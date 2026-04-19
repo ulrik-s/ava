@@ -4,15 +4,19 @@ import { prisma } from "@/server/db";
 import { extractText } from "./tika";
 
 /**
- * We use a local LLM served by LM Studio (OpenAI-compatible API at
- * http://localhost:1234 by default). No external API keys needed.
+ * We talk to a local LLM via any OpenAI-compatible server (Ollama, LM Studio,
+ * llama.cpp-server, vLLM, ...). No external API keys needed.
  *
- * Configure via env:
- *   LM_STUDIO_URL   — default "http://localhost:1234"
- *   LM_STUDIO_MODEL — optional; LM Studio routes any name to the loaded model
+ * Configure via env (nya namn — provider-agnostiska):
+ *   LLM_BASE_URL — default "http://localhost:11434" (Ollama)
+ *   LLM_MODEL    — default "llama3.1:8b"
+ *
+ * Bakåtkompat: LM_STUDIO_URL / LM_STUDIO_MODEL respekteras om satta.
  */
-const LM_STUDIO_URL = (process.env.LM_STUDIO_URL ?? "http://localhost:1234").replace(/\/+$/, "");
-const MODEL = process.env.LM_STUDIO_MODEL ?? "local-model";
+const LLM_BASE_URL = (
+  process.env.LLM_BASE_URL ?? process.env.LM_STUDIO_URL ?? "http://localhost:11434"
+).replace(/\/+$/, "");
+const MODEL = process.env.LLM_MODEL ?? process.env.LM_STUDIO_MODEL ?? "llama3.1:8b";
 // Llama-3-8B-Instruct has ~8K context. System prompt + JSON output eats ~2.5K tokens
 // (~10k chars), so cap doc text to leave headroom for output.
 const MAX_CHARS = 12_000;
@@ -121,7 +125,7 @@ export interface AnalyzeOptions {
  * Runs full analysis pipeline for a document:
  *   1. Loads file from disk
  *   2. Extracts text via Tika
- *   3. Calls local LM Studio LLM for structured analysis
+ *   3. Calls local LLM (OpenAI-compat endpoint) for structured analysis
  *   4. Writes metadata to Document + creates DocumentAnalysisSuggestion rows
  *
  * Non-throwing: errors are written to Document.analysisError.
@@ -155,8 +159,8 @@ export async function analyzeDocument(
       ? trimmed.slice(0, MAX_CHARS) + "\n\n[...avkortad...]"
       : trimmed;
 
-    // 3. Call local LM Studio (OpenAI-compatible endpoint)
-    const endpoint = `${LM_STUDIO_URL}/v1/chat/completions`;
+    // 3. Call local LLM (OpenAI-compatible endpoint)
+    const endpoint = `${LLM_BASE_URL}/v1/chat/completions`;
     let response: Response;
     try {
       response = await fetch(endpoint, {
@@ -166,7 +170,7 @@ export async function analyzeDocument(
           model: MODEL,
           temperature: 0.2,
           max_tokens: 8000,
-          // Ask LM Studio to constrain output to valid JSON. Models that don't
+          // Ask the server to constrain output to valid JSON. Models that don't
           // honor this still tend to produce JSON because the system prompt
           // insists on it; we strip code fences just in case.
           response_format: { type: "json_object" },
@@ -181,13 +185,13 @@ export async function analyzeDocument(
       });
     } catch (e) {
       throw new Error(
-        `Kunde inte nå LM Studio på ${LM_STUDIO_URL}. Är servern igång? (${e instanceof Error ? e.message : String(e)})`,
+        `Kunde inte nå LLM-servern på ${LLM_BASE_URL}. Är den igång? (${e instanceof Error ? e.message : String(e)})`,
       );
     }
 
     if (!response.ok) {
       const errText = await response.text().catch(() => "");
-      throw new Error(`LM Studio-fel ${response.status}: ${errText.slice(0, 500)}`);
+      throw new Error(`LLM-fel ${response.status}: ${errText.slice(0, 500)}`);
     }
 
     const body = (await response.json()) as {
@@ -195,11 +199,11 @@ export async function analyzeDocument(
     };
     const raw = body.choices?.[0]?.message?.content?.trim();
     if (!raw) {
-      throw new Error("Tomt svar från LM Studio.");
+      throw new Error("Tomt svar från LLM.");
     }
     const parsed = parseWithRepair(raw);
     if (!parsed) {
-      throw new Error(`Kunde inte tolka LM Studio-svar som JSON. Svar: ${raw.slice(0, 300)}`);
+      throw new Error(`Kunde inte tolka LLM-svar som JSON. Svar: ${raw.slice(0, 300)}`);
     }
 
     // 4. Persist

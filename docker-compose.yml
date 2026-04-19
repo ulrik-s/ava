@@ -29,6 +29,51 @@ services:
     ports:
       - "9998:9998"
 
+  # Lokal LLM via Ollama (OpenAI-kompatibelt API på /v1).
+  #
+  # OBS Apple Silicon (macOS): Docker Desktop har INGEN GPU-access, så
+  # inferens här blir CPU-only och mycket långsammare än LM Studio.
+  # Två alternativ på Mac:
+  #   1) Kör Ollama natively på host (`brew install ollama && ollama serve`)
+  #      — sätt LLM_BASE_URL=http://localhost:11434 och kommentera bort
+  #      ollama-servicen nedan.
+  #   2) Acceptera CPU-inferens via Docker och använd en liten modell
+  #      (t.ex. llama3.2:3b eller qwen2.5:3b).
+  # På Linux-server med NVIDIA: avkommentera `deploy.resources` nedan.
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    # GPU på Linux (NVIDIA + nvidia-container-toolkit):
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+  # One-shot service som drar ned modellen vid uppstart. Avslutar sedan.
+  # Kontrollera via `docker compose logs ollama-pull`.
+  ollama-pull:
+    image: ollama/ollama:latest
+    depends_on:
+      - ollama
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1:8b}
+    entrypoint: ["/bin/sh", "-c"]
+    command: >
+      "until ollama list >/dev/null 2>&1; do echo 'Väntar på ollama...'; sleep 2; done;
+       echo 'Drar ned modell: '$$OLLAMA_MODEL;
+       ollama pull $$OLLAMA_MODEL;
+       echo 'Klar.'"
+    restart: "no"
+
 volumes:
   postgres_data:
   meili_data:
+  ollama_data:

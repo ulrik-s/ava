@@ -9,6 +9,7 @@ async function main() {
     where: {
       OR: [
         { analysisError: { contains: "LM Studio" } },
+        { analysisError: { contains: "LLM" } },
         { analysisError: { contains: "JSON" } },
       ],
     },
