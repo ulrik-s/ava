@@ -83,6 +83,7 @@ model User {
   conflictChecks    ConflictCheck[]
   expenses          Expense[]
   createdTemplates  DocumentTemplate[] @relation("TemplateCreatedBy")
+  recordedPayments  Payment[]          @relation("PaymentRecordedBy")
 
   @@map("users")
 }
@@ -358,25 +359,129 @@ enum InvoiceStatus {
   SENT
   PAID
   CANCELLED
-  BAD_DEBT   // Kundförlust — fakturerat men avskrivet som förlust
+  BAD_DEBT           // Kundförlust — fakturerat men avskrivet som förlust
+  INSTALLMENT_PLAN   // Aktiv avbetalningsplan knuten till fakturan
+}
+
+enum InvoiceType {
+  STANDARD    // Vanlig löpande faktura
+  ACCONTO     // Förskott, belopp sätts av advokat, dras av på FINAL
+  FINAL       // Slutfaktura med avdrag för tidigare ACCONTO
 }
 
 model Invoice {
   id          String        @id @default(cuid())
   matterId    String        @map("matter_id")
-  amount      Int
+  amount      Int                           // öre (för FINAL: brutto före accontoavdrag)
   status      InvoiceStatus @default(DRAFT)
+  invoiceType InvoiceType   @default(STANDARD) @map("invoice_type")
   fortnoxId   String?       @map("fortnox_id")
   invoiceDate DateTime      @map("invoice_date") @db.Date
   dueDate     DateTime?     @map("due_date") @db.Date
+  notes       String?
   createdAt   DateTime      @default(now()) @map("created_at")
   updatedAt   DateTime      @updatedAt @map("updated_at")
 
   matter      Matter      @relation(fields: [matterId], references: [id])
   timeEntries TimeEntry[]
   expenses    Expense[]
+  paymentPlan PaymentPlan?
+  payments    Payment[]
 
+  // FINAL-fakturor pekar på ACCONTO-fakturor som dragits av:
+  accontoDeductions InvoiceAccontoDeduction[] @relation("FinalToAcconto")
+  // Och varje ACCONTO vet vilken FINAL den konsumerats av:
+  deductedOnFinals  InvoiceAccontoDeduction[] @relation("AccontoToFinal")
+
+  @@index([matterId])
+  @@index([status])
+  @@index([invoiceType])
   @@map("invoices")
+}
+
+// ─── PaymentPlan (Avbetalningsplan) ─────────────────────────────
+// 1:1 med en Invoice. När planen skapas sätts Invoice.status=INSTALLMENT_PLAN.
+// Cron kontrollerar `dayOfMonth` varje månad och skickar DUE-mail samt
+// OVERDUE-påminnelse efter 10 dagar om ingen betalning inkommit för månaden.
+
+enum PaymentPlanStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+model PaymentPlan {
+  id            String            @id @default(cuid())
+  invoiceId     String            @unique @map("invoice_id")
+  monthlyAmount Int               @map("monthly_amount")    // öre
+  dayOfMonth    Int               @map("day_of_month")      // 1-28
+  startDate     DateTime          @map("start_date") @db.Date
+  status        PaymentPlanStatus @default(ACTIVE)
+  notes         String?
+  createdAt     DateTime          @default(now()) @map("created_at")
+  updatedAt     DateTime          @updatedAt @map("updated_at")
+
+  invoice   Invoice               @relation(fields: [invoiceId], references: [id])
+  reminders PaymentPlanReminder[]
+
+  @@index([status])
+  @@map("payment_plans")
+}
+
+// ─── Payment (Registrerad betalning) ────────────────────────────
+
+model Payment {
+  id            String   @id @default(cuid())
+  invoiceId     String   @map("invoice_id")
+  amount        Int                                          // öre
+  paidAt        DateTime @map("paid_at") @db.Date
+  note          String?
+  recordedById  String   @map("recorded_by_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  invoice    Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  recordedBy User    @relation("PaymentRecordedBy", fields: [recordedById], references: [id])
+
+  @@index([invoiceId])
+  @@index([paidAt])
+  @@map("payments")
+}
+
+// ─── PaymentPlanReminder (idempotens för mail-utskick) ──────────
+
+enum ReminderType {
+  DUE       // "Månadens betalning förfaller idag"
+  OVERDUE   // "Påminnelse: betalning saknas"
+}
+
+model PaymentPlanReminder {
+  id       String       @id @default(cuid())
+  planId   String       @map("plan_id")
+  /// Vilken månad detta avser, format "YYYY-MM" — säkerställer att samma
+  /// mail inte skickas två gånger för samma månad.
+  dueMonth String       @map("due_month")
+  type     ReminderType
+  sentAt   DateTime     @default(now()) @map("sent_at")
+
+  plan PaymentPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, dueMonth, type])
+  @@map("payment_plan_reminders")
+}
+
+// ─── InvoiceAccontoDeduction (join: FINAL ← ACCONTO) ───────────
+
+model InvoiceAccontoDeduction {
+  id               String @id @default(cuid())
+  finalInvoiceId   String @map("final_invoice_id")
+  accontoInvoiceId String @map("acconto_invoice_id")
+
+  finalInvoice   Invoice @relation("FinalToAcconto",   fields: [finalInvoiceId],   references: [id], onDelete: Cascade)
+  accontoInvoice Invoice @relation("AccontoToFinal",   fields: [accontoInvoiceId], references: [id])
+
+  @@unique([finalInvoiceId, accontoInvoiceId])
+  @@index([accontoInvoiceId])
+  @@map("invoice_acconto_deductions")
 }
 
 // ─── Document Template (Dokumentmall) ──────────────────────────

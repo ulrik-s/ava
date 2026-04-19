@@ -9,6 +9,7 @@ import { userRouter } from "./user";
 import { documentTemplateRouter } from "./documentTemplate";
 import { organizationRouter } from "./organization";
 import { reportsRouter } from "./reports";
+import { invoiceRouter } from "./invoice";
 
 export const appRouter = router({
   contacts: contactRouter,
@@ -21,6 +22,7 @@ export const appRouter = router({
   documentTemplate: documentTemplateRouter,
   organization: organizationRouter,
   reports: reportsRouter,
+  invoice: invoiceRouter,
 });
 
 export type AppRouter = typeof appRouter;
