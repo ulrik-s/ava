@@ -1,0 +1,207 @@
+"use client";
+
+import { Suspense, useState } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { trpc } from "@/lib/trpc";
+import { labelForContactType, contactTypes } from "@/lib/labels";
+
+function ContactsContent() {
+  const searchParams = useSearchParams();
+  const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState("");
+  const [page, setPage] = useState(1);
+  const [showForm, setShowForm] = useState(searchParams.get("new") === "1");
+
+  const contacts = trpc.contacts.list.useQuery({
+    search,
+    contactType: typeFilter || undefined,
+    page,
+    pageSize: 20,
+  } as Parameters<typeof trpc.contacts.list.useQuery>[0]);
+  const utils = trpc.useUtils();
+
+  const createContact = trpc.contacts.create.useMutation({
+    onSuccess: () => {
+      utils.contacts.list.invalidate();
+      setShowForm(false);
+      setForm({ name: "", contactType: "PERSON", personalNumber: "", orgNumber: "", email: "", phone: "", address: "", notes: "" });
+    },
+  });
+
+  const [form, setForm] = useState({
+    name: "",
+    contactType: "PERSON" as string,
+    personalNumber: "",
+    orgNumber: "",
+    email: "",
+    phone: "",
+    address: "",
+    notes: "",
+  });
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    createContact.mutate(form as Parameters<typeof createContact.mutate>[0]);
+  }
+
+  const showPersonalNumber = form.contactType === "PERSON";
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold text-gray-900">Kontakter</h1>
+        <button
+          onClick={() => setShowForm(!showForm)}
+          className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700"
+        >
+          {showForm ? "Avbryt" : "+ Ny kontakt"}
+        </button>
+      </div>
+
+      {showForm && (
+        <form onSubmit={handleSubmit} className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
+          <h2 className="font-semibold text-gray-900 mb-4">Ny kontakt</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Namn *</label>
+              <input type="text" required value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Typ</label>
+              <select value={form.contactType}
+                onChange={(e) => setForm({ ...form, contactType: e.target.value })}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
+                {contactTypes.map((t) => (
+                  <option key={t.value} value={t.value}>{t.label}</option>
+                ))}
+              </select>
+            </div>
+            {showPersonalNumber ? (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Personnummer</label>
+                <input type="text" value={form.personalNumber}
+                  onChange={(e) => setForm({ ...form, personalNumber: e.target.value })}
+                  placeholder="YYYYMMDD-XXXX"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+              </div>
+            ) : (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Organisationsnummer</label>
+                <input type="text" value={form.orgNumber}
+                  onChange={(e) => setForm({ ...form, orgNumber: e.target.value })}
+                  placeholder="XXXXXX-XXXX"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+              </div>
+            )}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">E-post</label>
+              <input type="email" value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Telefon</label>
+              <input type="text" value={form.phone}
+                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Adress</label>
+              <input type="text" value={form.address}
+                onChange={(e) => setForm({ ...form, address: e.target.value })}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Anteckningar</label>
+              <textarea value={form.notes}
+                onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                rows={2} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+            </div>
+          </div>
+          <div className="mt-4 flex gap-2">
+            <button type="submit" disabled={createContact.isPending}
+              className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50">
+              {createContact.isPending ? "Sparar..." : "Spara kontakt"}
+            </button>
+            <button type="button" onClick={() => setShowForm(false)}
+              className="px-4 py-2 bg-white text-gray-700 text-sm font-medium rounded-lg border border-gray-300 hover:bg-gray-50">
+              Avbryt
+            </button>
+          </div>
+          {createContact.error && (
+            <p className="mt-2 text-sm text-red-600">{createContact.error.message}</p>
+          )}
+        </form>
+      )}
+
+      <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-4">
+        <input type="text" placeholder="Sök kontakter..."
+          value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+          className="flex-1 sm:max-w-md rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+        <select value={typeFilter}
+          onChange={(e) => { setTypeFilter(e.target.value); setPage(1); }}
+          className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
+          <option value="">Alla typer</option>
+          {contactTypes.map((t) => (
+            <option key={t.value} value={t.value}>{t.label}</option>
+          ))}
+        </select>
+      </div>
+
+      <div className="bg-white rounded-lg border border-gray-200 overflow-x-auto">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead>
+            <tr className="bg-gray-50">
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Namn</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Typ</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Personnr/Orgnr</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">E-post</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ärenden</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {contacts.data?.contacts.map((contact) => (
+              <tr key={contact.id} className="hover:bg-gray-50">
+                <td className="px-6 py-4">
+                  <Link href={`/contacts/${contact.id}`} className="text-sm font-medium text-blue-600 hover:underline">
+                    {contact.name}
+                  </Link>
+                </td>
+                <td className="px-6 py-4 text-sm text-gray-500">
+                  {labelForContactType(contact.contactType)}
+                </td>
+                <td className="px-6 py-4 text-sm text-gray-500">
+                  {contact.personalNumber || contact.orgNumber || "—"}
+                </td>
+                <td className="px-6 py-4 text-sm text-gray-500">{contact.email || "—"}</td>
+                <td className="px-6 py-4 text-sm text-gray-500">{contact._count.matterLinks}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {contacts.data && contacts.data.pages > 1 && (
+          <div className="px-6 py-3 border-t border-gray-200 flex items-center justify-between">
+            <p className="text-sm text-gray-500">Sida {page} av {contacts.data.pages} ({contacts.data.total} totalt)</p>
+            <div className="flex gap-2">
+              <button disabled={page <= 1} onClick={() => setPage(page - 1)}
+                className="px-3 py-1 text-sm border rounded disabled:opacity-50">Föregående</button>
+              <button disabled={page >= contacts.data.pages} onClick={() => setPage(page + 1)}
+                className="px-3 py-1 text-sm border rounded disabled:opacity-50">Nästa</button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default function ContactsPage() {
+  return (
+    <Suspense fallback={<p className="text-gray-500">Laddar...</p>}>
+      <ContactsContent />
+    </Suspense>
+  );
+}

@@ -1,0 +1,414 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Organization ───────────────────────────────────────────────
+
+model Organization {
+  id            String   @id @default(cuid())
+  name          String
+  orgNumber     String?  @map("org_number")
+  address       String?
+  phone         String?
+  email         String?
+  bankgiro      String?
+  logoPath      String?  @map("logo_path")
+  /// Entra ID (Azure AD) tenant-id för single-tenant O365-inloggning.
+  /// Endast användare vars id_token.tid matchar detta får logga in via Microsoft.
+  azureTenantId String?  @unique @map("azure_tenant_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  users             User[]
+  contacts          Contact[]
+  matters           Matter[]
+  documentTemplates DocumentTemplate[]
+  offices           Office[]
+
+  @@map("organizations")
+}
+
+// ─── Office (Kontor) ────────────────────────────────────────────
+
+model Office {
+  id             String   @id @default(cuid())
+  name           String
+  address        String?
+  phone          String?
+  email          String?
+  isMain         Boolean  @default(false) @map("is_main")
+  organizationId String   @map("organization_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@map("offices")
+}
+
+// ─── User ───────────────────────────────────────────────────────
+
+enum UserRole {
+  ADMIN
+  LAWYER
+  ASSISTANT
+}
+
+model User {
+  id             String       @id @default(cuid())
+  email          String       @unique
+  passwordHash   String?      @map("password_hash")
+  name           String
+  title          String?      // e.g. "Advokat", "Biträdande jurist"
+  role           UserRole     @default(LAWYER)
+  hourlyRate     Int?         @map("hourly_rate")
+  mileageRate    Int?         @map("mileage_rate") // öre per km
+  organizationId String       @map("organization_id")
+  /// Entra ID object-id (oid) — sätts första gången användaren loggar in via Microsoft.
+  /// Null = användaren har inte ännu loggat in via O365 (inbjuden men inte aktiverad).
+  azureOid       String?      @unique @map("azure_oid")
+  /// När senaste inloggning via Microsoft skedde.
+  lastLoginAt    DateTime?    @map("last_login_at")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  organization      Organization       @relation(fields: [organizationId], references: [id])
+  timeEntries       TimeEntry[]
+  documents         Document[]         @relation("UploadedBy")
+  emails            Email[]            @relation("SavedBy")
+  conflictChecks    ConflictCheck[]
+  expenses          Expense[]
+  createdTemplates  DocumentTemplate[] @relation("TemplateCreatedBy")
+
+  @@map("users")
+}
+
+// ─── Contact (Kontakt) ──────────────────────────────────────────
+// Unified register: persons, companies, courts, authorities, etc.
+
+enum ContactType {
+  PERSON
+  COMPANY
+  COURT
+  AUTHORITY
+  INSURANCE_COMPANY
+  LAW_FIRM
+  OTHER
+}
+
+model Contact {
+  id             String      @id @default(cuid())
+  name           String
+  contactType    ContactType @default(PERSON) @map("contact_type")
+  personalNumber String?     @map("personal_number")
+  orgNumber      String?     @map("org_number")
+  email          String?
+  phone          String?
+  address        String?
+  notes          String?
+  organizationId String      @map("organization_id")
+  parentId       String?     @map("parent_id")
+  createdAt      DateTime    @default(now()) @map("created_at")
+  updatedAt      DateTime    @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  parent       Contact?     @relation("ContactChildren", fields: [parentId], references: [id])
+  children     Contact[]    @relation("ContactChildren")
+  matterLinks  MatterContact[]
+
+  @@map("contacts")
+}
+
+// ─── Matter (Ärende) ────────────────────────────────────────────
+
+enum MatterStatus {
+  ACTIVE
+  CLOSED
+  ARCHIVED
+}
+
+model Matter {
+  id             String       @id @default(cuid())
+  matterNumber   String       @unique @map("matter_number")
+  title          String
+  description    String?
+  status         MatterStatus @default(ACTIVE)
+  matterType     String?      @map("matter_type")
+  organizationId String       @map("organization_id")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  organization Organization    @relation(fields: [organizationId], references: [id])
+  contacts     MatterContact[]
+  folders      DocumentFolder[]
+  documents    Document[]
+  emails       Email[]
+  timeEntries  TimeEntry[]
+  expenses     Expense[]
+  invoices     Invoice[]
+
+  @@map("matters")
+}
+
+// ─── MatterContact (Koppling kontakt → ärende med roll) ─────────
+
+enum MatterRole {
+  KLIENT
+  MOTPART
+  MOTPARTSOMBUD
+  AKLAGARE
+  DOMSTOL
+  FORSAKRINGSBOLAG
+  VITTNE
+  OMBUD
+  OVRIG
+}
+
+model MatterContact {
+  id        String     @id @default(cuid())
+  matterId  String     @map("matter_id")
+  contactId String     @map("contact_id")
+  role      MatterRole
+  notes     String?
+  createdAt DateTime   @default(now()) @map("created_at")
+
+  matter  Matter  @relation(fields: [matterId], references: [id], onDelete: Cascade)
+  contact Contact @relation(fields: [contactId], references: [id])
+
+  @@unique([matterId, contactId, role])
+  @@map("matter_contacts")
+}
+
+// ─── Document Folder ────────────────────────────────────────────
+
+model DocumentFolder {
+  id        String   @id @default(cuid())
+  name      String
+  matterId  String   @map("matter_id")
+  parentId  String?  @map("parent_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  matter   Matter           @relation(fields: [matterId], references: [id], onDelete: Cascade)
+  parent   DocumentFolder?  @relation("FolderChildren", fields: [parentId], references: [id])
+  children DocumentFolder[] @relation("FolderChildren")
+  documents Document[]
+
+  @@unique([matterId, parentId, name])
+  @@map("document_folders")
+}
+
+// ─── Document ───────────────────────────────────────────────────
+
+model Document {
+  id           String   @id @default(cuid())
+  fileName     String   @map("file_name")
+  mimeType     String   @map("mime_type")
+  fileSize     Int      @map("file_size")
+  storagePath  String   @map("storage_path")
+  version      Int      @default(1)
+  matterId     String   @map("matter_id")
+  folderId     String?  @map("folder_id")
+  uploadedById String   @map("uploaded_by_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  // AI-generated metadata (populated async after upload)
+  title          String?   // "Stämningsansökan, Tingsrätten mål T 1234-26"
+  documentType   String?   @map("document_type") // "Stämningsansökan", "Dom", "Fullmakt", ...
+  summary        String?
+  analyzedAt     DateTime? @map("analyzed_at")
+  analysisModel  String?   @map("analysis_model")
+  analysisError  String?   @map("analysis_error")
+
+  matter      Matter          @relation(fields: [matterId], references: [id], onDelete: Cascade)
+  folder      DocumentFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  uploadedBy  User            @relation("UploadedBy", fields: [uploadedById], references: [id])
+  suggestions DocumentAnalysisSuggestion[]
+  events      MatterEventSuggestion[]
+
+  @@map("documents")
+}
+
+// ─── AI-föreslagna tidpunkter (möten, frister, förhandlingar) ───
+
+model MatterEventSuggestion {
+  id          String           @id @default(cuid())
+  documentId  String           @map("document_id")
+  title       String
+  description String?
+  eventType   String?          @map("event_type")   // "Förhandling", "Möte", "Frist", ...
+  startAt     DateTime         @map("start_at")
+  endAt       DateTime?        @map("end_at")
+  allDay      Boolean          @default(false) @map("all_day")
+  location    String?
+  status      SuggestionStatus @default(PENDING)
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+  @@index([status])
+  @@index([startAt])
+  @@map("matter_event_suggestions")
+}
+
+// ─── AI-föreslagna kontakter från dokumentanalys ────────────────
+
+enum SuggestionStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+model DocumentAnalysisSuggestion {
+  id                String           @id @default(cuid())
+  documentId        String           @map("document_id")
+  name              String
+  role              MatterRole
+  contactType       ContactType      @map("contact_type")
+  email             String?
+  phone             String?
+  orgNumber         String?          @map("org_number")
+  personalNumber    String?          @map("personal_number")
+  notes             String?
+  status            SuggestionStatus @default(PENDING)
+  acceptedContactId String?          @map("accepted_contact_id")
+  createdAt         DateTime         @default(now()) @map("created_at")
+  updatedAt         DateTime         @updatedAt @map("updated_at")
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+  @@index([status])
+  @@map("document_analysis_suggestions")
+}
+
+// ─── Email ──────────────────────────────────────────────────────
+
+model Email {
+  id          String   @id @default(cuid())
+  messageId   String?  @map("message_id")
+  fromAddress String   @map("from_address")
+  toAddress   String   @map("to_address")
+  subject     String
+  bodyText    String?  @map("body_text")
+  bodyHtml    String?  @map("body_html")
+  sentAt      DateTime @map("sent_at")
+  matterId    String   @map("matter_id")
+  savedById   String   @map("saved_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  matter  Matter @relation(fields: [matterId], references: [id], onDelete: Cascade)
+  savedBy User   @relation("SavedBy", fields: [savedById], references: [id])
+
+  @@map("emails")
+}
+
+// ─── TimeEntry (Tidregistrering) ────────────────────────────────
+
+model TimeEntry {
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")
+  matterId    String   @map("matter_id")
+  date        DateTime @db.Date
+  minutes     Int
+  description String
+  hourlyRate  Int      @map("hourly_rate")
+  billable    Boolean  @default(true)
+  invoiceId   String?  @map("invoice_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user    User     @relation(fields: [userId], references: [id])
+  matter  Matter   @relation(fields: [matterId], references: [id], onDelete: Cascade)
+  invoice Invoice? @relation(fields: [invoiceId], references: [id])
+
+  @@map("time_entries")
+}
+
+// ─── Expense (Utlägg) ───────────────────────────────────────────
+
+model Expense {
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")
+  matterId    String   @map("matter_id")
+  date        DateTime @db.Date
+  amount      Int      // Amount in öre (cents)
+  description String
+  billable    Boolean  @default(true)
+  invoiceId   String?  @map("invoice_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user    User     @relation(fields: [userId], references: [id])
+  matter  Matter   @relation(fields: [matterId], references: [id], onDelete: Cascade)
+  invoice Invoice? @relation(fields: [invoiceId], references: [id])
+
+  @@map("expenses")
+}
+
+// ─── Invoice (Faktura) ──────────────────────────────────────────
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PAID
+  CANCELLED
+  BAD_DEBT   // Kundförlust — fakturerat men avskrivet som förlust
+}
+
+model Invoice {
+  id          String        @id @default(cuid())
+  matterId    String        @map("matter_id")
+  amount      Int
+  status      InvoiceStatus @default(DRAFT)
+  fortnoxId   String?       @map("fortnox_id")
+  invoiceDate DateTime      @map("invoice_date") @db.Date
+  dueDate     DateTime?     @map("due_date") @db.Date
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  matter      Matter      @relation(fields: [matterId], references: [id])
+  timeEntries TimeEntry[]
+  expenses    Expense[]
+
+  @@map("invoices")
+}
+
+// ─── Document Template (Dokumentmall) ──────────────────────────
+
+model DocumentTemplate {
+  id             String   @id @default(cuid())
+  name           String
+  description    String?
+  category       String?
+  content        String   // Handlebars HTML-mall
+  organizationId String   @map("organization_id")
+  createdById    String   @map("created_by_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  createdBy    User         @relation("TemplateCreatedBy", fields: [createdById], references: [id])
+
+  @@map("document_templates")
+}
+
+// ─── Conflict Check (Jävskontroll) ──────────────────────────────
+
+model ConflictCheck {
+  id          String   @id @default(cuid())
+  searchTerm  String   @map("search_term")
+  searchType  String   @map("search_type")
+  results     Json
+  checkedById String   @map("checked_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  checkedBy User @relation(fields: [checkedById], references: [id])
+
+  @@map("conflict_checks")
+}
