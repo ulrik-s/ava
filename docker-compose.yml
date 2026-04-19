@@ -29,6 +29,22 @@ services:
     ports:
       - "9998:9998"
 
+  # One-shot bootstrap: tvingar Docker Model Runner att pulla/starta modellen
+  # vid `docker compose up`. En top-level `models:`-deklaration ensam räcker
+  # inte — den måste refereras av en service för att trigga pull. Denna
+  # container gör inget annat än att verifiera och avsluta.
+  llm-bootstrap:
+    image: alpine:latest
+    command:
+      - sh
+      - -c
+      - 'echo "LLM redo: $$LLM_URL (modell: $$LLM_MODEL)"'
+    models:
+      llm:
+        endpoint_var: LLM_URL
+        model_var: LLM_MODEL
+    restart: "no"
+
 models:
   llm:
     model: ai/gemma4
