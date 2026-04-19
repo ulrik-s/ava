@@ -11,7 +11,9 @@ import { extractText } from "./tika";
  *
  * Configure via env (provider-agnostiska namn):
  *   LLM_BASE_URL — default "http://localhost:12434/engines"
- *   LLM_MODEL    — default "ai/gemma4"
+ *   LLM_MODEL        — default "ai/gemma4"
+ *   LLM_TIMEOUT_MS   — default 300000 (5 min). Skyddar mot hängande inferens
+ *                      så dokumentet inte fastnar för evigt i "analyseras"-läge.
  *
  * Bakåtkompat: LM_STUDIO_URL / LM_STUDIO_MODEL respekteras om satta.
  */
@@ -19,6 +21,7 @@ const LLM_BASE_URL = (
   process.env.LLM_BASE_URL ?? process.env.LM_STUDIO_URL ?? "http://localhost:12434/engines"
 ).replace(/\/+$/, "");
 const MODEL = process.env.LLM_MODEL ?? process.env.LM_STUDIO_MODEL ?? "ai/gemma4";
+const LLM_TIMEOUT_MS = Number(process.env.LLM_TIMEOUT_MS ?? 300_000);
 // Gemma-modeller har typiskt 8K+ kontextfönster. System prompt + JSON-output
 // äter ~2.5K tokens (~10k tecken), så vi kapar doktext för att lämna headroom.
 const MAX_CHARS = 12_000;
@@ -161,13 +164,18 @@ export async function analyzeDocument(
       ? trimmed.slice(0, MAX_CHARS) + "\n\n[...avkortad...]"
       : trimmed;
 
-    // 3. Call local LLM (OpenAI-compatible endpoint)
+    // 3. Call local LLM (OpenAI-compatible endpoint).
+    // AbortController ger en hård deadline — utan den kan en hängande server
+    // låta dokumentet fastna i "analyseras"-state för evigt.
     const endpoint = `${LLM_BASE_URL}/v1/chat/completions`;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), LLM_TIMEOUT_MS);
     let response: Response;
     try {
       response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify({
           model: MODEL,
           temperature: 0.2,
@@ -186,9 +194,16 @@ export async function analyzeDocument(
         }),
       });
     } catch (e) {
+      if (e instanceof Error && e.name === "AbortError") {
+        throw new Error(
+          `LLM-anrop timeout efter ${Math.round(LLM_TIMEOUT_MS / 1000)}s. Servern ${LLM_BASE_URL} svarade inte i tid.`,
+        );
+      }
       throw new Error(
         `Kunde inte nå LLM-servern på ${LLM_BASE_URL}. Är den igång? (${e instanceof Error ? e.message : String(e)})`,
       );
+    } finally {
+      clearTimeout(timeout);
     }
 
     if (!response.ok) {
