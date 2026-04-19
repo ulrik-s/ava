@@ -4,21 +4,23 @@ import { prisma } from "@/server/db";
 import { extractText } from "./tika";
 
 /**
- * We talk to a local LLM via any OpenAI-compatible server (Ollama, LM Studio,
- * llama.cpp-server, vLLM, ...). No external API keys needed.
+ * We talk to a local LLM via any OpenAI-compatible server. Standard setup:
+ * Docker Model Runner (Docker Desktop feature) med modellen deklarerad i
+ * docker-compose.yml. Host-side TCP default på port 12434, OpenAI-kompatibel
+ * endpoint under /engines/v1. Inga externa API-nycklar behövs.
  *
- * Configure via env (nya namn — provider-agnostiska):
- *   LLM_BASE_URL — default "http://localhost:11434" (Ollama)
- *   LLM_MODEL    — default "llama3.1:8b"
+ * Configure via env (provider-agnostiska namn):
+ *   LLM_BASE_URL — default "http://localhost:12434/engines"
+ *   LLM_MODEL    — default "ai/gemma4"
  *
  * Bakåtkompat: LM_STUDIO_URL / LM_STUDIO_MODEL respekteras om satta.
  */
 const LLM_BASE_URL = (
-  process.env.LLM_BASE_URL ?? process.env.LM_STUDIO_URL ?? "http://localhost:11434"
+  process.env.LLM_BASE_URL ?? process.env.LM_STUDIO_URL ?? "http://localhost:12434/engines"
 ).replace(/\/+$/, "");
-const MODEL = process.env.LLM_MODEL ?? process.env.LM_STUDIO_MODEL ?? "llama3.1:8b";
-// Llama-3-8B-Instruct has ~8K context. System prompt + JSON output eats ~2.5K tokens
-// (~10k chars), so cap doc text to leave headroom for output.
+const MODEL = process.env.LLM_MODEL ?? process.env.LM_STUDIO_MODEL ?? "ai/gemma4";
+// Gemma-modeller har typiskt 8K+ kontextfönster. System prompt + JSON-output
+// äter ~2.5K tokens (~10k tecken), så vi kapar doktext för att lämna headroom.
 const MAX_CHARS = 12_000;
 
 const MATTER_ROLES = [
