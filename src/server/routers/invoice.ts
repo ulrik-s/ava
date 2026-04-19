@@ -51,6 +51,7 @@ export const invoiceRouter = router({
           paymentPlan: true,
           payments: { orderBy: { paidAt: "desc" } },
           accontoDeductions: { include: { accontoInvoice: true } },
+          deductedOnFinals: { select: { id: true } },
         },
       }),
     ),

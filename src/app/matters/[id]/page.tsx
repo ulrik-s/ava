@@ -8,6 +8,7 @@ import { labelForMatterRole, matterRoles, contactTypes } from "@/lib/labels";
 import { DocumentBrowser } from "@/components/document-browser";
 import { SuggestionsPanel } from "@/components/suggestions-panel";
 import { EventsPanel } from "@/components/events-panel";
+import { InvoicesSection } from "@/components/invoices-section";
 import { FileDown } from "lucide-react";
 
 export default function MatterDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -457,6 +458,8 @@ export default function MatterDetailPage({ params }: { params: Promise<{ id: str
           </table>
           </div>
         </div>
+
+        <InvoicesSection matterId={id} />
       </div>
 
       {/* Generate document modal */}
