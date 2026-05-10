@@ -15,6 +15,7 @@
     "test:cov": "vitest run --config config/vitest.config.ts --coverage",
     "test:fast": "vitest run --config config/vitest.config.ts --exclude '**/test/scripts/**' --exclude '**/test/e2e/**'",
     "test:full": "bash scripts/test-full.sh",
+    "test:all": "bash scripts/test-all.sh",
     "e2e": "playwright test --config config/playwright.config.ts",
     "e2e:ui": "playwright test --config config/playwright.config.ts --ui",
     "e2e:install": "playwright install --with-deps chromium",
