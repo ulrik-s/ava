@@ -16,7 +16,7 @@ docker compose up -d
 
 echo "==> Väntar på Postgres (max 60s)"
 for i in {1..30}; do
-  if docker compose exec -T postgres pg_isready -U postgres >/dev/null 2>&1; then
+  if docker compose exec -T postgres pg_isready -U ava >/dev/null 2>&1; then
     echo "    Postgres redo."
     break
   fi
@@ -27,8 +27,8 @@ for i in {1..30}; do
   fi
 done
 
-echo "==> Migrerar databas"
-npx prisma migrate deploy >/dev/null
+echo "==> Synkar schema (db push, idempotent)"
+yarn prisma db push --accept-data-loss
 
 echo "==> Vitest (unit + scripts)"
 npx vitest run --config config/vitest.config.ts

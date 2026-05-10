@@ -1,4 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
+import path from "node:path";
+
+const projectRoot = path.resolve(__dirname, "..");
 
 /**
  * E2E-tester körs mot riktiga Next.js + WebDAV-servrar (samma `npm run dev`-
@@ -9,16 +12,16 @@ import { defineConfig, devices } from "@playwright/test";
  *      `npx playwright show-report`
  */
 export default defineConfig({
-  testDir: "./test/e2e",
+  testDir: path.join(projectRoot, "test/e2e"),
   timeout: 30_000,
   expect: { timeout: 5_000 },
   fullyParallel: false, // delar DB; håll det sekventiellt tills tester är isolerade
   retries: process.env.CI ? 2 : 0,
   workers: 1,
   reporter: process.env.CI
-    ? [["github"], ["html", { open: "never", outputFolder: "reports/playwright" }]]
-    : [["list"], ["html", { open: "never", outputFolder: "reports/playwright" }]],
-  outputDir: "reports/playwright-results",
+    ? [["github"], ["html", { open: "never", outputFolder: path.join(projectRoot, "reports/playwright") }]]
+    : [["list"], ["html", { open: "never", outputFolder: path.join(projectRoot, "reports/playwright") }]],
+  outputDir: path.join(projectRoot, "reports/playwright-results"),
   use: {
     baseURL: "http://localhost:3000",
     trace: "on-first-retry",
