@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useId, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { trpc } from "@/lib/trpc";
@@ -12,6 +12,14 @@ function ContactsContent() {
   const [typeFilter, setTypeFilter] = useState("");
   const [page, setPage] = useState(1);
   const [showForm, setShowForm] = useState(searchParams.get("new") === "1");
+  const nameId = useId();
+  const typeId = useId();
+  const personalNumberId = useId();
+  const orgNumberId = useId();
+  const emailId = useId();
+  const phoneId = useId();
+  const addressId = useId();
+  const notesId = useId();
 
   const contacts = trpc.contacts.list.useQuery({
     search,
@@ -64,14 +72,14 @@ function ContactsContent() {
           <h2 className="font-semibold text-gray-900 mb-4">Ny kontakt</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Namn *</label>
-              <input type="text" required value={form.name}
+              <label htmlFor={nameId} className="block text-sm font-medium text-gray-700 mb-1">Namn *</label>
+              <input id={nameId} type="text" required value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Typ</label>
-              <select value={form.contactType}
+              <label htmlFor={typeId} className="block text-sm font-medium text-gray-700 mb-1">Typ</label>
+              <select id={typeId} value={form.contactType}
                 onChange={(e) => setForm({ ...form, contactType: e.target.value })}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
                 {contactTypes.map((t) => (
@@ -81,42 +89,42 @@ function ContactsContent() {
             </div>
             {showPersonalNumber ? (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Personnummer</label>
-                <input type="text" value={form.personalNumber}
+                <label htmlFor={personalNumberId} className="block text-sm font-medium text-gray-700 mb-1">Personnummer</label>
+                <input id={personalNumberId} type="text" value={form.personalNumber}
                   onChange={(e) => setForm({ ...form, personalNumber: e.target.value })}
                   placeholder="YYYYMMDD-XXXX"
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
               </div>
             ) : (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Organisationsnummer</label>
-                <input type="text" value={form.orgNumber}
+                <label htmlFor={orgNumberId} className="block text-sm font-medium text-gray-700 mb-1">Organisationsnummer</label>
+                <input id={orgNumberId} type="text" value={form.orgNumber}
                   onChange={(e) => setForm({ ...form, orgNumber: e.target.value })}
                   placeholder="XXXXXX-XXXX"
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
               </div>
             )}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">E-post</label>
-              <input type="email" value={form.email}
+              <label htmlFor={emailId} className="block text-sm font-medium text-gray-700 mb-1">E-post</label>
+              <input id={emailId} type="email" value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Telefon</label>
-              <input type="text" value={form.phone}
+              <label htmlFor={phoneId} className="block text-sm font-medium text-gray-700 mb-1">Telefon</label>
+              <input id={phoneId} type="text" value={form.phone}
                 onChange={(e) => setForm({ ...form, phone: e.target.value })}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Adress</label>
-              <input type="text" value={form.address}
+              <label htmlFor={addressId} className="block text-sm font-medium text-gray-700 mb-1">Adress</label>
+              <input id={addressId} type="text" value={form.address}
                 onChange={(e) => setForm({ ...form, address: e.target.value })}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
             </div>
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Anteckningar</label>
-              <textarea value={form.notes}
+              <label htmlFor={notesId} className="block text-sm font-medium text-gray-700 mb-1">Anteckningar</label>
+              <textarea id={notesId} value={form.notes}
                 onChange={(e) => setForm({ ...form, notes: e.target.value })}
                 rows={2} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
             </div>

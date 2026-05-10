@@ -68,78 +68,19 @@ export async function POST(req: NextRequest) {
   for (const plan of plans) {
     if (!planHasStarted(plan.startDate, today)) continue;
 
-    const clientLink = plan.invoice.matter.contacts[0];
-    const email = clientLink?.contact.email;
-    const name = clientLink?.contact.name ?? "Klient";
-    if (!email) {
-      console.warn(
-        `[cron] Plan ${plan.id}: klient saknar e-postadress, skippar utskick.`,
-      );
+    const ctx = buildReminderContext(plan);
+    if (!ctx) {
+      console.warn(`[cron] Plan ${plan.id}: klient saknar e-postadress, skippar utskick.`);
       skippedNoEmail++;
       continue;
     }
 
-    const paidSum = plan.invoice.payments.reduce((s, p) => s + p.amount, 0);
-    const remaining = Math.max(0, plan.invoice.amount - paidSum);
-    const org = plan.invoice.matter.organization;
-
-    const baseCtx: PaymentReminderContext = {
-      recipientEmail: email,
-      recipientName: name,
-      matterNumber: plan.invoice.matter.matterNumber,
-      matterTitle: plan.invoice.matter.title,
-      invoiceAmount: plan.invoice.amount,
-      monthlyAmount: plan.monthlyAmount,
-      dayOfMonth: plan.dayOfMonth,
-      remainingAmount: remaining,
-      organizationName: org.name,
-      organizationContact: org.email ?? undefined,
-      bankgiro: org.bankgiro ?? undefined,
-    };
-
-    // DUE: förfallodag idag
     if (day === plan.dayOfMonth) {
-      const alreadySent = await prisma.paymentPlanReminder.findUnique({
-        where: {
-          planId_dueMonth_type: { planId: plan.id, dueMonth: currentMonth, type: "DUE" },
-        },
-      });
-      if (!alreadySent) {
-        try {
-          await sendPaymentDue(baseCtx);
-          await prisma.paymentPlanReminder.create({
-            data: { planId: plan.id, dueMonth: currentMonth, type: "DUE" },
-          });
-          dueSent++;
-        } catch (e) {
-          console.error(`[cron] DUE-mail misslyckades för plan ${plan.id}:`, e);
-        }
-      }
+      if (await trySendDue(plan.id, ctx, currentMonth)) dueSent++;
     }
-
-    // OVERDUE: 10 dgr efter förfall, ingen betalning denna månad
     if (day === plan.dayOfMonth + 10) {
-      const hasPaidThisMonth = plan.invoice.payments.some(
-        (p) => monthKey(p.paidAt) === currentMonth,
-      );
-      if (!hasPaidThisMonth) {
-        const alreadySent = await prisma.paymentPlanReminder.findUnique({
-          where: {
-            planId_dueMonth_type: { planId: plan.id, dueMonth: currentMonth, type: "OVERDUE" },
-          },
-        });
-        if (!alreadySent) {
-          try {
-            await sendPaymentOverdue(baseCtx);
-            await prisma.paymentPlanReminder.create({
-              data: { planId: plan.id, dueMonth: currentMonth, type: "OVERDUE" },
-            });
-            overdueSent++;
-          } catch (e) {
-            console.error(`[cron] OVERDUE-mail misslyckades för plan ${plan.id}:`, e);
-          }
-        }
-      }
+      const hasPaidThisMonth = plan.invoice.payments.some((p) => monthKey(p.paidAt) === currentMonth);
+      if (!hasPaidThisMonth && await trySendOverdue(plan.id, ctx, currentMonth)) overdueSent++;
     }
   }
 
@@ -150,4 +91,74 @@ export async function POST(req: NextRequest) {
     overdueSent,
     skippedNoEmail,
   });
+}
+
+type PlanWithIncludes = Awaited<ReturnType<typeof prisma.paymentPlan.findMany>>[number] & {
+  invoice: {
+    amount: number;
+    payments: Array<{ amount: number; paidAt: Date }>;
+    matter: {
+      matterNumber: string;
+      title: string;
+      organization: { name: string; email: string | null; bankgiro: string | null };
+      contacts: Array<{ contact: { email: string | null; name: string } }>;
+    };
+  };
+};
+
+function buildReminderContext(plan: PlanWithIncludes): PaymentReminderContext | null {
+  const clientLink = plan.invoice.matter.contacts[0];
+  const email = clientLink?.contact.email;
+  if (!email) return null;
+  const name = clientLink?.contact.name ?? "Klient";
+  const paidSum = plan.invoice.payments.reduce((s, p) => s + p.amount, 0);
+  const remaining = Math.max(0, plan.invoice.amount - paidSum);
+  const org = plan.invoice.matter.organization;
+  return {
+    recipientEmail: email,
+    recipientName: name,
+    matterNumber: plan.invoice.matter.matterNumber,
+    matterTitle: plan.invoice.matter.title,
+    invoiceAmount: plan.invoice.amount,
+    monthlyAmount: plan.monthlyAmount,
+    dayOfMonth: plan.dayOfMonth,
+    remainingAmount: remaining,
+    organizationName: org.name,
+    organizationContact: org.email ?? undefined,
+    bankgiro: org.bankgiro ?? undefined,
+  };
+}
+
+async function trySendDue(planId: string, ctx: PaymentReminderContext, currentMonth: string): Promise<boolean> {
+  const alreadySent = await prisma.paymentPlanReminder.findUnique({
+    where: { planId_dueMonth_type: { planId, dueMonth: currentMonth, type: "DUE" } },
+  });
+  if (alreadySent) return false;
+  try {
+    await sendPaymentDue(ctx);
+    await prisma.paymentPlanReminder.create({
+      data: { planId, dueMonth: currentMonth, type: "DUE" },
+    });
+    return true;
+  } catch (e) {
+    console.error(`[cron] DUE-mail misslyckades för plan ${planId}:`, e);
+    return false;
+  }
+}
+
+async function trySendOverdue(planId: string, ctx: PaymentReminderContext, currentMonth: string): Promise<boolean> {
+  const alreadySent = await prisma.paymentPlanReminder.findUnique({
+    where: { planId_dueMonth_type: { planId, dueMonth: currentMonth, type: "OVERDUE" } },
+  });
+  if (alreadySent) return false;
+  try {
+    await sendPaymentOverdue(ctx);
+    await prisma.paymentPlanReminder.create({
+      data: { planId, dueMonth: currentMonth, type: "OVERDUE" },
+    });
+    return true;
+  } catch (e) {
+    console.error(`[cron] OVERDUE-mail misslyckades för plan ${planId}:`, e);
+    return false;
+  }
 }

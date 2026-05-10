@@ -53,3 +53,6 @@ next-env.d.ts
 .vscode/
 .idea/
 *.swp
+
+# Test- och kvalitetsrapporter (samlad output-mapp)
+/reports/

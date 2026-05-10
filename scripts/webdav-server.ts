@@ -62,9 +62,15 @@ type User = Awaited<ReturnType<typeof prisma.user.findFirstOrThrow>>;
 // Helpers — URL parsing, slugs, XML escaping
 // ────────────────────────────────────────────────────────────────
 
-/** Split decoded path "/a/b/c" into segments ["a","b","c"]. Empty for root. */
+/** Split decoded path "/a/b/c" into segments ["a","b","c"]. Empty for root.
+ *
+ * Normaliserar till NFC (composed Unicode) — macOS Finder skickar filnamn
+ * i NFD (t.ex. "å" som a + combining ring), medan databasen lagrar NFC.
+ * Utan denna normalisering 404:ar matters/mappar/filer med svenska tecken
+ * slumpmässigt beroende på client.
+ */
 function splitPath(urlPath: string): string[] {
-  const decoded = decodeURIComponent(urlPath);
+  const decoded = decodeURIComponent(urlPath).normalize("NFC");
   return decoded.replace(/^\/+|\/+$/g, "").split("/").filter(Boolean);
 }
 
@@ -88,10 +94,10 @@ function httpDate(d: Date | string): string {
   return new Date(d).toUTCString();
 }
 
-/** Swedish-safe matter slug: "2024-0001 - Title" */
+/** Swedish-safe matter slug: "2024-0001 - Title" — normaliserat till NFC. */
 function matterSlug(m: { matterNumber: string; title: string }): string {
   const safeTitle = m.title.replace(/[\/\\:*?"<>|]/g, "-").slice(0, 80);
-  return `${m.matterNumber} - ${safeTitle}`;
+  return `${m.matterNumber} - ${safeTitle}`.normalize("NFC");
 }
 
 // ────────────────────────────────────────────────────────────────
@@ -277,43 +283,56 @@ type Resolved =
   | { kind: "missing-in-folder"; matter: MatterNode; folder: FolderNode | null; name: string }
   | { kind: "not-found" };
 
-async function resolvePath(segments: string[], user: User): Promise<Resolved> {
-  if (segments.length === 0) return { kind: "root" };
-
-  // Segment 0: matter — match by slug
+async function findMatterBySlug(slug: string, user: User): Promise<MatterNode | null> {
   const allMatters = await prisma.matter.findMany({
     where: { organizationId: user.organizationId },
     select: { id: true, matterNumber: true, title: true, organizationId: true },
   });
-  const matter = allMatters.find((m) => matterSlug(m) === segments[0]);
+  return allMatters.find((m) => matterSlug(m) === slug) ?? null;
+}
+
+async function traverseFolders(
+  matterId: string,
+  segments: string[],
+): Promise<FolderNode | null | "not-found"> {
+  let currentFolder: FolderNode | null = null;
+  for (const name of segments) {
+    const siblings: FolderNode[] = await prisma.documentFolder.findMany({
+      where: { matterId, parentId: currentFolder?.id ?? null },
+    });
+    const found = siblings.find((f) => f.name.normalize("NFC") === name) ?? null;
+    if (!found) return "not-found";
+    currentFolder = found;
+  }
+  return currentFolder;
+}
+
+async function resolvePath(segments: string[], user: User): Promise<Resolved> {
+  if (segments.length === 0) return { kind: "root" };
+
+  const matter = await findMatterBySlug(segments[0], user);
   if (!matter) return { kind: "not-found" };
   if (segments.length === 1) return { kind: "matter", matter };
 
-  // Traverse folder path (all but last segment are folders, last may be folder or file)
-  let currentFolder: FolderNode | null = null;
-  for (let i = 1; i < segments.length - 1; i++) {
-    const name = segments[i];
-    const found: FolderNode | null = await prisma.documentFolder.findFirst({
-      where: { matterId: matter.id, parentId: currentFolder?.id ?? null, name },
-    });
-    if (!found) return { kind: "not-found" };
-    currentFolder = found;
-  }
+  const folderSegments = segments.slice(1, -1);
+  const traversal = await traverseFolders(matter.id, folderSegments);
+  if (traversal === "not-found") return { kind: "not-found" };
+  const currentFolder = traversal;
 
   const lastName = segments[segments.length - 1];
 
-  // Last segment: folder or document?
-  const folderMatch: FolderNode | null = await prisma.documentFolder.findFirst({
-    where: { matterId: matter.id, parentId: currentFolder?.id ?? null, name: lastName },
+  const folderSiblings = await prisma.documentFolder.findMany({
+    where: { matterId: matter.id, parentId: currentFolder?.id ?? null },
   });
+  const folderMatch = folderSiblings.find((f) => f.name.normalize("NFC") === lastName) ?? null;
   if (folderMatch) return { kind: "folder", matter, folder: folderMatch };
 
-  const docMatch = await prisma.document.findFirst({
-    where: { matterId: matter.id, folderId: currentFolder?.id ?? null, fileName: lastName },
+  const docSiblings = await prisma.document.findMany({
+    where: { matterId: matter.id, folderId: currentFolder?.id ?? null },
   });
+  const docMatch = docSiblings.find((d) => d.fileName.normalize("NFC") === lastName) ?? null;
   if (docMatch) return { kind: "document", matter, folder: currentFolder, document: docMatch };
 
-  // Nothing exists at this path yet — caller may want this for PUT/MKCOL
   return { kind: "missing-in-folder", matter, folder: currentFolder, name: lastName };
 }
 
@@ -366,10 +385,72 @@ function multistatus(entries: PropEntry[]): string {
 // PROPFIND — list resources
 // ────────────────────────────────────────────────────────────────
 
+async function buildRootEntries(user: User, includeChildren: boolean): Promise<PropEntry[]> {
+  const entries: PropEntry[] = [{ href: "/", displayName: "/", isCollection: true }];
+  if (!includeChildren) return entries;
+  const matters = await prisma.matter.findMany({
+    where: { organizationId: user.organizationId },
+    orderBy: { matterNumber: "asc" },
+  });
+  for (const m of matters) {
+    const name = matterSlug(m);
+    entries.push({
+      href: "/" + encodeSegment(name) + "/",
+      displayName: name,
+      isCollection: true,
+      lastModified: m.updatedAt,
+      created: m.createdAt,
+    });
+  }
+  return entries;
+}
+
+async function buildCollectionEntries(
+  matterId: string,
+  folderId: string | null,
+  selfHref: string,
+  hrefPrefix: string,
+  selfName: string,
+  includeChildren: boolean,
+): Promise<PropEntry[]> {
+  const entries: PropEntry[] = [{
+    href: selfHref + "/",
+    displayName: selfName,
+    isCollection: true,
+  }];
+  if (!includeChildren) return entries;
+  const [childFolders, childDocs] = await Promise.all([
+    prisma.documentFolder.findMany({ where: { matterId, parentId: folderId }, orderBy: { name: "asc" } }),
+    prisma.document.findMany({ where: { matterId, folderId }, orderBy: { fileName: "asc" } }),
+  ]);
+  for (const f of childFolders) {
+    entries.push({
+      href: hrefPrefix + encodeSegment(f.name) + "/",
+      displayName: f.name,
+      isCollection: true,
+      created: f.createdAt,
+    });
+  }
+  for (const d of childDocs) {
+    entries.push({
+      href: hrefPrefix + encodeSegment(d.fileName),
+      displayName: d.fileName,
+      isCollection: false,
+      size: d.fileSize,
+      contentType: d.mimeType,
+      lastModified: d.createdAt,
+      created: d.createdAt,
+      etag: `${d.id}-v${d.version}`,
+    });
+  }
+  return entries;
+}
+
 async function handlePROPFIND(req: IncomingMessage, res: ServerResponse, user: User) {
   const urlPath = new URL(req.url!, "http://x").pathname;
   const segments = splitPath(urlPath);
   const depth = (req.headers.depth as string) ?? "1";
+  const includeChildren = depth !== "0";
   const resolved = await resolvePath(segments, user);
 
   if (resolved.kind === "not-found" || resolved.kind === "missing-in-folder") {
@@ -379,67 +460,20 @@ async function handlePROPFIND(req: IncomingMessage, res: ServerResponse, user: U
 
   const hrefPrefix = "/" + segments.map(encodeSegment).join("/") + (segments.length ? "/" : "");
   const selfHref = hrefPrefix.replace(/\/$/, "") || "/";
-  const entries: PropEntry[] = [];
+  let entries: PropEntry[] = [];
 
   if (resolved.kind === "root") {
-    entries.push({ href: "/", displayName: "/", isCollection: true });
-    if (depth !== "0") {
-      const matters = await prisma.matter.findMany({
-        where: { organizationId: user.organizationId },
-        orderBy: { matterNumber: "asc" },
-      });
-      for (const m of matters) {
-        const name = matterSlug(m);
-        entries.push({
-          href: "/" + encodeSegment(name) + "/",
-          displayName: name,
-          isCollection: true,
-          lastModified: m.updatedAt,
-          created: m.createdAt,
-        });
-      }
-    }
+    entries = await buildRootEntries(user, includeChildren);
   } else if (resolved.kind === "matter" || resolved.kind === "folder") {
-    const matterId = resolved.matter.id;
     const folderId = resolved.kind === "folder" ? resolved.folder?.id ?? null : null;
-    entries.push({
-      href: selfHref + "/",
-      displayName: segments[segments.length - 1] ?? "/",
-      isCollection: true,
-    });
-
-    if (depth !== "0") {
-      const [childFolders, childDocs] = await Promise.all([
-        prisma.documentFolder.findMany({
-          where: { matterId, parentId: folderId },
-          orderBy: { name: "asc" },
-        }),
-        prisma.document.findMany({
-          where: { matterId, folderId },
-          orderBy: { fileName: "asc" },
-        }),
-      ]);
-      for (const f of childFolders) {
-        entries.push({
-          href: hrefPrefix + encodeSegment(f.name) + "/",
-          displayName: f.name,
-          isCollection: true,
-          created: f.createdAt,
-        });
-      }
-      for (const d of childDocs) {
-        entries.push({
-          href: hrefPrefix + encodeSegment(d.fileName),
-          displayName: d.fileName,
-          isCollection: false,
-          size: d.fileSize,
-          contentType: d.mimeType,
-          lastModified: d.createdAt,
-          created: d.createdAt,
-          etag: `${d.id}-v${d.version}`,
-        });
-      }
-    }
+    entries = await buildCollectionEntries(
+      resolved.matter.id,
+      folderId,
+      selfHref,
+      hrefPrefix,
+      segments[segments.length - 1] ?? "/",
+      includeChildren,
+    );
   } else if (resolved.kind === "document") {
     const d = resolved.document;
     entries.push({
@@ -690,6 +724,38 @@ async function handleMKCOL(req: IncomingMessage, res: ServerResponse, user: User
 // MOVE — rename or move a document/folder (non-junk paths)
 // ────────────────────────────────────────────────────────────────
 
+async function moveDocumentOverwrite(
+  src: Extract<Resolved, { kind: "document" }>,
+  dst: Extract<Resolved, { kind: "document" }>,
+): Promise<void> {
+  const srcAbs = path.isAbsolute(src.document.storagePath)
+    ? src.document.storagePath : path.resolve(process.cwd(), src.document.storagePath);
+  const dstAbs = path.isAbsolute(dst.document.storagePath)
+    ? dst.document.storagePath : path.resolve(process.cwd(), dst.document.storagePath);
+  const body = await readFile(srcAbs);
+  await writeFile(dstAbs, body);
+  await prisma.document.update({
+    where: { id: dst.document.id },
+    data: { fileSize: body.length, version: dst.document.version + 1 },
+  });
+  try { await unlink(srcAbs); } catch { /* ignore */ }
+  await prisma.document.delete({ where: { id: src.document.id } });
+}
+
+async function moveDocumentToNew(
+  src: Extract<Resolved, { kind: "document" }>,
+  dst: Extract<Resolved, { kind: "missing-in-folder" }>,
+): Promise<void> {
+  await prisma.document.update({
+    where: { id: src.document.id },
+    data: {
+      fileName: dst.name,
+      folderId: dst.folder?.id ?? null,
+      matterId: dst.matter.id,
+    },
+  });
+}
+
 async function handleMOVE(req: IncomingMessage, res: ServerResponse, user: User) {
   const urlPath = new URL(req.url!, "http://x").pathname;
   const destHeader = (req.headers["destination"] as string | undefined) ?? "";
@@ -703,58 +769,34 @@ async function handleMOVE(req: IncomingMessage, res: ServerResponse, user: User)
   const src = await resolvePath(splitPath(urlPath), user);
   const dst = await resolvePath(splitPath(destPath), user);
 
-  // Destination must live inside some matter
   if (dst.kind === "root" || dst.kind === "not-found") {
     res.writeHead(409).end(); return;
   }
 
-  if (src.kind === "document") {
-    if (dst.kind === "document") {
-      if (!overwrite) { res.writeHead(412).end(); return; }
-      // Overwrite destination: replace bytes & bump version; delete source.
-      const srcAbs = path.isAbsolute(src.document.storagePath)
-        ? src.document.storagePath : path.resolve(process.cwd(), src.document.storagePath);
-      const dstAbs = path.isAbsolute(dst.document.storagePath)
-        ? dst.document.storagePath : path.resolve(process.cwd(), dst.document.storagePath);
-      const body = await readFile(srcAbs);
-      await writeFile(dstAbs, body);
-      await prisma.document.update({
-        where: { id: dst.document.id },
-        data: { fileSize: body.length, version: dst.document.version + 1 },
-      });
-      try { await unlink(srcAbs); } catch { /* ignore */ }
-      await prisma.document.delete({ where: { id: src.document.id } });
-      res.writeHead(204).end();
-      return;
-    }
-    if (dst.kind === "missing-in-folder") {
-      // Rename / move: keep bytes on disk, update DB metadata.
-      await prisma.document.update({
-        where: { id: src.document.id },
-        data: {
-          fileName: dst.name,
-          folderId: dst.folder?.id ?? null,
-          matterId: dst.matter.id,
-        },
-      });
-      res.writeHead(201).end();
-      return;
-    }
+  if (src.kind === "document" && dst.kind === "document") {
+    if (!overwrite) { res.writeHead(412).end(); return; }
+    await moveDocumentOverwrite(src, dst);
+    res.writeHead(204).end();
+    return;
   }
 
-  if (src.kind === "folder" && src.folder) {
-    if (dst.kind === "missing-in-folder") {
-      await prisma.documentFolder.update({
-        where: { id: src.folder.id },
-        data: {
-          name: dst.name,
-          parentId: dst.folder?.id ?? null,
-          matterId: dst.matter.id,
-        },
-      });
-      res.writeHead(201).end();
-      return;
-    }
+  if (src.kind === "document" && dst.kind === "missing-in-folder") {
+    await moveDocumentToNew(src, dst);
+    res.writeHead(201).end();
+    return;
+  }
+
+  if (src.kind === "folder" && src.folder && dst.kind === "missing-in-folder") {
+    await prisma.documentFolder.update({
+      where: { id: src.folder.id },
+      data: {
+        name: dst.name,
+        parentId: dst.folder?.id ?? null,
+        matterId: dst.matter.id,
+      },
+    });
+    res.writeHead(201).end();
+    return;
   }
 
   res.writeHead(409).end();
@@ -810,6 +852,181 @@ function handleOPTIONS(_req: IncomingMessage, res: ServerResponse) {
 //
 // Returns true if the request was handled (response written).
 
+async function handleJunkPut(req: IncomingMessage, res: ServerResponse, urlPath: string, name: string) {
+  const body = await readBody(req);
+  junkSet(urlPath, {
+    body,
+    contentType: mimeFromExt(name) || "application/octet-stream",
+    modifiedAt: new Date(),
+  });
+  // Match original behavior: always 204 since junkGet runs after junkSet.
+  res.writeHead(junkGet(urlPath) ? 204 : 201).end();
+}
+
+function handleJunkGet(res: ServerResponse, urlPath: string, method: "GET" | "HEAD") {
+  const e = junkGet(urlPath);
+  if (!e) { res.writeHead(404).end(); return; }
+  res.writeHead(200, {
+    "Content-Type": e.contentType,
+    "Content-Length": String(e.body.length),
+    "Last-Modified": httpDate(e.modifiedAt),
+    "Accept-Ranges": "bytes",
+    "Cache-Control": "no-cache",
+  });
+  if (method === "HEAD") res.end(); else res.end(e.body);
+}
+
+function handleJunkPropfind(res: ServerResponse, urlPath: string, name: string, href: string) {
+  const e = junkGet(urlPath);
+  if (e) {
+    const xml = multistatus([{
+      href, displayName: name, isCollection: false,
+      size: e.body.length, contentType: e.contentType,
+      lastModified: e.modifiedAt, created: e.modifiedAt,
+    }]);
+    res.writeHead(207, { "Content-Type": 'application/xml; charset="utf-8"', "DAV": "1, 2" });
+    res.end(xml);
+    return;
+  }
+  if (junkCollectionHas(urlPath)) {
+    const xml = multistatus([{
+      href: href.endsWith("/") ? href : href + "/",
+      displayName: name, isCollection: true,
+    }]);
+    res.writeHead(207, { "Content-Type": 'application/xml; charset="utf-8"', "DAV": "1, 2" });
+    res.end(xml);
+    return;
+  }
+  res.writeHead(404).end();
+}
+
+async function rescueAbortedSave(
+  urlPath: string,
+  segments: string[],
+  user: User,
+): Promise<void> {
+  const lastSeg = segments[segments.length - 1] ?? "";
+  const sbMatch = SB_TEMP_RE.exec(lastSeg);
+  if (!sbMatch || !junkCollectionHas(urlPath)) return;
+  const realName = lastSeg.slice(0, sbMatch.index);
+  const innerKey = junkKey(urlPath) + "/" + realName;
+  const stashed = junkStore.get(innerKey);
+  if (!stashed || stashed.expiresAt <= Date.now()) return;
+  const parentSegments = segments.slice(0, -1);
+  const realUrlPath = "/" + [...parentSegments, realName].map(encodeSegment).join("/");
+  const realResolved = await resolvePath([...parentSegments, realName], user);
+  try {
+    await commitRescuedBody(realResolved, stashed.entry.body, realName, user);
+    console.log(`[webdav] räddade aborterad save: ${realUrlPath} (${stashed.entry.body.length} B)`);
+  } catch (err) {
+    console.error(`[webdav] kunde inte rädda aborterad save ${realUrlPath}:`, err);
+  }
+}
+
+async function commitRescuedBody(
+  resolved: Resolved,
+  body: Buffer,
+  realName: string,
+  user: User,
+): Promise<void> {
+  if (resolved.kind === "document") {
+    const d = resolved.document;
+    const absPath = path.isAbsolute(d.storagePath)
+      ? d.storagePath : path.resolve(process.cwd(), d.storagePath);
+    await mkdir(path.dirname(absPath), { recursive: true });
+    await writeFile(absPath, body);
+    await prisma.document.update({
+      where: { id: d.id },
+      data: { fileSize: body.length, version: d.version + 1 },
+    });
+    triggerAnalysis(d.id);
+  } else if (resolved.kind === "missing-in-folder") {
+    await createNewDocument(resolved, body, realName, user);
+  }
+}
+
+async function createNewDocument(
+  resolved: Extract<Resolved, { kind: "missing-in-folder" }>,
+  body: Buffer,
+  fileName: string,
+  user: User,
+): Promise<void> {
+  const mime = mimeFromExt(fileName);
+  const docId = crypto.randomUUID();
+  const dir = path.join(STORAGE_ROOT, resolved.matter.id, docId);
+  const absPath = path.join(dir, fileName);
+  await mkdir(dir, { recursive: true });
+  await writeFile(absPath, body);
+  const created = await prisma.document.create({
+    data: {
+      fileName, mimeType: mime, fileSize: body.length,
+      storagePath: path.relative(process.cwd(), absPath),
+      version: 1,
+      matterId: resolved.matter.id,
+      folderId: resolved.folder?.id ?? null,
+      uploadedById: user.id,
+    },
+  });
+  triggerAnalysis(created.id);
+}
+
+async function handleJunkDelete(res: ServerResponse, urlPath: string, user: User) {
+  const segments = splitPath(urlPath);
+  await rescueAbortedSave(urlPath, segments, user);
+  junkDelete(urlPath);
+  res.writeHead(204).end();
+}
+
+async function handleJunkMove(req: IncomingMessage, res: ServerResponse, urlPath: string, user: User) {
+  const destHeader = (req.headers["destination"] as string | undefined) ?? "";
+  const overwrite = ((req.headers["overwrite"] as string | undefined) ?? "T").toUpperCase() !== "F";
+  if (!destHeader) { res.writeHead(400).end(); return; }
+  let destPath: string;
+  try { destPath = new URL(destHeader, "http://x").pathname; }
+  catch { res.writeHead(400).end(); return; }
+
+  const source = junkGet(urlPath);
+  if (!source) { res.writeHead(404).end(); return; }
+
+  const destResolved = await resolvePath(splitPath(destPath), user);
+
+  if (destResolved.kind === "document") {
+    if (!overwrite) { res.writeHead(412).end(); return; }
+    await commitRescuedBody(destResolved, source.body, "", user);
+    junkDelete(urlPath);
+    res.writeHead(204).end();
+    return;
+  }
+
+  if (destResolved.kind === "missing-in-folder") {
+    await createNewDocument(destResolved, source.body, destResolved.name, user);
+    junkDelete(urlPath);
+    res.writeHead(201).end();
+    return;
+  }
+
+  if (isJunkPath(destPath)) {
+    junkSet(destPath, source);
+    junkDelete(urlPath);
+    res.writeHead(201).end();
+    return;
+  }
+
+  res.writeHead(409).end();
+}
+
+function handleJunkProppatch(res: ServerResponse, href: string) {
+  const xml = `<?xml version="1.0" encoding="utf-8"?>
+<D:multistatus xmlns:D="DAV:">
+  <D:response>
+    <D:href>${href}</D:href>
+    <D:propstat><D:prop/><D:status>HTTP/1.1 200 OK</D:status></D:propstat>
+  </D:response>
+</D:multistatus>`;
+  res.writeHead(207, { "Content-Type": 'application/xml; charset="utf-8"' });
+  res.end(xml);
+}
+
 async function handleJunkFile(
   method: string,
   req: IncomingMessage,
@@ -822,160 +1039,18 @@ async function handleJunkFile(
   const href = urlPath;
 
   switch (method) {
-    case "PUT": {
-      const body = await readBody(req);
-      junkSet(urlPath, {
-        body,
-        contentType: mimeFromExt(name) || "application/octet-stream",
-        modifiedAt: new Date(),
-      });
-      res.writeHead(junkGet(urlPath) ? 204 : 201).end();
-      return true;
-    }
+    case "PUT": await handleJunkPut(req, res, urlPath, name); return true;
     case "GET":
-    case "HEAD": {
-      const e = junkGet(urlPath);
-      if (!e) { res.writeHead(404).end(); return true; }
-      res.writeHead(200, {
-        "Content-Type": e.contentType,
-        "Content-Length": String(e.body.length),
-        "Last-Modified": httpDate(e.modifiedAt),
-        "Accept-Ranges": "bytes",
-        "Cache-Control": "no-cache",
-      });
-      if (method === "HEAD") res.end(); else res.end(e.body);
-      return true;
-    }
-    case "PROPFIND": {
-      const e = junkGet(urlPath);
-      if (e) {
-        const xml = multistatus([{
-          href, displayName: name, isCollection: false,
-          size: e.body.length, contentType: e.contentType,
-          lastModified: e.modifiedAt, created: e.modifiedAt,
-        }]);
-        res.writeHead(207, { "Content-Type": 'application/xml; charset="utf-8"', "DAV": "1, 2" });
-        res.end(xml);
-        return true;
-      }
-      if (junkCollectionHas(urlPath)) {
-        const xml = multistatus([{
-          href: href.endsWith("/") ? href : href + "/",
-          displayName: name, isCollection: true,
-        }]);
-        res.writeHead(207, { "Content-Type": 'application/xml; charset="utf-8"', "DAV": "1, 2" });
-        res.end(xml);
-        return true;
-      }
-      res.writeHead(404).end();
-      return true;
-    }
-    case "DELETE": {
-      junkDelete(urlPath);
-      res.writeHead(204).end();
-      return true;
-    }
-    case "MKCOL": {
-      // macOS safe-save creates `.sb-…` temp dirs — track in memory only.
-      junkCollectionAdd(urlPath);
-      res.writeHead(201).end();
-      return true;
-    }
-    case "MOVE": {
-      // The crucial step: macOS MOVEs a junk temp file over the real doc
-      // to commit an atomic save. Pull the body out of the junk store,
-      // write it to the destination, and clean up.
-      const destHeader = (req.headers["destination"] as string | undefined) ?? "";
-      const overwrite = ((req.headers["overwrite"] as string | undefined) ?? "T").toUpperCase() !== "F";
-      if (!destHeader) { res.writeHead(400).end(); return true; }
-      let destPath: string;
-      try { destPath = new URL(destHeader, "http://x").pathname; }
-      catch { res.writeHead(400).end(); return true; }
-
-      const source = junkGet(urlPath);
-      if (!source) { res.writeHead(404).end(); return true; }
-
-      const destSegments = splitPath(destPath);
-      const destResolved = await resolvePath(destSegments, user);
-
-      if (destResolved.kind === "document") {
-        if (!overwrite) { res.writeHead(412).end(); return true; }
-        const d = destResolved.document;
-        const absPath = path.isAbsolute(d.storagePath)
-          ? d.storagePath : path.resolve(process.cwd(), d.storagePath);
-        await mkdir(path.dirname(absPath), { recursive: true });
-        await writeFile(absPath, source.body);
-        await prisma.document.update({
-          where: { id: d.id },
-          data: { fileSize: source.body.length, version: d.version + 1 },
-        });
-        triggerAnalysis(d.id);
-        junkDelete(urlPath);
-        res.writeHead(204).end();
-        return true;
-      }
-
-      if (destResolved.kind === "missing-in-folder") {
-        const fileName = destResolved.name;
-        const mime = mimeFromExt(fileName);
-        const docId = crypto.randomUUID();
-        const dir = path.join(STORAGE_ROOT, destResolved.matter.id, docId);
-        const absPath = path.join(dir, fileName);
-        await mkdir(dir, { recursive: true });
-        await writeFile(absPath, source.body);
-        const created = await prisma.document.create({
-          data: {
-            fileName, mimeType: mime, fileSize: source.body.length,
-            storagePath: path.relative(process.cwd(), absPath),
-            version: 1,
-            matterId: destResolved.matter.id,
-            folderId: destResolved.folder?.id ?? null,
-            uploadedById: user.id,
-          },
-        });
-        triggerAnalysis(created.id);
-        junkDelete(urlPath);
-        res.writeHead(201).end();
-        return true;
-      }
-
-      // Destination is another junk path — just rekey in-memory.
-      if (isJunkPath(destPath)) {
-        junkSet(destPath, source);
-        junkDelete(urlPath);
-        res.writeHead(201).end();
-        return true;
-      }
-
-      res.writeHead(409).end(); // conflict (e.g. dest folder missing)
-      return true;
-    }
-    case "COPY": {
-      res.writeHead(501).end();
-      return true;
-    }
-    case "LOCK": {
-      handleLOCK(req, res);
-      return true;
-    }
-    case "UNLOCK": {
-      handleUNLOCK(req, res);
-      return true;
-    }
-    case "PROPPATCH": {
-      const xml = `<?xml version="1.0" encoding="utf-8"?>
-<D:multistatus xmlns:D="DAV:">
-  <D:response>
-    <D:href>${href}</D:href>
-    <D:propstat><D:prop/><D:status>HTTP/1.1 200 OK</D:status></D:propstat>
-  </D:response>
-</D:multistatus>`;
-      res.writeHead(207, { "Content-Type": 'application/xml; charset="utf-8"' });
-      res.end(xml);
-      return true;
-    }
-    default:
-      return false; // Let the main router handle it (e.g. OPTIONS).
+    case "HEAD": handleJunkGet(res, urlPath, method); return true;
+    case "PROPFIND": handleJunkPropfind(res, urlPath, name, href); return true;
+    case "DELETE": await handleJunkDelete(res, urlPath, user); return true;
+    case "MKCOL": junkCollectionAdd(urlPath); res.writeHead(201).end(); return true;
+    case "MOVE": await handleJunkMove(req, res, urlPath, user); return true;
+    case "COPY": res.writeHead(501).end(); return true;
+    case "LOCK": handleLOCK(req, res); return true;
+    case "UNLOCK": handleUNLOCK(req, res); return true;
+    case "PROPPATCH": handleJunkProppatch(res, href); return true;
+    default: return false;
   }
 }
 
@@ -1063,9 +1138,16 @@ const server = createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, () => {
-  console.log(`\n🗂️  AVA WebDAV server listening on http://localhost:${PORT}/`);
-  console.log(`   Storage root: ${STORAGE_ROOT}`);
-  console.log(`   Mount from Finder:  Cmd+K → http://localhost:${PORT}/`);
-  console.log(`   Mount from Windows: Explorer → Map network drive → http://localhost:${PORT}/\n`);
-});
+// Starta bara HTTP-servern när modulen körs som entry-point. I tester sätter
+// vi WEBDAV_SKIP_LISTEN=1 och attachar vår egen listener på en slumpvald port.
+if (process.env.WEBDAV_SKIP_LISTEN !== "1") {
+  server.listen(PORT, () => {
+    console.log(`\n🗂️  AVA WebDAV server listening on http://localhost:${PORT}/`);
+    console.log(`   Storage root: ${STORAGE_ROOT}`);
+    console.log(`   Mount from Finder:  Cmd+K → http://localhost:${PORT}/`);
+    console.log(`   Mount from Windows: Explorer → Map network drive → http://localhost:${PORT}/\n`);
+  });
+}
+
+// Exporteras för integrationstester.
+export { server, prisma };

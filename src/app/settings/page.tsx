@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useId, useState, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { Upload, Trash2, Building2, Plus, Pencil, X, Check, FolderOpen, Copy } from "lucide-react";
 
@@ -206,13 +206,18 @@ interface OfficeFormRowProps {
 function OfficeFormRow({ value, onChange, onSave, onCancel, saving }: OfficeFormRowProps) {
   const set = (k: keyof OfficeFormState) => (e: React.ChangeEvent<HTMLInputElement>) =>
     onChange({ ...value, [k]: k === "isMain" ? e.target.checked : e.target.value });
+  const officeNameId = useId();
+  const officeAddressId = useId();
+  const officePhoneId = useId();
+  const officeEmailId = useId();
 
   return (
     <div className="border border-blue-200 rounded p-3 bg-blue-50 space-y-2">
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <label className="block text-xs font-medium text-gray-700 mb-1">Namn *</label>
+          <label htmlFor={officeNameId} className="block text-xs font-medium text-gray-700 mb-1">Namn *</label>
           <input
+            id={officeNameId}
             type="text"
             value={value.name}
             onChange={set("name")}
@@ -221,8 +226,9 @@ function OfficeFormRow({ value, onChange, onSave, onCancel, saving }: OfficeForm
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-gray-700 mb-1">Adress</label>
+          <label htmlFor={officeAddressId} className="block text-xs font-medium text-gray-700 mb-1">Adress</label>
           <input
+            id={officeAddressId}
             type="text"
             value={value.address}
             onChange={set("address")}
@@ -231,8 +237,9 @@ function OfficeFormRow({ value, onChange, onSave, onCancel, saving }: OfficeForm
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-gray-700 mb-1">Telefon</label>
+          <label htmlFor={officePhoneId} className="block text-xs font-medium text-gray-700 mb-1">Telefon</label>
           <input
+            id={officePhoneId}
             type="text"
             value={value.phone}
             onChange={set("phone")}
@@ -241,8 +248,9 @@ function OfficeFormRow({ value, onChange, onSave, onCancel, saving }: OfficeForm
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-gray-700 mb-1">E-post</label>
+          <label htmlFor={officeEmailId} className="block text-xs font-medium text-gray-700 mb-1">E-post</label>
           <input
+            id={officeEmailId}
             type="email"
             value={value.email}
             onChange={set("email")}
@@ -301,6 +309,12 @@ export default function SettingsPage() {
   const [logoLoading, setLogoLoading] = useState(false);
   const [logoError, setLogoError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const orgNameId = useId();
+  const orgNumberId = useId();
+  const orgAddressId = useId();
+  const orgPhoneId = useId();
+  const orgEmailId = useId();
+  const orgBankgiroId = useId();
 
   // Populate form once data arrives
   if (settings.data && !formReady) {
@@ -443,8 +457,9 @@ export default function SettingsPage() {
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Byråns namn</label>
+              <label htmlFor={orgNameId} className="block text-xs font-medium text-gray-700 mb-1">Byråns namn</label>
               <input
+                id={orgNameId}
                 type="text"
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
@@ -452,8 +467,9 @@ export default function SettingsPage() {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Organisationsnummer</label>
+              <label htmlFor={orgNumberId} className="block text-xs font-medium text-gray-700 mb-1">Organisationsnummer</label>
               <input
+                id={orgNumberId}
                 type="text"
                 value={form.orgNumber}
                 placeholder="556123-4567"
@@ -464,8 +480,9 @@ export default function SettingsPage() {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Adress (huvudkontor)</label>
+            <label htmlFor={orgAddressId} className="block text-xs font-medium text-gray-700 mb-1">Adress (huvudkontor)</label>
             <input
+              id={orgAddressId}
               type="text"
               value={form.address}
               placeholder="Storgatan 1, 111 23 Stockholm"
@@ -476,8 +493,9 @@ export default function SettingsPage() {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Telefon</label>
+              <label htmlFor={orgPhoneId} className="block text-xs font-medium text-gray-700 mb-1">Telefon</label>
               <input
+                id={orgPhoneId}
                 type="text"
                 value={form.phone}
                 placeholder="08-123 456 78"
@@ -486,8 +504,9 @@ export default function SettingsPage() {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">E-post</label>
+              <label htmlFor={orgEmailId} className="block text-xs font-medium text-gray-700 mb-1">E-post</label>
               <input
+                id={orgEmailId}
                 type="email"
                 value={form.email}
                 placeholder="info@byrå.se"
@@ -498,8 +517,9 @@ export default function SettingsPage() {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Bankgiro</label>
+            <label htmlFor={orgBankgiroId} className="block text-xs font-medium text-gray-700 mb-1">Bankgiro</label>
             <input
+              id={orgBankgiroId}
               type="text"
               value={form.bankgiro}
               placeholder="123-4567"

@@ -52,7 +52,7 @@ export async function resolveAzureUser(
   }
 
   // 2. Primary lookup: stable Azure oid (set on prior logins).
-  let user = await prisma.user.findUnique({
+  const user = await prisma.user.findUnique({
     where: { azureOid: profile.oid },
     select: { id: true, organizationId: true, role: true, email: true },
   });

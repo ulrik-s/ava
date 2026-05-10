@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import Link from "next/link";
 import { trpc } from "@/lib/trpc";
 import { formatMinutes } from "@/lib/utils";
@@ -12,6 +12,10 @@ export default function TimePage() {
   const utils = trpc.useUtils();
 
   const [showForm, setShowForm] = useState(false);
+  const matterFieldId = useId();
+  const dateFieldId = useId();
+  const minutesFieldId = useId();
+  const descriptionFieldId = useId();
   const [form, setForm] = useState({
     matterId: "",
     date: new Date().toISOString().split("T")[0],
@@ -48,8 +52,8 @@ export default function TimePage() {
           className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div>
-              <label className="block text-sm text-gray-500 mb-1">Ärende *</label>
-              <select required value={form.matterId}
+              <label htmlFor={matterFieldId} className="block text-sm text-gray-500 mb-1">Ärende *</label>
+              <select id={matterFieldId} required value={form.matterId}
                 onChange={(e) => setForm({ ...form, matterId: e.target.value })}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
                 <option value="">Välj ärende...</option>
@@ -59,20 +63,20 @@ export default function TimePage() {
               </select>
             </div>
             <div>
-              <label className="block text-sm text-gray-500 mb-1">Datum *</label>
-              <input type="date" required value={form.date}
+              <label htmlFor={dateFieldId} className="block text-sm text-gray-500 mb-1">Datum *</label>
+              <input id={dateFieldId} type="date" required value={form.date}
                 onChange={(e) => setForm({ ...form, date: e.target.value })}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
             </div>
             <div>
-              <label className="block text-sm text-gray-500 mb-1">Tid (minuter) *</label>
-              <input type="number" required min={1} value={form.minutes}
+              <label htmlFor={minutesFieldId} className="block text-sm text-gray-500 mb-1">Tid (minuter) *</label>
+              <input id={minutesFieldId} type="number" required min={1} value={form.minutes}
                 onChange={(e) => setForm({ ...form, minutes: parseInt(e.target.value) || 0 })}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
             </div>
             <div>
-              <label className="block text-sm text-gray-500 mb-1">Beskrivning *</label>
-              <input type="text" required value={form.description}
+              <label htmlFor={descriptionFieldId} className="block text-sm text-gray-500 mb-1">Beskrivning *</label>
+              <input id={descriptionFieldId} type="text" required value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
             </div>

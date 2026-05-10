@@ -1,0 +1,37 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": [
+    "src/app/**/page.tsx",
+    "src/app/**/layout.tsx",
+    "src/app/**/loading.tsx",
+    "src/app/**/error.tsx",
+    "src/app/**/not-found.tsx",
+    "src/app/**/route.ts",
+    "src/middleware.ts",
+    "src/server/routers/_app.ts",
+    "scripts/*.ts",
+    "test/e2e/*.spec.ts",
+    "test/unit/**/*.test.{ts,tsx}",
+    "test/scripts/*.test.ts",
+    "next.config.{ts,js,mjs}",
+    "postcss.config.{js,mjs}"
+  ],
+  "project": [
+    "src/**/*.{ts,tsx}",
+    "scripts/**/*.ts"
+  ],
+  "ignore": [
+    "src/types/**",
+    "next-env.d.ts",
+    "**/*.test.{ts,tsx}",
+    "**/*.spec.{ts,tsx}"
+  ],
+  "ignoreDependencies": [
+    "@types/node",
+    "@types/react",
+    "@types/react-dom",
+    "tsx",
+    "tailwindcss",
+    "@tailwindcss/postcss"
+  ]
+}

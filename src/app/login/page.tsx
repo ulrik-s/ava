@@ -20,6 +20,73 @@ function LoginFallback() {
   );
 }
 
+function mapOAuthError(oauthError: string | null): string | null {
+  switch (oauthError) {
+    case "WrongTenant":
+      return "Din Microsoft-organisation är inte kopplad till AVA. Kontakta admin.";
+    case "NotInvited":
+      return "Du är inte inbjuden till AVA. Be din admin skapa ett konto med din e-post först.";
+    case "MissingEmail":
+    case "MissingClaims":
+      return "Microsoft-kontot saknar e-post eller obligatorisk information.";
+    case "AccessDenied":
+      return "Inloggningen nekades.";
+    case "OAuthSignin":
+    case "OAuthCallback":
+    case "OAuthAccountNotLinked":
+      return "Microsoft-inloggningen misslyckades. Försök igen.";
+    default:
+      return null;
+  }
+}
+
+function useAzureAvailable(): boolean {
+  const [azureAvailable, setAzureAvailable] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    getProviders().then((providers) => {
+      if (!cancelled) setAzureAvailable(!!providers?.["azure-ad"]);
+    }).catch(() => { /* tyst */ });
+    return () => { cancelled = true; };
+  }, []);
+  return azureAvailable;
+}
+
+function OAuthSection({
+  callbackUrl,
+  oauthErrorMessage,
+}: {
+  callbackUrl: string;
+  oauthErrorMessage: string | null;
+}) {
+  return (
+    <div className="bg-white rounded-lg border border-gray-200 p-6 space-y-4">
+      <h2 className="text-lg font-semibold text-gray-900">Logga in</h2>
+
+      {oauthErrorMessage && (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+          <p className="text-sm text-red-800">{oauthErrorMessage}</p>
+        </div>
+      )}
+
+      <button
+        type="button"
+        onClick={() => signIn("azure-ad", { callbackUrl })}
+        className="w-full flex items-center justify-center gap-3 px-4 py-2.5 border border-gray-300 rounded-lg text-sm font-medium text-gray-800 bg-white hover:bg-gray-50"
+      >
+        <MicrosoftLogo />
+        Logga in med Microsoft
+      </button>
+
+      <div className="flex items-center gap-3">
+        <div className="flex-1 h-px bg-gray-200" />
+        <span className="text-xs text-gray-500">eller med lösenord</span>
+        <div className="flex-1 h-px bg-gray-200" />
+      </div>
+    </div>
+  );
+}
+
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -30,43 +97,8 @@ function LoginForm() {
 
   const callbackUrl = searchParams.get("callbackUrl") || "/";
   const oauthError = searchParams.get("error");
-
-  /**
-   * AzureAD-providern registreras endast när AZURE_AD_*-env är satta. Visa
-   * Microsoft-knappen bara om providern faktiskt är aktiv — annars skulle ett
-   * klick hamna i tomma intet.
-   */
-  const [azureAvailable, setAzureAvailable] = useState(false);
-  useEffect(() => {
-    let cancelled = false;
-    getProviders().then((providers) => {
-      if (!cancelled) setAzureAvailable(!!providers?.["azure-ad"]);
-    }).catch(() => {
-      /* providern tyst av när fetch fallerar */
-    });
-    return () => { cancelled = true; };
-  }, []);
-
-  /** Mappa NextAuth/Azure-fel till svensk, begriplig text. */
-  const oauthErrorMessage = (() => {
-    switch (oauthError) {
-      case "WrongTenant":
-        return "Din Microsoft-organisation är inte kopplad till AVA. Kontakta admin.";
-      case "NotInvited":
-        return "Du är inte inbjuden till AVA. Be din admin skapa ett konto med din e-post först.";
-      case "MissingEmail":
-      case "MissingClaims":
-        return "Microsoft-kontot saknar e-post eller obligatorisk information.";
-      case "AccessDenied":
-        return "Inloggningen nekades.";
-      case "OAuthSignin":
-      case "OAuthCallback":
-      case "OAuthAccountNotLinked":
-        return "Microsoft-inloggningen misslyckades. Försök igen.";
-      default:
-        return null;
-    }
-  })();
+  const azureAvailable = useAzureAvailable();
+  const oauthErrorMessage = mapOAuthError(oauthError);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -98,31 +130,7 @@ function LoginForm() {
         </div>
 
         {azureAvailable && (
-          <div className="bg-white rounded-lg border border-gray-200 p-6 space-y-4">
-            <h2 className="text-lg font-semibold text-gray-900">Logga in</h2>
-
-            {oauthErrorMessage && (
-              <div className="rounded-lg border border-red-200 bg-red-50 p-3">
-                <p className="text-sm text-red-800">{oauthErrorMessage}</p>
-              </div>
-            )}
-
-            {/* Primär inloggningsmetod: Microsoft / O365 */}
-            <button
-              type="button"
-              onClick={() => signIn("azure-ad", { callbackUrl })}
-              className="w-full flex items-center justify-center gap-3 px-4 py-2.5 border border-gray-300 rounded-lg text-sm font-medium text-gray-800 bg-white hover:bg-gray-50"
-            >
-              <MicrosoftLogo />
-              Logga in med Microsoft
-            </button>
-
-            <div className="flex items-center gap-3">
-              <div className="flex-1 h-px bg-gray-200" />
-              <span className="text-xs text-gray-500">eller med lösenord</span>
-              <div className="flex-1 h-px bg-gray-200" />
-            </div>
-          </div>
+          <OAuthSection callbackUrl={callbackUrl} oauthErrorMessage={oauthErrorMessage} />
         )}
 
         <form
@@ -144,10 +152,11 @@ function LoginForm() {
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="login-email" className="block text-sm font-medium text-gray-700 mb-1">
               E-postadress
             </label>
             <input
+              id="login-email"
               type="email"
               required
               autoFocus
@@ -160,10 +169,11 @@ function LoginForm() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="login-password" className="block text-sm font-medium text-gray-700 mb-1">
               Losenord
             </label>
             <input
+              id="login-password"
               type="password"
               required
               autoComplete="current-password"

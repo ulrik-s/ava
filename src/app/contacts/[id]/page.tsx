@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useId, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc";
@@ -15,6 +15,14 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
   const [editing, setEditing] = useState(false);
   const [showChildForm, setShowChildForm] = useState(false);
   const [childForm, setChildForm] = useState({ name: "", email: "", phone: "", notes: "" });
+  const editNameId = useId();
+  const editTypeId = useId();
+  const editPersonalNumberId = useId();
+  const editOrgNumberId = useId();
+  const editEmailId = useId();
+  const editPhoneId = useId();
+  const editAddressId = useId();
+  const editNotesId = useId();
 
   const [editForm, setEditForm] = useState({
     name: "", contactType: "PERSON" as string, personalNumber: "", orgNumber: "",
@@ -82,52 +90,52 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
           <form onSubmit={(e) => { e.preventDefault(); updateContact.mutate({ id, ...editForm } as Parameters<typeof updateContact.mutate>[0]); }}>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm text-gray-500 mb-1">Namn *</label>
-                <input type="text" required value={editForm.name}
+                <label htmlFor={editNameId} className="block text-sm text-gray-500 mb-1">Namn *</label>
+                <input id={editNameId} type="text" required value={editForm.name}
                   onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
                   className="w-full rounded border border-gray-300 px-3 py-2 text-sm" />
               </div>
               <div>
-                <label className="block text-sm text-gray-500 mb-1">Typ</label>
-                <select value={editForm.contactType}
+                <label htmlFor={editTypeId} className="block text-sm text-gray-500 mb-1">Typ</label>
+                <select id={editTypeId} value={editForm.contactType}
                   onChange={(e) => setEditForm({ ...editForm, contactType: e.target.value })}
                   className="w-full rounded border border-gray-300 px-3 py-2 text-sm">
                   {contactTypes.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
                 </select>
               </div>
               <div>
-                <label className="block text-sm text-gray-500 mb-1">Personnummer</label>
-                <input type="text" value={editForm.personalNumber}
+                <label htmlFor={editPersonalNumberId} className="block text-sm text-gray-500 mb-1">Personnummer</label>
+                <input id={editPersonalNumberId} type="text" value={editForm.personalNumber}
                   onChange={(e) => setEditForm({ ...editForm, personalNumber: e.target.value })}
                   className="w-full rounded border border-gray-300 px-3 py-2 text-sm" />
               </div>
               <div>
-                <label className="block text-sm text-gray-500 mb-1">Organisationsnummer</label>
-                <input type="text" value={editForm.orgNumber}
+                <label htmlFor={editOrgNumberId} className="block text-sm text-gray-500 mb-1">Organisationsnummer</label>
+                <input id={editOrgNumberId} type="text" value={editForm.orgNumber}
                   onChange={(e) => setEditForm({ ...editForm, orgNumber: e.target.value })}
                   className="w-full rounded border border-gray-300 px-3 py-2 text-sm" />
               </div>
               <div>
-                <label className="block text-sm text-gray-500 mb-1">E-post</label>
-                <input type="email" value={editForm.email}
+                <label htmlFor={editEmailId} className="block text-sm text-gray-500 mb-1">E-post</label>
+                <input id={editEmailId} type="email" value={editForm.email}
                   onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
                   className="w-full rounded border border-gray-300 px-3 py-2 text-sm" />
               </div>
               <div>
-                <label className="block text-sm text-gray-500 mb-1">Telefon</label>
-                <input type="text" value={editForm.phone}
+                <label htmlFor={editPhoneId} className="block text-sm text-gray-500 mb-1">Telefon</label>
+                <input id={editPhoneId} type="text" value={editForm.phone}
                   onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
                   className="w-full rounded border border-gray-300 px-3 py-2 text-sm" />
               </div>
               <div className="md:col-span-2">
-                <label className="block text-sm text-gray-500 mb-1">Adress</label>
-                <input type="text" value={editForm.address}
+                <label htmlFor={editAddressId} className="block text-sm text-gray-500 mb-1">Adress</label>
+                <input id={editAddressId} type="text" value={editForm.address}
                   onChange={(e) => setEditForm({ ...editForm, address: e.target.value })}
                   className="w-full rounded border border-gray-300 px-3 py-2 text-sm" />
               </div>
               <div className="md:col-span-2">
-                <label className="block text-sm text-gray-500 mb-1">Anteckningar</label>
-                <textarea value={editForm.notes} rows={3}
+                <label htmlFor={editNotesId} className="block text-sm text-gray-500 mb-1">Anteckningar</label>
+                <textarea id={editNotesId} value={editForm.notes} rows={3}
                   onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
                   className="w-full rounded border border-gray-300 px-3 py-2 text-sm" />
               </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useId, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { trpc } from "@/lib/trpc";
@@ -11,6 +11,10 @@ function MattersContent() {
   const [statusFilter, setStatusFilter] = useState<"ACTIVE" | "CLOSED" | "ARCHIVED" | "">("");
   const [page, setPage] = useState(1);
   const [showForm, setShowForm] = useState(searchParams.get("new") === "1");
+  const titleId = useId();
+  const klientId = useId();
+  const matterTypeId = useId();
+  const descriptionId = useId();
 
   const matters = trpc.matter.list.useQuery({
     search,
@@ -61,14 +65,14 @@ function MattersContent() {
           <h2 className="font-semibold text-gray-900 mb-4">Nytt ärende</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Titel *</label>
-              <input type="text" required value={form.title}
+              <label htmlFor={titleId} className="block text-sm font-medium text-gray-700 mb-1">Titel *</label>
+              <input id={titleId} type="text" required value={form.title}
                 onChange={(e) => setForm({ ...form, title: e.target.value })}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Klient</label>
-              <select value={form.klientId}
+              <label htmlFor={klientId} className="block text-sm font-medium text-gray-700 mb-1">Klient</label>
+              <select id={klientId} value={form.klientId}
                 onChange={(e) => setForm({ ...form, klientId: e.target.value })}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
                 <option value="">Välj klient (valfritt)...</option>
@@ -78,15 +82,15 @@ function MattersContent() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Ärendetyp</label>
-              <input type="text" value={form.matterType}
+              <label htmlFor={matterTypeId} className="block text-sm font-medium text-gray-700 mb-1">Ärendetyp</label>
+              <input id={matterTypeId} type="text" value={form.matterType}
                 onChange={(e) => setForm({ ...form, matterType: e.target.value })}
                 placeholder="T.ex. Familjerätt, Brottmål..."
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
             </div>
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Beskrivning</label>
-              <textarea value={form.description}
+              <label htmlFor={descriptionId} className="block text-sm font-medium text-gray-700 mb-1">Beskrivning</label>
+              <textarea id={descriptionId} value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
                 rows={2} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
             </div>

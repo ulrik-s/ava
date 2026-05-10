@@ -4,6 +4,7 @@ import { use, useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc";
+import { UserForm, type UserFormState } from "../_user-form";
 
 const roleLabels: Record<string, string> = {
   ADMIN: "Admin",
@@ -17,7 +18,7 @@ export default function EditUserPage({ params }: { params: Promise<{ id: string 
   const utils = trpc.useUtils();
   const user = trpc.user.getById.useQuery({ id });
 
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<UserFormState>({
     name: "",
     title: "",
     email: "",
@@ -30,6 +31,7 @@ export default function EditUserPage({ params }: { params: Promise<{ id: string 
   const [passwordError, setPasswordError] = useState("");
   const [initialized, setInitialized] = useState(false);
 
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (user.data && !initialized) {
       setForm({
@@ -45,6 +47,7 @@ export default function EditUserPage({ params }: { params: Promise<{ id: string 
       setInitialized(true);
     }
   }, [user.data, initialized]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const updateUser = trpc.user.update.useMutation({
     onSuccess: () => {
@@ -105,112 +108,18 @@ export default function EditUserPage({ params }: { params: Promise<{ id: string 
           </span>
         </div>
 
-        <form onSubmit={handleSubmit}>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Namn *</label>
-              <input
-                type="text"
-                required
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Titel</label>
-              <input
-                type="text"
-                value={form.title}
-                onChange={(e) => setForm({ ...form, title: e.target.value })}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">E-post *</label>
-              <input
-                type="email"
-                required
-                value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Roll</label>
-              <select
-                value={form.role}
-                onChange={(e) => setForm({ ...form, role: e.target.value })}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-              >
-                <option value="ADMIN">Admin</option>
-                <option value="LAWYER">Advokat</option>
-                <option value="ASSISTANT">Assistent</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Timtaxa (kr/h)</label>
-              <input
-                type="number"
-                value={form.hourlyRate}
-                onChange={(e) => setForm({ ...form, hourlyRate: e.target.value })}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Milersättning (kr/km)</label>
-              <input
-                type="number"
-                step="0.01"
-                value={form.mileageRate}
-                onChange={(e) => setForm({ ...form, mileageRate: e.target.value })}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Nytt lösenord</label>
-              <input
-                type="password"
-                value={form.password}
-                onChange={(e) => setForm({ ...form, password: e.target.value })}
-                placeholder="Lämna tomt för att behålla nuvarande"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Bekräfta lösenord</label>
-              <input
-                type="password"
-                value={form.confirmPassword}
-                onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-              />
-            </div>
-          </div>
-
-          {passwordError && (
-            <p className="mt-2 text-sm text-red-600">{passwordError}</p>
-          )}
-          {updateUser.error && (
-            <p className="mt-2 text-sm text-red-600">{updateUser.error.message}</p>
-          )}
-
-          <div className="mt-6 flex items-center justify-between">
-            <div className="flex gap-3">
-              <button
-                type="submit"
-                disabled={updateUser.isPending}
-                className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50"
-              >
-                {updateUser.isPending ? "Sparar..." : "Spara"}
-              </button>
-              <Link
-                href="/users"
-                className="px-4 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50"
-              >
-                Avbryt
-              </Link>
-            </div>
+        <UserForm
+          form={form}
+          setForm={setForm}
+          onSubmit={handleSubmit}
+          passwordError={passwordError}
+          errorMessage={updateUser.error?.message}
+          passwordRequired={false}
+          passwordPlaceholder="Lämna tomt för att behålla nuvarande"
+          submitLabel="Spara"
+          submittingLabel="Sparar..."
+          isSubmitting={updateUser.isPending}
+          extraActions={
             <button
               type="button"
               onClick={handleDelete}
@@ -219,8 +128,8 @@ export default function EditUserPage({ params }: { params: Promise<{ id: string 
             >
               {deleteUser.isPending ? "Tar bort..." : "Ta bort"}
             </button>
-          </div>
-        </form>
+          }
+        />
       </div>
     </div>
   );

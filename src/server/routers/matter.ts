@@ -52,6 +52,7 @@ export const matterRouter = router({
             },
             _count: { select: { documents: true, timeEntries: true, contacts: true } },
           },
+          // paymentMethod, paymentMethodNote, paymentMethodDecidedAt ingår som del av Matter
         }),
         ctx.prisma.matter.count({ where }),
       ]);
@@ -138,11 +139,22 @@ export const matterRouter = router({
         description: z.string().optional(),
         status: z.enum(["ACTIVE", "CLOSED", "ARCHIVED"]).optional(),
         matterType: z.string().optional(),
+        paymentMethod: z
+          .enum(["PENDING", "RATTSHJALP", "RATTSSKYDD", "OFFENTLIG_FORSVARARE", "PRIVAT", "MIX"])
+          .optional(),
+        paymentMethodNote: z.string().nullable().optional(),
+        paymentMethodDecidedAt: z.string().nullable().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
       await assertMatterInOrg(ctx, input.id);
-      const { id, ...data } = input;
+      const { id, paymentMethodDecidedAt, ...rest } = input;
+      const data: Record<string, unknown> = { ...rest };
+      if (paymentMethodDecidedAt !== undefined) {
+        data.paymentMethodDecidedAt = paymentMethodDecidedAt
+          ? new Date(paymentMethodDecidedAt)
+          : null;
+      }
       return ctx.prisma.matter.update({ where: { id }, data });
     }),
 

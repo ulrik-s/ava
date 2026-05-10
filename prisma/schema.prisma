@@ -132,16 +132,36 @@ enum MatterStatus {
   ARCHIVED
 }
 
+// Hur klienten ska betala ärendet — kritiskt för kreditriskbedömning.
+// PENDING = ej fastställt (ansökan pågår)
+// RATTSHJALP = rättshjälp beviljad — staten betalar största delen
+// RATTSSKYDD = rättsskydd från klientens försäkringsbolag
+// OFFENTLIG_FORSVARARE = brottmål, staten betalar försvarararvodet
+// PRIVAT = klienten betalar själv (högst kreditrisk)
+// MIX = kombination (t.ex. rättsskydd + privat självrisk)
+enum PaymentMethod {
+  PENDING
+  RATTSHJALP
+  RATTSSKYDD
+  OFFENTLIG_FORSVARARE
+  PRIVAT
+  MIX
+}
+
 model Matter {
-  id             String       @id @default(cuid())
-  matterNumber   String       @unique @map("matter_number")
-  title          String
-  description    String?
-  status         MatterStatus @default(ACTIVE)
-  matterType     String?      @map("matter_type")
-  organizationId String       @map("organization_id")
-  createdAt      DateTime     @default(now()) @map("created_at")
-  updatedAt      DateTime     @updatedAt @map("updated_at")
+  id                     String         @id @default(cuid())
+  matterNumber           String         @unique @map("matter_number")
+  title                  String
+  description            String?
+  status                 MatterStatus   @default(ACTIVE)
+  matterType             String?        @map("matter_type")
+  paymentMethod          PaymentMethod  @default(PENDING) @map("payment_method")
+  paymentMethodNote      String?        @map("payment_method_note")
+  /// När beslut om rättshjälp/rättsskydd mottogs
+  paymentMethodDecidedAt DateTime?      @map("payment_method_decided_at") @db.Date
+  organizationId         String         @map("organization_id")
+  createdAt              DateTime       @default(now()) @map("created_at")
+  updatedAt              DateTime       @updatedAt @map("updated_at")
 
   organization Organization    @relation(fields: [organizationId], references: [id])
   contacts     MatterContact[]
@@ -367,12 +387,13 @@ enum InvoiceType {
   STANDARD    // Vanlig löpande faktura
   ACCONTO     // Förskott, belopp sätts av advokat, dras av på FINAL
   FINAL       // Slutfaktura med avdrag för tidigare ACCONTO
+  CREDIT      // Kreditfaktura — krediterar en tidigare faktura (negativt belopp)
 }
 
 model Invoice {
   id          String        @id @default(cuid())
   matterId    String        @map("matter_id")
-  amount      Int                           // öre (för FINAL: brutto före accontoavdrag)
+  amount      Int                           // öre (för FINAL: brutto före accontoavdrag; för CREDIT: negativt)
   status      InvoiceStatus @default(DRAFT)
   invoiceType InvoiceType   @default(STANDARD) @map("invoice_type")
   fortnoxId   String?       @map("fortnox_id")
@@ -381,6 +402,12 @@ model Invoice {
   notes       String?
   createdAt   DateTime      @default(now()) @map("created_at")
   updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  // När denna är en CREDIT-faktura: pekar på den ursprungliga fakturan som krediteras
+  creditedInvoiceId String?  @unique @map("credited_invoice_id")
+  creditedInvoice   Invoice? @relation("InvoiceCredit", fields: [creditedInvoiceId], references: [id])
+  // När denna är krediterad: pekar på CREDIT-fakturan som krediterar den
+  creditNote        Invoice? @relation("InvoiceCredit")
 
   matter      Matter      @relation(fields: [matterId], references: [id])
   timeEntries TimeEntry[]

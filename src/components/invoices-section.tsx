@@ -10,7 +10,7 @@
  * Detaljer (betalningar, avbetalningsplan) hanteras på /invoices/[id].
  */
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import Link from "next/link";
 import { trpc } from "@/lib/trpc";
 import { formatCurrency } from "@/lib/utils";
@@ -19,6 +19,7 @@ function statusBadge(status: string, invoiceType: string): string {
   const base = "text-[10px] rounded-full px-2 py-0.5 font-medium";
   if (invoiceType === "ACCONTO") return `${base} bg-purple-100 text-purple-700`;
   if (invoiceType === "FINAL") return `${base} bg-blue-100 text-blue-700`;
+  if (invoiceType === "CREDIT") return `${base} bg-orange-100 text-orange-700`;
   switch (status) {
     case "PAID": return `${base} bg-green-100 text-green-700`;
     case "SENT": return `${base} bg-amber-100 text-amber-700`;
@@ -42,7 +43,10 @@ function statusLabel(status: string): string {
 }
 
 function typeLabel(t: string): string {
-  return t === "ACCONTO" ? "Acconto" : t === "FINAL" ? "Slutfaktura" : "Faktura";
+  return t === "ACCONTO" ? "Acconto"
+    : t === "FINAL" ? "Slutfaktura"
+    : t === "CREDIT" ? "Kreditfaktura"
+    : "Faktura";
 }
 
 export function InvoicesSection({ matterId }: { matterId: string }) {
@@ -54,6 +58,11 @@ export function InvoicesSection({ matterId }: { matterId: string }) {
   const [showAcconto, setShowAcconto] = useState(false);
   const [showFinal, setShowFinal] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const accontoAmountId = useId();
+  const accontoDueDateId = useId();
+  const accontoNotesId = useId();
+  const finalDueDateId = useId();
+  const finalNotesId = useId();
 
   const createAcconto = trpc.invoice.createAcconto.useMutation({
     onSuccess: () => {
@@ -159,8 +168,9 @@ export function InvoicesSection({ matterId }: { matterId: string }) {
             <h3 className="font-semibold mb-4">Ny acconto-faktura</h3>
             <div className="space-y-3">
               <div>
-                <label className="block text-xs font-medium mb-1">Belopp (kr)</label>
+                <label htmlFor={accontoAmountId} className="block text-xs font-medium mb-1">Belopp (kr)</label>
                 <input
+                  id={accontoAmountId}
                   type="number" min={1}
                   value={accontoAmountSek}
                   onChange={(e) => setAccontoAmountSek(e.target.value)}
@@ -168,8 +178,9 @@ export function InvoicesSection({ matterId }: { matterId: string }) {
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium mb-1">Förfallodatum</label>
+                <label htmlFor={accontoDueDateId} className="block text-xs font-medium mb-1">Förfallodatum</label>
                 <input
+                  id={accontoDueDateId}
                   type="date"
                   value={accontoDueDate}
                   onChange={(e) => setAccontoDueDate(e.target.value)}
@@ -177,8 +188,9 @@ export function InvoicesSection({ matterId }: { matterId: string }) {
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium mb-1">Notering (valfri)</label>
+                <label htmlFor={accontoNotesId} className="block text-xs font-medium mb-1">Notering (valfri)</label>
                 <textarea
+                  id={accontoNotesId}
                   value={accontoNotes}
                   onChange={(e) => setAccontoNotes(e.target.value)}
                   rows={2}
@@ -283,12 +295,12 @@ export function InvoicesSection({ matterId }: { matterId: string }) {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium mb-1">Förfallodatum</label>
-                  <input type="date" value={finalDueDate} onChange={(e) => setFinalDueDate(e.target.value)} className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm" />
+                  <label htmlFor={finalDueDateId} className="block text-xs font-medium mb-1">Förfallodatum</label>
+                  <input id={finalDueDateId} type="date" value={finalDueDate} onChange={(e) => setFinalDueDate(e.target.value)} className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium mb-1">Notering</label>
-                  <input value={finalNotes} onChange={(e) => setFinalNotes(e.target.value)} className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm" />
+                  <label htmlFor={finalNotesId} className="block text-xs font-medium mb-1">Notering</label>
+                  <input id={finalNotesId} value={finalNotes} onChange={(e) => setFinalNotes(e.target.value)} className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm" />
                 </div>
               </div>
 

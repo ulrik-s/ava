@@ -38,47 +38,139 @@ const GenerateBody = z.object({
  *
  * Response: { documents: Array<{ documentId, fileName, recipientContactId? }> }
  */
-export const POST = withApiErrors(async (req: NextRequest) => {
-  const { userId, orgId: organizationId } = await requireSession();
-  const { templateId, matterId, format, recipientContactIds } = await parseJsonBody(req, GenerateBody);
+type RenderArgs = {
+  html: string;
+  format: "pdf" | "docx";
+  browser: Awaited<ReturnType<typeof puppeteer.launch>> | null;
+  headerTemplate: string;
+  footerTemplate: string;
+  docxHeaderHtml: string;
+  docxFooterHtml: string;
+};
 
-  // Load template (verify org ownership)
+async function renderToFile(args: RenderArgs): Promise<{
+  fileBuffer: Buffer;
+  mimeType: string;
+  extension: "pdf" | "docx";
+}> {
+  if (args.format === "pdf" && args.browser) {
+    const page = await args.browser.newPage();
+    try {
+      await page.setContent(args.html, { waitUntil: "networkidle0" });
+      const pdf = await page.pdf({
+        format: "A4",
+        printBackground: true,
+        displayHeaderFooter: true,
+        headerTemplate: args.headerTemplate,
+        footerTemplate: args.footerTemplate,
+        margin: { top: "3.2cm", right: "2.5cm", bottom: "2.8cm", left: "3cm" },
+      });
+      return { fileBuffer: Buffer.from(pdf), mimeType: "application/pdf", extension: "pdf" };
+    } finally {
+      await page.close();
+    }
+  }
+  const docxBuffer = await HTMLtoDOCX(args.html, args.docxHeaderHtml, {
+    table: { row: { cantSplit: true } },
+    header: true,
+    footer: true,
+    footerType: "first",
+    pageNumber: false,
+  }, args.docxFooterHtml);
+  const fileBuffer = Buffer.isBuffer(docxBuffer) ? docxBuffer : Buffer.from(docxBuffer);
+  return {
+    fileBuffer,
+    mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    extension: "docx",
+  };
+}
+
+async function saveDocument(args: {
+  fileName: string;
+  mimeType: string;
+  fileBuffer: Buffer;
+  matterId: string;
+  userId: string;
+}) {
+  const storagePath = process.env.DOCUMENT_STORAGE_PATH || "./storage/documents";
+  const docId = crypto.randomUUID();
+  const dirPath = path.join(storagePath, args.matterId, docId);
+  await mkdir(dirPath, { recursive: true });
+  const filePath = path.join(dirPath, args.fileName);
+  await writeFile(filePath, args.fileBuffer);
+
+  return prisma.document.create({
+    data: {
+      fileName: args.fileName,
+      mimeType: args.mimeType,
+      fileSize: args.fileBuffer.length,
+      storagePath: filePath,
+      matterId: args.matterId,
+      uploadedById: args.userId,
+    },
+  });
+}
+
+type LoadResult =
+  | { kind: "error"; response: NextResponse }
+  | {
+      kind: "ok";
+      template: NonNullable<Awaited<ReturnType<typeof prisma.documentTemplate.findUnique>>>;
+      matter: { organizationId: string; matterNumber: string; title: string };
+    };
+
+async function loadTemplateAndMatter(
+  templateId: string,
+  matterId: string,
+  organizationId: string,
+): Promise<LoadResult> {
   const template = await prisma.documentTemplate.findUnique({ where: { id: templateId } });
   if (!template || template.organizationId !== organizationId) {
-    return NextResponse.json({ error: "Template not found" }, { status: 404 });
+    return { kind: "error", response: NextResponse.json({ error: "Template not found" }, { status: 404 }) };
   }
-
-  // Verify matter ownership
   const matter = await prisma.matter.findUnique({
     where: { id: matterId },
     select: { organizationId: true, matterNumber: true, title: true },
   });
   if (!matter || matter.organizationId !== organizationId) {
-    return NextResponse.json({ error: "Matter not found" }, { status: 404 });
+    return { kind: "error", response: NextResponse.json({ error: "Matter not found" }, { status: 404 }) };
   }
+  return { kind: "ok", template, matter };
+}
 
-  // Build base context once (expensive: touches org, contacts, time, expenses, logo)
+async function loadRecipients(
+  recipientIds: string[],
+  matterId: string,
+): Promise<ResolvedRecipient[] | NextResponse> {
+  if (recipientIds.length === 0) return [];
+  const links = await prisma.matterContact.findMany({
+    where: { matterId, contactId: { in: recipientIds } },
+    include: { contact: true },
+  });
+  try {
+    return resolveRecipients(recipientIds, links, matterId);
+  } catch (e) {
+    if (e instanceof RecipientNotLinkedError) {
+      return NextResponse.json({ error: e.message }, { status: 400 });
+    }
+    throw e;
+  }
+}
+
+export const POST = withApiErrors(async (req: NextRequest): Promise<NextResponse> => {
+  const { userId, orgId: organizationId } = await requireSession();
+  const { templateId, matterId, format, recipientContactIds } = await parseJsonBody(req, GenerateBody);
+
+  const loaded = await loadTemplateAndMatter(templateId, matterId, organizationId);
+  if (loaded.kind === "error") return loaded.response;
+  const { template, matter } = loaded;
+
   const baseContext = await buildTemplateContext(matterId, userId, prisma);
 
-  // Resolve recipient list. Empty array / omitted → single render without recipient.
   const recipientIds = Array.isArray(recipientContactIds) ? recipientContactIds : [];
-  let recipientContacts: ResolvedRecipient[] = [];
-
-  if (recipientIds.length > 0) {
-    const links = await prisma.matterContact.findMany({
-      where: { matterId, contactId: { in: recipientIds } },
-      include: { contact: true },
-    });
-
-    try {
-      recipientContacts = resolveRecipients(recipientIds, links, matterId);
-    } catch (e) {
-      if (e instanceof RecipientNotLinkedError) {
-        return NextResponse.json({ error: e.message }, { status: 400 });
-      }
-      throw e;
-    }
-  }
+  const recipientResult = await loadRecipients(recipientIds, matterId);
+  if (recipientResult instanceof NextResponse) return recipientResult;
+  const recipientContacts: ResolvedRecipient[] = recipientResult;
 
   // ─── Render helpers (browser stays open across loop for PDF) ──
   const esc = (s: string | null | undefined) =>
@@ -157,78 +249,24 @@ export const POST = withApiErrors(async (req: NextRequest) => {
         recipients: recipientContacts.map((r) => r.data),
       };
       const html = renderTemplate(template.content, ctx);
-
-      let fileBuffer: Buffer;
-      let mimeType: string;
-      let extension: string;
-
-      if (format === "pdf" && browser) {
-        const page = await browser.newPage();
-        try {
-          await page.setContent(html, { waitUntil: "networkidle0" });
-          const pdf = await page.pdf({
-            format: "A4",
-            printBackground: true,
-            displayHeaderFooter: true,
-            headerTemplate,
-            footerTemplate,
-            margin: { top: "3.2cm", right: "2.5cm", bottom: "2.8cm", left: "3cm" },
-          });
-          fileBuffer = Buffer.from(pdf);
-        } finally {
-          await page.close();
-        }
-        mimeType = "application/pdf";
-        extension = "pdf";
-      } else {
-        const docxBuffer = await HTMLtoDOCX(html, docxHeaderHtml, {
-          table: { row: { cantSplit: true } },
-          header: true,
-          footer: true,
-          footerType: "first",
-          pageNumber: false,
-        }, docxFooterHtml);
-        fileBuffer = Buffer.isBuffer(docxBuffer) ? docxBuffer : Buffer.from(docxBuffer);
-        mimeType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-        extension = "docx";
-      }
+      const { fileBuffer, mimeType, extension } = await renderToFile({
+        html, format, browser, headerTemplate, footerTemplate, docxHeaderHtml, docxFooterHtml,
+      });
 
       const fileName = buildGeneratedFileName(
         matter.matterNumber,
         template.name,
-        extension as "pdf" | "docx",
+        extension,
         target.data,
       );
 
-      // Save to storage
-      const storagePath = process.env.DOCUMENT_STORAGE_PATH || "./storage/documents";
-      const docId = crypto.randomUUID();
-      const dirPath = path.join(storagePath, matterId, docId);
-      await mkdir(dirPath, { recursive: true });
-      const filePath = path.join(dirPath, fileName);
-      await writeFile(filePath, fileBuffer);
-
-      const document = await prisma.document.create({
-        data: {
-          fileName,
-          mimeType,
-          fileSize: fileBuffer.length,
-          storagePath: filePath,
-          matterId,
-          uploadedById: userId,
-        },
+      const document = await saveDocument({
+        fileName, mimeType, fileBuffer, matterId, userId,
       });
 
-      // Fire-and-forget analysis (won't block response)
-      analyzeDocument(document.id).catch((err) =>
-        console.error("Document analysis failed:", err),
-      );
+      analyzeDocument(document.id).catch((err) => console.error("Document analysis failed:", err));
 
-      results.push({
-        documentId: document.id,
-        fileName,
-        recipientContactId: target.contactId,
-      });
+      results.push({ documentId: document.id, fileName, recipientContactId: target.contactId });
     }
   } finally {
     if (browser) await browser.close();

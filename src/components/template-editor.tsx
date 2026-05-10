@@ -231,115 +231,37 @@ export function TemplateEditor({
     onSave({ name: name.trim(), description: description.trim(), category: category.trim(), content });
   };
 
+  const insertVariable = (key: string) => {
+    const tag = key.startsWith("{{") ? key : `{{${key}}}`;
+    setContent((c) => c + tag);
+    setActiveTab("editor");
+  };
+
   return (
     <div className="flex flex-col h-full gap-4">
-      {/* Metadata fields */}
-      <div className="grid grid-cols-3 gap-3">
-        <div className="col-span-1">
-          <label className="block text-xs font-medium text-gray-700 mb-1">Namn *</label>
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="t.ex. Uppdragsavtal"
-            className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-          />
-        </div>
-        <div className="col-span-1">
-          <label className="block text-xs font-medium text-gray-700 mb-1">Kategori</label>
-          <input
-            type="text"
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            placeholder="t.ex. Avtal"
-            className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-          />
-        </div>
-        <div className="col-span-1">
-          <label className="block text-xs font-medium text-gray-700 mb-1">Beskrivning</label>
-          <input
-            type="text"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Valfri beskrivning"
-            className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-          />
-        </div>
-      </div>
+      <MetadataFields
+        name={name} setName={setName}
+        category={category} setCategory={setCategory}
+        description={description} setDescription={setDescription}
+      />
 
-      {/* Editor / Preview tabs */}
       <div className="flex-1 flex flex-col min-h-0 border border-gray-200 rounded-lg overflow-hidden">
-        <div className="flex border-b border-gray-200 bg-gray-50">
-          <button
-            onClick={() => setActiveTab("editor")}
-            className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
-              activeTab === "editor"
-                ? "border-blue-600 text-blue-700"
-                : "border-transparent text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            <Code size={14} /> Redigera
-          </button>
-          <button
-            onClick={() => setActiveTab("preview")}
-            className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
-              activeTab === "preview"
-                ? "border-blue-600 text-blue-700"
-                : "border-transparent text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            <Eye size={14} /> Förhandsgranskning
-          </button>
-          <div className="flex-1" />
-          <button
-            onClick={() => setRefOpen((v) => !v)}
-            className="flex items-center gap-1 px-3 py-2 text-xs text-gray-500 hover:text-gray-700"
-          >
-            {refOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-            Variabler
-          </button>
-        </div>
+        <EditorTabs
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          refOpen={refOpen}
+          toggleRef={() => setRefOpen((v) => !v)}
+        />
 
         <div className="flex flex-1 min-h-0">
-          {/* Variable reference sidebar */}
           {refOpen && (
-            <div className="w-64 border-r border-gray-200 overflow-y-auto bg-gray-50 text-xs">
-              {VARIABLE_REFERENCE.map((section) => (
-                <div key={section.group}>
-                  <button
-                    onClick={() => toggleGroup(section.group)}
-                    className="w-full flex items-center gap-1 px-3 py-1.5 font-semibold text-gray-700 hover:bg-gray-100"
-                  >
-                    {expandedGroups.has(section.group) ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
-                    {section.group}
-                  </button>
-                  {expandedGroups.has(section.group) && (
-                    <div className="pb-1">
-                      {section.vars.map((v) => (
-                        <div
-                          key={v.key}
-                          className="px-4 py-1 group cursor-pointer hover:bg-blue-50"
-                          onClick={() => {
-                            const tag = v.key.startsWith("{{") ? v.key : `{{${v.key}}}`;
-                            setContent((c) => c + tag);
-                            setActiveTab("editor");
-                          }}
-                          title="Klicka för att infoga"
-                        >
-                          <code className="text-blue-700 group-hover:text-blue-900">
-                            {v.key.startsWith("{{") ? v.key : `{{${v.key}}}`}
-                          </code>
-                          <div className="text-gray-500 text-[10px] leading-tight">{v.desc}</div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
+            <VariableSidebar
+              expandedGroups={expandedGroups}
+              toggleGroup={toggleGroup}
+              onInsert={insertVariable}
+            />
           )}
 
-          {/* Editor pane */}
           {activeTab === "editor" && (
             <textarea
               value={content}
@@ -350,7 +272,6 @@ export function TemplateEditor({
             />
           )}
 
-          {/* Preview pane */}
           {activeTab === "preview" && (
             <iframe
               srcDoc={previewHtml}
@@ -362,12 +283,8 @@ export function TemplateEditor({
         </div>
       </div>
 
-      {/* Actions */}
       <div className="flex justify-end gap-2">
-        <button
-          onClick={onCancel}
-          className="px-4 py-2 text-sm border border-gray-300 rounded hover:bg-gray-50"
-        >
+        <button onClick={onCancel} className="px-4 py-2 text-sm border border-gray-300 rounded hover:bg-gray-50">
           Avbryt
         </button>
         <button
@@ -378,6 +295,117 @@ export function TemplateEditor({
           {saving ? "Sparar…" : "Spara mall"}
         </button>
       </div>
+    </div>
+  );
+}
+
+function MetadataFields({
+  name, setName, category, setCategory, description, setDescription,
+}: {
+  name: string; setName: (v: string) => void;
+  category: string; setCategory: (v: string) => void;
+  description: string; setDescription: (v: string) => void;
+}) {
+  return (
+    <div className="grid grid-cols-3 gap-3">
+      <div className="col-span-1">
+        <label className="block text-xs font-medium text-gray-700 mb-1">Namn *</label>
+        <input type="text" value={name} onChange={(e) => setName(e.target.value)}
+          placeholder="t.ex. Uppdragsavtal"
+          className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+      </div>
+      <div className="col-span-1">
+        <label className="block text-xs font-medium text-gray-700 mb-1">Kategori</label>
+        <input type="text" value={category} onChange={(e) => setCategory(e.target.value)}
+          placeholder="t.ex. Avtal"
+          className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+      </div>
+      <div className="col-span-1">
+        <label className="block text-xs font-medium text-gray-700 mb-1">Beskrivning</label>
+        <input type="text" value={description} onChange={(e) => setDescription(e.target.value)}
+          placeholder="Valfri beskrivning"
+          className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+      </div>
+    </div>
+  );
+}
+
+function EditorTabs({
+  activeTab, setActiveTab, refOpen, toggleRef,
+}: {
+  activeTab: "editor" | "preview";
+  setActiveTab: (t: "editor" | "preview") => void;
+  refOpen: boolean;
+  toggleRef: () => void;
+}) {
+  return (
+    <div className="flex border-b border-gray-200 bg-gray-50">
+      <button
+        onClick={() => setActiveTab("editor")}
+        className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+          activeTab === "editor"
+            ? "border-blue-600 text-blue-700"
+            : "border-transparent text-gray-500 hover:text-gray-700"
+        }`}
+      >
+        <Code size={14} /> Redigera
+      </button>
+      <button
+        onClick={() => setActiveTab("preview")}
+        className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+          activeTab === "preview"
+            ? "border-blue-600 text-blue-700"
+            : "border-transparent text-gray-500 hover:text-gray-700"
+        }`}
+      >
+        <Eye size={14} /> Förhandsgranskning
+      </button>
+      <div className="flex-1" />
+      <button onClick={toggleRef} className="flex items-center gap-1 px-3 py-2 text-xs text-gray-500 hover:text-gray-700">
+        {refOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+        Variabler
+      </button>
+    </div>
+  );
+}
+
+function VariableSidebar({
+  expandedGroups, toggleGroup, onInsert,
+}: {
+  expandedGroups: Set<string>;
+  toggleGroup: (g: string) => void;
+  onInsert: (key: string) => void;
+}) {
+  return (
+    <div className="w-64 border-r border-gray-200 overflow-y-auto bg-gray-50 text-xs">
+      {VARIABLE_REFERENCE.map((section) => (
+        <div key={section.group}>
+          <button
+            onClick={() => toggleGroup(section.group)}
+            className="w-full flex items-center gap-1 px-3 py-1.5 font-semibold text-gray-700 hover:bg-gray-100"
+          >
+            {expandedGroups.has(section.group) ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
+            {section.group}
+          </button>
+          {expandedGroups.has(section.group) && (
+            <div className="pb-1">
+              {section.vars.map((v) => (
+                <div
+                  key={v.key}
+                  className="px-4 py-1 group cursor-pointer hover:bg-blue-50"
+                  onClick={() => onInsert(v.key)}
+                  title="Klicka för att infoga"
+                >
+                  <code className="text-blue-700 group-hover:text-blue-900">
+                    {v.key.startsWith("{{") ? v.key : `{{${v.key}}}`}
+                  </code>
+                  <div className="text-gray-500 text-[10px] leading-tight">{v.desc}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
     </div>
   );
 }

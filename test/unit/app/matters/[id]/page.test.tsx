@@ -1,0 +1,455 @@
+/**
+ * Test för MatterDetailPage — den största sidan i appen.
+ *
+ * Mockar alla relaterade trpc-queries + mutations + barnkomponenter.
+ */
+
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { Suspense } from "react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import MatterDetailPage from "@/app/matters/[id]/page";
+
+const matterQuery = {
+  data: undefined as Record<string, unknown> | undefined,
+  isLoading: false,
+  error: null as Error | null,
+};
+const timeQuery = {
+  data: { entries: [], totalMinutes: 0 } as Record<string, unknown>,
+};
+const expenseQuery = {
+  data: { expenses: [], totalAmount: 0 } as Record<string, unknown>,
+};
+const contactsQuery = { data: { contacts: [] } };
+const templatesQuery = { data: undefined as undefined | Array<{ id: string; name: string; category: string | null }>, isLoading: false };
+
+const utilsMock = {
+  matter: { getById: { invalidate: vi.fn() } },
+  timeEntry: { list: { invalidate: vi.fn() } },
+  expense: { list: { invalidate: vi.fn() } },
+  contacts: { list: { invalidate: vi.fn() } },
+  document: { tree: { invalidate: vi.fn() } },
+};
+const stubs = {
+  addContact: { mutate: vi.fn(), isPending: false },
+  addNewContact: { mutate: vi.fn(), isPending: false },
+  removeContact: { mutate: vi.fn(), isPending: false },
+  createTimeEntry: { mutate: vi.fn(), isPending: false },
+  createExpense: { mutate: vi.fn(), isPending: false },
+  deleteExpense: { mutate: vi.fn(), isPending: false },
+};
+
+vi.mock("@/lib/trpc", () => ({
+  trpc: {
+    useUtils: () => utilsMock,
+    matter: {
+      getById: { useQuery: () => matterQuery },
+      addContact: { useMutation: () => stubs.addContact },
+      addNewContact: { useMutation: () => stubs.addNewContact },
+      removeContact: { useMutation: () => stubs.removeContact },
+    },
+    timeEntry: {
+      list: { useQuery: () => timeQuery },
+      create: { useMutation: () => stubs.createTimeEntry },
+    },
+    expense: {
+      list: { useQuery: () => expenseQuery },
+      create: { useMutation: () => stubs.createExpense },
+      delete: { useMutation: () => stubs.deleteExpense },
+    },
+    contacts: {
+      list: { useQuery: () => contactsQuery },
+    },
+    documentTemplate: {
+      list: { useQuery: () => templatesQuery },
+    },
+  },
+}));
+
+// Tunga barnkomponenter — mocka som platshållare
+vi.mock("@/components/document-browser", () => ({
+  DocumentBrowser: () => <div data-testid="doc-browser" />,
+}));
+vi.mock("@/components/suggestions-panel", () => ({
+  SuggestionsPanel: () => <div data-testid="suggestions" />,
+}));
+vi.mock("@/components/events-panel", () => ({
+  EventsPanel: () => <div data-testid="events" />,
+}));
+vi.mock("@/components/invoices-section", () => ({
+  InvoicesSection: () => <div data-testid="invoices" />,
+}));
+vi.mock("@/components/payment-method-card", () => ({
+  PaymentMethodCard: ({ paymentMethod }: { paymentMethod: string }) => (
+    <div data-testid="pmc">{paymentMethod}</div>
+  ),
+}));
+
+const M = {
+  id: "m1",
+  matterNumber: "2026-0001",
+  title: "Bodelning Lindström",
+  status: "ACTIVE",
+  matterType: "Familjerätt",
+  description: "En bodelning",
+  paymentMethod: "RATTSHJALP",
+  paymentMethodNote: null,
+  paymentMethodDecidedAt: null,
+  contacts: [
+    {
+      id: "mc1",
+      role: "KLIENT",
+      contact: { id: "c1", name: "Anna", contactType: "PERSON", personalNumber: null, orgNumber: null },
+    },
+  ],
+  _count: { documents: 0, timeEntries: 0, emails: 0 },
+};
+
+// React 19's use() läser sync från Promise.status === 'fulfilled' om det
+// är satt; annars suspendar den och Suspense-fallback visas. Vi sätter
+// fältet manuellt så pages som anropar `use(params)` slipper suspending.
+function makeParams(value: { id: string }) {
+  const p = Promise.resolve(value) as Promise<{ id: string }> & {
+    status?: string;
+    value?: { id: string };
+  };
+  p.status = "fulfilled";
+  p.value = value;
+  return p;
+}
+
+const params = makeParams({ id: "m1" });
+
+const renderPage = () =>
+  render(
+    <Suspense fallback={<div>laddar</div>}>
+      <MatterDetailPage params={params} />
+    </Suspense>,
+  );
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  matterQuery.data = M;
+  matterQuery.isLoading = false;
+  matterQuery.error = null;
+  timeQuery.data = { entries: [], totalMinutes: 0 };
+  expenseQuery.data = { expenses: [], totalAmount: 0 };
+  templatesQuery.data = undefined;
+  stubs.addContact.mutate = vi.fn();
+  stubs.addNewContact.mutate = vi.fn();
+  stubs.removeContact.mutate = vi.fn();
+  stubs.createTimeEntry.mutate = vi.fn();
+  stubs.createExpense.mutate = vi.fn();
+  stubs.deleteExpense.mutate = vi.fn();
+});
+
+describe("MatterDetailPage", () => {
+  it("visar laddartext under loading", async () => {
+    matterQuery.isLoading = true;
+    matterQuery.data = undefined;
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getByText(/Laddar\.\.\./i)).toBeInTheDocument(),
+    );
+  });
+
+  it("visar fel när matter.error är satt", async () => {
+    matterQuery.error = new Error("Saknas");
+    renderPage();
+    await waitFor(() => expect(screen.getByText(/Saknas/)).toBeInTheDocument());
+  });
+
+  it("renderar matterNumber + title + klient-länk", async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByText("2026-0001")).toBeInTheDocument());
+    expect(screen.getByText("Bodelning Lindström")).toBeInTheDocument();
+    // "Anna" finns flera ställen — minst en är klient-länken
+    expect(screen.getAllByRole("link", { name: "Anna" }).length).toBeGreaterThan(0);
+  });
+
+  it("renderar PaymentMethodCard med paymentMethod", async () => {
+    renderPage();
+    await waitFor(() => {
+      const pmc = screen.getByTestId("pmc");
+      expect(pmc).toHaveTextContent("RATTSHJALP");
+    });
+  });
+
+  it("renderar mockade barnkomponenter", async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId("doc-browser")).toBeInTheDocument());
+    expect(screen.getByTestId("suggestions")).toBeInTheDocument();
+    expect(screen.getByTestId("events")).toBeInTheDocument();
+    expect(screen.getByTestId("invoices")).toBeInTheDocument();
+  });
+
+  it("visar Aktivt-badge när status=ACTIVE", async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Aktivt")).toBeInTheDocument());
+  });
+
+  it("visar Stängt-badge när status=CLOSED", async () => {
+    matterQuery.data = { ...M, status: "CLOSED" };
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Stängt")).toBeInTheDocument());
+  });
+
+  it("öppnar Generera dokument-modal", async () => {
+    renderPage();
+    const button = await waitFor(() =>
+      screen.getByRole("button", { name: /Generera dokument/i }),
+    );
+    fireEvent.click(button);
+    expect(screen.getByText(/Välj mall/i)).toBeInTheDocument();
+  });
+
+  it("visar tidregistrering-totalt", async () => {
+    timeQuery.data = { entries: [], totalMinutes: 90 };
+    renderPage();
+    await waitFor(() => expect(screen.getByText(/1:30/)).toBeInTheDocument());
+  });
+
+  it("visar Arkiverat-badge för andra statusar", async () => {
+    matterQuery.data = { ...M, status: "ARCHIVED" };
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Arkiverat")).toBeInTheDocument());
+  });
+
+  it("renderar matterType + description", async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByText(/Familjerätt/)).toBeInTheDocument());
+    expect(screen.getByText("En bodelning")).toBeInTheDocument();
+  });
+
+  it("öppnar och stänger lägg-till-kontakt-formuläret", async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByText("2026-0001")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /\+ Lägg till/i }));
+    expect(screen.getByPlaceholderText(/Namn/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Avbryt/i }));
+    expect(screen.queryByPlaceholderText(/Namn/i)).not.toBeInTheDocument();
+  });
+
+  it("växlar mellan Befintlig och Ny kontakt-läget", async () => {
+    renderPage();
+    await waitFor(() => screen.getByText("2026-0001"));
+    fireEvent.click(screen.getByRole("button", { name: /\+ Lägg till/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Befintlig kontakt/i }));
+    expect(screen.getByText(/Välj kontakt/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^Ny kontakt$/i }));
+    expect(screen.getByPlaceholderText(/Namn/i)).toBeInTheDocument();
+  });
+
+  it("submittar Ny kontakt-formuläret", async () => {
+    renderPage();
+    await waitFor(() => screen.getByText("2026-0001"));
+    fireEvent.click(screen.getByRole("button", { name: /\+ Lägg till/i }));
+    const nameInput = screen.getByPlaceholderText(/Namn/i);
+    fireEvent.change(nameInput, { target: { value: "Bertil Berg" } });
+    fireEvent.click(screen.getByRole("button", { name: /Skapa & lägg till/i }));
+    expect(stubs.addNewContact.mutate).toHaveBeenCalled();
+    const arg = stubs.addNewContact.mutate.mock.calls[0][0];
+    expect(arg.name).toBe("Bertil Berg");
+    expect(arg.matterId).toBe("m1");
+  });
+
+  it("klickar Ta bort på en kontakt", async () => {
+    renderPage();
+    await waitFor(() => screen.getByText("2026-0001"));
+    const removeButtons = screen.getAllByRole("button", { name: /^Ta bort$/i });
+    fireEvent.click(removeButtons[0]);
+    expect(stubs.removeContact.mutate).toHaveBeenCalledWith({ matterContactId: "mc1" });
+  });
+
+  it("öppnar tidsformulär och submittar", async () => {
+    renderPage();
+    await waitFor(() => screen.getByText("2026-0001"));
+    fireEvent.click(screen.getByRole("button", { name: /\+ Registrera tid/i }));
+    const desc = screen.getByPlaceholderText(/Beskrivning/i);
+    fireEvent.change(desc, { target: { value: "Mejl och telefon" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Spara$/i }));
+    expect(stubs.createTimeEntry.mutate).toHaveBeenCalled();
+    const arg = stubs.createTimeEntry.mutate.mock.calls[0][0];
+    expect(arg.matterId).toBe("m1");
+    expect(arg.description).toBe("Mejl och telefon");
+    expect(arg.billable).toBe(true);
+  });
+
+  it("togglar debiterbar-checkbox i tidsformulär", async () => {
+    renderPage();
+    await waitFor(() => screen.getByText("2026-0001"));
+    fireEvent.click(screen.getByRole("button", { name: /\+ Registrera tid/i }));
+    const checkbox = screen.getAllByRole("checkbox")[0] as HTMLInputElement;
+    expect(checkbox.checked).toBe(true);
+    fireEvent.click(checkbox);
+    expect(checkbox.checked).toBe(false);
+  });
+
+  it("öppnar utläggsformulär och submittar", async () => {
+    renderPage();
+    await waitFor(() => screen.getByText("2026-0001"));
+    fireEvent.click(screen.getByRole("button", { name: /\+ Nytt utlägg/i }));
+    const desc = screen.getByPlaceholderText(/Beskrivning/i);
+    fireEvent.change(desc, { target: { value: "Domstolsavgift" } });
+    const numberInput = screen.getByPlaceholderText(/0,00/);
+    fireEvent.change(numberInput, { target: { value: "150" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Spara$/i }));
+    expect(stubs.createExpense.mutate).toHaveBeenCalled();
+    const arg = stubs.createExpense.mutate.mock.calls[0][0];
+    expect(arg.amount).toBe(15000); // SEK → öre
+    expect(arg.description).toBe("Domstolsavgift");
+  });
+
+  it("renderar tidsposter i tabellen", async () => {
+    timeQuery.data = {
+      entries: [
+        {
+          id: "te1",
+          date: new Date("2026-04-01"),
+          minutes: 60,
+          description: "Telefonsamtal",
+          billable: true,
+          user: { name: "Lisa Lawyer" },
+        },
+      ],
+      totalMinutes: 60,
+    };
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Telefonsamtal")).toBeInTheDocument());
+    expect(screen.getByText("Lisa Lawyer")).toBeInTheDocument();
+  });
+
+  it("renderar utlägg och tar bort vid klick", async () => {
+    expenseQuery.data = {
+      expenses: [
+        {
+          id: "e1",
+          date: new Date("2026-04-01"),
+          amount: 15000,
+          description: "Domstolsavgift",
+          billable: true,
+          user: { name: "Lisa" },
+        },
+      ],
+      totalAmount: 15000,
+    };
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Domstolsavgift")).toBeInTheDocument());
+    const removes = screen.getAllByRole("button", { name: /^Ta bort$/i });
+    // sista Ta bort-knappen är på utläggsraden
+    fireEvent.click(removes[removes.length - 1]);
+    expect(stubs.deleteExpense.mutate).toHaveBeenCalledWith({ id: "e1" });
+  });
+
+  it("byter format till docx i generera-modal", async () => {
+    renderPage();
+    await waitFor(() => screen.getByText("2026-0001"));
+    fireEvent.click(screen.getByRole("button", { name: /Generera dokument/i }));
+    const docxRadio = screen.getByRole("radio", { name: /Word/i }) as HTMLInputElement;
+    fireEvent.click(docxRadio);
+    expect(docxRadio.checked).toBe(true);
+  });
+
+  it("kryssar i mottagare i generera-modal", async () => {
+    renderPage();
+    await waitFor(() => screen.getByText("2026-0001"));
+    fireEvent.click(screen.getByRole("button", { name: /Generera dokument/i }));
+    // Mottagar-checkboxen för Anna
+    const allChecks = screen.getAllByRole("checkbox");
+    const annaCheck = allChecks.find((c) =>
+      (c as HTMLInputElement).closest("label")?.textContent?.includes("Anna"),
+    ) as HTMLInputElement | undefined;
+    expect(annaCheck).toBeTruthy();
+    fireEvent.click(annaCheck!);
+    expect(annaCheck!.checked).toBe(true);
+    // Räknaren ska visa 1
+    expect(screen.getByText(/Mottagare \(1\)/i)).toBeInTheDocument();
+  });
+
+  it("listar mallar i selectern och tillåter val", async () => {
+    templatesQuery.data = [
+      { id: "tpl1", name: "Stämning", category: "Avtal" },
+      { id: "tpl2", name: "Fullmakt", category: null },
+    ];
+    renderPage();
+    await waitFor(() => screen.getByText("2026-0001"));
+    fireEvent.click(screen.getByRole("button", { name: /Generera dokument/i }));
+    expect(screen.getByText(/Avtal – Stämning/)).toBeInTheDocument();
+    expect(screen.getByText(/Fullmakt/)).toBeInTheDocument();
+  });
+
+  it("visar Skapa en mall-länk när inga mallar finns", async () => {
+    templatesQuery.data = [];
+    renderPage();
+    await waitFor(() => screen.getByText("2026-0001"));
+    fireEvent.click(screen.getByRole("button", { name: /Generera dokument/i }));
+    expect(screen.getByRole("link", { name: /Skapa en mall/i })).toBeInTheDocument();
+  });
+
+  it("stänger generera-modal med Avbryt", async () => {
+    renderPage();
+    await waitFor(() => screen.getByText("2026-0001"));
+    fireEvent.click(screen.getByRole("button", { name: /Generera dokument/i }));
+    expect(screen.getByText(/Välj mall/i)).toBeInTheDocument();
+    const avbrytButtons = screen.getAllByRole("button", { name: /Avbryt/i });
+    fireEvent.click(avbrytButtons[avbrytButtons.length - 1]);
+    expect(screen.queryByText(/Välj mall/i)).not.toBeInTheDocument();
+  });
+
+  it("submittar 'befintlig kontakt'-formuläret", async () => {
+    contactsQuery.data = { contacts: [{ id: "c2", name: "Bertil" }] } as never;
+    renderPage();
+    await waitFor(() => screen.getByText("2026-0001"));
+    fireEvent.click(screen.getByRole("button", { name: /\+ Lägg till/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Befintlig kontakt/i }));
+    const select = screen.getByText(/Välj kontakt/i).closest("select")!;
+    fireEvent.change(select, { target: { value: "c2" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Lägg till$/i }));
+    expect(stubs.addContact.mutate).toHaveBeenCalled();
+    const arg = stubs.addContact.mutate.mock.calls[0][0];
+    expect(arg.contactId).toBe("c2");
+    expect(arg.matterId).toBe("m1");
+  });
+
+  it("genererar PDF-dokument (öppnar window) vid lyckad fetch", async () => {
+    templatesQuery.data = [{ id: "tpl1", name: "Stämning", category: null }];
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ documents: [{ documentId: "d1", fileName: "x.pdf", recipientContactId: null }] }),
+    });
+    const openMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("open", openMock);
+    Object.defineProperty(window, "open", { value: openMock, writable: true, configurable: true });
+    renderPage();
+    await waitFor(() => screen.getByText("2026-0001"));
+    fireEvent.click(screen.getByRole("button", { name: /Generera dokument/i }));
+    const select = screen.getByRole("combobox") as HTMLSelectElement;
+    fireEvent.change(select, { target: { value: "tpl1" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Generera$/i }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    await waitFor(() => expect(openMock).toHaveBeenCalledWith(
+      "/api/documents/d1/download",
+      "_blank",
+      "noopener,noreferrer",
+    ));
+    vi.unstubAllGlobals();
+  });
+
+  it("visar fel när dokument-generering returnerar !ok", async () => {
+    templatesQuery.data = [{ id: "tpl1", name: "Stämning", category: null }];
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      json: () => Promise.resolve({ error: "Mall saknar fält" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    renderPage();
+    await waitFor(() => screen.getByText("2026-0001"));
+    fireEvent.click(screen.getByRole("button", { name: /Generera dokument/i }));
+    const select = screen.getByRole("combobox") as HTMLSelectElement;
+    fireEvent.change(select, { target: { value: "tpl1" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Generera$/i }));
+    await waitFor(() => expect(screen.getByText(/Mall saknar fält/)).toBeInTheDocument());
+    vi.unstubAllGlobals();
+  });
+});

@@ -18,10 +18,11 @@ import * as path from "path";
 
 const MOUNT_PATH = process.env.WEBDAV_MOUNT_PATH ?? "/Volumes/localhost";
 
-/** Must match the `matterSlug()` in scripts/webdav-server.ts exactly. */
+/** Must match the `matterSlug()` in scripts/webdav-server.ts exactly,
+ * inklusive NFC-normaliseringen — utan den 404:ar macOS på svenska tecken. */
 function matterSlug(m: { matterNumber: string; title: string }): string {
   const safeTitle = m.title.replace(/[\/\\:*?"<>|]/g, "-").slice(0, 80);
-  return `${m.matterNumber} - ${safeTitle}`;
+  return `${m.matterNumber} - ${safeTitle}`.normalize("NFC");
 }
 
 function jsonResponse(message: string, ok: boolean): NextResponse {
@@ -57,12 +58,17 @@ export async function GET(
       select: { name: true, parentId: true },
     });
     if (!f) break;
-    folderSegments.unshift(f.name);
+    folderSegments.unshift(f.name.normalize("NFC"));
     currentId = f.parentId;
   }
 
   const slug = matterSlug(doc.matter);
-  const fullPath = path.join(MOUNT_PATH, slug, ...folderSegments, doc.fileName);
+  const fullPath = path.join(
+    MOUNT_PATH,
+    slug,
+    ...folderSegments,
+    doc.fileName.normalize("NFC"),
+  );
 
   try {
     await access(fullPath);

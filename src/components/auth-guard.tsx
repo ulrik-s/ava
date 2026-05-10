@@ -38,7 +38,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-full">
       <Sidebar userName={session?.user?.name} />
-      <main className="flex-1 overflow-y-auto pt-16 lg:pt-0 p-4 sm:p-6 lg:p-8 min-w-0">
+      <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 pt-16 sm:pt-16 lg:pt-0 min-w-0">
         {children}
       </main>
     </div>

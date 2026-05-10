@@ -135,6 +135,167 @@ export interface AnalyzeOptions {
  *
  * Non-throwing: errors are written to Document.analysisError.
  */
+async function loadDocumentText(doc: { storagePath: string; mimeType: string }): Promise<string> {
+  const absPath = path.isAbsolute(doc.storagePath)
+    ? doc.storagePath
+    : path.resolve(process.cwd(), doc.storagePath);
+  const buffer = await readFile(absPath);
+
+  let text: string;
+  try {
+    text = await extractText(buffer, doc.mimeType);
+  } catch (e) {
+    throw new Error(`Tika-extraktion misslyckades: ${e instanceof Error ? e.message : String(e)}`);
+  }
+  const trimmed = text.trim();
+  if (!trimmed) throw new Error("Ingen text kunde extraheras från dokumentet.");
+  return trimmed.length > MAX_CHARS
+    ? trimmed.slice(0, MAX_CHARS) + "\n\n[...avkortad...]"
+    : trimmed;
+}
+
+async function callLlmForAnalysis(
+  fileName: string,
+  mimeType: string,
+  documentText: string,
+): Promise<AnalysisResult> {
+  const endpoint = `${LLM_BASE_URL}/v1/chat/completions`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), LLM_TIMEOUT_MS);
+  let response: Response;
+  try {
+    response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      signal: controller.signal,
+      body: JSON.stringify({
+        model: MODEL,
+        temperature: 0.2,
+        max_tokens: 8000,
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          {
+            role: "user",
+            content: `Filnamn: ${fileName}\nMIME: ${mimeType}\n\n--- DOKUMENTTEXT ---\n${documentText}`,
+          },
+        ],
+      }),
+    });
+  } catch (e) {
+    if (e instanceof Error && e.name === "AbortError") {
+      throw new Error(
+        `LLM-anrop timeout efter ${Math.round(LLM_TIMEOUT_MS / 1000)}s. Servern ${LLM_BASE_URL} svarade inte i tid.`,
+      );
+    }
+    throw new Error(
+      `Kunde inte nå LLM-servern på ${LLM_BASE_URL}. Är den igång? (${e instanceof Error ? e.message : String(e)})`,
+    );
+  } finally {
+    clearTimeout(timeout);
+  }
+
+  if (!response.ok) {
+    const errText = await response.text().catch(() => "");
+    throw new Error(`LLM-fel ${response.status}: ${errText.slice(0, 500)}`);
+  }
+
+  const body = (await response.json()) as {
+    choices?: Array<{ message?: { content?: string } }>;
+  };
+  const raw = body.choices?.[0]?.message?.content?.trim();
+  if (!raw) throw new Error("Tomt svar från LLM.");
+  const parsed = parseWithRepair(raw);
+  if (!parsed) throw new Error(`Kunde inte tolka LLM-svar som JSON. Svar: ${raw.slice(0, 300)}`);
+  return parsed;
+}
+
+type Tx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
+
+async function persistEventSuggestion(
+  tx: Tx,
+  documentId: string,
+  ev: NonNullable<AnalysisResult["events"]>[number],
+): Promise<void> {
+  if (!ev.title || typeof ev.title !== "string") return;
+  if (!ev.startAt || typeof ev.startAt !== "string") return;
+  const parsedStart = parseEventDate(ev.startAt);
+  if (!parsedStart) return;
+  const parsedEnd = ev.endAt ? parseEventDate(ev.endAt) : null;
+  const allDay = ev.allDay === true || /^\d{4}-\d{2}-\d{2}$/.test(ev.startAt.trim());
+  await tx.matterEventSuggestion.create({
+    data: {
+      documentId,
+      title: truncate(ev.title, 200) ?? ev.title,
+      description: ev.description ? truncate(ev.description, 1000) : null,
+      eventType: ev.eventType ? truncate(ev.eventType, 50) : null,
+      startAt: parsedStart,
+      endAt: parsedEnd,
+      allDay,
+      location: ev.location ? truncate(ev.location, 300) : null,
+      status: "PENDING",
+    },
+  });
+}
+
+async function persistPartySuggestion(
+  tx: Tx,
+  documentId: string,
+  p: NonNullable<AnalysisResult["parties"]>[number],
+): Promise<void> {
+  if (!p.name || typeof p.name !== "string") return;
+  if (!MATTER_ROLES.includes(p.role)) return;
+  if (!CONTACT_TYPES.includes(p.contactType)) return;
+  const name = truncate(p.name, 200);
+  if (!name) return;
+  await tx.documentAnalysisSuggestion.create({
+    data: {
+      documentId,
+      name,
+      role: p.role,
+      contactType: p.contactType,
+      email: p.email || null,
+      phone: p.phone || null,
+      orgNumber: p.orgNumber || null,
+      personalNumber: p.personalNumber || null,
+      notes: p.notes ? truncate(p.notes, 500) : null,
+      status: "PENDING",
+    },
+  });
+}
+
+async function persistAnalysisResults(
+  documentId: string,
+  parsed: AnalysisResult,
+): Promise<void> {
+  await prisma.$transaction(async (tx) => {
+    await tx.document.update({
+      where: { id: documentId },
+      data: {
+        title: truncate(parsed.title, 300),
+        documentType: truncate(parsed.documentType, 100),
+        summary: truncate(parsed.summary, 2000),
+        analyzedAt: new Date(),
+        analysisModel: MODEL,
+        analysisError: null,
+      },
+    });
+
+    await tx.documentAnalysisSuggestion.deleteMany({
+      where: { documentId, status: "PENDING" },
+    });
+    await tx.matterEventSuggestion.deleteMany({
+      where: { documentId, status: "PENDING" },
+    });
+
+    const events = Array.isArray(parsed.events) ? parsed.events : [];
+    for (const ev of events) await persistEventSuggestion(tx, documentId, ev);
+
+    const parties = Array.isArray(parsed.parties) ? parsed.parties : [];
+    for (const p of parties) await persistPartySuggestion(tx, documentId, p);
+  });
+}
+
 export async function analyzeDocument(
   documentId: string,
   _opts: AnalyzeOptions = {},
@@ -143,155 +304,9 @@ export async function analyzeDocument(
   if (!doc) return;
 
   try {
-    // 1. Load file
-    const absPath = path.isAbsolute(doc.storagePath)
-      ? doc.storagePath
-      : path.resolve(process.cwd(), doc.storagePath);
-    const buffer = await readFile(absPath);
-
-    // 2. Extract text
-    let text: string;
-    try {
-      text = await extractText(buffer, doc.mimeType);
-    } catch (e) {
-      throw new Error(`Tika-extraktion misslyckades: ${e instanceof Error ? e.message : String(e)}`);
-    }
-    const trimmed = text.trim();
-    if (!trimmed) {
-      throw new Error("Ingen text kunde extraheras från dokumentet.");
-    }
-    const truncated = trimmed.length > MAX_CHARS
-      ? trimmed.slice(0, MAX_CHARS) + "\n\n[...avkortad...]"
-      : trimmed;
-
-    // 3. Call local LLM (OpenAI-compatible endpoint).
-    // AbortController ger en hård deadline — utan den kan en hängande server
-    // låta dokumentet fastna i "analyseras"-state för evigt.
-    const endpoint = `${LLM_BASE_URL}/v1/chat/completions`;
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), LLM_TIMEOUT_MS);
-    let response: Response;
-    try {
-      response = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        signal: controller.signal,
-        body: JSON.stringify({
-          model: MODEL,
-          temperature: 0.2,
-          max_tokens: 8000,
-          // Ask the server to constrain output to valid JSON. Models that don't
-          // honor this still tend to produce JSON because the system prompt
-          // insists on it; we strip code fences just in case.
-          response_format: { type: "json_object" },
-          messages: [
-            { role: "system", content: SYSTEM_PROMPT },
-            {
-              role: "user",
-              content: `Filnamn: ${doc.fileName}\nMIME: ${doc.mimeType}\n\n--- DOKUMENTTEXT ---\n${truncated}`,
-            },
-          ],
-        }),
-      });
-    } catch (e) {
-      if (e instanceof Error && e.name === "AbortError") {
-        throw new Error(
-          `LLM-anrop timeout efter ${Math.round(LLM_TIMEOUT_MS / 1000)}s. Servern ${LLM_BASE_URL} svarade inte i tid.`,
-        );
-      }
-      throw new Error(
-        `Kunde inte nå LLM-servern på ${LLM_BASE_URL}. Är den igång? (${e instanceof Error ? e.message : String(e)})`,
-      );
-    } finally {
-      clearTimeout(timeout);
-    }
-
-    if (!response.ok) {
-      const errText = await response.text().catch(() => "");
-      throw new Error(`LLM-fel ${response.status}: ${errText.slice(0, 500)}`);
-    }
-
-    const body = (await response.json()) as {
-      choices?: Array<{ message?: { content?: string } }>;
-    };
-    const raw = body.choices?.[0]?.message?.content?.trim();
-    if (!raw) {
-      throw new Error("Tomt svar från LLM.");
-    }
-    const parsed = parseWithRepair(raw);
-    if (!parsed) {
-      throw new Error(`Kunde inte tolka LLM-svar som JSON. Svar: ${raw.slice(0, 300)}`);
-    }
-
-    // 4. Persist
-    await prisma.$transaction(async (tx) => {
-      await tx.document.update({
-        where: { id: documentId },
-        data: {
-          title: truncate(parsed.title, 300),
-          documentType: truncate(parsed.documentType, 100),
-          summary: truncate(parsed.summary, 2000),
-          analyzedAt: new Date(),
-          analysisModel: MODEL,
-          analysisError: null,
-        },
-      });
-
-      // Remove previous PENDING suggestions; keep ACCEPTED/REJECTED history.
-      await tx.documentAnalysisSuggestion.deleteMany({
-        where: { documentId, status: "PENDING" },
-      });
-      await tx.matterEventSuggestion.deleteMany({
-        where: { documentId, status: "PENDING" },
-      });
-
-      const events = Array.isArray(parsed.events) ? parsed.events : [];
-      for (const ev of events) {
-        if (!ev.title || typeof ev.title !== "string") continue;
-        if (!ev.startAt || typeof ev.startAt !== "string") continue;
-        const parsedStart = parseEventDate(ev.startAt);
-        if (!parsedStart) continue;
-        const parsedEnd = ev.endAt ? parseEventDate(ev.endAt) : null;
-        const allDay = ev.allDay === true || /^\d{4}-\d{2}-\d{2}$/.test(ev.startAt.trim());
-        await tx.matterEventSuggestion.create({
-          data: {
-            documentId,
-            title: truncate(ev.title, 200) ?? ev.title,
-            description: ev.description ? truncate(ev.description, 1000) : null,
-            eventType: ev.eventType ? truncate(ev.eventType, 50) : null,
-            startAt: parsedStart,
-            endAt: parsedEnd,
-            allDay,
-            location: ev.location ? truncate(ev.location, 300) : null,
-            status: "PENDING",
-          },
-        });
-      }
-
-      const parties = Array.isArray(parsed.parties) ? parsed.parties : [];
-      for (const p of parties) {
-        if (!p.name || typeof p.name !== "string") continue;
-        if (!MATTER_ROLES.includes(p.role)) continue;
-        if (!CONTACT_TYPES.includes(p.contactType)) continue;
-        const name = truncate(p.name, 200);
-        if (!name) continue;
-        await tx.documentAnalysisSuggestion.create({
-          data: {
-            documentId,
-            name,
-            role: p.role,
-            contactType: p.contactType,
-            email: p.email || null,
-            phone: p.phone || null,
-            orgNumber: p.orgNumber || null,
-            personalNumber: p.personalNumber || null,
-            notes: p.notes ? truncate(p.notes, 500) : null,
-            status: "PENDING",
-          },
-        });
-      }
-    });
-
+    const truncated = await loadDocumentText(doc);
+    const parsed = await callLlmForAnalysis(doc.fileName, doc.mimeType, truncated);
+    await persistAnalysisResults(documentId, parsed);
     console.log(`[document-analysis] ✓ analyzed ${documentId} (${parsed.parties?.length ?? 0} parties)`);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

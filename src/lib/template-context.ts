@@ -123,34 +123,22 @@ export interface TemplateContext {
   };
 }
 
-export async function buildTemplateContext(
-  matterId: string,
-  userId: string,
-  prisma: PrismaClient
-): Promise<TemplateContext> {
-  const [matter, user] = await Promise.all([
-    prisma.matter.findUniqueOrThrow({
-      where: { id: matterId },
-      include: {
-        organization: { include: { offices: { orderBy: { isMain: "desc" } } } },
-        contacts: {
-          include: { contact: true },
-          orderBy: { createdAt: "asc" },
-        },
-        timeEntries: {
-          include: { user: true },
-          orderBy: { date: "asc" },
-        },
-        expenses: {
-          include: { user: true },
-          orderBy: { date: "asc" },
-        },
-      },
-    }),
-    prisma.user.findUniqueOrThrow({ where: { id: userId } }),
-  ]);
+type MatterWithIncludes = Awaited<ReturnType<typeof loadMatter>>;
 
-  const contacts = matter.contacts.map((mc) => ({
+async function loadMatter(matterId: string, prisma: PrismaClient) {
+  return prisma.matter.findUniqueOrThrow({
+    where: { id: matterId },
+    include: {
+      organization: { include: { offices: { orderBy: { isMain: "desc" } } } },
+      contacts: { include: { contact: true }, orderBy: { createdAt: "asc" } },
+      timeEntries: { include: { user: true }, orderBy: { date: "asc" } },
+      expenses: { include: { user: true }, orderBy: { date: "asc" } },
+    },
+  });
+}
+
+function buildContacts(matter: MatterWithIncludes) {
+  return matter.contacts.map((mc) => ({
     name: mc.contact.name,
     role: mc.role,
     roleLabel: labelForMatterRole(mc.role),
@@ -161,10 +149,9 @@ export async function buildTemplateContext(
     orgNumber: mc.contact.orgNumber,
     notes: mc.notes,
   }));
+}
 
-  const klient = contacts.find((c) => c.role === "KLIENT") ?? null;
-  const motpart = contacts.find((c) => c.role === "MOTPART") ?? null;
-
+function buildBilling(matter: MatterWithIncludes) {
   const timeEntries = matter.timeEntries.map((te) => ({
     date: te.date,
     description: te.description,
@@ -174,7 +161,6 @@ export async function buildTemplateContext(
     userName: te.user.name,
     billable: te.billable,
   }));
-
   const expenses = matter.expenses.map((e) => ({
     date: e.date,
     description: e.description,
@@ -182,16 +168,13 @@ export async function buildTemplateContext(
     userName: e.user.name,
     billable: e.billable,
   }));
-
   const totalTimeMinutes = timeEntries.reduce((sum, te) => sum + te.minutes, 0);
-  const totalTimeAmount = timeEntries
-    .filter((te) => te.billable)
-    .reduce((sum, te) => sum + te.amount, 0);
-  const totalExpenseAmount = expenses
-    .filter((e) => e.billable)
-    .reduce((sum, e) => sum + e.amount, 0);
+  const totalTimeAmount = timeEntries.filter((te) => te.billable).reduce((sum, te) => sum + te.amount, 0);
+  const totalExpenseAmount = expenses.filter((e) => e.billable).reduce((sum, e) => sum + e.amount, 0);
+  return { timeEntries, expenses, totalTimeMinutes, totalTimeAmount, totalExpenseAmount };
+}
 
-  // Read org logo and encode as base64 data URL
+async function buildOrganization(matter: MatterWithIncludes) {
   let logoBase64: string | null = null;
   const logoPath = matter.organization.logoPath;
   if (logoPath && existsSync(logoPath)) {
@@ -214,6 +197,27 @@ export async function buildTemplateContext(
     isMain: o.isMain,
   }));
   const mainOffice = offices.find((o) => o.isMain) ?? offices[0] ?? null;
+  return { logoBase64, offices, mainOffice };
+}
+
+export async function buildTemplateContext(
+  matterId: string,
+  userId: string,
+  prisma: PrismaClient
+): Promise<TemplateContext> {
+  const [matter, user] = await Promise.all([
+    loadMatter(matterId, prisma),
+    prisma.user.findUniqueOrThrow({ where: { id: userId } }),
+  ]);
+
+  const contacts = buildContacts(matter);
+  const klient = contacts.find((c) => c.role === "KLIENT") ?? null;
+  const motpart = contacts.find((c) => c.role === "MOTPART") ?? null;
+
+  const billing = buildBilling(matter);
+  const { timeEntries, expenses, totalTimeMinutes, totalTimeAmount, totalExpenseAmount } = billing;
+
+  const { logoBase64, offices, mainOffice } = await buildOrganization(matter);
 
   return {
     matter: {

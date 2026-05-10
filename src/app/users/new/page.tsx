@@ -4,12 +4,13 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc";
+import { UserForm, type UserFormState } from "../_user-form";
 
 export default function NewUserPage() {
   const router = useRouter();
   const utils = trpc.useUtils();
 
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<UserFormState>({
     name: "",
     title: "",
     email: "",
@@ -57,113 +58,17 @@ export default function NewUserPage() {
       <div className="bg-white rounded-lg border border-gray-200 p-6">
         <h1 className="text-2xl font-bold text-gray-900 mb-6">Ny användare</h1>
 
-        <form onSubmit={handleSubmit}>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Namn *</label>
-              <input
-                type="text"
-                required
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Titel</label>
-              <input
-                type="text"
-                value={form.title}
-                onChange={(e) => setForm({ ...form, title: e.target.value })}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">E-post *</label>
-              <input
-                type="email"
-                required
-                value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Roll</label>
-              <select
-                value={form.role}
-                onChange={(e) => setForm({ ...form, role: e.target.value })}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-              >
-                <option value="ADMIN">Admin</option>
-                <option value="LAWYER">Advokat</option>
-                <option value="ASSISTANT">Assistent</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Timtaxa (kr/h)</label>
-              <input
-                type="number"
-                value={form.hourlyRate}
-                onChange={(e) => setForm({ ...form, hourlyRate: e.target.value })}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Milersättning (kr/km)</label>
-              <input
-                type="number"
-                step="0.01"
-                value={form.mileageRate}
-                onChange={(e) => setForm({ ...form, mileageRate: e.target.value })}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Lösenord *</label>
-              <input
-                type="password"
-                required
-                value={form.password}
-                onChange={(e) => setForm({ ...form, password: e.target.value })}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Bekräfta lösenord *</label>
-              <input
-                type="password"
-                required
-                value={form.confirmPassword}
-                onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-              />
-            </div>
-          </div>
-
-          {passwordError && (
-            <p className="mt-2 text-sm text-red-600">{passwordError}</p>
-          )}
-          {createUser.error && (
-            <p className="mt-2 text-sm text-red-600">{createUser.error.message}</p>
-          )}
-
-          <div className="mt-6 flex gap-3">
-            <button
-              type="submit"
-              disabled={createUser.isPending}
-              className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50"
-            >
-              {createUser.isPending ? "Sparar..." : "Skapa användare"}
-            </button>
-            <Link
-              href="/users"
-              className="px-4 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50"
-            >
-              Avbryt
-            </Link>
-          </div>
-        </form>
+        <UserForm
+          form={form}
+          setForm={setForm}
+          onSubmit={handleSubmit}
+          passwordError={passwordError}
+          errorMessage={createUser.error?.message}
+          passwordRequired={true}
+          submitLabel="Skapa användare"
+          submittingLabel="Sparar..."
+          isSubmitting={createUser.isPending}
+        />
       </div>
     </div>
   );

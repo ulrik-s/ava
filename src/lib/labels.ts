@@ -92,6 +92,62 @@ export function isContactType(v: unknown): v is ContactType {
   return typeof v === "string" && v in CONTACT_TYPE_LABELS;
 }
 
+// ─── Payment method (betalningssätt på ärende) ──────────────────
+
+export const PAYMENT_METHOD_LABELS = {
+  PENDING: "Ej fastställt",
+  RATTSHJALP: "Rättshjälp",
+  RATTSSKYDD: "Rättsskydd",
+  OFFENTLIG_FORSVARARE: "Offentlig försvarare",
+  PRIVAT: "Privat betalning",
+  MIX: "Kombinerad",
+} as const satisfies Record<string, string>;
+
+export type PaymentMethod = keyof typeof PAYMENT_METHOD_LABELS;
+
+const paymentMethodKeys = Object.keys(PAYMENT_METHOD_LABELS) as [PaymentMethod, ...PaymentMethod[]];
+
+export const paymentMethodSchema = z.enum(paymentMethodKeys);
+
+export type PaymentMethodOption = { readonly value: PaymentMethod; readonly label: string };
+
+export const paymentMethodOptions: ReadonlyArray<PaymentMethodOption> = paymentMethodKeys.map(
+  (value) => ({ value, label: PAYMENT_METHOD_LABELS[value] }),
+);
+
+export function labelForPaymentMethod(v: string): string {
+  return (PAYMENT_METHOD_LABELS as Record<string, string>)[v] ?? v;
+}
+
+/**
+ * Kreditriskbedömning baserat på betalningssätt — påverkar vilken status
+ * rapportsidan visar för ofakturerat arbete.
+ */
+export type CreditRisk = "LOW" | "MEDIUM" | "HIGH" | "UNKNOWN";
+
+export function creditRiskFor(method: string): CreditRisk {
+  switch (method) {
+    case "RATTSHJALP":
+    case "OFFENTLIG_FORSVARARE":
+    case "RATTSSKYDD":
+      return "LOW";       // staten eller försäkringsbolag betalar
+    case "MIX":
+      return "MEDIUM";    // delvis privat
+    case "PRIVAT":
+      return "HIGH";      // hela risken ligger på klienten
+    case "PENDING":
+    default:
+      return "UNKNOWN";
+  }
+}
+
+export const CREDIT_RISK_LABELS: Record<CreditRisk, string> = {
+  LOW: "Låg",
+  MEDIUM: "Medel",
+  HIGH: "Hög",
+  UNKNOWN: "Okänd",
+};
+
 // ─── Bakåtkompatibla aliaser ────────────────────────────────────
 // Behåller gamla namn så att existerande komponenter och det låsta
 // labels.test.ts fortsätter fungera utan ändringar.

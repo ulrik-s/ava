@@ -52,6 +52,8 @@ export const invoiceRouter = router({
           payments: { orderBy: { paidAt: "desc" } },
           accontoDeductions: { include: { accontoInvoice: true } },
           deductedOnFinals: { select: { id: true } },
+          creditedInvoice: { select: { id: true, invoiceDate: true, amount: true } },
+          creditNote: { select: { id: true, invoiceDate: true, amount: true } },
         },
       }),
     ),
@@ -72,6 +74,8 @@ export const invoiceRouter = router({
           expenses: true,
           accontoDeductions: { include: { accontoInvoice: true } },
           deductedOnFinals: { include: { finalInvoice: true } },
+          creditedInvoice: { select: { id: true, invoiceDate: true, amount: true, invoiceType: true } },
+          creditNote: { select: { id: true, invoiceDate: true, amount: true } },
         },
       });
       if (!inv) throw new TRPCError({ code: "NOT_FOUND" });
@@ -210,6 +214,74 @@ export const invoiceRouter = router({
           },
         });
         return { invoice, breakdown };
+      });
+    }),
+
+  /**
+   * CREDIT: krediterar en befintlig faktura. Skapar en ny faktura med
+   * negativt belopp som pekar tillbaka på originalet, och sätter originalets
+   * status till CANCELLED. Kan inte kreditera en redan krediterad eller
+   * annullerad faktura.
+   */
+  createCredit: orgProcedure
+    .input(
+      z.object({
+        invoiceId: z.string(),
+        notes: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      return ctx.prisma.$transaction(async (tx) => {
+        const original = await tx.invoice.findFirst({
+          where: { id: input.invoiceId, matter: { organizationId: ctx.orgId } },
+          include: { creditNote: true, paymentPlan: true },
+        });
+        if (!original) throw new TRPCError({ code: "NOT_FOUND" });
+        if (original.invoiceType === "CREDIT") {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Kan inte kreditera en kreditfaktura.",
+          });
+        }
+        if (original.creditNote) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Fakturan är redan krediterad.",
+          });
+        }
+        if (original.status === "CANCELLED") {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Kan inte kreditera en annullerad faktura.",
+          });
+        }
+
+        // Om originalet har en aktiv avbetalningsplan: avbryt den
+        if (original.paymentPlan && original.paymentPlan.status === "ACTIVE") {
+          await tx.paymentPlan.update({
+            where: { id: original.paymentPlan.id },
+            data: { status: "CANCELLED" },
+          });
+        }
+
+        const credit = await tx.invoice.create({
+          data: {
+            matterId: original.matterId,
+            amount: -original.amount,
+            invoiceType: "CREDIT",
+            status: "SENT", // kreditfaktura är "färdig" direkt
+            invoiceDate: new Date(),
+            notes: input.notes,
+            creditedInvoiceId: original.id,
+          },
+        });
+
+        await tx.invoice.update({
+          where: { id: original.id },
+          data: { status: "CANCELLED" },
+        });
+
+        return credit;
       });
     }),
 
