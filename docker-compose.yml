@@ -11,6 +11,11 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./prisma/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ava"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
 
   meilisearch:
     image: getmeili/meilisearch:v1.6
@@ -22,6 +27,11 @@ services:
       - "7700:7700"
     volumes:
       - meili_data:/meili_data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:7700/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   tika:
     image: apache/tika:latest
@@ -45,6 +55,98 @@ services:
         model_var: LLM_MODEL
     restart: "no"
 
+  # ─── Engångs-init: yarn install + prisma generate + db push ───
+  # Kör innan app/webdav startar. Skriver till samma node_modules-volym
+  # som de andra service:arna mountar, så installationen sker bara här.
+  app-init:
+    image: node:22-bookworm-slim
+    working_dir: /app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: "postgresql://ava:ava_dev_password@postgres:5432/ava?schema=public"
+      # Krävs för att @prisma/engines ska kunna ladda native binärer i Debian-slim
+      DEBIAN_FRONTEND: noninteractive
+    volumes:
+      - ./:/app
+      - app_node_modules:/app/node_modules
+    command:
+      - bash
+      - -c
+      - |
+        set -e
+        apt-get update -qq && apt-get install -y --no-install-recommends openssl ca-certificates >/dev/null
+        corepack enable
+        yarn install --immutable
+        yarn prisma generate
+        yarn prisma db push --accept-data-loss
+        echo "✅ app-init klar"
+    restart: "no"
+
+  # ─── Next.js (port 3000) ───
+  app:
+    image: node:22-bookworm-slim
+    working_dir: /app
+    depends_on:
+      app-init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      meilisearch:
+        condition: service_healthy
+      tika:
+        condition: service_started
+    environment:
+      DATABASE_URL: "postgresql://ava:ava_dev_password@postgres:5432/ava?schema=public"
+      NEXTAUTH_URL: "http://localhost:3000"
+      NEXTAUTH_SECRET: "dev-secret-change-in-production"
+      MEILI_URL: "http://meilisearch:7700"
+      MEILI_MASTER_KEY: "ava_meili_dev_key"
+      TIKA_URL: "http://tika:9998"
+      DOCUMENT_STORAGE_PATH: "/app/storage/documents"
+      # Docker Model Runner exponeras på host-side TCP-port 12434.
+      # host.docker.internal funkar out-of-the-box på Mac/Windows; på Linux
+      # mappas det via extra_hosts nedan.
+      LLM_BASE_URL: "http://host.docker.internal:12434/engines"
+      LLM_MODEL: "ai/gemma4"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./:/app
+      - app_node_modules:/app/node_modules
+    command:
+      - bash
+      - -c
+      - 'corepack enable && yarn dev:next --hostname 0.0.0.0'
+    restart: unless-stopped
+
+  # ─── WebDAV-server (port 3001) ───
+  webdav:
+    image: node:22-bookworm-slim
+    working_dir: /app
+    depends_on:
+      app-init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: "postgresql://ava:ava_dev_password@postgres:5432/ava?schema=public"
+      WEBDAV_PORT: "3001"
+      STORAGE_ROOT: "/app/storage/documents"
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./:/app
+      - app_node_modules:/app/node_modules
+    command:
+      - bash
+      - -c
+      - 'corepack enable && yarn dev:webdav'
+    restart: unless-stopped
+
 models:
   llm:
     model: ai/gemma4
@@ -52,4 +154,4 @@ models:
 volumes:
   postgres_data:
   meili_data:
-
+  app_node_modules:
