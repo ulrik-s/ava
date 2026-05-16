@@ -1,9 +1,14 @@
 # AVA — Arkitektur och regler
 
-Det här dokumentet beskriver hur systemet är uppbyggt idag och vilka
+Det här dokumentet beskriver hur systemet är uppbyggt **idag** och vilka
 konventioner som styr nya ändringar. Läs det innan du lägger till ny
 funktionalitet, framför allt **"Regler"**-sektionerna — de är avgörande
 för att tenant-isoleringen och pengarräkningen ska fortsätta stämma.
+
+> **Framtida målbild:** se [`architecture-future.md`](./architecture-future.md)
+> som beskriver den dual-mode-arkitektur vi enats om — local-first med tunn
+> SSH-server *eller* tjock server-deployment, båda från samma kodbas. Det
+> dokumentet är **planen**, inte vad som körs idag.
 
 AVA är ett svenskt CRM för advokatbyråer: kontakter, ärenden, dokument
 (med AI-analys), tidregistrering, utlägg, fakturering (inklusive
