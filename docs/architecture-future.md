@@ -751,11 +751,23 @@ SOLID-status:
      `notesCrdt` (base64-state) som optionella fält
    - Integration-test: full kollaborativ scenario med Anna+Björn
    - UI-bindning (Tiptap/CodeMirror med Yjs-awareness) kommer i step 7
-7. **Tauri-wrapper** (~1 vecka) — bundling + auto-update
-8. **Migrationsverktyg Postgres → git** (~1 vecka) — engångsexport
+7. 🟡 **Tauri-wrapper + composition root** — DELVIS KLAR per 2026-05-18.
+   - ✅ `LocalRuntime` — composition root som binder ihop fs + git + prisma +
+     LocalGitStore + SyncLoop + ProjectionHydrator. Lifecycle
+     (startSync, shutdown med idempotent disconnect) TDD-testat.
+   - ⬜ Tauri-bundling (Cargo.toml, src-tauri/, tauri.conf.json) — kräver
+     Rust-toolchain, lämnas till deploy-passet.
+   - ⬜ Prisma SQLite-provider config — schema-variant eller env-flag.
+8. ✅ **Migrationsverktyg Postgres → git** — KLAR per 2026-05-18.
+   - `PostgresExporter` läser entiteter per byrå via Prisma och projicerar
+     via samma `ProjectionRegistry`/`ProjectionWriter` som SyncLoop använder.
+   - Open-closed: ny entitet = registrera + lägg en rad i `ENTITY_FETCHERS`.
+   - Felsamlande: krasch under projektion stoppar inte export:en — felet
+     samlas i `result.errors`.
 
-Totalt återstår ~2.5 veckor till en körbar Tauri-app. Projektion-paradigmet
-+ CRDT-merge är de riskabla bitarna — bägge är nu bevisade.
+Totalt återstår ~1 vecka av rent integration-jobb: Tauri-bundling, Prisma
+SQLite-provider-config, och ett CLI-skript som binder exporter:n till
+realgit + faktisk Postgres-DB.
 
 ### 7.4.0 Tidigare estimat (för referens)
 

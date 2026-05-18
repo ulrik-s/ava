@@ -107,4 +107,14 @@ skipIfNoGit("IGitOps.changedFiles — NodeGitOps", () => {
     const changed = await ops.changedFiles(c1.hash, c2.hash);
     expect(changed).toContain("doomed.txt");
   });
+
+  it("tom fromHash → listar alla filer i toHash (ls-tree)", async () => {
+    const ops: IGitOps = new NodeGitOps(workDir, "anna", "anna@x");
+    await writeFile(join(workDir, "a.txt"), "x");
+    await writeFile(join(workDir, "b.txt"), "y");
+    const c = await ops.commit("c");
+    const all = await ops.changedFiles("", c.hash);
+    expect(all).toContain("a.txt");
+    expect(all).toContain("b.txt");
+  });
 });
