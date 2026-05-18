@@ -17,18 +17,29 @@
  */
 
 import { useState } from "react";
-import type { DemoRuntime } from "@/server/local-first/demo-runtime";
+import { DemoRuntime } from "@/server/local-first/demo-runtime";
+import { cloneFromGithub } from "@/server/local-first/clone-from-github";
 import { useDemoRuntime } from "@/lib/use-demo-runtime";
 
 export interface DemoClientProps {
-  runtimeFactory: () => DemoRuntime;
+  /**
+   * Valfri runtime-factory. Default = isomorphic-git över HTTPS mot
+   * GitHub. Tester injicerar en fake. Server Components MÅSTE NOT
+   * passa funktioner till Client Components (Next 16/RSC) — därför
+   * är prop:en optional och defaultas till client-side-konstruktion.
+   */
+  runtimeFactory?: () => DemoRuntime;
+}
+
+function defaultRuntimeFactory(): DemoRuntime {
+  return DemoRuntime.create({ cloneFn: cloneFromGithub() });
 }
 
 interface MatterLike { id: string; matterNumber: string; title: string; status: string }
 interface ContactLike { id: string; name: string; contactType: string; email?: string | null }
 interface UserLike { id: string; email: string; name: string; role: string }
 
-export function DemoClient({ runtimeFactory }: DemoClientProps) {
+export function DemoClient({ runtimeFactory = defaultRuntimeFactory }: DemoClientProps) {
   const { status, error, entities, loadDemo } = useDemoRuntime(runtimeFactory);
   const [url, setUrl] = useState("");
 
