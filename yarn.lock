@@ -2491,6 +2491,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@types/json-logic-js@npm:^2.0.8":
+  version: 2.0.8
+  resolution: "@types/json-logic-js@npm:2.0.8"
+  checksum: 10c0/b1fc0b39242b8f1f939c86f47bfda213e1eb57686ee4dfbe11057df88fad0dbe0abc3582b72429975e8fb07b0267959d98341e5079ba945345931973538d2f43
+  languageName: node
+  linkType: hard
+
 "@types/json-schema@npm:^7.0.15":
   version: 7.0.15
   resolution: "@types/json-schema@npm:7.0.15"
@@ -3394,6 +3401,7 @@ __metadata:
     "@trpc/server": "npm:^11.16.0"
     "@types/bcryptjs": "npm:^2.4.6"
     "@types/file-saver": "npm:^2.0.7"
+    "@types/json-logic-js": "npm:^2.0.8"
     "@types/node": "npm:^20.19.39"
     "@types/nodemailer": "npm:^8.0.0"
     "@types/react": "npm:^19"
@@ -3416,6 +3424,7 @@ __metadata:
     husky: "npm:^9.1.7"
     jscpd: "npm:^4.0.9"
     jsdom: "npm:^29.1.1"
+    json-logic-js: "npm:^2.0.5"
     knip: "npm:^6.12.1"
     lint-staged: "npm:^16.4.0"
     lucide-react: "npm:^1.8.0"
@@ -6753,6 +6762,13 @@ __metadata:
   version: 3.0.1
   resolution: "json-buffer@npm:3.0.1"
   checksum: 10c0/0d1c91569d9588e7eef2b49b59851f297f3ab93c7b35c7c221e288099322be6b562767d11e4821da500f3219542b9afd2e54c5dc573107c1126ed1080f8e96d7
+  languageName: node
+  linkType: hard
+
+"json-logic-js@npm:^2.0.5":
+  version: 2.0.5
+  resolution: "json-logic-js@npm:2.0.5"
+  checksum: 10c0/c80d96a9f704dac2f4488c7119d9c94cbf67adbd93cb47eaa5b7eadc4947f18ed6d62fd5555f245cc2f87525f9e8d7bd5f70bd9e7fba2c70366e63bd68010f23
   languageName: node
   linkType: hard
 

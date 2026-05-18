@@ -29,6 +29,7 @@ model Organization {
   documentTemplates DocumentTemplate[]
   offices           Office[]
   events            AvaEventLog[]
+  rules             AvaRule[]
 
   @@map("organizations")
 }
@@ -544,6 +545,48 @@ model ConflictCheck {
   checkedBy User @relation(fields: [checkedById], references: [id])
 
   @@map("conflict_checks")
+}
+
+// ─── Rule (regelmotor — framtida arkitekturen) ─────────────────
+
+/// En regel som körs när ett event matchar, ett schema slår, eller ett
+/// HTTP-anrop kommer in på en regel-trigger-endpoint. Se
+/// `docs/architecture-future.md` §2.2 och `src/server/rules/schema.ts`.
+///
+/// `body` är hela `AvaRule`-objektet serialiserat som JSON — vi sparar
+/// inte de inre fälten separat eftersom strukturen är rekursiv (steg
+/// kan innehålla nestade steg).
+model AvaRule {
+  id             String   @id
+  name           String
+  description    String?
+  ownerId        String   @map("owner_id")
+  enabled        Boolean  @default(true)
+  organizationId String   @map("organization_id")
+
+  /// Trigger-typ ("event" | "schedule" | "http") — duplicerad ur body för billig filter.
+  triggerKind    String   @map("trigger_kind")
+  /// För event-triggers: vilken event-typ. Annars null.
+  triggerEventType String? @map("trigger_event_type")
+  /// För schedule-triggers: cron-uttryck. Annars null.
+  triggerCron    String?  @map("trigger_cron")
+  /// För http-triggers: path. Annars null.
+  triggerHttpPath String? @map("trigger_http_path")
+  /// För http-triggers: method.
+  triggerHttpMethod String? @map("trigger_http_method")
+
+  /// Hela AvaRule som JSON (inkl. steps + predicate).
+  body           Json
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId, enabled])
+  @@index([organizationId, triggerKind])
+  @@index([triggerKind, triggerEventType, enabled])
+  @@index([triggerKind, triggerHttpPath, triggerHttpMethod, enabled])
+  @@map("ava_rules")
 }
 
 // ─── Event Log (förstklassig medborgare i framtida arkitekturen) ─
