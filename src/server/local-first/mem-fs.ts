@@ -100,6 +100,31 @@ export class MemFs implements IFileSystem {
     this.store.delete(this.norm(path));
   }
 
+  /**
+   * Producera en JSON-serialiserbar snapshot av hela fs-state.
+   * Buffrar encodas som base64 så binär data inte korrumperas vid
+   * JSON.stringify/parse. Används av `IPersistence`-backendar.
+   */
+  snapshot(): Record<string, string> {
+    const out: Record<string, string> = {};
+    for (const [path, buf] of this.store) {
+      out[path] = buf.toString("base64");
+    }
+    return out;
+  }
+
+  /**
+   * Ersätt all fs-state med innehållet från en tidigare snapshot.
+   * `null`/`undefined` är no-op (för "ingen cachad data" fallback).
+   */
+  restore(snapshot: Record<string, string> | null | undefined): void {
+    if (!snapshot) return;
+    this.store.clear();
+    for (const [path, b64] of Object.entries(snapshot)) {
+      this.store.set(path, Buffer.from(b64, "base64"));
+    }
+  }
+
   async listDir(prefix: string): Promise<string[]> {
     const norm = this.norm(prefix);
     const search = norm === "" ? "" : `${norm}/`;

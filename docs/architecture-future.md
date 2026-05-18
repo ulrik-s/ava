@@ -842,8 +842,12 @@ Användaren går till `https://ava.example/demo`, klistrar in en publik
 GitHub-url, klickar "Ladda demo", och ser data renderat — utan att någon
 data lämnar deras webbläsare.
 
-- SQLite WASM (sql.js eller wa-sqlite, OPFS-persistent) (~1 v)
-- isomorphic-git över HTTPS (~3 d)
+- ✅ OPFS-persistens — KLAR. `IPersistence`-abstraktion +
+  `OpfsPersistence` + `InMemoryPersistence` + `MemFs.snapshot()`/
+  `restore()`. Wirat i `/demo`-sidan: data återställs från cache vid
+  page-reload utan ny HTTPS-clone. (sql.js WASM-binding kommer
+  separat när vi behöver SQL-queries i browser-runtime.)
+- ✅ isomorphic-git över HTTPS — KLAR (Fas 4 demo-kärna).
 - PDF.js ersätter Tika (~4 d)
 - Sök via FTS5 eller minisearch i WASM (~1 v)
 - WebAuthn/passkeys-auth (~1 v)

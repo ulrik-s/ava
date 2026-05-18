@@ -105,4 +105,44 @@ describe("useDemoRuntime", () => {
     rerender();
     expect(factory).toHaveBeenCalledTimes(1);
   });
+
+  it("vid mount försöker restoreFromCache och sätter loaded när cachen finns", async () => {
+    const { InMemoryPersistence } = await import("@/server/local-first/persistence");
+    const persistence = new InMemoryPersistence();
+    const matterJson = JSON.stringify({
+      id: "m1", matterNumber: "2026-0001", title: "X",
+      status: "ACTIVE", organizationId: "demo",
+    });
+
+    const warmup = DemoRuntime.create({
+      cloneFn: async (fs) => { await fs.writeFile("matters/active/m1.json", matterJson); },
+      persistence,
+    });
+    await warmup.loadDemo("a");
+
+    const { result } = renderHook(() =>
+      useDemoRuntime(() => DemoRuntime.create({
+        cloneFn: async () => { throw new Error("ska inte kallas"); },
+        persistence,
+      })),
+    );
+
+    await waitFor(() => expect(result.current.status).toBe("loaded"));
+    expect(result.current.fromCache).toBe(true);
+    expect(result.current.entities.matter).toHaveLength(1);
+  });
+
+  it("fromCache är false efter manuell loadDemo", async () => {
+    const matterJson = JSON.stringify({
+      id: "m1", matterNumber: "2026-0001", title: "X",
+      status: "ACTIVE", organizationId: "demo",
+    });
+    const { result } = renderHook(() =>
+      useDemoRuntime(() => fakeRuntime({ "matters/active/m1.json": matterJson })),
+    );
+
+    await act(async () => { await result.current.loadDemo("a"); });
+    await waitFor(() => expect(result.current.status).toBe("loaded"));
+    expect(result.current.fromCache).toBe(false);
+  });
 });

@@ -99,6 +99,33 @@ export class DemoLoader {
     return out;
   }
 
+  /**
+   * Re-hydratisera entiteterna från fs:n utan att klona igen. Används
+   * av `DemoRuntime.restoreFromCache()` efter en persistens-restore.
+   */
+  async replaceEntitiesFromFs(): Promise<void> {
+    this.hydrated.clear();
+    const { ProjectionHydrator } = await import("./projection-writer");
+    const hydrator = new ProjectionHydrator(this.deps.fs, this.deps.registry);
+    for (const entity of this.deps.registry.entities()) {
+      for (const prefix of this.knownPrefixes(entity)) {
+        const items = await this.deps.fs.listDir(prefix);
+        for (const item of items) {
+          if (!item.endsWith(".json")) continue;
+          const path = `${prefix}/${item}`;
+          try {
+            const r = await hydrator.hydratePath(path);
+            if (!r) continue;
+            if (!this.hydrated.has(r.entity)) this.hydrated.set(r.entity, []);
+            this.hydrated.get(r.entity)!.push(r.data);
+          } catch {
+            // Korrupta filer i cache — hoppa över
+          }
+        }
+      }
+    }
+  }
+
   // ── interna ──────────────────────────────────────────────────
 
   private async clearFs(): Promise<void> {

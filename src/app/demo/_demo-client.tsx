@@ -19,20 +19,27 @@
 import { useState } from "react";
 import { DemoRuntime } from "@/server/local-first/demo-runtime";
 import { cloneFromGithub } from "@/server/local-first/clone-from-github";
+import { OpfsPersistence } from "@/server/local-first/persistence";
 import { useDemoRuntime } from "@/lib/use-demo-runtime";
 
 export interface DemoClientProps {
   /**
    * Valfri runtime-factory. Default = isomorphic-git över HTTPS mot
-   * GitHub. Tester injicerar en fake. Server Components MÅSTE NOT
-   * passa funktioner till Client Components (Next 16/RSC) — därför
-   * är prop:en optional och defaultas till client-side-konstruktion.
+   * GitHub + OPFS-persistens. Tester injicerar en fake. Server
+   * Components MÅSTE INTE passa funktioner till Client Components
+   * (Next 16/RSC) — därför är prop:en optional och defaultas till
+   * client-side-konstruktion.
    */
   runtimeFactory?: () => DemoRuntime;
 }
 
 function defaultRuntimeFactory(): DemoRuntime {
-  return DemoRuntime.create({ cloneFn: cloneFromGithub() });
+  // OpfsPersistence skapas alltid — implementationen sväljer fel
+  // tyst i runtimes som inte stödjer OPFS (vissa Safari-versioner).
+  return DemoRuntime.create({
+    cloneFn: cloneFromGithub(),
+    persistence: new OpfsPersistence("ava-demo"),
+  });
 }
 
 interface MatterLike { id: string; matterNumber: string; title: string; status: string }
@@ -40,7 +47,7 @@ interface ContactLike { id: string; name: string; contactType: string; email?: s
 interface UserLike { id: string; email: string; name: string; role: string }
 
 export function DemoClient({ runtimeFactory = defaultRuntimeFactory }: DemoClientProps) {
-  const { status, error, entities, loadDemo } = useDemoRuntime(runtimeFactory);
+  const { status, error, entities, loadDemo, fromCache } = useDemoRuntime(runtimeFactory);
   const [url, setUrl] = useState("");
 
   const matters = (entities.matter ?? []) as MatterLike[];
@@ -89,6 +96,13 @@ export function DemoClient({ runtimeFactory = defaultRuntimeFactory }: DemoClien
       {status === "error" && error && (
         <div className="p-4 bg-red-50 border-l-4 border-red-400 mb-4">
           <strong>Kunde inte ladda demon:</strong> {error.message}
+        </div>
+      )}
+
+      {status === "loaded" && fromCache && (
+        <div className="p-3 bg-green-50 border-l-4 border-green-400 mb-4 text-sm">
+          Visar cachad data från senaste session. Klicka &quot;Ladda demo&quot;
+          för att hämta senaste version från GitHub.
         </div>
       )}
 

@@ -128,3 +128,57 @@ describe("MemFs — node-fs-yta (isomorphic-git-kompatibel)", () => {
     expect(buf.toString("utf8")).toBe("x");
   });
 });
+
+describe("MemFs — snapshot/restore för persistens", () => {
+  it("snapshot är JSON-serialiserbar (paths → base64-strängar)", async () => {
+    const mem = new MemFs();
+    await mem.writeFile("a.txt", "Hej");
+    await mem.writeFile("b/c.txt", "Värld");
+    const snap = mem.snapshot();
+
+    const serialized = JSON.stringify(snap);
+    expect(serialized).toContain("a.txt");
+    expect(serialized).toContain("b/c.txt");
+
+    const parsed = JSON.parse(serialized);
+    expect(typeof parsed["a.txt"]).toBe("string");
+  });
+
+  it("restore tömmer existerande data och laddar nytt", async () => {
+    const mem = new MemFs();
+    await mem.writeFile("kvar.txt", "ursprung");
+    await mem.writeFile("a.txt", "ursprung");
+    const snap = mem.snapshot();
+
+    await mem.writeFile("a.txt", "ändrad");
+    await mem.deleteFile("kvar.txt");
+    await mem.writeFile("extra.txt", "ska bort");
+
+    mem.restore(snap);
+    expect(await mem.readFile("a.txt")).toBe("ursprung");
+    expect(await mem.readFile("kvar.txt")).toBe("ursprung");
+    expect(await mem.exists("extra.txt")).toBe(false);
+  });
+
+  it("snapshot → JSON → restore bevarar UTF-8/emoji", async () => {
+    const mem = new MemFs();
+    await mem.writeFile("sv.txt", "Åäö ÅÄÖ åäö");
+    await mem.writeFile("emoji.txt", "✓ 🎉");
+    const json = JSON.parse(JSON.stringify(mem.snapshot()));
+    const fresh = new MemFs();
+    fresh.restore(json);
+    expect(await fresh.readFile("sv.txt")).toBe("Åäö ÅÄÖ åäö");
+    expect(await fresh.readFile("emoji.txt")).toBe("✓ 🎉");
+  });
+
+  it("snapshot av tom MemFs är tomt objekt", () => {
+    expect(new MemFs().snapshot()).toEqual({});
+  });
+
+  it("restore med null är no-op", async () => {
+    const mem = new MemFs();
+    await mem.writeFile("kvar.txt", "x");
+    mem.restore(null);
+    expect(await mem.readFile("kvar.txt")).toBe("x");
+  });
+});
