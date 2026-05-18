@@ -672,6 +672,52 @@ routrar behöver röras igen.
 
 ### 7.4 Fas 3 — Local-first-implementation
 
+**Status: 🟡 KERNEL KLAR per 2026-05-18.** De abstraktioner och kärn-
+implementationer som driver hela local-first-läget är på plats. Vad som
+återstår är Tauri-bundling, real isomorphic-git-bindning, Yjs-CRDT-fält,
+hydrate-on-pull och 15s-poll-loopen.
+
+Kernel-leverans (`src/server/local-first/`):
+
+| Komponent | Vad |
+|---|---|
+| `IFileSystem` + `InMemoryFileSystem` | DI-vänlig fs-abstraktion |
+| `IGitOps` + `InMemoryGitOps` | Git-operationer som test-mockable interface |
+| `IProjection<T>` + `JsonProjection<T>` | SOLID-baserat projektions-mönster |
+| `MatterProjection` | Per-entity-file till `matters/active/<id>.json` eller `matters/archive/<år>/` |
+| `EventLogProjection` | JSONL-append till `events/<år>/<mm>/<dd>.jsonl` |
+| `ClaimsProjection` | JSONL-append till `claims/<år>/<mm>/<dd>.jsonl` |
+| `time-bucket.ts` | DRY-helper för dagbaserade JSONL-paths |
+| `FilesystemEventLog` | `IEventLog`-impl mot fs (Liskov-substituerbar med `PostgresEventLog`) |
+| `FilesystemClaimStore` | `IClaimStore`-impl med CAS via push, retry, stale-failover |
+| `LocalGitStore` | `IDataStore`-impl som komponerar allt — full Liskov-kompabilitet med `PostgresStore` |
+
+TDD: alla 9 komponenter fick tester skrivna FÖRE implementation; 62 nya
+testfall (totalt 917 gröna, 0 typecheck-fel).
+
+SOLID-status:
+- **S** — varje klass har en uppgift (projektion projicerar, ops gör git, claim-store claimar)
+- **O** — ny entitet = ny `JsonProjection`-subklass, ingen ändring av kernel
+- **L** — `LocalGitStore` är substituerbar med `PostgresStore` överallt
+- **I** — `IFileSystem` / `IGitOps` / `IProjection` är små fokuserade interfaces
+- **D** — kernel-koden beror på interfaces; tester injicerar in-memory-impl
+
+Återstår innan local-first kan dogfooda:
+
+1. **`isomorphic-git`-bunden `IGitOps`-impl** (~3 dagar) — clone, fetch, push, commit
+2. **Node/Tauri-bunden `IFileSystem`-impl** (~1 dag) — `fs/promises` mot disk
+3. **SQLite-projektion** (~1 vecka) — write-through cache: emit → JSON + SQLite
+4. **Hydrate-on-pull** (~5 dagar) — vid fetch som ger nya commits, läs ändrade filer + re-hydratisera SQLite
+5. **15s-poll-loop** (~3 dagar) — bakgrundsprocess som fetchar och triggar hydrate
+6. **Yjs-CRDT på fri-text-fält** (~5 dagar) — matter.notes och task-kommentarer
+7. **Tauri-wrapper** (~1 vecka) — bundling + auto-update
+8. **Migrationsverktyg Postgres → git** (~1 vecka) — engångsexport
+
+Totalt återstår ~5 veckor till en körbar Tauri-app. Kärnan ovan är dock
+det riskabla — resten är hantverk på toppen.
+
+### 7.4.0 Tidigare estimat (för referens)
+
 **~7 veckor.** Resultat: en byrå kan välja att köra AVA i local-first-läget.
 
 - Tauri-wrapper (~1 v)
