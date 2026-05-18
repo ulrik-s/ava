@@ -360,9 +360,15 @@ function isClaimable(claimId: string): boolean {
 }
 ```
 
-#### Preferred-runner-optimering
+#### Preferred-runner (krav, inte optimering)
 
-För att undvika att alla 15 klienter försöker claima samtidigt:
+Spike i `spikes/claim-race/` (2026-05-18) visade att utan denna mekanism får
+vi avg 10 retries per claim under konkurrens (p95 = 82). Med den: avg 1.27,
+p95 = 2. Det är 8× snabbare och nödvändigt vid burst-scenarier.
+
+Insikt från spiken: git CAS sker på `refs/heads/main`-nivå, inte fil-nivå.
+Att splitta claims över olika filer hjälper inte; bara reducerad konkurrens
+gör det.
 
 ```ts
 const primary = activeUsers.find(u => hash(u + event.id) === minHash(event.id));
