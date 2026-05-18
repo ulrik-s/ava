@@ -712,15 +712,24 @@ SOLID-status:
 2. ✅ **`IFileSystem`-impl mot disk** — KLAR per 2026-05-18.
    `NodeFileSystem` mot `fs/promises` med path-traversal-skydd och
    tmpdir-baserade tester.
-3. **SQLite-projektion** (~1 vecka) — write-through cache: emit → JSON + SQLite
-4. **Hydrate-on-pull** (~5 dagar) — vid fetch som ger nya commits, läs ändrade filer + re-hydratisera SQLite
-5. **15s-poll-loop** (~3 dagar) — bakgrundsprocess som fetchar och triggar hydrate
+3. ✅ **Projektion-paradigm** — KLAR per 2026-05-18.
+   - `ProjectionRegistry` — entity ↔ projektion ↔ path-prefix
+   - `ProjectionWriter` — write-through: Prisma-write → JSON-fil
+   - `ProjectionHydrator` — hydrate: JSON-fil → callback (callern uppdaterar SQLite)
+   - Default-registry: matter, contact, user
+   - Round-trip-tester bevisar inversion
+4. **Bind ProjectionWriter till tRPC mutations + Prisma SQLite-provider**
+   (~3 dagar) — varje router-write triggar `writer.project(entity, data)`.
+   Schema-config byter provider till SQLite för local-first-läget.
+5. **15s-poll-loop med hydrate** (~3 dagar) — bakgrundsprocess som
+   `fetch` → diff:ar ändrade paths → `hydrator.hydrateChanges()` →
+   SQLite-upsert via Prisma → notifiera tRPC-klienten via SSE/Tauri-event
 6. **Yjs-CRDT på fri-text-fält** (~5 dagar) — matter.notes och task-kommentarer
 7. **Tauri-wrapper** (~1 vecka) — bundling + auto-update
 8. **Migrationsverktyg Postgres → git** (~1 vecka) — engångsexport
 
-Totalt återstår ~5 veckor till en körbar Tauri-app. Kärnan ovan är dock
-det riskabla — resten är hantverk på toppen.
+Totalt återstår ~3.5 veckor till en körbar Tauri-app. Projektion-paradigmet
+ovan var det riskabla — resten är hantverk på toppen.
 
 ### 7.4.0 Tidigare estimat (för referens)
 
