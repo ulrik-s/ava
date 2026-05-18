@@ -40,6 +40,9 @@ export const EVENT_TYPES = [
   "invoice.sent",
   "invoice.payment_received",
   "invoice.overdue",
+  // payment-plan (avbetalningsplaner) — driver av påminnelser
+  "payment.due",
+  "payment.overdue",
   // time
   "time-entry.added",
   "time-entry.updated",
@@ -55,6 +58,8 @@ export const EVENT_TYPES = [
   "user.logged_in",
   "user.action",
   "system.heartbeat",
+  "system.payment_scan_requested",
+  "system.payment_scan_completed",
 ] as const;
 
 export type EventType = (typeof EVENT_TYPES)[number];

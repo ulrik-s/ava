@@ -5,6 +5,20 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "./db";
 import { PostgresStore } from "./data-store/PostgresStore";
 import type { IDataStore } from "./data-store/IDataStore";
+import { attachEventRuleExecutor } from "./rules/event-executor";
+import { attachPaymentScanListener } from "./services/payment-scan-listener";
+
+/** Bygg per-request dataStore + fäst regelmotorn som listener. */
+function buildContextDataStore(organizationId: string): IDataStore {
+  const ds = PostgresStore.forOrganization(prisma, organizationId);
+  // Event-trigrade regler kör automatiskt när routrar emittar events.
+  // Listeners är scoped till denna PostgresEventLog som garbage-collectas
+  // när requesten slutar — så ingen ackumulering.
+  attachEventRuleExecutor(prisma, ds, organizationId);
+  // Domän-listener för payment-scan (Fas 1.5).
+  attachPaymentScanListener(prisma, ds, organizationId);
+  return ds;
+}
 
 export type Context = {
   prisma: typeof prisma;
@@ -29,7 +43,7 @@ export async function createContext(opts?: { req?: Request; resHeaders?: Headers
   if (session?.user) {
     return {
       prisma,
-      dataStore: PostgresStore.forOrganization(prisma, session.user.organizationId),
+      dataStore: buildContextDataStore(session.user.organizationId),
       user: {
         id: session.user.id,
         email: session.user.email!,
@@ -68,7 +82,7 @@ export async function createContext(opts?: { req?: Request; resHeaders?: Headers
 
     return {
       prisma,
-      dataStore: PostgresStore.forOrganization(prisma, user.organizationId),
+      dataStore: buildContextDataStore(user.organizationId),
       user: {
         id: user.id,
         email: user.email,

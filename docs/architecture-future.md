@@ -602,10 +602,44 @@ Resultat: 855 tester gröna (+82 från fas-1-start), 0 typcheck-fel.
 
 Begränsningar / kvarstår till senare faser:
 - Fas 1.5: replay-CLI är begränsad — saknar event-causation-graph-vy
-- Migration av befintliga cron-routes till regler är **inte gjord** —
-  `cron/send-payment-reminders` körs fortfarande hårdkodat. Migreras
-  i Fas 1.5 när live-handlers stresstestats.
 - Yjs-CRDT-fält är inte implementerade än (Fas 3-jobb).
+
+### 7.2.1 Fas 1.5 — Migration av hardcoded business-logic till regler
+
+**Status: ✅ KLAR per 2026-05-18.** Existerande hardcoded flows kör nu
+parallellt med regelmotor-versioner.
+
+Levererat:
+
+- ✅ Nya event-typer: `payment.due`, `payment.overdue`,
+  `system.payment_scan_requested`, `system.payment_scan_completed`.
+- ✅ `src/server/services/payment-scan.ts` — komplex SQL bor kvar i kod,
+  men resultatet emittas som events istället för att skicka mail direkt.
+- ✅ `src/server/services/payment-scan-listener.ts` — domän-listener som
+  lyssnar på `system.payment_scan_requested` och kör scannen.
+- ✅ `src/server/rules/event-executor.ts` — glue som kopplar event-loggen
+  till regelmotorn så event-triggrade regler kör automatiskt vid emit().
+- ✅ Listeners attachade i tRPC-context, scheduler-tick och upload-route.
+- ✅ Startregler uppdaterade:
+  - `_org/daily-payment-scan` — schedule, emittar `system.payment_scan_requested`
+  - `_org/send-payment-due-mail` — event, skickar via `payment-reminder`-mall
+  - `_org/send-payment-overdue-mail` — event, skickar via `payment-overdue`-mall
+  - `_org/auto-analyze-on-upload` — event, kör llm.extract på alla uppladdningar
+- ✅ `upload-route.ts` emittar `document.uploaded` istället för direktanrop
+  till `analyzeDocument` — regeln triggar via `llm.extract`-stepet.
+- ✅ `cron/send-payment-reminders/route.ts` markerad `@deprecated` med pekare
+  till nya flödet. Filen finns kvar för bakåtkompatibilitet under övergång.
+
+Resultat: 865 tester gröna (+10), 0 typcheck-fel.
+
+Migration-path för en byrå:
+1. `yarn seed:rules --org <id>` (en gång per byrå)
+2. `yarn ava rules enable --org <id> --id _org/daily-payment-scan`
+3. `yarn ava rules enable --org <id> --id _org/send-payment-due-mail`
+4. `yarn ava rules enable --org <id> --id _org/send-payment-overdue-mail`
+5. `yarn ava rules enable --org <id> --id _org/auto-analyze-on-upload`
+6. Punkter:a `/api/cron/send-payment-reminders` från extern cron och
+   peka istället på `/api/cron/scheduler-tick`
 
 ### 7.3 Fas 2 — `DataStore`-abstraktion
 

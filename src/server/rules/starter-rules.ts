@@ -14,50 +14,106 @@ import type { AvaRule } from "./schema";
 
 export const STARTER_RULES: AvaRule[] = [
   // ────────────────────────────────────────────────────────────────
-  // 1. Daglig betalningspåminnelse (ersätter cron/send-payment-reminders)
+  // 1. Daglig payment-scan (ersätter cron/send-payment-reminders).
+  // Steg 1 av 3: triggas dagligen, emittar system.payment_scan_requested.
+  // Domän-listener (payment-scan-listener.ts) reagerar och emittar
+  // payment.due / payment.overdue per plan, vilka regel 1b/1c skickar mail för.
   // ────────────────────────────────────────────────────────────────
   {
-    id: "_org/daily-payment-reminders",
-    name: "Daglig betalningspåminnelse 09:00",
-    description: "Skickar 14-dagars-påminnelse till klienter med förfallna fakturor.",
+    id: "_org/daily-payment-scan",
+    name: "Daglig payment-scan kl 09:00",
+    description: "Trigger för payment-scan-service som hittar planer som ska ha DUE-/OVERDUE-mail.",
     ownerId: "_org",
     enabled: false,
     trigger: { kind: "schedule", cron: "0 9 * * 1-5", timezone: "Europe/Stockholm" },
     steps: [
-      { do: "audit.log", message: "Daglig påminnelse-scan startad" },
-      // Den faktiska "hitta-förfallna-fakturor"-logiken kommer som en
-      // SQL-fråga i en `report.query`-step i nästa wave. För nu en
-      // markörregel som visar mönstret.
+      { do: "audit.log", message: "Daglig payment-scan startas" },
+      { do: "emit", eventType: "system.payment_scan_requested", payload: {} },
+    ],
+  },
+
+  // 1b. Skicka DUE-mail när payment-scan emittar payment.due.
+  {
+    id: "_org/send-payment-due-mail",
+    name: "Skicka månadens betalnings-mail",
+    description: "Reagerar på payment.due-events från payment-scan-service.",
+    ownerId: "_org",
+    enabled: false,
+    trigger: { kind: "event", type: "payment.due" },
+    steps: [
+      {
+        do: "email.send",
+        template: "payment-reminder",
+        to: "{{payload.recipientEmail}}",
+        vars: {
+          recipientEmail: "{{payload.recipientEmail}}",
+          recipientName: "{{payload.recipientName}}",
+          matterNumber: "{{payload.matterNumber}}",
+          matterTitle: "{{payload.matterTitle}}",
+          invoiceAmount: "{{payload.invoiceAmount}}",
+          monthlyAmount: "{{payload.monthlyAmount}}",
+          dayOfMonth: "{{payload.dayOfMonth}}",
+          remainingAmount: "{{payload.remainingAmount}}",
+          organizationName: "{{payload.organizationName}}",
+          organizationContact: "{{payload.organizationContact}}",
+          bankgiro: "{{payload.bankgiro}}",
+        },
+        idempotencyKey: "{{payload.idempotencyKey}}",
+      },
+    ],
+  },
+
+  // 1c. Skicka OVERDUE-mail när payment-scan emittar payment.overdue.
+  {
+    id: "_org/send-payment-overdue-mail",
+    name: "Skicka påminnelse om försenad betalning",
+    description: "Reagerar på payment.overdue-events från payment-scan-service.",
+    ownerId: "_org",
+    enabled: false,
+    trigger: { kind: "event", type: "payment.overdue" },
+    steps: [
+      {
+        do: "email.send",
+        template: "payment-overdue",
+        to: "{{payload.recipientEmail}}",
+        vars: {
+          recipientEmail: "{{payload.recipientEmail}}",
+          recipientName: "{{payload.recipientName}}",
+          matterNumber: "{{payload.matterNumber}}",
+          matterTitle: "{{payload.matterTitle}}",
+          invoiceAmount: "{{payload.invoiceAmount}}",
+          monthlyAmount: "{{payload.monthlyAmount}}",
+          dayOfMonth: "{{payload.dayOfMonth}}",
+          remainingAmount: "{{payload.remainingAmount}}",
+          organizationName: "{{payload.organizationName}}",
+          organizationContact: "{{payload.organizationContact}}",
+          bankgiro: "{{payload.bankgiro}}",
+        },
+        idempotencyKey: "{{payload.idempotencyKey}}",
+      },
     ],
   },
 
   // ────────────────────────────────────────────────────────────────
-  // 2. Auto-extrahera avtalsmetadata vid uppladdning
+  // 2. Auto-analysera uppladdade dokument (ersätter direkt-anrop till
+  // analyzeDocument från upload-route + templates/generate). Triggar
+  // för alla dokument; LLM avgör vad som är värt att extrahera.
   // ────────────────────────────────────────────────────────────────
   {
-    id: "_org/extract-contract-metadata",
-    name: "AI-extraktion av avtal vid uppladdning",
-    description: "När ett dokument med 'avtal' i filnamnet laddas upp körs LLM-extraktion av parter, datum och belopp.",
+    id: "_org/auto-analyze-on-upload",
+    name: "Auto-analysera dokument vid uppladdning",
+    description: "AI-extraktion körs på varje nytt dokument (fire-and-forget).",
     ownerId: "_org",
     enabled: false,
-    trigger: {
-      kind: "event",
-      type: "document.uploaded",
-      predicate: { in: ["avtal", { var: "payload.fileName" }] },
-    },
+    trigger: { kind: "event", type: "document.uploaded" },
     steps: [
       {
         do: "llm.extract",
         documentId: "{{payload.documentId}}",
-        schema: { parter: "string[]", datum: "date", belopp: "number?" },
+        schema: { titel: "string?", typ: "string?", parter: "string[]?" },
         into: "documents.{{payload.documentId}}.aiMetadata",
       },
-      {
-        do: "task.create",
-        assignTo: "{{event.actor.id}}",
-        title: "Granska AI-extraherat för {{payload.fileName}}",
-      },
-      { do: "audit.log", message: "AI-extraktion startad för {{payload.fileName}}" },
+      { do: "audit.log", message: "AI-analys triggad för {{payload.fileName}}" },
     ],
   },
 

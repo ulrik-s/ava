@@ -23,6 +23,8 @@ import {
   alreadyRanFromEventLog,
 } from "@/server/rules/scheduler";
 import { buildLiveHandlers } from "@/server/rules/handlers";
+import { attachPaymentScanListener } from "@/server/services/payment-scan-listener";
+import { attachEventRuleExecutor } from "@/server/rules/event-executor";
 
 export async function POST(req: NextRequest) {
   const expected = process.env.CRON_SECRET;
@@ -62,14 +64,26 @@ export async function POST(req: NextRequest) {
       organizationId: org.id,
     });
 
-    const result = await runScheduledTick({
-      rules,
-      dataStore,
-      handlers,
-      alreadyRan: alreadyRanFromEventLog(dataStore),
-    });
+    // Listeners attachade för denna tick:
+    //   1. Rule-executor → event-triggrade regler kör automatiskt på
+    //      events från scheduled rules + domän-services.
+    //   2. Payment-scan-listener → reagerar på `system.payment_scan_requested`
+    //      emittat från `_org/daily-payment-scan`-regeln.
+    const detach1 = attachEventRuleExecutor(prisma, dataStore, org.id);
+    const detach2 = attachPaymentScanListener(prisma, dataStore, org.id);
 
-    perOrg.push({ organizationId: org.id, name: org.name, ...result });
+    try {
+      const result = await runScheduledTick({
+        rules,
+        dataStore,
+        handlers,
+        alreadyRan: alreadyRanFromEventLog(dataStore),
+      });
+      perOrg.push({ organizationId: org.id, name: org.name, ...result });
+    } finally {
+      detach1();
+      detach2();
+    }
   }
 
   const totals = perOrg.reduce(

@@ -5,8 +5,10 @@ import { mkdir, writeFile } from "fs/promises";
 import path from "path";
 import { extractText } from "@/server/services/tika";
 import { indexDocument } from "@/server/services/meilisearch";
-import { analyzeDocument } from "@/server/services/document-analysis";
 import { isJunkFileName } from "@/lib/junk-files";
+import { PostgresStore } from "@/server/data-store/PostgresStore";
+import { emit } from "@/server/events/emit";
+import { attachEventRuleExecutor } from "@/server/rules/event-executor";
 
 export const POST = withApiErrors(async (req: NextRequest) => {
   const user = await requireSession();
@@ -71,9 +73,14 @@ export const POST = withApiErrors(async (req: NextRequest) => {
     )
     .catch((err) => console.error("Document indexing failed:", err));
 
-  // AI-analys (non-blocking) — extraherar titel, dokumenttyp + föreslår kontakter
-  analyzeDocument(document.id).catch((err) =>
-    console.error("Document analysis failed:", err),
+  // Emit document.uploaded — auto-analyze-on-upload-regeln plockar upp det
+  // och triggar analyzeDocument via llm.extract-step. Inget direktanrop
+  // till analyzeDocument från denna route längre (Fas 1.5).
+  const dataStore = PostgresStore.forOrganization(prisma, user.orgId);
+  attachEventRuleExecutor(prisma, dataStore, user.orgId);
+  await emit.documentUploaded(
+    { user: { id: user.userId }, dataStore },
+    { id: document.id, fileName: document.fileName, matterId },
   );
 
   return NextResponse.json(document);

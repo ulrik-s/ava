@@ -1,4 +1,19 @@
 /**
+ * @deprecated Sedan Fas 1.5 (2026-05-18) ersätts den här endpointen av
+ * regelmotor-driven payment-scan:
+ *
+ *   1. `/api/cron/scheduler-tick` triggas av extern cron
+ *   2. Regeln `_org/daily-payment-scan` (enabled per byrå) emittar
+ *      `system.payment_scan_requested`
+ *   3. `payment-scan-service.ts` reagerar och emittar `payment.due` /
+ *      `payment.overdue` per plan
+ *   4. Reglerna `_org/send-payment-due-mail` och `_org/send-payment-overdue-mail`
+ *      skickar respektive mall via `email.send`-step
+ *
+ * Den här endpoint:n är kvar för bakåtkompatibilitet under en
+ * övergångsperiod. När alla byråer har aktiverat de fyra reglerna
+ * (daily-payment-scan + 1b + 1c) kan filen raderas.
+ *
  * Cron-endpoint: skickar månads- och påminnelsebrev för aktiva
  * avbetalningsplaner. Körs dagligen av extern schemaläggare (systemd-timer,
  * k8s CronJob, Vercel Cron, macOS `launchd`, whatever).
@@ -8,14 +23,6 @@
  * Idempotens: varje utskick loggas i `PaymentPlanReminder` med unique
  * `[planId, dueMonth, type]`. Om cron:en körs två gånger samma dag skickas
  * inget dubbelt.
- *
- * Logik per plan (ACTIVE + invoice.status=INSTALLMENT_PLAN):
- *   - Om today.date === plan.dayOfMonth → DUE-mail (om inte redan skickat
- *     denna månad)
- *   - Om today.date === plan.dayOfMonth + 10 OCH ingen betalning registrerad
- *     i denna månad → OVERDUE-mail (om inte redan skickat denna månad)
- *
- * Returnerar JSON med räknare för observability.
  */
 
 import { NextRequest, NextResponse } from "next/server";
