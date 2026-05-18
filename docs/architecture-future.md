@@ -740,12 +740,22 @@ SOLID-status:
    - Felhantering: fetch-fel och hydrate-fel loggas men tar inte ner loopen
    - Integration-test mot riktig git bevisar end-to-end-flödet med två
      klienter
-6. **Yjs-CRDT på fri-text-fält** (~5 dagar) — matter.notes och task-kommentarer
+6. ✅ **Yjs-CRDT på fri-text-fält** — KLAR per 2026-05-18 (kärna).
+   - `YjsTextField`-klassen exponerar insert/delete/replaceAll +
+     encodedState()/applyEncodedUpdate() för persistence och peer-sync
+   - Round-trip-tester bevisar att text bevaras (inkl. svenska tecken)
+     över encode → decode
+   - CRDT-merge-tester bevisar att två parallella editingar (även på
+     samma position) mergas deterministiskt och konflikt-fritt
+   - `matterProjectionSchema` utökat med `notes` (renderad) och
+     `notesCrdt` (base64-state) som optionella fält
+   - Integration-test: full kollaborativ scenario med Anna+Björn
+   - UI-bindning (Tiptap/CodeMirror med Yjs-awareness) kommer i step 7
 7. **Tauri-wrapper** (~1 vecka) — bundling + auto-update
 8. **Migrationsverktyg Postgres → git** (~1 vecka) — engångsexport
 
-Totalt återstår ~3.5 veckor till en körbar Tauri-app. Projektion-paradigmet
-ovan var det riskabla — resten är hantverk på toppen.
+Totalt återstår ~2.5 veckor till en körbar Tauri-app. Projektion-paradigmet
++ CRDT-merge är de riskabla bitarna — bägge är nu bevisade.
 
 ### 7.4.0 Tidigare estimat (för referens)
 

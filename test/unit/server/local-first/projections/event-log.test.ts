@@ -1,6 +1,21 @@
 import { describe, it, expect } from "vitest";
 import { EventLogProjection } from "@/server/local-first/projections/event-log";
+import { dayBucketPath, monthBucketPath } from "@/server/local-first/projections/time-bucket";
 import type { AvaEvent } from "@/server/events/schema";
+
+describe("time-bucket helpers", () => {
+  it("dayBucketPath zero-pad:ar månad och dag", () => {
+    expect(dayBucketPath("events", new Date("2026-01-05T00:00:00Z"))).toBe("events/2026/01/05.jsonl");
+  });
+
+  it("monthBucketPath zero-pad:ar månad", () => {
+    expect(monthBucketPath("time-entries/anna", new Date("2026-01-15T00:00:00Z"))).toBe("time-entries/anna/2026/01.jsonl");
+  });
+
+  it("monthBucketPath hanterar december", () => {
+    expect(monthBucketPath("logs", new Date("2026-12-31T23:59:59Z"))).toBe("logs/2026/12.jsonl");
+  });
+});
 
 const event: AvaEvent = {
   id: "01900000-0000-7000-8000-000000000001",

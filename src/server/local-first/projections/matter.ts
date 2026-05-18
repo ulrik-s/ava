@@ -23,6 +23,17 @@ export const matterProjectionSchema = z.object({
   status: z.enum(["ACTIVE", "CLOSED", "ARCHIVED"]),
   organizationId: z.string(),
   archivedAt: z.string().nullable().optional(),
+  /**
+   * Renderad anteckningstext för läs-vyer (sidolist, sök-snippets etc).
+   * Vid CRDT-aktiverad redigering räknas detta ut från `notesCrdt`.
+   * Källans sanning är `notesCrdt` när bägge finns.
+   */
+  notes: z.string().optional(),
+  /**
+   * Base64 av YDoc-state — Yjs-CRDT-historik som möjliggör konflikt-fri
+   * merge när två klienter editerar samtidigt. Se `yjs-text-field.ts`.
+   */
+  notesCrdt: z.string().optional(),
 });
 
 export type MatterProjectionData = z.infer<typeof matterProjectionSchema>;

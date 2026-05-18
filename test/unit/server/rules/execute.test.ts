@@ -167,6 +167,54 @@ describe("executeRule.email.send", () => {
   });
 });
 
+describe("executeRule.llm.extract + task.create + emit", () => {
+  it("llm.extract triggar handler med templatade värden", async () => {
+    const { ds } = makeMockDataStore();
+    const handlers = buildNoopHandlers();
+    const rule = makeRule([
+      { do: "llm.extract", documentId: "{{event.payload.docId}}", schema: {}, into: "into-{{event.payload.docId}}" },
+    ]);
+    const event: AvaEvent = { ...baseEvent, payload: { docId: "d1" } };
+    await executeRule({ rule, event, dataStore: ds, handlers });
+    expect(handlers.calls[0].args).toMatchObject({ documentId: "d1", into: "into-d1" });
+  });
+
+  it("task.create triggar handler", async () => {
+    const { ds } = makeMockDataStore();
+    const handlers = buildNoopHandlers();
+    const rule = makeRule([
+      { do: "task.create", assignTo: "{{actor.id}}", title: "Granska {{event.payload.title}}", dueAt: "2026-06-01" },
+    ]);
+    const event: AvaEvent = { ...baseEvent, payload: { title: "X" } };
+    await executeRule({ rule, event, dataStore: ds, handlers });
+    expect(handlers.calls[0].args).toMatchObject({ assignTo: "anna", title: "Granska X", dueAt: "2026-06-01" });
+  });
+
+  it("emit step emittar nytt event med causedBy = origin", async () => {
+    const { ds, emit } = makeMockDataStore();
+    const handlers = buildNoopHandlers();
+    const rule = makeRule([
+      { do: "emit", eventType: "task.created", payload: { foo: "{{event.payload.matterNumber}}" } },
+    ]);
+    await executeRule({ rule, event: baseEvent, dataStore: ds, handlers });
+    const emittedTask = emit.mock.calls.find((c) => (c[0] as { type: string }).type === "task.created");
+    expect(emittedTask).toBeTruthy();
+    expect((emittedTask![0] as { causedBy: string }).causedBy).toBe(baseEvent.id);
+    expect((emittedTask![0] as { payload: { foo: string } }).payload.foo).toBe("2026-0001");
+  });
+
+  it("for-each kastar om items inte är array", async () => {
+    const { ds } = makeMockDataStore();
+    const handlers = buildNoopHandlers();
+    const rule = makeRule([
+      { do: "for-each", items: "event.payload.title", as: "x", body: [{ do: "audit.log", message: "{{x}}" }] },
+    ]);
+    const result = await executeRule({ rule, event: baseEvent, dataStore: ds, handlers });
+    expect(result.ok).toBe(false);
+    expect(result.error?.message).toMatch(/for-each\.items/);
+  });
+});
+
 describe("executeRule felhantering", () => {
   it("emittar rule.failed när ett step kastar", async () => {
     const { ds, emit } = makeMockDataStore();

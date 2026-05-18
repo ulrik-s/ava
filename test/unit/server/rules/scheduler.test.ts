@@ -8,6 +8,41 @@ import { buildNoopHandlers } from "@/server/rules/handlers";
 import type { AvaRule } from "@/server/rules/schema";
 import type { IDataStore } from "@/server/data-store/IDataStore";
 
+describe("alreadyRanFromEventLog", () => {
+  it("returnerar true när event-loggen redan har heartbeat med matchande key", async () => {
+    const { alreadyRanFromEventLog } = await import("@/server/rules/scheduler");
+    const ds = {
+      events: {
+        query: vi.fn().mockResolvedValue([
+          { type: "system.heartbeat", payload: { idempotencyKey: "schedule:r1@2026-05-18T09:00:00.000Z" } },
+        ]),
+      },
+    } as never;
+    const check = alreadyRanFromEventLog(ds);
+    expect(await check("schedule:r1@2026-05-18T09:00:00.000Z")).toBe(true);
+  });
+
+  it("returnerar false när ingen heartbeat med samma key finns", async () => {
+    const { alreadyRanFromEventLog } = await import("@/server/rules/scheduler");
+    const ds = {
+      events: {
+        query: vi.fn().mockResolvedValue([
+          { type: "system.heartbeat", payload: { idempotencyKey: "annan-key" } },
+        ]),
+      },
+    } as never;
+    const check = alreadyRanFromEventLog(ds);
+    expect(await check("schedule:r1@2026-05-18T09:00:00.000Z")).toBe(false);
+  });
+
+  it("returnerar false när loggen är tom", async () => {
+    const { alreadyRanFromEventLog } = await import("@/server/rules/scheduler");
+    const ds = { events: { query: vi.fn().mockResolvedValue([]) } } as never;
+    const check = alreadyRanFromEventLog(ds);
+    expect(await check("schedule:r1@x")).toBe(false);
+  });
+});
+
 describe("expandTicks", () => {
   it("returnerar varje schemalagd tick i intervallet", () => {
     // Vardagar 09:00 Stockholm
