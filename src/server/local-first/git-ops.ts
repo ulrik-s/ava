@@ -52,4 +52,15 @@ export interface IGitOps {
    * changes. Används efter `NonFastForward` för att kunna börja om.
    */
   resetHardToRemote(): Promise<void>;
+
+  /**
+   * Lista filer som ändrats mellan två commits (added/modified/deleted).
+   *
+   * Används av sync-loopen för att avgöra vilka projektioner som behöver
+   * re-hydratiseras efter en fetch. Path-formatet är relativt repo-roten.
+   *
+   * Om `fromHash` är tom sträng tolkas det som "first commit" — då
+   * returneras alla filer i `toHash`.
+   */
+  changedFiles(fromHash: string, toHash: string): Promise<string[]>;
 }

@@ -105,6 +105,18 @@ export class InMemoryGitOps implements IGitOps {
     this.applyWorkingTree(this.knownRemoteHash);
   }
 
+  async changedFiles(fromHash: string, toHash: string): Promise<string[]> {
+    if (fromHash === toHash) return [];
+    const before = this.remote.workingTrees.get(fromHash) ?? {};
+    const after = this.remote.workingTrees.get(toHash) ?? {};
+    const all = new Set([...Object.keys(before), ...Object.keys(after)]);
+    const changed: string[] = [];
+    for (const p of all) {
+      if (before[p] !== after[p]) changed.push(p);
+    }
+    return changed.sort();
+  }
+
   // ── private ───────────────────────────────────────────────────
 
   private applyWorkingTree(hash: string): void {

@@ -728,9 +728,18 @@ SOLID-status:
    - Integration-test mot riktig git: Anna emit → projicering → commit
      → push → Björn fetch → reset → hydratiserar identisk data.
    - SQLite-byte i Prisma sker när vi når Tauri-runtime (step 7).
-5. **15s-poll-loop med hydrate** (~3 dagar) — bakgrundsprocess som
-   `fetch` → diff:ar ändrade paths → `hydrator.hydrateChanges()` →
-   SQLite-upsert via Prisma → notifiera tRPC-klienten via SSE/Tauri-event
+5. ✅ **SyncLoop med hydrate** — KLAR per 2026-05-18.
+   - `SyncLoop` är bakgrundsprocessen som driver fetch + hydrate
+   - Använder `IGitOps.changedFiles(fromHash, toHash)` för att diff:a
+     remote-ändringar och bara hydratisera ändrade paths
+   - Konservativ regel: skippar tick om klienten har lokala commits
+     ahead (skyddar mot förlorade writes)
+   - `tickOnce()` är exponerad så tester kan driva loopen deterministiskt
+     OCH så UI:t kan trigga manuell sync via "Pull"-knapp
+   - `start()`/`stop()` använder setInterval (default 15s)
+   - Felhantering: fetch-fel och hydrate-fel loggas men tar inte ner loopen
+   - Integration-test mot riktig git bevisar end-to-end-flödet med två
+     klienter
 6. **Yjs-CRDT på fri-text-fält** (~5 dagar) — matter.notes och task-kommentarer
 7. **Tauri-wrapper** (~1 vecka) — bundling + auto-update
 8. **Migrationsverktyg Postgres → git** (~1 vecka) — engångsexport

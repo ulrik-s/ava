@@ -93,6 +93,19 @@ export class NodeGitOps implements IGitOps {
     await this.run(["reset", "--hard", `${this.remote}/${this.branch}`]);
   }
 
+  async changedFiles(fromHash: string, toHash: string): Promise<string[]> {
+    if (fromHash === toHash) return [];
+    if (!fromHash) {
+      // Tom from = "alla filer i toHash"
+      const { stdout } = await this.run(["ls-tree", "-r", "--name-only", toHash]);
+      return stdout.split("\n").map((s) => s.trim()).filter(Boolean);
+    }
+    const { stdout } = await this.run([
+      "diff", "--name-only", `${fromHash}..${toHash}`,
+    ]);
+    return stdout.split("\n").map((s) => s.trim()).filter(Boolean);
+  }
+
   // ── private ───────────────────────────────────────────────────
 
   private async run(args: string[]): Promise<{ stdout: string; stderr: string }> {
