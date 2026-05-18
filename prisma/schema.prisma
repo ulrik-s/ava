@@ -86,8 +86,38 @@ model User {
   expenses          Expense[]
   createdTemplates  DocumentTemplate[] @relation("TemplateCreatedBy")
   recordedPayments  Payment[]          @relation("PaymentRecordedBy")
+  passkeys          Passkey[]
 
   @@map("users")
+}
+
+// ─── Passkey (WebAuthn-credential) ───────────────────────────────
+// Lagrar WebAuthn-credentials per användare så de kan logga in
+// lösenordsfritt via passkeys (Touch ID, Windows Hello, YubiKey, etc.).
+
+model Passkey {
+  /// credentialID (base64url-encoded) — primärnyckel per FIDO-spec.
+  id                  String   @id
+  userId              String   @map("user_id")
+  /// Publiknyckel (base64url, CBOR-encoded COSE key).
+  publicKey           String   @map("public_key")
+  /// Signaturräknare (för anti-clone-skydd).
+  counter             BigInt   @default(0)
+  /// Transport-hints från authenticator (usb, ble, nfc, internal, hybrid).
+  transports          String[] @default([])
+  /// Användar-vänligt namn t.ex. "MacBook Touch ID" eller "YubiKey blå".
+  name                String?
+  /// Backed-up status — `true` = synkad via iCloud/Google Password Manager.
+  backedUp            Boolean  @default(false) @map("backed_up")
+  /// "Device" eller "MultiDevice" — om passkey:n flyttar mellan enheter.
+  deviceType          String   @map("device_type")
+  createdAt           DateTime @default(now()) @map("created_at")
+  lastUsedAt          DateTime? @map("last_used_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("passkeys")
 }
 
 // ─── Contact (Kontakt) ──────────────────────────────────────────

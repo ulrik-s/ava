@@ -817,9 +817,15 @@ Use case som nu fungerar:
 
 Återstår innan full pure-web-MVP:
 
-- ⬜ `sql.js` eller `wa-sqlite` för persistens i OPFS (nu bara in-memory)
-- ⬜ WebAuthn/passkeys-auth (för byråer som vill ha web-only utan SSH-keys)
-- ⬜ PWA-service-worker för offline-cache
+- ✅ OPFS-persistens (snapshot/restore + IPersistence). `sql.js` för SQL-
+  queries i browser kommer separat när vi behöver det.
+- ✅ WebAuthn/passkeys-auth — KLAR. `passkey-ceremony` (DI-vänlig),
+  Prisma `Passkey`-modell, 4 API-routes (`/api/passkey/{register,authenticate}/{begin,finish}`),
+  `usePasskey`-hook. Tester: 11 ceremony-tester + 5 hook-tester.
+- ✅ PWA-service-worker — KLAR. `public/sw.js` + `public/manifest.json`
+  + `PwaRegister`-komponent monterad i root-layout. Cache-strategi i
+  `lib/pwa-cache-strategy.ts` (TDD-validerad). Status: app-shell cachas
+  cache-first, HTML network-first, /api network-only.
 - ⬜ WebLLM opt-in för LLM-extract i browser (valfritt)
 - ⬜ Responsiv UI-poliering (touch-mål, mobil-sidebar)
 
