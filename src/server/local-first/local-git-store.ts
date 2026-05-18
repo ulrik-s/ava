@@ -4,6 +4,8 @@
  * Komposition (Single Responsibility, Liskov):
  *   - `FilesystemEventLog` hanterar events (JSONL i git working tree)
  *   - `FilesystemClaimStore` hanterar claims (samma format, JSONL)
+ *   - `ProjectionWriter` + `WriteThroughProjector` auto-projicerar
+ *     Prisma-writes till JSON-filer baserat på event-flödet
  *   - `prisma` (mot SQLite i runtime, mot mock i tester) driver
  *     domän-CRUD via samma delegate-API som `PostgresStore`
  *
@@ -15,12 +17,12 @@
  * Designval (Dependency inversion):
  *   - LocalGitStore kräver `IFileSystem` och `IGitOps` via constructor.
  *     Tester passar in `InMemoryFileSystem` + `InMemoryGitOps`;
- *     produktions-Tauri-runtime passar in `TauriFileSystem` +
- *     `IsomorphicGitOps`. Klassen är agnostisk.
+ *     produktions-Tauri-runtime passar in `NodeFileSystem` + `NodeGitOps`.
+ *     Klassen är agnostisk.
  *
  * Vad som INTE finns här ännu (kommer i nästa iterations):
- *   - SQLite-projektion (skriv-genom-cache från JSON → Prisma)
- *   - Hydrate-on-pull (re-hydratisera SQLite från ändrade JSON-filer)
+ *   - Hydrate-on-pull-loop (`ProjectionHydrator` finns men hooken till
+ *     polling-loopen kommer i step 4)
  *   - 15s-polling loop (poll, fetch, hydrate)
  *   - Yjs-CRDT-fält på matter.notes etc.
  */
@@ -35,6 +37,10 @@ import type { IFileSystem } from "./file-system";
 import type { IGitOps } from "./git-ops";
 import { FilesystemEventLog } from "./filesystem-event-log";
 import { FilesystemClaimStore } from "./filesystem-claim-store";
+import { ProjectionWriter } from "./projection-writer";
+import { WriteThroughProjector } from "./write-through-projector";
+import { buildDefaultRegistry } from "./projections/default-registry";
+import type { ProjectionRegistry } from "./projections/registry";
 
 export interface LocalGitStoreDeps {
   fs: IFileSystem;
@@ -43,12 +49,21 @@ export interface LocalGitStoreDeps {
   me: string;
   /** Prisma-klient (mot SQLite i runtime). */
   prisma: PrismaClient;
+  /**
+   * Valfri custom registry. Default = `buildDefaultRegistry()` med
+   * matter, contact, user. Tester kan injicera tomma eller specialiserade.
+   */
+  registry?: ProjectionRegistry;
 }
 
 export class LocalGitStore implements IDataStore {
   public readonly events: IEventLog;
   public readonly claims: IClaimStore;
   public readonly raw: PrismaClient;
+  /** `ProjectionWriter` exponerad så callers (t.ex. migrationsverktyg) kan projicera manuellt. */
+  public readonly projectionWriter: ProjectionWriter;
+  /** Disposer för write-through-listenern (anropas vid teardown). */
+  public readonly detachProjection: () => void;
 
   public readonly matters: PrismaClient["matter"];
   public readonly matterContacts: PrismaClient["matterContact"];
@@ -67,9 +82,12 @@ export class LocalGitStore implements IDataStore {
   public readonly conflictChecks: PrismaClient["conflictCheck"];
 
   constructor(deps: LocalGitStoreDeps) {
+    const registry = deps.registry ?? buildDefaultRegistry();
     this.events = new FilesystemEventLog(deps.fs);
     this.claims = new FilesystemClaimStore(deps.fs, deps.git, deps.me);
     this.raw = deps.prisma;
+    this.projectionWriter = new ProjectionWriter(deps.fs, registry);
+
     this.matters = deps.prisma.matter;
     this.matterContacts = deps.prisma.matterContact;
     this.contacts = deps.prisma.contact;
@@ -85,5 +103,10 @@ export class LocalGitStore implements IDataStore {
     this.organizations = deps.prisma.organization;
     this.offices = deps.prisma.office;
     this.conflictChecks = deps.prisma.conflictCheck;
+
+    // Fäst write-through-projektor på event-loggen så att routrarnas
+    // emit-anrop automatiskt skriver JSON till disk.
+    const projector = new WriteThroughProjector(this.projectionWriter, this);
+    this.detachProjection = projector.attach(this.events);
   }
 }

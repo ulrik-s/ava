@@ -718,9 +718,16 @@ SOLID-status:
    - `ProjectionHydrator` — hydrate: JSON-fil → callback (callern uppdaterar SQLite)
    - Default-registry: matter, contact, user
    - Round-trip-tester bevisar inversion
-4. **Bind ProjectionWriter till tRPC mutations + Prisma SQLite-provider**
-   (~3 dagar) — varje router-write triggar `writer.project(entity, data)`.
-   Schema-config byter provider till SQLite för local-first-läget.
+4. ✅ **WriteThroughProjector — auto-projicering via event-log** — KLAR per 2026-05-18.
+   - Routrarna ändras INTE. De gör `ctx.dataStore.matters.create()` +
+     `emit.matterCreated()` precis som idag.
+   - `WriteThroughProjector` lyssnar på event-loggen, läser tillbaka
+     entiteten via dataStore, och `ProjectionWriter` skriver JSON.
+   - Open-closed: ny event-typ = ny rad i `EVENT_HANDLERS`-tabellen.
+   - Auto-attachad i `LocalGitStore`-konstruktorn.
+   - Integration-test mot riktig git: Anna emit → projicering → commit
+     → push → Björn fetch → reset → hydratiserar identisk data.
+   - SQLite-byte i Prisma sker när vi når Tauri-runtime (step 7).
 5. **15s-poll-loop med hydrate** (~3 dagar) — bakgrundsprocess som
    `fetch` → diff:ar ändrade paths → `hydrator.hydrateChanges()` →
    SQLite-upsert via Prisma → notifiera tRPC-klienten via SSE/Tauri-event
