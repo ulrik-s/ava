@@ -3,9 +3,17 @@ import { getServerSession } from "next-auth/next";
 import superjson from "superjson";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "./db";
+import { PostgresStore } from "./data-store/PostgresStore";
+import type { IDataStore } from "./data-store/IDataStore";
 
 export type Context = {
   prisma: typeof prisma;
+  /**
+   * `dataStore` är den nya abstraktionen (se `docs/architecture-future.md` §6).
+   * Initialt exponerar den bara `events` — domän-repos läggs till i Fas 2.
+   * Existing routrar fortsätter använda `ctx.prisma` tills de migreras.
+   */
+  dataStore: IDataStore;
   user: {
     id: string;
     email: string;
@@ -21,6 +29,7 @@ export async function createContext(opts?: { req?: Request; resHeaders?: Headers
   if (session?.user) {
     return {
       prisma,
+      dataStore: PostgresStore.forOrganization(prisma, session.user.organizationId),
       user: {
         id: session.user.id,
         email: session.user.email!,
@@ -59,6 +68,7 @@ export async function createContext(opts?: { req?: Request; resHeaders?: Headers
 
     return {
       prisma,
+      dataStore: PostgresStore.forOrganization(prisma, user.organizationId),
       user: {
         id: user.id,
         email: user.email,
@@ -69,7 +79,14 @@ export async function createContext(opts?: { req?: Request; resHeaders?: Headers
     };
   }
 
-  return { prisma, user: null };
+  // För oinloggade requests har vi ingen byrå-kontext, så vi ger en
+  // "tom" store som kastar vid varje anrop. Ingen public-procedure ska
+  // anropa dataStore innan auth-middleware körts.
+  return {
+    prisma,
+    dataStore: PostgresStore.forOrganization(prisma, "__unauthenticated__"),
+    user: null,
+  };
 }
 
 const t = initTRPC.context<Context>().create({

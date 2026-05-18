@@ -28,6 +28,7 @@ model Organization {
   matters           Matter[]
   documentTemplates DocumentTemplate[]
   offices           Office[]
+  events            AvaEventLog[]
 
   @@map("organizations")
 }
@@ -543,4 +544,35 @@ model ConflictCheck {
   checkedBy User @relation(fields: [checkedById], references: [id])
 
   @@map("conflict_checks")
+}
+
+// ─── Event Log (förstklassig medborgare i framtida arkitekturen) ─
+
+/// Append-only event log. Allt som ändrar systemet skrivs som ett event
+/// INNAN det manifesteras i datalagret. Se `docs/architecture-future.md` §2.1.
+///
+/// I server-läget lever events i den här tabellen. I local-first-läget
+/// (framtid) projiceras de till `.ava/events/<år>/<mm>/<dd>.jsonl`.
+///
+/// Index på (organizationId, createdAt) för billiga "ge mig senaste N
+/// events för byrå X"-queries. Index på (type, createdAt) för regelmotorn.
+model AvaEventLog {
+  id             String   @id // UUID v7
+  type           String   // ex "matter.created", "mail.received"
+  source         String   // ui | mail | file | rule | system | schedule
+  actorKind      String   @map("actor_kind") // user | rule | system
+  actorId        String   @map("actor_id")
+  organizationId String   @map("organization_id")
+  matterId       String?  @map("matter_id")
+  causedBy       String?  @map("caused_by")
+  payload        Json
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId, createdAt])
+  @@index([type, createdAt])
+  @@index([matterId])
+  @@index([causedBy])
+  @@map("ava_event_log")
 }
