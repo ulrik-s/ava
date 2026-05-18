@@ -80,6 +80,7 @@ export default defineConfig({
           include: [
             "test/unit/components/**/*.test.tsx",
             "test/unit/app/**/*.test.tsx",
+            "test/unit/lib/**/*.test.tsx",
           ],
         },
       },

@@ -828,6 +828,20 @@ Use case som nu fungerar:
 `DemoRuntime.create({ cloneFn: cloneFromGithub() }).loadDemo(url)`
 laddar det i webappen.
 
+#### Demo-UI på `/demo` (tillagd 2026-05-18)
+
+- `src/lib/use-demo-runtime.ts`: React-hook som synkar UI-state mot
+  DemoRuntime (status/error/entities/loadDemo). DI-vänlig — factory
+  injiceras så tester kör utan isomorphic-git.
+- `src/app/demo/_demo-client.tsx`: Client Component med URL-input,
+  load-knapp, loading/error-states och listor för matters/contacts/users.
+- `src/app/demo/page.tsx`: Next-route som monterar Client Component med
+  `cloneFromGithub()` som default-factory.
+
+Användaren går till `https://ava.example/demo`, klistrar in en publik
+GitHub-url, klickar "Ladda demo", och ser data renderat — utan att någon
+data lämnar deras webbläsare.
+
 - SQLite WASM (sql.js eller wa-sqlite, OPFS-persistent) (~1 v)
 - isomorphic-git över HTTPS (~3 d)
 - PDF.js ersätter Tika (~4 d)
