@@ -79,11 +79,11 @@ export const reportsRouter = router({
       const orgScope = { matter: { organizationId: ctx.user.organizationId } };
 
       const [user, timeEntries, expenses] = await Promise.all([
-        ctx.prisma.user.findFirst({
+        ctx.dataStore.users.findFirst({
           where: { id: input.userId, organizationId: ctx.user.organizationId },
           select: { id: true, name: true, hourlyRate: true },
         }),
-        ctx.prisma.timeEntry.findMany({
+        ctx.dataStore.timeEntries.findMany({
           where: {
             ...orgScope,
             userId: input.userId,
@@ -115,7 +115,7 @@ export const reportsRouter = router({
           },
           orderBy: { date: "asc" },
         }),
-        ctx.prisma.expense.findMany({
+        ctx.dataStore.expenses.findMany({
           where: {
             ...orgScope,
             userId: input.userId,

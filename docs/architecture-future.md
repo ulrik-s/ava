@@ -609,8 +609,32 @@ Begränsningar / kvarstår till senare faser:
 
 ### 7.3 Fas 2 — `DataStore`-abstraktion
 
-**~2 veckor.** Resultat: tRPC-routrarna pratar mot interfacet. Inget annat
-ändras i koden.
+**Status: ✅ KLAR per 2026-05-18.**
+
+Levererat:
+
+- ✅ `IDataStore`-interfacet utvidgat med 15 typade Prisma-delegate-properties
+  (matters, contacts, documents, invoices, timeEntries, expenses, users, ...)
+  + `raw`-escape-hatch för `$transaction`/`$queryRaw`.
+- ✅ `PostgresStore` implementerar interfacet genom att exponera Prisma's
+  delegates direkt — zero runtime-cost wrapper.
+- ✅ Alla 14 tRPC-routrar migrerade: `ctx.prisma.X.method()` →
+  `ctx.dataStore.<plural>.method()`. Helpers i `routers/document/shared.ts`
+  och matter-routerns `assertMatterInOrg` också uppdaterade.
+- ✅ Test-helper `dataStoreFromMockPrisma()` så att mocks från befintliga
+  tester återanvänds — varje router-test ger ctx både `prisma: mockPrisma`
+  (för bakåtkompatibilitet) och `dataStore: dataStoreFromMockPrisma(...)`.
+- ✅ Zero regressioner: 855 tester gröna, 0 typcheck-fel.
+
+Designvalet att exponera Prisma-delegates direkt (istället för att handskriva
+15 stycken `IMatterRepo`/`IContactRepo`-interfaces) är dokumenterat i
+`src/server/data-store/IDataStore.ts`. Kostnaden: routrarna binds vid Prisma's
+typer. Eftersom Prisma är vårt ORM även i local-first-läget (samma client
+mot SQLite) är detta ingen läckande abstraktion utan ett medvetet val.
+
+För Fas 3:s `LocalGitStore` betyder detta att vi använder samma Prisma-client
+mot SQLite + lägger till `$extends`-middleware för git-commit-on-write. Inga
+routrar behöver röras igen.
 
 ### 7.4 Fas 3 — Local-first-implementation
 

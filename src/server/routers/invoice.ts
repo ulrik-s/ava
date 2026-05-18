@@ -39,7 +39,7 @@ export const invoiceRouter = router({
       }),
     )
     .query(({ ctx, input }) =>
-      ctx.prisma.invoice.findMany({
+      ctx.dataStore.invoices.findMany({
         where: {
           matter: { organizationId: ctx.orgId },
           ...(input.matterId ? { matterId: input.matterId } : {}),
@@ -62,7 +62,7 @@ export const invoiceRouter = router({
   getById: orgProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
-      const inv = await ctx.prisma.invoice.findFirst({
+      const inv = await ctx.dataStore.invoices.findFirst({
         where: { id: input.id, matter: { organizationId: ctx.orgId } },
         include: {
           matter: { select: { id: true, matterNumber: true, title: true } },
@@ -95,11 +95,11 @@ export const invoiceRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const matter = await ctx.prisma.matter.findFirst({
+      const matter = await ctx.dataStore.matters.findFirst({
         where: { id: input.matterId, organizationId: ctx.orgId },
       });
       if (!matter) throw new TRPCError({ code: "NOT_FOUND" });
-      const invoice = await ctx.prisma.invoice.create({
+      const invoice = await ctx.dataStore.invoices.create({
         data: {
           matterId: input.matterId,
           amount: input.amount,
@@ -132,7 +132,7 @@ export const invoiceRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      return ctx.prisma.$transaction(async (tx) => {
+      return ctx.dataStore.raw.$transaction(async (tx) => {
         const matter = await tx.matter.findFirst({
           where: { id: input.matterId, organizationId: ctx.orgId },
         });
@@ -237,7 +237,7 @@ export const invoiceRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      return ctx.prisma.$transaction(async (tx) => {
+      return ctx.dataStore.raw.$transaction(async (tx) => {
         const original = await tx.invoice.findFirst({
           where: { id: input.invoiceId, matter: { organizationId: ctx.orgId } },
           include: { creditNote: true, paymentPlan: true },
@@ -301,7 +301,7 @@ export const invoiceRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      return ctx.prisma.$transaction(async (tx) => {
+      return ctx.dataStore.raw.$transaction(async (tx) => {
         const inv = await tx.invoice.findFirst({
           where: { id: input.invoiceId, matter: { organizationId: ctx.orgId } },
           include: { paymentPlan: true, payments: true },
@@ -348,7 +348,7 @@ export const invoiceRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      return ctx.prisma.$transaction(async (tx) => {
+      return ctx.dataStore.raw.$transaction(async (tx) => {
         const inv = await tx.invoice.findFirst({
           where: { id: input.invoiceId, matter: { organizationId: ctx.orgId } },
           include: { paymentPlan: true },
@@ -387,7 +387,7 @@ export const invoiceRouter = router({
   cancelPaymentPlan: orgProcedure
     .input(z.object({ planId: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      return ctx.prisma.$transaction(async (tx) => {
+      return ctx.dataStore.raw.$transaction(async (tx) => {
         const plan = await tx.paymentPlan.findFirst({
           where: {
             id: input.planId,
@@ -416,11 +416,11 @@ export const invoiceRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const inv = await ctx.prisma.invoice.findFirst({
+      const inv = await ctx.dataStore.invoices.findFirst({
         where: { id: input.invoiceId, matter: { organizationId: ctx.orgId } },
       });
       if (!inv) throw new TRPCError({ code: "NOT_FOUND" });
-      return ctx.prisma.invoice.update({
+      return ctx.dataStore.invoices.update({
         where: { id: inv.id },
         data: { status: input.status },
       });

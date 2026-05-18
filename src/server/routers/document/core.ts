@@ -23,19 +23,19 @@ export const coreProcedures = {
     )
     .query(async ({ ctx, input }) => {
       const [documents, folders, total] = await Promise.all([
-        ctx.prisma.document.findMany({
+        ctx.dataStore.documents.findMany({
           where: { matterId: input.matterId, folderId: input.folderId },
           orderBy: { createdAt: "desc" },
           skip: (input.page - 1) * input.pageSize,
           take: input.pageSize,
           include: { uploadedBy: { select: { name: true } } },
         }),
-        ctx.prisma.documentFolder.findMany({
+        ctx.dataStore.documentFolders.findMany({
           where: { matterId: input.matterId, parentId: input.folderId },
           orderBy: { name: "asc" },
           include: { _count: { select: { documents: true, children: true } } },
         }),
-        ctx.prisma.document.count({
+        ctx.dataStore.documents.count({
           where: { matterId: input.matterId, folderId: input.folderId },
         }),
       ]);
@@ -47,11 +47,11 @@ export const coreProcedures = {
     .input(z.object({ matterId: z.string() }))
     .query(async ({ ctx, input }) => {
       const [folders, documents] = await Promise.all([
-        ctx.prisma.documentFolder.findMany({
+        ctx.dataStore.documentFolders.findMany({
           where: { matterId: input.matterId },
           orderBy: { name: "asc" },
         }),
-        ctx.prisma.document.findMany({
+        ctx.dataStore.documents.findMany({
           where: { matterId: input.matterId },
           orderBy: { createdAt: "desc" },
           include: { uploadedBy: { select: { name: true } } },
@@ -85,7 +85,7 @@ export const coreProcedures = {
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
       await assertDocAccess(ctx, input.id);
-      const doc = await ctx.prisma.document.delete({ where: { id: input.id } });
+      const doc = await ctx.dataStore.documents.delete({ where: { id: input.id } });
       removeDocument(input.id).catch(() => {});
       return doc;
     }),
@@ -115,6 +115,6 @@ export const coreProcedures = {
     .mutation(async ({ ctx, input }) => {
       await assertDocAccess(ctx, input.documentId);
       const { documentId, ...data } = input;
-      return ctx.prisma.document.update({ where: { id: documentId }, data });
+      return ctx.dataStore.documents.update({ where: { id: documentId }, data });
     }),
 };

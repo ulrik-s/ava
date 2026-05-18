@@ -22,7 +22,7 @@ export const suggestionProcedures = {
   pendingSuggestions: orgProcedure
     .input(z.object({ matterId: z.string() }))
     .query(({ ctx, input }) =>
-      ctx.prisma.documentAnalysisSuggestion.findMany({
+      ctx.dataStore.documentAnalysisSuggestions.findMany({
         where: {
           status: "PENDING",
           document: {
@@ -42,7 +42,7 @@ export const suggestionProcedures = {
   pendingSuggestionsGrouped: orgProcedure
     .input(z.object({ matterId: z.string() }))
     .query(async ({ ctx, input }) => {
-      const rows = await ctx.prisma.documentAnalysisSuggestion.findMany({
+      const rows = await ctx.dataStore.documentAnalysisSuggestions.findMany({
         where: {
           status: "PENDING",
           document: {
@@ -82,7 +82,7 @@ export const suggestionProcedures = {
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const sugg = await ctx.prisma.documentAnalysisSuggestion.findFirst({
+      const sugg = await ctx.dataStore.documentAnalysisSuggestions.findFirst({
         where: {
           id: input.suggestionId,
           document: { matter: { organizationId: ctx.orgId } },
@@ -100,7 +100,7 @@ export const suggestionProcedures = {
 
       let contactId: string;
       if (input.existingContactId) {
-        const existing = await ctx.prisma.contact.findFirst({
+        const existing = await ctx.dataStore.contacts.findFirst({
           where: { id: input.existingContactId, organizationId: ctx.orgId },
         });
         if (!existing) throw new TRPCError({ code: "NOT_FOUND" });
@@ -111,16 +111,16 @@ export const suggestionProcedures = {
         const on = o.orgNumber ?? sugg.orgNumber;
         let existing: ContactCandidate | null = null;
         if (pn) {
-          existing = await ctx.prisma.contact.findFirst({
+          existing = await ctx.dataStore.contacts.findFirst({
             where: { personalNumber: pn, organizationId: ctx.orgId },
           });
         } else if (on) {
-          existing = await ctx.prisma.contact.findFirst({
+          existing = await ctx.dataStore.contacts.findFirst({
             where: { orgNumber: on, organizationId: ctx.orgId },
           });
         }
         if (!existing) {
-          const matterLinks = await ctx.prisma.matterContact.findMany({
+          const matterLinks = await ctx.dataStore.matterContacts.findMany({
             where: { matterId },
             include: { contact: true },
           });
@@ -139,7 +139,7 @@ export const suggestionProcedures = {
         if (existing) {
           contactId = existing.id;
         } else {
-          const created = await ctx.prisma.contact.create({
+          const created = await ctx.dataStore.contacts.create({
             data: {
               name: o.name ?? sugg.name,
               contactType: o.contactType ?? sugg.contactType,
@@ -155,16 +155,16 @@ export const suggestionProcedures = {
       }
 
       // Länka till ärendet om inte redan länkad med samma roll.
-      const existingLink = await ctx.prisma.matterContact.findFirst({
+      const existingLink = await ctx.dataStore.matterContacts.findFirst({
         where: { matterId, contactId, role: finalRole },
       });
       if (!existingLink) {
-        await ctx.prisma.matterContact.create({
+        await ctx.dataStore.matterContacts.create({
           data: { matterId, contactId, role: finalRole, notes: sugg.notes },
         });
       }
 
-      await ctx.prisma.documentAnalysisSuggestion.update({
+      await ctx.dataStore.documentAnalysisSuggestions.update({
         where: { id: sugg.id },
         data: { status: "ACCEPTED", acceptedContactId: contactId },
       });
@@ -175,14 +175,14 @@ export const suggestionProcedures = {
   rejectSuggestion: orgProcedure
     .input(z.object({ suggestionId: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const sugg = await ctx.prisma.documentAnalysisSuggestion.findFirst({
+      const sugg = await ctx.dataStore.documentAnalysisSuggestions.findFirst({
         where: {
           id: input.suggestionId,
           document: { matter: { organizationId: ctx.orgId } },
         },
       });
       if (!sugg) throw new TRPCError({ code: "NOT_FOUND" });
-      return ctx.prisma.documentAnalysisSuggestion.update({
+      return ctx.dataStore.documentAnalysisSuggestions.update({
         where: { id: sugg.id },
         data: { status: "REJECTED" },
       });
@@ -203,7 +203,7 @@ export const suggestionProcedures = {
     )
     .mutation(async ({ ctx, input }) => {
       // Ett query validerar både existens, org-tillhörighet och samma ärende.
-      const suggs = await ctx.prisma.documentAnalysisSuggestion.findMany({
+      const suggs = await ctx.dataStore.documentAnalysisSuggestions.findMany({
         where: {
           id: { in: input.suggestionIds },
           status: "PENDING",
@@ -238,7 +238,7 @@ export const suggestionProcedures = {
 
       let contactId: string;
       if (input.existingContactId) {
-        const existing = await ctx.prisma.contact.findFirst({
+        const existing = await ctx.dataStore.contacts.findFirst({
           where: { id: input.existingContactId, organizationId: ctx.orgId },
         });
         if (!existing) throw new TRPCError({ code: "NOT_FOUND" });
@@ -246,17 +246,17 @@ export const suggestionProcedures = {
       } else {
         let existing: ContactCandidate | null = null;
         if (personalNumber) {
-          existing = await ctx.prisma.contact.findFirst({
+          existing = await ctx.dataStore.contacts.findFirst({
             where: { personalNumber, organizationId: ctx.orgId },
           });
         } else if (orgNumber) {
-          existing = await ctx.prisma.contact.findFirst({
+          existing = await ctx.dataStore.contacts.findFirst({
             where: { orgNumber, organizationId: ctx.orgId },
           });
         }
         // Namn-fallback scopad till ärendet (se contact-dedup.ts).
         if (!existing) {
-          const matterLinks = await ctx.prisma.matterContact.findMany({
+          const matterLinks = await ctx.dataStore.matterContacts.findMany({
             where: { matterId },
             include: { contact: true },
           });
@@ -275,7 +275,7 @@ export const suggestionProcedures = {
         if (existing) {
           contactId = existing.id;
         } else {
-          const created = await ctx.prisma.contact.create({
+          const created = await ctx.dataStore.contacts.create({
             data: {
               name: suggs[0].name,
               contactType: suggs[0].contactType,
@@ -293,20 +293,20 @@ export const suggestionProcedures = {
       // Länka alla distinkta roller till ärendet.
       const distinctRoles = Array.from(new Set(suggs.map((s) => s.role)));
       for (const role of distinctRoles) {
-        const existingLink = await ctx.prisma.matterContact.findFirst({
+        const existingLink = await ctx.dataStore.matterContacts.findFirst({
           where: { matterId, contactId, role },
         });
         if (!existingLink) {
           const notesForRole = Array.from(
             new Set(suggs.filter((s) => s.role === role && s.notes).map((s) => s.notes as string)),
           ).join("\n");
-          await ctx.prisma.matterContact.create({
+          await ctx.dataStore.matterContacts.create({
             data: { matterId, contactId, role, notes: notesForRole || null },
           });
         }
       }
 
-      await ctx.prisma.documentAnalysisSuggestion.updateMany({
+      await ctx.dataStore.documentAnalysisSuggestions.updateMany({
         where: { id: { in: suggs.map((s) => s.id) } },
         data: { status: "ACCEPTED", acceptedContactId: contactId },
       });
@@ -318,7 +318,7 @@ export const suggestionProcedures = {
   rejectSuggestionGroup: orgProcedure
     .input(z.object({ suggestionIds: z.array(z.string()).min(1) }))
     .mutation(async ({ ctx, input }) => {
-      const suggs = await ctx.prisma.documentAnalysisSuggestion.findMany({
+      const suggs = await ctx.dataStore.documentAnalysisSuggestions.findMany({
         where: {
           id: { in: input.suggestionIds },
           document: { matter: { organizationId: ctx.orgId } },
@@ -332,7 +332,7 @@ export const suggestionProcedures = {
           message: "Några förslag saknas eller tillhör annan org.",
         });
       }
-      await ctx.prisma.documentAnalysisSuggestion.updateMany({
+      await ctx.dataStore.documentAnalysisSuggestions.updateMany({
         where: { id: { in: suggs.map((s) => s.id) } },
         data: { status: "REJECTED" },
       });

@@ -22,7 +22,7 @@ export const folderProcedures = {
     )
     .mutation(async ({ ctx, input }) => {
       await assertMatterAccess(ctx, input.matterId);
-      return ctx.prisma.documentFolder.create({
+      return ctx.dataStore.documentFolders.create({
         data: {
           name: input.name,
           matterId: input.matterId,
@@ -34,7 +34,7 @@ export const folderProcedures = {
   renameFolder: orgProcedure
     .input(z.object({ id: z.string(), name: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
-      return ctx.prisma.documentFolder.update({
+      return ctx.dataStore.documentFolders.update({
         where: { id: input.id },
         data: { name: input.name },
       });
@@ -44,24 +44,24 @@ export const folderProcedures = {
   deleteFolder: orgProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const folder = await ctx.prisma.documentFolder.findUniqueOrThrow({
+      const folder = await ctx.dataStore.documentFolders.findUniqueOrThrow({
         where: { id: input.id },
       });
-      await ctx.prisma.document.updateMany({
+      await ctx.dataStore.documents.updateMany({
         where: { folderId: input.id },
         data: { folderId: folder.parentId },
       });
-      await ctx.prisma.documentFolder.updateMany({
+      await ctx.dataStore.documentFolders.updateMany({
         where: { parentId: input.id },
         data: { parentId: folder.parentId },
       });
-      return ctx.prisma.documentFolder.delete({ where: { id: input.id } });
+      return ctx.dataStore.documentFolders.delete({ where: { id: input.id } });
     }),
 
   moveDocument: orgProcedure
     .input(z.object({ documentId: z.string(), folderId: z.string().nullable() }))
     .mutation(async ({ ctx, input }) => {
-      return ctx.prisma.document.update({
+      return ctx.dataStore.documents.update({
         where: { id: input.documentId },
         data: { folderId: input.folderId },
       });
@@ -81,14 +81,14 @@ export const folderProcedures = {
             });
           }
           const parent: { parentId: string | null } | null =
-            await ctx.prisma.documentFolder.findUnique({
+            await ctx.dataStore.documentFolders.findUnique({
               where: { id: checkId },
               select: { parentId: true },
             });
           checkId = parent?.parentId ?? null;
         }
       }
-      return ctx.prisma.documentFolder.update({
+      return ctx.dataStore.documentFolders.update({
         where: { id: input.folderId },
         data: { parentId: input.targetParentId },
       });
@@ -102,7 +102,7 @@ export const folderProcedures = {
       let currentId: string | null = input.folderId;
       while (currentId) {
         const folder: { id: string; name: string; parentId: string | null } | null =
-          await ctx.prisma.documentFolder.findUnique({
+          await ctx.dataStore.documentFolders.findUnique({
             where: { id: currentId },
             select: { id: true, name: true, parentId: true },
           });

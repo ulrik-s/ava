@@ -6,7 +6,7 @@ export const organizationRouter = router({
   // ── Settings ────────────────────────────────────────────────────
 
   getSettings: protectedProcedure.query(async ({ ctx }) => {
-    return ctx.prisma.organization.findUniqueOrThrow({
+    return ctx.dataStore.organizations.findUniqueOrThrow({
       where: { id: ctx.user.organizationId },
       select: {
         id: true,
@@ -33,7 +33,7 @@ export const organizationRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      return ctx.prisma.organization.update({
+      return ctx.dataStore.organizations.update({
         where: { id: ctx.user.organizationId },
         data: input,
       });
@@ -42,7 +42,7 @@ export const organizationRouter = router({
   // ── Offices ─────────────────────────────────────────────────────
 
   listOffices: protectedProcedure.query(async ({ ctx }) => {
-    return ctx.prisma.office.findMany({
+    return ctx.dataStore.offices.findMany({
       where: { organizationId: ctx.user.organizationId },
       orderBy: [{ isMain: "desc" }, { name: "asc" }],
     });
@@ -61,12 +61,12 @@ export const organizationRouter = router({
     .mutation(async ({ ctx, input }) => {
       // If new office is main, demote existing main first
       if (input.isMain) {
-        await ctx.prisma.office.updateMany({
+        await ctx.dataStore.offices.updateMany({
           where: { organizationId: ctx.user.organizationId, isMain: true },
           data: { isMain: false },
         });
       }
-      return ctx.prisma.office.create({
+      return ctx.dataStore.offices.create({
         data: {
           ...input,
           organizationId: ctx.user.organizationId,
@@ -87,27 +87,27 @@ export const organizationRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const { id, ...data } = input;
-      const office = await ctx.prisma.office.findUnique({ where: { id } });
+      const office = await ctx.dataStore.offices.findUnique({ where: { id } });
       if (!office || office.organizationId !== ctx.user.organizationId) {
         throw new TRPCError({ code: "NOT_FOUND" });
       }
       // If setting as main, demote others first
       if (data.isMain) {
-        await ctx.prisma.office.updateMany({
+        await ctx.dataStore.offices.updateMany({
           where: { organizationId: ctx.user.organizationId, isMain: true },
           data: { isMain: false },
         });
       }
-      return ctx.prisma.office.update({ where: { id }, data });
+      return ctx.dataStore.offices.update({ where: { id }, data });
     }),
 
   deleteOffice: protectedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const office = await ctx.prisma.office.findUnique({ where: { id: input.id } });
+      const office = await ctx.dataStore.offices.findUnique({ where: { id: input.id } });
       if (!office || office.organizationId !== ctx.user.organizationId) {
         throw new TRPCError({ code: "NOT_FOUND" });
       }
-      return ctx.prisma.office.delete({ where: { id: input.id } });
+      return ctx.dataStore.offices.delete({ where: { id: input.id } });
     }),
 });

@@ -31,7 +31,7 @@ export const contactRouter = router({
       };
 
       const [contacts, total] = await Promise.all([
-        ctx.prisma.contact.findMany({
+        ctx.dataStore.contacts.findMany({
           where,
           orderBy: { name: "asc" },
           skip: (input.page - 1) * input.pageSize,
@@ -40,7 +40,7 @@ export const contactRouter = router({
             _count: { select: { matterLinks: true, children: true } },
           },
         }),
-        ctx.prisma.contact.count({ where }),
+        ctx.dataStore.contacts.count({ where }),
       ]);
 
       return { contacts, total, pages: Math.ceil(total / input.pageSize) };
@@ -49,7 +49,7 @@ export const contactRouter = router({
   getById: orgProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
-      return ctx.prisma.contact.findFirstOrThrow({
+      return ctx.dataStore.contacts.findFirstOrThrow({
         where: { id: input.id, organizationId: ctx.orgId },
         include: {
           children: { orderBy: { name: "asc" } },
@@ -81,7 +81,7 @@ export const contactRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const contact = await ctx.prisma.contact.create({
+      const contact = await ctx.dataStore.contacts.create({
         data: {
           ...input,
           email: input.email || null,
@@ -109,12 +109,12 @@ export const contactRouter = router({
     .mutation(async ({ ctx, input }) => {
       // Säkerhet: verifiera att kontakten tillhör anropande org innan update.
       await requireOrgOwned(
-        () => ctx.prisma.contact.findUnique({ where: { id: input.id } }),
+        () => ctx.dataStore.contacts.findUnique({ where: { id: input.id } }),
         ctx.orgId,
         (c) => c.organizationId,
       );
       const { id, ...data } = input;
-      const updated = await ctx.prisma.contact.update({
+      const updated = await ctx.dataStore.contacts.update({
         where: { id },
         data: { ...data, email: data.email || null },
       });
@@ -126,11 +126,11 @@ export const contactRouter = router({
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
       await requireOrgOwned(
-        () => ctx.prisma.contact.findUnique({ where: { id: input.id } }),
+        () => ctx.dataStore.contacts.findUnique({ where: { id: input.id } }),
         ctx.orgId,
         (c) => c.organizationId,
       );
-      const result = await ctx.prisma.contact.delete({ where: { id: input.id } });
+      const result = await ctx.dataStore.contacts.delete({ where: { id: input.id } });
       await emit.contactDeleted(ctx, input.id);
       return result;
     }),
@@ -148,11 +148,11 @@ export const contactRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       await requireOrgOwned(
-        () => ctx.prisma.contact.findUnique({ where: { id: input.parentId } }),
+        () => ctx.dataStore.contacts.findUnique({ where: { id: input.parentId } }),
         ctx.orgId,
         (c) => c.organizationId,
       );
-      return ctx.prisma.contact.create({
+      return ctx.dataStore.contacts.create({
         data: {
           name: input.name,
           contactType: "PERSON",

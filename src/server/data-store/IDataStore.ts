@@ -2,98 +2,71 @@
  * `IDataStore` — abstraktionen som möjliggör att samma kodbas kör i två lägen:
  *
  *   - **Server-läget** (PostgreSQL): `PostgresStore` implementerar mot Prisma
- *   - **Local-first-läget** (SQLite + git): `LocalGitStore` skriver SQLite +
- *     projicerar JSON-filer i git working tree
+ *   - **Local-first-läget** (SQLite + git): `LocalGitStore` (Fas 3) skriver
+ *     samma Prisma-API men mot SQLite + projicerar JSON-filer i git working tree
  *
  * Se `docs/architecture-future.md` §6 för fullständig design.
  *
- * Status: **interface-skiss**. Existerande tRPC-routrar pratar fortfarande
- * direkt mot Prisma (`ctx.prisma`). Migration sker stegvis under Fas 2:
+ * Designval: vi exponerar Prisma's egna `Delegate`-typer direkt istället för
+ * att handskriva 15 stycken `IMatterRepo`/`IContactRepo`-interfaces. Det ger:
  *
- *   1. Nya features (event-log, regelmotor, claims) skrivs DIRECT mot
- *      `IDataStore` — de behövs i båda lägen från start.
- *   2. Befintliga routrar migreras en i taget när vi närmar oss Fas 3.
- *   3. När routern migrerats använder den `ctx.dataStore.matters` etc istället
- *      för `ctx.prisma.matter`.
+ *   - Type-safety identisk med direkt `prisma.matter.*`-användning
+ *   - Inga "vilka metoder ska repon ha?"-beslut att underhålla
+ *   - LocalGitStore implementerar samma kontrakt — Prisma stödjer SQLite
+ *     out-of-the-box, så en lokal Prisma-klient mot SQLite täcker oss.
  *
- * Den här filen är ett *kontrakt* — den definierar vad lägena MÅSTE stödja.
- * Konkreta implementationer ligger i `PostgresStore.ts` och senare
- * `LocalGitStore.ts`.
+ * Kostnaden: routrarna binds vid Prisma's typer. Eftersom Prisma ÄR vårt ORM
+ * (även i local-first-läget) är detta inte en läckande abstraktion utan ett
+ * dokumenterat val.
  */
 
+import type { prisma } from "@/server/db";
 import type { AvaEvent, EmitInput, EventFilter } from "../events/schema";
 
 // ─── Event-log ────────────────────────────────────────────────────────
 
 export interface IEventLog {
-  /**
-   * Skriv ett event till loggen. Returnerar det skapade eventet med
-   * `id` och `ts` ifyllt. Append-only — events får aldrig modifieras.
-   */
   emit(input: EmitInput): Promise<AvaEvent>;
-
-  /** Synchront query (begränsat antal events). Använd `iterate` för streaming. */
   query(filter: EventFilter): Promise<AvaEvent[]>;
-
-  /** Async-iterator för stora result-sets. */
   iterate(filter: EventFilter): AsyncIterable<AvaEvent>;
-
-  /**
-   * Registrera handler som anropas när nya events skrivs. Returnerar en
-   * disposer som unsubscribar. Används av:
-   *   - Server-läget: WebSocket/SSE-broadcast till connected klienter
-   *   - Local-first-läget: regel-executorn pollar inte, den lyssnar lokalt
-   */
   onNewEvent(handler: (event: AvaEvent) => void | Promise<void>): () => void;
 }
 
 // ─── Claim-store (bara aktiv i local-first-läget) ─────────────────────
 
 export interface IClaimStore {
-  /**
-   * Försök claima en arbets-enhet. Returnerar `true` om vi fick claim,
-   * `false` om någon annan redan har den eller om vår push misslyckades
-   * efter alla retries.
-   *
-   * I server-läget: trivialt — en INSERT i `claims`-tabellen som
-   * UNIQUE-constraint avgör.
-   *
-   * I local-first-läget: pre-fetch → preferred-runner-delay → JSONL-append
-   * → commit → push → CAS avgör. Se §3.7 i `architecture-future.md`.
-   */
   tryClaim(claimId: string, opts: ClaimOpts): Promise<boolean>;
-
-  /**
-   * Kolla om en claim har expiretat utan att den motsvarande
-   * `rule.executed`-eventet har skrivits. Används för stale-claim-failover.
-   */
   isStale(claimId: string): Promise<boolean>;
 }
 
 export interface ClaimOpts {
-  /** Time-to-live för claim:en i sekunder. Default 300 (5 min). */
   ttlSec?: number;
-  /** För deterministisk preferred-runner-ordning. */
   preferredRunnerOrder?: string[];
-  /** Vår egen user-id. */
   me: string;
 }
 
-// ─── Domän-repos ──────────────────────────────────────────────────────
+// ─── Domän-delegates ──────────────────────────────────────────────────
 //
-// I Fas 2 läggs interface-typer här för matters, contacts, documents osv.
-// Initialt skriver vi mot `ctx.prisma` direkt. När en router migreras
-// flyttar man dess CRUD-anrop till motsvarande repo-interface.
-//
-// Exempel på vad det kan se ut:
-//
-//   export interface IMatterRepo {
-//     findById(id: string): Promise<Matter | null>;
-//     findByOrganization(orgId: string): Promise<Matter[]>;
-//     create(input: MatterCreateInput): Promise<Matter>;
-//     update(id: string, patch: MatterUpdateInput): Promise<Matter>;
-//     // ...
-//   }
+// Genvägstyper — Prisma's egen `XDelegate<>` är komplex generic. Vi
+// extrahera typen direkt från `prisma`-instansen.
+
+type PrismaInstance = typeof prisma;
+
+export type MatterDelegate = PrismaInstance["matter"];
+export type ContactDelegate = PrismaInstance["contact"];
+export type MatterContactDelegate = PrismaInstance["matterContact"];
+export type DocumentDelegate = PrismaInstance["document"];
+export type DocumentFolderDelegate = PrismaInstance["documentFolder"];
+export type DocumentTemplateDelegate = PrismaInstance["documentTemplate"];
+export type DocumentAnalysisSuggestionDelegate = PrismaInstance["documentAnalysisSuggestion"];
+export type MatterEventSuggestionDelegate = PrismaInstance["matterEventSuggestion"];
+export type InvoiceDelegate = PrismaInstance["invoice"];
+export type TimeEntryDelegate = PrismaInstance["timeEntry"];
+export type ExpenseDelegate = PrismaInstance["expense"];
+export type UserDelegate = PrismaInstance["user"];
+export type OrganizationDelegate = PrismaInstance["organization"];
+export type OfficeDelegate = PrismaInstance["office"];
+export type ConflictCheckDelegate = PrismaInstance["conflictCheck"];
 
 // ─── Aggregat ─────────────────────────────────────────────────────────
 
@@ -107,10 +80,33 @@ export interface IDataStore {
    */
   claims?: IClaimStore;
 
-  // Repos läggs till i Fas 2:
-  // matters: IMatterRepo;
-  // contacts: IContactRepo;
-  // documents: IDocumentRepo;
-  // invoices: IInvoiceRepo;
-  // ...
+  // ─── Domän-repos (Prisma-delegates) ─────────────────────────────
+  readonly matters: MatterDelegate;
+  readonly matterContacts: MatterContactDelegate;
+  readonly contacts: ContactDelegate;
+  readonly documents: DocumentDelegate;
+  readonly documentFolders: DocumentFolderDelegate;
+  readonly documentTemplates: DocumentTemplateDelegate;
+  readonly documentAnalysisSuggestions: DocumentAnalysisSuggestionDelegate;
+  readonly matterEventSuggestions: MatterEventSuggestionDelegate;
+  readonly invoices: InvoiceDelegate;
+  readonly timeEntries: TimeEntryDelegate;
+  readonly expenses: ExpenseDelegate;
+  readonly users: UserDelegate;
+  readonly organizations: OrganizationDelegate;
+  readonly offices: OfficeDelegate;
+  readonly conflictChecks: ConflictCheckDelegate;
+
+  /**
+   * Escape-hatch för komplexa frågor som inte ryms i delegates:
+   *   - $transaction
+   *   - $queryRaw / $executeRaw
+   *   - Aggregations över flera tabeller
+   *
+   * Markerad som "intern" — undvik i ny kod, men det är ofta enklare än
+   * att lägga till en ny method på interfacet för en engångs-aggregation.
+   * Vid Fas 3 migreras varje raw-användning ett-i-taget om de inte fungerar
+   * i SQLite-läget.
+   */
+  readonly raw: PrismaInstance;
 }

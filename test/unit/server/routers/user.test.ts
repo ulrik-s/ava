@@ -4,6 +4,7 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { userRouter } from "@/server/routers/user";
+import { dataStoreFromMockPrisma } from "../helpers/mock-data-store";
 
 const mockPrisma = {
   user: {
@@ -18,7 +19,7 @@ const mockPrisma = {
 function makeCaller(userId = "user-1", orgId = "org-a") {
   const ctx = {
     user: { id: userId, email: "a@b.com", name: "Test", role: "ADMIN", organizationId: orgId },
-    prisma: mockPrisma,
+    prisma: mockPrisma, dataStore: dataStoreFromMockPrisma(mockPrisma as unknown as Record<string, unknown>),
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return userRouter.createCaller(ctx as any);

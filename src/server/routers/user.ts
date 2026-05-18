@@ -10,7 +10,7 @@ export const userRouter = router({
       }).optional()
     )
     .query(async ({ ctx }) => {
-      const users = await ctx.prisma.user.findMany({
+      const users = await ctx.dataStore.users.findMany({
         where: { organizationId: ctx.user.organizationId },
         orderBy: { name: "asc" },
         select: {
@@ -30,7 +30,7 @@ export const userRouter = router({
   getById: protectedProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
-      return ctx.prisma.user.findUniqueOrThrow({
+      return ctx.dataStore.users.findUniqueOrThrow({
         where: { id: input.id, organizationId: ctx.user.organizationId },
         select: {
           id: true,
@@ -64,7 +64,7 @@ export const userRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const passwordHash = input.password ? await hash(input.password, 12) : null;
-      return ctx.prisma.user.create({
+      return ctx.dataStore.users.create({
         data: {
           email: input.email,
           name: input.name,
@@ -97,7 +97,7 @@ export const userRouter = router({
       if (password) {
         updateData.passwordHash = await hash(password, 12);
       }
-      return ctx.prisma.user.update({
+      return ctx.dataStore.users.update({
         where: { id, organizationId: ctx.user.organizationId },
         data: updateData,
       });
@@ -109,7 +109,7 @@ export const userRouter = router({
       if (input.id === ctx.user.id) {
         throw new Error("Du kan inte ta bort dig själv");
       }
-      return ctx.prisma.user.delete({
+      return ctx.dataStore.users.delete({
         where: { id: input.id, organizationId: ctx.user.organizationId },
       });
     }),

@@ -4,7 +4,7 @@ import { TRPCError } from "@trpc/server";
 
 export const documentTemplateRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
-    return ctx.prisma.documentTemplate.findMany({
+    return ctx.dataStore.documentTemplates.findMany({
       where: { organizationId: ctx.user.organizationId },
       select: {
         id: true,
@@ -22,7 +22,7 @@ export const documentTemplateRouter = router({
   getById: protectedProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
-      const template = await ctx.prisma.documentTemplate.findUnique({
+      const template = await ctx.dataStore.documentTemplates.findUnique({
         where: { id: input.id },
         include: { createdBy: { select: { name: true } } },
       });
@@ -42,7 +42,7 @@ export const documentTemplateRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      return ctx.prisma.documentTemplate.create({
+      return ctx.dataStore.documentTemplates.create({
         data: {
           name: input.name,
           description: input.description,
@@ -65,7 +65,7 @@ export const documentTemplateRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const existing = await ctx.prisma.documentTemplate.findUnique({
+      const existing = await ctx.dataStore.documentTemplates.findUnique({
         where: { id: input.id },
         select: { organizationId: true },
       });
@@ -73,19 +73,19 @@ export const documentTemplateRouter = router({
         throw new TRPCError({ code: "NOT_FOUND" });
       }
       const { id, ...data } = input;
-      return ctx.prisma.documentTemplate.update({ where: { id }, data });
+      return ctx.dataStore.documentTemplates.update({ where: { id }, data });
     }),
 
   delete: protectedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const existing = await ctx.prisma.documentTemplate.findUnique({
+      const existing = await ctx.dataStore.documentTemplates.findUnique({
         where: { id: input.id },
         select: { organizationId: true },
       });
       if (!existing || existing.organizationId !== ctx.user.organizationId) {
         throw new TRPCError({ code: "NOT_FOUND" });
       }
-      await ctx.prisma.documentTemplate.delete({ where: { id: input.id } });
+      await ctx.dataStore.documentTemplates.delete({ where: { id: input.id } });
     }),
 });

@@ -1,15 +1,16 @@
 import { z } from "zod";
 import { router, orgProcedure, requireOrgOwned } from "../trpc";
+import type { IDataStore } from "../data-store/IDataStore";
 import { matterRoleSchema, contactTypeSchema } from "@/lib/labels";
 import { emit } from "../events/emit";
 
 /** Hjälpare: hämta matter och verifiera att den tillhör anropande org. */
 const assertMatterInOrg = (
-  ctx: { prisma: typeof import("../db").prisma; orgId: string },
+  ctx: { dataStore: IDataStore; orgId: string },
   matterId: string,
 ) =>
   requireOrgOwned(
-    () => ctx.prisma.matter.findUnique({ where: { id: matterId } }),
+    () => ctx.dataStore.matters.findUnique({ where: { id: matterId } }),
     ctx.orgId,
     (m) => m.organizationId,
   );
@@ -40,7 +41,7 @@ export const matterRouter = router({
       };
 
       const [matters, total] = await Promise.all([
-        ctx.prisma.matter.findMany({
+        ctx.dataStore.matters.findMany({
           where,
           orderBy: { createdAt: "desc" },
           skip: (input.page - 1) * input.pageSize,
@@ -55,7 +56,7 @@ export const matterRouter = router({
           },
           // paymentMethod, paymentMethodNote, paymentMethodDecidedAt ingår som del av Matter
         }),
-        ctx.prisma.matter.count({ where }),
+        ctx.dataStore.matters.count({ where }),
       ]);
 
       return { matters, total, pages: Math.ceil(total / input.pageSize) };
@@ -64,7 +65,7 @@ export const matterRouter = router({
   getById: orgProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
-      return ctx.prisma.matter.findFirstOrThrow({
+      return ctx.dataStore.matters.findFirstOrThrow({
         where: { id: input.id, organizationId: ctx.orgId },
         include: {
           contacts: {
@@ -87,7 +88,7 @@ export const matterRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const year = new Date().getFullYear();
-      const lastMatter = await ctx.prisma.matter.findFirst({
+      const lastMatter = await ctx.dataStore.matters.findFirst({
         where: {
           organizationId: ctx.orgId,
           matterNumber: { startsWith: `${year}-` },
@@ -103,7 +104,7 @@ export const matterRouter = router({
 
       const matterNumber = `${year}-${seq.toString().padStart(4, "0")}`;
 
-      const matter = await ctx.prisma.matter.create({
+      const matter = await ctx.dataStore.matters.create({
         data: {
           title: input.title,
           description: input.description,
@@ -117,11 +118,11 @@ export const matterRouter = router({
       // If a klient was specified, link them
       if (input.klientId) {
         await requireOrgOwned(
-          () => ctx.prisma.contact.findUnique({ where: { id: input.klientId! } }),
+          () => ctx.dataStore.contacts.findUnique({ where: { id: input.klientId! } }),
           ctx.orgId,
           (c) => c.organizationId,
         );
-        await ctx.prisma.matterContact.create({
+        await ctx.dataStore.matterContacts.create({
           data: {
             matterId: matter.id,
             contactId: input.klientId,
@@ -157,7 +158,7 @@ export const matterRouter = router({
           ? new Date(paymentMethodDecidedAt)
           : null;
       }
-      const updated = await ctx.prisma.matter.update({ where: { id }, data });
+      const updated = await ctx.dataStore.matters.update({ where: { id }, data });
       await emit.matterUpdated(ctx, id, data);
       if (input.status && input.status !== before.status) {
         await emit.matterStatusChanged(ctx, id, before.status, input.status);
@@ -178,11 +179,11 @@ export const matterRouter = router({
     .mutation(async ({ ctx, input }) => {
       await assertMatterInOrg(ctx, input.matterId);
       await requireOrgOwned(
-        () => ctx.prisma.contact.findUnique({ where: { id: input.contactId } }),
+        () => ctx.dataStore.contacts.findUnique({ where: { id: input.contactId } }),
         ctx.orgId,
         (c) => c.organizationId,
       );
-      return ctx.prisma.matterContact.create({
+      return ctx.dataStore.matterContacts.create({
         data: input,
         include: { contact: true },
       });
@@ -210,22 +211,22 @@ export const matterRouter = router({
       // Check if contact already exists by personal/org number
       let contact = null;
       if (contactData.personalNumber) {
-        contact = await ctx.prisma.contact.findFirst({
+        contact = await ctx.dataStore.contacts.findFirst({
           where: { personalNumber: contactData.personalNumber, organizationId: ctx.orgId },
         });
       } else if (contactData.orgNumber) {
-        contact = await ctx.prisma.contact.findFirst({
+        contact = await ctx.dataStore.contacts.findFirst({
           where: { orgNumber: contactData.orgNumber, organizationId: ctx.orgId },
         });
       }
 
       if (!contact) {
-        contact = await ctx.prisma.contact.create({
+        contact = await ctx.dataStore.contacts.create({
           data: { ...contactData, organizationId: ctx.orgId },
         });
       }
 
-      return ctx.prisma.matterContact.create({
+      return ctx.dataStore.matterContacts.create({
         data: { matterId, contactId: contact.id, role, notes },
         include: { contact: true },
       });
@@ -237,13 +238,13 @@ export const matterRouter = router({
       // Verifiera via matterContact→matter→org
       await requireOrgOwned(
         () =>
-          ctx.prisma.matterContact.findUnique({
+          ctx.dataStore.matterContacts.findUnique({
             where: { id: input.matterContactId },
             include: { matter: { select: { organizationId: true } } },
           }),
         ctx.orgId,
         (mc) => mc.matter.organizationId,
       );
-      return ctx.prisma.matterContact.delete({ where: { id: input.matterContactId } });
+      return ctx.dataStore.matterContacts.delete({ where: { id: input.matterContactId } });
     }),
 });

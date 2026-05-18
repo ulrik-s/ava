@@ -17,7 +17,7 @@ export const expenseRouter = router({
       };
 
       const [expenses, total] = await Promise.all([
-        ctx.prisma.expense.findMany({
+        ctx.dataStore.expenses.findMany({
           where,
           orderBy: { date: "desc" },
           skip: (input.page - 1) * input.pageSize,
@@ -27,10 +27,10 @@ export const expenseRouter = router({
             matter: { select: { id: true, matterNumber: true, title: true } },
           },
         }),
-        ctx.prisma.expense.count({ where }),
+        ctx.dataStore.expenses.count({ where }),
       ]);
 
-      const totalAmount = await ctx.prisma.expense.aggregate({
+      const totalAmount = await ctx.dataStore.expenses.aggregate({
         where,
         _sum: { amount: true },
       });
@@ -54,7 +54,7 @@ export const expenseRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      return ctx.prisma.expense.create({
+      return ctx.dataStore.expenses.create({
         data: {
           userId: ctx.user.id,
           matterId: input.matterId,
@@ -78,7 +78,7 @@ export const expenseRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const { id, date, ...data } = input;
-      return ctx.prisma.expense.update({
+      return ctx.dataStore.expenses.update({
         where: { id },
         data: {
           ...data,
@@ -90,6 +90,6 @@ export const expenseRouter = router({
   delete: protectedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      return ctx.prisma.expense.delete({ where: { id: input.id } });
+      return ctx.dataStore.expenses.delete({ where: { id: input.id } });
     }),
 });

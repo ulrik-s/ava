@@ -12,7 +12,7 @@ export const eventProcedures = {
   events: orgProcedure
     .input(z.object({ matterId: z.string() }))
     .query(({ ctx, input }) =>
-      ctx.prisma.matterEventSuggestion.findMany({
+      ctx.dataStore.matterEventSuggestions.findMany({
         where: {
           status: { not: "REJECTED" },
           document: {
@@ -28,14 +28,14 @@ export const eventProcedures = {
   rejectEvent: orgProcedure
     .input(z.object({ eventId: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const ev = await ctx.prisma.matterEventSuggestion.findFirst({
+      const ev = await ctx.dataStore.matterEventSuggestions.findFirst({
         where: {
           id: input.eventId,
           document: { matter: { organizationId: ctx.orgId } },
         },
       });
       if (!ev) throw new TRPCError({ code: "NOT_FOUND" });
-      return ctx.prisma.matterEventSuggestion.update({
+      return ctx.dataStore.matterEventSuggestions.update({
         where: { id: ev.id },
         data: { status: "REJECTED" },
       });
@@ -45,14 +45,14 @@ export const eventProcedures = {
   markEventAdded: orgProcedure
     .input(z.object({ eventId: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const ev = await ctx.prisma.matterEventSuggestion.findFirst({
+      const ev = await ctx.dataStore.matterEventSuggestions.findFirst({
         where: {
           id: input.eventId,
           document: { matter: { organizationId: ctx.orgId } },
         },
       });
       if (!ev) throw new TRPCError({ code: "NOT_FOUND" });
-      return ctx.prisma.matterEventSuggestion.update({
+      return ctx.dataStore.matterEventSuggestions.update({
         where: { id: ev.id },
         data: { status: "ACCEPTED" },
       });

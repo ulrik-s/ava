@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { TRPCError } from "@trpc/server";
 import { documentTemplateRouter } from "@/server/routers/documentTemplate";
+import { dataStoreFromMockPrisma } from "../helpers/mock-data-store";
 
 // ─── Helpers ─────────────────────────────────────────────────────
 
@@ -8,7 +9,7 @@ import { documentTemplateRouter } from "@/server/routers/documentTemplate";
 function makeCaller(orgId = "org-a") {
   const ctx = {
     user: { id: "user-1", email: "a@b.com", name: "Test", role: "ADMIN", organizationId: orgId },
-    prisma: mockPrisma,
+    prisma: mockPrisma, dataStore: dataStoreFromMockPrisma(mockPrisma as unknown as Record<string, unknown>),
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return documentTemplateRouter.createCaller(ctx as any);

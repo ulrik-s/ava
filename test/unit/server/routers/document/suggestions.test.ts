@@ -3,6 +3,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { dataStoreFromMockPrisma } from "../../helpers/mock-data-store";
 
 vi.mock("@/server/services/meilisearch", () => ({
   searchDocuments: vi.fn(),
@@ -35,7 +36,7 @@ const mockPrisma = {
 function makeCaller(orgId = "org-a") {
   const ctx = {
     user: { id: "u1", email: "a@b.se", name: "T", role: "LAWYER", organizationId: orgId },
-    prisma: mockPrisma,
+    prisma: mockPrisma, dataStore: dataStoreFromMockPrisma(mockPrisma as unknown as Record<string, unknown>),
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return documentRouter.createCaller(ctx as any);

@@ -30,7 +30,7 @@ export const timeEntryRouter = router({
       };
 
       const [entries, total] = await Promise.all([
-        ctx.prisma.timeEntry.findMany({
+        ctx.dataStore.timeEntries.findMany({
           where,
           orderBy: { date: "desc" },
           skip: (input.page - 1) * input.pageSize,
@@ -40,10 +40,10 @@ export const timeEntryRouter = router({
             matter: { select: { id: true, matterNumber: true, title: true } },
           },
         }),
-        ctx.prisma.timeEntry.count({ where }),
+        ctx.dataStore.timeEntries.count({ where }),
       ]);
 
-      const totalMinutes = await ctx.prisma.timeEntry.aggregate({
+      const totalMinutes = await ctx.dataStore.timeEntries.aggregate({
         where,
         _sum: { minutes: true },
       });
@@ -67,12 +67,12 @@ export const timeEntryRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const user = await ctx.prisma.user.findUniqueOrThrow({
+      const user = await ctx.dataStore.users.findUniqueOrThrow({
         where: { id: ctx.user.id },
         select: { hourlyRate: true },
       });
 
-      const entry = await ctx.prisma.timeEntry.create({
+      const entry = await ctx.dataStore.timeEntries.create({
         data: {
           userId: ctx.user.id,
           matterId: input.matterId,
@@ -99,7 +99,7 @@ export const timeEntryRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const { id, date, ...data } = input;
-      const updated = await ctx.prisma.timeEntry.update({
+      const updated = await ctx.dataStore.timeEntries.update({
         where: { id },
         data: {
           ...data,
@@ -113,7 +113,7 @@ export const timeEntryRouter = router({
   delete: protectedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const entry = await ctx.prisma.timeEntry.delete({ where: { id: input.id } });
+      const entry = await ctx.dataStore.timeEntries.delete({ where: { id: input.id } });
       await emit.timeEntryDeleted(ctx, entry.id, entry.matterId);
       return entry;
     }),
@@ -141,7 +141,7 @@ export const timeEntryRouter = router({
         ...(input.matterId ? { matterId: input.matterId } : {}),
       };
 
-      const entries = await ctx.prisma.timeEntry.findMany({
+      const entries = await ctx.dataStore.timeEntries.findMany({
         where,
         include: {
           user: { select: { id: true, name: true } },

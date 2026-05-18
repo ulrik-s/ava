@@ -6,13 +6,13 @@
  */
 
 import { TRPCError } from "@trpc/server";
-import type { prisma } from "../../db";
+import type { IDataStore } from "../../data-store/IDataStore";
 
-export type DocCtx = { prisma: typeof prisma; orgId: string };
+export type DocCtx = { dataStore: IDataStore; orgId: string };
 
 /** Verifiera att dokumentet finns och tillhör anropande org. */
 export async function assertDocAccess(ctx: DocCtx, documentId: string) {
-  const doc = await ctx.prisma.document.findFirst({
+  const doc = await ctx.dataStore.documents.findFirst({
     where: { id: documentId, matter: { organizationId: ctx.orgId } },
     select: { id: true, matterId: true },
   });
@@ -22,7 +22,7 @@ export async function assertDocAccess(ctx: DocCtx, documentId: string) {
 
 /** Verifiera att ärendet finns och tillhör anropande org. */
 export async function assertMatterAccess(ctx: DocCtx, matterId: string) {
-  const m = await ctx.prisma.matter.findFirst({
+  const m = await ctx.dataStore.matters.findFirst({
     where: { id: matterId, organizationId: ctx.orgId },
     select: { id: true },
   });

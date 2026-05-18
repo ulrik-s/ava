@@ -48,7 +48,7 @@ function makeInMemoryEventLog(): IEventLog & { events: AvaEvent[] } {
 function makeDataStore(): { ds: IDataStore; events: () => AvaEvent[] } {
   const log = makeInMemoryEventLog();
   return {
-    ds: { events: log } as IDataStore,
+    ds: { events: log } as unknown as IDataStore,
     events: () => log.events,
   };
 }

@@ -25,7 +25,7 @@ export const conflictRouter = router({
 
       // Search by personal/org number (exact substring match)
       if (input.searchType === "personalNumber" || input.searchType === "both") {
-        const byNumber = await ctx.prisma.matterContact.findMany({
+        const byNumber = await ctx.dataStore.matterContacts.findMany({
           where: {
             matter: { organizationId: ctx.user.organizationId },
             contact: {
@@ -68,7 +68,7 @@ export const conflictRouter = router({
 
       // Search by name (fuzzy using trigram similarity)
       if (input.searchType === "name" || input.searchType === "both") {
-        const byName = await ctx.prisma.$queryRaw<
+        const byName = await ctx.dataStore.raw.$queryRaw<
           Array<{
             contact_id: string;
             contact_name: string;
@@ -104,7 +104,7 @@ export const conflictRouter = router({
         for (const row of byName) {
           if (!results.some((r) => r.contactId === row.contact_id && r.matterId === row.matter_id && r.role === row.role)) {
             // Fetch klient for this matter
-            const klientLink = await ctx.prisma.matterContact.findFirst({
+            const klientLink = await ctx.dataStore.matterContacts.findFirst({
               where: { matterId: row.matter_id, role: "KLIENT" },
               include: { contact: { select: { name: true } } },
             });
@@ -126,7 +126,7 @@ export const conflictRouter = router({
       }
 
       // Log the check
-      await ctx.prisma.conflictCheck.create({
+      await ctx.dataStore.conflictChecks.create({
         data: {
           searchTerm: input.searchTerm,
           searchType: input.searchType,
@@ -151,13 +151,13 @@ export const conflictRouter = router({
     )
     .query(async ({ ctx, input }) => {
       const [checks, total] = await Promise.all([
-        ctx.prisma.conflictCheck.findMany({
+        ctx.dataStore.conflictChecks.findMany({
           orderBy: { createdAt: "desc" },
           skip: (input.page - 1) * input.pageSize,
           take: input.pageSize,
           include: { checkedBy: { select: { name: true } } },
         }),
-        ctx.prisma.conflictCheck.count(),
+        ctx.dataStore.conflictChecks.count(),
       ]);
 
       return { checks, total, pages: Math.ceil(total / input.pageSize) };
