@@ -826,8 +826,17 @@ Use case som nu fungerar:
   + `PwaRegister`-komponent monterad i root-layout. Cache-strategi i
   `lib/pwa-cache-strategy.ts` (TDD-validerad). Status: app-shell cachas
   cache-first, HTML network-first, /api network-only.
-- ⬜ WebLLM opt-in för LLM-extract i browser (valfritt)
-- ⬜ Responsiv UI-poliering (touch-mål, mobil-sidebar)
+- ✅ WebLLM opt-in — KLAR. `ILlmExtractor`-interface med 3 impl:
+  `NoopExtractor` (default), `StubExtractor` (test), `WebLlmExtractor`
+  (lazy-laddar @mlc-ai/web-llm via dynamic import). `useLlmExtractor`-
+  hook med status-livscykel. Användaren aktiverar genom att klicka
+  "Aktivera lokal AI" — modellen laddas explicit (~2 GB engångsfönster).
+- ✅ Responsiv UI-poliering — KLAR. `/demo` har nu skalande padding
+  (p-4 sm:p-6 md:p-8), flex-col → sm:flex-row för form-rad, touch-target
+  min-h-12 (48 px) på input + knapp, inputMode="url" + autoCapitalize="off"
+  för rätt mobil-tangentbord. `useMediaQuery`-hook tillgänglig för
+  komponenter som behöver media-query-state. Viewport-meta i root-layout
+  med initialScale=1, viewportFit=cover (notch-safe).
 
 **Demo-läget är dock fullt körbart i sin tunna form** redan nu —
 `yarn demo:build` producerar repo:t, det pushas till GitHub publikt, och

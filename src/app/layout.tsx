@@ -28,6 +28,11 @@ export const metadata: Metadata = {
 
 export const viewport = {
   themeColor: "#2563eb",
+  // Säkerställ korrekt mobil-rendering — initial-scale=1 + viewport-fit för
+  // notch på iPhone. Användaren kan zooma (utan user-scalable=no).
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover" as const,
 };
 
 export default function RootLayout({

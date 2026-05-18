@@ -60,19 +60,23 @@ export function DemoClient({ runtimeFactory = defaultRuntimeFactory }: DemoClien
   }
 
   return (
-    <div className="mx-auto max-w-4xl p-8">
-      <h1 className="text-3xl font-bold mb-2">AVA Demo</h1>
-      <p className="mb-6 text-gray-600">
+    <div className="mx-auto max-w-4xl p-4 sm:p-6 md:p-8">
+      <h1 className="text-2xl sm:text-3xl font-bold mb-2">AVA Demo</h1>
+      <p className="mb-4 sm:mb-6 text-sm sm:text-base text-gray-600">
         Klistra in en publik GitHub-repo-url med AVA-demo-data. Allt körs
         lokalt i din webbläsare — ingen data lämnar din enhet.
       </p>
 
-      <div className="flex gap-2 mb-6">
+      {/* Stack på mobil, row på tablet+. Touch-target min 44px (min-h-12). */}
+      <div className="flex flex-col sm:flex-row gap-2 mb-6">
         <input
           type="url"
+          inputMode="url"
+          autoComplete="off"
+          autoCapitalize="off"
           aria-label="GitHub-url"
           placeholder="https://github.com/användare/ava-demo.git"
-          className="flex-1 px-3 py-2 border rounded"
+          className="flex-1 min-h-12 px-3 border rounded text-base"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") void handleLoad(); }}
@@ -81,7 +85,7 @@ export function DemoClient({ runtimeFactory = defaultRuntimeFactory }: DemoClien
           type="button"
           onClick={() => void handleLoad()}
           disabled={status === "loading"}
-          className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50"
+          className="min-h-12 px-6 bg-blue-600 text-white rounded font-medium disabled:opacity-50 active:bg-blue-700"
         >
           Ladda demo
         </button>
