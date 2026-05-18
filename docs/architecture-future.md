@@ -790,8 +790,43 @@ realgit + faktisk Postgres-DB.
 
 ### 7.5 Fas 4 — Pure web-variant
 
-**~5 veckor extra ovanpå Tauri.** Resultat: en byrå kan välja att köra
-local-first i bara browser (inkl. iPad).
+**Status: 🟡 Demo-kärna KLAR per 2026-05-18.** Web-runtime (MemFs +
+IsomorphicGitOps) och demo-läget är på plats. Återstår: PWA-service-worker,
+WebAuthn, sql.js, WebLLM-opt-in.
+
+Levererat:
+
+| Komponent | Vad |
+|---|---|
+| `MemFs` | Dual-yta in-memory backend: IFileSystem + node-fs-callback för isomorphic-git |
+| `IsomorphicGitOps` | IGitOps-impl via isomorphic-git — clone/fetch/push/commit/log/changedFiles |
+| `clone-from-github.ts` | Tunn wrapper kring `isomorphic-git.clone` + dynamic http-plugin |
+| `DemoLoader` | Klonar repo + hydratiserar entiteter via samma ProjectionHydrator som production |
+| `DemoRuntime` | Composition root för demo: read-only EntityCollection per entitet |
+| `build-demo-repo.ts` | Skript som producerar en GitHub-redo demo-mapp med 3 ärenden + 5 kontakter + 2 användare |
+
+Use case som nu fungerar:
+
+```
+[GitHub-repo med JSON-data]
+        ↓ (isomorphic-git.clone över HTTPS)
+[MemFs in-memory i browser]
+        ↓ (ProjectionHydrator)
+[DemoRuntime — UI:t läser via .matters(), .contacts(), .users()]
+```
+
+Återstår innan full pure-web-MVP:
+
+- ⬜ `sql.js` eller `wa-sqlite` för persistens i OPFS (nu bara in-memory)
+- ⬜ WebAuthn/passkeys-auth (för byråer som vill ha web-only utan SSH-keys)
+- ⬜ PWA-service-worker för offline-cache
+- ⬜ WebLLM opt-in för LLM-extract i browser (valfritt)
+- ⬜ Responsiv UI-poliering (touch-mål, mobil-sidebar)
+
+**Demo-läget är dock fullt körbart i sin tunna form** redan nu —
+`yarn demo:build` producerar repo:t, det pushas till GitHub publikt, och
+`DemoRuntime.create({ cloneFn: cloneFromGithub() }).loadDemo(url)`
+laddar det i webappen.
 
 - SQLite WASM (sql.js eller wa-sqlite, OPFS-persistent) (~1 v)
 - isomorphic-git över HTTPS (~3 d)

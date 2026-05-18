@@ -13,6 +13,7 @@
     "start": "next start",
     "schema:sqlite": "tsx scripts/generate-sqlite-schema.ts",
     "migrate:pg-to-git": "tsx scripts/migrate-pg-to-git.ts",
+    "demo:build": "tsx scripts/build-demo-repo.ts",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
