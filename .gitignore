@@ -56,3 +56,11 @@ next-env.d.ts
 
 # Test- och kvalitetsrapporter (samlad output-mapp)
 /reports/
+
+# Tauri-bygget — Rust-artefakter, genererade ikoner, plattforms-bundle
+/src-tauri/target/
+/src-tauri/Cargo.lock
+/src-tauri/gen/
+
+# Genererat SQLite-schema (committas inte — bygger sig själv från schema.prisma)
+/prisma/schema.sqlite.prisma
