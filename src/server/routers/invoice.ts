@@ -17,6 +17,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, orgProcedure } from "../trpc";
 import { computeFinalInvoiceBreakdown, isPaymentPlanSettled } from "@/lib/invoice-calc";
+import { emit } from "../events/emit";
 
 const invoiceTypeSchema = z.enum(["STANDARD", "ACCONTO", "FINAL"]);
 const invoiceStatusSchema = z.enum([
@@ -98,7 +99,7 @@ export const invoiceRouter = router({
         where: { id: input.matterId, organizationId: ctx.orgId },
       });
       if (!matter) throw new TRPCError({ code: "NOT_FOUND" });
-      return ctx.prisma.invoice.create({
+      const invoice = await ctx.prisma.invoice.create({
         data: {
           matterId: input.matterId,
           amount: input.amount,
@@ -109,6 +110,8 @@ export const invoiceRouter = router({
           notes: input.notes,
         },
       });
+      await emit.invoiceCreated(ctx, invoice);
+      return invoice;
     }),
 
   /**
@@ -214,6 +217,9 @@ export const invoiceRouter = router({
           },
         });
         return { invoice, breakdown };
+      }).then(async (result) => {
+        await emit.invoiceCreated(ctx, result.invoice);
+        return result;
       });
     }),
 

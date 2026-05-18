@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { router, orgProcedure, requireOrgOwned } from "../trpc";
 import { contactTypeSchema } from "@/lib/labels";
+import { emit } from "../events/emit";
 
 export const contactRouter = router({
   list: orgProcedure
@@ -80,13 +81,15 @@ export const contactRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      return ctx.prisma.contact.create({
+      const contact = await ctx.prisma.contact.create({
         data: {
           ...input,
           email: input.email || null,
           organizationId: ctx.orgId,
         },
       });
+      await emit.contactCreated(ctx, contact);
+      return contact;
     }),
 
   update: orgProcedure
@@ -111,10 +114,12 @@ export const contactRouter = router({
         (c) => c.organizationId,
       );
       const { id, ...data } = input;
-      return ctx.prisma.contact.update({
+      const updated = await ctx.prisma.contact.update({
         where: { id },
         data: { ...data, email: data.email || null },
       });
+      await emit.contactUpdated(ctx, id, data);
+      return updated;
     }),
 
   delete: orgProcedure
@@ -125,7 +130,9 @@ export const contactRouter = router({
         ctx.orgId,
         (c) => c.organizationId,
       );
-      return ctx.prisma.contact.delete({ where: { id: input.id } });
+      const result = await ctx.prisma.contact.delete({ where: { id: input.id } });
+      await emit.contactDeleted(ctx, input.id);
+      return result;
     }),
 
   // Add a contact person to an organization

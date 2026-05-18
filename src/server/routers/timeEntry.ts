@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../trpc";
+import { emit } from "../events/emit";
 
 export const timeEntryRouter = router({
   list: protectedProcedure
@@ -71,7 +72,7 @@ export const timeEntryRouter = router({
         select: { hourlyRate: true },
       });
 
-      return ctx.prisma.timeEntry.create({
+      const entry = await ctx.prisma.timeEntry.create({
         data: {
           userId: ctx.user.id,
           matterId: input.matterId,
@@ -82,6 +83,8 @@ export const timeEntryRouter = router({
           billable: input.billable,
         },
       });
+      await emit.timeEntryAdded(ctx, { id: entry.id, matterId: entry.matterId, minutes: entry.minutes });
+      return entry;
     }),
 
   update: protectedProcedure
@@ -96,19 +99,23 @@ export const timeEntryRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const { id, date, ...data } = input;
-      return ctx.prisma.timeEntry.update({
+      const updated = await ctx.prisma.timeEntry.update({
         where: { id },
         data: {
           ...data,
           ...(date ? { date: new Date(date) } : {}),
         },
       });
+      await emit.timeEntryUpdated(ctx, { id: updated.id, matterId: updated.matterId });
+      return updated;
     }),
 
   delete: protectedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      return ctx.prisma.timeEntry.delete({ where: { id: input.id } });
+      const entry = await ctx.prisma.timeEntry.delete({ where: { id: input.id } });
+      await emit.timeEntryDeleted(ctx, entry.id, entry.matterId);
+      return entry;
     }),
 
   report: protectedProcedure

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { router, orgProcedure, requireOrgOwned } from "../trpc";
 import { matterRoleSchema, contactTypeSchema } from "@/lib/labels";
+import { emit } from "../events/emit";
 
 /** Hjälpare: hämta matter och verifiera att den tillhör anropande org. */
 const assertMatterInOrg = (
@@ -111,6 +112,7 @@ export const matterRouter = router({
           organizationId: ctx.orgId,
         },
       });
+      await emit.matterCreated(ctx, matter);
 
       // If a klient was specified, link them
       if (input.klientId) {
@@ -147,7 +149,7 @@ export const matterRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      await assertMatterInOrg(ctx, input.id);
+      const before = await assertMatterInOrg(ctx, input.id);
       const { id, paymentMethodDecidedAt, ...rest } = input;
       const data: Record<string, unknown> = { ...rest };
       if (paymentMethodDecidedAt !== undefined) {
@@ -155,7 +157,13 @@ export const matterRouter = router({
           ? new Date(paymentMethodDecidedAt)
           : null;
       }
-      return ctx.prisma.matter.update({ where: { id }, data });
+      const updated = await ctx.prisma.matter.update({ where: { id }, data });
+      await emit.matterUpdated(ctx, id, data);
+      if (input.status && input.status !== before.status) {
+        await emit.matterStatusChanged(ctx, id, before.status, input.status);
+        if (input.status === "ARCHIVED") await emit.matterArchived(ctx, id);
+      }
+      return updated;
     }),
 
   addContact: orgProcedure

@@ -3413,6 +3413,7 @@ __metadata:
     class-variance-authority: "npm:^0.7.1"
     clsx: "npm:^2.1.1"
     concurrently: "npm:^9.2.1"
+    cron-parser: "npm:^5.5.0"
     dependency-cruiser: "npm:^17.4.0"
     dotenv: "npm:^17.4.2"
     eslint: "npm:^9"
@@ -4163,6 +4164,15 @@ __metadata:
     crc-32: "npm:^1.2.0"
     readable-stream: "npm:^3.4.0"
   checksum: 10c0/127b0c66a947c54db37054fca86085722140644d3a75ebc61d4477bad19304d2936386b0461e8ee9e1c24b00e804cd7c2e205180e5bcb4632d20eccd60533bc4
+  languageName: node
+  linkType: hard
+
+"cron-parser@npm:^5.5.0":
+  version: 5.5.0
+  resolution: "cron-parser@npm:5.5.0"
+  dependencies:
+    luxon: "npm:^3.7.1"
+  checksum: 10c0/ffbda13dcfca26cd79c07d7cb4aa317c3634119696f3690dedf4f3baceacade5b1459fc160f65563b3a367ec1b020a2fd065fa49c4b6d937536ba3d637191cd2
   languageName: node
   linkType: hard
 
@@ -7306,6 +7316,13 @@ __metadata:
   peerDependencies:
     react: ^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0
   checksum: 10c0/25c5dd878945842ffb519532f1a66f59f2d461e7be7bd322091b0ecd3cd32561c1ae3d9b50161432d39a72bf8c8f1a039268f2f20a035e520dd3f49dd46ffaf2
+  languageName: node
+  linkType: hard
+
+"luxon@npm:^3.7.1":
+  version: 3.7.2
+  resolution: "luxon@npm:3.7.2"
+  checksum: 10c0/ed8f0f637826c08c343a29dd478b00628be93bba6f068417b1d8896b61cb61c6deacbe1df1e057dbd9298334044afa150f9aaabbeb3181418ac8520acfdc2ae2
   languageName: node
   linkType: hard
 
