@@ -13,6 +13,9 @@
 import type { PrismaClient, Prisma } from "@prisma/client";
 import type { StepHandlers } from "./execute";
 import type { IDataStore } from "../data-store/IDataStore";
+import { renderEmail } from "./email-templates";
+import { sendEmail } from "../services/email";
+import { analyzeDocument } from "../services/document-analysis";
 
 export function buildLiveHandlers(deps: {
   prisma: PrismaClient;
@@ -31,9 +34,8 @@ export function buildLiveHandlers(deps: {
         });
         if (already) return false;
       }
-      // TODO: faktisk mail-skickning via befintlig services/email.ts.
-      // Lägger till i nästa pass när vi migrerar payment-reminders-flödet.
-      console.info("[rules] sendEmail", { template, to, idempotencyKey, vars });
+      const rendered = renderEmail(template, vars ?? {});
+      await sendEmail({ to, subject: rendered.subject, text: rendered.text, html: rendered.html });
       return true;
     },
 
@@ -45,8 +47,26 @@ export function buildLiveHandlers(deps: {
     },
 
     async extractFromDocument({ documentId, schema, into }) {
-      // TODO: kopplas till befintlig document-analysis-service.
-      console.info("[rules] llm.extract", { documentId, into, schemaKeys: Object.keys(schema) });
+      // Verifiera att dokumentet tillhör anropande byrå innan vi
+      // triggar analysen. analyzeDocument tar bara id, men vi vill
+      // inte att en regel i fel byrå kan trigga annans dokument.
+      const doc = await deps.prisma.document.findFirst({
+        where: { id: documentId, matter: { organizationId: deps.organizationId } },
+        select: { id: true },
+      });
+      if (!doc) {
+        console.warn(`[rules] llm.extract: dokument ${documentId} hittas inte i byrå ${deps.organizationId}`);
+        return;
+      }
+      // Fire-and-forget: analyzeDocument är best-effort, kan ta sekunder.
+      void analyzeDocument(documentId).catch((err) =>
+        console.error("[rules] llm.extract misslyckades:", err),
+      );
+      // `schema` och `into` är metadata för framtida selectiva extractions —
+      // nuvarande analyzeDocument körr full pipeline. När vi splittar upp
+      // den (Fas 1 punkt 4) kan de användas för att styra vilken delta-schema
+      // som tillämpas.
+      void schema; void into;
     },
 
     async createTask({ assignTo, title, dueAt }) {

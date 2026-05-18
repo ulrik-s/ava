@@ -574,18 +574,38 @@ interfacet.
 
 ### 7.2 Fas 1 — Event-log och regelmotor (server-läget först)
 
-**~5 veckor.** Resultat: nuvarande server fungerar likadant utåt sett, men
-internt går alla mutations genom event-log + regelmotor. Inga nya features
-för slutanvändare, men *fundamentet* är på plats.
+**Status: ✅ KLAR per 2026-05-18.** Fundamentet är på plats; nuvarande
+server fungerar likadant utåt sett, men internt går alla mutations genom
+event-log och regelmotor är aktiverbar för 8 startregler.
 
-- Event-schema + log-writer (~5 d)
-- `emitEvent` införs vid varje tRPC-mutation (~3 d)
-- Regel-loader + executor + 5–6 step-typer (~1.5 v)
-- HTTP-trigger catch-all + auth (~3 d)
-- Scheduler med idempotens-keys (~4 d)
-- 8–10 migrerade startregler ersätter hardcode (~1 v)
-- Replay/debug-CLI (~3 d)
-- Tester + dokumentation (~1 v)
+Levererat:
+
+- ✅ Event-schema + log-writer + UUID v7 (`src/server/events/`)
+- ✅ `IDataStore`-interface + `PostgresEventLog` + tRPC-context-integration
+- ✅ `emitEvent`-helpers i 4 routrar: matter, contact, timeEntry, invoice
+- ✅ Regel-schema (3 trigger-typer + alla 9 step-typer)
+- ✅ Templating med dot-path + filters (upper/lower/date/json)
+- ✅ Regel-executor (if/for-each/http.respond, kausalkedjor via causedBy)
+- ✅ JsonLogic-predikat för event-trigger-filtrering
+- ✅ HTTP-trigger catch-all på `/api/r/[...path]` med 3 auth-lägen
+- ✅ Scheduler med cron-parser + idempotens-keys (`schedule:<rule>@<iso>`)
+- ✅ `/api/cron/scheduler-tick` driver för extern cron
+- ✅ Live-handlers: `email.send` via `services/email.ts`, `llm.extract`
+  fire-and-forget mot `analyzeDocument`, `matter.update` via Prisma
+- ✅ Email-mall-registry (`generic`, `payment-reminder`, `payment-overdue`)
+- ✅ 8 startregler i `src/server/rules/starter-rules.ts` (alla disabled)
+- ✅ Seed-script + debug-CLI (`yarn seed:rules`, `yarn ava`)
+- ✅ End-to-end-tester för regel-kedjan
+- ✅ Spike: claim-race över git push-CAS (validerar local-first-modellen)
+
+Resultat: 855 tester gröna (+82 från fas-1-start), 0 typcheck-fel.
+
+Begränsningar / kvarstår till senare faser:
+- Fas 1.5: replay-CLI är begränsad — saknar event-causation-graph-vy
+- Migration av befintliga cron-routes till regler är **inte gjord** —
+  `cron/send-payment-reminders` körs fortfarande hårdkodat. Migreras
+  i Fas 1.5 när live-handlers stresstestats.
+- Yjs-CRDT-fält är inte implementerade än (Fas 3-jobb).
 
 ### 7.3 Fas 2 — `DataStore`-abstraktion
 
