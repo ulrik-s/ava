@@ -704,8 +704,14 @@ SOLID-status:
 
 Återstår innan local-first kan dogfooda:
 
-1. **`isomorphic-git`-bunden `IGitOps`-impl** (~3 dagar) — clone, fetch, push, commit
-2. **Node/Tauri-bunden `IFileSystem`-impl** (~1 dag) — `fs/promises` mot disk
+1. ✅ **`IGitOps`-impl mot riktiga git** — KLAR per 2026-05-18. Pragmatiskt
+   val: `NodeGitOps` via `child_process` spawning av system-`git` istället
+   för `isomorphic-git`. Skäl: hanterar SSH-auth, file://, HTTPS-creds
+   out-of-the-box. `isomorphic-git`-paketet stannar installerat för Fas 4
+   (web-variant) där subprocess inte är ett alternativ.
+2. ✅ **`IFileSystem`-impl mot disk** — KLAR per 2026-05-18.
+   `NodeFileSystem` mot `fs/promises` med path-traversal-skydd och
+   tmpdir-baserade tester.
 3. **SQLite-projektion** (~1 vecka) — write-through cache: emit → JSON + SQLite
 4. **Hydrate-on-pull** (~5 dagar) — vid fetch som ger nya commits, läs ändrade filer + re-hydratisera SQLite
 5. **15s-poll-loop** (~3 dagar) — bakgrundsprocess som fetchar och triggar hydrate
