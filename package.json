@@ -4,9 +4,11 @@
   "license": "MIT",
   "private": true,
   "scripts": {
-    "dev": "concurrently -n next,webdav -c blue,magenta \"next dev\" \"tsx watch scripts/webdav-server.ts\"",
+    "dev": "concurrently -n next,webdav,cors -c blue,magenta,cyan \"next dev\" \"tsx watch scripts/webdav-server.ts\" \"yarn dev:cors\"",
     "dev:next": "next dev",
     "dev:webdav": "tsx watch scripts/webdav-server.ts",
+    "dev:cors": "cors-proxy start -p 9999",
+    "dev:demo": "concurrently -n next,cors -c blue,cyan \"next dev\" \"yarn dev:cors\"",
     "ava": "tsx scripts/ava-cli.ts",
     "seed:rules": "tsx scripts/seed-rules.ts",
     "build": "next build",
@@ -48,6 +50,7 @@
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.2",
+    "@mlc-ai/web-llm": "^0.2.83",
     "@prisma/adapter-pg": "^7.7.0",
     "@prisma/client": "^7.7.0",
     "@simplewebauthn/browser": "^13.3.0",
@@ -85,6 +88,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@isomorphic-git/cors-proxy": "^3.0.1",
     "@playwright/test": "^1.59.1",
     "@tailwindcss/postcss": "^4",
     "@tauri-apps/cli": "^2.11.2",

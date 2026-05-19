@@ -1018,6 +1018,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@isomorphic-git/cors-proxy@npm:^3.0.1":
+  version: 3.0.1
+  resolution: "@isomorphic-git/cors-proxy@npm:3.0.1"
+  bin:
+    cors-proxy: bin.js
+  checksum: 10c0/8e335a4cd01862a0d77296d50256aaca5e8bcd46beb17e5a15e2f11977aa14cf8f75d94b26a722d2684876253c73c004139653c685ac91e9560de7a1a6ffd7e9
+  languageName: node
+  linkType: hard
+
 "@jridgewell/gen-mapping@npm:^0.3.12, @jridgewell/gen-mapping@npm:^0.3.5":
   version: 0.3.13
   resolution: "@jridgewell/gen-mapping@npm:0.3.13"
@@ -1132,6 +1141,15 @@ __metadata:
   version: 0.2.11
   resolution: "@levischuck/tiny-cbor@npm:0.2.11"
   checksum: 10c0/b34b4b2df5d601f0b260f2cae012168439e6128963959a716ea264586d621d4c411a120219a6abd8c96482de6f11cb34e77365fb6d9f61d99a89c1db5f43ddf3
+  languageName: node
+  linkType: hard
+
+"@mlc-ai/web-llm@npm:^0.2.83":
+  version: 0.2.83
+  resolution: "@mlc-ai/web-llm@npm:0.2.83"
+  dependencies:
+    loglevel: "npm:^1.9.1"
+  checksum: 10c0/6294966065274f1dabaeb128d4947a9b687fa051122ed69328ec2977ebbe4a6d4dca7043460b2db36df918036be8d186c1d2376830cf544ac2cc162aacb52ee3
   languageName: node
   linkType: hard
 
@@ -3743,6 +3761,8 @@ __metadata:
   resolution: "ava@workspace:."
   dependencies:
     "@auth/prisma-adapter": "npm:^2.11.2"
+    "@isomorphic-git/cors-proxy": "npm:^3.0.1"
+    "@mlc-ai/web-llm": "npm:^0.2.83"
     "@playwright/test": "npm:^1.59.1"
     "@prisma/adapter-pg": "npm:^7.7.0"
     "@prisma/client": "npm:^7.7.0"
@@ -7701,6 +7721,13 @@ __metadata:
     strip-ansi: "npm:^7.1.0"
     wrap-ansi: "npm:^9.0.0"
   checksum: 10c0/4b350c0a83d7753fea34dcac6cd797d1dc9603291565de009baa4aa91c0447eab0d3815a05c8ec9ac04fdfffb43c82adcdb03ec1fceafd8518e1a8c1cff4ff89
+  languageName: node
+  linkType: hard
+
+"loglevel@npm:^1.9.1":
+  version: 1.9.2
+  resolution: "loglevel@npm:1.9.2"
+  checksum: 10c0/1e317fa4648fe0b4a4cffef6de037340592cee8547b07d4ce97a487abe9153e704b98451100c799b032c72bb89c9366d71c9fb8192ada8703269263ae77acdc7
   languageName: node
   linkType: hard
 

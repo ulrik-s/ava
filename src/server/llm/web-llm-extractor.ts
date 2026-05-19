@@ -44,9 +44,30 @@ export interface WebLlmEngine {
   };
 }
 
+/**
+ * Default-modell — `gemma3-1b-it-q4f16_1-MLC`.
+ *
+ * Bakgrund: huvudappen kör `ai/gemma4` via Docker Model Runner
+ * (server-side, OpenAI-kompatibel). I browser-läget finns Gemma 4 ännu
+ * inte konverterad till MLC-format (open feature request: mlc-ai/web-llm
+ * issue #810). Vi väljer Gemma 3-1B för att hålla familjekonsistensen
+ * — samma prompt-stil, samma "personlighet" — och för att 1B-modellen
+ * är liten nog att ladda ner snabbt (~700 MB) och fungera på enheter
+ * utan high-end GPU. När Gemma 4 dyker upp i MLC byter vi default.
+ *
+ * Trade-off: 1B är svag på komplex juridisk svenska. För riktigt
+ * extraktionsjobb kan användaren byta till en större modell, t.ex.
+ * `gemma-2-9b-it-q4f16_1-MLC` (~5 GB).
+ */
+export const DEFAULT_WEB_LLM_MODEL = "gemma3-1b-it-q4f16_1-MLC";
+
 export interface WebLlmExtractorOpts {
-  /** Modell-id i web-llm-katalogen, t.ex. "Llama-3.2-3B-Instruct-q4f32_1-MLC". */
-  modelId: string;
+  /**
+   * Modell-id i web-llm-katalogen. Default `DEFAULT_WEB_LLM_MODEL`
+   * (Gemma 3-1B). Se `prebuiltAppConfig.model_list` i @mlc-ai/web-llm
+   * för fullständig lista.
+   */
+  modelId?: string;
   /**
    * Fabriksfunktion som returnerar en engine-instans. Default
    * dynamic-importerar `@mlc-ai/web-llm`.
@@ -57,8 +78,11 @@ export interface WebLlmExtractorOpts {
 export class WebLlmExtractor implements ILlmExtractor {
   private engine: WebLlmEngine | null = null;
   private warmupPromise: Promise<void> | null = null;
+  private readonly modelId: string;
 
-  constructor(private opts: WebLlmExtractorOpts) {}
+  constructor(private opts: WebLlmExtractorOpts = {}) {
+    this.modelId = opts.modelId ?? DEFAULT_WEB_LLM_MODEL;
+  }
 
   isReady(): boolean {
     return this.engine !== null;
@@ -70,7 +94,7 @@ export class WebLlmExtractor implements ILlmExtractor {
     this.warmupPromise = (async () => {
       const factory = this.opts.factory ?? defaultFactory;
       const engine = await factory();
-      await engine.reload(this.opts.modelId);
+      await engine.reload(this.modelId);
       this.engine = engine;
     })();
     return this.warmupPromise;

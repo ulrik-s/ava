@@ -35,6 +35,18 @@ export interface CloneFromGithubOptions {
    *   - node    → `isomorphic-git/http/node`
    */
   http?: { request: (opts: unknown) => Promise<unknown> };
+  /**
+   * CORS-proxy-url. Krävs i browser för att klona från github.com
+   * (GitHub servar inte CORS-headers för smart-HTTP). I Node behövs
+   * den inte.
+   *
+   * - Default i browser: `https://cors.isomorphic-git.org` (publik
+   *   demo-proxy från isomorphic-git-teamet, för dev/demo).
+   * - Sätt till `null` för att uttryckligen stänga av.
+   * - För prod: kör en egen liten proxy (`@isomorphic-git/cors-proxy`)
+   *   och peka hit.
+   */
+  corsProxy?: string | null;
 }
 
 /**
@@ -47,6 +59,7 @@ export function cloneFromGithub(options: CloneFromGithubOptions = {}): DemoClone
 
   return async function clone(fs: MemFs, url: string): Promise<void> {
     const http = options.http ?? (await defaultHttp());
+    const corsProxy = resolveCorsProxy(options.corsProxy);
     await git.clone({
       fs: fs.nodeFs(),
       http: http as never,
@@ -55,8 +68,30 @@ export function cloneFromGithub(options: CloneFromGithubOptions = {}): DemoClone
       ref,
       singleBranch: true,
       depth,
+      ...(corsProxy ? { corsProxy } : {}),
     });
   };
+}
+
+/**
+ * I browser krävs en CORS-proxy mot github.com. I Node ignoreras
+ * proxy:n. `null` = användaren har stängt av explicit.
+ */
+function resolveCorsProxy(opt: string | null | undefined): string | null {
+  if (opt === null) return null;
+  if (opt) return opt;
+  const isBrowser = typeof globalThis !== "undefined"
+    && (globalThis as { window?: unknown }).window !== undefined;
+  if (!isBrowser) return null;
+  // Dev-läge: använd lokal cors-proxy på 9999 (startas av `yarn dev`).
+  // Detekteras via window.location.hostname — undviker beroende av
+  // build-time env vars (som inte finns i client-bundlern utan NEXT_PUBLIC_).
+  const loc = (globalThis as { location?: { hostname?: string } }).location;
+  const host = loc?.hostname ?? "";
+  const isLocalDev = host === "localhost" || host === "127.0.0.1";
+  if (isLocalDev) return "http://localhost:9999";
+  // Prod-fallback: publika proxyn (driftsäker self-host rekommenderas).
+  return "https://cors.isomorphic-git.org";
 }
 
 /**
