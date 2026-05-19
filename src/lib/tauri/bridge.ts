@@ -64,3 +64,63 @@ export async function gitPush(
     token,
   });
 }
+
+export interface PullResult {
+  kind: "up-to-date" | "fast-forward" | "merge-needed";
+  newHead: string | null;
+}
+
+export async function gitPull(
+  repoPath: string,
+  token: string,
+  options: { remote?: string; branch?: string } = {},
+): Promise<PullResult> {
+  return invoke<PullResult>("git_pull", {
+    repoPath,
+    remote: options.remote,
+    branch: options.branch,
+    token,
+  });
+}
+
+// ─── Keychain ──────────────────────────────────────────────────────
+
+export async function secretGet(key: string): Promise<string | null> {
+  return invoke<string | null>("secret_get", { key });
+}
+
+export async function secretSet(key: string, value: string): Promise<void> {
+  await invoke<void>("secret_set", { key, value });
+}
+
+export async function secretDelete(key: string): Promise<void> {
+  await invoke<void>("secret_delete", { key });
+}
+
+// ─── fs-watch ──────────────────────────────────────────────────────
+
+export interface RepoChangeEvent {
+  kind: string;
+  paths: string[];
+}
+
+export async function watchRepoStart(repoPath: string): Promise<number> {
+  return invoke<number>("watch_repo_start", { repoPath });
+}
+
+export async function watchRepoStop(token: number): Promise<void> {
+  await invoke<void>("watch_repo_stop", { token });
+}
+
+/**
+ * Lyssna på `repo-changed`-eventet som watch_repo_start emittar.
+ * Returnerar unsubscribe-fn. Anropas bara i Tauri-kontext.
+ */
+export async function onRepoChange(
+  handler: (event: RepoChangeEvent) => void,
+): Promise<() => void> {
+  if (!isTauri()) return () => {};
+  const mod = await import("@tauri-apps/api/event");
+  const un = await mod.listen<RepoChangeEvent>("repo-changed", (e) => handler(e.payload));
+  return un;
+}

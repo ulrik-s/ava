@@ -1,26 +1,25 @@
 "use client";
 
 /**
- * `TauriGitSync` — visar git-status i Tauri-build:n och låter
- * användaren committa + pusha ändringar (efter PDF-redigering).
+ * `TauriGitSync` — git-sync-panel i Tauri-build:n.
  *
- * Renderar `null` utanför Tauri.
+ * Funktioner:
+ *   - Visar git-status (osparade ändringar) — live via fs-watch
+ *   - Pull/Push via knappar
+ *   - Repo-sökväg och GitHub PAT — PAT lagras i OS-keychain via
+ *     `secret_get/secret_set/secret_delete` (Rust `keyring`).
+ *   - localStorage-fallback för migration; städas vid första
+ *     keychain-save.
  *
- * Designval:
- *   - GitHub PAT lagras i `localStorage` för v1 (snabbt). Senare bör
- *     vi använda Tauri:s keychain (`tauri-plugin-stronghold` /
- *     `tauri-plugin-keychain`).
- *   - Repo-sökvägen kommer från en env-var
- *     `NEXT_PUBLIC_LOCAL_REPO_PATH` eller från `localStorage`.
+ * Returnerar null utanför Tauri.
  */
 
 import { useCallback, useEffect, useState } from "react";
 
-interface Status {
-  loading: boolean;
-  changes: number;
-  error: string | null;
-}
+interface Status { loading: boolean; changes: number; error: string | null }
+
+const PATH_KEY = "ava.localRepoPath";
+const TOKEN_SECRET = "github-token";
 
 export function TauriGitSync() {
   const [available, setAvailable] = useState(false);
@@ -28,7 +27,7 @@ export function TauriGitSync() {
   const [token, setToken] = useState("");
   const [repoPath, setRepoPath] = useState("");
   const [showSettings, setShowSettings] = useState(false);
-  const [pushing, setPushing] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [lastResult, setLastResult] = useState<string | null>(null);
 
   const refresh = useCallback(async (path: string) => {
@@ -42,31 +41,97 @@ export function TauriGitSync() {
     }
   }, []);
 
+  // Init: detektera Tauri, läs settings + token från keychain, starta fs-watch
   useEffect(() => {
+    let watcherToken: number | null = null;
+    let unsub: (() => void) | null = null;
+    let cancelled = false;
+
     (async () => {
       const bridge = await import("@/lib/tauri/bridge");
       if (!bridge.isTauri()) return;
       setAvailable(true);
-      const savedPath = localStorage.getItem("ava.localRepoPath") ?? "";
-      const savedToken = localStorage.getItem("ava.githubToken") ?? "";
+
+      const savedPath = localStorage.getItem(PATH_KEY) ?? "";
+      let savedToken = "";
+      try {
+        savedToken = (await bridge.secretGet(TOKEN_SECRET)) ?? "";
+        // Migrera ev. legacy-token från localStorage in i keychain
+        const legacy = localStorage.getItem("ava.githubToken");
+        if (!savedToken && legacy) {
+          await bridge.secretSet(TOKEN_SECRET, legacy);
+          localStorage.removeItem("ava.githubToken");
+          savedToken = legacy;
+        }
+      } catch (err) {
+        console.warn("[tauri-git-sync] keychain-läsning misslyckades:", err);
+      }
+      if (cancelled) return;
       setRepoPath(savedPath);
       setToken(savedToken);
       await refresh(savedPath);
+
+      if (savedPath) {
+        try {
+          watcherToken = await bridge.watchRepoStart(savedPath);
+          unsub = await bridge.onRepoChange(() => {
+            // Debounce inte här — Rust-eventen är redan paketerade per
+            // batch och vi vill ha snabb feedback efter spara-i-editor.
+            void refresh(savedPath);
+          });
+        } catch (err) {
+          console.warn("[tauri-git-sync] fs-watch kunde inte startas:", err);
+        }
+      }
     })();
+
+    return () => {
+      cancelled = true;
+      if (unsub) unsub();
+      if (watcherToken !== null) {
+        void import("@/lib/tauri/bridge").then((b) => b.watchRepoStop(watcherToken!));
+      }
+    };
   }, [refresh]);
 
   if (!available) return null;
 
-  const saveSettings = () => {
-    localStorage.setItem("ava.localRepoPath", repoPath);
-    localStorage.setItem("ava.githubToken", token);
+  const saveSettings = async () => {
+    const bridge = await import("@/lib/tauri/bridge");
+    localStorage.setItem(PATH_KEY, repoPath);
+    try {
+      if (token) await bridge.secretSet(TOKEN_SECRET, token);
+      else await bridge.secretDelete(TOKEN_SECRET);
+    } catch (err) {
+      setLastResult(`✗ Kunde inte spara token: ${err instanceof Error ? err.message : String(err)}`);
+      return;
+    }
     setShowSettings(false);
     void refresh(repoPath);
   };
 
+  const doPull = async () => {
+    if (!repoPath || !token) { setShowSettings(true); return; }
+    setBusy(true);
+    setLastResult(null);
+    try {
+      const bridge = await import("@/lib/tauri/bridge");
+      const r = await bridge.gitPull(repoPath, token);
+      const label = r.kind === "up-to-date" ? "redan synkad"
+        : r.kind === "fast-forward" ? `uppdaterad till ${r.newHead?.slice(0, 7)}`
+        : "merge behövs (lös manuellt)";
+      setLastResult(`✓ Pull: ${label}`);
+      await refresh(repoPath);
+    } catch (err) {
+      setLastResult(`✗ Pull: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const commitAndPush = async () => {
     if (!repoPath || !token) { setShowSettings(true); return; }
-    setPushing(true);
+    setBusy(true);
     setLastResult(null);
     try {
       const bridge = await import("@/lib/tauri/bridge");
@@ -76,9 +141,9 @@ export function TauriGitSync() {
       setLastResult(`✓ Pushad: ${commit.oid.slice(0, 7)}`);
       await refresh(repoPath);
     } catch (err) {
-      setLastResult(`✗ ${err instanceof Error ? err.message : String(err)}`);
+      setLastResult(`✗ Push: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
-      setPushing(false);
+      setBusy(false);
     }
   };
 
@@ -107,11 +172,19 @@ export function TauriGitSync() {
           </button>
           <button
             type="button"
+            onClick={doPull}
+            disabled={busy}
+            className="px-3 py-1.5 text-sm bg-white border border-gray-300 text-gray-700 rounded hover:bg-gray-50 disabled:opacity-50"
+          >
+            ↓ Pull
+          </button>
+          <button
+            type="button"
             onClick={commitAndPush}
-            disabled={pushing || status.changes === 0}
+            disabled={busy || status.changes === 0}
             className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
           >
-            {pushing ? "Pushar…" : "Spara & pusha"}
+            {busy ? "Arbetar…" : "↑ Spara & pusha"}
           </button>
         </div>
       </div>
@@ -132,7 +205,7 @@ export function TauriGitSync() {
           </label>
           <label className="block">
             <span className="text-xs text-gray-500 mb-1 block">
-              GitHub Personal Access Token (lagras i localStorage)
+              GitHub Personal Access Token <em>(lagras i OS-keychain)</em>
             </span>
             <input
               type="password"
@@ -152,7 +225,7 @@ export function TauriGitSync() {
             </button>
             <button
               type="button"
-              onClick={saveSettings}
+              onClick={() => void saveSettings()}
               className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
             >
               Spara
