@@ -1,27 +1,22 @@
 /**
  * Tyst stub för Node-only moduler i browser-bundle:n.
  *
- * Returnerar en Proxy där varje access ger en no-op-funktion eller
- * tomt objekt. På så sätt kraschar inte modul-init när biblioteket
- * gör `const x = require("fs")` + `const { foo } = x` på top-level.
+ * Returnerar en no-op-funktion som tål allt:
+ *   - kallas som funktion → undefined
+ *   - new:as → undefined
+ *   - egenskaper läses → undefined (eller specifika kända default-värden)
  *
- * Om kod faktiskt försöker köra en server-funktion → no-op.
- * Det är OK eftersom inget server-flöde anropas i demo (allt går
- * via DataStore).
+ * Detta tål alla mönster en lib kan göra vid modul-init:
+ *   const fs = require("fs"); fs.readFileSync("..."); → undefined
+ *   const { Buffer } = require("buffer"); → undefined
+ *
+ * Om koden FAKTISKT skulle försöka använda resultatet i prod-flöde
+ * kraschar det vid runtime. Men i demo-läge anropas server-flöden
+ * aldrig (allt går via DemoDataStore).
  */
 
-function makeProxy() {
-  const fn = function noop() { return makeProxy(); };
-  return new Proxy(fn, {
-    get(_target, prop) {
-      if (prop === "default") return makeProxy();
-      if (prop === "then") return undefined; // undvik felaktig await-detection
-      if (prop === Symbol.toPrimitive || prop === Symbol.toStringTag) return undefined;
-      return makeProxy();
-    },
-    apply() { return makeProxy(); },
-    construct() { return makeProxy(); },
-  });
-}
+function noop() { /* no-op */ }
+noop.default = noop;
 
-module.exports = makeProxy();
+module.exports = noop;
+module.exports.default = noop;

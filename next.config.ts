@@ -31,22 +31,17 @@ const baseConfig: NextConfig = {
  */
 const NODE_STUB = "./src/stubs/empty.js";
 const stubAliases: Record<string, { browser: string }> = {};
+// Bara strikt Node-only-moduler som inte har browser-polyfill. Generiska
+// paket (buffer, stream, crypto, util, url) har webpack-polyfills som
+// browsern behöver — får INTE stubbas.
 const NODE_BUILTINS_AND_SERVER_DEPS = [
   "fs", "fs/promises", "node:fs", "node:fs/promises",
-  "path", "node:path",
   "dns", "node:dns",
   "net", "node:net",
   "tls", "node:tls",
   "child_process", "node:child_process",
-  "crypto", "node:crypto",
-  "stream", "node:stream",
-  "http", "node:http",
-  "https", "node:https",
   "os", "node:os",
-  "url", "node:url",
-  "util", "node:util",
   "zlib", "node:zlib",
-  "buffer", "node:buffer",
   "nodemailer",
   "pg", "pg-connection-string", "pgpass", "pg-types",
   "@prisma/adapter-pg",

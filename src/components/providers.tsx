@@ -5,16 +5,34 @@ import { SessionProvider } from "next-auth/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchLink } from "@trpc/client";
 import { trpc } from "@/lib/trpc";
-import { DemoBootstrap } from "./demo-bootstrap";
 import superjson from "superjson";
 
+/**
+ * Demo-build:n importerar inte DemoBootstrap här (det skulle dra in
+ * appRouter → en hög routers/services). I demo-läget kör `/demo`
+ * sin egen DemoRuntime-hook och övriga sidor är stashade i
+ * build-demo.sh tills routers-import-trädet kan städas.
+ */
 const IS_DEMO_BUILD = process.env.NEXT_PUBLIC_DEMO_BUILD === "1";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   if (IS_DEMO_BUILD) {
-    return <DemoBootstrap>{children}</DemoBootstrap>;
+    return <DemoProvidersMinimal>{children}</DemoProvidersMinimal>;
   }
   return <FullProviders>{children}</FullProviders>;
+}
+
+function DemoProvidersMinimal({ children }: { children: React.ReactNode }) {
+  // Demo-build: ingen tRPC-client behövs (sidorna som använder den
+  // är stashade ur builden). Bara QueryClient + children.
+  const [queryClient] = useState(() => new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  }));
+  return (
+    <QueryClientProvider client={queryClient}>
+      {children}
+    </QueryClientProvider>
+  );
 }
 
 function FullProviders({ children }: { children: React.ReactNode }) {
