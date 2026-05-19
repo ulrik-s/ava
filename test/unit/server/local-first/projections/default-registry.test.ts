@@ -10,7 +10,10 @@ describe("buildDefaultRegistry", () => {
   const registry = buildDefaultRegistry();
 
   it("har matter, contact och user registrerade", () => {
-    expect(registry.entities().sort()).toEqual(["contact", "matter", "user"]);
+    expect(registry.entities().sort()).toEqual([
+      "contact", "document", "expense", "invoice", "matter",
+      "matterContact", "timeEntry", "user",
+    ]);
   });
 
   it("matchPath på matter-fil ger matter-projection", () => {

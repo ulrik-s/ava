@@ -5,7 +5,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Suspense } from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import InvoiceDetailPage from "@/app/invoices/[id]/page";
+import InvoiceDetailPage from "@/app/invoices/[id]/_client";
 
 const invoiceQuery = {
   data: undefined as Record<string, unknown> | undefined,
@@ -55,7 +55,7 @@ const params = makeParams({ id: "i1" });
 const renderPage = () =>
   render(
     <Suspense fallback={<div>laddar</div>}>
-      <InvoiceDetailPage params={params} />
+      <InvoiceDetailPage id="i1" />
     </Suspense>,
   );
 

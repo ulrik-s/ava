@@ -12,7 +12,10 @@ import { JsonProjection } from "./base";
 export const contactProjectionSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
-  contactType: z.enum(["PERSON", "ORGANIZATION"]),
+  contactType: z.enum([
+    "PERSON", "ORGANIZATION", "COMPANY", "COURT", "AUTHORITY",
+    "INSURANCE_COMPANY", "LAW_FIRM", "OTHER",
+  ]),
   personalNumber: z.string().nullable().optional(),
   orgNumber: z.string().nullable().optional(),
   email: z.string().nullable().optional(),

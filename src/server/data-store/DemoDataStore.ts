@@ -88,6 +88,22 @@ export class DemoDataStore implements IDataStore {
         collection: () => this.source.matterContacts ?? [],
         where: (parent) => ({ matterId: (parent as { id: string }).id }),
       },
+      documents: {
+        collection: () => this.source.documents ?? [],
+        where: (parent) => ({ matterId: (parent as { id: string }).id }),
+      },
+      timeEntries: {
+        collection: () => this.source.timeEntries ?? [],
+        where: (parent) => ({ matterId: (parent as { id: string }).id }),
+      },
+      expenses: {
+        collection: () => this.source.expenses ?? [],
+        where: (parent) => ({ matterId: (parent as { id: string }).id }),
+      },
+      invoices: {
+        collection: () => this.source.invoices ?? [],
+        where: (parent) => ({ matterId: (parent as { id: string }).id }),
+      },
     }) as unknown as MatterDelegate;
 
     this.matterContacts = this.makeDelegate("matterContacts", {
@@ -101,8 +117,18 @@ export class DemoDataStore implements IDataStore {
       },
     }) as unknown as MatterContactDelegate;
 
-    this.contacts = this.makeDelegate("contacts") as unknown as ContactDelegate;
-    this.documents = this.makeDelegate("documents") as unknown as DocumentDelegate;
+    this.contacts = this.makeDelegate("contacts", {
+      matterLinks: {
+        collection: () => this.source.matterContacts ?? [],
+        where: (parent) => ({ contactId: (parent as { id: string }).id }),
+      },
+    }) as unknown as ContactDelegate;
+    this.documents = this.makeDelegate("documents", {
+      matter: {
+        collection: () => this.source.matters ?? [],
+        where: (parent) => ({ id: (parent as { matterId: string }).matterId }),
+      },
+    }) as unknown as DocumentDelegate;
     this.documentFolders = this.makeDelegate("documentFolders") as unknown as DocumentFolderDelegate;
     this.documentTemplates = this.makeDelegate("documentTemplates") as unknown as DocumentTemplateDelegate;
     this.documentAnalysisSuggestions = this.makeDelegate("documentAnalysisSuggestions") as unknown as DocumentAnalysisSuggestionDelegate;

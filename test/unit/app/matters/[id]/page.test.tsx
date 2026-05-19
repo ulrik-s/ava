@@ -7,7 +7,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Suspense } from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import MatterDetailPage from "@/app/matters/[id]/page";
+import MatterDetailPage from "@/app/matters/[id]/_client";
 
 const matterQuery = {
   data: undefined as Record<string, unknown> | undefined,
@@ -123,7 +123,7 @@ const params = makeParams({ id: "m1" });
 const renderPage = () =>
   render(
     <Suspense fallback={<div>laddar</div>}>
-      <MatterDetailPage params={params} />
+      <MatterDetailPage id="m1" />
     </Suspense>,
   );
 

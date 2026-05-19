@@ -109,13 +109,18 @@ export class ReadOnlyDelegate<T extends Record<string, unknown>> {
       const relConfig = relations[relName];
       if (relConfig) {
         const all = relConfig.collection();
-        const where = relConfig.where(row);
-        const filtered = all.filter((r) => this.matchWhere(r, where));
+        const baseWhere = relConfig.where(row);
+        // include-spec kan vara true, eller ett objekt med { where, take, orderBy, ... }
+        const spec = (typeof includeSpec === "object" ? includeSpec : {}) as {
+          where?: Record<string, unknown>;
+          take?: number;
+        };
+        const userWhere = spec.where ?? {};
+        const finalWhere = { ...baseWhere, ...userWhere };
+        let filtered = all.filter((r) => this.matchWhere(r, finalWhere));
+        if (typeof spec.take === "number") filtered = filtered.slice(0, spec.take);
         out[relName] = filtered;
       } else {
-        // Okonfigurerad relation — returnera tomt så UI-koden inte
-        // kraschar på `row.foo.bar`. Demon har inte alla relationer
-        // hydratiserade och read-only-vyer förväntar sig listor.
         out[relName] = [];
       }
     }

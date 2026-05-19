@@ -26,7 +26,10 @@
 import { readdir, writeFile } from "node:fs/promises";
 import { join, resolve, relative } from "node:path";
 
-const DEFAULT_SCAN_PATHS = ["matters", "contacts", ".ava"];
+const DEFAULT_SCAN_PATHS = [
+  "matters", "contacts", ".ava",
+  "matter-contacts", "documents", "time-entries", "expenses", "invoices",
+];
 
 async function listJsonFiles(root: string, dir: string): Promise<string[]> {
   const full = join(root, dir);

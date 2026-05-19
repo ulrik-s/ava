@@ -5,7 +5,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { Suspense } from "react";
-import ContactDetailPage from "@/app/contacts/[id]/page";
+import ContactDetailPage from "@/app/contacts/[id]/_client";
 
 const routerPush = vi.fn();
 const utilsMock = {
@@ -58,7 +58,7 @@ function fulfilled<T>(value: T): Promise<T> {
 function renderPage() {
   return render(
     <Suspense fallback={<div>loading-suspense</div>}>
-      <ContactDetailPage params={fulfilled({ id: "c1" })} />
+      <ContactDetailPage id="c1" />
     </Suspense>
   );
 }

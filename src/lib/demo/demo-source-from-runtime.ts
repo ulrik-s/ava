@@ -3,13 +3,10 @@
  * hydratiserade entiteter till en `DemoSource` som `DemoDataStore`
  * konsumerar.
  *
- * Designval (Adapter pattern):
- *   - Ena sidan vet inget om den andra. Adaptern är thunk-baserad så
- *     `DemoDataStore` får färska arrayer när DemoRuntime laddar om.
- *
- * Designval (Open-closed):
- *   - När fler projektioner läggs till i `buildDefaultRegistry` räcker
- *     det att utöka mappnings-tabellen här.
+ * Pre-bakar enkla joins (matterContact.contact, matterContact.matter,
+ * document.matter etc.) så routrarnas `include: { contact: ... }` ger
+ * korrekta nästlade fält utan att InMemoryQueryEngine behöver
+ * implementera rekursiv hydrate.
  */
 
 import type { DemoRuntime } from "@/server/local-first/demo-runtime";
@@ -20,6 +17,7 @@ const ENTITY_TO_SOURCE_KEY: Record<string, keyof DemoSource> = {
   matter: "matters",
   contact: "contacts",
   user: "users",
+  matterContact: "matterContacts",
   document: "documents",
   invoice: "invoices",
   timeEntry: "timeEntries",
@@ -29,6 +27,15 @@ const ENTITY_TO_SOURCE_KEY: Record<string, keyof DemoSource> = {
   documentTemplate: "documentTemplates",
 };
 
+interface RawMatterContact {
+  id: string;
+  matterId: string;
+  contactId: string;
+  role?: string;
+  notes?: string | null;
+  createdAt?: Date | string;
+}
+
 export function demoSourceFromRuntime(runtime: DemoRuntime): DemoSource {
   const entities = runtime.allEntities();
   const out: DemoSource = {};
@@ -37,5 +44,31 @@ export function demoSourceFromRuntime(runtime: DemoRuntime): DemoSource {
     if (!key) continue;
     (out as Record<string, readonly unknown[]>)[key] = list;
   }
+
+  // Pre-bake joins så `include: { contact: {...} }` på matterContact
+  // ger tillbaka nästade objekt direkt.
+  const contactsById = new Map(
+    (out.contacts ?? []).map((c) => [(c as { id: string }).id, c]),
+  );
+  const mattersById = new Map(
+    (out.matters ?? []).map((m) => [(m as { id: string }).id, m]),
+  );
+  if (out.matterContacts) {
+    out.matterContacts = (out.matterContacts as unknown as RawMatterContact[]).map((mc) => ({
+      ...mc,
+      contact: contactsById.get(mc.contactId) ?? null,
+      matter: mattersById.get(mc.matterId) ?? null,
+    })) as readonly Record<string, unknown>[];
+  }
+  // Pre-bake document.matter, timeEntry.matter, expense.matter, invoice.matter
+  for (const key of ["documents", "timeEntries", "expenses", "invoices"] as const) {
+    const rows = out[key];
+    if (!rows) continue;
+    out[key] = (rows as Array<{ matterId: string }>).map((row) => ({
+      ...row,
+      matter: mattersById.get(row.matterId) ?? null,
+    })) as readonly Record<string, unknown>[];
+  }
+
   return out;
 }

@@ -152,6 +152,11 @@ export class DemoLoader {
       matter: ["matters/active"],
       contact: ["contacts"],
       user: [".ava/users"],
+      matterContact: ["matter-contacts"],
+      document: ["documents"],
+      timeEntry: ["time-entries"],
+      expense: ["expenses"],
+      invoice: ["invoices"],
     };
     return prefixes[entity] ?? [];
   }
