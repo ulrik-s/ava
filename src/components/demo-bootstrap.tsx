@@ -11,6 +11,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import superjson from "superjson";
+import { RenderErrorBoundary } from "./render-error-boundary";
 import { DemoRuntime } from "@/server/local-first/demo-runtime";
 import { createGhPagesCloneFn } from "@/server/local-first/gh-pages-loader";
 import { OpfsPersistence } from "@/server/local-first/persistence";
@@ -110,7 +111,7 @@ export function DemoBootstrap({ children }: { children: ReactNode }) {
               </div>
             </div>
           )}
-          {children}
+          <RenderErrorBoundary>{children}</RenderErrorBoundary>
         </QueryClientProvider>
       </trpc.Provider>
     </DemoModeProvider>
