@@ -31,8 +31,8 @@ const contactJson = JSON.stringify({
 });
 
 describe("DemoClient", () => {
-  it("renderar URL-input och tom-state initialt", () => {
-    render(<DemoClient runtimeFactory={fakeRuntimeFactory({})} />);
+  it("renderar URL-input och tom-state initialt (utan auto-load)", () => {
+    render(<DemoClient runtimeFactory={fakeRuntimeFactory({})} defaultRepo="" />);
     expect(screen.getByRole("textbox", { name: /GitHub-url/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Ladda demo/i })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: /Ärenden/i })).not.toBeInTheDocument();
@@ -40,7 +40,7 @@ describe("DemoClient", () => {
 
   it("klick på 'Ladda demo' utan url gör ingen request", () => {
     const factory = vi.fn(fakeRuntimeFactory({}));
-    render(<DemoClient runtimeFactory={factory} />);
+    render(<DemoClient runtimeFactory={factory} defaultRepo="" />);
     fireEvent.click(screen.getByRole("button", { name: /Ladda demo/i }));
     // Factory anropas vid mount (för memo) men loadDemo ska inte ha körts
     // → ingen "Laddar..."-text
@@ -51,7 +51,7 @@ describe("DemoClient", () => {
     render(<DemoClient runtimeFactory={fakeRuntimeFactory({
       "matters/active/m1.json": matterJson,
       "contacts/c1.json": contactJson,
-    })} />);
+    })} defaultRepo="" />);
 
     fireEvent.change(screen.getByRole("textbox", { name: /GitHub-url/i }), {
       target: { value: "https://github.com/x/demo.git" },
@@ -67,6 +67,7 @@ describe("DemoClient", () => {
       runtimeFactory={() => DemoRuntime.create({
         cloneFn: async () => { throw new Error("Repo hittades inte"); },
       })}
+      defaultRepo=""
     />);
 
     fireEvent.change(screen.getByRole("textbox", { name: /GitHub-url/i }), {
@@ -83,6 +84,7 @@ describe("DemoClient", () => {
       runtimeFactory={() => DemoRuntime.create({
         cloneFn: () => new Promise<void>((r) => { resolve = r; }),
       })}
+      defaultRepo=""
     />);
 
     fireEvent.change(screen.getByRole("textbox", { name: /GitHub-url/i }), {
@@ -102,7 +104,7 @@ describe("DemoClient", () => {
         status: "ACTIVE", organizationId: "demo",
       }),
       "contacts/c1.json": contactJson,
-    })} />);
+    })} defaultRepo="" />);
 
     fireEvent.change(screen.getByRole("textbox", { name: /GitHub-url/i }), {
       target: { value: "x" },
@@ -111,5 +113,18 @@ describe("DemoClient", () => {
 
     await waitFor(() => expect(screen.getByText(/2 ärenden/i)).toBeInTheDocument());
     expect(screen.getByText(/1 kontakter/i)).toBeInTheDocument();
+  });
+
+  it("auto-laddar default-repo vid mount (utan att kräva user-input)", async () => {
+    const cloneFn = vi.fn(async (fs, url: string) => {
+      expect(url).toBe("ulrik-s/ava-demo");
+      await fs.writeFile("matters/active/m1.json", matterJson);
+    });
+    render(<DemoClient
+      runtimeFactory={() => DemoRuntime.create({ cloneFn })}
+      defaultRepo="ulrik-s/ava-demo"
+    />);
+    await waitFor(() => expect(cloneFn).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByText(/Demo-ärende/i)).toBeInTheDocument());
   });
 });

@@ -16,21 +16,34 @@
  * Stylas senare; just nu plain Tailwind-klasser för läsbarhet.
  */
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { DemoRuntime } from "@/server/local-first/demo-runtime";
 import { createGhPagesCloneFn } from "@/server/local-first/gh-pages-loader";
 import { OpfsPersistence } from "@/server/local-first/persistence";
 import { useDemoRuntime } from "@/lib/use-demo-runtime";
 
+/**
+ * Default demo-data-repo. Användare kan klistra in eget om de vill,
+ * men 99% vill bara klicka in och se nåt. Override via
+ * NEXT_PUBLIC_DEFAULT_DEMO_REPO vid build-time.
+ */
+const DEFAULT_DEMO_REPO =
+  process.env.NEXT_PUBLIC_DEFAULT_DEMO_REPO ?? "ulrik-s/ava-demo";
+
 export interface DemoClientProps {
   /**
-   * Valfri runtime-factory. Default = isomorphic-git över HTTPS mot
-   * GitHub + OPFS-persistens. Tester injicerar en fake. Server
-   * Components MÅSTE INTE passa funktioner till Client Components
-   * (Next 16/RSC) — därför är prop:en optional och defaultas till
-   * client-side-konstruktion.
+   * Valfri runtime-factory. Default = GH Pages-loader + OPFS-persistens.
+   * Tester injicerar en fake. Server Components MÅSTE INTE passa
+   * funktioner till Client Components (Next 16/RSC) — därför är
+   * prop:en optional och defaultas till client-side-konstruktion.
    */
   runtimeFactory?: () => DemoRuntime;
+  /**
+   * Default-repo som auto-laddas vid mount. Sätt till tom sträng
+   * för att kräva användar-input (gamla beteendet). Override via
+   * `NEXT_PUBLIC_DEFAULT_DEMO_REPO` vid build-time.
+   */
+  defaultRepo?: string;
 }
 
 function defaultRuntimeFactory(): DemoRuntime {
@@ -50,9 +63,15 @@ interface MatterLike { id: string; matterNumber: string; title: string; status: 
 interface ContactLike { id: string; name: string; contactType: string; email?: string | null }
 interface UserLike { id: string; email: string; name: string; role: string }
 
-export function DemoClient({ runtimeFactory = defaultRuntimeFactory }: DemoClientProps) {
+export function DemoClient({
+  runtimeFactory = defaultRuntimeFactory,
+  defaultRepo = DEFAULT_DEMO_REPO,
+}: DemoClientProps) {
   const { status, error, entities, loadDemo, fromCache } = useDemoRuntime(runtimeFactory);
-  const [url, setUrl] = useState("");
+  const [url, setUrl] = useState(defaultRepo);
+  // Ref istället för state — vi vill inte trigga rerender när flaggan
+  // sätts (React 19:s set-state-in-effect-regel skulle annars klaga).
+  const autoLoadAttempted = useRef(false);
 
   const matters = (entities.matter ?? []) as MatterLike[];
   const contacts = (entities.contact ?? []) as ContactLike[];
@@ -63,12 +82,26 @@ export function DemoClient({ runtimeFactory = defaultRuntimeFactory }: DemoClien
     try { await loadDemo(url.trim()); } catch { /* error visas via state */ }
   }
 
+  // Auto-load default-repo vid mount så användaren får en komplett
+  // upplevelse direkt utan att behöva mecka med inställningar.
+  // Triggar bara en gång och bara om vi inte redan har data (från
+  // OPFS-cache via useDemoRuntime:s restoreFromCache).
+  useEffect(() => {
+    if (autoLoadAttempted.current) return;
+    if (status !== "idle") return;
+    if (!defaultRepo) return;
+    autoLoadAttempted.current = true;
+    void loadDemo(defaultRepo).catch(() => { /* error visas via state */ });
+  }, [status, defaultRepo, loadDemo]);
+
   return (
     <div className="mx-auto max-w-4xl p-4 sm:p-6 md:p-8">
       <h1 className="text-2xl sm:text-3xl font-bold mb-2">AVA Demo</h1>
       <p className="mb-4 sm:mb-6 text-sm sm:text-base text-gray-600">
-        Klistra in en publik GitHub-repo-url med AVA-demo-data. Allt körs
-        lokalt i din webbläsare — ingen data lämnar din enhet.
+        Allt körs lokalt i din webbläsare — ingen data lämnar din enhet.
+        Demo-datan laddas automatiskt från standard-repo:t. Vill du
+        prova din egen demo-data? Klistra in en annan publik
+        GitHub-repo-URL nedan.
       </p>
 
       {/* Stack på mobil, row på tablet+. Touch-target min 44px (min-h-12). */}
@@ -79,7 +112,7 @@ export function DemoClient({ runtimeFactory = defaultRuntimeFactory }: DemoClien
           autoComplete="off"
           autoCapitalize="off"
           aria-label="GitHub-url"
-          placeholder="https://github.com/användare/ava-demo.git"
+          placeholder="användare/ava-demo"
           className="flex-1 min-h-12 px-3 border rounded text-base"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
