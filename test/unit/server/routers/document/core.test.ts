@@ -14,8 +14,6 @@ vi.mock("@/server/services/document-analysis", () => ({
 }));
 
 import { documentRouter } from "@/server/routers/document";
-import * as meili from "@/server/services/meilisearch";
-import * as analysis from "@/server/services/document-analysis";
 
 const mockPrisma = {
   document: {
@@ -33,10 +31,23 @@ const mockPrisma = {
   },
 };
 
+const mockPorts = {
+  email: { send: vi.fn() },
+  paymentScanner: { scan: vi.fn() },
+  documentAnalyzer: { analyze: vi.fn().mockResolvedValue(undefined) },
+  searchIndex: {
+    search: vi.fn(),
+    upsert: vi.fn(),
+    remove: vi.fn().mockResolvedValue(undefined),
+  },
+};
+
 function makeCaller(orgId = "org-a") {
   const ctx = {
     user: { id: "u1", email: "a@b.se", name: "T", role: "LAWYER", organizationId: orgId },
-    prisma: mockPrisma, dataStore: dataStoreFromMockPrisma(mockPrisma as unknown as Record<string, unknown>),
+    prisma: mockPrisma,
+    dataStore: dataStoreFromMockPrisma(mockPrisma as unknown as Record<string, unknown>),
+    ports: mockPorts,
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return documentRouter.createCaller(ctx as any);
@@ -87,7 +98,7 @@ describe("document.tree", () => {
 
 describe("document.search", () => {
   it("anropar meilisearch och normaliserar svaret", async () => {
-    vi.mocked(meili.searchDocuments).mockResolvedValue({
+    mockPorts.searchIndex.search.mockResolvedValue({
       hits: [
         {
           id: "d1",
@@ -102,14 +113,14 @@ describe("document.search", () => {
     } as never);
 
     const res = await makeCaller("org-a").search({ query: "test" });
-    expect(meili.searchDocuments).toHaveBeenCalledWith("test", "org-a", 20);
+    expect(mockPorts.searchIndex.search).toHaveBeenCalledWith("test", "org-a", 20);
     expect(res.totalHits).toBe(1);
     expect(res.hits[0].documentId).toBe("d1");
     expect(res.hits[0].highlight).toContain("highlighted");
   });
 
   it("returnerar tom highlight när _formatted saknas", async () => {
-    vi.mocked(meili.searchDocuments).mockResolvedValue({
+    mockPorts.searchIndex.search.mockResolvedValue({
       hits: [
         {
           id: "d1",
@@ -146,7 +157,7 @@ describe("document.delete", () => {
 
     await makeCaller().delete({ id: "d1" });
     expect(mockPrisma.document.delete).toHaveBeenCalledWith({ where: { id: "d1" } });
-    expect(meili.removeDocument).toHaveBeenCalledWith("d1");
+    expect(mockPorts.searchIndex.remove).toHaveBeenCalledWith("d1");
   });
 });
 
@@ -156,16 +167,16 @@ describe("document.analyze", () => {
     await expect(
       makeCaller().analyze({ documentId: "d1" }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
-    expect(analysis.analyzeDocument).not.toHaveBeenCalled();
+    expect(mockPorts.documentAnalyzer.analyze).not.toHaveBeenCalled();
   });
 
   it("triggar fire-and-forget analys när tillgång OK", async () => {
     mockPrisma.document.findFirst.mockResolvedValue({ id: "d1", matterId: "m1" });
-    vi.mocked(analysis.analyzeDocument).mockResolvedValue();
+    mockPorts.documentAnalyzer.analyze.mockResolvedValue(undefined);
 
     const res = await makeCaller().analyze({ documentId: "d1" });
     expect(res).toEqual({ ok: true });
-    expect(analysis.analyzeDocument).toHaveBeenCalledWith("d1");
+    expect(mockPorts.documentAnalyzer.analyze).toHaveBeenCalledWith("d1");
   });
 });
 

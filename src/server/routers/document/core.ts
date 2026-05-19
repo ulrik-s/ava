@@ -5,8 +5,6 @@
 
 import { z } from "zod";
 import { orgProcedure } from "../../trpc";
-import { searchDocuments, removeDocument } from "../../services/meilisearch";
-import { analyzeDocument } from "../../services/document-analysis";
 import { isJunkFileName } from "@/lib/junk-files";
 import { assertDocAccess } from "./shared";
 
@@ -67,7 +65,7 @@ export const coreProcedures = {
   search: orgProcedure
     .input(z.object({ query: z.string().min(1), limit: z.number().min(1).max(50).default(20) }))
     .query(async ({ ctx, input }) => {
-      const result = await searchDocuments(input.query, ctx.orgId, input.limit);
+      const result = await ctx.ports.searchIndex.search(input.query, ctx.orgId, input.limit);
       return {
         hits: result.hits.map((hit) => ({
           documentId: hit.id,
@@ -86,7 +84,7 @@ export const coreProcedures = {
     .mutation(async ({ ctx, input }) => {
       await assertDocAccess(ctx, input.id);
       const doc = await ctx.dataStore.documents.delete({ where: { id: input.id } });
-      removeDocument(input.id).catch(() => {});
+      ctx.ports.searchIndex.remove(input.id).catch(() => {});
       return doc;
     }),
 
@@ -96,7 +94,7 @@ export const coreProcedures = {
     .mutation(async ({ ctx, input }) => {
       await assertDocAccess(ctx, input.documentId);
       // Fire-and-forget — användaren får svar direkt; UI pollar för resultat.
-      analyzeDocument(input.documentId).catch((e) =>
+      ctx.ports.documentAnalyzer.analyze(input.documentId).catch((e: unknown) =>
         console.error("analyze failed:", e),
       );
       return { ok: true };

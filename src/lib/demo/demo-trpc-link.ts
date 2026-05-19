@@ -20,8 +20,9 @@ import { TRPCError } from "@trpc/server";
 import { TRPCClientError, type TRPCLink } from "@trpc/client";
 import type { AppRouter } from "@/server/routers/_app";
 import { appRouter } from "@/server/routers/_app";
-import type { Context } from "@/server/trpc";
+import type { Context } from "@/server/trpc-core";
 import type { IDataStore } from "@/server/data-store/IDataStore";
+import { noopPorts } from "@/server/adapters/noop-ports";
 
 export interface DemoTrpcLinkDeps {
   dataStore: IDataStore;
@@ -31,10 +32,8 @@ export interface DemoTrpcLinkDeps {
 
 export function createDemoTrpcLink(deps: DemoTrpcLinkDeps): TRPCLink<AppRouter> {
   const ctx: Context = {
-    // `prisma` används inte i demo (DemoDataStore wrappar allt). En proxy
-    // som kastar gör så vi upptäcker oavsiktliga direkt-anrop tidigt.
-    prisma: makeThrowingProxy("prisma") as Context["prisma"],
     dataStore: deps.dataStore,
+    ports: noopPorts,
     user: deps.user ?? defaultDemoUser(),
   };
 
@@ -95,10 +94,3 @@ function toTrpcError(err: unknown, _type: string): TRPCError {
   return new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: String(err) });
 }
 
-function makeThrowingProxy(name: string): unknown {
-  return new Proxy({}, {
-    get(_t, prop) {
-      throw new Error(`Demo-läget försökte komma åt '${name}.${String(prop)}'. Detta är ett kodfel — använd dataStore istället.`);
-    },
-  });
-}
