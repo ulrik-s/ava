@@ -11,12 +11,12 @@ import { createDemoTrpcLink } from "@/lib/demo/demo-trpc-link";
 import { DemoDataStore } from "@/server/data-store/DemoDataStore";
 
 const matters = [
-  { id: "m1", title: "Demo Avtal", organizationId: "demo-org", status: "ACTIVE", matterNumber: "2025-0001", createdAt: new Date("2025-01-01") },
-  { id: "m2", title: "Annan Tvist", organizationId: "demo-org", status: "CLOSED", matterNumber: "2025-0002", createdAt: new Date("2025-02-01") },
+  { id: "m1", title: "Demo Avtal", organizationId: "demo-firma-ab", status: "ACTIVE", matterNumber: "2025-0001", createdAt: new Date("2025-01-01") },
+  { id: "m2", title: "Annan Tvist", organizationId: "demo-firma-ab", status: "CLOSED", matterNumber: "2025-0002", createdAt: new Date("2025-02-01") },
 ];
 
 const contacts = [
-  { id: "c1", name: "Anna", organizationId: "demo-org", contactType: "PRIVATPERSON" },
+  { id: "c1", name: "Anna", organizationId: "demo-firma-ab", contactType: "PRIVATPERSON" },
 ];
 
 const buildClient = () => {

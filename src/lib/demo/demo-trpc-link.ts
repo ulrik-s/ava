@@ -64,13 +64,18 @@ export function createDemoTrpcLink(deps: DemoTrpcLinkDeps): TRPCLink<AppRouter> 
     });
 }
 
+/**
+ * Default-demo-user. organizationId måste matcha det som demo-repo:t
+ * använder för att orgProcedure ska släppa igenom queries.
+ * `ulrik-s/ava-demo` använder "demo-firma-ab".
+ */
 function defaultDemoUser(): Context["user"] {
   return {
     id: "demo-user",
     email: "demo@ava.local",
     name: "Demo Advokat",
     role: "ADMIN",
-    organizationId: "demo-org",
+    organizationId: "demo-firma-ab",
   };
 }
 

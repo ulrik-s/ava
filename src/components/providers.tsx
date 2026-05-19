@@ -5,26 +5,16 @@ import { SessionProvider } from "next-auth/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchLink } from "@trpc/client";
 import { trpc } from "@/lib/trpc";
+import { DemoBootstrap } from "./demo-bootstrap";
 import superjson from "superjson";
 
 const IS_DEMO_BUILD = process.env.NEXT_PUBLIC_DEMO_BUILD === "1";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   if (IS_DEMO_BUILD) {
-    return <DemoMinimal>{children}</DemoMinimal>;
+    return <DemoBootstrap>{children}</DemoBootstrap>;
   }
   return <FullProviders>{children}</FullProviders>;
-}
-
-function DemoMinimal({ children }: { children: React.ReactNode }) {
-  const [queryClient] = useState(() => new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-  }));
-  return (
-    <QueryClientProvider client={queryClient}>
-      {children}
-    </QueryClientProvider>
-  );
 }
 
 function FullProviders({ children }: { children: React.ReactNode }) {

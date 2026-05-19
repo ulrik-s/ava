@@ -101,16 +101,31 @@ export class ReadOnlyDelegate<T extends Record<string, unknown>> {
   // ─── Privat: relations-hydrering ─────────────────────────────────
 
   private hydrateRelations(row: T, include: Record<string, unknown> | undefined): T {
-    if (!include || !this.opts.relations) return row;
+    if (!include) return row;
     const out: Record<string, unknown> = { ...row };
-    for (const [relName, relConfig] of Object.entries(this.opts.relations)) {
-      const includeSpec = include[relName];
-      if (!includeSpec) continue;
-      const all = relConfig.collection();
-      const where = relConfig.where(row);
-      // Filter using a fresh untyped engine (relation rows have unknown shape).
-      const filtered = all.filter((r) => this.matchWhere(r, where));
-      out[relName] = filtered;
+    if (this.opts.relations) {
+      for (const [relName, relConfig] of Object.entries(this.opts.relations)) {
+        const includeSpec = include[relName];
+        if (!includeSpec) continue;
+        const all = relConfig.collection();
+        const where = relConfig.where(row);
+        const filtered = all.filter((r) => this.matchWhere(r, where));
+        out[relName] = filtered;
+      }
+    }
+    // Prisma-stil `_count: { select: { rel1: true, rel2: true } }`.
+    // I demo har vi inte alla relationer hydratiserade → returnera 0
+    // per nyckel. Bättre än TypeError vid `row._count.rel.length`.
+    if (include._count && typeof include._count === "object") {
+      const countSpec = (include._count as { select?: Record<string, unknown> }).select ?? {};
+      const counts: Record<string, number> = {};
+      for (const key of Object.keys(countSpec)) {
+        // Om relationen är hydratiserad ovan, räkna ur den;
+        // annars 0 (demo har sällan dessa).
+        const r = (out as Record<string, unknown>)[key];
+        counts[key] = Array.isArray(r) ? r.length : 0;
+      }
+      out._count = counts;
     }
     return out as T;
   }

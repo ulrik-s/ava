@@ -37,6 +37,10 @@ export type Context = {
 
 const t = initTRPC.context<Context>().create({
   transformer: superjson,
+  // Tillåt browser-import: demo-läget kör appRouter.createCaller(ctx)
+  // i client-bundle:n mot DemoDataStore. tRPC v11 blockar default
+  // detta — vi opt:ar in eftersom vi vet vad vi gör.
+  allowOutsideOfServer: true,
 });
 
 export const router = t.router;

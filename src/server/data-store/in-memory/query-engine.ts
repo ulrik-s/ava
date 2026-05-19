@@ -143,6 +143,8 @@ export class InMemoryQueryEngine<T extends Record<string, unknown>> {
 
   private eq(a: unknown, b: unknown): boolean {
     if (a instanceof Date && b instanceof Date) return a.getTime() === b.getTime();
+    // Prisma-semantik: null och undefined likställs (saknad kolumn = null).
+    if ((a === null || a === undefined) && (b === null || b === undefined)) return true;
     return a === b;
   }
 
