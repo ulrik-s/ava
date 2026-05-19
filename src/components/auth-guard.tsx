@@ -19,8 +19,27 @@ const IS_DEMO_BUILD = process.env.NEXT_PUBLIC_DEMO_BUILD === "1";
  * komponent gate:ar, inner använder hooken.
  */
 export function AuthGuard({ children }: { children: React.ReactNode }) {
-  if (IS_DEMO_BUILD) return <>{children}</>;
+  if (IS_DEMO_BUILD) return <DemoLayout>{children}</DemoLayout>;
   return <AuthGuardInner>{children}</AuthGuardInner>;
+}
+
+/**
+ * Layout för demo-builden: sidebar + main, samma som inloggat läge —
+ * men utan auth. Sidebar:n får ett fake-namn så user-chippet renderar.
+ * /demo-routen visas utan sidebar (egen UX).
+ */
+function DemoLayout({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const isDemoPath = pathname === "/demo" || pathname.startsWith("/demo/");
+  if (isDemoPath) return <>{children}</>;
+  return (
+    <div className="flex h-full">
+      <Sidebar userName="Demo Advokat" />
+      <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 pt-16 sm:pt-16 lg:pt-0 min-w-0">
+        {children}
+      </main>
+    </div>
+  );
 }
 
 function AuthGuardInner({ children }: { children: React.ReactNode }) {

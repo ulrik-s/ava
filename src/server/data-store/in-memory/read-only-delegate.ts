@@ -103,14 +103,20 @@ export class ReadOnlyDelegate<T extends Record<string, unknown>> {
   private hydrateRelations(row: T, include: Record<string, unknown> | undefined): T {
     if (!include) return row;
     const out: Record<string, unknown> = { ...row };
-    if (this.opts.relations) {
-      for (const [relName, relConfig] of Object.entries(this.opts.relations)) {
-        const includeSpec = include[relName];
-        if (!includeSpec) continue;
+    const relations = this.opts.relations ?? {};
+    for (const [relName, includeSpec] of Object.entries(include)) {
+      if (relName === "_count" || !includeSpec) continue;
+      const relConfig = relations[relName];
+      if (relConfig) {
         const all = relConfig.collection();
         const where = relConfig.where(row);
         const filtered = all.filter((r) => this.matchWhere(r, where));
         out[relName] = filtered;
+      } else {
+        // Okonfigurerad relation — returnera tomt så UI-koden inte
+        // kraschar på `row.foo.bar`. Demon har inte alla relationer
+        // hydratiserade och read-only-vyer förväntar sig listor.
+        out[relName] = [];
       }
     }
     // Prisma-stil `_count: { select: { rel1: true, rel2: true } }`.

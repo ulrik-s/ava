@@ -37,9 +37,6 @@ STASH_PATHS=(
   "settings"
   "users"
   "templates"
-  "matters/[id]"
-  "contacts/[id]"
-  "invoices/[id]"
 )
 
 cleanup() {
