@@ -1,10 +1,13 @@
 import { initTRPC, TRPCError } from "@trpc/server";
-import { getServerSession } from "next-auth/next";
 import superjson from "superjson";
-import { authOptions } from "@/lib/auth";
 import { prisma } from "./db";
-import { PostgresStore } from "./data-store/PostgresStore";
 import type { IDataStore } from "./data-store/IDataStore";
+
+// Server-only imports laddas lazy så modulen kan parsas i browser
+// (demo-build). `createContext` är den enda export:en som faktiskt
+// kör server-koden; routrarna importerar bara `router`/`procedure`
+// från denna modul (TypeScript-typer + initTRPC-instans).
+import { PostgresStore } from "./data-store/PostgresStore";
 import { attachEventRuleExecutor } from "./rules/event-executor";
 import { attachPaymentScanListener } from "./services/payment-scan-listener";
 
@@ -38,6 +41,11 @@ export type Context = {
 };
 
 export async function createContext(opts?: { req?: Request; resHeaders?: Headers }): Promise<Context> {
+  // Lazy server-only imports — NextAuth-providers + bcryptjs får inte
+  // hamna i client-bundle:n.
+  const { getServerSession } = await import("next-auth/next");
+  const { authOptions } = await import("@/lib/auth");
+
   // Try real NextAuth session first
   const session = await getServerSession(authOptions);
   if (session?.user) {

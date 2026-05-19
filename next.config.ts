@@ -22,6 +22,40 @@ const baseConfig: NextConfig = {
   reactStrictMode: true,
 };
 
+/**
+ * I demo-builden importerar `DemoBootstrap` → `appRouter`, vilket drar
+ * in routrarnas transitive deps i client-bundle:n. Vi alias:ar Node-
+ * only-moduler + server-only npm-paket till en tom stub så bundle:n
+ * kompilerar. Server-only-funktioner körs aldrig i demo (allt går
+ * via DemoDataStore som är read-only), så stubbarna anropas aldrig.
+ */
+const NODE_STUB = "./src/stubs/empty.js";
+const stubAliases: Record<string, { browser: string }> = {};
+const NODE_BUILTINS_AND_SERVER_DEPS = [
+  "fs", "fs/promises", "node:fs", "node:fs/promises",
+  "path", "node:path",
+  "dns", "node:dns",
+  "net", "node:net",
+  "tls", "node:tls",
+  "child_process", "node:child_process",
+  "crypto", "node:crypto",
+  "stream", "node:stream",
+  "http", "node:http",
+  "https", "node:https",
+  "os", "node:os",
+  "url", "node:url",
+  "util", "node:util",
+  "zlib", "node:zlib",
+  "buffer", "node:buffer",
+  "nodemailer",
+  "pg", "pg-connection-string", "pgpass", "pg-types",
+  "@prisma/adapter-pg",
+  "isomorphic-git/http/node",
+];
+for (const m of NODE_BUILTINS_AND_SERVER_DEPS) {
+  stubAliases[m] = { browser: NODE_STUB };
+}
+
 const demoConfig: NextConfig = {
   ...baseConfig,
   output: "export",
@@ -29,9 +63,10 @@ const demoConfig: NextConfig = {
   assetPrefix: demoBasePath || undefined,
   trailingSlash: true,
   images: { unoptimized: true },
-  // Vi behöver inte type-check eller lint igen i export-steget — CI
-  // har redan kört dem och en lokal build ska gå snabbt.
   typescript: { ignoreBuildErrors: false },
+  turbopack: {
+    resolveAlias: stubAliases,
+  },
 };
 
 const nextConfig: NextConfig = isDemoBuild ? demoConfig : baseConfig;

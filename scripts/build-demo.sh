@@ -36,14 +36,10 @@ STASH_PATHS=(
   "login"
   "settings"
   "users"
-  "contacts"
-  "matters"
-  "invoices"
   "templates"
-  "time"
-  "conflicts"
-  "reports"
-  "search"
+  "matters/[id]"
+  "contacts/[id]"
+  "invoices/[id]"
 )
 
 cleanup() {
@@ -52,10 +48,11 @@ cleanup() {
     for p in "${STASH_PATHS[@]}"; do
       if [[ -d "$STASH_DIR/$p" ]]; then
         rm -rf "$APP_DIR/$p"
+        mkdir -p "$(dirname "$APP_DIR/$p")"
         mv "$STASH_DIR/$p" "$APP_DIR/$p"
       fi
     done
-    rmdir "$STASH_DIR" 2>/dev/null || true
+    find "$STASH_DIR" -type d -empty -delete 2>/dev/null || true
   fi
 }
 trap cleanup EXIT
@@ -65,6 +62,7 @@ mkdir -p "$STASH_DIR"
 echo "[build-demo] Stash:ar server-only sidor..."
 for p in "${STASH_PATHS[@]}"; do
   if [[ -d "$APP_DIR/$p" ]]; then
+    mkdir -p "$(dirname "$STASH_DIR/$p")"
     mv "$APP_DIR/$p" "$STASH_DIR/$p"
   fi
 done

@@ -1,5 +1,7 @@
-import { readFile } from "fs/promises";
-import path from "path";
+// node:fs och node:path importeras lazy så modulen kan parsas i browser-
+// kontext (demo-build) utan att Webpack försöker resolva node-builtins.
+// `analyzeDocument` är server-only och anropas aldrig i demo, så de
+// lazy-importerade modulerna körs aldrig där.
 import { prisma } from "@/server/db";
 import { extractText } from "./tika";
 
@@ -136,6 +138,11 @@ export interface AnalyzeOptions {
  * Non-throwing: errors are written to Document.analysisError.
  */
 async function loadDocumentText(doc: { storagePath: string; mimeType: string }): Promise<string> {
+  // Lazy server-only imports — laddas vid första anropet.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { readFile } = require("fs/promises") as typeof import("fs/promises");
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const path = require("path") as typeof import("path");
   const absPath = path.isAbsolute(doc.storagePath)
     ? doc.storagePath
     : path.resolve(process.cwd(), doc.storagePath);

@@ -7,19 +7,23 @@ import { trpc } from "@/lib/trpc";
 
 const IS_DEMO_BUILD = process.env.NEXT_PUBLIC_DEMO_BUILD === "1";
 
-export default function Dashboard() {
+export default function Page() {
+  // Demo-build:n har ingen "Dashboard" — / redirectar till /demo.
+  // Vi splittar i två toppfunktioner så test-suiten (jsdom utan
+  // app-router) inte tvingas mocka useRouter när den testar
+  // Dashboard:en.
+  if (IS_DEMO_BUILD) return <DemoRedirect />;
+  return <Dashboard />;
+}
+
+function DemoRedirect() {
   const router = useRouter();
-  useEffect(() => {
-    if (IS_DEMO_BUILD) router.replace("/demo");
-  }, [router]);
+  useEffect(() => { router.replace("/demo"); }, [router]);
+  return null;
+}
 
-  // Demo-build: skipa tRPC-anrop helt (ingen backend finns). Render
-  // null medan redirect till /demo körs.
-  if (IS_DEMO_BUILD) return null;
-
-   
+function Dashboard() {
   const contacts = trpc.contacts.list.useQuery({ page: 1, pageSize: 5 });
-   
   const matters = trpc.matter.list.useQuery({ page: 1, pageSize: 5, status: "ACTIVE" });
 
   return (
