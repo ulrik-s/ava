@@ -4,6 +4,7 @@ import { Suspense, useId, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { trpc } from "@/lib/trpc";
+import { useIsReadOnly } from "@/lib/demo/demo-mode-context";
 
 function MattersContent() {
   const searchParams = useSearchParams();
@@ -11,6 +12,7 @@ function MattersContent() {
   const [statusFilter, setStatusFilter] = useState<"ACTIVE" | "CLOSED" | "ARCHIVED" | "">("");
   const [page, setPage] = useState(1);
   const [showForm, setShowForm] = useState(searchParams.get("new") === "1");
+  const readOnly = useIsReadOnly();
   const titleId = useId();
   const klientId = useId();
   const matterTypeId = useId();
@@ -54,8 +56,11 @@ function MattersContent() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Ärenden</h1>
-        <button onClick={() => setShowForm(!showForm)}
-          className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700">
+        <button
+          onClick={() => setShowForm(!showForm)}
+          disabled={readOnly}
+          title={readOnly ? "Inte tillgängligt i demo-läget" : undefined}
+          className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed">
           {showForm ? "Avbryt" : "+ Nytt ärende"}
         </button>
       </div>

@@ -5,9 +5,11 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { trpc } from "@/lib/trpc";
 import { labelForContactType, contactTypes } from "@/lib/labels";
+import { useIsReadOnly } from "@/lib/demo/demo-mode-context";
 
 function ContactsContent() {
   const searchParams = useSearchParams();
+  const readOnly = useIsReadOnly();
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [page, setPage] = useState(1);
@@ -61,7 +63,9 @@ function ContactsContent() {
         <h1 className="text-2xl font-bold text-gray-900">Kontakter</h1>
         <button
           onClick={() => setShowForm(!showForm)}
-          className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700"
+          disabled={readOnly}
+          title={readOnly ? "Inte tillgängligt i demo-läget" : undefined}
+          className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
         >
           {showForm ? "Avbryt" : "+ Ny kontakt"}
         </button>

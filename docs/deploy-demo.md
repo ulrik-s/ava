@@ -132,18 +132,27 @@ och peka loadern dit explicit via `baseUrl`-prop.
 
 ## Vad ingår — och inte — i demon
 
-`scripts/build-demo.sh` flyttar ut server-only-rutter och dynamiska
-rutter innan `next build` (de återställs efteråt). I MVP-builden ingår
-bara:
+I demo-builden ingår nu (efter Fas R1-R5):
 
-- `/` (landningssida)
-- `/demo` (GitHub-URL-input + ärendelista från klonat repo)
+- `/` — Dashboard med tRPC mot DemoDataStore
+- `/demo` — auto-laddar demo-data + listor
+- `/matters/` — ärendelista
+- `/contacts/` — kontaktlista
+- `/invoices/` — fakturor (tom — ingen demo-data)
+- `/time/` — tidpost
+- `/reports/` — rapporter
+- `/search/` — sök
+- `/conflicts/` — jävskontroll
 
-Resten av appen (`/matters`, `/contacts`, `/invoices`, m.fl.) ligger
-utanför demo-builden tills de fått `generateStaticParams()` för sina
-dynamiska segment. Fas B-infrastrukturen (`DemoDataStore`,
-`createDemoTrpcLink`, `DemoProviders`) finns och kan kopplas in när
-sidorna görs statisk-redo.
+Mutation-knappar (`+ Nytt ärende`, `+ Ny kontakt`, etc.) är grå:ade
+via `useIsReadOnly()`-hooken och visar tooltip "Inte tillgängligt
+i demo-läget".
+
+Stashas fortfarande (kräver `generateStaticParams()`):
+- `/matters/[id]`, `/contacts/[id]`, `/invoices/[id]` — detail-sidor
+- `/login`, `/settings`, `/users`, `/templates` — kräver auth/data
+  som inte finns i demo
+- `/api/*` — server-routes som inte finns i statisk export
 
 ## Felsökning
 
