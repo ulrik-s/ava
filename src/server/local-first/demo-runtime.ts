@@ -134,6 +134,16 @@ export class DemoRuntime {
     return this.collectionFor<T>("user");
   }
 
+  /**
+   * Råa hydratiserade entiteter per typ. Används av
+   * `demoSourceFromRuntime()` för att bygga `DemoSource` åt
+   * `DemoDataStore`. Open-closed: när fler projektioner läggs till
+   * dyker de upp här utan kod-ändring.
+   */
+  allEntities(): Record<string, readonly unknown[]> {
+    return this.loader.entities();
+  }
+
   // ── private ───────────────────────────────────────────────────
 
   private collectionFor<T>(entity: string): EntityCollection<T> {

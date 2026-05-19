@@ -18,7 +18,7 @@
 
 import { useState } from "react";
 import { DemoRuntime } from "@/server/local-first/demo-runtime";
-import { cloneFromGithub } from "@/server/local-first/clone-from-github";
+import { createGhPagesCloneFn } from "@/server/local-first/gh-pages-loader";
 import { OpfsPersistence } from "@/server/local-first/persistence";
 import { useDemoRuntime } from "@/lib/use-demo-runtime";
 
@@ -34,10 +34,14 @@ export interface DemoClientProps {
 }
 
 function defaultRuntimeFactory(): DemoRuntime {
+  // GH Pages som data-källa: inget CORS-proxy-beroende, ingen
+  // isomorphic-git, ingen git-historik — bara filer-via-CDN. Se
+  // `gh-pages-loader.ts` för detaljer. För full git-historik
+  // (Tauri/Node-läget) använd `cloneFromGithub()` istället.
   // OpfsPersistence skapas alltid — implementationen sväljer fel
   // tyst i runtimes som inte stödjer OPFS (vissa Safari-versioner).
   return DemoRuntime.create({
-    cloneFn: cloneFromGithub(),
+    cloneFn: createGhPagesCloneFn(),
     persistence: new OpfsPersistence("ava-demo"),
   });
 }

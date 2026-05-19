@@ -83,14 +83,15 @@ function resolveCorsProxy(opt: string | null | undefined): string | null {
   const isBrowser = typeof globalThis !== "undefined"
     && (globalThis as { window?: unknown }).window !== undefined;
   if (!isBrowser) return null;
-  // Dev-läge: använd lokal cors-proxy på 9999 (startas av `yarn dev`).
-  // Detekteras via window.location.hostname — undviker beroende av
-  // build-time env vars (som inte finns i client-bundlern utan NEXT_PUBLIC_).
+  // 1. Build-time injicerad proxy (Cloudflare Worker i prod-deploy)
+  const envProxy = process.env.NEXT_PUBLIC_CORS_PROXY_URL;
+  if (envProxy) return envProxy;
+  // 2. Dev-läge: lokal cors-proxy på 9999 (startas av `yarn dev`).
   const loc = (globalThis as { location?: { hostname?: string } }).location;
   const host = loc?.hostname ?? "";
   const isLocalDev = host === "localhost" || host === "127.0.0.1";
   if (isLocalDev) return "http://localhost:9999";
-  // Prod-fallback: publika proxyn (driftsäker self-host rekommenderas).
+  // 3. Sista fallback: publika proxyn (driftsäker self-host rekommenderas).
   return "https://cors.isomorphic-git.org";
 }
 

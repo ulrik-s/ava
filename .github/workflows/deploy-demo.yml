@@ -1,0 +1,63 @@
+name: Deploy demo to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Bara en deploy åt gången — om en ny push kommer in mitt i, avbryt
+# den tidigare så vi inte krockar i out/-mappen.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: yarn
+
+      - name: Setup Pages
+        id: pages
+        uses: actions/configure-pages@v5
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Generate Prisma client (för typer i routrar)
+        run: yarn prisma generate
+
+      - name: Build demo (static export)
+        env:
+          DEMO_BUILD: "1"
+          # Hämta base path från GH Pages-konfigurationen så vi får
+          # automatiskt rätt /<repo>-prefix.
+          DEMO_BASE_PATH: ${{ steps.pages.outputs.base_path }}
+        run: bash scripts/build-demo.sh
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./out
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
