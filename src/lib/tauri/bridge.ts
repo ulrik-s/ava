@@ -33,6 +33,14 @@ export async function openInDefaultApp(path: string): Promise<void> {
   await invoke<void>("open_in_default_app", { path });
 }
 
+export async function gitClone(
+  url: string,
+  targetDir: string,
+  token?: string,
+): Promise<void> {
+  await invoke<void>("git_clone", { url, targetDir, token });
+}
+
 export interface GitStatusEntry {
   path: string;
   status: "modified" | "added" | "deleted" | "renamed" | "untracked";

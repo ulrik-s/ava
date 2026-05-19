@@ -32,6 +32,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             ping,
             open_in_default_app,
+            git_clone,
             git_status,
             git_commit_changes,
             git_push,
@@ -105,6 +106,28 @@ struct PullResult {
     /// "up-to-date" | "fast-forward" | "merge-needed"
     kind: String,
     new_head: Option<String>,
+}
+
+/// Kloning från HTTPS URL till lokal katalog. Token är valfri —
+/// publika repos behöver ingen, privata kräver PAT.
+#[tauri::command]
+fn git_clone(
+    url: String,
+    target_dir: String,
+    token: Option<String>,
+) -> Result<(), String> {
+    let path = std::path::Path::new(&target_dir);
+    if path.exists() && path.read_dir().map(|mut d| d.next().is_some()).unwrap_or(false) {
+        return Err(format!("Målmappen är inte tom: {}", target_dir));
+    }
+    let mut builder = git2::build::RepoBuilder::new();
+    if let Some(tk) = token {
+        let mut fetch_opts = git2::FetchOptions::new();
+        fetch_opts.remote_callbacks(token_callbacks(tk));
+        builder.fetch_options(fetch_opts);
+    }
+    builder.clone(&url, path).map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 #[tauri::command]
