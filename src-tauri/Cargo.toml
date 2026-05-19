@@ -31,6 +31,8 @@ anyhow = "1"
 # Credential Manager på Windows, Secret Service på Linux).
 keyring = "3"
 tokio = { version = "1", features = ["sync", "time"] }
+tauri-plugin-dialog = "2"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
 # Tauri Plugin Sidecar — låter oss spawn:a Next.js + WebDAV-servern
 # som child-processer från Rust-sidan vid app-start.
 

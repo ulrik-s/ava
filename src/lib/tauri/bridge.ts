@@ -132,3 +132,65 @@ export async function onRepoChange(
   const un = await mod.listen<RepoChangeEvent>("repo-changed", (e) => handler(e.payload));
   return un;
 }
+
+// ─── GitHub OAuth Device Flow ─────────────────────────────────────
+
+export interface DeviceCodeResponse {
+  deviceCode: string;
+  userCode: string;
+  verificationUri: string;
+  interval: number;
+  expiresIn: number;
+}
+
+export type PollResult =
+  | { status: "authorization_pending" }
+  | { status: "slow_down"; interval: number }
+  | { status: "done"; accessToken: string }
+  | { status: "error"; message: string };
+
+export async function oauthStartDeviceFlow(scopes?: string): Promise<DeviceCodeResponse> {
+  const raw = await invoke<{
+    device_code: string; user_code: string; verification_uri: string;
+    interval: number; expires_in: number;
+  }>("oauth_start_device_flow", { scopes });
+  return {
+    deviceCode: raw.device_code,
+    userCode: raw.user_code,
+    verificationUri: raw.verification_uri,
+    interval: raw.interval,
+    expiresIn: raw.expires_in,
+  };
+}
+
+export async function oauthPollAccessToken(deviceCode: string): Promise<PollResult> {
+  const raw = await invoke<
+    | { status: "authorization_pending" }
+    | { status: "slow_down"; interval: number }
+    | { status: "done"; access_token: string }
+    | { status: "error"; message: string }
+  >("oauth_poll_access_token", { deviceCode });
+  if (raw.status === "done") return { status: "done", accessToken: raw.access_token };
+  return raw as PollResult;
+}
+
+// ─── Merge-konflikter ─────────────────────────────────────────────
+
+export interface ConflictedFile {
+  path: string;
+  kind: "both_modified" | "both_added" | "deleted_by_us" | "deleted_by_them" | "unknown";
+}
+
+export async function listConflictedFiles(repoPath: string): Promise<ConflictedFile[]> {
+  return invoke<ConflictedFile[]>("list_conflicted_files", { repoPath });
+}
+
+// ─── Folder-picker via tauri-plugin-dialog ────────────────────────
+
+export async function pickFolder(title?: string): Promise<string | null> {
+  if (!isTauri()) return null;
+  const mod = await import("@tauri-apps/plugin-dialog");
+  const selected = await mod.open({ directory: true, multiple: false, title });
+  if (typeof selected === "string") return selected;
+  return null;
+}

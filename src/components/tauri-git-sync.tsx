@@ -16,6 +16,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { GitStatusEntry } from "@/lib/tauri/bridge";
+import { OAuthDeviceFlow } from "./oauth-device-flow";
+import { MergeConflictPanel } from "./merge-conflict-panel";
 
 interface Status { loading: boolean; entries: GitStatusEntry[]; error: string | null }
 
@@ -33,6 +35,8 @@ export function TauriGitSync() {
   const [showClone, setShowClone] = useState(false);
   const [busy, setBusy] = useState(false);
   const [lastResult, setLastResult] = useState<string | null>(null);
+  const [showOauth, setShowOauth] = useState(false);
+  const [hasConflicts, setHasConflicts] = useState(false);
   const repoPathRef = useRef("");
   const tokenRef = useRef("");
 
@@ -54,11 +58,13 @@ export function TauriGitSync() {
     try {
       const bridge = await import("@/lib/tauri/bridge");
       const r = await bridge.gitPull(path, tk);
+      if (r.kind === "merge-needed") setHasConflicts(true);
+      else setHasConflicts(false);
       if (!silent) {
         const label = r.kind === "up-to-date" ? "redan synkad"
           : r.kind === "fast-forward" ? `uppdaterad till ${r.newHead?.slice(0, 7)}`
-          : "merge behövs (lös manuellt)";
-        setLastResult(`✓ Pull: ${label}`);
+          : "merge behövs — se lista nedan";
+        setLastResult(`${r.kind === "merge-needed" ? "⚠" : "✓"} Pull: ${label}`);
       }
       await refresh(path);
     } catch (err) {
@@ -238,6 +244,12 @@ export function TauriGitSync() {
 
       {lastResult && <p className="mt-2 text-xs text-gray-700">{lastResult}</p>}
 
+      {hasConflicts && (
+        <div className="mt-3">
+          <MergeConflictPanel repoPath={repoPath} onDismiss={() => setHasConflicts(false)} />
+        </div>
+      )}
+
       {showFileList && changes > 0 && (
         <ul className="mt-3 border-t border-gray-100 pt-3 text-xs font-mono space-y-1 max-h-48 overflow-y-auto">
           {status.entries.map((e) => (
@@ -249,30 +261,52 @@ export function TauriGitSync() {
         </ul>
       )}
 
-      {showSettings && (
+      {showSettings && !showOauth && (
         <div className="mt-4 grid grid-cols-1 gap-3 border-t border-gray-100 pt-3">
           <label className="block">
             <span className="text-xs text-gray-500 mb-1 block">Lokal sökväg till klonat repo</span>
-            <input
-              type="text"
-              value={repoPath}
-              onChange={(e) => setRepoPath(e.target.value)}
-              placeholder="/Users/du/ava-data"
-              className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm font-mono"
-            />
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={repoPath}
+                onChange={(e) => setRepoPath(e.target.value)}
+                placeholder="/Users/du/ava-data"
+                className="flex-1 rounded border border-gray-300 px-3 py-1.5 text-sm font-mono"
+              />
+              <button
+                type="button"
+                onClick={async () => {
+                  const b = await import("@/lib/tauri/bridge");
+                  const f = await b.pickFolder("Välj klonat repo-mapp");
+                  if (f) setRepoPath(f);
+                }}
+                className="px-2 py-1.5 text-xs bg-white border border-gray-300 text-gray-700 rounded hover:bg-gray-50"
+              >
+                Bläddra…
+              </button>
+            </div>
           </label>
-          <label className="block">
+          <div>
             <span className="text-xs text-gray-500 mb-1 block">
-              GitHub Personal Access Token <em>(lagras i OS-keychain)</em>
+              GitHub Access Token <em>(lagras i OS-keychain)</em>
             </span>
-            <input
-              type="password"
-              value={token}
-              onChange={(e) => setToken(e.target.value)}
-              placeholder="ghp_..."
-              className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm font-mono"
-            />
-          </label>
+            <div className="flex gap-2">
+              <input
+                type="password"
+                value={token}
+                onChange={(e) => setToken(e.target.value)}
+                placeholder="ghp_... eller gho_..."
+                className="flex-1 rounded border border-gray-300 px-3 py-1.5 text-sm font-mono"
+              />
+              <button
+                type="button"
+                onClick={() => setShowOauth(true)}
+                className="px-2 py-1.5 text-xs bg-white border border-gray-300 text-gray-700 rounded hover:bg-gray-50"
+              >
+                Logga in via GitHub
+              </button>
+            </div>
+          </div>
           <div className="flex justify-end gap-2">
             <button
               type="button"
@@ -289,6 +323,18 @@ export function TauriGitSync() {
               Spara
             </button>
           </div>
+        </div>
+      )}
+
+      {showOauth && (
+        <div className="mt-4 border-t border-gray-100 pt-3">
+          <OAuthDeviceFlow
+            onComplete={(accessToken) => {
+              setToken(accessToken);
+              setShowOauth(false);
+            }}
+            onCancel={() => setShowOauth(false)}
+          />
         </div>
       )}
     </div>
@@ -321,6 +367,7 @@ function CloneWizard({ onSettings, onCloneDone }: CloneWizardProps) {
   const [token, setToken] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showOauth, setShowOauth] = useState(false);
 
   const doClone = async () => {
     setBusy(true);
@@ -358,29 +405,63 @@ function CloneWizard({ onSettings, onCloneDone }: CloneWizardProps) {
             className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm font-mono"
           />
         </label>
-        <label className="block">
+        <div>
           <span className="text-xs text-gray-700 mb-1 block">Lokal mapp att klona till (måste vara tom)</span>
-          <input
-            type="text"
-            value={path}
-            onChange={(e) => setPath(e.target.value)}
-            placeholder="/Users/du/ava-data"
-            className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm font-mono"
-          />
-        </label>
-        <label className="block">
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={path}
+              onChange={(e) => setPath(e.target.value)}
+              placeholder="/Users/du/ava-data"
+              className="flex-1 rounded border border-gray-300 px-3 py-1.5 text-sm font-mono"
+            />
+            <button
+              type="button"
+              onClick={async () => {
+                const b = await import("@/lib/tauri/bridge");
+                const f = await b.pickFolder("Välj mapp att klona till");
+                if (f) setPath(f);
+              }}
+              className="px-2 py-1.5 text-xs bg-white border border-gray-300 text-gray-700 rounded hover:bg-gray-50"
+            >
+              Bläddra…
+            </button>
+          </div>
+        </div>
+        <div>
           <span className="text-xs text-gray-700 mb-1 block">
-            GitHub Personal Access Token <em>(för privata repos / push)</em>
+            GitHub Access Token <em>(för privata repos / push)</em>
           </span>
-          <input
-            type="password"
-            value={token}
-            onChange={(e) => setToken(e.target.value)}
-            placeholder="ghp_..."
-            className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm font-mono"
-          />
-        </label>
+          <div className="flex gap-2">
+            <input
+              type="password"
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+              placeholder="ghp_... eller gho_..."
+              className="flex-1 rounded border border-gray-300 px-3 py-1.5 text-sm font-mono"
+            />
+            <button
+              type="button"
+              onClick={() => setShowOauth(true)}
+              className="px-2 py-1.5 text-xs bg-white border border-gray-300 text-gray-700 rounded hover:bg-gray-50"
+            >
+              Logga in via GitHub
+            </button>
+          </div>
+        </div>
       </div>
+
+      {showOauth && (
+        <div className="mt-3">
+          <OAuthDeviceFlow
+            onComplete={(accessToken) => {
+              setToken(accessToken);
+              setShowOauth(false);
+            }}
+            onCancel={() => setShowOauth(false)}
+          />
+        </div>
+      )}
 
       {error && <p className="mt-2 text-xs text-red-700">✗ {error}</p>}
 

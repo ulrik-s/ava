@@ -16,11 +16,17 @@
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Mutex;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, State};
 use notify::{Event, RecursiveMode, Watcher};
 
 const KEYRING_SERVICE: &str = "ava-crm";
+
+/// GitHub OAuth App client_id. Sätts via env vid build-time:
+///   AVA_GITHUB_CLIENT_ID=Ov23xxxxxxxxxxxx cargo build
+/// Registrera en OAuth App på https://github.com/settings/developers
+/// med "Device Flow"-stöd aktiverat.
+const GITHUB_CLIENT_ID: Option<&str> = option_env!("AVA_GITHUB_CLIENT_ID");
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -28,6 +34,7 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .manage(WatcherState::default())
         .invoke_handler(tauri::generate_handler![
             ping,
@@ -42,6 +49,9 @@ pub fn run() {
             secret_delete,
             watch_repo_start,
             watch_repo_stop,
+            oauth_start_device_flow,
+            oauth_poll_access_token,
+            list_conflicted_files,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Tauri application");
@@ -307,4 +317,136 @@ fn watch_repo_stop(
     let mut inner = state.0.lock().map_err(|_| "lock-fel".to_string())?;
     inner.watchers.remove(&token);
     Ok(())
+}
+
+// ─── GitHub OAuth Device Flow ─────────────────────────────────────
+
+#[derive(Serialize)]
+struct DeviceCodeResponse {
+    device_code: String,
+    user_code: String,
+    verification_uri: String,
+    /// Sekunder mellan poll-anrop. GitHub-default 5.
+    interval: u64,
+    /// Sekunder tills user-code löper ut.
+    expires_in: u64,
+}
+
+#[derive(Deserialize)]
+struct GhDeviceCode {
+    device_code: String,
+    user_code: String,
+    verification_uri: String,
+    interval: u64,
+    expires_in: u64,
+}
+
+/// Starta GitHub Device Flow. Returnerar user_code som användaren
+/// ska skriva in på verification_uri (vanligen
+/// https://github.com/login/device).
+#[tauri::command]
+async fn oauth_start_device_flow(scopes: Option<String>) -> Result<DeviceCodeResponse, String> {
+    let client_id = GITHUB_CLIENT_ID
+        .ok_or_else(|| "AVA_GITHUB_CLIENT_ID är inte satt vid build-time".to_string())?;
+    let scope = scopes.unwrap_or_else(|| "repo".to_string());
+    let client = reqwest::Client::new();
+    let resp = client
+        .post("https://github.com/login/device/code")
+        .header("Accept", "application/json")
+        .form(&[("client_id", client_id), ("scope", scope.as_str())])
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    let parsed: GhDeviceCode = resp.json().await.map_err(|e| e.to_string())?;
+    Ok(DeviceCodeResponse {
+        device_code: parsed.device_code,
+        user_code: parsed.user_code,
+        verification_uri: parsed.verification_uri,
+        interval: parsed.interval,
+        expires_in: parsed.expires_in,
+    })
+}
+
+#[derive(Deserialize)]
+struct GhAccessTokenResp {
+    access_token: Option<String>,
+    error: Option<String>,
+    error_description: Option<String>,
+    interval: Option<u64>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "snake_case", tag = "status")]
+enum PollResult {
+    AuthorizationPending,
+    SlowDown { interval: u64 },
+    Done { access_token: String },
+    Error { message: String },
+}
+
+/// Poll:a en gång efter access-token. JS-sidan loopar med
+/// `interval`-sekunder. Returnerar status:
+///   - authorization_pending → fortsätt polla
+///   - slow_down → öka interval
+///   - done → spara access_token i keychain
+///   - error → avbryt
+#[tauri::command]
+async fn oauth_poll_access_token(device_code: String) -> Result<PollResult, String> {
+    let client_id = GITHUB_CLIENT_ID
+        .ok_or_else(|| "AVA_GITHUB_CLIENT_ID är inte satt".to_string())?;
+    let client = reqwest::Client::new();
+    let resp = client
+        .post("https://github.com/login/oauth/access_token")
+        .header("Accept", "application/json")
+        .form(&[
+            ("client_id", client_id),
+            ("device_code", device_code.as_str()),
+            ("grant_type", "urn:ietf:params:oauth:grant-type:device_code"),
+        ])
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    let parsed: GhAccessTokenResp = resp.json().await.map_err(|e| e.to_string())?;
+    if let Some(token) = parsed.access_token {
+        return Ok(PollResult::Done { access_token: token });
+    }
+    match parsed.error.as_deref() {
+        Some("authorization_pending") => Ok(PollResult::AuthorizationPending),
+        Some("slow_down") => Ok(PollResult::SlowDown { interval: parsed.interval.unwrap_or(10) }),
+        Some(other) => Ok(PollResult::Error {
+            message: parsed.error_description.unwrap_or_else(|| other.to_string()),
+        }),
+        None => Ok(PollResult::Error { message: "Okänt svar från GitHub".into() }),
+    }
+}
+
+// ─── Merge-konflikter ─────────────────────────────────────────────
+
+#[derive(Serialize)]
+struct ConflictedFile {
+    path: String,
+    /// "both_modified" | "both_added" | "deleted_by_us" | "deleted_by_them"
+    kind: String,
+}
+
+#[tauri::command]
+fn list_conflicted_files(repo_path: String) -> Result<Vec<ConflictedFile>, String> {
+    let repo = git2::Repository::open(&repo_path).map_err(|e| e.to_string())?;
+    let index = repo.index().map_err(|e| e.to_string())?;
+    let mut out: HashMap<String, ConflictedFile> = HashMap::new();
+    for c in index.conflicts().map_err(|e| e.to_string())? {
+        let c = c.map_err(|e| e.to_string())?;
+        let path = c.our.as_ref().or(c.their.as_ref()).or(c.ancestor.as_ref())
+            .and_then(|e| std::str::from_utf8(&e.path).ok().map(|s| s.to_string()));
+        let Some(p) = path else { continue };
+        let kind = match (c.ancestor.is_some(), c.our.is_some(), c.their.is_some()) {
+            (true, true, true) => "both_modified",
+            (false, true, true) => "both_added",
+            (_, true, false) => "deleted_by_them",
+            (_, false, true) => "deleted_by_us",
+            _ => "unknown",
+        };
+        out.insert(p.clone(), ConflictedFile { path: p, kind: kind.into() });
+    }
+    Ok(out.into_values().collect())
 }

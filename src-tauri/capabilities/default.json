@@ -9,6 +9,8 @@
     "shell:allow-open",
     "opener:default",
     "opener:allow-open-path",
-    "fs:default"
+    "fs:default",
+    "dialog:default",
+    "dialog:allow-open"
   ]
 }
