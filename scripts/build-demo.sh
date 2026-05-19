@@ -71,6 +71,7 @@ done
 
 echo "[build-demo] Kör next build (DEMO_BUILD=1)..."
 DEMO_BUILD=1 \
+NEXT_PUBLIC_DEMO_BUILD=1 \
 DEMO_BASE_PATH="${DEMO_BASE_PATH:-/ava}" \
   yarn next build
 

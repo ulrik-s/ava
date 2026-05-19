@@ -1,10 +1,25 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc";
 
+const IS_DEMO_BUILD = process.env.NEXT_PUBLIC_DEMO_BUILD === "1";
+
 export default function Dashboard() {
+  const router = useRouter();
+  useEffect(() => {
+    if (IS_DEMO_BUILD) router.replace("/demo");
+  }, [router]);
+
+  // Demo-build: skipa tRPC-anrop helt (ingen backend finns). Render
+  // null medan redirect till /demo körs.
+  if (IS_DEMO_BUILD) return null;
+
+   
   const contacts = trpc.contacts.list.useQuery({ page: 1, pageSize: 5 });
+   
   const matters = trpc.matter.list.useQuery({ page: 1, pageSize: 5, status: "ACTIVE" });
 
   return (

@@ -5,6 +5,14 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { Sidebar } from "./sidebar";
 
+/**
+ * Demo-build: ingen NextAuth-backend finns, ingen sidebar/sidopanel
+ * passar, och alla "auth-skyddade" sidor ska bara fungera read-only
+ * mot DemoDataStore. Gated via build-time env var som expanderas
+ * i client-bundlen (kräver NEXT_PUBLIC_-prefix).
+ */
+const IS_DEMO_BUILD = process.env.NEXT_PUBLIC_DEMO_BUILD === "1";
+
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession();
   const pathname = usePathname();
@@ -12,13 +20,26 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
   const isLoginPage = pathname === "/login";
   const isDev = process.env.NODE_ENV === "development";
+  const isDemoPath = pathname === "/demo" || pathname.startsWith("/demo/");
 
   useEffect(() => {
+    if (IS_DEMO_BUILD) return;
+    if (isDemoPath) return;
     // In production, redirect to login if not authenticated
     if (status === "unauthenticated" && !isLoginPage && !isDev) {
       router.push(`/login?callbackUrl=${encodeURIComponent(pathname)}`);
     }
-  }, [status, isLoginPage, isDev, router, pathname]);
+  }, [status, isLoginPage, isDev, isDemoPath, router, pathname]);
+
+  // Demo-build: ingen sidebar, ingen auth-redirect. Bara children.
+  if (IS_DEMO_BUILD) {
+    return <>{children}</>;
+  }
+
+  // /demo-rutten har inget med auth att göra ens i full build:n.
+  if (isDemoPath) {
+    return <>{children}</>;
+  }
 
   // Login page: render without sidebar
   if (isLoginPage) {
