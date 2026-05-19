@@ -13,7 +13,17 @@ import { Sidebar } from "./sidebar";
  */
 const IS_DEMO_BUILD = process.env.NEXT_PUBLIC_DEMO_BUILD === "1";
 
+/**
+ * Demo-build kör utan SessionProvider — vi får inte ens anropa
+ * `useSession()` eftersom det skulle krascha vid prerendring. Outer
+ * komponent gate:ar, inner använder hooken.
+ */
 export function AuthGuard({ children }: { children: React.ReactNode }) {
+  if (IS_DEMO_BUILD) return <>{children}</>;
+  return <AuthGuardInner>{children}</AuthGuardInner>;
+}
+
+function AuthGuardInner({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession();
   const pathname = usePathname();
   const router = useRouter();
@@ -23,18 +33,12 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   const isDemoPath = pathname === "/demo" || pathname.startsWith("/demo/");
 
   useEffect(() => {
-    if (IS_DEMO_BUILD) return;
     if (isDemoPath) return;
     // In production, redirect to login if not authenticated
     if (status === "unauthenticated" && !isLoginPage && !isDev) {
       router.push(`/login?callbackUrl=${encodeURIComponent(pathname)}`);
     }
   }, [status, isLoginPage, isDev, isDemoPath, router, pathname]);
-
-  // Demo-build: ingen sidebar, ingen auth-redirect. Bara children.
-  if (IS_DEMO_BUILD) {
-    return <>{children}</>;
-  }
 
   // /demo-rutten har inget med auth att göra ens i full build:n.
   if (isDemoPath) {
