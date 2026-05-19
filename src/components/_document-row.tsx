@@ -65,22 +65,7 @@ export function DocumentRow({
           {new Date(doc.createdAt).toLocaleDateString("sv-SE")}
         </td>
         <td className="px-6 py-2.5 text-right whitespace-nowrap">
-          <a
-            href={`/api/documents/${doc.id}/download`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs text-gray-500 hover:text-blue-600 hover:underline mr-3"
-            title="Visa i webbläsaren"
-          >
-            👁 Visa
-          </a>
-          <a
-            href={`/api/documents/${doc.id}/download?download=1`}
-            className="text-xs text-gray-500 hover:text-blue-600 hover:underline mr-3"
-            title="Ladda ner"
-          >
-            ⬇ Ladda ner
-          </a>
+          <DocumentLinks doc={doc} />
           <button
             onClick={onReanalyze}
             disabled={reanalyzePending}
@@ -104,10 +89,66 @@ function isWithinAnalysisGrace(doc: DocumentRecord): boolean {
   return Date.now() - new Date(doc.createdAt).getTime() < ANALYSIS_GRACE_MS;
 }
 
+/**
+ * `DocumentLinks` — "Visa" + "Ladda ner". I demo-läget pekar de
+ * mot GH Pages-hostat innehåll i samma demo-repo. I full build
+ * mot /api/documents/<id>/download.
+ */
+function DocumentLinks({ doc }: { doc: DocumentRecord }) {
+  const isDemo = process.env.NEXT_PUBLIC_DEMO_BUILD === "1";
+  let viewHref: string;
+  let downloadHref: string;
+  if (isDemo) {
+    const repo = process.env.NEXT_PUBLIC_DEFAULT_DEMO_REPO ?? "ulrik-s/ava-demo";
+    const m = repo.match(/^([^/\s]+)\/([^/\s]+)$/);
+    const base = m ? `https://${m[1]}.github.io/${m[2]}` : repo.replace(/\/+$/, "");
+    const rec = doc as DocumentRecord & { storagePath?: string };
+    const path = rec.storagePath ?? `documents/${doc.id}`;
+    viewHref = `${base}/${path}`;
+    downloadHref = viewHref;
+  } else {
+    viewHref = `/api/documents/${doc.id}/download`;
+    downloadHref = `/api/documents/${doc.id}/download?download=1`;
+  }
+  return (
+    <>
+      <a
+        href={viewHref}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-xs text-gray-500 hover:text-blue-600 hover:underline mr-3"
+        title="Visa i webbläsaren"
+      >
+        👁 Visa
+      </a>
+      <a
+        href={downloadHref}
+        className="text-xs text-gray-500 hover:text-blue-600 hover:underline mr-3"
+        title="Ladda ner"
+      >
+        ⬇ Ladda ner
+      </a>
+    </>
+  );
+}
+
 function DocumentNameButton({ doc, isAnalyzing }: { doc: DocumentRecord; isAnalyzing: boolean }) {
   const isWaitingAnalysis = isAnalyzing || isWithinAnalysisGrace(doc);
 
+  const isDemo = process.env.NEXT_PUBLIC_DEMO_BUILD === "1";
   const onClick = async () => {
+    // I demo-läget pekar storagePath på en fil i samma demo-repo
+    // (t.ex. documents/content/<id>.md). Öppna direkt mot GH Pages
+    // — ingen backend-API behövs.
+    if (isDemo) {
+      const repo = process.env.NEXT_PUBLIC_DEFAULT_DEMO_REPO ?? "ulrik-s/ava-demo";
+      const m = repo.match(/^([^/\s]+)\/([^/\s]+)$/);
+      const base = m ? `https://${m[1]}.github.io/${m[2]}` : repo.replace(/\/+$/, "");
+      const rec = doc as DocumentRecord & { storagePath?: string };
+      const path = rec.storagePath ?? `documents/${doc.id}`;
+      window.open(`${base}/${path}`, "_blank", "noopener,noreferrer");
+      return;
+    }
     try {
       const res = await fetch(`/api/documents/${doc.id}/open`);
       if (!res.ok) {

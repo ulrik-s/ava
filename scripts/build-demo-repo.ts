@@ -64,15 +64,41 @@ function buildDemoData(): Array<{ path: string; data: unknown }> {
   );
 
   // ─── Documents ───────────────────────────────────────────────
-  all.push(
-    { path: "documents/d-vardnad-stamning.json", data: { id: "d-vardnad-stamning", matterId: "m-vardnad", fileName: "Stämningsansökan vårdnad.pdf", mimeType: "application/pdf", sizeBytes: 184_320, storagePath: "demo/d-vardnad-stamning.pdf", documentType: "Stämningsansökan", summary: "Yrkanden: ensam vårdnad samt umgängesrätt. Grunder: samarbetssvårigheter och bristande omsorg.", uploadedAt: date("2026-02-20"), uploadedById: "u-anna", organizationId: ORG_ID, analysisStatus: "COMPLETED" } },
-    { path: "documents/d-vardnad-svar.json", data: { id: "d-vardnad-svar", matterId: "m-vardnad", fileName: "Svaromål motpart.pdf", mimeType: "application/pdf", sizeBytes: 142_336, storagePath: "demo/d-vardnad-svar.pdf", documentType: "Svaromål", summary: "Motpart bestrider yrkandena och vill ha fortsatt gemensam vårdnad.", uploadedAt: date("2026-03-15"), uploadedById: "u-anna", organizationId: ORG_ID, analysisStatus: "COMPLETED" } },
-    { path: "documents/d-vardnad-bevis.json", data: { id: "d-vardnad-bevis", matterId: "m-vardnad", fileName: "Bevisförteckning.docx", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", sizeBytes: 28_672, storagePath: "demo/d-vardnad-bevis.docx", documentType: "Bevisförteckning", uploadedAt: date("2026-04-02"), uploadedById: "u-bjorn", organizationId: ORG_ID, analysisStatus: "PENDING" } },
-    { path: "documents/d-brf-stadgar.json", data: { id: "d-brf-stadgar", matterId: "m-bostadsratt", fileName: "BRF Vinkeln stadgar.pdf", mimeType: "application/pdf", sizeBytes: 96_768, storagePath: "demo/d-brf-stadgar.pdf", documentType: "Stadgar", summary: "Stadgar antagna 2018. §32 reglerar ansvar för vattenskador.", uploadedAt: date("2026-03-10"), uploadedById: "u-anna", organizationId: ORG_ID, analysisStatus: "COMPLETED" } },
-    { path: "documents/d-brf-avslag.json", data: { id: "d-brf-avslag", matterId: "m-bostadsratt", fileName: "Avslag från styrelsen.pdf", mimeType: "application/pdf", sizeBytes: 51_200, storagePath: "demo/d-brf-avslag.pdf", documentType: "Brev", uploadedAt: date("2026-03-09"), uploadedById: "u-anna", organizationId: ORG_ID, analysisStatus: "COMPLETED" } },
-    { path: "documents/d-arvskifte-bouppt.json", data: { id: "d-arvskifte-bouppt", matterId: "m-arvskifte", fileName: "Bouppteckning Eriksson.pdf", mimeType: "application/pdf", sizeBytes: 245_760, storagePath: "demo/d-arvskifte-bouppt.pdf", documentType: "Bouppteckning", summary: "Tillgångar 2 450 000 kr, skulder 380 000 kr. Tre arvingar.", uploadedAt: date("2025-12-15"), uploadedById: "u-anna", organizationId: ORG_ID, analysisStatus: "COMPLETED" } },
-    { path: "documents/d-arvskifte-skifte.json", data: { id: "d-arvskifte-skifte", matterId: "m-arvskifte", fileName: "Arvskifteshandling.pdf", mimeType: "application/pdf", sizeBytes: 87_040, storagePath: "demo/d-arvskifte-skifte.pdf", documentType: "Arvskifteshandling", uploadedAt: date("2026-01-22"), uploadedById: "u-anna", organizationId: ORG_ID, analysisStatus: "COMPLETED" } },
-  );
+  // I demo-läget pekar storagePath på en markdown-fil i samma repo
+  // som klienten kan öppna direkt mot GH Pages (innehåll nedan).
+  const docs = [
+    { id: "d-vardnad-stamning", matterId: "m-vardnad", fileName: "Stämningsansökan vårdnad.md", documentType: "Stämningsansökan", summary: "Yrkanden: ensam vårdnad samt umgängesrätt. Grunder: samarbetssvårigheter och bristande omsorg.", uploadedAt: "2026-02-20", uploadedById: "u-anna", analysisStatus: "COMPLETED",
+      content: "# Stämningsansökan — Vårdnadstvist\n\n**Käranden:** Anna Andersson (19851012-1234)\n**Svaranden:** Björn Persson (19831102-5678)\n\n## Yrkanden\n\n1. Att tingsrätten tilldömer käranden ensam vårdnad om parternas dotter Olivia (f. 2022-03-14).\n2. Att svaranden förpliktas till underhållsbidrag enligt 7 kap. föräldrabalken.\n3. Att svaranden får umgängesrätt varannan helg samt halva sommarlovet.\n\n## Grunder\n\nSamarbetssvårigheter mellan föräldrarna har eskalerat under det senaste året. Käranden har uppvisat större tillgänglighet och stabilitet i barnets vardag.\n\n## Bevisning\n\n- Förhör med käranden\n- Skriftväxling mellan parterna 2025–2026\n- Yttrande från förskolepersonal" },
+    { id: "d-vardnad-svar", matterId: "m-vardnad", fileName: "Svaromål motpart.md", documentType: "Svaromål", summary: "Motpart bestrider yrkandena och vill ha fortsatt gemensam vårdnad.", uploadedAt: "2026-03-15", uploadedById: "u-anna", analysisStatus: "COMPLETED",
+      content: "# Svaromål\n\n**Mål nr T 4711-26**\n\nSvaranden bestrider samtliga yrkanden.\n\n## Grunder för bestridande\n\n1. Det föreligger inga sådana samarbetssvårigheter som motiverar att vårdnaden upplöses.\n2. Båda föräldrarna har en god relation till barnet.\n3. Gemensam vårdnad är förenligt med barnets bästa enligt 6 kap. 5 § FB.\n\nSvaranden yrkar att stämningen ogillas." },
+    { id: "d-vardnad-bevis", matterId: "m-vardnad", fileName: "Bevisförteckning.md", documentType: "Bevisförteckning", uploadedAt: "2026-04-02", uploadedById: "u-bjorn", analysisStatus: "PENDING",
+      content: "# Bevisförteckning\n\n## Skriftlig bevisning\n\n1. SMS-konversationer mellan parterna (jan-mar 2026)\n2. Förskolans närvarorapport\n3. Läkarintyg från BVC\n\n## Muntlig bevisning\n\n- Käranden\n- Svaranden\n- Förskolelärare Eva Sjögren" },
+    { id: "d-brf-stadgar", matterId: "m-bostadsratt", fileName: "BRF Vinkeln stadgar.md", documentType: "Stadgar", summary: "Stadgar antagna 2018. §32 reglerar ansvar för vattenskador.", uploadedAt: "2026-03-10", uploadedById: "u-anna", analysisStatus: "COMPLETED",
+      content: "# BRF Vinkeln — Stadgar\n\nAntagna vid årsstämman 2018.\n\n## §32 Underhållsskyldighet\n\nFöreningen ansvarar för underhåll av:\n- Stamledningar (vatten, värme, avlopp)\n- Yttertak och fasader\n- Trapphus och gemensamma utrymmen\n\nBostadsrättshavaren ansvarar för underhåll inne i lägenheten, dock ej för stamledningarnas funktion." },
+    { id: "d-brf-avslag", matterId: "m-bostadsratt", fileName: "Avslag från styrelsen.md", documentType: "Brev", uploadedAt: "2026-03-09", uploadedById: "u-anna", analysisStatus: "COMPLETED",
+      content: "Stockholm, 2026-03-05\n\nTill Björn Persson\n\nFöreningen har behandlat ert krav på ersättning för vattenskada om 87 000 kr. Styrelsen avslår kravet med hänvisning till att skadan uppstått i lägenhetens privata installationer.\n\nMed vänlig hälsning,\nStyrelsen BRF Vinkeln" },
+    { id: "d-arvskifte-bouppt", matterId: "m-arvskifte", fileName: "Bouppteckning Eriksson.md", documentType: "Bouppteckning", summary: "Tillgångar 2 450 000 kr, skulder 380 000 kr. Tre arvingar.", uploadedAt: "2025-12-15", uploadedById: "u-anna", analysisStatus: "COMPLETED",
+      content: "# Bouppteckning efter Karl-Erik Eriksson\n\n**Avliden:** 2025-11-04\n**Dödsbodelägare:** 3 personer\n\n## Tillgångar\n\n| Post | Värde |\n|---|---|\n| Villa, Bromma | 1 850 000 kr |\n| Bankmedel | 480 000 kr |\n| Fordon | 120 000 kr |\n| **Summa** | **2 450 000 kr** |\n\n## Skulder\n\n| Post | Belopp |\n|---|---|\n| Lån villa | 350 000 kr |\n| Skatter | 30 000 kr |\n| **Summa** | **380 000 kr** |\n\n**Behållning:** 2 070 000 kr" },
+    { id: "d-arvskifte-skifte", matterId: "m-arvskifte", fileName: "Arvskifteshandling.md", documentType: "Arvskifteshandling", uploadedAt: "2026-01-22", uploadedById: "u-anna", analysisStatus: "COMPLETED",
+      content: "# Arvskifteshandling\n\nNedanstående arvingar har överenskommit om följande fördelning av kvarlåtenskapen efter Karl-Erik Eriksson:\n\n- Klas Eriksson (son): 690 000 kr\n- Lena Eriksson (dotter): 690 000 kr\n- Erik Eriksson (son): 690 000 kr\n\nVillan i Bromma övertas av Klas Eriksson mot motsvarande avräkning på arvslotten." },
+  ];
+  for (const d of docs) {
+    const mdPath = `documents/content/${d.id}.md`;
+    all.push({
+      path: `documents/${d.id}.json`,
+      data: {
+        id: d.id, matterId: d.matterId, fileName: d.fileName,
+        mimeType: "text/markdown",
+        sizeBytes: new TextEncoder().encode(d.content).length,
+        storagePath: mdPath,
+        documentType: d.documentType, summary: d.summary,
+        uploadedAt: date(d.uploadedAt), uploadedById: d.uploadedById,
+        organizationId: ORG_ID, analysisStatus: d.analysisStatus,
+      },
+    });
+    // Content-fil bredvid metadata, fetch:as direkt från GH Pages.
+    all.push({ path: mdPath, data: d.content });
+  }
 
   // ─── Time entries ────────────────────────────────────────────
   const teVardnad = [
@@ -122,7 +148,12 @@ async function writeAll(root: string, entries: Array<{ path: string; data: unkno
   for (const entry of entries) {
     const fullPath = resolve(root, entry.path);
     await mkdir(dirname(fullPath), { recursive: true });
-    await writeFile(fullPath, JSON.stringify(entry.data, null, 2));
+    // .md/.txt-filer skrivs rått; resten serialiseras som JSON.
+    const isText = entry.path.endsWith(".md") || entry.path.endsWith(".txt");
+    const body = isText && typeof entry.data === "string"
+      ? entry.data
+      : JSON.stringify(entry.data, null, 2);
+    await writeFile(fullPath, body);
   }
   return entries.length;
 }

@@ -31,7 +31,9 @@ const DEFAULT_SCAN_PATHS = [
   "matter-contacts", "documents", "time-entries", "expenses", "invoices",
 ];
 
-async function listJsonFiles(root: string, dir: string): Promise<string[]> {
+async function listProjectionFiles(root: string, dir: string): Promise<string[]> {
+  // Manifestet listar enbart projection-JSON. .md-innehållsfiler bredvid
+  // metadata serveras direkt från GH Pages utan att gå via manifest.
   const full = join(root, dir);
   const out: string[] = [];
   try {
@@ -39,9 +41,10 @@ async function listJsonFiles(root: string, dir: string): Promise<string[]> {
     for (const e of entries) {
       const childAbs = join(full, e.name);
       if (e.isDirectory()) {
-        out.push(...await listJsonFiles(root, relative(root, childAbs)));
+        // Hoppa över content-mappar inne i documents/
+        if (e.name === "content") continue;
+        out.push(...await listProjectionFiles(root, relative(root, childAbs)));
       } else if (e.isFile() && e.name.endsWith(".json")) {
-        // Hoppa över manifestet självt (idempotent vid re-körning)
         const rel = relative(root, childAbs);
         if (rel === "manifest.json") continue;
         out.push(rel);
@@ -57,7 +60,7 @@ async function main(): Promise<void> {
   const root = resolve(process.argv[2] ?? process.cwd());
   const paths: string[] = [];
   for (const scan of DEFAULT_SCAN_PATHS) {
-    paths.push(...await listJsonFiles(root, scan));
+    paths.push(...await listProjectionFiles(root, scan));
   }
   paths.sort();
 
