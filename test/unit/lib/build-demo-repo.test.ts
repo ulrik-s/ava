@@ -18,7 +18,9 @@ describe("buildDemoData", () => {
   const all = buildDemoData();
 
   function byPrefix(prefix: string): unknown[] {
-    return all.filter((e) => e.path.startsWith(prefix)).map((e) => e.data);
+    return all
+      .filter((e) => e.path.startsWith(prefix) && e.path.endsWith(".json"))
+      .map((e) => e.data);
   }
 
   it("har minst 3 matters, 5 contacts, 2 users", () => {

@@ -21,6 +21,12 @@ serde = { version = "1", features = ["derive"] }
 tauri = { version = "2", features = [] }
 tauri-plugin-shell = "2"
 tauri-plugin-fs = "2"
+tauri-plugin-opener = "2"
+# git2 — för commit + push från Rust-sidan utan att shell-out:a till
+# system-git. Använder libgit2 via FFI. Auth med HTTPS PAT mot GitHub.
+git2 = { version = "0.20", default-features = false, features = ["vendored-openssl"] }
+notify = "8"
+anyhow = "1"
 # Tauri Plugin Sidecar — låter oss spawn:a Next.js + WebDAV-servern
 # som child-processer från Rust-sidan vid app-start.
 

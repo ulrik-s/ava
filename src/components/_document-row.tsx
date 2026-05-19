@@ -90,9 +90,15 @@ function isWithinAnalysisGrace(doc: DocumentRecord): boolean {
 }
 
 /**
- * `DocumentLinks` — "Visa" + "Ladda ner". I demo-läget pekar de
- * mot GH Pages-hostat innehåll i samma demo-repo. I full build
- * mot /api/documents/<id>/download.
+ * `DocumentLinks` — "Öppna" + "Visa" + "Ladda ner".
+ *
+ * I Tauri-build:n exponeras "Öppna i [app]"-knappen som anropar
+ * Rust-command `open_in_default_app` så användaren får sin OS-default
+ * PDF-editor (PDFGear/Preview). Efter redigering committar
+ * `Spara ändringar`-flödet på matter-sidan.
+ *
+ * I demo-build:n pekar "Visa"/"Ladda ner" mot GH Pages.
+ * I full server-build:n mot /api/documents/<id>/download.
  */
 function DocumentLinks({ doc }: { doc: DocumentRecord }) {
   const isDemo = process.env.NEXT_PUBLIC_DEMO_BUILD === "1";
@@ -110,8 +116,36 @@ function DocumentLinks({ doc }: { doc: DocumentRecord }) {
     viewHref = `/api/documents/${doc.id}/download`;
     downloadHref = `/api/documents/${doc.id}/download?download=1`;
   }
+
+  const openInEditor = async () => {
+    const { isTauri, openInDefaultApp } = await import("@/lib/tauri/bridge");
+    if (!isTauri()) {
+      window.open(viewHref, "_blank", "noopener,noreferrer");
+      return;
+    }
+    const rec = doc as DocumentRecord & { storagePath?: string };
+    const path = rec.storagePath ?? "";
+    if (!path) {
+      alert("Dokumentet saknar lokal sökväg.");
+      return;
+    }
+    try {
+      await openInDefaultApp(path);
+    } catch (err) {
+      alert(`Kunde inte öppna: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
+
   return (
     <>
+      <button
+        type="button"
+        onClick={openInEditor}
+        className="text-xs text-gray-500 hover:text-blue-600 hover:underline mr-3"
+        title="Öppna i din PDF-editor (Tauri) eller browsern"
+      >
+        🖊 Öppna
+      </button>
       <a
         href={viewHref}
         target="_blank"

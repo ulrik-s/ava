@@ -1,0 +1,13 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "AVA core capabilities — open file in default app, fs access, git ops via custom commands.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "shell:allow-open",
+    "opener:default",
+    "opener:allow-open-path",
+    "fs:default"
+  ]
+}
