@@ -10,7 +10,7 @@
  *   4. När `done`: anropa onComplete(accessToken)
  *
  * Avbryts via "Avbryt"-knapp. Sparar inte själv i keychain —
- * uppströms-komponent (TauriGitSync) gör det.
+ * uppströms-komponent (datasource-section / AutoSync) gör det.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";

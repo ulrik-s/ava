@@ -3,6 +3,7 @@
 import { useId, useState, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { Upload, Trash2, Building2, Plus, Pencil, X, Check, FolderOpen, Copy } from "lucide-react";
+import { DatasourceSection } from "@/components/datasource-section";
 
 // ─── WebDAV mount instructions ───────────────────────────────────
 
@@ -388,6 +389,9 @@ export default function SettingsPage() {
         <h1 className="text-2xl font-bold text-gray-900">Inställningar</h1>
         <p className="text-sm text-gray-500 mt-1">Byråns uppgifter används i genererade dokument.</p>
       </div>
+
+      {/* Datakälla & inloggning — engångskonfiguration */}
+      <DatasourceSection />
 
       {/* Logo section */}
       <div className="bg-white border border-gray-200 rounded-lg p-5 mb-5">

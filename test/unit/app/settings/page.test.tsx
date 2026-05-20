@@ -28,6 +28,12 @@ const updateOfficeMutate = vi.fn();
 const updateOfficeState = { isPending: false };
 const deleteOfficeMutate = vi.fn();
 
+// DatasourceSection har egna tester (firma-settings-panel.test.tsx).
+// Stubba ut den här så vi inte krockar med dess Spara-knapp + checkbox.
+vi.mock("@/components/datasource-section", () => ({
+  DatasourceSection: () => null,
+}));
+
 vi.mock("@/lib/trpc", () => ({
   trpc: {
     useUtils: () => utilsMock,

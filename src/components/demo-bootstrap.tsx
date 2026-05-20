@@ -21,9 +21,9 @@ import { DemoModeProvider } from "@/lib/demo/demo-mode-context";
 import { demoSourceFromRuntime } from "@/lib/demo/demo-source-from-runtime";
 import { trpc } from "@/lib/trpc";
 import { loadFirmaConfig, type FirmaConfig } from "@/lib/firma/firma-config";
-import { FirmaSettingsPanel } from "./firma-settings-panel";
 import { AuthProvider, useAuthMode } from "@/lib/auth/use-auth-mode";
 import { AuthStatusBanner } from "./auth-status-banner";
+import { AutoSync } from "./auto-sync";
 
 type Status = "loading" | "ready" | "error";
 
@@ -39,7 +39,6 @@ function useRefBox<T>(initial: T): { current: T } {
 
 export function DemoBootstrap({ children }: { children: ReactNode }) {
   const [firmaConfig] = useState<FirmaConfig>(() => loadFirmaConfig());
-  const [showSettings, setShowSettings] = useState(false);
   const [source] = useState<DemoSource>(() => ({}));
   const [fsaHandle, setFsaHandle] = useState<FileSystemDirectoryHandle | null>(null);
   // FSA-handle laddas async — uppdatera mutable container via setHandle
@@ -51,6 +50,10 @@ export function DemoBootstrap({ children }: { children: ReactNode }) {
     const { makeFsaWriteBack } = await import("@/lib/firma/fsa-write-back");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await makeFsaWriteBack({ handle: h })(event as any);
+    // Notifiera AutoSync — debounced push triggas
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("ava:data-changed"));
+    }
   })[0];
   const [dataStore] = useState(() => new DemoDataStore(source, writeBack));
   // På /demo har vi ingen runtime-load → starta som "ready" så vi inte
@@ -144,8 +147,6 @@ export function DemoBootstrap({ children }: { children: ReactNode }) {
     <AuthProvider token={firmaConfig.token} repoUrl={firmaConfig.repo}>
       <AuthGatedDemoTree
         firmaConfig={firmaConfig}
-        showSettings={showSettings}
-        setShowSettings={setShowSettings}
         trpcClient={trpcClient}
         queryClient={queryClient}
         status={status}
@@ -160,8 +161,6 @@ export function DemoBootstrap({ children }: { children: ReactNode }) {
 
 interface TreeProps {
   firmaConfig: FirmaConfig;
-  showSettings: boolean;
-  setShowSettings: (v: boolean) => void;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   trpcClient: any;
   queryClient: QueryClient;
@@ -172,55 +171,51 @@ interface TreeProps {
 }
 
 function AuthGatedDemoTree(props: TreeProps) {
-  const { firmaConfig, showSettings, setShowSettings, trpcClient, queryClient, status, errorMsg, fsaHandle, children } = props;
+  const { firmaConfig, trpcClient, queryClient, status, errorMsg, fsaHandle, children } = props;
   const auth = useAuthMode();
 
-  // readOnly avgörs av auth-mode (inte FSA-handle som tidigare).
-  // FSA-handle krävs FORTFARANDE för att write ska skriva till disk
-  // men UI-knappar bestäms av om user kan pusha.
+  // readOnly avgörs av auth-mode. FSA-handle krävs fortfarande för att
+  // write faktiskt ska landa på disk; om vi saknar handle visar vi UI:n
+  // som write-mode men sync-pillen kommer berätta att inget skrivs.
   const readOnly = auth.mode !== "identified-write" || fsaHandle === null;
 
   return (
     <DemoModeProvider readOnly={readOnly}>
       <trpc.Provider client={trpcClient} queryClient={queryClient}>
         <QueryClientProvider client={queryClient}>
-          <AuthStatusBanner onOpenSettings={() => setShowSettings(true)} />
-          {showSettings && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 overflow-auto">
-              <FirmaSettingsPanel
-                initial={firmaConfig}
-                onSaved={() => window.location.reload()}
-                onCancel={() => setShowSettings(false)}
-              />
+          <div className="flex items-center justify-between gap-2 border-b border-gray-200 bg-white">
+            <div className="flex-1 min-w-0">
+              <AuthStatusBanner />
             </div>
-          )}
-          {status === "loading" && !showSettings && (
+            <div className="px-3 py-1.5 shrink-0">
+              <AutoSync token={firmaConfig.token} />
+            </div>
+          </div>
+          {status === "loading" && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-white">
               <div className="text-center">
                 <div className="text-lg font-medium text-gray-900 mb-2">AVA</div>
                 <div className="text-sm text-gray-500">Laddar data från {firmaConfig.repo}…</div>
-                <button
-                  type="button"
-                  onClick={() => setShowSettings(true)}
-                  className="mt-4 text-xs text-blue-600 hover:underline"
+                <a
+                  href="/settings"
+                  className="mt-4 inline-block text-xs text-blue-600 hover:underline"
                 >
-                  Byt firma / datakälla
-                </button>
+                  Öppna inställningar
+                </a>
               </div>
             </div>
           )}
-          {status === "error" && !showSettings && (
+          {status === "error" && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-white">
               <div className="text-center max-w-md p-6">
                 <div className="text-lg font-medium text-red-900 mb-2">Kunde inte ladda data</div>
                 <div className="text-sm text-red-600 mb-4">{errorMsg}</div>
-                <button
-                  type="button"
-                  onClick={() => setShowSettings(true)}
-                  className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+                <a
+                  href="/settings"
+                  className="inline-block px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
                 >
-                  Byt firma / datakälla
-                </button>
+                  Öppna inställningar
+                </a>
               </div>
             </div>
           )}

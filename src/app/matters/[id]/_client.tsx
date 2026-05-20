@@ -13,8 +13,6 @@ import { ContactsSection } from "./_contacts-section";
 import { TimeSection } from "./_time-section";
 import { ExpenseSection } from "./_expense-section";
 import { GenerateModal } from "./_generate-modal";
-import { TauriGitSync } from "@/components/tauri-git-sync";
-import { WebFsaGitSync } from "@/components/web-fsa-git-sync";
 
 export default function MatterDetailClient({ id }: { id: string }) {
   const matter = trpc.matter.getById.useQuery({ id });
@@ -38,9 +36,6 @@ export default function MatterDetailClient({ id }: { id: string }) {
         klient={klient}
         onOpenGenerate={() => setShowGenerateModal(true)}
       />
-
-      <TauriGitSync />
-      <WebFsaGitSync />
 
       <div className="mb-6">
         <PaymentMethodCard

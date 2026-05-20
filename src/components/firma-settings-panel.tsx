@@ -17,9 +17,11 @@ interface Props {
   initial: FirmaConfig;
   onSaved: () => void;
   onCancel: () => void;
+  /** Inline = ingen modal-wrapper, ingen Avbryt-knapp (för /settings-sidan). */
+  inline?: boolean;
 }
 
-export function FirmaSettingsPanel({ initial, onSaved, onCancel }: Props) {
+export function FirmaSettingsPanel({ initial, onSaved, onCancel, inline = false }: Props) {
   const [tier, setTier] = useState<FirmaTier>(initial.tier);
   const [repo, setRepo] = useState(initial.repo);
   const [token, setToken] = useState(initial.token);
@@ -53,15 +55,24 @@ export function FirmaSettingsPanel({ initial, onSaved, onCancel }: Props) {
     onSaved();
   };
 
-  return (
-    <div className="bg-white rounded-lg border border-gray-200 p-6 max-w-2xl mx-auto">
-      <h2 className="text-lg font-semibold text-gray-900">Välj firma / datakälla</h2>
-      <p className="text-sm text-gray-600 mt-1">
-        AVA är multi-tenant via git. Välj vilken repo som ska användas
-        som data-källa.
-      </p>
+  const Wrapper = inline ? "div" : "div";
+  const wrapperCls = inline
+    ? ""
+    : "bg-white rounded-lg border border-gray-200 p-6 max-w-2xl mx-auto";
 
-      <div className="mt-4 space-y-3 text-sm">
+  return (
+    <Wrapper className={wrapperCls}>
+      {!inline && (
+        <>
+          <h2 className="text-lg font-semibold text-gray-900">Välj firma / datakälla</h2>
+          <p className="text-sm text-gray-600 mt-1">
+            AVA är multi-tenant via git. Välj vilken repo som ska användas
+            som data-källa.
+          </p>
+        </>
+      )}
+
+      <div className={`${inline ? "" : "mt-4 "}space-y-3 text-sm`}>
         <div>
           <label className="text-xs text-gray-500 mb-1 block">Tier</label>
           <div className="flex gap-2">
@@ -180,13 +191,15 @@ export function FirmaSettingsPanel({ initial, onSaved, onCancel }: Props) {
           )}
         </div>
         <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="px-3 py-1.5 text-sm text-gray-700 border border-gray-300 rounded hover:bg-gray-50"
-          >
-            Avbryt
-          </button>
+          {!inline && (
+            <button
+              type="button"
+              onClick={onCancel}
+              className="px-3 py-1.5 text-sm text-gray-700 border border-gray-300 rounded hover:bg-gray-50"
+            >
+              Avbryt
+            </button>
+          )}
           <button
             type="button"
             onClick={save}
@@ -197,6 +210,6 @@ export function FirmaSettingsPanel({ initial, onSaved, onCancel }: Props) {
           </button>
         </div>
       </div>
-    </div>
+    </Wrapper>
   );
 }
