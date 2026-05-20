@@ -20,13 +20,14 @@ import { createDemoTrpcLink } from "@/lib/demo/demo-trpc-link";
 import { DemoModeProvider } from "@/lib/demo/demo-mode-context";
 import { demoSourceFromRuntime } from "@/lib/demo/demo-source-from-runtime";
 import { trpc } from "@/lib/trpc";
-
-const DEFAULT_DEMO_REPO =
-  process.env.NEXT_PUBLIC_DEFAULT_DEMO_REPO ?? "ulrik-s/ava-demo";
+import { loadFirmaConfig, type FirmaConfig } from "@/lib/firma/firma-config";
+import { FirmaSettingsPanel } from "./firma-settings-panel";
 
 type Status = "loading" | "ready" | "error";
 
 export function DemoBootstrap({ children }: { children: ReactNode }) {
+  const [firmaConfig] = useState<FirmaConfig>(() => loadFirmaConfig());
+  const [showSettings, setShowSettings] = useState(false);
   const [source] = useState<DemoSource>(() => ({}));
   const [dataStore] = useState(() => new DemoDataStore(source));
   // På /demo har vi ingen runtime-load → starta som "ready" så vi inte
@@ -43,7 +44,16 @@ export function DemoBootstrap({ children }: { children: ReactNode }) {
     },
   }));
   const [trpcClient] = useState(() => trpc.createClient({
-    links: [createDemoTrpcLink({ dataStore })],
+    links: [createDemoTrpcLink({
+      dataStore,
+      user: {
+        id: "current-user",
+        email: firmaConfig.authorEmail,
+        name: firmaConfig.authorName,
+        role: "ADMIN",
+        organizationId: firmaConfig.organizationId,
+      },
+    })],
     transformer: superjson,
   } as never));
 
@@ -75,7 +85,7 @@ export function DemoBootstrap({ children }: { children: ReactNode }) {
       } catch { /* fall through */ }
 
       try {
-        await runtime.loadDemo(DEFAULT_DEMO_REPO);
+        await runtime.loadDemo(firmaConfig.repo);
         if (cancelled) return;
         mergeSource(source, demoSourceFromRuntime(runtime));
         // Invalidate alla tRPC-queries så useQuery re-fetchar mot
@@ -95,19 +105,42 @@ export function DemoBootstrap({ children }: { children: ReactNode }) {
     <DemoModeProvider readOnly>
       <trpc.Provider client={trpcClient} queryClient={queryClient}>
         <QueryClientProvider client={queryClient}>
-          {status === "loading" && (
+          {showSettings && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 overflow-auto">
+              <FirmaSettingsPanel
+                initial={firmaConfig}
+                onSaved={() => window.location.reload()}
+                onCancel={() => setShowSettings(false)}
+              />
+            </div>
+          )}
+          {status === "loading" && !showSettings && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-white">
               <div className="text-center">
-                <div className="text-lg font-medium text-gray-900 mb-2">AVA Demo</div>
-                <div className="text-sm text-gray-500">Laddar demo-data från GitHub…</div>
+                <div className="text-lg font-medium text-gray-900 mb-2">AVA</div>
+                <div className="text-sm text-gray-500">Laddar data från {firmaConfig.repo}…</div>
+                <button
+                  type="button"
+                  onClick={() => setShowSettings(true)}
+                  className="mt-4 text-xs text-blue-600 hover:underline"
+                >
+                  Byt firma / datakälla
+                </button>
               </div>
             </div>
           )}
-          {status === "error" && (
+          {status === "error" && !showSettings && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-white">
-              <div className="text-center max-w-md">
-                <div className="text-lg font-medium text-red-900 mb-2">Kunde inte ladda demo-data</div>
-                <div className="text-sm text-red-600">{errorMsg}</div>
+              <div className="text-center max-w-md p-6">
+                <div className="text-lg font-medium text-red-900 mb-2">Kunde inte ladda data</div>
+                <div className="text-sm text-red-600 mb-4">{errorMsg}</div>
+                <button
+                  type="button"
+                  onClick={() => setShowSettings(true)}
+                  className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+                >
+                  Byt firma / datakälla
+                </button>
               </div>
             </div>
           )}
