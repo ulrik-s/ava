@@ -46,7 +46,14 @@ function enoent(path: string): Error {
 }
 
 function splitPath(p: string): string[] {
-  return p.replace(/^\/+/, "").replace(/\/+$/, "").split("/").filter(Boolean);
+  // Normalisera: '.' och '/.' tolkas som rooten (samma semantik som POSIX).
+  // isomorphic-git anropar `lstat('.')` i statusMatrix → måste returnera dir.
+  const normalized = p
+    .replace(/^\/+/, "")
+    .replace(/\/+$/, "");
+  if (normalized === "" || normalized === ".") return [];
+  // Filtrera bort tomma + isolerade '.'-segment ('./foo' → ['foo'])
+  return normalized.split("/").filter((s) => s !== "" && s !== ".");
 }
 
 async function resolveDir(
