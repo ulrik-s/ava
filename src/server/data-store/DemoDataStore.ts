@@ -159,14 +159,16 @@ export class DemoDataStore implements IDataStore {
     relations?: Record<string, RelationConfig<T>>,
   ): ReadOnlyDelegate<T> {
     if (this.onMutate) {
-      // Mutable mode — säkerställ att source-arrayen finns och är writable
-      if (!this.source[key]) {
-        (this.source as Record<string, unknown[]>)[key as string] = [];
-      }
-      const collection = (this.source[key] ?? []) as unknown as T[];
+      // Mutable mode — getter ser till att vi alltid pekar på senaste
+      // source-arrayen även när mergeSource bytt ut referensen.
       return new WritableDelegate<T>({
         entity: this.entityNameFor(key),
-        collection,
+        collection: () => {
+          if (!this.source[key]) {
+            (this.source as Record<string, unknown[]>)[key as string] = [];
+          }
+          return (this.source[key] ?? []) as unknown as T[];
+        },
         relations,
         onMutate: this.onMutate as (e: MutationEvent<T>) => Promise<void> | void,
       });

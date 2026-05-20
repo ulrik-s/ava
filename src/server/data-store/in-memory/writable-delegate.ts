@@ -29,8 +29,12 @@ export interface MutationEvent<T> {
 export interface WritableDelegateOpts<T> {
   /** Vilken entitet detta är (för callback-tagging). */
   entity: string;
-  /** Mutable källa. Skiljer sig från ReadOnly genom att den kan mutera. */
-  collection: T[];
+  /**
+   * Getter för aktuell collection. Vi använder getter så att
+   * DataStore kan byta ut sin source-array (t.ex. när demo-data
+   * laddas in) utan att delegaten tappar referensen.
+   */
+  collection: () => T[];
   /** Optional relations (samma format som ReadOnlyDelegate). */
   relations?: Record<string, RelationConfig<T>>;
   /** Callback efter varje mutation — DataStore använder den för FSA-write. */
@@ -44,11 +48,13 @@ function genId(): string {
 }
 
 export class WritableDelegate<T extends Record<string, unknown>> extends ReadOnlyDelegate<T> {
-  private collection: T[];
-
   constructor(private wopts: WritableDelegateOpts<T>) {
-    super(() => wopts.collection as readonly T[], { relations: wopts.relations });
-    this.collection = wopts.collection;
+    super(() => wopts.collection() as readonly T[], { relations: wopts.relations });
+  }
+
+  /** Aktuell array — hämtas på begäran så DataStore kan byta ut den. */
+  private get collection(): T[] {
+    return this.wopts.collection();
   }
 
   async create(args: unknown): Promise<never> {
