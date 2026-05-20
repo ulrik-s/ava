@@ -6,7 +6,7 @@
   "build": {
     "beforeDevCommand": "yarn dev:next",
     "devUrl": "http://localhost:3000",
-    "beforeBuildCommand": "yarn build",
+    "beforeBuildCommand": "bash scripts/build-tauri.sh",
     "frontendDist": "../out"
   },
   "app": {
