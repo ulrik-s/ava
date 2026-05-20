@@ -171,12 +171,40 @@ export class DemoDataStore implements IDataStore {
         },
         relations,
         onMutate: this.onMutate as (e: MutationEvent<T>) => Promise<void> | void,
+        enrichRow: (row) => this.enrichRowForEntity(key, row) as T,
       });
     }
     return new ReadOnlyDelegate<T>(
       () => (this.source[key] ?? []) as readonly T[],
       relations ? { relations } : {},
     );
+  }
+
+  /**
+   * Pre-baka kända join-fält så att UI-koden får samma struktur
+   * från create/update som från findUnique med include.
+   */
+  private enrichRowForEntity(
+    key: keyof DemoSource,
+    row: Record<string, unknown>,
+  ): Record<string, unknown> {
+    const lookup = (k: keyof DemoSource, id: string | undefined) => {
+      if (!id) return null;
+      const arr = (this.source[k] ?? []) as Array<{ id?: string }>;
+      return arr.find((r) => r.id === id) ?? null;
+    };
+
+    if (key === "matterContacts") {
+      return {
+        ...row,
+        contact: lookup("contacts", row.contactId as string),
+        matter: lookup("matters", row.matterId as string),
+      };
+    }
+    if (key === "documents" || key === "timeEntries" || key === "expenses" || key === "invoices") {
+      return { ...row, matter: lookup("matters", row.matterId as string) };
+    }
+    return row;
   }
 
   /** Map DemoSource-nyckel → projection-entitetsnamn för write-back. */

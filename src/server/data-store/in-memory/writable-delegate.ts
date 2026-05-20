@@ -41,6 +41,13 @@ export interface WritableDelegateOpts<T> {
   onMutate?: (event: MutationEvent<T>) => void | Promise<void>;
   /** Generate nytt id om input saknar det. */
   generateId?: () => string;
+  /**
+   * Optional row-enricher. Anropas efter att en row sparas i
+   * collection:en — får tillbaka en row med pre-bakade joins
+   * (t.ex. .contact, .matter). Används av DemoDataStore för
+   * att hålla mutation-resultat konsistent med find*-output.
+   */
+  enrichRow?: (row: T) => T;
 }
 
 function genId(): string {
@@ -67,8 +74,12 @@ export class WritableDelegate<T extends Record<string, unknown>> extends ReadOnl
       updatedAt: new Date(),
     } as unknown as T;
     this.collection.push(row);
-    await this.wopts.onMutate?.({ entity: this.wopts.entity, kind: "create", row });
-    return row as never;
+    const enriched = this.wopts.enrichRow ? this.wopts.enrichRow(row) : row;
+    // Skriv tillbaka enriched-row så framtida read:s ser pre-bakade joins
+    const idx = this.collection.findIndex((r) => (r as { id?: string }).id === id);
+    if (idx >= 0) this.collection[idx] = enriched;
+    await this.wopts.onMutate?.({ entity: this.wopts.entity, kind: "create", row: enriched });
+    return enriched as never;
   }
 
   async update(args: unknown): Promise<never> {
@@ -77,9 +88,10 @@ export class WritableDelegate<T extends Record<string, unknown>> extends ReadOnl
     if (idx < 0) throw new Error(`Hittade inte ${this.wopts.entity} med id=${a.where.id}`);
     const prev = { ...this.collection[idx] };
     const updated = { ...this.collection[idx], ...a.data, updatedAt: new Date() } as T;
-    this.collection[idx] = updated;
-    await this.wopts.onMutate?.({ entity: this.wopts.entity, kind: "update", row: updated, previous: prev });
-    return updated as never;
+    const enriched = this.wopts.enrichRow ? this.wopts.enrichRow(updated) : updated;
+    this.collection[idx] = enriched;
+    await this.wopts.onMutate?.({ entity: this.wopts.entity, kind: "update", row: enriched, previous: prev });
+    return enriched as never;
   }
 
   async delete(args: unknown): Promise<never> {
