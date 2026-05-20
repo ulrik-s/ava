@@ -51,13 +51,35 @@ export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true);
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("matterId", matterId);
-    await fetch("/api/documents/upload", { method: "POST", body: formData });
-    utils.document.tree.invalidate({ matterId });
-    setUploading(false);
-    if (fileInputRef.current) fileInputRef.current.value = "";
+    try {
+      // FSA-läge: skriv fil direkt till user:ns lokala mapp + skapa
+      // dokumentet via tRPC (vilket via WritableDelegate skriver
+      // metadata-JSON till samma mapp).
+      const { isFsaSupported, loadHandle } = await import("@/lib/fsa/handle-store");
+      const handle = isFsaSupported() ? await loadHandle("repo-root") : null;
+      if (handle) {
+        const { uploadDocumentToFsa } = await import("@/lib/fsa/upload-document");
+        const result = await uploadDocumentToFsa({ handle, matterId, file });
+        await mutations.createFromFsa({
+          id: result.id,
+          matterId,
+          fileName: result.fileName,
+          mimeType: result.mimeType,
+          sizeBytes: result.sizeBytes,
+          storagePath: result.storagePath,
+        });
+      } else {
+        // Server-fallback (full Tier 2/3-build med backend)
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("matterId", matterId);
+        await fetch("/api/documents/upload", { method: "POST", body: formData });
+      }
+      utils.document.tree.invalidate({ matterId });
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
   }
 
   const handleDragStart = useCallback(
@@ -318,6 +340,15 @@ function useDocumentMutations({
   const moveFolder = trpc.document.moveFolder.useMutation({ onSuccess: invalidate });
   const deleteDocument = trpc.document.delete.useMutation({ onSuccess: invalidate });
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const registerMutation = (trpc.document as any).register.useMutation({ onSuccess: invalidate });
+  const createFromFsa = async (input: {
+    id: string; matterId: string; fileName: string;
+    mimeType: string; sizeBytes: number; storagePath: string;
+  }) => {
+    await registerMutation.mutateAsync(input);
+  };
+
   const reanalyze = trpc.document.analyze.useMutation({
     onMutate: ({ documentId }) => {
       setAnalyzingIds((prev) => new Set(prev).add(documentId));
@@ -346,7 +377,7 @@ function useDocumentMutations({
     },
   });
 
-  return { createFolder, renameFolder, deleteFolder, moveDocument, moveFolder, deleteDocument, reanalyze };
+  return { createFolder, renameFolder, deleteFolder, moveDocument, moveFolder, deleteDocument, reanalyze, createFromFsa };
 }
 
 function pollAnalysis({

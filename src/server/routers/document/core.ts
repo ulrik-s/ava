@@ -88,6 +88,45 @@ export const coreProcedures = {
       return doc;
     }),
 
+  /**
+   * Registrera ett uppladdat dokument. Används av web-FSA-klienten
+   * efter att filen skrivits till lokal disk via uploadDocumentToFsa.
+   * I full server-build:n körs uploaden via /api/documents/upload
+   * som direkt skriver till Postgres + storage, så denna procedure
+   * är bara aktuell för demo/FSA-flödet.
+   */
+  register: orgProcedure
+    .input(z.object({
+      id: z.string(),
+      matterId: z.string(),
+      fileName: z.string(),
+      mimeType: z.string(),
+      sizeBytes: z.number(),
+      storagePath: z.string(),
+      folderId: z.string().nullable().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      // Verifiera matter:n tillhör org:n
+      await ctx.dataStore.matters.findFirstOrThrow({
+        where: { id: input.matterId, organizationId: ctx.orgId },
+      });
+      const doc = await ctx.dataStore.documents.create({
+        data: {
+          id: input.id,
+          matterId: input.matterId,
+          fileName: input.fileName,
+          mimeType: input.mimeType,
+          sizeBytes: input.sizeBytes,
+          storagePath: input.storagePath,
+          folderId: input.folderId ?? null,
+          organizationId: ctx.orgId,
+          analysisStatus: "PENDING",
+          uploadedById: ctx.user.id,
+        } as never,
+      });
+      return doc;
+    }),
+
   /** Kör (eller kör om) AI-analys på ett dokument. Returnerar omedelbart. */
   analyze: orgProcedure
     .input(z.object({ documentId: z.string() }))

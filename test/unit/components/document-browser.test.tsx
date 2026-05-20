@@ -35,6 +35,7 @@ const mutationStubs = {
   moveFolder: { mutate: vi.fn(), isPending: false },
   delete: { mutate: vi.fn(), isPending: false },
   analyze: { mutate: vi.fn(), isPending: false },
+  register: { mutate: vi.fn(), mutateAsync: vi.fn().mockResolvedValue({}), isPending: false },
 };
 
 vi.mock("@/lib/trpc", () => ({
@@ -49,6 +50,7 @@ vi.mock("@/lib/trpc", () => ({
       moveFolder: { useMutation: () => mutationStubs.moveFolder },
       delete: { useMutation: () => mutationStubs.delete },
       analyze: { useMutation: () => mutationStubs.analyze },
+      register: { useMutation: () => mutationStubs.register },
     },
   },
 }));
