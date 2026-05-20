@@ -20,6 +20,7 @@
  */
 
 import { ReadOnlyDelegate, ReadOnlyError, type RelationConfig } from "./in-memory/read-only-delegate";
+import { WritableDelegate, type MutationEvent } from "./in-memory/writable-delegate";
 import type {
   IDataStore,
   IEventLog,
@@ -79,7 +80,15 @@ export class DemoDataStore implements IDataStore {
   readonly events: IEventLog;
   readonly raw: IDataStore["raw"];
 
-  constructor(private source: DemoSource) {
+  constructor(
+    private source: DemoSource,
+    /**
+     * Optional write-back callback. När satt → delegates blir writable
+     * (mutations uppdaterar source + triggar callback för persistens).
+     * När `undefined` → delegates är read-only (mutations kastar).
+     */
+    private onMutate?: (event: MutationEvent<Record<string, unknown>>) => void | Promise<void>,
+  ) {
     // Bygg delegates för varje entitet. `as unknown as XDelegate` är
     // ofrånkomligt — Prisma's typer är för komplexa att matcha exakt,
     // men strukturellt har vi rätt metoder.
@@ -149,10 +158,38 @@ export class DemoDataStore implements IDataStore {
     key: keyof DemoSource,
     relations?: Record<string, RelationConfig<T>>,
   ): ReadOnlyDelegate<T> {
+    if (this.onMutate) {
+      // Mutable mode — säkerställ att source-arrayen finns och är writable
+      if (!this.source[key]) {
+        (this.source as Record<string, unknown[]>)[key as string] = [];
+      }
+      const collection = (this.source[key] ?? []) as unknown as T[];
+      return new WritableDelegate<T>({
+        entity: this.entityNameFor(key),
+        collection,
+        relations,
+        onMutate: this.onMutate as (e: MutationEvent<T>) => Promise<void> | void,
+      });
+    }
     return new ReadOnlyDelegate<T>(
       () => (this.source[key] ?? []) as readonly T[],
       relations ? { relations } : {},
     );
+  }
+
+  /** Map DemoSource-nyckel → projection-entitetsnamn för write-back. */
+  private entityNameFor(key: keyof DemoSource): string {
+    const map: Record<string, string> = {
+      matters: "matter",
+      contacts: "contact",
+      matterContacts: "matterContact",
+      documents: "document",
+      timeEntries: "timeEntry",
+      expenses: "expense",
+      invoices: "invoice",
+      users: "user",
+    };
+    return map[key as string] ?? String(key);
   }
 }
 

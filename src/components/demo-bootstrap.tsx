@@ -25,11 +25,32 @@ import { FirmaSettingsPanel } from "./firma-settings-panel";
 
 type Status = "loading" | "ready" | "error";
 
+/**
+ * Mutable box som useState ger oss — refobjekt utan att triggea
+ * re-render. Vi använder useState istället för useRef här för att
+ * ESLint:s react-rules-of-hooks tillåter mutationer på initial value.
+ */
+function useRefBox<T>(initial: T): { current: T } {
+  const [box] = useState<{ current: T }>(() => ({ current: initial }));
+  return box;
+}
+
 export function DemoBootstrap({ children }: { children: ReactNode }) {
   const [firmaConfig] = useState<FirmaConfig>(() => loadFirmaConfig());
   const [showSettings, setShowSettings] = useState(false);
   const [source] = useState<DemoSource>(() => ({}));
-  const [dataStore] = useState(() => new DemoDataStore(source));
+  const [fsaHandle, setFsaHandle] = useState<FileSystemDirectoryHandle | null>(null);
+  // FSA-handle laddas async — uppdatera mutable container via setHandle
+  // som även triggar React-state och stänger ESLint:s ref-during-render.
+  const fsaRef = useRefBox<FileSystemDirectoryHandle | null>(null);
+  const writeBack = useState(() => async (event: { entity: string; kind: string; row: Record<string, unknown>; previous?: Record<string, unknown> }) => {
+    const h = fsaRef.current;
+    if (!h) return;
+    const { makeFsaWriteBack } = await import("@/lib/firma/fsa-write-back");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await makeFsaWriteBack({ handle: h })(event as any);
+  })[0];
+  const [dataStore] = useState(() => new DemoDataStore(source, writeBack));
   // På /demo har vi ingen runtime-load → starta som "ready" så vi inte
   // kallar setStatus i effect:n (vilket React 19 ogillar).
   const initialStatus: Status = typeof window !== "undefined"
@@ -70,6 +91,22 @@ export function DemoBootstrap({ children }: { children: ReactNode }) {
     }
 
     let cancelled = false;
+    // Försök ladda FSA-handle innan första render. Om vi har en handle
+    // som ger write-access → app:n blir writable. Annars in-memory.
+    void (async () => {
+      try {
+        const { loadHandle, ensureReadWrite, isFsaSupported } = await import("@/lib/fsa/handle-store");
+        if (!isFsaSupported()) return;
+        const h = await loadHandle("repo-root");
+        if (!h) return;
+        const ok = await ensureReadWrite(h).catch(() => false);
+        if (!ok) return;
+        if (cancelled) return;
+        fsaRef.current = h;
+        setFsaHandle(h);
+      } catch { /* ignorera */ }
+    })();
+
     const runtime = DemoRuntime.create({
       cloneFn: createGhPagesCloneFn(),
       persistence: new OpfsPersistence("ava-demo"),
@@ -101,8 +138,12 @@ export function DemoBootstrap({ children }: { children: ReactNode }) {
     return () => { cancelled = true; };
   }, []);
 
+  // readOnly = true om vi inte har FSA-handle (= läsläge).
+  // Med FSA-handle blir alla CRUD-knappar aktiva.
+  const readOnly = fsaHandle === null;
+
   return (
-    <DemoModeProvider readOnly>
+    <DemoModeProvider readOnly={readOnly}>
       <trpc.Provider client={trpcClient} queryClient={queryClient}>
         <QueryClientProvider client={queryClient}>
           {showSettings && (
