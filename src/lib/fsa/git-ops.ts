@@ -14,6 +14,7 @@
  */
 
 import { FsaIsoGitAdapter } from "./fs-adapter";
+import { sshToHttps } from "./url-rewrite";
 
 export interface CloneOptions {
   url: string;
@@ -37,6 +38,29 @@ async function loadIsoGit(): Promise<typeof import("isomorphic-git")> {
 
 async function loadHttp(): Promise<typeof import("isomorphic-git/http/web")> {
   return import("isomorphic-git/http/web");
+}
+
+/**
+ * Läs URL för en remote från .git/config och översätt SSH → HTTPS
+ * eftersom isomorphic-git inte stöder SSH-protokollet i browser.
+ */
+async function resolveRemoteHttpsUrl(
+  fs: FsaIsoGitAdapter,
+  remote: string,
+): Promise<string | null> {
+  const git = await loadIsoGit();
+  try {
+    const url = await git.getConfig({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      fs: fs as any,
+      dir: "/",
+      path: `remote.${remote}.url`,
+    });
+    if (typeof url !== "string" || !url) return null;
+    return sshToHttps(url);
+  } catch {
+    return null;
+  }
 }
 
 export async function cloneRepo(
@@ -126,16 +150,21 @@ export async function stageAllAndCommit(
 
 export async function pushBranch(
   fs: FsaIsoGitAdapter,
-  opts: { token: string; remote?: string; branch?: string; corsProxy?: string },
+  opts: { token: string; remote?: string; branch?: string; corsProxy?: string; url?: string },
 ): Promise<void> {
   const git = await loadIsoGit();
   const httpMod = await loadHttp();
+  const remoteName = opts.remote ?? "origin";
+  // Översätt SSH→HTTPS om .git/config har SSH-URL (isomorphic-git
+  // hanterar inte SSH i browser).
+  const url = opts.url ?? (await resolveRemoteHttpsUrl(fs, remoteName)) ?? undefined;
   await git.push({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     fs: fs as any,
     http: httpMod.default ?? httpMod,
     dir: "/",
-    remote: opts.remote ?? "origin",
+    remote: remoteName,
+    url,
     ref: opts.branch ?? "main",
     corsProxy: opts.corsProxy ?? DEFAULT_CORS_PROXY,
     onAuth: () => ({ username: "x-access-token", password: opts.token }),
@@ -144,7 +173,7 @@ export async function pushBranch(
 
 export async function pullBranch(
   fs: FsaIsoGitAdapter,
-  opts: { token: string; authorName: string; authorEmail: string; branch?: string; corsProxy?: string },
+  opts: { token: string; authorName: string; authorEmail: string; branch?: string; corsProxy?: string; url?: string },
 ): Promise<{ kind: "up-to-date" | "fast-forward" | "merged"; head: string }> {
   const git = await loadIsoGit();
   const httpMod = await loadHttp();
@@ -154,11 +183,13 @@ export async function pullBranch(
     dir: "/",
     ref: "HEAD",
   });
+  const url = opts.url ?? (await resolveRemoteHttpsUrl(fs, "origin")) ?? undefined;
   await git.pull({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     fs: fs as any,
     http: httpMod.default ?? httpMod,
     dir: "/",
+    url,
     ref: opts.branch ?? "main",
     singleBranch: true,
     corsProxy: opts.corsProxy ?? DEFAULT_CORS_PROXY,
