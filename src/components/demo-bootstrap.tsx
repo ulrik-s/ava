@@ -22,6 +22,8 @@ import { demoSourceFromRuntime } from "@/lib/demo/demo-source-from-runtime";
 import { trpc } from "@/lib/trpc";
 import { loadFirmaConfig, type FirmaConfig } from "@/lib/firma/firma-config";
 import { FirmaSettingsPanel } from "./firma-settings-panel";
+import { AuthProvider, useAuthMode } from "@/lib/auth/use-auth-mode";
+import { AuthStatusBanner } from "./auth-status-banner";
 
 type Status = "loading" | "ready" | "error";
 
@@ -138,14 +140,51 @@ export function DemoBootstrap({ children }: { children: ReactNode }) {
     return () => { cancelled = true; };
   }, []);
 
-  // readOnly = true om vi inte har FSA-handle (= läsläge).
-  // Med FSA-handle blir alla CRUD-knappar aktiva.
-  const readOnly = fsaHandle === null;
+  return (
+    <AuthProvider token={firmaConfig.token} repoUrl={firmaConfig.repo}>
+      <AuthGatedDemoTree
+        firmaConfig={firmaConfig}
+        showSettings={showSettings}
+        setShowSettings={setShowSettings}
+        trpcClient={trpcClient}
+        queryClient={queryClient}
+        status={status}
+        errorMsg={errorMsg}
+        fsaHandle={fsaHandle}
+      >
+        {children}
+      </AuthGatedDemoTree>
+    </AuthProvider>
+  );
+}
+
+interface TreeProps {
+  firmaConfig: FirmaConfig;
+  showSettings: boolean;
+  setShowSettings: (v: boolean) => void;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  trpcClient: any;
+  queryClient: QueryClient;
+  status: Status;
+  errorMsg: string | null;
+  fsaHandle: FileSystemDirectoryHandle | null;
+  children: ReactNode;
+}
+
+function AuthGatedDemoTree(props: TreeProps) {
+  const { firmaConfig, showSettings, setShowSettings, trpcClient, queryClient, status, errorMsg, fsaHandle, children } = props;
+  const auth = useAuthMode();
+
+  // readOnly avgörs av auth-mode (inte FSA-handle som tidigare).
+  // FSA-handle krävs FORTFARANDE för att write ska skriva till disk
+  // men UI-knappar bestäms av om user kan pusha.
+  const readOnly = auth.mode !== "identified-write" || fsaHandle === null;
 
   return (
     <DemoModeProvider readOnly={readOnly}>
       <trpc.Provider client={trpcClient} queryClient={queryClient}>
         <QueryClientProvider client={queryClient}>
+          <AuthStatusBanner onOpenSettings={() => setShowSettings(true)} />
           {showSettings && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 overflow-auto">
               <FirmaSettingsPanel

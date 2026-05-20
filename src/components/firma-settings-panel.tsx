@@ -11,6 +11,7 @@
 
 import { useState } from "react";
 import { type FirmaConfig, type FirmaTier, inferTier, saveFirmaConfig, resetToDemo } from "@/lib/firma/firma-config";
+import { loadAuthSettings, saveAuthSettings } from "@/lib/auth/use-auth-mode";
 
 interface Props {
   initial: FirmaConfig;
@@ -25,6 +26,9 @@ export function FirmaSettingsPanel({ initial, onSaved, onCancel }: Props) {
   const [orgId, setOrgId] = useState(initial.organizationId);
   const [name, setName] = useState(initial.authorName);
   const [email, setEmail] = useState(initial.authorEmail);
+  const [allowAnonymousRead, setAllowAnonymousRead] = useState<boolean>(
+    () => loadAuthSettings().allowAnonymousRead,
+  );
 
   const handleRepoChange = (v: string) => {
     setRepo(v);
@@ -34,6 +38,13 @@ export function FirmaSettingsPanel({ initial, onSaved, onCancel }: Props) {
 
   const save = () => {
     saveFirmaConfig({ tier, repo, token, organizationId: orgId, authorName: name, authorEmail: email });
+    saveAuthSettings({ allowAnonymousRead });
+    onSaved();
+  };
+
+  const logOut = () => {
+    setToken("");
+    saveFirmaConfig({ tier, repo, token: "", organizationId: orgId, authorName: name, authorEmail: email });
     onSaved();
   };
 
@@ -114,6 +125,17 @@ export function FirmaSettingsPanel({ initial, onSaved, onCancel }: Props) {
           />
         </label>
 
+        <label className="flex items-center gap-2 pt-2">
+          <input
+            type="checkbox"
+            checked={allowAnonymousRead}
+            onChange={(e) => setAllowAnonymousRead(e.target.checked)}
+          />
+          <span className="text-xs text-gray-700">
+            Tillåt anonym läsning (avmarkera = kräv inloggning för att se data)
+          </span>
+        </label>
+
         <div className="grid grid-cols-2 gap-3">
           <label className="block">
             <span className="text-xs text-gray-500 mb-1 block">Ditt namn (för commits)</span>
@@ -139,13 +161,24 @@ export function FirmaSettingsPanel({ initial, onSaved, onCancel }: Props) {
       </div>
 
       <div className="mt-6 flex items-center justify-between">
-        <button
-          type="button"
-          onClick={useDemo}
-          className="text-xs text-gray-500 hover:underline"
-        >
-          Återställ till demo
-        </button>
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={useDemo}
+            className="text-xs text-gray-500 hover:underline"
+          >
+              Återställ till demo
+          </button>
+          {token && (
+            <button
+              type="button"
+              onClick={logOut}
+              className="text-xs text-red-600 hover:underline"
+            >
+              Logga ut (rensa token)
+            </button>
+          )}
+        </div>
         <div className="flex gap-2">
           <button
             type="button"
