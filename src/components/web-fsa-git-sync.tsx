@@ -42,15 +42,26 @@ export function WebFsaGitSync({ hideIfTauri = true }: Props) {
   const [showFileList, setShowFileList] = useState(false);
   const handleRef = useRef<FileSystemDirectoryHandle | null>(null);
 
+  const [unsupportedReason, setUnsupportedReason] = useState<string | null>(null);
+
   // Init: kolla support + ladda persisterad handle + token
   useEffect(() => {
     (async () => {
       // Tauri-detektering (importera lazy så bridge-modulen inte krashar SSR)
       if (hideIfTauri) {
         const b = await import("@/lib/tauri/bridge");
-        if (b.isTauri()) return;
+        if (b.isTauri()) return; // Tauri har sin egen panel — ingen text
       }
-      if (!isFsaSupported()) return;
+      if (!isFsaSupported()) {
+        const ua = navigator.userAgent;
+        const reason = ua.includes("Firefox")
+          ? "Firefox stöder inte File System Access API. Använd Chrome, Edge eller Brave för fullt skrivstöd."
+          : ua.includes("Safari") && !ua.includes("Chrome")
+          ? "Safari stöder inte File System Access API. Använd Chrome, Edge eller Brave för fullt skrivstöd."
+          : "Den här webbläsaren stöder inte File System Access API. Använd Chrome, Edge eller Brave.";
+        setUnsupportedReason(reason);
+        return;
+      }
       setSupported(true);
       const tk = localStorage.getItem(TOKEN_STORAGE) ?? "";
       setToken(tk);
@@ -85,6 +96,15 @@ export function WebFsaGitSync({ hideIfTauri = true }: Props) {
     const t = setInterval(() => { void refresh(); }, POLL_INTERVAL_MS);
     return () => clearInterval(t);
   }, [handle, refresh]);
+
+  if (unsupportedReason) {
+    return (
+      <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
+        <h3 className="text-sm font-semibold text-gray-900">Web-skrivstöd ej tillgängligt</h3>
+        <p className="text-xs text-gray-600 mt-0.5">{unsupportedReason}</p>
+      </div>
+    );
+  }
 
   if (!supported || !handle && !showCloneWizard) {
     if (!supported) return null;
