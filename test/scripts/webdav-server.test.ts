@@ -54,7 +54,13 @@ async function webdavRequest(
   return { status: res.status, text };
 }
 
+// WebDAV-stacken är borttagen i nuvarande arkitektur (Tier 1-3 via git
+// istället för WebDAV). Skipa hela suiten — historisk arkiv kvar tills
+// vi tar bort scripts/webdav-server.ts.
+const SKIP_WEBDAV = true;
+
 beforeAll(async () => {
+  if (SKIP_WEBDAV) return;
   // Starta servern på slumpvald port.
   await new Promise<void>((resolve) => {
     (server as Server).listen(0, "127.0.0.1", () => resolve());
@@ -104,6 +110,7 @@ beforeAll(async () => {
 }, 30_000);
 
 afterAll(async () => {
+  if (SKIP_WEBDAV) return;
   // Städa upp: radera test-docs, test-ärende, test-user.
   await prisma.document.deleteMany({ where: { matterId } }).catch(() => {});
   await prisma.matter.delete({ where: { id: matterId } }).catch(() => {});
@@ -112,7 +119,7 @@ afterAll(async () => {
   await prisma.$disconnect();
 }, 30_000);
 
-describe("WebDAV atomic save — normalt macOS-flöde", () => {
+describe.skip("WebDAV atomic save — normalt macOS-flöde", () => {
   it("MKCOL → PUT → MOVE till riktig plats → DELETE sparar filen via MOVE 204", async () => {
     const encodedMatter = encodeURIComponent(matterSlug);
     const realPath = `/${encodedMatter}/demofil.pdf`;
@@ -140,7 +147,7 @@ describe("WebDAV atomic save — normalt macOS-flöde", () => {
   }, 15_000);
 });
 
-describe("WebDAV atomic save — buggy macOS-flöde (MOVE till riktig plats skippas)", () => {
+describe.skip("WebDAV atomic save — buggy macOS-flöde (MOVE till riktig plats skippas)", () => {
   it("räddar innehållet när DELETE av .sb-dir ska slänga en committerad fil", async () => {
     const encodedMatter = encodeURIComponent(matterSlug);
     const outerSb = `/${encodedMatter}/demofil.pdf.sb-bb222222-BUGGY1`;
@@ -206,7 +213,7 @@ describe("WebDAV atomic save — buggy macOS-flöde (MOVE till riktig plats skip
   }, 10_000);
 });
 
-describe("WebDAV — basic protocol", () => {
+describe.skip("WebDAV — basic protocol", () => {
   it("OPTIONS returnerar Allow-headers utan auth", async () => {
     const res = await fetch(`${baseUrl}/`, { method: "OPTIONS" });
     expect(res.status).toBe(200);
