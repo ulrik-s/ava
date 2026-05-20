@@ -67,8 +67,10 @@ function buildDemoData(): Array<{ path: string; data: unknown }> {
   // I demo-läget pekar storagePath på en markdown-fil i samma repo
   // som klienten kan öppna direkt mot GH Pages (innehåll nedan).
   const docs = [
-    { id: "d-vardnad-stamning", matterId: "m-vardnad", fileName: "Stämningsansökan vårdnad.md", documentType: "Stämningsansökan", summary: "Yrkanden: ensam vårdnad samt umgängesrätt. Grunder: samarbetssvårigheter och bristande omsorg.", uploadedAt: "2026-02-20", uploadedById: "u-anna", analysisStatus: "COMPLETED",
-      content: "# Stämningsansökan — Vårdnadstvist\n\n**Käranden:** Anna Andersson (19851012-1234)\n**Svaranden:** Björn Persson (19831102-5678)\n\n## Yrkanden\n\n1. Att tingsrätten tilldömer käranden ensam vårdnad om parternas dotter Olivia (f. 2022-03-14).\n2. Att svaranden förpliktas till underhållsbidrag enligt 7 kap. föräldrabalken.\n3. Att svaranden får umgängesrätt varannan helg samt halva sommarlovet.\n\n## Grunder\n\nSamarbetssvårigheter mellan föräldrarna har eskalerat under det senaste året. Käranden har uppvisat större tillgänglighet och stabilitet i barnets vardag.\n\n## Bevisning\n\n- Förhör med käranden\n- Skriftväxling mellan parterna 2025–2026\n- Yttrande från förskolepersonal" },
+    // Real PDF; storagePath pekar på .pdf-fil som genereras separat
+    // av scripts/build-demo-pdf.py (för att undvika binärbeggning i denna fil)
+    { id: "d-vardnad-stamning", matterId: "m-vardnad", fileName: "Stämningsansökan vårdnad.pdf", documentType: "Stämningsansökan", summary: "Yrkanden: ensam vårdnad samt umgängesrätt. Grunder: samarbetssvårigheter och bristande omsorg.", uploadedAt: "2026-02-20", uploadedById: "u-anna", analysisStatus: "COMPLETED",
+      content: null, mimeType: "application/pdf", explicitPath: "documents/content/d-vardnad-stamning.pdf", sizeBytes: 1346 },
     { id: "d-vardnad-svar", matterId: "m-vardnad", fileName: "Svaromål motpart.md", documentType: "Svaromål", summary: "Motpart bestrider yrkandena och vill ha fortsatt gemensam vårdnad.", uploadedAt: "2026-03-15", uploadedById: "u-anna", analysisStatus: "COMPLETED",
       content: "# Svaromål\n\n**Mål nr T 4711-26**\n\nSvaranden bestrider samtliga yrkanden.\n\n## Grunder för bestridande\n\n1. Det föreligger inga sådana samarbetssvårigheter som motiverar att vårdnaden upplöses.\n2. Båda föräldrarna har en god relation till barnet.\n3. Gemensam vårdnad är förenligt med barnets bästa enligt 6 kap. 5 § FB.\n\nSvaranden yrkar att stämningen ogillas." },
     { id: "d-vardnad-bevis", matterId: "m-vardnad", fileName: "Bevisförteckning.md", documentType: "Bevisförteckning", uploadedAt: "2026-04-02", uploadedById: "u-bjorn", analysisStatus: "PENDING",
@@ -83,21 +85,34 @@ function buildDemoData(): Array<{ path: string; data: unknown }> {
       content: "# Arvskifteshandling\n\nNedanstående arvingar har överenskommit om följande fördelning av kvarlåtenskapen efter Karl-Erik Eriksson:\n\n- Klas Eriksson (son): 690 000 kr\n- Lena Eriksson (dotter): 690 000 kr\n- Erik Eriksson (son): 690 000 kr\n\nVillan i Bromma övertas av Klas Eriksson mot motsvarande avräkning på arvslotten." },
   ];
   for (const d of docs) {
-    const mdPath = `documents/content/${d.id}.md`;
+    type DocLike = typeof d & {
+      content: string | null;
+      mimeType?: string;
+      explicitPath?: string;
+      sizeBytes?: number;
+    };
+    const dd = d as DocLike;
+    const mdPath = dd.explicitPath ?? `documents/content/${d.id}.md`;
+    const mime = dd.mimeType ?? "text/markdown";
+    const size = dd.sizeBytes
+      ?? (dd.content ? new TextEncoder().encode(dd.content).length : 0);
     all.push({
       path: `documents/${d.id}.json`,
       data: {
         id: d.id, matterId: d.matterId, fileName: d.fileName,
-        mimeType: "text/markdown",
-        sizeBytes: new TextEncoder().encode(d.content).length,
+        mimeType: mime,
+        sizeBytes: size,
         storagePath: mdPath,
         documentType: d.documentType, summary: d.summary,
         uploadedAt: date(d.uploadedAt), uploadedById: d.uploadedById,
         organizationId: ORG_ID, analysisStatus: d.analysisStatus,
       },
     });
-    // Content-fil bredvid metadata, fetch:as direkt från GH Pages.
-    all.push({ path: mdPath, data: d.content });
+    // Content-fil bredvid metadata. Hoppa om explicit-path
+    // (då hanteras filen separat, t.ex. en checked-in PDF).
+    if (dd.content != null && !dd.explicitPath) {
+      all.push({ path: mdPath, data: dd.content });
+    }
   }
 
   // ─── Time entries ────────────────────────────────────────────
