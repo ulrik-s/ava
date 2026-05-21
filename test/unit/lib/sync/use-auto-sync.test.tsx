@@ -13,6 +13,8 @@ function makeProvider(overrides: Partial<SyncProvider> = {}): SyncProvider {
   return {
     pull: vi.fn().mockResolvedValue({ kind: "up-to-date" }),
     countChanges: vi.fn().mockResolvedValue(0),
+    commitLocal: vi.fn().mockResolvedValue({ oid: null }),
+    push: vi.fn().mockResolvedValue(undefined),
     commitAndPush: vi.fn().mockResolvedValue({ oid: null }),
     ...overrides,
   };
@@ -92,7 +94,8 @@ describe("useAutoSync — timeout-safety", () => {
   it("hängande push triggar error-state", async () => {
     const provider = makeProvider({
       countChanges: vi.fn().mockResolvedValue(1),
-      commitAndPush: vi.fn((): Promise<{ oid: string | null }> => new Promise(() => {})),
+      commitLocal: vi.fn().mockResolvedValue({ oid: "abc1234" }),
+      push: vi.fn((): Promise<void> => new Promise(() => {})),
     });
     const { result } = renderHook(() => useAutoSync({
       provider, enabled: true, pushTimeoutMs: 50,
@@ -102,27 +105,54 @@ describe("useAutoSync — timeout-safety", () => {
   });
 });
 
-describe("useAutoSync — push-debounce", () => {
-  it("notifyChange triggar pending-state, sedan push efter debounce", async () => {
+describe("useAutoSync — commit → pull → push-ordning", () => {
+  it("committar lokala ändringar INNAN pull (säkrar checkout mot dirty tree)", async () => {
+    const calls: string[] = [];
     const provider = makeProvider({
       countChanges: vi.fn().mockResolvedValue(2),
-      commitAndPush: vi.fn().mockResolvedValue({ oid: "abc1234" }),
+      commitLocal: vi.fn(async () => { calls.push("commit"); return { oid: "c1" }; }),
+      pull: vi.fn(async () => { calls.push("pull"); return { kind: "up-to-date" }; }),
+      push: vi.fn(async () => { calls.push("push"); }),
+    });
+    renderHook(() => useAutoSync({ provider, enabled: true }));
+    await waitFor(() => expect(calls).toEqual(["commit", "pull", "push"]));
+  });
+
+  it("hoppar commit/push när inga lokala ändringar finns", async () => {
+    const provider = makeProvider({
+      countChanges: vi.fn().mockResolvedValue(0),
+      commitLocal: vi.fn().mockResolvedValue({ oid: null }),
+      push: vi.fn().mockResolvedValue(undefined),
+    });
+    renderHook(() => useAutoSync({ provider, enabled: true }));
+    await waitFor(() => expect(provider.pull).toHaveBeenCalled());
+    expect(provider.commitLocal).not.toHaveBeenCalled();
+    expect(provider.push).not.toHaveBeenCalled();
+  });
+});
+
+describe("useAutoSync — push-debounce", () => {
+  it("notifyChange triggar pending-state, sedan commit+push efter debounce", async () => {
+    const provider = makeProvider({
+      countChanges: vi.fn().mockResolvedValue(2),
+      commitLocal: vi.fn().mockResolvedValue({ oid: "abc1234" }),
+      push: vi.fn().mockResolvedValue(undefined),
     });
     const { result } = renderHook(() => useAutoSync({
       provider, enabled: true, pushDebounceMs: 50,
     }));
-    // Vänta in initial sync
     await waitFor(() => expect(provider.pull).toHaveBeenCalled());
 
     act(() => { result.current.notifyChange(); });
     await waitFor(() => expect(result.current.state.kind).toBe("pending"));
-    await waitFor(() => expect(provider.commitAndPush).toHaveBeenCalled(), { timeout: 2000 });
+    await waitFor(() => expect(provider.push).toHaveBeenCalled(), { timeout: 2000 });
   });
 
   it("flera notifyChange i rad debouncar — bara EN push", async () => {
     const provider = makeProvider({
       countChanges: vi.fn().mockResolvedValue(1),
-      commitAndPush: vi.fn().mockResolvedValue({ oid: "abc1234" }),
+      commitLocal: vi.fn().mockResolvedValue({ oid: "abc1234" }),
+      push: vi.fn().mockResolvedValue(undefined),
     });
     const { result } = renderHook(() => useAutoSync({
       provider, enabled: true, pushDebounceMs: 50,
@@ -134,7 +164,7 @@ describe("useAutoSync — push-debounce", () => {
       result.current.notifyChange();
       result.current.notifyChange();
     });
-    await waitFor(() => expect(provider.commitAndPush).toHaveBeenCalledTimes(1), { timeout: 1000 });
+    await waitFor(() => expect(provider.push).toHaveBeenCalledTimes(1), { timeout: 1000 });
   });
 });
 

@@ -36,17 +36,29 @@ export interface PushOutcome {
   /** Commit-OID om vi pushade, eller null om inget att pusha. */
   oid: string | null;
 }
+export interface CommitOutcome {
+  /** Commit-OID, eller null om inget att committa. */
+  oid: string | null;
+}
 
 /**
  * Provider:n vet hur en pull eller push utförs. Den är miljö-specifik
  * (Tauri-bridge / FSA + isomorphic-git) men håller ett gemensamt API.
+ *
+ * Notera ordningen `commitLocal → pull → push`: vi måste committa
+ * lokala ändringar INNAN pull, annars vägrar git.checkout att skriva
+ * över "Your local changes would be overwritten".
  */
 export interface SyncProvider {
   /** Kör en pull (rebase eller fast-forward). Kasta inte — wrappa i try. */
   pull: () => Promise<PullOutcome>;
   /** Räkna osparade ändringar. */
   countChanges: () => Promise<number>;
-  /** Commit + push allt staged. Returnera `oid: null` om ingenting att pusha. */
+  /** Stage + commit alla lokala ändringar. Ingen push. */
+  commitLocal: () => Promise<CommitOutcome>;
+  /** Push HEAD till origin. Förutsätter att lokala ändringar är committade. */
+  push: () => Promise<void>;
+  /** Bakåtkompabilitet: commit + push i ett anrop. Används av tester. */
   commitAndPush: () => Promise<PushOutcome>;
 }
 
@@ -130,8 +142,31 @@ export function useAutoSync(opts: UseAutoSyncOptions): UseAutoSyncReturn {
     }
 
     busyRef.current = true;
+    void trigger; // trigger used to gate manual vs auto; nu lika behandlade
     try {
-      // ── Pull ──
+      // ── 1. Commit lokala ändringar FÖRST ──
+      // Anledning: git.pull/checkout vägrar skriva över "Your local
+      // changes would be overwritten" om working tree är dirty. AVA:s
+      // writeBack skriver kontinuerligt till filer, så vi måste rensa
+      // working tree (= committa) innan vi pullar.
+      const initialChanges = await provider.countChanges();
+      const hasLocalCommit = initialChanges > 0;
+      if (hasLocalCommit) {
+        setState({ kind: "syncing", what: "push" });
+        try {
+          await withTimeout(
+            provider.commitLocal(),
+            cfgRef.current.pushTimeoutMs,
+            "git commit",
+          );
+        } catch (err) {
+          setState({ kind: "error", message: errMsg(err, "Commit") });
+          bumpBackoff();
+          return;
+        }
+      }
+
+      // ── 2. Pull (working tree är nu rent) ──
       setState({ kind: "syncing", what: "pull" });
       try {
         const pullResult = await withTimeout(
@@ -145,40 +180,29 @@ export function useAutoSync(opts: UseAutoSyncOptions): UseAutoSyncReturn {
           return;
         }
       } catch (err) {
-        // Pull-fel → visa felmeddelande och avbryt. Hellre ärligt än
-        // tyst "synkad" som ljuger om att data är aktuell.
         setState({ kind: "error", message: errMsg(err, "Pull") });
         bumpBackoff();
         return;
       }
-      // trigger används inte längre eftersom alla fel surfacers lika
-      void trigger;
 
-      // ── Push (bara om ändringar) ──
-      const changes = await provider.countChanges();
-      if (changes === 0) {
-        setState({ kind: "synced", at: Date.now() });
-        backoffRef.current = cfgRef.current.pullIntervalMs;
-        return;
-      }
-
-      setState({ kind: "syncing", what: "push" });
-      try {
-        const pushed = await withTimeout(
-          provider.commitAndPush(),
-          cfgRef.current.pushTimeoutMs,
-          "git push",
-        );
-        if (pushed.oid) {
-          setState({ kind: "synced", at: Date.now() });
-        } else {
-          setState({ kind: "synced", at: Date.now() });
+      // ── 3. Push lokala commits (om något) ──
+      if (hasLocalCommit) {
+        setState({ kind: "syncing", what: "push" });
+        try {
+          await withTimeout(
+            provider.push(),
+            cfgRef.current.pushTimeoutMs,
+            "git push",
+          );
+        } catch (err) {
+          setState({ kind: "error", message: errMsg(err, "Push") });
+          bumpBackoff();
+          return;
         }
-        backoffRef.current = cfgRef.current.pullIntervalMs;
-      } catch (err) {
-        setState({ kind: "error", message: errMsg(err, "Push") });
-        bumpBackoff();
       }
+
+      setState({ kind: "synced", at: Date.now() });
+      backoffRef.current = cfgRef.current.pullIntervalMs;
     } finally {
       busyRef.current = false;
     }

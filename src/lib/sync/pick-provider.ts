@@ -49,6 +49,18 @@ export async function pickProvider(token: string): Promise<PickedProvider | null
 }
 
 function makeTauriProvider(repoPath: string, token: string): SyncProvider {
+  const commitOnly = async () => {
+    const b = await import("@/lib/tauri/bridge");
+    const entries = await b.gitStatus(repoPath);
+    if (entries.length === 0) return { oid: null };
+    const msg = `AVA: ${entries.length} ändring${entries.length === 1 ? "" : "ar"} ${new Date().toISOString().slice(0, 10)}`;
+    const commit = await b.gitCommitChanges(repoPath, msg);
+    return { oid: commit.oid };
+  };
+  const pushOnly = async () => {
+    const b = await import("@/lib/tauri/bridge");
+    await b.gitPush(repoPath, token);
+  };
   return {
     pull: async () => {
       const b = await import("@/lib/tauri/bridge");
@@ -60,19 +72,36 @@ function makeTauriProvider(repoPath: string, token: string): SyncProvider {
       const entries = await b.gitStatus(repoPath);
       return entries.length;
     },
+    commitLocal: commitOnly,
+    push: pushOnly,
     commitAndPush: async () => {
-      const b = await import("@/lib/tauri/bridge");
-      const entries = await b.gitStatus(repoPath);
-      if (entries.length === 0) return { oid: null };
-      const msg = `AVA: ${entries.length} ändring${entries.length === 1 ? "" : "ar"} ${new Date().toISOString().slice(0, 10)}`;
-      const commit = await b.gitCommitChanges(repoPath, msg);
-      await b.gitPush(repoPath, token);
-      return { oid: commit.oid };
+      const c = await commitOnly();
+      if (!c.oid) return { oid: null };
+      await pushOnly();
+      return c;
     },
   };
 }
 
 function makeFsaProvider(handle: FileSystemDirectoryHandle, token: string): SyncProvider {
+  const commitOnly = async () => {
+    const { FsaIsoGitAdapter } = await import("@/lib/fsa/fs-adapter");
+    const { statusMatrix, stageAllAndCommit } = await import("@/lib/fsa/git-ops");
+    const fs = new FsaIsoGitAdapter(handle);
+    const entries = await statusMatrix(fs);
+    if (entries.length === 0) return { oid: null };
+    const oid = await stageAllAndCommit(fs, {
+      message: `AVA: ${entries.length} ändring${entries.length === 1 ? "" : "ar"} ${new Date().toISOString().slice(0, 10)}`,
+      authorName: "AVA User", authorEmail: "user@ava.local",
+    });
+    return { oid };
+  };
+  const pushOnly = async () => {
+    const { FsaIsoGitAdapter } = await import("@/lib/fsa/fs-adapter");
+    const { pushBranch } = await import("@/lib/fsa/git-ops");
+    const fs = new FsaIsoGitAdapter(handle);
+    await pushBranch(fs, { token });
+  };
   return {
     pull: async () => {
       const { FsaIsoGitAdapter } = await import("@/lib/fsa/fs-adapter");
@@ -88,18 +117,13 @@ function makeFsaProvider(handle: FileSystemDirectoryHandle, token: string): Sync
       const entries = await statusMatrix(fs);
       return entries.length;
     },
+    commitLocal: commitOnly,
+    push: pushOnly,
     commitAndPush: async () => {
-      const { FsaIsoGitAdapter } = await import("@/lib/fsa/fs-adapter");
-      const { statusMatrix, stageAllAndCommit, pushBranch } = await import("@/lib/fsa/git-ops");
-      const fs = new FsaIsoGitAdapter(handle);
-      const entries = await statusMatrix(fs);
-      if (entries.length === 0) return { oid: null };
-      const oid = await stageAllAndCommit(fs, {
-        message: `AVA: ${entries.length} ändring${entries.length === 1 ? "" : "ar"} ${new Date().toISOString().slice(0, 10)}`,
-        authorName: "AVA User", authorEmail: "user@ava.local",
-      });
-      await pushBranch(fs, { token });
-      return { oid };
+      const c = await commitOnly();
+      if (!c.oid) return { oid: null };
+      await pushOnly();
+      return c;
     },
   };
 }
