@@ -1,0 +1,14 @@
+# AVA OAuth-proxy — wrangler-konfiguration
+# Kopiera detta till ./wrangler.toml och fyll i värdena nedan.
+
+name = "ava-oauth-proxy"
+main = "src/index.ts"
+compatibility_date = "2026-01-01"
+
+[vars]
+# Public-värden — säkert att checka in i ditt eget repo.
+GITHUB_CLIENT_ID = "Ov23li_..."         # från https://github.com/settings/developers
+AVA_ORIGIN = "https://<ditt>.github.io"  # exakt origin för din AVA-deploy (utan path)
+
+# Secret sätts via CLI istället för fil:
+#   wrangler secret put GITHUB_CLIENT_SECRET

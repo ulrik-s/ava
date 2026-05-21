@@ -156,6 +156,16 @@ export interface CommitArgs {
   message: string;
   authorName: string;
   authorEmail: string;
+  /**
+   * Om angiven så signeras commit:n med SSH-format (SSHSIG). Privata
+   * nyckeln signerar commit-objektet, publika nyckeln embeddas i
+   * signaturen. GitHub visar "Verified" om den publika nyckeln är
+   * registrerad på användarens GitHub-konto.
+   */
+  sshSigning?: {
+    publicKey: Uint8Array;
+    privateKey: CryptoKey;
+  };
 }
 
 export async function stageAllAndCommit(
@@ -184,6 +194,19 @@ export async function stageAllAndCommit(
         filepath,
       });
     }
+  }
+  if (args.sshSigning) {
+    // SSH-signerad commit — vi använder signGitCommit som bygger
+    // commit-objektet manuellt + sätter gpgsig-header.
+    const { signGitCommit } = await import("@/lib/keys/sign-commit");
+    return signGitCommit({
+      fs,
+      message: args.message,
+      authorName: args.authorName,
+      authorEmail: args.authorEmail,
+      publicKey: args.sshSigning.publicKey,
+      privateKey: args.sshSigning.privateKey,
+    });
   }
   const oid = await git.commit({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

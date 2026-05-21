@@ -22,6 +22,8 @@ import {
   isEd25519Supported, type StoredKeypair,
 } from "@/lib/keys/ed25519-keypair";
 import { buildSshPublicKey, sshFingerprint } from "@/lib/keys/ssh-format";
+import { registerSshKeyOnGithub } from "@/lib/github/register-ssh-key";
+import { loadFirmaConfig } from "@/lib/firma/firma-config";
 
 interface Props {
   /** Callback när användaren bekräftar att de vill addera nyckeln till profilen. */
@@ -39,6 +41,8 @@ export function KeypairManager({ onAddToProfile, saving }: Props) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [registering, setRegistering] = useState(false);
+  const [registeredOk, setRegisteredOk] = useState(false);
 
   const refreshDerived = async (kp: StoredKeypair) => {
     setSshString(buildSshPublicKey(kp.rawPublicKey, comment || undefined));
@@ -93,6 +97,31 @@ export function KeypairManager({ onAddToProfile, saving }: Props) {
   const onAdd = () => {
     if (!sshString || !fingerprint) return;
     onAddToProfile({ sshPublicKey: sshString, fingerprint, comment: comment || "enhet" });
+  };
+
+  const onRegisterOnGithub = async () => {
+    if (!sshString) return;
+    const cfg = loadFirmaConfig();
+    if (!cfg.token) {
+      setErr("Saknar GitHub-token i Inställningar. Lägg till en PAT med scope 'admin:public_key' eller 'write:public_key'.");
+      return;
+    }
+    setRegistering(true);
+    setErr(null);
+    setRegisteredOk(false);
+    try {
+      await registerSshKeyOnGithub({
+        token: cfg.token,
+        title: `AVA — ${comment || "enhet"}`,
+        key: sshString,
+      });
+      setRegisteredOk(true);
+      setTimeout(() => setRegisteredOk(false), 4000);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setRegistering(false);
+    }
   };
 
   // Uppdatera SSH-string när comment ändras
@@ -187,13 +216,23 @@ export function KeypairManager({ onAddToProfile, saving }: Props) {
             >
               {saving ? "Lägger till…" : "Lägg till i min profil"}
             </button>
+            <button
+              type="button"
+              onClick={() => void onRegisterOnGithub()}
+              disabled={registering}
+              className="text-xs px-3 py-1.5 bg-gray-900 text-white rounded hover:bg-gray-800 disabled:bg-gray-400 inline-flex items-center gap-1"
+              title="POSTar direkt till api.github.com/user/keys"
+            >
+              {registering ? "Registrerar…" : registeredOk ? "✓ Registrerad" : "Registrera på GitHub (auto)"}
+            </button>
             <a
               href="https://github.com/settings/ssh/new"
               target="_blank"
               rel="noopener noreferrer"
               className="text-xs px-3 py-1.5 bg-white border border-gray-300 text-gray-700 rounded hover:bg-gray-50 inline-flex items-center gap-1"
+              title="Öppna GitHub manuellt"
             >
-              <ExternalLink size={12} /> Registrera på GitHub
+              <ExternalLink size={12} /> Manuellt
             </a>
             <button
               type="button"

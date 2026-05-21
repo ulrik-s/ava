@@ -90,9 +90,19 @@ function makeFsaProvider(handle: FileSystemDirectoryHandle, token: string): Sync
     const fs = new FsaIsoGitAdapter(handle);
     const entries = await statusMatrix(fs);
     if (entries.length === 0) return { oid: null };
+    // Försök ladda Ed25519-nyckelpar för att signera commit:n. Om det
+    // saknas eller WebCrypto inte stöder Ed25519 → fall tillbaka till
+    // osignerad commit.
+    let sshSigning: { publicKey: Uint8Array; privateKey: CryptoKey } | undefined;
+    try {
+      const { loadKeypair } = await import("@/lib/keys/ed25519-keypair");
+      const kp = await loadKeypair();
+      if (kp) sshSigning = { publicKey: kp.rawPublicKey, privateKey: kp.privateKey };
+    } catch { /* ignorera — fall back till osignerad */ }
     const oid = await stageAllAndCommit(fs, {
       message: `AVA: ${entries.length} ändring${entries.length === 1 ? "" : "ar"} ${new Date().toISOString().slice(0, 10)}`,
       authorName: "AVA User", authorEmail: "user@ava.local",
+      sshSigning,
     });
     return { oid };
   };

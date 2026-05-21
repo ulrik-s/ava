@@ -268,6 +268,7 @@ export function FirmaSettingsPanel({ initial, onSaved, onCancel, inline = false 
                     className="w-full rounded border border-gray-300 px-2 py-1 text-xs font-mono"
                   />
                 </label>
+                <ProxyTestButton url={oauth.proxyUrl} />
               </div>
             )}
           </div>
@@ -359,5 +360,48 @@ export function FirmaSettingsPanel({ initial, onSaved, onCancel, inline = false 
         </div>
       </div>
     </Wrapper>
+  );
+}
+
+function ProxyTestButton({ url }: { url: string }) {
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  const test = async () => {
+    if (!url) { setResult({ ok: false, msg: "Saknar URL" }); return; }
+    setBusy(true);
+    setResult(null);
+    try {
+      const res = await fetch(`${url.replace(/\/+$/, "")}/device/code`, { method: "POST" });
+      if (!res.ok) {
+        setResult({ ok: false, msg: `Proxy svarade ${res.status} ${res.statusText}` });
+        return;
+      }
+      const data = await res.json() as { user_code?: string; error?: string };
+      if (data.user_code) setResult({ ok: true, msg: `✓ Proxy svarar (test-kod: ${data.user_code})` });
+      else setResult({ ok: false, msg: `Oväntat svar: ${data.error ?? JSON.stringify(data).slice(0, 80)}` });
+    } catch (e) {
+      setResult({ ok: false, msg: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="pt-1">
+      <button
+        type="button"
+        onClick={() => void test()}
+        disabled={busy || !url}
+        className="text-xs px-2 py-1 bg-white border border-gray-300 text-gray-700 rounded hover:bg-gray-50 disabled:opacity-50"
+      >
+        {busy ? "Testar…" : "Testa proxy-anslutning"}
+      </button>
+      {result && (
+        <p className={`text-[11px] mt-1 ${result.ok ? "text-green-700" : "text-red-700"}`}>
+          {result.msg}
+        </p>
+      )}
+    </div>
   );
 }
