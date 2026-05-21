@@ -10,6 +10,7 @@
 import { Database } from "lucide-react";
 import { FirmaSettingsPanel } from "./firma-settings-panel";
 import { FsaFolderSelector } from "./fsa-folder-selector";
+import { SyncDiagnostics } from "./sync-diagnostics";
 import { loadFirmaConfig } from "@/lib/firma/firma-config";
 import { useEffect, useState } from "react";
 import type { FirmaConfig } from "@/lib/firma/firma-config";
@@ -50,6 +51,7 @@ export function DatasourceSection() {
       <div className="mt-4">
         <FsaFolderSelector repoUrl={config.repo} token={config.token} />
       </div>
+      <SyncDiagnostics />
     </div>
   );
 }

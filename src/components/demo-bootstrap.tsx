@@ -24,6 +24,8 @@ import { loadFirmaConfig, type FirmaConfig } from "@/lib/firma/firma-config";
 import { AuthProvider, useAuthMode } from "@/lib/auth/use-auth-mode";
 import { AuthStatusBanner } from "./auth-status-banner";
 import { AutoSync } from "./auto-sync";
+import { SyncProviderRoot } from "@/lib/sync/sync-context";
+import { pickProvider } from "@/lib/sync/pick-provider";
 
 type Status = "loading" | "ready" | "error";
 
@@ -183,12 +185,13 @@ function AuthGatedDemoTree(props: TreeProps) {
     <DemoModeProvider readOnly={readOnly}>
       <trpc.Provider client={trpcClient} queryClient={queryClient}>
         <QueryClientProvider client={queryClient}>
+          <SyncProviderRoot token={firmaConfig.token} pickProvider={pickProvider}>
           <div className="flex items-center justify-between gap-2 border-b border-gray-200 bg-white">
             <div className="flex-1 min-w-0">
               <AuthStatusBanner />
             </div>
             <div className="px-3 py-1.5 shrink-0">
-              <AutoSync token={firmaConfig.token} />
+              <AutoSync />
             </div>
           </div>
           {status === "loading" && (
@@ -220,6 +223,7 @@ function AuthGatedDemoTree(props: TreeProps) {
             </div>
           )}
           <RenderErrorBoundary>{children}</RenderErrorBoundary>
+          </SyncProviderRoot>
         </QueryClientProvider>
       </trpc.Provider>
     </DemoModeProvider>
