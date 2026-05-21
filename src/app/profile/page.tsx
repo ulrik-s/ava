@@ -13,6 +13,7 @@ import { useEffect, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { User, KeyRound, Plus, Trash2 } from "lucide-react";
 import { IntegrationsSection } from "@/components/integrations-section";
+import { KeypairManager } from "@/components/keypair-manager";
 
 interface PublicKey {
   fingerprint: string;
@@ -122,6 +123,16 @@ export default function ProfilePage() {
         onAdd={(k) => addKey.mutate(k)}
         onRemove={(fp) => removeKey.mutate({ fingerprint: fp })}
         addErr={addKey.error?.message ?? null}
+        onAddGenerated={({ sshPublicKey, fingerprint: fp, comment }) =>
+          addKey.mutate({
+            fingerprint: fp,
+            type: "ssh-ed25519",
+            publicKey: sshPublicKey,
+            comment,
+            addedAt: new Date().toISOString(),
+          })
+        }
+        addingGenerated={addKey.isPending}
       />
 
       {/* Anslutna tjänster (O365, Google, …) */}
@@ -144,17 +155,19 @@ interface KeysSectionProps {
   onAdd: (key: PublicKey) => void;
   onRemove: (fingerprint: string) => void;
   addErr: string | null;
+  onAddGenerated: (args: { sshPublicKey: string; fingerprint: string; comment: string }) => void;
+  addingGenerated: boolean;
 }
 
-function KeysSection({ keys, onAdd, onRemove, addErr }: KeysSectionProps) {
+function KeysSection({ keys, onAdd, onRemove, addErr, onAddGenerated, addingGenerated }: KeysSectionProps) {
   const [adding, setAdding] = useState(false);
   const [input, setInput] = useState("");
   const [comment, setComment] = useState("");
 
-  const tryAdd = () => {
+  const tryAdd = async () => {
     const trimmed = input.trim();
     if (!trimmed) return;
-    const parsed = parseSshPublicKey(trimmed);
+    const parsed = await parseSshPublicKey(trimmed);
     if (!parsed) {
       alert("Kunde inte tolka nyckeln. Förväntar format som\n  ssh-ed25519 AAAA… kommentar");
       return;
@@ -193,8 +206,15 @@ function KeysSection({ keys, onAdd, onRemove, addErr }: KeysSectionProps) {
       </p>
 
       {keys.length === 0 && !adding && (
-        <p className="text-sm text-gray-400 italic">Inga nycklar registrerade ännu.</p>
+        <p className="text-sm text-gray-400 italic mb-4">Inga nycklar registrerade ännu.</p>
       )}
+
+      <KeypairManager onAddToProfile={onAddGenerated} saving={addingGenerated} />
+
+      <div className="mt-4 text-xs text-gray-500">
+        eller klistra in en nyckel som genererats utanför AVA (
+        <code>ssh-keygen -t ed25519</code>):
+      </div>
 
       <ul className="space-y-2">
         {keys.map((k) => (
@@ -251,7 +271,7 @@ function KeysSection({ keys, onAdd, onRemove, addErr }: KeysSectionProps) {
             </button>
             <button
               type="button"
-              onClick={tryAdd}
+              onClick={() => void tryAdd()}
               className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
             >
               Lägg till
@@ -265,9 +285,9 @@ function KeysSection({ keys, onAdd, onRemove, addErr }: KeysSectionProps) {
 
 /**
  * Lätt SSH-pubkey-parsing — extraherar typ, base64-body, kommentar.
- * Beräknar SHA-256-fingerprint i ssh-keygen-format.
+ * Beräknar SHA-256-fingerprint i ssh-keygen-format via WebCrypto.
  */
-function parseSshPublicKey(raw: string): { type: PublicKey["type"]; fingerprint: string; comment: string } | null {
+async function parseSshPublicKey(raw: string): Promise<{ type: PublicKey["type"]; fingerprint: string; comment: string } | null> {
   const parts = raw.trim().split(/\s+/);
   if (parts.length < 2) return null;
   const typeMap: Record<string, PublicKey["type"]> = {
@@ -279,18 +299,24 @@ function parseSshPublicKey(raw: string): { type: PublicKey["type"]; fingerprint:
   };
   const type = typeMap[parts[0]];
   if (!type) return null;
-  const fingerprint = computeSha256Fingerprint(parts[1]);
+  // Riktig SHA-256-fingerprint via crypto.subtle på den base64-decodade
+  // wire-format-blob:n. För Ed25519 är decodad blob 51 bytes (4+11+4+32).
+  const blob = base64ToBytes(parts[1]);
+  const digest = await crypto.subtle.digest("SHA-256", blob.buffer as ArrayBuffer);
+  const fp = "SHA256:" + bytesToBase64(new Uint8Array(digest)).replace(/=+$/, "");
   const comment = parts.slice(2).join(" ");
-  return { type, fingerprint, comment };
+  return { type, fingerprint: fp, comment };
 }
 
-/** Synchron SHA-256 av base64-decodad payload. */
-function computeSha256Fingerprint(b64: string): string {
-  // I browser:s subtle.crypto är async. Returnera en provisorisk
-  // fingerprint baserad på base64-trimming för UI-feedback;
-  // server-sidan kan validera mer noggrant.
-  // (Riktig implementation: await crypto.subtle.digest("SHA-256",
-  // base64ToBytes(b64)) → base64 → "SHA256:" + value)
-  const truncated = b64.slice(-44).replace(/=+$/, "");
-  return `SHA256:${truncated}`;
+function base64ToBytes(b64: string): Uint8Array {
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let s = "";
+  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+  return btoa(s);
 }
