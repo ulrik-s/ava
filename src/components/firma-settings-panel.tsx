@@ -51,9 +51,61 @@ export function FirmaSettingsPanel({ initial, onSaved, onCancel, inline = false 
   };
 
   const openPatHelper = () => {
+    // Fine-grained PAT — modernare än classic, kan låsas till specifika
+    // repos. URL-params för fine-grained är begränsade (GitHub fyller
+    // inte i target_repo automatiskt) men vi pre-fyller beskrivningen.
     const desc = encodeURIComponent(`AVA — ${orgId || "default"}`);
-    const url = `https://github.com/settings/tokens/new?scopes=repo&description=${desc}`;
+    const url = `https://github.com/settings/personal-access-tokens/new?description=${desc}`;
     window.open(url, "_blank", "noopener,noreferrer");
+  };
+
+  const [tokenStatus, setTokenStatus] = useState<"untested" | "checking" | "valid" | "invalid">("untested");
+  const [tokenStatusMsg, setTokenStatusMsg] = useState<string | null>(null);
+
+  const validateToken = async () => {
+    if (!token) {
+      setTokenStatus("invalid");
+      setTokenStatusMsg("Tom token");
+      return;
+    }
+    setTokenStatus("checking");
+    setTokenStatusMsg(null);
+    try {
+      // Verifiera via /user (CORS-enabled, fungerar utan proxy)
+      const res = await fetch("https://api.github.com/user", {
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" },
+      });
+      if (!res.ok) {
+        setTokenStatus("invalid");
+        setTokenStatusMsg(`GitHub avvisade: ${res.status} ${res.statusText}`);
+        return;
+      }
+      const user = await res.json() as { login: string };
+      // Verifiera repo-åtkomst om repo angetts
+      if (repo && tier === "github") {
+        const parsed = repo.match(/^([^/]+)\/([^/.]+)/);
+        if (parsed) {
+          const r = await fetch(`https://api.github.com/repos/${parsed[1]}/${parsed[2]}`, {
+            headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" },
+          });
+          if (!r.ok) {
+            setTokenStatus("invalid");
+            setTokenStatusMsg(`Ingen åtkomst till ${parsed[1]}/${parsed[2]}: ${r.status}`);
+            return;
+          }
+          const repoInfo = await r.json() as { permissions?: { push?: boolean } };
+          const canPush = repoInfo.permissions?.push === true;
+          setTokenStatus("valid");
+          setTokenStatusMsg(`✓ @${user.login} — ${canPush ? "kan pusha" : "endast läsning"}`);
+          return;
+        }
+      }
+      setTokenStatus("valid");
+      setTokenStatusMsg(`✓ @${user.login}`);
+    } catch (e) {
+      setTokenStatus("invalid");
+      setTokenStatusMsg(e instanceof Error ? e.message : String(e));
+    }
   };
 
   const logOut = () => {
@@ -156,13 +208,31 @@ export function FirmaSettingsPanel({ initial, onSaved, onCancel, inline = false 
                 </div>
               )}
             </div>
-            <input
-              type="password"
-              value={token}
-              onChange={(e) => setToken(e.target.value)}
-              placeholder={tier === "github" ? "ghp_..." : "auth-token för din git-server"}
-              className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm font-mono"
-            />
+            <div className="flex gap-2">
+              <input
+                type="password"
+                value={token}
+                onChange={(e) => { setToken(e.target.value); setTokenStatus("untested"); setTokenStatusMsg(null); }}
+                placeholder={tier === "github" ? "github_pat_... eller ghp_..." : "auth-token för din git-server"}
+                className="flex-1 rounded border border-gray-300 px-3 py-1.5 text-sm font-mono"
+              />
+              {tier === "github" && (
+                <button
+                  type="button"
+                  onClick={() => void validateToken()}
+                  disabled={!token || tokenStatus === "checking"}
+                  className="px-3 py-1.5 text-sm bg-white border border-gray-300 text-gray-700 rounded hover:bg-gray-50 disabled:opacity-50"
+                  title="Verifiera token mot api.github.com"
+                >
+                  {tokenStatus === "checking" ? "Testar…" : "Verifiera"}
+                </button>
+              )}
+            </div>
+            {tokenStatusMsg && (
+              <p className={`mt-1 text-xs ${tokenStatus === "valid" ? "text-green-700" : tokenStatus === "invalid" ? "text-red-700" : "text-gray-600"}`}>
+                {tokenStatusMsg}
+              </p>
+            )}
             {showOauth && (
               <div className="mt-2">
                 <WebOAuthDeviceFlow
