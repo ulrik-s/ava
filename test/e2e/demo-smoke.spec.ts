@@ -24,10 +24,11 @@ const ROUTES = [
   { path: "/reports/", expectText: /Rapporter/i },
   { path: "/search/", expectText: /Sök|Dokumentsök/i },
   { path: "/conflicts/", expectText: /Jävskontroll/i },
+  // /settings är fullständig i demo:n (datakälla + FSA + token-config)
+  { path: "/settings/", expectText: /Inställningar/i },
   // Placeholders (Fas R17) — visar FeatureUnavailable istället för 404
   { path: "/templates/", expectText: /Dokumentmallar|Inte tillgängligt/i },
   { path: "/users/", expectText: /Användare|Inte tillgängligt/i },
-  { path: "/settings/", expectText: /Inställningar|Inte tillgängligt/i },
 ];
 
 for (const { path, expectText } of ROUTES) {

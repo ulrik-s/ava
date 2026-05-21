@@ -34,7 +34,6 @@ APP_DIR="$ROOT/src/app"
 STASH_PATHS=(
   "api"
   "login"
-  "settings"
   "users"
   "templates"
 )
@@ -42,8 +41,11 @@ STASH_PATHS=(
 # Routes som ska få en placeholder-sida ("Feature unavailable in demo")
 # istället för att bara 404:a när användaren klickar i sidopanelen.
 # Notera att "api" och "login" inte syns i sidobar — ingen placeholder.
+#
+# /settings är *inte* placeholder — den är main config-UI för demon
+# (datakälla, FSA-mapp, GitHub-token). Real-sidan funkar mot
+# DemoDataStore via demo-trpc-link.
 PLACEHOLDER_ROUTES=(
-  "settings"
   "users"
   "templates"
 )
@@ -80,12 +82,10 @@ done
 # Skriv placeholder-sidor så menyklick på stashade routes inte 404:ar
 echo "[build-demo] Skriver placeholders för $(IFS=,; echo "${PLACEHOLDER_ROUTES[*]}")..."
 declare -A ROUTE_TITLES=(
-  ["settings"]="Inställningar"
   ["users"]="Användare"
   ["templates"]="Dokumentmallar"
 )
 declare -A ROUTE_DESCS=(
-  ["settings"]="Konfiguration av din byrå, fakturanummerserier, betalningsplaner och liknande."
   ["users"]="Hantering av advokater och biträden på byrån."
   ["templates"]="Återanvändbara dokumentmallar som kan auto-fyllas från ärendedata."
 )
