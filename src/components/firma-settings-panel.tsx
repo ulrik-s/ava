@@ -12,6 +12,8 @@
 import { useState } from "react";
 import { type FirmaConfig, type FirmaTier, inferTier, saveFirmaConfig, resetToDemo } from "@/lib/firma/firma-config";
 import { loadAuthSettings, saveAuthSettings } from "@/lib/auth/use-auth-mode";
+import { loadOAuthConfig, saveOAuthConfig, isOAuthConfigured } from "@/lib/auth/oauth-config";
+import { WebOAuthDeviceFlow } from "./web-oauth-device-flow";
 
 interface Props {
   initial: FirmaConfig;
@@ -31,6 +33,9 @@ export function FirmaSettingsPanel({ initial, onSaved, onCancel, inline = false 
   const [allowAnonymousRead, setAllowAnonymousRead] = useState<boolean>(
     () => loadAuthSettings().allowAnonymousRead,
   );
+  const [oauth, setOauth] = useState(() => loadOAuthConfig());
+  const [showOauth, setShowOauth] = useState(false);
+  const [showOauthCfg, setShowOauthCfg] = useState(false);
 
   const handleRepoChange = (v: string) => {
     setRepo(v);
@@ -41,7 +46,14 @@ export function FirmaSettingsPanel({ initial, onSaved, onCancel, inline = false 
   const save = () => {
     saveFirmaConfig({ tier, repo, token, organizationId: orgId, authorName: name, authorEmail: email });
     saveAuthSettings({ allowAnonymousRead });
+    saveOAuthConfig(oauth);
     onSaved();
+  };
+
+  const openPatHelper = () => {
+    const desc = encodeURIComponent(`AVA — ${orgId || "default"}`);
+    const url = `https://github.com/settings/tokens/new?scopes=repo&description=${desc}`;
+    window.open(url, "_blank", "noopener,noreferrer");
   };
 
   const logOut = () => {
@@ -111,10 +123,39 @@ export function FirmaSettingsPanel({ initial, onSaved, onCancel, inline = false 
         </label>
 
         {tier !== "demo" && (
-          <label className="block">
-            <span className="text-xs text-gray-500 mb-1 block">
-              Auth-token <em>(lagras i localStorage)</em>
-            </span>
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs text-gray-500">
+                Auth-token <em>(lagras i localStorage)</em>
+              </span>
+              {tier === "github" && (
+                <div className="flex gap-3">
+                  {isOAuthConfigured(oauth) && (
+                    <button
+                      type="button"
+                      onClick={() => setShowOauth(true)}
+                      className="text-xs text-blue-600 hover:underline"
+                    >
+                      Logga in via GitHub
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={openPatHelper}
+                    className="text-xs text-blue-600 hover:underline"
+                  >
+                    Skapa PAT på GitHub →
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowOauthCfg((v) => !v)}
+                    className="text-xs text-gray-500 hover:underline"
+                  >
+                    {showOauthCfg ? "Dölj OAuth-config" : "OAuth-config"}
+                  </button>
+                </div>
+              )}
+            </div>
             <input
               type="password"
               value={token}
@@ -122,7 +163,44 @@ export function FirmaSettingsPanel({ initial, onSaved, onCancel, inline = false 
               placeholder={tier === "github" ? "ghp_..." : "auth-token för din git-server"}
               className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm font-mono"
             />
-          </label>
+            {showOauth && (
+              <div className="mt-2">
+                <WebOAuthDeviceFlow
+                  onComplete={(t) => { setToken(t); setShowOauth(false); }}
+                  onCancel={() => setShowOauth(false)}
+                />
+              </div>
+            )}
+            {showOauthCfg && (
+              <div className="mt-3 bg-gray-50 border border-gray-200 rounded p-3 space-y-2">
+                <p className="text-xs text-gray-700">
+                  För att aktivera &quot;Logga in via GitHub&quot; behövs en deployerad
+                  OAuth-proxy. Se{" "}
+                  <code className="bg-white px-1 rounded">scripts/oauth-proxy/README.md</code>.
+                </p>
+                <label className="block">
+                  <span className="text-[11px] text-gray-500 block mb-0.5">OAuth proxy URL</span>
+                  <input
+                    type="url"
+                    value={oauth.proxyUrl}
+                    onChange={(e) => setOauth({ ...oauth, proxyUrl: e.target.value })}
+                    placeholder="https://ava-oauth-proxy.<account>.workers.dev"
+                    className="w-full rounded border border-gray-300 px-2 py-1 text-xs font-mono"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-[11px] text-gray-500 block mb-0.5">OAuth Client ID</span>
+                  <input
+                    type="text"
+                    value={oauth.clientId}
+                    onChange={(e) => setOauth({ ...oauth, clientId: e.target.value })}
+                    placeholder="Ov23li..."
+                    className="w-full rounded border border-gray-300 px-2 py-1 text-xs font-mono"
+                  />
+                </label>
+              </div>
+            )}
+          </div>
         )}
 
         <label className="block">

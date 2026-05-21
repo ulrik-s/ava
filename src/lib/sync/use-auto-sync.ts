@@ -273,6 +273,23 @@ export function useAutoSync(opts: UseAutoSyncOptions): UseAutoSyncReturn {
 
 function errMsg(err: unknown, prefix: string): string {
   if (err instanceof SyncTimeoutError) return `${prefix}: timeout — försöker igen senare`;
-  if (err instanceof Error) return `${prefix}: ${err.message}`;
+  if (err instanceof Error) {
+    const m = err.message;
+    // Översätt vanliga isomorphic-git-fel till begripliga råd
+    if (m.includes("A requested file or directory could not be found")
+        || m.includes("ENOENT")) {
+      return `${prefix}: Mappen är inte ett git-repo (saknar .git/). Klona repo:t först i datakällan ovan.`;
+    }
+    if (/401|unauthorized|bad credentials/i.test(m)) {
+      return `${prefix}: GitHub-token avvisades (401). Kontrollera att token finns och har 'repo'-scope.`;
+    }
+    if (/404|not found/i.test(m)) {
+      return `${prefix}: Repo eller branch hittades inte (404). Kontrollera repo-URL och att branchen 'main' finns.`;
+    }
+    if (/CORS|fetch failed/i.test(m)) {
+      return `${prefix}: Nät-fel (CORS/fetch). Kontrollera nätverket.`;
+    }
+    return `${prefix}: ${m}`;
+  }
   return `${prefix}: ${String(err)}`;
 }

@@ -20,6 +20,7 @@ export function FsaFolderSelector({ repoUrl, token }: { repoUrl: string; token: 
   const [supported, setSupported] = useState<boolean | null>(null);
   const [unsupportedReason, setUnsupportedReason] = useState<string | null>(null);
   const [handle, setHandle] = useState<FileSystemDirectoryHandle | null>(null);
+  const [hasGit, setHasGit] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -45,7 +46,16 @@ export function FsaFolderSelector({ repoUrl, token }: { repoUrl: string; token: 
       const h = await loadHandle(HANDLE_KEY);
       if (!h) return;
       const ok = await ensureReadWrite(h).catch(() => false);
-      if (ok && !cancelled) setHandle(h);
+      if (ok && !cancelled) {
+        setHandle(h);
+        // Kolla om det är ett git-repo (har .git/-mapp)
+        try {
+          await h.getDirectoryHandle(".git");
+          if (!cancelled) setHasGit(true);
+        } catch {
+          if (!cancelled) setHasGit(false);
+        }
+      }
     })();
     return () => { cancelled = true; };
   }, []);
@@ -73,7 +83,12 @@ export function FsaFolderSelector({ repoUrl, token }: { repoUrl: string; token: 
     }
   };
 
-  const cloneNew = async () => {
+  /**
+   * Klona repo. Om `useCurrent` → klona till nuvarande handle (för
+   * "Klona hit nu" när användaren redan valt en tom mapp). Annars
+   * be om en ny mapp.
+   */
+  const cloneNew = async (useCurrent = false) => {
     if (!repoUrl) { setErr("Repo-URL saknas — fyll i datakälla först"); return; }
     setBusy(true);
     setErr(null);
@@ -81,19 +96,26 @@ export function FsaFolderSelector({ repoUrl, token }: { repoUrl: string; token: 
       const { saveHandle, ensureReadWrite } = await import("@/lib/fsa/handle-store");
       const { FsaIsoGitAdapter } = await import("@/lib/fsa/fs-adapter");
       const { cloneRepo } = await import("@/lib/fsa/git-ops");
-      const win = window as Window & {
-        showDirectoryPicker?: (o: { mode: string }) => Promise<FileSystemDirectoryHandle>;
-      };
-      const h = await win.showDirectoryPicker?.({ mode: "readwrite" });
-      if (!h) return;
-      if (!(await ensureReadWrite(h))) {
-        setErr("Skrivtillstånd nekat");
-        return;
+      let h: FileSystemDirectoryHandle;
+      if (useCurrent && handle) {
+        h = handle;
+      } else {
+        const win = window as Window & {
+          showDirectoryPicker?: (o: { mode: string }) => Promise<FileSystemDirectoryHandle>;
+        };
+        const picked = await win.showDirectoryPicker?.({ mode: "readwrite" });
+        if (!picked) return;
+        if (!(await ensureReadWrite(picked))) {
+          setErr("Skrivtillstånd nekat");
+          return;
+        }
+        h = picked;
       }
       const fs = new FsaIsoGitAdapter(h);
       await cloneRepo(fs, { url: githubize(repoUrl), token: token || undefined });
       await saveHandle(HANDLE_KEY, h);
       setHandle(h);
+      setHasGit(true);
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
@@ -124,18 +146,42 @@ export function FsaFolderSelector({ repoUrl, token }: { repoUrl: string; token: 
         <strong className="text-gray-800">Lokal mapp</strong>
       </div>
       {handle ? (
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-gray-700">
-            Vald: <span className="font-mono text-gray-900">{handle.name}</span>
-          </span>
-          <button
-            type="button"
-            onClick={() => void forgetFolder()}
-            className="text-gray-500 hover:underline"
-          >
-            Byt mapp
-          </button>
-        </div>
+        <>
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-gray-700">
+              Vald: <span className="font-mono text-gray-900">{handle.name}</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => void forgetFolder()}
+              className="text-gray-500 hover:underline"
+            >
+              Byt mapp
+            </button>
+          </div>
+          {hasGit === false && (
+            <div className="mt-2 bg-amber-50 border border-amber-200 rounded p-2">
+              <p className="text-amber-900 mb-2">
+                <strong>⚠ Mappen är inte ett git-repo.</strong> Klona ett
+                repo hit för att kunna synka. Annars fungerar inte
+                pull/push.
+              </p>
+              <button
+                type="button"
+                onClick={() => void cloneNew(true)}
+                disabled={busy || !repoUrl}
+                className="px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300"
+              >
+                {busy ? "Klonar…" : "Klona hit nu"}
+              </button>
+              {!repoUrl && (
+                <p className="text-amber-800 mt-2">
+                  Fyll i Repo-URL ovan först.
+                </p>
+              )}
+            </div>
+          )}
+        </>
       ) : (
         <div className="flex gap-2 items-center">
           <button
