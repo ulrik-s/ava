@@ -48,11 +48,23 @@ export function FsaFolderSelector({ repoUrl, token }: { repoUrl: string; token: 
       const ok = await ensureReadWrite(h).catch(() => false);
       if (ok && !cancelled) {
         setHandle(h);
-        // Kolla om det är ett git-repo (har .git/-mapp)
+        // Kolla om det är ett *fungerande* git-repo. Vi nöjer oss inte
+        // med att .git/-mappen finns — den kan vara halv-skapad från
+        // en tidigare clone som avbröts. Kräver att HEAD kan resolvas.
         try {
           await h.getDirectoryHandle(".git");
+          const { FsaIsoGitAdapter } = await import("@/lib/fsa/fs-adapter");
+          const git = await import("isomorphic-git");
+          const fsAdapter = new FsaIsoGitAdapter(h);
+          await git.resolveRef({
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            fs: fsAdapter as any,
+            dir: "/",
+            ref: "HEAD",
+          });
           if (!cancelled) setHasGit(true);
         } catch {
+          // .git saknas, är trasig, eller HEAD är inte resolvbar
           if (!cancelled) setHasGit(false);
         }
       }

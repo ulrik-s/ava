@@ -69,17 +69,64 @@ export async function cloneRepo(
 ): Promise<void> {
   const git = await loadIsoGit();
   const httpMod = await loadHttp();
-  await git.clone({
+  const http = httpMod.default ?? httpMod;
+  const ref = opts.ref ?? "main";
+  const corsProxy = opts.corsProxy ?? DEFAULT_CORS_PROXY;
+  const onAuth = opts.token
+    ? () => ({ username: "x-access-token", password: opts.token! })
+    : undefined;
+
+  // Försök först en vanlig clone. Om mappen redan har en partiell git-init
+  // (t.ex. från ett tidigare avbrutet försök) får vi "already exists" på
+  // origin-remote:n. Då kör vi istället en idempotent reset:
+  //   1. Sätt om remote.origin.url (force)
+  //   2. fetch
+  //   3. checkout ref med force (skriver över ev. half-applied files)
+  try {
+    await git.clone({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      fs: fs as any,
+      http,
+      dir: "/",
+      url: opts.url,
+      ref,
+      singleBranch: true,
+      depth: 1,
+      corsProxy,
+      onAuth,
+    });
+    return;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (!/already exists/i.test(msg)) throw err;
+    // Fall through till re-init nedan
+  }
+
+  await git.setConfig({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     fs: fs as any,
-    http: httpMod.default ?? httpMod,
+    dir: "/",
+    path: "remote.origin.url",
+    value: opts.url,
+  });
+  await git.fetch({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    fs: fs as any,
+    http,
     dir: "/",
     url: opts.url,
-    ref: opts.ref ?? "main",
+    ref,
     singleBranch: true,
     depth: 1,
-    corsProxy: opts.corsProxy ?? DEFAULT_CORS_PROXY,
-    onAuth: opts.token ? () => ({ username: "x-access-token", password: opts.token! }) : undefined,
+    corsProxy,
+    onAuth,
+  });
+  await git.checkout({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    fs: fs as any,
+    dir: "/",
+    ref,
+    force: true,
   });
 }
 
