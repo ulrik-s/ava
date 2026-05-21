@@ -68,6 +68,14 @@ export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
           sizeBytes: result.sizeBytes,
           storagePath: result.storagePath,
         });
+        // Enqueue klassificering så användaren ser "analyseras..."-state
+        // försvinna när jobbet är klart. /jobs visar progress.
+        const { jobQueue } = await import("@/lib/jobs/job-queue");
+        jobQueue.enqueue("classify-document", `Analyserar ${result.fileName}`, {
+          documentId: result.id,
+          fileName: result.fileName,
+          storagePath: result.storagePath,
+        });
       } else {
         // Server-fallback (full Tier 2/3-build med backend)
         const formData = new FormData();

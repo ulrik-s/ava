@@ -26,6 +26,9 @@ import { AuthStatusBanner } from "./auth-status-banner";
 import { AutoSync } from "./auto-sync";
 import { SyncProviderRoot } from "@/lib/sync/sync-context";
 import { pickProvider } from "@/lib/sync/pick-provider";
+import { JobsBadge } from "./jobs-badge";
+import { AnalyzeDispatcherRegistrar } from "./analyze-dispatcher-registrar";
+import "@/lib/jobs/register-workers"; // ⚠ side-effect: registrerar workers
 
 type Status = "loading" | "ready" | "error";
 
@@ -186,11 +189,13 @@ function AuthGatedDemoTree(props: TreeProps) {
       <trpc.Provider client={trpcClient} queryClient={queryClient}>
         <QueryClientProvider client={queryClient}>
           <SyncProviderRoot token={firmaConfig.token} pickProvider={pickProvider}>
+          <AnalyzeDispatcherRegistrar />
           <div className="flex items-center justify-between gap-2 border-b border-gray-200 bg-white">
             <div className="flex-1 min-w-0">
               <AuthStatusBanner />
             </div>
-            <div className="px-3 py-1.5 shrink-0">
+            <div className="px-3 py-1.5 shrink-0 flex items-center gap-2">
+              <JobsBadge />
               <AutoSync />
             </div>
           </div>

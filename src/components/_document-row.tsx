@@ -120,7 +120,17 @@ function DocumentLinks({ doc }: { doc: DocumentRecord }) {
   const openInEditor = async () => {
     const { isTauri, openInDefaultApp } = await import("@/lib/tauri/bridge");
     if (!isTauri()) {
-      window.open(viewHref, "_blank", "noopener,noreferrer");
+      // I web/demo har vi inget sätt att öppna i OS-default-appen.
+      // Berätta för användaren att WebDAV-mounten är vägen och länka
+      // till instruktionerna i /settings.
+      const proceed = confirm(
+        "I webbläsarversionen öppnas dokument i Chrome.\n\n" +
+        "För att öppna i PDFGear / Preview / Acrobat:\n" +
+        "1. Mounta AVA:s WebDAV-disk (instruktioner i Inställningar)\n" +
+        "2. Öppna filen från Finder/Utforskaren — den öppnas i standardappen\n\n" +
+        "Klicka OK för att öppna i Chrome ändå."
+      );
+      if (proceed) window.open(viewHref, "_blank", "noopener,noreferrer");
       return;
     }
     const rec = doc as DocumentRecord & { storagePath?: string };
