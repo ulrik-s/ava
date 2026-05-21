@@ -34,19 +34,17 @@ APP_DIR="$ROOT/src/app"
 STASH_PATHS=(
   "api"
   "login"
-  "users"
   "templates"
+  "users/[id]"
 )
 
 # Routes som ska få en placeholder-sida ("Feature unavailable in demo")
 # istället för att bara 404:a när användaren klickar i sidopanelen.
 # Notera att "api" och "login" inte syns i sidobar — ingen placeholder.
 #
-# /settings är *inte* placeholder — den är main config-UI för demon
-# (datakälla, FSA-mapp, GitHub-token). Real-sidan funkar mot
-# DemoDataStore via demo-trpc-link.
+# /settings, /users och /profile är *inte* placeholders — alla
+# fungerar mot DemoDataStore via demo-trpc-link.
 PLACEHOLDER_ROUTES=(
-  "users"
   "templates"
 )
 

@@ -142,3 +142,104 @@ describe("user.delete", () => {
     expect(mockPrisma.user.delete).not.toHaveBeenCalled();
   });
 });
+
+// ─── Nya tester: admin-only-kontroll + key-management ────────────────
+
+function makeCallerWithRole(role: "ADMIN" | "LAWYER" | "ASSISTANT", userId = "u1", orgId = "org-a") {
+  const ctx = {
+    user: { id: userId, email: "x@y", name: "X", role, organizationId: orgId },
+    prisma: mockPrisma, dataStore: dataStoreFromMockPrisma(mockPrisma as unknown as Record<string, unknown>),
+  };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return userRouter.createCaller(ctx as any);
+}
+
+describe("admin-only checks", () => {
+  it("user.create kräver ADMIN", async () => {
+    await expect(
+      makeCallerWithRole("LAWYER").create({ email: "x@example.com", name: "X" }),
+    ).rejects.toThrow(/administratörer/i);
+  });
+
+  it("user.deactivate kräver ADMIN", async () => {
+    await expect(
+      makeCallerWithRole("LAWYER").deactivate({ id: "other" }),
+    ).rejects.toThrow(/administratörer/i);
+  });
+
+  it("user.delete kräver ADMIN", async () => {
+    await expect(
+      makeCallerWithRole("LAWYER").delete({ id: "other" }),
+    ).rejects.toThrow(/administratörer/i);
+  });
+
+  it("user.update.role kräver ADMIN", async () => {
+    await expect(
+      makeCallerWithRole("LAWYER", "u1").update({ id: "u1", role: "ADMIN" }),
+    ).rejects.toThrow(/administratörer/i);
+  });
+
+  it("non-admin kan ändra EGEN profil (namn) men inte annans", async () => {
+    await expect(
+      makeCallerWithRole("LAWYER", "u1").update({ id: "u2", name: "hack" }),
+    ).rejects.toThrow(/bara ändra din egen profil/i);
+  });
+});
+
+describe("user.addKey / removeKey", () => {
+  it("addKey läser publicKeys + uppdaterar (tom array → 1 nyckel)", async () => {
+    mockPrisma.user.findUniqueOrThrow.mockResolvedValue({ publicKeys: [] });
+    mockPrisma.user.update.mockResolvedValue({});
+    await makeCallerWithRole("LAWYER", "u1").addKey({
+      fingerprint: "SHA256:abc", type: "ssh-ed25519", publicKey: "ssh-ed25519 AAAA",
+      addedAt: "2026-05-21T00:00:00Z",
+    });
+    const call = mockPrisma.user.update.mock.calls[0][0];
+    expect(call.data.publicKeys).toHaveLength(1);
+    expect(call.data.publicKeys[0].fingerprint).toBe("SHA256:abc");
+  });
+
+  it("addKey nekar dubblett-fingerprint", async () => {
+    mockPrisma.user.findUniqueOrThrow.mockResolvedValue({
+      publicKeys: [{ fingerprint: "SHA256:abc", type: "ssh-ed25519", publicKey: "x", addedAt: "..." }],
+    });
+    await expect(
+      makeCallerWithRole("LAWYER", "u1").addKey({
+        fingerprint: "SHA256:abc", type: "ssh-ed25519", publicKey: "y", addedAt: "..."
+      }),
+    ).rejects.toThrow(/finns redan/i);
+  });
+
+  it("removeKey filtrerar bort efter fingerprint", async () => {
+    mockPrisma.user.findUniqueOrThrow.mockResolvedValue({
+      publicKeys: [
+        { fingerprint: "SHA256:a", type: "ssh-ed25519", publicKey: "x", addedAt: "..." },
+        { fingerprint: "SHA256:b", type: "ssh-ed25519", publicKey: "y", addedAt: "..." },
+      ],
+    });
+    mockPrisma.user.update.mockResolvedValue({});
+    await makeCallerWithRole("LAWYER", "u1").removeKey({ fingerprint: "SHA256:a" });
+    const call = mockPrisma.user.update.mock.calls[0][0];
+    expect(call.data.publicKeys).toHaveLength(1);
+    expect(call.data.publicKeys[0].fingerprint).toBe("SHA256:b");
+  });
+});
+
+describe("user.current", () => {
+  it("returnerar ctx.user om saknas i tabellen (demo-läget)", async () => {
+    mockPrisma.user.findUniqueOrThrow.mockRejectedValue(new Error("not found"));
+    const me = await makeCallerWithRole("ADMIN", "demo-user").current();
+    expect(me.id).toBe("demo-user");
+    expect(me.publicKeys).toEqual([]);
+  });
+
+  it("returnerar databas-rad om finns", async () => {
+    mockPrisma.user.findUniqueOrThrow.mockResolvedValue({
+      id: "u1", email: "u1@x", name: "U1", title: null, role: "LAWYER",
+      hourlyRate: null, mileageRate: null, createdAt: new Date(),
+      publicKeys: [{ fingerprint: "SHA256:x", type: "ssh-ed25519", publicKey: "k", addedAt: "..." }],
+    });
+    const me = await makeCallerWithRole("LAWYER", "u1").current();
+    expect(me.publicKeys).toHaveLength(1);
+  });
+});

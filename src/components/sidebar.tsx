@@ -17,6 +17,7 @@ const navigation = [
   { name: "Rapporter", href: "/reports", icon: "📈" },
   { name: "Fakturor", href: "/invoices", icon: "💰" },
   { name: "Användare", href: "/users", icon: "👥" },
+  { name: "Min profil", href: "/profile", icon: "🪪" },
   { name: "Inställningar", href: "/settings", icon: "⚙️" },
 ];
 

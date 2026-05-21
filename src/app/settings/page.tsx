@@ -4,7 +4,6 @@ import { useId, useState, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { Upload, Trash2, Building2, Plus, Pencil, X, Check, FolderOpen, Copy } from "lucide-react";
 import { DatasourceSection } from "@/components/datasource-section";
-import { IntegrationsSection } from "@/components/integrations-section";
 
 // ─── WebDAV mount instructions ───────────────────────────────────
 
@@ -393,10 +392,6 @@ export default function SettingsPage() {
 
       {/* Datakälla & inloggning — engångskonfiguration */}
       <DatasourceSection />
-
-      {/* Anslutna tjänster (O365, Google, …) — flyttas till /profile när
-          användarmodellen är klar. Visas här som placeholder. */}
-      <IntegrationsSection />
 
       {/* Logo section */}
       <div className="bg-white border border-gray-200 rounded-lg p-5 mb-5">

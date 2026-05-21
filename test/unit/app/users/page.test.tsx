@@ -10,10 +10,24 @@ const usersQuery = {
   data: { users: [] as Array<Record<string, unknown>> },
   isLoading: false,
 };
+const currentQuery = {
+  data: { id: "admin", role: "ADMIN" } as Record<string, unknown>,
+  isLoading: false,
+};
+const deactivateMutation = {
+  mutate: vi.fn(),
+  isPending: false,
+  error: null,
+};
 
 vi.mock("@/lib/trpc", () => ({
   trpc: {
-    user: { list: { useQuery: () => usersQuery } },
+    user: {
+      list: { useQuery: () => usersQuery },
+      current: { useQuery: () => currentQuery },
+      deactivate: { useMutation: () => deactivateMutation },
+    },
+    useUtils: () => ({ user: { list: { invalidate: vi.fn() } } }),
   },
 }));
 
