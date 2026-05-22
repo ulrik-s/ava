@@ -20,6 +20,10 @@ export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [analyzingIds, setAnalyzingIds] = useState<Set<string>>(new Set());
+  // Dokument-ID:n som fortfarande är mid-upload — visas men inte
+  // klickbara förrän hela kedjan (FSA-write + tRPC-register +
+  // invalidate) klar.
+  const [uploadingIds, setUploadingIds] = useState<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
   const utils = trpc.useUtils();
 
@@ -60,14 +64,25 @@ export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
       if (handle) {
         const { uploadDocumentToFsa } = await import("@/lib/fsa/upload-document");
         const result = await uploadDocumentToFsa({ handle, matterId, file });
-        await mutations.createFromFsa({
-          id: result.id,
-          matterId,
-          fileName: result.fileName,
-          mimeType: result.mimeType,
-          sizeBytes: result.sizeBytes,
-          storagePath: result.storagePath,
-        });
+        // Markera som "uploading" innan tree-invalidate så raden visas
+        // disabled när den först dyker upp i UI:n.
+        setUploadingIds((s) => new Set(s).add(result.id));
+        try {
+          await mutations.createFromFsa({
+            id: result.id,
+            matterId,
+            fileName: result.fileName,
+            mimeType: result.mimeType,
+            sizeBytes: result.sizeBytes,
+            storagePath: result.storagePath,
+          });
+        } finally {
+          // Refetch klar → tree har dokumentet → ta bort upload-flaggan
+          await utils.document.tree.invalidate({ matterId });
+          setUploadingIds((s) => {
+            const next = new Set(s); next.delete(result.id); return next;
+          });
+        }
         // Enqueue klassificering så användaren ser "analyseras..."-state
         // försvinna när jobbet är klart. /jobs visar progress.
         const { jobQueue } = await import("@/lib/jobs/job-queue");
@@ -135,6 +150,7 @@ export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
       depth={depth}
       isDragging={dragItem?.id === doc.id}
       isAnalyzing={analyzingIds.has(doc.id)}
+      isUploading={uploadingIds.has(doc.id)}
       onDragStart={handleDragStart("document", doc.id)}
       onDragEnd={handleDragEnd}
       onReanalyze={() => mutations.reanalyze.mutate({ documentId: doc.id })}

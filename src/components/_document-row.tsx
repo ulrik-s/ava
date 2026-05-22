@@ -27,6 +27,9 @@ interface Props {
   depth: number;
   isDragging: boolean;
   isAnalyzing: boolean;
+  /** Sätts till true under upload-fasen (FSA-write + register +
+   *  tree-invalidate). Klick/öppna är disabled tills false. */
+  isUploading?: boolean;
   onDragStart: (e: React.DragEvent) => void;
   onDragEnd: () => void;
   onReanalyze: () => void;
@@ -41,6 +44,7 @@ export function DocumentRow({
   depth,
   isDragging,
   isAnalyzing,
+  isUploading,
   onDragStart,
   onDragEnd,
   onReanalyze,
@@ -50,14 +54,15 @@ export function DocumentRow({
   return (
     <Fragment>
       <tr
-        draggable
+        draggable={!isUploading}
         onDragStart={onDragStart}
         onDragEnd={onDragEnd}
-        className={`hover:bg-gray-50 ${isDragging ? "opacity-50" : ""}`}
+        className={`hover:bg-gray-50 ${isDragging ? "opacity-50" : ""} ${isUploading ? "opacity-60 pointer-events-none" : ""}`}
+        title={isUploading ? "Laddar upp…" : undefined}
       >
         <td className="px-6 py-2.5 text-sm">
           <div style={{ paddingLeft: `${depth * 20 + 20}px` }}>
-            <DocumentNameButton doc={doc} isAnalyzing={isAnalyzing} />
+            <DocumentNameButton doc={doc} isAnalyzing={isAnalyzing} disabled={isUploading} />
           </div>
         </td>
         <td className="px-6 py-2.5 text-sm text-gray-500 whitespace-nowrap">{formatFileSize(doc.fileSize)}</td>
@@ -65,16 +70,20 @@ export function DocumentRow({
           {new Date(doc.createdAt).toLocaleDateString("sv-SE")}
         </td>
         <td className="px-6 py-2.5 text-right whitespace-nowrap">
-          <DocumentLinks doc={doc} />
+          <DocumentLinks doc={doc} disabled={isUploading} />
           <button
             onClick={onReanalyze}
-            disabled={reanalyzePending}
+            disabled={reanalyzePending || isUploading}
             className="text-xs text-gray-500 hover:text-blue-600 hover:underline mr-3 disabled:opacity-50"
-            title="Kör AI-analys på nytt"
+            title={isUploading ? "Vänta tills uppladdningen är klar" : "Kör AI-analys på nytt"}
           >
             🧠 Analysera
           </button>
-          <button onClick={onDelete} className="text-xs text-red-500 hover:underline">
+          <button
+            onClick={onDelete}
+            disabled={isUploading}
+            className="text-xs text-red-500 hover:underline disabled:opacity-50"
+          >
             Ta bort
           </button>
         </td>
@@ -100,7 +109,7 @@ function isWithinAnalysisGrace(doc: DocumentRecord): boolean {
  * I demo-build:n pekar "Visa"/"Ladda ner" mot GH Pages.
  * I full server-build:n mot /api/documents/<id>/download.
  */
-function DocumentLinks({ doc }: { doc: DocumentRecord }) {
+function DocumentLinks({ doc, disabled }: { doc: DocumentRecord; disabled?: boolean }) {
   const isDemo = process.env.NEXT_PUBLIC_DEMO_BUILD === "1";
   let viewHref: string;
   let downloadHref: string;
@@ -172,24 +181,27 @@ function DocumentLinks({ doc }: { doc: DocumentRecord }) {
       <button
         type="button"
         onClick={openInEditor}
-        className="text-xs text-gray-500 hover:text-blue-600 hover:underline mr-3"
-        title="Öppna i din PDF-editor (Tauri) eller browsern"
+        disabled={disabled}
+        className="text-xs text-gray-500 hover:text-blue-600 hover:underline mr-3 disabled:opacity-50 disabled:cursor-not-allowed"
+        title={disabled ? "Vänta tills uppladdningen är klar" : "Öppna i din PDF-editor (Tauri) eller browsern"}
       >
         🖊 Öppna
       </button>
       <a
-        href={viewHref}
+        href={disabled ? undefined : viewHref}
         target="_blank"
         rel="noopener noreferrer"
-        className="text-xs text-gray-500 hover:text-blue-600 hover:underline mr-3"
-        title="Visa i webbläsaren"
+        className={`text-xs text-gray-500 hover:text-blue-600 hover:underline mr-3 ${disabled ? "opacity-50 pointer-events-none" : ""}`}
+        title={disabled ? "Vänta tills uppladdningen är klar" : "Visa i webbläsaren"}
+        aria-disabled={disabled}
       >
         👁 Visa
       </a>
       <a
-        href={downloadHref}
-        className="text-xs text-gray-500 hover:text-blue-600 hover:underline mr-3"
-        title="Ladda ner"
+        href={disabled ? undefined : downloadHref}
+        className={`text-xs text-gray-500 hover:text-blue-600 hover:underline mr-3 ${disabled ? "opacity-50 pointer-events-none" : ""}`}
+        title={disabled ? "Vänta tills uppladdningen är klar" : "Ladda ner"}
+        aria-disabled={disabled}
       >
         ⬇ Ladda ner
       </a>
@@ -216,11 +228,12 @@ async function readFromFsa(handle: FileSystemDirectoryHandle, path: string): Pro
   } catch { return null; }
 }
 
-function DocumentNameButton({ doc, isAnalyzing }: { doc: DocumentRecord; isAnalyzing: boolean }) {
+function DocumentNameButton({ doc, isAnalyzing, disabled }: { doc: DocumentRecord; isAnalyzing: boolean; disabled?: boolean }) {
   const isWaitingAnalysis = isAnalyzing || isWithinAnalysisGrace(doc);
 
   const isDemo = process.env.NEXT_PUBLIC_DEMO_BUILD === "1";
   const onClick = async () => {
+    if (disabled) return;
     // I demo-läget pekar storagePath på en fil i samma demo-repo
     // (t.ex. documents/content/<id>.md). Öppna direkt mot GH Pages
     // — ingen backend-API behövs.
@@ -248,8 +261,9 @@ function DocumentNameButton({ doc, isAnalyzing }: { doc: DocumentRecord; isAnaly
     <button
       type="button"
       onClick={onClick}
-      className="flex items-start gap-2 text-blue-600 hover:underline text-left"
-      title={doc.summary || "Öppna i extern app (PDFGear för PDF)"}
+      disabled={disabled}
+      className="flex items-start gap-2 text-blue-600 hover:underline text-left disabled:opacity-50 disabled:cursor-not-allowed disabled:no-underline"
+      title={disabled ? "Laddar upp — vänta tills filen är registrerad" : (doc.summary || "Öppna i extern app (PDFGear för PDF)")}
     >
       <span className="text-lg leading-tight">📄</span>
       <span className="flex flex-col min-w-0">

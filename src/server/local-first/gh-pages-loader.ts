@@ -148,11 +148,15 @@ async function fetchAndWriteAll(
     );
   }
   if (missing.length > 0) {
-    const hasDotPath = missing.some((p) => p.startsWith("."));
-    console.warn(
+    const dotPathOnly = missing.every((p) => p.startsWith("."));
+    // Dot-folder-fall är förväntat (Jekyll-default) — degradera till
+    // info istället för warn för att inte spamma consolen. Användaren
+    // kan lägga till .nojekyll i repo-roten för att fixa.
+    const logFn = dotPathOnly ? console.info : console.warn;
+    logFn(
       `[gh-pages-loader] ${missing.length} fil(er) saknades på ${baseUrl}: ` +
       `${missing.slice(0, 3).join(", ")}${missing.length > 3 ? "…" : ""}` +
-      (hasDotPath ? " (TIP: dot-folders kräver .nojekyll i repo-roten — Jekyll strippar dem annars)" : ""),
+      (dotPathOnly ? " (Jekyll strippar dot-folders som default — lägg till en tom `.nojekyll` i repo-roten för att fixa)" : ""),
     );
   }
 
