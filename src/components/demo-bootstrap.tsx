@@ -61,12 +61,9 @@ export function DemoBootstrap({ children }: { children: ReactNode }) {
     }
   })[0];
   const [dataStore] = useState(() => new DemoDataStore(source, writeBack));
-  // På /demo har vi ingen runtime-load → starta som "ready" så vi inte
-  // kallar setStatus i effect:n (vilket React 19 ogillar).
-  const initialStatus: Status = typeof window !== "undefined"
-    && (window.location.pathname.endsWith("/demo") || window.location.pathname.endsWith("/demo/"))
-    ? "ready" : "loading";
-  const [status, setStatus] = useState<Status>(initialStatus);
+  // Initial status MÅSTE vara SSR-stabil för att undvika hydration-
+  // mismatch (React #418). Pathname-baserad logik flyttas till useEffect.
+  const [status, setStatus] = useState<Status>("loading");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [queryClient] = useState(() => new QueryClient({
     defaultOptions: {
@@ -89,10 +86,19 @@ export function DemoBootstrap({ children }: { children: ReactNode }) {
   } as never));
 
   useEffect(() => {
-    // /demo har egen runtime (DemoClient) — skipa bootstrappens load.
+    // /demo har egen runtime (DemoClient). /settings är konfig-sidan
+    // som inte behöver demo-data. Båda skippar load + visar inte
+    // loading-overlay.
     if (typeof window !== "undefined") {
       const p = window.location.pathname;
-      if (p.endsWith("/demo") || p.endsWith("/demo/")) return; // status redan "ready"
+      if (p.endsWith("/demo") || p.endsWith("/demo/")
+          || p.endsWith("/settings") || p.endsWith("/settings/")
+          || p.endsWith("/profile") || p.endsWith("/profile/")
+          || p.endsWith("/users") || p.endsWith("/users/")
+          || p.endsWith("/jobs") || p.endsWith("/jobs/")) {
+        queueMicrotask(() => setStatus("ready"));
+        return;
+      }
     }
 
     // Debug-flagga: ?nodata = ladda inte, behåll status=loading
@@ -203,7 +209,7 @@ function AuthGatedDemoTree(props: TreeProps) {
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-white">
               <div className="text-center">
                 <div className="text-lg font-medium text-gray-900 mb-2">AVA</div>
-                <div className="text-sm text-gray-500">Laddar data från {firmaConfig.repo}…</div>
+                <div className="text-sm text-gray-500">Laddar data…</div>
                 <a
                   href="/settings"
                   className="mt-4 inline-block text-xs text-blue-600 hover:underline"

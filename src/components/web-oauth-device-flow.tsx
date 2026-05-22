@@ -37,7 +37,9 @@ interface TokenResponse {
 }
 
 export function WebOAuthDeviceFlow({ onComplete, onCancel }: Props) {
-  const [cfg] = useState(() => loadOAuthConfig());
+  // SSR-stabil initial — riktig config läses post-mount
+  const [cfg, setCfg] = useState<{ proxyUrl: string; clientId: string }>({ proxyUrl: "", clientId: "" });
+  useEffect(() => { queueMicrotask(() => setCfg(loadOAuthConfig())); }, []);
   const [step, setStep] = useState<"requesting" | "waiting" | "error">("requesting");
   const [code, setCode] = useState<DeviceCodeResponse | null>(null);
   const [err, setErr] = useState<string | null>(null);

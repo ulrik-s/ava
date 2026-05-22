@@ -37,7 +37,9 @@ export function KeypairManager({ onAddToProfile, saving }: Props) {
   const [keypair, setKeypair] = useState<StoredKeypair | null>(null);
   const [sshString, setSshString] = useState<string>("");
   const [fingerprint, setFingerprint] = useState<string>("");
-  const [comment, setComment] = useState<string>(typeof navigator !== "undefined" ? defaultComment() : "");
+  // SSR-stabil initial — defaultComment() läser navigator.userAgent
+  // som inte finns server-side. Sätt i useEffect efter mount istället.
+  const [comment, setComment] = useState<string>("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -50,6 +52,10 @@ export function KeypairManager({ onAddToProfile, saving }: Props) {
   };
 
   useEffect(() => {
+    // Sätt default-comment baserat på user agent post-mount
+    if (typeof navigator !== "undefined") {
+      queueMicrotask(() => setComment(defaultComment()));
+    }
     let cancelled = false;
     void (async () => {
       const ok = await isEd25519Supported();

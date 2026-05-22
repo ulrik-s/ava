@@ -9,7 +9,7 @@
  * → reload sidan så ny config laddas.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { type FirmaConfig, type FirmaTier, inferTier, saveFirmaConfig, resetToDemo } from "@/lib/firma/firma-config";
 import { loadAuthSettings, saveAuthSettings } from "@/lib/auth/use-auth-mode";
 import { loadOAuthConfig, saveOAuthConfig, isOAuthConfigured } from "@/lib/auth/oauth-config";
@@ -34,9 +34,14 @@ export function FirmaSettingsPanel({ initial, onSaved, onCancel, inline = false 
   const [allowAnonymousRead, setAllowAnonymousRead] = useState<boolean>(
     () => loadAuthSettings().allowAnonymousRead,
   );
-  const [oauth, setOauth] = useState(() => loadOAuthConfig());
+  // SSR-stabil initial — riktig config läses post-mount via useEffect
+  const [oauth, setOauth] = useState<{ proxyUrl: string; clientId: string }>({ proxyUrl: "", clientId: "" });
   const [showOauth, setShowOauth] = useState(false);
   const [showOauthCfg, setShowOauthCfg] = useState(false);
+
+  // Läs OAuth-config från localStorage efter hydration så vi undviker
+  // mismatch mellan SSR-rendering (tom config) och client (sparad).
+  useEffect(() => { queueMicrotask(() => setOauth(loadOAuthConfig())); }, []);
 
   const handleRepoChange = (v: string) => {
     setRepo(v);

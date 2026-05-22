@@ -18,7 +18,10 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "AVA — Advokat CRM",
   description: "CRM-system för advokatbyråer",
-  manifest: "/manifest.json",
+  // basePath-prefix bakas in vid build (DEMO_BASE_PATH=/ava i demon).
+  // Next.js Metadata-API:t lägger INTE automatiskt till basePath på
+  // manifest-URL:n, så vi gör det manuellt.
+  manifest: `${process.env.NEXT_PUBLIC_DEMO_BASE_PATH ?? ""}/manifest.json`,
   appleWebApp: {
     capable: true,
     title: "AVA",

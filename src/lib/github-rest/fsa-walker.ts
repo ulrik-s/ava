@@ -25,11 +25,12 @@ export async function walkFsa(handle: FileSystemDirectoryHandle): Promise<Walked
 }
 
 async function walk(dir: FileSystemDirectoryHandle, prefix: string, out: WalkedFile[]): Promise<void> {
-  // FileSystemDirectoryHandle är iterable via .values() (returnerar
-  // FileSystemHandle:s med .kind === "file" | "directory")
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const iterable = dir as any as AsyncIterable<FileSystemHandle>;
-  for await (const entry of iterable) {
+  // FileSystemDirectoryHandle:s default async-iteration ger
+  // [name, handle]-tupler (samma som .entries()). Vi använder
+  // .values() för att få handles direkt.
+   
+  const handleWithValues = dir as FileSystemDirectoryHandle & { values: () => AsyncIterable<FileSystemHandle> };
+  for await (const entry of handleWithValues.values()) {
     if (entry.kind === "directory") {
       if (IGNORED_DIRS.has(entry.name)) continue;
       await walk(entry as FileSystemDirectoryHandle, `${prefix}${entry.name}/`, out);

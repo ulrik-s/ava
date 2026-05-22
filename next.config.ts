@@ -18,6 +18,10 @@ import type { NextConfig } from "next";
 const isDemoBuild = process.env.DEMO_BUILD === "1";
 const demoBasePath = process.env.DEMO_BASE_PATH ?? "";
 
+// Exponera basePath som NEXT_PUBLIC_*-variabel så client-bundle:n vet
+// vad den ska prefixa absoluta URL:s med (t.ex. manifest.json).
+process.env.NEXT_PUBLIC_DEMO_BASE_PATH = demoBasePath;
+
 const baseConfig: NextConfig = {
   reactStrictMode: true,
 };
