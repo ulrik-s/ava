@@ -37,8 +37,18 @@ for (const { path, expectText } of ROUTES) {
     expect(response?.status(), `HTTP-status för ${path}`).toBe(200);
     // Vänta lite så bundle:n hinner hydrera
     await expect(page.locator("body")).toContainText(expectText, { timeout: 15_000 });
-    // Garantera att vi inte landat på Next.js 404
-    const text = await page.locator("body").textContent();
-    expect(text).not.toMatch(/This page could not be found/i);
+    // Garantera att vi inte landat på Next.js 404-sidan. Vi kan inte
+    // bara matcha textContent på body, eftersom Next.js sätter
+    // 404-fallback-strängen i __next_f-payload:n för ALLA sidor (som
+    // potentiell not-found-boundary). Vi kollar bara synliga element:
+    // Next:s 404-sida har specifikt en <h1 class="next-error-h1">404</h1>
+    // Om den är synlig så är vi på 404-sidan.
+    const errorH1 = page.locator("h1.next-error-h1");
+    await expect(errorH1).toHaveCount(0, { timeout: 1000 }).catch(async () => {
+      // Om den finns: kolla att den inte är synlig (kan ligga i en
+      // hidden notFound-boundary som inte aktiverats)
+      const visible = await errorH1.isVisible().catch(() => false);
+      expect(visible, `404-sida visas för ${path}`).toBe(false);
+    });
   });
 }

@@ -56,7 +56,12 @@ async function renderToFile(args: RenderArgs): Promise<{
   if (args.format === "pdf" && args.browser) {
     const page = await args.browser.newPage();
     try {
-      await page.setContent(args.html, { waitUntil: "networkidle0" });
+      // waitUntil: "load" — väntar på allt stylesheet/img-resurser. Vi
+      // använder INTE "networkidle0" eftersom Puppeteer:s type-export
+      // mellan top-level + core ibland kollapsar union:n och CI:s
+      // type-resolution avvisar det. "load" är giltig i alla versioner
+      // och tillräcklig för statisk HTML-rendering av mall-PDF:er.
+      await page.setContent(args.html, { waitUntil: "load" });
       const pdf = await page.pdf({
         format: "A4",
         printBackground: true,
