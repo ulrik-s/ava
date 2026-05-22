@@ -75,13 +75,29 @@ describe("createGhPagesCloneFn", () => {
     await expect(clone(new MemFs(), "ulrik-s/ava-demo")).rejects.toThrow(/tomt|ogiltigt/);
   });
 
-  it("kastar om en fil 404:ar mitt i fetchen", async () => {
+  it("individuella 404:s loggas och hoppas över — resten lyckas", async () => {
     const fetchFn = fakeFetch({
-      "/manifest.json": { paths: ["matters/active/m1.json", "saknas.json"] },
+      "/manifest.json": { paths: ["matters/active/m1.json", ".ava/users/u.json"] },
       "/matters/active/m1.json": '{"id":"m1"}',
+      // .ava/users/u.json finns inte — Jekyll strippar dot-folders på GH Pages
+    });
+    const fs = new MemFs();
+    const clone = createGhPagesCloneFn({ fetchFn });
+    // Skall INTE kasta — load ska lyckas trots saknad fil
+    await clone(fs, "ulrik-s/ava-demo");
+    // De som finns ska vara skrivna
+    expect(await fs.readFile("matters/active/m1.json")).toContain("m1");
+    // Den som 404:ade ska inte finnas
+    expect(await fs.exists(".ava/users/u.json")).toBe(false);
+  });
+
+  it("kastar bara om ALLA filer 404:ar (definitivt fel)", async () => {
+    const fetchFn = fakeFetch({
+      "/manifest.json": { paths: ["a.json", "b.json"] },
+      // Inga filer levereras
     });
     const clone = createGhPagesCloneFn({ fetchFn });
-    await expect(clone(new MemFs(), "ulrik-s/ava-demo")).rejects.toThrow(/saknas\.json|404/);
+    await expect(clone(new MemFs(), "ulrik-s/ava-demo")).rejects.toThrow(/alla|all/i);
   });
 
   it("explicit baseUrl override:ar resolveGhPagesUrl", async () => {

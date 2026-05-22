@@ -128,13 +128,33 @@ async function fetchAndWriteAll(
   fs: MemFs,
   concurrency: number,
 ): Promise<void> {
-  // Enkel parallell-kö: konsumera från arrayen N samtidigt
+  // Enkel parallell-kö: konsumera från arrayen N samtidigt.
+  // Individuella 404:s loggas men kastar inte — det är vanligt att
+  // GitHub Pages strippar `.dotfolders` (Jekyll-default) eller att
+  // manifest:n är stale. Vi vill att resten av data:n laddas ändå.
   const queue = [...paths];
+  const missing: string[] = [];
+  let succeeded = 0;
   const workers: Promise<void>[] = [];
   for (let i = 0; i < Math.min(concurrency, queue.length); i++) {
     workers.push(worker());
   }
   await Promise.all(workers);
+
+  if (succeeded === 0 && paths.length > 0) {
+    throw new Error(
+      `Kunde inte hämta NÅGON fil från ${baseUrl} — alla ${paths.length} paths 404:ade. ` +
+      `Kontrollera att GH Pages är aktiverat på datakälla-repo:t och att manifest.json är up-to-date.`,
+    );
+  }
+  if (missing.length > 0) {
+    const hasDotPath = missing.some((p) => p.startsWith("."));
+    console.warn(
+      `[gh-pages-loader] ${missing.length} fil(er) saknades på ${baseUrl}: ` +
+      `${missing.slice(0, 3).join(", ")}${missing.length > 3 ? "…" : ""}` +
+      (hasDotPath ? " (TIP: dot-folders kräver .nojekyll i repo-roten — Jekyll strippar dem annars)" : ""),
+    );
+  }
 
   async function worker(): Promise<void> {
     for (;;) {
@@ -144,10 +164,17 @@ async function fetchAndWriteAll(
       const fileUrl = `${baseUrl}/${cleanPath}`;
       const res = await fetchFn(fileUrl, { method: "GET" });
       if (!res.ok) {
+        if (res.status === 404) {
+          missing.push(cleanPath);
+          continue;
+        }
+        // Andra fel (500, network) är allvarligare — kasta för att
+        // användaren ska reagera.
         throw new Error(`Kunde inte hämta ${fileUrl}: HTTP ${res.status}`);
       }
       const body = await res.text();
       await fs.writeFile(cleanPath, body);
+      succeeded++;
     }
   }
 }
