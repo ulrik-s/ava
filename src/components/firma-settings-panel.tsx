@@ -30,6 +30,7 @@ export function FirmaSettingsPanel({ initial, onSaved, onCancel, inline = false 
   const [orgId, setOrgId] = useState(initial.organizationId);
   const [name, setName] = useState(initial.authorName);
   const [email, setEmail] = useState(initial.authorEmail);
+  const [corsProxy, setCorsProxy] = useState(initial.corsProxy ?? "");
   const [allowAnonymousRead, setAllowAnonymousRead] = useState<boolean>(
     () => loadAuthSettings().allowAnonymousRead,
   );
@@ -44,7 +45,12 @@ export function FirmaSettingsPanel({ initial, onSaved, onCancel, inline = false 
   };
 
   const save = () => {
-    saveFirmaConfig({ tier, repo, token, organizationId: orgId, authorName: name, authorEmail: email });
+    saveFirmaConfig({
+      tier, repo, token,
+      organizationId: orgId,
+      authorName: name, authorEmail: email,
+      corsProxy: corsProxy.trim() || undefined,
+    });
     saveAuthSettings({ allowAnonymousRead });
     saveOAuthConfig(oauth);
     onSaved();
@@ -110,7 +116,12 @@ export function FirmaSettingsPanel({ initial, onSaved, onCancel, inline = false 
 
   const logOut = () => {
     setToken("");
-    saveFirmaConfig({ tier, repo, token: "", organizationId: orgId, authorName: name, authorEmail: email });
+    saveFirmaConfig({
+      tier, repo, token: "",
+      organizationId: orgId,
+      authorName: name, authorEmail: email,
+      corsProxy: corsProxy.trim() || undefined,
+    });
     onSaved();
   };
 
@@ -318,6 +329,10 @@ export function FirmaSettingsPanel({ initial, onSaved, onCancel, inline = false 
             />
           </label>
         </div>
+
+        {tier !== "demo" && (
+          <CorsProxyField value={corsProxy} onChange={setCorsProxy} />
+        )}
       </div>
 
       <div className="mt-6 flex items-center justify-between">
@@ -402,6 +417,97 @@ function ProxyTestButton({ url }: { url: string }) {
           {result.msg}
         </p>
       )}
+    </div>
+  );
+}
+
+const CORS_PROXY_PREFABS: Array<{ url: string; label: string; warning?: string }> = [
+  {
+    url: "",
+    label: "cors.isomorphic-git.org (default)",
+    warning: "Publik gratis-tjänst — instabil, gick ner senast.",
+  },
+  {
+    url: "https://cors.proxy.aulneau.com",
+    label: "cors.proxy.aulneau.com (community-driven)",
+    warning: "Alternativ publik proxy.",
+  },
+];
+
+function CorsProxyField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [testing, setTesting] = useState(false);
+  const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  const effectiveUrl = value || "https://cors.isomorphic-git.org";
+
+  const test = async () => {
+    setTesting(true);
+    setResult(null);
+    try {
+      // Ping en känd GitHub-endpoint genom proxy:n
+      const url = `${effectiveUrl.replace(/\/+$/, "")}/github.com/ulrik-s/ava-demo/info/refs?service=git-upload-pack`;
+      const res = await fetch(url, { method: "GET" });
+      if (res.ok) {
+        setResult({ ok: true, msg: `✓ Proxy svarar (${res.status})` });
+      } else {
+        setResult({ ok: false, msg: `Proxy svarade ${res.status} ${res.statusText}` });
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setResult({ ok: false, msg: `✗ ${msg}` });
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  return (
+    <div className="pt-2 border-t border-gray-100">
+      <label className="block">
+        <span className="text-xs text-gray-500 mb-1 block">
+          CORS-proxy för git <em>(GitHub:s git-endpoints saknar CORS-headers)</em>
+        </span>
+        <div className="flex gap-2">
+          <input
+            type="url"
+            value={value}
+            onChange={(e) => { onChange(e.target.value); setResult(null); }}
+            placeholder="https://cors.isomorphic-git.org (default om tomt)"
+            className="flex-1 rounded border border-gray-300 px-3 py-1.5 text-sm font-mono"
+          />
+          <button
+            type="button"
+            onClick={() => void test()}
+            disabled={testing}
+            className="text-xs px-3 py-1.5 bg-white border border-gray-300 text-gray-700 rounded hover:bg-gray-50 disabled:opacity-50"
+          >
+            {testing ? "Testar…" : "Testa"}
+          </button>
+        </div>
+        {result && (
+          <p className={`mt-1 text-xs ${result.ok ? "text-green-700" : "text-red-700"}`}>
+            {result.msg}
+          </p>
+        )}
+      </label>
+      <p className="text-[11px] text-gray-500 mt-2">
+        <strong>För produktion:</strong> deploya en egen Cloudflare Worker
+        (se <code>scripts/oauth-proxy/README.md</code>). Den kan användas både
+        som git-CORS-proxy och OAuth-proxy.
+      </p>
+      <div className="text-[11px] text-gray-500 mt-1">
+        Snabbval:{" "}
+        {CORS_PROXY_PREFABS.map((p) => (
+          <button
+            key={p.label}
+            type="button"
+            onClick={() => onChange(p.url)}
+            className="text-blue-600 hover:underline mr-3"
+            title={p.warning}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

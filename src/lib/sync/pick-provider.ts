@@ -42,7 +42,10 @@ export async function pickProvider(token: string): Promise<PickedProvider | null
     if (!handle) return null;
     const ok = await ensureReadWrite(handle).catch(() => false);
     if (!ok) return null;
-    return { provider: makeFsaProvider(handle, token), kind: "fsa" };
+    // Läs corsProxy från firma-config (samma storage som token)
+    const { loadFirmaConfig } = await import("@/lib/firma/firma-config");
+    const corsProxy = loadFirmaConfig().corsProxy;
+    return { provider: makeFsaProvider(handle, token, corsProxy), kind: "fsa" };
   } catch { /* ignorera */ }
 
   return null;
@@ -83,7 +86,7 @@ function makeTauriProvider(repoPath: string, token: string): SyncProvider {
   };
 }
 
-function makeFsaProvider(handle: FileSystemDirectoryHandle, token: string): SyncProvider {
+function makeFsaProvider(handle: FileSystemDirectoryHandle, token: string, corsProxy?: string): SyncProvider {
   const commitOnly = async () => {
     const { FsaIsoGitAdapter } = await import("@/lib/fsa/fs-adapter");
     const { statusMatrix, stageAllAndCommit } = await import("@/lib/fsa/git-ops");
@@ -110,14 +113,17 @@ function makeFsaProvider(handle: FileSystemDirectoryHandle, token: string): Sync
     const { FsaIsoGitAdapter } = await import("@/lib/fsa/fs-adapter");
     const { pushBranch } = await import("@/lib/fsa/git-ops");
     const fs = new FsaIsoGitAdapter(handle);
-    await pushBranch(fs, { token });
+    await pushBranch(fs, { token, corsProxy });
   };
   return {
     pull: async () => {
       const { FsaIsoGitAdapter } = await import("@/lib/fsa/fs-adapter");
       const { pullBranch } = await import("@/lib/fsa/git-ops");
       const fs = new FsaIsoGitAdapter(handle);
-      const r = await pullBranch(fs, { token, authorName: "AVA User", authorEmail: "user@ava.local" });
+      const r = await pullBranch(fs, {
+        token, authorName: "AVA User", authorEmail: "user@ava.local",
+        corsProxy,
+      });
       return { kind: r.kind };
     },
     countChanges: async () => {

@@ -310,8 +310,11 @@ function errMsg(err: unknown, prefix: string): string {
     if (/404|not found/i.test(m)) {
       return `${prefix}: Repo eller branch hittades inte (404). Kontrollera repo-URL och att branchen 'main' finns.`;
     }
-    if (/CORS|fetch failed/i.test(m)) {
-      return `${prefix}: Nät-fel (CORS/fetch). Kontrollera nätverket.`;
+    if (/Failed to fetch|fetch failed/i.test(m)) {
+      return `${prefix}: Nät-fel (Failed to fetch). Vanligast: CORS-proxyn (cors.isomorphic-git.org) är nere eller blockerad. Konfigurera en egen CORS-proxy i Inställningar → Datakälla.`;
+    }
+    if (/CORS/i.test(m)) {
+      return `${prefix}: CORS-fel. Proxyn svarar inte med rätt headers. Byt CORS-proxy i Inställningar.`;
     }
     return `${prefix}: ${m}`;
   }

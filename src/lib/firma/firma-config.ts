@@ -30,6 +30,13 @@ export interface FirmaConfig {
   /** Användarnamn för commits. */
   authorName: string;
   authorEmail: string;
+  /**
+   * URL till CORS-proxy för git smart-HTTP-trafiken. GitHub:s git-
+   * endpoints saknar CORS-headers så vi måste gå via en proxy.
+   * Tomt → använd default (cors.isomorphic-git.org, instabil).
+   * Egen Cloudflare Worker rekommenderas för produktion.
+   */
+  corsProxy?: string;
 }
 
 const STORAGE_KEY = "ava.firma";
