@@ -15,8 +15,13 @@ export function AnalyzeDispatcherRegistrar() {
   const utils = trpc.useUtils();
 
   useEffect(() => {
-    setAnalyzeDispatcher(async ({ documentId, kind }) => {
-      await updateMetadata.mutateAsync({ documentId, documentType: kind });
+    setAnalyzeDispatcher(async ({ documentId, kind, analyzedAt, analysisStatus }) => {
+      await updateMetadata.mutateAsync({
+        documentId,
+        documentType: kind,
+        analyzedAt,
+        analysisStatus,
+      });
       // Invalidera så document-tree i UI:n re-fetchar med uppdaterad metadata
       await utils.document.tree.invalidate();
     });

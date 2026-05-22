@@ -119,31 +119,52 @@ function DocumentLinks({ doc }: { doc: DocumentRecord }) {
 
   const openInEditor = async () => {
     const { isTauri, openInDefaultApp } = await import("@/lib/tauri/bridge");
-    if (!isTauri()) {
-      // I web/demo har vi inget sätt att öppna i OS-default-appen.
-      // Berätta för användaren att WebDAV-mounten är vägen och länka
-      // till instruktionerna i /settings.
-      const proceed = confirm(
-        "I webbläsarversionen öppnas dokument i Chrome.\n\n" +
-        "För att öppna i PDFGear / Preview / Acrobat:\n" +
-        "1. Mounta AVA:s WebDAV-disk (instruktioner i Inställningar)\n" +
-        "2. Öppna filen från Finder/Utforskaren — den öppnas i standardappen\n\n" +
-        "Klicka OK för att öppna i Chrome ändå."
-      );
-      if (proceed) window.open(viewHref, "_blank", "noopener,noreferrer");
+    if (isTauri()) {
+      const rec = doc as DocumentRecord & { storagePath?: string };
+      const path = rec.storagePath ?? "";
+      if (!path) { alert("Dokumentet saknar lokal sökväg."); return; }
+      try { await openInDefaultApp(path); }
+      catch (err) { alert(`Kunde inte öppna: ${err instanceof Error ? err.message : String(err)}`); }
       return;
     }
+
+    // Web/demo: läs lokal kopia från FSA om den finns (nyligen uppladdade
+    // filer hinner inte till remote än), annars GH Pages-URL.
+    // Browser kan EJ navigera till file:// från https://, så vi öppnar
+    // som blob:-URL i ny tab → Chrome visar PDF inline.
+    // För PDFGear/Preview/Acrobat → mounta WebDAV-disken i Inställningar.
     const rec = doc as DocumentRecord & { storagePath?: string };
     const path = rec.storagePath ?? "";
-    if (!path) {
-      alert("Dokumentet saknar lokal sökväg.");
-      return;
+
+    if (path) {
+      try {
+        const { isFsaSupported, loadHandle } = await import("@/lib/fsa/handle-store");
+        if (isFsaSupported()) {
+          const handle = await loadHandle("repo-root");
+          if (handle) {
+            const blob = await readFromFsa(handle, path);
+            if (blob) {
+              const url = URL.createObjectURL(blob);
+              window.open(url, "_blank", "noopener,noreferrer");
+              // Återvinn URL:n efter en stund (browsern behåller den medan tab:n öppen)
+              setTimeout(() => URL.revokeObjectURL(url), 60_000);
+              return;
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("[open] FSA-läsning misslyckades, faller tillbaka till GH Pages:", err);
+      }
     }
-    try {
-      await openInDefaultApp(path);
-    } catch (err) {
-      alert(`Kunde inte öppna: ${err instanceof Error ? err.message : String(err)}`);
-    }
+
+    // Fallback: GH Pages (för pushade dokument i demo) eller server-URL
+    const proceed = confirm(
+      "Dokumentet öppnas i Chrome.\n\n" +
+      "Vill du öppna i PDFGear / Preview / Acrobat istället?\n" +
+      "→ Mounta AVA:s WebDAV-disk via Inställningar och öppna filen från Finder/Utforskaren.\n\n" +
+      "Klicka OK för att öppna i Chrome ändå."
+    );
+    if (proceed) window.open(viewHref, "_blank", "noopener,noreferrer");
   };
 
   return (
@@ -174,6 +195,25 @@ function DocumentLinks({ doc }: { doc: DocumentRecord }) {
       </a>
     </>
   );
+}
+
+/**
+ * Läs en fil från FSA-handle:n och returnera som Blob. Returnerar
+ * null om path:n inte finns. Används för att öppna nyligen
+ * uppladdade dokument lokalt utan att gå via GH Pages.
+ */
+async function readFromFsa(handle: FileSystemDirectoryHandle, path: string): Promise<Blob | null> {
+  const parts = path.replace(/^\/+/, "").split("/").filter(Boolean);
+  if (parts.length === 0) return null;
+  let dir: FileSystemDirectoryHandle = handle;
+  for (let i = 0; i < parts.length - 1; i++) {
+    try { dir = await dir.getDirectoryHandle(parts[i]); }
+    catch { return null; }
+  }
+  try {
+    const fh = await dir.getFileHandle(parts[parts.length - 1]);
+    return await fh.getFile();
+  } catch { return null; }
 }
 
 function DocumentNameButton({ doc, isAnalyzing }: { doc: DocumentRecord; isAnalyzing: boolean }) {

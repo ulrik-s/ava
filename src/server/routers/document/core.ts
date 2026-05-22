@@ -139,7 +139,11 @@ export const coreProcedures = {
       return { ok: true };
     }),
 
-  /** Manuell override av AI-genererad metadata. */
+  /**
+   * Skriv AI-genererad metadata (eller manuell override). Accepterar
+   * även `analyzedAt` + `analysisStatus` så client-side workers kan
+   * markera dokumentet som färdiganalyserat.
+   */
   updateMetadata: orgProcedure
     .input(
       z.object({
@@ -147,11 +151,17 @@ export const coreProcedures = {
         title: z.string().nullable().optional(),
         documentType: z.string().nullable().optional(),
         summary: z.string().nullable().optional(),
+        analyzedAt: z.union([z.string(), z.date()]).nullable().optional(),
+        analysisStatus: z.string().nullable().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
       await assertDocAccess(ctx, input.documentId);
-      const { documentId, ...data } = input;
+      const { documentId, analyzedAt, ...rest } = input;
+      const data = {
+        ...rest,
+        ...(analyzedAt !== undefined ? { analyzedAt: typeof analyzedAt === "string" ? new Date(analyzedAt) : analyzedAt } : {}),
+      };
       return ctx.dataStore.documents.update({ where: { id: documentId }, data });
     }),
 };

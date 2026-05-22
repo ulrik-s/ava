@@ -23,10 +23,18 @@ jobQueue.registerWorker<ClassifyPayload>("classify-document", async (payload, ct
   await sleepWithAbort(200, ctx.signal);
   const guess = guessFromFilename(payload.fileName);
 
-  // Steg 2: skriv `kind` + `analyzedAt` via tRPC
+  // Steg 2: skriv `documentType` + `analyzedAt` + `analysisStatus` via tRPC.
+  // Alla tre fält måste sättas så UI:n vet att analysen körts klart —
+  // utan analyzedAt visas "⏳ analyseras..." permanent.
   ctx.setProgress(0.5);
   const { dispatchAnalyze } = await import("./analyze-dispatch");
-  await dispatchAnalyze({ documentId: payload.documentId, kind: guess, signal: ctx.signal });
+  await dispatchAnalyze({
+    documentId: payload.documentId,
+    kind: guess,
+    analyzedAt: new Date().toISOString(),
+    analysisStatus: "DONE",
+    signal: ctx.signal,
+  });
   ctx.setProgress(1);
 });
 
