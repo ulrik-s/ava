@@ -42,13 +42,106 @@ export async function pickProvider(token: string): Promise<PickedProvider | null
     if (!handle) return null;
     const ok = await ensureReadWrite(handle).catch(() => false);
     if (!ok) return null;
-    // Läs corsProxy från firma-config (samma storage som token)
+    // Bygg REST-baserad provider (ingen CORS-proxy behövs — vi använder
+    // bara api.github.com som har CORS *).
     const { loadFirmaConfig } = await import("@/lib/firma/firma-config");
-    const corsProxy = loadFirmaConfig().corsProxy;
-    return { provider: makeFsaProvider(handle, token, corsProxy), kind: "fsa" };
+    const cfg = loadFirmaConfig();
+    const { parseRepoLocator } = await import("@/lib/github-rest/api");
+    const repoLocator = parseRepoLocator(cfg.repo);
+    if (!repoLocator) {
+      // Self-hosted eller okänd URL → fall tillbaka till legacy iso-git
+      return { provider: makeFsaProvider(handle, token, cfg.corsProxy), kind: "fsa" };
+    }
+    return { provider: makeRestProvider(handle, token, repoLocator, "main"), kind: "fsa" };
   } catch { /* ignorera */ }
 
   return null;
+}
+
+/**
+ * REST-baserad provider — anropar bara api.github.com (CORS *), aldrig
+ * git smart-HTTP eller någon proxy. Detta är primärvägen för web-builden.
+ */
+function makeRestProvider(
+  handle: FileSystemDirectoryHandle,
+  token: string,
+  repo: { owner: string; repo: string },
+  branch: string,
+): SyncProvider {
+  const sharedArgs = { handle, repo, branch, token };
+
+  const countChanges = async (): Promise<number> => {
+    const { walkFsa } = await import("@/lib/github-rest/fsa-walker");
+    const { readSyncState } = await import("@/lib/github-rest/sync-state");
+    const state = await readSyncState(handle);
+    const local = await walkFsa(handle);
+    if (!state) {
+      // Ingen sync-state ännu → inga 'ändringar' (men pull kommer initiera)
+      return 0;
+    }
+    let changes = 0;
+    const localMap = new Map(local.map((f) => [f.path, f.sha]));
+    for (const f of local) {
+      if (state.files[f.path] !== f.sha) changes++;
+    }
+    for (const path of Object.keys(state.files)) {
+      if (!localMap.has(path)) changes++;
+    }
+    return changes;
+  };
+
+  // Lokal commit-only används inte i REST-flödet (vi commit:ar via
+  // GitHub:s API direkt vid push). Returnera no-op.
+  const commitLocal = async (): Promise<{ oid: string | null }> => {
+    return { oid: null };
+  };
+
+  const pushOnly = async (): Promise<void> => {
+    const { pushViaRest } = await import("@/lib/github-rest/push");
+    const n = await countChanges();
+    // Försök ladda Ed25519-nyckel för SSH-signering
+    let signature: string | undefined;
+    try {
+      const { loadKeypair } = await import("@/lib/keys/ed25519-keypair");
+      const kp = await loadKeypair();
+      if (kp) {
+        // Vi kan inte beräkna gpgsig FÖRRÄN vi har commit-textens
+        // bytes (som inkluderar tree+parent+author/committer). GitHub:s
+        // /git/commits-endpoint skapar dessa fält åt oss, så vi kan
+        // inte göra det helt deterministiskt. För nu: skippa signering
+        // i REST-flödet och låt UI förklara att signed commits kräver
+        // helper:n (där vi har full lokal git-state).
+        void kp;
+      }
+    } catch { /* ignorera */ }
+
+    await pushViaRest({
+      ...sharedArgs,
+      message: `AVA: ${n} ändring${n === 1 ? "" : "ar"} ${new Date().toISOString().slice(0, 10)}`,
+      signature,
+    });
+  };
+
+  return {
+    pull: async () => {
+      const { pullViaRest } = await import("@/lib/github-rest/pull");
+      const r = await pullViaRest(sharedArgs);
+      return { kind: r.kind };
+    },
+    countChanges,
+    commitLocal,
+    push: pushOnly,
+    commitAndPush: async () => {
+      const before = await countChanges();
+      if (before === 0) return { oid: null };
+      await pushOnly();
+      // pushViaRest returnerar nya head:n men vi förlorade den här —
+      // läs igen från sync-state
+      const { readSyncState } = await import("@/lib/github-rest/sync-state");
+      const state = await readSyncState(handle);
+      return { oid: state?.lastHead ?? null };
+    },
+  };
 }
 
 function makeTauriProvider(repoPath: string, token: string): SyncProvider {
