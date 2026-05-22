@@ -1,36 +1,71 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AVA — Advokat-CRM
 
-## Getting Started
+Local-first CRM för advokatbyråer. All klientdata stannar i webbläsaren
+(demo-läge), firmans privata git-repo (skarp användning), eller på en
+self-hosted Linux-server (Tier 3). Inga centraliserade backends.
 
-First, run the development server:
+## Kom igång
 
 ```bash
-npm run dev
-# or
+yarn install
 yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Öppna http://localhost:3000.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Lokal test-pipeline
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Speglar exakt vad CI gör — kör allt på ett bräde:
 
-## Learn More
+```bash
+yarn test:all            # hela stacken inkl. Playwright e2e (kräver Docker)
+yarn test:all --no-e2e   # snabb feedback (~1 min): skippar docker + e2e
+```
 
-To learn more about Next.js, take a look at the following resources:
+Pipeline:n kör i ordning:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. **Static analysis** — typecheck, lint, deps:check (cykeldetektion),
+   duplicates (jscpd), knip (dead code)
+2. **`yarn build`** — production Next.js-build
+3. **`scripts/build-demo.sh`** — statisk export för GH Pages
+4. **Docker services** — postgres + meilisearch + tika + llm (om e2e ingår)
+5. **Vitest** — ~1500 unit + komponent + integration-tester med coverage
+6. **Playwright e2e** — smoke-tester mot demo-deployen
+7. **Rapporter** — coverage, jscpd, playwright (HTML i `reports/`)
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Individuella lager
 
-## Deploy on Vercel
+```bash
+yarn typecheck          # tsc --noEmit
+yarn lint               # eslint
+yarn test:run           # vitest
+yarn test:cov           # vitest med coverage
+yarn test:fast          # vitest utan e2e/scripts
+yarn build              # next build
+bash scripts/build-demo.sh  # GH Pages-export
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Demo-läge
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Demo-builden använder ett publikt git-repo som datakälla — ingen server.
+Kör mot live-demo:
+
+https://ulrik-s.github.io/ava
+
+## Architecture
+
+- **Demo build** (`NEXT_PUBLIC_DEMO_BUILD=1`) → GH Pages, in-memory store
+  populerad från publikt git-repo + FSA-mount för local writes
+- **Full build** (default) → Next.js med Postgres + Prisma backend
+- **Tauri build** → desktop-app med libgit2 + OS-keychain för secrets
+
+Designdokument finns i `docs/`:
+- `architecture-future.md` — målarkitekturen
+- `auth-and-integrations-design.md` — användardatabas + O365/OAuth
+- `test-and-tooling-status.md` — testtäckning + tooling-historik
+
+## CI
+
+`.github/workflows/ci.yml` kör samma steg som `yarn test:all` i tre
+parallella jobs. `deploy-demo.yml` deployer GH Pages efter varje
+push till main.
