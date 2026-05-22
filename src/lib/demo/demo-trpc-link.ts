@@ -23,6 +23,7 @@ import { appRouter } from "@/server/routers/_app";
 import type { Context } from "@/server/trpc-core";
 import type { IDataStore } from "@/server/data-store/IDataStore";
 import { noopPorts } from "@/server/adapters/noop-ports";
+import { demoDocumentAnalyzer } from "@/server/adapters/demo-document-analyzer";
 
 export interface DemoTrpcLinkDeps {
   dataStore: IDataStore;
@@ -33,7 +34,9 @@ export interface DemoTrpcLinkDeps {
 export function createDemoTrpcLink(deps: DemoTrpcLinkDeps): TRPCLink<AppRouter> {
   const ctx: Context = {
     dataStore: deps.dataStore,
-    ports: noopPorts,
+    // documentAnalyzer enqueue:ar ett classify-jobb istället för noop
+    // så "Analysera"-knappen faktiskt gör något i demon.
+    ports: { ...noopPorts, documentAnalyzer: demoDocumentAnalyzer },
     user: deps.user ?? defaultDemoUser(),
   };
 

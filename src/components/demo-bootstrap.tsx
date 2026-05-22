@@ -50,8 +50,23 @@ export function DemoBootstrap({ children }: { children: ReactNode }) {
   // som även triggar React-state och stänger ESLint:s ref-during-render.
   const fsaRef = useRefBox<FileSystemDirectoryHandle | null>(null);
   const writeBack = useState(() => async (event: { entity: string; kind: string; row: Record<string, unknown>; previous?: Record<string, unknown> }) => {
-    const h = fsaRef.current;
-    if (!h) return;
+    // Läs handle:n FRÄSCH från IndexedDB vid varje skrivning. fsaRef
+    // sätts av bootstrap:s useEffect men användaren kan ha valt
+    // FSA-mappen via /settings EFTER bootstrap mounted — då är
+    // fsaRef.current null men handle:n finns i IndexedDB. Att alltid
+    // läsa fresh undviker den racen helt.
+    let h = fsaRef.current;
+    if (!h) {
+      try {
+        const { loadHandle, ensureReadWrite, isFsaSupported } = await import("@/lib/fsa/handle-store");
+        if (!isFsaSupported()) return;
+        const loaded = await loadHandle("repo-root");
+        if (!loaded) return;
+        if (!(await ensureReadWrite(loaded).catch(() => false))) return;
+        h = loaded;
+        fsaRef.current = loaded; // cache:a för nästa anrop
+      } catch { return; }
+    }
     const { makeFsaWriteBack } = await import("@/lib/firma/fsa-write-back");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await makeFsaWriteBack({ handle: h })(event as any);
