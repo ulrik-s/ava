@@ -24,6 +24,7 @@ import type { Context } from "@/server/trpc-core";
 import type { IDataStore } from "@/server/data-store/IDataStore";
 import { noopPorts } from "@/server/adapters/noop-ports";
 import { demoDocumentAnalyzer } from "@/server/adapters/demo-document-analyzer";
+import { makeDemoSearchIndex } from "@/server/adapters/demo-search-index";
 
 export interface DemoTrpcLinkDeps {
   dataStore: IDataStore;
@@ -34,9 +35,14 @@ export interface DemoTrpcLinkDeps {
 export function createDemoTrpcLink(deps: DemoTrpcLinkDeps): TRPCLink<AppRouter> {
   const ctx: Context = {
     dataStore: deps.dataStore,
-    // documentAnalyzer enqueue:ar ett classify-jobb istället för noop
-    // så "Analysera"-knappen faktiskt gör något i demon.
-    ports: { ...noopPorts, documentAnalyzer: demoDocumentAnalyzer },
+    // documentAnalyzer enqueue:ar ett classify-jobb istället för noop.
+    // searchIndex söker direkt mot DemoDataStore (in-memory full-text-sök
+    // över fileName + documentType + summary) istället för noop.
+    ports: {
+      ...noopPorts,
+      documentAnalyzer: demoDocumentAnalyzer,
+      searchIndex: makeDemoSearchIndex(deps.dataStore),
+    },
     user: deps.user ?? defaultDemoUser(),
   };
 

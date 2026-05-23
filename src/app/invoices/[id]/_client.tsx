@@ -77,7 +77,7 @@ export default function InvoiceDetailClient({ id }: { id: string }) {
         <InvoiceActions
           invoiceType={inv.invoiceType}
           status={inv.status}
-          hasPlan={!!inv.paymentPlan}
+          hasPlan={inv.paymentPlan?.status === "ACTIVE"}
           hasCreditNote={!!inv.creditNote}
           onShowPayment={() => setShowPayment(true)}
           onShowPlan={() => setShowPlan(true)}

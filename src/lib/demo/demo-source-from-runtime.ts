@@ -70,5 +70,21 @@ export function demoSourceFromRuntime(runtime: DemoRuntime): DemoSource {
     })) as readonly Record<string, unknown>[];
   }
 
+  // Document-projection-schemat heter `uploadedAt` men UI:n läser
+  // `createdAt`. Mappa fallback så datum-stämpeln blir synlig.
+  // Likadant: analyzedAt = uploadedAt om analysen var klar (analysisStatus
+  // = COMPLETED/DONE) men ingen analyzedAt-fält finns i seed-datan.
+  if (out.documents) {
+    out.documents = (out.documents as Array<Record<string, unknown>>).map((row) => {
+      const uploadedAt = row.uploadedAt as Date | string | undefined;
+      const createdAt = (row.createdAt as Date | string | undefined) ?? uploadedAt;
+      const analysisStatus = row.analysisStatus as string | undefined;
+      const isDone = analysisStatus === "COMPLETED" || analysisStatus === "DONE";
+      const analyzedAt = (row.analyzedAt as Date | string | undefined)
+        ?? (isDone ? uploadedAt : null);
+      return { ...row, createdAt, analyzedAt };
+    }) as readonly Record<string, unknown>[];
+  }
+
   return out;
 }

@@ -1,14 +1,21 @@
 # AVA — Arkitektur och regler
 
-Det här dokumentet beskriver hur systemet är uppbyggt **idag** och vilka
+> ⚠ **VIKTIGT**: Detta dokument beskriver Next.js-backenden + Postgres-stacken
+> som används i UTVECKLINGSMILJÖN. **Produktions-arkitekturen är annorlunda**
+> — en tunn nginx + sshd-server (Tier 3). Se [`architecture-future.md`](./architecture-future.md)
+> och [`deploy-tier3-self-hosted.md`](./deploy-tier3-self-hosted.md) för
+> målbilden. README:n i repo-roten är primär.
+
+Det här dokumentet beskriver hur dev-stacken är uppbyggd och vilka
 konventioner som styr nya ändringar. Läs det innan du lägger till ny
 funktionalitet, framför allt **"Regler"**-sektionerna — de är avgörande
 för att tenant-isoleringen och pengarräkningen ska fortsätta stämma.
 
-> **Framtida målbild:** se [`architecture-future.md`](./architecture-future.md)
-> som beskriver den dual-mode-arkitektur vi enats om — local-first med tunn
-> SSH-server *eller* tjock server-deployment, båda från samma kodbas. Det
-> dokumentet är **planen**, inte vad som körs idag.
+**Dev vs prod-skillnad:**
+- **Dev (denna stack)**: Next.js + Postgres för att underlätta debug,
+  iteration och scenario-tester
+- **Prod (Tier 3)**: Statisk Next.js-export servad av nginx + bare git-repos
+  via sshd, all logik kör i klientens browser via FSA + isomorphic-git
 
 AVA är ett svenskt CRM för advokatbyråer: kontakter, ärenden, dokument
 (med AI-analys), tidregistrering, utlägg, fakturering (inklusive

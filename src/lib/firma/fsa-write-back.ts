@@ -18,6 +18,9 @@ const ENTITY_TO_PATH: Record<string, (id: string, row: Record<string, unknown>) 
   contact: (id) => `contacts/${id}.json`,
   matterContact: (id) => `matter-contacts/${id}.json`,
   document: (id) => `documents/${id}.json`,
+  // documentText: extraherad text från PDF/DOCX → plain text-fil. Skrivs via
+  // separat mutation (eller direkt-kallad) efter att extraktionen är klar.
+  documentText: (id) => `documents/text/${id}.txt`,
   timeEntry: (id) => `time-entries/${id}.json`,
   expense: (id) => `expenses/${id}.json`,
   invoice: (id) => `invoices/${id}.json`,
@@ -45,6 +48,24 @@ export function makeFsaWriteBack(opts: WriteBackOpts): (event: MutationEvent<Rec
     try {
       if (event.kind === "delete") {
         await fs.unlink("/" + path);
+        // När ett document raderas → ta även bort binär-content + extraherad text
+        // så att git-historiken blir ren och inga föräldralösa filer ligger kvar.
+        if (event.entity === "document") {
+          const storagePath = String(event.row.storagePath ?? "");
+          if (storagePath) {
+            await fs.unlink("/" + storagePath.replace(/^\/+/, "")).catch(() => {
+              /* redan borta */
+            });
+          }
+          await fs.unlink(`/documents/text/${id}.txt`).catch(() => {
+            /* ev. aldrig extraherad */
+          });
+        }
+      } else if (event.entity === "documentText") {
+        // documentText sparas som plain text, INTE JSON.
+        // row.text innehåller den extraherade strängen.
+        const text = String(event.row.text ?? "");
+        await fs.writeFile("/" + path, text);
       } else {
         const json = JSON.stringify(event.row, null, 2) + "\n";
         await fs.writeFile("/" + path, json);

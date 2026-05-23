@@ -61,8 +61,19 @@ export function DocumentRow({
         title={isUploading ? "Laddar upp…" : undefined}
       >
         <td className="px-6 py-2.5 text-sm">
-          <div style={{ paddingLeft: `${depth * 20 + 20}px` }}>
+          <div
+            style={{ paddingLeft: `${depth * 20 + 20}px` }}
+            className="flex items-center gap-2"
+          >
             <DocumentNameButton doc={doc} isAnalyzing={isAnalyzing} disabled={isUploading} />
+            {isUploading && (
+              <span
+                className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-100 text-amber-800"
+                title="Sparas lokalt — pushas till git när auto-sync kör"
+              >
+                <span className="animate-pulse">●</span> Lokal
+              </span>
+            )}
           </div>
         </td>
         <td className="px-6 py-2.5 text-sm text-gray-500 whitespace-nowrap">{formatFileSize(doc.fileSize)}</td>

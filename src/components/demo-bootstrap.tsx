@@ -28,6 +28,7 @@ import { SyncProviderRoot } from "@/lib/sync/sync-context";
 import { pickProvider } from "@/lib/sync/pick-provider";
 import { JobsBadge } from "./jobs-badge";
 import { AnalyzeDispatcherRegistrar } from "./analyze-dispatcher-registrar";
+import { ExtractTextDispatcherRegistrar } from "./extract-text-dispatcher-registrar";
 import "@/lib/jobs/register-workers"; // ⚠ side-effect: registrerar workers
 
 type Status = "loading" | "ready" | "error";
@@ -75,6 +76,24 @@ export function DemoBootstrap({ children }: { children: ReactNode }) {
       window.dispatchEvent(new CustomEvent("ava:data-changed"));
     }
   })[0];
+
+  // Lyssna på text-extraktions-event från job-workers. Skriver via
+  // samma writeBack-pipeline så filen hamnar i FSA + auto-sync push:ar.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ documentId: string; text: string }>).detail;
+      if (!detail) return;
+      void writeBack({
+        entity: "documentText",
+        kind: "create",
+        row: { id: detail.documentId, text: detail.text },
+      });
+    };
+    window.addEventListener("ava:document-text-extracted", handler);
+    return () => window.removeEventListener("ava:document-text-extracted", handler);
+  }, [writeBack]);
+
   const [dataStore] = useState(() => new DemoDataStore(source, writeBack));
   // Initial status MÅSTE vara SSR-stabil för att undvika hydration-
   // mismatch (React #418). Pathname-baserad logik flyttas till useEffect.
@@ -160,6 +179,21 @@ export function DemoBootstrap({ children }: { children: ReactNode }) {
         // den nu-populerade DemoDataStore.
         await queryClient.invalidateQueries();
         setStatus("ready");
+
+        // Pre-loada text-content (.md, .txt) i bakgrunden så fritextsök
+        // matchar mot innehåll, inte bara metadata. PDF kommer i nästa
+        // iteration via pdfjs-dist. Non-blocking: fortsätter efter ready.
+        void (async () => {
+          try {
+            const { preloadDocumentContents } = await import("@/lib/search/document-content-cache");
+            const { resolveGhPagesUrl } = await import("@/server/local-first/gh-pages-loader");
+            const baseUrl = resolveGhPagesUrl(firmaConfig.repo);
+            const docs = (source.documents ?? []) as Array<{ id: string; fileName?: string; storagePath?: string; mimeType?: string }>;
+            await preloadDocumentContents(docs, baseUrl);
+          } catch (e) {
+            console.warn("[demo] document-content preload failed:", e);
+          }
+        })();
       } catch (err) {
         if (cancelled) return;
         setStatus("error");
@@ -211,6 +245,7 @@ function AuthGatedDemoTree(props: TreeProps) {
         <QueryClientProvider client={queryClient}>
           <SyncProviderRoot token={firmaConfig.token} pickProvider={pickProvider}>
           <AnalyzeDispatcherRegistrar />
+          <ExtractTextDispatcherRegistrar />
           <div className="flex items-center justify-between gap-2 border-b border-gray-200 bg-white">
             <div className="flex-1 min-w-0">
               <AuthStatusBanner />

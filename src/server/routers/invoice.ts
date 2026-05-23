@@ -354,10 +354,10 @@ export const invoiceRouter = router({
           include: { paymentPlan: true },
         });
         if (!inv) throw new TRPCError({ code: "NOT_FOUND" });
-        if (inv.paymentPlan) {
+        if (inv.paymentPlan && inv.paymentPlan.status === "ACTIVE") {
           throw new TRPCError({
             code: "BAD_REQUEST",
-            message: "Avbetalningsplan finns redan för denna faktura.",
+            message: "En aktiv avbetalningsplan finns redan för denna faktura.",
           });
         }
         if (inv.status !== "SENT") {
@@ -365,6 +365,12 @@ export const invoiceRouter = router({
             code: "BAD_REQUEST",
             message: "Endast SENT-fakturor kan få en avbetalningsplan.",
           });
+        }
+
+        // Om en gammal CANCELLED-plan finns, ta bort den först — `invoiceId`
+        // är @unique på PaymentPlan så vi kan inte ha två rader.
+        if (inv.paymentPlan && inv.paymentPlan.status !== "ACTIVE") {
+          await tx.paymentPlan.delete({ where: { id: inv.paymentPlan.id } });
         }
 
         const plan = await tx.paymentPlan.create({

@@ -1,9 +1,19 @@
-# AVA — Framtida arkitektur
+# AVA — Arkitekturmål: tunn server, tjock klient
 
-> **Status:** designdokument. Beskriver målbilden vi enats om i diskussioner
-> 2026-05-10 till 2026-05-15. Nuvarande kodbas (Postgres + Next-server + WebDAV)
-> beskrivs i [`architecture.md`](./architecture.md) — denna fil är **inte** en
-> beskrivning av vad som körs idag.
+> **Status (2026-05-23):** detta är den aktuella målbilden. Vi har beslutat
+> att gå allt-in på **tunn-server-modellen** (Tier 3) — nginx + sshd, ingen
+> Postgres i produktion. Browser-klienten gör allt jobb via FSA +
+> isomorphic-git. Den tjocka server-modellen (Tier 2) finns kvar i
+> `docker-compose-dev.yml` enbart för utveckling och scenario-tester.
+>
+> Implementations-status:
+> - ✅ Tunn server (nginx + sshd) — se [`deploy-tier3-self-hosted.md`](./deploy-tier3-self-hosted.md)
+> - ✅ Browser-klient med FSA-skrivning + GitHub REST push/pull
+> - ✅ Sync-loop med offline-safety + auto-pull/push
+> - ✅ Local SSH-server via docker (`docker/git-ssh/`)
+> - 🚧 Lokal helper-agent för SSH-push från browser — [`local-helper-design.md`](./local-helper-design.md)
+> - 🚧 Direktanslutning från Tauri-app till SSH (libgit2 inbyggd)
+> - 🚧 Migrera alla scenario-tester till tunn-mode
 
 AVA distribueras i framtiden i **två deployment-lägen** från **samma kodbas**.
 Varje byrå väljer vilket som passar dem:

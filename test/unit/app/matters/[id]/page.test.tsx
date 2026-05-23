@@ -47,6 +47,7 @@ vi.mock("@/lib/trpc", () => ({
       addContact: { useMutation: () => stubs.addContact },
       addNewContact: { useMutation: () => stubs.addNewContact },
       removeContact: { useMutation: () => stubs.removeContact },
+      update: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
     timeEntry: {
       list: { useQuery: () => timeQuery },

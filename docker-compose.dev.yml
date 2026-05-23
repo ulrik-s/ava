@@ -1,0 +1,116 @@
+# AVA dev-stack — fat backend för utveckling och scenario-tester.
+#
+# Default `docker-compose.yml` är den TUNNA Tier 3-mode:n (nginx + sshd).
+# Denna fil är ALTERNATIV för utvecklare som vill köra Next.js dev-server
+# med Postgres för att iterera på serverkod och köra scenario-tester:s
+# multi-step user journeys mot riktig tRPC + DB.
+#
+# Användning:
+#   docker compose -f docker-compose.dev.yml up -d
+#   yarn scenarios       # eller direkt: yarn playwright test
+#
+# Browser → http://localhost:3000
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ava
+      POSTGRES_PASSWORD: ava_dev_password
+      POSTGRES_DB: ava
+    ports:
+      - "5432:5432"
+    volumes:
+      - dev_postgres_data:/var/lib/postgresql/data
+      - ./prisma/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ava"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.6
+    restart: unless-stopped
+    environment:
+      MEILI_MASTER_KEY: ava_meili_dev_key
+      MEILI_ENV: development
+    ports:
+      - "7700:7700"
+    volumes:
+      - dev_meili_data:/meili_data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:7700/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  tika:
+    image: apache/tika:latest
+    restart: unless-stopped
+    ports:
+      - "9998:9998"
+
+  app-init:
+    image: node:22-bookworm-slim
+    working_dir: /app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: "postgresql://ava:ava_dev_password@postgres:5432/ava?schema=public"
+      DEBIAN_FRONTEND: noninteractive
+    volumes:
+      - ./:/app
+      - dev_node_modules:/app/node_modules
+    command:
+      - bash
+      - -c
+      - |
+        set -e
+        apt-get update -qq && apt-get install -y --no-install-recommends openssl ca-certificates >/dev/null
+        corepack enable
+        yarn install --immutable
+        yarn prisma generate
+        yarn prisma db push --accept-data-loss
+        echo "✅ app-init klar"
+    restart: "no"
+
+  app:
+    image: node:22-bookworm-slim
+    working_dir: /app
+    depends_on:
+      app-init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      meilisearch:
+        condition: service_healthy
+      tika:
+        condition: service_started
+    environment:
+      DATABASE_URL: "postgresql://ava:ava_dev_password@postgres:5432/ava?schema=public"
+      NEXTAUTH_URL: "http://localhost:3000"
+      NEXTAUTH_SECRET: "dev-secret-change-in-production"
+      MEILI_URL: "http://meilisearch:7700"
+      MEILI_MASTER_KEY: "ava_meili_dev_key"
+      TIKA_URL: "http://tika:9998"
+      DOCUMENT_STORAGE_PATH: "/app/storage/documents"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./:/app
+      - dev_node_modules:/app/node_modules
+    command:
+      - bash
+      - -c
+      - 'corepack enable && yarn dev:next --hostname 0.0.0.0'
+    restart: unless-stopped
+
+volumes:
+  dev_postgres_data:
+  dev_meili_data:
+  dev_node_modules:

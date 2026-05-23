@@ -27,6 +27,7 @@
 
 export type JobKind =
   | "classify-document"
+  | "extract-text"
   | "index-document"
   | "upload-document"
   | "sync"

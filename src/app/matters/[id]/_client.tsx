@@ -75,6 +75,7 @@ type MatterContact = {
 
 interface HeaderProps {
   matter: {
+    id: string;
     matterNumber: string;
     title: string;
     matterType?: string | null;
@@ -86,6 +87,19 @@ interface HeaderProps {
 }
 
 function MatterHeader({ matter: m, klient, onOpenGenerate }: HeaderProps) {
+  const utils = trpc.useUtils();
+  const updateStatus = trpc.matter.update.useMutation({
+    onSuccess: () => utils.matter.getById.invalidate({ id: m.id }),
+  });
+
+  const onCloseMatter = () => {
+    if (!confirm(`Avsluta ärendet "${m.title}"? Det går att återöppna sen.`)) return;
+    updateStatus.mutate({ id: m.id, status: "CLOSED" });
+  };
+  const onReopenMatter = () => {
+    updateStatus.mutate({ id: m.id, status: "ACTIVE" });
+  };
+
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6 mb-6">
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
@@ -101,6 +115,23 @@ function MatterHeader({ matter: m, klient, onOpenGenerate }: HeaderProps) {
         </div>
         <div className="flex items-center gap-2">
           <StatusBadge status={m.status} />
+          {m.status === "ACTIVE" ? (
+            <button
+              onClick={onCloseMatter}
+              disabled={updateStatus.isPending}
+              className="px-3 py-1 text-xs font-medium bg-white border border-gray-300 rounded-full hover:bg-gray-50 text-gray-700 disabled:opacity-50"
+            >
+              Avsluta ärende
+            </button>
+          ) : m.status === "CLOSED" ? (
+            <button
+              onClick={onReopenMatter}
+              disabled={updateStatus.isPending}
+              className="px-3 py-1 text-xs font-medium bg-white border border-gray-300 rounded-full hover:bg-gray-50 text-gray-700 disabled:opacity-50"
+            >
+              Återöppna
+            </button>
+          ) : null}
           <button
             onClick={onOpenGenerate}
             className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium bg-white border border-gray-300 rounded-full hover:bg-gray-50 text-gray-700"

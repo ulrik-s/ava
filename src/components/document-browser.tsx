@@ -24,6 +24,11 @@ export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
   // klickbara förrän hela kedjan (FSA-write + tRPC-register +
   // invalidate) klar.
   const [uploadingIds, setUploadingIds] = useState<Set<string>>(new Set());
+  // Optimistiska rader: dyker upp i listan direkt när användaren väljer en
+  // fil, innan FSA-write och tRPC-register hunnits. Tas bort när tree-
+  // refetch klart (då dyker den "riktiga" raden upp på samma plats).
+  const [pendingUploads, setPendingUploads] = useState<DocumentRecord[]>([]);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const utils = trpc.useUtils();
 
@@ -40,7 +45,11 @@ export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
   });
 
   const foldersByParent = useMemo(() => groupBy(folders, (f) => f.parentId ?? null), [folders]);
-  const docsByFolder = useMemo(() => groupBy(documents, (d) => d.folderId ?? null), [documents]);
+  // Optimistiska rader läggs i root-foldern (de saknar ännu folderId).
+  const docsByFolder = useMemo(
+    () => groupBy([...documents, ...pendingUploads], (d) => d.folderId ?? null),
+    [documents, pendingUploads]
+  );
 
   const toggleFolder = useCallback((folderId: string) => {
     setCollapsedFolders((prev) => {
@@ -54,51 +63,81 @@ export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    setUploadError(null);
     setUploading(true);
+
+    // Optimistisk rad — användaren ser filen direkt i listan, greyed,
+    // med "Lokal"-pill. Tas bort när tree-refetch klart.
+    const placeholderId = `pending-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+    const placeholder = makePlaceholderDoc({ id: placeholderId, file, matterId });
+    setPendingUploads((p) => [...p, placeholder]);
+    setUploadingIds((s) => new Set(s).add(placeholderId));
+
+    const removePlaceholder = () => {
+      setPendingUploads((p) => p.filter((d) => d.id !== placeholderId));
+      setUploadingIds((s) => {
+        const next = new Set(s); next.delete(placeholderId); return next;
+      });
+    };
+
     try {
-      // FSA-läge: skriv fil direkt till user:ns lokala mapp + skapa
-      // dokumentet via tRPC (vilket via WritableDelegate skriver
-      // metadata-JSON till samma mapp).
       const { isFsaSupported, loadHandle } = await import("@/lib/fsa/handle-store");
-      const handle = isFsaSupported() ? await loadHandle("repo-root") : null;
-      if (handle) {
-        const { uploadDocumentToFsa } = await import("@/lib/fsa/upload-document");
-        const result = await uploadDocumentToFsa({ handle, matterId, file });
-        // Markera som "uploading" innan tree-invalidate så raden visas
-        // disabled när den först dyker upp i UI:n.
-        setUploadingIds((s) => new Set(s).add(result.id));
-        try {
-          await mutations.createFromFsa({
-            id: result.id,
-            matterId,
-            fileName: result.fileName,
-            mimeType: result.mimeType,
-            sizeBytes: result.sizeBytes,
-            storagePath: result.storagePath,
-          });
-        } finally {
-          // Refetch klar → tree har dokumentet → ta bort upload-flaggan
-          await utils.document.tree.invalidate({ matterId });
-          setUploadingIds((s) => {
-            const next = new Set(s); next.delete(result.id); return next;
-          });
-        }
-        // Enqueue klassificering så användaren ser "analyseras..."-state
-        // försvinna när jobbet är klart. /jobs visar progress.
-        const { jobQueue } = await import("@/lib/jobs/job-queue");
-        jobQueue.enqueue("classify-document", `Analyserar ${result.fileName}`, {
-          documentId: result.id,
+      if (!isFsaSupported()) {
+        throw new Error(
+          "Din webbläsare stödjer inte File System Access. Använd Chrome eller Edge."
+        );
+      }
+      const handle = await loadHandle("repo-root");
+      if (!handle) {
+        throw new Error(
+          "Ingen lokal mapp är vald. Gå till Inställningar → välj din firma-mapp och försök igen."
+        );
+      }
+
+      const { uploadDocumentToFsa } = await import("@/lib/fsa/upload-document");
+      const result = await uploadDocumentToFsa({ handle, matterId, file });
+
+      // Byt placeholder-id mot riktigt id så raden inte hoppar.
+      setUploadingIds((s) => {
+        const next = new Set(s); next.delete(placeholderId); next.add(result.id); return next;
+      });
+      setPendingUploads((p) => p.map((d) => (d.id === placeholderId ? { ...d, id: result.id } : d)));
+
+      try {
+        await mutations.createFromFsa({
+          id: result.id,
+          matterId,
           fileName: result.fileName,
+          mimeType: result.mimeType,
+          sizeBytes: result.sizeBytes,
           storagePath: result.storagePath,
         });
-      } else {
-        // Server-fallback (full Tier 2/3-build med backend)
-        const formData = new FormData();
-        formData.append("file", file);
-        formData.append("matterId", matterId);
-        await fetch("/api/documents/upload", { method: "POST", body: formData });
+      } finally {
+        await utils.document.tree.invalidate({ matterId });
+        setUploadingIds((s) => {
+          const next = new Set(s); next.delete(result.id); return next;
+        });
+        setPendingUploads((p) => p.filter((d) => d.id !== result.id));
       }
-      utils.document.tree.invalidate({ matterId });
+
+      // Bakgrundsjobb: AI-klassificering + text-extraktion → sökbart innehåll
+      const { jobQueue } = await import("@/lib/jobs/job-queue");
+      jobQueue.enqueue("classify-document", `Analyserar ${result.fileName}`, {
+        documentId: result.id,
+        fileName: result.fileName,
+        storagePath: result.storagePath,
+      });
+      jobQueue.enqueue("extract-text", `Extraherar text ur ${result.fileName}`, {
+        documentId: result.id,
+        fileName: result.fileName,
+        storagePath: result.storagePath,
+        mimeType: result.mimeType,
+      });
+    } catch (err) {
+      removePlaceholder();
+      const msg = err instanceof Error ? err.message : String(err);
+      setUploadError(msg);
+      console.error("[upload]", err);
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -214,6 +253,20 @@ export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
         onUpload={handleFileUpload}
       />
 
+      {uploadError && (
+        <div className="mx-6 mt-3 p-3 rounded-md border border-red-200 bg-red-50 text-sm text-red-800 flex items-start justify-between gap-3">
+          <span><strong>Uppladdning misslyckades:</strong> {uploadError}</span>
+          <button
+            type="button"
+            onClick={() => setUploadError(null)}
+            className="text-red-600 hover:text-red-800 text-xs"
+            aria-label="Stäng felmeddelande"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {showNewFolder && (
         <NewFolderForm
           isPending={mutations.createFolder.isPending}
@@ -325,6 +378,35 @@ function BrowserHeader({
       </div>
     </div>
   );
+}
+
+/**
+ * Bygger en placeholder-DocumentRecord för optimistisk rendering medan
+ * filen håller på att skrivas till FSA + registreras via tRPC.
+ * Fälten är "best-effort" — version/uploadedBy/etc bara stub-värden
+ * eftersom raden ändå är disabled tills den ersätts av den riktiga.
+ */
+function makePlaceholderDoc({
+  id, file, matterId,
+}: { id: string; file: File; matterId: string }): DocumentRecord {
+  return {
+    id,
+    fileName: file.name,
+    mimeType: file.type || "application/octet-stream",
+    fileSize: file.size,
+    storagePath: "",
+    version: 1,
+    matterId,
+    folderId: null,
+    uploadedById: "",
+    createdAt: new Date().toISOString(),
+    uploadedBy: { name: null },
+    title: null,
+    documentType: null,
+    summary: null,
+    analyzedAt: null,
+    analysisError: null,
+  };
 }
 
 function groupBy<T, K>(items: T[], keyFn: (item: T) => K): Map<K, T[]> {
