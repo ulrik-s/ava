@@ -338,7 +338,7 @@ Sidoeffekter under arbetet med Task #4:
   `documents/content/*.md`. INTE relaterat till detta arbete. Beslut: uppdatera
   testet (kod-intentet verkar medvetet) eller koden.
 - **Task #5 (delvis):** coverage → 95%.
-  - Aktuell: **Stmts 69.9% / Br 63.8% / Func 70.3% / Lines 72.5%** (var ~58–64% innan).
+  - Aktuell: **Stmts 70.8% / Br 64.8% / Func 71.2% / Lines 73.5%** (var ~58–64% innan).
   - Trösklar i `tooling/config/vitest.config.ts` är nu 68/60/68/70 — strax under
     nuvarande siffror så CI fångar regressioner.
   - **Genomfört denna omgång:**
@@ -373,7 +373,10 @@ Sidoeffekter under arbetet med Task #4:
     -- TODO: refactor` så CI blockerar NYA brott men existerande exceptions är
     spårade. Sök efter `TODO: refactor` för kö-listan.
   - **Kvar att refaktorera (sortat efter komplexitet):**
-    - `FirmaSettingsPanel` (25) — `src/client/components/firma-settings-panel.tsx`
+    - ~~`FirmaSettingsPanel` (25)~~ — KLAR (extraherade TierPicker, RepoField,
+      IdentityFields, AuthTokenSection, FooterButtons, ProxyTestButton +
+      pure helpers validateGithubToken, testOAuthProxy, testCorsProxy.
+      Coverage 32.8% → 78.9% lines. 41 tester i firma-settings-panel.test.tsx.)
     - `ContactDetailClient` (22) — `src/app/contacts/[id]/_client.tsx`
     - `SettingsPage` (21) — `src/app/settings/page.tsx`
     - `InvoicesSection` (21) — `src/client/components/invoices-section.tsx`
