@@ -4,7 +4,7 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { AuthGuard } from "@/components/auth-guard";
+import { AuthGuard } from "@/client/components/auth-guard";
 
 const sessionMock = vi.fn<
   () => {
@@ -25,7 +25,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 // Sidebar är tung att rendera (signOut + Link); mocka som platshållare
-vi.mock("@/components/sidebar", () => ({
+vi.mock("@/client/components/sidebar", () => ({
   Sidebar: ({ userName }: { userName?: string | null }) => (
     <aside data-testid="sidebar">{userName ?? "anonym"}</aside>
   ),

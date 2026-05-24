@@ -7,9 +7,9 @@
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { FirmaSettingsPanel } from "@/components/firma-settings-panel";
-import { loadAuthSettings, saveAuthSettings } from "@/lib/auth/use-auth-mode";
-import type { FirmaConfig } from "@/lib/firma/firma-config";
+import { FirmaSettingsPanel } from "@/client/components/firma-settings-panel";
+import { loadAuthSettings, saveAuthSettings } from "@/client/lib/auth/use-auth-mode";
+import type { FirmaConfig } from "@/client/lib/firma/firma-config";
 
 const baseConfig: FirmaConfig = {
   tier: "github",

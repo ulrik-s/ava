@@ -12,9 +12,9 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { jobQueue } from "@/lib/jobs/job-queue";
-import { setAnalyzeDispatcher } from "@/lib/jobs/analyze-dispatch";
-import "@/lib/jobs/register-workers"; // ensure worker is registered
+import { jobQueue } from "@/client/lib/jobs/job-queue";
+import { setAnalyzeDispatcher } from "@/client/lib/jobs/analyze-dispatch";
+import "@/client/lib/jobs/register-workers"; // ensure worker is registered
 
 beforeEach(() => {
   jobQueue.list().forEach((j) => {

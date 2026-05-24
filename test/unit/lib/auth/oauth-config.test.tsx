@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect, beforeEach } from "vitest";
-import { loadOAuthConfig, saveOAuthConfig, isOAuthConfigured } from "@/lib/auth/oauth-config";
+import { loadOAuthConfig, saveOAuthConfig, isOAuthConfigured } from "@/client/lib/auth/oauth-config";
 
 beforeEach(() => localStorage.clear());
 

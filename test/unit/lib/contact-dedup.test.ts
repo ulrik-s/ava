@@ -3,7 +3,7 @@ import {
   findExistingContactForSuggestion,
   type ContactCandidate,
   type SuggestionKey,
-} from "@/lib/contact-dedup";
+} from "@/client/lib/contact-dedup";
 
 function contact(overrides: Partial<ContactCandidate> & { id: string }): ContactCandidate {
   return {

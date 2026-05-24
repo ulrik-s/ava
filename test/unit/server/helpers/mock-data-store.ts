@@ -13,6 +13,7 @@ import { vi } from "vitest";
 export interface MockDataStore {
   events: { emit: ReturnType<typeof vi.fn>; query: ReturnType<typeof vi.fn>; iterate: ReturnType<typeof vi.fn>; onNewEvent: ReturnType<typeof vi.fn> };
   raw: unknown;
+  transaction: <T>(fn: (tx: unknown) => Promise<T>) => Promise<T>;
   matters: unknown;
   matterContacts: unknown;
   contacts: unknown;
@@ -28,6 +29,9 @@ export interface MockDataStore {
   organizations: unknown;
   offices: unknown;
   conflictChecks: unknown;
+  payments: unknown;
+  paymentPlans: unknown;
+  accontoDeductions: unknown;
 }
 
 // Återanvändbar mall — pekare i `mockPrisma` mappas mot fält i `dataStore`.
@@ -40,6 +44,30 @@ export function dataStoreFromMockPrisma(mockPrisma: Record<string, unknown>): Mo
       onNewEvent: vi.fn(() => () => {}),
     },
     raw: mockPrisma,
+    // Speglar Prisma's interaktiva transaktion: kör callbacken mot en
+    // tx-vy som mappar plural-namn → mockPrisma:s singular-delegates.
+    // Tester som vill testa $transaction-flöden konfigurerar mockPrisma
+    // som vanligt; rollback simuleras inte (samma som tidigare mock).
+    transaction: (fn) => fn({
+      matters: mockPrisma.matter,
+      matterContacts: mockPrisma.matterContact,
+      contacts: mockPrisma.contact,
+      documents: mockPrisma.document,
+      documentFolders: mockPrisma.documentFolder,
+      documentTemplates: mockPrisma.documentTemplate,
+      documentAnalysisSuggestions: mockPrisma.documentAnalysisSuggestion,
+      matterEventSuggestions: mockPrisma.matterEventSuggestion,
+      invoices: mockPrisma.invoice,
+      timeEntries: mockPrisma.timeEntry,
+      expenses: mockPrisma.expense,
+      users: mockPrisma.user,
+      organizations: mockPrisma.organization,
+      offices: mockPrisma.office,
+      conflictChecks: mockPrisma.conflictCheck,
+      payments: mockPrisma.payment,
+      paymentPlans: mockPrisma.paymentPlan,
+      accontoDeductions: mockPrisma.invoiceAccontoDeduction,
+    }),
     matters: mockPrisma.matter,
     matterContacts: mockPrisma.matterContact,
     contacts: mockPrisma.contact,
@@ -55,5 +83,8 @@ export function dataStoreFromMockPrisma(mockPrisma: Record<string, unknown>): Mo
     organizations: mockPrisma.organization,
     offices: mockPrisma.office,
     conflictChecks: mockPrisma.conflictCheck,
+    payments: mockPrisma.payment,
+    paymentPlans: mockPrisma.paymentPlan,
+    accontoDeductions: mockPrisma.invoiceAccontoDeduction,
   };
 }

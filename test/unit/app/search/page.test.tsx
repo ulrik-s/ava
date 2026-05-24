@@ -12,7 +12,7 @@ const searchQuery = {
   error: null as Error | null,
 };
 
-vi.mock("@/lib/trpc", () => ({
+vi.mock("@/client/lib/trpc", () => ({
   trpc: {
     document: {
       search: { useQuery: () => searchQuery },

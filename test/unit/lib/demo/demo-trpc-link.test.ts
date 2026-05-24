@@ -7,7 +7,7 @@ import { describe, it, expect } from "vitest";
 import { createTRPCClient } from "@trpc/client";
 import superjson from "superjson";
 import type { AppRouter } from "@/server/routers/_app";
-import { createDemoTrpcLink } from "@/lib/demo/demo-trpc-link";
+import { createDemoTrpcLink } from "@/client/lib/demo/demo-trpc-link";
 import { DemoDataStore } from "@/server/data-store/DemoDataStore";
 
 const matters = [

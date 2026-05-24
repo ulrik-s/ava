@@ -15,7 +15,7 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: routerPush }),
 }));
 
-vi.mock("@/lib/trpc", () => ({
+vi.mock("@/client/lib/trpc", () => ({
   trpc: {
     useUtils: () => utilsMock,
     user: {

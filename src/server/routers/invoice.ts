@@ -16,7 +16,7 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, orgProcedure } from "../trpc";
-import { computeFinalInvoiceBreakdown, isPaymentPlanSettled } from "@/lib/invoice-calc";
+import { computeFinalInvoiceBreakdown, isPaymentPlanSettled } from "@/client/lib/invoice-calc";
 import { emit } from "../events/emit";
 
 const invoiceTypeSchema = z.enum(["STANDARD", "ACCONTO", "FINAL"]);
@@ -132,15 +132,15 @@ export const invoiceRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      return ctx.dataStore.raw.$transaction(async (tx) => {
-        const matter = await tx.matter.findFirst({
+      return ctx.dataStore.transaction(async (tx) => {
+        const matter = await tx.matters.findFirst({
           where: { id: input.matterId, organizationId: ctx.orgId },
         });
         if (!matter) throw new TRPCError({ code: "NOT_FOUND" });
 
         // Hämta och validera time entries
         const timeEntries = input.timeEntryIds.length
-          ? await tx.timeEntry.findMany({
+          ? await tx.timeEntries.findMany({
               where: {
                 id: { in: input.timeEntryIds },
                 matterId: input.matterId,
@@ -157,7 +157,7 @@ export const invoiceRouter = router({
         }
 
         const expenses = input.expenseIds.length
-          ? await tx.expense.findMany({
+          ? await tx.expenses.findMany({
               where: {
                 id: { in: input.expenseIds },
                 matterId: input.matterId,
@@ -175,7 +175,7 @@ export const invoiceRouter = router({
         // Validera accontos: måste tillhöra samma ärende, vara ACCONTO, och
         // inte redan vara avdragna på en tidigare FINAL.
         const accontos = input.accontoInvoiceIds.length
-          ? await tx.invoice.findMany({
+          ? await tx.invoices.findMany({
               where: {
                 id: { in: input.accontoInvoiceIds },
                 matterId: input.matterId,
@@ -200,7 +200,7 @@ export const invoiceRouter = router({
           accontos.map((a) => ({ id: a.id, amount: a.amount })),
         );
 
-        const invoice = await tx.invoice.create({
+        const invoice = await tx.invoices.create({
           data: {
             matterId: input.matterId,
             amount: breakdown.grossAmount,
@@ -209,13 +209,29 @@ export const invoiceRouter = router({
             invoiceDate: input.invoiceDate ? new Date(input.invoiceDate) : new Date(),
             dueDate: input.dueDate ? new Date(input.dueDate) : null,
             notes: input.notes,
-            timeEntries: { connect: timeEntries.map((t) => ({ id: t.id })) },
-            expenses: { connect: expenses.map((e) => ({ id: e.id })) },
-            accontoDeductions: {
-              create: accontos.map((a) => ({ accontoInvoiceId: a.id })),
-            },
           },
         });
+
+        // Koppla poster + skapa acconto-avdrag via explicita anrop (istället
+        // för Prisma nested writes) så samma kod kör mot både Postgres och
+        // in-memory/git-store:n.
+        if (timeEntries.length) {
+          await tx.timeEntries.updateMany({
+            where: { id: { in: timeEntries.map((t) => t.id) } },
+            data: { invoiceId: invoice.id },
+          });
+        }
+        if (expenses.length) {
+          await tx.expenses.updateMany({
+            where: { id: { in: expenses.map((e) => e.id) } },
+            data: { invoiceId: invoice.id },
+          });
+        }
+        for (const a of accontos) {
+          await tx.accontoDeductions.create({
+            data: { finalInvoiceId: invoice.id, accontoInvoiceId: a.id },
+          });
+        }
         return { invoice, breakdown };
       }).then(async (result) => {
         await emit.invoiceCreated(ctx, result.invoice);
@@ -237,8 +253,8 @@ export const invoiceRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      return ctx.dataStore.raw.$transaction(async (tx) => {
-        const original = await tx.invoice.findFirst({
+      return ctx.dataStore.transaction(async (tx) => {
+        const original = await tx.invoices.findFirst({
           where: { id: input.invoiceId, matter: { organizationId: ctx.orgId } },
           include: { creditNote: true, paymentPlan: true },
         });
@@ -264,13 +280,13 @@ export const invoiceRouter = router({
 
         // Om originalet har en aktiv avbetalningsplan: avbryt den
         if (original.paymentPlan && original.paymentPlan.status === "ACTIVE") {
-          await tx.paymentPlan.update({
+          await tx.paymentPlans.update({
             where: { id: original.paymentPlan.id },
             data: { status: "CANCELLED" },
           });
         }
 
-        const credit = await tx.invoice.create({
+        const credit = await tx.invoices.create({
           data: {
             matterId: original.matterId,
             amount: -original.amount,
@@ -282,7 +298,7 @@ export const invoiceRouter = router({
           },
         });
 
-        await tx.invoice.update({
+        await tx.invoices.update({
           where: { id: original.id },
           data: { status: "CANCELLED" },
         });
@@ -301,14 +317,14 @@ export const invoiceRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      return ctx.dataStore.raw.$transaction(async (tx) => {
-        const inv = await tx.invoice.findFirst({
+      return ctx.dataStore.transaction(async (tx) => {
+        const inv = await tx.invoices.findFirst({
           where: { id: input.invoiceId, matter: { organizationId: ctx.orgId } },
           include: { paymentPlan: true, payments: true },
         });
         if (!inv) throw new TRPCError({ code: "NOT_FOUND" });
 
-        const payment = await tx.payment.create({
+        const payment = await tx.payments.create({
           data: {
             invoiceId: inv.id,
             amount: input.amount,
@@ -322,12 +338,12 @@ export const invoiceRouter = router({
           inv.payments.reduce((s, p) => s + p.amount, 0) + input.amount;
 
         if (isPaymentPlanSettled(inv.amount, paidSum)) {
-          await tx.invoice.update({
+          await tx.invoices.update({
             where: { id: inv.id },
             data: { status: "PAID" },
           });
           if (inv.paymentPlan) {
-            await tx.paymentPlan.update({
+            await tx.paymentPlans.update({
               where: { id: inv.paymentPlan.id },
               data: { status: "COMPLETED" },
             });
@@ -348,8 +364,8 @@ export const invoiceRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      return ctx.dataStore.raw.$transaction(async (tx) => {
-        const inv = await tx.invoice.findFirst({
+      return ctx.dataStore.transaction(async (tx) => {
+        const inv = await tx.invoices.findFirst({
           where: { id: input.invoiceId, matter: { organizationId: ctx.orgId } },
           include: { paymentPlan: true },
         });
@@ -370,19 +386,21 @@ export const invoiceRouter = router({
         // Om en gammal CANCELLED-plan finns, ta bort den först — `invoiceId`
         // är @unique på PaymentPlan så vi kan inte ha två rader.
         if (inv.paymentPlan && inv.paymentPlan.status !== "ACTIVE") {
-          await tx.paymentPlan.delete({ where: { id: inv.paymentPlan.id } });
+          await tx.paymentPlans.delete({ where: { id: inv.paymentPlan.id } });
         }
 
-        const plan = await tx.paymentPlan.create({
+        const plan = await tx.paymentPlans.create({
           data: {
             invoiceId: inv.id,
             monthlyAmount: input.monthlyAmount,
             dayOfMonth: input.dayOfMonth,
             startDate: new Date(input.startDate),
             notes: input.notes,
+            // Explicit (Prisma schema-default appliceras inte av in-memory-store:n).
+            status: "ACTIVE",
           },
         });
-        await tx.invoice.update({
+        await tx.invoices.update({
           where: { id: inv.id },
           data: { status: "INSTALLMENT_PLAN" },
         });
@@ -393,19 +411,19 @@ export const invoiceRouter = router({
   cancelPaymentPlan: orgProcedure
     .input(z.object({ planId: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      return ctx.dataStore.raw.$transaction(async (tx) => {
-        const plan = await tx.paymentPlan.findFirst({
+      return ctx.dataStore.transaction(async (tx) => {
+        const plan = await tx.paymentPlans.findFirst({
           where: {
             id: input.planId,
             invoice: { matter: { organizationId: ctx.orgId } },
           },
         });
         if (!plan) throw new TRPCError({ code: "NOT_FOUND" });
-        await tx.paymentPlan.update({
+        await tx.paymentPlans.update({
           where: { id: plan.id },
           data: { status: "CANCELLED" },
         });
-        await tx.invoice.update({
+        await tx.invoices.update({
           where: { id: plan.invoiceId },
           data: { status: "SENT" },
         });

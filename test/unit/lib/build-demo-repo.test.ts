@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { buildDemoData } from "../../../scripts/build-demo-repo";
+import { buildDemoData } from "../../../tooling/scripts/build-demo-repo";
 import { matterProjectionSchema } from "@/server/local-first/projections/matter";
 import { contactProjectionSchema } from "@/server/local-first/projections/contact";
 import { userProjectionSchema } from "@/server/local-first/projections/user";

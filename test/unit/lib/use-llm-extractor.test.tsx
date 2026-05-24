@@ -4,7 +4,7 @@
 
 import { describe, it, expect, vi } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
-import { useLlmExtractor } from "@/lib/use-llm-extractor";
+import { useLlmExtractor } from "@/client/lib/use-llm-extractor";
 import { NoopExtractor, StubExtractor } from "@/server/llm/llm-extractor";
 
 const schema = { titel: { type: "string?" as const, description: "Dokumentets titel" } };

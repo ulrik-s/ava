@@ -24,7 +24,7 @@ const matterQuery: { data: { matters: Array<Record<string, unknown>> } } = {
 const utilsMock = { timeEntry: { list: { invalidate: vi.fn() } } };
 const createMutate = vi.fn();
 
-vi.mock("@/lib/trpc", () => ({
+vi.mock("@/client/lib/trpc", () => ({
   trpc: {
     useUtils: () => utilsMock,
     timeEntry: {

@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { buildSshPublicKey, sshFingerprint } from "@/lib/keys/ssh-format";
+import { buildSshPublicKey, sshFingerprint } from "@/client/lib/keys/ssh-format";
 
 // Test-vector: 32 noll-bytes → välbestämd SSH-string
 const ZERO_PUBKEY = new Uint8Array(32);

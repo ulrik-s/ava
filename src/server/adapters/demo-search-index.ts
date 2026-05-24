@@ -12,7 +12,7 @@
 
 import type { ISearchIndex, SearchResponse } from "../ports";
 import type { IDataStore } from "../data-store/IDataStore";
-import { getDocumentContent } from "@/lib/search/document-content-cache";
+import { getDocumentContent } from "@/client/lib/demo/document-content-cache";
 
 interface DocLike {
   id: string;

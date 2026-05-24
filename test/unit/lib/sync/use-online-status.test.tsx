@@ -6,7 +6,7 @@
 
 import { describe, it, expect } from "vitest";
 import { renderHook, act } from "@testing-library/react";
-import { useOnlineStatus } from "@/lib/sync/use-online-status";
+import { useOnlineStatus } from "@/client/lib/sync/use-online-status";
 
 describe("useOnlineStatus", () => {
   it("returnerar initialt navigator.onLine-värdet", () => {

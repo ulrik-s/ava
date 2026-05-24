@@ -21,6 +21,67 @@ const data: Matter[] = [
 
 const delegate = new ReadOnlyDelegate<Matter>(() => data);
 
+describe("ReadOnlyDelegate — relations include", () => {
+  type Invoice = { id: string } & Record<string, unknown>;
+  const invoices: Invoice[] = [{ id: "inv1" }];
+  const plans = [{ id: "pp1", invoiceId: "inv1" }];
+  const payments = [
+    { id: "pay1", invoiceId: "inv1" },
+    { id: "pay2", invoiceId: "inv1" },
+    { id: "pay3", invoiceId: "other" },
+  ];
+  const del = new ReadOnlyDelegate<Invoice>(() => invoices, {
+    relations: {
+      paymentPlan: { kind: "one", collection: () => plans, where: (p) => ({ invoiceId: p.id }) },
+      payments: { collection: () => payments, where: (p) => ({ invoiceId: p.id }) },
+    },
+  });
+
+  it("kind:'one' hydratiserar ett enskilt objekt (inte array)", async () => {
+    const r = await del.findUnique({ where: { id: "inv1" }, include: { paymentPlan: true } });
+    expect((r as unknown as { paymentPlan: { id: string } }).paymentPlan).toEqual({ id: "pp1", invoiceId: "inv1" });
+  });
+
+  it("kind:'one' utan träff → null", async () => {
+    const empty = new ReadOnlyDelegate<Invoice>(() => invoices, {
+      relations: { paymentPlan: { kind: "one", collection: () => [], where: () => ({}) } },
+    });
+    const r2 = await empty.findUnique({ where: { id: "inv1" }, include: { paymentPlan: true } });
+    expect((r2 as unknown as { paymentPlan: unknown }).paymentPlan).toBeNull();
+  });
+
+  it("default kind (many) hydratiserar array", async () => {
+    const r = await del.findUnique({ where: { id: "inv1" }, include: { payments: true } });
+    expect((r as unknown as { payments: unknown[] }).payments).toHaveLength(2);
+  });
+});
+
+describe("ReadOnlyDelegate — aggregate", () => {
+  type Entry = { id: string; matterId: string; minutes: number } & Record<string, unknown>;
+  const entries: Entry[] = [
+    { id: "1", matterId: "m1", minutes: 30 },
+    { id: "2", matterId: "m1", minutes: 90 },
+    { id: "3", matterId: "m2", minutes: 15 },
+  ];
+  const del = new ReadOnlyDelegate<Entry>(() => entries);
+
+  it("_sum med where", async () => {
+    const r = await del.aggregate({ where: { matterId: "m1" }, _sum: { minutes: true } }) as { _sum: { minutes: number } };
+    expect(r._sum.minutes).toBe(120);
+  });
+
+  it("_sum utan träff → 0", async () => {
+    const r = await del.aggregate({ where: { matterId: "x" }, _sum: { minutes: true } }) as { _sum: { minutes: number } };
+    expect(r._sum.minutes).toBe(0);
+  });
+
+  it("_count + _avg", async () => {
+    const r = await del.aggregate({ _count: true, _avg: { minutes: true } }) as { _count: number; _avg: { minutes: number } };
+    expect(r._count).toBe(3);
+    expect(r._avg.minutes).toBe(45);
+  });
+});
+
 describe("ReadOnlyDelegate — läsning", () => {
   it("findMany med where", async () => {
     const r = await delegate.findMany({ where: { organizationId: "org1" } });

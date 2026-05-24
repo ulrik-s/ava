@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
-import { demoSourceFromRuntime } from "@/lib/demo/demo-source-from-runtime";
+import { demoSourceFromRuntime } from "@/client/lib/demo/demo-source-from-runtime";
 import { DemoRuntime } from "@/server/local-first/demo-runtime";
 import type { MemFs } from "@/server/local-first/mem-fs";
 

@@ -3,8 +3,8 @@
 import { Suspense, useId, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { trpc } from "@/lib/trpc";
-import { useIsReadOnly } from "@/lib/demo/demo-mode-context";
+import { trpc } from "@/client/lib/trpc";
+import { useIsReadOnly } from "@/client/lib/demo/demo-mode-context";
 
 function MattersContent() {
   const searchParams = useSearchParams();

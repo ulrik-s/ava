@@ -28,9 +28,11 @@ const addChildState = { isPending: false };
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: routerPush }),
+  // useRouteId() läser usePathname; null → faller tillbaka till prop-id:t.
+  usePathname: () => null,
 }));
 
-vi.mock("@/lib/trpc", () => ({
+vi.mock("@/client/lib/trpc", () => ({
   trpc: {
     useUtils: () => utilsMock,
     contacts: {

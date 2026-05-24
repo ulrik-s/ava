@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { trpc } from "@/lib/trpc";
-import { formatMinutes } from "@/lib/utils";
+import { trpc } from "@/client/lib/trpc";
+import { formatMinutes } from "@/client/lib/utils";
 
 interface Props {
   matterId: string;

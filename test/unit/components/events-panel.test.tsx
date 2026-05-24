@@ -4,7 +4,7 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { EventsPanel } from "@/components/events-panel";
+import { EventsPanel } from "@/client/components/events-panel";
 
 type Event = {
   id: string;
@@ -30,7 +30,7 @@ const utilsMock = {
 
 const rejectMutate = vi.fn();
 
-vi.mock("@/lib/trpc", () => ({
+vi.mock("@/client/lib/trpc", () => ({
   trpc: {
     useUtils: () => utilsMock,
     document: {

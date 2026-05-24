@@ -6,10 +6,10 @@
 
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { JobsBadge } from "@/components/jobs-badge";
+import { JobsBadge } from "@/client/components/jobs-badge";
 
 const summary = { total: 0, queued: 0, running: 0, failed: 0, lastError: null as string | null };
-vi.mock("@/lib/jobs/use-jobs", () => ({
+vi.mock("@/client/lib/jobs/use-jobs", () => ({
   useJobsSummary: () => summary,
 }));
 

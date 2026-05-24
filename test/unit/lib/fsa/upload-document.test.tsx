@@ -5,20 +5,20 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
-import { uploadDocumentToFsa } from "@/lib/fsa/upload-document";
+import { uploadDocumentToFsa } from "@/client/lib/fsa/upload-document";
 
 interface MockFs {
   writeFile: ReturnType<typeof vi.fn>;
 }
 
-vi.mock("@/lib/fsa/fs-adapter", () => ({
+vi.mock("@/client/lib/fsa/fs-adapter", () => ({
   FsaIsoGitAdapter: vi.fn().mockImplementation(function (this: MockFs): MockFs {
     this.writeFile = vi.fn().mockResolvedValue(undefined);
     return this;
   }),
 }));
 
-import { FsaIsoGitAdapter } from "@/lib/fsa/fs-adapter";
+import { FsaIsoGitAdapter } from "@/client/lib/fsa/fs-adapter";
 
 describe("uploadDocumentToFsa", () => {
   it("genererar id + skriver fil till documents/content/<id>.<ext>", async () => {

@@ -64,7 +64,8 @@ export class InMemoryQueryEngine<T extends Record<string, unknown>> {
 
   // ─── Where-matching ────────────────────────────────────────────────
 
-  private matches(row: T, where: Record<string, unknown>): boolean {
+  /** Publik så delegate-lagret kan matcha en (relations-hydratiserad) rad. */
+  matches(row: Record<string, unknown>, where: Record<string, unknown>): boolean {
     for (const [key, val] of Object.entries(where)) {
       if (val === undefined) continue;
       if (key === "OR") {
@@ -87,11 +88,20 @@ export class InMemoryQueryEngine<T extends Record<string, unknown>> {
     if (expected === null || typeof expected !== "object" || expected instanceof Date) {
       return this.eq(fieldVal, expected);
     }
-    // Operator-objekt: { contains, in, gte, ... }
     const op = expected as Record<string, unknown>;
-    const mode = op.mode as string | undefined;
-    const ci = mode === "insensitive";
-
+    const keys = Object.keys(op);
+    // Operator-objekt om ALLA nycklar är kända operatorer ({ in }, { gte }…).
+    // Annars: nested relations-filter ({ matter: { organizationId } }).
+    const isOperatorObj =
+      keys.length > 0 && keys.every((k) => k === "mode" || k in this.ops);
+    if (!isOperatorObj) {
+      // To-one relation: rekursera ned i det nästlade objektet.
+      if (fieldVal && typeof fieldVal === "object" && !Array.isArray(fieldVal)) {
+        return this.matches(fieldVal as Record<string, unknown>, op);
+      }
+      return false;
+    }
+    const ci = op.mode === "insensitive";
     for (const [opName, opVal] of Object.entries(op)) {
       if (opName === "mode") continue;
       if (!this.applyOp(fieldVal, opName, opVal, ci)) return false;
@@ -99,46 +109,46 @@ export class InMemoryQueryEngine<T extends Record<string, unknown>> {
     return true;
   }
 
+  /**
+   * Operator-tabell (dispatch) — håller `applyOp` på komplexitet 1 och gör
+   * det trivialt att lägga till operatorer. Arrow-fns sluter över `this`
+   * för åtkomst till eq/cmp/matches.
+   */
+  private readonly ops: Record<string, (fieldVal: unknown, opVal: unknown, ci: boolean) => boolean> = {
+    equals: (f, v) => this.eq(f, v),
+    not: (f, v) => !this.eq(f, v),
+    contains: (f, v, ci) => this.strOp(f, v, ci, (a, b) => a.includes(b)),
+    startsWith: (f, v, ci) => this.strOp(f, v, ci, (a, b) => a.startsWith(b)),
+    endsWith: (f, v, ci) => this.strOp(f, v, ci, (a, b) => a.endsWith(b)),
+    in: (f, v) => Array.isArray(v) && v.some((x) => this.eq(f, x)),
+    notIn: (f, v) => Array.isArray(v) && !v.some((x) => this.eq(f, x)),
+    gte: (f, v) => this.cmp(f, v) >= 0,
+    lte: (f, v) => this.cmp(f, v) <= 0,
+    gt: (f, v) => this.cmp(f, v) > 0,
+    lt: (f, v) => this.cmp(f, v) < 0,
+    // Relations-count-filter på en (ev. hydratiserad) array.
+    some: (f, v) => Array.isArray(f) && f.some((el) => this.matchesRel(el, v)),
+    none: (f, v) => !Array.isArray(f) || !f.some((el) => this.matchesRel(el, v)),
+    every: (f, v) => !Array.isArray(f) || f.every((el) => this.matchesRel(el, v)),
+  };
+
   private applyOp(fieldVal: unknown, op: string, opVal: unknown, ci: boolean): boolean {
-    switch (op) {
-      case "equals":
-        return this.eq(fieldVal, opVal);
-      case "not":
-        return !this.eq(fieldVal, opVal);
-      case "contains": {
-        if (typeof fieldVal !== "string" || typeof opVal !== "string") return false;
-        return ci
-          ? fieldVal.toLowerCase().includes(opVal.toLowerCase())
-          : fieldVal.includes(opVal);
-      }
-      case "startsWith": {
-        if (typeof fieldVal !== "string" || typeof opVal !== "string") return false;
-        return ci
-          ? fieldVal.toLowerCase().startsWith(opVal.toLowerCase())
-          : fieldVal.startsWith(opVal);
-      }
-      case "endsWith": {
-        if (typeof fieldVal !== "string" || typeof opVal !== "string") return false;
-        return ci
-          ? fieldVal.toLowerCase().endsWith(opVal.toLowerCase())
-          : fieldVal.endsWith(opVal);
-      }
-      case "in":
-        return Array.isArray(opVal) && opVal.some((v) => this.eq(fieldVal, v));
-      case "notIn":
-        return Array.isArray(opVal) && !opVal.some((v) => this.eq(fieldVal, v));
-      case "gte":
-        return this.cmp(fieldVal, opVal) >= 0;
-      case "lte":
-        return this.cmp(fieldVal, opVal) <= 0;
-      case "gt":
-        return this.cmp(fieldVal, opVal) > 0;
-      case "lt":
-        return this.cmp(fieldVal, opVal) < 0;
-      default:
-        // Okänd operator → match false (defensiv). Vid behov: kasta istället.
-        return false;
-    }
+    const fn = this.ops[op];
+    return fn ? fn(fieldVal, opVal, ci) : false;
+  }
+
+  private strOp(
+    fieldVal: unknown,
+    opVal: unknown,
+    ci: boolean,
+    cmp: (a: string, b: string) => boolean,
+  ): boolean {
+    if (typeof fieldVal !== "string" || typeof opVal !== "string") return false;
+    return ci ? cmp(fieldVal.toLowerCase(), opVal.toLowerCase()) : cmp(fieldVal, opVal);
+  }
+
+  private matchesRel(el: unknown, where: unknown): boolean {
+    return this.matches(el as Record<string, unknown>, (where ?? {}) as Record<string, unknown>);
   }
 
   private eq(a: unknown, b: unknown): boolean {

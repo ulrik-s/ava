@@ -16,7 +16,7 @@ import {
   getRepoPermissions,
   parseRepoUrl,
   type AuthMode,
-} from "@/lib/auth/github-auth";
+} from "@/client/lib/auth/github-auth";
 
 const fetchMock = vi.fn();
 beforeEach(() => {
@@ -133,5 +133,9 @@ describe("detectAuthMode", () => {
   it("self-hosted utan token → anonymous", async () => {
     const m = await detectAuthMode({ token: "", repoUrl: "https://git.firma.se/data.git" });
     expect(m).toBe("anonymous");
+  });
+  it("lokal self-hosted (localhost) utan token → identified-write (anonym push tillåts)", async () => {
+    const m = await detectAuthMode({ token: "", repoUrl: "http://localhost:8080/git/firma.git" });
+    expect(m).toBe("identified-write");
   });
 });

@@ -1,0 +1,23 @@
+{
+  "$schema": "https://raw.githubusercontent.com/kucherenko/jscpd/master/schema.json",
+  "threshold": 4.5,
+  "minLines": 8,
+  "minTokens": 80,
+  "format": ["typescript", "tsx"],
+  "ignore": [
+    "**/node_modules/**",
+    "**/.next/**",
+    "**/data/storage/**",
+    "**/reports/**",
+    "**/dist/**",
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/*.spec.ts",
+    "tooling/scripts/seed-*.ts",
+    "tooling/scripts/analyze-unanalyzed.ts"
+  ],
+  "reporters": ["console", "html", "json"],
+  "output": "./reports/jscpd",
+  "absolute": true,
+  "gitignore": true
+}

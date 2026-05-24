@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/server/db";
 import { requireSession, parseJsonBody, withApiErrors } from "@/server/api-auth";
-import { buildTemplateContext, renderTemplate, type TemplateContext } from "@/lib/template-context";
+import { buildTemplateContext, renderTemplate, type TemplateContext } from "@/client/lib/template-context";
 import { mkdir, writeFile } from "fs/promises";
 import path from "path";
 import puppeteer from "puppeteer";
@@ -14,7 +14,7 @@ import {
   buildGeneratedFileName,
   RecipientNotLinkedError,
   type ResolvedRecipient,
-} from "@/lib/template-recipients";
+} from "@/client/lib/template-recipients";
 
 const GenerateBody = z.object({
   templateId: z.string().min(1),
@@ -97,7 +97,7 @@ async function saveDocument(args: {
   matterId: string;
   userId: string;
 }) {
-  const storagePath = process.env.DOCUMENT_STORAGE_PATH || "./storage/documents";
+  const storagePath = process.env.DOCUMENT_STORAGE_PATH || "./data/storage/documents";
   const docId = crypto.randomUUID();
   const dirPath = path.join(storagePath, args.matterId, docId);
   await mkdir(dirPath, { recursive: true });

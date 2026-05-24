@@ -67,6 +67,37 @@ export type UserDelegate = PrismaInstance["user"];
 export type OrganizationDelegate = PrismaInstance["organization"];
 export type OfficeDelegate = PrismaInstance["office"];
 export type ConflictCheckDelegate = PrismaInstance["conflictCheck"];
+export type PaymentDelegate = PrismaInstance["payment"];
+export type PaymentPlanDelegate = PrismaInstance["paymentPlan"];
+export type AccontoDeductionDelegate = PrismaInstance["invoiceAccontoDeduction"];
+
+// ─── Transaktionsvy ───────────────────────────────────────────────────
+//
+// Det `tx`-objekt en `transaction(fn)`-callback får. Speglar store:ns
+// delegates (plural-namn) så routerkod ser samma API inuti som utanför
+// transaktionen. I server-läget mappas detta mot Prisma's interaktiva
+// transaktion; i local-first/demo mot en in-memory snapshot/rollback.
+
+export interface DataStoreTx {
+  matters: MatterDelegate;
+  matterContacts: MatterContactDelegate;
+  contacts: ContactDelegate;
+  documents: DocumentDelegate;
+  documentFolders: DocumentFolderDelegate;
+  documentTemplates: DocumentTemplateDelegate;
+  documentAnalysisSuggestions: DocumentAnalysisSuggestionDelegate;
+  matterEventSuggestions: MatterEventSuggestionDelegate;
+  invoices: InvoiceDelegate;
+  timeEntries: TimeEntryDelegate;
+  expenses: ExpenseDelegate;
+  users: UserDelegate;
+  organizations: OrganizationDelegate;
+  offices: OfficeDelegate;
+  conflictChecks: ConflictCheckDelegate;
+  payments: PaymentDelegate;
+  paymentPlans: PaymentPlanDelegate;
+  accontoDeductions: AccontoDeductionDelegate;
+}
 
 // ─── Aggregat ─────────────────────────────────────────────────────────
 
@@ -109,4 +140,15 @@ export interface IDataStore {
    * i SQLite-läget.
    */
   readonly raw: PrismaInstance;
+
+  /**
+   * Kör `fn` i en transaktion. Allt-eller-inget: kastar `fn` så committas
+   * inga ändringar (och i local-first-läget: inga write-back-filer skrivs).
+   *
+   * Ersätter `raw.$transaction` i routerkod — så routrarna inte behöver
+   * känna till om de kör mot Prisma (server) eller in-memory + git
+   * (local-first). I server-läget delegeras till Prisma's interaktiva
+   * transaktion; i demo/local-first till en snapshot/rollback-impl.
+   */
+  transaction<T>(fn: (tx: DataStoreTx) => Promise<T>): Promise<T>;
 }

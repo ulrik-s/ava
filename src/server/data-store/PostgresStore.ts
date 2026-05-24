@@ -10,8 +10,9 @@
  */
 
 import type { PrismaClient } from "@prisma/client";
-import type { IDataStore, IEventLog } from "./IDataStore";
+import type { DataStoreTx, IDataStore, IEventLog } from "./IDataStore";
 import { PostgresEventLog } from "./PostgresEventLog";
+import { prismaTxToDataStoreTx } from "./prisma-tx-adapter";
 
 export class PostgresStore implements IDataStore {
   public readonly events: IEventLog;
@@ -51,6 +52,10 @@ export class PostgresStore implements IDataStore {
     this.organizations = prisma.organization;
     this.offices = prisma.office;
     this.conflictChecks = prisma.conflictCheck;
+  }
+
+  transaction<T>(fn: (tx: DataStoreTx) => Promise<T>): Promise<T> {
+    return this.raw.$transaction((tx) => fn(prismaTxToDataStoreTx(tx)));
   }
 
   /** Bygg en store för en specifik byrå-kontekt. Anropas per request. */

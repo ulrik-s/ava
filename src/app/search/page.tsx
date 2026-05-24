@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { trpc } from "@/lib/trpc";
+import { trpc } from "@/client/lib/trpc";
 
 export default function DocumentSearchPage() {
   const [query, setQuery] = useState("");

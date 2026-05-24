@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { FsaIsoGitAdapter } from "@/lib/fsa/fs-adapter";
+import { FsaIsoGitAdapter } from "@/client/lib/fsa/fs-adapter";
 
 // ─── In-memory FSA-mock ────────────────────────────────────────────
 

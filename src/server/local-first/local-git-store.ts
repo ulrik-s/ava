@@ -32,7 +32,9 @@ import type {
   IDataStore,
   IEventLog,
   IClaimStore,
+  DataStoreTx,
 } from "../data-store/IDataStore";
+import { prismaTxToDataStoreTx } from "../data-store/prisma-tx-adapter";
 import type { IFileSystem } from "./file-system";
 import type { IGitOps } from "./git-ops";
 import { FilesystemEventLog } from "./filesystem-event-log";
@@ -108,5 +110,9 @@ export class LocalGitStore implements IDataStore {
     // emit-anrop automatiskt skriver JSON till disk.
     const projector = new WriteThroughProjector(this.projectionWriter, this);
     this.detachProjection = projector.attach(this.events);
+  }
+
+  transaction<T>(fn: (tx: DataStoreTx) => Promise<T>): Promise<T> {
+    return this.raw.$transaction((tx) => fn(prismaTxToDataStoreTx(tx)));
   }
 }

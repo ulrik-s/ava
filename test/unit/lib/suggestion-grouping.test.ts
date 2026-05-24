@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { groupingKey, groupSuggestions, type RawSuggestion } from "@/lib/suggestion-grouping";
+import { groupingKey, groupSuggestions, type RawSuggestion } from "@/client/lib/suggestion-grouping";
 
 function sug(overrides: Partial<RawSuggestion> = {}): RawSuggestion {
   return {

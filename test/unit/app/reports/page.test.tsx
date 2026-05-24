@@ -14,7 +14,7 @@ const reportQuery = {
   isLoading: false,
 };
 
-vi.mock("@/lib/trpc", () => ({
+vi.mock("@/client/lib/trpc", () => ({
   trpc: {
     user: {
       list: { useQuery: () => usersQuery },

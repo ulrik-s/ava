@@ -10,7 +10,7 @@
 > - ✅ Tunn server (nginx + sshd) — se [`deploy-tier3-self-hosted.md`](./deploy-tier3-self-hosted.md)
 > - ✅ Browser-klient med FSA-skrivning + GitHub REST push/pull
 > - ✅ Sync-loop med offline-safety + auto-pull/push
-> - ✅ Local SSH-server via docker (`docker/git-ssh/`)
+> - ✅ Local SSH-server via docker (`tooling/docker/git-ssh/`)
 > - 🚧 Lokal helper-agent för SSH-push från browser — [`local-helper-design.md`](./local-helper-design.md)
 > - 🚧 Direktanslutning från Tauri-app till SSH (libgit2 inbyggd)
 > - 🚧 Migrera alla scenario-tester till tunn-mode
@@ -855,7 +855,7 @@ laddar det i webappen.
 
 #### Demo-UI på `/demo` (tillagd 2026-05-18)
 
-- `src/lib/use-demo-runtime.ts`: React-hook som synkar UI-state mot
+- `src/client/lib/use-demo-runtime.ts`: React-hook som synkar UI-state mot
   DemoRuntime (status/error/entities/loadDemo). DI-vänlig — factory
   injiceras så tester kör utan isomorphic-git.
 - `src/app/demo/_demo-client.tsx`: Client Component med URL-input,

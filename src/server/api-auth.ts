@@ -16,7 +16,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/auth";
+import { authOptions } from "@/client/lib/auth";
 import { prisma } from "@/server/db";
 import type { z } from "zod";
 

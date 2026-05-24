@@ -19,11 +19,11 @@ vi.mock("bcryptjs", () => ({
 }));
 
 const resolveAzureUserMock = vi.fn();
-vi.mock("@/lib/azure-provisioning", () => ({
+vi.mock("@/client/lib/azure-provisioning", () => ({
   resolveAzureUser: (...a: unknown[]) => resolveAzureUserMock(...a),
 }));
 
-import { authOptions } from "@/lib/auth";
+import { authOptions } from "@/client/lib/auth";
 
 type AuthorizeFn = (
   creds: Record<string, string> | undefined,

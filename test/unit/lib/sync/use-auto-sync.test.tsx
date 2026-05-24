@@ -7,7 +7,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
-import { useAutoSync, type SyncProvider } from "@/lib/sync/use-auto-sync";
+import { useAutoSync, type SyncProvider } from "@/client/lib/sync/use-auto-sync";
 
 function makeProvider(overrides: Partial<SyncProvider> = {}): SyncProvider {
   return {

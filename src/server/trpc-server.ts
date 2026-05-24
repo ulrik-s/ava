@@ -47,7 +47,7 @@ async function buildServerPorts(dataStore: IDataStore): Promise<IPorts> {
 
 export async function createContext(_opts?: { req?: Request; resHeaders?: Headers }): Promise<Context> {
   const { getServerSession } = await import("next-auth/next");
-  const { authOptions } = await import("@/lib/auth");
+  const { authOptions } = await import("@/client/lib/auth");
 
   const session = await getServerSession(authOptions);
   if (session?.user) {

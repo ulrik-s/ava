@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency } from "@/client/lib/utils";
 
 interface Props {
   invoiceId: string;

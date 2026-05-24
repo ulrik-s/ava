@@ -31,9 +31,14 @@ const mockPrisma = {
   },
   timeEntry: {
     findMany: vi.fn(),
+    updateMany: vi.fn(),
   },
   expense: {
     findMany: vi.fn(),
+    updateMany: vi.fn(),
+  },
+  invoiceAccontoDeduction: {
+    create: vi.fn(),
   },
   payment: {
     create: vi.fn(),
@@ -146,6 +151,7 @@ describe("invoice.createFinal", () => {
     expect(res.breakdown.accontoDeductionTotal).toBe(200_000);
     expect(res.breakdown.netAmount).toBe(150_000);
 
+    // Fakturan skapas utan nested writes …
     expect(mockPrisma.invoice.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
@@ -153,12 +159,21 @@ describe("invoice.createFinal", () => {
           amount: 350_000,
           invoiceType: "FINAL",
           status: "DRAFT",
-          timeEntries: { connect: [{ id: "t1" }, { id: "t2" }] },
-          expenses: { connect: [{ id: "e1" }, { id: "e2" }] },
-          accontoDeductions: { create: [{ accontoInvoiceId: "acc1" }] },
         }),
       }),
     );
+    // … posterna kopplas via explicita updateMany + acconto-avdrag via create.
+    expect(mockPrisma.timeEntry.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ["t1", "t2"] } },
+      data: { invoiceId: "final-1" },
+    });
+    expect(mockPrisma.expense.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ["e1", "e2"] } },
+      data: { invoiceId: "final-1" },
+    });
+    expect(mockPrisma.invoiceAccontoDeduction.create).toHaveBeenCalledWith({
+      data: { finalInvoiceId: "final-1", accontoInvoiceId: "acc1" },
+    });
   });
 
   it("BAD_REQUEST om någon time entry redan är fakturerad (eller tillhör annat ärende)", async () => {

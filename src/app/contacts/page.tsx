@@ -3,9 +3,9 @@
 import { Suspense, useId, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { trpc } from "@/lib/trpc";
-import { labelForContactType, contactTypes } from "@/lib/labels";
-import { useIsReadOnly } from "@/lib/demo/demo-mode-context";
+import { trpc } from "@/client/lib/trpc";
+import { labelForContactType, contactTypes } from "@/client/lib/labels";
+import { useIsReadOnly } from "@/client/lib/demo/demo-mode-context";
 
 function ContactsContent() {
   const searchParams = useSearchParams();

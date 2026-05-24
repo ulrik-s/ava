@@ -24,7 +24,7 @@ Kör allt på en gång: `yarn quality`
 All files          |   66.75% statements  |  68.96% lines  |  68.15% functions  |  58.61% branches
 ```
 
-**Tröskel-golv** i `config/vitest.config.ts`: statements 82, lines 84, functions 81, branches 77.
+**Tröskel-golv** i `tooling/config/vitest.config.ts`: statements 82, lines 84, functions 81, branches 77.
 
 ⚠️ **Aktuell coverage är UNDER trösklarna** för core stmts/lines (66.75 < 82). Trösklar är satta för före-refaktor-koden. Nya FSA/Tauri-komponenter saknar test-täckning.
 
@@ -34,28 +34,28 @@ All files          |   66.75% statements  |  68.96% lines  |  68.15% functions  
 
 | Fil | Coverage | Risk |
 |---|---|---|
-| `src/components/demo-bootstrap.tsx` | 1.21% | Kritisk — composition root |
-| `src/components/firma-settings-panel.tsx` | 4% | UI för byta repo |
-| `src/components/oauth-device-flow.tsx` | 1.92% | OAuth-flöde |
-| `src/components/merge-conflict-panel.tsx` | 10% | Merge-konflikt UI |
-| `src/components/render-error-boundary.tsx` | 14% | Felhantering |
-| `src/components/tauri-git-sync.tsx` | 21% | Tauri sync |
-| `src/components/web-fsa-git-sync.tsx` | 23% | Web FSA sync |
-| `src/lib/firma/firma-config.ts` | 100% ✅ (efter Fas R17) | — |
-| `src/lib/firma/fsa-write-back.ts` | 100% ✅ (efter Fas R17) | — |
-| `src/lib/demo/static-params.ts` | 0% | Build-time, kör i Next.js |
-| `src/lib/fsa/handle-store.ts` | (mockas i web-fsa-test) | Medium |
+| `src/client/components/demo-bootstrap.tsx` | 1.21% | Kritisk — composition root |
+| `src/client/components/firma-settings-panel.tsx` | 4% | UI för byta repo |
+| `src/client/components/oauth-device-flow.tsx` | 1.92% | OAuth-flöde |
+| `src/client/components/merge-conflict-panel.tsx` | 10% | Merge-konflikt UI |
+| `src/client/components/render-error-boundary.tsx` | 14% | Felhantering |
+| `src/client/components/tauri-git-sync.tsx` | 21% | Tauri sync |
+| `src/client/components/web-fsa-git-sync.tsx` | 23% | Web FSA sync |
+| `src/client/lib/firma/firma-config.ts` | 100% ✅ (efter Fas R17) | — |
+| `src/client/lib/firma/fsa-write-back.ts` | 100% ✅ (efter Fas R17) | — |
+| `src/client/lib/demo/static-params.ts` | 0% | Build-time, kör i Next.js |
+| `src/client/lib/fsa/handle-store.ts` | (mockas i web-fsa-test) | Medium |
 
 ### Medium gap (50-80%)
 
-- `src/components/document-browser.tsx` (64%) — komplex tabell-rendering
-- `src/components/contacts-section.tsx` (75%)
-- `src/components/auth-guard.tsx` (68%)
+- `src/client/components/document-browser.tsx` (64%) — komplex tabell-rendering
+- `src/client/components/contacts-section.tsx` (75%)
+- `src/client/components/auth-guard.tsx` (68%)
 - Routrar (varierande)
 
 ### Bra (>90%)
 
-- Alla `src/lib/`-helpers
+- Alla `src/client/lib/`-helpers
 - `src/app/page.tsx` (Dashboard) 100%
 - Procedure-routrar
 - Projection-classer

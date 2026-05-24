@@ -6,8 +6,8 @@
 
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { SyncDiagnostics } from "@/components/sync-diagnostics";
-import type { SyncState } from "@/lib/sync/use-auto-sync";
+import { SyncDiagnostics } from "@/client/components/sync-diagnostics";
+import type { SyncState } from "@/client/lib/sync/use-auto-sync";
 
 const ctxState = {
   state: { kind: "idle" } as SyncState,
@@ -17,7 +17,7 @@ const ctxState = {
   lastError: null as string | null,
 };
 
-vi.mock("@/lib/sync/sync-context", () => ({
+vi.mock("@/client/lib/sync/sync-context", () => ({
   useSyncContext: () => ctxState,
 }));
 

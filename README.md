@@ -20,13 +20,13 @@ Servern är två minimala lager: nginx för web-app:n + sshd för git-repos.
 
 ```bash
 # 1. Lägg din SSH-nyckel
-cat ~/.ssh/id_ed25519.pub >> docker/git-ssh/authorized_keys
+cat ~/.ssh/id_ed25519.pub >> tooling/docker/git-ssh/authorized_keys
 
 # 2. Bygg static web-app
-DEMO_BASE_PATH=/ava bash scripts/build-demo.sh
+DEMO_BASE_PATH=/ava bash tooling/scripts/build-demo.sh
 
 # 3. Starta stacken
-docker compose up -d --build
+docker compose -f tooling/docker/docker-compose.yml up -d --build
 
 # 4. Öppna i browser
 open http://localhost:8080/ava/
@@ -48,6 +48,33 @@ Git push/pull från klienten: `ssh://git@localhost:2222/srv/git/firma.git`
 - Git som källa-till-sanning — alla mutationer = commits, hela historiken sparad
 - Inga centraliserade backends — varje firma har sitt eget repo
 - Privacy by design — klientdata stannar lokalt eller i firmans privata git
+
+## Projektstruktur
+
+```
+src/
+  app/                Next.js App Router — sidor + REST route-handlers (api/)
+  client/             Browser-only kod (komponenter + lib)
+    components/       Delade React-komponenter
+    lib/              Klient-logik (sync, fsa, firma, demo, auth, jobs, …)
+  server/             Backend: tRPC-routrar, data-store, events, regelmotor,
+                      local-first-kärna (OPFS/git), tjänster
+  shared/             Kod som båda sidor delar
+    types/            TypeScript-typer (next-auth m.fl.)
+    generated/        Genererad Prisma-client (gitignored)
+    stubs/            Tomma stubs (Next.js demo-bundling)
+tooling/              Allt utvecklingsstöd som inte är produktionskod
+  config/             eslint, vitest, playwright, knip, jscpd, depcruise
+  docker/             Tier 3-images: web (nginx + git-http-backend), git-ssh
+  scripts/            CLI- och drift-skript (build-demo, seed, webdav, …)
+docs/                 Arkitektur + designdokument (se roundtrip-handoff.md)
+prisma/               schema.prisma + migrationer
+src-tauri/            Tauri desktop-wrapper
+test/                 unit/ (vitest) + e2e/ (Playwright: scenarios, round-trip)
+```
+
+Tooling-konfig bor i `tooling/config/` (kör via `package.json`-scripts). Root hålls
+medvetet tunn: bara filer som Next/Prisma/PostCSS kräver där + standardfiler.
 
 ## Tre deploy-läger
 
@@ -95,8 +122,22 @@ yarn lint               # eslint
 yarn test:run           # vitest
 yarn test:cov           # vitest med coverage
 yarn test:fast          # vitest utan e2e/scripts
-yarn build              # next build
-bash scripts/build-demo.sh  # GH Pages-export
+yarn build              # next build (.next — producerar INTE out/)
+bash tooling/scripts/build-demo.sh  # GH Pages/static-export → out/
+yarn round-trip         # browser-e2e mot docker self-hosted git (se nedan)
+```
+
+### Self-hosted round-trip (browser ↔ lokal git-server)
+
+Round-trip-loopen klonar/committar/pushar mot git-http-backend bakom nginx
+(samma origin som web-app:n → ingen CORS-proxy). Full status + hur det funkar:
+[`docs/roundtrip-handoff.md`](docs/roundtrip-handoff.md).
+
+```bash
+DEMO_BASE_PATH=/ava bash tooling/scripts/build-demo.sh   # bygg out/ (yarn build räcker EJ)
+docker compose -f tooling/docker/docker-compose.yml up -d --build                     # nginx + git-http-backend + sshd
+yarn round-trip                                  # Playwright mot http://localhost:8080
+# OBS: efter `rm -rf out` → `docker compose -f tooling/docker/docker-compose.yml restart web` (bind-mount).
 ```
 
 ## Komponentbibliotek (motionerade widgets)
@@ -122,8 +163,8 @@ Mer detaljerade designdokument finns i `docs/`:
 - [`architecture-future.md`](docs/architecture-future.md) — målarkitekturen
 - [`auth-and-integrations-design.md`](docs/auth-and-integrations-design.md) — användardatabas + O365/OAuth
 - [`test-and-tooling-status.md`](docs/test-and-tooling-status.md) — testtäckning + tooling
-- [`docker/git-ssh/README.md`](docker/git-ssh/README.md) — Tier 3 SSH-server setup
-- [`scripts/oauth-proxy/README.md`](scripts/oauth-proxy/README.md) — Cloudflare Worker för GitHub-OAuth
+- [`tooling/docker/git-ssh/README.md`](tooling/docker/git-ssh/README.md) — Tier 3 SSH-server setup
+- [`tooling/scripts/oauth-proxy/README.md`](tooling/scripts/oauth-proxy/README.md) — Cloudflare Worker för GitHub-OAuth
 
 ## CI
 

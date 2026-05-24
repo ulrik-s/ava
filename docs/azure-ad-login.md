@@ -61,7 +61,7 @@ Detta binder tenanten till organisationen. Tokens från andra tenanter avvisas i
 
 1. Admin → `/users/new` → fyll i **e-post** (samma som O365-UPN), namn, roll. **Lösenord lämnas tomt**.
 2. Användaren går till AVA → klickar **"Logga in med Microsoft"** → loggar in med sitt O365-konto.
-3. Vid första lyckade login länkar AVA användarens `azureOid` till User-posten (`src/lib/azure-provisioning.ts`, `resolveAzureUser`).
+3. Vid första lyckade login länkar AVA användarens `azureOid` till User-posten (`src/client/lib/azure-provisioning.ts`, `resolveAzureUser`).
 
 ### Fel-URL:er (visas som svenskt felmeddelande på `/login`)
 
@@ -84,7 +84,7 @@ Detta binder tenanten till organisationen. Tokens från andra tenanter avvisas i
 
 ## 5. Testning
 
-`src/lib/azure-provisioning.test.ts` täcker:
+`src/client/lib/azure-provisioning.test.ts` täcker:
 - Återkommande login via `oid`
 - Första login via e-post + länkning av `oid`
 - Skiftlägesokänslig e-post

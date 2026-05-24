@@ -27,7 +27,7 @@ const stubs = {
   createCredit: { mutate: vi.fn(), isPending: false },
 };
 
-vi.mock("@/lib/trpc", () => ({
+vi.mock("@/client/lib/trpc", () => ({
   trpc: {
     useUtils: () => utilsMock,
     invoice: {

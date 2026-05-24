@@ -7,7 +7,7 @@
 
 import { describe, it, expect, beforeEach } from "vitest";
 import { demoDocumentAnalyzer } from "@/server/adapters/demo-document-analyzer";
-import { jobQueue } from "@/lib/jobs/job-queue";
+import { jobQueue } from "@/client/lib/jobs/job-queue";
 
 beforeEach(() => {
   // Rensa kön mellan testen

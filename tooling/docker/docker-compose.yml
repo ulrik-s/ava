@@ -1,0 +1,62 @@
+# AVA Tier 3 — tunn backend.
+#
+# Arkitektur:
+#   Browser (klient)
+#     │
+#     ├─ HTTP → nginx (port 8080)  — servar static web-app + git-http-backend
+#     └─ SSH  → sshd  (port 2222)  — bare git-repos = all datalagring
+#
+# Klienten gör allt jobb (FSA + isomorphic-git). Servern är bara två
+# tunna lager: filserver för web-app:n + git-server för data. Ingen
+# databas, ingen LLM, ingen text-extraktion på serversidan.
+#
+# OBS: compose-filen ligger i docker/. Kör ALLTID med -f från repo-roten:
+#   1. Bygg web-app:n statiskt:  DEMO_BASE_PATH=/ava bash tooling/scripts/build-demo.sh
+#   2. Lägg din SSH-nyckel i:    tooling/docker/git-ssh/authorized_keys
+#   3. Starta:                   docker compose -f tooling/docker/docker-compose.yml up -d --build
+#   4. Browser:                  http://localhost:8080/ava
+#   5. Klona repo:                git clone ssh://git@localhost:2222/srv/git/firma.git
+#
+# `name: ava` håller projekt-/volymnamnen stabila (ava_git_repos) oavsett
+# att filen flyttats till docker/ — annars skulle de prefixas "docker_".
+# Relativa sökvägar nedan är relativa docker/ (compose-filens katalog).
+
+name: ava
+
+services:
+  # ─── Statisk web-app + smart-HTTP git-endpoint ────────────
+  # nginx servar dels static under /ava/, dels git-http-backend under
+  # /git/ (samma origin → ingen CORS-proxy för browser-push). Delar
+  # bare-repos med git-ssh via volymen git_repos.
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      - ../../out:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - git_repos:/srv/git
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/ava/"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # ─── SSH + bare git-repos = datalagring ────────────────────
+  git-ssh:
+    build:
+      context: ./git-ssh
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "2222:22"
+    volumes:
+      - git_repos:/srv/git
+      - ./git-ssh/authorized_keys:/keys/authorized_keys:ro
+
+volumes:
+  # Persistent storage för bare git-repos. Backup = `tar` på denna volym.
+  git_repos:

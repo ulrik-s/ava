@@ -8,8 +8,9 @@
 import { useState } from "react";
 import Link from "next/link";
 import type { inferRouterOutputs } from "@trpc/server";
-import { trpc } from "@/lib/trpc";
-import { formatCurrency } from "@/lib/utils";
+import { trpc } from "@/client/lib/trpc";
+import { useRouteId } from "@/client/lib/demo/use-route-id";
+import { formatCurrency } from "@/client/lib/utils";
 import type { AppRouter } from "@/server/routers/_app";
 import { PaymentModal } from "./_payment-modal";
 import { PlanModal } from "./_plan-modal";
@@ -26,7 +27,9 @@ const STATUS_LABELS: Record<string, string> = {
   INSTALLMENT_PLAN: "Avbetalningsplan",
 };
 
-export default function InvoiceDetailClient({ id }: { id: string }) {
+export default function InvoiceDetailClient({ id: paramId }: { id: string }) {
+  // Static export: sentinel-shell för nya id:n → läs riktiga id:t ur URL:en.
+  const id = useRouteId() ?? paramId;
   const invoice = trpc.invoice.getById.useQuery({ id });
   const utils = trpc.useUtils();
 

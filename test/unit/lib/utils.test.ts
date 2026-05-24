@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { cn, formatMinutes, formatCurrency } from "@/lib/utils";
+import { cn, formatMinutes, formatCurrency } from "@/client/lib/utils";
 
 describe("cn()", () => {
   it("kombinerar klasser till en sträng", () => {

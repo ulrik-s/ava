@@ -8,7 +8,7 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { DocumentBrowser } from "@/components/document-browser";
+import { DocumentBrowser } from "@/client/components/document-browser";
 
 type Doc = Record<string, unknown>;
 type Folder = Record<string, unknown>;
@@ -38,7 +38,7 @@ const mutationStubs = {
   register: { mutate: vi.fn(), mutateAsync: vi.fn().mockResolvedValue({}), isPending: false },
 };
 
-vi.mock("@/lib/trpc", () => ({
+vi.mock("@/client/lib/trpc", () => ({
   trpc: {
     useUtils: () => utilsMock,
     document: {

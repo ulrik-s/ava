@@ -4,7 +4,7 @@
 
 import { describe, it, expect, beforeEach } from "vitest";
 import { searchDocuments } from "@/server/adapters/demo-search-index";
-import { setDocumentContent, clearDocumentContentCache } from "@/lib/search/document-content-cache";
+import { setDocumentContent, clearDocumentContentCache } from "@/client/lib/demo/document-content-cache";
 
 beforeEach(() => clearDocumentContentCache());
 

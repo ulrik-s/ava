@@ -4,14 +4,14 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
-import { makeFsaWriteBack } from "@/lib/firma/fsa-write-back";
+import { makeFsaWriteBack } from "@/client/lib/firma/fsa-write-back";
 
 interface MockFs {
   writeFile: ReturnType<typeof vi.fn>;
   unlink: ReturnType<typeof vi.fn>;
 }
 
-vi.mock("@/lib/fsa/fs-adapter", () => ({
+vi.mock("@/client/lib/fsa/fs-adapter", () => ({
   FsaIsoGitAdapter: vi.fn().mockImplementation(function (
     this: MockFs,
   ): MockFs {
@@ -21,7 +21,7 @@ vi.mock("@/lib/fsa/fs-adapter", () => ({
   }),
 }));
 
-import { FsaIsoGitAdapter } from "@/lib/fsa/fs-adapter";
+import { FsaIsoGitAdapter } from "@/client/lib/fsa/fs-adapter";
 
 describe("makeFsaWriteBack", () => {
   const handle = {} as FileSystemDirectoryHandle;
@@ -81,6 +81,28 @@ describe("makeFsaWriteBack", () => {
       row: { id: "u1", email: "anna@firma.se", name: "Anna" },
     });
     expect(instance.writeFile.mock.calls.at(-1)![0]).toBe("/.ava/users/anna@firma.se.json");
+  });
+
+  // Regressionsskydd för "ser ut att fungera men persisteras inte"-buggen:
+  // dessa entiteter mutateras via UI:t men saknade tidigare path-mappning
+  // → skrevs aldrig till git-db:n.
+  it.each([
+    ["documentFolder", "/document-folders/df1.json"],
+    ["documentTemplate", "/.ava/templates/dt1.json"],
+    ["documentAnalysisSuggestion", "/document-analysis-suggestions/das1.json"],
+    ["matterEventSuggestion", "/matter-event-suggestions/mes1.json"],
+    ["organization", "/.ava/organizations/o1.json"],
+    ["office", "/offices/of1.json"],
+    ["conflictCheck", "/conflict-checks/cc1.json"],
+    ["payment", "/payments/pay1.json"],
+    ["paymentPlan", "/payment-plans/pp1.json"],
+    ["accontoDeduction", "/acconto-deductions/ad1.json"],
+  ])("%s create → %s", async (entity, expectedPath) => {
+    const id = expectedPath.split("/").pop()!.replace(".json", "");
+    const writeBack = makeFsaWriteBack({ handle });
+    const instance = (FsaIsoGitAdapter as unknown as { mock: { instances: MockFs[] } }).mock.instances.at(-1)!;
+    await writeBack({ entity, kind: "create", row: { id, organizationId: "o1" } });
+    expect(instance.writeFile.mock.calls.at(-1)![0]).toBe(expectedPath);
   });
 
   it("okänd entitet ignoreras tyst", async () => {

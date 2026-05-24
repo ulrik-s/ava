@@ -101,7 +101,7 @@ till `main` och kör:
 ```
 yarn install --immutable
 yarn prisma generate
-bash scripts/build-demo.sh    # DEMO_BUILD=1 next build → out/
+bash tooling/scripts/build-demo.sh    # DEMO_BUILD=1 next build → out/
 actions/upload-pages-artifact
 actions/deploy-pages
 ```
@@ -118,7 +118,7 @@ och loadern auto-mappar till motsvarande GH Pages-URL.
 Bygg och servera lokalt för att sanity-checka:
 
 ```bash
-bash scripts/build-demo.sh
+bash tooling/scripts/build-demo.sh
 cd out
 python3 -m http.server 8765
 # → http://localhost:8765/demo/
@@ -161,7 +161,7 @@ Stashas fortfarande (kräver `generateStaticParams()`):
 | **"Kunde inte hämta demo-manifest..."** | GH Pages är inte aktiverat på demo-data-repo:t, eller `manifest.json` saknas i roten. |
 | **"Kunde inte hämta X: HTTP 404"** | Manifestet listar en fil som inte finns. Re-generera manifestet. |
 | **404 på `/demo/_next/*`** | Fel `basePath`. CI sätter den automatiskt; för lokal test, sätt `DEMO_BASE_PATH=""`. |
-| **Build error: "Page X is missing generateStaticParams"** | En dynamisk route nådde demo-builden. Lägg till den i `STASH_PATHS` i `scripts/build-demo.sh`. |
+| **Build error: "Page X is missing generateStaticParams"** | En dynamisk route nådde demo-builden. Lägg till den i `STASH_PATHS` i `tooling/scripts/build-demo.sh`. |
 | **CORS-fel vid fetch** | Repo:t är privat. GH Pages CORS gäller endast publika repos. |
 
 ## Varför inte `isomorphic-git` + CORS-proxy?

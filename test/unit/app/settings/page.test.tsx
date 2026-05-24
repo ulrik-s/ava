@@ -30,11 +30,11 @@ const deleteOfficeMutate = vi.fn();
 
 // DatasourceSection har egna tester (firma-settings-panel.test.tsx).
 // Stubba ut den här så vi inte krockar med dess Spara-knapp + checkbox.
-vi.mock("@/components/datasource-section", () => ({
+vi.mock("@/client/components/datasource-section", () => ({
   DatasourceSection: () => null,
 }));
 
-vi.mock("@/lib/trpc", () => ({
+vi.mock("@/client/lib/trpc", () => ({
   trpc: {
     useUtils: () => utilsMock,
     organization: {

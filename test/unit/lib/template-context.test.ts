@@ -7,7 +7,7 @@ import {
   renderTemplate,
   buildTemplateContext,
   type TemplateContext,
-} from "@/lib/template-context";
+} from "@/client/lib/template-context";
 
 // ─── formatDate ──────────────────────────────────────────────────
 

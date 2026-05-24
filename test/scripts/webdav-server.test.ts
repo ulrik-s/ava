@@ -22,7 +22,7 @@ import { hash } from "bcryptjs";
 process.env.WEBDAV_SKIP_LISTEN = "1";
 
 // Dynamisk import så WEBDAV_SKIP_LISTEN hinner sättas.
-const { server, prisma } = await import("../../scripts/webdav-server");
+const { server, prisma } = await import("../../tooling/scripts/webdav-server");
 
 let baseUrl: string;
 let auth: string;

@@ -28,6 +28,44 @@ const rows: Row[] = [
 
 const engine = new InMemoryQueryEngine<Row>();
 
+// ─── Relations-filter (nested to-one + some/none/every) ──────────────
+
+describe("InMemoryQueryEngine relations-filter", () => {
+  type InvoiceRow = {
+    id: string;
+    matter?: { organizationId: string };
+    deductedOnFinals?: Array<{ id: string }>;
+  } & Record<string, unknown>;
+  const eng = new InMemoryQueryEngine<InvoiceRow>();
+  const invoices: InvoiceRow[] = [
+    { id: "a", matter: { organizationId: "o1" }, deductedOnFinals: [] },
+    { id: "b", matter: { organizationId: "o2" }, deductedOnFinals: [{ id: "d1" }] },
+    { id: "c", matter: { organizationId: "o1" } }, // deductedOnFinals saknas
+  ];
+
+  it("nested to-one: where matter.organizationId", () => {
+    const r = eng.query(invoices, { where: { matter: { organizationId: "o1" } } });
+    expect(r.map((x) => x.id)).toEqual(["a", "c"]);
+  });
+
+  it("none: tom eller saknad relation matchar {none:{}}", () => {
+    const r = eng.query(invoices, { where: { deductedOnFinals: { none: {} } } });
+    expect(r.map((x) => x.id)).toEqual(["a", "c"]);
+  });
+
+  it("some: relation med minst en rad", () => {
+    const r = eng.query(invoices, { where: { deductedOnFinals: { some: {} } } });
+    expect(r.map((x) => x.id)).toEqual(["b"]);
+  });
+
+  it("kombinerar nested to-one med skalär-filter", () => {
+    const r = eng.query(invoices, {
+      where: { matter: { organizationId: "o1" }, deductedOnFinals: { none: {} } },
+    });
+    expect(r.map((x) => x.id)).toEqual(["a", "c"]);
+  });
+});
+
 describe("InMemoryQueryEngine — where", () => {
   it("equals (implicit) matchar exakt", () => {
     const r = engine.query(rows, { where: { id: "2" } });

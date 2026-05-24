@@ -14,8 +14,8 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { uploadDocumentToFsa } from "@/lib/fsa/upload-document";
-import { makeFsaWriteBack } from "@/lib/firma/fsa-write-back";
+import { uploadDocumentToFsa } from "@/client/lib/fsa/upload-document";
+import { makeFsaWriteBack } from "@/client/lib/firma/fsa-write-back";
 import { makeFakeFsa } from "../../../helpers/fake-fsa";
 
 describe("Document upload — integration mot fake FSA", () => {

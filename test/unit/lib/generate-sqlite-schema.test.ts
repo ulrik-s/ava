@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { generate } from "../../../scripts/generate-sqlite-schema";
+import { generate } from "../../../tooling/scripts/generate-sqlite-schema";
 
 const PG_SCHEMA = `
 generator client {

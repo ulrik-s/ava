@@ -6,7 +6,7 @@
 
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { AuthStatusBanner } from "@/components/auth-status-banner";
+import { AuthStatusBanner } from "@/client/components/auth-status-banner";
 
 const mockState = {
   mode: "anonymous" as "anonymous" | "identified-read" | "identified-write",
@@ -17,7 +17,7 @@ const mockState = {
   refresh: async () => {},
 };
 
-vi.mock("@/lib/auth/use-auth-mode", () => ({
+vi.mock("@/client/lib/auth/use-auth-mode", () => ({
   useAuthMode: () => mockState,
 }));
 

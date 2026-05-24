@@ -11,7 +11,7 @@ Genererad: 2026-05-19.
 | `src/server/local-first/node-git-ops.ts` | `child_process` | direkt |
 | `src/server/local-first/node-fs.ts` | `fs`, `path` | direkt |
 | `src/server/db.ts` | `@prisma/adapter-pg` (lazy via require) | indirekt via `pg`/`pgpass` |
-| `src/lib/auth.ts` | `next-auth`, `bcryptjs`, `next-auth/providers/*` | indirekt |
+| `src/client/lib/auth.ts` | `next-auth`, `bcryptjs`, `next-auth/providers/*` | indirekt |
 
 ## Polluterande imports (transitiva via `appRouter`)
 

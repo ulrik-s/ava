@@ -119,7 +119,7 @@ Se TODO-listan i `docs/architecture-future.md` §7.4 step 8.
 När en användare installerat klient-appen kör hen:
 
 ```bash
-bash scripts/bootstrap-local-first.sh \
+bash tooling/scripts/bootstrap-local-first.sh \
   --repo ssh://git@your-server/srv/git/firma-x.git \
   --dir "$HOME/Library/Application Support/AVA/firma-x" \
   --user anna@firma.se

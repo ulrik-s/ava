@@ -39,7 +39,7 @@ const stubs = {
   deleteExpense: { mutate: vi.fn(), isPending: false },
 };
 
-vi.mock("@/lib/trpc", () => ({
+vi.mock("@/client/lib/trpc", () => ({
   trpc: {
     useUtils: () => utilsMock,
     matter: {
@@ -68,19 +68,19 @@ vi.mock("@/lib/trpc", () => ({
 }));
 
 // Tunga barnkomponenter — mocka som platshållare
-vi.mock("@/components/document-browser", () => ({
+vi.mock("@/client/components/document-browser", () => ({
   DocumentBrowser: () => <div data-testid="doc-browser" />,
 }));
-vi.mock("@/components/suggestions-panel", () => ({
+vi.mock("@/client/components/suggestions-panel", () => ({
   SuggestionsPanel: () => <div data-testid="suggestions" />,
 }));
-vi.mock("@/components/events-panel", () => ({
+vi.mock("@/client/components/events-panel", () => ({
   EventsPanel: () => <div data-testid="events" />,
 }));
-vi.mock("@/components/invoices-section", () => ({
+vi.mock("@/client/components/invoices-section", () => ({
   InvoicesSection: () => <div data-testid="invoices" />,
 }));
-vi.mock("@/components/payment-method-card", () => ({
+vi.mock("@/client/components/payment-method-card", () => ({
   PaymentMethodCard: ({ paymentMethod }: { paymentMethod: string }) => (
     <div data-testid="pmc">{paymentMethod}</div>
   ),

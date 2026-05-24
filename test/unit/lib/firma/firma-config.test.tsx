@@ -7,7 +7,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import {
   loadFirmaConfig, saveFirmaConfig, resetToDemo, inferTier,
   type FirmaConfig,
-} from "@/lib/firma/firma-config";
+} from "@/client/lib/firma/firma-config";
 
 const KEY = "ava.firma";
 

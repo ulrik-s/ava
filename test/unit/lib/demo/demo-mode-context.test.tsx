@@ -4,7 +4,7 @@
 
 import { describe, it, expect } from "vitest";
 import { renderHook } from "@testing-library/react";
-import { DemoModeProvider, useIsReadOnly } from "@/lib/demo/demo-mode-context";
+import { DemoModeProvider, useIsReadOnly } from "@/client/lib/demo/demo-mode-context";
 
 describe("useIsReadOnly", () => {
   it("default = false utan provider", () => {

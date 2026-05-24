@@ -2,19 +2,23 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { trpc } from "@/lib/trpc";
-import { DocumentBrowser } from "@/components/document-browser";
-import { SuggestionsPanel } from "@/components/suggestions-panel";
-import { EventsPanel } from "@/components/events-panel";
-import { InvoicesSection } from "@/components/invoices-section";
-import { PaymentMethodCard } from "@/components/payment-method-card";
+import { trpc } from "@/client/lib/trpc";
+import { DocumentBrowser } from "@/client/components/document-browser";
+import { SuggestionsPanel } from "@/client/components/suggestions-panel";
+import { EventsPanel } from "@/client/components/events-panel";
+import { InvoicesSection } from "@/client/components/invoices-section";
+import { PaymentMethodCard } from "@/client/components/payment-method-card";
 import { FileDown } from "lucide-react";
 import { ContactsSection } from "./_contacts-section";
 import { TimeSection } from "./_time-section";
 import { ExpenseSection } from "./_expense-section";
 import { GenerateModal } from "./_generate-modal";
+import { useRouteId } from "@/client/lib/demo/use-route-id";
 
-export default function MatterDetailClient({ id }: { id: string }) {
+export default function MatterDetailClient({ id: paramId }: { id: string }) {
+  // Static export serverar en sentinel-shell för nya id:n → läs riktiga
+  // id:t ur URL:en (faller tillbaka till build-time-param i server-mode).
+  const id = useRouteId() ?? paramId;
   const matter = trpc.matter.getById.useQuery({ id });
   const [showGenerateModal, setShowGenerateModal] = useState(false);
 

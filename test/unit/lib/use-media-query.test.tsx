@@ -7,7 +7,7 @@
 
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
-import { useMediaQuery } from "@/lib/use-media-query";
+import { useMediaQuery } from "@/client/lib/use-media-query";
 
 interface MQL {
   matches: boolean;

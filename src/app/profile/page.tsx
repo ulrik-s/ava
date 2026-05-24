@@ -10,10 +10,10 @@
  */
 
 import { useEffect, useState } from "react";
-import { trpc } from "@/lib/trpc";
+import { trpc } from "@/client/lib/trpc";
 import { User, KeyRound, Plus, Trash2 } from "lucide-react";
-import { IntegrationsSection } from "@/components/integrations-section";
-import { KeypairManager } from "@/components/keypair-manager";
+import { IntegrationsSection } from "@/client/components/integrations-section";
+import { KeypairManager } from "@/client/components/keypair-manager";
 
 interface PublicKey {
   fingerprint: string;

@@ -5,7 +5,7 @@
 
 import { z } from "zod";
 import { orgProcedure } from "../../trpc";
-import { isJunkFileName } from "@/lib/junk-files";
+import { isJunkFileName } from "@/client/lib/junk-files";
 import { assertDocAccess } from "./shared";
 
 export const coreProcedures = {

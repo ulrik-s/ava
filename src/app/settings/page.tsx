@@ -1,9 +1,9 @@
 "use client";
 
 import { useId, useState, useRef } from "react";
-import { trpc } from "@/lib/trpc";
+import { trpc } from "@/client/lib/trpc";
 import { Upload, Trash2, Building2, Plus, Pencil, X, Check, FolderOpen, Copy } from "lucide-react";
-import { DatasourceSection } from "@/components/datasource-section";
+import { DatasourceSection } from "@/client/components/datasource-section";
 
 // ─── WebDAV mount instructions ───────────────────────────────────
 

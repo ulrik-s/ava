@@ -22,7 +22,7 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => ({ get: searchParamsGet }),
 }));
 
-vi.mock("@/lib/trpc", () => ({
+vi.mock("@/client/lib/trpc", () => ({
   trpc: {
     useUtils: () => utilsMock,
     matter: {

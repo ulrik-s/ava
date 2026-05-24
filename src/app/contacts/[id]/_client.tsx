@@ -3,11 +3,14 @@
 import { useId, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { trpc } from "@/lib/trpc";
-import { labelForContactType, labelForMatterRole, contactTypes } from "@/lib/labels";
+import { trpc } from "@/client/lib/trpc";
+import { labelForContactType, labelForMatterRole, contactTypes } from "@/client/lib/labels";
+import { useRouteId } from "@/client/lib/demo/use-route-id";
 
-export default function ContactDetailClient({ id }: { id: string }) {
+export default function ContactDetailClient({ id: paramId }: { id: string }) {
   const router = useRouter();
+  // Static export: sentinel-shell för nya id:n → läs riktiga id:t ur URL:en.
+  const id = useRouteId() ?? paramId;
   const contact = trpc.contacts.getById.useQuery({ id });
   const utils = trpc.useUtils();
 

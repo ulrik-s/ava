@@ -123,7 +123,7 @@ in Node-paket.
 
 ### Fas R4 — Demo-bootstrap + sidor (3h)
 
-1. Återinför `src/components/demo-bootstrap.tsx` (designet från
+1. Återinför `src/client/components/demo-bootstrap.tsx` (designet från
    tidigare attempt). Nu ska `createDemoTrpcLink` fungera eftersom
    appRouter är bundle-bar.
 2. Ta bort list-sidor från `STASH_PATHS` i `build-demo.sh`:

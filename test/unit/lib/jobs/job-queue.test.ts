@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { jobQueue, type Job } from "@/lib/jobs/job-queue";
+import { jobQueue, type Job } from "@/client/lib/jobs/job-queue";
 
 beforeEach(() => {
   // Töm queue:n mellan testen — den är singleton

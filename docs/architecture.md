@@ -43,7 +43,7 @@ svenska; enum-värden är engelska (Prisma-konvention).
 | Runtime         | Docker Compose (Postgres, Meili, Tika, LLM-bootstrap)        |
 
 Det finns en sidotjänst för WebDAV-åtkomst till dokumentarkivet som körs
-via `tsx watch scripts/webdav-server.ts` parallellt med `next dev`.
+via `tsx watch tooling/scripts/webdav-server.ts` parallellt med `next dev`.
 
 ---
 
@@ -81,7 +81,7 @@ prisma/
   schema.prisma             Källa för datamodellen
   init.sql                  Postgres-init (extensions etc.)
   migrations/               Prisma-migrationer
-scripts/                    Engångs- och operativa skript
+tooling/scripts/                    Engångs- och operativa skript
   webdav-server.ts          WebDAV-frontend mot storage/
   analyze-unanalyzed.ts     Backfill av LLM-analys
   seed-templates.ts         Seed för standardmallar
@@ -224,7 +224,7 @@ implementationerna (`computeFinalInvoiceBreakdown`, `isPaymentPlanSettled`)
 
 ### 5.3 Formatering för UI
 
-- `formatCurrency(ore)` i `src/lib/utils.ts` → `"12 345,00 kr"`.
+- `formatCurrency(ore)` i `src/client/lib/utils.ts` → `"12 345,00 kr"`.
 - `formatMinutes(m)` → `"2,5 tim"` / `"1 tim 30 min"`.
 - `formatAmount(ore)` i `template-context.ts` → för Handlebars-mallar.
 
@@ -405,7 +405,7 @@ Timdebitering per vecka, Upparb. ej fakt.
 **ISO-vecka** (`isoWeek`, `weeksInRange`) räknas i UTC — använd inte
 `Date#getDay()` utan suffixet `getUTCDay()`. Varje rapport-procedure
 har egen kopia av hjälparna eftersom de är små och lätta att hålla
-synkade; om logiken blir mer komplex, flytta ut till `src/lib/iso-week.ts`.
+synkade; om logiken blir mer komplex, flytta ut till `src/client/lib/iso-week.ts`.
 
 ---
 
@@ -438,7 +438,7 @@ en unique-konstraint för idempotens.
 
 ## 12. Infrastruktur
 
-### 12.1 docker-compose.yml
+### 12.1 docker/docker-compose.yml
 
 Startar: `postgres` (5432), `meilisearch` (7700), `tika` (9998) och en
 `llm-bootstrap`-service som refererar top-level `models: llm:
@@ -518,7 +518,7 @@ satta. **Använd alltid de nya namnen i ny kod.**
 - Kod och filnamn: engelska (camelCase för variabler, PascalCase för
   komponenter/typer, kebab-case för filer).
 - Enum-värden: engelska, SCREAMING_SNAKE (`INSTALLMENT_PLAN`,
-  `BAD_DEBT`). Översätts i UI via `src/lib/labels.ts`.
+  `BAD_DEBT`). Översätts i UI via `src/client/lib/labels.ts`.
 - Kommentarer och commit-meddelanden: svenska eller engelska beroende
   på vad som redan dominerar filen. Kommentera **varför**, inte vad.
 - Användarvända strängar: alltid svenska.
@@ -530,7 +530,7 @@ satta. **Använd alltid de nya namnen i ny kod.**
 
 ## 16. Checklista innan merge
 
-1. `npx tsc --noEmit` rent (undantaget `scripts/webdav-server.ts` om
+1. `npx tsc --noEmit` rent (undantaget `tooling/scripts/webdav-server.ts` om
    det felar på orelaterade rader).
 2. `npm run test:run` grönt.
 3. Nya routers har `orgProcedure` + cross-org-test.

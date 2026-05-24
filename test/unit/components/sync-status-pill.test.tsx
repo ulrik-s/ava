@@ -6,8 +6,8 @@
 
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { SyncStatusPill } from "@/components/sync-status-pill";
-import type { SyncState } from "@/lib/sync/use-auto-sync";
+import { SyncStatusPill } from "@/client/components/sync-status-pill";
+import type { SyncState } from "@/client/lib/sync/use-auto-sync";
 
 describe("SyncStatusPill", () => {
   it("idle: 'Inte synkat ännu'", () => {

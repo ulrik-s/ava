@@ -47,7 +47,7 @@ next-env.d.ts
 .claude/worktrees/
 
 # Uppladdat användarinnehåll (dokument, logotyper)
-/storage/
+/data/storage/
 
 # IDE
 .vscode/
@@ -63,4 +63,7 @@ next-env.d.ts
 /src-tauri/gen/
 
 # Genererat SQLite-schema (committas inte — bygger sig själv från schema.prisma)
-/prisma/schema.sqlite.prisma
+/data/prisma/schema.sqlite.prisma
+
+# Stray npm lockfile — this project uses Yarn (yarn.lock)
+package-lock.json

@@ -19,7 +19,7 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: routerPush }),
 }));
 
-vi.mock("@/lib/trpc", () => ({
+vi.mock("@/client/lib/trpc", () => ({
   trpc: {
     useUtils: () => utilsMock,
     documentTemplate: {
@@ -37,7 +37,7 @@ vi.mock("@/lib/trpc", () => ({
   },
 }));
 
-vi.mock("@/components/template-editor", () => ({
+vi.mock("@/client/components/template-editor", () => ({
   TemplateEditor: ({
     onSave,
     onCancel,

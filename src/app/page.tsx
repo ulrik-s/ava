@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { trpc } from "@/lib/trpc";
+import { trpc } from "@/client/lib/trpc";
 
 export default function Dashboard() {
   const contacts = trpc.contacts.list.useQuery({ page: 1, pageSize: 5 });

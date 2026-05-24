@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { matterRoleLabels, matterRoles, contactTypeLabels, contactTypes } from "@/lib/labels";
+import { matterRoleLabels, matterRoles, contactTypeLabels, contactTypes } from "@/client/lib/labels";
 
 describe("matterRoleLabels", () => {
   it("använder 'Klient' (inte 'Huvudman') som label för KLIENT", () => {

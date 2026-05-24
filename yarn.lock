@@ -59,41 +59,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@auth/core@npm:0.41.2":
-  version: 0.41.2
-  resolution: "@auth/core@npm:0.41.2"
-  dependencies:
-    "@panva/hkdf": "npm:^1.2.1"
-    jose: "npm:^6.0.6"
-    oauth4webapi: "npm:^3.3.0"
-    preact: "npm:10.24.3"
-    preact-render-to-string: "npm:6.5.11"
-  peerDependencies:
-    "@simplewebauthn/browser": ^9.0.1
-    "@simplewebauthn/server": ^9.0.2
-    nodemailer: ^7.0.7
-  peerDependenciesMeta:
-    "@simplewebauthn/browser":
-      optional: true
-    "@simplewebauthn/server":
-      optional: true
-    nodemailer:
-      optional: true
-  checksum: 10c0/a8309434a91bb678c5dd644b97ae8ed0935426808f4251ddd5f888b845c152393718978d631ffdf48ed13c2626dae146665592b6be66b7e1c06356764a89dce4
-  languageName: node
-  linkType: hard
-
-"@auth/prisma-adapter@npm:^2.11.2":
-  version: 2.11.2
-  resolution: "@auth/prisma-adapter@npm:2.11.2"
-  dependencies:
-    "@auth/core": "npm:0.41.2"
-  peerDependencies:
-    "@prisma/client": ">=2.26.0 || >=3 || >=4 || >=5 || >=6"
-  checksum: 10c0/5d878fedfd3a351a64807f0d32588d758ec3d2a692319fbfee830d17c8d275ea89c33d598d28a99379e006976d3a20f3827965cadaf7e5b8c3d63e608cc0fb4c
-  languageName: node
-  linkType: hard
-
 "@babel/code-frame@npm:^7.0.0, @babel/code-frame@npm:^7.10.4, @babel/code-frame@npm:^7.28.6, @babel/code-frame@npm:^7.29.0":
   version: 7.29.0
   resolution: "@babel/code-frame@npm:7.29.0"
@@ -1779,7 +1744,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@panva/hkdf@npm:^1.0.2, @panva/hkdf@npm:^1.2.1":
+"@panva/hkdf@npm:^1.0.2":
   version: 1.2.1
   resolution: "@panva/hkdf@npm:1.2.1"
   checksum: 10c0/1fabdec9bd2c19b8e88a3fa6fd0c25e25823c5000d9efdf4b6dfe32e9f370f8b9603cf776d120d160bec15fba17e079974cc34f0f52cebb24602cd832dfde19c
@@ -2831,15 +2796,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@testing-library/user-event@npm:^14.6.1":
-  version: 14.6.1
-  resolution: "@testing-library/user-event@npm:14.6.1"
-  peerDependencies:
-    "@testing-library/dom": ">=7.21.4"
-  checksum: 10c0/75fea130a52bf320d35d46ed54f3eec77e71a56911b8b69a3fe29497b0b9947b2dc80d30f04054ad4ce7f577856ae3e5397ea7dff0ef14944d3909784c7a93fe
-  languageName: node
-  linkType: hard
-
 "@tootallnate/quickjs-emscripten@npm:^0.23.0":
   version: 0.23.0
   resolution: "@tootallnate/quickjs-emscripten@npm:0.23.0"
@@ -2856,29 +2812,6 @@ __metadata:
   bin:
     intent: bin/intent.js
   checksum: 10c0/f18061128f28a5a5e27551d5facf11e10a591a2e8e28d93601cebf541025f3aee459500d252343e25e4d7e913623cdd3455e1fab23979cb83e174cecd40e3163
-  languageName: node
-  linkType: hard
-
-"@trpc/next@npm:^11.16.0":
-  version: 11.17.0
-  resolution: "@trpc/next@npm:11.17.0"
-  peerDependencies:
-    "@tanstack/react-query": ^5.59.15
-    "@trpc/client": 11.17.0
-    "@trpc/react-query": 11.17.0
-    "@trpc/server": 11.17.0
-    next: "*"
-    react: ">=16.8.0"
-    react-dom: ">=16.8.0"
-    typescript: ">=5.7.2"
-  peerDependenciesMeta:
-    "@tanstack/react-query":
-      optional: true
-    "@trpc/react-query":
-      optional: true
-  bin:
-    intent: bin/intent.js
-  checksum: 10c0/b24c75116e5fcba185b122985f4e9c40784d88e4b83f17b1db40822ef28d9c7102e89ca74977c7c995f7d449f6453a688b9e43e904cfeb599c77d97f000f8a7e
   languageName: node
   linkType: hard
 
@@ -2922,13 +2855,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/bcryptjs@npm:^2.4.6":
-  version: 2.4.6
-  resolution: "@types/bcryptjs@npm:2.4.6"
-  checksum: 10c0/1182663f0c081c5c58760019459cd309335e9b5fc6552780b0fd21b6c5f25661a844709e46218796f4bdbebe6736e11cfc5af0729bc2cdb0160943650aceb3da
-  languageName: node
-  linkType: hard
-
 "@types/chai@npm:^5.2.2":
   version: 5.2.3
   resolution: "@types/chai@npm:5.2.3"
@@ -2950,13 +2876,6 @@ __metadata:
   version: 1.0.9
   resolution: "@types/estree@npm:1.0.9"
   checksum: 10c0/3ad3286ca2988cd550dafb8f2ad599c8474868e954fa601a36655bdfefd8039f7c714b8c1c7f2ae219ffbd58bd4660e66fa7479a0120fc02d4777057d4865387
-  languageName: node
-  linkType: hard
-
-"@types/file-saver@npm:^2.0.7":
-  version: 2.0.7
-  resolution: "@types/file-saver@npm:2.0.7"
-  checksum: 10c0/c6b88a1aea8eec58469da2a90828fef6e9d5d590c7094fb959783d7c32878af80d39439734f3d41b78355dadb507f606e3d04a29a160c85411c65251e58df847
   languageName: node
   linkType: hard
 
@@ -3920,7 +3839,6 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "ava@workspace:."
   dependencies:
-    "@auth/prisma-adapter": "npm:^2.11.2"
     "@isomorphic-git/cors-proxy": "npm:^3.0.1"
     "@mlc-ai/web-llm": "npm:^0.2.83"
     "@playwright/test": "npm:^1.59.1"
@@ -3936,13 +3854,9 @@ __metadata:
     "@testing-library/dom": "npm:^10.4.1"
     "@testing-library/jest-dom": "npm:^6.9.1"
     "@testing-library/react": "npm:^16.3.2"
-    "@testing-library/user-event": "npm:^14.6.1"
     "@trpc/client": "npm:^11.16.0"
-    "@trpc/next": "npm:^11.16.0"
     "@trpc/react-query": "npm:^11.16.0"
     "@trpc/server": "npm:^11.16.0"
-    "@types/bcryptjs": "npm:^2.4.6"
-    "@types/file-saver": "npm:^2.0.7"
     "@types/json-logic-js": "npm:^2.0.8"
     "@types/node": "npm:^20.19.39"
     "@types/nodemailer": "npm:^8.0.0"
@@ -3952,7 +3866,6 @@ __metadata:
     "@vitest/coverage-v8": "npm:^4.1.5"
     "@vitest/ui": "npm:^4.1.5"
     bcryptjs: "npm:^3.0.3"
-    class-variance-authority: "npm:^0.7.1"
     clsx: "npm:^2.1.1"
     concurrently: "npm:^9.2.1"
     cron-parser: "npm:^5.5.0"
@@ -3961,7 +3874,6 @@ __metadata:
     eslint: "npm:^9"
     eslint-config-next: "npm:16.2.3"
     exceljs: "npm:^4.4.0"
-    file-saver: "npm:^2.0.5"
     handlebars: "npm:^4.7.9"
     html-to-docx: "npm:^1.8.0"
     husky: "npm:^9.1.7"
@@ -4491,15 +4403,6 @@ __metadata:
   peerDependencies:
     devtools-protocol: "*"
   checksum: 10c0/49da03868d3a46c68e40d20f68a75ffacc05b22dc247b7c1b2126716d8d69e618780f8ab1d63e676fb372cddb32b773efaabb2f520217321caece9a258500d31
-  languageName: node
-  linkType: hard
-
-"class-variance-authority@npm:^0.7.1":
-  version: 0.7.1
-  resolution: "class-variance-authority@npm:0.7.1"
-  dependencies:
-    clsx: "npm:^2.1.1"
-  checksum: 10c0/0f438cea22131808b99272de0fa933c2532d5659773bfec0c583de7b3f038378996d3350683426b8e9c74a6286699382106d71fbec52f0dd5fbb191792cccb5b
   languageName: node
   linkType: hard
 
@@ -6099,13 +6002,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"file-saver@npm:^2.0.5":
-  version: 2.0.5
-  resolution: "file-saver@npm:2.0.5"
-  checksum: 10c0/0a361f683786c34b2574aea53744cb70d0a6feb0fa5e3af00f2fcb6c9d40d3049cc1470e38c6c75df24219f247f6fb3076f86943958f580e62ee2ffe897af8b1
-  languageName: node
-  linkType: hard
-
 "fill-range@npm:^7.1.1":
   version: 7.1.1
   resolution: "fill-range@npm:7.1.1"
@@ -7290,13 +7186,6 @@ __metadata:
   version: 4.15.9
   resolution: "jose@npm:4.15.9"
   checksum: 10c0/4ed4ddf4a029db04bd167f2215f65d7245e4dc5f36d7ac3c0126aab38d66309a9e692f52df88975d99429e357e5fd8bab340ff20baab544d17684dd1d940a0f4
-  languageName: node
-  linkType: hard
-
-"jose@npm:^6.0.6":
-  version: 6.2.3
-  resolution: "jose@npm:6.2.3"
-  checksum: 10c0/aa91bccba22cc84d86308f833749bcb0b00441e35c24e0ac79abeac5f76dc62d47bdef9c1da6a0c609f5da6478595f52b252085888b89dbdb163861e40ea4188
   languageName: node
   linkType: hard
 
@@ -8500,13 +8389,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"oauth4webapi@npm:^3.3.0":
-  version: 3.8.6
-  resolution: "oauth4webapi@npm:3.8.6"
-  checksum: 10c0/479810716702c5616e4a0eb80d4f1c264a6a2b63b04061a62a59375e195d2726e947507ede98e41ee3f9ca800f159621ea371c36f5c4346d015b6ec03e477440
-  languageName: node
-  linkType: hard
-
 "oauth@npm:^0.9.15":
   version: 0.9.15
   resolution: "oauth@npm:0.9.15"
@@ -9205,15 +9087,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"preact-render-to-string@npm:6.5.11":
-  version: 6.5.11
-  resolution: "preact-render-to-string@npm:6.5.11"
-  peerDependencies:
-    preact: ">=10"
-  checksum: 10c0/a68b704c1343756022fb41322154b45e39f6021b940cbc97e86c292627d017d019700339a17d67b42c308b14fc5323fc120c798f785d6a3e993c8f273610bfe2
-  languageName: node
-  linkType: hard
-
 "preact-render-to-string@npm:^5.1.19":
   version: 5.2.6
   resolution: "preact-render-to-string@npm:5.2.6"
@@ -9222,13 +9095,6 @@ __metadata:
   peerDependencies:
     preact: ">=10"
   checksum: 10c0/fb40f952f377900d87d3274e8ede1b59271347f7a3f41ae390aedeb088d162fe15f0a8040272404bd4477551cc2ec83b8a661e2fd3084702498b1543bb08dd11
-  languageName: node
-  linkType: hard
-
-"preact@npm:10.24.3":
-  version: 10.24.3
-  resolution: "preact@npm:10.24.3"
-  checksum: 10c0/c863df6d7be6a660480189762d8a8f2d4148733fc2bb9efbd9d2fd27315d2c7ede850a16077d716c91666c915c0349bd3c9699733e4f08457226a0519f408761
   languageName: node
   linkType: hard
 

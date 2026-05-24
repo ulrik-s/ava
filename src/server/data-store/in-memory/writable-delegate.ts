@@ -104,6 +104,17 @@ export class WritableDelegate<T extends Record<string, unknown>> extends ReadOnl
     return removed as never;
   }
 
+  async updateMany(args: unknown): Promise<never> {
+    const a = args as { where?: Record<string, unknown>; data: Partial<T> };
+    const matches = await this.findMany({ where: a.where });
+    let count = 0;
+    for (const m of matches) {
+      await this.update({ where: { id: (m as unknown as { id: string }).id }, data: a.data });
+      count++;
+    }
+    return { count } as never;
+  }
+
   async deleteMany(args: unknown): Promise<never> {
     const a = args as { where?: Record<string, unknown> };
     const matches = await this.findMany({ where: a.where });

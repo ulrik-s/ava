@@ -19,7 +19,7 @@
 
 import type { PrismaClient } from "@prisma/client";
 import type { IDataStore } from "../data-store/IDataStore";
-import { monthKey, planHasStarted } from "@/lib/invoice-calc";
+import { monthKey, planHasStarted } from "@/client/lib/invoice-calc";
 
 export interface ScanResult {
   organizationId: string;

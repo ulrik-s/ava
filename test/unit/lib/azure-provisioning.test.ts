@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { resolveAzureUser, type AzureProfile } from "@/lib/azure-provisioning";
+import { resolveAzureUser, type AzureProfile } from "@/client/lib/azure-provisioning";
 
 // ─── Helpers ─────────────────────────────────────────────────────
 

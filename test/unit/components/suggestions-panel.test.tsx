@@ -4,7 +4,7 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { SuggestionsPanel } from "@/components/suggestions-panel";
+import { SuggestionsPanel } from "@/client/components/suggestions-panel";
 
 type Group = {
   key: string;
@@ -36,7 +36,7 @@ const utilsMock = {
 const acceptMutate = vi.fn();
 const rejectMutate = vi.fn();
 
-vi.mock("@/lib/trpc", () => ({
+vi.mock("@/client/lib/trpc", () => ({
   trpc: {
     useUtils: () => utilsMock,
     document: {

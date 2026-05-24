@@ -88,7 +88,7 @@ Detsamma vid radera ärende:
 ## Implementations-checklista
 
 - [ ] Lägga till `pdfjs-dist` + `mammoth` som deps
-- [ ] `src/lib/text-extraction/extract.ts` — pure function `extractText(blob, mime) → string`
+- [ ] `src/client/lib/text-extraction/extract.ts` — pure function `extractText(blob, mime) → string`
 - [ ] Worker: `extract-text`-job i jobQueue som körs vid upload
 - [ ] writeBack: hantera "documentText"-entity som skriver text-filen
 - [ ] tRPC: ny mutation `document.writeExtractedText`

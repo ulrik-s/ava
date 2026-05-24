@@ -2,8 +2,8 @@
 
 import { use } from "react";
 import { useRouter } from "next/navigation";
-import { trpc } from "@/lib/trpc";
-import { TemplateEditor } from "@/components/template-editor";
+import { trpc } from "@/client/lib/trpc";
+import { TemplateEditor } from "@/client/components/template-editor";
 
 export default function EditTemplatePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);

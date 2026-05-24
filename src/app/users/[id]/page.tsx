@@ -3,7 +3,7 @@
 import { use, useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { trpc } from "@/lib/trpc";
+import { trpc } from "@/client/lib/trpc";
 import { UserForm, type UserFormState } from "../_user-form";
 
 const roleLabels: Record<string, string> = {

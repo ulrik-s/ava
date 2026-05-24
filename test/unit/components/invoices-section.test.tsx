@@ -5,7 +5,7 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { InvoicesSection } from "@/components/invoices-section";
+import { InvoicesSection } from "@/client/components/invoices-section";
 
 const invoicesQuery = { isLoading: false, data: [] as Array<Record<string, unknown>> };
 const timeQuery: { data: { entries: Array<Record<string, unknown>> } } = { data: { entries: [] } };
@@ -18,7 +18,7 @@ const utilsMock = {
 const createAccontoMutate = vi.fn();
 const createFinalMutate = vi.fn();
 
-vi.mock("@/lib/trpc", () => ({
+vi.mock("@/client/lib/trpc", () => ({
   trpc: {
     useUtils: () => utilsMock,
     invoice: {

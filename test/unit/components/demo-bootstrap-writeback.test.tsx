@@ -22,7 +22,7 @@ const handleState: { current: FileSystemDirectoryHandle | null; isSupported: boo
   current: null,
   isSupported: true,
 };
-vi.mock("@/lib/fsa/handle-store", () => ({
+vi.mock("@/client/lib/fsa/handle-store", () => ({
   isFsaSupported: () => handleState.isSupported,
   loadHandle: vi.fn(async () => handleState.current),
   ensureReadWrite: vi.fn(async () => true),
@@ -36,7 +36,7 @@ async function buildWriteBack(): Promise<(event: MutationEventLike) => Promise<v
   return async (event) => {
     let h = fsaRef.current;
     if (!h) {
-      const { loadHandle, ensureReadWrite, isFsaSupported } = await import("@/lib/fsa/handle-store");
+      const { loadHandle, ensureReadWrite, isFsaSupported } = await import("@/client/lib/fsa/handle-store");
       if (!isFsaSupported()) return;
       const loaded = await loadHandle("repo-root");
       if (!loaded) return;
@@ -44,7 +44,7 @@ async function buildWriteBack(): Promise<(event: MutationEventLike) => Promise<v
       h = loaded;
       fsaRef.current = loaded;
     }
-    const { makeFsaWriteBack } = await import("@/lib/firma/fsa-write-back");
+    const { makeFsaWriteBack } = await import("@/client/lib/firma/fsa-write-back");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await makeFsaWriteBack({ handle: h })(event as any);
     if (typeof window !== "undefined") {
@@ -116,7 +116,7 @@ describe("demo-bootstrap writeBack — fresh handle-fallback", () => {
   it("andra skrivningen använder cached handle (anropar inte loadHandle igen)", async () => {
     const fsa = makeFakeFsa();
     handleState.current = fsa.root;
-    const { loadHandle } = await import("@/lib/fsa/handle-store");
+    const { loadHandle } = await import("@/client/lib/fsa/handle-store");
     const writeBack = await buildWriteBack();
 
     await writeBack({ entity: "matter", kind: "create", row: { id: "m-1" } });

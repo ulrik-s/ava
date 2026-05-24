@@ -2,8 +2,8 @@
 
 import { useId, useState } from "react";
 import Link from "next/link";
-import { trpc } from "@/lib/trpc";
-import { formatMinutes } from "@/lib/utils";
+import { trpc } from "@/client/lib/trpc";
+import { formatMinutes } from "@/client/lib/utils";
 
 export default function TimePage() {
   const [page, setPage] = useState(1);

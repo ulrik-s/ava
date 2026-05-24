@@ -17,7 +17,7 @@ const historyQuery: {
   isLoading: boolean;
 } = { data: { checks: [], total: 0, pages: 0 }, isLoading: false };
 
-vi.mock("@/lib/trpc", () => ({
+vi.mock("@/client/lib/trpc", () => ({
   trpc: {
     conflict: {
       check: {

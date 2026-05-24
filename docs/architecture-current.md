@@ -1,7 +1,12 @@
-# AVA — Aktuell arkitektur (2026-05-23)
+# AVA — Aktuell arkitektur (2026-05-24)
 
 Denna fil är den **officiella översikten** över vad som körs idag och vart
 vi är på väg. Detaljer i andra docs ligger för vidare läsning.
+
+> **Tar du vid pågående self-hosted round-trip-arbete?** Läs
+> [`roundtrip-handoff.md`](./roundtrip-handoff.md) — det är den färska,
+> implementationsnära statusen (browser↔lokal git-server, OPFS-runtime,
+> dynamisk routing, e2e-harness, kvarvarande arbete).
 
 ## Mål: tunn server, tjock klient
 
@@ -36,20 +41,27 @@ vi är på väg. Detaljer i andra docs ligger för vidare läsning.
 | **Tier 3 self-hosted** | nginx + sshd | Browser eller Tauri | Bare git-repo på firmans server | ✅ Lokalt via docker-compose |
 | **Tier 2 server-baserad** | Next.js + Postgres | Browser | PostgreSQL | 🚧 Endast för utveckling |
 
-## Vad körs i `docker-compose.yml`
+## Vad körs i `tooling/docker/docker-compose.yml`
 
 Tunn variant — speglar Tier 3:
 
 | Service | Port | Vad |
 |---|---|---|
-| `web` | 8080 | nginx servar `out/` (statisk Next.js-export) |
+| `web` | 8080 | nginx servar `out/` (statisk Next.js-export) under `/ava/` **+ smart-HTTP git (`git-http-backend`) under `/git/`** |
 | `git-ssh` | 2222 | sshd + bare git-repo (`firma.git`) |
+
+Både `web` och `git-ssh` mountar samma `git_repos`-volym, så samma bare-repo
+(`/srv/git/firma.git`) nås över **HTTP** (`http://localhost:8080/git/firma.git`)
+och **SSH** (`ssh://git@localhost:2222/srv/git/firma.git`). HTTP-vägen finns för
+att browser-klienten (isomorphic-git) ska kunna klona/pusha utan SSH — och
+eftersom `/git/` ligger på samma origin som `/ava/` behövs **ingen CORS-proxy**.
+Det är denna väg lokala round-trip- och e2e-tester använder.
 
 Bygg + starta:
 
 ```bash
-DEMO_BASE_PATH=/ava bash scripts/build-demo.sh
-docker compose up -d --build
+DEMO_BASE_PATH=/ava bash tooling/scripts/build-demo.sh
+docker compose -f tooling/docker/docker-compose.yml up -d --build
 # → http://localhost:8080/ava/
 # → ssh://git@localhost:2222/srv/git/firma.git
 ```
@@ -62,7 +74,7 @@ Next.js dev-server. Den är **inte** vad användarna kör.
 
 ## Klient-arkitektur
 
-`src/components/demo-bootstrap.tsx` är entry-point för web-builden:
+`src/client/components/demo-bootstrap.tsx` är entry-point för web-builden:
 
 1. Läser `firma-config` (lokalt sparad i IndexedDB)
 2. Klonar publikt demo-repo (om sådant) eller bygger upp från lokal FSA
@@ -85,7 +97,7 @@ GitHub (eller firmans Tier 3-server)
 
 ## Lokal SSH-server för utveckling
 
-`docker/git-ssh/` innehåller en minimal Alpine-baserad sshd-image. Den
+`tooling/docker/git-ssh/` innehåller en minimal Alpine-baserad sshd-image. Den
 används för att testa Tier 3-flödet utan att deploya en faktisk server:
 
 ```bash
@@ -97,14 +109,14 @@ cat ~/.ssh/id_ed25519.pub >> docker/git-ssh/authorized_keys
 ssh://git@localhost:2222/srv/git/firma.git
 ```
 
-Detaljer: [`docker/git-ssh/README.md`](../docker/git-ssh/README.md).
+Detaljer: [`tooling/docker/git-ssh/README.md`](../docker/git-ssh/README.md).
 
 ## Push/pull-flödet från browser
 
 Browser kan inte SSH:a direkt (ingen rå TCP-socket). Tre vägar:
 
 1. **GitHub REST** — pushar/pullar via api.github.com med PAT eller OAuth-token
-   ([`pull-via-rest.ts`](../src/lib/sync/github-rest/), körs idag)
+   ([`pull-via-rest.ts`](../src/client/lib/sync/github-rest/), körs idag)
 2. **Tauri-app** — libgit2 inbyggd, SSH fungerar direkt
 3. **Lokal helper-agent** — daemon på user:ns dator som tar HTTP-requests
    från browser:n och translaterar till SSH-git ([`local-helper-design.md`](./local-helper-design.md))

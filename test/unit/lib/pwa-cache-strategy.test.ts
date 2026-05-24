@@ -16,7 +16,7 @@ import {
   cacheStrategyFor,
   shouldCacheResponse,
   type CacheStrategy,
-} from "@/lib/pwa-cache-strategy";
+} from "@/client/lib/pwa-cache-strategy";
 
 describe("cacheStrategyFor", () => {
   it("statiska Next-bundles → cache-first (stabilt content-hash i URL)", () => {

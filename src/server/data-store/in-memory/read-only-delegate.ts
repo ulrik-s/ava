@@ -31,6 +31,18 @@ export interface RelationConfig<TParent> {
   collection: () => readonly Record<string, unknown>[];
   /** Bygger where-filter för barn baserat på parent. */
   where: (parent: TParent) => Record<string, unknown>;
+  /**
+   * "many" (default) → hydratiseras som array.
+   * "one" → hydratiseras som ett enskilt objekt (första träffen) eller null.
+   * Krävs för to-one-relationer som `invoice.paymentPlan`.
+   */
+  kind?: "one" | "many";
+  /**
+   * Sub-relationer på barn-entiteten. Möjliggör nested include
+   * (`accontoDeductions: { include: { accontoInvoice: true } }`) och
+   * nested where (`invoice: { matter: { organizationId } }`).
+   */
+  relations?: Record<string, RelationConfig<Record<string, unknown>>>;
 }
 
 export interface ReadOnlyDelegateOpts<T extends Record<string, unknown>> {
@@ -58,18 +70,17 @@ export class ReadOnlyDelegate<T extends Record<string, unknown>> {
   // ─── Läs-metoder ──────────────────────────────────────────────────
 
   async findMany(args: FindArgs = {}): Promise<T[]> {
-    const rows = this.engine.query(this.rowsFn(), args);
-    return rows.map((r) => this.hydrateRelations(r, args.include));
+    const rows = this.queryRows(args);
+    return rows.map((r) => this.hydrate(r, args.include));
   }
 
   async findFirst(args: FindArgs = {}): Promise<T | null> {
-    const r = this.engine.findFirst(this.rowsFn(), args);
-    return r ? this.hydrateRelations(r, args.include) : null;
+    const r = this.queryRows({ ...args, take: 1 })[0] ?? null;
+    return r ? this.hydrate(r, args.include) : null;
   }
 
   async findUnique(args: FindArgs = {}): Promise<T | null> {
-    const r = this.engine.findUnique(this.rowsFn(), args);
-    return r ? this.hydrateRelations(r, args.include) : null;
+    return this.findFirst(args);
   }
 
   async findFirstOrThrow(args: FindArgs = {}): Promise<T> {
@@ -85,7 +96,59 @@ export class ReadOnlyDelegate<T extends Record<string, unknown>> {
   }
 
   async count(args: FindArgs = {}): Promise<number> {
-    return this.engine.count(this.rowsFn(), args);
+    return this.filterRows(this.rowsFn(), args.where).length;
+  }
+
+  /**
+   * Prisma-subset av `aggregate`: `_count`, `_sum`, `_avg`, `_min`, `_max`
+   * över numeriska fält. Räcker för router-användningarna (timeEntry-summor,
+   * rapporter). Okända fält → 0/null.
+   */
+  async aggregate(args: {
+    where?: Record<string, unknown>;
+    _count?: true | Record<string, true>;
+    _sum?: Record<string, true>;
+    _avg?: Record<string, true>;
+    _min?: Record<string, true>;
+    _max?: Record<string, true>;
+  } = {}): Promise<Record<string, unknown>> {
+    const rows = this.filterRows(this.rowsFn(), args.where);
+    const nums = (field: string) => rows.map((r) => Number((r as Record<string, unknown>)[field]) || 0);
+    const out: Record<string, unknown> = {};
+    if (args._count !== undefined) {
+      out._count = typeof args._count === "object" ? this.fold(args._count, () => rows.length) : rows.length;
+    }
+    if (args._sum) out._sum = this.fold(args._sum, (f) => nums(f).reduce((s, n) => s + n, 0));
+    if (args._avg) out._avg = this.fold(args._avg, (f) => (rows.length ? nums(f).reduce((s, n) => s + n, 0) / rows.length : null));
+    if (args._min) out._min = this.fold(args._min, (f) => (rows.length ? Math.min(...nums(f)) : null));
+    if (args._max) out._max = this.fold(args._max, (f) => (rows.length ? Math.max(...nums(f)) : null));
+    return out;
+  }
+
+  private fold(spec: Record<string, true>, fn: (field: string) => number | null): Record<string, number | null> {
+    const o: Record<string, number | null> = {};
+    for (const field of Object.keys(spec)) o[field] = fn(field);
+    return o;
+  }
+
+  /** Filtrera (med relations-prehydrering) → sortera/paginera. */
+  private queryRows(args: FindArgs): T[] {
+    const filtered = this.filterRows(this.rowsFn(), args.where);
+    return this.engine.query(filtered, {
+      orderBy: args.orderBy, skip: args.skip, take: args.take,
+    });
+  }
+
+  /**
+   * Filtrera rader på `where`. Relationer som where:t refererar
+   * (t.ex. `matter: { organizationId }` eller `deductedOnFinals: { none }`)
+   * prehydratiseras på en kopia så query-motorn kan matcha dem.
+   */
+  private filterRows(rows: readonly T[], where: Record<string, unknown> | undefined): T[] {
+    if (!where) return [...rows];
+    return rows.filter((r) =>
+      this.engine.matches(this.hydrateWith(r, this.relations, where, "where"), where),
+    );
   }
 
   // ─── Mutationer — alla kastar ─────────────────────────────────────
@@ -100,51 +163,81 @@ export class ReadOnlyDelegate<T extends Record<string, unknown>> {
 
   // ─── Privat: relations-hydrering ─────────────────────────────────
 
-  private hydrateRelations(row: T, include: Record<string, unknown> | undefined): T {
+  private get relations(): Record<string, RelationConfig<Record<string, unknown>>> {
+    return (this.opts.relations ?? {}) as Record<string, RelationConfig<Record<string, unknown>>>;
+  }
+
+  /** Include-hydrering (+ _count). */
+  private hydrate(row: T, include: Record<string, unknown> | undefined): T {
     if (!include) return row;
-    const out: Record<string, unknown> = { ...row };
-    const relations = this.opts.relations ?? {};
-    for (const [relName, includeSpec] of Object.entries(include)) {
-      if (relName === "_count" || !includeSpec) continue;
-      const relConfig = relations[relName];
-      if (relConfig) {
-        const all = relConfig.collection();
-        const baseWhere = relConfig.where(row);
-        // include-spec kan vara true, eller ett objekt med { where, take, orderBy, ... }
-        const spec = (typeof includeSpec === "object" ? includeSpec : {}) as {
-          where?: Record<string, unknown>;
-          take?: number;
-        };
-        const userWhere = spec.where ?? {};
-        const finalWhere = { ...baseWhere, ...userWhere };
-        let filtered = all.filter((r) => this.matchWhere(r, finalWhere));
-        if (typeof spec.take === "number") filtered = filtered.slice(0, spec.take);
-        out[relName] = filtered;
-      } else {
-        out[relName] = [];
-      }
-    }
-    // Prisma-stil `_count: { select: { rel1: true, rel2: true } }`.
-    // I demo har vi inte alla relationer hydratiserade → returnera 0
-    // per nyckel. Bättre än TypeError vid `row._count.rel.length`.
-    if (include._count && typeof include._count === "object") {
-      const countSpec = (include._count as { select?: Record<string, unknown> }).select ?? {};
-      const counts: Record<string, number> = {};
-      for (const key of Object.keys(countSpec)) {
-        // Om relationen är hydratiserad ovan, räkna ur den;
-        // annars 0 (demo har sällan dessa).
-        const r = (out as Record<string, unknown>)[key];
-        counts[key] = Array.isArray(r) ? r.length : 0;
-      }
-      out._count = counts;
-    }
+    const out = this.hydrateWith(row, this.relations, include, "include");
+    this.applyCount(out, include);
     return out as T;
   }
 
-  private matchWhere(row: Record<string, unknown>, where: Record<string, unknown>): boolean {
-    for (const [k, v] of Object.entries(where)) {
-      if (row[k] !== v) return false;
+  /**
+   * Rekursiv relations-hydrering. Driver BÅDE include (nested barn-barn)
+   * och where-prehydrering (relationer som where:t filtrerar på).
+   *
+   * `tree` är antingen ett include-objekt eller ett where-objekt; `mode`
+   * styr hur barn-spec:en tolkas. Nycklar som inte är konfigurerade
+   * relationer ignoreras (skalär-fält / `true`).
+   */
+  private hydrateWith(
+    row: Record<string, unknown>,
+    relations: Record<string, RelationConfig<Record<string, unknown>>>,
+    tree: Record<string, unknown>,
+    mode: "where" | "include",
+  ): Record<string, unknown> {
+    const out: Record<string, unknown> = { ...row };
+    for (const [key, spec] of Object.entries(tree)) {
+      if (key === "_count" || spec === undefined || spec === false) continue;
+      const rc = relations[key];
+      if (rc) out[key] = this.resolveRelation(out, rc, spec, mode);
     }
-    return true;
+    return out;
   }
+
+  private resolveRelation(
+    parent: Record<string, unknown>,
+    rc: RelationConfig<Record<string, unknown>>,
+    spec: unknown,
+    mode: "where" | "include",
+  ): unknown {
+    const userWhere = mode === "include" && isObj(spec) ? (spec.where as Record<string, unknown>) ?? {} : {};
+    const finalWhere = { ...rc.where(parent), ...userWhere };
+    let children = rc.collection().filter((c) => this.engine.matches(c, finalWhere));
+
+    const subTree = subTreeFor(spec, mode);
+    if (subTree && rc.relations) {
+      children = children.map((c) => this.hydrateWith(c, rc.relations!, subTree, mode));
+    }
+    if (mode === "include" && isObj(spec) && typeof spec.take === "number") {
+      children = children.slice(0, spec.take);
+    }
+    return rc.kind === "one" ? (children[0] ?? null) : children;
+  }
+
+  /** Prisma-stil `_count: { select: { rel: true } }` → 0 om ej hydratiserad. */
+  private applyCount(out: Record<string, unknown>, include: Record<string, unknown>): void {
+    if (!isObj(include._count)) return;
+    const countSpec = (include._count.select as Record<string, unknown>) ?? {};
+    const counts: Record<string, number> = {};
+    for (const key of Object.keys(countSpec)) {
+      const r = out[key];
+      counts[key] = Array.isArray(r) ? r.length : 0;
+    }
+    out._count = counts;
+  }
+}
+
+function isObj(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+/** Vilket sub-träd att rekursera ned i för nested include / nested where. */
+function subTreeFor(spec: unknown, mode: "where" | "include"): Record<string, unknown> | undefined {
+  if (!isObj(spec)) return undefined;
+  if (mode === "include") return isObj(spec.include) ? spec.include : undefined;
+  return spec; // where: spec ÄR det nästlade filtret
 }

@@ -28,7 +28,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/server/db";
 import { sendPaymentDue, sendPaymentOverdue, type PaymentReminderContext } from "@/server/services/email";
-import { monthKey, planHasStarted } from "@/lib/invoice-calc";
+import { monthKey, planHasStarted } from "@/client/lib/invoice-calc";
 
 export async function POST(req: NextRequest) {
   const expected = process.env.CRON_SECRET;

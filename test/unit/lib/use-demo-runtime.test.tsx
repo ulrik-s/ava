@@ -15,7 +15,7 @@
 
 import { describe, it, expect, vi } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
-import { useDemoRuntime } from "@/lib/use-demo-runtime";
+import { useDemoRuntime } from "@/client/lib/use-demo-runtime";
 import { DemoRuntime } from "@/server/local-first/demo-runtime";
 
 function fakeRuntime(data: Record<string, string>): DemoRuntime {

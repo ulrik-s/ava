@@ -13,7 +13,7 @@ vi.mock("next-auth/react", () => ({
   ),
 }));
 
-import { Providers } from "@/components/providers";
+import { Providers } from "@/client/components/providers";
 
 describe("Providers", () => {
   it("renderar children", () => {

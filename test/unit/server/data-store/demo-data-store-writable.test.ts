@@ -51,6 +51,28 @@ describe("DemoDataStore writable", () => {
     expect(matter.contacts[0].contact.name).toBe("Anna");
   });
 
+  // Regressionsskydd: tidigare mappade `entityNameFor` bara 8 nycklar och
+  // lät resten falla igenom till PLURAL-nyckeln (t.ex. "documentFolders").
+  // fsa-write-back känner bara igen SINGULAR-namn → mutationer på dessa
+  // entiteter skrevs aldrig till git ("ser ut att fungera i UI:t men
+  // persisteras inte"). Varje writable entitet måste emit:a sitt singulara
+  // projektion-namn.
+  it.each([
+    ["documentFolders", "documentFolder"],
+    ["documentTemplates", "documentTemplate"],
+    ["documentAnalysisSuggestions", "documentAnalysisSuggestion"],
+    ["matterEventSuggestions", "matterEventSuggestion"],
+    ["organizations", "organization"],
+    ["offices", "office"],
+    ["conflictChecks", "conflictCheck"],
+  ])("mutation på %s emit:ar entity-namn '%s'", async (key, expected) => {
+    const events: MutationEvent<Record<string, unknown>>[] = [];
+    const ds = new DemoDataStore({}, (e) => { events.push(e); });
+    const delegate = (ds as unknown as Record<string, { create: (a: unknown) => Promise<unknown> }>)[key];
+    await delegate.create({ data: { id: "x1", organizationId: "o1" } });
+    expect(events.at(-1)!.entity).toBe(expected);
+  });
+
   it("create + findUnique cycle: nya matterContact har .contact", async () => {
     const source = {
       matters: [{ id: "m1", title: "Avtal", organizationId: "o1" }],

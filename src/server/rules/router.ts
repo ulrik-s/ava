@@ -15,7 +15,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/auth";
+import { authOptions } from "@/client/lib/auth";
 import { prisma } from "@/server/db";
 import { PostgresRuleLoader } from "./load";
 import { matchHttpTrigger } from "./match";

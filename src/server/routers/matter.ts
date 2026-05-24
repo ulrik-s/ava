@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { router, orgProcedure, requireOrgOwned } from "../trpc";
 import type { IDataStore } from "../data-store/IDataStore";
-import { matterRoleSchema, contactTypeSchema } from "@/lib/labels";
+import { matterRoleSchema, contactTypeSchema } from "@/client/lib/labels";
 import { emit } from "../events/emit";
 
 /** Hjälpare: hämta matter och verifiera att den tillhör anropande org. */
@@ -111,6 +111,8 @@ export const matterRouter = router({
           matterType: input.matterType,
           matterNumber,
           organizationId: ctx.orgId,
+          // Explicit (Prisma schema-default appliceras inte av in-memory-store:n).
+          status: "ACTIVE",
         },
       });
       await emit.matterCreated(ctx, matter);

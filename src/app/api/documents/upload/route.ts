@@ -5,7 +5,7 @@ import { mkdir, writeFile } from "fs/promises";
 import path from "path";
 import { extractText } from "@/server/services/tika";
 import { indexDocument } from "@/server/services/meilisearch";
-import { isJunkFileName } from "@/lib/junk-files";
+import { isJunkFileName } from "@/client/lib/junk-files";
 import { PostgresStore } from "@/server/data-store/PostgresStore";
 import { emit } from "@/server/events/emit";
 import { attachEventRuleExecutor } from "@/server/rules/event-executor";
@@ -37,7 +37,7 @@ export const POST = withApiErrors(async (req: NextRequest) => {
     return NextResponse.json({ error: "Matter not found" }, { status: 404 });
   }
 
-  const storagePath = process.env.DOCUMENT_STORAGE_PATH || "./storage/documents";
+  const storagePath = process.env.DOCUMENT_STORAGE_PATH || "./data/storage/documents";
   const docId = crypto.randomUUID();
   const dirPath = path.join(storagePath, matterId, docId);
   await mkdir(dirPath, { recursive: true });

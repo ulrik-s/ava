@@ -30,14 +30,14 @@ har konsoliderats till `reports/` — samlar alla CI-artefakter på ett ställe.
 | Område | Verktyg | Konfig |
 |---|---|---|
 | Statisk typkontroll | TypeScript `tsc --noEmit` | `tsconfig.json` |
-| Lint + komplexitet | ESLint + `complexity` / `max-depth` / `max-params` | `config/eslint.config.mjs` |
-| Enhetstester (Node) | Vitest | `config/vitest.config.ts` (project: `node`) |
-| Komponenttester (DOM) | Vitest + jsdom + Testing Library | `config/vitest.config.ts` (project: `jsdom`), `config/vitest.setup.ts` |
-| E2E-tester | Playwright (Chromium) | `config/playwright.config.ts`, `test/e2e/` |
-| Kodtäckning | Vitest + V8 | `config/vitest.config.ts` `coverage`-block |
-| Duplikatdetektering (DRY) | jscpd | `config/jscpd.json` |
-| Arkitektur (SOLID/lager) | dependency-cruiser | `config/dependency-cruiser.cjs` |
-| Död kod / oanvända exports | knip | `config/knip.json` |
+| Lint + komplexitet | ESLint + `complexity` / `max-depth` / `max-params` | `tooling/config/eslint.config.mjs` |
+| Enhetstester (Node) | Vitest | `tooling/config/vitest.config.ts` (project: `node`) |
+| Komponenttester (DOM) | Vitest + jsdom + Testing Library | `tooling/config/vitest.config.ts` (project: `jsdom`), `tooling/config/vitest.setup.ts` |
+| E2E-tester | Playwright (Chromium) | `tooling/config/playwright.config.ts`, `test/e2e/` |
+| Kodtäckning | Vitest + V8 | `tooling/config/vitest.config.ts` `coverage`-block |
+| Duplikatdetektering (DRY) | jscpd | `tooling/config/jscpd.json` |
+| Arkitektur (SOLID/lager) | dependency-cruiser | `tooling/config/dependency-cruiser.cjs` |
+| Död kod / oanvända exports | knip | `tooling/config/knip.json` |
 | Pre-commit | husky + lint-staged | `.husky/pre-commit`, `package.json` |
 | CI | GitHub Actions | `.github/workflows/ci.yml` |
 
@@ -71,7 +71,7 @@ Coverage-rapporten skrivs till `coverage/` (HTML, lcov, json-summary, text).
 |---|---|---|
 | Cyclomatic complexity per funktion | 12 | warn |
 | Maxdjup (nested blocks) | 4 | warn |
-| Rader per funktion | 100 (200 i `scripts/`) | warn |
+| Rader per funktion | 100 (200 i `tooling/scripts/`) | warn |
 | Parametrar per funktion | 5 | warn |
 | Nested callbacks | 4 | warn |
 
@@ -87,7 +87,7 @@ Coverage-rapporten skrivs till `coverage/` (HTML, lcov, json-summary, text).
 Hårda regler (severity `error`, blockerar commit):
 
 - **`no-circular`** — inga cirkulära imports
-- **`ui-not-direct-prisma`** — `src/components/**` och `src/app/**` (utom `app/api`) får inte importera `src/server/db`
+- **`ui-not-direct-prisma`** — `src/client/components/**` och `src/app/**` (utom `app/api`) får inte importera `src/server/db`
 - **`ui-not-server-services`** — UI-lagret går via tRPC, inte direkt mot services
 - **`no-test-imports-from-prod`** — produktionskod får inte importera testfiler
 - **`no-non-package-json`** — varje `import` måste finnas i `package.json`

@@ -1,12 +1,11 @@
 import InvoiceDetailClient from "./_client";
+import { SHELL_PARAM } from "@/client/lib/demo/static-params";
 
-// Demo (static export) har inga faktura-fixtures men behöver en placeholder
-// så Next:s build inte klagar. Real backend (Postgres) bygger sina sidor
-// dynamiskt → `dynamicParams = true` (default) krävs så riktiga id:n inte
-// 404:ar. Tidigare `false` blockerade ALLA id:n utom "placeholder", vilket
-// gjorde att Öppna-länken på en faktura ledde till 404 i full-mode.
+// Static export: en sentinel-shell som nginx serverar för godtyckliga
+// faktura-id:n (self-hosted). Klienten läser riktiga id:t via useRouteId().
+// Real backend (Postgres) bygger sidor dynamiskt (dynamicParams=true default).
 export async function generateStaticParams(): Promise<{ id: string }[]> {
-  return [{ id: "placeholder" }];
+  return [{ id: SHELL_PARAM }];
 }
 
 export default async function InvoiceDetailPage({ params }: { params: Promise<{ id: string }> }) {
