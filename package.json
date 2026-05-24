@@ -32,7 +32,6 @@
     "e2e:install": "playwright install --with-deps chromium",
     "round-trip": "playwright test --config tooling/config/playwright.round-trip.config.ts",
     "smoke:tier3": "bash tooling/scripts/test-tier3-smoke.sh",
-    "test:full": "bash tooling/scripts/test-full.sh",
     "test:all": "bash tooling/scripts/test-all.sh",
     "duplicates": "jscpd --config tooling/config/jscpd.json src",
     "deps:check": "depcruise --config tooling/config/dependency-cruiser.cjs --output-type err src",

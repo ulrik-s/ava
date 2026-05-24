@@ -4,10 +4,9 @@
  * Mål:
  *   - Inga cirkulära imports (fångar dålig modulisering)
  *   - Inga "föräldraknark" — tester får importera prod-kod, ej tvärtom
- *   - Layer-separation: UI-komponenter får inte importera prisma direkt
  *   - Inga orphan-moduler (filer ingen importerar — kandidater för bortrensning)
  *
- * Kör: `npx depcruise --config .dependency-cruiser.cjs src`
+ * Kör: `yarn deps:check`
  */
 module.exports = {
   forbidden: [
@@ -47,25 +46,6 @@ module.exports = {
       to: { dependencyTypes: ["deprecated"] },
     },
     {
-      name: "ui-not-direct-prisma",
-      severity: "error",
-      comment:
-        "UI-komponenter (src/client/components, src/app) ska INTE importera prisma direkt — använd tRPC.",
-      from: { path: "^src/(components|app(?!/api))" },
-      to: { path: "^src/server/db(\\.ts)?$" },
-    },
-    {
-      name: "ui-not-server-services",
-      severity: "error",
-      comment:
-        "UI-komponenter ska inte importera server-services direkt; gå via tRPC.",
-      from: {
-        path: "^src/(components|app(?!/api))",
-        pathNot: ["\\.test\\.tsx?$"],
-      },
-      to: { path: "^src/server/services/" },
-    },
-    {
       name: "no-test-imports-from-prod",
       severity: "error",
       comment: "Produktionskod får inte importera testfiler.",
@@ -101,7 +81,7 @@ module.exports = {
       dot: { collapsePattern: "node_modules/(@[^/]+/[^/]+|[^/]+)" },
       archi: {
         collapsePattern:
-          "^src/(app|components|server/routers|server/services|server/db|lib|types)",
+          "^src/(app|client/components|client/lib|server/routers|server/data-store|server/local-first|shared/(schemas|types))",
       },
     },
   },

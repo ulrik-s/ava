@@ -34,8 +34,7 @@
     "tsx",
     "tailwindcss",
     "@tailwindcss/postcss",
-    "@mlc-ai/web-llm",
-    "pg"
+    "@mlc-ai/web-llm"
   ],
   "ignoreBinaries": [
     "dot"

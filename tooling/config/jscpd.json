@@ -12,9 +12,7 @@
     "**/dist/**",
     "**/*.test.ts",
     "**/*.test.tsx",
-    "**/*.spec.ts",
-    "tooling/scripts/seed-*.ts",
-    "tooling/scripts/analyze-unanalyzed.ts"
+    "**/*.spec.ts"
   ],
   "reporters": ["console", "html", "json"],
   "output": "./reports/jscpd",

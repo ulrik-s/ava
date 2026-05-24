@@ -63,46 +63,56 @@ describe("conflict.check", () => {
     expect(res.results[0].klient).toBe("Klient Klientsson");
   });
 
-  it("hittar kontakter via fuzzy namn-sökning (trigram)", async () => {
-    mockPrisma.$queryRaw.mockResolvedValue([
+  it("hittar kontakter via fuzzy namn-sökning (bigram-Jaccard)", async () => {
+    // Implementationen scannar matterContacts och kör similarity() i minne;
+    // ingen $queryRaw längre (Prisma borta).
+    mockPrisma.matterContact.findMany.mockResolvedValue([
       {
-        contact_id: "c1", contact_name: "Anna Andersson", contact_type: "PERSON",
-        personal_number: null, org_number: null,
-        matter_id: "m1", matter_number: "2026-0001", matter_title: "X",
-        role: "MOTPART", similarity: 0.8,
+        role: "MOTPART",
+        contact: { id: "c1", name: "Anna Andersson", contactType: "PERSON", personalNumber: null, orgNumber: null },
+        matter: {
+          id: "m1", matterNumber: "2026-0001", title: "X",
+          contacts: [{ contact: { name: "Klienten" } }],
+        },
       },
     ]);
-    mockPrisma.matterContact.findFirst.mockResolvedValue({
-      contact: { name: "Klienten" },
-    });
 
     const res = await makeCaller().check({
-      searchTerm: "Ana",
+      // "Anna Andersson" — exakt match → score 1, klart över 0.4-tröskeln
+      searchTerm: "Anna Andersson",
       searchType: "name",
     });
     expect(res.matchCount).toBe(1);
     expect(res.results[0].contactName).toBe("Anna Andersson");
+    expect(res.results[0].klient).toBe("Klienten");
   });
 
-  it("kombinerar både searchTypes utan dubblettrader", async () => {
-    // Samma kontakt+ärende+roll dyker upp i båda sökningarna — ska bara räknas en gång
+  it("filtrerar bort matchningar under similarity-tröskeln", async () => {
     mockPrisma.matterContact.findMany.mockResolvedValue([
       {
         role: "MOTPART",
-        contact: { id: "c1", name: "X", contactType: "PERSON", personalNumber: "1", orgNumber: null },
+        contact: { id: "c1", name: "Anna Andersson", contactType: "PERSON", personalNumber: null, orgNumber: null },
+        matter: { id: "m1", matterNumber: "2026-0001", title: "X", contacts: [] },
+      },
+    ]);
+    const res = await makeCaller().check({
+      searchTerm: "Helt Annorlunda",
+      searchType: "name",
+    });
+    expect(res.matchCount).toBe(0);
+  });
+
+  it("kombinerar både searchTypes utan dubblettrader", async () => {
+    // Samma kontakt+ärende+roll matchar både via personnummer-substring
+    // OCH namn-similarity — ska bara räknas en gång.
+    mockPrisma.matterContact.findMany.mockResolvedValue([
+      {
+        role: "MOTPART",
+        contact: { id: "c1", name: "Anna Andersson", contactType: "PERSON", personalNumber: "12345", orgNumber: null },
         matter: { id: "m1", matterNumber: "0001", title: "Y", contacts: [] },
       },
     ]);
-    mockPrisma.$queryRaw.mockResolvedValue([
-      {
-        contact_id: "c1", contact_name: "X", contact_type: "PERSON",
-        personal_number: "1", org_number: null,
-        matter_id: "m1", matter_number: "0001", matter_title: "Y",
-        role: "MOTPART", similarity: 0.9,
-      },
-    ]);
-
-    const res = await makeCaller().check({ searchTerm: "X", searchType: "both" });
+    const res = await makeCaller().check({ searchTerm: "Anna Andersson", searchType: "both" });
     expect(res.matchCount).toBe(1);
   });
 

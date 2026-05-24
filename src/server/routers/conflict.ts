@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../trpc";
+import { similarity } from "@/client/lib/fuzzy-similarity";
 
 export const conflictRouter = router({
   check: protectedProcedure
@@ -67,62 +68,50 @@ export const conflictRouter = router({
         }
       }
 
-      // Search by name (fuzzy using trigram similarity)
+      // Search by name (fuzzy via in-memory bigram-Jaccard similarity).
+      // Tidigare användes Postgres' pg_trgm.similarity() via $queryRaw —
+      // ersatt nu eftersom git-modellen inte har en SQL-databas.
       if (input.searchType === "name" || input.searchType === "both") {
-        const byName = await ctx.dataStore.raw.$queryRaw<
-          Array<{
-            contact_id: string;
-            contact_name: string;
-            contact_type: string;
-            personal_number: string | null;
-            org_number: string | null;
-            matter_id: string;
-            matter_number: string;
-            matter_title: string;
-            role: string;
-            similarity: number;
-          }>
-        >`
-          SELECT
-            c.id as contact_id,
-            c.name as contact_name,
-            c.contact_type,
-            c.personal_number,
-            c.org_number,
-            m.id as matter_id,
-            m.matter_number,
-            m.title as matter_title,
-            mc.role,
-            similarity(c.name, ${input.searchTerm}) as similarity
-          FROM contacts c
-          JOIN matter_contacts mc ON mc.contact_id = c.id
-          JOIN matters m ON m.id = mc.matter_id
-          WHERE m.organization_id = ${ctx.user.organizationId}
-            AND similarity(c.name, ${input.searchTerm}) > 0.3
-          ORDER BY similarity DESC
-        `;
+        const SIM_THRESHOLD = 0.4;
+        const byName = await ctx.dataStore.matterContacts.findMany({
+          where: { matter: { organizationId: ctx.user.organizationId } },
+          include: {
+            contact: true,
+            matter: {
+              include: {
+                contacts: {
+                  where: { role: "KLIENT" },
+                  include: { contact: { select: { name: true } } },
+                  take: 1,
+                },
+              },
+            },
+          },
+        });
 
-        for (const row of byName) {
-          if (!results.some((r) => r.contactId === row.contact_id && r.matterId === row.matter_id && r.role === row.role)) {
-            // Fetch klient for this matter
-            const klientLink = await ctx.dataStore.matterContacts.findFirst({
-              where: { matterId: row.matter_id, role: "KLIENT" },
-              include: { contact: { select: { name: true } } },
-            });
+        type NamedScore = { row: typeof byName[number]; score: number };
+        const scored: NamedScore[] = byName
+          .map((row) => ({ row, score: similarity(row.contact.name, input.searchTerm) }))
+          .filter((s) => s.score > SIM_THRESHOLD)
+          .sort((a, b) => b.score - a.score);
 
-            results.push({
-              contactId: row.contact_id,
-              contactName: row.contact_name,
-              contactType: row.contact_type,
-              personalNumber: row.personal_number,
-              orgNumber: row.org_number,
-              matterId: row.matter_id,
-              matterNumber: row.matter_number,
-              matterTitle: row.matter_title,
-              role: row.role,
-              klient: klientLink?.contact.name ?? null,
-            });
+        for (const { row } of scored) {
+          if (results.some((r) => r.contactId === row.contact.id && r.matterId === row.matter.id && r.role === row.role)) {
+            continue;
           }
+          const klient = row.matter.contacts[0]?.contact.name ?? null;
+          results.push({
+            contactId: row.contact.id,
+            contactName: row.contact.name,
+            contactType: row.contact.contactType,
+            personalNumber: row.contact.personalNumber,
+            orgNumber: row.contact.orgNumber,
+            matterId: row.matter.id,
+            matterNumber: row.matter.matterNumber,
+            matterTitle: row.matter.title,
+            role: row.role,
+            klient,
+          });
         }
       }
 

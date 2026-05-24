@@ -6,28 +6,24 @@
 #   - vitest:      unit + komponent + integration (med coverage)
 #   - build:       yarn build (production Next.js)
 #   - demo-build:  bash tooling/scripts/build-demo.sh (statisk export för GH Pages)
-#   - e2e:         Playwright headless Chromium (kräver docker-services)
+#   - e2e:         Playwright round-trip mot tier 3-stacken (docker-compose.yml)
+#
+# Arkitekturen är pure git-modell — ingen Postgres längre. Dev-stacken
+# (postgres+meili+tika) togs bort i samband med Prisma-borttagningen.
 #
 # Användning:
 #   yarn test:all              # hela stacken inkl. e2e (kräver docker)
 #   yarn test:all --no-e2e     # hoppar e2e + docker (fast lokal feedback)
-#   yarn test:all --no-docker  # alias för --no-e2e
-#
-# Krav:
-#   - Node 22 + Yarn
-#   - Docker (om e2e körs)
 
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
-# ─── Argument-parser ─────────────────────────────────────────────
-SKIP_DOCKER=0
 SKIP_E2E=0
 for arg in "$@"; do
   case "$arg" in
-    --no-docker|--no-e2e) SKIP_E2E=1; SKIP_DOCKER=1 ;;
+    --no-docker|--no-e2e) SKIP_E2E=1 ;;
     *) echo "Okänt argument: $arg"; exit 1 ;;
   esac
 done
@@ -37,60 +33,49 @@ ok()   { printf "    \033[32m✓\033[0m %s\n" "$*"; }
 
 START=$SECONDS
 
-# ─── 1. Static analysis (CI: 'static' job) ───────────────────────
-bold "[1/7] Static analysis (typecheck + lint + deps + duplicates + knip)"
+# ─── 1. Static analysis ──────────────────────────────────────────
+bold "[1/5] Static analysis (typecheck + lint + deps + duplicates + knip)"
 yarn typecheck && ok "typecheck"
 yarn lint && ok "lint"
 yarn deps:check && ok "deps:check (cycle detection)"
 yarn duplicates && ok "duplicates (jscpd)"
 yarn knip:report && ok "knip (dead code)"
 
-# ─── 2. Build (Next.js production) ───────────────────────────────
-bold "[2/7] yarn build (Next.js production)"
-yarn build >/dev/null && ok "next build"
-
-# ─── 3. Demo-build (statisk export för GH Pages) ─────────────────
-bold "[3/7] bash tooling/scripts/build-demo.sh (GH Pages-export)"
-bash tooling/scripts/build-demo.sh >/dev/null && ok "demo-build"
-
-# ─── 4. Docker services för integration + e2e ────────────────────
-if [[ $SKIP_DOCKER -eq 1 ]]; then
-  bold "[4/7] Docker services — HOPPAR (--no-docker)"
-else
-  bold "[4/7] Docker services (postgres, meilisearch, tika, llm)"
-  docker compose -f tooling/docker/docker-compose.dev.yml up -d
-  for i in {1..30}; do
-    if docker compose -f tooling/docker/docker-compose.dev.yml exec -T postgres pg_isready -U ava >/dev/null 2>&1; then
-      ok "postgres redo"
-      break
-    fi
-    sleep 2
-    if [[ $i -eq 30 ]]; then
-      echo "    Postgres svarar inte efter 60s — avbryter."
-      exit 1
-    fi
-  done
-  yarn prisma db push --accept-data-loss >/dev/null && ok "schema synkat"
-fi
-
-# ─── 5. Vitest med coverage ──────────────────────────────────────
-bold "[5/7] Vitest (unit + komponent + integration)"
+# ─── 2. Vitest med coverage ──────────────────────────────────────
+bold "[2/5] Vitest (unit + komponent)"
 yarn vitest run --config tooling/config/vitest.config.ts --coverage && ok "vitest"
 
-# ─── 6. Playwright e2e ───────────────────────────────────────────
+# ─── 3. Build (Next.js production) ───────────────────────────────
+bold "[3/5] yarn build (Next.js production)"
+yarn build >/dev/null && ok "next build"
+
+# ─── 4. Demo-build (statisk export för GH Pages) ─────────────────
+bold "[4/5] bash tooling/scripts/build-demo.sh (GH Pages-export)"
+bash tooling/scripts/build-demo.sh >/dev/null && ok "demo-build"
+
+# ─── 5. Round-trip e2e ───────────────────────────────────────────
 if [[ $SKIP_E2E -eq 1 ]]; then
-  bold "[6/7] Playwright e2e — HOPPAR (--no-e2e)"
+  bold "[5/5] Round-trip e2e — HOPPAR (--no-e2e)"
 else
-  bold "[6/7] Playwright e2e"
-  yarn playwright test --config tooling/config/playwright.config.ts && ok "e2e"
+  bold "[5/5] Round-trip e2e (tier 3-stacken)"
+  yarn tier3:up >/dev/null && ok "docker compose up"
+  # Vänta tills web-servicen svarar
+  for i in {1..15}; do
+    if curl -sf -o /dev/null http://localhost:8080/ava/ 2>/dev/null; then
+      ok "web redo"; break
+    fi
+    sleep 1
+    if [[ $i -eq 15 ]]; then echo "    web svarar inte efter 15s"; exit 1; fi
+  done
+  yarn round-trip && ok "round-trip"
 fi
 
-# ─── 7. Sammanställning ──────────────────────────────────────────
-bold "[7/7] Klart"
+# ─── Sammanställning ─────────────────────────────────────────────
+bold "Klart"
 ELAPSED=$((SECONDS - START))
 echo "  Tid:                          ${ELAPSED}s"
 echo "  Coverage-rapport:             reports/coverage/index.html"
-echo "  Playwright-rapport:           reports/playwright/index.html"
+echo "  Playwright-rapport:           reports/playwright-round-trip/index.html"
 echo "  jscpd-rapport:                reports/jscpd/html/index.html"
 echo
 if [[ -f reports/coverage/coverage-summary.json ]]; then

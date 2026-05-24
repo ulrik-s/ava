@@ -13,6 +13,12 @@
  */
 
 import type { AvaEvent, EmitInput, EventFilter } from "../events/schema";
+import type {
+  Contact, Matter, MatterContact, Document, DocumentFolder,
+  DocumentTemplate, DocumentAnalysisSuggestion, MatterEventSuggestion,
+  Invoice, TimeEntry, Expense, User, Organization, Office, ConflictCheck,
+  Payment, PaymentPlan, AccontoDeduction,
+} from "@/shared/schemas";
 
 // ─── Event-log ────────────────────────────────────────────────────────
 
@@ -51,17 +57,25 @@ export interface ClaimOpts {
 // `any` likt det gjorde med Prisma's flytande generics.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+/**
+ * Output-typ för en delegate-fråga. `Row` är basraden (från Zod-schemat),
+ * `& { [k: string]: any }` lägger till en index-signatur för att rymma
+ * `include`-joinade fält (matter.contacts, contact.matterLinks, ...) utan
+ * att behöva typ-deklarera varje möjlig kombination.
+ */
+export type Joined<Row> = Row & { [key: string]: any };
+
 export interface Delegate<Row = any> {
-  findUnique(args: any): Promise<Row | null>;
-  findUniqueOrThrow(args: any): Promise<Row>;
-  findFirst(args?: any): Promise<Row | null>;
-  findFirstOrThrow(args?: any): Promise<Row>;
-  findMany(args?: any): Promise<Row[]>;
-  create(args: any): Promise<Row>;
-  update(args: any): Promise<Row>;
+  findUnique(args: any): Promise<Joined<Row> | null>;
+  findUniqueOrThrow(args: any): Promise<Joined<Row>>;
+  findFirst(args?: any): Promise<Joined<Row> | null>;
+  findFirstOrThrow(args?: any): Promise<Joined<Row>>;
+  findMany(args?: any): Promise<Joined<Row>[]>;
+  create(args: any): Promise<Joined<Row>>;
+  update(args: any): Promise<Joined<Row>>;
   updateMany(args: any): Promise<{ count: number }>;
-  upsert(args: any): Promise<Row>;
-  delete(args: any): Promise<Row>;
+  upsert(args: any): Promise<Joined<Row>>;
+  delete(args: any): Promise<Joined<Row>>;
   deleteMany(args?: any): Promise<{ count: number }>;
   count(args?: any): Promise<number>;
   aggregate(args: any): Promise<any>;
@@ -69,6 +83,11 @@ export interface Delegate<Row = any> {
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
+// Delegate-typerna är fortfarande Delegate<any>. Tightening per delegate via
+// `Delegate<Matter>` etc. avslöjar legacy-mismatches mellan schemas (nullish)
+// och kallar (förväntar `null`-only), samt relation-joins (matter.contacts)
+// som inte finns i bas-schemat. Tighten har gjorts opt-in via TypedDelegate
+// nedan så enskilda callers kan välja striktare typer när de vill.
 export type MatterDelegate = Delegate;
 export type ContactDelegate = Delegate;
 export type MatterContactDelegate = Delegate;
@@ -87,6 +106,28 @@ export type ConflictCheckDelegate = Delegate;
 export type PaymentDelegate = Delegate;
 export type PaymentPlanDelegate = Delegate;
 export type AccontoDeductionDelegate = Delegate;
+
+// Opt-in: enskilda callers som vill ha striktare row-typ kan importera
+// dessa istället. T.ex. `const matters = ctx.dataStore.matters as MattersStrict`.
+// TODO: när schema-mismatches är fixade kan vi växla över delegaterna ovan.
+export type MattersStrict = Delegate<Matter>;
+export type ContactsStrict = Delegate<Contact>;
+export type MatterContactsStrict = Delegate<MatterContact>;
+export type DocumentsStrict = Delegate<Document>;
+export type DocumentFoldersStrict = Delegate<DocumentFolder>;
+export type DocumentTemplatesStrict = Delegate<DocumentTemplate>;
+export type DocumentAnalysisSuggestionsStrict = Delegate<DocumentAnalysisSuggestion>;
+export type MatterEventSuggestionsStrict = Delegate<MatterEventSuggestion>;
+export type InvoicesStrict = Delegate<Invoice>;
+export type TimeEntriesStrict = Delegate<TimeEntry>;
+export type ExpensesStrict = Delegate<Expense>;
+export type UsersStrict = Delegate<User>;
+export type OrganizationsStrict = Delegate<Organization>;
+export type OfficesStrict = Delegate<Office>;
+export type ConflictChecksStrict = Delegate<ConflictCheck>;
+export type PaymentsStrict = Delegate<Payment>;
+export type PaymentPlansStrict = Delegate<PaymentPlan>;
+export type AccontoDeductionsStrict = Delegate<AccontoDeduction>;
 
 // ─── Transaktionsvy ───────────────────────────────────────────────────
 //

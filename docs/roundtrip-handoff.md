@@ -333,10 +333,9 @@ Sidoeffekter under arbetet med Task #4:
 - **`templates/[id]` + `users/[id]`** stashas av `build-demo.sh` (STASH_PATHS) →
   byggs inte för self-hosted. Måste byggas + få shell innan deras detalj-flöden
   kan e2e-testas (t.ex. user-edit på /users/[id], template-redigering).
-- **Jävs-fuzzy-name-sök** (`searchType=name|both`) använder PostgreSQL `similarity()`
-  via `$queryRaw` → funkar bara i server-tier:n. För self-hosted bör vi
-  implementera en in-memory trigram-approximering eller dölja name-search i UI
-  när tier=self-hosted.
+- ~~**Jävs-fuzzy-name-sök** via `$queryRaw`~~ — KLAR. Ersatt med
+  in-memory bigram-Jaccard i `src/client/lib/fuzzy-similarity.ts`. Tröskel 0.4.
+  Diakritik normaliseras (åäö → aao) så svenska namn hittas oavsett kodning.
 - **Pre-existing test-fail:** `test/unit/lib/search/document-content-cache.test.ts`
   (2 fall) — koden hämtar `documents/text/*.txt` först men testet förväntar
   `documents/content/*.md`. INTE relaterat till detta arbete. Beslut: uppdatera
