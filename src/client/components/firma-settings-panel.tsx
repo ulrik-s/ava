@@ -23,6 +23,7 @@ interface Props {
   inline?: boolean;
 }
 
+// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'FirmaSettingsPanel' has a complexity of 25. Maximum allowed is 8.)
 export function FirmaSettingsPanel({ initial, onSaved, onCancel, inline = false }: Props) {
   const [tier, setTier] = useState<FirmaTier>(initial.tier);
   const [repo, setRepo] = useState(initial.repo);
@@ -73,6 +74,7 @@ export function FirmaSettingsPanel({ initial, onSaved, onCancel, inline = false 
   const [tokenStatus, setTokenStatus] = useState<"untested" | "checking" | "valid" | "invalid">("untested");
   const [tokenStatusMsg, setTokenStatusMsg] = useState<string | null>(null);
 
+  // eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Async arrow function has a complexity of 11. Maximum allowed is 8.)
   const validateToken = async () => {
     if (!token) {
       setTokenStatus("invalid");

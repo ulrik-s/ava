@@ -9,6 +9,7 @@ export const conflictRouter = router({
         searchType: z.enum(["name", "personalNumber", "both"]).default("both"),
       })
     )
+    // eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Async arrow function has a complexity of 12. Maximum allowed is 8.)
     .mutation(async ({ ctx, input }) => {
       const results: Array<{
         contactId: string;

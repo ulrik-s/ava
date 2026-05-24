@@ -200,6 +200,7 @@ const expenses: ExpenseSpec[] = [
 
 // ─── Main ────────────────────────────────────────────────────────
 
+// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Async function 'main' has a complexity of 20. Maximum allowed is 8.)
 async function main() {
   console.log("👥 Seedar team, motpartsombud, åklagare, tid och utlägg…\n");
 

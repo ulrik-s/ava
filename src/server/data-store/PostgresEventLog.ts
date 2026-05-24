@@ -106,6 +106,7 @@ export class PostgresEventLog implements IEventLog {
 
   // ─── helpers ─────────────────────────────────────────────────
 
+  // eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Method 'buildWhere' has a complexity of 10. Maximum allowed is 8.)
   private buildWhere(filter: EventFilter) {
     const where: Record<string, unknown> = { organizationId: this.organizationId };
     if (filter.type) {

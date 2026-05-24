@@ -44,6 +44,7 @@ export function searchDocuments(
 
   const matched = docs
     .filter((d) => d.organizationId === organizationId)
+    // eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Arrow function has a complexity of 15. Maximum allowed is 8.)
     .map((d) => {
       // Bevara original-content för snippet-rendering (case-känsligt),
       // sök case-insensitively via lowercase-kopia.

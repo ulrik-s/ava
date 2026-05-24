@@ -198,6 +198,7 @@ export class ReadOnlyDelegate<T extends Record<string, unknown>> {
     return out;
   }
 
+  // eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Method 'resolveRelation' has a complexity of 11. Maximum allowed is 8.)
   private resolveRelation(
     parent: Record<string, unknown>,
     rc: RelationConfig<Record<string, unknown>>,

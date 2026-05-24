@@ -284,6 +284,7 @@ function OfficeFormRow({ value, onChange, onSave, onCancel, saving }: OfficeForm
 
 // ─── Main page ───────────────────────────────────────────────────
 
+// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'SettingsPage' has a complexity of 21. Maximum allowed is 8.)
 export default function SettingsPage() {
   const settings = trpc.organization.getSettings.useQuery();
   const utils = trpc.useUtils();

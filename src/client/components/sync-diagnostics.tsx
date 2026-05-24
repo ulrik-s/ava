@@ -77,6 +77,7 @@ export function SyncDiagnostics() {
   );
 }
 
+// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'StateLabel' has a complexity of 11. Maximum allowed is 8.)
 function StateLabel({ state }: { state: SyncState }) {
   switch (state.kind) {
     case "idle":           return <>Vänlar på första synk…</>;

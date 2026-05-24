@@ -16,6 +16,7 @@ import { FolderOpen } from "lucide-react";
 
 const HANDLE_KEY = "repo-root";
 
+// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'FsaFolderSelector' has a complexity of 11. Maximum allowed is 8.)
 export function FsaFolderSelector({ repoUrl, token }: { repoUrl: string; token: string }) {
   const [supported, setSupported] = useState<boolean | null>(null);
   const [unsupportedReason, setUnsupportedReason] = useState<string | null>(null);
@@ -26,6 +27,7 @@ export function FsaFolderSelector({ repoUrl, token }: { repoUrl: string; token: 
 
   useEffect(() => {
     let cancelled = false;
+    // eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Async arrow function has a complexity of 14. Maximum allowed is 8.)
     void (async () => {
       const { isFsaSupported, loadHandle, ensureReadWrite } = await import("@/client/lib/fsa/handle-store");
       if (!isFsaSupported()) {
@@ -100,6 +102,7 @@ export function FsaFolderSelector({ repoUrl, token }: { repoUrl: string; token: 
    * "Klona hit nu" när användaren redan valt en tom mapp). Annars
    * be om en ny mapp.
    */
+  // eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Async arrow function has a complexity of 11. Maximum allowed is 8.)
   const cloneNew = async (useCurrent = false) => {
     if (!repoUrl) { setErr("Repo-URL saknas — fyll i datakälla först"); return; }
     setBusy(true);

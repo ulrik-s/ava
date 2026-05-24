@@ -120,6 +120,7 @@ export class IsomorphicGitOps implements IGitOps {
     return this.toCommit(log[0]);
   }
 
+  // eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Async method 'push' has a complexity of 9. Maximum allowed is 8.)
   async push(): Promise<PushResult> {
     if (!this.deps.remoteUrl || !this.deps.http) {
       return { ok: false, reason: "Unknown" };

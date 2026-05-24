@@ -32,6 +32,7 @@ function jsonResponse(message: string, ok: boolean): NextResponse {
   );
 }
 
+// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Async function 'GET' has a complexity of 9. Maximum allowed is 8.)
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }

@@ -91,6 +91,7 @@ export const authOptions: NextAuthOptions = {
      * lyckad match. Returnera false/url → nekad inloggning (NextAuth
      * redirectar till /login?error=AccessDenied).
      */
+    // eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Async method 'signIn' has a complexity of 11. Maximum allowed is 8.)
     async signIn({ account, profile, user }) {
       if (account?.provider !== "azure-ad") {
         return true; // credentials-flödet kör sin egen auth i authorize()

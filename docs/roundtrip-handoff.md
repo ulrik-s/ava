@@ -23,7 +23,7 @@ Senast uppdaterad: 2026-05-24.
 | e2e round-trip (`yarn round-trip`) | ✅ **14 tester gröna** (kontakt, ärende, fakturering, utlägg, plan, kredit, avsluta+återöppna ärende, jävskontroll, settings, kontor, user CRUD, dokumentuppladdning) |
 | Task #4: fler UI-flöden i e2e | ✅ klar (se §8) |
 | Coverage → 95% | ⬜ Task #5 |
-| Cyklomatisk komplexitet → 8 (error) | ⬜ Task #6 |
+| Cyklomatisk komplexitet → 8 (error) | 🟨 Task #6 delvis — rule satt till error@8, 6 worst-cases klara, 83 kvar med explicit TODO-disable |
 
 **Kör hela round-trip-loopen lokalt:**
 
@@ -338,10 +338,22 @@ Sidoeffekter under arbetet med Task #4:
   `documents/content/*.md`. INTE relaterat till detta arbete. Beslut: uppdatera
   testet (kod-intentet verkar medvetet) eller koden.
 - **Task #5:** coverage → 95% (`tooling/config/vitest.config.ts` thresholds ~58–62 nu).
-- **Task #6:** cyklomatisk komplexitet → 8 som **error** på `src/` (`tooling/config/
-  eslint.config.mjs` är `warn`@12 nu). Värsta: fat client-komponenter
-  (`FirmaSettingsPanel` 25, `InvoicesSection` 21, `SettingsPage` 21,
-  `ContactDetailClient` 21). `applyOp` (var 23) är redan refaktorerad → dispatch-map.
+- **Task #6 (delvis klar):** cyklomatisk komplexitet → 8 som **error**.
+  - Rule:n är nu `complexity: ["error", { max: 8 }]` i `tooling/config/eslint.config.mjs`.
+  - 6 worst non-UI funktioner refaktorerade: `runStep` (26→≤8),
+    `suggestions.acceptSuggestion`-arrow (25→≤8),
+    `acceptSuggestionGroup`-arrow (→ helpers), `handleRuleRequest` (22→≤8),
+    `reports/excel.GET` (21→≤8), `groupSuggestions` (20→≤8),
+    `pickProvider` (18→≤8).
+  - 83 kvarstående violations har explicit `// eslint-disable-next-line complexity
+    -- TODO: refactor` så CI blockerar NYA brott men existerande exceptions är
+    spårade. Sök efter `TODO: refactor` för kö-listan.
+  - **Kvar att refaktorera (sortat efter komplexitet):**
+    - `FirmaSettingsPanel` (25) — `src/client/components/firma-settings-panel.tsx`
+    - `ContactDetailClient` (22) — `src/app/contacts/[id]/_client.tsx`
+    - `SettingsPage` (21) — `src/app/settings/page.tsx`
+    - `InvoicesSection` (21) — `src/client/components/invoices-section.tsx`
+    - ~80 till på 9-17 complexity, mest UI + sync/jobs/keys.
 
 ### Tre deploy-lägen (påminnelse)
 - **demo** (GH Pages, read-only) — `firma-config` tier `demo`, GH-Pages-loader.

@@ -8,6 +8,7 @@ interface Props {
   matterId: string;
 }
 
+// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'ExpenseSection' has a complexity of 9. Maximum allowed is 8.)
 export function ExpenseSection({ matterId }: Props) {
   const utils = trpc.useUtils();
   const expenses = trpc.expense.list.useQuery({ matterId });

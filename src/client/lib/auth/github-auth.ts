@@ -121,6 +121,7 @@ export interface DetectArgs {
  * repo-permissions. För self-hosted (icke-GitHub) URL:er hanteras
  * det optimistiskt: token → write, ingen token → anonymous.
  */
+// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Async function 'detectAuthMode' has a complexity of 11. Maximum allowed is 8.)
 export async function detectAuthMode(args: DetectArgs): Promise<AuthMode> {
   const parsed = parseRepoUrl(args.repoUrl);
 

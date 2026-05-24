@@ -70,6 +70,7 @@ export class FilesystemEventLog implements IEventLog {
     return results;
   }
 
+  // eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Async generator method 'iterate' has a complexity of 10. Maximum allowed is 8.)
   async *iterate(filter: EventFilter): AsyncIterable<AvaEvent> {
     // För nu: linjär scan över alla års-mappar (sorterade lex). Optimering
     // (slice efter `since/until`) kommer när vi har realistisk last.
@@ -101,6 +102,7 @@ export class FilesystemEventLog implements IEventLog {
 
   // ── intern matching (delar logik med PostgresEventLog) ─────────
 
+  // eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Method 'matches' has a complexity of 14. Maximum allowed is 8.)
   private matches(event: AvaEvent, filter: EventFilter): boolean {
     if (filter.type) {
       const types = Array.isArray(filter.type) ? filter.type : [filter.type];

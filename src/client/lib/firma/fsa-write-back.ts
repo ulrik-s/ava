@@ -51,6 +51,7 @@ export interface WriteBackOpts {
 export function makeFsaWriteBack(opts: WriteBackOpts): (event: MutationEvent<Record<string, unknown>>) => Promise<void> {
   const fs = new FsaIsoGitAdapter(opts.handle);
 
+  // eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Async arrow function has a complexity of 10. Maximum allowed is 8.)
   return async (event) => {
     const pathFn = ENTITY_TO_PATH[event.entity];
     if (!pathFn) {

@@ -83,6 +83,7 @@ export class InMemoryQueryEngine<T extends Record<string, unknown>> {
     return true;
   }
 
+  // eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Method 'fieldMatches' has a complexity of 12. Maximum allowed is 8.)
   private fieldMatches(fieldVal: unknown, expected: unknown): boolean {
     // Primitiv likhet
     if (expected === null || typeof expected !== "object" || expected instanceof Date) {

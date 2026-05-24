@@ -301,6 +301,7 @@ function AuthGatedDemoTree(props: TreeProps) {
  * redan), hydrera DemoSource från clonen. Skrivningar + sync sköts av
  * samma FSA-pipeline (OPFS-handle:n sparas som "repo-root").
  */
+// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Async function 'loadSelfHosted' has a complexity of 9. Maximum allowed is 8.)
 async function loadSelfHosted(
   firmaConfig: FirmaConfig,
   source: DemoSource,

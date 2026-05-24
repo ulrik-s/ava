@@ -15,6 +15,7 @@ import * as dotenv from "dotenv";
 dotenv.config({ path: ".env.local" });
 dotenv.config();
 
+// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Async function 'main' has a complexity of 13. Maximum allowed is 8.)
 async function main() {
   const orgArg = process.argv.indexOf("--org");
   const orgId = orgArg > -1 ? process.argv[orgArg + 1] : undefined;

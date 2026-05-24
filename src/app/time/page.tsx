@@ -5,6 +5,7 @@ import Link from "next/link";
 import { trpc } from "@/client/lib/trpc";
 import { formatMinutes } from "@/client/lib/utils";
 
+// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'TimePage' has a complexity of 9. Maximum allowed is 8.)
 export default function TimePage() {
   const [page, setPage] = useState(1);
   const timeEntries = trpc.timeEntry.list.useQuery({ page, pageSize: 50 });

@@ -63,6 +63,7 @@ interface MatterLike { id: string; matterNumber: string; title: string; status: 
 interface ContactLike { id: string; name: string; contactType: string; email?: string | null }
 interface UserLike { id: string; email: string; name: string; role: string }
 
+// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'DemoClient' has a complexity of 15. Maximum allowed is 8.)
 export function DemoClient({
   runtimeFactory = defaultRuntimeFactory,
   defaultRepo = DEFAULT_DEMO_REPO,

@@ -36,6 +36,7 @@ export class FilesystemClaimStore implements IClaimStore {
     private maxRetries: number = DEFAULT_MAX_RETRIES,
   ) {}
 
+  // eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Async method 'tryClaim' has a complexity of 9. Maximum allowed is 8.)
   async tryClaim(claimId: string, opts: ClaimOpts): Promise<boolean> {
     const ttlSec = opts.ttlSec ?? DEFAULT_TTL_SEC;
 

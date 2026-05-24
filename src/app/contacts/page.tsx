@@ -7,6 +7,7 @@ import { trpc } from "@/client/lib/trpc";
 import { labelForContactType, contactTypes } from "@/client/lib/labels";
 import { useIsReadOnly } from "@/client/lib/demo/demo-mode-context";
 
+// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'ContactsContent' has a complexity of 11. Maximum allowed is 8.)
 function ContactsContent() {
   const searchParams = useSearchParams();
   const readOnly = useIsReadOnly();

@@ -75,36 +75,40 @@ const totalStyle: Partial<ExcelJS.Style> = {
   border: { top: { style: "thin", color: { argb: "9CA3AF" } } },
 };
 
-export async function GET(req: NextRequest) {
+type ReportInputs = { from: string; to: string; userId: string };
+
+function parseInputs(req: NextRequest): ReportInputs | NextResponse {
   const { searchParams } = new URL(req.url);
   const from = searchParams.get("from");
   const to = searchParams.get("to");
-  const userIdsParam = searchParams.get("userIds");
-  const userId = userIdsParam?.split(",").filter(Boolean)[0];
+  const userId = searchParams.get("userIds")?.split(",").filter(Boolean)[0];
+  if (!from || !to) return NextResponse.json({ error: "from and to required" }, { status: 400 });
+  if (!userId) return NextResponse.json({ error: "userIds required" }, { status: 400 });
+  return { from, to, userId };
+}
 
-  if (!from || !to) {
-    return NextResponse.json({ error: "from and to required" }, { status: 400 });
-  }
-  if (!userId) {
-    return NextResponse.json({ error: "userIds required" }, { status: 400 });
-  }
+type MatterRef = {
+  id: string; matterNumber: string; title: string;
+  contacts: Array<{ contact: { name: string } }>;
+};
+type TimeEntryRow = {
+  id: string; date: Date; minutes: number; billable: boolean; hourlyRate: number;
+  description: string; invoiceId: string | null; matter: MatterRef;
+};
+type ExpenseRow = {
+  id: string; date: Date; amount: number; billable: boolean; invoiceId: string | null;
+  matter: MatterRef;
+};
 
-  const org = await prisma.organization.findFirst();
-  if (!org) return NextResponse.json({ error: "No organization" }, { status: 404 });
-
-  const fromDate = new Date(from);
-  const toDate = new Date(to);
-  toDate.setUTCHours(23, 59, 59, 999);
-
-  const orgScope = { matter: { organizationId: org.id } } as const;
-
-  const [user, timeEntries, expenses] = await Promise.all([
+async function loadReportData(orgId: string, userId: string, from: Date, to: Date) {
+  const orgScope = { matter: { organizationId: orgId } } as const;
+  return Promise.all([
     prisma.user.findFirst({
-      where: { id: userId, organizationId: org.id },
+      where: { id: userId, organizationId: orgId },
       select: { id: true, name: true, hourlyRate: true },
     }),
     prisma.timeEntry.findMany({
-      where: { ...orgScope, userId, date: { gte: fromDate, lte: toDate } },
+      where: { ...orgScope, userId, date: { gte: from, lte: to } },
       select: {
         id: true, date: true, minutes: true, billable: true, hourlyRate: true,
         description: true, invoiceId: true,
@@ -116,9 +120,9 @@ export async function GET(req: NextRequest) {
         },
       },
       orderBy: { date: "asc" },
-    }),
+    }) as Promise<TimeEntryRow[]>,
     prisma.expense.findMany({
-      where: { ...orgScope, userId, date: { gte: fromDate, lte: toDate } },
+      where: { ...orgScope, userId, date: { gte: from, lte: to } },
       select: {
         id: true, date: true, amount: true, billable: true, invoiceId: true,
         matter: {
@@ -129,38 +133,30 @@ export async function GET(req: NextRequest) {
         },
       },
       orderBy: { date: "asc" },
-    }),
+    }) as Promise<ExpenseRow[]>,
   ]);
+}
 
-  if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
+type MatterAgg = {
+  matterNumber: string; title: string; client: string | null;
+  totalMinutes: number; billableMinutes: number; workValueOre: number; expenseOre: number;
+};
 
-  // ─── Aggregera (samma logik som reports.perLawyer) ───────────────────
-
-  type MatterAgg = {
-    matterNumber: string;
-    title: string;
-    client: string | null;
-    totalMinutes: number;
-    billableMinutes: number;
-    workValueOre: number;
-    expenseOre: number;
-  };
+function aggregateMatters(timeEntries: TimeEntryRow[], expenses: ExpenseRow[]) {
   const matters = new Map<string, MatterAgg>();
-  const ensureMatter = (m: NonNullable<(typeof timeEntries)[number]["matter"]>): MatterAgg => {
-    let a = matters.get(m.id);
-    if (!a) {
-      a = {
-        matterNumber: m.matterNumber, title: m.title,
-        client: m.contacts[0]?.contact.name ?? null,
-        totalMinutes: 0, billableMinutes: 0, workValueOre: 0, expenseOre: 0,
-      };
-      matters.set(m.id, a);
-    }
-    return a;
+  const ensure = (m: MatterRef) => {
+    const cached = matters.get(m.id);
+    if (cached) return cached;
+    const created: MatterAgg = {
+      matterNumber: m.matterNumber, title: m.title,
+      client: m.contacts[0]?.contact.name ?? null,
+      totalMinutes: 0, billableMinutes: 0, workValueOre: 0, expenseOre: 0,
+    };
+    matters.set(m.id, created);
+    return created;
   };
-
   for (const te of timeEntries) {
-    const a = ensureMatter(te.matter);
+    const a = ensure(te.matter);
     a.totalMinutes += te.minutes;
     if (te.billable) {
       a.billableMinutes += te.minutes;
@@ -168,20 +164,22 @@ export async function GET(req: NextRequest) {
     }
   }
   for (const ex of expenses) {
-    const a = ensureMatter(ex.matter);
-    if (ex.billable) a.expenseOre += ex.amount;
+    if (ex.billable) ensure(ex.matter).expenseOre += ex.amount;
   }
-
-  const mattersSorted = Array.from(matters.entries())
+  return Array.from(matters.entries())
     .map(([id, a]) => ({ id, ...a }))
     .sort((a, b) => a.matterNumber.localeCompare(b.matterNumber, "sv"));
+}
 
-  const weeks = weeksInRange(fromDate, toDate);
-  const weekGrid = new Map<string, { totalMinutes: number; billableMinutes: number; workValueOre: number }>();
-  for (const w of weeks) weekGrid.set(weekKey(w.isoYear, w.week), { totalMinutes: 0, billableMinutes: 0, workValueOre: 0 });
+type WeekCell = { totalMinutes: number; billableMinutes: number; workValueOre: number };
+
+function aggregateWeeks(timeEntries: TimeEntryRow[], from: Date, to: Date) {
+  const weeks = weeksInRange(from, to);
+  const grid = new Map<string, WeekCell>();
+  for (const w of weeks) grid.set(weekKey(w.isoYear, w.week), { totalMinutes: 0, billableMinutes: 0, workValueOre: 0 });
   for (const te of timeEntries) {
     const { year, week } = isoWeek(te.date);
-    const cell = weekGrid.get(weekKey(year, week));
+    const cell = grid.get(weekKey(year, week));
     if (!cell) continue;
     cell.totalMinutes += te.minutes;
     if (te.billable) {
@@ -189,44 +187,70 @@ export async function GET(req: NextRequest) {
       cell.workValueOre += Math.round((te.minutes / 60) * te.hourlyRate * 100);
     }
   }
+  return { weeks, grid };
+}
 
-  type Unbilled = { matterNumber: string; title: string; client: string | null; timeOre: number; expenseOre: number; total: number };
+type Unbilled = {
+  matterNumber: string; title: string; client: string | null;
+  timeOre: number; expenseOre: number; total: number;
+};
+
+function aggregateUnbilled(timeEntries: TimeEntryRow[], expenses: ExpenseRow[]) {
   const unbilled = new Map<string, Unbilled>();
-  const ensureUnbilled = (m: NonNullable<(typeof timeEntries)[number]["matter"]>) => {
-    let r = unbilled.get(m.id);
-    if (!r) {
-      r = { matterNumber: m.matterNumber, title: m.title, client: m.contacts[0]?.contact.name ?? null, timeOre: 0, expenseOre: 0, total: 0 };
-      unbilled.set(m.id, r);
-    }
-    return r;
+  const ensure = (m: MatterRef) => {
+    const cached = unbilled.get(m.id);
+    if (cached) return cached;
+    const created: Unbilled = {
+      matterNumber: m.matterNumber, title: m.title,
+      client: m.contacts[0]?.contact.name ?? null,
+      timeOre: 0, expenseOre: 0, total: 0,
+    };
+    unbilled.set(m.id, created);
+    return created;
   };
   for (const te of timeEntries) {
     if (!te.billable || te.invoiceId) continue;
     const o = Math.round((te.minutes / 60) * te.hourlyRate * 100);
-    const r = ensureUnbilled(te.matter);
+    const r = ensure(te.matter);
     r.timeOre += o; r.total += o;
   }
   for (const ex of expenses) {
     if (!ex.billable || ex.invoiceId) continue;
-    const r = ensureUnbilled(ex.matter);
+    const r = ensure(ex.matter);
     r.expenseOre += ex.amount; r.total += ex.amount;
   }
-  const unbilledSorted = Array.from(unbilled.values())
+  return Array.from(unbilled.values())
     .filter((r) => r.total > 0)
     .sort((a, b) => a.matterNumber.localeCompare(b.matterNumber, "sv"));
+}
 
-  // ─── Bygg workbook ───────────────────────────────────────────────────
+export async function GET(req: NextRequest) {
+  const parsed = parseInputs(req);
+  if (parsed instanceof NextResponse) return parsed;
+  const { from, to, userId } = parsed;
+
+  const org = await prisma.organization.findFirst();
+  if (!org) return NextResponse.json({ error: "No organization" }, { status: 404 });
+
+  const fromDate = new Date(from);
+  const toDate = new Date(to);
+  toDate.setUTCHours(23, 59, 59, 999);
+
+  const [user, timeEntries, expenses] = await loadReportData(org.id, userId, fromDate, toDate);
+  if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
+
+  const mattersSorted = aggregateMatters(timeEntries, expenses);
+  const { weeks, grid: weekGrid } = aggregateWeeks(timeEntries, fromDate, toDate);
+  const unbilledSorted = aggregateUnbilled(timeEntries, expenses);
 
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "AVA";
   workbook.created = new Date();
-
   addMatterSheet(workbook, user.name, from, to, mattersSorted);
   addWeeklySheet(workbook, user.name, from, to, weeks, weekGrid);
   addUnbilledSheet(workbook, user.name, from, to, unbilledSorted);
 
   const buffer = await workbook.xlsx.writeBuffer();
-
   const safeName = user.name.replace(/[^\w-]+/g, "_");
   return new NextResponse(buffer, {
     headers: {

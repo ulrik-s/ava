@@ -67,124 +67,141 @@ function evalPredicate(predicate: unknown, data: Record<string, unknown>): boole
   }
 }
 
+function errMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
 /** Huvudloop: kör en lista av steg. Returneras tidigt på fel eller http.respond. */
 async function runSteps(steps: RuleStep[], ctx: ExecutionContext, depth = 0, loopBindings?: Record<string, unknown>): Promise<{ stepsRan: number; httpResponse?: { status: number; body?: unknown }; error?: { step: number; message: string } }> {
   let ran = 0;
   for (let i = 0; i < steps.length; i++) {
-    const step = steps[i];
     try {
-      const subResult = await runStep(step, ctx, depth, loopBindings);
+      const subResult = await runStep(steps[i], ctx, depth, loopBindings);
       ran++;
       if (subResult?.httpResponse) return { stepsRan: ran, httpResponse: subResult.httpResponse };
-      // Räkna nestade steg-körningar också
-      if (subResult?.nestedRan) ran += subResult.nestedRan;
+      ran += subResult?.nestedRan ?? 0;
     } catch (err) {
-      return { stepsRan: ran, error: { step: i, message: err instanceof Error ? err.message : String(err) } };
+      return { stepsRan: ran, error: { step: i, message: errMessage(err) } };
     }
   }
   return { stepsRan: ran };
 }
 
-async function runStep(step: RuleStep, ctx: ExecutionContext, depth: number, loopBindings?: Record<string, unknown>): Promise<{ httpResponse?: { status: number; body?: unknown }; nestedRan?: number } | undefined> {
+type StepResult = { httpResponse?: { status: number; body?: unknown }; nestedRan?: number } | undefined;
+type StepArgs<T extends RuleStep> = {
+  step: T;
+  ctx: ExecutionContext;
+  tctx: Record<string, unknown>;
+  depth: number;
+  loopBindings?: Record<string, unknown>;
+};
+
+// Pick<RuleStep, ...> — TypeScript discriminerar på `do` så varje handler
+// får exakt den step-variant den deklarerar.
+type StepHandler<K extends RuleStep["do"]> = (
+  args: StepArgs<Extract<RuleStep, { do: K }>>,
+) => Promise<StepResult>;
+
+const STEP_HANDLERS: { [K in RuleStep["do"]]: StepHandler<K> } = {
+  "emit": async ({ step, ctx, tctx }) => {
+    await ctx.dataStore.events.emit({
+      type: step.eventType as never,
+      source: "rule",
+      actor: { kind: "rule", id: ctx.rule.id },
+      causedBy: ctx.event.id,
+      matterId: ctx.event.matterId,
+      payload: templateValue(step.payload, tctx),
+    });
+    return undefined;
+  },
+
+  "email.send": async ({ step, ctx, tctx }) => {
+    const to = String(templateValue(step.to, tctx));
+    const vars = templateValue(step.vars ?? {}, tctx) as Record<string, unknown>;
+    const idempotencyKey = step.idempotencyKey ? String(templateValue(step.idempotencyKey, tctx)) : undefined;
+    const sent = await ctx.handlers.sendEmail({ template: step.template, to, vars, idempotencyKey });
+    if (sent) {
+      await ctx.dataStore.events.emit({
+        type: "mail.sent",
+        source: "rule",
+        actor: { kind: "rule", id: ctx.rule.id },
+        causedBy: ctx.event.id,
+        matterId: ctx.event.matterId,
+        payload: { template: step.template, to, idempotencyKey },
+      });
+    }
+    return undefined;
+  },
+
+  "matter.update": async ({ step, ctx, tctx }) => {
+    const matterId = String(templateValue(step.matterId, tctx));
+    const patch = templateValue(step.patch, tctx) as Record<string, unknown>;
+    await ctx.handlers.updateMatter(matterId, patch);
+    return undefined;
+  },
+
+  "audit.log": async ({ step, ctx, tctx }) => {
+    const msg = String(templateValue(step.message, tctx));
+    await ctx.dataStore.events.emit({
+      type: "user.action",
+      source: "rule",
+      actor: { kind: "rule", id: ctx.rule.id },
+      causedBy: ctx.event.id,
+      matterId: ctx.event.matterId,
+      payload: { audit: msg },
+    });
+    return undefined;
+  },
+
+  "if": async ({ step, ctx, tctx, depth, loopBindings }) => {
+    const branch = evalPredicate(step.cond, tctx) ? step.then : step.else;
+    if (!branch?.length) return undefined;
+    const sub = await runSteps(branch, ctx, depth + 1, loopBindings);
+    if (sub.httpResponse) return { httpResponse: sub.httpResponse };
+    if (sub.error) throw new Error(sub.error.message);
+    return { nestedRan: sub.stepsRan };
+  },
+
+  "for-each": async ({ step, ctx, tctx, depth, loopBindings }) => {
+    const items = lookup(tctx, step.items);
+    if (!Array.isArray(items)) throw new Error(`for-each.items "${step.items}" är inte en array`);
+    let totalNested = 0;
+    for (const item of items) {
+      const newBindings = { ...(loopBindings ?? {}), [step.as]: item };
+      const sub = await runSteps(step.body, ctx, depth + 1, newBindings);
+      totalNested += sub.stepsRan;
+      if (sub.httpResponse) return { httpResponse: sub.httpResponse, nestedRan: totalNested };
+      if (sub.error) throw new Error(sub.error.message);
+    }
+    return { nestedRan: totalNested };
+  },
+
+  "http.respond": async ({ step, tctx }) => {
+    const body = step.body !== undefined ? templateValue(step.body, tctx) : undefined;
+    return { httpResponse: { status: step.status, body } };
+  },
+
+  "llm.extract": async ({ step, ctx, tctx }) => {
+    const documentId = String(templateValue(step.documentId, tctx));
+    const into = String(templateValue(step.into, tctx));
+    await ctx.handlers.extractFromDocument({ documentId, schema: step.schema, into });
+    return undefined;
+  },
+
+  "task.create": async ({ step, ctx, tctx }) => {
+    const assignTo = String(templateValue(step.assignTo, tctx));
+    const title = String(templateValue(step.title, tctx));
+    const dueAt = step.dueAt ? String(templateValue(step.dueAt, tctx)) : undefined;
+    await ctx.handlers.createTask({ assignTo, title, dueAt });
+    return undefined;
+  },
+};
+
+async function runStep(step: RuleStep, ctx: ExecutionContext, depth: number, loopBindings?: Record<string, unknown>): Promise<StepResult> {
   if (depth > 10) throw new Error("Steg-rekursion djupare än 10 — bug eller missdesignad regel");
   const tctx = templateContext(ctx, loopBindings);
-
-  switch (step.do) {
-    case "emit": {
-      const payload = templateValue(step.payload, tctx);
-      await ctx.dataStore.events.emit({
-        type: step.eventType as never,
-        source: "rule",
-        actor: { kind: "rule", id: ctx.rule.id },
-        causedBy: ctx.event.id,
-        matterId: ctx.event.matterId,
-        payload,
-      });
-      return;
-    }
-
-    case "email.send": {
-      const to = String(templateValue(step.to, tctx));
-      const vars = templateValue(step.vars ?? {}, tctx) as Record<string, unknown>;
-      const idempotencyKey = step.idempotencyKey ? String(templateValue(step.idempotencyKey, tctx)) : undefined;
-      const sent = await ctx.handlers.sendEmail({ template: step.template, to, vars, idempotencyKey });
-      if (sent) {
-        await ctx.dataStore.events.emit({
-          type: "mail.sent",
-          source: "rule",
-          actor: { kind: "rule", id: ctx.rule.id },
-          causedBy: ctx.event.id,
-          matterId: ctx.event.matterId,
-          payload: { template: step.template, to, idempotencyKey },
-        });
-      }
-      return;
-    }
-
-    case "matter.update": {
-      const matterId = String(templateValue(step.matterId, tctx));
-      const patch = templateValue(step.patch, tctx) as Record<string, unknown>;
-      await ctx.handlers.updateMatter(matterId, patch);
-      return;
-    }
-
-    case "audit.log": {
-      const msg = String(templateValue(step.message, tctx));
-      await ctx.dataStore.events.emit({
-        type: "user.action",
-        source: "rule",
-        actor: { kind: "rule", id: ctx.rule.id },
-        causedBy: ctx.event.id,
-        matterId: ctx.event.matterId,
-        payload: { audit: msg },
-      });
-      return;
-    }
-
-    case "if": {
-      const cond = evalPredicate(step.cond, tctx);
-      const branch = cond ? step.then : step.else;
-      if (!branch?.length) return;
-      const sub = await runSteps(branch, ctx, depth + 1, loopBindings);
-      if (sub.httpResponse) return { httpResponse: sub.httpResponse };
-      if (sub.error) throw new Error(sub.error.message);
-      return { nestedRan: sub.stepsRan };
-    }
-
-    case "for-each": {
-      const items = lookup(tctx, step.items);
-      if (!Array.isArray(items)) throw new Error(`for-each.items "${step.items}" är inte en array`);
-      let totalNested = 0;
-      for (const item of items) {
-        const newBindings = { ...(loopBindings ?? {}), [step.as]: item };
-        const sub = await runSteps(step.body, ctx, depth + 1, newBindings);
-        totalNested += sub.stepsRan;
-        if (sub.httpResponse) return { httpResponse: sub.httpResponse, nestedRan: totalNested };
-        if (sub.error) throw new Error(sub.error.message);
-      }
-      return { nestedRan: totalNested };
-    }
-
-    case "http.respond": {
-      const body = step.body !== undefined ? templateValue(step.body, tctx) : undefined;
-      return { httpResponse: { status: step.status, body } };
-    }
-
-    case "llm.extract": {
-      const documentId = String(templateValue(step.documentId, tctx));
-      const into = String(templateValue(step.into, tctx));
-      await ctx.handlers.extractFromDocument({ documentId, schema: step.schema, into });
-      return;
-    }
-
-    case "task.create": {
-      const assignTo = String(templateValue(step.assignTo, tctx));
-      const title = String(templateValue(step.title, tctx));
-      const dueAt = step.dueAt ? String(templateValue(step.dueAt, tctx)) : undefined;
-      await ctx.handlers.createTask({ assignTo, title, dueAt });
-      return;
-    }
-  }
+  const handler = STEP_HANDLERS[step.do] as StepHandler<typeof step.do>;
+  return handler({ step, ctx, tctx, depth, loopBindings } as StepArgs<typeof step>);
 }
 
 /** Toppnivå: kör en regel mot ett event. Loggar utfallet som event. */

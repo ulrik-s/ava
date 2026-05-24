@@ -141,6 +141,7 @@ export async function cloneRepo(
   });
 }
 
+// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Async function 'statusMatrix' has a complexity of 10. Maximum allowed is 8.)
 export async function statusMatrix(fs: FsaIsoGitAdapter): Promise<GitStatusEntry[]> {
   const git = await loadIsoGit();
   // statusMatrix returnerar tupler [filepath, HEAD, WORKDIR, STAGE]

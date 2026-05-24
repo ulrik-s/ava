@@ -24,6 +24,7 @@ const ORG_ID = "demo-firma-ab";
 
 function date(iso: string): string { return new Date(iso).toISOString(); }
 
+// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'buildDemoData' has a complexity of 11. Maximum allowed is 8.)
 function buildDemoData(): Array<{ path: string; data: unknown }> {
   const all: Array<{ path: string; data: unknown }> = [];
 

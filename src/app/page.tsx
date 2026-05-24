@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { trpc } from "@/client/lib/trpc";
 
+// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'Dashboard' has a complexity of 11. Maximum allowed is 8.)
 export default function Dashboard() {
   const contacts = trpc.contacts.list.useQuery({ page: 1, pageSize: 5 });
   const matters = trpc.matter.list.useQuery({ page: 1, pageSize: 5, status: "ACTIVE" });

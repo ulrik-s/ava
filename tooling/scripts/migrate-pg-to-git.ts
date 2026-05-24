@@ -41,6 +41,7 @@ async function dirExists(p: string): Promise<boolean> {
   try { await access(p); return true; } catch { return false; }
 }
 
+// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Async function 'main' has a complexity of 10. Maximum allowed is 8.)
 async function main(): Promise<void> {
   const orgId = arg("--org");
   const dirArg = arg("--dir");

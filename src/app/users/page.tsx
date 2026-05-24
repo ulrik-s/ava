@@ -10,6 +10,7 @@ const roleLabels: Record<string, string> = {
   ASSISTANT: "Assistent",
 };
 
+// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'UsersPage' has a complexity of 9. Maximum allowed is 8.)
 export default function UsersPage() {
   const me = trpc.user.current.useQuery();
   const users = trpc.user.list.useQuery();

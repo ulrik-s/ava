@@ -20,6 +20,7 @@ function LoginFallback() {
   );
 }
 
+// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'mapOAuthError' has a complexity of 9. Maximum allowed is 8.)
 function mapOAuthError(oauthError: string | null): string | null {
   switch (oauthError) {
     case "WrongTenant":
@@ -87,6 +88,7 @@ function OAuthSection({
   );
 }
 
+// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'LoginForm' has a complexity of 10. Maximum allowed is 8.)
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();

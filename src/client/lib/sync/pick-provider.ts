@@ -14,56 +14,52 @@ export interface PickedProvider {
   kind: "tauri" | "fsa";
 }
 
+/** Tauri-greanen: native desktop med libgit2 via bridge. */
+async function tryTauri(token: string): Promise<PickedProvider | null> {
+  let bridge: typeof import("@/client/lib/integrations/tauri-bridge");
+  try {
+    bridge = await import("@/client/lib/integrations/tauri-bridge");
+  } catch { return null; }
+  if (!bridge.isTauri()) return null;
+  const repoPath = localStorage.getItem("ava.localRepoPath") ?? "";
+  if (!repoPath) return null;
+  const tk = (await bridge.secretGet("github-token").catch(() => null)) || token;
+  if (!tk) return null;
+  return { provider: makeTauriProvider(repoPath, tk), kind: "tauri" };
+}
+
+/** Web/FSA/OPFS-grenen — antingen via GitHub REST eller iso-git smart-HTTP. */
+async function tryFsa(token: string): Promise<PickedProvider | null> {
+  const { isFsaSupported, isOpfsSupported, loadHandle, ensureReadWrite } = await import("@/client/lib/fsa/handle-store");
+  if (!isFsaSupported() && !isOpfsSupported()) return null;
+  const handle = await loadHandle("repo-root");
+  if (!handle) return null;
+  if (!(await ensureReadWrite(handle).catch(() => false))) return null;
+
+  const { loadFirmaConfig } = await import("@/client/lib/firma/firma-config");
+  const { resolveCorsProxy, isLocalOrSameOrigin } = await import("./cors-proxy");
+  const cfg = loadFirmaConfig();
+  const origin = window.location.origin;
+  // Lokal/self-hosted git-server (docker:8080/git) tillåter anonym push →
+  // token krävs inte. GitHub/fjärr kräver token.
+  if (!token && !isLocalOrSameOrigin(cfg.repo, origin)) return null;
+
+  const { parseRepoLocator } = await import("@/client/lib/github/api");
+  const repoLocator = parseRepoLocator(cfg.repo);
+  if (repoLocator) {
+    return { provider: makeRestProvider(handle, token, repoLocator, "main"), kind: "fsa" };
+  }
+  // Self-hosted eller okänd URL → iso-git smart-HTTP. Lokal/samma-origin
+  // (round-trip mot docker:8080/git/) → "" = ingen cors-proxy.
+  const corsProxy = resolveCorsProxy({ url: cfg.repo, configured: cfg.corsProxy, origin });
+  return { provider: makeFsaProvider(handle, token, corsProxy), kind: "fsa" };
+}
+
 export async function pickProvider(token: string): Promise<PickedProvider | null> {
   if (typeof window === "undefined") return null;
-
-  // Tauri-detektering
-  try {
-    const bridge = await import("@/client/lib/integrations/tauri-bridge");
-    if (bridge.isTauri()) {
-      const repoPath = localStorage.getItem("ava.localRepoPath") ?? "";
-      if (!repoPath) return null;
-      let tk = token;
-      try {
-        const fromKey = await bridge.secretGet("github-token");
-        if (fromKey) tk = fromKey;
-      } catch { /* ej tillgängligt — använd token-prop */ }
-      if (!tk) return null;
-      return { provider: makeTauriProvider(repoPath, tk), kind: "tauri" };
-    }
-  } catch { /* ignorera — bridge importerar inte i icke-Tauri */ }
-
-  // Web FSA/OPFS-detektering
-  try {
-    const { isFsaSupported, isOpfsSupported, loadHandle, ensureReadWrite } = await import("@/client/lib/fsa/handle-store");
-    // OPFS (self-hosted/e2e) räcker — kräver inte showDirectoryPicker (saknas på iOS Safari).
-    if (!isFsaSupported() && !isOpfsSupported()) return null;
-    const handle = await loadHandle("repo-root");
-    if (!handle) return null;
-    const ok = await ensureReadWrite(handle).catch(() => false);
-    if (!ok) return null;
-
-    const { loadFirmaConfig } = await import("@/client/lib/firma/firma-config");
-    const cfg = loadFirmaConfig();
-    const { resolveCorsProxy, isLocalOrSameOrigin } = await import("./cors-proxy");
-    const origin = typeof window !== "undefined" ? window.location.origin : undefined;
-    const isLocal = isLocalOrSameOrigin(cfg.repo, origin);
-    // Lokal/self-hosted git-server (docker:8080/git) tillåter anonym push →
-    // token krävs inte. GitHub/fjärr kräver token.
-    if (!token && !isLocal) return null;
-
-    const { parseRepoLocator } = await import("@/client/lib/github/api");
-    const repoLocator = parseRepoLocator(cfg.repo);
-    if (!repoLocator) {
-      // Self-hosted eller okänd URL → iso-git smart-HTTP. Lokal/samma-origin
-      // (round-trip mot docker:8080/git/) → "" = ingen cors-proxy.
-      const corsProxy = resolveCorsProxy({ url: cfg.repo, configured: cfg.corsProxy, origin });
-      return { provider: makeFsaProvider(handle, token, corsProxy), kind: "fsa" };
-    }
-    return { provider: makeRestProvider(handle, token, repoLocator, "main"), kind: "fsa" };
-  } catch { /* ignorera */ }
-
-  return null;
+  const tauri = await tryTauri(token);
+  if (tauri) return tauri;
+  return tryFsa(token).catch(() => null);
 }
 
 /**

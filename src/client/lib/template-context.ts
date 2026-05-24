@@ -174,6 +174,7 @@ function buildBilling(matter: MatterWithIncludes) {
   return { timeEntries, expenses, totalTimeMinutes, totalTimeAmount, totalExpenseAmount };
 }
 
+// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Async function 'buildOrganization' has a complexity of 10. Maximum allowed is 8.)
 async function buildOrganization(matter: MatterWithIncludes) {
   let logoBase64: string | null = null;
   const logoPath = matter.organization.logoPath;

@@ -183,6 +183,7 @@ interface Props {
   saving?: boolean;
 }
 
+// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'TemplateEditor' has a complexity of 12. Maximum allowed is 8.)
 export function TemplateEditor({
   initialName = "",
   initialDescription = "",

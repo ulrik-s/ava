@@ -29,6 +29,7 @@ const TEXT_MIMES = new Set([
   "application/json", "application/xml",
 ]);
 
+// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'isPlainTextDoc' has a complexity of 9. Maximum allowed is 8.)
 export function isPlainTextDoc(doc: ContentDoc): boolean {
   const mime = doc.mimeType?.toLowerCase() ?? "";
   if (TEXT_MIMES.has(mime) || mime.startsWith("text/")) return true;

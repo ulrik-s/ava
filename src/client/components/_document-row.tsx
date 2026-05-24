@@ -120,6 +120,7 @@ function isWithinAnalysisGrace(doc: DocumentRecord): boolean {
  * I demo-build:n pekar "Visa"/"Ladda ner" mot GH Pages.
  * I full server-build:n mot /api/documents/<id>/download.
  */
+// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'DocumentLinks' has a complexity of 12. Maximum allowed is 8.)
 function DocumentLinks({ doc, disabled }: { doc: DocumentRecord; disabled?: boolean }) {
   const isDemo = process.env.NEXT_PUBLIC_DEMO_BUILD === "1";
   let viewHref: string;
@@ -137,6 +138,7 @@ function DocumentLinks({ doc, disabled }: { doc: DocumentRecord; disabled?: bool
     downloadHref = `/api/documents/${doc.id}/download?download=1`;
   }
 
+  // eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Async arrow function has a complexity of 13. Maximum allowed is 8.)
   const openInEditor = async () => {
     const { isTauri, openInDefaultApp } = await import("@/client/lib/integrations/tauri-bridge");
     if (isTauri()) {
@@ -239,10 +241,12 @@ async function readFromFsa(handle: FileSystemDirectoryHandle, path: string): Pro
   } catch { return null; }
 }
 
+// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'DocumentNameButton' has a complexity of 10. Maximum allowed is 8.)
 function DocumentNameButton({ doc, isAnalyzing, disabled }: { doc: DocumentRecord; isAnalyzing: boolean; disabled?: boolean }) {
   const isWaitingAnalysis = isAnalyzing || isWithinAnalysisGrace(doc);
 
   const isDemo = process.env.NEXT_PUBLIC_DEMO_BUILD === "1";
+  // eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Async arrow function has a complexity of 10. Maximum allowed is 8.)
   const onClick = async () => {
     if (disabled) return;
     // I demo-läget pekar storagePath på en fil i samma demo-repo

@@ -4,13 +4,14 @@ import nextTs from "eslint-config-next/typescript";
 
 /**
  * ESLint-konfiguration med extra regler för kodkvalitet:
- *   - complexity: cyklomatisk komplexitet ≤ 12 per funktion
+ *   - complexity: cyklomatisk komplexitet ≤ 8 per funktion (HARD error)
  *   - max-depth: max 4 nivåer av nästade block
  *   - max-lines-per-function: 80 rader (mjuk gräns)
  *   - max-params: 5 parametrar per funktion
  *
- * Regelvärdena är medvetet pragmatiska — strikta nog att fånga riktiga
- * problem, men inte så strikta att de blockerar normal kod.
+ * Befintliga funktioner som överskrider 8 har explicita `eslint-disable`
+ * + TODO så CI blockerar NYA brott. Se Task #6 i docs/roundtrip-handoff.md
+ * för refaktoreringskö.
  */
 const eslintConfig = defineConfig([
   ...nextVitals,
@@ -18,7 +19,7 @@ const eslintConfig = defineConfig([
   {
     files: ["**/*.{ts,tsx}"],
     rules: {
-      complexity: ["warn", { max: 12 }],
+      complexity: ["error", { max: 8 }],
       "max-depth": ["warn", 4],
       "max-lines-per-function": [
         "warn",

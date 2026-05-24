@@ -27,6 +27,7 @@ const STATUS_LABELS: Record<string, string> = {
   INSTALLMENT_PLAN: "Avbetalningsplan",
 };
 
+// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'InvoiceDetailClient' has a complexity of 14. Maximum allowed is 8.)
 export default function InvoiceDetailClient({ id: paramId }: { id: string }) {
   // Static export: sentinel-shell för nya id:n → läs riktiga id:t ur URL:en.
   const id = useRouteId() ?? paramId;

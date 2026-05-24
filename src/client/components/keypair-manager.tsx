@@ -32,6 +32,7 @@ interface Props {
   saving?: boolean;
 }
 
+// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'KeypairManager' has a complexity of 12. Maximum allowed is 8.)
 export function KeypairManager({ onAddToProfile, saving }: Props) {
   const [supported, setSupported] = useState<boolean | null>(null);
   const [keypair, setKeypair] = useState<StoredKeypair | null>(null);

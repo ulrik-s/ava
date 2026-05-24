@@ -75,6 +75,7 @@ function Section({ title, jobs, emptyText }: { title: string; jobs: Job[]; empty
   );
 }
 
+// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'JobRow' has a complexity of 9. Maximum allowed is 8.)
 function JobRow({ job }: { job: Job }) {
   // För körande jobb visar vi inget exakt millisek-värde (annars triggar
   // varje setInterval en re-render). Bara start-tid och status räcker.

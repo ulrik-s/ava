@@ -36,6 +36,7 @@ export interface PullResult {
   filesUpdated: number;
 }
 
+// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Async function 'pullViaRest' has a complexity of 13. Maximum allowed is 8.)
 export async function pullViaRest(args: PullArgs): Promise<PullResult> {
   const opts = { token: args.token, signal: args.signal };
   const state = await readSyncState(args.handle);

@@ -162,6 +162,7 @@ async function loadRecipients(
   }
 }
 
+// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Async arrow function has a complexity of 12. Maximum allowed is 8.)
 export const POST = withApiErrors(async (req: NextRequest): Promise<NextResponse> => {
   const { userId, orgId: organizationId } = await requireSession();
   const { templateId, matterId, format, recipientContactIds } = await parseJsonBody(req, GenerateBody);

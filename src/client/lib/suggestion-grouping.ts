@@ -60,6 +60,38 @@ export function groupingKey(s: Pick<RawSuggestion, "personalNumber" | "orgNumber
   return `name:${normalizeName(s.name)}|${s.contactType}`;
 }
 
+/** Skapa en ny grupp från första observerade suggestion. */
+function makeGroup(key: string, s: RawSuggestion): GroupedSuggestion {
+  return {
+    key,
+    suggestionIds: [s.id],
+    name: s.name,
+    contactType: s.contactType,
+    roles: [s.role],
+    email: s.email || null,
+    phone: s.phone || null,
+    orgNumber: s.orgNumber || null,
+    personalNumber: s.personalNumber || null,
+    notes: s.notes ? [s.notes] : [],
+    documents: [s.document],
+  };
+}
+
+/** "First non-empty wins" — bara skriva fältet om gruppen saknar värde. */
+const FIRST_NON_EMPTY_FIELDS = ["email", "phone", "orgNumber", "personalNumber"] as const;
+
+function mergeIntoGroup(g: GroupedSuggestion, s: RawSuggestion): void {
+  g.suggestionIds.push(s.id);
+  if (!g.roles.includes(s.role)) g.roles.push(s.role);
+  for (const f of FIRST_NON_EMPTY_FIELDS) {
+    if (!g[f] && s[f]) g[f] = s[f];
+  }
+  if (s.notes && !g.notes.includes(s.notes)) g.notes.push(s.notes);
+  if (!g.documents.some((d) => d.id === s.document.id)) {
+    g.documents.push(s.document);
+  }
+}
+
 /**
  * Groups an array of suggestions into one entry per unique entity. Roles,
  * notes and source documents are aggregated; contact attributes take the
@@ -67,41 +99,11 @@ export function groupingKey(s: Pick<RawSuggestion, "personalNumber" | "orgNumber
  */
 export function groupSuggestions(suggestions: RawSuggestion[]): GroupedSuggestion[] {
   const groups = new Map<string, GroupedSuggestion>();
-
   for (const s of suggestions) {
     const key = groupingKey(s);
     const existing = groups.get(key);
-
-    if (!existing) {
-      groups.set(key, {
-        key,
-        suggestionIds: [s.id],
-        name: s.name,
-        contactType: s.contactType,
-        roles: [s.role],
-        email: s.email || null,
-        phone: s.phone || null,
-        orgNumber: s.orgNumber || null,
-        personalNumber: s.personalNumber || null,
-        notes: s.notes ? [s.notes] : [],
-        documents: [s.document],
-      });
-      continue;
-    }
-
-    existing.suggestionIds.push(s.id);
-    if (!existing.roles.includes(s.role)) existing.roles.push(s.role);
-    // "First non-empty wins" — prefer non-null attribute from later rows only
-    // if current is null.
-    if (!existing.email && s.email) existing.email = s.email;
-    if (!existing.phone && s.phone) existing.phone = s.phone;
-    if (!existing.orgNumber && s.orgNumber) existing.orgNumber = s.orgNumber;
-    if (!existing.personalNumber && s.personalNumber) existing.personalNumber = s.personalNumber;
-    if (s.notes && !existing.notes.includes(s.notes)) existing.notes.push(s.notes);
-    if (!existing.documents.some((d) => d.id === s.document.id)) {
-      existing.documents.push(s.document);
-    }
+    if (existing) mergeIntoGroup(existing, s);
+    else groups.set(key, makeGroup(key, s));
   }
-
   return Array.from(groups.values());
 }

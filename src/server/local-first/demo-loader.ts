@@ -55,6 +55,7 @@ export class DemoLoader {
    * Klona repo och hydratisera alla entiteter.
    * Idempotent — fler anrop ersätter tidigare snapshot.
    */
+  // eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Async method 'loadDemo' has a complexity of 10. Maximum allowed is 8.)
   async loadDemo(url: string): Promise<LoadResult> {
     // Reset state — flera ladd-anrop ger fresh data
     await this.clearFs();

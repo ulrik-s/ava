@@ -7,6 +7,7 @@ import { trpc } from "@/client/lib/trpc";
 import { labelForContactType, labelForMatterRole, contactTypes } from "@/client/lib/labels";
 import { useRouteId } from "@/client/lib/demo/use-route-id";
 
+// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'ContactDetailClient' has a complexity of 22. Maximum allowed is 8.)
 export default function ContactDetailClient({ id: paramId }: { id: string }) {
   const router = useRouter();
   // Static export: sentinel-shell för nya id:n → läs riktiga id:t ur URL:en.

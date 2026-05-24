@@ -29,6 +29,7 @@ export interface ScanResult {
   skippedNoEmail: number;
 }
 
+// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Async function 'runPaymentScan' has a complexity of 13. Maximum allowed is 8.)
 export async function runPaymentScan(
   prisma: PrismaClient,
   dataStore: IDataStore,

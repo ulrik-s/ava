@@ -15,6 +15,7 @@ import Link from "next/link";
 import { trpc } from "@/client/lib/trpc";
 import { formatCurrency } from "@/client/lib/utils";
 
+// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'statusBadge' has a complexity of 9. Maximum allowed is 8.)
 function statusBadge(status: string, invoiceType: string): string {
   const base = "text-[10px] rounded-full px-2 py-0.5 font-medium";
   if (invoiceType === "ACCONTO") return `${base} bg-purple-100 text-purple-700`;
@@ -49,6 +50,7 @@ function typeLabel(t: string): string {
     : "Faktura";
 }
 
+// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'InvoicesSection' has a complexity of 21. Maximum allowed is 8.)
 export function InvoicesSection({ matterId }: { matterId: string }) {
   const invoices = trpc.invoice.list.useQuery({ matterId });
   const timeEntries = trpc.timeEntry.list.useQuery({ matterId });

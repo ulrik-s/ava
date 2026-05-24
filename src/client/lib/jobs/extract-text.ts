@@ -40,6 +40,7 @@ export async function extractText(input: ExtractInput): Promise<string> {
 }
 
 /** Vilket extraktorn ska användas för denna fil. */
+// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'detectKind' has a complexity of 13. Maximum allowed is 8.)
 export function detectKind(input: ExtractInput): "text" | "pdf" | "docx" | "unknown" {
   const mime = (input.mimeType ?? "").toLowerCase();
   const ext = (input.fileName ?? "").toLowerCase().match(/\.([a-z0-9]+)$/)?.[1] ?? "";

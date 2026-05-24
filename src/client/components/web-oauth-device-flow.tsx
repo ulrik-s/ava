@@ -74,6 +74,7 @@ export function WebOAuthDeviceFlow({ onComplete, onCancel }: Props) {
     const intervalMs = Math.max(code.interval, 5) * 1000;
     const deadline = Date.now() + code.expires_in * 1000;
 
+    // eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Async arrow function has a complexity of 11. Maximum allowed is 8.)
     const poll = async () => {
       if (cancelled) return;
       if (Date.now() > deadline) {

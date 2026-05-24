@@ -7,6 +7,7 @@
 
 import type { PasskeyConfig } from "./passkey-ceremony";
 
+// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'getPasskeyConfig' has a complexity of 9. Maximum allowed is 8.)
 export function getPasskeyConfig(): PasskeyConfig {
   const isDev = process.env.NODE_ENV !== "production";
   const rpId = process.env.PASSKEY_RP_ID ?? (isDev ? "localhost" : "");

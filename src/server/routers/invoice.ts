@@ -132,6 +132,7 @@ export const invoiceRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      // eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Async arrow function has a complexity of 13. Maximum allowed is 8.)
       return ctx.dataStore.transaction(async (tx) => {
         const matter = await tx.matters.findFirst({
           where: { id: input.matterId, organizationId: ctx.orgId },

@@ -117,6 +117,7 @@ function matterSlug(m: { matterNumber: string; title: string }): string {
 // they don't touch the DB; MOVE promotes the junk body to the real doc.
 const SB_TEMP_RE = /\.sb-[0-9a-f]{8}-[A-Za-z0-9]{6}$/;
 
+// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'isJunkFile' has a complexity of 15. Maximum allowed is 8.)
 function isJunkFile(name: string): boolean {
   if (name.startsWith("._")) return true;           // AppleDouble
   if (SB_TEMP_RE.test(name)) return true;           // macOS safe-save temp
@@ -193,6 +194,7 @@ function cacheKey(authHeader: string): string {
   return crypto.createHash("sha256").update(authHeader).digest("hex");
 }
 
+// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Async function 'authenticate' has a complexity of 13. Maximum allowed is 8.)
 async function authenticate(req: IncomingMessage): Promise<User | null> {
   const header = req.headers.authorization;
   if (!header || !header.toLowerCase().startsWith("basic ")) return null;
@@ -307,6 +309,7 @@ async function traverseFolders(
   return currentFolder;
 }
 
+// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Async function 'resolvePath' has a complexity of 13. Maximum allowed is 8.)
 async function resolvePath(segments: string[], user: User): Promise<Resolved> {
   if (segments.length === 0) return { kind: "root" };
 
@@ -446,6 +449,7 @@ async function buildCollectionEntries(
   return entries;
 }
 
+// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Async function 'handlePROPFIND' has a complexity of 14. Maximum allowed is 8.)
 async function handlePROPFIND(req: IncomingMessage, res: ServerResponse, user: User) {
   const urlPath = new URL(req.url!, "http://x").pathname;
   const segments = splitPath(urlPath);
@@ -499,6 +503,7 @@ async function handlePROPFIND(req: IncomingMessage, res: ServerResponse, user: U
 // GET / HEAD
 // ────────────────────────────────────────────────────────────────
 
+// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Async function 'handleGET' has a complexity of 15. Maximum allowed is 8.)
 async function handleGET(req: IncomingMessage, res: ServerResponse, user: User, method: "GET" | "HEAD") {
   const urlPath = new URL(req.url!, "http://x").pathname;
   const resolved = await resolvePath(splitPath(urlPath), user);
@@ -756,6 +761,7 @@ async function moveDocumentToNew(
   });
 }
 
+// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Async function 'handleMOVE' has a complexity of 17. Maximum allowed is 8.)
 async function handleMOVE(req: IncomingMessage, res: ServerResponse, user: User) {
   const urlPath = new URL(req.url!, "http://x").pathname;
   const destHeader = (req.headers["destination"] as string | undefined) ?? "";
@@ -977,6 +983,7 @@ async function handleJunkDelete(res: ServerResponse, urlPath: string, user: User
   res.writeHead(204).end();
 }
 
+// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Async function 'handleJunkMove' has a complexity of 10. Maximum allowed is 8.)
 async function handleJunkMove(req: IncomingMessage, res: ServerResponse, urlPath: string, user: User) {
   const destHeader = (req.headers["destination"] as string | undefined) ?? "";
   const overwrite = ((req.headers["overwrite"] as string | undefined) ?? "T").toUpperCase() !== "F";
@@ -1027,6 +1034,7 @@ function handleJunkProppatch(res: ServerResponse, href: string) {
   res.end(xml);
 }
 
+// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Async function 'handleJunkFile' has a complexity of 13. Maximum allowed is 8.)
 async function handleJunkFile(
   method: string,
   req: IncomingMessage,
@@ -1058,6 +1066,7 @@ async function handleJunkFile(
 // Router
 // ────────────────────────────────────────────────────────────────
 
+// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Async arrow function has a complexity of 20. Maximum allowed is 8.)
 const server = createServer(async (req, res) => {
   const method = (req.method ?? "").toUpperCase();
   const started = Date.now();

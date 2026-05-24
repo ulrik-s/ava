@@ -71,6 +71,7 @@ export const reportsRouter = router({
       to: z.string(),
       userId: z.string(),
     }))
+    // eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Async arrow function has a complexity of 16. Maximum allowed is 8.)
     .query(async ({ ctx, input }) => {
       const fromDate = new Date(input.from);
       const toDate = new Date(input.to);

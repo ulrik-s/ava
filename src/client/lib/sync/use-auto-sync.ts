@@ -295,6 +295,7 @@ export function useAutoSync(opts: UseAutoSyncOptions): UseAutoSyncReturn {
   return { state, syncNow, notifyChange };
 }
 
+// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'errMsg' has a complexity of 9. Maximum allowed is 8.)
 function errMsg(err: unknown, prefix: string): string {
   if (err instanceof SyncTimeoutError) return `${prefix}: timeout — försöker igen senare`;
   if (err instanceof Error) {

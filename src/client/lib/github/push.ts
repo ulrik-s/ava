@@ -39,6 +39,7 @@ export interface PushResult {
   filesPushed: number;
 }
 
+// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Async function 'pushViaRest' has a complexity of 12. Maximum allowed is 8.)
 export async function pushViaRest(args: PushArgs): Promise<PushResult> {
   const opts = { token: args.token, signal: args.signal };
   const state = await readSyncState(args.handle);

@@ -161,6 +161,7 @@ async function loadDocumentText(doc: { storagePath: string; mimeType: string }):
     : trimmed;
 }
 
+// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Async function 'callLlmForAnalysis' has a complexity of 12. Maximum allowed is 8.)
 async function callLlmForAnalysis(
   fileName: string,
   mimeType: string,
@@ -219,6 +220,7 @@ async function callLlmForAnalysis(
 
 type Tx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
 
+// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Async function 'persistEventSuggestion' has a complexity of 12. Maximum allowed is 8.)
 async function persistEventSuggestion(
   tx: Tx,
   documentId: string,
@@ -245,6 +247,7 @@ async function persistEventSuggestion(
   });
 }
 
+// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Async function 'persistPartySuggestion' has a complexity of 11. Maximum allowed is 8.)
 async function persistPartySuggestion(
   tx: Tx,
   documentId: string,
@@ -375,6 +378,7 @@ export function parseWithRepair(raw: string): AnalysisResult | null {
  * may become corrupt after some point; each candidate represents a prefix
  * we can attempt to close and parse.
  */
+// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'safeCandidatePositions' has a complexity of 13. Maximum allowed is 8.)
 function safeCandidatePositions(s: string, start: number): Array<{ end: number; stack: string }> {
   const stack: Array<"{" | "["> = [];
   let inString = false;
@@ -436,6 +440,7 @@ export function extractJsonObject(s: string): string | null {
   return repairJson(stripped, start);
 }
 
+// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'findBalancedObject' has a complexity of 10. Maximum allowed is 8.)
 function findBalancedObject(s: string, start: number): string | null {
   let depth = 0;
   let inString = false;
@@ -463,6 +468,7 @@ function findBalancedObject(s: string, start: number): string | null {
  * Tracks the last "safe" position (after a complete key:value pair at a
  * known depth) and closes outstanding containers at that point.
  */
+// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'repairJson' has a complexity of 17. Maximum allowed is 8.)
 function repairJson(s: string, start: number): string | null {
   const stack: Array<"{" | "["> = [];
   let inString = false;

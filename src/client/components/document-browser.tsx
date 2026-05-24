@@ -11,6 +11,7 @@ interface DocumentBrowserProps {
   matterId: string;
 }
 
+// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'DocumentBrowser' has a complexity of 9. Maximum allowed is 8.)
 export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set());
   const [showNewFolder, setShowNewFolder] = useState(false);

@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { trpc } from "@/client/lib/trpc";
 import { useIsReadOnly } from "@/client/lib/demo/demo-mode-context";
 
+// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'MattersContent' has a complexity of 11. Maximum allowed is 8.)
 function MattersContent() {
   const searchParams = useSearchParams();
   const [search, setSearch] = useState("");
