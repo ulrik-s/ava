@@ -13,28 +13,7 @@
 import { FsaIsoGitAdapter } from "@/client/lib/fsa/fs-adapter";
 import type { DemoSource } from "@/server/data-store/DemoDataStore";
 import { prebakeJoins } from "@/client/lib/demo/prebake-joins";
-
-/** Path-prefix → DemoSource-fält. Speglar ENTITY_TO_PATH i fsa-write-back. */
-const PREFIX_TO_KEY: Array<[string, keyof DemoSource]> = [
-  ["matters/active", "matters"],
-  ["contacts", "contacts"],
-  ["matter-contacts", "matterContacts"],
-  ["documents", "documents"],
-  ["document-folders", "documentFolders"],
-  ["document-analysis-suggestions", "documentAnalysisSuggestions"],
-  ["matter-event-suggestions", "matterEventSuggestions"],
-  ["time-entries", "timeEntries"],
-  ["expenses", "expenses"],
-  ["invoices", "invoices"],
-  ["payments", "payments"],
-  ["payment-plans", "paymentPlans"],
-  ["acconto-deductions", "accontoDeductions"],
-  ["offices", "offices"],
-  ["conflict-checks", "conflictChecks"],
-  [".ava/users", "users"],
-  [".ava/templates", "documentTemplates"],
-  [".ava/organizations", "organizations"],
-];
+import { ENTITY_REGISTRY, ENTITY_NAMES, type EntityName } from "@/shared/schemas";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/;
 
@@ -70,14 +49,35 @@ async function readJsonDir(
   return rows;
 }
 
+/**
+ * Validera och normalisera en rad mot dess Zod-schema. Vid valideringsfel:
+ * varna i konsolen men släpp igenom rådatan så vi inte kraschar på legacy-
+ * filer. (Strikt validering kan slås på via env-flagga senare.)
+ */
+function validateRow(entity: EntityName, row: Record<string, unknown>): Record<string, unknown> {
+  const schema = ENTITY_REGISTRY[entity].schema;
+  const result = schema.safeParse(row);
+  if (!result.success) {
+    console.warn(
+      `[hydrate] ${entity}/${String(row.id ?? "?")} schema-validering misslyckades:`,
+      result.error.issues.slice(0, 3),
+    );
+    return row;
+  }
+  return result.data as Record<string, unknown>;
+}
+
 export async function hydrateWorkingCopy(
   root: FileSystemDirectoryHandle,
 ): Promise<DemoSource> {
   const fs = new FsaIsoGitAdapter(root);
   const out: DemoSource = {};
-  for (const [prefix, key] of PREFIX_TO_KEY) {
-    const rows = await readJsonDir(fs, prefix);
-    if (rows.length) (out as Record<string, readonly unknown[]>)[key as string] = rows;
+  for (const entity of ENTITY_NAMES) {
+    const { gitPrefix, sourceKey } = ENTITY_REGISTRY[entity];
+    const rows = await readJsonDir(fs, gitPrefix);
+    if (!rows.length) continue;
+    const validated = rows.map((r) => validateRow(entity, r));
+    (out as Record<string, readonly unknown[]>)[sourceKey] = validated;
   }
   return prebakeJoins(out);
 }

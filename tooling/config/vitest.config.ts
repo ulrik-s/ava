@@ -79,6 +79,7 @@ export default defineConfig({
           include: [
             "test/unit/lib/**/*.test.ts",
             "test/unit/server/**/*.test.ts",
+            "test/unit/shared/**/*.test.ts",
             "test/unit/app/api/**/*.test.ts",
             "test/scripts/**/*.test.ts",
           ],
