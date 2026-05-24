@@ -486,3 +486,61 @@ test("dokument: ladda upp fil på matter → documents/<id>.json + content-fil i
     }
   }, POLL).toBe(true);
 });
+
+test("kalender: skapa event i UI:t → calendar/<id>.json i git-db:n", async ({ page }) => {
+  const stamp = Date.now();
+  const title = `Förhandling ${stamp}`;
+
+  await configureSelfHosted(page);
+  await page.goto("/ava/calendar/");
+  await expect(page.getByText("Laddar data…")).toHaveCount(0, { timeout: 30_000 });
+
+  await page.getByRole("button", { name: /^Nytt event$/ }).click();
+  await page.getByLabel(/^Titel/).fill(title);
+  await page.getByLabel(/^Plats$/).fill("Stockholms tingsrätt");
+  // datetime-local-input redan förifylld med "now" — räcker för testet
+  await page.getByRole("button", { name: /^Skapa$/ }).click();
+
+  // Eventet visas i listan
+  await expect(page.getByText(title)).toBeVisible({ timeout: 15_000 });
+
+  // Och en JSON-rad ska landa i git-db:n under calendar/
+  await expect.poll(() => rowsInRepo("calendar").map((e) => String(e.title)), POLL).toContain(title);
+  // Verifiera scope-fält som routern sätter
+  const row = rowsInRepo("calendar").find((e) => String(e.title) === title);
+  expect(row?.userId).toBe("current-user");
+  expect(row?.kind).toBe("appointment");
+  expect(row?.mirrorToOutlook).toBe(false);
+});
+
+test("tasks: skapa task + markera klar i UI:t → tasks/<id>.json + status DONE", async ({ page }) => {
+  const stamp = Date.now();
+  const title = `Ring klient ${stamp}`;
+
+  await configureSelfHosted(page);
+  await page.goto("/ava/calendar/");
+  await expect(page.getByText("Laddar data…")).toHaveCount(0, { timeout: 30_000 });
+
+  await page.getByRole("button", { name: /^Ny task$/ }).click();
+  // Task-formuläret renderas (blå border). Använd locator-scope för att inte
+  // krocka med Nytt event-formulärets fält.
+  const taskForm = page.locator(".bg-blue-50").last();
+  await taskForm.getByLabel(/^Titel/).fill(title);
+  await taskForm.getByRole("button", { name: /^Skapa$/ }).click();
+
+  await expect(page.getByText(title)).toBeVisible({ timeout: 15_000 });
+
+  await expect.poll(() => rowsInRepo("tasks").map((t) => String(t.title)), POLL).toContain(title);
+  expect(rowsInRepo("tasks").find((t) => String(t.title) === title)?.status).toBe("TODO");
+
+  // Markera klar — CheckCircle-knappen för raden. UI:n använder <li>, inte
+  // <tr>, så scope:a till li:has-text(title). title="Markera klar" på
+  // knappen blir dess accessible name.
+  await page.locator(`li:has-text("${title}")`).getByRole("button", { name: /Markera klar/i }).click();
+
+  // Status ska flippas till DONE i git
+  await expect.poll(() => {
+    const t = rowsInRepo("tasks").find((r) => String(r.title) === title);
+    return t ? String(t.status) : "(missing)";
+  }, POLL).toBe("DONE");
+});

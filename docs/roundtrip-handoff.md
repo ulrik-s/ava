@@ -15,6 +15,7 @@ Senast uppdaterad: 2026-05-24.
 | Område | Status |
 |---|---|
 | Zod-schemas för alla git-db-entiteter | ✅ klar (`src/shared/schemas/`) |
+| Kalender + tasks (per användare) | 🟨 v1 klar — `/calendar` med list+create+delete för events och tasks (+ complete för tasks). Outlook-spegling deferad till Phase D. Månadsvy deferad till Phase E. |
 | Prisma/PostgreSQL borttaget | ✅ klar — pure git-modell |
 | NextAuth + WebDAV-server borttaget | ✅ klar |
 | API-routes borttagna (`src/app/api/`) | ✅ klar — allt går via DemoDataStore i browser |

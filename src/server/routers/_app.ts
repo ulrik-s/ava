@@ -10,6 +10,8 @@ import { documentTemplateRouter } from "./documentTemplate";
 import { organizationRouter } from "./organization";
 import { reportsRouter } from "./reports";
 import { invoiceRouter } from "./invoice";
+import { calendarRouter } from "./calendar";
+import { taskRouter } from "./task";
 
 export const appRouter = router({
   contacts: contactRouter,
@@ -23,6 +25,8 @@ export const appRouter = router({
   organization: organizationRouter,
   reports: reportsRouter,
   invoice: invoiceRouter,
+  calendar: calendarRouter,
+  task: taskRouter,
 });
 
 export type AppRouter = typeof appRouter;

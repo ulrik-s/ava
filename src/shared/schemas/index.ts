@@ -33,6 +33,7 @@ import {
   accontoDeductionSchema,
 } from "./billing";
 import { documentTemplateSchema, conflictCheckSchema } from "./misc";
+import { calendarEventSchema, taskSchema } from "./calendar";
 
 export * from "./enums";
 export * from "./common";
@@ -43,6 +44,7 @@ export * from "./matter";
 export * from "./document";
 export * from "./billing";
 export * from "./misc";
+export * from "./calendar";
 
 /**
  * Pathfunktion för en entitet. Andra argumentet är raden själv — vissa
@@ -184,6 +186,20 @@ export const ENTITY_REGISTRY: Record<string, EntityEntry> = {
     gitPrefix: "conflict-checks",
     sourceKey: "conflictChecks",
   },
+  calendarEvent: {
+    schema: calendarEventSchema,
+    // Flat path; userId-fältet i raden räcker för per-user-filtrering
+    // (samma mönster som time-entries, expenses).
+    gitPath: p((id) => `calendar/${id}.json`),
+    gitPrefix: "calendar",
+    sourceKey: "calendarEvents",
+  },
+  task: {
+    schema: taskSchema,
+    gitPath: p((id) => `tasks/${id}.json`),
+    gitPrefix: "tasks",
+    sourceKey: "tasks",
+  },
 };
 
 /** Union av alla giltiga entity-namn (strängliteraler). */
@@ -191,7 +207,8 @@ export type EntityName =
   | "organization" | "office" | "user" | "contact" | "matter" | "matterContact"
   | "document" | "documentFolder" | "documentAnalysisSuggestion" | "matterEventSuggestion"
   | "timeEntry" | "expense" | "invoice" | "payment" | "paymentPlan"
-  | "paymentPlanReminder" | "accontoDeduction" | "documentTemplate" | "conflictCheck";
+  | "paymentPlanReminder" | "accontoDeduction" | "documentTemplate" | "conflictCheck"
+  | "calendarEvent" | "task";
 
 /** Lista alla entity-namn (för iteration). */
 export const ENTITY_NAMES = Object.keys(ENTITY_REGISTRY) as EntityName[];

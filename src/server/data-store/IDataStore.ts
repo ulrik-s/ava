@@ -18,6 +18,7 @@ import type {
   DocumentTemplate, DocumentAnalysisSuggestion, MatterEventSuggestion,
   Invoice, TimeEntry, Expense, User, Organization, Office, ConflictCheck,
   Payment, PaymentPlan, AccontoDeduction,
+  CalendarEvent, Task,
 } from "@/shared/schemas";
 
 // ─── Event-log ────────────────────────────────────────────────────────
@@ -106,6 +107,8 @@ export type ConflictCheckDelegate = Delegate;
 export type PaymentDelegate = Delegate;
 export type PaymentPlanDelegate = Delegate;
 export type AccontoDeductionDelegate = Delegate;
+export type CalendarEventDelegate = Delegate;
+export type TaskDelegate = Delegate;
 
 // Opt-in: enskilda callers som vill ha striktare row-typ kan importera
 // dessa istället. T.ex. `const matters = ctx.dataStore.matters as MattersStrict`.
@@ -128,6 +131,8 @@ export type ConflictChecksStrict = Delegate<ConflictCheck>;
 export type PaymentsStrict = Delegate<Payment>;
 export type PaymentPlansStrict = Delegate<PaymentPlan>;
 export type AccontoDeductionsStrict = Delegate<AccontoDeduction>;
+export type CalendarEventsStrict = Delegate<CalendarEvent>;
+export type TasksStrict = Delegate<Task>;
 
 // ─── Transaktionsvy ───────────────────────────────────────────────────
 //
@@ -154,6 +159,8 @@ export interface DataStoreTx {
   payments: PaymentDelegate;
   paymentPlans: PaymentPlanDelegate;
   accontoDeductions: AccontoDeductionDelegate;
+  calendarEvents: CalendarEventDelegate;
+  tasks: TaskDelegate;
 }
 
 // ─── Aggregat ─────────────────────────────────────────────────────────
@@ -181,6 +188,8 @@ export interface IDataStore {
   readonly organizations: OrganizationDelegate;
   readonly offices: OfficeDelegate;
   readonly conflictChecks: ConflictCheckDelegate;
+  readonly calendarEvents: CalendarEventDelegate;
+  readonly tasks: TaskDelegate;
 
   /**
    * Escape-hatch för komplexa frågor. Throwing-proxy i demo-store —

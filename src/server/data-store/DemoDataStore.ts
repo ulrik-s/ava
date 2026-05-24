@@ -43,6 +43,8 @@ import type {
   PaymentDelegate,
   PaymentPlanDelegate,
   AccontoDeductionDelegate,
+  CalendarEventDelegate,
+  TaskDelegate,
 } from "./IDataStore";
 import type { AvaEvent, EmitInput, EventFilter } from "../events/schema";
 
@@ -67,6 +69,8 @@ export interface DemoSource {
   paymentPlans?: readonly Record<string, unknown>[];
   paymentPlanReminders?: readonly Record<string, unknown>[];
   accontoDeductions?: readonly Record<string, unknown>[];
+  calendarEvents?: readonly Record<string, unknown>[];
+  tasks?: readonly Record<string, unknown>[];
 }
 
 export class DemoDataStore implements IDataStore {
@@ -88,6 +92,8 @@ export class DemoDataStore implements IDataStore {
   readonly payments: PaymentDelegate;
   readonly paymentPlans: PaymentPlanDelegate;
   readonly accontoDeductions: AccontoDeductionDelegate;
+  readonly calendarEvents: CalendarEventDelegate;
+  readonly tasks: TaskDelegate;
   readonly events: IEventLog;
   readonly raw: IDataStore["raw"];
 
@@ -200,6 +206,12 @@ export class DemoDataStore implements IDataStore {
       }),
     }) as unknown as PaymentPlanDelegate;
     this.accontoDeductions = this.makeDelegate("accontoDeductions") as unknown as AccontoDeductionDelegate;
+    this.calendarEvents = this.makeDelegate("calendarEvents", {
+      matter: this.rel("matters", "id", "matterId", "one"),
+    }) as unknown as CalendarEventDelegate;
+    this.tasks = this.makeDelegate("tasks", {
+      matter: this.rel("matters", "id", "matterId", "one"),
+    }) as unknown as TaskDelegate;
 
     this.events = new ReadOnlyEventLog();
     this.raw = makeThrowingProxy() as unknown as IDataStore["raw"];
@@ -302,6 +314,8 @@ export class DemoDataStore implements IDataStore {
       payments: "payment",
       paymentPlans: "paymentPlan",
       accontoDeductions: "accontoDeduction",
+      calendarEvents: "calendarEvent",
+      tasks: "task",
     };
     return map[key as string] ?? String(key);
   }
@@ -367,6 +381,8 @@ export class DemoDataStore implements IDataStore {
       payments: this.payments,
       paymentPlans: this.paymentPlans,
       accontoDeductions: this.accontoDeductions,
+      calendarEvents: this.calendarEvents,
+      tasks: this.tasks,
     };
   }
 

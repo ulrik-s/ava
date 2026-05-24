@@ -8,18 +8,27 @@ import { describe, it, expect } from "vitest";
 import {
   ENTITY_REGISTRY,
   ENTITY_NAMES,
+  calendarEventSchema,
   contactSchema,
   invoiceSchema,
   matterSchema,
   organizationSchema,
   paymentSchema,
   paymentPlanSchema,
+  taskSchema,
   userSchema,
 } from "@/shared/schemas";
 
 describe("ENTITY_REGISTRY", () => {
-  it("har minst 19 entiteter", () => {
-    expect(ENTITY_NAMES.length).toBeGreaterThanOrEqual(19);
+  it("har minst 21 entiteter (inkl. calendarEvent + task)", () => {
+    expect(ENTITY_NAMES.length).toBeGreaterThanOrEqual(21);
+    expect(ENTITY_NAMES).toContain("calendarEvent");
+    expect(ENTITY_NAMES).toContain("task");
+  });
+
+  it("calendar + task: gitPath flat (inte per-user-mapp)", () => {
+    expect(ENTITY_REGISTRY.calendarEvent.gitPath("e-1", { userId: "u-1" })).toBe("calendar/e-1.json");
+    expect(ENTITY_REGISTRY.task.gitPath("t-1", { userId: "u-1" })).toBe("tasks/t-1.json");
   });
 
   it("varje entry har schema + gitPath + gitPrefix + sourceKey", () => {
@@ -126,6 +135,40 @@ describe("schemas — minimal valid input", () => {
     });
     expect(a.invoiceDate).toBeInstanceOf(Date);
     expect(b.invoiceDate).toBeInstanceOf(Date);
+  });
+
+  it("calendarEventSchema defaultar kind=appointment + visibility=normal + mirrorToOutlook=false", () => {
+    const now = "2026-05-24T10:00:00Z";
+    const e = calendarEventSchema.parse({
+      id: "e-1", userId: "u-1", organizationId: "org-1",
+      title: "Möte med klient",
+      startAt: now,
+      createdAt: now, updatedAt: now,
+    });
+    expect(e.kind).toBe("appointment");
+    expect(e.visibility).toBe("normal");
+    expect(e.mirrorToOutlook).toBe(false);
+    expect(e.allDay).toBe(false);
+  });
+
+  it("calendarEventSchema kräver title min(1)", () => {
+    const now = "2026-05-24T10:00:00Z";
+    expect(() => calendarEventSchema.parse({
+      id: "e-1", userId: "u-1", organizationId: "org-1",
+      title: "",
+      startAt: now, createdAt: now, updatedAt: now,
+    })).toThrow();
+  });
+
+  it("taskSchema defaultar status=TODO + priority=MEDIUM", () => {
+    const now = "2026-05-24T10:00:00Z";
+    const t = taskSchema.parse({
+      id: "t-1", userId: "u-1", organizationId: "org-1",
+      title: "Ring klienten",
+      createdAt: now, updatedAt: now,
+    });
+    expect(t.status).toBe("TODO");
+    expect(t.priority).toBe("MEDIUM");
   });
 
   it("passthrough — okända fält behålls (för legacy-tolerance)", () => {
