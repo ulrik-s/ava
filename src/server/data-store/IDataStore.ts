@@ -1,26 +1,17 @@
 /**
- * `IDataStore` — abstraktionen som möjliggör att samma kodbas kör i två lägen:
+ * `IDataStore` — git-first datalager. Single implementation: `DemoDataStore`
+ * som håller en in-memory `DemoSource` + skriver tillbaka till FSA/git working
+ * copy via `onMutate`-callback.
  *
- *   - **Server-läget** (PostgreSQL): `PostgresStore` implementerar mot Prisma
- *   - **Local-first-läget** (SQLite + git): `LocalGitStore` (Fas 3) skriver
- *     samma Prisma-API men mot SQLite + projicerar JSON-filer i git working tree
+ * Tidigare hade vi även `PostgresStore` (server-mode med Prisma) och
+ * `LocalGitStore` (Tauri helper-mode med SQLite). Båda är borttagna —
+ * arkitekturen är nu rent local-first: browser läser/skriver JSON i git.
  *
- * Se `docs/architecture-future.md` §6 för fullständig design.
- *
- * Designval: vi exponerar Prisma's egna `Delegate`-typer direkt istället för
- * att handskriva 15 stycken `IMatterRepo`/`IContactRepo`-interfaces. Det ger:
- *
- *   - Type-safety identisk med direkt `prisma.matter.*`-användning
- *   - Inga "vilka metoder ska repon ha?"-beslut att underhålla
- *   - LocalGitStore implementerar samma kontrakt — Prisma stödjer SQLite
- *     out-of-the-box, så en lokal Prisma-klient mot SQLite täcker oss.
- *
- * Kostnaden: routrarna binds vid Prisma's typer. Eftersom Prisma ÄR vårt ORM
- * (även i local-first-läget) är detta inte en läckande abstraktion utan ett
- * dokumenterat val.
+ * Delegate-typerna mimikrerar Prisma's API-yta (findUnique, findMany,
+ * create, update, ...) eftersom det är formen vi har på alla routrar idag.
+ * Tighten i framtiden mot Zod-inferade row-typer per delegate.
  */
 
-import type { prisma } from "@/server/db";
 import type { AvaEvent, EmitInput, EventFilter } from "../events/schema";
 
 // ─── Event-log ────────────────────────────────────────────────────────
@@ -32,7 +23,7 @@ export interface IEventLog {
   onNewEvent(handler: (event: AvaEvent) => void | Promise<void>): () => void;
 }
 
-// ─── Claim-store (bara aktiv i local-first-läget) ─────────────────────
+// ─── Claim-store (oanvänd i ren git-modell, kvar för framtida ev. hjälpprocess) ───
 
 export interface IClaimStore {
   tryClaim(claimId: string, opts: ClaimOpts): Promise<boolean>;
@@ -47,36 +38,61 @@ export interface ClaimOpts {
 
 // ─── Domän-delegates ──────────────────────────────────────────────────
 //
-// Genvägstyper — Prisma's egen `XDelegate<>` är komplex generic. Vi
-// extrahera typen direkt från `prisma`-instansen.
+// Tunn generisk delegate som täcker den Prisma-stil-yta som routrarna
+// använder. `Row` är raden i tabellen; vi använder en lös shape här eftersom
+// callers redan har egna typade gardar. Tighten i framtiden:
+//   type MatterRow = z.infer<typeof matterSchema>
+//   export type MatterDelegate = Delegate<MatterRow>
 
-type PrismaInstance = typeof prisma;
+// `any` är medvetet här under transitionsperioden — Prisma:s genererade
+// delegate-typer hade exakta `where`/`select`/`include`-typer som vi inte
+// kan återskapa utan en massiv router-omskrivning. Routrarna har egna
+// `as`-casts där de behöver striktare typer; för övriga callers funkar
+// `any` likt det gjorde med Prisma's flytande generics.
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
-export type MatterDelegate = PrismaInstance["matter"];
-export type ContactDelegate = PrismaInstance["contact"];
-export type MatterContactDelegate = PrismaInstance["matterContact"];
-export type DocumentDelegate = PrismaInstance["document"];
-export type DocumentFolderDelegate = PrismaInstance["documentFolder"];
-export type DocumentTemplateDelegate = PrismaInstance["documentTemplate"];
-export type DocumentAnalysisSuggestionDelegate = PrismaInstance["documentAnalysisSuggestion"];
-export type MatterEventSuggestionDelegate = PrismaInstance["matterEventSuggestion"];
-export type InvoiceDelegate = PrismaInstance["invoice"];
-export type TimeEntryDelegate = PrismaInstance["timeEntry"];
-export type ExpenseDelegate = PrismaInstance["expense"];
-export type UserDelegate = PrismaInstance["user"];
-export type OrganizationDelegate = PrismaInstance["organization"];
-export type OfficeDelegate = PrismaInstance["office"];
-export type ConflictCheckDelegate = PrismaInstance["conflictCheck"];
-export type PaymentDelegate = PrismaInstance["payment"];
-export type PaymentPlanDelegate = PrismaInstance["paymentPlan"];
-export type AccontoDeductionDelegate = PrismaInstance["invoiceAccontoDeduction"];
+export interface Delegate<Row = any> {
+  findUnique(args: any): Promise<Row | null>;
+  findUniqueOrThrow(args: any): Promise<Row>;
+  findFirst(args?: any): Promise<Row | null>;
+  findFirstOrThrow(args?: any): Promise<Row>;
+  findMany(args?: any): Promise<Row[]>;
+  create(args: any): Promise<Row>;
+  update(args: any): Promise<Row>;
+  updateMany(args: any): Promise<{ count: number }>;
+  upsert(args: any): Promise<Row>;
+  delete(args: any): Promise<Row>;
+  deleteMany(args?: any): Promise<{ count: number }>;
+  count(args?: any): Promise<number>;
+  aggregate(args: any): Promise<any>;
+  $queryRaw?: (...args: any[]) => Promise<any>;
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
+export type MatterDelegate = Delegate;
+export type ContactDelegate = Delegate;
+export type MatterContactDelegate = Delegate;
+export type DocumentDelegate = Delegate;
+export type DocumentFolderDelegate = Delegate;
+export type DocumentTemplateDelegate = Delegate;
+export type DocumentAnalysisSuggestionDelegate = Delegate;
+export type MatterEventSuggestionDelegate = Delegate;
+export type InvoiceDelegate = Delegate;
+export type TimeEntryDelegate = Delegate;
+export type ExpenseDelegate = Delegate;
+export type UserDelegate = Delegate;
+export type OrganizationDelegate = Delegate;
+export type OfficeDelegate = Delegate;
+export type ConflictCheckDelegate = Delegate;
+export type PaymentDelegate = Delegate;
+export type PaymentPlanDelegate = Delegate;
+export type AccontoDeductionDelegate = Delegate;
 
 // ─── Transaktionsvy ───────────────────────────────────────────────────
 //
 // Det `tx`-objekt en `transaction(fn)`-callback får. Speglar store:ns
 // delegates (plural-namn) så routerkod ser samma API inuti som utanför
-// transaktionen. I server-läget mappas detta mot Prisma's interaktiva
-// transaktion; i local-first/demo mot en in-memory snapshot/rollback.
+// transaktionen. I demo-store: snapshot/rollback + buffered write-back.
 
 export interface DataStoreTx {
   matters: MatterDelegate;
@@ -102,16 +118,13 @@ export interface DataStoreTx {
 // ─── Aggregat ─────────────────────────────────────────────────────────
 
 export interface IDataStore {
-  /** Event-loggen. Alltid tillgänglig i båda lägen. */
+  /** Event-loggen. */
   events: IEventLog;
 
-  /**
-   * Claim-store. Bara satt i local-first-läget; i server-läget används
-   * inga claims (en single rule-executor mekar inte mot sig själv).
-   */
+  /** Claim-store. Oanvänd just nu (var aktiv i Tauri-helper-läget). */
   claims?: IClaimStore;
 
-  // ─── Domän-repos (Prisma-delegates) ─────────────────────────────
+  // ─── Domän-repos ────────────────────────────────────────────────
   readonly matters: MatterDelegate;
   readonly matterContacts: MatterContactDelegate;
   readonly contacts: ContactDelegate;
@@ -129,26 +142,18 @@ export interface IDataStore {
   readonly conflictChecks: ConflictCheckDelegate;
 
   /**
-   * Escape-hatch för komplexa frågor som inte ryms i delegates:
-   *   - $transaction
-   *   - $queryRaw / $executeRaw
-   *   - Aggregations över flera tabeller
-   *
-   * Markerad som "intern" — undvik i ny kod, men det är ofta enklare än
-   * att lägga till en ny method på interfacet för en engångs-aggregation.
-   * Vid Fas 3 migreras varje raw-användning ett-i-taget om de inte fungerar
-   * i SQLite-läget.
+   * Escape-hatch för komplexa frågor. Throwing-proxy i demo-store —
+   * existerande callers (t.ex. fuzzy-name-search i conflict.ts) får
+   * "ej implementerat"-fel om de anropas i ren git-modell. Refaktorera
+   * dem ett-i-taget till in-memory-implementations.
    */
-  readonly raw: PrismaInstance;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  readonly raw: any;
 
   /**
-   * Kör `fn` i en transaktion. Allt-eller-inget: kastar `fn` så committas
-   * inga ändringar (och i local-first-läget: inga write-back-filer skrivs).
-   *
-   * Ersätter `raw.$transaction` i routerkod — så routrarna inte behöver
-   * känna till om de kör mot Prisma (server) eller in-memory + git
-   * (local-first). I server-läget delegeras till Prisma's interaktiva
-   * transaktion; i demo/local-first till en snapshot/rollback-impl.
+   * Kör `fn` i en transaktion. In-memory snapshot/rollback — alla
+   * write-back-event buffras tills `fn` returnerar; vid throw rullas
+   * source-array:erna tillbaka och inga JSON-filer skrivs.
    */
   transaction<T>(fn: (tx: DataStoreTx) => Promise<T>): Promise<T>;
 }

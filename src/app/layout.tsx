@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/client/components/providers";
-import { AuthGuard } from "@/client/components/auth-guard";
 import { PwaRegister } from "@/client/components/pwa-register";
 
 const geistSans = Geist({
@@ -50,11 +49,7 @@ export default function RootLayout({
     >
       <body className="h-full bg-gray-50">
         <PwaRegister />
-        <Providers>
-          <AuthGuard>
-            {children}
-          </AuthGuard>
-        </Providers>
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

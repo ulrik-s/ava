@@ -1,5 +1,5 @@
 /**
- * Test för Sidebar — navigation, aktiv markering, mobile drawer, signOut.
+ * Test för Sidebar — navigation, aktiv markering, mobile drawer, lokal sign-out.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -12,14 +12,18 @@ vi.mock("next/navigation", () => ({
   usePathname: () => pathnameMock(),
 }));
 
-const signOutMock = vi.fn();
-vi.mock("next-auth/react", () => ({
-  signOut: (opts: unknown) => signOutMock(opts),
-}));
-
+// window.location.reload behövs av signOutLocally i sidebar — JSDOM throw:ar
+// inte trots stub. Vi mockar reload för att verifiera anropet utan att faktiskt
+// navigera.
+const reloadMock = vi.fn();
 beforeEach(() => {
   vi.clearAllMocks();
   pathnameMock.mockReturnValue("/");
+  Object.defineProperty(window, "location", {
+    value: { ...window.location, reload: reloadMock },
+    configurable: true,
+  });
+  localStorage.clear();
 });
 
 describe("Sidebar", () => {
@@ -54,11 +58,14 @@ describe("Sidebar", () => {
     expect(screen.getAllByText("Anna Karlsson").length).toBeGreaterThan(0);
   });
 
-  it("anropar signOut med login-callback", () => {
+  it("rensar token i localStorage och reload:ar vid Logga ut", () => {
+    localStorage.setItem("ava.firma", JSON.stringify({ tier: "github", token: "ghp_x" }));
     render(<Sidebar />);
     const logout = screen.getAllByText("Logga ut")[0];
     fireEvent.click(logout);
-    expect(signOutMock).toHaveBeenCalledWith({ callbackUrl: "/login" });
+    const stored = JSON.parse(localStorage.getItem("ava.firma") ?? "{}");
+    expect(stored.token).toBeUndefined();
+    expect(reloadMock).toHaveBeenCalled();
   });
 
   it("öppnar mobil-meny vid klick på hamburgaren", () => {

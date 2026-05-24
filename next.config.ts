@@ -46,9 +46,6 @@ const NODE_BUILTINS_AND_SERVER_DEPS = [
   "child_process", "node:child_process",
   "os", "node:os",
   "zlib", "node:zlib",
-  "nodemailer",
-  "pg", "pg-connection-string", "pgpass", "pg-types",
-  "@prisma/adapter-pg",
   "isomorphic-git/http/node",
 ];
 for (const m of NODE_BUILTINS_AND_SERVER_DEPS) {

@@ -63,8 +63,11 @@ export default function InvoiceDetailClient({ id: paramId }: { id: string }) {
   if (invoice.error || !invoice.data) return <p className="p-6 text-sm text-red-600">Kunde inte ladda fakturan.</p>;
   const inv = invoice.data;
 
-  const paidSum = inv.payments.reduce((s, p) => s + p.amount, 0);
-  const accontoDeductionTotal = inv.accontoDeductions.reduce((s, d) => s + d.accontoInvoice.amount, 0);
+  const paidSum = inv.payments.reduce((s: number, p: { amount: number }) => s + p.amount, 0);
+  const accontoDeductionTotal = inv.accontoDeductions.reduce(
+    (s: number, d: { accontoInvoice: { amount: number } }) => s + d.accontoInvoice.amount,
+    0,
+  );
   const netAmount = inv.amount - accontoDeductionTotal;
 
   return (
@@ -242,7 +245,7 @@ function PaymentPlanCard({
         <div className="mt-4 pt-4 border-t">
           <p className="text-xs font-medium mb-2">Utskick</p>
           <ul className="text-xs text-gray-600 space-y-1">
-            {plan.reminders.map((r) => (
+            {plan.reminders.map((r: { id: string; type: string; dueMonth: string; sentAt: string | Date }) => (
               <li key={r.id}>
                 {r.type === "DUE" ? "📅" : "⚠️"} {r.dueMonth} — {r.type === "DUE" ? "Månadspåminnelse" : "Förseningspåminnelse"} skickat {new Date(r.sentAt).toLocaleString("sv-SE")}
               </li>
@@ -260,7 +263,7 @@ function AccontoDeductions({ deductions }: { deductions: Inv["accontoDeductions"
       <h2 className="font-semibold mb-3">Accontoavdrag</h2>
       <table className="min-w-full text-sm">
         <tbody className="divide-y divide-gray-100">
-          {deductions.map((d) => (
+          {deductions.map((d: Inv["accontoDeductions"][number]) => (
             <tr key={d.id}>
               <td className="py-2">
                 <Link href={`/invoices/${d.accontoInvoice.id}`} className="text-blue-600 hover:underline">

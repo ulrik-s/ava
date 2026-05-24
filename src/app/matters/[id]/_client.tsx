@@ -27,7 +27,7 @@ export default function MatterDetailClient({ id: paramId }: { id: string }) {
   if (!matter.data) return null;
 
   const m = matter.data;
-  const klient = m.contacts.filter((c) => c.role === "KLIENT");
+  const klient = m.contacts.filter((c: { role: string }) => c.role === "KLIENT");
 
   return (
     <div>

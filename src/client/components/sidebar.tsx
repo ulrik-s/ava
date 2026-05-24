@@ -3,8 +3,20 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { signOut } from "next-auth/react";
 import { cn } from "@/client/lib/utils";
+
+/**
+ * Pure git-modell — ingen NextAuth-session. "Logga ut" rensar
+ * firma-config (token), browsern reload:ar och visar inställnings-overlay:n.
+ */
+function signOutLocally(): void {
+  try {
+    const cfg = JSON.parse(localStorage.getItem("ava.firma") ?? "{}") as Record<string, unknown>;
+    delete cfg.token;
+    localStorage.setItem("ava.firma", JSON.stringify(cfg));
+  } catch { /* ignorera */ }
+  window.location.reload();
+}
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: "📊" },
@@ -96,7 +108,7 @@ export function Sidebar({ userName }: SidebarProps) {
                 <p className="text-sm font-medium text-gray-900 mb-2 truncate">{userName}</p>
               )}
               <button
-                onClick={() => signOut({ callbackUrl: "/login" })}
+                onClick={() => signOutLocally()}
                 className="text-sm text-gray-500 hover:text-gray-700"
               >
                 Logga ut
@@ -141,7 +153,7 @@ export function Sidebar({ userName }: SidebarProps) {
             <p className="text-sm font-medium text-gray-900 mb-1 truncate">{userName}</p>
           )}
           <button
-            onClick={() => signOut({ callbackUrl: "/login" })}
+            onClick={() => signOutLocally()}
             className="text-sm text-gray-500 hover:text-gray-700"
           >
             Logga ut

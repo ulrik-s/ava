@@ -1,6 +1,15 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../trpc";
-import { hash } from "bcryptjs";
+// bcryptjs är borttagen — pure-git-modellen har inte server-side
+// password-hashing. Om/när lokal HTTP Basic Auth införs på Linux-boxen
+// hanteras htpasswd av nginx (bcrypt-strängar genereras med `htpasswd -B`,
+// inte i appen). Tills dess: vi sparar bara klartext-flaggan att en
+// password finns; verifiering sker utanför appen.
+async function hashPassword(password: string): Promise<string> {
+  // Markör-prefix så det är uppenbart att detta INTE är ett färdigt
+  // bcrypt-hash. Riktig hashing måste göras innan vi går prod.
+  return `placeholder:${password.length}-chars`;
+}
 import { TRPCError } from "@trpc/server";
 
 // Smal select för listor — håller utgående typ stabil för konsumenter
@@ -129,7 +138,7 @@ export const userRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       assertAdmin(ctx);
-      const passwordHash = input.password ? await hash(input.password, 12) : null;
+      const passwordHash = input.password ? await hashPassword(input.password) : null;
       return ctx.dataStore.users.create({
         data: {
           email: input.email,
@@ -173,7 +182,7 @@ export const userRouter = router({
       }
       const { id, password, ...data } = input;
       const updateData: Record<string, unknown> = { ...data };
-      if (password) updateData.passwordHash = await hash(password, 12);
+      if (password) updateData.passwordHash = await hashPassword(password);
       return ctx.dataStore.users.update({
         where: { id, organizationId: ctx.user.organizationId },
         data: updateData,

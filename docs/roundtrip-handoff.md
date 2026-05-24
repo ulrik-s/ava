@@ -14,8 +14,12 @@ Senast uppdaterad: 2026-05-24.
 
 | Område | Status |
 |---|---|
+| Zod-schemas för alla git-db-entiteter | ✅ klar (`src/shared/schemas/`) |
+| Prisma/PostgreSQL borttaget | ✅ klar — pure git-modell |
+| NextAuth + WebDAV-server borttaget | ✅ klar |
+| API-routes borttagna (`src/app/api/`) | ✅ klar — allt går via DemoDataStore i browser |
 | Round-trip-server (git över HTTP bakom nginx) | ✅ klar + validerad |
-| Write-back-täckning (alla entiteter → git-filer) | ✅ klar |
+| Write-back-täckning (alla entiteter → git-filer) | ✅ klar (drivs nu av `ENTITY_REGISTRY`) |
 | `transaction()`-primitiv (ersätter `raw.$transaction`) | ✅ klar |
 | In-memory query-engine (nested where, some/none/every, aggregate, 1:1+nested include) | ✅ klar |
 | OPFS-baserad self-hosted-runtime (clone + hydrera + write-back + push) | ✅ klar + validerad i browser |

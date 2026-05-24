@@ -12,9 +12,21 @@
  */
 
 import { labelForMatterRole } from "./labels";
-import type { TemplateContext } from "./template-context";
 
-export type RecipientContactData = TemplateContext["contacts"][number];
+// template-context modulen är borttagen (Prisma-dependent). En kontakts
+// data i template-rendering är en sub-set av Contact-schemat.
+export interface RecipientContactData {
+  id?: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  address: string | null;
+  personalNumber: string | null;
+  orgNumber: string | null;
+  role: string;
+  roleLabel: string;
+  notes: string | null;
+}
 
 export interface ResolvedRecipient {
   contactId: string;

@@ -336,7 +336,7 @@ export const invoiceRouter = router({
         });
 
         const paidSum =
-          inv.payments.reduce((s, p) => s + p.amount, 0) + input.amount;
+          inv.payments.reduce((s: number, p: { amount: number }) => s + p.amount, 0) + input.amount;
 
         if (isPaymentPlanSettled(inv.amount, paidSum)) {
           await tx.invoices.update({
