@@ -22,7 +22,7 @@ Senast uppdaterad: 2026-05-24.
 | Dynamisk routing för nya id:n i static export | ✅ klar |
 | e2e round-trip (`yarn round-trip`) | ✅ **14 tester gröna** (kontakt, ärende, fakturering, utlägg, plan, kredit, avsluta+återöppna ärende, jävskontroll, settings, kontor, user CRUD, dokumentuppladdning) |
 | Task #4: fler UI-flöden i e2e | ✅ klar (se §8) |
-| Coverage → 95% | ⬜ Task #5 |
+| Coverage → 95% | 🟨 Task #5 delvis — Stmts 69.9% / Lines 72.5% (var ~60%), trösklar höjda |
 | Cyklomatisk komplexitet → 8 (error) | 🟨 Task #6 delvis — rule satt till error@8, 6 worst-cases klara, 83 kvar med explicit TODO-disable |
 
 **Kör hela round-trip-loopen lokalt:**
@@ -337,7 +337,31 @@ Sidoeffekter under arbetet med Task #4:
   (2 fall) — koden hämtar `documents/text/*.txt` först men testet förväntar
   `documents/content/*.md`. INTE relaterat till detta arbete. Beslut: uppdatera
   testet (kod-intentet verkar medvetet) eller koden.
-- **Task #5:** coverage → 95% (`tooling/config/vitest.config.ts` thresholds ~58–62 nu).
+- **Task #5 (delvis):** coverage → 95%.
+  - Aktuell: **Stmts 69.9% / Br 63.8% / Func 70.3% / Lines 72.5%** (var ~58–64% innan).
+  - Trösklar i `tooling/config/vitest.config.ts` är nu 68/60/68/70 — strax under
+    nuvarande siffror så CI fångar regressioner.
+  - **Genomfört denna omgång:**
+    - Fixade 2 pre-existing failures i `document-content-cache.test.ts` (testet
+      reflekterade gammal single-source-logik, koden använder text/-källan först).
+    - Fixade fake-fsa-bug: `kind: "dir"` → `"directory"` (FSA-spec). Påverkade
+      walkFsa-tester som silently misskategoriserade dir-entries som filer.
+    - Nya tester (≈80 nya it()-block):
+      - `demo/static-params.ts` (8 tests)
+      - `github/sync-state.ts` (7)
+      - `github/fsa-walker.ts` (10)
+      - `github/api.ts` (23) — alla REST-wrappers
+      - `github/push.ts` (7) — full diff + tree + commit-flöde
+      - `github/pull.ts` (7) — diff + fetch + delete + sync-state-uppdatering
+      - `integrations/registry.ts` (5)
+      - `integrations/tauri-bridge.ts` (19)
+      - `fsa/handle-store.ts` (9) — exkl. IDB-paths (kräver full IDB-mock)
+    - Exkluderade `tooling/scripts/webdav-server.ts` från coverage-include
+      (tas via integration; unit skulle kräva omfattande Prisma+HTTP-mock).
+  - **Kvar att täcka för 95%:** fat React-komponenter (`firma-settings-panel`,
+    `fsa-folder-selector`, `keypair-manager`, `demo-bootstrap`, `profile/page`),
+    crypto-moduler (`ed25519-keypair`, `sign-commit`) — kräver Testing Library
+    + WebCrypto-mocks och är multi-session-arbete.
 - **Task #6 (delvis klar):** cyklomatisk komplexitet → 8 som **error**.
   - Rule:n är nu `complexity: ["error", { max: 8 }]` i `tooling/config/eslint.config.mjs`.
   - 6 worst non-UI funktioner refaktorerade: `runStep` (26→≤8),

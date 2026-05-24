@@ -53,18 +53,34 @@ describe("fetchPlainText", () => {
 });
 
 describe("preloadDocumentContents + getDocumentContent", () => {
-  it("fyller cache:n med text från text-dokument", async () => {
-    const fakeFetch = vi.fn(async (url: string | URL | Request) => ({
-      ok: true,
-      text: async () => `content of ${url.toString()}`,
-    } as Response));
+  it("fyller cache:n med text från text-dokument (fallback till content/ när text/ saknas)", async () => {
+    // Koden försöker FÖRST documents/text/<id>.txt (extraherad text); om den
+    // inte finns faller den tillbaka till documents/content/<id>.<ext>.
+    const fakeFetch = vi.fn(async (url: string | URL | Request) => {
+      const u = url.toString();
+      if (u.includes("/documents/text/")) return { ok: false } as Response; // ingen extraherad text ännu
+      return { ok: true, text: async () => `content of ${u}` } as Response;
+    });
     const docs = [
       { id: "d-1", storagePath: "documents/content/d-1.md" },
       { id: "d-2", storagePath: "documents/content/d-2.pdf" }, // ej text
     ];
     await preloadDocumentContents(docs, "https://example.com/repo", fakeFetch as unknown as typeof fetch);
     expect(getDocumentContent("d-1")).toContain("d-1.md");
-    expect(getDocumentContent("d-2")).toBe(""); // PDF skippas
+    expect(getDocumentContent("d-2")).toBe(""); // PDF skippas (saknar både text/ och plain-text-typ)
+  });
+
+  it("föredrar extraherad text från documents/text/ när den finns", async () => {
+    const fakeFetch = vi.fn(async (url: string | URL | Request) => ({
+      ok: true,
+      text: async () => `extracted from ${url.toString()}`,
+    } as Response));
+    await preloadDocumentContents(
+      [{ id: "d-1", storagePath: "documents/content/d-1.pdf", mimeType: "application/pdf" }],
+      "https://example.com/repo",
+      fakeFetch as unknown as typeof fetch,
+    );
+    expect(getDocumentContent("d-1")).toContain("/documents/text/d-1.txt");
   });
 
   it("skipa redan-cached dokument", async () => {
@@ -86,14 +102,22 @@ describe("preloadDocumentContents + getDocumentContent", () => {
   it("byggs URL korrekt utan dubbla slashes", async () => {
     const seenUrls: string[] = [];
     const fakeFetch = vi.fn(async (url: string | URL | Request) => {
-      seenUrls.push(url.toString());
+      const u = url.toString();
+      seenUrls.push(u);
+      // text/ branch saknas → faller till content/
+      if (u.includes("/documents/text/")) return { ok: false } as Response;
       return { ok: true, text: async () => "x" } as Response;
     });
     await preloadDocumentContents(
       [{ id: "d-1", storagePath: "documents/content/d-1.md" }],
-      "https://example.com/repo/",
+      "https://example.com/repo/",   // trailing slash → ska normaliseras
       fakeFetch as unknown as typeof fetch,
     );
-    expect(seenUrls[0]).toBe("https://example.com/repo/documents/content/d-1.md");
+    // Ingen dubbel slash trots trailing slash i baseUrl
+    expect(seenUrls.every((u) => !u.includes("repo//"))).toBe(true);
+    // text/-källan slås upp först
+    expect(seenUrls[0]).toBe("https://example.com/repo/documents/text/d-1.txt");
+    // content/-fallback följer
+    expect(seenUrls).toContain("https://example.com/repo/documents/content/d-1.md");
   });
 });

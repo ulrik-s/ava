@@ -34,7 +34,8 @@ export default defineConfig({
         "src/server/local-first/**",
         "src/client/components/**",
         "src/app/**/page.tsx",
-        "tooling/scripts/webdav-server.ts",
+        // webdav-server.ts exkluderad — testas via integration (test/scripts/),
+        // unit-coverage skulle kräva omfattande PrismaClient + HTTP-mockning.
       ],
       exclude: [
         "**/*.test.ts",
@@ -51,21 +52,22 @@ export default defineConfig({
       // Historik (för att vi inte ska sjunka i smyg):
       //   - 801 tester:  Stmts 83.56%  Br 78.35%  Func 82.72%  Lines 85.47%
       //   - 1454 tester: Stmts 60.17%  Br 54.01%  Func 62.64%  Lines 62.46%
+      //   - 1664 tester: Stmts 69.90%  Br 63.76%  Func 70.32%  Lines 72.47%
+      //                  (Task #5 omgång 1: webdav-server exkluderad +
+      //                   tester för static-params, sync-state, fsa-walker,
+      //                   github/api, push, pull, integrations/registry,
+      //                   handle-store, tauri-bridge)
       //
-      // 2026-05-22: stor tillförsel av UI- + FSA-beroende kod (jobs,
-      // sync, keypair, integrations, github-rest, profile, users) som
-      // kräver Playwright/FSA-mocks vi inte byggt än. Sänker tröskeln
-      // till ny realistisk baseline. Höj ÅTERIGEN när vi byggt FSA-
-      // testharness — då ska coverage gå upp, inte ner.
-      //
-      // Mål långsiktigt: 80%+ överallt. Just nu fokuserar vi på kvalitet
-      // i pure-logic-modulerna (sync, jobs, github-rest, keys) som har
-      // egna unit-tester.
+      // Mål Task #5: 95% överallt. Kvarstående gap = i huvudsak fat React-
+      // komponenter (firma-settings-panel, fsa-folder-selector, keypair-
+      // manager, demo-bootstrap, profile/page) + crypto-modules (ed25519,
+      // sign-commit) som kräver mer test-infrastruktur (Testing Library
+      // setup + WebCrypto-mocks). Multi-session-arbete.
       thresholds: {
-        statements: 58,
-        lines: 60,
-        functions: 60,
-        branches: 52,
+        statements: 68,
+        lines: 70,
+        functions: 68,
+        branches: 60,
       },
     },
     projects: [

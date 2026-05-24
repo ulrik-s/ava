@@ -24,7 +24,8 @@ export interface FakeFsa {
 
 function makeFileMock(node: Extract<FsNode, { kind: "file" }>, name: string): FileSystemFileHandle {
   return {
-    kind: "file",
+    // FSA-spec använder "file" / "directory" på handles — INTE fsNode-typen
+    kind: "file" as const,
     name,
     async getFile() {
       const part = node.bytes as unknown as BlobPart;
@@ -67,7 +68,8 @@ function makeFileMock(node: Extract<FsNode, { kind: "file" }>, name: string): Fi
 
 function makeDirMock(node: Extract<FsNode, { kind: "dir" }>, name: string): FileSystemDirectoryHandle {
   const dir = {
-    kind: "dir",
+    // FSA-spec: handles har kind "directory" (inte "dir" som fsNode-typen).
+    kind: "directory" as const,
     name,
     async getFileHandle(n: string, opts?: { create?: boolean }) {
       let child = node.children.get(n);
