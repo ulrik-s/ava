@@ -8,7 +8,7 @@ import { router, protectedProcedure } from "../trpc";
  *
  * Enheter (samma som resten av kodbasen):
  *   - `TimeEntry.minutes`    — heltal minuter
- *   - `TimeEntry.hourlyRate` — kronor/timme (NOT öre)
+ *   - `TimeEntry.hourlyRate` — öre/timme (seed-data: 250_000 = 2 500 kr/h)
  *   - `Expense.amount`       — öre
  *   - `Invoice.amount`       — öre
  *
@@ -193,8 +193,9 @@ export const reportsRouter = router({
         agg.totalMinutes += te.minutes;
         if (te.billable) {
           agg.billableMinutes += te.minutes;
-          // kronor/h → öre
-          agg.workValueOre += Math.round((te.minutes / 60) * te.hourlyRate * 100);
+          // hourlyRate ÄR REDAN ÖRE (öre/h) → (min/60) × öre/h = öre.
+          // Tidigare hade vi en extra * 100 som gjorde värdet 100x för stort.
+          agg.workValueOre += Math.round((te.minutes / 60) * te.hourlyRate);
         }
       }
       for (const ex of expenses) {
@@ -218,7 +219,7 @@ export const reportsRouter = router({
         cell.totalMinutes += te.minutes;
         if (te.billable) {
           cell.billableMinutes += te.minutes;
-          cell.workValueOre += Math.round((te.minutes / 60) * te.hourlyRate * 100);
+          cell.workValueOre += Math.round((te.minutes / 60) * te.hourlyRate);
         }
       }
 
@@ -267,7 +268,7 @@ export const reportsRouter = router({
       let unbilledTotal = 0;
       for (const te of timeEntries) {
         if (!te.billable || te.invoiceId) continue;
-        const ore = Math.round((te.minutes / 60) * te.hourlyRate * 100);
+        const ore = Math.round((te.minutes / 60) * te.hourlyRate);
         const row = ensureUnbilled(te.matter);
         row.timeOre += ore;
         row.total += ore;
