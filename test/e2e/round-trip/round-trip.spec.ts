@@ -18,16 +18,20 @@ import { freshClone, cleanup, readAll, resetRepo } from "./_repo-helpers";
 const ORG = "e2e-firma-ab";
 
 async function configureSelfHosted(page: Page): Promise<void> {
-  await page.addInitScript((org) => {
+  // PAT genereras av docker-web:s entrypoint vid första uppstart och
+  // läses från docker-logs:n. Exportera AVA_RT_GIT_PAT innan testet.
+  // Behövs eftersom nginx /git/ har auth_basic på.
+  const pat = process.env.AVA_RT_GIT_PAT ?? "";
+  await page.addInitScript(({ org, token }) => {
     localStorage.setItem("ava.firma", JSON.stringify({
       tier: "self-hosted",
       repo: "http://localhost:8080/git/firma.git",
-      token: "",
+      token,
+      authorEmail: token ? "admin@ava.local" : "e2e@ava.local",
       organizationId: org,
       authorName: "E2E Test",
-      authorEmail: "e2e@ava.local",
     }));
-  }, ORG);
+  }, { org: ORG, token: pat });
 }
 
 /** Läs alla rader under en under-mapp i bare-repo:t (fristående clone). */
@@ -485,6 +489,52 @@ test("dokument: ladda upp fil på matter → documents/<id>.json + content-fil i
       cleanup(dir);
     }
   }, POLL).toBe(true);
+});
+
+test("dokumentsök: ladda upp PDF → extract-text indexerar → sök hittar innehåll", async ({ page }) => {
+  const stamp = Date.now();
+  const uniqueWord = `PdfNeedle${stamp}`;
+  const fileName = `notering-${stamp}.pdf`;
+
+  await configureSelfHosted(page);
+  await createContact(page, `Klient ${stamp}`);
+  await createMatterAndOpen(page, `Ärende ${stamp}`, `Klient ${stamp}`);
+
+  // Generera en minimal PDF som innehåller uniqueWord (i Node-context via pdf-lib).
+  // pdf-lib är redan en runtime-dep i seed-flödet — vi återanvänder den.
+  const { PDFDocument, StandardFonts } = await import("pdf-lib");
+  const pdf = await PDFDocument.create();
+  const font = await pdf.embedFont(StandardFonts.Helvetica);
+  const p = pdf.addPage([595, 842]);
+  p.drawText(uniqueWord, { x: 50, y: 750, size: 18, font });
+  p.drawText("Lorem ipsum sökbart innehåll i ärendedokumentet.", { x: 50, y: 720, size: 11, font });
+  const pdfBytes = await pdf.save();
+
+  // Ladda upp via det dolda fil-input:et i DocumentBrowser
+  const fileInput = page.locator('input[type="file"]').first();
+  await fileInput.setInputFiles({
+    name: fileName,
+    mimeType: "application/pdf",
+    buffer: Buffer.from(pdfBytes),
+  });
+
+  // Optimistisk row visas, sen riktig row när tRPC-mutationen klar
+  await expect(page.getByText(fileName)).toBeVisible({ timeout: 20_000 });
+
+  // Vänta tills extract-text-jobbet har körts klart. Vi kan inte inspektera
+  // job-queue direkt så vi pollar tills sökning hittar innehållet.
+  await page.goto("/ava/search/");
+  await expect(page.getByText("Laddar data…")).toHaveCount(0, { timeout: 30_000 });
+
+  await page.locator('input[type="search"], input[placeholder*="Sök"]').first().fill(uniqueWord);
+
+  // Vänta upp till 30s på att extract-text körs klart och search-index uppdateras.
+  // Vi söker efter uniqueWord och förväntar fileName i resultatet.
+  await expect.poll(async () => {
+    // Re-trigger search om input behöver det
+    const links = await page.getByRole("link", { name: new RegExp(fileName, "i") }).count();
+    return links;
+  }, { timeout: 30_000, intervals: [1000, 1500, 2000] }).toBeGreaterThan(0);
 });
 
 test("kalender: skapa event i UI:t → calendar/<id>.json i git-db:n", async ({ page }) => {

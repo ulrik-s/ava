@@ -10,10 +10,23 @@ import path from "node:path";
 
 export const GIT_URL = process.env.AVA_RT_GIT_URL ?? "http://localhost:8080/git/firma.git";
 
+/**
+ * Bygger auth-prefix:en `admin:PAT@` från `AVA_RT_GIT_PAT` (om satt).
+ * Web-containern bootstrap:ar en slumpad admin-PAT vid första uppstart
+ * och printar den i loggen. Hämta den med:
+ *   docker logs ava-web-1 2>&1 | grep "Admin-token"
+ * och exportera AVA_RT_GIT_PAT=<pat> innan yarn round-trip.
+ */
+function urlWithAuth(url: string): string {
+  const pat = process.env.AVA_RT_GIT_PAT;
+  if (!pat) return url;
+  return url.replace(/^(https?:\/\/)/, `$1admin:${encodeURIComponent(pat)}@`);
+}
+
 /** Klona repo:t till en temp-mapp och returnera sökvägen. */
 export function freshClone(): string {
   const dir = mkdtempSync(path.join(os.tmpdir(), "ava-rt-"));
-  execFileSync("git", ["clone", "-q", GIT_URL, dir], { stdio: "pipe" });
+  execFileSync("git", ["clone", "-q", urlWithAuth(GIT_URL), dir], { stdio: "pipe" });
   return dir;
 }
 
@@ -53,6 +66,9 @@ export function resetRepo(): void {
     // försöker återställa till (bara .gitkeep) finns inget att committa, vilket
     // annars dödar processen med "nothing to commit".
     run("commit", "-q", "--allow-empty", "-m", "reset");
+    // Push måste också ha auth — annars 401 från nginx. Sätt remote-URL
+    // till auth-prefix:ad variant och push:a mot main.
+    run("remote", "set-url", "origin", urlWithAuth(GIT_URL));
     run("push", "-q", "--force", "origin", "HEAD:main");
   } finally {
     cleanup(dir);
