@@ -89,7 +89,7 @@ export default function TemplatesPage() {
                       {t.description || <span className="text-gray-300">–</span>}
                     </td>
                     <td className="px-4 py-3 text-gray-500 hidden md:table-cell">
-                      {t.createdBy.name}
+                      {t.createdBy?.name ?? "—"}
                     </td>
                     <td className="px-4 py-3 text-gray-400 hidden md:table-cell">
                       {new Date(t.updatedAt).toLocaleDateString("sv-SE")}

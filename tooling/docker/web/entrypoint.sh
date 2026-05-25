@@ -51,6 +51,40 @@ chmod -R a+rwX "$REPO_ROOT" 2>/dev/null || true
 spawn-fcgi -s /var/run/fcgiwrap.socket -F 1 -- /usr/bin/fcgiwrap
 chmod 666 /var/run/fcgiwrap.socket
 
+# ─── Auth-bootstrap (engångs) ──────────────────────────────────────────
+# Om /auth-data/htpasswd är tom vid första uppstart: skapa en slumpad
+# admin-PAT, skriv htpasswd-entry för `admin`, och PRINTA token:n EN GÅNG
+# i loggen så administratören kan klistra in den i AVA-app:ens /setup.
+#
+# Det här är all server-side auth-kod som finns: ~15 rader bash + de
+# två binärerna `htpasswd` och `openssl` som följer med apk-paketen.
+# Inga custom-tjänster att underhålla.
+AUTH_DIR=/auth-data
+mkdir -p "$AUTH_DIR"
+HTPASSWD="$AUTH_DIR/htpasswd"
+if [ ! -s "$HTPASSWD" ]; then
+  ADMIN_PAT=$(openssl rand -base64 32 | tr -d '=+/' | head -c 40)
+  htpasswd -bBc "$HTPASSWD" admin "$ADMIN_PAT"
+  cat <<EOF >&2
+
+[web] ────────────────────────────────────────────────────────────
+[web]  AUTH BOOTSTRAP — första uppstart, ingen htpasswd fanns.
+[web]
+[web]    Admin-användare:  admin
+[web]    Admin-token:      $ADMIN_PAT
+[web]
+[web]  Spara denna token — den visas BARA EN GÅNG. Använd den i
+[web]  AVA-app:ens /setup-sida för att logga in.
+[web]
+[web]  Skapa fler användare med:
+[web]    tooling/scripts/add-user.sh <email>
+[web] ────────────────────────────────────────────────────────────
+
+EOF
+else
+  echo "[web] Auth: $(wc -l < "$HTPASSWD") användare i htpasswd."
+fi
+
 echo "[web] git smart-HTTP redo på /git/  (repos under $REPO_ROOT)"
 echo "[web] Startar nginx…"
 exec nginx -g 'daemon off;'

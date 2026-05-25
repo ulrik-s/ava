@@ -13,7 +13,7 @@ const ctxState = {
   state: { kind: "idle" } as SyncState,
   syncNow: vi.fn(async () => {}),
   notifyChange: vi.fn(),
-  providerKind: "fsa" as "fsa" | "tauri" | null,
+  providerKind: "fsa" as "fsa" | null,
   lastError: null as string | null,
 };
 
@@ -81,14 +81,10 @@ describe("SyncDiagnostics", () => {
     expect(screen.getByText(/Vanliga orsaker/i)).toBeInTheDocument();
   });
 
-  it("visar miljö-label baserat på providerKind", () => {
+  it("visar Web FSA-miljö-label", () => {
     reset();
-    ctxState.providerKind = "tauri";
-    const { rerender } = render(<SyncDiagnostics />);
-    expect(screen.getByText(/Tauri \(libgit2\)/)).toBeInTheDocument();
-
     ctxState.providerKind = "fsa";
-    rerender(<SyncDiagnostics />);
+    render(<SyncDiagnostics />);
     expect(screen.getByText(/Web FSA/)).toBeInTheDocument();
   });
 });

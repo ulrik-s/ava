@@ -13,7 +13,7 @@ const ctxState = {
   state: { kind: "synced", at: Date.now() } as SyncState,
   syncNow: vi.fn(),
   notifyChange: vi.fn(),
-  providerKind: "fsa" as "fsa" | "tauri" | null,
+  providerKind: "fsa" as "fsa" | null,
   lastError: null,
 };
 

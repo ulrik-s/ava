@@ -139,7 +139,7 @@ export default function ConflictsPage() {
                     <span className="ml-2 text-xs text-gray-500">({check.searchType})</span>
                   </p>
                   <p className="text-xs text-gray-500">
-                    {check.checkedBy.name} · {new Date(check.createdAt).toLocaleString("sv-SE")}
+                    {check.checkedBy?.name ?? "—"} · {new Date(check.createdAt).toLocaleString("sv-SE")}
                   </p>
                 </div>
                 <p className={`text-xs mt-1 ${results.length > 0 ? "text-amber-600" : "text-green-600"}`}>

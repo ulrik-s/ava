@@ -117,7 +117,7 @@ export default function TimePage() {
                     {entry.matter.matterNumber} — {entry.matter.title}
                   </Link>
                 </td>
-                <td className="px-6 py-3 text-sm text-gray-900">{entry.user.name}</td>
+                <td className="px-6 py-3 text-sm text-gray-900">{entry.user?.name ?? "—"}</td>
                 <td className="px-6 py-3 text-sm font-mono text-gray-900">{formatMinutes(entry.minutes)}</td>
                 <td className="px-6 py-3 text-sm text-gray-700">{entry.description}</td>
                 <td className="px-6 py-3 text-sm">{entry.billable ? "Ja" : "Nej"}</td>

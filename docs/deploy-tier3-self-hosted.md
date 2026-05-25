@@ -1,223 +1,188 @@
-# Tier 3 — Self-hosted produktion (Cleura / Linux + SSH)
+# Deploy: self-hosted Linux + docker
 
-Den här guiden beskriver hur en byrå går från Tier 2 (privat GitHub-repo)
-till **Tier 3 (egen Linux-server)** med både SSH-access för Tauri/CLI
-och HTTPS-access för web-klienter.
+Hur en byrå går från demo-läget till egen server. Två containers, en
+volym, en bash-script. Inget custom server-kod-skikt att underhålla.
 
 ## Arkitektur
 
 ```
-                   ┌──────────────────────────────────────┐
-                   │  Cleura / Linux-server (firma.se)    │
-                   │                                      │
-                   │  /srv/git/<firma>.git/  (bare repo)  │
-                   │                                      │
-                   │  SSH-server   :22  (git-shell)       │
-                   │  HTTPS-server :443 (git-http-backend)│
-                   └──────────────────────────────────────┘
-                              │              │
-                ┌─────────────┘              └─────────────┐
-                │                                          │
-       ┌────────▼─────────┐                       ┌────────▼─────────┐
-       │  Tauri-klient    │                       │  Web (Chrome)    │
-       │                  │                       │                  │
-       │  git@firma.se:   │                       │  https://firma.se│
-       │   <firma>.git    │                       │   /git/<firma>   │
-       │  via libssh +    │                       │  via isomorphic- │
-       │  ssh-agent       │                       │  git + token     │
-       └──────────────────┘                       └──────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│  Linux-server (1 GB RAM räcker)                              │
+│  ┌────────────────────────────────────────────────────────┐  │
+│  │  docker compose                                        │  │
+│  │  ┌──────────────────┐    ┌──────────────────┐          │  │
+│  │  │ web              │    │ git-ssh          │          │  │
+│  │  │ ├─ nginx          │    │ └─ sshd          │          │  │
+│  │  │ ├─ git-http-bk   │    │                  │          │  │
+│  │  │ ├─ fcgiwrap      │    │                  │          │  │
+│  │  │ └─ htpasswd bin  │    │                  │          │  │
+│  │  └────────┬─────────┘    └────────┬─────────┘          │  │
+│  │           │ git_repos volume      │                    │  │
+│  │           └────────────┬──────────┘                    │  │
+│  │                        ▼                               │  │
+│  │              /srv/git/firma.git (bare)                 │  │
+│  └────────────────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────────┘
+   ▲ HTTPS (auth_basic)                ▲ SSH (authorized_keys)
+   │                                    │
+Browser-klient (advokater)           CLI / Tauri (admin)
 ```
 
-## Steg 1 — Sätt upp bare repo på servern
+Två containers, en namngiven volym för git-repot, en namngiven volym för
+htpasswd-filen. Det är allt.
+
+## Installation
+
+### 1. Servern (Ubuntu/Debian/Fedora — vad som helst med docker)
 
 ```bash
-# På Cleura-servern (Ubuntu/Debian)
-sudo apt install -y git apache2-utils
-sudo useradd -r -m -s /usr/bin/git-shell git-firma
-sudo -u git-firma mkdir -p /home/git-firma/repos
-sudo -u git-firma git init --bare /home/git-firma/repos/firma.git
+ssh admin@firma-server
+sudo apt install docker.io docker-compose-v2 git
+git clone https://github.com/<owner>/ava.git /opt/ava
+cd /opt/ava
+yarn install
+DEMO_BASE_PATH=/ava bash tooling/scripts/build-demo.sh   # bygger out/
 ```
 
-## Steg 2 — SSH-access för Tauri-klienter
-
-Varje användare lägger till sin publika SSH-nyckel:
+### 2. Starta stack
 
 ```bash
-# På klientens dator (en gång)
-ssh-copy-id git-firma@firma.se
-
-# Begränsa till git-only via authorized_keys command-flagga
-# (på servern, /home/git-firma/.ssh/authorized_keys):
-# command="git-shell -c \"$SSH_ORIGINAL_COMMAND\"",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty <user-pub-key>
+docker compose -f tooling/docker/docker-compose.yml up -d --build
 ```
 
-**Tauri-klient klonar via SSH:**
-
-```
-Repo: git@firma.se:repos/firma.git
-```
-
-Tauri:s `git_clone`-command stöder SSH via libgit2 (vendored-openssl).
-Klient måste ha `~/.ssh/id_ed25519` (eller motsvarande) som matchar
-nyckeln på servern.
-
-## Steg 3 — HTTPS-access för web-klienter
-
-Browsers kan inte SSH:a — vi behöver smart-HTTP-endpoint. Två val:
-
-### A. `git-http-backend` (minimal)
+Web-containerns entrypoint detekterar att htpasswd är tom och genererar en
+slumpad admin-PAT. Den printas EN GÅNG i loggen:
 
 ```bash
-# /etc/nginx/sites-available/firma.se
-server {
-    listen 443 ssl http2;
-    server_name firma.se;
+docker compose -f tooling/docker/docker-compose.yml logs web
 
-    ssl_certificate     /etc/letsencrypt/live/firma.se/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/firma.se/privkey.pem;
+# [web] ────────────────────────────────────────────────────────────
+# [web]  AUTH BOOTSTRAP — första uppstart, ingen htpasswd fanns.
+# [web]
+# [web]    Admin-användare:  admin
+# [web]    Admin-token:      xkJ8mQ...
+# [web]
+# [web]  Spara denna token — den visas BARA EN GÅNG.
+# [web] ────────────────────────────────────────────────────────────
+```
 
-    location ~ ^/git/ {
-        client_max_body_size 100M;
-        fastcgi_param GIT_HTTP_EXPORT_ALL "";
-        fastcgi_param GIT_PROJECT_ROOT /home/git-firma/repos;
-        fastcgi_param PATH_INFO $1;
-        fastcgi_param REMOTE_USER $remote_user;
-        fastcgi_pass unix:/var/run/fcgiwrap.socket;
-        fastcgi_param SCRIPT_FILENAME /usr/lib/git-core/git-http-backend;
-        include fastcgi_params;
+**Kopiera token:n NU.** Den finns inte sparad någon annanstans.
 
-        # Per-user-auth via tokens
-        auth_basic "AVA Git";
-        auth_basic_user_file /etc/nginx/htpasswd.firma;
+### 3. Lägg upp HTTPS-terminering (rekommenderat)
 
-        # CORS — krävs för isomorphic-git från browser
-        add_header Access-Control-Allow-Origin "https://ava.firma.se" always;
-        add_header Access-Control-Allow-Credentials "true" always;
-        add_header Access-Control-Allow-Methods "GET, POST, OPTIONS" always;
-        add_header Access-Control-Allow-Headers "Authorization, Content-Type, Git-Protocol" always;
-        if ($request_method = OPTIONS) { return 204; }
-    }
+Caddy är enklast — placera framför nginx:
+
+```caddy
+firma.se {
+  reverse_proxy localhost:8080
 }
 ```
 
-Skapa token per användare:
+Eller använd nginx-proxy + Let's Encrypt. AVA gör inga antaganden om
+TLS-lagret.
+
+### 4. Provisionera advokaterna
+
+För varje advokat:
 
 ```bash
-sudo htpasswd /etc/nginx/htpasswd.firma anna   # promptar lösenord/token
+ssh admin@firma-server 'cd /opt/ava && tooling/scripts/add-user.sh anna@firma.se'
+# → printar email + slumpad PAT
 ```
 
-Web-klient klonar via:
-```
-Repo: https://firma.se/git/firma
-Token: <htpasswd-värdet>
-```
+Admin skickar email + PAT till advokaten **via säker kanal** (Signal, SMS,
+i person — INTE okrypterad e-post).
 
-### B. Gitea (full webserver med UI)
+Advokaten öppnar `https://firma.se/ava/setup` → klistrar in PAT + email →
+PAT sparas i browserns `localStorage` och skickas som Basic-auth mot
+`/git/firma.git`.
 
-Om byrån vill ha pull-requests, issues, etc. — installera `gitea`
-istället. Stöder både SSH + HTTPS native, har CORS-konfig i app.ini,
-och ger ett webb-UI för admin.
+### 5. Seed-data (valbart)
+
+Om byrån vill börja med en rik demo-datamängd:
 
 ```bash
-sudo apt install gitea
-# eller: docker run gitea/gitea
+# Lokalt mot servern
+SEED_REPO_URL=https://firma.se/git/firma.git yarn seed:local
+# Kräver att din `git`-CLI har auth-credentials sparade för repo:t.
 ```
 
-Web-klient klonar via:
-```
-Repo: https://firma.se/anna/firma.git
-Token: <gitea PAT>
-```
+## Drift
 
-## Steg 4 — Deploya AVA-webappen
-
-Två val för var AVA-UI:t hostas:
-
-### A. Samma server (Cleura)
+### Backup
 
 ```bash
-# På Cleura-servern
-git clone https://github.com/ulrik-s/ava /opt/ava
+# Hela git-repot + htpasswd
+docker run --rm -v ava_git_repos:/repos -v ava_auth_data:/auth \
+  -v /backup:/out alpine tar czf /out/ava-$(date +%F).tar.gz /repos /auth
+```
+
+Återställ:
+
+```bash
+docker compose down
+docker volume rm ava_git_repos ava_auth_data
+docker run --rm -v ava_git_repos:/repos -v ava_auth_data:/auth \
+  -v /backup:/in alpine tar xzf /in/ava-2026-05-25.tar.gz -C /
+docker compose up -d
+```
+
+### Rotera advokats PAT
+
+```bash
+tooling/scripts/add-user.sh anna@firma.se          # ny slumpad
+tooling/scripts/add-user.sh anna@firma.se <ny-pat> # vald
+```
+
+### Ta bort advokat
+
+```bash
+docker exec ava-web-1 htpasswd -D /auth-data/htpasswd anna@firma.se
+```
+
+### Uppdatera AVA-appen
+
+```bash
 cd /opt/ava
+git pull
 yarn install
-yarn build               # producerar .next/ för server-mode
-# eller:
-DEMO_BUILD=1 yarn build  # statisk export i out/
-
-# Servera via samma nginx:
-# location / { root /opt/ava/out; try_files $uri $uri/ /index.html; }
+DEMO_BASE_PATH=/ava bash tooling/scripts/build-demo.sh
+docker compose -f tooling/docker/docker-compose.yml restart web
 ```
 
-### B. Vercel / Cloudflare Pages
+(Git-repot och htpasswd bevaras — volymerna är `git_repos` resp. `auth_data`.)
 
-Pusha AVA-UI:t som ett vanligt Next.js-projekt. Sätt
-`NEXT_PUBLIC_DEFAULT_REPO=https://firma.se/git/firma` så
-landningssidan pekar direkt på rätt repo.
-
-## Steg 5 — Klient-konfiguration
-
-Användarna öppnar AVA-appen och går till **"Byt firma / datakälla"** →
-**Tier 3: Self-hosted**:
-
-| Fält | Värde |
-|---|---|
-| Tier | `3. Self-hosted (Cleura/Linux)` |
-| Repo | `https://firma.se/git/firma` |
-| Auth-token | (htpasswd-lösenord eller Gitea PAT) |
-| Organisation ID | `firma-x` |
-| Namn | Anna Advokat |
-| E-post | anna@firma.se |
-
-**Spara & ladda om** → AVA klonar repo:t via web+FSA eller Tauri.
-
-## Per-funktion-stöd
-
-| Funktion | Tier 1 Demo | Tier 2 GitHub | Tier 3 Self-hosted |
-|---|---|---|---|
-| Läs publik data | ✅ | n/a | n/a |
-| Läs privat data | n/a | ✅ med PAT | ✅ med htpasswd/PAT |
-| Skriv från Tauri | n/a | ✅ via git_push | ✅ SSH eller HTTPS |
-| Skriv från Web+FSA | n/a | ✅ via isomorphic-git + token | ✅ med CORS-konfig på servern |
-| Multi-user | n/a | ✅ via GitHub-konton | ✅ via egna konton |
-| Offline backup | n/a | GitHub | Egen server + GitHub-spegling |
-| Egen domän | n/a | n/a | ✅ firma.se |
-| Datalokalitet | n/a | GitHub (US/EU) | ✅ Sverige (Cleura) |
-
-## Verifiering
+## Loggar + observability
 
 ```bash
-# 1. SSH-clone fungerar?
-git clone git@firma.se:repos/firma.git /tmp/test-ssh
-# Förväntat: clones into /tmp/test-ssh
-
-# 2. HTTPS-clone med token?
-git clone https://anna:TOKEN@firma.se/git/firma /tmp/test-https
-# Förväntat: clones med basic auth
-
-# 3. CORS-headers från web?
-curl -I -H "Origin: https://ava.firma.se" https://firma.se/git/firma/info/refs?service=git-upload-pack
-# Förväntat: Access-Control-Allow-Origin: https://ava.firma.se
+docker compose -f tooling/docker/docker-compose.yml logs -f
+# Watch:a auth-status:
+watch 'docker exec ava-web-1 wc -l /auth-data/htpasswd'
 ```
 
-## Säkerhet
+Ingen Prometheus, ingen ELK — bara stdout. Skala upp om byrån behöver.
 
-- **SSH**: använd ed25519-nycklar, ssh-shell-restriction via authorized_keys
-- **HTTPS**: enbart TLS 1.3, `auth_basic` eller bättre (OAuth2 proxy)
-- **Tokens**: rotera per kvartal, lagra i Tauri keychain / browser localStorage
-- **Backup**: cron-job som speglar `/home/git-firma/repos/` till GitHub varje natt
-- **Audit**: `git log --pretty=format:"%h %an %ae %s"` visar full historik
+## Vad servern INTE kör
 
-## Migration mellan tiers
+- Ingen Node.js-process
+- Ingen databas
+- Ingen auth-server (default)
+- Ingen LLM (den körs i browsern hos varje advokat)
+- Inga cron-jobb
+- Ingen e-postserver
+- Ingen reverse-proxy om du inte väljer att lägga till TLS
 
+Allt är två standard-binärer (`nginx`, `sshd`) + några vanliga utility-tools
+(`git-http-backend`, `fcgiwrap`, `htpasswd`). Varje rad bash som körs vid
+uppstart syns i `tooling/docker/web/entrypoint.sh` (~70 rader).
+
+## Vad om jag vill ha invite-UI istället för admin-SSH?
+
+```bash
+docker compose -f tooling/docker/docker-compose.yml --profile invite-server up -d
 ```
-Tier 1 → Tier 2:
-  AVA-app: byt repo i Settings → "user/repo" på GitHub
-  Data: rensa OPFS-cache, klona från GitHub
 
-Tier 2 → Tier 3:
-  Servern: git clone --mirror git@github.com:user/repo /home/git-firma/repos/firma.git
-  AVA-app: byt repo i Settings → "https://firma.se/git/firma"
-  Data: rensa OPFS-cache, klona från egen server
-
-Inga datakonverteringar behövs — git är samma format hela vägen.
-```
+Lägger till en valbar Node-tjänst som exponerar `/auth/`-endpoints i
+nginx för bootstrap + invite-token-flöde. Default OFF eftersom det är
+en custom-process att underhålla. Se `tooling/docker/auth-server/` för
+implementationen om du väljer den vägen.

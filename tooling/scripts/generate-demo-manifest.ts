@@ -28,7 +28,14 @@ import { join, resolve, relative } from "node:path";
 
 const DEFAULT_SCAN_PATHS = [
   "matters", "contacts", ".ava",
-  "matter-contacts", "documents", "time-entries", "expenses", "invoices",
+  "matter-contacts", "documents", "document-folders",
+  "document-analysis-suggestions", "matter-event-suggestions",
+  "time-entries", "expenses", "invoices",
+  // Senare tillagda entiteter — utan dessa skulle demo:n inte se kalender,
+  // tasks, avbetalningsplaner eller jäv-historik.
+  "calendar", "tasks",
+  "payment-plans", "payment-plan-reminders", "payments",
+  "acconto-deductions", "conflict-checks", "offices",
 ];
 
 async function listProjectionFiles(root: string, dir: string): Promise<string[]> {

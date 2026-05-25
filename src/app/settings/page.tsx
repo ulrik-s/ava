@@ -4,6 +4,7 @@ import { useId, useState, useRef } from "react";
 import { trpc } from "@/client/lib/trpc";
 import { Upload, Trash2, Building2, Plus, Pencil, X, Check, FolderOpen, Copy } from "lucide-react";
 import { DatasourceSection } from "@/client/components/datasource-section";
+import { LlmSettingsCard } from "@/client/components/llm-settings-card";
 
 // ─── WebDAV mount instructions ───────────────────────────────────
 
@@ -393,6 +394,11 @@ export default function SettingsPage() {
 
       {/* Datakälla & inloggning — engångskonfiguration */}
       <DatasourceSection />
+
+      {/* AI / lokal LLM — opt-in, ~700 MB nedladdning första gången */}
+      <div className="mb-5">
+        <LlmSettingsCard />
+      </div>
 
       {/* Logo section */}
       <div className="bg-white border border-gray-200 rounded-lg p-5 mb-5">

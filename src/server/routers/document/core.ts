@@ -70,6 +70,7 @@ export const coreProcedures = {
         hits: result.hits.map((hit) => ({
           documentId: hit.id,
           fileName: hit.fileName,
+          storagePath: hit.storagePath ?? null,
           matterId: hit.matterId,
           matterNumber: hit.matterNumber,
           matterTitle: hit.matterTitle,

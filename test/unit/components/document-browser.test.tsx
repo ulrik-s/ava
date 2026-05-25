@@ -10,6 +10,19 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { DocumentBrowser } from "@/client/components/document-browser";
 
+// Self-hosted-läget letar efter ett FSA-handle via IndexedDB; jsdom har inte
+// någon working copy uppsatt. Mock:a explicit så testen är deterministisk
+// oavsett om andra tester polyfillar IndexedDB.
+vi.mock("@/client/lib/fsa/handle-store", () => ({
+  loadHandle: vi.fn(async () => null),
+  saveHandle: vi.fn(async () => {}),
+  deleteHandle: vi.fn(async () => {}),
+  ensureReadWrite: vi.fn(async () => false),
+  isFsaSupported: vi.fn(() => false),
+  isOpfsSupported: vi.fn(() => false),
+  getOpfsRoot: vi.fn(async () => null),
+}));
+
 type Doc = Record<string, unknown>;
 type Folder = Record<string, unknown>;
 
@@ -352,33 +365,19 @@ describe("DocumentBrowser", () => {
     expect(screen.getByText("sub.pdf")).toBeInTheDocument();
   });
 
-  it("klick på dokumentnamnet anropar /api/documents/:id/open via fetch", async () => {
-    treeQuery.data = { folders: [], documents: [baseDoc()] };
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({}),
-    } as Response);
-    render(<DocumentBrowser matterId="m1" />);
-    fireEvent.click(screen.getByText("test.pdf"));
-    await new Promise((r) => setTimeout(r, 0));
-    expect(fetchSpy).toHaveBeenCalledWith("/api/documents/d1/open");
-    fetchSpy.mockRestore();
-  });
-
-  it("öppnar fil-fel visar alert vid icke-OK svar", async () => {
+  it("klick på dokumentnamnet i self-hosted utan FSA-handle → alert om saknad working copy", async () => {
+    // Self-hosted i jsdom har ingen indexedDB-handle → openDocument:s
+    // notifyError-gren körs istället för att fetcha ett api som inte finns.
     treeQuery.data = { folders: [], documents: [baseDoc()] };
     const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => {});
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue({
-      ok: false,
-      json: () => Promise.resolve({ message: "Filen hittades ej" }),
-    } as Response);
     render(<DocumentBrowser matterId="m1" />);
     fireEvent.click(screen.getByText("test.pdf"));
-    await new Promise((r) => setTimeout(r, 0));
-    expect(alertSpy).toHaveBeenCalled();
-    expect(alertSpy.mock.calls[0][0]).toContain("Filen hittades ej");
+    // openDocument är async + dynamic-import:ar två moduler → vänta med waitFor
+    await import("@testing-library/react").then(({ waitFor }) =>
+      waitFor(() => expect(alertSpy).toHaveBeenCalled(), { timeout: 1000 }),
+    );
+    expect(alertSpy.mock.calls[0][0]).toMatch(/working copy/i);
     alertSpy.mockRestore();
-    fetchSpy.mockRestore();
   });
 
   it("formaterar filstorlek korrekt (KB, MB)", () => {

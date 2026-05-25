@@ -25,6 +25,7 @@ import type {
   IDataStore,
   IEventLog,
   DataStoreTx,
+  Delegate,
   MatterDelegate,
   MatterContactDelegate,
   ContactDelegate,
@@ -91,6 +92,7 @@ export class DemoDataStore implements IDataStore {
   readonly conflictChecks: ConflictCheckDelegate;
   readonly payments: PaymentDelegate;
   readonly paymentPlans: PaymentPlanDelegate;
+  readonly paymentPlanReminders: Delegate;
   readonly accontoDeductions: AccontoDeductionDelegate;
   readonly calendarEvents: CalendarEventDelegate;
   readonly tasks: TaskDelegate;
@@ -140,14 +142,16 @@ export class DemoDataStore implements IDataStore {
     }) as unknown as MatterDelegate;
 
     this.matterContacts = this.makeDelegate("matterContacts", {
-      contact: {
-        collection: () => this.source.contacts ?? [],
-        where: (parent) => ({ id: (parent as { contactId: string }).contactId }),
-      },
-      matter: {
-        collection: () => this.source.matters ?? [],
-        where: (parent) => ({ id: (parent as { matterId: string }).matterId }),
-      },
+      // kind:"one" — varje matter-contact-länk har EN kontakt och EN matter.
+      contact: this.rel("contacts", "id", "contactId", "one"),
+      // Nested-include från conflict.ts (matter.contacts.contact) kräver
+      // att sub-relationerna registreras här — annars blir matter.contacts
+      // undefined även om include säger annat.
+      matter: this.rel("matters", "id", "matterId", "one", {
+        contacts: this.rel("matterContacts", "matterId", "id", "many", {
+          contact: this.rel("contacts", "id", "contactId", "one"),
+        }),
+      }),
     }) as unknown as MatterContactDelegate;
 
     this.contacts = this.makeDelegate("contacts", {
@@ -157,13 +161,15 @@ export class DemoDataStore implements IDataStore {
       },
     }) as unknown as ContactDelegate;
     this.documents = this.makeDelegate("documents", {
-      matter: {
-        collection: () => this.source.matters ?? [],
-        where: (parent) => ({ id: (parent as { matterId: string }).matterId }),
-      },
+      // kind:"one" är AVGÖRANDE — utan det matcheras nested where
+      // `matter: { organizationId }` mot en array istället för ett objekt
+      // → assertDocAccess returnerar NOT_FOUND. Manifest: tidigare bugg.
+      matter: this.rel("matters", "id", "matterId", "one"),
     }) as unknown as DocumentDelegate;
     this.documentFolders = this.makeDelegate("documentFolders") as unknown as DocumentFolderDelegate;
-    this.documentTemplates = this.makeDelegate("documentTemplates") as unknown as DocumentTemplateDelegate;
+    this.documentTemplates = this.makeDelegate("documentTemplates", {
+      createdBy: this.rel("users", "id", "createdById", "one"),
+    }) as unknown as DocumentTemplateDelegate;
     this.documentAnalysisSuggestions = this.makeDelegate("documentAnalysisSuggestions") as unknown as DocumentAnalysisSuggestionDelegate;
     this.matterEventSuggestions = this.makeDelegate("matterEventSuggestions") as unknown as MatterEventSuggestionDelegate;
     this.invoices = this.makeDelegate("invoices", {
@@ -196,15 +202,23 @@ export class DemoDataStore implements IDataStore {
     this.users = this.makeDelegate("users") as unknown as UserDelegate;
     this.organizations = this.makeDelegate("organizations") as unknown as OrganizationDelegate;
     this.offices = this.makeDelegate("offices") as unknown as OfficeDelegate;
-    this.conflictChecks = this.makeDelegate("conflictChecks") as unknown as ConflictCheckDelegate;
+    this.conflictChecks = this.makeDelegate("conflictChecks", {
+      checkedBy: this.rel("users", "id", "checkedById", "one"),
+    }) as unknown as ConflictCheckDelegate;
     this.payments = this.makeDelegate("payments") as unknown as PaymentDelegate;
     // invoice (+ nested matter) krävs för cancelPaymentPlan:s where
     // `invoice: { matter: { organizationId } }`.
     this.paymentPlans = this.makeDelegate("paymentPlans", {
       invoice: this.rel("invoices", "id", "invoiceId", "one", {
-        matter: this.rel("matters", "id", "matterId", "one"),
+        matter: this.rel("matters", "id", "matterId", "one", {
+          // Klient-kontakt joinas under matter för "vem fakturan gäller"-rad i UI
+          contacts: this.rel("matterContacts", "matterId", "id"),
+        }),
+        payments: this.rel("payments", "invoiceId", "id"),
       }),
+      reminders: this.rel("paymentPlanReminders", "planId", "id"),
     }) as unknown as PaymentPlanDelegate;
+    this.paymentPlanReminders = this.makeDelegate("paymentPlanReminders") as unknown as Delegate;
     this.accontoDeductions = this.makeDelegate("accontoDeductions") as unknown as AccontoDeductionDelegate;
     this.calendarEvents = this.makeDelegate("calendarEvents", {
       matter: this.rel("matters", "id", "matterId", "one"),

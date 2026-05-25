@@ -36,6 +36,9 @@ export async function saveHandle(key: string, handle: FileSystemDirectoryHandle)
 }
 
 export async function loadHandle(key: string): Promise<FileSystemDirectoryHandle | null> {
+  // Robust mot miljöer utan indexedDB (jsdom, SSR, vissa privata flikar):
+  // returnera null så uppringare faller tillbaka på "ingen handle".
+  if (typeof indexedDB === "undefined") return null;
   const value = await tx<unknown>("readonly", (s) => s.get(key) as IDBRequest<unknown>);
   return (value as FileSystemDirectoryHandle | undefined) ?? null;
 }

@@ -64,6 +64,9 @@ vi.mock("@/client/lib/trpc", () => ({
     documentTemplate: {
       list: { useQuery: () => templatesQuery },
     },
+    user: {
+      current: { useQuery: () => ({ data: { id: "u1", name: "Anna", email: "anna@firma.local" } }) },
+    },
   },
 }));
 
@@ -208,6 +211,22 @@ describe("MatterDetailPage", () => {
     timeQuery.data = { entries: [], totalMinutes: 90 };
     renderPage();
     await waitFor(() => expect(screen.getByText(/1:30/)).toBeInTheDocument());
+  });
+
+  // Regression: när time-entry-listans `user`-join returnerar null (t.ex. mot
+  // git-db där en användare raderats) får tabellen INTE krascha med
+  // "Cannot read properties of null (reading 'name')".
+  it("renderar tidsrad även om entry.user är null", async () => {
+    timeQuery.data = {
+      entries: [
+        { id: "t1", date: "2026-01-15", minutes: 60, description: "Möte", billable: true, user: null },
+      ],
+      totalMinutes: 60,
+    };
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Möte")).toBeInTheDocument());
+    // Fallback-texten visas i Advokat-kolumnen
+    expect(screen.getByText("—")).toBeInTheDocument();
   });
 
   it("visar Arkiverat-badge för andra statusar", async () => {

@@ -28,6 +28,12 @@ services:
   # nginx servar dels static under /ava/, dels git-http-backend under
   # /git/ (samma origin → ingen CORS-proxy för browser-push). Delar
   # bare-repos med git-ssh via volymen git_repos.
+  #
+  # Auth: nginx auth_basic på /git/ läser htpasswd ur auth_data-volymen.
+  # Web-containerns entrypoint skapar en initial admin-PAT vid första
+  # start om htpasswd tom (printas i loggen, en gång). Inga server-
+  # processer utöver nginx + git-http-backend (båda standard, inget
+  # custom kod-skikt att underhålla).
   web:
     build:
       context: ./web
@@ -39,11 +45,30 @@ services:
       - ../../out:/usr/share/nginx/html:ro
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - git_repos:/srv/git
+      - auth_data:/auth-data
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/ava/"]
       interval: 10s
       timeout: 3s
       retries: 5
+
+  # ─── (Valbar) Auth-server med invite-token-UI ──────────────
+  # Default off — bara för kunder som vill ha self-service-provisionering
+  # via browser istället för admin-SSH. Aktivera med:
+  #   docker compose --profile invite-server up -d
+  # Standard: admin lägger till användare med tooling/scripts/add-user.sh.
+  auth:
+    profiles: ["invite-server"]
+    build:
+      context: ./auth-server
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      BOOT_SECRET: ${BOOT_SECRET:-}
+      PORT: "3001"
+      DATA_DIR: "/data"
+    volumes:
+      - auth_data:/data
 
   # ─── SSH + bare git-repos = datalagring ────────────────────
   git-ssh:
@@ -60,3 +85,6 @@ services:
 volumes:
   # Persistent storage för bare git-repos. Backup = `tar` på denna volym.
   git_repos:
+  # Persistent storage för auth-state (htpasswd, invites). Delad mellan
+  # auth-tjänsten (read/write) och web/nginx (read).
+  auth_data:

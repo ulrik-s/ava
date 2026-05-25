@@ -3,29 +3,18 @@
 /**
  * `pickProvider` — väljer rätt SyncProvider beroende på miljö.
  *
- * Returnerar `null` om varken Tauri eller FSA är tillgängligt, eller
- * om token/handle/path saknas. AutoSync visar då inget pill.
+ * Returnerar `null` om FSA/OPFS inte är tillgängligt eller om
+ * token/handle saknas. AutoSync visar då inget pill.
+ *
+ * Tidigare hade vi även en Tauri-gren (libgit2 native) — borttagen.
+ * Browser är runtime, period.
  */
 
 import type { SyncProvider } from "./use-auto-sync";
 
 export interface PickedProvider {
   provider: SyncProvider;
-  kind: "tauri" | "fsa";
-}
-
-/** Tauri-greanen: native desktop med libgit2 via bridge. */
-async function tryTauri(token: string): Promise<PickedProvider | null> {
-  let bridge: typeof import("@/client/lib/integrations/tauri-bridge");
-  try {
-    bridge = await import("@/client/lib/integrations/tauri-bridge");
-  } catch { return null; }
-  if (!bridge.isTauri()) return null;
-  const repoPath = localStorage.getItem("ava.localRepoPath") ?? "";
-  if (!repoPath) return null;
-  const tk = (await bridge.secretGet("github-token").catch(() => null)) || token;
-  if (!tk) return null;
-  return { provider: makeTauriProvider(repoPath, tk), kind: "tauri" };
+  kind: "fsa";
 }
 
 /** Web/FSA/OPFS-grenen — antingen via GitHub REST eller iso-git smart-HTTP. */
@@ -57,8 +46,6 @@ async function tryFsa(token: string): Promise<PickedProvider | null> {
 
 export async function pickProvider(token: string): Promise<PickedProvider | null> {
   if (typeof window === "undefined") return null;
-  const tauri = await tryTauri(token);
-  if (tauri) return tauri;
   return tryFsa(token).catch(() => null);
 }
 
@@ -79,10 +66,7 @@ function makeRestProvider(
     const { readSyncState } = await import("@/client/lib/github/sync-state");
     const state = await readSyncState(handle);
     const local = await walkFsa(handle);
-    if (!state) {
-      // Ingen sync-state ännu → inga 'ändringar' (men pull kommer initiera)
-      return 0;
-    }
+    if (!state) return 0;
     let changes = 0;
     const localMap = new Map(local.map((f) => [f.path, f.sha]));
     for (const f of local) {
@@ -94,8 +78,6 @@ function makeRestProvider(
     return changes;
   };
 
-  // Lokal commit-only används inte i REST-flödet (vi commit:ar via
-  // GitHub:s API direkt vid push). Returnera no-op.
   const commitLocal = async (): Promise<{ oid: string | null }> => {
     return { oid: null };
   };
@@ -103,26 +85,9 @@ function makeRestProvider(
   const pushOnly = async (): Promise<void> => {
     const { pushViaRest } = await import("@/client/lib/github/push");
     const n = await countChanges();
-    // Försök ladda Ed25519-nyckel för SSH-signering
-    let signature: string | undefined;
-    try {
-      const { loadKeypair } = await import("@/client/lib/keys/ed25519-keypair");
-      const kp = await loadKeypair();
-      if (kp) {
-        // Vi kan inte beräkna gpgsig FÖRRÄN vi har commit-textens
-        // bytes (som inkluderar tree+parent+author/committer). GitHub:s
-        // /git/commits-endpoint skapar dessa fält åt oss, så vi kan
-        // inte göra det helt deterministiskt. För nu: skippa signering
-        // i REST-flödet och låt UI förklara att signed commits kräver
-        // helper:n (där vi har full lokal git-state).
-        void kp;
-      }
-    } catch { /* ignorera */ }
-
     await pushViaRest({
       ...sharedArgs,
       message: `AVA: ${n} ändring${n === 1 ? "" : "ar"} ${new Date().toISOString().slice(0, 10)}`,
-      signature,
     });
   };
 
@@ -139,46 +104,9 @@ function makeRestProvider(
       const before = await countChanges();
       if (before === 0) return { oid: null };
       await pushOnly();
-      // pushViaRest returnerar nya head:n men vi förlorade den här —
-      // läs igen från sync-state
       const { readSyncState } = await import("@/client/lib/github/sync-state");
       const state = await readSyncState(handle);
       return { oid: state?.lastHead ?? null };
-    },
-  };
-}
-
-function makeTauriProvider(repoPath: string, token: string): SyncProvider {
-  const commitOnly = async () => {
-    const b = await import("@/client/lib/integrations/tauri-bridge");
-    const entries = await b.gitStatus(repoPath);
-    if (entries.length === 0) return { oid: null };
-    const msg = `AVA: ${entries.length} ändring${entries.length === 1 ? "" : "ar"} ${new Date().toISOString().slice(0, 10)}`;
-    const commit = await b.gitCommitChanges(repoPath, msg);
-    return { oid: commit.oid };
-  };
-  const pushOnly = async () => {
-    const b = await import("@/client/lib/integrations/tauri-bridge");
-    await b.gitPush(repoPath, token);
-  };
-  return {
-    pull: async () => {
-      const b = await import("@/client/lib/integrations/tauri-bridge");
-      const r = await b.gitPull(repoPath, token);
-      return { kind: r.kind };
-    },
-    countChanges: async () => {
-      const b = await import("@/client/lib/integrations/tauri-bridge");
-      const entries = await b.gitStatus(repoPath);
-      return entries.length;
-    },
-    commitLocal: commitOnly,
-    push: pushOnly,
-    commitAndPush: async () => {
-      const c = await commitOnly();
-      if (!c.oid) return { oid: null };
-      await pushOnly();
-      return c;
     },
   };
 }
@@ -190,9 +118,6 @@ function makeFsaProvider(handle: FileSystemDirectoryHandle, token: string, corsP
     const fs = new FsaIsoGitAdapter(handle);
     const entries = await statusMatrix(fs);
     if (entries.length === 0) return { oid: null };
-    // Försök ladda Ed25519-nyckelpar för att signera commit:n. Om det
-    // saknas eller WebCrypto inte stöder Ed25519 → fall tillbaka till
-    // osignerad commit.
     let sshSigning: { publicKey: Uint8Array; privateKey: CryptoKey } | undefined;
     try {
       const { loadKeypair } = await import("@/client/lib/keys/ed25519-keypair");

@@ -71,7 +71,7 @@ export function SyncDiagnostics() {
       )}
 
       <p className="text-[11px] text-gray-400 mt-3">
-        Miljö: {providerKind === "tauri" ? "Tauri (libgit2)" : "Web FSA (isomorphic-git)"}
+        Miljö: Web FSA (isomorphic-git)
       </p>
     </div>
   );

@@ -2,6 +2,7 @@
 
 import { Fragment } from "react";
 import { formatFileSize } from "./_drag-helpers";
+import { readFromFsa } from "@/client/lib/fsa/read-from-fsa";
 
 export interface DocumentRecord {
   id: string;
@@ -138,18 +139,8 @@ function DocumentLinks({ doc, disabled }: { doc: DocumentRecord; disabled?: bool
     downloadHref = `/api/documents/${doc.id}/download?download=1`;
   }
 
-  // eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Async arrow function has a complexity of 13. Maximum allowed is 8.)
+   
   const openInEditor = async () => {
-    const { isTauri, openInDefaultApp } = await import("@/client/lib/integrations/tauri-bridge");
-    if (isTauri()) {
-      const rec = doc as DocumentRecord & { storagePath?: string };
-      const path = rec.storagePath ?? "";
-      if (!path) { alert("Dokumentet saknar lokal sökväg."); return; }
-      try { await openInDefaultApp(path); }
-      catch (err) { alert(`Kunde inte öppna: ${err instanceof Error ? err.message : String(err)}`); }
-      return;
-    }
-
     // Web/demo: läs lokal kopia från FSA om den finns (nyligen uppladdade
     // filer hinner inte till remote än), annars GH Pages-URL.
     // Browser kan EJ navigera till file:// från https://, så vi öppnar
@@ -222,54 +213,28 @@ function DocumentLinks({ doc, disabled }: { doc: DocumentRecord; disabled?: bool
   );
 }
 
-/**
- * Läs en fil från FSA-handle:n och returnera som Blob. Returnerar
- * null om path:n inte finns. Används för att öppna nyligen
- * uppladdade dokument lokalt utan att gå via GH Pages.
- */
-async function readFromFsa(handle: FileSystemDirectoryHandle, path: string): Promise<Blob | null> {
-  const parts = path.replace(/^\/+/, "").split("/").filter(Boolean);
-  if (parts.length === 0) return null;
-  let dir: FileSystemDirectoryHandle = handle;
-  for (let i = 0; i < parts.length - 1; i++) {
-    try { dir = await dir.getDirectoryHandle(parts[i]); }
-    catch { return null; }
-  }
-  try {
-    const fh = await dir.getFileHandle(parts[parts.length - 1]);
-    return await fh.getFile();
-  } catch { return null; }
-}
+// readFromFsa flyttad till `@/client/lib/fsa/read-from-fsa` (delas med
+// search-sidan + andra "öppna lokal kopia"-flöden).
 
-// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'DocumentNameButton' has a complexity of 10. Maximum allowed is 8.)
+// eslint-disable-next-line complexity
 function DocumentNameButton({ doc, isAnalyzing, disabled }: { doc: DocumentRecord; isAnalyzing: boolean; disabled?: boolean }) {
   const isWaitingAnalysis = isAnalyzing || isWithinAnalysisGrace(doc);
 
   const isDemo = process.env.NEXT_PUBLIC_DEMO_BUILD === "1";
-  // eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Async arrow function has a complexity of 10. Maximum allowed is 8.)
   const onClick = async () => {
     if (disabled) return;
-    // I demo-läget pekar storagePath på en fil i samma demo-repo
-    // (t.ex. documents/content/<id>.md). Öppna direkt mot GH Pages
-    // — ingen backend-API behövs.
-    if (isDemo) {
-      const repo = process.env.NEXT_PUBLIC_DEFAULT_DEMO_REPO ?? "ulrik-s/ava-demo";
-      const m = repo.match(/^([^/\s]+)\/([^/\s]+)$/);
-      const base = m ? `https://${m[1]}.github.io/${m[2]}` : repo.replace(/\/+$/, "");
-      const rec = doc as DocumentRecord & { storagePath?: string };
-      const path = rec.storagePath ?? `documents/${doc.id}`;
-      window.open(`${base}/${path}`, "_blank", "noopener,noreferrer");
-      return;
-    }
-    try {
-      const res = await fetch(`/api/documents/${doc.id}/open`);
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({ message: "Okänt fel" }));
-        alert(`Kunde inte öppna dokumentet: ${j.message ?? "okänt fel"}`);
-      }
-    } catch (err) {
-      alert(`Nätverksfel: ${err instanceof Error ? err.message : String(err)}`);
-    }
+    const { openDocument } = await import("@/client/lib/firma/open-document");
+    const { loadHandle } = await import("@/client/lib/fsa/handle-store");
+    const rec = doc as DocumentRecord & { storagePath?: string };
+    await openDocument({
+      doc: { id: doc.id, storagePath: rec.storagePath, fileName: doc.fileName },
+      isDemo,
+      demoRepo: process.env.NEXT_PUBLIC_DEFAULT_DEMO_REPO,
+      loadHandle: () => loadHandle("repo-root"),
+      readFromHandle: readFromFsa,
+      openUrl: (u) => window.open(u, "_blank", "noopener,noreferrer"),
+      notifyError: (m) => alert(m),
+    });
   };
 
   return (

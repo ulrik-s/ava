@@ -36,6 +36,9 @@ export interface IDocumentAnalyzer {
 export interface SearchHit {
   id: string;
   fileName: string;
+  /** Path till filinnehållet i git working copy:n. UI:n använder den för
+   *  att öppna dokumentet via OPFS-blob (self-hosted) eller GH Pages (demo). */
+  storagePath?: string | null;
   matterId: string;
   matterNumber: string;
   matterTitle: string;

@@ -35,16 +35,35 @@ jobs:
       - name: Install dependencies
         run: yarn install --immutable
 
-      - name: Generate Prisma client (för typer i routrar)
-        run: yarn prisma generate
-
-      - name: Build demo (static export)
+      # Bygger appen som statisk export OCH seedar demo-data direkt i out/.
+      # build-demo.sh kör:
+      #   1. next build (DEMO_BUILD=1) → out/
+      #   2. tsx tooling/scripts/build-demo-repo.ts --dir out  (seed-data)
+      #   3. tsx tooling/scripts/generate-demo-manifest.ts out (manifest.json)
+      #   4. touch out/.nojekyll (så .ava/-mappar serveras av Pages)
+      - name: Build demo (app + seeded data)
         env:
           DEMO_BUILD: "1"
-          # Hämta base path från GH Pages-konfigurationen så vi får
-          # automatiskt rätt /<repo>-prefix.
+          NEXT_PUBLIC_DEMO_BUILD: "1"
+          # Bas-sökväg matchar repo:t (t.ex. "/ava-demo") så assets + data
+          # serveras från rätt path.
           DEMO_BASE_PATH: ${{ steps.pages.outputs.base_path }}
-        run: bash scripts/build-demo.sh
+          # Tala om för app:en att data lever på samma origin/repo som den
+          # själv. Annars defaultar firma-config till ulrik-s/ava-demo →
+          # CORS-fel + tom data.
+          NEXT_PUBLIC_DEMO_REPO: ${{ github.repository }}
+        run: bash tooling/scripts/build-demo.sh
+
+      - name: Sanity check — manifest + binärfiler
+        run: |
+          test -f out/manifest.json || (echo "manifest.json saknas!" && exit 1)
+          test -f out/.nojekyll || (echo ".nojekyll saknas!" && exit 1)
+          docs=$(find out/documents/content -type f 2>/dev/null | wc -l | tr -d ' ')
+          if [ "$docs" -lt 30 ]; then
+            echo "Förväntade ≥30 PDF/DOCX-filer, fick $docs"
+            exit 1
+          fi
+          echo "✓ Sanity check OK — $docs dokumentfiler, manifest finns."
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

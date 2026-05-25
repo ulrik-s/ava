@@ -12,14 +12,17 @@ import { FileDown } from "lucide-react";
 import { ContactsSection } from "./_contacts-section";
 import { TimeSection } from "./_time-section";
 import { ExpenseSection } from "./_expense-section";
+import { TaxaCard } from "./_taxa-card";
 import { GenerateModal } from "./_generate-modal";
 import { useRouteId } from "@/client/lib/demo/use-route-id";
 
+// eslint-disable-next-line complexity
 export default function MatterDetailClient({ id: paramId }: { id: string }) {
   // Static export serverar en sentinel-shell för nya id:n → läs riktiga
   // id:t ur URL:en (faller tillbaka till build-time-param i server-mode).
   const id = useRouteId() ?? paramId;
   const matter = trpc.matter.getById.useQuery({ id });
+  const currentUser = trpc.user.current.useQuery();
   const [showGenerateModal, setShowGenerateModal] = useState(false);
 
   if (matter.isLoading) return <p className="text-gray-500">Laddar...</p>;
@@ -50,13 +53,30 @@ export default function MatterDetailClient({ id: paramId }: { id: string }) {
         />
       </div>
 
+      {m.isTaxeArende && (
+        <TaxaCard
+          matterId={id}
+          matterNumber={m.matterNumber}
+          matterTitle={m.title}
+          clientName={klient[0]?.contact?.name ?? ""}
+          courtName={m.contacts.find((c: { role: string }) => c.role === "DOMSTOL")?.contact?.name}
+          defenderName={currentUser.data?.name ?? ""}
+          defenderEmail={currentUser.data?.email}
+          initial={{
+            taxaLevel: m.taxaLevel,
+            taxaHuvudforhandlingMin: m.taxaHuvudforhandlingMin,
+            taxaHasFTax: m.taxaHasFTax,
+          }}
+        />
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <EventsPanel matterId={id} />
         <SuggestionsPanel matterId={id} />
         <ContactsSection matterId={id} contacts={m.contacts} />
         <DocumentBrowser matterId={id} />
-        <TimeSection matterId={id} />
-        <ExpenseSection matterId={id} />
+        <TimeSection matterId={id} isTaxeArende={m.isTaxeArende} />
+        <ExpenseSection matterId={id} isTaxeArende={m.isTaxeArende} />
         <InvoicesSection matterId={id} />
       </div>
 
@@ -85,6 +105,7 @@ interface HeaderProps {
     matterType?: string | null;
     description?: string | null;
     status: string;
+    isTaxeArende?: boolean;
   };
   klient: MatterContact[];
   onOpenGenerate: () => void;
@@ -118,6 +139,14 @@ function MatterHeader({ matter: m, klient, onOpenGenerate }: HeaderProps) {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {m.isTaxeArende && (
+            <span
+              className="inline-flex items-center rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide"
+              title="Taxeärende — ersättning enligt Domstolsverkets fastställda taxa (DVFS) istället för löpande timdebitering. Domstolen kan frångå taxan när avsevärt mer arbete än normalt krävts."
+            >
+              Taxa
+            </span>
+          )}
           <StatusBadge status={m.status} />
           {m.status === "ACTIVE" ? (
             <button

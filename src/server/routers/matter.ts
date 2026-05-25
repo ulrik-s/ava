@@ -84,6 +84,7 @@ export const matterRouter = router({
         description: z.string().optional(),
         matterType: z.string().optional(),
         klientId: z.string().optional(),
+        isTaxeArende: z.boolean().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -109,6 +110,7 @@ export const matterRouter = router({
           title: input.title,
           description: input.description,
           matterType: input.matterType,
+          isTaxeArende: input.isTaxeArende ?? false,
           matterNumber,
           organizationId: ctx.orgId,
           // Explicit (Prisma schema-default appliceras inte av in-memory-store:n).
@@ -149,16 +151,24 @@ export const matterRouter = router({
           .optional(),
         paymentMethodNote: z.string().nullable().optional(),
         paymentMethodDecidedAt: z.string().nullable().optional(),
+        isTaxeArende: z.boolean().optional(),
+        taxaLevel: z.number().int().min(1).max(4).nullable().optional(),
+        taxaHuvudforhandlingMin: z.number().int().nonnegative().nullable().optional(),
+        taxaHasFTax: z.boolean().nullable().optional(),
+        taxaHufStart: z.string().nullable().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
       const before = await assertMatterInOrg(ctx, input.id);
-      const { id, paymentMethodDecidedAt, ...rest } = input;
+      const { id, paymentMethodDecidedAt, taxaHufStart, ...rest } = input;
       const data: Record<string, unknown> = { ...rest };
       if (paymentMethodDecidedAt !== undefined) {
         data.paymentMethodDecidedAt = paymentMethodDecidedAt
           ? new Date(paymentMethodDecidedAt)
           : null;
+      }
+      if (taxaHufStart !== undefined) {
+        data.taxaHufStart = taxaHufStart ? new Date(taxaHufStart) : null;
       }
       const updated = await ctx.dataStore.matters.update({ where: { id }, data });
       await emit.matterUpdated(ctx, id, data);

@@ -41,29 +41,77 @@ export interface FirmaConfig {
 
 const STORAGE_KEY = "ava.firma";
 
+/**
+ * Repo-pekare för demo:n.
+ *   - `NEXT_PUBLIC_DEMO_REPO` bakas in vid build (CI sätter det) och pekar
+ *     då på samma-origin data (där build-demo.sh seedade direkt i `out/`).
+ *   - Saknas variabeln → fall tillbaka på publika referensdemon
+ *     `ulrik-s/ava-demo` för utvecklare som bygger lokalt utan att seeda.
+ */
+const DEMO_REPO = process.env.NEXT_PUBLIC_DEMO_REPO || "ulrik-s/ava-demo";
+
 const DEMO_DEFAULT: FirmaConfig = {
   tier: "demo",
-  repo: "ulrik-s/ava-demo",
+  repo: DEMO_REPO,
   token: "",
   organizationId: "demo-firma-ab",
   authorName: "AVA Demo",
   authorEmail: "demo@ava.local",
 };
 
+/**
+ * Default när vi körs lokalt mot docker (`tooling/docker/docker-compose.yml`).
+ * Same-origin när användaren öppnar `http://localhost:8080/ava/` (statisk
+ * export), eller cross-origin när dev-servern körs på `:3000` — `pickProvider`
+ * + same-origin-detektor hanterar bägge.
+ *
+ * Default-org "firma-ab" matchar git-repo:t som docker startar (firma.git i
+ * `tooling/docker/git-ssh`). Författar-identiteten är generisk; användaren
+ * uppdaterar via `/settings`.
+ */
+const SELF_HOSTED_LOCALHOST_DEFAULT: FirmaConfig = {
+  tier: "self-hosted",
+  repo: "http://localhost:8080/git/firma.git",
+  token: "",
+  organizationId: "firma-ab",
+  authorName: "Lokal användare",
+  authorEmail: "user@firma.local",
+};
+
+/**
+ * Vilken default-config ska vi använda för en given hostname?
+ *
+ * - `localhost` / `127.0.0.1` → self-hosted mot docker (`localhost:8080`).
+ *   Det här gör att `next dev` och den statiska exporten beter sig som
+ *   en självhostad firma-Linux-låda utan att användaren behöver konfigurera
+ *   något — docker måste vara igång, men det är förutsättningen för
+ *   "git lokalt".
+ * - Övrigt (gh-pages-domän etc.) → publik demo.
+ *
+ * Pure-helper — testas direkt utan att mocka `window`.
+ */
+export function defaultConfigForHost(hostname: string | undefined): FirmaConfig {
+  if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "0.0.0.0") {
+    return SELF_HOSTED_LOCALHOST_DEFAULT;
+  }
+  return DEMO_DEFAULT;
+}
+
 export function loadFirmaConfig(): FirmaConfig {
   if (typeof window === "undefined") return DEMO_DEFAULT;
+  const fallback = defaultConfigForHost(window.location.hostname);
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return DEMO_DEFAULT;
+    if (!raw) return fallback;
     const parsed = JSON.parse(raw) as Partial<FirmaConfig>;
     return {
-      ...DEMO_DEFAULT,
+      ...fallback,
       ...parsed,
-      // Tomt repo → fall tillbaka till demo
-      repo: parsed.repo || DEMO_DEFAULT.repo,
+      // Tomt repo → fall tillbaka till hostens default
+      repo: parsed.repo || fallback.repo,
     };
   } catch {
-    return DEMO_DEFAULT;
+    return fallback;
   }
 }
 

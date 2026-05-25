@@ -29,6 +29,8 @@ import { pickProvider } from "@/client/lib/sync/pick-provider";
 import { JobsBadge } from "./jobs-badge";
 import { AnalyzeDispatcherRegistrar } from "./analyze-dispatcher-registrar";
 import { ExtractTextDispatcherRegistrar } from "./extract-text-dispatcher-registrar";
+import { MirrorOutlookRegistrar } from "./mirror-outlook-registrar";
+import { AppShell } from "./app-shell";
 import "@/client/lib/jobs/register-workers"; // ⚠ side-effect: registrerar workers
 
 type Status = "loading" | "ready" | "error";
@@ -251,6 +253,7 @@ function AuthGatedDemoTree(props: TreeProps) {
           <SyncProviderRoot token={firmaConfig.token} pickProvider={pickProvider}>
           <AnalyzeDispatcherRegistrar />
           <ExtractTextDispatcherRegistrar />
+          <MirrorOutlookRegistrar />
           <div className="flex items-center justify-between gap-2 border-b border-gray-200 bg-white">
             <div className="flex-1 min-w-0">
               <AuthStatusBanner />
@@ -288,7 +291,9 @@ function AuthGatedDemoTree(props: TreeProps) {
               </div>
             </div>
           )}
-          <RenderErrorBoundary>{children}</RenderErrorBoundary>
+          <RenderErrorBoundary>
+            <AppShell>{children}</AppShell>
+          </RenderErrorBoundary>
           </SyncProviderRoot>
         </QueryClientProvider>
       </trpc.Provider>

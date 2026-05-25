@@ -1,79 +1,73 @@
 # Test & tooling-status
 
-Status per 2026-05-20. Detta dokument svarar på frågorna "vilka verktyg har vi", "vad är coverage", "vad saknas".
+Snapshot 2026-05-25. För konfig-detaljer, se [`quality.md`](./quality.md).
 
-## Verktyg som redan finns
+## Verktygskedja
 
 | Verktyg | Vad det gör | Status |
 |---|---|---|
-| **vitest** | Unit + integration tester, coverage via v8 | ✅ Konfigurerat |
-| **@testing-library/react** | DOM-render-tester | ✅ Konfigurerat |
-| **playwright** | End-to-end browser-tester | ⚠️ Installerat men få tester |
-| **eslint** (Next.js + complexity-plugin) | Lint inkl. complexity ≤ 12, max-lines-per-function 100 | ✅ Pre-commit hook |
-| **jscpd** | Duplicates / DRY-detection | ✅ `yarn duplicates` |
-| **dependency-cruiser** | Modulär arkitektur (SOLID), cykler, kapsling | ✅ `yarn deps:check` |
-| **knip** | Hittar oanvänd kod, exports, deps | ✅ `yarn knip` |
-| **husky** + **lint-staged** | Eslint + typecheck vid commit | ✅ Aktiv |
-| **tsx --strict** | TypeScript strict mode | ✅ |
+| **vitest** | Unit + integration tester (node + jsdom projekt) | ✅ |
+| **@testing-library/react** | DOM-render-tester | ✅ |
+| **playwright** | End-to-end round-trip mot docker | ✅ (`yarn round-trip`) |
+| **eslint** | Lint + komplexitet (cap @ 8) | ✅ pre-commit |
+| **jscpd** | Duplicate detection (DRY) | ✅ `yarn duplicates` |
+| **dependency-cruiser** | Cykler + lager-regler (SOLID) | ✅ `yarn deps:check` |
+| **knip** | Oanvänd kod / exports | ✅ `yarn knip` |
+| **husky + lint-staged** | Lint + typecheck vid commit | ✅ |
+| **tsc --strict** | Typkontroll | ✅ |
 
-Kör allt på en gång: `yarn quality`
+Kör allt: `yarn quality`. Snabb-cykel: `yarn test:fast` (~14s, ~1646 tester).
 
-## Coverage just nu (per 2026-05-20)
+## Aktuell testdistribution (~1646 tester)
 
+- **Pure-helpers** (~50 testfiler): seed-data, color-palette, classify-document, fuzzy-similarity, calendar-grid-helpers, day-view-layout, auth-core, manifest-generator, llm-config, etc.
+- **tRPC-routrar** (~25 testfiler): matter, contact, calendar, task, paymentPlan, invoice, document, conflict, timeEntry, expense, user, reports
+- **Komponenter** (~40 testfiler): document-browser, firma-settings-panel, sync-diagnostics, jobs-badge, calendar-page, payment-plans-page, etc.
+- **Sidor** (~20 testfiler): contacts/[id], matters/[id], invoices/[id], search, settings, users, templates, time, conflicts, reports
+- **Integration** (`test/integration/seed-smoke.test.ts`): kör varje meny-sidas tRPC-procedurer mot riktig DemoDataStore + seed-datan. Skyddar mot regressioner i:
+  - join-resolvering (documents.matter, matterContacts.contact/matter etc.)
+  - org-scope (assertDocAccess, classifyDocument)
+  - data-integritet (varje INSTALLMENT_PLAN-faktura har en ACTIVE-plan)
+- **E2E** (`test/e2e/round-trip/`): browser pushar verkligen mot docker-firma.git via OPFS + iso-git
+
+## Coverage-trösklar
+
+I `tooling/config/vitest.config.ts`:
+
+```ts
+thresholds: {
+  statements: 68,
+  lines: 70,
+  functions: 68,
+  branches: 60,
+}
 ```
-All files          |   66.75% statements  |  68.96% lines  |  68.15% functions  |  58.61% branches
+
+Mål Task #5 är 95% överallt. Resterande gap är fat React-komponenter
+(firma-settings-panel, document-browser, demo-bootstrap) och vissa
+crypto-modules (ed25519, sign-commit) som kräver mer test-infrastruktur
+(WebCrypto-mocks).
+
+## CI
+
+Två workflows:
+
+- **`ci.yml`** — på varje PR: install + lint + typecheck + `test:fast` + duplicates + deps:check
+- **`deploy-demo.yml`** — på push till main: bygger `out/` med app + seed + manifest, deployar till GH Pages
+
+Båda kör Node 22. Se `.github/workflows/`.
+
+## Snabbreferens
+
+```bash
+yarn test:fast               # unit + integration, ~14s
+yarn test:run                # alla projekt inkl. scripts
+yarn test:cov                # med coverage-rapport
+yarn round-trip              # E2E mot docker (kräver docker up + out/)
+yarn typecheck               # tsc --noEmit
+yarn lint                    # eslint
+yarn duplicates              # jscpd
+yarn deps:check              # dependency-cruiser
+yarn knip                    # död kod
+yarn quality                 # alla ovan
 ```
-
-**Tröskel-golv** i `tooling/config/vitest.config.ts`: statements 82, lines 84, functions 81, branches 77.
-
-⚠️ **Aktuell coverage är UNDER trösklarna** för core stmts/lines (66.75 < 82). Trösklar är satta för före-refaktor-koden. Nya FSA/Tauri-komponenter saknar test-täckning.
-
-## Var gapen ligger
-
-### Stor gap (< 30% coverage, behöver tester)
-
-| Fil | Coverage | Risk |
-|---|---|---|
-| `src/client/components/demo-bootstrap.tsx` | 1.21% | Kritisk — composition root |
-| `src/client/components/firma-settings-panel.tsx` | 4% | UI för byta repo |
-| `src/client/components/oauth-device-flow.tsx` | 1.92% | OAuth-flöde |
-| `src/client/components/merge-conflict-panel.tsx` | 10% | Merge-konflikt UI |
-| `src/client/components/render-error-boundary.tsx` | 14% | Felhantering |
-| `src/client/components/tauri-git-sync.tsx` | 21% | Tauri sync |
-| `src/client/components/web-fsa-git-sync.tsx` | 23% | Web FSA sync |
-| `src/client/lib/firma/firma-config.ts` | 100% ✅ (efter Fas R17) | — |
-| `src/client/lib/firma/fsa-write-back.ts` | 100% ✅ (efter Fas R17) | — |
-| `src/client/lib/demo/static-params.ts` | 0% | Build-time, kör i Next.js |
-| `src/client/lib/fsa/handle-store.ts` | (mockas i web-fsa-test) | Medium |
-
-### Medium gap (50-80%)
-
-- `src/client/components/document-browser.tsx` (64%) — komplex tabell-rendering
-- `src/client/components/contacts-section.tsx` (75%)
-- `src/client/components/auth-guard.tsx` (68%)
-- Routrar (varierande)
-
-### Bra (>90%)
-
-- Alla `src/client/lib/`-helpers
-- `src/app/page.tsx` (Dashboard) 100%
-- Procedure-routrar
-- Projection-classer
-
-## Vägen till 95% — uppskattat arbete
-
-| Område | Effort | Värde |
-|---|---|---|
-| FSA/Tauri-komponent-tester (act+screen.findByText etc.) | 8-12h | Hög — fångar bugs som "Cannot read .id" |
-| Playwright smoke-test för varje route | 2-3h | Hög — fångar 404-bugs |
-| Mutation-flöden via tRPC-link → DemoDataStore → fsa-write-back | 3h | Hög — integration |
-| Dynamic [id]-routes (matters/[id], contacts/[id]) | 4h | Medium |
-| Resterande lib/-helpers | 2h | Low |
-| **Totalt** | **~20h** | |
-
-## Min rekommendation framöver
-
-1. **Höj trösklar gradvis** i stället för att kräva 95% direkt. Sätt floor till nuvarande nivå så regressioner fångas.
-2. **Test-first för nya buggar** — skriv test innan fix. Vi har redan börjat med detta (writable-delegate, fs-adapter, url-rewrite).
-3. **Smoke-tests först, unit-tests sen** — Playwright `expect(page).toHaveTitle()` för varje route fångar 80% av broken-pages-buggar med 20% av effort.
-4. **Strikta lint-rules** redan på plats — eslint klagar på complexity > 12, max-lines > 100, vilket pushar SOLID.

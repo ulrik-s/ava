@@ -8,22 +8,27 @@
 
 ```
 ava/
-├── src/                  # produktionskod
-├── test/                 # all testkod (speglat src/-träd)
-│   ├── unit/             # vitest enhets-/komponenttester (mirror av src/)
-│   ├── scripts/          # tester för scripts/ (webdav-server m.fl.)
-│   └── e2e/              # Playwright end-to-end
-├── scripts/              # CLI-scripts (seed, webdav, test-full, analys)
-├── prisma/               # schema + migrations
-├── reports/              # **all** output (coverage, jscpd, playwright, demo-pdfs)
-├── config/               # verktygskonfig (eslint, vitest, playwright,
-│                         #   jscpd, knip, dependency-cruiser)
-├── docs/                 # dokumentation
-└── ... rotkonfig som måste ligga i roten (next, postcss, prisma, tsconfig)
+├── src/
+│   ├── app/             # Next.js App Router (server-rendered shell-pages)
+│   ├── client/          # browser-only: components/, lib/
+│   ├── server/          # tRPC routers, data-store, adapters, ports
+│   └── shared/          # zod-schemas (single source of truth)
+├── test/
+│   ├── unit/            # vitest enhets-/komponenttester
+│   ├── integration/     # seed-smoke + cross-router-tester
+│   └── e2e/             # Playwright (round-trip mot docker)
+├── tooling/
+│   ├── config/          # eslint, vitest, playwright, knip, jscpd, dependency-cruiser
+│   ├── docker/          # docker-compose, nginx, web-image, optional auth-server
+│   └── scripts/         # seed-data, build-demo, generate-manifest, add-user
+├── reports/             # CI-artefakter (coverage, jscpd, playwright-report)
+├── data/                # local-only artifacts (storage/, ej incheckat)
+├── docs/                # dokumentation (denna fil + arkitektur, auth, deploy)
+└── ... rotkonfig som måste ligga i roten (next, postcss, tsconfig)
 ```
 
-Output-mapparna (`coverage/`, `playwright-report/`, `test-results/`, `demo-pdfs/`)
-har konsoliderats till `reports/` — samlar alla CI-artefakter på ett ställe.
+Prisma och Postgres är borta — `prisma/`-mappen finns inte längre. All data
+lever som JSON i ett git-repo (se [`architecture.md`](./architecture.md)).
 
 ## Verktygskedja
 
@@ -54,43 +59,43 @@ Initial baslinje-tröskel — höj efterhand som tester läggs till. Tröskeln f
 | Branches | 18 % | 70 % |
 | Statements | 25 % | 60 % |
 
-Aktuell baslinje (262 tester över 17 testfiler):
+Aktuell baslinje (~1646 tester över 167 testfiler):
 
-| Mått | Värde |
+| Mått | Tröskel (vitest-config) |
 |---|---|
-| Statements | 26.4 % (691/2620) |
-| Branches | 20.2 % (395/1956) |
-| Functions | 18.1 % (125/690) |
-| Lines | 25.9 % (605/2340) |
+| Statements | 68 % |
+| Lines | 70 % |
+| Functions | 68 % |
+| Branches | 60 % |
 
-Coverage-rapporten skrivs till `coverage/` (HTML, lcov, json-summary, text).
+Coverage-rapporten skrivs till `reports/coverage/` (HTML, lcov, json-summary, text).
 
-### Komplexitet (`npm run lint`)
+### Komplexitet (`yarn lint`)
 
-| Mått | Gräns | Severity |
-|---|---|---|
-| Cyclomatic complexity per funktion | 12 | warn |
-| Maxdjup (nested blocks) | 4 | warn |
-| Rader per funktion | 100 (200 i `tooling/scripts/`) | warn |
-| Parametrar per funktion | 5 | warn |
-| Nested callbacks | 4 | warn |
+| Mått | Gräns |
+|---|---|
+| Cyclomatic complexity per funktion | 8 (error) |
+| Maxdjup (nested blocks) | 4 |
+| Rader per funktion | 100 (200 i `tooling/scripts/`) |
+| Parametrar per funktion | 5 |
 
-### Duplikat (`npm run duplicates`)
+### Duplikat (`yarn duplicates`)
 
 | Mått | Gräns |
 |---|---|
 | Duplicerade kodblock | ≥ 8 rader / ≥ 80 tokens |
 | Procent duplikat | < 1.5 % av kodbasen |
 
-### Arkitektur (`npm run deps:check`)
+### Arkitektur (`yarn deps:check`)
 
-Hårda regler (severity `error`, blockerar commit):
+Hårda regler (severity `error`):
 
 - **`no-circular`** — inga cirkulära imports
-- **`ui-not-direct-prisma`** — `src/client/components/**` och `src/app/**` (utom `app/api`) får inte importera `src/server/db`
-- **`ui-not-server-services`** — UI-lagret går via tRPC, inte direkt mot services
 - **`no-test-imports-from-prod`** — produktionskod får inte importera testfiler
 - **`no-non-package-json`** — varje `import` måste finnas i `package.json`
+
+`src/server/db` finns inte längre (Prisma borta), så `ui-not-direct-prisma`-
+regeln är obsolet.
 
 Mjuka regler (`warn`):
 

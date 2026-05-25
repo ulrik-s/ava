@@ -50,6 +50,8 @@ export const EVENT_TYPES = [
   // task
   "task.created",
   "task.completed",
+  // kostnadsräkning (taxa-ärenden, brottmål med offentlig försvarare)
+  "kostnadsrakning.generated",
   // rule / system
   "rule.executed",
   "rule.failed",

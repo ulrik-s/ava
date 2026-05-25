@@ -24,6 +24,90 @@ interface ExtractTextPayload extends Record<string, unknown> {
   mimeType?: string;
 }
 
+/**
+ * Mirror-to-Outlook-jobbets payload. Hela event-snapshot:n skickas med
+ * (workern behöver inte refetcha från dataStore) plus operationen att
+ * utföra: upsert eller delete.
+ */
+interface MirrorPayload extends Record<string, unknown> {
+  eventId: string;
+  op: "upsert" | "delete";
+  /** Krävs för upsert; ignoreras för delete. */
+  event?: {
+    title: string;
+    description?: string | null;
+    location?: string | null;
+    startAt: string;
+    endAt?: string | null;
+    allDay: boolean;
+    visibility: "normal" | "private";
+    kind: "appointment" | "deadline";
+  };
+  /** Sätts efter första lyckad mirror; för PATCH/DELETE krävs den. */
+  outlookEventId?: string | null;
+  outlookCalendarId?: string | null;
+}
+
+// eslint-disable-next-line complexity
+jobQueue.registerWorker<MirrorPayload>("mirror-to-outlook", async (payload, ctx) => {
+  ctx.setProgress(0.1);
+  const { getOutlookToken, dispatchMirrorState } = await import("./mirror-outlook-dispatch");
+  const token = await getOutlookToken();
+  if (!token) {
+    await dispatchMirrorState({
+      eventId: payload.eventId,
+      patch: { mirrorStatus: "failed", mirrorError: "Office 365 är inte ansluten. Anslut via /profile." },
+      signal: ctx.signal,
+    });
+    return;
+  }
+
+  ctx.setProgress(0.4);
+  const graph = await import("@/client/lib/integrations/microsoft-graph");
+  try {
+    if (payload.op === "delete") {
+      if (payload.outlookEventId) {
+        await graph.deleteGraphEvent(payload.outlookEventId, { token, calendarId: payload.outlookCalendarId ?? undefined });
+      }
+      // Vid delete på AVA-eventet finns ingen rad att uppdatera — workern
+      // slutar bara här. (Calendar-routerns delete tar bort raden helt.)
+      ctx.setProgress(1);
+      return;
+    }
+    // Upsert
+    if (!payload.event) throw new Error("MirrorPayload saknar event-data för upsert");
+    const body = graph.toGraphEvent({ ...payload.event });
+    let outlookEventId: string;
+    if (payload.outlookEventId) {
+      const res = await graph.updateGraphEvent(payload.outlookEventId, body, { token, calendarId: payload.outlookCalendarId ?? undefined });
+      outlookEventId = res.id;
+    } else {
+      const res = await graph.createGraphEvent(body, { token, calendarId: payload.outlookCalendarId ?? undefined });
+      outlookEventId = res.id;
+    }
+    ctx.setProgress(0.9);
+    await dispatchMirrorState({
+      eventId: payload.eventId,
+      patch: {
+        outlookEventId,
+        mirrorStatus: "synced",
+        mirrorError: null,
+        mirrorLastSyncedAt: new Date(),
+      },
+      signal: ctx.signal,
+    });
+    ctx.setProgress(1);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    await dispatchMirrorState({
+      eventId: payload.eventId,
+      patch: { mirrorStatus: "failed", mirrorError: msg },
+      signal: ctx.signal,
+    });
+    throw err;
+  }
+});
+
 jobQueue.registerWorker<ExtractTextPayload>("extract-text", async (payload, ctx) => {
   // Steg 1: hämta fil-bytes från FSA-handle
   ctx.setProgress(0.1);
@@ -66,15 +150,27 @@ jobQueue.registerWorker<ExtractTextPayload>("extract-text", async (payload, ctx)
 });
 
 jobQueue.registerWorker<ClassifyPayload>("classify-document", async (payload, ctx) => {
-  // Steg 1: snabb filename-heuristik
   ctx.setProgress(0.1);
-  await sleepWithAbort(200, ctx.signal);
-  const guess = guessFromFilename(payload.fileName);
+  await sleepWithAbort(50, ctx.signal);
 
-  // Steg 2: skriv `documentType` + `analyzedAt` + `analysisStatus` via tRPC.
+  // Försök hämta extraherad text (om extract-text-jobbet redan körts) +
+  // den aktiva LLM:n. classifyDocument:s fallback-logik tar hand om
+  // alla edge cases (no text / LLM off / LLM error).
+  const { getDocumentContent } = await import("@/client/lib/demo/document-content-cache");
+  const { getActiveLlm } = await import("@/client/lib/llm/active-llm");
+  const { classifyDocument } = await import("@/client/lib/llm/classify-document");
+
+  ctx.setProgress(0.3);
+  const guess = await classifyDocument({
+    fileName: payload.fileName,
+    text: getDocumentContent(payload.documentId),
+    extractor: getActiveLlm(),
+  });
+
+  // Skriv `documentType` + `analyzedAt` + `analysisStatus` via tRPC.
   // Alla tre fält måste sättas så UI:n vet att analysen körts klart —
   // utan analyzedAt visas "⏳ analyseras..." permanent.
-  ctx.setProgress(0.5);
+  ctx.setProgress(0.7);
   const { dispatchAnalyze } = await import("./analyze-dispatch");
   await dispatchAnalyze({
     documentId: payload.documentId,
@@ -85,18 +181,6 @@ jobQueue.registerWorker<ClassifyPayload>("classify-document", async (payload, ct
   });
   ctx.setProgress(1);
 });
-
-function guessFromFilename(name: string): string {
-  const lower = name.toLowerCase();
-  if (/(stamning|kallelse|stämning)/.test(lower)) return "STAMNING";
-  if (/(dom|beslut|tingsr|domstol)/.test(lower)) return "DOM";
-  if (/(bevis|fotografi|bilaga|exhibit)/.test(lower)) return "BEVIS";
-  if (/(fullmakt|poa|power)/.test(lower)) return "FULLMAKT";
-  if (/(avtal|kontrakt|hyres|köpe|köpeavtal)/.test(lower)) return "AVTAL";
-  if (/(faktura|invoice|kvitto|receipt)/.test(lower)) return "FAKTURA";
-  if (/(rapport|utlatande|utlåtande|expert)/.test(lower)) return "RAPPORT";
-  return "OKLASSIFICERAT";
-}
 
 async function sleepWithAbort(ms: number, signal: AbortSignal): Promise<void> {
   if (signal.aborted) throw new Error("Aborted");

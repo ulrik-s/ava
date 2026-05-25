@@ -57,13 +57,14 @@ next-env.d.ts
 # Test- och kvalitetsrapporter (samlad output-mapp)
 /reports/
 
-# Tauri-bygget — Rust-artefakter, genererade ikoner, plattforms-bundle
-/src-tauri/target/
-/src-tauri/Cargo.lock
-/src-tauri/gen/
-
 # Genererat SQLite-schema (committas inte — bygger sig själv från schema.prisma)
 /data/prisma/schema.sqlite.prisma
 
 # Stray npm lockfile — this project uses Yarn (yarn.lock)
 package-lock.json
+
+# Local agent / dev-tooling state (inte del av kodbasen)
+.claude/
+.claude-flow/
+docs/.claude-flow/
+.mcp.json

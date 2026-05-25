@@ -29,6 +29,7 @@ const navigation = [
   { name: "Jävskontroll", href: "/conflicts", icon: "🔍" },
   { name: "Rapporter", href: "/reports", icon: "📈" },
   { name: "Fakturor", href: "/invoices", icon: "💰" },
+  { name: "Avbetalningar", href: "/payment-plans", icon: "📅" },
   { name: "Användare", href: "/users", icon: "👥" },
   { name: "Min profil", href: "/profile", icon: "🪪" },
   { name: "Inställningar", href: "/settings", icon: "⚙️" },

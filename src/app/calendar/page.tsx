@@ -3,42 +3,149 @@
 /**
  * /calendar — användarens kalender (möten, förhandlingar, frister) + tasks.
  *
- * V1: enkel listvy + create-form. Månads-/veckovy kommer i Phase E.
- * Outlook-spegling (mirror-to-outlook-worker) kommer i Phase D.
+ * Vy: lista nu — månadsgrid och veckovy i CalendarGrid-komponenten.
+ * Outlook-spegling enqueue:as automatiskt på create/update/delete via
+ * `enqueueMirror()` när `mirrorToOutlook=true`.
  */
 
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { trpc } from "@/client/lib/trpc";
-import { Calendar as CalendarIcon, Plus, ExternalLink, Trash2, CheckCircle2 } from "lucide-react";
+import { Calendar as CalendarIcon, Plus, ExternalLink, Trash2, CheckCircle2, List, LayoutGrid, CalendarDays, Sun } from "lucide-react";
+import { jobQueue } from "@/client/lib/jobs/job-queue";
+import { CalendarGrid, startOfDay } from "./_calendar-grid";
+import { DayView } from "./_day-view";
+import { UserPicker, loadSelectedUserIds } from "./_user-picker";
+import { buildUserColorMap, type UserColor } from "@/client/lib/calendar/user-colors";
 
+type ViewMode = "list" | "day" | "week" | "month";
+
+interface EventForMirror {
+  title: string;
+  description?: string | null;
+  location?: string | null;
+  startAt: string;
+  endAt?: string | null;
+  allDay: boolean;
+  visibility: "normal" | "private";
+  kind: "appointment" | "deadline";
+}
+
+interface MirrorArgs {
+  eventId: string;
+  op: "upsert" | "delete";
+  event?: EventForMirror;
+  outlookEventId?: string | null;
+  outlookCalendarId?: string | null;
+}
+
+/**
+ * Enqueue:a en mirror-to-outlook-worker. Fire-and-forget; workern
+ * uppdaterar mirrorStatus efter sync och calendar.list invalidate:as.
+ */
+function enqueueMirror(args: MirrorArgs): void {
+  const label = args.op === "delete"
+    ? `Tar bort i Outlook: ${args.eventId.slice(0, 8)}`
+    : `Speglar till Outlook: ${args.event?.title ?? ""}`;
+  jobQueue.enqueue("mirror-to-outlook", label, args as unknown as Record<string, unknown>);
+}
+
+// eslint-disable-next-line complexity
 export default function CalendarPage() {
   const [showNewEvent, setShowNewEvent] = useState(false);
   const [showNewTask, setShowNewTask] = useState(false);
+  const [view, setView] = useState<ViewMode>("week");
+  // Hydration-safe init: `new Date()` och `localStorage` ger olika värden
+  // SSR (statisk export, byggtid) vs klient. Vi initialiserar deterministiskt
+  // till null/[] och fyller via useEffect efter mount — då matchar SSR-HTML
+  // klientens första render.
+  const [anchor, setAnchor] = useState<Date | null>(null);
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { setAnchor(startOfDay(new Date())); }, []);
+
+  // Persistera vilka användare som visas (multi-user). Default: bara mig.
+  const currentUser = trpc.user.current.useQuery();
+  const orgUsers = trpc.user.list.useQuery();
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+  useEffect(() => {
+    // Läs localStorage först efter mount så SSR-HTML inte missmatchar.
+    const stored = loadSelectedUserIds();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (stored.length > 0) setSelectedUserIds(stored);
+  }, []);
+
+  // När current-user laddats: om inget val finns sen tidigare → välj bara mig.
+  useEffect(() => {
+    if (selectedUserIds.length === 0 && currentUser.data?.id) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSelectedUserIds([currentUser.data.id]);
+    }
+  }, [currentUser.data?.id, selectedUserIds.length]);
+
+  const userNames = useMemo<Record<string, string>>(() => {
+    const m: Record<string, string> = {};
+    for (const u of orgUsers.data?.users ?? []) m[u.id] = u.name;
+    return m;
+  }, [orgUsers.data?.users]);
+
+  // Färgmappen byggs över ALLA org-användare så färgerna är stabila även
+  // när man togglar in/ut individer i pickern. `buildUserColorMap` sorterar
+  // id:na deterministiskt och garanterar unika färger för ≤12 användare.
+  const userColors = useMemo<Map<string, UserColor>>(() => {
+    const ids = (orgUsers.data?.users ?? []).map((u: { id: string }) => u.id);
+    return buildUserColorMap(ids);
+  }, [orgUsers.data?.users]);
 
   return (
-    <div className="max-w-4xl">
+    <div className="max-w-6xl">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
           <CalendarIcon size={24} /> Kalender
         </h1>
         <p className="text-sm text-gray-500 mt-1">
-          Möten, förhandlingar, frister och tasks. Markera valfria events
-          för spegling till Outlook.
+          Möten, förhandlingar, frister och tasks. Färgkodat per användare —
+          markera vilka du vill se i listan till vänster.
         </p>
       </div>
 
-      <section className="mb-8">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-semibold text-gray-800">Kommande events</h2>
-          <button
-            onClick={() => setShowNewEvent((v) => !v)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700"
-          >
-            <Plus size={14} /> Nytt event
-          </button>
+      <section className="mb-8 grid grid-cols-1 lg:grid-cols-[14rem_1fr] gap-4">
+        <UserPicker
+          selectedUserIds={selectedUserIds}
+          onChange={setSelectedUserIds}
+          enforceAtLeastOne
+          userColors={userColors}
+        />
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-3">
+              <h2 className="text-lg font-semibold text-gray-800">Events</h2>
+              <ViewSwitcher value={view} onChange={setView} />
+            </div>
+            <button
+              onClick={() => setShowNewEvent((v) => !v)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700"
+            >
+              <Plus size={14} /> Nytt event
+            </button>
+          </div>
+          {showNewEvent && <NewEventForm onClose={() => setShowNewEvent(false)} />}
+          {view === "list" && <EventList />}
+          {/* anchor är null fram till första mount — då renderar vi en
+              osynlig placeholder så SSR-HTML matchar klientens första render. */}
+          {!anchor && <div data-calendar-placeholder className="h-64" aria-hidden />}
+          {anchor && view === "day" && (
+            <DayView anchor={anchor} onAnchorChange={setAnchor} userIds={selectedUserIds} userNames={userNames} userColors={userColors} />
+          )}
+          {anchor && (view === "week" || view === "month") && (
+            <CalendarGrid
+              mode={view}
+              userIds={selectedUserIds}
+              userNames={userNames}
+              userColors={userColors}
+              anchor={anchor}
+              onAnchorChange={setAnchor}
+            />
+          )}
         </div>
-        {showNewEvent && <NewEventForm onClose={() => setShowNewEvent(false)} />}
-        <EventList />
       </section>
 
       <section>
@@ -65,6 +172,17 @@ function EventList() {
   const utils = trpc.useUtils();
   const del = trpc.calendar.delete.useMutation({ onSuccess: () => utils.calendar.list.invalidate() });
 
+  const handleDelete = (ev: EventRow) => {
+    if (!confirm(`Ta bort "${ev.title}"?`)) return;
+    if (ev.outlookEventId) {
+      enqueueMirror({
+        eventId: ev.id, op: "delete",
+        outlookEventId: ev.outlookEventId, outlookCalendarId: ev.outlookCalendarId ?? null,
+      });
+    }
+    del.mutate({ id: ev.id });
+  };
+
   if (isLoading) return <p className="text-sm text-gray-500">Laddar…</p>;
   if (!events?.length) return <p className="text-sm text-gray-400 italic">Inga events ännu.</p>;
 
@@ -85,7 +203,7 @@ function EventList() {
             </p>
           </div>
           <button
-            onClick={() => { if (confirm(`Ta bort "${ev.title}"?`)) del.mutate({ id: ev.id }); }}
+            onClick={() => handleDelete(ev)}
             className="text-gray-400 hover:text-red-600 p-1"
             title="Ta bort"
           >
@@ -153,8 +271,25 @@ function TaskList() {
 function NewEventForm({ onClose }: { onClose: () => void }) {
   const utils = trpc.useUtils();
   const create = trpc.calendar.create.useMutation({
-    onSuccess: () => {
+    onSuccess: (created: EventRow) => {
       utils.calendar.list.invalidate();
+      if (created.mirrorToOutlook) {
+        enqueueMirror({
+          eventId: created.id,
+          op: "upsert",
+          event: {
+            title: created.title,
+            description: null,
+            location: created.location ?? null,
+            startAt: typeof created.startAt === "string" ? created.startAt : created.startAt.toISOString(),
+            endAt: created.endAt ? (typeof created.endAt === "string" ? created.endAt : created.endAt.toISOString()) : null,
+            allDay: created.allDay,
+            visibility: "normal",
+            kind: created.kind,
+          },
+          outlookCalendarId: created.outlookCalendarId ?? null,
+        });
+      }
       onClose();
     },
   });
@@ -313,6 +448,8 @@ interface EventRow {
   matter?: { id: string; matterNumber: string; title: string } | null;
   mirrorToOutlook?: boolean;
   mirrorStatus?: "pending" | "synced" | "failed" | null;
+  outlookEventId?: string | null;
+  outlookCalendarId?: string | null;
 }
 
 interface TaskRow {
@@ -322,6 +459,30 @@ interface TaskRow {
   priority: "LOW" | "MEDIUM" | "HIGH";
   dueAt?: string | Date | null;
   matter?: { id: string; matterNumber: string; title: string } | null;
+}
+
+function ViewSwitcher({ value, onChange }: { value: ViewMode; onChange: (v: ViewMode) => void }) {
+  const opts: { v: ViewMode; label: string; Icon: typeof List }[] = [
+    { v: "list", label: "Lista", Icon: List },
+    { v: "day", label: "Dag", Icon: Sun },
+    { v: "week", label: "Vecka", Icon: LayoutGrid },
+    { v: "month", label: "Månad", Icon: CalendarDays },
+  ];
+  return (
+    <div className="inline-flex rounded-md border border-gray-200 bg-white text-xs">
+      {opts.map(({ v, label, Icon }) => (
+        <button
+          key={v}
+          type="button"
+          onClick={() => onChange(v)}
+          aria-pressed={value === v}
+          className={`flex items-center gap-1 px-2 py-1 ${value === v ? "bg-blue-50 text-blue-700" : "text-gray-600 hover:bg-gray-50"}`}
+        >
+          <Icon size={12} /> {label}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 function KindBadge({ kind }: { kind: "appointment" | "deadline" }) {

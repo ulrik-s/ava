@@ -85,15 +85,37 @@ Detsamma vid radera ärende:
 - **Cold start**: cache:n preloadas vid app-start parallellt. För 100
   dokument à ~5-50kB text: ~2-5s totalt över snabbt nätverk
 
-## Implementations-checklista
+## Sökning + wildcards
 
-- [ ] Lägga till `pdfjs-dist` + `mammoth` som deps
-- [ ] `src/client/lib/text-extraction/extract.ts` — pure function `extractText(blob, mime) → string`
-- [ ] Worker: `extract-text`-job i jobQueue som körs vid upload
-- [ ] writeBack: hantera "documentText"-entity som skriver text-filen
-- [ ] tRPC: ny mutation `document.writeExtractedText`
-- [ ] Upload-flow: enqueue extract-job efter classify
-- [ ] Delete-flow: ta bort text-fil också
-- [ ] content-cache: läs från `documents/text/<id>.txt` också
-- [ ] demo-manifest-generator: inkludera text-filer
-- [ ] Tester (TDD) per modul
+`document.search` driver `/search`-sidan. Helper-funktionen `compileNeedle()`
+i `src/server/adapters/demo-search-index.ts` stödjer:
+
+- Plain substring (snabb path, `haystack.includes(needle)`)
+- `*` wildcard (matchar 0+ tecken, kompileras till regex)
+
+Exempel: `polis*ord*` matchar "Polisen_sfi_ordlista.pdf". Regex-metachars
+(`. + ? ^ $ { } ( ) | [ ] \`) escapas automatiskt så användarinput inte
+kan trigga oavsiktlig regex-matchning.
+
+## Implementation-status (klar)
+
+- `pdfjs-dist` + `mammoth` finns som deps
+- `src/client/lib/jobs/extract-text.ts` — pure extract-funktion
+- `extract-text`-worker i `register-workers.ts`
+- `extract-text-dispatch.ts` — bridge worker ↔ tRPC
+- `document.writeExtractedText`-mutation
+- Upload-flow enqueue:ar både `classify-document` och `extract-text`
+- `delete-flow` rensar både content + text-fil
+- `document-content-cache` läser från båda källorna
+- `generate-demo-manifest.ts` inkluderar text-filer
+
+## Öppna dokument (browser → UI)
+
+`src/client/lib/firma/open-document.ts` hanterar tre grenar:
+
+1. **Demo-mode**: öppna direkt via gh-pages-URL (`https://<owner>.github.io/<repo>/<storagePath>`)
+2. **Self-hosted**: läs `storagePath` ur OPFS-handle:n → skapa blob-URL → öppna i ny flik
+3. **Fel**: `notifyError("Working copy saknas")` om FSA-handle inte finns
+
+Pure helper `withUtf8CharsetIfText` taggar `.md/.txt/.csv/.json/.html`-blobs
+med `charset=utf-8` så svenska tecken renderas korrekt i alla browsers.

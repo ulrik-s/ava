@@ -1,172 +1,127 @@
-# AVA — Advokat-CRM
+# AVA — CRM för svenska advokatbyråer
 
-Local-first CRM för advokatbyråer med **tunn backend-arkitektur**.
-All affärslogik kör i klientens browser (FSA + isomorphic-git).
-Servern är två minimala lager: nginx för web-app:n + sshd för git-repos.
+> **USP**: Svenska byråer, svenska tjänster. **Din data, du bestämmer.**
+> Browser är runtime. Servern är så tunn det går.
 
 ```
-┌──────────────────────┐
-│ Browser (tjock klient)│  ← all CRM-logik, FSA-mappad lokal disk
-└──────────┬───────────┘
-           │
-           ├─ HTTPS → nginx :8080  ─ servar statiska web-app:n
-           └─ SSH   → sshd  :2222  ─ bare git-repo = all datalagring
-┌──────────────────────┐
-│ Linux-server (tunn)   │  ← inget app-tillstånd, ingen DB
-└──────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│  Browser-app (Next.js 16 + tRPC, in-memory DemoDataStore)  │
+│  ├─ Demo-mode: läser från GitHub Pages CDN                  │
+│  └─ Self-hosted: clone:ar git-repo till OPFS, push:ar       │
+└─────────────────────────────────────────────────────────────┘
+                          ▲ HTTPS
+┌─────────────────────────────────────────────────────────────┐
+│  Server (val 1 av 2)                                        │
+│  ├─ GitHub Pages: statiska filer (app + data)               │
+│  └─ Linux/docker: nginx + git-http-backend + sshd           │
+│     (inget custom kod-skikt att underhålla)                 │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-## Kom igång (lokal Tier 3-replica)
+## Funktioner
+
+| Modul | Innehåll |
+|---|---|
+| **Ärenden** | CRUD, klient + motpart + domstol, dokumentträd, generera dokument från Handlebars-mall |
+| **Kontakter** | Personer, företag, domstolar, försäkringsbolag, advokatbyråer, myndigheter |
+| **Kalender** | Multi-user med färgkod, dag/vecka/månadsvy, Outlook-mirror (opt-in via O365-connector) |
+| **Tasks** | TODO/IN_PROGRESS/DONE per advokat |
+| **Tid + utlägg** | Per-ärende registrering, debiterbar-flagga, periodrapporter |
+| **Fakturor** | DRAFT/SENT/PAID/INSTALLMENT_PLAN, acconto/slutfaktura/credit, betalningshistorik |
+| **Avbetalningsplaner** | ACTIVE/COMPLETED/CANCELLED, progress-vy, reminders |
+| **Dokument** | PDF/DOCX uppladdning + text-extraktion + fulltextsök (wildcards `*`) |
+| **Mallar** | Handlebars-baserade dokumentmallar |
+| **Jävskontroll** | Fuzzy namnsök + personnummer-substring mot alla matter-contacts |
+| **AI (opt-in)** | In-browser LLM (Llama 3.2 via WebGPU) för dokumentklassificering |
+| **Användare** | 5+ per byrå, ADMIN/LAWYER/ASSISTANT-roller |
+
+## Kom igång
+
+### Demo (GitHub Pages)
+
+Surfa till den deployade demon. Det är read-only — ändringar lever bara i fliken.
+
+Bygg + deploya egen demo:
 
 ```bash
-# 1. Lägg din SSH-nyckel
-cat ~/.ssh/id_ed25519.pub >> tooling/docker/git-ssh/authorized_keys
+yarn install
+# CI sköter detta vid push till main: .github/workflows/deploy-demo.yml
+# Manuellt:
+DEMO_BASE_PATH=/ava bash tooling/scripts/build-demo.sh
+# → out/ innehåller statisk app + manifest.json + 40 PDF/DOCX
+```
 
-# 2. Bygg static web-app
+### Self-hosted (Linux + docker)
+
+```bash
+# 1. Bygg statisk export
 DEMO_BASE_PATH=/ava bash tooling/scripts/build-demo.sh
 
-# 3. Starta stacken
-docker compose -f tooling/docker/docker-compose.yml up -d --build
+# 2. Starta stack
+docker compose -f tooling/docker/docker-compose.yml up -d
 
-# 4. Öppna i browser
-open http://localhost:8080/ava/
+# 3. Hämta initial admin-PAT (skrivs en gång i loggen)
+docker compose -f tooling/docker/docker-compose.yml logs web | grep "Admin-token"
+
+# 4. Browser: http://localhost:8080/ava/setup → klistra in PAT
+
+# 5. Lägg till fler advokater
+tooling/scripts/add-user.sh anna@firma.se
+tooling/scripts/add-user.sh bjorn@firma.se
 ```
 
-Git push/pull från klienten: `ssh://git@localhost:2222/srv/git/firma.git`
+Se [`docs/auth.md`](./docs/auth.md) för auth-modellen.
 
-## Arkitektur
-
-| Komponent | Vad | Var |
-|---|---|---|
-| **Klient** | FSA + isomorphic-git, all CRM-logik, sökindex, dokumenthantering | Browser |
-| **Web** | nginx servar statiska web-app:n (Next.js export) | Container/server |
-| **Git** | sshd + bare repos = persistent datalagring | Container/server |
-| **Identitet** | SSH ed25519-nycklar — autenticerar push/pull | Per-user, browser-genererade |
-
-**Designprinciper:**
-- Tjock klient, tunn server — browser har all kapacitet (FSA, IndexedDB, WebCrypto, WebLLM)
-- Git som källa-till-sanning — alla mutationer = commits, hela historiken sparad
-- Inga centraliserade backends — varje firma har sitt eget repo
-- Privacy by design — klientdata stannar lokalt eller i firmans privata git
-
-## Projektstruktur
-
-```
-src/
-  app/                Next.js App Router — sidor + REST route-handlers (api/)
-  client/             Browser-only kod (komponenter + lib)
-    components/       Delade React-komponenter
-    lib/              Klient-logik (sync, fsa, firma, demo, auth, jobs, …)
-  server/             Backend: tRPC-routrar, data-store, events, regelmotor,
-                      local-first-kärna (OPFS/git), tjänster
-  shared/             Kod som båda sidor delar
-    types/            TypeScript-typer (next-auth m.fl.)
-    generated/        Genererad Prisma-client (gitignored)
-    stubs/            Tomma stubs (Next.js demo-bundling)
-tooling/              Allt utvecklingsstöd som inte är produktionskod
-  config/             eslint, vitest, playwright, knip, jscpd, depcruise
-  docker/             Tier 3-images: web (nginx + git-http-backend), git-ssh
-  scripts/            CLI- och drift-skript (build-demo, seed, webdav, …)
-docs/                 Arkitektur + designdokument (se roundtrip-handoff.md)
-prisma/               schema.prisma + migrationer
-src-tauri/            Tauri desktop-wrapper
-test/                 unit/ (vitest) + e2e/ (Playwright: scenarios, round-trip)
-```
-
-Tooling-konfig bor i `tooling/config/` (kör via `package.json`-scripts). Root hålls
-medvetet tunn: bara filer som Next/Prisma/PostCSS kräver där + standardfiler.
-
-## Tre deploy-läger
-
-1. **Demo (publik)** — `https://ulrik-s.github.io/ava` läser från publikt git-repo
-2. **Lokalt (denna repo)** — docker-compose med nginx + sshd, för utveckling och egen byrå
-3. **Tauri (desktop)** — native app med libgit2, för dem som vill slippa browser
-
-## Lokal test-pipeline
-
-Speglar exakt vad CI gör — kör allt på ett bräde:
+### Dev-server (mot lokal docker)
 
 ```bash
-yarn test:all            # hela stacken inkl. Playwright e2e (kräver Docker)
-yarn test:all --no-e2e   # snabb feedback (~1 min): skippar docker + e2e
+yarn install
+docker compose -f tooling/docker/docker-compose.yml up -d
+yarn dev
+# Browser: http://localhost:3000
+# (firma-config defaultar till http://localhost:8080/git/firma.git)
 ```
 
-Pipeline:n kör i ordning: typecheck → lint → deps + duplicates + knip
-→ Next.js-build → demo-build → Vitest + coverage → Playwright e2e.
-
-### Scenario-tester (UI motionering)
-
-`test/e2e/scenarios/` innehåller multi-step användarflöden:
-
-| Fil | Vad |
-|---|---|
-| `01-skapa-arende-med-befintlig-klient` | Ärende-form + klient-koppling |
-| `02-skapa-ny-klient-och-arende` | Skapa kontakt → ärende kopplar den |
-| `03-oppna-arende-och-bladdra` | Lista + filter + detalj-vy |
-| `04-tid-till-rapport` | Registrera tid → verifiera i Rapporter |
-| `05-faktura-plan-betalning-avsluta` | Slutfaktura → plan → betalningar → PAID → avsluta |
-| `06-acconto-och-slutfaktura` | Acconto → betalas → slutfaktura med avdrag |
-
-Kör scenarier (kräver lokal dev-postgres för utveckling):
+### Seed-data för byrån
 
 ```bash
-yarn scenarios            # docker-up + seed + alla 12 tester (~30s)
-yarn scenarios:ui         # interaktiv Playwright-UI
+yarn seed:local
+# → pushar 5 users, 17 contacts, 15 matters, 40 PDF/DOCX,
+#   7 avbetalningsplaner, 20 payments, 25 kalender-events
+#   till docker-firma.git
 ```
 
-### Individuella lager
+## Arkitektur i kort
+
+- **Ingen databas**. All data är JSON-rader + binärfiler i ett git-repo.
+- **Ingen NextAuth, ingen Prisma, ingen Tauri**. Pivot bort från dessa.
+- **Browser pratar inte med en backend** — tRPC routrar körs in-process via `demo-trpc-link`.
+- **Git smart-HTTP** är enda lager mellan browser och server-disk. Allt via `isomorphic-git`.
+- **OPFS** (Origin Private File System) håller en lokal working copy. Inga fil-väljardialoger.
+- **Single source of truth för seed-data**: `tooling/scripts/seed-data.ts`. Samma fabrik bygger docker firma.git OCH gh-pages-demon.
+
+Detaljer: [`docs/architecture.md`](./docs/architecture.md).
+
+## Test + kvalitet
 
 ```bash
-yarn typecheck          # tsc --noEmit
-yarn lint               # eslint
-yarn test:run           # vitest
-yarn test:cov           # vitest med coverage
-yarn test:fast          # vitest utan e2e/scripts
-yarn build              # next build (.next — producerar INTE out/)
-bash tooling/scripts/build-demo.sh  # GH Pages/static-export → out/
-yarn round-trip         # browser-e2e mot docker self-hosted git (se nedan)
+yarn test:fast           # ~1646 tester, ~14s
+yarn typecheck           # tsc --noEmit
+yarn lint                # eslint
+yarn round-trip          # E2E mot docker (kräver docker upp)
 ```
 
-### Self-hosted round-trip (browser ↔ lokal git-server)
+Se [`docs/quality.md`](./docs/quality.md) för verktyg och tröskelvärden.
 
-Round-trip-loopen klonar/committar/pushar mot git-http-backend bakom nginx
-(samma origin som web-app:n → ingen CORS-proxy). Full status + hur det funkar:
-[`docs/roundtrip-handoff.md`](docs/roundtrip-handoff.md).
+## Deploy
 
-```bash
-DEMO_BASE_PATH=/ava bash tooling/scripts/build-demo.sh   # bygg out/ (yarn build räcker EJ)
-docker compose -f tooling/docker/docker-compose.yml up -d --build                     # nginx + git-http-backend + sshd
-yarn round-trip                                  # Playwright mot http://localhost:8080
-# OBS: efter `rm -rf out` → `docker compose -f tooling/docker/docker-compose.yml restart web` (bind-mount).
-```
+- [`docs/deploy-demo.md`](./docs/deploy-demo.md) — CI auto-seedad demo på GitHub Pages
+- [`docs/deploy-tier3-self-hosted.md`](./docs/deploy-tier3-self-hosted.md) — Linux + docker-stack åt en byrå
+- [`docs/auth.md`](./docs/auth.md) — htpasswd-baserad auth + PAT-rotation
 
-## Komponentbibliotek (motionerade widgets)
+## Skiljemål från andra CRM:er
 
-| Komponent | Tester |
-|---|---|
-| AuthStatusBanner | 6 |
-| SyncStatusPill (alla 7 states) | 10 |
-| JobsBadge | 7 |
-| FeatureUnavailable | 3 |
-| RenderErrorBoundary | 3 |
-| SyncDiagnostics | 8 |
-| AutoSync | 2 |
-| FirmaSettingsPanel | 5 |
-| DocumentRow + upload-guard | 4 |
-| MatterDetailPage | många |
-| Reports | många |
-
-## Designdokument
-
-Mer detaljerade designdokument finns i `docs/`:
-
-- [`architecture-future.md`](docs/architecture-future.md) — målarkitekturen
-- [`auth-and-integrations-design.md`](docs/auth-and-integrations-design.md) — användardatabas + O365/OAuth
-- [`test-and-tooling-status.md`](docs/test-and-tooling-status.md) — testtäckning + tooling
-- [`tooling/docker/git-ssh/README.md`](tooling/docker/git-ssh/README.md) — Tier 3 SSH-server setup
-- [`tooling/scripts/oauth-proxy/README.md`](tooling/scripts/oauth-proxy/README.md) — Cloudflare Worker för GitHub-OAuth
-
-## CI
-
-`.github/workflows/ci.yml` kör samma steg som `yarn test:all` i tre
-parallella jobs. `deploy-demo.yml` deployer GH Pages efter varje push.
+- **Svensk domän**: matter-roller, betalningsmetoder (rättshjälp/rättsskydd/offentlig försvarare), BankID-redo
+- **Data-suveränitet**: byrån äger git-repot. Vi äger ingen tjänst som kan stängas av åt dem.
+- **Offline-AI**: LLM kör i browsern, dokument lämnar aldrig maskinen
+- **Audit-vänligt**: varje state-ändring är en signerad git-commit med författare + tidsstämpel

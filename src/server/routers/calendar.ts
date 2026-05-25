@@ -98,6 +98,45 @@ export const calendarRouter = router({
       });
     }),
 
+  /**
+   * Lista events för flera användare samtidigt (multi-user-kalendervyn).
+   *
+   * Privacy: `private`-events från ANDRA användare filtreras bort i minne;
+   * ägaren ser alltid sina egna oavsett visibility.
+   *
+   * Designval: vi gör en union-query mot org-scope + `userId in (...)` istället
+   * för en findMany per användare — färre rundor mot data-store:n. Range-filter
+   * görs i minne (samma som `list`, in-memory query-engine stödjer inte range
+   * över Date).
+   */
+  listForUsers: protectedProcedure
+    .input(z.object({
+      userIds: z.array(z.string()),
+      from: z.date().optional(),
+      to: z.date().optional(),
+    }))
+    .query(async ({ ctx, input }) => {
+      if (input.userIds.length === 0) return [];
+      const events = await ctx.dataStore.calendarEvents.findMany({
+        where: {
+          organizationId: ctx.user.organizationId,
+          userId: { in: input.userIds },
+        },
+        orderBy: { startAt: "asc" },
+        include: { matter: { select: { id: true, matterNumber: true, title: true } } },
+      });
+      const visible = events.filter((e: { userId: string; visibility?: string }) =>
+        e.visibility !== "private" || e.userId === ctx.user.id,
+      );
+      if (!input.from && !input.to) return visible;
+      return visible.filter((e: { startAt: Date | string }) => {
+        const start = new Date(e.startAt);
+        if (input.from && start < input.from) return false;
+        if (input.to && start > input.to) return false;
+        return true;
+      });
+    }),
+
   getById: protectedProcedure
     .input(z.object({ id: z.string() }))
     .query(({ ctx, input }) =>
@@ -141,5 +180,29 @@ export const calendarRouter = router({
         where: { id: input.id, userId: ctx.user.id, organizationId: ctx.user.organizationId },
       });
       return ctx.dataStore.calendarEvents.delete({ where: { id: input.id } });
+    }),
+
+  /**
+   * Sätt mirror-state utan att trigga `computeMirrorPatch`-logiken.
+   * Anropas av `mirror-to-outlook`-workern efter sync — annars skulle vår
+   * egen status-update klassas som "andra fält ändrade" och vi skulle få
+   * en evig pending→synced→pending-loop.
+   */
+  setMirrorState: protectedProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        outlookEventId: z.string().nullish(),
+        mirrorStatus: z.enum(["synced", "failed", "pending"]).nullable(),
+        mirrorError: z.string().nullish(),
+        mirrorLastSyncedAt: z.date().nullish(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      await ctx.dataStore.calendarEvents.findFirstOrThrow({
+        where: { id: input.id, userId: ctx.user.id, organizationId: ctx.user.organizationId },
+      });
+      const { id, ...data } = input;
+      return ctx.dataStore.calendarEvents.update({ where: { id }, data });
     }),
 });

@@ -15,7 +15,10 @@ FROM nginx:1.27-alpine
 #               (ingår INTE i alpines bas-git-paket)
 # fcgiwrap    — kör CGI-scriptet som FastCGI så nginx kan prata med det
 # spawn-fcgi  — startar fcgiwrap på en unix-socket
-RUN apk add --no-cache git git-daemon fcgiwrap spawn-fcgi
+# apache2-utils — ger oss `htpasswd`-binären för auth-administration
+# (admin SSH:ar in och kör `htpasswd /auth-data/htpasswd <user>`)
+# openssl    — för att slumpa initial admin-PAT vid första uppstart
+RUN apk add --no-cache git git-daemon fcgiwrap spawn-fcgi apache2-utils openssl
 
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh

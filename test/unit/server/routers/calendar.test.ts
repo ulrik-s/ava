@@ -70,6 +70,54 @@ describe("calendar.list", () => {
   });
 });
 
+describe("calendar.listForUsers", () => {
+  it("scopar till organisation + tillåtna userIds", async () => {
+    await makeCaller("u-anna", "org-x").listForUsers({ userIds: ["u-anna", "u-bjorn"] });
+    expect(mockPrisma.calendarEvent.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          organizationId: "org-x",
+          userId: { in: ["u-anna", "u-bjorn"] },
+        },
+      }),
+    );
+  });
+
+  it("filtrerar bort private-events från ANDRA användare men behåller egna", async () => {
+    mockPrisma.calendarEvent.findMany.mockResolvedValue([
+      { id: "e1", userId: "u-anna", visibility: "normal", startAt: new Date() },
+      { id: "e2", userId: "u-bjorn", visibility: "private", startAt: new Date() },
+      { id: "e3", userId: "u-anna", visibility: "private", startAt: new Date() },
+      { id: "e4", userId: "u-bjorn", visibility: "normal", startAt: new Date() },
+    ]);
+    const events = await makeCaller("u-anna").listForUsers({ userIds: ["u-anna", "u-bjorn"] });
+    const ids = events.map((e: { id: string }) => e.id);
+    expect(ids).toContain("e1");      // egen normal
+    expect(ids).toContain("e3");      // egen private OK
+    expect(ids).toContain("e4");      // annans normal OK
+    expect(ids).not.toContain("e2");  // annans private MÅSTE filtreras
+  });
+
+  it("tom userIds-lista → tom array (ingen query mot DB krävs)", async () => {
+    const events = await makeCaller().listForUsers({ userIds: [] });
+    expect(events).toEqual([]);
+  });
+
+  it("range-filter funkar precis som calendar.list (in-memory)", async () => {
+    mockPrisma.calendarEvent.findMany.mockResolvedValue([
+      { id: "x1", userId: "u-anna", visibility: "normal", startAt: new Date("2026-05-20T10:00:00Z") },
+      { id: "x2", userId: "u-anna", visibility: "normal", startAt: new Date("2026-05-24T10:00:00Z") },
+      { id: "x3", userId: "u-anna", visibility: "normal", startAt: new Date("2026-05-30T10:00:00Z") },
+    ]);
+    const events = await makeCaller().listForUsers({
+      userIds: ["u-anna"],
+      from: new Date("2026-05-23T00:00:00Z"),
+      to: new Date("2026-05-25T23:59:59Z"),
+    });
+    expect(events.map((e: { id: string }) => e.id)).toEqual(["x2"]);
+  });
+});
+
 describe("calendar.create", () => {
   it("sätter userId + organizationId från ctx + mirrorStatus när mirrorToOutlook=true", async () => {
     mockPrisma.calendarEvent.create.mockResolvedValue({ id: "new-1" });

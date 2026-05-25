@@ -71,12 +71,12 @@ export class ReadOnlyDelegate<T extends Record<string, unknown>> {
 
   async findMany(args: FindArgs = {}): Promise<T[]> {
     const rows = this.queryRows(args);
-    return rows.map((r) => this.hydrate(r, args.include));
+    return rows.map((r) => this.hydrate(r, args.include ?? args.select));
   }
 
   async findFirst(args: FindArgs = {}): Promise<T | null> {
     const r = this.queryRows({ ...args, take: 1 })[0] ?? null;
-    return r ? this.hydrate(r, args.include) : null;
+    return r ? this.hydrate(r, args.include ?? args.select) : null;
   }
 
   async findUnique(args: FindArgs = {}): Promise<T | null> {

@@ -1,196 +1,104 @@
-# Deploya demo till GitHub Pages
+# Deploy: demo på GitHub Pages
 
-Den här guiden beskriver hur du publicerar AVA-demon (`/demo`-rutten) som
-en statisk site på GitHub Pages, med demo-datan hostad på en **annan**
-GitHub Pages-instans. Inga externa beroenden — bara GitHub.
+Demo:n består av en statisk Next.js-export + den rika seed-datan, packad
+till en enda site på GitHub Pages. Allt — appens HTML/JS, JSON-entiteterna,
+PDF/DOCX-binärer, `manifest.json` — serveras från samma origin. Ingen
+extern data-repo, ingen CORS, ingen tredje-parts auth.
 
-## Arkitektur
+## Vad CI gör automatiskt
 
-```
-                ┌──────────────────────────────────┐
-                │   GitHub Pages (UI)              │
-                │   https://you.github.io/ava/     │
-                │                                  │
-                │   - /demo  (UI)                  │
-                │   - Service Worker (PWA)         │
-                │   - WebLLM (opt-in, 700 MB)      │
-                └─────────────┬────────────────────┘
-                              │ fetch JSON-filer
-                              │ Access-Control-Allow-Origin: *
-                              ▼
-                ┌──────────────────────────────────┐
-                │   GitHub Pages (data)            │
-                │   https://you.github.io/ava-demo │
-                │                                  │
-                │   - manifest.json                │
-                │   - matters/active/*.json        │
-                │   - contacts/*.json              │
-                └──────────────────────────────────┘
-```
+`.github/workflows/deploy-demo.yml` triggar vid push till `main`:
 
-GitHub Pages serverar publika filer med `Access-Control-Allow-Origin: *`
-automatiskt — ingen CORS-proxy behövs. Detta är GitHub:s
-officiella mönster för "ge en browser läsåtkomst till filer i ett
-publikt repo".
+1. Checkout + Node 22 + `yarn install --immutable`
+2. `actions/configure-pages@v5` ger oss `base_path` (t.ex. `/ava`)
+3. `bash tooling/scripts/build-demo.sh` med env:
+   - `DEMO_BUILD=1` + `NEXT_PUBLIC_DEMO_BUILD=1`
+   - `DEMO_BASE_PATH=<base_path>`
+   - `NEXT_PUBLIC_DEMO_REPO=<github.repository>` (så app:en hittar data same-origin)
+4. Sanity-check: `out/manifest.json` finns + `.nojekyll` finns + ≥30 dokument
+5. `actions/upload-pages-artifact@v3` + `actions/deploy-pages@v4`
 
-## Steg 1 — Förbered demo-data-repo:t
-
-I ditt **demo-data-repo** (t.ex. `ulrik-s/ava-demo`):
-
-1. Strukturera filerna under standardprefix:en (`matters/active/`,
-   `contacts/`, `.ava/users/`).
-2. Generera `manifest.json` (lista över alla JSON-filer som loadern
-   ska hämta):
-
-   ```bash
-   yarn tsx ../ava/scripts/generate-demo-manifest.ts .
-   ```
-
-   Eller automatisera via en GitHub Action — se "Auto-generera
-   manifest" nedan.
-
-3. Aktivera GitHub Pages: **Settings → Pages → Source: Deploy from
-   a branch → main / (root)**.
-
-Demo-datan blir nu tillgänglig på `https://<user>.github.io/<demo-repo>/`.
-
-### Auto-generera manifest (rekommenderas)
-
-Lägg `.github/workflows/manifest.yml` i demo-data-repo:t:
-
-```yaml
-name: Update manifest
-on:
-  push:
-    branches: [main]
-    paths-ignore: [manifest.json]
-permissions:
-  contents: write
-jobs:
-  manifest:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 22 }
-      - run: |
-          curl -fsSL https://raw.githubusercontent.com/<user>/ava/main/scripts/generate-demo-manifest.ts -o /tmp/gen.ts
-          npx -y tsx /tmp/gen.ts .
-      - run: |
-          git config user.name "github-actions"
-          git config user.email "actions@github.com"
-          git add manifest.json
-          git diff --staged --quiet || git commit -m "Auto-update manifest"
-          git push
-```
-
-Då uppdateras manifestet automatiskt vid varje commit till `main`.
-
-## Steg 2 — Konfigurera UI-repo:t
-
-I ditt **UI-repo** (`ulrik-s/ava`):
-
-1. **Settings → Pages → Source**: välj **GitHub Actions**.
-2. Inga secrets behövs.
-
-## Steg 3 — Pusha till `main`
-
-Workflow:n `.github/workflows/deploy-demo.yml` triggas av varje push
-till `main` och kör:
+## Vad `build-demo.sh` gör
 
 ```
-yarn install --immutable
-yarn prisma generate
-bash tooling/scripts/build-demo.sh    # DEMO_BUILD=1 next build → out/
-actions/upload-pages-artifact
-actions/deploy-pages
+1. Stash:a server-only sidor (api/, login/, …)
+2. next build (DEMO_BUILD=1) → out/                       (statisk app)
+3. tsx tooling/scripts/build-demo-repo.ts --dir out       (rik demo-seed)
+   ├─ buildSeed({ orgId: "demo-firma-ab", currentUserId: "u-anna", ... })
+   └─ generateDocumentBytes (pdf-lib + html-to-docx)      (40 PDF/DOCX)
+4. tsx tooling/scripts/generate-demo-manifest.ts out       (manifest.json)
+5. touch out/.nojekyll                                     (gh-pages serverar .ava/-dirs)
+6. cleanup-trap restaurerar app-träd
 ```
 
-När den är klar (typiskt 2–4 min) får du en URL som
-`https://<user>.github.io/<repo>/demo/`.
+Resultat (typiskt):
+- 20 HTML-filer (statiska pages)
+- 248 JSON-entiteter i manifest
+- 40 binärfiler (PDF + DOCX)
+- `.nojekyll` så `.ava/users/<email>.json` serveras av Pages
 
-Användaren klistrar in sin demo-data-repo (t.ex.
-`https://github.com/<user>/ava-demo` eller kortformen `<user>/ava-demo`)
-och loadern auto-mappar till motsvarande GH Pages-URL.
-
-## Lokal verifiering före deploy
-
-Bygg och servera lokalt för att sanity-checka:
+## Manuell körning lokalt
 
 ```bash
-bash tooling/scripts/build-demo.sh
-cd out
-python3 -m http.server 8765
-# → http://localhost:8765/demo/
+yarn install
+DEMO_BASE_PATH=/ava NEXT_PUBLIC_DEMO_REPO=ulrik-s/ava bash tooling/scripts/build-demo.sh
+
+# Smoke-test:
+python3 -m http.server -d out 9000
+# → http://localhost:9000/ava/
 ```
 
-Notera: i `_demo-client.tsx` används `createGhPagesCloneFn()` som
-default. När du klistrar in en URL i UI:t fetchas demo-data från GH
-Pages — så du måste ha aktiverat GH Pages på demo-data-repo:t även
-för lokal-test, eller använda en lokal HTTP-server för demo-datan
-och peka loadern dit explicit via `baseUrl`-prop.
+## Bygg + push ett eget demo-repo (utan CI)
 
-## Vad ingår — och inte — i demon
+```bash
+yarn build:demo-repo --dir ./demo-repo
+cd ./demo-repo
+git init && git add -A && git commit -m "Demo seed"
+git remote add origin git@github.com:<owner>/<repo>.git
+git push -fu origin main
+```
 
-I demo-builden ingår nu (efter Fas R1-R5):
+## Vad demon innehåller
 
-- `/` — Dashboard med tRPC mot DemoDataStore
-- `/demo` — auto-laddar demo-data + listor
-- `/matters/` — ärendelista
-- `/contacts/` — kontaktlista
-- `/invoices/` — fakturor (tom — ingen demo-data)
-- `/time/` — tidpost
-- `/reports/` — rapporter
-- `/search/` — sök
-- `/conflicts/` — jävskontroll
+| Entitet | Antal |
+|---|---|
+| Användare | 5 (Anna ADMIN + 4 advokater/biträden) |
+| Kontakter | 17 (personer, företag, domstolar, försäkringsbolag) |
+| Ärenden | 15 (familjerätt, fastighet, skadestånd, arbetsrätt…) |
+| Dokument | 40 binärfiler (20 PDF + 20 DOCX) |
+| Avbetalningsplaner | 7 (5 ACTIVE, 1 COMPLETED, 1 CANCELLED) |
+| Inbetalningar | 20 |
+| Kalender-events | 25 (över alla 5 användare) |
+| Tasks | 12 |
+| Templates | 5 |
 
-Mutation-knappar (`+ Nytt ärende`, `+ Ny kontakt`, etc.) är grå:ade
-via `useIsReadOnly()`-hooken och visar tooltip "Inte tillgängligt
-i demo-läget".
+Allt deterministiskt — samma data varje deploy.
 
-Stashas fortfarande (kräver `generateStaticParams()`):
-- `/matters/[id]`, `/contacts/[id]`, `/invoices/[id]` — detail-sidor
-- `/login`, `/settings`, `/users`, `/templates` — kräver auth/data
-  som inte finns i demo
-- `/api/*` — server-routes som inte finns i statisk export
+## Skillnader mellan demo och self-hosted
+
+| Aspekt | Demo (GH Pages) | Self-hosted (docker) |
+|---|---|---|
+| Auth | Ingen (read-only-publik) | nginx auth_basic + htpasswd |
+| Mutationer | In-memory, försvinner vid reload | Persistas i git via OPFS-write-back |
+| LLM | Kan slås på, körs i browsern | Samma |
+| Org-id i data | `demo-firma-ab` | `firma-ab` |
+| Admin-user | `u-anna` | `current-user` |
+
+Båda använder samma `buildSeed()`-fabrik. Single source of truth.
 
 ## Felsökning
 
-| Symptom | Trolig orsak |
-|---|---|
-| **"Kunde inte hämta demo-manifest..."** | GH Pages är inte aktiverat på demo-data-repo:t, eller `manifest.json` saknas i roten. |
-| **"Kunde inte hämta X: HTTP 404"** | Manifestet listar en fil som inte finns. Re-generera manifestet. |
-| **404 på `/demo/_next/*`** | Fel `basePath`. CI sätter den automatiskt; för lokal test, sätt `DEMO_BASE_PATH=""`. |
-| **Build error: "Page X is missing generateStaticParams"** | En dynamisk route nådde demo-builden. Lägg till den i `STASH_PATHS` i `tooling/scripts/build-demo.sh`. |
-| **CORS-fel vid fetch** | Repo:t är privat. GH Pages CORS gäller endast publika repos. |
+**"Inga matters visas i demon"** — kolla `out/manifest.json` att den
+listar `matters/active/*.json`-sökvägar. Om manifest är tomt: scan-paths
+i `tooling/scripts/generate-demo-manifest.ts` missar någon entitet.
 
-## Varför inte `isomorphic-git` + CORS-proxy?
+**"PDF/DOCX 404"** — verifiera `out/documents/content/`. Filerna skrivs
+av `build-demo-repo.ts` → `generateDocumentBytes()`. Misslyckas vanligen
+om `pdf-lib` eller `html-to-docx` saknas (`yarn install`).
 
-Tidigare iteration använde `isomorphic-git.clone()` mot
-`github.com`/`codeload.github.com`, vilket kräver en CORS-proxy
-(public eller egenhostad Cloudflare Worker) eftersom GitHub inte
-sätter CORS-headers på git-protokoll-endpoints.
+**"å/ä/ö renderas konstigt i öppnat dokument"** — `_document-row.tsx`
+använder `openDocument()` som taggar `.md`-blobs med `charset=utf-8`.
+Binärformat (PDF/DOCX) ska vara opåverkade.
 
-Det nuvarande GH Pages-mönstret:
-
-- ✅ Endast GitHub som dependency
-- ✅ Inget extern proxy-deploy
-- ✅ Fastly-CDN-cache globalt
-- ✅ Mycket generös bandbredd-quota
-- ❌ Bara publika repos (men det är ju demo-fallet)
-- ❌ Endast HEAD/GET (men det är allt vi behöver — demo är read-only)
-- ❌ Ingen git-historik (irrelevant för demo)
-
-För **Tauri/Node-läget** (där git-historik faktiskt är värdefull) finns
-`cloneFromGithub()` i `clone-from-github.ts` kvar oförändrad.
-
-## Nästa steg
-
-För att få med fler delar av appen i demon:
-
-1. Lägg till `generateStaticParams()` på de dynamiska rutterna —
-   returnera id:n från demo-fixture-data.
-2. Wrap:a roten i `<DemoProviders>` i en separat `/demo-app/`-route
-   (eller villkorad i `layout.tsx`).
-3. Ta bort relevanta paths från `STASH_PATHS`.
-4. Pusha → CI bygger om → live på GH Pages.
+**".ava/ 404 på GH Pages"** — `.nojekyll` saknas i `out/`. CI-builden
+har en sanity-check som failedar på det.

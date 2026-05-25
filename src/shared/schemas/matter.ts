@@ -17,6 +17,45 @@ export const matterSchema = z.object({
   paymentMethod: paymentMethodSchema.default("PENDING"),
   paymentMethodNote: z.string().nullish(),
   paymentMethodDecidedAt: optionalDateLike,
+  /**
+   * `isTaxeArende` — ärendet ersätts enligt Domstolsverkets fastställda
+   * taxa (schablon) istället för löpande timdebitering.
+   *
+   * Vanligast vid:
+   *   - Brottmål med offentlig försvarare (brottmålstaxan)
+   *   - Konkursförvaltning (konkursförvaltartaxan)
+   *   - Förordnandemål, tolkuppdrag, helg-/jourförhandlingar
+   *
+   * Domstolen kan frångå taxan när "avsevärt mer arbete än normalt"
+   * krävts — då gäller timkostnadsnormen istället. Se Domstolsverkets
+   * DVFS-föreskrifter för aktuellt år (timkostnadsnorm 2026: 1 626 kr
+   * ex moms med F-skatt).
+   *
+   * Separat dimension från `paymentMethod`: paymentMethod säger VEM
+   * som betalar (stat, försäkring, klient), isTaxeArende säger HUR
+   * ersättningen räknas.
+   */
+  isTaxeArende: z.boolean().default(false),
+  /**
+   * Nivå för brottmålstaxan (DVFS 2025:6):
+   *   1 = grundersättning (bara HUF)
+   *   2 = HUF + häktning / kvarstad / beslag / reseförbud
+   *   3 = HUF + RPU (rättspsykiatrisk undersökning)
+   *   4 = HUF + (häktning etc.) + RPU
+   *
+   * Relevant bara när isTaxeArende=true. Default 1.
+   */
+  taxaLevel: z.number().int().min(1).max(4).nullish(),
+  /** Total förhandlingstid i minuter (input till `computeBrottmalstaxa`). */
+  taxaHuvudforhandlingMin: z.number().int().nonnegative().nullish(),
+  /** Default true. False → ersättning × 1237/1626 (DVFS 11 §). */
+  taxaHasFTax: z.boolean().nullish(),
+  /**
+   * Start-tidpunkt för huvudförhandlingen. Auto-sparas av Kostnadsräkningens
+   * modal så advokaten slipper minnas/skriva in den från scratch i
+   * rättssalen — slut-tidpunkten triggas av "STOPPA NU".
+   */
+  taxaHufStart: optionalDateLike,
 }).passthrough();
 
 export type Matter = z.infer<typeof matterSchema>;

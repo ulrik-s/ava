@@ -51,6 +51,10 @@ export const expenseRouter = router({
         amount: z.number().min(1),
         description: z.string().min(1),
         billable: z.boolean().default(true),
+        /** Moms-sats i basis points (0/600/1200/2500). Default 25 %. */
+        vatRate: z.number().int().nonnegative().max(10000).default(2500),
+        /** True om `amount` är inkl moms (kvitto-fall). Default true. */
+        vatIncluded: z.boolean().default(true),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -62,6 +66,8 @@ export const expenseRouter = router({
           amount: input.amount,
           description: input.description,
           billable: input.billable,
+          vatRate: input.vatRate,
+          vatIncluded: input.vatIncluded,
         },
       });
     }),
@@ -74,6 +80,8 @@ export const expenseRouter = router({
         amount: z.number().min(1).optional(),
         description: z.string().min(1).optional(),
         billable: z.boolean().optional(),
+        vatRate: z.number().int().nonnegative().max(10000).optional(),
+        vatIncluded: z.boolean().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {

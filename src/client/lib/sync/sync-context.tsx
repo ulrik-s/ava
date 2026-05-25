@@ -18,7 +18,8 @@ export interface SyncContextValue {
   state: SyncState;
   syncNow: () => Promise<void>;
   notifyChange: () => void;
-  providerKind: "tauri" | "fsa" | null;
+  providerKind: "fsa" | null;
+  /** Tidigare även "tauri" — borttagen, web-only nu. */
   /** Senaste error-meddelandet, persisteras tills syncen lyckas. */
   lastError: string | null;
 }
@@ -27,7 +28,7 @@ const SyncCtx = createContext<SyncContextValue | null>(null);
 
 interface RootProps {
   token: string;
-  pickProvider: (token: string) => Promise<{ provider: SyncProvider; kind: "tauri" | "fsa" } | null>;
+  pickProvider: (token: string) => Promise<{ provider: SyncProvider; kind: "fsa" } | null>;
   children: ReactNode;
 }
 
@@ -35,7 +36,7 @@ interface RootProps {
  * Mountas en gång (i DemoBootstrap). Äger sync-loopen + state.
  */
 export function SyncProviderRoot({ token, pickProvider, children }: RootProps) {
-  const [picked, setPicked] = useState<{ provider: SyncProvider; kind: "tauri" | "fsa" } | null>(null);
+  const [picked, setPicked] = useState<{ provider: SyncProvider; kind: "fsa" } | null>(null);
   const auth = useAuthMode();
   const writeAllowed = auth.mode === "identified-write";
 

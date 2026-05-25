@@ -188,6 +188,10 @@ export interface IDataStore {
   readonly organizations: OrganizationDelegate;
   readonly offices: OfficeDelegate;
   readonly conflictChecks: ConflictCheckDelegate;
+  readonly payments: PaymentDelegate;
+  readonly paymentPlans: PaymentPlanDelegate;
+  readonly paymentPlanReminders: Delegate;
+  readonly accontoDeductions: AccontoDeductionDelegate;
   readonly calendarEvents: CalendarEventDelegate;
   readonly tasks: TaskDelegate;
 

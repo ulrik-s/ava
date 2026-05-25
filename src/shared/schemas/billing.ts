@@ -28,6 +28,18 @@ export type TimeEntry = z.infer<typeof timeEntrySchema>;
 
 /**
  * Expense (Utlägg) — `amount` i öre. Lagras i `expenses/<id>.json`.
+ *
+ * Moms-modellen:
+ *   - `amount` är beloppet som står på kvittot (i öre)
+ *   - `vatRate` i basis points: 0/600/1200/2500 (= 0/6/12/25 %)
+ *   - `vatIncluded=true` → `amount` inkluderar redan moms (vanligaste fallet)
+ *   - `vatIncluded=false` → `amount` är exkl moms, moms läggs ovanpå
+ *
+ * `splitVat({amount, vatRate, vatIncluded})` returnerar `{exclVat, vat, inclVat}`
+ * deterministiskt. Se `src/shared/vat.ts`.
+ *
+ * Backwards-compat: gamla rader utan vatRate/vatIncluded ska tolkas som
+ * 25 % inkl moms (default-fallet för svenska kvitton). zod-defaults gör jobbet.
  */
 export const expenseSchema = z.object({
   ...baseFields,
@@ -38,6 +50,10 @@ export const expenseSchema = z.object({
   description: z.string(),
   billable: z.boolean().default(true),
   invoiceId: z.string().nullish(),
+  /** Moms-sats i basis points (0/600/1200/2500). Default 25 %. */
+  vatRate: z.number().int().nonnegative().max(10000).default(2500),
+  /** Är `amount` redan inkl moms? Default true (kvitto-fall). */
+  vatIncluded: z.boolean().default(true),
 }).passthrough();
 
 export type Expense = z.infer<typeof expenseSchema>;

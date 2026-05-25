@@ -6,6 +6,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import {
   loadFirmaConfig, saveFirmaConfig, resetToDemo, inferTier,
+  defaultConfigForHost,
   type FirmaConfig,
 } from "@/client/lib/firma/firma-config";
 
@@ -16,12 +17,35 @@ describe("firma-config", () => {
     localStorage.clear();
   });
 
-  describe("loadFirmaConfig", () => {
-    it("returnerar demo-default när inget är sparat", () => {
-      const cfg = loadFirmaConfig();
+  describe("defaultConfigForHost", () => {
+    it("localhost → self-hosted mot docker:8080", () => {
+      const cfg = defaultConfigForHost("localhost");
+      expect(cfg.tier).toBe("self-hosted");
+      expect(cfg.repo).toBe("http://localhost:8080/git/firma.git");
+    });
+
+    it("127.0.0.1 → samma self-hosted-default", () => {
+      expect(defaultConfigForHost("127.0.0.1").tier).toBe("self-hosted");
+    });
+
+    it("publik domän → demo (gh-pages)", () => {
+      const cfg = defaultConfigForHost("ulrik-s.github.io");
       expect(cfg.tier).toBe("demo");
       expect(cfg.repo).toBe("ulrik-s/ava-demo");
-      expect(cfg.organizationId).toBe("demo-firma-ab");
+    });
+
+    it("undefined hostname → demo", () => {
+      expect(defaultConfigForHost(undefined).tier).toBe("demo");
+    });
+  });
+
+  describe("loadFirmaConfig", () => {
+    it("jsdom (localhost) → self-hosted-default när inget är sparat", () => {
+      // jsdom rapporterar window.location.hostname === "localhost"
+      const cfg = loadFirmaConfig();
+      expect(cfg.tier).toBe("self-hosted");
+      expect(cfg.repo).toBe("http://localhost:8080/git/firma.git");
+      expect(cfg.organizationId).toBe("firma-ab");
     });
 
     it("returnerar sparad config", () => {
@@ -37,16 +61,17 @@ describe("firma-config", () => {
       expect(loadFirmaConfig()).toEqual(cfg);
     });
 
-    it("faller tillbaka till demo-repo om sparad config saknar repo", () => {
+    it("faller tillbaka till host-default-repo om sparad config saknar repo", () => {
       localStorage.setItem(KEY, JSON.stringify({ tier: "github", repo: "" }));
       const cfg = loadFirmaConfig();
-      expect(cfg.repo).toBe("ulrik-s/ava-demo");
+      // jsdom = localhost → self-hosted-default
+      expect(cfg.repo).toBe("http://localhost:8080/git/firma.git");
     });
 
-    it("ignorerar korrupt JSON och returnerar default", () => {
+    it("ignorerar korrupt JSON och returnerar host-default", () => {
       localStorage.setItem(KEY, "{kaos");
       const cfg = loadFirmaConfig();
-      expect(cfg.tier).toBe("demo");
+      expect(cfg.tier).toBe("self-hosted");
     });
   });
 

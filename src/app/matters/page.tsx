@@ -41,6 +41,7 @@ function MattersContent() {
     description: "",
     matterType: "",
     klientId: "",
+    isTaxeArende: false,
   });
 
   function handleSubmit(e: React.FormEvent) {
@@ -50,6 +51,7 @@ function MattersContent() {
       description: form.description || undefined,
       matterType: form.matterType || undefined,
       klientId: form.klientId || undefined,
+      isTaxeArende: form.isTaxeArende || undefined,
     });
   }
 
@@ -100,6 +102,24 @@ function MattersContent() {
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
                 rows={2} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
             </div>
+            <div className="md:col-span-2">
+              <label className="inline-flex items-start gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={form.isTaxeArende}
+                  onChange={(e) => setForm({ ...form, isTaxeArende: e.target.checked })}
+                  className="mt-0.5"
+                />
+                <span>
+                  <span className="font-medium text-gray-900">Taxeärende</span>
+                  <span className="block text-xs text-gray-500 mt-0.5">
+                    Ersättning enligt Domstolsverkets fastställda taxa (schablon)
+                    istället för löpande timdebitering. Vanligast för brottmål med
+                    offentlig försvarare, konkursförvaltning och förordnandemål.
+                  </span>
+                </span>
+              </label>
+            </div>
           </div>
           <div className="mt-4 flex gap-2">
             <button type="submit" disabled={createMatter.isPending}
@@ -146,6 +166,14 @@ function MattersContent() {
                     <Link href={`/matters/${matter.id}`} className="text-sm font-medium text-blue-600 hover:underline">
                       {matter.title}
                     </Link>
+                    {matter.isTaxeArende && (
+                      <span
+                        className="ml-2 inline-flex items-center rounded-full bg-indigo-50 text-indigo-700 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+                        title="Taxeärende — ersättning enligt Domstolsverkets fastställda taxa"
+                      >
+                        Taxa
+                      </span>
+                    )}
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-500">{klient || "—"}</td>
                   <td className="px-6 py-4">

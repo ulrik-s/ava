@@ -1,61 +1,85 @@
 /**
- * Tester för demo-repo-builder. Validerar att vi producerar giltiga
- * JSON-filer som AVA-projektionerna kan hydratisera.
+ * Tester för konsoliderad demo-seed.
+ *
+ * `build-demo-repo.ts` kör nu `buildSeed()` (samma som docker-firma-seedet)
+ * med demo-specifika opts. Vi testar pipeline:n: buildSeed → seedToFiles
+ * och verifierar att resultatet:
+ *   - innehåller alla viktiga entity-typer
+ *   - använder den demo-org-id:n vi skickat in
+ *   - skriver users med "u-anna" som ADMIN (legacy-id för gh-pages-demon)
  */
 
 import { describe, it, expect } from "vitest";
-import { buildDemoData } from "../../../tooling/scripts/build-demo-repo";
-import { matterProjectionSchema } from "@/server/local-first/projections/matter";
-import { contactProjectionSchema } from "@/server/local-first/projections/contact";
-import { userProjectionSchema } from "@/server/local-first/projections/user";
-import { matterContactSchema } from "@/server/local-first/projections/matter-contact";
-import { documentSchema } from "@/server/local-first/projections/document";
-import { timeEntrySchema } from "@/server/local-first/projections/time-entry";
-import { expenseSchema } from "@/server/local-first/projections/expense";
-import { invoiceSchema } from "@/server/local-first/projections/invoice";
+import { buildSeed, seedToFiles } from "../../../tooling/scripts/seed-data";
 
-describe("buildDemoData", () => {
-  const all = buildDemoData();
+const DEMO_ARGS = {
+  orgId: "demo-firma-ab",
+  currentUserId: "u-anna",
+  emailDomain: "ava.demo",
+  organizationName: "Demo Advokatbyrå AB",
+} as const;
 
-  function byPrefix(prefix: string): unknown[] {
-    return all
-      .filter((e) => e.path.startsWith(prefix) && e.path.endsWith(".json"))
-      .map((e) => e.data);
+describe("konsoliderad demo-seed", () => {
+  const seed = buildSeed(DEMO_ARGS);
+  const files = seedToFiles(seed);
+
+  function byPrefix(prefix: string): typeof files {
+    return files.filter((f) => f.path.startsWith(prefix) && f.path.endsWith(".json"));
   }
 
-  it("har minst 3 matters, 5 contacts, 2 users", () => {
-    expect(byPrefix("matters/").length).toBeGreaterThanOrEqual(3);
-    expect(byPrefix("contacts/").length).toBeGreaterThanOrEqual(5);
-    expect(byPrefix(".ava/users/").length).toBeGreaterThanOrEqual(2);
+  it("rik datamängd: 5 users, ≥10 matters, ≥10 contacts, ≥10 documents", () => {
+    expect(byPrefix(".ava/users/")).toHaveLength(5);
+    expect(byPrefix("matters/active/").length).toBeGreaterThanOrEqual(10);
+    expect(byPrefix("contacts/").length).toBeGreaterThanOrEqual(10);
+    expect(byPrefix("documents/").length).toBeGreaterThanOrEqual(10);
   });
 
-  it("har MatterContact-länkar för varje matter", () => {
-    expect(byPrefix("matter-contacts/").length).toBeGreaterThan(0);
+  it("avbetalningsplaner + payments-rader finns", () => {
+    expect(byPrefix("payment-plans/").length).toBeGreaterThanOrEqual(3);
+    expect(byPrefix("payments/").length).toBeGreaterThan(0);
   });
 
-  it("har documents + time-entries + expenses + invoices", () => {
-    expect(byPrefix("documents/").length).toBeGreaterThan(0);
-    expect(byPrefix("time-entries/").length).toBeGreaterThan(0);
-    expect(byPrefix("expenses/").length).toBeGreaterThan(0);
-    expect(byPrefix("invoices/").length).toBeGreaterThan(0);
+  it("kalender-events och tasks finns över flera användare", () => {
+    expect(byPrefix("calendar/").length).toBeGreaterThanOrEqual(15);
+    expect(byPrefix("tasks/").length).toBeGreaterThan(0);
   });
 
-  const schemas: Array<[string, { parse: (d: unknown) => unknown }]> = [
-    ["matters/", matterProjectionSchema],
-    ["contacts/", contactProjectionSchema],
-    [".ava/users/", userProjectionSchema],
-    ["matter-contacts/", matterContactSchema],
-    ["documents/", documentSchema],
-    ["time-entries/", timeEntrySchema],
-    ["expenses/", expenseSchema],
-    ["invoices/", invoiceSchema],
-  ];
+  it("alla entiteter får demo-orgId", () => {
+    const withOrg = files
+      .map((f) => f.data as { organizationId?: string })
+      .filter((d) => d.organizationId !== undefined);
+    expect(withOrg.length).toBeGreaterThan(0);
+    for (const d of withOrg) {
+      expect(d.organizationId).toBe("demo-firma-ab");
+    }
+  });
 
-  for (const [prefix, schema] of schemas) {
-    it(`alla ${prefix} validerar mot sitt projection-schema`, () => {
-      for (const d of byPrefix(prefix)) {
-        expect(() => schema.parse(d)).not.toThrow();
-      }
-    });
-  }
+  it("admin-användaren har id u-anna + role=ADMIN (legacy-id för gh-pages)", () => {
+    const userFile = files.find((f) => f.path === ".ava/users/user@ava.demo.json");
+    expect(userFile).toBeDefined();
+    const u = userFile!.data as { id: string; role: string; email: string };
+    expect(u.id).toBe("u-anna");
+    expect(u.role).toBe("ADMIN");
+    expect(u.email).toBe("user@ava.demo");
+  });
+
+  it("e-mail-domän följer emailDomain-opten på alla users", () => {
+    const userFiles = byPrefix(".ava/users/");
+    for (const f of userFiles) {
+      const u = f.data as { email: string };
+      expect(u.email).toMatch(/@ava\.demo$/);
+    }
+  });
+
+  it("organization heter Demo Advokatbyrå AB", () => {
+    const orgFile = files.find((f) => f.path === ".ava/organizations/demo-firma-ab.json");
+    expect(orgFile).toBeDefined();
+    expect((orgFile!.data as { name: string }).name).toBe("Demo Advokatbyrå AB");
+  });
+
+  it("inga referenser till legacy 'current-user' i demo-builden", () => {
+    // Alla createdById/checkedById/recordedById ska peka på u-anna istället
+    const serialized = JSON.stringify(files);
+    expect(serialized).not.toContain("current-user");
+  });
 });

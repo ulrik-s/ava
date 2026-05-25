@@ -6,9 +6,11 @@ import { formatMinutes } from "@/client/lib/utils";
 
 interface Props {
   matterId: string;
+  /** Visa Domstolsverket-info om ärendet ersätts enligt taxan. */
+  isTaxeArende?: boolean;
 }
 
-export function TimeSection({ matterId }: Props) {
+export function TimeSection({ matterId, isTaxeArende }: Props) {
   const utils = trpc.useUtils();
   const timeEntries = trpc.timeEntry.list.useQuery({ matterId });
   const [showTimeForm, setShowTimeForm] = useState(false);
@@ -49,6 +51,14 @@ export function TimeSection({ matterId }: Props) {
       {showTimeForm && (
         <form onSubmit={(e) => { e.preventDefault(); createTimeEntry.mutate({ ...timeForm, matterId }); }}
           className="p-4 border-b border-gray-200">
+          {isTaxeArende && (
+            <div className="text-xs text-indigo-900 bg-indigo-50 border border-indigo-200 rounded px-3 py-2 mb-3">
+              <strong>Taxeärende</strong> — arvodet ersätts enligt Domstolsverkets
+              fastställda taxa (brottmålstaxan / motsv.), inte byråns timpris.
+              Registrera ändå faktisk nedlagd tid — domstolen kan frångå taxan
+              om &quot;avsevärt mer arbete än normalt&quot; krävts.
+            </div>
+          )}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <input type="date" required value={timeForm.date}
               onChange={(e) => setTimeForm({ ...timeForm, date: e.target.value })}
@@ -92,7 +102,7 @@ export function TimeSection({ matterId }: Props) {
             {timeEntries.data?.entries.map((entry) => (
               <tr key={entry.id}>
                 <td className="px-6 py-2 text-sm text-gray-500">{new Date(entry.date).toLocaleDateString("sv-SE")}</td>
-                <td className="px-6 py-2 text-sm text-gray-900">{entry.user.name}</td>
+                <td className="px-6 py-2 text-sm text-gray-900">{entry.user?.name ?? "—"}</td>
                 <td className="px-6 py-2 text-sm text-gray-900">{formatMinutes(entry.minutes)}</td>
                 <td className="px-6 py-2 text-sm text-gray-700">{entry.description}</td>
                 <td className="px-6 py-2 text-sm">{entry.billable ? "Ja" : "Nej"}</td>
