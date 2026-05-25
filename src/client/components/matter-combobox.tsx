@@ -1,18 +1,24 @@
 "use client";
 
 /**
- * `MatterCombobox` — sökbar val-input för ärenden. Använder befintliga
- * `<datalist>` istället för en custom dropdown — funkar på mobil,
- * keyboard-accessible, inga extra dependencies.
+ * `MatterCombobox` — sökbar val-input för ärenden via native `<datalist>`.
  *
- * Användning:
- *   <MatterCombobox matters={list} value={matterId} onChange={setMatterId} />
+ * Designval (Single responsibility):
+ *   - Bara presentation: en input + en datalist. State för "vad användaren
+ *     skriver" lever inuti komponenten; parenten ser bara id:t via onChange.
  *
- * Visar "<matterNumber> — <title>" i lista. Användaren kan söka på båda.
- * Bra för advokater med 100+ ärenden — slipper scrolla en lång dropdown.
+ * Designval (Open-closed):
+ *   - Utbytbart UI utan att kallaren behöver bry sig. Implementationen kan
+ *     bytas mot t.ex. Headless UI Combobox utan att ändra props-kontraktet.
+ *
+ * Beteende:
+ *   1. Användaren ser texten hen skriver direkt (lokalt state).
+ *   2. När typen matchar en option exakt → onChange(matterId).
+ *   3. När input töms → onChange("").
+ *   4. När value-prop sätts utifrån → display:n hoppar till matter-namnet.
  */
 
-import { useId, useMemo } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 
 export interface MatterOption {
   id: string;
@@ -33,18 +39,39 @@ export function MatterCombobox({ matters, value, onChange, required, placeholder
   const inputId = useId();
   const listId = useId();
 
-  // Sortera på matterNumber så snabbnumrerat-val (skriv "2026-0001") fungerar.
   const options = useMemo(
     () => [...matters].sort((a, b) => a.matterNumber.localeCompare(b.matterNumber, "sv")),
     [matters],
   );
 
-  // Bygg map id→display så vi kan visa nuvarande val även om input innehåller
-  // användarens sökterm.
-  const display = useMemo(() => {
+  function labelFor(o: MatterOption): string {
+    return `${o.matterNumber} — ${o.title}`;
+  }
+
+  const [text, setText] = useState<string>(() => {
     const m = options.find((o) => o.id === value);
-    return m ? `${m.matterNumber} — ${m.title}` : "";
-  }, [options, value]);
+    return m ? labelFor(m) : "";
+  });
+
+  // Synka in display-text när value-prop ändras utifrån (formulär-reset,
+  // edit-flöde där matterId sätts efter mount). Vi ändrar text BARA om
+  // det skiljer från nuvarande text — annars stör vi användaren mitt i
+  // skrivningen.
+  useEffect(() => {
+    const m = options.find((o) => o.id === value);
+    const next = m ? labelFor(m) : "";
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setText((curr) => (curr === next ? curr : next));
+  }, [value, options]);
+
+  function handleInput(v: string): void {
+    setText(v);
+    const exactMatch = options.find((o) => labelFor(o) === v);
+    if (exactMatch) onChange(exactMatch.id);
+    else if (v === "") onChange("");
+    // Partiell match → låt onChange vara orörd så formuläret kvarstår i
+    // "inget vald än"-läge tills användaren plockar en option.
+  }
 
   return (
     <div>
@@ -53,21 +80,15 @@ export function MatterCombobox({ matters, value, onChange, required, placeholder
         id={inputId}
         list={listId}
         required={required}
-        value={display}
-        onChange={(e) => {
-          const v = e.target.value;
-          // Hitta option som matchar typad/vald sträng
-          const m = options.find((o) => `${o.matterNumber} — ${o.title}` === v);
-          if (m) onChange(m.id);
-          else onChange("");
-        }}
+        value={text}
+        onChange={(e) => handleInput(e.target.value)}
         placeholder={placeholder ?? "Sök på ärendenr eller titel..."}
         className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
         autoComplete="off"
       />
       <datalist id={listId}>
         {options.map((m) => (
-          <option key={m.id} value={`${m.matterNumber} — ${m.title}`} />
+          <option key={m.id} value={labelFor(m)} />
         ))}
       </datalist>
     </div>
