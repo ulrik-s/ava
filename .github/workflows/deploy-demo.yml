@@ -67,15 +67,17 @@ jobs:
             echo "Förväntade ≥30 PDF/DOCX-filer, fick $docs"
             exit 1
           fi
-          # Kritiska sidor som tidigare har klobbats av seed (data-dir-namn
-          # som kolliderar med routes). Säkerställ att index.html finns.
-          for route in calendar contacts invoices payment-plans matters; do
-            if [ ! -f "out/$route/index.html" ]; then
-              echo "out/$route/index.html saknas! (seed-data har troligen klobbat HTML:en)"
-              exit 1
-            fi
-          done
-          echo "✓ Sanity check OK — $docs dokumentfiler, manifest finns, alla route-html:er finns."
+          # SPA-shell-läget: vi vill bara ha out/index.html + out/404.html som
+          # HTML. Per-route index.html är medvetet borttagna så all routing
+          # går klientsidigt via SpaRedirectReader.
+          test -f out/index.html || (echo "out/index.html saknas — SPA-shell:en!" && exit 1)
+          htmlcount=$(find out -name '*.html' | wc -l | tr -d ' ')
+          if [ "$htmlcount" -gt 2 ]; then
+            echo "Förväntade ≤2 HTML-filer (index + 404), hittade $htmlcount:"
+            find out -name '*.html'
+            exit 1
+          fi
+          echo "✓ Sanity check OK — $docs dokumentfiler, manifest finns, $htmlcount HTML-fil(er) (SPA-shell)."
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
