@@ -74,7 +74,9 @@ async function main(): Promise<void> {
     mkdirSync(resolve(full, ".."), { recursive: true });
     writeFileSync(full, bytes);
     // Uppdatera sizeBytes på raden så filtoolbarn visar rätt storlek
-    (doc as Record<string, unknown>).sizeBytes = statSync(full).size;
+    const sz = statSync(full).size;
+    (doc as Record<string, unknown>).sizeBytes = sz;
+    (doc as Record<string, unknown>).fileSize = sz;
   }
 
   const files = seedToFiles(seed);

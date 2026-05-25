@@ -60,8 +60,28 @@ export abstract class JsonProjection<T> implements IProjection<T> {
     return JSON.stringify(input, null, 2);
   }
 
+  /**
+   * Bevara ALLA fält från JSON:en, även de som inte finns i schemat.
+   * Zod default strippar okända fält → UI tappar t.ex. `createdAt`,
+   * `fileSize` osv. Vi vill att projection-schemat bara VALIDERAR
+   * obligatoriska fält, inte filtrerar bort extra. Här flettas raw-json:en
+   * tillbaka över det parsade resultatet så stripping inte sker.
+   *
+   * Trade-off: typfel i extra-fält fångas inte. Acceptabelt eftersom
+   * obligatoriska fält fortfarande typcheckas, och UI-fält är typade i sin
+   * egen schemas i src/shared/schemas/.
+   */
+  protected mergeRawAfterParse(raw: unknown, parsed: T): T {
+    if (!raw || typeof raw !== "object" || !parsed || typeof parsed !== "object") return parsed;
+    return { ...(raw as Record<string, unknown>), ...(parsed as Record<string, unknown>) } as T;
+  }
+
   deserialize(raw: string): T {
-    return this.schema.parse(JSON.parse(raw));
+    const json = JSON.parse(raw);
+    const parsed = this.schema.parse(json);
+    // Behåll extra-fält (createdAt, updatedAt, fileSize, invoiceDate, etc.)
+    // som UI/tRPC förväntar sig men som inte är i projection-schemat.
+    return this.mergeRawAfterParse(json, parsed);
   }
 }
 

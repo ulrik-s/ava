@@ -84,7 +84,9 @@ async function main(): Promise<void> {
     const full = resolve(outDir, d.storagePath);
     mkdirSync(resolve(full, ".."), { recursive: true });
     writeFileSync(full, bytes);
-    (doc as Record<string, unknown>).sizeBytes = statSync(full).size;
+    const sz = statSync(full).size;
+    (doc as Record<string, unknown>).sizeBytes = sz;
+    (doc as Record<string, unknown>).fileSize = sz;
   }
 
   // 4. Skriv ut JSON-rader för alla entiteter

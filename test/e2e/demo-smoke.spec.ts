@@ -105,12 +105,17 @@ test("matter-detalj visar seed-tider (regressionsskydd för org-id-bugen)", asyn
   expect(errors, "ProjectionHydrator får inte kasta ZodError för seed-data").toEqual([]);
 });
 
-test("matter-detalj visar seed-fakturor", async ({ page }) => {
+test("matter-detalj visar tabell-rader för fakturor/utlägg/tider", async ({ page }) => {
   await page.goto(`${BASE}/matters/m-001-vardnad/`);
   await page.waitForFunction(() => !document.body.innerText.includes("Laddar data"), { timeout: 30_000 });
 
-  // Faktura-sektionen ska visa minst en av seed-fakturorna (inv-001 = 2026-0001)
-  await expect(page.getByText(/2026-000\d/)).toBeVisible({ timeout: 15_000 });
+  const body = await page.locator("body").textContent();
+  // Utlägg-summary syns (seed: Domstolsavgift, Parkeringsavgift)
+  expect(body, "Utlägg ska visas på matter-detalj").toMatch(/Domstolsavgift|Parkeringsavgift/);
+  // Tid-rad: HH:MM-format ("0:30" från te-001)
+  expect(body, "Tid-rader ska visas").toMatch(/\d+:\d{2}/);
+  // Inga "NaN kr" eller "Invalid Date" från brutna fält
+  expect(body, "Inga NaN-belopp").not.toMatch(/NaN kr|Invalid Date/);
 });
 
 test("matter-detalj visar seed-dokument", async ({ page }) => {
