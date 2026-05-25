@@ -61,6 +61,7 @@ jobs:
         run: |
           test -f out/manifest.json || (echo "manifest.json saknas!" && exit 1)
           test -f out/.nojekyll || (echo ".nojekyll saknas!" && exit 1)
+          test -f out/404.html || (echo "404.html saknas (SPA-fallback)!" && exit 1)
           docs=$(find out/documents/content -type f 2>/dev/null | wc -l | tr -d ' ')
           if [ "$docs" -lt 30 ]; then
             echo "Förväntade ≥30 PDF/DOCX-filer, fick $docs"

@@ -10,7 +10,13 @@
  */
 
 import { DemoBootstrap } from "./demo-bootstrap";
+import { SpaRedirectReader } from "./spa-redirect-reader";
 
 export function Providers({ children }: { children: React.ReactNode }) {
-  return <DemoBootstrap>{children}</DemoBootstrap>;
+  return (
+    <DemoBootstrap>
+      <SpaRedirectReader />
+      {children}
+    </DemoBootstrap>
+  );
 }
