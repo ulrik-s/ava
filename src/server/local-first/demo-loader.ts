@@ -158,6 +158,18 @@ export class DemoLoader {
       timeEntry: ["time-entries"],
       expense: ["expenses"],
       invoice: ["invoices"],
+      // Tillagda — utan dessa skippades hela mappen även om
+      // ProjectionRegistry kände till path-prefix:en. Resultat:
+      // kalender, avbetalningar, tasks osv. visade tomt i UI.
+      calendarEvent: ["calendar"],
+      paymentPlan: ["payment-plans"],
+      payment: ["payments"],
+      paymentPlanReminder: ["payment-plan-reminders"],
+      task: ["tasks"],
+      conflictCheck: ["conflict-checks"],
+      documentTemplate: [".ava/templates"],
+      organization: [".ava/organizations"],
+      office: ["offices"],
     };
     return prefixes[entity] ?? [];
   }

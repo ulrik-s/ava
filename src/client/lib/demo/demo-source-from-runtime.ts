@@ -26,6 +26,14 @@ const ENTITY_TO_SOURCE_KEY: Record<string, keyof DemoSource> = {
   organization: "organizations",
   office: "offices",
   documentTemplate: "documentTemplates",
+  // Tillagda: tidigare hydraterades dessa inte → kalender, avbetalningar,
+  // tasks och jävskontroller visade tomma listor i demon.
+  calendarEvent: "calendarEvents",
+  paymentPlan: "paymentPlans",
+  payment: "payments",
+  paymentPlanReminder: "paymentPlanReminders",
+  task: "tasks",
+  conflictCheck: "conflictChecks",
 };
 
 export function demoSourceFromRuntime(runtime: DemoRuntime): DemoSource {

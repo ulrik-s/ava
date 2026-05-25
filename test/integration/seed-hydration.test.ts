@@ -67,7 +67,9 @@ describe("seed-data hydration", () => {
     const requiresOrgId = [
       "contacts/", "matters/", "matter-contacts/",
       "documents/", "time-entries/", "expenses/", "invoices/",
-      ".ava/users/", ".ava/organizations/",
+      ".ava/users/",
+      // .ava/organizations/ — organisationen ÄR själv organisationen,
+      // ingen organizationId nödvändig
     ];
 
     for (const { path, data } of files) {
