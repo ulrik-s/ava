@@ -218,9 +218,9 @@ export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
   // matterContacts
   for (const m of MATTERS) {
     const created = isoDate(-m.createdDaysAgo);
-    out.matterContacts.push({ id: `mc-${m.id}-klient`, matterId: m.id, contactId: m.klientId, role: "KLIENT", createdAt: created });
-    if (m.motpartId) out.matterContacts.push({ id: `mc-${m.id}-motpart`, matterId: m.id, contactId: m.motpartId, role: "MOTPART", createdAt: created });
-    if (m.domstolId) out.matterContacts.push({ id: `mc-${m.id}-domstol`, matterId: m.id, contactId: m.domstolId, role: "DOMSTOL", createdAt: created });
+    out.matterContacts.push({ id: `mc-${m.id}-klient`, matterId: m.id, contactId: m.klientId, role: "KLIENT", organizationId: orgId, createdAt: created });
+    if (m.motpartId) out.matterContacts.push({ id: `mc-${m.id}-motpart`, matterId: m.id, contactId: m.motpartId, role: "MOTPART", organizationId: orgId, createdAt: created });
+    if (m.domstolId) out.matterContacts.push({ id: `mc-${m.id}-domstol`, matterId: m.id, contactId: m.domstolId, role: "DOMSTOL", organizationId: orgId, createdAt: created });
   }
 
   // documents — 20 PDF + 20 DOCX. Faktiska binärfiler skrivs av
@@ -248,7 +248,7 @@ export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
       const daysAgo = (docSeq * 2) + 3;
       docSeq++;
       out.documents.push({
-        id, matterId: matter.id, folderId: null,
+        id, organizationId: orgId, matterId: matter.id, folderId: null,
         fileName: `${k.baseName} ${matter.matterNumber}.${fmt.ext}`,
         mimeType: fmt.mime,
         sizeBytes: 0, // fylls i av seed-script efter att binärfilen genererats
@@ -272,6 +272,7 @@ export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
     const daysAgo = (i * 3) + 1;
     out.timeEntries.push({
       id: `te-${String(i + 1).padStart(3, "0")}`,
+      organizationId: orgId,
       userId: user.id, matterId: matter.id, date: isoDate(-daysAgo, 14),
       minutes: 30 + ((i * 17) % 5) * 15,
       description: `${tasks[i % tasks.length]} (${matter.title.slice(0, 30)})`,
@@ -300,6 +301,7 @@ export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
     const daysAgo = (i * 4) + 2;
     out.expenses.push({
       id: `ex-${String(i + 1).padStart(3, "0")}`,
+      organizationId: orgId,
       userId: user.id, matterId: matter.id, date: isoDate(-daysAgo, 12),
       amount: cat.amount, description: cat.description,
       vatRate: cat.vatRate, vatIncluded: true,
@@ -313,12 +315,22 @@ export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
   for (let i = 0; i < 12; i++) {
     const matter = MATTERS[i % MATTERS.length];
     const daysAgo = (i * 7) + 5;
+    const amountInclVat = 80_000 + (i * 23_000);
+    // 25 % moms baked-in: exklusiv-belopp = inkl / 1.25 (avrundat till örestal)
+    const amountExclVat = Math.round(amountInclVat / 1.25);
     out.invoices.push({
       id: `inv-${String(i + 1).padStart(3, "0")}`,
-      matterId: matter.id, amount: 80_000 + (i * 23_000),
-      status: statuses[i % statuses.length], invoiceType: "STANDARD",
-      invoiceDate: isoDate(-daysAgo), dueDate: isoDate(-daysAgo + 30), notes: null,
-      createdAt: isoDate(-daysAgo), updatedAt: isoDate(-daysAgo),
+      organizationId: orgId,
+      matterId: matter.id,
+      invoiceNumber: `${new Date().getFullYear()}-${String(i + 1).padStart(4, "0")}`,
+      type: "FINAL",
+      status: statuses[i % statuses.length],
+      amountExclVat,
+      vat: amountInclVat - amountExclVat,
+      amountInclVat,
+      issuedAt: isoDate(-daysAgo),
+      dueAt: isoDate(-daysAgo + 30),
+      paidAt: statuses[i % statuses.length] === "PAID" ? isoDate(-daysAgo + 20) : null,
     });
   }
 
@@ -416,16 +428,17 @@ export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
     return r.status === "PAID" && !planTargets.some((p) => p.invoiceId === r.id);
   });
   for (const inv of paidExtras.slice(0, 3)) {
-    const r = inv as { id: string; amount: number; invoiceDate: Date | string };
+    const r = inv as { id: string; amountInclVat: number; issuedAt: Date | string };
     paymentSeq++;
+    const issuedIso = typeof r.issuedAt === "string" ? r.issuedAt : r.issuedAt.toISOString();
     out.payments.push({
       id: `pay-${String(paymentSeq).padStart(3, "0")}`,
       invoiceId: r.id,
-      amount: r.amount,
-      paidAt: new Date(typeof r.invoiceDate === "string" ? r.invoiceDate : r.invoiceDate.toISOString()),
+      amount: r.amountInclVat,
+      paidAt: new Date(issuedIso),
       note: "Engångsbetalning",
       recordedById: currentUserId,
-      createdAt: new Date(typeof r.invoiceDate === "string" ? r.invoiceDate : r.invoiceDate.toISOString()),
+      createdAt: new Date(issuedIso),
     });
   }
 
