@@ -52,3 +52,48 @@ for (const { path, expectText } of ROUTES) {
     });
   });
 }
+
+// ── Djupare tester: hydratering + navigation ──────────────────────────────
+
+test("dokumentmallar visas (data laddas från .ava/templates/)", async ({ page }) => {
+  await page.goto(`${BASE}/templates/`);
+  // "Kostnadsräkning till rätten" är en seed-mall (specifik nog för strict mode)
+  await expect(page.getByRole("cell", { name: "Kostnadsräkning till rätten", exact: true })).toBeVisible({ timeout: 15_000 });
+});
+
+test("ärendelistan visar seed-data (Brottmål m-016)", async ({ page }) => {
+  await page.goto(`${BASE}/matters/`);
+  await expect(page.getByText(/Brottm/, { exact: false }).first()).toBeVisible({ timeout: 15_000 });
+});
+
+test("kontaktlistan visar seed-data (Andersson)", async ({ page }) => {
+  await page.goto(`${BASE}/contacts/`);
+  await expect(page.getByText("Andersson", { exact: false }).first()).toBeVisible({ timeout: 15_000 });
+});
+
+test("klick på matter öppnar detalj-sidan utan loop", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (err) => errors.push(`pageerror: ${err.message}`));
+
+  await page.goto(`${BASE}/matters/m-016-brottmal-rh/`);
+  await expect(page.locator("body")).toContainText(/Brottm|m-016/i, { timeout: 15_000 });
+
+  // Vänta lite och försäkra oss om att vi inte loop:ar till en redirect-sida
+  await page.waitForTimeout(1500);
+  expect(page.url(), "URL ska innehålla matter-id:t").toMatch(/m-016-brottmal-rh/);
+  expect(errors, "inga script-errors").toEqual([]);
+});
+
+test("avbetalningsplaner-sidan listar seed-planerna", async ({ page }) => {
+  await page.goto(`${BASE}/payment-plans/`);
+  // Listan visar ärendenr (2026-XXXX) + klient-namn. Verifiera att åtminstone
+  // en avbetalningsplan-länk syns (pp-001..pp-007 i seed).
+  await expect(page.locator('a[href*="/payment-plans/pp-"]').first()).toBeVisible({ timeout: 15_000 });
+});
+
+test("SPA-fallback redirectar till app-shellen vid 404", async ({ page }) => {
+  await page.goto(`${BASE}/matters/m-doesnt-exist-here/`);
+  // 404.html → location.replace → app-shell hydraterar
+  // Slutligen ska vi se nav-länken till Ärenden (alltså sidebar:n är synlig)
+  await expect(page.locator("nav").getByRole("link", { name: /Ärenden/ })).toBeVisible({ timeout: 15_000 });
+});
