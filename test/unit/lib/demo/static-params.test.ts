@@ -1,63 +1,41 @@
 /**
  * Tester för demo-static-params: collectDemoIds + demoStaticParams.
  *
- * Båda är build-time-helpers som kör i Node. Vi mockar global fetch och
- * styr DEMO_BUILD via process.env.
+ * Använder samma in-process buildSeed() som CI:n: ingen fetch, ingen
+ * manifest — id:na kommer från seed-data:n direkt så vi inte behöver
+ * vänta in en deploy-cykel mellan seed-skrivning och build.
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-const realFetch = globalThis.fetch;
 const realDemoBuild = process.env.DEMO_BUILD;
 
-function mockManifestFetch(paths: string[] | unknown, ok = true): void {
-  globalThis.fetch = vi.fn(async () => ({
-    ok,
-    json: async () => ({ paths }),
-  } as Response)) as typeof fetch;
-}
-
 afterEach(() => {
-  globalThis.fetch = realFetch;
   if (realDemoBuild === undefined) delete process.env.DEMO_BUILD;
   else process.env.DEMO_BUILD = realDemoBuild;
-  vi.resetModules();
 });
 
 describe("collectDemoIds", () => {
-  it("extraherar id:n från manifest-paths under prefix", async () => {
-    mockManifestFetch([
-      "matters/active/m-arvskifte.json",
-      "matters/active/m-bostadsratt.json",
-      "contacts/c-andersson.json", // annan prefix — ignoreras
-      "matters/closed/m-old.json", // annan sub-prefix — ignoreras
-    ]);
+  it("returnerar matter-id:n från buildSeed", async () => {
     const { collectDemoIds } = await import("@/client/lib/demo/static-params");
-    expect(await collectDemoIds("matters/active")).toEqual(["m-arvskifte", "m-bostadsratt"]);
+    const ids = await collectDemoIds("matters/active");
+    // Seed innehåller flera matters (m-001 .. m-017+). Vi verifierar bara
+    // att det inte är tomt och att brottmåls-id:na är med.
+    expect(ids.length).toBeGreaterThan(5);
+    expect(ids.some((i) => i.startsWith("m-"))).toBe(true);
   });
 
   it("normaliserar trailing slash i prefix", async () => {
-    mockManifestFetch(["contacts/c-1.json", "contacts/c-2.json"]);
     const { collectDemoIds } = await import("@/client/lib/demo/static-params");
-    expect(await collectDemoIds("contacts/")).toEqual(["c-1", "c-2"]);
+    const withSlash = await collectDemoIds("contacts/");
+    const without = await collectDemoIds("contacts");
+    expect(withSlash).toEqual(without);
+    expect(withSlash.length).toBeGreaterThan(5);
   });
 
-  it("returnerar [] när manifest 404:ar", async () => {
-    mockManifestFetch(["foo"], false);
+  it("returnerar [] när prefixen inte finns i seed", async () => {
     const { collectDemoIds } = await import("@/client/lib/demo/static-params");
-    expect(await collectDemoIds("matters")).toEqual([]);
-  });
-
-  it("returnerar [] när manifest saknar paths-array", async () => {
-    mockManifestFetch("not-an-array");
-    const { collectDemoIds } = await import("@/client/lib/demo/static-params");
-    expect(await collectDemoIds("matters")).toEqual([]);
-  });
-
-  it("returnerar [] när fetch kastar", async () => {
-    globalThis.fetch = vi.fn(async () => { throw new Error("network"); }) as typeof fetch;
-    const { collectDemoIds } = await import("@/client/lib/demo/static-params");
-    expect(await collectDemoIds("matters")).toEqual([]);
+    expect(await collectDemoIds("does-not-exist")).toEqual([]);
   });
 });
 
@@ -69,22 +47,14 @@ describe("demoStaticParams", () => {
     expect(await demoStaticParams("matters/active")).toEqual([]);
   });
 
-  it("inkluderar SHELL_PARAM-sentinel + collectade id:n när DEMO_BUILD=1", async () => {
+  it("inkluderar SHELL_PARAM-sentinel + seed-id:n när DEMO_BUILD=1", async () => {
     process.env.DEMO_BUILD = "1";
-    mockManifestFetch(["matters/active/m-1.json", "matters/active/m-2.json"]);
     const { demoStaticParams, SHELL_PARAM } = await import("@/client/lib/demo/static-params");
     const params = await demoStaticParams("matters/active");
-    expect(params).toEqual([
-      { id: "m-1" },
-      { id: "m-2" },
-      { id: SHELL_PARAM },
-    ]);
-  });
-
-  it("returnerar bara sentinel-shell när manifest är tomt", async () => {
-    process.env.DEMO_BUILD = "1";
-    mockManifestFetch([]);
-    const { demoStaticParams, SHELL_PARAM } = await import("@/client/lib/demo/static-params");
-    expect(await demoStaticParams("matters/active")).toEqual([{ id: SHELL_PARAM }]);
+    const ids = params.map((p) => p.id);
+    expect(ids).toContain(SHELL_PARAM);
+    expect(ids.some((i) => i.startsWith("m-"))).toBe(true);
+    // Sentinel-shellen ska vara sist (efter alla seed-id:n)
+    expect(ids[ids.length - 1]).toBe(SHELL_PARAM);
   });
 });

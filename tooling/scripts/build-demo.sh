@@ -34,7 +34,7 @@ APP_DIR="$ROOT/src/app"
 STASH_PATHS=(
   "api"
   "login"
-  "templates"
+  "templates/[id]"
   "users/[id]"
 )
 
@@ -42,11 +42,9 @@ STASH_PATHS=(
 # istället för att bara 404:a när användaren klickar i sidopanelen.
 # Notera att "api" och "login" inte syns i sidobar — ingen placeholder.
 #
-# /settings, /users och /profile är *inte* placeholders — alla
+# /settings, /users, /profile och /templates är *inte* placeholders — alla
 # fungerar mot DemoDataStore via demo-trpc-link.
-PLACEHOLDER_ROUTES=(
-  "templates"
-)
+PLACEHOLDER_ROUTES=()
 
 cleanup() {
   if [[ -d "$STASH_DIR" ]]; then

@@ -50,8 +50,11 @@ jobs:
           DEMO_BASE_PATH: ${{ steps.pages.outputs.base_path }}
           # Tala om för app:en att data lever på samma origin/repo som den
           # själv. Annars defaultar firma-config till ulrik-s/ava-demo →
-          # CORS-fel + tom data.
+          # CORS-fel + tom data. Båda env-namnen sätts eftersom olika filer
+          # läser olika varianter (NEXT_PUBLIC_DEMO_REPO i firma-config.ts;
+          # NEXT_PUBLIC_DEFAULT_DEMO_REPO i search/demo/document-row).
           NEXT_PUBLIC_DEMO_REPO: ${{ github.repository }}
+          NEXT_PUBLIC_DEFAULT_DEMO_REPO: ${{ github.repository }}
         run: bash tooling/scripts/build-demo.sh
 
       - name: Sanity check — manifest + binärfiler
@@ -63,7 +66,15 @@ jobs:
             echo "Förväntade ≥30 PDF/DOCX-filer, fick $docs"
             exit 1
           fi
-          echo "✓ Sanity check OK — $docs dokumentfiler, manifest finns."
+          # Kritiska sidor som tidigare har klobbats av seed (data-dir-namn
+          # som kolliderar med routes). Säkerställ att index.html finns.
+          for route in calendar contacts invoices payment-plans matters; do
+            if [ ! -f "out/$route/index.html" ]; then
+              echo "out/$route/index.html saknas! (seed-data har troligen klobbat HTML:en)"
+              exit 1
+            fi
+          done
+          echo "✓ Sanity check OK — $docs dokumentfiler, manifest finns, alla route-html:er finns."
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

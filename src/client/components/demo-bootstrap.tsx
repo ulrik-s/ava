@@ -244,7 +244,12 @@ function AuthGatedDemoTree(props: TreeProps) {
   // readOnly avgörs av auth-mode. FSA-handle krävs fortfarande för att
   // write faktiskt ska landa på disk; om vi saknar handle visar vi UI:n
   // som write-mode men sync-pillen kommer berätta att inget skrivs.
-  const readOnly = auth.mode !== "identified-write" || fsaHandle === null;
+  //
+  // I demo-tier ger vi däremot full write-känsla i UI:n — mutationer
+  // landar i DemoDataStore (in-memory), de bara persister inte över
+  // page reload. DemoModeBanner förklarar för användaren.
+  const isDemoTier = firmaConfig.tier === "demo";
+  const readOnly = isDemoTier ? false : (auth.mode !== "identified-write" || fsaHandle === null);
 
   return (
     <DemoModeProvider readOnly={readOnly}>

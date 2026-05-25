@@ -19,7 +19,7 @@
  * (legacy-id-namn så befintliga bokmärken funkar). E-mail-domän "ava.demo".
  */
 
-import { mkdirSync, rmSync, existsSync, writeFileSync, statSync } from "node:fs";
+import { mkdirSync, rmSync, existsSync, writeFileSync, statSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { buildSeed, seedToFiles, generateDocumentBytes } from "./seed-data";
 
@@ -42,8 +42,11 @@ async function main(): Promise<void> {
   //    → out/ innehåller redan app:en. Vi ska bara LÄGGA TILL data-filer
   //    ovanpå.
   //
-  //    Däremot rensar vi de SPECIFIKA data-mapparna så obsoleta entiteter
-  //    från tidigare seed-körningar inte hänger med.
+  //    Däremot rensar vi seed-data-FILERNA (json-rader) ur de specifika
+  //    mapparna så obsoleta entiteter från tidigare körningar inte hänger
+  //    med. VIKTIGT: vi raderar inte hela mapparna eftersom flera av dem
+  //    KOLLIDERAR med Next:s static-export-routes (out/calendar/index.html
+  //    delar dir med out/calendar/cal-*.json). Vi raderar bara .json-filer.
   mkdirSync(outDir, { recursive: true });
   const dataDirs = [
     ".ava/organizations", ".ava/users", ".ava/templates",
@@ -55,7 +58,12 @@ async function main(): Promise<void> {
   ];
   for (const d of dataDirs) {
     const full = resolve(outDir, d);
-    if (existsSync(full)) rmSync(full, { recursive: true, force: true });
+    if (!existsSync(full)) continue;
+    for (const entry of readdirSync(full)) {
+      if (entry.endsWith(".json")) {
+        rmSync(resolve(full, entry), { force: true });
+      }
+    }
   }
 
   // 2. Bygg dataset med demo-args
