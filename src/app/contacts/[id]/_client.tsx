@@ -234,7 +234,7 @@ export default function ContactDetailClient({ id: paramId }: { id: string }) {
             </form>
           )}
           <div className="divide-y divide-gray-100">
-            {c.children.map((child: { id: string; name: string; contactType: string; email: string | null; phone: string | null; notes: string | null }) => (
+            {(c.children ?? []).map((child: { id: string; name: string; contactType: string; email: string | null; phone: string | null; notes: string | null }) => (
               <Link key={child.id} href={`/contacts/${child.id}`} className="block px-6 py-3 hover:bg-gray-50">
                 <p className="text-sm font-medium text-gray-900">{child.name}</p>
                 <p className="text-xs text-gray-500">

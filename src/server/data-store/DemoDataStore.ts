@@ -159,6 +159,12 @@ export class DemoDataStore implements IDataStore {
         collection: () => this.source.matterContacts ?? [],
         where: (parent) => ({ contactId: (parent as { id: string }).id }),
       },
+      // Hierarki: en kontakt kan ha barn (t.ex. en organisation med
+      // anställda) och en parent. Båda valfria; UI:n kräver children
+      // som array — utan denna relation blev c.children undefined och
+      // .map() kraschade.
+      children: this.rel("contacts", "parentId", "id"),
+      parent: this.rel("contacts", "id", "parentId", "one"),
     }) as unknown as ContactDelegate;
     this.documents = this.makeDelegate("documents", {
       // kind:"one" är AVGÖRANDE — utan det matcheras nested where

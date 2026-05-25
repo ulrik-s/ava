@@ -91,6 +91,21 @@ test("avbetalningsplaner-sidan listar seed-planerna", async ({ page }) => {
   await expect(page.locator('a[href*="/payment-plans/pp-"]').first()).toBeVisible({ timeout: 15_000 });
 });
 
+test("kontakt-detalj kraschar inte (c.children kan vara undefined)", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push("pageerror: " + e.message.slice(0, 250)));
+
+  // Testa flera olika kontakter med olika "shape"
+  for (const id of ["c-andersson", "c-byggfirma", "c-folksam", "c-skatteverket"]) {
+    await page.goto(`${BASE}/contacts/${id}/`);
+    await page.waitForFunction(() => !document.body.innerText.includes("Laddar data"), { timeout: 30_000 });
+    await page.waitForTimeout(1000);
+  }
+
+  expect(errors.filter((e) => e.includes("children")), "ingen children-undefined-krasch").toEqual([]);
+  expect(errors.filter((e) => e.includes("TypeError")), "inga TypeErrors").toEqual([]);
+});
+
 test("matter-detalj visar seed-tider (regressionsskydd för org-id-bugen)", async ({ page }) => {
   const errors: string[] = [];
   page.on("console", (m) => { if (m.type() === "error" && m.text().includes("hydratisera")) errors.push(m.text()); });
