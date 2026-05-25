@@ -106,6 +106,15 @@ test("kontakt-detalj kraschar inte (c.children kan vara undefined)", async ({ pa
   expect(errors.filter((e) => e.includes("TypeError")), "inga TypeErrors").toEqual([]);
 });
 
+test("faktura-detalj öppnas utan loop (inv-001 + inv-005)", async ({ page }) => {
+  for (const id of ["inv-001", "inv-005"]) {
+    const response = await page.goto(`${BASE}/invoices/${id}/`, { waitUntil: "domcontentloaded" });
+    expect(response?.status(), `inv-${id} ska vara pre-renderad (200), inte SPA-fallback (404)`).toBe(200);
+    await page.waitForFunction(() => !document.body.innerText.includes("Laddar data"), { timeout: 30_000 });
+    expect(page.url(), "ingen redirect-loop").toContain(`/invoices/${id}`);
+  }
+});
+
 test("matter-detalj visar seed-tider (regressionsskydd för org-id-bugen)", async ({ page }) => {
   const errors: string[] = [];
   page.on("console", (m) => { if (m.type() === "error" && m.text().includes("hydratisera")) errors.push(m.text()); });
