@@ -1,9 +1,8 @@
 /**
- * Tester för demo-static-params i SPA-shell-läget.
+ * Tester för demo-static-params: collectDemoIds + demoStaticParams.
  *
- * Vi pre-renderar inte HTML per seed-id längre — bara sentinel-shellen
- * så Next:s build inte klagar. Alla riktiga URL:er routar via 404.html →
- * SpaRedirectReader klientsidigt.
+ * Använder in-process buildSeed() — single source of truth med seed-skrivning,
+ * inga fetch-deps vid build-tid.
  */
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -15,6 +14,28 @@ afterEach(() => {
   else process.env.DEMO_BUILD = realDemoBuild;
 });
 
+describe("collectDemoIds", () => {
+  it("returnerar matter-id:n från buildSeed", async () => {
+    const { collectDemoIds } = await import("@/client/lib/demo/static-params");
+    const ids = await collectDemoIds("matters/active");
+    expect(ids.length).toBeGreaterThan(5);
+    expect(ids.some((i) => i.startsWith("m-"))).toBe(true);
+  });
+
+  it("normaliserar trailing slash i prefix", async () => {
+    const { collectDemoIds } = await import("@/client/lib/demo/static-params");
+    const withSlash = await collectDemoIds("contacts/");
+    const without = await collectDemoIds("contacts");
+    expect(withSlash).toEqual(without);
+    expect(withSlash.length).toBeGreaterThan(5);
+  });
+
+  it("returnerar [] när prefixen inte finns i seed", async () => {
+    const { collectDemoIds } = await import("@/client/lib/demo/static-params");
+    expect(await collectDemoIds("does-not-exist")).toEqual([]);
+  });
+});
+
 describe("demoStaticParams", () => {
   beforeEach(() => { delete process.env.DEMO_BUILD; });
 
@@ -23,25 +44,13 @@ describe("demoStaticParams", () => {
     expect(await demoStaticParams("matters/active")).toEqual([]);
   });
 
-  it("returnerar bara SHELL_PARAM-sentinel när DEMO_BUILD=1", async () => {
+  it("inkluderar SHELL_PARAM-sentinel + seed-id:n när DEMO_BUILD=1", async () => {
     process.env.DEMO_BUILD = "1";
     const { demoStaticParams, SHELL_PARAM } = await import("@/client/lib/demo/static-params");
     const params = await demoStaticParams("matters/active");
-    expect(params).toEqual([{ id: SHELL_PARAM }]);
-  });
-
-  it("returnerar bara sentinel oavsett prefix (en HTML per dynamic route)", async () => {
-    process.env.DEMO_BUILD = "1";
-    const { demoStaticParams, SHELL_PARAM } = await import("@/client/lib/demo/static-params");
-    expect(await demoStaticParams("contacts")).toEqual([{ id: SHELL_PARAM }]);
-    expect(await demoStaticParams("payment-plans")).toEqual([{ id: SHELL_PARAM }]);
-    expect(await demoStaticParams("invoices")).toEqual([{ id: SHELL_PARAM }]);
-  });
-});
-
-describe("collectDemoIds (legacy stub)", () => {
-  it("returnerar tom array — vi pre-renderar inte per id längre", async () => {
-    const { collectDemoIds } = await import("@/client/lib/demo/static-params");
-    expect(await collectDemoIds("matters/active")).toEqual([]);
+    const ids = params.map((p) => p.id);
+    expect(ids).toContain(SHELL_PARAM);
+    expect(ids.some((i) => i.startsWith("m-"))).toBe(true);
+    expect(ids[ids.length - 1]).toBe(SHELL_PARAM);
   });
 });

@@ -10,6 +10,8 @@
     "build": "next build",
     "build:demo": "DEMO_BASE_PATH=/ava bash tooling/scripts/build-demo.sh",
     "build:demo-repo": "tsx tooling/scripts/build-demo-repo.ts",
+    "demo:serve": "bash tooling/scripts/demo-serve.sh",
+    "demo:serve:fast": "SKIP_BUILD=1 bash tooling/scripts/demo-serve.sh",
     "seed:local": "tsx tooling/scripts/seed-firma-local.ts",
     "start": "next start",
     "tier3:up": "docker compose -f tooling/docker/docker-compose.yml up -d --build",

@@ -156,16 +156,7 @@ cat > "$ROOT/out/404.html" <<EOF
 </html>
 EOF
 
-# En SPA-shell: slopa per-route HTML så bara out/index.html + out/404.html
-# finns kvar. Alla okända URL:er går genom 404.html → SpaRedirectReader →
-# klientsidigt router.replace. Resultat: webappen är fully dynamic efter
-# första rendern, inga pre-renderade per-id-HTML-filer.
-echo "[build-demo] Slopar per-route HTML (behåller bara index.html + 404.html)..."
-find "$ROOT/out" -mindepth 2 -name "index.html" -delete
-# Tomma route-mappar städas bort (kanske bara innehöll just den HTML:en).
-find "$ROOT/out" -mindepth 1 -type d -empty -delete 2>/dev/null || true
-
 echo "[build-demo] Klar. Output: $ROOT/out/"
-echo "  • App: $(find "$ROOT/out" -name '*.html' | wc -l | tr -d ' ') HTML-filer (vi siktar på 2: index + 404)"
+echo "  • App: $(find "$ROOT/out" -name '*.html' | wc -l | tr -d ' ') HTML-filer"
 echo "  • Data: $(grep -c '"' "$ROOT/out/manifest.json" 2>/dev/null || echo 0) entiteter i manifest"
 echo "  • Binärer: $(find "$ROOT/out/documents/content" -type f 2>/dev/null | wc -l | tr -d ' ') PDF/DOCX"

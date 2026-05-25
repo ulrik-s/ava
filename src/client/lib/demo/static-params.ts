@@ -1,26 +1,48 @@
 /**
- * `demoStaticParams` — minimal generateStaticParams för demo-builden.
+ * `demoStaticParams` — generateStaticParams för demo-builden.
  *
- * Vi vill INTE pre-rendera HTML per seed-id (det skulle göra exporten
- * statisk-tung). Istället returnerar vi bara sentinel-shell:en så Next
- * får en (1) HTML-platshållare som chunk-ingång, och alla riktiga
- * URL:er router:as klientsidigt via SPA-fallback (404.html → app-shell).
+ * Next 16 + `output: "export"` kräver att alla dynamic-route-params
+ * enumereras vid build-tid; client-side navigation till okända params
+ * fungerar inte (det är skillnaden mot full-server-builds). Därför
+ * pre-renderar vi 1 HTML per seed-id PLUS en sentinel-shell.
  *
- * `SHELL_PARAM` används också av nginx i self-hosted-läget (try_files
- * fallback för godtyckliga entity-id:n i kundens git-klone).
+ * Sentinel-shellen (`/<route>/__shell__/`) används både för:
+ *   - self-hosted (nginx try_files-fallback för nya entity-id:n)
+ *   - GH Pages demo (404.html redirectar nya id:n hit + ?_p=<path>)
+ *
+ * Datan kommer in-process från `buildSeed()` — single source of truth
+ * delad med seed-skrivnings-stegen.
  */
 
 export const SHELL_PARAM = "__shell__";
 
-export async function demoStaticParams(_pathPrefix: string): Promise<{ id: string }[]> {
+const DEMO_ORG_ID = "demo-firma-ab";
+const DEMO_CURRENT_USER_ID = "u-anna";
+const DEMO_EMAIL_DOMAIN = "ava.demo";
+const DEMO_ORG_NAME = "Demo Advokatbyrå AB";
+
+export async function demoStaticParams(pathPrefix: string): Promise<{ id: string }[]> {
   if (process.env.DEMO_BUILD !== "1") return [];
-  return [{ id: SHELL_PARAM }];
+  const ids = await collectDemoIds(pathPrefix);
+  return [...ids, SHELL_PARAM].map((id) => ({ id }));
 }
 
-/**
- * Kvar för bakåt-kompat med eventuella callers; returnerar tom array
- * eftersom vi inte längre pre-renderar per seed-id.
- */
-export async function collectDemoIds(_pathPrefix: string): Promise<string[]> {
-  return [];
+export async function collectDemoIds(pathPrefix: string): Promise<string[]> {
+  try {
+    const { buildSeed, seedToFiles } = await import("../../../../tooling/scripts/seed-data");
+    const seed = buildSeed({
+      orgId: DEMO_ORG_ID,
+      currentUserId: DEMO_CURRENT_USER_ID,
+      emailDomain: DEMO_EMAIL_DOMAIN,
+      organizationName: DEMO_ORG_NAME,
+    });
+    const files = seedToFiles(seed);
+    const prefix = pathPrefix.replace(/\/+$/, "") + "/";
+    return files
+      .map((f) => f.path)
+      .filter((p: string) => p.startsWith(prefix) && p.endsWith(".json"))
+      .map((p: string) => p.slice(prefix.length, -".json".length));
+  } catch {
+    return [];
+  }
 }

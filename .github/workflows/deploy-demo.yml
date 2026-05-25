@@ -67,17 +67,25 @@ jobs:
             echo "Förväntade ≥30 PDF/DOCX-filer, fick $docs"
             exit 1
           fi
-          # SPA-shell-läget: vi vill bara ha out/index.html + out/404.html som
-          # HTML. Per-route index.html är medvetet borttagna så all routing
-          # går klientsidigt via SpaRedirectReader.
-          test -f out/index.html || (echo "out/index.html saknas — SPA-shell:en!" && exit 1)
-          htmlcount=$(find out -name '*.html' | wc -l | tr -d ' ')
-          if [ "$htmlcount" -gt 2 ]; then
-            echo "Förväntade ≤2 HTML-filer (index + 404), hittade $htmlcount:"
-            find out -name '*.html'
-            exit 1
-          fi
-          echo "✓ Sanity check OK — $docs dokumentfiler, manifest finns, $htmlcount HTML-fil(er) (SPA-shell)."
+          # Kritiska sidor som måste finnas som pre-renderade HTML — Next 16
+          # static export kräver det för dynamic routes; client-side nav till
+          # okända params funkar inte. Seed-IDs har 1 HTML var, plus
+          # __shell__ för runtime-skapade entiteter.
+          test -f out/index.html || (echo "out/index.html saknas!" && exit 1)
+          test -f out/404.html || (echo "out/404.html saknas (SPA-fallback)!" && exit 1)
+          for route in calendar contacts invoices payment-plans matters search settings; do
+            if [ ! -f "out/$route/index.html" ]; then
+              echo "out/$route/index.html saknas!"
+              exit 1
+            fi
+          done
+          for route in matters contacts invoices payment-plans; do
+            if [ ! -f "out/$route/__shell__/index.html" ]; then
+              echo "out/$route/__shell__/index.html saknas (sentinel-shell för okända id:n)!"
+              exit 1
+            fi
+          done
+          echo "✓ Sanity check OK — $docs dokumentfiler, manifest finns, route-HTML:er finns."
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
