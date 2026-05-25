@@ -22,7 +22,7 @@ export const matterRouter = router({
         search: z.string().optional(),
         status: z.enum(["ACTIVE", "CLOSED", "ARCHIVED"]).optional(),
         page: z.number().min(1).default(1),
-        pageSize: z.number().min(1).max(100).default(20),
+        pageSize: z.number().min(1).max(500).default(20),
       })
     )
     .query(async ({ ctx, input }) => {

@@ -4,12 +4,15 @@ import { useId, useState } from "react";
 import Link from "next/link";
 import { trpc } from "@/client/lib/trpc";
 import { formatMinutes } from "@/client/lib/utils";
+import { MatterCombobox } from "@/client/components/matter-combobox";
 
 // eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'TimePage' has a complexity of 9. Maximum allowed is 8.)
 export default function TimePage() {
   const [page, setPage] = useState(1);
   const timeEntries = trpc.timeEntry.list.useQuery({ page, pageSize: 50 });
-  const matters = trpc.matter.list.useQuery({ pageSize: 200 });
+  // Hämta alla ACTIVE matters (cap 500 räcker för en advokatbyrå). Tidigare
+  // skickades 200 men routern cappade på 100 → Zod-fail → tom dropdown.
+  const matters = trpc.matter.list.useQuery({ pageSize: 500, status: "ACTIVE" });
   const utils = trpc.useUtils();
 
   const [showForm, setShowForm] = useState(false);
@@ -53,15 +56,16 @@ export default function TimePage() {
           className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div>
-              <label htmlFor={matterFieldId} className="block text-sm text-gray-500 mb-1">Ärende *</label>
-              <select id={matterFieldId} required value={form.matterId}
-                onChange={(e) => setForm({ ...form, matterId: e.target.value })}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
-                <option value="">Välj ärende...</option>
-                {matters.data?.matters.map((m) => (
-                  <option key={m.id} value={m.id}>{m.matterNumber} — {m.title}</option>
-                ))}
-              </select>
+              <MatterCombobox
+                label="Ärende *"
+                required
+                matters={matters.data?.matters ?? []}
+                value={form.matterId}
+                onChange={(id) => setForm({ ...form, matterId: id })}
+              />
+              {matters.data && matters.data.matters.length === 0 && (
+                <p className="text-xs text-amber-600 mt-1">Inga aktiva ärenden — skapa ett under Ärenden.</p>
+              )}
             </div>
             <div>
               <label htmlFor={dateFieldId} className="block text-sm text-gray-500 mb-1">Datum *</label>

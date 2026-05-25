@@ -36,19 +36,33 @@ export function ExpenseSection({ matterId, isTaxeArende }: Props) {
   const utils = trpc.useUtils();
   const expenses = trpc.expense.list.useQuery({ matterId });
   const [showExpenseForm, setShowExpenseForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [expenseForm, setExpenseForm] = useState<ExpenseForm>(initialForm);
 
-  const createExpense = trpc.expense.create.useMutation({
-    onSuccess: () => {
-      utils.expense.list.invalidate({ matterId });
-      setShowExpenseForm(false);
-      setExpenseForm(initialForm());
-    },
-  });
+  function resetForm(): void {
+    setShowExpenseForm(false);
+    setEditingId(null);
+    setExpenseForm(initialForm());
+  }
 
+  const createExpense = trpc.expense.create.useMutation({ onSuccess: () => { utils.expense.list.invalidate({ matterId }); resetForm(); } });
+  const updateExpense = trpc.expense.update.useMutation({ onSuccess: () => { utils.expense.list.invalidate({ matterId }); resetForm(); } });
   const deleteExpense = trpc.expense.delete.useMutation({
     onSuccess: () => utils.expense.list.invalidate({ matterId }),
   });
+
+  function startEdit(e: Expense): void {
+    setEditingId(e.id);
+    setShowExpenseForm(true);
+    setExpenseForm({
+      date: new Date(e.date).toISOString().split("T")[0],
+      amount: e.amount / 100,
+      description: e.description,
+      billable: e.billable,
+      vatRate: (e.vatRate ?? 2500) as VatRate,
+      vatIncluded: e.vatIncluded ?? true,
+    });
+  }
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 lg:col-span-2">
@@ -59,7 +73,7 @@ export function ExpenseSection({ matterId, isTaxeArende }: Props) {
             <span className="ml-2 text-sm font-normal text-gray-500">(totalt {formatCurrency(expenses.data.totalAmount)})</span>
           )}
         </h2>
-        <button onClick={() => setShowExpenseForm(!showExpenseForm)} className="text-sm text-blue-600 hover:underline">
+        <button onClick={() => showExpenseForm ? resetForm() : setShowExpenseForm(true)} className="text-sm text-blue-600 hover:underline">
           {showExpenseForm ? "Avbryt" : "+ Nytt utlägg"}
         </button>
       </div>
@@ -67,15 +81,16 @@ export function ExpenseSection({ matterId, isTaxeArende }: Props) {
       {showExpenseForm && (
         <form onSubmit={(e) => {
           e.preventDefault();
-          createExpense.mutate({
-            matterId,
+          const payload = {
             date: expenseForm.date,
             amount: Math.round(expenseForm.amount * 100),
             description: expenseForm.description,
             billable: expenseForm.billable,
             vatRate: expenseForm.vatRate,
             vatIncluded: expenseForm.vatIncluded,
-          });
+          };
+          if (editingId) updateExpense.mutate({ id: editingId, ...payload });
+          else createExpense.mutate({ matterId, ...payload });
         }} className="p-4 border-b border-gray-200 space-y-3">
           {isTaxeArende && (
             <div className="text-xs text-indigo-900 bg-indigo-50 border border-indigo-200 rounded px-3 py-2">
@@ -125,9 +140,9 @@ export function ExpenseSection({ matterId, isTaxeArende }: Props) {
                 onChange={(e) => setExpenseForm({ ...expenseForm, billable: e.target.checked })} />
               Debiterbar
             </label>
-            <button type="submit" disabled={createExpense.isPending}
+            <button type="submit" disabled={createExpense.isPending || updateExpense.isPending}
               className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 disabled:opacity-50">
-              {createExpense.isPending ? "Sparar..." : "Spara"}
+              {(createExpense.isPending || updateExpense.isPending) ? "Sparar..." : (editingId ? "Spara ändring" : "Spara")}
             </button>
           </div>
         </form>
@@ -135,7 +150,8 @@ export function ExpenseSection({ matterId, isTaxeArende }: Props) {
 
       <ExpenseTable
         expenses={expenses.data?.expenses ?? []}
-        onDelete={(id) => deleteExpense.mutate({ id })}
+        onEdit={(e) => { startEdit(e); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+        onDelete={(id) => { if (confirm("Ta bort utlägget?")) deleteExpense.mutate({ id }); }}
       />
     </div>
   );
@@ -162,7 +178,7 @@ interface Expense {
   vatIncluded?: boolean;
 }
 
-function ExpenseTable({ expenses, onDelete }: { expenses: Expense[]; onDelete: (id: string) => void }) {
+function ExpenseTable({ expenses, onEdit, onDelete }: { expenses: Expense[]; onEdit: (e: Expense) => void; onDelete: (id: string) => void }) {
   // Totalsumma exkl/moms/inkl
   const totals = expenses.reduce(
     (acc, e) => {
@@ -211,7 +227,10 @@ function ExpenseTable({ expenses, onDelete }: { expenses: Expense[]; onDelete: (
                 <td className="px-6 py-2 text-sm font-mono text-gray-500 text-right whitespace-nowrap" title={`${rateLabel}`}>{formatCurrency(r.vat)}</td>
                 <td className="px-6 py-2 text-sm font-mono text-gray-900 text-right whitespace-nowrap">{formatCurrency(r.inclVat)}</td>
                 <td className="px-6 py-2 text-sm">{expense.billable ? "Ja" : "Nej"}</td>
-                <td className="px-6 py-2 text-right">
+                <td className="px-6 py-2 text-right whitespace-nowrap">
+                  <button onClick={() => onEdit(expense)} className="text-xs text-gray-500 hover:text-blue-600 hover:underline mr-3">
+                    Ändra
+                  </button>
                   <button onClick={() => onDelete(expense.id)} className="text-xs text-red-500 hover:underline">
                     Ta bort
                   </button>
