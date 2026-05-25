@@ -537,6 +537,59 @@ test("dokumentsök: ladda upp PDF → extract-text indexerar → sök hittar inn
   }, { timeout: 30_000, intervals: [1000, 1500, 2000] }).toBeGreaterThan(0);
 });
 
+test("dokument: ladda upp + radera → documents/<id>.json försvinner ur git-db:n", async ({ page }) => {
+  const stamp = Date.now();
+  const fileName = `att-radera-${stamp}.txt`;
+
+  await configureSelfHosted(page);
+  await createContact(page, `Klient ${stamp}`);
+  await createMatterAndOpen(page, `Ärende ${stamp}`, `Klient ${stamp}`);
+
+  const fileInput = page.locator('input[type="file"]').first();
+  await fileInput.setInputFiles({ name: fileName, mimeType: "text/plain", buffer: Buffer.from("temp content\n") });
+  await expect(page.getByText(fileName)).toBeVisible({ timeout: 15_000 });
+
+  // Hitta + klicka "Ta bort"-knappen i raden för det här dokumentet
+  const row = page.locator("tr", { hasText: fileName });
+  page.once("dialog", (d) => d.accept()); // confirm-dialog
+  await row.getByRole("button", { name: /Ta bort/i }).click();
+
+  // Raden försvinner i UI:n
+  await expect(page.getByText(fileName)).toHaveCount(0, { timeout: 15_000 });
+
+  // Och från git-db:n
+  await expect.poll(() => rowsInRepo("documents").map((d) => String(d.fileName)), POLL).not.toContain(fileName);
+});
+
+test("dokumentmallar: skapa + använd + radera → .ava/templates/ i git-db:n", async ({ page }) => {
+  const stamp = Date.now();
+  const tmplName = `Testmall ${stamp}`;
+  const tmplContent = `<h1>Testmall</h1><p>Skapad {{stamp}}</p>`;
+
+  await configureSelfHosted(page);
+  await page.goto("/ava/templates/");
+  await expect(page.getByText("Laddar data…")).toHaveCount(0, { timeout: 30_000 });
+
+  // Skapa
+  await page.getByRole("link", { name: /Ny mall|\+ Ny/ }).click();
+  await page.getByLabel(/Namn/).fill(tmplName);
+  await page.getByLabel(/Kategori/).fill("Test");
+  // Content kan vara textarea eller rik-editor; testa textarea först
+  await page.locator('textarea, [contenteditable="true"]').first().fill(tmplContent);
+  await page.getByRole("button", { name: /Spara/ }).click();
+  await expect(page.getByText(tmplName)).toBeVisible({ timeout: 15_000 });
+
+  // Verifiera i git-db:n (.ava/templates/<id>.json)
+  await expect.poll(() => rowsInRepo(".ava/templates").map((t) => String(t.name)), POLL).toContain(tmplName);
+
+  // Radera
+  const row = page.locator("tr,li", { hasText: tmplName }).first();
+  page.once("dialog", (d) => d.accept());
+  await row.getByRole("button", { name: /Ta bort|Radera/i }).click();
+  await expect(page.getByText(tmplName)).toHaveCount(0, { timeout: 15_000 });
+  await expect.poll(() => rowsInRepo(".ava/templates").map((t) => String(t.name)), POLL).not.toContain(tmplName);
+});
+
 test("kalender: skapa event i UI:t → calendar/<id>.json i git-db:n", async ({ page }) => {
   const stamp = Date.now();
   const title = `Förhandling ${stamp}`;

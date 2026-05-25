@@ -91,6 +91,36 @@ test("avbetalningsplaner-sidan listar seed-planerna", async ({ page }) => {
   await expect(page.locator('a[href*="/payment-plans/pp-"]').first()).toBeVisible({ timeout: 15_000 });
 });
 
+test("matter-detalj visar seed-tider (regressionsskydd för org-id-bugen)", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("console", (m) => { if (m.type() === "error" && m.text().includes("hydratisera")) errors.push(m.text()); });
+
+  await page.goto(`${BASE}/matters/m-001-vardnad/`);
+  await page.waitForFunction(() => !document.body.innerText.includes("Laddar data"), { timeout: 30_000 });
+
+  // Tidregistrering-sektionens innehåll: seed har te-001 "Genomgång av handlingar"
+  await expect(page.getByText(/Genomgång av handlingar/)).toBeVisible({ timeout: 15_000 });
+
+  // Inga hydration-warnings i console
+  expect(errors, "ProjectionHydrator får inte kasta ZodError för seed-data").toEqual([]);
+});
+
+test("matter-detalj visar seed-fakturor", async ({ page }) => {
+  await page.goto(`${BASE}/matters/m-001-vardnad/`);
+  await page.waitForFunction(() => !document.body.innerText.includes("Laddar data"), { timeout: 30_000 });
+
+  // Faktura-sektionen ska visa minst en av seed-fakturorna (inv-001 = 2026-0001)
+  await expect(page.getByText(/2026-000\d/)).toBeVisible({ timeout: 15_000 });
+});
+
+test("matter-detalj visar seed-dokument", async ({ page }) => {
+  await page.goto(`${BASE}/matters/m-001-vardnad/`);
+  await page.waitForFunction(() => !document.body.innerText.includes("Laddar data"), { timeout: 30_000 });
+
+  // Dokument från seed (Stämningsansökan / Förlikningsförslag etc.)
+  await expect(page.getByText(/\.pdf|\.docx/i).first()).toBeVisible({ timeout: 15_000 });
+});
+
 test("SPA-fallback redirectar till app-shellen vid 404", async ({ page }) => {
   await page.goto(`${BASE}/matters/m-doesnt-exist-here/`);
   // 404.html → location.replace → app-shell hydraterar

@@ -318,19 +318,33 @@ export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
     const amountInclVat = 80_000 + (i * 23_000);
     // 25 % moms baked-in: exklusiv-belopp = inkl / 1.25 (avrundat till örestal)
     const amountExclVat = Math.round(amountInclVat / 1.25);
+    const status = statuses[i % statuses.length];
+    const issuedAt = isoDate(-daysAgo);
+    const dueAt = isoDate(-daysAgo + 30);
+    const paidAt = status === "PAID" ? isoDate(-daysAgo + 20) : null;
     out.invoices.push({
       id: `inv-${String(i + 1).padStart(3, "0")}`,
       organizationId: orgId,
       matterId: matter.id,
       invoiceNumber: `${new Date().getFullYear()}-${String(i + 1).padStart(4, "0")}`,
+      // Projection-schema kräver "type"; tRPC/UI använder gamla "invoiceType"
       type: "FINAL",
-      status: statuses[i % statuses.length],
+      invoiceType: "STANDARD",
+      status,
+      // Båda fältnamnen — UI använder gamla `amount`/`invoiceDate`/`dueDate`,
+      // projection-hydratorn använder amountInclVat/issuedAt/dueAt/paidAt.
       amountExclVat,
       vat: amountInclVat - amountExclVat,
       amountInclVat,
-      issuedAt: isoDate(-daysAgo),
-      dueAt: isoDate(-daysAgo + 30),
-      paidAt: statuses[i % statuses.length] === "PAID" ? isoDate(-daysAgo + 20) : null,
+      amount: amountInclVat,
+      issuedAt,
+      invoiceDate: issuedAt,
+      dueAt,
+      dueDate: dueAt,
+      paidAt,
+      notes: null,
+      createdAt: issuedAt,
+      updatedAt: issuedAt,
     });
   }
 
