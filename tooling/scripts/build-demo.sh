@@ -34,7 +34,6 @@ APP_DIR="$ROOT/src/app"
 STASH_PATHS=(
   "api"
   "login"
-  "templates/[id]"
   "users/[id]"
 )
 
