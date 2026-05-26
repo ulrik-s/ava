@@ -7,7 +7,7 @@
  */
 
 import { trpc } from "@/lib/client/trpc";
-import { Trash2, X, MapPin, Clock, User as UserIcon, Briefcase, Pencil, CalendarDays } from "lucide-react";
+import { Trash2, X, MapPin, Clock, User as UserIcon, Briefcase, Pencil, CalendarDays, Users } from "lucide-react";
 import type { UserColor } from "@/lib/client/calendar/user-colors";
 
 export interface EventDetail {
@@ -22,6 +22,8 @@ export interface EventDetail {
   matterId?: string | null;
   kind: "appointment" | "deadline";
   matter?: { id: string; matterNumber: string; title: string } | null;
+  inviteeUserIds?: string[];
+  inviteeContactIds?: string[];
 }
 
 interface Props {
@@ -39,6 +41,10 @@ interface Props {
 // eslint-disable-next-line complexity
 export function EventDetailModal({ event, userName, color, onClose, onAfterDelete, onEdit, gotoCalendar }: Props): React.ReactElement | null {
   const utils = trpc.useUtils();
+  // Hämta user/contact-listor för att rendera invitee-namn (lazy: query
+  // skickas bara när modalen är öppen)
+  const orgUsers = trpc.user.list.useQuery(undefined, { enabled: !!event });
+  const orgContacts = trpc.contacts.list.useQuery({ pageSize: 500 }, { enabled: !!event });
   const del = trpc.calendar.delete.useMutation({
     onSuccess: () => {
       utils.calendar.invalidate();
@@ -105,6 +111,22 @@ export function EventDetailModal({ event, userName, color, onClose, onAfterDelet
               <a href={`/matters/${event.matter.id}`} className="text-blue-600 hover:underline">
                 {event.matter.matterNumber} — {event.matter.title}
               </a>
+            </div>
+          )}
+
+          {((event.inviteeUserIds?.length ?? 0) > 0 || (event.inviteeContactIds?.length ?? 0) > 0) && (
+            <div className="flex items-start gap-2">
+              <Users size={14} className="text-gray-400 mt-0.5 shrink-0" />
+              <div className="text-xs text-gray-900 space-y-0.5">
+                {(event.inviteeUserIds ?? []).map((uid) => {
+                  const u = orgUsers.data?.users.find((x: { id: string; name: string }) => x.id === uid);
+                  return <div key={uid}><span className="text-gray-400">Kollega:</span> {u?.name ?? uid}</div>;
+                })}
+                {(event.inviteeContactIds ?? []).map((cid) => {
+                  const c = orgContacts.data?.contacts.find((x: { id: string; name: string }) => x.id === cid);
+                  return <div key={cid}><span className="text-gray-400">Kontakt:</span> {c?.name ?? cid}</div>;
+                })}
+              </div>
             </div>
           )}
 

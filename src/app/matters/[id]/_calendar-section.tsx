@@ -8,6 +8,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/client/trpc";
 import { Calendar } from "lucide-react";
 import { EventDetailModal, type EventDetail } from "@/app/calendar/_event-detail-modal";
@@ -31,6 +32,7 @@ interface Event {
 
 // eslint-disable-next-line complexity
 export function CalendarSection({ matterId }: Props): React.ReactElement {
+  const router = useRouter();
   const events = trpc.calendar.listForMatter.useQuery({ matterId });
   const users = trpc.user.list.useQuery();
   const [selected, setSelected] = useState<EventDetail | null>(null);
@@ -107,7 +109,8 @@ export function CalendarSection({ matterId }: Props): React.ReactElement {
         gotoCalendar={(ev) => {
           const d = new Date(ev.startAt);
           const ymd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-          window.location.href = `/calendar?date=${ymd}`;
+          // Next router respekterar basePath ("/ava") så vi slipper hårdkoda det.
+          router.push(`/calendar?date=${ymd}`);
         }}
       />
     </div>

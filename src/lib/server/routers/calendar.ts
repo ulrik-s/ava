@@ -27,6 +27,10 @@ const createInput = z.object({
   matterId: z.string().nullish(),
   visibility: calendarEventVisibilitySchema.default("normal"),
   mirrorToOutlook: z.boolean().default(false),
+  /** Inbjudna kollegor (interna users). */
+  inviteeUserIds: z.array(z.string()).optional(),
+  /** Inbjudna externa kontakter (klient, motpart, vittne osv.). */
+  inviteeContactIds: z.array(z.string()).optional(),
 });
 
 // OBS: separat schema utan `.default()` — annars fyller Zod i defaults för
@@ -44,6 +48,8 @@ const updateInput = z.object({
   matterId: z.string().nullish(),
   visibility: calendarEventVisibilitySchema.optional(),
   mirrorToOutlook: z.boolean().optional(),
+  inviteeUserIds: z.array(z.string()).optional(),
+  inviteeContactIds: z.array(z.string()).optional(),
 });
 
 /**

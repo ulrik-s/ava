@@ -16,6 +16,7 @@ import { CalendarGrid, startOfDay } from "./_calendar-grid";
 import { DayView } from "./_day-view";
 import { EventDetailModal, type EventDetail } from "./_event-detail-modal";
 import { MatterCombobox } from "@/components/matter/matter-combobox";
+import { CheckboxList } from "@/components/ui/checkbox-list";
 import { UserPicker, loadSelectedUserIds } from "./_user-picker";
 import { buildUserColorMap, type UserColor } from "@/lib/client/calendar/user-colors";
 
@@ -313,6 +314,8 @@ function NewEventForm({ onClose, initial }: { onClose: () => void; initial?: Eve
   const utils = trpc.useUtils();
   const isEdit = !!initial;
   const matters = trpc.matter.list.useQuery({ pageSize: 500, status: "ACTIVE" });
+  const orgUsers = trpc.user.list.useQuery();
+  const contacts = trpc.contacts.list.useQuery({ pageSize: 500 });
 
   const onCreateOrUpdateSuccess = (saved: EventRow): void => {
     utils.calendar.invalidate();
@@ -354,6 +357,8 @@ function NewEventForm({ onClose, initial }: { onClose: () => void; initial?: Eve
   const [location, setLocation] = useState(initial?.location ?? "");
   const [matterId, setMatterId] = useState(initial?.matterId ?? "");
   const [mirrorToOutlook, setMirrorToOutlook] = useState(initial?.mirrorToOutlook ?? false);
+  const [inviteeUserIds, setInviteeUserIds] = useState<string[]>(initial?.inviteeUserIds ?? []);
+  const [inviteeContactIds, setInviteeContactIds] = useState<string[]>(initial?.inviteeContactIds ?? []);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -365,6 +370,8 @@ function NewEventForm({ onClose, initial }: { onClose: () => void; initial?: Eve
       location: location || undefined,
       matterId: matterId || undefined,
       mirrorToOutlook,
+      inviteeUserIds,
+      inviteeContactIds,
     };
     if (isEdit && initial) update.mutate({ id: initial.id, ...payload });
     else create.mutate(payload);
@@ -426,6 +433,26 @@ function NewEventForm({ onClose, initial }: { onClose: () => void; initial?: Eve
           value={matterId}
           onChange={setMatterId}
           placeholder="Valfritt — sök på ärendenr eller titel…"
+        />
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <CheckboxList
+          label="Bjud in kollegor"
+          options={(orgUsers.data?.users ?? []).map((u: { id: string; name: string; role?: string }) => ({
+            id: u.id, label: u.name, sublabel: u.role,
+          }))}
+          selectedIds={inviteeUserIds}
+          onChange={setInviteeUserIds}
+          placeholder="Sök kollega…"
+        />
+        <CheckboxList
+          label="Bjud in från kontakter"
+          options={(contacts.data?.contacts ?? []).map((c: { id: string; name: string; contactType?: string }) => ({
+            id: c.id, label: c.name, sublabel: c.contactType,
+          }))}
+          selectedIds={inviteeContactIds}
+          onChange={setInviteeContactIds}
+          placeholder="Sök kontakt…"
         />
       </div>
       <label className="flex items-center gap-2 text-xs text-gray-700">
@@ -516,6 +543,8 @@ interface EventRow {
   location?: string | null;
   matterId?: string | null;
   matter?: { id: string; matterNumber: string; title: string } | null;
+  inviteeUserIds?: string[];
+  inviteeContactIds?: string[];
   mirrorToOutlook?: boolean;
   mirrorStatus?: "pending" | "synced" | "failed" | null;
   outlookEventId?: string | null;
