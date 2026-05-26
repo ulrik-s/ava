@@ -183,7 +183,16 @@ function DocumentLinks({ doc, disabled }: { doc: DocumentRecord; disabled?: bool
   const openExternal = async () => {
     const { openInFinder } = await import("@/client/lib/fsa/open-in-finder");
     const { getExternalEditTracker } = await import("@/client/lib/fsa/external-edit-tracker");
-    const r = await openInFinder(doc.storagePath);
+    // I demo-mode finns inte filerna i user:s FSA-mapp by default — vi
+    // lazy-downloadar dem från GH Pages om de saknas.
+    const fallbackBase = (process.env.NEXT_PUBLIC_DEMO_BUILD === "1")
+      ? (() => {
+          const repo = process.env.NEXT_PUBLIC_DEMO_REPO || process.env.NEXT_PUBLIC_DEFAULT_DEMO_REPO || "ulrik-s/ava-demo";
+          const m = repo.match(/^([^/\s]+)\/([^/\s]+)$/);
+          return m ? `https://${m[1]}.github.io/${m[2]}` : repo;
+        })()
+      : undefined;
+    const r = await openInFinder(doc.storagePath, { downloadFallbackBase: fallbackBase });
     if (r.kind === "unsupported") { alert("Din webbläsare stödjer inte File System Access. Använd Chrome eller Edge."); return; }
     if (r.kind === "no-handle") { alert("Du har inte valt en lokal mapp än. Gå till Inställningar → välj firma-mapp."); return; }
     if (r.kind === "permission-denied") { alert("AVA fick inte tillåtelse att läsa filen. Klicka 'Tillåt' nästa gång prompten dyker upp."); return; }

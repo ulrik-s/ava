@@ -27,6 +27,8 @@ export interface FinderTarget {
   folderName: string;
   /** Fil-handle redo att skickas till `tracker.watch(...)`. */
   fileHandle: FileSystemFileHandle;
+  /** True om vi just laddade ner filen pga den saknades lokalt. */
+  justDownloaded?: boolean;
 }
 
 export type OpenInFinderResult =
@@ -36,7 +38,13 @@ export type OpenInFinderResult =
   | { kind: "permission-denied" }
   | { kind: "file-not-found"; path: string };
 
-export async function openInFinder(storagePath: string): Promise<OpenInFinderResult> {
+export interface OpenInFinderOpts {
+  /** Om filen saknas lokalt — hämta från denna base-URL och skriv till FSA innan vi öppnar. */
+  downloadFallbackBase?: string;
+}
+
+// eslint-disable-next-line complexity
+export async function openInFinder(storagePath: string, opts: OpenInFinderOpts = {}): Promise<OpenInFinderResult> {
   if (!isFsaSupported()) return { kind: "unsupported" };
   const root = await loadHandle("repo-root");
   if (!root) return { kind: "no-handle" };
@@ -55,18 +63,31 @@ export async function openInFinder(storagePath: string): Promise<OpenInFinderRes
     }
   }
   let fileHandle: FileSystemFileHandle;
+  let justDownloaded = false;
   try {
     fileHandle = await dir.getFileHandle(parts[parts.length - 1]);
   } catch {
-    return { kind: "file-not-found", path: storagePath };
+    // Demo-mode fallback: filen finns inte i user:s lokala mapp men på GH
+    // Pages. Lazy-download + skriv hit, sen returnera handle till nya filen.
+    if (opts.downloadFallbackBase) {
+      try {
+        const { downloadToFsa } = await import("./download-to-fsa");
+        const base = opts.downloadFallbackBase.replace(/\/+$/, "");
+        const url = `${base}/${storagePath.replace(/^\/+/, "")}`;
+        const result = await downloadToFsa({ root, relativePath: storagePath, url });
+        fileHandle = result.fileHandle;
+        justDownloaded = true;
+      } catch (err) {
+        console.warn("[openInFinder] download-fallback misslyckades:", err);
+        return { kind: "file-not-found", path: storagePath };
+      }
+    } else {
+      return { kind: "file-not-found", path: storagePath };
+    }
   }
 
   return {
     kind: "ok",
-    target: {
-      relativePath: storagePath,
-      folderName: root.name,
-      fileHandle,
-    },
+    target: { relativePath: storagePath, folderName: root.name, fileHandle, justDownloaded },
   };
 }

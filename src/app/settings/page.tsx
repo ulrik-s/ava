@@ -4,6 +4,7 @@ import { useId, useState, useRef } from "react";
 import { trpc } from "@/client/lib/trpc";
 import { Upload, Trash2, Building2, Plus, Pencil, X, Check, FolderOpen, Copy } from "lucide-react";
 import { DatasourceSection } from "@/client/components/datasource-section";
+import { ExternalEditSection } from "@/client/components/external-edit-section";
 import { LlmSettingsCard } from "@/client/components/llm-settings-card";
 
 // ─── WebDAV mount instructions ───────────────────────────────────
@@ -457,6 +458,7 @@ export default function SettingsPage() {
       </div>
 
       {/* WebDAV mount section */}
+      <ExternalEditSection />
       <WebDAVSection />
 
       {/* Offices section */}
