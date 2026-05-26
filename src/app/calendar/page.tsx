@@ -19,6 +19,7 @@ import { MatterCombobox } from "@/components/matter/matter-combobox";
 import { CheckboxList } from "@/components/ui/checkbox-list";
 import { UserPicker, loadSelectedUserIds } from "./_user-picker";
 import { buildUserColorMap, type UserColor } from "@/lib/client/calendar/user-colors";
+import { resolveSelectedUsers } from "@/lib/client/calendar/select-users";
 
 type ViewMode = "list" | "day" | "week" | "month";
 
@@ -78,24 +79,31 @@ export default function CalendarPage() {
     if (dateParam) setView("day");
   }, []);
 
-  // Persistera vilka användare som visas (multi-user). Default: bara mig.
+  // Persistera vilka användare som visas (multi-user). Default: bara mig,
+  // men ?date=-deep-link (från matter) väljer alla så event av andra
+  // ägare syns. Beslutet lever i pure resolveSelectedUsers (testad).
   const currentUser = trpc.user.current.useQuery();
   const orgUsers = trpc.user.list.useQuery();
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+  const [userSelInit, setUserSelInit] = useState(false);
   useEffect(() => {
-    // Läs localStorage först efter mount så SSR-HTML inte missmatchar.
-    const stored = loadSelectedUserIds();
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (stored.length > 0) setSelectedUserIds(stored);
-  }, []);
-
-  // När current-user laddats: om inget val finns sen tidigare → välj bara mig.
-  useEffect(() => {
-    if (selectedUserIds.length === 0 && currentUser.data?.id) {
+    // Vänta tills minst current-user laddats så vi inte sätter [] permanent.
+    if (userSelInit) return;
+    const hasDateParam = typeof window !== "undefined" && new URL(window.location.href).searchParams.has("date");
+    const orgIds = (orgUsers.data?.users ?? []).map((u: { id: string }) => u.id);
+    const resolved = resolveSelectedUsers({
+      stored: loadSelectedUserIds(),
+      currentUserId: currentUser.data?.id ?? null,
+      orgUserIds: orgIds,
+      hasDateParam,
+    });
+    if (resolved.length > 0) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setSelectedUserIds([currentUser.data.id]);
+      setSelectedUserIds(resolved);
+       
+      setUserSelInit(true);
     }
-  }, [currentUser.data?.id, selectedUserIds.length]);
+  }, [currentUser.data?.id, orgUsers.data?.users, userSelInit]);
 
   const userNames = useMemo<Record<string, string>>(() => {
     const m: Record<string, string> = {};
