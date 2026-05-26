@@ -95,25 +95,43 @@ export default function DocumentSearchPage() {
 
         {docTypes.data && docTypes.data.length > 0 && (
           <div className="mt-4">
-            <p className="text-xs font-medium text-gray-600 mb-2">Begränsa till dokumenttyp:</p>
+            <p className="text-xs font-medium text-gray-600 mb-2">
+              Begränsa till dokumenttyp:
+              {results.data && (
+                <span className="text-gray-400 font-normal">
+                  {" "}— räknarna visar träffar för &quot;{searchTerm}&quot; per typ
+                </span>
+              )}
+            </p>
             <div className="flex flex-wrap gap-2">
-              {docTypes.data.map(({ type, count }) => {
-                const checked = selectedTypes.includes(type);
-                return (
-                  <label
-                    key={type}
-                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs cursor-pointer border ${checked ? "bg-blue-100 border-blue-300 text-blue-900" : "bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100"}`}
-                  >
-                    <input
-                      type="checkbox"
-                      className="sr-only"
-                      checked={checked}
-                      onChange={() => toggleType(type)}
-                    />
-                    {type} <span className="text-gray-400">({count})</span>
-                  </label>
-                );
-              })}
+              {(() => {
+                // Före sökning: visa totalantal per typ ur listDocumentTypes.
+                // Efter sökning: visa antal träffar i query-result per typ
+                //   (facets), och lägg till 0-räkningar för icke-matchande typer
+                //   så user ser att de finns men inte träffas.
+                const facetMap = new Map((results.data?.facets?.documentTypes ?? []).map((f) => [f.type, f.count]));
+                const rows = results.data
+                  ? docTypes.data.map(({ type }) => ({ type, count: facetMap.get(type) ?? 0 }))
+                  : docTypes.data;
+                return rows.map(({ type, count }) => {
+                  const checked = selectedTypes.includes(type);
+                  const zeroAfterSearch = results.data !== undefined && count === 0;
+                  return (
+                    <label
+                      key={type}
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs cursor-pointer border ${checked ? "bg-blue-100 border-blue-300 text-blue-900" : zeroAfterSearch ? "bg-gray-50 border-gray-200 text-gray-400" : "bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100"}`}
+                    >
+                      <input
+                        type="checkbox"
+                        className="sr-only"
+                        checked={checked}
+                        onChange={() => toggleType(type)}
+                      />
+                      {type} <span className={zeroAfterSearch ? "text-gray-300" : "text-gray-400"}>({count})</span>
+                    </label>
+                  );
+                });
+              })()}
               {selectedTypes.length > 0 && (
                 <button
                   type="button"

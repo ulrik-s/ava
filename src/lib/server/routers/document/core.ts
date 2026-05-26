@@ -84,6 +84,8 @@ export const coreProcedures = {
           highlight: hit._formatted?.content || "",
         })),
         totalHits: result.estimatedTotalHits,
+        // Per-type-räknare baserat på query-match (oavsett type-filter)
+        facets: result.facets ?? { documentTypes: [] },
       };
     }),
 

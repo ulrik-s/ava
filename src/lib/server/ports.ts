@@ -52,6 +52,11 @@ export interface SearchHit {
 export interface SearchResponse {
   hits: SearchHit[];
   estimatedTotalHits: number;
+  /** Facet-counts per dimension. Räknas på query-MATCH oavsett aktuellt
+   *  type-filter — så UI:n kan visa "hur många träffar SKULLE jag få per typ". */
+  facets?: {
+    documentTypes?: { type: string; count: number }[];
+  };
 }
 
 export interface IndexableDocument {

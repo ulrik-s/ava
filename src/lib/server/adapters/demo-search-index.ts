@@ -108,8 +108,27 @@ export function searchDocuments(
     ? new Set(opts.documentTypes)
     : null;
 
-  const matched = docs
-    .filter((d) => orgOf(d) === organizationId)
+  // Steg 1: hitta ALLA dokument i org som matchar query, oavsett type-filter.
+  //   - Behövs för facet-counts (badges visar hur många träffar varje typ
+  //     SKULLE ge — så user kan toggla utan att tappa kontext).
+  //   - Tar bara ett extra pass över redan-filtrerade docs; billigt.
+  const orgDocs = docs.filter((d) => orgOf(d) === organizationId);
+  const queryMatches = orgDocs.filter((d) => {
+    const haystack = [d.fileName ?? "", d.documentType ?? "", d.summary ?? ""].join(" ").toLowerCase();
+    if (matcher.test(haystack)) return true;
+    return matcher.test(getDocumentContent(d.id).toLowerCase());
+  });
+  // Facet-räknare per typ
+  const facetCounts = new Map<string, number>();
+  for (const d of queryMatches) {
+    if (!d.documentType) continue;
+    facetCounts.set(d.documentType, (facetCounts.get(d.documentType) ?? 0) + 1);
+  }
+  const facetEntries = [...facetCounts.entries()]
+    .map(([type, count]) => ({ type, count }))
+    .sort((a, b) => b.count - a.count || a.type.localeCompare(b.type, "sv"));
+
+  const matched = orgDocs
     .filter((d) => typeFilter === null || (d.documentType !== null && d.documentType !== undefined && typeFilter.has(d.documentType)))
     // eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Arrow function has a complexity of 15. Maximum allowed is 8.)
     .map((d) => {
@@ -162,6 +181,7 @@ export function searchDocuments(
   return {
     hits: matched,
     estimatedTotalHits: matched.length,
+    facets: { documentTypes: facetEntries },
   };
 }
 
