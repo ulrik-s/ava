@@ -11,21 +11,43 @@
  *   - "Synka nu" → triggar manuell sync
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { useSyncContext } from "@/client/lib/sync/sync-context";
 import type { SyncState } from "@/client/lib/sync/use-auto-sync";
+import { loadFirmaConfig } from "@/client/lib/firma/firma-config";
+import { loadHandle } from "@/client/lib/fsa/handle-store";
 
 export function SyncDiagnostics() {
   const { state, syncNow, providerKind, lastError } = useSyncContext();
   const [running, setRunning] = useState(false);
+  const [tier, setTier] = useState<string | null>(null);
+  const [folderName, setFolderName] = useState<string | null>(null);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setTier(loadFirmaConfig().tier);
+    void loadHandle("repo-root").then((h) => setFolderName(h?.name ?? null));
+  }, []);
 
   if (!providerKind) {
+    // Förfina meddelandet: i demo-mode är det INTE en konfig-fel utan
+    // ett medvetet val (data hämtas från GH Pages, ändringar persisteras
+    // bara i tab:en). Visa rätt förklaring per tier + redan-valda fakta.
     return (
-      <div className="bg-gray-50 border border-gray-200 rounded p-3 text-xs text-gray-600 mt-4">
-        <strong className="text-gray-800">Synk:</strong> ingen lokal mapp vald
-        eller token saknas. Konfigurera datakälla ovan så börjar
-        auto-sync.
+      <div className="bg-gray-50 border border-gray-200 rounded p-3 text-xs text-gray-600 mt-4 space-y-1">
+        <p>
+          <strong className="text-gray-800">Synk:</strong>{" "}
+          {tier === "demo"
+            ? "demo-läge — ingen remote-sync. Ändringar lever bara i denna tab/mappen lokalt."
+            : "auto-sync inaktiv — token för git-remote saknas, eller mapp ej vald."}
+        </p>
+        <p>
+          <strong className="text-gray-800">Lokal mapp:</strong>{" "}
+          {folderName
+            ? <>vald (<code className="bg-gray-100 px-1 rounded">{folderName}/</code>)</>
+            : "ingen mapp vald — välj under 'Datakälla' ovan."}
+        </p>
       </div>
     );
   }
