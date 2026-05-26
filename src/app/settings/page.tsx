@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState, useRef } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { trpc } from "@/client/lib/trpc";
 import { Upload, Trash2, Building2, Plus, Pencil, X, Check } from "lucide-react";
 import { DatasourceSection } from "@/client/components/datasource-section";
@@ -266,16 +266,24 @@ export default function SettingsPage() {
       .catch(() => {});
   }
 
-  const handleSave = () => {
-    updateSettings.mutate({
-      name: form.name || undefined,
-      orgNumber: form.orgNumber || undefined,
-      address: form.address || undefined,
-      phone: form.phone || undefined,
-      email: form.email || undefined,
-      bankgiro: form.bankgiro || undefined,
-    });
-  };
+  // Auto-save: debounce 800ms efter senaste change. Visar "Sparar…" /
+  // "✓ Sparat"-status istället för en separat Spara-knapp. Mönster lånat
+  // från Notion/Linear-settings — färre klick, mindre "vad-händer-om-jag-glömmer".
+  useEffect(() => {
+    if (!formReady) return;
+    const id = setTimeout(() => {
+      updateSettings.mutate({
+        name: form.name || undefined,
+        orgNumber: form.orgNumber || undefined,
+        address: form.address || undefined,
+        phone: form.phone || undefined,
+        email: form.email || undefined,
+        bankgiro: form.bankgiro || undefined,
+      });
+    }, 800);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form, formReady]);
 
   const handleLogoUpload = async (file: File) => {
     setLogoLoading(true);
@@ -318,22 +326,23 @@ export default function SettingsPage() {
     <div className="p-6 max-w-2xl">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Inställningar</h1>
-        <p className="text-sm text-gray-500 mt-1">Byråns uppgifter används i genererade dokument.</p>
+        <p className="text-sm text-gray-500 mt-1">
+          Ändringar sparas automatiskt — du behöver inte klicka &quot;Spara&quot;.
+          Konfigurera ovanifrån-och-ner.
+        </p>
       </div>
 
-      {/* Datakälla & inloggning — engångskonfiguration */}
+      {/* 1. Datakälla — engångskonfiguration */}
+      <SectionHeader num={1} title="Datakälla & inloggning" subtitle="Var ligger din byrås data? Konfigureras en gång — synkar sedan automatiskt." />
       <DatasourceSection />
 
-      {/* AI / lokal LLM — opt-in, ~700 MB nedladdning första gången */}
-      <div className="mb-5">
-        <LlmSettingsCard />
-      </div>
+      {/* 2. Byråns uppgifter — kontakt + logo (auto-save) */}
+      <SectionHeader num={2} title="Byråns uppgifter" subtitle="Visas i genererade dokument (offerter, fakturor, kostnadsräkningar)." />
 
-      {/* Logo section */}
       <div className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
         <div className="flex items-center gap-2 mb-4">
           <Building2 size={16} className="text-gray-500" />
-          <h2 className="font-semibold text-gray-900">Logotyp</h2>
+          <h3 className="font-semibold text-gray-900">Logotyp</h3>
         </div>
         <p className="text-xs text-gray-500 mb-4">
           Visas i sidhuvudet på alla genererade dokument. PNG, JPEG eller SVG, max 2 MB.
@@ -385,16 +394,9 @@ export default function SettingsPage() {
         {logoError && <p className="mt-2 text-sm text-red-600">{logoError}</p>}
       </div>
 
-      {/* WebDAV mount section */}
-      <ExternalEditSection />
-      <EditorExtensionsSection />
-
-      {/* Offices section */}
-      <OfficesSection />
-
-      {/* Contact details */}
-      <div className="bg-white border border-gray-200 rounded-lg p-5">
-        <h2 className="font-semibold text-gray-900 mb-4">Kontaktuppgifter</h2>
+      {/* Kontaktuppgifter — del av sektion 2 */}
+      <div className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
+        <h3 className="font-semibold text-gray-900 mb-4">Kontaktuppgifter</h3>
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -470,23 +472,18 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-3 mt-5">
-          <button
-            onClick={handleSave}
-            disabled={updateSettings.isPending}
-            className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
-          >
-            {updateSettings.isPending ? "Sparar…" : "Spara"}
-          </button>
-          {saved && <span className="text-sm text-green-600">✓ Sparat</span>}
+        <div className="flex items-center gap-3 mt-3 text-xs text-gray-500">
+          <span className="italic">Ändringar sparas automatiskt.</span>
+          {updateSettings.isPending && <span>Sparar…</span>}
+          {saved && <span className="text-green-600">✓ Sparat</span>}
           {updateSettings.error && (
-            <span className="text-sm text-red-600">{updateSettings.error.message}</span>
+            <span className="text-red-600">{updateSettings.error.message}</span>
           )}
         </div>
       </div>
 
       {/* Preview of how footer looks */}
-      <div className="mt-5 bg-gray-50 border border-gray-200 rounded-lg p-4">
+      <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-5">
         <p className="text-xs font-medium text-gray-500 mb-2 uppercase tracking-wider">Förhandsgranskning av sidfot</p>
         <div className="bg-white border border-gray-200 rounded p-3 text-[11px] text-gray-500 border-t-2">
           <div className="flex items-center justify-between">
@@ -505,6 +502,33 @@ export default function SettingsPage() {
             <span className="text-gray-300">Sida 1 av 1</span>
           </div>
         </div>
+      </div>
+
+      {/* 3. Lokala kontor */}
+      <SectionHeader num={3} title="Lokala kontor" subtitle="Lägg till adresser för Stockholm, Göteborg osv. — visas på dokument-sidfot." />
+      <OfficesSection />
+
+      {/* 4. Editera dokument externt */}
+      <SectionHeader num={4} title="Editera dokument externt" subtitle="Öppna PDF/Word direkt i din favorit-editor. Valfritt — bara om du vill jobba i andra program än AVA:s inbyggda viewer." />
+      <ExternalEditSection />
+      <EditorExtensionsSection />
+
+      {/* 5. Avancerat / opt-in */}
+      <SectionHeader num={5} title="Avancerat" subtitle="Opt-in-funktioner som kräver extra resurser eller setup." />
+      <div className="mb-5">
+        <LlmSettingsCard />
+      </div>
+    </div>
+  );
+}
+
+function SectionHeader({ num, title, subtitle }: { num: number; title: string; subtitle?: string }) {
+  return (
+    <div className="flex items-baseline gap-3 mt-8 mb-3 first:mt-0">
+      <span className="flex items-center justify-center h-6 w-6 rounded-full bg-blue-100 text-blue-700 text-xs font-semibold shrink-0">{num}</span>
+      <div>
+        <h2 className="text-base font-semibold text-gray-900">{title}</h2>
+        {subtitle && <p className="text-xs text-gray-500">{subtitle}</p>}
       </div>
     </div>
   );
