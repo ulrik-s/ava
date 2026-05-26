@@ -25,12 +25,12 @@ import {
   testCorsProxy,
   testOAuthProxy,
   validateGithubToken,
-} from "@/client/components/firma-settings-panel";
+} from "@/components/settings/firma-settings-panel";
 import { loadAuthSettings, saveAuthSettings } from "@/client/lib/auth/use-auth-mode";
 import type { FirmaConfig } from "@/client/lib/firma/firma-config";
 
 // Mocka WebOAuthDeviceFlow så den inte gör nätverksanrop i renderingar
-vi.mock("@/client/components/web-oauth-device-flow", () => ({
+vi.mock("@/components/settings/web-oauth-device-flow", () => ({
   WebOAuthDeviceFlow: ({ onCancel }: { onComplete: (t: string) => void; onCancel: () => void }) => (
     <div data-testid="oauth-device-flow">
       <button onClick={onCancel}>Avbryt OAuth</button>

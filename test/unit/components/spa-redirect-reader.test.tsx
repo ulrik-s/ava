@@ -12,7 +12,7 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace: replaceMock, push: vi.fn(), back: vi.fn() }),
 }));
 
-import { SpaRedirectReader } from "@/client/components/spa-redirect-reader";
+import { SpaRedirectReader } from "@/components/shell/spa-redirect-reader";
 
 beforeEach(() => {
   replaceMock.mockReset();

@@ -5,7 +5,7 @@
 
 import { describe, it, expect, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { DemoModeBanner } from "@/client/components/demo-mode-banner";
+import { DemoModeBanner } from "@/components/shell/demo-mode-banner";
 import { saveFirmaConfig, resetToDemo } from "@/client/lib/firma/firma-config";
 
 beforeEach(() => {

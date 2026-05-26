@@ -6,7 +6,7 @@
 
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { SyncStatusPill } from "@/client/components/sync-status-pill";
+import { SyncStatusPill } from "@/components/shell/sync-status-pill";
 import type { SyncState } from "@/client/lib/sync/use-auto-sync";
 
 describe("SyncStatusPill", () => {

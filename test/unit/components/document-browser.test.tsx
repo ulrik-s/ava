@@ -8,7 +8,7 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { DocumentBrowser } from "@/client/components/document-browser";
+import { DocumentBrowser } from "@/components/documents/document-browser";
 
 // Self-hosted-läget letar efter ett FSA-handle via IndexedDB; jsdom har inte
 // någon working copy uppsatt. Mock:a explicit så testen är deterministisk

@@ -4,7 +4,7 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { SuggestionsPanel } from "@/client/components/suggestions-panel";
+import { SuggestionsPanel } from "@/components/matter/suggestions-panel";
 
 type Group = {
   key: string;

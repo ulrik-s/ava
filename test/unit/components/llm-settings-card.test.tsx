@@ -4,7 +4,7 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { LlmSettingsCard } from "@/client/components/llm-settings-card";
+import { LlmSettingsCard } from "@/components/llm/llm-settings-card";
 import { resetLlmConfig } from "@/client/lib/llm/llm-config";
 import { resetActiveLlm } from "@/client/lib/llm/active-llm";
 

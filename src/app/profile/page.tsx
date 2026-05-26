@@ -12,8 +12,8 @@
 import { useEffect, useState } from "react";
 import { trpc } from "@/client/lib/trpc";
 import { User, KeyRound, Plus, Trash2 } from "lucide-react";
-import { IntegrationsSection } from "@/client/components/integrations-section";
-import { KeypairManager } from "@/client/components/keypair-manager";
+import { IntegrationsSection } from "@/components/settings/integrations-section";
+import { KeypairManager } from "@/components/settings/keypair-manager";
 
 interface PublicKey {
   fingerprint: string;

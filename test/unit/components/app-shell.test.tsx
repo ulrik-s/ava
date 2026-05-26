@@ -5,7 +5,7 @@
 
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { AppShell } from "@/client/components/app-shell";
+import { AppShell } from "@/components/shell/app-shell";
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/",

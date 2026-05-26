@@ -6,7 +6,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { RenderErrorBoundary } from "@/client/components/render-error-boundary";
+import { RenderErrorBoundary } from "@/components/ui/render-error-boundary";
 
 function Crash(): never { throw new Error("Boom"); }
 function Ok(): React.ReactElement { return <div>fungerande barn</div>; }

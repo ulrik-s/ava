@@ -6,7 +6,7 @@
 
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { AuthStatusBanner } from "@/client/components/auth-status-banner";
+import { AuthStatusBanner } from "@/components/shell/auth-status-banner";
 
 const mockState = {
   mode: "anonymous" as "anonymous" | "identified-read" | "identified-write",

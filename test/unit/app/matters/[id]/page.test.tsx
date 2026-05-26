@@ -71,19 +71,19 @@ vi.mock("@/client/lib/trpc", () => ({
 }));
 
 // Tunga barnkomponenter — mocka som platshållare
-vi.mock("@/client/components/document-browser", () => ({
+vi.mock("@/components/documents/document-browser", () => ({
   DocumentBrowser: () => <div data-testid="doc-browser" />,
 }));
-vi.mock("@/client/components/suggestions-panel", () => ({
+vi.mock("@/components/matter/suggestions-panel", () => ({
   SuggestionsPanel: () => <div data-testid="suggestions" />,
 }));
-vi.mock("@/client/components/events-panel", () => ({
+vi.mock("@/components/matter/events-panel", () => ({
   EventsPanel: () => <div data-testid="events" />,
 }));
-vi.mock("@/client/components/invoices-section", () => ({
+vi.mock("@/components/matter/invoices-section", () => ({
   InvoicesSection: () => <div data-testid="invoices" />,
 }));
-vi.mock("@/client/components/payment-method-card", () => ({
+vi.mock("@/components/matter/payment-method-card", () => ({
   PaymentMethodCard: ({ paymentMethod }: { paymentMethod: string }) => (
     <div data-testid="pmc">{paymentMethod}</div>
   ),

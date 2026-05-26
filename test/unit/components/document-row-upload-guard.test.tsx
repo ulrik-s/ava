@@ -11,7 +11,7 @@
 
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { DocumentRow, type DocumentRecord } from "@/client/components/_document-row";
+import { DocumentRow, type DocumentRecord } from "@/components/documents/_document-row";
 
 const baseDoc = {
   id: "d-1",

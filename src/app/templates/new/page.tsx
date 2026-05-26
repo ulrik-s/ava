@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { trpc } from "@/client/lib/trpc";
-import { TemplateEditor } from "@/client/components/template-editor";
+import { TemplateEditor } from "@/components/settings/template-editor";
 
 export default function NewTemplatePage() {
   const router = useRouter();

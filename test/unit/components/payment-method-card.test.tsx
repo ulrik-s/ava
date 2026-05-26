@@ -7,7 +7,7 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { PaymentMethodCard } from "@/client/components/payment-method-card";
+import { PaymentMethodCard } from "@/components/matter/payment-method-card";
 
 const updateMutate = vi.fn();
 

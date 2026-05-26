@@ -11,7 +11,7 @@
 
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { MatterCombobox, type MatterOption } from "@/client/components/matter-combobox";
+import { MatterCombobox, type MatterOption } from "@/components/matter/matter-combobox";
 
 const MATTERS: MatterOption[] = [
   { id: "m-001", matterNumber: "2026-0001", title: "Vårdnadstvist Andersson" },

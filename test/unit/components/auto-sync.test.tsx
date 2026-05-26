@@ -6,7 +6,7 @@
 
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { AutoSync } from "@/client/components/auto-sync";
+import { AutoSync } from "@/components/shell/auto-sync";
 import type { SyncState } from "@/client/lib/sync/use-auto-sync";
 
 const ctxState = {

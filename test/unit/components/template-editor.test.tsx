@@ -4,7 +4,7 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { TemplateEditor } from "@/client/components/template-editor";
+import { TemplateEditor } from "@/components/settings/template-editor";
 
 const onSave = vi.fn();
 const onCancel = vi.fn();

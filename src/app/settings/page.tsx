@@ -3,10 +3,10 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { trpc } from "@/client/lib/trpc";
 import { Upload, Trash2, Building2, Plus, Pencil, X, Check } from "lucide-react";
-import { DatasourceSection } from "@/client/components/datasource-section";
-import { ExternalEditSection } from "@/client/components/external-edit-section";
-import { EditorExtensionsSection } from "@/client/components/editor-extensions-section";
-import { LlmSettingsCard } from "@/client/components/llm-settings-card";
+import { DatasourceSection } from "@/components/settings/datasource-section";
+import { ExternalEditSection } from "@/components/settings/external-edit-section";
+import { EditorExtensionsSection } from "@/components/settings/editor-extensions-section";
+import { LlmSettingsCard } from "@/components/llm/llm-settings-card";
 
 // ─── Offices sub-component ───────────────────────────────────────
 

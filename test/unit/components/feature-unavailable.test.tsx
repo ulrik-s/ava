@@ -6,7 +6,7 @@
 
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { FeatureUnavailable } from "@/client/components/feature-unavailable";
+import { FeatureUnavailable } from "@/components/ui/feature-unavailable";
 
 describe("FeatureUnavailable", () => {
   it("renderar title + description", () => {

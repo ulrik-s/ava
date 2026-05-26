@@ -3,11 +3,11 @@
 import { useState } from "react";
 import Link from "next/link";
 import { trpc } from "@/client/lib/trpc";
-import { DocumentBrowser } from "@/client/components/document-browser";
-import { SuggestionsPanel } from "@/client/components/suggestions-panel";
-import { EventsPanel } from "@/client/components/events-panel";
-import { InvoicesSection } from "@/client/components/invoices-section";
-import { PaymentMethodCard } from "@/client/components/payment-method-card";
+import { DocumentBrowser } from "@/components/documents/document-browser";
+import { SuggestionsPanel } from "@/components/matter/suggestions-panel";
+import { EventsPanel } from "@/components/matter/events-panel";
+import { InvoicesSection } from "@/components/matter/invoices-section";
+import { PaymentMethodCard } from "@/components/matter/payment-method-card";
 import { FileDown } from "lucide-react";
 import { ContactsSection } from "./_contacts-section";
 import { TimeSection } from "./_time-section";

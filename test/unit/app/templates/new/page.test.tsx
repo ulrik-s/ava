@@ -37,7 +37,7 @@ vi.mock("@/client/lib/trpc", () => ({
   },
 }));
 
-vi.mock("@/client/components/template-editor", () => ({
+vi.mock("@/components/settings/template-editor", () => ({
   TemplateEditor: ({
     onSave,
     onCancel,

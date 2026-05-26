@@ -12,8 +12,8 @@
 import { usePathname } from "next/navigation";
 import { Sidebar } from "./sidebar";
 import { DemoModeBanner } from "./demo-mode-banner";
-import { ExternalEditRegistrar } from "./external-edit-registrar";
-import { ExternalEditIndicator } from "./external-edit-indicator";
+import { ExternalEditRegistrar } from "@/components/documents/external-edit-registrar";
+import { ExternalEditIndicator } from "@/components/documents/external-edit-indicator";
 import { trpc } from "@/client/lib/trpc";
 
 /**

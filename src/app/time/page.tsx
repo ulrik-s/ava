@@ -4,7 +4,7 @@ import { useId, useState } from "react";
 import Link from "next/link";
 import { trpc } from "@/client/lib/trpc";
 import { formatMinutes } from "@/client/lib/utils";
-import { MatterCombobox } from "@/client/components/matter-combobox";
+import { MatterCombobox } from "@/components/matter/matter-combobox";
 
 // eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'TimePage' has a complexity of 9. Maximum allowed is 8.)
 export default function TimePage() {

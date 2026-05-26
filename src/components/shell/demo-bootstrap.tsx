@@ -11,7 +11,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import superjson from "superjson";
-import { RenderErrorBoundary } from "./render-error-boundary";
+import { RenderErrorBoundary } from "@/components/ui/render-error-boundary";
 import { DemoRuntime } from "@/server/local-first/demo-runtime";
 import { createGhPagesCloneFn } from "@/server/local-first/gh-pages-loader";
 import { OpfsPersistence } from "@/server/local-first/persistence";
@@ -27,9 +27,9 @@ import { AutoSync } from "./auto-sync";
 import { SyncProviderRoot } from "@/client/lib/sync/sync-context";
 import { pickProvider } from "@/client/lib/sync/pick-provider";
 import { JobsBadge } from "./jobs-badge";
-import { AnalyzeDispatcherRegistrar } from "./analyze-dispatcher-registrar";
-import { ExtractTextDispatcherRegistrar } from "./extract-text-dispatcher-registrar";
-import { MirrorOutlookRegistrar } from "./mirror-outlook-registrar";
+import { AnalyzeDispatcherRegistrar } from "@/components/documents/analyze-dispatcher-registrar";
+import { ExtractTextDispatcherRegistrar } from "@/components/documents/extract-text-dispatcher-registrar";
+import { MirrorOutlookRegistrar } from "@/components/matter/mirror-outlook-registrar";
 import { AppShell } from "./app-shell";
 import "@/client/lib/jobs/register-workers"; // ⚠ side-effect: registrerar workers
 
