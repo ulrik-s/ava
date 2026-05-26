@@ -219,14 +219,34 @@ export class ReadOnlyDelegate<T extends Record<string, unknown>> {
     return rc.kind === "one" ? (children[0] ?? null) : children;
   }
 
-  /** Prisma-stil `_count: { select: { rel: true } }` → 0 om ej hydratiserad. */
+  /**
+   * Prisma-stil `_count: { select: { rel: true } }`.
+   *
+   * Bug-fix: tidigare lästes bara `out[key]` (den redan-hydrerade
+   * relationen). Men `_count.select.documents` betyder "räkna documents"
+   * UTAN att nödvändigtvis ha include:at dem → out.documents var
+   * undefined → count blev felaktigt 0 (dashboardens "0 dok / 0 tidposter").
+   *
+   * Nu: om relationen inte redan hydrerats, räkna den on-demand direkt
+   * via relation-config + where-filter.
+   */
   private applyCount(out: Record<string, unknown>, include: Record<string, unknown>): void {
     if (!isObj(include._count)) return;
     const countSpec = (include._count.select as Record<string, unknown>) ?? {};
     const counts: Record<string, number> = {};
     for (const key of Object.keys(countSpec)) {
-      const r = out[key];
-      counts[key] = Array.isArray(r) ? r.length : 0;
+      const existing = out[key];
+      if (Array.isArray(existing)) {
+        counts[key] = existing.length;
+        continue;
+      }
+      // Ej hydrerad → räkna via relation-config (utan att mutera out)
+      const rc = this.relations[key];
+      if (rc) {
+        counts[key] = rc.collection().filter((c) => this.engine.matches(c, rc.where(out))).length;
+      } else {
+        counts[key] = 0;
+      }
     }
     out._count = counts;
   }

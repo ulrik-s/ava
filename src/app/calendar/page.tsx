@@ -121,25 +121,14 @@ export default function CalendarPage() {
 
   return (
     <div className="max-w-6xl">
-      <div className="mb-6 flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <CalendarIcon size={24} /> Kalender
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Möten, förhandlingar, frister och tasks. Färgkodat per användare —
-            markera vilka du vill se i listan till vänster.
-          </p>
-        </div>
-        {currentUser.data && (
-          <div className="inline-flex items-center gap-2 text-xs text-gray-600 bg-gray-100 border border-gray-200 rounded-full px-3 py-1.5 shrink-0">
-            <span
-              className="inline-block h-2.5 w-2.5 rounded-full"
-              style={{ background: userColors.get(currentUser.data.id)?.border ?? "#999" }}
-            />
-            Inloggad som <strong className="text-gray-900">{currentUser.data.name}</strong>
-          </div>
-        )}
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+          <CalendarIcon size={24} /> Kalender
+        </h1>
+        <p className="text-sm text-gray-500 mt-1">
+          Möten, förhandlingar, frister och tasks. Färgkodat per användare —
+          markera vilka du vill se i listan till vänster.
+        </p>
       </div>
 
       <section className="mb-8 grid grid-cols-1 lg:grid-cols-[14rem_1fr] gap-4">
