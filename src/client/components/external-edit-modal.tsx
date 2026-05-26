@@ -45,6 +45,25 @@ export function ExternalEditModal({ state, onClose }: Props): React.ReactElement
 
   if (state.kind === "closed") return null;
 
+  // Hjälpare för Office URI-protokoll: ms-word: / ms-excel: / ms-powerpoint:
+  // Funkar OM Office är installerat — det är OS-nivå-protokoll-handler.
+  // Begränsning: vi behöver en absolut http(s)-URL, inte en blob — Office
+  // hämtar filen själv via WebDAV-likt protokoll. För nu försöker vi med
+  // blob-URL ändå; user-feedback får visa om det funkar.
+  function officeUriFor(fileName: string, url: string | null): string | null {
+    if (!url) return null;
+    const ext = fileName.toLowerCase().match(/\.(docx|doc|xlsx|xls|pptx|ppt)$/)?.[1];
+    if (!ext) return null;
+    const scheme = ext.startsWith("xls") ? "ms-excel" : ext.startsWith("ppt") ? "ms-powerpoint" : "ms-word";
+    return `${scheme}:ofe|u|${url}`;
+  }
+  function officeAppName(fileName: string): string {
+    const ext = fileName.toLowerCase().match(/\.(docx|doc|xlsx|xls|pptx|ppt)$/)?.[1] ?? "";
+    if (ext.startsWith("xls")) return "Excel";
+    if (ext.startsWith("ppt")) return "PowerPoint";
+    return "Word";
+  }
+
   async function copyPath(): Promise<void> {
     if (state.kind !== "ok") return;
     try {
@@ -83,6 +102,24 @@ export function ExternalEditModal({ state, onClose }: Props): React.ReactElement
             </code>
 
             <div className="space-y-3 mb-5">
+              {/* Office URI Schemes — om filen är .docx/.xlsx/.pptx kan vi öppna
+                  direkt i Office utan download-omväg, förutsatt att Office är
+                  installerat (inbyggt i Windows + macOS Office). */}
+              {officeUriFor(state.fileName, downloadUrl) && (
+                <div>
+                  <a
+                    href={officeUriFor(state.fileName, downloadUrl) ?? "#"}
+                    className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+                  >
+                    📝 Öppna direkt i {officeAppName(state.fileName)}
+                  </a>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Funkar OM Office är installerat. Filen öppnas i {officeAppName(state.fileName)} och
+                    save funkar mot AVA om filen ligger i din lokala mapp.
+                  </p>
+                </div>
+              )}
+
               <div>
                 <a
                   href={downloadUrl ?? "#"}
