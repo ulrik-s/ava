@@ -35,9 +35,11 @@ interface CalendarGridProps {
   /** Kontrollerad anchor från parent så dag/vecka/månad delar tidpunkt. */
   anchor: Date;
   onAnchorChange: (d: Date) => void;
+  /** Klick på event-chip → öppna detalj-modal i parent. */
+  onSelectEvent?: (ev: CalendarGridEvent) => void;
 }
 
-export function CalendarGrid({ mode, userIds, userNames, userColors, anchor, onAnchorChange }: CalendarGridProps) {
+export function CalendarGrid({ mode, userIds, userNames, userColors, anchor, onAnchorChange, onSelectEvent }: CalendarGridProps) {
   const range = useMemo(() => (mode === "month" ? monthRange(anchor) : weekRange(anchor)), [mode, anchor]);
   const { data: events, isLoading } = trpc.calendar.listForUsers.useQuery(
     { userIds: [...userIds], from: range.from, to: range.to },
@@ -111,6 +113,7 @@ export function CalendarGrid({ mode, userIds, userNames, userColors, anchor, onA
                   ev={ev}
                   userName={userNames[ev.userId] ?? "?"}
                   color={userColors?.get(ev.userId) ?? colorForUserId(ev.userId)}
+                  onClick={() => onSelectEvent?.(ev)}
                 />
               ))}
               {dayEvents.length > 4 && (
@@ -124,21 +127,21 @@ export function CalendarGrid({ mode, userIds, userNames, userColors, anchor, onA
   );
 }
 
-function EventChip({ ev, userName, color }: { ev: CalendarGridEvent; userName: string; color: UserColor }) {
+function EventChip({ ev, userName, color, onClick }: { ev: CalendarGridEvent; userName: string; color: UserColor; onClick?: () => void }) {
   const start = new Date(ev.startAt);
   const time = ev.allDay ? "" : start.toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" });
-  // Deadlines markeras med tunn amber-ring så de skiljs visuellt utan att vi
-  // släpper user-färgkodningen.
   const deadlineRing = ev.kind === "deadline" ? "ring-1 ring-amber-400" : "";
   return (
-    <div
+    <button
+      type="button"
+      onClick={onClick}
       title={`${ev.title} — ${userName}${time ? ` · ${time}` : ""}`}
-      className={`text-[10px] truncate rounded px-1 py-0.5 border ${deadlineRing}`}
+      className={`text-[10px] truncate rounded px-1 py-0.5 border text-left w-full hover:brightness-95 ${deadlineRing}`}
       style={{ background: color.bg, color: color.text, borderColor: color.border }}
     >
       {time && <span className="font-mono mr-1">{time}</span>}
       {ev.title}
-    </div>
+    </button>
   );
 }
 

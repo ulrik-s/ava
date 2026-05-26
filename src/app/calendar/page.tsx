@@ -14,6 +14,7 @@ import { Calendar as CalendarIcon, Plus, ExternalLink, Trash2, CheckCircle2, Lis
 import { jobQueue } from "@/lib/client/jobs/job-queue";
 import { CalendarGrid, startOfDay } from "./_calendar-grid";
 import { DayView } from "./_day-view";
+import { EventDetailModal, type EventDetail } from "./_event-detail-modal";
 import { UserPicker, loadSelectedUserIds } from "./_user-picker";
 import { buildUserColorMap, type UserColor } from "@/lib/client/calendar/user-colors";
 
@@ -54,6 +55,7 @@ export default function CalendarPage() {
   const [showNewEvent, setShowNewEvent] = useState(false);
   const [showNewTask, setShowNewTask] = useState(false);
   const [view, setView] = useState<ViewMode>("week");
+  const [selectedEvent, setSelectedEvent] = useState<EventDetail | null>(null);
   // Hydration-safe init: `new Date()` och `localStorage` ger olika värden
   // SSR (statisk export, byggtid) vs klient. Vi initialiserar deterministiskt
   // till null/[] och fyller via useEffect efter mount — då matchar SSR-HTML
@@ -97,14 +99,25 @@ export default function CalendarPage() {
 
   return (
     <div className="max-w-6xl">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-          <CalendarIcon size={24} /> Kalender
-        </h1>
-        <p className="text-sm text-gray-500 mt-1">
-          Möten, förhandlingar, frister och tasks. Färgkodat per användare —
-          markera vilka du vill se i listan till vänster.
-        </p>
+      <div className="mb-6 flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+            <CalendarIcon size={24} /> Kalender
+          </h1>
+          <p className="text-sm text-gray-500 mt-1">
+            Möten, förhandlingar, frister och tasks. Färgkodat per användare —
+            markera vilka du vill se i listan till vänster.
+          </p>
+        </div>
+        {currentUser.data && (
+          <div className="inline-flex items-center gap-2 text-xs text-gray-600 bg-gray-100 border border-gray-200 rounded-full px-3 py-1.5 shrink-0">
+            <span
+              className="inline-block h-2.5 w-2.5 rounded-full"
+              style={{ background: userColors.get(currentUser.data.id)?.border ?? "#999" }}
+            />
+            Inloggad som <strong className="text-gray-900">{currentUser.data.name}</strong>
+          </div>
+        )}
       </div>
 
       <section className="mb-8 grid grid-cols-1 lg:grid-cols-[14rem_1fr] gap-4">
@@ -133,7 +146,7 @@ export default function CalendarPage() {
               osynlig placeholder så SSR-HTML matchar klientens första render. */}
           {!anchor && <div data-calendar-placeholder className="h-64" aria-hidden />}
           {anchor && view === "day" && (
-            <DayView anchor={anchor} onAnchorChange={setAnchor} userIds={selectedUserIds} userNames={userNames} userColors={userColors} />
+            <DayView anchor={anchor} onAnchorChange={setAnchor} userIds={selectedUserIds} userNames={userNames} userColors={userColors} onSelectEvent={setSelectedEvent} />
           )}
           {anchor && (view === "week" || view === "month") && (
             <CalendarGrid
@@ -143,8 +156,15 @@ export default function CalendarPage() {
               userColors={userColors}
               anchor={anchor}
               onAnchorChange={setAnchor}
+              onSelectEvent={setSelectedEvent}
             />
           )}
+          <EventDetailModal
+            event={selectedEvent}
+            userName={selectedEvent ? (userNames[selectedEvent.userId] ?? "?") : ""}
+            color={selectedEvent ? userColors.get(selectedEvent.userId) : undefined}
+            onClose={() => setSelectedEvent(null)}
+          />
         </div>
       </section>
 

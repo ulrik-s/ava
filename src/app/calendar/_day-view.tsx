@@ -36,15 +36,17 @@ interface DayViewProps {
   onAnchorChange: (d: Date) => void;
   userIds: readonly string[];
   userNames: Readonly<Record<string, string>>;
-  /** Stabil färgkarta från `buildUserColorMap`. Optional fallback. */
   userColors?: Map<string, UserColor>;
+  /** Klick på event → öppna detalj-modal i parent. */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  onSelectEvent?: (ev: any) => void;
 }
 
 const HOUR_HEIGHT = 48; // px per timme
 const DAY_START_HOUR = 7;
 const DAY_END_HOUR = 21;
 
-export function DayView({ anchor, onAnchorChange, userIds, userNames, userColors }: DayViewProps) {
+export function DayView({ anchor, onAnchorChange, userIds, userNames, userColors, onSelectEvent }: DayViewProps) {
   const dayStart = useMemo(() => startOfDay(anchor), [anchor]);
   const dayEnd = useMemo(() => {
     const d = new Date(dayStart);
@@ -95,6 +97,7 @@ export function DayView({ anchor, onAnchorChange, userIds, userNames, userColors
               ev={ev}
               userName={userNames[ev.userId] ?? "?"}
               color={userColors?.get(ev.userId) ?? colorForUserId(ev.userId)}
+              onClick={() => onSelectEvent?.(ev)}
               compact
             />
           ))}
@@ -123,6 +126,7 @@ export function DayView({ anchor, onAnchorChange, userIds, userNames, userColors
                 ev={ev}
                 userName={userNames[ev.userId] ?? "?"}
                 color={userColors?.get(ev.userId) ?? colorForUserId(ev.userId)}
+                onClick={() => onSelectEvent?.(ev)}
               />
             </div>
           ))}
@@ -132,19 +136,21 @@ export function DayView({ anchor, onAnchorChange, userIds, userNames, userColors
   );
 }
 
-function EventBlock({ ev, userName, color, compact }: { ev: DayEvent; userName: string; color: UserColor; compact?: boolean }) {
+function EventBlock({ ev, userName, color, compact, onClick }: { ev: DayEvent; userName: string; color: UserColor; compact?: boolean; onClick?: () => void }) {
   const c = color;
   const start = new Date(ev.startAt);
   const time = ev.allDay ? "" : start.toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" });
   return (
-    <div
+    <button
+      type="button"
+      onClick={onClick}
       title={`${ev.title} — ${userName}${time ? ` · ${time}` : ""}`}
-      className={`h-full rounded text-[10px] overflow-hidden border ${compact ? "px-2 py-0.5" : "px-1.5 py-1"}`}
+      className={`h-full w-full text-left rounded text-[10px] overflow-hidden border hover:brightness-95 ${compact ? "px-2 py-0.5" : "px-1.5 py-1"}`}
       style={{ background: c.bg, color: c.text, borderColor: c.border }}
     >
       <div className="font-medium truncate">{time && <span className="font-mono mr-1">{time}</span>}{ev.title}</div>
       {!compact && <div className="opacity-90 truncate">{userName}{ev.location ? ` · ${ev.location}` : ""}</div>}
-    </div>
+    </button>
   );
 }
 
