@@ -1,8 +1,9 @@
 "use client";
 
-import { Fragment } from "react";
+import { Fragment, useState } from "react";
 import { formatFileSize } from "./_drag-helpers";
 import { readFromFsa } from "@/client/lib/fsa/read-from-fsa";
+import { ExternalEditModal, type ModalState } from "./external-edit-modal";
 
 export interface DocumentRecord {
   id: string;
@@ -123,6 +124,7 @@ function isWithinAnalysisGrace(doc: DocumentRecord): boolean {
  */
 // eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'DocumentLinks' has a complexity of 12. Maximum allowed is 8.)
 function DocumentLinks({ doc, disabled }: { doc: DocumentRecord; disabled?: boolean }) {
+  const [modal, setModal] = useState<ModalState>({ kind: "closed" });
   const isDemo = process.env.NEXT_PUBLIC_DEMO_BUILD === "1";
   let viewHref: string;
   let downloadHref: string;
@@ -193,22 +195,45 @@ function DocumentLinks({ doc, disabled }: { doc: DocumentRecord; disabled?: bool
         })()
       : undefined;
     const r = await openInFinder(doc.storagePath, { downloadFallbackBase: fallbackBase });
-    if (r.kind === "unsupported") { alert("Din webbläsare stödjer inte File System Access. Använd Chrome eller Edge."); return; }
-    if (r.kind === "no-handle") { alert("Du har inte valt en lokal mapp än. Gå till Inställningar → välj firma-mapp."); return; }
-    if (r.kind === "permission-denied") { alert("AVA fick inte tillåtelse att läsa filen. Klicka 'Tillåt' nästa gång prompten dyker upp."); return; }
-    if (r.kind === "file-not-found") { alert(`Hittade inte filen i din lokala mapp: ${r.path}`); return; }
+    if (r.kind === "unsupported") {
+      setModal({ kind: "error", title: "Browser stödjer inte File System Access",
+        message: "Din webbläsare stödjer inte File System Access API. Använd Chrome eller Edge på desktop." });
+      return;
+    }
+    if (r.kind === "no-handle") {
+      setModal({ kind: "error", title: "Ingen lokal mapp vald",
+        message: "Du har inte valt en lokal mapp än. Gå till Inställningar → 'Datakälla' → välj firma-mapp." });
+      return;
+    }
+    if (r.kind === "permission-denied") {
+      setModal({ kind: "error", title: "Saknar behörighet",
+        message: "AVA fick inte tillåtelse att läsa filen. Klicka 'Tillåt' nästa gång prompten dyker upp." });
+      return;
+    }
+    if (r.kind === "file-not-found") {
+      setModal({ kind: "error", title: "Filen hittades inte",
+        message: `Hittade inte filen i din lokala mapp: ${r.path}` });
+      return;
+    }
     const t = getExternalEditTracker();
-    if (!t) { alert("Edit-tracker:n är inte initialiserad — ladda om sidan."); return; }
+    if (!t) {
+      setModal({ kind: "error", title: "Edit-tracker inte initialiserad",
+        message: "Ladda om sidan så registreras tracker:n." });
+      return;
+    }
     await t.watch({ docId: doc.id, path: r.target.relativePath, handle: r.target.fileHandle });
-    alert(
-      `Öppna filen i Finder/Explorer:\n\n` +
-      `${r.target.folderName}/${r.target.relativePath}\n\n` +
-      `Dubbelklicka för att öppna i PDF Gear, Preview, Word etc. AVA committar automatiskt när du sparar (efter 90 sekunder utan ändringar) — eller klicka "Spara nu" i den gula bannern högst upp.`,
-    );
+    setModal({
+      kind: "ok",
+      fileName: doc.fileName,
+      folderName: r.target.folderName,
+      relativePath: r.target.relativePath,
+      fileHandle: r.target.fileHandle,
+    });
   };
 
   return (
     <>
+      <ExternalEditModal state={modal} onClose={() => setModal({ kind: "closed" })} />
       <button
         type="button"
         onClick={openInEditor}
