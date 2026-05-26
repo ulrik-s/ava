@@ -2,83 +2,10 @@
 
 import { useId, useState, useRef } from "react";
 import { trpc } from "@/client/lib/trpc";
-import { Upload, Trash2, Building2, Plus, Pencil, X, Check, FolderOpen, Copy } from "lucide-react";
+import { Upload, Trash2, Building2, Plus, Pencil, X, Check } from "lucide-react";
 import { DatasourceSection } from "@/client/components/datasource-section";
 import { ExternalEditSection } from "@/client/components/external-edit-section";
 import { LlmSettingsCard } from "@/client/components/llm-settings-card";
-
-// ─── WebDAV mount instructions ───────────────────────────────────
-
-function WebDAVSection() {
-  const [copied, setCopied] = useState(false);
-  // In dev the WebDAV server runs on :3001; behind a reverse proxy in prod
-  // it can be the same host. Infer from browser location.
-  const host = typeof window !== "undefined" ? window.location.hostname : "localhost";
-  const webdavUrl = `http://${host}:3001/`;
-
-  const copyUrl = () => {
-    navigator.clipboard.writeText(webdavUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  };
-
-  return (
-    <div className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
-      <div className="flex items-center gap-2 mb-3">
-        <FolderOpen size={16} className="text-gray-500" />
-        <h2 className="font-semibold text-gray-900">Öppna dokument i lokala program</h2>
-      </div>
-      <p className="text-xs text-gray-500 mb-4">
-        Mounta AVA:s dokumentmappar som en nätverksdisk. Då kan du öppna, redigera
-        och spara PDF-filer direkt i t.ex. <strong>PDFGear</strong>, <strong>Adobe Acrobat</strong> eller{" "}
-        <strong>Preview</strong> — ändringarna skrivs tillbaka automatiskt.
-      </p>
-
-      <div className="flex items-center gap-2 mb-4">
-        <code className="flex-1 bg-gray-50 border border-gray-200 rounded px-3 py-1.5 text-xs font-mono text-gray-800">
-          {webdavUrl}
-        </code>
-        <button
-          onClick={copyUrl}
-          className="flex items-center gap-1 px-2.5 py-1.5 text-xs border border-gray-300 rounded hover:bg-gray-50"
-        >
-          <Copy size={12} />
-          {copied ? "Kopierat!" : "Kopiera"}
-        </button>
-      </div>
-
-      <details className="text-sm">
-        <summary className="cursor-pointer text-blue-600 hover:underline font-medium">
-          Så mountar du på macOS (Finder)
-        </summary>
-        <ol className="list-decimal ml-5 mt-2 space-y-1 text-gray-700 text-xs">
-          <li>Öppna Finder</li>
-          <li>Tryck <kbd className="px-1 border rounded">⌘K</kbd> (eller menyn: Gå → Anslut till server…)</li>
-          <li>Klistra in adressen: <code className="bg-gray-100 px-1 rounded">{webdavUrl}</code></li>
-          <li>Logga in med din AVA-mejladress och lösenord</li>
-          <li>Dina ärenden dyker upp som mappar i Finder</li>
-          <li>Dubbelklicka en PDF → öppnas i standardprogrammet (PDFGear, Preview, Acrobat…)</li>
-          <li>Gör dina understrykningar och spara med <kbd className="px-1 border rounded">⌘S</kbd></li>
-          <li>Ändringen skrivs direkt till AVA — ny version skapas automatiskt</li>
-        </ol>
-      </details>
-
-      <details className="text-sm mt-2">
-        <summary className="cursor-pointer text-blue-600 hover:underline font-medium">
-          Så mountar du på Windows (Utforskaren)
-        </summary>
-        <div className="ml-5 mt-2 text-xs text-gray-700 space-y-2">
-          <p>
-            Windows kräver HTTPS för att tillåta Basic-auth över WebDAV. I nuläget
-            är AVA:s WebDAV-server enbart testad mot macOS — en Windows-anpassning
-            (HTTPS + registerändring eller tredjepartsklient som <em>CyberDuck</em> / <em>RaiDrive</em>)
-            levereras i ett senare steg.
-          </p>
-        </div>
-      </details>
-    </div>
-  );
-}
 
 // ─── Offices sub-component ───────────────────────────────────────
 
@@ -459,7 +386,6 @@ export default function SettingsPage() {
 
       {/* WebDAV mount section */}
       <ExternalEditSection />
-      <WebDAVSection />
 
       {/* Offices section */}
       <OfficesSection />
