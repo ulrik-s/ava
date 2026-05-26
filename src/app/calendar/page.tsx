@@ -15,6 +15,7 @@ import { jobQueue } from "@/lib/client/jobs/job-queue";
 import { CalendarGrid, startOfDay } from "./_calendar-grid";
 import { DayView } from "./_day-view";
 import { EventDetailModal, type EventDetail } from "./_event-detail-modal";
+import { MatterCombobox } from "@/components/matter/matter-combobox";
 import { UserPicker, loadSelectedUserIds } from "./_user-picker";
 import { buildUserColorMap, type UserColor } from "@/lib/client/calendar/user-colors";
 
@@ -56,6 +57,7 @@ export default function CalendarPage() {
   const [showNewTask, setShowNewTask] = useState(false);
   const [view, setView] = useState<ViewMode>("week");
   const [selectedEvent, setSelectedEvent] = useState<EventDetail | null>(null);
+  const [editingEvent, setEditingEvent] = useState<EventRow | null>(null);
   // Hydration-safe init: `new Date()` och `localStorage` ger olika värden
   // SSR (statisk export, byggtid) vs klient. Vi initialiserar deterministiskt
   // till null/[] och fyller via useEffect efter mount — då matchar SSR-HTML
@@ -141,6 +143,12 @@ export default function CalendarPage() {
             </button>
           </div>
           {showNewEvent && <NewEventForm onClose={() => setShowNewEvent(false)} />}
+          {editingEvent && (
+            <NewEventForm
+              initial={editingEvent}
+              onClose={() => setEditingEvent(null)}
+            />
+          )}
           {view === "list" && <EventList />}
           {/* anchor är null fram till första mount — då renderar vi en
               osynlig placeholder så SSR-HTML matchar klientens första render. */}
@@ -164,6 +172,7 @@ export default function CalendarPage() {
             userName={selectedEvent ? (userNames[selectedEvent.userId] ?? "?") : ""}
             color={selectedEvent ? userColors.get(selectedEvent.userId) : undefined}
             onClose={() => setSelectedEvent(null)}
+            onEdit={(ev) => { setSelectedEvent(null); setEditingEvent(ev as unknown as EventRow); }}
           />
         </div>
       </section>
@@ -288,52 +297,69 @@ function TaskList() {
 
 // ─── Create forms ─────────────────────────────────────────────────────────
 
-function NewEventForm({ onClose }: { onClose: () => void }) {
+// eslint-disable-next-line complexity
+function NewEventForm({ onClose, initial }: { onClose: () => void; initial?: EventRow }) {
   const utils = trpc.useUtils();
-  const create = trpc.calendar.create.useMutation({
-    onSuccess: (created: EventRow) => {
-      // Invalidate HELA calendar-namespacen — vi vet inte vilken query
-      // som UI:n just nu har aktiv (list / listForUsers). Tidigare
-      // invaliderades bara `.list` → events i multi-user-vyn visades inte.
-      utils.calendar.invalidate();
-      if (created.mirrorToOutlook) {
-        enqueueMirror({
-          eventId: created.id,
-          op: "upsert",
-          event: {
-            title: created.title,
-            description: null,
-            location: created.location ?? null,
-            startAt: typeof created.startAt === "string" ? created.startAt : created.startAt.toISOString(),
-            endAt: created.endAt ? (typeof created.endAt === "string" ? created.endAt : created.endAt.toISOString()) : null,
-            allDay: created.allDay,
-            visibility: "normal",
-            kind: created.kind,
-          },
-          outlookCalendarId: created.outlookCalendarId ?? null,
-        });
-      }
-      onClose();
-    },
-  });
-  const [title, setTitle] = useState("");
-  const [kind, setKind] = useState<"appointment" | "deadline">("appointment");
-  const [startAt, setStartAt] = useState(new Date().toISOString().slice(0, 16));
-  const [endAt, setEndAt] = useState("");
-  const [location, setLocation] = useState("");
-  const [mirrorToOutlook, setMirrorToOutlook] = useState(false);
+  const isEdit = !!initial;
+  const matters = trpc.matter.list.useQuery({ pageSize: 500, status: "ACTIVE" });
+
+  const onCreateOrUpdateSuccess = (saved: EventRow): void => {
+    utils.calendar.invalidate();
+    if (saved.mirrorToOutlook) {
+      enqueueMirror({
+        eventId: saved.id,
+        op: "upsert",
+        event: {
+          title: saved.title,
+          description: null,
+          location: saved.location ?? null,
+          startAt: typeof saved.startAt === "string" ? saved.startAt : saved.startAt.toISOString(),
+          endAt: saved.endAt ? (typeof saved.endAt === "string" ? saved.endAt : saved.endAt.toISOString()) : null,
+          allDay: saved.allDay,
+          visibility: "normal",
+          kind: saved.kind,
+        },
+        outlookCalendarId: saved.outlookCalendarId ?? null,
+      });
+    }
+    onClose();
+  };
+
+  const create = trpc.calendar.create.useMutation({ onSuccess: onCreateOrUpdateSuccess });
+  const update = trpc.calendar.update.useMutation({ onSuccess: onCreateOrUpdateSuccess });
+
+  // Hjälpare: ISO → datetime-local-värde "YYYY-MM-DDTHH:mm"
+  const toLocalInput = (d: Date | string | null | undefined): string => {
+    if (!d) return "";
+    const dt = typeof d === "string" ? new Date(d) : d;
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+  };
+
+  const [title, setTitle] = useState(initial?.title ?? "");
+  const [kind, setKind] = useState<"appointment" | "deadline">(initial?.kind ?? "appointment");
+  const [startAt, setStartAt] = useState(initial ? toLocalInput(initial.startAt) : new Date().toISOString().slice(0, 16));
+  const [endAt, setEndAt] = useState(initial?.endAt ? toLocalInput(initial.endAt) : "");
+  const [location, setLocation] = useState(initial?.location ?? "");
+  const [matterId, setMatterId] = useState(initial?.matterId ?? "");
+  const [mirrorToOutlook, setMirrorToOutlook] = useState(initial?.mirrorToOutlook ?? false);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    create.mutate({
+    const payload = {
       title,
       kind,
       startAt: new Date(startAt),
       endAt: endAt && kind === "appointment" ? new Date(endAt) : undefined,
       location: location || undefined,
+      matterId: matterId || undefined,
       mirrorToOutlook,
-    });
+    };
+    if (isEdit && initial) update.mutate({ id: initial.id, ...payload });
+    else create.mutate(payload);
   };
+
+  const pending = create.isPending || update.isPending;
 
   return (
     <form onSubmit={submit} className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-3 space-y-3">
@@ -382,6 +408,15 @@ function NewEventForm({ onClose }: { onClose: () => void }) {
           </label>
         )}
       </div>
+      <div>
+        <MatterCombobox
+          label="Ärende (vad mötet handlar om)"
+          matters={matters.data?.matters ?? []}
+          value={matterId}
+          onChange={setMatterId}
+          placeholder="Valfritt — sök på ärendenr eller titel…"
+        />
+      </div>
       <label className="flex items-center gap-2 text-xs text-gray-700">
         <input
           type="checkbox" checked={mirrorToOutlook}
@@ -391,9 +426,9 @@ function NewEventForm({ onClose }: { onClose: () => void }) {
       </label>
       <div className="flex justify-end gap-2">
         <button type="button" onClick={onClose} className="px-3 py-1.5 text-sm text-gray-700 hover:bg-white rounded">Avbryt</button>
-        <button type="submit" disabled={!title || create.isPending}
+        <button type="submit" disabled={!title || pending}
           className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50">
-          {create.isPending ? "Sparar…" : "Skapa"}
+          {pending ? "Sparar…" : isEdit ? "Spara ändringar" : "Skapa"}
         </button>
       </div>
     </form>
@@ -468,6 +503,7 @@ interface EventRow {
   endAt?: string | Date | null;
   allDay: boolean;
   location?: string | null;
+  matterId?: string | null;
   matter?: { id: string; matterNumber: string; title: string } | null;
   mirrorToOutlook?: boolean;
   mirrorStatus?: "pending" | "synced" | "failed" | null;

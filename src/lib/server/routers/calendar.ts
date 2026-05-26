@@ -159,6 +159,16 @@ export const calendarRouter = router({
       });
     }),
 
+  /** Alla events kopplade till ett specifikt ärende, kronologiskt. */
+  listForMatter: protectedProcedure
+    .input(z.object({ matterId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      return ctx.dataStore.calendarEvents.findMany({
+        where: { matterId: input.matterId, organizationId: ctx.user.organizationId },
+        orderBy: { startAt: "asc" },
+      });
+    }),
+
   update: protectedProcedure
     .input(updateInput)
     .mutation(async ({ ctx, input }) => {

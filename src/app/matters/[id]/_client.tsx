@@ -12,6 +12,7 @@ import { FileDown } from "lucide-react";
 import { ContactsSection } from "./_contacts-section";
 import { TimeSection } from "./_time-section";
 import { ExpenseSection } from "./_expense-section";
+import { CalendarSection } from "./_calendar-section";
 import { TaxaCard } from "./_taxa-card";
 import { GenerateModal } from "./_generate-modal";
 import { useRouteId } from "@/lib/client/demo/use-route-id";
@@ -77,6 +78,7 @@ export default function MatterDetailClient({ id: paramId }: { id: string }) {
         <DocumentBrowser matterId={id} />
         <TimeSection matterId={id} isTaxeArende={m.isTaxeArende} />
         <ExpenseSection matterId={id} isTaxeArende={m.isTaxeArende} />
+        <CalendarSection matterId={id} />
         <InvoicesSection matterId={id} />
       </div>
 

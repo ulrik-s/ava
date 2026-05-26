@@ -7,7 +7,7 @@
  */
 
 import { trpc } from "@/lib/client/trpc";
-import { Trash2, X, MapPin, Clock, User as UserIcon, Briefcase } from "lucide-react";
+import { Trash2, X, MapPin, Clock, User as UserIcon, Briefcase, Pencil } from "lucide-react";
 import type { UserColor } from "@/lib/client/calendar/user-colors";
 
 export interface EventDetail {
@@ -30,10 +30,12 @@ interface Props {
   color?: UserColor;
   onClose: () => void;
   onAfterDelete?: () => void;
+  /** Klick på "Redigera" → parent öppnar redigeringsformuläret. */
+  onEdit?: (ev: EventDetail) => void;
 }
 
 // eslint-disable-next-line complexity
-export function EventDetailModal({ event, userName, color, onClose, onAfterDelete }: Props): React.ReactElement | null {
+export function EventDetailModal({ event, userName, color, onClose, onAfterDelete, onEdit }: Props): React.ReactElement | null {
   const utils = trpc.useUtils();
   const del = trpc.calendar.delete.useMutation({
     onSuccess: () => {
@@ -120,9 +122,19 @@ export function EventDetailModal({ event, userName, color, onClose, onAfterDelet
           >
             <Trash2 size={14} /> {del.isPending ? "Tar bort…" : "Ta bort"}
           </button>
-          <button onClick={onClose} className="px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 rounded">
-            Stäng
-          </button>
+          <div className="flex items-center gap-2">
+            {onEdit && (
+              <button
+                onClick={() => onEdit(event)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+              >
+                <Pencil size={14} /> Redigera
+              </button>
+            )}
+            <button onClick={onClose} className="px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 rounded">
+              Stäng
+            </button>
+          </div>
         </footer>
       </div>
     </div>
