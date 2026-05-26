@@ -7,7 +7,7 @@
  */
 
 import { trpc } from "@/lib/client/trpc";
-import { Trash2, X, MapPin, Clock, User as UserIcon, Briefcase, Pencil } from "lucide-react";
+import { Trash2, X, MapPin, Clock, User as UserIcon, Briefcase, Pencil, CalendarDays } from "lucide-react";
 import type { UserColor } from "@/lib/client/calendar/user-colors";
 
 export interface EventDetail {
@@ -32,10 +32,12 @@ interface Props {
   onAfterDelete?: () => void;
   /** Klick på "Redigera" → parent öppnar redigeringsformuläret. */
   onEdit?: (ev: EventDetail) => void;
+  /** Klick på "Gå till kalendern" → parent navigerar till kalender på given dag. */
+  gotoCalendar?: (ev: EventDetail) => void;
 }
 
 // eslint-disable-next-line complexity
-export function EventDetailModal({ event, userName, color, onClose, onAfterDelete, onEdit }: Props): React.ReactElement | null {
+export function EventDetailModal({ event, userName, color, onClose, onAfterDelete, onEdit, gotoCalendar }: Props): React.ReactElement | null {
   const utils = trpc.useUtils();
   const del = trpc.calendar.delete.useMutation({
     onSuccess: () => {
@@ -123,6 +125,15 @@ export function EventDetailModal({ event, userName, color, onClose, onAfterDelet
             <Trash2 size={14} /> {del.isPending ? "Tar bort…" : "Ta bort"}
           </button>
           <div className="flex items-center gap-2">
+            {gotoCalendar && (
+              <button
+                onClick={() => gotoCalendar(event)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-300 hover:bg-gray-50 rounded"
+                title="Hoppa till kalendervyn för den här dagen"
+              >
+                <CalendarDays size={14} /> Gå till kalendern
+              </button>
+            )}
             {onEdit && (
               <button
                 onClick={() => onEdit(event)}

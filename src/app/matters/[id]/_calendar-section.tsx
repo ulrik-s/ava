@@ -2,12 +2,15 @@
 
 /**
  * `CalendarSection` — listar kalender-events kopplade till ärendet på
- * matter-detalj-sidan. Visar tid, titel, ägare och plats.
+ * matter-detalj-sidan. Klick på rad → EventDetailModal med info + länk
+ * till kalender-vyn för den dagen.
  */
 
+import { useState } from "react";
 import Link from "next/link";
 import { trpc } from "@/lib/client/trpc";
 import { Calendar } from "lucide-react";
+import { EventDetailModal, type EventDetail } from "@/app/calendar/_event-detail-modal";
 
 interface Props {
   matterId: string;
@@ -19,13 +22,20 @@ interface Event {
   startAt: string | Date;
   endAt?: string | Date | null;
   location?: string | null;
+  description?: string | null;
   userId: string;
+  matterId?: string | null;
   kind?: string;
   allDay?: boolean;
 }
 
+// eslint-disable-next-line complexity
 export function CalendarSection({ matterId }: Props): React.ReactElement {
   const events = trpc.calendar.listForMatter.useQuery({ matterId });
+  const users = trpc.user.list.useQuery();
+  const [selected, setSelected] = useState<EventDetail | null>(null);
+  const userName = (uid: string): string =>
+    users.data?.users.find((u: { id: string; name: string }) => u.id === uid)?.name ?? "?";
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 lg:col-span-2">
@@ -64,7 +74,14 @@ export function CalendarSection({ matterId }: Props): React.ReactElement {
                 const dateStr = start.toLocaleDateString("sv-SE", { weekday: "short", year: "numeric", month: "short", day: "numeric" });
                 const timeStr = e.allDay ? "Hela dagen" : start.toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" });
                 return (
-                  <tr key={e.id}>
+                  <tr key={e.id} className="hover:bg-gray-50 cursor-pointer"
+                    onClick={() => setSelected({
+                      id: e.id, title: e.title, location: e.location,
+                      startAt: e.startAt, endAt: e.endAt, allDay: e.allDay ?? false,
+                      userId: e.userId, matterId: e.matterId, description: e.description ?? null,
+                      kind: (e.kind === "deadline" ? "deadline" : "appointment"),
+                    })}
+                  >
                     <td className="px-6 py-2 text-sm text-gray-700 whitespace-nowrap">
                       <div>{dateStr}</div>
                       <div className="text-xs text-gray-500">{timeStr}</div>
@@ -83,6 +100,16 @@ export function CalendarSection({ matterId }: Props): React.ReactElement {
           </table>
         )}
       </div>
+      <EventDetailModal
+        event={selected}
+        userName={selected ? userName(selected.userId) : ""}
+        onClose={() => setSelected(null)}
+        gotoCalendar={(ev) => {
+          const d = new Date(ev.startAt);
+          const ymd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+          window.location.href = `/calendar?date=${ymd}`;
+        }}
+      />
     </div>
   );
 }

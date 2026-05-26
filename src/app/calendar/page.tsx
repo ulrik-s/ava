@@ -63,8 +63,19 @@ export default function CalendarPage() {
   // till null/[] och fyller via useEffect efter mount — då matchar SSR-HTML
   // klientens första render.
   const [anchor, setAnchor] = useState<Date | null>(null);
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { setAnchor(startOfDay(new Date())); }, []);
+   
+  useEffect(() => {
+    // Acceptera ?date=YYYY-MM-DD så andra sidor kan länka hit och hoppa
+    // direkt till en specifik dag (matter-detalj: "Gå till kalendern").
+    const url = new URL(window.location.href);
+    const dateParam = url.searchParams.get("date");
+    const parsed = dateParam ? new Date(dateParam) : null;
+    const valid = parsed && !isNaN(parsed.getTime()) ? parsed : new Date();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setAnchor(startOfDay(valid));
+     
+    if (dateParam) setView("day");
+  }, []);
 
   // Persistera vilka användare som visas (multi-user). Default: bara mig.
   const currentUser = trpc.user.current.useQuery();
