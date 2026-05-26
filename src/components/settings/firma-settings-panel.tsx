@@ -29,9 +29,12 @@ interface Props {
   onCancel: () => void;
   /** Inline = ingen modal-wrapper, ingen Avbryt-knapp (för /settings-sidan). */
   inline?: boolean;
+  /** Extra innehåll (FSA-väljare, sync-status) som renderas mellan
+   *  konfig-fälten och Spara-knappen så knappen hamnar allra längst ner. */
+  children?: React.ReactNode;
 }
 
-export function FirmaSettingsPanel({ initial, onSaved, onCancel, inline = false }: Props) {
+export function FirmaSettingsPanel({ initial, onSaved, onCancel, inline = false, children }: Props) {
   const [tier, setTier] = useState<FirmaTier>(initial.tier);
   const [repo, setRepo] = useState(initial.repo);
   const [token, setToken] = useState(initial.token);
@@ -105,6 +108,8 @@ export function FirmaSettingsPanel({ initial, onSaved, onCancel, inline = false 
 
         {tier !== "demo" && <CorsProxyField value={corsProxy} onChange={setCorsProxy} />}
       </div>
+
+      {children}
 
       <FooterButtons
         inline={inline}
@@ -276,7 +281,7 @@ export function FooterButtons(props: {
           disabled={!props.canSave}
           className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300"
         >
-          Spara & ladda om
+          Spara
         </button>
       </div>
     </div>

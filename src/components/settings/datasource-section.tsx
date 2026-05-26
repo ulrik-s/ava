@@ -47,11 +47,14 @@ export function DatasourceSection() {
         onSaved={() => window.location.reload()}
         onCancel={() => { /* inline-vy — ingen cancel */ }}
         inline
-      />
-      <div className="mt-4">
-        <FsaFolderSelector repoUrl={config.repo} token={config.token} />
-      </div>
-      <SyncDiagnostics />
+      >
+        {/* FSA-väljare + sync-status renderas FÖRE Spara-knappen så
+            "Spara" hamnar allra längst ner i panelen. */}
+        <div className="mt-4">
+          <FsaFolderSelector repoUrl={config.repo} token={config.token} />
+        </div>
+        <SyncDiagnostics />
+      </FirmaSettingsPanel>
     </div>
   );
 }
