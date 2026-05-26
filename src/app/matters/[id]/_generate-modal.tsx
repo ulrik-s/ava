@@ -5,8 +5,10 @@ import Link from "next/link";
 import { FileDown } from "lucide-react";
 import { trpc } from "@/lib/client/trpc";
 import { labelForMatterRole } from "@/lib/client/labels";
+import { buildTemplateContext } from "@/lib/client/templates/build-template-context";
+import { renderHandlebars } from "@/lib/client/kostnadsrakning/render-handlebars";
 
-type Contact = { id: string; name: string };
+type Contact = { id: string; name: string; email?: string | null; phone?: string | null };
 type MatterContact = { id: string; role: string; contact: Contact };
 
 interface Props {
@@ -15,9 +17,13 @@ interface Props {
   onClose: () => void;
 }
 
+// eslint-disable-next-line max-lines-per-function
 export function GenerateModal({ matterId, contacts, onClose }: Props) {
   const utils = trpc.useUtils();
   const templates = trpc.documentTemplate.list.useQuery();
+  const matter = trpc.matter.getById.useQuery({ id: matterId });
+  const org = trpc.organization.getSettings.useQuery();
+  const register = trpc.document.register.useMutation();
   const [generateTemplateId, setGenerateTemplateId] = useState("");
   const [generateFormat, setGenerateFormat] = useState<"pdf" | "docx">("pdf");
   const [generateRecipientIds, setGenerateRecipientIds] = useState<string[]>([]);
@@ -31,37 +37,62 @@ export function GenerateModal({ matterId, contacts, onClose }: Props) {
     );
   };
 
+  // Klientsidig generering — demo/static-export har ingen /api/-route.
+  // Vi renderar mallen i browsern via renderHandlebars, öppnar print-flik
+  // (PDF via "Spara som PDF" i utskriftsdialogen) + skriver HTML till FSA
+  // och registrerar dokumentet via tRPC.
+  // eslint-disable-next-line complexity
   const handleGenerate = async () => {
     if (!generateTemplateId) return;
     setGenerating(true);
     setGenerateError(null);
     try {
-      const res = await fetch("/api/templates/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          templateId: generateTemplateId,
-          matterId,
-          format: generateFormat,
-          recipientContactIds: generateRecipientIds,
-        }),
-      });
-      if (!res.ok) {
-        const err = await res.json() as { error?: string };
-        throw new Error(err.error || "Generering misslyckades");
-      }
-      const { documents } = await res.json() as {
-        documents: Array<{ documentId: string; fileName: string; recipientContactId: string | null }>;
-      };
-      for (const doc of documents) {
-        if (generateFormat === "pdf") {
-          window.open(`/api/documents/${doc.documentId}/download`, "_blank", "noopener,noreferrer");
-        } else {
-          const dl = document.createElement("a");
-          dl.href = `/api/documents/${doc.documentId}/download?download=1`;
-          dl.download = doc.fileName;
-          dl.click();
+      const tpl = (templates.data ?? []).find((t: { id: string; content?: string; name: string }) => t.id === generateTemplateId);
+      if (!tpl?.content) throw new Error("Mallen saknar innehåll.");
+      const m = matter.data;
+      if (!m) throw new Error("Ärendedata kunde inte laddas.");
+
+      const clientLink = m.contacts?.find((c: { role: string }) => c.role === "KLIENT");
+      const recipients = generateRecipientIds.length > 0
+        ? contacts.filter((mc) => generateRecipientIds.includes(mc.contact.id)).map((mc) => mc.contact)
+        : [null];
+
+      for (const recipient of recipients) {
+        const ctx = buildTemplateContext({
+          matter: { matterNumber: m.matterNumber, title: m.title, matterType: m.matterType },
+          recipient: recipient ? { name: recipient.name, email: recipient.email, phone: recipient.phone } : null,
+          client: clientLink ? { name: clientLink.contact.name } : null,
+          organization: org.data ? { name: org.data.name, orgNumber: org.data.orgNumber, address: org.data.address, email: org.data.email } : null,
+        });
+        const html = renderHandlebars(tpl.content, ctx);
+
+        // Öppna i ny flik (auto-print för PDF-format)
+        const printable = generateFormat === "pdf"
+          ? html.replace("</body>", `<script>setTimeout(function(){window.print();},200);<\/script></body>`)
+          : html;
+        const blob = new Blob([printable.includes("<body") ? printable : `<!doctype html><html><body>${printable}</body></html>`], { type: "text/html; charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        window.open(url, "_blank", "noopener,noreferrer");
+        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+
+        // Spara + registrera dokument
+        const suffix = recipient ? ` ${recipient.name}` : "";
+        const fileName = `${tpl.name}${suffix} ${ctx.today as string}.html`;
+        const docId = `gen-${m.matterNumber}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+        const storagePath = `documents/content/${docId}.html`;
+        const bytes = new TextEncoder().encode(html);
+        try {
+          const { loadHandle } = await import("@/lib/client/fsa/handle-store");
+          const { FsaIsoGitAdapter } = await import("@/lib/client/fsa/fs-adapter");
+          const handle = await loadHandle("repo-root");
+          if (handle) await new FsaIsoGitAdapter(handle).writeFile("/" + storagePath, bytes);
+        } catch (e) {
+          console.warn("[generate] FSA-skrivning misslyckades:", e);
         }
+        await register.mutateAsync({
+          id: docId, matterId, fileName,
+          mimeType: "text/html; charset=utf-8", sizeBytes: bytes.byteLength, storagePath,
+        });
       }
       utils.document.tree.invalidate({ matterId });
       onClose();
@@ -231,7 +262,7 @@ function FormatPicker({
               onChange={() => onChange(fmt)}
               className="accent-blue-600"
             />
-            <span className="text-sm">{fmt === "pdf" ? "PDF" : "Word (.docx)"}</span>
+            <span className="text-sm">{fmt === "pdf" ? "PDF (via utskrift)" : "HTML-fil"}</span>
           </label>
         ))}
       </div>
