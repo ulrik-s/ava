@@ -8,7 +8,7 @@ import {
   loadFirmaConfig, saveFirmaConfig, resetToDemo, inferTier,
   defaultConfigForHost,
   type FirmaConfig,
-} from "@/client/lib/firma/firma-config";
+} from "@/lib/client/firma/firma-config";
 
 const KEY = "ava.firma";
 

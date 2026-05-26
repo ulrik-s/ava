@@ -14,7 +14,7 @@
  */
 
 import { describe, it, expect, beforeEach } from "vitest";
-import { MemFs } from "@/server/local-first/mem-fs";
+import { MemFs } from "@/lib/server/local-first/mem-fs";
 
 describe("MemFs — IFileSystem-yta", () => {
   let mem: MemFs;

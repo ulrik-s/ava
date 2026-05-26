@@ -1,5 +1,5 @@
 import InvoiceDetailClient from "./_client";
-import { demoStaticParams } from "@/client/lib/demo/static-params";
+import { demoStaticParams } from "@/lib/client/demo/static-params";
 
 // Static export: pre-rendera 1 HTML per seed-faktura PLUS sentinel-shell
 // (för self-hosted nya id:n). Tidigare returnerades bara SHELL_PARAM →

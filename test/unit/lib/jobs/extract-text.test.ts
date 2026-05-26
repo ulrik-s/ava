@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { extractText, detectKind } from "@/client/lib/jobs/extract-text";
+import { extractText, detectKind } from "@/lib/client/jobs/extract-text";
 
 describe("detectKind", () => {
   it("plain text via mime", () => {

@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { parseRepoLocator } from "@/client/lib/github/api";
+import { parseRepoLocator } from "@/lib/client/github/api";
 
 describe("parseRepoLocator", () => {
   it("kortform 'user/repo'", () => {

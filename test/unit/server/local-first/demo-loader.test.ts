@@ -11,9 +11,9 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
-import { DemoLoader } from "@/server/local-first/demo-loader";
-import { MemFs } from "@/server/local-first/mem-fs";
-import { buildDefaultRegistry } from "@/server/local-first/projections/default-registry";
+import { DemoLoader } from "@/lib/server/local-first/demo-loader";
+import { MemFs } from "@/lib/server/local-first/mem-fs";
+import { buildDefaultRegistry } from "@/lib/server/local-first/projections/default-registry";
 
 const sampleMatter = JSON.stringify({
   id: "m1",

@@ -3,9 +3,9 @@
 import { useId, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { trpc } from "@/client/lib/trpc";
-import { labelForContactType, labelForMatterRole, contactTypes } from "@/client/lib/labels";
-import { useRouteId } from "@/client/lib/demo/use-route-id";
+import { trpc } from "@/lib/client/trpc";
+import { labelForContactType, labelForMatterRole, contactTypes } from "@/lib/client/labels";
+import { useRouteId } from "@/lib/client/demo/use-route-id";
 
 // eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'ContactDetailClient' has a complexity of 22. Maximum allowed is 8.)
 export default function ContactDetailClient({ id: paramId }: { id: string }) {

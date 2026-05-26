@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { lookup, template, templateValue } from "@/server/rules/template";
+import { lookup, template, templateValue } from "@/lib/server/rules/template";
 
 describe("lookup", () => {
   const data = {

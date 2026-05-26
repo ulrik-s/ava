@@ -22,7 +22,7 @@ import {
   getTreeRecursive,
   parseRepoLocator,
   updateRef,
-} from "@/client/lib/github/api";
+} from "@/lib/client/github/api";
 
 const REPO = { owner: "ulrik-s", repo: "ava" };
 const OPTS = { token: "ghp_test" };

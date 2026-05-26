@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { splitVat, isVatRate, VAT_RATES, DEFAULT_VAT_RATE } from "@/shared/vat";
+import { splitVat, isVatRate, VAT_RATES, DEFAULT_VAT_RATE } from "@/lib/shared/vat";
 
 describe("splitVat", () => {
   // ─── 25 % (default) ──────────────────────────────────────────────

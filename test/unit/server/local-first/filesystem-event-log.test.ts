@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { FilesystemEventLog } from "@/server/local-first/filesystem-event-log";
-import { InMemoryFileSystem } from "@/server/local-first/in-memory-fs";
+import { FilesystemEventLog } from "@/lib/server/local-first/filesystem-event-log";
+import { InMemoryFileSystem } from "@/lib/server/local-first/in-memory-fs";
 
 function makeLog() {
   const fs = new InMemoryFileSystem();

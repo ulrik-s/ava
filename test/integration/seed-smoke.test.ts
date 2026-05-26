@@ -12,11 +12,11 @@
 
 import { describe, it, expect } from "vitest";
 import { buildSeed } from "../../tooling/scripts/seed-data";
-import { DemoDataStore, type DemoSource } from "@/server/data-store/DemoDataStore";
-import { prebakeJoins } from "@/client/lib/demo/prebake-joins";
-import { appRouter } from "@/server/routers/_app";
-import { noopPorts } from "@/server/adapters/noop-ports";
-import { makeDemoSearchIndex } from "@/server/adapters/demo-search-index";
+import { DemoDataStore, type DemoSource } from "@/lib/server/data-store/DemoDataStore";
+import { prebakeJoins } from "@/lib/client/demo/prebake-joins";
+import { appRouter } from "@/lib/server/routers/_app";
+import { noopPorts } from "@/lib/server/adapters/noop-ports";
+import { makeDemoSearchIndex } from "@/lib/server/adapters/demo-search-index";
 
 const ORG_ID = "firma-ab";
 const ADMIN_USER = { id: "current-user", email: "user@firma.local", name: "Anna Advokat", role: "ADMIN" as const, organizationId: ORG_ID };

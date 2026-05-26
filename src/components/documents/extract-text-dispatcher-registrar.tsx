@@ -15,7 +15,7 @@
  */
 
 import { useEffect } from "react";
-import { setExtractTextDispatcher } from "@/client/lib/jobs/extract-text-dispatch";
+import { setExtractTextDispatcher } from "@/lib/client/jobs/extract-text-dispatch";
 
 export function ExtractTextDispatcherRegistrar() {
   useEffect(() => {

@@ -12,7 +12,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { ExternalEditTracker } from "@/client/lib/fsa/external-edit-tracker";
+import { ExternalEditTracker } from "@/lib/client/fsa/external-edit-tracker";
 
 // Minimal FileSystemFileHandle-fake: vi mutar `lastModified` mellan ticks.
 class FakeHandle {

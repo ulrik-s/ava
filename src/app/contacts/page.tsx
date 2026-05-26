@@ -3,9 +3,9 @@
 import { Suspense, useId, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { trpc } from "@/client/lib/trpc";
-import { labelForContactType, contactTypes } from "@/client/lib/labels";
-import { useIsReadOnly } from "@/client/lib/demo/demo-mode-context";
+import { trpc } from "@/lib/client/trpc";
+import { labelForContactType, contactTypes } from "@/lib/client/labels";
+import { useIsReadOnly } from "@/lib/client/demo/demo-mode-context";
 
 // eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'ContactsContent' has a complexity of 11. Maximum allowed is 8.)
 function ContactsContent() {

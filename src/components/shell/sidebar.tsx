@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { cn } from "@/client/lib/utils";
+import { cn } from "@/lib/client/utils";
 
 /**
  * Pure git-modell — ingen NextAuth-session. "Logga ut" rensar

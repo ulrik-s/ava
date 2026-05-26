@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { sshToHttps } from "@/client/lib/fsa/url-rewrite";
+import { sshToHttps } from "@/lib/client/fsa/url-rewrite";
 
 describe("sshToHttps", () => {
   it("git@github.com:user/repo.git → https://github.com/user/repo.git", () => {

@@ -22,8 +22,8 @@ vi.mock("isomorphic-git/http/web", () => ({
   default: { request: vi.fn() },
 }));
 
-import { cloneRepo } from "@/client/lib/fsa/git-ops";
-import type { FsaIsoGitAdapter } from "@/client/lib/fsa/fs-adapter";
+import { cloneRepo } from "@/lib/client/fsa/git-ops";
+import type { FsaIsoGitAdapter } from "@/lib/client/fsa/fs-adapter";
 
 const fsStub = {} as FsaIsoGitAdapter;
 

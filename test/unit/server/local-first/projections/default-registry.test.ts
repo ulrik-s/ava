@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { buildDefaultRegistry } from "@/server/local-first/projections/default-registry";
+import { buildDefaultRegistry } from "@/lib/server/local-first/projections/default-registry";
 
 describe("buildDefaultRegistry", () => {
   const registry = buildDefaultRegistry();

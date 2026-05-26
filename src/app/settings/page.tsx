@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
-import { trpc } from "@/client/lib/trpc";
+import { trpc } from "@/lib/client/trpc";
 import { Upload, Trash2, Building2, Plus, Pencil, X, Check } from "lucide-react";
 import { DatasourceSection } from "@/components/settings/datasource-section";
 import { ExternalEditSection } from "@/components/settings/external-edit-section";

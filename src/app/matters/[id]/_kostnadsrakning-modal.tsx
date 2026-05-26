@@ -18,15 +18,15 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Clock, FileText, Mail, Send, X, AlertTriangle, Printer } from "lucide-react";
-import { trpc } from "@/client/lib/trpc";
-import { buildKostnadsrakningContext } from "@/shared/kostnadsrakning";
-import type { TaxaLevel } from "@/shared/brottmalstaxa";
-import { renderHandlebars } from "@/client/lib/kostnadsrakning/render-handlebars";
+import { trpc } from "@/lib/client/trpc";
+import { buildKostnadsrakningContext } from "@/lib/shared/kostnadsrakning";
+import type { TaxaLevel } from "@/lib/shared/brottmalstaxa";
+import { renderHandlebars } from "@/lib/client/kostnadsrakning/render-handlebars";
 import {
   KOSTNADSRAKNING_DEFAULT_HTML,
   KOSTNADSRAKNING_TEMPLATE_CATEGORY,
-} from "@/shared/kostnadsrakning-template";
-import { formatCurrency } from "@/client/lib/utils";
+} from "@/lib/shared/kostnadsrakning-template";
+import { formatCurrency } from "@/lib/client/utils";
 
 interface Props {
   matterId: string;
@@ -139,8 +139,8 @@ export function KostnadsrakningModal(props: Props) {
       const storagePath = `documents/content/${docId}.html`;
       const bytes = new TextEncoder().encode(html);
       try {
-        const { loadHandle } = await import("@/client/lib/fsa/handle-store");
-        const { FsaIsoGitAdapter } = await import("@/client/lib/fsa/fs-adapter");
+        const { loadHandle } = await import("@/lib/client/fsa/handle-store");
+        const { FsaIsoGitAdapter } = await import("@/lib/client/fsa/fs-adapter");
         const handle = await loadHandle("repo-root");
         if (handle) {
           const fs = new FsaIsoGitAdapter(handle);

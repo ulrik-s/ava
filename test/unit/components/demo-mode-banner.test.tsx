@@ -6,7 +6,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { DemoModeBanner } from "@/components/shell/demo-mode-banner";
-import { saveFirmaConfig, resetToDemo } from "@/client/lib/firma/firma-config";
+import { saveFirmaConfig, resetToDemo } from "@/lib/client/firma/firma-config";
 
 beforeEach(() => {
   localStorage.clear();

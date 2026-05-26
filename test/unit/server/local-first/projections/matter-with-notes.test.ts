@@ -11,8 +11,8 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { matterProjectionSchema, MatterProjection } from "@/server/local-first/projections/matter";
-import { YjsTextField } from "@/server/local-first/yjs-text-field";
+import { matterProjectionSchema, MatterProjection } from "@/lib/server/local-first/projections/matter";
+import { YjsTextField } from "@/lib/server/local-first/yjs-text-field";
 
 describe("MatterProjection — med CRDT-notes-fält", () => {
   const proj = new MatterProjection();

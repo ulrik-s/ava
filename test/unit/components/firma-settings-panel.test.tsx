@@ -26,8 +26,8 @@ import {
   testOAuthProxy,
   validateGithubToken,
 } from "@/components/settings/firma-settings-panel";
-import { loadAuthSettings, saveAuthSettings } from "@/client/lib/auth/use-auth-mode";
-import type { FirmaConfig } from "@/client/lib/firma/firma-config";
+import { loadAuthSettings, saveAuthSettings } from "@/lib/client/auth/use-auth-mode";
+import type { FirmaConfig } from "@/lib/client/firma/firma-config";
 
 // Mocka WebOAuthDeviceFlow så den inte gör nätverksanrop i renderingar
 vi.mock("@/components/settings/web-oauth-device-flow", () => ({

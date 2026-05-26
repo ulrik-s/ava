@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { conflictRouter } from "@/server/routers/conflict";
+import { conflictRouter } from "@/lib/server/routers/conflict";
 import { dataStoreFromMockPrisma } from "../helpers/mock-data-store";
 
 const mockPrisma = {

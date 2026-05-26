@@ -16,8 +16,8 @@ import {
   isLlmEnabled, setLlmEnabled,
   getLlmModelId, setLlmModelId,
   LLM_MODELS, type LlmModelId,
-} from "@/client/lib/llm/llm-config";
-import { downloadActiveModel, subscribeLlmProgress, getActiveLlm } from "@/client/lib/llm/active-llm";
+} from "@/lib/client/llm/llm-config";
+import { downloadActiveModel, subscribeLlmProgress, getActiveLlm } from "@/lib/client/llm/active-llm";
 
 const MODEL_LABELS: Record<LlmModelId, string> = {
   "Llama-3.2-1B-Instruct-q4f16_1-MLC": "Llama 3.2 1B — snabb, ~700 MB",

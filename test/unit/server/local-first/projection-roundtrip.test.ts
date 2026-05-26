@@ -12,11 +12,11 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { ProjectionWriter, ProjectionHydrator } from "@/server/local-first/projection-writer";
-import { buildDefaultRegistry } from "@/server/local-first/projections/default-registry";
-import { InMemoryFileSystem } from "@/server/local-first/in-memory-fs";
-import type { MatterProjectionData } from "@/server/local-first/projections/matter";
-import type { ContactProjectionData } from "@/server/local-first/projections/contact";
+import { ProjectionWriter, ProjectionHydrator } from "@/lib/server/local-first/projection-writer";
+import { buildDefaultRegistry } from "@/lib/server/local-first/projections/default-registry";
+import { InMemoryFileSystem } from "@/lib/server/local-first/in-memory-fs";
+import type { MatterProjectionData } from "@/lib/server/local-first/projections/matter";
+import type { ContactProjectionData } from "@/lib/server/local-first/projections/contact";
 
 describe("Projection round-trip — write → hydrate", () => {
   const matter: MatterProjectionData = {

@@ -18,7 +18,7 @@ const utilsMock = {
 const createAccontoMutate = vi.fn();
 const createFinalMutate = vi.fn();
 
-vi.mock("@/client/lib/trpc", () => ({
+vi.mock("@/lib/client/trpc", () => ({
   trpc: {
     useUtils: () => utilsMock,
     invoice: {

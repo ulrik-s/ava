@@ -8,10 +8,10 @@
 import { useState } from "react";
 import Link from "next/link";
 import type { inferRouterOutputs } from "@trpc/server";
-import { trpc } from "@/client/lib/trpc";
-import { useRouteId } from "@/client/lib/demo/use-route-id";
-import { formatCurrency } from "@/client/lib/utils";
-import type { AppRouter } from "@/server/routers/_app";
+import { trpc } from "@/lib/client/trpc";
+import { useRouteId } from "@/lib/client/demo/use-route-id";
+import { formatCurrency } from "@/lib/client/utils";
+import type { AppRouter } from "@/lib/server/routers/_app";
 import { PaymentModal } from "./_payment-modal";
 import { PlanModal } from "./_plan-modal";
 import { CreditModal } from "./_credit-modal";

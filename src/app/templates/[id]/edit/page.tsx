@@ -2,7 +2,7 @@
 
 import { use } from "react";
 import { useRouter } from "next/navigation";
-import { trpc } from "@/client/lib/trpc";
+import { trpc } from "@/lib/client/trpc";
 import { TemplateEditor } from "@/components/settings/template-editor";
 
 export default function EditTemplatePage({ params }: { params: Promise<{ id: string }> }) {

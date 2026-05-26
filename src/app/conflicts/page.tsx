@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { trpc } from "@/client/lib/trpc";
-import { labelForContactType, labelForMatterRole } from "@/client/lib/labels";
+import { trpc } from "@/lib/client/trpc";
+import { labelForContactType, labelForMatterRole } from "@/lib/client/labels";
 
 export default function ConflictsPage() {
   const [searchTerm, setSearchTerm] = useState("");

@@ -11,7 +11,7 @@ import { PaymentMethodCard } from "@/components/matter/payment-method-card";
 
 const updateMutate = vi.fn();
 
-vi.mock("@/client/lib/trpc", () => ({
+vi.mock("@/lib/client/trpc", () => ({
   trpc: {
     useUtils: () => ({ matter: { getById: { invalidate: vi.fn() } } }),
     matter: {

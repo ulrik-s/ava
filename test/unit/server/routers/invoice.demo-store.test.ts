@@ -11,9 +11,9 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
-import { invoiceRouter } from "@/server/routers/invoice";
-import { DemoDataStore, type DemoSource } from "@/server/data-store/DemoDataStore";
-import type { MutationEvent } from "@/server/data-store/in-memory/writable-delegate";
+import { invoiceRouter } from "@/lib/server/routers/invoice";
+import { DemoDataStore, type DemoSource } from "@/lib/server/data-store/DemoDataStore";
+import type { MutationEvent } from "@/lib/server/data-store/in-memory/writable-delegate";
 
 function setup(overrides?: Partial<DemoSource>) {
   const source: DemoSource = {

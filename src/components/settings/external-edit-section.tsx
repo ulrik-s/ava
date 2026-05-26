@@ -9,8 +9,8 @@
 
 import { useEffect, useState } from "react";
 import { Pencil } from "lucide-react";
-import { isFsaSupported, loadHandle, ensureReadWrite } from "@/client/lib/fsa/handle-store";
-import { preloadAllDocuments } from "@/client/lib/fsa/preload-documents";
+import { isFsaSupported, loadHandle, ensureReadWrite } from "@/lib/client/fsa/handle-store";
+import { preloadAllDocuments } from "@/lib/client/fsa/preload-documents";
 
 interface PreloadState {
   phase: "idle" | "running" | "done";

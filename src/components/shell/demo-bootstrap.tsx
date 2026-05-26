@@ -12,26 +12,26 @@ import { useEffect, useState, type ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import superjson from "superjson";
 import { RenderErrorBoundary } from "@/components/ui/render-error-boundary";
-import { DemoRuntime } from "@/server/local-first/demo-runtime";
-import { createGhPagesCloneFn } from "@/server/local-first/gh-pages-loader";
-import { OpfsPersistence } from "@/server/local-first/persistence";
-import { DemoDataStore, type DemoSource } from "@/server/data-store/DemoDataStore";
-import { createDemoTrpcLink } from "@/client/lib/demo/demo-trpc-link";
-import { DemoModeProvider } from "@/client/lib/demo/demo-mode-context";
-import { demoSourceFromRuntime } from "@/client/lib/demo/demo-source-from-runtime";
-import { trpc } from "@/client/lib/trpc";
-import { loadFirmaConfig, type FirmaConfig } from "@/client/lib/firma/firma-config";
-import { AuthProvider, useAuthMode } from "@/client/lib/auth/use-auth-mode";
+import { DemoRuntime } from "@/lib/server/local-first/demo-runtime";
+import { createGhPagesCloneFn } from "@/lib/server/local-first/gh-pages-loader";
+import { OpfsPersistence } from "@/lib/server/local-first/persistence";
+import { DemoDataStore, type DemoSource } from "@/lib/server/data-store/DemoDataStore";
+import { createDemoTrpcLink } from "@/lib/client/demo/demo-trpc-link";
+import { DemoModeProvider } from "@/lib/client/demo/demo-mode-context";
+import { demoSourceFromRuntime } from "@/lib/client/demo/demo-source-from-runtime";
+import { trpc } from "@/lib/client/trpc";
+import { loadFirmaConfig, type FirmaConfig } from "@/lib/client/firma/firma-config";
+import { AuthProvider, useAuthMode } from "@/lib/client/auth/use-auth-mode";
 import { AuthStatusBanner } from "./auth-status-banner";
 import { AutoSync } from "./auto-sync";
-import { SyncProviderRoot } from "@/client/lib/sync/sync-context";
-import { pickProvider } from "@/client/lib/sync/pick-provider";
+import { SyncProviderRoot } from "@/lib/client/sync/sync-context";
+import { pickProvider } from "@/lib/client/sync/pick-provider";
 import { JobsBadge } from "./jobs-badge";
 import { AnalyzeDispatcherRegistrar } from "@/components/documents/analyze-dispatcher-registrar";
 import { ExtractTextDispatcherRegistrar } from "@/components/documents/extract-text-dispatcher-registrar";
 import { MirrorOutlookRegistrar } from "@/components/matter/mirror-outlook-registrar";
 import { AppShell } from "./app-shell";
-import "@/client/lib/jobs/register-workers"; // ⚠ side-effect: registrerar workers
+import "@/lib/client/jobs/register-workers"; // ⚠ side-effect: registrerar workers
 
 type Status = "loading" | "ready" | "error";
 
@@ -61,7 +61,7 @@ export function DemoBootstrap({ children }: { children: ReactNode }) {
     let h = fsaRef.current;
     if (!h) {
       try {
-        const { loadHandle, ensureReadWrite, isFsaSupported } = await import("@/client/lib/fsa/handle-store");
+        const { loadHandle, ensureReadWrite, isFsaSupported } = await import("@/lib/client/fsa/handle-store");
         if (!isFsaSupported()) return;
         const loaded = await loadHandle("repo-root");
         if (!loaded) return;
@@ -70,7 +70,7 @@ export function DemoBootstrap({ children }: { children: ReactNode }) {
         fsaRef.current = loaded; // cache:a för nästa anrop
       } catch { return; }
     }
-    const { makeFsaWriteBack } = await import("@/client/lib/firma/fsa-write-back");
+    const { makeFsaWriteBack } = await import("@/lib/client/firma/fsa-write-back");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await makeFsaWriteBack({ handle: h })(event as any);
     // Notifiera AutoSync — debounced push triggas
@@ -152,7 +152,7 @@ export function DemoBootstrap({ children }: { children: ReactNode }) {
     // som ger write-access → app:n blir writable. Annars in-memory.
     void (async () => {
       try {
-        const { loadHandle, ensureReadWrite, isFsaSupported } = await import("@/client/lib/fsa/handle-store");
+        const { loadHandle, ensureReadWrite, isFsaSupported } = await import("@/lib/client/fsa/handle-store");
         if (!isFsaSupported()) return;
         const h = await loadHandle("repo-root");
         if (!h) return;
@@ -192,8 +192,8 @@ export function DemoBootstrap({ children }: { children: ReactNode }) {
         // iteration via pdfjs-dist. Non-blocking: fortsätter efter ready.
         void (async () => {
           try {
-            const { preloadDocumentContents } = await import("@/client/lib/demo/document-content-cache");
-            const { resolveGhPagesUrl } = await import("@/server/local-first/gh-pages-loader");
+            const { preloadDocumentContents } = await import("@/lib/client/demo/document-content-cache");
+            const { resolveGhPagesUrl } = await import("@/lib/server/local-first/gh-pages-loader");
             const baseUrl = resolveGhPagesUrl(firmaConfig.repo);
             const docs = (source.documents ?? []) as Array<{ id: string; fileName?: string; storagePath?: string; mimeType?: string }>;
             await preloadDocumentContents(docs, baseUrl);
@@ -323,8 +323,8 @@ async function loadSelfHosted(
   isCancelled: () => boolean,
 ): Promise<void> {
   try {
-    const { getOpfsRoot, saveHandle } = await import("@/client/lib/fsa/handle-store");
-    const { loadSelfHostedSource } = await import("@/client/lib/firma/load-self-hosted-source");
+    const { getOpfsRoot, saveHandle } = await import("@/lib/client/fsa/handle-store");
+    const { loadSelfHostedSource } = await import("@/lib/client/firma/load-self-hosted-source");
     const opfs = await getOpfsRoot("working-copy");
     if (!opfs) {
       setStatus("error");

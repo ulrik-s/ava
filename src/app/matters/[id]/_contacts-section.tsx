@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { trpc } from "@/client/lib/trpc";
-import { labelForMatterRole, matterRoles, contactTypes } from "@/client/lib/labels";
+import { trpc } from "@/lib/client/trpc";
+import { labelForMatterRole, matterRoles, contactTypes } from "@/lib/client/labels";
 
 type Contact = {
   id: string;

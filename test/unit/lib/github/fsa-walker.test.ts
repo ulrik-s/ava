@@ -6,8 +6,8 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { walkFsa, writeFile, deleteFile } from "@/client/lib/github/fsa-walker";
-import { gitBlobSha1 } from "@/client/lib/github/git-blob-hash";
+import { walkFsa, writeFile, deleteFile } from "@/lib/client/github/fsa-walker";
+import { gitBlobSha1 } from "@/lib/client/github/git-blob-hash";
 import { makeFakeFsa } from "../../../helpers/fake-fsa";
 
 async function seed(fsa: ReturnType<typeof makeFakeFsa>, path: string, content: string): Promise<void> {

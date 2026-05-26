@@ -39,7 +39,7 @@ const stubs = {
   deleteExpense: { mutate: vi.fn(), isPending: false },
 };
 
-vi.mock("@/client/lib/trpc", () => ({
+vi.mock("@/lib/client/trpc", () => ({
   trpc: {
     useUtils: () => utilsMock,
     matter: {

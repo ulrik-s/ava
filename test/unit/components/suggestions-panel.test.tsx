@@ -36,7 +36,7 @@ const utilsMock = {
 const acceptMutate = vi.fn();
 const rejectMutate = vi.fn();
 
-vi.mock("@/client/lib/trpc", () => ({
+vi.mock("@/lib/client/trpc", () => ({
   trpc: {
     useUtils: () => utilsMock,
     document: {

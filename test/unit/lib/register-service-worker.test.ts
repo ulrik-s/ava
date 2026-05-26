@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { registerServiceWorker } from "@/client/lib/register-service-worker";
+import { registerServiceWorker } from "@/lib/client/register-service-worker";
 
 describe("registerServiceWorker", () => {
   beforeEach(() => { vi.stubGlobal("window", {}); });

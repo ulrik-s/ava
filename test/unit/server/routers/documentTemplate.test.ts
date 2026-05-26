@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { TRPCError } from "@trpc/server";
-import { documentTemplateRouter } from "@/server/routers/documentTemplate";
+import { documentTemplateRouter } from "@/lib/server/routers/documentTemplate";
 import { dataStoreFromMockPrisma } from "../helpers/mock-data-store";
 
 // ─── Helpers ─────────────────────────────────────────────────────

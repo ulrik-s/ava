@@ -11,7 +11,7 @@ import {
   BROTTMALSTAXA_TABLE,
   TAXA_MAX_MINUTES,
   applyNoFTaxFactor,
-} from "@/shared/brottmalstaxa";
+} from "@/lib/shared/brottmalstaxa";
 
 describe("computeBrottmalstaxa — spot checks från DVFS 2025:6", () => {
   // Nivå 1, 0-14 min → 2809 kr ex moms

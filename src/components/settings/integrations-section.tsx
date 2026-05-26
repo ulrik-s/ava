@@ -12,9 +12,9 @@
 
 import { useEffect, useState } from "react";
 import { Plug } from "lucide-react";
-import "@/client/lib/integrations/office365-connector"; // ⚠ side-effect: registrerar
-import { listConnectors } from "@/client/lib/integrations/registry";
-import type { ConnectionStatus, IntegrationConnector } from "@/client/lib/integrations/types";
+import "@/lib/client/integrations/office365-connector"; // ⚠ side-effect: registrerar
+import { listConnectors } from "@/lib/client/integrations/registry";
+import type { ConnectionStatus, IntegrationConnector } from "@/lib/client/integrations/types";
 
 export function IntegrationsSection() {
   const [connectors] = useState(() => listConnectors());

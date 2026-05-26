@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { MatterProjection } from "@/server/local-first/projections/matter";
+import { MatterProjection } from "@/lib/server/local-first/projections/matter";
 
 const baseMatter = {
   id: "matter-abc",

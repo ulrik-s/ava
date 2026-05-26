@@ -4,7 +4,7 @@
  */
 
 import PaymentPlanDetailClient from "./_client";
-import { demoStaticParams } from "@/client/lib/demo/static-params";
+import { demoStaticParams } from "@/lib/client/demo/static-params";
 
 export async function generateStaticParams(): Promise<{ id: string }[]> {
   return demoStaticParams("payment-plans");

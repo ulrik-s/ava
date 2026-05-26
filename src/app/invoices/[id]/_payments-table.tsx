@@ -1,6 +1,6 @@
 "use client";
 
-import { formatCurrency } from "@/client/lib/utils";
+import { formatCurrency } from "@/lib/client/utils";
 
 interface Payment {
   id: string;

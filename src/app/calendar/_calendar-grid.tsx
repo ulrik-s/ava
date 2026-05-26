@@ -11,8 +11,8 @@
 
 import { useMemo } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { trpc } from "@/client/lib/trpc";
-import { colorForUserId, type UserColor } from "@/client/lib/calendar/user-colors";
+import { trpc } from "@/lib/client/trpc";
+import { colorForUserId, type UserColor } from "@/lib/client/calendar/user-colors";
 
 export interface CalendarGridEvent {
   id: string;

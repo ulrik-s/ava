@@ -9,10 +9,10 @@ import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { execSync, spawnSync } from "node:child_process";
-import { InMemoryGitOps } from "@/server/local-first/in-memory-git-ops";
-import { InMemoryFileSystem } from "@/server/local-first/in-memory-fs";
-import { NodeGitOps } from "@/server/local-first/node-git-ops";
-import type { IGitOps } from "@/server/local-first/git-ops";
+import { InMemoryGitOps } from "@/lib/server/local-first/in-memory-git-ops";
+import { InMemoryFileSystem } from "@/lib/server/local-first/in-memory-fs";
+import { NodeGitOps } from "@/lib/server/local-first/node-git-ops";
+import type { IGitOps } from "@/lib/server/local-first/git-ops";
 
 function hasGit() { return spawnSync("git", ["--version"], { stdio: "ignore" }).status === 0; }
 

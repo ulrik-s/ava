@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { uuidv7 } from "@/server/events/uuid7";
+import { uuidv7 } from "@/lib/server/events/uuid7";
 
 describe("uuidv7", () => {
   it("genererar en 36-tecken UUID-sträng med v7-versionsbit", () => {

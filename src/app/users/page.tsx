@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { trpc } from "@/client/lib/trpc";
+import { trpc } from "@/lib/client/trpc";
 import { ShieldAlert, UserX } from "lucide-react";
 
 const roleLabels: Record<string, string> = {

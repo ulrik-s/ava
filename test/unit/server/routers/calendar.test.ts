@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { calendarRouter } from "@/server/routers/calendar";
+import { calendarRouter } from "@/lib/server/routers/calendar";
 import { dataStoreFromMockPrisma } from "../helpers/mock-data-store";
 
 const mockPrisma = {

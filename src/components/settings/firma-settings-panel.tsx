@@ -18,9 +18,9 @@
  */
 
 import { useEffect, useState } from "react";
-import { type FirmaConfig, type FirmaTier, inferTier, saveFirmaConfig, resetToDemo } from "@/client/lib/firma/firma-config";
-import { loadAuthSettings, saveAuthSettings } from "@/client/lib/auth/use-auth-mode";
-import { loadOAuthConfig, saveOAuthConfig, isOAuthConfigured } from "@/client/lib/auth/oauth-config";
+import { type FirmaConfig, type FirmaTier, inferTier, saveFirmaConfig, resetToDemo } from "@/lib/client/firma/firma-config";
+import { loadAuthSettings, saveAuthSettings } from "@/lib/client/auth/use-auth-mode";
+import { loadOAuthConfig, saveOAuthConfig, isOAuthConfigured } from "@/lib/client/auth/oauth-config";
 import { WebOAuthDeviceFlow } from "./web-oauth-device-flow";
 
 interface Props {

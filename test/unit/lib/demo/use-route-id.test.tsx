@@ -11,7 +11,7 @@ import { renderHook } from "@testing-library/react";
 let pathname = "/";
 vi.mock("next/navigation", () => ({ usePathname: () => pathname }));
 
-import { useRouteId } from "@/client/lib/demo/use-route-id";
+import { useRouteId } from "@/lib/client/demo/use-route-id";
 
 describe("useRouteId", () => {
   it("sista segmentet (matters/[id])", () => {

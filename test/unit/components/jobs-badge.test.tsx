@@ -9,7 +9,7 @@ import { render, screen } from "@testing-library/react";
 import { JobsBadge } from "@/components/shell/jobs-badge";
 
 const summary = { total: 0, queued: 0, running: 0, failed: 0, lastError: null as string | null };
-vi.mock("@/client/lib/jobs/use-jobs", () => ({
+vi.mock("@/lib/client/jobs/use-jobs", () => ({
   useJobsSummary: () => summary,
 }));
 

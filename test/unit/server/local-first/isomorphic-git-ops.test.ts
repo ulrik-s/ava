@@ -8,8 +8,8 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { IsomorphicGitOps } from "@/server/local-first/isomorphic-git-ops";
-import { MemFs } from "@/server/local-first/mem-fs";
+import { IsomorphicGitOps } from "@/lib/server/local-first/isomorphic-git-ops";
+import { MemFs } from "@/lib/server/local-first/mem-fs";
 import * as git from "isomorphic-git";
 
 async function initRepo(mem: MemFs): Promise<void> {

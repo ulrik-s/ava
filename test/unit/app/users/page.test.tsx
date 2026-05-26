@@ -20,7 +20,7 @@ const deactivateMutation = {
   error: null,
 };
 
-vi.mock("@/client/lib/trpc", () => ({
+vi.mock("@/lib/client/trpc", () => ({
   trpc: {
     user: {
       list: { useQuery: () => usersQuery },

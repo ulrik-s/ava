@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 describe("ensureReadWrite", () => {
   it("OPFS-handle (saknar query/requestPermission) → alltid granted", async () => {
-    const { ensureReadWrite } = await import("@/client/lib/fsa/handle-store");
+    const { ensureReadWrite } = await import("@/lib/client/fsa/handle-store");
     expect(await ensureReadWrite({ name: "opfs" } as unknown as FileSystemDirectoryHandle)).toBe(true);
   });
 
@@ -19,7 +19,7 @@ describe("ensureReadWrite", () => {
       queryPermission: vi.fn(async () => "granted" as PermissionState),
       requestPermission,
     } as unknown as FileSystemDirectoryHandle;
-    const { ensureReadWrite } = await import("@/client/lib/fsa/handle-store");
+    const { ensureReadWrite } = await import("@/lib/client/fsa/handle-store");
     expect(await ensureReadWrite(handle)).toBe(true);
     expect(requestPermission).not.toHaveBeenCalled();
   });
@@ -29,7 +29,7 @@ describe("ensureReadWrite", () => {
       queryPermission: vi.fn(async () => "prompt" as PermissionState),
       requestPermission: vi.fn(async () => "granted" as PermissionState),
     } as unknown as FileSystemDirectoryHandle;
-    const { ensureReadWrite } = await import("@/client/lib/fsa/handle-store");
+    const { ensureReadWrite } = await import("@/lib/client/fsa/handle-store");
     expect(await ensureReadWrite(handle)).toBe(true);
   });
 
@@ -38,7 +38,7 @@ describe("ensureReadWrite", () => {
       queryPermission: vi.fn(async () => "prompt" as PermissionState),
       requestPermission: vi.fn(async () => "denied" as PermissionState),
     } as unknown as FileSystemDirectoryHandle;
-    const { ensureReadWrite } = await import("@/client/lib/fsa/handle-store");
+    const { ensureReadWrite } = await import("@/lib/client/fsa/handle-store");
     expect(await ensureReadWrite(handle)).toBe(false);
   });
 });
@@ -52,7 +52,7 @@ describe("isFsaSupported / isOpfsSupported", () => {
     (globalThis as { showDirectoryPicker?: unknown; window?: unknown }).showDirectoryPicker = () => {};
     // @ts-expect-error — window stub
     globalThis.window = globalThis;
-    const { isFsaSupported } = await import("@/client/lib/fsa/handle-store");
+    const { isFsaSupported } = await import("@/lib/client/fsa/handle-store");
     expect(isFsaSupported()).toBe(true);
   });
 
@@ -61,7 +61,7 @@ describe("isFsaSupported / isOpfsSupported", () => {
       value: { getDirectory: async () => ({}) },
       configurable: true,
     });
-    const { isOpfsSupported } = await import("@/client/lib/fsa/handle-store");
+    const { isOpfsSupported } = await import("@/lib/client/fsa/handle-store");
     expect(isOpfsSupported()).toBe(true);
   });
 });
@@ -69,7 +69,7 @@ describe("isFsaSupported / isOpfsSupported", () => {
 describe("getOpfsRoot", () => {
   it("returnerar null om OPFS saknas", async () => {
     Object.defineProperty(globalThis.navigator, "storage", { value: {}, configurable: true });
-    const { getOpfsRoot } = await import("@/client/lib/fsa/handle-store");
+    const { getOpfsRoot } = await import("@/lib/client/fsa/handle-store");
     expect(await getOpfsRoot()).toBeNull();
   });
 
@@ -79,7 +79,7 @@ describe("getOpfsRoot", () => {
       value: { getDirectory: async () => fakeRoot },
       configurable: true,
     });
-    const { getOpfsRoot } = await import("@/client/lib/fsa/handle-store");
+    const { getOpfsRoot } = await import("@/lib/client/fsa/handle-store");
     expect(await getOpfsRoot()).toBe(fakeRoot);
   });
 
@@ -97,7 +97,7 @@ describe("getOpfsRoot", () => {
       value: { getDirectory: async () => fakeRoot },
       configurable: true,
     });
-    const { getOpfsRoot } = await import("@/client/lib/fsa/handle-store");
+    const { getOpfsRoot } = await import("@/lib/client/fsa/handle-store");
     expect(await getOpfsRoot("working-copy")).toBe(subdirHandle);
   });
 });

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { trpc } from "@/client/lib/trpc";
+import { trpc } from "@/lib/client/trpc";
 import { SuggestionRow, type SuggestionGroup } from "./_suggestion-row";
 
 interface SuggestionsPanelProps {

@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
-import { downloadToFsa } from "@/client/lib/fsa/download-to-fsa";
+import { downloadToFsa } from "@/lib/client/fsa/download-to-fsa";
 
 // ── Minimal FSA-fake ─────────────────────────────────────────────────
 

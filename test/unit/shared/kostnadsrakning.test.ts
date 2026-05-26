@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { buildKostnadsrakningContext, diffMinutes, formatMinutes } from "@/shared/kostnadsrakning";
+import { buildKostnadsrakningContext, diffMinutes, formatMinutes } from "@/lib/shared/kostnadsrakning";
 
 const baseInput = {
   matter: { matterNumber: "2026-0016", title: "Brottmål — rattfylleri", clientName: "Falk" },

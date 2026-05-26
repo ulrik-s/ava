@@ -5,8 +5,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { LlmSettingsCard } from "@/components/llm/llm-settings-card";
-import { resetLlmConfig } from "@/client/lib/llm/llm-config";
-import { resetActiveLlm } from "@/client/lib/llm/active-llm";
+import { resetLlmConfig } from "@/lib/client/llm/llm-config";
+import { resetActiveLlm } from "@/lib/client/llm/active-llm";
 
 const engineHoisted = vi.hoisted(() => ({
   CreateMLCEngine: vi.fn(async (_id, opts) => {

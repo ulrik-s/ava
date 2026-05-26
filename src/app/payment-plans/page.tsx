@@ -11,8 +11,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { ChevronRight, Wallet, Search } from "lucide-react";
-import { trpc } from "@/client/lib/trpc";
-import { formatCurrency } from "@/client/lib/utils";
+import { trpc } from "@/lib/client/trpc";
+import { formatCurrency } from "@/lib/client/utils";
 
 type Status = "ACTIVE" | "COMPLETED" | "CANCELLED";
 

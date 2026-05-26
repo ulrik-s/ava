@@ -14,7 +14,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { invoiceRouter } from "@/server/routers/invoice";
+import { invoiceRouter } from "@/lib/server/routers/invoice";
 import { dataStoreFromMockPrisma } from "../helpers/mock-data-store";
 
 // ─── Mock prisma ─────────────────────────────────────────────────

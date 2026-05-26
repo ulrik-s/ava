@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { TRPCError } from "@trpc/server";
-import { organizationRouter } from "@/server/routers/organization";
+import { organizationRouter } from "@/lib/server/routers/organization";
 import { dataStoreFromMockPrisma } from "../helpers/mock-data-store";
 
 // ─── Helpers ─────────────────────────────────────────────────────

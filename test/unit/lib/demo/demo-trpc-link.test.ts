@@ -6,9 +6,9 @@
 import { describe, it, expect } from "vitest";
 import { createTRPCClient } from "@trpc/client";
 import superjson from "superjson";
-import type { AppRouter } from "@/server/routers/_app";
-import { createDemoTrpcLink } from "@/client/lib/demo/demo-trpc-link";
-import { DemoDataStore } from "@/server/data-store/DemoDataStore";
+import type { AppRouter } from "@/lib/server/routers/_app";
+import { createDemoTrpcLink } from "@/lib/client/demo/demo-trpc-link";
+import { DemoDataStore } from "@/lib/server/data-store/DemoDataStore";
 
 const matters = [
   { id: "m1", title: "Demo Avtal", organizationId: "demo-firma-ab", status: "ACTIVE", matterNumber: "2025-0001", createdAt: new Date("2025-01-01") },

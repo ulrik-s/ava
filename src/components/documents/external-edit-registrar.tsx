@@ -7,8 +7,8 @@
  */
 
 import { useEffect } from "react";
-import { ExternalEditTracker, setExternalEditTracker, type CommitPayload } from "@/client/lib/fsa/external-edit-tracker";
-import { trpc } from "@/client/lib/trpc";
+import { ExternalEditTracker, setExternalEditTracker, type CommitPayload } from "@/lib/client/fsa/external-edit-tracker";
+import { trpc } from "@/lib/client/trpc";
 
 export function ExternalEditRegistrar(): null {
   const utils = trpc.useUtils();

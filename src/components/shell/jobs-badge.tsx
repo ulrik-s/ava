@@ -6,7 +6,7 @@
  */
 
 import Link from "next/link";
-import { useJobsSummary } from "@/client/lib/jobs/use-jobs";
+import { useJobsSummary } from "@/lib/client/jobs/use-jobs";
 
 // eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'JobsBadge' has a complexity of 11. Maximum allowed is 8.)
 export function JobsBadge() {

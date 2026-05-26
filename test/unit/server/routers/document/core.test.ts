@@ -5,15 +5,15 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { dataStoreFromMockPrisma } from "../../helpers/mock-data-store";
 
-vi.mock("@/server/services/meilisearch", () => ({
+vi.mock("@/lib/server/services/meilisearch", () => ({
   searchDocuments: vi.fn(),
   removeDocument: vi.fn().mockResolvedValue(undefined),
 }));
-vi.mock("@/server/services/document-analysis", () => ({
+vi.mock("@/lib/server/services/document-analysis", () => ({
   analyzeDocument: vi.fn().mockResolvedValue(undefined),
 }));
 
-import { documentRouter } from "@/server/routers/document";
+import { documentRouter } from "@/lib/server/routers/document";
 
 const mockPrisma = {
   document: {

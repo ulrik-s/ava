@@ -11,7 +11,7 @@ import {
   resetLlmConfig,
   DEFAULT_LLM_MODEL,
   type LlmModelId,
-} from "@/client/lib/llm/llm-config";
+} from "@/lib/client/llm/llm-config";
 
 const KEY = "ava.llm";
 

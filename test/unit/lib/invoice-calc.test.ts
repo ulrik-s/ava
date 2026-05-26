@@ -4,7 +4,7 @@ import {
   isPaymentPlanSettled,
   monthKey,
   planHasStarted,
-} from "@/client/lib/invoice-calc";
+} from "@/lib/client/invoice-calc";
 
 describe("computeFinalInvoiceBreakdown", () => {
   it("räknar time × rate / 60 per post", () => {

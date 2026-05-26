@@ -11,8 +11,8 @@ import {
   updateGraphEvent,
   deleteGraphEvent,
   toGraphEvent,
-} from "@/client/lib/integrations/microsoft-graph";
-import type { GraphEventBody, GraphEventResponse } from "@/client/lib/integrations/microsoft-graph";
+} from "@/lib/client/integrations/microsoft-graph";
+import type { GraphEventBody, GraphEventResponse } from "@/lib/client/integrations/microsoft-graph";
 
 function mockResponse(status: number, body: unknown): Response {
   return new Response(typeof body === "string" ? body : JSON.stringify(body), {

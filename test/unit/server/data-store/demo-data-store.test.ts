@@ -4,8 +4,8 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { DemoDataStore } from "@/server/data-store/DemoDataStore";
-import { ReadOnlyError } from "@/server/data-store/in-memory/read-only-delegate";
+import { DemoDataStore } from "@/lib/server/data-store/DemoDataStore";
+import { ReadOnlyError } from "@/lib/server/data-store/in-memory/read-only-delegate";
 
 const matters = [
   { id: "m1", title: "Avtal", organizationId: "org1", status: "ACTIVE", matterNumber: "2025-0001", createdAt: new Date("2025-01-01") },

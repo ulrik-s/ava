@@ -16,7 +16,7 @@ import {
   getRepoPermissions,
   parseRepoUrl,
   type AuthMode,
-} from "@/client/lib/auth/github-auth";
+} from "@/lib/client/auth/github-auth";
 
 const fetchMock = vi.fn();
 beforeEach(() => {

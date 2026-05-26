@@ -12,7 +12,7 @@ import {
   useIsWriteAllowed,
   loadAuthSettings,
   saveAuthSettings,
-} from "@/client/lib/auth/use-auth-mode";
+} from "@/lib/client/auth/use-auth-mode";
 
 beforeEach(() => {
   localStorage.clear();

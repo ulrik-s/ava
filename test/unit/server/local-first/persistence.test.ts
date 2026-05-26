@@ -16,7 +16,7 @@ import {
   InMemoryPersistence,
   OpfsPersistence,
   type IPersistence,
-} from "@/server/local-first/persistence";
+} from "@/lib/server/local-first/persistence";
 
 function contractTests(name: string, factory: () => Promise<IPersistence>) {
   describe(name, () => {

@@ -4,14 +4,14 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
-import { makeFsaWriteBack } from "@/client/lib/firma/fsa-write-back";
+import { makeFsaWriteBack } from "@/lib/client/firma/fsa-write-back";
 
 interface MockFs {
   writeFile: ReturnType<typeof vi.fn>;
   unlink: ReturnType<typeof vi.fn>;
 }
 
-vi.mock("@/client/lib/fsa/fs-adapter", () => ({
+vi.mock("@/lib/client/fsa/fs-adapter", () => ({
   FsaIsoGitAdapter: vi.fn().mockImplementation(function (
     this: MockFs,
   ): MockFs {
@@ -21,7 +21,7 @@ vi.mock("@/client/lib/fsa/fs-adapter", () => ({
   }),
 }));
 
-import { FsaIsoGitAdapter } from "@/client/lib/fsa/fs-adapter";
+import { FsaIsoGitAdapter } from "@/lib/client/fsa/fs-adapter";
 
 describe("makeFsaWriteBack", () => {
   const handle = {} as FileSystemDirectoryHandle;

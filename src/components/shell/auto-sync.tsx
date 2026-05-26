@@ -7,7 +7,7 @@
  */
 
 import { SyncStatusPill } from "./sync-status-pill";
-import { useSyncContext } from "@/client/lib/sync/sync-context";
+import { useSyncContext } from "@/lib/client/sync/sync-context";
 
 export function AutoSync() {
   const { state, providerKind } = useSyncContext();

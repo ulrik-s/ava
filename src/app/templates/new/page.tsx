@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { trpc } from "@/client/lib/trpc";
+import { trpc } from "@/lib/client/trpc";
 import { TemplateEditor } from "@/components/settings/template-editor";
 
 export default function NewTemplatePage() {

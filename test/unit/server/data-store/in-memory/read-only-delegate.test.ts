@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { ReadOnlyDelegate, ReadOnlyError } from "@/server/data-store/in-memory/read-only-delegate";
+import { ReadOnlyDelegate, ReadOnlyError } from "@/lib/server/data-store/in-memory/read-only-delegate";
 
 type Matter = {
   id: string;

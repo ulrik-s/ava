@@ -17,8 +17,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { KeyRound, ShieldCheck, Info, AlertTriangle, Check, Loader2, Settings } from "lucide-react";
-import { createAuthClient, type ProvisionedAccount } from "@/client/lib/auth/auth-client";
-import { loadFirmaConfig, saveFirmaConfig } from "@/client/lib/firma/firma-config";
+import { createAuthClient, type ProvisionedAccount } from "@/lib/client/auth/auth-client";
+import { loadFirmaConfig, saveFirmaConfig } from "@/lib/client/firma/firma-config";
 
 type Stage = "loading" | "done" | "paste" | "advanced" | "demo";
 

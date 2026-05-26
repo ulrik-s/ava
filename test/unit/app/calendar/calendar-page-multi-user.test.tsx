@@ -24,7 +24,7 @@ const orgUsers = {
   isLoading: false,
 };
 
-vi.mock("@/client/lib/trpc", () => {
+vi.mock("@/lib/client/trpc", () => {
   return {
     trpc: {
       useUtils: () => ({

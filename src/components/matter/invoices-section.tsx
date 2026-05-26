@@ -12,8 +12,8 @@
 
 import { useId, useState } from "react";
 import Link from "next/link";
-import { trpc } from "@/client/lib/trpc";
-import { formatCurrency } from "@/client/lib/utils";
+import { trpc } from "@/lib/client/trpc";
+import { formatCurrency } from "@/lib/client/utils";
 
 // eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'statusBadge' has a complexity of 9. Maximum allowed is 8.)
 function statusBadge(status: string, invoiceType: string): string {

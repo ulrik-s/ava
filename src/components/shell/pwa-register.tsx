@@ -9,7 +9,7 @@
  */
 
 import { useEffect } from "react";
-import { registerServiceWorker } from "@/client/lib/register-service-worker";
+import { registerServiceWorker } from "@/lib/client/register-service-worker";
 
 const IS_DEMO_BUILD = process.env.NEXT_PUBLIC_DEMO_BUILD === "1";
 

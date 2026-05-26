@@ -12,7 +12,7 @@
  */
 
 import Link from "next/link";
-import { useAuthMode } from "@/client/lib/auth/use-auth-mode";
+import { useAuthMode } from "@/lib/client/auth/use-auth-mode";
 
 const STYLES: Record<string, string> = {
   anonymous: "bg-gray-50 text-gray-700",

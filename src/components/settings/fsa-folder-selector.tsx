@@ -29,7 +29,7 @@ export function FsaFolderSelector({ repoUrl, token }: { repoUrl: string; token: 
     let cancelled = false;
     // eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Async arrow function has a complexity of 14. Maximum allowed is 8.)
     void (async () => {
-      const { isFsaSupported, loadHandle, ensureReadWrite } = await import("@/client/lib/fsa/handle-store");
+      const { isFsaSupported, loadHandle, ensureReadWrite } = await import("@/lib/client/fsa/handle-store");
       if (!isFsaSupported()) {
         const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
         const reason = ua.includes("Firefox")
@@ -55,7 +55,7 @@ export function FsaFolderSelector({ repoUrl, token }: { repoUrl: string; token: 
         // en tidigare clone som avbröts. Kräver att HEAD kan resolvas.
         try {
           await h.getDirectoryHandle(".git");
-          const { FsaIsoGitAdapter } = await import("@/client/lib/fsa/fs-adapter");
+          const { FsaIsoGitAdapter } = await import("@/lib/client/fsa/fs-adapter");
           const git = await import("isomorphic-git");
           const fsAdapter = new FsaIsoGitAdapter(h);
           await git.resolveRef({
@@ -78,7 +78,7 @@ export function FsaFolderSelector({ repoUrl, token }: { repoUrl: string; token: 
     setBusy(true);
     setErr(null);
     try {
-      const { saveHandle, ensureReadWrite } = await import("@/client/lib/fsa/handle-store");
+      const { saveHandle, ensureReadWrite } = await import("@/lib/client/fsa/handle-store");
       const win = window as Window & {
         showDirectoryPicker?: (o: { mode: string }) => Promise<FileSystemDirectoryHandle>;
       };
@@ -108,9 +108,9 @@ export function FsaFolderSelector({ repoUrl, token }: { repoUrl: string; token: 
     setBusy(true);
     setErr(null);
     try {
-      const { saveHandle, ensureReadWrite } = await import("@/client/lib/fsa/handle-store");
-      const { FsaIsoGitAdapter } = await import("@/client/lib/fsa/fs-adapter");
-      const { cloneRepo } = await import("@/client/lib/fsa/git-ops");
+      const { saveHandle, ensureReadWrite } = await import("@/lib/client/fsa/handle-store");
+      const { FsaIsoGitAdapter } = await import("@/lib/client/fsa/fs-adapter");
+      const { cloneRepo } = await import("@/lib/client/fsa/git-ops");
       let h: FileSystemDirectoryHandle;
       if (useCurrent && handle) {
         h = handle;
@@ -139,7 +139,7 @@ export function FsaFolderSelector({ repoUrl, token }: { repoUrl: string; token: 
   };
 
   const forgetFolder = async () => {
-    const { deleteHandle } = await import("@/client/lib/fsa/handle-store");
+    const { deleteHandle } = await import("@/lib/client/fsa/handle-store");
     await deleteHandle(HANDLE_KEY);
     setHandle(null);
   };

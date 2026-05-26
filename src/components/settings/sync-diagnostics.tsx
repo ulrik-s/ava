@@ -13,10 +13,10 @@
 
 import { useEffect, useState } from "react";
 import { RefreshCw } from "lucide-react";
-import { useSyncContext } from "@/client/lib/sync/sync-context";
-import type { SyncState } from "@/client/lib/sync/use-auto-sync";
-import { loadFirmaConfig } from "@/client/lib/firma/firma-config";
-import { loadHandle } from "@/client/lib/fsa/handle-store";
+import { useSyncContext } from "@/lib/client/sync/sync-context";
+import type { SyncState } from "@/lib/client/sync/use-auto-sync";
+import { loadFirmaConfig } from "@/lib/client/firma/firma-config";
+import { loadHandle } from "@/lib/client/fsa/handle-store";
 
 // eslint-disable-next-line complexity
 export function SyncDiagnostics() {

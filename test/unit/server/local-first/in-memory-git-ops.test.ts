@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { InMemoryGitOps } from "@/server/local-first/in-memory-git-ops";
+import { InMemoryGitOps } from "@/lib/server/local-first/in-memory-git-ops";
 
 describe("InMemoryGitOps", () => {
   it("commit + push gör att senaste commit blir visibel för andra klienter", async () => {

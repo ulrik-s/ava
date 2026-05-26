@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { trpc } from "@/client/lib/trpc";
+import { trpc } from "@/lib/client/trpc";
 import { Plus, Pencil, Trash2, FileText } from "lucide-react";
 
 export default function TemplatesPage() {

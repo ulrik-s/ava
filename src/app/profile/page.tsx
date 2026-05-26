@@ -10,7 +10,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { trpc } from "@/client/lib/trpc";
+import { trpc } from "@/lib/client/trpc";
 import { User, KeyRound, Plus, Trash2 } from "lucide-react";
 import { IntegrationsSection } from "@/components/settings/integrations-section";
 import { KeypairManager } from "@/components/settings/keypair-manager";

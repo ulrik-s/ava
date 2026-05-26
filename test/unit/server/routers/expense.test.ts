@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { expenseRouter } from "@/server/routers/expense";
+import { expenseRouter } from "@/lib/server/routers/expense";
 import { dataStoreFromMockPrisma } from "../helpers/mock-data-store";
 
 const mockPrisma = {

@@ -9,7 +9,7 @@ import { mkdirSync, writeFileSync, rmSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
-import { ENTITY_REGISTRY } from "@/shared/schemas";
+import { ENTITY_REGISTRY } from "@/lib/shared/schemas";
 
 describe("generate-demo-manifest", () => {
   const TMP = resolve(tmpdir(), `manifest-test-${Date.now()}`);

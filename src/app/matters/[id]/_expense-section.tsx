@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { trpc } from "@/client/lib/trpc";
-import { formatCurrency } from "@/client/lib/utils";
-import { splitVat, VAT_RATES, VAT_RATE_LABELS, type VatRate } from "@/shared/vat";
+import { trpc } from "@/lib/client/trpc";
+import { formatCurrency } from "@/lib/client/utils";
+import { splitVat, VAT_RATES, VAT_RATE_LABELS, type VatRate } from "@/lib/shared/vat";
 
 interface Props {
   matterId: string;

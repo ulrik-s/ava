@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { trpc } from "@/client/lib/trpc";
+import { trpc } from "@/lib/client/trpc";
 
 interface SearchHit {
   documentId: string;
@@ -22,9 +22,9 @@ interface SearchHit {
  */
 async function openHit(hit: SearchHit): Promise<void> {
   const [{ openDocument }, { loadHandle }, { readFromFsa }] = await Promise.all([
-    import("@/client/lib/firma/open-document"),
-    import("@/client/lib/fsa/handle-store"),
-    import("@/client/lib/fsa/read-from-fsa"),
+    import("@/lib/client/firma/open-document"),
+    import("@/lib/client/fsa/handle-store"),
+    import("@/lib/client/fsa/read-from-fsa"),
   ]);
   const isDemo = process.env.NEXT_PUBLIC_DEMO_BUILD === "1";
   await openDocument({

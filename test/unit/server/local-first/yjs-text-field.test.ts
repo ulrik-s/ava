@@ -17,7 +17,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { YjsTextField } from "@/server/local-first/yjs-text-field";
+import { YjsTextField } from "@/lib/server/local-first/yjs-text-field";
 
 describe("YjsTextField — grundläggande operationer", () => {
   it("nyskapad är tom sträng", () => {

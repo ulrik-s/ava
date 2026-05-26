@@ -12,7 +12,7 @@ import { mkdtemp, rm, writeFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { execSync, spawnSync } from "node:child_process";
-import { NodeGitOps } from "@/server/local-first/node-git-ops";
+import { NodeGitOps } from "@/lib/server/local-first/node-git-ops";
 
 function hasGit(): boolean {
   return spawnSync("git", ["--version"], { stdio: "ignore" }).status === 0;

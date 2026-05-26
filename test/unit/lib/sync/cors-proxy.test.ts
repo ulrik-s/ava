@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { resolveCorsProxy, isLocalOrSameOrigin, DEFAULT_CORS_PROXY } from "@/client/lib/sync/cors-proxy";
+import { resolveCorsProxy, isLocalOrSameOrigin, DEFAULT_CORS_PROXY } from "@/lib/client/sync/cors-proxy";
 
 describe("isLocalOrSameOrigin", () => {
   it("true för localhost/127.0.0.1", () => {

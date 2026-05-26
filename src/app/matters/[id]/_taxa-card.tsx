@@ -15,13 +15,13 @@
 
 import { useEffect, useState } from "react";
 import { Calculator, Info, AlertTriangle, FileText } from "lucide-react";
-import { trpc } from "@/client/lib/trpc";
+import { trpc } from "@/lib/client/trpc";
 import {
   computeBrottmalstaxa,
   TAXA_MAX_MINUTES,
   type TaxaLevel,
-} from "@/shared/brottmalstaxa";
-import { formatCurrency } from "@/client/lib/utils";
+} from "@/lib/shared/brottmalstaxa";
+import { formatCurrency } from "@/lib/client/utils";
 import { KostnadsrakningModal } from "./_kostnadsrakning-modal";
 
 interface Props {

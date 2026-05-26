@@ -11,7 +11,7 @@ const invoicesQuery = {
   isLoading: false,
 };
 
-vi.mock("@/client/lib/trpc", () => ({
+vi.mock("@/lib/client/trpc", () => ({
   trpc: {
     invoice: {
       list: { useQuery: () => invoicesQuery },

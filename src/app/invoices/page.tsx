@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { trpc } from "@/client/lib/trpc";
-import { formatCurrency } from "@/client/lib/utils";
+import { trpc } from "@/lib/client/trpc";
+import { formatCurrency } from "@/lib/client/utils";
 
 const STATUS_LABELS: Record<string, string> = {
   DRAFT: "Utkast",

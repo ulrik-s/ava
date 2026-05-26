@@ -12,7 +12,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 const currentQuery = { data: undefined as { name?: string } | undefined };
-vi.mock("@/client/lib/trpc", () => ({
+vi.mock("@/lib/client/trpc", () => ({
   trpc: {
     user: {
       current: { useQuery: () => currentQuery },

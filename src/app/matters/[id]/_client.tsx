@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { trpc } from "@/client/lib/trpc";
+import { trpc } from "@/lib/client/trpc";
 import { DocumentBrowser } from "@/components/documents/document-browser";
 import { SuggestionsPanel } from "@/components/matter/suggestions-panel";
 import { EventsPanel } from "@/components/matter/events-panel";
@@ -14,7 +14,7 @@ import { TimeSection } from "./_time-section";
 import { ExpenseSection } from "./_expense-section";
 import { TaxaCard } from "./_taxa-card";
 import { GenerateModal } from "./_generate-modal";
-import { useRouteId } from "@/client/lib/demo/use-route-id";
+import { useRouteId } from "@/lib/client/demo/use-route-id";
 
 // eslint-disable-next-line complexity
 export default function MatterDetailClient({ id: paramId }: { id: string }) {

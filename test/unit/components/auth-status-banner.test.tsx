@@ -17,7 +17,7 @@ const mockState = {
   refresh: async () => {},
 };
 
-vi.mock("@/client/lib/auth/use-auth-mode", () => ({
+vi.mock("@/lib/client/auth/use-auth-mode", () => ({
   useAuthMode: () => mockState,
 }));
 

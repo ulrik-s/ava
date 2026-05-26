@@ -9,7 +9,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtemp, rm, readFile, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { NodeFileSystem } from "@/server/local-first/node-fs";
+import { NodeFileSystem } from "@/lib/server/local-first/node-fs";
 
 describe("NodeFileSystem", () => {
   let root: string;

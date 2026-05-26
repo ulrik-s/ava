@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
-import { openDocument, withUtf8CharsetIfText } from "@/client/lib/firma/open-document";
+import { openDocument, withUtf8CharsetIfText } from "@/lib/client/firma/open-document";
 
 const baseDoc = { id: "doc-1", storagePath: "documents/content/doc-1.md", fileName: "x.md" };
 

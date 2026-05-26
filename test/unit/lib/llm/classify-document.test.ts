@@ -3,8 +3,8 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
-import { classifyDocument, guessFromFilename, KNOWN_KINDS } from "@/client/lib/llm/classify-document";
-import { NoopExtractor, StubExtractor } from "@/server/llm/llm-extractor";
+import { classifyDocument, guessFromFilename, KNOWN_KINDS } from "@/lib/client/llm/classify-document";
+import { NoopExtractor, StubExtractor } from "@/lib/server/llm/llm-extractor";
 
 describe("guessFromFilename (heuristik)", () => {
   it("matchar svenska och engelska varianter", () => {
@@ -60,7 +60,7 @@ describe("classifyDocument", () => {
   });
 
   it("LLM kastar → fall back på heuristik (graceful)", async () => {
-    const x: import("@/server/llm/llm-extractor").ILlmExtractor = {
+    const x: import("@/lib/server/llm/llm-extractor").ILlmExtractor = {
       isReady: () => true,
       warmup: async () => {},
       extract: vi.fn(async () => { throw new Error("WebGPU bortkopplat"); }),

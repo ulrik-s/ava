@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
-import { withTimeout, SyncTimeoutError } from "@/client/lib/sync/with-timeout";
+import { withTimeout, SyncTimeoutError } from "@/lib/client/sync/with-timeout";
 
 describe("withTimeout", () => {
   it("resolvar om promise hinner före timeout", async () => {

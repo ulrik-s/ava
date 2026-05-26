@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
-import { WritableDelegate, type MutationEvent } from "@/server/data-store/in-memory/writable-delegate";
+import { WritableDelegate, type MutationEvent } from "@/lib/server/data-store/in-memory/writable-delegate";
 
 interface Matter extends Record<string, unknown> {
   id: string;

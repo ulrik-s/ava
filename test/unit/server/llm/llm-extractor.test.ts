@@ -11,7 +11,7 @@ import {
   StubExtractor,
   type ILlmExtractor,
   type ExtractionSchema,
-} from "@/server/llm/llm-extractor";
+} from "@/lib/server/llm/llm-extractor";
 
 const schema: ExtractionSchema = {
   parter: { type: "string[]", description: "Namn på avtalets parter" },

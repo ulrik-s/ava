@@ -1,6 +1,6 @@
 "use client";
 
-import { matterRoleLabels, contactTypeLabels } from "@/client/lib/labels";
+import { matterRoleLabels, contactTypeLabels } from "@/lib/client/labels";
 
 export interface SuggestionGroup {
   key: string;

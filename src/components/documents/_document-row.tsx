@@ -2,7 +2,7 @@
 
 import { Fragment, useState } from "react";
 import { formatFileSize } from "./_drag-helpers";
-import { readFromFsa } from "@/client/lib/fsa/read-from-fsa";
+import { readFromFsa } from "@/lib/client/fsa/read-from-fsa";
 import { ExternalEditModal, type ModalState } from "./external-edit-modal";
 
 export interface DocumentRecord {
@@ -153,7 +153,7 @@ function DocumentLinks({ doc, disabled }: { doc: DocumentRecord; disabled?: bool
 
     if (path) {
       try {
-        const { isFsaSupported, loadHandle } = await import("@/client/lib/fsa/handle-store");
+        const { isFsaSupported, loadHandle } = await import("@/lib/client/fsa/handle-store");
         if (isFsaSupported()) {
           const handle = await loadHandle("repo-root");
           if (handle) {
@@ -183,8 +183,8 @@ function DocumentLinks({ doc, disabled }: { doc: DocumentRecord; disabled?: bool
   };
 
   const openExternal = async () => {
-    const { openInFinder } = await import("@/client/lib/fsa/open-in-finder");
-    const { getExternalEditTracker } = await import("@/client/lib/fsa/external-edit-tracker");
+    const { openInFinder } = await import("@/lib/client/fsa/open-in-finder");
+    const { getExternalEditTracker } = await import("@/lib/client/fsa/external-edit-tracker");
     // I demo-mode finns inte filerna i user:s FSA-mapp by default — vi
     // lazy-downloadar dem från GH Pages om de saknas.
     const fallbackBase = (process.env.NEXT_PUBLIC_DEMO_BUILD === "1")
@@ -274,7 +274,7 @@ function DocumentLinks({ doc, disabled }: { doc: DocumentRecord; disabled?: bool
   );
 }
 
-// readFromFsa flyttad till `@/client/lib/fsa/read-from-fsa` (delas med
+// readFromFsa flyttad till `@/lib/client/fsa/read-from-fsa` (delas med
 // search-sidan + andra "öppna lokal kopia"-flöden).
 
 // eslint-disable-next-line complexity
@@ -284,8 +284,8 @@ function DocumentNameButton({ doc, isAnalyzing, disabled }: { doc: DocumentRecor
   const isDemo = process.env.NEXT_PUBLIC_DEMO_BUILD === "1";
   const onClick = async () => {
     if (disabled) return;
-    const { openDocument } = await import("@/client/lib/firma/open-document");
-    const { loadHandle } = await import("@/client/lib/fsa/handle-store");
+    const { openDocument } = await import("@/lib/client/firma/open-document");
+    const { loadHandle } = await import("@/lib/client/fsa/handle-store");
     const rec = doc as DocumentRecord & { storagePath?: string };
     await openDocument({
       doc: { id: doc.id, storagePath: rec.storagePath, fileName: doc.fileName },

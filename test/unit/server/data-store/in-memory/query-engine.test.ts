@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { InMemoryQueryEngine } from "@/server/data-store/in-memory/query-engine";
+import { InMemoryQueryEngine } from "@/lib/server/data-store/in-memory/query-engine";
 
 type Row = {
   id: string;

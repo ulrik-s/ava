@@ -15,7 +15,7 @@
 
 import { useEffect, useState } from "react";
 import { ExternalLink } from "lucide-react";
-import { loadOAuthConfig } from "@/client/lib/auth/oauth-config";
+import { loadOAuthConfig } from "@/lib/client/auth/oauth-config";
 
 interface Props {
   onComplete: (accessToken: string) => void;

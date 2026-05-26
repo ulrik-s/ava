@@ -7,11 +7,11 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { jobQueue, type Job } from "@/client/lib/jobs/job-queue";
+import { jobQueue, type Job } from "@/lib/client/jobs/job-queue";
 import {
   setOutlookTokenProvider,
   setMirrorStateDispatcher,
-} from "@/client/lib/jobs/mirror-outlook-dispatch";
+} from "@/lib/client/jobs/mirror-outlook-dispatch";
 
 // Mocka Graph-modulen. `vi.hoisted` säkerställer att fns finns när workern
 // dynamiskt import:ar dem inuti job-körningen.
@@ -21,10 +21,10 @@ const graph = vi.hoisted(() => ({
   deleteGraphEvent: vi.fn(),
   toGraphEvent: vi.fn((ev: { title: string }) => ({ subject: ev.title })),
 }));
-vi.mock("@/client/lib/integrations/microsoft-graph", () => graph);
+vi.mock("@/lib/client/integrations/microsoft-graph", () => graph);
 
 // Trigger registreringen av workern.
-import "@/client/lib/jobs/register-workers";
+import "@/lib/client/jobs/register-workers";
 
 function waitForFinish(id: string, timeoutMs = 1000): Promise<Job> {
   return new Promise((resolve, reject) => {

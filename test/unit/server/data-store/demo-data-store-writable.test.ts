@@ -4,8 +4,8 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { DemoDataStore } from "@/server/data-store/DemoDataStore";
-import type { MutationEvent } from "@/server/data-store/in-memory/writable-delegate";
+import { DemoDataStore } from "@/lib/server/data-store/DemoDataStore";
+import type { MutationEvent } from "@/lib/server/data-store/in-memory/writable-delegate";
 
 describe("DemoDataStore writable", () => {
   it("create matterContact ger row med .contact pre-baked", async () => {

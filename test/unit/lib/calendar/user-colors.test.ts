@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { colorForUserId, hashString, paletteSize, buildUserColorMap } from "@/client/lib/calendar/user-colors";
+import { colorForUserId, hashString, paletteSize, buildUserColorMap } from "@/lib/client/calendar/user-colors";
 
 describe("colorForUserId", () => {
   it("ger samma färg för samma id (stabil)", () => {

@@ -4,7 +4,7 @@ import {
   eventFilterSchema,
   EVENT_TYPES,
   type AvaEvent,
-} from "@/server/events/schema";
+} from "@/lib/server/events/schema";
 
 describe("avaEventSchema", () => {
   const validEvent: AvaEvent = {

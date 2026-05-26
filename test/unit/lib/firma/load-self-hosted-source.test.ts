@@ -5,8 +5,8 @@
 
 import { describe, it, expect, vi } from "vitest";
 import { makeFakeFsa } from "../../../helpers/fake-fsa";
-import { makeFsaWriteBack } from "@/client/lib/firma/fsa-write-back";
-import { loadSelfHostedSource } from "@/client/lib/firma/load-self-hosted-source";
+import { makeFsaWriteBack } from "@/lib/client/firma/fsa-write-back";
+import { loadSelfHostedSource } from "@/lib/client/firma/load-self-hosted-source";
 
 describe("loadSelfHostedSource", () => {
   it("klonar när working copy saknar .git, hydrerar sedan", async () => {
@@ -16,7 +16,7 @@ describe("loadSelfHostedSource", () => {
       const wb = makeFsaWriteBack({ handle: fsa.root });
       await wb({ entity: "matter", kind: "create", row: { id: "m1", organizationId: "o1", title: "T" } });
       // markera som klonad
-      const { FsaIsoGitAdapter } = await import("@/client/lib/fsa/fs-adapter");
+      const { FsaIsoGitAdapter } = await import("@/lib/client/fsa/fs-adapter");
       await new FsaIsoGitAdapter(fsa.root).writeFile("/.git/HEAD", "ref: refs/heads/main\n");
     });
 
@@ -30,7 +30,7 @@ describe("loadSelfHostedSource", () => {
 
   it("provisionerar current-user om den saknas", async () => {
     const fsa = makeFakeFsa();
-    const { FsaIsoGitAdapter } = await import("@/client/lib/fsa/fs-adapter");
+    const { FsaIsoGitAdapter } = await import("@/lib/client/fsa/fs-adapter");
     await new FsaIsoGitAdapter(fsa.root).writeFile("/.git/HEAD", "ref: refs/heads/main\n");
 
     const src = await loadSelfHostedSource({
@@ -53,7 +53,7 @@ describe("loadSelfHostedSource", () => {
 
   it("provisionerar current-organization om den saknas (krävs av /settings)", async () => {
     const fsa = makeFakeFsa();
-    const { FsaIsoGitAdapter } = await import("@/client/lib/fsa/fs-adapter");
+    const { FsaIsoGitAdapter } = await import("@/lib/client/fsa/fs-adapter");
     await new FsaIsoGitAdapter(fsa.root).writeFile("/.git/HEAD", "ref: refs/heads/main\n");
 
     const src = await loadSelfHostedSource({
@@ -71,7 +71,7 @@ describe("loadSelfHostedSource", () => {
     const fsa = makeFakeFsa();
     const wb = makeFsaWriteBack({ handle: fsa.root });
     await wb({ entity: "contact", kind: "create", row: { id: "c1", organizationId: "o1", name: "Anna" } });
-    const { FsaIsoGitAdapter } = await import("@/client/lib/fsa/fs-adapter");
+    const { FsaIsoGitAdapter } = await import("@/lib/client/fsa/fs-adapter");
     await new FsaIsoGitAdapter(fsa.root).writeFile("/.git/HEAD", "ref: refs/heads/main\n");
 
     const clone = vi.fn(async () => { /* should not be called */ });

@@ -4,8 +4,8 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { WebLlmExtractor, buildPrompt, parseJsonResponse } from "@/client/lib/llm/web-llm-extractor";
-import type { ExtractionSchema } from "@/server/llm/llm-extractor";
+import { WebLlmExtractor, buildPrompt, parseJsonResponse } from "@/lib/client/llm/web-llm-extractor";
+import type { ExtractionSchema } from "@/lib/server/llm/llm-extractor";
 
 const schema: ExtractionSchema = {
   motpart: { type: "string", description: "Motpartens namn" },

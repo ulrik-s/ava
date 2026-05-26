@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { InMemoryFileSystem } from "@/server/local-first/in-memory-fs";
+import { InMemoryFileSystem } from "@/lib/server/local-first/in-memory-fs";
 
 describe("InMemoryFileSystem", () => {
   it("read efter write returnerar samma innehåll", async () => {

@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { gitBlobSha1 } from "@/client/lib/github/git-blob-hash";
+import { gitBlobSha1 } from "@/lib/client/github/git-blob-hash";
 
 describe("gitBlobSha1", () => {
   it("tom byte-stream → standardvärde för tom blob", async () => {

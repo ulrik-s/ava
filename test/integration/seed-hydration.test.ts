@@ -13,7 +13,7 @@
 
 import { describe, it, expect } from "vitest";
 import { buildSeed, seedToFiles } from "../../tooling/scripts/seed-data";
-import { buildDefaultRegistry } from "@/server/local-first/projections/default-registry";
+import { buildDefaultRegistry } from "@/lib/server/local-first/projections/default-registry";
 
 describe("seed-data hydration", () => {
   it("alla seed-genererade filer parsar med sina projektion-schemas", () => {

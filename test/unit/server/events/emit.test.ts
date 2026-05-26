@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { emit } from "@/server/events/emit";
+import { emit } from "@/lib/server/events/emit";
 
 function makeCtx() {
   const emitFn = vi.fn(async (input: unknown) => ({ id: "e1", ts: "now", ...input as object }));

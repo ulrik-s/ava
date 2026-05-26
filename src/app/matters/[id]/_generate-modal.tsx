@@ -3,8 +3,8 @@
 import { useId, useState } from "react";
 import Link from "next/link";
 import { FileDown } from "lucide-react";
-import { trpc } from "@/client/lib/trpc";
-import { labelForMatterRole } from "@/client/lib/labels";
+import { trpc } from "@/lib/client/trpc";
+import { labelForMatterRole } from "@/lib/client/labels";
 
 type Contact = { id: string; name: string };
 type MatterContact = { id: string; role: string; contact: Contact };

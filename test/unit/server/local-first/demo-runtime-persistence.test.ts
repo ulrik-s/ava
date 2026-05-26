@@ -9,8 +9,8 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
-import { DemoRuntime } from "@/server/local-first/demo-runtime";
-import { InMemoryPersistence } from "@/server/local-first/persistence";
+import { DemoRuntime } from "@/lib/server/local-first/demo-runtime";
+import { InMemoryPersistence } from "@/lib/server/local-first/persistence";
 
 const matter1 = JSON.stringify({
   id: "m1", matterNumber: "2026-0001", title: "T",

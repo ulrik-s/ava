@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { timeEntryRouter } from "@/server/routers/timeEntry";
+import { timeEntryRouter } from "@/lib/server/routers/timeEntry";
 import { dataStoreFromMockPrisma } from "../helpers/mock-data-store";
 
 const mockPrisma = {

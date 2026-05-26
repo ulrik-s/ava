@@ -7,8 +7,8 @@
  */
 
 import { describe, it, expect, beforeEach } from "vitest";
-import { ProjectionRegistry } from "@/server/local-first/projections/registry";
-import { MatterProjection, type MatterProjectionData } from "@/server/local-first/projections/matter";
+import { ProjectionRegistry } from "@/lib/server/local-first/projections/registry";
+import { MatterProjection, type MatterProjectionData } from "@/lib/server/local-first/projections/matter";
 
 describe("ProjectionRegistry — entity lookups", () => {
   let registry: ProjectionRegistry;

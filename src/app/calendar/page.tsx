@@ -9,13 +9,13 @@
  */
 
 import { useState, useEffect, useMemo } from "react";
-import { trpc } from "@/client/lib/trpc";
+import { trpc } from "@/lib/client/trpc";
 import { Calendar as CalendarIcon, Plus, ExternalLink, Trash2, CheckCircle2, List, LayoutGrid, CalendarDays, Sun } from "lucide-react";
-import { jobQueue } from "@/client/lib/jobs/job-queue";
+import { jobQueue } from "@/lib/client/jobs/job-queue";
 import { CalendarGrid, startOfDay } from "./_calendar-grid";
 import { DayView } from "./_day-view";
 import { UserPicker, loadSelectedUserIds } from "./_user-picker";
-import { buildUserColorMap, type UserColor } from "@/client/lib/calendar/user-colors";
+import { buildUserColorMap, type UserColor } from "@/lib/client/calendar/user-colors";
 
 type ViewMode = "list" | "day" | "week" | "month";
 

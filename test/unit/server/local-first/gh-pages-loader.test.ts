@@ -3,8 +3,8 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
-import { createGhPagesCloneFn, resolveGhPagesUrl } from "@/server/local-first/gh-pages-loader";
-import { MemFs } from "@/server/local-first/mem-fs";
+import { createGhPagesCloneFn, resolveGhPagesUrl } from "@/lib/server/local-first/gh-pages-loader";
+import { MemFs } from "@/lib/server/local-first/mem-fs";
 
 function fakeFetch(files: Record<string, unknown>): typeof fetch {
   return (async (url: string | URL | Request) => {

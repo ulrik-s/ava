@@ -3,10 +3,10 @@
 import { useId, useState } from "react";
 import Link from "next/link";
 import type { inferRouterOutputs } from "@trpc/server";
-import { trpc } from "@/client/lib/trpc";
-import { formatMinutes, formatCurrency } from "@/client/lib/utils";
-import { labelForPaymentMethod, creditRiskFor, CREDIT_RISK_LABELS, type CreditRisk } from "@/client/lib/labels";
-import type { AppRouter } from "@/server/routers/_app";
+import { trpc } from "@/lib/client/trpc";
+import { formatMinutes, formatCurrency } from "@/lib/client/utils";
+import { labelForPaymentMethod, creditRiskFor, CREDIT_RISK_LABELS, type CreditRisk } from "@/lib/client/labels";
+import type { AppRouter } from "@/lib/server/routers/_app";
 
 const RISK_BADGE_CLASSES: Record<CreditRisk, string> = {
   LOW: "bg-green-50 text-green-700 border-green-200",

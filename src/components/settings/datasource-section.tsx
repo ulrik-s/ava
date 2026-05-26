@@ -11,9 +11,9 @@ import { Database } from "lucide-react";
 import { FirmaSettingsPanel } from "./firma-settings-panel";
 import { FsaFolderSelector } from "./fsa-folder-selector";
 import { SyncDiagnostics } from "./sync-diagnostics";
-import { loadFirmaConfig } from "@/client/lib/firma/firma-config";
+import { loadFirmaConfig } from "@/lib/client/firma/firma-config";
 import { useEffect, useState } from "react";
-import type { FirmaConfig } from "@/client/lib/firma/firma-config";
+import type { FirmaConfig } from "@/lib/client/firma/firma-config";
 
 export function DatasourceSection() {
   const [config, setConfig] = useState<FirmaConfig | null>(null);

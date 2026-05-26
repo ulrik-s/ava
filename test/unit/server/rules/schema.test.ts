@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { avaRuleSchema } from "@/server/rules/schema";
+import { avaRuleSchema } from "@/lib/server/rules/schema";
 
 describe("avaRuleSchema", () => {
   const baseRule = {

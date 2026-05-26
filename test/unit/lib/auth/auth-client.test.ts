@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
-import { createAuthClient } from "@/client/lib/auth/auth-client";
+import { createAuthClient } from "@/lib/client/auth/auth-client";
 
 function mockFetch(handler: (url: string, init?: RequestInit) => Response | Promise<Response>) {
   return vi.fn(async (url: string, init?: RequestInit) => handler(url, init)) as unknown as typeof fetch;

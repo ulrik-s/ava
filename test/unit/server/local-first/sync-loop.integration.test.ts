@@ -10,15 +10,15 @@ import { mkdtemp, rm, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { execSync, spawnSync } from "node:child_process";
-import { SyncLoop } from "@/server/local-first/sync-loop";
-import { NodeFileSystem } from "@/server/local-first/node-fs";
-import { NodeGitOps } from "@/server/local-first/node-git-ops";
+import { SyncLoop } from "@/lib/server/local-first/sync-loop";
+import { NodeFileSystem } from "@/lib/server/local-first/node-fs";
+import { NodeGitOps } from "@/lib/server/local-first/node-git-ops";
 import {
   ProjectionWriter,
   ProjectionHydrator,
-} from "@/server/local-first/projection-writer";
-import { buildDefaultRegistry } from "@/server/local-first/projections/default-registry";
-import type { MatterProjectionData } from "@/server/local-first/projections/matter";
+} from "@/lib/server/local-first/projection-writer";
+import { buildDefaultRegistry } from "@/lib/server/local-first/projections/default-registry";
+import type { MatterProjectionData } from "@/lib/server/local-first/projections/matter";
 
 function hasGit(): boolean {
   return spawnSync("git", ["--version"], { stdio: "ignore" }).status === 0;

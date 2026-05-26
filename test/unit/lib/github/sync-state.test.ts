@@ -3,7 +3,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { readSyncState, writeSyncState, pathFor } from "@/client/lib/github/sync-state";
+import { readSyncState, writeSyncState, pathFor } from "@/lib/client/github/sync-state";
 import { makeFakeFsa } from "../../../helpers/fake-fsa";
 
 const sampleState = {

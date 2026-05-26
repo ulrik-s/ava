@@ -10,7 +10,7 @@
 
 import { describe, it, expect } from "vitest";
 import { z } from "zod";
-import { JsonProjection } from "@/server/local-first/projections/base";
+import { JsonProjection } from "@/lib/server/local-first/projections/base";
 
 const sampleSchema = z.object({
   id: z.string(),

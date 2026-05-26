@@ -32,7 +32,7 @@ vi.mock("next/navigation", () => ({
   usePathname: () => null,
 }));
 
-vi.mock("@/client/lib/trpc", () => ({
+vi.mock("@/lib/client/trpc", () => ({
   trpc: {
     useUtils: () => utilsMock,
     contacts: {

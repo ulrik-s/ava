@@ -17,7 +17,7 @@ import {
   paymentPlanSchema,
   taskSchema,
   userSchema,
-} from "@/shared/schemas";
+} from "@/lib/shared/schemas";
 
 describe("ENTITY_REGISTRY", () => {
   it("har minst 21 entiteter (inkl. calendarEvent + task)", () => {

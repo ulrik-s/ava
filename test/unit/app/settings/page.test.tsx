@@ -34,7 +34,7 @@ vi.mock("@/components/settings/datasource-section", () => ({
   DatasourceSection: () => null,
 }));
 
-vi.mock("@/client/lib/trpc", () => ({
+vi.mock("@/lib/client/trpc", () => ({
   trpc: {
     useUtils: () => utilsMock,
     organization: {

@@ -13,11 +13,11 @@
  */
 
 import { useEffect } from "react";
-import { trpc } from "@/client/lib/trpc";
+import { trpc } from "@/lib/client/trpc";
 import {
   setMirrorStateDispatcher,
   setOutlookTokenProvider,
-} from "@/client/lib/jobs/mirror-outlook-dispatch";
+} from "@/lib/client/jobs/mirror-outlook-dispatch";
 
 export function MirrorOutlookRegistrar() {
   const setMirror = trpc.calendar.setMirrorState.useMutation();
@@ -29,7 +29,7 @@ export function MirrorOutlookRegistrar() {
       if (manual) return manual;
       // 2. O365-connector via registry (stub tills MSAL är inlagd)
       try {
-        const { getConnector } = await import("@/client/lib/integrations/registry");
+        const { getConnector } = await import("@/lib/client/integrations/registry");
         const conn = getConnector("office365");
         if (!conn) return null;
         const status = await conn.getStatus();

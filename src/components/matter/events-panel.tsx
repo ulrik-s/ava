@@ -1,6 +1,6 @@
 "use client";
 
-import { trpc } from "@/client/lib/trpc";
+import { trpc } from "@/lib/client/trpc";
 
 interface EventsPanelProps {
   matterId: string;

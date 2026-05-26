@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { trpc } from "@/client/lib/trpc";
-import { useRouteId } from "@/client/lib/demo/use-route-id";
-import { formatCurrency } from "@/client/lib/utils";
+import { trpc } from "@/lib/client/trpc";
+import { useRouteId } from "@/lib/client/demo/use-route-id";
+import { formatCurrency } from "@/lib/client/utils";
 import { ArrowLeft, Ban, Wallet } from "lucide-react";
 
 const STATUS_LABEL: Record<string, string> = {

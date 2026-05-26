@@ -4,9 +4,9 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
-import { demoSourceFromRuntime } from "@/client/lib/demo/demo-source-from-runtime";
-import { DemoRuntime } from "@/server/local-first/demo-runtime";
-import type { MemFs } from "@/server/local-first/mem-fs";
+import { demoSourceFromRuntime } from "@/lib/client/demo/demo-source-from-runtime";
+import { DemoRuntime } from "@/lib/server/local-first/demo-runtime";
+import type { MemFs } from "@/lib/server/local-first/mem-fs";
 
 async function seededRuntime(): Promise<DemoRuntime> {
   const runtime = DemoRuntime.create({

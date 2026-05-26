@@ -12,7 +12,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { DemoClient } from "@/app/demo/_demo-client";
-import { DemoRuntime } from "@/server/local-first/demo-runtime";
+import { DemoRuntime } from "@/lib/server/local-first/demo-runtime";
 
 function fakeRuntimeFactory(data: Record<string, string>) {
   return () => DemoRuntime.create({

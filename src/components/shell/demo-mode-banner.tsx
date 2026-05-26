@@ -11,7 +11,7 @@
 
 import { useEffect, useState } from "react";
 import { Info, X } from "lucide-react";
-import { loadFirmaConfig } from "@/client/lib/firma/firma-config";
+import { loadFirmaConfig } from "@/lib/client/firma/firma-config";
 
 const STORAGE_KEY = "ava.demoBannerDismissed";
 

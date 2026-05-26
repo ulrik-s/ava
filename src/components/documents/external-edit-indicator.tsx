@@ -7,7 +7,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { getExternalEditTracker, type EditSession } from "@/client/lib/fsa/external-edit-tracker";
+import { getExternalEditTracker, type EditSession } from "@/lib/client/fsa/external-edit-tracker";
 
 export function ExternalEditIndicator(): React.ReactElement | null {
   const [sessions, setSessions] = useState<EditSession[]>([]);

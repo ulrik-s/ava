@@ -14,7 +14,7 @@
  */
 
 import Link from "next/link";
-import type { SyncState } from "@/client/lib/sync/use-auto-sync";
+import type { SyncState } from "@/lib/client/sync/use-auto-sync";
 
 interface Props {
   state: SyncState;

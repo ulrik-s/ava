@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { renderHandlebars } from "@/client/lib/kostnadsrakning/render-handlebars";
+import { renderHandlebars } from "@/lib/client/kostnadsrakning/render-handlebars";
 
 describe("renderHandlebars", () => {
   it("ersätter enkla variabler", () => {

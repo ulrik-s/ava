@@ -13,7 +13,7 @@ const mattersQuery = {
   data: undefined as Record<string, unknown> | undefined,
 };
 
-vi.mock("@/client/lib/trpc", () => ({
+vi.mock("@/lib/client/trpc", () => ({
   trpc: {
     contacts: {
       list: { useQuery: () => contactsQuery },

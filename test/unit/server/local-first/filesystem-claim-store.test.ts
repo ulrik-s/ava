@@ -7,9 +7,9 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { FilesystemClaimStore } from "@/server/local-first/filesystem-claim-store";
-import { InMemoryFileSystem } from "@/server/local-first/in-memory-fs";
-import { InMemoryGitOps } from "@/server/local-first/in-memory-git-ops";
+import { FilesystemClaimStore } from "@/lib/server/local-first/filesystem-claim-store";
+import { InMemoryFileSystem } from "@/lib/server/local-first/in-memory-fs";
+import { InMemoryGitOps } from "@/lib/server/local-first/in-memory-git-ops";
 
 function makeStore(me: string) {
   const fs = new InMemoryFileSystem();

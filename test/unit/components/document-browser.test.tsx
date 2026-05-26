@@ -13,7 +13,7 @@ import { DocumentBrowser } from "@/components/documents/document-browser";
 // Self-hosted-läget letar efter ett FSA-handle via IndexedDB; jsdom har inte
 // någon working copy uppsatt. Mock:a explicit så testen är deterministisk
 // oavsett om andra tester polyfillar IndexedDB.
-vi.mock("@/client/lib/fsa/handle-store", () => ({
+vi.mock("@/lib/client/fsa/handle-store", () => ({
   loadHandle: vi.fn(async () => null),
   saveHandle: vi.fn(async () => {}),
   deleteHandle: vi.fn(async () => {}),
@@ -51,7 +51,7 @@ const mutationStubs = {
   register: { mutate: vi.fn(), mutateAsync: vi.fn().mockResolvedValue({}), isPending: false },
 };
 
-vi.mock("@/client/lib/trpc", () => ({
+vi.mock("@/lib/client/trpc", () => ({
   trpc: {
     useUtils: () => utilsMock,
     document: {

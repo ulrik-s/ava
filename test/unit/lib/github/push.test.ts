@@ -11,10 +11,10 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { pushViaRest } from "@/client/lib/github/push";
-import { writeSyncState } from "@/client/lib/github/sync-state";
-import { writeFile, deleteFile } from "@/client/lib/github/fsa-walker";
-import { gitBlobSha1 } from "@/client/lib/github/git-blob-hash";
+import { pushViaRest } from "@/lib/client/github/push";
+import { writeSyncState } from "@/lib/client/github/sync-state";
+import { writeFile, deleteFile } from "@/lib/client/github/fsa-walker";
+import { gitBlobSha1 } from "@/lib/client/github/git-blob-hash";
 import { makeFakeFsa } from "../../../helpers/fake-fsa";
 
 const REPO = { owner: "ulrik-s", repo: "ava" };
@@ -170,7 +170,7 @@ describe("pushViaRest", () => {
     });
 
     // Återläs sync-state — ska ha nya HEAD + tree + filer
-    const { readSyncState } = await import("@/client/lib/github/sync-state");
+    const { readSyncState } = await import("@/lib/client/github/sync-state");
     const state = await readSyncState(fsa.root);
     expect(state?.lastHead).toBe("commit-1");
     expect(state?.lastTree).toBe("tree-1");

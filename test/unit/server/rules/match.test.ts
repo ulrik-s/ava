@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { matchEventTriggers, matchHttpTrigger } from "@/server/rules/match";
-import type { AvaRule } from "@/server/rules/schema";
-import type { AvaEvent } from "@/server/events/schema";
+import { matchEventTriggers, matchHttpTrigger } from "@/lib/server/rules/match";
+import type { AvaRule } from "@/lib/server/rules/schema";
+import type { AvaEvent } from "@/lib/server/events/schema";
 
 const baseEvent: AvaEvent = {
   id: "e1",

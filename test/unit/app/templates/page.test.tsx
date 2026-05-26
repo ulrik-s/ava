@@ -14,7 +14,7 @@ const utilsMock = { documentTemplate: { list: { invalidate: vi.fn() } } };
 const deleteMutate = vi.fn();
 const deleteState = { isPending: false };
 
-vi.mock("@/client/lib/trpc", () => ({
+vi.mock("@/lib/client/trpc", () => ({
   trpc: {
     useUtils: () => utilsMock,
     documentTemplate: {

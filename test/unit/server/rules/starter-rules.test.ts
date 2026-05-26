@@ -5,8 +5,8 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { avaRuleSchema } from "@/server/rules/schema";
-import { STARTER_RULES } from "@/server/rules/starter-rules";
+import { avaRuleSchema } from "@/lib/server/rules/schema";
+import { STARTER_RULES } from "@/lib/server/rules/starter-rules";
 
 describe("STARTER_RULES", () => {
   it("har minst 8 regler", () => {

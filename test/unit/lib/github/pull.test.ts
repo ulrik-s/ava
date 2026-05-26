@@ -4,10 +4,10 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { pullViaRest } from "@/client/lib/github/pull";
-import { writeSyncState, readSyncState } from "@/client/lib/github/sync-state";
-import { writeFile } from "@/client/lib/github/fsa-walker";
-import { gitBlobSha1 } from "@/client/lib/github/git-blob-hash";
+import { pullViaRest } from "@/lib/client/github/pull";
+import { writeSyncState, readSyncState } from "@/lib/client/github/sync-state";
+import { writeFile } from "@/lib/client/github/fsa-walker";
+import { gitBlobSha1 } from "@/lib/client/github/git-blob-hash";
 import { makeFakeFsa } from "../../../helpers/fake-fsa";
 
 const REPO = { owner: "ulrik-s", repo: "ava" };

@@ -10,7 +10,7 @@ import {
   getDocumentContent,
   setDocumentContent,
   clearDocumentContentCache,
-} from "@/client/lib/demo/document-content-cache";
+} from "@/lib/client/demo/document-content-cache";
 
 beforeEach(() => clearDocumentContentCache());
 

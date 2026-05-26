@@ -14,7 +14,7 @@ import { Sidebar } from "./sidebar";
 import { DemoModeBanner } from "./demo-mode-banner";
 import { ExternalEditRegistrar } from "@/components/documents/external-edit-registrar";
 import { ExternalEditIndicator } from "@/components/documents/external-edit-indicator";
-import { trpc } from "@/client/lib/trpc";
+import { trpc } from "@/lib/client/trpc";
 
 /**
  * Routes som ska renderas utan sidebar (deras egen layout tar över).

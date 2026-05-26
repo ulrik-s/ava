@@ -4,7 +4,7 @@ import {
   buildGeneratedFileName,
   RecipientNotLinkedError,
   type MatterContactLink,
-} from "@/client/lib/template-recipients";
+} from "@/lib/client/template-recipients";
 
 function link(overrides: Partial<MatterContactLink> & { contactId: string }): MatterContactLink {
   return {

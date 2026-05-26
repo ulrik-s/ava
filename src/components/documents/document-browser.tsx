@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useMemo } from "react";
-import { trpc } from "@/client/lib/trpc";
+import { trpc } from "@/lib/client/trpc";
 import { FolderRow, type FolderRecord } from "./_folder-row";
 import { DocumentRow, type DocumentRecord } from "./_document-row";
 import { NewFolderForm } from "./_new-folder-form";
@@ -82,7 +82,7 @@ export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
     };
 
     try {
-      const { isFsaSupported, loadHandle } = await import("@/client/lib/fsa/handle-store");
+      const { isFsaSupported, loadHandle } = await import("@/lib/client/fsa/handle-store");
       if (!isFsaSupported()) {
         throw new Error(
           "Din webbläsare stödjer inte File System Access. Använd Chrome eller Edge."
@@ -95,7 +95,7 @@ export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
         );
       }
 
-      const { uploadDocumentToFsa } = await import("@/client/lib/fsa/upload-document");
+      const { uploadDocumentToFsa } = await import("@/lib/client/fsa/upload-document");
       const result = await uploadDocumentToFsa({ handle, matterId, file });
 
       // Byt placeholder-id mot riktigt id så raden inte hoppar.
@@ -122,7 +122,7 @@ export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
       }
 
       // Bakgrundsjobb: AI-klassificering + text-extraktion → sökbart innehåll
-      const { jobQueue } = await import("@/client/lib/jobs/job-queue");
+      const { jobQueue } = await import("@/lib/client/jobs/job-queue");
       jobQueue.enqueue("classify-document", `Analyserar ${result.fileName}`, {
         documentId: result.id,
         fileName: result.fileName,

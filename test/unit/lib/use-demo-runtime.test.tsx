@@ -15,8 +15,8 @@
 
 import { describe, it, expect, vi } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
-import { useDemoRuntime } from "@/client/lib/use-demo-runtime";
-import { DemoRuntime } from "@/server/local-first/demo-runtime";
+import { useDemoRuntime } from "@/lib/client/use-demo-runtime";
+import { DemoRuntime } from "@/lib/server/local-first/demo-runtime";
 
 function fakeRuntime(data: Record<string, string>): DemoRuntime {
   return DemoRuntime.create({
@@ -107,7 +107,7 @@ describe("useDemoRuntime", () => {
   });
 
   it("vid mount försöker restoreFromCache och sätter loaded när cachen finns", async () => {
-    const { InMemoryPersistence } = await import("@/server/local-first/persistence");
+    const { InMemoryPersistence } = await import("@/lib/server/local-first/persistence");
     const persistence = new InMemoryPersistence();
     const matterJson = JSON.stringify({
       id: "m1", matterNumber: "2026-0001", title: "X",

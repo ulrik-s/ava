@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { sshsigSign } from "@/client/lib/keys/sshsig";
+import { sshsigSign } from "@/lib/client/keys/sshsig";
 
 const ZERO_PUBKEY = new Uint8Array(32);
 // 64-byte:s signatur (alla nollor) — bara för struktur-test

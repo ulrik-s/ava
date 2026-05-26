@@ -5,8 +5,8 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { ContactProjection, type ContactProjectionData } from "@/server/local-first/projections/contact";
-import { UserProjection, type UserProjectionData } from "@/server/local-first/projections/user";
+import { ContactProjection, type ContactProjectionData } from "@/lib/server/local-first/projections/contact";
+import { UserProjection, type UserProjectionData } from "@/lib/server/local-first/projections/user";
 
 describe("ContactProjection", () => {
   const proj = new ContactProjection();
