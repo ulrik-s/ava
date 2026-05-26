@@ -18,8 +18,9 @@ import type { SyncState } from "@/client/lib/sync/use-auto-sync";
 import { loadFirmaConfig } from "@/client/lib/firma/firma-config";
 import { loadHandle } from "@/client/lib/fsa/handle-store";
 
+// eslint-disable-next-line complexity
 export function SyncDiagnostics() {
-  const { state, syncNow, providerKind, lastError } = useSyncContext();
+  const { state, syncNow, providerKind, lastError, enabled } = useSyncContext();
   const [running, setRunning] = useState(false);
   const [tier, setTier] = useState<string | null>(null);
   const [folderName, setFolderName] = useState<string | null>(null);
@@ -66,12 +67,20 @@ export function SyncDiagnostics() {
           <p className="text-xs text-gray-600 mt-1">
             <StateLabel state={state} />
           </p>
+          {!enabled && (
+            <p className="text-xs text-amber-700 mt-1">
+              ⚠ Sync är inaktiv — du är troligen i demo-läge (anonym) eller
+              har inte loggat in med en write-mode-token. &quot;Synka nu&quot; gör
+              ingenting tills detta är åtgärdat.
+            </p>
+          )}
         </div>
         <button
           type="button"
           onClick={() => void trigger()}
-          disabled={running || state.kind === "syncing"}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300"
+          disabled={!enabled || running || state.kind === "syncing"}
+          title={!enabled ? "Sync inaktiv — kräver write-mode-token" : undefined}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
         >
           <RefreshCw size={14} className={running ? "animate-spin" : ""} />
           {running ? "Synkar…" : "Synka nu"}

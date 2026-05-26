@@ -22,6 +22,10 @@ export interface SyncContextValue {
   /** Tidigare även "tauri" — borttagen, web-only nu. */
   /** Senaste error-meddelandet, persisteras tills syncen lyckas. */
   lastError: string | null;
+  /** Sync aktiv = både provider OK och auth tillåter write. False i
+   *  demo (anonym) eller om FSA-handle saknas. UI:n disable:ar då
+   *  "Synka nu"-knappen och förklarar varför. */
+  enabled: boolean;
 }
 
 const SyncCtx = createContext<SyncContextValue | null>(null);
@@ -86,6 +90,7 @@ export function SyncProviderRoot({ token, pickProvider, children }: RootProps) {
     notifyChange,
     providerKind: picked?.kind ?? null,
     lastError,
+    enabled: writeAllowed && picked !== null,
   };
 
   return <SyncCtx.Provider value={value}>{children}</SyncCtx.Provider>;
@@ -104,5 +109,6 @@ export function useSyncContext(): SyncContextValue {
     notifyChange: () => {},
     providerKind: null,
     lastError: null,
+    enabled: false,
   };
 }
