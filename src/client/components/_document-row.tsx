@@ -180,6 +180,24 @@ function DocumentLinks({ doc, disabled }: { doc: DocumentRecord; disabled?: bool
     if (proceed) window.open(viewHref, "_blank", "noopener,noreferrer");
   };
 
+  const openExternal = async () => {
+    const { openInFinder } = await import("@/client/lib/fsa/open-in-finder");
+    const { getExternalEditTracker } = await import("@/client/lib/fsa/external-edit-tracker");
+    const r = await openInFinder(doc.storagePath);
+    if (r.kind === "unsupported") { alert("Din webbläsare stödjer inte File System Access. Använd Chrome eller Edge."); return; }
+    if (r.kind === "no-handle") { alert("Du har inte valt en lokal mapp än. Gå till Inställningar → välj firma-mapp."); return; }
+    if (r.kind === "permission-denied") { alert("AVA fick inte tillåtelse att läsa filen. Klicka 'Tillåt' nästa gång prompten dyker upp."); return; }
+    if (r.kind === "file-not-found") { alert(`Hittade inte filen i din lokala mapp: ${r.path}`); return; }
+    const t = getExternalEditTracker();
+    if (!t) { alert("Edit-tracker:n är inte initialiserad — ladda om sidan."); return; }
+    await t.watch({ docId: doc.id, path: r.target.relativePath, handle: r.target.fileHandle });
+    alert(
+      `Öppna filen i Finder/Explorer:\n\n` +
+      `${r.target.folderName}/${r.target.relativePath}\n\n` +
+      `Dubbelklicka för att öppna i PDF Gear, Preview, Word etc. AVA committar automatiskt när du sparar (efter 90 sekunder utan ändringar) — eller klicka "Spara nu" i den gula bannern högst upp.`,
+    );
+  };
+
   return (
     <>
       <button
@@ -187,9 +205,18 @@ function DocumentLinks({ doc, disabled }: { doc: DocumentRecord; disabled?: bool
         onClick={openInEditor}
         disabled={disabled}
         className="text-xs text-gray-500 hover:text-blue-600 hover:underline mr-3 disabled:opacity-50 disabled:cursor-not-allowed"
-        title={disabled ? "Vänta tills uppladdningen är klar" : "Öppna i din PDF-editor (Tauri) eller browsern"}
+        title={disabled ? "Vänta tills uppladdningen är klar" : "Öppna i din browser"}
       >
         🖊 Öppna
+      </button>
+      <button
+        type="button"
+        onClick={openExternal}
+        disabled={disabled}
+        className="text-xs text-gray-500 hover:text-blue-600 hover:underline mr-3 disabled:opacity-50 disabled:cursor-not-allowed"
+        title={disabled ? "Vänta tills uppladdningen är klar" : "Öppna i extern app (PDF Gear, Preview...) — AVA committar dina ändringar automatiskt"}
+      >
+        🖥 Editera externt
       </button>
       <a
         href={disabled ? undefined : viewHref}

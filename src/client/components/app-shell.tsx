@@ -12,6 +12,8 @@
 import { usePathname } from "next/navigation";
 import { Sidebar } from "./sidebar";
 import { DemoModeBanner } from "./demo-mode-banner";
+import { ExternalEditRegistrar } from "./external-edit-registrar";
+import { ExternalEditIndicator } from "./external-edit-indicator";
 import { trpc } from "@/client/lib/trpc";
 
 /**
@@ -30,7 +32,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex flex-col h-full">
+      <ExternalEditRegistrar />
       <DemoModeBanner />
+      <ExternalEditIndicator />
       <div className="flex flex-1 min-h-0">
         <Sidebar userName={current.data?.name ?? null} />
         <main className="flex-1 overflow-y-auto pt-16 lg:pt-0 p-4 sm:p-6 lg:p-8 min-w-0">

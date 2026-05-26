@@ -165,4 +165,33 @@ export const coreProcedures = {
       };
       return ctx.dataStore.documents.update({ where: { id: documentId }, data });
     }),
+
+  /**
+   * `markExternallyEdited` — kallas av `ExternalEditTracker` när user
+   * har sparat ändringar i en extern editor (PDF Gear, Word, etc.).
+   * Bumpar version + updatedAt + sizeBytes så manifest + commit-pipeline
+   * picks up ändringen. Faktiska bytes ligger redan på rätt path i FSA-
+   * mappen (extern editor sparade in-place).
+   */
+  markExternallyEdited: orgProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        saves: z.number().int().min(1),
+        sessionStartedAt: z.union([z.string(), z.date()]),
+        sizeBytes: z.number().int().min(0).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      await assertDocAccess(ctx, input.id);
+      const doc = await ctx.dataStore.documents.findUniqueOrThrow({ where: { id: input.id } }) as { version?: number };
+      return ctx.dataStore.documents.update({
+        where: { id: input.id },
+        data: {
+          version: (doc.version ?? 1) + 1,
+          updatedAt: new Date(),
+          ...(input.sizeBytes !== undefined ? { sizeBytes: input.sizeBytes, fileSize: input.sizeBytes } : {}),
+        },
+      });
+    }),
 };
