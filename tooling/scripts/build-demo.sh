@@ -25,17 +25,21 @@ cd "$ROOT"
 STASH_DIR="$ROOT/.demo-stash"
 APP_DIR="$ROOT/src/app"
 
-# Sidor som inte ska ingå i den statiska demon. De flyttas åt sidan
-# innan build och återställs efteråt.
+# Sidor som inte kan ingå i den statiska demon. De flyttas åt sidan innan
+# build och återställs efteråt.
 #
-# MVP: Bara `/` och `/demo` ingår. Dynamiska rutter (matters/[id] etc.)
-# och server-rutter (api, login) lämnas utanför demo-builden tills vi
-# har generateStaticParams() på dem.
-STASH_PATHS=(
-  "api"
-  "login"
-  "users/[id]"
-)
+# HISTORIK: denna array var länge en genväg — dynamiska rutter som saknade
+# generateStaticParams() stashades bort istället för att fixas, vilket gav
+# 404 → SPA-fallback-loopar (invoices, templates, users). ALLA dynamiska
+# rutter har nu generateStaticParams (demoStaticParams /
+# demoStaticParamsBySeedId) så ingen behöver stashas.
+#
+# Bara ÄKTA server-only-routes hör hemma här — sådana som blockerar
+# `output: "export"` (route handlers under api/) eller kräver en server.
+# De mapparna finns inte i src/app/ just nu → arrayen är tom. Lägg BARA
+# till en route här om den faktiskt har en route.ts (server handler) —
+# aldrig en sida bara för att den "inte hunnit få" static-params.
+STASH_PATHS=()
 
 # Routes som ska få en placeholder-sida ("Feature unavailable in demo")
 # istället för att bara 404:a när användaren klickar i sidopanelen.

@@ -46,3 +46,28 @@ export async function collectDemoIds(pathPrefix: string): Promise<string[]> {
     return [];
   }
 }
+
+/**
+ * `demoStaticParamsBySeedId` — för entiteter där FILNAMNET skiljer sig
+ * från route-id:t. Users lagras som `.ava/users/<email>.json` men UI
+ * länkar till `/users/<user.id>` (t.ex. u-anna) → collectDemoIds (som
+ * läser filnamn) skulle ge fel värden. Här läser vi seed-objektens
+ * `.id`-fält direkt.
+ */
+export async function demoStaticParamsBySeedId(sourceKey: string): Promise<{ id: string }[]> {
+  if (process.env.DEMO_BUILD !== "1") return [];
+  try {
+    const { buildSeed } = await import("../../../../tooling/scripts/seed-data");
+    const seed = buildSeed({
+      orgId: DEMO_ORG_ID,
+      currentUserId: DEMO_CURRENT_USER_ID,
+      emailDomain: DEMO_EMAIL_DOMAIN,
+      organizationName: DEMO_ORG_NAME,
+    }) as unknown as Record<string, Array<{ id?: string }>>;
+    const list = seed[sourceKey] ?? [];
+    const ids = list.map((x) => x.id).filter((x): x is string => typeof x === "string");
+    return [...ids, SHELL_PARAM].map((id) => ({ id }));
+  } catch {
+    return [{ id: SHELL_PARAM }];
+  }
+}
