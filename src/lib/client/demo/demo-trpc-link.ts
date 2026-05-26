@@ -79,10 +79,13 @@ export function createDemoTrpcLink(deps: DemoTrpcLinkDeps): TRPCLink<AppRouter> 
  * `ulrik-s/ava-demo` använder "demo-firma-ab".
  */
 function defaultDemoUser(): Context["user"] {
+  // ID:t MÅSTE matcha seedens currentUserId (u-anna) annars hamnar nya
+  // entiteter (calendar-events, time-entries) på en user som inte syns
+  // i någon picker → "skapa event" verkar inte göra något i UI:n.
   return {
-    id: "demo-user",
-    email: "demo@ava.local",
-    name: "Demo Advokat",
+    id: "u-anna",
+    email: "user@ava.demo",
+    name: "Anna Advokat",
     role: "ADMIN",
     organizationId: "demo-firma-ab",
   };

@@ -170,7 +170,7 @@ export default function CalendarPage() {
 function EventList() {
   const { data: events, isLoading } = trpc.calendar.list.useQuery();
   const utils = trpc.useUtils();
-  const del = trpc.calendar.delete.useMutation({ onSuccess: () => utils.calendar.list.invalidate() });
+  const del = trpc.calendar.delete.useMutation({ onSuccess: () => utils.calendar.invalidate() });
 
   const handleDelete = (ev: EventRow) => {
     if (!confirm(`Ta bort "${ev.title}"?`)) return;
@@ -272,7 +272,10 @@ function NewEventForm({ onClose }: { onClose: () => void }) {
   const utils = trpc.useUtils();
   const create = trpc.calendar.create.useMutation({
     onSuccess: (created: EventRow) => {
-      utils.calendar.list.invalidate();
+      // Invalidate HELA calendar-namespacen — vi vet inte vilken query
+      // som UI:n just nu har aktiv (list / listForUsers). Tidigare
+      // invaliderades bara `.list` → events i multi-user-vyn visades inte.
+      utils.calendar.invalidate();
       if (created.mirrorToOutlook) {
         enqueueMirror({
           eventId: created.id,
