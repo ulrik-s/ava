@@ -38,18 +38,28 @@ async function openHit(hit: SearchHit): Promise<void> {
   });
 }
 
+// eslint-disable-next-line complexity
 export default function DocumentSearchPage() {
   const [query, setQuery] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
+  const [searchedTypes, setSearchedTypes] = useState<string[]>([]);
+
+  const docTypes = trpc.document.listDocumentTypes.useQuery();
 
   const results = trpc.document.search.useQuery(
-    { query: searchTerm },
+    { query: searchTerm, documentTypes: searchedTypes.length > 0 ? searchedTypes : undefined },
     { enabled: searchTerm.length > 0 }
   );
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
     setSearchTerm(query.trim());
+    setSearchedTypes(selectedTypes);
+  }
+
+  function toggleType(type: string): void {
+    setSelectedTypes((prev) => prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]);
   }
 
   return (
@@ -82,6 +92,45 @@ export default function DocumentSearchPage() {
             {results.isFetching ? "Söker..." : "Sök"}
           </button>
         </div>
+
+        {docTypes.data && docTypes.data.length > 0 && (
+          <div className="mt-4">
+            <p className="text-xs font-medium text-gray-600 mb-2">Begränsa till dokumenttyp:</p>
+            <div className="flex flex-wrap gap-2">
+              {docTypes.data.map(({ type, count }) => {
+                const checked = selectedTypes.includes(type);
+                return (
+                  <label
+                    key={type}
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs cursor-pointer border ${checked ? "bg-blue-100 border-blue-300 text-blue-900" : "bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100"}`}
+                  >
+                    <input
+                      type="checkbox"
+                      className="sr-only"
+                      checked={checked}
+                      onChange={() => toggleType(type)}
+                    />
+                    {type} <span className="text-gray-400">({count})</span>
+                  </label>
+                );
+              })}
+              {selectedTypes.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedTypes([])}
+                  className="text-xs text-gray-500 hover:text-gray-900 underline ml-1"
+                >
+                  Rensa filter
+                </button>
+              )}
+            </div>
+            <p className="text-[11px] text-gray-400 mt-1">
+              {selectedTypes.length === 0
+                ? "Inga filter — söker i alla typer."
+                : `Filter aktivt: ${selectedTypes.length} typ(er) — klicka Sök för att tillämpa.`}
+            </p>
+          </div>
+        )}
       </form>
 
       {searchTerm && results.data && (

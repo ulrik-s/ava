@@ -63,9 +63,16 @@ export const coreProcedures = {
 
   /** Meilisearch-baserad full-text-sök inom org. */
   search: orgProcedure
-    .input(z.object({ query: z.string().min(1), limit: z.number().min(1).max(50).default(20) }))
+    .input(z.object({
+      query: z.string().min(1),
+      limit: z.number().min(1).max(50).default(20),
+      documentTypes: z.array(z.string()).optional(),
+    }))
     .query(async ({ ctx, input }) => {
-      const result = await ctx.ports.searchIndex.search(input.query, ctx.orgId, input.limit);
+      const result = await ctx.ports.searchIndex.search(
+        input.query, ctx.orgId, input.limit,
+        { documentTypes: input.documentTypes },
+      );
       return {
         hits: result.hits.map((hit) => ({
           documentId: hit.id,
@@ -78,6 +85,24 @@ export const coreProcedures = {
         })),
         totalHits: result.estimatedTotalHits,
       };
+    }),
+
+  /** Lista alla unika documentType-värden inom org + antal per typ.
+   *  Används av sök-sidan för att rendera filter-checkboxar. */
+  listDocumentTypes: orgProcedure
+    .query(async ({ ctx }) => {
+      const docs = await ctx.dataStore.documents.findMany({
+        where: { matter: { organizationId: ctx.orgId } },
+        include: { matter: { select: { organizationId: true } } },
+      }) as Array<{ documentType?: string | null }>;
+      const counts = new Map<string, number>();
+      for (const d of docs) {
+        if (!d.documentType) continue;
+        counts.set(d.documentType, (counts.get(d.documentType) ?? 0) + 1);
+      }
+      return [...counts.entries()]
+        .map(([type, count]) => ({ type, count }))
+        .sort((a, b) => a.type.localeCompare(b.type, "sv"));
     }),
 
   delete: orgProcedure

@@ -84,12 +84,19 @@ export function compileNeedle(query: string): NeedleMatcher {
  * Stödjer `*` som wildcard (matchar 0+ tecken) — `stäm*ansökan` matchar
  * "stämningsansökan". Annars vanlig substring-match.
  */
+export interface SearchOpts {
+  /** Begränsa till dokument vars documentType matchar någon i listan.
+   *  Tomt array eller undefined = alla typer. */
+  documentTypes?: string[];
+}
+
 export function searchDocuments(
   docs: DocLike[],
   matters: Map<string, MatterLike>,
   query: string,
   organizationId: string,
   limit: number,
+  opts: SearchOpts = {},
 ): SearchResponse {
   const matcher = compileNeedle(query);
   if (!matcher.raw) return { hits: [], estimatedTotalHits: 0 };
@@ -97,8 +104,13 @@ export function searchDocuments(
   const orgOf = (d: DocLike): string | undefined =>
     d.organizationId ?? matters.get(d.matterId)?.organizationId;
 
+  const typeFilter = opts.documentTypes && opts.documentTypes.length > 0
+    ? new Set(opts.documentTypes)
+    : null;
+
   const matched = docs
     .filter((d) => orgOf(d) === organizationId)
+    .filter((d) => typeFilter === null || (d.documentType !== null && d.documentType !== undefined && typeFilter.has(d.documentType)))
     // eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Arrow function has a complexity of 15. Maximum allowed is 8.)
     .map((d) => {
       // Bevara original-content för snippet-rendering (case-känsligt),
@@ -158,7 +170,7 @@ export function searchDocuments(
  */
 export function makeDemoSearchIndex(dataStore: IDataStore): ISearchIndex {
   return {
-    async search(query: string, organizationId: string, limit = 20): Promise<SearchResponse> {
+    async search(query: string, organizationId: string, limit = 20, opts = {}): Promise<SearchResponse> {
       // findMany utan org-filter — vi filtrerar i searchDocuments
       // (DocumentWhereInput har ingen organizationId-direkt, det går
       // via matter-relation som vår in-memory-implementation inte
@@ -168,7 +180,7 @@ export function makeDemoSearchIndex(dataStore: IDataStore): ISearchIndex {
         where: { organizationId },
       }) as unknown as MatterLike[];
       const matters = new Map(matterRows.map((m) => [m.id, m]));
-      return searchDocuments(docs, matters, query, organizationId, limit);
+      return searchDocuments(docs, matters, query, organizationId, limit, opts);
     },
     async upsert() { /* no-op — vi använder live data-store, inget index att uppdatera */ },
     async remove() { /* no-op */ },

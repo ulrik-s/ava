@@ -64,8 +64,13 @@ export interface IndexableDocument {
   organizationId: string;
 }
 
+export interface ISearchOpts {
+  /** Bara dokument vars documentType matchar någon i listan. */
+  documentTypes?: string[];
+}
+
 export interface ISearchIndex {
-  search(query: string, organizationId: string, limit?: number): Promise<SearchResponse>;
+  search(query: string, organizationId: string, limit?: number, opts?: ISearchOpts): Promise<SearchResponse>;
   upsert(doc: IndexableDocument): Promise<void>;
   remove(id: string): Promise<void>;
 }
