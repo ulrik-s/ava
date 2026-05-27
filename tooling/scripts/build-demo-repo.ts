@@ -1,15 +1,12 @@
 /**
- * `build-demo-repo` — bygger ./demo-repo redo att pushas till
- * `ulrik-s/ava-demo` (eller motsvarande GH-Pages-repo).
+ * `build-demo-repo` — skriver demo-datafiler ovanpå ./demo-repo (eller out/)
+ * redo att pushas till `ulrik-s/ava-demo` (GH-Pages-repo).
  *
- * KONSOLIDERAD: använder samma `buildSeed()` som docker-firma:n får, så
- * demo-mode på GitHub Pages innehåller IDENTISKT rikt dataset:
- *   • 5 användare (Anna ADMIN + 4 advokater/biträden)
- *   • 17 kontakter, 15 ärenden, 18 docs-rader
- *   • 20 PDF + 20 DOCX binärfiler (genereras via pdf-lib + html-to-docx)
- *   • 7 avbetalningsplaner + 20 payments + 18 reminders
- *   • 25 kalender-events över alla användare + 12 tasks
- *   • 5 templates + 5 jäv-historik-rader
+ * KONSOLIDERAD: använder samma `generateInto()` som docker-firma:n + den
+ * fristående generatorn → demo-mode på GitHub Pages får IDENTISKT dataset
+ * (5 användare, 17 kontakter, 17 ärenden, 40 PDF/DOCX, fakturering via
+ * flöden inkl avbetalningsplaner + påminnelser, 25 kalender-events, 12 tasks,
+ * 6 templates, 5 jäv-historik-rader).
  *
  * Användning:
  *     yarn build:demo-repo                    # default ./demo-repo
@@ -19,9 +16,9 @@
  * (legacy-id-namn så befintliga bokmärken funkar). E-mail-domän "ava.demo".
  */
 
-import { mkdirSync, rmSync, existsSync, writeFileSync, statSync, readdirSync } from "node:fs";
+import { mkdirSync, rmSync, existsSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
-import { buildSeed, seedToFiles, generateDocumentBytes } from "./seed-data";
+import { generateInto } from "../demo-generator/generate-into";
 
 const DEMO_ORG_ID = "demo-firma-ab";
 const DEMO_CURRENT_USER_ID = "u-anna";
@@ -66,45 +63,19 @@ async function main(): Promise<void> {
     }
   }
 
-  // 2. Bygg dataset med demo-args
-  const seed = buildSeed({
+  // 2. Generera demo-data via tRPC-API:t (JSON + PDF/DOCX-binärer) ovanpå out/.
+  const result = await generateInto(outDir, {
     orgId: DEMO_ORG_ID,
     currentUserId: DEMO_CURRENT_USER_ID,
     emailDomain: DEMO_EMAIL_DOMAIN,
     organizationName: DEMO_ORG_NAME,
   });
 
-  // 3. Generera dokument-binärer FÖRST så vi kan uppdatera sizeBytes
-  //    på metadata-raden innan vi serialiserar JSON:erna.
-  console.log(`[demo-repo] genererar ${seed.documents.length} dokumentfiler (PDF/DOCX)`);
-  for (const doc of seed.documents) {
-    const d = doc as { id: string; storagePath?: string; title?: string; summary?: string; fileName?: string; documentType?: string; mimeType?: string };
-    if (!d.storagePath) continue;
-    const bytes = await generateDocumentBytes(d);
-    const full = resolve(outDir, d.storagePath);
-    mkdirSync(resolve(full, ".."), { recursive: true });
-    writeFileSync(full, bytes);
-    const sz = statSync(full).size;
-    (doc as Record<string, unknown>).sizeBytes = sz;
-    (doc as Record<string, unknown>).fileSize = sz;
-  }
-
-  // 4. Skriv ut JSON-rader för alla entiteter
-  const files = seedToFiles(seed);
-  console.log(`[demo-repo] skriver ${files.length} JSON-rader`);
-  for (const f of files) {
-    const full = resolve(outDir, f.path);
-    mkdirSync(resolve(full, ".."), { recursive: true });
-    writeFileSync(full, JSON.stringify(f.data, null, 2) + "\n");
-  }
-
   console.log(`[demo-repo] klart. Innehåll i ${outDir}:`);
-  console.log(`  • ${seed.users.length} användare`);
-  console.log(`  • ${seed.contacts.length} kontakter`);
-  console.log(`  • ${seed.matters.length} ärenden`);
-  console.log(`  • ${seed.documents.length} dokument (PDF/DOCX)`);
-  console.log(`  • ${seed.paymentPlans.length} avbetalningsplaner, ${seed.payments.length} payments`);
-  console.log(`  • ${seed.calendarEvents.length} kalender-events, ${seed.tasks.length} tasks`);
+  console.log(`  • ${result.users} användare, ${result.contacts} kontakter, ${result.matters} ärenden`);
+  console.log(`  • ${result.documents} dokument (PDF/DOCX)`);
+  console.log(`  • fakturering: ${result.billing.invoices} fakturor, ${result.billing.paymentPlans} planer, ${result.billing.payments} betalningar, ${result.billing.reminders} påminnelser`);
+  console.log(`  • ${result.calendarEvents} kalender-events, ${result.tasks} tasks`);
   console.log("");
   console.log("Nästa steg (om du vill pusha till ulrik-s/ava-demo):");
   console.log("  cd " + outDir);

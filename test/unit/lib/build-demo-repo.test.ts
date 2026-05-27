@@ -1,12 +1,11 @@
 /**
- * Tester för konsoliderad demo-seed.
+ * Tester för demo-seedens `buildSeed → seedToFiles`-väg.
  *
- * `build-demo-repo.ts` kör nu `buildSeed()` (samma som docker-firma-seedet)
- * med demo-specifika opts. Vi testar pipeline:n: buildSeed → seedToFiles
- * och verifierar att resultatet:
- *   - innehåller alla viktiga entity-typer
- *   - använder den demo-org-id:n vi skickat in
- *   - skriver users med "u-anna" som ADMIN (legacy-id för gh-pages-demon)
+ * Datan SKRIVS numera via generatorn (`generateInto`), men `seedToFiles`
+ * lever kvar för `static-params.ts` som vid Next-builden enumererar
+ * entity-id:n att pre-rendera. Dessa tester vaktar den vägen: att
+ * `buildSeed(DEMO_ARGS)` + `seedToFiles` ger rätt paths/id:n, demo-org-id,
+ * "u-anna" som ADMIN (legacy-id för gh-pages) och rätt e-mail-domän.
  */
 
 import { describe, it, expect } from "vitest";

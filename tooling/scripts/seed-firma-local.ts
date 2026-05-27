@@ -7,20 +7,20 @@
  * Förutsättning: `tooling/docker/docker-compose.yml` är igång och
  * `firma.git` är nåbar på `http://localhost:8080/git/firma.git`.
  *
- * Data:n kommer från `seed-data.ts` (delas med integrationstesten).
- * Detta script är tunn dial-tone runt:
+ * Tunn dial-tone runt demo-generatorn:
  *   1. Klona repo:t in i en temp-mapp
- *   2. Skriv ut JSON-filer från `buildSeed()`
+ *   2. `generateInto()` — driver tRPC-API:t → skriver JSON + binärer
  *   3. Commit + push tillbaka till docker
  *
- * Idempotent — om diff:en är tom: ingen commit, ingen push.
+ * Datan genereras via samma `generateInto()` som GH-Pages-demon → identiskt
+ * dataset oavsett deploy-läge. Idempotent — tom diff: ingen commit/push.
  */
 
-import { mkdirSync, rmSync, existsSync, writeFileSync, statSync } from "node:fs";
+import { mkdirSync, rmSync, existsSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { resolve } from "node:path";
 import { tmpdir } from "node:os";
-import { buildSeed, seedToFiles, generateDocumentBytes } from "./seed-data";
+import { generateInto } from "../demo-generator/generate-into";
 
 const REPO_URL = process.env.SEED_REPO_URL ?? "http://localhost:8080/git/firma.git";
 const TMP = resolve(tmpdir(), `ava-seed-firma-${Date.now()}`);
@@ -29,13 +29,6 @@ function sh(cmd: string, opts: { cwd?: string } = {}): string {
   return execSync(cmd, { cwd: opts.cwd ?? TMP, stdio: ["ignore", "pipe", "pipe"] }).toString();
 }
 
-function writeJson(path: string, data: unknown): void {
-  const full = resolve(TMP, path);
-  mkdirSync(resolve(full, ".."), { recursive: true });
-  writeFileSync(full, JSON.stringify(data, null, 2) + "\n");
-}
-
-// eslint-disable-next-line complexity
 async function main(): Promise<void> {
   if (existsSync(TMP)) rmSync(TMP, { recursive: true, force: true });
   mkdirSync(TMP, { recursive: true });
@@ -54,34 +47,19 @@ async function main(): Promise<void> {
     ".ava/organizations", ".ava/users", ".ava/templates",
     "offices", "contacts", "matters/active", "matter-contacts",
     "documents", "document-folders",
-    "time-entries", "expenses", "invoices",
+    "time-entries", "expenses", "invoices", "payments",
     "calendar", "tasks", "conflict-checks",
+    "payment-plans", "payment-plan-reminders",
   ];
   for (const p of purge) {
     const full = resolve(TMP, p);
     if (existsSync(full)) rmSync(full, { recursive: true, force: true });
   }
 
-  // 3. Generera + skriv binärfiler för dokument FÖRST (så vi kan fylla i
-  //    `sizeBytes` på JSON-metadata-raden innan vi serialiserar.)
-  const seed = buildSeed();
-  console.log(`[seed] genererar ${seed.documents.length} dokumentfiler (PDF/DOCX)`);
-  for (const doc of seed.documents) {
-    const d = doc as { id: string; storagePath?: string; title?: string; summary?: string; fileName?: string; documentType?: string; mimeType?: string };
-    if (!d.storagePath) continue;
-    const bytes = await generateDocumentBytes(d);
-    const full = resolve(TMP, d.storagePath);
-    mkdirSync(resolve(full, ".."), { recursive: true });
-    writeFileSync(full, bytes);
-    // Uppdatera sizeBytes på raden så filtoolbarn visar rätt storlek
-    const sz = statSync(full).size;
-    (doc as Record<string, unknown>).sizeBytes = sz;
-    (doc as Record<string, unknown>).fileSize = sz;
-  }
-
-  const files = seedToFiles(seed);
-  console.log(`[seed] skriver ${files.length} JSON-rader`);
-  for (const f of files) writeJson(f.path, f.data);
+  // 3. Generera demo-data via tRPC-API:t (JSON + PDF/DOCX-binärer).
+  console.log("[seed] genererar demo-data via API:t…");
+  const result = await generateInto(TMP);
+  console.log("[seed] genererat:", result);
 
   // 4. Commit + push
   sh(`git config user.email "seed@firma.local"`);
