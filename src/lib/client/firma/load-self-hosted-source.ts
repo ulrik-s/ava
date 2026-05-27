@@ -17,6 +17,7 @@ import { FsaIsoGitAdapter } from "@/lib/client/fsa/fs-adapter";
 import { cloneRepo, type CloneOptions } from "@/lib/client/fsa/git-ops";
 import { resolveCorsProxy } from "@/lib/client/sync/cors-proxy";
 import { hydrateWorkingCopy } from "./hydrate-working-copy";
+import { setDocumentContent } from "@/lib/client/demo/document-content-cache";
 import type { DemoSource } from "@/lib/server/data-store/DemoDataStore";
 
 export interface CurrentUser {
@@ -73,11 +74,31 @@ export async function loadSelfHostedSource(deps: LoadSelfHostedDeps): Promise<De
   }
 
   const source = await hydrateWorkingCopy(deps.handle);
+  // Ladda extraherad dokumenttext (documents/text/<id>.txt) från OPFS in i
+  // content-cache:n så fritext-sök hittar PDF/DOCX-innehåll EFTER en
+  // sid-navigering (cache:n är in-memory + nollställs vid full page-load;
+  // preloadDocumentContents fetchar via HTTP vilket inte når OPFS).
+  await hydrateExtractedText(fs);
   if (deps.currentUser) {
     await ensureCurrentOrganization(fs, source, deps.currentUser.organizationId);
     await ensureCurrentUser(fs, source, deps.currentUser);
   }
   return source;
+}
+
+/** Läs documents/text/<id>.txt ur OPFS → content-cache (för fritext-sök). */
+async function hydrateExtractedText(fs: FsaIsoGitAdapter): Promise<void> {
+  let files: string[];
+  try { files = await fs.readdir("/documents/text"); }
+  catch { return; } // ingen extraherad text än
+  await Promise.all(
+    files.filter((f) => f.endsWith(".txt")).map(async (f) => {
+      try {
+        const text = (await fs.readFile(`/documents/text/${f}`, "utf8")) as string;
+        if (text) setDocumentContent(f.replace(/\.txt$/, ""), text);
+      } catch { /* hoppa över trasig/oläsbar fil */ }
+    }),
+  );
 }
 
 /**

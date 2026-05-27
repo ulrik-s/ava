@@ -13,7 +13,7 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { test, expect, type Page } from "@playwright/test";
-import { freshClone, cleanup, readAll, resetRepo } from "./_repo-helpers";
+import { freshClone, cleanup, readAll, resetRepo, extractedTextInRepo } from "./_repo-helpers";
 
 const ORG = "e2e-firma-ab";
 
@@ -488,12 +488,16 @@ test("dokument: ladda upp fil på matter → documents/<id>.json + content-fil i
   }, POLL).toBe(true);
 });
 
-// FIXME: PDF-text-extraktion → sök hittar inte innehållet headless (varken
-// 30s eller 60s poll). Auth-buggen som blockerade ALLA round-trip-tester är
-// fixad och 18/19 är gröna; det här testar en tyngre async-pipeline
-// (PDF.js-worker → documentText → getDocumentContent → search-reindex) som
-// behöver separat felsökning i headless/self-hosted-läge. Avgränsat så e2e
-// kan köra grönt på varje push under tiden.
+// FIXME (delvis löst): kedjan är till stora delar fixad och verifierad —
+//   ✓ PDF.js-extraktion fungerar (nginx serverar nu .mjs som JS-MIME).
+//   ✓ extraherad text skrivs till OPFS (documents/text/<id>.txt) + pushas.
+//   ✓ hydrateExtractedText laddar OPFS-texten in i content-cache:n på
+//     sök-sidan (bevisat: cache populeras vid bootstrap).
+// KVAR: sök-sidan returnerar 0 träffar ändå + visar "@okänd"/read-only —
+//   den hydratiserade self-hosted-källan/principalen verkar inte nå
+//   sök-korpus:en (document-entiteterna) i den aktiva dataStore:n efter en
+//   navigering. Separat felsökning (sök-sidans data-store-state), inte
+//   PDF-extraktionen. Avgränsat så e2e kör grönt på varje push.
 test.fixme("dokumentsök: ladda upp PDF → extract-text indexerar → sök hittar innehåll", async ({ page }) => {
   const stamp = Date.now();
   const uniqueWord = `PdfNeedle${stamp}`;
@@ -524,20 +528,21 @@ test.fixme("dokumentsök: ladda upp PDF → extract-text indexerar → sök hitt
   // Optimistisk row visas, sen riktig row när tRPC-mutationen klar
   await expect(page.getByText(fileName)).toBeVisible({ timeout: 20_000 });
 
-  // Vänta tills extract-text-jobbet har körts klart. Vi kan inte inspektera
-  // job-queue direkt så vi pollar tills sökning hittar innehållet.
+  // Vänta in extract-text-jobbet: PDF.js extraherar → documents/text/<id>.txt
+  // skrivs till OPFS → auto-sync committar+pushar. Vi pollar git-db:n tills
+  // texten finns där (= extraktionen klar OCH OPFS hunnit skriva den).
+  await expect.poll(() => extractedTextInRepo(), { timeout: 60_000, intervals: [2000, 3000] }).toContain(uniqueWord);
+
+  // Nu finns texten i OPFS → search-sidans bootstrap (loadSelfHosted →
+  // hydrateExtractedText) laddar den in i content-cache:n → fritext-sök hittar.
   await page.goto("/ava/search/");
   await expect(page.getByText("Laddar data…")).toHaveCount(0, { timeout: 30_000 });
-
   await page.locator('input[type="search"], input[placeholder*="Sök"]').first().fill(uniqueWord);
 
-  // Vänta upp till 30s på att extract-text körs klart och search-index uppdateras.
-  // Vi söker efter uniqueWord och förväntar fileName i resultatet.
+  // Sökträffens filnamn renderas som en <button> (öppnar dokumentet), inte länk.
   await expect.poll(async () => {
-    // Re-trigger search om input behöver det
-    const links = await page.getByRole("link", { name: new RegExp(fileName, "i") }).count();
-    return links;
-  }, { timeout: 60_000, intervals: [1000, 2000, 3000] }).toBeGreaterThan(0);
+    return page.getByRole("button", { name: new RegExp(fileName, "i") }).count();
+  }, { timeout: 20_000, intervals: [500, 1000, 2000] }).toBeGreaterThan(0);
 });
 
 test("dokument: ladda upp + radera → documents/<id>.json försvinner ur git-db:n", async ({ page }) => {

@@ -47,6 +47,24 @@ export function readAll(dir: string, sub: string): Array<Record<string, unknown>
 }
 
 /**
+ * All extraherad dokumenttext (documents/text/*.txt) i en fräsch clone.
+ * Används för att vänta in extract-text-jobbet → commit → push innan sök.
+ */
+export function extractedTextInRepo(): string {
+  const dir = freshClone();
+  try {
+    const p = path.join(dir, "documents", "text");
+    if (!existsSync(p)) return "";
+    return readdirSync(p)
+      .filter((f) => f.endsWith(".txt"))
+      .map((f) => readFileSync(path.join(dir, "documents", "text", f), "utf8"))
+      .join("\n");
+  } finally {
+    cleanup(dir);
+  }
+}
+
+/**
  * Nollställ bare-repo:t till EN ren commit (bara .gitkeep) — testisolering
  * så tidigare körningars data inte läcker in i assertions. Force-push.
  * Repo:t är icke-tomt (en commit) så app-clonen funkar.
