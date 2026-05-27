@@ -215,11 +215,15 @@ export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
     paymentPlanReminders: [],
   };
 
-  // matterContacts
+  // matterContacts — klient + (motpart, motpartsombud, domstol där relevant).
   for (const m of MATTERS) {
     const created = isoDate(-m.createdDaysAgo);
     out.matterContacts.push({ id: `mc-${m.id}-klient`, matterId: m.id, contactId: m.klientId, role: "KLIENT", organizationId: orgId, createdAt: created });
-    if (m.motpartId) out.matterContacts.push({ id: `mc-${m.id}-motpart`, matterId: m.id, contactId: m.motpartId, role: "MOTPART", organizationId: orgId, createdAt: created });
+    if (m.motpartId) {
+      out.matterContacts.push({ id: `mc-${m.id}-motpart`, matterId: m.id, contactId: m.motpartId, role: "MOTPART", organizationId: orgId, createdAt: created });
+      // Motpartsombud (advokatbyrå) — gör parts-vyn fylligare + jäv-träffar rikare.
+      out.matterContacts.push({ id: `mc-${m.id}-ombud`, matterId: m.id, contactId: "c-advokatbyran-nord", role: "MOTPARTSOMBUD", organizationId: orgId, createdAt: created });
+    }
     if (m.domstolId) out.matterContacts.push({ id: `mc-${m.id}-domstol`, matterId: m.id, contactId: m.domstolId, role: "DOMSTOL", organizationId: orgId, createdAt: created });
   }
 
@@ -264,23 +268,27 @@ export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
     }
   }
 
-  // time entries
+  // time entries — 4-6 per aktivt ärende (annars ser ärende-vyn tom ut).
   const tasks = ["Genomgång av handlingar", "Klientmöte", "Skrivit inlaga", "Telefon med motpart", "Förberedelse inför huvudförhandling", "Granskning av dom", "Möte med domstolen", "Korrespondens", "Förlikningsdiskussion", "Strategisk analys"];
   const activeMatters = MATTERS.filter((m) => m.status === "ACTIVE");
-  for (let i = 0; i < 22; i++) {
-    const matter = activeMatters[i % activeMatters.length];
-    const user = users[i % users.length];
-    const daysAgo = (i * 3) + 1;
-    out.timeEntries.push({
-      id: `te-${String(i + 1).padStart(3, "0")}`,
-      organizationId: orgId,
-      userId: user.id, matterId: matter.id, date: isoDate(-daysAgo, 14),
-      minutes: 30 + ((i * 17) % 5) * 15,
-      description: `${tasks[i % tasks.length]} (${matter.title.slice(0, 30)})`,
-      hourlyRate: user.hourlyRate, billable: i % 7 !== 6,
-      invoiceId: null, createdAt: isoDate(-daysAgo, 14), updatedAt: isoDate(-daysAgo, 14),
-    });
-  }
+  let teSeq = 0;
+  activeMatters.forEach((matter, mi) => {
+    const count = 4 + (mi % 3); // 4,5,6,4,5,6…
+    for (let j = 0; j < count; j++) {
+      teSeq++;
+      const user = users[(mi + j) % users.length];
+      const daysAgo = (teSeq * 2) + 1;
+      out.timeEntries.push({
+        id: `te-${String(teSeq).padStart(3, "0")}`,
+        organizationId: orgId,
+        userId: user.id, matterId: matter.id, date: isoDate(-daysAgo, 14),
+        minutes: 30 + ((teSeq * 17) % 6) * 15,
+        description: `${tasks[teSeq % tasks.length]} (${matter.title.slice(0, 30)})`,
+        hourlyRate: user.hourlyRate, billable: teSeq % 8 !== 6,
+        invoiceId: null, createdAt: isoDate(-daysAgo, 14), updatedAt: isoDate(-daysAgo, 14),
+      });
+    }
+  });
 
   // expenses
   // Moms-modellen följer Skatteverket: persontransporter + restaurang 12 %,
@@ -295,21 +303,25 @@ export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
     { amount: 3200, description: "Parkeringsavgift", vatRate: 2500 },
     { amount: 15000, description: "Expertutlåtande", vatRate: 2500 },
   ];
-  for (let i = 0; i < 15; i++) {
-    const matter = activeMatters[i % activeMatters.length];
-    const user = users[i % users.length];
-    const cat = cats[i % cats.length];
-    const daysAgo = (i * 4) + 2;
-    out.expenses.push({
-      id: `ex-${String(i + 1).padStart(3, "0")}`,
-      organizationId: orgId,
-      userId: user.id, matterId: matter.id, date: isoDate(-daysAgo, 12),
-      amount: cat.amount, description: cat.description,
-      vatRate: cat.vatRate, vatIncluded: true,
-      billable: true, invoiceId: null,
-      createdAt: isoDate(-daysAgo, 12), updatedAt: isoDate(-daysAgo, 12),
-    });
-  }
+  let exSeq = 0;
+  activeMatters.forEach((matter, mi) => {
+    const count = 2 + (mi % 2); // 2-3 per aktivt ärende
+    for (let j = 0; j < count; j++) {
+      exSeq++;
+      const user = users[(mi + j) % users.length];
+      const cat = cats[exSeq % cats.length];
+      const daysAgo = (exSeq * 3) + 2;
+      out.expenses.push({
+        id: `ex-${String(exSeq).padStart(3, "0")}`,
+        organizationId: orgId,
+        userId: user.id, matterId: matter.id, date: isoDate(-daysAgo, 12),
+        amount: cat.amount, description: cat.description,
+        vatRate: cat.vatRate, vatIncluded: true,
+        billable: true, invoiceId: null,
+        createdAt: isoDate(-daysAgo, 12), updatedAt: isoDate(-daysAgo, 12),
+      });
+    }
+  });
 
   // invoices
   const statuses: Array<"DRAFT" | "SENT" | "PAID" | "INSTALLMENT_PLAN"> = ["DRAFT", "SENT", "PAID", "INSTALLMENT_PLAN"];
