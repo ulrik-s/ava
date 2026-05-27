@@ -169,7 +169,7 @@ export function DemoBootstrap({ children }: { children: ReactNode }) {
 
     const runtime = DemoRuntime.create({
       cloneFn: createGhPagesCloneFn(),
-      persistence: new OpfsPersistence("ava-demo"),
+      persistence: new OpfsPersistence(demoCacheKey()),
     });
     (async () => {
       try {
@@ -366,6 +366,17 @@ async function loadSelfHosted(
     setStatus("error");
     setErrorMsg(err instanceof Error ? err.message : String(err));
   }
+}
+
+/**
+ * OPFS-cache-nyckel versionerad per deploy. `NEXT_PUBLIC_DEMO_VERSION` sätts
+ * av deploy-demo.yml (= commit-sha) → varje ny deploy får en ny cache-namespace
+ * → `restoreFromCache` hittar inget gammalt → loadDemo hämtar färsk data.
+ * Annars (lokal dev) en stabil nyckel så caching funkar mellan reloads.
+ */
+function demoCacheKey(): string {
+  const v = process.env.NEXT_PUBLIC_DEMO_VERSION;
+  return v ? `ava-demo-${v.slice(0, 12)}` : "ava-demo";
 }
 
 function mergeSource(target: DemoSource, fresh: DemoSource): void {

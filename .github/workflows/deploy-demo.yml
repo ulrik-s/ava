@@ -55,6 +55,10 @@ jobs:
           # NEXT_PUBLIC_DEFAULT_DEMO_REPO i search/demo/document-row).
           NEXT_PUBLIC_DEMO_REPO: ${{ github.repository }}
           NEXT_PUBLIC_DEFAULT_DEMO_REPO: ${{ github.repository }}
+          # Versionera OPFS-demo-cachen per deploy → användare ser ny data
+          # utan att manuellt rensa OPFS (annars serverar restoreFromCache
+          # en gammal snapshot tills den rensas).
+          NEXT_PUBLIC_DEMO_VERSION: ${{ github.sha }}
         run: bash tooling/scripts/build-demo.sh
 
       - name: Sanity check — manifest + binärfiler
