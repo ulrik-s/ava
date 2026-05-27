@@ -59,6 +59,37 @@ module.exports = {
       from: {},
       to: { dependencyTypes: ["npm-no-pkg", "npm-unknown"] },
     },
+    {
+      // ADR 0001: backend-pluggbarhet. Git-backendens cache/sök-internals
+      // (in-memory content-cache, in-process search-index, klient-sidig
+      // text-extraktion) FINNS INTE i Postgres-läget. Kontrakt-lagret
+      // (IDataStore/IPorts-interfaces, routrar, shared) och en framtida
+      // server/Postgres-backend MÅSTE gå via IPorts.searchIndex-porten och
+      // får ALDRIG importera dessa git-moduler direkt.
+      // (GitBackendRuntime/buildGitPorts FÅR — de ÄR git-backendens wiring.)
+      name: "no-git-cache-in-contracts",
+      severity: "error",
+      comment:
+        "Kontrakt-lagret + framtida Postgres-backend får inte importera git-" +
+        "backendens cache/sök-internals (document-content-cache, demo-search-" +
+        "index, jobs/extract-text). Gå via IPorts.searchIndex-porten (ADR 0001).",
+      from: {
+        path: [
+          "^src/lib/server/data-store/IDataStore\\.ts$",
+          "^src/lib/server/ports\\.ts$",
+          "^src/lib/server/routers/",
+          "^src/lib/shared/",
+          "^src/lib/server/data-store/postgres/",
+        ],
+      },
+      to: {
+        path: [
+          "^src/lib/client/demo/document-content-cache\\.ts$",
+          "^src/lib/server/adapters/demo-search-index\\.ts$",
+          "^src/lib/client/jobs/extract-text",
+        ],
+      },
+    },
   ],
   options: {
     doNotFollow: { path: "node_modules" },
