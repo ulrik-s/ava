@@ -15,6 +15,7 @@ const ctxState = {
   notifyChange: vi.fn(),
   providerKind: "fsa" as "fsa" | null,
   lastError: null as string | null,
+  enabled: true, // "Synka nu" är disabled när sync är inaktiv
 };
 
 vi.mock("@/lib/client/sync/sync-context", () => ({
@@ -25,6 +26,7 @@ function reset(): void {
   ctxState.state = { kind: "idle" } as SyncState;
   ctxState.providerKind = "fsa";
   ctxState.lastError = null;
+  ctxState.enabled = true;
   ctxState.syncNow.mockClear();
 }
 
@@ -33,7 +35,7 @@ describe("SyncDiagnostics", () => {
     reset();
     ctxState.providerKind = null;
     render(<SyncDiagnostics />);
-    expect(screen.getByText(/ingen lokal mapp vald/i)).toBeInTheDocument();
+    expect(screen.getByText(/ingen mapp vald/i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Synka nu/ })).not.toBeInTheDocument();
   });
 

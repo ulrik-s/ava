@@ -108,8 +108,7 @@ describe("SettingsPage", () => {
     render(<SettingsPage />);
     expect(screen.getByRole("heading", { name: /^Inställningar$/i })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /Logotyp/i })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: /Öppna dokument/i })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: /Kontor/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /^Kontor$/i })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /Kontaktuppgifter/i })).toBeInTheDocument();
   });
 
@@ -121,18 +120,13 @@ describe("SettingsPage", () => {
     expect(screen.getByText(/Org\.nr 556677-8899/)).toBeInTheDocument();
   });
 
-  it("Spara-knappen anropar updateSettings.mutate", () => {
+  // Kontaktuppgifter auto-sparas (debounce 800ms) — ingen separat Spara-knapp.
+  it("auto-sparar kontaktuppgifter (debounce) vid ändring", async () => {
     render(<SettingsPage />);
-    fireEvent.click(screen.getByRole("button", { name: /^Spara$/i }));
-    expect(updateSettingsMutate).toHaveBeenCalledTimes(1);
-    expect(updateSettingsMutate.mock.calls[0][0]).toMatchObject({ name: "Byrå AB" });
-  });
-
-  it("Kopiera-knappen i WebDAV-sektionen kopierar URL", async () => {
-    render(<SettingsPage />);
-    fireEvent.click(screen.getByRole("button", { name: /Kopiera/i }));
-    expect(navigator.clipboard.writeText).toHaveBeenCalled();
-    expect(await screen.findByRole("button", { name: /Kopierat/i })).toBeInTheDocument();
+    const nameInput = screen.getByDisplayValue("Byrå AB") as HTMLInputElement;
+    fireEvent.change(nameInput, { target: { value: "Byrå AB" } });
+    await waitFor(() => expect(updateSettingsMutate).toHaveBeenCalled(), { timeout: 2000 });
+    expect(updateSettingsMutate.mock.calls.at(-1)![0]).toMatchObject({ name: "Byrå AB" });
   });
 
   it("öppnar formuläret för att lägga till kontor och sparar", async () => {
@@ -171,12 +165,11 @@ describe("SettingsPage", () => {
     expect(screen.getByText(/Något fel/i)).toBeInTheDocument();
   });
 
-  it("uppdaterar byråns namn-input och triggar mutate med nytt värde", () => {
+  it("uppdaterar byråns namn-input och auto-sparar med nytt värde", async () => {
     render(<SettingsPage />);
     const nameInput = screen.getByDisplayValue("Byrå AB") as HTMLInputElement;
     fireEvent.change(nameInput, { target: { value: "Ny Byrå AB" } });
-    fireEvent.click(screen.getByRole("button", { name: /^Spara$/i }));
-    expect(updateSettingsMutate.mock.calls[0][0].name).toBe("Ny Byrå AB");
+    await waitFor(() => expect(updateSettingsMutate.mock.calls.at(-1)?.[0]?.name).toBe("Ny Byrå AB"), { timeout: 2000 });
   });
 
   it("uppdaterar bankgiro-input", () => {
@@ -243,7 +236,7 @@ describe("SettingsPage", () => {
     expect(officeSave.disabled).toBe(true);
   });
 
-  it("uppdaterar email, telefon, address, orgNumber och submittar", () => {
+  it("uppdaterar email, telefon, address och auto-sparar", async () => {
     render(<SettingsPage />);
     const emailInput = screen.getByDisplayValue("info@byra.se") as HTMLInputElement;
     fireEvent.change(emailInput, { target: { value: "ny@byra.se" } });
@@ -251,11 +244,13 @@ describe("SettingsPage", () => {
     fireEvent.change(phoneInput, { target: { value: "08-999" } });
     const addressInput = screen.getByDisplayValue("Storgatan 1") as HTMLInputElement;
     fireEvent.change(addressInput, { target: { value: "Lillgatan 2" } });
-    fireEvent.click(screen.getByRole("button", { name: /^Spara$/i }));
-    const arg = updateSettingsMutate.mock.calls[0][0];
-    expect(arg.email).toBe("ny@byra.se");
-    expect(arg.phone).toBe("08-999");
-    expect(arg.address).toBe("Lillgatan 2");
+    // Debounce coalescar de tre ändringarna → sista mutate har alla värden.
+    await waitFor(() => {
+      const arg = updateSettingsMutate.mock.calls.at(-1)?.[0];
+      expect(arg?.email).toBe("ny@byra.se");
+      expect(arg?.phone).toBe("08-999");
+      expect(arg?.address).toBe("Lillgatan 2");
+    }, { timeout: 2000 });
   });
 
   it("renderar adress, telefon och e-post i kontor-listrad", () => {

@@ -84,8 +84,10 @@ describe("TimePage", () => {
     };
     render(<TimePage />);
     fireEvent.click(screen.getByRole("button", { name: /\+ Registrera tid/i }));
-    const matterSelect = screen.getByRole("combobox") as HTMLSelectElement;
-    fireEvent.change(matterSelect, { target: { value: "m1" } });
+    // MatterCombobox är en sökbar <input>+<datalist> — välj via exakt etikett
+    // ("<nr> — <titel>") → komponenten anropar onChange(matterId).
+    const matterInput = screen.getByRole("combobox") as HTMLInputElement;
+    fireEvent.change(matterInput, { target: { value: "2026-0001 — Test" } });
     const desc = screen.getAllByRole("textbox")[0] as HTMLInputElement;
     fireEvent.change(desc, { target: { value: "Klientmöte" } });
     fireEvent.click(screen.getByRole("button", { name: /^Spara$/i }));

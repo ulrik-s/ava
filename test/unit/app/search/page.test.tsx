@@ -16,6 +16,8 @@ vi.mock("@/lib/client/trpc", () => ({
   trpc: {
     document: {
       search: { useQuery: () => searchQuery },
+      // dokumenttyp-facetterna (tillagda denna session)
+      listDocumentTypes: { useQuery: () => ({ data: [] }) },
     },
   },
 }));

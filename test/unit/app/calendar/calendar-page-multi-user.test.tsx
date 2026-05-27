@@ -35,6 +35,10 @@ vi.mock("@/lib/client/trpc", () => {
         current: { useQuery: () => currentUser },
         list: { useQuery: () => orgUsers },
       },
+      // kontakter kan bjudas in till events (tillagt denna session)
+      contacts: {
+        list: { useQuery: () => ({ data: { contacts: [] } }) },
+      },
       calendar: {
         list: {
           useQuery: () => {
