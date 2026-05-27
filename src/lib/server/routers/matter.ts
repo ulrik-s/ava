@@ -2,18 +2,93 @@ import { z } from "zod";
 import { router, orgProcedure, requireOrgOwned } from "../trpc";
 import type { IDataStore } from "../data-store/IDataStore";
 import { matterRoleSchema, contactTypeSchema } from "@/lib/client/labels";
+import { matterStatusSchema, paymentMethodSchema } from "@/lib/shared/schemas/enums";
 import { emit } from "../events/emit";
 
+type MatterCtx = { dataStore: IDataStore; orgId: string };
+
 /** Hjälpare: hämta matter och verifiera att den tillhör anropande org. */
-const assertMatterInOrg = (
-  ctx: { dataStore: IDataStore; orgId: string },
-  matterId: string,
-) =>
+const assertMatterInOrg = (ctx: MatterCtx, matterId: string) =>
   requireOrgOwned(
     () => ctx.dataStore.matters.findUnique({ where: { id: matterId } }),
     ctx.orgId,
     (m) => m.organizationId,
   );
+
+/**
+ * create-input. Optionella setup-fält (id, matterNumber, status,
+ * paymentMethod, taxa…) tas emot för demo-generatorn/provisionering
+ * (ADR 0003) — i normalt UI-flöde utelämnas de och defaultas.
+ */
+const matterCreateInput = z.object({
+  id: z.string().optional(),
+  matterNumber: z.string().optional(),
+  title: z.string().min(1),
+  description: z.string().optional(),
+  matterType: z.string().optional(),
+  status: matterStatusSchema.optional(),
+  paymentMethod: paymentMethodSchema.optional(),
+  paymentMethodNote: z.string().nullable().optional(),
+  paymentMethodDecidedAt: z.string().nullable().optional(),
+  isTaxeArende: z.boolean().optional(),
+  taxaLevel: z.number().int().min(1).max(4).nullable().optional(),
+  taxaHuvudforhandlingMin: z.number().int().nonnegative().nullable().optional(),
+  taxaHasFTax: z.boolean().nullable().optional(),
+  /** Historiskt skapad-datum (demo-generator/fixtures, ADR 0003) — annars now(). */
+  createdAt: z.string().optional(),
+  klientId: z.string().optional(),
+});
+type MatterCreateInput = z.infer<typeof matterCreateInput>;
+
+/** Nästa lediga ärendenummer (YYYY-NNNN) för org:en. */
+async function nextMatterNumber(ctx: MatterCtx): Promise<string> {
+  const year = new Date().getFullYear();
+  const last = await ctx.dataStore.matters.findFirst({
+    where: { organizationId: ctx.orgId, matterNumber: { startsWith: `${year}-` } },
+    orderBy: { matterNumber: "desc" },
+  });
+  const seq = last ? parseInt(last.matterNumber.split("-")[1], 10) + 1 : 1;
+  return `${year}-${seq.toString().padStart(4, "0")}`;
+}
+
+function toDateOrNull(v: string | null | undefined): Date | null | undefined {
+  if (v === undefined) return undefined;
+  return v ? new Date(v) : null;
+}
+
+function buildMatterData(orgId: string, matterNumber: string, input: MatterCreateInput): Record<string, unknown> {
+  const optional: Record<string, unknown> = {
+    id: input.id,
+    paymentMethod: input.paymentMethod,
+    paymentMethodNote: input.paymentMethodNote,
+    paymentMethodDecidedAt: toDateOrNull(input.paymentMethodDecidedAt),
+    taxaLevel: input.taxaLevel,
+    taxaHuvudforhandlingMin: input.taxaHuvudforhandlingMin,
+    taxaHasFTax: input.taxaHasFTax,
+    createdAt: input.createdAt ? new Date(input.createdAt) : undefined,
+  };
+  const data: Record<string, unknown> = {
+    title: input.title,
+    description: input.description,
+    matterType: input.matterType,
+    isTaxeArende: input.isTaxeArende ?? false,
+    matterNumber,
+    organizationId: orgId,
+    // Explicit (Prisma schema-default appliceras inte av in-memory-store:n).
+    status: input.status ?? "ACTIVE",
+  };
+  for (const [k, v] of Object.entries(optional)) if (v !== undefined) data[k] = v;
+  return data;
+}
+
+async function linkKlient(ctx: MatterCtx, matterId: string, klientId: string): Promise<void> {
+  await requireOrgOwned(
+    () => ctx.dataStore.contacts.findUnique({ where: { id: klientId } }),
+    ctx.orgId,
+    (c) => c.organizationId,
+  );
+  await ctx.dataStore.matterContacts.create({ data: { matterId, contactId: klientId, role: "KLIENT" } });
+}
 
 export const matterRouter = router({
   list: orgProcedure
@@ -81,63 +156,14 @@ export const matterRouter = router({
     }),
 
   create: orgProcedure
-    .input(
-      z.object({
-        title: z.string().min(1),
-        description: z.string().optional(),
-        matterType: z.string().optional(),
-        klientId: z.string().optional(),
-        isTaxeArende: z.boolean().optional(),
-      })
-    )
+    .input(matterCreateInput)
     .mutation(async ({ ctx, input }) => {
-      const year = new Date().getFullYear();
-      const lastMatter = await ctx.dataStore.matters.findFirst({
-        where: {
-          organizationId: ctx.orgId,
-          matterNumber: { startsWith: `${year}-` },
-        },
-        orderBy: { matterNumber: "desc" },
-      });
-
-      let seq = 1;
-      if (lastMatter) {
-        const lastSeq = parseInt(lastMatter.matterNumber.split("-")[1], 10);
-        seq = lastSeq + 1;
-      }
-
-      const matterNumber = `${year}-${seq.toString().padStart(4, "0")}`;
-
+      const matterNumber = input.matterNumber ?? (await nextMatterNumber(ctx));
       const matter = await ctx.dataStore.matters.create({
-        data: {
-          title: input.title,
-          description: input.description,
-          matterType: input.matterType,
-          isTaxeArende: input.isTaxeArende ?? false,
-          matterNumber,
-          organizationId: ctx.orgId,
-          // Explicit (Prisma schema-default appliceras inte av in-memory-store:n).
-          status: "ACTIVE",
-        },
+        data: buildMatterData(ctx.orgId, matterNumber, input),
       });
       await emit.matterCreated(ctx, matter);
-
-      // If a klient was specified, link them
-      if (input.klientId) {
-        await requireOrgOwned(
-          () => ctx.dataStore.contacts.findUnique({ where: { id: input.klientId! } }),
-          ctx.orgId,
-          (c) => c.organizationId,
-        );
-        await ctx.dataStore.matterContacts.create({
-          data: {
-            matterId: matter.id,
-            contactId: input.klientId,
-            role: "KLIENT",
-          },
-        });
-      }
-
+      if (input.klientId) await linkKlient(ctx, matter.id, input.klientId);
       return matter;
     }),
 
@@ -185,10 +211,14 @@ export const matterRouter = router({
   addContact: orgProcedure
     .input(
       z.object({
+        /** Valfritt klient-genererat id (ADR 0003) — annars genererar store:n. */
+        id: z.string().optional(),
         matterId: z.string(),
         contactId: z.string(),
         role: matterRoleSchema,
         notes: z.string().optional(),
+        /** Historiskt skapad-datum (demo-generator/fixtures) — annars now(). */
+        createdAt: z.string().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {

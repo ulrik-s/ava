@@ -20,6 +20,8 @@ const tinySeed = {
   organizations: [{ id: "org-test", name: "Testbyrå AB", orgNumber: "556111-0001", createdAt: now, updatedAt: now }],
   users: [{ id: "u-test", email: "anna@test.se", name: "Anna Advokat", role: "ADMIN", hourlyRate: 250_000, organizationId: "org-test", createdAt: now, updatedAt: now }],
   contacts: [{ id: "c-test", name: "Klient AB", contactType: "COMPANY", organizationId: "org-test", createdAt: now, updatedAt: now }],
+  matters: [{ id: "m-test", matterNumber: "2024-0007", title: "Testärende", description: "Demo", status: "CLOSED", matterType: "Tvist", paymentMethod: "PRIVAT", paymentMethodDecidedAt: now, isTaxeArende: false, organizationId: "org-test", createdAt: now, updatedAt: now }],
+  matterContacts: [{ id: "mc-test", matterId: "m-test", contactId: "c-test", role: "KLIENT", organizationId: "org-test", createdAt: now }],
 } as unknown as SeedDataset;
 
 const ADMIN = { id: "gen", email: "gen@ava.local", name: "Generator", role: "ADMIN", organizationId: "org-test" };
@@ -32,10 +34,23 @@ describe("demo-generator — populate (org/users/contacts via tRPC)", () => {
       writeBack: async (e) => { if (e.kind !== "delete") captured.push({ entity: e.entity, id: String(e.row.id) }); },
     });
     const res = await populate(target.caller, tinySeed);
-    expect(res).toEqual({ organizations: 1, users: 1, contacts: 1 });
+    expect(res).toEqual({ organizations: 1, users: 1, contacts: 1, matters: 1, matterContacts: 1 });
     expect(captured.find((c) => c.entity === "organization")?.id).toBe("org-test");
     expect(captured.find((c) => c.entity === "user")?.id).toBe("u-test");
     expect(captured.find((c) => c.entity === "contact")?.id).toBe("c-test");
+    expect(captured.find((c) => c.entity === "matter")?.id).toBe("m-test");
+    expect(captured.find((c) => c.entity === "matterContact")?.id).toBe("mc-test");
+  });
+
+  it("bevarar kurerade fixture-värden (matterNumber, status) genom API:t", async () => {
+    const target = createGitTarget({ principal: ADMIN, writeBack: async () => {} });
+    await populate(target.caller, tinySeed);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const m = await (target.caller as any).matter.getById({ id: "m-test" });
+    expect(m.matterNumber).toBe("2024-0007"); // ej auto-genererat
+    expect(m.status).toBe("CLOSED"); // ej tvingat ACTIVE
+    expect(m.paymentMethod).toBe("PRIVAT");
+    expect(new Date(m.createdAt).getTime()).toBe(now.getTime()); // historiskt datum bevarat
   });
 
   it("läsbar via samma caller (org-scopad list ser kontakten)", async () => {

@@ -20,6 +20,8 @@ export interface PopulateResult {
   organizations: number;
   users: number;
   contacts: number;
+  matters: number;
+  matterContacts: number;
 }
 
 type Row = Record<string, unknown>;
@@ -33,6 +35,12 @@ function defined(obj: Row): Row {
     if (v !== null && v !== undefined) out[k] = v;
   }
   return out;
+}
+
+/** Date|sträng → ISO-sträng (zod-input vill ha sträng för date-fält). */
+function isoOrUndef(v: unknown): string | undefined {
+  if (v === null || v === undefined) return undefined;
+  return v instanceof Date ? v.toISOString() : String(v);
 }
 
 async function createOrganizations(c: AnyCaller, rows: Row[]): Promise<void> {
@@ -59,15 +67,41 @@ async function createContacts(c: AnyCaller, rows: Row[]): Promise<void> {
   }
 }
 
+async function createMatters(c: AnyCaller, rows: Row[]): Promise<void> {
+  for (const m of rows) {
+    await c.matter.create(
+      defined({ id: m.id, matterNumber: m.matterNumber, title: m.title, description: m.description, matterType: m.matterType, status: m.status, paymentMethod: m.paymentMethod, paymentMethodNote: m.paymentMethodNote, paymentMethodDecidedAt: isoOrUndef(m.paymentMethodDecidedAt), isTaxeArende: m.isTaxeArende, taxaLevel: m.taxaLevel, taxaHuvudforhandlingMin: m.taxaHuvudforhandlingMin, taxaHasFTax: m.taxaHasFTax, createdAt: isoOrUndef(m.createdAt) }),
+    );
+  }
+}
+
+async function createMatterContacts(c: AnyCaller, rows: Row[]): Promise<void> {
+  for (const mc of rows) {
+    await c.matter.addContact(
+      defined({ id: mc.id, matterId: mc.matterId, contactId: mc.contactId, role: mc.role, notes: mc.notes, createdAt: isoOrUndef(mc.createdAt) }),
+    );
+  }
+}
+
 export async function populate(caller: GeneratorCaller, seed: SeedDataset): Promise<PopulateResult> {
   const c = caller as AnyCaller;
   const organizations = seed.organizations ?? [];
   const users = seed.users ?? [];
   const contacts = seed.contacts ?? [];
+  const matters = seed.matters ?? [];
+  const matterContacts = seed.matterContacts ?? [];
 
   await createOrganizations(c, organizations); // rot — måste finnas före org-scopat
   await createUsers(c, users); // kräver ADMIN-principal (generatorns principal)
   await createContacts(c, contacts);
+  await createMatters(c, matters); // före matter-contacts + allt matterId-refererande
+  await createMatterContacts(c, matterContacts);
 
-  return { organizations: organizations.length, users: users.length, contacts: contacts.length };
+  return {
+    organizations: organizations.length,
+    users: users.length,
+    contacts: contacts.length,
+    matters: matters.length,
+    matterContacts: matterContacts.length,
+  };
 }
