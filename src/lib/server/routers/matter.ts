@@ -21,6 +21,8 @@ export const matterRouter = router({
       z.object({
         search: z.string().optional(),
         status: z.enum(["ACTIVE", "CLOSED", "ARCHIVED"]).optional(),
+        /** Filtrera till ärenden som medarbetaren har arbetat på (har tidsposter på). */
+        employeeId: z.string().optional(),
         page: z.number().min(1).default(1),
         pageSize: z.number().min(1).max(500).default(20),
       })
@@ -29,6 +31,7 @@ export const matterRouter = router({
       const where = {
         organizationId: ctx.orgId,
         ...(input.status ? { status: input.status } : {}),
+        ...(input.employeeId ? { timeEntries: { some: { userId: input.employeeId } } } : {}),
         ...(input.search
           ? {
               OR: [

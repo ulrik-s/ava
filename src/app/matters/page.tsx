@@ -11,6 +11,7 @@ function MattersContent() {
   const searchParams = useSearchParams();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"ACTIVE" | "CLOSED" | "ARCHIVED" | "">("");
+  const [employeeId, setEmployeeId] = useState("");
   const [page, setPage] = useState(1);
   const [showForm, setShowForm] = useState(searchParams.get("new") === "1");
   const readOnly = useIsReadOnly();
@@ -22,11 +23,13 @@ function MattersContent() {
   const matters = trpc.matter.list.useQuery({
     search,
     status: statusFilter || undefined,
+    employeeId: employeeId || undefined,
     page,
     pageSize: 20,
   });
 
   const contacts = trpc.contacts.list.useQuery({ pageSize: 100 });
+  const employees = trpc.user.list.useQuery();
   const utils = trpc.useUtils();
 
   const createMatter = trpc.matter.create.useMutation({
@@ -142,6 +145,15 @@ function MattersContent() {
           <option value="ACTIVE">Aktiva</option>
           <option value="CLOSED">Stängda</option>
           <option value="ARCHIVED">Arkiverade</option>
+        </select>
+        <select value={employeeId}
+          onChange={(e) => { setEmployeeId(e.target.value); setPage(1); }}
+          title="Visa ärenden som medarbetaren har arbetat på (har tidsposter på)"
+          className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
+          <option value="">Alla medarbetare</option>
+          {employees.data?.users.map((u) => (
+            <option key={u.id} value={u.id}>{u.name}</option>
+          ))}
         </select>
       </div>
 

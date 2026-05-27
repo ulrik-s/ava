@@ -54,6 +54,26 @@ describe("DemoDataStore", () => {
     await expect(ds.matters.findFirstOrThrow({ where: { id: "missing" } })).rejects.toThrow();
   });
 
+  it("matters.findMany filtrerar på timeEntries.some.userId (medarbetar-filter)", async () => {
+    const ds = new DemoDataStore({
+      matters,
+      users,
+      timeEntries: [
+        { id: "t1", matterId: "m1", userId: "u-anna", organizationId: "org1" },
+        { id: "t2", matterId: "m2", userId: "u-bjorn", organizationId: "org1" },
+        { id: "t3", matterId: "m1", userId: "u-bjorn", organizationId: "org1" },
+      ],
+    });
+    const anna = await ds.matters.findMany({ where: { timeEntries: { some: { userId: "u-anna" } } } });
+    expect(anna.map((m: { id: string }) => m.id).sort()).toEqual(["m1"]);
+
+    const bjorn = await ds.matters.findMany({ where: { timeEntries: { some: { userId: "u-bjorn" } } } });
+    expect(bjorn.map((m: { id: string }) => m.id).sort()).toEqual(["m1", "m2"]);
+
+    const none = await ds.matters.findMany({ where: { timeEntries: { some: { userId: "u-ingen" } } } });
+    expect(none).toEqual([]);
+  });
+
   it("matters.create kastar ReadOnlyError", async () => {
     const ds = buildStore();
     await expect(ds.matters.create({ data: {} as never })).rejects.toThrow(ReadOnlyError);

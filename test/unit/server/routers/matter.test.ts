@@ -94,6 +94,29 @@ describe("matter.list", () => {
     );
   });
 
+  it("filtrerar på medarbetare (tidsposter) när employeeId angivet", async () => {
+    mockPrisma.matter.findMany.mockResolvedValue([]);
+    mockPrisma.matter.count.mockResolvedValue(0);
+
+    await makeCaller().list({ employeeId: "u-bjorn" });
+    expect(mockPrisma.matter.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          timeEntries: { some: { userId: "u-bjorn" } },
+        }),
+      }),
+    );
+  });
+
+  it("utelämnar timeEntries-filter när employeeId saknas", async () => {
+    mockPrisma.matter.findMany.mockResolvedValue([]);
+    mockPrisma.matter.count.mockResolvedValue(0);
+
+    await makeCaller().list({});
+    const where = mockPrisma.matter.findMany.mock.calls[0][0].where;
+    expect(where).not.toHaveProperty("timeEntries");
+  });
+
   it("bygger OR-sökning på title/matterNumber/contacts", async () => {
     mockPrisma.matter.findMany.mockResolvedValue([]);
     mockPrisma.matter.count.mockResolvedValue(0);
@@ -113,7 +136,7 @@ describe("matter.list", () => {
   });
 
   it("validerar pageSize-gränser via zod", async () => {
-    await expect(makeCaller().list({ pageSize: 200 })).rejects.toThrow();
+    await expect(makeCaller().list({ pageSize: 600 })).rejects.toThrow(); // max 500
     await expect(makeCaller().list({ page: 0 })).rejects.toThrow();
   });
 });
