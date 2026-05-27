@@ -142,6 +142,8 @@ export const coreProcedures = {
       analysisStatus: z.enum(["PENDING", "RUNNING", "DONE", "ERROR"]).optional(),
       analyzedAt: z.string().optional(),
       createdAt: z.string().optional(),
+      /** Koppla dokumentet till en faktura (t.ex. genererad faktura/underlag). */
+      invoiceId: z.string().nullable().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       // Verifiera matter:n tillhör org:n
@@ -167,6 +169,7 @@ export const coreProcedures = {
           summary: input.summary,
           analyzedAt: input.analyzedAt ? new Date(input.analyzedAt) : undefined,
           createdAt: input.createdAt ? new Date(input.createdAt) : undefined,
+          invoiceId: input.invoiceId ?? undefined,
         } as never,
       });
       return doc;

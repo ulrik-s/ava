@@ -20,11 +20,13 @@ import { populate, type PopulateResult } from "./populate";
 import { populateBilling, type BillingResult } from "./populate-billing";
 import { populateDocuments } from "./populate-documents";
 import { populateTemplateDocs } from "./populate-template-docs";
+import { populateInvoiceDocs } from "./populate-invoice-docs";
 import type { Principal } from "@/lib/server/auth/principal";
 
 export interface GenerateResult extends PopulateResult {
   documents: number;
   templateDocs: number;
+  invoiceDocs: number;
   billing: BillingResult;
 }
 
@@ -50,6 +52,7 @@ export async function generateInto(outDir: string, seedOpts: BuildSeedOpts = {})
   };
   const documents = await populateDocuments(target.caller, seed, sink);
   const templateDocs = await populateTemplateDocs(target.caller, seed, sink); // mall→ärende-flödet
+  const invoiceDocs = await populateInvoiceDocs(target.caller, sink); // faktura-dokument länkade till fakturan
   await target.finalize();
-  return { ...res, documents, templateDocs, billing };
+  return { ...res, documents, templateDocs, invoiceDocs, billing };
 }

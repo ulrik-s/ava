@@ -194,6 +194,7 @@ export class DemoDataStore implements IDataStore {
       }),
       timeEntries: this.rel("timeEntries", "invoiceId", "id"),
       expenses: this.rel("expenses", "invoiceId", "id"),
+      documents: this.rel("documents", "invoiceId", "id"), // genererade faktura-/underlag-dokument
       creditNote: this.rel("invoices", "creditedInvoiceId", "id", "one"),
       creditedInvoice: this.rel("invoices", "id", "creditedInvoiceId", "one"),
     }) as unknown as InvoiceDelegate;

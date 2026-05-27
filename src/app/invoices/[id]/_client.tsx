@@ -94,7 +94,9 @@ export default function InvoiceDetailClient({ id: paramId }: { id: string }) {
         {inv.notes && <p className="mt-4 text-sm text-gray-600 border-t pt-3">{inv.notes}</p>}
       </div>
 
-      <SpecificationCard timeEntries={inv.timeEntries as unknown as SpecTimeRow[]} expenses={inv.expenses as unknown as SpecExpenseRow[]} />
+      <SpecificationCard timeEntries={(inv.timeEntries ?? []) as unknown as SpecTimeRow[]} expenses={(inv.expenses ?? []) as unknown as SpecExpenseRow[]} />
+
+      <InvoiceDocumentsCard matterId={inv.matter.id} documents={(inv.documents ?? []) as unknown as InvoiceDocRow[]} />
 
       <CreditBanners inv={inv} />
 
@@ -261,6 +263,26 @@ function PaymentPlanCard({
 
 type SpecTimeRow = { id: string; date: string | Date; description: string; minutes: number; hourlyRate?: number | null };
 type SpecExpenseRow = { id: string; date: string | Date; description: string; amount: number };
+type InvoiceDocRow = { id: string; fileName: string; documentType?: string | null; createdAt?: string | Date | null };
+
+function InvoiceDocumentsCard({ matterId, documents }: { matterId: string; documents: InvoiceDocRow[] }) {
+  if (documents.length === 0) return null;
+  return (
+    <div className="bg-white rounded-lg border border-gray-200 p-6">
+      <h2 className="font-semibold mb-3">Fakturadokument</h2>
+      <ul className="text-sm divide-y divide-gray-100">
+        {documents.map((d) => (
+          <li key={d.id} className="py-2 flex items-center justify-between">
+            <Link href={`/matters/${matterId}`} className="text-blue-600 hover:underline">
+              {d.fileName}
+            </Link>
+            {d.documentType && <span className="text-[10px] rounded-full bg-gray-100 text-gray-600 px-2 py-0.5">{d.documentType}</span>}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
 function SpecificationCard({ timeEntries, expenses }: { timeEntries: SpecTimeRow[]; expenses: SpecExpenseRow[] }) {
   if (timeEntries.length === 0 && expenses.length === 0) return null;

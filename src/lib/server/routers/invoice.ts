@@ -136,6 +136,7 @@ export const invoiceRouter = router({
           },
           timeEntries: true,
           expenses: true,
+          documents: { orderBy: { createdAt: "desc" } },
           accontoDeductions: { include: { accontoInvoice: true } },
           deductedOnFinals: { include: { finalInvoice: true } },
           creditedInvoice: { select: { id: true, invoiceDate: true, amount: true, invoiceType: true } },
