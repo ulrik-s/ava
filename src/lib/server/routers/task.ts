@@ -17,6 +17,12 @@ const createInput = z.object({
   priority: taskPrioritySchema.default("MEDIUM"),
   dueAt: z.date().nullish(),
   matterId: z.string().nullish(),
+  // Valfria setup-fält (demo-generator/fixtures, ADR 0003).
+  id: z.string().optional(),
+  userId: z.string().optional(),
+  status: taskStatusSchema.optional(),
+  completedAt: z.date().nullish(),
+  createdAt: z.date().nullish(),
 });
 
 const updateInput = createInput.partial().extend({
@@ -52,9 +58,10 @@ export const taskRouter = router({
       ctx.dataStore.tasks.create({
         data: {
           ...input,
-          status: "TODO",
-          userId: ctx.user.id,
+          status: input.status ?? "TODO",
+          userId: input.userId ?? ctx.user.id,
           organizationId: ctx.user.organizationId,
+          createdAt: input.createdAt ?? undefined,
         },
       }),
     ),

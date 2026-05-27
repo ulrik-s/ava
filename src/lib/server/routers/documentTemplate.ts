@@ -39,17 +39,23 @@ export const documentTemplateRouter = router({
         description: z.string().optional(),
         category: z.string().optional(),
         content: z.string().min(1),
+        // Valfria setup-fält (demo-generator/fixtures, ADR 0003).
+        id: z.string().optional(),
+        createdById: z.string().optional(),
+        createdAt: z.string().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
       return ctx.dataStore.documentTemplates.create({
         data: {
+          id: input.id, // undefined → store genererar
           name: input.name,
           description: input.description,
           category: input.category,
           content: input.content,
           organizationId: ctx.user.organizationId,
-          createdById: ctx.user.id,
+          createdById: input.createdById ?? ctx.user.id,
+          createdAt: input.createdAt ? new Date(input.createdAt) : undefined,
         },
       });
     }),

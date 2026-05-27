@@ -31,6 +31,10 @@ const createInput = z.object({
   inviteeUserIds: z.array(z.string()).optional(),
   /** Inbjudna externa kontakter (klient, motpart, vittne osv.). */
   inviteeContactIds: z.array(z.string()).optional(),
+  // Valfria setup-fält (demo-generator/fixtures, ADR 0003).
+  id: z.string().optional(),
+  userId: z.string().optional(),
+  createdAt: z.date().nullish(),
 });
 
 // OBS: separat schema utan `.default()` — annars fyller Zod i defaults för
@@ -158,9 +162,10 @@ export const calendarRouter = router({
       return ctx.dataStore.calendarEvents.create({
         data: {
           ...input,
-          userId: ctx.user.id,
+          userId: input.userId ?? ctx.user.id,
           organizationId: ctx.user.organizationId,
           mirrorStatus: input.mirrorToOutlook ? "pending" : null,
+          createdAt: input.createdAt ?? undefined,
         },
       });
     }),

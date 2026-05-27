@@ -64,23 +64,33 @@ export const timeEntryRouter = router({
         minutes: z.number().min(1),
         description: z.string().min(1),
         billable: z.boolean().default(true),
+        // Valfria setup-fält (demo-generator/fixtures, ADR 0003).
+        id: z.string().optional(),
+        userId: z.string().optional(),
+        hourlyRate: z.number().optional(),
+        invoiceId: z.string().nullable().optional(),
+        createdAt: z.string().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
+      const userId = input.userId ?? ctx.user.id;
       const user = await ctx.dataStore.users.findUniqueOrThrow({
-        where: { id: ctx.user.id },
+        where: { id: userId },
         select: { hourlyRate: true },
       });
 
       const entry = await ctx.dataStore.timeEntries.create({
         data: {
-          userId: ctx.user.id,
+          id: input.id, // undefined → store genererar
+          userId,
           matterId: input.matterId,
           date: new Date(input.date),
           minutes: input.minutes,
           description: input.description,
-          hourlyRate: user.hourlyRate ?? 0,
+          hourlyRate: input.hourlyRate ?? user.hourlyRate ?? 0,
           billable: input.billable,
+          invoiceId: input.invoiceId ?? null,
+          createdAt: input.createdAt ? new Date(input.createdAt) : undefined,
         },
       });
       await emit.timeEntryAdded(ctx, { id: entry.id, matterId: entry.matterId, minutes: entry.minutes });

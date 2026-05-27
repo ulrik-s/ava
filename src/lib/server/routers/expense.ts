@@ -55,12 +55,18 @@ export const expenseRouter = router({
         vatRate: z.number().int().nonnegative().max(10000).default(2500),
         /** True om `amount` är inkl moms (kvitto-fall). Default true. */
         vatIncluded: z.boolean().default(true),
+        // Valfria setup-fält (demo-generator/fixtures, ADR 0003).
+        id: z.string().optional(),
+        userId: z.string().optional(),
+        invoiceId: z.string().nullable().optional(),
+        createdAt: z.string().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
       return ctx.dataStore.expenses.create({
         data: {
-          userId: ctx.user.id,
+          id: input.id, // undefined → store genererar
+          userId: input.userId ?? ctx.user.id,
           matterId: input.matterId,
           date: new Date(input.date),
           amount: input.amount,
@@ -68,6 +74,8 @@ export const expenseRouter = router({
           billable: input.billable,
           vatRate: input.vatRate,
           vatIncluded: input.vatIncluded,
+          invoiceId: input.invoiceId ?? null,
+          createdAt: input.createdAt ? new Date(input.createdAt) : undefined,
         },
       });
     }),
