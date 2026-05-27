@@ -15,7 +15,8 @@ export const matterContactSchema = z.object({
     "DOMSTOL", "FORSAKRINGSBOLAG", "VITTNE", "OMBUD", "OVRIG",
   ]),
   notes: z.string().nullable().optional(),
-  organizationId: z.string(),
+  // Denormaliserat; org-scoping via matter-relationen → valfritt.
+  organizationId: z.string().optional(),
   createdAt: z.coerce.date().optional(),
 });
 

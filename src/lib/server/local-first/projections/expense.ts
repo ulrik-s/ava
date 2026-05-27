@@ -9,7 +9,9 @@ export const expenseSchema = z.object({
   amount: z.number(),
   description: z.string(),
   billable: z.boolean().default(true),
-  organizationId: z.string(),
+  // Denormaliserat; org-scoping sker via matter-relationen → valfritt så
+  // API-skapade utlägg hydreras (inte droppas av strikt projektion).
+  organizationId: z.string().optional(),
 });
 
 export type ExpenseProjectionData = z.infer<typeof expenseSchema>;

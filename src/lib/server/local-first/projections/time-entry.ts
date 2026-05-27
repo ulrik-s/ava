@@ -10,7 +10,9 @@ export const timeEntrySchema = z.object({
   description: z.string(),
   billable: z.boolean().default(true),
   hourlyRate: z.number().optional(),
-  organizationId: z.string(),
+  // Denormaliserat (seed hade det); mutationerna org-scopar via matter-
+  // relationen → valfritt här så API-skapade poster hydreras (inte droppas).
+  organizationId: z.string().optional(),
 });
 
 export type TimeEntryProjectionData = z.infer<typeof timeEntrySchema>;
