@@ -24,18 +24,13 @@ export default defineConfig({
       provider: "v8",
       reporter: ["text", "html", "json-summary", "lcov"],
       reportsDirectory: "./reports/coverage",
+      // OBS: glob:arna måste matcha den nuvarande `src/lib/**`-layouten.
+      // (Tidigare pekade de på `src/server/**`/`src/client/lib/**` som inte
+      // längre finns efter omstruktureringen → coverage mätte 0 filer.)
       include: [
-        "src/client/lib/**",
-        "src/server/routers/**",
-        "src/server/services/**",
-        "src/server/events/**",
-        "src/server/rules/**",
-        "src/server/data-store/**",
-        "src/server/local-first/**",
-        "src/client/components/**",
+        "src/lib/**",
+        "src/components/**",
         "src/app/**/page.tsx",
-        // webdav-server.ts exkluderad — testas via integration (test/scripts/),
-        // unit-coverage skulle kräva omfattande PrismaClient + HTTP-mockning.
       ],
       exclude: [
         "**/*.test.ts",

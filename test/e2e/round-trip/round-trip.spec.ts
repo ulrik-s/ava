@@ -376,8 +376,8 @@ test("inställningar: byråns kontaktuppgifter → .ava/organizations i git-db:n
   await page.getByLabel(/^Byråns namn$/).fill(name);
   await page.getByLabel(/^Organisationsnummer$/).fill(orgNumber);
   await page.getByLabel(/^Telefon$/).first().fill(phone);
-  // Scope:a Spara-knappen till kontaktuppgifter-sektionen ("Spara & ladda om"
-  // i DatasourceSection och office-formens "Spara" (när öppen) är andra knappar).
+  // Scope:a Spara-knappen till kontaktuppgifter-sektionen (DatasourceSection
+  // har också en "Spara", och office-formen en "Spara" när öppen).
   await page.locator("h2", { hasText: "Kontaktuppgifter" })
     .locator("xpath=ancestor::div[1]")
     .getByRole("button", { name: /^Spara$/ })

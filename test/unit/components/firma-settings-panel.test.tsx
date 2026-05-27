@@ -72,7 +72,7 @@ describe("FirmaSettingsPanel — auth-relaterad UI", () => {
     const onSaved = vi.fn();
     render(<FirmaSettingsPanel initial={baseConfig} onSaved={onSaved} onCancel={() => {}} />);
     fireEvent.click(screen.getByRole("checkbox"));
-    fireEvent.click(screen.getByText("Spara & ladda om"));
+    fireEvent.click(screen.getByText("Spara"));
     expect(loadAuthSettings()).toEqual({ allowAnonymousRead: false });
     expect(onSaved).toHaveBeenCalled();
   });
@@ -314,7 +314,7 @@ describe("FooterButtons", () => {
   it("visar Avbryt + Spara i modal-mode", () => {
     setup();
     expect(screen.getByText("Avbryt")).toBeInTheDocument();
-    expect(screen.getByText("Spara & ladda om")).toBeInTheDocument();
+    expect(screen.getByText("Spara")).toBeInTheDocument();
   });
 
   it("döljer Avbryt i inline-mode", () => {
@@ -324,7 +324,7 @@ describe("FooterButtons", () => {
 
   it("disablar Spara när canSave=false", () => {
     setup({ canSave: false });
-    expect((screen.getByText("Spara & ladda om") as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByText("Spara") as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("anropar alla callbacks", () => {
@@ -332,7 +332,7 @@ describe("FooterButtons", () => {
     fireEvent.click(screen.getByText("Återställ till demo"));
     fireEvent.click(screen.getByText(/Logga ut/));
     fireEvent.click(screen.getByText("Avbryt"));
-    fireEvent.click(screen.getByText("Spara & ladda om"));
+    fireEvent.click(screen.getByText("Spara"));
     expect(p.onUseDemo).toHaveBeenCalled();
     expect(p.onLogOut).toHaveBeenCalled();
     expect(p.onCancel).toHaveBeenCalled();

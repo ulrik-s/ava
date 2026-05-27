@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import MattersPage from "@/app/matters/page";
 
 const mattersQuery: {
@@ -14,6 +14,7 @@ const mattersQuery: {
   isLoading: false,
 };
 const contactsQuery = { data: { contacts: [] } };
+const employeesQuery = { data: { users: [] } };
 const utilsMock = { matter: { list: { invalidate: vi.fn() } } };
 const createMatterMutate = vi.fn();
 const searchParamsGet = vi.fn((_: string): string | null => null);
@@ -33,6 +34,9 @@ vi.mock("@/lib/client/trpc", () => ({
     },
     contacts: {
       list: { useQuery: () => contactsQuery },
+    },
+    user: {
+      list: { useQuery: () => employeesQuery },
     },
   },
 }));
@@ -103,8 +107,11 @@ describe("MattersPage", () => {
 
   it("ändrar status-filter", () => {
     render(<MattersPage />);
-    const filters = screen.getAllByRole("combobox");
-    const statusFilter = filters[filters.length - 1] as HTMLSelectElement;
+    // Det finns två filter-comboboxar (status + medarbetare) — välj status
+    // robust via dess "Alla statusar"-option (inte position).
+    const statusFilter = screen.getAllByRole("combobox").find(
+      (el) => within(el).queryByRole("option", { name: "Alla statusar" }) !== null,
+    ) as HTMLSelectElement;
     fireEvent.change(statusFilter, { target: { value: "CLOSED" } });
     expect(statusFilter.value).toBe("CLOSED");
   });
