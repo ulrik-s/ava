@@ -16,7 +16,8 @@ import { DemoRuntime } from "@/lib/server/local-first/demo-runtime";
 import { createGhPagesCloneFn } from "@/lib/server/local-first/gh-pages-loader";
 import { OpfsPersistence } from "@/lib/server/local-first/persistence";
 import { DemoDataStore, type DemoSource } from "@/lib/server/data-store/DemoDataStore";
-import { createDemoTrpcLink } from "@/lib/client/demo/demo-trpc-link";
+import { GitBackendRuntime } from "@/lib/client/backend/git-backend-runtime";
+import { GitAuthProvider } from "@/lib/server/auth/git-auth-provider";
 import { DemoModeProvider } from "@/lib/client/demo/demo-mode-context";
 import { demoSourceFromRuntime } from "@/lib/client/demo/demo-source-from-runtime";
 import { trpc } from "@/lib/client/trpc";
@@ -108,16 +109,18 @@ export function DemoBootstrap({ children }: { children: ReactNode }) {
     },
   }));
   const [trpcClient] = useState(() => trpc.createClient({
-    links: [createDemoTrpcLink({
-      dataStore,
-      user: {
-        id: "current-user",
-        email: firmaConfig.authorEmail,
-        name: firmaConfig.authorName,
-        role: "ADMIN",
-        organizationId: firmaConfig.organizationId,
-      },
-    })],
+    links: [
+      new GitBackendRuntime({
+        dataStore,
+        authProvider: new GitAuthProvider({
+          id: "current-user",
+          email: firmaConfig.authorEmail,
+          name: firmaConfig.authorName,
+          role: "ADMIN",
+          organizationId: firmaConfig.organizationId,
+        }),
+      }).createLink(),
+    ],
     transformer: superjson,
   } as never));
 

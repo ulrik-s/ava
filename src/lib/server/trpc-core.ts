@@ -19,20 +19,19 @@ import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import type { IDataStore } from "./data-store/IDataStore";
 import type { IPorts } from "./ports";
+import type { Principal } from "./auth/principal";
 
 export type Context = {
-  /** Read/write-data via abstraktion. Demo-läget wirar DemoDataStore. */
+  /** Read/write-data via abstraktion. Git-backenden wirar DemoDataStore. */
   dataStore: IDataStore;
-  /** Server-side ports (email, search, etc). Demo wirar no-ops. */
+  /** Server-side ports (email, search, etc). Git-backenden wirar no-ops. */
   ports: IPorts;
-  /** Inloggad användare. `null` för publika rutter eller demo. */
-  user: {
-    id: string;
-    email: string;
-    name: string;
-    role: string;
-    organizationId: string;
-  } | null;
+  /**
+   * Inloggad principal (fastställs av en `AuthProvider`). `null` för
+   * publika rutter eller anonym åtkomst. Single source of truth för formen:
+   * `Principal` i `auth/principal.ts`.
+   */
+  user: Principal | null;
 };
 
 const t = initTRPC.context<Context>().create({

@@ -15,8 +15,7 @@ import { buildSeed } from "../../tooling/scripts/seed-data";
 import { DemoDataStore, type DemoSource } from "@/lib/server/data-store/DemoDataStore";
 import { prebakeJoins } from "@/lib/client/demo/prebake-joins";
 import { appRouter } from "@/lib/server/routers/_app";
-import { noopPorts } from "@/lib/server/adapters/noop-ports";
-import { makeDemoSearchIndex } from "@/lib/server/adapters/demo-search-index";
+import { buildGitPorts } from "@/lib/server/adapters/git-ports";
 
 const ORG_ID = "firma-ab";
 const ADMIN_USER = { id: "current-user", email: "user@firma.local", name: "Anna Advokat", role: "ADMIN" as const, organizationId: ORG_ID };
@@ -48,9 +47,9 @@ function makeCaller(): ReturnType<typeof appRouter.createCaller> {
   // conflict.check som persisterar historik) kraschar. Här no-op:ar vi den
   // för att mimika produktions-uppsättningen.
   const dataStore = new DemoDataStore(source, async () => { /* no-op write-back */ });
-  // Sammma ports som demo-trpc-link skickar in i prod — annars kraschar
-  // document.search etc. på `ctx.ports.searchIndex` = undefined.
-  const ports = { ...noopPorts, searchIndex: makeDemoSearchIndex(dataStore) };
+  // Samma ports som Git-backenden wirar i prod (buildGitPorts) — så smoke-
+  // testet speglar produktions-uppsättningen exakt.
+  const ports = buildGitPorts(dataStore);
   return appRouter.createCaller({
     user: ADMIN_USER,
     dataStore,

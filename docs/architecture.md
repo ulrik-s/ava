@@ -6,6 +6,14 @@
 > Ingen databas, ingen NextAuth, ingen Prisma. Allt persisteras som JSON +
 > binärfiler i ett git-repo.
 
+> **Arkitekturbeslut (ADR):** Längre fram finns en valbar Postgres-backend.
+> Gränsen `IDataStore` + tRPC är designad för att vara backend-pluggbar — se
+> [`docs/adr/`](./adr/). Aktuella beslut:
+> - [ADR 0001](./adr/0001-pluggbar-backend-bakom-idatastore.md) — pluggbar
+>   backend: Git (local-first, offline) ⟷ Postgres (server, online).
+> - [ADR 0002](./adr/0002-git-konflikthantering-backend-a.md) — git-konflikt­
+>   hantering i Git-backenden: last-write-wins + diskret överskrivnings-notis.
+
 ## Tre lager
 
 ```
@@ -27,7 +35,7 @@
 
 ### Frontend (oavsett deploy-mode)
 - **Next.js 16** App Router, `output: "export"` för statisk export
-- **tRPC 11** in-process (anrop går genom `demo-trpc-link` direkt till routrar — INGEN HTTP-server)
+- **tRPC 11** in-process (anrop går genom `GitBackendRuntime` → `inProcessLink` direkt till routrar — INGEN HTTP-server). Backend väljs bakom `BackendRuntime`-seamen (Git ⟷ framtida Postgres), se [ADR 0001](./adr/0001-pluggbar-backend-bakom-idatastore.md)
 - **DemoDataStore**: in-memory data-lager. Prisma-API:t (`findMany`, `create`, ...) emuleras mot vanliga JS-arrays. Write-back-callback skriver tillbaka JSON till git working copy.
 - **isomorphic-git**: browser-side git clone/pull/push (pure JS)
 - **OPFS (Origin Private File System)**: lokal working-copy som inte kräver fil-väljardialog
