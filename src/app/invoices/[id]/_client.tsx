@@ -94,6 +94,8 @@ export default function InvoiceDetailClient({ id: paramId }: { id: string }) {
         {inv.notes && <p className="mt-4 text-sm text-gray-600 border-t pt-3">{inv.notes}</p>}
       </div>
 
+      <SpecificationCard timeEntries={inv.timeEntries as unknown as SpecTimeRow[]} expenses={inv.expenses as unknown as SpecExpenseRow[]} />
+
       <CreditBanners inv={inv} />
 
       {inv.paymentPlan && (
@@ -253,6 +255,68 @@ function PaymentPlanCard({
           </ul>
         </div>
       )}
+    </div>
+  );
+}
+
+type SpecTimeRow = { id: string; date: string | Date; description: string; minutes: number; hourlyRate?: number | null };
+type SpecExpenseRow = { id: string; date: string | Date; description: string; amount: number };
+
+function SpecificationCard({ timeEntries, expenses }: { timeEntries: SpecTimeRow[]; expenses: SpecExpenseRow[] }) {
+  if (timeEntries.length === 0 && expenses.length === 0) return null;
+  const lineFor = (t: SpecTimeRow) => Math.round((t.minutes / 60) * (t.hourlyRate ?? 0));
+  const timeTotal = timeEntries.reduce((s, t) => s + lineFor(t), 0);
+  const expenseTotal = expenses.reduce((s, e) => s + e.amount, 0);
+  return (
+    <div className="bg-white rounded-lg border border-gray-200 p-6">
+      <h2 className="font-semibold mb-3">Underlag (specifikation)</h2>
+      {timeEntries.length > 0 && (
+        <div className="mb-4">
+          <p className="text-xs font-medium text-gray-500 mb-1">Arbetad tid</p>
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs text-gray-500">
+                <th className="py-1 font-normal">Datum</th>
+                <th className="py-1 font-normal">Beskrivning</th>
+                <th className="py-1 font-normal text-right">Tid</th>
+                <th className="py-1 font-normal text-right">Timpris</th>
+                <th className="py-1 font-normal text-right">Belopp</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {timeEntries.map((t) => (
+                <tr key={t.id}>
+                  <td className="py-1.5 whitespace-nowrap">{new Date(t.date).toLocaleDateString("sv-SE")}</td>
+                  <td className="py-1.5">{t.description}</td>
+                  <td className="py-1.5 text-right whitespace-nowrap">{(t.minutes / 60).toFixed(1)} h</td>
+                  <td className="py-1.5 text-right font-mono">{formatCurrency(t.hourlyRate ?? 0)}</td>
+                  <td className="py-1.5 text-right font-mono">{formatCurrency(lineFor(t))}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {expenses.length > 0 && (
+        <div className="mb-4">
+          <p className="text-xs font-medium text-gray-500 mb-1">Utlägg</p>
+          <table className="min-w-full text-sm">
+            <tbody className="divide-y divide-gray-100">
+              {expenses.map((e) => (
+                <tr key={e.id}>
+                  <td className="py-1.5 whitespace-nowrap">{new Date(e.date).toLocaleDateString("sv-SE")}</td>
+                  <td className="py-1.5">{e.description}</td>
+                  <td className="py-1.5 text-right font-mono">{formatCurrency(e.amount)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <div className="border-t pt-2 flex justify-between text-sm font-semibold">
+        <span>Summa underlag</span>
+        <span className="font-mono">{formatCurrency(timeTotal + expenseTotal)}</span>
+      </div>
     </div>
   );
 }
