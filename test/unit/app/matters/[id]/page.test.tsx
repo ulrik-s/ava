@@ -21,7 +21,7 @@ const expenseQuery = {
   data: { expenses: [], totalAmount: 0 } as Record<string, unknown>,
 };
 const contactsQuery = { data: { contacts: [] } };
-const templatesQuery = { data: undefined as undefined | Array<{ id: string; name: string; category: string | null }>, isLoading: false };
+const templatesQuery = { data: undefined as undefined | Array<{ id: string; name: string; category: string | null; content?: string }>, isLoading: false };
 
 const utilsMock = {
   matter: { getById: { invalidate: vi.fn() } },
@@ -52,10 +52,13 @@ vi.mock("@/lib/client/trpc", () => ({
     timeEntry: {
       list: { useQuery: () => timeQuery },
       create: { useMutation: () => stubs.createTimeEntry },
+      update: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      delete: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
     expense: {
       list: { useQuery: () => expenseQuery },
       create: { useMutation: () => stubs.createExpense },
+      update: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       delete: { useMutation: () => stubs.deleteExpense },
     },
     contacts: {
@@ -64,11 +67,37 @@ vi.mock("@/lib/client/trpc", () => ({
     documentTemplate: {
       list: { useQuery: () => templatesQuery },
     },
+    document: {
+      register: { useMutation: () => ({ mutateAsync: vi.fn(), mutate: vi.fn(), isPending: false }) },
+    },
+    organization: {
+      getSettings: { useQuery: () => ({ data: undefined }) },
+    },
+    kostnadsrakning: {
+      record: { useMutation: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }) },
+    },
+    calendar: {
+      listForMatter: { useQuery: () => ({ data: [] }) },
+      listForUsers: { useQuery: () => ({ data: [] }) },
+      list: { useQuery: () => ({ data: [] }) },
+      create: { useMutation: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }) },
+      update: { useMutation: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }) },
+      delete: { useMutation: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }) },
+    },
     user: {
       current: { useQuery: () => ({ data: { id: "u1", name: "Anna", email: "anna@firma.local" } }) },
+      list: { useQuery: () => ({ data: { users: [] } }) },
     },
   },
 }));
+
+// Navigation: kalender-sektionen (tillagd denna session) använder
+// useRouter/Link → måste mockas annars "app router not mounted".
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
+  usePathname: () => "/matters/m1",
+}));
+vi.mock("@/lib/client/demo/use-route-id", () => ({ useRouteId: () => "m1" }));
 
 // Tunga barnkomponenter — mocka som platshållare
 vi.mock("@/components/documents/document-browser", () => ({
@@ -353,21 +382,24 @@ describe("MatterDetailPage", () => {
       ],
       totalAmount: 15000,
     };
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true); // delete bakom confirm nu
     renderPage();
     await waitFor(() => expect(screen.getByText("Domstolsavgift")).toBeInTheDocument());
     const removes = screen.getAllByRole("button", { name: /^Ta bort$/i });
     // sista Ta bort-knappen är på utläggsraden
     fireEvent.click(removes[removes.length - 1]);
     expect(stubs.deleteExpense.mutate).toHaveBeenCalledWith({ id: "e1" });
+    confirmSpy.mockRestore();
   });
 
-  it("byter format till docx i generera-modal", async () => {
+  it("byter format till HTML-fil i generera-modal", async () => {
     renderPage();
     await waitFor(() => screen.getByText("2026-0001"));
     fireEvent.click(screen.getByRole("button", { name: /Generera dokument/i }));
-    const docxRadio = screen.getByRole("radio", { name: /Word/i }) as HTMLInputElement;
-    fireEvent.click(docxRadio);
-    expect(docxRadio.checked).toBe(true);
+    // Format-alternativen är nu "PDF (via utskrift)" / "HTML-fil" (värde docx).
+    const htmlRadio = screen.getByRole("radio", { name: /HTML/i }) as HTMLInputElement;
+    fireEvent.click(htmlRadio);
+    expect(htmlRadio.checked).toBe(true);
   });
 
   it("kryssar i mottagare i generera-modal", async () => {
@@ -431,45 +463,30 @@ describe("MatterDetailPage", () => {
     expect(arg.matterId).toBe("m1");
   });
 
-  it("genererar PDF-dokument (öppnar window) vid lyckad fetch", async () => {
-    templatesQuery.data = [{ id: "tpl1", name: "Stämning", category: null }];
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ documents: [{ documentId: "d1", fileName: "x.pdf", recipientContactId: null }] }),
-    });
+  it("genererar dokument client-side (öppnar blob i ny flik)", async () => {
+    // Ny flöde: renderHandlebars i browsern → window.open(blob), ingen /api-fetch.
+    templatesQuery.data = [{ id: "tpl1", name: "Stämning", category: null, content: "<p>{{matter.matterNumber}}</p>" }];
     const openMock = vi.fn();
-    vi.stubGlobal("fetch", fetchMock);
-    vi.stubGlobal("open", openMock);
     Object.defineProperty(window, "open", { value: openMock, writable: true, configurable: true });
+    Object.defineProperty(URL, "createObjectURL", { value: vi.fn(() => "blob:fake"), writable: true, configurable: true });
+    Object.defineProperty(URL, "revokeObjectURL", { value: vi.fn(), writable: true, configurable: true });
     renderPage();
     await waitFor(() => screen.getByText("2026-0001"));
     fireEvent.click(screen.getByRole("button", { name: /Generera dokument/i }));
     const select = screen.getByRole("combobox") as HTMLSelectElement;
     fireEvent.change(select, { target: { value: "tpl1" } });
     fireEvent.click(screen.getByRole("button", { name: /^Generera$/i }));
-    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    await waitFor(() => expect(openMock).toHaveBeenCalledWith(
-      "/api/documents/d1/download",
-      "_blank",
-      "noopener,noreferrer",
-    ));
-    vi.unstubAllGlobals();
+    await waitFor(() => expect(openMock).toHaveBeenCalledWith("blob:fake", "_blank", "noopener,noreferrer"));
   });
 
-  it("visar fel när dokument-generering returnerar !ok", async () => {
-    templatesQuery.data = [{ id: "tpl1", name: "Stämning", category: null }];
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: false,
-      json: () => Promise.resolve({ error: "Mall saknar fält" }),
-    });
-    vi.stubGlobal("fetch", fetchMock);
+  it("visar fel när mallen saknar innehåll", async () => {
+    templatesQuery.data = [{ id: "tpl1", name: "Stämning", category: null }]; // ingen content
     renderPage();
     await waitFor(() => screen.getByText("2026-0001"));
     fireEvent.click(screen.getByRole("button", { name: /Generera dokument/i }));
     const select = screen.getByRole("combobox") as HTMLSelectElement;
     fireEvent.change(select, { target: { value: "tpl1" } });
     fireEvent.click(screen.getByRole("button", { name: /^Generera$/i }));
-    await waitFor(() => expect(screen.getByText(/Mall saknar fält/)).toBeInTheDocument());
-    vi.unstubAllGlobals();
+    await waitFor(() => expect(screen.getByText(/Mallen saknar innehåll/)).toBeInTheDocument());
   });
 });

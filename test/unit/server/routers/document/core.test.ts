@@ -113,7 +113,7 @@ describe("document.search", () => {
     } as never);
 
     const res = await makeCaller("org-a").search({ query: "test" });
-    expect(mockPorts.searchIndex.search).toHaveBeenCalledWith("test", "org-a", 20);
+    expect(mockPorts.searchIndex.search).toHaveBeenCalledWith("test", "org-a", 20, { documentTypes: undefined });
     expect(res.totalHits).toBe(1);
     expect(res.hits[0].documentId).toBe("d1");
     expect(res.hits[0].highlight).toContain("highlighted");

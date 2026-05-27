@@ -17,6 +17,9 @@ vi.mock("@/lib/client/trpc", () => ({
     user: {
       current: { useQuery: () => currentQuery },
     },
+    // ExternalEditRegistrar (mountad av AppShell) anropar trpc.useUtils().
+    // Resultatet derefereras bara i en FSA-event-callback (ej vid render).
+    useUtils: () => ({}),
   },
 }));
 

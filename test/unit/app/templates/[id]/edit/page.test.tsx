@@ -3,9 +3,12 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { Suspense } from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import EditTemplatePage from "@/app/templates/[id]/edit/page";
+import EditTemplateClient from "@/app/templates/[id]/edit/_edit-client";
+
+// Testar klient-komponenten direkt — den async server-wrappern (page.tsx)
+// kan inte renderas i jsdom ("async Client Component").
+vi.mock("@/lib/client/demo/use-route-id", () => ({ useRouteId: () => "t1" }));
 
 const routerPush = vi.fn();
 const utilsMock = {
@@ -75,24 +78,7 @@ vi.mock("@/components/settings/template-editor", () => ({
   ),
 }));
 
-function makeParams(value: { id: string }) {
-  const p = Promise.resolve(value) as Promise<{ id: string }> & {
-    status?: string;
-    value?: { id: string };
-  };
-  p.status = "fulfilled";
-  p.value = value;
-  return p;
-}
-
-const params = makeParams({ id: "t1" });
-
-const renderPage = () =>
-  render(
-    <Suspense fallback={<div>laddar</div>}>
-      <EditTemplatePage params={params} />
-    </Suspense>,
-  );
+const renderPage = () => render(<EditTemplateClient id="t1" />);
 
 beforeEach(() => {
   vi.clearAllMocks();

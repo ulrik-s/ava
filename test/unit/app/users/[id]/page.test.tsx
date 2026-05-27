@@ -4,8 +4,12 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { Suspense } from "react";
-import EditUserPage from "@/app/users/[id]/page";
+import EditUserClient from "@/app/users/[id]/_edit-client";
+
+// Vi testar klient-komponenten direkt. Den async server-wrappern (page.tsx)
+// går inte att rendera i jsdom ("async Client Component"-fel) och gör bara
+// `await params → <EditUserClient id>`.
+vi.mock("@/lib/client/demo/use-route-id", () => ({ useRouteId: () => "u1" }));
 
 const routerPush = vi.fn();
 const utilsMock = {
@@ -47,21 +51,8 @@ vi.mock("@/lib/client/trpc", () => ({
   },
 }));
 
-// React's `use()` can read a thenable synchronously if it has a `status: "fulfilled"`
-// field with a `value`. This dodges Suspense in unit tests.
-function fulfilled<T>(value: T): Promise<T> {
-  const p = Promise.resolve(value) as Promise<T> & { status?: string; value?: T };
-  p.status = "fulfilled";
-  p.value = value;
-  return p;
-}
-
 function renderPage() {
-  return render(
-    <Suspense fallback={<div>loading-suspense</div>}>
-      <EditUserPage params={fulfilled({ id: "u1" })} />
-    </Suspense>
-  );
+  return render(<EditUserClient id="u1" />);
 }
 
 beforeEach(() => {
