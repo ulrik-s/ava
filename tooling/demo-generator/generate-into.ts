@@ -19,10 +19,12 @@ import { createGitTarget } from "./backend-target";
 import { populate, type PopulateResult } from "./populate";
 import { populateBilling, type BillingResult } from "./populate-billing";
 import { populateDocuments } from "./populate-documents";
+import { populateTemplateDocs } from "./populate-template-docs";
 import type { Principal } from "@/lib/server/auth/principal";
 
 export interface GenerateResult extends PopulateResult {
   documents: number;
+  templateDocs: number;
   billing: BillingResult;
 }
 
@@ -40,12 +42,14 @@ export async function generateInto(outDir: string, seedOpts: BuildSeedOpts = {})
 
   const res = await populate(target.caller, seed);
   const billing = await populateBilling(target.caller, seed); // efter time/expenses
-  const documents = await populateDocuments(target.caller, seed, (storagePath, bytes) => {
+  const sink = (storagePath: string, bytes: Uint8Array): number => {
     const full = join(outDir, storagePath);
     mkdirSync(dirname(full), { recursive: true });
     writeFileSync(full, bytes);
     return bytes.byteLength;
-  });
+  };
+  const documents = await populateDocuments(target.caller, seed, sink);
+  const templateDocs = await populateTemplateDocs(target.caller, seed, sink); // mall→ärende-flödet
   await target.finalize();
-  return { ...res, documents, billing };
+  return { ...res, documents, templateDocs, billing };
 }
