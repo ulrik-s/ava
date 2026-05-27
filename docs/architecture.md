@@ -13,6 +13,8 @@
 >   backend: Git (local-first, offline) ⟷ Postgres (server, online).
 > - [ADR 0002](./adr/0002-git-konflikthantering-backend-a.md) — git-konflikt­
 >   hantering i Git-backenden: last-write-wins + diskret överskrivnings-notis.
+> - [ADR 0003](./adr/0003-nyckelstrategi-app-genererad-uuidv7.md) — nyckel­
+>   strategi: app-genererad UUIDv7 (klient-/offline-genererad, native `uuid` i PG).
 
 ## Tre lager
 
