@@ -128,6 +128,8 @@ export const userRouter = router({
    */
   create: protectedProcedure
     .input(z.object({
+      /** Valfritt klient-genererat id (ADR 0003) — annars genererar store:n. */
+      id: z.string().optional(),
       email: z.string().email(),
       name: z.string().min(1),
       title: z.string().optional(),
@@ -141,6 +143,7 @@ export const userRouter = router({
       const passwordHash = input.password ? await hashPassword(input.password) : null;
       return ctx.dataStore.users.create({
         data: {
+          ...(input.id ? { id: input.id } : {}),
           email: input.email,
           name: input.name,
           title: input.title,

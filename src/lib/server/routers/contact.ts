@@ -69,6 +69,8 @@ export const contactRouter = router({
   create: orgProcedure
     .input(
       z.object({
+        /** Valfritt klient-genererat id (ADR 0003) — annars genererar store:n. */
+        id: z.string().optional(),
         name: z.string().min(1),
         contactType: contactTypeSchema,
         personalNumber: z.string().optional(),

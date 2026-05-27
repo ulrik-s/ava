@@ -23,6 +23,9 @@ async function safeEmit(ctx: EmitCtx, input: EmitInput): Promise<void> {
   try {
     await ctx.dataStore.events.emit(input);
   } catch (err) {
+    // Read-only event-loggar (demo-/git-backend + generator) kan inte emit:a —
+    // det är väntat, inte ett fel. Logga bara oväntade fel.
+    if (err instanceof Error && err.name === "ReadOnlyError") return;
     console.error("[emit] event-skrivning misslyckades:", err, { type: input.type });
   }
 }

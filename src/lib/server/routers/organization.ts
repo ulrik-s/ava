@@ -39,6 +39,28 @@ export const organizationRouter = router({
       });
     }),
 
+  /**
+   * Skapa en organisation med explicit id (rot-entiteten — den ÄR scope:n,
+   * så ingen org-scoping). Provisionerings-/setup- och seed-väg: demo-
+   * generatorn skapar org:en först, sedan org-scopade entiteter. Id:t är
+   * klient-/app-genererat (ADR 0003).
+   */
+  create: protectedProcedure
+    .input(
+      z.object({
+        id: z.string().min(1),
+        name: z.string().min(1),
+        orgNumber: z.string().optional(),
+        address: z.string().optional(),
+        phone: z.string().optional(),
+        email: z.string().optional(),
+        bankgiro: z.string().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      return ctx.dataStore.organizations.create({ data: input });
+    }),
+
   // ── Offices ─────────────────────────────────────────────────────
 
   listOffices: protectedProcedure.query(async ({ ctx }) => {

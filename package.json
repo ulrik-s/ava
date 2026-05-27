@@ -10,6 +10,7 @@
     "build": "next build",
     "build:demo": "DEMO_BASE_PATH=/ava bash tooling/scripts/build-demo.sh",
     "build:demo-repo": "tsx tooling/scripts/build-demo-repo.ts",
+    "demo:generate": "tsx tooling/demo-generator/generate.ts",
     "demo:serve": "bash tooling/scripts/demo-serve.sh",
     "demo:serve:fast": "SKIP_BUILD=1 bash tooling/scripts/demo-serve.sh",
     "seed:local": "tsx tooling/scripts/seed-firma-local.ts",

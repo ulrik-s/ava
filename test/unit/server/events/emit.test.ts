@@ -52,6 +52,7 @@ describe("emit-helpers", () => {
   });
 
   it("emit-fel kraschar INTE caller (safeEmit sväljer)", async () => {
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const ctx = {
       user: { id: "anna" },
       dataStore: {
@@ -64,5 +65,27 @@ describe("emit-helpers", () => {
       } as never,
     };
     await expect(emit.matterCreated(ctx, { id: "m1", matterNumber: "x", title: "y" })).resolves.toBeUndefined();
+    expect(errSpy).toHaveBeenCalled(); // oväntat fel → loggas
+    errSpy.mockRestore();
+  });
+
+  it("ReadOnlyError sväljs tyst (väntat på demo-/git-backend, ingen log)", async () => {
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const readOnly = new Error('Demo-läget är read-only — kan inte köra "events.emit".');
+    readOnly.name = "ReadOnlyError";
+    const ctx = {
+      user: { id: "anna" },
+      dataStore: {
+        events: {
+          emit: vi.fn(async () => { throw readOnly; }),
+          query: vi.fn(),
+          iterate: vi.fn(),
+          onNewEvent: vi.fn(),
+        },
+      } as never,
+    };
+    await expect(emit.matterCreated(ctx, { id: "m1", matterNumber: "x", title: "y" })).resolves.toBeUndefined();
+    expect(errSpy).not.toHaveBeenCalled(); // väntat → tyst
+    errSpy.mockRestore();
   });
 });
