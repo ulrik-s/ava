@@ -7,6 +7,10 @@ on:
 
 # Yarn (med nodeLinker: node-modules) är vad utvecklarna kör lokalt.
 # Vi använder corepack i CI så att exakt samma yarn-version används.
+#
+# OBS: AVA är git-first — ingen Prisma, Postgres, NextAuth, Meilisearch
+# eller Tika i stacken. CI speglar därför bara den faktiska stacken:
+# statisk analys + vitest (+ git-round-trip-e2e mot docker).
 
 jobs:
   # ───────────────── Statisk analys ─────────────────
@@ -21,7 +25,6 @@ jobs:
           node-version: 22
       - run: corepack enable
       - run: yarn install --immutable
-      - run: yarn prisma generate
       - run: yarn typecheck
       - run: yarn lint
       - run: yarn deps:check
@@ -35,29 +38,12 @@ jobs:
           path: reports/jscpd/
 
   # ───────── Unit + komponent + integration ─────────
-  # Postgres som GH-service räcker för integration-testet (webdav-server.test.ts).
-  # Övriga lager mockar sina beroenden.
+  # Allt mockar sina beroenden / kör mot in-memory DemoDataStore — inga
+  # externa tjänster behövs.
   unit:
     name: Unit / komponent / integration
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: ava
-          POSTGRES_PASSWORD: ava_dev_password
-          POSTGRES_DB: ava
-        ports: ["5432:5432"]
-        options: >-
-          --health-cmd "pg_isready -U ava"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 10
-    env:
-      DATABASE_URL: postgresql://ava:ava_dev_password@localhost:5432/ava?schema=public
-      NEXTAUTH_SECRET: ci-test-secret
-      NEXTAUTH_URL: http://localhost:3000
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -65,8 +51,6 @@ jobs:
           node-version: 22
       - run: corepack enable
       - run: yarn install --immutable
-      - run: yarn prisma generate
-      - run: yarn prisma db push --accept-data-loss
       - run: yarn test:cov
       - name: Upload coverage
         if: always()
@@ -75,49 +59,16 @@ jobs:
           name: coverage
           path: reports/coverage/
 
-  # ───────────────── E2E ─────────────────
-  # Playwright spinner upp Next-servern själv (se config/playwright.config.ts).
-  # Vi behöver postgres + meili + tika som GH-services. LLM (Docker Model Runner)
-  # finns inte i CI — document-analysis-flödet är inte med i smoke-svit:en
-  # och tjänsten är best-effort (fire-and-forget).
+  # ───────────────── E2E (git round-trip) ─────────────────
+  # Den riktiga browser-klienten pushar mot docker-git-servern (self-hosted).
+  # Kräver byggd `out/` + docker-stacken uppe (se docs/architecture.md).
+  # NB: omskriven från den gamla (stale) Postgres/Meili/Tika-uppsättningen —
+  # validera mot första CI-körningen.
   e2e:
-    name: E2E (Playwright)
+    name: E2E (git round-trip)
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: ava
-          POSTGRES_PASSWORD: ava_dev_password
-          POSTGRES_DB: ava
-        ports: ["5432:5432"]
-        options: >-
-          --health-cmd "pg_isready -U ava"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 10
-      meilisearch:
-        image: getmeili/meilisearch:v1.6
-        env:
-          MEILI_MASTER_KEY: ava_meili_dev_key
-          MEILI_ENV: development
-        ports: ["7700:7700"]
-        options: >-
-          --health-cmd "wget -q --spider http://127.0.0.1:7700/health"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 10
-      tika:
-        image: apache/tika:latest
-        ports: ["9998:9998"]
     env:
-      DATABASE_URL: postgresql://ava:ava_dev_password@localhost:5432/ava?schema=public
-      NEXTAUTH_SECRET: ci-test-secret
-      NEXTAUTH_URL: http://localhost:3000
-      MEILI_URL: http://localhost:7700
-      MEILI_MASTER_KEY: ava_meili_dev_key
-      TIKA_URL: http://localhost:9998
       CI: "true"
     steps:
       - uses: actions/checkout@v4
@@ -126,10 +77,13 @@ jobs:
           node-version: 22
       - run: corepack enable
       - run: yarn install --immutable
-      - run: yarn prisma generate
-      - run: yarn prisma db push --accept-data-loss
+      - run: yarn build:demo
+      - run: docker compose -f tooling/docker/docker-compose.yml up -d --build
       - run: yarn playwright install --with-deps chromium
-      - run: yarn e2e
+      - run: yarn round-trip
+      - name: Tear down docker
+        if: always()
+        run: docker compose -f tooling/docker/docker-compose.yml down -v
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v4

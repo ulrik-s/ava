@@ -48,21 +48,21 @@ export default defineConfig({
       //   - 801 tester:  Stmts 83.56%  Br 78.35%  Func 82.72%  Lines 85.47%
       //   - 1454 tester: Stmts 60.17%  Br 54.01%  Func 62.64%  Lines 62.46%
       //   - 1664 tester: Stmts 69.90%  Br 63.76%  Func 70.32%  Lines 72.47%
-      //                  (Task #5 omgång 1: webdav-server exkluderad +
-      //                   tester för static-params, sync-state, fsa-walker,
-      //                   github/api, push, pull, integrations/registry,
-      //                   handle-store, tauri-bridge)
+      //   - 1804 tester (2026-05-27): Stmts 68.01% Br 62.94% Func 67.99% Lines 70.05%
+      //       NB: include-glob:arna pekade tidigare på den gamla (borttagna)
+      //       `src/server/**`-layouten → coverage mätte 0 filer. Nu fixade till
+      //       `src/lib/**` → siffrorna ovan är FAKTISK täckning över hela src/lib.
       //
-      // Mål Task #5: 95% överallt. Kvarstående gap = i huvudsak fat React-
-      // komponenter (firma-settings-panel, fsa-folder-selector, keypair-
-      // manager, demo-bootstrap, profile/page) + crypto-modules (ed25519,
-      // sign-commit) som kräver mer test-infrastruktur (Testing Library
-      // setup + WebCrypto-mocks). Multi-session-arbete.
+      // Mål: 95% överallt. Kvarstående gap = i huvudsak fat React-komponenter
+      // (firma-settings-panel, fsa-folder-selector, keypair-manager,
+      // demo-bootstrap, profile/page) + crypto-modules (ed25519, sign-commit)
+      // som kräver mer test-infrastruktur. Multi-session-arbete. Trösklarna
+      // ligger strax under faktisk siffra → varje borttaget test syns som rött.
       thresholds: {
-        statements: 68,
-        lines: 70,
-        functions: 68,
-        branches: 60,
+        statements: 67,
+        lines: 69,
+        functions: 67,
+        branches: 62,
       },
     },
     projects: [
