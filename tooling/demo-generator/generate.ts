@@ -14,13 +14,15 @@
  * dokument (metadata via API + binärinnehåll), se task-TODO.
  */
 
-import { rmSync, mkdirSync } from "node:fs";
+import { rmSync, mkdirSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { execFileSync } from "node:child_process";
 import { buildSeed } from "../scripts/seed-data";
 import { makeNodeGitWriteBack } from "./node-git-writeback";
 import { createGitTarget, createPostgresTarget, type BackendTarget } from "./backend-target";
 import { populate } from "./populate";
 import { populateBilling } from "./populate-billing";
+import { populateDocuments, type BinarySink } from "./populate-documents";
 import type { Principal } from "@/lib/server/auth/principal";
 
 interface Args { backend: "git" | "postgres"; outDir: string; }
@@ -66,8 +68,18 @@ async function main(): Promise<void> {
 
   const res = await populate(target.caller, seed);
   const billing = await populateBilling(target.caller, seed); // efter time/expenses
+  // Git: skriv binärinnehåll till documents/content/…; annars metadata-only.
+  const sink: BinarySink | undefined = args.backend === "git"
+    ? (storagePath, bytes) => {
+        const full = join(args.outDir, storagePath);
+        mkdirSync(dirname(full), { recursive: true });
+        writeFileSync(full, bytes);
+        return bytes.byteLength;
+      }
+    : undefined;
+  const documents = await populateDocuments(target.caller, seed, sink);
   await target.finalize();
-  console.log(`[demo-generator] backend=${args.backend} →`, { ...res, billing });
+  console.log(`[demo-generator] backend=${args.backend} →`, { ...res, documents, billing });
   if (args.backend === "git") console.log(`[demo-generator] git-repo: ${args.outDir}`);
 }
 

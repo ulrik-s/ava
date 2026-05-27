@@ -132,6 +132,16 @@ export const coreProcedures = {
       sizeBytes: z.number(),
       storagePath: z.string(),
       folderId: z.string().nullable().optional(),
+      // Valfri AI-analys-metadata + setup-fält (demo-generator/fixtures,
+      // ADR 0003). I appens upload-flöde sätts analysen async av `analyze`.
+      uploadedById: z.string().optional(),
+      version: z.number().int().positive().optional(),
+      title: z.string().nullable().optional(),
+      documentType: z.string().nullable().optional(),
+      summary: z.string().nullable().optional(),
+      analysisStatus: z.enum(["PENDING", "RUNNING", "DONE", "ERROR"]).optional(),
+      analyzedAt: z.string().optional(),
+      createdAt: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       // Verifiera matter:n tillhör org:n
@@ -148,8 +158,14 @@ export const coreProcedures = {
           storagePath: input.storagePath,
           folderId: input.folderId ?? null,
           organizationId: ctx.orgId,
-          analysisStatus: "PENDING",
-          uploadedById: ctx.user.id,
+          analysisStatus: input.analysisStatus ?? "PENDING",
+          uploadedById: input.uploadedById ?? ctx.user.id,
+          version: input.version,
+          title: input.title,
+          documentType: input.documentType,
+          summary: input.summary,
+          analyzedAt: input.analyzedAt ? new Date(input.analyzedAt) : undefined,
+          createdAt: input.createdAt ? new Date(input.createdAt) : undefined,
         } as never,
       });
       return doc;
