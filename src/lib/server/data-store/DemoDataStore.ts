@@ -333,6 +333,7 @@ export class DemoDataStore implements IDataStore {
       conflictChecks: "conflictCheck",
       payments: "payment",
       paymentPlans: "paymentPlan",
+      paymentPlanReminders: "paymentPlanReminder",
       accontoDeductions: "accontoDeduction",
       calendarEvents: "calendarEvent",
       tasks: "task",

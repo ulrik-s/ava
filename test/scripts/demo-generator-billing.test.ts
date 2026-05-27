@@ -29,6 +29,7 @@ describe("populateBilling — driver fakturerings-flödena", () => {
     expect(billing.paymentPlans).toBeGreaterThanOrEqual(7);
     expect(billing.payments).toBeGreaterThan(5);
     expect(billing.credits).toBe(1);
+    expect(billing.reminders).toBeGreaterThan(0); // påminnelse-historik på planerna
 
     const invoices: Inv[] = await (target.caller as Inv).invoice.list({});
     const byStatus = (s: string) => invoices.filter((i: Inv) => i.status === s).length;

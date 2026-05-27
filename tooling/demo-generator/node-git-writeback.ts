@@ -1,11 +1,11 @@
 /**
- * `makeNodeGitWriteBack` — en DataStore-writeBack som skriver varje skapad
- * entitet som ren JSON till en git-katalog på disk (Node fs).
+ * `makeNodeGitWriteBack` — Node-motsvarigheten till appens self-hosted
+ * writeBack (`src/lib/client/firma/fsa-write-back.ts`): skriver varje
+ * skapad/uppdaterad entitet som JSON till en git-katalog på disk.
  *
- * Demo-generatorn kör tRPC-mutationer mot en `DemoDataStore` med denna
- * writeBack → samma git-fillayout som appens self-hosted-writeBack, men i
- * Node istället för browser-FSA. `schema.parse` strippar ev. pre-bakade
- * joins från den enrichade raden → endast persisterade fält hamnar i filen.
+ * Skriver `event.row` RAKT AV (som fsa-write-back gör) → identiskt
+ * fil-innehåll oavsett om datan skapas i browsern eller av generatorn.
+ * (Denormaliserade fält som `fileSize` bevaras — UI:t läser dem.)
  */
 
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -20,7 +20,7 @@ export interface WriteBackEvent {
 
 export function makeNodeGitWriteBack(outDir: string): (event: WriteBackEvent) => Promise<void> {
   return async (event: WriteBackEvent): Promise<void> => {
-    if (event.kind === "delete") return; // generatorn skapar bara
+    if (event.kind === "delete") return; // generatorn skapar/uppdaterar bara
 
     // documentText: extraherad text, plain .txt (inte en registry-entitet)
     if (event.entity === "documentText") {
@@ -31,21 +31,8 @@ export function makeNodeGitWriteBack(outDir: string): (event: WriteBackEvent) =>
 
     const reg = ENTITY_REGISTRY[event.entity];
     if (!reg) return; // okänd entitet → hoppa (ingen git-path)
-    // Schemas är `.passthrough()` (behåller extra fält) → parse strippar INTE
-    // pre-bakade joins. Plocka istället bara schemats definierade fält.
-    const clean = pickSchemaFields(reg.schema, event.row);
-    writeFile(join(outDir, reg.gitPath(String(clean.id ?? event.row.id), clean)), JSON.stringify(clean, null, 2) + "\n");
+    writeFile(join(outDir, reg.gitPath(String(event.row.id), event.row)), JSON.stringify(event.row, null, 2) + "\n");
   };
-}
-
-function pickSchemaFields(schema: unknown, row: Record<string, unknown>): Record<string, unknown> {
-  const shape = (schema as { shape?: Record<string, unknown> }).shape;
-  if (!shape) return { ...row };
-  const out: Record<string, unknown> = {};
-  for (const key of Object.keys(shape)) {
-    if (key in row) out[key] = row[key];
-  }
-  return out;
 }
 
 function writeFile(full: string, content: string): void {

@@ -18,7 +18,7 @@
 
 import { z } from "zod";
 import { router, protectedProcedure, orgProcedure, TRPCError } from "../trpc";
-import { paymentPlanStatusSchema } from "@/lib/shared/schemas";
+import { paymentPlanStatusSchema, reminderTypeSchema } from "@/lib/shared/schemas";
 
 type Plan = { id: string; status: string; invoiceId: string };
 
@@ -120,6 +120,37 @@ export const paymentPlanRouter = router({
         await tx.paymentPlans.update({ where: { id: plan.id }, data: { status: "CANCELLED" } });
         await tx.invoices.update({ where: { id: plan.invoiceId }, data: { status: "SENT" } });
         return { ok: true };
+      });
+    }),
+
+  /**
+   * Logga en utskickad påminnelse för en plan (DUE/OVERDUE för en viss månad).
+   * Org-scopas via planens invoice. `sentAt`/`id` är valfria (demo-generator/
+   * fixtures, ADR 0003) — annars now() resp store-genererat id.
+   */
+  recordReminder: orgProcedure
+    .input(
+      z.object({
+        id: z.string().optional(),
+        planId: z.string(),
+        dueMonth: z.string().regex(/^\d{4}-\d{2}$/),
+        type: reminderTypeSchema,
+        sentAt: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const plan = await ctx.dataStore.paymentPlans.findFirst({
+        where: { id: input.planId, invoice: { matter: { organizationId: ctx.orgId } } },
+      });
+      if (!plan) throw new TRPCError({ code: "NOT_FOUND" });
+      return ctx.dataStore.paymentPlanReminders.create({
+        data: {
+          id: input.id,
+          planId: input.planId,
+          dueMonth: input.dueMonth,
+          type: input.type,
+          sentAt: input.sentAt ? new Date(input.sentAt) : new Date(),
+        },
       });
     }),
 });

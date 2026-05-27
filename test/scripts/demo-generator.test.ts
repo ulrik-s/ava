@@ -77,17 +77,19 @@ describe("demo-generator — populate (org/users/contacts via tRPC)", () => {
   });
 });
 
-describe("makeNodeGitWriteBack — git-fillayout med ren JSON", () => {
-  it("skriver contact till contacts/<id>.json (strippar joins)", async () => {
+describe("makeNodeGitWriteBack — git-fillayout (speglar fsa-write-back)", () => {
+  it("skriver event.row rakt av till registryns gitPath (inkl denormaliserade fält)", async () => {
     const dir = mkdtempSync(join(os.tmpdir(), "ava-gen-"));
     try {
       const wb = makeNodeGitWriteBack(dir);
-      await wb({ entity: "contact", kind: "create", row: { id: "c1", name: "X", contactType: "COMPANY", organizationId: "org-test", createdAt: now, updatedAt: now, matterLinks: [{ joink: "skräp" }] } });
-      const p = join(dir, "contacts/c1.json");
+      // Denormaliserat fält (fileSize) ligger utanför schemat men UI:t läser
+      // det → måste bevaras precis som appens self-hosted writeBack gör.
+      await wb({ entity: "document", kind: "create", row: { id: "doc1", matterId: "m1", fileName: "X.pdf", mimeType: "application/pdf", sizeBytes: 100, fileSize: 100, storagePath: "documents/content/doc1.pdf", uploadedById: "u1", organizationId: "org-test", createdAt: now, updatedAt: now } });
+      const p = join(dir, "documents/doc1.json");
       expect(existsSync(p)).toBe(true);
       const data = JSON.parse(readFileSync(p, "utf8"));
-      expect(data.id).toBe("c1");
-      expect(data.matterLinks).toBeUndefined(); // join strippad av schema.parse
+      expect(data.id).toBe("doc1");
+      expect(data.fileSize).toBe(100); // denormaliserat fält bevarat (ej strippat)
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

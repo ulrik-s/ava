@@ -24,6 +24,7 @@ export interface BillingResult {
   payments: number;
   paymentPlans: number;
   credits: number;
+  reminders: number;
 }
 
 interface Ctx {
@@ -79,13 +80,25 @@ async function scenarioPaid(ctx: Ctx, matterId: string | undefined, daysAgo: num
   ctx.res.payments++;
 }
 
+/** Logga `months` DUE-påminnelser för de senaste månaderna (historik). */
+async function addReminders(ctx: Ctx, planId: string, months: number): Promise<void> {
+  for (let m = months; m >= 1; m--) {
+    const due = new Date();
+    due.setMonth(due.getMonth() - m);
+    const dueMonth = `${due.getFullYear()}-${String(due.getMonth() + 1).padStart(2, "0")}`;
+    await ctx.c.paymentPlan.recordReminder({ planId, dueMonth, type: "DUE", sentAt: new Date(due.getFullYear(), due.getMonth(), 10).toISOString() });
+    ctx.res.reminders++;
+  }
+}
+
 async function scenarioActivePlan(ctx: Ctx, matterId: string | undefined, daysAgo: number, monthsPaid: number): Promise<void> {
   if (!matterId) return;
   const inv = await finalSent(ctx, matterId, daysAgo);
   if (inv.amount < 5) return;
   const monthly = Math.ceil(inv.amount / 5); // 5 delbetalningar → delbetalda planer förblir ACTIVE
-  await ctx.c.invoice.createPaymentPlan({ invoiceId: inv.id, monthlyAmount: monthly, dayOfMonth: 15, startDate: isoDaysAgo(daysAgo - 5) });
+  const plan = await ctx.c.invoice.createPaymentPlan({ invoiceId: inv.id, monthlyAmount: monthly, dayOfMonth: 15, startDate: isoDaysAgo(daysAgo - 5) });
   ctx.res.paymentPlans++;
+  await addReminders(ctx, plan.id, Math.min(2, monthsPaid + 1));
   for (let m = 0; m < monthsPaid; m++) {
     await ctx.c.invoice.recordPayment({ invoiceId: inv.id, amount: monthly, paidAt: isoDaysAgo(daysAgo - 30 - m * 30), note: `Avbetalning ${m + 1}` });
     ctx.res.payments++;
@@ -96,8 +109,9 @@ async function scenarioCompletedPlan(ctx: Ctx, matterId: string | undefined, day
   if (!matterId) return;
   const inv = await finalSent(ctx, matterId, daysAgo);
   if (inv.amount <= 0) return;
-  await ctx.c.invoice.createPaymentPlan({ invoiceId: inv.id, monthlyAmount: Math.ceil(inv.amount / 3), dayOfMonth: 1, startDate: isoDaysAgo(daysAgo - 5) });
+  const plan = await ctx.c.invoice.createPaymentPlan({ invoiceId: inv.id, monthlyAmount: Math.ceil(inv.amount / 3), dayOfMonth: 1, startDate: isoDaysAgo(daysAgo - 5) });
   ctx.res.paymentPlans++;
+  await addReminders(ctx, plan.id, 6); // hel historik för slutförd plan
   // Full inbetalning → recordPayment auto-completar plan + sätter PAID.
   await ctx.c.invoice.recordPayment({ invoiceId: inv.id, amount: inv.amount, paidAt: isoDaysAgo(daysAgo - 10), note: "Slutbetalning" });
   ctx.res.payments++;
@@ -137,7 +151,7 @@ async function scenarioDraft(ctx: Ctx, matterId: string, daysAgo: number): Promi
 export async function populateBilling(caller: GeneratorCaller, seed: SeedDataset): Promise<BillingResult> {
   const ctx: Ctx = {
     c: caller as AnyCaller,
-    res: { invoices: 0, payments: 0, paymentPlans: 0, credits: 0 },
+    res: { invoices: 0, payments: 0, paymentPlans: 0, credits: 0, reminders: 0 },
     time: groupIds(arr(seed, "timeEntries"), "matterId"),
     exp: groupIds(arr(seed, "expenses"), "matterId"),
   };

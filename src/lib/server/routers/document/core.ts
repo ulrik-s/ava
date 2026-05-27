@@ -155,6 +155,7 @@ export const coreProcedures = {
           fileName: input.fileName,
           mimeType: input.mimeType,
           sizeBytes: input.sizeBytes,
+          fileSize: input.sizeBytes, // denormaliserat (UI läser fileSize)
           storagePath: input.storagePath,
           folderId: input.folderId ?? null,
           organizationId: ctx.orgId,
