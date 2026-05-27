@@ -58,6 +58,10 @@ async function createContact(page: Page, name: string): Promise<void> {
   await page.getByLabel(/Namn/).fill(name);
   await page.getByRole("button", { name: "Spara kontakt" }).click();
   await expect(page.getByRole("button", { name: "Spara kontakt" })).toHaveCount(0, { timeout: 15_000 });
+  // Vänta in hela writeBack→commit→push-kedjan: annars kan en efterföljande
+  // sid-navigering (createMatterAndOpen) hydratisera OPFS INNAN kontakten
+  // hunnit skrivas → klient-dropdownen saknar den (flaky i långsammare CI).
+  await expect.poll(() => contactNamesInRepo(), POLL).toContain(name);
 }
 
 /** Registrera en tidspost (120 min) på öppen matter-detalj. */
