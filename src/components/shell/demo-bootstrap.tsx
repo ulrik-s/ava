@@ -21,7 +21,7 @@ import { GitAuthProvider } from "@/lib/server/auth/git-auth-provider";
 import { DemoModeProvider } from "@/lib/client/demo/demo-mode-context";
 import { demoSourceFromRuntime } from "@/lib/client/demo/demo-source-from-runtime";
 import { trpc } from "@/lib/client/trpc";
-import { loadFirmaConfig, type FirmaConfig } from "@/lib/client/firma/firma-config";
+import { loadFirmaConfig, gitAuthUsername, type FirmaConfig } from "@/lib/client/firma/firma-config";
 import { AuthProvider, useAuthMode } from "@/lib/client/auth/use-auth-mode";
 import { AuthStatusBanner } from "./auth-status-banner";
 import { AutoSync } from "./auto-sync";
@@ -343,6 +343,7 @@ async function loadSelfHosted(
       handle: opfs,
       repo: firmaConfig.repo,
       token: firmaConfig.token,
+      username: gitAuthUsername(firmaConfig),
       origin,
       // Måste matcha trpcClient-användaren nedan (id "current-user") så att
       // flöden som slår upp ctx.user (timeEntry.create m.fl.) hittar en rad.

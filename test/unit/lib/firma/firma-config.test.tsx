@@ -6,7 +6,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import {
   loadFirmaConfig, saveFirmaConfig, resetToDemo, inferTier,
-  defaultConfigForHost,
+  defaultConfigForHost, gitAuthUsername,
   type FirmaConfig,
 } from "@/lib/client/firma/firma-config";
 
@@ -105,6 +105,22 @@ describe("firma-config", () => {
     });
     it("tom sträng → demo", () => {
       expect(inferTier("")).toBe("demo");
+    });
+  });
+
+  describe("gitAuthUsername", () => {
+    it("github/demo → x-access-token (GitHub-konvention)", () => {
+      expect(gitAuthUsername({ tier: "github", authorEmail: "a@b.se" })).toBe("x-access-token");
+      expect(gitAuthUsername({ tier: "demo", authorEmail: "a@b.se" })).toBe("x-access-token");
+    });
+    it("self-hosted → explicit gitUsername (t.ex. admin) vinner", () => {
+      expect(gitAuthUsername({ tier: "self-hosted", gitUsername: "admin", authorEmail: "a@b.se" })).toBe("admin");
+    });
+    it("self-hosted utan gitUsername → authorEmail (add-user.sh lägger till på e-post)", () => {
+      expect(gitAuthUsername({ tier: "self-hosted", authorEmail: "anna@firma.se" })).toBe("anna@firma.se");
+    });
+    it("self-hosted utan något → x-access-token (sista fallback)", () => {
+      expect(gitAuthUsername({ tier: "self-hosted", authorEmail: "" })).toBe("x-access-token");
     });
   });
 });

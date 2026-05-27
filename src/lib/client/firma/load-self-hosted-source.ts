@@ -32,6 +32,8 @@ export interface LoadSelfHostedDeps {
   handle: FileSystemDirectoryHandle;
   repo: string;
   token?: string;
+  /** Basic-auth-användarnamn (self-hosted htpasswd; default x-access-token). */
+  username?: string;
   /** window.location.origin — för same-origin-detektering (cors-proxy). */
   origin?: string;
   /**
@@ -64,6 +66,7 @@ export async function loadSelfHostedSource(deps: LoadSelfHostedDeps): Promise<De
     await (deps.clone ?? cloneRepo)(fs, {
       url: deps.repo,
       token: deps.token,
+      username: deps.username,
       corsProxy,
       ref: "main",
     });

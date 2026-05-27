@@ -22,6 +22,11 @@ export interface CloneOptions {
   ref?: string;
   /** OAuth-token eller PAT för privata repos. */
   token?: string;
+  /**
+   * Basic-auth-användarnamn. GitHub: "x-access-token" (default). Self-hosted
+   * nginx auth_basic: den faktiska htpasswd-användaren (admin/email).
+   */
+  username?: string;
   /** CORS-proxy URL för smart-http (default = isomorphic-git:s publika). */
   corsProxy?: string;
 }
@@ -84,7 +89,7 @@ export async function cloneRepo(
   const ref = opts.ref ?? "main";
   const corsProxy = normalizeProxy(opts.corsProxy);
   const onAuth = opts.token
-    ? () => ({ username: "x-access-token", password: opts.token! })
+    ? () => ({ username: opts.username || "x-access-token", password: opts.token! })
     : undefined;
 
   // Försök först en vanlig clone. Om mappen redan har en partiell git-init
@@ -232,7 +237,7 @@ export async function stageAllAndCommit(
 
 export async function pushBranch(
   fs: FsaIsoGitAdapter,
-  opts: { token: string; remote?: string; branch?: string; corsProxy?: string; url?: string },
+  opts: { token: string; username?: string; remote?: string; branch?: string; corsProxy?: string; url?: string },
 ): Promise<void> {
   const git = await loadIsoGit();
   const httpMod = await loadHttp();
@@ -249,13 +254,13 @@ export async function pushBranch(
     url,
     ref: opts.branch ?? "main",
     corsProxy: normalizeProxy(opts.corsProxy),
-    onAuth: () => ({ username: "x-access-token", password: opts.token }),
+    onAuth: () => ({ username: opts.username || "x-access-token", password: opts.token }),
   });
 }
 
 export async function pullBranch(
   fs: FsaIsoGitAdapter,
-  opts: { token: string; authorName: string; authorEmail: string; branch?: string; corsProxy?: string; url?: string },
+  opts: { token: string; username?: string; authorName: string; authorEmail: string; branch?: string; corsProxy?: string; url?: string },
 ): Promise<{ kind: "up-to-date" | "fast-forward" | "merged"; head: string }> {
   const git = await loadIsoGit();
   const httpMod = await loadHttp();
@@ -276,7 +281,7 @@ export async function pullBranch(
     singleBranch: true,
     corsProxy: normalizeProxy(opts.corsProxy),
     author: { name: opts.authorName, email: opts.authorEmail },
-    onAuth: () => ({ username: "x-access-token", password: opts.token }),
+    onAuth: () => ({ username: opts.username || "x-access-token", password: opts.token }),
   });
   const after = await git.resolveRef({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

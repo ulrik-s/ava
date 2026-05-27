@@ -25,9 +25,10 @@ async function tryFsa(token: string): Promise<PickedProvider | null> {
   if (!handle) return null;
   if (!(await ensureReadWrite(handle).catch(() => false))) return null;
 
-  const { loadFirmaConfig } = await import("@/lib/client/firma/firma-config");
+  const { loadFirmaConfig, gitAuthUsername } = await import("@/lib/client/firma/firma-config");
   const { resolveCorsProxy, isLocalOrSameOrigin } = await import("./cors-proxy");
   const cfg = loadFirmaConfig();
+  const username = gitAuthUsername(cfg);
   const origin = window.location.origin;
   // Lokal/self-hosted git-server (docker:8080/git) tillåter anonym push →
   // token krävs inte. GitHub/fjärr kräver token.
@@ -41,7 +42,7 @@ async function tryFsa(token: string): Promise<PickedProvider | null> {
   // Self-hosted eller okänd URL → iso-git smart-HTTP. Lokal/samma-origin
   // (round-trip mot docker:8080/git/) → "" = ingen cors-proxy.
   const corsProxy = resolveCorsProxy({ url: cfg.repo, configured: cfg.corsProxy, origin });
-  return { provider: makeFsaProvider(handle, token, corsProxy), kind: "fsa" };
+  return { provider: makeFsaProvider(handle, token, corsProxy, username), kind: "fsa" };
 }
 
 export async function pickProvider(token: string): Promise<PickedProvider | null> {
@@ -111,7 +112,7 @@ function makeRestProvider(
   };
 }
 
-function makeFsaProvider(handle: FileSystemDirectoryHandle, token: string, corsProxy?: string): SyncProvider {
+function makeFsaProvider(handle: FileSystemDirectoryHandle, token: string, corsProxy?: string, username?: string): SyncProvider {
   const commitOnly = async () => {
     const { FsaIsoGitAdapter } = await import("@/lib/client/fsa/fs-adapter");
     const { statusMatrix, stageAllAndCommit } = await import("@/lib/client/fsa/git-ops");
@@ -135,7 +136,7 @@ function makeFsaProvider(handle: FileSystemDirectoryHandle, token: string, corsP
     const { FsaIsoGitAdapter } = await import("@/lib/client/fsa/fs-adapter");
     const { pushBranch } = await import("@/lib/client/fsa/git-ops");
     const fs = new FsaIsoGitAdapter(handle);
-    await pushBranch(fs, { token, corsProxy });
+    await pushBranch(fs, { token, username, corsProxy });
   };
   return {
     pull: async () => {
@@ -143,7 +144,7 @@ function makeFsaProvider(handle: FileSystemDirectoryHandle, token: string, corsP
       const { pullBranch } = await import("@/lib/client/fsa/git-ops");
       const fs = new FsaIsoGitAdapter(handle);
       const r = await pullBranch(fs, {
-        token, authorName: "AVA User", authorEmail: "user@ava.local",
+        token, username, authorName: "AVA User", authorEmail: "user@ava.local",
         corsProxy,
       });
       return { kind: r.kind };

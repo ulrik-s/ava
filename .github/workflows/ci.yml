@@ -61,16 +61,14 @@ jobs:
           path: reports/coverage/
 
   # ───────────────── E2E (git round-trip) ─────────────────
-  # Den riktiga browser-klienten pushar mot docker-git-servern (self-hosted).
-  # Tungt test (docker + headless browser-push). PAT-bootstrap fungerar i CI,
-  # men själva round-trip-flödet hänger för närvarande headless (~18 min →
-  # timeout) → kräver separat felsökning. Tills dess: kör ON-DEMAND
-  # (workflow_dispatch eller lokalt `yarn round-trip`), inte på varje push.
+  # Den riktiga browser-klienten klonar/pushar mot docker-git-servern
+  # (self-hosted). Auth: PAT bootstrappas av web-containern; vi exporterar
+  # den som AVA_RT_GIT_PAT (clone + browser-push). 18/19 tester gröna; ett
+  # PDF-extraktions-test är test.fixme (se round-trip.spec.ts).
   e2e:
     name: E2E (git round-trip)
-    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     env:
       CI: "true"
     steps:
