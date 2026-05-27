@@ -1,6 +1,8 @@
 "use client";
 
 import { Fragment, type ReactNode } from "react";
+import { Pencil, Trash2 } from "lucide-react";
+import { ActionMenu, type ActionMenuItem } from "@/components/ui/action-menu";
 
 export interface FolderRecord {
   id: string;
@@ -66,8 +68,8 @@ export function FolderRow({
           isDropTarget ? "bg-blue-50 ring-2 ring-blue-300 ring-inset" : ""
         } ${isDragging ? "opacity-50" : ""}`}
       >
-        <td className="px-6 py-2.5 text-sm">
-          <div className="flex items-center gap-1" style={{ paddingLeft: `${depth * 20}px` }}>
+        <td className="px-3 sm:px-6 py-2.5 text-sm">
+          <div className="flex items-center gap-1 min-w-0" style={{ paddingLeft: `${depth * 16}px` }}>
             <button onClick={onToggle} className="w-5 text-gray-400 hover:text-gray-600 flex-shrink-0 text-xs">
               {isCollapsed ? "▶" : "▼"}
             </button>
@@ -94,19 +96,18 @@ export function FolderRow({
             )}
           </div>
         </td>
-        <td className="px-6 py-2.5 text-sm text-gray-400">&mdash;</td>
-        <td className="px-6 py-2.5 text-sm text-gray-500 whitespace-nowrap">
+        <td className="hidden sm:table-cell px-6 py-2.5 text-sm text-gray-400">&mdash;</td>
+        <td className="hidden sm:table-cell px-6 py-2.5 text-sm text-gray-500 whitespace-nowrap">
           {new Date(folder.createdAt).toLocaleDateString("sv-SE")}
         </td>
-        <td className="px-6 py-2.5 text-right">
-          <div className="flex items-center justify-end gap-2">
-            <button onClick={onStartRename} className="text-xs text-gray-500 hover:underline">
-              Byt namn
-            </button>
-            <button onClick={onDelete} className="text-xs text-red-500 hover:underline">
-              Ta bort
-            </button>
-          </div>
+        <td className="px-3 py-2.5 text-right">
+          <ActionMenu
+            label="Mappåtgärder"
+            items={[
+              { key: "rename", label: "Byt namn", icon: <Pencil size={15} />, onSelect: onStartRename },
+              { key: "delete", label: "Ta bort", icon: <Trash2 size={15} />, onSelect: onDelete, danger: true },
+            ] satisfies ActionMenuItem[]}
+          />
         </td>
       </tr>
       {!isCollapsed && children}

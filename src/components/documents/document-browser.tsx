@@ -305,13 +305,13 @@ function BrowserTable({
 }) {
   return (
     <div className="overflow-x-auto">
-      <table className="min-w-full divide-y divide-gray-200">
+      <table className="w-full table-fixed divide-y divide-gray-200">
         <thead>
           <tr className="bg-gray-50">
-            <th className="px-6 py-2 text-left text-xs font-medium text-gray-500 uppercase">Namn</th>
-            <th className="px-6 py-2 text-left text-xs font-medium text-gray-500 uppercase w-24">Storlek</th>
-            <th className="px-6 py-2 text-left text-xs font-medium text-gray-500 uppercase w-28">Datum</th>
-            <th className="px-6 py-2 w-20"></th>
+            <th className="px-3 sm:px-6 py-2 text-left text-xs font-medium text-gray-500 uppercase">Namn</th>
+            <th className="hidden sm:table-cell px-6 py-2 text-left text-xs font-medium text-gray-500 uppercase w-24">Storlek</th>
+            <th className="hidden sm:table-cell px-6 py-2 text-left text-xs font-medium text-gray-500 uppercase w-28">Datum</th>
+            <th className="px-3 py-2 w-12"></th>
           </tr>
         </thead>
         <tbody>

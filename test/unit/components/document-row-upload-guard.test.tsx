@@ -1,10 +1,9 @@
 /**
- * Test: DocumentRow med isUploading=true disable:ar alla actions
- * (klick på namn, Öppna, Visa, Ladda ner, Analysera, Ta bort).
- *
- * Bugg: tidigare visades nyligen-uppladdade dokument direkt med
- * full click-funktionalitet — men FSA-skrivningen + tRPC-register
- * + tree-invalidate är inte alltid klart, så klicken kunde ge fel.
+ * Test: DocumentRow:s actions ligger nu i en kebab-meny (⋮). Guarden för
+ * isUploading=true ska göra att menyn INTE går att öppna (trigger disabled)
+ * + att filnamn-knappen är disabled. Utan upload ska menyn öppnas och alla
+ * actions (Öppna, Editera externt, Visa, Ladda ner, Analysera, Ta bort)
+ * vara åtkomliga och triggas korrekt.
  *
  * @vitest-environment jsdom
  */
@@ -60,40 +59,48 @@ function renderRow(overrides: Partial<React.ComponentProps<typeof DocumentRow>> 
   };
 }
 
-describe("DocumentRow — isUploading-guard", () => {
-  it("normalt: alla action-knappar är klickbara", () => {
+const openMenu = () => fireEvent.click(screen.getByLabelText("Dokumentåtgärder"));
+
+describe("DocumentRow — kebab-meny + isUploading-guard", () => {
+  it("normalt: kebab-trigger öppnar menyn och Analysera/Ta bort fungerar", () => {
     const { onReanalyze, onDelete } = renderRow({ isUploading: false });
-    const analyze = screen.getByTitle(/Kör AI-analys/);
-    const remove = screen.getByText(/Ta bort/);
-    expect(analyze).not.toBeDisabled();
-    expect(remove).not.toBeDisabled();
-    fireEvent.click(analyze);
-    fireEvent.click(remove);
-    expect(onReanalyze).toHaveBeenCalled();
-    expect(onDelete).toHaveBeenCalled();
+    const trigger = screen.getByLabelText("Dokumentåtgärder");
+    expect(trigger).not.toBeDisabled();
+
+    openMenu();
+    // Alla sex actions finns i menyn
+    expect(screen.getByText("Öppna i webbläsaren")).toBeInTheDocument();
+    expect(screen.getByText(/Editera externt/)).toBeInTheDocument();
+    expect(screen.getByText("Visa")).toBeInTheDocument();
+    expect(screen.getByText("Ladda ner")).toBeInTheDocument();
+    expect(screen.getByText("Analysera (AI)")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Analysera (AI)"));
+    openMenu();
+    fireEvent.click(screen.getByText("Ta bort"));
+    expect(onReanalyze).toHaveBeenCalledTimes(1);
+    expect(onDelete).toHaveBeenCalledTimes(1);
   });
 
-  it("isUploading=true: Analysera + Ta bort + Öppna är disabled", () => {
+  it("Visa + Ladda ner renderas som riktiga länkar (a[href])", () => {
+    renderRow({ isUploading: false });
+    openMenu();
+    expect(screen.getByText("Visa").closest("a")).toHaveAttribute("href");
+    const dl = screen.getByText("Ladda ner").closest("a");
+    expect(dl).toHaveAttribute("href");
+    expect(dl).toHaveAttribute("download");
+  });
+
+  it("isUploading=true: kebab-trigger är disabled → menyn kan inte öppnas", () => {
     const { onReanalyze, onDelete } = renderRow({ isUploading: true });
-    const analyze = screen.getByText(/🧠 Analysera/);
-    const remove = screen.getByText(/Ta bort/);
-    const open = screen.getByText(/🖊 Öppna/);
-    expect(analyze).toBeDisabled();
-    expect(remove).toBeDisabled();
-    expect(open).toBeDisabled();
-    fireEvent.click(analyze);
-    fireEvent.click(remove);
-    fireEvent.click(open);
+    const trigger = screen.getByLabelText("Dokumentåtgärder");
+    expect(trigger).toBeDisabled();
+
+    fireEvent.click(trigger);
+    // Menyn ska inte ha öppnats
+    expect(screen.queryByText("Ta bort")).not.toBeInTheDocument();
     expect(onReanalyze).not.toHaveBeenCalled();
     expect(onDelete).not.toHaveBeenCalled();
-  });
-
-  it("isUploading=true: Visa + Ladda ner-länkar är aria-disabled", () => {
-    renderRow({ isUploading: true });
-    const visa = screen.getByText(/👁 Visa/);
-    const ladda = screen.getByText(/⬇ Ladda ner/);
-    expect(visa.getAttribute("aria-disabled")).toBe("true");
-    expect(ladda.getAttribute("aria-disabled")).toBe("true");
   });
 
   it("isUploading=true: filnamn-knappen är disabled", () => {

@@ -169,11 +169,12 @@ describe("DocumentBrowser", () => {
     expect(screen.queryByText(/analyseras/i)).not.toBeInTheDocument();
   });
 
-  it("har Visa, Ladda ner, Analysera-knappar på varje fil", () => {
+  it("har Visa, Ladda ner, Analysera, Ta bort i kebab-menyn på varje fil", () => {
     treeQuery.data = { folders: [], documents: [baseDoc()] };
     render(<DocumentBrowser matterId="m1" />);
-    expect(screen.getByText(/👁 Visa/)).toBeInTheDocument();
-    expect(screen.getByText(/Ladda ner/)).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("Dokumentåtgärder"));
+    expect(screen.getByText("Visa")).toBeInTheDocument();
+    expect(screen.getByText("Ladda ner")).toBeInTheDocument();
     expect(screen.getByText(/Analysera/)).toBeInTheDocument();
     expect(screen.getByText("Ta bort")).toBeInTheDocument();
   });
@@ -228,7 +229,8 @@ describe("DocumentBrowser", () => {
   it("klick på Byt namn aktiverar inline-rename-input", () => {
     treeQuery.data = { folders: [baseFolder()], documents: [] };
     render(<DocumentBrowser matterId="m1" />);
-    fireEvent.click(screen.getByRole("button", { name: /Byt namn/i }));
+    fireEvent.click(screen.getByLabelText("Mappåtgärder"));
+    fireEvent.click(screen.getByRole("menuitem", { name: /Byt namn/i }));
     // En input ska nu finnas (med mappnamnet förifyllt)
     const input = screen.getByDisplayValue("Inlagor") as HTMLInputElement;
     expect(input).toBeInTheDocument();
@@ -245,7 +247,8 @@ describe("DocumentBrowser", () => {
     treeQuery.data = { folders: [baseFolder()], documents: [] };
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
     render(<DocumentBrowser matterId="m1" />);
-    fireEvent.click(screen.getByRole("button", { name: /^Ta bort$/i }));
+    fireEvent.click(screen.getByLabelText("Mappåtgärder"));
+    fireEvent.click(screen.getByRole("menuitem", { name: /^Ta bort$/i }));
     expect(confirmSpy).toHaveBeenCalled();
     expect(mutationStubs.deleteFolder.mutate).toHaveBeenCalledWith({ id: "f1" });
     confirmSpy.mockRestore();
@@ -255,7 +258,8 @@ describe("DocumentBrowser", () => {
     treeQuery.data = { folders: [baseFolder()], documents: [] };
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
     render(<DocumentBrowser matterId="m1" />);
-    fireEvent.click(screen.getByRole("button", { name: /^Ta bort$/i }));
+    fireEvent.click(screen.getByLabelText("Mappåtgärder"));
+    fireEvent.click(screen.getByRole("menuitem", { name: /^Ta bort$/i }));
     expect(mutationStubs.deleteFolder.mutate).not.toHaveBeenCalled();
     confirmSpy.mockRestore();
   });
@@ -264,7 +268,8 @@ describe("DocumentBrowser", () => {
     treeQuery.data = { folders: [], documents: [baseDoc()] };
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
     render(<DocumentBrowser matterId="m1" />);
-    fireEvent.click(screen.getByRole("button", { name: /^Ta bort$/i }));
+    fireEvent.click(screen.getByLabelText("Dokumentåtgärder"));
+    fireEvent.click(screen.getByRole("menuitem", { name: /^Ta bort$/i }));
     expect(mutationStubs.delete.mutate).toHaveBeenCalledWith({ id: "d1" });
     confirmSpy.mockRestore();
   });
@@ -272,7 +277,8 @@ describe("DocumentBrowser", () => {
   it("klick på Analysera triggar reanalyze-mutation", () => {
     treeQuery.data = { folders: [], documents: [baseDoc()] };
     render(<DocumentBrowser matterId="m1" />);
-    fireEvent.click(screen.getByRole("button", { name: /Analysera/i }));
+    fireEvent.click(screen.getByLabelText("Dokumentåtgärder"));
+    fireEvent.click(screen.getByRole("menuitem", { name: /Analysera/i }));
     expect(mutationStubs.analyze.mutate).toHaveBeenCalledWith({ documentId: "d1" });
   });
 

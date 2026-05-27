@@ -1,9 +1,11 @@
 "use client";
 
 import { Fragment, useState } from "react";
+import { Trash2 } from "lucide-react";
 import { formatFileSize } from "./_drag-helpers";
 import { readFromFsa } from "@/lib/client/fsa/read-from-fsa";
 import { ExternalEditModal, type ModalState } from "./external-edit-modal";
+import { ActionMenu, type ActionMenuItem } from "@/components/ui/action-menu";
 
 export interface DocumentRecord {
   id: string;
@@ -62,10 +64,10 @@ export function DocumentRow({
         className={`hover:bg-gray-50 ${isDragging ? "opacity-50" : ""} ${isUploading ? "opacity-60 pointer-events-none" : ""}`}
         title={isUploading ? "Laddar upp…" : undefined}
       >
-        <td className="px-6 py-2.5 text-sm">
+        <td className="px-3 sm:px-6 py-2.5 text-sm">
           <div
-            style={{ paddingLeft: `${depth * 20 + 20}px` }}
-            className="flex items-center gap-2"
+            style={{ paddingLeft: `${depth * 16 + 4}px` }}
+            className="flex items-center gap-2 min-w-0"
           >
             <DocumentNameButton doc={doc} isAnalyzing={isAnalyzing} disabled={isUploading} />
             {isUploading && (
@@ -78,27 +80,18 @@ export function DocumentRow({
             )}
           </div>
         </td>
-        <td className="px-6 py-2.5 text-sm text-gray-500 whitespace-nowrap">{formatFileSize(doc.fileSize)}</td>
-        <td className="px-6 py-2.5 text-sm text-gray-500 whitespace-nowrap">
+        <td className="hidden sm:table-cell px-6 py-2.5 text-sm text-gray-500 whitespace-nowrap">{formatFileSize(doc.fileSize)}</td>
+        <td className="hidden sm:table-cell px-6 py-2.5 text-sm text-gray-500 whitespace-nowrap">
           {new Date(doc.createdAt).toLocaleDateString("sv-SE")}
         </td>
-        <td className="px-6 py-2.5 text-right whitespace-nowrap">
-          <DocumentLinks doc={doc} disabled={isUploading} />
-          <button
-            onClick={onReanalyze}
-            disabled={reanalyzePending || isUploading}
-            className="text-xs text-gray-500 hover:text-blue-600 hover:underline mr-3 disabled:opacity-50"
-            title={isUploading ? "Vänta tills uppladdningen är klar" : "Kör AI-analys på nytt"}
-          >
-            🧠 Analysera
-          </button>
-          <button
-            onClick={onDelete}
+        <td className="px-3 py-2.5 text-right whitespace-nowrap">
+          <DocumentActions
+            doc={doc}
             disabled={isUploading}
-            className="text-xs text-red-500 hover:underline disabled:opacity-50"
-          >
-            Ta bort
-          </button>
+            onReanalyze={onReanalyze}
+            onDelete={onDelete}
+            reanalyzePending={reanalyzePending}
+          />
         </td>
       </tr>
     </Fragment>
@@ -112,18 +105,31 @@ function isWithinAnalysisGrace(doc: DocumentRecord): boolean {
 }
 
 /**
- * `DocumentLinks` — "Öppna" + "Visa" + "Ladda ner".
+ * `DocumentActions` — alla rad-actions samlade i EN kebab-meny (⋮).
  *
- * I Tauri-build:n exponeras "Öppna i [app]"-knappen som anropar
- * Rust-command `open_in_default_app` så användaren får sin OS-default
- * PDF-editor (PDFGear/Preview). Efter redigering committar
- * `Spara ändringar`-flödet på matter-sidan.
+ * Tidigare låg Öppna / Editera externt / Visa / Ladda ner / Analysera /
+ * Ta bort som inline-knappar → raden blev för bred → horisontell scroll
+ * på små skärmar. Nu en touch-vänlig overflow-meny som funkar på alla
+ * skärmstorlekar (se [[ActionMenu]]).
  *
- * I demo-build:n pekar "Visa"/"Ladda ner" mot GH Pages.
- * I full server-build:n mot /api/documents/<id>/download.
+ * Länk-vägar:
+ *   - demo-build → GH Pages-URL (Visa/Ladda ner).
+ *   - server-build → /api/documents/<id>/download.
  */
-// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'DocumentLinks' has a complexity of 12. Maximum allowed is 8.)
-function DocumentLinks({ doc, disabled }: { doc: DocumentRecord; disabled?: boolean }) {
+// eslint-disable-next-line complexity -- bygger länk-URL:er + actions (demo vs server)
+function DocumentActions({
+  doc,
+  disabled,
+  onReanalyze,
+  onDelete,
+  reanalyzePending,
+}: {
+  doc: DocumentRecord;
+  disabled?: boolean;
+  onReanalyze: () => void;
+  onDelete: () => void;
+  reanalyzePending: boolean;
+}) {
   const [modal, setModal] = useState<ModalState>({ kind: "closed" });
   const isDemo = process.env.NEXT_PUBLIC_DEMO_BUILD === "1";
   let viewHref: string;
@@ -147,7 +153,7 @@ function DocumentLinks({ doc, disabled }: { doc: DocumentRecord; disabled?: bool
     // filer hinner inte till remote än), annars GH Pages-URL.
     // Browser kan EJ navigera till file:// från https://, så vi öppnar
     // som blob:-URL i ny tab → Chrome visar PDF inline.
-    // För PDFGear/Preview/Acrobat → mounta WebDAV-disken i Inställningar.
+    // För PDFGear/Preview/Acrobat → använd "Editera externt" (FSA).
     const rec = doc as DocumentRecord & { storagePath?: string };
     const path = rec.storagePath ?? "";
 
@@ -172,14 +178,11 @@ function DocumentLinks({ doc, disabled }: { doc: DocumentRecord; disabled?: bool
       }
     }
 
-    // Fallback: GH Pages (för pushade dokument i demo) eller server-URL
-    const proceed = confirm(
-      "Dokumentet öppnas i Chrome.\n\n" +
-      "Vill du öppna i PDFGear / Preview / Acrobat istället?\n" +
-      "→ Mounta AVA:s WebDAV-disk via Inställningar och öppna filen från Finder/Utforskaren.\n\n" +
-      "Klicka OK för att öppna i Chrome ändå."
-    );
-    if (proceed) window.open(viewHref, "_blank", "noopener,noreferrer");
+    // Fallback: GH Pages (för pushade dokument i demo) eller server-URL.
+    // Vill användaren redigera i en extern app (PDF Gear/Preview/Acrobat)
+    // är vägen "Editera externt" (öppnar filen från din lokala mapp via
+    // File System Access) — inte detta visnings-flöde.
+    window.open(viewHref, "_blank", "noopener,noreferrer");
   };
 
   const openExternal = async () => {
@@ -231,45 +234,20 @@ function DocumentLinks({ doc, disabled }: { doc: DocumentRecord; disabled?: bool
     });
   };
 
+  const uploadingTitle = disabled ? "Vänta tills uppladdningen är klar" : undefined;
+  const items: ActionMenuItem[] = [
+    { key: "open", label: "Öppna i webbläsaren", icon: <span aria-hidden>🖊</span>, onSelect: openInEditor, disabled, title: uploadingTitle ?? "Öppna i din browser" },
+    { key: "external", label: "Editera externt (PDF Gear, Preview…)", icon: <span aria-hidden>🖥</span>, onSelect: openExternal, disabled, title: uploadingTitle ?? "AVA committar dina ändringar automatiskt" },
+    { key: "view", label: "Visa", icon: <span aria-hidden>👁</span>, href: viewHref, newTab: true, disabled, title: uploadingTitle ?? "Visa i webbläsaren" },
+    { key: "download", label: "Ladda ner", icon: <span aria-hidden>⬇</span>, href: downloadHref, download: true, disabled, title: uploadingTitle ?? "Ladda ner" },
+    { key: "reanalyze", label: "Analysera (AI)", icon: <span aria-hidden>🧠</span>, onSelect: onReanalyze, disabled: disabled || reanalyzePending, title: uploadingTitle ?? "Kör AI-analys på nytt" },
+    { key: "delete", label: "Ta bort", icon: <Trash2 size={15} />, onSelect: onDelete, danger: true, disabled, title: uploadingTitle },
+  ];
+
   return (
     <>
       <ExternalEditModal state={modal} onClose={() => setModal({ kind: "closed" })} />
-      <button
-        type="button"
-        onClick={openInEditor}
-        disabled={disabled}
-        className="text-xs text-gray-500 hover:text-blue-600 hover:underline mr-3 disabled:opacity-50 disabled:cursor-not-allowed"
-        title={disabled ? "Vänta tills uppladdningen är klar" : "Öppna i din browser"}
-      >
-        🖊 Öppna
-      </button>
-      <button
-        type="button"
-        onClick={openExternal}
-        disabled={disabled}
-        className="text-xs text-gray-500 hover:text-blue-600 hover:underline mr-3 disabled:opacity-50 disabled:cursor-not-allowed"
-        title={disabled ? "Vänta tills uppladdningen är klar" : "Öppna i extern app (PDF Gear, Preview...) — AVA committar dina ändringar automatiskt"}
-      >
-        🖥 Editera externt
-      </button>
-      <a
-        href={disabled ? undefined : viewHref}
-        target="_blank"
-        rel="noopener noreferrer"
-        className={`text-xs text-gray-500 hover:text-blue-600 hover:underline mr-3 ${disabled ? "opacity-50 pointer-events-none" : ""}`}
-        title={disabled ? "Vänta tills uppladdningen är klar" : "Visa i webbläsaren"}
-        aria-disabled={disabled}
-      >
-        👁 Visa
-      </a>
-      <a
-        href={disabled ? undefined : downloadHref}
-        className={`text-xs text-gray-500 hover:text-blue-600 hover:underline mr-3 ${disabled ? "opacity-50 pointer-events-none" : ""}`}
-        title={disabled ? "Vänta tills uppladdningen är klar" : "Ladda ner"}
-        aria-disabled={disabled}
-      >
-        ⬇ Ladda ner
-      </a>
+      <ActionMenu items={items} disabled={disabled} label="Dokumentåtgärder" />
     </>
   );
 }
@@ -306,12 +284,12 @@ function DocumentNameButton({ doc, isAnalyzing, disabled }: { doc: DocumentRecor
       className="flex items-start gap-2 text-blue-600 hover:underline text-left disabled:opacity-50 disabled:cursor-not-allowed disabled:no-underline"
       title={disabled ? "Laddar upp — vänta tills filen är registrerad" : (doc.summary || "Öppna i extern app (PDFGear för PDF)")}
     >
-      <span className="text-lg leading-tight">📄</span>
+      <span className="text-lg leading-tight flex-shrink-0">📄</span>
       <span className="flex flex-col min-w-0">
-        <span className="font-medium">{doc.title || doc.fileName}</span>
-        <span className="flex items-center gap-1.5 text-xs text-gray-500 font-normal">
+        <span className="font-medium break-words">{doc.title || doc.fileName}</span>
+        <span className="flex items-center gap-1.5 text-xs text-gray-500 font-normal min-w-0">
           {doc.documentType && (
-            <span className="inline-block rounded-full bg-purple-50 text-purple-700 px-1.5 py-0.5 text-[10px] font-medium">
+            <span className="inline-block rounded-full bg-purple-50 text-purple-700 px-1.5 py-0.5 text-[10px] font-medium flex-shrink-0">
               {doc.documentType}
             </span>
           )}
