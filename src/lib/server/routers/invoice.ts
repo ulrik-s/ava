@@ -16,8 +16,71 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, orgProcedure } from "../trpc";
+import type { DataStoreTx } from "../data-store/IDataStore";
 import { computeFinalInvoiceBreakdown, isPaymentPlanSettled } from "@/lib/client/invoice-calc";
 import { emit } from "../events/emit";
+
+// ─── createFinal-hjälpare (validera + koppla poster) ──────────────
+
+/** Hämta valda obetalda tidsposter; kasta om någon redan fakturerats/ägs av annat ärende. */
+async function fetchUnbilledTimeEntries(tx: DataStoreTx, matterId: string, ids: string[]) {
+  const rows = ids.length
+    ? await tx.timeEntries.findMany({
+        where: { id: { in: ids }, matterId, invoiceId: null },
+        include: { user: { select: { hourlyRate: true } } },
+      })
+    : [];
+  if (rows.length !== ids.length) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "Några tidsposter är redan fakturerade eller tillhör annat ärende." });
+  }
+  return rows;
+}
+
+/** Hämta valda obetalda utlägg; kasta om någon redan fakturerats/ägs av annat ärende. */
+async function fetchUnbilledExpenses(tx: DataStoreTx, matterId: string, ids: string[]) {
+  const rows = ids.length
+    ? await tx.expenses.findMany({ where: { id: { in: ids }, matterId, invoiceId: null } })
+    : [];
+  if (rows.length !== ids.length) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "Några utlägg är redan fakturerade eller tillhör annat ärende." });
+  }
+  return rows;
+}
+
+/** Validera accontos: samma ärende, typ ACCONTO, ej redan avdragna på en FINAL. */
+async function fetchDeductibleAccontos(tx: DataStoreTx, matterId: string, ids: string[]) {
+  const rows = ids.length
+    ? await tx.invoices.findMany({
+        where: { id: { in: ids }, matterId, invoiceType: "ACCONTO", deductedOnFinals: { none: {} } },
+      })
+    : [];
+  if (rows.length !== ids.length) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "Några acconto-fakturor är redan avdragna eller tillhör annat ärende." });
+  }
+  return rows;
+}
+
+/**
+ * Koppla poster till fakturan + skapa acconto-avdrag via explicita anrop
+ * (ej Prisma nested writes) så samma kod kör mot både Postgres och git-store:n.
+ */
+async function linkBilledItems(
+  tx: DataStoreTx,
+  invoiceId: string,
+  timeEntries: ReadonlyArray<{ id: string }>,
+  expenses: ReadonlyArray<{ id: string }>,
+  accontos: ReadonlyArray<{ id: string }>,
+): Promise<void> {
+  if (timeEntries.length) {
+    await tx.timeEntries.updateMany({ where: { id: { in: timeEntries.map((t) => t.id) } }, data: { invoiceId } });
+  }
+  if (expenses.length) {
+    await tx.expenses.updateMany({ where: { id: { in: expenses.map((e) => e.id) } }, data: { invoiceId } });
+  }
+  for (const a of accontos) {
+    await tx.accontoDeductions.create({ data: { finalInvoiceId: invoiceId, accontoInvoiceId: a.id } });
+  }
+}
 
 const invoiceTypeSchema = z.enum(["STANDARD", "ACCONTO", "FINAL"]);
 const invoiceStatusSchema = z.enum([
@@ -132,71 +195,18 @@ export const invoiceRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      // eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Async arrow function has a complexity of 13. Maximum allowed is 8.)
       return ctx.dataStore.transaction(async (tx) => {
         const matter = await tx.matters.findFirst({
           where: { id: input.matterId, organizationId: ctx.orgId },
         });
         if (!matter) throw new TRPCError({ code: "NOT_FOUND" });
 
-        // Hämta och validera time entries
-        const timeEntries = input.timeEntryIds.length
-          ? await tx.timeEntries.findMany({
-              where: {
-                id: { in: input.timeEntryIds },
-                matterId: input.matterId,
-                invoiceId: null,
-              },
-              include: { user: { select: { hourlyRate: true } } },
-            })
-          : [];
-        if (timeEntries.length !== input.timeEntryIds.length) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "Några tidsposter är redan fakturerade eller tillhör annat ärende.",
-          });
-        }
-
-        const expenses = input.expenseIds.length
-          ? await tx.expenses.findMany({
-              where: {
-                id: { in: input.expenseIds },
-                matterId: input.matterId,
-                invoiceId: null,
-              },
-            })
-          : [];
-        if (expenses.length !== input.expenseIds.length) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "Några utlägg är redan fakturerade eller tillhör annat ärende.",
-          });
-        }
-
-        // Validera accontos: måste tillhöra samma ärende, vara ACCONTO, och
-        // inte redan vara avdragna på en tidigare FINAL.
-        const accontos = input.accontoInvoiceIds.length
-          ? await tx.invoices.findMany({
-              where: {
-                id: { in: input.accontoInvoiceIds },
-                matterId: input.matterId,
-                invoiceType: "ACCONTO",
-                deductedOnFinals: { none: {} },
-              },
-            })
-          : [];
-        if (accontos.length !== input.accontoInvoiceIds.length) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "Några acconto-fakturor är redan avdragna eller tillhör annat ärende.",
-          });
-        }
+        const timeEntries = await fetchUnbilledTimeEntries(tx, input.matterId, input.timeEntryIds);
+        const expenses = await fetchUnbilledExpenses(tx, input.matterId, input.expenseIds);
+        const accontos = await fetchDeductibleAccontos(tx, input.matterId, input.accontoInvoiceIds);
 
         const breakdown = computeFinalInvoiceBreakdown(
-          timeEntries.map((t) => ({
-            minutes: t.minutes,
-            hourlyRate: t.user.hourlyRate ?? 0,
-          })),
+          timeEntries.map((t) => ({ minutes: t.minutes, hourlyRate: t.user.hourlyRate ?? 0 })),
           expenses.map((e) => ({ amount: e.amount, billable: e.billable })),
           accontos.map((a) => ({ id: a.id, amount: a.amount })),
         );
@@ -213,26 +223,7 @@ export const invoiceRouter = router({
           },
         });
 
-        // Koppla poster + skapa acconto-avdrag via explicita anrop (istället
-        // för Prisma nested writes) så samma kod kör mot både Postgres och
-        // in-memory/git-store:n.
-        if (timeEntries.length) {
-          await tx.timeEntries.updateMany({
-            where: { id: { in: timeEntries.map((t) => t.id) } },
-            data: { invoiceId: invoice.id },
-          });
-        }
-        if (expenses.length) {
-          await tx.expenses.updateMany({
-            where: { id: { in: expenses.map((e) => e.id) } },
-            data: { invoiceId: invoice.id },
-          });
-        }
-        for (const a of accontos) {
-          await tx.accontoDeductions.create({
-            data: { finalInvoiceId: invoice.id, accontoInvoiceId: a.id },
-          });
-        }
+        await linkBilledItems(tx, invoice.id, timeEntries, expenses, accontos);
         return { invoice, breakdown };
       }).then(async (result) => {
         await emit.invoiceCreated(ctx, result.invoice);
