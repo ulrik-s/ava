@@ -8,11 +8,10 @@
  * Git-läget producerar ett pushbart repo. Postgres-läget är en stub tills
  * PostgresStore finns (ADR 0001 Fas 3).
  *
- * STATUS: populate täcker första slice:n (organization → users → contacts).
- * Kvarstående entiteter (matters + matter-contacts, time/expenses, templates,
- * documents, calendar, tasks, conflicts) och BILLING via flöden (createAcconto
- * → recordPayment → createFinal, ADR-beslut 1a) byggs som nästa increment i
- * `populate.ts`.
+ * STATUS: populate täcker org → users → contacts → matters → matter-contacts
+ * → time/expenses → calendar → tasks → templates → conflict-checks, och
+ * populateBilling driver fakturerings-flödena (ADR-beslut 1a). Kvarstår:
+ * dokument (metadata via API + binärinnehåll), se task-TODO.
  */
 
 import { rmSync, mkdirSync } from "node:fs";
@@ -21,6 +20,7 @@ import { buildSeed } from "../scripts/seed-data";
 import { makeNodeGitWriteBack } from "./node-git-writeback";
 import { createGitTarget, createPostgresTarget, type BackendTarget } from "./backend-target";
 import { populate } from "./populate";
+import { populateBilling } from "./populate-billing";
 import type { Principal } from "@/lib/server/auth/principal";
 
 interface Args { backend: "git" | "postgres"; outDir: string; }
@@ -65,8 +65,9 @@ async function main(): Promise<void> {
   }
 
   const res = await populate(target.caller, seed);
+  const billing = await populateBilling(target.caller, seed); // efter time/expenses
   await target.finalize();
-  console.log(`[demo-generator] backend=${args.backend} →`, res);
+  console.log(`[demo-generator] backend=${args.backend} →`, { ...res, billing });
   if (args.backend === "git") console.log(`[demo-generator] git-repo: ${args.outDir}`);
 }
 

@@ -5,12 +5,10 @@
  * klient-genererade id:n, ADR 0003) → backenden (git/Postgres) persisterar
  * via `IDataStore`. Samma kod oavsett backend.
  *
- * STATUS: första vertikala slice:n (organization → users → contacts).
- * Kvarstående increment (samma mönster): matters (+ matter-contacts via
- * addContact), time-entries, expenses, document-templates, documents,
- * calendar, tasks, conflict-checks — samt BILLING via flöden (createAcconto
- * → recordPayment → createFinal → createPaymentPlan, ADR-beslut 1a) och
- * organization.create för reminders. Se generate.ts-TODO.
+ * Täcker org → users → contacts → matters → matter-contacts → time-entries
+ * → expenses → calendar → tasks → document-templates → conflict-checks.
+ * Fakturering drivs via FLÖDENA i `populate-billing.ts` (ADR-beslut 1a).
+ * Kvarstår: dokument (metadata + binärinnehåll).
  */
 
 import type { SeedDataset } from "../scripts/seed-data";
