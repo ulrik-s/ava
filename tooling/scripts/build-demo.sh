@@ -129,35 +129,16 @@ yarn tsx tooling/scripts/generate-demo-manifest.ts "$ROOT/out"
 # (t.ex. /.ava/users/) → users + org-data skulle 404:a.
 touch "$ROOT/out/.nojekyll"
 
-# SPA-fallback: GH Pages serverar 404.html för okända URL:er. Vi skriver
-# en tiny 404-sida som strip:ar basePath, sparar intended path i
-# sessionStorage och redirectar till app-shellen på /ava/. Då bootar appen
-# på roten, SpaRedirectReader läser sessionStorage och kör router.replace().
-# Resultat: webappen funkar som SPA — runtime-skapade entity-id:n kan nås
-# via direktlänk utan att kräva pre-renderad HTML.
-BASE_PATH="${DEMO_BASE_PATH:-/ava}"
-cat > "$ROOT/out/404.html" <<EOF
-<!doctype html>
-<html lang="sv">
-<head>
-<meta charset="utf-8">
-<title>AVA</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<script>
-(function () {
-  var base = "${BASE_PATH}";
-  var path = location.pathname;
-  if (base && path.indexOf(base) === 0) path = path.slice(base.length);
-  if (!path.startsWith("/")) path = "/" + path;
-  var target = path + location.search + location.hash;
-  try { sessionStorage.setItem("_spa_redirect", target); } catch (e) {}
-  location.replace((base || "") + "/");
-})();
-</script>
-</head>
-<body><p style="font-family:system-ui;color:#555;padding:2rem">Laddar AVA…</p></body>
-</html>
-EOF
+# SPA-fallback: GH Pages serverar 404.html för okända URL:er. Vi gör
+# 404.html till en KOPIA av index.html (app-shellen). Då bootar appen
+# direkt på den okända URL:en, Next:s client-router renderar matchande
+# route och `useRouteId` läser id:t ur path:en. Inget redirect → ingen
+# loop för id:n som inte är pre-renderade (organiska faktura-/plan-id).
+#
+# Tidigare redirect-till-rot + sessionStorage-mekanism loopade när
+# router.replace gick mot ett id som inte fanns i generateStaticParams
+# (Next hård-navigerade → ny 404 → ny redirect → loop).
+cp "$ROOT/out/index.html" "$ROOT/out/404.html"
 
 echo "[build-demo] Klar. Output: $ROOT/out/"
 echo "  • App: $(find "$ROOT/out" -name '*.html' | wc -l | tr -d ' ') HTML-filer"
