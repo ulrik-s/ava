@@ -72,7 +72,7 @@ export function DocumentsListView({ matterId, documents, folders, onDelete, onRe
             onSelect: () => { if (confirm(`Ta bort "${d.fileName}"?`)) onDelete(d.id); },
           },
         ];
-        return <ActionMenu items={items} />;
+        return <ActionMenu items={items} label="Dokumentåtgärder" />;
       },
     },
   ];
