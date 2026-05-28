@@ -60,6 +60,10 @@ const demoConfig: NextConfig = {
   trailingSlash: true,
   images: { unoptimized: true },
   typescript: { ignoreBuildErrors: false },
+  // Källkartor i prod-bundle:n så diagnose-ui:s page-error-stack mappar
+  // tillbaka till riktiga filer/rader. Lite större bundle (~5-10%) men
+  // gör fjärr-felsökning på GH Pages-demon möjlig.
+  productionBrowserSourceMaps: true,
   turbopack: {
     resolveAlias: stubAliases,
   },

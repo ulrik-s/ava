@@ -34,6 +34,7 @@ interface Props {
   children?: React.ReactNode;
 }
 
+// eslint-disable-next-line complexity -- många tier-conditionals i JSX
 export function FirmaSettingsPanel({ initial, onSaved, onCancel, inline = false, children }: Props) {
   const [tier, setTier] = useState<FirmaTier>(initial.tier);
   const [repo, setRepo] = useState(initial.repo);
@@ -42,6 +43,7 @@ export function FirmaSettingsPanel({ initial, onSaved, onCancel, inline = false,
   const [name, setName] = useState(initial.authorName);
   const [email, setEmail] = useState(initial.authorEmail);
   const [corsProxy, setCorsProxy] = useState(initial.corsProxy ?? "");
+  const [gitUsername, setGitUsername] = useState(initial.gitUsername ?? "");
   const [allowAnonymousRead, setAllowAnonymousRead] = useState<boolean>(
     () => loadAuthSettings().allowAnonymousRead,
   );
@@ -63,6 +65,7 @@ export function FirmaSettingsPanel({ initial, onSaved, onCancel, inline = false,
       organizationId: orgId,
       authorName: name, authorEmail: email,
       corsProxy: corsProxy.trim() || undefined,
+      gitUsername: gitUsername.trim() || undefined,
     });
     saveAuthSettings({ allowAnonymousRead });
     saveOAuthConfig(oauth);
@@ -76,6 +79,7 @@ export function FirmaSettingsPanel({ initial, onSaved, onCancel, inline = false,
       organizationId: orgId,
       authorName: name, authorEmail: email,
       corsProxy: corsProxy.trim() || undefined,
+      gitUsername: gitUsername.trim() || undefined,
     });
     onSaved();
   };
@@ -105,6 +109,10 @@ export function FirmaSettingsPanel({ initial, onSaved, onCancel, inline = false,
         <OrgIdField value={orgId} onChange={setOrgId} />
         <AnonymousReadToggle checked={allowAnonymousRead} onChange={setAllowAnonymousRead} />
         <IdentityFields name={name} email={email} onNameChange={setName} onEmailChange={setEmail} />
+
+        {tier === "self-hosted" && (
+          <GitUsernameField tier={tier} value={gitUsername} onChange={setGitUsername} authorEmail={email} />
+        )}
 
         {tier !== "demo" && <CorsProxyField value={corsProxy} onChange={setCorsProxy} />}
       </div>
@@ -211,6 +219,34 @@ function AnonymousReadToggle({ checked, onChange }: { checked: boolean; onChange
       <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
       <span className="text-xs text-gray-700">
         Tillåt anonym läsning (avmarkera = kräv inloggning för att se data)
+      </span>
+    </label>
+  );
+}
+
+export function GitUsernameField({ tier, value, onChange, authorEmail }: {
+  tier: FirmaTier;
+  value: string;
+  onChange: (v: string) => void;
+  authorEmail: string;
+}) {
+  if (tier !== "self-hosted") return null;
+  const fallback = authorEmail || "admin";
+  return (
+    <label className="block">
+      <span className="text-xs text-gray-500 mb-1 block">
+        Git-användarnamn (Basic-auth mot self-hosted nginx)
+      </span>
+      <input
+        type="text" value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={`Lämna tomt → använder "${fallback}"`}
+        className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm font-mono"
+      />
+      <span className="text-[11px] text-gray-400 mt-1 block">
+        nginx htpasswd-användaren — typiskt &quot;admin&quot; (bootstrap-PAT) eller en e-post
+        (skapad med <code className="font-mono bg-gray-100 px-1 rounded">add-user.sh</code>).
+        Tomt = härleds från e-post.
       </span>
     </label>
   );

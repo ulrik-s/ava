@@ -164,6 +164,11 @@ function attachListeners(page: Page, consoleErrors: ConsoleMsg[], networkErrors:
       consoleErrors.push({ level: msg.type(), text: msg.text(), url: msg.location().url });
     }
   });
+  // Page-errors innehåller Playwright's källkarte-resolverade stacks → exakt
+  // filnamn/rad där throw:en kom från. Mycket bättre än console-error-strängar.
+  page.on("pageerror", (err: Error) => {
+    consoleErrors.push({ level: "pageerror", text: `${err.message}\n${err.stack ?? ""}` });
+  });
   page.on("response", (resp) => {
     if (resp.status() >= 400) {
       networkErrors.push({ url: resp.url(), status: resp.status(), method: resp.request().method() });
@@ -227,7 +232,10 @@ async function visitDetail(
   await page.waitForTimeout(4000);
 
   const hadErrorBoundary = await detectErrorBoundary(page);
-  const rendered = !hadErrorBoundary && await page.locator("h1, h2").first().isVisible().catch(() => false);
+  // "Renderade" = ingen error-boundary fångad. Pageerror + console-errors
+  // visas separat — vi behöver inte också ha en text-längd-heuristik som
+  // ger falska negativ för formulär/editor-sidor med mest placeholders.
+  const rendered = !hadErrorBoundary;
 
   const dir = join(REPORT_DIR, routeName);
   await mkdir(dir, { recursive: true });
@@ -298,7 +306,7 @@ function summarize(results: RouteResult[]): { totalIssues: number; lines: string
       const labelOrHref = it.label || it.href;
       lines.push(`     → ${it.href.padEnd(40)} ${itStatus}  ${labelOrHref.slice(0, 40)}`);
       if (it.hadErrorBoundary) lines.push(`        ✗ error-boundary triggered`);
-      if (!it.rendered && !it.hadErrorBoundary) lines.push(`        ✗ ingen h1/h2 hittad`);
+      if (!it.rendered && !it.hadErrorBoundary) lines.push(`        ✗ ingen huvudinnehåll-text hittad`);
       for (const e of it.consoleErrors.slice(0, 2)) lines.push(`        ! console-${e.level}: ${e.text.slice(0, 100)}`);
       for (const n of it.networkErrors.slice(0, 2)) lines.push(`        ! ${n.method} ${n.status} ${n.url.slice(0, 80)}`);
     }
