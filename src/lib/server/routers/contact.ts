@@ -10,7 +10,9 @@ export const contactRouter = router({
         search: z.string().optional(),
         contactType: contactTypeSchema.optional(),
         page: z.number().min(1).default(1),
-        pageSize: z.number().min(1).max(100).default(20),
+        // Cap höjt till 1000: kalender-event-formuläret behöver ALLA kontakter
+        // (för invitee-pickern), inte sidvis. pageSize:500 misslyckades tidigare.
+        pageSize: z.number().min(1).max(1000).default(20),
       })
     )
     .query(async ({ ctx, input }) => {
