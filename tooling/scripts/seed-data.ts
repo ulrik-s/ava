@@ -500,20 +500,55 @@ export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
     });
   }
 
-  // tasks
-  const taskTitles = ["Skriv inlaga till tingsrätten", "Granska motpartens svaromål", "Beställ vittnesinkallelser", "Boka tolk till huvudförhandling", "Förbereda korsförhör", "Skicka faktura efter förlikning", "Uppdatera ärendebeskrivning", "Ring klient angående status", "Kopiera handlingar till motparten", "Boka mötesrum för klientmöte", "Skicka in fullmakt", "Sammanställ bevisuppgift"];
+  // tasks — sprid 80 stycken över förfluten + framtid, alla användare,
+  // alla ärenden, mix av status/prioritet. Ger realistisk volym till
+  // dashboard-widgeten och /todo-vyn.
+  const taskTitles = [
+    "Skriv inlaga till tingsrätten", "Granska motpartens svaromål",
+    "Beställ vittnesinkallelser", "Boka tolk till huvudförhandling",
+    "Förbereda korsförhör", "Skicka faktura efter förlikning",
+    "Uppdatera ärendebeskrivning", "Ring klient angående status",
+    "Kopiera handlingar till motparten", "Boka mötesrum för klientmöte",
+    "Skicka in fullmakt", "Sammanställ bevisuppgift",
+    "Förbered slutplädering", "Skicka påminnelse om obetald faktura",
+    "Kontakta domstolen om förhandlingsdatum", "Begär ut handlingar från myndighet",
+    "Skicka över förslag till förlikning", "Förbered avtalsmall",
+    "Boka medling", "Genomgång av nytt material",
+    "Hör med vittne om tillgänglighet", "Lägg in tidrapport för förra veckan",
+    "Korrekturläsning av dom", "Skicka kvitto till klient",
+    "Förbereda agenda för möte", "Uppdatera klient om ärendets status",
+    "Skicka in överklagan", "Granska sakkunnigutlåtande",
+    "Förbered budget för ärendet", "Skriva sammanfattning till klient",
+  ];
   const priorities: Array<"LOW" | "MEDIUM" | "HIGH"> = ["LOW", "MEDIUM", "HIGH"];
-  const taskStatuses: Array<"TODO" | "IN_PROGRESS" | "DONE"> = ["TODO", "TODO", "IN_PROGRESS", "TODO", "DONE"];
-  for (let i = 0; i < taskTitles.length; i++) {
+  // Vikt mot TODO (oavslutade dominerar i en advokatbyrå).
+  const taskStatusPool: Array<"TODO" | "IN_PROGRESS" | "DONE"> = [
+    "TODO", "TODO", "TODO", "TODO", "IN_PROGRESS", "IN_PROGRESS", "DONE", "DONE",
+  ];
+  const TASK_COUNT = 80;
+  for (let i = 0; i < TASK_COUNT; i++) {
     const matter = MATTERS[i % MATTERS.length];
-    const status = taskStatuses[i % taskStatuses.length];
-    const due = (i % 4) + 1;
+    const title = taskTitles[i % taskTitles.length];
+    const status = taskStatusPool[i % taskStatusPool.length];
+    // Sprid förfallodatum: -14 till +21 dagar (mix av över-tid + i dag + framtid).
+    const dueOffset = ((i * 7) % 35) - 14;
+    // Tider varierar: morgon, lunch, eftermiddag.
+    const dueAt = new Date(isoDate(dueOffset));
+    dueAt.setHours([9, 11, 14, 16][i % 4], [0, 15, 30, 45][i % 4], 0, 0);
+    const createdOffset = -(((i * 3) % 30) + 1);
     out.tasks.push({
       id: `task-${String(i + 1).padStart(3, "0")}`,
-      userId: ASSIGN_USERS[i % ASSIGN_USERS.length], organizationId: orgId,
-      title: taskTitles[i], status, priority: priorities[i % priorities.length],
-      dueAt: isoDate(due * 2), completedAt: status === "DONE" ? isoDate(-2) : null,
-      matterId: matter.id, createdAt: isoDate(-7), updatedAt: isoDate(-1),
+      userId: ASSIGN_USERS[i % ASSIGN_USERS.length],
+      organizationId: orgId,
+      title,
+      description: i % 3 === 0 ? `Uppgift kopplad till ärende ${matter.title}.` : null,
+      status,
+      priority: priorities[i % priorities.length],
+      dueAt: dueAt.toISOString(),
+      completedAt: status === "DONE" ? isoDate(dueOffset - 1) : null,
+      matterId: matter.id,
+      createdAt: isoDate(createdOffset),
+      updatedAt: isoDate(Math.max(-1, createdOffset + 2)),
     });
   }
 

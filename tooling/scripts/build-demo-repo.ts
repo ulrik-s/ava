@@ -5,7 +5,7 @@
  * KONSOLIDERAD: använder samma `generateInto()` som docker-firma:n + den
  * fristående generatorn → demo-mode på GitHub Pages får IDENTISKT dataset
  * (5 användare, 17 kontakter, 17 ärenden, 40 PDF/DOCX, fakturering via
- * flöden inkl avbetalningsplaner + påminnelser, 25 kalender-events, 12 tasks,
+ * flöden inkl avbetalningsplaner + påminnelser, 25 kalender-events, 80 tasks,
  * 6 templates, 5 jäv-historik-rader).
  *
  * Användning:
