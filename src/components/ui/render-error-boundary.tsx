@@ -8,13 +8,14 @@
 
 import { Component, type ReactNode } from "react";
 
-interface State { error: Error | null }
+interface State { error: Error | null; componentStack: string | null }
 
 export class RenderErrorBoundary extends Component<{ children: ReactNode }, State> {
-  state: State = { error: null };
-  static getDerivedStateFromError(error: Error): State { return { error }; }
+  state: State = { error: null, componentStack: null };
+  static getDerivedStateFromError(error: Error): State { return { error, componentStack: null }; }
   componentDidCatch(error: Error, info: { componentStack: string }) {
-    console.error("[render-error]", error, info.componentStack);
+    console.error("[render-error]", error.message, "\nComponentStack:", info.componentStack);
+    this.setState({ componentStack: info.componentStack });
   }
   render() {
     if (this.state.error) {
@@ -23,6 +24,12 @@ export class RenderErrorBoundary extends Component<{ children: ReactNode }, Stat
           <div className="font-bold mb-2">Render-fel</div>
           <div>{this.state.error.name}: {this.state.error.message}</div>
           <pre className="mt-2 whitespace-pre-wrap text-[10px] text-red-700">{this.state.error.stack?.slice(0, 1500)}</pre>
+          {this.state.componentStack && (
+            <>
+              <div className="mt-3 font-bold">Component stack:</div>
+              <pre className="mt-1 whitespace-pre-wrap text-[10px] text-red-700">{this.state.componentStack}</pre>
+            </>
+          )}
         </div>
       );
     }

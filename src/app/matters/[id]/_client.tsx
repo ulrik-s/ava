@@ -111,6 +111,7 @@ interface HeaderProps {
   onOpenGenerate: () => void;
 }
 
+// eslint-disable-next-line complexity -- JSX-conditionals (klient-länk + matterType + isTaxeArende + status-actions)
 function MatterHeader({ matter: m, klient, onOpenGenerate }: HeaderProps) {
   const utils = trpc.useUtils();
   const updateStatus = trpc.matter.update.useMutation({
@@ -132,7 +133,7 @@ function MatterHeader({ matter: m, klient, onOpenGenerate }: HeaderProps) {
           <p className="text-sm font-mono text-gray-500">{m.matterNumber}</p>
           <h1 className="text-2xl font-bold text-gray-900 mt-1">{m.title}</h1>
           <p className="text-sm text-gray-500 mt-1">
-            {klient.length > 0 && (
+            {klient.length > 0 && klient[0].contact && (
               <>Klient: <Link href={`/contacts/${klient[0].contact.id}`} className="text-blue-600 hover:underline">{klient[0].contact.name}</Link></>
             )}
             {m.matterType && <>{klient.length > 0 ? " · " : ""}{m.matterType}</>}

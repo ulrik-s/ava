@@ -36,8 +36,8 @@ const matterColumns: Column<MatterRow>[] = [
       </span>
     ),
   },
-  { key: "klient", label: "Klient", sortable: true, sortValue: (m) => m.contacts[0]?.contact.name ?? "",
-    render: (m) => <span className="text-sm text-gray-500">{m.contacts[0]?.contact.name || "—"}</span> },
+  { key: "klient", label: "Klient", sortable: true, sortValue: (m) => m.contacts[0]?.contact?.name ?? "",
+    render: (m) => <span className="text-sm text-gray-500">{m.contacts[0]?.contact?.name || "—"}</span> },
   { key: "status", label: "Status", sortable: true, sortValue: (m) => statusLabel(m.status),
     render: (m) => (
       <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${

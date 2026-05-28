@@ -136,18 +136,20 @@ function ContactsList({
   onRemove: (matterContactId: string) => void;
 }) {
   const columns: Column<MatterContact>[] = [
-    { key: "name", label: "Namn", sortable: true, sortValue: (mc) => mc.contact.name,
+    { key: "name", label: "Namn", sortable: true, sortValue: (mc) => mc.contact?.name ?? "",
       render: (mc) => (
-        <Link href={`/contacts/${mc.contact.id}`} className="text-sm font-medium text-blue-600 hover:underline">
-          {mc.contact.name}
-        </Link>
+        mc.contact ? (
+          <Link href={`/contacts/${mc.contact.id}`} className="text-sm font-medium text-blue-600 hover:underline">
+            {mc.contact.name}
+          </Link>
+        ) : <span className="text-sm text-gray-400 italic">(kontakt saknas)</span>
       ),
     },
     { key: "role", label: "Roll", sortable: true, sortValue: (mc) => labelForMatterRole(mc.role),
       render: (mc) => <span className="text-sm text-gray-700">{labelForMatterRole(mc.role)}</span> },
     { key: "number", label: "Personnr/Orgnr", sortable: true,
-      sortValue: (mc) => mc.contact.personalNumber ?? mc.contact.orgNumber ?? "",
-      render: (mc) => <span className="text-sm text-gray-500">{mc.contact.personalNumber || mc.contact.orgNumber || "—"}</span> },
+      sortValue: (mc) => mc.contact?.personalNumber ?? mc.contact?.orgNumber ?? "",
+      render: (mc) => <span className="text-sm text-gray-500">{mc.contact?.personalNumber || mc.contact?.orgNumber || "—"}</span> },
     { key: "actions", label: "", sortable: false, align: "right", hideable: false,
       render: (mc) => (
         <button type="button" onClick={() => onRemove(mc.id)} className="text-xs text-red-500 hover:underline">
