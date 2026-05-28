@@ -29,6 +29,7 @@ const utilsMock = {
   expense: { list: { invalidate: vi.fn() } },
   contacts: { list: { invalidate: vi.fn() } },
   document: { tree: { invalidate: vi.fn() } },
+  prefs: { get: { invalidate: vi.fn() } },
 };
 const stubs = {
   addContact: { mutate: vi.fn(), isPending: false },
@@ -91,6 +92,9 @@ vi.mock("@/lib/client/trpc", () => ({
     prefs: {
       get: { useQuery: () => ({ data: undefined, isLoading: false }) },
       save: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      clear: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      setOrgDefault: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      clearOrgDefault: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
   },
 }));

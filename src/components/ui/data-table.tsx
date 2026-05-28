@@ -111,6 +111,12 @@ function widthOf<T>(col: Column<T>, prefs: DataTablePrefs): number | undefined {
 export function DataTable<T>({ prefKey, columns, data, rowKey, onRowClick, emptyMessage }: Props<T>) {
   const persisted = trpc.prefs.get.useQuery({ key: prefKey });
   const save = trpc.prefs.save.useMutation();
+  const clear = trpc.prefs.clear.useMutation();
+  const setOrg = trpc.prefs.setOrgDefault.useMutation();
+  const clearOrg = trpc.prefs.clearOrgDefault.useMutation();
+  const me = trpc.user.current.useQuery();
+  const isAdmin = me.data?.role === "ADMIN";
+  const utils = trpc.useUtils();
   // Härledd från query (initial); local-overrides när användaren ändrar något.
   // Detta undviker setState-i-useEffect-mönstret (cascading-render-varning).
   const remote = useMemo(
@@ -137,10 +143,29 @@ export function DataTable<T>({ prefKey, columns, data, rowKey, onRowClick, empty
   const vCols = useMemo(() => visibleColumns(columns, prefs), [columns, prefs]);
   const rows = useMemo(() => sortRows(data, columns, prefs.sortBy, prefs.sortDir), [data, columns, prefs.sortBy, prefs.sortDir]);
 
+  const resetPersonal = (): void => {
+    setLocalPrefs(null);
+    clear.mutate({ key: prefKey }, { onSuccess: () => utils.prefs.get.invalidate({ key: prefKey }) });
+  };
+  const saveAsOrgDefault = (): void => {
+    setOrg.mutate({ key: prefKey, prefs: prefs as Record<string, unknown> }, { onSuccess: () => utils.prefs.get.invalidate({ key: prefKey }) });
+  };
+  const removeOrgDefault = (): void => {
+    clearOrg.mutate({ key: prefKey }, { onSuccess: () => utils.prefs.get.invalidate({ key: prefKey }) });
+  };
+
   return (
     <div className="overflow-x-auto bg-white border border-gray-200 rounded-lg">
       <table className="min-w-full text-sm">
-        <DataTableHeader columns={columns} vCols={vCols} prefs={prefs} update={update} />
+        <DataTableHeader
+          columns={columns} vCols={vCols} prefs={prefs} update={update}
+          isAdmin={isAdmin}
+          hasPersonalPref={persisted.data?.user != null}
+          hasOrgPref={persisted.data?.org != null}
+          onResetPersonal={resetPersonal}
+          onSaveAsOrgDefault={saveAsOrgDefault}
+          onRemoveOrgDefault={removeOrgDefault}
+        />
         <tbody className="divide-y divide-gray-100">
           {rows.length === 0 ? (
             <tr><td colSpan={vCols.length + 1} className="px-4 py-6 text-center text-sm text-gray-500">{emptyMessage ?? "Inget att visa."}</td></tr>
@@ -165,9 +190,15 @@ interface HeaderProps<T> {
   vCols: Column<T>[];
   prefs: DataTablePrefs;
   update: (patch: Partial<DataTablePrefs>) => void;
+  isAdmin: boolean;
+  hasPersonalPref: boolean;
+  hasOrgPref: boolean;
+  onResetPersonal: () => void;
+  onSaveAsOrgDefault: () => void;
+  onRemoveOrgDefault: () => void;
 }
 
-function DataTableHeader<T>({ columns, vCols, prefs, update }: HeaderProps<T>) {
+function DataTableHeader<T>({ columns, vCols, prefs, update, isAdmin, hasPersonalPref, hasOrgPref, onResetPersonal, onSaveAsOrgDefault, onRemoveOrgDefault }: HeaderProps<T>) {
   const onSort = (key: string): void => {
     const next: DataTablePrefs = prefs.sortBy === key
       ? { ...prefs, sortDir: prefs.sortDir === "asc" ? "desc" : "asc" }
@@ -205,7 +236,15 @@ function DataTableHeader<T>({ columns, vCols, prefs, update }: HeaderProps<T>) {
           />
         ))}
         <th className="px-2 py-2 w-8">
-          <ColumnMenu columns={columns} prefs={prefs} onToggleHidden={onToggleHidden} />
+          <ColumnMenu
+            columns={columns} prefs={prefs} onToggleHidden={onToggleHidden}
+            isAdmin={isAdmin}
+            hasPersonalPref={hasPersonalPref}
+            hasOrgPref={hasOrgPref}
+            onResetPersonal={onResetPersonal}
+            onSaveAsOrgDefault={onSaveAsOrgDefault}
+            onRemoveOrgDefault={onRemoveOrgDefault}
+          />
         </th>
       </tr>
     </thead>
@@ -260,20 +299,56 @@ function ResizeHandle({ width, onResize }: { width?: number; onResize: (width: n
   return <span onMouseDown={onMouseDown} className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-400" />;
 }
 
-function ColumnMenu<T>({ columns, prefs, onToggleHidden }: { columns: Column<T>[]; prefs: DataTablePrefs; onToggleHidden: (key: string) => void }) {
+interface ColumnMenuProps<T> {
+  columns: Column<T>[];
+  prefs: DataTablePrefs;
+  onToggleHidden: (key: string) => void;
+  isAdmin: boolean;
+  hasPersonalPref: boolean;
+  hasOrgPref: boolean;
+  onResetPersonal: () => void;
+  onSaveAsOrgDefault: () => void;
+  onRemoveOrgDefault: () => void;
+}
+
+function ColumnMenu<T>(props: ColumnMenuProps<T>) {
+  const { columns, prefs, onToggleHidden, isAdmin, hasPersonalPref, hasOrgPref, onResetPersonal, onSaveAsOrgDefault, onRemoveOrgDefault } = props;
   const [open, setOpen] = useState(false);
   const hidden = new Set((prefs.columns ?? []).filter((c) => c.hidden).map((c) => c.key));
   return (
     <div className="relative">
       <button type="button" onClick={() => setOpen((v) => !v)} className="text-gray-400 hover:text-gray-700" aria-label="Kolumnval">⋯</button>
       {open && (
-        <div className="absolute right-0 top-7 z-20 bg-white border border-gray-200 rounded shadow-lg p-2 min-w-[12rem]">
+        <div className="absolute right-0 top-7 z-20 bg-white border border-gray-200 rounded shadow-lg p-2 min-w-[14rem]">
+          <p className="px-2 pt-1 pb-2 text-[10px] font-semibold uppercase text-gray-400">Visa kolumner</p>
           {columns.filter((c) => c.hideable !== false).map((c) => (
             <label key={c.key} className="flex items-center gap-2 px-2 py-1 text-xs hover:bg-gray-50 cursor-pointer">
               <input type="checkbox" checked={!hidden.has(c.key)} onChange={() => onToggleHidden(c.key)} />
               <span>{c.label}</span>
             </label>
           ))}
+          <div className="my-2 border-t border-gray-100" />
+          {hasPersonalPref && (
+            <button type="button" onClick={() => { onResetPersonal(); setOpen(false); }}
+              className="block w-full text-left px-2 py-1 text-xs text-gray-700 hover:bg-gray-50 rounded">
+              Återställ mina inställningar
+            </button>
+          )}
+          {isAdmin && (
+            <>
+              <p className="mt-2 px-2 pt-1 pb-1 text-[10px] font-semibold uppercase text-gray-400">Admin</p>
+              <button type="button" onClick={() => { onSaveAsOrgDefault(); setOpen(false); }}
+                className="block w-full text-left px-2 py-1 text-xs text-blue-700 hover:bg-blue-50 rounded">
+                Spara som org-default
+              </button>
+              {hasOrgPref && (
+                <button type="button" onClick={() => { onRemoveOrgDefault(); setOpen(false); }}
+                  className="block w-full text-left px-2 py-1 text-xs text-red-600 hover:bg-red-50 rounded">
+                  Ta bort org-default
+                </button>
+              )}
+            </>
+          )}
         </div>
       )}
     </div>

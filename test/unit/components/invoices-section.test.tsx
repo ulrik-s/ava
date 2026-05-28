@@ -14,6 +14,7 @@ const utilsMock = {
   invoice: { list: { invalidate: vi.fn() } },
   timeEntry: { list: { invalidate: vi.fn() } },
   expense: { list: { invalidate: vi.fn() } },
+  prefs: { get: { invalidate: vi.fn() } },
 };
 const createAccontoMutate = vi.fn();
 const createFinalMutate = vi.fn();
@@ -39,6 +40,12 @@ vi.mock("@/lib/client/trpc", () => ({
     prefs: {
       get: { useQuery: () => ({ data: undefined, isLoading: false }) },
       save: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      clear: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      setOrgDefault: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      clearOrgDefault: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+    },
+    user: {
+      current: { useQuery: () => ({ data: { id: "u1", role: "LAWYER" } }) },
     },
   },
 }));

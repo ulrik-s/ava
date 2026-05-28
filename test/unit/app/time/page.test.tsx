@@ -21,7 +21,7 @@ const timeQuery: {
 const matterQuery: { data: { matters: Array<Record<string, unknown>> } } = {
   data: { matters: [] },
 };
-const utilsMock = { timeEntry: { list: { invalidate: vi.fn() } } };
+const utilsMock = { timeEntry: { list: { invalidate: vi.fn() } }, prefs: { get: { invalidate: vi.fn() } } };
 const createMutate = vi.fn();
 
 vi.mock("@/lib/client/trpc", () => ({
@@ -37,6 +37,12 @@ vi.mock("@/lib/client/trpc", () => ({
     prefs: {
       get: { useQuery: () => ({ data: undefined, isLoading: false }) },
       save: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      clear: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      setOrgDefault: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      clearOrgDefault: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+    },
+    user: {
+      current: { useQuery: () => ({ data: { id: "u1", role: "LAWYER" } }) },
     },
   },
 }));

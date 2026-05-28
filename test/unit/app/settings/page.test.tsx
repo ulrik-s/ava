@@ -33,6 +33,10 @@ const deleteOfficeMutate = vi.fn();
 vi.mock("@/components/settings/datasource-section", () => ({
   DatasourceSection: () => null,
 }));
+// OrgDefaultsSection har separat täckning — stubba ut för isolering.
+vi.mock("@/components/settings/org-defaults-section", () => ({
+  OrgDefaultsSection: () => null,
+}));
 
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {

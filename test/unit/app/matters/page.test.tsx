@@ -15,7 +15,7 @@ const mattersQuery: {
 };
 const contactsQuery = { data: { contacts: [] } };
 const employeesQuery = { data: { users: [] } };
-const utilsMock = { matter: { list: { invalidate: vi.fn() } } };
+const utilsMock = { matter: { list: { invalidate: vi.fn() } }, prefs: { get: { invalidate: vi.fn() } } };
 const createMatterMutate = vi.fn();
 const searchParamsGet = vi.fn((_: string): string | null => null);
 
@@ -37,10 +37,14 @@ vi.mock("@/lib/client/trpc", () => ({
     },
     user: {
       list: { useQuery: () => employeesQuery },
+      current: { useQuery: () => ({ data: { id: "u1", role: "LAWYER" } }) },
     },
     prefs: {
       get: { useQuery: () => ({ data: undefined, isLoading: false }) },
       save: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      clear: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      setOrgDefault: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      clearOrgDefault: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
   },
 }));

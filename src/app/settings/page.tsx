@@ -7,6 +7,7 @@ import { DatasourceSection } from "@/components/settings/datasource-section";
 import { ExternalEditSection } from "@/components/settings/external-edit-section";
 import { EditorExtensionsSection } from "@/components/settings/editor-extensions-section";
 import { LlmSettingsCard } from "@/components/llm/llm-settings-card";
+import { OrgDefaultsSection } from "@/components/settings/org-defaults-section";
 
 // ─── Offices sub-component ───────────────────────────────────────
 
@@ -513,8 +514,12 @@ export default function SettingsPage() {
       <ExternalEditSection />
       <EditorExtensionsSection />
 
-      {/* 5. Avancerat / opt-in */}
-      <SectionHeader num={5} title="Avancerat" subtitle="Opt-in-funktioner som kräver extra resurser eller setup." />
+      {/* 5. Standardvyer */}
+      <SectionHeader num={5} title="Standardvyer (admin)" subtitle="Org-globala kolumn- och sort-defaults för listor. Personliga val vinner över org-defaults." />
+      <OrgDefaultsSection />
+
+      {/* 6. Avancerat / opt-in */}
+      <SectionHeader num={6} title="Avancerat" subtitle="Opt-in-funktioner som kräver extra resurser eller setup." />
       <div className="mb-5">
         <LlmSettingsCard />
       </div>
