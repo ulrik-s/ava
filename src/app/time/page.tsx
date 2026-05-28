@@ -5,6 +5,37 @@ import Link from "next/link";
 import { trpc } from "@/lib/client/trpc";
 import { formatMinutes } from "@/lib/client/utils";
 import { MatterCombobox } from "@/components/matter/matter-combobox";
+import { DataTable, type Column } from "@/components/ui/data-table";
+
+interface TimeRow {
+  id: string;
+  date: string | Date;
+  minutes: number;
+  description: string;
+  billable: boolean;
+  matter: { id: string; matterNumber: string; title: string };
+  user?: { name?: string | null } | null;
+}
+
+const timeColumns: Column<TimeRow>[] = [
+  { key: "date", label: "Datum", sortable: true, sortValue: (e) => new Date(e.date),
+    render: (e) => <span className="text-sm text-gray-500">{new Date(e.date).toLocaleDateString("sv-SE")}</span> },
+  { key: "matter", label: "Ärende", sortable: true, sortValue: (e) => e.matter.matterNumber,
+    render: (e) => (
+      <Link href={`/matters/${e.matter.id}`} className="text-sm text-blue-600 hover:underline">
+        {e.matter.matterNumber} — {e.matter.title}
+      </Link>
+    ),
+  },
+  { key: "user", label: "Advokat", sortable: true, sortValue: (e) => e.user?.name ?? "",
+    render: (e) => <span className="text-sm text-gray-900">{e.user?.name ?? "—"}</span> },
+  { key: "minutes", label: "Tid", sortable: true, align: "right", sortValue: (e) => e.minutes,
+    render: (e) => <span className="text-sm font-mono text-gray-900">{formatMinutes(e.minutes)}</span> },
+  { key: "description", label: "Beskrivning", sortable: true, sortValue: (e) => e.description,
+    render: (e) => <span className="text-sm text-gray-700">{e.description}</span> },
+  { key: "billable", label: "Deb.", sortable: true, sortValue: (e) => (e.billable ? 1 : 0),
+    render: (e) => <span className="text-sm">{e.billable ? "Ja" : "Nej"}</span> },
+];
 
 // eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'TimePage' has a complexity of 9. Maximum allowed is 8.)
 export default function TimePage() {
@@ -100,45 +131,22 @@ export default function TimePage() {
         </form>
       )}
 
-      <div className="bg-white rounded-lg border border-gray-200 overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead>
-            <tr className="bg-gray-50">
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Datum</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ärende</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Advokat</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tid</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Beskrivning</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Deb.</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {timeEntries.data?.entries.map((entry) => (
-              <tr key={entry.id} className="hover:bg-gray-50">
-                <td className="px-6 py-3 text-sm text-gray-500">{new Date(entry.date).toLocaleDateString("sv-SE")}</td>
-                <td className="px-6 py-3">
-                  <Link href={`/matters/${entry.matter.id}`} className="text-sm text-blue-600 hover:underline">
-                    {entry.matter.matterNumber} — {entry.matter.title}
-                  </Link>
-                </td>
-                <td className="px-6 py-3 text-sm text-gray-900">{entry.user?.name ?? "—"}</td>
-                <td className="px-6 py-3 text-sm font-mono text-gray-900">{formatMinutes(entry.minutes)}</td>
-                <td className="px-6 py-3 text-sm text-gray-700">{entry.description}</td>
-                <td className="px-6 py-3 text-sm">{entry.billable ? "Ja" : "Nej"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {timeEntries.data && timeEntries.data.pages > 1 && (
-          <div className="px-6 py-3 border-t border-gray-200 flex items-center justify-between">
-            <p className="text-sm text-gray-500">Sida {page} av {timeEntries.data.pages}</p>
-            <div className="flex gap-2">
-              <button disabled={page <= 1} onClick={() => setPage(page - 1)} className="px-3 py-1 text-sm border rounded disabled:opacity-50">Föregående</button>
-              <button disabled={page >= timeEntries.data.pages} onClick={() => setPage(page + 1)} className="px-3 py-1 text-sm border rounded disabled:opacity-50">Nästa</button>
-            </div>
+      <DataTable
+        prefKey="list.time-entries"
+        columns={timeColumns}
+        data={(timeEntries.data?.entries ?? []) as TimeRow[]}
+        rowKey={(e) => e.id}
+        emptyMessage="Inga tidsposter."
+      />
+      {timeEntries.data && timeEntries.data.pages > 1 && (
+        <div className="px-6 py-3 mt-2 bg-white border border-gray-200 rounded-lg flex items-center justify-between">
+          <p className="text-sm text-gray-500">Sida {page} av {timeEntries.data.pages}</p>
+          <div className="flex gap-2">
+            <button disabled={page <= 1} onClick={() => setPage(page - 1)} className="px-3 py-1 text-sm border rounded disabled:opacity-50">Föregående</button>
+            <button disabled={page >= timeEntries.data.pages} onClick={() => setPage(page + 1)} className="px-3 py-1 text-sm border rounded disabled:opacity-50">Nästa</button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

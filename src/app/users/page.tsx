@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { trpc } from "@/lib/client/trpc";
 import { ShieldAlert, UserX } from "lucide-react";
+import { DataTable, type Column } from "@/components/ui/data-table";
 
 const roleLabels: Record<string, string> = {
   ADMIN: "Admin",
@@ -10,7 +11,64 @@ const roleLabels: Record<string, string> = {
   ASSISTANT: "Assistent",
 };
 
-// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'UsersPage' has a complexity of 9. Maximum allowed is 8.)
+interface UserRow {
+  id: string;
+  name: string;
+  title?: string | null;
+  email: string;
+  role: string;
+  hourlyRate?: number | null;
+  mileageRate?: number | null;
+}
+
+function buildUserColumns(opts: {
+  isAdmin: boolean;
+  meId?: string;
+  onDeactivate: (id: string, name: string) => void;
+}): Column<UserRow>[] {
+  const base: Column<UserRow>[] = [
+    { key: "name", label: "Namn", sortable: true, sortValue: (u) => u.name,
+      render: (u) => <Link href={`/users/${u.id}`} className="text-sm font-medium text-blue-600 hover:underline">{u.name}</Link> },
+    { key: "title", label: "Titel", sortable: true, sortValue: (u) => u.title ?? "",
+      render: (u) => <span className="text-sm text-gray-500">{u.title || "—"}</span> },
+    { key: "email", label: "E-post", sortable: true, sortValue: (u) => u.email,
+      render: (u) => <span className="text-sm text-gray-500">{u.email}</span> },
+    { key: "role", label: "Roll", sortable: true, sortValue: (u) => roleLabels[u.role] || u.role,
+      render: (u) => <span className="text-sm text-gray-500">{roleLabels[u.role] || u.role}</span> },
+    { key: "hourlyRate", label: "Timtaxa", sortable: true, align: "right",
+      sortValue: (u) => u.hourlyRate ?? -1,
+      render: (u) => <span className="text-sm text-gray-500">{u.hourlyRate != null ? `${u.hourlyRate} kr/h` : "—"}</span> },
+    { key: "mileageRate", label: "Milersättning", sortable: true, align: "right",
+      sortValue: (u) => u.mileageRate ?? -1,
+      render: (u) => <span className="text-sm text-gray-500">{u.mileageRate != null ? `${(u.mileageRate / 100).toFixed(2)} kr/km` : "—"}</span> },
+  ];
+  if (!opts.isAdmin) return base;
+  return [
+    ...base,
+    { key: "actions", label: "", sortable: false, align: "right", hideable: false,
+      render: (u) => (
+        u.id !== opts.meId ? (
+          <button
+            type="button"
+            onClick={() => opts.onDeactivate(u.id, u.name)}
+            className="text-xs text-gray-400 hover:text-red-600 inline-flex items-center gap-1"
+            title="Inaktivera"
+          >
+            <UserX size={12} /> Inaktivera
+          </button>
+        ) : null
+      ),
+    },
+  ];
+}
+
+function confirmDeactivate(id: string, name: string, run: (args: { id: string }) => void): void {
+  if (confirm(`Inaktivera ${name}? Användaren kan inte längre logga in men historik bevaras.`)) {
+    run({ id });
+  }
+}
+
+// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8 — JSX-conditionals i list-headern)
 export default function UsersPage() {
   const me = trpc.user.current.useQuery();
   const users = trpc.user.list.useQuery();
@@ -20,6 +78,11 @@ export default function UsersPage() {
   });
 
   const isAdmin = me.data?.role === "ADMIN";
+  const columns = buildUserColumns({
+    isAdmin,
+    meId: me.data?.id,
+    onDeactivate: (id, name) => confirmDeactivate(id, name, deactivate.mutate),
+  });
 
   return (
     <div>
@@ -41,59 +104,13 @@ export default function UsersPage() {
         </div>
       )}
 
-      <div className="bg-white rounded-lg border border-gray-200 overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead>
-            <tr className="bg-gray-50">
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Namn</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Titel</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">E-post</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Roll</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Timtaxa</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Milersättning</th>
-              {isAdmin && <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase"></th>}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {users.data?.users.map((user) => (
-              <tr key={user.id} className="hover:bg-gray-50">
-                <td className="px-6 py-4">
-                  <Link href={`/users/${user.id}`} className="text-sm font-medium text-blue-600 hover:underline">
-                    {user.name}
-                  </Link>
-                </td>
-                <td className="px-6 py-4 text-sm text-gray-500">{user.title || "—"}</td>
-                <td className="px-6 py-4 text-sm text-gray-500">{user.email}</td>
-                <td className="px-6 py-4 text-sm text-gray-500">{roleLabels[user.role] || user.role}</td>
-                <td className="px-6 py-4 text-sm text-gray-500">
-                  {user.hourlyRate != null ? `${user.hourlyRate} kr/h` : "—"}
-                </td>
-                <td className="px-6 py-4 text-sm text-gray-500">
-                  {user.mileageRate != null ? `${(user.mileageRate / 100).toFixed(2)} kr/km` : "—"}
-                </td>
-                {isAdmin && (
-                  <td className="px-6 py-4 text-right">
-                    {user.id !== me.data?.id && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (confirm(`Inaktivera ${user.name}? Användaren kan inte längre logga in men historik bevaras.`)) {
-                            deactivate.mutate({ id: user.id });
-                          }
-                        }}
-                        className="text-xs text-gray-400 hover:text-red-600 inline-flex items-center gap-1"
-                        title="Inaktivera"
-                      >
-                        <UserX size={12} /> Inaktivera
-                      </button>
-                    )}
-                  </td>
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <DataTable
+        prefKey="list.users"
+        columns={columns}
+        data={(users.data?.users ?? []) as UserRow[]}
+        rowKey={(u) => u.id}
+        emptyMessage="Inga användare."
+      />
 
       {users.isLoading && <p className="mt-4 text-sm text-gray-500">Laddar...</p>}
       {users.error && <p className="mt-4 text-sm text-red-600">Fel: {users.error.message}</p>}

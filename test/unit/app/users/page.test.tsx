@@ -27,6 +27,10 @@ vi.mock("@/lib/client/trpc", () => ({
       current: { useQuery: () => currentQuery },
       deactivate: { useMutation: () => deactivateMutation },
     },
+    prefs: {
+      get: { useQuery: () => ({ data: undefined, isLoading: false }) },
+      save: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+    },
     useUtils: () => ({ user: { list: { invalidate: vi.fn() } } }),
   },
 }));
