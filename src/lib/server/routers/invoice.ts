@@ -151,6 +151,8 @@ export const invoiceRouter = router({
   createAcconto: orgProcedure
     .input(
       z.object({
+        /** Valfritt klient-genererat id (demo-generator/fixtures) → annars genererar store:n. */
+        id: z.string().optional(),
         matterId: z.string(),
         amount: z.number().int().min(1),
         invoiceDate: z.string().optional(),
@@ -165,6 +167,7 @@ export const invoiceRouter = router({
       if (!matter) throw new TRPCError({ code: "NOT_FOUND" });
       const invoice = await ctx.dataStore.invoices.create({
         data: {
+          id: input.id, // undefined → store genererar
           matterId: input.matterId,
           amount: input.amount,
           invoiceType: "ACCONTO",
@@ -186,6 +189,8 @@ export const invoiceRouter = router({
   createFinal: orgProcedure
     .input(
       z.object({
+        /** Valfritt klient-genererat id (demo-generator/fixtures) → annars genererar store:n. */
+        id: z.string().optional(),
         matterId: z.string(),
         timeEntryIds: z.array(z.string()),
         expenseIds: z.array(z.string()),
@@ -214,6 +219,7 @@ export const invoiceRouter = router({
 
         const invoice = await tx.invoices.create({
           data: {
+            id: input.id, // undefined → store genererar
             matterId: input.matterId,
             amount: breakdown.grossAmount,
             invoiceType: "FINAL",
@@ -241,6 +247,8 @@ export const invoiceRouter = router({
   createCredit: orgProcedure
     .input(
       z.object({
+        /** Valfritt klient-genererat id för kredit-fakturan (demo-generator/fixtures). */
+        id: z.string().optional(),
         invoiceId: z.string(),
         notes: z.string().optional(),
       }),
@@ -281,6 +289,7 @@ export const invoiceRouter = router({
 
         const credit = await tx.invoices.create({
           data: {
+            id: input.id, // undefined → store genererar
             matterId: original.matterId,
             amount: -original.amount,
             invoiceType: "CREDIT",
@@ -349,6 +358,8 @@ export const invoiceRouter = router({
   createPaymentPlan: orgProcedure
     .input(
       z.object({
+        /** Valfritt klient-genererat id (demo-generator/fixtures) → annars genererar store:n. */
+        id: z.string().optional(),
         invoiceId: z.string(),
         monthlyAmount: z.number().int().min(1),
         dayOfMonth: z.number().int().min(1).max(28),
@@ -384,6 +395,7 @@ export const invoiceRouter = router({
 
         const plan = await tx.paymentPlans.create({
           data: {
+            id: input.id, // undefined → store genererar
             invoiceId: inv.id,
             monthlyAmount: input.monthlyAmount,
             dayOfMonth: input.dayOfMonth,

@@ -38,13 +38,27 @@ export async function collectDemoIds(pathPrefix: string): Promise<string[]> {
     });
     const files = seedToFiles(seed);
     const prefix = pathPrefix.replace(/\/+$/, "") + "/";
-    return files
+    const seedIds = files
       .map((f) => f.path)
       .filter((p: string) => p.startsWith(prefix) && p.endsWith(".json"))
       .map((p: string) => p.slice(prefix.length, -".json".length));
+
+    // Demo-generatorn skapar billing-rader (invoices, payment-plans) med
+    // deterministiska id:n (1 per ärende). Lägg till dem som pre-renderbara
+    // params så /invoices/<id> + /payment-plans/<id> inte 404:ar.
+    if (pathPrefix === "invoices" || pathPrefix === "payment-plans") {
+      const ids = await collectBillingIds(pathPrefix, seed.matters as Array<{ id?: unknown }>);
+      return [...seedIds, ...ids];
+    }
+    return seedIds;
   } catch {
     return [];
   }
+}
+
+async function collectBillingIds(prefix: string, matters: Array<{ id?: unknown }>): Promise<string[]> {
+  const mod = await import("../../../../tooling/scripts/demo-billing-ids");
+  return prefix === "invoices" ? mod.allDemoBillingInvoiceIds(matters) : mod.allDemoBillingPlanIds(matters);
 }
 
 /**

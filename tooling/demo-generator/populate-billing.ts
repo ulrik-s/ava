@@ -14,6 +14,7 @@
 
 import type { SeedDataset } from "../scripts/seed-data";
 import type { GeneratorCaller } from "./backend-target";
+import { demoFinalInvoiceId, demoAccontoInvoiceId, demoCreditInvoiceId, demoPaymentPlanId } from "../scripts/demo-billing-ids";
 
 type Row = Record<string, unknown>;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -64,6 +65,7 @@ async function finalSent(ctx: Ctx, matterId: string, daysAgo: number, accontoInv
   const { timeEntryIds, expenseIds } = idsOf(ctx, matterId);
   // createFinal returnerar { invoice, breakdown } — plocka ut fakturan.
   const { invoice } = await ctx.c.invoice.createFinal({
+    id: demoFinalInvoiceId(matterId),
     matterId, timeEntryIds, expenseIds, accontoInvoiceIds,
     invoiceDate: isoDaysAgo(daysAgo), dueDate: isoDaysAgo(daysAgo - 30),
   });
@@ -96,7 +98,7 @@ async function scenarioActivePlan(ctx: Ctx, matterId: string | undefined, daysAg
   const inv = await finalSent(ctx, matterId, daysAgo);
   if (inv.amount < 5) return;
   const monthly = Math.ceil(inv.amount / 5); // 5 delbetalningar → delbetalda planer förblir ACTIVE
-  const plan = await ctx.c.invoice.createPaymentPlan({ invoiceId: inv.id, monthlyAmount: monthly, dayOfMonth: 15, startDate: isoDaysAgo(daysAgo - 5) });
+  const plan = await ctx.c.invoice.createPaymentPlan({ id: demoPaymentPlanId(matterId), invoiceId: inv.id, monthlyAmount: monthly, dayOfMonth: 15, startDate: isoDaysAgo(daysAgo - 5) });
   ctx.res.paymentPlans++;
   await addReminders(ctx, plan.id, Math.min(2, monthsPaid + 1));
   for (let m = 0; m < monthsPaid; m++) {
@@ -109,7 +111,7 @@ async function scenarioCompletedPlan(ctx: Ctx, matterId: string | undefined, day
   if (!matterId) return;
   const inv = await finalSent(ctx, matterId, daysAgo);
   if (inv.amount <= 0) return;
-  const plan = await ctx.c.invoice.createPaymentPlan({ invoiceId: inv.id, monthlyAmount: Math.ceil(inv.amount / 3), dayOfMonth: 1, startDate: isoDaysAgo(daysAgo - 5) });
+  const plan = await ctx.c.invoice.createPaymentPlan({ id: demoPaymentPlanId(matterId), invoiceId: inv.id, monthlyAmount: Math.ceil(inv.amount / 3), dayOfMonth: 1, startDate: isoDaysAgo(daysAgo - 5) });
   ctx.res.paymentPlans++;
   await addReminders(ctx, plan.id, 6); // hel historik för slutförd plan
   // Full inbetalning → recordPayment auto-completar plan + sätter PAID.
@@ -121,7 +123,7 @@ async function scenarioCancelledPlan(ctx: Ctx, matterId: string | undefined, day
   if (!matterId) return;
   const inv = await finalSent(ctx, matterId, daysAgo);
   if (inv.amount <= 0) return;
-  const plan = await ctx.c.invoice.createPaymentPlan({ invoiceId: inv.id, monthlyAmount: Math.ceil(inv.amount / 6), dayOfMonth: 28, startDate: isoDaysAgo(daysAgo - 5), notes: "Avbruten på klientens begäran" });
+  const plan = await ctx.c.invoice.createPaymentPlan({ id: demoPaymentPlanId(matterId), invoiceId: inv.id, monthlyAmount: Math.ceil(inv.amount / 6), dayOfMonth: 28, startDate: isoDaysAgo(daysAgo - 5), notes: "Avbruten på klientens begäran" });
   ctx.res.paymentPlans++;
   await ctx.c.invoice.cancelPaymentPlan({ planId: plan.id });
 }
@@ -129,14 +131,14 @@ async function scenarioCancelledPlan(ctx: Ctx, matterId: string | undefined, day
 async function scenarioCredit(ctx: Ctx, matterId: string | undefined, daysAgo: number): Promise<void> {
   if (!matterId) return;
   const inv = await finalSent(ctx, matterId, daysAgo);
-  await ctx.c.invoice.createCredit({ invoiceId: inv.id, notes: "Kreditering — felaktig fakturering" });
+  await ctx.c.invoice.createCredit({ id: demoCreditInvoiceId(matterId), invoiceId: inv.id, notes: "Kreditering — felaktig fakturering" });
   ctx.res.invoices++; // kreditfakturan
   ctx.res.credits++;
 }
 
 async function scenarioAcconto(ctx: Ctx, matterId: string | undefined, daysAgo: number): Promise<void> {
   if (!matterId) return;
-  const acconto = await ctx.c.invoice.createAcconto({ matterId, amount: 50_000, invoiceDate: isoDaysAgo(daysAgo + 20), dueDate: isoDaysAgo(daysAgo - 10), notes: "Förskott" });
+  const acconto = await ctx.c.invoice.createAcconto({ id: demoAccontoInvoiceId(matterId), matterId, amount: 50_000, invoiceDate: isoDaysAgo(daysAgo + 20), dueDate: isoDaysAgo(daysAgo - 10), notes: "Förskott" });
   ctx.res.invoices++;
   await ctx.c.invoice.setStatus({ invoiceId: acconto.id, status: "SENT" });
   await finalSent(ctx, matterId, daysAgo, [acconto.id]); // final med acconto-avdrag
@@ -144,7 +146,7 @@ async function scenarioAcconto(ctx: Ctx, matterId: string | undefined, daysAgo: 
 
 async function scenarioDraft(ctx: Ctx, matterId: string, daysAgo: number): Promise<void> {
   const { timeEntryIds, expenseIds } = idsOf(ctx, matterId);
-  await ctx.c.invoice.createFinal({ matterId, timeEntryIds, expenseIds, accontoInvoiceIds: [], invoiceDate: isoDaysAgo(daysAgo) });
+  await ctx.c.invoice.createFinal({ id: demoFinalInvoiceId(matterId), matterId, timeEntryIds, expenseIds, accontoInvoiceIds: [], invoiceDate: isoDaysAgo(daysAgo) });
   ctx.res.invoices++; // lämnas DRAFT
 }
 
