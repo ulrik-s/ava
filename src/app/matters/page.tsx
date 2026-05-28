@@ -5,6 +5,51 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { trpc } from "@/lib/client/trpc";
 import { useIsReadOnly } from "@/lib/client/demo/demo-mode-context";
+import { DataTable, type Column } from "@/components/ui/data-table";
+
+interface MatterRow {
+  id: string;
+  matterNumber: string;
+  title: string;
+  status: string;
+  isTaxeArende?: boolean;
+  contacts: Array<{ contact: { name: string } }>;
+  _count: { contacts: number };
+}
+
+function statusLabel(s: string): string {
+  return s === "ACTIVE" ? "Aktivt" : s === "CLOSED" ? "Stängt" : "Arkiverat";
+}
+
+const matterColumns: Column<MatterRow>[] = [
+  { key: "matterNumber", label: "Ärendenr", sortable: true, sortValue: (m) => m.matterNumber,
+    render: (m) => <span className="text-sm font-mono text-gray-500">{m.matterNumber}</span> },
+  { key: "title", label: "Titel", sortable: true, sortValue: (m) => m.title,
+    render: (m) => (
+      <span>
+        <Link href={`/matters/${m.id}`} className="text-sm font-medium text-blue-600 hover:underline">{m.title}</Link>
+        {m.isTaxeArende && (
+          <span
+            className="ml-2 inline-flex items-center rounded-full bg-indigo-50 text-indigo-700 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+            title="Taxeärende — ersättning enligt Domstolsverkets fastställda taxa">Taxa</span>
+        )}
+      </span>
+    ),
+  },
+  { key: "klient", label: "Klient", sortable: true, sortValue: (m) => m.contacts[0]?.contact.name ?? "",
+    render: (m) => <span className="text-sm text-gray-500">{m.contacts[0]?.contact.name || "—"}</span> },
+  { key: "status", label: "Status", sortable: true, sortValue: (m) => statusLabel(m.status),
+    render: (m) => (
+      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+        m.status === "ACTIVE" ? "bg-green-50 text-green-700"
+          : m.status === "CLOSED" ? "bg-gray-100 text-gray-600"
+          : "bg-yellow-50 text-yellow-700"
+      }`}>{statusLabel(m.status)}</span>
+    ),
+  },
+  { key: "contactCount", label: "Kontakter", sortable: true, align: "right", sortValue: (m) => m._count.contacts,
+    render: (m) => <span className="text-sm text-gray-500">{m._count.contacts}</span> },
+];
 
 // eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'MattersContent' has a complexity of 11. Maximum allowed is 8.)
 function MattersContent() {
@@ -157,62 +202,22 @@ function MattersContent() {
         </select>
       </div>
 
-      <div className="bg-white rounded-lg border border-gray-200 overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead>
-            <tr className="bg-gray-50">
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ärendenr</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Titel</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Klient</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Kontakter</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {matters.data?.matters.map((matter) => {
-              const klient = matter.contacts[0]?.contact.name;
-              return (
-                <tr key={matter.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 text-sm font-mono text-gray-500">{matter.matterNumber}</td>
-                  <td className="px-6 py-4">
-                    <Link href={`/matters/${matter.id}`} className="text-sm font-medium text-blue-600 hover:underline">
-                      {matter.title}
-                    </Link>
-                    {matter.isTaxeArende && (
-                      <span
-                        className="ml-2 inline-flex items-center rounded-full bg-indigo-50 text-indigo-700 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
-                        title="Taxeärende — ersättning enligt Domstolsverkets fastställda taxa"
-                      >
-                        Taxa
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-500">{klient || "—"}</td>
-                  <td className="px-6 py-4">
-                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                      matter.status === "ACTIVE" ? "bg-green-50 text-green-700"
-                        : matter.status === "CLOSED" ? "bg-gray-100 text-gray-600"
-                        : "bg-yellow-50 text-yellow-700"
-                    }`}>
-                      {matter.status === "ACTIVE" ? "Aktivt" : matter.status === "CLOSED" ? "Stängt" : "Arkiverat"}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-500">{matter._count.contacts}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-        {matters.data && matters.data.pages > 1 && (
-          <div className="px-6 py-3 border-t border-gray-200 flex items-center justify-between">
-            <p className="text-sm text-gray-500">Sida {page} av {matters.data.pages}</p>
-            <div className="flex gap-2">
-              <button disabled={page <= 1} onClick={() => setPage(page - 1)} className="px-3 py-1 text-sm border rounded disabled:opacity-50">Föregående</button>
-              <button disabled={page >= matters.data.pages} onClick={() => setPage(page + 1)} className="px-3 py-1 text-sm border rounded disabled:opacity-50">Nästa</button>
-            </div>
+      <DataTable
+        prefKey="list.matters"
+        columns={matterColumns}
+        data={(matters.data?.matters ?? []) as MatterRow[]}
+        rowKey={(m) => m.id}
+        emptyMessage="Inga ärenden."
+      />
+      {matters.data && matters.data.pages > 1 && (
+        <div className="px-6 py-3 mt-2 bg-white border border-gray-200 rounded-lg flex items-center justify-between">
+          <p className="text-sm text-gray-500">Sida {page} av {matters.data.pages}</p>
+          <div className="flex gap-2">
+            <button disabled={page <= 1} onClick={() => setPage(page - 1)} className="px-3 py-1 text-sm border rounded disabled:opacity-50">Föregående</button>
+            <button disabled={page >= matters.data.pages} onClick={() => setPage(page + 1)} className="px-3 py-1 text-sm border rounded disabled:opacity-50">Nästa</button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

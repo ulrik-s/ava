@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
+import { DataTable, type Column } from "@/components/ui/data-table";
 
 const STATUS_LABELS: Record<string, string> = {
   DRAFT: "Utkast",
@@ -29,54 +30,62 @@ function statusBadgeClass(status: string): string {
   }
 }
 
+interface InvoiceRow {
+  id: string;
+  invoiceDate: string | Date;
+  invoiceType: string;
+  status: string;
+  amount: number;
+  matter: { id: string; matterNumber: string; title: string };
+}
+
+const invoiceColumns: Column<InvoiceRow>[] = [
+  { key: "invoiceDate", label: "Datum", sortable: true, sortValue: (i) => new Date(i.invoiceDate),
+    render: (i) => (
+      <Link href={`/invoices/${i.id}`} className="text-blue-600 hover:underline">
+        {new Date(i.invoiceDate).toLocaleDateString("sv-SE")}
+      </Link>
+    ),
+  },
+  { key: "matter", label: "Ärende", sortable: true, sortValue: (i) => i.matter.matterNumber,
+    render: (i) => (
+      <Link href={`/matters/${i.matter.id}`} className="hover:underline">
+        {i.matter.matterNumber} — {i.matter.title}
+      </Link>
+    ),
+  },
+  { key: "type", label: "Typ", sortable: true, sortValue: (i) => TYPE_LABELS[i.invoiceType] ?? i.invoiceType,
+    render: (i) => <span className="text-gray-600">{TYPE_LABELS[i.invoiceType] ?? i.invoiceType}</span> },
+  { key: "status", label: "Status", sortable: true, sortValue: (i) => STATUS_LABELS[i.status] ?? i.status,
+    render: (i) => (
+      <span className={`text-[10px] rounded-full px-2 py-0.5 font-medium ${statusBadgeClass(i.status)}`}>
+        {STATUS_LABELS[i.status] ?? i.status}
+      </span>
+    ),
+  },
+  { key: "amount", label: "Belopp", sortable: true, align: "right", sortValue: (i) => i.amount,
+    render: (i) => <span className="font-mono">{formatCurrency(i.amount)}</span> },
+];
+
 export default function InvoicesPage() {
   const invoices = trpc.invoice.list.useQuery({});
 
   return (
     <div>
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Fakturor</h1>
-      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-        {invoices.isLoading ? (
-          <p className="p-6 text-sm text-gray-400">Laddar…</p>
-        ) : (invoices.data ?? []).length === 0 ? (
-          <p className="p-6 text-sm text-gray-500">Inga fakturor ännu.</p>
-        ) : (
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-2 text-left text-xs font-medium text-gray-500">Datum</th>
-                <th className="px-6 py-2 text-left text-xs font-medium text-gray-500">Ärende</th>
-                <th className="px-6 py-2 text-left text-xs font-medium text-gray-500">Typ</th>
-                <th className="px-6 py-2 text-left text-xs font-medium text-gray-500">Status</th>
-                <th className="px-6 py-2 text-right text-xs font-medium text-gray-500">Belopp</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {invoices.data!.map((inv) => (
-                <tr key={inv.id} className="text-sm hover:bg-gray-50">
-                  <td className="px-6 py-2">
-                    <Link href={`/invoices/${inv.id}`} className="text-blue-600 hover:underline">
-                      {new Date(inv.invoiceDate).toLocaleDateString("sv-SE")}
-                    </Link>
-                  </td>
-                  <td className="px-6 py-2">
-                    <Link href={`/matters/${inv.matter.id}`} className="hover:underline">
-                      {inv.matter.matterNumber} — {inv.matter.title}
-                    </Link>
-                  </td>
-                  <td className="px-6 py-2 text-gray-600">{TYPE_LABELS[inv.invoiceType] ?? inv.invoiceType}</td>
-                  <td className="px-6 py-2">
-                    <span className={`text-[10px] rounded-full px-2 py-0.5 font-medium ${statusBadgeClass(inv.status)}`}>
-                      {STATUS_LABELS[inv.status] ?? inv.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-2 text-right font-mono">{formatCurrency(inv.amount)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+      {invoices.isLoading ? (
+        <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <p className="text-sm text-gray-400">Laddar…</p>
+        </div>
+      ) : (
+        <DataTable
+          prefKey="list.invoices"
+          columns={invoiceColumns}
+          data={(invoices.data ?? []) as InvoiceRow[]}
+          rowKey={(i) => i.id}
+          emptyMessage="Inga fakturor ännu."
+        />
+      )}
     </div>
   );
 }
