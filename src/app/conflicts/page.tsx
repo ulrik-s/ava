@@ -4,7 +4,61 @@ import { useState } from "react";
 import Link from "next/link";
 import { trpc } from "@/lib/client/trpc";
 import { labelForContactType, labelForMatterRole } from "@/lib/client/labels";
+import { DataTable, type Column } from "@/components/ui/data-table";
 
+interface ConflictRow {
+  contactId: string;
+  contactName: string;
+  contactType: string;
+  personalNumber?: string | null;
+  orgNumber?: string | null;
+  matterId: string;
+  matterNumber: string;
+  matterTitle: string;
+  role: string;
+  klient?: string | null;
+}
+
+function rolePillClass(role: string): string {
+  if (role === "KLIENT") return "bg-blue-50 text-blue-700";
+  if (role === "MOTPART") return "bg-orange-50 text-orange-700";
+  if (role === "MOTPARTSOMBUD") return "bg-orange-50 text-orange-600";
+  if (role === "AKLAGARE") return "bg-purple-50 text-purple-700";
+  return "bg-gray-100 text-gray-600";
+}
+
+const conflictColumns: Column<ConflictRow>[] = [
+  { key: "contactName", label: "Kontakt", sortable: true, sortValue: (r) => r.contactName,
+    render: (r) => (
+      <Link href={`/contacts/${r.contactId}`} className="text-sm font-medium text-blue-600 hover:underline">
+        {r.contactName}
+      </Link>
+    ),
+  },
+  { key: "contactType", label: "Typ", sortable: true, sortValue: (r) => labelForContactType(r.contactType),
+    render: (r) => <span className="text-sm text-gray-500">{labelForContactType(r.contactType)}</span> },
+  { key: "number", label: "Personnr/Orgnr", sortable: true,
+    sortValue: (r) => r.personalNumber || r.orgNumber || "",
+    render: (r) => <span className="text-sm text-gray-500">{r.personalNumber || r.orgNumber || "—"}</span> },
+  { key: "matter", label: "Ärende", sortable: true, sortValue: (r) => r.matterNumber,
+    render: (r) => (
+      <Link href={`/matters/${r.matterId}`} className="text-sm text-blue-600 hover:underline">
+        {r.matterNumber} — {r.matterTitle}
+      </Link>
+    ),
+  },
+  { key: "role", label: "Roll i ärendet", sortable: true, sortValue: (r) => labelForMatterRole(r.role),
+    render: (r) => (
+      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${rolePillClass(r.role)}`}>
+        {labelForMatterRole(r.role)}
+      </span>
+    ),
+  },
+  { key: "klient", label: "Klient", sortable: true, sortValue: (r) => r.klient ?? "",
+    render: (r) => <span className="text-sm text-gray-500">{r.klient || "—"}</span> },
+];
+
+ 
 export default function ConflictsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [searchType, setSearchType] = useState<"name" | "personalNumber" | "both">("both");
@@ -48,7 +102,6 @@ export default function ConflictsPage() {
         </div>
       </form>
 
-      {/* Results */}
       {checkConflict.data && (
         <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
           <div className="flex items-center justify-between mb-4">
@@ -65,54 +118,13 @@ export default function ConflictsPage() {
           </div>
 
           {checkConflict.data.matchCount > 0 && (
-            <div className="-mx-6 overflow-x-auto px-6">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead>
-                  <tr>
-                    <th className="text-left text-xs font-medium text-gray-500 uppercase pb-2 pr-4">Kontakt</th>
-                    <th className="text-left text-xs font-medium text-gray-500 uppercase pb-2 pr-4">Typ</th>
-                    <th className="text-left text-xs font-medium text-gray-500 uppercase pb-2 pr-4">Personnr/Orgnr</th>
-                    <th className="text-left text-xs font-medium text-gray-500 uppercase pb-2 pr-4">Ärende</th>
-                    <th className="text-left text-xs font-medium text-gray-500 uppercase pb-2 pr-4">Roll i ärendet</th>
-                    <th className="text-left text-xs font-medium text-gray-500 uppercase pb-2">Klient</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {checkConflict.data.results.map((r, i) => (
-                    <tr key={i} className="hover:bg-gray-50">
-                      <td className="py-2.5 pr-4">
-                        <Link href={`/contacts/${r.contactId}`} className="text-sm font-medium text-blue-600 hover:underline">
-                          {r.contactName}
-                        </Link>
-                      </td>
-                      <td className="py-2.5 pr-4 text-sm text-gray-500">
-                        {labelForContactType(r.contactType)}
-                      </td>
-                      <td className="py-2.5 pr-4 text-sm text-gray-500">
-                        {r.personalNumber || r.orgNumber || "—"}
-                      </td>
-                      <td className="py-2.5 pr-4">
-                        <Link href={`/matters/${r.matterId}`} className="text-sm text-blue-600 hover:underline">
-                          {r.matterNumber} — {r.matterTitle}
-                        </Link>
-                      </td>
-                      <td className="py-2.5 pr-4">
-                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                          r.role === "KLIENT" ? "bg-blue-50 text-blue-700"
-                            : r.role === "MOTPART" ? "bg-orange-50 text-orange-700"
-                            : r.role === "MOTPARTSOMBUD" ? "bg-orange-50 text-orange-600"
-                            : r.role === "AKLAGARE" ? "bg-purple-50 text-purple-700"
-                            : "bg-gray-100 text-gray-600"
-                        }`}>
-                          {labelForMatterRole(r.role)}
-                        </span>
-                      </td>
-                      <td className="py-2.5 text-sm text-gray-500">{r.klient || "—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <DataTable
+              prefKey="list.conflicts"
+              columns={conflictColumns}
+              data={checkConflict.data.results as ConflictRow[]}
+              rowKey={(r) => `${r.contactId}-${r.matterId}-${r.role}`}
+              emptyMessage="Inga träffar."
+            />
           )}
         </div>
       )}
@@ -123,7 +135,6 @@ export default function ConflictsPage() {
         </div>
       )}
 
-      {/* History */}
       <div className="bg-white rounded-lg border border-gray-200">
         <div className="px-6 py-4 border-b border-gray-200">
           <h2 className="font-semibold text-gray-900">Senaste sökningar</h2>

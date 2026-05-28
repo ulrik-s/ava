@@ -2,10 +2,22 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/client/trpc";
 import { Plus, Pencil, Trash2, FileText } from "lucide-react";
+import { DataTable, type Column } from "@/components/ui/data-table";
+
+interface Template {
+  id: string;
+  name: string;
+  description?: string | null;
+  category?: string | null;
+  createdBy?: { name?: string | null } | null;
+  updatedAt: string | Date;
+}
 
 export default function TemplatesPage() {
+  const router = useRouter();
   const templates = trpc.documentTemplate.list.useQuery();
   const utils = trpc.useUtils();
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
@@ -17,17 +29,39 @@ export default function TemplatesPage() {
     },
   });
 
-  const grouped = templates.data
-    ? templates.data.reduce<Record<string, typeof templates.data>>((acc, t) => {
-        const key = t.category || "Okategoriserade";
-        if (!acc[key]) acc[key] = [];
-        acc[key].push(t);
-        return acc;
-      }, {})
-    : {};
+  const columns: Column<Template>[] = [
+    { key: "name", label: "Namn", sortable: true, sortValue: (t) => t.name,
+      render: (t) => <span className="text-sm font-medium text-gray-900">{t.name}</span> },
+    { key: "category", label: "Kategori", sortable: true,
+      sortValue: (t) => t.category ?? "Okategoriserade",
+      render: (t) => <span className="text-sm text-gray-700">{t.category || "Okategoriserade"}</span> },
+    { key: "description", label: "Beskrivning", sortable: true,
+      sortValue: (t) => t.description ?? "",
+      render: (t) => <span className="text-sm text-gray-500">{t.description || "–"}</span> },
+    { key: "createdBy", label: "Skapad av", sortable: true,
+      sortValue: (t) => t.createdBy?.name ?? "",
+      render: (t) => <span className="text-sm text-gray-500">{t.createdBy?.name ?? "—"}</span> },
+    { key: "updatedAt", label: "Uppdaterad", sortable: true,
+      sortValue: (t) => new Date(t.updatedAt),
+      render: (t) => <span className="text-sm text-gray-400">{new Date(t.updatedAt).toLocaleDateString("sv-SE")}</span> },
+    { key: "actions", label: "", sortable: false, align: "right", hideable: false,
+      render: (t) => (
+        <span className="flex items-center gap-1 justify-end" onClick={(e) => e.stopPropagation()}>
+          <Link href={`/templates/${t.id}/edit`}
+            className="p-1.5 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-700" title="Redigera">
+            <Pencil size={14} />
+          </Link>
+          <button onClick={() => setConfirmDelete(t.id)}
+            className="p-1.5 rounded hover:bg-red-50 text-gray-500 hover:text-red-600" title="Ta bort">
+            <Trash2 size={14} />
+          </button>
+        </span>
+      ),
+    },
+  ];
 
   return (
-    <div className="p-6 max-w-4xl">
+    <div className="p-6 max-w-5xl">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Dokumentmallar</h1>
@@ -59,68 +93,17 @@ export default function TemplatesPage() {
         </div>
       )}
 
-      {Object.entries(grouped).map(([category, items]) => (
-        <div key={category} className="mb-8">
-          <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
-            {category}
-          </h2>
-          <div className="border border-gray-200 rounded-lg overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="text-left px-4 py-2.5 font-medium text-gray-600">Namn</th>
-                  <th className="text-left px-4 py-2.5 font-medium text-gray-600 hidden sm:table-cell">
-                    Beskrivning
-                  </th>
-                  <th className="text-left px-4 py-2.5 font-medium text-gray-600 hidden md:table-cell">
-                    Skapad av
-                  </th>
-                  <th className="text-left px-4 py-2.5 font-medium text-gray-600 hidden md:table-cell">
-                    Uppdaterad
-                  </th>
-                  <th className="w-20" />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {items.map((t) => (
-                  <tr key={t.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 font-medium text-gray-900">{t.name}</td>
-                    <td className="px-4 py-3 text-gray-500 hidden sm:table-cell">
-                      {t.description || <span className="text-gray-300">–</span>}
-                    </td>
-                    <td className="px-4 py-3 text-gray-500 hidden md:table-cell">
-                      {t.createdBy?.name ?? "—"}
-                    </td>
-                    <td className="px-4 py-3 text-gray-400 hidden md:table-cell">
-                      {new Date(t.updatedAt).toLocaleDateString("sv-SE")}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-1 justify-end">
-                        <Link
-                          href={`/templates/${t.id}/edit`}
-                          className="p-1.5 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-700"
-                          title="Redigera"
-                        >
-                          <Pencil size={14} />
-                        </Link>
-                        <button
-                          onClick={() => setConfirmDelete(t.id)}
-                          className="p-1.5 rounded hover:bg-red-50 text-gray-500 hover:text-red-600"
-                          title="Ta bort"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      ))}
+      {templates.data && templates.data.length > 0 && (
+        <DataTable
+          prefKey="list.templates"
+          columns={columns}
+          data={templates.data as Template[]}
+          rowKey={(t) => t.id}
+          onRowClick={(t) => router.push(`/templates/${t.id}/edit`)}
+          emptyMessage="Inga mallar."
+        />
+      )}
 
-      {/* Delete confirmation dialog */}
       {confirmDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
           <div className="bg-white rounded-xl shadow-xl p-6 max-w-sm w-full mx-4">

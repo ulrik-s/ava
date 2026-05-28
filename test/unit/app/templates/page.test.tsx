@@ -10,9 +10,16 @@ const templatesQuery = {
   data: undefined as Array<Record<string, unknown>> | undefined,
   isLoading: false,
 };
-const utilsMock = { documentTemplate: { list: { invalidate: vi.fn() } } };
+const utilsMock = {
+  documentTemplate: { list: { invalidate: vi.fn() } },
+  prefs: { get: { invalidate: vi.fn() } },
+};
 const deleteMutate = vi.fn();
 const deleteState = { isPending: false };
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
+}));
 
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
@@ -23,6 +30,14 @@ vi.mock("@/lib/client/trpc", () => ({
         useMutation: () => ({ mutate: deleteMutate, isPending: deleteState.isPending }),
       },
     },
+    prefs: {
+      get: { useQuery: () => ({ data: undefined, isLoading: false }) },
+      save: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      clear: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      setOrgDefault: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      clearOrgDefault: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+    },
+    user: { current: { useQuery: () => ({ data: { id: "u1", role: "LAWYER" } }) } },
   },
 }));
 

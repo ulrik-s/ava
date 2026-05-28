@@ -2,17 +2,15 @@
 
 /**
  * `/payment-plans` — listning av alla avbetalningsplaner i organisationen.
- *
- * Tidigare gick alla planer bara att hitta via Faktura-detaljvyn. Nu får
- * de en egen sida med status-flikar (ACTIVE / COMPLETED / CANCELLED) och
- * snabb-sök på klient/ärendenr/anteckning.
+ * Status-flikar + sortbar/justerbar kolumnvy via DataTable.
  */
 
 import { useState } from "react";
-import Link from "next/link";
-import { ChevronRight, Wallet, Search } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Wallet, Search } from "lucide-react";
 import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
+import { DataTable, type Column } from "@/components/ui/data-table";
 
 type Status = "ACTIVE" | "COMPLETED" | "CANCELLED";
 
@@ -27,7 +25,68 @@ const STATUS_PILL: Record<Status, string> = {
   CANCELLED: "bg-red-100 text-red-800",
 };
 
+interface PlanRow {
+  id: string;
+  status: Status;
+  monthlyAmount: number;
+  dayOfMonth: number;
+  invoice?: {
+    amount?: number;
+    payments?: Array<{ amount: number }>;
+    matter?: {
+      matterNumber?: string;
+      title?: string;
+      contacts?: Array<{ contact?: { id: string; name: string } }>;
+    };
+  };
+}
+
+function paidOf(p: PlanRow): number {
+  return (p.invoice?.payments ?? []).reduce((s, x) => s + x.amount, 0);
+}
+
+function totalOf(p: PlanRow): number {
+  return p.invoice?.amount ?? 0;
+}
+
+const planColumns: Column<PlanRow>[] = [
+  { key: "matterNumber", label: "Ärendenr", sortable: true,
+    sortValue: (p) => p.invoice?.matter?.matterNumber ?? "",
+    render: (p) => <span className="text-sm font-medium text-gray-900">{p.invoice?.matter?.matterNumber ?? "—"}</span> },
+  { key: "title", label: "Titel", sortable: true,
+    sortValue: (p) => p.invoice?.matter?.title ?? "",
+    render: (p) => <span className="text-sm text-gray-700">{p.invoice?.matter?.title ?? "—"}</span> },
+  { key: "klient", label: "Klient", sortable: true,
+    sortValue: (p) => p.invoice?.matter?.contacts?.[0]?.contact?.name ?? "",
+    render: (p) => <span className="text-sm text-gray-500">{p.invoice?.matter?.contacts?.[0]?.contact?.name ?? "—"}</span> },
+  { key: "status", label: "Status", sortable: true, sortValue: (p) => STATUS_LABEL[p.status],
+    render: (p) => (
+      <span className={`text-[10px] uppercase font-medium rounded px-1.5 py-0.5 ${STATUS_PILL[p.status]}`}>
+        {STATUS_LABEL[p.status]}
+      </span>
+    ),
+  },
+  { key: "monthlyAmount", label: "Per månad", sortable: true, align: "right",
+    sortValue: (p) => p.monthlyAmount,
+    render: (p) => <span className="font-mono text-sm">{formatCurrency(p.monthlyAmount)}</span> },
+  { key: "paid", label: "Inbetalt", sortable: true, align: "right",
+    sortValue: (p) => paidOf(p),
+    render: (p) => <span className="font-mono text-sm">{formatCurrency(paidOf(p))}</span> },
+  { key: "total", label: "Totalt", sortable: true, align: "right",
+    sortValue: (p) => totalOf(p),
+    render: (p) => <span className="font-mono text-sm">{formatCurrency(totalOf(p))}</span> },
+  { key: "pct", label: "Andel", sortable: true, align: "right",
+    sortValue: (p) => totalOf(p) > 0 ? paidOf(p) / totalOf(p) : 0,
+    render: (p) => {
+      const total = totalOf(p);
+      const pct = total > 0 ? Math.min(100, Math.round((paidOf(p) / total) * 100)) : 0;
+      return <span className="text-sm text-gray-700">{pct}%</span>;
+    },
+  },
+];
+
 export default function PaymentPlansPage() {
+  const router = useRouter();
   const [status, setStatus] = useState<Status>("ACTIVE");
   const [search, setSearch] = useState("");
   const list = trpc.paymentPlan.list.useQuery({ status, search: search || undefined });
@@ -69,64 +128,18 @@ export default function PaymentPlansPage() {
         </div>
       </div>
 
-      {list.isLoading && <p className="text-sm text-gray-500">Laddar…</p>}
-      {list.data && list.data.length === 0 && (
-        <div className="bg-white border border-dashed border-gray-200 rounded-lg p-8 text-center">
-          <p className="text-sm text-gray-500">
-            Inga {STATUS_LABEL[status].toLowerCase()} planer.
-          </p>
-        </div>
+      {list.isLoading ? (
+        <p className="text-sm text-gray-500">Laddar…</p>
+      ) : (
+        <DataTable
+          prefKey="list.payment-plans"
+          columns={planColumns}
+          data={(list.data ?? []) as PlanRow[]}
+          rowKey={(p) => p.id}
+          emptyMessage={`Inga ${STATUS_LABEL[status].toLowerCase()} planer.`}
+          onRowClick={(p) => router.push(`/payment-plans/${p.id}`)}
+        />
       )}
-
-      <ul className="divide-y divide-gray-100 bg-white border border-gray-200 rounded-lg">
-        {/* eslint-disable-next-line complexity */}
-        {list.data?.map((p: PlanRow) => {
-          const klient = p.invoice?.matter?.contacts?.[0]?.contact?.name ?? "—";
-          const matterNr = p.invoice?.matter?.matterNumber ?? "—";
-          const matterTitle = p.invoice?.matter?.title ?? "—";
-          const paid = (p.invoice?.payments ?? []).reduce((s, x) => s + x.amount, 0);
-          const total = p.invoice?.amount ?? 0;
-          const pct = total > 0 ? Math.min(100, Math.round((paid / total) * 100)) : 0;
-          return (
-            <li key={p.id}>
-              <Link
-                href={`/payment-plans/${p.id}`}
-                className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50"
-              >
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-gray-900">{matterNr}</span>
-                    <span className="text-xs text-gray-500 truncate">{matterTitle}</span>
-                    <span className={`ml-2 text-[10px] uppercase font-medium rounded px-1.5 py-0.5 ${STATUS_PILL[p.status]}`}>
-                      {STATUS_LABEL[p.status]}
-                    </span>
-                  </div>
-                  <p className="text-xs text-gray-500 mt-0.5">
-                    {klient} · {formatCurrency(p.monthlyAmount)}/mån · {formatCurrency(paid)} av {formatCurrency(total)} ({pct}%)
-                  </p>
-                </div>
-                <ChevronRight size={16} className="text-gray-300" />
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
     </div>
   );
-}
-
-interface PlanRow {
-  id: string;
-  status: Status;
-  monthlyAmount: number;
-  dayOfMonth: number;
-  invoice?: {
-    amount?: number;
-    payments?: Array<{ amount: number }>;
-    matter?: {
-      matterNumber?: string;
-      title?: string;
-      contacts?: Array<{ contact?: { id: string; name: string } }>;
-    };
-  };
 }

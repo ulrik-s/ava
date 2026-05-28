@@ -14,11 +14,19 @@ const searchQuery = {
 
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
+    useUtils: () => ({ prefs: { get: { invalidate: vi.fn() } } }),
     document: {
       search: { useQuery: () => searchQuery },
-      // dokumenttyp-facetterna (tillagda denna session)
       listDocumentTypes: { useQuery: () => ({ data: [] }) },
     },
+    prefs: {
+      get: { useQuery: () => ({ data: undefined, isLoading: false }) },
+      save: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      clear: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      setOrgDefault: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      clearOrgDefault: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+    },
+    user: { current: { useQuery: () => ({ data: { id: "u1", role: "LAWYER" } }) } },
   },
 }));
 

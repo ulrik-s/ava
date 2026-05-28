@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { trpc } from "@/lib/client/trpc";
+import { DataTable, type Column } from "@/components/ui/data-table";
 
 interface SearchHit {
   documentId: string;
@@ -36,6 +37,32 @@ async function openHit(hit: SearchHit): Promise<void> {
     openUrl: (u) => window.open(u, "_blank", "noopener,noreferrer"),
     notifyError: (m) => alert(m),
   });
+}
+
+function searchColumns(open: (h: SearchHit) => Promise<void>): Column<SearchHit>[] {
+  return [
+    { key: "fileName", label: "Fil", sortable: true, sortValue: (h) => h.fileName,
+      render: (h) => (
+        <button type="button" onClick={() => void open(h)}
+          className="text-sm font-medium text-blue-600 hover:underline text-left">
+          {h.fileName}
+        </button>
+      ),
+    },
+    { key: "matter", label: "Ärende", sortable: true, sortValue: (h) => h.matterNumber,
+      render: (h) => (
+        <Link href={`/matters/${h.matterId}`} className="text-sm text-blue-600 hover:underline">
+          {h.matterNumber} — {h.matterTitle}
+        </Link>
+      ),
+    },
+    { key: "highlight", label: "Träff", sortable: false,
+      render: (h) => (
+        <span className="text-sm text-gray-600 line-clamp-2"
+          dangerouslySetInnerHTML={{ __html: h.highlight }} />
+      ),
+    },
+  ];
 }
 
 // eslint-disable-next-line complexity
@@ -152,48 +179,20 @@ export default function DocumentSearchPage() {
       </form>
 
       {searchTerm && results.data && (
-        <div className="bg-white rounded-lg border border-gray-200">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <p className="text-sm text-gray-500">
-              {results.data.totalHits > 0
-                ? `${results.data.totalHits} träff(ar) för "${searchTerm}"`
-                : `Inga träffar för "${searchTerm}"`}
-            </p>
-          </div>
-
+        <div>
+          <p className="text-sm text-gray-500 mb-2">
+            {results.data.totalHits > 0
+              ? `${results.data.totalHits} träff(ar) för "${searchTerm}"`
+              : `Inga träffar för "${searchTerm}"`}
+          </p>
           {results.data.hits.length > 0 && (
-            <div className="divide-y divide-gray-100">
-              {results.data.hits.map((hit) => (
-                <div key={hit.documentId} className="px-6 py-4 hover:bg-gray-50">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <div>
-                      <button
-                        type="button"
-                        onClick={() => void openHit(hit)}
-                        className="text-sm font-medium text-blue-600 hover:underline text-left"
-                      >
-                        {hit.fileName}
-                      </button>
-                      <p className="text-xs text-gray-500 mt-1">
-                        Ärende:{" "}
-                        <Link
-                          href={`/matters/${hit.matterId}`}
-                          className="text-blue-600 hover:underline"
-                        >
-                          {hit.matterNumber} — {hit.matterTitle}
-                        </Link>
-                      </p>
-                    </div>
-                  </div>
-                  {hit.highlight && (
-                    <p
-                      className="text-sm text-gray-600 mt-2 line-clamp-2"
-                      dangerouslySetInnerHTML={{ __html: hit.highlight }}
-                    />
-                  )}
-                </div>
-              ))}
-            </div>
+            <DataTable
+              prefKey="list.doc-search"
+              columns={searchColumns(openHit)}
+              data={results.data.hits as SearchHit[]}
+              rowKey={(h) => h.documentId}
+              emptyMessage="Inga träffar."
+            />
           )}
         </div>
       )}

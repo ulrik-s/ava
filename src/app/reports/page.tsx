@@ -7,6 +7,7 @@ import { trpc } from "@/lib/client/trpc";
 import { formatMinutes, formatCurrency } from "@/lib/client/utils";
 import { labelForPaymentMethod, creditRiskFor, CREDIT_RISK_LABELS, type CreditRisk } from "@/lib/client/labels";
 import type { AppRouter } from "@/lib/server/routers/_app";
+import { DataTable, type Column } from "@/components/ui/data-table";
 
 const RISK_BADGE_CLASSES: Record<CreditRisk, string> = {
   LOW: "bg-green-50 text-green-700 border-green-200",
@@ -176,6 +177,25 @@ function SummaryCard({ report }: { report: Report }) {
 
 // ─── 1. Ärenden i perioden ───────────────────────────────────────────
 
+type MatterRow = Report["matters"][number];
+
+const mattersTableColumns: Column<MatterRow>[] = [
+  { key: "matter", label: "Ärende", sortable: true, sortValue: (m) => m.matterNumber,
+    render: (m) => <Link href={`/matters/${m.matterId}`} className="text-blue-600 hover:underline">{m.matterNumber} — {m.title}</Link> },
+  { key: "client", label: "Klient", sortable: true, sortValue: (m) => m.client ?? "",
+    render: (m) => <span className="text-gray-600">{m.client ?? "—"}</span> },
+  { key: "payment", label: "Betalning", sortable: true, sortValue: (m) => labelForPaymentMethod(m.paymentMethod),
+    render: (m) => <PaymentBadge method={m.paymentMethod} /> },
+  { key: "totalMinutes", label: "Tid", sortable: true, align: "right", sortValue: (m) => m.totalMinutes,
+    render: (m) => <span className="font-mono">{formatMinutes(m.totalMinutes)}</span> },
+  { key: "billableMinutes", label: "Deb. tid", sortable: true, align: "right", sortValue: (m) => m.billableMinutes,
+    render: (m) => <strong className="font-mono">{formatMinutes(m.billableMinutes)}</strong> },
+  { key: "workValueOre", label: "Arbetsvärde", sortable: true, align: "right", sortValue: (m) => m.workValueOre,
+    render: (m) => <span className="font-mono">{formatCurrency(m.workValueOre)}</span> },
+  { key: "expenseOre", label: "Utlägg", sortable: true, align: "right", sortValue: (m) => m.expenseOre,
+    render: (m) => <span className="font-mono">{m.expenseOre > 0 ? formatCurrency(m.expenseOre) : "—"}</span> },
+];
+
 function MattersTable({ report }: { report: Report }) {
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
@@ -187,70 +207,43 @@ function MattersTable({ report }: { report: Report }) {
       {report.matters.length === 0 ? (
         <p className="text-sm text-gray-500">Inga ärenden i vald period.</p>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200 text-sm">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Ärende</th>
-                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Klient</th>
-                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Betalning</th>
-                <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Tid</th>
-                <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Deb. tid</th>
-                <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Arbetsvärde</th>
-                <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Utlägg</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {report.matters.map((m) => (
-                <tr key={m.matterId} className="hover:bg-gray-50">
-                  <td className="px-3 py-2">
-                    <Link
-                      href={`/matters/${m.matterId}`}
-                      className="text-blue-600 hover:underline"
-                    >
-                      {m.matterNumber} — {m.title}
-                    </Link>
-                  </td>
-                  <td className="px-3 py-2 text-gray-600">{m.client ?? "—"}</td>
-                  <td className="px-3 py-2"><PaymentBadge method={m.paymentMethod} /></td>
-                  <td className="px-3 py-2 text-right font-mono">{formatMinutes(m.totalMinutes)}</td>
-                  <td className="px-3 py-2 text-right font-mono">
-                    <strong>{formatMinutes(m.billableMinutes)}</strong>
-                  </td>
-                  <td className="px-3 py-2 text-right font-mono">{formatCurrency(m.workValueOre)}</td>
-                  <td className="px-3 py-2 text-right font-mono">
-                    {m.expenseOre > 0 ? formatCurrency(m.expenseOre) : "—"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot className="border-t-2 border-gray-300 bg-gray-50">
-              <tr>
-                <td colSpan={3} className="px-3 py-2 text-xs font-medium text-gray-700 uppercase">
-                  Totalt
-                </td>
-                <td className="px-3 py-2 text-right font-mono font-semibold">
-                  {formatMinutes(report.totals.totalMinutes)}
-                </td>
-                <td className="px-3 py-2 text-right font-mono font-semibold">
-                  {formatMinutes(report.totals.billableMinutes)}
-                </td>
-                <td className="px-3 py-2 text-right font-mono font-semibold">
-                  {formatCurrency(report.totals.workValueOre)}
-                </td>
-                <td className="px-3 py-2 text-right font-mono font-semibold">
-                  {report.totals.expenseOre > 0 ? formatCurrency(report.totals.expenseOre) : "—"}
-                </td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
+        <>
+          <DataTable
+            prefKey="list.reports-matters"
+            columns={mattersTableColumns}
+            data={report.matters}
+            rowKey={(m) => m.matterId}
+            emptyMessage="Inga ärenden i vald period."
+          />
+          <div className="mt-3 px-4 py-2 bg-gray-50 border border-gray-200 rounded flex items-center justify-end gap-6 text-sm font-medium">
+            <span className="text-gray-700">Totalt:</span>
+            <span className="font-mono">{formatMinutes(report.totals.totalMinutes)}</span>
+            <span className="font-mono">deb. {formatMinutes(report.totals.billableMinutes)}</span>
+            <span className="font-mono">{formatCurrency(report.totals.workValueOre)}</span>
+            <span className="font-mono">{report.totals.expenseOre > 0 ? formatCurrency(report.totals.expenseOre) : "—"}</span>
+          </div>
+        </>
       )}
     </div>
   );
 }
 
 // ─── 2. Timdebitering per vecka ──────────────────────────────────────
+
+type WeekRow = Report["weeklyRows"][number];
+
+const weeklyColumns: Column<WeekRow>[] = [
+  { key: "week", label: "Vecka", sortable: true, sortValue: (r) => `${r.isoYear}-${String(r.week).padStart(2, "0")}`,
+    render: (r) => <span className="font-mono">{r.isoYear}-v{String(r.week).padStart(2, "0")}</span> },
+  { key: "period", label: "Period", sortable: true, sortValue: (r) => r.start,
+    render: (r) => <span className="text-xs text-gray-500 whitespace-nowrap">{r.start.slice(5)} – {r.end.slice(5)}</span> },
+  { key: "totalMinutes", label: "Tid", sortable: true, align: "right", sortValue: (r) => r.totalMinutes,
+    render: (r) => <span className="font-mono">{r.totalMinutes > 0 ? formatMinutes(r.totalMinutes) : "—"}</span> },
+  { key: "billableMinutes", label: "Deb. tid", sortable: true, align: "right", sortValue: (r) => r.billableMinutes,
+    render: (r) => <span className="font-mono">{r.billableMinutes > 0 ? <strong>{formatMinutes(r.billableMinutes)}</strong> : "—"}</span> },
+  { key: "workValueOre", label: "Arbetsvärde", sortable: true, align: "right", sortValue: (r) => r.workValueOre,
+    render: (r) => <span className="font-mono">{r.workValueOre > 0 ? formatCurrency(r.workValueOre) : "—"}</span> },
+];
 
 function WeeklyTable({ report }: { report: Report }) {
   const anyActivity = report.weeklyRows.some((r) => r.totalMinutes > 0);
@@ -265,69 +258,44 @@ function WeeklyTable({ report }: { report: Report }) {
       {!anyActivity ? (
         <p className="text-sm text-gray-500">Ingen tid registrerad i vald period.</p>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200 text-sm">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Vecka</th>
-                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Period</th>
-                <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Tid</th>
-                <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Deb. tid</th>
-                <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Arbetsvärde</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {report.weeklyRows.map((r) => (
-                <tr
-                  key={`${r.isoYear}-${r.week}`}
-                  className={r.totalMinutes > 0 ? "" : "text-gray-300"}
-                >
-                  <td className="px-3 py-1.5 font-mono">
-                    {r.isoYear}-v{String(r.week).padStart(2, "0")}
-                  </td>
-                  <td className="px-3 py-1.5 text-xs text-gray-500 whitespace-nowrap">
-                    {r.start.slice(5)} – {r.end.slice(5)}
-                  </td>
-                  <td className="px-3 py-1.5 text-right font-mono">
-                    {r.totalMinutes > 0 ? formatMinutes(r.totalMinutes) : "—"}
-                  </td>
-                  <td className="px-3 py-1.5 text-right font-mono">
-                    {r.billableMinutes > 0 ? (
-                      <strong>{formatMinutes(r.billableMinutes)}</strong>
-                    ) : (
-                      "—"
-                    )}
-                  </td>
-                  <td className="px-3 py-1.5 text-right font-mono">
-                    {r.workValueOre > 0 ? formatCurrency(r.workValueOre) : "—"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot className="border-t-2 border-gray-300 bg-gray-50">
-              <tr>
-                <td colSpan={2} className="px-3 py-2 text-xs font-medium text-gray-700 uppercase">
-                  Totalt
-                </td>
-                <td className="px-3 py-2 text-right font-mono font-semibold">
-                  {formatMinutes(report.totals.totalMinutes)}
-                </td>
-                <td className="px-3 py-2 text-right font-mono font-semibold">
-                  {formatMinutes(report.totals.billableMinutes)}
-                </td>
-                <td className="px-3 py-2 text-right font-mono font-semibold">
-                  {formatCurrency(report.totals.workValueOre)}
-                </td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
+        <>
+          <DataTable
+            prefKey="list.reports-weekly"
+            columns={weeklyColumns}
+            data={report.weeklyRows}
+            rowKey={(r) => `${r.isoYear}-${r.week}`}
+            emptyMessage="Inga veckor."
+          />
+          <div className="mt-3 px-4 py-2 bg-gray-50 border border-gray-200 rounded flex items-center justify-end gap-6 text-sm font-medium">
+            <span className="text-gray-700">Totalt:</span>
+            <span className="font-mono">{formatMinutes(report.totals.totalMinutes)}</span>
+            <span className="font-mono">deb. {formatMinutes(report.totals.billableMinutes)}</span>
+            <span className="font-mono">{formatCurrency(report.totals.workValueOre)}</span>
+          </div>
+        </>
       )}
     </div>
   );
 }
 
 // ─── 3. Upparbetat, icke fakturerat ──────────────────────────────────
+
+type UnbilledRow = Report["unbilled"]["rows"][number];
+
+const unbilledColumns: Column<UnbilledRow>[] = [
+  { key: "matter", label: "Ärende", sortable: true, sortValue: (r) => r.matterNumber,
+    render: (r) => <Link href={`/matters/${r.matterId}`} className="text-blue-600 hover:underline">{r.matterNumber} — {r.title}</Link> },
+  { key: "client", label: "Klient", sortable: true, sortValue: (r) => r.client ?? "",
+    render: (r) => <span className="text-gray-600">{r.client ?? "—"}</span> },
+  { key: "payment", label: "Betalning", sortable: true, sortValue: (r) => labelForPaymentMethod(r.paymentMethod),
+    render: (r) => <PaymentBadge method={r.paymentMethod} /> },
+  { key: "timeOre", label: "Tid", sortable: true, align: "right", sortValue: (r) => r.timeOre,
+    render: (r) => <span className="font-mono">{r.timeOre > 0 ? formatCurrency(r.timeOre) : "—"}</span> },
+  { key: "expenseOre", label: "Utlägg", sortable: true, align: "right", sortValue: (r) => r.expenseOre,
+    render: (r) => <span className="font-mono">{r.expenseOre > 0 ? formatCurrency(r.expenseOre) : "—"}</span> },
+  { key: "total", label: "Summa", sortable: true, align: "right", sortValue: (r) => r.total,
+    render: (r) => <span className="font-mono font-medium">{formatCurrency(r.total)}</span> },
+];
 
 function UnbilledTable({ report }: { report: Report }) {
   const { rows, total } = report.unbilled;
@@ -375,54 +343,16 @@ function UnbilledTable({ report }: { report: Report }) {
             </div>
           )}
 
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200 text-sm">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Ärende</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Klient</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Betalning</th>
-                  <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Tid</th>
-                  <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Utlägg</th>
-                  <th className="px-3 py-2 text-right text-xs font-medium text-gray-700 uppercase">Summa</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {rows.map((r) => (
-                  <tr key={r.matterId} className="hover:bg-gray-50">
-                    <td className="px-3 py-2">
-                      <Link
-                        href={`/matters/${r.matterId}`}
-                        className="text-blue-600 hover:underline"
-                      >
-                        {r.matterNumber} — {r.title}
-                      </Link>
-                    </td>
-                    <td className="px-3 py-2 text-gray-600">{r.client ?? "—"}</td>
-                    <td className="px-3 py-2"><PaymentBadge method={r.paymentMethod} /></td>
-                    <td className="px-3 py-2 text-right font-mono">
-                      {r.timeOre > 0 ? formatCurrency(r.timeOre) : "—"}
-                    </td>
-                    <td className="px-3 py-2 text-right font-mono">
-                      {r.expenseOre > 0 ? formatCurrency(r.expenseOre) : "—"}
-                    </td>
-                    <td className="px-3 py-2 text-right font-mono font-medium">
-                      {formatCurrency(r.total)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot className="border-t-2 border-gray-300 bg-gray-50">
-                <tr>
-                  <td colSpan={5} className="px-3 py-2 text-xs font-medium text-gray-700 uppercase">
-                    Totalt upparbetat, icke fakturerat
-                  </td>
-                  <td className="px-3 py-2 text-right font-mono font-semibold">
-                    {formatCurrency(total)}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
+          <DataTable
+            prefKey="list.reports-unbilled"
+            columns={unbilledColumns}
+            data={rows}
+            rowKey={(r) => r.matterId}
+            emptyMessage="Inget ofakturerat."
+          />
+          <div className="mt-3 px-4 py-2 bg-gray-50 border border-gray-200 rounded flex items-center justify-end gap-6 text-sm font-medium">
+            <span className="text-gray-700">Totalt upparbetat, icke fakturerat:</span>
+            <span className="font-mono">{formatCurrency(total)}</span>
           </div>
         </>
       )}

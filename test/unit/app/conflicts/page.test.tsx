@@ -19,6 +19,7 @@ const historyQuery: {
 
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
+    useUtils: () => ({ prefs: { get: { invalidate: vi.fn() } } }),
     conflict: {
       check: {
         useMutation: () => ({
@@ -30,6 +31,14 @@ vi.mock("@/lib/client/trpc", () => ({
       },
       history: { useQuery: () => historyQuery },
     },
+    prefs: {
+      get: { useQuery: () => ({ data: undefined, isLoading: false }) },
+      save: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      clear: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      setOrgDefault: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      clearOrgDefault: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+    },
+    user: { current: { useQuery: () => ({ data: { id: "u1", role: "LAWYER" } }) } },
   },
 }));
 
