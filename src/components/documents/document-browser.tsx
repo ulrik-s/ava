@@ -6,6 +6,10 @@ import { FolderRow, type FolderRecord } from "./_folder-row";
 import { DocumentRow, type DocumentRecord } from "./_document-row";
 import { NewFolderForm } from "./_new-folder-form";
 import { type DragItem } from "./_drag-helpers";
+import { DocumentsListView } from "./_documents-list-view";
+
+type ViewMode = "tree" | "list";
+const VIEW_MODE_KEY = "ava.documents.viewMode";
 
 interface DocumentBrowserProps {
   matterId: string;
@@ -13,6 +17,15 @@ interface DocumentBrowserProps {
 
 // eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'DocumentBrowser' has a complexity of 9. Maximum allowed is 8.)
 export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    if (typeof window === "undefined") return "list";
+    const stored = window.localStorage.getItem(VIEW_MODE_KEY);
+    return stored === "tree" || stored === "list" ? stored : "list";
+  });
+  function changeViewMode(m: ViewMode): void {
+    setViewMode(m);
+    if (typeof window !== "undefined") window.localStorage.setItem(VIEW_MODE_KEY, m);
+  }
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set());
   const [showNewFolder, setShowNewFolder] = useState(false);
   const [renamingFolderId, setRenamingFolderId] = useState<string | null>(null);
@@ -252,6 +265,8 @@ export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
         uploading={uploading}
         fileInputRef={fileInputRef}
         onUpload={handleFileUpload}
+        viewMode={viewMode}
+        onChangeViewMode={changeViewMode}
       />
 
       {uploadError && (
@@ -276,16 +291,26 @@ export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
         />
       )}
 
-      <BrowserTable
-        rootFolders={rootFolders}
-        rootDocs={rootDocs}
-        renderFolderRow={renderFolderRow}
-        renderDocRow={renderDocRow}
-        dropTarget={dropTarget}
-        setDropTarget={setDropTarget}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop(null)}
-      />
+      {viewMode === "tree" ? (
+        <BrowserTable
+          rootFolders={rootFolders}
+          rootDocs={rootDocs}
+          renderFolderRow={renderFolderRow}
+          renderDocRow={renderDocRow}
+          dropTarget={dropTarget}
+          setDropTarget={setDropTarget}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop(null)}
+        />
+      ) : (
+        <DocumentsListView
+          matterId={matterId}
+          documents={documents}
+          folders={folders}
+          onDelete={(id) => mutations.deleteDocument.mutate({ id })}
+          onReanalyze={(id) => mutations.reanalyze.mutate({ documentId: id })}
+        />
+      )}
     </div>
   );
 }
@@ -353,19 +378,35 @@ function BrowserHeader({
   uploading,
   fileInputRef,
   onUpload,
+  viewMode,
+  onChangeViewMode,
 }: {
   showNewFolder: () => void;
   uploading: boolean;
   fileInputRef: React.RefObject<HTMLInputElement | null>;
   onUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  viewMode: ViewMode;
+  onChangeViewMode: (m: ViewMode) => void;
 }) {
   return (
     <div className="px-6 py-4 border-b border-gray-200 flex flex-wrap items-center justify-between gap-2">
       <h2 className="font-semibold text-gray-900">Dokument</h2>
       <div className="flex items-center gap-3">
-        <button onClick={showNewFolder} className="text-sm text-blue-600 hover:underline">
-          + Ny mapp
-        </button>
+        <div className="inline-flex rounded-md border border-gray-200 text-xs">
+          <button type="button" onClick={() => onChangeViewMode("list")}
+            className={`px-2 py-1 ${viewMode === "list" ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-600 hover:bg-gray-50"}`}>
+            Lista
+          </button>
+          <button type="button" onClick={() => onChangeViewMode("tree")}
+            className={`px-2 py-1 ${viewMode === "tree" ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-600 hover:bg-gray-50"}`}>
+            Träd
+          </button>
+        </div>
+        {viewMode === "tree" && (
+          <button onClick={showNewFolder} className="text-sm text-blue-600 hover:underline">
+            + Ny mapp
+          </button>
+        )}
         <label className="text-sm text-blue-600 hover:underline cursor-pointer">
           {uploading ? "Laddar upp..." : "+ Ladda upp"}
           <input

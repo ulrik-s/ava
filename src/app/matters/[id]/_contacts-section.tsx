@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { trpc } from "@/lib/client/trpc";
 import { labelForMatterRole, matterRoles, contactTypes } from "@/lib/client/labels";
+import { DataTable, type Column } from "@/components/ui/data-table";
 
 type Contact = {
   id: string;
@@ -120,40 +121,50 @@ export function ContactsSection({ matterId, contacts }: Props) {
         </div>
       )}
 
-      <ContactsList contacts={contacts} onRemove={(id) => removeContact.mutate({ matterContactId: id })} />
+      <ContactsList matterId={matterId} contacts={contacts} onRemove={(id) => removeContact.mutate({ matterContactId: id })} />
     </div>
   );
 }
 
 function ContactsList({
+  matterId,
   contacts,
   onRemove,
 }: {
+  matterId: string;
   contacts: MatterContact[];
   onRemove: (matterContactId: string) => void;
 }) {
+  const columns: Column<MatterContact>[] = [
+    { key: "name", label: "Namn", sortable: true, sortValue: (mc) => mc.contact.name,
+      render: (mc) => (
+        <Link href={`/contacts/${mc.contact.id}`} className="text-sm font-medium text-blue-600 hover:underline">
+          {mc.contact.name}
+        </Link>
+      ),
+    },
+    { key: "role", label: "Roll", sortable: true, sortValue: (mc) => labelForMatterRole(mc.role),
+      render: (mc) => <span className="text-sm text-gray-700">{labelForMatterRole(mc.role)}</span> },
+    { key: "number", label: "Personnr/Orgnr", sortable: true,
+      sortValue: (mc) => mc.contact.personalNumber ?? mc.contact.orgNumber ?? "",
+      render: (mc) => <span className="text-sm text-gray-500">{mc.contact.personalNumber || mc.contact.orgNumber || "—"}</span> },
+    { key: "actions", label: "", sortable: false, align: "right", hideable: false,
+      render: (mc) => (
+        <button type="button" onClick={() => onRemove(mc.id)} className="text-xs text-red-500 hover:underline">
+          Ta bort
+        </button>
+      ),
+    },
+  ];
   return (
-    <div className="divide-y divide-gray-100">
-      {contacts.map((mc) => (
-        <div key={mc.id} className="px-6 py-3 flex items-center justify-between">
-          <div>
-            <Link href={`/contacts/${mc.contact.id}`} className="text-sm font-medium text-blue-600 hover:underline">
-              {mc.contact.name}
-            </Link>
-            <p className="text-xs text-gray-500">
-              <span className="font-medium">{labelForMatterRole(mc.role)}</span>
-              {mc.contact.personalNumber && ` · ${mc.contact.personalNumber}`}
-              {mc.contact.orgNumber && ` · ${mc.contact.orgNumber}`}
-            </p>
-          </div>
-          <button onClick={() => onRemove(mc.id)} className="text-xs text-red-500 hover:underline">
-            Ta bort
-          </button>
-        </div>
-      ))}
-      {contacts.length === 0 && (
-        <p className="px-6 py-4 text-sm text-gray-500">Inga kontakter kopplade</p>
-      )}
+    <div className="p-4">
+      <DataTable
+        prefKey={`list.matter-contacts.${matterId}`}
+        columns={columns}
+        data={contacts}
+        rowKey={(mc) => mc.id}
+        emptyMessage="Inga kontakter kopplade"
+      />
     </div>
   );
 }

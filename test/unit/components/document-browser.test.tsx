@@ -38,6 +38,7 @@ const utilsMock = {
     pendingSuggestions: { invalidate: vi.fn() },
   },
   matter: { getById: { invalidate: vi.fn() } },
+  prefs: { get: { invalidate: vi.fn() } },
 };
 
 const mutationStubs = {
@@ -65,11 +66,22 @@ vi.mock("@/lib/client/trpc", () => ({
       analyze: { useMutation: () => mutationStubs.analyze },
       register: { useMutation: () => mutationStubs.register },
     },
+    prefs: {
+      get: { useQuery: () => ({ data: undefined, isLoading: false }) },
+      save: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      clear: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      setOrgDefault: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      clearOrgDefault: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+    },
+    user: { current: { useQuery: () => ({ data: { id: "u1", role: "LAWYER" } }) } },
   },
 }));
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Tester nedan validerar träd-vyn explicit (+Ny mapp, drag-and-drop osv.);
+  // tvinga träd-läget innan varje render (default är annars "list").
+  window.localStorage.setItem("ava.documents.viewMode", "tree");
   treeQuery.data = { folders: [], documents: [] };
   mutationStubs.createFolder.mutate = vi.fn();
   mutationStubs.renameFolder.mutate = vi.fn();
