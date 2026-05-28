@@ -1,17 +1,12 @@
 "use client";
 
-/**
- * `CalendarSection` — listar kalender-events kopplade till ärendet på
- * matter-detalj-sidan. Klick på rad → EventDetailModal med info + länk
- * till kalender-vyn för den dagen.
- */
-
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/client/trpc";
 import { Calendar } from "lucide-react";
 import { EventDetailModal, type EventDetail } from "@/app/calendar/_event-detail-modal";
+import { DataTable, type Column } from "@/components/ui/data-table";
 
 interface Props {
   matterId: string;
@@ -30,7 +25,33 @@ interface Event {
   allDay?: boolean;
 }
 
-// eslint-disable-next-line complexity
+const eventColumns: Column<Event>[] = [
+  { key: "datetime", label: "Datum / tid", sortable: true, sortValue: (e) => new Date(e.startAt),
+    render: (e) => {
+      const start = new Date(e.startAt);
+      const dateStr = start.toLocaleDateString("sv-SE", { weekday: "short", year: "numeric", month: "short", day: "numeric" });
+      const timeStr = e.allDay ? "Hela dagen" : start.toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" });
+      return (
+        <span className="text-sm text-gray-700 whitespace-nowrap">
+          <span className="block">{dateStr}</span>
+          <span className="block text-xs text-gray-500">{timeStr}</span>
+        </span>
+      );
+    },
+  },
+  { key: "kind", label: "Typ", sortable: true, sortValue: (e) => e.kind === "deadline" ? "Frist" : "Möte",
+    render: (e) => (
+      <span className={`inline-flex px-1.5 py-0.5 rounded-full text-xs ${e.kind === "deadline" ? "bg-amber-100 text-amber-800" : "bg-blue-100 text-blue-800"}`}>
+        {e.kind === "deadline" ? "Frist" : "Möte"}
+      </span>
+    ),
+  },
+  { key: "title", label: "Titel", sortable: true, sortValue: (e) => e.title,
+    render: (e) => <span className="text-sm text-gray-900">{e.title}</span> },
+  { key: "location", label: "Plats", sortable: true, sortValue: (e) => e.location ?? "",
+    render: (e) => <span className="text-sm text-gray-500">{e.location ?? "—"}</span> },
+];
+
 export function CalendarSection({ matterId }: Props): React.ReactElement {
   const router = useRouter();
   const events = trpc.calendar.listForMatter.useQuery({ matterId });
@@ -38,6 +59,26 @@ export function CalendarSection({ matterId }: Props): React.ReactElement {
   const [selected, setSelected] = useState<EventDetail | null>(null);
   const userName = (uid: string): string =>
     users.data?.users.find((u: { id: string; name: string }) => u.id === uid)?.name ?? "?";
+
+  function onSelect(e: Event): void {
+    setSelected({
+      id: e.id, title: e.title, location: e.location,
+      startAt: e.startAt, endAt: e.endAt, allDay: e.allDay ?? false,
+      userId: e.userId, matterId: e.matterId, description: e.description ?? null,
+      kind: (e.kind === "deadline" ? "deadline" : "appointment"),
+    });
+  }
+
+  const columns: Column<Event>[] = [
+    ...eventColumns,
+    { key: "open", label: "", sortable: false, align: "right", hideable: false,
+      render: (e) => (
+        <button type="button" onClick={() => onSelect(e)} className="text-xs text-blue-600 hover:underline">
+          Visa
+        </button>
+      ),
+    },
+  ];
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 lg:col-span-2">
@@ -53,55 +94,20 @@ export function CalendarSection({ matterId }: Props): React.ReactElement {
         </Link>
       </div>
 
-      <div className="overflow-x-auto">
-        {events.isLoading && (
-          <p className="px-6 py-3 text-sm text-gray-500">Laddar…</p>
-        )}
-        {events.data && events.data.length === 0 && (
-          <p className="px-6 py-3 text-sm text-gray-500">Inga kalender-händelser kopplade till detta ärende.</p>
-        )}
-        {events.data && events.data.length > 0 && (
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead>
-              <tr className="bg-gray-50">
-                <th className="px-6 py-2 text-left text-xs font-medium text-gray-500 uppercase">Datum / tid</th>
-                <th className="px-6 py-2 text-left text-xs font-medium text-gray-500 uppercase">Typ</th>
-                <th className="px-6 py-2 text-left text-xs font-medium text-gray-500 uppercase">Titel</th>
-                <th className="px-6 py-2 text-left text-xs font-medium text-gray-500 uppercase">Plats</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {(events.data as Event[]).map((e) => {
-                const start = new Date(e.startAt);
-                const dateStr = start.toLocaleDateString("sv-SE", { weekday: "short", year: "numeric", month: "short", day: "numeric" });
-                const timeStr = e.allDay ? "Hela dagen" : start.toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" });
-                return (
-                  <tr key={e.id} className="hover:bg-gray-50 cursor-pointer"
-                    onClick={() => setSelected({
-                      id: e.id, title: e.title, location: e.location,
-                      startAt: e.startAt, endAt: e.endAt, allDay: e.allDay ?? false,
-                      userId: e.userId, matterId: e.matterId, description: e.description ?? null,
-                      kind: (e.kind === "deadline" ? "deadline" : "appointment"),
-                    })}
-                  >
-                    <td className="px-6 py-2 text-sm text-gray-700 whitespace-nowrap">
-                      <div>{dateStr}</div>
-                      <div className="text-xs text-gray-500">{timeStr}</div>
-                    </td>
-                    <td className="px-6 py-2 text-xs">
-                      <span className={`inline-flex px-1.5 py-0.5 rounded-full ${e.kind === "deadline" ? "bg-amber-100 text-amber-800" : "bg-blue-100 text-blue-800"}`}>
-                        {e.kind === "deadline" ? "Frist" : "Möte"}
-                      </span>
-                    </td>
-                    <td className="px-6 py-2 text-sm text-gray-900">{e.title}</td>
-                    <td className="px-6 py-2 text-sm text-gray-500">{e.location ?? "—"}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+      <div className="p-4">
+        {events.isLoading ? (
+          <p className="text-sm text-gray-500">Laddar…</p>
+        ) : (
+          <DataTable
+            prefKey={`list.matter-calendar.${matterId}`}
+            columns={columns}
+            data={(events.data ?? []) as Event[]}
+            rowKey={(e) => e.id}
+            emptyMessage="Inga kalender-händelser kopplade till detta ärende."
+          />
         )}
       </div>
+
       <EventDetailModal
         event={selected}
         userName={selected ? userName(selected.userId) : ""}
@@ -109,7 +115,6 @@ export function CalendarSection({ matterId }: Props): React.ReactElement {
         gotoCalendar={(ev) => {
           const d = new Date(ev.startAt);
           const ymd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-          // Next router respekterar basePath ("/ava") så vi slipper hårdkoda det.
           router.push(`/calendar?date=${ymd}`);
         }}
       />

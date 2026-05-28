@@ -36,6 +36,10 @@ vi.mock("@/lib/client/trpc", () => ({
     expense: {
       list: { useQuery: () => expenseQuery },
     },
+    prefs: {
+      get: { useQuery: () => ({ data: undefined, isLoading: false }) },
+      save: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+    },
   },
 }));
 

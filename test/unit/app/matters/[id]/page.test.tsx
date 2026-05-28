@@ -88,6 +88,10 @@ vi.mock("@/lib/client/trpc", () => ({
       current: { useQuery: () => ({ data: { id: "u1", name: "Anna", email: "anna@firma.local" } }) },
       list: { useQuery: () => ({ data: { users: [] } }) },
     },
+    prefs: {
+      get: { useQuery: () => ({ data: undefined, isLoading: false }) },
+      save: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+    },
   },
 }));
 

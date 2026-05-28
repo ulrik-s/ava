@@ -14,6 +14,15 @@ import { useId, useState } from "react";
 import Link from "next/link";
 import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
+import { DataTable, type Column } from "@/components/ui/data-table";
+
+interface InvoiceRow {
+  id: string;
+  invoiceDate: string | Date;
+  invoiceType: string;
+  status: string;
+  amount: number;
+}
 
 // eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'statusBadge' has a complexity of 9. Maximum allowed is 8.)
 function statusBadge(status: string, invoiceType: string): string {
@@ -50,7 +59,20 @@ function typeLabel(t: string): string {
     : "Faktura";
 }
 
-// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'InvoicesSection' has a complexity of 21. Maximum allowed is 8.)
+const invoiceCols: Column<InvoiceRow>[] = [
+  { key: "invoiceDate", label: "Datum", sortable: true, sortValue: (i) => new Date(i.invoiceDate),
+    render: (i) => <span>{new Date(i.invoiceDate).toLocaleDateString("sv-SE")}</span> },
+  { key: "type", label: "Typ", sortable: true, sortValue: (i) => typeLabel(i.invoiceType),
+    render: (i) => <span>{typeLabel(i.invoiceType)}</span> },
+  { key: "status", label: "Status", sortable: true, sortValue: (i) => statusLabel(i.status),
+    render: (i) => <span className={statusBadge(i.status, i.invoiceType)}>{statusLabel(i.status)}</span> },
+  { key: "amount", label: "Belopp", sortable: true, align: "right", sortValue: (i) => i.amount,
+    render: (i) => <span className="font-mono">{formatCurrency(i.amount)}</span> },
+  { key: "open", label: "", sortable: false, align: "right", hideable: false,
+    render: (i) => <Link href={`/invoices/${i.id}`} className="text-blue-600 hover:underline text-xs">Öppna</Link> },
+];
+
+// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'InvoicesSection' har JSX-conditionals)
 export function InvoicesSection({ matterId }: { matterId: string }) {
   const invoices = trpc.invoice.list.useQuery({ matterId });
   const timeEntries = trpc.timeEntry.list.useQuery({ matterId });
@@ -130,37 +152,16 @@ export function InvoicesSection({ matterId }: { matterId: string }) {
 
       {invoices.isLoading ? (
         <p className="p-6 text-sm text-gray-400">Laddar…</p>
-      ) : (invoices.data ?? []).length === 0 ? (
-        <p className="p-6 text-sm text-gray-500">Inga fakturor ännu.</p>
       ) : (
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-2 text-left text-xs font-medium text-gray-500">Datum</th>
-              <th className="px-6 py-2 text-left text-xs font-medium text-gray-500">Typ</th>
-              <th className="px-6 py-2 text-left text-xs font-medium text-gray-500">Status</th>
-              <th className="px-6 py-2 text-right text-xs font-medium text-gray-500">Belopp</th>
-              <th className="px-6 py-2 text-right text-xs font-medium text-gray-500"></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {invoices.data!.map((inv) => (
-              <tr key={inv.id} className="text-sm">
-                <td className="px-6 py-2">{new Date(inv.invoiceDate).toLocaleDateString("sv-SE")}</td>
-                <td className="px-6 py-2">{typeLabel(inv.invoiceType)}</td>
-                <td className="px-6 py-2">
-                  <span className={statusBadge(inv.status, inv.invoiceType)}>{statusLabel(inv.status)}</span>
-                </td>
-                <td className="px-6 py-2 text-right font-mono">{formatCurrency(inv.amount)}</td>
-                <td className="px-6 py-2 text-right">
-                  <Link href={`/invoices/${inv.id}`} className="text-blue-600 hover:underline text-xs">
-                    Öppna
-                  </Link>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="p-4">
+          <DataTable
+            prefKey={`list.matter-invoices.${matterId}`}
+            columns={invoiceCols}
+            data={(invoices.data ?? []) as InvoiceRow[]}
+            rowKey={(i) => i.id}
+            emptyMessage="Inga fakturor ännu."
+          />
+        </div>
       )}
 
       {/* ACCONTO modal */}
