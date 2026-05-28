@@ -533,8 +533,8 @@ export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
     // Sprid förfallodatum: -14 till +21 dagar (mix av över-tid + i dag + framtid).
     const dueOffset = ((i * 7) % 35) - 14;
     // Tider varierar: morgon, lunch, eftermiddag.
-    const dueAt = new Date(isoDate(dueOffset));
-    dueAt.setHours([9, 11, 14, 16][i % 4], [0, 15, 30, 45][i % 4], 0, 0);
+    const dueAt = isoDate(dueOffset, [9, 11, 14, 16][i % 4]);
+    dueAt.setMinutes([0, 15, 30, 45][i % 4]);
     const createdOffset = -(((i * 3) % 30) + 1);
     out.tasks.push({
       id: `task-${String(i + 1).padStart(3, "0")}`,
@@ -544,7 +544,7 @@ export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
       description: i % 3 === 0 ? `Uppgift kopplad till ärende ${matter.title}.` : null,
       status,
       priority: priorities[i % priorities.length],
-      dueAt: dueAt.toISOString(),
+      dueAt,
       completedAt: status === "DONE" ? isoDate(dueOffset - 1) : null,
       matterId: matter.id,
       createdAt: isoDate(createdOffset),
