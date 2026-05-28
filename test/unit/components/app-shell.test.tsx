@@ -38,11 +38,11 @@ describe("AppShell", () => {
     expect(screen.getByTestId("page-content")).toBeInTheDocument();
   });
 
-  it("ger Kalender-länk i sidebar", () => {
+  it("ger Att göra-länk i sidebar (ersatt Kalender i UX:n)", () => {
     currentQuery.data = { name: "X" };
     render(<AppShell>x</AppShell>);
     // Två förekomster (mobil + desktop) — räkna att minst en finns
-    expect(screen.getAllByRole("link", { name: /Kalender/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("link", { name: /Att göra/i }).length).toBeGreaterThan(0);
   });
 
   it("tål null/undefined user.current utan att krascha", () => {

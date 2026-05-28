@@ -14,6 +14,7 @@ import { paymentPlanRouter } from "./paymentPlan";
 import { kostnadsrakningRouter } from "./kostnadsrakning";
 import { calendarRouter } from "./calendar";
 import { taskRouter } from "./task";
+import { todoRouter } from "./todo";
 
 export const appRouter = router({
   contacts: contactRouter,
@@ -31,6 +32,7 @@ export const appRouter = router({
   kostnadsrakning: kostnadsrakningRouter,
   calendar: calendarRouter,
   task: taskRouter,
+  todo: todoRouter,
 });
 
 export type AppRouter = typeof appRouter;

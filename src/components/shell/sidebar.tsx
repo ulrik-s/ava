@@ -20,7 +20,7 @@ function signOutLocally(): void {
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: "📊" },
-  { name: "Kalender", href: "/calendar", icon: "🗓️" },
+  { name: "Att göra", href: "/todo", icon: "✅" },
   { name: "Kontakter", href: "/contacts", icon: "👤" },
   { name: "Ärenden", href: "/matters", icon: "📁" },
   { name: "Dokumentsök", href: "/search", icon: "📄" },
