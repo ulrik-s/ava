@@ -34,6 +34,8 @@ const ENTITY_TO_SOURCE_KEY: Record<string, keyof DemoSource> = {
   paymentPlanReminder: "paymentPlanReminders",
   task: "tasks",
   conflictCheck: "conflictChecks",
+  userPreference: "userPreferences",
+  orgPreference: "orgPreferences",
 };
 
 export function demoSourceFromRuntime(runtime: DemoRuntime): DemoSource {

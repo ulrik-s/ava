@@ -15,6 +15,7 @@ import { kostnadsrakningRouter } from "./kostnadsrakning";
 import { calendarRouter } from "./calendar";
 import { taskRouter } from "./task";
 import { todoRouter } from "./todo";
+import { preferenceRouter } from "./preference";
 
 export const appRouter = router({
   contacts: contactRouter,
@@ -33,6 +34,7 @@ export const appRouter = router({
   calendar: calendarRouter,
   task: taskRouter,
   todo: todoRouter,
+  prefs: preferenceRouter,
 });
 
 export type AppRouter = typeof appRouter;

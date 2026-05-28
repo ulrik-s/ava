@@ -161,6 +161,8 @@ export interface DataStoreTx {
   accontoDeductions: AccontoDeductionDelegate;
   calendarEvents: CalendarEventDelegate;
   tasks: TaskDelegate;
+  userPreferences: Delegate;
+  orgPreferences: Delegate;
 }
 
 // ─── Aggregat ─────────────────────────────────────────────────────────
@@ -194,6 +196,8 @@ export interface IDataStore {
   readonly accontoDeductions: AccontoDeductionDelegate;
   readonly calendarEvents: CalendarEventDelegate;
   readonly tasks: TaskDelegate;
+  readonly userPreferences: Delegate;
+  readonly orgPreferences: Delegate;
 
   /**
    * Escape-hatch för komplexa frågor. Throwing-proxy i demo-store —

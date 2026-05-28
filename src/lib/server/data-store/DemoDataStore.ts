@@ -72,6 +72,8 @@ export interface DemoSource {
   accontoDeductions?: readonly Record<string, unknown>[];
   calendarEvents?: readonly Record<string, unknown>[];
   tasks?: readonly Record<string, unknown>[];
+  userPreferences?: readonly Record<string, unknown>[];
+  orgPreferences?: readonly Record<string, unknown>[];
 }
 
 export class DemoDataStore implements IDataStore {
@@ -96,6 +98,8 @@ export class DemoDataStore implements IDataStore {
   readonly accontoDeductions: AccontoDeductionDelegate;
   readonly calendarEvents: CalendarEventDelegate;
   readonly tasks: TaskDelegate;
+  readonly userPreferences: Delegate;
+  readonly orgPreferences: Delegate;
   readonly events: IEventLog;
   readonly raw: IDataStore["raw"];
 
@@ -233,6 +237,8 @@ export class DemoDataStore implements IDataStore {
     this.tasks = this.makeDelegate("tasks", {
       matter: this.rel("matters", "id", "matterId", "one"),
     }) as unknown as TaskDelegate;
+    this.userPreferences = this.makeDelegate("userPreferences") as unknown as Delegate;
+    this.orgPreferences = this.makeDelegate("orgPreferences") as unknown as Delegate;
 
     this.events = new ReadOnlyEventLog();
     this.raw = makeThrowingProxy() as unknown as IDataStore["raw"];
@@ -338,6 +344,8 @@ export class DemoDataStore implements IDataStore {
       accontoDeductions: "accontoDeduction",
       calendarEvents: "calendarEvent",
       tasks: "task",
+      userPreferences: "userPreference",
+      orgPreferences: "orgPreference",
     };
     return map[key as string] ?? String(key);
   }
@@ -405,6 +413,8 @@ export class DemoDataStore implements IDataStore {
       accontoDeductions: this.accontoDeductions,
       calendarEvents: this.calendarEvents,
       tasks: this.tasks,
+      userPreferences: this.userPreferences,
+      orgPreferences: this.orgPreferences,
     };
   }
 

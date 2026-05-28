@@ -40,6 +40,8 @@ export function buildDefaultRegistry(): ProjectionRegistry {
   r.register({ entity: "documentTemplate", projection: new GenericProjection(".ava/templates"), ownsPath: (p) => p.startsWith(".ava/templates/") });
   r.register({ entity: "organization", projection: new GenericProjection(".ava/organizations"), ownsPath: (p) => p.startsWith(".ava/organizations/") });
   r.register({ entity: "office", projection: new GenericProjection("offices"), ownsPath: (p) => p.startsWith("offices/") });
+  r.register({ entity: "userPreference", projection: new GenericProjection(".ava/user-preferences"), ownsPath: (p) => p.startsWith(".ava/user-preferences/") });
+  r.register({ entity: "orgPreference", projection: new GenericProjection(".ava/org-preferences"), ownsPath: (p) => p.startsWith(".ava/org-preferences/") });
 
   return r;
 }

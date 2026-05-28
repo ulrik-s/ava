@@ -35,6 +35,8 @@ export interface MockDataStore {
   accontoDeductions: unknown;
   calendarEvents: unknown;
   tasks: unknown;
+  userPreferences: unknown;
+  orgPreferences: unknown;
 }
 
 // Återanvändbar mall — pekare i `mockPrisma` mappas mot fält i `dataStore`.
@@ -73,6 +75,8 @@ export function dataStoreFromMockPrisma(mockPrisma: Record<string, unknown>): Mo
       accontoDeductions: mockPrisma.invoiceAccontoDeduction,
       calendarEvents: mockPrisma.calendarEvent,
       tasks: mockPrisma.task,
+      userPreferences: mockPrisma.userPreference,
+      orgPreferences: mockPrisma.orgPreference,
     }),
     matters: mockPrisma.matter,
     matterContacts: mockPrisma.matterContact,
@@ -95,5 +99,7 @@ export function dataStoreFromMockPrisma(mockPrisma: Record<string, unknown>): Mo
     accontoDeductions: mockPrisma.invoiceAccontoDeduction,
     calendarEvents: mockPrisma.calendarEvent,
     tasks: mockPrisma.task,
+    userPreferences: mockPrisma.userPreference,
+    orgPreferences: mockPrisma.orgPreference,
   };
 }

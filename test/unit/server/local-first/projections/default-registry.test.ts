@@ -9,11 +9,14 @@ import { buildDefaultRegistry } from "@/lib/server/local-first/projections/defau
 describe("buildDefaultRegistry", () => {
   const registry = buildDefaultRegistry();
 
-  it("har alla 17 entiteter registrerade (matter, contact, user m.fl.)", () => {
+  it("har alla 19 entiteter registrerade (matter, contact, user, prefs m.fl.)", () => {
+    // JS sort är case-sensitive → uppercase < lowercase → "orgPreference" < "organization".
     expect(registry.entities().sort()).toEqual([
       "calendarEvent", "conflictCheck", "contact", "document", "documentTemplate",
-      "expense", "invoice", "matter", "matterContact", "office", "organization",
-      "payment", "paymentPlan", "paymentPlanReminder", "task", "timeEntry", "user",
+      "expense", "invoice", "matter", "matterContact", "office",
+      "orgPreference", "organization",
+      "payment", "paymentPlan", "paymentPlanReminder",
+      "task", "timeEntry", "user", "userPreference",
     ]);
   });
 

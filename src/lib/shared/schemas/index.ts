@@ -34,6 +34,7 @@ import {
 } from "./billing";
 import { documentTemplateSchema, conflictCheckSchema } from "./misc";
 import { calendarEventSchema, taskSchema } from "./calendar";
+import { userPreferenceSchema, orgPreferenceSchema } from "./preference";
 
 export * from "./enums";
 export * from "./common";
@@ -200,6 +201,18 @@ export const ENTITY_REGISTRY: Record<string, EntityEntry> = {
     gitPrefix: "tasks",
     sourceKey: "tasks",
   },
+  userPreference: {
+    schema: userPreferenceSchema,
+    gitPath: p((id) => `.ava/user-preferences/${id}.json`),
+    gitPrefix: ".ava/user-preferences",
+    sourceKey: "userPreferences",
+  },
+  orgPreference: {
+    schema: orgPreferenceSchema,
+    gitPath: p((id) => `.ava/org-preferences/${id}.json`),
+    gitPrefix: ".ava/org-preferences",
+    sourceKey: "orgPreferences",
+  },
 };
 
 /** Union av alla giltiga entity-namn (strängliteraler). */
@@ -208,7 +221,8 @@ export type EntityName =
   | "document" | "documentFolder" | "documentAnalysisSuggestion" | "matterEventSuggestion"
   | "timeEntry" | "expense" | "invoice" | "payment" | "paymentPlan"
   | "paymentPlanReminder" | "accontoDeduction" | "documentTemplate" | "conflictCheck"
-  | "calendarEvent" | "task";
+  | "calendarEvent" | "task"
+  | "userPreference" | "orgPreference";
 
 /** Lista alla entity-namn (för iteration). */
 export const ENTITY_NAMES = Object.keys(ENTITY_REGISTRY) as EntityName[];
