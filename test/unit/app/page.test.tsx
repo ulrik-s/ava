@@ -13,9 +13,14 @@ const meQuery: { data: unknown } = { data: { id: "u1", name: "Anna" } };
 
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
+    useUtils: () => ({ todo: { list: { invalidate: vi.fn() } } }),
     todo: { list: { useQuery: () => todoQuery } },
     timeEntry: { list: { useQuery: () => timeQuery } },
     user: { current: { useQuery: () => meQuery } },
+    task: {
+      complete: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      update: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+    },
   },
 }));
 
@@ -75,6 +80,54 @@ describe("Dashboard", () => {
     ];
     render(<Dashboard />);
     expect(screen.getByText("Frist")).toBeInTheDocument();
+  });
+
+  it("klick på att-göra-rad öppnar detalj-modal", async () => {
+    const { fireEvent, waitFor } = await import("@testing-library/react");
+    todoQuery.data = [
+      {
+        id: "t1", source: "task", title: "Skriv stämningsansökan",
+        description: "Förbered yrkanden + faktaomständigheter",
+        at: new Date(), allDay: false, status: "TODO", priority: "HIGH",
+        kind: null, location: null, userId: "u1",
+        matter: { id: "m1", matterNumber: "2026-0001", title: "Tvist" },
+      },
+    ];
+    render(<Dashboard />);
+    fireEvent.click(screen.getByText("Skriv stämningsansökan"));
+    await waitFor(() => {
+      expect(screen.getByText(/Förbered yrkanden/)).toBeInTheDocument();
+      expect(screen.getByText(/Prioritet: Hög/)).toBeInTheDocument();
+    });
+  });
+
+  it("egen TODO-task visar 'Markera klar'-knapp i modal", async () => {
+    const { fireEvent, waitFor } = await import("@testing-library/react");
+    todoQuery.data = [
+      {
+        id: "t1", source: "task", title: "X", at: new Date(),
+        allDay: false, status: "TODO", priority: null, kind: null,
+        location: null, userId: "u1", description: null, matter: null,
+      },
+    ];
+    render(<Dashboard />);
+    fireEvent.click(screen.getByText("X"));
+    await waitFor(() => expect(screen.getByText("Markera klar")).toBeInTheDocument());
+  });
+
+  it("annans task visar INTE 'Markera klar'-knapp", async () => {
+    const { fireEvent, waitFor } = await import("@testing-library/react");
+    todoQuery.data = [
+      {
+        id: "t1", source: "task", title: "Annans task", at: new Date(),
+        allDay: false, status: "TODO", priority: null, kind: null,
+        location: null, userId: "u-other", description: null, matter: null,
+      },
+    ];
+    render(<Dashboard />);
+    fireEvent.click(screen.getByText("Annans task"));
+    await waitFor(() => expect(screen.getAllByText("Annans task").length).toBeGreaterThan(1));
+    expect(screen.queryByText("Markera klar")).not.toBeInTheDocument();
   });
 
   it("visar tomt-läge för tidrapportering när inga entries", () => {

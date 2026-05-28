@@ -13,7 +13,8 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { trpc } from "@/lib/client/trpc";
 import { formatMinutes } from "@/lib/client/utils";
-import { Plus, Calendar as CalendarIcon, Clock } from "lucide-react";
+import { Plus, Calendar as CalendarIcon, Clock, MapPin } from "lucide-react";
+import { Modal } from "@/components/ui/modal";
 
 function todayYmd(): string {
   const d = new Date();
@@ -83,6 +84,7 @@ function DaySwitcher({ ymd, onChange }: { ymd: string; onChange: (y: string) => 
   );
 }
 
+// eslint-disable-next-line complexity -- många JSX-conditionals + modal
 function TodoCard({ ymd }: { ymd: string }) {
   const range = useMemo(() => rangeForDay(ymd), [ymd]);
   // Vänta på me.data innan vi frågar — todo.list verifierar att user finns
@@ -93,6 +95,10 @@ function TodoCard({ ymd }: { ymd: string }) {
     { from: range.from, to: range.to },
     { enabled: !!me.data?.id },
   );
+  const [selected, setSelected] = useState<TodoItem | null>(null);
+  const utils = trpc.useUtils();
+  const completeTask = trpc.task.complete.useMutation({ onSuccess: () => utils.todo.list.invalidate() });
+  const updateTask = trpc.task.update.useMutation({ onSuccess: () => utils.todo.list.invalidate() });
 
   return (
     <div className="bg-white rounded-lg border border-gray-200">
@@ -109,9 +115,27 @@ function TodoCard({ ymd }: { ymd: string }) {
           <p className="px-6 py-4 text-sm text-gray-500">Inget att göra {ymd === todayYmd() ? "idag" : "denna dag"}.</p>
         )}
         {todo.data?.map((item) => (
-          <TodoRow key={`${item.source}-${item.id}`} item={item} />
+          <TodoRow key={`${item.source}-${item.id}`} item={item as TodoItem} onSelect={setSelected} />
         ))}
       </div>
+
+      <Modal open={!!selected} title={selected?.title ?? ""} onClose={() => setSelected(null)} widthClass="max-w-lg">
+        {selected && (
+          <TodoDetailCard
+            item={selected}
+            isOwn={!!me.data?.id && selected.userId === me.data.id}
+            onToggleDone={() => {
+              if (selected.status === "DONE") {
+                updateTask.mutate({ id: selected.id, status: "TODO" });
+              } else {
+                completeTask.mutate({ id: selected.id });
+              }
+              setSelected(null);
+            }}
+            onClose={() => setSelected(null)}
+          />
+        )}
+      </Modal>
     </div>
   );
 }
@@ -121,37 +145,118 @@ interface TodoItem {
   source: "task" | "event";
   title: string;
   at: string | Date;
+  endAt?: string | Date | null;
   allDay: boolean;
   status: string | null;
+  priority: string | null;
   kind: string | null;
+  location: string | null;
+  description?: string | null;
+  userId: string;
   matter: { id: string; matterNumber: string; title: string } | null;
 }
 
-function TodoRow({ item }: { item: TodoItem }) {
+function badgeFor(item: TodoItem): { cls: string; label: string } {
+  if (item.source === "task") return { cls: "bg-blue-50 text-blue-700", label: "Att göra" };
+  if (item.kind === "deadline") return { cls: "bg-amber-100 text-amber-800", label: "Frist" };
+  return { cls: "bg-purple-50 text-purple-700", label: "Möte" };
+}
+
+function TodoRow({ item, onSelect }: { item: TodoItem; onSelect: (item: TodoItem) => void }) {
   const date = new Date(item.at);
   const timeStr = item.allDay ? "Hela dagen" : date.toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" });
-  const inner = (
-    <div className="px-6 py-3 hover:bg-gray-50 flex items-center gap-3">
-      <span className={`inline-flex text-[10px] font-medium uppercase rounded-full px-1.5 py-0.5 ${
-        item.source === "task" ? "bg-blue-50 text-blue-700"
-          : item.kind === "deadline" ? "bg-amber-100 text-amber-800"
-          : "bg-purple-50 text-purple-700"
-      }`}>
-        {item.source === "task" ? "Att göra" : item.kind === "deadline" ? "Frist" : "Möte"}
-      </span>
+  const badge = badgeFor(item);
+  const isDone = item.source === "task" && item.status === "DONE";
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(item)}
+      className={`w-full text-left px-6 py-3 hover:bg-gray-50 flex items-center gap-3 ${isDone ? "opacity-60" : ""}`}
+    >
+      <span className={`inline-flex text-[10px] font-medium uppercase rounded-full px-1.5 py-0.5 ${badge.cls}`}>{badge.label}</span>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-gray-900 truncate">{item.title}</p>
+        <p className={`text-sm font-medium text-gray-900 truncate ${isDone ? "line-through" : ""}`}>{item.title}</p>
         {item.matter && (
           <p className="text-xs text-gray-500 truncate">{item.matter.matterNumber} — {item.matter.title}</p>
         )}
       </div>
       <span className="text-xs text-gray-500 whitespace-nowrap">{timeStr}</span>
-    </div>
+    </button>
   );
-  return item.matter ? (
-    <Link href={`/matters/${item.matter.id}`} className="block">{inner}</Link>
-  ) : (
-    <div>{inner}</div>
+}
+
+const PRIORITY_LABELS: Record<string, string> = { LOW: "Låg", MEDIUM: "Medium", HIGH: "Hög" };
+const STATUS_LABELS: Record<string, string> = { TODO: "Att göra", IN_PROGRESS: "Pågår", DONE: "Klar" };
+
+// eslint-disable-next-line complexity -- många JSX-conditional-rader (status/prioritet/plats/beskrivning/ärende/own-actions)
+function TodoDetailCard({ item, isOwn, onToggleDone, onClose }: {
+  item: TodoItem;
+  isOwn: boolean;
+  onToggleDone: () => void;
+  onClose: () => void;
+}) {
+  const date = new Date(item.at);
+  const dateStr = date.toLocaleDateString("sv-SE", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+  const timeStr = item.allDay ? "Hela dagen" : date.toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" });
+  const endStr = item.endAt && !item.allDay ? new Date(item.endAt).toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" }) : null;
+  const badge = badgeFor(item);
+  return (
+    <div className="space-y-3 text-sm">
+      <div className="flex items-center gap-2">
+        <span className={`inline-flex text-[10px] font-medium uppercase rounded-full px-1.5 py-0.5 ${badge.cls}`}>{badge.label}</span>
+        {item.source === "task" && item.status && (
+          <span className="text-xs text-gray-600">{STATUS_LABELS[item.status] ?? item.status}</span>
+        )}
+        {item.source === "task" && item.priority && (
+          <span className="text-xs text-gray-600">· Prioritet: {PRIORITY_LABELS[item.priority] ?? item.priority}</span>
+        )}
+      </div>
+
+      <p className="text-gray-700"><span className="capitalize">{dateStr}</span>{!item.allDay && <> · {timeStr}{endStr ? `–${endStr}` : ""}</>}</p>
+
+      {item.location && (
+        <p className="text-gray-700 inline-flex items-center gap-1"><MapPin size={12} className="text-gray-400" /> {item.location}</p>
+      )}
+
+      {item.description && (
+        <div>
+          <p className="text-xs font-medium text-gray-500 mb-1">Beskrivning</p>
+          <p className="text-gray-700 whitespace-pre-wrap">{item.description}</p>
+        </div>
+      )}
+
+      {item.matter && (
+        <div>
+          <p className="text-xs font-medium text-gray-500 mb-1">Ärende</p>
+          <Link href={`/matters/${item.matter.id}`} className="text-blue-600 hover:underline">
+            {item.matter.matterNumber} — {item.matter.title}
+          </Link>
+        </div>
+      )}
+
+      <div className="flex justify-between gap-2 pt-3 border-t border-gray-200">
+        <div>
+          {isOwn && item.source === "task" && (
+            <button type="button" onClick={onToggleDone}
+              className="px-3 py-1.5 text-sm bg-green-600 text-white rounded hover:bg-green-700">
+              {item.status === "DONE" ? "Markera ej klar" : "Markera klar"}
+            </button>
+          )}
+        </div>
+        <div className="flex gap-2">
+          {isOwn && item.source === "task" && (
+            <Link href="/todo" onClick={onClose}
+              className="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50">
+              Ändra…
+            </Link>
+          )}
+          <button type="button" onClick={onClose}
+            className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700">
+            Stäng
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
