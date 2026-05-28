@@ -525,31 +525,35 @@ export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
   const taskStatusPool: Array<"TODO" | "IN_PROGRESS" | "DONE"> = [
     "TODO", "TODO", "TODO", "TODO", "IN_PROGRESS", "IN_PROGRESS", "DONE", "DONE",
   ];
-  const TASK_COUNT = 80;
-  for (let i = 0; i < TASK_COUNT; i++) {
-    const matter = MATTERS[i % MATTERS.length];
-    const title = taskTitles[i % taskTitles.length];
-    const status = taskStatusPool[i % taskStatusPool.length];
-    // Sprid förfallodatum: -14 till +21 dagar (mix av över-tid + i dag + framtid).
-    const dueOffset = ((i * 7) % 35) - 14;
-    // Tider varierar: morgon, lunch, eftermiddag.
-    const dueAt = isoDate(dueOffset, [9, 11, 14, 16][i % 4]);
-    dueAt.setMinutes([0, 15, 30, 45][i % 4]);
-    const createdOffset = -(((i * 3) % 30) + 1);
-    out.tasks.push({
-      id: `task-${String(i + 1).padStart(3, "0")}`,
-      userId: ASSIGN_USERS[i % ASSIGN_USERS.length],
-      organizationId: orgId,
-      title,
-      description: i % 3 === 0 ? `Uppgift kopplad till ärende ${matter.title}.` : null,
-      status,
-      priority: priorities[i % priorities.length],
-      dueAt,
-      completedAt: status === "DONE" ? isoDate(dueOffset - 1) : null,
-      matterId: matter.id,
-      createdAt: isoDate(createdOffset),
-      updatedAt: isoDate(Math.max(-1, createdOffset + 2)),
-    });
+  // Generera per användare så var och en garanterat får tasks vid offset=0
+  // (idag) — annars gör gcd-fall att vissa users hamnar utanför "idag".
+  const userTaskOffsets = [-14, -10, -7, -4, -2, -1, 0, 0, 1, 2, 3, 5, 7, 10, 14, 21];
+  let taskSeq = 0;
+  for (const uid of ASSIGN_USERS) {
+    for (let j = 0; j < userTaskOffsets.length; j++) {
+      const matter = MATTERS[taskSeq % MATTERS.length];
+      const title = taskTitles[taskSeq % taskTitles.length];
+      const status = taskStatusPool[taskSeq % taskStatusPool.length];
+      const dueOffset = userTaskOffsets[j];
+      const dueAt = isoDate(dueOffset, [9, 11, 14, 16][j % 4]);
+      dueAt.setMinutes([0, 15, 30, 45][j % 4]);
+      const createdOffset = -((taskSeq * 3) % 30 + 1);
+      out.tasks.push({
+        id: `task-${String(taskSeq + 1).padStart(3, "0")}`,
+        userId: uid,
+        organizationId: orgId,
+        title,
+        description: taskSeq % 3 === 0 ? `Uppgift kopplad till ärende ${matter.title}.` : null,
+        status,
+        priority: priorities[taskSeq % priorities.length],
+        dueAt,
+        completedAt: status === "DONE" ? isoDate(dueOffset - 1) : null,
+        matterId: matter.id,
+        createdAt: isoDate(createdOffset),
+        updatedAt: isoDate(Math.max(-1, createdOffset + 2)),
+      });
+      taskSeq++;
+    }
   }
 
   // templates

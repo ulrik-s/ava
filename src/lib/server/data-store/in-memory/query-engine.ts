@@ -29,6 +29,20 @@
 
 export type SortDir = "asc" | "desc";
 
+/** Försök tolka v som Date — Date, eller ISO-8601-sträng. Annars null. */
+function toDate(v: unknown): Date | null {
+  if (v instanceof Date) return v;
+  if (typeof v === "string") {
+    // Bara ISO-format ("2026-05-28T..." eller "2026-05-28"). Undvik att råka
+    // tolka godtyckliga strängar som "ABC123" som datum.
+    if (/^\d{4}-\d{2}-\d{2}/.test(v)) {
+      const d = new Date(v);
+      if (!isNaN(d.getTime())) return d;
+    }
+  }
+  return null;
+}
+
 export interface QueryOptions {
   where?: Record<string, unknown>;
   orderBy?: Record<string, SortDir> | Array<Record<string, SortDir>>;
@@ -160,7 +174,11 @@ export class InMemoryQueryEngine<T extends Record<string, unknown>> {
   }
 
   private cmp(a: unknown, b: unknown): number {
-    if (a instanceof Date && b instanceof Date) return a.getTime() - b.getTime();
+    // Tillåt blandning Date↔ISO-sträng — t.ex. generic-projektioner sparar
+    // dueAt som sträng, men routrar skickar `from/to` som Date. Utan denna
+    // coercion returnerar cmp 0 → både gte och lte sant → tomt resultat.
+    const ad = toDate(a); const bd = toDate(b);
+    if (ad && bd) return ad.getTime() - bd.getTime();
     if (typeof a === "number" && typeof b === "number") return a - b;
     if (typeof a === "string" && typeof b === "string") return a.localeCompare(b);
     return 0;

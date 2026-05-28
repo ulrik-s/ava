@@ -30,6 +30,7 @@
     "e2e:ui": "playwright test --config tooling/config/playwright.config.ts --ui",
     "e2e:install": "playwright install --with-deps chromium",
     "round-trip": "playwright test --config tooling/config/playwright.round-trip.config.ts",
+    "diagnose-ui": "tsx tooling/scripts/diagnose-ui.ts",
     "smoke:tier3": "bash tooling/scripts/test-tier3-smoke.sh",
     "test:all": "bash tooling/scripts/test-all.sh",
     "duplicates": "jscpd --config tooling/config/jscpd.json src",

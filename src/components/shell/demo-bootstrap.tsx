@@ -113,7 +113,11 @@ export function DemoBootstrap({ children }: { children: ReactNode }) {
       new GitBackendRuntime({
         dataStore,
         authProvider: new GitAuthProvider({
-          id: "current-user",
+          // Måste matcha seedens currentUserId. För demo (build-demo-repo)
+          // är det "u-anna" — annars filtreras tasks/todo/recent-matters
+          // bort eftersom de assignas till "u-anna". Self-hosted-seeden
+          // (seed-firma-local) använder fortfarande "current-user".
+          id: firmaConfig.tier === "demo" ? "u-anna" : "current-user",
           email: firmaConfig.authorEmail,
           name: firmaConfig.authorName,
           role: "ADMIN",

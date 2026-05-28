@@ -85,7 +85,14 @@ function DaySwitcher({ ymd, onChange }: { ymd: string; onChange: (y: string) => 
 
 function TodoCard({ ymd }: { ymd: string }) {
   const range = useMemo(() => rangeForDay(ymd), [ymd]);
-  const todo = trpc.todo.list.useQuery({ from: range.from, to: range.to });
+  // Vänta på me.data innan vi frågar — todo.list verifierar att user finns
+  // i org:en. Demo-runtime hydrerar users asynkront → utan gate kraschar
+  // första query:n innan datan finns.
+  const me = trpc.user.current.useQuery();
+  const todo = trpc.todo.list.useQuery(
+    { from: range.from, to: range.to },
+    { enabled: !!me.data?.id },
+  );
 
   return (
     <div className="bg-white rounded-lg border border-gray-200">

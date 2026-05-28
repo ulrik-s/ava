@@ -68,3 +68,4 @@ package-lock.json
 .claude-flow/
 docs/.claude-flow/
 .mcp.json
+reports/ui-diagnose/

@@ -25,7 +25,11 @@ const EVENT_KIND_LABELS: Record<string, string> = { appointment: "Möte", deadli
 
 function startOfDay(d: Date): Date { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; }
 function endOfDay(d: Date): Date { const x = new Date(d); x.setHours(23, 59, 59, 999); return x; }
-function toInputDate(d: Date): string { return d.toISOString().slice(0, 10); }
+function toInputDate(d: Date): string {
+  // Använd LOKAL-datum (inte UTC) — annars visar input fel dag för användare
+  // öster om UTC innan kl 02:00 lokalt (toISOString → UTC → föregående dag).
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 function fromInputDate(s: string): Date { const [y, m, day] = s.split("-").map(Number); return new Date(y, (m ?? 1) - 1, day ?? 1); }
 function shiftDays(d: Date, n: number): Date { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
 
@@ -64,7 +68,9 @@ export default function TodoClient() {
   const range = useMemo(() => ({ from: startOfDay(day), to: endOfDay(day) }), [day]);
   const items = trpc.todo.list.useQuery(
     { from: range.from, to: range.to, ...(effectiveUserId ? { userId: effectiveUserId } : {}) },
-    { enabled: !!effectiveUserId },
+    // Gate på me.data → demo-runtime hydrerar users asynkront; utan gate
+    // kraschar första query:n innan user existerar i datalagret.
+    { enabled: !!effectiveUserId && !!me.data?.id },
   );
   const matters = trpc.matter.list.useQuery({ pageSize: 200, status: "ACTIVE" });
   const utils = trpc.useUtils();

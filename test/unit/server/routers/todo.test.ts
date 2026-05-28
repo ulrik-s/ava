@@ -54,13 +54,16 @@ describe("todo.list", () => {
     await expect(makeCaller().list({ from: FROM, to: TO, userId: "okänd" })).rejects.toThrow();
   });
 
-  it("defaultar till anropande user när userId utelämnas", async () => {
-    mockPrisma.user.findFirst.mockResolvedValue({ id: "u1", organizationId: "org-a" });
+  it("defaultar till anropande user när userId utelämnas (skippar user-check för egen lookup)", async () => {
     mockPrisma.task.findMany.mockResolvedValue([]);
     mockPrisma.calendarEvent.findMany.mockResolvedValue([]);
     await makeCaller("org-a", "u1").list({ from: FROM, to: TO });
-    const userQ = mockPrisma.user.findFirst.mock.calls[0][0] as { where: { id: string } };
-    expect(userQ.where.id).toBe("u1");
+    // För egen-tidslinje hoppar router över user.findFirst (ctx.user är
+    // redan autentiserad). Användare-kollen körs bara vid kollegial look-up.
+    expect(mockPrisma.user.findFirst).not.toHaveBeenCalled();
+    // Och tasks-frågan körs ändå med rätt userId.
+    const taskQ = mockPrisma.task.findMany.mock.calls[0][0] as { where: { userId: string } };
+    expect(taskQ.where.userId).toBe("u1");
   });
 });
 

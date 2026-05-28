@@ -42,11 +42,17 @@ export const todoRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       const userId = input.userId ?? ctx.user.id;
-      // Verifiera att user:n tillhör org:en (annars kan vem som helst se vem som helst).
-      const user = await ctx.dataStore.users.findFirst({
-        where: { id: userId, organizationId: ctx.user.organizationId },
-      });
-      if (!user) throw new TRPCError({ code: "NOT_FOUND", message: "Användare finns inte i organisationen." });
+      // Vid kollegial-look-up (annan user än ctx.user) — verifiera att den
+      // user:n tillhör samma org (förhindrar arbitrary user-listning).
+      // För egen tidslinje hoppar vi över checken: ctx.user är redan
+      // autentiserad. Det undviker race när demo-runtime hydrerar users
+      // asynkront → todo.list slog tidigare in innan u-anna fanns i datalagret.
+      if (userId !== ctx.user.id) {
+        const user = await ctx.dataStore.users.findFirst({
+          where: { id: userId, organizationId: ctx.user.organizationId },
+        });
+        if (!user) throw new TRPCError({ code: "NOT_FOUND", message: "Användare finns inte i organisationen." });
+      }
 
       const where = { userId, organizationId: ctx.user.organizationId };
       const [tasks, events] = await Promise.all([
@@ -60,17 +66,23 @@ export const todoRouter = router({
         }),
       ]);
 
+      // Demo-projektionen (passthrough) sparar datum som ISO-strängar →
+      // coerca till Date innan sort/serialisering (getTime() på en sträng
+      // kraschar tyst inne i sort:s comparator → React Query svalde felet
+      // och behöll förra resultatet → tom dashboard).
+      const toDate = (v: unknown): Date => v instanceof Date ? v : new Date(v as string);
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const taskItems: TodoItem[] = (tasks as any[]).map((t) => ({
         id: t.id, source: "task", title: t.title, description: t.description ?? null,
-        at: t.dueAt, endAt: null, allDay: false,
+        at: toDate(t.dueAt), endAt: null, allDay: false,
         status: t.status, priority: t.priority, kind: null, location: null,
         matter: t.matter ?? null, userId: t.userId,
       }));
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const eventItems: TodoItem[] = (events as any[]).map((e) => ({
         id: e.id, source: "event", title: e.title, description: e.description ?? null,
-        at: e.startAt, endAt: e.endAt ?? null, allDay: e.allDay ?? false,
+        at: toDate(e.startAt), endAt: e.endAt ? toDate(e.endAt) : null, allDay: e.allDay ?? false,
         status: null, priority: null, kind: e.kind, location: e.location ?? null,
         matter: e.matter ?? null, userId: e.userId,
       }));
