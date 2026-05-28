@@ -28,6 +28,10 @@ vi.mock("@/lib/client/trpc", () => ({
       list: { useQuery: () => contactsQuery },
       create: { useMutation: () => ({ mutate: createMutate, isPending: false }) },
     },
+    prefs: {
+      get: { useQuery: () => ({ data: undefined, isLoading: false }) },
+      save: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+    },
   },
 }));
 

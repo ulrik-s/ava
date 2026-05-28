@@ -6,6 +6,34 @@ import { useSearchParams } from "next/navigation";
 import { trpc } from "@/lib/client/trpc";
 import { labelForContactType, contactTypes } from "@/lib/client/labels";
 import { useIsReadOnly } from "@/lib/client/demo/demo-mode-context";
+import { DataTable, type Column } from "@/components/ui/data-table";
+
+interface ContactRow {
+  id: string;
+  name: string;
+  contactType: string;
+  personalNumber?: string | null;
+  orgNumber?: string | null;
+  email?: string | null;
+  _count: { matterLinks: number };
+}
+
+const contactColumns: Column<ContactRow>[] = [
+  { key: "name", label: "Namn", sortable: true, sortValue: (c) => c.name,
+    render: (c) => <Link href={`/contacts/${c.id}`} className="text-sm font-medium text-blue-600 hover:underline">{c.name}</Link> },
+  { key: "contactType", label: "Typ", sortable: true, sortValue: (c) => labelForContactType(c.contactType),
+    render: (c) => <span className="text-sm text-gray-500">{labelForContactType(c.contactType)}</span> },
+  { key: "number", label: "Personnr/Orgnr", sortable: true, sortValue: (c) => c.personalNumber || c.orgNumber || "",
+    render: (c) => <span className="text-sm text-gray-500">{c.personalNumber || c.orgNumber || "—"}</span> },
+  { key: "email", label: "E-post", sortable: true, sortValue: (c) => c.email || "",
+    render: (c) => <span className="text-sm text-gray-500">{c.email || "—"}</span> },
+  { key: "matterCount", label: "Ärenden", sortable: true, align: "right", sortValue: (c) => c._count.matterLinks,
+    render: (c) => <span className="text-sm text-gray-500">{c._count.matterLinks}</span> },
+];
+
+function ContactsTable({ rows }: { rows: ContactRow[] }) {
+  return <DataTable prefKey="list.contacts" columns={contactColumns} data={rows} rowKey={(c) => c.id} emptyMessage="Inga kontakter." />;
+}
 
 // eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'ContactsContent' has a complexity of 11. Maximum allowed is 8.)
 function ContactsContent() {
@@ -164,49 +192,18 @@ function ContactsContent() {
         </select>
       </div>
 
-      <div className="bg-white rounded-lg border border-gray-200 overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead>
-            <tr className="bg-gray-50">
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Namn</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Typ</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Personnr/Orgnr</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">E-post</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ärenden</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {contacts.data?.contacts.map((contact) => (
-              <tr key={contact.id} className="hover:bg-gray-50">
-                <td className="px-6 py-4">
-                  <Link href={`/contacts/${contact.id}`} className="text-sm font-medium text-blue-600 hover:underline">
-                    {contact.name}
-                  </Link>
-                </td>
-                <td className="px-6 py-4 text-sm text-gray-500">
-                  {labelForContactType(contact.contactType)}
-                </td>
-                <td className="px-6 py-4 text-sm text-gray-500">
-                  {contact.personalNumber || contact.orgNumber || "—"}
-                </td>
-                <td className="px-6 py-4 text-sm text-gray-500">{contact.email || "—"}</td>
-                <td className="px-6 py-4 text-sm text-gray-500">{contact._count.matterLinks}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {contacts.data && contacts.data.pages > 1 && (
-          <div className="px-6 py-3 border-t border-gray-200 flex items-center justify-between">
-            <p className="text-sm text-gray-500">Sida {page} av {contacts.data.pages} ({contacts.data.total} totalt)</p>
-            <div className="flex gap-2">
-              <button disabled={page <= 1} onClick={() => setPage(page - 1)}
-                className="px-3 py-1 text-sm border rounded disabled:opacity-50">Föregående</button>
-              <button disabled={page >= contacts.data.pages} onClick={() => setPage(page + 1)}
-                className="px-3 py-1 text-sm border rounded disabled:opacity-50">Nästa</button>
-            </div>
+      <ContactsTable rows={contacts.data?.contacts ?? []} />
+      {contacts.data && contacts.data.pages > 1 && (
+        <div className="px-6 py-3 mt-2 bg-white border border-gray-200 rounded-lg flex items-center justify-between">
+          <p className="text-sm text-gray-500">Sida {page} av {contacts.data.pages} ({contacts.data.total} totalt)</p>
+          <div className="flex gap-2">
+            <button disabled={page <= 1} onClick={() => setPage(page - 1)}
+              className="px-3 py-1 text-sm border rounded disabled:opacity-50">Föregående</button>
+            <button disabled={page >= contacts.data.pages} onClick={() => setPage(page + 1)}
+              className="px-3 py-1 text-sm border rounded disabled:opacity-50">Nästa</button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
