@@ -4,6 +4,7 @@ import "./globals.css";
 import { Providers } from "@/components/shell/providers";
 import { PwaRegister } from "@/components/shell/pwa-register";
 import { ThemeRestore } from "@/components/shell/theme-restore";
+import { ThemeToggle } from "@/components/shell/theme-toggle";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -60,6 +61,7 @@ export default function RootLayout({
       </head>
       <body className="h-full bg-gray-50">
         <ThemeRestore />
+        <ThemeToggle />
         <PwaRegister />
         <Providers>{children}</Providers>
       </body>

@@ -17,25 +17,34 @@ body {
 
 /* ─── Dark mode ──────────────────────────────────────────────────────
    Strategi: override de mest använda Tailwind-utilities under `.dark`
-   istället för att lägga `dark:`-klasser i varje komponent. Detta gör
-   att vi får ett konsekvent mörkt utseende utan att röra varje vy.
-   Accent-färger (blue, green, red, amber) lämnas oförändrade — de
-   syns lika bra på mörk botten.
+   istället för att lägga `dark:`-klasser i varje komponent.
+
+   Designprinciper (Material Design 3 + Apple HIG):
+   • Inga pure black — använd slate-900 som botten, slate-800 som
+     surface, slate-700 som elevated.
+   • Accent-färger desatureras lite (300-tonen på dark istället för
+     600-700 på light) för att inte vibrera mot mörk botten.
+   • Text-kontrast: WCAG AA — minst 4.5:1 för normal text.
+   • Mjuka bakgrunder (bg-amber-50 etc.) blir genomskinligare på dark
+     så textfärgen lyfter.
 */
 .dark {
   --color-background: #0f172a; /* slate-900 */
   --color-foreground: #f1f5f9; /* slate-100 */
 }
 
+/* Surfaces ─────────────────────────────────────────────────────────── */
 .dark .bg-white { background-color: #1e293b; /* slate-800 */ }
-.dark .bg-gray-50 { background-color: #0f172a; }
+.dark .bg-gray-50 { background-color: #0f172a; /* slate-900 */ }
 .dark .bg-gray-100 { background-color: #334155; /* slate-700 */ }
-.dark .bg-gray-200 { background-color: #475569; }
+.dark .bg-gray-200 { background-color: #475569; /* slate-600 */ }
 
 .dark .hover\:bg-gray-50:hover { background-color: #334155; }
 .dark .hover\:bg-gray-100:hover { background-color: #475569; }
 .dark .hover\:bg-white:hover { background-color: #334155; }
+.dark .hover\:bg-blue-700:hover { background-color: #3b82f6; }
 
+/* Text — neutralfärger ─────────────────────────────────────────────── */
 .dark .text-gray-900 { color: #f1f5f9; }
 .dark .text-gray-800 { color: #e2e8f0; }
 .dark .text-gray-700 { color: #cbd5e1; }
@@ -44,25 +53,86 @@ body {
 .dark .text-gray-400 { color: #64748b; }
 .dark .text-gray-300 { color: #475569; }
 
+/* Borders ──────────────────────────────────────────────────────────── */
 .dark .border-gray-200 { border-color: #334155; }
 .dark .border-gray-300 { border-color: #475569; }
 .dark .border-gray-100 { border-color: #1e293b; }
+.dark .ring-gray-200 { --tw-ring-color: #334155; }
 
 .dark .divide-gray-100 > * + * { border-color: #1e293b; }
 .dark .divide-gray-200 > * + * { border-color: #334155; }
 
-/* Mjuka accent-bakgrunder på mörk botten — gör dem genomskinligare så
-   textfärgen får mer kontrast. */
-.dark .bg-blue-50 { background-color: rgba(37, 99, 235, 0.15); }
-.dark .bg-green-50 { background-color: rgba(22, 163, 74, 0.15); }
-.dark .bg-amber-50 { background-color: rgba(245, 158, 11, 0.15); }
-.dark .bg-red-50 { background-color: rgba(220, 38, 38, 0.15); }
-.dark .bg-yellow-50 { background-color: rgba(234, 179, 8, 0.15); }
-.dark .bg-orange-50 { background-color: rgba(249, 115, 22, 0.15); }
-.dark .bg-purple-50 { background-color: rgba(168, 85, 247, 0.15); }
-.dark .bg-indigo-50 { background-color: rgba(99, 102, 241, 0.15); }
+/* Accent-text — lyft upp 600/700 → 300/400-tonen (HIG: desaturera och
+   lätta upp på mörk botten för bättre läsbarhet) ────────────────── */
+.dark .text-blue-700 { color: #93c5fd; /* blue-300 */ }
+.dark .text-blue-600 { color: #93c5fd; }
+.dark .text-blue-800 { color: #bfdbfe; }
+.dark .text-blue-900 { color: #dbeafe; }
+.dark .hover\:text-blue-600:hover { color: #93c5fd; }
 
-/* Inputs/selects — gör fält läsliga */
+.dark .text-green-700 { color: #86efac; }
+.dark .text-green-600 { color: #86efac; }
+.dark .text-green-800 { color: #bbf7d0; }
+.dark .text-green-900 { color: #dcfce7; }
+.dark .hover\:text-green-600:hover { color: #86efac; }
+
+.dark .text-amber-700 { color: #fcd34d; }
+.dark .text-amber-600 { color: #fcd34d; }
+.dark .text-amber-800 { color: #fde68a; }
+.dark .text-amber-900 { color: #fef3c7; }
+
+.dark .text-red-700 { color: #fca5a5; }
+.dark .text-red-600 { color: #fca5a5; }
+.dark .text-red-500 { color: #fca5a5; }
+.dark .text-red-800 { color: #fecaca; }
+.dark .text-red-900 { color: #fee2e2; }
+.dark .hover\:text-red-600:hover { color: #fca5a5; }
+
+.dark .text-indigo-700 { color: #a5b4fc; }
+.dark .text-indigo-800 { color: #c7d2fe; }
+.dark .text-indigo-900 { color: #e0e7ff; }
+
+.dark .text-purple-700 { color: #d8b4fe; }
+.dark .text-purple-600 { color: #d8b4fe; }
+.dark .text-purple-800 { color: #e9d5ff; }
+
+.dark .text-orange-700 { color: #fdba74; }
+.dark .text-orange-600 { color: #fdba74; }
+
+.dark .text-yellow-700 { color: #fde047; }
+.dark .text-yellow-600 { color: #fde047; }
+.dark .text-yellow-800 { color: #fef08a; }
+
+/* Mjuka accent-bakgrunder (bg-X-50 etc.) — gör dem genomskinligare på
+   mörk botten så det blir luftigt + textfärg lyfter ──────────────── */
+.dark .bg-blue-50 { background-color: rgba(37, 99, 235, 0.18); }
+.dark .bg-blue-100 { background-color: rgba(37, 99, 235, 0.28); }
+.dark .bg-green-50 { background-color: rgba(22, 163, 74, 0.18); }
+.dark .bg-green-100 { background-color: rgba(22, 163, 74, 0.28); }
+.dark .bg-amber-50 { background-color: rgba(245, 158, 11, 0.18); }
+.dark .bg-amber-100 { background-color: rgba(245, 158, 11, 0.28); }
+.dark .bg-red-50 { background-color: rgba(220, 38, 38, 0.18); }
+.dark .bg-red-100 { background-color: rgba(220, 38, 38, 0.28); }
+.dark .bg-yellow-50 { background-color: rgba(234, 179, 8, 0.18); }
+.dark .bg-orange-50 { background-color: rgba(249, 115, 22, 0.18); }
+.dark .bg-purple-50 { background-color: rgba(168, 85, 247, 0.18); }
+.dark .bg-purple-100 { background-color: rgba(168, 85, 247, 0.28); }
+.dark .bg-indigo-50 { background-color: rgba(99, 102, 241, 0.18); }
+.dark .bg-indigo-100 { background-color: rgba(99, 102, 241, 0.28); }
+
+/* Mjuka accent-borders — matchande på dark */
+.dark .border-amber-200 { border-color: rgba(245, 158, 11, 0.4); }
+.dark .border-blue-200 { border-color: rgba(37, 99, 235, 0.4); }
+.dark .border-green-200 { border-color: rgba(22, 163, 74, 0.4); }
+.dark .border-red-200 { border-color: rgba(220, 38, 38, 0.4); }
+.dark .border-purple-200 { border-color: rgba(168, 85, 247, 0.4); }
+.dark .border-indigo-200 { border-color: rgba(99, 102, 241, 0.4); }
+
+/* Floating theme-toggle override — toggle:n behöver semitransparent
+   bakgrund mot båda lägena. Override på dark. */
+.dark .bg-white\/80 { background-color: rgba(30, 41, 59, 0.85); }
+
+/* Inputs/selects ───────────────────────────────────────────────────── */
 .dark input:not([type="checkbox"]):not([type="radio"]),
 .dark select,
 .dark textarea {
@@ -71,3 +141,6 @@ body {
   border-color: #475569;
 }
 .dark input::placeholder, .dark textarea::placeholder { color: #64748b; }
+
+/* Code-block inline-stiling — t.ex. demo-banner:n */
+.dark code { background-color: #334155; color: #f1f5f9; }

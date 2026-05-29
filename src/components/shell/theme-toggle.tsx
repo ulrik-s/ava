@@ -1,12 +1,15 @@
 "use client";
 
 /**
- * `ThemeToggle` — växlar mellan light och dark mode. Klassen `dark`
- * sätts på `<html>` så CSS i [[globals.css]] kan override:a Tailwind-
- * utilities (bg-white, text-gray-900 etc.).
+ * `ThemeToggle` — flytande icon-knapp i övre hörnan som växlar mellan
+ * light och dark mode. Klassen `dark` sätts på `<html>` så
+ * [[globals.css]]:s `.dark`-overrides applicerar Tailwind-utilities.
  *
- * Persisteras i `localStorage.ava.theme = "light" | "dark"`. Vid första
- * besöket använder vi prefers-color-scheme; därefter explicit val.
+ * Designval (per Material/Apple HIG):
+ *   • Position: fixed top-right, alltid synlig oavsett scroll/route.
+ *   • Icon-only (Sun/Moon) med tooltip — minimal visuell tyngd.
+ *   • Subtil background med ring för att signalera tryckbarhet utan
+ *     att stjäla fokus från huvudinnehållet.
  */
 
 import { useState } from "react";
@@ -18,16 +21,10 @@ type Theme = "light" | "dark";
 
 function readTheme(): Theme {
   if (typeof window === "undefined") return "light";
-  // Inline-skriptet i layout.tsx sätter .dark INNAN React mountar →
-  // läs DOM-state istället för localStorage så vi inte trippar React-
-  // Compiler:s "setState i useEffect"-varning.
   return document.documentElement.classList.contains("dark") ? "dark" : "light";
 }
 
 export function ThemeToggle() {
-  // Lazy initial state — kör bara på client (SSR-stabil eftersom server
-  // alltid får "light" och inline-scriptet hinner toggla DOM innan React
-  // hydrerar).
   const [theme, setTheme] = useState<Theme>(readTheme);
 
   function toggle(): void {
@@ -47,10 +44,9 @@ export function ThemeToggle() {
       onClick={toggle}
       aria-label={theme === "dark" ? "Byt till ljust läge" : "Byt till mörkt läge"}
       title={theme === "dark" ? "Ljust läge" : "Mörkt läge"}
-      className="text-gray-500 hover:text-gray-900 inline-flex items-center gap-1.5 text-sm"
+      className="fixed top-2 right-2 z-[60] inline-flex items-center justify-center h-8 w-8 rounded-full bg-white/80 text-gray-600 shadow-sm ring-1 ring-gray-200 hover:bg-white hover:text-gray-900 backdrop-blur-sm transition"
     >
-      {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
-      <span>{theme === "dark" ? "Ljus" : "Mörk"}</span>
+      {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
     </button>
   );
 }
