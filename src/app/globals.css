@@ -39,6 +39,20 @@ body {
 .dark .bg-gray-100 { background-color: #334155; /* slate-700 */ }
 .dark .bg-gray-200 { background-color: #475569; /* slate-600 */ }
 
+/* Responsive-varianter måste override:as separat — Tailwind genererar
+   .lg\:bg-white inuti en @media, vilket är ett annat selector-namn än
+   .bg-white. Utan dessa förblir desktop-sidebaren vit på dark. */
+@media (min-width: 640px) {
+  .dark .sm\:bg-white { background-color: #1e293b; }
+}
+@media (min-width: 768px) {
+  .dark .md\:bg-white { background-color: #1e293b; }
+}
+@media (min-width: 1024px) {
+  .dark .lg\:bg-white { background-color: #1e293b; }
+  .dark .lg\:border-gray-200 { border-color: #334155; }
+}
+
 .dark .hover\:bg-gray-50:hover { background-color: #334155; }
 .dark .hover\:bg-gray-100:hover { background-color: #475569; }
 .dark .hover\:bg-white:hover { background-color: #334155; }
