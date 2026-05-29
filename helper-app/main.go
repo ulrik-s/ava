@@ -59,8 +59,11 @@ func main() {
 	updateCfg := update.Config{
 		CurrentVersion: Version,
 		Repo:           "ulrik-s/ava",
-		TagFilter:      "helper-",
-		CheckInterval:  24 * time.Hour,
+		// CI publicerar releaser under semver-alias "vX.Y.Z" (trigger-tag är
+		// "helper-vX.Y.Z" men GoReleaser OSS parsar bara ren semver). Inget
+		// prefix-filter behövs så länge monorepot bara har helper-releaser.
+		TagFilter:     "",
+		CheckInterval: 24 * time.Hour,
 		InitialDelay:   5 * time.Minute,
 		OnUpdated: func(newVersion string) {
 			log.Printf("self-update klar (%s → %s) — exiterar för restart", Version, newVersion)
