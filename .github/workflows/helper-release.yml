@@ -39,6 +39,21 @@ jobs:
           version: "~> v2"
           install-only: true
 
+      # GoReleaser OSS parsar bara rena semver-tags. Vår monorepo
+      # taggar `helper-vX.Y.Z`; vi skapar en lokal alias-tag `vX.Y.Z`
+      # i CI så goreleaser plockar upp den. Aliasen pushas inte
+      # tillbaka — den lever bara under CI-körningen.
+      - name: Create semver alias for GoReleaser
+        working-directory: ${{ github.workspace }}
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          VERSION="${TAG#helper-}"
+          echo "Trigger tag: $TAG → goreleaser semver: $VERSION"
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git tag -a "$VERSION" -m "alias for $TAG" "$TAG"
+          echo "GORELEASER_CURRENT_TAG=$VERSION" >> "$GITHUB_ENV"
+
       - name: Run GoReleaser
         run: goreleaser release --clean
         env:
