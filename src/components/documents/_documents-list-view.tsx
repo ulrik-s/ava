@@ -3,13 +3,17 @@
 /**
  * `DocumentsListView` — platt sorterbar lista av alla dokument i ett ärende.
  * Alternativ vy till träd-vyn när användaren vill sortera på datum, typ, mm.
+ *
+ * Klick på filnamnet: PDF/Office → "Editera externt" (öppnar i PDF Gear,
+ * Word etc. när FSA finns). Andra filtyper → browser-tab.
  */
 
-import Link from "next/link";
+import { useState } from "react";
 import { trpc } from "@/lib/client/trpc";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { formatFileSize } from "./_drag-helpers";
 import { ActionMenu, type ActionMenuItem } from "@/components/ui/action-menu";
+import { ExternalEditModal, type ModalState } from "./external-edit-modal";
 import type { DocumentRecord } from "./_document-row";
 import type { FolderRecord } from "./_folder-row";
 
@@ -19,7 +23,6 @@ interface Props {
   folders: FolderRecord[];
   onDelete: (id: string) => void;
   onReanalyze: (id: string) => void;
-  onOpen?: (doc: DocumentRecord) => void;
 }
 
 function folderPath(folderId: string | null, folders: FolderRecord[]): string {
@@ -34,16 +37,37 @@ function folderPath(folderId: string | null, folders: FolderRecord[]): string {
   return "/" + parts.join("/");
 }
 
-export function DocumentsListView({ matterId, documents, folders, onDelete, onReanalyze, onOpen }: Props) {
+async function openDocumentSmart(doc: DocumentRecord, setModal: (m: ModalState) => void): Promise<void> {
+  const { shouldPreferExternalEdit, runExternalEdit } = await import("@/lib/client/firma/open-document-externally");
+  const { isFsaSupported, loadHandle } = await import("@/lib/client/fsa/handle-store");
+  if (shouldPreferExternalEdit(doc.fileName) && isFsaSupported() && await loadHandle("repo-root")) {
+    setModal(await runExternalEdit({ id: doc.id, fileName: doc.fileName, storagePath: doc.storagePath }));
+    return;
+  }
+  // Fallback: öppna i browser-tab
+  const isDemo = process.env.NEXT_PUBLIC_DEMO_BUILD === "1";
+  const url = isDemo
+    ? (() => {
+        const repo = process.env.NEXT_PUBLIC_DEFAULT_DEMO_REPO ?? "ulrik-s/ava-demo";
+        const m = repo.match(/^([^/\s]+)\/([^/\s]+)$/);
+        const base = m ? `https://${m[1]}.github.io/${m[2]}` : repo.replace(/\/+$/, "");
+        return `${base}/${doc.storagePath}`;
+      })()
+    : `/api/documents/${doc.id}/download`;
+  window.open(url, "_blank", "noopener,noreferrer");
+}
+
+export function DocumentsListView({ matterId, documents, folders, onDelete, onReanalyze }: Props) {
+  const [modal, setModal] = useState<ModalState>({ kind: "closed" });
+
   const columns: Column<DocumentRecord>[] = [
     { key: "fileName", label: "Filnamn", sortable: true, sortValue: (d) => d.fileName,
-      render: (d) => onOpen ? (
-        <button type="button" onClick={() => onOpen(d)}
-          className="text-sm font-medium text-blue-600 hover:underline text-left">
+      render: (d) => (
+        <button type="button" onClick={() => void openDocumentSmart(d, setModal)}
+          className="text-sm font-medium text-blue-600 hover:underline text-left"
+          title="PDF/Word/Excel → öppnas i extern editor om du har valt en lokal mapp">
           {d.fileName}
         </button>
-      ) : (
-        <span className="text-sm text-gray-900">{d.fileName}</span>
       ),
     },
     { key: "documentType", label: "Typ", sortable: true,
@@ -64,6 +88,7 @@ export function DocumentsListView({ matterId, documents, folders, onDelete, onRe
     { key: "actions", label: "", sortable: false, align: "right", hideable: false,
       render: (d) => {
         const items: ActionMenuItem[] = [
+          { key: "external", label: "Editera externt", onSelect: () => void openDocumentSmart(d, setModal) },
           { key: "reanalyze", label: "Analysera igen", onSelect: () => onReanalyze(d.id) },
           {
             key: "delete",
@@ -77,8 +102,12 @@ export function DocumentsListView({ matterId, documents, folders, onDelete, onRe
     },
   ];
 
+  // tRPC används bara via imports som passeras in — DataTable hanterar prefs
+  void trpc;
+
   return (
     <div className="p-4">
+      <ExternalEditModal state={modal} onClose={() => setModal({ kind: "closed" })} />
       <DataTable
         prefKey={`list.matter-documents.${matterId}`}
         columns={columns}

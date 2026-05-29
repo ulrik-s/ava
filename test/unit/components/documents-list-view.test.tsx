@@ -95,14 +95,12 @@ describe("DocumentsListView", () => {
     expect(screen.getByText("stamning.pdf")).toBeInTheDocument();
   });
 
-  it("onOpen prop renderar filnamnet som klickbar knapp", () => {
-    const onOpen = vi.fn();
+  it("filnamnet renderas som klickbar knapp (default: openDocumentSmart)", () => {
     const doc = baseDoc();
     render(
       <DocumentsListView
         matterId="m1" documents={[doc]} folders={[]}
         onDelete={() => {}} onReanalyze={() => {}}
-        onOpen={onOpen}
       />,
     );
     expect(screen.getByRole("button", { name: "stamning.pdf" })).toBeInTheDocument();

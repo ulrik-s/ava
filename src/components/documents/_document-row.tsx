@@ -55,8 +55,17 @@ export function DocumentRow({
   onDelete,
   reanalyzePending,
 }: Props) {
+  // Modal-state ligger på rad-nivå så både DocumentNameButton (primärklick)
+  // och DocumentActions (kebab-meny) kan trigga "Editera externt" mot
+  // samma modal.
+  const [modal, setModal] = useState<ModalState>({ kind: "closed" });
+  const triggerExternalEdit = async () => {
+    const { runExternalEdit } = await import("@/lib/client/firma/open-document-externally");
+    setModal(await runExternalEdit({ id: doc.id, fileName: doc.fileName, storagePath: doc.storagePath }));
+  };
   return (
     <Fragment>
+      <ExternalEditModal state={modal} onClose={() => setModal({ kind: "closed" })} />
       <tr
         draggable={!isUploading}
         onDragStart={onDragStart}
@@ -69,7 +78,8 @@ export function DocumentRow({
             style={{ paddingLeft: `${depth * 16 + 4}px` }}
             className="flex items-center gap-2 min-w-0"
           >
-            <DocumentNameButton doc={doc} isAnalyzing={isAnalyzing} disabled={isUploading} />
+            <DocumentNameButton doc={doc} isAnalyzing={isAnalyzing} disabled={isUploading}
+              onExternalEdit={triggerExternalEdit} />
             {isUploading && (
               <span
                 className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-100 text-amber-800"
@@ -91,6 +101,7 @@ export function DocumentRow({
             onReanalyze={onReanalyze}
             onDelete={onDelete}
             reanalyzePending={reanalyzePending}
+            onExternalEdit={triggerExternalEdit}
           />
         </td>
       </tr>
@@ -123,14 +134,15 @@ function DocumentActions({
   onReanalyze,
   onDelete,
   reanalyzePending,
+  onExternalEdit,
 }: {
   doc: DocumentRecord;
   disabled?: boolean;
   onReanalyze: () => void;
   onDelete: () => void;
   reanalyzePending: boolean;
+  onExternalEdit: () => Promise<void>;
 }) {
-  const [modal, setModal] = useState<ModalState>({ kind: "closed" });
   const isDemo = process.env.NEXT_PUBLIC_DEMO_BUILD === "1";
   let viewHref: string;
   let downloadHref: string;
@@ -185,54 +197,7 @@ function DocumentActions({
     window.open(viewHref, "_blank", "noopener,noreferrer");
   };
 
-  const openExternal = async () => {
-    const { openInFinder } = await import("@/lib/client/fsa/open-in-finder");
-    const { getExternalEditTracker } = await import("@/lib/client/fsa/external-edit-tracker");
-    // I demo-mode finns inte filerna i user:s FSA-mapp by default — vi
-    // lazy-downloadar dem från GH Pages om de saknas.
-    const fallbackBase = (process.env.NEXT_PUBLIC_DEMO_BUILD === "1")
-      ? (() => {
-          const repo = process.env.NEXT_PUBLIC_DEMO_REPO || process.env.NEXT_PUBLIC_DEFAULT_DEMO_REPO || "ulrik-s/ava-demo";
-          const m = repo.match(/^([^/\s]+)\/([^/\s]+)$/);
-          return m ? `https://${m[1]}.github.io/${m[2]}` : repo;
-        })()
-      : undefined;
-    const r = await openInFinder(doc.storagePath, { downloadFallbackBase: fallbackBase });
-    if (r.kind === "unsupported") {
-      setModal({ kind: "error", title: "Browser stödjer inte File System Access",
-        message: "Din webbläsare stödjer inte File System Access API. Använd Chrome eller Edge på desktop." });
-      return;
-    }
-    if (r.kind === "no-handle") {
-      setModal({ kind: "error", title: "Ingen lokal mapp vald",
-        message: "Du har inte valt en lokal mapp än. Gå till Inställningar → 'Datakälla' → välj firma-mapp." });
-      return;
-    }
-    if (r.kind === "permission-denied") {
-      setModal({ kind: "error", title: "Saknar behörighet",
-        message: "AVA fick inte tillåtelse att läsa filen. Klicka 'Tillåt' nästa gång prompten dyker upp." });
-      return;
-    }
-    if (r.kind === "file-not-found") {
-      setModal({ kind: "error", title: "Filen hittades inte",
-        message: `Hittade inte filen i din lokala mapp: ${r.path}` });
-      return;
-    }
-    const t = getExternalEditTracker();
-    if (!t) {
-      setModal({ kind: "error", title: "Edit-tracker inte initialiserad",
-        message: "Ladda om sidan så registreras tracker:n." });
-      return;
-    }
-    await t.watch({ docId: doc.id, path: r.target.relativePath, handle: r.target.fileHandle });
-    setModal({
-      kind: "ok",
-      fileName: doc.fileName,
-      folderName: r.target.folderName,
-      relativePath: r.target.relativePath,
-      fileHandle: r.target.fileHandle,
-    });
-  };
+  const openExternal = onExternalEdit;
 
   const uploadingTitle = disabled ? "Vänta tills uppladdningen är klar" : undefined;
   const items: ActionMenuItem[] = [
@@ -244,24 +209,39 @@ function DocumentActions({
     { key: "delete", label: "Ta bort", icon: <Trash2 size={15} />, onSelect: onDelete, danger: true, disabled, title: uploadingTitle },
   ];
 
-  return (
-    <>
-      <ExternalEditModal state={modal} onClose={() => setModal({ kind: "closed" })} />
-      <ActionMenu items={items} disabled={disabled} label="Dokumentåtgärder" />
-    </>
-  );
+  return <ActionMenu items={items} disabled={disabled} label="Dokumentåtgärder" />;
 }
 
 // readFromFsa flyttad till `@/lib/client/fsa/read-from-fsa` (delas med
 // search-sidan + andra "öppna lokal kopia"-flöden).
 
+interface NameButtonProps {
+  doc: DocumentRecord;
+  isAnalyzing: boolean;
+  disabled?: boolean;
+  /** Påkallad av PDF/Office-klick när FSA är tillgänglig: kör external-
+   *  edit-flödet via parent (modal-state ligger där). Om null → faller
+   *  vi alltid tillbaka till browser-tab. */
+  onExternalEdit?: () => void;
+}
+
 // eslint-disable-next-line complexity
-function DocumentNameButton({ doc, isAnalyzing, disabled }: { doc: DocumentRecord; isAnalyzing: boolean; disabled?: boolean }) {
+function DocumentNameButton({ doc, isAnalyzing, disabled, onExternalEdit }: NameButtonProps) {
   const isWaitingAnalysis = isAnalyzing || isWithinAnalysisGrace(doc);
 
   const isDemo = process.env.NEXT_PUBLIC_DEMO_BUILD === "1";
   const onClick = async () => {
     if (disabled) return;
+    // PDF/Office-filer öppnas i extern editor (PDF Gear, Preview, Word…)
+    // när FSA är konfigurerad. Browser-tabben är fallback.
+    if (onExternalEdit) {
+      const { shouldPreferExternalEdit } = await import("@/lib/client/firma/open-document-externally");
+      const { isFsaSupported, loadHandle } = await import("@/lib/client/fsa/handle-store");
+      if (shouldPreferExternalEdit(doc.fileName) && isFsaSupported() && await loadHandle("repo-root")) {
+        onExternalEdit();
+        return;
+      }
+    }
     const { openDocument } = await import("@/lib/client/firma/open-document");
     const { loadHandle } = await import("@/lib/client/fsa/handle-store");
     const rec = doc as DocumentRecord & { storagePath?: string };
