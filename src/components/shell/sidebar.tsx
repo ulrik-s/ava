@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/client/utils";
+import { ThemeToggle } from "./theme-toggle";
 
 /**
  * Pure git-modell — ingen NextAuth-session. "Logga ut" rensar
@@ -105,16 +106,19 @@ export function Sidebar({ userName }: SidebarProps) {
               })}
             </div>
             {/* User section mobile */}
-            <div className="px-4 py-4 border-t border-gray-200">
+            <div className="px-4 py-4 border-t border-gray-200 space-y-2">
               {userName && (
-                <p className="text-sm font-medium text-gray-900 mb-2 truncate">{userName}</p>
+                <p className="text-sm font-medium text-gray-900 mb-1 truncate">{userName}</p>
               )}
-              <button
-                onClick={() => signOutLocally()}
-                className="text-sm text-gray-500 hover:text-gray-700"
-              >
-                Logga ut
-              </button>
+              <div className="flex items-center justify-between">
+                <button
+                  onClick={() => signOutLocally()}
+                  className="text-sm text-gray-500 hover:text-gray-700"
+                >
+                  Logga ut
+                </button>
+                <ThemeToggle />
+              </div>
             </div>
           </nav>
         </div>
@@ -150,16 +154,19 @@ export function Sidebar({ userName }: SidebarProps) {
           })}
         </nav>
         {/* User section desktop */}
-        <div className="px-4 py-4 border-t border-gray-200">
+        <div className="px-4 py-4 border-t border-gray-200 space-y-1.5">
           {userName && (
-            <p className="text-sm font-medium text-gray-900 mb-1 truncate">{userName}</p>
+            <p className="text-sm font-medium text-gray-900 truncate">{userName}</p>
           )}
-          <button
-            onClick={() => signOutLocally()}
-            className="text-sm text-gray-500 hover:text-gray-700"
-          >
-            Logga ut
-          </button>
+          <div className="flex items-center justify-between">
+            <button
+              onClick={() => signOutLocally()}
+              className="text-sm text-gray-500 hover:text-gray-700"
+            >
+              Logga ut
+            </button>
+            <ThemeToggle />
+          </div>
         </div>
       </div>
     </>

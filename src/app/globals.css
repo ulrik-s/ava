@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme inline {
   --color-background: #ffffff;
   --color-foreground: #171717;
@@ -12,3 +14,60 @@ body {
   color: var(--color-foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* ─── Dark mode ──────────────────────────────────────────────────────
+   Strategi: override de mest använda Tailwind-utilities under `.dark`
+   istället för att lägga `dark:`-klasser i varje komponent. Detta gör
+   att vi får ett konsekvent mörkt utseende utan att röra varje vy.
+   Accent-färger (blue, green, red, amber) lämnas oförändrade — de
+   syns lika bra på mörk botten.
+*/
+.dark {
+  --color-background: #0f172a; /* slate-900 */
+  --color-foreground: #f1f5f9; /* slate-100 */
+}
+
+.dark .bg-white { background-color: #1e293b; /* slate-800 */ }
+.dark .bg-gray-50 { background-color: #0f172a; }
+.dark .bg-gray-100 { background-color: #334155; /* slate-700 */ }
+.dark .bg-gray-200 { background-color: #475569; }
+
+.dark .hover\:bg-gray-50:hover { background-color: #334155; }
+.dark .hover\:bg-gray-100:hover { background-color: #475569; }
+.dark .hover\:bg-white:hover { background-color: #334155; }
+
+.dark .text-gray-900 { color: #f1f5f9; }
+.dark .text-gray-800 { color: #e2e8f0; }
+.dark .text-gray-700 { color: #cbd5e1; }
+.dark .text-gray-600 { color: #94a3b8; }
+.dark .text-gray-500 { color: #94a3b8; }
+.dark .text-gray-400 { color: #64748b; }
+.dark .text-gray-300 { color: #475569; }
+
+.dark .border-gray-200 { border-color: #334155; }
+.dark .border-gray-300 { border-color: #475569; }
+.dark .border-gray-100 { border-color: #1e293b; }
+
+.dark .divide-gray-100 > * + * { border-color: #1e293b; }
+.dark .divide-gray-200 > * + * { border-color: #334155; }
+
+/* Mjuka accent-bakgrunder på mörk botten — gör dem genomskinligare så
+   textfärgen får mer kontrast. */
+.dark .bg-blue-50 { background-color: rgba(37, 99, 235, 0.15); }
+.dark .bg-green-50 { background-color: rgba(22, 163, 74, 0.15); }
+.dark .bg-amber-50 { background-color: rgba(245, 158, 11, 0.15); }
+.dark .bg-red-50 { background-color: rgba(220, 38, 38, 0.15); }
+.dark .bg-yellow-50 { background-color: rgba(234, 179, 8, 0.15); }
+.dark .bg-orange-50 { background-color: rgba(249, 115, 22, 0.15); }
+.dark .bg-purple-50 { background-color: rgba(168, 85, 247, 0.15); }
+.dark .bg-indigo-50 { background-color: rgba(99, 102, 241, 0.15); }
+
+/* Inputs/selects — gör fält läsliga */
+.dark input:not([type="checkbox"]):not([type="radio"]),
+.dark select,
+.dark textarea {
+  background-color: #1e293b;
+  color: #f1f5f9;
+  border-color: #475569;
+}
+.dark input::placeholder, .dark textarea::placeholder { color: #64748b; }
