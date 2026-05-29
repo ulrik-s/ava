@@ -13,6 +13,14 @@ version: 2
 
 project_name: ava-helper
 
+# Vi sitter i en monorepo med flera komponenter. Helper-releaser taggas
+# `helper-vX.Y.Z` (web-app-releaser kan taggas på annat prefix). GoReleaser
+# stripper prefix:et innan tag-validering så "helper-v0.1.0" parsas som
+# "v0.1.0" / semver.
+monorepo:
+  tag_prefix: helper-
+  dir: helper-app
+
 # Vi sitter i en monorepo — helper-koden bor i ./helper-app/.
 # main: . är default men vi specificerar för tydlighet.
 builds:
