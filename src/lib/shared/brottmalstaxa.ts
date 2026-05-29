@@ -36,6 +36,40 @@ export const TAXA_MAX_MINUTES = 225;
 export const NO_FTAX_FACTOR_NUMERATOR = 1237;
 export const NO_FTAX_FACTOR_DENOMINATOR = 1626;
 
+/**
+ * Domstolsverkets timkostnadsnorm 2026 (DVFS 2025:6 § 8). Använd för
+ * statligt betalda ärenden som INTE är taxemål — t.ex. komplexa brottmål
+ * där HUF > 3 tim 45 min, eller rättshjälp i tvistemål, eller offentligt
+ * biträde i förvaltningsmål (LVU, LPT, asyl, m.m.).
+ *
+ * Belopp i öre per timme, exkl moms.
+ */
+export const TIMKOSTNADSNORM_FTAX_ORE_PER_H = 162_600; // 1 626 kr/h
+export const TIMKOSTNADSNORM_NO_FTAX_ORE_PER_H = 123_700; // 1 237 kr/h
+
+/**
+ * Beräkna ersättning enligt timkostnadsnorm × tid (öre, exkl moms).
+ *
+ * Vanligast användningsfall:
+ *   - HUF > 225 min (taxan tillämpas inte → ersättning enligt
+ *     timkostnadsnorm × hela arbetstiden)
+ *   - Rättshjälp i tvistemål (LRF; non-taxemål)
+ *   - Offentligt biträde i förvaltningsmål
+ *
+ * `tidsspillanMinutes` ersätts med samma timkostnadsnorm (DV-praxis).
+ */
+export function computeTimkostnadsnorm(opts: {
+  arbetsMinutes: number;
+  tidsspillanMinutes?: number;
+  hasFTax?: boolean;
+}): { arbete: number; tidsspillan: number; total: number; rateOrePerH: number } {
+  const hasFTax = opts.hasFTax ?? true;
+  const rate = hasFTax ? TIMKOSTNADSNORM_FTAX_ORE_PER_H : TIMKOSTNADSNORM_NO_FTAX_ORE_PER_H;
+  const arbete = Math.round((opts.arbetsMinutes * rate) / 60);
+  const tidsspillan = Math.round(((opts.tidsspillanMinutes ?? 0) * rate) / 60);
+  return { arbete, tidsspillan, total: arbete + tidsspillan, rateOrePerH: rate };
+}
+
 interface TaxaRow {
   /** Start av intervallet i minuter (inklusivt). */
   fromMin: number;
