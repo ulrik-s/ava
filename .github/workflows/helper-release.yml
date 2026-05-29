@@ -1,0 +1,45 @@
+name: Helper release
+
+# Triggas av tag som börjar med "helper-v" (helper-v1.0.0, helper-v1.2.3…).
+# Vi använder prefix så helper-releaser inte krockar med eventuella
+# web-app-releaser i samma monorepo.
+on:
+  push:
+    tags:
+      - "helper-v*"
+
+permissions:
+  contents: write   # för att ladda upp release-artefakter
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: helper-app
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # GoReleaser behöver hela git-historiken
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: helper-app/go.mod
+          cache-dependency-path: helper-app/go.sum
+
+      - name: Run Go tests
+        run: go test ./...
+
+      - name: Setup GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          install-only: true
+
+      - name: Run GoReleaser
+        run: goreleaser release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

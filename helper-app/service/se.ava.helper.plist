@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+launchd-user-agent för ava-helper på macOS.
+
+Installation:
+  1. Kopiera helper-binären till ~/Library/Application Support/AVA/ava-helper
+     chmod +x ~/Library/Application Support/AVA/ava-helper
+  2. Kopiera denna plist till ~/Library/LaunchAgents/se.ava.helper.plist
+  3. launchctl load -w ~/Library/LaunchAgents/se.ava.helper.plist
+  4. För att stoppa: launchctl unload -w ~/Library/LaunchAgents/se.ava.helper.plist
+
+KeepAlive=true → om processen exit:ar (t.ex. efter self-update) startar
+launchd om den med nya binär-bytsen. Det är så vår update-loop ska funka.
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>se.ava.helper</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <!-- $HOME expanderas av launchd; substituera vid install till absolut path. -->
+        <string>/Users/CURRENT_USER/Library/Application Support/AVA/ava-helper</string>
+    </array>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+
+    <key>StandardOutPath</key>
+    <string>/Users/CURRENT_USER/Library/Logs/AVA/launchd.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/CURRENT_USER/Library/Logs/AVA/launchd.err.log</string>
+
+    <!-- Vänta minst 30 sek mellan restart-attempts efter krasch så vi
+         inte hamnar i en throttling-loop. -->
+    <key>ThrottleInterval</key>
+    <integer>30</integer>
+</dict>
+</plist>

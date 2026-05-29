@@ -1,0 +1,49 @@
+name: Helper CI
+
+# Lint + test för helper-app vid varje PR som rör helper-koden.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "helper-app/**"
+      - ".github/workflows/helper-ci.yml"
+  pull_request:
+    paths:
+      - "helper-app/**"
+      - ".github/workflows/helper-ci.yml"
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: helper-app
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: helper-app/go.mod
+          cache-dependency-path: helper-app/go.sum
+
+      - name: go mod tidy check
+        run: |
+          go mod tidy
+          git diff --exit-code go.mod go.sum
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go test
+        run: go test -race -cover ./...
+
+      - name: Cross-build (snapshot)
+        run: |
+          GOOS=darwin GOARCH=arm64 go build -o /tmp/ava-helper-darwin-arm64 .
+          GOOS=darwin GOARCH=amd64 go build -o /tmp/ava-helper-darwin-amd64 .
+          GOOS=linux  GOARCH=arm64 go build -o /tmp/ava-helper-linux-arm64 .
+          GOOS=linux  GOARCH=amd64 go build -o /tmp/ava-helper-linux-amd64 .
+          GOOS=windows GOARCH=amd64 go build -o /tmp/ava-helper.exe .
+          ls -lh /tmp/ava-helper*

@@ -38,11 +38,17 @@ function folderPath(folderId: string | null, folders: FolderRecord[]): string {
 }
 
 async function openDocumentSmart(doc: DocumentRecord, setModal: (m: ModalState) => void): Promise<void> {
-  const { shouldPreferExternalEdit, runExternalEdit } = await import("@/lib/client/firma/open-document-externally");
-  const { isFsaSupported, loadHandle } = await import("@/lib/client/fsa/handle-store");
-  if (shouldPreferExternalEdit(doc.fileName) && isFsaSupported() && await loadHandle("repo-root")) {
-    setModal(await runExternalEdit({ id: doc.id, fileName: doc.fileName, storagePath: doc.storagePath }));
-    return;
+  const { shouldPreferExternalEdit, runExternalEdit, tryHelperOpen } = await import("@/lib/client/firma/open-document-externally");
+  if (shouldPreferExternalEdit(doc.fileName)) {
+    // Försök 1-klicks via AVA Helper först (funkar i alla browsers)
+    const handled = await tryHelperOpen({ id: doc.id, fileName: doc.fileName, storagePath: doc.storagePath });
+    if (handled) return;
+    // Fallback: FSA + ExternalEditModal (Chrome/Edge med vald mapp)
+    const { isFsaSupported, loadHandle } = await import("@/lib/client/fsa/handle-store");
+    if (isFsaSupported() && await loadHandle("repo-root")) {
+      setModal(await runExternalEdit({ id: doc.id, fileName: doc.fileName, storagePath: doc.storagePath }));
+      return;
+    }
   }
   // Fallback: öppna i browser-tab
   const isDemo = process.env.NEXT_PUBLIC_DEMO_BUILD === "1";

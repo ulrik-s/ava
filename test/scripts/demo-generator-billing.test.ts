@@ -41,6 +41,17 @@ describe("populateBilling — driver fakturerings-flödena", () => {
     expect(invoices.some((i: Inv) => i.invoiceType === "CREDIT")).toBe(true);
   });
 
+  it("paymentPlan.list ser planerna (samma query som /payment-plans-sidan)", async () => {
+    const seed = buildSeed();
+    const target = createGitTarget({ principal: ADMIN, writeBack: async () => {} });
+    await populate(target.caller, seed);
+    await populateBilling(target.caller, seed);
+    // Exakt queryn som listsidan kör — nested where-filter invoice.matter.organizationId.
+    const plans = await (target.caller as Inv).paymentPlan.list({});
+    expect(plans.length).toBe(7); // 5 aktiva + 1 slutförd + 1 avbruten
+    expect(plans.every((p: Inv) => p.invoice?.matter?.matterNumber)).toBe(true); // join hydrerad
+  });
+
   it("flaggar fakturerade tidsposter (invoiceId sätts via flödet)", async () => {
     const seed = buildSeed();
     const target = createGitTarget({ principal: ADMIN, writeBack: async () => {} });

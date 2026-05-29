@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-16"?>
+<!--
+Windows Task Scheduler-task för ava-helper.
+
+Installation (per-user, ingen admin):
+  1. Kopiera helper-binären till %LOCALAPPDATA%\AVA\ava-helper.exe
+  2. Substituera CURRENT_USER nedan med din Windows-användarnamn
+  3. schtasks /create /tn "AVA Helper" /xml ava-helper.windows.xml /f
+
+Verifiera:    schtasks /query /tn "AVA Helper" /v
+Starta nu:    schtasks /run /tn "AVA Helper"
+Stoppa:       schtasks /end /tn "AVA Helper"
+Avregistrera: schtasks /delete /tn "AVA Helper" /f
+
+RestartCount=99 + RestartInterval=PT30S → Task Scheduler startar om
+helpern automatiskt om den avslutas (t.ex. efter self-update).
+-->
+<Task version="1.4" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Description>AVA Helper — lokala dokument-broker</Description>
+    <URI>\AVA Helper</URI>
+  </RegistrationInfo>
+  <Triggers>
+    <LogonTrigger>
+      <Enabled>true</Enabled>
+      <UserId>CURRENT_USER</UserId>
+    </LogonTrigger>
+  </Triggers>
+  <Principals>
+    <Principal id="Author">
+      <UserId>CURRENT_USER</UserId>
+      <LogonType>InteractiveToken</LogonType>
+      <RunLevel>LeastPrivilege</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <AllowHardTerminate>true</AllowHardTerminate>
+    <StartWhenAvailable>true</StartWhenAvailable>
+    <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>
+    <IdleSettings>
+      <StopOnIdleEnd>false</StopOnIdleEnd>
+      <RestartOnIdle>false</RestartOnIdle>
+    </IdleSettings>
+    <AllowStartOnDemand>true</AllowStartOnDemand>
+    <Enabled>true</Enabled>
+    <Hidden>false</Hidden>
+    <RunOnlyIfIdle>false</RunOnlyIfIdle>
+    <WakeToRun>false</WakeToRun>
+    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
+    <Priority>7</Priority>
+    <RestartOnFailure>
+      <Interval>PT30S</Interval>
+      <Count>99</Count>
+    </RestartOnFailure>
+  </Settings>
+  <Actions Context="Author">
+    <Exec>
+      <Command>%LOCALAPPDATA%\AVA\ava-helper.exe</Command>
+    </Exec>
+  </Actions>
+</Task>

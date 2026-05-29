@@ -19,6 +19,7 @@
  */
 
 import type { ModalState } from "@/components/documents/external-edit-modal";
+import { openViaHelper } from "@/lib/client/helper/use-helper";
 
 interface Doc {
   id: string;
@@ -27,6 +28,56 @@ interface Doc {
 }
 
 const DEFAULT_DEMO_REPO_FALLBACK = "ulrik-s/ava-demo";
+const HELPER_BASE = "http://127.0.0.1:48761";
+
+/**
+ * Försök öppna via AVA Helper (1-klicks-flow). Returnerar true om
+ * helpern svarade och tog över hanteringen — då behöver UI:t inte
+ * visa ExternalEditModal.
+ *
+ * Helpern:
+ *   1. Laddar ner filen (via downloadUrl)
+ *   2. Spawnar OS-default-app (PDF Gear, Word, Preview, …)
+ *   3. Pollar lastModified och PUT:ar tillbaka via uploadUrl
+ *
+ * Web-appens jobb är bara att konstruera rätt URLs baserat på vilken
+ * AVA-backend som körs (git-http eller REST). Helpern är tier-agnostisk.
+ */
+export async function tryHelperOpen(doc: Doc): Promise<boolean> {
+  // Snabb ping — om helpern inte kör, fail-fast och låt fallback ta över
+  try {
+    await fetch(`${HELPER_BASE}/ping`, { signal: AbortSignal.timeout(300) });
+  } catch {
+    return false;
+  }
+  // Beräkna download/upload-URLs. För git-tier serverar nginx (eller
+  // demo-build) filerna under storagePath. För Postgres-tier blir det
+  // /api/documents/<id>/download. Vi använder befintliga konstruktioner.
+  const isDemo = process.env.NEXT_PUBLIC_DEMO_BUILD === "1";
+  const downloadUrl = isDemo ? demoUrl(doc) : `/api/documents/${doc.id}/download`;
+  // Skicka absolute URL — helpern kör utanför browser-sessionen och
+  // har ingen referens till "origin".
+  const absDownload = downloadUrl.startsWith("http") ? downloadUrl : new URL(downloadUrl, window.location.origin).toString();
+  const uploadUrl = isDemo ? undefined : new URL(`/api/documents/${doc.id}/upload`, window.location.origin).toString();
+  try {
+    await openViaHelper({
+      fileName: doc.fileName,
+      downloadUrl: absDownload,
+      uploadUrl,
+    });
+    return true;
+  } catch (err) {
+    console.warn("[helper] /open misslyckades, fallback:", err);
+    return false;
+  }
+}
+
+function demoUrl(doc: Doc): string {
+  const repo = process.env.NEXT_PUBLIC_DEMO_REPO || process.env.NEXT_PUBLIC_DEFAULT_DEMO_REPO || DEFAULT_DEMO_REPO_FALLBACK;
+  const m = repo.match(/^([^/\s]+)\/([^/\s]+)$/);
+  const base = m ? `https://${m[1]}.github.io/${m[2]}` : repo.replace(/\/+$/, "");
+  return `${base}/${doc.storagePath}`;
+}
 
 export async function runExternalEdit(doc: Doc): Promise<ModalState> {
   const { openInFinder } = await import("@/lib/client/fsa/open-in-finder");

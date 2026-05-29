@@ -60,7 +60,12 @@ export function DocumentRow({
   // samma modal.
   const [modal, setModal] = useState<ModalState>({ kind: "closed" });
   const triggerExternalEdit = async () => {
-    const { runExternalEdit } = await import("@/lib/client/firma/open-document-externally");
+    // Försök först via AVA Helper (1-klicks-flow). Om helpern inte kör
+    // faller vi tillbaka till befintlig ExternalEditModal (download via
+    // browser + FSA-watch).
+    const { tryHelperOpen, runExternalEdit } = await import("@/lib/client/firma/open-document-externally");
+    const handled = await tryHelperOpen({ id: doc.id, fileName: doc.fileName, storagePath: doc.storagePath });
+    if (handled) return;
     setModal(await runExternalEdit({ id: doc.id, fileName: doc.fileName, storagePath: doc.storagePath }));
   };
   return (

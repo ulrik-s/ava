@@ -8,6 +8,7 @@ import { ExternalEditSection } from "@/components/settings/external-edit-section
 import { EditorExtensionsSection } from "@/components/settings/editor-extensions-section";
 import { LlmSettingsCard } from "@/components/llm/llm-settings-card";
 import { OrgDefaultsSection } from "@/components/settings/org-defaults-section";
+import { HelperSection } from "@/components/settings/helper-section";
 
 // ─── Offices sub-component ───────────────────────────────────────
 
@@ -511,6 +512,7 @@ export default function SettingsPage() {
 
       {/* 4. Editera dokument externt */}
       <SectionHeader num={4} title="Editera dokument externt" subtitle="Öppna PDF/Word direkt i din favorit-editor. Valfritt — bara om du vill jobba i andra program än AVA:s inbyggda viewer." />
+      <HelperSection />
       <ExternalEditSection />
       <EditorExtensionsSection />
 

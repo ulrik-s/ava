@@ -1,0 +1,32 @@
+# systemd user-unit för ava-helper.
+#
+# Installation (per-user, ingen sudo):
+#   1. Kopiera helper-binären till ~/.local/share/AVA/ava-helper
+#      chmod +x ~/.local/share/AVA/ava-helper
+#   2. Kopiera denna fil till ~/.config/systemd/user/ava-helper.service
+#   3. systemctl --user daemon-reload
+#   4. systemctl --user enable --now ava-helper
+#
+# Status: systemctl --user status ava-helper
+# Stopp:  systemctl --user stop ava-helper
+#
+# Restart=always → om processen exit:ar (t.ex. efter self-update)
+# startar systemd om den med nya binär-bytsen.
+
+[Unit]
+Description=AVA Helper — lokala dokument-broker
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/share/AVA/ava-helper
+Restart=always
+RestartSec=10
+
+# Logga via journald
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ava-helper
+
+[Install]
+WantedBy=default.target

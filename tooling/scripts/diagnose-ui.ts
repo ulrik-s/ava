@@ -158,10 +158,20 @@ async function buildIfNeeded(): Promise<void> {
   });
 }
 
+// Förväntade icke-fel som vi inte bryr oss om i diagnos-rapporten.
+function isExpectedError(text: string): boolean {
+  // AVA Helper inte installerad → 127.0.0.1:48761 → ERR_CONNECTION_REFUSED
+  return /127\.0\.0\.1:48761/.test(text) ||
+    /localhost:48761/.test(text);
+}
+
 function attachListeners(page: Page, consoleErrors: ConsoleMsg[], networkErrors: NetErr[]): void {
   page.on("console", (msg) => {
     if (msg.type() === "error" || msg.type() === "warning") {
-      consoleErrors.push({ level: msg.type(), text: msg.text(), url: msg.location().url });
+      const text = msg.text();
+      const loc = msg.location().url;
+      if (isExpectedError(text) || isExpectedError(loc)) return;
+      consoleErrors.push({ level: msg.type(), text, url: loc });
     }
   });
   // Page-errors innehåller Playwright's källkarte-resolverade stacks → exakt
@@ -171,7 +181,9 @@ function attachListeners(page: Page, consoleErrors: ConsoleMsg[], networkErrors:
   });
   page.on("response", (resp) => {
     if (resp.status() >= 400) {
-      networkErrors.push({ url: resp.url(), status: resp.status(), method: resp.request().method() });
+      const url = resp.url();
+      if (isExpectedError(url)) return;
+      networkErrors.push({ url, status: resp.status(), method: resp.request().method() });
     }
   });
 }
