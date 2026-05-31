@@ -205,6 +205,7 @@ export class DemoDataStore implements IDataStore {
     this.timeEntries = this.makeDelegate("timeEntries", {
       user: this.rel("users", "id", "userId", "one"),
       matter: this.rel("matters", "id", "matterId", "one"),
+      invoice: this.rel("invoices", "id", "invoiceId", "one"),
     }) as unknown as TimeEntryDelegate;
     this.expenses = this.makeDelegate("expenses", {
       matter: this.rel("matters", "id", "matterId", "one"),

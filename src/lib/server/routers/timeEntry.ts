@@ -38,6 +38,7 @@ export const timeEntryRouter = router({
           include: {
             user: { select: { id: true, name: true } },
             matter: { select: { id: true, matterNumber: true, title: true } },
+            invoice: { select: { id: true, invoiceNumber: true } },
           },
         }),
         ctx.dataStore.timeEntries.count({ where }),
