@@ -515,10 +515,14 @@ interface GroupBlockProps<T> {
 }
 
 function GroupSummaryRow<T>({ vCols, prefs, content }: { vCols: Column<T>[]; prefs: DataTablePrefs; content: Partial<Record<string, React.ReactNode>> }) {
+  // Per-grupp-summa: light = bg-gray-100 (något mörkare än white-rader);
+  // dark = slate-700 (ljusare än slate-800-rader, dvs "elevated"-tier).
+  // Båda lägena ger ~5:1 kontrast på texten + tydlig border-300/slate-600.
+  // Följer Material Design 3 surface-tiers + WCAG AA.
   return (
-    <tr className="bg-gray-50/70 border-t border-gray-200 text-xs font-semibold text-gray-700">
+    <tr className="bg-gray-100 border-t border-gray-300 text-xs font-semibold text-gray-800">
       {vCols.map((c) => (
-        <td key={c.key} style={{ width: widthOf(c, prefs), textAlign: c.align ?? "left" }} className="px-3 py-1.5 whitespace-nowrap italic">
+        <td key={c.key} style={{ width: widthOf(c, prefs), textAlign: c.align ?? "left" }} className="px-3 py-1.5 whitespace-nowrap">
           {content[c.key] ?? ""}
         </td>
       ))}

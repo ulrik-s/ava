@@ -108,7 +108,6 @@ export function TimeSection({ matterId, isTaxeArende }: Props) {
       summary: (rows) => <span className="font-mono">{formatMinutes(rows.reduce((sum, r) => sum + r.minutes, 0))}</span>,
       render: (e) => <span className="text-sm text-gray-900">{formatMinutes(e.minutes)}</span> },
     { key: "description", label: "Beskrivning", sortable: true, sortValue: (e) => e.description ?? "",
-      summary: () => <span className="text-gray-700">Summa</span>,
       render: (e) => <span className="text-sm text-gray-700">{e.description}</span> },
     { key: "billable", label: "Deb.", sortable: true, sortValue: (e) => (e.billable ? 1 : 0),
       render: (e) => <span className="text-sm">{e.billable ? "Ja" : "Nej"}</span> },
