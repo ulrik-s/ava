@@ -215,25 +215,23 @@ export function DataTable<T>({ prefKey, columns, data, rowKey, onRowClick, empty
 
   return (
     <div>
-      {showOverrideBar && (
-        <div className="mb-2 flex items-center justify-end">
-          <button type="button" onClick={resetPersonal}
-            className="text-xs px-3 py-1 border border-gray-300 rounded hover:bg-gray-50 text-gray-700">
-            Återställ vy
-          </button>
-        </div>
+      {(showOverrideBar || isAdmin) && (
+        <ActivePrefsToolbar
+          prefs={prefs}
+          columns={columns}
+          onClearSort={() => update({ sortBy: undefined, sortDir: undefined })}
+          onClearFilter={(key) => update({ filters: { ...(prefs.filters ?? {}), [key]: "" } })}
+          onClearGroup={() => update({ groupBy: undefined })}
+          onResetAll={resetPersonal}
+          isAdmin={isAdmin}
+          hasOrgPref={persisted.data?.org != null}
+          onSaveAsOrgDefault={saveAsOrgDefault}
+          onRemoveOrgDefault={removeOrgDefault}
+        />
       )}
       <div className="overflow-x-auto bg-white border border-gray-200 rounded-lg">
         <table className="min-w-full text-sm">
-          <DataTableHeader
-            columns={columns} vCols={vCols} prefs={prefs} update={update}
-            isAdmin={isAdmin}
-            hasPersonalPref={persisted.data?.user != null}
-            hasOrgPref={persisted.data?.org != null}
-            onResetPersonal={resetPersonal}
-            onSaveAsOrgDefault={saveAsOrgDefault}
-            onRemoveOrgDefault={removeOrgDefault}
-          />
+          <DataTableHeader columns={columns} vCols={vCols} prefs={prefs} update={update} />
           <tbody className="divide-y divide-gray-100">
             <BodyRows
               grouped={grouped}
@@ -250,6 +248,102 @@ export function DataTable<T>({ prefKey, columns, data, rowKey, onRowClick, empty
         </table>
       </div>
     </div>
+  );
+}
+
+interface ToolbarProps<T> {
+  prefs: DataTablePrefs;
+  columns: Column<T>[];
+  onClearSort: () => void;
+  onClearFilter: (key: string) => void;
+  onClearGroup: () => void;
+  onResetAll: () => void;
+  isAdmin: boolean;
+  hasOrgPref: boolean;
+  onSaveAsOrgDefault: () => void;
+  onRemoveOrgDefault: () => void;
+}
+
+function labelFor<T>(columns: Column<T>[], key: string): string {
+  return columns.find((c) => c.key === key)?.label ?? key;
+}
+
+function ActiveChips<T>({ prefs, columns, onClearSort, onClearFilter, onClearGroup }: {
+  prefs: DataTablePrefs; columns: Column<T>[];
+  onClearSort: () => void; onClearFilter: (key: string) => void; onClearGroup: () => void;
+}) {
+  const activeFilters = Object.entries(prefs.filters ?? {}).filter(([, v]) => v && String(v).trim() !== "");
+  return (
+    <>
+      {prefs.sortBy && (
+        <Chip
+          label={`Sortering: ${labelFor(columns, prefs.sortBy)} ${prefs.sortDir === "asc" ? "↑" : "↓"}`}
+          onRemove={onClearSort}
+        />
+      )}
+      {activeFilters.map(([k, v]) => (
+        <Chip key={k} label={`Filter: ${labelFor(columns, k)}="${v}"`} onRemove={() => onClearFilter(k)} />
+      ))}
+      {prefs.groupBy && (
+        <Chip label={`Gruppering: ${labelFor(columns, prefs.groupBy)}`} onRemove={onClearGroup} />
+      )}
+    </>
+  );
+}
+
+function ToolbarAdminButtons({ hasOrgPref, onSaveAsOrgDefault, onRemoveOrgDefault }: {
+  hasOrgPref: boolean; onSaveAsOrgDefault: () => void; onRemoveOrgDefault: () => void;
+}) {
+  return (
+    <>
+      <button type="button" onClick={onSaveAsOrgDefault}
+        className="text-xs px-3 py-1 border border-blue-300 rounded hover:bg-blue-50 text-blue-700">
+        Spara som org-default
+      </button>
+      {hasOrgPref && (
+        <button type="button" onClick={onRemoveOrgDefault}
+          className="text-xs px-3 py-1 border border-red-300 rounded hover:bg-red-50 text-red-700">
+          Ta bort org-default
+        </button>
+      )}
+    </>
+  );
+}
+
+function ActivePrefsToolbar<T>(props: ToolbarProps<T>) {
+  const { prefs, columns, onClearSort, onClearFilter, onClearGroup, onResetAll,
+    isAdmin, hasOrgPref, onSaveAsOrgDefault, onRemoveOrgDefault } = props;
+  const hasAny = hasOverrides(prefs);
+  if (!hasAny && !isAdmin) return null;
+  return (
+    <div className="mb-2 flex flex-wrap items-center gap-2">
+      <ActiveChips prefs={prefs} columns={columns}
+        onClearSort={onClearSort} onClearFilter={onClearFilter} onClearGroup={onClearGroup} />
+      <span className="flex-1" />
+      {hasAny && (
+        <button type="button" onClick={onResetAll}
+          className="text-xs px-3 py-1 border border-gray-300 rounded hover:bg-gray-50 text-gray-700">
+          Återställ vy
+        </button>
+      )}
+      {isAdmin && (
+        <ToolbarAdminButtons hasOrgPref={hasOrgPref}
+          onSaveAsOrgDefault={onSaveAsOrgDefault} onRemoveOrgDefault={onRemoveOrgDefault} />
+      )}
+    </div>
+  );
+}
+
+function Chip({ label, onRemove }: { label: string; onRemove: () => void }) {
+  return (
+    <span className="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-900 border border-blue-200 rounded-full pl-3 pr-1 py-0.5">
+      <span>{label}</span>
+      <button type="button" onClick={onRemove}
+        aria-label="Ta bort"
+        className="text-blue-700 hover:bg-blue-200 rounded-full w-5 h-5 flex items-center justify-center">
+        ×
+      </button>
+    </span>
   );
 }
 
@@ -344,72 +438,58 @@ interface HeaderProps<T> {
   vCols: Column<T>[];
   prefs: DataTablePrefs;
   update: (patch: Partial<DataTablePrefs>) => void;
-  isAdmin: boolean;
-  hasPersonalPref: boolean;
-  hasOrgPref: boolean;
-  onResetPersonal: () => void;
-  onSaveAsOrgDefault: () => void;
-  onRemoveOrgDefault: () => void;
 }
 
-function DataTableHeader<T>({ columns, vCols, prefs, update, isAdmin, hasPersonalPref, hasOrgPref, onResetPersonal, onSaveAsOrgDefault, onRemoveOrgDefault }: HeaderProps<T>) {
-  const onSort = (key: string): void => {
-    const next: DataTablePrefs = prefs.sortBy === key
-      ? { ...prefs, sortDir: prefs.sortDir === "asc" ? "desc" : "asc" }
-      : { ...prefs, sortBy: key, sortDir: "asc" };
-    update(next);
-  };
-  const onReorder = (from: string, to: string): void => {
-    const keys = vCols.map((c) => c.key);
-    const fromIdx = keys.indexOf(from);
-    const toIdx = keys.indexOf(to);
-    if (fromIdx < 0 || toIdx < 0 || fromIdx === toIdx) return;
-    keys.splice(toIdx, 0, ...keys.splice(fromIdx, 1));
-    update({ order: keys });
-  };
-  const onResize = (key: string, width: number): void => {
-    const cols = (prefs.columns ?? []).filter((c) => c.key !== key);
-    update({ columns: [...cols, { key, width }] });
-  };
-  const onToggleHidden = (key: string): void => {
-    const cur = prefs.columns ?? [];
-    const existing = cur.find((c) => c.key === key);
-    const next = existing
-      ? cur.map((c) => c.key === key ? { ...c, hidden: !c.hidden } : c)
-      : [...cur, { key, hidden: true }];
-    update({ columns: next });
-  };
-  const onFilter = (key: string, value: string): void => {
-    update({ filters: { ...(prefs.filters ?? {}), [key]: value } });
-  };
-  const onGroupBy = (key: string | undefined): void => {
-    update({ groupBy: key });
-  };
+interface HeaderActions {
+  setSort: (key: string, dir: SortDir | undefined) => void;
+  setFilter: (key: string, value: string) => void;
+  setGroupBy: (key: string | undefined) => void;
+  toggleHidden: (key: string) => void;
+  reorder: (from: string, to: string) => void;
+  resize: (key: string, width: number) => void;
+}
 
+function buildHeaderActions<T>(
+  prefs: DataTablePrefs,
+  vCols: Column<T>[],
+  update: (patch: Partial<DataTablePrefs>) => void,
+): HeaderActions {
+  return {
+    setSort: (key, dir) => update({ sortBy: dir ? key : undefined, sortDir: dir }),
+    setFilter: (key, value) => update({ filters: { ...(prefs.filters ?? {}), [key]: value } }),
+    setGroupBy: (key) => update({ groupBy: key }),
+    toggleHidden: (key) => {
+      const cur = prefs.columns ?? [];
+      const existing = cur.find((c) => c.key === key);
+      const next = existing
+        ? cur.map((c) => c.key === key ? { ...c, hidden: !c.hidden } : c)
+        : [...cur, { key, hidden: true }];
+      update({ columns: next });
+    },
+    reorder: (from, to) => {
+      const keys = vCols.map((c) => c.key);
+      const fromIdx = keys.indexOf(from);
+      const toIdx = keys.indexOf(to);
+      if (fromIdx < 0 || toIdx < 0 || fromIdx === toIdx) return;
+      keys.splice(toIdx, 0, ...keys.splice(fromIdx, 1));
+      update({ order: keys });
+    },
+    resize: (key, width) => {
+      const cols = (prefs.columns ?? []).filter((c) => c.key !== key);
+      update({ columns: [...cols, { key, width }] });
+    },
+  };
+}
+
+function DataTableHeader<T>({ vCols, prefs, update }: HeaderProps<T>) {
+  const actions = buildHeaderActions(prefs, vCols, update);
   return (
     <thead className="bg-gray-50 text-left">
       <tr>
         {vCols.map((c) => (
-          <HeaderCell
-            key={c.key} col={c} sortKey={prefs.sortBy} sortDir={prefs.sortDir}
-            width={widthOf(c, prefs)}
-            filterText={prefs.filters?.[c.key] ?? ""}
-            onSort={onSort} onReorder={onReorder} onResize={onResize} onFilter={onFilter}
-          />
+          <HeaderCell key={c.key} col={c} prefs={prefs} width={widthOf(c, prefs)} actions={actions} />
         ))}
-        <th className="px-2 py-2 w-8">
-          <ColumnMenu
-            columns={columns} prefs={prefs}
-            onToggleHidden={onToggleHidden}
-            onGroupBy={onGroupBy}
-            isAdmin={isAdmin}
-            hasPersonalPref={hasPersonalPref}
-            hasOrgPref={hasOrgPref}
-            onResetPersonal={onResetPersonal}
-            onSaveAsOrgDefault={onSaveAsOrgDefault}
-            onRemoveOrgDefault={onRemoveOrgDefault}
-          />
-        </th>
+        <th className="px-2 py-2 w-8" />
       </tr>
     </thead>
   );
@@ -417,49 +497,152 @@ function DataTableHeader<T>({ columns, vCols, prefs, update, isAdmin, hasPersona
 
 interface HeaderCellProps<T> {
   col: Column<T>;
-  sortKey?: string;
-  sortDir?: SortDir;
+  prefs: DataTablePrefs;
   width?: number;
-  filterText: string;
-  onSort: (key: string) => void;
-  onReorder: (from: string, to: string) => void;
-  onResize: (key: string, width: number) => void;
-  onFilter: (key: string, value: string) => void;
+  actions: HeaderActions;
 }
 
-function HeaderCell<T>({ col, sortKey, sortDir, width, filterText, onSort, onReorder, onResize, onFilter }: HeaderCellProps<T>) {
-  const isSorted = sortKey === col.key;
-  const arrow = !isSorted ? "" : sortDir === "asc" ? " ↑" : " ↓";
+function sortArrow(prefs: DataTablePrefs, key: string): string {
+  if (prefs.sortBy !== key) return "";
+  return prefs.sortDir === "asc" ? " ↑" : " ↓";
+}
+
+function hasAnyMenu<T>(col: Column<T>): boolean {
+  return Boolean(col.sortable || col.filterable || col.groupable || col.hideable !== false);
+}
+
+function HeaderCell<T>({ col, prefs, width, actions }: HeaderCellProps<T>) {
+  const [open, setOpen] = useState(false);
+  const arrow = sortArrow(prefs, col.key);
+  const menu = hasAnyMenu(col);
   return (
     <th
       style={{ width, textAlign: col.align ?? "left" }}
-      className="relative px-3 py-2 text-xs font-semibold text-gray-700 select-none align-top"
+      className="relative px-3 py-2 text-xs font-semibold text-gray-700 select-none"
       draggable
       onDragStart={(e) => e.dataTransfer.setData("text/x-col", col.key)}
       onDragOver={(e) => e.preventDefault()}
-      onDrop={(e) => { e.preventDefault(); const from = e.dataTransfer.getData("text/x-col"); if (from) onReorder(from, col.key); }}
+      onDrop={(e) => { e.preventDefault(); const from = e.dataTransfer.getData("text/x-col"); if (from) actions.reorder(from, col.key); }}
     >
       <button
         type="button"
-        onClick={() => col.sortable && onSort(col.key)}
-        className={col.sortable ? "cursor-pointer hover:text-gray-900" : "cursor-default"}
-        disabled={!col.sortable}
+        onClick={() => menu && setOpen(true)}
+        className={menu ? "cursor-pointer hover:text-gray-900 inline-flex items-center gap-1" : "cursor-default"}
+        disabled={!menu}
+        aria-haspopup={menu ? "menu" : undefined}
       >
-        {col.label}{arrow}
+        <span>{col.label}{arrow}</span>
+        {menu && <span className="text-gray-400 text-[10px]">▾</span>}
       </button>
-      {col.filterable && (
-        <input
-          type="text"
-          value={filterText}
-          onChange={(e) => onFilter(col.key, e.target.value)}
-          placeholder="Filter…"
-          className="mt-1 block w-full text-xs font-normal border border-gray-200 rounded px-1 py-0.5 focus:outline-none focus:border-blue-400"
-          onClick={(e) => e.stopPropagation()}
-        />
+      {open && (
+        <ColumnMenu col={col} prefs={prefs} actions={actions} onClose={() => setOpen(false)} align={col.align ?? "left"} />
       )}
-      <ResizeHandle width={width} onResize={(w) => onResize(col.key, w)} />
+      <ResizeHandle width={width} onResize={(w) => actions.resize(col.key, w)} />
     </th>
   );
+}
+
+interface ColumnMenuProps<T> {
+  col: Column<T>;
+  prefs: DataTablePrefs;
+  actions: HeaderActions;
+  onClose: () => void;
+  align: "left" | "right" | "center";
+}
+
+function SortSection<T>({ col, prefs, actions, onClose }: {
+  col: Column<T>; prefs: DataTablePrefs; actions: HeaderActions; onClose: () => void;
+}) {
+  const isSortedHere = prefs.sortBy === col.key;
+  return (
+    <>
+      <MenuButton active={isSortedHere && prefs.sortDir === "asc"}
+        onClick={() => { actions.setSort(col.key, "asc"); onClose(); }}>
+        Sortera stigande ↑
+      </MenuButton>
+      <MenuButton active={isSortedHere && prefs.sortDir === "desc"}
+        onClick={() => { actions.setSort(col.key, "desc"); onClose(); }}>
+        Sortera fallande ↓
+      </MenuButton>
+      {isSortedHere && (
+        <MenuButton onClick={() => { actions.setSort(col.key, undefined); onClose(); }}>
+          Ta bort sortering
+        </MenuButton>
+      )}
+      <Separator />
+    </>
+  );
+}
+
+function FilterSection<T>({ col, prefs, actions, onClose }: {
+  col: Column<T>; prefs: DataTablePrefs; actions: HeaderActions; onClose: () => void;
+}) {
+  const [draft, setDraft] = useState<string>(prefs.filters?.[col.key] ?? "");
+  const submit = (): void => { actions.setFilter(col.key, draft); onClose(); };
+  const hasActive = (prefs.filters?.[col.key] ?? "") !== "";
+  return (
+    <>
+      <div className="px-2 py-1.5">
+        <label className="block text-[10px] uppercase text-gray-500 mb-1">Filtrera</label>
+        <input type="text" value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") submit(); if (e.key === "Escape") onClose(); }}
+          autoFocus
+          placeholder="Skriv för att filtrera…"
+          className="w-full text-xs border border-gray-200 rounded px-2 py-1 focus:outline-none focus:border-blue-400" />
+        <div className="mt-1 flex justify-end gap-1">
+          {hasActive && (
+            <button type="button" onClick={() => { actions.setFilter(col.key, ""); onClose(); }}
+              className="text-[11px] px-2 py-0.5 text-gray-600 hover:bg-gray-50 rounded">Rensa</button>
+          )}
+          <button type="button" onClick={submit}
+            className="text-[11px] px-2 py-0.5 bg-blue-600 text-white rounded hover:bg-blue-700">Tillämpa</button>
+        </div>
+      </div>
+      <Separator />
+    </>
+  );
+}
+
+function ColumnMenu<T>({ col, prefs, actions, onClose, align }: ColumnMenuProps<T>) {
+  const isGrouped = prefs.groupBy === col.key;
+  const posClass = align === "right" ? "right-0" : "left-0";
+  return (
+    <>
+      <div className="fixed inset-0 z-30" onClick={onClose} />
+      <div className={`absolute top-full mt-1 z-40 ${posClass} min-w-[14rem] bg-white border border-gray-200 rounded shadow-lg p-1 text-left font-normal`}>
+        {col.sortable && <SortSection col={col} prefs={prefs} actions={actions} onClose={onClose} />}
+        {col.filterable && <FilterSection col={col} prefs={prefs} actions={actions} onClose={onClose} />}
+        {col.groupable && (
+          <>
+            <MenuButton active={isGrouped}
+              onClick={() => { actions.setGroupBy(isGrouped ? undefined : col.key); onClose(); }}>
+              {isGrouped ? "Sluta gruppera" : "Gruppera på den här"}
+            </MenuButton>
+            <Separator />
+          </>
+        )}
+        {col.hideable !== false && (
+          <MenuButton onClick={() => { actions.toggleHidden(col.key); onClose(); }}>
+            Dölj kolumn
+          </MenuButton>
+        )}
+      </div>
+    </>
+  );
+}
+
+function MenuButton({ active, onClick, children }: { active?: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button type="button" onClick={onClick}
+      className={`block w-full text-left px-3 py-1.5 text-xs rounded ${active ? "bg-blue-50 text-blue-900 font-semibold" : "text-gray-700 hover:bg-gray-50"}`}>
+      {children}
+    </button>
+  );
+}
+
+function Separator() {
+  return <div className="my-1 border-t border-gray-100" />;
 }
 
 function ResizeHandle({ width, onResize }: { width?: number; onResize: (width: number) => void }) {
@@ -475,78 +658,3 @@ function ResizeHandle({ width, onResize }: { width?: number; onResize: (width: n
   return <span onMouseDown={onMouseDown} className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-400" />;
 }
 
-interface ColumnMenuProps<T> {
-  columns: Column<T>[];
-  prefs: DataTablePrefs;
-  onToggleHidden: (key: string) => void;
-  onGroupBy: (key: string | undefined) => void;
-  isAdmin: boolean;
-  hasPersonalPref: boolean;
-  hasOrgPref: boolean;
-  onResetPersonal: () => void;
-  onSaveAsOrgDefault: () => void;
-  onRemoveOrgDefault: () => void;
-}
-
-function ColumnMenu<T>(props: ColumnMenuProps<T>) {
-  const { columns, prefs, onToggleHidden, onGroupBy, isAdmin, hasPersonalPref, hasOrgPref, onResetPersonal, onSaveAsOrgDefault, onRemoveOrgDefault } = props;
-  const [open, setOpen] = useState(false);
-  const hidden = new Set((prefs.columns ?? []).filter((c) => c.hidden).map((c) => c.key));
-  const groupable = columns.filter((c) => c.groupable);
-  return (
-    <div className="relative">
-      <button type="button" onClick={() => setOpen((v) => !v)} className="text-gray-400 hover:text-gray-700" aria-label="Kolumnval">⋯</button>
-      {open && (
-        <div className="absolute right-0 top-7 z-20 bg-white border border-gray-200 rounded shadow-lg p-2 min-w-[14rem]">
-          <p className="px-2 pt-1 pb-2 text-[10px] font-semibold uppercase text-gray-400">Visa kolumner</p>
-          {columns.filter((c) => c.hideable !== false).map((c) => (
-            <label key={c.key} className="flex items-center gap-2 px-2 py-1 text-xs hover:bg-gray-50 cursor-pointer">
-              <input type="checkbox" checked={!hidden.has(c.key)} onChange={() => onToggleHidden(c.key)} />
-              <span>{c.label}</span>
-            </label>
-          ))}
-          {groupable.length > 0 && (
-            <>
-              <div className="my-2 border-t border-gray-100" />
-              <p className="px-2 pt-1 pb-1 text-[10px] font-semibold uppercase text-gray-400">Gruppera på</p>
-              {groupable.map((c) => (
-                <button key={c.key} type="button" onClick={() => { onGroupBy(prefs.groupBy === c.key ? undefined : c.key); setOpen(false); }}
-                  className="block w-full text-left px-2 py-1 text-xs text-gray-700 hover:bg-gray-50 rounded">
-                  {prefs.groupBy === c.key ? "✓ " : ""}{c.label}
-                </button>
-              ))}
-              {prefs.groupBy && (
-                <button type="button" onClick={() => { onGroupBy(undefined); setOpen(false); }}
-                  className="block w-full text-left px-2 py-1 text-xs text-gray-500 hover:bg-gray-50 rounded">
-                  Ta bort gruppering
-                </button>
-              )}
-            </>
-          )}
-          <div className="my-2 border-t border-gray-100" />
-          {hasPersonalPref && (
-            <button type="button" onClick={() => { onResetPersonal(); setOpen(false); }}
-              className="block w-full text-left px-2 py-1 text-xs text-gray-700 hover:bg-gray-50 rounded">
-              Återställ mina inställningar
-            </button>
-          )}
-          {isAdmin && (
-            <>
-              <p className="mt-2 px-2 pt-1 pb-1 text-[10px] font-semibold uppercase text-gray-400">Admin</p>
-              <button type="button" onClick={() => { onSaveAsOrgDefault(); setOpen(false); }}
-                className="block w-full text-left px-2 py-1 text-xs text-blue-700 hover:bg-blue-50 rounded">
-                Spara som org-default
-              </button>
-              {hasOrgPref && (
-                <button type="button" onClick={() => { onRemoveOrgDefault(); setOpen(false); }}
-                  className="block w-full text-left px-2 py-1 text-xs text-red-600 hover:bg-red-50 rounded">
-                  Ta bort org-default
-                </button>
-              )}
-            </>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}

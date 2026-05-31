@@ -1,7 +1,9 @@
 /**
- * DataTable-komponent — rendering, sort-klick, kolumn-meny, admin-actions.
- * Pure helpers täcks i data-table.test.tsx; här fokuserar vi på UI:t som
- * inte är enkelt att enhets-testa utan att rendera.
+ * DataTable-komponent — rendering + per-kolumn-meny + toolbar med chips.
+ *
+ * UI-mönstret (Excel-stil): klick på kolumn-rubrik öppnar dropdown med
+ * Sortera/Filtrera/Gruppera/Dölj. Aktiva val visas som chips i toolbar.
+ * Admin-knappar (Spara org-default etc.) sitter i samma toolbar.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -10,7 +12,7 @@ import { DataTable, type Column } from "@/components/ui/data-table";
 
 interface Row { id: string; name: string; age: number }
 const cols: Column<Row>[] = [
-  { key: "name", label: "Namn", render: (r) => r.name, sortable: true, sortValue: (r) => r.name },
+  { key: "name", label: "Namn", render: (r) => r.name, sortable: true, sortValue: (r) => r.name, filterable: true, groupable: true },
   { key: "age", label: "Ålder", render: (r) => r.age, sortable: true, sortValue: (r) => r.age, align: "right" },
 ];
 const rows: Row[] = [
@@ -59,16 +61,38 @@ describe("DataTable", () => {
     expect(screen.getByText("Inget här")).toBeInTheDocument();
   });
 
-  it("klick på sorterbar rubrik triggar save mutation", () => {
+  it("klick på rubrik öppnar kolumn-meny med Sortera-alternativ", () => {
     render(<DataTable prefKey="x" columns={cols} data={rows} rowKey={(r) => r.id} />);
-    fireEvent.click(screen.getByRole("button", { name: /^Namn$/ }));
-    // Save sker debounced (setTimeout 400ms) → kolla att mutationen registrerades efter timeout
+    fireEvent.click(screen.getByRole("button", { name: /Namn/ }));
+    expect(screen.getByText("Sortera stigande ↑")).toBeInTheDocument();
+    expect(screen.getByText("Sortera fallande ↓")).toBeInTheDocument();
+  });
+
+  it("klick på Sortera stigande triggar save mutation", () => {
+    render(<DataTable prefKey="x" columns={cols} data={rows} rowKey={(r) => r.id} />);
+    fireEvent.click(screen.getByRole("button", { name: /Namn/ }));
+    fireEvent.click(screen.getByText("Sortera stigande ↑"));
     return new Promise<void>((resolve) => {
-      setTimeout(() => {
-        expect(saveMutate).toHaveBeenCalled();
-        resolve();
-      }, 500);
+      setTimeout(() => { expect(saveMutate).toHaveBeenCalled(); resolve(); }, 500);
     });
+  });
+
+  it("kolumn-meny visar Filtrera-input för filterable column", () => {
+    render(<DataTable prefKey="x" columns={cols} data={rows} rowKey={(r) => r.id} />);
+    fireEvent.click(screen.getByRole("button", { name: /Namn/ }));
+    expect(screen.getByPlaceholderText(/Skriv för att filtrera/)).toBeInTheDocument();
+  });
+
+  it("kolumn-meny visar 'Gruppera på den här' för groupable column", () => {
+    render(<DataTable prefKey="x" columns={cols} data={rows} rowKey={(r) => r.id} />);
+    fireEvent.click(screen.getByRole("button", { name: /Namn/ }));
+    expect(screen.getByText("Gruppera på den här")).toBeInTheDocument();
+  });
+
+  it("kolumn-meny visar 'Dölj kolumn'", () => {
+    render(<DataTable prefKey="x" columns={cols} data={rows} rowKey={(r) => r.id} />);
+    fireEvent.click(screen.getByRole("button", { name: /Namn/ }));
+    expect(screen.getByText("Dölj kolumn")).toBeInTheDocument();
   });
 
   it("onRowClick fires när rad klickas", () => {
@@ -78,23 +102,13 @@ describe("DataTable", () => {
     expect(onRowClick).toHaveBeenCalledWith(rows[0]);
   });
 
-  it("kolumn-menyn öppnar och visar checkbox för kolumn", () => {
+  it("admin ser 'Spara som org-default' i toolbar (alltid synlig)", () => {
     render(<DataTable prefKey="x" columns={cols} data={rows} rowKey={(r) => r.id} />);
-    fireEvent.click(screen.getByLabelText("Kolumnval"));
-    // Båda kolumnerna finns som checkbox-label
-    expect(screen.getAllByText("Namn").length).toBeGreaterThan(1); // header + meny
-    expect(screen.getAllByText("Ålder").length).toBeGreaterThan(1);
-  });
-
-  it("admin ser 'Spara som org-default' när menyn öppnas", () => {
-    render(<DataTable prefKey="x" columns={cols} data={rows} rowKey={(r) => r.id} />);
-    fireEvent.click(screen.getByLabelText("Kolumnval"));
     expect(screen.getByText(/Spara som org-default/)).toBeInTheDocument();
   });
 
   it("klick på 'Spara som org-default' anropar setOrgDefault", () => {
     render(<DataTable prefKey="x" columns={cols} data={rows} rowKey={(r) => r.id} />);
-    fireEvent.click(screen.getByLabelText("Kolumnval"));
     fireEvent.click(screen.getByText(/Spara som org-default/));
     expect(setOrgMutate).toHaveBeenCalled();
   });
@@ -102,21 +116,36 @@ describe("DataTable", () => {
   it("non-admin ser INTE org-default-knappar", () => {
     me.data = { id: "u1", role: "LAWYER" };
     render(<DataTable prefKey="x" columns={cols} data={rows} rowKey={(r) => r.id} />);
-    fireEvent.click(screen.getByLabelText("Kolumnval"));
     expect(screen.queryByText(/Spara som org-default/)).not.toBeInTheDocument();
   });
 
-  it("'Återställ mina' visas när det finns personlig pref", () => {
-    persisted.data = { user: { sortBy: "name" }, org: null };
+  it("'Återställ vy'-knapp visas när det finns personlig pref", () => {
+    persisted.data = { user: { sortBy: "name", sortDir: "asc" }, org: null };
     render(<DataTable prefKey="x" columns={cols} data={rows} rowKey={(r) => r.id} />);
-    fireEvent.click(screen.getByLabelText("Kolumnval"));
-    expect(screen.getByText(/Återställ mina/)).toBeInTheDocument();
+    expect(screen.getByText(/Återställ vy/)).toBeInTheDocument();
   });
 
   it("'Ta bort org-default' visas för admin när org-pref finns", () => {
     persisted.data = { user: null, org: { sortBy: "age" } };
     render(<DataTable prefKey="x" columns={cols} data={rows} rowKey={(r) => r.id} />);
-    fireEvent.click(screen.getByLabelText("Kolumnval"));
     expect(screen.getByText(/Ta bort org-default/)).toBeInTheDocument();
+  });
+
+  it("aktiv sortering visas som chip i toolbar", () => {
+    persisted.data = { user: { sortBy: "name", sortDir: "desc" }, org: null };
+    render(<DataTable prefKey="x" columns={cols} data={rows} rowKey={(r) => r.id} />);
+    expect(screen.getByText(/Sortering: Namn ↓/)).toBeInTheDocument();
+  });
+
+  it("aktivt filter visas som chip i toolbar", () => {
+    persisted.data = { user: { filters: { name: "anna" } }, org: null };
+    render(<DataTable prefKey="x" columns={cols} data={rows} rowKey={(r) => r.id} />);
+    expect(screen.getByText(/Filter: Namn="anna"/)).toBeInTheDocument();
+  });
+
+  it("aktiv gruppering visas som chip i toolbar", () => {
+    persisted.data = { user: { groupBy: "name" }, org: null };
+    render(<DataTable prefKey="x" columns={cols} data={rows} rowKey={(r) => r.id} />);
+    expect(screen.getByText(/Gruppering: Namn/)).toBeInTheDocument();
   });
 });
