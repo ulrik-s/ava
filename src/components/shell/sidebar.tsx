@@ -7,15 +7,19 @@ import { cn } from "@/lib/client/utils";
 
 /**
  * Pure git-modell — ingen NextAuth-session. "Logga ut" rensar
- * firma-config (token), browsern reload:ar och visar inställnings-overlay:n.
+ * firma-config (token + principalId) och navigerar till /login så
+ * användaren kan välja konto igen. Måste rensa principalId — annars
+ * tolkar demo-bootstrap reload:en som "redan inloggad".
  */
-function signOutLocally(): void {
+export function signOutLocally(): void {
   try {
     const cfg = JSON.parse(localStorage.getItem("ava.firma") ?? "{}") as Record<string, unknown>;
     delete cfg.token;
+    delete cfg.principalId;
     localStorage.setItem("ava.firma", JSON.stringify(cfg));
   } catch { /* ignorera */ }
-  window.location.reload();
+  const basePath = process.env.NEXT_PUBLIC_DEMO_BASE_PATH ?? "";
+  window.location.replace(`${basePath}/login/`);
 }
 
 const navigation = [
