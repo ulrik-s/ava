@@ -64,6 +64,7 @@ const invoiceColumns: Column<InvoiceRow>[] = [
     ),
   },
   { key: "amount", label: "Belopp", sortable: true, align: "right", sortValue: (i) => i.amount,
+    summary: (rows) => <span className="font-mono">{formatCurrency(rows.reduce((s, r) => s + r.amount, 0))}</span>,
     render: (i) => <span className="font-mono">{formatCurrency(i.amount)}</span> },
 ];
 

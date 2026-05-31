@@ -2,7 +2,7 @@
  * DataTable pure helpers: filterRows, groupRows, hasOverrides.
  */
 import { describe, it, expect } from "vitest";
-import { filterRows, groupRows, hasOverrides, isFilterable, isGroupable, isColumnHidden, type Column } from "@/components/ui/data-table";
+import { filterRows, groupRows, hasOverrides, isFilterable, isGroupable, isColumnHidden, hasSummary, buildSummaryContent, type Column } from "@/components/ui/data-table";
 
 interface Row { id: string; name: string; status: string; amount: number }
 
@@ -124,6 +124,37 @@ describe("isFilterable / isGroupable — sortable opt-in:ar båda", () => {
   it("explicit filterable: true override:ar sortable=false (för specialfall)", () => {
     const col: Column<{ x: string }> = { key: "x", label: "X", render: (r) => r.x, filterable: true };
     expect(isFilterable(col)).toBe(true);
+  });
+});
+
+describe("hasSummary / buildSummaryContent — auto-summa", () => {
+  const sumCols: Column<{ id: string; amount: number; name: string }>[] = [
+    { key: "name", label: "Namn", render: (r) => r.name },
+    { key: "amount", label: "Belopp", render: (r) => String(r.amount),
+      summary: (rows) => String(rows.reduce((s, r) => s + r.amount, 0)) },
+  ];
+
+  it("hasSummary=true om någon kolumn har summary-funktion", () => {
+    expect(hasSummary(sumCols)).toBe(true);
+  });
+
+  it("hasSummary=false om INGEN kolumn har summary", () => {
+    const cols: Column<{ x: string }>[] = [{ key: "x", label: "X", render: (r) => r.x }];
+    expect(hasSummary(cols)).toBe(false);
+  });
+
+  it("buildSummaryContent kallar summary med raderna och returnerar map per kolumn-key", () => {
+    const out = buildSummaryContent(sumCols, [
+      { id: "1", amount: 100, name: "A" },
+      { id: "2", amount: 250, name: "B" },
+    ]);
+    expect(out.amount).toBe("350");
+    expect(out.name).toBeUndefined(); // ingen summary → ingen key
+  });
+
+  it("buildSummaryContent på tom rad-array → returnerar summary av tom array", () => {
+    const out = buildSummaryContent(sumCols, []);
+    expect(out.amount).toBe("0");
   });
 });
 

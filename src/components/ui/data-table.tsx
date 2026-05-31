@@ -46,6 +46,11 @@ export interface Column<T> {
    *  väljer "+ Visa kolumn → <denna>". Använd för fält som är intressanta
    *  ibland men skulle göra default-vyn för bred (createdAt, IDs, etc.). */
   defaultHidden?: boolean;
+  /** Summa-funktion: returnerar innehållet för footer-cellen i denna kolumn.
+   *  Om någon kolumn har summary auto-renderas en footer-rad (filtrerade
+   *  rader) + en summa-rad per grupp vid gruppering. Caller styr formatering
+   *  (currency, minutes, etc.) genom return-värdet. */
+  summary?: (rows: T[]) => React.ReactNode;
 }
 
 /** En kolumn räknas som filterbar/grupperbar om `sortable` är satt och
@@ -198,6 +203,18 @@ export function hasOverrides(prefs: DataTablePrefs): boolean {
   return Boolean(prefs.order && prefs.order.length > 0);
 }
 
+export function hasSummary<T>(columns: Column<T>[]): boolean {
+  return columns.some((c) => c.summary !== undefined);
+}
+
+export function buildSummaryContent<T>(columns: Column<T>[], rows: T[]): Partial<Record<string, React.ReactNode>> {
+  const out: Partial<Record<string, React.ReactNode>> = {};
+  for (const c of columns) {
+    if (c.summary) out[c.key] = c.summary(rows);
+  }
+  return out;
+}
+
 export function DataTable<T>({ prefKey, columns, data, rowKey, onRowClick, emptyMessage, footer }: Props<T>) {
   const persisted = trpc.prefs.get.useQuery({ key: prefKey });
   const save = trpc.prefs.save.useMutation();
@@ -279,15 +296,29 @@ export function DataTable<T>({ prefKey, columns, data, rowKey, onRowClick, empty
               rowKey={rowKey}
               onRowClick={onRowClick}
               emptyMessage={emptyMessage}
+              columns={columns}
             />
           </tbody>
-          {footer && filtered.length > 0 && (
-            <FooterRow vCols={vCols} prefs={prefs} content={footer(filtered)} />
-          )}
+          <AutoFooter columns={columns} vCols={vCols} prefs={prefs} filtered={filtered} footer={footer} />
         </table>
       </div>
     </div>
   );
+}
+
+interface AutoFooterProps<T> {
+  columns: Column<T>[];
+  vCols: Column<T>[];
+  prefs: DataTablePrefs;
+  filtered: T[];
+  footer?: FooterFn<T>;
+}
+
+function AutoFooter<T>({ columns, vCols, prefs, filtered, footer }: AutoFooterProps<T>) {
+  if (filtered.length === 0) return null;
+  if (!footer && !hasSummary(columns)) return null;
+  const content = footer ? footer(filtered) : buildSummaryContent(columns, filtered);
+  return <FooterRow vCols={vCols} prefs={prefs} content={content} />;
 }
 
 interface ToolbarProps<T> {
@@ -444,9 +475,10 @@ interface BodyProps<T> {
   rowKey: (row: T) => string;
   onRowClick?: (row: T) => void;
   emptyMessage?: string;
+  columns: Column<T>[];
 }
 
-function BodyRows<T>({ grouped, vCols, prefs, rowKey, onRowClick, emptyMessage }: BodyProps<T>) {
+function BodyRows<T>({ grouped, vCols, prefs, rowKey, onRowClick, emptyMessage, columns }: BodyProps<T>) {
   const totalCols = vCols.length + 1;
   const isEmpty = grouped.every((g) => g.rows.length === 0);
   if (isEmpty) {
@@ -454,6 +486,8 @@ function BodyRows<T>({ grouped, vCols, prefs, rowKey, onRowClick, emptyMessage }
       <tr><td colSpan={totalCols} className="px-4 py-6 text-center text-sm text-gray-500">{emptyMessage ?? "Inget att visa."}</td></tr>
     );
   }
+  // Bara visa per-grupp summa när vi faktiskt grupperar OCH det finns summary
+  const showGroupSummary = prefs.groupBy != null && hasSummary(columns);
   return (
     <>{grouped.map((g) => (
       <GroupBlock
@@ -463,6 +497,8 @@ function BodyRows<T>({ grouped, vCols, prefs, rowKey, onRowClick, emptyMessage }
         prefs={prefs}
         rowKey={rowKey}
         onRowClick={onRowClick}
+        showSummary={showGroupSummary}
+        columns={columns}
       />
     ))}</>
   );
@@ -474,9 +510,24 @@ interface GroupBlockProps<T> {
   prefs: DataTablePrefs;
   rowKey: (row: T) => string;
   onRowClick?: (row: T) => void;
+  showSummary: boolean;
+  columns: Column<T>[];
 }
 
-function GroupBlock<T>({ group, vCols, prefs, rowKey, onRowClick }: GroupBlockProps<T>) {
+function GroupSummaryRow<T>({ vCols, prefs, content }: { vCols: Column<T>[]; prefs: DataTablePrefs; content: Partial<Record<string, React.ReactNode>> }) {
+  return (
+    <tr className="bg-gray-50/70 border-t border-gray-200 text-xs font-semibold text-gray-700">
+      {vCols.map((c) => (
+        <td key={c.key} style={{ width: widthOf(c, prefs), textAlign: c.align ?? "left" }} className="px-3 py-1.5 whitespace-nowrap italic">
+          {content[c.key] ?? ""}
+        </td>
+      ))}
+      <td className="w-4" />
+    </tr>
+  );
+}
+
+function GroupBlock<T>({ group, vCols, prefs, rowKey, onRowClick, showSummary, columns }: GroupBlockProps<T>) {
   const totalCols = vCols.length + 1;
   return (
     <>
@@ -497,6 +548,9 @@ function GroupBlock<T>({ group, vCols, prefs, rowKey, onRowClick }: GroupBlockPr
           <td className="w-4" />
         </tr>
       ))}
+      {showSummary && (
+        <GroupSummaryRow vCols={vCols} prefs={prefs} content={buildSummaryContent(columns, group.rows)} />
+      )}
     </>
   );
 }
