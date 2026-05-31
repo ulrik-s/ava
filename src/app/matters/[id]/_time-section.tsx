@@ -25,13 +25,22 @@ interface TimeEntryRow {
   minutes: number;
   description: string | null;
   billable: boolean;
+  hourlyRate?: number | null;
   user?: { name?: string | null } | null;
   invoiceId?: string | null;
   invoice?: { id: string; invoiceNumber?: string | null } | null;
+  createdAt?: Date | string | null;
+  updatedAt?: Date | string | null;
 }
 
 function invoicedOf(e: TimeEntryRow): boolean {
   return e.invoiceId != null && e.invoiceId !== "";
+}
+
+function fmtDateTime(v: Date | string | null | undefined): string {
+  if (!v) return "—";
+  const d = new Date(v);
+  return d.toLocaleString("sv-SE", { dateStyle: "short", timeStyle: "short" });
 }
 
 function toEditForm(entry: TimeEntryRow): EditForm {
@@ -122,6 +131,20 @@ export function TimeSection({ matterId, isTaxeArende }: Props) {
             </span>
       ),
     },
+    // Katalog-fält — finns på posten men visas inte i default-vyn. Användaren
+    // aktiverar via "+ Visa kolumn → Tillgängliga fält".
+    { key: "hourlyRate", label: "Timpris", sortable: true, defaultHidden: true, align: "right",
+      sortValue: (e) => e.hourlyRate ?? 0,
+      render: (e) => <span className="text-sm font-mono text-gray-500">{e.hourlyRate ? `${e.hourlyRate / 100} kr/h` : "—"}</span> },
+    { key: "createdAt", label: "Skapad", sortable: true, defaultHidden: true,
+      sortValue: (e) => e.createdAt ? new Date(e.createdAt) : null,
+      render: (e) => <span className="text-sm text-gray-500">{fmtDateTime(e.createdAt)}</span> },
+    { key: "updatedAt", label: "Uppdaterad", sortable: true, defaultHidden: true,
+      sortValue: (e) => e.updatedAt ? new Date(e.updatedAt) : null,
+      render: (e) => <span className="text-sm text-gray-500">{fmtDateTime(e.updatedAt)}</span> },
+    { key: "id", label: "ID", sortable: true, defaultHidden: true,
+      sortValue: (e) => e.id,
+      render: (e) => <span className="text-xs font-mono text-gray-400">{e.id.slice(0, 8)}</span> },
   ];
 
   return (

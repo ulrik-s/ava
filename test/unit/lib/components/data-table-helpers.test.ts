@@ -2,7 +2,7 @@
  * DataTable pure helpers: filterRows, groupRows, hasOverrides.
  */
 import { describe, it, expect } from "vitest";
-import { filterRows, groupRows, hasOverrides, isFilterable, isGroupable, type Column } from "@/components/ui/data-table";
+import { filterRows, groupRows, hasOverrides, isFilterable, isGroupable, isColumnHidden, type Column } from "@/components/ui/data-table";
 
 interface Row { id: string; name: string; status: string; amount: number }
 
@@ -71,6 +71,28 @@ describe("groupRows", () => {
     const blank = [{ id: "x", name: "", status: "Aktiv", amount: 0 }];
     const g = groupRows(blank, cols, "name");
     expect(g[0].group).toBe("(tomt)");
+  });
+});
+
+describe("isColumnHidden / defaultHidden — katalog-fält", () => {
+  it("defaultHidden=true → kolumnen är dold tills user explicit visar den", () => {
+    const col: Column<{ x: string }> = { key: "x", label: "X", render: (r) => r.x, defaultHidden: true };
+    expect(isColumnHidden(col, {})).toBe(true);
+  });
+
+  it("defaultHidden=false (default) → kolumnen är synlig som default", () => {
+    const col: Column<{ x: string }> = { key: "x", label: "X", render: (r) => r.x };
+    expect(isColumnHidden(col, {})).toBe(false);
+  });
+
+  it("user-pref { hidden: false } override:ar defaultHidden", () => {
+    const col: Column<{ x: string }> = { key: "x", label: "X", render: (r) => r.x, defaultHidden: true };
+    expect(isColumnHidden(col, { columns: [{ key: "x", hidden: false }] })).toBe(false);
+  });
+
+  it("user-pref { hidden: true } gömmer även icke-defaultHidden", () => {
+    const col: Column<{ x: string }> = { key: "x", label: "X", render: (r) => r.x };
+    expect(isColumnHidden(col, { columns: [{ key: "x", hidden: true }] })).toBe(true);
   });
 });
 

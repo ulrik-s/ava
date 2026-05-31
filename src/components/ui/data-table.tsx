@@ -42,6 +42,10 @@ export interface Column<T> {
   defaultWidth?: number;
   align?: "left" | "right" | "center";
   hideable?: boolean;
+  /** Kolumnen finns i katalogen men är inte visad förrän användaren explicit
+   *  väljer "+ Visa kolumn → <denna>". Använd för fält som är intressanta
+   *  ibland men skulle göra default-vyn för bred (createdAt, IDs, etc.). */
+  defaultHidden?: boolean;
 }
 
 /** En kolumn räknas som filterbar/grupperbar om `sortable` är satt och
@@ -160,9 +164,16 @@ export function groupRows<T>(rows: T[], columns: Column<T>[], groupBy?: string):
   return Array.from(groups.entries()).map(([group, gRows]) => ({ group, rows: gRows }));
 }
 
+/** En kolumn är dold om user explicit satt { hidden: true }, ELLER om
+ *  defaultHidden=true och user inte explicit visat den. */
+export function isColumnHidden<T>(col: Column<T>, prefs: DataTablePrefs): boolean {
+  const override = (prefs.columns ?? []).find((c) => c.key === col.key);
+  if (override?.hidden !== undefined) return override.hidden;
+  return Boolean(col.defaultHidden);
+}
+
 export function visibleColumns<T>(columns: Column<T>[], prefs: DataTablePrefs): Column<T>[] {
-  const overrides = new Map((prefs.columns ?? []).map((c) => [c.key, c]));
-  const visible = columns.filter((c) => !(overrides.get(c.key)?.hidden));
+  const visible = columns.filter((c) => !isColumnHidden(c, prefs));
   if (!prefs.order?.length) return visible;
   const idx = new Map(prefs.order.map((k, i) => [k, i] as const));
   return [...visible].sort((a, b) => (idx.get(a.key) ?? Number.MAX_SAFE_INTEGER) - (idx.get(b.key) ?? Number.MAX_SAFE_INTEGER));
@@ -243,7 +254,11 @@ export function DataTable<T>({ prefKey, columns, data, rowKey, onRowClick, empty
           onClearFilter={(key) => update({ filters: { ...(prefs.filters ?? {}), [key]: "" } })}
           onClearGroup={() => update({ groupBy: undefined })}
           onUnhide={(key) => {
-            const next = (prefs.columns ?? []).map((c) => c.key === key ? { ...c, hidden: false } : c);
+            const cur = prefs.columns ?? [];
+            const existing = cur.find((c) => c.key === key);
+            const next = existing
+              ? cur.map((c) => c.key === key ? { ...c, hidden: false } : c)
+              : [...cur, { key, hidden: false }];
             update({ columns: next });
           }}
           onResetAll={resetPersonal}
@@ -290,13 +305,16 @@ interface ToolbarProps<T> {
 }
 
 function hiddenColumns<T>(prefs: DataTablePrefs, columns: Column<T>[]): Column<T>[] {
-  const hidden = new Set((prefs.columns ?? []).filter((c) => c.hidden).map((c) => c.key));
-  return columns.filter((c) => hidden.has(c.key));
+  return columns.filter((c) => isColumnHidden(c, prefs));
 }
 
 function ShowHiddenButton<T>({ hidden, onUnhide }: { hidden: Column<T>[]; onUnhide: (key: string) => void }) {
   const [open, setOpen] = useState(false);
   if (hidden.length === 0) return null;
+  // Separera default-dolda (katalog-tillgängliga fält) från user-dolda
+  // (kolumner som finns i default-vyn men användaren stängt av).
+  const catalog = hidden.filter((c) => c.defaultHidden);
+  const userHidden = hidden.filter((c) => !c.defaultHidden);
   return (
     <div className="relative">
       <button type="button" onClick={() => setOpen((v) => !v)}
@@ -306,19 +324,31 @@ function ShowHiddenButton<T>({ hidden, onUnhide }: { hidden: Column<T>[]; onUnhi
       {open && (
         <>
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full mt-1 z-40 min-w-[12rem] bg-white border border-gray-200 rounded shadow-lg p-1">
-            <p className="px-2 pt-1 pb-1 text-[10px] font-semibold uppercase text-gray-400">Dolda kolumner</p>
-            {hidden.map((c) => (
-              <button key={c.key} type="button"
-                onClick={() => { onUnhide(c.key); setOpen(false); }}
-                className="block w-full text-left px-2 py-1 text-xs text-gray-700 hover:bg-gray-50 rounded">
-                {c.label}
-              </button>
-            ))}
+          <div className="absolute right-0 top-full mt-1 z-40 min-w-[14rem] bg-white border border-gray-200 rounded shadow-lg p-1">
+            {userHidden.length > 0 && (
+              <ColumnList label="Dolda kolumner" cols={userHidden} onPick={(k) => { onUnhide(k); setOpen(false); }} />
+            )}
+            {catalog.length > 0 && (
+              <ColumnList label="Tillgängliga fält" cols={catalog} onPick={(k) => { onUnhide(k); setOpen(false); }} />
+            )}
           </div>
         </>
       )}
     </div>
+  );
+}
+
+function ColumnList<T>({ label, cols, onPick }: { label: string; cols: Column<T>[]; onPick: (key: string) => void }) {
+  return (
+    <>
+      <p className="px-2 pt-1 pb-1 text-[10px] font-semibold uppercase text-gray-400">{label}</p>
+      {cols.map((c) => (
+        <button key={c.key} type="button" onClick={() => onPick(c.key)}
+          className="block w-full text-left px-2 py-1 text-xs text-gray-700 hover:bg-gray-50 rounded">
+          {c.label}
+        </button>
+      ))}
+    </>
   );
 }
 
@@ -519,11 +549,13 @@ function buildHeaderActions<T>(
     setFilter: (key, value) => update({ filters: { ...(prefs.filters ?? {}), [key]: value } }),
     setGroupBy: (key) => update({ groupBy: key }),
     toggleHidden: (key) => {
+      const col = vCols.find((c) => c.key === key);
+      const isNowHidden = col ? false : true; // vCols är synliga → toggling till hidden
       const cur = prefs.columns ?? [];
       const existing = cur.find((c) => c.key === key);
       const next = existing
-        ? cur.map((c) => c.key === key ? { ...c, hidden: !c.hidden } : c)
-        : [...cur, { key, hidden: true }];
+        ? cur.map((c) => c.key === key ? { ...c, hidden: isNowHidden } : c)
+        : [...cur, { key, hidden: isNowHidden }];
       update({ columns: next });
     },
     reorder: (from, to) => {
