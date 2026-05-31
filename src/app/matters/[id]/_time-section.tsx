@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { trpc } from "@/lib/client/trpc";
 import { formatMinutes } from "@/lib/client/utils";
 import { DataTable, type Column } from "@/components/ui/data-table";
@@ -31,10 +30,6 @@ interface TimeEntryRow {
   invoice?: { id: string; invoiceNumber?: string | null } | null;
   createdAt?: Date | string | null;
   updatedAt?: Date | string | null;
-}
-
-function invoicedOf(e: TimeEntryRow): boolean {
-  return e.invoiceId != null && e.invoiceId !== "";
 }
 
 function fmtDateTime(v: Date | string | null | undefined): string {
@@ -111,25 +106,17 @@ export function TimeSection({ matterId, isTaxeArende }: Props) {
       render: (e) => <span className="text-sm text-gray-700">{e.description}</span> },
     { key: "billable", label: "Deb.", sortable: true, sortValue: (e) => (e.billable ? 1 : 0),
       render: (e) => <span className="text-sm">{e.billable ? "Ja" : "Nej"}</span> },
-    { key: "invoiced", label: "Fakturerad", sortable: true, sortValue: (e) => (invoicedOf(e) ? 1 : 0),
-      render: (e) => <span className="text-sm">{invoicedOf(e) ? "Ja" : "Nej"}</span> },
-    { key: "invoice", label: "Faktura", sortable: true, sortValue: (e) => e.invoice?.invoiceNumber ?? "",
-      render: (e) => (
-        e.invoice && e.invoiceId
-          ? <Link href={`/invoices/${e.invoiceId}`} className="text-sm text-blue-600 hover:underline">
-              {e.invoice.invoiceNumber ?? e.invoiceId.slice(0, 8)}
-            </Link>
-          : <span className="text-sm text-gray-400">—</span>
-      ),
-    },
+    // Notera: kolumnerna "Fakturerad" + "Faktura" finns INTE här. Rättshjälp/
+    // rättsskydd-flödet bryter 1:1-kopplingen mellan tidsrad och faktura —
+    // samma rad kan ingå i acconto till klient + slutfaktura till myndighet.
+    // Vid framtida rättshjälp-stöd hanteras kopplingen via separat invoice-
+    // line-modell, inte invoiceId på timeEntry.
     { key: "actions", label: "", sortable: false, align: "right", hideable: false,
       render: (e) => (
-        invoicedOf(e)
-          ? <span className="text-xs text-gray-400 italic">Låst (på faktura)</span>
-          : <span className="whitespace-nowrap">
-              <button onClick={() => startEdit(e)} className="text-xs text-gray-500 hover:text-blue-600 hover:underline mr-3">Ändra</button>
-              <button onClick={() => confirmDelete(e.id)} className="text-xs text-red-500 hover:underline">Ta bort</button>
-            </span>
+        <span className="whitespace-nowrap">
+          <button onClick={() => startEdit(e)} className="text-xs text-gray-500 hover:text-blue-600 hover:underline mr-3">Ändra</button>
+          <button onClick={() => confirmDelete(e.id)} className="text-xs text-red-500 hover:underline">Ta bort</button>
+        </span>
       ),
     },
     // Katalog-fält — finns på posten men visas inte i default-vyn. Användaren

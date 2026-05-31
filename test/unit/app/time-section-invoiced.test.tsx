@@ -1,15 +1,13 @@
 /**
- * TimeSection — invoiced/locked-beteende.
- *
- * Verifierar att tidsposter på faktura visas som "Ja"/faktura-nr + att
- * Ändra/Ta bort-knapparna byts mot "Låst"-text.
+ * TimeSection — efter borttagning av Fakturerad/Faktura-kolumner och
+ * "Låst på faktura"-state. Rättshjälp/rättsskydd-flödet bryter 1:1-
+ * kopplingen mellan tidsrad och faktura, så koppling visas inte längre.
  */
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TimeSection } from "@/app/matters/[id]/_time-section";
 
-// Minimal mock av trpc — vi.mock hoist:as så all setup måste vara inline.
 vi.mock("@/lib/client/trpc", () => {
   const noopMut = { mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false };
   return {
@@ -58,29 +56,22 @@ function renderSection() {
   );
 }
 
-describe("TimeSection — fakturerad/låst", () => {
-  it("visar 'Ja' för fakturerade entries och 'Nej' för icke-fakturerade", () => {
+describe("TimeSection — utan invoice-koppling i UI", () => {
+  it("renderar INGEN 'Fakturerad'-kolumn", () => {
     renderSection();
-    const cells = screen.getAllByText(/^(Ja|Nej)$/);
-    // 4 träffar förväntas: 2 i Deb.-kolumnen + 2 i Fakturerad-kolumnen
-    expect(cells.length).toBeGreaterThanOrEqual(3);
-    expect(screen.getByText("2026-0042")).toBeInTheDocument();
+    expect(screen.queryByText("Fakturerad")).not.toBeInTheDocument();
   });
 
-  it("faktura-nr är klickbar (länk till /invoices/<id>)", () => {
+  it("renderar INGEN 'Faktura'-kolumn (även för entries med invoiceId)", () => {
     renderSection();
-    const link = screen.getByRole("link", { name: "2026-0042" });
-    expect(link.getAttribute("href")).toBe("/invoices/inv-1");
+    expect(screen.queryByText("Faktura")).not.toBeInTheDocument();
+    expect(screen.queryByText("2026-0042")).not.toBeInTheDocument();
   });
 
-  it("icke-fakturerade entries visar Ändra + Ta bort knappar", () => {
+  it("alla entries får Ändra + Ta bort — ingen 'Låst (på faktura)'-state", () => {
     renderSection();
-    expect(screen.getByText("Ändra")).toBeInTheDocument();
-    expect(screen.getByText("Ta bort")).toBeInTheDocument();
-  });
-
-  it("fakturerade entries visar 'Låst (på faktura)' istället för actions", () => {
-    renderSection();
-    expect(screen.getByText(/Låst \(på faktura\)/)).toBeInTheDocument();
+    expect(screen.queryByText(/Låst/)).not.toBeInTheDocument();
+    expect(screen.getAllByText("Ändra")).toHaveLength(2);
+    expect(screen.getAllByText("Ta bort")).toHaveLength(2);
   });
 });
