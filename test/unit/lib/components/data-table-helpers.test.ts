@@ -2,7 +2,7 @@
  * DataTable pure helpers: filterRows, groupRows, hasOverrides.
  */
 import { describe, it, expect } from "vitest";
-import { filterRows, groupRows, hasOverrides, type Column } from "@/components/ui/data-table";
+import { filterRows, groupRows, hasOverrides, isFilterable, isGroupable, type Column } from "@/components/ui/data-table";
 
 interface Row { id: string; name: string; status: string; amount: number }
 
@@ -71,6 +71,37 @@ describe("groupRows", () => {
     const blank = [{ id: "x", name: "", status: "Aktiv", amount: 0 }];
     const g = groupRows(blank, cols, "name");
     expect(g[0].group).toBe("(tomt)");
+  });
+});
+
+describe("isFilterable / isGroupable — sortable opt-in:ar båda", () => {
+  it("sortable=true → filterable + groupable ärvs automatiskt", () => {
+    const col: Column<{ x: string }> = { key: "x", label: "X", render: (r) => r.x, sortable: true };
+    expect(isFilterable(col)).toBe(true);
+    expect(isGroupable(col)).toBe(true);
+  });
+
+  it("sortable=false → filterable + groupable är false som default", () => {
+    const col: Column<{ x: string }> = { key: "x", label: "X", render: (r) => r.x };
+    expect(isFilterable(col)).toBe(false);
+    expect(isGroupable(col)).toBe(false);
+  });
+
+  it("explicit filterable: false slår av även när sortable=true", () => {
+    const col: Column<{ x: string }> = { key: "x", label: "X", render: (r) => r.x, sortable: true, filterable: false };
+    expect(isFilterable(col)).toBe(false);
+    expect(isGroupable(col)).toBe(true);
+  });
+
+  it("explicit groupable: false slår av group men inte filter", () => {
+    const col: Column<{ x: string }> = { key: "x", label: "X", render: (r) => r.x, sortable: true, groupable: false };
+    expect(isFilterable(col)).toBe(true);
+    expect(isGroupable(col)).toBe(false);
+  });
+
+  it("explicit filterable: true override:ar sortable=false (för specialfall)", () => {
+    const col: Column<{ x: string }> = { key: "x", label: "X", render: (r) => r.x, filterable: true };
+    expect(isFilterable(col)).toBe(true);
   });
 });
 

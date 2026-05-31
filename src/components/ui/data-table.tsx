@@ -27,16 +27,30 @@ export interface Column<T> {
   render: (row: T) => React.ReactNode;
   /** Pure-data-värde för sortering (default = render-output som sträng). */
   sortValue?: (row: T) => string | number | Date | null;
-  /** Värde som filter-text matchas mot (default: render-output som string). */
+  /** Värde som filter-text matchas mot (default: sortValue eller render-output). */
   filterValue?: (row: T) => string;
-  /** Värde som används vid groupering (default: filterValue eller render). */
+  /** Värde som används vid groupering (default: filterValue eller sortValue). */
   groupValue?: (row: T) => string;
+  /** Sorterbar? Default: false. När `sortable: true` aktiveras filter + group
+   *  automatiskt (kan stängas av per kolumn med `filterable: false` /
+   *  `groupable: false`). */
   sortable?: boolean;
+  /** Explicit override — default ärver från `sortable`. */
   filterable?: boolean;
+  /** Explicit override — default ärver från `sortable`. */
   groupable?: boolean;
   defaultWidth?: number;
   align?: "left" | "right" | "center";
   hideable?: boolean;
+}
+
+/** En kolumn räknas som filterbar/grupperbar om `sortable` är satt och
+ *  flaggorna inte explicit slagits av. */
+export function isFilterable<T>(col: Column<T>): boolean {
+  return col.filterable ?? Boolean(col.sortable);
+}
+export function isGroupable<T>(col: Column<T>): boolean {
+  return col.groupable ?? Boolean(col.sortable);
 }
 
 export interface DataTablePrefs {
@@ -109,6 +123,12 @@ export function sortRows<T>(rows: T[], columns: Column<T>[], sortBy?: string, so
 
 function columnValueAsString<T>(col: Column<T>, row: T): string {
   if (col.filterValue) return col.filterValue(row);
+  if (col.sortValue) {
+    const v = col.sortValue(row);
+    if (v == null) return "";
+    if (v instanceof Date) return v.toLocaleDateString("sv-SE");
+    return String(v);
+  }
   return String(col.render(row) ?? "");
 }
 
@@ -129,7 +149,7 @@ export function groupRows<T>(rows: T[], columns: Column<T>[], groupBy?: string):
   if (!groupBy) return [{ group: null, rows }];
   const col = columns.find((c) => c.key === groupBy);
   if (!col) return [{ group: null, rows }];
-  const valueOf = col.groupValue ?? col.filterValue ?? ((r: T) => String(col.render(r) ?? ""));
+  const valueOf = col.groupValue ?? ((r: T) => columnValueAsString(col, r));
   const groups = new Map<string, T[]>();
   for (const r of rows) {
     const k = valueOf(r) || "(tomt)";
@@ -508,7 +528,7 @@ function sortArrow(prefs: DataTablePrefs, key: string): string {
 }
 
 function hasAnyMenu<T>(col: Column<T>): boolean {
-  return Boolean(col.sortable || col.filterable || col.groupable || col.hideable !== false);
+  return Boolean(col.sortable || isFilterable(col) || isGroupable(col) || col.hideable !== false);
 }
 
 function HeaderCell<T>({ col, prefs, width, actions }: HeaderCellProps<T>) {
@@ -612,8 +632,8 @@ function ColumnMenu<T>({ col, prefs, actions, onClose, align }: ColumnMenuProps<
       <div className="fixed inset-0 z-30" onClick={onClose} />
       <div className={`absolute top-full mt-1 z-40 ${posClass} min-w-[14rem] bg-white border border-gray-200 rounded shadow-lg p-1 text-left font-normal`}>
         {col.sortable && <SortSection col={col} prefs={prefs} actions={actions} onClose={onClose} />}
-        {col.filterable && <FilterSection col={col} prefs={prefs} actions={actions} onClose={onClose} />}
-        {col.groupable && (
+        {isFilterable(col) && <FilterSection col={col} prefs={prefs} actions={actions} onClose={onClose} />}
+        {isGroupable(col) && (
           <>
             <MenuButton active={isGrouped}
               onClick={() => { actions.setGroupBy(isGrouped ? undefined : col.key); onClose(); }}>
