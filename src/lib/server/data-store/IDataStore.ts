@@ -107,6 +107,7 @@ export type ConflictCheckDelegate = Delegate;
 export type PaymentDelegate = Delegate;
 export type PaymentPlanDelegate = Delegate;
 export type AccontoDeductionDelegate = Delegate;
+export type BillingRunDelegate = Delegate;
 export type CalendarEventDelegate = Delegate;
 export type TaskDelegate = Delegate;
 
@@ -159,6 +160,7 @@ export interface DataStoreTx {
   payments: PaymentDelegate;
   paymentPlans: PaymentPlanDelegate;
   accontoDeductions: AccontoDeductionDelegate;
+  billingRuns: BillingRunDelegate;
   calendarEvents: CalendarEventDelegate;
   tasks: TaskDelegate;
   userPreferences: Delegate;
@@ -194,6 +196,7 @@ export interface IDataStore {
   readonly paymentPlans: PaymentPlanDelegate;
   readonly paymentPlanReminders: Delegate;
   readonly accontoDeductions: AccontoDeductionDelegate;
+  readonly billingRuns: BillingRunDelegate;
   readonly calendarEvents: CalendarEventDelegate;
   readonly tasks: TaskDelegate;
   readonly userPreferences: Delegate;

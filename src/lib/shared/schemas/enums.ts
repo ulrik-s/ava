@@ -69,6 +69,55 @@ export const INVOICE_TYPE_LABELS = {
 export const invoiceTypeSchema = enumFromLabels(INVOICE_TYPE_LABELS);
 export type InvoiceType = z.infer<typeof invoiceTypeSchema>;
 
+// ─── BillingRun (fakturerings-händelse) ───────────────────────────────────
+
+/** Typen av billing-händelse. Skiljer aconto (klient betalar andel) från
+ *  slutfaktura (full specifikation till slutbetalaren). KOSTNADSRAKNING är
+ *  OFFENTLIG_FÖRSVARARE-flowet där fakturan väntar på dom + ev. prutning. */
+export const BILLING_RUN_TYPE_LABELS = {
+  ACCONTO: "Aconto",
+  FINAL: "Slutfaktura",
+  KOSTNADSRAKNING: "Kostnadsräkning",
+  CREDIT: "Kreditering",
+} as const satisfies Record<string, string>;
+export const billingRunTypeSchema = enumFromLabels(BILLING_RUN_TYPE_LABELS);
+export type BillingRunType = z.infer<typeof billingRunTypeSchema>;
+
+/** Vem fakturan skickas till. Påverkar mall + bevisbörda (rättshjälps­
+ *  blankett vs försäkringsbolags-mall vs kostnadsräkning till domstol). */
+export const BILLING_RUN_RECIPIENT_LABELS = {
+  KLIENT: "Klient",
+  FORSAKRING: "Försäkringsbolag",
+  RATTSHJALPSMYNDIGHET: "Rättshjälpsmyndighet/domstol",
+  DOMSTOL: "Domstol (kostnadsräkning)",
+} as const satisfies Record<string, string>;
+export const billingRunRecipientSchema = enumFromLabels(BILLING_RUN_RECIPIENT_LABELS);
+export type BillingRunRecipient = z.infer<typeof billingRunRecipientSchema>;
+
+/** Livscykel. PENDING_VERDICT = OFFENTLIG_FÖRSVARARE-fall där vi väntar
+ *  på dom innan vi kan skapa fakturan (advokaten behöver veta om
+ *  kostnadsräkningen är prutad innan slutfaktura). */
+export const BILLING_RUN_STATUS_LABELS = {
+  DRAFT: "Utkast",
+  PENDING_VERDICT: "Väntar på dom",
+  SENT: "Skickad",
+  VOIDED: "Annullerad",
+} as const satisfies Record<string, string>;
+export const billingRunStatusSchema = enumFromLabels(BILLING_RUN_STATUS_LABELS);
+export type BillingRunStatus = z.infer<typeof billingRunStatusSchema>;
+
+// ─── Expense kind — utlägg vs arvodes-justering ───────────────────────────
+
+/** Skiljer vanligt utlägg från PRUTNING. Prutning är minus-rad på en
+ *  kostnadsräkning när domstolen prutar — bokförs i ärendet men har inget
+ *  kvitto och ingen moms (negativt belopp på advokatens arvode). */
+export const EXPENSE_KIND_LABELS = {
+  EXPENSE: "Utlägg",
+  PRUTNING: "Prutning (domstol)",
+} as const satisfies Record<string, string>;
+export const expenseKindSchema = enumFromLabels(EXPENSE_KIND_LABELS);
+export type ExpenseKind = z.infer<typeof expenseKindSchema>;
+
 // ─── Payment plan status + reminder type ──────────────────────────────────
 
 export const PAYMENT_PLAN_STATUS_LABELS = {

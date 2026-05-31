@@ -44,6 +44,7 @@ import type {
   PaymentDelegate,
   PaymentPlanDelegate,
   AccontoDeductionDelegate,
+  BillingRunDelegate,
   CalendarEventDelegate,
   TaskDelegate,
 } from "./IDataStore";
@@ -70,6 +71,7 @@ export interface DemoSource {
   paymentPlans?: readonly Record<string, unknown>[];
   paymentPlanReminders?: readonly Record<string, unknown>[];
   accontoDeductions?: readonly Record<string, unknown>[];
+  billingRuns?: readonly Record<string, unknown>[];
   calendarEvents?: readonly Record<string, unknown>[];
   tasks?: readonly Record<string, unknown>[];
   userPreferences?: readonly Record<string, unknown>[];
@@ -96,6 +98,7 @@ export class DemoDataStore implements IDataStore {
   readonly paymentPlans: PaymentPlanDelegate;
   readonly paymentPlanReminders: Delegate;
   readonly accontoDeductions: AccontoDeductionDelegate;
+  readonly billingRuns: BillingRunDelegate;
   readonly calendarEvents: CalendarEventDelegate;
   readonly tasks: TaskDelegate;
   readonly userPreferences: Delegate;
@@ -233,6 +236,10 @@ export class DemoDataStore implements IDataStore {
     }) as unknown as PaymentPlanDelegate;
     this.paymentPlanReminders = this.makeDelegate("paymentPlanReminders") as unknown as Delegate;
     this.accontoDeductions = this.makeDelegate("accontoDeductions") as unknown as AccontoDeductionDelegate;
+    this.billingRuns = this.makeDelegate("billingRuns", {
+      invoice: this.rel("invoices", "id", "invoiceId", "one"),
+      matter: this.rel("matters", "id", "matterId", "one"),
+    }) as unknown as BillingRunDelegate;
     this.calendarEvents = this.makeDelegate("calendarEvents", {
       matter: this.rel("matters", "id", "matterId", "one"),
     }) as unknown as CalendarEventDelegate;
@@ -344,6 +351,7 @@ export class DemoDataStore implements IDataStore {
       paymentPlans: "paymentPlan",
       paymentPlanReminders: "paymentPlanReminder",
       accontoDeductions: "accontoDeduction",
+      billingRuns: "billingRun",
       calendarEvents: "calendarEvent",
       tasks: "task",
       userPreferences: "userPreference",
@@ -413,6 +421,7 @@ export class DemoDataStore implements IDataStore {
       payments: this.payments,
       paymentPlans: this.paymentPlans,
       accontoDeductions: this.accontoDeductions,
+      billingRuns: this.billingRuns,
       calendarEvents: this.calendarEvents,
       tasks: this.tasks,
       userPreferences: this.userPreferences,
