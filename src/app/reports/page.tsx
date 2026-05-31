@@ -187,12 +187,19 @@ const mattersTableColumns: Column<MatterRow>[] = [
   { key: "payment", label: "Betalning", sortable: true, sortValue: (m) => labelForPaymentMethod(m.paymentMethod),
     render: (m) => <PaymentBadge method={m.paymentMethod} /> },
   { key: "totalMinutes", label: "Tid", sortable: true, align: "right", sortValue: (m) => m.totalMinutes,
+    summary: (rs) => <span className="font-mono">{formatMinutes(rs.reduce((s, r) => s + r.totalMinutes, 0))}</span>,
     render: (m) => <span className="font-mono">{formatMinutes(m.totalMinutes)}</span> },
   { key: "billableMinutes", label: "Deb. tid", sortable: true, align: "right", sortValue: (m) => m.billableMinutes,
+    summary: (rs) => <strong className="font-mono">{formatMinutes(rs.reduce((s, r) => s + r.billableMinutes, 0))}</strong>,
     render: (m) => <strong className="font-mono">{formatMinutes(m.billableMinutes)}</strong> },
   { key: "workValueOre", label: "Arbetsvärde", sortable: true, align: "right", sortValue: (m) => m.workValueOre,
+    summary: (rs) => <span className="font-mono">{formatCurrency(rs.reduce((s, r) => s + r.workValueOre, 0))}</span>,
     render: (m) => <span className="font-mono">{formatCurrency(m.workValueOre)}</span> },
   { key: "expenseOre", label: "Utlägg", sortable: true, align: "right", sortValue: (m) => m.expenseOre,
+    summary: (rs) => {
+      const t = rs.reduce((s, r) => s + r.expenseOre, 0);
+      return <span className="font-mono">{t > 0 ? formatCurrency(t) : "—"}</span>;
+    },
     render: (m) => <span className="font-mono">{m.expenseOre > 0 ? formatCurrency(m.expenseOre) : "—"}</span> },
 ];
 
@@ -207,22 +214,13 @@ function MattersTable({ report }: { report: Report }) {
       {report.matters.length === 0 ? (
         <p className="text-sm text-gray-500">Inga ärenden i vald period.</p>
       ) : (
-        <>
-          <DataTable
-            prefKey="list.reports-matters"
-            columns={mattersTableColumns}
-            data={report.matters}
-            rowKey={(m) => m.matterId}
-            emptyMessage="Inga ärenden i vald period."
-          />
-          <div className="mt-3 px-4 py-2 bg-gray-50 border border-gray-200 rounded flex items-center justify-end gap-6 text-sm font-medium">
-            <span className="text-gray-700">Totalt:</span>
-            <span className="font-mono">{formatMinutes(report.totals.totalMinutes)}</span>
-            <span className="font-mono">deb. {formatMinutes(report.totals.billableMinutes)}</span>
-            <span className="font-mono">{formatCurrency(report.totals.workValueOre)}</span>
-            <span className="font-mono">{report.totals.expenseOre > 0 ? formatCurrency(report.totals.expenseOre) : "—"}</span>
-          </div>
-        </>
+        <DataTable
+          prefKey="list.reports-matters"
+          columns={mattersTableColumns}
+          data={report.matters}
+          rowKey={(m) => m.matterId}
+          emptyMessage="Inga ärenden i vald period."
+        />
       )}
     </div>
   );
@@ -238,10 +236,13 @@ const weeklyColumns: Column<WeekRow>[] = [
   { key: "period", label: "Period", sortable: true, sortValue: (r) => r.start,
     render: (r) => <span className="text-xs text-gray-500 whitespace-nowrap">{r.start.slice(5)} – {r.end.slice(5)}</span> },
   { key: "totalMinutes", label: "Tid", sortable: true, align: "right", sortValue: (r) => r.totalMinutes,
+    summary: (rs) => <span className="font-mono">{formatMinutes(rs.reduce((s, r) => s + r.totalMinutes, 0))}</span>,
     render: (r) => <span className="font-mono">{r.totalMinutes > 0 ? formatMinutes(r.totalMinutes) : "—"}</span> },
   { key: "billableMinutes", label: "Deb. tid", sortable: true, align: "right", sortValue: (r) => r.billableMinutes,
+    summary: (rs) => <strong className="font-mono">{formatMinutes(rs.reduce((s, r) => s + r.billableMinutes, 0))}</strong>,
     render: (r) => <span className="font-mono">{r.billableMinutes > 0 ? <strong>{formatMinutes(r.billableMinutes)}</strong> : "—"}</span> },
   { key: "workValueOre", label: "Arbetsvärde", sortable: true, align: "right", sortValue: (r) => r.workValueOre,
+    summary: (rs) => <span className="font-mono">{formatCurrency(rs.reduce((s, r) => s + r.workValueOre, 0))}</span>,
     render: (r) => <span className="font-mono">{r.workValueOre > 0 ? formatCurrency(r.workValueOre) : "—"}</span> },
 ];
 
@@ -258,21 +259,13 @@ function WeeklyTable({ report }: { report: Report }) {
       {!anyActivity ? (
         <p className="text-sm text-gray-500">Ingen tid registrerad i vald period.</p>
       ) : (
-        <>
-          <DataTable
-            prefKey="list.reports-weekly"
-            columns={weeklyColumns}
-            data={report.weeklyRows}
-            rowKey={(r) => `${r.isoYear}-${r.week}`}
-            emptyMessage="Inga veckor."
-          />
-          <div className="mt-3 px-4 py-2 bg-gray-50 border border-gray-200 rounded flex items-center justify-end gap-6 text-sm font-medium">
-            <span className="text-gray-700">Totalt:</span>
-            <span className="font-mono">{formatMinutes(report.totals.totalMinutes)}</span>
-            <span className="font-mono">deb. {formatMinutes(report.totals.billableMinutes)}</span>
-            <span className="font-mono">{formatCurrency(report.totals.workValueOre)}</span>
-          </div>
-        </>
+        <DataTable
+          prefKey="list.reports-weekly"
+          columns={weeklyColumns}
+          data={report.weeklyRows}
+          rowKey={(r) => `${r.isoYear}-${r.week}`}
+          emptyMessage="Inga veckor."
+        />
       )}
     </div>
   );
@@ -290,15 +283,18 @@ const unbilledColumns: Column<UnbilledRow>[] = [
   { key: "payment", label: "Betalning", sortable: true, sortValue: (r) => labelForPaymentMethod(r.paymentMethod),
     render: (r) => <PaymentBadge method={r.paymentMethod} /> },
   { key: "timeOre", label: "Tid", sortable: true, align: "right", sortValue: (r) => r.timeOre,
+    summary: (rs) => <span className="font-mono">{formatCurrency(rs.reduce((s, r) => s + r.timeOre, 0))}</span>,
     render: (r) => <span className="font-mono">{r.timeOre > 0 ? formatCurrency(r.timeOre) : "—"}</span> },
   { key: "expenseOre", label: "Utlägg", sortable: true, align: "right", sortValue: (r) => r.expenseOre,
+    summary: (rs) => <span className="font-mono">{formatCurrency(rs.reduce((s, r) => s + r.expenseOre, 0))}</span>,
     render: (r) => <span className="font-mono">{r.expenseOre > 0 ? formatCurrency(r.expenseOre) : "—"}</span> },
   { key: "total", label: "Summa", sortable: true, align: "right", sortValue: (r) => r.total,
+    summary: (rs) => <span className="font-mono font-medium">{formatCurrency(rs.reduce((s, r) => s + r.total, 0))}</span>,
     render: (r) => <span className="font-mono font-medium">{formatCurrency(r.total)}</span> },
 ];
 
 function UnbilledTable({ report }: { report: Report }) {
-  const { rows, total } = report.unbilled;
+  const { rows } = report.unbilled;
 
   // Summera per kreditrisk — visar hur stor andel av ofakturerat arbete
   // som ligger under respektive risknivå.
@@ -350,10 +346,6 @@ function UnbilledTable({ report }: { report: Report }) {
             rowKey={(r) => r.matterId}
             emptyMessage="Inget ofakturerat."
           />
-          <div className="mt-3 px-4 py-2 bg-gray-50 border border-gray-200 rounded flex items-center justify-end gap-6 text-sm font-medium">
-            <span className="text-gray-700">Totalt upparbetat, icke fakturerat:</span>
-            <span className="font-mono">{formatCurrency(total)}</span>
-          </div>
         </>
       )}
     </div>

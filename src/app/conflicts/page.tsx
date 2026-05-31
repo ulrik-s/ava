@@ -64,7 +64,6 @@ export default function ConflictsPage() {
   const [searchType, setSearchType] = useState<"name" | "personalNumber" | "both">("both");
 
   const checkConflict = trpc.conflict.check.useMutation();
-  const history = trpc.conflict.history.useQuery({ page: 1, pageSize: 10 });
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
@@ -135,32 +134,6 @@ export default function ConflictsPage() {
         </div>
       )}
 
-      <div className="bg-white rounded-lg border border-gray-200">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="font-semibold text-gray-900">Senaste sökningar</h2>
-        </div>
-        <div className="divide-y divide-gray-100">
-          {history.data?.checks.map((check) => {
-            const results = check.results as Array<Record<string, unknown>>;
-            return (
-              <div key={check.id} className="px-6 py-3">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-medium text-gray-900">
-                    &quot;{check.searchTerm}&quot;
-                    <span className="ml-2 text-xs text-gray-500">({check.searchType})</span>
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    {check.checkedBy?.name ?? "—"} · {new Date(check.createdAt).toLocaleString("sv-SE")}
-                  </p>
-                </div>
-                <p className={`text-xs mt-1 ${results.length > 0 ? "text-amber-600" : "text-green-600"}`}>
-                  {results.length > 0 ? `${results.length} träff(ar)` : "Ingen träff"}
-                </p>
-              </div>
-            );
-          })}
-        </div>
-      </div>
     </div>
   );
 }

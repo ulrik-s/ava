@@ -121,35 +121,9 @@ describe("ConflictsPage", () => {
     expect(screen.getByText("Server-fel")).toBeInTheDocument();
   });
 
-  it("renderar historik-checks", () => {
-    historyQuery.data = {
-      checks: [
-        {
-          id: "h1",
-          searchTerm: "Anna",
-          searchType: "both",
-          checkedBy: { name: "Lisa" },
-          createdAt: new Date("2026-04-01"),
-          results: [{ contactId: "c1" }],
-        },
-        {
-          id: "h2",
-          searchTerm: "Bertil",
-          searchType: "name",
-          checkedBy: { name: "Lisa" },
-          createdAt: new Date("2026-04-02"),
-          results: [],
-        },
-      ],
-      total: 2,
-      pages: 1,
-    };
-    render(<ConflictsPage />);
-    expect(screen.getAllByText(/Anna/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/Bertil/).length).toBeGreaterThan(0);
-    expect(screen.getByText(/1 träff\(ar\)/)).toBeInTheDocument();
-    expect(screen.getByText(/Ingen träff/)).toBeInTheDocument();
-  });
+  // 'Senaste sökningar'-panelen är borttagen — UI fokuserar på pågående
+  // sökning + dess träffar. Historik-data finns fortfarande server-side
+  // för audit men visas inte i UI:t (kan exponeras igen vid behov).
 
   it("visar disabled-läge när isPending", () => {
     checkState.isPending = true;
