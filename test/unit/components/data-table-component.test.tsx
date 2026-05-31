@@ -148,4 +148,26 @@ describe("DataTable", () => {
     render(<DataTable prefKey="x" columns={cols} data={rows} rowKey={(r) => r.id} />);
     expect(screen.getByText(/Gruppering: Namn/)).toBeInTheDocument();
   });
+
+  it("'+ Visa kolumn'-knapp dyker upp i toolbar när någon kolumn är dold", () => {
+    persisted.data = { user: { columns: [{ key: "age", hidden: true }] }, org: null };
+    render(<DataTable prefKey="x" columns={cols} data={rows} rowKey={(r) => r.id} />);
+    expect(screen.getByText(/\+ Visa kolumn/)).toBeInTheDocument();
+  });
+
+  it("klick på '+ Visa kolumn' öppnar lista med dolda kolumner", () => {
+    persisted.data = { user: { columns: [{ key: "age", hidden: true }] }, org: null };
+    render(<DataTable prefKey="x" columns={cols} data={rows} rowKey={(r) => r.id} />);
+    fireEvent.click(screen.getByText(/\+ Visa kolumn/));
+    expect(screen.getByText("Dolda kolumner")).toBeInTheDocument();
+    // "Ålder" finns både i lista och i header (osynlig pga hidden)
+    const ages = screen.getAllByText("Ålder");
+    expect(ages.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("'+ Visa kolumn' visas INTE när inga kolumner är dolda", () => {
+    persisted.data = { user: { sortBy: "name" }, org: null };
+    render(<DataTable prefKey="x" columns={cols} data={rows} rowKey={(r) => r.id} />);
+    expect(screen.queryByText(/\+ Visa kolumn/)).not.toBeInTheDocument();
+  });
 });

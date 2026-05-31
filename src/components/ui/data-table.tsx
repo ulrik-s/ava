@@ -242,6 +242,10 @@ export function DataTable<T>({ prefKey, columns, data, rowKey, onRowClick, empty
           onClearSort={() => update({ sortBy: undefined, sortDir: undefined })}
           onClearFilter={(key) => update({ filters: { ...(prefs.filters ?? {}), [key]: "" } })}
           onClearGroup={() => update({ groupBy: undefined })}
+          onUnhide={(key) => {
+            const next = (prefs.columns ?? []).map((c) => c.key === key ? { ...c, hidden: false } : c);
+            update({ columns: next });
+          }}
           onResetAll={resetPersonal}
           isAdmin={isAdmin}
           hasOrgPref={persisted.data?.org != null}
@@ -277,11 +281,45 @@ interface ToolbarProps<T> {
   onClearSort: () => void;
   onClearFilter: (key: string) => void;
   onClearGroup: () => void;
+  onUnhide: (key: string) => void;
   onResetAll: () => void;
   isAdmin: boolean;
   hasOrgPref: boolean;
   onSaveAsOrgDefault: () => void;
   onRemoveOrgDefault: () => void;
+}
+
+function hiddenColumns<T>(prefs: DataTablePrefs, columns: Column<T>[]): Column<T>[] {
+  const hidden = new Set((prefs.columns ?? []).filter((c) => c.hidden).map((c) => c.key));
+  return columns.filter((c) => hidden.has(c.key));
+}
+
+function ShowHiddenButton<T>({ hidden, onUnhide }: { hidden: Column<T>[]; onUnhide: (key: string) => void }) {
+  const [open, setOpen] = useState(false);
+  if (hidden.length === 0) return null;
+  return (
+    <div className="relative">
+      <button type="button" onClick={() => setOpen((v) => !v)}
+        className="text-xs px-3 py-1 border border-gray-300 rounded hover:bg-gray-50 text-gray-700 inline-flex items-center gap-1">
+        + Visa kolumn <span className="text-gray-400">({hidden.length})</span>
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-full mt-1 z-40 min-w-[12rem] bg-white border border-gray-200 rounded shadow-lg p-1">
+            <p className="px-2 pt-1 pb-1 text-[10px] font-semibold uppercase text-gray-400">Dolda kolumner</p>
+            {hidden.map((c) => (
+              <button key={c.key} type="button"
+                onClick={() => { onUnhide(c.key); setOpen(false); }}
+                className="block w-full text-left px-2 py-1 text-xs text-gray-700 hover:bg-gray-50 rounded">
+                {c.label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
 }
 
 function labelFor<T>(columns: Column<T>[], key: string): string {
@@ -331,15 +369,17 @@ function ToolbarAdminButtons({ hasOrgPref, onSaveAsOrgDefault, onRemoveOrgDefaul
 }
 
 function ActivePrefsToolbar<T>(props: ToolbarProps<T>) {
-  const { prefs, columns, onClearSort, onClearFilter, onClearGroup, onResetAll,
+  const { prefs, columns, onClearSort, onClearFilter, onClearGroup, onUnhide, onResetAll,
     isAdmin, hasOrgPref, onSaveAsOrgDefault, onRemoveOrgDefault } = props;
   const hasAny = hasOverrides(prefs);
-  if (!hasAny && !isAdmin) return null;
+  const hidden = hiddenColumns(prefs, columns);
+  if (!hasAny && !isAdmin && hidden.length === 0) return null;
   return (
     <div className="mb-2 flex flex-wrap items-center gap-2">
       <ActiveChips prefs={prefs} columns={columns}
         onClearSort={onClearSort} onClearFilter={onClearFilter} onClearGroup={onClearGroup} />
       <span className="flex-1" />
+      <ShowHiddenButton hidden={hidden} onUnhide={onUnhide} />
       {hasAny && (
         <button type="button" onClick={onResetAll}
           className="text-xs px-3 py-1 border border-gray-300 rounded hover:bg-gray-50 text-gray-700">
