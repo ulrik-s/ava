@@ -30,6 +30,8 @@ interface Expense {
   user?: { name: string };
   vatRate?: number;
   vatIncluded?: boolean;
+  invoiceId?: string | null;
+  invoice?: { id: string; invoiceNumber?: string | null } | null;
 }
 
 function initialForm(): ExpenseForm {
@@ -82,7 +84,7 @@ function computeTotals(expenses: Expense[]): { exclVat: number; vat: number; inc
   );
 }
 
-// eslint-disable-next-line complexity -- TODO: refactor (JSX-conditionals i header + summary)
+ 
 export function ExpenseSection({ matterId, isTaxeArende }: Props) {
   const utils = trpc.useUtils();
   const expenses = trpc.expense.list.useQuery({ matterId });
@@ -112,36 +114,66 @@ export function ExpenseSection({ matterId, isTaxeArende }: Props) {
   }
 
   const items = (expenses.data?.expenses ?? []) as Expense[];
-  const totals = computeTotals(items);
   const isPending = createExpense.isPending || updateExpense.isPending;
 
+  function vatOf(e: Expense) {
+    return splitVat({ amount: e.amount, vatRate: e.vatRate ?? 2500, vatIncluded: e.vatIncluded ?? true });
+  }
+  function invoiceLabel(e: Expense): string {
+    return e.invoice?.invoiceNumber ?? (e.invoiceId ? "(faktura)" : "Ej fakturerad");
+  }
+  const isInvoiced = (e: Expense): boolean => e.invoiceId != null && e.invoiceId !== "";
   const columns: Column<Expense>[] = [
-    { key: "date", label: "Datum", sortable: true, sortValue: (e) => new Date(e.date),
+    { key: "date", label: "Datum", sortable: true, filterable: true, sortValue: (e) => new Date(e.date),
+      filterValue: (e) => new Date(e.date).toLocaleDateString("sv-SE"),
       render: (e) => <span className="text-sm text-gray-500 whitespace-nowrap">{new Date(e.date).toLocaleDateString("sv-SE")}</span> },
-    { key: "user", label: "Av", sortable: true, sortValue: (e) => e.user?.name ?? "",
+    { key: "user", label: "Av", sortable: true, filterable: true, groupable: true,
+      sortValue: (e) => e.user?.name ?? "", filterValue: (e) => e.user?.name ?? "",
       render: (e) => <span className="text-sm text-gray-900 whitespace-nowrap">{e.user?.name ?? "—"}</span> },
-    { key: "description", label: "Beskrivning", sortable: true, sortValue: (e) => e.description,
+    { key: "description", label: "Beskrivning", sortable: true, filterable: true,
+      sortValue: (e) => e.description, filterValue: (e) => e.description,
       render: (e) => <span className="text-sm text-gray-700">{e.description}</span> },
     { key: "exclVat", label: "Exkl moms", sortable: true, align: "right",
-      sortValue: (e) => splitVat({ amount: e.amount, vatRate: e.vatRate ?? 2500, vatIncluded: e.vatIncluded ?? true }).exclVat,
-      render: (e) => <span className="text-sm font-mono text-gray-900 whitespace-nowrap">{formatCurrency(splitVat({ amount: e.amount, vatRate: e.vatRate ?? 2500, vatIncluded: e.vatIncluded ?? true }).exclVat)}</span> },
+      sortValue: (e) => vatOf(e).exclVat,
+      render: (e) => <span className="text-sm font-mono text-gray-900 whitespace-nowrap">{formatCurrency(vatOf(e).exclVat)}</span> },
     { key: "vat", label: "Moms", sortable: true, align: "right",
-      sortValue: (e) => splitVat({ amount: e.amount, vatRate: e.vatRate ?? 2500, vatIncluded: e.vatIncluded ?? true }).vat,
-      render: (e) => <span className="text-sm font-mono text-gray-500 whitespace-nowrap">{formatCurrency(splitVat({ amount: e.amount, vatRate: e.vatRate ?? 2500, vatIncluded: e.vatIncluded ?? true }).vat)}</span> },
+      sortValue: (e) => vatOf(e).vat,
+      render: (e) => <span className="text-sm font-mono text-gray-500 whitespace-nowrap">{formatCurrency(vatOf(e).vat)}</span> },
     { key: "inclVat", label: "Inkl moms", sortable: true, align: "right",
-      sortValue: (e) => splitVat({ amount: e.amount, vatRate: e.vatRate ?? 2500, vatIncluded: e.vatIncluded ?? true }).inclVat,
-      render: (e) => <span className="text-sm font-mono text-gray-900 whitespace-nowrap">{formatCurrency(splitVat({ amount: e.amount, vatRate: e.vatRate ?? 2500, vatIncluded: e.vatIncluded ?? true }).inclVat)}</span> },
-    { key: "billable", label: "Deb.", sortable: true, sortValue: (e) => (e.billable ? 1 : 0),
+      sortValue: (e) => vatOf(e).inclVat,
+      render: (e) => <span className="text-sm font-mono text-gray-900 whitespace-nowrap">{formatCurrency(vatOf(e).inclVat)}</span> },
+    { key: "billable", label: "Deb.", sortable: true, filterable: true,
+      sortValue: (e) => (e.billable ? 1 : 0), filterValue: (e) => (e.billable ? "Ja" : "Nej"),
       render: (e) => <span className="text-sm">{e.billable ? "Ja" : "Nej"}</span> },
+    { key: "invoice", label: "Faktura", sortable: true, filterable: true, groupable: true,
+      sortValue: (e) => invoiceLabel(e), filterValue: (e) => invoiceLabel(e), groupValue: (e) => invoiceLabel(e),
+      render: (e) => (
+        isInvoiced(e) && e.invoiceId
+          ? <a href={`/invoices/${e.invoiceId}`} className="text-sm text-blue-600 hover:underline">{e.invoice?.invoiceNumber ?? e.invoiceId.slice(0, 8)}</a>
+          : <span className="text-sm text-gray-400">—</span>
+      ),
+    },
     { key: "actions", label: "", sortable: false, align: "right", hideable: false,
       render: (e) => (
-        <span className="whitespace-nowrap">
-          <button onClick={() => startEdit(e)} className="text-xs text-gray-500 hover:text-blue-600 hover:underline mr-3">Ändra</button>
-          <button onClick={() => { if (confirm("Ta bort utlägget?")) deleteExpense.mutate({ id: e.id }); }} className="text-xs text-red-500 hover:underline">Ta bort</button>
-        </span>
+        isInvoiced(e)
+          ? <span className="text-xs text-gray-400 italic">Låst (på faktura)</span>
+          : <span className="whitespace-nowrap">
+              <button onClick={() => startEdit(e)} className="text-xs text-gray-500 hover:text-blue-600 hover:underline mr-3">Ändra</button>
+              <button onClick={() => { if (confirm("Ta bort utlägget?")) deleteExpense.mutate({ id: e.id }); }} className="text-xs text-red-500 hover:underline">Ta bort</button>
+            </span>
       ),
     },
   ];
+
+  function footerContent(rows: Expense[]): Partial<Record<string, React.ReactNode>> {
+    const t = computeTotals(rows);
+    return {
+      description: <span className="text-gray-700">Summa</span>,
+      exclVat: <span className="font-mono text-gray-900">{formatCurrency(t.exclVat)}</span>,
+      vat: <span className="font-mono text-gray-700">{formatCurrency(t.vat)}</span>,
+      inclVat: <span className="font-mono text-gray-900">{formatCurrency(t.inclVat)}</span>,
+    };
+  }
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 lg:col-span-2">
@@ -162,15 +194,8 @@ export function ExpenseSection({ matterId, isTaxeArende }: Props) {
           data={items}
           rowKey={(e) => e.id}
           emptyMessage="Inga utlägg registrerade"
+          footer={footerContent}
         />
-        {items.length > 0 && (
-          <div className="mt-2 px-4 py-2 bg-gray-50 border border-gray-200 rounded text-sm flex items-center justify-end gap-6 font-medium">
-            <span className="text-gray-700">Summa:</span>
-            <span className="font-mono">Exkl: {formatCurrency(totals.exclVat)}</span>
-            <span className="font-mono">Moms: {formatCurrency(totals.vat)}</span>
-            <span className="font-mono">Inkl: {formatCurrency(totals.inclVat)}</span>
-          </div>
-        )}
       </div>
 
       <Modal open={showCreate} title="Nytt utlägg" onClose={resetClose} widthClass="max-w-xl">

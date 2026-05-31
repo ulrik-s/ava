@@ -210,6 +210,7 @@ export class DemoDataStore implements IDataStore {
     this.expenses = this.makeDelegate("expenses", {
       matter: this.rel("matters", "id", "matterId", "one"),
       user: this.rel("users", "id", "userId", "one"),
+      invoice: this.rel("invoices", "id", "invoiceId", "one"),
     }) as unknown as ExpenseDelegate;
     this.users = this.makeDelegate("users") as unknown as UserDelegate;
     this.organizations = this.makeDelegate("organizations") as unknown as OrganizationDelegate;

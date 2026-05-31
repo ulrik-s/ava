@@ -7,13 +7,13 @@
  *   • Klick på rubrik → sortera asc/desc/none.
  *   • Drag i höger kant → ändra kolumnbredd.
  *   • Drag på rubrik → ordna om kolumner.
- *   • Trepunktsmeny → dölj/visa kolumner.
+ *   • Trepunktsmeny → dölj/visa kolumner, gruppera på kolumn.
+ *   • Per-kolumn-text-filter (header-input) när col.filterable=true.
+ *   • Footer-prop renderar `<tfoot>`-rad som alignar med kolumnerna —
+ *     använd för Summa-rader (utlägg, tid m.fl.).
+ *   • "Återställ"-knapp synlig när användaren har överrider:t prefs.
  *   • Allt sparas per user via prefs-API:t. Admin-globala defaults via
  *     prefs.setOrgDefault. Merge: personal > org > komponent-default.
- *
- * Användning:
- *   <DataTable prefKey="list.contacts" columns={cols} data={rows}
- *     rowKey={(c) => c.id} onRowClick={(c) => router.push(...)} />
  */
 
 import { useMemo, useRef, useState } from "react";
@@ -27,7 +27,13 @@ export interface Column<T> {
   render: (row: T) => React.ReactNode;
   /** Pure-data-värde för sortering (default = render-output som sträng). */
   sortValue?: (row: T) => string | number | Date | null;
+  /** Värde som filter-text matchas mot (default: render-output som string). */
+  filterValue?: (row: T) => string;
+  /** Värde som används vid groupering (default: filterValue eller render). */
+  groupValue?: (row: T) => string;
   sortable?: boolean;
+  filterable?: boolean;
+  groupable?: boolean;
   defaultWidth?: number;
   align?: "left" | "right" | "center";
   hideable?: boolean;
@@ -40,7 +46,13 @@ export interface DataTablePrefs {
   order?: string[];
   /** Per-kolumn-överrides. */
   columns?: Array<{ key: string; width?: number; hidden?: boolean }>;
+  /** Per-kolumn-key filter-text (case-insensitive substring-match). */
+  filters?: Record<string, string>;
+  /** Kolumn-key att gruppera på. Hela tabellen presenteras då i sektioner. */
+  groupBy?: string;
 }
+
+type FooterFn<T> = (rows: T[]) => Partial<Record<string, React.ReactNode>>;
 
 interface Props<T> {
   prefKey: string;
@@ -49,11 +61,13 @@ interface Props<T> {
   rowKey: (row: T) => string;
   onRowClick?: (row: T) => void;
   emptyMessage?: string;
+  /** Per-kolumn-key footer-innehåll. Renderas i `<tfoot>` så cellerna
+   *  alignar med kolumnerna. Använd för Summa-rader. */
+  footer?: FooterFn<T>;
 }
 
-const PREF_KEYS = ["sortBy", "sortDir", "order", "columns"] as const;
+const PREF_KEYS = ["sortBy", "sortDir", "order", "columns", "filters", "groupBy"] as const;
 
-/** Slå ihop user-pref över org-pref (personal vinner per fält). */
 export function mergePrefs(user: DataTablePrefs | null | undefined, org: DataTablePrefs | null | undefined): DataTablePrefs {
   const out: DataTablePrefs = {};
   for (const k of PREF_KEYS) {
@@ -63,7 +77,6 @@ export function mergePrefs(user: DataTablePrefs | null | undefined, org: DataTab
   return out;
 }
 
-/** Coerca till comparable: number för numbers/Dates, lowercase string för resten, null för null/undefined. */
 function coerce(v: unknown): string | number | null {
   if (v == null) return null;
   if (v instanceof Date) return v.getTime();
@@ -73,7 +86,6 @@ function coerce(v: unknown): string | number | null {
 
 function nullCmp(a: string | number | null, b: string | number | null, dir: SortDir): number {
   if (a == null && b == null) return 0;
-  // null sist i asc, först i desc
   return a == null ? (dir === "asc" ? 1 : -1) : (dir === "asc" ? -1 : 1);
 }
 
@@ -95,7 +107,39 @@ export function sortRows<T>(rows: T[], columns: Column<T>[], sortBy?: string, so
   return [...rows].sort((a, b) => compareValues(valueOf(a), valueOf(b), sortDir));
 }
 
-/** Beräkna synlig kolumnordning. */
+function columnValueAsString<T>(col: Column<T>, row: T): string {
+  if (col.filterValue) return col.filterValue(row);
+  return String(col.render(row) ?? "");
+}
+
+export function filterRows<T>(rows: T[], columns: Column<T>[], filters?: Record<string, string>): T[] {
+  const active = Object.entries(filters ?? {}).filter(([, v]) => v && String(v).trim() !== "");
+  if (active.length === 0) return rows;
+  const colByKey = new Map(columns.map((c) => [c.key, c]));
+  return rows.filter((r) => active.every(([key, text]) => {
+    const col = colByKey.get(key);
+    if (!col) return true;
+    return columnValueAsString(col, r).toLowerCase().includes(String(text).toLowerCase());
+  }));
+}
+
+export interface RowGroup<T> { group: string | null; rows: T[] }
+
+export function groupRows<T>(rows: T[], columns: Column<T>[], groupBy?: string): RowGroup<T>[] {
+  if (!groupBy) return [{ group: null, rows }];
+  const col = columns.find((c) => c.key === groupBy);
+  if (!col) return [{ group: null, rows }];
+  const valueOf = col.groupValue ?? col.filterValue ?? ((r: T) => String(col.render(r) ?? ""));
+  const groups = new Map<string, T[]>();
+  for (const r of rows) {
+    const k = valueOf(r) || "(tomt)";
+    const list = groups.get(k);
+    if (list) list.push(r);
+    else groups.set(k, [r]);
+  }
+  return Array.from(groups.entries()).map(([group, gRows]) => ({ group, rows: gRows }));
+}
+
 export function visibleColumns<T>(columns: Column<T>[], prefs: DataTablePrefs): Column<T>[] {
   const overrides = new Map((prefs.columns ?? []).map((c) => [c.key, c]));
   const visible = columns.filter((c) => !(overrides.get(c.key)?.hidden));
@@ -108,7 +152,22 @@ function widthOf<T>(col: Column<T>, prefs: DataTablePrefs): number | undefined {
   return prefs.columns?.find((c) => c.key === col.key)?.width ?? col.defaultWidth;
 }
 
-export function DataTable<T>({ prefKey, columns, data, rowKey, onRowClick, emptyMessage }: Props<T>) {
+function hasActiveFilter(filters?: Record<string, string>): boolean {
+  return Object.values(filters ?? {}).some((v) => v != null && String(v).trim() !== "");
+}
+
+function hasColumnOverride(cols?: Array<{ hidden?: boolean; width?: number }>): boolean {
+  return (cols ?? []).some((c) => c.hidden || c.width !== undefined);
+}
+
+export function hasOverrides(prefs: DataTablePrefs): boolean {
+  if (prefs.sortBy || prefs.groupBy) return true;
+  if (hasActiveFilter(prefs.filters)) return true;
+  if (hasColumnOverride(prefs.columns)) return true;
+  return Boolean(prefs.order && prefs.order.length > 0);
+}
+
+export function DataTable<T>({ prefKey, columns, data, rowKey, onRowClick, emptyMessage, footer }: Props<T>) {
   const persisted = trpc.prefs.get.useQuery({ key: prefKey });
   const save = trpc.prefs.save.useMutation();
   const clear = trpc.prefs.clear.useMutation();
@@ -117,8 +176,6 @@ export function DataTable<T>({ prefKey, columns, data, rowKey, onRowClick, empty
   const me = trpc.user.current.useQuery();
   const isAdmin = me.data?.role === "ADMIN";
   const utils = trpc.useUtils();
-  // Härledd från query (initial); local-overrides när användaren ändrar något.
-  // Detta undviker setState-i-useEffect-mönstret (cascading-render-varning).
   const remote = useMemo(
     () => mergePrefs(persisted.data?.user as DataTablePrefs | null, persisted.data?.org as DataTablePrefs | null),
     [persisted.data],
@@ -126,7 +183,6 @@ export function DataTable<T>({ prefKey, columns, data, rowKey, onRowClick, empty
   const [localPrefs, setLocalPrefs] = useState<DataTablePrefs | null>(null);
   const prefs = localPrefs ?? remote;
 
-  // Debounce-sparning
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const persist = (next: DataTablePrefs): void => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
@@ -141,10 +197,13 @@ export function DataTable<T>({ prefKey, columns, data, rowKey, onRowClick, empty
   };
 
   const vCols = useMemo(() => visibleColumns(columns, prefs), [columns, prefs]);
-  const rows = useMemo(() => sortRows(data, columns, prefs.sortBy, prefs.sortDir), [data, columns, prefs.sortBy, prefs.sortDir]);
+  const sorted = useMemo(() => sortRows(data, columns, prefs.sortBy, prefs.sortDir), [data, columns, prefs.sortBy, prefs.sortDir]);
+  const filtered = useMemo(() => filterRows(sorted, columns, prefs.filters), [sorted, columns, prefs.filters]);
+  const grouped = useMemo(() => groupRows(filtered, columns, prefs.groupBy), [filtered, columns, prefs.groupBy]);
+  const showOverrideBar = hasOverrides(prefs);
 
   const resetPersonal = (): void => {
-    setLocalPrefs(null);
+    setLocalPrefs({});
     clear.mutate({ key: prefKey }, { onSuccess: () => utils.prefs.get.invalidate({ key: prefKey }) });
   };
   const saveAsOrgDefault = (): void => {
@@ -155,33 +214,128 @@ export function DataTable<T>({ prefKey, columns, data, rowKey, onRowClick, empty
   };
 
   return (
-    <div className="overflow-x-auto bg-white border border-gray-200 rounded-lg">
-      <table className="min-w-full text-sm">
-        <DataTableHeader
-          columns={columns} vCols={vCols} prefs={prefs} update={update}
-          isAdmin={isAdmin}
-          hasPersonalPref={persisted.data?.user != null}
-          hasOrgPref={persisted.data?.org != null}
-          onResetPersonal={resetPersonal}
-          onSaveAsOrgDefault={saveAsOrgDefault}
-          onRemoveOrgDefault={removeOrgDefault}
-        />
-        <tbody className="divide-y divide-gray-100">
-          {rows.length === 0 ? (
-            <tr><td colSpan={vCols.length + 1} className="px-4 py-6 text-center text-sm text-gray-500">{emptyMessage ?? "Inget att visa."}</td></tr>
-          ) : rows.map((r) => (
-            <tr key={rowKey(r)} className={onRowClick ? "hover:bg-gray-50 cursor-pointer" : ""} onClick={onRowClick ? () => onRowClick(r) : undefined}>
-              {vCols.map((c) => (
-                <td key={c.key} style={{ width: widthOf(c, prefs), textAlign: c.align ?? "left" }} className="px-3 py-2 whitespace-nowrap">
-                  {c.render(r)}
-                </td>
-              ))}
-              <td className="w-4" />
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div>
+      {showOverrideBar && (
+        <div className="mb-2 flex items-center justify-end">
+          <button type="button" onClick={resetPersonal}
+            className="text-xs px-3 py-1 border border-gray-300 rounded hover:bg-gray-50 text-gray-700">
+            Återställ vy
+          </button>
+        </div>
+      )}
+      <div className="overflow-x-auto bg-white border border-gray-200 rounded-lg">
+        <table className="min-w-full text-sm">
+          <DataTableHeader
+            columns={columns} vCols={vCols} prefs={prefs} update={update}
+            isAdmin={isAdmin}
+            hasPersonalPref={persisted.data?.user != null}
+            hasOrgPref={persisted.data?.org != null}
+            onResetPersonal={resetPersonal}
+            onSaveAsOrgDefault={saveAsOrgDefault}
+            onRemoveOrgDefault={removeOrgDefault}
+          />
+          <tbody className="divide-y divide-gray-100">
+            <BodyRows
+              grouped={grouped}
+              vCols={vCols}
+              prefs={prefs}
+              rowKey={rowKey}
+              onRowClick={onRowClick}
+              emptyMessage={emptyMessage}
+            />
+          </tbody>
+          {footer && filtered.length > 0 && (
+            <FooterRow vCols={vCols} prefs={prefs} content={footer(filtered)} />
+          )}
+        </table>
+      </div>
     </div>
+  );
+}
+
+interface BodyProps<T> {
+  grouped: RowGroup<T>[];
+  vCols: Column<T>[];
+  prefs: DataTablePrefs;
+  rowKey: (row: T) => string;
+  onRowClick?: (row: T) => void;
+  emptyMessage?: string;
+}
+
+function BodyRows<T>({ grouped, vCols, prefs, rowKey, onRowClick, emptyMessage }: BodyProps<T>) {
+  const totalCols = vCols.length + 1;
+  const isEmpty = grouped.every((g) => g.rows.length === 0);
+  if (isEmpty) {
+    return (
+      <tr><td colSpan={totalCols} className="px-4 py-6 text-center text-sm text-gray-500">{emptyMessage ?? "Inget att visa."}</td></tr>
+    );
+  }
+  return (
+    <>{grouped.map((g) => (
+      <GroupBlock
+        key={g.group ?? "__all"}
+        group={g}
+        vCols={vCols}
+        prefs={prefs}
+        rowKey={rowKey}
+        onRowClick={onRowClick}
+      />
+    ))}</>
+  );
+}
+
+interface GroupBlockProps<T> {
+  group: RowGroup<T>;
+  vCols: Column<T>[];
+  prefs: DataTablePrefs;
+  rowKey: (row: T) => string;
+  onRowClick?: (row: T) => void;
+}
+
+function GroupBlock<T>({ group, vCols, prefs, rowKey, onRowClick }: GroupBlockProps<T>) {
+  const totalCols = vCols.length + 1;
+  return (
+    <>
+      {group.group !== null && (
+        <tr className="bg-blue-50">
+          <td colSpan={totalCols} className="px-3 py-2 text-xs font-semibold text-blue-900 uppercase tracking-wide">
+            {group.group} <span className="font-normal text-blue-700">({group.rows.length})</span>
+          </td>
+        </tr>
+      )}
+      {group.rows.map((r) => (
+        <tr key={rowKey(r)} className={onRowClick ? "hover:bg-gray-50 cursor-pointer" : ""} onClick={onRowClick ? () => onRowClick(r) : undefined}>
+          {vCols.map((c) => (
+            <td key={c.key} style={{ width: widthOf(c, prefs), textAlign: c.align ?? "left" }} className="px-3 py-2 whitespace-nowrap">
+              {c.render(r)}
+            </td>
+          ))}
+          <td className="w-4" />
+        </tr>
+      ))}
+    </>
+  );
+}
+
+interface FooterProps<T> {
+  vCols: Column<T>[];
+  prefs: DataTablePrefs;
+  content: Partial<Record<string, React.ReactNode>>;
+}
+
+function FooterRow<T>({ vCols, prefs, content }: FooterProps<T>) {
+  return (
+    <tfoot>
+      <tr className="bg-gray-50 border-t-2 border-gray-200 font-semibold">
+        {vCols.map((c) => (
+          <td key={c.key} style={{ width: widthOf(c, prefs), textAlign: c.align ?? "left" }}
+            className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">
+            {content[c.key] ?? ""}
+          </td>
+        ))}
+        <td className="w-4" />
+      </tr>
+    </tfoot>
   );
 }
 
@@ -225,6 +379,12 @@ function DataTableHeader<T>({ columns, vCols, prefs, update, isAdmin, hasPersona
       : [...cur, { key, hidden: true }];
     update({ columns: next });
   };
+  const onFilter = (key: string, value: string): void => {
+    update({ filters: { ...(prefs.filters ?? {}), [key]: value } });
+  };
+  const onGroupBy = (key: string | undefined): void => {
+    update({ groupBy: key });
+  };
 
   return (
     <thead className="bg-gray-50 text-left">
@@ -232,12 +392,16 @@ function DataTableHeader<T>({ columns, vCols, prefs, update, isAdmin, hasPersona
         {vCols.map((c) => (
           <HeaderCell
             key={c.key} col={c} sortKey={prefs.sortBy} sortDir={prefs.sortDir}
-            width={widthOf(c, prefs)} onSort={onSort} onReorder={onReorder} onResize={onResize}
+            width={widthOf(c, prefs)}
+            filterText={prefs.filters?.[c.key] ?? ""}
+            onSort={onSort} onReorder={onReorder} onResize={onResize} onFilter={onFilter}
           />
         ))}
         <th className="px-2 py-2 w-8">
           <ColumnMenu
-            columns={columns} prefs={prefs} onToggleHidden={onToggleHidden}
+            columns={columns} prefs={prefs}
+            onToggleHidden={onToggleHidden}
+            onGroupBy={onGroupBy}
             isAdmin={isAdmin}
             hasPersonalPref={hasPersonalPref}
             hasOrgPref={hasOrgPref}
@@ -256,18 +420,20 @@ interface HeaderCellProps<T> {
   sortKey?: string;
   sortDir?: SortDir;
   width?: number;
+  filterText: string;
   onSort: (key: string) => void;
   onReorder: (from: string, to: string) => void;
   onResize: (key: string, width: number) => void;
+  onFilter: (key: string, value: string) => void;
 }
 
-function HeaderCell<T>({ col, sortKey, sortDir, width, onSort, onReorder, onResize }: HeaderCellProps<T>) {
+function HeaderCell<T>({ col, sortKey, sortDir, width, filterText, onSort, onReorder, onResize, onFilter }: HeaderCellProps<T>) {
   const isSorted = sortKey === col.key;
   const arrow = !isSorted ? "" : sortDir === "asc" ? " ↑" : " ↓";
   return (
     <th
       style={{ width, textAlign: col.align ?? "left" }}
-      className="relative px-3 py-2 text-xs font-semibold text-gray-700 select-none"
+      className="relative px-3 py-2 text-xs font-semibold text-gray-700 select-none align-top"
       draggable
       onDragStart={(e) => e.dataTransfer.setData("text/x-col", col.key)}
       onDragOver={(e) => e.preventDefault()}
@@ -281,6 +447,16 @@ function HeaderCell<T>({ col, sortKey, sortDir, width, onSort, onReorder, onResi
       >
         {col.label}{arrow}
       </button>
+      {col.filterable && (
+        <input
+          type="text"
+          value={filterText}
+          onChange={(e) => onFilter(col.key, e.target.value)}
+          placeholder="Filter…"
+          className="mt-1 block w-full text-xs font-normal border border-gray-200 rounded px-1 py-0.5 focus:outline-none focus:border-blue-400"
+          onClick={(e) => e.stopPropagation()}
+        />
+      )}
       <ResizeHandle width={width} onResize={(w) => onResize(col.key, w)} />
     </th>
   );
@@ -303,6 +479,7 @@ interface ColumnMenuProps<T> {
   columns: Column<T>[];
   prefs: DataTablePrefs;
   onToggleHidden: (key: string) => void;
+  onGroupBy: (key: string | undefined) => void;
   isAdmin: boolean;
   hasPersonalPref: boolean;
   hasOrgPref: boolean;
@@ -312,9 +489,10 @@ interface ColumnMenuProps<T> {
 }
 
 function ColumnMenu<T>(props: ColumnMenuProps<T>) {
-  const { columns, prefs, onToggleHidden, isAdmin, hasPersonalPref, hasOrgPref, onResetPersonal, onSaveAsOrgDefault, onRemoveOrgDefault } = props;
+  const { columns, prefs, onToggleHidden, onGroupBy, isAdmin, hasPersonalPref, hasOrgPref, onResetPersonal, onSaveAsOrgDefault, onRemoveOrgDefault } = props;
   const [open, setOpen] = useState(false);
   const hidden = new Set((prefs.columns ?? []).filter((c) => c.hidden).map((c) => c.key));
+  const groupable = columns.filter((c) => c.groupable);
   return (
     <div className="relative">
       <button type="button" onClick={() => setOpen((v) => !v)} className="text-gray-400 hover:text-gray-700" aria-label="Kolumnval">⋯</button>
@@ -327,6 +505,24 @@ function ColumnMenu<T>(props: ColumnMenuProps<T>) {
               <span>{c.label}</span>
             </label>
           ))}
+          {groupable.length > 0 && (
+            <>
+              <div className="my-2 border-t border-gray-100" />
+              <p className="px-2 pt-1 pb-1 text-[10px] font-semibold uppercase text-gray-400">Gruppera på</p>
+              {groupable.map((c) => (
+                <button key={c.key} type="button" onClick={() => { onGroupBy(prefs.groupBy === c.key ? undefined : c.key); setOpen(false); }}
+                  className="block w-full text-left px-2 py-1 text-xs text-gray-700 hover:bg-gray-50 rounded">
+                  {prefs.groupBy === c.key ? "✓ " : ""}{c.label}
+                </button>
+              ))}
+              {prefs.groupBy && (
+                <button type="button" onClick={() => { onGroupBy(undefined); setOpen(false); }}
+                  className="block w-full text-left px-2 py-1 text-xs text-gray-500 hover:bg-gray-50 rounded">
+                  Ta bort gruppering
+                </button>
+              )}
+            </>
+          )}
           <div className="my-2 border-t border-gray-100" />
           {hasPersonalPref && (
             <button type="button" onClick={() => { onResetPersonal(); setOpen(false); }}
