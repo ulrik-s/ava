@@ -1,0 +1,7 @@
+# Compiled binaries
+ava-helper
+helper-app
+*.exe
+
+# Build artefacts
+dist/

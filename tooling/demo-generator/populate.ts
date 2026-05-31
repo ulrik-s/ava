@@ -93,9 +93,9 @@ async function createMatterContacts(c: AnyCaller, rows: Row[]): Promise<void> {
 }
 
 async function createTimeEntries(c: AnyCaller, rows: Row[]): Promise<void> {
-  for (const t of rows) {
+  for (const te of rows) {
     await c.timeEntry.create(
-      defined({ id: t.id, userId: t.userId, matterId: t.matterId, date: isoOrUndef(t.date), minutes: t.minutes, description: t.description, billable: t.billable, hourlyRate: t.hourlyRate, invoiceId: t.invoiceId, createdAt: isoOrUndef(t.createdAt) }),
+      defined({ id: te.id, userId: te.userId, matterId: te.matterId, date: isoOrUndef(te.date), minutes: te.minutes, description: te.description, billable: te.billable, hourlyRate: te.hourlyRate, invoiceId: te.invoiceId, createdAt: isoOrUndef(te.createdAt) }),
     );
   }
 }
@@ -119,9 +119,9 @@ async function createCalendarEvents(c: AnyCaller, rows: Row[]): Promise<void> {
 
 async function createTasks(c: AnyCaller, rows: Row[]): Promise<void> {
   // dueAt/completedAt/createdAt är z.date()-input → skicka Date direkt.
-  for (const t of rows) {
+  for (const tk of rows) {
     await c.task.create(
-      defined({ id: t.id, userId: t.userId, title: t.title, description: t.description, priority: t.priority, status: t.status, dueAt: t.dueAt, completedAt: t.completedAt, matterId: t.matterId, createdAt: t.createdAt }),
+      defined({ id: tk.id, userId: tk.userId, title: tk.title, description: tk.description, priority: tk.priority, status: tk.status, dueAt: tk.dueAt, completedAt: tk.completedAt, matterId: tk.matterId, createdAt: tk.createdAt }),
     );
   }
 }

@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { trpc } from "@/lib/client/trpc";
-import { ShieldAlert, UserX } from "lucide-react";
+import { ShieldAlert, UserX, UserRound } from "lucide-react";
 import { DataTable, type Column } from "@/components/ui/data-table";
+import { patchFirmaConfig } from "@/lib/client/firma/firma-config";
 
 const roleLabels: Record<string, string> = {
   ADMIN: "Admin",
@@ -21,10 +22,34 @@ interface UserRow {
   mileageRate?: number | null;
 }
 
+/** Logga in som en annan användare ("Bli X"). Admin-only — använder samma
+ *  patch som /login. Reloadar sidan så demo-bootstrap initierar
+ *  trpcClient med nytt principal-id. */
+export function becomeUser(u: Pick<UserRow, "id" | "name" | "email">): void {
+  if (typeof window === "undefined") return;
+  patchFirmaConfig({ principalId: u.id, authorName: u.name, authorEmail: u.email });
+  const basePath = process.env.NEXT_PUBLIC_DEMO_BASE_PATH ?? "";
+  window.location.replace(`${basePath}/`);
+}
+
+function BecomeButton({ user, onClick }: { user: UserRow; onClick: (u: UserRow) => void }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onClick(user)}
+      className="text-xs text-gray-400 hover:text-blue-600 inline-flex items-center gap-1"
+      title={`Logga in som ${user.name}`}
+    >
+      <UserRound size={12} /> Bli denna
+    </button>
+  );
+}
+
 function buildUserColumns(opts: {
   isAdmin: boolean;
   meId?: string;
   onDeactivate: (id: string, name: string) => void;
+  onBecome: (u: UserRow) => void;
 }): Column<UserRow>[] {
   const base: Column<UserRow>[] = [
     { key: "name", label: "Namn", sortable: true, sortValue: (u) => u.name,
@@ -48,14 +73,17 @@ function buildUserColumns(opts: {
     { key: "actions", label: "", sortable: false, align: "right", hideable: false,
       render: (u) => (
         u.id !== opts.meId ? (
-          <button
-            type="button"
-            onClick={() => opts.onDeactivate(u.id, u.name)}
-            className="text-xs text-gray-400 hover:text-red-600 inline-flex items-center gap-1"
-            title="Inaktivera"
-          >
-            <UserX size={12} /> Inaktivera
-          </button>
+          <span className="inline-flex items-center gap-3">
+            <BecomeButton user={u} onClick={opts.onBecome} />
+            <button
+              type="button"
+              onClick={() => opts.onDeactivate(u.id, u.name)}
+              className="text-xs text-gray-400 hover:text-red-600 inline-flex items-center gap-1"
+              title="Inaktivera"
+            >
+              <UserX size={12} /> Inaktivera
+            </button>
+          </span>
         ) : null
       ),
     },
@@ -82,6 +110,7 @@ export default function UsersPage() {
     isAdmin,
     meId: me.data?.id,
     onDeactivate: (id, name) => confirmDeactivate(id, name, deactivate.mutate),
+    onBecome: (u) => { if (confirm(`Logga in som ${u.name}?`)) becomeUser(u); },
   });
 
   return (

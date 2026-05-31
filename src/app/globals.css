@@ -73,7 +73,13 @@ body {
 .dark .border-gray-100 { border-color: #1e293b; }
 .dark .ring-gray-200 { --tw-ring-color: #334155; }
 
+/* Tailwind v4:s `divide-y` använder `> :not(:last-child)` med
+   `border-bottom`. v3-selektorn `> * + *` lämnas kvar som fallback
+   för kompatibilitet. Utan v4-varianten färgas FÖRSTA radens
+   border-bottom med default-tonen → ljus linje på dark bg. */
+.dark .divide-gray-100 > :not(:last-child),
 .dark .divide-gray-100 > * + * { border-color: #1e293b; }
+.dark .divide-gray-200 > :not(:last-child),
 .dark .divide-gray-200 > * + * { border-color: #334155; }
 
 /* Accent-text — lyft upp 600/700 → 300/400-tonen (HIG: desaturera och

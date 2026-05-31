@@ -23,10 +23,16 @@ export interface FirmaConfig {
   /** GitHub PAT eller motsvarande auth-token. Tomt för publik demo. */
   token: string;
   /**
-   * Org-id som filtreras i data:n. Default "demo-firma-ab" (matchar
-   * `ulrik-s/ava-demo`). Real firms sätter sin egen.
+   * Org-id som filtreras i data:n. Tom sträng på första start → demo-bootstrap
+   * hämtar värdet från `.ava/meta.json` (demo) eller failar tydligt
+   * (self-hosted). INGA hårdkodade demo-strängar längre.
    */
   organizationId: string;
+  /**
+   * Vald inloggad användares id. Tom → demo-bootstrap redirectar till
+   * `/login` så användaren kan välja konto. Sätts av login-flowet.
+   */
+  principalId?: string;
   /** Användarnamn för commits. */
   authorName: string;
   authorEmail: string;
@@ -62,7 +68,8 @@ const DEMO_DEFAULT: FirmaConfig = {
   tier: "demo",
   repo: DEMO_REPO,
   token: "",
-  organizationId: "demo-firma-ab",
+  // Tomt: web-appen läser värdet från `.ava/meta.json` vid bootstrap.
+  organizationId: "",
   authorName: "AVA Demo",
   authorEmail: "demo@ava.local",
 };
@@ -126,6 +133,16 @@ export function loadFirmaConfig(): FirmaConfig {
 export function saveFirmaConfig(cfg: FirmaConfig): void {
   if (typeof window === "undefined") return;
   localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg));
+}
+
+/**
+ * Patch:a en delmängd av config:en — t.ex. när login-flowet sätter
+ * `principalId` + `organizationId` efter att meta.json laddats.
+ */
+export function patchFirmaConfig(patch: Partial<FirmaConfig>): FirmaConfig {
+  const next = { ...loadFirmaConfig(), ...patch };
+  saveFirmaConfig(next);
+  return next;
 }
 
 export function resetToDemo(): void {

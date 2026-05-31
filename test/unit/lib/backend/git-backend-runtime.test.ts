@@ -32,16 +32,18 @@ function buildClient(runtime: GitBackendRuntime) {
   };
 }
 
+const seedOrgPrincipal = new GitAuthProvider({ organizationId: "demo-firma-ab", id: "test-user" });
+
 describe("GitBackendRuntime", () => {
-  it("query går igenom appRouter till DemoDataStore (default-principal scopar demo-firma-ab)", async () => {
-    const runtime = new GitBackendRuntime({ dataStore: new DemoDataStore({ matters, contacts }) });
+  it("query går igenom appRouter till DemoDataStore (explicit principal scopar demo-firma-ab)", async () => {
+    const runtime = new GitBackendRuntime({ dataStore: new DemoDataStore({ matters, contacts }), authProvider: seedOrgPrincipal });
     const result = await buildClient(runtime).matter.list.query({});
     expect(result.matters.length).toBeGreaterThanOrEqual(1);
     expect(result.total).toBeGreaterThanOrEqual(1);
   });
 
   it("mutation kastar (read-only via DemoDataStore)", async () => {
-    const runtime = new GitBackendRuntime({ dataStore: new DemoDataStore({ matters, contacts }) });
+    const runtime = new GitBackendRuntime({ dataStore: new DemoDataStore({ matters, contacts }), authProvider: seedOrgPrincipal });
     await expect(buildClient(runtime).matter.create.mutate({ title: "Ny" })).rejects.toThrow();
   });
 

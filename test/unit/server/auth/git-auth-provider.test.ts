@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { GitAuthProvider, DEMO_DEFAULT_PRINCIPAL } from "@/lib/server/auth/git-auth-provider";
+import { GitAuthProvider, TEST_PRINCIPAL } from "@/lib/server/auth/git-auth-provider";
 import type { AuthProvider, Principal } from "@/lib/server/auth/principal";
 
 describe("GitAuthProvider", () => {
@@ -18,16 +18,14 @@ describe("GitAuthProvider", () => {
     expect(typeof provider.getPrincipal).toBe("function");
   });
 
-  it("utan config → demo-default-principalen (matchar seedens u-anna)", () => {
+  it("utan config → neutral principal (inga demo-strängar läcks)", () => {
     const p = new GitAuthProvider().getPrincipal();
-    expect(p).toEqual(DEMO_DEFAULT_PRINCIPAL);
-    // Säkrar att vi inte tappar id-kontraktet mot seed-datan
-    expect(p?.id).toBe("u-anna");
-    expect(p?.organizationId).toBe("demo-firma-ab");
-    expect(p?.role).toBe("ADMIN");
+    expect(p.id).toBe("");
+    expect(p.organizationId).toBe("");
+    expect(p.role).toBe("ADMIN");
   });
 
-  it("med config → överrider per fält, default för resten", () => {
+  it("med config → överrider per fält, neutral för resten", () => {
     const p = new GitAuthProvider({
       id: "current-user",
       organizationId: "firma-ab",
@@ -43,8 +41,14 @@ describe("GitAuthProvider", () => {
     });
   });
 
-  it("getPrincipal returnerar en komplett Principal-shape (alla fält satta)", () => {
-    const p = new GitAuthProvider({ organizationId: "x" }).getPrincipal() as Principal;
+  it("TEST_PRINCIPAL har neutral UUID-baserad shape", () => {
+    expect(TEST_PRINCIPAL.role).toBe("ADMIN");
+    expect(TEST_PRINCIPAL.id).toMatch(/^[0-9a-f-]+$/);
+    expect(TEST_PRINCIPAL.organizationId).toMatch(/^[0-9a-f-]+$/);
+  });
+
+  it("getPrincipal med fullt config returnerar komplett Principal-shape", () => {
+    const p = new GitAuthProvider(TEST_PRINCIPAL).getPrincipal() as Principal;
     for (const key of ["id", "email", "name", "role", "organizationId"] as const) {
       expect(p[key], `fält ${key} ska vara satt`).toBeTruthy();
     }

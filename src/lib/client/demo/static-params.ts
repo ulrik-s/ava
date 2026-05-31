@@ -14,12 +14,14 @@
  * delad med seed-skrivnings-stegen.
  */
 
-export const SHELL_PARAM = "__shell__";
+import {
+  DEMO_ORG_ID,
+  DEMO_CURRENT_USER_ID,
+  DEMO_EMAIL_DOMAIN,
+  DEMO_ORG_NAME,
+} from "../../../../tooling/demo-config";
 
-const DEMO_ORG_ID = "demo-firma-ab";
-const DEMO_CURRENT_USER_ID = "u-anna";
-const DEMO_EMAIL_DOMAIN = "ava.demo";
-const DEMO_ORG_NAME = "Demo Advokatbyrå AB";
+export const SHELL_PARAM = "__shell__";
 
 export async function demoStaticParams(pathPrefix: string): Promise<{ id: string }[]> {
   if (process.env.DEMO_BUILD !== "1") return [];
@@ -30,12 +32,16 @@ export async function demoStaticParams(pathPrefix: string): Promise<{ id: string
 export async function collectDemoIds(pathPrefix: string): Promise<string[]> {
   try {
     const { buildSeed, seedToFiles } = await import("../../../../tooling/scripts/seed-data");
-    const seed = buildSeed({
+    const { createIdTranslator, translateSeed } = await import("../../../../tooling/demo-generator/id-translator");
+    // Måste matcha generateInto:s translation så static-params:n pekar på de
+    // UUID:n som faktiskt persisteras i datat.
+    const translator = createIdTranslator();
+    const seed = translateSeed(buildSeed({
       orgId: DEMO_ORG_ID,
       currentUserId: DEMO_CURRENT_USER_ID,
       emailDomain: DEMO_EMAIL_DOMAIN,
       organizationName: DEMO_ORG_NAME,
-    });
+    }), translator);
     const files = seedToFiles(seed);
     const prefix = pathPrefix.replace(/\/+$/, "") + "/";
     const seedIds = files
@@ -72,12 +78,13 @@ export async function demoStaticParamsBySeedId(sourceKey: string): Promise<{ id:
   if (process.env.DEMO_BUILD !== "1") return [];
   try {
     const { buildSeed } = await import("../../../../tooling/scripts/seed-data");
-    const seed = buildSeed({
+    const { createIdTranslator, translateSeed } = await import("../../../../tooling/demo-generator/id-translator");
+    const seed = translateSeed(buildSeed({
       orgId: DEMO_ORG_ID,
       currentUserId: DEMO_CURRENT_USER_ID,
       emailDomain: DEMO_EMAIL_DOMAIN,
       organizationName: DEMO_ORG_NAME,
-    }) as unknown as Record<string, Array<{ id?: string }>>;
+    }), createIdTranslator()) as unknown as Record<string, Array<{ id?: string }>>;
     const list = seed[sourceKey] ?? [];
     const ids = list.map((x) => x.id).filter((x): x is string => typeof x === "string");
     return [...ids, SHELL_PARAM].map((id) => ({ id }));

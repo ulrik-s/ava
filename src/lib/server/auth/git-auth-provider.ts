@@ -6,20 +6,32 @@
  * firma-config. Det är OK eftersom Git-backenden per design inte har
  * per-entitet-ACL (firma-nivå-isolering via repo-åtkomst, se ADR 0001).
  *
- * Defaulten matchar demo-repots seed (`u-anna` i `demo-firma-ab`) så att
- * `orgProcedure` släpper igenom och nya entiteter hamnar på en user som
- * syns i picker:s. Self-hosted wirar in firma-config-värden (org, namn,
- * email) via konstruktorn.
+ * Defaulten är NEUTRAL (inga demo-specifika strängar) så web-appen inte
+ * råkar referera till "u-anna"/"demo-firma-ab" som hårdkodade konstanter.
+ * Tester använder `TEST_PRINCIPAL` explicit. Demo-bootstrap skickar
+ * faktiska värden från `.ava/meta.json` + login-flow.
  */
 
 import type { AuthProvider, Principal } from "./principal";
 
-export const DEMO_DEFAULT_PRINCIPAL: Principal = {
-  id: "u-anna",
-  email: "user@ava.demo",
-  name: "Anna Advokat",
+/** Test-fixture: explicit principal som tester ska passera till
+ *  `new GitAuthProvider(TEST_PRINCIPAL)`. INTE för produktion. */
+export const TEST_PRINCIPAL: Principal = {
+  id: "00000000-0000-0000-0000-000000000001",
+  email: "test@ava.local",
+  name: "Test User",
   role: "ADMIN",
-  organizationId: "demo-firma-ab",
+  organizationId: "00000000-0000-0000-0000-000000000000",
+};
+
+/** Neutral fallback när varken config eller test-fixture ges. INGA demo-
+ *  identifierare läcks via denna väg. */
+const NEUTRAL_PRINCIPAL: Principal = {
+  id: "",
+  email: "",
+  name: "",
+  role: "ADMIN",
+  organizationId: "",
 };
 
 export type GitPrincipalConfig = Partial<Principal>;
@@ -29,11 +41,11 @@ export class GitAuthProvider implements AuthProvider {
 
   getPrincipal(): Principal {
     return {
-      id: this.config.id ?? DEMO_DEFAULT_PRINCIPAL.id,
-      email: this.config.email ?? DEMO_DEFAULT_PRINCIPAL.email,
-      name: this.config.name ?? DEMO_DEFAULT_PRINCIPAL.name,
-      role: this.config.role ?? DEMO_DEFAULT_PRINCIPAL.role,
-      organizationId: this.config.organizationId ?? DEMO_DEFAULT_PRINCIPAL.organizationId,
+      id: this.config.id ?? NEUTRAL_PRINCIPAL.id,
+      email: this.config.email ?? NEUTRAL_PRINCIPAL.email,
+      name: this.config.name ?? NEUTRAL_PRINCIPAL.name,
+      role: this.config.role ?? NEUTRAL_PRINCIPAL.role,
+      organizationId: this.config.organizationId ?? NEUTRAL_PRINCIPAL.organizationId,
     };
   }
 }

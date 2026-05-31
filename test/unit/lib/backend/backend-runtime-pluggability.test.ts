@@ -18,6 +18,7 @@ import superjson from "superjson";
 import type { AppRouter } from "@/lib/server/routers/_app";
 import type { BackendRuntime } from "@/lib/client/backend/backend-runtime";
 import { GitBackendRuntime } from "@/lib/client/backend/git-backend-runtime";
+import { GitAuthProvider } from "@/lib/server/auth/git-auth-provider";
 import { DemoDataStore } from "@/lib/server/data-store/DemoDataStore";
 
 /**
@@ -65,6 +66,7 @@ describe("BackendRuntime — pluggbarhet (kloss-socket)", () => {
         dataStore: new DemoDataStore({
           matters: [{ id: "m1", title: "T", organizationId: "demo-firma-ab", status: "ACTIVE", matterNumber: "2025-0001", createdAt: new Date() }],
         }),
+        authProvider: new GitAuthProvider({ organizationId: "demo-firma-ab", id: "t" }),
       }),
       new FakeServerBackendRuntime({ matters: [{ id: "srv-1" }], total: 1 }),
     ];

@@ -6,6 +6,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { isUuid } from "@/lib/shared/uuid";
 
 const realDemoBuild = process.env.DEMO_BUILD;
 
@@ -15,11 +16,11 @@ afterEach(() => {
 });
 
 describe("collectDemoIds", () => {
-  it("returnerar matter-id:n från buildSeed", async () => {
+  it("returnerar UUID-baserade matter-id:n (efter seed-translation till UUID v5)", async () => {
     const { collectDemoIds } = await import("@/lib/client/demo/static-params");
     const ids = await collectDemoIds("matters/active");
     expect(ids.length).toBeGreaterThan(5);
-    expect(ids.some((i) => i.startsWith("m-"))).toBe(true);
+    expect(ids.every((i) => isUuid(i))).toBe(true);
   });
 
   it("normaliserar trailing slash i prefix", async () => {
@@ -44,13 +45,13 @@ describe("demoStaticParams", () => {
     expect(await demoStaticParams("matters/active")).toEqual([]);
   });
 
-  it("inkluderar SHELL_PARAM-sentinel + seed-id:n när DEMO_BUILD=1", async () => {
+  it("inkluderar SHELL_PARAM-sentinel + UUID-id:n när DEMO_BUILD=1", async () => {
     process.env.DEMO_BUILD = "1";
     const { demoStaticParams, SHELL_PARAM } = await import("@/lib/client/demo/static-params");
     const params = await demoStaticParams("matters/active");
     const ids = params.map((p) => p.id);
     expect(ids).toContain(SHELL_PARAM);
-    expect(ids.some((i) => i.startsWith("m-"))).toBe(true);
+    expect(ids.filter((i) => i !== SHELL_PARAM).every((i) => isUuid(i))).toBe(true);
     expect(ids[ids.length - 1]).toBe(SHELL_PARAM);
   });
 });

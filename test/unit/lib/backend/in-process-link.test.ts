@@ -61,7 +61,11 @@ describe("inProcessLink — felvägar", () => {
   it("GitBackendRuntime respekterar injicerade ports", async () => {
     const ds = store();
     const ports = buildGitPorts(ds);
-    const runtime = new GitBackendRuntime({ dataStore: ds, ports });
+    const runtime = new GitBackendRuntime({
+      dataStore: ds,
+      ports,
+      authProvider: new GitAuthProvider({ organizationId: "demo-firma-ab", id: "t" }),
+    });
     const client = rawClient(runtime) as unknown as {
       matter: { list: { query: (i: unknown) => Promise<{ matters: unknown[] }> } };
     };

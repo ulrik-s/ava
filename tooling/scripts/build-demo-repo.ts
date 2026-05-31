@@ -19,11 +19,14 @@
 import { mkdirSync, rmSync, existsSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { generateInto } from "../demo-generator/generate-into";
-
-const DEMO_ORG_ID = "demo-firma-ab";
-const DEMO_CURRENT_USER_ID = "u-anna";
-const DEMO_EMAIL_DOMAIN = "ava.demo";
-const DEMO_ORG_NAME = "Demo Advokatbyrå AB";
+import {
+  DEMO_ORG_ID,
+  DEMO_CURRENT_USER_ID,
+  DEMO_EMAIL_DOMAIN,
+  DEMO_ORG_NAME,
+} from "../demo-config";
+import { writeDemoMeta } from "./write-demo-meta";
+import { buildSeed } from "./seed-data";
 
 function parseDirArg(): string {
   const idx = process.argv.indexOf("--dir");
@@ -70,6 +73,18 @@ async function main(): Promise<void> {
     emailDomain: DEMO_EMAIL_DOMAIN,
     organizationName: DEMO_ORG_NAME,
   });
+
+  // 3. Skriv meta.json så web-appen kan läsa orgId + user-listan utan
+  //    att hårdkoda identifierare. Använd samma translator som generateInto
+  //    så UUID:n i meta matchar UUID:n i persisterad data.
+  const metaSeed = buildSeed({
+    orgId: DEMO_ORG_ID,
+    currentUserId: DEMO_CURRENT_USER_ID,
+    emailDomain: DEMO_EMAIL_DOMAIN,
+    organizationName: DEMO_ORG_NAME,
+  });
+  const metaPath = writeDemoMeta(outDir, metaSeed, result.translator);
+  console.log(`[demo-repo] meta.json → ${metaPath}`);
 
   console.log(`[demo-repo] klart. Innehåll i ${outDir}:`);
   console.log(`  • ${result.users} användare, ${result.contacts} kontakter, ${result.matters} ärenden`);

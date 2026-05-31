@@ -36,6 +36,30 @@ import "@/lib/client/jobs/register-workers"; // ⚠ side-effect: registrerar wor
 
 type Status = "loading" | "ready" | "error";
 
+type GateDecision = "continue" | "skip-ready" | "redirect-login" | "skip-loading";
+
+function pathSkipsAuth(p: string): boolean {
+  return /\/(demo|login)\/?$/.test(p);
+}
+
+function redirectToLogin(): void {
+  const basePath = process.env.NEXT_PUBLIC_DEMO_BASE_PATH ?? "";
+  window.location.replace(`${basePath}/login/`);
+}
+
+/** Avgör om DemoBootstrap-useEffect ska köras vidare eller kortsluta.
+ *  Bryts ut för att hålla useEffect under cyklomatisk komplexitet 8. */
+function checkBootstrapGate(firmaConfig: FirmaConfig): GateDecision {
+  if (typeof window === "undefined") return "continue";
+  if (pathSkipsAuth(window.location.pathname)) return "skip-ready";
+  if (firmaConfig.tier === "demo" && !firmaConfig.principalId) {
+    redirectToLogin();
+    return "redirect-login";
+  }
+  if (window.location.search.includes("nodata")) return "skip-loading";
+  return "continue";
+}
+
 /**
  * Mutable box som useState ger oss — refobjekt utan att triggea
  * re-render. Vi använder useState istället för useRef här för att
@@ -113,11 +137,13 @@ export function DemoBootstrap({ children }: { children: ReactNode }) {
       new GitBackendRuntime({
         dataStore,
         authProvider: new GitAuthProvider({
-          // Måste matcha seedens currentUserId. För demo (build-demo-repo)
-          // är det "u-anna" — annars filtreras tasks/todo/recent-matters
-          // bort eftersom de assignas till "u-anna". Self-hosted-seeden
-          // (seed-firma-local) använder fortfarande "current-user".
-          id: firmaConfig.tier === "demo" ? "u-anna" : "current-user",
+          // principalId sätts av login-flowet (`/login`). Demo-mode utan
+          // satt principal → guest-id (datakällan filtrerar bort
+          // user-bundna queries tills login är gjort). Self-hosted-seed:en
+          // använder fortfarande "current-user" tills self-hosted-login är
+          // implementerad.
+          id: firmaConfig.principalId
+            || (firmaConfig.tier === "self-hosted" ? "current-user" : ""),
           email: firmaConfig.authorEmail,
           name: firmaConfig.authorName,
           role: "ADMIN",
@@ -129,22 +155,10 @@ export function DemoBootstrap({ children }: { children: ReactNode }) {
   } as never));
 
   useEffect(() => {
-    // /demo har egen runtime (DemoClient) → skippa loadern. Övriga "configurations-
-    // sidor" (/settings, /users, /profile, /jobs) behöver source-data:
-    // /settings läser org-raden, /users läser user-listan etc. Hoppa ALDRIG
-    // över laddningen för dem — annars throw:ar getSettings/list.
-    if (typeof window !== "undefined") {
-      const p = window.location.pathname;
-      if (p.endsWith("/demo") || p.endsWith("/demo/")) {
-        queueMicrotask(() => setStatus("ready"));
-        return;
-      }
-    }
-
-    // Debug-flagga: ?nodata = ladda inte, behåll status=loading
-    if (typeof window !== "undefined" && window.location.search.includes("nodata")) {
-      return;
-    }
+    const gate = checkBootstrapGate(firmaConfig);
+    if (gate === "skip-ready") { queueMicrotask(() => setStatus("ready")); return; }
+    if (gate === "redirect-login") return; // sidan reloadar — släng inget annat
+    if (gate === "skip-loading") return;
 
     let cancelled = false;
 
