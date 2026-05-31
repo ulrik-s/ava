@@ -12,7 +12,6 @@
  * vi i en omdirigerings-loop med demo-bootstrap.
  */
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { loadFirmaConfig, patchFirmaConfig } from "@/lib/client/firma/firma-config";
 import { loadDemoMeta, type DemoMeta, type DemoMetaUser } from "@/lib/client/demo/demo-meta";
 import { DEMO_PASSWORD } from "../../../tooling/demo-config";
@@ -51,7 +50,6 @@ export default function LoginPage() {
   const [selected, setSelected] = useState<string>("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const router = useRouter();
 
   useEffect(() => {
     void initLogin(setState, setSelected);
@@ -75,7 +73,12 @@ export default function LoginPage() {
       authorName: user.name,
       authorEmail: user.email,
     });
-    router.push("/");
+    // Full reload (inte router.push) — DemoBootstrap initierar trpcClient via
+    // useState-initializer som bara körs vid MOUNT. router.push reloadar inte
+    // → ny principalId/organizationId i localStorage ignoreras och alla
+    // queries returnerar tomt. window.location.replace tvingar fresh mount.
+    const basePath = process.env.NEXT_PUBLIC_DEMO_BASE_PATH ?? "";
+    window.location.replace(`${basePath}/`);
   }
 
   return (
