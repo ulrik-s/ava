@@ -75,6 +75,22 @@ async function registerTime(page: Page, desc: string): Promise<void> {
 }
 
 /**
+ * Sätt matter:s betalningssätt till Rättsskydd via PaymentMethodCard
+ * ("Ändra" → välj → "Spara"). Acconto-flödet i BillingRun-modellen erbjuds
+ * BARA för rättsskydd/rättshjälp (optionsFor i _billing-panel.tsx) — en
+ * default-matter (paymentMethod=PENDING) visar bara "Faktura till klient".
+ * Vi väntar tills kortet visar "Rättsskydd" (matter.getById refetchad) så att
+ * BillingPanel hunnit få paymentMethod=RATTSSKYDD innan menyn öppnas.
+ */
+async function setRattsskydd(page: Page): Promise<void> {
+  await page.getByRole("button", { name: "Ändra", exact: true }).first().click();
+  const select = page.locator("select").filter({ has: page.locator("option", { hasText: "Rättsskydd" }) });
+  await select.selectOption("RATTSSKYDD");
+  await page.getByRole("button", { name: /^Spara$/ }).click();
+  await expect(page.getByText("Rättsskydd").first()).toBeVisible({ timeout: 10_000 });
+}
+
+/**
  * Vänta tills BillingPanel:s summa-kort renderats (panelen hydrerad) innan vi
  * klickar "+ Skapa faktura". Annars kan en kvardröjande overlay från en just
  * stängd modal/dropdown (`div.fixed.inset-0 z-30`, BillingActions/data-table)
@@ -228,6 +244,9 @@ test("fakturering: tid → acconto → betalning landar i git-db:n", async ({ pa
   await createMatterAndOpen(page, matter, client);
   const matterUrl = page.url();
 
+  // Acconto erbjuds bara för rättsskydd/rättshjälp → sätt betalningssätt först.
+  await setRattsskydd(page);
+
   // ── Registrera tid (120 min) ──
   await page.getByRole("button", { name: /Registrera tid/i }).click();
   await page.locator('input[type="date"]').first().fill(new Date().toISOString().slice(0, 10));
@@ -271,7 +290,8 @@ test("fakturering: tid → acconto → betalning landar i git-db:n", async ({ pa
   await expect(page.getByText("Laddar data…")).toHaveCount(0, { timeout: 30_000 });
   await awaitBillingPanelReady(page);
   await page.getByRole("button", { name: /\+ Skapa faktura/ }).click();
-  await page.getByRole("button", { name: /Faktura till klient/i }).click();
+  // Rättsskydd-matter → slutfakturan går till försäkringsbolaget (inte klienten).
+  await page.getByRole("button", { name: /Faktura till försäkring/i }).click();
   const finalModal = page.locator("div.fixed.inset-0").filter({ has: page.getByRole("heading", { name: /^Faktura$/ }) });
   // Aconto-avdraget är förkryssat by default — säkra att det är kvar
   await finalModal.getByRole("button", { name: /^Skapa faktura$/ }).click();
