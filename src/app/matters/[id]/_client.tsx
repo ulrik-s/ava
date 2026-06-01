@@ -12,17 +12,15 @@ import { ContactsSection } from "./_contacts-section";
 import { TimeSection } from "./_time-section";
 import { ExpenseSection } from "./_expense-section";
 import { BillingPanel } from "./_billing-panel";
-import { TaxaCard } from "./_taxa-card";
 import { GenerateModal } from "./_generate-modal";
 import { useRouteId } from "@/lib/client/demo/use-route-id";
 
-// eslint-disable-next-line complexity
+ 
 export default function MatterDetailClient({ id: paramId }: { id: string }) {
   // Static export serverar en sentinel-shell för nya id:n → läs riktiga
   // id:t ur URL:en (faller tillbaka till build-time-param i server-mode).
   const id = useRouteId() ?? paramId;
   const matter = trpc.matter.getById.useQuery({ id });
-  const currentUser = trpc.user.current.useQuery();
   const [showGenerateModal, setShowGenerateModal] = useState(false);
 
   if (matter.isLoading) return <p className="text-gray-500">Laddar...</p>;
@@ -52,23 +50,6 @@ export default function MatterDetailClient({ id: paramId }: { id: string }) {
           paymentMethodDecidedAt={m.paymentMethodDecidedAt}
         />
       </div>
-
-      {m.isTaxeArende && (
-        <TaxaCard
-          matterId={id}
-          matterNumber={m.matterNumber}
-          matterTitle={m.title}
-          clientName={klient[0]?.contact?.name ?? ""}
-          courtName={m.contacts.find((c: { role: string }) => c.role === "DOMSTOL")?.contact?.name}
-          defenderName={currentUser.data?.name ?? ""}
-          defenderEmail={currentUser.data?.email}
-          initial={{
-            taxaLevel: m.taxaLevel,
-            taxaHuvudforhandlingMin: m.taxaHuvudforhandlingMin,
-            taxaHasFTax: m.taxaHasFTax,
-          }}
-        />
-      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <EventsPanel matterId={id} />

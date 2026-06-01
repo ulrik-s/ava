@@ -130,6 +130,7 @@ export const MATTERS: MatterSeed[] = [
   // domstolen kan frångå taxan ifall avsevärt mer arbete krävts.
   { id: "m-016-brottmal-rh", matterNumber: "2026-0016", title: "Brottmål — rattfylleri Falk", status: "ACTIVE", matterType: "Brottmål", paymentMethod: "OFFENTLIG_FORSVARARE", description: "Förordnad offentlig försvarare vid Stockholms tingsrätt.", klientId: "c-falk", domstolId: "c-tingsratten-sthlm", createdDaysAgo: 18, isTaxeArende: true, taxaLevel: 1, taxaHuvudforhandlingMin: 95, taxaHasFTax: true },
   { id: "m-017-brottmal-omf", matterNumber: "2026-0017", title: "Brottmål — omfattande utredning Davidsson", status: "ACTIVE", matterType: "Brottmål", paymentMethod: "OFFENTLIG_FORSVARARE", description: "Frångångstaxa pga väsentligt mer arbete (komplex bevisning).", klientId: "c-davidsson", domstolId: "c-hovratten-svea", createdDaysAgo: 35, isTaxeArende: false },
+  { id: "m-018-brottmal-ekobrott", matterNumber: "2026-0018", title: "Brottmål — ekobrott Carlsson", status: "ACTIVE", matterType: "Brottmål", paymentMethod: "OFFENTLIG_FORSVARARE", description: "Misstanke om grovt bokföringsbrott. Omfattande material — kostnadsräkning skickas till domstol istället för enligt taxa.", klientId: "c-carlsson", domstolId: "c-tingsratten-sthlm", createdDaysAgo: 28, isTaxeArende: false },
 ];
 
 // ASSIGN_USERS härleds inuti buildSeed() från de aktuella users — så ifall

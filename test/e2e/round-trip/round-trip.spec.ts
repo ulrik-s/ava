@@ -75,19 +75,25 @@ async function registerTime(page: Page, desc: string): Promise<void> {
 }
 
 /**
- * Skapa kontakt + ärende + tid (3000 kr) → slutfaktura → markera skickad.
- * Lämnar page på fakturans detaljvy (SENT). Förutsättning för plan/kredit.
+ * Skapa kontakt + ärende + tid (3000 kr) → faktura via BillingPanel →
+ * navigera till faktura-detalj → markera skickad. Lämnar page på fakturans
+ * detaljvy (SENT). Förutsättning för plan/kredit.
  */
 async function createSentFinalInvoice(page: Page, stamp: number): Promise<void> {
   await createContact(page, `Klient ${stamp}`);
   await createMatterAndOpen(page, `Ärende ${stamp}`, `Klient ${stamp}`);
   await registerTime(page, `Arbete ${stamp}`);
-  await page.getByRole("button", { name: /\+ Slutfaktura/ }).click();
-  const finalModal = page.locator("div.fixed.inset-0").filter({ has: page.getByRole("heading", { name: /Skapa slutfaktura/i }) });
-  await finalModal.locator('input[type="checkbox"]').first().check(); // bara tidsraden (netto positivt)
-  await finalModal.getByRole("button", { name: /^Skapa slutfaktura$/ }).click();
+  // Nya BillingPanel: "+ Skapa faktura" → meny → "Faktura till klient" → modal "Faktura"
+  await page.getByRole("button", { name: /\+ Skapa faktura/ }).click();
+  await page.getByRole("button", { name: /Faktura till klient/i }).click();
+  const finalModal = page.locator("div.fixed.inset-0").filter({ has: page.getByRole("heading", { name: /^Faktura$/ }) });
+  await finalModal.getByRole("button", { name: /^Skapa faktura$/ }).click();
   await expect(finalModal).toBeHidden({ timeout: 10_000 });
-  await page.getByRole("link", { name: /^Öppna$/ }).first().click();
+  // Klicka på fakturanummer-länken i BillingPanel:s lista (kan vara invoiceNumber
+  // eller "Faktura"-fallback) — navigerar till /invoices/<id>
+  const invoiceLink = page.locator('a[href*="/invoices/"]').first();
+  await invoiceLink.click();
+  await page.waitForURL(/\/invoices\/.+/, { timeout: 15_000 });
   await page.getByRole("button", { name: /Markera som skickad/ }).click();
   await expect(page.getByRole("button", { name: /Skapa avbetalningsplan/ })).toBeVisible({ timeout: 15_000 });
 }
@@ -202,15 +208,19 @@ test("fakturering: tid → acconto → betalning landar i git-db:n", async ({ pa
   await page.getByRole("button", { name: /^Spara$/ }).click();
   await expect(page.getByText(timeDesc)).toBeVisible({ timeout: 10_000 });
 
-  // ── Skapa acconto-faktura (1000 kr) — mindre än tidens värde (2h×1500=3000) ──
-  await page.getByRole("button", { name: /\+ Acconto/ }).click();
-  const accontoModal = page.locator("div.fixed.inset-0").filter({ has: page.getByRole("heading", { name: /Ny acconto-faktura/i }) });
-  await accontoModal.locator('input[type="number"]').first().fill("1000");
-  await accontoModal.getByRole("button", { name: /^Skapa$/ }).click();
+  // ── Skapa acconto-faktura (1000 kr) via BillingPanel ──
+  await page.getByRole("button", { name: /\+ Skapa faktura/ }).click();
+  await page.getByRole("button", { name: /Aconto till klient/i }).click();
+  const accontoModal = page.locator("div.fixed.inset-0").filter({ has: page.getByRole("heading", { name: /Aconto till klient/i }) });
+  // Belopp (kr)-fältet är det andra number-input:et (första är clientShare-procent)
+  await accontoModal.locator('input[type="number"]').nth(1).fill("1000");
+  await accontoModal.getByRole("button", { name: /Skapa aconto-faktura/ }).click();
   await expect(accontoModal).toBeHidden({ timeout: 10_000 });
 
   // ── Öppna acconto, markera skickad, registrera betalning (1000 kr) ──
-  await page.getByRole("link", { name: /^Öppna$/ }).first().click();
+  const accontoLink = page.locator('a[href*="/invoices/"]').first();
+  await accontoLink.click();
+  await page.waitForURL(/\/invoices\/.+/, { timeout: 15_000 });
   await page.getByRole("button", { name: /Markera som skickad/ }).click();
   await page.getByRole("button", { name: /Registrera betalning/ }).click();
   const payModal = page.locator("div.fixed.inset-0").filter({ has: page.getByRole("heading", { name: /Registrera betalning/i }) });
@@ -228,22 +238,25 @@ test("fakturering: tid → acconto → betalning landar i git-db:n", async ({ pa
   expect(rowsInRepo("time-entries").map((t) => Number(t.minutes))).toContain(120);
   expect(rowsInRepo("invoices").map((i) => String(i.invoiceType))).toContain("ACCONTO");
 
-  // ── Slutfaktura med acconto-avdrag (createFinal — nested writes) ──
+  // ── Slutfaktura via BillingPanel (acconton listas som checkboxar) ──
   await page.goto(matterUrl);
   await expect(page.getByText("Laddar data…")).toHaveCount(0, { timeout: 30_000 });
-  await page.getByRole("button", { name: /\+ Slutfaktura/ }).click();
-  const finalModal = page.locator("div.fixed.inset-0").filter({ has: page.getByRole("heading", { name: /Skapa slutfaktura/i }) });
-  await finalModal.locator('input[type="checkbox"]').first().check(); // tidsraden
-  await finalModal.locator('input[type="checkbox"]').last().check();  // acconto-avdraget
-  await finalModal.getByRole("button", { name: /^Skapa slutfaktura$/ }).click();
+  await page.getByRole("button", { name: /\+ Skapa faktura/ }).click();
+  await page.getByRole("button", { name: /Faktura till klient/i }).click();
+  const finalModal = page.locator("div.fixed.inset-0").filter({ has: page.getByRole("heading", { name: /^Faktura$/ }) });
+  // Aconto-avdraget är förkryssat by default — säkra att det är kvar
+  await finalModal.getByRole("button", { name: /^Skapa faktura$/ }).click();
   await expect(finalModal).toBeHidden({ timeout: 10_000 });
 
-  // Verifiera i git-db:n: FINAL-faktura + acconto-avdrag persisterade
-  await expect.poll(() => rowsInRepo("acconto-deductions").length, {
+  // Verifiera i git-db:n: FINAL-faktura persisterad. BillingRun-modellen
+  // länkar via deductedBillingRunIds (inte acconto-deductions-mappen).
+  await expect.poll(() => rowsInRepo("invoices").map((i) => String(i.invoiceType)), {
     timeout: 60_000,
     intervals: [3_000, 3_000, 5_000, 5_000, 5_000, 10_000],
-  }).toBeGreaterThan(0);
-  expect(rowsInRepo("invoices").map((i) => String(i.invoiceType))).toContain("FINAL");
+  }).toContain("FINAL");
+  await expect.poll(() => rowsInRepo("billing-runs").map((r) => String(r.type)),
+    { timeout: 60_000, intervals: [3_000, 5_000, 5_000, 10_000] })
+    .toContain("FINAL");
 });
 
 const POLL = { timeout: 60_000, intervals: [3_000, 3_000, 5_000, 5_000, 5_000, 10_000] };
