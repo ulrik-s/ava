@@ -79,3 +79,38 @@ export async function triggerHelperUpdateCheck(): Promise<void> {
     signal: AbortSignal.timeout(2_000),
   }).catch(() => { /* tyst — best-effort */ });
 }
+
+/**
+ * `composeMailViaHelper` — be helpern öppna OS:s mail-app med en
+ * förifylld kompositions-vy + bifogad fil. Helpern sparar bytes till
+ * tempfil och anropar plattforms-specifikt mail-kommando (osascript
+ * Mail.app på macOS, xdg-email på Linux, COM på Windows).
+ *
+ * Returnerar true om helpern accepterade requesten, false om något
+ * gick fel (404 = helper kör äldre version utan endpoint, network
+ * error, etc.) så caller kan logga + falla tillbaka tyst.
+ */
+export interface ComposeMailInput {
+  fileName: string;
+  /** base64-kodade bytes. */
+  contentBase64: string;
+  /** MIME-typ för bilagan. */
+  mimeType: string;
+  to?: string;
+  subject: string;
+  body: string;
+}
+
+export async function composeMailViaHelper(input: ComposeMailInput): Promise<boolean> {
+  try {
+    const r = await fetch(`${HELPER_BASE}/compose-mail`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+      signal: AbortSignal.timeout(10_000),
+    });
+    return r.ok;
+  } catch {
+    return false;
+  }
+}

@@ -38,6 +38,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/ping", s.handlePing)
 	mux.HandleFunc("/version", s.handleVersion)
 	mux.HandleFunc("/open", s.handleOpen)
+	mux.HandleFunc("/compose-mail", s.handleComposeMail)
 	mux.HandleFunc("/check-update", s.handleCheckUpdate)
 	return withCORS(mux)
 }

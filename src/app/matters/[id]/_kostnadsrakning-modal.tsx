@@ -17,7 +17,7 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
-import { Clock, FileText, Mail, Send, X, AlertTriangle, Printer } from "lucide-react";
+import { Clock, FileText, X, AlertTriangle, Save } from "lucide-react";
 import { trpc } from "@/lib/client/trpc";
 import { buildKostnadsrakningContext } from "@/lib/shared/kostnadsrakning";
 import type { TaxaLevel } from "@/lib/shared/brottmalstaxa";
@@ -26,6 +26,7 @@ import {
   templateCategoryFor,
   defaultTemplateFor,
 } from "@/lib/shared/kostnadsrakning-template";
+import { useHelper, composeMailViaHelper } from "@/lib/client/helper/use-helper";
 import { formatCurrency } from "@/lib/client/utils";
 
 interface Props {
@@ -63,6 +64,94 @@ function defaultStart(stored?: string | Date | null): string {
   return toDatetimeLocalValue(d);
 }
 
+interface TemplateRow { category?: string | null; content?: string }
+
+function renderHtml(isTaxe: boolean, templates: unknown, ctx: Record<string, unknown>): string {
+  const wantedCategory = templateCategoryFor(isTaxe);
+  const list = (templates ?? []) as TemplateRow[];
+  const tpl = list.find((t) => t.category === wantedCategory);
+  const html = tpl?.content ?? defaultTemplateFor(isTaxe);
+  return renderHandlebars(html, ctx);
+}
+
+async function writeFsa(storagePath: string, bytes: Uint8Array): Promise<void> {
+  try {
+    const { loadHandle } = await import("@/lib/client/fsa/handle-store");
+    const { FsaIsoGitAdapter } = await import("@/lib/client/fsa/fs-adapter");
+    const handle = await loadHandle("repo-root");
+    if (!handle) return;
+    const fs = new FsaIsoGitAdapter(handle);
+    await fs.writeFile("/" + storagePath, bytes);
+  } catch (e) {
+    console.warn("[kostnadsrakning] FSA-skrivning misslyckades:", e);
+  }
+}
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+interface RecordDocOpts {
+  recordKostn: { mutateAsync: (i: any) => Promise<unknown> };
+  utils: { document: { list: { invalidate: (filter?: any) => Promise<unknown> } } };
+  docId: string;
+  matterId: string;
+  fileName: string;
+  storagePath: string;
+  bytes: Uint8Array;
+  totalInclVat: number;
+  huvudforhandlingMinutes: number;
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
+async function recordDocument(opts: RecordDocOpts): Promise<void> {
+  try {
+    await opts.recordKostn.mutateAsync({
+      id: opts.docId, matterId: opts.matterId, fileName: opts.fileName,
+      mimeType: "text/html; charset=utf-8", sizeBytes: opts.bytes.byteLength,
+      storagePath: opts.storagePath, totalInclVat: opts.totalInclVat,
+      huvudforhandlingMinutes: opts.huvudforhandlingMinutes,
+    });
+    await opts.utils.document.list.invalidate({ matterId: opts.matterId });
+    await opts.utils.document.list.invalidate();
+  } catch (e) {
+    console.warn("[kostnadsrakning] record/invalidate misslyckades:", e);
+  }
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let bin = "";
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin);
+}
+
+interface MailOpts {
+  helperAvailable: boolean;
+  fileName: string;
+  bytes: Uint8Array;
+  matterNumber: string;
+  matterTitle: string;
+  clientName: string;
+  huvudforhandlingFormatted: string;
+  totalInclFormatted: string;
+}
+
+async function maybeComposeMail(opts: MailOpts): Promise<boolean> {
+  if (!opts.helperAvailable) return false;
+  const body = [
+    `Mål: ${opts.matterNumber} (${opts.matterTitle})`,
+    `Klient: ${opts.clientName}`,
+    `Förhandlingstid: ${opts.huvudforhandlingFormatted}`,
+    `Totalt att fakturera: ${opts.totalInclFormatted}`,
+    "",
+    "Kostnadsräkning bifogas.",
+  ].join("\n");
+  return composeMailViaHelper({
+    fileName: opts.fileName,
+    contentBase64: bytesToBase64(opts.bytes),
+    mimeType: "text/html; charset=utf-8",
+    subject: `Kostnadsräkning Mål ${opts.matterNumber}`,
+    body,
+  });
+}
+
 // eslint-disable-next-line complexity
 export function KostnadsrakningModal(props: Props) {
   const [hufStart, setHufStart] = useState<string>(() => defaultStart(props.initialHufStart));
@@ -71,10 +160,10 @@ export function KostnadsrakningModal(props: Props) {
   const [level, setLevel] = useState<TaxaLevel>(props.initialLevel ?? 1);
   // F-skatt antas alltid — alla advokater har F-skatt. Tidigare radio borttagen.
   const hasFTax = true;
-  const [courtEmail, setCourtEmail] = useState<string>("");
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState<{ filename: string } | null>(null);
+  const [done, setDone] = useState<{ filename: string; mailOpened: boolean } | null>(null);
+  const helper = useHelper();
 
   const templates = trpc.documentTemplate.list.useQuery();
   const matterUpdate = trpc.matter.update.useMutation();
@@ -116,90 +205,30 @@ export function KostnadsrakningModal(props: Props) {
 
   const stoppaNu = () => setHufEnd(toDatetimeLocalValue(new Date()));
 
-  // eslint-disable-next-line complexity
   const generate = async () => {
     setError(null);
     setGenerating(true);
     try {
-      // Mall: byråns egen i RÄTT kategori (taxa vs icke-taxa), annars
-      // den inbyggda default-HTML:en för respektive variant.
-      const wantedCategory = templateCategoryFor(isTaxe);
-      const tpl = (templates.data ?? []).find(
-        (t: { category?: string | null; content?: string }) => t.category === wantedCategory,
-      ) as { content?: string } | undefined;
-      const templateHtml = tpl?.content ?? defaultTemplateFor(isTaxe);
-
-      // Rendera mall + ctx
-      const html = renderHandlebars(templateHtml, ctx.templateContext);
-
-      // Öppna i ny flik med auto-print — cross-platform PDF utan deps
-      const printable = html.replace(
-        "</body>",
-        `<script>setTimeout(function(){window.print();},200);<\/script></body>`,
-      );
-      const blob = new Blob([printable], { type: "text/html; charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      const tab = window.open(url, "_blank", "noopener,noreferrer");
-      if (!tab) {
-        throw new Error("Pop-up blockerad. Tillåt pop-ups för AVA och försök igen.");
-      }
-      setTimeout(() => URL.revokeObjectURL(url), 60_000);
-
-      // Spara HTML i OPFS + registrera dokument + emit event
-      const today = new Date().toISOString().slice(0, 10);
-      const fileName = `Kostnadsräkning ${props.matterNumber} ${today}.html`;
+      const fileName = `Kostnadsräkning ${props.matterNumber} ${new Date().toISOString().slice(0, 10)}.html`;
       const docId = `kostn-${props.matterNumber}-${Date.now().toString(36)}`;
-      const storagePath = `documents/content/${docId}.html`;
+      const html = renderHtml(isTaxe, templates.data, ctx.templateContext);
       const bytes = new TextEncoder().encode(html);
-      try {
-        const { loadHandle } = await import("@/lib/client/fsa/handle-store");
-        const { FsaIsoGitAdapter } = await import("@/lib/client/fsa/fs-adapter");
-        const handle = await loadHandle("repo-root");
-        if (handle) {
-          const fs = new FsaIsoGitAdapter(handle);
-          await fs.writeFile("/" + storagePath, bytes);
-        }
-      } catch (e) {
-        console.warn("[kostnadsrakning] FSA-skrivning misslyckades:", e);
-      }
-
-      try {
-        await recordKostn.mutateAsync({
-          id: docId,
-          matterId: props.matterId,
-          fileName,
-          mimeType: "text/html; charset=utf-8",
-          sizeBytes: bytes.byteLength,
-          storagePath,
-          totalInclVat: ctx.totalInclVat,
-          huvudforhandlingMinutes: ctx.huvudforhandlingMinutes,
-        });
-        // Invalidera dokument-listan så det nya dokumentet syns
-        // omedelbart i ärendets DocumentBrowser + global dokument-sök.
-        await utils.document.list.invalidate?.({ matterId: props.matterId });
-        await utils.document.list.invalidate?.();
-      } catch (e) {
-        console.warn("[kostnadsrakning] event-emit misslyckades:", e);
-      }
-
-      // Mailto (om e-post angiven)
-      if (courtEmail) {
-        const subject = `Kostnadsräkning Mål ${props.matterNumber} — ${props.defenderName}`;
-        const body = [
-          `Mål: ${props.matterNumber} (${props.matterTitle})`,
-          `Klient: ${props.clientName}`,
-          `Förhandlingstid: ${ctx.templateContext.huvudforhandlingFormatted}`,
-          `Totalt att fakturera: ${ctx.templateContext.totalInclFormatted}`,
-          "",
-          "Kostnadsräkning bifogas (PDF — genererad via Spara som PDF i utskriftsdialogen).",
-        ].join("\n");
-        const mailto = `mailto:${encodeURIComponent(courtEmail)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-        setTimeout(() => { window.location.href = mailto; }, 500);
-      }
-
-      setDone({ filename: fileName });
-      // Stäng dialogen automatiskt efter att användaren hunnit se
-      // confirm-meddelandet. Print-fönstret är redan öppet i ny flik.
+      const storagePath = `documents/content/${docId}.html`;
+      await writeFsa(storagePath, bytes);
+      await recordDocument({
+        recordKostn, utils, docId, matterId: props.matterId, fileName, storagePath,
+        bytes, totalInclVat: ctx.totalInclVat,
+        huvudforhandlingMinutes: ctx.huvudforhandlingMinutes,
+      });
+      const mailOpened = await maybeComposeMail({
+        helperAvailable: Boolean(helper.version),
+        fileName, bytes,
+        matterNumber: props.matterNumber, matterTitle: props.matterTitle,
+        clientName: props.clientName,
+        huvudforhandlingFormatted: String(ctx.templateContext.huvudforhandlingFormatted ?? ""),
+        totalInclFormatted: String(ctx.templateContext.totalInclFormatted ?? ""),
+      });
+      setDone({ filename: fileName, mailOpened });
       setTimeout(() => props.onClose(), 1500);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -326,20 +355,12 @@ export function KostnadsrakningModal(props: Props) {
             </dl>
           </section>
 
-          <section>
-            <label className="block">
-              <span className="text-xs text-gray-700 mb-1 flex items-center gap-1">
-                <Mail size={12} /> E-post till rätten
-              </span>
-              <input
-                type="email" value={courtEmail}
-                onChange={(e) => setCourtEmail(e.target.value)}
-                placeholder="t.ex. stockholms.tingsratt@dom.se"
-                inputMode="email"
-                autoComplete="email"
-                className="w-full rounded border border-gray-300 px-3 py-2.5 text-base font-mono"
-              />
-            </label>
+          <section className="text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded px-3 py-2">
+            {helper.checked && helper.version
+              ? <>✓ AVA Helper {helper.version} installerad — mail-appen öppnas med bilaga efter generering.</>
+              : helper.checked
+                ? <>Helper ej installerad — dokumentet sparas i ärendet, du kan skicka mail manuellt därifrån.</>
+                : <>Kontrollerar helper-status…</>}
           </section>
 
           {error && (
@@ -350,8 +371,9 @@ export function KostnadsrakningModal(props: Props) {
           {done && (
             <p className="text-sm text-green-800 bg-green-50 border border-green-200 rounded p-3">
               ✓ <strong>{done.filename}</strong> sparad i ärendets dokument.
-              Utskriftsdialogen är öppen — välj <em>Spara som PDF</em> för att få filen,
-              attacha sedan i mailet till rätten.
+              {done.mailOpened
+                ? <> Mail-appen öppnas med kostnadsräkningen som bilaga — fyll i adressaten och skicka.</>
+                : <> Bifoga manuellt när du skickar mail till rätten.</>}
             </p>
           )}
         </div>
@@ -371,9 +393,8 @@ export function KostnadsrakningModal(props: Props) {
               <>Genererar…</>
             ) : (
               <>
-                <Printer size={18} />
-                Generera + öppna utskrift
-                {courtEmail && <Send size={14} />}
+                <Save size={18} />
+                {helper.version ? "Generera + öppna mail" : "Generera + spara"}
               </>
             )}
           </button>
