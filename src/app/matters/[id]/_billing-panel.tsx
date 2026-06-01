@@ -1,0 +1,203 @@
+"use client";
+
+/**
+ * `BillingPanel` — översikt + skapa-faktura-actions per ärende.
+ *
+ * Visar summa-kort (Upparbetat / Aconto fakturerat / Beräknat netto),
+ * lista över billing-runs (aconto, slutfaktura, kostnadsräkning) och en
+ * "+ Skapa faktura"-knapp som öppnar rätt dialog beroende på matter:s
+ * paymentMethod.
+ *
+ * KOSTNADSRAKNING i PENDING_VERDICT-state får en "Ange dom"-knapp som
+ * öppnar verdict-dialogen (sätter prutning + skapar faktura).
+ */
+import { useState } from "react";
+import Link from "next/link";
+import { trpc } from "@/lib/client/trpc";
+import { formatCurrency } from "@/lib/client/utils";
+import { BILLING_RUN_TYPE_LABELS, BILLING_RUN_STATUS_LABELS } from "@/lib/shared/schemas/enums";
+import { BillingDialog } from "./_billing-dialog";
+import { VerdictDialog } from "./_verdict-dialog";
+
+interface Props {
+  matterId: string;
+  paymentMethod?: string | null;
+}
+
+interface BillingRunRow {
+  id: string;
+  type: string;
+  status: string;
+  recipient: string;
+  amountOre: number;
+  createdAt: string | Date;
+  invoiceId?: string | null;
+  invoice?: { id: string; invoiceNumber?: string | null } | null;
+}
+
+function PendingVerdictBanner({ run, onClick }: { run: BillingRunRow; onClick: () => void }) {
+  return (
+    <div className="mx-6 my-3 rounded border border-amber-300 bg-amber-50 px-4 py-3 flex items-center justify-between">
+      <div className="text-sm text-amber-900">
+        <strong>Kostnadsräkning väntar på dom</strong> — {formatCurrency(run.amountOre)} föreslaget belopp.
+      </div>
+      <button onClick={onClick}
+        className="text-xs px-3 py-1 bg-amber-600 text-white rounded hover:bg-amber-700">
+        Ange dom + prutning
+      </button>
+    </div>
+  );
+}
+
+type DialogState = "NONE" | "ACCONTO" | "FINAL" | "KOSTNADSRAKNING";
+
+function findPendingVerdict(rows: BillingRunRow[]): BillingRunRow | undefined {
+  return rows.find((r) => r.type === "KOSTNADSRAKNING" && r.status === "PENDING_VERDICT");
+}
+
+interface DialogsProps {
+  matterId: string; rows: BillingRunRow[];
+  dialog: DialogState; setDialog: (s: DialogState) => void;
+  verdictRunId: string | null; setVerdictRunId: (id: string | null) => void;
+  onRefetch: () => void;
+}
+
+function BillingDialogs({ matterId, rows, dialog, setDialog, verdictRunId, setVerdictRunId, onRefetch }: DialogsProps) {
+  const pending = findPendingVerdict(rows);
+  return (
+    <>
+      {dialog !== "NONE" && (
+        <BillingDialog matterId={matterId} type={dialog}
+          existingAccontos={rows.filter((r) => r.type === "ACCONTO" && r.status === "SENT")}
+          onClose={() => { setDialog("NONE"); onRefetch(); }} />
+      )}
+      {verdictRunId && (
+        <VerdictDialog billingRunId={verdictRunId} workValueOre={pending?.amountOre ?? 0}
+          onClose={() => { setVerdictRunId(null); onRefetch(); }} />
+      )}
+    </>
+  );
+}
+
+export function BillingPanel({ matterId, paymentMethod }: Props) {
+  const runs = trpc.billingRun.list.useQuery({ matterId });
+  const [dialog, setDialog] = useState<DialogState>("NONE");
+  const [verdictRunId, setVerdictRunId] = useState<string | null>(null);
+  const rows = (runs.data?.runs ?? []) as BillingRunRow[];
+  const pending = findPendingVerdict(rows);
+  const refetch = () => { void runs.refetch(); };
+  return (
+    <div className="bg-white rounded-lg border border-gray-200 lg:col-span-2">
+      <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+        <h2 className="font-semibold text-gray-900">Fakturering</h2>
+        <BillingActions paymentMethod={paymentMethod ?? ""} onPick={setDialog} />
+      </div>
+      <SummaryCards totals={computeTotals(rows)} />
+      {pending && <PendingVerdictBanner run={pending} onClick={() => setVerdictRunId(pending.id)} />}
+      <RunsList rows={rows} loading={runs.isLoading} />
+      <BillingDialogs matterId={matterId} rows={rows}
+        dialog={dialog} setDialog={setDialog}
+        verdictRunId={verdictRunId} setVerdictRunId={setVerdictRunId}
+        onRefetch={refetch} />
+    </div>
+  );
+}
+
+function computeTotals(rows: BillingRunRow[]) {
+  let acconto = 0, finalSent = 0, pending = 0;
+  for (const r of rows) {
+    if (r.type === "ACCONTO" && r.status === "SENT") acconto += r.amountOre;
+    if ((r.type === "FINAL" || r.type === "KOSTNADSRAKNING") && r.status === "SENT") finalSent += r.amountOre;
+    if (r.status === "PENDING_VERDICT") pending += r.amountOre;
+  }
+  return { acconto, finalSent, pending };
+}
+
+function SummaryCards({ totals }: { totals: { acconto: number; finalSent: number; pending: number } }) {
+  return (
+    <div className="grid grid-cols-3 gap-3 px-6 py-4">
+      <Card label="Aconto fakturerat" value={totals.acconto} />
+      <Card label="Slutfakturerat" value={totals.finalSent} />
+      <Card label="Väntar på dom" value={totals.pending} dim />
+    </div>
+  );
+}
+
+function Card({ label, value, dim }: { label: string; value: number; dim?: boolean }) {
+  return (
+    <div className={`rounded-lg border ${dim ? "border-amber-200 bg-amber-50" : "border-gray-200 bg-gray-50"} px-3 py-2`}>
+      <div className="text-[10px] uppercase text-gray-500">{label}</div>
+      <div className="font-mono font-semibold text-sm">{formatCurrency(value)}</div>
+    </div>
+  );
+}
+
+function BillingActions({ paymentMethod, onPick }: { paymentMethod: string; onPick: (t: "ACCONTO" | "FINAL" | "KOSTNADSRAKNING") => void }) {
+  const [open, setOpen] = useState(false);
+  const options = optionsFor(paymentMethod);
+  return (
+    <div className="relative">
+      <button onClick={() => setOpen((v) => !v)} className="text-sm bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700">
+        + Skapa faktura
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-full mt-1 z-40 bg-white border border-gray-200 rounded shadow-lg p-1 min-w-[14rem]">
+            {options.map((o) => (
+              <button key={o.type}
+                onClick={() => { onPick(o.type); setOpen(false); }}
+                className="block w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 rounded">
+                {o.label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function optionsFor(pm: string): Array<{ type: "ACCONTO" | "FINAL" | "KOSTNADSRAKNING"; label: string }> {
+  if (pm === "RATTSSKYDD" || pm === "RATTSHJALP") {
+    return [
+      { type: "ACCONTO", label: "Aconto till klient" },
+      { type: "FINAL", label: pm === "RATTSSKYDD" ? "Slutfaktura till försäkring" : "Slutfaktura till myndighet" },
+    ];
+  }
+  if (pm === "OFFENTLIG_FORSVARARE") {
+    return [{ type: "KOSTNADSRAKNING", label: "Kostnadsräkning till domstol" }];
+  }
+  return [{ type: "FINAL", label: "Slutfaktura till klient" }];
+}
+
+function RunsList({ rows, loading }: { rows: BillingRunRow[]; loading: boolean }) {
+  if (loading) return <p className="px-6 py-3 text-sm text-gray-500">Laddar…</p>;
+  if (rows.length === 0) return <p className="px-6 py-3 text-sm text-gray-500">Inga billing-runs ännu.</p>;
+  return (
+    <div className="px-6 py-2">
+      <table className="min-w-full text-sm">
+        <thead className="text-xs text-gray-500">
+          <tr><th className="text-left py-1">Typ</th><th className="text-left">Mottagare</th><th className="text-left">Status</th><th className="text-right">Belopp</th><th></th></tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100">
+          {rows.map((r) => (
+            <tr key={r.id}>
+              <td className="py-2 text-sm">{BILLING_RUN_TYPE_LABELS[r.type as keyof typeof BILLING_RUN_TYPE_LABELS] ?? r.type}</td>
+              <td className="text-sm text-gray-600">{r.recipient}</td>
+              <td className="text-sm">{BILLING_RUN_STATUS_LABELS[r.status as keyof typeof BILLING_RUN_STATUS_LABELS] ?? r.status}</td>
+              <td className="text-right text-sm font-mono">{formatCurrency(r.amountOre)}</td>
+              <td className="text-right">
+                {r.invoiceId && (
+                  <Link href={`/invoices/${r.invoiceId}`} className="text-xs text-blue-600 hover:underline">
+                    {r.invoice?.invoiceNumber ?? "Faktura"}
+                  </Link>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}

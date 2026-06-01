@@ -10,6 +10,7 @@ import { documentTemplateRouter } from "./documentTemplate";
 import { organizationRouter } from "./organization";
 import { reportsRouter } from "./reports";
 import { invoiceRouter } from "./invoice";
+import { billingRunRouter } from "./billingRun";
 import { paymentPlanRouter } from "./paymentPlan";
 import { kostnadsrakningRouter } from "./kostnadsrakning";
 import { calendarRouter } from "./calendar";
@@ -29,6 +30,7 @@ export const appRouter = router({
   organization: organizationRouter,
   reports: reportsRouter,
   invoice: invoiceRouter,
+  billingRun: billingRunRouter,
   paymentPlan: paymentPlanRouter,
   kostnadsrakning: kostnadsrakningRouter,
   calendar: calendarRouter,

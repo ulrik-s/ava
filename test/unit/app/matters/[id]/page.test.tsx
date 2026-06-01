@@ -77,6 +77,13 @@ vi.mock("@/lib/client/trpc", () => ({
     kostnadsrakning: {
       record: { useMutation: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }) },
     },
+    billingRun: {
+      list: { useQuery: () => ({ data: { runs: [] }, isLoading: false, refetch: vi.fn() }) },
+      createAcconto: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      createFinal: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      createKostnadsrakning: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      setVerdict: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+    },
     calendar: {
       listForMatter: { useQuery: () => ({ data: [] }) },
       listForUsers: { useQuery: () => ({ data: [] }) },

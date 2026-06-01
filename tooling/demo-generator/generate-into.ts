@@ -22,6 +22,7 @@ import { populateDocuments } from "./populate-documents";
 import { populateTemplateDocs } from "./populate-template-docs";
 import { populateInvoiceDocs } from "./populate-invoice-docs";
 import { populateUnbilledTime } from "./populate-unbilled-time";
+import { populateBillingRuns, type BillingRunsResult } from "./populate-billing-runs";
 import { createIdTranslator, translateSeed, type IdTranslator } from "./id-translator";
 import type { Principal } from "@/lib/server/auth/principal";
 
@@ -30,6 +31,7 @@ export interface GenerateResult extends PopulateResult {
   templateDocs: number;
   invoiceDocs: number;
   billing: BillingResult;
+  billingRuns: BillingRunsResult;
   unbilledTimeEntries: number;
   /** Reverse-mappning UUID → slug. meta.json + URL-routing använder den. */
   translator: IdTranslator;
@@ -53,6 +55,9 @@ export async function generateInto(outDir: string, seedOpts: BuildSeedOpts = {})
 
   const res = await populate(target.caller, seed);
   const billing = await populateBilling(target.caller, seed); // efter time/expenses
+  // Nya BillingRun-modellen: aconto/slutfaktura/kostnadsräkning per paymentMethod.
+  // Körs efter populateBilling så vi inte konfliktar med legacy-flow:n.
+  const billingRuns = await populateBillingRuns(target.caller, seed);
   // Färsk upparbetad tid EFTER billing → entries med invoiceId=null.
   // Simulerar löpande arbete som inte hunnit faktureras ännu.
   const unbilledTimeEntries = await populateUnbilledTime(target.caller, seed);
@@ -66,5 +71,5 @@ export async function generateInto(outDir: string, seedOpts: BuildSeedOpts = {})
   const templateDocs = await populateTemplateDocs(target.caller, seed, sink); // mall→ärende-flödet
   const invoiceDocs = await populateInvoiceDocs(target.caller, sink); // faktura-dokument länkade till fakturan
   await target.finalize();
-  return { ...res, documents, templateDocs, invoiceDocs, billing, unbilledTimeEntries, translator };
+  return { ...res, documents, templateDocs, invoiceDocs, billing, billingRuns, unbilledTimeEntries, translator };
 }
