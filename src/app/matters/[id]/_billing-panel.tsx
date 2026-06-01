@@ -18,6 +18,7 @@ import { BILLING_RUN_TYPE_LABELS, BILLING_RUN_STATUS_LABELS } from "@/lib/shared
 import { BillingDialog } from "./_billing-dialog";
 import { VerdictDialog } from "./_verdict-dialog";
 import { KostnadsrakningModal } from "./_kostnadsrakning-modal";
+import { hasGeneratedDoc, openGeneratedDoc } from "@/lib/client/demo/generated-doc-cache";
 
 interface MatterContext {
   matterNumber: string;
@@ -66,9 +67,23 @@ function findKrDocument(matterId: string, run: BillingRunRow): KrDocInfo | null 
   return sorted[0] ? { id: sorted[0].id, fileName: sorted[0].fileName } : null;
 }
 
+function openKrDocument(doc: KrDocInfo): void {
+  // I demo-mode (GH Pages) finns ingen statisk fil för dokument som
+  // genererats client-side — blob-cachen håller bytes:erna i minnet.
+  // Self-hosted/server-mode skulle istället peka mot /api/documents/:id.
+  if (hasGeneratedDoc(doc.id)) {
+    openGeneratedDoc(doc.id);
+    return;
+  }
+  // Fallback: ingen blob (page reload sedan generering) — visa hint.
+  alert(
+    `Dokumentet "${doc.fileName}" är inte längre i minnet (efter sid-reload).\n` +
+    `Skapa en ny kostnadsräkning eller använd helper-app:n för att spara filen.`,
+  );
+}
+
 function PendingVerdictBanner({ matterId, run, onClick }: { matterId: string; run: BillingRunRow; onClick: () => void }) {
   const doc = findKrDocument(matterId, run);
-  const basePath = process.env.NEXT_PUBLIC_DEMO_BASE_PATH ?? "";
   return (
     <div className="mx-6 my-3 rounded border border-amber-300 bg-amber-50 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
       <div className="text-sm text-amber-900 space-y-1">
@@ -77,7 +92,14 @@ function PendingVerdictBanner({ matterId, run, onClick }: { matterId: string; ru
         </div>
         {doc && (
           <div className="text-xs text-amber-800">
-            Dokument: <a href={`${basePath}/documents/${doc.id}/`} className="underline hover:text-amber-900">{doc.fileName}</a>
+            Dokument:{" "}
+            <button
+              type="button"
+              onClick={() => openKrDocument(doc)}
+              className="underline hover:text-amber-900 text-amber-900 cursor-pointer"
+            >
+              {doc.fileName}
+            </button>
           </div>
         )}
       </div>

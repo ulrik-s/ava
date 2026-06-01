@@ -29,9 +29,18 @@ export interface OpenDocumentDeps {
   notifyError: (msg: string) => void;
 }
 
-export async function openDocument(deps: OpenDocumentDeps): Promise<"opened-gh-pages" | "opened-blob" | "error"> {
+export async function openDocument(deps: OpenDocumentDeps): Promise<"opened-gh-pages" | "opened-blob" | "opened-generated" | "error"> {
   const { doc, isDemo, demoRepo, loadHandle, readFromHandle, openUrl, notifyError } = deps;
   const storagePath = doc.storagePath ?? `documents/${doc.id}`;
+
+  // Demo + self-hosted: dokument som genererats client-side under denna
+  // session finns INTE som statisk fil — slå upp i in-memory blob-cachen
+  // först. (Kostnadsräkning m.fl.)
+  const { hasGeneratedDoc, openGeneratedDoc } = await import("@/lib/client/demo/generated-doc-cache");
+  if (hasGeneratedDoc(doc.id)) {
+    openGeneratedDoc(doc.id, (url) => openUrl(url));
+    return "opened-generated";
+  }
 
   if (isDemo) {
     const repo = demoRepo ?? "ulrik-s/ava-demo";

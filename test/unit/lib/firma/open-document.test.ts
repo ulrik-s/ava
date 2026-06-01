@@ -3,10 +3,13 @@
  * dokument baserat på deploy-mode. Pure-fn → inga FSA-mocks behövs.
  */
 
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { openDocument, withUtf8CharsetIfText } from "@/lib/client/firma/open-document";
+import { clearGeneratedDocCache, stashGeneratedDoc } from "@/lib/client/demo/generated-doc-cache";
 
 const baseDoc = { id: "doc-1", storagePath: "documents/content/doc-1.md", fileName: "x.md" };
+
+beforeEach(() => clearGeneratedDocCache());
 
 describe("openDocument", () => {
   it("demo-mode → öppnar gh-pages-URL byggd från demoRepo", async () => {
@@ -106,6 +109,24 @@ describe("openDocument", () => {
       notifyError: vi.fn(),
     });
     expect(capturedBlob?.type).toBe("text/markdown; charset=utf-8");
+  });
+
+  it("blob-cached doc → öppnar via blob: URL (skippa gh-pages-URL)", async () => {
+    globalThis.URL.createObjectURL = vi.fn(() => "blob:in-memory");
+    globalThis.URL.revokeObjectURL = vi.fn();
+    stashGeneratedDoc("doc-1", new TextEncoder().encode("<html/>"), "text/html", "k.html");
+    const openUrl = vi.fn();
+    const result = await openDocument({
+      doc: baseDoc,
+      isDemo: true,
+      demoRepo: "alice/firma",
+      loadHandle: async () => null,
+      readFromHandle: async () => null,
+      openUrl,
+      notifyError: vi.fn(),
+    });
+    expect(result).toBe("opened-generated");
+    expect(openUrl).toHaveBeenCalledWith("blob:in-memory");
   });
 
   it("fallback storagePath när doc saknar fältet → documents/<id>", async () => {

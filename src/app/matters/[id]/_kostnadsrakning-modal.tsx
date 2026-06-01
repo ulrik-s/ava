@@ -28,6 +28,7 @@ import {
 } from "@/lib/shared/kostnadsrakning-template";
 import { useHelper, composeMailViaHelper } from "@/lib/client/helper/use-helper";
 import { formatCurrency } from "@/lib/client/utils";
+import { stashGeneratedDoc } from "@/lib/client/demo/generated-doc-cache";
 
 interface Props {
   matterId: string;
@@ -93,7 +94,10 @@ interface RecordDocOpts {
   utils: {
     document: {
       list: { invalidate: (filter?: any) => Promise<unknown> };
-      tree: { invalidate: (filter?: any) => Promise<unknown> };
+      tree: {
+        invalidate: (filter?: any) => Promise<unknown>;
+        refetch: (filter?: any) => Promise<unknown>;
+      };
     };
   };
   docId: string;
@@ -114,10 +118,12 @@ async function recordDocument(opts: RecordDocOpts): Promise<void> {
       storagePath: opts.storagePath, totalInclVat: opts.totalInclVat,
       huvudforhandlingMinutes: opts.huvudforhandlingMinutes,
     });
-    // DocumentBrowser använder document.tree, dokumentsöket använder
-    // document.list. Invalidera båda (+ explicit matterId-scoped) så det
-    // nya dokumentet dyker upp omedelbart oavsett vart användaren tittar.
+    // DocumentBrowser använder document.tree; dokumentsöket använder
+    // document.list. Invalidera båda + tvinga explicit refetch på tree
+    // för matter:n — annars (R-Q v5 + tRPC v11) händer ibland att
+    // useQuery håller cached data tills nästa mount.
     await opts.utils.document.tree.invalidate({ matterId: opts.matterId });
+    await opts.utils.document.tree.refetch({ matterId: opts.matterId });
     await opts.utils.document.list.invalidate({ matterId: opts.matterId });
     await opts.utils.document.list.invalidate();
   } catch (e) {
@@ -223,6 +229,10 @@ export function KostnadsrakningModal(props: Props) {
       const html = renderHtml(isTaxe, templates.data, ctx.templateContext);
       const bytes = new TextEncoder().encode(html);
       const storagePath = `documents/content/${docId}.html`;
+      // I demo-mode (GH Pages) finns ingen server som kan ta emot filen,
+      // så stash:a bytes:erna i en in-memory blob-cache som document-row
+      // och banner-länken slår upp när användaren klickar "öppna".
+      stashGeneratedDoc(docId, bytes, "text/html", fileName);
       await writeFsa(storagePath, bytes);
       await recordDocument({
         recordKostn, utils, docId, matterId: props.matterId, fileName, storagePath,
