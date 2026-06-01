@@ -23,8 +23,8 @@ import { buildKostnadsrakningContext } from "@/lib/shared/kostnadsrakning";
 import type { TaxaLevel } from "@/lib/shared/brottmalstaxa";
 import { renderHandlebars } from "@/lib/client/kostnadsrakning/render-handlebars";
 import {
-  KOSTNADSRAKNING_DEFAULT_HTML,
-  KOSTNADSRAKNING_TEMPLATE_CATEGORY,
+  templateCategoryFor,
+  defaultTemplateFor,
 } from "@/lib/shared/kostnadsrakning-template";
 import { formatCurrency } from "@/lib/client/utils";
 
@@ -78,6 +78,7 @@ export function KostnadsrakningModal(props: Props) {
 
   const templates = trpc.documentTemplate.list.useQuery();
   const matterUpdate = trpc.matter.update.useMutation();
+  const utils = trpc.useUtils();
   const recordKostn = trpc.kostnadsrakning.record.useMutation();
   // Tidsregistreringar — billable rader inkluderas i kostnadsräkningen.
   // För icke-taxa-ärenden räknas de in i arvodes-summan; för taxa-ärenden
@@ -120,11 +121,13 @@ export function KostnadsrakningModal(props: Props) {
     setError(null);
     setGenerating(true);
     try {
-      // Mall: byråns egen ("Kostnadsräkning"-kategori) eller default
+      // Mall: byråns egen i RÄTT kategori (taxa vs icke-taxa), annars
+      // den inbyggda default-HTML:en för respektive variant.
+      const wantedCategory = templateCategoryFor(isTaxe);
       const tpl = (templates.data ?? []).find(
-        (t: { category?: string | null; content?: string }) => t.category === KOSTNADSRAKNING_TEMPLATE_CATEGORY,
+        (t: { category?: string | null; content?: string }) => t.category === wantedCategory,
       ) as { content?: string } | undefined;
-      const templateHtml = tpl?.content ?? KOSTNADSRAKNING_DEFAULT_HTML;
+      const templateHtml = tpl?.content ?? defaultTemplateFor(isTaxe);
 
       // Rendera mall + ctx
       const html = renderHandlebars(templateHtml, ctx.templateContext);
@@ -171,6 +174,10 @@ export function KostnadsrakningModal(props: Props) {
           totalInclVat: ctx.totalInclVat,
           huvudforhandlingMinutes: ctx.huvudforhandlingMinutes,
         });
+        // Invalidera dokument-listan så det nya dokumentet syns
+        // omedelbart i ärendets DocumentBrowser + global dokument-sök.
+        await utils.document.list.invalidate?.({ matterId: props.matterId });
+        await utils.document.list.invalidate?.();
       } catch (e) {
         console.warn("[kostnadsrakning] event-emit misslyckades:", e);
       }
@@ -191,6 +198,9 @@ export function KostnadsrakningModal(props: Props) {
       }
 
       setDone({ filename: fileName });
+      // Stäng dialogen automatiskt efter att användaren hunnit se
+      // confirm-meddelandet. Print-fönstret är redan öppet i ny flik.
+      setTimeout(() => props.onClose(), 1500);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
