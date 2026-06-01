@@ -6,6 +6,13 @@ on:
   pull_request:
   workflow_dispatch: # för on-demand e2e (git round-trip)
 
+# Opta in GitHub Actions runtime på Node 24. Annars kör checkout/setup-node/
+# upload-artifact på Node 20 som tvångsbyts 2026-06-16 och EOL:ar 2026-09-16
+# (deprecation-varning i loggen). Detta är skilt från setup-node:s node-version
+# nedan (= Node:n som kör yarn/build/test).
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 # Yarn (med nodeLinker: node-modules) är vad utvecklarna kör lokalt.
 # Vi använder corepack i CI så att exakt samma yarn-version används.
 #
@@ -23,7 +30,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
       - run: corepack enable
       - run: yarn install --immutable
       - run: yarn typecheck
@@ -51,7 +58,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
       - run: corepack enable
       - run: yarn install --immutable
       - run: yarn test:cov
@@ -77,7 +84,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
       - run: corepack enable
       - run: yarn install --immutable
       - run: yarn build:demo
