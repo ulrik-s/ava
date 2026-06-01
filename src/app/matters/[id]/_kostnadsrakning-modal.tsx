@@ -90,7 +90,12 @@ async function writeFsa(storagePath: string, bytes: Uint8Array): Promise<void> {
 /* eslint-disable @typescript-eslint/no-explicit-any */
 interface RecordDocOpts {
   recordKostn: { mutateAsync: (i: any) => Promise<unknown> };
-  utils: { document: { list: { invalidate: (filter?: any) => Promise<unknown> } } };
+  utils: {
+    document: {
+      list: { invalidate: (filter?: any) => Promise<unknown> };
+      tree: { invalidate: (filter?: any) => Promise<unknown> };
+    };
+  };
   docId: string;
   matterId: string;
   fileName: string;
@@ -109,6 +114,10 @@ async function recordDocument(opts: RecordDocOpts): Promise<void> {
       storagePath: opts.storagePath, totalInclVat: opts.totalInclVat,
       huvudforhandlingMinutes: opts.huvudforhandlingMinutes,
     });
+    // DocumentBrowser använder document.tree, dokumentsöket använder
+    // document.list. Invalidera båda (+ explicit matterId-scoped) så det
+    // nya dokumentet dyker upp omedelbart oavsett vart användaren tittar.
+    await opts.utils.document.tree.invalidate({ matterId: opts.matterId });
     await opts.utils.document.list.invalidate({ matterId: opts.matterId });
     await opts.utils.document.list.invalidate();
   } catch (e) {

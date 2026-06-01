@@ -46,14 +46,43 @@ interface BillingRunRow {
   invoice?: { id: string; invoiceNumber?: string | null } | null;
 }
 
-function PendingVerdictBanner({ run, onClick }: { run: BillingRunRow; onClick: () => void }) {
+interface KrDocInfo { id: string; fileName: string }
+
+function findKrDocument(matterId: string, run: BillingRunRow): KrDocInfo | null {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const docs = trpc.document.list.useQuery({ matterId, folderId: null, pageSize: 100 }).data as any;
+  const list = (docs?.documents ?? []) as Array<{ id: string; fileName: string; documentType?: string | null; createdAt?: string | Date }>;
+  const kostn = list.filter((d) => d.documentType === "Kostnadsräkning");
+  if (kostn.length === 0) return null;
+  // Senaste KR-dokumentet skapat innan/samtidigt med billing-run:n —
+  // räcker för MVP (vanligtvis 1 pending KR per matter). Vid framtida
+  // refactor: lagra documentId direkt på BillingRun-row.
+  const runTs = new Date(run.createdAt).getTime();
+  const sorted = [...kostn].sort((a, b) => {
+    const at = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const bt = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    return Math.abs(at - runTs) - Math.abs(bt - runTs);
+  });
+  return sorted[0] ? { id: sorted[0].id, fileName: sorted[0].fileName } : null;
+}
+
+function PendingVerdictBanner({ matterId, run, onClick }: { matterId: string; run: BillingRunRow; onClick: () => void }) {
+  const doc = findKrDocument(matterId, run);
+  const basePath = process.env.NEXT_PUBLIC_DEMO_BASE_PATH ?? "";
   return (
-    <div className="mx-6 my-3 rounded border border-amber-300 bg-amber-50 px-4 py-3 flex items-center justify-between">
-      <div className="text-sm text-amber-900">
-        <strong>Kostnadsräkning väntar på dom</strong> — {formatCurrency(run.amountOre)} föreslaget belopp.
+    <div className="mx-6 my-3 rounded border border-amber-300 bg-amber-50 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+      <div className="text-sm text-amber-900 space-y-1">
+        <div>
+          <strong>Kostnadsräkning väntar på dom</strong> — <span className="font-mono font-semibold">{formatCurrency(run.amountOre)}</span> föreslaget belopp
+        </div>
+        {doc && (
+          <div className="text-xs text-amber-800">
+            Dokument: <a href={`${basePath}/documents/${doc.id}/`} className="underline hover:text-amber-900">{doc.fileName}</a>
+          </div>
+        )}
       </div>
       <button onClick={onClick}
-        className="text-xs px-3 py-1 bg-amber-600 text-white rounded hover:bg-amber-700">
+        className="text-xs px-3 py-1 bg-amber-600 text-white rounded hover:bg-amber-700 whitespace-nowrap">
         Ange dom + prutning
       </button>
     </div>
@@ -187,7 +216,7 @@ export function BillingPanel({ matterId, matter }: Props) {
         <BillingActions paymentMethod={matter.paymentMethod ?? ""} onPick={onPick} />
       </div>
       <SummaryCards totals={computeTotals(rows)} />
-      {pending && <PendingVerdictBanner run={pending} onClick={() => setVerdictRunId(pending.id)} />}
+      {pending && <PendingVerdictBanner matterId={matterId} run={pending} onClick={() => setVerdictRunId(pending.id)} />}
       <RunsList rows={rows} loading={runs.isLoading} />
       <BillingDialogs matterId={matterId} rows={rows}
         dialog={dialog} setDialog={setDialog}
