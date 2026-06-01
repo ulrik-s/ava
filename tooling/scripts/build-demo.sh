@@ -129,16 +129,38 @@ yarn tsx tooling/scripts/generate-demo-manifest.ts "$ROOT/out"
 # (t.ex. /.ava/users/) → users + org-data skulle 404:a.
 touch "$ROOT/out/.nojekyll"
 
-# SPA-fallback: GH Pages serverar 404.html för okända URL:er. Vi gör
-# 404.html till en KOPIA av index.html (app-shellen). Då bootar appen
-# direkt på den okända URL:en, Next:s client-router renderar matchande
-# route och `useRouteId` läser id:t ur path:en. Inget redirect → ingen
-# loop för id:n som inte är pre-renderade (organiska faktura-/plan-id).
+# SPA-fallback: GH Pages serverar 404.html för okända URL:er. Att bara
+# kopiera index.html funkar INTE för runtime-skapade id:n: index.html:s
+# bakade route är dashboarden, så /invoices/<nytt-id>/ renderar dashboarden
+# (och Next hård-navigerar icke-pre-renderade params → loop om man försöker
+# router.replace till själva id:t).
 #
-# Tidigare redirect-till-rot + sessionStorage-mekanism loopade när
-# router.replace gick mot ett id som inte fanns i generateStaticParams
-# (Next hård-navigerade → ny 404 → ny redirect → loop).
-cp "$ROOT/out/index.html" "$ROOT/out/404.html"
+# Lösning (shell-routing-shim): 404.html är ett pytte-skript som mappar en
+# okänd entity-URL till den PRE-RENDERADE `__shell__`-sentinellen och bär det
+# egentliga id:t i hash:en (#orig=<path>). __shell__ är en riktig 200-fil →
+# ingen 404-loop; appen bootar där och `useRouteId` läser id:t ur hash:en.
+# Okända icke-entity-URL:er → app-roten (dashboard).
+cat > "$ROOT/out/404.html" <<'HTML'
+<!doctype html>
+<html lang="sv"><head><meta charset="utf-8"><title>AVA</title><meta name="robots" content="noindex"></head>
+<body><script>
+(function(){
+  var SHELL=["invoices","matters","contacts","payment-plans","users","templates"];
+  var base="__BASEPATH__";
+  var path=location.pathname;
+  var rest=(base && path.indexOf(base)===0)?path.slice(base.length):path;
+  var segs=rest.split("/").filter(Boolean);
+  var last=segs.length?segs[segs.length-1]:"";
+  var isAsset=path.indexOf("/_next/")!==-1 || last.indexOf(".")!==-1;
+  if(!isAsset && segs.length>=2 && SHELL.indexOf(segs[0])!==-1 && segs[1]!=="__shell__"){
+    location.replace(base+"/"+segs[0]+"/__shell__/#orig="+encodeURIComponent(path+location.search));
+  } else if(!isAsset){ location.replace(base+"/"); }
+  else { document.title="404"; document.body.textContent="404"; }
+})();
+</script></body></html>
+HTML
+# Baka in basePath (portabelt — node finns redan i bygget; sed -i skiljer sig mac/linux)
+node -e 'const f=process.argv[1],fs=require("fs");fs.writeFileSync(f,fs.readFileSync(f,"utf8").replace("__BASEPATH__",process.env.DEMO_BASE_PATH||""))' "$ROOT/out/404.html"
 
 echo "[build-demo] Klar. Output: $ROOT/out/"
 echo "  • App: $(find "$ROOT/out" -name '*.html' | wc -l | tr -d ' ') HTML-filer"
