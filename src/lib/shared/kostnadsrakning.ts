@@ -17,7 +17,7 @@
  *   - `templateContext` — Handlebars-context (matchar default-mallen)
  */
 
-import { computeBrottmalstaxa, type TaxaLevel, type TaxaResult } from "./brottmalstaxa";
+import { computeBrottmalstaxa, computeTimkostnadsnorm, type TaxaLevel, type TaxaResult } from "./brottmalstaxa";
 import { splitVat } from "./vat";
 
 export interface ExpenseInput {
@@ -54,10 +54,13 @@ export interface BuildInput {
   hufStart: Date | string;
   /** ISO-string eller Date — HUF slutade (just nu i rättssalen). */
   hufEnd: Date | string;
-  /** Brottmålstaxa-nivå (1-4). Default 1. */
+  /** Brottmålstaxa-nivå (1-4). Default 1. Används bara när isTaxeArende=true. */
   taxaLevel?: TaxaLevel;
   /** F-skatt-flagga (DVFS 11 §). Default true. */
   hasFTax?: boolean;
+  /** Är detta ett taxa-ärende? Default true (bakåt­kompabilitet).
+   *  Vid false: arvodet räknas via timkostnadsnorm × faktisk tid istället. */
+  isTaxeArende?: boolean;
   /** Alla utlägg på ärendet. */
   expenses: readonly ExpenseInput[];
 }
@@ -85,6 +88,21 @@ export interface KostnadsrakningResult {
   templateContext: Record<string, unknown>;
 }
 
+/** Icke-taxa-ärende: arvode = timkostnadsnorm × faktisk tid. Returnerar
+ *  ett TaxaResult-objekt så övriga delen av flowet är oförändrad. */
+function timkostnadsnormResult(huvudforhandlingMinutes: number, hasFTax: boolean): TaxaResult {
+  const tk = computeTimkostnadsnorm({ arbetsMinutes: huvudforhandlingMinutes, hasFTax });
+  const label = hasFTax ? "Timkostnadsnorm (med F-skatt)" : "Timkostnadsnorm (utan F-skatt)";
+  return {
+    kind: "taxa-applies",
+    level: 1,
+    intervalLabel: label,
+    ersattningExclVat: tk.total,
+    gransvardeExclVat: 0,
+    notes: [`Icke-taxa-ärende — timkostnadsnorm ${tk.rateOrePerH / 100} kr/h × ${(huvudforhandlingMinutes / 60).toFixed(2)} h`],
+  };
+}
+
 // eslint-disable-next-line complexity
 export function buildKostnadsrakningContext(input: BuildInput): KostnadsrakningResult {
   const start = new Date(input.hufStart);
@@ -92,11 +110,10 @@ export function buildKostnadsrakningContext(input: BuildInput): KostnadsrakningR
   const huvudforhandlingMinutes = diffMinutes(start, end);
 
   const level: TaxaLevel = input.taxaLevel ?? 1;
-  const taxa = computeBrottmalstaxa({
-    huvudforhandlingMinutes,
-    level,
-    hasFTax: input.hasFTax ?? true,
-  });
+  const isTaxe = input.isTaxeArende ?? true;
+  const taxa: TaxaResult = isTaxe
+    ? computeBrottmalstaxa({ huvudforhandlingMinutes, level, hasFTax: input.hasFTax ?? true })
+    : timkostnadsnormResult(huvudforhandlingMinutes, input.hasFTax ?? true);
 
   // Bara billable utlägg ska faktureras — non-billable är firmans egen kostnad.
   const expenses = input.expenses.filter((e) => e.billable !== false);

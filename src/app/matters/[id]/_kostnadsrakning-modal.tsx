@@ -46,6 +46,7 @@ interface Props {
   initialLevel?: TaxaLevel;
   initialHasFTax?: boolean;
   initialHufStart?: string | Date | null;
+  initialIsTaxe?: boolean;
   onClose: () => void;
 }
 
@@ -65,6 +66,7 @@ function defaultStart(stored?: string | Date | null): string {
 export function KostnadsrakningModal(props: Props) {
   const [hufStart, setHufStart] = useState<string>(() => defaultStart(props.initialHufStart));
   const [hufEnd, setHufEnd] = useState<string>(() => toDatetimeLocalValue(new Date()));
+  const [isTaxe, setIsTaxe] = useState<boolean>(props.initialIsTaxe ?? true);
   const [level, setLevel] = useState<TaxaLevel>(props.initialLevel ?? 1);
   const [hasFTax, setHasFTax] = useState<boolean>(props.initialHasFTax ?? true);
   const [courtEmail, setCourtEmail] = useState<string>("");
@@ -94,8 +96,9 @@ export function KostnadsrakningModal(props: Props) {
     hufEnd: new Date(hufEnd),
     taxaLevel: level,
     hasFTax,
+    isTaxeArende: isTaxe,
     expenses: props.expenses,
-  }), [hufStart, hufEnd, level, hasFTax, props]);
+  }), [hufStart, hufEnd, level, hasFTax, isTaxe, props]);
 
   useEffect(() => {
     const h = (e: KeyboardEvent) => { if (e.key === "Escape") props.onClose(); };
@@ -245,26 +248,43 @@ export function KostnadsrakningModal(props: Props) {
             </div>
           </section>
 
-          <section className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <label className="block">
-              <span className="text-xs text-gray-700 mb-1 block">Ersättningsnivå (DVFS 2025:6)</span>
-              <select value={level} onChange={(e) => setLevel(Number(e.target.value) as TaxaLevel)}
-                className="w-full rounded border border-gray-300 px-3 py-2.5 text-base">
-                <option value={1}>1 — Grundersättning</option>
-                <option value={2}>2 — + häktningsförh. m.m.</option>
-                <option value={3}>3 — + RPU</option>
-                <option value={4}>4 — + häktning m.m. + RPU</option>
-              </select>
-            </label>
+          <section className="space-y-3">
             <div>
-              <span className="text-xs text-gray-700 mb-1 block">F-skatt</span>
-              <div className="flex items-center gap-4 py-2 text-base">
-                <label className="flex items-center gap-2">
-                  <input type="radio" checked={hasFTax} onChange={() => setHasFTax(true)} className="w-5 h-5" /> Ja
+              <span className="text-xs text-gray-700 mb-1 block">Ersättningstyp</span>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <label className="flex items-center gap-2 text-base">
+                  <input type="radio" checked={isTaxe} onChange={() => setIsTaxe(true)} className="w-5 h-5" />
+                  Taxa (brottmålstaxan DVFS 2025:6)
                 </label>
-                <label className="flex items-center gap-2">
-                  <input type="radio" checked={!hasFTax} onChange={() => setHasFTax(false)} className="w-5 h-5" /> Nej
+                <label className="flex items-center gap-2 text-base">
+                  <input type="radio" checked={!isTaxe} onChange={() => setIsTaxe(false)} className="w-5 h-5" />
+                  Icke-taxa (timkostnadsnorm × faktisk tid)
                 </label>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {isTaxe && (
+                <label className="block">
+                  <span className="text-xs text-gray-700 mb-1 block">Ersättningsnivå (DVFS 2025:6)</span>
+                  <select value={level} onChange={(e) => setLevel(Number(e.target.value) as TaxaLevel)}
+                    className="w-full rounded border border-gray-300 px-3 py-2.5 text-base">
+                    <option value={1}>1 — Grundersättning</option>
+                    <option value={2}>2 — + häktningsförh. m.m.</option>
+                    <option value={3}>3 — + RPU</option>
+                    <option value={4}>4 — + häktning m.m. + RPU</option>
+                  </select>
+                </label>
+              )}
+              <div className={isTaxe ? "" : "sm:col-span-2"}>
+                <span className="text-xs text-gray-700 mb-1 block">F-skatt</span>
+                <div className="flex items-center gap-4 py-2 text-base">
+                  <label className="flex items-center gap-2">
+                    <input type="radio" checked={hasFTax} onChange={() => setHasFTax(true)} className="w-5 h-5" /> Ja
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input type="radio" checked={!hasFTax} onChange={() => setHasFTax(false)} className="w-5 h-5" /> Nej
+                  </label>
+                </div>
               </div>
             </div>
           </section>

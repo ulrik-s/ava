@@ -12,7 +12,6 @@
  * öppnar verdict-dialogen (sätter prutning + skapar faktura).
  */
 import { useState } from "react";
-import Link from "next/link";
 import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
 import { BILLING_RUN_TYPE_LABELS, BILLING_RUN_STATUS_LABELS } from "@/lib/shared/schemas/enums";
@@ -26,6 +25,7 @@ interface MatterContext {
   taxaLevel?: 1 | 2 | 3 | 4 | null;
   taxaHasFTax?: boolean | null;
   taxaHufStart?: string | Date | null;
+  isTaxeArende?: boolean | null;
   paymentMethod?: string | null;
   contacts?: ReadonlyArray<{ role: string; contact?: { name?: string | null; email?: string | null } | null }>;
 }
@@ -162,6 +162,7 @@ function KostnadsrakningTrigger({ matterId, matter, open, onClose, onRecorded }:
       initialLevel={matter.taxaLevel ?? undefined}
       initialHasFTax={matter.taxaHasFTax ?? undefined}
       initialHufStart={matter.taxaHufStart ?? undefined}
+      initialIsTaxe={matter.isTaxeArende ?? undefined}
       onClose={onModalClose}
     />
   );
@@ -288,9 +289,15 @@ function RunsList({ rows, loading }: { rows: BillingRunRow[]; loading: boolean }
               <td className="text-right text-sm font-mono">{formatCurrency(r.amountOre)}</td>
               <td className="text-right">
                 {r.invoiceId && (
-                  <Link href={`/invoices/${r.invoiceId}`} className="text-xs text-blue-600 hover:underline">
+                  // <a>-tag (inte Next-Link) — runtime-skapade UUIDs finns inte
+                  // i generateStaticParams. Hård navigering → 404.html (=
+                  // index.html) → app:en bootar med rätt URL, useRouteId
+                  // läser id:t. Next-Link skulle inte hitta routen och falla
+                  // tillbaka till dashboard.
+                  <a href={`${process.env.NEXT_PUBLIC_DEMO_BASE_PATH ?? ""}/invoices/${r.invoiceId}/`}
+                    className="text-xs text-blue-600 hover:underline">
                     {r.invoice?.invoiceNumber ?? "Faktura"}
-                  </Link>
+                  </a>
                 )}
               </td>
             </tr>
