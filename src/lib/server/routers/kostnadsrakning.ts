@@ -14,6 +14,7 @@
 
 import { z } from "zod";
 import { router, orgProcedure } from "../trpc";
+import { emit } from "../events/emit";
 
 export const kostnadsrakningRouter = router({
   /**
@@ -55,19 +56,19 @@ export const kostnadsrakningRouter = router({
         } as never,
       });
 
-      // 2. Emit event så regelmotorn kan trigga
-      await ctx.dataStore.events.emit({
-        type: "kostnadsrakning.generated",
-        source: "ui",
-        actor: { kind: "user", id: ctx.user.id },
-        matterId: input.matterId,
-        payload: {
-          documentId: input.id,
-          fileName: input.fileName,
-          totalInclVat: input.totalInclVat,
-          huvudforhandlingMinutes: input.huvudforhandlingMinutes,
-          organizationId: ctx.orgId,
-        },
+      // 2. Emit event så regelmotorn kan trigga.
+      //    OBS: går via `emit`-helpern (safeEmit) — INTE `ctx.dataStore.events.emit`
+      //    direkt. I demo/git-backenden är event-loggen read-only och kastar
+      //    `ReadOnlyError`; safeEmit sväljer det. Direkt-anrop här gjorde att
+      //    hela mutationen rejektade EFTER att dokumentet skapats, vilket fick
+      //    klientens record/invalidate att hoppas över → dokumentet dök aldrig
+      //    upp i ärendet trots att UI:t visade "sparad".
+      await emit.kostnadsrakningGenerated(ctx, input.matterId, {
+        documentId: input.id,
+        fileName: input.fileName,
+        totalInclVat: input.totalInclVat,
+        huvudforhandlingMinutes: input.huvudforhandlingMinutes,
+        organizationId: ctx.orgId,
       });
 
       return doc;

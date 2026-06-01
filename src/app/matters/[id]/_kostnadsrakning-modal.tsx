@@ -111,23 +111,28 @@ interface RecordDocOpts {
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
 async function recordDocument(opts: RecordDocOpts): Promise<void> {
+  // Steg 1 MÅSTE lyckas. Om mutationen kastar propagerar vi felet så att
+  // generate() visar en RIKTIG felruta istället för en falsk "sparad"-banner.
+  // (Tidigare svaldes ALLT här → server-mutationen kunde rejekta på read-only
+  // event-log utan att dokumentet skapades, men UI:t sa ändå "sparad".)
+  await opts.recordKostn.mutateAsync({
+    id: opts.docId, matterId: opts.matterId, fileName: opts.fileName,
+    mimeType: "text/html; charset=utf-8", sizeBytes: opts.bytes.byteLength,
+    storagePath: opts.storagePath, totalInclVat: opts.totalInclVat,
+    huvudforhandlingMinutes: opts.huvudforhandlingMinutes,
+  });
+  // Steg 2 (invalidering) är best-effort — dokumentet är redan registrerat,
+  // så ett invaliderings-hicka ska inte blockera success. DocumentBrowser
+  // använder document.tree; faktura-panelen document.list. Invalidera båda +
+  // tvinga explicit refetch på tree (R-Q v5 + tRPC v11 håller annars ibland
+  // cached data tills nästa mount).
   try {
-    await opts.recordKostn.mutateAsync({
-      id: opts.docId, matterId: opts.matterId, fileName: opts.fileName,
-      mimeType: "text/html; charset=utf-8", sizeBytes: opts.bytes.byteLength,
-      storagePath: opts.storagePath, totalInclVat: opts.totalInclVat,
-      huvudforhandlingMinutes: opts.huvudforhandlingMinutes,
-    });
-    // DocumentBrowser använder document.tree; dokumentsöket använder
-    // document.list. Invalidera båda + tvinga explicit refetch på tree
-    // för matter:n — annars (R-Q v5 + tRPC v11) händer ibland att
-    // useQuery håller cached data tills nästa mount.
     await opts.utils.document.tree.invalidate({ matterId: opts.matterId });
     await opts.utils.document.tree.refetch({ matterId: opts.matterId });
     await opts.utils.document.list.invalidate({ matterId: opts.matterId });
     await opts.utils.document.list.invalidate();
   } catch (e) {
-    console.warn("[kostnadsrakning] record/invalidate misslyckades:", e);
+    console.warn("[kostnadsrakning] dokument-invalidering misslyckades (best-effort):", e);
   }
 }
 

@@ -95,6 +95,19 @@ export const emit = {
   timeEntryDeleted: (ctx: EmitCtx, entryId: string, matterId: string) =>
     emitUser(ctx, "time-entry.deleted", { entryId }, matterId),
 
+  // ── kostnadsräkning ────────────────────────────────────────────
+  kostnadsrakningGenerated: (
+    ctx: EmitCtx,
+    matterId: string,
+    payload: {
+      documentId: string;
+      fileName: string;
+      totalInclVat: number;
+      huvudforhandlingMinutes: number;
+      organizationId: string;
+    },
+  ) => emitUser(ctx, "kostnadsrakning.generated", payload, matterId),
+
   // ── user / generic ─────────────────────────────────────────────
   userAction: (ctx: EmitCtx, payload: Record<string, unknown>) =>
     emitUser(ctx, "user.action", payload),
