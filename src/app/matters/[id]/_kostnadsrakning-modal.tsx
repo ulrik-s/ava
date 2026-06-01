@@ -44,6 +44,7 @@ interface Props {
     amount: number; vatRate?: number; vatIncluded?: boolean; billable?: boolean;
   }>;
   initialLevel?: TaxaLevel;
+  /** @deprecated Alla advokater har F-skatt — fältet ignoreras. */
   initialHasFTax?: boolean;
   initialHufStart?: string | Date | null;
   initialIsTaxe?: boolean;
@@ -68,7 +69,8 @@ export function KostnadsrakningModal(props: Props) {
   const [hufEnd, setHufEnd] = useState<string>(() => toDatetimeLocalValue(new Date()));
   const [isTaxe, setIsTaxe] = useState<boolean>(props.initialIsTaxe ?? true);
   const [level, setLevel] = useState<TaxaLevel>(props.initialLevel ?? 1);
-  const [hasFTax, setHasFTax] = useState<boolean>(props.initialHasFTax ?? true);
+  // F-skatt antas alltid — alla advokater har F-skatt. Tidigare radio borttagen.
+  const hasFTax = true;
   const [courtEmail, setCourtEmail] = useState<string>("");
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -77,6 +79,10 @@ export function KostnadsrakningModal(props: Props) {
   const templates = trpc.documentTemplate.list.useQuery();
   const matterUpdate = trpc.matter.update.useMutation();
   const recordKostn = trpc.kostnadsrakning.record.useMutation();
+  // Tidsregistreringar — billable rader inkluderas i kostnadsräkningen.
+  // För icke-taxa-ärenden räknas de in i arvodes-summan; för taxa-ärenden
+  // visas de bara som specifikation (beloppet styrs av taxa).
+  const timeEntries = trpc.timeEntry.list.useQuery({ matterId: props.matterId, pageSize: 100 });
 
   // Auto-spara HUF-start (debounced 600 ms)
   useEffect(() => {
@@ -98,7 +104,8 @@ export function KostnadsrakningModal(props: Props) {
     hasFTax,
     isTaxeArende: isTaxe,
     expenses: props.expenses,
-  }), [hufStart, hufEnd, level, hasFTax, isTaxe, props]);
+    timeEntries: ((timeEntries.data?.entries ?? []) as Array<{ id: string; date: string | Date; description: string; minutes: number; billable: boolean }>),
+  }), [hufStart, hufEnd, level, isTaxe, props, timeEntries.data]);
 
   useEffect(() => {
     const h = (e: KeyboardEvent) => { if (e.key === "Escape") props.onClose(); };
@@ -258,36 +265,38 @@ export function KostnadsrakningModal(props: Props) {
                 </label>
                 <label className="flex items-center gap-2 text-base">
                   <input type="radio" checked={!isTaxe} onChange={() => setIsTaxe(false)} className="w-5 h-5" />
-                  Icke-taxa (timkostnadsnorm × faktisk tid)
+                  Icke-taxa (timkostnadsnorm × all tid)
                 </label>
               </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {isTaxe && (
-                <label className="block">
-                  <span className="text-xs text-gray-700 mb-1 block">Ersättningsnivå (DVFS 2025:6)</span>
-                  <select value={level} onChange={(e) => setLevel(Number(e.target.value) as TaxaLevel)}
-                    className="w-full rounded border border-gray-300 px-3 py-2.5 text-base">
-                    <option value={1}>1 — Grundersättning</option>
-                    <option value={2}>2 — + häktningsförh. m.m.</option>
-                    <option value={3}>3 — + RPU</option>
-                    <option value={4}>4 — + häktning m.m. + RPU</option>
-                  </select>
-                </label>
-              )}
-              <div className={isTaxe ? "" : "sm:col-span-2"}>
-                <span className="text-xs text-gray-700 mb-1 block">F-skatt</span>
-                <div className="flex items-center gap-4 py-2 text-base">
-                  <label className="flex items-center gap-2">
-                    <input type="radio" checked={hasFTax} onChange={() => setHasFTax(true)} className="w-5 h-5" /> Ja
-                  </label>
-                  <label className="flex items-center gap-2">
-                    <input type="radio" checked={!hasFTax} onChange={() => setHasFTax(false)} className="w-5 h-5" /> Nej
-                  </label>
-                </div>
-              </div>
-            </div>
+            {isTaxe && (
+              <label className="block">
+                <span className="text-xs text-gray-700 mb-1 block">Ersättningsnivå (DVFS 2025:6)</span>
+                <select value={level} onChange={(e) => setLevel(Number(e.target.value) as TaxaLevel)}
+                  className="w-full rounded border border-gray-300 px-3 py-2.5 text-base">
+                  <option value={1}>1 — Grundersättning</option>
+                  <option value={2}>2 — + häktningsförh. m.m.</option>
+                  <option value={3}>3 — + RPU</option>
+                  <option value={4}>4 — + häktning m.m. + RPU</option>
+                </select>
+              </label>
+            )}
           </section>
+
+          {ctx.timeLines.length > 0 && (
+            <section>
+              <h3 className="text-sm font-semibold text-gray-700 mb-2">Tidsspecifikation</h3>
+              <div className="text-xs text-gray-600 mb-2">
+                {ctx.timeLines.length} billable {ctx.timeLines.length === 1 ? "rad" : "rader"} — tot{" "}
+                <span className="font-mono">{Math.round(ctx.billableArbetsMinutes / 60 * 10) / 10} h</span>
+                {" + HUF "}
+                <span className="font-mono">{Math.round(ctx.huvudforhandlingMinutes / 60 * 10) / 10} h</span>
+                {" = "}
+                <span className="font-mono font-semibold">{Math.round(ctx.totalArbetsMinutes / 60 * 10) / 10} h</span>
+                {!isTaxe && " (grunden för icke-taxa-beräkningen)"}
+              </div>
+            </section>
+          )}
 
           <section className="bg-gray-50 border border-gray-200 rounded p-4">
             <h3 className="text-sm font-semibold text-gray-700 mb-2">Förhandsvisning</h3>

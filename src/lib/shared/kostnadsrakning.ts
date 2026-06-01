@@ -59,10 +59,22 @@ export interface BuildInput {
   /** F-skatt-flagga (DVFS 11 §). Default true. */
   hasFTax?: boolean;
   /** Är detta ett taxa-ärende? Default true (bakåt­kompabilitet).
-   *  Vid false: arvodet räknas via timkostnadsnorm × faktisk tid istället. */
+   *  Vid false: arvodet räknas via timkostnadsnorm × (sum billable tid + HUF). */
   isTaxeArende?: boolean;
   /** Alla utlägg på ärendet. */
   expenses: readonly ExpenseInput[];
+  /** Tidsregistreringar på ärendet — inkluderas i specifikationen och i
+   *  arvodes-beräkningen för icke-taxa-ärenden. För taxa-ärenden visas de
+   *  bara som information; beloppet styrs av taxan. */
+  timeEntries?: readonly TimeEntryInput[];
+}
+
+export interface TimeEntryInput {
+  id: string;
+  date: Date | string;
+  description: string;
+  minutes: number;
+  billable?: boolean;
 }
 
 export interface ExpenseLine {
@@ -75,9 +87,24 @@ export interface ExpenseLine {
   inclVat: number;
 }
 
+export interface TimeLine {
+  id: string;
+  date: string;
+  description: string;
+  minutes: number;
+}
+
 export interface KostnadsrakningResult {
   huvudforhandlingMinutes: number;
   taxa: TaxaResult;
+  /** Specifikation av billable tidsposter (exkluderar HUF — den anges
+   *  separat). Visas alltid i kostnadsräkningen oavsett taxa-läge. */
+  timeLines: TimeLine[];
+  /** Total billable tid (timeEntries.minutes) — exkl HUF. */
+  billableArbetsMinutes: number;
+  /** billableArbetsMinutes + huvudforhandlingMinutes = grunden för
+   *  icke-taxa-beräkningen. */
+  totalArbetsMinutes: number;
   expenseLines: ExpenseLine[];
   expenseSummary: { exclVat: number; vat: number; inclVat: number };
   arvodeExclVat: number;
@@ -88,18 +115,18 @@ export interface KostnadsrakningResult {
   templateContext: Record<string, unknown>;
 }
 
-/** Icke-taxa-ärende: arvode = timkostnadsnorm × faktisk tid. Returnerar
- *  ett TaxaResult-objekt så övriga delen av flowet är oförändrad. */
-function timkostnadsnormResult(huvudforhandlingMinutes: number, hasFTax: boolean): TaxaResult {
-  const tk = computeTimkostnadsnorm({ arbetsMinutes: huvudforhandlingMinutes, hasFTax });
-  const label = hasFTax ? "Timkostnadsnorm (med F-skatt)" : "Timkostnadsnorm (utan F-skatt)";
+/** Icke-taxa-ärende: arvode = timkostnadsnorm × all billable arbetstid
+ *  (timeEntries) + HUF. Returnerar TaxaResult så övriga delen av flowet
+ *  är oförändrad. */
+function timkostnadsnormResult(totalArbetsMinutes: number, hasFTax: boolean): TaxaResult {
+  const tk = computeTimkostnadsnorm({ arbetsMinutes: totalArbetsMinutes, hasFTax });
   return {
     kind: "taxa-applies",
     level: 1,
-    intervalLabel: label,
+    intervalLabel: "Timkostnadsnorm",
     ersattningExclVat: tk.total,
     gransvardeExclVat: 0,
-    notes: [`Icke-taxa-ärende — timkostnadsnorm ${tk.rateOrePerH / 100} kr/h × ${(huvudforhandlingMinutes / 60).toFixed(2)} h`],
+    notes: [`Icke-taxa-ärende — timkostnadsnorm ${tk.rateOrePerH / 100} kr/h × ${(totalArbetsMinutes / 60).toFixed(2)} h (HUF + tidsregistreringar)`],
   };
 }
 
@@ -109,11 +136,20 @@ export function buildKostnadsrakningContext(input: BuildInput): KostnadsrakningR
   const end = new Date(input.hufEnd);
   const huvudforhandlingMinutes = diffMinutes(start, end);
 
+  // Tidsregistreringar — bara billable räknas (samma princip som utlägg).
+  // Visas alltid i specifikationen oavsett taxa-läge.
+  const billableTimeEntries = (input.timeEntries ?? []).filter((t) => t.billable !== false);
+  const timeLines: TimeLine[] = billableTimeEntries.map((t) => ({
+    id: t.id, date: toIsoDate(t.date), description: t.description, minutes: t.minutes,
+  }));
+  const billableArbetsMinutes = billableTimeEntries.reduce((s, t) => s + t.minutes, 0);
+  const totalArbetsMinutes = billableArbetsMinutes + huvudforhandlingMinutes;
+
   const level: TaxaLevel = input.taxaLevel ?? 1;
   const isTaxe = input.isTaxeArende ?? true;
   const taxa: TaxaResult = isTaxe
     ? computeBrottmalstaxa({ huvudforhandlingMinutes, level, hasFTax: input.hasFTax ?? true })
-    : timkostnadsnormResult(huvudforhandlingMinutes, input.hasFTax ?? true);
+    : timkostnadsnormResult(totalArbetsMinutes, input.hasFTax ?? true);
 
   // Bara billable utlägg ska faktureras — non-billable är firmans egen kostnad.
   const expenses = input.expenses.filter((e) => e.billable !== false);
@@ -187,11 +223,22 @@ export function buildKostnadsrakningContext(input: BuildInput): KostnadsrakningR
     },
     totalInclVat,
     totalInclFormatted: formatOreAsKr(totalInclVat),
+    timeLines: timeLines.map((t) => ({
+      ...t,
+      minutesFormatted: formatMinutes(t.minutes),
+    })),
+    billableArbetsMinutes,
+    billableArbetsFormatted: formatMinutes(billableArbetsMinutes),
+    totalArbetsMinutes,
+    totalArbetsFormatted: formatMinutes(totalArbetsMinutes),
   };
 
   return {
     huvudforhandlingMinutes,
     taxa,
+    timeLines,
+    billableArbetsMinutes,
+    totalArbetsMinutes,
     expenseLines,
     expenseSummary,
     arvodeExclVat,
