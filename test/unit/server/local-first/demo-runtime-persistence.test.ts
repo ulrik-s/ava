@@ -97,4 +97,45 @@ describe("DemoRuntime — persistens", () => {
     await rt.clearCache();
     expect(await persistence.load()).toBeNull();
   });
+
+  // ── Slab (writable, persisterad demo) ─────────────────────────────
+  // writeBack i demo-läget skriver mutationer som filer i runtime:s MemFs
+  // ("slaben under isomorphic-git") + persist() → snapshot till OPFS. En ny
+  // session restore:ar slaben (inkl. mutationerna) istället för att klona om.
+
+  it("slab: writeFile-mutation + persist överlever i en ny runtime (writable demo)", async () => {
+    const persistence = new InMemoryPersistence();
+    const rt1 = DemoRuntime.create({
+      cloneFn: async (fs) => { await fs.writeFile("matters/active/m1.json", matter1); },
+      persistence,
+    });
+    await rt1.loadDemo("x");
+    // Runtime-mutation skriven till slaben (som demo-writeBack gör).
+    const matter2 = JSON.stringify({
+      id: "m2", matterNumber: "2026-0002", title: "Runtime", status: "ACTIVE", organizationId: "demo",
+    });
+    await rt1.writeFile("matters/active/m2.json", matter2);
+    await rt1.persist();
+
+    // Ny session, samma persistence → restore utan att klona om.
+    const rt2 = DemoRuntime.create({
+      cloneFn: async () => { throw new Error("ska inte klona — slaben ska restore:as"); },
+      persistence,
+    });
+    expect(await rt2.restoreFromCache()).toBe(true);
+    expect(rt2.matters().findById("m1")).toMatchObject({ matterNumber: "2026-0001" }); // seed kvar
+    expect(rt2.matters().findById("m2")).toMatchObject({ matterNumber: "2026-0002" }); // mutationen överlevde
+  });
+
+  it("persist() inkluderar slab-skrivningar; deleteFile tar bort dem", async () => {
+    const persistence = new InMemoryPersistence();
+    const rt = DemoRuntime.create({ cloneFn: async () => {}, persistence });
+    await rt.writeFile("matters/active/x.json", matter1);
+    await rt.persist();
+    expect((await persistence.load())?.["matters/active/x.json"]).toBeDefined();
+
+    await rt.deleteFile("matters/active/x.json");
+    await rt.persist();
+    expect((await persistence.load())?.["matters/active/x.json"]).toBeUndefined();
+  });
 });

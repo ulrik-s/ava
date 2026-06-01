@@ -25,6 +25,15 @@ export const SHELL_PARAM = "__shell__";
 
 export async function demoStaticParams(pathPrefix: string): Promise<{ id: string }[]> {
   if (process.env.DEMO_BUILD !== "1") return [];
+  // invoices/payment-plans skapas av demo-generatorn via API:t med store-
+  // genererade id:n som INTE matchar buildSeed/billing-id-prediktionen (drev
+  // isär → döda "kunde inte ladda"-rutter + oprerenderade riktiga id:n).
+  // __shell__-shimmen (404.html → /<route>/__shell__/#orig=<path> → useRouteId
+  // → getById) renderar VILKET id som helst client-side, så per-id-prerendering
+  // är onödig — och skadlig — här. Pre-rendera bara sentinellen.
+  if (pathPrefix === "invoices" || pathPrefix === "payment-plans") {
+    return [{ id: SHELL_PARAM }];
+  }
   const ids = await collectDemoIds(pathPrefix);
   return [...ids, SHELL_PARAM].map((id) => ({ id }));
 }

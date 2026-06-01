@@ -20,6 +20,7 @@ import { GitBackendRuntime } from "@/lib/client/backend/git-backend-runtime";
 import { GitAuthProvider } from "@/lib/server/auth/git-auth-provider";
 import { DemoModeProvider } from "@/lib/client/demo/demo-mode-context";
 import { demoSourceFromRuntime } from "@/lib/client/demo/demo-source-from-runtime";
+import { demoCacheKey } from "@/lib/client/demo/demo-cache-key";
 import { trpc } from "@/lib/client/trpc";
 import { loadFirmaConfig, gitAuthUsername, type FirmaConfig } from "@/lib/client/firma/firma-config";
 import { AuthProvider, useAuthMode } from "@/lib/client/auth/use-auth-mode";
@@ -70,6 +71,50 @@ function useRefBox<T>(initial: T): { current: T } {
   return box;
 }
 
+type WriteBackEvent = { entity: string; kind: string; row: Record<string, unknown>; previous?: Record<string, unknown> };
+
+/** Returnera en skrivbar FSA-handle om en finns (self-hosted, eller demo med
+ *  vald mapp). Läses fräsch ur IndexedDB — mappen kan ha valts efter mount. */
+async function resolveFsaHandle(fsaRef: { current: FileSystemDirectoryHandle | null }): Promise<FileSystemDirectoryHandle | null> {
+  if (fsaRef.current) return fsaRef.current;
+  try {
+    const { loadHandle, ensureReadWrite, isFsaSupported } = await import("@/lib/client/fsa/handle-store");
+    if (!isFsaSupported()) return null;
+    const loaded = await loadHandle("repo-root");
+    if (loaded && (await ensureReadWrite(loaded).catch(() => false))) {
+      fsaRef.current = loaded;
+      return loaded;
+    }
+  } catch { /* faller igenom → slab */ }
+  return null;
+}
+
+/** Skriv mutationen till FSA-working-copyn + notifiera AutoSync. */
+async function writeViaFsa(handle: FileSystemDirectoryHandle, event: WriteBackEvent): Promise<void> {
+  const { makeFsaWriteBack } = await import("@/lib/client/firma/fsa-write-back");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await makeFsaWriteBack({ handle })(event as any);
+  if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("ava:data-changed"));
+}
+
+/** Pure demo: skriv mutationen till den persisterade MemFs-slaben + debounced
+ *  snapshot-persist (samma path-/JSON-mappning som FSA via makeWriteBack). */
+async function writeViaSlab(
+  rt: DemoRuntime,
+  event: WriteBackEvent,
+  persistTimer: { current: ReturnType<typeof setTimeout> | null },
+): Promise<void> {
+  const { makeWriteBack } = await import("@/lib/client/firma/fsa-write-back");
+  const slabFs = {
+    writeFile: (p: string, d: string) => rt.writeFile(p, d),
+    unlink: (p: string) => rt.deleteFile(p),
+  };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await makeWriteBack(slabFs)(event as any);
+  if (persistTimer.current) clearTimeout(persistTimer.current);
+  persistTimer.current = setTimeout(() => { void rt.persist(); }, 600);
+}
+
 export function DemoBootstrap({ children }: { children: ReactNode }) {
   const [firmaConfig] = useState<FirmaConfig>(() => loadFirmaConfig());
   const [source] = useState<DemoSource>(() => ({}));
@@ -77,31 +122,17 @@ export function DemoBootstrap({ children }: { children: ReactNode }) {
   // FSA-handle laddas async — uppdatera mutable container via setHandle
   // som även triggar React-state och stänger ESLint:s ref-during-render.
   const fsaRef = useRefBox<FileSystemDirectoryHandle | null>(null);
-  const writeBack = useState(() => async (event: { entity: string; kind: string; row: Record<string, unknown>; previous?: Record<string, unknown> }) => {
-    // Läs handle:n FRÄSCH från IndexedDB vid varje skrivning. fsaRef
-    // sätts av bootstrap:s useEffect men användaren kan ha valt
-    // FSA-mappen via /settings EFTER bootstrap mounted — då är
-    // fsaRef.current null men handle:n finns i IndexedDB. Att alltid
-    // läsa fresh undviker den racen helt.
-    let h = fsaRef.current;
-    if (!h) {
-      try {
-        const { loadHandle, ensureReadWrite, isFsaSupported } = await import("@/lib/client/fsa/handle-store");
-        if (!isFsaSupported()) return;
-        const loaded = await loadHandle("repo-root");
-        if (!loaded) return;
-        if (!(await ensureReadWrite(loaded).catch(() => false))) return;
-        h = loaded;
-        fsaRef.current = loaded; // cache:a för nästa anrop
-      } catch { return; }
-    }
-    const { makeFsaWriteBack } = await import("@/lib/client/firma/fsa-write-back");
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await makeFsaWriteBack({ handle: h })(event as any);
-    // Notifiera AutoSync — debounced push triggas
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(new CustomEvent("ava:data-changed"));
-    }
+  // Slab-referens: writeBack skriver demo-mutationer till denna runtime:s
+  // persisterade MemFs (sätts i boot-effekten). persistTimer debouncar
+  // snapshot-skrivningen till OPFS.
+  const runtimeRef = useRefBox<DemoRuntime | null>(null);
+  const persistTimer = useRefBox<ReturnType<typeof setTimeout> | null>(null);
+  const writeBack = useState(() => async (event: WriteBackEvent) => {
+    // FSA-working-copy (self-hosted/demo-med-mapp) vinner; annars pure-demo-slab.
+    const h = await resolveFsaHandle(fsaRef);
+    if (h) { await writeViaFsa(h, event); return; }
+    const rt = runtimeRef.current;
+    if (rt) await writeViaSlab(rt, event, persistTimer);
   })[0];
 
   // Lyssna på text-extraktions-event från job-workers. Skriver via
@@ -189,39 +220,51 @@ export function DemoBootstrap({ children }: { children: ReactNode }) {
       cloneFn: createGhPagesCloneFn(),
       persistence: new OpfsPersistence(demoCacheKey()),
     });
+    runtimeRef.current = runtime; // exponera slaben för writeBack (persisterad demo-skrivning)
+
+    // Non-blocking: pre-loada text-content (.md, .txt) i bakgrunden så fritext-
+    // sök matchar innehåll, inte bara metadata. Fortsätter efter "ready".
+    const preloadDocs = async () => {
+      try {
+        const { preloadDocumentContents } = await import("@/lib/client/demo/document-content-cache");
+        const { resolveGhPagesUrl } = await import("@/lib/server/local-first/gh-pages-loader");
+        const baseUrl = resolveGhPagesUrl(firmaConfig.repo);
+        const docs = (source.documents ?? []) as Array<{ id: string; fileName?: string; storagePath?: string; mimeType?: string }>;
+        await preloadDocumentContents(docs, baseUrl);
+      } catch (e) {
+        console.warn("[demo] document-content preload failed:", e);
+      }
+    };
+
     (async () => {
       try {
+        // Persisterad slab (inkl. ev. runtime-mutationer) finns? Använd den och
+        // klona INTE över den — annars skrivs användarens ändringar bort. Ny
+        // NEXT_PUBLIC_DEMO_VERSION → ny cache-nyckel → restore ger false →
+        // färsk seed-clone nedan (version-busting vid deploy).
         const restored = await runtime.restoreFromCache();
         if (restored && !cancelled) {
           mergeSource(source, demoSourceFromRuntime(runtime));
           await queryClient.invalidateQueries();
           setStatus("ready");
+          void preloadDocs();
+          return;
         }
-      } catch { /* fall through */ }
+      } catch { /* fall through to fresh clone */ }
 
       try {
+        // Första besöket (eller cache rensad/version-bytt): klona färskt seed
+        // och persistera direkt så efterföljande mutationer kan läggas till
+        // ovanpå och överleva reload.
         await runtime.loadDemo(firmaConfig.repo);
         if (cancelled) return;
+        await runtime.persist();
         mergeSource(source, demoSourceFromRuntime(runtime));
-        // Invalidate alla tRPC-queries så useQuery re-fetchar mot
-        // den nu-populerade DemoDataStore.
+        // Invalidate alla tRPC-queries så useQuery re-fetchar mot den
+        // nu-populerade DemoDataStore.
         await queryClient.invalidateQueries();
         setStatus("ready");
-
-        // Pre-loada text-content (.md, .txt) i bakgrunden så fritextsök
-        // matchar mot innehåll, inte bara metadata. PDF kommer i nästa
-        // iteration via pdfjs-dist. Non-blocking: fortsätter efter ready.
-        void (async () => {
-          try {
-            const { preloadDocumentContents } = await import("@/lib/client/demo/document-content-cache");
-            const { resolveGhPagesUrl } = await import("@/lib/server/local-first/gh-pages-loader");
-            const baseUrl = resolveGhPagesUrl(firmaConfig.repo);
-            const docs = (source.documents ?? []) as Array<{ id: string; fileName?: string; storagePath?: string; mimeType?: string }>;
-            await preloadDocumentContents(docs, baseUrl);
-          } catch (e) {
-            console.warn("[demo] document-content preload failed:", e);
-          }
-        })();
+        void preloadDocs();
       } catch (err) {
         if (cancelled) return;
         setStatus("error");
@@ -384,17 +427,6 @@ async function loadSelfHosted(
     setStatus("error");
     setErrorMsg(err instanceof Error ? err.message : String(err));
   }
-}
-
-/**
- * OPFS-cache-nyckel versionerad per deploy. `NEXT_PUBLIC_DEMO_VERSION` sätts
- * av deploy-demo.yml (= commit-sha) → varje ny deploy får en ny cache-namespace
- * → `restoreFromCache` hittar inget gammalt → loadDemo hämtar färsk data.
- * Annars (lokal dev) en stabil nyckel så caching funkar mellan reloads.
- */
-function demoCacheKey(): string {
-  const v = process.env.NEXT_PUBLIC_DEMO_VERSION;
-  return v ? `ava-demo-${v.slice(0, 12)}` : "ava-demo";
 }
 
 function mergeSource(target: DemoSource, fresh: DemoSource): void {

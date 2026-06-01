@@ -112,6 +112,28 @@ export class DemoRuntime {
     if (this.persistence) await this.persistence.clear();
   }
 
+  // ── Slab-skrivning (writable, persisterad demo) ────────────────
+  // Demo-läget skriver mutationer som JSON-filer i den in-memory git-
+  // working-tree:n (MemFs = "slaben under isomorphic-git") och persisterar
+  // snapshot:en till OPFS. Klienten (demo-bootstrap) bygger en WriteBackFs
+  // av dessa primitiver + `persist()` — så server-lagret slipper känna till
+  // klient-write-back-koden (rätt import-riktning).
+
+  /** Skriv en fil till slaben (in-memory git working tree). */
+  async writeFile(path: string, data: string): Promise<void> {
+    await this.fs.writeFile(path, data);
+  }
+
+  /** Radera en fil ur slaben. */
+  async deleteFile(path: string): Promise<void> {
+    await this.fs.deleteFile(path);
+  }
+
+  /** Persistera nuvarande slab-state (MemFs-snapshot) till persistens-backenden. */
+  async persist(): Promise<void> {
+    if (this.persistence) await this.persistence.save(this.fs.snapshot());
+  }
+
   status(): DemoStatus {
     return this.currentStatus;
   }

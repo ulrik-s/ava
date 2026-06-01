@@ -18,6 +18,16 @@ import type { MutationEvent } from "@/lib/server/data-store/in-memory/writable-d
 import { FsaIsoGitAdapter } from "@/lib/client/fsa/fs-adapter";
 import { ENTITY_REGISTRY, type EntityName } from "@/lib/shared/schemas";
 
+/**
+ * Minimal fs-yta som write-back behöver. Uppfylls av `FsaIsoGitAdapter`
+ * (self-hosted/OPFS-working-copy) OCH av MemFs-slaben (persisterad in-memory
+ * git-db för demo). Samma mappnings-logik, olika backing-store.
+ */
+export interface WriteBackFs {
+  writeFile(path: string, data: string): Promise<void>;
+  unlink(path: string): Promise<void>;
+}
+
 function pathForEntity(entity: string, id: string, row: Record<string, unknown>): string | null {
   if (entity === "documentText") return `documents/text/${id}.txt`;
   const entry = (ENTITY_REGISTRY as Record<string, { gitPath: (id: string, row: Record<string, unknown>) => string }>)[entity];
@@ -36,30 +46,40 @@ export interface WriteBackOpts {
   onCounted?: (delta: number) => void;
 }
 
-export function makeFsaWriteBack(opts: WriteBackOpts): (event: MutationEvent<Record<string, unknown>>) => Promise<void> {
-  const fs = new FsaIsoGitAdapter(opts.handle);
-
+/**
+ * Kärnan: mappar en DataStore-mutation → fil-skrivning mot valfri
+ * `WriteBackFs`. fs-agnostisk så FSA-working-copyn och MemFs-slaben delar
+ * exakt samma path-/JSON-logik (DRY).
+ */
+export function makeWriteBack(
+  fs: WriteBackFs,
+  onCounted?: (delta: number) => void,
+): (event: MutationEvent<Record<string, unknown>>) => Promise<void> {
   return async (event) => {
     const id = String(event.row.id);
     const path = pathForEntity(event.entity, id, event.row);
     if (!path) {
-      console.warn(`[fsa-writeback] okänd entitet '${event.entity}' — hoppar över`);
+      console.warn(`[writeback] okänd entitet '${event.entity}' — hoppar över`);
       return;
     }
     try {
       if (event.kind === "delete") await handleDelete(fs, event, path, id);
       else if (event.entity === "documentText") await fs.writeFile("/" + path, String(event.row.text ?? ""));
       else await fs.writeFile("/" + path, JSON.stringify(event.row, null, 2) + "\n");
-      opts.onCounted?.(+1);
+      onCounted?.(+1);
     } catch (err) {
-      console.error(`[fsa-writeback] kunde inte skriva ${path}:`, err);
+      console.error(`[writeback] kunde inte skriva ${path}:`, err);
       throw err;
     }
   };
 }
 
+export function makeFsaWriteBack(opts: WriteBackOpts): (event: MutationEvent<Record<string, unknown>>) => Promise<void> {
+  return makeWriteBack(new FsaIsoGitAdapter(opts.handle), opts.onCounted);
+}
+
 async function handleDelete(
-  fs: FsaIsoGitAdapter,
+  fs: WriteBackFs,
   event: MutationEvent<Record<string, unknown>>,
   path: string,
   id: string,

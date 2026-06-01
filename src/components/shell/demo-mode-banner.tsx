@@ -37,14 +37,32 @@ export function DemoModeBanner() {
     setShow(false);
   };
 
+  const reset = async (): Promise<void> => {
+    if (typeof window === "undefined") return;
+    if (!window.confirm("Återställa demon? Dina lokala ändringar i den här webbläsaren raderas och färsk demo-data laddas.")) return;
+    try {
+      const { OpfsPersistence } = await import("@/lib/server/local-first/persistence");
+      const { demoCacheKey } = await import("@/lib/client/demo/demo-cache-key");
+      await new OpfsPersistence(demoCacheKey()).clear();
+    } catch { /* OPFS saknas/redan tomt — reload räcker */ }
+    window.location.reload();
+  };
+
   return (
     <div className="bg-amber-50 border-b border-amber-200 text-amber-900 text-xs px-4 py-2 flex items-center gap-2">
       <Info size={14} className="shrink-0" />
       <span className="flex-1">
         <strong>Demo-läge</strong> — du kör mot publik data från GitHub Pages.
-        Ändringar du gör gäller bara i den här fliken och försvinner vid omladdning.
-        Vill du ha persistent data, kör <code className="font-mono px-1 rounded bg-amber-100">localhost:3000</code> mot egen docker-stack.
+        Dina ändringar sparas lokalt i den här webbläsaren (de delas inte och syns inte för andra).
+        Vill du dela data på riktigt, kör mot en egen self-hosted-stack.
       </span>
+      <button
+        type="button"
+        onClick={() => void reset()}
+        className="shrink-0 underline hover:no-underline whitespace-nowrap"
+      >
+        Återställ demo
+      </button>
       <button
         type="button"
         onClick={dismiss}

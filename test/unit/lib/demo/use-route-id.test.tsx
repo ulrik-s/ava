@@ -31,6 +31,27 @@ describe("useRouteId", () => {
 
   it("null på rot", () => {
     pathname = "/";
+    window.location.hash = "";
     expect(renderHook(() => useRouteId()).result.current).toBeNull();
+  });
+
+  // ── __shell__-shim: läs riktiga id:t ur hash:en (#orig=<path>) ──
+  // GH Pages 404.html redirectar /<route>/<id>/ → /<route>/__shell__/#orig=<path>.
+  it("läser id:t ur hash:en (#orig) på __shell__-sentinellen", () => {
+    pathname = "/invoices/__shell__";
+    window.location.hash = "#orig=" + encodeURIComponent("/ava/invoices/inv-abc-final/");
+    expect(renderHook(() => useRouteId()).result.current).toBe("inv-abc-final");
+  });
+
+  it("faller tillbaka på '__shell__' när hash saknas (= getById hittar inget)", () => {
+    pathname = "/invoices/__shell__";
+    window.location.hash = "";
+    expect(renderHook(() => useRouteId()).result.current).toBe("__shell__");
+  });
+
+  it("hash-orig respekterar offset för nästlad rutt", () => {
+    pathname = "/templates/__shell__/edit";
+    window.location.hash = "#orig=" + encodeURIComponent("/ava/templates/t-9/edit/");
+    expect(renderHook(() => useRouteId(1)).result.current).toBe("t-9");
   });
 });
