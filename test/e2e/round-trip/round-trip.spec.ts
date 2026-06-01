@@ -75,6 +75,36 @@ async function registerTime(page: Page, desc: string): Promise<void> {
 }
 
 /**
+ * Vänta tills BillingPanel:s summa-kort renderats (panelen hydrerad) innan vi
+ * klickar "+ Skapa faktura". Annars kan en kvardröjande overlay från en just
+ * stängd modal/dropdown (`div.fixed.inset-0 z-30`, BillingActions/data-table)
+ * fånga pointer-eventet och klicket hänger till test-timeouten.
+ */
+async function awaitBillingPanelReady(page: Page): Promise<void> {
+  await expect(page.getByText(/Fakturerat/).first()).toBeVisible({ timeout: 10_000 });
+}
+
+/**
+ * Klicka fakturalänken i BillingPanel:s billing-run-lista och vänta in den
+ * hård-navigerade faktura-detaljvyn tills den hydrerat.
+ *
+ * Två fallgropar hanteras:
+ *  1. Sidomenyns "Fakturor"-länk renderas som `/ava/invoices/` (basePath +
+ *     trailingSlash) och matchar också `[href*="/invoices/"]` — och ligger
+ *     före panelen i DOM. Vi exkluderar den (den slutar på `/invoices/`); en
+ *     riktig fakturalänk slutar på `<uuid>/`.
+ *  2. Länken är en `<a>` (inte Next-Link) → hård navigation till static-export-
+ *     shellen (404.html) → appen bootar om, klonar OPFS och kör useRouteId.
+ *     Det tar längre tid än 15 s under last → vänta upp till 30 s + att
+ *     "Laddar data…" släckts innan vi rör detaljvyns knappar.
+ */
+async function openInvoiceFromPanel(page: Page): Promise<void> {
+  await page.locator('a[href*="/invoices/"]:not([href$="/invoices/"])').first().click();
+  await page.waitForURL(/\/invoices\/.+/, { timeout: 30_000 });
+  await expect(page.getByText("Laddar data…")).toHaveCount(0, { timeout: 30_000 });
+}
+
+/**
  * Skapa kontakt + ärende + tid (3000 kr) → faktura via BillingPanel →
  * navigera till faktura-detalj → markera skickad. Lämnar page på fakturans
  * detaljvy (SENT). Förutsättning för plan/kredit.
@@ -84,16 +114,14 @@ async function createSentFinalInvoice(page: Page, stamp: number): Promise<void> 
   await createMatterAndOpen(page, `Ärende ${stamp}`, `Klient ${stamp}`);
   await registerTime(page, `Arbete ${stamp}`);
   // Nya BillingPanel: "+ Skapa faktura" → meny → "Faktura till klient" → modal "Faktura"
+  await awaitBillingPanelReady(page);
   await page.getByRole("button", { name: /\+ Skapa faktura/ }).click();
   await page.getByRole("button", { name: /Faktura till klient/i }).click();
   const finalModal = page.locator("div.fixed.inset-0").filter({ has: page.getByRole("heading", { name: /^Faktura$/ }) });
   await finalModal.getByRole("button", { name: /^Skapa faktura$/ }).click();
   await expect(finalModal).toBeHidden({ timeout: 10_000 });
-  // Klicka på fakturanummer-länken i BillingPanel:s lista (kan vara invoiceNumber
-  // eller "Faktura"-fallback) — navigerar till /invoices/<id>
-  const invoiceLink = page.locator('a[href*="/invoices/"]').first();
-  await invoiceLink.click();
-  await page.waitForURL(/\/invoices\/.+/, { timeout: 15_000 });
+  await openInvoiceFromPanel(page);
+  await expect(page.getByRole("button", { name: /Markera som skickad/ })).toBeVisible({ timeout: 15_000 });
   await page.getByRole("button", { name: /Markera som skickad/ }).click();
   await expect(page.getByRole("button", { name: /Skapa avbetalningsplan/ })).toBeVisible({ timeout: 15_000 });
 }
@@ -209,6 +237,7 @@ test("fakturering: tid → acconto → betalning landar i git-db:n", async ({ pa
   await expect(page.getByText(timeDesc)).toBeVisible({ timeout: 10_000 });
 
   // ── Skapa acconto-faktura (1000 kr) via BillingPanel ──
+  await awaitBillingPanelReady(page);
   await page.getByRole("button", { name: /\+ Skapa faktura/ }).click();
   await page.getByRole("button", { name: /Aconto till klient/i }).click();
   const accontoModal = page.locator("div.fixed.inset-0").filter({ has: page.getByRole("heading", { name: /Aconto till klient/i }) });
@@ -218,9 +247,8 @@ test("fakturering: tid → acconto → betalning landar i git-db:n", async ({ pa
   await expect(accontoModal).toBeHidden({ timeout: 10_000 });
 
   // ── Öppna acconto, markera skickad, registrera betalning (1000 kr) ──
-  const accontoLink = page.locator('a[href*="/invoices/"]').first();
-  await accontoLink.click();
-  await page.waitForURL(/\/invoices\/.+/, { timeout: 15_000 });
+  await openInvoiceFromPanel(page);
+  await expect(page.getByRole("button", { name: /Markera som skickad/ })).toBeVisible({ timeout: 15_000 });
   await page.getByRole("button", { name: /Markera som skickad/ }).click();
   await page.getByRole("button", { name: /Registrera betalning/ }).click();
   const payModal = page.locator("div.fixed.inset-0").filter({ has: page.getByRole("heading", { name: /Registrera betalning/i }) });
@@ -241,6 +269,7 @@ test("fakturering: tid → acconto → betalning landar i git-db:n", async ({ pa
   // ── Slutfaktura via BillingPanel (acconton listas som checkboxar) ──
   await page.goto(matterUrl);
   await expect(page.getByText("Laddar data…")).toHaveCount(0, { timeout: 30_000 });
+  await awaitBillingPanelReady(page);
   await page.getByRole("button", { name: /\+ Skapa faktura/ }).click();
   await page.getByRole("button", { name: /Faktura till klient/i }).click();
   const finalModal = page.locator("div.fixed.inset-0").filter({ has: page.getByRole("heading", { name: /^Faktura$/ }) });

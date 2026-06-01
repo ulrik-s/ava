@@ -52,6 +52,8 @@ export default defineConfig({
       //       NB: include-glob:arna pekade tidigare på den gamla (borttagna)
       //       `src/server/**`-layouten → coverage mätte 0 filer. Nu fixade till
       //       `src/lib/**` → siffrorna ovan är FAKTISK täckning över hela src/lib.
+      //   - 2104 tester (2026-06-01): Stmts 69.55% Br 63.65% Func 67.66% Lines 71.58%
+      //       → trösklarna höjda till strax under detta (cap-at-current ratchet).
       //
       // Mål: 95% överallt. Kvarstående gap = i huvudsak fat React-komponenter
       // (firma-settings-panel, fsa-folder-selector, keypair-manager,
@@ -59,10 +61,10 @@ export default defineConfig({
       // som kräver mer test-infrastruktur. Multi-session-arbete. Trösklarna
       // ligger strax under faktisk siffra → varje borttaget test syns som rött.
       thresholds: {
-        statements: 67,
-        lines: 69,
+        statements: 69,
+        lines: 71,
         functions: 67,
-        branches: 62,
+        branches: 63,
       },
     },
     projects: [

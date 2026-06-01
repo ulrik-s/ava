@@ -27,7 +27,9 @@ jobs:
       - run: corepack enable
       - run: yarn install --immutable
       - run: yarn typecheck
-      - run: yarn lint
+      # Ratchet: lint får ha HÖGST 86 warnings (dagens nivå). Nya warnings →
+      # rött bygge. Driv ned baseline:n över tid (mål: 0). Errors fällde redan.
+      - run: yarn lint --max-warnings 86
       - run: yarn deps:check
       - run: yarn knip:report
       - run: yarn duplicates
@@ -105,4 +107,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
-          path: reports/playwright/
+          # round-trip-konfigen skriver till reports/playwright-round-trip/
+          # (playwright.round-trip.config.ts) — INTE reports/playwright/. Fel
+          # path gjorde att trace/video/HTML aldrig laddades upp vid rött bygge.
+          path: reports/playwright-round-trip/
