@@ -6,7 +6,6 @@ import { trpc } from "@/lib/client/trpc";
 import { DocumentBrowser } from "@/components/documents/document-browser";
 import { SuggestionsPanel } from "@/components/matter/suggestions-panel";
 import { EventsPanel } from "@/components/matter/events-panel";
-import { InvoicesSection } from "@/components/matter/invoices-section";
 import { PaymentMethodCard } from "@/components/matter/payment-method-card";
 import { FileDown } from "lucide-react";
 import { ContactsSection } from "./_contacts-section";
@@ -76,10 +75,9 @@ export default function MatterDetailClient({ id: paramId }: { id: string }) {
         <SuggestionsPanel matterId={id} />
         <ContactsSection matterId={id} contacts={m.contacts} />
         <DocumentBrowser matterId={id} />
-        <BillingPanel matterId={id} paymentMethod={m.paymentMethod} />
+        <BillingPanel matterId={id} matter={m} />
         <TimeSection matterId={id} isTaxeArende={m.isTaxeArende} />
         <ExpenseSection matterId={id} isTaxeArende={m.isTaxeArende} />
-        <InvoicesSection matterId={id} />
       </div>
 
       {showGenerateModal && (

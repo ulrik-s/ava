@@ -76,7 +76,7 @@ export type InvoiceType = z.infer<typeof invoiceTypeSchema>;
  *  OFFENTLIG_FÖRSVARARE-flowet där fakturan väntar på dom + ev. prutning. */
 export const BILLING_RUN_TYPE_LABELS = {
   ACCONTO: "Aconto",
-  FINAL: "Slutfaktura",
+  FINAL: "Faktura",
   KOSTNADSRAKNING: "Kostnadsräkning",
   CREDIT: "Kreditering",
 } as const satisfies Record<string, string>;

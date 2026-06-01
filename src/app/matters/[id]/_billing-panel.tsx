@@ -18,10 +18,21 @@ import { formatCurrency } from "@/lib/client/utils";
 import { BILLING_RUN_TYPE_LABELS, BILLING_RUN_STATUS_LABELS } from "@/lib/shared/schemas/enums";
 import { BillingDialog } from "./_billing-dialog";
 import { VerdictDialog } from "./_verdict-dialog";
+import { KostnadsrakningModal } from "./_kostnadsrakning-modal";
+
+interface MatterContext {
+  matterNumber: string;
+  title: string;
+  taxaLevel?: 1 | 2 | 3 | 4 | null;
+  taxaHasFTax?: boolean | null;
+  taxaHufStart?: string | Date | null;
+  paymentMethod?: string | null;
+  contacts?: ReadonlyArray<{ role: string; contact?: { name?: string | null; email?: string | null } | null }>;
+}
 
 interface Props {
   matterId: string;
-  paymentMethod?: string | null;
+  matter: MatterContext;
 }
 
 interface BillingRunRow {
@@ -49,10 +60,19 @@ function PendingVerdictBanner({ run, onClick }: { run: BillingRunRow; onClick: (
   );
 }
 
-type DialogState = "NONE" | "ACCONTO" | "FINAL" | "KOSTNADSRAKNING";
+type DialogState = "NONE" | "ACCONTO" | "FINAL";
+type ActionPick = "ACCONTO" | "FINAL" | "KOSTNADSRAKNING";
 
 function findPendingVerdict(rows: BillingRunRow[]): BillingRunRow | undefined {
   return rows.find((r) => r.type === "KOSTNADSRAKNING" && r.status === "PENDING_VERDICT");
+}
+
+function clientOf(matter: MatterContext): string {
+  return matter.contacts?.find((c) => c.role === "KLIENT")?.contact?.name ?? "";
+}
+
+function courtOf(matter: MatterContext): string | undefined {
+  return matter.contacts?.find((c) => c.role === "DOMSTOL")?.contact?.name ?? undefined;
 }
 
 interface DialogsProps {
@@ -79,18 +99,91 @@ function BillingDialogs({ matterId, rows, dialog, setDialog, verdictRunId, setVe
   );
 }
 
-export function BillingPanel({ matterId, paymentMethod }: Props) {
+interface KrTriggerProps {
+  matterId: string;
+  matter: MatterContext;
+  open: boolean;
+  onClose: () => void;
+  onRecorded: () => void;
+}
+
+interface KrModalData {
+  defenderName: string;
+  defenderEmail?: string;
+  organizationName?: string;
+  organizationOrgNumber?: string;
+  organizationAddress?: string;
+  expenses: Array<{ id: string; date: string | Date; description: string; amount: number; vatRate?: number; vatIncluded?: boolean; billable?: boolean }>;
+}
+
+function strOrUndef(v: string | null | undefined): string | undefined {
+  return v ?? undefined;
+}
+
+interface OrgData { name?: string; orgNumber?: string; address?: string }
+function orgProps(org: { name?: string | null; orgNumber?: string | null; address?: string | null } | undefined): OrgData {
+  return {
+    name: strOrUndef(org?.name),
+    orgNumber: strOrUndef(org?.orgNumber),
+    address: strOrUndef(org?.address),
+  };
+}
+
+function useKrModalData(matterId: string): KrModalData {
+  const me = trpc.user.current.useQuery().data;
+  const org = orgProps(trpc.organization.getSettings.useQuery().data ?? undefined);
+  const expenses = trpc.expense.list.useQuery({ matterId }).data?.expenses ?? [];
+  return {
+    defenderName: me?.name ?? "",
+    defenderEmail: strOrUndef(me?.email),
+    organizationName: org.name,
+    organizationOrgNumber: org.orgNumber,
+    organizationAddress: org.address,
+    expenses: expenses as KrModalData["expenses"],
+  };
+}
+
+function KostnadsrakningTrigger({ matterId, matter, open, onClose, onRecorded }: KrTriggerProps) {
+  const data = useKrModalData(matterId);
+  const createKr = trpc.billingRun.createKostnadsrakning.useMutation();
+  if (!open) return null;
+  const onModalClose = (): void => {
+    onClose();
+    createKr.mutate({ matterId }, { onSuccess: onRecorded });
+  };
+  return (
+    <KostnadsrakningModal
+      matterId={matterId}
+      matterNumber={matter.matterNumber}
+      matterTitle={matter.title}
+      clientName={clientOf(matter)}
+      courtName={courtOf(matter)}
+      {...data}
+      initialLevel={matter.taxaLevel ?? undefined}
+      initialHasFTax={matter.taxaHasFTax ?? undefined}
+      initialHufStart={matter.taxaHufStart ?? undefined}
+      onClose={onModalClose}
+    />
+  );
+}
+
+export function BillingPanel({ matterId, matter }: Props) {
   const runs = trpc.billingRun.list.useQuery({ matterId });
   const [dialog, setDialog] = useState<DialogState>("NONE");
+  const [showKr, setShowKr] = useState(false);
   const [verdictRunId, setVerdictRunId] = useState<string | null>(null);
   const rows = (runs.data?.runs ?? []) as BillingRunRow[];
   const pending = findPendingVerdict(rows);
   const refetch = () => { void runs.refetch(); };
+  const onPick = (t: ActionPick) => {
+    if (t === "KOSTNADSRAKNING") setShowKr(true);
+    else setDialog(t);
+  };
   return (
     <div className="bg-white rounded-lg border border-gray-200 lg:col-span-2">
       <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
         <h2 className="font-semibold text-gray-900">Fakturering</h2>
-        <BillingActions paymentMethod={paymentMethod ?? ""} onPick={setDialog} />
+        <BillingActions paymentMethod={matter.paymentMethod ?? ""} onPick={onPick} />
       </div>
       <SummaryCards totals={computeTotals(rows)} />
       {pending && <PendingVerdictBanner run={pending} onClick={() => setVerdictRunId(pending.id)} />}
@@ -99,6 +192,12 @@ export function BillingPanel({ matterId, paymentMethod }: Props) {
         dialog={dialog} setDialog={setDialog}
         verdictRunId={verdictRunId} setVerdictRunId={setVerdictRunId}
         onRefetch={refetch} />
+      <KostnadsrakningTrigger
+        matterId={matterId} matter={matter}
+        open={showKr}
+        onClose={() => setShowKr(false)}
+        onRecorded={refetch}
+      />
     </div>
   );
 }
@@ -117,7 +216,7 @@ function SummaryCards({ totals }: { totals: { acconto: number; finalSent: number
   return (
     <div className="grid grid-cols-3 gap-3 px-6 py-4">
       <Card label="Aconto fakturerat" value={totals.acconto} />
-      <Card label="Slutfakturerat" value={totals.finalSent} />
+      <Card label="Fakturerat" value={totals.finalSent} />
       <Card label="Väntar på dom" value={totals.pending} dim />
     </div>
   );
@@ -132,7 +231,7 @@ function Card({ label, value, dim }: { label: string; value: number; dim?: boole
   );
 }
 
-function BillingActions({ paymentMethod, onPick }: { paymentMethod: string; onPick: (t: "ACCONTO" | "FINAL" | "KOSTNADSRAKNING") => void }) {
+function BillingActions({ paymentMethod, onPick }: { paymentMethod: string; onPick: (t: ActionPick) => void }) {
   const [open, setOpen] = useState(false);
   const options = optionsFor(paymentMethod);
   return (
@@ -158,17 +257,17 @@ function BillingActions({ paymentMethod, onPick }: { paymentMethod: string; onPi
   );
 }
 
-function optionsFor(pm: string): Array<{ type: "ACCONTO" | "FINAL" | "KOSTNADSRAKNING"; label: string }> {
+function optionsFor(pm: string): Array<{ type: ActionPick; label: string }> {
   if (pm === "RATTSSKYDD" || pm === "RATTSHJALP") {
     return [
       { type: "ACCONTO", label: "Aconto till klient" },
-      { type: "FINAL", label: pm === "RATTSSKYDD" ? "Slutfaktura till försäkring" : "Slutfaktura till myndighet" },
+      { type: "FINAL", label: pm === "RATTSSKYDD" ? "Faktura till försäkring" : "Faktura till myndighet" },
     ];
   }
   if (pm === "OFFENTLIG_FORSVARARE") {
     return [{ type: "KOSTNADSRAKNING", label: "Kostnadsräkning till domstol" }];
   }
-  return [{ type: "FINAL", label: "Slutfaktura till klient" }];
+  return [{ type: "FINAL", label: "Faktura till klient" }];
 }
 
 function RunsList({ rows, loading }: { rows: BillingRunRow[]; loading: boolean }) {

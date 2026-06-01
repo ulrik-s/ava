@@ -15,7 +15,7 @@ interface AccontoRow { id: string; amountOre: number; recipient: string }
 
 interface Props {
   matterId: string;
-  type: "ACCONTO" | "FINAL" | "KOSTNADSRAKNING";
+  type: "ACCONTO" | "FINAL";
   existingAccontos: AccontoRow[];
   onClose: () => void;
 }
@@ -25,15 +25,13 @@ export function BillingDialog({ matterId, type, existingAccontos, onClose }: Pro
     <Modal open title={titleFor(type)} onClose={onClose} widthClass="max-w-xl">
       {type === "ACCONTO" && <AccontoForm matterId={matterId} onDone={onClose} />}
       {type === "FINAL" && <FinalForm matterId={matterId} accontos={existingAccontos} onDone={onClose} />}
-      {type === "KOSTNADSRAKNING" && <KostnadsrakningForm matterId={matterId} onDone={onClose} />}
     </Modal>
   );
 }
 
 function titleFor(type: string): string {
   if (type === "ACCONTO") return "Aconto till klient";
-  if (type === "FINAL") return "Slutfaktura";
-  return "Kostnadsräkning till domstol";
+  return "Faktura";
 }
 
 function AccontoForm({ matterId, onDone }: { matterId: string; onDone: () => void }) {
@@ -73,7 +71,8 @@ function FinalForm({ matterId, accontos, onDone }: { matterId: string; accontos:
       matterId, recipient, deductedBillingRunIds: selected,
     }); }} className="space-y-3">
       <p className="text-sm text-gray-600">
-        Slutfaktura med full specifikation. Alla obetalda tids- och utläggsrader fryses.
+        Faktura med full specifikation av tid och utlägg. Alla obetalda
+        tids- och utläggsrader fryses.
       </p>
       <Field label="Mottagare">
         <select value={recipient} onChange={(e) => setRecipient(e.target.value as typeof recipient)}
@@ -98,27 +97,7 @@ function FinalForm({ matterId, accontos, onDone }: { matterId: string; accontos:
         </Field>
       )}
       {mut.error && <p className="text-sm text-red-700">{mut.error.message}</p>}
-      <SubmitRow onDone={onDone} pending={mut.isPending} label="Skapa slutfaktura" />
-    </form>
-  );
-}
-
-function KostnadsrakningForm({ matterId, onDone }: { matterId: string; onDone: () => void }) {
-  const [notes, setNotes] = useState("");
-  const mut = trpc.billingRun.createKostnadsrakning.useMutation({ onSuccess: onDone });
-  return (
-    <form onSubmit={(e) => { e.preventDefault(); mut.mutate({ matterId, notes: notes || null }); }} className="space-y-3">
-      <div className="text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded px-3 py-2">
-        Kostnadsräkningen skickas till domstolen och får status <strong>Väntar på dom</strong>.
-        När du fått dom anger du eventuell prutning och fakturan skapas.
-      </div>
-      <Field label="Anteckning (valfri)">
-        <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3}
-          className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm"
-          placeholder="T.ex. tidsspillan, restilägg…" />
-      </Field>
-      {mut.error && <p className="text-sm text-red-700">{mut.error.message}</p>}
-      <SubmitRow onDone={onDone} pending={mut.isPending} label="Skicka kostnadsräkning" />
+      <SubmitRow onDone={onDone} pending={mut.isPending} label="Skapa faktura" />
     </form>
   );
 }

@@ -228,7 +228,7 @@ describe("MatterDetailPage", () => {
     await waitFor(() => expect(screen.getByTestId("doc-browser")).toBeInTheDocument());
     expect(screen.getByTestId("suggestions")).toBeInTheDocument();
     expect(screen.getByTestId("events")).toBeInTheDocument();
-    expect(screen.getByTestId("invoices")).toBeInTheDocument();
+    // 'invoices'-panelen är borttagen — BillingPanel ersätter den
   });
 
   it("visar Aktivt-badge när status=ACTIVE", async () => {
