@@ -127,6 +127,21 @@ describe("DemoRuntime — persistens", () => {
     expect(rt2.matters().findById("m2")).toMatchObject({ matterNumber: "2026-0002" }); // mutationen överlevde
   });
 
+  it("slab: genererat dokument-INNEHÅLL persisteras + kan läsas i ny runtime (blob-persistens)", async () => {
+    const persistence = new InMemoryPersistence();
+    const rt1 = DemoRuntime.create({ cloneFn: async () => {}, persistence });
+    // Som demo-bootstrap:s ava:generated-doc-listener gör för en kostnadsräkning.
+    const html = "<!doctype html><html><body>Kostnadsräkning B 2026-1234 ÅÄÖ</body></html>";
+    await rt1.writeFile("documents/content/kostn-x.html", html);
+    await rt1.persist();
+
+    // Ny session → restore + rehydrera blob-cachen ur slaben.
+    const rt2 = DemoRuntime.create({ cloneFn: async () => { throw new Error("ska inte klona"); }, persistence });
+    expect(await rt2.restoreFromCache()).toBe(true);
+    expect(await rt2.listFiles("documents/content")).toContain("kostn-x.html");
+    expect(await rt2.readFile("documents/content/kostn-x.html")).toBe(html); // exakt, inkl. svenska tecken
+  });
+
   it("persist() inkluderar slab-skrivningar; deleteFile tar bort dem", async () => {
     const persistence = new InMemoryPersistence();
     const rt = DemoRuntime.create({ cloneFn: async () => {}, persistence });

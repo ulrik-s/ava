@@ -115,6 +115,38 @@ async function writeViaSlab(
   persistTimer.current = setTimeout(() => { void rt.persist(); }, 600);
 }
 
+/**
+ * Återfyll in-memory blob-cachen för klient-genererade dokument (kostnadsräkning
+ * m.fl.) från slaben efter en reload, så `openDocument`/`openGeneratedDoc`
+ * (blob:-URL) fungerar igen. Slabens `documents/content/` innehåller ENBART
+ * runtime-genererat innehåll — seed-dokumentens content ligger inte i manifestet
+ * (hämtas on-demand från GH Pages), så ingen krock.
+ */
+interface DocMeta { id: string; fileName?: string; storagePath?: string; mimeType?: string }
+type StashFn = (id: string, bytes: Uint8Array, mimeType: string, fileName: string) => void;
+
+function inferDocMime(file: string, meta: DocMeta | undefined): string {
+  if (meta?.mimeType) return meta.mimeType;
+  return file.endsWith(".html") ? "text/html; charset=utf-8" : "application/octet-stream";
+}
+
+async function stashSlabDoc(runtime: DemoRuntime, file: string, docs: readonly DocMeta[], stash: StashFn): Promise<void> {
+  const meta = docs.find((d) => d.storagePath === `documents/content/${file}`);
+  const content = await runtime.readFile(`documents/content/${file}`).catch(() => null);
+  if (content == null) return; // trasig/oläsbar fil → hoppa över
+  const id = meta?.id ?? file.replace(/\.[^.]+$/, "");
+  stash(id, new TextEncoder().encode(content), inferDocMime(file, meta), meta?.fileName ?? file);
+}
+
+async function rehydrateGeneratedDocs(runtime: DemoRuntime, source: DemoSource): Promise<void> {
+  let files: string[];
+  try { files = await runtime.listFiles("documents/content"); } catch { return; }
+  if (!files.length) return;
+  const { stashGeneratedDoc } = await import("@/lib/client/demo/generated-doc-cache");
+  const docs = (source.documents ?? []) as unknown as readonly DocMeta[];
+  for (const f of files) await stashSlabDoc(runtime, f, docs, stashGeneratedDoc);
+}
+
 export function DemoBootstrap({ children }: { children: ReactNode }) {
   const [firmaConfig] = useState<FirmaConfig>(() => loadFirmaConfig());
   const [source] = useState<DemoSource>(() => ({}));
@@ -151,6 +183,29 @@ export function DemoBootstrap({ children }: { children: ReactNode }) {
     window.addEventListener("ava:document-text-extracted", handler);
     return () => window.removeEventListener("ava:document-text-extracted", handler);
   }, [writeBack]);
+
+  // Persistera klient-genererat dokument-innehåll (kostnadsräkning m.fl.) till
+  // demo-slaben så det överlever reload och kan öppnas igen via blob:-URL.
+  // Self-hosted (ingen demo-runtime) → no-op; där skrev modalens writeFsa redan
+  // till FSA-working-copyn.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ id: string; storagePath: string; content: string }>).detail;
+      const rt = runtimeRef.current;
+      if (!detail || !rt) return;
+      void (async () => {
+        try {
+          await rt.writeFile(detail.storagePath, detail.content);
+          await rt.persist();
+        } catch (err) {
+          console.warn("[demo] generated-doc persist failed:", err);
+        }
+      })();
+    };
+    window.addEventListener("ava:generated-doc", handler);
+    return () => window.removeEventListener("ava:generated-doc", handler);
+  }, [runtimeRef]);
 
   const [dataStore] = useState(() => new DemoDataStore(source, writeBack));
   // Initial status MÅSTE vara SSR-stabil för att undvika hydration-
@@ -248,6 +303,7 @@ export function DemoBootstrap({ children }: { children: ReactNode }) {
           await queryClient.invalidateQueries();
           setStatus("ready");
           void preloadDocs();
+          void rehydrateGeneratedDocs(runtime, source);
           return;
         }
       } catch { /* fall through to fresh clone */ }

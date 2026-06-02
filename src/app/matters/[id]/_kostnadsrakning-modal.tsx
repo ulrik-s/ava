@@ -244,6 +244,13 @@ export function KostnadsrakningModal(props: Props) {
         bytes, totalInclVat: ctx.totalInclVat,
         huvudforhandlingMinutes: ctx.huvudforhandlingMinutes,
       });
+      // Persistera innehållet till demo-slaben så det kan öppnas igen efter
+      // reload (metadata persisteras redan via record→writeBack). demo-bootstrap
+      // lyssnar → skriver till MemFs + persist. Self-hosted: writeFsa ovan
+      // skrev redan till FSA, så listenern (utan demo-runtime) no-op:ar.
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("ava:generated-doc", { detail: { id: docId, storagePath, content: html } }));
+      }
       const mailOpened = await maybeComposeMail({
         helperAvailable: Boolean(helper.version),
         fileName, bytes,

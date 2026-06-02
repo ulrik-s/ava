@@ -38,6 +38,12 @@ function folderPath(folderId: string | null, folders: FolderRecord[]): string {
 }
 
 async function openDocumentSmart(doc: DocumentRecord, setModal: (m: ModalState) => void): Promise<void> {
+  // Klient-genererade dokument (kostnadsräkning m.fl.) öppnas som blob:-URL ur
+  // cachen (rehydreras från demo-slaben efter reload). Annars skulle demo-grenen
+  // nedan öppna en storagePath som 404:ar på GH Pages → app:en hamnar på
+  // dashboarden. (Träd-vyn gör redan detta via open-document.ts.)
+  const { hasGeneratedDoc, openGeneratedDoc } = await import("@/lib/client/demo/generated-doc-cache");
+  if (hasGeneratedDoc(doc.id)) { openGeneratedDoc(doc.id); return; }
   const { shouldPreferExternalEdit, runExternalEdit, tryHelperOpen } = await import("@/lib/client/firma/open-document-externally");
   if (shouldPreferExternalEdit(doc.fileName)) {
     // Försök 1-klicks via AVA Helper först (funkar i alla browsers)

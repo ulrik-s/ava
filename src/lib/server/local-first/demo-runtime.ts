@@ -134,6 +134,16 @@ export class DemoRuntime {
     if (this.persistence) await this.persistence.save(this.fs.snapshot());
   }
 
+  /** Läs en fil ur slaben (UTF-8). Kastar om filen saknas. */
+  async readFile(path: string): Promise<string> {
+    return this.fs.readFile(path);
+  }
+
+  /** Direkta barn-filnamn under `prefix` i slaben (t.ex. "documents/content"). */
+  async listFiles(prefix: string): Promise<string[]> {
+    return this.fs.listDir(prefix);
+  }
+
   status(): DemoStatus {
     return this.currentStatus;
   }
