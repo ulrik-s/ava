@@ -151,6 +151,16 @@ export function resetToDemo(): void {
 }
 
 /**
+ * Demo-default som en fristående kopia. Används av reset-flows som måste
+ * skriva tillbaka tier=demo EXPLICIT — `defaultConfigForHost` ger nämligen
+ * self-hosted på localhost, så att bara radera `ava.firma` skulle kicka ut
+ * en lokal användare ur demo-läget. Se `resetDemoCompletely`.
+ */
+export function demoConfig(): FirmaConfig {
+  return { ...DEMO_DEFAULT };
+}
+
+/**
  * Heuristik för tier baserat på repo-strängen. Används om user
  * inte explicit valt tier.
  */

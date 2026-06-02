@@ -39,12 +39,11 @@ export function DemoModeBanner() {
 
   const reset = async (): Promise<void> => {
     if (typeof window === "undefined") return;
-    if (!window.confirm("Återställa demon? Dina lokala ändringar i den här webbläsaren raderas och färsk demo-data laddas.")) return;
+    if (!window.confirm("Återställa demon? All lokal demo-data och dina lokala ändringar i den här webbläsaren raderas, och färsk demo-data laddas.")) return;
     try {
-      const { OpfsPersistence } = await import("@/lib/server/local-first/persistence");
-      const { demoCacheKey } = await import("@/lib/client/demo/demo-cache-key");
-      await new OpfsPersistence(demoCacheKey()).clear();
-    } catch { /* OPFS saknas/redan tomt — reload räcker */ }
+      const { resetDemoCompletely } = await import("@/lib/client/demo/reset-demo");
+      await resetDemoCompletely();
+    } catch { /* best-effort — reload laddar ändå färsk seed */ }
     window.location.reload();
   };
 
