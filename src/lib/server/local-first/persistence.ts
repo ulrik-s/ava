@@ -67,32 +67,57 @@ const FILE_NAME = "snapshot.json";
  * egen sub-katalog så att flera demos inte krockar.
  */
 export class OpfsPersistence implements IPersistence {
+  /**
+   * Sätts till true första gången OPFS visar sig oanvändbart. Vissa
+   * webbläsare (t.ex. Firefox med blockerad/raderad site-data eller strikt
+   * spårningsskydd) exponerar `navigator.storage.getDirectory` men kastar
+   * `SecurityError` när den anropas. Efter det första felet blir alla
+   * vidare anrop tysta no-ops — en best-effort-cache ska aldrig spamma
+   * konsolloggen (och därmed felrapporten) med upprepade varningar.
+   */
+  private unusable = false;
+
   constructor(private readonly key: string) {
     if (!key || /[/\\]/.test(key)) {
       throw new Error(`OpfsPersistence: ogiltig key "${key}"`);
     }
   }
 
-  /** Kolla om aktuell runtime stödjer OPFS. */
+  /**
+   * Kolla om aktuell runtime *faktiskt* stödjer OPFS. Det räcker inte att
+   * `getDirectory` finns — den måste gå att anropa utan att kasta (Firefox
+   * kastar SecurityError när site-data är blockerad). Vi probar därför på
+   * riktigt istället för att bara typkolla funktionen.
+   */
   static async isSupported(): Promise<boolean> {
     const nav = (globalThis as { navigator?: NavigatorWithStorage }).navigator;
-    return typeof nav?.storage?.getDirectory === "function";
+    if (typeof nav?.storage?.getDirectory !== "function") return false;
+    try {
+      await nav.storage.getDirectory();
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   async load(): Promise<FsSnapshot | null> {
+    if (this.unusable) return null;
     try {
       const dir = await this.getKeyDir();
       const file = await dir.getFileHandle(FILE_NAME);
       const content = await (await file.getFile()).text();
       return JSON.parse(content) as FsSnapshot;
-    } catch {
+    } catch (err) {
       // Filen finns inte, OPFS stödjs inte, eller JSON kunde inte parsas.
-      // För en cache är "ingen data" rätt fallback.
+      // För en cache är "ingen data" rätt fallback. Om felet beror på att
+      // OPFS är otillgängligt markeras instansen så vidare anrop no-op:ar.
+      this.markUnusableIfOpfsBlocked(err);
       return null;
     }
   }
 
   async save(snapshot: FsSnapshot): Promise<void> {
+    if (this.unusable) return;
     try {
       const dir = await this.getKeyDir();
       const file = await dir.getFileHandle(FILE_NAME, { create: true });
@@ -102,11 +127,12 @@ export class OpfsPersistence implements IPersistence {
     } catch (err) {
       // Persistens är best-effort. Om OPFS inte fungerar ska appen
       // ändå funka — bara utan offline-cache.
-      console.warn("[OpfsPersistence] save misslyckades:", err);
+      this.markUnusableIfOpfsBlocked(err);
     }
   }
 
   async clear(): Promise<void> {
+    if (this.unusable) return;
     try {
       const dir = await this.getKeyDir();
       await dir.removeEntry(FILE_NAME);
@@ -116,6 +142,31 @@ export class OpfsPersistence implements IPersistence {
   }
 
   // ── private ───────────────────────────────────────────────────
+
+  /**
+   * Avgör om felet betyder att OPFS är otillgängligt (snarare än "filen
+   * fanns inte"). I så fall: logga EN gång och markera instansen som
+   * oanvändbar så att efterföljande save/load/clear blir tysta no-ops.
+   *
+   * Heuristik: SecurityError eller "OPFS stöds inte"-felet från getKeyDir
+   * betyder blockerad/saknad OPFS. Andra fel (t.ex. en saknad fil) lämnar
+   * cachen aktiv — det är ett normalt "ingen data ännu"-utfall.
+   */
+  private markUnusableIfOpfsBlocked(err: unknown): void {
+    if (this.unusable) return;
+    const name = (err as { name?: string })?.name;
+    const isBlocked =
+      name === "SecurityError" ||
+      (err instanceof Error && err.message.includes("OPFS stöds inte"));
+    if (!isBlocked) return;
+    this.unusable = true;
+    // Informativ, en gång: detta är ett väntat degraderat läge, inte ett
+    // appfel. Demon kör vidare i minnesläge (ändringar sparas ej över reload).
+    console.info(
+      "[OpfsPersistence] OPFS ej tillgängligt i denna webbläsare/läge — " +
+        "fortsätter i minnesläge (ändringar sparas inte över omladdning).",
+    );
+  }
 
   private async getKeyDir(): Promise<OpfsDirHandle> {
     const nav = (globalThis as { navigator?: NavigatorWithStorage }).navigator;

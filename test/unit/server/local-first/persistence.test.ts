@@ -95,6 +95,39 @@ describe("OpfsPersistence (browser-mock)", () => {
     expect(await OpfsPersistence.isSupported()).toBe(true);
   });
 
+  it("är INTE stödd när getDirectory finns men kastar (Firefox SecurityError)", async () => {
+    (globalThis as { navigator?: { storage: { getDirectory: () => unknown } } }).navigator!.storage.getDirectory =
+      () => { throw new DOMException("Security error when calling GetDirectory", "SecurityError"); };
+    expect(await OpfsPersistence.isSupported()).toBe(false);
+  });
+
+  it("SecurityError → save blir tyst no-op och loggar EN gång (ingen spam)", async () => {
+    const p = new OpfsPersistence("ava-demo");
+    (globalThis as { navigator?: { storage: { getDirectory: () => unknown } } }).navigator!.storage.getDirectory =
+      () => { throw new DOMException("Security error when calling GetDirectory", "SecurityError"); };
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await p.save({ "x": "y" });
+    await p.save({ "x": "z" });
+    await p.save({ "x": "w" });
+    // Exakt en informativ rad totalt, aldrig console.warn.
+    expect(info).toHaveBeenCalledTimes(1);
+    expect(warn).not.toHaveBeenCalled();
+    info.mockRestore();
+    warn.mockRestore();
+  });
+
+  it("efter SecurityError blir load tyst no-op (returnerar null utan att kasta)", async () => {
+    const p = new OpfsPersistence("ava-demo");
+    (globalThis as { navigator?: { storage: { getDirectory: () => unknown } } }).navigator!.storage.getDirectory =
+      () => { throw new DOMException("blocked", "SecurityError"); };
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    expect(await p.load()).toBeNull();
+    expect(await p.load()).toBeNull();
+    expect(info).toHaveBeenCalledTimes(1); // markerad oanvändbar vid första anropet
+    info.mockRestore();
+  });
+
   it("save → load round-trip via OPFS", async () => {
     const p = new OpfsPersistence("ava-demo");
     await p.save({ "matters/active/m1.json": "ewogICJpZCI6ICJtMSIKfQ==" });
