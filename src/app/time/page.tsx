@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
-import Link from "next/link";
+import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
 import { formatMinutes } from "@/lib/client/utils";
 import { periodFrom, periodTo } from "@/lib/client/time-filter";
@@ -23,9 +23,9 @@ const timeColumns: Column<TimeRow>[] = [
     render: (e) => <span className="text-sm text-gray-500">{new Date(e.date).toLocaleDateString("sv-SE")}</span> },
   { key: "matter", label: "Ärende", sortable: true, sortValue: (e) => e.matter.matterNumber,
     render: (e) => (
-      <Link href={`/matters/${e.matter.id}`} className="text-sm text-blue-600 hover:underline">
+      <EntityLink route="matters" id={e.matter.id} className="text-sm text-blue-600 hover:underline">
         {e.matter.matterNumber} — {e.matter.title}
-      </Link>
+      </EntityLink>
     ),
   },
   { key: "user", label: "Advokat", sortable: true, sortValue: (e) => e.user?.name ?? "",

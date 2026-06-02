@@ -11,6 +11,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
 import { formatMinutes } from "@/lib/client/utils";
 import { Plus, Calendar as CalendarIcon, Clock, MapPin } from "lucide-react";
@@ -228,9 +229,9 @@ function TodoDetailCard({ item, isOwn, onToggleDone, onClose }: {
       {item.matter && (
         <div>
           <p className="text-xs font-medium text-gray-500 mb-1">Ärende</p>
-          <Link href={`/matters/${item.matter.id}`} className="text-blue-600 hover:underline">
+          <EntityLink route="matters" id={item.matter.id} className="text-blue-600 hover:underline">
             {item.matter.matterNumber} — {item.matter.title}
-          </Link>
+          </EntityLink>
         </div>
       )}
 
@@ -288,7 +289,7 @@ function TimeCard({ ymd }: { ymd: string }) {
           <p className="px-6 py-4 text-sm text-gray-500">Ingen tid registrerad {ymd === todayYmd() ? "idag" : "denna dag"} — <Link href="/time" className="text-blue-600 hover:underline">registrera tid</Link></p>
         )}
         {entries.data?.entries.map((e) => (
-          <Link key={e.id} href={`/matters/${e.matter.id}`}
+          <EntityLink key={e.id} route="matters" id={e.matter.id}
             className="block px-6 py-3 hover:bg-gray-50 flex items-center gap-3">
             <span className="text-sm font-mono text-gray-700 w-14 text-right">{formatMinutes(e.minutes)}</span>
             <div className="flex-1 min-w-0">
@@ -296,7 +297,7 @@ function TimeCard({ ymd }: { ymd: string }) {
               <p className="text-xs text-gray-500 truncate">{e.matter.matterNumber} — {e.matter.title}</p>
             </div>
             {!e.billable && <span className="text-[10px] text-gray-400 uppercase">Ej deb.</span>}
-          </Link>
+          </EntityLink>
         ))}
       </div>
     </div>
@@ -334,12 +335,12 @@ function RecentMattersCard() {
           <p className="px-6 py-4 text-sm text-gray-500">Du har inte registrerat tid på något ärende ännu.</p>
         )}
         {recent.map((m) => (
-          <Link key={m.id} href={`/matters/${m.id}`} className="block px-6 py-3 hover:bg-gray-50 flex items-center justify-between gap-3">
+          <EntityLink key={m.id} route="matters" id={m.id} className="block px-6 py-3 hover:bg-gray-50 flex items-center justify-between gap-3">
             <div>
               <p className="text-sm font-medium text-gray-900">{m.matterNumber} — {m.title}</p>
               <p className="text-xs text-gray-500">Senast: {m.lastDate.toLocaleDateString("sv-SE")}</p>
             </div>
-          </Link>
+          </EntityLink>
         ))}
       </div>
     </div>

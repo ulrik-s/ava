@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
 import { DocumentBrowser } from "@/components/documents/document-browser";
 import { SuggestionsPanel } from "@/components/matter/suggestions-panel";
@@ -115,7 +116,7 @@ function MatterHeader({ matter: m, klient, onOpenGenerate }: HeaderProps) {
           <h1 className="text-2xl font-bold text-gray-900 mt-1">{m.title}</h1>
           <p className="text-sm text-gray-500 mt-1">
             {klient.length > 0 && klient[0].contact && (
-              <>Klient: <Link href={`/contacts/${klient[0].contact.id}`} className="text-blue-600 hover:underline">{klient[0].contact.name}</Link></>
+              <>Klient: <EntityLink route="contacts" id={klient[0].contact.id} className="text-blue-600 hover:underline">{klient[0].contact.name}</EntityLink></>
             )}
             {m.matterType && <>{klient.length > 0 ? " · " : ""}{m.matterType}</>}
           </p>

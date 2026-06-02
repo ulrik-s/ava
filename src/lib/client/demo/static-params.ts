@@ -8,7 +8,7 @@
  *
  * Sentinel-shellen (`/<route>/__shell__/`) används både för:
  *   - self-hosted (nginx try_files-fallback för nya entity-id:n)
- *   - GH Pages demo (404.html redirectar nya id:n hit + ?_p=<path>)
+ *   - GH Pages demo (404.html redirectar nya id:n hit + #orig=<path>)
  *
  * Datan kommer in-process från `buildSeed()` — single source of truth
  * delad med seed-skrivnings-stegen.

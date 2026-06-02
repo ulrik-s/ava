@@ -1,7 +1,11 @@
 /**
- * Regressionsskydd: matter-länken i EventDetailModal måste vara en Next
- * <Link> (inte <a>) så basePath "/ava" prepend:as automatiskt på GH
- * Pages — annars 404 vid klick.
+ * Regressionsskydd: matter-länken i EventDetailModal måste vara en HÅRD
+ * <a href> via <EntityLink> (INTE en Next-<Link>). Ärenden kan skapas i
+ * körande demo → deras id:n finns inte i generateStaticParams; en Next-Link
+ * soft-nav till ett sådant id kraschar med React #418. EntityLink hård-navar
+ * så 404-shimmen/nginx try_files löser id:t. entityHref prefixar base-path
+ * MEDVETET (eftersom <a> kringgår Next:s router) + trailing slash. Se
+ * docs/architecture.md ("Routing till runtime-skapade id:n").
  */
 
 import { describe, it, expect, vi } from "vitest";
@@ -29,14 +33,13 @@ const EV: EventDetail = {
 };
 
 describe("EventDetailModal — matter-länk", () => {
-  it("renderar matter-länken via Next <Link> (basePath-aware)", () => {
+  it("renderar matter-länken som hård <a href> via EntityLink (shim-säker)", () => {
     render(<EventDetailModal event={EV} userName="Anna" onClose={vi.fn()} />);
     const link = screen.getByRole("link", { name: /2026-0001/ });
-    // Next:s <Link> sätter href-attribut till SAMMA path som vi skickar in
-    // (basePath prepend:as vid navigation, inte i markup) — men det är ett
-    // Link-element, inte <a>. Vi verifierar att href:n inte är hårdkodad
-    // med basePath (vilket var den gamla buggen).
-    expect(link.getAttribute("href")).toBe("/matters/m-001");
+    // Hård <a> (inte Next-Link) med trailing slash → 404-shim/__shell__ kan
+    // lösa runtime-skapade ärende-id:n. Base-path är tomt i testmiljön.
+    expect(link.tagName).toBe("A");
+    expect(link.getAttribute("href")).toBe("/matters/m-001/");
   });
 
   it("matter-länken är klickbar (har not pointer-events:none)", () => {

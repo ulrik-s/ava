@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useId, useState } from "react";
-import Link from "next/link";
+import { EntityLink } from "@/lib/client/demo/entity-link";
 import { useSearchParams } from "next/navigation";
 import { trpc } from "@/lib/client/trpc";
 import { useIsReadOnly } from "@/lib/client/demo/demo-mode-context";
@@ -27,7 +27,7 @@ const matterColumns: Column<MatterRow>[] = [
   { key: "title", label: "Titel", sortable: true, sortValue: (m) => m.title,
     render: (m) => (
       <span>
-        <Link href={`/matters/${m.id}`} className="text-sm font-medium text-blue-600 hover:underline">{m.title}</Link>
+        <EntityLink route="matters" id={m.id} className="text-sm font-medium text-blue-600 hover:underline">{m.title}</EntityLink>
         {m.isTaxeArende && (
           <span
             className="ml-2 inline-flex items-center rounded-full bg-indigo-50 text-indigo-700 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"

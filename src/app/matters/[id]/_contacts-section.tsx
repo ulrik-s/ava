@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
+import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
 import { labelForMatterRole, matterRoles, contactTypes } from "@/lib/client/labels";
 import { DataTable, type Column } from "@/components/ui/data-table";
@@ -139,9 +139,9 @@ function ContactsList({
     { key: "name", label: "Namn", sortable: true, sortValue: (mc) => mc.contact?.name ?? "",
       render: (mc) => (
         mc.contact ? (
-          <Link href={`/contacts/${mc.contact.id}`} className="text-sm font-medium text-blue-600 hover:underline">
+          <EntityLink route="contacts" id={mc.contact.id} className="text-sm font-medium text-blue-600 hover:underline">
             {mc.contact.name}
-          </Link>
+          </EntityLink>
         ) : <span className="text-sm text-gray-400 italic">(kontakt saknas)</span>
       ),
     },

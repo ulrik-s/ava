@@ -139,7 +139,14 @@ touch "$ROOT/out/.nojekyll"
 # okänd entity-URL till den PRE-RENDERADE `__shell__`-sentinellen och bär det
 # egentliga id:t i hash:en (#orig=<path>). __shell__ är en riktig 200-fil →
 # ingen 404-loop; appen bootar där och `useRouteId` läser id:t ur hash:en.
+# Svans-segment bevaras (segs.slice(2)) så nästlade routes funkar.
 # Okända icke-entity-URL:er → app-roten (dashboard).
+#
+# NB: `templates` har INGEN platt [id]-detalj — bara templates/[id]/edit. Det
+# finns därför ingen `templates/__shell__/`-fil, bara `templates/__shell__/edit/`.
+# All app-länkning till mallar går via /edit (EntityLink sub="edit"), så detta
+# räcker. En bar `/templates/<id>/` (deep-link utan /edit) saknar shell och
+# faller därför till dashboarden — medvetet, inte en route i appen.
 cat > "$ROOT/out/404.html" <<'HTML'
 <!doctype html>
 <html lang="sv"><head><meta charset="utf-8"><title>AVA</title><meta name="robots" content="noindex"></head>
@@ -153,7 +160,12 @@ cat > "$ROOT/out/404.html" <<'HTML'
   var last=segs.length?segs[segs.length-1]:"";
   var isAsset=path.indexOf("/_next/")!==-1 || last.indexOf(".")!==-1;
   if(!isAsset && segs.length>=2 && SHELL.indexOf(segs[0])!==-1 && segs[1]!=="__shell__"){
-    location.replace(base+"/"+segs[0]+"/__shell__/#orig="+encodeURIComponent(path+location.search));
+    // Byt ut id-segmentet (segs[1]) mot __shell__ men BEHÅLL svans-segment
+    // (t.ex. /templates/<id>/edit/ → /templates/__shell__/edit/) så nästlade
+    // routes landar på rätt pre-renderade sentinel. Plattа routes (segs.length
+    // ===2) ger /<route>/__shell__/. useRouteId läser id:t ur #orig-hashen.
+    var tail=segs.slice(2).join("/");
+    location.replace(base+"/"+segs[0]+"/__shell__/"+(tail?tail+"/":"")+"#orig="+encodeURIComponent(path+location.search));
   } else if(!isAsset){ location.replace(base+"/"); }
   else { document.title="404"; document.body.textContent="404"; }
 })();

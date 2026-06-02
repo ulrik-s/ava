@@ -97,11 +97,11 @@ describe("InvoicesPage", () => {
     render(<InvoicesPage />);
     const links = screen.getAllByRole("link");
     const hrefs = links.map((l) => l.getAttribute("href"));
-    // Faktura-länken är en hård <a href> (entityHref) med trailing slash så
-    // runtime-skapade id:n funkar via 404-shim/__shell__ istället för en
-    // Next-Link soft-nav (→ #418). Base-path är tomt i testmiljön.
+    // Både faktura- och ärende-länken är nu hårda <a href> (EntityLink) med
+    // trailing slash, så runtime-skapade id:n funkar via 404-shim/__shell__
+    // istället för en Next-Link soft-nav (→ #418). Base-path är tomt i testmiljön.
     expect(hrefs).toContain("/invoices/i1/");
-    expect(hrefs).toContain("/matters/m1");
+    expect(hrefs).toContain("/matters/m1/");
   });
 
   it("renderar alla statuser med rätt klass-färg", () => {

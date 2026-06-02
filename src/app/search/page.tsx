@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
+import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
 import { DataTable, type Column } from "@/components/ui/data-table";
 
@@ -51,9 +51,9 @@ function searchColumns(open: (h: SearchHit) => Promise<void>): Column<SearchHit>
     },
     { key: "matter", label: "Ärende", sortable: true, sortValue: (h) => h.matterNumber,
       render: (h) => (
-        <Link href={`/matters/${h.matterId}`} className="text-sm text-blue-600 hover:underline">
+        <EntityLink route="matters" id={h.matterId} className="text-sm text-blue-600 hover:underline">
           {h.matterNumber} — {h.matterTitle}
-        </Link>
+        </EntityLink>
       ),
     },
     { key: "highlight", label: "Träff", sortable: false,

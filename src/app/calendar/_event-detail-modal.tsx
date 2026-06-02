@@ -6,7 +6,7 @@
  * CalendarGrid eller DayView.
  */
 
-import Link from "next/link";
+import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
 import { Trash2, X, MapPin, Clock, User as UserIcon, Briefcase, Pencil, CalendarDays, Users } from "lucide-react";
 import type { UserColor } from "@/lib/client/calendar/user-colors";
@@ -109,11 +109,11 @@ export function EventDetailModal({ event, userName, color, onClose, onAfterDelet
           {event.matter && (
             <div className="flex items-start gap-2">
               <Briefcase size={14} className="text-gray-400 mt-0.5 shrink-0" />
-              {/* OBS: <Link> (inte <a>) så Next:s basePath ("/ava") läggs på
-                  → annars 404. Klick på matter-länk i modal → matter-detalj. */}
-              <Link href={`/matters/${event.matter.id}`} className="text-blue-600 hover:underline">
+              {/* OBS: EntityLink (hård navigering) så att runtime-skapade
+                  matter-id:n löses av 404/nginx-shim → annars React #418. */}
+              <EntityLink route="matters" id={event.matter.id} className="text-blue-600 hover:underline">
                 {event.matter.matterNumber} — {event.matter.title}
-              </Link>
+              </EntityLink>
             </div>
           )}
 

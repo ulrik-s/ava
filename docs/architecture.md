@@ -53,6 +53,64 @@
 - Sajten serverar både app:en och data:n från samma origin
 - Read-only i praktiken (ingen write-back kan ske mot CDN), men UI:n tillåter mutations som lever in-memory tills tab:en reload:ar
 
+## Routing till runtime-skapade id:n (`__shell__`-shim + `EntityLink`)
+
+**Detta är den enda sanktionerade vägen att länka till en entitets-detaljsida.
+Läs den innan du rör en länk — annars återuppfinns shim-vs-länk-debatten.**
+
+Problemet: `output: "export"` pre-renderar dynamiska rutter (`/invoices/[id]`)
+**bara för build-tidens kända id:n**. Ett id som skapas i körande app (en faktura,
+ett ärende, en kontakt …) finns inte i `generateStaticParams`. En Next-`<Link>`
+soft-nav eller `router.push` till ett sådant id hittar ingen route, **kringgår
+shimmen**, och kraschar med **React #418** (hydration-mismatch). Soft-nav går
+*inte* att rädda — det är skillnaden mot en full-server-build.
+
+Lösningen är **två komplementära halvor av EN mekanism** (inte konkurrerande
+alternativ):
+
+1. **Värd-sidans landning (shim).** Okända detalj-URL:er fångas och landar på en
+   pre-renderad sentinel:
+   - *GH Pages:* `out/404.html` (genereras i `tooling/scripts/build-demo.sh`)
+     byter ut id-segmentet mot `__shell__` och bär originalpath:en i hashen:
+     `/<route>/<id>/<svans?>/` → `/<route>/__shell__/<svans?>/#orig=<path>`.
+   - *Self-hosted:* nginx `try_files` (`tooling/docker/nginx.conf`) serverar
+     `/<route>/__shell__/…/index.html` men **behåller URL:en** (ingen hash behövs).
+   - `generateStaticParams` pre-renderar därför `__shell__`-sentinellen per
+     dynamisk route (`src/lib/client/demo/static-params.ts`).
+   - `useRouteId` (`src/lib/client/demo/use-route-id.ts`) läser det riktiga id:t
+     ur `#orig`-hashen (GH Pages) eller direkt ur path:en (self-hosted).
+2. **Klient-sidans avtryckare (`EntityLink`).** En `<Link>` gör soft-nav och når
+   aldrig shimmen. En **hård `<a href>`** gör en full navigering som shimmen kan
+   fånga. Använd därför **alltid** `<EntityLink route id [sub]>`
+   (`src/lib/client/demo/entity-link.tsx`) i UI:t — aldrig `<Link>`/`router.push`
+   mot `/<route>/<id>`. För row-click-handlers: `location.assign(entityHref(...))`.
+   `entityHref` prefixar base-path manuellt (eftersom `<a>` kringgår Next:s router)
+   och lägger trailing slash så `trailingSlash: true`-bygget matchar shimmen.
+
+`MemFs-slaben` (skriv-pipelinen nedan) är **ortogonal** mot detta: den får
+entitetens *data* att överleva omladdningen så `getById` lyckas när man väl
+landat — den påverkar inte routing. **OBS:** hård-nav innebär en full
+sid-omladdning vid *varje* klick på en detalj-länk. I demo-läget överlever
+in-memory-mutationer omladdningen bara så länge OPFS-persistensen (slaben)
+fungerar; i lägen där OPFS är blockerat (vissa privata/strikta fönster)
+återställs sessionen till seed vid omladdning. Det är den medvetna kostnaden
+för static-export + runtime-id:n (soft-nav går inte att använda — se ovan).
+
+**Att lägga till en ny dynamisk entity-route — fyra kopplade rörliga delar
+(håll dem i synk):**
+1. `generateStaticParams` i `<route>/[id]/page.tsx` → anropa `demoStaticParams(<gitPath-prefix>)`.
+   **Argumentet är `ENTITY_REGISTRY[...].gitPath`-prefixet, INTE URL-segmentet** —
+   de skiljer sig för vissa routes: ärenden använder `demoStaticParams("matters/active")`
+   och mallar `demoStaticParams(".ava/templates")`, medan URL:erna är `/matters/…`
+   resp. `/templates/…/edit`. Fel prefix → noll seed-id:n pre-renderas (tyst).
+2. Route-segmentet (URL) i `SHELL`-arrayen i `build-demo.sh` (404-shimmen).
+3. Samma route-segment i nginx-regex:en (`nginx.conf`, self-hosted).
+4. Länka med `<EntityLink route id [sub]>` (aldrig `<Link>`/`router.push`).
+
+Saknas något faller hård-nav tillbaka till dashboarden. Kontraktet vaktas av
+`test/unit/lib/client/demo/no-detail-link-regression.test.ts` som failar om en
+`<Link>`/`router.push` mot en detalj-route smyger tillbaka.
+
 ## Data-modell
 
 Alla entiteter lagras som JSON-rader i ett git-repo:

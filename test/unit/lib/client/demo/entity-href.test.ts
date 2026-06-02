@@ -32,4 +32,14 @@ describe("entityHref", () => {
     expect(entityHref("payment-plans", "p1")).toBe("/ava/payment-plans/p1/");
     expect(entityHref("matters", "m1")).toBe("/ava/matters/m1/");
   });
+
+  it("sub-segment hanterar nästlade routes (templates/<id>/edit)", () => {
+    vi.stubEnv("NEXT_PUBLIC_DEMO_BASE_PATH", "/ava");
+    expect(entityHref("templates", "t1", "edit")).toBe("/ava/templates/t1/edit/");
+  });
+
+  it("normaliserar sub med ledande/avslutande slash", () => {
+    vi.stubEnv("NEXT_PUBLIC_DEMO_BASE_PATH", "");
+    expect(entityHref("templates", "t1", "/edit/")).toBe("/templates/t1/edit/");
+  });
 });

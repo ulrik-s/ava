@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { trpc } from "@/lib/client/trpc";
 import { useRouteId } from "@/lib/client/demo/use-route-id";
-import { entityHref } from "@/lib/client/demo/entity-href";
+import { EntityLink } from "@/lib/client/demo/entity-link";
 import { formatCurrency } from "@/lib/client/utils";
 import { ArrowLeft, Ban, Wallet } from "lucide-react";
 
@@ -51,9 +51,13 @@ export default function PaymentPlanDetailClient({ id: paramId }: { id: string })
             <Wallet size={22} /> Avbetalningsplan
           </h1>
           <p className="text-sm text-gray-500 mt-1">
-            <Link href={`/matters/${p.invoice?.matter?.id ?? ""}`} className="text-blue-600 hover:underline">
-              {p.invoice?.matter?.matterNumber ?? "—"}
-            </Link>
+            {p.invoice?.matter?.id ? (
+              <EntityLink route="matters" id={p.invoice.matter.id} className="text-blue-600 hover:underline">
+                {p.invoice.matter.matterNumber ?? "—"}
+              </EntityLink>
+            ) : (
+              <span>{p.invoice?.matter?.matterNumber ?? "—"}</span>
+            )}
             {" · "}{p.invoice?.matter?.title ?? "—"}{" · "}{klient}
           </p>
         </div>
@@ -72,12 +76,13 @@ export default function PaymentPlanDetailClient({ id: paramId }: { id: string })
           <dd className="text-gray-900">{new Date(p.startDate).toLocaleDateString("sv-SE")}</dd>
           <dt className="text-gray-500">Faktura</dt>
           <dd>
-            <a
-              href={entityHref("invoices", p.invoice?.id ?? "")}
-              className="text-blue-600 hover:underline"
-            >
-              {p.invoice?.id ?? "—"}
-            </a>
+            {p.invoice?.id ? (
+              <EntityLink route="invoices" id={p.invoice.id} className="text-blue-600 hover:underline">
+                {p.invoice.id}
+              </EntityLink>
+            ) : (
+              <span>—</span>
+            )}
             {" · "}
             <span className="font-mono">{p.invoice ? formatCurrency(p.invoice.amount) : ""}</span>
           </dd>

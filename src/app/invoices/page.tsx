@@ -1,9 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
-import { entityHref } from "@/lib/client/demo/entity-href";
+import { EntityLink } from "@/lib/client/demo/entity-link";
 import { DataTable, type Column } from "@/components/ui/data-table";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -46,16 +45,16 @@ const invoiceColumns: Column<InvoiceRow>[] = [
     // i generateStaticParams → Link soft-nav hamnar i trasigt router-tillstånd
     // (#418). entityHref → 404-shim/__shell__ → useRouteId. Se [[entity-href]].
     render: (i) => (
-      <a href={entityHref("invoices", i.id)} className="text-blue-600 hover:underline">
+      <EntityLink route="invoices" id={i.id} className="text-blue-600 hover:underline">
         {new Date(i.invoiceDate).toLocaleDateString("sv-SE")}
-      </a>
+      </EntityLink>
     ),
   },
   { key: "matter", label: "Ärende", sortable: true, sortValue: (i) => i.matter.matterNumber,
     render: (i) => (
-      <Link href={`/matters/${i.matter.id}`} className="hover:underline">
+      <EntityLink route="matters" id={i.matter.id} className="hover:underline">
         {i.matter.matterNumber} — {i.matter.title}
-      </Link>
+      </EntityLink>
     ),
   },
   { key: "type", label: "Typ", sortable: true, sortValue: (i) => TYPE_LABELS[i.invoiceType] ?? i.invoiceType,

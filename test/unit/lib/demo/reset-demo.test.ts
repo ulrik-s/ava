@@ -64,7 +64,7 @@ describe("resetDemoCompletely", () => {
       "ava.llm": "{...}",
       "keep.me": "x",
     });
-    const ss = makeStorage({ "ava.demoBannerDismissed": "1", "_spa_redirect": "/foo" });
+    const ss = makeStorage({ "ava.demoBannerDismissed": "1", "other.key": "/foo" });
     stubBrowser({ ls, ss });
 
     const { resetDemoCompletely } = await import("@/lib/client/demo/reset-demo");
@@ -75,7 +75,7 @@ describe("resetDemoCompletely", () => {
     expect(ls.getItem("ava.llm")).toBeNull();
     expect(ls.getItem("keep.me")).toBe("x");
     expect(ss.getItem("ava.demoBannerDismissed")).toBeNull();
-    expect(ss.getItem("_spa_redirect")).toBe("/foo");
+    expect(ss.getItem("other.key")).toBe("/foo");
   });
 
   it("skriver tillbaka demo-config EXPLICIT på localhost (annars self-hosted-default)", async () => {

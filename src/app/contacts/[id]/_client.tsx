@@ -3,6 +3,7 @@
 import { useId, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
 import { labelForContactType, labelForMatterRole, contactTypes } from "@/lib/client/labels";
 import { useRouteId } from "@/lib/client/demo/use-route-id";
@@ -167,7 +168,7 @@ export default function ContactDetailClient({ id: paramId }: { id: string }) {
                 {c.parent && (
                   <p className="text-sm text-gray-500 mt-1">
                     Kontaktperson på{" "}
-                    <Link href={`/contacts/${c.parent.id}`} className="text-blue-600 hover:underline">{c.parent.name}</Link>
+                    <EntityLink route="contacts" id={c.parent.id} className="text-blue-600 hover:underline">{c.parent.name}</EntityLink>
                   </p>
                 )}
               </div>
@@ -235,13 +236,13 @@ export default function ContactDetailClient({ id: paramId }: { id: string }) {
           )}
           <div className="divide-y divide-gray-100">
             {(c.children ?? []).map((child: { id: string; name: string; contactType: string; email: string | null; phone: string | null; notes: string | null }) => (
-              <Link key={child.id} href={`/contacts/${child.id}`} className="block px-6 py-3 hover:bg-gray-50">
+              <EntityLink key={child.id} route="contacts" id={child.id} className="block px-6 py-3 hover:bg-gray-50">
                 <p className="text-sm font-medium text-gray-900">{child.name}</p>
                 <p className="text-xs text-gray-500">
                   {child.email && `${child.email} · `}{child.phone}
                   {child.notes && ` · ${child.notes}`}
                 </p>
-              </Link>
+              </EntityLink>
             ))}
             {c.children.length === 0 && !showChildForm && (
               <p className="px-6 py-4 text-sm text-gray-500">Inga kontaktpersoner</p>
@@ -257,7 +258,7 @@ export default function ContactDetailClient({ id: paramId }: { id: string }) {
         </div>
         <div className="divide-y divide-gray-100">
           {c.matterLinks.map((link: { id: string; role: string; matter: { id: string; matterNumber: string; title: string; status: string } }) => (
-            <Link key={link.id} href={`/matters/${link.matter.id}`} className="block px-6 py-4 hover:bg-gray-50">
+            <EntityLink key={link.id} route="matters" id={link.matter.id} className="block px-6 py-4 hover:bg-gray-50">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-900">
@@ -275,7 +276,7 @@ export default function ContactDetailClient({ id: paramId }: { id: string }) {
                   {link.matter.status === "ACTIVE" ? "Aktivt" : link.matter.status === "CLOSED" ? "Stängt" : "Arkiverat"}
                 </span>
               </div>
-            </Link>
+            </EntityLink>
           ))}
           {c.matterLinks.length === 0 && (
             <p className="px-6 py-4 text-sm text-gray-500">Inte kopplad till några ärenden</p>

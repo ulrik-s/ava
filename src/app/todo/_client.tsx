@@ -14,8 +14,8 @@
  */
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
 import { Calendar, CheckSquare, Square, Clock, MapPin, Trash2, Pencil, Plus } from "lucide-react";
+import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
 import { Modal } from "@/components/ui/modal";
 
@@ -265,9 +265,9 @@ function TodoLi({ it, isOwn, onToggle, onEdit, onDelete }: LiProps) {
         <span className="hidden sm:inline-flex items-center gap-1 text-xs text-gray-500"><MapPin size={11} /> {it.location}</span>
       )}
       {it.matter && (
-        <Link href={`/matters/${it.matter.id}`} className="text-xs text-blue-600 hover:underline truncate max-w-[12rem]" title={it.matter.title}>
+        <EntityLink route="matters" id={it.matter.id} className="text-xs text-blue-600 hover:underline truncate max-w-[12rem]" title={it.matter.title}>
           {it.matter.matterNumber}
-        </Link>
+        </EntityLink>
       )}
       <span className="text-[10px] rounded-full bg-gray-100 text-gray-700 px-2 py-0.5">{tagFor(it)}</span>
       {isOwn && it.source === "task" && (

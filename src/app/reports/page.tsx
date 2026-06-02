@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
-import Link from "next/link";
+import { EntityLink } from "@/lib/client/demo/entity-link";
 import type { inferRouterOutputs } from "@trpc/server";
 import { trpc } from "@/lib/client/trpc";
 import { formatMinutes, formatCurrency } from "@/lib/client/utils";
@@ -181,7 +181,7 @@ type MatterRow = Report["matters"][number];
 
 const mattersTableColumns: Column<MatterRow>[] = [
   { key: "matter", label: "Ärende", sortable: true, sortValue: (m) => m.matterNumber,
-    render: (m) => <Link href={`/matters/${m.matterId}`} className="text-blue-600 hover:underline">{m.matterNumber} — {m.title}</Link> },
+    render: (m) => <EntityLink route="matters" id={m.matterId} className="text-blue-600 hover:underline">{m.matterNumber} — {m.title}</EntityLink> },
   { key: "client", label: "Klient", sortable: true, sortValue: (m) => m.client ?? "",
     render: (m) => <span className="text-gray-600">{m.client ?? "—"}</span> },
   { key: "payment", label: "Betalning", sortable: true, sortValue: (m) => labelForPaymentMethod(m.paymentMethod),
@@ -277,7 +277,7 @@ type UnbilledRow = Report["unbilled"]["rows"][number];
 
 const unbilledColumns: Column<UnbilledRow>[] = [
   { key: "matter", label: "Ärende", sortable: true, sortValue: (r) => r.matterNumber,
-    render: (r) => <Link href={`/matters/${r.matterId}`} className="text-blue-600 hover:underline">{r.matterNumber} — {r.title}</Link> },
+    render: (r) => <EntityLink route="matters" id={r.matterId} className="text-blue-600 hover:underline">{r.matterNumber} — {r.title}</EntityLink> },
   { key: "client", label: "Klient", sortable: true, sortValue: (r) => r.client ?? "",
     render: (r) => <span className="text-gray-600">{r.client ?? "—"}</span> },
   { key: "payment", label: "Betalning", sortable: true, sortValue: (r) => labelForPaymentMethod(r.paymentMethod),

@@ -13,7 +13,7 @@
 import { useId, useState } from "react";
 import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
-import { entityHref } from "@/lib/client/demo/entity-href";
+import { EntityLink } from "@/lib/client/demo/entity-link";
 import { DataTable, type Column } from "@/components/ui/data-table";
 
 interface InvoiceRow {
@@ -69,7 +69,7 @@ const invoiceCols: Column<InvoiceRow>[] = [
   { key: "amount", label: "Belopp", sortable: true, align: "right", sortValue: (i) => i.amount,
     render: (i) => <span className="font-mono">{formatCurrency(i.amount)}</span> },
   { key: "open", label: "", sortable: false, align: "right", hideable: false,
-    render: (i) => <a href={entityHref("invoices", i.id)} className="text-blue-600 hover:underline text-xs">Öppna</a> },
+    render: (i) => <EntityLink route="invoices" id={i.id} className="text-blue-600 hover:underline text-xs">Öppna</EntityLink> },
 ];
 
 // eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'InvoicesSection' har JSX-conditionals)

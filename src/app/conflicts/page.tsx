@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
+import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
 import { labelForContactType, labelForMatterRole } from "@/lib/client/labels";
 import { DataTable, type Column } from "@/components/ui/data-table";
@@ -30,9 +30,9 @@ function rolePillClass(role: string): string {
 const conflictColumns: Column<ConflictRow>[] = [
   { key: "contactName", label: "Kontakt", sortable: true, sortValue: (r) => r.contactName,
     render: (r) => (
-      <Link href={`/contacts/${r.contactId}`} className="text-sm font-medium text-blue-600 hover:underline">
+      <EntityLink route="contacts" id={r.contactId} className="text-sm font-medium text-blue-600 hover:underline">
         {r.contactName}
-      </Link>
+      </EntityLink>
     ),
   },
   { key: "contactType", label: "Typ", sortable: true, sortValue: (r) => labelForContactType(r.contactType),
@@ -42,9 +42,9 @@ const conflictColumns: Column<ConflictRow>[] = [
     render: (r) => <span className="text-sm text-gray-500">{r.personalNumber || r.orgNumber || "—"}</span> },
   { key: "matter", label: "Ärende", sortable: true, sortValue: (r) => r.matterNumber,
     render: (r) => (
-      <Link href={`/matters/${r.matterId}`} className="text-sm text-blue-600 hover:underline">
+      <EntityLink route="matters" id={r.matterId} className="text-sm text-blue-600 hover:underline">
         {r.matterNumber} — {r.matterTitle}
-      </Link>
+      </EntityLink>
     ),
   },
   { key: "role", label: "Roll i ärendet", sortable: true, sortValue: (r) => labelForMatterRole(r.role),

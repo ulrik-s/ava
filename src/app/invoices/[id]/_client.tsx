@@ -6,11 +6,10 @@
  */
 
 import { useState } from "react";
-import Link from "next/link";
 import type { inferRouterOutputs } from "@trpc/server";
 import { trpc } from "@/lib/client/trpc";
 import { useRouteId } from "@/lib/client/demo/use-route-id";
-import { entityHref } from "@/lib/client/demo/entity-href";
+import { EntityLink } from "@/lib/client/demo/entity-link";
 import { formatCurrency } from "@/lib/client/utils";
 import type { AppRouter } from "@/lib/server/routers/_app";
 import { PaymentModal } from "./_payment-modal";
@@ -155,7 +154,7 @@ function InvoiceHeader({ inv }: { inv: Inv }) {
     : "Faktura";
   return (
     <div>
-      <Link href={`/matters/${inv.matter.id}`} className="text-sm text-blue-600 hover:underline">← {inv.matter.matterNumber} {inv.matter.title}</Link>
+      <EntityLink route="matters" id={inv.matter.id} className="text-sm text-blue-600 hover:underline">← {inv.matter.matterNumber} {inv.matter.title}</EntityLink>
       <h1 className="text-2xl font-bold mt-2">
         {heading}
         <span className="ml-3 text-sm font-normal text-gray-500">{new Date(inv.invoiceDate).toLocaleDateString("sv-SE")}</span>
@@ -198,9 +197,9 @@ function CreditBanners({ inv }: { inv: Inv }) {
         <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 text-sm">
           <p className="font-medium text-orange-900">Denna faktura är krediterad.</p>
           <p className="text-orange-800 mt-1">
-            <a href={entityHref("invoices", inv.creditNote.id)} className="underline">
+            <EntityLink route="invoices" id={inv.creditNote.id} className="underline">
               Kreditfaktura {new Date(inv.creditNote.invoiceDate).toLocaleDateString("sv-SE")}
-            </a>
+            </EntityLink>
             {" "}— belopp {formatCurrency(inv.creditNote.amount)}
           </p>
         </div>
@@ -210,9 +209,9 @@ function CreditBanners({ inv }: { inv: Inv }) {
           <p className="font-medium text-orange-900">Detta är en kreditfaktura.</p>
           <p className="text-orange-800 mt-1">
             Krediterar{" "}
-            <a href={entityHref("invoices", inv.creditedInvoice.id)} className="underline">
+            <EntityLink route="invoices" id={inv.creditedInvoice.id} className="underline">
               faktura från {new Date(inv.creditedInvoice.invoiceDate).toLocaleDateString("sv-SE")}
-            </a>
+            </EntityLink>
             {" "}(ursprungligt belopp {formatCurrency(inv.creditedInvoice.amount)})
           </p>
         </div>
@@ -274,9 +273,9 @@ function InvoiceDocumentsCard({ matterId, documents }: { matterId: string; docum
       <ul className="text-sm divide-y divide-gray-100">
         {documents.map((d) => (
           <li key={d.id} className="py-2 flex items-center justify-between">
-            <Link href={`/matters/${matterId}`} className="text-blue-600 hover:underline">
+            <EntityLink route="matters" id={matterId} className="text-blue-600 hover:underline">
               {d.fileName}
-            </Link>
+            </EntityLink>
             {d.documentType && <span className="text-[10px] rounded-full bg-gray-100 text-gray-600 px-2 py-0.5">{d.documentType}</span>}
           </li>
         ))}
@@ -353,9 +352,9 @@ function AccontoDeductions({ deductions }: { deductions: Inv["accontoDeductions"
           {deductions.map((d: Inv["accontoDeductions"][number]) => (
             <tr key={d.id}>
               <td className="py-2">
-                <a href={entityHref("invoices", d.accontoInvoice.id)} className="text-blue-600 hover:underline">
+                <EntityLink route="invoices" id={d.accontoInvoice.id} className="text-blue-600 hover:underline">
                   Acconto {new Date(d.accontoInvoice.invoiceDate).toLocaleDateString("sv-SE")}
-                </a>
+                </EntityLink>
               </td>
               <td className="py-2 text-right font-mono">−{formatCurrency(d.accontoInvoice.amount)}</td>
             </tr>

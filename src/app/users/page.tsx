@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
 import { ShieldAlert, UserX, UserRound } from "lucide-react";
 import { DataTable, type Column } from "@/components/ui/data-table";
@@ -53,7 +54,7 @@ function buildUserColumns(opts: {
 }): Column<UserRow>[] {
   const base: Column<UserRow>[] = [
     { key: "name", label: "Namn", sortable: true, sortValue: (u) => u.name,
-      render: (u) => <Link href={`/users/${u.id}`} className="text-sm font-medium text-blue-600 hover:underline">{u.name}</Link> },
+      render: (u) => <EntityLink route="users" id={u.id} className="text-sm font-medium text-blue-600 hover:underline">{u.name}</EntityLink> },
     { key: "title", label: "Titel", sortable: true, sortValue: (u) => u.title ?? "",
       render: (u) => <span className="text-sm text-gray-500">{u.title || "—"}</span> },
     { key: "email", label: "E-post", sortable: true, sortValue: (u) => u.email,

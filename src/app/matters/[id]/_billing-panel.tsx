@@ -19,6 +19,7 @@ import { BillingDialog } from "./_billing-dialog";
 import { VerdictDialog } from "./_verdict-dialog";
 import { KostnadsrakningModal } from "./_kostnadsrakning-modal";
 import { hasGeneratedDoc, openGeneratedDoc } from "@/lib/client/demo/generated-doc-cache";
+import { EntityLink } from "@/lib/client/demo/entity-link";
 import { useMatterInvariants } from "@/lib/client/diagnostics/use-matter-invariants";
 
 interface MatterContext {
@@ -345,15 +346,15 @@ function RunsList({ rows, loading }: { rows: BillingRunRow[]; loading: boolean }
               <td className="text-right text-sm font-mono">{formatCurrency(r.amountOre)}</td>
               <td className="text-right">
                 {r.invoiceId && (
-                  // <a>-tag (inte Next-Link) — runtime-skapade UUIDs finns inte
-                  // i generateStaticParams. Hård navigering → 404.html (=
-                  // index.html) → app:en bootar med rätt URL, useRouteId
-                  // läser id:t. Next-Link skulle inte hitta routen och falla
-                  // tillbaka till dashboard.
-                  <a href={`${process.env.NEXT_PUBLIC_DEMO_BASE_PATH ?? ""}/invoices/${r.invoiceId}/`}
+                  // EntityLink (inte Next-Link) — runtime-skapade UUIDs finns
+                  // inte i generateStaticParams. Nuvarande 404.html är en
+                  // __shell__ routing-shim (se [[entity-link]]); EntityLink gör
+                  // en hård navigering så shim/nginx try_files kan resolva
+                  // runtime-skapade faktura-id:n.
+                  <EntityLink route="invoices" id={r.invoiceId}
                     className="text-xs text-blue-600 hover:underline">
                     {r.invoice?.invoiceNumber ?? "Faktura"}
-                  </a>
+                  </EntityLink>
                 )}
               </td>
             </tr>

@@ -1,8 +1,8 @@
 "use client";
 
 import { Suspense, useId, useState } from "react";
-import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
 import { labelForContactType, contactTypes } from "@/lib/client/labels";
 import { useIsReadOnly } from "@/lib/client/demo/demo-mode-context";
@@ -20,7 +20,7 @@ interface ContactRow {
 
 const contactColumns: Column<ContactRow>[] = [
   { key: "name", label: "Namn", sortable: true, sortValue: (c) => c.name,
-    render: (c) => <Link href={`/contacts/${c.id}`} className="text-sm font-medium text-blue-600 hover:underline">{c.name}</Link> },
+    render: (c) => <EntityLink route="contacts" id={c.id} className="text-sm font-medium text-blue-600 hover:underline">{c.name}</EntityLink> },
   { key: "contactType", label: "Typ", sortable: true, sortValue: (c) => labelForContactType(c.contactType),
     render: (c) => <span className="text-sm text-gray-500">{labelForContactType(c.contactType)}</span> },
   { key: "number", label: "Personnr/Orgnr", sortable: true, sortValue: (c) => c.personalNumber || c.orgNumber || "",

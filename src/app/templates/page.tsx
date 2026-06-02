@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/client/trpc";
+import { EntityLink } from "@/lib/client/demo/entity-link";
+import { entityHref } from "@/lib/client/demo/entity-href";
 import { Plus, Pencil, Trash2, FileText } from "lucide-react";
 import { DataTable, type Column } from "@/components/ui/data-table";
 
@@ -17,7 +18,6 @@ interface Template {
 }
 
 export default function TemplatesPage() {
-  const router = useRouter();
   const templates = trpc.documentTemplate.list.useQuery();
   const utils = trpc.useUtils();
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
@@ -47,10 +47,10 @@ export default function TemplatesPage() {
     { key: "actions", label: "", sortable: false, align: "right", hideable: false,
       render: (t) => (
         <span className="flex items-center gap-1 justify-end" onClick={(e) => e.stopPropagation()}>
-          <Link href={`/templates/${t.id}/edit`}
+          <EntityLink route="templates" id={t.id} sub="edit"
             className="p-1.5 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-700" title="Redigera">
             <Pencil size={14} />
-          </Link>
+          </EntityLink>
           <button onClick={() => setConfirmDelete(t.id)}
             className="p-1.5 rounded hover:bg-red-50 text-gray-500 hover:text-red-600" title="Ta bort">
             <Trash2 size={14} />
@@ -99,7 +99,7 @@ export default function TemplatesPage() {
           columns={columns}
           data={templates.data as Template[]}
           rowKey={(t) => t.id}
-          onRowClick={(t) => router.push(`/templates/${t.id}/edit`)}
+          onRowClick={(t) => location.assign(entityHref("templates", t.id, "edit"))}
           emptyMessage="Inga mallar."
         />
       )}

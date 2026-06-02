@@ -17,9 +17,19 @@
  * Base-path:en (`/ava` på GH Pages, tomt i self-hosted) måste prefixas manuellt
  * eftersom `<a>` kringgår Next:s router (som annars lägger på basePath). Trailing
  * slash matchar `trailingSlash: true`-bygget så 404-shimmen får rätt path.
+ *
+ * `sub` hanterar nästlade detalj-routes (t.ex. `templates/[id]/edit`):
+ * `entityHref("templates", id, "edit")` → `/<base>/templates/<id>/edit/`. Både
+ * 404-shimmen och nginx try_files bevarar svans-segmentet och landar på rätt
+ * sentinel (`/templates/__shell__/edit/`), och `useRouteId(1)` läser id:t.
+ *
+ * Använd helst `<EntityLink>` ([[entity-link]]) i UI:t — den är den kanoniska
+ * primitiven. `entityHref` är den rena funktionen bakom den (för `location.assign`
+ * i row-click-handlers m.m.).
  */
-export function entityHref(route: string, id: string): string {
+export function entityHref(route: string, id: string, sub?: string): string {
   const base = process.env.NEXT_PUBLIC_DEMO_BASE_PATH ?? "";
   const cleanRoute = route.replace(/^\/+|\/+$/g, "");
-  return `${base}/${cleanRoute}/${id}/`;
+  const cleanSub = sub ? `${sub.replace(/^\/+|\/+$/g, "")}/` : "";
+  return `${base}/${cleanRoute}/${id}/${cleanSub}`;
 }
