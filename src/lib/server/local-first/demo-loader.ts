@@ -26,6 +26,7 @@
 import type { MemFs } from "./mem-fs";
 import { ProjectionHydrator } from "./projection-writer";
 import type { ProjectionRegistry } from "./projections/registry";
+import { ENTITY_REGISTRY } from "@/lib/shared/schemas";
 
 export type DemoCloneFn = (fs: MemFs, url: string) => Promise<void>;
 
@@ -149,28 +150,12 @@ export class DemoLoader {
   }
 
   private knownPrefixes(entity: string): string[] {
-    const prefixes: Record<string, string[]> = {
-      matter: ["matters/active"],
-      contact: ["contacts"],
-      user: [".ava/users"],
-      matterContact: ["matter-contacts"],
-      document: ["documents"],
-      timeEntry: ["time-entries"],
-      expense: ["expenses"],
-      invoice: ["invoices"],
-      // Tillagda — utan dessa skippades hela mappen även om
-      // ProjectionRegistry kände till path-prefix:en. Resultat:
-      // kalender, avbetalningar, tasks osv. visade tomt i UI.
-      calendarEvent: ["calendar"],
-      paymentPlan: ["payment-plans"],
-      payment: ["payments"],
-      paymentPlanReminder: ["payment-plan-reminders"],
-      task: ["tasks"],
-      conflictCheck: ["conflict-checks"],
-      documentTemplate: [".ava/templates"],
-      organization: [".ava/organizations"],
-      office: ["offices"],
-    };
-    return prefixes[entity] ?? [];
+    // Härled scan-prefix:et ur ENTITY_REGISTRY (single source of truth för
+    // "vart skrivs varje entitet"). Tidigare en hårdkodad dubblett-karta som
+    // upprepade gånger glömdes vid nya entiteter (kalender, billing-runs …) →
+    // de hydrerades aldrig vid restore ("Inga billingruns ännu"). Open-closed:
+    // en ny entitet i registry:t + en registrerad projection räcker nu.
+    const entry = (ENTITY_REGISTRY as Record<string, { gitPrefix?: string }>)[entity];
+    return entry?.gitPrefix ? [entry.gitPrefix] : [];
   }
 }

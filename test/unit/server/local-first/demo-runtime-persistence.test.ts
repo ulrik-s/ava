@@ -11,6 +11,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { DemoRuntime } from "@/lib/server/local-first/demo-runtime";
 import { InMemoryPersistence } from "@/lib/server/local-first/persistence";
+import { demoSourceFromRuntime } from "@/lib/client/demo/demo-source-from-runtime";
 
 const matter1 = JSON.stringify({
   id: "m1", matterNumber: "2026-0001", title: "T",
@@ -153,6 +154,28 @@ describe("DemoRuntime — persistens", () => {
     expect(await rt2.restoreFromCache()).toBe(true);
     const read = await rt2.readFileBytes("documents/content/k.pdf");
     expect(Array.from(read)).toEqual(Array.from(bytes)); // binärt bevarat byte-för-byte över persist/restore
+  });
+
+  it("slab: billingRun-mutation hydreras vid restore + når DemoSource (projection + source-key)", async () => {
+    // Regression: faktureringsflöden skriver billing-runs/<id>.json till slaben,
+    // men utan projection + ENTITY_TO_SOURCE_KEY-mappning droppades de vid restore
+    // → "Inga billingruns ännu" efter reload.
+    const persistence = new InMemoryPersistence();
+    const rt1 = DemoRuntime.create({ cloneFn: async () => {}, persistence });
+    const run = JSON.stringify({
+      id: "br1", matterId: "m1", type: "KOSTNADSRAKNING", status: "PENDING_VERDICT",
+      recipient: "OFFENTLIG_FORSVARARE", workValueOreAtRun: 670400,
+    });
+    await rt1.writeFile("billing-runs/br1.json", run);
+    await rt1.persist();
+
+    const rt2 = DemoRuntime.create({ cloneFn: async () => { throw new Error("ska inte klona"); }, persistence });
+    expect(await rt2.restoreFromCache()).toBe(true);
+    // Projektionen hydrerar entiteten …
+    expect(rt2.allEntities().billingRun).toEqual([expect.objectContaining({ id: "br1", status: "PENDING_VERDICT" })]);
+    // … och demoSourceFromRuntime mappar den till DemoSource.billingRuns.
+    const source = demoSourceFromRuntime(rt2);
+    expect(source.billingRuns).toEqual([expect.objectContaining({ id: "br1", matterId: "m1" })]);
   });
 
   it("persist() inkluderar slab-skrivningar; deleteFile tar bort dem", async () => {

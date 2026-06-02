@@ -9,9 +9,10 @@ import { buildDefaultRegistry } from "@/lib/server/local-first/projections/defau
 describe("buildDefaultRegistry", () => {
   const registry = buildDefaultRegistry();
 
-  it("har alla 19 entiteter registrerade (matter, contact, user, prefs m.fl.)", () => {
+  it("har alla 21 entiteter registrerade (matter, contact, billingRun, prefs m.fl.)", () => {
     // JS sort är case-sensitive → uppercase < lowercase → "orgPreference" < "organization".
     expect(registry.entities().sort()).toEqual([
+      "accontoDeduction", "billingRun",
       "calendarEvent", "conflictCheck", "contact", "document", "documentTemplate",
       "expense", "invoice", "matter", "matterContact", "office",
       "orgPreference", "organization",
