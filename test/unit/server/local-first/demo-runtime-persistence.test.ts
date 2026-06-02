@@ -142,6 +142,19 @@ describe("DemoRuntime — persistens", () => {
     expect(await rt2.readFile("documents/content/kostn-x.html")).toBe(html); // exakt, inkl. svenska tecken
   });
 
+  it("slab: binärt innehåll (writeFileBytes) persisteras + läses tillbaka exakt", async () => {
+    const persistence = new InMemoryPersistence();
+    const rt1 = DemoRuntime.create({ cloneFn: async () => {}, persistence });
+    const bytes = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x00, 0x01, 0xfe, 0xff, 0x80]); // %PDF + binärt
+    await rt1.writeFileBytes("documents/content/k.pdf", bytes);
+    await rt1.persist();
+
+    const rt2 = DemoRuntime.create({ cloneFn: async () => { throw new Error("ska inte klona"); }, persistence });
+    expect(await rt2.restoreFromCache()).toBe(true);
+    const read = await rt2.readFileBytes("documents/content/k.pdf");
+    expect(Array.from(read)).toEqual(Array.from(bytes)); // binärt bevarat byte-för-byte över persist/restore
+  });
+
   it("persist() inkluderar slab-skrivningar; deleteFile tar bort dem", async () => {
     const persistence = new InMemoryPersistence();
     const rt = DemoRuntime.create({ cloneFn: async () => {}, persistence });

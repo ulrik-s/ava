@@ -139,6 +139,16 @@ export class DemoRuntime {
     return this.fs.readFile(path);
   }
 
+  /** Skriv binärt innehåll (PDF m.fl.) till slaben. */
+  async writeFileBytes(path: string, data: Uint8Array): Promise<void> {
+    await this.fs.writeBytes(path, data);
+  }
+
+  /** Läs binärt innehåll ur slaben. */
+  async readFileBytes(path: string): Promise<Uint8Array> {
+    return this.fs.readBytes(path);
+  }
+
   /** Direkta barn-filnamn under `prefix` i slaben (t.ex. "documents/content"). */
   async listFiles(prefix: string): Promise<string[]> {
     return this.fs.listDir(prefix);

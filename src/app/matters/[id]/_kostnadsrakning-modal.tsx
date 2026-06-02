@@ -21,14 +21,10 @@ import { Clock, FileText, X, AlertTriangle, Save } from "lucide-react";
 import { trpc } from "@/lib/client/trpc";
 import { buildKostnadsrakningContext } from "@/lib/shared/kostnadsrakning";
 import type { TaxaLevel } from "@/lib/shared/brottmalstaxa";
-import { renderHandlebars } from "@/lib/client/kostnadsrakning/render-handlebars";
-import {
-  templateCategoryFor,
-  defaultTemplateFor,
-} from "@/lib/shared/kostnadsrakning-template";
+import { renderKostnadsrakningPdf } from "@/lib/client/kostnadsrakning/render-pdf";
 import { useHelper, composeMailViaHelper } from "@/lib/client/helper/use-helper";
 import { formatCurrency } from "@/lib/client/utils";
-import { stashGeneratedDoc } from "@/lib/client/demo/generated-doc-cache";
+import { persistGeneratedDoc } from "@/lib/client/demo/persist-generated-doc";
 
 interface Props {
   matterId: string;
@@ -65,29 +61,6 @@ function defaultStart(stored?: string | Date | null): string {
   return toDatetimeLocalValue(d);
 }
 
-interface TemplateRow { category?: string | null; content?: string }
-
-function renderHtml(isTaxe: boolean, templates: unknown, ctx: Record<string, unknown>): string {
-  const wantedCategory = templateCategoryFor(isTaxe);
-  const list = (templates ?? []) as TemplateRow[];
-  const tpl = list.find((t) => t.category === wantedCategory);
-  const html = tpl?.content ?? defaultTemplateFor(isTaxe);
-  return renderHandlebars(html, ctx);
-}
-
-async function writeFsa(storagePath: string, bytes: Uint8Array): Promise<void> {
-  try {
-    const { loadHandle } = await import("@/lib/client/fsa/handle-store");
-    const { FsaIsoGitAdapter } = await import("@/lib/client/fsa/fs-adapter");
-    const handle = await loadHandle("repo-root");
-    if (!handle) return;
-    const fs = new FsaIsoGitAdapter(handle);
-    await fs.writeFile("/" + storagePath, bytes);
-  } catch (e) {
-    console.warn("[kostnadsrakning] FSA-skrivning misslyckades:", e);
-  }
-}
-
 /* eslint-disable @typescript-eslint/no-explicit-any */
 interface RecordDocOpts {
   recordKostn: { mutateAsync: (i: any) => Promise<unknown> };
@@ -117,7 +90,7 @@ async function recordDocument(opts: RecordDocOpts): Promise<void> {
   // event-log utan att dokumentet skapades, men UI:t sa ändå "sparad".)
   await opts.recordKostn.mutateAsync({
     id: opts.docId, matterId: opts.matterId, fileName: opts.fileName,
-    mimeType: "text/html; charset=utf-8", sizeBytes: opts.bytes.byteLength,
+    mimeType: "application/pdf", sizeBytes: opts.bytes.byteLength,
     storagePath: opts.storagePath, totalInclVat: opts.totalInclVat,
     huvudforhandlingMinutes: opts.huvudforhandlingMinutes,
   });
@@ -166,7 +139,7 @@ async function maybeComposeMail(opts: MailOpts): Promise<boolean> {
   return composeMailViaHelper({
     fileName: opts.fileName,
     contentBase64: bytesToBase64(opts.bytes),
-    mimeType: "text/html; charset=utf-8",
+    mimeType: "application/pdf",
     subject: `Kostnadsräkning Mål ${opts.matterNumber}`,
     body,
   });
@@ -185,7 +158,6 @@ export function KostnadsrakningModal(props: Props) {
   const [done, setDone] = useState<{ filename: string; mailOpened: boolean } | null>(null);
   const helper = useHelper();
 
-  const templates = trpc.documentTemplate.list.useQuery();
   const matterUpdate = trpc.matter.update.useMutation();
   const utils = trpc.useUtils();
   const recordKostn = trpc.kostnadsrakning.record.useMutation();
@@ -229,28 +201,28 @@ export function KostnadsrakningModal(props: Props) {
     setError(null);
     setGenerating(true);
     try {
-      const fileName = `Kostnadsräkning ${props.matterNumber} ${new Date().toISOString().slice(0, 10)}.html`;
+      const fileName = `Kostnadsräkning ${props.matterNumber} ${new Date().toISOString().slice(0, 10)}.pdf`;
       const docId = `kostn-${props.matterNumber}-${Date.now().toString(36)}`;
-      const html = renderHtml(isTaxe, templates.data, ctx.templateContext);
-      const bytes = new TextEncoder().encode(html);
-      const storagePath = `documents/content/${docId}.html`;
-      // I demo-mode (GH Pages) finns ingen server som kan ta emot filen,
-      // så stash:a bytes:erna i en in-memory blob-cache som document-row
-      // och banner-länken slår upp när användaren klickar "öppna".
-      stashGeneratedDoc(docId, bytes, "text/html", fileName);
-      await writeFsa(storagePath, bytes);
+      // Riktig PDF direkt (pdf-lib, client-side) — öppnas inline i webbläsaren,
+      // ingen utskrift behövs.
+      const bytes = await renderKostnadsrakningPdf({
+        result: ctx,
+        meta: {
+          matterNumber: props.matterNumber, matterTitle: props.matterTitle,
+          clientName: props.clientName, courtName: props.courtName ?? "",
+          defenderName: props.defenderName,
+          organizationName: props.organizationName, organizationOrgNumber: props.organizationOrgNumber,
+        },
+      });
+      const storagePath = `documents/content/${docId}.pdf`;
+      // Innehåll: in-memory blob-cache (öppna nu) + FSA (self-hosted) + demo-slab
+      // (överlever reload). Metadata-raden skapas separat av recordDocument.
+      await persistGeneratedDoc({ id: docId, storagePath, fileName, mimeType: "application/pdf", bytes });
       await recordDocument({
         recordKostn, utils, docId, matterId: props.matterId, fileName, storagePath,
         bytes, totalInclVat: ctx.totalInclVat,
         huvudforhandlingMinutes: ctx.huvudforhandlingMinutes,
       });
-      // Persistera innehållet till demo-slaben så det kan öppnas igen efter
-      // reload (metadata persisteras redan via record→writeBack). demo-bootstrap
-      // lyssnar → skriver till MemFs + persist. Self-hosted: writeFsa ovan
-      // skrev redan till FSA, så listenern (utan demo-runtime) no-op:ar.
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new CustomEvent("ava:generated-doc", { detail: { id: docId, storagePath, content: html } }));
-      }
       const mailOpened = await maybeComposeMail({
         helperAvailable: Boolean(helper.version),
         fileName, bytes,

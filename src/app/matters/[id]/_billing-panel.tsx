@@ -127,13 +127,13 @@ function courtOf(matter: MatterContext): string | undefined {
 }
 
 interface DialogsProps {
-  matterId: string; rows: BillingRunRow[];
+  matterId: string; matter: MatterContext; rows: BillingRunRow[];
   dialog: DialogState; setDialog: (s: DialogState) => void;
   verdictRunId: string | null; setVerdictRunId: (id: string | null) => void;
   onRefetch: () => void;
 }
 
-function BillingDialogs({ matterId, rows, dialog, setDialog, verdictRunId, setVerdictRunId, onRefetch }: DialogsProps) {
+function BillingDialogs({ matterId, matter, rows, dialog, setDialog, verdictRunId, setVerdictRunId, onRefetch }: DialogsProps) {
   const pending = findPendingVerdict(rows);
   return (
     <>
@@ -144,6 +144,8 @@ function BillingDialogs({ matterId, rows, dialog, setDialog, verdictRunId, setVe
       )}
       {verdictRunId && (
         <VerdictDialog billingRunId={verdictRunId} workValueOre={pending?.amountOre ?? 0}
+          matterId={matterId} matterNumber={matter.matterNumber} matterTitle={matter.title}
+          clientName={clientOf(matter)}
           onClose={() => { setVerdictRunId(null); onRefetch(); }} />
       )}
     </>
@@ -240,7 +242,7 @@ export function BillingPanel({ matterId, matter }: Props) {
       <SummaryCards totals={computeTotals(rows)} />
       {pending && <PendingVerdictBanner matterId={matterId} run={pending} onClick={() => setVerdictRunId(pending.id)} />}
       <RunsList rows={rows} loading={runs.isLoading} />
-      <BillingDialogs matterId={matterId} rows={rows}
+      <BillingDialogs matterId={matterId} matter={matter} rows={rows}
         dialog={dialog} setDialog={setDialog}
         verdictRunId={verdictRunId} setVerdictRunId={setVerdictRunId}
         onRefetch={refetch} />

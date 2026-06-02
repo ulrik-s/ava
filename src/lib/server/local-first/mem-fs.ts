@@ -100,6 +100,19 @@ export class MemFs implements IFileSystem {
     this.store.delete(this.norm(path));
   }
 
+  /** Skriv binärt innehåll (t.ex. PDF) — lagras som Buffer direkt (ingen
+   *  UTF-8-tolkning), så binära dokument inte korrumperas. */
+  async writeBytes(path: string, data: Uint8Array): Promise<void> {
+    this.store.set(this.norm(path), Buffer.from(data));
+  }
+
+  /** Läs binärt innehåll. Kastar ENOENT om filen saknas. */
+  async readBytes(path: string): Promise<Uint8Array> {
+    const buf = this.store.get(this.norm(path));
+    if (!buf) throw enoent(path);
+    return new Uint8Array(buf);
+  }
+
   /**
    * Producera en JSON-serialiserbar snapshot av hela fs-state.
    * Buffrar encodas som base64 så binär data inte korrumperas vid
