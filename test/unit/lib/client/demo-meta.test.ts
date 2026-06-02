@@ -39,6 +39,16 @@ describe("loadDemoMeta", () => {
     expect(meta.users[0].id).toBe("u-anna");
   });
 
+  it("fetchar med cache:'no-store' så reset/deploy ger färsk meta", async () => {
+    let init: RequestInit | undefined;
+    const fetchFn: typeof fetch = ((_url: unknown, opts?: RequestInit) => {
+      init = opts;
+      return Promise.resolve(new Response(JSON.stringify(VALID_META)));
+    }) as typeof fetch;
+    await loadDemoMeta("ulrik-s/ava", fetchFn);
+    expect(init?.cache).toBe("no-store");
+  });
+
   it("cachar resultatet (andra anropet fetchar inte igen)", async () => {
     let calls = 0;
     const fetchFn: typeof fetch = (() => {
