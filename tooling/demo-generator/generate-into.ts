@@ -21,6 +21,7 @@ import { populateBilling, type BillingResult } from "./populate-billing";
 import { populateDocuments } from "./populate-documents";
 import { populateTemplateDocs } from "./populate-template-docs";
 import { populateInvoiceDocs } from "./populate-invoice-docs";
+import { populateKostnadsrakningDocs } from "./populate-kostnadsrakning-docs";
 import { populateUnbilledTime } from "./populate-unbilled-time";
 import { populateBillingRuns, type BillingRunsResult } from "./populate-billing-runs";
 import { createIdTranslator, translateSeed, type IdTranslator } from "./id-translator";
@@ -30,6 +31,7 @@ export interface GenerateResult extends PopulateResult {
   documents: number;
   templateDocs: number;
   invoiceDocs: number;
+  kostnadsrakningDocs: number;
   billing: BillingResult;
   billingRuns: BillingRunsResult;
   unbilledTimeEntries: number;
@@ -70,6 +72,9 @@ export async function generateInto(outDir: string, seedOpts: BuildSeedOpts = {})
   const documents = await populateDocuments(target.caller, seed, sink);
   const templateDocs = await populateTemplateDocs(target.caller, seed, sink); // mall→ärende-flödet
   const invoiceDocs = await populateInvoiceDocs(target.caller, sink); // faktura-dokument länkade till fakturan
+  // KR-dokument per KOSTNADSRAKNING-run → ärendet visar inte "väntar på dom"
+  // utan att kostnadsräkningen faktiskt finns (kohärent demo-state).
+  const kostnadsrakningDocs = await populateKostnadsrakningDocs(target.caller, sink);
   await target.finalize();
-  return { ...res, documents, templateDocs, invoiceDocs, billing, billingRuns, unbilledTimeEntries, translator };
+  return { ...res, documents, templateDocs, invoiceDocs, kostnadsrakningDocs, billing, billingRuns, unbilledTimeEntries, translator };
 }

@@ -89,6 +89,7 @@ async function main(): Promise<void> {
   console.log(`[demo-repo] klart. Innehåll i ${outDir}:`);
   console.log(`  • ${result.users} användare, ${result.contacts} kontakter, ${result.matters} ärenden`);
   console.log(`  • ${result.documents} dokument (PDF/DOCX)`);
+  console.log(`  • genererade dokument: ${result.invoiceDocs} faktura, ${result.kostnadsrakningDocs} kostnadsräkning`);
   console.log(`  • fakturering: ${result.billing.invoices} fakturor, ${result.billing.paymentPlans} planer, ${result.billing.payments} betalningar, ${result.billing.reminders} påminnelser`);
   console.log(`  • ${result.calendarEvents} kalender-events, ${result.tasks} tasks`);
   console.log("");
