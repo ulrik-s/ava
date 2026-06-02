@@ -19,12 +19,68 @@ import { Modal } from "@/components/ui/modal";
 interface Props {
   billingRunId: string;
   workValueOre: number;
+  matterId: string;
+  matterNumber: string;
+  matterTitle: string;
+  clientName?: string;
+  organizationName?: string;
+  organizationOrgNumber?: string;
   onClose: () => void;
 }
 
-export function VerdictDialog({ billingRunId, workValueOre, onClose }: Props) {
+/* eslint-disable @typescript-eslint/no-explicit-any */
+type RegisterMut = { mutateAsync: (i: any) => Promise<unknown> };
+type DocUtils = { document: { tree: { invalidate: (f?: any) => Promise<unknown>; refetch: (f?: any) => Promise<unknown> }; list: { invalidate: (f?: any) => Promise<unknown> } } };
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
+/**
+ * Generera ett faktura-DOKUMENT (PDF) ur den nyss skapade invoice-entiteten och
+ * lägg det i ärendets fil-lista (parallellt med Invoice-objektet). document.register
+ * emittar inga events (ingen read-only-trap), så detta funkar i demo/git-backend.
+ */
+async function generateFakturaDoc(
+  invoice: { id: string; amount: number; invoiceNumber?: string | null; invoiceDate?: string | Date | null },
+  props: Props, register: RegisterMut, utils: DocUtils,
+): Promise<void> {
+  const { renderFakturaPdf } = await import("@/lib/client/kostnadsrakning/render-faktura-pdf");
+  const { persistGeneratedDoc } = await import("@/lib/client/demo/persist-generated-doc");
+  const bytes = await renderFakturaPdf({
+    invoice,
+    meta: {
+      matterNumber: props.matterNumber, matterTitle: props.matterTitle,
+      clientName: props.clientName,
+      organizationName: props.organizationName, organizationOrgNumber: props.organizationOrgNumber,
+    },
+  });
+  const docId = `faktura-${invoice.id}`;
+  const fileName = `Faktura ${props.matterNumber} ${new Date().toISOString().slice(0, 10)}.pdf`;
+  const storagePath = `documents/content/${docId}.pdf`;
+  await register.mutateAsync({
+    id: docId, matterId: props.matterId, fileName, mimeType: "application/pdf",
+    sizeBytes: bytes.byteLength, storagePath, documentType: "Faktura",
+    invoiceId: invoice.id, analysisStatus: "DONE",
+  });
+  await persistGeneratedDoc({ id: docId, storagePath, fileName, mimeType: "application/pdf", bytes });
+  try {
+    await utils.document.tree.invalidate({ matterId: props.matterId });
+    await utils.document.tree.refetch({ matterId: props.matterId });
+    await utils.document.list.invalidate();
+  } catch { /* best-effort */ }
+}
+
+export function VerdictDialog(props: Props) {
+  const { billingRunId, workValueOre, onClose } = props;
   const [awardedKr, setAwardedKr] = useState(workValueOre / 100);
-  const mut = trpc.billingRun.setVerdict.useMutation({ onSuccess: onClose });
+  const register = trpc.document.register.useMutation();
+  const utils = trpc.useUtils();
+  const mut = trpc.billingRun.setVerdict.useMutation({
+    onSuccess: async (res) => {
+      // Lägg ett faktura-dokument i fil-listan ur den skapade fakturan.
+      try { await generateFakturaDoc((res as { invoice: Parameters<typeof generateFakturaDoc>[0] }).invoice, props, register, utils as unknown as DocUtils); }
+      catch (e) { console.warn("[verdict] faktura-dokument misslyckades:", e); }
+      onClose();
+    },
+  });
   const awardedOre = Math.max(0, Math.round(awardedKr * 100));
   const prutningOre = awardedOre - workValueOre; // ≤ 0
   const tooHigh = awardedOre > workValueOre;

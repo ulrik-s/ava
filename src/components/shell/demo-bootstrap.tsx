@@ -125,17 +125,26 @@ async function writeViaSlab(
 interface DocMeta { id: string; fileName?: string; storagePath?: string; mimeType?: string }
 type StashFn = (id: string, bytes: Uint8Array, mimeType: string, fileName: string) => void;
 
+/** base64 → bytes (för event-transport av binärt dokument-innehåll). */
+function base64ToBytes(b64: string): Uint8Array {
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
 function inferDocMime(file: string, meta: DocMeta | undefined): string {
   if (meta?.mimeType) return meta.mimeType;
+  if (file.endsWith(".pdf")) return "application/pdf";
   return file.endsWith(".html") ? "text/html; charset=utf-8" : "application/octet-stream";
 }
 
 async function stashSlabDoc(runtime: DemoRuntime, file: string, docs: readonly DocMeta[], stash: StashFn): Promise<void> {
   const meta = docs.find((d) => d.storagePath === `documents/content/${file}`);
-  const content = await runtime.readFile(`documents/content/${file}`).catch(() => null);
-  if (content == null) return; // trasig/oläsbar fil → hoppa över
+  const bytes = await runtime.readFileBytes(`documents/content/${file}`).catch(() => null);
+  if (bytes == null) return; // trasig/oläsbar fil → hoppa över
   const id = meta?.id ?? file.replace(/\.[^.]+$/, "");
-  stash(id, new TextEncoder().encode(content), inferDocMime(file, meta), meta?.fileName ?? file);
+  stash(id, bytes, inferDocMime(file, meta), meta?.fileName ?? file);
 }
 
 async function rehydrateGeneratedDocs(runtime: DemoRuntime, source: DemoSource): Promise<void> {
@@ -191,12 +200,12 @@ export function DemoBootstrap({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const handler = (e: Event) => {
-      const detail = (e as CustomEvent<{ id: string; storagePath: string; content: string }>).detail;
+      const detail = (e as CustomEvent<{ id: string; storagePath: string; contentBase64: string }>).detail;
       const rt = runtimeRef.current;
       if (!detail || !rt) return;
       void (async () => {
         try {
-          await rt.writeFile(detail.storagePath, detail.content);
+          await rt.writeFileBytes(detail.storagePath, base64ToBytes(detail.contentBase64));
           await rt.persist();
         } catch (err) {
           console.warn("[demo] generated-doc persist failed:", err);
