@@ -45,6 +45,14 @@ export const documentSchema = z.object({
 export type Document = z.infer<typeof documentSchema>;
 
 /**
+ * Kanonisk `documentType`-tagg för genererade kostnadsräkningar. Sätts av
+ * `kostnadsrakningRouter.record` och används av billing-UI:t + diagnostik-
+ * invarianten ([[invariants]]) för att hitta KR-dokumentet i ett ärende.
+ * En enda källa så taggen inte kan divergera mellan skrivning och läsning.
+ */
+export const KOSTNADSRAKNING_DOCUMENT_TYPE = "Kostnadsräkning";
+
+/**
  * DocumentAnalysisSuggestion — AI-extraherat kontakt-förslag. Lagras i
  * `document-analysis-suggestions/<id>.json`.
  */

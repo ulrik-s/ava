@@ -15,6 +15,7 @@
 import { z } from "zod";
 import { router, orgProcedure } from "../trpc";
 import { emit } from "../events/emit";
+import { KOSTNADSRAKNING_DOCUMENT_TYPE } from "@/lib/shared/schemas/document";
 
 export const kostnadsrakningRouter = router({
   /**
@@ -49,7 +50,7 @@ export const kostnadsrakningRouter = router({
           storagePath: input.storagePath,
           folderId: null,
           organizationId: ctx.orgId,
-          documentType: "Kostnadsräkning",
+          documentType: KOSTNADSRAKNING_DOCUMENT_TYPE,
           analysisStatus: "DONE",
           analyzedAt: new Date(),
           uploadedById: ctx.user.id,

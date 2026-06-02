@@ -70,6 +70,9 @@ vi.mock("@/lib/client/trpc", () => ({
     },
     document: {
       register: { useMutation: () => ({ mutateAsync: vi.fn(), mutate: vi.fn(), isPending: false }) },
+      // useMatterInvariants (diagnostik) frågar dokument-listan för att
+      // upptäcka KR-utan-dokument — måste finnas i mocken.
+      list: { useQuery: () => ({ data: { documents: [] }, isLoading: false }) },
     },
     organization: {
       getSettings: { useQuery: () => ({ data: undefined }) },

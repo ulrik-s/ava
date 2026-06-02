@@ -19,6 +19,7 @@ import { BillingDialog } from "./_billing-dialog";
 import { VerdictDialog } from "./_verdict-dialog";
 import { KostnadsrakningModal } from "./_kostnadsrakning-modal";
 import { hasGeneratedDoc, openGeneratedDoc } from "@/lib/client/demo/generated-doc-cache";
+import { useMatterInvariants } from "@/lib/client/diagnostics/use-matter-invariants";
 
 interface MatterContext {
   matterNumber: string;
@@ -223,6 +224,8 @@ function KostnadsrakningTrigger({ matterId, matter, open, onClose, onRecorded }:
 
 export function BillingPanel({ matterId, matter }: Props) {
   const runs = trpc.billingRun.list.useQuery({ matterId });
+  // Självupptäck inkonsistenser (t.ex. KR väntar på dom utan KR-dokument).
+  useMatterInvariants({ matterId, matterNumber: matter.matterNumber });
   const [dialog, setDialog] = useState<DialogState>("NONE");
   const [showKr, setShowKr] = useState(false);
   const [verdictRunId, setVerdictRunId] = useState<string | null>(null);

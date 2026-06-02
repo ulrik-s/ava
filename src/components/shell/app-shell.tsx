@@ -14,6 +14,7 @@ import { Sidebar } from "./sidebar";
 import { DemoModeBanner } from "./demo-mode-banner";
 import { ExternalEditRegistrar } from "@/components/documents/external-edit-registrar";
 import { ExternalEditIndicator } from "@/components/documents/external-edit-indicator";
+import { ErrorReportButton } from "@/components/diagnostics/error-report-button";
 import { trpc } from "@/lib/client/trpc";
 
 /**
@@ -41,6 +42,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           {children}
         </main>
       </div>
+      <ErrorReportButton />
     </div>
   );
 }

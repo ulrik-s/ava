@@ -11,10 +11,12 @@
 
 import { DemoBootstrap } from "./demo-bootstrap";
 import { SpaRedirectReader } from "./spa-redirect-reader";
+import { DiagnosticsRegistrar } from "./diagnostics-registrar";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <DemoBootstrap>
+      <DiagnosticsRegistrar />
       <SpaRedirectReader />
       {children}
     </DemoBootstrap>
