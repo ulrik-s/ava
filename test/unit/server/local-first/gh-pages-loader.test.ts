@@ -100,6 +100,93 @@ describe("createGhPagesCloneFn", () => {
     await expect(clone(new MemFs(), "ulrik-s/ava-demo")).rejects.toThrow(/alla|all/i);
   });
 
+  it("försöker om transient 503 på en fil och lyckas till slut", async () => {
+    // Filen 503:ar två gånger (transient CDN-rate-limit) och lyckas på tredje.
+    let attempts = 0;
+    const fetchFn = (async (url: string | URL | Request) => {
+      const u = typeof url === "string" ? url : url.toString();
+      if (u.endsWith("/manifest.json")) {
+        return { ok: true, status: 200, json: async () => ({ paths: ["payment-plan-reminders/x.json"] }) } as unknown as Response;
+      }
+      attempts++;
+      if (attempts < 3) return { ok: false, status: 503 } as Response;
+      return { ok: true, status: 200, text: async () => '{"id":"x"}' } as unknown as Response;
+    }) as typeof fetch;
+    const fs = new MemFs();
+    const sleepFn = vi.fn(async () => {});
+    const clone = createGhPagesCloneFn({ fetchFn, maxRetries: 4, sleepFn });
+    await clone(fs, "ulrik-s/ava-demo");
+    expect(await fs.readFile("payment-plan-reminders/x.json")).toContain("x");
+    expect(attempts).toBe(3); // 1 + 2 omförsök
+    expect(sleepFn).toHaveBeenCalledTimes(2); // backoff mellan omförsöken
+  });
+
+  it("kastar med vägledning om transient 503 kvarstår efter alla omförsök", async () => {
+    const fetchFn = (async (url: string | URL | Request) => {
+      const u = typeof url === "string" ? url : url.toString();
+      if (u.endsWith("/manifest.json")) {
+        return { ok: true, status: 200, json: async () => ({ paths: ["payment-plan-reminders/x.json"] }) } as unknown as Response;
+      }
+      return { ok: false, status: 503 } as Response; // alltid 503
+    }) as typeof fetch;
+    const clone = createGhPagesCloneFn({ fetchFn, maxRetries: 2, sleepFn: async () => {} });
+    await expect(clone(new MemFs(), "ulrik-s/ava-demo")).rejects.toThrow(/503.*omförsök|omförsök/);
+  });
+
+  it("försöker om transient 503 på manifestet och lyckas", async () => {
+    let attempts = 0;
+    const fetchFn = (async (url: string | URL | Request) => {
+      const u = typeof url === "string" ? url : url.toString();
+      if (u.endsWith("/manifest.json")) {
+        attempts++;
+        if (attempts < 2) return { ok: false, status: 503 } as Response;
+        return { ok: true, status: 200, json: async () => ({ paths: ["a.json"] }) } as unknown as Response;
+      }
+      return { ok: true, status: 200, text: async () => "{}" } as unknown as Response;
+    }) as typeof fetch;
+    const fs = new MemFs();
+    const clone = createGhPagesCloneFn({ fetchFn, maxRetries: 4, sleepFn: async () => {} });
+    await clone(fs, "ulrik-s/ava-demo");
+    expect(await fs.readFile("a.json")).toBe("{}");
+    expect(attempts).toBe(2);
+  });
+
+  it("försöker om nätverks-undantag (kastad fetch) och lyckas", async () => {
+    let attempts = 0;
+    const fetchFn = (async (url: string | URL | Request) => {
+      const u = typeof url === "string" ? url : url.toString();
+      if (u.endsWith("/manifest.json")) {
+        return { ok: true, status: 200, json: async () => ({ paths: ["a.json"] }) } as unknown as Response;
+      }
+      attempts++;
+      if (attempts < 2) throw new Error("ECONNRESET");
+      return { ok: true, status: 200, text: async () => "{}" } as unknown as Response;
+    }) as typeof fetch;
+    const fs = new MemFs();
+    const clone = createGhPagesCloneFn({ fetchFn, maxRetries: 4, sleepFn: async () => {} });
+    await clone(fs, "ulrik-s/ava-demo");
+    expect(await fs.readFile("a.json")).toBe("{}");
+    expect(attempts).toBe(2);
+  });
+
+  it("404 försöks INTE om — definitivt saknad fil", async () => {
+    let attempts = 0;
+    const fetchFn = (async (url: string | URL | Request) => {
+      const u = typeof url === "string" ? url : url.toString();
+      if (u.endsWith("/manifest.json")) {
+        return { ok: true, status: 200, json: async () => ({ paths: ["found.json", "missing.json"] }) } as unknown as Response;
+      }
+      if (u.endsWith("/found.json")) return { ok: true, status: 200, text: async () => "{}" } as unknown as Response;
+      attempts++;
+      return { ok: false, status: 404 } as Response;
+    }) as typeof fetch;
+    const sleepFn = vi.fn(async () => {});
+    const clone = createGhPagesCloneFn({ fetchFn, maxRetries: 4, sleepFn });
+    await clone(new MemFs(), "ulrik-s/ava-demo"); // ska inte kasta — found.json lyckas
+    expect(attempts).toBe(1); // 404 hämtas exakt en gång, inga omförsök
+    expect(sleepFn).not.toHaveBeenCalled();
+  });
+
   it("explicit baseUrl override:ar resolveGhPagesUrl", async () => {
     const calls: string[] = [];
     const fetchFn = (async (url: string | URL | Request) => {

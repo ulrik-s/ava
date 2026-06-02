@@ -46,6 +46,78 @@ export interface GhPagesLoaderOpts {
   /** Max parallella file-fetches. Default 12 — bra balans mellan
       latency och soft-rate-limit på CDN-edge. */
   concurrency?: number;
+  /**
+   * Max antal *omförsök* (utöver första försöket) vid transienta fel —
+   * HTTP 429/500/502/503/504 eller nätverks-undantag. Default 4.
+   *
+   * Varför: GitHub Pages serveras via Fastly-CDN som soft-rate-limitar
+   * burst:ar av parallella requests med HTTP 503/429 även när filen
+   * finns. Utan omförsök fick en enda transient 503 hela demo-laddningen
+   * att kasta. Vi backar av exponentiellt och försöker igen.
+   */
+  maxRetries?: number;
+  /**
+   * Inject:bar sleep mellan omförsök — default exponentiell backoff via
+   * `setTimeout`. Tester injicerar en no-op för att slippa väntan.
+   */
+  sleepFn?: (ms: number) => Promise<void>;
+}
+
+/** En fetch-funktion som redan har omförsöks-logik inbyggd. */
+type RetryFetch = (url: string) => Promise<Response>;
+
+/** HTTP-statusar som är transienta och värda att försöka igen. */
+const TRANSIENT_STATUS = new Set([429, 500, 502, 503, 504]);
+
+/** Default-sleep: löser efter `ms` millisekunder. */
+function defaultSleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Exponentiell backoff med tak: 250ms, 500ms, 1s, 2s, … (max 4s). */
+function backoffMs(attempt: number): number {
+  return Math.min(250 * 2 ** (attempt - 1), 4000);
+}
+
+/**
+ * Ett svar är "definitivt" om det inte är värt att försöka igen: lyckat,
+ * saknat (404), eller ett icke-transient fel.
+ */
+function isDefinitive(res: Response): boolean {
+  return res.ok || res.status === 404 || !TRANSIENT_STATUS.has(res.status);
+}
+
+/**
+ * Bygg en `RetryFetch` som backar av exponentiellt vid transienta fel
+ * (HTTP 429/500/502/503/504 eller nätverks-undantag) och försöker igen
+ * upp till `maxRetries` gånger. Returnerar `Response` så fort svaret är
+ * definitivt; vid uttömda omförsök returneras sista transienta `Response`
+ * (så anroparen kan kasta med rätt status) eller kastas sista undantaget.
+ *
+ * Varför closure: kapslar `fetchFn`/`maxRetries`/`sleepFn` så att anropare
+ * bara behöver skicka URL:en (färre parametrar att tråda runt).
+ */
+function makeRetryFetch(
+  fetchFn: typeof fetch,
+  maxRetries: number,
+  sleepFn: (ms: number) => Promise<void>,
+): RetryFetch {
+  return async function retryFetch(url: string): Promise<Response> {
+    let lastResponse: Response | undefined;
+    let lastError: unknown;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      if (attempt > 0) await sleepFn(backoffMs(attempt));
+      try {
+        const res = await fetchFn(url, { method: "GET" });
+        if (isDefinitive(res)) return res;
+        lastResponse = res; // transient — försök igen
+      } catch (err) {
+        lastError = err; // nätverksfel — försök igen
+      }
+    }
+    if (lastResponse) return lastResponse;
+    throw lastError ?? new Error(`Kunde inte hämta ${url}`);
+  };
 }
 
 export interface DemoManifest {
@@ -69,16 +141,19 @@ export interface DemoManifest {
 export function createGhPagesCloneFn(opts: GhPagesLoaderOpts = {}): DemoCloneFn {
   const fetchFn = opts.fetchFn ?? globalThis.fetch.bind(globalThis);
   const concurrency = opts.concurrency ?? 12;
+  const maxRetries = opts.maxRetries ?? 4;
+  const sleepFn = opts.sleepFn ?? defaultSleep;
+  const retryFetch = makeRetryFetch(fetchFn, maxRetries, sleepFn);
 
   return async function ghPagesClone(fs: MemFs, url: string): Promise<void> {
     const baseUrl = opts.baseUrl ?? resolveGhPagesUrl(url);
 
-    const manifest = await fetchManifest(fetchFn, baseUrl);
+    const manifest = await fetchManifest(retryFetch, baseUrl);
     if (!Array.isArray(manifest.paths) || manifest.paths.length === 0) {
       throw new Error(`GH Pages-manifest från ${baseUrl}/manifest.json är tomt eller ogiltigt`);
     }
 
-    await fetchAndWriteAll(fetchFn, baseUrl, manifest.paths, fs, concurrency);
+    await fetchAndWriteAll({ retryFetch, baseUrl, paths: manifest.paths, fs, concurrency, maxRetries });
   };
 }
 
@@ -103,11 +178,11 @@ export function resolveGhPagesUrl(input: string): string {
 }
 
 async function fetchManifest(
-  fetchFn: typeof fetch,
+  retryFetch: RetryFetch,
   baseUrl: string,
 ): Promise<DemoManifest> {
   const manifestUrl = `${baseUrl}/manifest.json`;
-  const res = await fetchFn(manifestUrl, { method: "GET" });
+  const res = await retryFetch(manifestUrl);
   if (!res.ok) {
     throw new Error(
       `Kunde inte hämta demo-manifest från ${manifestUrl}: HTTP ${res.status}. ` +
@@ -121,13 +196,18 @@ async function fetchManifest(
   return json as DemoManifest;
 }
 
-async function fetchAndWriteAll(
-  fetchFn: typeof fetch,
-  baseUrl: string,
-  paths: string[],
-  fs: MemFs,
-  concurrency: number,
-): Promise<void> {
+interface FetchAndWriteAllArgs {
+  retryFetch: RetryFetch;
+  baseUrl: string;
+  paths: string[];
+  fs: MemFs;
+  concurrency: number;
+  /** Antal omförsök — endast för felmeddelande-text. */
+  maxRetries: number;
+}
+
+async function fetchAndWriteAll(args: FetchAndWriteAllArgs): Promise<void> {
+  const { retryFetch, baseUrl, paths, fs, concurrency, maxRetries } = args;
   // Enkel parallell-kö: konsumera från arrayen N samtidigt.
   // Individuella 404:s loggas men kastar inte — det är vanligt att
   // GitHub Pages strippar `.dotfolders` (Jekyll-default) eller att
@@ -166,15 +246,19 @@ async function fetchAndWriteAll(
       if (!path) return;
       const cleanPath = path.replace(/^\/+/, "");
       const fileUrl = `${baseUrl}/${cleanPath}`;
-      const res = await fetchFn(fileUrl, { method: "GET" });
+      const res = await retryFetch(fileUrl);
       if (!res.ok) {
         if (res.status === 404) {
           missing.push(cleanPath);
           continue;
         }
-        // Andra fel (500, network) är allvarligare — kasta för att
-        // användaren ska reagera.
-        throw new Error(`Kunde inte hämta ${fileUrl}: HTTP ${res.status}`);
+        // Andra fel (500/503/network) är allvarligare och har redan
+        // försökts om `maxRetries` gånger med backoff — kasta så att
+        // användaren reagerar (GH Pages nere eller ej deployad).
+        throw new Error(
+          `Kunde inte hämta ${fileUrl}: HTTP ${res.status} (efter ${maxRetries} omförsök). ` +
+          `Tjänsten kan vara tillfälligt otillgänglig — försök igen om en stund.`,
+        );
       }
       const body = await res.text();
       await fs.writeFile(cleanPath, body);
