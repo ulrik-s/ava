@@ -108,7 +108,15 @@ function makeRetryFetch(
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       if (attempt > 0) await sleepFn(backoffMs(attempt));
       try {
-        const res = await fetchFn(url, { method: "GET" });
+        // `cache: "no-store"` — kringgå browserns HTTP-cache helt. GitHub
+        // Pages serveras via Fastly med `Cache-Control: max-age` så en
+        // vanlig fetch returnerar cachade (gamla) bytes. Då visar "Återställ
+        // demo" (som rensar OPFS/localStorage men inte HTTP-cachen) fortfa-
+        // rande gammal seed-data, och en ny demo-deploy syns inte förrän
+        // cachen TTL:ar ut. Den här fetch-vägen körs bara vid kall-laddning/
+        // efter-reset (varma reloads återställer från OPFS) → ingen
+        // prestanda-kostnad på hot-path.
+        const res = await fetchFn(url, { method: "GET", cache: "no-store" });
         if (isDefinitive(res)) return res;
         lastResponse = res; // transient — försök igen
       } catch (err) {

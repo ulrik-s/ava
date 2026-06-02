@@ -187,6 +187,23 @@ describe("createGhPagesCloneFn", () => {
     expect(sleepFn).not.toHaveBeenCalled();
   });
 
+  it("fetchar med cache:'no-store' så reset/deploy ger färsk data (ej HTTP-cache)", async () => {
+    const inits: (RequestInit | undefined)[] = [];
+    const fetchFn = (async (url: string | URL | Request, init?: RequestInit) => {
+      const u = typeof url === "string" ? url : url.toString();
+      inits.push(init);
+      if (u.endsWith("/manifest.json")) {
+        return { ok: true, status: 200, json: async () => ({ paths: ["a.json"] }) } as unknown as Response;
+      }
+      return { ok: true, status: 200, text: async () => "{}" } as unknown as Response;
+    }) as typeof fetch;
+    const clone = createGhPagesCloneFn({ fetchFn, sleepFn: async () => {} });
+    await clone(new MemFs(), "ulrik-s/ava-demo");
+    // Både manifest- och fil-fetchen ska kringgå HTTP-cachen.
+    expect(inits.length).toBeGreaterThanOrEqual(2);
+    expect(inits.every((i) => i?.cache === "no-store")).toBe(true);
+  });
+
   it("explicit baseUrl override:ar resolveGhPagesUrl", async () => {
     const calls: string[] = [];
     const fetchFn = (async (url: string | URL | Request) => {

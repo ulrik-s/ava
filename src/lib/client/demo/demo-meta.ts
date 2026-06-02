@@ -42,7 +42,10 @@ export async function loadDemoMeta(
   const url = demoMetaUrl(repo);
   if (cache && cache.url === url) return cache.data;
 
-  const res = await fetchFn(url, { method: "GET" });
+  // `cache: "no-store"` — samma skäl som i gh-pages-loader: kringgå
+  // browserns HTTP-cache så att "Återställ demo" / ny deploy ger färsk
+  // meta.json (annars kan stale user-/org-lista överleva en reset).
+  const res = await fetchFn(url, { method: "GET", cache: "no-store" });
   if (!res.ok) {
     throw new Error(
       `Kunde inte hämta demo-meta från ${url}: HTTP ${res.status}. ` +
