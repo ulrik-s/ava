@@ -4,6 +4,7 @@ import { useId, useState } from "react";
 import Link from "next/link";
 import { trpc } from "@/lib/client/trpc";
 import { formatMinutes } from "@/lib/client/utils";
+import { periodFrom, periodTo } from "@/lib/client/time-filter";
 import { MatterCombobox } from "@/components/matter/matter-combobox";
 import { DataTable, type Column } from "@/components/ui/data-table";
 
@@ -38,10 +39,52 @@ const timeColumns: Column<TimeRow>[] = [
     render: (e) => <span className="text-sm">{e.billable ? "Ja" : "Nej"}</span> },
 ];
 
+interface PeriodFilterProps {
+  from: string;
+  to: string;
+  onFrom: (v: string) => void;
+  onTo: (v: string) => void;
+  onClear: () => void;
+}
+
+function PeriodFilter({ from, to, onFrom, onTo, onClear }: PeriodFilterProps) {
+  const fromId = useId();
+  const toId = useId();
+  return (
+    <div className="bg-white rounded-lg border border-gray-200 p-4 mb-6 flex flex-wrap items-end gap-4">
+      <div>
+        <label htmlFor={fromId} className="block text-sm text-gray-500 mb-1">Från</label>
+        <input id={fromId} type="date" value={from} max={to || undefined}
+          onChange={(e) => onFrom(e.target.value)}
+          className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+      </div>
+      <div>
+        <label htmlFor={toId} className="block text-sm text-gray-500 mb-1">Till</label>
+        <input id={toId} type="date" value={to} min={from || undefined}
+          onChange={(e) => onTo(e.target.value)}
+          className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+      </div>
+      {(from || to) && (
+        <button onClick={onClear}
+          className="px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
+          Rensa
+        </button>
+      )}
+    </div>
+  );
+}
+
 // eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'TimePage' has a complexity of 9. Maximum allowed is 8.)
 export default function TimePage() {
   const [page, setPage] = useState(1);
-  const timeEntries = trpc.timeEntry.list.useQuery({ page, pageSize: 50 });
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const timeEntries = trpc.timeEntry.list.useQuery({
+    page,
+    pageSize: 50,
+    from: periodFrom(fromDate),
+    to: periodTo(toDate),
+  });
   // Hämta alla ACTIVE matters (cap 500 räcker för en advokatbyrå). Tidigare
   // skickades 200 men routern cappade på 100 → Zod-fail → tom dropdown.
   const matters = trpc.matter.list.useQuery({ pageSize: 500, status: "ACTIVE" });
@@ -131,6 +174,14 @@ export default function TimePage() {
           </div>
         </form>
       )}
+
+      <PeriodFilter
+        from={fromDate}
+        to={toDate}
+        onFrom={(v) => { setFromDate(v); setPage(1); }}
+        onTo={(v) => { setToDate(v); setPage(1); }}
+        onClear={() => { setFromDate(""); setToDate(""); setPage(1); }}
+      />
 
       <DataTable
         prefKey="list.time-entries"
