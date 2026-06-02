@@ -35,6 +35,11 @@ export function buildDefaultRegistry(): ProjectionRegistry {
   r.register({ entity: "paymentPlan", projection: new GenericProjection("payment-plans"), ownsPath: (p) => p.startsWith("payment-plans/") });
   r.register({ entity: "payment", projection: new GenericProjection("payments"), ownsPath: (p) => p.startsWith("payments/") });
   r.register({ entity: "paymentPlanReminder", projection: new GenericProjection("payment-plan-reminders"), ownsPath: (p) => p.startsWith("payment-plan-reminders/") });
+  // BillingRun + AccontoDeduction: skrivs av faktureringsflöden (createKostnadsrakning,
+  // setVerdict, createAcconto). Saknades här → runtime-skapade fakturerings-
+  // händelser hydrerades inte vid restore → "Inga billingruns ännu" efter reload.
+  r.register({ entity: "billingRun", projection: new GenericProjection("billing-runs"), ownsPath: (p) => p.startsWith("billing-runs/") });
+  r.register({ entity: "accontoDeduction", projection: new GenericProjection("acconto-deductions"), ownsPath: (p) => p.startsWith("acconto-deductions/") });
   r.register({ entity: "task", projection: new GenericProjection("tasks"), ownsPath: (p) => p.startsWith("tasks/") });
   r.register({ entity: "conflictCheck", projection: new GenericProjection("conflict-checks"), ownsPath: (p) => p.startsWith("conflict-checks/") });
   r.register({ entity: "documentTemplate", projection: new GenericProjection(".ava/templates"), ownsPath: (p) => p.startsWith(".ava/templates/") });

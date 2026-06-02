@@ -33,6 +33,10 @@ const ENTITY_TO_SOURCE_KEY: Record<string, keyof DemoSource> = {
   payment: "payments",
   paymentPlanReminder: "paymentPlanReminders",
   task: "tasks",
+  // Faktureringshändelser — utan dessa droppades runtime-skapade billing-runs
+  // (och acconto-avdrag) vid restore trots att de skrivits till slaben.
+  billingRun: "billingRuns",
+  accontoDeduction: "accontoDeductions",
   conflictCheck: "conflictChecks",
   userPreference: "userPreferences",
   orgPreference: "orgPreferences",
