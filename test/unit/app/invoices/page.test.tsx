@@ -97,7 +97,10 @@ describe("InvoicesPage", () => {
     render(<InvoicesPage />);
     const links = screen.getAllByRole("link");
     const hrefs = links.map((l) => l.getAttribute("href"));
-    expect(hrefs).toContain("/invoices/i1");
+    // Faktura-länken är en hård <a href> (entityHref) med trailing slash så
+    // runtime-skapade id:n funkar via 404-shim/__shell__ istället för en
+    // Next-Link soft-nav (→ #418). Base-path är tomt i testmiljön.
+    expect(hrefs).toContain("/invoices/i1/");
     expect(hrefs).toContain("/matters/m1");
   });
 

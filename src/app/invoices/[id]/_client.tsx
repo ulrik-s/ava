@@ -10,6 +10,7 @@ import Link from "next/link";
 import type { inferRouterOutputs } from "@trpc/server";
 import { trpc } from "@/lib/client/trpc";
 import { useRouteId } from "@/lib/client/demo/use-route-id";
+import { entityHref } from "@/lib/client/demo/entity-href";
 import { formatCurrency } from "@/lib/client/utils";
 import type { AppRouter } from "@/lib/server/routers/_app";
 import { PaymentModal } from "./_payment-modal";
@@ -197,9 +198,9 @@ function CreditBanners({ inv }: { inv: Inv }) {
         <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 text-sm">
           <p className="font-medium text-orange-900">Denna faktura är krediterad.</p>
           <p className="text-orange-800 mt-1">
-            <Link href={`/invoices/${inv.creditNote.id}`} className="underline">
+            <a href={entityHref("invoices", inv.creditNote.id)} className="underline">
               Kreditfaktura {new Date(inv.creditNote.invoiceDate).toLocaleDateString("sv-SE")}
-            </Link>
+            </a>
             {" "}— belopp {formatCurrency(inv.creditNote.amount)}
           </p>
         </div>
@@ -209,9 +210,9 @@ function CreditBanners({ inv }: { inv: Inv }) {
           <p className="font-medium text-orange-900">Detta är en kreditfaktura.</p>
           <p className="text-orange-800 mt-1">
             Krediterar{" "}
-            <Link href={`/invoices/${inv.creditedInvoice.id}`} className="underline">
+            <a href={entityHref("invoices", inv.creditedInvoice.id)} className="underline">
               faktura från {new Date(inv.creditedInvoice.invoiceDate).toLocaleDateString("sv-SE")}
-            </Link>
+            </a>
             {" "}(ursprungligt belopp {formatCurrency(inv.creditedInvoice.amount)})
           </p>
         </div>
@@ -352,9 +353,9 @@ function AccontoDeductions({ deductions }: { deductions: Inv["accontoDeductions"
           {deductions.map((d: Inv["accontoDeductions"][number]) => (
             <tr key={d.id}>
               <td className="py-2">
-                <Link href={`/invoices/${d.accontoInvoice.id}`} className="text-blue-600 hover:underline">
+                <a href={entityHref("invoices", d.accontoInvoice.id)} className="text-blue-600 hover:underline">
                   Acconto {new Date(d.accontoInvoice.invoiceDate).toLocaleDateString("sv-SE")}
-                </Link>
+                </a>
               </td>
               <td className="py-2 text-right font-mono">−{formatCurrency(d.accontoInvoice.amount)}</td>
             </tr>

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
+import { entityHref } from "@/lib/client/demo/entity-href";
 import { DataTable, type Column } from "@/components/ui/data-table";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -41,10 +42,13 @@ interface InvoiceRow {
 
 const invoiceColumns: Column<InvoiceRow>[] = [
   { key: "invoiceDate", label: "Datum", sortable: true, sortValue: (i) => new Date(i.invoiceDate),
+    // Hård <a>-nav (inte Next-Link): runtime-skapade faktura-id:n finns inte
+    // i generateStaticParams → Link soft-nav hamnar i trasigt router-tillstånd
+    // (#418). entityHref → 404-shim/__shell__ → useRouteId. Se [[entity-href]].
     render: (i) => (
-      <Link href={`/invoices/${i.id}`} className="text-blue-600 hover:underline">
+      <a href={entityHref("invoices", i.id)} className="text-blue-600 hover:underline">
         {new Date(i.invoiceDate).toLocaleDateString("sv-SE")}
-      </Link>
+      </a>
     ),
   },
   { key: "matter", label: "Ärende", sortable: true, sortValue: (i) => i.matter.matterNumber,

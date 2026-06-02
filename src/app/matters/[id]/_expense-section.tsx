@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
+import { entityHref } from "@/lib/client/demo/entity-href";
 import { splitVat, VAT_RATES, VAT_RATE_LABELS, type VatRate } from "@/lib/shared/vat";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { Modal } from "@/components/ui/modal";
@@ -149,7 +150,7 @@ export function ExpenseSection({ matterId, isTaxeArende }: Props) {
       sortValue: (e) => invoiceLabel(e), filterValue: (e) => invoiceLabel(e), groupValue: (e) => invoiceLabel(e),
       render: (e) => (
         isInvoiced(e) && e.invoiceId
-          ? <a href={`/invoices/${e.invoiceId}`} className="text-sm text-blue-600 hover:underline">{e.invoice?.invoiceNumber ?? e.invoiceId.slice(0, 8)}</a>
+          ? <a href={entityHref("invoices", e.invoiceId)} className="text-sm text-blue-600 hover:underline">{e.invoice?.invoiceNumber ?? e.invoiceId.slice(0, 8)}</a>
           : <span className="text-sm text-gray-400">—</span>
       ),
     },

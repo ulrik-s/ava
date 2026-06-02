@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { trpc } from "@/lib/client/trpc";
 import { useRouteId } from "@/lib/client/demo/use-route-id";
+import { entityHref } from "@/lib/client/demo/entity-href";
 import { formatCurrency } from "@/lib/client/utils";
 import { ArrowLeft, Ban, Wallet } from "lucide-react";
 
@@ -71,12 +72,12 @@ export default function PaymentPlanDetailClient({ id: paramId }: { id: string })
           <dd className="text-gray-900">{new Date(p.startDate).toLocaleDateString("sv-SE")}</dd>
           <dt className="text-gray-500">Faktura</dt>
           <dd>
-            <Link
-              href={`/invoices/${p.invoice?.id ?? ""}`}
+            <a
+              href={entityHref("invoices", p.invoice?.id ?? "")}
               className="text-blue-600 hover:underline"
             >
               {p.invoice?.id ?? "—"}
-            </Link>
+            </a>
             {" · "}
             <span className="font-mono">{p.invoice ? formatCurrency(p.invoice.amount) : ""}</span>
           </dd>
