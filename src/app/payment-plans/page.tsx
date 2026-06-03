@@ -6,9 +6,10 @@
  */
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Wallet, Search } from "lucide-react";
 import { trpc } from "@/lib/client/trpc";
-import { entityHref } from "@/lib/client/demo/entity-href";
+import { shellPath } from "@/lib/client/demo/entity-href";
 import { formatCurrency } from "@/lib/client/utils";
 import { DataTable, type Column } from "@/components/ui/data-table";
 
@@ -86,6 +87,7 @@ const planColumns: Column<PlanRow>[] = [
 ];
 
 export default function PaymentPlansPage() {
+  const router = useRouter();
   const [status, setStatus] = useState<Status>("ACTIVE");
   const [search, setSearch] = useState("");
   const list = trpc.paymentPlan.list.useQuery({ status, search: search || undefined });
@@ -136,7 +138,7 @@ export default function PaymentPlansPage() {
           data={(list.data ?? []) as PlanRow[]}
           rowKey={(p) => p.id}
           emptyMessage={`Inga ${STATUS_LABEL[status].toLowerCase()} planer.`}
-          onRowClick={(p) => location.assign(entityHref("payment-plans", p.id))}
+          onRowClick={(p) => router.push(shellPath("payment-plans", p.id))}
         />
       )}
     </div>

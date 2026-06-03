@@ -30,6 +30,8 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: routerPush }),
   // useRouteId() läser usePathname; null → faller tillbaka till prop-id:t.
   usePathname: () => null,
+  // useRouteId() läser även useSearchParams; tom → faller tillbaka till prop-id:t.
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 vi.mock("@/lib/client/trpc", () => ({

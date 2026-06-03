@@ -33,3 +33,20 @@ export function entityHref(route: string, id: string, sub?: string): string {
   const cleanSub = sub ? `${sub.replace(/^\/+|\/+$/g, "")}/` : "";
   return `${base}/${cleanRoute}/${id}/${cleanSub}`;
 }
+
+/**
+ * `shellPath` — route-relativ SOFT-NAV-path till den pre-renderade
+ * `__shell__`-routen, med id:t som query-param. Används av `<EntityLink>` och
+ * `router.push` för att navigera UTAN sidomladdning (inget blink): eftersom
+ * `__shell__` är pre-renderad är en Next-`<Link>` dit en vanlig SPA-övergång
+ * (ingen #418), och `useSearchParams` läser `?id` reaktivt (även shell→shell).
+ *
+ * Ingen base-path här — Next:s `<Link>`/router lägger på den själv (till
+ * skillnad från `entityHref` som används för rå `<a>`/shim-vägar).
+ * `entityHref('templates', id, 'edit')` → `/templates/__shell__/edit/?id=…`.
+ */
+export function shellPath(route: string, id: string, sub?: string): string {
+  const cleanRoute = route.replace(/^\/+|\/+$/g, "");
+  const tail = sub ? `${sub.replace(/^\/+|\/+$/g, "")}/` : "";
+  return `/${cleanRoute}/__shell__/${tail}?id=${encodeURIComponent(id)}`;
+}

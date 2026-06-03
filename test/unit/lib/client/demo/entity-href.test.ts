@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { entityHref } from "@/lib/client/demo/entity-href";
+import { entityHref, shellPath } from "@/lib/client/demo/entity-href";
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -41,5 +41,25 @@ describe("entityHref", () => {
   it("normaliserar sub med ledande/avslutande slash", () => {
     vi.stubEnv("NEXT_PUBLIC_DEMO_BASE_PATH", "");
     expect(entityHref("templates", "t1", "/edit/")).toBe("/templates/t1/edit/");
+  });
+});
+
+describe("shellPath (soft-nav till __shell__ med ?id)", () => {
+  it("bygger route-relativ __shell__-path med id som query (ingen base-path)", () => {
+    // Ingen base-path: Next:s <Link>/router lägger på den själv.
+    expect(shellPath("invoices", "inv-1")).toBe("/invoices/__shell__/?id=inv-1");
+    expect(shellPath("matters", "m-1")).toBe("/matters/__shell__/?id=m-1");
+  });
+
+  it("hanterar nästlad route (templates/__shell__/edit/)", () => {
+    expect(shellPath("templates", "t-1", "edit")).toBe("/templates/__shell__/edit/?id=t-1");
+  });
+
+  it("URL-enkodar id:t", () => {
+    expect(shellPath("invoices", "a/b c")).toBe("/invoices/__shell__/?id=a%2Fb%20c");
+  });
+
+  it("pekar ALDRIG direkt på /<route>/<id> (soft-nav dit → React #418)", () => {
+    expect(shellPath("invoices", "inv-1")).not.toMatch(/\/invoices\/inv-1(\/|\?|$)/);
   });
 });

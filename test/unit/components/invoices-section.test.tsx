@@ -228,7 +228,9 @@ describe("InvoicesSection", () => {
     ];
     render(<InvoicesSection matterId="m1" />);
     const link = screen.getByRole("link", { name: /Öppna/i }) as HTMLAnchorElement;
-    expect(link.href).toContain("/invoices/i-abc");
+    expect(link.href).toContain("/invoices/__shell__");
+    expect(link.href).toContain("id=i-abc");
+    expect(link.href).not.toContain("/invoices/i-abc");
   });
 
   it("renderar BAD_DEBT-status med rätt label", () => {

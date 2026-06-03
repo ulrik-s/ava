@@ -14,7 +14,7 @@
  * → offset 1).
  */
 
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 
 // Sentinel-segmentet som static-export pre-renderar för okända id:n
 // (måste matcha SHELL_PARAM i static-params.ts). Inlinad för att hålla
@@ -38,6 +38,14 @@ function effectivePathname(pathname: string): string {
 
 export function useRouteId(offsetFromEnd = 0): string | null {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  // 1. `?id=` — soft-nav till den pre-renderade __shell__-routen (EntityLink)
+  //    samt 404-shimmen. REAKTIVT via useSearchParams: id:t uppdateras även vid
+  //    shell→shell-övergångar (samma pathname, ny query) utan omladdning.
+  const queryId = searchParams?.get("id");
+  if (queryId) return queryId;
+  // 2. #orig-hash / pathname — direkt-URL, self-hosted (nginx behåller URL:en),
+  //    och pre-renderade seed-id:n. Bakåtkompatibelt med äldre shim/länkar.
   if (!pathname) return null;
   const segs = effectivePathname(pathname).split("/").filter(Boolean);
   const idx = segs.length - 1 - offsetFromEnd;

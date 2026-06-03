@@ -1,10 +1,10 @@
 /**
- * Regressionsskydd: matter-länken i EventDetailModal måste vara en HÅRD
- * <a href> via <EntityLink> (INTE en Next-<Link>). Ärenden kan skapas i
- * körande demo → deras id:n finns inte i generateStaticParams; en Next-Link
- * soft-nav till ett sådant id kraschar med React #418. EntityLink hård-navar
- * så 404-shimmen/nginx try_files löser id:t. entityHref prefixar base-path
- * MEDVETET (eftersom <a> kringgår Next:s router) + trailing slash. Se
+ * Regressionsskydd: matter-länken i EventDetailModal måste gå via <EntityLink>
+ * till den pre-renderade __shell__-routen med ärende-id:t som ?id-query-param
+ * (INTE en direkt /matters/<id>-länk). Ärenden kan skapas i körande demo → deras
+ * id:n finns inte i generateStaticParams; en direkt soft-nav till ett sådant id
+ * kraschar med React #418. EntityLink navar till den pre-renderade __shell__-
+ * sentinellen och useRouteId/useSearchParams läser id:t. Se
  * docs/architecture.md ("Routing till runtime-skapade id:n").
  */
 
@@ -33,13 +33,17 @@ const EV: EventDetail = {
 };
 
 describe("EventDetailModal — matter-länk", () => {
-  it("renderar matter-länken som hård <a href> via EntityLink (shim-säker)", () => {
+  it("renderar matter-länken via EntityLink till __shell__ med ärende-id (shim-säker)", () => {
     render(<EventDetailModal event={EV} userName="Anna" onClose={vi.fn()} />);
     const link = screen.getByRole("link", { name: /2026-0001/ });
-    // Hård <a> (inte Next-Link) med trailing slash → 404-shim/__shell__ kan
-    // lösa runtime-skapade ärende-id:n. Base-path är tomt i testmiljön.
+    // EntityLink renderar en <a> till den pre-renderade __shell__-routen med
+    // ärende-id:t som ?id-query → 404-shim/useRouteId kan lösa runtime-skapade
+    // ärende-id:n. Får INTE vara en direkt /matters/<id>-länk.
     expect(link.tagName).toBe("A");
-    expect(link.getAttribute("href")).toBe("/matters/m-001/");
+    const href = link.getAttribute("href") ?? "";
+    expect(href).toContain("/matters/__shell__");
+    expect(href).toContain("id=m-001");
+    expect(href).not.toMatch(/\/matters\/m-001(\/|$)/);
   });
 
   it("matter-länken är klickbar (har not pointer-events:none)", () => {

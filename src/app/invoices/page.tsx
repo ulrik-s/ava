@@ -41,9 +41,9 @@ interface InvoiceRow {
 
 const invoiceColumns: Column<InvoiceRow>[] = [
   { key: "invoiceDate", label: "Datum", sortable: true, sortValue: (i) => new Date(i.invoiceDate),
-    // Hård <a>-nav (inte Next-Link): runtime-skapade faktura-id:n finns inte
-    // i generateStaticParams → Link soft-nav hamnar i trasigt router-tillstånd
-    // (#418). entityHref → 404-shim/__shell__ → useRouteId. Se [[entity-href]].
+    // EntityLink soft-navigerar till __shell__?id (ingen omladdning). Runtime-
+    // skapade faktura-id:n finns inte i generateStaticParams, så en Next-Link
+    // DIREKT till /invoices/<id> skulle krascha (#418) — därför __shell__-routen.
     render: (i) => (
       <EntityLink route="invoices" id={i.id} className="text-blue-600 hover:underline">
         {new Date(i.invoiceDate).toLocaleDateString("sv-SE")}

@@ -9,7 +9,10 @@ import { describe, it, expect, vi } from "vitest";
 import { renderHook } from "@testing-library/react";
 
 let pathname = "/";
-vi.mock("next/navigation", () => ({ usePathname: () => pathname }));
+vi.mock("next/navigation", () => ({
+  usePathname: () => pathname,
+  useSearchParams: () => new URLSearchParams(),
+}));
 
 import { useRouteId } from "@/lib/client/demo/use-route-id";
 

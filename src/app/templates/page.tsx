@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/client/trpc";
 import { EntityLink } from "@/lib/client/demo/entity-link";
-import { entityHref } from "@/lib/client/demo/entity-href";
+import { shellPath } from "@/lib/client/demo/entity-href";
 import { Plus, Pencil, Trash2, FileText } from "lucide-react";
 import { DataTable, type Column } from "@/components/ui/data-table";
 
@@ -18,6 +19,7 @@ interface Template {
 }
 
 export default function TemplatesPage() {
+  const router = useRouter();
   const templates = trpc.documentTemplate.list.useQuery();
   const utils = trpc.useUtils();
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
@@ -99,7 +101,7 @@ export default function TemplatesPage() {
           columns={columns}
           data={templates.data as Template[]}
           rowKey={(t) => t.id}
-          onRowClick={(t) => location.assign(entityHref("templates", t.id, "edit"))}
+          onRowClick={(t) => router.push(shellPath("templates", t.id, "edit"))}
           emptyMessage="Inga mallar."
         />
       )}

@@ -97,11 +97,14 @@ describe("InvoicesPage", () => {
     render(<InvoicesPage />);
     const links = screen.getAllByRole("link");
     const hrefs = links.map((l) => l.getAttribute("href"));
-    // Både faktura- och ärende-länken är nu hårda <a href> (EntityLink) med
-    // trailing slash, så runtime-skapade id:n funkar via 404-shim/__shell__
-    // istället för en Next-Link soft-nav (→ #418). Base-path är tomt i testmiljön.
-    expect(hrefs).toContain("/invoices/i1/");
-    expect(hrefs).toContain("/matters/m1/");
+    // Både faktura- och ärende-länken renderas nu som Next-<Link> till den
+    // förrenderade __shell__-routen med ?id=<id> (soft-nav), så runtime-skapade
+    // id:n funkar utan egen prerender. Base-path är tomt i testmiljön.
+    expect(hrefs).toContain("/invoices/__shell__?id=i1");
+    expect(hrefs).toContain("/matters/__shell__?id=m1");
+    // ...och INTE en direkt /<route>/<id>-länk.
+    expect(hrefs).not.toContain("/invoices/i1/");
+    expect(hrefs).not.toContain("/matters/m1/");
   });
 
   it("renderar alla statuser med rätt klass-färg", () => {

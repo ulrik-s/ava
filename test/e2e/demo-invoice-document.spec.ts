@@ -55,12 +55,19 @@ test("fakturadokument öppnas i ny flik — dirigeras INTE in i ärendet (+ inge
     await page.waitForTimeout(6000);
   }
 
+  // No-reload-markör: överlever en SPA-övergång men nollas vid sidomladdning.
+  await page.evaluate(() => { (window as unknown as { __avaSpa?: string }).__avaSpa = "alive"; });
+
   // "Faktura"-länken längst till höger i kostnadsräkningsraden → fakturasidan.
   const fakturaLink = page.locator('main a[href*="/invoices/"]').first();
   await expect(fakturaLink).toBeVisible({ timeout: 15_000 });
   await fakturaLink.click();
   await expect(page).toHaveURL(/\/invoices\//, { timeout: 20_000 });
   await page.waitForTimeout(4000); // bootstrap + rehydrering av genererat dokument
+
+  // Navigeringen ska ha varit en SOFT SPA-övergång (ingen omladdning → inget blink).
+  const survivedNav = await page.evaluate(() => (window as unknown as { __avaSpa?: string }).__avaSpa);
+  expect(survivedNav, "navigering till fakturan ska vara soft (ingen sidomladdning)").toBe("alive");
 
   // Fakturadokument-panelen: dokumentnamnet "Faktura ….pdf". Lokalisera via TEXT
   // så det fångar både den BUGGIGA varianten (en <a>-länk till /matters) och den

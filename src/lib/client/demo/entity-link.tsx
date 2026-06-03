@@ -2,31 +2,32 @@
 
 /**
  * `<EntityLink>` — den KANONISKA primitiven för att länka till en entitets
- * detaljsida i demo/static-export-läget. Använd ALLTID denna (eller
- * `entityHref` för row-click/`location.assign`) — ALDRIG `next/link`
- * `<Link>` eller `router.push` mot en `/<route>/<id>`-URL.
+ * detaljsida i demo/static-export-läget. Använd ALLTID denna — ALDRIG en rå
+ * `next/link`-`<Link>` mot en `/<route>/<id>`-URL eller `router.push` dit.
  *
- * Varför inte `<Link>`? I `output: "export"` pre-renderas dynamiska rutter
- * bara för build-time-kända id:n. En `<Link>` soft-nav till ett runtime-skapat
- * id (ärende/kontakt/faktura/… skapat i demo-sessionen) hittar ingen route,
- * kringgår 404-shimmen helt, och kraschar med React #418. En vanlig `<a href>`
- * gör en HÅRD navigering → 404.html-shim (GH Pages) / nginx try_files
- * (self-hosted) → den pre-renderade `__shell__`-sentinellen → `useRouteId`
- * läser det riktiga id:t. Se [[entity-href]] och [[use-route-id]].
+ * Hur det funkar (ingen sidomladdning, inget blink): vi soft-navigerar med en
+ * Next-`<Link>` till den PRE-RENDERADE `__shell__`-routen och bär id:t som en
+ * query-param (`?id=`). Eftersom `__shell__` finns pre-renderad är det en
+ * vanlig SPA-övergång (ingen React #418 som vid soft-nav till ett okänt id),
+ * och `useRouteId` läser `?id` reaktivt via `useSearchParams`. Direkt-URL:er,
+ * reload och 404-shimmen hanteras av samma `?id`/hash-fallback i [[use-route-id]].
  *
- * Detta är medvetet en tunn `<a>`-wrapper: en namngiven, grep-bar primitiv som
- * gör kontraktet explicit. Att fällan inte smyger tillbaka vaktas i CI av
- * `test/unit/lib/client/demo/no-detail-link-regression.test.ts` (failar på en
- * `<Link>`/`router.push` mot en `/<route>/<id>`-detaljroute).
+ * Tomt/saknat id → ingen länk (en `<span>`), aldrig en trasig URL.
+ *
+ * Vaktas i CI av `test/unit/lib/client/demo/no-detail-link-regression.test.ts`
+ * och e2e `test/e2e/demo-invoice-document.spec.ts`.
  */
 
-import type { AnchorHTMLAttributes, ReactNode } from "react";
-import { entityHref } from "./entity-href";
+import Link from "next/link";
+import type { ComponentProps, ReactNode } from "react";
+import { shellPath } from "./entity-href";
 
-interface EntityLinkProps extends Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "href" | "id"> {
+type LinkProps = Omit<ComponentProps<typeof Link>, "href" | "id">;
+
+interface EntityLinkProps extends LinkProps {
   /** Route-segmentet, t.ex. "invoices", "matters", "contacts", "templates". */
   route: string;
-  /** Entitetens id (seed eller runtime-skapat — båda funkar via shimmen). */
+  /** Entitetens id (seed eller runtime-skapat — båda funkar via __shell__). */
   id: string | null | undefined;
   /** Valfritt svans-segment för nästlade routes, t.ex. "edit" (templates). */
   sub?: string;
@@ -34,16 +35,13 @@ interface EntityLinkProps extends Omit<AnchorHTMLAttributes<HTMLAnchorElement>, 
 }
 
 export function EntityLink({ route, id, sub, children, ...rest }: EntityLinkProps) {
-  // Tomt/saknat id → rendera INTE en länk. En `/<route>//`-URL (dubbel slash)
-  // kollapsar i 404-shimmen till färre segment än shimmen kräver → den bouncar
-  // till dashboarden ("skickad till dashboarden"). Visa bara innehållet istället.
   if (!id) {
-    const { className } = rest;
+    const { className } = rest as { className?: string };
     return <span className={className}>{children}</span>;
   }
   return (
-    <a href={entityHref(route, id, sub)} {...rest}>
+    <Link href={shellPath(route, id, sub)} {...rest}>
       {children}
-    </a>
+    </Link>
   );
 }
