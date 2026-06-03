@@ -12,6 +12,7 @@
 
 import { LogBuffer } from "./log-buffer";
 import { IssueStore } from "./issue-store";
+import { detectDomAnomalies } from "./dom-anomalies";
 import { buildIssueReport, githubIssueNewUrl, type IssueReport } from "./report";
 import { parseRepoLocator, type RepoLocator } from "@/lib/client/github/api";
 import type { InvariantViolation } from "@/lib/shared/diagnostics/invariants";
@@ -79,6 +80,10 @@ export function collectMeta(): Record<string, string> {
   if (typeof window !== "undefined") {
     meta.url = window.location.href;
     meta.userAgent = window.navigator?.userAgent ?? "okänd";
+    // Spår av DOM-muterande tillägg (vanlig orsak till React #418
+    // hydrerings-mismatch). Tomt = inga kända spår hittade.
+    const dom = typeof document !== "undefined" ? detectDomAnomalies(document) : "";
+    if (dom) meta.domMiljö = dom;
   }
   const version = process.env.NEXT_PUBLIC_DEMO_VERSION;
   if (version) meta.version = version;

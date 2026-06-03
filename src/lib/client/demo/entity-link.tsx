@@ -23,17 +23,24 @@
 import type { AnchorHTMLAttributes, ReactNode } from "react";
 import { entityHref } from "./entity-href";
 
-interface EntityLinkProps extends Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "href"> {
+interface EntityLinkProps extends Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "href" | "id"> {
   /** Route-segmentet, t.ex. "invoices", "matters", "contacts", "templates". */
   route: string;
   /** Entitetens id (seed eller runtime-skapat — båda funkar via shimmen). */
-  id: string;
+  id: string | null | undefined;
   /** Valfritt svans-segment för nästlade routes, t.ex. "edit" (templates). */
   sub?: string;
   children: ReactNode;
 }
 
 export function EntityLink({ route, id, sub, children, ...rest }: EntityLinkProps) {
+  // Tomt/saknat id → rendera INTE en länk. En `/<route>//`-URL (dubbel slash)
+  // kollapsar i 404-shimmen till färre segment än shimmen kräver → den bouncar
+  // till dashboarden ("skickad till dashboarden"). Visa bara innehållet istället.
+  if (!id) {
+    const { className } = rest;
+    return <span className={className}>{children}</span>;
+  }
   return (
     <a href={entityHref(route, id, sub)} {...rest}>
       {children}

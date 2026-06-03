@@ -37,4 +37,15 @@ describe("EntityLink", () => {
     expect(link.getAttribute("title")).toBe("t");
     expect(link.getAttribute("href")).toBe("/matters/m-1/");
   });
+
+  it("tomt/saknat id → ingen länk (span), undviker /route//-bounce till dashboard", () => {
+    vi.stubEnv("NEXT_PUBLIC_DEMO_BASE_PATH", "/ava");
+    const { rerender } = render(<EntityLink route="matters" id="" className="c">—</EntityLink>);
+    expect(screen.queryByRole("link")).toBeNull();
+    expect(screen.getByText("—").tagName).toBe("SPAN");
+    rerender(<EntityLink route="matters" id={null}>X</EntityLink>);
+    expect(screen.queryByRole("link")).toBeNull();
+    rerender(<EntityLink route="matters" id={undefined}>Y</EntityLink>);
+    expect(screen.queryByRole("link")).toBeNull();
+  });
 });
