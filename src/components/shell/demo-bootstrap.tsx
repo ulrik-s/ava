@@ -158,6 +158,13 @@ async function rehydrateGeneratedDocs(runtime: DemoRuntime, source: DemoSource):
 
 export function DemoBootstrap({ children }: { children: ReactNode }) {
   const [firmaConfig] = useState<FirmaConfig>(() => loadFirmaConfig());
+  // Hydrerings-grind: server-prerender och klientens FÖRSTA render måste vara
+  // byte-identiska. Hela demo-appen är klient-renderad (data laddas client-side),
+  // så vi renderar en minimal platshållare tills komponenten monterat — då kan
+  // ingen server/klient-mismatch uppstå (React #418), oavsett mängd återställd
+  // OPFS-data, datum/locale eller webbläsartillägg. Allt dynamiskt körs efter
+  // commit. Se [[dom-anomalies]] / docs/architecture.md.
+  const [mounted, setMounted] = useState(false);
   const [source] = useState<DemoSource>(() => ({}));
   const [fsaHandle, setFsaHandle] = useState<FileSystemDirectoryHandle | null>(null);
   // FSA-handle laddas async — uppdatera mutable container via setHandle
@@ -249,6 +256,11 @@ export function DemoBootstrap({ children }: { children: ReactNode }) {
     transformer: superjson,
   } as never));
 
+  // Flippa efter första commit → byter från platshållare till full app-tree.
+  // Egen effekt (separat från boot-effekten) så hydreringen hinner committa rent.
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- engångs-flip; det ÄR avsikten
+  useEffect(() => { setMounted(true); }, []);
+
   useEffect(() => {
     const gate = checkBootstrapGate(firmaConfig);
     if (gate === "skip-ready") { queueMicrotask(() => setStatus("ready")); return; }
@@ -338,6 +350,18 @@ export function DemoBootstrap({ children }: { children: ReactNode }) {
     })();
     return () => { cancelled = true; };
   }, []);
+
+  // Hydrerings-grind: identisk markup på server + klientens första render.
+  if (!mounted) {
+    return (
+      <div className="fixed inset-0 flex items-center justify-center bg-white">
+        <div className="text-center">
+          <div className="text-lg font-medium text-gray-900 mb-2">AVA</div>
+          <div className="text-sm text-gray-500">Laddar…</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <AuthProvider token={firmaConfig.token} repoUrl={firmaConfig.repo}>
