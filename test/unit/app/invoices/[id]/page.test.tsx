@@ -41,6 +41,15 @@ vi.mock("@/lib/client/trpc", () => ({
   },
 }));
 
+// Fakturadokument-panelen ska ÖPPNA dokumentet (ny flik) via openDocument —
+// INTE navigera in i ärendet. Mocka open-document-flödet för att verifiera.
+const openDocumentMock = vi.fn();
+vi.mock("@/lib/client/firma/open-document", () => ({
+  openDocument: (deps: unknown) => openDocumentMock(deps),
+}));
+vi.mock("@/lib/client/fsa/handle-store", () => ({ loadHandle: vi.fn(async () => null) }));
+vi.mock("@/lib/client/fsa/read-from-fsa", () => ({ readFromFsa: vi.fn(async () => null) }));
+
 function makeParams(value: { id: string }) {
   const p = Promise.resolve(value) as Promise<{ id: string }> & {
     status?: string;
@@ -405,6 +414,32 @@ describe("InvoiceDetailPage", () => {
     expect(arg.dayOfMonth).toBe(15);
     expect(arg.startDate).toBe("2026-06-01");
     expect(arg.notes).toBe("Avbetalningsplan");
+  });
+
+  it("Fakturadokument: klick på dokumentnamnet ÖPPNAR dokumentet (ny flik), navigerar INTE in i ärendet", async () => {
+    // Regressionsskydd för den jagade buggen: dokumentnamnet i Fakturadokument-
+    // panelen länkade till /matters → man dirigerades in i ärendet istället för
+    // att få upp PDF:en. Nu ska det vara en knapp som öppnar dokumentet.
+    invoiceQuery.data = {
+      ...baseInvoice,
+      documents: [
+        { id: "faktura-i1", fileName: "Faktura 2026-0001.pdf", documentType: "Faktura", storagePath: "documents/content/faktura-i1.pdf" },
+      ],
+    };
+    renderPage();
+    const docEl = await waitFor(() => screen.getByText("Faktura 2026-0001.pdf"));
+
+    // 1) Det är en KNAPP, inte en länk till ärendet.
+    expect(docEl.tagName).toBe("BUTTON");
+    expect(docEl.closest("a")).toBeNull();
+
+    // 2) Klick öppnar dokumentet via openDocument (med en openUrl → ny flik),
+    //    snarare än att navigera. Verifiera rätt dokument-id.
+    fireEvent.click(docEl);
+    await waitFor(() => expect(openDocumentMock).toHaveBeenCalledTimes(1));
+    const deps = openDocumentMock.mock.calls[0][0] as { doc: { id: string; fileName: string }; openUrl: unknown };
+    expect(deps.doc).toMatchObject({ id: "faktura-i1", fileName: "Faktura 2026-0001.pdf" });
+    expect(typeof deps.openUrl).toBe("function");
   });
 
   it("uppdaterar betalningsdatum och anteckning i betalnings-modal", async () => {

@@ -28,6 +28,7 @@
     "test:fast": "vitest run --config tooling/config/vitest.config.ts --exclude '**/test/scripts/**' --exclude '**/test/e2e/**'",
     "e2e": "playwright test --config tooling/config/playwright.config.ts",
     "e2e:ui": "playwright test --config tooling/config/playwright.config.ts --ui",
+    "e2e:demo": "playwright test --config tooling/config/playwright-demo.config.ts",
     "e2e:install": "playwright install --with-deps chromium",
     "round-trip": "playwright test --config tooling/config/playwright.round-trip.config.ts",
     "diagnose-ui": "tsx tooling/scripts/diagnose-ui.ts",

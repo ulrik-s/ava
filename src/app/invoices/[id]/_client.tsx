@@ -96,7 +96,7 @@ export default function InvoiceDetailClient({ id: paramId }: { id: string }) {
 
       <SpecificationCard timeEntries={(inv.timeEntries ?? []) as unknown as SpecTimeRow[]} expenses={(inv.expenses ?? []) as unknown as SpecExpenseRow[]} />
 
-      <InvoiceDocumentsCard matterId={inv.matter.id} documents={(inv.documents ?? []) as unknown as InvoiceDocRow[]} />
+      <InvoiceDocumentsCard documents={(inv.documents ?? []) as unknown as InvoiceDocRow[]} />
 
       <CreditBanners inv={inv} />
 
@@ -263,9 +263,31 @@ function PaymentPlanCard({
 
 type SpecTimeRow = { id: string; date: string | Date; description: string; minutes: number; hourlyRate?: number | null };
 type SpecExpenseRow = { id: string; date: string | Date; description: string; amount: number };
-type InvoiceDocRow = { id: string; fileName: string; documentType?: string | null; createdAt?: string | Date | null };
+type InvoiceDocRow = { id: string; fileName: string; documentType?: string | null; createdAt?: string | Date | null; storagePath?: string | null; mimeType?: string | null };
 
-function InvoiceDocumentsCard({ matterId, documents }: { matterId: string; documents: InvoiceDocRow[] }) {
+/**
+ * Öppna ett fakturadokument (PDF m.fl.) i en ny flik — SAMMA flöde som
+ * dokumentraden på ärende-sidan ([[_document-row]]): runtime-genererade docs
+ * öppnas ur blob-cachen, seed-docs hämtas från GH Pages, self-hosted ur FSA.
+ * Tidigare länkade namnet felaktigt till /matters → man dirigerades in i
+ * ärendet istället för att få upp filen.
+ */
+async function openInvoiceDoc(doc: InvoiceDocRow): Promise<void> {
+  const { openDocument } = await import("@/lib/client/firma/open-document");
+  const { loadHandle } = await import("@/lib/client/fsa/handle-store");
+  const { readFromFsa } = await import("@/lib/client/fsa/read-from-fsa");
+  await openDocument({
+    doc: { id: doc.id, storagePath: doc.storagePath ?? undefined, fileName: doc.fileName },
+    isDemo: process.env.NEXT_PUBLIC_DEMO_BUILD === "1",
+    demoRepo: process.env.NEXT_PUBLIC_DEFAULT_DEMO_REPO,
+    loadHandle: () => loadHandle("repo-root"),
+    readFromHandle: readFromFsa,
+    openUrl: (u) => window.open(u, "_blank", "noopener,noreferrer"),
+    notifyError: (m) => alert(m),
+  });
+}
+
+function InvoiceDocumentsCard({ documents }: { documents: InvoiceDocRow[] }) {
   if (documents.length === 0) return null;
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-6">
@@ -273,9 +295,13 @@ function InvoiceDocumentsCard({ matterId, documents }: { matterId: string; docum
       <ul className="text-sm divide-y divide-gray-100">
         {documents.map((d) => (
           <li key={d.id} className="py-2 flex items-center justify-between">
-            <EntityLink route="matters" id={matterId} className="text-blue-600 hover:underline">
+            <button
+              type="button"
+              onClick={() => void openInvoiceDoc(d)}
+              className="text-blue-600 hover:underline text-left"
+            >
               {d.fileName}
-            </EntityLink>
+            </button>
             {d.documentType && <span className="text-[10px] rounded-full bg-gray-100 text-gray-600 px-2 py-0.5">{d.documentType}</span>}
           </li>
         ))}
