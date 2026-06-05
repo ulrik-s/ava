@@ -3,7 +3,13 @@
  * mockning och utan att routern behöver duplicera summeringsregler.
  *
  * Alla belopp i öre (Int), så vi slipper flyttalsfel.
+ *
+ * Datumlogiken nedan använder Temporal (TS6 + @js-temporal/polyfill) för att
+ * uttrycka date-only-jämförelser tidszon-säkert och deklarativt i stället för
+ * manuell UTC-juggling med Date.
  */
+
+import { Temporal } from "@js-temporal/polyfill";
 
 export interface TimeEntryForInvoice {
   minutes: number;
@@ -87,10 +93,15 @@ export function isPaymentPlanSettled(
  * Returnerar "YYYY-MM" för ett datum (UTC). Används som stabil nyckel i
  * PaymentPlanReminder för att idempotens-garantera månads-mail.
  */
+/** Date → dess UTC-datumdel som Temporal.PlainDate (date-only, ingen tid). */
+function toPlainDateUTC(date: Date): Temporal.PlainDate {
+  return Temporal.Instant.fromEpochMilliseconds(date.getTime())
+    .toZonedDateTimeISO("UTC")
+    .toPlainDate();
+}
+
 export function monthKey(date: Date): string {
-  const y = date.getUTCFullYear();
-  const m = String(date.getUTCMonth() + 1).padStart(2, "0");
-  return `${y}-${m}`;
+  return toPlainDateUTC(date).toPlainYearMonth().toString(); // "YYYY-MM"
 }
 
 /**
@@ -98,11 +109,5 @@ export function monthKey(date: Date): string {
  * Vi jämför datumdelen bara (utan tid) så dev-/prod-tidszon inte spökar.
  */
 export function planHasStarted(startDate: Date, today: Date): boolean {
-  const start = Date.UTC(
-    startDate.getUTCFullYear(),
-    startDate.getUTCMonth(),
-    startDate.getUTCDate(),
-  );
-  const now = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
-  return now >= start;
+  return Temporal.PlainDate.compare(toPlainDateUTC(today), toPlainDateUTC(startDate)) >= 0;
 }
