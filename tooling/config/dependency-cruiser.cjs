@@ -32,6 +32,10 @@ module.exports = {
           "(^|/)(eslint|vitest|playwright|next|tailwind|postcss|prisma)\\.setup\\.[a-z]+$",
           "(^|/)tooling/scripts/.+",
           "(^|/)test/.+",
+          // Webpack-stub (next.config NODE_STUB) — aliasas in i browser-
+          // bundle:n via resolve.alias, importeras aldrig direkt. Per design
+          // orphan i import-grafen.
+          "(^|/)lib/shared/stubs/.+",
           "src/app/.+/(page|layout|loading|error|not-found|route)\\.tsx?$",
           "src/shared/types/.+\\.d\\.ts$",
           "src/middleware\\.ts$",
@@ -90,8 +94,69 @@ module.exports = {
         ],
       },
     },
+    {
+      // Lager-gräns (docs/architecture.md §"Tre lager"): `shared` är delad kod
+      // (Zod-scheman, domän-helpers) synlig för alla lager. Den får därför
+      // INTE bero på vare sig UI- (`client`) eller backend-lagret (`server`) —
+      // annars är den inte längre delbar. Enums/domänlogik som både client och
+      // server behöver hör hemma här, inte i client/.
+      name: "shared-must-not-import-up",
+      severity: "error",
+      comment:
+        "src/lib/shared får inte importera från client/ eller server/. Flytta " +
+        "delad kod (enums, domän-helpers) till shared istället för att låta " +
+        "shared bero uppåt.",
+      from: { path: "^src/lib/shared/" },
+      to: { path: "^src/lib/(client|server)/" },
+    },
+    {
+      // Lager-gräns: backendens kontrakt-/domänlager (routrar, data-store,
+      // events, regler, auth, trpc) får inte bero på UI-lagret (`client`).
+      // Undantag: git-backendens egen wiring (adapters/, local-first/) KÖR
+      // klient-sidigt och får röra client-cachen — den gränsen vaktas i
+      // stället av `no-git-cache-in-contracts` ovan.
+      name: "server-contracts-must-not-import-client",
+      severity: "error",
+      comment:
+        "Server-routrar/domänlogik får inte importera från client/. Ren " +
+        "domänlogik som servern behöver hör hemma i shared/.",
+      from: {
+        path: "^src/lib/server/",
+        pathNot: "^src/lib/server/(adapters|local-first)/",
+      },
+      to: { path: "^src/lib/client/" },
+    },
+    {
+      // Lager-gräns: UI-lagret (app/, components/, lib/client) får referera
+      // backend-lagret BARA via typer (tRPC `AppRouter`-kontraktet etc) —
+      // aldrig dra in körbar server-kod. Undantag: composition-root:en där
+      // backend faktiskt wire:as ihop in-process i browsern (browser ÄR
+      // runtime, se architecture.md). Håll den listan kort.
+      name: "ui-imports-server-by-type-only",
+      severity: "error",
+      comment:
+        "UI-lagret får bara type-only-importera från server/ (tRPC-kontrakt). " +
+        "Värde-importer av server-kod är tillåtna endast i composition-root: " +
+        "lib/client/backend/, in-process-link, active-llm, demo-bootstrap, " +
+        "app/demo/_demo-client.",
+      from: {
+        path: "^src/(app|components)/|^src/lib/client/",
+        pathNot:
+          "^src/(lib/client/(backend/|demo/in-process-link\\.ts$|llm/active-llm\\.ts$)|components/shell/demo-bootstrap\\.tsx$|app/demo/_demo-client\\.tsx$)",
+      },
+      to: {
+        path: "^src/lib/server/",
+        dependencyTypesNot: ["type-only"],
+      },
+    },
   ],
   options: {
+    // Följ type-only-imports (`import type`). Utan detta räknas inte type-
+    // kanter, vilket (a) får rena interface-/typ-moduler (IDataStore, IPorts,
+    // AuthProvider …) att felaktigt flaggas som orphans, och (b) gör att
+    // lager-reglernas `dependencyTypesNot: ["type-only"]` inte kan urskilja
+    // type- från värde-importer. Påslaget löser bådadera.
+    tsPreCompilationDeps: true,
     doNotFollow: { path: "node_modules" },
     exclude: {
       path: [

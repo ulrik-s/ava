@@ -41,8 +41,8 @@ export const PAYMENT_METHOD_LABELS = {
   RATTSHJALP: "Rättshjälp",
   RATTSSKYDD: "Rättsskydd",
   OFFENTLIG_FORSVARARE: "Offentlig försvarare",
-  PRIVAT: "Privat",
-  MIX: "Mix",
+  PRIVAT: "Privat betalning",
+  MIX: "Kombinerad",
 } as const satisfies Record<string, string>;
 export const paymentMethodSchema = enumFromLabels(PAYMENT_METHOD_LABELS);
 export type PaymentMethod = z.infer<typeof paymentMethodSchema>;
@@ -145,6 +145,32 @@ export const SUGGESTION_STATUS_LABELS = {
 export const suggestionStatusSchema = enumFromLabels(SUGGESTION_STATUS_LABELS);
 export type SuggestionStatus = z.infer<typeof suggestionStatusSchema>;
 
-// Note: MATTER_ROLE och CONTACT_TYPE finns i src/client/lib/labels.ts och
-// re-exporteras därifrån för att inte duplicera. Skulle kunna flyttas hit
-// i en framtida städ-runda om labels.ts blir för stor.
+// ─── Matter role (parts roll i ett ärende) ────────────────────────────────
+
+export const MATTER_ROLE_LABELS = {
+  KLIENT: "Klient",
+  MOTPART: "Motpart",
+  MOTPARTSOMBUD: "Motpartsombud",
+  AKLAGARE: "Åklagare",
+  DOMSTOL: "Domstol",
+  FORSAKRINGSBOLAG: "Försäkringsbolag",
+  VITTNE: "Vittne",
+  OMBUD: "Ombud",
+  OVRIG: "Övrig",
+} as const satisfies Record<string, string>;
+export const matterRoleSchema = enumFromLabels(MATTER_ROLE_LABELS);
+export type MatterRole = z.infer<typeof matterRoleSchema>;
+
+// ─── Contact type ─────────────────────────────────────────────────────────
+
+export const CONTACT_TYPE_LABELS = {
+  PERSON: "Person",
+  COMPANY: "Företag",
+  COURT: "Domstol",
+  AUTHORITY: "Myndighet",
+  INSURANCE_COMPANY: "Försäkringsbolag",
+  LAW_FIRM: "Advokatbyrå",
+  OTHER: "Övrig",
+} as const satisfies Record<string, string>;
+export const contactTypeSchema = enumFromLabels(CONTACT_TYPE_LABELS);
+export type ContactType = z.infer<typeof contactTypeSchema>;

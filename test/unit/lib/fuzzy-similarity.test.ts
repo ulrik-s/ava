@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { bigrams, normalize, similarity } from "@/lib/client/fuzzy-similarity";
+import { bigrams, normalize, similarity } from "@/lib/shared/fuzzy-similarity";
 
 describe("normalize", () => {
   it("lowercase + strippar diakritik", () => {

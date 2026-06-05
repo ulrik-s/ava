@@ -1,8 +1,12 @@
 import { z } from "zod";
 import { router, orgProcedure, requireOrgOwned } from "../trpc";
 import type { IDataStore } from "../data-store/IDataStore";
-import { matterRoleSchema, contactTypeSchema } from "@/lib/client/labels";
-import { matterStatusSchema, paymentMethodSchema } from "@/lib/shared/schemas/enums";
+import {
+  matterRoleSchema,
+  contactTypeSchema,
+  matterStatusSchema,
+  paymentMethodSchema,
+} from "@/lib/shared/schemas/enums";
 import { emit } from "../events/emit";
 
 type MatterCtx = { dataStore: IDataStore; orgId: string };

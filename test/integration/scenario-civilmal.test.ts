@@ -33,7 +33,7 @@ import { DemoDataStore, type DemoSource } from "@/lib/server/data-store/DemoData
 import { prebakeJoins } from "@/lib/client/demo/prebake-joins";
 import { appRouter } from "@/lib/server/routers/_app";
 import { buildGitPorts } from "@/lib/server/adapters/git-ports";
-import { computeFinalInvoiceBreakdown } from "@/lib/client/invoice-calc";
+import { computeFinalInvoiceBreakdown } from "@/lib/shared/invoice-calc";
 
 const ORG_ID = "firma-ab";
 const HOURLY_RATE = 250_000; // 2 500 kr/h exkl moms (i öre)

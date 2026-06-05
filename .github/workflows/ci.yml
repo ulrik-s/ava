@@ -34,9 +34,10 @@ jobs:
       - run: corepack enable
       - run: yarn install --immutable
       - run: yarn typecheck
-      # Ratchet: lint får ha HÖGST 86 warnings (dagens nivå). Nya warnings →
+      # Ratchet: lint får ha HÖGST 50 warnings (dagens nivå). Nya warnings →
       # rött bygge. Driv ned baseline:n över tid (mål: 0). Errors fällde redan.
-      - run: yarn lint --max-warnings 86
+      # (Sänkt 86→50: no-unused-vars utrensad + ^_-ignore i eslint-configen.)
+      - run: yarn lint --max-warnings 50
       - run: yarn deps:check
       - run: yarn knip:report
       - run: yarn duplicates

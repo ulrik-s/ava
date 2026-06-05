@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../trpc";
 import type { IDataStore } from "../data-store/IDataStore";
-import { similarity } from "@/lib/client/fuzzy-similarity";
+import { similarity } from "@/lib/shared/fuzzy-similarity";
 
 type ConflictCtx = { dataStore: IDataStore; user: { id: string; organizationId: string } };
 

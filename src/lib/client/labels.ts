@@ -18,27 +18,28 @@
  * slutet av filen så att befintlig kod (och låsta tester) fortsätter fungera.
  */
 
-import { z } from "zod";
+import {
+  MATTER_ROLE_LABELS,
+  matterRoleSchema,
+  type MatterRole,
+  CONTACT_TYPE_LABELS,
+  contactTypeSchema,
+  type ContactType,
+  PAYMENT_METHOD_LABELS,
+  paymentMethodSchema,
+  type PaymentMethod,
+} from "@/lib/shared/schemas/enums";
 
-// ─── Matter roles ────────────────────────────────────────────────
+// MatterRole/ContactType/PaymentMethod — labels + schema + typ bor i
+// shared/schemas/enums.ts (delad kod, synlig för alla lager). Här re-exporteras
+// de tillsammans med de UI-nära derivationerna (dropdown-options, label-helpers,
+// runtime-guards).
+export { MATTER_ROLE_LABELS, matterRoleSchema, CONTACT_TYPE_LABELS, contactTypeSchema };
+export type { MatterRole, ContactType };
 
-export const MATTER_ROLE_LABELS = {
-  KLIENT: "Klient",
-  MOTPART: "Motpart",
-  MOTPARTSOMBUD: "Motpartsombud",
-  AKLAGARE: "Åklagare",
-  DOMSTOL: "Domstol",
-  FORSAKRINGSBOLAG: "Försäkringsbolag",
-  VITTNE: "Vittne",
-  OMBUD: "Ombud",
-  OVRIG: "Övrig",
-} as const satisfies Record<string, string>;
-
-export type MatterRole = keyof typeof MATTER_ROLE_LABELS;
+// ─── Matter roles (UI-derivationer) ──────────────────────────────
 
 const matterRoleKeys = Object.keys(MATTER_ROLE_LABELS) as [MatterRole, ...MatterRole[]];
-
-export const matterRoleSchema = z.enum(matterRoleKeys);
 
 export type MatterRoleOption = { readonly value: MatterRole; readonly label: string };
 
@@ -58,23 +59,9 @@ export function isMatterRole(v: unknown): v is MatterRole {
   return typeof v === "string" && v in MATTER_ROLE_LABELS;
 }
 
-// ─── Contact types ───────────────────────────────────────────────
-
-export const CONTACT_TYPE_LABELS = {
-  PERSON: "Person",
-  COMPANY: "Företag",
-  COURT: "Domstol",
-  AUTHORITY: "Myndighet",
-  INSURANCE_COMPANY: "Försäkringsbolag",
-  LAW_FIRM: "Advokatbyrå",
-  OTHER: "Övrig",
-} as const satisfies Record<string, string>;
-
-export type ContactType = keyof typeof CONTACT_TYPE_LABELS;
+// ─── Contact types (UI-derivationer) ─────────────────────────────
 
 const contactTypeKeys = Object.keys(CONTACT_TYPE_LABELS) as [ContactType, ...ContactType[]];
-
-export const contactTypeSchema = z.enum(contactTypeKeys);
 
 export type ContactTypeOption = { readonly value: ContactType; readonly label: string };
 
@@ -92,22 +79,13 @@ export function isContactType(v: unknown): v is ContactType {
   return typeof v === "string" && v in CONTACT_TYPE_LABELS;
 }
 
-// ─── Payment method (betalningssätt på ärende) ──────────────────
-
-export const PAYMENT_METHOD_LABELS = {
-  PENDING: "Ej fastställt",
-  RATTSHJALP: "Rättshjälp",
-  RATTSSKYDD: "Rättsskydd",
-  OFFENTLIG_FORSVARARE: "Offentlig försvarare",
-  PRIVAT: "Privat betalning",
-  MIX: "Kombinerad",
-} as const satisfies Record<string, string>;
-
-export type PaymentMethod = keyof typeof PAYMENT_METHOD_LABELS;
+// ─── Payment method (UI-derivationer) ────────────────────────────
+// PAYMENT_METHOD-enumet bor i shared/schemas/enums.ts (delad källa,
+// schema-validering). Här re-exporteras det + UI-derivationerna.
+export { PAYMENT_METHOD_LABELS, paymentMethodSchema };
+export type { PaymentMethod };
 
 const paymentMethodKeys = Object.keys(PAYMENT_METHOD_LABELS) as [PaymentMethod, ...PaymentMethod[]];
-
-export const paymentMethodSchema = z.enum(paymentMethodKeys);
 
 export type PaymentMethodOption = { readonly value: PaymentMethod; readonly label: string };
 

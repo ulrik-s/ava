@@ -84,7 +84,6 @@ export const userRouter = router({
         select: USER_PROFILE_SELECT as any,
       }) as unknown as UserProfile;
       return { ...u, publicKeys: Array.isArray(u.publicKeys) ? u.publicKeys : [] };
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (_e) {
       return {
         id: ctx.user.id,

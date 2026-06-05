@@ -52,13 +52,6 @@ vi.mock("@/lib/client/trpc", () => ({
   },
 }));
 
-function fulfilled<T>(value: T): Promise<T> {
-  const p = Promise.resolve(value) as Promise<T> & { status?: string; value?: T };
-  p.status = "fulfilled";
-  p.value = value;
-  return p;
-}
-
 function renderPage() {
   return render(
     <Suspense fallback={<div>loading-suspense</div>}>

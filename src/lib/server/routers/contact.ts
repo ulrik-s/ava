@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { router, orgProcedure, requireOrgOwned } from "../trpc";
-import { contactTypeSchema } from "@/lib/client/labels";
+import { contactTypeSchema } from "@/lib/shared/schemas/enums";
 import { emit } from "../events/emit";
 
 export const contactRouter = router({

@@ -91,7 +91,6 @@ export default function TimePage() {
   const utils = trpc.useUtils();
 
   const [showForm, setShowForm] = useState(false);
-  const matterFieldId = useId();
   const dateFieldId = useId();
   const minutesFieldId = useId();
   const descriptionFieldId = useId();

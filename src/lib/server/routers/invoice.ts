@@ -17,7 +17,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, orgProcedure } from "../trpc";
 import type { DataStoreTx } from "../data-store/IDataStore";
-import { computeFinalInvoiceBreakdown, isPaymentPlanSettled } from "@/lib/client/invoice-calc";
+import { computeFinalInvoiceBreakdown, isPaymentPlanSettled } from "@/lib/shared/invoice-calc";
 import { emit } from "../events/emit";
 
 // ─── createFinal-hjälpare (validera + koppla poster) ──────────────

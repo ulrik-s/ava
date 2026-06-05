@@ -16,7 +16,7 @@
 import {
   readFile, writeFile, appendFile, unlink, mkdir, readdir, stat,
 } from "node:fs/promises";
-import { join, relative, resolve, dirname } from "node:path";
+import { relative, resolve, dirname } from "node:path";
 import type { IFileSystem } from "./file-system";
 
 export class NodeFileSystem implements IFileSystem {

@@ -11,7 +11,7 @@
  * @vitest-environment jsdom
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { jobQueue } from "@/lib/client/jobs/job-queue";
 import { setAnalyzeDispatcher } from "@/lib/client/jobs/analyze-dispatch";
 import "@/lib/client/jobs/register-workers"; // ensure worker is registered

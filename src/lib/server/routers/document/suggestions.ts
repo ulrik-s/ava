@@ -4,18 +4,18 @@
  *
  * Dedup-beslutet (matcha befintlig kontakt på pnr / orgNr / namn-i-ärende)
  * sker i den rena funktionen `findExistingContactForSuggestion` i
- * `@/lib/client/contact-dedup`. Routern sköter IO och transaktionsflöde.
+ * `@/lib/shared/contact-dedup`. Routern sköter IO och transaktionsflöde.
  */
 
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { orgProcedure } from "../../trpc";
-import { groupSuggestions } from "@/lib/client/suggestion-grouping";
-import { matterRoleSchema, contactTypeSchema } from "@/lib/client/labels";
+import { groupSuggestions } from "@/lib/shared/suggestion-grouping";
+import { matterRoleSchema, contactTypeSchema } from "@/lib/shared/schemas/enums";
 import {
   findExistingContactForSuggestion,
   type ContactCandidate,
-} from "@/lib/client/contact-dedup";
+} from "@/lib/shared/contact-dedup";
 
 // ─── Helpers för acceptSuggestion ─────────────────────────────────────────
 

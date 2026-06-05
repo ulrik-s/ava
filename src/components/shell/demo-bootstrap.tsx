@@ -524,14 +524,3 @@ function mergeSource(target: DemoSource, fresh: DemoSource): void {
       (fresh[k] ?? []) as readonly unknown[];
   }
 }
-
-function Overlay({ tone, children }: { tone: "info" | "error"; children: ReactNode }) {
-  const cls = tone === "error"
-    ? "bg-red-50 border-b border-red-200 text-red-800"
-    : "bg-blue-50 border-b border-blue-200 text-blue-800";
-  return (
-    <div className={`fixed top-0 left-0 right-0 z-50 ${cls} text-sm py-2 px-4 text-center`}>
-      {children}
-    </div>
-  );
-}

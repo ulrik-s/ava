@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { baseFields, optionalDateLike } from "./common";
-import { suggestionStatusSchema } from "./enums";
-import { matterRoleSchema, contactTypeSchema } from "@/lib/client/labels";
+import { suggestionStatusSchema, matterRoleSchema, contactTypeSchema } from "./enums";
 
 /**
  * DocumentFolder — hierarkisk mapp inom ett matter. `parentId` = null → root.

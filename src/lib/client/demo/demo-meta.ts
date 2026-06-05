@@ -8,7 +8,7 @@
  * Cachas i minne efter första hämtningen (samma data hela sessionen).
  */
 import { DEMO_META_PATH } from "../../../../tooling/demo-config";
-import { resolveGhPagesUrl } from "../../server/local-first/gh-pages-loader";
+import { resolveGhPagesUrl } from "@/lib/shared/gh-pages-url";
 
 export interface DemoMetaUser {
   /** UUID — principalId som /login sparar i firma-config. */

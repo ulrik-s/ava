@@ -19,6 +19,17 @@ const eslintConfig = defineConfig([
   {
     files: ["**/*.{ts,tsx}"],
     rules: {
+      // Underscore-prefix = avsiktligt oanvänd (signaturkrav, framtida bruk).
+      // Skiljer medvetna platshållare från faktiskt bortglömd kod.
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+          caughtErrorsIgnorePattern: "^_",
+          destructuredArrayIgnorePattern: "^_",
+        },
+      ],
       complexity: ["error", { max: 8 }],
       "max-depth": ["warn", 4],
       "max-lines-per-function": [

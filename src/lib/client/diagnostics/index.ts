@@ -44,7 +44,6 @@ export function reportSelfDetected(violations: ReadonlyArray<InvariantViolation>
   const added = issueStore.report(violations);
   if (added === 0) return;
   for (const v of violations) {
-    // eslint-disable-next-line no-console
     console.warn(`[ava-invariant] ${v.code}: ${v.message}`, v.context);
   }
 }

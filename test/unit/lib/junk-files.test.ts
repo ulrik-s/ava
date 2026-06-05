@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isJunkFileName } from "@/lib/client/junk-files";
+import { isJunkFileName } from "@/lib/shared/junk-files";
 
 describe("isJunkFileName — OS-skräp som aldrig ska sparas", () => {
   it("fångar AppleDouble-filer (._*)", () => {

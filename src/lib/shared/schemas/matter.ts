@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { orgScopedFields, optionalDateLike } from "./common";
-import { matterStatusSchema, paymentMethodSchema } from "./enums";
-import { matterRoleSchema } from "@/lib/client/labels";
+import { matterStatusSchema, paymentMethodSchema, matterRoleSchema } from "./enums";
 
 /**
  * Matter (Ärende) — lagras i `matters/active/<id>.json`. Vi har inte längre

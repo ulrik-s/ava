@@ -156,20 +156,6 @@ const M = {
   _count: { documents: 0, timeEntries: 0, emails: 0 },
 };
 
-// React 19's use() läser sync från Promise.status === 'fulfilled' om det
-// är satt; annars suspendar den och Suspense-fallback visas. Vi sätter
-// fältet manuellt så pages som anropar `use(params)` slipper suspending.
-function makeParams(value: { id: string }) {
-  const p = Promise.resolve(value) as Promise<{ id: string }> & {
-    status?: string;
-    value?: { id: string };
-  };
-  p.status = "fulfilled";
-  p.value = value;
-  return p;
-}
-
-const params = makeParams({ id: "m1" });
 
 const renderPage = () =>
   render(

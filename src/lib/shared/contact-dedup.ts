@@ -18,7 +18,7 @@
  * listorna (kan vara så små eller stora den vill) och överlåter beslutet hit.
  */
 
-import type { ContactType } from "./labels";
+import type { ContactType } from "./schemas/enums";
 
 // ─── Publika typer ──────────────────────────────────────────────
 

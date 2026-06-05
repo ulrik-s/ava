@@ -33,7 +33,7 @@ const baseConfig: NextConfig = {
  * kompilerar. Server-only-funktioner körs aldrig i demo (allt går
  * via DemoDataStore som är read-only), så stubbarna anropas aldrig.
  */
-const NODE_STUB = "./src/shared/stubs/empty.js";
+const NODE_STUB = "./src/lib/shared/stubs/empty.js";
 const stubAliases: Record<string, { browser: string }> = {};
 // Bara strikt Node-only-moduler som inte har browser-polyfill. Generiska
 // paket (buffer, stream, crypto, util, url) har webpack-polyfills som

@@ -50,17 +50,6 @@ vi.mock("@/lib/client/firma/open-document", () => ({
 vi.mock("@/lib/client/fsa/handle-store", () => ({ loadHandle: vi.fn(async () => null) }));
 vi.mock("@/lib/client/fsa/read-from-fsa", () => ({ readFromFsa: vi.fn(async () => null) }));
 
-function makeParams(value: { id: string }) {
-  const p = Promise.resolve(value) as Promise<{ id: string }> & {
-    status?: string;
-    value?: { id: string };
-  };
-  p.status = "fulfilled";
-  p.value = value;
-  return p;
-}
-
-const params = makeParams({ id: "i1" });
 const renderPage = () =>
   render(
     <Suspense fallback={<div>laddar</div>}>

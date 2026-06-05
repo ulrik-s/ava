@@ -6,7 +6,7 @@
  * unit-testas utan filsystem.
  */
 
-import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import { randomBytes, timingSafeEqual } from "node:crypto";
 
 // ─── bcrypt-kompatibel hashing ────────────────────────────────────────────
 //

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { orgScopedFields } from "./common";
-import { contactTypeSchema } from "@/lib/client/labels";
+import { contactTypeSchema } from "./enums";
 
 /**
  * Contact — unified register: personer, företag, domstolar, myndigheter, …
