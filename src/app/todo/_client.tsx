@@ -256,11 +256,23 @@ interface LiProps {
 
 function TodoLi({ it, isOwn, onToggle, onEdit, onDelete }: LiProps) {
   const isDone = it.source === "task" && it.status === "DONE";
+  const editable = isOwn && it.source === "task";
   return (
     <li className={`flex items-center gap-3 px-4 py-3 hover:bg-gray-50 ${isDone ? "opacity-60" : ""}`}>
       <TodoIcon it={it} onToggle={onToggle} isOwn={isOwn} />
       <span className="font-mono text-xs text-gray-500 w-28 shrink-0">{timeLabelFor(it)}</span>
-      <span className={`flex-1 min-w-0 truncate ${isDone ? "line-through" : ""}`}>{it.title}</span>
+      {editable ? (
+        <button
+          type="button"
+          onClick={() => onEdit(it)}
+          title="Öppna och ändra"
+          className={`flex-1 min-w-0 truncate text-left text-blue-600 hover:underline ${isDone ? "line-through" : ""}`}
+        >
+          {it.title}
+        </button>
+      ) : (
+        <span className={`flex-1 min-w-0 truncate ${isDone ? "line-through" : ""}`}>{it.title}</span>
+      )}
       {it.location && (
         <span className="hidden sm:inline-flex items-center gap-1 text-xs text-gray-500"><MapPin size={11} /> {it.location}</span>
       )}
