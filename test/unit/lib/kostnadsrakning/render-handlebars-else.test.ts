@@ -52,8 +52,8 @@ describe("renderHandlebars — nästling", () => {
     expect(out).toBe("a:+ b:- ");
   });
 
-  it("each med inre variabel + parent-scope-lookup", () => {
-    const tpl = "{{#each lines}}{{desc}} ({{currency}}){{/each}}";
+  it("each med inre variabel + parent-scope-lookup (../)", () => {
+    const tpl = "{{#each lines}}{{desc}} ({{../currency}}){{/each}}";
     const out = renderHandlebars(tpl, { currency: "SEK", lines: [{ desc: "Taxi" }, { desc: "Tåg" }] });
     expect(out).toBe("Taxi (SEK)Tåg (SEK)");
   });
