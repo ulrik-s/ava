@@ -252,13 +252,13 @@ export function DataTable<T>({ prefKey, columns, data, rowKey, onRowClick, empty
 
   const resetPersonal = (): void => {
     setLocalPrefs({});
-    clear.mutate({ key: prefKey }, { onSuccess: () => utils.prefs.get.invalidate({ key: prefKey }) });
+    clear.mutate({ key: prefKey }, { onSuccess: () => { void utils.prefs.get.invalidate({ key: prefKey }); } });
   };
   const saveAsOrgDefault = (): void => {
-    setOrg.mutate({ key: prefKey, prefs: prefs as Record<string, unknown> }, { onSuccess: () => utils.prefs.get.invalidate({ key: prefKey }) });
+    setOrg.mutate({ key: prefKey, prefs: prefs as Record<string, unknown> }, { onSuccess: () => { void utils.prefs.get.invalidate({ key: prefKey }); } });
   };
   const removeOrgDefault = (): void => {
-    clearOrg.mutate({ key: prefKey }, { onSuccess: () => utils.prefs.get.invalidate({ key: prefKey }) });
+    clearOrg.mutate({ key: prefKey }, { onSuccess: () => { void utils.prefs.get.invalidate({ key: prefKey }); } });
   };
 
   return (

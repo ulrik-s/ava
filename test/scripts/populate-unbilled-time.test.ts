@@ -46,7 +46,7 @@ describe("populateUnbilledTime", () => {
 
   it("returnerar 0 om inga aktiva ärenden finns", async () => {
     const { target } = await runTarget();
-    const emptySeed = { ...await (await runTarget()).seed, matters: [], users: [] };
+    const emptySeed = { ...(await runTarget()).seed, matters: [], users: [] };
     const count = await populateUnbilledTime(target.caller, emptySeed as never);
     expect(count).toBe(0);
   });

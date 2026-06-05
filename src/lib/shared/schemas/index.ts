@@ -12,7 +12,7 @@
  * single source of truth för "vad finns i git-db:n och vart skrivs det".
  */
 
-import { z } from "zod";
+import type { z } from "zod";
 import { organizationSchema, officeSchema } from "./organization";
 import { userSchema } from "./user";
 import { contactSchema } from "./contact";

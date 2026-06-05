@@ -90,7 +90,7 @@ export function InvoicesSection({ matterId }: { matterId: string }) {
 
   const createAcconto = trpc.invoice.createAcconto.useMutation({
     onSuccess: () => {
-      utils.invoice.list.invalidate({ matterId });
+      void utils.invoice.list.invalidate({ matterId });
       setShowAcconto(false);
       setError(null);
     },
@@ -98,9 +98,9 @@ export function InvoicesSection({ matterId }: { matterId: string }) {
   });
   const createFinal = trpc.invoice.createFinal.useMutation({
     onSuccess: () => {
-      utils.invoice.list.invalidate({ matterId });
-      utils.timeEntry.list.invalidate({ matterId });
-      utils.expense.list.invalidate({ matterId });
+      void utils.invoice.list.invalidate({ matterId });
+      void utils.timeEntry.list.invalidate({ matterId });
+      void utils.expense.list.invalidate({ matterId });
       setShowFinal(false);
       setError(null);
     },

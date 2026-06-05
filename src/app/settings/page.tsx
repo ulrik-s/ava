@@ -33,10 +33,10 @@ function OfficesSection() {
   const { data: offices = [], isLoading } = trpc.organization.listOffices.useQuery();
 
   const addOffice = trpc.organization.addOffice.useMutation({
-    onSuccess: () => { utils.organization.listOffices.invalidate(); setAdding(false); setForm(emptyOffice()); },
+    onSuccess: () => { void utils.organization.listOffices.invalidate(); setAdding(false); setForm(emptyOffice()); },
   });
   const updateOffice = trpc.organization.updateOffice.useMutation({
-    onSuccess: () => { utils.organization.listOffices.invalidate(); setEditingId(null); },
+    onSuccess: () => { void utils.organization.listOffices.invalidate(); setEditingId(null); },
   });
   const deleteOffice = trpc.organization.deleteOffice.useMutation({
     onSuccess: () => utils.organization.listOffices.invalidate(),
@@ -223,7 +223,7 @@ export default function SettingsPage() {
 
   const updateSettings = trpc.organization.updateSettings.useMutation({
     onSuccess: () => {
-      utils.organization.getSettings.invalidate();
+      void utils.organization.getSettings.invalidate();
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     },
@@ -370,7 +370,7 @@ export default function SettingsPage() {
               className="hidden"
               onChange={(e) => {
                 const file = e.target.files?.[0];
-                if (file) handleLogoUpload(file);
+                if (file) void handleLogoUpload(file);
                 e.target.value = "";
               }}
             />
@@ -384,7 +384,7 @@ export default function SettingsPage() {
             </button>
             {logoUrl && (
               <button
-                onClick={handleLogoDelete}
+                onClick={() => void handleLogoDelete()}
                 disabled={logoLoading}
                 className="flex items-center gap-2 px-3 py-1.5 text-sm border border-red-200 text-red-600 rounded hover:bg-red-50 disabled:opacity-50"
               >

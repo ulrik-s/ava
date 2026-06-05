@@ -35,21 +35,21 @@ export default function ContactDetailClient({ id: paramId }: { id: string }) {
 
   const updateContact = trpc.contacts.update.useMutation({
     onSuccess: () => {
-      utils.contacts.getById.invalidate({ id });
+      void utils.contacts.getById.invalidate({ id });
       setEditing(false);
     },
   });
 
   const deleteContact = trpc.contacts.delete.useMutation({
     onSuccess: () => {
-      utils.contacts.list.invalidate();
+      void utils.contacts.list.invalidate();
       router.push("/contacts");
     },
   });
 
   const addChild = trpc.contacts.addChild.useMutation({
     onSuccess: () => {
-      utils.contacts.getById.invalidate({ id });
+      void utils.contacts.getById.invalidate({ id });
       setShowChildForm(false);
       setChildForm({ name: "", email: "", phone: "", notes: "" });
     },

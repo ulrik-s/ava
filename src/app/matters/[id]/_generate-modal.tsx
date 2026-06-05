@@ -94,7 +94,7 @@ export function GenerateModal({ matterId, contacts, onClose }: Props) {
           mimeType: "text/html; charset=utf-8", sizeBytes: bytes.byteLength, storagePath,
         });
       }
-      utils.document.tree.invalidate({ matterId });
+      void utils.document.tree.invalidate({ matterId });
       onClose();
     } catch (e) {
       setGenerateError(e instanceof Error ? e.message : "Okänt fel");
@@ -137,7 +137,7 @@ export function GenerateModal({ matterId, contacts, onClose }: Props) {
             Avbryt
           </button>
           <button
-            onClick={handleGenerate}
+            onClick={() => void handleGenerate()}
             disabled={!generateTemplateId || generating}
             className="flex items-center gap-1.5 px-4 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >

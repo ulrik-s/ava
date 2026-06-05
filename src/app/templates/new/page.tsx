@@ -10,7 +10,7 @@ export default function NewTemplatePage() {
 
   const create = trpc.documentTemplate.create.useMutation({
     onSuccess: () => {
-      utils.documentTemplate.list.invalidate();
+      void utils.documentTemplate.list.invalidate();
       router.push("/templates");
     },
   });

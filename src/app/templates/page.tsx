@@ -26,7 +26,7 @@ export default function TemplatesPage() {
 
   const deleteTemplate = trpc.documentTemplate.delete.useMutation({
     onSuccess: () => {
-      utils.documentTemplate.list.invalidate();
+      void utils.documentTemplate.list.invalidate();
       setConfirmDelete(null);
     },
   });

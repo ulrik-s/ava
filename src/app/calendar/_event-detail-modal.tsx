@@ -48,7 +48,7 @@ export function EventDetailModal({ event, userName, color, onClose, onAfterDelet
   const orgContacts = trpc.contacts.list.useQuery({ pageSize: 500 }, { enabled: !!event });
   const del = trpc.calendar.delete.useMutation({
     onSuccess: () => {
-      utils.calendar.invalidate();
+      void utils.calendar.invalidate();
       onAfterDelete?.();
       onClose();
     },

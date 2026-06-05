@@ -97,7 +97,7 @@ export function EventsPanel({ matterId }: EventsPanelProps) {
                   title="Ladda ner .ics-fil — öppna den för att lägga till i Kalender"
                   onClick={() => {
                     // optimistic — server also marks accepted
-                    setTimeout(() => utils.document.events.invalidate({ matterId }), 500);
+                    setTimeout(() => { void utils.document.events.invalidate({ matterId }); }, 500);
                   }}
                 >
                   📅 Lägg i kalender

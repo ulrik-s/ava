@@ -22,7 +22,7 @@ export function inProcessLink(ctx: Context): TRPCLink<AppRouter> {
 
   return () => ({ op }) =>
     observable((observer) => {
-      (async () => {
+      void (async () => {
         try {
           const fn = resolvePath(caller, op.path);
           const result = await fn(op.input);

@@ -51,15 +51,15 @@ export function ContactsSection({ matterId, contacts }: Props) {
 
   const addContact = trpc.matter.addContact.useMutation({
     onSuccess: () => {
-      utils.matter.getById.invalidate({ id: matterId });
+      void utils.matter.getById.invalidate({ id: matterId });
       setExistingContactForm({ contactId: "", role: "MOTPART", notes: "" });
     },
   });
 
   const addNewContact = trpc.matter.addNewContact.useMutation({
     onSuccess: () => {
-      utils.matter.getById.invalidate({ id: matterId });
-      utils.contacts.list.invalidate();
+      void utils.matter.getById.invalidate({ id: matterId });
+      void utils.contacts.list.invalidate();
       setShowContactForm(false);
       setNewContactForm({
         name: "",

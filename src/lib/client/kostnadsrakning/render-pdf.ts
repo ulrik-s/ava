@@ -36,6 +36,7 @@
  */
 
 import type { KostnadsrakningResult } from "@/lib/shared/kostnadsrakning";
+import type { PDFPage, PDFFont } from "pdf-lib";
 
 export interface RenderInput {
   result: KostnadsrakningResult;
@@ -172,12 +173,12 @@ export async function renderKostnadsrakningPdf(input: RenderInput): Promise<Uint
   return pdf.save();
 }
 
-function drawRow(page: import("pdf-lib").PDFPage, y: number, font: import("pdf-lib").PDFFont, label: string, value: string): void {
+function drawRow(page: PDFPage, y: number, font: PDFFont, label: string, value: string): void {
   page.drawText(label, { x: 50, y, size: 10, font });
   page.drawText(value, { x: 50 + 350, y, size: 10, font });
 }
 
-function drawTableHeader(page: import("pdf-lib").PDFPage, y: number, font: import("pdf-lib").PDFFont): void {
+function drawTableHeader(page: PDFPage, y: number, font: PDFFont): void {
   page.drawText("Datum", { x: 50, y, size: 8, font });
   page.drawText("Beskrivning", { x: 50 + 70, y, size: 8, font });
   page.drawText("Sats", { x: 50 + 250, y, size: 8, font });

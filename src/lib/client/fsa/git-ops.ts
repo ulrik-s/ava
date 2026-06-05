@@ -13,9 +13,11 @@
  *     `Access-Control-Allow-Origin: *`.
  */
 
-import { FsaIsoGitAdapter } from "./fs-adapter";
+import type { FsaIsoGitAdapter } from "./fs-adapter";
 import { sshToHttps } from "./url-rewrite";
 import { DEFAULT_CORS_PROXY } from "@/lib/client/sync/cors-proxy";
+import type * as IsomorphicGit from "isomorphic-git";
+import type * as IsomorphicGitHttp from "isomorphic-git/http/web";
 
 export interface CloneOptions {
   url: string;
@@ -48,11 +50,11 @@ function normalizeProxy(p: string | undefined): string | undefined {
   return p ?? DEFAULT_CORS_PROXY;
 }
 
-async function loadIsoGit(): Promise<typeof import("isomorphic-git")> {
+async function loadIsoGit(): Promise<typeof IsomorphicGit> {
   return import("isomorphic-git");
 }
 
-async function loadHttp(): Promise<typeof import("isomorphic-git/http/web")> {
+async function loadHttp(): Promise<typeof IsomorphicGitHttp> {
   return import("isomorphic-git/http/web");
 }
 

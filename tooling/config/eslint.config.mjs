@@ -26,8 +26,36 @@ const eslintConfig = defineConfig([
     settings: { react: { version: "19.2" } },
   },
   {
+    // Typ-medveten linting (#9). projectService låter typescript-eslint hitta
+    // närmaste tsconfig.json per fil → ger typinfo till reglerna nedan.
+    // Kostar lint-tid (~14s → ~21s) men möjliggör enforcement-golv som rent
+    // syntaktiska regler inte kan uttrycka. tsconfigRootDir = repo-rot eftersom
+    // ESLint annars förankrar mot tooling/config/.
+    files: ["**/*.{ts,tsx,mts}"],
+    languageOptions: {
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: import.meta.dirname + "/../..",
+      },
+    },
+  },
+  {
     files: ["**/*.{ts,tsx}"],
     rules: {
+      // consistent-type-imports tvingar `import type` för type-only-importer
+      // → backar mekaniskt upp dependency-cruiser-regeln "UI importerar server
+      // type-only" på källnivå (#9).
+      "@typescript-eslint/consistent-type-imports": "error",
+      // Promise-säkerhet: oavsiktligt obevakade promises, async-callbacks i
+      // synkron/void-kontext, och `await` på icke-thenables är vanliga
+      // buggkällor som bara typinfo kan upptäcka (#9).
+      "@typescript-eslint/no-floating-promises": "error",
+      "@typescript-eslint/no-misused-promises": "error",
+      "@typescript-eslint/await-thenable": "error",
+      // Utvärderade men uppskjutna (#9): no-unnecessary-condition (~105 brott)
+      // och strict-boolean-expressions (~529) är för stora för ett svep —
+      // ratchas per katalog i uppföljnings-issue. Typinfon ovan är redan på, så
+      // de tillkommer utan extra parser-overhead när de aktiveras.
       // Underscore-prefix = avsiktligt oanvänd (signaturkrav, framtida bruk).
       // Skiljer medvetna platshållare från faktiskt bortglömd kod.
       "@typescript-eslint/no-unused-vars": [

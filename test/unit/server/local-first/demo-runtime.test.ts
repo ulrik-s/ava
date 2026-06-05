@@ -11,10 +11,11 @@
 
 import { describe, it, expect, vi } from "vitest";
 import { DemoRuntime } from "@/lib/server/local-first/demo-runtime";
+import type { MemFs } from "@/lib/server/local-first/mem-fs";
 
 describe("DemoRuntime", () => {
   it("loadDemo populerar in-memory listor som UI:t kan läsa", async () => {
-    const cloneFn = vi.fn(async (fs: import("@/lib/server/local-first/mem-fs").MemFs) => {
+    const cloneFn = vi.fn(async (fs: MemFs) => {
       await fs.writeFile("matters/active/m1.json", JSON.stringify({
         id: "m1", matterNumber: "2026-0001", title: "Demo-ärende",
         status: "ACTIVE", organizationId: "demo",
@@ -33,7 +34,7 @@ describe("DemoRuntime", () => {
   });
 
   it("matters().list returnerar alla ärenden", async () => {
-    const cloneFn = async (fs: import("@/lib/server/local-first/mem-fs").MemFs) => {
+    const cloneFn = async (fs: MemFs) => {
       for (let i = 1; i <= 3; i++) {
         await fs.writeFile(`matters/active/m${i}.json`, JSON.stringify({
           id: `m${i}`, matterNumber: `2026-000${i}`, title: `T${i}`,
@@ -54,7 +55,7 @@ describe("DemoRuntime", () => {
 
   it("ny load ersätter tidigare data", async () => {
     let counter = 0;
-    const cloneFn = async (fs: import("@/lib/server/local-first/mem-fs").MemFs) => {
+    const cloneFn = async (fs: MemFs) => {
       counter++;
       await fs.writeFile("matters/active/m.json", JSON.stringify({
         id: "m", matterNumber: `v${counter}`, title: "x",
