@@ -187,7 +187,7 @@ export function KostnadsrakningModal(props: Props) {
     isTaxeArende: isTaxe,
     expenses: props.expenses,
     timeEntries: ((timeEntries.data?.entries ?? []) as Array<{ id: string; date: string | Date; description: string; minutes: number; billable: boolean }>),
-  }), [hufStart, hufEnd, level, isTaxe, props, timeEntries.data]);
+  }), [hufStart, hufEnd, level, isTaxe, hasFTax, props, timeEntries.data]);
 
   useEffect(() => {
     const h = (e: KeyboardEvent) => { if (e.key === "Escape") props.onClose(); };

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
-import { labelForContactType, labelForMatterRole, contactTypes } from "@/lib/client/labels";
+import { labelForContactType, labelForMatterRole, contactTypeOptions } from "@/lib/client/labels";
 import { useRouteId } from "@/lib/client/demo/use-route-id";
 
 // eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'ContactDetailClient' has a complexity of 22. Maximum allowed is 8.)
@@ -104,7 +104,7 @@ export default function ContactDetailClient({ id: paramId }: { id: string }) {
                 <select id={editTypeId} value={editForm.contactType}
                   onChange={(e) => setEditForm({ ...editForm, contactType: e.target.value })}
                   className="w-full rounded border border-gray-300 px-3 py-2 text-sm">
-                  {contactTypes.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                  {contactTypeOptions.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
                 </select>
               </div>
               <div>
