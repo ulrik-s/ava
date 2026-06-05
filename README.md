@@ -1,5 +1,9 @@
 # AVA — CRM för svenska advokatbyråer
 
+### ▶ **[Prova live-demon → ulrik-s.github.io/ava](https://ulrik-s.github.io/ava/)**
+
+*(Read-only — ändringar lever bara i din flik.)*
+
 > **USP**: Svenska byråer, svenska tjänster. **Din data, du bestämmer.**
 > Browser är runtime. Servern är så tunn det går.
 
