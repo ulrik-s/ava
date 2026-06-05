@@ -1,14 +1,9 @@
 {
-  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "$schema": "https://unpkg.com/knip@6/schema.json",
   "entry": [
     "src/app/**/page.tsx",
     "src/app/**/layout.tsx",
-    "src/app/**/loading.tsx",
-    "src/app/**/error.tsx",
-    "src/app/**/not-found.tsx",
-    "src/app/**/route.ts",
-    "src/middleware.ts",
-    "src/server/routers/_app.ts",
+    "src/lib/server/routers/_app.ts",
     "tooling/scripts/*.ts",
     "test/e2e/*.spec.ts",
     "test/unit/**/*.test.{ts,tsx}",
@@ -21,22 +16,25 @@
     "tooling/scripts/**/*.ts"
   ],
   "ignore": [
-    "src/shared/types/**",
-    "next-env.d.ts",
-    "**/*.test.{ts,tsx}",
-    "**/*.spec.{ts,tsx}",
     "tooling/scripts/oauth-proxy/**"
   ],
   "ignoreDependencies": [
-    "@types/node",
-    "@types/react",
-    "@types/react-dom",
-    "tsx",
-    "tailwindcss",
-    "@tailwindcss/postcss",
-    "@mlc-ai/web-llm"
+    "tailwindcss"
   ],
   "ignoreBinaries": [
     "dot"
-  ]
+  ],
+  "rules": {
+    "files": "error",
+    "dependencies": "error",
+    "unlisted": "error",
+    "unresolved": "error",
+    "binaries": "error",
+    "exports": "warn",
+    "types": "warn",
+    "nsExports": "warn",
+    "nsTypes": "warn",
+    "enumMembers": "warn",
+    "duplicates": "warn"
+  }
 }

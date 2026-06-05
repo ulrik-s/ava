@@ -39,7 +39,9 @@ jobs:
       # (Sänkt 86→50: no-unused-vars utrensad + ^_-ignore i eslint-configen.)
       - run: yarn lint --max-warnings 50
       - run: yarn deps:check
-      - run: yarn knip:report
+      # Gating: fäller på strukturfynd (döda filer, oanvända/olistade deps).
+      # Export-/typ-fynd är "warn" i knip.json (rådgivande) tills #3/#4 städat dem.
+      - run: yarn knip
       - run: yarn duplicates
       - name: Upload jscpd report
         if: always()
