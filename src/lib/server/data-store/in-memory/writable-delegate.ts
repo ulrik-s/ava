@@ -64,7 +64,7 @@ export class WritableDelegate<T extends Record<string, unknown>> extends ReadOnl
     return this.wopts.collection();
   }
 
-  async create(args: unknown): Promise<never> {
+  override async create(args: unknown): Promise<never> {
     const a = args as { data: Partial<T> };
     const id = (a.data as { id?: string }).id ?? (this.wopts.generateId ?? genId)();
     const row = {
@@ -82,7 +82,7 @@ export class WritableDelegate<T extends Record<string, unknown>> extends ReadOnl
     return enriched as never;
   }
 
-  async update(args: unknown): Promise<never> {
+  override async update(args: unknown): Promise<never> {
     const a = args as { where: { id: string }; data: Partial<T> };
     const idx = this.collection.findIndex((r) => (r as { id?: string }).id === a.where.id);
     if (idx < 0) throw new Error(`Hittade inte ${this.wopts.entity} med id=${a.where.id}`);
@@ -94,7 +94,7 @@ export class WritableDelegate<T extends Record<string, unknown>> extends ReadOnl
     return enriched as never;
   }
 
-  async delete(args: unknown): Promise<never> {
+  override async delete(args: unknown): Promise<never> {
     const a = args as { where: { id: string } };
     const idx = this.collection.findIndex((r) => (r as { id?: string }).id === a.where.id);
     if (idx < 0) throw new Error(`Hittade inte ${this.wopts.entity} med id=${a.where.id}`);
@@ -104,7 +104,7 @@ export class WritableDelegate<T extends Record<string, unknown>> extends ReadOnl
     return removed as never;
   }
 
-  async updateMany(args: unknown): Promise<never> {
+  override async updateMany(args: unknown): Promise<never> {
     const a = args as { where?: Record<string, unknown>; data: Partial<T> };
     const matches = await this.findMany({ where: a.where });
     let count = 0;
@@ -115,7 +115,7 @@ export class WritableDelegate<T extends Record<string, unknown>> extends ReadOnl
     return { count } as never;
   }
 
-  async deleteMany(args: unknown): Promise<never> {
+  override async deleteMany(args: unknown): Promise<never> {
     const a = args as { where?: Record<string, unknown> };
     const matches = await this.findMany({ where: a.where });
     let count = 0;
@@ -126,7 +126,7 @@ export class WritableDelegate<T extends Record<string, unknown>> extends ReadOnl
     return { count } as never;
   }
 
-  async upsert(args: unknown): Promise<never> {
+  override async upsert(args: unknown): Promise<never> {
     const a = args as { where: { id: string }; create: Partial<T>; update: Partial<T> };
     const existing = await this.findUnique({ where: { id: a.where.id } });
     const result = existing

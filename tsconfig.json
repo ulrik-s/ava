@@ -5,6 +5,11 @@
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
+    // Extra korrekthetsflaggor (#7). noUncheckedIndexedAccess (~519 fel) och
+    // exactOptionalPropertyTypes (~61, mest tooling) skjuts upp till en ratchet
+    // — se uppföljnings-issue.
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
     // TS6: matcha 7.0:s (Go-native) typordning → mindre diff vid den migreringen.
     "stableTypeOrdering": true,
     // TS6: default blev [] (drar inte längre in alla @types/* → snabbare).
