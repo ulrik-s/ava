@@ -7,7 +7,7 @@ import { userRoleSchema } from "./enums";
  * azureOid, lastLoginAt) lever bara i självhostade installationer.
  */
 
-const publicKeySchema = z.object({
+export const publicKeySchema = z.object({
   fingerprint: z.string(),
   type: z.enum(["ssh-ed25519", "ssh-rsa", "ssh-ecdsa", "gpg"]),
   publicKey: z.string(),

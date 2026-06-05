@@ -14,14 +14,7 @@ import { trpc } from "@/lib/client/trpc";
 import { User, KeyRound, Plus, Trash2 } from "lucide-react";
 import { IntegrationsSection } from "@/components/settings/integrations-section";
 import { KeypairManager } from "@/components/settings/keypair-manager";
-
-interface PublicKey {
-  fingerprint: string;
-  type: "ssh-ed25519" | "ssh-rsa" | "ssh-ecdsa" | "gpg";
-  publicKey: string;
-  comment?: string;
-  addedAt: string;
-}
+import type { PublicKey } from "@/lib/shared/schemas/user";
 
 export default function ProfilePage() {
   const me = trpc.user.current.useQuery();
