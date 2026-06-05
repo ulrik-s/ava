@@ -94,7 +94,7 @@
     "@vitest/ui": "^4.1.8",
     "concurrently": "^9.2.1",
     "dependency-cruiser": "^17.4.3",
-    "eslint": "^9",
+    "eslint": "^10",
     "eslint-config-next": "16.2.7",
     "husky": "^9.1.7",
     "jscpd": "^4.2.4",
@@ -104,7 +104,7 @@
     "pdf-lib": "^1.17.1",
     "tailwindcss": "^4",
     "tsx": "^4.22.4",
-    "typescript": "^5",
+    "typescript": "^6",
     "vite-plugin-tsconfig-paths": "^1.4.1",
     "vitest": "^4.1.8"
   }

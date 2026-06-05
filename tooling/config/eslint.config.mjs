@@ -17,6 +17,15 @@ const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
   {
+    // ESLint 10-kompat: hårdkoda React-versionen. eslint-plugin-react
+    // (buntad av eslint-config-next) auto-detekterar annars versionen via
+    // context.getFilename(), som togs bort i ESLint 10 → krasch. Att ange
+    // versionen explicit kringgår detekteringen (och är snabbare). Kan tas
+    // bort när eslint-config-next buntar en ESLint-10-fixad eslint-plugin-react
+    // (jsx-eslint/eslint-plugin-react#3979, vercel/next.js#91702).
+    settings: { react: { version: "19.2" } },
+  },
+  {
     files: ["**/*.{ts,tsx}"],
     rules: {
       // Underscore-prefix = avsiktligt oanvänd (signaturkrav, framtida bruk).
