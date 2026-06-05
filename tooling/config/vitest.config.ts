@@ -56,6 +56,9 @@ export default defineConfig({
       //       → trösklarna höjda till strax under detta (cap-at-current ratchet).
       //   - 2207 tester (2026-06-05): Stmts 70.61% Br 64.24% Func 68.18% Lines 72.89%
       //       → ratchet:en höjd till 70/72/68/64 (strax under faktisk).
+      //   - 2207 tester (2026-06-05, efter #3–#7): Stmts 70.60% Br 64.21%
+      //       Func 68.18% Lines 72.87% → golvet förankrat med decimaler precis
+      //       under faktisk (≥0.07 marginal > observerad ~0.03 run-variation).
       //
       // Mål: 95% överallt. Kvarstående gap = i huvudsak fat React-komponenter
       // (firma-settings-panel, fsa-folder-selector, keypair-manager,
@@ -63,10 +66,10 @@ export default defineConfig({
       // som kräver mer test-infrastruktur. Multi-session-arbete. Trösklarna
       // ligger strax under faktisk siffra → varje borttaget test syns som rött.
       thresholds: {
-        statements: 70,
-        lines: 72,
-        functions: 68,
-        branches: 64,
+        statements: 70.5,
+        lines: 72.5,
+        functions: 68.1,
+        branches: 64.1,
       },
     },
     projects: [
