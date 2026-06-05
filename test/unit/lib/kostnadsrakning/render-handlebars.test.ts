@@ -1,5 +1,5 @@
 /**
- * Tester för mini-Handlebars-renderaren.
+ * Tester för renderHandlebars (fulla handlebars-biblioteket).
  */
 
 import { describe, it, expect } from "vitest";
@@ -21,7 +21,7 @@ describe("renderHandlebars", () => {
 
   it("escapar HTML i värden", () => {
     expect(renderHandlebars("{{x}}", { x: "<script>alert('xss')</script>" }))
-      .toBe("&lt;script&gt;alert(&#39;xss&#39;)&lt;/script&gt;");
+      .toBe("&lt;script&gt;alert(&#x27;xss&#x27;)&lt;/script&gt;");
   });
 
   it("{{#if}} visar block när truthy", () => {
@@ -61,8 +61,8 @@ describe("renderHandlebars", () => {
     expect(renderHandlebars("{{items.length}} st", { items: [1, 2, 3] })).toBe("3 st");
   });
 
-  it("parent-scope-lookup i each", () => {
-    const tpl = "{{#each items}}{{title}}-{{ownerName}};{{/each}}";
+  it("parent-scope-lookup i each (../)", () => {
+    const tpl = "{{#each items}}{{title}}-{{../ownerName}};{{/each}}";
     const out = renderHandlebars(tpl, {
       ownerName: "Anna",
       items: [{ title: "X" }, { title: "Y" }],
