@@ -120,7 +120,7 @@ const MIME: Record<string, string> = {
 };
 
 function serveOut(): Server {
-  const server = createServer(async (req, res) => {
+  const server = createServer((req, res) => { void (async () => {
     try {
       let url = new URL(req.url ?? "/", `http://localhost:${PORT}`).pathname;
       if (url.startsWith(BASE_PATH)) url = url.slice(BASE_PATH.length);
@@ -139,7 +139,7 @@ function serveOut(): Server {
     } catch (e) {
       res.writeHead(500); res.end(String(e));
     }
-  });
+  })(); });
   server.listen(PORT);
   return server;
 }

@@ -104,7 +104,7 @@ export default function TimePage() {
 
   const createTimeEntry = trpc.timeEntry.create.useMutation({
     onSuccess: () => {
-      utils.timeEntry.list.invalidate();
+      void utils.timeEntry.list.invalidate();
       setShowForm(false);
       setForm({ matterId: "", date: new Date().toISOString().split("T")[0], minutes: 30, description: "", billable: true });
     },

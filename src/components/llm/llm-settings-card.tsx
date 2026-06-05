@@ -118,7 +118,7 @@ export function LlmSettingsCard() {
           <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={onDownload}
+              onClick={() => void onDownload()}
               disabled={downloading}
               className="inline-flex items-center gap-2 px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
             >

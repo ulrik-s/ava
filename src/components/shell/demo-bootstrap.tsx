@@ -312,7 +312,7 @@ export function DemoBootstrap({ children }: { children: ReactNode }) {
       }
     };
 
-    (async () => {
+    void (async () => {
       try {
         // Persisterad slab (inkl. ev. runtime-mutationer) finns? Använd den och
         // klona INTE över den — annars skrivs användarens ändringar bort. Ny

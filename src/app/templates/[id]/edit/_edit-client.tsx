@@ -17,8 +17,8 @@ export default function EditTemplateClient({ id: paramId }: { id: string }) {
 
   const update = trpc.documentTemplate.update.useMutation({
     onSuccess: () => {
-      utils.documentTemplate.list.invalidate();
-      utils.documentTemplate.getById.invalidate({ id });
+      void utils.documentTemplate.list.invalidate();
+      void utils.documentTemplate.getById.invalidate({ id });
       router.push("/templates");
     },
   });

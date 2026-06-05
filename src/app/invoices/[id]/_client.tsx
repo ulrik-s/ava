@@ -40,8 +40,8 @@ export default function InvoiceDetailClient({ id: paramId }: { id: string }) {
   const [error, setError] = useState<string | null>(null);
 
   const refetchAll = () => {
-    utils.invoice.getById.invalidate({ id });
-    utils.invoice.list.invalidate();
+    void utils.invoice.getById.invalidate({ id });
+    void utils.invoice.list.invalidate();
   };
 
   const recordPayment = trpc.invoice.recordPayment.useMutation({

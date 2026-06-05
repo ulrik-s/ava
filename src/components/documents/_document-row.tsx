@@ -84,7 +84,7 @@ export function DocumentRow({
             className="flex items-center gap-2 min-w-0"
           >
             <DocumentNameButton doc={doc} isAnalyzing={isAnalyzing} disabled={isUploading}
-              onExternalEdit={triggerExternalEdit} />
+              onExternalEdit={() => void triggerExternalEdit()} />
             {isUploading && (
               <span
                 className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-100 text-amber-800"
@@ -206,8 +206,8 @@ function DocumentActions({
 
   const uploadingTitle = disabled ? "Vänta tills uppladdningen är klar" : undefined;
   const items: ActionMenuItem[] = [
-    { key: "open", label: "Öppna i webbläsaren", icon: <span aria-hidden>🖊</span>, onSelect: openInEditor, disabled, title: uploadingTitle ?? "Öppna i din browser" },
-    { key: "external", label: "Editera externt (PDF Gear, Preview…)", icon: <span aria-hidden>🖥</span>, onSelect: openExternal, disabled, title: uploadingTitle ?? "AVA committar dina ändringar automatiskt" },
+    { key: "open", label: "Öppna i webbläsaren", icon: <span aria-hidden>🖊</span>, onSelect: () => void openInEditor(), disabled, title: uploadingTitle ?? "Öppna i din browser" },
+    { key: "external", label: "Editera externt (PDF Gear, Preview…)", icon: <span aria-hidden>🖥</span>, onSelect: () => void openExternal(), disabled, title: uploadingTitle ?? "AVA committar dina ändringar automatiskt" },
     { key: "view", label: "Visa", icon: <span aria-hidden>👁</span>, href: viewHref, newTab: true, disabled, title: uploadingTitle ?? "Visa i webbläsaren" },
     { key: "download", label: "Ladda ner", icon: <span aria-hidden>⬇</span>, href: downloadHref, download: true, disabled, title: uploadingTitle ?? "Ladda ner" },
     { key: "reanalyze", label: "Analysera (AI)", icon: <span aria-hidden>🧠</span>, onSelect: onReanalyze, disabled: disabled || reanalyzePending, title: uploadingTitle ?? "Kör AI-analys på nytt" },
@@ -264,7 +264,7 @@ function DocumentNameButton({ doc, isAnalyzing, disabled, onExternalEdit }: Name
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={() => void onClick()}
       disabled={disabled}
       className="flex items-start gap-2 text-blue-600 hover:underline text-left disabled:opacity-50 disabled:cursor-not-allowed disabled:no-underline"
       title={disabled ? "Laddar upp — vänta tills filen är registrerad" : (doc.summary || "Öppna i extern app (PDFGear för PDF)")}

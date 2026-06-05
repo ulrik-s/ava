@@ -99,9 +99,9 @@ export function ExpenseSection({ matterId, isTaxeArende }: Props) {
     setForm(initialForm());
   }
 
-  const createExpense = trpc.expense.create.useMutation({ onSuccess: () => { utils.expense.list.invalidate({ matterId }); resetClose(); } });
-  const updateExpense = trpc.expense.update.useMutation({ onSuccess: () => { utils.expense.list.invalidate({ matterId }); resetClose(); } });
-  const deleteExpense = trpc.expense.delete.useMutation({ onSuccess: () => utils.expense.list.invalidate({ matterId }) });
+  const createExpense = trpc.expense.create.useMutation({ onSuccess: () => { void utils.expense.list.invalidate({ matterId }); resetClose(); } });
+  const updateExpense = trpc.expense.update.useMutation({ onSuccess: () => { void utils.expense.list.invalidate({ matterId }); resetClose(); } });
+  const deleteExpense = trpc.expense.delete.useMutation({ onSuccess: () => void utils.expense.list.invalidate({ matterId }) });
 
   function startEdit(e: Expense): void {
     setEditingId(e.id);

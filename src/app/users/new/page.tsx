@@ -24,7 +24,7 @@ export default function NewUserPage() {
 
   const createUser = trpc.user.create.useMutation({
     onSuccess: () => {
-      utils.user.list.invalidate();
+      void utils.user.list.invalidate();
       router.push("/users");
     },
   });

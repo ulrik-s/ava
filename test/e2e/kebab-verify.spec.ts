@@ -16,7 +16,7 @@
  * Mot localhost måste demo-läge tvingas (localhost defaultar self-hosted).
  */
 
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 
 const BASE = process.env.AVA_DEMO_BASE_URL ?? "https://ulrik-s.github.io/ava";
 const isLocal = /localhost|127\.0\.0\.1/.test(BASE);
@@ -32,7 +32,7 @@ test.beforeEach(async ({ page }) => {
   }, BASE);
 });
 
-async function gotoMatter(page: import("@playwright/test").Page) {
+async function gotoMatter(page: Page) {
   await page.goto(`${BASE}/matters/m-001-vardnad/`);
   await page.getByLabel("Dokumentåtgärder").first().waitFor({ timeout: 25_000 });
   await page.waitForTimeout(1500); // demo-bootstrap invalidateQueries settle

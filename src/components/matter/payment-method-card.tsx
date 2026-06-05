@@ -53,7 +53,7 @@ export function PaymentMethodCard({
   const utils = trpc.useUtils();
   const update = trpc.matter.update.useMutation({
     onSuccess: () => {
-      utils.matter.getById.invalidate({ id: matterId });
+      void utils.matter.getById.invalidate({ id: matterId });
       setEditing(false);
     },
   });

@@ -263,7 +263,7 @@ export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
         showNewFolder={() => setShowNewFolder(true)}
         uploading={uploading}
         fileInputRef={fileInputRef}
-        onUpload={handleFileUpload}
+        onUpload={(e) => { void handleFileUpload(e); }}
         viewMode={viewMode}
         onChangeViewMode={changeViewMode}
       />
@@ -477,10 +477,10 @@ function useDocumentMutations({
   const invalidate = () => utils.document.tree.invalidate({ matterId });
 
   const createFolder = trpc.document.createFolder.useMutation({
-    onSuccess: () => { invalidate(); setShowNewFolder(false); },
+    onSuccess: () => { void invalidate(); setShowNewFolder(false); },
   });
   const renameFolder = trpc.document.renameFolder.useMutation({
-    onSuccess: () => { invalidate(); setRenamingFolderId(null); },
+    onSuccess: () => { void invalidate(); setRenamingFolderId(null); },
   });
   const deleteFolder = trpc.document.deleteFolder.useMutation({ onSuccess: invalidate });
   const moveDocument = trpc.document.moveDocument.useMutation({ onSuccess: invalidate });
@@ -544,23 +544,25 @@ function pollAnalysis({
   const maxAttempts = 24; // 24 × 5s = 120s
   const before = documents.find((d) => d.id === documentId);
   const refresh = () => {
-    utils.document.tree.invalidate({ matterId });
-    utils.document.pendingSuggestionsGrouped.invalidate({ matterId });
-    utils.document.pendingSuggestions.invalidate({ matterId });
-    utils.matter.getById.invalidate({ id: matterId });
+    void utils.document.tree.invalidate({ matterId });
+    void utils.document.pendingSuggestionsGrouped.invalidate({ matterId });
+    void utils.document.pendingSuggestions.invalidate({ matterId });
+    void utils.matter.getById.invalidate({ id: matterId });
   };
-  const interval = setInterval(async () => {
-    attempts++;
-    await refresh();
-    const fresh = await utils.document.tree.fetch({ matterId });
-    const doc = fresh.documents.find((d) => d.id === documentId);
-    const changed = doc && before && (
-      (doc.analyzedAt ? new Date(doc.analyzedAt).getTime() : 0) >
-      (before.analyzedAt ? new Date(before.analyzedAt).getTime() : 0)
-    );
-    if (changed || attempts >= maxAttempts) {
-      clearInterval(interval);
-      clearAnalyzing();
-    }
+  const interval = setInterval(() => {
+    void (async () => {
+      attempts++;
+      refresh();
+      const fresh = await utils.document.tree.fetch({ matterId });
+      const doc = fresh.documents.find((d) => d.id === documentId);
+      const changed = doc && before && (
+        (doc.analyzedAt ? new Date(doc.analyzedAt).getTime() : 0) >
+        (before.analyzedAt ? new Date(before.analyzedAt).getTime() : 0)
+      );
+      if (changed || attempts >= maxAttempts) {
+        clearInterval(interval);
+        clearAnalyzing();
+      }
+    })();
   }, 5000);
 }

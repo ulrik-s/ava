@@ -62,7 +62,7 @@ export function TimeSection({ matterId, isTaxeArende }: Props) {
 
   const createTimeEntry = trpc.timeEntry.create.useMutation({
     onSuccess: () => {
-      utils.timeEntry.list.invalidate({ matterId });
+      void utils.timeEntry.list.invalidate({ matterId });
       setShowCreate(false);
       setCreateForm(emptyForm());
     },
@@ -70,7 +70,7 @@ export function TimeSection({ matterId, isTaxeArende }: Props) {
 
   const updateTimeEntry = trpc.timeEntry.update.useMutation({
     onSuccess: () => {
-      utils.timeEntry.list.invalidate({ matterId });
+      void utils.timeEntry.list.invalidate({ matterId });
       setEditingId(null);
       setEditForm(null);
     },

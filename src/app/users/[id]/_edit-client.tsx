@@ -54,15 +54,15 @@ export default function EditUserClient({ id: paramId }: { id: string }) {
 
   const updateUser = trpc.user.update.useMutation({
     onSuccess: () => {
-      utils.user.list.invalidate();
-      utils.user.getById.invalidate({ id });
+      void utils.user.list.invalidate();
+      void utils.user.getById.invalidate({ id });
       router.push("/users");
     },
   });
 
   const deleteUser = trpc.user.delete.useMutation({
     onSuccess: () => {
-      utils.user.list.invalidate();
+      void utils.user.list.invalidate();
       router.push("/users");
     },
   });

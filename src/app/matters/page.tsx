@@ -79,7 +79,7 @@ function MattersContent() {
 
   const createMatter = trpc.matter.create.useMutation({
     onSuccess: () => {
-      utils.matter.list.invalidate();
+      void utils.matter.list.invalidate();
       setShowForm(false);
     },
   });

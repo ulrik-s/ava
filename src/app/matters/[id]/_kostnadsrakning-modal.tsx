@@ -388,7 +388,7 @@ export function KostnadsrakningModal(props: Props) {
           </button>
           <button
             type="button"
-            onClick={generate}
+            onClick={() => void generate()}
             disabled={generating || hufMin <= 0}
             className="w-full sm:w-auto px-6 py-3.5 bg-indigo-600 text-white text-base font-semibold rounded-lg shadow hover:bg-indigo-700 disabled:opacity-50 inline-flex items-center justify-center gap-2 touch-manipulation order-1 sm:order-2"
           >

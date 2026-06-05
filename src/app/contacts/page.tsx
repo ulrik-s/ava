@@ -62,7 +62,7 @@ function ContactsContent() {
 
   const createContact = trpc.contacts.create.useMutation({
     onSuccess: () => {
-      utils.contacts.list.invalidate();
+      void utils.contacts.list.invalidate();
       setShowForm(false);
       setForm({ name: "", contactType: "PERSON", personalNumber: "", orgNumber: "", email: "", phone: "", address: "", notes: "" });
     },

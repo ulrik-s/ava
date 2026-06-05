@@ -14,9 +14,9 @@ export function SuggestionsPanel({ matterId }: SuggestionsPanelProps) {
   const [busyKey, setBusyKey] = useState<string | null>(null);
 
   const invalidateAll = () => {
-    utils.document.pendingSuggestionsGrouped.invalidate({ matterId });
-    utils.document.pendingSuggestions.invalidate({ matterId });
-    utils.matter.getById.invalidate({ id: matterId });
+    void utils.document.pendingSuggestionsGrouped.invalidate({ matterId });
+    void utils.document.pendingSuggestions.invalidate({ matterId });
+    void utils.matter.getById.invalidate({ id: matterId });
   };
 
   const acceptGroup = trpc.document.acceptSuggestionGroup.useMutation({

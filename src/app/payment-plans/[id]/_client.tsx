@@ -25,8 +25,8 @@ export default function PaymentPlanDetailClient({ id: paramId }: { id: string })
   const utils = trpc.useUtils();
   const cancel = trpc.paymentPlan.cancel.useMutation({
     onSuccess: () => {
-      utils.paymentPlan.getById.invalidate({ id });
-      utils.paymentPlan.list.invalidate();
+      void utils.paymentPlan.getById.invalidate({ id });
+      void utils.paymentPlan.list.invalidate();
     },
   });
 

@@ -315,7 +315,7 @@ function NewEventForm({ onClose, initial }: { onClose: () => void; initial?: Eve
   const contacts = trpc.contacts.list.useQuery({ pageSize: 500 });
 
   const onCreateOrUpdateSuccess = (saved: EventRow): void => {
-    utils.calendar.invalidate();
+    void utils.calendar.invalidate();
     if (saved.mirrorToOutlook) {
       enqueueMirror({
         eventId: saved.id,
@@ -473,7 +473,7 @@ function NewEventForm({ onClose, initial }: { onClose: () => void; initial?: Eve
 function NewTaskForm({ onClose }: { onClose: () => void }) {
   const utils = trpc.useUtils();
   const create = trpc.task.create.useMutation({
-    onSuccess: () => { utils.task.list.invalidate(); onClose(); },
+    onSuccess: () => { void utils.task.list.invalidate(); onClose(); },
   });
   const [title, setTitle] = useState("");
   const [priority, setPriority] = useState<"LOW" | "MEDIUM" | "HIGH">("MEDIUM");

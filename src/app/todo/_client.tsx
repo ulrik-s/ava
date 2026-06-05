@@ -76,8 +76,8 @@ export default function TodoClient() {
   const utils = trpc.useUtils();
 
   const refresh = () => utils.todo.list.invalidate();
-  const createTask = trpc.task.create.useMutation({ onSuccess: () => { refresh(); setModalState(null); } });
-  const updateTask = trpc.task.update.useMutation({ onSuccess: () => { refresh(); setModalState(null); } });
+  const createTask = trpc.task.create.useMutation({ onSuccess: () => { void refresh(); setModalState(null); } });
+  const updateTask = trpc.task.update.useMutation({ onSuccess: () => { void refresh(); setModalState(null); } });
   const completeTask = trpc.task.complete.useMutation({ onSuccess: refresh });
   const updateTaskStatus = trpc.task.update.useMutation({ onSuccess: refresh });
   const deleteTask = trpc.task.delete.useMutation({ onSuccess: refresh });
