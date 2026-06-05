@@ -18,7 +18,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, orgProcedure } from "../trpc";
 import type { DataStoreTx } from "../data-store/IDataStore";
-import { billingRunRecipientSchema } from "@/lib/shared/schemas/enums";
+import { billingRunRecipientSchema, type ExpenseKind } from "@/lib/shared/schemas/enums";
 import { emit } from "../events/emit";
 
 interface UnfrozenWork {
@@ -32,7 +32,7 @@ async function fetchUnfrozenWork(tx: DataStoreTx, matterId: string): Promise<Unf
   }) as Array<{ id: string; minutes: number; hourlyRate: number; billable: boolean }>;
   const ex = await tx.expenses.findMany({
     where: { matterId, frozenByBillingRunId: null },
-  }) as Array<{ id: string; amount: number; billable: boolean; kind?: string }>;
+  }) as Array<{ id: string; amount: number; billable: boolean; kind?: ExpenseKind }>;
   return { timeEntries: te, expenses: ex.filter((e) => e.kind !== "PRUTNING") };
 }
 

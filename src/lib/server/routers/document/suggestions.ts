@@ -11,7 +11,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { orgProcedure } from "../../trpc";
 import { groupSuggestions } from "@/lib/shared/suggestion-grouping";
-import { matterRoleSchema, contactTypeSchema } from "@/lib/shared/schemas/enums";
+import { matterRoleSchema, contactTypeSchema, type SuggestionStatus } from "@/lib/shared/schemas/enums";
 import {
   findExistingContactForSuggestion,
   type ContactCandidate,
@@ -50,7 +50,7 @@ type SuggOverride = {
 };
 type Suggestion = {
   id: string;
-  status: string;
+  status: SuggestionStatus;
   role: string;
   name: string;
   contactType: string;

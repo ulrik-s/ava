@@ -18,9 +18,9 @@
 
 import { z } from "zod";
 import { router, protectedProcedure, orgProcedure, TRPCError } from "../trpc";
-import { paymentPlanStatusSchema, reminderTypeSchema } from "@/lib/shared/schemas";
+import { paymentPlanStatusSchema, reminderTypeSchema, type PaymentPlanStatus } from "@/lib/shared/schemas";
 
-type Plan = { id: string; status: string; invoiceId: string };
+type Plan = { id: string; status: PaymentPlanStatus; invoiceId: string };
 
 export const paymentPlanRouter = router({
   list: orgProcedure

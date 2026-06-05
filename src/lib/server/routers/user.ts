@@ -11,6 +11,7 @@ async function hashPassword(password: string): Promise<string> {
   return `placeholder:${password.length}-chars`;
 }
 import { TRPCError } from "@trpc/server";
+import { publicKeySchema, type PublicKey } from "@/lib/shared/schemas/user";
 
 // Smal select för listor — håller utgående typ stabil för konsumenter
 // (reports, tids-rader, etc.) som inte bryr sig om nycklar.
@@ -32,22 +33,6 @@ const USER_PROFILE_SELECT = {
   publicKeys: true,
 } as const;
 
-const PublicKeySchema = z.object({
-  fingerprint: z.string(),
-  type: z.enum(["ssh-ed25519", "ssh-rsa", "ssh-ecdsa", "gpg"]),
-  publicKey: z.string(),
-  comment: z.string().optional(),
-  addedAt: z.string(),
-});
-
-interface UserPublicKey {
-  fingerprint: string;
-  type: string;
-  publicKey: string;
-  comment?: string;
-  addedAt: string;
-}
-
 export interface UserProfile {
   id: string;
   email: string;
@@ -57,7 +42,7 @@ export interface UserProfile {
   hourlyRate: number | null;
   mileageRate: number | null;
   createdAt: Date;
-  publicKeys: UserPublicKey[];
+  publicKeys: PublicKey[];
 }
 
 function assertAdmin(ctx: { user: { role: string; id: string } }): void {
@@ -196,7 +181,7 @@ export const userRouter = router({
    * detta åt andra — nyckeln är användarens egendom.
    */
   addKey: protectedProcedure
-    .input(PublicKeySchema)
+    .input(publicKeySchema)
     .mutation(async ({ ctx, input }) => {
       const u = await ctx.dataStore.users.findUniqueOrThrow({
         where: { id: ctx.user.id, organizationId: ctx.user.organizationId },
