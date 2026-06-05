@@ -34,11 +34,11 @@ jobs:
       - run: corepack enable
       - run: yarn install --immutable
       - run: yarn typecheck
-      # Ratchet: lint får ha HÖGST 46 warnings (dagens nivå). Nya warnings →
+      # Ratchet: lint får ha HÖGST 45 warnings (dagens nivå). Nya warnings →
       # rött bygge. Driv ned baseline:n över tid (mål: 0). Errors fällde redan.
-      # (86→50: no-unused-vars + ^_-ignore. 50→46: react-hooks/exhaustive-deps
-      #  åtgärdade (#5) + en complexity-TODO som löste sig på köpet.)
-      - run: yarn lint --max-warnings 46
+      # (86→50: no-unused-vars + ^_-ignore. 50→46: exhaustive-deps (#5).
+      #  46→45: ProfileBasicsSection utbruten ur ProfilePage (#6, pågående ratchet).)
+      - run: yarn lint --max-warnings 45
       - run: yarn deps:check
       # Gating: fäller på strukturfynd (döda filer, oanvända/olistade deps).
       # Export-/typ-fynd är "warn" i knip.json (rådgivande) tills #3/#4 städat dem.
