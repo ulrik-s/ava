@@ -1,10 +1,16 @@
 {
   "compilerOptions": {
-    "target": "ES2017",
+    "target": "ES2022",
     "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
+    // TS6: matcha 7.0:s (Go-native) typordning → mindre diff vid den migreringen.
+    "stableTypeOrdering": true,
+    // TS6: default blev [] (drar inte längre in alla @types/* → snabbare).
+    // Explicit för att göra det medvetet; ambienta globaler kommer via
+    // next-env.d.ts + lib:dom/esnext, inte via auto-inkluderade @types.
+    "types": [],
     "noEmit": true,
     "esModuleInterop": true,
     "module": "esnext",
