@@ -90,9 +90,33 @@ Coverage-rapporten skrivs till `reports/coverage/` (HTML, lcov, json-summary, te
 
 Hårda regler (severity `error`):
 
+_Hygien_
+
 - **`no-circular`** — inga cirkulära imports
 - **`no-test-imports-from-prod`** — produktionskod får inte importera testfiler
 - **`no-non-package-json`** — varje `import` måste finnas i `package.json`
+
+_Lager- & kompositionsgränser (fitness functions)_
+
+- **`shared-must-not-import-up`** — `src/lib/shared` får inte bero på `client/`
+  eller `server/` (delad kod hör hemma neråt, inte uppåt).
+- **`shared-must-be-framework-agnostic`** — `src/lib/shared` får inte importera
+  `react`/`react-dom`/`next`/`@trpc`; det är ramverks-agnostisk domänkod som
+  körs i alla lager.
+- **`server-contracts-must-not-import-client`** — server-routrar/domänlogik får
+  inte importera `client/` (undantag: git-backendens egen wiring i
+  `adapters/`, `local-first/`).
+- **`ui-imports-server-by-type-only`** — UI-lagret får bara `import type` från
+  `server/` (tRPC-kontraktet); värde-importer endast i composition-root.
+- **`no-git-cache-in-contracts`** — kontrakt-lagret + framtida Postgres-backend
+  får inte importera git-backendens cache/sök-internals (gå via
+  `IPorts.searchIndex`, [ADR 0001](./adr/0001-pluggbar-backend-bakom-idatastore.md)).
+- **`routers-compose-via-app`** — tRPC-routrar får inte importera varandra;
+  komponera top-level-routrar i `routers/_app.ts`.
+- **`router-internals-private`** — en routers interna procedurgrupper i en
+  subdir (t.ex. `routers/document/`) är privata: bara kompositionsfilen
+  (`document.ts`) + syskon inom subdir:en får importera dem. Inga djupa
+  cross-module-importer.
 
 `src/server/db` finns inte längre (Prisma borta), så `ui-not-direct-prisma`-
 regeln är obsolet.

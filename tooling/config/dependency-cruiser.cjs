@@ -149,6 +149,64 @@ module.exports = {
         dependencyTypesNot: ["type-only"],
       },
     },
+    {
+      // Lager-gräns (docs/architecture.md §"Tre lager"): `shared` är delad
+      // domänkod (Zod-scheman, rena helpers) som körs i ALLA lager — server,
+      // klient, tester, build-skript. Den måste därför vara framework-agnostisk:
+      // ingen import av react/next/@trpc. Ramverks-beroende kod hör hemma i
+      // client/ (UI) eller server/ (tRPC), inte i shared/. (`shared-must-not-
+      // import-up` vaktar grannskapet — egna lager; den här vaktar uppåt mot
+      // npm-ramverken.) node_modules-löven react/react-dom/next/@trpc hålls
+      // kvar i grafen av exclude-undantaget längst ned just för denna regel.
+      name: "shared-must-be-framework-agnostic",
+      severity: "error",
+      comment:
+        "src/lib/shared får inte importera react/react-dom/next/@trpc. Det är " +
+        "framework-agnostisk delad domänkod (scheman, helpers) — lägg " +
+        "ramverks-beroende kod i client/ eller server/.",
+      from: { path: "^src/lib/shared/" },
+      to: { path: "node_modules/(react|react-dom|next|@trpc)(/|$)" },
+    },
+    {
+      // Kompositions-disciplin: varje top-level-router (`routers/<x>.ts`)
+      // exporterar EN `xRouter` och komponeras ihop i `_app.ts`. Routrar får
+      // inte importera varandra — det skapar implicit koppling, cykler och gör
+      // att de inte längre går att resonera om/testa isolerat. Delad
+      // domänlogik hör hemma i shared/ eller server-interna helpers, inte i en
+      // grann-router. `_app.ts` är undantaget — det ÄR kompositionsroten.
+      // (Subdir-filer som routers/document/core.ts är INTE top-level-routrar;
+      // de matchar inte to-mönstret nedan och får komponeras fritt inom sin
+      // modul — den gränsen vaktas av `router-internals-private`.)
+      name: "routers-compose-via-app",
+      severity: "error",
+      comment:
+        "tRPC-routrar får inte importera varandra. Komponera top-level-routrar " +
+        "i routers/_app.ts; dela domänlogik via shared/ eller server-interna " +
+        "helpers, inte via en grann-router.",
+      from: {
+        path: "^src/lib/server/routers/",
+        pathNot: "^src/lib/server/routers/_app\\.ts$",
+      },
+      to: { path: "^src/lib/server/routers/[^/]+\\.ts$" },
+    },
+    {
+      // Inga djupa cross-module-importer: en router som splittas i flera filer
+      // lägger sina interna delar i en subdir (`routers/document/` →
+      // core/folders/suggestions/events/shared). Den publika ytan är
+      // kompositionsfilen `document.ts` (exporterar `documentRouter`); de
+      // interna procedurgrupperna är privata. Bara `document.ts` + syskon inom
+      // `document/` får importera dem — alla andra ska konsumera documentRouter
+      // via _app, inte djupimportera interna grupper. Samma mönster gäller
+      // varje framtida `routers/<x>/`-submodul (lägg till en rad per submodul).
+      name: "router-internals-private",
+      severity: "error",
+      comment:
+        "Djup cross-module-import förbjuden: routers/document/ är document-" +
+        "routerns privata procedurgrupper. Bara document.ts (+ syskon i " +
+        "document/) får importera dem; andra moduler går via documentRouter/_app.",
+      from: { pathNot: "^src/lib/server/routers/document(/|\\.ts$)" },
+      to: { path: "^src/lib/server/routers/document/" },
+    },
   ],
   options: {
     // Följ type-only-imports (`import type`). Utan detta räknas inte type-
@@ -161,7 +219,11 @@ module.exports = {
     exclude: {
       path: [
         "(^|/)\\.next(/|$)",
-        "(^|/)node_modules(/|$)",
+        // node_modules utesluts ur grafen UTOM react/react-dom/next/@trpc.
+        // De fyra hålls kvar som (icke-traverserade, via doNotFollow ovan)
+        // löv-noder så att `shared-must-be-framework-agnostic` kan path-matcha
+        // kanten src/lib/shared → ramverk. Övriga paket exkluderas som förr.
+        "(^|/)node_modules/(?!(react|react-dom|next|@trpc)(/|$))",
         "(^|/)reports(/|$)",
         "(^|/)storage(/|$)",
         "(^|/)src/shared/generated(/|$)",
