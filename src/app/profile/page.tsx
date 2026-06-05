@@ -62,53 +62,14 @@ export default function ProfilePage() {
         </p>
       </div>
 
-      {/* Basinfo */}
-      <section className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
-        <h2 className="font-semibold text-gray-900 mb-3">Dina uppgifter</h2>
-        <div className="space-y-3 text-sm">
-          <Field label="Namn">
-            <input
-              type="text"
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
-            />
-          </Field>
-          <Field label="Titel">
-            <input
-              type="text"
-              value={form.title}
-              onChange={(e) => setForm({ ...form, title: e.target.value })}
-              placeholder="t.ex. Advokat / Biträdande jurist"
-              className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
-            />
-          </Field>
-          <Field label="E-post">
-            <input
-              type="email"
-              value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
-              className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
-            />
-          </Field>
-          <Field label="Roll">
-            <div className="text-sm text-gray-700">{u.role}
-              <span className="text-xs text-gray-400 ml-2">(ändras av admin)</span>
-            </div>
-          </Field>
-        </div>
-        <div className="mt-4 flex items-center gap-3">
-          <button
-            type="button"
-            onClick={saveProfile}
-            disabled={updateUser.isPending}
-            className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
-          >
-            {updateUser.isPending ? "Sparar…" : "Spara"}
-          </button>
-          {updateUser.error && <span className="text-xs text-red-600">{updateUser.error.message}</span>}
-        </div>
-      </section>
+      <ProfileBasicsSection
+        form={form}
+        setForm={setForm}
+        role={u.role}
+        onSave={saveProfile}
+        saving={updateUser.isPending}
+        saveError={updateUser.error?.message ?? null}
+      />
 
       {/* Publika nycklar */}
       <KeysSection
@@ -131,6 +92,66 @@ export default function ProfilePage() {
       {/* Anslutna tjänster (O365, Google, …) */}
       <IntegrationsSection />
     </div>
+  );
+}
+
+type ProfileForm = { name: string; title: string; email: string };
+
+function ProfileBasicsSection({ form, setForm, role, onSave, saving, saveError }: {
+  form: ProfileForm;
+  setForm: React.Dispatch<React.SetStateAction<ProfileForm>>;
+  role: string;
+  onSave: () => void;
+  saving: boolean;
+  saveError: string | null;
+}) {
+  return (
+    <section className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
+      <h2 className="font-semibold text-gray-900 mb-3">Dina uppgifter</h2>
+      <div className="space-y-3 text-sm">
+        <Field label="Namn">
+          <input
+            type="text"
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
+          />
+        </Field>
+        <Field label="Titel">
+          <input
+            type="text"
+            value={form.title}
+            onChange={(e) => setForm({ ...form, title: e.target.value })}
+            placeholder="t.ex. Advokat / Biträdande jurist"
+            className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
+          />
+        </Field>
+        <Field label="E-post">
+          <input
+            type="email"
+            value={form.email}
+            onChange={(e) => setForm({ ...form, email: e.target.value })}
+            className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
+          />
+        </Field>
+        <Field label="Roll">
+          <div className="text-sm text-gray-700">{role}
+            <span className="text-xs text-gray-400 ml-2">(ändras av admin)</span>
+          </div>
+        </Field>
+      </div>
+      <div className="mt-4 flex items-center gap-3">
+        <button
+          type="button"
+          onClick={onSave}
+          disabled={saving}
+          className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+        >
+          {saving ? "Sparar…" : "Spara"}
+        </button>
+        {saveError && <span className="text-xs text-red-600">{saveError}</span>}
+      </div>
+    </section>
   );
 }
 
