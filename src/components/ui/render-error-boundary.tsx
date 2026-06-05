@@ -11,13 +11,13 @@ import { Component, type ReactNode } from "react";
 interface State { error: Error | null; componentStack: string | null }
 
 export class RenderErrorBoundary extends Component<{ children: ReactNode }, State> {
-  state: State = { error: null, componentStack: null };
+  override state: State = { error: null, componentStack: null };
   static getDerivedStateFromError(error: Error): State { return { error, componentStack: null }; }
-  componentDidCatch(error: Error, info: { componentStack: string }) {
+  override componentDidCatch(error: Error, info: { componentStack: string }) {
     console.error("[render-error]", error.message, "\nComponentStack:", info.componentStack);
     this.setState({ componentStack: info.componentStack });
   }
-  render() {
+  override render() {
     if (this.state.error) {
       return (
         <div className="m-4 p-4 bg-red-50 border-l-4 border-red-400 text-red-900 text-xs font-mono">
