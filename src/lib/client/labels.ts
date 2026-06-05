@@ -132,5 +132,3 @@ export const CREDIT_RISK_LABELS: Record<CreditRisk, string> = {
 
 export const matterRoleLabels = MATTER_ROLE_LABELS;
 export const contactTypeLabels = CONTACT_TYPE_LABELS;
-export const matterRoles = matterRoleOptions;
-export const contactTypes = contactTypeOptions;

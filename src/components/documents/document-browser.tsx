@@ -15,7 +15,6 @@ interface DocumentBrowserProps {
   matterId: string;
 }
 
-// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'DocumentBrowser' has a complexity of 9. Maximum allowed is 8.)
 export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     if (typeof window === "undefined") return "list";
@@ -47,8 +46,8 @@ export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
   const utils = trpc.useUtils();
 
   const tree = trpc.document.tree.useQuery({ matterId });
-  const folders: FolderRecord[] = tree.data?.folders ?? [];
-  const documents: DocumentRecord[] = tree.data?.documents ?? [];
+  const folders = useMemo<FolderRecord[]>(() => tree.data?.folders ?? [], [tree.data]);
+  const documents = useMemo<DocumentRecord[]>(() => tree.data?.documents ?? [], [tree.data]);
 
   const mutations = useDocumentMutations({
     matterId,

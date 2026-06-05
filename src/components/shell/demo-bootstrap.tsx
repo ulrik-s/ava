@@ -349,6 +349,10 @@ export function DemoBootstrap({ children }: { children: ReactNode }) {
       }
     })();
     return () => { cancelled = true; };
+    // Mount-only bootstrap: ska köras en gång. Att lägga firmaConfig/source/
+    // refs som deps skulle re-trigga hela demo-clonen; refs + queryClient är
+    // stabila och behöver inte vara deps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Hydrerings-grind: identisk markup på server + klientens första render.

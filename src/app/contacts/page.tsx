@@ -4,7 +4,7 @@ import { Suspense, useId, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
-import { labelForContactType, contactTypes } from "@/lib/client/labels";
+import { labelForContactType, contactTypeOptions } from "@/lib/client/labels";
 import { useIsReadOnly } from "@/lib/client/demo/demo-mode-context";
 import { DataTable, type Column } from "@/components/ui/data-table";
 
@@ -115,7 +115,7 @@ function ContactsContent() {
               <select id={typeId} value={form.contactType}
                 onChange={(e) => setForm({ ...form, contactType: e.target.value })}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
-                {contactTypes.map((t) => (
+                {contactTypeOptions.map((t) => (
                   <option key={t.value} value={t.value}>{t.label}</option>
                 ))}
               </select>
@@ -186,7 +186,7 @@ function ContactsContent() {
           onChange={(e) => { setTypeFilter(e.target.value); setPage(1); }}
           className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
           <option value="">Alla typer</option>
-          {contactTypes.map((t) => (
+          {contactTypeOptions.map((t) => (
             <option key={t.value} value={t.value}>{t.label}</option>
           ))}
         </select>

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { matterRoleLabels, matterRoles, contactTypeLabels, contactTypes } from "@/lib/client/labels";
+import { matterRoleLabels, matterRoleOptions, contactTypeLabels, contactTypeOptions } from "@/lib/client/labels";
 
 describe("matterRoleLabels", () => {
   it("använder 'Klient' (inte 'Huvudman') som label för KLIENT", () => {
@@ -23,19 +23,19 @@ describe("matterRoleLabels", () => {
   });
 });
 
-describe("matterRoles (dropdown-lista)", () => {
+describe("matterRoleOptions (dropdown-lista)", () => {
   it("har KLIENT som första valbara roll", () => {
-    expect(matterRoles[0]).toEqual({ value: "KLIENT", label: "Klient" });
+    expect(matterRoleOptions[0]).toEqual({ value: "KLIENT", label: "Klient" });
   });
 
   it("innehåller inget objekt med value === HUVUDMAN", () => {
     // Cast to string — TS vet redan att "HUVUDMAN" inte finns (typen har
     // skalbort det), men testet dokumenterar invarianten mot runtime-data.
-    expect(matterRoles.some((r) => (r.value as string) === "HUVUDMAN")).toBe(false);
+    expect(matterRoleOptions.some((r) => (r.value as string) === "HUVUDMAN")).toBe(false);
   });
 
   it("listan matchar labels-mappen i både value och label", () => {
-    for (const { value, label } of matterRoles) {
+    for (const { value, label } of matterRoleOptions) {
       expect(matterRoleLabels[value]).toBe(label);
     }
   });
@@ -48,8 +48,8 @@ describe("contactTypeLabels", () => {
     expect(contactTypeLabels.LAW_FIRM).toBe("Advokatbyrå");
   });
 
-  it("contactTypes-listan matchar labels-mappen", () => {
-    for (const { value, label } of contactTypes) {
+  it("contactTypeOptions-listan matchar labels-mappen", () => {
+    for (const { value, label } of contactTypeOptions) {
       expect(contactTypeLabels[value]).toBe(label);
     }
   });

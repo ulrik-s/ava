@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
-import { labelForMatterRole, matterRoles, contactTypes } from "@/lib/client/labels";
+import { labelForMatterRole, matterRoleOptions, contactTypeOptions } from "@/lib/client/labels";
 import { DataTable, type Column } from "@/components/ui/data-table";
 
 type Contact = {
@@ -202,7 +202,7 @@ function ExistingContactForm({
         <select value={form.role}
           onChange={(e) => setForm({ ...form, role: e.target.value })}
           className="rounded border border-gray-300 px-3 py-1.5 text-sm">
-          {matterRoles.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+          {matterRoleOptions.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
         </select>
       </div>
       <button type="submit" disabled={isPending}
@@ -246,12 +246,12 @@ function NewContactForm({
         <select value={form.role}
           onChange={(e) => setForm({ ...form, role: e.target.value })}
           className="rounded border border-gray-300 px-3 py-1.5 text-sm">
-          {matterRoles.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+          {matterRoleOptions.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
         </select>
         <select value={form.contactType}
           onChange={(e) => setForm({ ...form, contactType: e.target.value })}
           className="rounded border border-gray-300 px-3 py-1.5 text-sm">
-          {contactTypes.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+          {contactTypeOptions.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
         </select>
         <input type="text" placeholder={form.contactType === "PERSON" ? "Personnummer" : "Orgnummer"}
           value={form.contactType === "PERSON" ? form.personalNumber : form.orgNumber}
