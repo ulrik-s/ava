@@ -10,7 +10,14 @@
     "test/scripts/*.test.ts",
     "next.config.{ts,js,mjs}",
     "postcss.config.{js,mjs}",
-    "src/lib/shared/schemas/ids.ts"
+
+    "src/lib/shared/schemas/*.ts",
+    "src/lib/server/data-store/IDataStore.ts",
+    "src/lib/server/ports.ts",
+    "src/lib/server/events/schema.ts",
+    "src/lib/server/rules/schema.ts",
+    "src/lib/server/trpc.ts",
+    "src/lib/server/trpc-core.ts"
   ],
   "project": [
     "src/**/*.{ts,tsx}",
@@ -19,6 +26,7 @@
   "ignore": [
     "tooling/scripts/oauth-proxy/**"
   ],
+  "ignoreExportsUsedInFile": true,
   "ignoreDependencies": [
     "tailwindcss",
     "@commitlint/cli"
@@ -36,8 +44,8 @@
     "unlisted": "error",
     "unresolved": "error",
     "binaries": "error",
-    "exports": "warn",
-    "types": "warn",
+    "exports": "error",
+    "types": "error",
     "nsExports": "warn",
     "nsTypes": "warn",
     "enumMembers": "warn",

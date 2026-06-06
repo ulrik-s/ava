@@ -54,7 +54,10 @@ export function labelForMatterRole(role: string): string {
   return (MATTER_ROLE_LABELS as Record<string, string>)[role] ?? role;
 }
 
-/** Runtime-guard — användbar när DB-data kommer in som rå sträng. */
+/**
+ * Runtime-guard — användbar när DB-data kommer in som rå sträng.
+ * @public — avsedd hjälpfunktion (ännu ej konsumerad internt).
+ */
 export function isMatterRole(v: unknown): v is MatterRole {
   return typeof v === "string" && v in MATTER_ROLE_LABELS;
 }
@@ -75,6 +78,10 @@ export function labelForContactType(type: string): string {
   return (CONTACT_TYPE_LABELS as Record<string, string>)[type] ?? type;
 }
 
+/**
+ * Runtime-guard — motsvarar `isMatterRole` för kontakt-typer.
+ * @public — avsedd hjälpfunktion (ännu ej konsumerad internt).
+ */
 export function isContactType(v: unknown): v is ContactType {
   return typeof v === "string" && v in CONTACT_TYPE_LABELS;
 }

@@ -62,5 +62,6 @@ export function shouldCacheResponse(res: ResponseLike): boolean {
 /**
  * Versionerad cache-namespace. Bumpa när vi vill invalidera alla
  * gamla cacher (t.ex. brytande SW-uppdatering).
+ * @public — avsedd cache-versionsinfra (ännu ej inkopplad i SW-flödet).
  */
 export const CACHE_VERSION = "ava-v1";
