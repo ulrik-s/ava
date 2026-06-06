@@ -1,0 +1,13 @@
+# CODEOWNERS — arkitektur-/tooling-kritiska sökvägar (issue #16).
+#
+# Branch protection på `main` kräver PR med gröna checks (men 0 obligatoriska
+# godkännanden — solo-projekt, self-merge). CODEOWNERS här dokumenterar
+# ägarskapet av de känsligaste filerna och auto-flaggar dem; höj till
+# require_code_owner_reviews när en andra granskare finns.
+
+# Tooling, CI och kvalitetsgrindar (ratchets, lint/knip/dep-cruiser, commitlint).
+/tooling/config/        @ulrik-s
+/.github/               @ulrik-s
+
+# Single source of truth för git-db-schemana + branded id-typerna (#15).
+/src/lib/shared/schemas/ @ulrik-s

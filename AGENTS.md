@@ -11,6 +11,46 @@ This version has breaking changes — APIs, conventions, and file structure may 
 * For UI test use playwright
 * Always check api, documentation etc on the web do not rely on memory
 
+## Workflow — Issue → PR → Merge (`main` is protected)
+
+**All changes land via a green PR. Do NOT push directly to `main`** — branch
+protection enforces this for everyone, admins included (`enforce_admins`).
+Force-push and branch deletion on `main` are blocked.
+
+The loop for every change:
+
+1. **Issue first.** Work starts from a GitHub issue (create one if missing).
+   Capture follow-ups / tech-debt as issues too so nothing is lost — label
+   `architecture` / `tech-debt` / `tooling` / `documentation`.
+2. **Branch from `main`**, one topic per branch (`issue-NN-<slug>`).
+3. **Conventional Commits** are mandatory — `feat(scope): …`, `fix:`, `chore:`,
+   `refactor:`, `docs:`, `test:`, `ci:`. Enforced by `.husky/commit-msg`
+   (commitlint, config at `tooling/config/commitlint.config.mjs`) **and** in CI.
+   Run `yarn install` so the hook's `commitlint` binary is present.
+4. **Before opening the PR, verify locally** (CI mirrors these):
+   - `yarn quality:fast` — typecheck + type-aware lint + `test:fast`.
+   - `yarn build:demo` — the GH Pages static export. **It fails silently in
+     CI/Pages otherwise**, so always run it for app changes.
+   - `yarn round-trip` — for changes touching the git push/pull e2e path.
+5. **Open a PR** to `main`. CI runs four required checks that must be green
+   before merge: **Static analysis** (typecheck + ESLint + knip + dep-cruiser
+   + jscpd), **Unit / komponent / integration** (vitest + coverage floor),
+   **E2E (git round-trip)**, and **Commit messages** (commitlint).
+6. **Self-merge.** No approval is required (solo project, 0 required reviews),
+   but the PR itself is mandatory — merge your own PR once all four checks are
+   green. `gh pr merge --squash` works.
+
+`.github/CODEOWNERS` marks the architecture-critical paths (`tooling/config/`,
+`src/lib/shared/schemas/`, `.github/`) — review them with extra care.
+
+### Quality ratchet — gates only tighten
+
+Coverage thresholds (`tooling/config/vitest.config.ts`), the lint
+`--max-warnings` cap, and knip are **ratchets**: anchored just under today's
+numbers and only moved tighter. **Never loosen a gate to land code** — fix the
+code or extract a sub-component (a "ratchet-step", cf. PR #6). See
+[`docs/quality.md`](docs/quality.md).
+
 ## Where to start
 
 Read [`docs/architecture.md`](docs/architecture.md) first — it's the canonical
