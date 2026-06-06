@@ -34,7 +34,7 @@ export class InMemoryGitOps implements IGitOps {
     private readonly fs: InMemoryFileSystem = new InMemoryFileSystem(),
     private readonly remote: SharedRemote = makeSharedRemote(),
   ) {
-    this.knownRemoteHash = remote.commits[remote.commits.length - 1].hash;
+    this.knownRemoteHash = remote.commits[remote.commits.length - 1]!.hash;
     this.localCommits = [...remote.commits];
     // Initial sync: applicera remote head:s working tree (om någon)
     this.applyWorkingTree(this.knownRemoteHash);
@@ -54,15 +54,15 @@ export class InMemoryGitOps implements IGitOps {
   }
 
   async fetch(): Promise<void> {
-    this.knownRemoteHash = this.remote.commits[this.remote.commits.length - 1].hash;
+    this.knownRemoteHash = this.remote.commits[this.remote.commits.length - 1]!.hash;
   }
 
   async remoteHead(): Promise<GitCommit> {
-    return this.remote.commits[this.remote.commits.length - 1];
+    return this.remote.commits[this.remote.commits.length - 1]!;
   }
 
   async localHead(): Promise<GitCommit> {
-    return this.localCommits[this.localCommits.length - 1];
+    return this.localCommits[this.localCommits.length - 1]!;
   }
 
   async pendingCommitsAhead(): Promise<GitCommit[]> {
@@ -85,7 +85,7 @@ export class InMemoryGitOps implements IGitOps {
   async push(): Promise<PushResult> {
     // CAS: remote-headen vi senast såg måste fortfarande vara den
     // aktuella remote-headen, annars NonFastForward.
-    const currentRemoteHead = this.remote.commits[this.remote.commits.length - 1].hash;
+    const currentRemoteHead = this.remote.commits[this.remote.commits.length - 1]!.hash;
     if (currentRemoteHead !== this.knownRemoteHash) {
       return { ok: false, reason: "NonFastForward" };
     }
@@ -93,7 +93,7 @@ export class InMemoryGitOps implements IGitOps {
     this.remote.commits.push(...pending);
     // Snapshot:a vår working tree mot senaste commit-hashen så att
     // andra klienter kan pulla in den vid fetch+reset.
-    const newHead = this.remote.commits[this.remote.commits.length - 1];
+    const newHead = this.remote.commits[this.remote.commits.length - 1]!;
     this.remote.workingTrees.set(newHead.hash, this.fs.snapshot());
     this.knownRemoteHash = newHead.hash;
     return { ok: true };
@@ -101,7 +101,7 @@ export class InMemoryGitOps implements IGitOps {
 
   async resetHardToRemote(): Promise<void> {
     this.localCommits = [...this.remote.commits];
-    this.knownRemoteHash = this.remote.commits[this.remote.commits.length - 1].hash;
+    this.knownRemoteHash = this.remote.commits[this.remote.commits.length - 1]!.hash;
     this.applyWorkingTree(this.knownRemoteHash);
   }
 

@@ -134,7 +134,7 @@ describe("ProjectionHydrator — hydrate-on-pull", () => {
     const callback = vi.fn();
     await hydrator.hydrateChanges(["matters/active/m1.json"], callback);
     expect(callback).toHaveBeenCalledTimes(1);
-    expect((callback.mock.calls[0][1] as { id: string }).id).toBe("matter-1");
+    expect((callback.mock.calls[0]![1] as { id: string }).id).toBe("matter-1");
   });
 
   it("hydrateChanges hoppar över okända paths utan att kasta", async () => {

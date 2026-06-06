@@ -39,8 +39,8 @@ export function uuidv5(name: string, namespace: string): string {
 
   const hash = sha1(input);
   const bytes = hash.slice(0, 16);
-  bytes[6] = (bytes[6] & 0x0f) | 0x50; // version 5
-  bytes[8] = (bytes[8] & 0x3f) | 0x80; // RFC 4122-variant
+  bytes[6] = (bytes[6]! & 0x0f) | 0x50; // version 5
+  bytes[8] = (bytes[8]! & 0x3f) | 0x80; // RFC 4122-variant
   return bytesToUuid(bytes);
 }
 
@@ -73,7 +73,7 @@ function uuidToBytes(uuid: string): Uint8Array {
 function bytesToUuid(bytes: Uint8Array): string {
   const hex: string[] = [];
   for (let i = 0; i < 16; i++) {
-    hex.push(HEX[(bytes[i] >> 4) & 0x0f] + HEX[bytes[i] & 0x0f]);
+    hex.push(HEX[(bytes[i]! >> 4) & 0x0f]! + HEX[bytes[i]! & 0x0f]!);
   }
   const h = hex.join("");
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
@@ -95,10 +95,10 @@ function sha1(data: Uint8Array): Uint8Array {
     const w = new Uint32Array(80);
     for (let i = 0; i < 16; i++) {
       const off = chunkStart + i * 4;
-      w[i] = (padded[off] << 24) | (padded[off + 1] << 16) | (padded[off + 2] << 8) | padded[off + 3];
+      w[i] = (padded[off]! << 24) | (padded[off + 1]! << 16) | (padded[off + 2]! << 8) | padded[off + 3]!;
     }
     for (let i = 16; i < 80; i++) {
-      w[i] = rotl(w[i - 3] ^ w[i - 8] ^ w[i - 14] ^ w[i - 16], 1);
+      w[i] = rotl(w[i - 3]! ^ w[i - 8]! ^ w[i - 14]! ^ w[i - 16]!, 1);
     }
     let a = h0, b = h1, c = h2, d = h3, e = h4;
     for (let i = 0; i < 80; i++) {
@@ -107,7 +107,7 @@ function sha1(data: Uint8Array): Uint8Array {
       else if (i < 40) { f = b ^ c ^ d;          k = 0x6ed9eba1; }
       else if (i < 60) { f = (b & c) | (b & d) | (c & d); k = 0x8f1bbcdc; }
       else             { f = b ^ c ^ d;          k = 0xca62c1d6; }
-      const temp = (rotl(a, 5) + f + e + k + w[i]) >>> 0;
+      const temp = (rotl(a, 5) + f + e + k + w[i]!) >>> 0;
       e = d; d = c; c = rotl(b, 30); b = a; a = temp;
     }
     h0 = (h0 + a) >>> 0; h1 = (h1 + b) >>> 0; h2 = (h2 + c) >>> 0;
@@ -138,10 +138,10 @@ function padMessage(data: Uint8Array): Uint8Array {
 function wordsToBytes(words: number[]): Uint8Array {
   const out = new Uint8Array(words.length * 4);
   for (let i = 0; i < words.length; i++) {
-    out[i * 4] = (words[i] >>> 24) & 0xff;
-    out[i * 4 + 1] = (words[i] >>> 16) & 0xff;
-    out[i * 4 + 2] = (words[i] >>> 8) & 0xff;
-    out[i * 4 + 3] = words[i] & 0xff;
+    out[i * 4] = (words[i]! >>> 24) & 0xff;
+    out[i * 4 + 1] = (words[i]! >>> 16) & 0xff;
+    out[i * 4 + 2] = (words[i]! >>> 8) & 0xff;
+    out[i * 4 + 3] = words[i]! & 0xff;
   }
   return out;
 }

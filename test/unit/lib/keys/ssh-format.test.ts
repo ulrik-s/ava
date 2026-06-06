@@ -29,7 +29,7 @@ describe("buildSshPublicKey", () => {
 
   it("base64-blob:n är 68 chars (50 bytes wire format → 68 base64)", () => {
     const s = buildSshPublicKey(ZERO_PUBKEY);
-    const b64 = s.split(" ")[1];
+    const b64 = s.split(" ")[1]!;
     expect(b64.length).toBe(68);
   });
 });

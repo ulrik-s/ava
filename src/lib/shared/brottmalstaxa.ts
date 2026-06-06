@@ -190,6 +190,14 @@ export function computeBrottmalstaxa(opts: ComputeOpts): TaxaResult {
   const idx = level - 1;
   const e = row.ersattning[idx];
   const g = row.gransvarde[idx];
+  if (e === undefined || g === undefined) {
+    // Inte väntat — idx härleds ur validerad nivå (1-4), men defensiv
+    return {
+      kind: "invalid-input", intervalLabel: "", level,
+      ersattningExclVat: 0, gransvardeExclVat: 0,
+      notes: ["Hittade ingen taxa-rad för angiven nivå."],
+    };
+  }
 
   const ersattning = hasFTax ? e : applyNoFTaxFactor(e);
   const gransvarde = hasFTax ? g : applyNoFTaxFactor(g);

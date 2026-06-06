@@ -216,14 +216,16 @@ async function resolveOrCreateGroupContact(
   suggs: Suggestion[],
   matterId: string,
 ): Promise<ContactId> {
+  const first = suggs[0];
+  if (!first) throw new TRPCError({ code: "NOT_FOUND" });
   const personalNumber = pickFirstFromGroup(suggs, "personalNumber");
   const orgNumber = pickFirstFromGroup(suggs, "orgNumber");
   const existing = await findGroupContact(ctx, suggs, matterId, personalNumber, orgNumber);
   if (existing) return asId<"ContactId">(existing.id);
   const created = (await ctx.dataStore.contacts.create({
     data: {
-      name: suggs[0].name,
-      contactType: suggs[0].contactType,
+      name: first.name,
+      contactType: first.contactType,
       email: pickFirstFromGroup(suggs, "email"),
       phone: pickFirstFromGroup(suggs, "phone"),
       personalNumber,
@@ -256,10 +258,12 @@ async function findGroupContact(
     where: { matterId },
     include: { contact: true },
   } as never)) as Array<{ contact: ContactCandidate }>;
+  const first = suggs[0];
+  if (!first) return null;
   const dedup = findExistingContactForSuggestion(
     {
-      name: suggs[0].name,
-      contactType: suggs[0].contactType,
+      name: first.name,
+      contactType: first.contactType,
       personalNumber: null,
       orgNumber: null,
     },
@@ -399,7 +403,9 @@ export const suggestionProcedures = {
     )
     .mutation(async ({ ctx, input }) => {
       const suggs = await loadPendingGroup(ctx, input.suggestionIds);
-      const matterId = suggs[0].document.matterId;
+      const first = suggs[0];
+      if (!first) throw new TRPCError({ code: "NOT_FOUND" });
+      const matterId = first.document.matterId;
 
       const contactId = input.existingContactId
         ? await resolveExistingContact(ctx, input.existingContactId)

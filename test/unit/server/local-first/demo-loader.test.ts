@@ -63,7 +63,7 @@ describe("DemoLoader", () => {
 
     const all = loader.entities();
     expect(all.matter).toHaveLength(1);
-    expect((all.matter[0] as { matterNumber: string }).matterNumber).toBe("2026-0001");
+    expect((all.matter![0] as { matterNumber: string }).matterNumber).toBe("2026-0001");
     expect(all.contact).toHaveLength(1);
   });
 
@@ -109,9 +109,9 @@ describe("DemoLoader", () => {
     const loader = new DemoLoader({ fs, registry: buildDefaultRegistry(), cloneFn });
 
     await loader.loadDemo("a.git");
-    expect((loader.entities().matter[0] as { matterNumber: string }).matterNumber).toBe("demo-1");
+    expect((loader.entities().matter![0] as { matterNumber: string }).matterNumber).toBe("demo-1");
 
     await loader.loadDemo("a.git");
-    expect((loader.entities().matter[0] as { matterNumber: string }).matterNumber).toBe("demo-2");
+    expect((loader.entities().matter![0] as { matterNumber: string }).matterNumber).toBe("demo-2");
   });
 });

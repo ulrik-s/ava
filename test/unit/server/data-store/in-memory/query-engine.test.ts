@@ -70,7 +70,7 @@ describe("InMemoryQueryEngine — where", () => {
   it("equals (implicit) matchar exakt", () => {
     const r = engine.query(rows, { where: { id: "2" } });
     expect(r).toHaveLength(1);
-    expect(r[0].id).toBe("2");
+    expect(r[0]!.id).toBe("2");
   });
 
   it("nested object equality", () => {
@@ -86,7 +86,7 @@ describe("InMemoryQueryEngine — where", () => {
   it("contains med mode insensitive", () => {
     const r = engine.query(rows, { where: { name: { contains: "DELTA", mode: "insensitive" } } });
     expect(r).toHaveLength(1);
-    expect(r[0].id).toBe("4");
+    expect(r[0]!.id).toBe("4");
   });
 
   it("startsWith", () => {

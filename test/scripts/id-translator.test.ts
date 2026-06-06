@@ -107,10 +107,10 @@ describe("translateSeed", () => {
       meta: { count: 2 }, // non-array key
     };
     const out = translateSeed(seed, t);
-    expect(out.users[0].id).toBe(t.toUuid("u-anna"));
-    expect(out.matters[0].id).toBe(t.toUuid("m-1"));
-    expect(out.matters[0].klientId).toBe(t.toUuid("c-1"));
-    expect(out.users[0].name).toBe("Anna");
+    expect(out.users[0]!.id).toBe(t.toUuid("u-anna"));
+    expect(out.matters[0]!.id).toBe(t.toUuid("m-1"));
+    expect(out.matters[0]!.klientId).toBe(t.toUuid("c-1"));
+    expect(out.users[0]!.name).toBe("Anna");
     expect(out.meta).toEqual({ count: 2 });
   });
 
@@ -121,6 +121,6 @@ describe("translateSeed", () => {
       tasks: [{ id: "t-1", userId: "u-anna" }],
     };
     const out = translateSeed(seed, t);
-    expect(out.tasks[0].userId).toBe(out.users[0].id);
+    expect(out.tasks[0]!.userId).toBe(out.users[0]!.id);
   });
 });

@@ -52,8 +52,8 @@ describe("weekDays", () => {
   it("returnerar 7 dagar måndag→söndag som täcker ankaret", () => {
     const days = weekDays(new Date(2026, 0, 7)); // onsdag
     expect(days).toHaveLength(7);
-    expect(toKey(days[0])).toBe("2026-01-05"); // måndag
-    expect(toKey(days[6])).toBe("2026-01-11"); // söndag
+    expect(toKey(days[0]!)).toBe("2026-01-05"); // måndag
+    expect(toKey(days[6]!)).toBe("2026-01-11"); // söndag
   });
 });
 
@@ -61,15 +61,15 @@ describe("monthGridDays", () => {
   it("returnerar 42 dagar för en månad och startar på måndag", () => {
     const days = monthGridDays(new Date(2026, 0, 15));
     expect(days).toHaveLength(42);
-    expect(mondayWeekday(days[0])).toBe(0);
+    expect(mondayWeekday(days[0]!)).toBe(0);
     // 1 januari 2026 är en torsdag → grid:en ska börja på måndagen innan
-    expect(toKey(days[0])).toBe("2025-12-29");
+    expect(toKey(days[0]!)).toBe("2025-12-29");
   });
 
   it("hanterar månader som börjar på måndag (ingen padding före)", () => {
     // 2026-06-01 är en måndag
     const days = monthGridDays(new Date(2026, 5, 10));
-    expect(toKey(days[0])).toBe("2026-06-01");
+    expect(toKey(days[0]!)).toBe("2026-06-01");
   });
 });
 

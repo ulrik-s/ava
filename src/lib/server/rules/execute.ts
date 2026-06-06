@@ -76,8 +76,10 @@ function errMessage(err: unknown): string {
 async function runSteps(steps: RuleStep[], ctx: ExecutionContext, depth = 0, loopBindings?: Record<string, unknown>): Promise<{ stepsRan: number; httpResponse?: { status: number; body?: unknown }; error?: { step: number; message: string } }> {
   let ran = 0;
   for (let i = 0; i < steps.length; i++) {
+    // i < steps.length → in-bounds; assertion undviker en extra gren (complexity ≤ 8).
+    const step = steps[i]!;
     try {
-      const subResult = await runStep(steps[i], ctx, depth, loopBindings);
+      const subResult = await runStep(step, ctx, depth, loopBindings);
       ran++;
       if (subResult?.httpResponse) return { stepsRan: ran, httpResponse: subResult.httpResponse };
       ran += subResult?.nestedRan ?? 0;

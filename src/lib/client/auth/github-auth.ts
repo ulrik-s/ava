@@ -49,16 +49,16 @@ export function parseRepoUrl(input: string): ParsedRepo | null {
 
   // https://github.com/user/repo[.git]
   const httpsMatch = trimmed.match(/^https?:\/\/github\.com\/([^/]+)\/([^/]+?)(?:\.git)?$/);
-  if (httpsMatch) return { owner: httpsMatch[1], repo: httpsMatch[2] };
+  if (httpsMatch) return { owner: httpsMatch[1]!, repo: httpsMatch[2]! };
 
   // git@github.com:user/repo[.git]
   const sshMatch = trimmed.match(/^git@github\.com:([^/]+)\/([^/]+?)(?:\.git)?$/);
-  if (sshMatch) return { owner: sshMatch[1], repo: sshMatch[2] };
+  if (sshMatch) return { owner: sshMatch[1]!, repo: sshMatch[2]! };
 
   // user/repo (kortform)
   const shortMatch = trimmed.match(/^([^/\s]+)\/([^/\s]+?)(?:\.git)?$/);
   if (shortMatch && !trimmed.startsWith("http") && !trimmed.includes("@")) {
-    return { owner: shortMatch[1], repo: shortMatch[2] };
+    return { owner: shortMatch[1]!, repo: shortMatch[2]! };
   }
   return null;
 }

@@ -145,6 +145,6 @@ describe("billingRun.list / byId", () => {
     await caller.billingRun.createAcconto({ matterId: "m-1", clientShareBips: 2000, amountOre: 50000 });
     const { runs } = await caller.billingRun.list({ matterId: "m-1" });
     expect(runs).toHaveLength(1);
-    expect(runs[0].type).toBe("ACCONTO");
+    expect(runs[0]!.type).toBe("ACCONTO");
   });
 });

@@ -38,12 +38,12 @@ describe("populateTemplateDocs — mall → ärende", () => {
 
     expect(count).toBe(1);
     expect(writes).toHaveLength(1);
-    expect(writes[0].path).toBe("documents/content/gendoc-m-test-tpl-fullmakt.html");
+    expect(writes[0]!.path).toBe("documents/content/gendoc-m-test-tpl-fullmakt.html");
     // Mallen renderad med ärendets kontext — inga kvarvarande {{...}}.
-    expect(writes[0].html).toContain("Klient AB");
-    expect(writes[0].html).toContain("Anna Advokat");
-    expect(writes[0].html).toContain("2026-0099");
-    expect(writes[0].html).not.toContain("{{");
+    expect(writes[0]!.html).toContain("Klient AB");
+    expect(writes[0]!.html).toContain("Anna Advokat");
+    expect(writes[0]!.html).toContain("2026-0099");
+    expect(writes[0]!.html).not.toContain("{{");
 
     expect(docs).toHaveLength(1);
     expect(docs[0].matterId).toBe("m-test"); // hamnar i ärendet

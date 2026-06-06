@@ -141,9 +141,9 @@ describe("SettingsPage", () => {
     // Det finns två "Spara"-knappar (en för office-formuläret, en för kontaktuppgifter).
     // Office-formuläret renderas först → välj första.
     const saveButtons = screen.getAllByRole("button", { name: /^Spara/i });
-    fireEvent.click(saveButtons[0]);
+    fireEvent.click(saveButtons[0]!);
     await waitFor(() => expect(addOfficeMutate).toHaveBeenCalled());
-    expect(addOfficeMutate.mock.calls[0][0]).toMatchObject({ name: "Göteborg" });
+    expect(addOfficeMutate.mock.calls[0]![0]).toMatchObject({ name: "Göteborg" });
   });
 
   it("listar existerande kontor", () => {
@@ -198,10 +198,10 @@ describe("SettingsPage", () => {
     const editBtn = screen.getByRole("button", { name: /Redigera/i });
     fireEvent.click(editBtn);
     // Edit-formulär nu öppen — spara-knapp finns
-    const saveBtn = screen.getAllByRole("button", { name: /^Spara/i })[0];
+    const saveBtn = screen.getAllByRole("button", { name: /^Spara/i })[0]!;
     fireEvent.click(saveBtn);
     await waitFor(() => expect(updateOfficeMutate).toHaveBeenCalled());
-    expect(updateOfficeMutate.mock.calls[0][0]).toMatchObject({ id: "o1", name: "Stockholm" });
+    expect(updateOfficeMutate.mock.calls[0]![0]).toMatchObject({ id: "o1", name: "Stockholm" });
   });
 
   it("anropar deleteOffice när Ta bort klickas", () => {

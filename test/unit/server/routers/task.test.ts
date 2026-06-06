@@ -42,13 +42,13 @@ describe("task.list", () => {
 
   it("filtrerar på status", async () => {
     await makeCaller().list({ status: "DONE" });
-    const arg = mockPrisma.task.findMany.mock.calls[0][0] as { where: { status: string } };
+    const arg = mockPrisma.task.findMany.mock.calls[0]![0] as { where: { status: string } };
     expect(arg.where.status).toBe("DONE");
   });
 
   it("filtrerar på matterId", async () => {
     await makeCaller().list({ matterId: "m-1" });
-    const arg = mockPrisma.task.findMany.mock.calls[0][0] as { where: { matterId: string } };
+    const arg = mockPrisma.task.findMany.mock.calls[0]![0] as { where: { matterId: string } };
     expect(arg.where.matterId).toBe("m-1");
   });
 });
@@ -86,7 +86,7 @@ describe("task.update", () => {
     mockPrisma.task.findFirstOrThrow.mockResolvedValue({ id: "t-1" });
     mockPrisma.task.update.mockResolvedValue({});
     await makeCaller().update({ id: "t-1", status: "DONE" });
-    const arg = mockPrisma.task.update.mock.calls[0][0] as { data: { completedAt: Date } };
+    const arg = mockPrisma.task.update.mock.calls[0]![0] as { data: { completedAt: Date } };
     expect(arg.data.completedAt).toBeInstanceOf(Date);
   });
 
@@ -94,7 +94,7 @@ describe("task.update", () => {
     mockPrisma.task.findFirstOrThrow.mockResolvedValue({ id: "t-1" });
     mockPrisma.task.update.mockResolvedValue({});
     await makeCaller().update({ id: "t-1", status: "TODO" });
-    const arg = mockPrisma.task.update.mock.calls[0][0] as { data: { completedAt: Date | null } };
+    const arg = mockPrisma.task.update.mock.calls[0]![0] as { data: { completedAt: Date | null } };
     expect(arg.data.completedAt).toBeNull();
   });
 });
@@ -104,7 +104,7 @@ describe("task.complete", () => {
     mockPrisma.task.findFirstOrThrow.mockResolvedValue({ id: "t-1" });
     mockPrisma.task.update.mockResolvedValue({});
     await makeCaller().complete({ id: "t-1" });
-    const arg = mockPrisma.task.update.mock.calls[0][0] as { data: { status: string; completedAt: Date } };
+    const arg = mockPrisma.task.update.mock.calls[0]![0] as { data: { status: string; completedAt: Date } };
     expect(arg.data.status).toBe("DONE");
     expect(arg.data.completedAt).toBeInstanceOf(Date);
   });

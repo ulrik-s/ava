@@ -17,7 +17,7 @@ describe("IssueStore", () => {
     const s = new IssueStore();
     expect(s.report([v()])).toBe(1);
     expect(s.count()).toBe(1);
-    expect(s.list()[0].code).toBe("KR_PENDING_NO_DOC");
+    expect(s.list()[0]!.code).toBe("KR_PENDING_NO_DOC");
   });
 
   it("dedupar på code + context", () => {

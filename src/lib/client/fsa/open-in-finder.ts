@@ -57,7 +57,7 @@ export async function openInFinder(storagePath: string, opts: OpenInFinderOpts =
   let dir: FileSystemDirectoryHandle = root;
   for (let i = 0; i < parts.length - 1; i++) {
     try {
-      dir = await dir.getDirectoryHandle(parts[i]);
+      dir = await dir.getDirectoryHandle(parts[i]!);
     } catch {
       return { kind: "file-not-found", path: storagePath };
     }
@@ -65,7 +65,7 @@ export async function openInFinder(storagePath: string, opts: OpenInFinderOpts =
   let fileHandle: FileSystemFileHandle;
   let justDownloaded = false;
   try {
-    fileHandle = await dir.getFileHandle(parts[parts.length - 1]);
+    fileHandle = await dir.getFileHandle(parts[parts.length - 1]!);
   } catch {
     // Demo-mode fallback: filen finns inte i user:s lokala mapp men på GH
     // Pages. Lazy-download + skriv hit, sen returnera handle till nya filen.

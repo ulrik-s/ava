@@ -107,10 +107,10 @@ describe("MattersPage", () => {
     render(<MattersPage />);
     fireEvent.click(screen.getByRole("button", { name: /\+ Nytt ärende/i }));
     const inputs = screen.getAllByRole("textbox") as HTMLInputElement[];
-    fireEvent.change(inputs[0], { target: { value: "Tvist Karlsson" } });
+    fireEvent.change(inputs[0]!, { target: { value: "Tvist Karlsson" } });
     fireEvent.click(screen.getByRole("button", { name: /Skapa ärende/i }));
     expect(createMatterMutate).toHaveBeenCalled();
-    expect(createMatterMutate.mock.calls[0][0].title).toBe("Tvist Karlsson");
+    expect(createMatterMutate.mock.calls[0]![0].title).toBe("Tvist Karlsson");
   });
 
   it("ändrar status-filter", () => {

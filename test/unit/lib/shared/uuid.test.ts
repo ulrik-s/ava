@@ -14,12 +14,12 @@ describe("uuidv7", () => {
 
   it("har version 7 (nibble efter andra bindestrecket)", () => {
     // 8-4-4-4-12 → versionsnibblen är första tecknet i tredje gruppen
-    const v = uuidv7().split("-")[2][0];
+    const v = uuidv7().split("-")[2]![0];
     expect(v).toBe("7");
   });
 
   it("har RFC-variant (8/9/a/b i fjärde gruppen)", () => {
-    const variant = uuidv7().split("-")[3][0];
+    const variant = uuidv7().split("-")[3]![0];
     expect(["8", "9", "a", "b"]).toContain(variant);
   });
 

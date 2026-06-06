@@ -61,10 +61,10 @@ export async function populateUnbilledTime(caller: GeneratorCaller, seed: SeedDa
 
   let count = 0;
   for (let mi = 0; mi < activeMatters.length; mi++) {
-    const matter = activeMatters[mi];
+    const matter = activeMatters[mi]!;
     const n = entriesPerMatter(mi);
     for (let j = 0; j < n; j++) {
-      const user = users[(mi + j) % users.length];
+      const user = users[(mi + j) % users.length]!;
       await createFreshEntry(c, user, matter, j + 1, mi * 3 + j);
       count++;
     }

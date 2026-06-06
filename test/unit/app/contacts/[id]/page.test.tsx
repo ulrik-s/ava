@@ -145,7 +145,7 @@ describe("ContactDetailPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /Redigera/i }));
     fireEvent.click(screen.getByRole("button", { name: /^Spara$/i }));
     expect(updateMutate).toHaveBeenCalledTimes(1);
-    expect(updateMutate.mock.calls[0][0]).toMatchObject({ id: "c1", name: "Anna Andersson" });
+    expect(updateMutate.mock.calls[0]![0]).toMatchObject({ id: "c1", name: "Anna Andersson" });
   });
 
   it("delete-knapp kallar delete efter confirm", async () => {
@@ -175,7 +175,7 @@ describe("ContactDetailPage", () => {
     fireEvent.change(screen.getByPlaceholderText(/Namn \*/), { target: { value: "Cecilia" } });
     fireEvent.click(screen.getByRole("button", { name: /^Lägg till$/i }));
     expect(addChildMutate).toHaveBeenCalledTimes(1);
-    expect(addChildMutate.mock.calls[0][0]).toMatchObject({ parentId: "c1", name: "Cecilia" });
+    expect(addChildMutate.mock.calls[0]![0]).toMatchObject({ parentId: "c1", name: "Cecilia" });
   });
 
   it("Avbryt vid redigering återgår till visningsläget", async () => {
@@ -194,7 +194,7 @@ describe("ContactDetailPage", () => {
     const emailInput = screen.getByDisplayValue("anna@x.se") as HTMLInputElement;
     fireEvent.change(emailInput, { target: { value: "ny@x.se" } });
     fireEvent.click(screen.getByRole("button", { name: /^Spara$/i }));
-    expect(updateMutate.mock.calls[0][0].email).toBe("ny@x.se");
+    expect(updateMutate.mock.calls[0]![0].email).toBe("ny@x.se");
   });
 
   it("delete avbryts när confirm returnerar false", async () => {
@@ -237,7 +237,7 @@ describe("ContactDetailPage", () => {
     fireEvent.change(screen.getByLabelText(/^Adress$/) as HTMLInputElement, { target: { value: "Lillgatan" } });
     fireEvent.change(screen.getByLabelText(/Anteckningar/) as HTMLTextAreaElement, { target: { value: "ny" } });
     fireEvent.click(screen.getByRole("button", { name: /^Spara$/i }));
-    const arg = updateMutate.mock.calls[0][0];
+    const arg = updateMutate.mock.calls[0]![0];
     expect(arg.name).toBe("Annika");
     expect(arg.phone).toBe("070-9");
     expect(arg.address).toBe("Lillgatan");
@@ -255,7 +255,7 @@ describe("ContactDetailPage", () => {
     fireEvent.change(screen.getByPlaceholderText(/Roll\/anteckning/) as HTMLInputElement, { target: { value: "VD" } });
     fireEvent.click(screen.getByRole("button", { name: /^Lägg till$/i }));
     expect(addChildMutate).toHaveBeenCalled();
-    expect(addChildMutate.mock.calls[0][0]).toMatchObject({
+    expect(addChildMutate.mock.calls[0]![0]).toMatchObject({
       parentId: "c1", name: "C", email: "c@x.se", phone: "07", notes: "VD",
     });
   });

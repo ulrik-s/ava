@@ -48,7 +48,7 @@ describe("ErrorReportButton", () => {
     fireEvent.click(screen.getByRole("button", { name: /Öppna GitHub-issue/ }));
 
     expect(openSpy).toHaveBeenCalledTimes(1);
-    const url = openSpy.mock.calls[0][0] as string;
+    const url = openSpy.mock.calls[0]![0] as string;
     expect(url).toContain("github.com/ulrik-s/ava/issues/new");
     const body = new URL(url).searchParams.get("body") ?? "";
     expect(decodeURIComponent(body)).toContain("Det small");
@@ -62,7 +62,7 @@ describe("ErrorReportButton", () => {
     fireEvent.click(screen.getByRole("button", { name: "Rapportera fel" }));
     fireEvent.click(screen.getByRole("button", { name: /Kopiera/ }));
     await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
-    expect(writeText.mock.calls[0][0]).toContain("[AVA]");
+    expect(writeText.mock.calls[0]![0]).toContain("[AVA]");
   });
 
   it("rensar upptäckta fel från dialogen", () => {

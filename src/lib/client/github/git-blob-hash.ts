@@ -25,8 +25,8 @@ export async function gitBlobSha1(content: Uint8Array): Promise<string> {
 
 function hexEncode(bytes: Uint8Array): string {
   let s = "";
-  for (let i = 0; i < bytes.length; i++) {
-    s += bytes[i].toString(16).padStart(2, "0");
+  for (const byte of bytes) {
+    s += byte.toString(16).padStart(2, "0");
   }
   return s;
 }

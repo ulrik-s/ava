@@ -51,7 +51,7 @@ describe("walkFsa", () => {
     await writeFile(fsa.root, "logos/firma.png", bytes);
     const files = await walkFsa(fsa.root);
     expect(files).toHaveLength(1);
-    expect(files[0].bytes).toEqual(bytes);
+    expect(files[0]!.bytes).toEqual(bytes);
   });
 });
 

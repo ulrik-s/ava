@@ -394,7 +394,7 @@ describe("DocumentBrowser", () => {
     await import("@testing-library/react").then(({ waitFor }) =>
       waitFor(() => expect(alertSpy).toHaveBeenCalled(), { timeout: 1000 }),
     );
-    expect(alertSpy.mock.calls[0][0]).toMatch(/working copy/i);
+    expect(alertSpy.mock.calls[0]![0]).toMatch(/working copy/i);
     alertSpy.mockRestore();
   });
 

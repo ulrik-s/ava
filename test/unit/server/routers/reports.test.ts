@@ -68,10 +68,10 @@ describe("reports.perLawyer", () => {
     });
     expect(res).not.toBeNull();
     expect(res!.matters).toHaveLength(1);
-    expect(res!.matters[0].totalMinutes).toBe(90);
-    expect(res!.matters[0].billableMinutes).toBe(60);
-    expect(res!.matters[0].workValueOre).toBe(60 / 60 * 3000); // 60 min × 3000 öre/h (hourlyRate ÄR öre)
-    expect(res!.matters[0].expenseOre).toBe(50000);
+    expect(res!.matters[0]!.totalMinutes).toBe(90);
+    expect(res!.matters[0]!.billableMinutes).toBe(60);
+    expect(res!.matters[0]!.workValueOre).toBe(60 / 60 * 3000); // 60 min × 3000 öre/h (hourlyRate ÄR öre)
+    expect(res!.matters[0]!.expenseOre).toBe(50000);
   });
 
   it("totals summerar alla ärenden", async () => {
@@ -112,7 +112,7 @@ describe("reports.perLawyer", () => {
       from: "2026-01-01", to: "2026-12-31", userId: "u1",
     });
     expect(res!.unbilled.rows).toHaveLength(1);
-    expect(res!.unbilled.rows[0].timeOre).toBe(30 / 60 * 1000); // hourlyRate ÄR öre
+    expect(res!.unbilled.rows[0]!.timeOre).toBe(30 / 60 * 1000); // hourlyRate ÄR öre
   });
 
   it("ignorerar non-billable i workValueOre och unbilled", async () => {
@@ -124,9 +124,9 @@ describe("reports.perLawyer", () => {
     const res = await makeCaller().perLawyer({
       from: "2026-01-01", to: "2026-12-31", userId: "u1",
     });
-    expect(res!.matters[0].totalMinutes).toBe(60);
-    expect(res!.matters[0].billableMinutes).toBe(0);
-    expect(res!.matters[0].workValueOre).toBe(0);
+    expect(res!.matters[0]!.totalMinutes).toBe(60);
+    expect(res!.matters[0]!.billableMinutes).toBe(0);
+    expect(res!.matters[0]!.workValueOre).toBe(0);
     expect(res!.unbilled.rows).toHaveLength(0);
   });
 
@@ -139,7 +139,7 @@ describe("reports.perLawyer", () => {
     const res = await makeCaller().perLawyer({
       from: "2026-01-01", to: "2026-12-31", userId: "u1",
     });
-    expect(res!.matters[0].paymentMethod).toBe("RATTSHJALP");
-    expect(res!.matters[0].paymentMethodNote).toBe("Diarienr X");
+    expect(res!.matters[0]!.paymentMethod).toBe("RATTSHJALP");
+    expect(res!.matters[0]!.paymentMethodNote).toBe("Diarienr X");
   });
 });

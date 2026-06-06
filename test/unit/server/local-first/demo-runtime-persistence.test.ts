@@ -28,7 +28,7 @@ describe("DemoRuntime — persistens", () => {
     });
     await rt.loadDemo("https://x/demo.git");
     expect(spy).toHaveBeenCalledTimes(1);
-    const saved = spy.mock.calls[0][0];
+    const saved = spy.mock.calls[0]![0];
     expect(saved["matters/active/m1.json"]).toBeDefined();
   });
 

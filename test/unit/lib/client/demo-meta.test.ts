@@ -36,7 +36,7 @@ describe("loadDemoMeta", () => {
     const meta = await loadDemoMeta("ulrik-s/ava", mockFetch(VALID_META));
     expect(meta.organizationId).toBe("demo-firma-ab");
     expect(meta.users).toHaveLength(2);
-    expect(meta.users[0].id).toBe("u-anna");
+    expect(meta.users[0]!.id).toBe("u-anna");
   });
 
   it("fetchar med cache:'no-store' så reset/deploy ger färsk meta", async () => {

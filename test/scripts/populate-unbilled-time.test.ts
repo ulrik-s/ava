@@ -24,7 +24,7 @@ describe("populateUnbilledTime", () => {
   it("skapar 2-3 entries per aktivt ärende (alla utan invoiceId)", async () => {
     const { target, seed } = await runTarget();
     // Populera org+users+contacts+matters först så timeEntry.create hittar dem
-    await target.caller.organization.create({ id: String(seed.organizations[0].id), name: "X" });
+    await target.caller.organization.create({ id: String(seed.organizations[0]!.id), name: "X" });
     for (const u of seed.users) {
       await target.caller.user.create({
         id: String(u.id), email: String(u.email), name: String(u.name),

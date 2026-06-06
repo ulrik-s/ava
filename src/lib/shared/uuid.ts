@@ -19,7 +19,7 @@ function getCrypto(): Crypto {
 
 function format(bytes: Uint8Array): string {
   const hex: string[] = [];
-  for (let i = 0; i < 16; i++) hex.push(bytes[i].toString(16).padStart(2, "0"));
+  for (let i = 0; i < 16; i++) hex.push(bytes[i]!.toString(16).padStart(2, "0"));
   const h = hex.join("");
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
 }
@@ -38,8 +38,8 @@ export function uuidv7(now: number = Date.now()): string {
   const bytes = new Uint8Array(16);
   writeTimestamp(bytes, now);
   getCrypto().getRandomValues(bytes.subarray(6));
-  bytes[6] = (bytes[6] & 0x0f) | 0x70; // version 7
-  bytes[8] = (bytes[8] & 0x3f) | 0x80; // RFC 4122-variant
+  bytes[6] = (bytes[6]! & 0x0f) | 0x70; // version 7
+  bytes[8] = (bytes[8]! & 0x3f) | 0x80; // RFC 4122-variant
   return format(bytes);
 }
 

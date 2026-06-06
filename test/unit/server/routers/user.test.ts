@@ -42,7 +42,7 @@ describe("user.list", () => {
   it("returnerar bara säkra fält (inte passwordHash)", async () => {
     mockPrisma.user.findMany.mockResolvedValue([]);
     await makeCaller().list();
-    const args = mockPrisma.user.findMany.mock.calls[0][0];
+    const args = mockPrisma.user.findMany.mock.calls[0]![0];
     expect(args.select.passwordHash).toBeUndefined();
     expect(args.select.email).toBe(true);
     expect(args.select.name).toBe(true);
@@ -69,7 +69,7 @@ describe("user.create", () => {
       name: "Ny",
       password: "hemligt-lösenord",
     });
-    const args = mockPrisma.user.create.mock.calls[0][0];
+    const args = mockPrisma.user.create.mock.calls[0]![0];
     expect(args.data.passwordHash).toBeDefined();
     expect(args.data.passwordHash).not.toBe("hemligt-lösenord"); // bcrypt
     expect(args.data.email).toBe("ny@test.se");
@@ -79,14 +79,14 @@ describe("user.create", () => {
   it("tillåter användare utan lösenord (Microsoft-only)", async () => {
     mockPrisma.user.create.mockResolvedValue({ id: "new" });
     await makeCaller().create({ email: "x@y.se", name: "Y" });
-    const args = mockPrisma.user.create.mock.calls[0][0];
+    const args = mockPrisma.user.create.mock.calls[0]![0];
     expect(args.data.passwordHash).toBeNull();
   });
 
   it("default-role är LAWYER", async () => {
     mockPrisma.user.create.mockResolvedValue({});
     await makeCaller().create({ email: "x@y.se", name: "Y" });
-    const args = mockPrisma.user.create.mock.calls[0][0];
+    const args = mockPrisma.user.create.mock.calls[0]![0];
     expect(args.data.role).toBe("LAWYER");
   });
 
@@ -105,7 +105,7 @@ describe("user.update", () => {
   it("hashar lösenord när password skickas", async () => {
     mockPrisma.user.update.mockResolvedValue({ id: "u1" });
     await makeCaller().update({ id: "u1", password: "nytt-hemligt-pwd" });
-    const args = mockPrisma.user.update.mock.calls[0][0];
+    const args = mockPrisma.user.update.mock.calls[0]![0];
     expect(args.data.passwordHash).toBeDefined();
     expect(args.data.password).toBeUndefined();
   });
@@ -113,7 +113,7 @@ describe("user.update", () => {
   it("uppdaterar utan att röra passwordHash om password ej skickas", async () => {
     mockPrisma.user.update.mockResolvedValue({});
     await makeCaller().update({ id: "u1", name: "Nytt namn" });
-    const args = mockPrisma.user.update.mock.calls[0][0];
+    const args = mockPrisma.user.update.mock.calls[0]![0];
     expect(args.data.passwordHash).toBeUndefined();
     expect(args.data.name).toBe("Nytt namn");
   });
@@ -121,7 +121,7 @@ describe("user.update", () => {
   it("scopar where på organizationId", async () => {
     mockPrisma.user.update.mockResolvedValue({});
     await makeCaller().update({ id: "u1", name: "X" });
-    const args = mockPrisma.user.update.mock.calls[0][0];
+    const args = mockPrisma.user.update.mock.calls[0]![0];
     expect(args.where).toEqual({ id: "u1", organizationId: "org-a" });
   });
 });
@@ -194,7 +194,7 @@ describe("user.addKey / removeKey", () => {
       fingerprint: "SHA256:abc", type: "ssh-ed25519", publicKey: "ssh-ed25519 AAAA",
       addedAt: "2026-05-21T00:00:00Z",
     });
-    const call = mockPrisma.user.update.mock.calls[0][0];
+    const call = mockPrisma.user.update.mock.calls[0]![0];
     expect(call.data.publicKeys).toHaveLength(1);
     expect(call.data.publicKeys[0].fingerprint).toBe("SHA256:abc");
   });
@@ -219,7 +219,7 @@ describe("user.addKey / removeKey", () => {
     });
     mockPrisma.user.update.mockResolvedValue({});
     await makeCallerWithRole("LAWYER", "u1").removeKey({ fingerprint: "SHA256:a" });
-    const call = mockPrisma.user.update.mock.calls[0][0];
+    const call = mockPrisma.user.update.mock.calls[0]![0];
     expect(call.data.publicKeys).toHaveLength(1);
     expect(call.data.publicKeys[0].fingerprint).toBe("SHA256:b");
   });

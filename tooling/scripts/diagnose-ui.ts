@@ -131,7 +131,7 @@ function serveOut(): Server {
         join(OUT_DIR, `${url}.html`),
         join(OUT_DIR, "404.html"),
       ];
-      const filePath = candidates.find((p) => existsSync(p) && statSync(p).isFile()) ?? candidates[candidates.length - 1];
+      const filePath = candidates.find((p) => existsSync(p) && statSync(p).isFile()) ?? candidates[candidates.length - 1]!;
       const data = await readFile(filePath);
       const ext = filePath.slice(filePath.lastIndexOf("."));
       res.writeHead(200, { "Content-Type": MIME[ext] ?? "application/octet-stream", "Cache-Control": "no-store" });
@@ -286,7 +286,7 @@ async function visitRoute(browser: Browser, route: Route): Promise<RouteResult> 
     const found = await collectDetailLinks(page, route.detailHrefPattern, max);
     await page.close();
     for (let i = 0; i < found.length; i++) {
-      items.push(await visitDetail(browser, route.name, baseUrl, found[i], i + 1));
+      items.push(await visitDetail(browser, route.name, baseUrl, found[i]!, i + 1));
     }
   } else {
     await page.close();

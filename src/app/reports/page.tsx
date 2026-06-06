@@ -31,8 +31,9 @@ function PaymentBadge({ method }: { method: string }) {
 // eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'ReportsPage' has a complexity of 10. Maximum allowed is 8.)
 export default function ReportsPage() {
   const now = new Date();
-  const firstOfYear = new Date(now.getFullYear(), 0, 1).toISOString().split("T")[0];
-  const today = now.toISOString().split("T")[0];
+  // split("T") ger alltid minst ett element → [0] är aldrig undefined.
+  const firstOfYear = new Date(now.getFullYear(), 0, 1).toISOString().split("T")[0]!;
+  const today = now.toISOString().split("T")[0]!;
 
   const [from, setFrom] = useState(firstOfYear);
   const [to, setTo] = useState(today);

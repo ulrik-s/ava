@@ -40,9 +40,9 @@ describe("_count utan explicit include", () => {
     }) as Array<{ _count: { documents: number; timeEntries: number; contacts: number } }>;
 
     expect(rows).toHaveLength(1);
-    expect(rows[0]._count.documents).toBe(2);   // d-1, d-2 (inte d-3 → annan matter)
-    expect(rows[0]._count.timeEntries).toBe(1);
-    expect(rows[0]._count.contacts).toBe(1);
+    expect(rows[0]!._count.documents).toBe(2);   // d-1, d-2 (inte d-3 → annan matter)
+    expect(rows[0]!._count.timeEntries).toBe(1);
+    expect(rows[0]!._count.contacts).toBe(1);
   });
 
   it("räknar 0 korrekt när inga relationer finns", async () => {
@@ -53,8 +53,8 @@ describe("_count utan explicit include", () => {
       where: { organizationId: ORG },
       include: { _count: { select: { documents: true, timeEntries: true } } },
     }) as Array<{ _count: { documents: number; timeEntries: number } }>;
-    expect(rows[0]._count.documents).toBe(0);
-    expect(rows[0]._count.timeEntries).toBe(0);
+    expect(rows[0]!._count.documents).toBe(0);
+    expect(rows[0]!._count.timeEntries).toBe(0);
   });
 
   it("count + samtidig include av annan relation fungerar ihop", async () => {
@@ -66,7 +66,7 @@ describe("_count utan explicit include", () => {
         _count: { select: { documents: true } },
       },
     }) as Array<{ contacts: unknown[]; _count: { documents: number } }>;
-    expect(Array.isArray(rows[0].contacts)).toBe(true);
-    expect(rows[0]._count.documents).toBe(2);
+    expect(Array.isArray(rows[0]!.contacts)).toBe(true);
+    expect(rows[0]!._count.documents).toBe(2);
   });
 });

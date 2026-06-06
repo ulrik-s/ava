@@ -103,7 +103,7 @@ export class FilesystemClaimStore implements IClaimStore {
       // Iterera baklänges — vi vill ha senaste matchande raden
       for (let i = lines.length - 1; i >= 0; i--) {
         try {
-          const row = this.projection.deserializeLine(lines[i]);
+          const row = this.projection.deserializeLine(lines[i]!);
           if (row.claimId === claimId) return row;
         } catch {
           // Trasig rad — hoppa över, robust mot partial writes

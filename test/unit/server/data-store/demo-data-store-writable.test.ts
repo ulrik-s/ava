@@ -47,8 +47,8 @@ describe("DemoDataStore writable", () => {
     type MatterWithContacts = { contacts: Array<{ contact: { name: string } }> };
     const matter = m as unknown as MatterWithContacts;
     expect(matter.contacts).toHaveLength(1);
-    expect(matter.contacts[0].contact).toBeDefined();
-    expect(matter.contacts[0].contact.name).toBe("Anna");
+    expect(matter.contacts[0]!.contact).toBeDefined();
+    expect(matter.contacts[0]!.contact.name).toBe("Anna");
   });
 
   // Regressionsskydd: tidigare mappade `entityNameFor` bara 8 nycklar och
@@ -68,7 +68,7 @@ describe("DemoDataStore writable", () => {
   ])("mutation på %s emit:ar entity-namn '%s'", async (key, expected) => {
     const events: MutationEvent<Record<string, unknown>>[] = [];
     const ds = new DemoDataStore({}, (e) => { events.push(e); });
-    const delegate = (ds as unknown as Record<string, { create: (a: unknown) => Promise<unknown> }>)[key];
+    const delegate = (ds as unknown as Record<string, { create: (a: unknown) => Promise<unknown> }>)[key]!;
     await delegate.create({ data: { id: "x1", organizationId: "o1" } });
     expect(events.at(-1)!.entity).toBe(expected);
   });
@@ -90,7 +90,7 @@ describe("DemoDataStore writable", () => {
     type MatterWithContacts = { contacts: Array<{ contact: { name: string } }> };
     const matter = m as unknown as MatterWithContacts;
     expect(matter.contacts).toHaveLength(1);
-    expect(matter.contacts[0].contact).toBeDefined();
-    expect(matter.contacts[0].contact.name).toBe("Anna");
+    expect(matter.contacts[0]!.contact).toBeDefined();
+    expect(matter.contacts[0]!.contact.name).toBe("Anna");
   });
 });

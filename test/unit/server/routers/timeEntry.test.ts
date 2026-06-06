@@ -48,7 +48,7 @@ describe("timeEntry.list", () => {
 
   it("filtrerar på matterId och userId", async () => {
     await makeCaller().list({ matterId: "m1", userId: "u9" });
-    const w = mockPrisma.timeEntry.findMany.mock.calls[0][0].where;
+    const w = mockPrisma.timeEntry.findMany.mock.calls[0]![0].where;
     expect(w.matterId).toBe("m1");
     expect(w.userId).toBe("u9");
   });
@@ -57,7 +57,7 @@ describe("timeEntry.list", () => {
     const from = new Date("2026-01-01");
     const to = new Date("2026-12-31");
     await makeCaller().list({ from, to });
-    const w = mockPrisma.timeEntry.findMany.mock.calls[0][0].where;
+    const w = mockPrisma.timeEntry.findMany.mock.calls[0]![0].where;
     expect(w.date.gte).toBe(from);
     expect(w.date.lte).toBe(to);
   });
@@ -79,7 +79,7 @@ describe("timeEntry.create", () => {
       minutes: 90,
       description: "Möte",
     });
-    const args = mockPrisma.timeEntry.create.mock.calls[0][0];
+    const args = mockPrisma.timeEntry.create.mock.calls[0]![0];
     expect(args.data.userId).toBe("u-9");
     expect(args.data.hourlyRate).toBe(3000);
     expect(args.data.minutes).toBe(90);
@@ -95,7 +95,7 @@ describe("timeEntry.create", () => {
       minutes: 30,
       description: "X",
     });
-    expect(mockPrisma.timeEntry.create.mock.calls[0][0].data.hourlyRate).toBe(0);
+    expect(mockPrisma.timeEntry.create.mock.calls[0]![0].data.hourlyRate).toBe(0);
   });
 
   it("validerar minutes > 0", async () => {
@@ -109,13 +109,13 @@ describe("timeEntry.update", () => {
   it("konverterar date-sträng till Date", async () => {
     mockPrisma.timeEntry.update.mockResolvedValue({});
     await makeCaller().update({ id: "t1", date: "2026-03-15" });
-    expect(mockPrisma.timeEntry.update.mock.calls[0][0].data.date).toBeInstanceOf(Date);
+    expect(mockPrisma.timeEntry.update.mock.calls[0]![0].data.date).toBeInstanceOf(Date);
   });
 
   it("uppdaterar bara skickade fält", async () => {
     mockPrisma.timeEntry.update.mockResolvedValue({});
     await makeCaller().update({ id: "t1", description: "Nytt" });
-    const data = mockPrisma.timeEntry.update.mock.calls[0][0].data;
+    const data = mockPrisma.timeEntry.update.mock.calls[0]![0].data;
     expect(data.description).toBe("Nytt");
     expect(data.minutes).toBeUndefined();
   });
@@ -154,10 +154,10 @@ describe("timeEntry.report", () => {
       to: "2026-12-31",
     });
     expect(res.totalEntries).toBe(3);
-    expect(res.byUser["u1"].name).toBe("Anna");
-    expect(res.byUser["u1"].totalMinutes).toBe(90);
-    expect(res.byUser["u1"].billableMinutes).toBe(60);
-    expect(res.byUser["u2"].totalMinutes).toBe(45);
+    expect(res.byUser["u1"]!.name).toBe("Anna");
+    expect(res.byUser["u1"]!.totalMinutes).toBe(90);
+    expect(res.byUser["u1"]!.billableMinutes).toBe(60);
+    expect(res.byUser["u2"]!.totalMinutes).toBe(45);
   });
 
   it("filtrerar på userIds-array när angiven", async () => {
@@ -167,7 +167,7 @@ describe("timeEntry.report", () => {
       to: "2026-12-31",
       userIds: ["u1", "u2"],
     });
-    const w = mockPrisma.timeEntry.findMany.mock.calls[0][0].where;
+    const w = mockPrisma.timeEntry.findMany.mock.calls[0]![0].where;
     expect(w.userId).toEqual({ in: ["u1", "u2"] });
   });
 
@@ -178,7 +178,7 @@ describe("timeEntry.report", () => {
       to: "2026-12-31",
       userId: "u1",
     });
-    const w = mockPrisma.timeEntry.findMany.mock.calls[0][0].where;
+    const w = mockPrisma.timeEntry.findMany.mock.calls[0]![0].where;
     expect(w.userId).toBe("u1");
   });
 
@@ -190,7 +190,7 @@ describe("timeEntry.report", () => {
       userId: "u1",
       userIds: ["u2", "u3"],
     });
-    const w = mockPrisma.timeEntry.findMany.mock.calls[0][0].where;
+    const w = mockPrisma.timeEntry.findMany.mock.calls[0]![0].where;
     expect(w.userId).toEqual({ in: ["u2", "u3"] });
   });
 
@@ -201,7 +201,7 @@ describe("timeEntry.report", () => {
       to: "2026-12-31",
       matterId: "m1",
     });
-    const w = mockPrisma.timeEntry.findMany.mock.calls[0][0].where;
+    const w = mockPrisma.timeEntry.findMany.mock.calls[0]![0].where;
     expect(w.matterId).toBe("m1");
   });
 });

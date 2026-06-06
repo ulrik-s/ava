@@ -110,7 +110,7 @@ describe("TemplatesPage", () => {
     expect(screen.getByText(/Ta bort mall\?/i)).toBeInTheDocument();
     // Click confirm (the second "Ta bort" button in the dialog)
     const removeButtons = screen.getAllByRole("button", { name: /Ta bort/i });
-    fireEvent.click(removeButtons[removeButtons.length - 1]);
+    fireEvent.click(removeButtons[removeButtons.length - 1]!);
     expect(deleteMutate).toHaveBeenCalledWith({ id: "t1" });
   });
 

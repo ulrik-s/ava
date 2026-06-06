@@ -188,11 +188,11 @@ describe("InvoiceDetailPage", () => {
       await waitFor(() => screen.getByRole("button", { name: /Registrera betalning/i })),
     );
     const numbers = screen.getAllByRole("spinbutton") as HTMLInputElement[];
-    fireEvent.change(numbers[0], { target: { value: "5000" } });
+    fireEvent.change(numbers[0]!, { target: { value: "5000" } });
     const sparaBtns = screen.getAllByRole("button", { name: /^Spara$/i });
-    fireEvent.click(sparaBtns[sparaBtns.length - 1]);
+    fireEvent.click(sparaBtns[sparaBtns.length - 1]!);
     expect(stubs.recordPayment.mutate).toHaveBeenCalled();
-    expect(stubs.recordPayment.mutate.mock.calls[0][0]).toMatchObject({
+    expect(stubs.recordPayment.mutate.mock.calls[0]![0]).toMatchObject({
       invoiceId: "i1",
       amount: 500000,
     });
@@ -204,7 +204,7 @@ describe("InvoiceDetailPage", () => {
       await waitFor(() => screen.getByRole("button", { name: /Registrera betalning/i })),
     );
     const cancels = screen.getAllByRole("button", { name: /Avbryt/i });
-    fireEvent.click(cancels[0]);
+    fireEvent.click(cancels[0]!);
     expect(screen.queryByRole("heading", { name: /Registrera betalning/i })).not.toBeInTheDocument();
   });
 
@@ -214,10 +214,10 @@ describe("InvoiceDetailPage", () => {
       await waitFor(() => screen.getByRole("button", { name: /Skapa avbetalningsplan/i })),
     );
     const numberInputs = screen.getAllByRole("spinbutton") as HTMLInputElement[];
-    fireEvent.change(numberInputs[0], { target: { value: "1000" } });
+    fireEvent.change(numberInputs[0]!, { target: { value: "1000" } });
     fireEvent.click(screen.getByRole("button", { name: /Skapa plan/i }));
     expect(stubs.createPaymentPlan.mutate).toHaveBeenCalled();
-    expect(stubs.createPaymentPlan.mutate.mock.calls[0][0]).toMatchObject({
+    expect(stubs.createPaymentPlan.mutate.mock.calls[0]![0]).toMatchObject({
       invoiceId: "i1",
       monthlyAmount: 100000,
     });
@@ -241,7 +241,7 @@ describe("InvoiceDetailPage", () => {
     const noteArea = screen.getByPlaceholderText(/anledning/i) as HTMLTextAreaElement;
     fireEvent.change(noteArea, { target: { value: "Felaktig fakturering" } });
     const krediteraBtns = screen.getAllByRole("button", { name: /Kreditera/i });
-    fireEvent.click(krediteraBtns[krediteraBtns.length - 1]);
+    fireEvent.click(krediteraBtns[krediteraBtns.length - 1]!);
     expect(stubs.createCredit.mutate).toHaveBeenCalledWith({
       invoiceId: "i1",
       notes: "Felaktig fakturering",
@@ -361,7 +361,7 @@ describe("InvoiceDetailPage", () => {
     );
     expect(screen.getByRole("heading", { name: /Kreditera faktura/i })).toBeInTheDocument();
     const cancels = screen.getAllByRole("button", { name: /Avbryt/i });
-    fireEvent.click(cancels[0]);
+    fireEvent.click(cancels[0]!);
     expect(screen.queryByRole("heading", { name: /Kreditera faktura/i })).not.toBeInTheDocument();
   });
 
@@ -372,7 +372,7 @@ describe("InvoiceDetailPage", () => {
     );
     expect(screen.getByRole("heading", { name: /Skapa avbetalningsplan/i })).toBeInTheDocument();
     const cancels = screen.getAllByRole("button", { name: /Avbryt/i });
-    fireEvent.click(cancels[0]);
+    fireEvent.click(cancels[0]!);
     expect(screen.queryByRole("heading", { name: /Skapa avbetalningsplan/i })).not.toBeInTheDocument();
   });
 
@@ -398,7 +398,7 @@ describe("InvoiceDetailPage", () => {
     expect(notes.value).toBe("Avbetalningsplan");
 
     fireEvent.click(screen.getByRole("button", { name: /Skapa plan/i }));
-    const arg = stubs.createPaymentPlan.mutate.mock.calls[0][0];
+    const arg = stubs.createPaymentPlan.mutate.mock.calls[0]![0];
     expect(arg.monthlyAmount).toBe(150000);
     expect(arg.dayOfMonth).toBe(15);
     expect(arg.startDate).toBe("2026-06-01");
@@ -426,7 +426,7 @@ describe("InvoiceDetailPage", () => {
     //    snarare än att navigera. Verifiera rätt dokument-id.
     fireEvent.click(docEl);
     await waitFor(() => expect(openDocumentMock).toHaveBeenCalledTimes(1));
-    const deps = openDocumentMock.mock.calls[0][0] as { doc: { id: string; fileName: string }; openUrl: unknown };
+    const deps = openDocumentMock.mock.calls[0]![0] as { doc: { id: string; fileName: string }; openUrl: unknown };
     expect(deps.doc).toMatchObject({ id: "faktura-i1", fileName: "Faktura 2026-0001.pdf" });
     expect(typeof deps.openUrl).toBe("function");
   });
@@ -443,8 +443,8 @@ describe("InvoiceDetailPage", () => {
     const amount = screen.getByLabelText(/^Belopp/) as HTMLInputElement;
     fireEvent.change(amount, { target: { value: "100" } });
     const sparaBtns = screen.getAllByRole("button", { name: /^Spara$/i });
-    fireEvent.click(sparaBtns[sparaBtns.length - 1]);
-    const arg = stubs.recordPayment.mutate.mock.calls[0][0];
+    fireEvent.click(sparaBtns[sparaBtns.length - 1]!);
+    const arg = stubs.recordPayment.mutate.mock.calls[0]![0];
     expect(arg.paidAt).toBe("2026-04-20");
     expect(arg.note).toBe("Banköverföring");
     expect(arg.amount).toBe(10000);

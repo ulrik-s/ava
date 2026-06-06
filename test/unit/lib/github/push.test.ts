@@ -114,13 +114,13 @@ describe("pushViaRest", () => {
     ]);
 
     // Commit-body har rätt message + parent + tree
-    const commitBody = calls[2].body as { message: string; tree: string; parents: string[] };
+    const commitBody = calls[2]!.body as { message: string; tree: string; parents: string[] };
     expect(commitBody.message).toBe("feat: add new");
     expect(commitBody.tree).toBe("tree-1");
     expect(commitBody.parents).toEqual(["parent"]);
 
     // Tree-entries: bara nya filen (existing inte ändrat → ingen entry)
-    const treeBody = calls[1].body as { base_tree: string; tree: Array<{ path: string; sha: string }> };
+    const treeBody = calls[1]!.body as { base_tree: string; tree: Array<{ path: string; sha: string }> };
     expect(treeBody.base_tree).toBe("base-tree");
     expect(treeBody.tree.map((e) => e.path)).toEqual(["new.json"]);
   });

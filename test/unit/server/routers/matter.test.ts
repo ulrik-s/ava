@@ -113,7 +113,7 @@ describe("matter.list", () => {
     mockPrisma.matter.count.mockResolvedValue(0);
 
     await makeCaller().list({});
-    const where = mockPrisma.matter.findMany.mock.calls[0][0].where;
+    const where = mockPrisma.matter.findMany.mock.calls[0]![0].where;
     expect(where).not.toHaveProperty("timeEntries");
   });
 
@@ -122,7 +122,7 @@ describe("matter.list", () => {
     mockPrisma.matter.count.mockResolvedValue(0);
 
     await makeCaller().list({ search: "Berg" });
-    const callArgs = mockPrisma.matter.findMany.mock.calls[0][0];
+    const callArgs = mockPrisma.matter.findMany.mock.calls[0]![0];
     expect(callArgs.where.OR).toBeDefined();
     expect(callArgs.where.OR).toHaveLength(3);
   });
@@ -243,7 +243,7 @@ describe("matter.update", () => {
       paymentMethod: "RATTSHJALP",
       paymentMethodDecidedAt: "2026-03-02",
     });
-    const args = mockPrisma.matter.update.mock.calls[0][0];
+    const args = mockPrisma.matter.update.mock.calls[0]![0];
     expect(args.data.paymentMethodDecidedAt).toBeInstanceOf(Date);
     expect((args.data.paymentMethodDecidedAt as Date).toISOString()).toContain("2026-03-02");
   });
@@ -253,7 +253,7 @@ describe("matter.update", () => {
     mockPrisma.matter.update.mockResolvedValue(MATTER_A);
 
     await makeCaller().update({ id: "matter-1", paymentMethodDecidedAt: null });
-    const args = mockPrisma.matter.update.mock.calls[0][0];
+    const args = mockPrisma.matter.update.mock.calls[0]![0];
     expect(args.data.paymentMethodDecidedAt).toBeNull();
   });
 

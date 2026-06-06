@@ -45,7 +45,7 @@ describe("openViaHelper", () => {
     global.fetch = fetchMock;
     await openViaHelper({ fileName: "x.pdf", downloadUrl: "https://example.com/x" });
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    const call = fetchMock.mock.calls[0];
+    const call = fetchMock.mock.calls[0]!;
     expect(call[0]).toBe("http://127.0.0.1:48761/open");
     expect(call[1].method).toBe("POST");
     expect(JSON.parse(call[1].body)).toMatchObject({ fileName: "x.pdf" });

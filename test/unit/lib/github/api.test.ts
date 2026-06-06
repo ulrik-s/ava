@@ -86,8 +86,8 @@ describe("getBranchHead", () => {
   it("returnerar sha från /git/ref/heads/<branch>", async () => {
     mockFetch(() => jsonRes({ object: { sha: "abc123" } }));
     expect(await getBranchHead(REPO, "main", OPTS)).toBe("abc123");
-    expect(calls[0].url).toBe("https://api.github.com/repos/ulrik-s/ava/git/ref/heads/main");
-    expect((calls[0].init?.headers as Record<string, string>)?.Authorization).toBe("Bearer ghp_test");
+    expect(calls[0]!.url).toBe("https://api.github.com/repos/ulrik-s/ava/git/ref/heads/main");
+    expect((calls[0]!.init?.headers as Record<string, string>)?.Authorization).toBe("Bearer ghp_test");
   });
 
   it("kastar med statusText + body.message vid fel", async () => {
@@ -98,7 +98,7 @@ describe("getBranchHead", () => {
   it("URL-encodar branch-namn", async () => {
     mockFetch(() => jsonRes({ object: { sha: "x" } }));
     await getBranchHead(REPO, "feature/foo bar", OPTS);
-    expect(calls[0].url).toContain("feature%2Ffoo%20bar");
+    expect(calls[0]!.url).toContain("feature%2Ffoo%20bar");
   });
 });
 
@@ -111,13 +111,13 @@ describe("getCommit + getTreeRecursive + getBlob", () => {
     };
     mockFetch(() => jsonRes(commit));
     expect(await getCommit(REPO, "abc", OPTS)).toEqual(commit);
-    expect(calls[0].url).toContain("/git/commits/abc");
+    expect(calls[0]!.url).toContain("/git/commits/abc");
   });
 
   it("getTreeRecursive lägger till ?recursive=1", async () => {
     mockFetch(() => jsonRes({ sha: "t", truncated: false, tree: [] }));
     await getTreeRecursive(REPO, "treesha", OPTS);
-    expect(calls[0].url).toContain("/git/trees/treesha?recursive=1");
+    expect(calls[0]!.url).toContain("/git/trees/treesha?recursive=1");
   });
 
   it("getBlob returnerar fil-innehåll i base64", async () => {
@@ -132,7 +132,7 @@ describe("createBlob", () => {
     mockFetch(() => jsonRes({ sha: "newblob" }));
     const sha = await createBlob(REPO, new TextEncoder().encode("hej"), OPTS);
     expect(sha).toBe("newblob");
-    const body = JSON.parse(calls[0].init!.body as string);
+    const body = JSON.parse(calls[0]!.init!.body as string);
     expect(body.encoding).toBe("base64");
     expect(body.content).toBe(btoa("hej"));
   });
@@ -144,7 +144,7 @@ describe("createTree", () => {
     await createTree(REPO, "basesha", [
       { path: "a.json", mode: "100644", type: "blob", sha: "blob1" },
     ], OPTS);
-    const body = JSON.parse(calls[0].init!.body as string);
+    const body = JSON.parse(calls[0]!.init!.body as string);
     expect(body.base_tree).toBe("basesha");
     expect(body.tree).toHaveLength(1);
   });
@@ -152,7 +152,7 @@ describe("createTree", () => {
   it("utelämnar base_tree när det är null (rena trädet)", async () => {
     mockFetch(() => jsonRes({ sha: "newtree" }));
     await createTree(REPO, null, [], OPTS);
-    const body = JSON.parse(calls[0].init!.body as string);
+    const body = JSON.parse(calls[0]!.init!.body as string);
     expect(body).not.toHaveProperty("base_tree");
   });
 
@@ -161,7 +161,7 @@ describe("createTree", () => {
     await createTree(REPO, "base", [
       { path: "removed.json", mode: "100644", type: "blob", sha: null },
     ], OPTS);
-    const body = JSON.parse(calls[0].init!.body as string);
+    const body = JSON.parse(calls[0]!.init!.body as string);
     expect(body.tree[0].sha).toBeNull();
   });
 });
@@ -173,7 +173,7 @@ describe("createCommit", () => {
       message: "Add foo", tree: "treesha", parents: ["parent1"],
     }, OPTS);
     expect(sha).toBe("newcommit");
-    const body = JSON.parse(calls[0].init!.body as string);
+    const body = JSON.parse(calls[0]!.init!.body as string);
     expect(body.message).toBe("Add foo");
     expect(body.parents).toEqual(["parent1"]);
   });
@@ -185,7 +185,7 @@ describe("createCommit", () => {
       signature: "-----BEGIN SSH SIGNATURE-----...",
       author: { name: "Anna", email: "anna@firma.se" },
     }, OPTS);
-    const body = JSON.parse(calls[0].init!.body as string);
+    const body = JSON.parse(calls[0]!.init!.body as string);
     expect(body.signature).toContain("BEGIN SSH SIGNATURE");
     expect(body.author.name).toBe("Anna");
   });
@@ -195,9 +195,9 @@ describe("updateRef", () => {
   it("PATCH:ar refs/heads/<branch> med ny sha", async () => {
     mockFetch(() => jsonRes({}));
     await updateRef(REPO, "main", "newsha", OPTS);
-    expect(calls[0].url).toContain("/git/refs/heads/main");
-    expect(calls[0].init?.method).toBe("PATCH");
-    const body = JSON.parse(calls[0].init!.body as string);
+    expect(calls[0]!.url).toContain("/git/refs/heads/main");
+    expect(calls[0]!.init?.method).toBe("PATCH");
+    const body = JSON.parse(calls[0]!.init!.body as string);
     expect(body.sha).toBe("newsha");
     expect(body.force).toBe(false);
   });
@@ -205,7 +205,7 @@ describe("updateRef", () => {
   it("skickar force=true när opts.force = true", async () => {
     mockFetch(() => jsonRes({}));
     await updateRef(REPO, "main", "x", { ...OPTS, force: true });
-    const body = JSON.parse(calls[0].init!.body as string);
+    const body = JSON.parse(calls[0]!.init!.body as string);
     expect(body.force).toBe(true);
   });
 

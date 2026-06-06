@@ -38,6 +38,17 @@
 import type { KostnadsrakningResult } from "@/lib/shared/kostnadsrakning";
 import type { PDFPage, PDFFont } from "pdf-lib";
 
+/** En formaterad utläggsrad i templateContext.expenseLines (se
+ *  kostnadsrakning.ts buildTemplateContext) — alla fält är required strings. */
+interface ExpenseRow {
+  date: string;
+  description: string;
+  vatRateLabel: string;
+  exclVatFormatted: string;
+  vatFormatted: string;
+  inclVatFormatted: string;
+}
+
 export interface RenderInput {
   result: KostnadsrakningResult;
   meta: {
@@ -124,8 +135,10 @@ export async function renderKostnadsrakningPdf(input: RenderInput): Promise<Uint
     y -= 22;
   }
 
-  // Utlägg
-  const lines = (c.expenseLines as Array<Record<string, string>>) ?? [];
+  // Utlägg. Precis lokal radtyp (alla fält required strings) i st.f.
+  // Record<string,string> — annars ger noUncheckedIndexedAccess `string |
+  // undefined` per fält och tvingar fram döda `?? ""`-fallbacks.
+  const lines = (c.expenseLines as ExpenseRow[] | undefined) ?? [];
   if (lines.length > 0) {
     page.drawText("Utlägg", { x: MARGIN, y, size: 11, font: bold });
     y -= 14;

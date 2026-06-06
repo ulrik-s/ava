@@ -40,7 +40,7 @@ function fmtDateTime(v: Date | string | null | undefined): string {
 
 function toEditForm(entry: TimeEntryRow): EditForm {
   return {
-    date: new Date(entry.date).toISOString().split("T")[0],
+    date: new Date(entry.date).toISOString().split("T")[0]!,
     minutes: entry.minutes,
     description: entry.description ?? "",
     billable: entry.billable,
@@ -48,7 +48,7 @@ function toEditForm(entry: TimeEntryRow): EditForm {
 }
 
 function emptyForm(): EditForm {
-  return { date: new Date().toISOString().split("T")[0], minutes: 30, description: "", billable: true };
+  return { date: new Date().toISOString().split("T")[0]!, minutes: 30, description: "", billable: true };
 }
 
 // eslint-disable-next-line max-lines-per-function -- TODO: refactor (struktur är tabular: kolumndefs + 2 modaler)

@@ -32,13 +32,13 @@ describe("searchDocuments", () => {
   it("matchar mot documentType", () => {
     const r = searchDocuments(docs, matters, "stämning", "org-1", 20);
     expect(r.hits.length).toBeGreaterThan(0);
-    expect(r.hits[0].id).toBe("d-1");
+    expect(r.hits[0]!.id).toBe("d-1");
   });
 
   it("matchar mot summary", () => {
     const r = searchDocuments(docs, matters, "Eriksson", "org-1", 20);
     expect(r.hits.length).toBe(1);
-    expect(r.hits[0].id).toBe("d-3");
+    expect(r.hits[0]!.id).toBe("d-3");
   });
 
   it("filtrerar bort dokument från annan org", () => {
@@ -68,8 +68,8 @@ describe("searchDocuments", () => {
 
   it("inkluderar matter-info i resultat", () => {
     const r = searchDocuments(docs, matters, "Stämningsansökan", "org-1", 20);
-    expect(r.hits[0].matterNumber).toBe("2026-001");
-    expect(r.hits[0].matterTitle).toBe("Vårdnad");
+    expect(r.hits[0]!.matterNumber).toBe("2026-001");
+    expect(r.hits[0]!.matterTitle).toBe("Vårdnad");
   });
 
   it("respekterar limit", () => {
@@ -82,7 +82,7 @@ describe("searchDocuments", () => {
     // "vårdnad" finns i d-1.fileName + d-1.summary + d-2.summary
     // d-1 ska ranka högst eftersom det har träff i både fileName + summary
     const r = searchDocuments(docs, matters, "vårdnad", "org-1", 20);
-    expect(r.hits[0].id).toBe("d-1");
+    expect(r.hits[0]!.id).toBe("d-1");
   });
 
   it("hittar ord som ENDAST finns i dokumentinnehåll (content-cache)", () => {
@@ -90,9 +90,9 @@ describe("searchDocuments", () => {
     setDocumentContent("d-3", "BRF beslutar avslag pga att skadan inte är dokumenterad.");
     const r = searchDocuments(docs, matters, "skadan", "org-1", 20);
     expect(r.hits.length).toBe(1);
-    expect(r.hits[0].id).toBe("d-3");
+    expect(r.hits[0]!.id).toBe("d-3");
     // Snippet ska innehålla kontext runt query
-    expect(r.hits[0]._formatted?.content).toContain("skadan");
+    expect(r.hits[0]!._formatted?.content).toContain("skadan");
   });
 
   it("content-träff genererar snippet med ellipsis runt query", () => {
@@ -103,7 +103,7 @@ describe("searchDocuments", () => {
     );
     const r = searchDocuments(docs, matters, "target", "org-1", 20);
     expect(r.hits.length).toBe(1);
-    const snippet = r.hits[0]._formatted?.content ?? "";
+    const snippet = r.hits[0]!._formatted?.content ?? "";
     expect(snippet).toContain("TARGET");
     expect(snippet).toMatch(/^…/);
     expect(snippet).toMatch(/…$/);
@@ -112,7 +112,7 @@ describe("searchDocuments", () => {
   it("kombinerar metadata- + content-träff (boost-summa)", () => {
     setDocumentContent("d-1", "innehåller också vårdnad-text");
     const r = searchDocuments(docs, matters, "vårdnad", "org-1", 20);
-    expect(r.hits[0].id).toBe("d-1");
+    expect(r.hits[0]!.id).toBe("d-1");
     // d-1 har: fileName(2) + summary(1) + content(1) + meta(1) = 5
     // d-2 har: summary(1) + meta(1) = 2
   });

@@ -44,7 +44,7 @@ function mockGitHub(responses: MockResponses): typeof fetch {
     }
     const blobMatch = u.match(/\/git\/blobs\/([^/]+)$/);
     if (blobMatch) {
-      const sha = blobMatch[1];
+      const sha = blobMatch[1]!;
       const b = responses.blobs?.[sha] ?? { content: btoa("default"), encoding: "base64" as const };
       return json({ sha, size: 0, ...b });
     }

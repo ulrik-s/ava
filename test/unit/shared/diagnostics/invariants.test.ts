@@ -18,10 +18,10 @@ describe("detectMatterInvariants — KR_PENDING_NO_DOC", () => {
   it("flaggar pending kostnadsräkning utan KR-dokument", () => {
     const v = detectMatterInvariants(input({ billingRuns: [pendingKr], documents: [] }));
     expect(v).toHaveLength(1);
-    expect(v[0].code).toBe("KR_PENDING_NO_DOC");
-    expect(v[0].severity).toBe("error");
-    expect(v[0].context).toMatchObject({ matterId: "m-1", billingRunId: "br-1", matterNumber: "2026-0001" });
-    expect(v[0].message).toContain("2026-0001");
+    expect(v[0]!.code).toBe("KR_PENDING_NO_DOC");
+    expect(v[0]!.severity).toBe("error");
+    expect(v[0]!.context).toMatchObject({ matterId: "m-1", billingRunId: "br-1", matterNumber: "2026-0001" });
+    expect(v[0]!.message).toContain("2026-0001");
   });
 
   it("flaggar inte när ett KR-dokument finns i ärendet", () => {
@@ -66,8 +66,8 @@ describe("detectMatterInvariants — KR_PENDING_NO_DOC", () => {
 
   it("faller tillbaka på matterId i meddelandet när matterNumber saknas", () => {
     const v = detectMatterInvariants({ matterId: "m-x", billingRuns: [pendingKr], documents: [] });
-    expect(v[0].message).toContain("m-x");
-    expect(v[0].context.matterNumber).toBeUndefined();
+    expect(v[0]!.message).toContain("m-x");
+    expect(v[0]!.context.matterNumber).toBeUndefined();
   });
 
   it("returnerar tomt för ett ärende utan billing-runs", () => {

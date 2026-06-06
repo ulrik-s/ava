@@ -194,7 +194,7 @@ describe("Seed-data smoke — varje meny-sida körs mot riktig DemoDataStore", (
   it("nested where via matter.organizationId hittar dokument (assertDocAccess)", async () => {
     const trpc = makeCaller();
     const matters = await trpc.matter.list({ page: 1, pageSize: 1, status: "ACTIVE" });
-    const matterId = matters.matters[0].id;
+    const matterId = matters.matters[0]!.id;
     // Skapa ett färskt dokument via document.register-flödet
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const reg = (trpc.document as unknown as { register: any }).register;

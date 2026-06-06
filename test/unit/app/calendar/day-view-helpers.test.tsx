@@ -42,8 +42,8 @@ describe("layoutEventsForDay", () => {
       ev({ startAt: new Date(2026, 3, 15, 10), endAt: new Date(2026, 3, 15, 11) }),
     ]);
     expect(out).toHaveLength(1);
-    expect(out[0].leftPct).toBe(0);
-    expect(out[0].widthPct).toBe(100);
+    expect(out[0]!.leftPct).toBe(0);
+    expect(out[0]!.widthPct).toBe(100);
   });
 
   it("två overlappande events → två kolumner med 50% var", () => {
@@ -75,7 +75,7 @@ describe("layoutEventsForDay", () => {
       ev({ startAt: new Date(2026, 3, 15, 10), endAt: null }),
     ]);
     const { hourHeight } = dayBounds();
-    expect(out[0].height).toBeCloseTo(hourHeight * 0.5, 3);
+    expect(out[0]!.height).toBeCloseTo(hourHeight * 0.5, 3);
   });
 
   it("top beräknas relativt DAY_START_HOUR", () => {
@@ -83,6 +83,6 @@ describe("layoutEventsForDay", () => {
     const out = layoutEventsForDay([
       ev({ startAt: new Date(2026, 3, 15, startHour + 2, 0), endAt: new Date(2026, 3, 15, startHour + 3, 0) }),
     ]);
-    expect(out[0].top).toBeCloseTo(2 * hourHeight, 3);
+    expect(out[0]!.top).toBeCloseTo(2 * hourHeight, 3);
   });
 });

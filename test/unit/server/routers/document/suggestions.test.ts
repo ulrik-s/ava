@@ -55,7 +55,7 @@ describe("document.pendingSuggestions", () => {
     ]);
     const result = await makeCaller().pendingSuggestions({ matterId: "m1" });
     expect(result).toHaveLength(1);
-    const args = mockPrisma.documentAnalysisSuggestion.findMany.mock.calls[0][0];
+    const args = mockPrisma.documentAnalysisSuggestion.findMany.mock.calls[0]![0];
     expect(args.where.status).toBe("PENDING");
     expect(args.where.document.matterId).toBe("m1");
     expect(args.where.document.matter.organizationId).toBe("org-a");
@@ -222,7 +222,7 @@ describe("document.acceptSuggestion", () => {
     const res = await makeCaller().acceptSuggestion({ suggestionId: "s1" });
     expect(res.contactId).toBe("c-new");
     expect(mockPrisma.contact.create).toHaveBeenCalled();
-    const data = mockPrisma.contact.create.mock.calls[0][0].data;
+    const data = mockPrisma.contact.create.mock.calls[0]![0].data;
     expect(data.name).toBe("Helt Ny");
     expect(data.email).toBe("ny@x.se");
     expect(data.organizationId).toBe("org-a");
@@ -249,10 +249,10 @@ describe("document.acceptSuggestion", () => {
       suggestionId: "s1",
       override: { name: "Override Name", role: "MOTPART", email: "o@e.se" },
     });
-    const data = mockPrisma.contact.create.mock.calls[0][0].data;
+    const data = mockPrisma.contact.create.mock.calls[0]![0].data;
     expect(data.name).toBe("Override Name");
     expect(data.email).toBe("o@e.se");
-    const link = mockPrisma.matterContact.create.mock.calls[0][0].data;
+    const link = mockPrisma.matterContact.create.mock.calls[0]![0].data;
     expect(link.role).toBe("MOTPART");
   });
 
@@ -512,7 +512,7 @@ describe("document.acceptSuggestionGroup", () => {
 
     const res = await makeCaller().acceptSuggestionGroup({ suggestionIds: ["a", "b"] });
     expect(res.contactId).toBe("c-created");
-    const data = mockPrisma.contact.create.mock.calls[0][0].data;
+    const data = mockPrisma.contact.create.mock.calls[0]![0].data;
     expect(data.email).toBe("first@e.se");
     expect(data.phone).toBe("070-x");
   });

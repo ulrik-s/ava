@@ -50,7 +50,7 @@ describe("TemplateEditor", () => {
     );
     const inputs = screen.getAllByRole("textbox") as HTMLInputElement[];
     // namnfält
-    fireEvent.change(inputs[0], { target: { value: "  Mitt avtal  " } });
+    fireEvent.change(inputs[0]!, { target: { value: "  Mitt avtal  " } });
     fireEvent.click(screen.getByRole("button", { name: /Spara mall/i }));
     expect(onSave).toHaveBeenCalledWith({
       name: "Mitt avtal",
@@ -85,12 +85,12 @@ describe("TemplateEditor", () => {
   it("klick på en variabel infogar tagg i editorn", () => {
     render(<TemplateEditor onSave={onSave} onCancel={onCancel} />);
     fireEvent.click(screen.getByRole("button", { name: /Variabler/i }));
-    const variable = screen.getAllByText("{{matter.matterNumber}}")[0];
+    const variable = screen.getAllByText("{{matter.matterNumber}}")[0]!;
     fireEvent.click(variable.closest("div")!);
     const textareas = screen.getAllByRole("textbox").filter(
       (el) => el.tagName === "TEXTAREA",
     ) as HTMLTextAreaElement[];
-    const editor = textareas[0];
+    const editor = textareas[0]!;
     expect(editor.value).toContain("{{matter.matterNumber}}");
   });
 

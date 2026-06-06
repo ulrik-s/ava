@@ -37,7 +37,7 @@ describe("openDocument", () => {
       openUrl,
       notifyError: vi.fn(),
     });
-    expect(openUrl.mock.calls[0][0]).toContain("ulrik-s.github.io/ava-demo");
+    expect(openUrl.mock.calls[0]![0]).toContain("ulrik-s.github.io/ava-demo");
   });
 
   it("self-hosted utan handle → notifyError, ingen URL öppnad", async () => {
@@ -53,7 +53,7 @@ describe("openDocument", () => {
     });
     expect(result).toBe("error");
     expect(notifyError).toHaveBeenCalled();
-    expect(notifyError.mock.calls[0][0]).toMatch(/working copy/i);
+    expect(notifyError.mock.calls[0]![0]).toMatch(/working copy/i);
     expect(openUrl).not.toHaveBeenCalled();
   });
 
@@ -69,8 +69,8 @@ describe("openDocument", () => {
       notifyError,
     });
     expect(result).toBe("error");
-    expect(notifyError.mock.calls[0][0]).toMatch(/disk/i);
-    expect(notifyError.mock.calls[0][0]).toContain("documents/content/doc-1.md");
+    expect(notifyError.mock.calls[0]![0]).toMatch(/disk/i);
+    expect(notifyError.mock.calls[0]![0]).toContain("documents/content/doc-1.md");
   });
 
   it("self-hosted med fil → skapar blob-URL och öppnar", async () => {
@@ -140,7 +140,7 @@ describe("openDocument", () => {
       openUrl,
       notifyError: vi.fn(),
     });
-    expect(openUrl.mock.calls[0][0]).toContain("/documents/naked");
+    expect(openUrl.mock.calls[0]![0]).toContain("/documents/naked");
   });
 });
 

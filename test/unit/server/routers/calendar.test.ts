@@ -145,7 +145,7 @@ describe("calendar.create", () => {
       title: "Privat möte",
       startAt: new Date(),
     });
-    const arg = mockPrisma.calendarEvent.create.mock.calls[0][0] as { data: { mirrorStatus: string | null } };
+    const arg = mockPrisma.calendarEvent.create.mock.calls[0]![0] as { data: { mirrorStatus: string | null } };
     expect(arg.data.mirrorStatus).toBeNull();
   });
 
@@ -159,7 +159,7 @@ describe("calendar.create", () => {
   it("default kind=appointment + allDay=false + visibility=normal", async () => {
     mockPrisma.calendarEvent.create.mockResolvedValue({ id: "x" });
     await makeCaller().create({ title: "Möte", startAt: new Date() });
-    const arg = mockPrisma.calendarEvent.create.mock.calls[0][0] as { data: { kind: string; allDay: boolean; visibility: string } };
+    const arg = mockPrisma.calendarEvent.create.mock.calls[0]![0] as { data: { kind: string; allDay: boolean; visibility: string } };
     expect(arg.data.kind).toBe("appointment");
     expect(arg.data.allDay).toBe(false);
     expect(arg.data.visibility).toBe("normal");
@@ -182,7 +182,7 @@ describe("calendar.update", () => {
     });
     mockPrisma.calendarEvent.update.mockResolvedValue({});
     await makeCaller().update({ id: "e1", mirrorToOutlook: true });
-    const arg = mockPrisma.calendarEvent.update.mock.calls[0][0] as { data: { mirrorStatus: string } };
+    const arg = mockPrisma.calendarEvent.update.mock.calls[0]![0] as { data: { mirrorStatus: string } };
     expect(arg.data.mirrorStatus).toBe("pending");
   });
 
@@ -192,7 +192,7 @@ describe("calendar.update", () => {
     });
     mockPrisma.calendarEvent.update.mockResolvedValue({});
     await makeCaller().update({ id: "e1", mirrorToOutlook: false });
-    const arg = mockPrisma.calendarEvent.update.mock.calls[0][0] as { data: { mirrorStatus: string | null; outlookEventId: string | null } };
+    const arg = mockPrisma.calendarEvent.update.mock.calls[0]![0] as { data: { mirrorStatus: string | null; outlookEventId: string | null } };
     expect(arg.data.mirrorStatus).toBeNull();
     expect(arg.data.outlookEventId).toBeNull();
   });
@@ -203,7 +203,7 @@ describe("calendar.update", () => {
     });
     mockPrisma.calendarEvent.update.mockResolvedValue({});
     await makeCaller().update({ id: "e1", title: "Nytt namn" });
-    const arg = mockPrisma.calendarEvent.update.mock.calls[0][0] as { data: { mirrorStatus: string } };
+    const arg = mockPrisma.calendarEvent.update.mock.calls[0]![0] as { data: { mirrorStatus: string } };
     expect(arg.data.mirrorStatus).toBe("pending");
   });
 });

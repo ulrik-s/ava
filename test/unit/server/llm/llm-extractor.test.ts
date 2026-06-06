@@ -74,8 +74,8 @@ describe("StubExtractor", () => {
     await e.extract("text-1", schema);
     await e.extract("text-2", schema);
     expect(e.calls).toHaveLength(2);
-    expect(e.calls[0].text).toBe("text-1");
-    expect(e.calls[1].text).toBe("text-2");
+    expect(e.calls[0]!.text).toBe("text-1");
+    expect(e.calls[1]!.text).toBe("text-2");
   });
 
   it("kan konfigureras att kasta för fel-tester", async () => {

@@ -35,7 +35,7 @@ describe("useMatterInvariants", () => {
     docsResult = { data: { documents: [] } };
     renderHook(() => useMatterInvariants({ matterId: "m-1", matterNumber: "2026-1" }));
     expect(issueStore.count()).toBe(1);
-    expect(issueStore.list()[0].code).toBe("KR_PENDING_NO_DOC");
+    expect(issueStore.list()[0]!.code).toBe("KR_PENDING_NO_DOC");
   });
 
   it("rapporterar inget när KR-dokument finns", () => {

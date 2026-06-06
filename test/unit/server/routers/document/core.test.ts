@@ -92,7 +92,7 @@ describe("document.tree", () => {
     const res = await makeCaller().tree({ matterId: "m1" });
     expect(res.folders).toHaveLength(1);
     expect(res.documents).toHaveLength(1);
-    expect(res.documents[0].fileName).toBe("real.pdf");
+    expect(res.documents[0]!.fileName).toBe("real.pdf");
   });
 });
 
@@ -115,8 +115,8 @@ describe("document.search", () => {
     const res = await makeCaller("org-a").search({ query: "test" });
     expect(mockPorts.searchIndex.search).toHaveBeenCalledWith("test", "org-a", 20, { documentTypes: undefined });
     expect(res.totalHits).toBe(1);
-    expect(res.hits[0].documentId).toBe("d1");
-    expect(res.hits[0].highlight).toContain("highlighted");
+    expect(res.hits[0]!.documentId).toBe("d1");
+    expect(res.hits[0]!.highlight).toContain("highlighted");
   });
 
   it("returnerar tom highlight när _formatted saknas", async () => {
@@ -134,7 +134,7 @@ describe("document.search", () => {
     } as never);
 
     const res = await makeCaller().search({ query: "x" });
-    expect(res.hits[0].highlight).toBe("");
+    expect(res.hits[0]!.highlight).toBe("");
   });
 
   it("kräver query min(1)", async () => {

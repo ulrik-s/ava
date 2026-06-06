@@ -49,8 +49,8 @@ describe("populateDocuments — metadata via API", () => {
     });
 
     expect(writes).toHaveLength(1);
-    expect(writes[0].path).toBe("documents/content/doc-1.pdf");
-    expect(writes[0].size).toBeGreaterThan(0); // riktig PDF genererad
-    expect(captured[0].sizeBytes).toBe(writes[0].size); // storlek från genererade bytes
+    expect(writes[0]!.path).toBe("documents/content/doc-1.pdf");
+    expect(writes[0]!.size).toBeGreaterThan(0); // riktig PDF genererad
+    expect(captured[0].sizeBytes).toBe(writes[0]!.size); // storlek från genererade bytes
   });
 });

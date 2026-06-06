@@ -55,7 +55,7 @@ async function readJsonDir(
  * filer. (Strikt validering kan slås på via env-flagga senare.)
  */
 function validateRow(entity: EntityName, row: Record<string, unknown>): Record<string, unknown> {
-  const schema = ENTITY_REGISTRY[entity].schema;
+  const schema = ENTITY_REGISTRY[entity]!.schema;
   const result = schema.safeParse(row);
   if (!result.success) {
     console.warn(
@@ -73,7 +73,7 @@ export async function hydrateWorkingCopy(
   const fs = new FsaIsoGitAdapter(root);
   const out: DemoSource = {};
   for (const entity of ENTITY_NAMES) {
-    const { gitPrefix, sourceKey } = ENTITY_REGISTRY[entity];
+    const { gitPrefix, sourceKey } = ENTITY_REGISTRY[entity]!;
     const rows = await readJsonDir(fs, gitPrefix);
     if (!rows.length) continue;
     const validated = rows.map((r) => validateRow(entity, r));

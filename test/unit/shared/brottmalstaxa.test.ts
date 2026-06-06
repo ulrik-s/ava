@@ -124,13 +124,13 @@ describe("Tabellintegritet", () => {
 
   it("intervallen är sammanhängande (ingen lucka)", () => {
     for (let i = 1; i < BROTTMALSTAXA_TABLE.length; i++) {
-      expect(BROTTMALSTAXA_TABLE[i].fromMin).toBe(BROTTMALSTAXA_TABLE[i - 1].toMin + 1);
+      expect(BROTTMALSTAXA_TABLE[i]!.fromMin).toBe(BROTTMALSTAXA_TABLE[i - 1]!.toMin + 1);
     }
   });
 
   it("täcker exakt 0 till TAXA_MAX_MINUTES", () => {
-    expect(BROTTMALSTAXA_TABLE[0].fromMin).toBe(0);
-    expect(BROTTMALSTAXA_TABLE[BROTTMALSTAXA_TABLE.length - 1].toMin).toBe(TAXA_MAX_MINUTES);
+    expect(BROTTMALSTAXA_TABLE[0]!.fromMin).toBe(0);
+    expect(BROTTMALSTAXA_TABLE[BROTTMALSTAXA_TABLE.length - 1]!.toMin).toBe(TAXA_MAX_MINUTES);
   });
 
   it("ersättning ökar monotont per nivå inom varje intervall", () => {
@@ -143,14 +143,14 @@ describe("Tabellintegritet", () => {
 
   it("ersättning ökar monotont mellan intervaller (nivå 1)", () => {
     for (let i = 1; i < BROTTMALSTAXA_TABLE.length; i++) {
-      expect(BROTTMALSTAXA_TABLE[i].ersattning[0]).toBeGreaterThan(BROTTMALSTAXA_TABLE[i - 1].ersattning[0]);
+      expect(BROTTMALSTAXA_TABLE[i]!.ersattning[0]).toBeGreaterThan(BROTTMALSTAXA_TABLE[i - 1]!.ersattning[0]!);
     }
   });
 
   it("gränsvärdet är alltid större än ersättningen", () => {
     for (const r of BROTTMALSTAXA_TABLE) {
       for (let lvl = 0; lvl < 4; lvl++) {
-        expect(r.gransvarde[lvl]).toBeGreaterThan(r.ersattning[lvl]);
+        expect(r.gransvarde[lvl]).toBeGreaterThan(r.ersattning[lvl]!);
       }
     }
   });

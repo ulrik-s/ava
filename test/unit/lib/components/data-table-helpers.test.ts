@@ -50,8 +50,8 @@ describe("groupRows", () => {
   it("returnerar 1 grupp utan label när groupBy saknas", () => {
     const g = groupRows(rows, cols);
     expect(g).toHaveLength(1);
-    expect(g[0].group).toBeNull();
-    expect(g[0].rows).toHaveLength(3);
+    expect(g[0]!.group).toBeNull();
+    expect(g[0]!.rows).toHaveLength(3);
   });
 
   it("grupperar rader på vald kolumn", () => {
@@ -63,14 +63,14 @@ describe("groupRows", () => {
 
   it("ignorerar okänd groupBy-key", () => {
     const g = groupRows(rows, cols, "okand");
-    expect(g[0].group).toBeNull();
-    expect(g[0].rows).toHaveLength(3);
+    expect(g[0]!.group).toBeNull();
+    expect(g[0]!.rows).toHaveLength(3);
   });
 
   it("tomt groupValue → label '(tomt)'", () => {
     const blank = [{ id: "x", name: "", status: "Aktiv", amount: 0 }];
     const g = groupRows(blank, cols, "name");
-    expect(g[0].group).toBe("(tomt)");
+    expect(g[0]!.group).toBe("(tomt)");
   });
 });
 

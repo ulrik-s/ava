@@ -301,7 +301,7 @@ describe("MatterDetailPage", () => {
     fireEvent.change(nameInput, { target: { value: "Bertil Berg" } });
     fireEvent.click(screen.getByRole("button", { name: /Skapa & lägg till/i }));
     expect(stubs.addNewContact.mutate).toHaveBeenCalled();
-    const arg = stubs.addNewContact.mutate.mock.calls[0][0];
+    const arg = stubs.addNewContact.mutate.mock.calls[0]![0];
     expect(arg.name).toBe("Bertil Berg");
     expect(arg.matterId).toBe("m1");
   });
@@ -310,7 +310,7 @@ describe("MatterDetailPage", () => {
     renderPage();
     await waitFor(() => screen.getByText("2026-0001"));
     const removeButtons = screen.getAllByRole("button", { name: /^Ta bort$/i });
-    fireEvent.click(removeButtons[0]);
+    fireEvent.click(removeButtons[0]!);
     expect(stubs.removeContact.mutate).toHaveBeenCalledWith({ matterContactId: "mc1" });
   });
 
@@ -322,7 +322,7 @@ describe("MatterDetailPage", () => {
     fireEvent.change(desc, { target: { value: "Mejl och telefon" } });
     fireEvent.click(screen.getByRole("button", { name: /^Spara$/i }));
     expect(stubs.createTimeEntry.mutate).toHaveBeenCalled();
-    const arg = stubs.createTimeEntry.mutate.mock.calls[0][0];
+    const arg = stubs.createTimeEntry.mutate.mock.calls[0]![0];
     expect(arg.matterId).toBe("m1");
     expect(arg.description).toBe("Mejl och telefon");
     expect(arg.billable).toBe(true);
@@ -348,7 +348,7 @@ describe("MatterDetailPage", () => {
     fireEvent.change(numberInput, { target: { value: "150" } });
     fireEvent.click(screen.getByRole("button", { name: /^Spara$/i }));
     expect(stubs.createExpense.mutate).toHaveBeenCalled();
-    const arg = stubs.createExpense.mutate.mock.calls[0][0];
+    const arg = stubs.createExpense.mutate.mock.calls[0]![0];
     expect(arg.amount).toBe(15000); // SEK → öre
     expect(arg.description).toBe("Domstolsavgift");
   });
@@ -391,7 +391,7 @@ describe("MatterDetailPage", () => {
     await waitFor(() => expect(screen.getByText("Domstolsavgift")).toBeInTheDocument());
     const removes = screen.getAllByRole("button", { name: /^Ta bort$/i });
     // sista Ta bort-knappen är på utläggsraden
-    fireEvent.click(removes[removes.length - 1]);
+    fireEvent.click(removes[removes.length - 1]!);
     expect(stubs.deleteExpense.mutate).toHaveBeenCalledWith({ id: "e1" });
     confirmSpy.mockRestore();
   });
@@ -448,7 +448,7 @@ describe("MatterDetailPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /Generera dokument/i }));
     expect(screen.getByText(/Välj mall/i)).toBeInTheDocument();
     const avbrytButtons = screen.getAllByRole("button", { name: /Avbryt/i });
-    fireEvent.click(avbrytButtons[avbrytButtons.length - 1]);
+    fireEvent.click(avbrytButtons[avbrytButtons.length - 1]!);
     expect(screen.queryByText(/Välj mall/i)).not.toBeInTheDocument();
   });
 
@@ -462,7 +462,7 @@ describe("MatterDetailPage", () => {
     fireEvent.change(select, { target: { value: "c2" } });
     fireEvent.click(screen.getByRole("button", { name: /^Lägg till$/i }));
     expect(stubs.addContact.mutate).toHaveBeenCalled();
-    const arg = stubs.addContact.mutate.mock.calls[0][0];
+    const arg = stubs.addContact.mutate.mock.calls[0]![0];
     expect(arg.contactId).toBe("c2");
     expect(arg.matterId).toBe("m1");
   });

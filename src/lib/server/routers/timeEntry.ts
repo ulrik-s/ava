@@ -183,12 +183,12 @@ export const timeEntryRouter = router({
       // Group by user
       const byUser: Record<string, { name: string; totalMinutes: number; billableMinutes: number; entries: typeof entries }> = {};
       for (const entry of entries) {
-        if (!byUser[entry.userId]) {
-          byUser[entry.userId] = { name: entry.user.name, totalMinutes: 0, billableMinutes: 0, entries: [] };
-        }
-        byUser[entry.userId].totalMinutes += entry.minutes;
-        if (entry.billable) byUser[entry.userId].billableMinutes += entry.minutes;
-        byUser[entry.userId].entries.push(entry);
+        const bucket = byUser[entry.userId] ??= {
+          name: entry.user.name, totalMinutes: 0, billableMinutes: 0, entries: [],
+        };
+        bucket.totalMinutes += entry.minutes;
+        if (entry.billable) bucket.billableMinutes += entry.minutes;
+        bucket.entries.push(entry);
       }
 
       return { byUser, totalEntries: entries.length };

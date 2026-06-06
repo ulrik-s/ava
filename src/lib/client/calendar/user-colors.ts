@@ -53,8 +53,8 @@ export function hashString(s: string): number {
 }
 
 export function colorForUserId(userId: string): UserColor {
-  if (!userId) return PALETTE[PALETTE.length - 1]; // slate fallback
-  return PALETTE[hashString(userId) % PALETTE.length];
+  if (!userId) return PALETTE[PALETTE.length - 1]!; // slate fallback
+  return PALETTE[hashString(userId) % PALETTE.length]!;
 }
 
 /**
@@ -74,7 +74,7 @@ export function colorForUserId(userId: string): UserColor {
 export function buildUserColorMap(userIds: readonly string[]): Map<string, UserColor> {
   const sorted = [...userIds].sort();
   const out = new Map<string, UserColor>();
-  sorted.forEach((id, i) => out.set(id, PALETTE[i % PALETTE.length]));
+  sorted.forEach((id, i) => out.set(id, PALETTE[i % PALETTE.length]!));
   return out;
 }
 

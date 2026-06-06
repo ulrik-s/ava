@@ -37,7 +37,7 @@ function defaultGenerateId(): string {
 
 function extFromFile(file: File): string {
   const m = file.name.match(/\.([a-zA-Z0-9]+)$/);
-  return m ? m[1].toLowerCase() : "bin";
+  return m?.[1] ? m[1].toLowerCase() : "bin";
 }
 
 export async function uploadDocumentToFsa(opts: UploadOptions): Promise<UploadResult> {

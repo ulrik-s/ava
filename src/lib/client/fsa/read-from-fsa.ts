@@ -12,11 +12,11 @@ export async function readFromFsa(handle: FileSystemDirectoryHandle, path: strin
   if (parts.length === 0) return null;
   let dir: FileSystemDirectoryHandle = handle;
   for (let i = 0; i < parts.length - 1; i++) {
-    try { dir = await dir.getDirectoryHandle(parts[i]); }
+    try { dir = await dir.getDirectoryHandle(parts[i]!); }
     catch { return null; }
   }
   try {
-    const fh = await dir.getFileHandle(parts[parts.length - 1]);
+    const fh = await dir.getFileHandle(parts[parts.length - 1]!);
     return await fh.getFile();
   } catch { return null; }
 }

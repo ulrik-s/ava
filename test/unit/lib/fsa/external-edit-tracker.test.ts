@@ -64,7 +64,7 @@ describe("ExternalEditTracker", () => {
 
     await vi.advanceTimersByTimeAsync(400);  // debounce-fönstret löper ut
     expect(onCommit).toHaveBeenCalledTimes(1);
-    const arg = onCommit.mock.calls[0][0];
+    const arg = onCommit.mock.calls[0]![0];
     expect(arg.docId).toBe("doc-1");
     expect(arg.saves).toBe(1);
     expect(Array.from(new Uint8Array(arg.bytes))).toEqual([2]);
@@ -90,8 +90,8 @@ describe("ExternalEditTracker", () => {
 
     await vi.advanceTimersByTimeAsync(500);
     expect(onCommit).toHaveBeenCalledTimes(1);
-    expect(onCommit.mock.calls[0][0].saves).toBe(3);
-    expect(Array.from(new Uint8Array(onCommit.mock.calls[0][0].bytes))).toEqual([4]);
+    expect(onCommit.mock.calls[0]![0].saves).toBe(3);
+    expect(Array.from(new Uint8Array(onCommit.mock.calls[0]![0].bytes))).toEqual([4]);
 
     tracker.dispose();
   });
@@ -107,7 +107,7 @@ describe("ExternalEditTracker", () => {
     await tracker.flushNow("doc-1");
 
     expect(onCommit).toHaveBeenCalledTimes(1);
-    expect(onCommit.mock.calls[0][0].saves).toBe(1);
+    expect(onCommit.mock.calls[0]![0].saves).toBe(1);
     tracker.dispose();
   });
 
