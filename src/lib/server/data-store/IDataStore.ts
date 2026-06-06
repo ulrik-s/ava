@@ -51,11 +51,13 @@ export interface ClaimOpts {
 //   type MatterRow = z.infer<typeof matterSchema>
 //   export type MatterDelegate = Delegate<MatterRow>
 
-// `any` är medvetet här under transitionsperioden — Prisma:s genererade
-// delegate-typer hade exakta `where`/`select`/`include`-typer som vi inte
-// kan återskapa utan en massiv router-omskrivning. Routrarna har egna
-// `as`-casts där de behöver striktare typer; för övriga callers funkar
-// `any` likt det gjorde med Prisma's flytande generics.
+// ENDA kvarvarande `no-explicit-any`-undantaget i src efter #47. `args: any`
+// på delegate-metoderna är den flytande Prisma-stil-query-ytan (where/select/
+// include) som inte går att typa exakt utan en massiv router-omskrivning —
+// det egna query-typsystemet spåras separat. `no-explicit-any` är `error`
+// överallt annars (ratchet); detta block är det medvetna, dokumenterade
+// undantaget. Returtyperna är däremot typade (`Joined<Row>`, #39) så branded
+// id:n flödar ut även om query-INPUT förblir `any` här.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 /**
@@ -224,10 +226,10 @@ export interface IDataStore {
    * Escape-hatch för komplexa frågor. Throwing-proxy i demo-store —
    * existerande callers (t.ex. fuzzy-name-search i conflict.ts) får
    * "ej implementerat"-fel om de anropas i ren git-modell. Refaktorera
-   * dem ett-i-taget till in-memory-implementations.
+   * dem ett-i-taget till in-memory-implementations. `unknown` (inte `any`):
+   * callers måste narrowa/casta medvetet — ingen tyst spridning.
    */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  readonly raw: any;
+  readonly raw: unknown;
 
   /**
    * Kör `fn` i en transaktion. In-memory snapshot/rollback — alla
