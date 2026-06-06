@@ -59,12 +59,30 @@ export interface ClaimOpts {
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 /**
- * Output-typ för en delegate-fråga. `Row` är basraden (från Zod-schemat),
- * `& { [k: string]: any }` lägger till en index-signatur för att rymma
- * `include`-joinade fält (matter.contacts, contact.matterLinks, ...) utan
- * att behöva typ-deklarera varje möjlig kombination.
+ * Kända relations-/join-fält som `include` kan lägga på en rad.
+ *
+ * Uppräknade som optional `any` — INTE en `[k: string]: any`-index-signatur —
+ * eftersom en string-index-signatur tvättar bort Row:s EGNA fälttyper (särskilt
+ * branded id:n, [[ids]]) till `any` i intersektionen. Med en uppräkning behåller
+ * `Joined<Matter>["id"]` sin `MatterId`-typ, medan joinade fält fortsatt är `any`
+ * (vi typar inte de exakta include-formerna här — det vore router-omskrivningen).
  */
-export type Joined<Row> = Row & { [key: string]: any };
+export interface JoinedRelations {
+  matter?: any; contact?: any; contacts?: any; matterLinks?: any;
+  children?: any; parent?: any; documents?: any; document?: any;
+  timeEntries?: any; expenses?: any; payments?: any; invoice?: any;
+  folder?: any; paymentPlan?: any; billingRun?: any; reminders?: any;
+  accontoInvoice?: any; finalInvoice?: any; creditNote?: any;
+  uploadedBy?: any; recordedBy?: any; createdBy?: any; checkedBy?: any;
+  user?: any; emails?: any; _count?: any;
+}
+
+/**
+ * Output-typ för en delegate-fråga: basraden (`Row`, från Zod-schemat) plus
+ * de optionella relations-fälten. Se `JoinedRelations` för varför det inte är
+ * en index-signatur (branded id:n skulle annars tvättas bort till `any`).
+ */
+export type Joined<Row> = Row & JoinedRelations;
 
 export interface Delegate<Row = any> {
   findUnique(args: any): Promise<Joined<Row> | null>;
@@ -89,8 +107,8 @@ export interface Delegate<Row = any> {
 // och kallar (förväntar `null`-only), samt relation-joins (matter.contacts)
 // som inte finns i bas-schemat. Tighten har gjorts opt-in via TypedDelegate
 // nedan så enskilda callers kan välja striktare typer när de vill.
-export type MatterDelegate = Delegate;
-export type ContactDelegate = Delegate;
+export type MatterDelegate = Delegate<Matter>;
+export type ContactDelegate = Delegate<Contact>;
 export type MatterContactDelegate = Delegate;
 export type DocumentDelegate = Delegate;
 export type DocumentFolderDelegate = Delegate;

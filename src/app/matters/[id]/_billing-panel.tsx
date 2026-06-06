@@ -25,7 +25,7 @@ import { useMatterInvariants } from "@/lib/client/diagnostics/use-matter-invaria
 interface MatterContext {
   matterNumber: string;
   title: string;
-  taxaLevel?: 1 | 2 | 3 | 4 | null;
+  taxaLevel?: number | null;
   taxaHasFTax?: boolean | null;
   taxaHufStart?: string | Date | null;
   isTaxeArende?: boolean | null;
@@ -214,7 +214,7 @@ function KostnadsrakningTrigger({ matterId, matter, open, onClose, onRecorded }:
       clientName={clientOf(matter)}
       courtName={courtOf(matter)}
       {...data}
-      initialLevel={matter.taxaLevel ?? undefined}
+      initialLevel={(matter.taxaLevel ?? undefined) as 1 | 2 | 3 | 4 | undefined}
       initialHasFTax={matter.taxaHasFTax ?? undefined}
       initialHufStart={matter.taxaHufStart ?? undefined}
       initialIsTaxe={matter.isTaxeArende ?? undefined}
