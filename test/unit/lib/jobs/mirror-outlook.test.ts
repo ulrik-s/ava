@@ -146,4 +146,114 @@ describe("mirror-to-outlook worker", () => {
     expect(dispatch.mock.calls[0][0].patch.mirrorStatus).toBe("failed");
     expect(dispatch.mock.calls[0][0].patch.mirrorError).toMatch(/403/);
   });
+
+  // ── outlookCalendarId-spreadens truthy-arm (per-kalender-mirroring) ──
+  // Default-kalendern utelämnar calendarId; en specifik byrå-/delad kalender
+  // skickar den vidare till Graph. Täcker `outlookCalendarId != null`-armen
+  // i create/update/delete.
+
+  it("upsert till specifik kalender → createGraphEvent får calendarId", async () => {
+    graph.createGraphEvent.mockResolvedValue({ id: "g-cal" });
+    const dispatch = vi.fn().mockResolvedValue(undefined);
+    setOutlookTokenProvider(async () => "tok");
+    setMirrorStateDispatcher(dispatch);
+
+    const id = jobQueue.enqueue("mirror-to-outlook", "test", {
+      eventId: "ev-cal-1",
+      op: "upsert",
+      outlookCalendarId: "cal-A",
+      event: { title: "Kal", startAt: "2026-02-01T09:00:00Z", allDay: false, visibility: "normal", kind: "appointment" },
+    });
+    await waitForFinish(id);
+    expect(graph.createGraphEvent).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ token: "tok", calendarId: "cal-A" }),
+    );
+  });
+
+  it("update i specifik kalender → updateGraphEvent får calendarId", async () => {
+    graph.updateGraphEvent.mockResolvedValue({ id: "g-cal-2" });
+    const dispatch = vi.fn().mockResolvedValue(undefined);
+    setOutlookTokenProvider(async () => "tok");
+    setMirrorStateDispatcher(dispatch);
+
+    const id = jobQueue.enqueue("mirror-to-outlook", "test", {
+      eventId: "ev-cal-2",
+      op: "upsert",
+      outlookEventId: "g-cal-2",
+      outlookCalendarId: "cal-B",
+      event: { title: "Kal2", startAt: "2026-02-02T09:00:00Z", allDay: false, visibility: "normal", kind: "appointment" },
+    });
+    await waitForFinish(id);
+    expect(graph.updateGraphEvent).toHaveBeenCalledWith(
+      "g-cal-2",
+      expect.anything(),
+      expect.objectContaining({ token: "tok", calendarId: "cal-B" }),
+    );
+  });
+
+  it("delete i specifik kalender → deleteGraphEvent får calendarId", async () => {
+    graph.deleteGraphEvent.mockResolvedValue(undefined);
+    const dispatch = vi.fn().mockResolvedValue(undefined);
+    setOutlookTokenProvider(async () => "tok");
+    setMirrorStateDispatcher(dispatch);
+
+    const id = jobQueue.enqueue("mirror-to-outlook", "test", {
+      eventId: "ev-cal-3",
+      op: "delete",
+      outlookEventId: "g-cal-3",
+      outlookCalendarId: "cal-C",
+    });
+    await waitForFinish(id);
+    expect(graph.deleteGraphEvent).toHaveBeenCalledWith(
+      "g-cal-3",
+      expect.objectContaining({ token: "tok", calendarId: "cal-C" }),
+    );
+  });
+
+  it("delete utan outlookEventId → ingen Graph-anrop (eventet aldrig mirrorat)", async () => {
+    const dispatch = vi.fn().mockResolvedValue(undefined);
+    setOutlookTokenProvider(async () => "tok");
+    setMirrorStateDispatcher(dispatch);
+
+    const id = jobQueue.enqueue("mirror-to-outlook", "test", {
+      eventId: "ev-no-id",
+      op: "delete",
+    });
+    const job = await waitForFinish(id);
+    expect(job.status).toBe("done");
+    expect(graph.deleteGraphEvent).not.toHaveBeenCalled();
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it("upsert utan event-data → workern kastar (saknad payload)", async () => {
+    const dispatch = vi.fn().mockResolvedValue(undefined);
+    setOutlookTokenProvider(async () => "tok");
+    setMirrorStateDispatcher(dispatch);
+
+    const id = jobQueue.enqueue("mirror-to-outlook", "test", {
+      eventId: "ev-no-event",
+      op: "upsert",
+    });
+    const job = await waitForFinish(id);
+    expect(job.status).toBe("failed");
+    expect(graph.createGraphEvent).not.toHaveBeenCalled();
+  });
+
+  it("Graph kastar icke-Error → mirrorError stringifieras", async () => {
+    graph.createGraphEvent.mockRejectedValue("rå-sträng-fel");
+    const dispatch = vi.fn().mockResolvedValue(undefined);
+    setOutlookTokenProvider(async () => "tok");
+    setMirrorStateDispatcher(dispatch);
+
+    const id = jobQueue.enqueue("mirror-to-outlook", "test", {
+      eventId: "ev-6",
+      op: "upsert",
+      event: { title: "RawErr", startAt: "2026-01-05T09:00:00Z", allDay: false, visibility: "normal", kind: "appointment" },
+    });
+    const job = await waitForFinish(id);
+    expect(job.status).toBe("failed");
+    expect(dispatch).toHaveBeenCalledOnce();
+    expect(dispatch.mock.calls[0][0].patch.mirrorError).toBe("rå-sträng-fel");
+  });
 });
