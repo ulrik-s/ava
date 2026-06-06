@@ -15,6 +15,7 @@
 
 export const KOSTNADSRAKNING_TEMPLATE_NAME = "Kostnadsräkning till rätten";
 export const KOSTNADSRAKNING_TEMPLATE_CATEGORY = "Kostnadsräkning";
+/** @public — del av den symmetriska mall-namn/kategori-uppsättningen (NAME-varianten ännu ej konsumerad). */
 export const KOSTNADSRAKNING_ICKE_TAXA_TEMPLATE_NAME = "Kostnadsräkning (icke-taxa)";
 export const KOSTNADSRAKNING_ICKE_TAXA_TEMPLATE_CATEGORY = "Kostnadsräkning (icke-taxa)";
 
