@@ -10,14 +10,20 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { orgProcedure } from "../../trpc";
 import { assertMatterAccess } from "./shared";
+import {
+  matterIdSchema,
+  documentFolderIdSchema,
+  documentIdSchema,
+  type DocumentFolderId,
+} from "@/lib/shared/schemas/ids";
 
 export const folderProcedures = {
   createFolder: orgProcedure
     .input(
       z.object({
-        matterId: z.string(),
+        matterId: matterIdSchema,
         name: z.string().min(1),
-        parentId: z.string().nullable().default(null),
+        parentId: documentFolderIdSchema.nullable().default(null),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -32,7 +38,7 @@ export const folderProcedures = {
     }),
 
   renameFolder: orgProcedure
-    .input(z.object({ id: z.string(), name: z.string().min(1) }))
+    .input(z.object({ id: documentFolderIdSchema, name: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
       return ctx.dataStore.documentFolders.update({
         where: { id: input.id },
@@ -42,7 +48,7 @@ export const folderProcedures = {
 
   /** Flyttar innehåll till parent och raderar mappen. */
   deleteFolder: orgProcedure
-    .input(z.object({ id: z.string() }))
+    .input(z.object({ id: documentFolderIdSchema }))
     .mutation(async ({ ctx, input }) => {
       const folder = await ctx.dataStore.documentFolders.findUniqueOrThrow({
         where: { id: input.id },
@@ -59,7 +65,7 @@ export const folderProcedures = {
     }),
 
   moveDocument: orgProcedure
-    .input(z.object({ documentId: z.string(), folderId: z.string().nullable() }))
+    .input(z.object({ documentId: documentIdSchema, folderId: documentFolderIdSchema.nullable() }))
     .mutation(async ({ ctx, input }) => {
       return ctx.dataStore.documents.update({
         where: { id: input.documentId },
@@ -69,10 +75,10 @@ export const folderProcedures = {
 
   /** Flyttar en mapp; blockerar cykler (mapp-in-i-sig-själv/descendant). */
   moveFolder: orgProcedure
-    .input(z.object({ folderId: z.string(), targetParentId: z.string().nullable() }))
+    .input(z.object({ folderId: documentFolderIdSchema, targetParentId: documentFolderIdSchema.nullable() }))
     .mutation(async ({ ctx, input }) => {
       if (input.targetParentId) {
-        let checkId: string | null = input.targetParentId;
+        let checkId: DocumentFolderId | null = input.targetParentId;
         while (checkId) {
           if (checkId === input.folderId) {
             throw new TRPCError({
@@ -80,12 +86,11 @@ export const folderProcedures = {
               message: "Cannot move a folder into itself or a descendant",
             });
           }
-          const parent: { parentId: string | null } | null =
-            await ctx.dataStore.documentFolders.findUnique({
-              where: { id: checkId },
-              select: { parentId: true },
-            });
-          checkId = parent?.parentId ?? null;
+          const parent = await ctx.dataStore.documentFolders.findUnique({
+            where: { id: checkId },
+            select: { parentId: true },
+          });
+          checkId = (parent?.parentId as DocumentFolderId | null | undefined) ?? null;
         }
       }
       return ctx.dataStore.documentFolders.update({
@@ -96,19 +101,18 @@ export const folderProcedures = {
 
   /** Breadcrumb-stig från rot till vald mapp. */
   breadcrumb: orgProcedure
-    .input(z.object({ folderId: z.string() }))
+    .input(z.object({ folderId: documentFolderIdSchema }))
     .query(async ({ ctx, input }) => {
       const path: { id: string; name: string }[] = [];
-      let currentId: string | null = input.folderId;
+      let currentId: DocumentFolderId | null = input.folderId;
       while (currentId) {
-        const folder: { id: string; name: string; parentId: string | null } | null =
-          await ctx.dataStore.documentFolders.findUnique({
-            where: { id: currentId },
-            select: { id: true, name: true, parentId: true },
-          });
+        const folder = await ctx.dataStore.documentFolders.findUnique({
+          where: { id: currentId },
+          select: { id: true, name: true, parentId: true },
+        });
         if (!folder) break;
         path.unshift({ id: folder.id, name: folder.name });
-        currentId = folder.parentId;
+        currentId = (folder.parentId as DocumentFolderId | null | undefined) ?? null;
       }
       return path;
     }),

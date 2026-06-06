@@ -64,8 +64,9 @@ export default function InvoiceDetailClient({ id: paramId }: { id: string }) {
   const inv = invoice.data;
 
   const paidSum = inv.payments.reduce((s: number, p: { amount: number }) => s + p.amount, 0);
-  const accontoDeductionTotal = inv.accontoDeductions.reduce(
-    (s: number, d: { accontoInvoice: { amount: number } }) => s + d.accontoInvoice.amount,
+  const accontoDeductions = accontoDeductionsOf(inv);
+  const accontoDeductionTotal = accontoDeductions.reduce(
+    (s: number, d: AccontoDeductionRow) => s + d.accontoInvoice.amount,
     0,
   );
   const netAmount = inv.amount - accontoDeductionTotal;
@@ -104,8 +105,8 @@ export default function InvoiceDetailClient({ id: paramId }: { id: string }) {
         <PaymentPlanCard plan={inv.paymentPlan} onCancel={() => cancelPlan.mutate({ planId: inv.paymentPlan!.id })} />
       )}
 
-      {inv.invoiceType === "FINAL" && inv.accontoDeductions.length > 0 && (
-        <AccontoDeductions deductions={inv.accontoDeductions} />
+      {inv.invoiceType === "FINAL" && accontoDeductions.length > 0 && (
+        <AccontoDeductions deductions={accontoDeductions} />
       )}
 
       <PaymentsTable payments={inv.payments} paidSum={paidSum} />
@@ -146,6 +147,21 @@ export default function InvoiceDetailClient({ id: paramId }: { id: string }) {
 }
 
 type Inv = NonNullable<inferRouterOutputs<AppRouter>["invoice"]["getById"]>;
+
+// ── Boundary-vyer för join-fält (router-read returnerar `unknown`/`{}` på
+//    relationer; vi narrowar dem till de former UI:t faktiskt läser). ──
+type AccontoDeductionRow = {
+  id: string;
+  accontoInvoice: { id: string; invoiceDate: string | Date; amount: number };
+};
+type CreditRefView = { id: string; invoiceDate: string | Date; amount: number } | null;
+
+const accontoDeductionsOf = (inv: Inv): AccontoDeductionRow[] =>
+  (inv.accontoDeductions ?? []) as unknown as AccontoDeductionRow[];
+const creditNoteOf = (inv: Inv): CreditRefView =>
+  (inv.creditNote ?? null) as unknown as CreditRefView;
+const creditedInvoiceOf = (inv: Inv): CreditRefView =>
+  (inv.creditedInvoice ?? null) as unknown as CreditRefView;
 
 function InvoiceHeader({ inv }: { inv: Inv }) {
   const heading = inv.invoiceType === "ACCONTO" ? "Acconto-faktura"
@@ -191,28 +207,30 @@ function SummaryGrid({
 }
 
 function CreditBanners({ inv }: { inv: Inv }) {
+  const creditNote = creditNoteOf(inv);
+  const creditedInvoice = creditedInvoiceOf(inv);
   return (
     <>
-      {inv.creditNote && (
+      {creditNote && (
         <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 text-sm">
           <p className="font-medium text-orange-900">Denna faktura är krediterad.</p>
           <p className="text-orange-800 mt-1">
-            <EntityLink route="invoices" id={inv.creditNote.id} className="underline">
-              Kreditfaktura {new Date(inv.creditNote.invoiceDate).toLocaleDateString("sv-SE")}
+            <EntityLink route="invoices" id={creditNote.id} className="underline">
+              Kreditfaktura {new Date(creditNote.invoiceDate).toLocaleDateString("sv-SE")}
             </EntityLink>
-            {" "}— belopp {formatCurrency(inv.creditNote.amount)}
+            {" "}— belopp {formatCurrency(creditNote.amount)}
           </p>
         </div>
       )}
-      {inv.invoiceType === "CREDIT" && inv.creditedInvoice && (
+      {inv.invoiceType === "CREDIT" && creditedInvoice && (
         <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 text-sm">
           <p className="font-medium text-orange-900">Detta är en kreditfaktura.</p>
           <p className="text-orange-800 mt-1">
             Krediterar{" "}
-            <EntityLink route="invoices" id={inv.creditedInvoice.id} className="underline">
-              faktura från {new Date(inv.creditedInvoice.invoiceDate).toLocaleDateString("sv-SE")}
+            <EntityLink route="invoices" id={creditedInvoice.id} className="underline">
+              faktura från {new Date(creditedInvoice.invoiceDate).toLocaleDateString("sv-SE")}
             </EntityLink>
-            {" "}(ursprungligt belopp {formatCurrency(inv.creditedInvoice.amount)})
+            {" "}(ursprungligt belopp {formatCurrency(creditedInvoice.amount)})
           </p>
         </div>
       )}
@@ -369,13 +387,13 @@ function SpecificationCard({ timeEntries, expenses }: { timeEntries: SpecTimeRow
   );
 }
 
-function AccontoDeductions({ deductions }: { deductions: Inv["accontoDeductions"] }) {
+function AccontoDeductions({ deductions }: { deductions: AccontoDeductionRow[] }) {
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-6">
       <h2 className="font-semibold mb-3">Accontoavdrag</h2>
       <table className="min-w-full text-sm">
         <tbody className="divide-y divide-gray-100">
-          {deductions.map((d: Inv["accontoDeductions"][number]) => (
+          {deductions.map((d: AccontoDeductionRow) => (
             <tr key={d.id}>
               <td className="py-2">
                 <EntityLink route="invoices" id={d.accontoInvoice.id} className="text-blue-600 hover:underline">

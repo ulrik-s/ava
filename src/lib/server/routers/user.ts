@@ -12,6 +12,7 @@ async function hashPassword(password: string): Promise<string> {
 }
 import { TRPCError } from "@trpc/server";
 import { publicKeySchema, type PublicKey } from "@/lib/shared/schemas/user";
+import { userIdSchema, asId } from "@/lib/shared/schemas/ids";
 
 // Smal select för listor — håller utgående typ stabil för konsumenter
 // (reports, tids-rader, etc.) som inte bryr sig om nycklar.
@@ -112,7 +113,7 @@ export const userRouter = router({
   create: protectedProcedure
     .input(z.object({
       /** Valfritt klient-genererat id (ADR 0003) — annars genererar store:n. */
-      id: z.string().optional(),
+      id: userIdSchema.optional(),
       email: z.string().email(),
       name: z.string().min(1),
       title: z.string().optional(),
@@ -134,7 +135,7 @@ export const userRouter = router({
           hourlyRate: input.hourlyRate,
           mileageRate: input.mileageRate,
           passwordHash,
-          organizationId: ctx.user.organizationId,
+          organizationId: asId<"OrganizationId">(ctx.user.organizationId),
           publicKeys: [],
         },
       });

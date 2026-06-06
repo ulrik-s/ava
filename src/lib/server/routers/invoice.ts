@@ -19,6 +19,15 @@ import { router, orgProcedure } from "../trpc";
 import type { DataStoreTx } from "../data-store/IDataStore";
 import { computeFinalInvoiceBreakdown, isPaymentPlanSettled } from "@/lib/shared/invoice-calc";
 import { emit } from "../events/emit";
+import {
+  asId,
+  matterIdSchema,
+  invoiceIdSchema,
+  paymentPlanIdSchema,
+  type InvoiceId,
+  type TimeEntryId,
+  type ExpenseId,
+} from "@/lib/shared/schemas/ids";
 
 // ─── createFinal-hjälpare (validera + koppla poster) ──────────────
 
@@ -66,10 +75,10 @@ async function fetchDeductibleAccontos(tx: DataStoreTx, matterId: string, ids: s
  */
 async function linkBilledItems(
   tx: DataStoreTx,
-  invoiceId: string,
-  timeEntries: ReadonlyArray<{ id: string }>,
-  expenses: ReadonlyArray<{ id: string }>,
-  accontos: ReadonlyArray<{ id: string }>,
+  invoiceId: InvoiceId,
+  timeEntries: ReadonlyArray<{ id: TimeEntryId }>,
+  expenses: ReadonlyArray<{ id: ExpenseId }>,
+  accontos: ReadonlyArray<{ id: InvoiceId }>,
 ): Promise<void> {
   if (timeEntries.length) {
     await tx.timeEntries.updateMany({ where: { id: { in: timeEntries.map((t) => t.id) } }, data: { invoiceId } });
@@ -152,8 +161,8 @@ export const invoiceRouter = router({
     .input(
       z.object({
         /** Valfritt klient-genererat id (demo-generator/fixtures) → annars genererar store:n. */
-        id: z.string().optional(),
-        matterId: z.string(),
+        id: invoiceIdSchema.optional(),
+        matterId: matterIdSchema,
         amount: z.number().int().min(1),
         invoiceDate: z.string().optional(),
         dueDate: z.string().optional(),
@@ -190,8 +199,8 @@ export const invoiceRouter = router({
     .input(
       z.object({
         /** Valfritt klient-genererat id (demo-generator/fixtures) → annars genererar store:n. */
-        id: z.string().optional(),
-        matterId: z.string(),
+        id: invoiceIdSchema.optional(),
+        matterId: matterIdSchema,
         timeEntryIds: z.array(z.string()),
         expenseIds: z.array(z.string()),
         accontoInvoiceIds: z.array(z.string()).default([]),
@@ -248,8 +257,8 @@ export const invoiceRouter = router({
     .input(
       z.object({
         /** Valfritt klient-genererat id för kredit-fakturan (demo-generator/fixtures). */
-        id: z.string().optional(),
-        invoiceId: z.string(),
+        id: invoiceIdSchema.optional(),
+        invoiceId: invoiceIdSchema,
         notes: z.string().optional(),
       }),
     )
@@ -332,7 +341,7 @@ export const invoiceRouter = router({
             amount: input.amount,
             paidAt: new Date(input.paidAt),
             note: input.note,
-            recordedById: ctx.user.id,
+            recordedById: asId<"UserId">(ctx.user.id),
           },
         });
 
@@ -359,8 +368,8 @@ export const invoiceRouter = router({
     .input(
       z.object({
         /** Valfritt klient-genererat id (demo-generator/fixtures) → annars genererar store:n. */
-        id: z.string().optional(),
-        invoiceId: z.string(),
+        id: paymentPlanIdSchema.optional(),
+        invoiceId: invoiceIdSchema,
         monthlyAmount: z.number().int().min(1),
         dayOfMonth: z.number().int().min(1).max(28),
         startDate: z.string(),

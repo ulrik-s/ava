@@ -249,8 +249,12 @@ export const matterRouter = router({
         ctx.orgId,
         (c) => c.organizationId,
       );
+      const { createdAt, ...rest } = input;
       return ctx.dataStore.matterContacts.create({
-        data: input,
+        data: {
+          ...rest,
+          ...(createdAt ? { createdAt: new Date(createdAt) } : {}),
+        },
         include: { contact: true },
       });
     }),

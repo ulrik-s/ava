@@ -10,8 +10,9 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { orgProcedure } from "../../trpc";
-import { groupSuggestions } from "@/lib/shared/suggestion-grouping";
+import { groupSuggestions, type RawSuggestion } from "@/lib/shared/suggestion-grouping";
 import { matterRoleSchema, contactTypeSchema, type SuggestionStatus } from "@/lib/shared/schemas/enums";
+import { asId, type ContactId } from "@/lib/shared/schemas/ids";
 import {
   findExistingContactForSuggestion,
   type ContactCandidate,
@@ -77,10 +78,10 @@ async function loadPendingSuggestion(ctx: Ctx, suggestionId: string): Promise<Su
   return sugg;
 }
 
-async function resolveExistingContact(ctx: Ctx, contactId: string): Promise<string> {
+async function resolveExistingContact(ctx: Ctx, contactId: string): Promise<ContactId> {
   const existing = (await ctx.dataStore.contacts.findFirst({
     where: { id: contactId, organizationId: ctx.orgId },
-  } as never)) as { id: string } | null;
+  } as never)) as { id: ContactId } | null;
   if (!existing) throw new TRPCError({ code: "NOT_FOUND" });
   return existing.id;
 }
@@ -146,12 +147,12 @@ async function resolveOrCreateContact(
   sugg: Suggestion,
   o: SuggOverride,
   matterId: string,
-): Promise<string> {
+): Promise<ContactId> {
   const existing = await findContactByNumberOrName(ctx, sugg, o, matterId);
-  if (existing) return existing.id;
+  if (existing) return asId<"ContactId">(existing.id);
   const created = (await ctx.dataStore.contacts.create({
     data: { ...applyOverride(sugg, o), organizationId: ctx.orgId },
-  } as never)) as { id: string };
+  } as never)) as { id: ContactId };
   return created.id;
 }
 
@@ -214,11 +215,11 @@ async function resolveOrCreateGroupContact(
   ctx: Ctx,
   suggs: Suggestion[],
   matterId: string,
-): Promise<string> {
+): Promise<ContactId> {
   const personalNumber = pickFirstFromGroup(suggs, "personalNumber");
   const orgNumber = pickFirstFromGroup(suggs, "orgNumber");
   const existing = await findGroupContact(ctx, suggs, matterId, personalNumber, orgNumber);
-  if (existing) return existing.id;
+  if (existing) return asId<"ContactId">(existing.id);
   const created = (await ctx.dataStore.contacts.create({
     data: {
       name: suggs[0].name,
@@ -229,7 +230,7 @@ async function resolveOrCreateGroupContact(
       orgNumber,
       organizationId: ctx.orgId,
     },
-  } as never)) as { id: string };
+  } as never)) as { id: ContactId };
   return created.id;
 }
 
@@ -321,7 +322,7 @@ export const suggestionProcedures = {
         include: { document: { select: { id: true, fileName: true, title: true } } },
         orderBy: { createdAt: "asc" }, // asc → första förekomst vinner i first-non-empty
       });
-      return groupSuggestions(rows);
+      return groupSuggestions(rows as unknown as RawSuggestion[]);
     }),
 
   /**

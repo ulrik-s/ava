@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../trpc";
+import { organizationIdSchema, asId } from "@/lib/shared/schemas/ids";
 
 export const organizationRouter = router({
   // ── Settings ────────────────────────────────────────────────────
@@ -48,7 +49,7 @@ export const organizationRouter = router({
   create: protectedProcedure
     .input(
       z.object({
-        id: z.string().min(1),
+        id: organizationIdSchema,
         name: z.string().min(1),
         orgNumber: z.string().optional(),
         address: z.string().optional(),
@@ -91,7 +92,7 @@ export const organizationRouter = router({
       return ctx.dataStore.offices.create({
         data: {
           ...input,
-          organizationId: ctx.user.organizationId,
+          organizationId: asId<"OrganizationId">(ctx.user.organizationId),
         },
       });
     }),

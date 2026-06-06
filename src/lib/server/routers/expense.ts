@@ -1,5 +1,12 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../trpc";
+import {
+  asId,
+  matterIdSchema,
+  userIdSchema,
+  expenseIdSchema,
+  invoiceIdSchema,
+} from "@/lib/shared/schemas/ids";
 
 export const expenseRouter = router({
   list: protectedProcedure
@@ -47,7 +54,7 @@ export const expenseRouter = router({
   create: protectedProcedure
     .input(
       z.object({
-        matterId: z.string(),
+        matterId: matterIdSchema,
         date: z.string(),
         amount: z.number().min(1),
         description: z.string().min(1),
@@ -57,9 +64,9 @@ export const expenseRouter = router({
         /** True om `amount` är inkl moms (kvitto-fall). Default true. */
         vatIncluded: z.boolean().default(true),
         // Valfria setup-fält (demo-generator/fixtures, ADR 0003).
-        id: z.string().optional(),
-        userId: z.string().optional(),
-        invoiceId: z.string().nullable().optional(),
+        id: expenseIdSchema.optional(),
+        userId: userIdSchema.optional(),
+        invoiceId: invoiceIdSchema.nullable().optional(),
         createdAt: z.string().optional(),
       })
     )
@@ -67,7 +74,7 @@ export const expenseRouter = router({
       return ctx.dataStore.expenses.create({
         data: {
           id: input.id, // undefined → store genererar
-          userId: input.userId ?? ctx.user.id,
+          userId: input.userId ?? asId<"UserId">(ctx.user.id),
           matterId: input.matterId,
           date: new Date(input.date),
           amount: input.amount,

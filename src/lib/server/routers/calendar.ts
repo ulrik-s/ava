@@ -15,6 +15,13 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../trpc";
 import { calendarEventKindSchema, calendarEventVisibilitySchema } from "@/lib/shared/schemas";
+import {
+  asId,
+  calendarEventIdSchema,
+  matterIdSchema,
+  userIdSchema,
+  contactIdSchema,
+} from "@/lib/shared/schemas/ids";
 
 const createInput = z.object({
   kind: calendarEventKindSchema.default("appointment"),
@@ -24,16 +31,16 @@ const createInput = z.object({
   startAt: z.date(),
   endAt: z.date().nullish(),
   allDay: z.boolean().default(false),
-  matterId: z.string().nullish(),
+  matterId: matterIdSchema.nullish(),
   visibility: calendarEventVisibilitySchema.default("normal"),
   mirrorToOutlook: z.boolean().default(false),
   /** Inbjudna kollegor (interna users). */
-  inviteeUserIds: z.array(z.string()).optional(),
+  inviteeUserIds: z.array(userIdSchema).optional(),
   /** Inbjudna externa kontakter (klient, motpart, vittne osv.). */
-  inviteeContactIds: z.array(z.string()).optional(),
+  inviteeContactIds: z.array(contactIdSchema).optional(),
   // Valfria setup-fält (demo-generator/fixtures, ADR 0003).
-  id: z.string().optional(),
-  userId: z.string().optional(),
+  id: calendarEventIdSchema.optional(),
+  userId: userIdSchema.optional(),
   createdAt: z.date().nullish(),
 });
 
@@ -41,7 +48,7 @@ const createInput = z.object({
 // fält som användaren inte angav, vilket triggar fel mirror-state-detektering
 // i computeMirrorPatch (allt ser ut som "explicit satt").
 const updateInput = z.object({
-  id: z.string(),
+  id: calendarEventIdSchema,
   kind: calendarEventKindSchema.optional(),
   title: z.string().min(1).optional(),
   description: z.string().nullish(),
@@ -49,11 +56,11 @@ const updateInput = z.object({
   startAt: z.date().optional(),
   endAt: z.date().nullish(),
   allDay: z.boolean().optional(),
-  matterId: z.string().nullish(),
+  matterId: matterIdSchema.nullish(),
   visibility: calendarEventVisibilitySchema.optional(),
   mirrorToOutlook: z.boolean().optional(),
-  inviteeUserIds: z.array(z.string()).optional(),
-  inviteeContactIds: z.array(z.string()).optional(),
+  inviteeUserIds: z.array(userIdSchema).optional(),
+  inviteeContactIds: z.array(contactIdSchema).optional(),
 });
 
 /**
@@ -162,8 +169,8 @@ export const calendarRouter = router({
       return ctx.dataStore.calendarEvents.create({
         data: {
           ...input,
-          userId: input.userId ?? ctx.user.id,
-          organizationId: ctx.user.organizationId,
+          userId: input.userId ?? asId<"UserId">(ctx.user.id),
+          organizationId: asId<"OrganizationId">(ctx.user.organizationId),
           mirrorStatus: input.mirrorToOutlook ? "pending" : null,
           createdAt: input.createdAt ?? undefined,
         },
