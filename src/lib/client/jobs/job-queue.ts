@@ -25,6 +25,8 @@
  *      synlighet, äldre dropps.
  */
 
+import { omitUndefined } from "@/lib/shared/omit-undefined";
+
 export type JobKind =
   | "classify-document"
   | "extract-text"
@@ -77,7 +79,7 @@ class JobQueueImpl {
     const job: Job = {
       id, kind, label,
       status: "queued",
-      payload,
+      ...omitUndefined({ payload }),
       enqueuedAt: Date.now(),
     };
     this.jobs.unshift(job);
@@ -106,10 +108,10 @@ class JobQueueImpl {
     const job = this.jobs.find((j) => j.id === id);
     if (!job || (job.status !== "failed" && job.status !== "canceled")) return;
     job.status = "queued";
-    job.error = undefined;
-    job.startedAt = undefined;
-    job.finishedAt = undefined;
-    job.progress = undefined;
+    delete job.error;
+    delete job.startedAt;
+    delete job.finishedAt;
+    delete job.progress;
     this.notify();
     void this.pump();
   }

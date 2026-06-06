@@ -128,7 +128,7 @@ function makeFsaProvider(handle: FileSystemDirectoryHandle, token: string, corsP
     const oid = await stageAllAndCommit(fs, {
       message: `AVA: ${entries.length} ändring${entries.length === 1 ? "" : "ar"} ${new Date().toISOString().slice(0, 10)}`,
       authorName: "AVA User", authorEmail: "user@ava.local",
-      sshSigning,
+      ...(sshSigning !== undefined ? { sshSigning } : {}),
     });
     return { oid };
   };
@@ -136,7 +136,7 @@ function makeFsaProvider(handle: FileSystemDirectoryHandle, token: string, corsP
     const { FsaIsoGitAdapter } = await import("@/lib/client/fsa/fs-adapter");
     const { pushBranch } = await import("@/lib/client/fsa/git-ops");
     const fs = new FsaIsoGitAdapter(handle);
-    await pushBranch(fs, { token, username, corsProxy });
+    await pushBranch(fs, { token, ...(username !== undefined ? { username } : {}), ...(corsProxy !== undefined ? { corsProxy } : {}) });
   };
   return {
     pull: async () => {
@@ -144,8 +144,8 @@ function makeFsaProvider(handle: FileSystemDirectoryHandle, token: string, corsP
       const { pullBranch } = await import("@/lib/client/fsa/git-ops");
       const fs = new FsaIsoGitAdapter(handle);
       const r = await pullBranch(fs, {
-        token, username, authorName: "AVA User", authorEmail: "user@ava.local",
-        corsProxy,
+        token, ...(username !== undefined ? { username } : {}), authorName: "AVA User", authorEmail: "user@ava.local",
+        ...(corsProxy !== undefined ? { corsProxy } : {}),
       });
       return { kind: r.kind };
     },

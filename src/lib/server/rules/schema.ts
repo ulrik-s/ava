@@ -80,14 +80,14 @@ const valueRefSchema = z.union([z.string(), z.number(), z.boolean(), z.null(), z
 interface BaseStep { do: string; }
 
 interface EmitStep extends BaseStep { do: "emit"; eventType: string; payload: Record<string, unknown>; }
-interface EmailSendStep extends BaseStep { do: "email.send"; template: string; to: string; vars?: Record<string, unknown>; idempotencyKey?: string; }
+interface EmailSendStep extends BaseStep { do: "email.send"; template: string; to: string; vars?: Record<string, unknown> | undefined; idempotencyKey?: string | undefined; }
 interface MatterUpdateStep extends BaseStep { do: "matter.update"; matterId: string; patch: Record<string, unknown>; }
 interface AuditLogStep extends BaseStep { do: "audit.log"; message: string; }
-interface IfStep extends BaseStep { do: "if"; cond: unknown; then: RuleStep[]; else?: RuleStep[]; }
+interface IfStep extends BaseStep { do: "if"; cond: unknown; then: RuleStep[]; else?: RuleStep[] | undefined; }
 interface ForEachStep extends BaseStep { do: "for-each"; items: string; as: string; body: RuleStep[]; }
 interface HttpRespondStep extends BaseStep { do: "http.respond"; status: number; body?: unknown; }
 interface LlmExtractStep extends BaseStep { do: "llm.extract"; documentId: string; schema: Record<string, unknown>; into: string; }
-interface TaskCreateStep extends BaseStep { do: "task.create"; assignTo: string; title: string; dueAt?: string; }
+interface TaskCreateStep extends BaseStep { do: "task.create"; assignTo: string; title: string; dueAt?: string | undefined; }
 
 export type RuleStep =
   | EmitStep

@@ -41,13 +41,13 @@ type Ctx = {
   orgId: string;
 };
 type SuggOverride = {
-  name?: string;
-  role?: string;
-  contactType?: string;
-  email?: string | null;
-  phone?: string | null;
-  orgNumber?: string | null;
-  personalNumber?: string | null;
+  name?: string | undefined;
+  role?: string | undefined;
+  contactType?: string | undefined;
+  email?: string | null | undefined;
+  phone?: string | null | undefined;
+  orgNumber?: string | null | undefined;
+  personalNumber?: string | null | undefined;
 };
 type Suggestion = {
   id: string;

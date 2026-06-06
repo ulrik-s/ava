@@ -20,6 +20,7 @@ import { CheckboxList } from "@/components/ui/checkbox-list";
 import { UserPicker, loadSelectedUserIds } from "./_user-picker";
 import { buildUserColorMap, type UserColor } from "@/lib/client/calendar/user-colors";
 import { resolveSelectedUsers } from "@/lib/client/calendar/select-users";
+import { omitUndefined } from "@/lib/shared/omit-undefined";
 
 type ViewMode = "list" | "day" | "week" | "month";
 
@@ -179,7 +180,9 @@ export default function CalendarPage() {
           <EventDetailModal
             event={selectedEvent}
             userName={selectedEvent ? (userNames[selectedEvent.userId] ?? "?") : ""}
-            color={selectedEvent ? userColors.get(selectedEvent.userId) : undefined}
+            {...(selectedEvent && userColors.get(selectedEvent.userId)
+              ? { color: userColors.get(selectedEvent.userId)! }
+              : {})}
             onClose={() => setSelectedEvent(null)}
             onEdit={(ev) => { setSelectedEvent(null); setEditingEvent(ev as unknown as EventRow); }}
           />
@@ -226,13 +229,17 @@ function EventList() {
 
   return (
     <ul className="divide-y divide-gray-100 bg-white rounded-lg border border-gray-200">
-      {events.map((ev: EventRow) => (
+      {events.map((row) => {
+        // Boundary-cast: tRPC-raden är branded/optional och bredare än den
+        // lokala vy-typen EventRow (samma fält, men branded id m.m.).
+        const ev = row as unknown as EventRow;
+        return (
         <li key={ev.id} className="px-4 py-3 flex items-center justify-between gap-3">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium text-gray-900">{ev.title}</span>
               <KindBadge kind={ev.kind} />
-              {ev.mirrorToOutlook && <MirrorBadge status={ev.mirrorStatus} />}
+              {ev.mirrorToOutlook && <MirrorBadge {...omitUndefined({ status: ev.mirrorStatus })} />}
             </div>
             <p className="text-xs text-gray-500 mt-0.5">
               {formatEventTime(ev)}
@@ -248,7 +255,8 @@ function EventList() {
             <Trash2 size={14} />
           </button>
         </li>
-      ))}
+        );
+      })}
     </ul>
   );
 }
@@ -266,7 +274,11 @@ function TaskList() {
 
   return (
     <ul className="divide-y divide-gray-100 bg-white rounded-lg border border-gray-200">
-      {tasks.map((t: TaskRow) => (
+      {tasks.map((row) => {
+        // Boundary-cast: tRPC-raden är branded/optional och bredare än den
+        // lokala vy-typen TaskRow (samma fält, men branded id m.m.).
+        const t = row as unknown as TaskRow;
+        return (
         <li key={t.id} className={`px-4 py-3 flex items-center justify-between gap-3 ${t.status === "DONE" ? "opacity-60" : ""}`}>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
@@ -299,7 +311,8 @@ function TaskList() {
             </button>
           </div>
         </li>
-      ))}
+        );
+      })}
     </ul>
   );
 }
@@ -314,7 +327,10 @@ function NewEventForm({ onClose, initial }: { onClose: () => void; initial?: Eve
   const orgUsers = trpc.user.list.useQuery();
   const contacts = trpc.contacts.list.useQuery({ pageSize: 500 });
 
-  const onCreateOrUpdateSuccess = (saved: EventRow): void => {
+  // Boundary-cast: mutationen returnerar en branded/optional tRPC-rad som är
+  // bredare än den lokala vy-typen EventRow; vi läser bara de fält som finns.
+  const onCreateOrUpdateSuccess = (savedRow: unknown): void => {
+    const saved = savedRow as EventRow;
     void utils.calendar.invalidate();
     if (saved.mirrorToOutlook) {
       enqueueMirror({
@@ -436,7 +452,7 @@ function NewEventForm({ onClose, initial }: { onClose: () => void; initial?: Eve
         <CheckboxList
           label="Bjud in kollegor"
           options={(orgUsers.data?.users ?? []).map((u: { id: string; name: string; role?: string }) => ({
-            id: u.id, label: u.name, sublabel: u.role,
+            id: u.id, label: u.name, ...omitUndefined({ sublabel: u.role }),
           }))}
           selectedIds={inviteeUserIds}
           onChange={setInviteeUserIds}
@@ -445,7 +461,7 @@ function NewEventForm({ onClose, initial }: { onClose: () => void; initial?: Eve
         <CheckboxList
           label="Bjud in från kontakter"
           options={(contacts.data?.contacts ?? []).map((c: { id: string; name: string; contactType?: string }) => ({
-            id: c.id, label: c.name, sublabel: c.contactType,
+            id: c.id, label: c.name, ...omitUndefined({ sublabel: c.contactType }),
           }))}
           selectedIds={inviteeContactIds}
           onChange={setInviteeContactIds}

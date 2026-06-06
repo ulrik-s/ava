@@ -41,7 +41,7 @@ export interface PushResult {
 
 // eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Async function 'pushViaRest' has a complexity of 12. Maximum allowed is 8.)
 export async function pushViaRest(args: PushArgs): Promise<PushResult> {
-  const opts = { token: args.token, signal: args.signal };
+  const opts = { token: args.token, ...(args.signal !== undefined ? { signal: args.signal } : {}) };
   const state = await readSyncState(args.handle);
   if (!state) {
     throw new Error("Saknar .ava/sync-state.json — gör en pull först innan push.");
@@ -92,8 +92,8 @@ export async function pushViaRest(args: PushArgs): Promise<PushResult> {
     message: args.message,
     tree: newTreeSha,
     parents: [state.lastHead],
-    signature: args.signature,
-    author: args.author,
+    ...(args.signature !== undefined ? { signature: args.signature } : {}),
+    ...(args.author !== undefined ? { author: args.author } : {}),
   }, opts);
 
   await updateRef(args.repo, args.branch, newCommitSha, opts);

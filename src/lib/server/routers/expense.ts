@@ -7,6 +7,7 @@ import {
   expenseIdSchema,
   invoiceIdSchema,
 } from "@/lib/shared/schemas/ids";
+import { omitUndefined } from "@/lib/shared/omit-undefined";
 
 export const expenseRouter = router({
   list: protectedProcedure
@@ -72,7 +73,7 @@ export const expenseRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       return ctx.dataStore.expenses.create({
-        data: {
+        data: omitUndefined({
           id: input.id, // undefined → store genererar
           userId: input.userId ?? asId<"UserId">(ctx.user.id),
           matterId: input.matterId,
@@ -83,8 +84,8 @@ export const expenseRouter = router({
           vatRate: input.vatRate,
           vatIncluded: input.vatIncluded,
           invoiceId: input.invoiceId ?? null,
-          createdAt: input.createdAt ? new Date(input.createdAt) : undefined,
-        },
+          ...(input.createdAt ? { createdAt: new Date(input.createdAt) } : {}),
+        }),
       });
     }),
 
@@ -101,13 +102,17 @@ export const expenseRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const { id, date, ...data } = input;
+      const { id, date, amount, description, billable, vatRate, vatIncluded } = input;
       return ctx.dataStore.expenses.update({
         where: { id },
-        data: {
-          ...data,
+        data: omitUndefined({
+          amount,
+          description,
+          billable,
+          vatRate,
+          vatIncluded,
           ...(date ? { date: new Date(date) } : {}),
-        },
+        }),
       });
     }),
 

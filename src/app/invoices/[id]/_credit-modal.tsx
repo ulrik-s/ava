@@ -44,7 +44,7 @@ export function CreditModal({ invoiceId, amount, hasActivePlan, isPending, error
           <button onClick={onClose} className="px-3 py-1.5 text-sm border border-gray-300 rounded">Avbryt</button>
           <button
             disabled={isPending}
-            onClick={() => onSubmit({ invoiceId, notes: creditNotes || undefined })}
+            onClick={() => onSubmit({ invoiceId, ...(creditNotes ? { notes: creditNotes } : {}) })}
             className="px-4 py-1.5 text-sm bg-orange-600 text-white rounded hover:bg-orange-700 disabled:opacity-50"
           >
             {isPending ? "Krediterar…" : "Kreditera"}

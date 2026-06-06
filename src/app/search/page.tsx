@@ -4,6 +4,7 @@ import { useState } from "react";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
 import { DataTable, type Column } from "@/components/ui/data-table";
+import { omitUndefined } from "@/lib/shared/omit-undefined";
 
 interface SearchHit {
   documentId: string;
@@ -29,9 +30,13 @@ async function openHit(hit: SearchHit): Promise<void> {
   ]);
   const isDemo = process.env.NEXT_PUBLIC_DEMO_BUILD === "1";
   await openDocument({
-    doc: { id: hit.documentId, storagePath: hit.storagePath, fileName: hit.fileName },
+    doc: {
+      id: hit.documentId,
+      ...omitUndefined({ storagePath: hit.storagePath }),
+      fileName: hit.fileName,
+    },
     isDemo,
-    demoRepo: process.env.NEXT_PUBLIC_DEFAULT_DEMO_REPO,
+    ...omitUndefined({ demoRepo: process.env.NEXT_PUBLIC_DEFAULT_DEMO_REPO }),
     loadHandle: () => loadHandle("repo-root"),
     readFromHandle: readFromFsa,
     openUrl: (u) => window.open(u, "_blank", "noopener,noreferrer"),

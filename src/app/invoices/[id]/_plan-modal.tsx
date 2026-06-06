@@ -59,7 +59,7 @@ export function PlanModal({ invoiceId, isPending, error, onSubmit, onClose }: Pr
               monthlyAmount: Math.round(Number(planMonthlySek) * 100),
               dayOfMonth: Number(planDayOfMonth),
               startDate: planStart,
-              notes: planNotes || undefined,
+              ...(planNotes ? { notes: planNotes } : {}),
             })}
             className="px-4 py-1.5 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50"
           >

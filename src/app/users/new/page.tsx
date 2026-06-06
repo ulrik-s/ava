@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/client/trpc";
 import { UserForm, type UserFormState } from "../_user-form";
+import { omitUndefined } from "@/lib/shared/omit-undefined";
 
 export default function NewUserPage() {
   const router = useRouter();
@@ -63,7 +64,7 @@ export default function NewUserPage() {
           setForm={setForm}
           onSubmit={handleSubmit}
           passwordError={passwordError}
-          errorMessage={createUser.error?.message}
+          {...omitUndefined({ errorMessage: createUser.error?.message })}
           passwordRequired={true}
           submitLabel="Skapa användare"
           submittingLabel="Sparar..."

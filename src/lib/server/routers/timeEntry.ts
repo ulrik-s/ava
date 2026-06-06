@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../trpc";
 import { emit } from "../events/emit";
+import { omitUndefined } from "@/lib/shared/omit-undefined";
 import {
   asId,
   matterIdSchema,
@@ -88,7 +89,7 @@ export const timeEntryRouter = router({
       });
 
       const entry = await ctx.dataStore.timeEntries.create({
-        data: {
+        data: omitUndefined({
           id: input.id, // undefined → store genererar
           userId,
           matterId: input.matterId,
@@ -98,8 +99,8 @@ export const timeEntryRouter = router({
           hourlyRate: input.hourlyRate ?? user.hourlyRate ?? 0,
           billable: input.billable,
           invoiceId: input.invoiceId ?? null,
-          createdAt: input.createdAt ? new Date(input.createdAt) : undefined,
-        },
+          ...(input.createdAt ? { createdAt: new Date(input.createdAt) } : {}),
+        }),
       });
       await emit.timeEntryAdded(ctx, { id: entry.id, matterId: entry.matterId, minutes: entry.minutes });
       return entry;
@@ -116,13 +117,15 @@ export const timeEntryRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const { id, date, ...data } = input;
+      const { id, date, minutes, description, billable } = input;
       const updated = await ctx.dataStore.timeEntries.update({
         where: { id },
-        data: {
-          ...data,
+        data: omitUndefined({
+          minutes,
+          description,
+          billable,
           ...(date ? { date: new Date(date) } : {}),
-        },
+        }),
       });
       await emit.timeEntryUpdated(ctx, { id: updated.id, matterId: updated.matterId });
       return updated;

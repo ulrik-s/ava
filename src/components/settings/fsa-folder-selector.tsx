@@ -127,7 +127,7 @@ export function FsaFolderSelector({ repoUrl, token }: { repoUrl: string; token: 
         h = picked;
       }
       const fs = new FsaIsoGitAdapter(h);
-      await cloneRepo(fs, { url: githubize(repoUrl), token: token || undefined });
+      await cloneRepo(fs, { url: githubize(repoUrl), ...(token ? { token } : {}) });
       await saveHandle(HANDLE_KEY, h);
       setHandle(h);
       setHasGit(true);

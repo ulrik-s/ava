@@ -51,7 +51,9 @@ export function CalendarGrid({ mode, userIds, userNames, userColors, anchor, onA
     [mode, anchor],
   );
   const eventsByDay = useMemo(
-    () => bucketEventsByDay(events ?? [], days),
+    // Boundary-cast: tRPC-raderna är branded/optional och bredare än den lokala
+    // vy-typen CalendarGridEvent; bucketEventsByDay läser bara de fält som finns.
+    () => bucketEventsByDay((events ?? []) as unknown as CalendarGridEvent[], days),
     [events, days],
   );
 

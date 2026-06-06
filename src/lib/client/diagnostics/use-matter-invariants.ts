@@ -13,6 +13,7 @@ import { useEffect } from "react";
 import { trpc } from "@/lib/client/trpc";
 import { detectMatterInvariants, type BillingRunView, type DocumentView } from "@/lib/shared/diagnostics/invariants";
 import { reportSelfDetected } from "@/lib/client/diagnostics";
+import { omitUndefined } from "@/lib/shared/omit-undefined";
 
 export function useMatterInvariants(input: { matterId: string; matterNumber?: string }): void {
   const { matterId, matterNumber } = input;
@@ -25,7 +26,12 @@ export function useMatterInvariants(input: { matterId: string; matterNumber?: st
   useEffect(() => {
     if (!runRows || !docRows) return;
     reportSelfDetected(
-      detectMatterInvariants({ matterId, matterNumber, billingRuns: runRows, documents: docRows }),
+      detectMatterInvariants({
+        matterId,
+        ...omitUndefined({ matterNumber }),
+        billingRuns: runRows,
+        documents: docRows,
+      }),
     );
   }, [matterId, matterNumber, runRows, docRows]);
 }

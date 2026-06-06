@@ -84,10 +84,10 @@ interface HeaderProps {
     id: string;
     matterNumber: string;
     title: string;
-    matterType?: string | null;
-    description?: string | null;
+    matterType?: string | null | undefined;
+    description?: string | null | undefined;
     status: string;
-    isTaxeArende?: boolean;
+    isTaxeArende?: boolean | undefined;
   };
   klient: MatterContact[];
   onOpenGenerate: () => void;

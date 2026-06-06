@@ -63,16 +63,18 @@ export function isGroupable<T>(col: Column<T>): boolean {
 }
 
 export interface DataTablePrefs {
-  sortBy?: string;
-  sortDir?: SortDir;
+  // Fälten får genuint vara explicit `undefined`: `update`/`patch` nollställer
+  // en pref genom att sätta nyckeln till `undefined` (se kommentar vid `update`).
+  sortBy?: string | undefined;
+  sortDir?: SortDir | undefined;
   /** Synlig kolumn-ordning. Saknade kolumner appendas i komponent-defaultordning. */
-  order?: string[];
+  order?: string[] | undefined;
   /** Per-kolumn-överrides. */
-  columns?: Array<{ key: string; width?: number; hidden?: boolean }>;
+  columns?: Array<{ key: string; width?: number; hidden?: boolean }> | undefined;
   /** Per-kolumn-key filter-text (case-insensitive substring-match). */
-  filters?: Record<string, string>;
+  filters?: Record<string, string> | undefined;
   /** Kolumn-key att gruppera på. Hela tabellen presenteras då i sektioner. */
-  groupBy?: string;
+  groupBy?: string | undefined;
 }
 
 type FooterFn<T> = (rows: T[]) => Partial<Record<string, React.ReactNode>>;
@@ -236,7 +238,9 @@ export function DataTable<T>({ prefKey, columns, data, rowKey, onRowClick, empty
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => save.mutate({ key: prefKey, prefs: next as Record<string, unknown> }), 400);
   };
-  const update = (patch: Partial<DataTablePrefs>): void => {
+  // Patch tillåter explicit `undefined` per nyckel — det är så vi RENSAR
+  // en pref (spread `{ ...cur, key: undefined }` nollställer fältet).
+  const update = (patch: { [K in keyof DataTablePrefs]?: DataTablePrefs[K] | undefined }): void => {
     setLocalPrefs((cur) => {
       const next = { ...(cur ?? remote), ...patch };
       persist(next);
@@ -311,7 +315,7 @@ interface AutoFooterProps<T> {
   vCols: Column<T>[];
   prefs: DataTablePrefs;
   filtered: T[];
-  footer?: FooterFn<T>;
+  footer?: FooterFn<T> | undefined;
 }
 
 function AutoFooter<T>({ columns, vCols, prefs, filtered, footer }: AutoFooterProps<T>) {
@@ -473,8 +477,8 @@ interface BodyProps<T> {
   vCols: Column<T>[];
   prefs: DataTablePrefs;
   rowKey: (row: T) => string;
-  onRowClick?: (row: T) => void;
-  emptyMessage?: string;
+  onRowClick?: ((row: T) => void) | undefined;
+  emptyMessage?: string | undefined;
   columns: Column<T>[];
 }
 
@@ -509,7 +513,7 @@ interface GroupBlockProps<T> {
   vCols: Column<T>[];
   prefs: DataTablePrefs;
   rowKey: (row: T) => string;
-  onRowClick?: (row: T) => void;
+  onRowClick?: ((row: T) => void) | undefined;
   showSummary: boolean;
   columns: Column<T>[];
 }
@@ -648,7 +652,7 @@ function DataTableHeader<T>({ vCols, prefs, update }: HeaderProps<T>) {
 interface HeaderCellProps<T> {
   col: Column<T>;
   prefs: DataTablePrefs;
-  width?: number;
+  width?: number | undefined;
   actions: HeaderActions;
 }
 
@@ -795,7 +799,7 @@ function Separator() {
   return <div className="my-1 border-t border-gray-100" />;
 }
 
-function ResizeHandle({ width, onResize }: { width?: number; onResize: (width: number) => void }) {
+function ResizeHandle({ width, onResize }: { width?: number | undefined; onResize: (width: number) => void }) {
   const onMouseDown = (e: React.MouseEvent): void => {
     e.preventDefault();
     const startX = e.clientX;

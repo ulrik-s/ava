@@ -16,6 +16,7 @@ import {
   type ContactId,
 } from "@/lib/shared/schemas/ids";
 import { emit } from "../events/emit";
+import { omitUndefined } from "@/lib/shared/omit-undefined";
 
 type MatterCtx = { dataStore: IDataStore; orgId: string };
 
@@ -249,12 +250,14 @@ export const matterRouter = router({
         ctx.orgId,
         (c) => c.organizationId,
       );
-      const { createdAt, ...rest } = input;
+      const { createdAt, id, notes, ...rest } = input;
       return ctx.dataStore.matterContacts.create({
-        data: {
+        data: omitUndefined({
           ...rest,
+          id,
+          notes,
           ...(createdAt ? { createdAt: new Date(createdAt) } : {}),
-        },
+        }),
         include: { contact: true },
       });
     }),

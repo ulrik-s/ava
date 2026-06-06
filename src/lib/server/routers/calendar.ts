@@ -71,8 +71,8 @@ const updateInput = z.object({
  *     (mirrorStatus="pending")
  *   - oförändrat: tomt patch
  */
-type UpdateData = Record<string, unknown> & { mirrorToOutlook?: boolean };
-type ExistingEvent = { mirrorToOutlook?: boolean };
+type UpdateData = Record<string, unknown> & { mirrorToOutlook?: boolean | undefined };
+type ExistingEvent = { mirrorToOutlook?: boolean | undefined };
 function computeMirrorPatch(data: UpdateData, existing: ExistingEvent): Record<string, unknown> {
   const newFlag = data.mirrorToOutlook;
   const oldFlag = existing.mirrorToOutlook ?? false;
@@ -166,13 +166,17 @@ export const calendarRouter = router({
   create: protectedProcedure
     .input(createInput)
     .mutation(async ({ ctx, input }) => {
+      // exactOptionalPropertyTypes: utelämna nycklar vars värde är undefined
+      // (förr droppades de ändå av create). null behålls (nullish-fält).
+      const cleanInput = Object.fromEntries(
+        Object.entries(input).filter(([, v]) => v !== undefined),
+      );
       return ctx.dataStore.calendarEvents.create({
         data: {
-          ...input,
+          ...cleanInput,
           userId: input.userId ?? asId<"UserId">(ctx.user.id),
           organizationId: asId<"OrganizationId">(ctx.user.organizationId),
           mirrorStatus: input.mirrorToOutlook ? "pending" : null,
-          createdAt: input.createdAt ?? undefined,
         },
       });
     }),
@@ -194,9 +198,15 @@ export const calendarRouter = router({
       const existing = await ctx.dataStore.calendarEvents.findFirstOrThrow({
         where: { id, userId: ctx.user.id, organizationId: ctx.user.organizationId },
       });
+      // exactOptionalPropertyTypes: utelämna nycklar vars värde är undefined
+      // i write-payloaden (förr droppades de ändå). `computeMirrorPatch` får
+      // dock det råa `data` så dess nyckel-räkning av "ändrade fält" bevaras.
+      const writeData = Object.fromEntries(
+        Object.entries(data).filter(([, v]) => v !== undefined),
+      );
       return ctx.dataStore.calendarEvents.update({
         where: { id },
-        data: { ...data, ...computeMirrorPatch(data, existing) },
+        data: { ...writeData, ...computeMirrorPatch(data, existing) },
       });
     }),
 

@@ -10,6 +10,7 @@
  */
 
 import { jobQueue } from "./job-queue";
+import { omitUndefined } from "@/lib/shared/omit-undefined";
 
 interface ClassifyPayload extends Record<string, unknown> {
   documentId: string;
@@ -67,7 +68,7 @@ jobQueue.registerWorker<MirrorPayload>("mirror-to-outlook", async (payload, ctx)
   try {
     if (payload.op === "delete") {
       if (payload.outlookEventId) {
-        await graph.deleteGraphEvent(payload.outlookEventId, { token, calendarId: payload.outlookCalendarId ?? undefined });
+        await graph.deleteGraphEvent(payload.outlookEventId, { token, ...(payload.outlookCalendarId != null ? { calendarId: payload.outlookCalendarId } : {}) });
       }
       // Vid delete på AVA-eventet finns ingen rad att uppdatera — workern
       // slutar bara här. (Calendar-routerns delete tar bort raden helt.)
@@ -79,10 +80,10 @@ jobQueue.registerWorker<MirrorPayload>("mirror-to-outlook", async (payload, ctx)
     const body = graph.toGraphEvent({ ...payload.event });
     let outlookEventId: string;
     if (payload.outlookEventId) {
-      const res = await graph.updateGraphEvent(payload.outlookEventId, body, { token, calendarId: payload.outlookCalendarId ?? undefined });
+      const res = await graph.updateGraphEvent(payload.outlookEventId, body, { token, ...(payload.outlookCalendarId != null ? { calendarId: payload.outlookCalendarId } : {}) });
       outlookEventId = res.id;
     } else {
-      const res = await graph.createGraphEvent(body, { token, calendarId: payload.outlookCalendarId ?? undefined });
+      const res = await graph.createGraphEvent(body, { token, ...(payload.outlookCalendarId != null ? { calendarId: payload.outlookCalendarId } : {}) });
       outlookEventId = res.id;
     }
     ctx.setProgress(0.9);
@@ -136,7 +137,7 @@ jobQueue.registerWorker<ExtractTextPayload>("extract-text", async (payload, ctx)
   // Steg 2: extrahera text
   ctx.setProgress(0.4);
   const { extractText } = await import("@/lib/client/jobs/extract-text");
-  const text = await extractText({ bytes, mimeType: payload.mimeType, fileName: payload.fileName });
+  const text = await extractText({ bytes, ...omitUndefined({ mimeType: payload.mimeType }), fileName: payload.fileName });
 
   // Steg 3: skriv till documents/text/<id>.txt och cache:a för sök
   ctx.setProgress(0.8);

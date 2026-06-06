@@ -121,7 +121,7 @@ function JobRow({ job }: { job: Job }) {
   );
 }
 
-function StatusBadge({ status, progress }: { status: Job["status"]; progress?: number }) {
+function StatusBadge({ status, progress }: { status: Job["status"]; progress?: number | undefined }) {
   const styles: Record<Job["status"], string> = {
     queued: "bg-gray-100 text-gray-700",
     running: "bg-blue-50 text-blue-800",

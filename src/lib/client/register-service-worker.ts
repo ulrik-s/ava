@@ -9,6 +9,8 @@
  *   - Felsäker: SSR / unsupported browsers / HTTPS-fel sväljs tyst.
  */
 
+import { omitUndefined } from "@/lib/shared/omit-undefined";
+
 export type RegisterStatus = "unsupported" | "registered" | "failed";
 
 export interface RegisterResult {
@@ -26,7 +28,7 @@ export async function registerServiceWorker(swUrl: string): Promise<RegisterResu
 
   try {
     const reg = await nav.serviceWorker.register(swUrl, { scope: "/" });
-    return { status: "registered", scope: reg.scope };
+    return { status: "registered", ...omitUndefined({ scope: reg.scope }) };
   } catch (err) {
     console.warn("[sw] registrering misslyckades:", err);
     return {

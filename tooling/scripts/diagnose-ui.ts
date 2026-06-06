@@ -273,7 +273,7 @@ async function visitRoute(browser: Browser, route: Route): Promise<RouteResult> 
   const assertions: RouteResult["assertions"] = [];
   for (const txt of route.mustContain ?? []) {
     const found = await page.locator(`text=${txt}`).first().isVisible().catch(() => false);
-    assertions.push({ check: `must contain "${txt}"`, passed: found, detail: found ? undefined : "saknas" });
+    assertions.push({ check: `must contain "${txt}"`, passed: found, ...(found ? {} : { detail: "saknas" }) });
   }
 
   const screenshotPath = join(REPORT_DIR, `${route.name}.png`);

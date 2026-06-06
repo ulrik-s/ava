@@ -16,6 +16,7 @@ import { detectDomAnomalies } from "./dom-anomalies";
 import { buildIssueReport, githubIssueNewUrl, type IssueReport } from "./report";
 import { parseRepoLocator, type RepoLocator } from "@/lib/client/github/api";
 import type { InvariantViolation } from "@/lib/shared/diagnostics/invariants";
+import { omitUndefined } from "@/lib/shared/omit-undefined";
 
 /** App-wide console-/fel-ringbuffert. */
 export const logBuffer = new LogBuffer(300);
@@ -59,7 +60,7 @@ export const DEFAULT_LOG_LINES = 50;
 export function buildSessionReport(opts: { userText?: string; includeLogs?: boolean; maxLogs?: number }): IssueReport {
   const includeLogs = opts.includeLogs ?? true;
   return buildIssueReport({
-    userText: opts.userText,
+    ...omitUndefined({ userText: opts.userText }),
     violations: issueStore.list(),
     logs: includeLogs ? logBuffer.recent(opts.maxLogs ?? DEFAULT_LOG_LINES) : [],
     meta: collectMeta(),

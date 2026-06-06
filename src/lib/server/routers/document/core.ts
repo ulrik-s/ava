@@ -7,6 +7,7 @@ import { z } from "zod";
 import { orgProcedure } from "../../trpc";
 import { isJunkFileName } from "@/lib/shared/junk-files";
 import { assertDocAccess } from "./shared";
+import { omitUndefined } from "@/lib/shared/omit-undefined";
 
 export const coreProcedures = {
   /** Paginerad lista över dokument + mappar i ett visst ärende/folder. */
@@ -71,7 +72,7 @@ export const coreProcedures = {
     .query(async ({ ctx, input }) => {
       const result = await ctx.ports.searchIndex.search(
         input.query, ctx.orgId, input.limit,
-        { documentTypes: input.documentTypes },
+        omitUndefined({ documentTypes: input.documentTypes }),
       );
       return {
         hits: result.hits.map((hit) => ({
@@ -208,10 +209,18 @@ export const coreProcedures = {
       const { documentId, analyzedAt, analysisStatus, ...rest } = input;
       const data = {
         ...rest,
-        ...(analysisStatus !== undefined
-          ? { analysisStatus: analysisStatus as "PENDING" | "RUNNING" | "DONE" | "ERROR" | null }
-          : {}),
-        ...(analyzedAt !== undefined ? { analyzedAt: typeof analyzedAt === "string" ? new Date(analyzedAt) : analyzedAt } : {}),
+        ...omitUndefined({
+          analysisStatus:
+            analysisStatus === undefined
+              ? undefined
+              : (analysisStatus as "PENDING" | "RUNNING" | "DONE" | "ERROR" | null),
+          analyzedAt:
+            analyzedAt === undefined
+              ? undefined
+              : typeof analyzedAt === "string"
+                ? new Date(analyzedAt)
+                : analyzedAt,
+        }),
       };
       return ctx.dataStore.documents.update({ where: { id: documentId }, data });
     }),
@@ -240,7 +249,7 @@ export const coreProcedures = {
         data: {
           version: (doc.version ?? 1) + 1,
           updatedAt: new Date(),
-          ...(input.sizeBytes !== undefined ? { sizeBytes: input.sizeBytes, fileSize: input.sizeBytes } : {}),
+          ...omitUndefined({ sizeBytes: input.sizeBytes, fileSize: input.sizeBytes }),
         },
       });
     }),

@@ -20,7 +20,8 @@
  */
 
 import { ReadOnlyDelegate, ReadOnlyError, type RelationConfig } from "./in-memory/read-only-delegate";
-import { WritableDelegate, type MutationEvent } from "./in-memory/writable-delegate";
+import { omitUndefined } from "@/lib/shared/omit-undefined";
+import { WritableDelegate, type MutationEvent, type WritableDelegateOpts } from "./in-memory/writable-delegate";
 import type {
   IDataStore,
   IEventLog,
@@ -265,12 +266,13 @@ export class DemoDataStore implements IDataStore {
     kind: "one" | "many" = "many",
     relations?: Record<string, RelationConfig<Record<string, unknown>>>,
   ): RelationConfig<Record<string, unknown>> {
-    return {
+    const cfg = omitUndefined({
       kind,
       collection: () => (this.source[key] ?? []) as readonly Record<string, unknown>[],
-      where: (p) => ({ [childField]: (p as Record<string, unknown>)[parentField] }),
+      where: (p: Record<string, unknown>) => ({ [childField]: p[parentField] }),
       relations,
-    };
+    });
+    return cfg as RelationConfig<Record<string, unknown>>;
   }
 
   private makeDelegate<T extends Record<string, unknown>>(
@@ -280,7 +282,7 @@ export class DemoDataStore implements IDataStore {
     if (this.onMutate) {
       // Mutable mode — getter ser till att vi alltid pekar på senaste
       // source-arrayen även när mergeSource bytt ut referensen.
-      return new WritableDelegate<T>({
+      const opts = omitUndefined({
         entity: this.entityNameFor(key),
         collection: () => {
           if (!this.source[key]) {
@@ -292,9 +294,10 @@ export class DemoDataStore implements IDataStore {
         // Routa via handleMutate så att event buffras under en transaction()
         // och flushas först vid commit (annars skulle en felad transaktion
         // skriva halva ändringar till git-db:n).
-        onMutate: (e) => this.handleMutate(e as MutationEvent<Record<string, unknown>>),
-        enrichRow: (row) => this.enrichRowForEntity(key, row) as T,
+        onMutate: (e: MutationEvent<T>) => this.handleMutate(e as MutationEvent<Record<string, unknown>>),
+        enrichRow: (row: T) => this.enrichRowForEntity(key, row) as T,
       });
+      return new WritableDelegate<T>(opts as WritableDelegateOpts<T>);
     }
     return new ReadOnlyDelegate<T>(
       () => (this.source[key] ?? []) as readonly T[],

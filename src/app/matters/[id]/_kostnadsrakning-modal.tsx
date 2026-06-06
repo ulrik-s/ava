@@ -22,6 +22,7 @@ import { Clock, FileText, X, AlertTriangle, Save } from "lucide-react";
 import { trpc } from "@/lib/client/trpc";
 import type { AppRouter } from "@/lib/server/routers/_app";
 import { buildKostnadsrakningContext } from "@/lib/shared/kostnadsrakning";
+import { omitUndefined } from "@/lib/shared/omit-undefined";
 import type { TaxaLevel } from "@/lib/shared/brottmalstaxa";
 import { renderKostnadsrakningPdf } from "@/lib/client/kostnadsrakning/render-pdf";
 import { useHelper, composeMailViaHelper } from "@/lib/client/helper/use-helper";
@@ -33,21 +34,21 @@ interface Props {
   matterNumber: string;
   matterTitle: string;
   clientName: string;
-  courtName?: string;
+  courtName?: string | undefined;
   defenderName: string;
-  defenderEmail?: string;
-  organizationName?: string;
-  organizationOrgNumber?: string;
-  organizationAddress?: string;
+  defenderEmail?: string | undefined;
+  organizationName?: string | undefined;
+  organizationOrgNumber?: string | undefined;
+  organizationAddress?: string | undefined;
   expenses: ReadonlyArray<{
     id: string; date: string | Date; description: string;
     amount: number; vatRate?: number; vatIncluded?: boolean; billable?: boolean;
   }>;
-  initialLevel?: TaxaLevel;
+  initialLevel?: TaxaLevel | undefined;
   /** @deprecated Alla advokater har F-skatt — fältet ignoreras. */
-  initialHasFTax?: boolean;
-  initialHufStart?: string | Date | null;
-  initialIsTaxe?: boolean;
+  initialHasFTax?: boolean | undefined;
+  initialHufStart?: string | Date | null | undefined;
+  initialIsTaxe?: boolean | undefined;
   onClose: () => void;
 }
 
@@ -181,9 +182,16 @@ export function KostnadsrakningModal(props: Props) {
 
   const ctx = useMemo(() => buildKostnadsrakningContext({
     matter: { matterNumber: props.matterNumber, title: props.matterTitle, clientName: props.clientName },
-    defender: { name: props.defenderName, email: props.defenderEmail },
-    organization: { name: props.organizationName, orgNumber: props.organizationOrgNumber, address: props.organizationAddress },
-    courtName: props.courtName,
+    defender: {
+      name: props.defenderName,
+      ...omitUndefined({ email: props.defenderEmail }),
+    },
+    organization: omitUndefined({
+      name: props.organizationName,
+      orgNumber: props.organizationOrgNumber,
+      address: props.organizationAddress,
+    }),
+    ...omitUndefined({ courtName: props.courtName }),
     hufStart: new Date(hufStart),
     hufEnd: new Date(hufEnd),
     taxaLevel: level,
@@ -215,7 +223,10 @@ export function KostnadsrakningModal(props: Props) {
           matterNumber: props.matterNumber, matterTitle: props.matterTitle,
           clientName: props.clientName, courtName: props.courtName ?? "",
           defenderName: props.defenderName,
-          organizationName: props.organizationName, organizationOrgNumber: props.organizationOrgNumber,
+          ...omitUndefined({
+            organizationName: props.organizationName,
+            organizationOrgNumber: props.organizationOrgNumber,
+          }),
         },
       });
       const storagePath = `documents/content/${docId}.pdf`;

@@ -32,7 +32,7 @@ let calls: MockCall[];
 
 function mockFetch(impl: (call: MockCall) => Response | Promise<Response>) {
   globalThis.fetch = vi.fn(async (url: URL | RequestInfo, init?: RequestInit) => {
-    const call = { url: url.toString(), init };
+    const call: MockCall = { url: url.toString(), ...(init !== undefined ? { init } : {}) };
     calls.push(call);
     return impl(call);
   }) as typeof fetch;
