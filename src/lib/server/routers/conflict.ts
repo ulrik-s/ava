@@ -2,6 +2,7 @@ import { z } from "zod";
 import { router, protectedProcedure } from "../trpc";
 import type { IDataStore } from "../data-store/IDataStore";
 import { similarity } from "@/lib/shared/fuzzy-similarity";
+import { asId } from "@/lib/shared/schemas/ids";
 
 type ConflictCtx = { dataStore: IDataStore; user: { id: string; organizationId: string } };
 
@@ -106,8 +107,8 @@ export const conflictRouter = router({
         data: {
           searchTerm: input.searchTerm,
           searchType: input.searchType,
-          results: results as unknown as object,
-          checkedById: ctx.user.id,
+          results: results as unknown as unknown[],
+          checkedById: asId<"UserId">(ctx.user.id),
         },
       });
 

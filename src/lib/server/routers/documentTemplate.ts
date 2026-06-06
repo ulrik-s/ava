@@ -1,6 +1,11 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../trpc";
 import { TRPCError } from "@trpc/server";
+import {
+  asId,
+  documentTemplateIdSchema,
+  userIdSchema,
+} from "@/lib/shared/schemas/ids";
 
 export const documentTemplateRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
@@ -40,8 +45,8 @@ export const documentTemplateRouter = router({
         category: z.string().optional(),
         content: z.string().min(1),
         // Valfria setup-fält (demo-generator/fixtures, ADR 0003).
-        id: z.string().optional(),
-        createdById: z.string().optional(),
+        id: documentTemplateIdSchema.optional(),
+        createdById: userIdSchema.optional(),
         createdAt: z.string().optional(),
       })
     )
@@ -53,8 +58,8 @@ export const documentTemplateRouter = router({
           description: input.description,
           category: input.category,
           content: input.content,
-          organizationId: ctx.user.organizationId,
-          createdById: input.createdById ?? ctx.user.id,
+          organizationId: asId<"OrganizationId">(ctx.user.organizationId),
+          createdById: input.createdById ?? asId<"UserId">(ctx.user.id),
           createdAt: input.createdAt ? new Date(input.createdAt) : undefined,
         },
       });

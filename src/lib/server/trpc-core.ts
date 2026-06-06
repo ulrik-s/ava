@@ -20,6 +20,7 @@ import superjson from "superjson";
 import type { IDataStore } from "./data-store/IDataStore";
 import type { IPorts } from "./ports";
 import type { Principal } from "./auth/principal";
+import { asId } from "@/lib/shared/schemas/ids";
 
 export type Context = {
   /** Read/write-data via abstraktion. Git-backenden wirar DemoDataStore. */
@@ -59,7 +60,10 @@ export const protectedProcedure = t.procedure.use(isAuthed);
  * `ctx.orgId`.
  */
 export const orgProcedure = protectedProcedure.use(({ ctx, next }) =>
-  next({ ctx: { ...ctx, orgId: ctx.user.organizationId } }),
+  // Branda orgId centralt (#24): ctx.user.organizationId är auth-kontextens
+  // råa sträng; som branded OrganizationId flödar den in i write-literals
+  // (`data: { organizationId: ctx.orgId }`) och typkollas mot entiteten.
+  next({ ctx: { ...ctx, orgId: asId<"OrganizationId">(ctx.user.organizationId) } }),
 );
 
 /**

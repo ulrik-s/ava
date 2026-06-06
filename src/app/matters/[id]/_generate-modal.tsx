@@ -112,7 +112,11 @@ export function GenerateModal({ matterId, contacts, onClose }: Props) {
           <TemplateSelector
             id={generateTemplateFieldId}
             isLoading={templates.isLoading}
-            templates={templates.data}
+            templates={templates.data?.map((t) => ({
+              id: t.id,
+              name: String(t.name),
+              category: (t.category as string | null) ?? null,
+            }))}
             value={generateTemplateId}
             onChange={setGenerateTemplateId}
           />

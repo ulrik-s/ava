@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { router, orgProcedure, requireOrgOwned } from "../trpc";
 import { contactTypeSchema } from "@/lib/shared/schemas/enums";
+import { contactIdSchema, asId } from "@/lib/shared/schemas/ids";
 import { emit } from "../events/emit";
 
 export const contactRouter = router({
@@ -72,7 +73,7 @@ export const contactRouter = router({
     .input(
       z.object({
         /** Valfritt klient-genererat id (ADR 0003) — annars genererar store:n. */
-        id: z.string().optional(),
+        id: contactIdSchema.optional(),
         name: z.string().min(1),
         contactType: contactTypeSchema,
         personalNumber: z.string().optional(),
@@ -81,7 +82,7 @@ export const contactRouter = router({
         phone: z.string().optional(),
         address: z.string().optional(),
         notes: z.string().optional(),
-        parentId: z.string().optional(),
+        parentId: contactIdSchema.optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -89,7 +90,7 @@ export const contactRouter = router({
         data: {
           ...input,
           email: input.email || null,
-          organizationId: ctx.orgId,
+          organizationId: asId<"OrganizationId">(ctx.orgId),
         },
       });
       await emit.contactCreated(ctx, contact);
@@ -143,7 +144,7 @@ export const contactRouter = router({
   addChild: orgProcedure
     .input(
       z.object({
-        parentId: z.string(),
+        parentId: contactIdSchema,
         name: z.string().min(1),
         email: z.string().email().optional().or(z.literal("")),
         phone: z.string().optional(),
@@ -164,7 +165,7 @@ export const contactRouter = router({
           phone: input.phone,
           notes: input.notes,
           parentId: input.parentId,
-          organizationId: ctx.orgId,
+          organizationId: asId<"OrganizationId">(ctx.orgId),
         },
       });
     }),

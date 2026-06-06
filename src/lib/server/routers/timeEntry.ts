@@ -1,6 +1,13 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../trpc";
 import { emit } from "../events/emit";
+import {
+  asId,
+  matterIdSchema,
+  userIdSchema,
+  timeEntryIdSchema,
+  invoiceIdSchema,
+} from "@/lib/shared/schemas/ids";
 
 export const timeEntryRouter = router({
   list: protectedProcedure
@@ -60,21 +67,21 @@ export const timeEntryRouter = router({
   create: protectedProcedure
     .input(
       z.object({
-        matterId: z.string(),
+        matterId: matterIdSchema,
         date: z.string(), // ISO date string YYYY-MM-DD
         minutes: z.number().min(1),
         description: z.string().min(1),
         billable: z.boolean().default(true),
         // Valfria setup-fält (demo-generator/fixtures, ADR 0003).
-        id: z.string().optional(),
-        userId: z.string().optional(),
+        id: timeEntryIdSchema.optional(),
+        userId: userIdSchema.optional(),
         hourlyRate: z.number().optional(),
-        invoiceId: z.string().nullable().optional(),
+        invoiceId: invoiceIdSchema.nullable().optional(),
         createdAt: z.string().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const userId = input.userId ?? ctx.user.id;
+      const userId = input.userId ?? asId<"UserId">(ctx.user.id);
       const user = await ctx.dataStore.users.findUniqueOrThrow({
         where: { id: userId },
         select: { hourlyRate: true },

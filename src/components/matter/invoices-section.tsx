@@ -126,9 +126,10 @@ export function InvoicesSection({ matterId }: { matterId: string }) {
     timeEntries: timeEntries.data?.entries.filter((t) => !t.invoiceId) ?? [],
     expenses: expenses.data?.expenses.filter((e) => !e.invoiceId) ?? [],
   };
-  const availableAccontos = (invoices.data ?? []).filter(
-    (i) => i.invoiceType === "ACCONTO" && i.deductedOnFinals?.length === 0 && i.status !== "CANCELLED",
-  );
+  const availableAccontos = (invoices.data ?? []).filter((i) => {
+    const deductedOnFinals = i.deductedOnFinals as unknown as { id: string }[] | undefined;
+    return i.invoiceType === "ACCONTO" && deductedOnFinals?.length === 0 && i.status !== "CANCELLED";
+  });
 
   return (
     <div className="bg-white rounded-lg border border-gray-200">

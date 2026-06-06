@@ -19,6 +19,12 @@ import { TRPCError } from "@trpc/server";
 import { router, orgProcedure } from "../trpc";
 import type { DataStoreTx } from "../data-store/IDataStore";
 import { billingRunRecipientSchema, type ExpenseKind } from "@/lib/shared/schemas/enums";
+import {
+  matterIdSchema,
+  billingRunIdSchema,
+  asId,
+  type BillingRunId,
+} from "@/lib/shared/schemas/ids";
 import { emit } from "../events/emit";
 
 interface UnfrozenWork {
@@ -46,7 +52,7 @@ function workValueOre(work: UnfrozenWork): number {
   return time + exp;
 }
 
-async function freezeWork(tx: DataStoreTx, matterId: string, billingRunId: string): Promise<void> {
+async function freezeWork(tx: DataStoreTx, matterId: string, billingRunId: BillingRunId): Promise<void> {
   const now = new Date();
   await tx.timeEntries.updateMany({
     where: { matterId, frozenByBillingRunId: null },
@@ -91,7 +97,7 @@ export const billingRunRouter = router({
 
   createAcconto: orgProcedure
     .input(z.object({
-      matterId: z.string(),
+      matterId: matterIdSchema,
       recipient: billingRunRecipientSchema.default("KLIENT"),
       clientShareBips: z.number().int().min(0).max(10000),
       amountOre: z.number().int().nonnegative(),
@@ -126,9 +132,9 @@ export const billingRunRouter = router({
 
   createFinal: orgProcedure
     .input(z.object({
-      matterId: z.string(),
+      matterId: matterIdSchema,
       recipient: billingRunRecipientSchema,
-      deductedBillingRunIds: z.array(z.string()).default([]),
+      deductedBillingRunIds: z.array(billingRunIdSchema).default([]),
       notes: z.string().nullish(),
     }))
     .mutation(async ({ ctx, input }) => {
@@ -161,7 +167,7 @@ export const billingRunRouter = router({
     }),
 
   createKostnadsrakning: orgProcedure
-    .input(z.object({ matterId: z.string(), notes: z.string().nullish() }))
+    .input(z.object({ matterId: matterIdSchema, notes: z.string().nullish() }))
     .mutation(async ({ ctx, input }) => {
       return ctx.dataStore.transaction(async (tx) => {
         await assertMatterInOrg(tx, input.matterId, ctx.orgId);
@@ -197,7 +203,7 @@ export const billingRunRouter = router({
         if (input.prutningOre < 0) {
           await tx.expenses.create({
             data: {
-              matterId: run.matterId, userId: ctx.user.id, date: new Date(),
+              matterId: run.matterId, userId: asId<"UserId">(ctx.user.id), date: new Date(),
               amount: input.prutningOre, description: "Prutning enligt dom",
               billable: true, vatRate: 0, vatIncluded: false, kind: "PRUTNING",
             },

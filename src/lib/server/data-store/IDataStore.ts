@@ -17,7 +17,7 @@ import type {
   Contact, Matter, MatterContact, Document, DocumentFolder,
   DocumentTemplate, DocumentAnalysisSuggestion, MatterEventSuggestion,
   Invoice, TimeEntry, Expense, User, Organization, Office, ConflictCheck,
-  Payment, PaymentPlan, AccontoDeduction,
+  Payment, PaymentPlan, AccontoDeduction, BillingRun,
   CalendarEvent, Task,
 } from "@/lib/shared/schemas";
 
@@ -92,10 +92,13 @@ export interface Delegate<Row = any> {
   findFirst(args?: any): Promise<Joined<Row> | null>;
   findFirstOrThrow(args?: any): Promise<Joined<Row>>;
   findMany(args?: any): Promise<Joined<Row>[]>;
-  create(args: any): Promise<Joined<Row>>;
-  update(args: any): Promise<Joined<Row>>;
-  updateMany(args: any): Promise<{ count: number }>;
-  upsert(args: any): Promise<Joined<Row>>;
+  // Skriv-args: `data`/`create`/`update` typas mot `Partial<Row>` så
+  // write-literals (inkl. enum-fält) typkollas (#24). `where`/`include`/`select`
+  // hålls lösa (flytande query-yta).
+  create(args: { data: Partial<Row>; include?: unknown; select?: unknown }): Promise<Joined<Row>>;
+  update(args: { where: unknown; data: Partial<Row>; include?: unknown; select?: unknown }): Promise<Joined<Row>>;
+  updateMany(args: { where?: unknown; data: Partial<Row> }): Promise<{ count: number }>;
+  upsert(args: { where: unknown; create: Partial<Row>; update: Partial<Row> }): Promise<Joined<Row>>;
   delete(args: any): Promise<Joined<Row>>;
   deleteMany(args?: any): Promise<{ count: number }>;
   count(args?: any): Promise<number>;
@@ -111,25 +114,25 @@ export interface Delegate<Row = any> {
 // nedan så enskilda callers kan välja striktare typer när de vill.
 export type MatterDelegate = Delegate<Matter>;
 export type ContactDelegate = Delegate<Contact>;
-export type MatterContactDelegate = Delegate;
-export type DocumentDelegate = Delegate;
-export type DocumentFolderDelegate = Delegate;
-export type DocumentTemplateDelegate = Delegate;
-export type DocumentAnalysisSuggestionDelegate = Delegate;
-export type MatterEventSuggestionDelegate = Delegate;
-export type InvoiceDelegate = Delegate;
-export type TimeEntryDelegate = Delegate;
-export type ExpenseDelegate = Delegate;
-export type UserDelegate = Delegate;
-export type OrganizationDelegate = Delegate;
-export type OfficeDelegate = Delegate;
-export type ConflictCheckDelegate = Delegate;
-export type PaymentDelegate = Delegate;
-export type PaymentPlanDelegate = Delegate;
-export type AccontoDeductionDelegate = Delegate;
-export type BillingRunDelegate = Delegate;
-export type CalendarEventDelegate = Delegate;
-export type TaskDelegate = Delegate;
+export type MatterContactDelegate = Delegate<MatterContact>;
+export type DocumentDelegate = Delegate<Document>;
+export type DocumentFolderDelegate = Delegate<DocumentFolder>;
+export type DocumentTemplateDelegate = Delegate<DocumentTemplate>;
+export type DocumentAnalysisSuggestionDelegate = Delegate<DocumentAnalysisSuggestion>;
+export type MatterEventSuggestionDelegate = Delegate<MatterEventSuggestion>;
+export type InvoiceDelegate = Delegate<Invoice>;
+export type TimeEntryDelegate = Delegate<TimeEntry>;
+export type ExpenseDelegate = Delegate<Expense>;
+export type UserDelegate = Delegate<User>;
+export type OrganizationDelegate = Delegate<Organization>;
+export type OfficeDelegate = Delegate<Office>;
+export type ConflictCheckDelegate = Delegate<ConflictCheck>;
+export type PaymentDelegate = Delegate<Payment>;
+export type PaymentPlanDelegate = Delegate<PaymentPlan>;
+export type AccontoDeductionDelegate = Delegate<AccontoDeduction>;
+export type BillingRunDelegate = Delegate<BillingRun>;
+export type CalendarEventDelegate = Delegate<CalendarEvent>;
+export type TaskDelegate = Delegate<Task>;
 
 // Opt-in: enskilda callers som vill ha striktare row-typ kan importera
 // dessa istället. T.ex. `const matters = ctx.dataStore.matters as MattersStrict`.

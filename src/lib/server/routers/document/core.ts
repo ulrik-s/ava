@@ -205,9 +205,12 @@ export const coreProcedures = {
     )
     .mutation(async ({ ctx, input }) => {
       await assertDocAccess(ctx, input.documentId);
-      const { documentId, analyzedAt, ...rest } = input;
+      const { documentId, analyzedAt, analysisStatus, ...rest } = input;
       const data = {
         ...rest,
+        ...(analysisStatus !== undefined
+          ? { analysisStatus: analysisStatus as "PENDING" | "RUNNING" | "DONE" | "ERROR" | null }
+          : {}),
         ...(analyzedAt !== undefined ? { analyzedAt: typeof analyzedAt === "string" ? new Date(analyzedAt) : analyzedAt } : {}),
       };
       return ctx.dataStore.documents.update({ where: { id: documentId }, data });

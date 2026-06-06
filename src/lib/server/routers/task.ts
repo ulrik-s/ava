@@ -10,23 +10,24 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../trpc";
 import { taskPrioritySchema, taskStatusSchema } from "@/lib/shared/schemas";
+import { asId, taskIdSchema, matterIdSchema, userIdSchema } from "@/lib/shared/schemas/ids";
 
 const createInput = z.object({
   title: z.string().min(1),
   description: z.string().nullish(),
   priority: taskPrioritySchema.default("MEDIUM"),
   dueAt: z.date().nullish(),
-  matterId: z.string().nullish(),
+  matterId: matterIdSchema.nullish(),
   // Valfria setup-fält (demo-generator/fixtures, ADR 0003).
-  id: z.string().optional(),
-  userId: z.string().optional(),
+  id: taskIdSchema.optional(),
+  userId: userIdSchema.optional(),
   status: taskStatusSchema.optional(),
   completedAt: z.date().nullish(),
   createdAt: z.date().nullish(),
 });
 
 const updateInput = createInput.partial().extend({
-  id: z.string(),
+  id: taskIdSchema,
   status: taskStatusSchema.optional(),
 });
 
@@ -59,8 +60,8 @@ export const taskRouter = router({
         data: {
           ...input,
           status: input.status ?? "TODO",
-          userId: input.userId ?? ctx.user.id,
-          organizationId: ctx.user.organizationId,
+          userId: input.userId ?? asId<"UserId">(ctx.user.id),
+          organizationId: asId<"OrganizationId">(ctx.user.organizationId),
           createdAt: input.createdAt ?? undefined,
         },
       }),

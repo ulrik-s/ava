@@ -50,8 +50,14 @@ export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
   const utils = trpc.useUtils();
 
   const tree = trpc.document.tree.useQuery({ matterId });
-  const folders = useMemo<FolderRecord[]>(() => tree.data?.folders ?? [], [tree.data]);
-  const documents = useMemo<DocumentRecord[]>(() => tree.data?.documents ?? [], [tree.data]);
+  const folders = useMemo<FolderRecord[]>(
+    () => (tree.data?.folders ?? []) as unknown as FolderRecord[],
+    [tree.data],
+  );
+  const documents = useMemo<DocumentRecord[]>(
+    () => (tree.data?.documents ?? []) as unknown as DocumentRecord[],
+    [tree.data],
+  );
 
   const mutations = useDocumentMutations({
     matterId,
