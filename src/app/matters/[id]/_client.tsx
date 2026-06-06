@@ -47,8 +47,8 @@ export default function MatterDetailClient({ id: paramId }: { id: string }) {
         <PaymentMethodCard
           matterId={id}
           paymentMethod={m.paymentMethod}
-          paymentMethodNote={m.paymentMethodNote}
-          paymentMethodDecidedAt={m.paymentMethodDecidedAt}
+          paymentMethodNote={m.paymentMethodNote ?? null}
+          paymentMethodDecidedAt={m.paymentMethodDecidedAt ?? null}
         />
       </div>
 

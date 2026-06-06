@@ -192,7 +192,7 @@ function ContactsContent() {
         </select>
       </div>
 
-      <ContactsTable rows={contacts.data?.contacts ?? []} />
+      <ContactsTable rows={(contacts.data?.contacts ?? []) as ContactRow[]} />
       {contacts.data && contacts.data.pages > 1 && (
         <div className="px-6 py-3 mt-2 bg-white border border-gray-200 rounded-lg flex items-center justify-between">
           <p className="text-sm text-gray-500">Sida {page} av {contacts.data.pages} ({contacts.data.total} totalt)</p>
