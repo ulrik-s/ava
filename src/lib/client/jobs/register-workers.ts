@@ -10,6 +10,7 @@
  */
 
 import { jobQueue } from "./job-queue";
+import { omitUndefined } from "@/lib/shared/omit-undefined";
 
 interface ClassifyPayload extends Record<string, unknown> {
   documentId: string;
@@ -136,7 +137,7 @@ jobQueue.registerWorker<ExtractTextPayload>("extract-text", async (payload, ctx)
   // Steg 2: extrahera text
   ctx.setProgress(0.4);
   const { extractText } = await import("@/lib/client/jobs/extract-text");
-  const text = await extractText({ bytes, ...(payload.mimeType !== undefined ? { mimeType: payload.mimeType } : {}), fileName: payload.fileName });
+  const text = await extractText({ bytes, ...omitUndefined({ mimeType: payload.mimeType }), fileName: payload.fileName });
 
   // Steg 3: skriv till documents/text/<id>.txt och cache:a för sök
   ctx.setProgress(0.8);

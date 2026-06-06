@@ -6,6 +6,8 @@ import { formatFileSize } from "./_drag-helpers";
 import { readFromFsa } from "@/lib/client/fsa/read-from-fsa";
 import { ExternalEditModal, type ModalState } from "./external-edit-modal";
 import { ActionMenu, type ActionMenuItem } from "@/components/ui/action-menu";
+import type { OpenDocumentDeps } from "@/lib/client/firma/open-document";
+import { omitUndefined } from "@/lib/shared/omit-undefined";
 
 export interface DocumentRecord {
   id: string;
@@ -212,7 +214,7 @@ function DocumentActions({
     { key: "view", label: "Visa", icon: <span aria-hidden>👁</span>, href: viewHref, newTab: true, disabled: isDisabled, title: uploadingTitle ?? "Visa i webbläsaren" },
     { key: "download", label: "Ladda ner", icon: <span aria-hidden>⬇</span>, href: downloadHref, download: true, disabled: isDisabled, title: uploadingTitle ?? "Ladda ner" },
     { key: "reanalyze", label: "Analysera (AI)", icon: <span aria-hidden>🧠</span>, onSelect: onReanalyze, disabled: isDisabled || reanalyzePending, title: uploadingTitle ?? "Kör AI-analys på nytt" },
-    { key: "delete", label: "Ta bort", icon: <Trash2 size={15} />, onSelect: onDelete, danger: true, disabled: isDisabled, ...(uploadingTitle !== undefined ? { title: uploadingTitle } : {}) },
+    omitUndefined({ key: "delete", label: "Ta bort", icon: <Trash2 size={15} />, onSelect: onDelete, danger: true, disabled: isDisabled, title: uploadingTitle }) as ActionMenuItem,
   ];
 
   return <ActionMenu items={items} disabled={isDisabled} label="Dokumentåtgärder" />;
@@ -252,15 +254,16 @@ function DocumentNameButton({ doc, isAnalyzing, disabled, onExternalEdit }: Name
     const { loadHandle } = await import("@/lib/client/fsa/handle-store");
     const rec = doc as DocumentRecord & { storagePath?: string };
     const demoRepo = process.env.NEXT_PUBLIC_DEFAULT_DEMO_REPO;
-    await openDocument({
-      doc: { id: doc.id, ...(rec.storagePath !== undefined ? { storagePath: rec.storagePath } : {}), fileName: doc.fileName },
+    const deps: OpenDocumentDeps = {
+      doc: omitUndefined({ id: doc.id, storagePath: rec.storagePath, fileName: doc.fileName }) as OpenDocumentDeps["doc"],
       isDemo,
-      ...(demoRepo !== undefined ? { demoRepo } : {}),
       loadHandle: () => loadHandle("repo-root"),
       readFromHandle: readFromFsa,
       openUrl: (u) => window.open(u, "_blank", "noopener,noreferrer"),
       notifyError: (m) => alert(m),
-    });
+      ...omitUndefined({ demoRepo }),
+    };
+    await openDocument(deps);
   };
 
   return (

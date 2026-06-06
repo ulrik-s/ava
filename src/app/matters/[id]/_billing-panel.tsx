@@ -184,11 +184,7 @@ function orgProps(org: { name?: string | null | undefined; orgNumber?: string | 
   const name = strOrUndef(org?.name);
   const orgNumber = strOrUndef(org?.orgNumber);
   const address = strOrUndef(org?.address);
-  return {
-    ...(name !== undefined ? { name } : {}),
-    ...(orgNumber !== undefined ? { orgNumber } : {}),
-    ...(address !== undefined ? { address } : {}),
-  };
+  return omitUndefined({ name, orgNumber, address });
 }
 
 function useKrModalData(matterId: string): KrModalData {

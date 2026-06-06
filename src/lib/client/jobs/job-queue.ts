@@ -25,6 +25,8 @@
  *      synlighet, äldre dropps.
  */
 
+import { omitUndefined } from "@/lib/shared/omit-undefined";
+
 export type JobKind =
   | "classify-document"
   | "extract-text"
@@ -77,7 +79,7 @@ class JobQueueImpl {
     const job: Job = {
       id, kind, label,
       status: "queued",
-      ...(payload !== undefined ? { payload } : {}),
+      ...omitUndefined({ payload }),
       enqueuedAt: Date.now(),
     };
     this.jobs.unshift(job);

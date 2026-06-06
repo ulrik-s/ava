@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../trpc";
 import { TRPCError } from "@trpc/server";
+import { omitUndefined } from "@/lib/shared/omit-undefined";
 import {
   asId,
   documentTemplateIdSchema,
@@ -53,13 +54,15 @@ export const documentTemplateRouter = router({
     .mutation(async ({ ctx, input }) => {
       return ctx.dataStore.documentTemplates.create({
         data: {
-          ...(input.id !== undefined ? { id: input.id } : {}), // undefined → store genererar
-          name: input.name,
-          ...(input.description !== undefined ? { description: input.description } : {}),
-          ...(input.category !== undefined ? { category: input.category } : {}),
-          content: input.content,
-          organizationId: asId<"OrganizationId">(ctx.user.organizationId),
-          createdById: input.createdById ?? asId<"UserId">(ctx.user.id),
+          ...omitUndefined({
+            id: input.id, // undefined → store genererar
+            name: input.name,
+            description: input.description,
+            category: input.category,
+            content: input.content,
+            organizationId: asId<"OrganizationId">(ctx.user.organizationId),
+            createdById: input.createdById ?? asId<"UserId">(ctx.user.id),
+          }),
           ...(input.createdAt ? { createdAt: new Date(input.createdAt) } : {}),
         },
       });
@@ -86,12 +89,7 @@ export const documentTemplateRouter = router({
       const { id, name, description, category, content } = input;
       return ctx.dataStore.documentTemplates.update({
         where: { id },
-        data: {
-          ...(name !== undefined ? { name } : {}),
-          ...(description !== undefined ? { description } : {}),
-          ...(category !== undefined ? { category } : {}),
-          ...(content !== undefined ? { content } : {}),
-        },
+        data: omitUndefined({ name, description, category, content }),
       });
     }),
 

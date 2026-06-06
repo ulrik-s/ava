@@ -18,6 +18,7 @@
  */
 
 import { InMemoryQueryEngine, type QueryOptions } from "./query-engine";
+import { omitUndefined } from "@/lib/shared/omit-undefined";
 
 export class ReadOnlyError extends Error {
   constructor(operation: string) {
@@ -134,11 +135,11 @@ export class ReadOnlyDelegate<T extends Record<string, unknown>> {
   /** Filtrera (med relations-prehydrering) → sortera/paginera. */
   private queryRows(args: FindArgs): T[] {
     const filtered = this.filterRows(this.rowsFn(), args.where);
-    return this.engine.query(filtered, {
-      ...(args.orderBy !== undefined ? { orderBy: args.orderBy } : {}),
-      ...(args.skip !== undefined ? { skip: args.skip } : {}),
-      ...(args.take !== undefined ? { take: args.take } : {}),
-    });
+    return this.engine.query(filtered, omitUndefined({
+      orderBy: args.orderBy,
+      skip: args.skip,
+      take: args.take,
+    }));
   }
 
   /**

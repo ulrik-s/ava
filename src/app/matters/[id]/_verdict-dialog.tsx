@@ -16,6 +16,7 @@ import type { inferRouterInputs } from "@trpc/server";
 import { trpc } from "@/lib/client/trpc";
 import type { AppRouter } from "@/lib/server/routers/_app";
 import { formatCurrency } from "@/lib/client/utils";
+import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { Modal } from "@/components/ui/modal";
 
 type RouterInputs = inferRouterInputs<AppRouter>;
@@ -57,9 +58,11 @@ async function generateFakturaDoc(
     invoice,
     meta: {
       matterNumber: props.matterNumber, matterTitle: props.matterTitle,
-      ...(props.clientName !== undefined ? { clientName: props.clientName } : {}),
-      ...(props.organizationName !== undefined ? { organizationName: props.organizationName } : {}),
-      ...(props.organizationOrgNumber !== undefined ? { organizationOrgNumber: props.organizationOrgNumber } : {}),
+      ...omitUndefined({
+        clientName: props.clientName,
+        organizationName: props.organizationName,
+        organizationOrgNumber: props.organizationOrgNumber,
+      }),
     },
   });
   const docId = `faktura-${invoice.id}`;

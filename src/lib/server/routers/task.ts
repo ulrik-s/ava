@@ -11,6 +11,7 @@ import { z } from "zod";
 import { router, protectedProcedure } from "../trpc";
 import { taskPrioritySchema, taskStatusSchema } from "@/lib/shared/schemas";
 import { asId, taskIdSchema, matterIdSchema, userIdSchema } from "@/lib/shared/schemas/ids";
+import { omitUndefined } from "@/lib/shared/omit-undefined";
 
 const createInput = z.object({
   title: z.string().min(1),
@@ -63,7 +64,7 @@ export const taskRouter = router({
           status: input.status ?? "TODO",
           userId: input.userId ?? asId<"UserId">(ctx.user.id),
           organizationId: asId<"OrganizationId">(ctx.user.organizationId),
-          ...(id !== undefined ? { id } : {}),
+          ...omitUndefined({ id }),
           ...(createdAt != null ? { createdAt } : {}),
         },
       });

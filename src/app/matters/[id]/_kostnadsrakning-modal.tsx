@@ -22,6 +22,7 @@ import { Clock, FileText, X, AlertTriangle, Save } from "lucide-react";
 import { trpc } from "@/lib/client/trpc";
 import type { AppRouter } from "@/lib/server/routers/_app";
 import { buildKostnadsrakningContext } from "@/lib/shared/kostnadsrakning";
+import { omitUndefined } from "@/lib/shared/omit-undefined";
 import type { TaxaLevel } from "@/lib/shared/brottmalstaxa";
 import { renderKostnadsrakningPdf } from "@/lib/client/kostnadsrakning/render-pdf";
 import { useHelper, composeMailViaHelper } from "@/lib/client/helper/use-helper";
@@ -183,14 +184,14 @@ export function KostnadsrakningModal(props: Props) {
     matter: { matterNumber: props.matterNumber, title: props.matterTitle, clientName: props.clientName },
     defender: {
       name: props.defenderName,
-      ...(props.defenderEmail !== undefined ? { email: props.defenderEmail } : {}),
+      ...omitUndefined({ email: props.defenderEmail }),
     },
-    organization: {
-      ...(props.organizationName !== undefined ? { name: props.organizationName } : {}),
-      ...(props.organizationOrgNumber !== undefined ? { orgNumber: props.organizationOrgNumber } : {}),
-      ...(props.organizationAddress !== undefined ? { address: props.organizationAddress } : {}),
-    },
-    ...(props.courtName !== undefined ? { courtName: props.courtName } : {}),
+    organization: omitUndefined({
+      name: props.organizationName,
+      orgNumber: props.organizationOrgNumber,
+      address: props.organizationAddress,
+    }),
+    ...omitUndefined({ courtName: props.courtName }),
     hufStart: new Date(hufStart),
     hufEnd: new Date(hufEnd),
     taxaLevel: level,
@@ -222,8 +223,10 @@ export function KostnadsrakningModal(props: Props) {
           matterNumber: props.matterNumber, matterTitle: props.matterTitle,
           clientName: props.clientName, courtName: props.courtName ?? "",
           defenderName: props.defenderName,
-          ...(props.organizationName !== undefined ? { organizationName: props.organizationName } : {}),
-          ...(props.organizationOrgNumber !== undefined ? { organizationOrgNumber: props.organizationOrgNumber } : {}),
+          ...omitUndefined({
+            organizationName: props.organizationName,
+            organizationOrgNumber: props.organizationOrgNumber,
+          }),
         },
       });
       const storagePath = `documents/content/${docId}.pdf`;

@@ -9,6 +9,8 @@
  * parallella blob-fetches, bara skapade objekt postas.
  */
 
+import { omitUndefined } from "@/lib/shared/omit-undefined";
+
 const API = "https://api.github.com";
 
 export interface RepoLocator {
@@ -55,7 +57,7 @@ export interface BlobData {
 async function apiFetch(path: string, init: RequestInit, opts: ApiOpts): Promise<Response> {
   const res = await fetch(`${API}${path}`, {
     ...init,
-    ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
+    ...omitUndefined({ signal: opts.signal }),
     headers: {
       ...(init.headers ?? {}),
       Authorization: `Bearer ${opts.token}`,

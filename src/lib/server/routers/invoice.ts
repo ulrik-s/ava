@@ -176,16 +176,16 @@ export const invoiceRouter = router({
       });
       if (!matter) throw new TRPCError({ code: "NOT_FOUND" });
       const invoice = await ctx.dataStore.invoices.create({
-        data: {
-          ...(input.id !== undefined ? { id: input.id } : {}), // undefined → store genererar
+        data: omitUndefined({
+          id: input.id, // undefined → store genererar
           matterId: input.matterId,
           amount: input.amount,
           invoiceType: "ACCONTO",
           status: "DRAFT",
           invoiceDate: input.invoiceDate ? new Date(input.invoiceDate) : new Date(),
           dueDate: input.dueDate ? new Date(input.dueDate) : null,
-          ...(input.notes !== undefined ? { notes: input.notes } : {}),
-        },
+          notes: input.notes,
+        }),
       });
       await emit.invoiceCreated(ctx, invoice);
       return invoice;
@@ -228,16 +228,16 @@ export const invoiceRouter = router({
         );
 
         const invoice = await tx.invoices.create({
-          data: {
-            ...(input.id !== undefined ? { id: input.id } : {}), // undefined → store genererar
+          data: omitUndefined({
+            id: input.id, // undefined → store genererar
             matterId: input.matterId,
             amount: breakdown.grossAmount,
             invoiceType: "FINAL",
             status: "DRAFT",
             invoiceDate: input.invoiceDate ? new Date(input.invoiceDate) : new Date(),
             dueDate: input.dueDate ? new Date(input.dueDate) : null,
-            ...(input.notes !== undefined ? { notes: input.notes } : {}),
-          },
+            notes: input.notes,
+          }),
         });
 
         await linkBilledItems(tx, invoice.id, timeEntries, expenses, accontos);

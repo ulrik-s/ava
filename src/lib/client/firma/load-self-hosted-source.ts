@@ -19,6 +19,7 @@ import { resolveCorsProxy } from "@/lib/client/sync/cors-proxy";
 import { hydrateWorkingCopy } from "./hydrate-working-copy";
 import { setDocumentContent } from "@/lib/client/demo/document-content-cache";
 import type { DemoSource } from "@/lib/server/data-store/DemoDataStore";
+import { omitUndefined } from "@/lib/shared/omit-undefined";
 
 export interface CurrentUser {
   id: string;
@@ -65,12 +66,11 @@ export async function loadSelfHostedSource(deps: LoadSelfHostedDeps): Promise<De
   if (!(await dirExists(fs, "/.git"))) {
     const corsProxy = resolveCorsProxy({
       url: deps.repo,
-      ...(deps.origin !== undefined ? { origin: deps.origin } : {}),
+      ...omitUndefined({ origin: deps.origin }),
     });
     await (deps.clone ?? cloneRepo)(fs, {
       url: deps.repo,
-      ...(deps.token !== undefined ? { token: deps.token } : {}),
-      ...(deps.username !== undefined ? { username: deps.username } : {}),
+      ...omitUndefined({ token: deps.token, username: deps.username }),
       corsProxy,
       ref: "main",
     });

@@ -13,6 +13,7 @@ import type { AvaRule, RuleStep } from "./schema";
 import type { AvaEvent } from "../events/schema";
 import { templateValue, lookup } from "./template";
 import type { IDataStore } from "../data-store/IDataStore";
+import { omitUndefined } from "@/lib/shared/omit-undefined";
 
 export type StepHandlers = {
   /** Skicka mail. Returnerar `false` om idempotency-key blockerade. */
@@ -119,12 +120,12 @@ const STEP_HANDLERS: { [K in RuleStep["do"]]: StepHandler<K> } = {
     const to = String(templateValue(step.to, tctx));
     const vars = templateValue(step.vars ?? {}, tctx) as Record<string, unknown>;
     const idempotencyKey = step.idempotencyKey ? String(templateValue(step.idempotencyKey, tctx)) : undefined;
-    const sent = await ctx.handlers.sendEmail({
+    const sent = await ctx.handlers.sendEmail(omitUndefined({
       template: step.template,
       to,
       vars,
-      ...(idempotencyKey !== undefined ? { idempotencyKey } : {}),
-    });
+      idempotencyKey,
+    }) as Parameters<StepHandlers["sendEmail"]>[0]);
     if (sent) {
       await ctx.dataStore.events.emit({
         type: "mail.sent",
@@ -197,7 +198,7 @@ const STEP_HANDLERS: { [K in RuleStep["do"]]: StepHandler<K> } = {
     const assignTo = String(templateValue(step.assignTo, tctx));
     const title = String(templateValue(step.title, tctx));
     const dueAt = step.dueAt ? String(templateValue(step.dueAt, tctx)) : undefined;
-    await ctx.handlers.createTask({ assignTo, title, ...(dueAt !== undefined ? { dueAt } : {}) });
+    await ctx.handlers.createTask(omitUndefined({ assignTo, title, dueAt }) as Parameters<StepHandlers["createTask"]>[0]);
     return undefined;
   },
 };
@@ -225,11 +226,11 @@ export async function executeRule(ctx: ExecutionContext): Promise<ExecutionResul
     },
   });
 
-  return {
+  return omitUndefined({
     ruleId: ctx.rule.id,
     ok: !result.error,
     stepsRan: result.stepsRan,
-    ...(result.httpResponse !== undefined ? { httpResponse: result.httpResponse } : {}),
-    ...(result.error !== undefined ? { error: result.error } : {}),
-  };
+    httpResponse: result.httpResponse,
+    error: result.error,
+  }) as ExecutionResult;
 }

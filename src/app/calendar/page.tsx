@@ -20,6 +20,7 @@ import { CheckboxList } from "@/components/ui/checkbox-list";
 import { UserPicker, loadSelectedUserIds } from "./_user-picker";
 import { buildUserColorMap, type UserColor } from "@/lib/client/calendar/user-colors";
 import { resolveSelectedUsers } from "@/lib/client/calendar/select-users";
+import { omitUndefined } from "@/lib/shared/omit-undefined";
 
 type ViewMode = "list" | "day" | "week" | "month";
 
@@ -238,7 +239,7 @@ function EventList() {
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium text-gray-900">{ev.title}</span>
               <KindBadge kind={ev.kind} />
-              {ev.mirrorToOutlook && <MirrorBadge {...(ev.mirrorStatus !== undefined ? { status: ev.mirrorStatus } : {})} />}
+              {ev.mirrorToOutlook && <MirrorBadge {...omitUndefined({ status: ev.mirrorStatus })} />}
             </div>
             <p className="text-xs text-gray-500 mt-0.5">
               {formatEventTime(ev)}
@@ -451,7 +452,7 @@ function NewEventForm({ onClose, initial }: { onClose: () => void; initial?: Eve
         <CheckboxList
           label="Bjud in kollegor"
           options={(orgUsers.data?.users ?? []).map((u: { id: string; name: string; role?: string }) => ({
-            id: u.id, label: u.name, ...(u.role !== undefined ? { sublabel: u.role } : {}),
+            id: u.id, label: u.name, ...omitUndefined({ sublabel: u.role }),
           }))}
           selectedIds={inviteeUserIds}
           onChange={setInviteeUserIds}
@@ -460,7 +461,7 @@ function NewEventForm({ onClose, initial }: { onClose: () => void; initial?: Eve
         <CheckboxList
           label="Bjud in från kontakter"
           options={(contacts.data?.contacts ?? []).map((c: { id: string; name: string; contactType?: string }) => ({
-            id: c.id, label: c.name, ...(c.contactType !== undefined ? { sublabel: c.contactType } : {}),
+            id: c.id, label: c.name, ...omitUndefined({ sublabel: c.contactType }),
           }))}
           selectedIds={inviteeContactIds}
           onChange={setInviteeContactIds}

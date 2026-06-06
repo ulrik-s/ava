@@ -6,6 +6,7 @@ import { FileDown } from "lucide-react";
 import { trpc } from "@/lib/client/trpc";
 import { labelForMatterRole } from "@/lib/client/labels";
 import { buildTemplateContext } from "@/lib/client/templates/build-template-context";
+import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { renderHandlebars } from "@/lib/client/kostnadsrakning/render-handlebars";
 
 type Contact = { id: string; name: string; email?: string | null; phone?: string | null };
@@ -62,19 +63,20 @@ export function GenerateModal({ matterId, contacts, onClose }: Props) {
           matter: {
             matterNumber: m.matterNumber,
             title: m.title,
-            ...(m.matterType !== undefined ? { matterType: m.matterType } : {}),
+            ...omitUndefined({ matterType: m.matterType }),
           },
           recipient: recipient ? {
             name: recipient.name,
-            ...(recipient.email !== undefined ? { email: recipient.email } : {}),
-            ...(recipient.phone !== undefined ? { phone: recipient.phone } : {}),
+            ...omitUndefined({ email: recipient.email, phone: recipient.phone }),
           } : null,
           client: clientLink ? { name: clientLink.contact.name } : null,
           organization: org.data ? {
             name: org.data.name,
-            ...(org.data.orgNumber !== undefined ? { orgNumber: org.data.orgNumber } : {}),
-            ...(org.data.address !== undefined ? { address: org.data.address } : {}),
-            ...(org.data.email !== undefined ? { email: org.data.email } : {}),
+            ...omitUndefined({
+              orgNumber: org.data.orgNumber,
+              address: org.data.address,
+              email: org.data.email,
+            }),
           } : null,
         });
         const html = renderHandlebars(tpl.content, ctx);
