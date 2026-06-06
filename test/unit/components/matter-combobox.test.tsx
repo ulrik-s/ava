@@ -64,6 +64,6 @@ describe("MatterCombobox", () => {
     const { container } = render(<MatterCombobox matters={MATTERS} value="" onChange={vi.fn()} label="Ärende" />);
     const options = container.querySelectorAll("datalist option");
     expect(options.length).toBe(3);
-    expect(options[0].getAttribute("value")).toBe("2026-0001 — Vårdnadstvist Andersson");
+    expect(options[0]!.getAttribute("value")).toBe("2026-0001 — Vårdnadstvist Andersson");
   });
 });

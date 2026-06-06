@@ -86,7 +86,7 @@ skipIfNoGit("SyncLoop — integration mot riktig git", () => {
     expect(result.changedPaths).toContain("matters/active/m1.json");
     expect(result.hydrated).toBe(1);
     expect(onHydrated).toHaveBeenCalledTimes(1);
-    const [entity, data] = onHydrated.mock.calls[0];
+    const [entity, data] = onHydrated.mock.calls[0]!;
     expect(entity).toBe("matter");
     expect((data as { id: string }).id).toBe("m1");
   });

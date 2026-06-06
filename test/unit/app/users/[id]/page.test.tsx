@@ -101,7 +101,7 @@ describe("EditUserPage", () => {
     await screen.findByRole("heading", { name: /Redigera användare/i });
     fireEvent.click(screen.getByRole("button", { name: /^Spara$/i }));
     expect(updateMutate).toHaveBeenCalledTimes(1);
-    expect(updateMutate.mock.calls[0][0]).toMatchObject({
+    expect(updateMutate.mock.calls[0]![0]).toMatchObject({
       id: "u1",
       name: "Anna",
       email: "anna@x.se",
@@ -122,8 +122,8 @@ describe("EditUserPage", () => {
     renderPage();
     await screen.findByRole("heading", { name: /Redigera användare/i });
     const passwordInputs = document.querySelectorAll('input[type="password"]');
-    fireEvent.change(passwordInputs[0], { target: { value: "abc" } });
-    fireEvent.change(passwordInputs[1], { target: { value: "xyz" } });
+    fireEvent.change(passwordInputs[0]!, { target: { value: "abc" } });
+    fireEvent.change(passwordInputs[1]!, { target: { value: "xyz" } });
     fireEvent.click(screen.getByRole("button", { name: /^Spara$/i }));
     expect(screen.getByText(/matchar inte/i)).toBeInTheDocument();
     expect(updateMutate).not.toHaveBeenCalled();
@@ -138,7 +138,7 @@ describe("EditUserPage", () => {
     const hourlyInput = screen.getByDisplayValue("2500") as HTMLInputElement;
     fireEvent.change(hourlyInput, { target: { value: "3000" } });
     fireEvent.click(screen.getByRole("button", { name: /^Spara$/i }));
-    const arg = updateMutate.mock.calls[0][0];
+    const arg = updateMutate.mock.calls[0]![0];
     expect(arg.role).toBe("ADMIN");
     expect(arg.hourlyRate).toBe(3000);
   });
@@ -147,10 +147,10 @@ describe("EditUserPage", () => {
     renderPage();
     await screen.findByRole("heading", { name: /Redigera användare/i });
     const passwordInputs = document.querySelectorAll('input[type="password"]');
-    fireEvent.change(passwordInputs[0], { target: { value: "samelpass" } });
-    fireEvent.change(passwordInputs[1], { target: { value: "samelpass" } });
+    fireEvent.change(passwordInputs[0]!, { target: { value: "samelpass" } });
+    fireEvent.change(passwordInputs[1]!, { target: { value: "samelpass" } });
     fireEvent.click(screen.getByRole("button", { name: /^Spara$/i }));
-    expect(updateMutate.mock.calls[0][0].password).toBe("samelpass");
+    expect(updateMutate.mock.calls[0]![0].password).toBe("samelpass");
   });
 
   it("delete avbryts när confirm ger false", async () => {

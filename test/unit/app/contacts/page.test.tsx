@@ -92,10 +92,10 @@ describe("ContactsPage", () => {
     render(<ContactsPage />);
     fireEvent.click(screen.getByRole("button", { name: /\+ Ny kontakt/i }));
     const inputs = screen.getAllByRole("textbox") as HTMLInputElement[];
-    fireEvent.change(inputs[0], { target: { value: "Cecilia C" } });
+    fireEvent.change(inputs[0]!, { target: { value: "Cecilia C" } });
     fireEvent.click(screen.getByRole("button", { name: /Spara kontakt/i }));
     expect(createMutate).toHaveBeenCalled();
-    expect(createMutate.mock.calls[0][0].name).toBe("Cecilia C");
+    expect(createMutate.mock.calls[0]![0].name).toBe("Cecilia C");
   });
 
   it("byter mellan PERSON och COMPANY visar olika nummer-fält", () => {
@@ -114,7 +114,7 @@ describe("ContactsPage", () => {
     expect(screen.getByRole("button", { name: /Spara kontakt/i })).toBeInTheDocument();
     // Det finns två "Avbryt" — top-headerns toggle och form Avbryt
     const cancelButtons = screen.getAllByRole("button", { name: /Avbryt/i });
-    fireEvent.click(cancelButtons[cancelButtons.length - 1]);
+    fireEvent.click(cancelButtons[cancelButtons.length - 1]!);
     expect(screen.queryByRole("button", { name: /Spara kontakt/i })).not.toBeInTheDocument();
   });
 

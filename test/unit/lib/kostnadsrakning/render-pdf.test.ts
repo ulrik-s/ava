@@ -8,7 +8,7 @@ import { buildKostnadsrakningContext } from "@/lib/shared/kostnadsrakning";
 import { renderKostnadsrakningPdf } from "@/lib/client/kostnadsrakning/render-pdf";
 
 function pdfHeader(bytes: Uint8Array): string {
-  return String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3]);
+  return String.fromCharCode(bytes[0]!, bytes[1]!, bytes[2]!, bytes[3]!);
 }
 
 describe("renderKostnadsrakningPdf", () => {

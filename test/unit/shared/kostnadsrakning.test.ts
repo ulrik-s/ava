@@ -142,7 +142,7 @@ describe("templateContext — formaterad data för Handlebars", () => {
 
   it("expenseLines har formaterade belopp + vatRateLabel", () => {
     const lines = (r.templateContext.expenseLines as Array<Record<string, unknown>>);
-    expect(lines[0].vatRateLabel).toBe("6 %");
-    expect(lines[0].inclVatFormatted).toMatch(/450,00\s+kr/);
+    expect(lines[0]!.vatRateLabel).toBe("6 %");
+    expect(lines[0]!.inclVatFormatted).toMatch(/450,00\s+kr/);
   });
 });

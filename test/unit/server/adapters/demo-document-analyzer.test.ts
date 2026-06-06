@@ -23,7 +23,7 @@ describe("demoDocumentAnalyzer", () => {
     const jobs = jobQueue.list();
     const classifyJobs = jobs.filter((j) => j.kind === "classify-document");
     expect(classifyJobs.length).toBe(1);
-    expect(classifyJobs[0].payload).toMatchObject({ documentId: "d-test-1" });
+    expect(classifyJobs[0]!.payload).toMatchObject({ documentId: "d-test-1" });
   });
 
   it("jobb-label innehåller en del av documentId så användaren känner igen det", async () => {

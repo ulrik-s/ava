@@ -67,8 +67,8 @@ describe("groupSuggestions — deduplicering", () => {
     ]);
 
     expect(groups).toHaveLength(1);
-    expect(groups[0].suggestionIds).toEqual(["s1", "s2"]);
-    expect(groups[0].documents).toHaveLength(2);
+    expect(groups[0]!.suggestionIds).toEqual(["s1", "s2"]);
+    expect(groups[0]!.documents).toHaveLength(2);
   });
 
   it("slår samman samma person med flera roller i samma dokument", () => {
@@ -78,8 +78,8 @@ describe("groupSuggestions — deduplicering", () => {
     ]);
 
     expect(groups).toHaveLength(1);
-    expect(groups[0].roles).toEqual(["KLIENT", "VITTNE"]);
-    expect(groups[0].suggestionIds).toEqual(["s1", "s2"]);
+    expect(groups[0]!.roles).toEqual(["KLIENT", "VITTNE"]);
+    expect(groups[0]!.suggestionIds).toEqual(["s1", "s2"]);
   });
 
   it("dedupar på exakt samma dokument-id", () => {
@@ -88,8 +88,8 @@ describe("groupSuggestions — deduplicering", () => {
       sug({ id: "s2", personalNumber: "19850315-1234", role: "VITTNE", document: { id: "d1", fileName: "a.pdf", title: null } }),
     ]);
 
-    expect(groups[0].documents).toHaveLength(1);
-    expect(groups[0].roles).toEqual(["KLIENT", "VITTNE"]);
+    expect(groups[0]!.documents).toHaveLength(1);
+    expect(groups[0]!.roles).toEqual(["KLIENT", "VITTNE"]);
   });
 
   it("separerar olika personer", () => {
@@ -108,7 +108,7 @@ describe("groupSuggestions — deduplicering", () => {
     ]);
 
     expect(groups).toHaveLength(1);
-    expect(groups[0].roles).toEqual(["MOTPARTSOMBUD", "OMBUD"]);
+    expect(groups[0]!.roles).toEqual(["MOTPARTSOMBUD", "OMBUD"]);
   });
 
   it("slår samman på normaliserat namn när ID saknas", () => {
@@ -118,7 +118,7 @@ describe("groupSuggestions — deduplicering", () => {
     ]);
 
     expect(groups).toHaveLength(1);
-    expect(groups[0].roles).toEqual(["KLIENT", "VITTNE"]);
+    expect(groups[0]!.roles).toEqual(["KLIENT", "VITTNE"]);
   });
 });
 
@@ -131,8 +131,8 @@ describe("groupSuggestions — attribut tas från första icke-tomma", () => {
       sug({ id: "s2", personalNumber: "19850315-1234", email: "anna@example.se", phone: "0701234567" }),
     ]);
 
-    expect(groups[0].email).toBe("anna@example.se");
-    expect(groups[0].phone).toBe("0701234567");
+    expect(groups[0]!.email).toBe("anna@example.se");
+    expect(groups[0]!.phone).toBe("0701234567");
   });
 
   it("behåller första icke-tomma värdet när båda dokumenten har värden", () => {
@@ -141,7 +141,7 @@ describe("groupSuggestions — attribut tas från första icke-tomma", () => {
       sug({ id: "s2", personalNumber: "19850315-1234", email: "anna@new.se" }),
     ]);
 
-    expect(groups[0].email).toBe("anna@old.se");
+    expect(groups[0]!.email).toBe("anna@old.se");
   });
 
   it("samlar distinkta anteckningar", () => {
@@ -151,7 +151,7 @@ describe("groupSuggestions — attribut tas från första icke-tomma", () => {
       sug({ id: "s3", personalNumber: "19850315-1234", notes: "Nämnd som klient" }), // dup
     ]);
 
-    expect(groups[0].notes).toEqual(["Nämnd som klient", "Nämnd som vittne"]);
+    expect(groups[0]!.notes).toEqual(["Nämnd som klient", "Nämnd som vittne"]);
   });
 
   it("undviker dubbel-roller", () => {
@@ -160,7 +160,7 @@ describe("groupSuggestions — attribut tas från första icke-tomma", () => {
       sug({ id: "s2", role: "KLIENT", personalNumber: "19850315-1234" }),
     ]);
 
-    expect(groups[0].roles).toEqual(["KLIENT"]);
+    expect(groups[0]!.roles).toEqual(["KLIENT"]);
   });
 });
 

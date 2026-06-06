@@ -33,7 +33,7 @@ function effectivePathname(pathname: string): string {
   if (!pathname.split("/").filter(Boolean).includes(SHELL_PARAM)) return pathname;
   const m = window.location.hash.match(/(?:^#|&)orig=([^&]+)/);
   if (!m) return pathname;
-  try { return decodeURIComponent(m[1]); } catch { return pathname; }
+  try { return decodeURIComponent(m[1]!); } catch { return pathname; }
 }
 
 export function useRouteId(offsetFromEnd = 0): string | null {

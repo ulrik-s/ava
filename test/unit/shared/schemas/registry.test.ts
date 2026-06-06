@@ -27,13 +27,13 @@ describe("ENTITY_REGISTRY", () => {
   });
 
   it("calendar + task: gitPath flat (inte per-user-mapp)", () => {
-    expect(ENTITY_REGISTRY.calendarEvent.gitPath("e-1", { userId: "u-1" })).toBe("calendar/e-1.json");
-    expect(ENTITY_REGISTRY.task.gitPath("t-1", { userId: "u-1" })).toBe("tasks/t-1.json");
+    expect(ENTITY_REGISTRY.calendarEvent!.gitPath("e-1", { userId: "u-1" })).toBe("calendar/e-1.json");
+    expect(ENTITY_REGISTRY.task!.gitPath("t-1", { userId: "u-1" })).toBe("tasks/t-1.json");
   });
 
   it("varje entry har schema + gitPath + gitPrefix + sourceKey", () => {
     for (const name of ENTITY_NAMES) {
-      const entry = ENTITY_REGISTRY[name];
+      const entry = ENTITY_REGISTRY[name]!;
       expect(entry.schema).toBeDefined();
       expect(typeof entry.gitPath).toBe("function");
       expect(entry.gitPrefix).toBeTruthy();
@@ -42,19 +42,19 @@ describe("ENTITY_REGISTRY", () => {
   });
 
   it("gitPath:s första argument används i resultatet (för rader utan email-style key)", () => {
-    expect(ENTITY_REGISTRY.matter.gitPath("m-1", {})).toBe("matters/active/m-1.json");
-    expect(ENTITY_REGISTRY.contact.gitPath("c-1", {})).toBe("contacts/c-1.json");
-    expect(ENTITY_REGISTRY.invoice.gitPath("i-1", {})).toBe("invoices/i-1.json");
+    expect(ENTITY_REGISTRY.matter!.gitPath("m-1", {})).toBe("matters/active/m-1.json");
+    expect(ENTITY_REGISTRY.contact!.gitPath("c-1", {})).toBe("contacts/c-1.json");
+    expect(ENTITY_REGISTRY.invoice!.gitPath("i-1", {})).toBe("invoices/i-1.json");
   });
 
   it("user-pathen använder email om satt, annars id", () => {
-    expect(ENTITY_REGISTRY.user.gitPath("u-1", { email: "anna@firma.se" })).toBe(".ava/users/anna@firma.se.json");
-    expect(ENTITY_REGISTRY.user.gitPath("u-1", {})).toBe(".ava/users/u-1.json");
+    expect(ENTITY_REGISTRY.user!.gitPath("u-1", { email: "anna@firma.se" })).toBe(".ava/users/anna@firma.se.json");
+    expect(ENTITY_REGISTRY.user!.gitPath("u-1", {})).toBe(".ava/users/u-1.json");
   });
 
   it("organisation + offices i registry:t", () => {
-    expect(ENTITY_REGISTRY.organization.gitPath("o-1", {})).toBe(".ava/organizations/o-1.json");
-    expect(ENTITY_REGISTRY.office.gitPath("off-1", {})).toBe("offices/off-1.json");
+    expect(ENTITY_REGISTRY.organization!.gitPath("o-1", {})).toBe(".ava/organizations/o-1.json");
+    expect(ENTITY_REGISTRY.office!.gitPath("off-1", {})).toBe("offices/off-1.json");
   });
 });
 

@@ -78,7 +78,7 @@ describe("expense.create", () => {
       amount: 50000,
       description: "Resa",
     });
-    const args = mockPrisma.expense.create.mock.calls[0][0];
+    const args = mockPrisma.expense.create.mock.calls[0]![0];
     expect(args.data.userId).toBe("u-9");
     expect(args.data.date).toBeInstanceOf(Date);
     expect(args.data.amount).toBe(50000);
@@ -92,7 +92,7 @@ describe("expense.create", () => {
       amount: 100,
       description: "X",
     });
-    expect(mockPrisma.expense.create.mock.calls[0][0].data.billable).toBe(true);
+    expect(mockPrisma.expense.create.mock.calls[0]![0].data.billable).toBe(true);
   });
 
   it("validerar belopp > 0", async () => {
@@ -106,14 +106,14 @@ describe("expense.update", () => {
   it("konverterar date-sträng om angiven", async () => {
     mockPrisma.expense.update.mockResolvedValue({});
     await makeCaller().update({ id: "e1", date: "2026-05-01" });
-    const args = mockPrisma.expense.update.mock.calls[0][0];
+    const args = mockPrisma.expense.update.mock.calls[0]![0];
     expect(args.data.date).toBeInstanceOf(Date);
   });
 
   it("rör inte date när ej angiven", async () => {
     mockPrisma.expense.update.mockResolvedValue({});
     await makeCaller().update({ id: "e1", description: "Ny" });
-    const args = mockPrisma.expense.update.mock.calls[0][0];
+    const args = mockPrisma.expense.update.mock.calls[0]![0];
     expect(args.data.date).toBeUndefined();
     expect(args.data.description).toBe("Ny");
   });

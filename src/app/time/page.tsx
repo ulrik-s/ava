@@ -96,7 +96,7 @@ export default function TimePage() {
   const descriptionFieldId = useId();
   const [form, setForm] = useState({
     matterId: "",
-    date: new Date().toISOString().split("T")[0],
+    date: new Date().toISOString().split("T")[0]!,
     minutes: 30,
     description: "",
     billable: true,
@@ -106,7 +106,7 @@ export default function TimePage() {
     onSuccess: () => {
       void utils.timeEntry.list.invalidate();
       setShowForm(false);
-      setForm({ matterId: "", date: new Date().toISOString().split("T")[0], minutes: 30, description: "", billable: true });
+      setForm({ matterId: "", date: new Date().toISOString().split("T")[0]!, minutes: 30, description: "", billable: true });
     },
   });
 

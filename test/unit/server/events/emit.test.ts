@@ -18,7 +18,7 @@ describe("emit-helpers", () => {
   it("matterCreated skickar rätt payload + matterId", async () => {
     const { ctx, emitFn } = makeCtx();
     await emit.matterCreated(ctx, { id: "m1", matterNumber: "2026-0001", title: "X" });
-    const arg = emitFn.mock.calls[0][0] as Record<string, unknown>;
+    const arg = emitFn.mock.calls[0]![0] as Record<string, unknown>;
     expect(arg.type).toBe("matter.created");
     expect(arg.matterId).toBe("m1");
     expect(arg.actor).toEqual({ kind: "user", id: "anna" });
@@ -29,7 +29,7 @@ describe("emit-helpers", () => {
   it("matterStatusChanged loggar from + to", async () => {
     const { ctx, emitFn } = makeCtx();
     await emit.matterStatusChanged(ctx, "m1", "ACTIVE", "ARCHIVED");
-    const arg = emitFn.mock.calls[0][0] as Record<string, unknown>;
+    const arg = emitFn.mock.calls[0]![0] as Record<string, unknown>;
     expect(arg.type).toBe("matter.status_changed");
     expect(arg.payload).toEqual({ from: "ACTIVE", to: "ARCHIVED" });
   });
@@ -37,7 +37,7 @@ describe("emit-helpers", () => {
   it("invoicePaymentReceived inkluderar amount", async () => {
     const { ctx, emitFn } = makeCtx();
     await emit.invoicePaymentReceived(ctx, "inv-1", "m1", 5000);
-    const arg = emitFn.mock.calls[0][0] as Record<string, unknown>;
+    const arg = emitFn.mock.calls[0]![0] as Record<string, unknown>;
     expect(arg.type).toBe("invoice.payment_received");
     expect(arg.payload).toEqual({ invoiceId: "inv-1", amount: 5000 });
   });
@@ -45,7 +45,7 @@ describe("emit-helpers", () => {
   it("timeEntryAdded inkluderar minutes och matterId", async () => {
     const { ctx, emitFn } = makeCtx();
     await emit.timeEntryAdded(ctx, { id: "t1", matterId: "m1", minutes: 90 });
-    const arg = emitFn.mock.calls[0][0] as Record<string, unknown>;
+    const arg = emitFn.mock.calls[0]![0] as Record<string, unknown>;
     expect(arg.type).toBe("time-entry.added");
     expect(arg.matterId).toBe("m1");
     expect(arg.payload).toEqual({ entryId: "t1", minutes: 90 });

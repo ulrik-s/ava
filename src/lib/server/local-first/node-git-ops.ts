@@ -116,8 +116,9 @@ export class NodeGitOps implements IGitOps {
   private async headOf(ref: string): Promise<GitCommit> {
     const { stdout } = await this.run(["log", "-1", ref, `--format=${FORMAT}`]);
     const commits = this.parseLog(stdout);
-    if (!commits.length) throw new Error(`Inget HEAD för ${ref}`);
-    return commits[0];
+    const head = commits[0];
+    if (!head) throw new Error(`Inget HEAD för ${ref}`);
+    return head;
   }
 
   private parseLog(stdout: string): GitCommit[] {
@@ -126,7 +127,7 @@ export class NodeGitOps implements IGitOps {
       .map((line) => line.trim())
       .filter(Boolean)
       .map((line) => {
-        const [hash, message, author, ts] = line.split("|");
+        const [hash = "", message = "", author = "", ts = ""] = line.split("|");
         return { hash, message, author, ts };
       });
   }

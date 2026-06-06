@@ -83,7 +83,7 @@ describe("subscribeLlmProgress", () => {
     await downloadActiveModel();
     // initial + "Förbereder…" + "Klar" + ev. interna events
     expect(seen.length).toBeGreaterThanOrEqual(2);
-    expect(seen[seen.length - 1].progress).toBe(1);
+    expect(seen[seen.length - 1]!.progress).toBe(1);
     unsub();
   });
 });

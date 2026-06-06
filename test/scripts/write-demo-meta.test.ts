@@ -32,9 +32,9 @@ describe("buildDemoMeta", () => {
   it("user.id är UUID (deterministiskt från seed-id)", () => {
     const t = createIdTranslator();
     const meta = buildDemoMeta(seed(), t, FIXED_NOW);
-    expect(isUuid(meta.users[0].id)).toBe(true);
-    expect(meta.users[0].id).toBe(t.toUuid("u-anna"));
-    expect(meta.users[0].name).toBe("Anna Advokat");
+    expect(isUuid(meta.users[0]!.id)).toBe(true);
+    expect(meta.users[0]!.id).toBe(t.toUuid("u-anna"));
+    expect(meta.users[0]!.name).toBe("Anna Advokat");
   });
 
   it("inkluderar deterministisk buildAt (ISO 8601)", () => {
@@ -59,6 +59,6 @@ describe("buildDemoMeta", () => {
 
   it("title är optional", () => {
     const noTitle = seed({ users: [{ id: "u-x", name: "X", email: "x@ava", role: "ADMIN" }] });
-    expect(buildDemoMeta(noTitle, createIdTranslator(), FIXED_NOW).users[0].title).toBeUndefined();
+    expect(buildDemoMeta(noTitle, createIdTranslator(), FIXED_NOW).users[0]!.title).toBeUndefined();
   });
 });

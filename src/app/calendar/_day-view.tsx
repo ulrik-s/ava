@@ -190,7 +190,7 @@ export function layoutEventsForDay(events: readonly DayEvent[]): LaidOutEvent[] 
     const start = new Date(ev.startAt);
     const end = ev.endAt ? new Date(ev.endAt) : new Date(start.getTime() + 30 * 60_000); // default 30 min
     let col = 0;
-    while (col < colEnds.length && colEnds[col].getTime() > start.getTime()) col++;
+    while (col < colEnds.length && colEnds[col]!.getTime() > start.getTime()) col++;
     if (col === colEnds.length) colEnds.push(end);
     else colEnds[col] = end;
     assigned.push({ ev, col, start, end });

@@ -61,7 +61,7 @@ describe("resolveRecipients", () => {
   it("faller tillbaka på rå roll-sträng om ingen label finns", () => {
     const links = [link({ contactId: "c1", role: "UNKNOWN_ROLE" })];
     const result = resolveRecipients(["c1"], links, "m1");
-    expect(result[0].data.roleLabel).toBe("UNKNOWN_ROLE");
+    expect(result[0]!.data.roleLabel).toBe("UNKNOWN_ROLE");
   });
 
   it("bevarar ordningen från recipientIds (inte från links)", () => {
@@ -100,8 +100,8 @@ describe("resolveRecipients", () => {
     const links = [link({ contactId: "c1" })];
     const result = resolveRecipients(["c1", "c1"], links, "m1");
     expect(result).toHaveLength(2);
-    expect(result[0].contactId).toBe("c1");
-    expect(result[1].contactId).toBe("c1");
+    expect(result[0]!.contactId).toBe("c1");
+    expect(result[1]!.contactId).toBe("c1");
   });
 
   it("hanterar flera länkar för samma kontakt genom att ta första matchen", () => {
@@ -113,7 +113,7 @@ describe("resolveRecipients", () => {
     ];
     const result = resolveRecipients(["c1"], links, "m1");
     expect(result).toHaveLength(1);
-    expect(result[0].data.role).toBe("KLIENT");
+    expect(result[0]!.data.role).toBe("KLIENT");
   });
 });
 

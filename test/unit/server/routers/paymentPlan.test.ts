@@ -40,7 +40,7 @@ describe("paymentPlan.recordReminder", () => {
 
     expect(res.planId).toBe("pp-1");
     expect(res.dueMonth).toBe("2026-03");
-    const arg = mockPrisma.paymentPlanReminder.create.mock.calls[0][0] as { data: Record<string, unknown> };
+    const arg = mockPrisma.paymentPlanReminder.create.mock.calls[0]![0] as { data: Record<string, unknown> };
     expect(arg.data.id).toBe("ppr-1");
     expect(arg.data.type).toBe("DUE");
     expect(arg.data.sentAt).toBeInstanceOf(Date);
@@ -52,7 +52,7 @@ describe("paymentPlan.recordReminder", () => {
       ({ data }: { data: Record<string, unknown> }) => Promise.resolve({ ...data }),
     );
     await makeCaller().recordReminder({ planId: "pp-1", dueMonth: "2026-04", type: "OVERDUE" });
-    const arg = mockPrisma.paymentPlanReminder.create.mock.calls[0][0] as { data: Record<string, unknown> };
+    const arg = mockPrisma.paymentPlanReminder.create.mock.calls[0]![0] as { data: Record<string, unknown> };
     expect(arg.data.sentAt).toBeInstanceOf(Date);
   });
 

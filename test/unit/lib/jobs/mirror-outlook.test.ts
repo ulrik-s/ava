@@ -66,8 +66,8 @@ describe("mirror-to-outlook worker", () => {
     await waitForFinish(id);
 
     expect(dispatch).toHaveBeenCalledOnce();
-    expect(dispatch.mock.calls[0][0].patch.mirrorStatus).toBe("failed");
-    expect(dispatch.mock.calls[0][0].patch.mirrorError).toMatch(/Office 365/);
+    expect(dispatch.mock.calls[0]![0].patch.mirrorStatus).toBe("failed");
+    expect(dispatch.mock.calls[0]![0].patch.mirrorError).toMatch(/Office 365/);
     expect(graph.createGraphEvent).not.toHaveBeenCalled();
   });
 
@@ -87,7 +87,7 @@ describe("mirror-to-outlook worker", () => {
     expect(graph.createGraphEvent).toHaveBeenCalledOnce();
     expect(graph.updateGraphEvent).not.toHaveBeenCalled();
     expect(dispatch).toHaveBeenCalledOnce();
-    const patch = dispatch.mock.calls[0][0].patch;
+    const patch = dispatch.mock.calls[0]![0].patch;
     expect(patch.outlookEventId).toBe("g-new");
     expect(patch.mirrorStatus).toBe("synced");
   });
@@ -108,7 +108,7 @@ describe("mirror-to-outlook worker", () => {
     expect(job.status).toBe("done");
     expect(graph.updateGraphEvent).toHaveBeenCalledOnce();
     expect(graph.createGraphEvent).not.toHaveBeenCalled();
-    expect(dispatch.mock.calls[0][0].patch.outlookEventId).toBe("g-existing");
+    expect(dispatch.mock.calls[0]![0].patch.outlookEventId).toBe("g-existing");
   });
 
   it("delete med outlookEventId → deleteGraphEvent, ingen state-dispatch", async () => {
@@ -143,8 +143,8 @@ describe("mirror-to-outlook worker", () => {
     const job = await waitForFinish(id);
     expect(job.status).toBe("failed");
     expect(dispatch).toHaveBeenCalledOnce();
-    expect(dispatch.mock.calls[0][0].patch.mirrorStatus).toBe("failed");
-    expect(dispatch.mock.calls[0][0].patch.mirrorError).toMatch(/403/);
+    expect(dispatch.mock.calls[0]![0].patch.mirrorStatus).toBe("failed");
+    expect(dispatch.mock.calls[0]![0].patch.mirrorError).toMatch(/403/);
   });
 
   // ── outlookCalendarId-spreadens truthy-arm (per-kalender-mirroring) ──
@@ -254,6 +254,6 @@ describe("mirror-to-outlook worker", () => {
     const job = await waitForFinish(id);
     expect(job.status).toBe("failed");
     expect(dispatch).toHaveBeenCalledOnce();
-    expect(dispatch.mock.calls[0][0].patch.mirrorError).toBe("rå-sträng-fel");
+    expect(dispatch.mock.calls[0]![0].patch.mirrorError).toBe("rå-sträng-fel");
   });
 });

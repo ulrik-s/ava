@@ -164,7 +164,7 @@ describe("invoiceRouter mot riktig DemoDataStore", () => {
     };
     expect(res.paymentPlan?.id).toBe("pp1"); // 1:1 → objekt, inte array
     expect(res.payments).toHaveLength(1);
-    expect(res.payments[0].recordedBy?.name).toBe("Anna"); // nested include
+    expect(res.payments[0]!.recordedBy?.name).toBe("Anna"); // nested include
   });
 });
 

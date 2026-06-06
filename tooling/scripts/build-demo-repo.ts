@@ -30,7 +30,7 @@ import { buildSeed } from "./seed-data";
 
 function parseDirArg(): string {
   const idx = process.argv.indexOf("--dir");
-  return idx > 0 && process.argv[idx + 1] ? process.argv[idx + 1] : "./demo-repo";
+  return idx > 0 && process.argv[idx + 1] ? process.argv[idx + 1]! : "./demo-repo";
 }
 
 async function main(): Promise<void> {

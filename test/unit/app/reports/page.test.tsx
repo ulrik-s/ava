@@ -147,8 +147,8 @@ describe("ReportsPage", () => {
   it("byter period via from/to-input", () => {
     const { container } = render(<ReportsPage />);
     const inputs = container.querySelectorAll('input[type="date"]');
-    fireEvent.change(inputs[0], { target: { value: "2026-03-01" } });
-    fireEvent.change(inputs[1], { target: { value: "2026-04-01" } });
+    fireEvent.change(inputs[0]!, { target: { value: "2026-03-01" } });
+    fireEvent.change(inputs[1]!, { target: { value: "2026-04-01" } });
     expect((inputs[0] as HTMLInputElement).value).toBe("2026-03-01");
     expect((inputs[1] as HTMLInputElement).value).toBe("2026-04-01");
   });
@@ -184,7 +184,7 @@ describe("ReportsPage", () => {
     // Vänta på att fetch anropas
     await new Promise((r) => setTimeout(r, 0));
     expect(fetchMock).toHaveBeenCalled();
-    const url = fetchMock.mock.calls[0][0] as string;
+    const url = fetchMock.mock.calls[0]![0] as string;
     expect(url).toContain("/api/reports/excel?");
     expect(url).toContain("userIds=u1");
   });

@@ -47,7 +47,7 @@ describe("sshsigSign", () => {
     const magic = new TextDecoder().decode(bytes.slice(0, 6));
     expect(magic).toBe("SSHSIG");
     // Nästa 4 bytes: uint32be version
-    const version = (bytes[6] << 24) | (bytes[7] << 16) | (bytes[8] << 8) | bytes[9];
+    const version = (bytes[6]! << 24) | (bytes[7]! << 16) | (bytes[8]! << 8) | bytes[9]!;
     expect(version).toBe(1);
   });
 

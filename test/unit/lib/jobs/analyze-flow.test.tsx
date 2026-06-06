@@ -50,11 +50,11 @@ describe("classify-document worker — full dispatch", () => {
     await waitForStatus(id, "done");
 
     expect(dispatched).toHaveLength(1);
-    expect(dispatched[0].documentId).toBe("d-1");
-    expect(dispatched[0].kind).toBe("STAMNING");
+    expect(dispatched[0]!.documentId).toBe("d-1");
+    expect(dispatched[0]!.kind).toBe("STAMNING");
     // CRITICAL: UI:n förlitar sig på dessa för att stoppa "analyseras..."
-    expect(dispatched[0].analyzedAt).toBeDefined();
-    expect(dispatched[0].analysisStatus).toBe("DONE");
+    expect(dispatched[0]!.analyzedAt).toBeDefined();
+    expect(dispatched[0]!.analysisStatus).toBe("DONE");
     setAnalyzeDispatcher(null);
   });
 
@@ -67,7 +67,7 @@ describe("classify-document worker — full dispatch", () => {
     });
     await waitForStatus(id, "done");
 
-    expect(dispatched[0].kind).toBe("OKLASSIFICERAT");
+    expect(dispatched[0]!.kind).toBe("OKLASSIFICERAT");
     setAnalyzeDispatcher(null);
   });
 
@@ -80,9 +80,9 @@ describe("classify-document worker — full dispatch", () => {
     });
     await waitForStatus(id, "done");
 
-    expect(dispatched[0].kind).toBe("OKLASSIFICERAT");
+    expect(dispatched[0]!.kind).toBe("OKLASSIFICERAT");
     // Även om vi inte kunde klassa, ska analysen markeras som körd
-    expect(dispatched[0].analyzedAt).toBeDefined();
+    expect(dispatched[0]!.analyzedAt).toBeDefined();
     setAnalyzeDispatcher(null);
   });
 

@@ -194,10 +194,10 @@ describe("organization — komplett flöde: registrera huvudkontor och filial", 
     const list = await makeCaller("org-a").listOffices();
 
     expect(list).toHaveLength(2);
-    expect(list[0].isMain).toBe(true);
-    expect(list[0].name).toBe("Stockholm");
-    expect(list[1].isMain).toBe(false);
-    expect(list[1].name).toBe("Göteborg");
+    expect(list[0]!.isMain).toBe(true);
+    expect(list[0]!.name).toBe("Stockholm");
+    expect(list[1]!.isMain).toBe(false);
+    expect(list[1]!.name).toBe("Göteborg");
 
     // Verify the query filters on org and orders by isMain desc, then name asc
     expect(mockPrisma.office.findMany).toHaveBeenCalledWith({

@@ -311,11 +311,11 @@ async function parseSshPublicKey(raw: string): Promise<{ type: PublicKey["type"]
     "ecdsa-sha2-nistp384": "ssh-ecdsa",
     "ecdsa-sha2-nistp521": "ssh-ecdsa",
   };
-  const type = typeMap[parts[0]];
+  const type = typeMap[parts[0]!];
   if (!type) return null;
   // Riktig SHA-256-fingerprint via crypto.subtle på den base64-decodade
   // wire-format-blob:n. För Ed25519 är decodad blob 51 bytes (4+11+4+32).
-  const blob = base64ToBytes(parts[1]);
+  const blob = base64ToBytes(parts[1]!);
   const digest = await crypto.subtle.digest("SHA-256", blob.buffer as ArrayBuffer);
   const fp = "SHA256:" + bytesToBase64(new Uint8Array(digest)).replace(/=+$/, "");
   const comment = parts.slice(2).join(" ");
@@ -331,6 +331,6 @@ function base64ToBytes(b64: string): Uint8Array {
 
 function bytesToBase64(bytes: Uint8Array): string {
   let s = "";
-  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]!);
   return btoa(s);
 }

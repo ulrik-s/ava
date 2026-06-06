@@ -42,7 +42,7 @@ const FILTERS: Record<string, (v: unknown) => unknown> = {
 export function template(input: string, ctx: Record<string, unknown>): unknown {
   const SINGLE = /^\{\{\s*([^}]+?)\s*\}\}$/;
   const single = input.match(SINGLE);
-  if (single) return resolveOne(single[1], ctx);
+  if (single) return resolveOne(single[1] ?? "", ctx);
 
   return input.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_m, expr) => {
     const v = resolveOne(expr, ctx);
@@ -51,7 +51,7 @@ export function template(input: string, ctx: Record<string, unknown>): unknown {
 }
 
 function resolveOne(expr: string, ctx: Record<string, unknown>): unknown {
-  const [pathRaw, ...filters] = expr.split("|").map((s) => s.trim());
+  const [pathRaw = "", ...filters] = expr.split("|").map((s) => s.trim());
   let v = lookup(ctx, pathRaw);
   for (const f of filters) {
     const fn = FILTERS[f];

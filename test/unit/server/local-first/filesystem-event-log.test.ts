@@ -79,7 +79,7 @@ describe("FilesystemEventLog — query", () => {
     await log.emit({ type: "matter.updated", source: "ui", actor: { kind: "user", id: "anna" }, payload: {} });
     const events = await log.query({});
     expect(events).toHaveLength(2);
-    expect(events[0].ts <= events[1].ts).toBe(true);
+    expect(events[0]!.ts <= events[1]!.ts).toBe(true);
   });
 
   it("filtrerar på type", async () => {
@@ -88,7 +88,7 @@ describe("FilesystemEventLog — query", () => {
     await log.emit({ type: "contact.created", source: "ui", actor: { kind: "user", id: "anna" }, payload: {} });
     const matters = await log.query({ type: "matter.created" });
     expect(matters).toHaveLength(1);
-    expect(matters[0].type).toBe("matter.created");
+    expect(matters[0]!.type).toBe("matter.created");
   });
 
   it("filtrerar på matterId", async () => {
@@ -97,7 +97,7 @@ describe("FilesystemEventLog — query", () => {
     await log.emit({ type: "matter.updated", source: "ui", actor: { kind: "user", id: "anna" }, payload: {}, matterId: "m2" });
     const m1Events = await log.query({ matterId: "m1" });
     expect(m1Events).toHaveLength(1);
-    expect(m1Events[0].matterId).toBe("m1");
+    expect(m1Events[0]!.matterId).toBe("m1");
   });
 });
 

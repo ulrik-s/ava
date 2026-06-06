@@ -59,7 +59,7 @@ describe("contact.list", () => {
 
   it("bygger OR-sökning på namn/personnr/orgnr/epost", async () => {
     await makeCaller().list({ search: "Anna" });
-    const args = mockPrisma.contact.findMany.mock.calls[0][0];
+    const args = mockPrisma.contact.findMany.mock.calls[0]![0];
     expect(args.where.OR).toHaveLength(4);
   });
 
@@ -97,7 +97,7 @@ describe("contact.create", () => {
       contactType: "PERSON",
       email: "",
     });
-    const args = mockPrisma.contact.create.mock.calls[0][0];
+    const args = mockPrisma.contact.create.mock.calls[0]![0];
     expect(args.data.email).toBeNull();
   });
 
@@ -158,7 +158,7 @@ describe("contact.addChild", () => {
     mockPrisma.contact.findUnique.mockResolvedValue(C);
     mockPrisma.contact.create.mockResolvedValue({ id: "child" });
     await makeCaller().addChild({ parentId: "c1", name: "Anställd" });
-    const args = mockPrisma.contact.create.mock.calls[0][0];
+    const args = mockPrisma.contact.create.mock.calls[0]![0];
     expect(args.data.parentId).toBe("c1");
     expect(args.data.contactType).toBe("PERSON");
     expect(args.data.organizationId).toBe("org-a");

@@ -117,7 +117,9 @@ export class IsomorphicGitOps implements IGitOps {
       author: { name: this.deps.authorName, email: this.deps.authorEmail },
     });
     const log = await git.log({ fs: this.fs.nodeFs(), dir: this.dir, ref: oid, depth: 1 });
-    return this.toCommit(log[0]);
+    const head = log[0];
+    if (!head) throw new Error("IsomorphicGitOps: commit gav ingen log-post");
+    return this.toCommit(head);
   }
 
   // eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Async method 'push' has a complexity of 9. Maximum allowed is 8.)
@@ -198,7 +200,9 @@ export class IsomorphicGitOps implements IGitOps {
   private async headOf(ref: string): Promise<GitCommit> {
     const oid = await git.resolveRef({ fs: this.fs.nodeFs(), dir: this.dir, ref });
     const log = await git.log({ fs: this.fs.nodeFs(), dir: this.dir, ref: oid, depth: 1 });
-    return this.toCommit(log[0]);
+    const head = log[0];
+    if (!head) throw new Error(`IsomorphicGitOps: hittade ingen commit för ref ${ref}`);
+    return this.toCommit(head);
   }
 
   private toCommit(entry: { oid: string; commit: { message: string; author: { name: string; timestamp: number } } }): GitCommit {

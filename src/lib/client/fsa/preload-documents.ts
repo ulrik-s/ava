@@ -98,11 +98,13 @@ export async function preloadAllDocuments(opts: PreloadOpts): Promise<PreloadRes
 
 async function fileExists(root: FileSystemDirectoryHandle, relativePath: string): Promise<boolean> {
   const parts = relativePath.replace(/^\/+/, "").split("/").filter(Boolean);
+  const fileName = parts[parts.length - 1];
+  if (fileName === undefined) return false; // tom sökväg → finns inte
   let dir: FileSystemDirectoryHandle = root;
   for (let i = 0; i < parts.length - 1; i++) {
-    try { dir = await dir.getDirectoryHandle(parts[i]); }
+    try { dir = await dir.getDirectoryHandle(parts[i]!); }
     catch { return false; }
   }
-  try { await dir.getFileHandle(parts[parts.length - 1]); return true; }
+  try { await dir.getFileHandle(fileName); return true; }
   catch { return false; }
 }

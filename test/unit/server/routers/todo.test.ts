@@ -43,10 +43,10 @@ describe("todo.list", () => {
 
     const items = await makeCaller().list({ from: FROM, to: TO });
     expect(items.map((i) => i.id)).toEqual(["e1", "t1"]); // sortert på tid (09 före 16)
-    expect(items[0].source).toBe("event");
-    expect(items[1].source).toBe("task");
-    expect(items[0].location).toBe("Kontor");
-    expect(items[1].status).toBe("TODO");
+    expect(items[0]!.source).toBe("event");
+    expect(items[1]!.source).toBe("task");
+    expect(items[0]!.location).toBe("Kontor");
+    expect(items[1]!.status).toBe("TODO");
   });
 
   it("kastar NOT_FOUND när userId inte är i org:en", async () => {
@@ -62,7 +62,7 @@ describe("todo.list", () => {
     // redan autentiserad). Användare-kollen körs bara vid kollegial look-up.
     expect(mockPrisma.user.findFirst).not.toHaveBeenCalled();
     // Och tasks-frågan körs ändå med rätt userId.
-    const taskQ = mockPrisma.task.findMany.mock.calls[0][0] as { where: { userId: string } };
+    const taskQ = mockPrisma.task.findMany.mock.calls[0]![0] as { where: { userId: string } };
     expect(taskQ.where.userId).toBe("u1");
   });
 });

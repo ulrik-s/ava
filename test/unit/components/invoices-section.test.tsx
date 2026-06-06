@@ -127,7 +127,7 @@ describe("InvoicesSection", () => {
     render(<InvoicesSection matterId="m1" />);
     fireEvent.click(screen.getByRole("button", { name: /\+ Acconto/i }));
     const inputs = screen.getAllByRole("spinbutton");
-    fireEvent.change(inputs[0], { target: { value: "5000" } });
+    fireEvent.change(inputs[0]!, { target: { value: "5000" } });
     fireEvent.click(screen.getByRole("button", { name: /^Skapa$/ }));
     expect(createAccontoMutate).toHaveBeenCalledWith(
       expect.objectContaining({ matterId: "m1", amount: 500000 }),
@@ -146,7 +146,7 @@ describe("InvoicesSection", () => {
     fireEvent.click(screen.getByRole("button", { name: /\+ Acconto/i }));
     expect(screen.getByText("Ny acconto-faktura")).toBeInTheDocument();
     const cancels = screen.getAllByRole("button", { name: /Avbryt/i });
-    fireEvent.click(cancels[0]);
+    fireEvent.click(cancels[0]!);
     expect(screen.queryByText("Ny acconto-faktura")).not.toBeInTheDocument();
   });
 
@@ -268,7 +268,7 @@ describe("InvoicesSection", () => {
     fireEvent.click(screen.getByRole("button", { name: /\+ Slutfaktura/i }));
     expect(screen.getByRole("heading", { name: /Skapa slutfaktura/ })).toBeInTheDocument();
     const cancels = screen.getAllByRole("button", { name: /Avbryt/i });
-    fireEvent.click(cancels[0]);
+    fireEvent.click(cancels[0]!);
     expect(screen.queryByRole("heading", { name: /Skapa slutfaktura/ })).not.toBeInTheDocument();
   });
 
@@ -280,9 +280,9 @@ describe("InvoicesSection", () => {
     const note = screen.getByLabelText(/Notering/) as HTMLTextAreaElement;
     fireEvent.change(note, { target: { value: "Förskott Q2" } });
     const inputs = screen.getAllByRole("spinbutton");
-    fireEvent.change(inputs[0], { target: { value: "1000" } });
+    fireEvent.change(inputs[0]!, { target: { value: "1000" } });
     fireEvent.click(screen.getByRole("button", { name: /^Skapa$/ }));
-    const arg = createAccontoMutate.mock.calls[0][0];
+    const arg = createAccontoMutate.mock.calls[0]![0];
     expect(arg.dueDate).toBe("2026-05-15");
     expect(arg.notes).toBe("Förskott Q2");
   });
@@ -336,10 +336,10 @@ describe("InvoicesSection", () => {
     expect(screen.getByText(/Acconto 2026-03-01/)).toBeInTheDocument();
     // Kryssa för tidspost + acconto-avdrag
     const checkboxes = screen.getAllByRole("checkbox") as HTMLInputElement[];
-    fireEvent.click(checkboxes[0]); // time entry
-    fireEvent.click(checkboxes[1]); // acconto
+    fireEvent.click(checkboxes[0]!); // time entry
+    fireEvent.click(checkboxes[1]!); // acconto
     fireEvent.click(screen.getByRole("button", { name: /Skapa slutfaktura/ }));
-    const arg = createFinalMutate.mock.calls[0][0];
+    const arg = createFinalMutate.mock.calls[0]![0];
     expect(arg.accontoInvoiceIds).toEqual(["ac1"]);
   });
 });

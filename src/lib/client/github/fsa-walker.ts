@@ -50,11 +50,12 @@ async function walk(dir: FileSystemDirectoryHandle, prefix: string, out: WalkedF
  */
 export async function writeFile(handle: FileSystemDirectoryHandle, path: string, bytes: Uint8Array): Promise<void> {
   const segments = path.split("/").filter((s) => s.length > 0);
+  const fileName = segments[segments.length - 1];
+  if (fileName === undefined) throw new Error(`writeFile: tom sökväg "${path}"`);
   let dir = handle;
   for (let i = 0; i < segments.length - 1; i++) {
-    dir = await dir.getDirectoryHandle(segments[i], { create: true });
+    dir = await dir.getDirectoryHandle(segments[i]!, { create: true });
   }
-  const fileName = segments[segments.length - 1];
   const fh = await dir.getFileHandle(fileName, { create: true });
   const writable = await (fh as FileSystemFileHandle & {
     createWritable: () => Promise<FileSystemWritableFileStream>;
@@ -68,15 +69,17 @@ export async function writeFile(handle: FileSystemDirectoryHandle, path: string,
  */
 export async function deleteFile(handle: FileSystemDirectoryHandle, path: string): Promise<void> {
   const segments = path.split("/").filter((s) => s.length > 0);
+  const fileName = segments[segments.length - 1];
+  if (fileName === undefined) return; // tom sökväg → inget att radera
   let dir = handle;
   for (let i = 0; i < segments.length - 1; i++) {
     try {
-      dir = await dir.getDirectoryHandle(segments[i]);
+      dir = await dir.getDirectoryHandle(segments[i]!);
     } catch {
       return; // mellanliggande katalog saknas → filen finns inte
     }
   }
   try {
-    await dir.removeEntry(segments[segments.length - 1]);
+    await dir.removeEntry(fileName);
   } catch { /* fil saknas redan */ }
 }

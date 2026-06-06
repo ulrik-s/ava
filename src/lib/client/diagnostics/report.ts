@@ -45,7 +45,7 @@ function buildTitle(input: ReportInput): string {
   const firstLine = input.userText?.split("\n")[0]?.trim();
   if (firstLine) return `[AVA] ${firstLine}`.slice(0, 120);
   if (input.violations && input.violations.length > 0) {
-    return `[AVA] Självupptäckt: ${input.violations[0].code}`;
+    return `[AVA] Självupptäckt: ${input.violations[0]!.code}`;
   }
   return "[AVA] Felrapport";
 }

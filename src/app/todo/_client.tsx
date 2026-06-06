@@ -30,7 +30,7 @@ function toInputDate(d: Date): string {
   // öster om UTC innan kl 02:00 lokalt (toISOString → UTC → föregående dag).
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
-function fromInputDate(s: string): Date { const [y, m, day] = s.split("-").map(Number); return new Date(y, (m ?? 1) - 1, day ?? 1); }
+function fromInputDate(s: string): Date { const [y, m, day] = s.split("-").map(Number); return new Date(y ?? 1970, (m ?? 1) - 1, day ?? 1); }
 function shiftDays(d: Date, n: number): Date { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
 
 interface TaskForm {

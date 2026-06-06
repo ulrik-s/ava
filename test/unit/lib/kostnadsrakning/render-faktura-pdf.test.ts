@@ -5,7 +5,7 @@
 import { describe, it, expect } from "vitest";
 import { renderFakturaPdf } from "@/lib/client/kostnadsrakning/render-faktura-pdf";
 
-const head = (b: Uint8Array) => String.fromCharCode(b[0], b[1], b[2], b[3]);
+const head = (b: Uint8Array) => String.fromCharCode(b[0]!, b[1]!, b[2]!, b[3]!);
 
 describe("renderFakturaPdf", () => {
   it("producerar en faktura-PDF med alla fält", async () => {

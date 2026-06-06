@@ -37,7 +37,7 @@ interface Expense {
 
 function initialForm(): ExpenseForm {
   return {
-    date: new Date().toISOString().split("T")[0],
+    date: new Date().toISOString().split("T")[0]!,
     amount: 0,
     description: "",
     billable: true,
@@ -48,7 +48,7 @@ function initialForm(): ExpenseForm {
 
 function toForm(e: Expense): ExpenseForm {
   return {
-    date: new Date(e.date).toISOString().split("T")[0],
+    date: new Date(e.date).toISOString().split("T")[0]!,
     amount: e.amount / 100,
     description: e.description,
     billable: e.billable,

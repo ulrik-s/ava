@@ -129,7 +129,7 @@ describe("document.moveDocument", () => {
   it("flyttar till rot (folderId=null)", async () => {
     mockPrisma.document.update.mockResolvedValue({});
     await makeCaller().moveDocument({ documentId: "d1", folderId: null });
-    expect(mockPrisma.document.update.mock.calls[0][0].data.folderId).toBeNull();
+    expect(mockPrisma.document.update.mock.calls[0]![0].data.folderId).toBeNull();
   });
 });
 

@@ -36,14 +36,14 @@ export async function downloadToFsa(input: DownloadInput): Promise<DownloadResul
   // Navigera/skapa kataloger
   let dir: FileSystemDirectoryHandle = input.root;
   for (let i = 0; i < parts.length - 1; i++) {
-    dir = await dir.getDirectoryHandle(parts[i], { create: true });
+    dir = await dir.getDirectoryHandle(parts[i]!, { create: true });
   }
 
   const res = await fetchFn(input.url);
   if (!res.ok) throw new Error(`downloadToFsa: HTTP ${res.status} från ${input.url}`);
   const bytes = new Uint8Array(await res.arrayBuffer());
 
-  const fileHandle = await dir.getFileHandle(parts[parts.length - 1], { create: true });
+  const fileHandle = await dir.getFileHandle(parts[parts.length - 1]!, { create: true });
   const writable = await fileHandle.createWritable();
   await writable.write(bytes);
   await writable.close();

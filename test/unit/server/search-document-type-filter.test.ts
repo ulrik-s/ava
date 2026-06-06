@@ -31,7 +31,7 @@ describe("searchDocuments — documentTypes-filter", () => {
   it("filter ['Dom'] returnerar bara dom-träffar", () => {
     const r = searchDocuments(docs, matters, "tvist", ORG, 50, { documentTypes: ["Dom"] });
     expect(r.hits).toHaveLength(1);
-    expect(r.hits[0].id).toBe("d2");
+    expect(r.hits[0]!.id).toBe("d2");
   });
 
   it("filter ['Dom', 'Yttrande'] inkluderar båda", () => {

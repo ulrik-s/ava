@@ -249,6 +249,8 @@ export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
     for (let i = 0; i < fmt.count; i++) {
       const matter = MATTERS[i % MATTERS.length];
       const k = docKinds[i % docKinds.length];
+      const uploader = users[i % users.length];
+      if (!matter || !k || !uploader) continue;
       const id = `doc-${fmt.ext}-${String(i + 1).padStart(2, "0")}`;
       const daysAgo = (docSeq * 2) + 3;
       docSeq++;
@@ -259,7 +261,7 @@ export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
         sizeBytes: 0, // fylls i av seed-script efter att binärfilen genererats
         fileSize: 0,  // dito (UI använder fileSize, schema sizeBytes)
         storagePath: `documents/content/${id}.${fmt.ext}`, version: 1,
-        uploadedById: users[i % users.length].id,
+        uploadedById: uploader.id,
         title: `${k.baseName} ${matter.matterNumber}`,
         documentType: k.type,
         summary: `${k.type} för ärende ${matter.matterNumber} — ${matter.title}. Skapat som demo-data med svenska tecken (å, ä, ö).`,
@@ -278,6 +280,7 @@ export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
     for (let j = 0; j < count; j++) {
       teSeq++;
       const user = users[(mi + j) % users.length];
+      if (!user) continue;
       const daysAgo = (teSeq * 2) + 1;
       out.timeEntries.push({
         id: `te-${String(teSeq).padStart(3, "0")}`,
@@ -311,6 +314,7 @@ export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
       exSeq++;
       const user = users[(mi + j) % users.length];
       const cat = cats[exSeq % cats.length];
+      if (!user || !cat) continue;
       const daysAgo = (exSeq * 3) + 2;
       out.expenses.push({
         id: `ex-${String(exSeq).padStart(3, "0")}`,
@@ -328,6 +332,7 @@ export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
   const statuses: Array<"DRAFT" | "SENT" | "PAID" | "INSTALLMENT_PLAN"> = ["DRAFT", "SENT", "PAID", "INSTALLMENT_PLAN"];
   for (let i = 0; i < 12; i++) {
     const matter = MATTERS[i % MATTERS.length];
+    if (!matter) continue;
     const daysAgo = (i * 7) + 5;
     const amountInclVat = 80_000 + (i * 23_000);
     // 25 % moms baked-in: exklusiv-belopp = inkl / 1.25 (avrundat till örestal)
@@ -394,6 +399,7 @@ export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
   let paymentSeq = 0;
   for (let i = 0; i < planTargets.length; i++) {
     const p = planTargets[i];
+    if (!p) continue;
     const planId = `pp-${String(i + 1).padStart(3, "0")}`;
     out.paymentPlans.push({
       id: planId,
@@ -488,6 +494,7 @@ export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
     const t = tpl[i % tpl.length];
     const matter = MATTERS[i % MATTERS.length];
     const userId = ASSIGN_USERS[i % ASSIGN_USERS.length];
+    if (!t || !matter) continue;
     const daysOffset = (i % 14) - 5; // -5..+8 dagar runt idag
     const start = isoDate(daysOffset, 9 + (i % 4) * 2);
     const endAt = t.hoursLong > 0 ? new Date(start.getTime() + t.hoursLong * 3600_000) : null;
@@ -536,8 +543,9 @@ export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
       const title = taskTitles[taskSeq % taskTitles.length];
       const status = taskStatusPool[taskSeq % taskStatusPool.length];
       const dueOffset = userTaskOffsets[j];
-      const dueAt = isoDate(dueOffset, [9, 11, 14, 16][j % 4]);
-      dueAt.setMinutes([0, 15, 30, 45][j % 4]);
+      if (!matter || dueOffset === undefined) continue;
+      const dueAt = isoDate(dueOffset, [9, 11, 14, 16][j % 4] ?? 9);
+      dueAt.setMinutes([0, 15, 30, 45][j % 4] ?? 0);
       const createdOffset = -((taskSeq * 3) % 30 + 1);
       out.tasks.push({
         id: `task-${String(taskSeq + 1).padStart(3, "0")}`,
@@ -584,8 +592,10 @@ export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
     { id: "cc-05", searchTerm: "Folksam", searchType: "name" as const },
   ];
   for (let i = 0; i < cc.length; i++) {
+    const c = cc[i];
+    if (!c) continue;
     out.conflictChecks.push({
-      id: cc[i].id, searchTerm: cc[i].searchTerm, searchType: cc[i].searchType,
+      id: c.id, searchTerm: c.searchTerm, searchType: c.searchType,
       results: [], checkedById: currentUserId, createdAt: isoDate(-(i * 3 + 1)),
     });
   }
@@ -708,6 +718,7 @@ export function seedToFiles(dataset: SeedDataset): Array<{ path: string; data: R
   const out: Array<{ path: string; data: Record<string, unknown> }> = [];
   for (const [key, entityName] of entityKeys) {
     const entry = ENTITY_REGISTRY[entityName];
+    if (!entry) continue;
     for (const row of dataset[key]) {
       const data = row as Record<string, unknown>;
       const path = entry.gitPath(data.id as string, data);

@@ -102,7 +102,7 @@ describe("TimePage", () => {
     fireEvent.change(desc, { target: { value: "Klientmöte" } });
     fireEvent.click(screen.getByRole("button", { name: /^Spara$/i }));
     expect(createMutate).toHaveBeenCalled();
-    const arg = createMutate.mock.calls[0][0];
+    const arg = createMutate.mock.calls[0]![0];
     expect(arg.matterId).toBe("m1");
     expect(arg.description).toBe("Klientmöte");
     expect(arg.billable).toBe(true);

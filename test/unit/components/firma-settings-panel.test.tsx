@@ -189,7 +189,7 @@ describe("testOAuthProxy", () => {
     const r = await testOAuthProxy("https://proxy.local/", fetchFn);
     expect(r.ok).toBe(true);
     expect(r.msg).toContain("ABCD-1234");
-    expect(String((fetchFn.mock.calls as unknown as unknown[][])[0][0])).toBe("https://proxy.local/device/code");
+    expect(String((fetchFn.mock.calls as unknown as unknown[][])[0]![0])).toBe("https://proxy.local/device/code");
   });
 
   it("returnerar ok=false vid 500", async () => {
@@ -218,7 +218,7 @@ describe("testCorsProxy", () => {
   it("använder default-proxy när value är tom", async () => {
     const fetchFn = vi.fn(async () => ({ ok: true, status: 200 } as Response));
     await testCorsProxy("", fetchFn);
-    expect(String((fetchFn.mock.calls as unknown as unknown[][])[0][0])).toContain("cors.isomorphic-git.org");
+    expect(String((fetchFn.mock.calls as unknown as unknown[][])[0]![0])).toContain("cors.isomorphic-git.org");
   });
 
   it("returnerar ok när proxy svarar 200", async () => {
@@ -236,7 +236,7 @@ describe("testCorsProxy", () => {
   it("strippar trailing slashes innan path-konkatenering", async () => {
     const fetchFn = vi.fn(async () => ({ ok: true } as Response));
     await testCorsProxy("https://proxy/", fetchFn);
-    expect(String((fetchFn.mock.calls as unknown as unknown[][])[0][0])).not.toMatch(/proxy\/\/github/);
+    expect(String((fetchFn.mock.calls as unknown as unknown[][])[0]![0])).not.toMatch(/proxy\/\/github/);
   });
 });
 

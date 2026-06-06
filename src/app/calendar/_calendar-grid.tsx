@@ -176,7 +176,7 @@ export function weekDays(anchor: Date): Date[] {
 
 export function weekRange(anchor: Date): { from: Date; to: Date } {
   const days = weekDays(anchor);
-  return { from: days[0], to: endOfDay(days[6]) };
+  return { from: days[0]!, to: endOfDay(days[6]!) };
 }
 
 export function monthGridDays(anchor: Date): Date[] {
@@ -189,7 +189,7 @@ export function monthGridDays(anchor: Date): Date[] {
 
 export function monthRange(anchor: Date): { from: Date; to: Date } {
   const days = monthGridDays(anchor);
-  return { from: days[0], to: endOfDay(days[days.length - 1]) };
+  return { from: days[0]!, to: endOfDay(days[days.length - 1]!) };
 }
 
 function endOfDay(d: Date): Date {

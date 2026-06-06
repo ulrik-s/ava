@@ -64,7 +64,7 @@ describe("Sidebar", () => {
       tier: "demo", token: "ghp_x", principalId: "u-uuid",
     }));
     render(<Sidebar />);
-    const logout = screen.getAllByText("Logga ut")[0];
+    const logout = screen.getAllByText("Logga ut")[0]!;
     fireEvent.click(logout);
     const stored = JSON.parse(localStorage.getItem("ava.firma") ?? "{}");
     expect(stored.token).toBeUndefined();
@@ -87,7 +87,7 @@ describe("Sidebar", () => {
     expect(screen.getAllByText("Logga ut").length).toBeGreaterThanOrEqual(2);
     // Klicka på en länk i drawern
     const links = screen.getAllByRole("link", { name: /Kontakter/ });
-    fireEvent.click(links[0]);
+    fireEvent.click(links[0]!);
     // Drawer borde nu vara stängd
     expect(screen.getAllByText("Logga ut").length).toBe(1);
   });

@@ -51,7 +51,7 @@ describe("document.events — lista tidpunkter för ärende", () => {
     const result = await makeCaller("org-a").events({ matterId: "mat-1" });
 
     expect(result).toHaveLength(1);
-    expect(result[0].title).toBe("Huvudförhandling");
+    expect(result[0]!.title).toBe("Huvudförhandling");
     expect(mockPrisma.matterEventSuggestion.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({

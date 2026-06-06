@@ -192,7 +192,7 @@ export async function updateRef(
 
 function bytesToBase64(bytes: Uint8Array): string {
   let s = "";
-  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]!);
   return btoa(s);
 }
 
@@ -213,9 +213,9 @@ export function parseRepoLocator(input: string): RepoLocator | null {
   const trimmed = input.trim().replace(/\.git$/, "");
   // Försök matcha github.com-prefixet först
   const ghMatch = trimmed.match(/github\.com[/:]([^/]+)\/([^/\s]+)$/);
-  if (ghMatch) return { owner: ghMatch[1], repo: ghMatch[2] };
+  if (ghMatch) return { owner: ghMatch[1]!, repo: ghMatch[2]! };
   // Annars: kortform "owner/repo" utan host
   const shortMatch = trimmed.match(/^([^/\s:]+)\/([^/\s]+)$/);
-  if (shortMatch) return { owner: shortMatch[1], repo: shortMatch[2] };
+  if (shortMatch) return { owner: shortMatch[1]!, repo: shortMatch[2]! };
   return null;
 }

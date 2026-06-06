@@ -5,9 +5,10 @@
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
-    // Extra korrekthetsflaggor. exactOptionalPropertyTypes på (#32).
-    // noUncheckedIndexedAccess (~529 fel, test-tungt) kvar som separat fas i #32.
+    // Extra korrekthetsflaggor (#32). Båda på: indexerad access och
+    // optional-fält ger nu T | undefined och måste smalnas innan bruk.
     "exactOptionalPropertyTypes": true,
+    "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
     "noFallthroughCasesInSwitch": true,
     // TS6: matcha 7.0:s (Go-native) typordning → mindre diff vid den migreringen.

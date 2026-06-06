@@ -49,7 +49,7 @@ describe("documentTemplate.list", () => {
     mockPrisma.documentTemplate.findMany.mockResolvedValue([TEMPLATE_A]);
     const result = await makeCaller("org-a").list();
     expect(result).toHaveLength(1);
-    expect(result[0].name).toBe("Uppdragsavtal");
+    expect(result[0]!.name).toBe("Uppdragsavtal");
   });
 
   it("queries with the correct organizationId filter", async () => {

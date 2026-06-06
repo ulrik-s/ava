@@ -85,9 +85,10 @@ export class WritableDelegate<T extends Record<string, unknown>> extends ReadOnl
   override async update(args: unknown): Promise<never> {
     const a = args as { where: { id: string }; data: Partial<T> };
     const idx = this.collection.findIndex((r) => (r as { id?: string }).id === a.where.id);
-    if (idx < 0) throw new Error(`Hittade inte ${this.wopts.entity} med id=${a.where.id}`);
-    const prev = { ...this.collection[idx] };
-    const updated = { ...this.collection[idx], ...a.data, updatedAt: new Date() } as T;
+    const current = this.collection[idx];
+    if (idx < 0 || current === undefined) throw new Error(`Hittade inte ${this.wopts.entity} med id=${a.where.id}`);
+    const prev = { ...current };
+    const updated = { ...current, ...a.data, updatedAt: new Date() } as T;
     const enriched = this.wopts.enrichRow ? this.wopts.enrichRow(updated) : updated;
     this.collection[idx] = enriched;
     await this.wopts.onMutate?.({ entity: this.wopts.entity, kind: "update", row: enriched, previous: prev });
@@ -97,8 +98,8 @@ export class WritableDelegate<T extends Record<string, unknown>> extends ReadOnl
   override async delete(args: unknown): Promise<never> {
     const a = args as { where: { id: string } };
     const idx = this.collection.findIndex((r) => (r as { id?: string }).id === a.where.id);
-    if (idx < 0) throw new Error(`Hittade inte ${this.wopts.entity} med id=${a.where.id}`);
     const removed = this.collection[idx];
+    if (idx < 0 || removed === undefined) throw new Error(`Hittade inte ${this.wopts.entity} med id=${a.where.id}`);
     this.collection.splice(idx, 1);
     await this.wopts.onMutate?.({ entity: this.wopts.entity, kind: "delete", row: removed });
     return removed as never;

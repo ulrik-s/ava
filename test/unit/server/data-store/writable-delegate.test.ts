@@ -45,7 +45,7 @@ describe("WritableDelegate", () => {
     const onMutate = vi.fn();
     const { box, delegate } = makeDelegate(initial, onMutate);
     await delegate.update({ where: { id: "m1" }, data: { title: "Ny" } });
-    expect(box.items[0].title).toBe("Ny");
+    expect(box.items[0]!.title).toBe("Ny");
     expect(onMutate).toHaveBeenCalledWith(expect.objectContaining({ kind: "update" }));
   });
 
@@ -61,6 +61,11 @@ describe("WritableDelegate", () => {
     await delegate.delete({ where: { id: "m1" } });
     expect(box.items).toHaveLength(0);
     expect(onMutate).toHaveBeenCalledWith(expect.objectContaining({ kind: "delete" }));
+  });
+
+  it("delete på okänt id kastar", async () => {
+    const { delegate } = makeDelegate([]);
+    await expect(delegate.delete({ where: { id: "missing" } })).rejects.toThrow(/Hittade inte/);
   });
 
   it("findMany ser ny data efter create", async () => {
@@ -83,7 +88,7 @@ describe("WritableDelegate", () => {
     box.items = [{ id: "fresh", title: "Loaded", organizationId: "o1" }];
     const all = await delegate.findMany({});
     expect((all as Matter[])).toHaveLength(1);
-    expect((all as Matter[])[0].title).toBe("Loaded");
+    expect((all as Matter[])[0]!.title).toBe("Loaded");
 
     // Mutation efter byte muterar nya array:n
     await delegate.create({ data: { id: "m2", title: "Added after", organizationId: "o1" } });

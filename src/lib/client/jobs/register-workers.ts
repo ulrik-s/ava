@@ -125,11 +125,11 @@ jobQueue.registerWorker<ExtractTextPayload>("extract-text", async (payload, ctx)
   const parts = payload.storagePath.replace(/^\/+/, "").split("/");
   let dir: FileSystemDirectoryHandle = handle;
   for (let i = 0; i < parts.length - 1; i++) {
-    try { dir = await dir.getDirectoryHandle(parts[i]); }
+    try { dir = await dir.getDirectoryHandle(parts[i]!); }
     catch { console.warn("[extract-text] saknad katalog:", parts[i]); return; }
   }
   let fileHandle: FileSystemFileHandle;
-  try { fileHandle = await dir.getFileHandle(parts[parts.length - 1]); }
+  try { fileHandle = await dir.getFileHandle(parts[parts.length - 1]!); }
   catch { console.warn("[extract-text] saknad fil:", payload.storagePath); return; }
   const file = await fileHandle.getFile();
   const bytes = new Uint8Array(await file.arrayBuffer());

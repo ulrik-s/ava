@@ -59,8 +59,8 @@ describe("conflict.check", () => {
       searchType: "personalNumber",
     });
     expect(res.matchCount).toBe(1);
-    expect(res.results[0].contactName).toBe("Anna");
-    expect(res.results[0].klient).toBe("Klient Klientsson");
+    expect(res.results[0]!.contactName).toBe("Anna");
+    expect(res.results[0]!.klient).toBe("Klient Klientsson");
   });
 
   it("hittar kontakter via fuzzy namn-sökning (bigram-Jaccard)", async () => {
@@ -83,8 +83,8 @@ describe("conflict.check", () => {
       searchType: "name",
     });
     expect(res.matchCount).toBe(1);
-    expect(res.results[0].contactName).toBe("Anna Andersson");
-    expect(res.results[0].klient).toBe("Klienten");
+    expect(res.results[0]!.contactName).toBe("Anna Andersson");
+    expect(res.results[0]!.klient).toBe("Klienten");
   });
 
   it("filtrerar bort matchningar under similarity-tröskeln", async () => {

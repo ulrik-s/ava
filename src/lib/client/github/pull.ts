@@ -116,8 +116,9 @@ async function parallelLimit<T>(
   let i = 0;
   const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
     while (i < items.length) {
-      const idx = i++;
-      await fn(items[idx]);
+      const item = items[i++];
+      if (item === undefined) continue;
+      await fn(item);
     }
   });
   await Promise.all(workers);

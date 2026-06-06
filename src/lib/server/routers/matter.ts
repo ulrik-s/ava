@@ -64,7 +64,7 @@ async function nextMatterNumber(ctx: MatterCtx): Promise<string> {
     where: { organizationId: ctx.orgId, matterNumber: { startsWith: `${year}-` } },
     orderBy: { matterNumber: "desc" },
   });
-  const seq = last ? parseInt(last.matterNumber.split("-")[1], 10) + 1 : 1;
+  const seq = last ? parseInt(last.matterNumber.split("-")[1] ?? "0", 10) + 1 : 1;
   return `${year}-${seq.toString().padStart(4, "0")}`;
 }
 
