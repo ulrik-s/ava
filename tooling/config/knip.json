@@ -19,11 +19,16 @@
     "tooling/scripts/oauth-proxy/**"
   ],
   "ignoreDependencies": [
-    "tailwindcss"
+    "tailwindcss",
+    "@commitlint/cli"
   ],
   "ignoreBinaries": [
-    "dot"
+    "dot",
+    "commitlint"
   ],
+  "commitlint": {
+    "config": ["tooling/config/commitlint.config.mjs"]
+  },
   "rules": {
     "files": "error",
     "dependencies": "error",
