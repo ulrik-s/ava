@@ -48,6 +48,12 @@ beforeAll(async () => {
     [path.join(repoRoot, "src"), path.join(repoRoot, "test")],
     cruiseOptions,
   );
+  // `result.output` är `string | ICruiseResult`; med validate:true och ingen
+  // sträng-reporter är det alltid ICruiseResult. Narrowa explicit så tsc inte
+  // tror att `.summary` saknas på sträng-grenen.
+  if (typeof result.output === "string") {
+    throw new Error("dependency-cruiser gav sträng-output — förväntade ICruiseResult");
+  }
   violations = result.output.summary.violations as Violation[];
   errorCount = result.output.summary.error;
 }, 60_000);
