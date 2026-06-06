@@ -83,6 +83,7 @@ export default defineConfig({
             "test/unit/server/**/*.test.ts",
             "test/unit/shared/**/*.test.ts",
             "test/unit/app/api/**/*.test.ts",
+            "test/unit/architecture/**/*.test.ts",
             "test/scripts/**/*.test.ts",
             "test/integration/**/*.test.ts",
           ],
