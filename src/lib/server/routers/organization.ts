@@ -2,6 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../trpc";
 import { organizationIdSchema, asId } from "@/lib/shared/schemas/ids";
+import { omitUndefined } from "@/lib/shared/omit-undefined";
 
 export const organizationRouter = router({
   // ── Settings ────────────────────────────────────────────────────
@@ -36,7 +37,7 @@ export const organizationRouter = router({
     .mutation(async ({ ctx, input }) => {
       return ctx.dataStore.organizations.update({
         where: { id: ctx.user.organizationId },
-        data: input,
+        data: omitUndefined(input),
       });
     }),
 
@@ -121,7 +122,7 @@ export const organizationRouter = router({
           data: { isMain: false },
         });
       }
-      return ctx.dataStore.offices.update({ where: { id }, data });
+      return ctx.dataStore.offices.update({ where: { id }, data: omitUndefined(data) });
     }),
 
   deleteOffice: protectedProcedure

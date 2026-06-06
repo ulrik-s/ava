@@ -63,7 +63,7 @@ export default function NewUserPage() {
           setForm={setForm}
           onSubmit={handleSubmit}
           passwordError={passwordError}
-          errorMessage={createUser.error?.message}
+          {...(createUser.error?.message !== undefined ? { errorMessage: createUser.error.message } : {})}
           passwordRequired={true}
           submitLabel="Skapa användare"
           submittingLabel="Sparar..."

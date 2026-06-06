@@ -25,7 +25,12 @@ export function useMatterInvariants(input: { matterId: string; matterNumber?: st
   useEffect(() => {
     if (!runRows || !docRows) return;
     reportSelfDetected(
-      detectMatterInvariants({ matterId, matterNumber, billingRuns: runRows, documents: docRows }),
+      detectMatterInvariants({
+        matterId,
+        ...(matterNumber !== undefined ? { matterNumber } : {}),
+        billingRuns: runRows,
+        documents: docRows,
+      }),
     );
   }, [matterId, matterNumber, runRows, docRows]);
 }

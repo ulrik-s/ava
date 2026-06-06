@@ -34,7 +34,7 @@ export function isLocalOrSameOrigin(url: string, origin?: string): boolean {
  */
 export function resolveCorsProxy(opts: {
   url: string;
-  configured?: string;
+  configured?: string | undefined;
   origin?: string;
 }): string {
   if (isLocalOrSameOrigin(opts.url, opts.origin)) return "";

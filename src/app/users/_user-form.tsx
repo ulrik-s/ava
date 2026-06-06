@@ -19,7 +19,7 @@ interface Props {
   setForm: (f: UserFormState) => void;
   onSubmit: (e: React.FormEvent) => void;
   passwordError: string;
-  errorMessage?: string;
+  errorMessage?: string | undefined;
   passwordRequired: boolean;
   passwordPlaceholder?: string;
   submitLabel: string;

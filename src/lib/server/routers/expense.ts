@@ -73,7 +73,7 @@ export const expenseRouter = router({
     .mutation(async ({ ctx, input }) => {
       return ctx.dataStore.expenses.create({
         data: {
-          id: input.id, // undefined → store genererar
+          ...(input.id !== undefined ? { id: input.id } : {}), // undefined → store genererar
           userId: input.userId ?? asId<"UserId">(ctx.user.id),
           matterId: input.matterId,
           date: new Date(input.date),
@@ -83,7 +83,7 @@ export const expenseRouter = router({
           vatRate: input.vatRate,
           vatIncluded: input.vatIncluded,
           invoiceId: input.invoiceId ?? null,
-          createdAt: input.createdAt ? new Date(input.createdAt) : undefined,
+          ...(input.createdAt ? { createdAt: new Date(input.createdAt) } : {}),
         },
       });
     }),
@@ -101,11 +101,15 @@ export const expenseRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const { id, date, ...data } = input;
+      const { id, date, amount, description, billable, vatRate, vatIncluded } = input;
       return ctx.dataStore.expenses.update({
         where: { id },
         data: {
-          ...data,
+          ...(amount !== undefined ? { amount } : {}),
+          ...(description !== undefined ? { description } : {}),
+          ...(billable !== undefined ? { billable } : {}),
+          ...(vatRate !== undefined ? { vatRate } : {}),
+          ...(vatIncluded !== undefined ? { vatIncluded } : {}),
           ...(date ? { date: new Date(date) } : {}),
         },
       });

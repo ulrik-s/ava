@@ -56,7 +56,7 @@ function genId(): string {
 
 export class WritableDelegate<T extends Record<string, unknown>> extends ReadOnlyDelegate<T> {
   constructor(private wopts: WritableDelegateOpts<T>) {
-    super(() => wopts.collection() as readonly T[], { relations: wopts.relations });
+    super(() => wopts.collection() as readonly T[], wopts.relations !== undefined ? { relations: wopts.relations } : {});
   }
 
   /** Aktuell array — hämtas på begäran så DataStore kan byta ut den. */
@@ -106,7 +106,7 @@ export class WritableDelegate<T extends Record<string, unknown>> extends ReadOnl
 
   override async updateMany(args: unknown): Promise<never> {
     const a = args as { where?: Record<string, unknown>; data: Partial<T> };
-    const matches = await this.findMany({ where: a.where });
+    const matches = await this.findMany(a.where !== undefined ? { where: a.where } : {});
     let count = 0;
     for (const m of matches) {
       await this.update({ where: { id: (m as unknown as { id: string }).id }, data: a.data });
@@ -117,7 +117,7 @@ export class WritableDelegate<T extends Record<string, unknown>> extends ReadOnl
 
   override async deleteMany(args: unknown): Promise<never> {
     const a = args as { where?: Record<string, unknown> };
-    const matches = await this.findMany({ where: a.where });
+    const matches = await this.findMany(a.where !== undefined ? { where: a.where } : {});
     let count = 0;
     for (const m of matches) {
       await this.delete({ where: { id: (m as unknown as { id: string }).id } });

@@ -55,7 +55,7 @@ export interface BlobData {
 async function apiFetch(path: string, init: RequestInit, opts: ApiOpts): Promise<Response> {
   const res = await fetch(`${API}${path}`, {
     ...init,
-    signal: opts.signal,
+    ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
     headers: {
       ...(init.headers ?? {}),
       Authorization: `Bearer ${opts.token}`,

@@ -295,9 +295,9 @@ async function openInvoiceDoc(doc: InvoiceDocRow): Promise<void> {
   const { loadHandle } = await import("@/lib/client/fsa/handle-store");
   const { readFromFsa } = await import("@/lib/client/fsa/read-from-fsa");
   await openDocument({
-    doc: { id: doc.id, storagePath: doc.storagePath ?? undefined, fileName: doc.fileName },
+    doc: { id: doc.id, ...(doc.storagePath != null ? { storagePath: doc.storagePath } : {}), fileName: doc.fileName },
     isDemo: process.env.NEXT_PUBLIC_DEMO_BUILD === "1",
-    demoRepo: process.env.NEXT_PUBLIC_DEFAULT_DEMO_REPO,
+    ...(process.env.NEXT_PUBLIC_DEFAULT_DEMO_REPO !== undefined ? { demoRepo: process.env.NEXT_PUBLIC_DEFAULT_DEMO_REPO } : {}),
     loadHandle: () => loadHandle("repo-root"),
     readFromHandle: readFromFsa,
     openUrl: (u) => window.open(u, "_blank", "noopener,noreferrer"),

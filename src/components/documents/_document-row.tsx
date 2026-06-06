@@ -83,7 +83,7 @@ export function DocumentRow({
             style={{ paddingLeft: `${depth * 16 + 4}px` }}
             className="flex items-center gap-2 min-w-0"
           >
-            <DocumentNameButton doc={doc} isAnalyzing={isAnalyzing} disabled={isUploading}
+            <DocumentNameButton doc={doc} isAnalyzing={isAnalyzing} disabled={!!isUploading}
               onExternalEdit={() => void triggerExternalEdit()} />
             {isUploading && (
               <span
@@ -102,7 +102,7 @@ export function DocumentRow({
         <td className="px-3 py-2.5 text-right whitespace-nowrap">
           <DocumentActions
             doc={doc}
-            disabled={isUploading}
+            disabled={!!isUploading}
             onReanalyze={onReanalyze}
             onDelete={onDelete}
             reanalyzePending={reanalyzePending}
@@ -204,17 +204,18 @@ function DocumentActions({
 
   const openExternal = onExternalEdit;
 
-  const uploadingTitle = disabled ? "Vänta tills uppladdningen är klar" : undefined;
+  const isDisabled = !!disabled;
+  const uploadingTitle = isDisabled ? "Vänta tills uppladdningen är klar" : undefined;
   const items: ActionMenuItem[] = [
-    { key: "open", label: "Öppna i webbläsaren", icon: <span aria-hidden>🖊</span>, onSelect: () => void openInEditor(), disabled, title: uploadingTitle ?? "Öppna i din browser" },
-    { key: "external", label: "Editera externt (PDF Gear, Preview…)", icon: <span aria-hidden>🖥</span>, onSelect: () => void openExternal(), disabled, title: uploadingTitle ?? "AVA committar dina ändringar automatiskt" },
-    { key: "view", label: "Visa", icon: <span aria-hidden>👁</span>, href: viewHref, newTab: true, disabled, title: uploadingTitle ?? "Visa i webbläsaren" },
-    { key: "download", label: "Ladda ner", icon: <span aria-hidden>⬇</span>, href: downloadHref, download: true, disabled, title: uploadingTitle ?? "Ladda ner" },
-    { key: "reanalyze", label: "Analysera (AI)", icon: <span aria-hidden>🧠</span>, onSelect: onReanalyze, disabled: disabled || reanalyzePending, title: uploadingTitle ?? "Kör AI-analys på nytt" },
-    { key: "delete", label: "Ta bort", icon: <Trash2 size={15} />, onSelect: onDelete, danger: true, disabled, title: uploadingTitle },
+    { key: "open", label: "Öppna i webbläsaren", icon: <span aria-hidden>🖊</span>, onSelect: () => void openInEditor(), disabled: isDisabled, title: uploadingTitle ?? "Öppna i din browser" },
+    { key: "external", label: "Editera externt (PDF Gear, Preview…)", icon: <span aria-hidden>🖥</span>, onSelect: () => void openExternal(), disabled: isDisabled, title: uploadingTitle ?? "AVA committar dina ändringar automatiskt" },
+    { key: "view", label: "Visa", icon: <span aria-hidden>👁</span>, href: viewHref, newTab: true, disabled: isDisabled, title: uploadingTitle ?? "Visa i webbläsaren" },
+    { key: "download", label: "Ladda ner", icon: <span aria-hidden>⬇</span>, href: downloadHref, download: true, disabled: isDisabled, title: uploadingTitle ?? "Ladda ner" },
+    { key: "reanalyze", label: "Analysera (AI)", icon: <span aria-hidden>🧠</span>, onSelect: onReanalyze, disabled: isDisabled || reanalyzePending, title: uploadingTitle ?? "Kör AI-analys på nytt" },
+    { key: "delete", label: "Ta bort", icon: <Trash2 size={15} />, onSelect: onDelete, danger: true, disabled: isDisabled, ...(uploadingTitle !== undefined ? { title: uploadingTitle } : {}) },
   ];
 
-  return <ActionMenu items={items} disabled={disabled} label="Dokumentåtgärder" />;
+  return <ActionMenu items={items} disabled={isDisabled} label="Dokumentåtgärder" />;
 }
 
 // readFromFsa flyttad till `@/lib/client/fsa/read-from-fsa` (delas med
@@ -250,10 +251,11 @@ function DocumentNameButton({ doc, isAnalyzing, disabled, onExternalEdit }: Name
     const { openDocument } = await import("@/lib/client/firma/open-document");
     const { loadHandle } = await import("@/lib/client/fsa/handle-store");
     const rec = doc as DocumentRecord & { storagePath?: string };
+    const demoRepo = process.env.NEXT_PUBLIC_DEFAULT_DEMO_REPO;
     await openDocument({
-      doc: { id: doc.id, storagePath: rec.storagePath, fileName: doc.fileName },
+      doc: { id: doc.id, ...(rec.storagePath !== undefined ? { storagePath: rec.storagePath } : {}), fileName: doc.fileName },
       isDemo,
-      demoRepo: process.env.NEXT_PUBLIC_DEFAULT_DEMO_REPO,
+      ...(demoRepo !== undefined ? { demoRepo } : {}),
       loadHandle: () => loadHandle("repo-root"),
       readFromHandle: readFromFsa,
       openUrl: (u) => window.open(u, "_blank", "noopener,noreferrer"),

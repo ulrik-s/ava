@@ -28,6 +28,7 @@ import {
   type TimeEntryId,
   type ExpenseId,
 } from "@/lib/shared/schemas/ids";
+import { omitUndefined } from "@/lib/shared/omit-undefined";
 
 // ─── createFinal-hjälpare (validera + koppla poster) ──────────────
 
@@ -176,14 +177,14 @@ export const invoiceRouter = router({
       if (!matter) throw new TRPCError({ code: "NOT_FOUND" });
       const invoice = await ctx.dataStore.invoices.create({
         data: {
-          id: input.id, // undefined → store genererar
+          ...(input.id !== undefined ? { id: input.id } : {}), // undefined → store genererar
           matterId: input.matterId,
           amount: input.amount,
           invoiceType: "ACCONTO",
           status: "DRAFT",
           invoiceDate: input.invoiceDate ? new Date(input.invoiceDate) : new Date(),
           dueDate: input.dueDate ? new Date(input.dueDate) : null,
-          notes: input.notes,
+          ...(input.notes !== undefined ? { notes: input.notes } : {}),
         },
       });
       await emit.invoiceCreated(ctx, invoice);
@@ -228,14 +229,14 @@ export const invoiceRouter = router({
 
         const invoice = await tx.invoices.create({
           data: {
-            id: input.id, // undefined → store genererar
+            ...(input.id !== undefined ? { id: input.id } : {}), // undefined → store genererar
             matterId: input.matterId,
             amount: breakdown.grossAmount,
             invoiceType: "FINAL",
             status: "DRAFT",
             invoiceDate: input.invoiceDate ? new Date(input.invoiceDate) : new Date(),
             dueDate: input.dueDate ? new Date(input.dueDate) : null,
-            notes: input.notes,
+            ...(input.notes !== undefined ? { notes: input.notes } : {}),
           },
         });
 
@@ -298,13 +299,12 @@ export const invoiceRouter = router({
 
         const credit = await tx.invoices.create({
           data: {
-            id: input.id, // undefined → store genererar
+            ...omitUndefined({ id: input.id, notes: input.notes }), // undefined → store genererar
             matterId: original.matterId,
             amount: -original.amount,
             invoiceType: "CREDIT",
             status: "SENT", // kreditfaktura är "färdig" direkt
             invoiceDate: new Date(),
-            notes: input.notes,
             creditedInvoiceId: original.id,
           },
         });
@@ -404,12 +404,11 @@ export const invoiceRouter = router({
 
         const plan = await tx.paymentPlans.create({
           data: {
-            id: input.id, // undefined → store genererar
+            ...omitUndefined({ id: input.id, notes: input.notes }), // undefined → store genererar
             invoiceId: inv.id,
             monthlyAmount: input.monthlyAmount,
             dayOfMonth: input.dayOfMonth,
             startDate: new Date(input.startDate),
-            notes: input.notes,
             // Explicit (Prisma schema-default appliceras inte av in-memory-store:n).
             status: "ACTIVE",
           },

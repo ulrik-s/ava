@@ -496,7 +496,7 @@ async function loadSelfHosted(
       repo: firmaConfig.repo,
       token: firmaConfig.token,
       username: gitAuthUsername(firmaConfig),
-      origin,
+      ...(origin !== undefined ? { origin } : {}),
       // Måste matcha trpcClient-användaren nedan (id "current-user") så att
       // flöden som slår upp ctx.user (timeEntry.create m.fl.) hittar en rad.
       currentUser: {

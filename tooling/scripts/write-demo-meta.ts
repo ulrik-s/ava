@@ -54,7 +54,7 @@ export function buildDemoMeta(seed: SeedShape, translator: IdTranslator, now: Da
     name: String(u.name ?? ""),
     email: String(u.email ?? ""),
     role: u.role as "ADMIN" | "LAWYER" | "ASSISTANT",
-    title: u.title ? String(u.title) : undefined,
+    ...(u.title ? { title: String(u.title) } : {}),
   }));
   if (users.some((u) => !u.id || !u.name || !u.role)) {
     throw new Error("User-rad saknar id/name/role");

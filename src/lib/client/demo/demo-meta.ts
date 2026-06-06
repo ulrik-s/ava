@@ -94,6 +94,6 @@ function validateUser(raw: unknown, url: string, idx: number): DemoMetaUser {
     name: u.name,
     email: typeof u.email === "string" ? u.email : "",
     role: u.role as "ADMIN" | "LAWYER" | "ASSISTANT",
-    title: typeof u.title === "string" ? u.title : undefined,
+    ...(typeof u.title === "string" ? { title: u.title } : {}),
   };
 }

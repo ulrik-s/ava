@@ -89,7 +89,7 @@ export const timeEntryRouter = router({
 
       const entry = await ctx.dataStore.timeEntries.create({
         data: {
-          id: input.id, // undefined → store genererar
+          ...(input.id !== undefined ? { id: input.id } : {}), // undefined → store genererar
           userId,
           matterId: input.matterId,
           date: new Date(input.date),
@@ -98,7 +98,7 @@ export const timeEntryRouter = router({
           hourlyRate: input.hourlyRate ?? user.hourlyRate ?? 0,
           billable: input.billable,
           invoiceId: input.invoiceId ?? null,
-          createdAt: input.createdAt ? new Date(input.createdAt) : undefined,
+          ...(input.createdAt ? { createdAt: new Date(input.createdAt) } : {}),
         },
       });
       await emit.timeEntryAdded(ctx, { id: entry.id, matterId: entry.matterId, minutes: entry.minutes });
@@ -116,11 +116,13 @@ export const timeEntryRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const { id, date, ...data } = input;
+      const { id, date, minutes, description, billable } = input;
       const updated = await ctx.dataStore.timeEntries.update({
         where: { id },
         data: {
-          ...data,
+          ...(minutes !== undefined ? { minutes } : {}),
+          ...(description !== undefined ? { description } : {}),
+          ...(billable !== undefined ? { billable } : {}),
           ...(date ? { date: new Date(date) } : {}),
         },
       });

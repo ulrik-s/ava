@@ -55,17 +55,19 @@ export const taskRouter = router({
 
   create: protectedProcedure
     .input(createInput)
-    .mutation(({ ctx, input }) =>
-      ctx.dataStore.tasks.create({
+    .mutation(({ ctx, input }) => {
+      const { id, createdAt, ...rest } = input;
+      return ctx.dataStore.tasks.create({
         data: {
-          ...input,
+          ...rest,
           status: input.status ?? "TODO",
           userId: input.userId ?? asId<"UserId">(ctx.user.id),
           organizationId: asId<"OrganizationId">(ctx.user.organizationId),
-          createdAt: input.createdAt ?? undefined,
+          ...(id !== undefined ? { id } : {}),
+          ...(createdAt != null ? { createdAt } : {}),
         },
-      }),
-    ),
+      });
+    }),
 
   update: protectedProcedure
     .input(updateInput)

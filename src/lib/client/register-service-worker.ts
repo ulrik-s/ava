@@ -26,7 +26,7 @@ export async function registerServiceWorker(swUrl: string): Promise<RegisterResu
 
   try {
     const reg = await nav.serviceWorker.register(swUrl, { scope: "/" });
-    return { status: "registered", scope: reg.scope };
+    return { status: "registered", ...(reg.scope !== undefined ? { scope: reg.scope } : {}) };
   } catch (err) {
     console.warn("[sw] registrering misslyckades:", err);
     return {

@@ -135,7 +135,9 @@ export class ReadOnlyDelegate<T extends Record<string, unknown>> {
   private queryRows(args: FindArgs): T[] {
     const filtered = this.filterRows(this.rowsFn(), args.where);
     return this.engine.query(filtered, {
-      orderBy: args.orderBy, skip: args.skip, take: args.take,
+      ...(args.orderBy !== undefined ? { orderBy: args.orderBy } : {}),
+      ...(args.skip !== undefined ? { skip: args.skip } : {}),
+      ...(args.take !== undefined ? { take: args.take } : {}),
     });
   }
 

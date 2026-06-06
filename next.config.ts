@@ -55,8 +55,7 @@ for (const m of NODE_BUILTINS_AND_SERVER_DEPS) {
 const demoConfig: NextConfig = {
   ...baseConfig,
   output: "export",
-  basePath: demoBasePath || undefined,
-  assetPrefix: demoBasePath || undefined,
+  ...(demoBasePath ? { basePath: demoBasePath, assetPrefix: demoBasePath } : {}),
   trailingSlash: true,
   images: { unoptimized: true },
   typescript: { ignoreBuildErrors: false },

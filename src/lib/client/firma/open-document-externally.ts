@@ -63,7 +63,7 @@ export async function tryHelperOpen(doc: Doc): Promise<boolean> {
     await openViaHelper({
       fileName: doc.fileName,
       downloadUrl: absDownload,
-      uploadUrl,
+      ...(uploadUrl !== undefined ? { uploadUrl } : {}),
     });
     return true;
   } catch (err) {
@@ -91,7 +91,9 @@ export async function runExternalEdit(doc: Doc): Promise<ModalState> {
       })()
     : undefined;
 
-  const r = await openInFinder(doc.storagePath, { downloadFallbackBase: fallbackBase });
+  const r = await openInFinder(doc.storagePath, {
+    ...(fallbackBase !== undefined ? { downloadFallbackBase: fallbackBase } : {}),
+  });
   if (r.kind === "unsupported") {
     return { kind: "error", title: "Browser stödjer inte File System Access",
       message: "Din webbläsare stödjer inte File System Access API. Använd Chrome eller Edge på desktop." };

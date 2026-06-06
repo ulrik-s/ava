@@ -53,14 +53,14 @@ export const documentTemplateRouter = router({
     .mutation(async ({ ctx, input }) => {
       return ctx.dataStore.documentTemplates.create({
         data: {
-          id: input.id, // undefined → store genererar
+          ...(input.id !== undefined ? { id: input.id } : {}), // undefined → store genererar
           name: input.name,
-          description: input.description,
-          category: input.category,
+          ...(input.description !== undefined ? { description: input.description } : {}),
+          ...(input.category !== undefined ? { category: input.category } : {}),
           content: input.content,
           organizationId: asId<"OrganizationId">(ctx.user.organizationId),
           createdById: input.createdById ?? asId<"UserId">(ctx.user.id),
-          createdAt: input.createdAt ? new Date(input.createdAt) : undefined,
+          ...(input.createdAt ? { createdAt: new Date(input.createdAt) } : {}),
         },
       });
     }),
@@ -83,8 +83,16 @@ export const documentTemplateRouter = router({
       if (!existing || existing.organizationId !== ctx.user.organizationId) {
         throw new TRPCError({ code: "NOT_FOUND" });
       }
-      const { id, ...data } = input;
-      return ctx.dataStore.documentTemplates.update({ where: { id }, data });
+      const { id, name, description, category, content } = input;
+      return ctx.dataStore.documentTemplates.update({
+        where: { id },
+        data: {
+          ...(name !== undefined ? { name } : {}),
+          ...(description !== undefined ? { description } : {}),
+          ...(category !== undefined ? { category } : {}),
+          ...(content !== undefined ? { content } : {}),
+        },
+      });
     }),
 
   delete: protectedProcedure

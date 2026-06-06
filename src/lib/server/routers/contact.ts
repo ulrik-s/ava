@@ -3,6 +3,7 @@ import { router, orgProcedure, requireOrgOwned } from "../trpc";
 import { contactTypeSchema } from "@/lib/shared/schemas/enums";
 import { contactIdSchema, asId } from "@/lib/shared/schemas/ids";
 import { emit } from "../events/emit";
+import { omitUndefined } from "@/lib/shared/omit-undefined";
 
 export const contactRouter = router({
   list: orgProcedure
@@ -88,7 +89,7 @@ export const contactRouter = router({
     .mutation(async ({ ctx, input }) => {
       const contact = await ctx.dataStore.contacts.create({
         data: {
-          ...input,
+          ...omitUndefined(input),
           email: input.email || null,
           organizationId: asId<"OrganizationId">(ctx.orgId),
         },
@@ -121,7 +122,10 @@ export const contactRouter = router({
       const { id, ...data } = input;
       const updated = await ctx.dataStore.contacts.update({
         where: { id },
-        data: { ...data, email: data.email || null },
+        data: {
+          ...omitUndefined(data),
+          email: input.email || null,
+        },
       });
       await emit.contactUpdated(ctx, id, data);
       return updated;

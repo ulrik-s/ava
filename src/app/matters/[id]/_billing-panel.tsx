@@ -23,16 +23,17 @@ import { KostnadsrakningModal } from "./_kostnadsrakning-modal";
 import { hasGeneratedDoc, openGeneratedDoc } from "@/lib/client/demo/generated-doc-cache";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { useMatterInvariants } from "@/lib/client/diagnostics/use-matter-invariants";
+import { omitUndefined } from "@/lib/shared/omit-undefined";
 
 interface MatterContext {
   matterNumber: string;
   title: string;
-  taxaLevel?: number | null;
-  taxaHasFTax?: boolean | null;
-  taxaHufStart?: string | Date | null;
-  isTaxeArende?: boolean | null;
-  paymentMethod?: string | null;
-  contacts?: ReadonlyArray<{ role: string; contact?: { name?: string | null; email?: string | null } | null }>;
+  taxaLevel?: number | null | undefined;
+  taxaHasFTax?: boolean | null | undefined;
+  taxaHufStart?: string | Date | null | undefined;
+  isTaxeArende?: boolean | null | undefined;
+  paymentMethod?: string | null | undefined;
+  contacts?: ReadonlyArray<{ role: string; contact?: { name?: string | null | undefined; email?: string | null | undefined } | null | undefined }> | undefined;
 }
 
 interface Props {
@@ -179,11 +180,14 @@ function strOrUndef(v: string | null | undefined): string | undefined {
 }
 
 interface OrgData { name?: string; orgNumber?: string; address?: string }
-function orgProps(org: { name?: string | null; orgNumber?: string | null; address?: string | null } | undefined): OrgData {
+function orgProps(org: { name?: string | null | undefined; orgNumber?: string | null | undefined; address?: string | null | undefined } | undefined): OrgData {
+  const name = strOrUndef(org?.name);
+  const orgNumber = strOrUndef(org?.orgNumber);
+  const address = strOrUndef(org?.address);
   return {
-    name: strOrUndef(org?.name),
-    orgNumber: strOrUndef(org?.orgNumber),
-    address: strOrUndef(org?.address),
+    ...(name !== undefined ? { name } : {}),
+    ...(orgNumber !== undefined ? { orgNumber } : {}),
+    ...(address !== undefined ? { address } : {}),
   };
 }
 
@@ -191,14 +195,16 @@ function useKrModalData(matterId: string): KrModalData {
   const me = trpc.user.current.useQuery().data;
   const org = orgProps(trpc.organization.getSettings.useQuery().data ?? undefined);
   const expenses = trpc.expense.list.useQuery({ matterId }).data?.expenses ?? [];
-  return {
+  // omitUndefined samlar exactOptional-strippningen (#32) på ett ställe så
+  // funktionen inte spräcker complexity-gränsen.
+  return omitUndefined({
     defenderName: me?.name ?? "",
     defenderEmail: strOrUndef(me?.email),
     organizationName: org.name,
     organizationOrgNumber: org.orgNumber,
     organizationAddress: org.address,
     expenses: expenses as KrModalData["expenses"],
-  };
+  }) as KrModalData;
 }
 
 function KostnadsrakningTrigger({ matterId, matter, open, onClose, onRecorded }: KrTriggerProps) {

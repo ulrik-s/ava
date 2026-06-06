@@ -64,8 +64,8 @@ export function FirmaSettingsPanel({ initial, onSaved, onCancel, inline = false,
       tier, repo, token,
       organizationId: orgId,
       authorName: name, authorEmail: email,
-      corsProxy: corsProxy.trim() || undefined,
-      gitUsername: gitUsername.trim() || undefined,
+      ...(corsProxy.trim() ? { corsProxy: corsProxy.trim() } : {}),
+      ...(gitUsername.trim() ? { gitUsername: gitUsername.trim() } : {}),
     });
     saveAuthSettings({ allowAnonymousRead });
     saveOAuthConfig(oauth);
@@ -78,8 +78,8 @@ export function FirmaSettingsPanel({ initial, onSaved, onCancel, inline = false,
       tier, repo, token: "",
       organizationId: orgId,
       authorName: name, authorEmail: email,
-      corsProxy: corsProxy.trim() || undefined,
-      gitUsername: gitUsername.trim() || undefined,
+      ...(corsProxy.trim() ? { corsProxy: corsProxy.trim() } : {}),
+      ...(gitUsername.trim() ? { gitUsername: gitUsername.trim() } : {}),
     });
     onSaved();
   };

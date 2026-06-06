@@ -71,7 +71,7 @@ export const coreProcedures = {
     .query(async ({ ctx, input }) => {
       const result = await ctx.ports.searchIndex.search(
         input.query, ctx.orgId, input.limit,
-        { documentTypes: input.documentTypes },
+        { ...(input.documentTypes !== undefined ? { documentTypes: input.documentTypes } : {}) },
       );
       return {
         hits: result.hits.map((hit) => ({

@@ -93,7 +93,7 @@ function buildCtxForMatter(m: Row, klientName: string, userName: string, org: Ro
     recipient: { name: klientName },
     client: { name: klientName },
     organization: { name: org.name as string, orgNumber: org.orgNumber as string, address: org.address as string, email: org.email as string },
-    now: m.createdAt ? new Date(m.createdAt as string) : undefined,
+    ...(m.createdAt ? { now: new Date(m.createdAt as string) } : {}),
   });
   return { ...base, contact: { name: klientName }, user: { name: userName } };
 }

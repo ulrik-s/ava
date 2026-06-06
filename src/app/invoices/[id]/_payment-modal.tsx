@@ -46,7 +46,7 @@ export function PaymentModal({ invoiceId, isPending, error, onSubmit, onClose }:
               invoiceId,
               amount: Math.round(Number(paymentAmountSek) * 100),
               paidAt: paymentDate,
-              note: paymentNote || undefined,
+              ...(paymentNote ? { note: paymentNote } : {}),
             })}
             className="px-4 py-1.5 text-sm bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
           >

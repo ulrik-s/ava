@@ -59,7 +59,7 @@ export const DEFAULT_LOG_LINES = 50;
 export function buildSessionReport(opts: { userText?: string; includeLogs?: boolean; maxLogs?: number }): IssueReport {
   const includeLogs = opts.includeLogs ?? true;
   return buildIssueReport({
-    userText: opts.userText,
+    ...(opts.userText !== undefined ? { userText: opts.userText } : {}),
     violations: issueStore.list(),
     logs: includeLogs ? logBuffer.recent(opts.maxLogs ?? DEFAULT_LOG_LINES) : [],
     meta: collectMeta(),

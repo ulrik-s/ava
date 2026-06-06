@@ -29,9 +29,15 @@ async function openHit(hit: SearchHit): Promise<void> {
   ]);
   const isDemo = process.env.NEXT_PUBLIC_DEMO_BUILD === "1";
   await openDocument({
-    doc: { id: hit.documentId, storagePath: hit.storagePath, fileName: hit.fileName },
+    doc: {
+      id: hit.documentId,
+      ...(hit.storagePath !== undefined ? { storagePath: hit.storagePath } : {}),
+      fileName: hit.fileName,
+    },
     isDemo,
-    demoRepo: process.env.NEXT_PUBLIC_DEFAULT_DEMO_REPO,
+    ...(process.env.NEXT_PUBLIC_DEFAULT_DEMO_REPO !== undefined
+      ? { demoRepo: process.env.NEXT_PUBLIC_DEFAULT_DEMO_REPO }
+      : {}),
     loadHandle: () => loadHandle("repo-root"),
     readFromHandle: readFromFsa,
     openUrl: (u) => window.open(u, "_blank", "noopener,noreferrer"),

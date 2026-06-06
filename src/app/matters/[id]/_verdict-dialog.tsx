@@ -57,8 +57,9 @@ async function generateFakturaDoc(
     invoice,
     meta: {
       matterNumber: props.matterNumber, matterTitle: props.matterTitle,
-      clientName: props.clientName,
-      organizationName: props.organizationName, organizationOrgNumber: props.organizationOrgNumber,
+      ...(props.clientName !== undefined ? { clientName: props.clientName } : {}),
+      ...(props.organizationName !== undefined ? { organizationName: props.organizationName } : {}),
+      ...(props.organizationOrgNumber !== undefined ? { organizationOrgNumber: props.organizationOrgNumber } : {}),
     },
   });
   const docId = `faktura-${invoice.id}`;

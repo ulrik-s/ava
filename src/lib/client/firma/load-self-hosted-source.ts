@@ -63,11 +63,14 @@ export async function loadSelfHostedSource(deps: LoadSelfHostedDeps): Promise<De
   const dirExists = deps.dirExists ?? defaultDirExists;
 
   if (!(await dirExists(fs, "/.git"))) {
-    const corsProxy = resolveCorsProxy({ url: deps.repo, origin: deps.origin });
+    const corsProxy = resolveCorsProxy({
+      url: deps.repo,
+      ...(deps.origin !== undefined ? { origin: deps.origin } : {}),
+    });
     await (deps.clone ?? cloneRepo)(fs, {
       url: deps.repo,
-      token: deps.token,
-      username: deps.username,
+      ...(deps.token !== undefined ? { token: deps.token } : {}),
+      ...(deps.username !== undefined ? { username: deps.username } : {}),
       corsProxy,
       ref: "main",
     });

@@ -193,7 +193,7 @@ interface FormProps {
   setForm: (f: EditForm) => void;
   submitLabel: string;
   isPending: boolean;
-  isTaxeArende?: boolean;
+  isTaxeArende?: boolean | undefined;
   onSubmit: () => void;
   onCancel: () => void;
 }

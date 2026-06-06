@@ -18,7 +18,7 @@ function makeDelegate(initial: Matter[] = [], onMutate?: (e: MutationEvent<Matte
     delegate: new WritableDelegate<Matter>({
       entity: "matter",
       collection: () => box.items,
-      onMutate,
+      ...(onMutate !== undefined ? { onMutate } : {}),
     }),
   };
 }

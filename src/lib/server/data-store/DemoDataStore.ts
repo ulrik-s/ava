@@ -269,7 +269,7 @@ export class DemoDataStore implements IDataStore {
       kind,
       collection: () => (this.source[key] ?? []) as readonly Record<string, unknown>[],
       where: (p) => ({ [childField]: (p as Record<string, unknown>)[parentField] }),
-      relations,
+      ...(relations !== undefined ? { relations } : {}),
     };
   }
 
@@ -288,7 +288,7 @@ export class DemoDataStore implements IDataStore {
           }
           return (this.source[key] ?? []) as unknown as T[];
         },
-        relations,
+        ...(relations !== undefined ? { relations } : {}),
         // Routa via handleMutate så att event buffras under en transaction()
         // och flushas först vid commit (annars skulle en felad transaktion
         // skriva halva ändringar till git-db:n).

@@ -119,7 +119,12 @@ const STEP_HANDLERS: { [K in RuleStep["do"]]: StepHandler<K> } = {
     const to = String(templateValue(step.to, tctx));
     const vars = templateValue(step.vars ?? {}, tctx) as Record<string, unknown>;
     const idempotencyKey = step.idempotencyKey ? String(templateValue(step.idempotencyKey, tctx)) : undefined;
-    const sent = await ctx.handlers.sendEmail({ template: step.template, to, vars, idempotencyKey });
+    const sent = await ctx.handlers.sendEmail({
+      template: step.template,
+      to,
+      vars,
+      ...(idempotencyKey !== undefined ? { idempotencyKey } : {}),
+    });
     if (sent) {
       await ctx.dataStore.events.emit({
         type: "mail.sent",
@@ -192,7 +197,7 @@ const STEP_HANDLERS: { [K in RuleStep["do"]]: StepHandler<K> } = {
     const assignTo = String(templateValue(step.assignTo, tctx));
     const title = String(templateValue(step.title, tctx));
     const dueAt = step.dueAt ? String(templateValue(step.dueAt, tctx)) : undefined;
-    await ctx.handlers.createTask({ assignTo, title, dueAt });
+    await ctx.handlers.createTask({ assignTo, title, ...(dueAt !== undefined ? { dueAt } : {}) });
     return undefined;
   },
 };
@@ -224,7 +229,7 @@ export async function executeRule(ctx: ExecutionContext): Promise<ExecutionResul
     ruleId: ctx.rule.id,
     ok: !result.error,
     stepsRan: result.stepsRan,
-    httpResponse: result.httpResponse,
-    error: result.error,
+    ...(result.httpResponse !== undefined ? { httpResponse: result.httpResponse } : {}),
+    ...(result.error !== undefined ? { error: result.error } : {}),
   };
 }

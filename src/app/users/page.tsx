@@ -48,7 +48,7 @@ function BecomeButton({ user, onClick }: { user: UserRow; onClick: (u: UserRow) 
 
 function buildUserColumns(opts: {
   isAdmin: boolean;
-  meId?: string;
+  meId?: string | undefined;
   onDeactivate: (id: string, name: string) => void;
   onBecome: (u: UserRow) => void;
 }): Column<UserRow>[] {
