@@ -21,6 +21,25 @@ env:
 # statisk analys + vitest (+ git-round-trip-e2e mot docker).
 
 jobs:
+  # ───────────────── Commit-meddelanden ─────────────────
+  # Speglar den lokala .husky/commit-msg-hooken i CI: alla commits i en PR
+  # måste följa Conventional Commits (skydd om någon committat utan hooken).
+  commitlint:
+    name: Commit messages
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # commitlint behöver hela historiken för --from..--to
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: corepack enable
+      - run: yarn install --immutable
+      - run: yarn commitlint --from "${{ github.event.pull_request.base.sha }}" --to "${{ github.event.pull_request.head.sha }}"
+
   # ───────────────── Statisk analys ─────────────────
   static:
     name: Static analysis

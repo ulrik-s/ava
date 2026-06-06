@@ -20,6 +20,7 @@
     "tier3:restart": "docker compose -f tooling/docker/docker-compose.yml restart web",
     "tier3:logs": "docker compose -f tooling/docker/docker-compose.yml logs -f",
     "lint": "eslint --config tooling/config/eslint.config.mjs",
+    "commitlint": "commitlint --config tooling/config/commitlint.config.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest --config tooling/config/vitest.config.ts",
     "test:run": "vitest run --config tooling/config/vitest.config.ts",
@@ -78,6 +79,8 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@commitlint/cli": "^21.0.2",
+    "@commitlint/config-conventional": "^21.0.2",
     "@isomorphic-git/cors-proxy": "^3.0.1",
     "@playwright/test": "^1.60.0",
     "@tailwindcss/postcss": "^4",
