@@ -46,6 +46,10 @@ const eslintConfig = defineConfig([
       // → backar mekaniskt upp dependency-cruiser-regeln "UI importerar server
       // type-only" på källnivå (#9).
       "@typescript-eslint/consistent-type-imports": "error",
+      // Ratchet (#47): all `any` eliminerad i src utom datalagrets flytande
+      // query-yta (IDataStore.ts, block-disabled + dokumenterad). Skärper från
+      // next/typescript:s `warn` → `error` så NYA `any` blockerar CI.
+      "@typescript-eslint/no-explicit-any": "error",
       // Promise-säkerhet: oavsiktligt obevakade promises, async-callbacks i
       // synkron/void-kontext, och `await` på icke-thenables är vanliga
       // buggkällor som bara typinfo kan upptäcka (#9).

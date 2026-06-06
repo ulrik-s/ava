@@ -21,6 +21,7 @@
  *     separat för testbarhet utan att behöva instansiera WebGPU.
  */
 
+import type { MLCEngine } from "@mlc-ai/web-llm";
 import type { ExtractionResult, ExtractionSchema, FieldType, ILlmExtractor } from "@/lib/server/llm/llm-extractor";
 import type { LlmModelId } from "./llm-config";
 
@@ -36,11 +37,8 @@ export interface WebLlmExtractorOpts {
   onProgress?: (p: ProgressEvent) => void;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type MLCEngineLike = any;
-
 export class WebLlmExtractor implements ILlmExtractor {
-  private engine: MLCEngineLike | null = null;
+  private engine: MLCEngine | null = null;
   private ready = false;
   private warmupPromise: Promise<void> | null = null;
 

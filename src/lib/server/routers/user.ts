@@ -65,8 +65,7 @@ export const userRouter = router({
     try {
       const u = await ctx.dataStore.users.findUniqueOrThrow({
         where: { id: ctx.user.id, organizationId: ctx.user.organizationId },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        select: USER_PROFILE_SELECT as any,
+        select: USER_PROFILE_SELECT,
       }) as unknown as UserProfile;
       return { ...u, publicKeys: Array.isArray(u.publicKeys) ? u.publicKeys : [] };
     } catch (_e) {
@@ -137,8 +136,7 @@ export const userRouter = router({
           passwordHash,
           organizationId: ctx.user.organizationId,
           publicKeys: [],
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        } as any,
+        },
       });
     }),
 
@@ -185,8 +183,7 @@ export const userRouter = router({
     .mutation(async ({ ctx, input }) => {
       const u = await ctx.dataStore.users.findUniqueOrThrow({
         where: { id: ctx.user.id, organizationId: ctx.user.organizationId },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        select: { publicKeys: true } as any,
+        select: { publicKeys: true },
       }) as unknown as { publicKeys?: unknown[] };
       const keys = Array.isArray(u.publicKeys) ? u.publicKeys : [];
       if (keys.some((k) => (k as { fingerprint: string }).fingerprint === input.fingerprint)) {
@@ -203,8 +200,7 @@ export const userRouter = router({
     .mutation(async ({ ctx, input }) => {
       const u = await ctx.dataStore.users.findUniqueOrThrow({
         where: { id: ctx.user.id, organizationId: ctx.user.organizationId },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        select: { publicKeys: true } as any,
+        select: { publicKeys: true },
       }) as unknown as { publicKeys?: unknown[] };
       const keys = (Array.isArray(u.publicKeys) ? u.publicKeys : []).filter(
         (k) => (k as { fingerprint: string }).fingerprint !== input.fingerprint,
