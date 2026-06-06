@@ -96,7 +96,6 @@ interface Props {
   saving?: boolean;
 }
 
-// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'TemplateEditor' has a complexity of 12. Maximum allowed is 8.)
 export function TemplateEditor({
   initialName = "",
   initialDescription = "",
@@ -159,56 +158,106 @@ export function TemplateEditor({
         description={description} setDescription={setDescription}
       />
 
-      <div className="flex-1 flex flex-col min-h-0 border border-gray-200 rounded-lg overflow-hidden">
-        <EditorTabs
-          activeTab={activeTab}
-          setActiveTab={setActiveTab}
-          refOpen={refOpen}
-          toggleRef={() => setRefOpen((v) => !v)}
-        />
+      <EditorPane
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        refOpen={refOpen}
+        toggleRef={() => setRefOpen((v) => !v)}
+        content={content}
+        setContent={setContent}
+        previewHtml={previewHtml}
+        expandedGroups={expandedGroups}
+        toggleGroup={toggleGroup}
+        onInsert={insertVariable}
+      />
 
-        <div className="flex flex-1 min-h-0">
-          {refOpen && (
-            <VariableSidebar
-              expandedGroups={expandedGroups}
-              toggleGroup={toggleGroup}
-              onInsert={insertVariable}
-            />
-          )}
+      <EditorActions
+        onCancel={onCancel}
+        onSave={handleSave}
+        saving={saving}
+        disabled={!name.trim() || !content.trim() || saving}
+      />
+    </div>
+  );
+}
 
-          {activeTab === "editor" && (
-            <textarea
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              spellCheck={false}
-              placeholder={`<h1>{{matter.title}}</h1>\n<p>Klient: {{klient.name}}</p>\n\n{{#each timeEntries}}\n<p>{{formatDateShort date}} – {{description}} ({{hours}})</p>\n{{/each}}`}
-              className="flex-1 p-4 font-mono text-sm resize-none focus:outline-none bg-[#1e1e2e] text-[#cdd6f4] leading-relaxed"
-            />
-          )}
+function EditorPane({
+  activeTab, setActiveTab, refOpen, toggleRef,
+  content, setContent, previewHtml,
+  expandedGroups, toggleGroup, onInsert,
+}: {
+  activeTab: "editor" | "preview";
+  setActiveTab: (t: "editor" | "preview") => void;
+  refOpen: boolean;
+  toggleRef: () => void;
+  content: string;
+  setContent: (v: string) => void;
+  previewHtml: string;
+  expandedGroups: Set<string>;
+  toggleGroup: (g: string) => void;
+  onInsert: (key: string) => void;
+}) {
+  return (
+    <div className="flex-1 flex flex-col min-h-0 border border-gray-200 rounded-lg overflow-hidden">
+      <EditorTabs
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        refOpen={refOpen}
+        toggleRef={toggleRef}
+      />
 
-          {activeTab === "preview" && (
-            <iframe
-              srcDoc={previewHtml}
-              className="flex-1 bg-white"
-              sandbox="allow-same-origin"
-              title="Förhandsgranskning"
-            />
-          )}
-        </div>
+      <div className="flex flex-1 min-h-0">
+        {refOpen && (
+          <VariableSidebar
+            expandedGroups={expandedGroups}
+            toggleGroup={toggleGroup}
+            onInsert={onInsert}
+          />
+        )}
+
+        {activeTab === "editor" && (
+          <textarea
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            spellCheck={false}
+            placeholder={`<h1>{{matter.title}}</h1>\n<p>Klient: {{klient.name}}</p>\n\n{{#each timeEntries}}\n<p>{{formatDateShort date}} – {{description}} ({{hours}})</p>\n{{/each}}`}
+            className="flex-1 p-4 font-mono text-sm resize-none focus:outline-none bg-[#1e1e2e] text-[#cdd6f4] leading-relaxed"
+          />
+        )}
+
+        {activeTab === "preview" && (
+          <iframe
+            srcDoc={previewHtml}
+            className="flex-1 bg-white"
+            sandbox="allow-same-origin"
+            title="Förhandsgranskning"
+          />
+        )}
       </div>
+    </div>
+  );
+}
 
-      <div className="flex justify-end gap-2">
-        <button onClick={onCancel} className="px-4 py-2 text-sm border border-gray-300 rounded hover:bg-gray-50">
-          Avbryt
-        </button>
-        <button
-          onClick={handleSave}
-          disabled={!name.trim() || !content.trim() || saving}
-          className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {saving ? "Sparar…" : "Spara mall"}
-        </button>
-      </div>
+function EditorActions({
+  onCancel, onSave, saving, disabled,
+}: {
+  onCancel: () => void;
+  onSave: () => void;
+  saving: boolean;
+  disabled: boolean;
+}) {
+  return (
+    <div className="flex justify-end gap-2">
+      <button onClick={onCancel} className="px-4 py-2 text-sm border border-gray-300 rounded hover:bg-gray-50">
+        Avbryt
+      </button>
+      <button
+        onClick={onSave}
+        disabled={disabled}
+        className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {saving ? "Sparar…" : "Spara mall"}
+      </button>
     </div>
   );
 }
