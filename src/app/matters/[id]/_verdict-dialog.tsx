@@ -12,9 +12,13 @@
  * det är vad advokaten skriver in.
  */
 import { useState } from "react";
+import type { inferRouterInputs } from "@trpc/server";
 import { trpc } from "@/lib/client/trpc";
+import type { AppRouter } from "@/lib/server/routers/_app";
 import { formatCurrency } from "@/lib/client/utils";
 import { Modal } from "@/components/ui/modal";
+
+type RouterInputs = inferRouterInputs<AppRouter>;
 
 interface Props {
   billingRunId: string;
@@ -28,10 +32,15 @@ interface Props {
   onClose: () => void;
 }
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-type RegisterMut = { mutateAsync: (i: any) => Promise<unknown> };
-type DocUtils = { document: { tree: { invalidate: (f?: any) => Promise<unknown>; refetch: (f?: any) => Promise<unknown> }; list: { invalidate: (f?: any) => Promise<unknown> } } };
-/* eslint-enable @typescript-eslint/no-explicit-any */
+type RegisterMut = { mutateAsync: (i: RouterInputs["document"]["register"]) => Promise<unknown> };
+type TreeFilter = RouterInputs["document"]["tree"];
+type ListFilter = RouterInputs["document"]["list"];
+type DocUtils = {
+  document: {
+    tree: { invalidate: (f?: TreeFilter) => Promise<unknown>; refetch: (f?: TreeFilter) => Promise<unknown> };
+    list: { invalidate: (f?: ListFilter) => Promise<unknown> };
+  };
+};
 
 /**
  * Generera ett faktura-DOKUMENT (PDF) ur den nyss skapade invoice-entiteten och

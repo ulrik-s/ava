@@ -67,9 +67,10 @@ async function toBytes(input: Uint8Array | ArrayBuffer | Blob): Promise<Uint8Arr
 
 async function extractFromPdf(bytes: Uint8Array): Promise<string> {
   try {
-    // Använd legacy-build för max-kompabilitet (Node test-env + jsdom)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs") as any;
+    // Använd legacy-build för max-kompabilitet (Node test-env + jsdom).
+    // Legacy-buildens pdf.d.mts re-exporterar pdfjs-dists egna typer, så
+    // importen är fullt typad utan cast.
+    const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
     // pdfjs i browser kräver workerSrc; vi använder samma legacy-fil
     // som worker för enkelhet (slower men funkar utan extra-konfig)
     if (pdfjs.GlobalWorkerOptions && !pdfjs.GlobalWorkerOptions.workerSrc) {
@@ -92,8 +93,9 @@ async function extractFromPdf(bytes: Uint8Array): Promise<string> {
     for (let i = 1; i <= doc.numPages; i++) {
       const page = await doc.getPage(i);
       const content = await page.getTextContent();
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const pageText = (content.items as any[])
+      // content.items: Array<TextItem | TextMarkedContent>; "str" finns bara
+      // på TextItem, så `in`-narrowing väljer rätt variant.
+      const pageText = content.items
         .map((item) => ("str" in item ? item.str : ""))
         .join(" ");
       parts.push(pageText);

@@ -13,6 +13,8 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, orgProcedure } from "../trpc";
+import type { Task, CalendarEvent } from "@/lib/shared/schemas";
+import type { Joined } from "../data-store/IDataStore";
 
 export interface TodoItem {
   id: string;
@@ -72,15 +74,13 @@ export const todoRouter = router({
       // och behöll förra resultatet → tom dashboard).
       const toDate = (v: unknown): Date => v instanceof Date ? v : new Date(v as string);
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const taskItems: TodoItem[] = (tasks as any[]).map((t) => ({
+      const taskItems: TodoItem[] = tasks.map((t: Joined<Task>) => ({
         id: t.id, source: "task", title: t.title, description: t.description ?? null,
         at: toDate(t.dueAt), endAt: null, allDay: false,
         status: t.status, priority: t.priority, kind: null, location: null,
         matter: t.matter ?? null, userId: t.userId,
       }));
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const eventItems: TodoItem[] = (events as any[]).map((e) => ({
+      const eventItems: TodoItem[] = events.map((e: Joined<CalendarEvent>) => ({
         id: e.id, source: "event", title: e.title, description: e.description ?? null,
         at: toDate(e.startAt), endAt: e.endAt ? toDate(e.endAt) : null, allDay: e.allDay ?? false,
         status: null, priority: null, kind: e.kind, location: e.location ?? null,

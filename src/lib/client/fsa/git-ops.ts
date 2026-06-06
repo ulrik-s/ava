@@ -17,7 +17,17 @@ import type { FsaIsoGitAdapter } from "./fs-adapter";
 import { sshToHttps } from "./url-rewrite";
 import { DEFAULT_CORS_PROXY } from "@/lib/client/sync/cors-proxy";
 import type * as IsomorphicGit from "isomorphic-git";
+import type { FsClient } from "isomorphic-git";
 import type * as IsomorphicGitHttp from "isomorphic-git/http/web";
+
+/**
+ * `FsaIsoGitAdapter` exponerar `promises`-API:t som isomorphic-git
+ * förväntar sig (`PromiseFsClient`). Den här hjälpfunktionen ger en
+ * typad vy så att vi slipper `fs as any` vid varje git-anrop.
+ */
+function asFsClient(fs: FsaIsoGitAdapter): FsClient {
+  return fs;
+}
 
 export interface CloneOptions {
   url: string;
@@ -69,8 +79,7 @@ async function resolveRemoteHttpsUrl(
   const git = await loadIsoGit();
   try {
     const url = await git.getConfig({
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      fs: fs as any,
+      fs: asFsClient(fs),
       dir: "/",
       path: `remote.${remote}.url`,
     });
@@ -102,8 +111,7 @@ export async function cloneRepo(
   //   3. checkout ref med force (skriver över ev. half-applied files)
   try {
     await git.clone({
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      fs: fs as any,
+      fs: asFsClient(fs),
       http,
       dir: "/",
       url: opts.url,
@@ -121,15 +129,13 @@ export async function cloneRepo(
   }
 
   await git.setConfig({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    fs: fs as any,
+    fs: asFsClient(fs),
     dir: "/",
     path: "remote.origin.url",
     value: opts.url,
   });
   await git.fetch({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    fs: fs as any,
+    fs: asFsClient(fs),
     http,
     dir: "/",
     url: opts.url,
@@ -140,8 +146,7 @@ export async function cloneRepo(
     onAuth,
   });
   await git.checkout({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    fs: fs as any,
+    fs: asFsClient(fs),
     dir: "/",
     ref,
     force: true,
@@ -154,8 +159,7 @@ export async function statusMatrix(fs: FsaIsoGitAdapter): Promise<GitStatusEntry
   // statusMatrix returnerar tupler [filepath, HEAD, WORKDIR, STAGE]
   // där 0=missing, 1=existerar, 2=ändrad, 3=ny stage.
   const matrix = await git.statusMatrix({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    fs: fs as any,
+    fs: asFsClient(fs),
     dir: "/",
   });
   const entries: GitStatusEntry[] = [];
@@ -193,22 +197,19 @@ export async function stageAllAndCommit(
 ): Promise<string> {
   const git = await loadIsoGit();
   const matrix = await git.statusMatrix({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    fs: fs as any,
+    fs: asFsClient(fs),
     dir: "/",
   });
   for (const [filepath, , workdir] of matrix) {
     if (workdir === 0) {
       await git.remove({
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        fs: fs as any,
+        fs: asFsClient(fs),
         dir: "/",
         filepath,
       });
     } else {
       await git.add({
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        fs: fs as any,
+        fs: asFsClient(fs),
         dir: "/",
         filepath,
       });
@@ -228,8 +229,7 @@ export async function stageAllAndCommit(
     });
   }
   const oid = await git.commit({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    fs: fs as any,
+    fs: asFsClient(fs),
     dir: "/",
     message: args.message,
     author: { name: args.authorName, email: args.authorEmail },
@@ -248,8 +248,7 @@ export async function pushBranch(
   // hanterar inte SSH i browser).
   const url = opts.url ?? (await resolveRemoteHttpsUrl(fs, remoteName)) ?? undefined;
   await git.push({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    fs: fs as any,
+    fs: asFsClient(fs),
     http: httpMod.default ?? httpMod,
     dir: "/",
     remote: remoteName,
@@ -267,15 +266,13 @@ export async function pullBranch(
   const git = await loadIsoGit();
   const httpMod = await loadHttp();
   const before = await git.resolveRef({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    fs: fs as any,
+    fs: asFsClient(fs),
     dir: "/",
     ref: "HEAD",
   });
   const url = opts.url ?? (await resolveRemoteHttpsUrl(fs, "origin")) ?? undefined;
   await git.pull({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    fs: fs as any,
+    fs: asFsClient(fs),
     http: httpMod.default ?? httpMod,
     dir: "/",
     url,
@@ -286,8 +283,7 @@ export async function pullBranch(
     onAuth: () => ({ username: opts.username || "x-access-token", password: opts.token }),
   });
   const after = await git.resolveRef({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    fs: fs as any,
+    fs: asFsClient(fs),
     dir: "/",
     ref: "HEAD",
   });

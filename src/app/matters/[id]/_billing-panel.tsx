@@ -12,7 +12,9 @@
  * öppnar verdict-dialogen (sätter prutning + skapar faktura).
  */
 import { useState } from "react";
+import type { inferRouterOutputs } from "@trpc/server";
 import { trpc } from "@/lib/client/trpc";
+import type { AppRouter } from "@/lib/server/routers/_app";
 import { formatCurrency } from "@/lib/client/utils";
 import { BILLING_RUN_TYPE_LABELS, BILLING_RUN_STATUS_LABELS } from "@/lib/shared/schemas/enums";
 import { BillingDialog } from "./_billing-dialog";
@@ -51,10 +53,11 @@ interface BillingRunRow {
 
 interface KrDocInfo { id: string; fileName: string }
 
+type DocumentListOutput = inferRouterOutputs<AppRouter>["document"]["list"];
+
 function findKrDocument(matterId: string, run: BillingRunRow): KrDocInfo | null {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const docs = trpc.document.list.useQuery({ matterId, folderId: null, pageSize: 100 }).data as any;
-  const list = (docs?.documents ?? []) as Array<{ id: string; fileName: string; documentType?: string | null; createdAt?: string | Date }>;
+  const docs: DocumentListOutput | undefined = trpc.document.list.useQuery({ matterId, folderId: null, pageSize: 100 }).data;
+  const list = docs?.documents ?? [];
   const kostn = list.filter((d) => d.documentType === "Kostnadsräkning");
   if (kostn.length === 0) return null;
   // Senaste KR-dokumentet skapat innan/samtidigt med billing-run:n —

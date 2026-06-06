@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useRef, useCallback, useMemo } from "react";
+import type { inferRouterInputs } from "@trpc/server";
 import { trpc } from "@/lib/client/trpc";
+import type { AppRouter } from "@/lib/server/routers/_app";
 import { FolderRow, type FolderRecord } from "./_folder-row";
 import { DocumentRow, type DocumentRecord } from "./_document-row";
 import { NewFolderForm } from "./_new-folder-form";
@@ -10,6 +12,8 @@ import { DocumentsListView } from "./_documents-list-view";
 
 type ViewMode = "tree" | "list";
 const VIEW_MODE_KEY = "ava.documents.viewMode";
+
+type RegisterInput = inferRouterInputs<AppRouter>["document"]["register"];
 
 interface DocumentBrowserProps {
   matterId: string;
@@ -487,12 +491,8 @@ function useDocumentMutations({
   const moveFolder = trpc.document.moveFolder.useMutation({ onSuccess: invalidate });
   const deleteDocument = trpc.document.delete.useMutation({ onSuccess: invalidate });
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const registerMutation = (trpc.document as any).register.useMutation({ onSuccess: invalidate });
-  const createFromFsa = async (input: {
-    id: string; matterId: string; fileName: string;
-    mimeType: string; sizeBytes: number; storagePath: string;
-  }) => {
+  const registerMutation = trpc.document.register.useMutation({ onSuccess: invalidate });
+  const createFromFsa = async (input: RegisterInput) => {
     await registerMutation.mutateAsync(input);
   };
 
