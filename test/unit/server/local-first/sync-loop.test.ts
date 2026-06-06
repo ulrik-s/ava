@@ -65,7 +65,7 @@ describe("SyncLoop — tickOnce", () => {
     expect(result.hadChanges).toBe(true);
     expect(result.changedPaths).toContain("matters/active/matter-1.json");
     expect(onHydrated).toHaveBeenCalledTimes(1);
-    const [entity, data] = onHydrated.mock.calls[0];
+    const [entity, data] = onHydrated.mock.calls[0]!;
     expect(entity).toBe("matter");
     expect((data as { id: string }).id).toBe("matter-1");
   });
