@@ -38,8 +38,7 @@ interface DayViewProps {
   userNames: Readonly<Record<string, string>>;
   userColors?: Map<string, UserColor>;
   /** Klick på event → öppna detalj-modal i parent. */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  onSelectEvent?: (ev: any) => void;
+  onSelectEvent?: (ev: DayEvent) => void;
 }
 
 const HOUR_HEIGHT = 48; // px per timme

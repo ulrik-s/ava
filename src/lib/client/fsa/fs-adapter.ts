@@ -19,6 +19,15 @@
  *   - Recursive mkdir hanteras manuellt eftersom FSA inte har det.
  */
 
+/**
+ * `FileSystemDirectoryHandle.entries()` är en del av File System Access API
+ * men saknas i den lib.dom-version vi kompilerar mot. Vi beskriver bara den
+ * delen vi använder (async-iteration över [namn, handle]-par).
+ */
+interface DirectoryHandleWithEntries {
+  entries(): AsyncIterableIterator<[string, FileSystemHandle]>;
+}
+
 interface IsoFsStat {
   type: "file" | "dir";
   mode: number;
@@ -108,11 +117,17 @@ export class FsaIsoGitAdapter {
     const fh = await dir.getFileHandle(filename, { create: true });
     const writable = await fh.createWritable();
     try {
-      const body = typeof data === "string"
-        ? new TextEncoder().encode(data)
-        : new Uint8Array(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength));
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await writable.write(body as any);
+      // `FileSystemWriteChunkType` kräver en `ArrayBuffer`-backad vy
+      // (`BufferSource`), så vi kopierar in i en fräsch `Uint8Array`
+      // vars buffer garanterat är en `ArrayBuffer` (inte SharedArrayBuffer).
+      let body: Uint8Array<ArrayBuffer>;
+      if (typeof data === "string") {
+        body = new TextEncoder().encode(data);
+      } else {
+        body = new Uint8Array(data.byteLength);
+        body.set(data);
+      }
+      await writable.write(body);
     } finally {
       await writable.close();
     }
@@ -131,10 +146,10 @@ export class FsaIsoGitAdapter {
     let dir: FileSystemDirectoryHandle;
     try { dir = await resolveDir(this.root, parts); } catch { throw enoent(path); }
     const names: string[] = [];
-    // `entries()` finns på FileSystemDirectoryHandle men saknas i vissa
-    // TS-libs. Casta för iteration.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    for await (const [name] of (dir as any).entries()) names.push(name as string);
+    // `entries()` finns på FileSystemDirectoryHandle men saknas i vår
+    // lib.dom-version. Narrow till en lokal vy istället för `any`.
+    const iterable = dir as unknown as DirectoryHandleWithEntries;
+    for await (const [name] of iterable.entries()) names.push(name);
     return names;
   }
 

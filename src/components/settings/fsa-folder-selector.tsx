@@ -13,6 +13,7 @@
 
 import { useEffect, useState } from "react";
 import { FolderOpen } from "lucide-react";
+import type { FsClient } from "isomorphic-git";
 
 const HANDLE_KEY = "repo-root";
 
@@ -59,8 +60,7 @@ export function FsaFolderSelector({ repoUrl, token }: { repoUrl: string; token: 
           const git = await import("isomorphic-git");
           const fsAdapter = new FsaIsoGitAdapter(h);
           await git.resolveRef({
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            fs: fsAdapter as any,
+            fs: fsAdapter as unknown as FsClient,
             dir: "/",
             ref: "HEAD",
           });

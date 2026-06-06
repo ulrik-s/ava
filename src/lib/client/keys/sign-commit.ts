@@ -15,7 +15,20 @@
  */
 
 import type { FsaIsoGitAdapter } from "@/lib/client/fsa/fs-adapter";
+import type { FsClient } from "isomorphic-git";
+import type * as IsomorphicGit from "isomorphic-git";
 import { sshsigSign } from "./sshsig";
+
+/** Det dynamiskt importerade isomorphic-git-modulnamespacet. */
+type IsoGit = typeof IsomorphicGit;
+
+/**
+ * `FsaIsoGitAdapter` implementerar `PromiseFsClient` (via `promises`),
+ * så den kan användas direkt som isomorphic-git:s `FsClient`.
+ */
+function asFsClient(fs: FsaIsoGitAdapter): FsClient {
+  return fs;
+}
 
 export interface SignCommitArgs {
   fs: FsaIsoGitAdapter;
@@ -34,8 +47,7 @@ export async function signGitCommit(args: SignCommitArgs): Promise<string> {
   const git = await import("isomorphic-git");
 
   // 1. Skriv aktuellt index till tree-objekt
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const fs = args.fs as any;
+  const fs = asFsClient(args.fs);
   const treeOid = await writeTreeFromIndex(git, fs, dir);
 
   // 2. Hämta nuvarande HEAD som parent (om finns)
@@ -95,8 +107,7 @@ export async function signGitCommit(args: SignCommitArgs): Promise<string> {
     fs, dir,
     type: "commit",
     // isomorphic-git accepterar string för commit-objekt
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    object: signedText as any,
+    object: signedText,
     format: "content",
   });
 
@@ -139,14 +150,18 @@ function buildCommitText(a: CommitTextArgs): string {
  * fall back till `git.commit({dryRun:true})` för att få tree-oid:n.
  */
 async function writeTreeFromIndex(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  git: any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  fs: any,
+  git: IsoGit,
+  fs: FsClient,
   dir: string,
 ): Promise<string> {
-  if (typeof git.writeTree === "function") {
-    return git.writeTree({ fs, dir }) as Promise<string>;
+  // `writeTree` anropas här utan `tree`-argument: vi förlitar oss på att
+  // funktionen (om den finns) skriver tree:t från index. Det matchar inte
+  // den publika typsignaturen, så vi feature-detekterar via en smal vy.
+  const writeTreeFromIndexFn = (
+    git as unknown as { writeTree?: (args: { fs: FsClient; dir: string }) => Promise<string> }
+  ).writeTree;
+  if (typeof writeTreeFromIndexFn === "function") {
+    return writeTreeFromIndexFn({ fs, dir });
   }
   // Fallback: kör en dry-run-commit för att få tree-oid:n
   const fakeCommit = await git.commit({
@@ -157,6 +172,8 @@ async function writeTreeFromIndex(
   });
   // Sedan läs tree:n från det skapade commit-objektet
   const obj = await git.readObject({ fs, dir, oid: fakeCommit });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (obj.object as any).tree;
+  if (obj.format === "parsed" && obj.type === "commit") {
+    return obj.object.tree;
+  }
+  throw new Error("Oväntat objektformat vid läsning av dry-run-commit");
 }

@@ -17,8 +17,10 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
+import type { inferRouterInputs } from "@trpc/server";
 import { Clock, FileText, X, AlertTriangle, Save } from "lucide-react";
 import { trpc } from "@/lib/client/trpc";
+import type { AppRouter } from "@/lib/server/routers/_app";
 import { buildKostnadsrakningContext } from "@/lib/shared/kostnadsrakning";
 import type { TaxaLevel } from "@/lib/shared/brottmalstaxa";
 import { renderKostnadsrakningPdf } from "@/lib/client/kostnadsrakning/render-pdf";
@@ -61,15 +63,18 @@ function defaultStart(stored?: string | Date | null): string {
   return toDatetimeLocalValue(d);
 }
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
+type RouterInputs = inferRouterInputs<AppRouter>;
+type DocListFilter = RouterInputs["document"]["list"];
+type DocTreeFilter = RouterInputs["document"]["tree"];
+
 interface RecordDocOpts {
-  recordKostn: { mutateAsync: (i: any) => Promise<unknown> };
+  recordKostn: { mutateAsync: (i: RouterInputs["kostnadsrakning"]["record"]) => Promise<unknown> };
   utils: {
     document: {
-      list: { invalidate: (filter?: any) => Promise<unknown> };
+      list: { invalidate: (filter?: DocListFilter) => Promise<unknown> };
       tree: {
-        invalidate: (filter?: any) => Promise<unknown>;
-        refetch: (filter?: any) => Promise<unknown>;
+        invalidate: (filter?: DocTreeFilter) => Promise<unknown>;
+        refetch: (filter?: DocTreeFilter) => Promise<unknown>;
       };
     };
   };
@@ -81,7 +86,6 @@ interface RecordDocOpts {
   totalInclVat: number;
   huvudforhandlingMinutes: number;
 }
-/* eslint-enable @typescript-eslint/no-explicit-any */
 
 async function recordDocument(opts: RecordDocOpts): Promise<void> {
   // Steg 1 MÅSTE lyckas. Om mutationen kastar propagerar vi felet så att

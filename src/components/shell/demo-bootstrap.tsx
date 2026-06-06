@@ -16,6 +16,7 @@ import { DemoRuntime } from "@/lib/server/local-first/demo-runtime";
 import { createGhPagesCloneFn } from "@/lib/server/local-first/gh-pages-loader";
 import { OpfsPersistence } from "@/lib/server/local-first/persistence";
 import { DemoDataStore, type DemoSource } from "@/lib/server/data-store/DemoDataStore";
+import type { MutationEvent } from "@/lib/server/data-store/in-memory/writable-delegate";
 import { GitBackendRuntime } from "@/lib/client/backend/git-backend-runtime";
 import { GitAuthProvider } from "@/lib/server/auth/git-auth-provider";
 import { DemoModeProvider } from "@/lib/client/demo/demo-mode-context";
@@ -71,7 +72,7 @@ function useRefBox<T>(initial: T): { current: T } {
   return box;
 }
 
-type WriteBackEvent = { entity: string; kind: string; row: Record<string, unknown>; previous?: Record<string, unknown> };
+type WriteBackEvent = MutationEvent<Record<string, unknown>>;
 
 /** Returnera en skrivbar FSA-handle om en finns (self-hosted, eller demo med
  *  vald mapp). Läses fräsch ur IndexedDB — mappen kan ha valts efter mount. */
@@ -92,8 +93,7 @@ async function resolveFsaHandle(fsaRef: { current: FileSystemDirectoryHandle | n
 /** Skriv mutationen till FSA-working-copyn + notifiera AutoSync. */
 async function writeViaFsa(handle: FileSystemDirectoryHandle, event: WriteBackEvent): Promise<void> {
   const { makeFsaWriteBack } = await import("@/lib/client/firma/fsa-write-back");
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await makeFsaWriteBack({ handle })(event as any);
+  await makeFsaWriteBack({ handle })(event);
   if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("ava:data-changed"));
 }
 
@@ -109,8 +109,7 @@ async function writeViaSlab(
     writeFile: (p: string, d: string) => rt.writeFile(p, d),
     unlink: (p: string) => rt.deleteFile(p),
   };
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await makeWriteBack(slabFs)(event as any);
+  await makeWriteBack(slabFs)(event);
   if (persistTimer.current) clearTimeout(persistTimer.current);
   persistTimer.current = setTimeout(() => { void rt.persist(); }, 600);
 }
@@ -385,8 +384,7 @@ export function DemoBootstrap({ children }: { children: ReactNode }) {
 
 interface TreeProps {
   firmaConfig: FirmaConfig;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  trpcClient: any;
+  trpcClient: ReturnType<typeof trpc.createClient>;
   queryClient: QueryClient;
   status: Status;
   errorMsg: string | null;
