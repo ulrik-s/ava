@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { baseFields, dateLike } from "./common";
+import { organizationIdSchema, officeIdSchema } from "./ids";
 
 /**
  * Organisation = byrå. En per git-repo (vanligen). Lagras i
@@ -7,6 +8,7 @@ import { baseFields, dateLike } from "./common";
  */
 export const organizationSchema = z.object({
   ...baseFields,
+  id: organizationIdSchema,
   name: z.string(),
   orgNumber: z.string().nullish(),
   address: z.string().nullish(),
@@ -22,7 +24,8 @@ export type Organization = z.infer<typeof organizationSchema>;
 
 export const officeSchema = z.object({
   ...baseFields,
-  organizationId: z.string(),
+  id: officeIdSchema,
+  organizationId: organizationIdSchema,
   name: z.string(),
   address: z.string().nullish(),
   phone: z.string().nullish(),

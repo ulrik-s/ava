@@ -10,6 +10,18 @@ import {
   paymentPlanStatusSchema,
   reminderTypeSchema,
 } from "./enums";
+import {
+  timeEntryIdSchema,
+  expenseIdSchema,
+  invoiceIdSchema,
+  paymentIdSchema,
+  paymentPlanIdSchema,
+  paymentPlanReminderIdSchema,
+  accontoDeductionIdSchema,
+  billingRunIdSchema,
+  matterIdSchema,
+  userIdSchema,
+} from "./ids";
 
 /**
  * TimeEntry — tidsregistrering på ärende. Lagras i `time-entries/<id>.json`.
@@ -17,8 +29,9 @@ import {
  */
 export const timeEntrySchema = z.object({
   ...baseFields,
-  userId: z.string(),
-  matterId: z.string(),
+  id: timeEntryIdSchema,
+  userId: userIdSchema,
+  matterId: matterIdSchema,
   date: dateLike,
   minutes: z.number().int().nonnegative(),
   description: z.string(),
@@ -28,13 +41,13 @@ export const timeEntrySchema = z.object({
   /** @deprecated Använd `frozenByBillingRunId`. invoiceId behålls för
    *  bakåt­kompatibilitet med befintlig demo/billing — nya flöden ska
    *  använda BillingRun-modellen. */
-  invoiceId: z.string().nullish(),
+  invoiceId: invoiceIdSchema.nullish(),
   /** När raden frystes som del av en slutfaktura. Null = upparbetad och
    *  fortfarande redigerbar. Aconto fryser INTE — bara FINAL +
    *  KOSTNADSRAKNING. */
   frozenAt: optionalDateLike,
   /** Vilken BillingRun frös raden. */
-  frozenByBillingRunId: z.string().nullish(),
+  frozenByBillingRunId: billingRunIdSchema.nullish(),
 }).passthrough();
 
 export type TimeEntry = z.infer<typeof timeEntrySchema>;
@@ -56,14 +69,15 @@ export type TimeEntry = z.infer<typeof timeEntrySchema>;
  */
 export const expenseSchema = z.object({
   ...baseFields,
-  userId: z.string(),
-  matterId: z.string(),
+  id: expenseIdSchema,
+  userId: userIdSchema,
+  matterId: matterIdSchema,
   date: dateLike,
   amount: z.number().int(),
   description: z.string(),
   billable: z.boolean().default(true),
   /** @deprecated Se motsvarande not på timeEntry.invoiceId. */
-  invoiceId: z.string().nullish(),
+  invoiceId: invoiceIdSchema.nullish(),
   /** Moms-sats i basis points (0/600/1200/2500). Default 25 %. */
   vatRate: z.number().int().nonnegative().max(10000).default(2500),
   /** Är `amount` redan inkl moms? Default true (kvitto-fall). */
@@ -74,7 +88,7 @@ export const expenseSchema = z.object({
   kind: expenseKindSchema.default("EXPENSE"),
   /** Samma frozen-mekanism som timeEntry. */
   frozenAt: optionalDateLike,
-  frozenByBillingRunId: z.string().nullish(),
+  frozenByBillingRunId: billingRunIdSchema.nullish(),
 }).passthrough();
 
 export type Expense = z.infer<typeof expenseSchema>;
@@ -85,7 +99,8 @@ export type Expense = z.infer<typeof expenseSchema>;
  */
 export const invoiceSchema = z.object({
   ...baseFields,
-  matterId: z.string(),
+  id: invoiceIdSchema,
+  matterId: matterIdSchema,
   amount: z.number().int(),
   status: invoiceStatusSchema.default("DRAFT"),
   invoiceType: invoiceTypeSchema.default("STANDARD"),
@@ -94,7 +109,7 @@ export const invoiceSchema = z.object({
   dueDate: optionalDateLike,
   notes: z.string().nullish(),
   /** Bara satt på CREDIT-fakturor — pekar på den ursprungliga fakturan som krediteras. */
-  creditedInvoiceId: z.string().nullish(),
+  creditedInvoiceId: invoiceIdSchema.nullish(),
 }).passthrough();
 
 export type Invoice = z.infer<typeof invoiceSchema>;
@@ -104,12 +119,12 @@ export type Invoice = z.infer<typeof invoiceSchema>;
  * Lagras i `payments/<id>.json`.
  */
 export const paymentSchema = z.object({
-  id: z.string(),
-  invoiceId: z.string(),
+  id: paymentIdSchema,
+  invoiceId: invoiceIdSchema,
   amount: z.number().int(),
   paidAt: dateLike,
   note: z.string().nullish(),
-  recordedById: z.string(),
+  recordedById: userIdSchema,
   createdAt: dateLike,
 }).passthrough();
 
@@ -122,7 +137,8 @@ export type Payment = z.infer<typeof paymentSchema>;
  */
 export const paymentPlanSchema = z.object({
   ...baseFields,
-  invoiceId: z.string(),
+  id: paymentPlanIdSchema,
+  invoiceId: invoiceIdSchema,
   /** öre/månad */
   monthlyAmount: z.number().int().positive(),
   /** 1-28 */
@@ -140,8 +156,8 @@ export type PaymentPlan = z.infer<typeof paymentPlanSchema>;
  * jobb i ren git-modell).
  */
 export const paymentPlanReminderSchema = z.object({
-  id: z.string(),
-  planId: z.string(),
+  id: paymentPlanReminderIdSchema,
+  planId: paymentPlanIdSchema,
   /** "YYYY-MM" */
   dueMonth: z.string().regex(/^\d{4}-\d{2}$/),
   type: reminderTypeSchema,
@@ -154,9 +170,9 @@ export type PaymentPlanReminder = z.infer<typeof paymentPlanReminderSchema>;
  * AccontoDeduction — länk FINAL ← ACCONTO. Lagras i `acconto-deductions/<id>.json`.
  */
 export const accontoDeductionSchema = z.object({
-  id: z.string(),
-  finalInvoiceId: z.string(),
-  accontoInvoiceId: z.string(),
+  id: accontoDeductionIdSchema,
+  finalInvoiceId: invoiceIdSchema,
+  accontoInvoiceId: invoiceIdSchema,
 }).passthrough();
 
 export type AccontoDeduction = z.infer<typeof accontoDeductionSchema>;
@@ -183,7 +199,8 @@ export type AccontoDeduction = z.infer<typeof accontoDeductionSchema>;
  */
 export const billingRunSchema = z.object({
   ...baseFields,
-  matterId: z.string(),
+  id: billingRunIdSchema,
+  matterId: matterIdSchema,
   type: billingRunTypeSchema,
   recipient: billingRunRecipientSchema,
   status: billingRunStatusSchema.default("DRAFT"),
@@ -201,9 +218,9 @@ export const billingRunSchema = z.object({
    *  när dom kommit. Driver Expense(kind=PRUTNING) som skapas vid SENT. */
   prutningOre: z.number().int().nullish(),
   /** Resulterande Invoice — null tills status=SENT. */
-  invoiceId: z.string().nullish(),
+  invoiceId: invoiceIdSchema.nullish(),
   /** För FINAL: lista av ACCONTO-runs som dras av. */
-  deductedBillingRunIds: z.array(z.string()).default([]),
+  deductedBillingRunIds: z.array(billingRunIdSchema).default([]),
   periodFrom: optionalDateLike,
   periodTo: optionalDateLike,
   /** Fri text — t.ex. "Inkluderar tidsspillan resa Stockholm-Göteborg". */

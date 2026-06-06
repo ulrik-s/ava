@@ -7,12 +7,24 @@ import {
   matterStatusSchema,
   paymentMethodSchema,
 } from "@/lib/shared/schemas/enums";
+import {
+  matterIdSchema,
+  contactIdSchema,
+  matterContactIdSchema,
+  asId,
+  type MatterId,
+  type ContactId,
+} from "@/lib/shared/schemas/ids";
 import { emit } from "../events/emit";
 
 type MatterCtx = { dataStore: IDataStore; orgId: string };
 
-/** Hjälpare: hämta matter och verifiera att den tillhör anropande org. */
-const assertMatterInOrg = (ctx: MatterCtx, matterId: string) =>
+/**
+ * Hjälpare: hämta matter och verifiera att den tillhör anropande org.
+ * `matterId` är branded ([[ids]]) — TS hindrar att man råkar skicka en
+ * `ContactId` hit.
+ */
+const assertMatterInOrg = (ctx: MatterCtx, matterId: MatterId) =>
   requireOrgOwned(
     () => ctx.dataStore.matters.findUnique({ where: { id: matterId } }),
     ctx.orgId,
@@ -85,7 +97,8 @@ function buildMatterData(orgId: string, matterNumber: string, input: MatterCreat
   return data;
 }
 
-async function linkKlient(ctx: MatterCtx, matterId: string, klientId: string): Promise<void> {
+// Branded params: en swap av argumenten (matterId ↔ klientId) blir ett TS-fel.
+async function linkKlient(ctx: MatterCtx, matterId: MatterId, klientId: ContactId): Promise<void> {
   await requireOrgOwned(
     () => ctx.dataStore.contacts.findUnique({ where: { id: klientId } }),
     ctx.orgId,
@@ -167,7 +180,11 @@ export const matterRouter = router({
         data: buildMatterData(ctx.orgId, matterNumber, input),
       });
       await emit.matterCreated(ctx, matter);
-      if (input.klientId) await linkKlient(ctx, matter.id, input.klientId);
+      // matter.id washar till `any` via Joined<>; brand explicit. klientId
+      // kommer från (redan validerad) input-sträng → trusted boundary-cast.
+      if (input.klientId) {
+        await linkKlient(ctx, asId<"MatterId">(matter.id), asId<"ContactId">(input.klientId));
+      }
       return matter;
     }),
 
@@ -192,7 +209,7 @@ export const matterRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const before = await assertMatterInOrg(ctx, input.id);
+      const before = await assertMatterInOrg(ctx, asId<"MatterId">(input.id));
       const { id, paymentMethodDecidedAt, taxaHufStart, ...rest } = input;
       const data: Record<string, unknown> = { ...rest };
       if (paymentMethodDecidedAt !== undefined) {
@@ -216,9 +233,9 @@ export const matterRouter = router({
     .input(
       z.object({
         /** Valfritt klient-genererat id (ADR 0003) — annars genererar store:n. */
-        id: z.string().optional(),
-        matterId: z.string(),
-        contactId: z.string(),
+        id: matterContactIdSchema.optional(),
+        matterId: matterIdSchema,
+        contactId: contactIdSchema,
         role: matterRoleSchema,
         notes: z.string().optional(),
         /** Historiskt skapad-datum (demo-generator/fixtures) — annars now(). */
@@ -242,7 +259,7 @@ export const matterRouter = router({
   addNewContact: orgProcedure
     .input(
       z.object({
-        matterId: z.string(),
+        matterId: matterIdSchema,
         name: z.string().min(1),
         contactType: contactTypeSchema,
         personalNumber: z.string().optional(),

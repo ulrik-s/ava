@@ -8,13 +8,14 @@
  */
 
 import { z } from "zod";
+import { userPreferenceIdSchema, orgPreferenceIdSchema, userIdSchema, organizationIdSchema } from "./ids";
 
 const prefsPayloadSchema = z.record(z.string(), z.unknown());
 
 export const userPreferenceSchema = z.object({
-  id: z.string(),
-  userId: z.string(),
-  organizationId: z.string().optional(),
+  id: userPreferenceIdSchema,
+  userId: userIdSchema,
+  organizationId: organizationIdSchema.optional(),
   /** Stabil nyckel: "list.contacts", "list.matters", … (1 per UI-vy). */
   key: z.string(),
   prefs: prefsPayloadSchema,
@@ -25,12 +26,12 @@ export const userPreferenceSchema = z.object({
 export type UserPreference = z.infer<typeof userPreferenceSchema>;
 
 export const orgPreferenceSchema = z.object({
-  id: z.string(),
-  organizationId: z.string(),
+  id: orgPreferenceIdSchema,
+  organizationId: organizationIdSchema,
   key: z.string(),
   prefs: prefsPayloadSchema,
   /** Admin som satte default:en (audit-spår). */
-  createdById: z.string().optional(),
+  createdById: userIdSchema.optional(),
   createdAt: z.union([z.date(), z.string()]).optional(),
   updatedAt: z.union([z.date(), z.string()]).optional(),
 }).passthrough();

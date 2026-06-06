@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { baseFields, optionalDateLike } from "./common";
 import { userRoleSchema } from "./enums";
+import { userIdSchema, organizationIdSchema } from "./ids";
 
 /**
  * User — lagras i `.ava/users/<email>.json`. Auth-fält (passwordHash,
@@ -17,7 +18,8 @@ export const publicKeySchema = z.object({
 
 export const userSchema = z.object({
   ...baseFields,
-  organizationId: z.string(),
+  id: userIdSchema,
+  organizationId: organizationIdSchema,
   email: z.string(),
   name: z.string(),
   title: z.string().nullish(),

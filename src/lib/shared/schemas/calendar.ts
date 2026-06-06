@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { baseFields, dateLike, optionalDateLike } from "./common";
+import { calendarEventIdSchema, taskIdSchema, userIdSchema, organizationIdSchema, matterIdSchema } from "./ids";
 
 /**
  * `CalendarEvent` — användarens kalender (möten, förhandlingar, frister).
@@ -31,9 +32,10 @@ export type CalendarEventVisibility = z.infer<typeof calendarEventVisibilitySche
 
 export const calendarEventSchema = z.object({
   ...baseFields,
+  id: calendarEventIdSchema,
   /** Ägare. Events skrivs under `calendar/<userId>/`. */
-  userId: z.string(),
-  organizationId: z.string(),
+  userId: userIdSchema,
+  organizationId: organizationIdSchema,
   kind: calendarEventKindSchema.default("appointment"),
   title: z.string().min(1),
   description: z.string().nullish(),
@@ -46,7 +48,7 @@ export const calendarEventSchema = z.object({
   allDay: z.boolean().default(false),
 
   /** Optional länk till matter; sätts t.ex. för förhandlingar. */
-  matterId: z.string().nullish(),
+  matterId: matterIdSchema.nullish(),
 
   visibility: calendarEventVisibilitySchema.default("normal"),
 
@@ -81,9 +83,10 @@ export type TaskPriority = z.infer<typeof taskPrioritySchema>;
 
 export const taskSchema = z.object({
   ...baseFields,
+  id: taskIdSchema,
   /** Ägare/assignee. Tasks skrivs under `tasks/<userId>/`. */
-  userId: z.string(),
-  organizationId: z.string(),
+  userId: userIdSchema,
+  organizationId: organizationIdSchema,
   title: z.string().min(1),
   description: z.string().nullish(),
   status: taskStatusSchema.default("TODO"),
@@ -91,7 +94,7 @@ export const taskSchema = z.object({
   dueAt: optionalDateLike,
   completedAt: optionalDateLike,
   /** Optional matter-koppling. */
-  matterId: z.string().nullish(),
+  matterId: matterIdSchema.nullish(),
 }).passthrough();
 
 export type Task = z.infer<typeof taskSchema>;

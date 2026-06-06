@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { orgScopedFields } from "./common";
 import { contactTypeSchema } from "./enums";
+import { contactIdSchema } from "./ids";
 
 /**
  * Contact — unified register: personer, företag, domstolar, myndigheter, …
@@ -8,6 +9,7 @@ import { contactTypeSchema } from "./enums";
  */
 export const contactSchema = z.object({
   ...orgScopedFields,
+  id: contactIdSchema,
   name: z.string(),
   contactType: contactTypeSchema.default("PERSON"),
   personalNumber: z.string().nullish(),
@@ -17,7 +19,7 @@ export const contactSchema = z.object({
   address: z.string().nullish(),
   notes: z.string().nullish(),
   /** Parent-länk för advokat → byrå-grupperingar (samma kontakt-typ). */
-  parentId: z.string().nullish(),
+  parentId: contactIdSchema.nullish(),
 }).passthrough();
 
 export type Contact = z.infer<typeof contactSchema>;

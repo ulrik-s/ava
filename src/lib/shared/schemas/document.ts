@@ -1,16 +1,25 @@
 import { z } from "zod";
 import { baseFields, optionalDateLike } from "./common";
 import { suggestionStatusSchema, matterRoleSchema, contactTypeSchema } from "./enums";
+import {
+  documentIdSchema,
+  documentFolderIdSchema,
+  documentAnalysisSuggestionIdSchema,
+  matterEventSuggestionIdSchema,
+  matterIdSchema,
+  contactIdSchema,
+  userIdSchema,
+} from "./ids";
 
 /**
  * DocumentFolder — hierarkisk mapp inom ett matter. `parentId` = null → root.
  * Lagras i `document-folders/<id>.json`.
  */
 export const documentFolderSchema = z.object({
-  id: z.string(),
+  id: documentFolderIdSchema,
   name: z.string(),
-  matterId: z.string(),
-  parentId: z.string().nullish(),
+  matterId: matterIdSchema,
+  parentId: documentFolderIdSchema.nullish(),
   createdAt: z.union([z.date(), z.string()]).transform((v) => (v instanceof Date ? v : new Date(v))),
 }).passthrough();
 
@@ -23,14 +32,15 @@ export type DocumentFolder = z.infer<typeof documentFolderSchema>;
  */
 export const documentSchema = z.object({
   ...baseFields,
-  matterId: z.string(),
-  folderId: z.string().nullish(),
+  id: documentIdSchema,
+  matterId: matterIdSchema,
+  folderId: documentFolderIdSchema.nullish(),
   fileName: z.string(),
   mimeType: z.string(),
   sizeBytes: z.number().int().nonnegative(),
   storagePath: z.string(),
   version: z.number().int().positive().default(1),
-  uploadedById: z.string(),
+  uploadedById: userIdSchema,
   // AI-genererad metadata (fylls async efter upload)
   title: z.string().nullish(),
   documentType: z.string().nullish(),
@@ -57,7 +67,8 @@ export const KOSTNADSRAKNING_DOCUMENT_TYPE = "Kostnadsräkning";
  */
 export const documentAnalysisSuggestionSchema = z.object({
   ...baseFields,
-  documentId: z.string(),
+  id: documentAnalysisSuggestionIdSchema,
+  documentId: documentIdSchema,
   name: z.string(),
   role: matterRoleSchema,
   contactType: contactTypeSchema,
@@ -67,7 +78,7 @@ export const documentAnalysisSuggestionSchema = z.object({
   personalNumber: z.string().nullish(),
   notes: z.string().nullish(),
   status: suggestionStatusSchema.default("PENDING"),
-  acceptedContactId: z.string().nullish(),
+  acceptedContactId: contactIdSchema.nullish(),
 }).passthrough();
 
 export type DocumentAnalysisSuggestion = z.infer<typeof documentAnalysisSuggestionSchema>;
@@ -78,7 +89,8 @@ export type DocumentAnalysisSuggestion = z.infer<typeof documentAnalysisSuggesti
  */
 export const matterEventSuggestionSchema = z.object({
   ...baseFields,
-  documentId: z.string(),
+  id: matterEventSuggestionIdSchema,
+  documentId: documentIdSchema,
   title: z.string(),
   description: z.string().nullish(),
   eventType: z.string().nullish(),

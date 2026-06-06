@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { baseFields, orgScopedFields, dateLike } from "./common";
+import { documentTemplateIdSchema, conflictCheckIdSchema, userIdSchema } from "./ids";
 
 /**
  * DocumentTemplate (Dokumentmall) — Handlebars HTML, autofyller från
@@ -7,12 +8,13 @@ import { baseFields, orgScopedFields, dateLike } from "./common";
  */
 export const documentTemplateSchema = z.object({
   ...orgScopedFields,
+  id: documentTemplateIdSchema,
   name: z.string(),
   description: z.string().nullish(),
   category: z.string().nullish(),
   /** Handlebars-HTML. */
   content: z.string(),
-  createdById: z.string(),
+  createdById: userIdSchema,
 }).passthrough();
 
 export type DocumentTemplate = z.infer<typeof documentTemplateSchema>;
@@ -21,12 +23,12 @@ export type DocumentTemplate = z.infer<typeof documentTemplateSchema>;
  * ConflictCheck — jävssök-logg. Lagras i `conflict-checks/<id>.json`.
  */
 export const conflictCheckSchema = z.object({
-  id: z.string(),
+  id: conflictCheckIdSchema,
   searchTerm: z.string(),
   searchType: z.enum(["name", "personalNumber", "both"]),
   /** Sökresultat snapshot:ade vid söktillfället. JSON-array. */
   results: z.array(z.unknown()),
-  checkedById: z.string(),
+  checkedById: userIdSchema,
   createdAt: dateLike,
 }).passthrough();
 

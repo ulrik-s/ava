@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { orgScopedFields, optionalDateLike } from "./common";
 import { matterStatusSchema, paymentMethodSchema, matterRoleSchema } from "./enums";
+import { matterIdSchema, matterContactIdSchema, contactIdSchema } from "./ids";
 
 /**
  * Matter (Ärende) — lagras i `matters/active/<id>.json`. Vi har inte längre
@@ -8,6 +9,7 @@ import { matterStatusSchema, paymentMethodSchema, matterRoleSchema } from "./enu
  */
 export const matterSchema = z.object({
   ...orgScopedFields,
+  id: matterIdSchema,
   matterNumber: z.string(),
   title: z.string(),
   description: z.string().nullish(),
@@ -64,9 +66,9 @@ export type Matter = z.infer<typeof matterSchema>;
  * kan ha flera roller på samma ärende (klient + ombud t.ex.).
  */
 export const matterContactSchema = z.object({
-  id: z.string(),
-  matterId: z.string(),
-  contactId: z.string(),
+  id: matterContactIdSchema,
+  matterId: matterIdSchema,
+  contactId: contactIdSchema,
   role: matterRoleSchema,
   notes: z.string().nullish(),
   createdAt: z.union([z.date(), z.string()]).transform((v) => (v instanceof Date ? v : new Date(v))),
