@@ -9,7 +9,8 @@
     "test/unit/**/*.test.{ts,tsx}",
     "test/scripts/*.test.ts",
     "next.config.{ts,js,mjs}",
-    "postcss.config.{js,mjs}"
+    "postcss.config.{js,mjs}",
+    "src/lib/shared/schemas/ids.ts"
   ],
   "project": [
     "src/**/*.{ts,tsx}",

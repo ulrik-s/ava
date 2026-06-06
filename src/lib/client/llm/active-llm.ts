@@ -34,8 +34,6 @@ export function subscribeLlmProgress(fn: (p: ProgressEvent) => void): () => void
   return () => { progressListeners.delete(fn); };
 }
 
-export function getLlmProgress(): ProgressEvent { return lastProgress; }
-
 /**
  * Returnerar singleton extractor. Skapas lazy. Återskapas om model-id ändras.
  *

@@ -16,7 +16,7 @@
 
 import type { MutationEvent } from "@/lib/server/data-store/in-memory/writable-delegate";
 import { FsaIsoGitAdapter } from "@/lib/client/fsa/fs-adapter";
-import { ENTITY_REGISTRY, type EntityName } from "@/lib/shared/schemas";
+import { ENTITY_REGISTRY } from "@/lib/shared/schemas";
 
 /**
  * Minimal fs-yta som write-back behöver. Uppfylls av `FsaIsoGitAdapter`
@@ -33,12 +33,6 @@ function pathForEntity(entity: string, id: string, row: Record<string, unknown>)
   const entry = (ENTITY_REGISTRY as Record<string, { gitPath: (id: string, row: Record<string, unknown>) => string }>)[entity];
   return entry ? entry.gitPath(id, row) : null;
 }
-
-/** Bara för bakåtkompatibilitet med tester som importerar ENTITY_TO_PATH-keys. */
-export const KNOWN_ENTITIES: ReadonlySet<EntityName | "documentText"> = new Set([
-  ...(Object.keys(ENTITY_REGISTRY) as EntityName[]),
-  "documentText" as const,
-]);
 
 export interface WriteBackOpts {
   handle: FileSystemDirectoryHandle;
