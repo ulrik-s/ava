@@ -17,7 +17,8 @@ export const invoiceSchema = z.object({
   amountInclVat: z.number().optional(),
   invoiceNumber: z.string().optional(),
   invoiceType: z.enum(["STANDARD", "ACCONTO", "FINAL", "CREDIT"]).optional(),
-  type: z.enum(["ACCONTO", "FINAL", "CREDIT"]).optional(), // legacy-namn
+  // Legacy-aliaset `type` togs bort i schemaVersion 2 (migrate-on-read strippar
+  // det vid hydrering, ADR 0004). `invoiceType` är kanoniskt.
   status: z.enum(["DRAFT", "SENT", "PAID", "CANCELLED", "BAD_DEBT", "INSTALLMENT_PLAN"]).default("DRAFT"),
   invoiceDate: z.coerce.date().nullable().optional(),
   issuedAt: z.coerce.date().nullable().optional(),

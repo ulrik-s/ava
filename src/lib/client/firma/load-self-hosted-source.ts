@@ -83,9 +83,11 @@ export async function loadSelfHostedSource(deps: LoadSelfHostedDeps): Promise<De
 
   // Versionsgrind (ADR 0004): vägra ett repo som är nyare än koden förstår,
   // FÖRE hydrering. Saknad/ogiltig meta → baslinje (v1) → fortsätt.
-  assertRepoSchemaCompatible(await readWorkingCopySchemaVersion(fs));
+  const repoVersion = (await readWorkingCopySchemaVersion(fs)) ?? 1;
+  assertRepoSchemaCompatible(repoVersion);
 
-  const source = await hydrateWorkingCopy(deps.handle);
+  // Migrate-on-read: lyft äldre rader till aktuell datamodell vid hydrering.
+  const source = await hydrateWorkingCopy(deps.handle, repoVersion);
   // Ladda extraherad dokumenttext (documents/text/<id>.txt) från OPFS in i
   // content-cache:n så fritext-sök hittar PDF/DOCX-innehåll EFTER en
   // sid-navigering (cache:n är in-memory + nollställs vid full page-load;

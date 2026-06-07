@@ -71,9 +71,11 @@ export class DemoLoader {
 
     // Versionsgrind (ADR 0004): vägra ett repo som är nyare än koden förstår,
     // FÖRE hydrering. Saknad/ogiltig meta → baslinje (v1) → fortsätt.
-    assertRepoSchemaCompatible(await this.readRepoSchemaVersion());
+    const repoVersion = await this.resolveRepoVersion();
+    assertRepoSchemaCompatible(repoVersion);
 
-    const hydrator = new ProjectionHydrator(this.deps.fs, this.deps.registry);
+    // Migrate-on-read: lyft äldre rader till aktuell datamodell vid hydrering.
+    const hydrator = new ProjectionHydrator(this.deps.fs, this.deps.registry, repoVersion);
     const result: LoadResult = { url, entities: {}, totalCount: 0, errors: [] };
 
     // Per-path hydration: fel på en fil hoppas över och loggas, andra
@@ -117,7 +119,9 @@ export class DemoLoader {
   async replaceEntitiesFromFs(): Promise<void> {
     this.hydrated.clear();
     const { ProjectionHydrator } = await import("./projection-writer");
-    const hydrator = new ProjectionHydrator(this.deps.fs, this.deps.registry);
+    const hydrator = new ProjectionHydrator(
+      this.deps.fs, this.deps.registry, await this.resolveRepoVersion(),
+    );
     for (const entity of this.deps.registry.entities()) {
       for (const prefix of this.knownPrefixes(entity)) {
         const items = await this.deps.fs.listDir(prefix);
@@ -154,6 +158,11 @@ export class DemoLoader {
     } catch {
       return undefined;
     }
+  }
+
+  /** Repots version, med saknad/ogiltig → v1-baslinje (för migrate-on-read). */
+  private async resolveRepoVersion(): Promise<number> {
+    return (await this.readRepoSchemaVersion()) ?? 1;
   }
 
   private async clearFs(): Promise<void> {

@@ -346,8 +346,9 @@ export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
       organizationId: orgId,
       matterId: matter.id,
       invoiceNumber: `${new Date().getFullYear()}-${String(i + 1).padStart(4, "0")}`,
-      // Projection-schema kräver "type"; tRPC/UI använder gamla "invoiceType"
-      type: "FINAL",
+      // `invoiceType` är kanoniskt. Legacy-aliaset `type` skrivs inte längre
+      // (borttaget i schemaVersion 2 — migrate-on-read strippar det ur äldre
+      // repon vid hydrering, ADR 0004).
       invoiceType: "STANDARD",
       status,
       // Båda fältnamnen — UI använder gamla `amount`/`invoiceDate`/`dueDate`,

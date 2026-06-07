@@ -23,6 +23,8 @@
 
 import type { IFileSystem } from "./file-system";
 import type { ProjectionRegistry } from "./projections/registry";
+import { CURRENT_SCHEMA_VERSION } from "@/lib/shared/schema-version";
+import { migrateRawJson } from "@/lib/shared/schema-migrations";
 
 export class ProjectionWriter {
   constructor(
@@ -61,9 +63,16 @@ export interface HydrateResult {
 }
 
 export class ProjectionHydrator {
+  /**
+   * @param repoSchemaVersion repots datamodell-version (ADR 0004). Rader lyfts
+   *   migrate-on-read från den upp till {@link CURRENT_SCHEMA_VERSION} före
+   *   parse. Default = CURRENT (ingen migration — för call-sites som hydrerar
+   *   data skriven av nuvarande kod, t.ex. live-sync).
+   */
   constructor(
     private fs: IFileSystem,
     private registry: ProjectionRegistry,
+    private repoSchemaVersion: number = CURRENT_SCHEMA_VERSION,
   ) {}
 
   /**
@@ -78,7 +87,11 @@ export class ProjectionHydrator {
     if (!entry) return null;
     if (!(await this.fs.exists(path))) return null;
     const raw = await this.fs.readFile(path);
-    const data = entry.projection.deserialize(raw);
+    // Migrate-on-read (ADR 0004): lyft rå-raden till aktuell datamodell FÖRE
+    // deserialize — annars skulle `mergeRawAfterParse` flätta tillbaka de
+    // borttagna legacy-fälten från rå-json:en.
+    const migrated = migrateRawJson(entry.entity, raw, this.repoSchemaVersion);
+    const data = entry.projection.deserialize(migrated);
     return { entity: entry.entity, data, path };
   }
 

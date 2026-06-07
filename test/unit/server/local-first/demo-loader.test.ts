@@ -104,6 +104,24 @@ describe("DemoLoader", () => {
       .rejects.toThrow(/nyare AVA-version/);
   });
 
+  it("migrate-on-read: v1-repo → invoice-`type` strippas vid hydrering (ADR 0004)", async () => {
+    const fs = new MemFs();
+    const cloneFn = async (target: MemFs) => {
+      await target.writeFile(".ava/meta.json", JSON.stringify({ schemaVersion: 1 }));
+      await target.writeFile("invoices/inv-1.json", JSON.stringify({
+        id: "inv-1", matterId: "m1", invoiceType: "STANDARD", type: "FINAL",
+        status: "PAID", organizationId: "demo-org",
+      }));
+    };
+    const loader = new DemoLoader({ fs, registry: buildDefaultRegistry(), cloneFn });
+    await loader.loadDemo("https://example/v1.git");
+
+    const invoice = loader.entities().invoice![0] as Record<string, unknown>;
+    expect(invoice.id).toBe("inv-1");
+    expect(invoice.invoiceType).toBe("STANDARD");
+    expect(invoice).not.toHaveProperty("type"); // legacy-aliaset borta
+  });
+
   it("versionsgrind: laddar normalt när schemaVersion saknas (baslinje v1)", async () => {
     const fs = new MemFs();
     const cloneFn = async (target: MemFs) => {

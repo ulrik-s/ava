@@ -63,4 +63,24 @@ describe("hydrateWorkingCopy", () => {
     const src = await hydrateWorkingCopy(fsa.root);
     expect(src.matters ?? []).toHaveLength(0);
   });
+
+  it("migrate-on-read: repoVersion=1 strippar invoice-`type` (ADR 0004)", async () => {
+    const fsa = makeFakeFsa();
+    const writeBack = makeFsaWriteBack({ handle: fsa.root });
+    await writeBack({ entity: "invoice", kind: "create", row: { id: "inv1", matterId: "m1", invoiceType: "STANDARD", type: "FINAL", amount: 1 } });
+
+    const src = await hydrateWorkingCopy(fsa.root, 1);
+    const inv = src.invoices![0] as Record<string, unknown>;
+    expect(inv.invoiceType).toBe("STANDARD");
+    expect(inv).not.toHaveProperty("type");
+  });
+
+  it("ingen migration när repoVersion = CURRENT (default) — `type` bevaras", async () => {
+    const fsa = makeFakeFsa();
+    const writeBack = makeFsaWriteBack({ handle: fsa.root });
+    await writeBack({ entity: "invoice", kind: "create", row: { id: "inv1", matterId: "m1", type: "FINAL", amount: 1 } });
+
+    const src = await hydrateWorkingCopy(fsa.root); // default = CURRENT
+    expect((src.invoices![0] as Record<string, unknown>)).toHaveProperty("type");
+  });
 });
