@@ -22,6 +22,12 @@ import { type FirmaConfig, type FirmaTier, inferTier, saveFirmaConfig, resetToDe
 import { loadAuthSettings, saveAuthSettings } from "@/lib/client/auth/use-auth-mode";
 import { loadOAuthConfig, saveOAuthConfig, isOAuthConfigured } from "@/lib/client/auth/oauth-config";
 import { WebOAuthDeviceFlow } from "./web-oauth-device-flow";
+// Nätverks-/validerings-helpers bor i firma-settings-net.ts (#62). Re-exporteras
+// så importörer + tester fortsätter peka på "@/components/settings/firma-settings-panel".
+import { validateGithubToken, testOAuthProxy, testCorsProxy } from "./firma-settings-net";
+import type { ProxyTestResult } from "./firma-settings-net";
+export { validateGithubToken, testOAuthProxy, testCorsProxy } from "./firma-settings-net";
+export type { TokenValidationResult, ProxyTestResult } from "./firma-settings-net";
 
 interface Props {
   initial: FirmaConfig;
@@ -327,39 +333,6 @@ export function FooterButtons(props: {
 // ─── Auth-token-sektion ───────────────────────────────────────────────────
 
 type TokenStatus = "untested" | "checking" | "valid" | "invalid";
-export interface TokenValidationResult { status: Exclude<TokenStatus, "untested" | "checking">; msg: string }
-
-/**
- * Pure validator — testas separat utan komponent. `fetchFn` injicerbar
- * för tester (default = globalThis.fetch).
- */
-export async function validateGithubToken(
-  args: { token: string; tier: FirmaTier; repo: string; fetchFn?: typeof fetch },
-): Promise<TokenValidationResult> {
-  const fetchFn = args.fetchFn ?? globalThis.fetch.bind(globalThis);
-  if (!args.token) return { status: "invalid", msg: "Tom token" };
-  const res = await fetchFn("https://api.github.com/user", {
-    headers: { Authorization: `Bearer ${args.token}`, Accept: "application/vnd.github+json" },
-  });
-  if (!res.ok) return { status: "invalid", msg: `GitHub avvisade: ${res.status} ${res.statusText}` };
-  const user = await res.json() as { login: string };
-  if (!args.repo || args.tier !== "github") return { status: "valid", msg: `✓ @${user.login}` };
-  return validateRepoAccess({ token: args.token, repo: args.repo, login: user.login, fetchFn });
-}
-
-async function validateRepoAccess(args: {
-  token: string; repo: string; login: string; fetchFn: typeof fetch;
-}): Promise<TokenValidationResult> {
-  const parsed = args.repo.match(/^([^/]+)\/([^/.]+)/);
-  if (!parsed) return { status: "valid", msg: `✓ @${args.login}` };
-  const r = await args.fetchFn(`https://api.github.com/repos/${parsed[1]}/${parsed[2]}`, {
-    headers: { Authorization: `Bearer ${args.token}`, Accept: "application/vnd.github+json" },
-  });
-  if (!r.ok) return { status: "invalid", msg: `Ingen åtkomst till ${parsed[1]}/${parsed[2]}: ${r.status}` };
-  const repoInfo = await r.json() as { permissions?: { push?: boolean } };
-  const canPush = repoInfo.permissions?.push === true;
-  return { status: "valid", msg: `✓ @${args.login} — ${canPush ? "kan pusha" : "endast läsning"}` };
-}
 
 export function AuthTokenSection(props: {
   tier: FirmaTier;
@@ -513,23 +486,6 @@ function OAuthConfigFields(props: {
 
 // ─── OAuth-proxy-test ─────────────────────────────────────────────────────
 
-export interface ProxyTestResult { ok: boolean; msg: string }
-
-/** Pure tester av OAuth-proxy:n. `fetchFn` injicerbar för tester. */
-export async function testOAuthProxy(url: string, fetchFn?: typeof fetch): Promise<ProxyTestResult> {
-  if (!url) return { ok: false, msg: "Saknar URL" };
-  const fn = fetchFn ?? globalThis.fetch.bind(globalThis);
-  try {
-    const res = await fn(`${url.replace(/\/+$/, "")}/device/code`, { method: "POST" });
-    if (!res.ok) return { ok: false, msg: `Proxy svarade ${res.status} ${res.statusText}` };
-    const data = await res.json() as { user_code?: string; error?: string };
-    if (data.user_code) return { ok: true, msg: `✓ Proxy svarar (test-kod: ${data.user_code})` };
-    return { ok: false, msg: `Oväntat svar: ${data.error ?? JSON.stringify(data).slice(0, 80)}` };
-  } catch (e) {
-    return { ok: false, msg: e instanceof Error ? e.message : String(e) };
-  }
-}
-
 export function ProxyTestButton({ url }: { url: string }) {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<ProxyTestResult | null>(null);
@@ -574,20 +530,6 @@ const CORS_PROXY_PREFABS: Array<{ url: string; label: string; warning?: string }
     warning: "Alternativ publik proxy.",
   },
 ];
-
-/** Pure tester av CORS-proxy mot ava-demo-repots refs-endpoint. */
-export async function testCorsProxy(url: string, fetchFn?: typeof fetch): Promise<ProxyTestResult> {
-  const fn = fetchFn ?? globalThis.fetch.bind(globalThis);
-  const effective = url || "https://cors.isomorphic-git.org";
-  try {
-    const target = `${effective.replace(/\/+$/, "")}/github.com/ulrik-s/ava-demo/info/refs?service=git-upload-pack`;
-    const res = await fn(target, { method: "GET" });
-    if (res.ok) return { ok: true, msg: `✓ Proxy svarar (${res.status})` };
-    return { ok: false, msg: `Proxy svarade ${res.status} ${res.statusText}` };
-  } catch (e) {
-    return { ok: false, msg: `✗ ${e instanceof Error ? e.message : String(e)}` };
-  }
-}
 
 export function CorsProxyField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const [testing, setTesting] = useState(false);
