@@ -41,6 +41,17 @@ function emitUser(ctx: EmitCtx, type: EventType, payload: Record<string, unknown
   });
 }
 
+/** Bygg payload + emit för en system-initierad händelse (payment-scan m.fl.). */
+function emitSystem(ctx: EmitCtx, type: EventType, payload: Record<string, unknown>, matterId?: string) {
+  return safeEmit(ctx, {
+    type,
+    source: "system",
+    actor: { kind: "system", id: "payment-scan" },
+    matterId,
+    payload,
+  });
+}
+
 export const emit = {
   // ── matter ─────────────────────────────────────────────────────
   matterCreated: (ctx: EmitCtx, matter: { id: string; matterNumber: string; title: string }) =>
@@ -107,6 +118,13 @@ export const emit = {
       organizationId: string;
     },
   ) => emitUser(ctx, "kostnadsrakning.generated", payload, matterId),
+
+  // ── payment-plan-påminnelser (payment-scan, #23) ───────────────
+  paymentDue: (ctx: EmitCtx, payload: Record<string, unknown>, matterId?: string) =>
+    emitSystem(ctx, "payment.due", payload, matterId),
+
+  paymentOverdue: (ctx: EmitCtx, payload: Record<string, unknown>, matterId?: string) =>
+    emitSystem(ctx, "payment.overdue", payload, matterId),
 
   // ── user / generic ─────────────────────────────────────────────
   userAction: (ctx: EmitCtx, payload: Record<string, unknown>) =>
