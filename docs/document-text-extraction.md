@@ -88,7 +88,7 @@ Detsamma vid radera ärende:
 ## Sökning + wildcards
 
 `document.search` driver `/search`-sidan. Helper-funktionen `compileNeedle()`
-i `src/server/adapters/demo-search-index.ts` stödjer:
+i `src/lib/server/adapters/demo-search-index.ts` stödjer:
 
 - Plain substring (snabb path, `haystack.includes(needle)`)
 - `*` wildcard (matchar 0+ tecken, kompileras till regex)
@@ -100,7 +100,7 @@ kan trigga oavsiktlig regex-matchning.
 ## Implementation-status (klar)
 
 - `pdfjs-dist` + `mammoth` finns som deps
-- `src/client/lib/jobs/extract-text.ts` — pure extract-funktion
+- `src/lib/client/jobs/extract-text.ts` — pure extract-funktion
 - `extract-text`-worker i `register-workers.ts`
 - `extract-text-dispatch.ts` — bridge worker ↔ tRPC
 - `document.writeExtractedText`-mutation
@@ -111,7 +111,7 @@ kan trigga oavsiktlig regex-matchning.
 
 ## Öppna dokument (browser → UI)
 
-`src/client/lib/firma/open-document.ts` hanterar tre grenar:
+`src/lib/client/firma/open-document.ts` hanterar tre grenar:
 
 1. **Demo-mode**: öppna direkt via gh-pages-URL (`https://<owner>.github.io/<repo>/<storagePath>`)
 2. **Self-hosted**: läs `storagePath` ur OPFS-handle:n → skapa blob-URL → öppna i ny flik

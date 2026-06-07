@@ -137,7 +137,7 @@ offices/<id>.json
 manifest.json                        # för demo-läget (paths-lista)
 ```
 
-`src/shared/schemas/index.ts` — `ENTITY_REGISTRY` är single source of truth: zod-schema + gitPath + sourceKey per entitet.
+`src/lib/shared/schemas/index.ts` — `ENTITY_REGISTRY` är single source of truth: zod-schema + gitPath + sourceKey per entitet.
 
 ## Skriv-pipelinen (self-hosted)
 
@@ -179,10 +179,19 @@ Commit-attribution: varje browser genererar ett Ed25519-keypar lagrat i IndexedD
 
 Samma 5 users / 17 contacts / 15 matters / 40 PDF/DOCX / 7 payment plans / 25 calendar events i båda deployments. Single source of truth.
 
+## Datamodell-evolution (schemaVersion + migrate-on-read)
+
+Data lever i användarens git-repo, så kod-version och data-version kan skilja
+sig. `.ava/meta.json` bär ett `schemaVersion` (`src/lib/shared/schema-version.ts`).
+Vid hydrering kör en **versionsgrind** (repo nyare än koden → vägra starta) och
+**migrate-on-read** (`src/lib/shared/schema-migrations.ts`) som lyfter äldre
+rader till aktuell form innan zod-parsern ser dem. Se
+[ADR 0004](./adr/0004-schemaversion-och-versionsgrind.md).
+
 ## Test-stack
 
 - `vitest` i två projekt: node (server/lib/scripts) + jsdom (komponenter + sidor)
 - `playwright` för E2E round-trip (docker upp + browser-push)
-- ~1646 unit/integration-tester
+- ~2224 unit/integration-tester
 - TDD-fokus på pure helpers (color-palette, classify-document, search-needle, fuzzy-similarity, day-view-layout)
 - Smoke-test:en `test/integration/seed-smoke.test.ts` kör varje meny-sidas tRPC-procedurer mot riktig DemoDataStore med seed-datan

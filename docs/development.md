@@ -82,7 +82,7 @@ yarn seed:local
 ## Test + kvalitet
 
 ```bash
-yarn test:fast           # ~2200 tester
+yarn test:fast           # ~2224 tester
 yarn typecheck           # tsc --noEmit
 yarn lint                # eslint (flat config)
 yarn deps:check          # dependency-cruiser (lagergränser)

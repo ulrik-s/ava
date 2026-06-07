@@ -9,10 +9,12 @@
 ```
 ava/
 ├── src/
-│   ├── app/             # Next.js App Router (server-rendered shell-pages)
-│   ├── client/          # browser-only: components/, lib/
-│   ├── server/          # tRPC routers, data-store, adapters, ports
-│   └── shared/          # zod-schemas (single source of truth)
+│   ├── app/             # Next.js App Router (sidor, layouts, routes)
+│   ├── components/      # React-komponenter (delad UI)
+│   └── lib/
+│       ├── client/      # browser-only: demo/, sync/, firma/, fsa/, calendar/ …
+│       ├── server/      # tRPC routers, data-store, adapters, ports, auth, events, rules
+│       └── shared/      # zod-schemas + ramverks-agnostiska helpers (single source of truth)
 ├── test/
 │   ├── unit/            # vitest enhets-/komponenttester
 │   ├── integration/     # seed-smoke + cross-router-tester
@@ -59,14 +61,14 @@ Initial baslinje-tröskel — höj efterhand som tester läggs till. Tröskeln f
 | Branches | 18 % | 70 % |
 | Statements | 25 % | 60 % |
 
-Aktuell baslinje (~1646 tester över 167 testfiler):
+Aktuell baslinje (~2224 tester över ~240 testfiler):
 
 | Mått | Tröskel (vitest-config) |
 |---|---|
-| Statements | 68 % |
-| Lines | 70 % |
-| Functions | 68 % |
-| Branches | 60 % |
+| Statements | 70.5 % |
+| Lines | 72.5 % |
+| Functions | 68.1 % |
+| Branches | 64.1 % |
 
 Coverage-rapporten skrivs till `reports/coverage/` (HTML, lcov, json-summary, text).
 
@@ -152,8 +154,8 @@ _Lager- & kompositionsgränser (fitness functions)_
   (`document.ts`) + syskon inom subdir:en får importera dem. Inga djupa
   cross-module-importer.
 
-`src/server/db` finns inte längre (Prisma borta), så `ui-not-direct-prisma`-
-regeln är obsolet.
+Den gamla Prisma-katalogen (`src/lib/server/db`) finns inte längre, så
+`ui-not-direct-prisma`-regeln i dependency-cruiser är obsolet (kan tas bort).
 
 Mjuka regler (`warn`):
 
@@ -163,8 +165,8 @@ Mjuka regler (`warn`):
 ## Vanliga kommandon
 
 ```bash
-# Snabb feedback under utveckling (< 60s, hoppar över WebDAV-integration + E2E)
-npm run test:fast         # bara unit + komponenttester (≈ 8s)
+# Snabb feedback under utveckling (< 60s, hoppar över E2E)
+npm run test:fast         # bara unit + komponenttester (~18s)
 npm run quality:fast      # typecheck + lint + test:fast
 
 # Hela testsviten — startar docker compose, kör allt inkl. E2E
@@ -189,13 +191,14 @@ npm run knip              # oanvända filer/exporter
 
 ## Pipeline (CI)
 
-`.github/workflows/ci.yml` definierar tre parallella jobb:
+`.github/workflows/ci.yml` definierar fyra parallella jobb (Node 24):
 
-1. **`static`** — typecheck, lint, depcruise, knip, jscpd. Inga tjänster.
-2. **`unit`** — vitest med coverage. Spinner upp Postgres-service.
-3. **`e2e`** — Playwright Chromium mot riktig Next-server. Spinner upp Postgres + dev-stacken.
+1. **Commit messages** — commitlint mot Conventional Commits (endast på PR).
+2. **Static analysis** — typecheck, lint (`--max-warnings 0`), depcruise, knip, jscpd. Inga tjänster.
+3. **Unit / komponent / integration** — vitest med coverage mot in-memory `DemoDataStore`. Inga externa tjänster (git-first → ingen Postgres).
+4. **E2E (git round-trip)** — Playwright Chromium mot docker-stacken (web + git-http-backend); startar docker, hämtar bootstrappad admin-PAT, pushar från browsern.
 
-Alla jobb laddar upp sina rapporter som artefakter (coverage, jscpd, playwright-report).
+Jobben laddar upp sina rapporter som artefakter (coverage, jscpd, playwright-report).
 
 ## Pre-commit
 
