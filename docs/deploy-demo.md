@@ -9,7 +9,7 @@ extern data-repo, ingen CORS, ingen tredje-parts auth.
 
 `.github/workflows/deploy-demo.yml` triggar vid push till `main`:
 
-1. Checkout + Node 22 + `yarn install --immutable`
+1. Checkout + Node 24 + `yarn install --immutable`
 2. `actions/configure-pages@v5` ger oss `base_path` (t.ex. `/ava`)
 3. `bash tooling/scripts/build-demo.sh` med env:
    - `DEMO_BUILD=1` + `NEXT_PUBLIC_DEMO_BUILD=1`

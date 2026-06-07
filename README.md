@@ -62,7 +62,6 @@ Teknisk dokumentation för den som ska köra, bygga eller vidareutveckla AVA:
 - [`docs/deploy-demo.md`](./docs/deploy-demo.md) — demo-deploy på GitHub Pages
 - [`docs/deploy-tier3-self-hosted.md`](./docs/deploy-tier3-self-hosted.md) — self-hosted Linux/docker
 - [`docs/document-text-extraction.md`](./docs/document-text-extraction.md) — textextraktion ur PDF/DOCX
-- [`docs/quality.md`](./docs/quality.md) — verktyg och tröskelvärden
-- [`docs/test-and-tooling-status.md`](./docs/test-and-tooling-status.md) — test-/tooling-status
-- [`docs/adr/`](./docs/adr/) — arkitekturbeslut (ADR 0001–0003)
+- [`docs/quality.md`](./docs/quality.md) — verktyg, tröskelvärden, test- & CI-status
+- [`docs/adr/`](./docs/adr/) — arkitekturbeslut (ADR 0001–0004)
 - [`AGENTS.md`](./AGENTS.md) — arbetssätt (Issue → PR → Merge) och projektregler

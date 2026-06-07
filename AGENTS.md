@@ -68,7 +68,7 @@ overview. Then [`docs/auth.md`](docs/auth.md) for the self-hosted auth model.
 - **`rm -rf out` breaks the docker bind-mount** → restart with:
   `docker compose -f tooling/docker/docker-compose.yml restart web`.
 - Run the browser round-trip e2e with `yarn round-trip` (needs docker up +
-  `out/` built). Unit tests: `yarn test:fast` (~1646 tests, ~14s).
+  `out/` built). Unit tests: `yarn test:fast` (~2224 tests, ~18s).
 
 ## Two deploy modes (selected by `firma-config.tier`)
 
@@ -81,7 +81,7 @@ overview. Then [`docs/auth.md`](docs/auth.md) for the self-hosted auth model.
 ## Data store
 
 - `DemoDataStore` (in-memory) + optional write-back-callback to OPFS via
-  `src/client/lib/firma/fsa-write-back.ts`. tRPC routers use
+  `src/lib/client/firma/fsa-write-back.ts`. tRPC routers use
   `ctx.dataStore.transaction(...)`, NOT `raw.$transaction` (Prisma is gone).
 - Single source of truth for seed-data: `tooling/scripts/seed-data.ts`.
   `seed-firma-local.ts` and `build-demo-repo.ts` both call `buildSeed(opts)`.
