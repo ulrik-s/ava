@@ -41,7 +41,7 @@ type Status = "loading" | "ready" | "error";
 
 type GateDecision = "continue" | "skip-ready" | "redirect-login" | "skip-loading";
 
-function pathSkipsAuth(p: string): boolean {
+export function pathSkipsAuth(p: string): boolean {
   return /\/(demo|login)\/?$/.test(p);
 }
 
@@ -52,7 +52,7 @@ function redirectToLogin(): void {
 
 /** Avgör om DemoBootstrap-useEffect ska köras vidare eller kortsluta.
  *  Bryts ut för att hålla useEffect under cyklomatisk komplexitet 8. */
-function checkBootstrapGate(firmaConfig: FirmaConfig): GateDecision {
+export function checkBootstrapGate(firmaConfig: FirmaConfig): GateDecision {
   if (typeof window === "undefined") return "continue";
   if (pathSkipsAuth(window.location.pathname)) return "skip-ready";
   if (firmaConfig.tier === "demo" && !firmaConfig.principalId) {
@@ -126,14 +126,14 @@ interface DocMeta { id: string; fileName?: string; storagePath?: string; mimeTyp
 type StashFn = (id: string, bytes: Uint8Array, mimeType: string, fileName: string) => void;
 
 /** base64 → bytes (för event-transport av binärt dokument-innehåll). */
-function base64ToBytes(b64: string): Uint8Array {
+export function base64ToBytes(b64: string): Uint8Array {
   const bin = atob(b64);
   const out = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
   return out;
 }
 
-function inferDocMime(file: string, meta: DocMeta | undefined): string {
+export function inferDocMime(file: string, meta: DocMeta | undefined): string {
   if (meta?.mimeType) return meta.mimeType;
   if (file.endsWith(".pdf")) return "application/pdf";
   return file.endsWith(".html") ? "text/html; charset=utf-8" : "application/octet-stream";
