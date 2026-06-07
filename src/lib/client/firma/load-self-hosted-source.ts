@@ -19,6 +19,11 @@ import { resolveCorsProxy } from "@/lib/client/sync/cors-proxy";
 import { hydrateWorkingCopy } from "./hydrate-working-copy";
 import { setDocumentContent } from "@/lib/client/demo/document-content-cache";
 import type { DemoSource } from "@/lib/server/data-store/DemoDataStore";
+import {
+  assertRepoSchemaCompatible,
+  parseSchemaVersion,
+} from "@/lib/shared/schema-version";
+import { DEMO_META_PATH } from "../../../../tooling/demo-config";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 
 export interface CurrentUser {
@@ -76,6 +81,10 @@ export async function loadSelfHostedSource(deps: LoadSelfHostedDeps): Promise<De
     });
   }
 
+  // Versionsgrind (ADR 0004): vägra ett repo som är nyare än koden förstår,
+  // FÖRE hydrering. Saknad/ogiltig meta → baslinje (v1) → fortsätt.
+  assertRepoSchemaCompatible(await readWorkingCopySchemaVersion(fs));
+
   const source = await hydrateWorkingCopy(deps.handle);
   // Ladda extraherad dokumenttext (documents/text/<id>.txt) från OPFS in i
   // content-cache:n så fritext-sök hittar PDF/DOCX-innehåll EFTER en
@@ -87,6 +96,24 @@ export async function loadSelfHostedSource(deps: LoadSelfHostedDeps): Promise<De
     await ensureCurrentUser(fs, source, deps.currentUser);
   }
   return source;
+}
+
+/**
+ * Läs `schemaVersion` ur den klonade working copy:ns `.ava/meta.json`. Saknad
+ * fil (repo seedat före grinden) eller trasig JSON → `undefined`, vilket
+ * grinden tolkar som v1-baslinje. Kastar aldrig själv.
+ */
+async function readWorkingCopySchemaVersion(
+  fs: FsaIsoGitAdapter,
+): Promise<number | undefined> {
+  try {
+    const raw = JSON.parse(
+      (await fs.readFile(`/${DEMO_META_PATH}`, "utf8")) as string,
+    ) as { schemaVersion?: unknown };
+    return parseSchemaVersion(raw.schemaVersion);
+  } catch {
+    return undefined;
+  }
 }
 
 /** Läs documents/text/<id>.txt ur OPFS → content-cache (för fritext-sök). */

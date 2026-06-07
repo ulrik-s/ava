@@ -9,6 +9,10 @@
  */
 import { DEMO_META_PATH } from "../../../../tooling/demo-config";
 import { resolveGhPagesUrl } from "@/lib/shared/gh-pages-url";
+import {
+  assertRepoSchemaCompatible,
+  parseSchemaVersion,
+} from "@/lib/shared/schema-version";
 
 export interface DemoMetaUser {
   /** UUID — principalId som /login sparar i firma-config. */
@@ -20,6 +24,8 @@ export interface DemoMetaUser {
 }
 
 export interface DemoMeta {
+  /** Datamodellens version (ADR 0004). Saknas i repon byggda före grinden. */
+  schemaVersion?: number;
   /** UUID på orgen. */
   organizationId: string;
   organizationName: string;
@@ -54,6 +60,9 @@ export async function loadDemoMeta(
   }
   const json = await res.json() as unknown;
   const meta = validate(json, url);
+  // Versionsgrind (ADR 0004): vägra ett repo som är nyare än koden förstår,
+  // INNAN user-/org-data används. Saknad version → baslinje (v1) → OK.
+  assertRepoSchemaCompatible(meta.schemaVersion);
   cache = { url, data: meta };
   return meta;
 }
@@ -76,7 +85,11 @@ function validate(json: unknown, url: string): DemoMeta {
   if (!Array.isArray(o.users) || o.users.length === 0) {
     throw new Error(`meta.json från ${url} saknar users`);
   }
+  const schemaVersion = parseSchemaVersion(o.schemaVersion);
   return {
+    // exactOptionalPropertyTypes: utelämna nyckeln helt när den saknas
+    // istället för att sätta `undefined`.
+    ...(schemaVersion !== undefined ? { schemaVersion } : {}),
     organizationId: requireString(o.organizationId, `meta.json från ${url} saknar organizationId`),
     organizationName: requireString(o.organizationName, `meta.json från ${url} saknar organizationName`),
     users: o.users.map((u, i) => validateUser(u, url, i)),

@@ -80,4 +80,20 @@ describe("loadDemoMeta", () => {
     await expect(loadDemoMeta("ulrik-s/ava", mockFetch(bad)))
       .rejects.toThrow(/saknar id/);
   });
+
+  it("versionsgrind: vägrar ett demo-repo nyare än koden (ADR 0004)", async () => {
+    await expect(loadDemoMeta("ulrik-s/ava", mockFetch({ ...VALID_META, schemaVersion: 9999 })))
+      .rejects.toThrow(/nyare AVA-version/);
+  });
+
+  it("versionsgrind: parsar schemaVersion när den finns", async () => {
+    const meta = await loadDemoMeta("ulrik-s/ava", mockFetch({ ...VALID_META, schemaVersion: 1 }));
+    expect(meta.schemaVersion).toBe(1);
+  });
+
+  it("versionsgrind: tom schemaVersion → undefined (baslinje), laddar ändå", async () => {
+    const meta = await loadDemoMeta("ulrik-s/ava", mockFetch(VALID_META));
+    expect(meta.schemaVersion).toBeUndefined();
+    expect(meta.organizationId).toBe("demo-firma-ab");
+  });
 });

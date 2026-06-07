@@ -28,6 +28,31 @@ describe("loadSelfHostedSource", () => {
     expect(src.matters).toHaveLength(1);
   });
 
+  it("versionsgrind: vägrar en working copy nyare än koden (ADR 0004)", async () => {
+    const fsa = makeFakeFsa();
+    const { FsaIsoGitAdapter } = await import("@/lib/client/fsa/fs-adapter");
+    const fs = new FsaIsoGitAdapter(fsa.root);
+    await fs.writeFile("/.git/HEAD", "ref: refs/heads/main\n");
+    await fs.writeFile("/.ava/meta.json", JSON.stringify({ schemaVersion: 9999 }));
+
+    await expect(loadSelfHostedSource({
+      handle: fsa.root, repo: "http://localhost:8080/git/firma.git", clone: vi.fn(),
+    })).rejects.toThrow(/nyare AVA-version/);
+  });
+
+  it("versionsgrind: working copy utan meta.json laddar (baslinje v1)", async () => {
+    const fsa = makeFakeFsa();
+    const wb = makeFsaWriteBack({ handle: fsa.root });
+    await wb({ entity: "matter", kind: "create", row: { id: "m1", organizationId: "o1", title: "T" } });
+    const { FsaIsoGitAdapter } = await import("@/lib/client/fsa/fs-adapter");
+    await new FsaIsoGitAdapter(fsa.root).writeFile("/.git/HEAD", "ref: refs/heads/main\n");
+
+    const src = await loadSelfHostedSource({
+      handle: fsa.root, repo: "http://localhost:8080/git/firma.git", clone: vi.fn(),
+    });
+    expect(src.matters).toHaveLength(1);
+  });
+
   it("provisionerar current-user om den saknas", async () => {
     const fsa = makeFakeFsa();
     const { FsaIsoGitAdapter } = await import("@/lib/client/fsa/fs-adapter");
