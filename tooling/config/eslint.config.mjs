@@ -3,15 +3,20 @@ import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";
 
 /**
- * ESLint-konfiguration med extra regler för kodkvalitet:
- *   - complexity: cyklomatisk komplexitet ≤ 8 per funktion (HARD error)
+ * ESLint-konfiguration med extra regler för kodkvalitet (alla HARD error):
+ *   - complexity: cyklomatisk komplexitet ≤ 8 per funktion
  *   - max-depth: max 4 nivåer av nästade block
- *   - max-lines-per-function: 80 rader (mjuk gräns)
+ *   - max-lines-per-function: 100 rader (200 i tooling/scripts/)
  *   - max-params: 5 parametrar per funktion
+ *   - max-nested-callbacks: max 4 nästade callbacks
  *
- * Befintliga funktioner som överskrider 8 har explicita `eslint-disable`
- * + TODO så CI blockerar NYA brott. Se Task #6 i docs/roundtrip-handoff.md
- * för refaktoreringskö.
+ * Struktur-reglerna är `error`, inte `warn`: CI körs med `--max-warnings 0`
+ * så NYA brott blockerar bygget. Befintlig skuld ligger som en baseline i
+ * `eslint-suppressions.json` (genererad via `yarn lint:suppress`, en
+ * ESLint-10-bulk-suppression) — den fungerar som ventil så orelaterat arbete
+ * aldrig blockeras av gammal skuld, och betas av mekaniskt: när en lång
+ * funktion refaktoreras kör `yarn lint:prune` bort dess post och filen krymper
+ * i git. Se docs/quality.md ("max-lines-cap & ventil") och #41.
  */
 const eslintConfig = defineConfig([
   ...nextVitals,
@@ -72,13 +77,13 @@ const eslintConfig = defineConfig([
         },
       ],
       complexity: ["error", { max: 8 }],
-      "max-depth": ["warn", 4],
+      "max-depth": ["error", 4],
       "max-lines-per-function": [
-        "warn",
+        "error",
         { max: 100, skipBlankLines: true, skipComments: true, IIFEs: true },
       ],
-      "max-params": ["warn", 5],
-      "max-nested-callbacks": ["warn", 4],
+      "max-params": ["error", 5],
+      "max-nested-callbacks": ["error", 4],
     },
   },
   {
@@ -93,7 +98,7 @@ const eslintConfig = defineConfig([
     // Scripts har naturligt mer setup-kod.
     files: ["tooling/scripts/**/*.ts"],
     rules: {
-      "max-lines-per-function": ["warn", { max: 200 }],
+      "max-lines-per-function": ["error", { max: 200 }],
     },
   },
   globalIgnores([

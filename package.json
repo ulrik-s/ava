@@ -20,6 +20,8 @@
     "tier3:restart": "docker compose -f tooling/docker/docker-compose.yml restart web",
     "tier3:logs": "docker compose -f tooling/docker/docker-compose.yml logs -f",
     "lint": "eslint --config tooling/config/eslint.config.mjs",
+    "lint:suppress": "eslint --config tooling/config/eslint.config.mjs --suppress-all",
+    "lint:prune": "eslint --config tooling/config/eslint.config.mjs --prune-suppressions",
     "commitlint": "commitlint --config tooling/config/commitlint.config.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest --config tooling/config/vitest.config.ts",

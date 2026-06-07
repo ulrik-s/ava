@@ -51,7 +51,7 @@ interface Env {
 
 const SCOPES = "repo,user:email";
 
-export default {
+const worker = {
   async fetch(request: Request, env: Env): Promise<Response> {
     const cors = corsHeaders(env);
     if (request.method === "OPTIONS") return new Response(null, { headers: cors });
@@ -66,6 +66,8 @@ export default {
     }
   },
 };
+
+export default worker;
 
 function corsHeaders(env: Env): Record<string, string> {
   return {

@@ -1,0 +1,185 @@
+{
+  "src/app/calendar/_event-detail-modal.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/app/calendar/page.tsx": {
+    "max-lines-per-function": {
+      "count": 2
+    }
+  },
+  "src/app/contacts/[id]/_client.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/app/contacts/page.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/app/demo/_demo-client.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/app/matters/[id]/_expense-section.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/app/matters/[id]/_kostnadsrakning-modal.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/app/matters/page.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/app/payment-plans/[id]/_client.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/app/profile/page.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/app/search/page.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/app/settings/page.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/app/setup/page.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/app/templates/page.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/app/time/page.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/app/users/[id]/_edit-client.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/components/documents/_document-row.tsx": {
+    "max-depth": {
+      "count": 1
+    }
+  },
+  "src/components/documents/document-browser.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/components/documents/external-edit-modal.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/components/llm/llm-settings-card.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/components/matter/invoices-section.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/components/matter/payment-method-card.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/components/settings/fsa-folder-selector.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/components/settings/keypair-manager.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/components/settings/web-oauth-device-flow.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/components/shell/demo-bootstrap.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    },
+    "max-params": {
+      "count": 1
+    }
+  },
+  "src/components/shell/sidebar.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/lib/client/kostnadsrakning/render-pdf.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/lib/client/sync/use-auto-sync.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/lib/server/adapters/demo-search-index.ts": {
+    "max-params": {
+      "count": 1
+    }
+  },
+  "src/lib/server/data-store/DemoDataStore.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/lib/server/local-first/demo-loader.ts": {
+    "max-depth": {
+      "count": 4
+    }
+  },
+  "src/lib/server/local-first/filesystem-event-log.ts": {
+    "max-depth": {
+      "count": 3
+    }
+  },
+  "src/lib/server/routers/reports.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/lib/shared/kostnadsrakning.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "tooling/scripts/seed-data.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  }
+}
