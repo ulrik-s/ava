@@ -17,6 +17,8 @@
 >   strategi: app-genererad UUIDv7 (klient-/offline-genererad, native `uuid` i PG).
 > - [ADR 0004](./adr/0004-schemaversion-och-versionsgrind.md) — `schemaVersion`
 >   i `.ava/meta.json` + versionsgrind vid hydrering (datamodell-evolution).
+> - [ADR 0005](./adr/0005-server-som-git-peer.md) — **(föreslagen)** tunn server
+>   som git-peer: integrationer + alltid-på-jobb utan att offra local-first.
 
 ## Tre lager
 
