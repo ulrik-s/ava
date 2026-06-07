@@ -54,6 +54,38 @@ Inför en **tunn server som är en git-peer**, inte en dataauktoritet. Servern:
 3. **Hemligheter lämnar aldrig servern.** Klient-koden får aldrig Fortnox-tokens. Icke-hemlig konfig (konto-mappning) får ligga i firma.git; **tokens** i serverns valv.
 4. **Server-skrivningar är additiva + idempotenta.** Servern är en git-peer som alla andra → [ADR 0002](./0002-git-konflikthantering-backend-a.md) (last-write-wins/merge) gäller dess pushar. För att minimera konflikter skriver servern helst additivt (egna event-/verifikat-rader, jfr append-only-loggen i [#58](https://github.com/ulrik-s/ava/issues/58)) och nyckar jobb idempotent mot git-state/event-id (en verifikat-push får inte dubbel-bokföra om servern kör om efter en pull).
 
+## Språk: allt i TypeScript (inget Rust)
+
+**Målsättning: all kod som inte är frontend skrivs i TypeScript, med samma
+kod- och arkitektur-regler som resten av repot.** Servern (och helpern) är
+inget undantag — det är *samma backend-kod*, körd i en annan värd.
+
+- **Samma kodregler:** eslint-stacken (cyklomatisk komplexitet ≤ 8,
+  `max-lines-per-function`, `no-explicit-any` = error, typ-medveten lint),
+  `--max-warnings 0`, jscpd och coverage-golvet — gäller server/helper-koden
+  precis som klientkoden (se [`docs/quality.md`](../quality.md)).
+- **Samma arkitektur-regler:** dependency-cruiser-lagren + `IDataStore`/tRPC-
+  sömmen ([ADR 0001](./0001-pluggbar-backend-bakom-idatastore.md)) gäller
+  oförändrat. Servern är "bara" en till runtime-värd bakom samma seam.
+- **Paketering:** server/helper byggs till en **fristående binär** ur TS:en
+  (Bun `bun build --compile` eller `deno compile`, alt. Node i docker). Då
+  bevaras **delade typer + tRPC end-to-end** och hela stacken är *ett språk* —
+  ingen reimplementation, inga genererade cross-language-typer.
+
+**Avvisat: Rust/WASM som generell backend-omskrivning.** Skäl: (1) bryter de
+delade TS-typerna + tRPC:s end-to-end-typsäkerhet; (2) AVA är I/O-bunden
+(git-synk + nätverk) → WASM:s CPU-vinst är marginell, och varje query kostar en
+JS↔WASM-kopiering; (3) omskrivningskostnaden (hela backenden + testsviten +
+kvalitetsstacken); (4) `gitoxide`:s `push`/`merge` är ännu under utveckling och
+träffar AVA:s push-baserade kärna — `isomorphic-git` gör push redan idag. Rust
+reserveras därför **endast** för isolerade CPU-hotspots bakom befintliga sömmar
+(sök-index, krypto), exakt som [ADR 0001](./0001-pluggbar-backend-bakom-idatastore.md)
+redan slår fast — aldrig som big-bang.
+
+> Not om signering: en TS-binär har **samma** OS-signerings-/notariseringsbörda
+> som vilken native app (Apple Developer ID + notarisering, Windows-cert) — det
+> är ingen skillnad mot en Go-binär och inget argument för/emot språkvalet.
+
 ## Konsekvenser
 
 **Positivt**
