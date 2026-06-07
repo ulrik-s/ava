@@ -15,11 +15,32 @@
 import { avaEventSchema, type AvaEvent } from "../../events/schema";
 import { JsonLinesProjection } from "./base";
 import { dayBucketPath } from "./time-bucket";
+import { CURRENT_SCHEMA_VERSION } from "@/lib/shared/schema-version";
+import { migrateEventPayload } from "@/lib/shared/schema-migrations";
 
 export class EventLogProjection extends JsonLinesProjection<AvaEvent> {
-  constructor() { super(avaEventSchema); }
+  /**
+   * @param repoSchemaVersion repots datamodell-version (ADR 0004). Event-
+   *   payloads lyfts migrate-on-read från den upp till
+   *   {@link CURRENT_SCHEMA_VERSION} vid läsning (#58). Default = CURRENT
+   *   (ingen migration — för skrivvägen + repon i aktuell version).
+   */
+  constructor(private repoSchemaVersion: number = CURRENT_SCHEMA_VERSION) {
+    super(avaEventSchema);
+  }
 
   pathFor(event: AvaEvent): string {
     return dayBucketPath("events", new Date(event.ts));
+  }
+
+  /**
+   * Parsa JSONL-raden och migrera payloaden till aktuell datamodell (#58).
+   * Payloaden är fri `z.record` → migreringen körs EFTER parse (parse avvisar
+   * aldrig payload-form). No-op när repot redan är i aktuell version.
+   */
+  override deserializeLine(raw: string): AvaEvent {
+    const event = super.deserializeLine(raw);
+    if (this.repoSchemaVersion >= CURRENT_SCHEMA_VERSION) return event;
+    return { ...event, payload: migrateEventPayload(event.type, event.payload, this.repoSchemaVersion) };
   }
 }

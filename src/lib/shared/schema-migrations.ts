@@ -74,3 +74,45 @@ export function migrateRawJson(
   const migrated = migrateRow(entity, parsed as Record<string, unknown>, fromVersion, toVersion);
   return JSON.stringify(migrated);
 }
+
+// ── Event-payloads (#58) ─────────────────────────────────────────────────────
+// Den append-only event-loggen skrivs ALDRIG om, så historiska payloads ligger
+// kvar i sitt ursprungsformat för evigt. Migrate-on-read normaliserar dem vid
+// läsning (FilesystemEventLog → EventLogProjection), keyat på event-typ + version.
+// Payloads är fria `z.record` → migrationen kan köra EFTER zod-parse (parse
+// avvisar aldrig payload-form), till skillnad från entiteterna ovan.
+
+/** Lyfter en event-payload exakt ETT versionssteg för en given event-typ. */
+export type EventPayloadMigration = (payload: Record<string, unknown>) => Record<string, unknown>;
+
+/** Byt legacy-`type` → `invoiceType` om den finns (jfr entitets-migrationen i
+ *  v1→v2, PR #57). No-op när `type` saknas eller `invoiceType` redan finns. */
+function renameInvoiceType(payload: Record<string, unknown>): Record<string, unknown> {
+  if (!("type" in payload) || "invoiceType" in payload) return payload;
+  const { type, ...rest } = payload;
+  return { ...rest, invoiceType: type };
+}
+
+/** `EVENT_MIGRATIONS[type][n]` lyfter en payload för `type` från v`n` → v`n+1`. */
+const EVENT_MIGRATIONS: Record<string, Record<number, EventPayloadMigration>> = {
+  "invoice.created": { 1: renameInvoiceType },
+  "invoice.sent": { 1: renameInvoiceType },
+};
+
+/**
+ * Kedja en event-payload (för `eventType`) från `fromVersion` upp till
+ * `toVersion`. Ren funktion; saknad post → identitet.
+ */
+export function migrateEventPayload(
+  eventType: string,
+  payload: Record<string, unknown>,
+  fromVersion: number,
+  toVersion: number = CURRENT_SCHEMA_VERSION,
+): Record<string, unknown> {
+  let current = payload;
+  for (let v = fromVersion; v < toVersion; v++) {
+    const step = EVENT_MIGRATIONS[eventType]?.[v];
+    if (step) current = step(current);
+  }
+  return current;
+}
