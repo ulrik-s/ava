@@ -1,9 +1,8 @@
 /**
  * Test för expenseRouter — list/create/update/delete.
  *
- * Notering: routern saknar fortfarande explicit org-scoping på update/delete,
- * vilket är en känd luka som täcks separat i issue. Tester här verifierar
- * nuvarande beteende plus pekar ut säkerhetsbristerna med skip:ade fall.
+ * update/delete org-scopas via matter (#60): `findFirst` med
+ * `matter: { organizationId }` innan mutation, NOT_FOUND vid mismatch.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -13,6 +12,7 @@ import { dataStoreFromMockPrisma } from "../helpers/mock-data-store";
 const mockPrisma = {
   expense: {
     findMany: vi.fn(),
+    findFirst: vi.fn(),
     count: vi.fn(),
     aggregate: vi.fn(),
     create: vi.fn(),
@@ -35,6 +35,8 @@ beforeEach(() => {
   mockPrisma.expense.findMany.mockResolvedValue([]);
   mockPrisma.expense.count.mockResolvedValue(0);
   mockPrisma.expense.aggregate.mockResolvedValue({ _sum: { amount: 0 } });
+  // Default: utlägget tillhör anropande org (happy path för update/delete).
+  mockPrisma.expense.findFirst.mockResolvedValue({ id: "e1" });
 });
 
 describe("expense.list", () => {
@@ -117,6 +119,21 @@ describe("expense.update", () => {
     expect(args.data.date).toBeUndefined();
     expect(args.data.description).toBe("Ny");
   });
+
+  it("scopar ägarkollen via matter.organizationId (#60)", async () => {
+    mockPrisma.expense.update.mockResolvedValue({});
+    await makeCaller("org-a").update({ id: "e1", description: "X" });
+    expect(mockPrisma.expense.findFirst).toHaveBeenCalledWith({
+      where: { id: "e1", matter: { organizationId: "org-a" } },
+    });
+  });
+
+  it("NOT_FOUND när utlägget inte tillhör org (#60) — och update körs ej", async () => {
+    mockPrisma.expense.findFirst.mockResolvedValue(null);
+    await expect(makeCaller("org-b").update({ id: "e1", description: "X" }))
+      .rejects.toThrow(/NOT_FOUND/);
+    expect(mockPrisma.expense.update).not.toHaveBeenCalled();
+  });
 });
 
 describe("expense.delete", () => {
@@ -124,5 +141,12 @@ describe("expense.delete", () => {
     mockPrisma.expense.delete.mockResolvedValue({});
     await makeCaller().delete({ id: "e1" });
     expect(mockPrisma.expense.delete).toHaveBeenCalledWith({ where: { id: "e1" } });
+  });
+
+  it("NOT_FOUND när utlägget inte tillhör org (#60) — och delete körs ej", async () => {
+    mockPrisma.expense.findFirst.mockResolvedValue(null);
+    await expect(makeCaller("org-b").delete({ id: "e1" }))
+      .rejects.toThrow(/NOT_FOUND/);
+    expect(mockPrisma.expense.delete).not.toHaveBeenCalled();
   });
 });

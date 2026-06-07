@@ -142,7 +142,7 @@ export const billingRunRouter = router({
         await assertMatterInOrg(tx, input.matterId, ctx.orgId);
         const work = await fetchUnfrozenWork(tx, input.matterId);
         const value = workValueOre(work);
-        const deductionOre = await sumDeductions(tx, input.deductedBillingRunIds);
+        const deductionOre = await sumDeductions(tx, input.matterId, input.deductedBillingRunIds);
         const finalAmount = Math.max(0, value - deductionOre);
         const invoice = await tx.invoices.create({
           data: {
@@ -227,8 +227,23 @@ export const billingRunRouter = router({
     }),
 });
 
-async function sumDeductions(tx: DataStoreTx, ids: ReadonlyArray<string>): Promise<number> {
+async function sumDeductions(
+  tx: DataStoreTx,
+  matterId: string,
+  ids: ReadonlyArray<string>,
+): Promise<number> {
   if (ids.length === 0) return 0;
-  const runs = await tx.billingRuns.findMany({ where: { id: { in: ids } } });
+  // Säkerhet (#60): avdragsposterna måste tillhöra SAMMA ärende och vara
+  // ACCONTO-körningar — annars kunde en FINAL dra av främmande/fel-typade
+  // billing-runs och förvanska beloppet. Kasta om någon id inte matchar.
+  const runs = await tx.billingRuns.findMany({
+    where: { id: { in: ids }, matterId, type: "ACCONTO" },
+  });
+  if (runs.length !== ids.length) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Någon avdragspost tillhör inte detta ärende eller är ingen ACCONTO-körning.",
+    });
+  }
   return runs.reduce((sum, r) => sum + ((r as { amountOre: number }).amountOre ?? 0), 0);
 }

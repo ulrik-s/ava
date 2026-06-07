@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { router, protectedProcedure } from "../trpc";
+import { router, protectedProcedure, orgProcedure, TRPCError } from "../trpc";
 import {
   asId,
   matterIdSchema,
@@ -89,7 +89,7 @@ export const expenseRouter = router({
       });
     }),
 
-  update: protectedProcedure
+  update: orgProcedure
     .input(
       z.object({
         id: z.string(),
@@ -102,6 +102,12 @@ export const expenseRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      // Säkerhet (#60): verifiera org-ägarskap (via matter, samma scopning som
+      // `list`) INNAN update. NOT_FOUND vid mismatch — läcker inte existens.
+      const owned = await ctx.dataStore.expenses.findFirst({
+        where: { id: input.id, matter: { organizationId: ctx.orgId } },
+      });
+      if (!owned) throw new TRPCError({ code: "NOT_FOUND" });
       const { id, date, amount, description, billable, vatRate, vatIncluded } = input;
       return ctx.dataStore.expenses.update({
         where: { id },
@@ -116,9 +122,13 @@ export const expenseRouter = router({
       });
     }),
 
-  delete: protectedProcedure
+  delete: orgProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
+      const owned = await ctx.dataStore.expenses.findFirst({
+        where: { id: input.id, matter: { organizationId: ctx.orgId } },
+      });
+      if (!owned) throw new TRPCError({ code: "NOT_FOUND" });
       return ctx.dataStore.expenses.delete({ where: { id: input.id } });
     }),
 });
