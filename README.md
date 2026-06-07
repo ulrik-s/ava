@@ -63,5 +63,5 @@ Teknisk dokumentation för den som ska köra, bygga eller vidareutveckla AVA:
 - [`docs/deploy-tier3-self-hosted.md`](./docs/deploy-tier3-self-hosted.md) — self-hosted Linux/docker
 - [`docs/document-text-extraction.md`](./docs/document-text-extraction.md) — textextraktion ur PDF/DOCX
 - [`docs/quality.md`](./docs/quality.md) — verktyg, tröskelvärden, test- & CI-status
-- [`docs/adr/`](./docs/adr/) — arkitekturbeslut (ADR 0001–0004)
+- [`docs/adr/`](./docs/adr/) — arkitekturbeslut (ADR 0001–0005)
 - [`AGENTS.md`](./AGENTS.md) — arbetssätt (Issue → PR → Merge) och projektregler
