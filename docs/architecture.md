@@ -15,6 +15,8 @@
 >   hantering i Git-backenden: last-write-wins + diskret överskrivnings-notis.
 > - [ADR 0003](./adr/0003-nyckelstrategi-app-genererad-uuidv7.md) — nyckel­
 >   strategi: app-genererad UUIDv7 (klient-/offline-genererad, native `uuid` i PG).
+> - [ADR 0004](./adr/0004-schemaversion-och-versionsgrind.md) — `schemaVersion`
+>   i `.ava/meta.json` + versionsgrind vid hydrering (datamodell-evolution).
 
 ## Tre lager
 
