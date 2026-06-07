@@ -59,6 +59,9 @@ export default defineConfig({
       //   - 2207 tester (2026-06-05, efter #3–#7): Stmts 70.60% Br 64.21%
       //       Func 68.18% Lines 72.87% → golvet förankrat med decimaler precis
       //       under faktisk (≥0.07 marginal > observerad ~0.03 run-variation).
+      //   - 2300 tester (2026-06-07, efter #61): Stmts 72.99% Br 66.26%
+      //       Func 69.59% Lines 75.27% (identiskt Node 22/24) → golvet höjt
+      //       till 72.9/75.2/69.5/66.1 (#43).
       //
       // Mål: 95% överallt. Kvarstående gap = i huvudsak fat React-komponenter
       // (firma-settings-panel, fsa-folder-selector, keypair-manager,
@@ -66,10 +69,10 @@ export default defineConfig({
       // som kräver mer test-infrastruktur. Multi-session-arbete. Trösklarna
       // ligger strax under faktisk siffra → varje borttaget test syns som rött.
       thresholds: {
-        statements: 70.5,
-        lines: 72.5,
-        functions: 68.1,
-        branches: 64.1,
+        statements: 72.9,
+        lines: 75.2,
+        functions: 69.5,
+        branches: 66.1,
       },
     },
     projects: [
