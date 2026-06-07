@@ -1,6 +1,6 @@
 # ADR 0005 — Tunn server som git-peer: integrationer + alltid-på-jobb utan att offra local-first
 
-- **Status:** Föreslagen (skiss — riktning ej spikad)
+- **Status:** Accepterad
 - **Datum:** 2026-06-07
 - **Beslutsfattare:** Ulrik Sjölin
 - **Berör:** server-topologi, integrationer (Fortnox/mail), regelmotor-runtime, payment-scan, git-sync, deploy-modeller
