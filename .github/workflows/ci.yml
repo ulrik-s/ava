@@ -53,11 +53,12 @@ jobs:
       - run: corepack enable
       - run: yarn install --immutable
       - run: yarn typecheck
-      # Ratchet: lint får ha HÖGST 45 warnings (dagens nivå). Nya warnings →
-      # rött bygge. Driv ned baseline:n över tid (mål: 0). Errors fällde redan.
-      # (86→50: no-unused-vars + ^_-ignore. 50→46: exhaustive-deps (#5).
-      #  46→45: ProfileBasicsSection utbruten ur ProfilePage (#6, pågående ratchet).)
-      - run: yarn lint --max-warnings 45
+      # Ratchet med ventil (#41): struktur-reglerna (max-lines/-depth/-params/
+      # -nested-callbacks + complexity) är `error`. Befintlig skuld ligger i
+      # eslint-suppressions.json (43 poster); --max-warnings 0 fäller alla NYA
+      # warnings OCH oavsedda warning-regler. Skulden betas av via `yarn
+      # lint:prune` när en lång funktion bryts ut. Se docs/quality.md.
+      - run: yarn lint --max-warnings 0
       - run: yarn deps:check
       # Gating: fäller på strukturfynd (döda filer, oanvända/olistade deps).
       # Export-/typ-fynd är "warn" i knip.json (rådgivande) tills #3/#4 städat dem.

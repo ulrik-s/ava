@@ -72,12 +72,46 @@ Coverage-rapporten skrivs till `reports/coverage/` (HTML, lcov, json-summary, te
 
 ### Komplexitet (`yarn lint`)
 
-| Mått | Gräns |
-|---|---|
-| Cyclomatic complexity per funktion | 8 (error) |
-| Maxdjup (nested blocks) | 4 |
-| Rader per funktion | 100 (200 i `tooling/scripts/`) |
-| Parametrar per funktion | 5 |
+Alla struktur-regler är `error` (inte `warn`). CI kör `yarn lint --max-warnings 0`.
+
+| Mått | Gräns | Nivå |
+|---|---|---|
+| Cyclomatic complexity per funktion | 8 | error |
+| Maxdjup (nested blocks) | 4 | error |
+| Rader per funktion | 100 (200 i `tooling/scripts/`) | error |
+| Parametrar per funktion | 5 | error |
+| Nästade callbacks | 4 | error |
+
+#### max-lines-cap & ventil (#41)
+
+Tidigare låg lint på `--max-warnings 45` med struktur-reglerna som `warn` —
+**noll marginal** (45/45). En orelaterad ny funktion > 100 rader rödfärgade
+bygget tills den bröts ut, och den delade budgeten gjorde att vilken ny warning
+som helst kunde spränga taket. Den frös skulden utan att beta av den.
+
+Nu: struktur-reglerna är `error` och dagens skuld (43 brott) ligger som en
+**baseline** i [`eslint-suppressions.json`](../eslint-suppressions.json) i
+repo-roten — ESLint 10:s inbyggda
+[bulk-suppressions](https://eslint.org/docs/latest/use/suppressions). Det ger:
+
+- **Ventil** — orelaterat arbete blockeras aldrig av gammal skuld. Det finns
+  ingen delad warning-budget kvar att spränga; bara *nya* brott fäller bygget.
+- **Hårdare ratchet** — en ny funktion > 100 rader (eller för djup/för många
+  parametrar) är ett `error`, inte en warning bland 45.
+- **Mekanisk nedtrappning mot 0** — när en lång funktion bryts ut kör man
+  `yarn lint:prune` som tar bort dess post ur baseline:n. Filen krymper i git;
+  diffen visar exakt vilken skuld som betats. Posterna får **bara** minska.
+
+Arbetsflöde:
+
+```bash
+yarn lint:prune     # efter en refaktorering: ta bort betalda poster ur baseline
+yarn lint:suppress  # ENDAST om en helt ny, oundviklig long-fn måste in (motivera i PR)
+```
+
+`yarn lint:suppress` lägger till i baseline:n och ska behandlas som en
+ratchet-loosening — undvik den; bryt hellre ut funktionen. Antalet poster i
+`eslint-suppressions.json` är skuldräknaren (mål: 0).
 
 ### Duplikat (`yarn duplicates`)
 

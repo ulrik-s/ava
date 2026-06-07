@@ -1,5 +1,7 @@
 // Commitlint-konfiguration — enforcar Conventional Commits.
 // Körs lokalt av .husky/commit-msg och i CI (PR-titel) via `yarn commitlint`.
-export default {
+const config = {
   extends: ['@commitlint/config-conventional'],
 };
+
+export default config;
