@@ -72,6 +72,14 @@ describe("billingRun.createFinal", () => {
     expect(fin.run.amountOre).toBe(400000);
     expect(fin.run.deductedBillingRunIds).toEqual([acc.run.id]);
   });
+
+  it("vägrar avdrag mot okänt/fel-scopat billing-run-id (#60)", async () => {
+    const { caller } = makeCaller({ workMinutes: 120 });
+    await expect(caller.billingRun.createFinal({
+      matterId: "m-1", recipient: "KLIENT",
+      deductedBillingRunIds: ["br-finns-ej"],
+    })).rejects.toThrow(/tillhör inte detta ärende|ACCONTO/);
+  });
 });
 
 describe("billingRun.createKostnadsrakning", () => {

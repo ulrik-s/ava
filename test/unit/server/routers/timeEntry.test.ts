@@ -9,6 +9,7 @@ import { dataStoreFromMockPrisma } from "../helpers/mock-data-store";
 const mockPrisma = {
   timeEntry: {
     findMany: vi.fn(),
+    findFirst: vi.fn(),
     count: vi.fn(),
     aggregate: vi.fn(),
     create: vi.fn(),
@@ -34,6 +35,8 @@ beforeEach(() => {
   mockPrisma.timeEntry.findMany.mockResolvedValue([]);
   mockPrisma.timeEntry.count.mockResolvedValue(0);
   mockPrisma.timeEntry.aggregate.mockResolvedValue({ _sum: { minutes: 0 } });
+  // Default: posten tillhör anropande org (happy path för update/delete, #60).
+  mockPrisma.timeEntry.findFirst.mockResolvedValue({ id: "t1", matterId: "m1" });
 });
 
 describe("timeEntry.list", () => {
@@ -119,6 +122,21 @@ describe("timeEntry.update", () => {
     expect(data.description).toBe("Nytt");
     expect(data.minutes).toBeUndefined();
   });
+
+  it("scopar ägarkollen via matter.organizationId (#60)", async () => {
+    mockPrisma.timeEntry.update.mockResolvedValue({});
+    await makeCaller("org-a").update({ id: "t1", description: "X" });
+    expect(mockPrisma.timeEntry.findFirst).toHaveBeenCalledWith({
+      where: { id: "t1", matter: { organizationId: "org-a" } },
+    });
+  });
+
+  it("NOT_FOUND när posten inte tillhör org (#60) — update körs ej", async () => {
+    mockPrisma.timeEntry.findFirst.mockResolvedValue(null);
+    await expect(makeCaller("org-b").update({ id: "t1", description: "X" }))
+      .rejects.toThrow(/NOT_FOUND/);
+    expect(mockPrisma.timeEntry.update).not.toHaveBeenCalled();
+  });
 });
 
 describe("timeEntry.delete", () => {
@@ -126,6 +144,13 @@ describe("timeEntry.delete", () => {
     mockPrisma.timeEntry.delete.mockResolvedValue({});
     await makeCaller().delete({ id: "t1" });
     expect(mockPrisma.timeEntry.delete).toHaveBeenCalledWith({ where: { id: "t1" } });
+  });
+
+  it("NOT_FOUND när posten inte tillhör org (#60) — delete körs ej", async () => {
+    mockPrisma.timeEntry.findFirst.mockResolvedValue(null);
+    await expect(makeCaller("org-b").delete({ id: "t1" }))
+      .rejects.toThrow(/NOT_FOUND/);
+    expect(mockPrisma.timeEntry.delete).not.toHaveBeenCalled();
   });
 });
 

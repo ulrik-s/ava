@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { router, protectedProcedure } from "../trpc";
+import { router, protectedProcedure, orgProcedure, TRPCError } from "../trpc";
 import { emit } from "../events/emit";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import {
@@ -106,7 +106,7 @@ export const timeEntryRouter = router({
       return entry;
     }),
 
-  update: protectedProcedure
+  update: orgProcedure
     .input(
       z.object({
         id: z.string(),
@@ -117,6 +117,12 @@ export const timeEntryRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      // Säkerhet (#60): org-ägarskap via matter (samma scopning som `list`)
+      // INNAN update. NOT_FOUND vid mismatch.
+      const owned = await ctx.dataStore.timeEntries.findFirst({
+        where: { id: input.id, matter: { organizationId: ctx.orgId } },
+      });
+      if (!owned) throw new TRPCError({ code: "NOT_FOUND" });
       const { id, date, minutes, description, billable } = input;
       const updated = await ctx.dataStore.timeEntries.update({
         where: { id },
@@ -131,9 +137,13 @@ export const timeEntryRouter = router({
       return updated;
     }),
 
-  delete: protectedProcedure
+  delete: orgProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
+      const owned = await ctx.dataStore.timeEntries.findFirst({
+        where: { id: input.id, matter: { organizationId: ctx.orgId } },
+      });
+      if (!owned) throw new TRPCError({ code: "NOT_FOUND" });
       const entry = await ctx.dataStore.timeEntries.delete({ where: { id: input.id } });
       await emit.timeEntryDeleted(ctx, entry.id, entry.matterId);
       return entry;
