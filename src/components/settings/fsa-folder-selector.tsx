@@ -228,7 +228,7 @@ export function FsaFolderSelector({ repoUrl, token }: { repoUrl: string; token: 
  *   - "git@github.com:u/r"   → https://github.com/u/r.git
  *   - "https://…"             → som-är
  */
-function githubize(input: string): string {
+export function githubize(input: string): string {
   if (/^https?:\/\//.test(input)) return input;
   const sshMatch = input.match(/^git@github\.com:([^/]+)\/(.+?)(?:\.git)?$/);
   if (sshMatch) return `https://github.com/${sshMatch[1]}/${sshMatch[2]}.git`;
