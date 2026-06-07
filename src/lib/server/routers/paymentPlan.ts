@@ -19,8 +19,66 @@
 import { z } from "zod";
 import { router, protectedProcedure, orgProcedure, TRPCError } from "../trpc";
 import { paymentPlanStatusSchema, reminderTypeSchema, type PaymentPlanStatus } from "@/lib/shared/schemas";
+import { emit } from "../events/emit";
+import {
+  computeDueReminders,
+  type PlanForScan,
+  type ReminderKind,
+} from "@/lib/shared/payment-reminders";
 
 type Plan = { id: string; status: PaymentPlanStatus; invoiceId: string };
+
+/** Joinad plan-rad (IDataStore:s query-yta är otypad — vi formar lokalt). */
+interface JoinedPlan {
+  id: string;
+  status: string;
+  monthlyAmount: number;
+  dayOfMonth: number;
+  startDate: Date | string;
+  invoice?: {
+    amount?: number;
+    payments?: Array<{ amount?: number }>;
+    matter?: {
+      id?: string;
+      matterNumber?: string;
+      title?: string;
+      contacts?: Array<{ contact?: { name?: string; email?: string | null } }>;
+    };
+  };
+  reminders?: Array<{ dueMonth: string; type: ReminderKind }>;
+}
+
+function sumPaidOre(payments?: Array<{ amount?: number }>): number {
+  return (payments ?? []).reduce((sum, p) => sum + (p.amount ?? 0), 0);
+}
+
+type Matter = NonNullable<NonNullable<JoinedPlan["invoice"]>["matter"]>;
+
+/** KLIENT-kontaktens namn/email för påminnelse-payloaden (tom om saknas). */
+function resolveRecipient(matter: Matter): { email: string; name: string } {
+  const client = matter.contacts?.[0]?.contact ?? {};
+  return { email: client.email ?? "", name: client.name ?? "" };
+}
+
+function toPlanForScan(p: JoinedPlan): PlanForScan {
+  const inv = p.invoice ?? {};
+  const matter: Matter = inv.matter ?? {};
+  const recipient = resolveRecipient(matter);
+  return {
+    planId: p.id,
+    status: p.status,
+    monthlyAmount: p.monthlyAmount,
+    dayOfMonth: p.dayOfMonth,
+    startDate: new Date(p.startDate),
+    invoiceTotalOre: inv.amount ?? 0,
+    paidOre: sumPaidOre(inv.payments),
+    matterId: matter.id ?? "",
+    matterNumber: matter.matterNumber ?? "",
+    matterTitle: matter.title ?? "",
+    recipientEmail: recipient.email,
+    recipientName: recipient.name,
+  };
+}
 
 export const paymentPlanRouter = router({
   list: orgProcedure
@@ -152,5 +210,61 @@ export const paymentPlanRouter = router({
           sentAt: input.sentAt ? new Date(input.sentAt) : new Date(),
         },
       });
+    }),
+
+  /**
+   * Payment-scan (#23): scanna org:ens aktiva planer och generera DUE/OVERDUE-
+   * påminnelser. Ren beslutslogik i `computeDueReminders`; här gör vi I/O —
+   * hämtar planer (joinade), loggar varje påminnelse (`paymentPlanReminders`)
+   * och emittar `payment.due`/`payment.overdue` (via `emit`, read-only-säkert).
+   * Idempotent: redan loggade (plan, månad, typ) hoppas över i kärnan.
+   *
+   * `asOf` (valfri ISO) injicerar "nu" för deterministiska tester/fixtures
+   * (samma mönster som `recordReminder.sentAt`, ADR 0003); annars `new Date()`.
+   */
+  scanDueReminders: orgProcedure
+    .input(z.object({ asOf: z.string().datetime().optional() }).optional())
+    .mutation(async ({ ctx, input }) => {
+      const now = input?.asOf ? new Date(input.asOf) : new Date();
+      const plans = await ctx.dataStore.paymentPlans.findMany({
+        where: { status: "ACTIVE", invoice: { matter: { organizationId: ctx.orgId } } },
+        include: {
+          invoice: {
+            include: {
+              payments: true,
+              matter: {
+                include: {
+                  contacts: {
+                    where: { role: "KLIENT" },
+                    include: { contact: { select: { id: true, name: true, email: true } } },
+                    take: 1,
+                  },
+                },
+              },
+            },
+          },
+          reminders: true,
+        },
+      }) as unknown as JoinedPlan[];
+
+      const logged = plans.flatMap((p) =>
+        (p.reminders ?? []).map((r) => ({ planId: p.id, dueMonth: r.dueMonth, type: r.type })),
+      );
+      const planned = computeDueReminders(plans.map(toPlanForScan), now, logged);
+
+      for (const r of planned) {
+        await ctx.dataStore.paymentPlanReminders.create({
+          data: { planId: r.planId, dueMonth: r.dueMonth, type: r.type, sentAt: now },
+        });
+        if (r.type === "DUE") await emit.paymentDue(ctx, r.payload, r.matterId);
+        else await emit.paymentOverdue(ctx, r.payload, r.matterId);
+      }
+
+      return {
+        scanned: plans.length,
+        planned: planned.length,
+        due: planned.filter((p) => p.type === "DUE").length,
+        overdue: planned.filter((p) => p.type === "OVERDUE").length,
+      };
     }),
 });
