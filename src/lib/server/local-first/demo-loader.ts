@@ -27,6 +27,11 @@ import type { MemFs } from "./mem-fs";
 import { ProjectionHydrator } from "./projection-writer";
 import type { ProjectionRegistry } from "./projections/registry";
 import { ENTITY_REGISTRY } from "@/lib/shared/schemas";
+import {
+  assertRepoSchemaCompatible,
+  parseSchemaVersion,
+} from "@/lib/shared/schema-version";
+import { DEMO_META_PATH } from "../../../../tooling/demo-config";
 
 export type DemoCloneFn = (fs: MemFs, url: string) => Promise<void>;
 
@@ -63,6 +68,10 @@ export class DemoLoader {
     this.hydrated.clear();
 
     await this.deps.cloneFn(this.deps.fs, url);
+
+    // Versionsgrind (ADR 0004): vägra ett repo som är nyare än koden förstår,
+    // FÖRE hydrering. Saknad/ogiltig meta → baslinje (v1) → fortsätt.
+    assertRepoSchemaCompatible(await this.readRepoSchemaVersion());
 
     const hydrator = new ProjectionHydrator(this.deps.fs, this.deps.registry);
     const result: LoadResult = { url, entities: {}, totalCount: 0, errors: [] };
@@ -129,6 +138,23 @@ export class DemoLoader {
   }
 
   // ── interna ──────────────────────────────────────────────────
+
+  /**
+   * Läs `schemaVersion` ur det klonade repots `.ava/meta.json`. Saknad fil
+   * (repo byggt före grinden) eller trasig JSON → `undefined`, vilket grinden
+   * tolkar som v1-baslinje. Kastar aldrig själv — bara grinden får vägra.
+   */
+  private async readRepoSchemaVersion(): Promise<number | undefined> {
+    try {
+      if (!(await this.deps.fs.exists(DEMO_META_PATH))) return undefined;
+      const raw = JSON.parse(await this.deps.fs.readFile(DEMO_META_PATH)) as {
+        schemaVersion?: unknown;
+      };
+      return parseSchemaVersion(raw.schemaVersion);
+    } catch {
+      return undefined;
+    }
+  }
 
   private async clearFs(): Promise<void> {
     // Rensa allt — ny demo-laddning ska inte ärva tidigare data

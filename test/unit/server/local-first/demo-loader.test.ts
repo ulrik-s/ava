@@ -93,6 +93,38 @@ describe("DemoLoader", () => {
     spy.mockRestore();
   });
 
+  it("versionsgrind: vägrar ett repo som är nyare än koden (ADR 0004)", async () => {
+    const fs = new MemFs();
+    const cloneFn = async (target: MemFs) => {
+      await target.writeFile(".ava/meta.json", JSON.stringify({ schemaVersion: 9999 }));
+      await target.writeFile("matters/active/m1.json", sampleMatter);
+    };
+    const loader = new DemoLoader({ fs, registry: buildDefaultRegistry(), cloneFn });
+    await expect(loader.loadDemo("https://example/too-new.git"))
+      .rejects.toThrow(/nyare AVA-version/);
+  });
+
+  it("versionsgrind: laddar normalt när schemaVersion saknas (baslinje v1)", async () => {
+    const fs = new MemFs();
+    const cloneFn = async (target: MemFs) => {
+      await target.writeFile("matters/active/m1.json", sampleMatter);
+    };
+    const loader = new DemoLoader({ fs, registry: buildDefaultRegistry(), cloneFn });
+    const result = await loader.loadDemo("https://example/legacy.git");
+    expect(result.entities.matter).toBe(1);
+  });
+
+  it("versionsgrind: trasig meta.json ignoreras (→ baslinje, laddar ändå)", async () => {
+    const fs = new MemFs();
+    const cloneFn = async (target: MemFs) => {
+      await target.writeFile(".ava/meta.json", "{ trasig json");
+      await target.writeFile("matters/active/m1.json", sampleMatter);
+    };
+    const loader = new DemoLoader({ fs, registry: buildDefaultRegistry(), cloneFn });
+    const result = await loader.loadDemo("https://example/corrupt-meta.git");
+    expect(result.entities.matter).toBe(1);
+  });
+
   it("flera demo-laddningar overskriver ren (data återställs varje load)", async () => {
     const fs = new MemFs();
     let counter = 0;

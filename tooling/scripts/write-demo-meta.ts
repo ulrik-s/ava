@@ -15,6 +15,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { DEMO_META_PATH } from "../demo-config";
 import type { IdTranslator } from "../demo-generator/id-translator";
+import { CURRENT_SCHEMA_VERSION } from "../../src/lib/shared/schema-version";
 
 export interface DemoMetaUser {
   /** UUID — det `principalId` som /login sparar i firma-config. */
@@ -26,6 +27,8 @@ export interface DemoMetaUser {
 }
 
 export interface DemoMeta {
+  /** Datamodellens version (ADR 0004) — versionsgrinden vid hydrering läser den. */
+  schemaVersion: number;
   /** UUID på orgen — matchar det som persisteras i datat. */
   organizationId: string;
   organizationName: string;
@@ -61,6 +64,7 @@ export function buildDemoMeta(seed: SeedShape, translator: IdTranslator, now: Da
   }
 
   return {
+    schemaVersion: CURRENT_SCHEMA_VERSION,
     organizationId: translator.toUuid(orgRawId),
     organizationName: orgName,
     users,

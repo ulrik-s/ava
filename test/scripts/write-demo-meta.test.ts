@@ -7,6 +7,7 @@ import { describe, it, expect } from "vitest";
 import { buildDemoMeta } from "../../tooling/scripts/write-demo-meta";
 import { createIdTranslator } from "../../tooling/demo-generator/id-translator";
 import { isUuid } from "../../src/lib/shared/uuid";
+import { CURRENT_SCHEMA_VERSION } from "../../src/lib/shared/schema-version";
 
 const FIXED_NOW = new Date("2026-05-31T10:00:00.000Z");
 
@@ -60,5 +61,10 @@ describe("buildDemoMeta", () => {
   it("title är optional", () => {
     const noTitle = seed({ users: [{ id: "u-x", name: "X", email: "x@ava", role: "ADMIN" }] });
     expect(buildDemoMeta(noTitle, createIdTranslator(), FIXED_NOW).users[0]!.title).toBeUndefined();
+  });
+
+  it("stämplar schemaVersion = CURRENT_SCHEMA_VERSION (ADR 0004)", () => {
+    expect(buildDemoMeta(seed(), createIdTranslator(), FIXED_NOW).schemaVersion)
+      .toBe(CURRENT_SCHEMA_VERSION);
   });
 });
