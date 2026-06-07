@@ -14,6 +14,8 @@ import { FsaIsoGitAdapter } from "@/lib/client/fsa/fs-adapter";
 import type { DemoSource } from "@/lib/server/data-store/DemoDataStore";
 import { prebakeJoins } from "@/lib/client/demo/prebake-joins";
 import { ENTITY_REGISTRY, ENTITY_NAMES, type EntityName } from "@/lib/shared/schemas";
+import { CURRENT_SCHEMA_VERSION } from "@/lib/shared/schema-version";
+import { migrateRow } from "@/lib/shared/schema-migrations";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/;
 
@@ -54,21 +56,28 @@ async function readJsonDir(
  * varna i konsolen men släpp igenom rådatan så vi inte kraschar på legacy-
  * filer. (Strikt validering kan slås på via env-flagga senare.)
  */
-function validateRow(entity: EntityName, row: Record<string, unknown>): Record<string, unknown> {
+function validateRow(
+  entity: EntityName,
+  row: Record<string, unknown>,
+  repoVersion: number,
+): Record<string, unknown> {
+  // Migrate-on-read (ADR 0004): lyft raden till aktuell datamodell före parse.
+  const migrated = migrateRow(entity, row, repoVersion);
   const schema = ENTITY_REGISTRY[entity]!.schema;
-  const result = schema.safeParse(row);
+  const result = schema.safeParse(migrated);
   if (!result.success) {
     console.warn(
-      `[hydrate] ${entity}/${String(row.id ?? "?")} schema-validering misslyckades:`,
+      `[hydrate] ${entity}/${String(migrated.id ?? "?")} schema-validering misslyckades:`,
       result.error.issues.slice(0, 3),
     );
-    return row;
+    return migrated;
   }
   return result.data as Record<string, unknown>;
 }
 
 export async function hydrateWorkingCopy(
   root: FileSystemDirectoryHandle,
+  repoSchemaVersion: number = CURRENT_SCHEMA_VERSION,
 ): Promise<DemoSource> {
   const fs = new FsaIsoGitAdapter(root);
   const out: DemoSource = {};
@@ -76,7 +85,7 @@ export async function hydrateWorkingCopy(
     const { gitPrefix, sourceKey } = ENTITY_REGISTRY[entity]!;
     const rows = await readJsonDir(fs, gitPrefix);
     if (!rows.length) continue;
-    const validated = rows.map((r) => validateRow(entity, r));
+    const validated = rows.map((r) => validateRow(entity, r, repoSchemaVersion));
     (out as Record<string, readonly unknown[]>)[sourceKey] = validated;
   }
   return prebakeJoins(out);

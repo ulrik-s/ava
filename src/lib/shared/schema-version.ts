@@ -16,10 +16,14 @@
 /**
  * Datamodellens version. **Bumpa BARA vid en BRYTANDE schemaändring** (rename,
  * typbyte, fält som blir obligatoriskt) — och para alltid en bump med en
- * migrate-on-read-kedja. Additiva optionella fält bärs av schemats
- * `.passthrough()` och kräver ingen bump.
+ * migrate-on-read-kedja i `schema-migrations.ts`. Additiva optionella fält bärs
+ * av schemats `.passthrough()` och kräver ingen bump.
+ *
+ * Historik:
+ *   - v1: baslinje (ADR 0004, PR 1).
+ *   - v2: invoice — döda legacy-aliaset `type` borttaget (→ `invoiceType`).
  */
-export const CURRENT_SCHEMA_VERSION = 1;
+export const CURRENT_SCHEMA_VERSION = 2;
 
 /**
  * Repots datamodell är NYARE än den här koden förstår. Att fortsätta vore
