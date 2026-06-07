@@ -102,3 +102,36 @@ describe("FilesystemEventLog — query", () => {
 });
 
 import { vi } from "vitest";
+
+describe("FilesystemEventLog — migrate-on-read (#58)", () => {
+  // Skriv en v1-event-rad (payload bär legacy `type`) direkt till loggen.
+  function writeV1InvoiceEvent(fs: InMemoryFileSystem) {
+    const line = JSON.stringify({
+      id: "0190a000-0000-7000-8000-000000000001",
+      ts: "2026-01-02T10:00:00.000Z",
+      type: "invoice.created", source: "ui",
+      actor: { kind: "user", id: "anna" },
+      payload: { invoiceId: "inv-1", type: "FINAL", amount: 1000 },
+    });
+    return fs.writeFile("events/2026/01/02.jsonl", line + "\n");
+  }
+
+  it("repoSchemaVersion=1 → invoice-payloadens `type` normaliseras till `invoiceType`", async () => {
+    const fs = new InMemoryFileSystem();
+    await writeV1InvoiceEvent(fs);
+    const log = new FilesystemEventLog(fs, 1);
+    const [event] = await log.query({ type: "invoice.created" });
+    expect(event!.payload.invoiceType).toBe("FINAL");
+    expect(event!.payload).not.toHaveProperty("type");
+    expect(event!.payload.amount).toBe(1000); // övriga fält orörda
+  });
+
+  it("default (CURRENT) → ingen migration, payload orörd", async () => {
+    const fs = new InMemoryFileSystem();
+    await writeV1InvoiceEvent(fs);
+    const log = new FilesystemEventLog(fs); // ingen version → CURRENT
+    const [event] = await log.query({ type: "invoice.created" });
+    expect(event!.payload).toHaveProperty("type", "FINAL");
+    expect(event!.payload).not.toHaveProperty("invoiceType");
+  });
+});

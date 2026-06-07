@@ -4,7 +4,7 @@
  * de defensiva fallen i sträng-wrappern.
  */
 import { describe, it, expect } from "vitest";
-import { migrateRow, migrateRawJson } from "@/lib/shared/schema-migrations";
+import { migrateRow, migrateRawJson, migrateEventPayload } from "@/lib/shared/schema-migrations";
 import { CURRENT_SCHEMA_VERSION } from "@/lib/shared/schema-version";
 
 describe("migrateRow — invoice v1→v2 (stripa legacy `type`)", () => {
@@ -56,5 +56,32 @@ describe("migrateRawJson — sträng-wrapper", () => {
     const raw = JSON.stringify({ id: "i", type: "FINAL" });
     expect(migrateRawJson("invoice", raw, 2, 2)).toBe(raw);
     expect(migrateRawJson("invoice", raw, CURRENT_SCHEMA_VERSION, CURRENT_SCHEMA_VERSION)).toBe(raw);
+  });
+});
+
+describe("migrateEventPayload — event-payloads (#58)", () => {
+  it("invoice.created v1→v2: renamear `type` → `invoiceType`, behåller övrigt", () => {
+    const out = migrateEventPayload("invoice.created", { invoiceId: "i", type: "FINAL", amount: 1000 }, 1, 2);
+    expect(out).toMatchObject({ invoiceId: "i", invoiceType: "FINAL", amount: 1000 });
+    expect(out).not.toHaveProperty("type");
+  });
+
+  it("invoice.sent omfattas av samma migration", () => {
+    expect(migrateEventPayload("invoice.sent", { type: "ACCONTO" }, 1, 2).invoiceType).toBe("ACCONTO");
+  });
+
+  it("no-op när invoiceType redan finns", () => {
+    const p = { invoiceType: "STANDARD", type: "FINAL" };
+    expect(migrateEventPayload("invoice.created", p, 1, 2)).toBe(p);
+  });
+
+  it("identitet för event-typ utan migration", () => {
+    const p = { matterNumber: "2026-0001" };
+    expect(migrateEventPayload("matter.created", p, 1, 2)).toBe(p);
+  });
+
+  it("no-op när from === to", () => {
+    const p = { type: "FINAL" };
+    expect(migrateEventPayload("invoice.created", p, 2, 2)).toBe(p);
   });
 });

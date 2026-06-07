@@ -31,10 +31,17 @@ import { EventLogProjection } from "./projections/event-log";
 type Listener = (event: AvaEvent) => void | Promise<void>;
 
 export class FilesystemEventLog implements IEventLog {
-  private projection = new EventLogProjection();
+  private projection: EventLogProjection;
   private listeners: Set<Listener> = new Set();
 
-  constructor(private fs: IFileSystem) {}
+  /**
+   * @param repoSchemaVersion repots datamodell-version (ADR 0004) för
+   *   migrate-on-read av äldre event-payloads vid läsning (#58). Default =
+   *   CURRENT (ingen migration).
+   */
+  constructor(private fs: IFileSystem, repoSchemaVersion?: number) {
+    this.projection = new EventLogProjection(repoSchemaVersion);
+  }
 
   async emit(input: EmitInput): Promise<AvaEvent> {
     const event: AvaEvent = avaEventSchema.parse({

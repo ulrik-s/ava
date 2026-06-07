@@ -124,12 +124,16 @@ append-only event-loggen, där historiska payloads aldrig skrivs om.
 
 ## Fasning
 
-1. **PR 1 (nu):** `schemaVersion` i `.ava/meta.json` + `CURRENT_SCHEMA_VERSION`-
-   konstant + grinden (alla fyra fall). Ingen migreringskedja än. Test:
+1. **PR 1 ✅ (#54/#56):** `schemaVersion` i `.ava/meta.json` +
+   `CURRENT_SCHEMA_VERSION`-konstant + grinden (alla fyra fall). Test:
    `repo > kod` vägrar; saknad version tolkas som v1.
-2. **PR 2:** migrate-on-read-ramverket + första riktiga migrationen som proof
-   (issuets "klar när": versionsgrind + minst en testad migrationskedja).
-3. **PR 3:** versionera event-payloads (`events/schema.ts`).
+2. **PR 2 ✅ (#57):** migrate-on-read-ramverket + första migrationen (invoice
+   v1→v2: legacy `type` borttaget). `CURRENT_SCHEMA_VERSION` 1→2.
+3. **PR 3 ✅ (#58):** migrate-on-read för event-payloads — `migrateEventPayload`
+   (keyat på event-typ + version) körs i `EventLogProjection.deserializeLine`.
+   `repoSchemaVersion` trådas via `FilesystemEventLog` (default CURRENT tills den
+   skrivbara event-loggen wire:as in i runtimen). Första event-migration:
+   `invoice.created`/`invoice.sent`-payloadens `type` → `invoiceType`.
 
 ## Öppna frågor
 
