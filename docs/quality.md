@@ -61,14 +61,14 @@ Initial baslinje-tröskel — höj efterhand som tester läggs till. Tröskeln f
 | Branches | 18 % | 70 % |
 | Statements | 25 % | 60 % |
 
-Aktuell baslinje (~2224 tester över ~240 testfiler):
+Aktuell baslinje (~2300 tester över ~254 testfiler; #43, strax under faktisk):
 
-| Mått | Tröskel (vitest-config) |
-|---|---|
-| Statements | 70.5 % |
-| Lines | 72.5 % |
-| Functions | 68.1 % |
-| Branches | 64.1 % |
+| Mått | Tröskel (vitest-config) | Faktisk |
+|---|---|---|
+| Statements | 72.9 % | 72.99 % |
+| Lines | 75.2 % | 75.27 % |
+| Functions | 69.5 % | 69.59 % |
+| Branches | 66.1 % | 66.26 % |
 
 Coverage-rapporten skrivs till `reports/coverage/` (HTML, lcov, json-summary, text).
 
