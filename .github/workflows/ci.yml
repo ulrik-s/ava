@@ -115,11 +115,17 @@ jobs:
       - run: yarn playwright install --with-deps chromium
       - name: Start docker + hämta bootstrappad admin-PAT
         run: |
-          docker compose -f tooling/docker/docker-compose.yml up -d --build
+          # `--wait` gatar på web-containerns healthcheck (servar /ava/) innan
+          # vi går vidare → ingen tävling mot kall runner (bootstrap + nginx upp).
+          # #63: tidigare pollades loggen direkt efter `up -d`, vilket false-
+          # red:ade när bootstrappen tog > 60s.
+          docker compose -f tooling/docker/docker-compose.yml up -d --build --wait --wait-timeout 180
           # web-containern printar en slumpad admin-PAT EN gång vid bootstrap.
           # round-trip-testet behöver den (git-clone + browser-push) via AVA_RT_GIT_PAT.
+          # När --wait passerat är containern healthy, så PAT-raden finns i loggen
+          # — men behåll en retry-loop (120s) som extra marginal.
           PAT=""
-          for i in $(seq 1 30); do
+          for i in $(seq 1 60); do
             PAT=$(docker compose -f tooling/docker/docker-compose.yml logs web 2>&1 \
               | grep -oE 'Admin-token:[[:space:]]+[A-Za-z0-9]{40}' | grep -oE '[A-Za-z0-9]{40}' | head -1)
             [ -n "$PAT" ] && break
@@ -127,8 +133,8 @@ jobs:
           done
           if [ -z "$PAT" ]; then echo "::error::Kunde inte hämta admin-PAT ur web-loggen"; docker compose -f tooling/docker/docker-compose.yml logs web; exit 1; fi
           echo "AVA_RT_GIT_PAT=$PAT" >> "$GITHUB_ENV"
-          # vänta tills web servar /ava/
-          for i in $(seq 1 30); do curl -sf http://localhost:8080/ava/ >/dev/null && break; sleep 2; done
+          # vänta tills web servar /ava/ (redundant efter --wait, men billig säkerhet)
+          for i in $(seq 1 60); do curl -sf http://localhost:8080/ava/ >/dev/null && break; sleep 2; done
       - run: yarn round-trip
       - name: Tear down docker
         if: always()
