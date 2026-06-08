@@ -19,6 +19,8 @@
 >   i `.ava/meta.json` + versionsgrind vid hydrering (datamodell-evolution).
 > - [ADR 0005](./adr/0005-server-som-git-peer.md) — tunn server som git-peer:
 >   integrationer + alltid-på-jobb utan att offra local-first.
+> - [ADR 0006](./adr/0006-helper-https-lokal-ca.md) — helper-HTTPS via lokal CA
+>   (mkcert-stil), macOS-scopat, för Safari/WKWebView (Office-add-ins).
 
 ## Tre lager
 
