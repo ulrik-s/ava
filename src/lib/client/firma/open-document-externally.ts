@@ -29,7 +29,6 @@ interface Doc {
 }
 
 const DEFAULT_DEMO_REPO_FALLBACK = "ulrik-s/ava-demo";
-const HELPER_BASE = "http://127.0.0.1:48761";
 
 /**
  * Försök öppna via AVA Helper (1-klicks-flow). Returnerar true om
@@ -45,13 +44,8 @@ const HELPER_BASE = "http://127.0.0.1:48761";
  * AVA-backend som körs (git-http eller REST). Helpern är tier-agnostisk.
  */
 export async function tryHelperOpen(doc: Doc): Promise<boolean> {
-  // Snabb ping — om helpern inte kör, fail-fast och låt fallback ta över
-  try {
-    await fetch(`${HELPER_BASE}/ping`, { signal: AbortSignal.timeout(300) });
-  } catch {
-    return false;
-  }
-  // Beräkna download/upload-URLs. För git-tier serverar nginx (eller
+  // openViaHelper löser transporten (https→http, ADR 0006) och kastar om
+  // helpern saknas → vi fångar och faller tillbaka. Beräkna download/upload-URLs. För git-tier serverar nginx (eller
   // demo-build) filerna under storagePath. För Postgres-tier blir det
   // /api/documents/<id>/download. Vi använder befintliga konstruktioner.
   const isDemo = process.env.NEXT_PUBLIC_DEMO_BUILD === "1";

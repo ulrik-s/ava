@@ -6,15 +6,21 @@
  * kan delegera "öppna dokument externt" till helpern (1-klicks-flow)
  * eller falla tillbaka till den befintliga download/modal-vägen.
  *
- * Helpern lyssnar på 127.0.0.1:48761 (se [[helper-app/README.md]]).
- * Request-/response-former + URL delas med själva helper-binären via
- * `@/lib/shared/helper/protocol` (#78) så sidorna aldrig glider isär.
+ * Transport (ADR 0006): helpern serverar både HTTP (127.0.0.1) och HTTPS
+ * (localhost, betrott lokalt cert). Safari/WKWebView (Office-add-ins på Mac)
+ * blockerar https-sida → http-loopback som mixed content, så vi PROVAR HTTPS
+ * först och faller tillbaka på HTTP (Chromium/Firefox där loopback redan är
+ * secure context). Den fungerande basen cachas.
+ *
+ * Request-/response-former + URL:er delas med själva helper-binären via
+ * `@/lib/shared/helper/protocol` (#78).
  */
 
 import { useEffect, useState } from "react";
 
 import {
   HELPER_BASE,
+  HELPER_HTTPS_BASE,
   parsePingVersion,
   type ComposeMailRequest,
   type HelperOpenRequest,
@@ -23,24 +29,56 @@ import {
 
 export type { HelperStatus };
 
+// HTTPS först (Safari kräver det), sedan HTTP (Chromium/Firefox).
+const PROBE_ORDER = [HELPER_HTTPS_BASE, HELPER_BASE] as const;
+let cachedBase: string | undefined;
+
+async function pingText(base: string, timeoutMs = 500): Promise<string | null> {
+  try {
+    const r = await fetch(`${base}/ping`, { signal: AbortSignal.timeout(timeoutMs) });
+    return r.ok ? await r.text() : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Pinga helpern och returnera fungerande transport + version. En cachad bas
+ * provas direkt (bekräftar liveness); annars provas PROBE_ORDER. En miss
+ * cachas INTE — helpern kan startas senare, så nästa anrop provar om.
+ */
+async function probeHelper(): Promise<{ base: string; version: string | null } | null> {
+  const bases = cachedBase !== undefined ? [cachedBase] : PROBE_ORDER;
+  for (const base of bases) {
+    const text = await pingText(base);
+    if (text !== null) {
+      cachedBase = base;
+      return { base, version: parsePingVersion(text) };
+    }
+  }
+  cachedBase = undefined; // cachad bas svarar inte längre → prova om nästa gång
+  return null;
+}
+
+/** Den transport (https/http) helpern svarar på, eller null. */
+export async function resolveHelperBase(): Promise<string | null> {
+  return (await probeHelper())?.base ?? null;
+}
+
+/** Endast för tester: nollställ transport-cachen. */
+export function resetHelperBaseCache(): void {
+  cachedBase = undefined;
+}
+
 export function useHelper(): HelperStatus {
   const [status, setStatus] = useState<HelperStatus>({ version: undefined, checked: false });
 
   useEffect(() => {
     let cancelled = false;
     async function ping(): Promise<void> {
-      try {
-        const r = await fetch(`${HELPER_BASE}/ping`, {
-          signal: AbortSignal.timeout(500),
-        });
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        const text = await r.text();
-        if (cancelled) return;
-        setStatus({ version: parsePingVersion(text), checked: true });
-      } catch {
-        if (cancelled) return;
-        setStatus({ version: null, checked: true });
-      }
+      const probe = await probeHelper();
+      if (cancelled) return;
+      setStatus({ version: probe?.version ?? null, checked: true });
     }
     void ping();
     return () => { cancelled = true; };
@@ -49,18 +87,25 @@ export function useHelper(): HelperStatus {
   return status;
 }
 
+/** Fetch mot helpern på den upplösta transporten; null om helpern saknas. */
+async function helperFetch(path: string, init: RequestInit): Promise<Response | null> {
+  const base = await resolveHelperBase();
+  return base === null ? null : fetch(`${base}${path}`, init);
+}
+
 /**
  * `openViaHelper` — skickar `POST /open` till helpern. AVA-webbappen
  * konstruerar absolute download/upload-URLs baserat på vilken backend
  * som körs (git-http eller REST).
  */
 export async function openViaHelper(input: HelperOpenRequest): Promise<void> {
-  const r = await fetch(`${HELPER_BASE}/open`, {
+  const r = await helperFetch("/open", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
     signal: AbortSignal.timeout(10_000),
   });
+  if (r === null) throw new Error("AVA Helper inte tillgänglig");
   if (!r.ok) {
     throw new Error(`helper /open: HTTP ${r.status} ${await r.text()}`);
   }
@@ -68,10 +113,10 @@ export async function openViaHelper(input: HelperOpenRequest): Promise<void> {
 
 /** Trigga omedelbar self-update-kontroll. */
 export async function triggerHelperUpdateCheck(): Promise<void> {
-  await fetch(`${HELPER_BASE}/check-update`, {
+  await helperFetch("/check-update", {
     method: "POST",
     signal: AbortSignal.timeout(2_000),
-  }).catch(() => { /* tyst — best-effort */ });
+  }).catch(() => null);
 }
 
 /**
@@ -81,18 +126,18 @@ export async function triggerHelperUpdateCheck(): Promise<void> {
  * Mail.app på macOS, xdg-email på Linux, COM på Windows).
  *
  * Returnerar true om helpern accepterade requesten, false om något
- * gick fel (404 = helper kör äldre version utan endpoint, network
- * error, etc.) så caller kan logga + falla tillbaka tyst.
+ * gick fel (helper saknas, 404 = äldre version, network error, etc.)
+ * så caller kan logga + falla tillbaka tyst.
  */
 export async function composeMailViaHelper(input: ComposeMailRequest): Promise<boolean> {
   try {
-    const r = await fetch(`${HELPER_BASE}/compose-mail`, {
+    const r = await helperFetch("/compose-mail", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(input),
       signal: AbortSignal.timeout(10_000),
     });
-    return r.ok;
+    return r?.ok ?? false;
   } catch {
     return false;
   }
