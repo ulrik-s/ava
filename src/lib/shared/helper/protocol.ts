@@ -17,6 +17,16 @@ export const HELPER_PORT = 48761;
 /** Bas-URL webbappen pratar mot. */
 export const HELPER_BASE = `http://127.0.0.1:${HELPER_PORT}`;
 
+/**
+ * HTTPS-port (ADR 0006): Safari/WKWebView (Office-add-ins på Mac) blockerar
+ * https-sida → http-loopback som mixed content och kräver HTTPS. Använder
+ * `localhost` (matchar leaf-certets SAN/CN), inte 127.0.0.1.
+ */
+export const HELPER_HTTPS_PORT = 48762;
+
+/** HTTPS-bas-URL (betrott lokalt cert via helperns CA). */
+export const HELPER_HTTPS_BASE = `https://localhost:${HELPER_HTTPS_PORT}`;
+
 /** Prefix i `GET /ping`-svaret: "ava-helper <version>". */
 export const HELPER_PING_PREFIX = "ava-helper";
 
