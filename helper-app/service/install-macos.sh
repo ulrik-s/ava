@@ -38,6 +38,13 @@ sed "s|/Users/CURRENT_USER|$HOME|g" "$PLIST_SRC" > "$PLIST_TARGET"
 launchctl unload "$PLIST_TARGET" 2>/dev/null || true
 launchctl load -w "$PLIST_TARGET"
 
+# Installera helperns lokala CA i login-keychain så Safari/WKWebView litar på
+# HTTPS-loopback-certet (ADR 0006). Kräver en engångs-auktoriseringsprompt.
+# Misslyckas tyst → HTTP funkar ändå i Chrome/Edge/Firefox.
+echo "→ Installerar lokal CA i keychain (Safari/Office-add-in på Mac)…"
+"$BIN_DIR/ava-helper" --install-trust || \
+  echo "⚠ Kunde inte installera CA-trust automatiskt — Safari kan kräva manuell trust."
+
 # Verifiera
 sleep 1
 if curl -s --max-time 2 http://127.0.0.1:48761/ping >/dev/null; then

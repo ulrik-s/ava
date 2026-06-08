@@ -67,11 +67,16 @@ Script:en kopierar binären till user-writable plats, registrerar
 service-units och startar processen. Inga sudo/admin-rättigheter
 behövs.
 
+På **macOS** installerar scriptet även helperns lokala CA i login-keychain
+(`ava-helper --install-trust`) så Safari/WKWebView (Office-add-ins) litar på
+HTTPS-loopback-certet — det ger en engångs-auktoriseringsprompt (ADR 0006).
+Chrome/Edge/Firefox + Windows/Linux behöver inte detta (HTTP-loopback funkar).
+
 ## Avinstallera
 
 | OS | Kommando |
 |---|---|
-| macOS | `launchctl unload -w ~/Library/LaunchAgents/se.ava.helper.plist && rm "$_"` |
+| macOS | `~/Library/Application\ Support/AVA/ava-helper --uninstall-trust; launchctl unload -w ~/Library/LaunchAgents/se.ava.helper.plist && rm "$_"` |
 | Linux | `systemctl --user disable --now ava-helper` |
 | Windows | `schtasks /delete /tn "AVA Helper" /f` |
 
