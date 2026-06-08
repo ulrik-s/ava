@@ -113,17 +113,17 @@ echo "[build-demo] Kör next build (DEMO_BUILD=1)..."
 DEMO_BUILD=1 \
 NEXT_PUBLIC_DEMO_BUILD=1 \
 DEMO_BASE_PATH="${DEMO_BASE_PATH:-/ava}" \
-  yarn next build
+  bunx next build
 
 # ─── Seed: kör samma buildSeed som docker-firma:n men med demo-args ─────
 # Resultatet (JSON + PDF/DOCX) skrivs direkt in i `out/` så pages-sajten
 # serverar både app:en och datan från samma origin. Då slipper vi en
 # separat data-repo + slipper CORS.
 echo "[build-demo] Seedar demo-data direkt i out/..."
-yarn tsx tooling/scripts/build-demo-repo.ts --dir "$ROOT/out"
+bun tooling/scripts/build-demo-repo.ts --dir "$ROOT/out"
 
 echo "[build-demo] Genererar manifest.json över out/..."
-yarn tsx tooling/scripts/generate-demo-manifest.ts "$ROOT/out"
+bun tooling/scripts/generate-demo-manifest.ts "$ROOT/out"
 
 # .nojekyll: utan denna fil ignorerar GitHub Pages alla dotfile-mappar
 # (t.ex. /.ava/users/) → users + org-data skulle 404:a.

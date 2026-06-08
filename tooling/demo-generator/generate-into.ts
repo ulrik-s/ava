@@ -1,7 +1,7 @@
 /**
  * `generateInto` — delad kärna för att generera demo-data via tRPC-API:t in
  * i en git-katalog. Används av:
- *   • generate.ts          (fristående `yarn demo:generate`)
+ *   • generate.ts          (fristående `bun run demo:generate`)
  *   • build-demo-repo.ts   (GH-Pages-demon → skriver ovanpå out/)
  *   • seed-firma-local.ts  (docker self-hosted-repo + push)
  *

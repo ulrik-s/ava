@@ -2,7 +2,7 @@
  * Arkitektur-som-tester — ArchUnit-stil fitness functions (issue #11).
  *
  * Lagerbrott ska synas i SAMMA flöde som vanliga tester, inte bara i en
- * separat `yarn deps:check`-körning. Det här testet kör dependency-cruiser
+ * separat `bun run deps:check`-körning. Det här testet kör dependency-cruiser
  * programmatiskt mot den KANONISKA regeluppsättningen
  * (`tooling/config/dependency-cruiser.cjs`) — single source of truth, ingen
  * duplicerad regel-logik här — och asserterar att lager-reglerna är gröna.
@@ -42,7 +42,7 @@ beforeAll(async () => {
     ruleSet: { forbidden: config.forbidden },
     validate: true,
   };
-  // Spegla `yarn deps:check`: cruisa både prod- och testkod (regeln
+  // Spegla `bun run deps:check`: cruisa både prod- och testkod (regeln
   // "produktionskod importerar inte testfiler" behöver test/ i grafen).
   const result = await cruise(
     [path.join(repoRoot, "src"), path.join(repoRoot, "test")],

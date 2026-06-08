@@ -6,7 +6,7 @@
  *   - Inga "föräldraknark" — tester får importera prod-kod, ej tvärtom
  *   - Inga orphan-moduler (filer ingen importerar — kandidater för bortrensning)
  *
- * Kör: `yarn deps:check`
+ * Kör: `bun run deps:check`
  */
 module.exports = {
   forbidden: [

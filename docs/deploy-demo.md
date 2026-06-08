@@ -9,7 +9,7 @@ extern data-repo, ingen CORS, ingen tredje-parts auth.
 
 `.github/workflows/deploy-demo.yml` triggar vid push till `main`:
 
-1. Checkout + Node 24 + `yarn install --immutable`
+1. Checkout + Node 24 + `bun run install --immutable`
 2. `actions/configure-pages@v5` ger oss `base_path` (t.ex. `/ava`)
 3. `bash tooling/scripts/build-demo.sh` med env:
    - `DEMO_BUILD=1` + `NEXT_PUBLIC_DEMO_BUILD=1`
@@ -23,10 +23,10 @@ extern data-repo, ingen CORS, ingen tredje-parts auth.
 ```
 1. Stash:a server-only sidor (api/, login/, …)
 2. next build (DEMO_BUILD=1) → out/                       (statisk app)
-3. tsx tooling/scripts/build-demo-repo.ts --dir out       (rik demo-seed)
+3. bun tooling/scripts/build-demo-repo.ts --dir out       (rik demo-seed)
    ├─ buildSeed({ orgId: "demo-firma-ab", currentUserId: "u-anna", ... })
    └─ generateDocumentBytes (pdf-lib + html-to-docx)      (40 PDF/DOCX)
-4. tsx tooling/scripts/generate-demo-manifest.ts out       (manifest.json)
+4. bun tooling/scripts/generate-demo-manifest.ts out       (manifest.json)
 5. touch out/.nojekyll                                     (gh-pages serverar .ava/-dirs)
 6. cleanup-trap restaurerar app-träd
 ```
@@ -40,7 +40,7 @@ Resultat (typiskt):
 ## Manuell körning lokalt
 
 ```bash
-yarn install
+bun run install
 DEMO_BASE_PATH=/ava NEXT_PUBLIC_DEMO_REPO=ulrik-s/ava bash tooling/scripts/build-demo.sh
 
 # Smoke-test:
@@ -51,7 +51,7 @@ python3 -m http.server -d out 9000
 ## Bygg + push ett eget demo-repo (utan CI)
 
 ```bash
-yarn build:demo-repo --dir ./demo-repo
+bun run build:demo-repo --dir ./demo-repo
 cd ./demo-repo
 git init && git add -A && git commit -m "Demo seed"
 git remote add origin git@github.com:<owner>/<repo>.git
@@ -94,7 +94,7 @@ i `tooling/scripts/generate-demo-manifest.ts` missar någon entitet.
 
 **"PDF/DOCX 404"** — verifiera `out/documents/content/`. Filerna skrivs
 av `build-demo-repo.ts` → `generateDocumentBytes()`. Misslyckas vanligen
-om `pdf-lib` eller `html-to-docx` saknas (`yarn install`).
+om `pdf-lib` eller `html-to-docx` saknas (`bun run install`).
 
 **"å/ä/ö renderas konstigt i öppnat dokument"** — `_document-row.tsx`
 använder `openDocument()` som taggar `.md`-blobs med `charset=utf-8`.

@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 /**
- * `yarn diagnose-ui` — UI-diagnose-pipeline (djup-läge).
+ * `bun run diagnose-ui` — UI-diagnose-pipeline (djup-läge).
  *
  * För varje huvudvy:
  *   1. Besök sidan, screenshota, kolla "must contain"-text, samla console/

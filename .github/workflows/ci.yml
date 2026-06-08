@@ -9,12 +9,14 @@ on:
 # Opta in GitHub Actions runtime på Node 24. Annars kör checkout/setup-node/
 # upload-artifact på Node 20 som tvångsbyts 2026-06-16 och EOL:ar 2026-09-16
 # (deprecation-varning i loggen). Detta är skilt från setup-node:s node-version
-# nedan (= Node:n som kör yarn/build/test).
+# nedan (= Node:n som tool-binärerna tsc/eslint/vitest/next kör under via shebang).
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
-# Yarn (med nodeLinker: node-modules) är vad utvecklarna kör lokalt.
-# Vi använder corepack i CI så att exakt samma yarn-version används.
+# Bun (#91) är pakethanterare + script-runner. setup-bun ger `bun` på PATH
+# (kör `bun install --frozen-lockfile` + `bun run X` + `bun *.ts`-scripten);
+# setup-node behålls för att tool-binärerna (tsc/eslint/vitest/next/playwright)
+# körs under Node via sin shebang.
 #
 # OBS: AVA är git-first — ingen Prisma, Postgres, NextAuth, Meilisearch
 # eller Tika i stacken. CI speglar därför bara den faktiska stacken:
@@ -36,9 +38,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - run: corepack enable
-      - run: yarn install --immutable
-      - run: yarn commitlint --from "${{ github.event.pull_request.base.sha }}" --to "${{ github.event.pull_request.head.sha }}"
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bun run commitlint --from "${{ github.event.pull_request.base.sha }}" --to "${{ github.event.pull_request.head.sha }}"
 
   # ───────────────── Statisk analys ─────────────────
   static:
@@ -50,20 +54,22 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - run: corepack enable
-      - run: yarn install --immutable
-      - run: yarn typecheck
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
       # Ratchet med ventil (#41): struktur-reglerna (max-lines/-depth/-params/
       # -nested-callbacks + complexity) är `error`. Befintlig skuld ligger i
       # eslint-suppressions.json (43 poster); --max-warnings 0 fäller alla NYA
       # warnings OCH oavsedda warning-regler. Skulden betas av via `yarn
       # lint:prune` när en lång funktion bryts ut. Se docs/quality.md.
-      - run: yarn lint --max-warnings 0
-      - run: yarn deps:check
+      - run: bun run lint --max-warnings 0
+      - run: bun run deps:check
       # Gating: fäller på strukturfynd (döda filer, oanvända/olistade deps).
       # Export-/typ-fynd är "warn" i knip.json (rådgivande) tills #3/#4 städat dem.
-      - run: yarn knip
-      - run: yarn duplicates
+      - run: bun run knip
+      - run: bun run duplicates
       - name: Upload jscpd report
         if: always()
         uses: actions/upload-artifact@v4
@@ -83,9 +89,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - run: corepack enable
-      - run: yarn install --immutable
-      - run: yarn test:cov
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bun run test:cov
       - name: Upload coverage
         if: always()
         uses: actions/upload-artifact@v4
@@ -109,10 +117,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - run: corepack enable
-      - run: yarn install --immutable
-      - run: yarn build:demo
-      - run: yarn playwright install --with-deps chromium
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bun run build:demo
+      - run: bun run e2e:install
       - name: Start docker + hämta bootstrappad admin-PAT
         run: |
           # `--wait` gatar på web-containerns healthcheck (servar /ava/) innan
@@ -135,7 +145,7 @@ jobs:
           echo "AVA_RT_GIT_PAT=$PAT" >> "$GITHUB_ENV"
           # vänta tills web servar /ava/ (redundant efter --wait, men billig säkerhet)
           for i in $(seq 1 60); do curl -sf http://localhost:8080/ava/ >/dev/null && break; sleep 2; done
-      - run: yarn round-trip
+      - run: bun run round-trip
       - name: Tear down docker
         if: always()
         run: docker compose -f tooling/docker/docker-compose.yml down -v

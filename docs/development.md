@@ -35,7 +35,7 @@ Detaljer: [`architecture.md`](./architecture.md).
 ## Bygg + deploya demon
 
 ```bash
-yarn install
+bun install
 # CI sköter detta vid push till main: .github/workflows/deploy-demo.yml
 # Manuellt:
 DEMO_BASE_PATH=/ava bash tooling/scripts/build-demo.sh
@@ -65,16 +65,16 @@ Se [`auth.md`](./auth.md) för auth-modellen.
 ## Dev-server (mot lokal docker)
 
 ```bash
-yarn install
+bun install
 docker compose -f tooling/docker/docker-compose.yml up -d
-yarn dev
+bun run dev
 # Browser: http://localhost:3000
 ```
 
 ## Seed-data för byrån
 
 ```bash
-yarn seed:local
+bun run seed:local
 # → pushar 5 users, 17 contacts, 15 matters, 40 PDF/DOCX,
 #   7 avbetalningsplaner, 20 payments, 25 kalender-events till docker-firma.git
 ```
@@ -82,12 +82,12 @@ yarn seed:local
 ## Test + kvalitet
 
 ```bash
-yarn test:fast           # ~2224 tester
-yarn typecheck           # tsc --noEmit
-yarn lint                # eslint (flat config)
-yarn deps:check          # dependency-cruiser (lagergränser)
-yarn knip                # död kod / oanvända deps
-yarn round-trip          # E2E mot docker (kräver docker upp)
+bun run test:fast           # ~2224 tester
+bun run typecheck           # tsc --noEmit
+bun run lint                # eslint (flat config)
+bun run deps:check          # dependency-cruiser (lagergränser)
+bun run knip                # död kod / oanvända deps
+bun run round-trip          # E2E mot docker (kräver docker upp)
 ```
 
 Se [`quality.md`](./quality.md) för verktyg och tröskelvärden, och

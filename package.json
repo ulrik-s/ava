@@ -4,16 +4,16 @@
   "license": "MIT",
   "private": true,
   "scripts": {
-    "dev": "concurrently -n next,cors -c blue,cyan \"next dev\" \"yarn dev:cors\"",
+    "dev": "concurrently -n next,cors -c blue,cyan \"next dev\" \"bun run dev:cors\"",
     "dev:next": "next dev",
     "dev:cors": "cors-proxy start -p 9999",
     "build": "next build",
     "build:demo": "DEMO_BASE_PATH=/ava bash tooling/scripts/build-demo.sh",
-    "build:demo-repo": "tsx tooling/scripts/build-demo-repo.ts",
-    "demo:generate": "tsx tooling/demo-generator/generate.ts",
+    "build:demo-repo": "bun tooling/scripts/build-demo-repo.ts",
+    "demo:generate": "bun tooling/demo-generator/generate.ts",
     "demo:serve": "bash tooling/scripts/demo-serve.sh",
     "demo:serve:fast": "SKIP_BUILD=1 bash tooling/scripts/demo-serve.sh",
-    "seed:local": "tsx tooling/scripts/seed-firma-local.ts",
+    "seed:local": "bun tooling/scripts/seed-firma-local.ts",
     "start": "next start",
     "tier3:up": "docker compose -f tooling/docker/docker-compose.yml up -d --build",
     "tier3:down": "docker compose -f tooling/docker/docker-compose.yml down",
@@ -34,7 +34,7 @@
     "e2e:demo": "playwright test --config tooling/config/playwright-demo.config.ts",
     "e2e:install": "playwright install --with-deps chromium",
     "round-trip": "playwright test --config tooling/config/playwright.round-trip.config.ts",
-    "diagnose-ui": "tsx tooling/scripts/diagnose-ui.ts",
+    "diagnose-ui": "bun tooling/scripts/diagnose-ui.ts",
     "smoke:tier3": "bash tooling/scripts/test-tier3-smoke.sh",
     "test:all": "bash tooling/scripts/test-all.sh",
     "duplicates": "jscpd --config tooling/config/jscpd.json src",
@@ -43,9 +43,9 @@
     "deps:archi": "depcruise --config tooling/config/dependency-cruiser.cjs --output-type archi src | dot -Tsvg > reports/architecture.svg",
     "knip": "knip --config tooling/config/knip.json",
     "knip:report": "knip --config tooling/config/knip.json --no-exit-code",
-    "quality": "npm run typecheck && npm run lint && npm run test:cov && npm run duplicates && npm run deps:check && npm run knip:report",
-    "quality:fast": "npm run typecheck && npm run lint && npm run test:fast",
-    "quality:report": "mkdir -p reports && npm run test:cov && npm run duplicates && npm run deps:check || true",
+    "quality": "bun run typecheck && bun run lint && bun run test:cov && bun run duplicates && bun run deps:check && bun run knip:report",
+    "quality:fast": "bun run typecheck && bun run lint && bun run test:fast",
+    "quality:report": "mkdir -p reports && bun run test:cov && bun run duplicates && bun run deps:check || true",
     "prepare": "husky"
   },
   "lint-staged": {
@@ -102,14 +102,16 @@
     "husky": "^9.1.7",
     "jscpd": "^4.2.4",
     "jsdom": "^29.1.1",
-    "knip": "^6.15.0",
+    "knip": "6.15.0",
     "lint-staged": "^16.4.0",
     "pdf-lib": "^1.17.1",
     "playwright": "^1.60.0",
     "tailwindcss": "^4",
-    "tsx": "^4.22.4",
     "typescript": "^6",
     "vite-plugin-tsconfig-paths": "^1.4.1",
     "vitest": "^4.1.8"
-  }
+  },
+  "trustedDependencies": [
+    "unrs-resolver"
+  ]
 }

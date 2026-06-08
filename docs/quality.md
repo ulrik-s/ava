@@ -50,7 +50,7 @@ lever som JSON i ett git-repo (se [`architecture.md`](./architecture.md)).
 
 ## Mått och tröskelvärden
 
-### Kodtäckning (`npm run test:cov`)
+### Kodtäckning (`bun run test:cov`)
 
 Initial baslinje-tröskel — höj efterhand som tester läggs till. Tröskeln finns i `vitest.config.ts → coverage.thresholds`:
 
@@ -72,9 +72,9 @@ Aktuell baslinje (~2300 tester över ~254 testfiler; #43, strax under faktisk):
 
 Coverage-rapporten skrivs till `reports/coverage/` (HTML, lcov, json-summary, text).
 
-### Komplexitet (`yarn lint`)
+### Komplexitet (`bun run lint`)
 
-Alla struktur-regler är `error` (inte `warn`). CI kör `yarn lint --max-warnings 0`.
+Alla struktur-regler är `error` (inte `warn`). CI kör `bun run lint --max-warnings 0`.
 
 | Mått | Gräns | Nivå |
 |---|---|---|
@@ -101,28 +101,28 @@ repo-roten — ESLint 10:s inbyggda
 - **Hårdare ratchet** — en ny funktion > 100 rader (eller för djup/för många
   parametrar) är ett `error`, inte en warning bland 45.
 - **Mekanisk nedtrappning mot 0** — när en lång funktion bryts ut kör man
-  `yarn lint:prune` som tar bort dess post ur baseline:n. Filen krymper i git;
+  `bun run lint:prune` som tar bort dess post ur baseline:n. Filen krymper i git;
   diffen visar exakt vilken skuld som betats. Posterna får **bara** minska.
 
 Arbetsflöde:
 
 ```bash
-yarn lint:prune     # efter en refaktorering: ta bort betalda poster ur baseline
-yarn lint:suppress  # ENDAST om en helt ny, oundviklig long-fn måste in (motivera i PR)
+bun run lint:prune     # efter en refaktorering: ta bort betalda poster ur baseline
+bun run lint:suppress  # ENDAST om en helt ny, oundviklig long-fn måste in (motivera i PR)
 ```
 
-`yarn lint:suppress` lägger till i baseline:n och ska behandlas som en
+`bun run lint:suppress` lägger till i baseline:n och ska behandlas som en
 ratchet-loosening — undvik den; bryt hellre ut funktionen. Antalet poster i
 `eslint-suppressions.json` är skuldräknaren (mål: 0).
 
-### Duplikat (`yarn duplicates`)
+### Duplikat (`bun run duplicates`)
 
 | Mått | Gräns |
 |---|---|
 | Duplicerade kodblock | ≥ 8 rader / ≥ 80 tokens |
 | Procent duplikat | < 1.5 % av kodbasen |
 
-### Arkitektur (`yarn deps:check`)
+### Arkitektur (`bun run deps:check`)
 
 Hårda regler (severity `error`):
 
@@ -166,27 +166,27 @@ Mjuka regler (`warn`):
 
 ```bash
 # Snabb feedback under utveckling (< 60s, hoppar över E2E)
-npm run test:fast         # bara unit + komponenttester (~18s)
-npm run quality:fast      # typecheck + lint + test:fast
+bun run test:fast         # bara unit + komponenttester (~18s)
+bun run quality:fast      # typecheck + lint + test:fast
 
 # Hela testsviten — startar docker compose, kör allt inkl. E2E
-npm run test:full
+bun run test:full
 
 # Full kvalitetscheck som CI kör
-npm run quality           # typecheck + lint + coverage + duplicates + deps + knip
+bun run quality           # typecheck + lint + coverage + duplicates + deps + knip
 
 # Bara rapporter (genererar utan att fail:a)
-npm run quality:report    # coverage + jscpd + dep-graph
+bun run quality:report    # coverage + jscpd + dep-graph
 
 # Specifika verktyg
-npm run test:cov          # tester + coverage-rapport (HTML i coverage/)
-npm run test:ui           # interaktiv vitest-UI
-npm run e2e               # Playwright headless
-npm run e2e:ui            # interaktiv Playwright
-npm run duplicates        # jscpd, rapport i reports/jscpd/html/
-npm run deps:check        # depcruise — fail:ar vid förbjudna importer
-npm run deps:archi        # arkitekturdiagram (SVG, kräver Graphviz `dot`)
-npm run knip              # oanvända filer/exporter
+bun run test:cov          # tester + coverage-rapport (HTML i coverage/)
+bun run test:ui           # interaktiv vitest-UI
+bun run e2e               # Playwright headless
+bun run e2e:ui            # interaktiv Playwright
+bun run duplicates        # jscpd, rapport i reports/jscpd/html/
+bun run deps:check        # depcruise — fail:ar vid förbjudna importer
+bun run deps:archi        # arkitekturdiagram (SVG, kräver Graphviz `dot`)
+bun run knip              # oanvända filer/exporter
 ```
 
 ## Pipeline (CI)

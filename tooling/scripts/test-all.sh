@@ -4,7 +4,7 @@
 # Lager:
 #   - static:      typecheck + lint + deps:check + duplicates + knip
 #   - vitest:      unit + komponent + integration (med coverage)
-#   - build:       yarn build (production Next.js)
+#   - build:       bun run build (production Next.js)
 #   - demo-build:  bash tooling/scripts/build-demo.sh (statisk export för GH Pages)
 #   - e2e:         Playwright round-trip mot tier 3-stacken (docker-compose.yml)
 #
@@ -12,8 +12,8 @@
 # (postgres+meili+tika) togs bort i samband med Prisma-borttagningen.
 #
 # Användning:
-#   yarn test:all              # hela stacken inkl. e2e (kräver docker)
-#   yarn test:all --no-e2e     # hoppar e2e + docker (fast lokal feedback)
+#   bun run test:all              # hela stacken inkl. e2e (kräver docker)
+#   bun run test:all --no-e2e     # hoppar e2e + docker (fast lokal feedback)
 
 set -euo pipefail
 
@@ -35,19 +35,19 @@ START=$SECONDS
 
 # ─── 1. Static analysis ──────────────────────────────────────────
 bold "[1/5] Static analysis (typecheck + lint + deps + duplicates + knip)"
-yarn typecheck && ok "typecheck"
-yarn lint && ok "lint"
-yarn deps:check && ok "deps:check (cycle detection)"
-yarn duplicates && ok "duplicates (jscpd)"
-yarn knip:report && ok "knip (dead code)"
+bun run typecheck && ok "typecheck"
+bun run lint && ok "lint"
+bun run deps:check && ok "deps:check (cycle detection)"
+bun run duplicates && ok "duplicates (jscpd)"
+bun run knip:report && ok "knip (dead code)"
 
 # ─── 2. Vitest med coverage ──────────────────────────────────────
 bold "[2/5] Vitest (unit + komponent)"
-yarn vitest run --config tooling/config/vitest.config.ts --coverage && ok "vitest"
+bunx vitest run --config tooling/config/vitest.config.ts --coverage && ok "vitest"
 
 # ─── 3. Build (Next.js production) ───────────────────────────────
-bold "[3/5] yarn build (Next.js production)"
-yarn build >/dev/null && ok "next build"
+bold "[3/5] bun run build (Next.js production)"
+bun run build >/dev/null && ok "next build"
 
 # ─── 4. Demo-build (statisk export för GH Pages) ─────────────────
 bold "[4/5] bash tooling/scripts/build-demo.sh (GH Pages-export)"
@@ -58,7 +58,7 @@ if [[ $SKIP_E2E -eq 1 ]]; then
   bold "[5/5] Round-trip e2e — HOPPAR (--no-e2e)"
 else
   bold "[5/5] Round-trip e2e (tier 3-stacken)"
-  yarn tier3:up >/dev/null && ok "docker compose up"
+  bun run tier3:up >/dev/null && ok "docker compose up"
   # Vänta tills web-servicen svarar
   for i in {1..15}; do
     if curl -sf -o /dev/null http://localhost:8080/ava/ 2>/dev/null; then
@@ -67,7 +67,7 @@ else
     sleep 1
     if [[ $i -eq 15 ]]; then echo "    web svarar inte efter 15s"; exit 1; fi
   done
-  yarn round-trip && ok "round-trip"
+  bun run round-trip && ok "round-trip"
 fi
 
 # ─── Sammanställning ─────────────────────────────────────────────

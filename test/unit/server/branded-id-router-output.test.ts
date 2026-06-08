@@ -3,7 +3,7 @@
  * till `any` vid `Joined<Row>`-gränsen i datalagret.
  *
  * Detta är ett TYP-NIVÅ-kontrakt: assertions:erna nedan verifieras av
- * `yarn typecheck` (include: **\/*.ts). Om en delegate åter-typas till
+ * `bun run typecheck` (include: **\/*.ts). Om en delegate åter-typas till
  * `Delegate<any>`, eller `Joined` återinför en `[k: string]: any`-index-
  * signatur, blir `.id` `any` igen → dessa rader blir röda. Runtime-testet
  * finns bara så vitest räknar filen.
@@ -44,7 +44,7 @@ type _distinct = Assert<Out["matter"]["getById"]["id"] extends ContactId ? false
 describe("branded id:n når router-output (#39)", () => {
   it("är ett typ-nivå-kontrakt som verifieras av tsc", () => {
     // De faktiska assertions:erna är typerna ovan; om de inte håller blir
-    // `yarn typecheck` rött. Här bekräftar vi bara att filen körs.
+    // `bun run typecheck` rött. Här bekräftar vi bara att filen körs.
     expect(true).toBe(true);
   });
 });

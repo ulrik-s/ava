@@ -9,11 +9,11 @@ const projectRoot = path.resolve(__dirname, "..", "..");
  * verifierar att UI-handlingar landar i bare-repo:t.
  *
  * Krav (externt): `docker compose -f tooling/docker/docker-compose.yml up -d --build` + `out/` byggd
- * (`DEMO_BASE_PATH=/ava yarn build`). Repo:t nås på
+ * (`DEMO_BASE_PATH=/ava bun run build`). Repo:t nås på
  * http://localhost:8080/git/firma.git (samma origin som /ava → ingen
  * cors-proxy).
  *
- * Kör: yarn playwright test --config tooling/config/playwright.round-trip.config.ts
+ * Kör: bun run playwright test --config tooling/config/playwright.round-trip.config.ts
  */
 export default defineConfig({
   testDir: path.join(projectRoot, "test/e2e/round-trip"),

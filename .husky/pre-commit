@@ -1,4 +1,4 @@
 #!/usr/bin/env sh
 # Snabb pre-commit-check: bara filer som ändras körs genom lint + format.
 # Tunga checks (test, jscpd, depcruise) körs i CI istället.
-npx lint-staged
+bunx lint-staged

@@ -5,7 +5,7 @@
  *
  * Användning:
  *
- *   yarn tsx tooling/scripts/generate-demo-manifest.ts [demo-repo-rot]
+ *   bun tooling/scripts/generate-demo-manifest.ts [demo-repo-rot]
  *
  * Utan argument används CWD. Default skannar:
  *   - matters/**\/*.json

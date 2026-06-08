@@ -87,7 +87,7 @@ function resolveCorsProxy(opt: string | null | undefined): string | null {
   // 1. Build-time injicerad proxy (Cloudflare Worker i prod-deploy)
   const envProxy = process.env.NEXT_PUBLIC_CORS_PROXY_URL;
   if (envProxy) return envProxy;
-  // 2. Dev-läge: lokal cors-proxy på 9999 (startas av `yarn dev`).
+  // 2. Dev-läge: lokal cors-proxy på 9999 (startas av `bun run dev`).
   const loc = (globalThis as { location?: { hostname?: string } }).location;
   const host = loc?.hostname ?? "";
   const isLocalDev = host === "localhost" || host === "127.0.0.1";

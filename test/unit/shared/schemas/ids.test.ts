@@ -6,7 +6,7 @@
  *      eller valideringen (samma som en vanlig `z.string().min(1)`).
  *   2. Typ-nivå (`@ts-expect-error`) — bevisar att brands är nominellt
  *      distinkta. Dessa rader körs harmlöst men deras VÄRDE ligger i att
- *      `yarn typecheck` (include: **\/*.ts) verifierar att felen finns där
+ *      `bun run typecheck` (include: **\/*.ts) verifierar att felen finns där
  *      de ska. Tas en brand bort → typecheck blir rött.
  */
 

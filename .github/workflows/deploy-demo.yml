@@ -30,20 +30,24 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: yarn
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
 
       - name: Setup Pages
         id: pages
         uses: actions/configure-pages@v5
 
       - name: Install dependencies
-        run: yarn install --immutable
+        run: bun install --frozen-lockfile
 
       # Bygger appen som statisk export OCH seedar demo-data direkt i out/.
       # build-demo.sh kör:
       #   1. next build (DEMO_BUILD=1) → out/
-      #   2. tsx tooling/scripts/build-demo-repo.ts --dir out  (seed-data)
-      #   3. tsx tooling/scripts/generate-demo-manifest.ts out (manifest.json)
+      #   2. bun tooling/scripts/build-demo-repo.ts --dir out  (seed-data)
+      #   3. bun tooling/scripts/generate-demo-manifest.ts out (manifest.json)
       #   4. touch out/.nojekyll (så .ava/-mappar serveras av Pages)
       - name: Build demo (app + seeded data)
         env:

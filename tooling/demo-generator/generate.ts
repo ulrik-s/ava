@@ -2,8 +2,8 @@
  * `demo-generator` — fristående program som populerar den AKTIVA backenden
  * med demo-data via tRPC-API:t (ADR 0001/0003).
  *
- *   tsx tooling/demo-generator/generate.ts --backend=git --out=./demo-repo
- *   tsx tooling/demo-generator/generate.ts --backend=postgres   (stub)
+ *   bun tooling/demo-generator/generate.ts --backend=git --out=./demo-repo
+ *   bun tooling/demo-generator/generate.ts --backend=postgres   (stub)
  *
  * Git-läget producerar ett pushbart repo. Postgres-läget är en stub tills
  * PostgresStore finns (ADR 0001 Fas 3).
