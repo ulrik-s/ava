@@ -13,6 +13,10 @@ const reportQuery = {
   data: undefined as Record<string, unknown> | undefined,
   isLoading: false,
 };
+const billedQuery = {
+  data: undefined as Record<string, unknown> | undefined,
+  isLoading: false,
+};
 
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
@@ -23,6 +27,7 @@ vi.mock("@/lib/client/trpc", () => ({
     },
     reports: {
       perLawyer: { useQuery: () => reportQuery },
+      billed: { useQuery: () => billedQuery },
     },
     prefs: {
       get: { useQuery: () => ({ data: undefined, isLoading: false }) },
@@ -39,7 +44,21 @@ beforeEach(() => {
   usersQuery.data = { users: [{ id: "u1", name: "Anna" }, { id: "u2", name: "Bo" }] };
   reportQuery.data = undefined;
   reportQuery.isLoading = false;
+  billedQuery.data = undefined;
+  billedQuery.isLoading = false;
 });
+
+const sampleBilled = {
+  user: { id: "u1", name: "Anna" },
+  period: { from: "2026-06-01", to: "2026-06-30" },
+  prevPeriod: { from: "2026-05-01", to: "2026-05-31" },
+  invoices: [
+    { id: "i1", invoiceDate: "2026-06-15T00:00:00.000Z", amountOre: 100000, shareOre: 75000, matterNumber: "2026-0001", title: "Tvist" },
+  ],
+  billedOre: 75000,
+  writeOffOre: 10000,
+  netOre: 65000,
+};
 
 const sampleReport = {
   user: { id: "u1", name: "Anna" },
@@ -187,5 +206,19 @@ describe("ReportsPage", () => {
     const url = fetchMock.mock.calls[0]![0] as string;
     expect(url).toContain("/api/reports/excel?");
     expect(url).toContain("userIds=u1");
+  });
+
+  it("renderar Fakturerat-rapporten med netto + fakturarad (#90)", () => {
+    billedQuery.data = sampleBilled;
+    render(<ReportsPage />);
+    expect(screen.getByText(/Fakturerat — Anna/)).toBeInTheDocument();
+    expect(screen.getByText("Netto-fakturerat")).toBeInTheDocument();
+    // Fakturaraden syns (ärendenummer).
+    expect(screen.getByText(/2026-0001/)).toBeInTheDocument();
+  });
+
+  it("visar inte Fakturerat-rapporten innan data finns", () => {
+    render(<ReportsPage />);
+    expect(screen.queryByText(/Fakturerat —/)).toBeNull();
   });
 });
