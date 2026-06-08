@@ -4,11 +4,13 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { tryHelperOpen, shouldPreferExternalEdit } from "@/lib/client/firma/open-document-externally";
+import { resetHelperBaseCache } from "@/lib/client/helper/use-helper";
 
 const originalFetch = global.fetch;
 beforeEach(() => {
   vi.restoreAllMocks();
   global.fetch = originalFetch;
+  resetHelperBaseCache();
 });
 
 describe("shouldPreferExternalEdit", () => {
