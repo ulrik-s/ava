@@ -1,8 +1,7 @@
 /**
- * E2E mot den FAKTISKT shippade artefakten (#99): kompilerar binären med
- * `bun build --compile` och kör den. Källtesterna kör mot TS — det här
- * fångar sådant som bara går sönder i den kompilerade binären (versions-
- * injektion via --define, Bun.serve i compiled-kontext, embedded runtime).
+ * E2E mot den FAKTISKT shippade artefakten (#99, #102): kompilerar binären
+ * med `bun build --compile` och kör den. Verifierar HTTP-API:t OCH att
+ * HTTPS serveras med ett lokalt genererat cert (ADR 0006).
  */
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
@@ -10,12 +9,15 @@ import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { connect } from "node:tls";
 
 import { HELPER_PING_PREFIX } from "@/lib/shared/helper/protocol";
 
 const VERSION = "helper-v9.9.9-e2e";
-const PORT = 48799; // ej default-porten → krockar inte med ev. riktig helper
-const BASE = `http://127.0.0.1:${PORT}`;
+const HTTP_PORT = 48799;
+const HTTPS_PORT = 48798;
+const HTTP_BASE = `http://127.0.0.1:${HTTP_PORT}`;
+const HTTPS_BASE = `https://localhost:${HTTPS_PORT}`;
 
 let dir: string;
 let bin: string;
@@ -24,7 +26,6 @@ let server: ChildProcess | undefined;
 beforeAll(async () => {
   dir = await mkdtemp(join(tmpdir(), "ava-helper-e2e-"));
   bin = join(dir, "ava-helper");
-  // Kompilera för host-plattformen med inbakad version (process.execPath = bun).
   const build = spawnSync(
     process.execPath,
     ["build", "src/main.ts", "--compile", "--define", `__AVA_HELPER_VERSION__="${VERSION}"`, "--outfile", bin],
@@ -33,6 +34,19 @@ beforeAll(async () => {
   if (build.status !== 0) {
     throw new Error(`bun build --compile misslyckades (${build.status}): ${build.stderr ?? ""}`);
   }
+  // Egen HOME/data-dir så cert + logg hamnar i temp (ingen pollution).
+  server = spawn(bin, [], {
+    stdio: "ignore",
+    env: {
+      ...process.env,
+      AVA_HELPER_PORT: String(HTTP_PORT),
+      AVA_HELPER_HTTPS_PORT: String(HTTPS_PORT),
+      HOME: dir,
+      XDG_DATA_HOME: dir,
+      LOCALAPPDATA: dir,
+    },
+  });
+  await waitForHttp();
 }, 60_000);
 
 afterAll(async () => {
@@ -40,11 +54,11 @@ afterAll(async () => {
   await rm(dir, { recursive: true, force: true });
 });
 
-async function waitForReady(timeoutMs = 10_000): Promise<void> {
+async function waitForHttp(timeoutMs = 10_000): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
     try {
-      const r = await fetch(`${BASE}/ping`, { signal: AbortSignal.timeout(500) });
+      const r = await fetch(`${HTTP_BASE}/ping`, { signal: AbortSignal.timeout(500) });
       if (r.ok) return;
     } catch {
       /* inte uppe än */
@@ -54,6 +68,22 @@ async function waitForReady(timeoutMs = 10_000): Promise<void> {
   }
 }
 
+/** CN i certet HTTPS-servern presenterar (utan att validera kedjan). */
+function peerCertCommonName(port: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const socket = connect({ host: "localhost", port, servername: "localhost", rejectUnauthorized: false }, () => {
+      const subject: unknown = socket.getPeerCertificate().subject;
+      socket.end();
+      const cn = subject !== null && typeof subject === "object" && "CN" in subject
+        ? String((subject as { CN?: unknown }).CN ?? "")
+        : "";
+      resolve(cn);
+    });
+    socket.setTimeout(5_000, () => socket.destroy(new Error("TLS-timeout")));
+    socket.on("error", reject);
+  });
+}
+
 describe("kompilerad binär (--compile)", () => {
   test("--version skriver ut den inbakade versionen", () => {
     const r = spawnSync(bin, ["--version"], { encoding: "utf8" });
@@ -61,25 +91,33 @@ describe("kompilerad binär (--compile)", () => {
     expect(r.stdout.trim()).toBe(VERSION);
   });
 
-  test("startar och serverar /ping, /version, CORS och /check-update", async () => {
-    server = spawn(bin, [], { env: { ...process.env, AVA_HELPER_PORT: String(PORT) }, stdio: "ignore" });
-    await waitForReady();
-
-    const ping = await fetch(`${BASE}/ping`);
+  test("HTTP: /ping, /version, CORS och /check-update", async () => {
+    const ping = await fetch(`${HTTP_BASE}/ping`);
     expect(ping.status).toBe(200);
     expect((await ping.text()).trim()).toBe(`${HELPER_PING_PREFIX} ${VERSION}`);
 
-    const version = await fetch(`${BASE}/version`);
+    const version = await fetch(`${HTTP_BASE}/version`);
     expect(((await version.json()) as { current: string }).current).toBe(VERSION);
 
-    const cors = await fetch(`${BASE}/ping`, {
+    const cors = await fetch(`${HTTP_BASE}/ping`, {
       method: "OPTIONS",
       headers: { Origin: "http://localhost:3000" },
     });
     expect(cors.status).toBe(204);
     expect(cors.headers.get("Access-Control-Allow-Origin")).toBe("http://localhost:3000");
 
-    const upd = await fetch(`${BASE}/check-update`, { method: "POST" });
+    const upd = await fetch(`${HTTP_BASE}/check-update`, { method: "POST" });
     expect(upd.status).toBe(202);
-  }, 20_000);
+  });
+
+  test("HTTPS: serverar /ping med ett localhost-cert (ADR 0006)", async () => {
+    // Certet är signerat av helperns egen lokala CA → validera inte kedjan här.
+    const ping = await fetch(`${HTTPS_BASE}/ping`, {
+      tls: { rejectUnauthorized: false },
+    } as RequestInit);
+    expect(ping.status).toBe(200);
+    expect((await ping.text()).trim()).toBe(`${HELPER_PING_PREFIX} ${VERSION}`);
+
+    expect(await peerCertCommonName(HTTPS_PORT)).toBe("localhost");
+  });
 });

@@ -3,6 +3,8 @@ import { describe, it, expect } from "vitest-compat";
 import {
   formatPing,
   HELPER_BASE,
+  HELPER_HTTPS_BASE,
+  HELPER_HTTPS_PORT,
   HELPER_PING_PREFIX,
   HELPER_PORT,
   isAllowedOrigin,
@@ -14,6 +16,10 @@ describe("konstanter", () => {
   it("HELPER_BASE byggs av porten", () => {
     expect(HELPER_PORT).toBe(48761);
     expect(HELPER_BASE).toBe("http://127.0.0.1:48761");
+  });
+  it("HTTPS-bas använder localhost (matchar cert-SAN) på egen port", () => {
+    expect(HELPER_HTTPS_PORT).toBe(48762);
+    expect(HELPER_HTTPS_BASE).toBe("https://localhost:48762");
   });
 });
 
