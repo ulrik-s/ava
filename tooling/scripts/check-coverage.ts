@@ -26,10 +26,12 @@ const TEST_GLOBS = ["test/unit", "test/integration", "test/scripts"];
 function runTests(): void {
   const proc = spawnSync(
     "bun",
-    // --timeout 20000: realgit-/integrationstester (NodeGitOps spawnar git)
-    // är legitimt långsamma under --parallel-kontention på CI; default 5s
-    // är för snålt och gav flakiga timeouts (#112).
-    ["test", "--parallel", "--timeout", "20000", "--coverage", "--coverage-reporter=lcov", ...TEST_GLOBS],
+    // --timeout 30000: realgit-/integrationstester (NodeGitOps + server-
+    // working-copy spawnar git) är legitimt långsamma under --parallel-
+    // kontention på CI; default 5s gav flakiga timeouts (#112), och 20s
+    // räckte inte längre när server-runtimens skriv-väg lade till fler
+    // git-spawnande sviter (#116) → höjt till 30s.
+    ["test", "--parallel", "--timeout", "30000", "--coverage", "--coverage-reporter=lcov", ...TEST_GLOBS],
     { stdio: "inherit" },
   );
   if (proc.status !== 0) {
