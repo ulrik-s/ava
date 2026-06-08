@@ -13,25 +13,41 @@
  * Events visas read-only (skapas via integrationer; ej CRUD här).
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Calendar, CheckSquare, Square, Clock, MapPin, Trash2, Pencil, Plus } from "lucide-react";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
 import { Modal } from "@/components/ui/modal";
+import { deadlineColor, type DeadlineColor } from "@/lib/shared/deadline-color";
+import { rangeForView, shiftAnchor, viewRangeLabel, groupByDay, type TodoView } from "@/lib/client/todo/todo-views";
 
 const TASK_STATUS_LABELS: Record<string, string> = { TODO: "Att göra", IN_PROGRESS: "Pågår", DONE: "Klar" };
 const TASK_PRIORITY_LABELS: Record<string, string> = { LOW: "Låg", MEDIUM: "Medium", HIGH: "Hög" };
 const EVENT_KIND_LABELS: Record<string, string> = { appointment: "Möte", deadline: "Frist" };
 
+// Vänster-kant-färg per deadline-status (#88). border-transparent när ingen
+// färg så radhöjden inte hoppar mellan färgad/ofärgad.
+const DEADLINE_BORDER: Record<DeadlineColor, string> = {
+  green: "border-l-4 border-green-500",
+  yellow: "border-l-4 border-amber-500",
+  red: "border-l-4 border-red-500",
+};
+const VIEW_LABELS: Record<TodoView, string> = { day: "Dag", week: "Vecka", month: "Månad" };
+const VIEW_PREF_KEY = "ava.todo.view";
+
+function readStoredView(): TodoView {
+  if (typeof localStorage === "undefined") return "day";
+  const v = localStorage.getItem(VIEW_PREF_KEY);
+  return v === "week" || v === "month" ? v : "day";
+}
+
 function startOfDay(d: Date): Date { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; }
-function endOfDay(d: Date): Date { const x = new Date(d); x.setHours(23, 59, 59, 999); return x; }
 function toInputDate(d: Date): string {
   // Använd LOKAL-datum (inte UTC) — annars visar input fel dag för användare
   // öster om UTC innan kl 02:00 lokalt (toISOString → UTC → föregående dag).
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 function fromInputDate(s: string): Date { const [y, m, day] = s.split("-").map(Number); return new Date(y ?? 1970, (m ?? 1) - 1, day ?? 1); }
-function shiftDays(d: Date, n: number): Date { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
 
 interface TaskForm {
   id?: string;
@@ -57,15 +73,21 @@ function emptyForm(defaultDate: Date): TaskForm {
 /* eslint-disable max-lines-per-function, complexity -- JSX-tung med dag/user-väljare + lista + modal-CRUD */
 export default function TodoClient() {
   const [day, setDay] = useState<Date>(() => startOfDay(new Date()));
+  const [view, setView] = useState<TodoView>(() => readStoredView());
   const [userId, setUserId] = useState<string>("");
   const [modalState, setModalState] = useState<{ mode: "create" | "edit"; form: TaskForm } | null>(null);
+
+  useEffect(() => {
+    try { localStorage.setItem(VIEW_PREF_KEY, view); } catch { /* pref ej kritisk */ }
+  }, [view]);
+  const now = new Date();
 
   const users = trpc.user.list.useQuery();
   const me = trpc.user.current.useQuery();
   const effectiveUserId = userId || me.data?.id;
   const isOwn = !userId || userId === me.data?.id;
 
-  const range = useMemo(() => ({ from: startOfDay(day), to: endOfDay(day) }), [day]);
+  const range = useMemo(() => rangeForView(view, day), [view, day]);
   const items = trpc.todo.list.useQuery(
     { from: range.from, to: range.to, ...(effectiveUserId ? { userId: effectiveUserId } : {}) },
     // Gate på me.data → demo-runtime hydrerar users asynkront; utan gate
@@ -82,7 +104,7 @@ export default function TodoClient() {
   const updateTaskStatus = trpc.task.update.useMutation({ onSuccess: refresh });
   const deleteTask = trpc.task.delete.useMutation({ onSuccess: refresh });
 
-  const dayLabel = day.toLocaleDateString("sv-SE", { weekday: "long", day: "numeric", month: "long" });
+  const periodLabel = viewRangeLabel(view, day);
 
   function submitForm(): void {
     if (!modalState) return;
@@ -104,11 +126,25 @@ export default function TodoClient() {
   return (
     <div className="p-6 space-y-4">
       <header className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold">Att göra <span className="ml-2 text-base font-normal text-gray-500">{dayLabel}</span></h1>
+        <h1 className="text-2xl font-bold">Att göra <span className="ml-2 text-base font-normal text-gray-500 capitalize">{periodLabel}</span></h1>
         <div className="flex items-center gap-2">
-          <button onClick={() => setDay((d) => shiftDays(d, -1))} className="px-3 py-1.5 text-sm border rounded hover:bg-gray-50">← Igår</button>
+          {/* Vy-växel Dag/Vecka/Månad (#88) */}
+          <div role="group" aria-label="Vy" className="inline-flex rounded border overflow-hidden">
+            {(["day", "week", "month"] as const).map((v) => (
+              <button
+                key={v}
+                type="button"
+                aria-pressed={view === v}
+                onClick={() => setView(v)}
+                className={`px-3 py-1.5 text-sm ${view === v ? "bg-blue-600 text-white" : "bg-white hover:bg-gray-50"}`}
+              >
+                {VIEW_LABELS[v]}
+              </button>
+            ))}
+          </div>
+          <button onClick={() => setDay((d) => shiftAnchor(view, d, -1))} aria-label="Föregående" className="px-3 py-1.5 text-sm border rounded hover:bg-gray-50">←</button>
           <button onClick={() => setDay(startOfDay(new Date()))} className="px-3 py-1.5 text-sm border rounded hover:bg-gray-50">Idag</button>
-          <button onClick={() => setDay((d) => shiftDays(d, 1))} className="px-3 py-1.5 text-sm border rounded hover:bg-gray-50">Imorgon →</button>
+          <button onClick={() => setDay((d) => shiftAnchor(view, d, 1))} aria-label="Nästa" className="px-3 py-1.5 text-sm border rounded hover:bg-gray-50">→</button>
           <input
             type="date"
             value={toInputDate(day)}
@@ -134,34 +170,28 @@ export default function TodoClient() {
         </select>
       </div>
 
-      <TodoList
-        items={items.data ?? []}
-        isLoading={items.isLoading}
-        isOwn={isOwn}
-        onToggle={(it) => {
-          if (it.status === "DONE") {
-            updateTaskStatus.mutate({ id: it.id, status: "TODO" });
-          } else {
-            completeTask.mutate({ id: it.id });
-          }
-        }}
-        onEdit={(it) => {
-          setModalState({
+      {(() => {
+        const handlers = {
+          isOwn,
+          now,
+          onToggle: (it: TodoRow) => {
+            if (it.status === "DONE") updateTaskStatus.mutate({ id: it.id, status: "TODO" });
+            else completeTask.mutate({ id: it.id });
+          },
+          onEdit: (it: TodoRow) => setModalState({
             mode: "edit",
             form: {
-              id: it.id,
-              title: it.title,
-              description: "",
-              priority: "MEDIUM",
+              id: it.id, title: it.title, description: "", priority: "MEDIUM",
               dueAt: new Date(it.at).toISOString().slice(0, 16),
               matterId: it.matter?.id ?? "",
             },
-          });
-        }}
-        onDelete={(it) => {
-          if (confirm(`Ta bort "${it.title}"?`)) deleteTask.mutate({ id: it.id });
-        }}
-      />
+          }),
+          onDelete: (it: TodoRow) => { if (confirm(`Ta bort "${it.title}"?`)) deleteTask.mutate({ id: it.id }); },
+        };
+        const data = items.data ?? [];
+        if (view === "day") return <TodoList items={data} isLoading={items.isLoading} {...handlers} />;
+        return <GroupedTodoList items={data} isLoading={items.isLoading} {...handlers} />;
+      })()}
 
       <Modal open={!!modalState} title={modalState?.mode === "edit" ? "Ändra Att-göra" : "Ny Att-göra"} onClose={() => setModalState(null)} widthClass="max-w-xl">
         {modalState && (
@@ -197,19 +227,42 @@ interface ListProps {
   items: TodoRow[];
   isLoading: boolean;
   isOwn: boolean;
+  now: Date;
   onToggle: (it: TodoRow) => void;
   onEdit: (it: TodoRow) => void;
   onDelete: (it: TodoRow) => void;
 }
 
-function TodoList({ items, isLoading, isOwn, onToggle, onEdit, onDelete }: ListProps) {
+function TodoList({ items, isLoading, isOwn, now, onToggle, onEdit, onDelete }: ListProps) {
   if (isLoading) return <p className="text-sm text-gray-400">Laddar…</p>;
-  if (items.length === 0) return <p className="text-sm text-gray-500">Inget på agendan denna dag.</p>;
+  if (items.length === 0) return <p className="text-sm text-gray-500">Inget på agendan denna period.</p>;
 
   return (
     <ul className="divide-y divide-gray-200 bg-white border border-gray-200 rounded-lg overflow-hidden">
-      {items.map((it) => <TodoLi key={`${it.source}-${it.id}`} it={it} isOwn={isOwn} onToggle={onToggle} onEdit={onEdit} onDelete={onDelete} />)}
+      {items.map((it) => <TodoLi key={`${it.source}-${it.id}`} it={it} isOwn={isOwn} now={now} onToggle={onToggle} onEdit={onEdit} onDelete={onDelete} />)}
     </ul>
+  );
+}
+
+/** Vecka/månad: gruppera per dag med datum-rubrik. Återanvänder rad-renderingen. */
+function GroupedTodoList({ items, isLoading, isOwn, now, onToggle, onEdit, onDelete }: ListProps) {
+  if (isLoading) return <p className="text-sm text-gray-400">Laddar…</p>;
+  if (items.length === 0) return <p className="text-sm text-gray-500">Inget på agendan denna period.</p>;
+
+  const groups = groupByDay(items);
+  return (
+    <div className="space-y-4">
+      {groups.map((g) => (
+        <section key={g.key}>
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1 capitalize">
+            {g.day.toLocaleDateString("sv-SE", { weekday: "long", day: "numeric", month: "long" })}
+          </h2>
+          <ul className="divide-y divide-gray-200 bg-white border border-gray-200 rounded-lg overflow-hidden">
+            {g.items.map((it) => <TodoLi key={`${it.source}-${it.id}`} it={it} isOwn={isOwn} now={now} onToggle={onToggle} onEdit={onEdit} onDelete={onDelete} />)}
+          </ul>
+        </section>
+      ))}
+    </div>
   );
 }
 
@@ -249,16 +302,23 @@ function TodoIcon({ it, onToggle, isOwn }: { it: TodoRow; onToggle: (it: TodoRow
 interface LiProps {
   it: TodoRow;
   isOwn: boolean;
+  now: Date;
   onToggle: (it: TodoRow) => void;
   onEdit: (it: TodoRow) => void;
   onDelete: (it: TodoRow) => void;
 }
 
-function TodoLi({ it, isOwn, onToggle, onEdit, onDelete }: LiProps) {
+function TodoLi({ it, isOwn, now, onToggle, onEdit, onDelete }: LiProps) {
   const isDone = it.source === "task" && it.status === "DONE";
   const editable = isOwn && it.source === "task";
+  // Deadline-färg endast för uppgifter (events har egen tidslogik). #88
+  const color = it.source === "task" ? deadlineColor(it.at, now, { done: isDone }) : null;
+  const borderClass = color ? DEADLINE_BORDER[color] : "border-l-4 border-transparent";
   return (
-    <li className={`flex items-center gap-3 px-4 py-3 hover:bg-gray-50 ${isDone ? "opacity-60" : ""}`}>
+    <li
+      data-deadline={color ?? "none"}
+      className={`flex items-center gap-3 px-4 py-3 hover:bg-gray-50 ${borderClass} ${isDone ? "opacity-60" : ""}`}
+    >
       <TodoIcon it={it} onToggle={onToggle} isOwn={isOwn} />
       <span className="font-mono text-xs text-gray-500 w-28 shrink-0">{timeLabelFor(it)}</span>
       {editable ? (
