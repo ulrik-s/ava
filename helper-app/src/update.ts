@@ -29,11 +29,11 @@ export interface UpdateConfig {
   onUpdated: (newVersion: string) => void;
 }
 
-interface GithubAsset {
+export interface GithubAsset {
   name: string;
   browser_download_url: string;
 }
-interface GithubRelease {
+export interface GithubRelease {
   tag_name: string;
   draft: boolean;
   assets: GithubAsset[];
@@ -45,34 +45,58 @@ export function assetName(platform: Platform = currentPlatform(), arch: string =
   return `ava-helper-${platform}-${arch}${ext}`;
 }
 
+/** Injicerbara IO-beroenden för loopen (SOLID) → testbar utan tid/nät. */
+export interface LoopDeps {
+  check: (cfg: UpdateConfig) => Promise<void>;
+  sleep: (ms: number, signal: AbortSignal) => Promise<void>;
+}
+
+const defaultLoopDeps: LoopDeps = { check: (cfg) => checkOnce(cfg), sleep };
+
 /** Loopa för evigt: kolla, sov. Anropas som bakgrunds-task. */
-export async function runUpdateLoop(cfg: UpdateConfig, signal: AbortSignal): Promise<void> {
-  await sleep(cfg.initialDelayMs, signal);
+export async function runUpdateLoop(
+  cfg: UpdateConfig,
+  signal: AbortSignal,
+  deps: LoopDeps = defaultLoopDeps,
+): Promise<void> {
+  await deps.sleep(cfg.initialDelayMs, signal);
   while (!signal.aborted) {
     try {
-      await checkOnce(cfg);
+      await deps.check(cfg);
     } catch (err) {
       log(`update check failed: ${err instanceof Error ? err.message : String(err)}`);
     }
-    await sleep(cfg.checkIntervalMs, signal);
+    await deps.sleep(cfg.checkIntervalMs, signal);
   }
 }
 
+/** Injicerbara beroenden för en kontroll → testbar utan nät/fs. */
+export interface CheckDeps {
+  fetchReleases: (repo: string) => Promise<GithubRelease[]>;
+  replace: (url: string, targetPath: string) => Promise<void>;
+  targetPath: string;
+  asset: string;
+}
+
+function defaultCheckDeps(): CheckDeps {
+  return { fetchReleases, replace: downloadAndReplace, targetPath: process.execPath, asset: assetName() };
+}
+
 /** En synkron kontroll. Returnerar utan att kasta om allt är OK. */
-export async function checkOnce(cfg: UpdateConfig): Promise<void> {
-  const releases = await fetchReleases(cfg.repo);
+export async function checkOnce(cfg: UpdateConfig, deps: CheckDeps = defaultCheckDeps()): Promise<void> {
+  const releases = await deps.fetchReleases(cfg.repo);
   const latest = pickLatest(releases, cfg.tagFilter, cfg.currentVersion);
   if (latest === null) {
     log(`already up to date (${cfg.currentVersion})`);
     return;
   }
-  const asset = latest.assets.find((a) => a.name === assetName());
+  const asset = latest.assets.find((a) => a.name === deps.asset);
   if (asset === undefined) {
-    log(`no asset ${assetName()} in ${latest.tag_name}`);
+    log(`no asset ${deps.asset} in ${latest.tag_name}`);
     return;
   }
   log(`updating ${cfg.currentVersion} → ${latest.tag_name}`);
-  await downloadAndReplace(asset.browser_download_url, process.execPath);
+  await deps.replace(asset.browser_download_url, deps.targetPath);
   cfg.onUpdated(latest.tag_name);
 }
 
@@ -106,7 +130,7 @@ export function pickLatest(
  * Windows flyttas den gamla undan först (kan inte skrivas över medan den
  * körs).
  */
-async function downloadAndReplace(url: string, targetPath: string): Promise<void> {
+export async function downloadAndReplace(url: string, targetPath: string): Promise<void> {
   const tmpPath = `${targetPath}.new`;
   const resp = await fetch(url);
   if (resp.status >= 400) throw new Error(`download HTTP ${resp.status}`);

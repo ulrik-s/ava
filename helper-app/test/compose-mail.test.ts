@@ -2,8 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { handleComposeMail, type ComposeMailDeps } from "../src/compose-mail.ts";
 import type { ComposeMailOpts } from "../src/platform/mail.ts";
-
-const BASE = "http://127.0.0.1:48761";
+import { jsonRequest, mkRequest } from "./helpers.ts";
 
 function deps(capture?: (o: ComposeMailOpts) => void): ComposeMailDeps {
   return {
@@ -14,7 +13,7 @@ function deps(capture?: (o: ComposeMailOpts) => void): ComposeMailDeps {
 }
 
 function mailReq(body: unknown): Request {
-  return new Request(`${BASE}/compose-mail`, { method: "POST", body: JSON.stringify(body) });
+  return jsonRequest("/compose-mail", body);
 }
 
 const validContent = Buffer.from("hello").toString("base64");
@@ -33,7 +32,7 @@ describe("handleComposeMail", () => {
   });
 
   test("avvisar GET", async () => {
-    const res = await handleComposeMail(new Request(`${BASE}/compose-mail`), deps());
+    const res = await handleComposeMail(mkRequest("/compose-mail"), deps());
     expect(res.status).toBe(405);
   });
 
@@ -56,5 +55,33 @@ describe("handleComposeMail", () => {
       deps(),
     );
     expect(res.status).toBe(400);
+  });
+
+  test("500 när skrivning av bilaga misslyckas", async () => {
+    const failing: ComposeMailDeps = {
+      compose: async () => undefined,
+      makeSessionDir: async () => "/tmp/ava-mail",
+      writeAttachment: async () => { throw new Error("disk full"); },
+    };
+    const res = await handleComposeMail(
+      mailReq({ fileName: "x.html", contentBase64: validContent, subject: "s", body: "b" }),
+      failing,
+    );
+    expect(res.status).toBe(500);
+    expect(await res.text()).toContain("write failed");
+  });
+
+  test("500 när mail-appen inte kan öppnas", async () => {
+    const failing: ComposeMailDeps = {
+      compose: async () => { throw new Error("no mail app"); },
+      makeSessionDir: async () => "/tmp/ava-mail",
+      writeAttachment: async () => undefined,
+    };
+    const res = await handleComposeMail(
+      mailReq({ fileName: "x.html", contentBase64: validContent, subject: "s", body: "b" }),
+      failing,
+    );
+    expect(res.status).toBe(500);
+    expect(await res.text()).toContain("compose-mail failed");
   });
 });

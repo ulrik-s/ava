@@ -6,9 +6,13 @@
  *   - macOS: AppleScript mot Mail.app (make new outgoing message, visible).
  *   - Linux: `xdg-email --attach --subject --body` (Thunderbird/Evolution …).
  *   - Windows: Outlook COM via PowerShell, fallback `mailto:` (utan bilaga).
+ *
+ * Kommando-byggarna (`mailCommand`, `windowsFallbackCommand` + script-/
+ * arg-/url-byggarna) är rena → testbara utan spawn (SOLID).
  */
 
-import { currentPlatform } from "./runtime.ts";
+import type { Command } from "./command.ts";
+import { currentPlatform, type Platform } from "./runtime.ts";
 import { spawnDetached } from "./spawn.ts";
 
 export interface ComposeMailOpts {
@@ -24,22 +28,46 @@ export async function composeMail(opts: ComposeMailOpts): Promise<void> {
   if (opts.attachmentPath === "") {
     throw new Error("attachmentPath required");
   }
-  switch (currentPlatform()) {
+  const platform = currentPlatform();
+  if (platform === "windows") {
+    await composeWindows(opts);
+    return;
+  }
+  const { cmd, args } = mailCommand(platform, opts);
+  await spawnDetached(cmd, args).started;
+}
+
+/** Primärt mail-kommando per plattform (ren). Kastar för okänt OS. */
+export function mailCommand(platform: Platform, opts: ComposeMailOpts): Command {
+  switch (platform) {
     case "darwin":
-      await spawnDetached("osascript", ["-e", macScript(opts)]).started;
-      return;
+      return { cmd: "osascript", args: ["-e", macScript(opts)] };
     case "linux":
-      await spawnDetached("xdg-email", linuxArgs(opts)).started;
-      return;
+      return { cmd: "xdg-email", args: linuxArgs(opts) };
     case "windows":
-      await composeWindows(opts);
-      return;
+      return { cmd: "powershell", args: ["-NoProfile", "-Command", windowsScript(opts)] };
     default:
-      throw new Error(`unsupported OS: ${process.platform}`);
+      throw new Error(`unsupported OS: ${platform}`);
   }
 }
 
-function macScript(opts: ComposeMailOpts): string {
+/** Windows-fallback: mailto (utan bilaga — stöds inte av standard-attach). */
+export function windowsFallbackCommand(opts: ComposeMailOpts): Command {
+  const url = `mailto:${opts.to ?? ""}?subject=${escapeUrl(opts.subject)}&body=${escapeUrl(opts.body)}`;
+  return { cmd: "rundll32", args: ["url.dll,FileProtocolHandler", url] };
+}
+
+async function composeWindows(opts: ComposeMailOpts): Promise<void> {
+  const primary = mailCommand("windows", opts);
+  try {
+    await spawnDetached(primary.cmd, primary.args).started;
+  } catch {
+    const fb = windowsFallbackCommand(opts);
+    await spawnDetached(fb.cmd, fb.args).started;
+  }
+}
+
+export function macScript(opts: ComposeMailOpts): string {
   return `
 tell application "Mail"
   activate
@@ -53,7 +81,7 @@ tell application "Mail"
 end tell`;
 }
 
-function macToRecipient(to: string): string {
+export function macToRecipient(to: string): string {
   if (to === "") return "";
   return `make new to recipient at end of to recipients with properties {address:${applescriptQuote(to)}}`;
 }
@@ -63,14 +91,14 @@ export function applescriptQuote(s: string): string {
   return `"${s.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 }
 
-function linuxArgs(opts: ComposeMailOpts): string[] {
+export function linuxArgs(opts: ComposeMailOpts): string[] {
   const args = ["--attach", opts.attachmentPath, "--subject", opts.subject, "--body", opts.body];
   if (opts.to !== undefined && opts.to !== "") args.push(opts.to);
   return args;
 }
 
-async function composeWindows(opts: ComposeMailOpts): Promise<void> {
-  const ps = [
+export function windowsScript(opts: ComposeMailOpts): string {
+  return [
     "$ol = New-Object -ComObject Outlook.Application",
     "$mail = $ol.CreateItem(0)",
     `$mail.To = '${escapePs(opts.to ?? "")}'`,
@@ -79,13 +107,6 @@ async function composeWindows(opts: ComposeMailOpts): Promise<void> {
     `$mail.Attachments.Add('${escapePs(opts.attachmentPath)}') | Out-Null`,
     "$mail.Display()",
   ].join("\n");
-  try {
-    await spawnDetached("powershell", ["-NoProfile", "-Command", ps]).started;
-  } catch {
-    // Fallback: mailto (utan bilaga — Windows stöder inte standard-attach).
-    const url = `mailto:${opts.to ?? ""}?subject=${escapeUrl(opts.subject)}&body=${escapeUrl(opts.body)}`;
-    await spawnDetached("rundll32", ["url.dll,FileProtocolHandler", url]).started;
-  }
 }
 
 /** PowerShell single-quote-escape (`'` → `''`). */

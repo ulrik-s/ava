@@ -5,8 +5,9 @@
 
 export type Platform = "darwin" | "linux" | "windows" | "other";
 
-export function currentPlatform(): Platform {
-  switch (process.platform) {
+/** Ren mappning från Node:s plattforms-sträng → vår union (testbar). */
+export function platformFrom(p: string): Platform {
+  switch (p) {
     case "darwin":
       return "darwin";
     case "linux":
@@ -16,4 +17,8 @@ export function currentPlatform(): Platform {
     default:
       return "other";
   }
+}
+
+export function currentPlatform(): Platform {
+  return platformFrom(process.platform);
 }

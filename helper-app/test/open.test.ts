@@ -1,8 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { handleOpen, type OpenDeps } from "../src/open.ts";
-
-const BASE = "http://127.0.0.1:48761";
+import { jsonRequest } from "./helpers.ts";
 
 interface Recorder {
   downloaded: string[];
@@ -29,7 +28,7 @@ function recorder(overrides: Partial<OpenDeps> = {}): Recorder {
 }
 
 function openReq(body: unknown): Request {
-  return new Request(`${BASE}/open`, { method: "POST", body: JSON.stringify(body) });
+  return jsonRequest("/open", body);
 }
 
 describe("handleOpen", () => {
