@@ -39,6 +39,15 @@ describe("Sidebar", () => {
     expect(screen.getAllByText("Användare")[0]).toBeInTheDocument();
   });
 
+  it("visar Jävskontroll överst, före Dashboard (#89)", () => {
+    render(<Sidebar />);
+    const texts = screen.getAllByRole("link").map((l) => l.textContent ?? "");
+    const jav = texts.findIndex((t) => t.includes("Jävskontroll"));
+    const dash = texts.findIndex((t) => t.includes("Dashboard"));
+    expect(jav).toBeGreaterThanOrEqual(0);
+    expect(jav).toBeLessThan(dash);
+  });
+
   it("markerar dashboard som aktiv när pathname=/", () => {
     pathnameMock.mockReturnValue("/");
     render(<Sidebar />);
