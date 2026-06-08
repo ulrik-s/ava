@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi } from "vitest-compat";
 import { IssueStore } from "@/lib/client/diagnostics/issue-store";
 import type { InvariantViolation } from "@/lib/shared/diagnostics/invariants";
 

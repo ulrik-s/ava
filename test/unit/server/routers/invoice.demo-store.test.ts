@@ -10,7 +10,7 @@
  * och att en cross-org-betalning rullas tillbaka utan write-back.
  */
 
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi } from "vitest-compat";
 import { invoiceRouter } from "@/lib/server/routers/invoice";
 import { DemoDataStore, type DemoSource } from "@/lib/server/data-store/DemoDataStore";
 import type { MutationEvent } from "@/lib/server/data-store/in-memory/writable-delegate";

@@ -9,7 +9,7 @@
  *   4. När value-prop bytts utifrån, reflekteras matchande display i input.
  */
 
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi } from "vitest-compat";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { MatterCombobox, type MatterOption } from "@/components/matter/matter-combobox";
 

@@ -1,10 +1,9 @@
 /**
  * Tester för `FeatureUnavailable`.
  *
- * @vitest-environment jsdom
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { render, screen } from "@testing-library/react";
 import { FeatureUnavailable } from "@/components/ui/feature-unavailable";
 

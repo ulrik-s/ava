@@ -8,7 +8,7 @@
  *   - serialize+deserialize är en round-trip
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { z } from "zod";
 import { JsonProjection } from "@/lib/server/local-first/projections/base";
 

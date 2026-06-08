@@ -1,10 +1,9 @@
 /**
  * Tester för `SyncStatusPill` — renderar alla 7 sync-states.
  *
- * @vitest-environment jsdom
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { render, screen } from "@testing-library/react";
 import { SyncStatusPill } from "@/components/shell/sync-status-pill";
 import type { SyncState } from "@/lib/client/sync/use-auto-sync";

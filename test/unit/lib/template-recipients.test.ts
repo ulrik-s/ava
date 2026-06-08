@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import {
   resolveRecipients,
   buildGeneratedFileName,
@@ -85,7 +85,7 @@ describe("resolveRecipients", () => {
     const links = [link({ contactId: "c1" })];
     try {
       resolveRecipients(["c999"], links, "m42");
-      expect.fail("Should have thrown");
+      throw new Error("Should have thrown");
     } catch (e) {
       expect(e).toBeInstanceOf(RecipientNotLinkedError);
       const err = e as RecipientNotLinkedError;

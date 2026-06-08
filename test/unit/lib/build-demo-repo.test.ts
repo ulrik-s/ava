@@ -8,7 +8,7 @@
  * "u-anna" som ADMIN (legacy-id för gh-pages) och rätt e-mail-domän.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { buildSeed, seedToFiles } from "../../../tooling/scripts/seed-data";
 
 const DEMO_ARGS = {

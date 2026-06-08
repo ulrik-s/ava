@@ -3,7 +3,7 @@
  * AI-analys-fält) + riktiga binärfiler via `generateDocumentBytes` → `sink`.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { createGitTarget } from "../../tooling/demo-generator/backend-target";
 import { populate } from "../../tooling/demo-generator/populate";
 import { populateDocuments } from "../../tooling/demo-generator/populate-documents";

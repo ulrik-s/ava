@@ -2,7 +2,7 @@
  * Tests för tryHelperOpen och shouldPreferExternalEdit.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { tryHelperOpen, shouldPreferExternalEdit } from "@/lib/client/firma/open-document-externally";
 
 const originalFetch = global.fetch;

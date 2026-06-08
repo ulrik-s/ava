@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { uuidv7 } from "@/lib/server/events/uuid7";
 
 describe("uuidv7", () => {

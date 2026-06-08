@@ -1,7 +1,7 @@
 /**
  * DataTable pure helpers: filterRows, groupRows, hasOverrides.
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { filterRows, groupRows, hasOverrides, isFilterable, isGroupable, isColumnHidden, hasSummary, buildSummaryContent, type Column } from "@/components/ui/data-table";
 
 interface Row { id: string; name: string; status: string; amount: number }

@@ -6,7 +6,7 @@
  * härigenom → DRY-shape oavsett backend.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { buildContext } from "@/lib/server/build-context";
 import type { IDataStore } from "@/lib/server/data-store/IDataStore";
 import type { IPorts } from "@/lib/server/ports";

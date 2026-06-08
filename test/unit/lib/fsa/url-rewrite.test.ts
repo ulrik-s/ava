@@ -4,7 +4,7 @@
  * SSH-URL i .git/config översätter vi vid push/pull.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { sshToHttps } from "@/lib/client/fsa/url-rewrite";
 
 describe("sshToHttps", () => {

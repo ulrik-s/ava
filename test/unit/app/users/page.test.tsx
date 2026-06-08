@@ -2,7 +2,7 @@
  * Test för UsersPage (lista).
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { render, screen } from "@testing-library/react";
 import UsersPage from "@/app/users/page";
 

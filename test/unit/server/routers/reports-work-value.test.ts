@@ -6,7 +6,7 @@
  * blev 100x för stora ("125 000 kr" på en 30-min entry @ 2 500 kr/h).
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 
 // Pure helpers — extrahera samma formel som routern kör för att enhetstesta isolerat.
 function workValueOre(minutes: number, hourlyRateOre: number): number {

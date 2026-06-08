@@ -3,7 +3,7 @@
  * in i working copy:n (om ej redan klonad), hydrera DemoSource från den.
  */
 
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi } from "vitest-compat";
 import { makeFakeFsa } from "../../../helpers/fake-fsa";
 import { makeFsaWriteBack } from "@/lib/client/firma/fsa-write-back";
 import { loadSelfHostedSource } from "@/lib/client/firma/load-self-hosted-source";

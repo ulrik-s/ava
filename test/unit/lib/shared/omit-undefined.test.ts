@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 
 describe("omitUndefined (#32)", () => {

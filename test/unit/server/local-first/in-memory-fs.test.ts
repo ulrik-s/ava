@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { InMemoryFileSystem } from "@/lib/server/local-first/in-memory-fs";
 
 describe("InMemoryFileSystem", () => {

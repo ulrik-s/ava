@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest-compat";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { ErrorReportButton } from "@/components/diagnostics/error-report-button";
 import { issueStore, logBuffer } from "@/lib/client/diagnostics";

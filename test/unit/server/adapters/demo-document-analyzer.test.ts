@@ -2,10 +2,9 @@
  * Tester för demoDocumentAnalyzer — verifiera att den enqueue:ar ett
  * classify-document-jobb istället för att vara noop som tidigare.
  *
- * @vitest-environment jsdom
  */
 
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest-compat";
 import { demoDocumentAnalyzer } from "@/lib/server/adapters/demo-document-analyzer";
 import { jobQueue } from "@/lib/client/jobs/job-queue";
 

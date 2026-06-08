@@ -5,7 +5,7 @@
  * `matter: { organizationId }` innan mutation, NOT_FOUND vid mismatch.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { expenseRouter } from "@/lib/server/routers/expense";
 import { dataStoreFromMockPrisma } from "../helpers/mock-data-store";
 

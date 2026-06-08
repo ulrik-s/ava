@@ -34,7 +34,7 @@ The loop for every change:
    - `bun run round-trip` — for changes touching the git push/pull e2e path.
 5. **Open a PR** to `main`. CI runs four required checks that must be green
    before merge: **Static analysis** (typecheck + ESLint + knip + dep-cruiser
-   + jscpd), **Unit / komponent / integration** (vitest + coverage floor),
+   + jscpd), **Unit / komponent / integration** (`bun test --parallel` + coverage floor),
    **E2E (git round-trip)**, and **Commit messages** (commitlint).
 6. **Self-merge.** No approval is required (solo project, 0 required reviews),
    but the PR itself is mandatory — merge your own PR once all four checks are
@@ -45,7 +45,7 @@ The loop for every change:
 
 ### Quality ratchet — gates only tighten
 
-Coverage thresholds (`tooling/config/vitest.config.ts`), the lint
+Coverage thresholds (`tooling/scripts/check-coverage.ts`), the lint
 `--max-warnings` cap, and knip are **ratchets**: anchored just under today's
 numbers and only moved tighter. **Never loosen a gate to land code** — fix the
 code or extract a sub-component (a "ratchet-step", cf. PR #6). See
@@ -68,7 +68,10 @@ overview. Then [`docs/auth.md`](docs/auth.md) for the self-hosted auth model.
 - **`rm -rf out` breaks the docker bind-mount** → restart with:
   `docker compose -f tooling/docker/docker-compose.yml restart web`.
 - Run the browser round-trip e2e with `bun run round-trip` (needs docker up +
-  `out/` built). Unit tests: `bun run test:fast` (~2224 tests, ~18s).
+  `out/` built). Unit tests: `bun run test` (`bun test --parallel`, ~2334
+  tester). Per-fil-isolering krävs (annars läcker `mock.module`/stubbar
+  mellan filer); `--parallel` ger det via en worker-pool (`--isolate`
+  kraschar på CI-linux, epoll). Se [[docs/quality.md]] + #92.
 
 ## Two deploy modes (selected by `firma-config.tier`)
 

@@ -1,10 +1,9 @@
 /**
  * Tester för OAuth-config — round-trip + isOAuthConfigured.
  *
- * @vitest-environment jsdom
  */
 
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest-compat";
 import { loadOAuthConfig, saveOAuthConfig, isOAuthConfigured } from "@/lib/client/auth/oauth-config";
 
 beforeEach(() => localStorage.clear());

@@ -3,7 +3,7 @@
  * moveDocument/moveFolder/breadcrumb. Inkluderar cykel-detektering.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { dataStoreFromMockPrisma } from "../../helpers/mock-data-store";
 
 vi.mock("@/lib/server/services/meilisearch", () => ({

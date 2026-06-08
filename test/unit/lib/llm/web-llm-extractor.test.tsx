@@ -3,7 +3,7 @@
  * `@mlc-ai/web-llm`-modul.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { WebLlmExtractor, buildPrompt, parseJsonResponse } from "@/lib/client/llm/web-llm-extractor";
 import type { ExtractionSchema } from "@/lib/server/llm/llm-extractor";
 
@@ -105,7 +105,7 @@ describe("WebLlmExtractor lifecycle", () => {
   });
 
   it("vidarebefordrar progress-callbacks från MLC till onProgress", async () => {
-    engineHoisted.CreateMLCEngine.mockImplementation(async (_id, opts) => {
+    engineHoisted.CreateMLCEngine.mockImplementation(async (_id: unknown, opts: { initProgressCallback: (p: { progress: number; text: string }) => void }) => {
       opts.initProgressCallback({ progress: 0.42, text: "Fetching shard 5/12" });
       return { chat: { completions: { create: vi.fn() } } };
     });

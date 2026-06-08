@@ -3,7 +3,7 @@
  * relations som UI:n förväntar sig nästade på nya rows.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { DemoDataStore } from "@/lib/server/data-store/DemoDataStore";
 import type { MutationEvent } from "@/lib/server/data-store/in-memory/writable-delegate";
 

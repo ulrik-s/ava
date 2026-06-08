@@ -2,7 +2,7 @@
  * ADR 0003 — app-genererad UUIDv7 + deterministisk seed-id (v5-stil).
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { uuidv7, isUuid } from "@/lib/shared/uuid";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;

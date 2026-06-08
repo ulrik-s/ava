@@ -11,7 +11,7 @@
  * Det testet hade fångat det innan deploy.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { buildSeed, seedToFiles } from "../../tooling/scripts/seed-data";
 import { buildDefaultRegistry } from "@/lib/server/local-first/projections/default-registry";
 

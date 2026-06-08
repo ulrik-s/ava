@@ -2,7 +2,7 @@
  * Test för reportsRouter — perLawyer-rapporten med tre delrapporter.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { reportsRouter } from "@/lib/server/routers/reports";
 import { dataStoreFromMockPrisma } from "../helpers/mock-data-store";
 

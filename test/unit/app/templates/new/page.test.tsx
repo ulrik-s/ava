@@ -2,7 +2,7 @@
  * Test för NewTemplatePage.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { render, screen, fireEvent } from "@testing-library/react";
 import NewTemplatePage from "@/app/templates/new/page";
 

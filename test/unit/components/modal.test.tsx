@@ -2,7 +2,7 @@
  * Test för Modal-komponenten — open/close, ESC, backdrop-klick.
  */
 
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi } from "vitest-compat";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { Modal } from "@/components/ui/modal";
 

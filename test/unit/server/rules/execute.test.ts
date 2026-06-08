@@ -4,7 +4,7 @@
  * http-short-circuit, if/for-each och templating.
  */
 
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi } from "vitest-compat";
 import { executeRule, type ExecutionContext, type StepHandlers } from "@/lib/server/rules/execute";
 import type { RuleStep } from "@/lib/server/rules/schema";
 import type { AvaEvent } from "@/lib/server/events/schema";
@@ -48,7 +48,7 @@ describe("executeRule — grundflöde", () => {
     const res = await executeRule(ctx);
     expect(res.ok).toBe(true);
     expect(res.stepsRan).toBe(1);
-    const types = emit.mock.calls.map((c) => (c[0] as { type: string }).type);
+    const types = emit.mock.calls.map((c: unknown[]) => (c[0] as { type: string }).type);
     expect(types).toContain("user.action"); // audit.log
     expect(types).toContain("rule.executed");
   });
@@ -61,8 +61,8 @@ describe("executeRule — steg-typer", () => {
       { payload: { name: "Anna" } },
     );
     await executeRule(ctx);
-    const emitted = emit.mock.calls.map((c) => c[0] as { type: string; payload?: Record<string, unknown> });
-    const custom = emitted.find((e) => e.type === "custom.thing");
+    const emitted = emit.mock.calls.map((c: unknown[]) => c[0] as { type: string; payload?: Record<string, unknown> });
+    const custom = emitted.find((e: { type: string; payload?: Record<string, unknown> }) => e.type === "custom.thing");
     expect(custom?.payload).toEqual({ who: "Anna" });
   });
 
@@ -74,7 +74,7 @@ describe("executeRule — steg-typer", () => {
     );
     await executeRule(ctx);
     expect(handlers.sendEmail).toHaveBeenCalledWith(expect.objectContaining({ template: "welcome", to: "a@b.se" }));
-    expect(emit.mock.calls.some((c) => (c[0] as { type: string }).type === "mail.sent")).toBe(true);
+    expect(emit.mock.calls.some((c: unknown[]) => (c[0] as { type: string }).type === "mail.sent")).toBe(true);
   });
 
   it("email.send: ingen mail.sent när idempotency blockerar (handler → false)", async () => {
@@ -84,7 +84,7 @@ describe("executeRule — steg-typer", () => {
       { handlers },
     );
     await executeRule(ctx);
-    expect(emit.mock.calls.some((c) => (c[0] as { type: string }).type === "mail.sent")).toBe(false);
+    expect(emit.mock.calls.some((c: unknown[]) => (c[0] as { type: string }).type === "mail.sent")).toBe(false);
   });
 
   it("matter.update: anropar handler med templatead matterId + patch", async () => {
@@ -131,8 +131,8 @@ describe("executeRule — if / for-each", () => {
     ] as RuleStep[]);
     const res = await executeRule(ctx);
     expect(res.ok).toBe(true);
-    const audits = emit.mock.calls.map((c) => c[0] as { type: string; payload?: { audit?: string } }).filter((e) => e.type === "user.action");
-    expect(audits.map((a) => a.payload?.audit)).toEqual(["true-branch"]);
+    const audits = emit.mock.calls.map((c: unknown[]) => c[0] as { type: string; payload?: { audit?: string } }).filter((e: { type: string; payload?: Record<string, unknown> }) => e.type === "user.action");
+    expect(audits.map((a: { type: string; payload?: Record<string, unknown> }) => a.payload?.audit)).toEqual(["true-branch"]);
   });
 
   it("if: kör else-grenen när cond är falsk", async () => {
@@ -140,8 +140,8 @@ describe("executeRule — if / for-each", () => {
       { do: "if", cond: { "==": [1, 2] }, then: [{ do: "audit.log", message: "true-branch" }], else: [{ do: "audit.log", message: "else-branch" }] },
     ] as RuleStep[]);
     await executeRule(ctx);
-    const audits = emit.mock.calls.map((c) => c[0] as { type: string; payload?: { audit?: string } }).filter((e) => e.type === "user.action");
-    expect(audits.map((a) => a.payload?.audit)).toEqual(["else-branch"]);
+    const audits = emit.mock.calls.map((c: unknown[]) => c[0] as { type: string; payload?: { audit?: string } }).filter((e: { type: string; payload?: Record<string, unknown> }) => e.type === "user.action");
+    expect(audits.map((a: { type: string; payload?: Record<string, unknown> }) => a.payload?.audit)).toEqual(["else-branch"]);
   });
 
   it("for-each: itererar och binder loop-variabeln", async () => {
@@ -151,8 +151,8 @@ describe("executeRule — if / for-each", () => {
     );
     const res = await executeRule(ctx);
     expect(res.ok).toBe(true);
-    const audits = emit.mock.calls.map((c) => c[0] as { type: string; payload?: { audit?: string } }).filter((e) => e.type === "user.action");
-    expect(audits.map((a) => a.payload?.audit)).toEqual(["n=1", "n=2", "n=3"]);
+    const audits = emit.mock.calls.map((c: unknown[]) => c[0] as { type: string; payload?: { audit?: string } }).filter((e: { type: string; payload?: Record<string, unknown> }) => e.type === "user.action");
+    expect(audits.map((a: { type: string; payload?: Record<string, unknown> }) => a.payload?.audit)).toEqual(["n=1", "n=2", "n=3"]);
   });
 
   it("for-each: kastar (→ rule.failed) när items inte är en array", async () => {
@@ -163,7 +163,7 @@ describe("executeRule — if / for-each", () => {
     const res = await executeRule(ctx);
     expect(res.ok).toBe(false);
     expect(res.error).toBeDefined();
-    expect(emit.mock.calls.some((c) => (c[0] as { type: string }).type === "rule.failed")).toBe(true);
+    expect(emit.mock.calls.some((c: unknown[]) => (c[0] as { type: string }).type === "rule.failed")).toBe(true);
   });
 });
 
@@ -178,7 +178,7 @@ describe("executeRule — felhantering", () => {
     expect(res.ok).toBe(false);
     expect(res.error?.message).toBe("DB nere");
     expect(res.error?.step).toBe(0);
-    expect(emit.mock.calls.some((c) => (c[0] as { type: string }).type === "rule.failed")).toBe(true);
+    expect(emit.mock.calls.some((c: unknown[]) => (c[0] as { type: string }).type === "rule.failed")).toBe(true);
   });
 
   it("icke-Error-kast → errMessage strängifierar", async () => {
@@ -194,8 +194,8 @@ describe("executeRule — felhantering", () => {
       { do: "if", cond: { okänd_operator: [1, 2] }, then: [{ do: "audit.log", message: "then" }], else: [{ do: "audit.log", message: "else" }] },
     ] as RuleStep[]);
     await executeRule(ctx);
-    const audits = emit.mock.calls.map((c) => c[0] as { type: string; payload?: { audit?: string } }).filter((e) => e.type === "user.action");
-    expect(audits.map((a) => a.payload?.audit)).toEqual(["else"]);
+    const audits = emit.mock.calls.map((c: unknown[]) => c[0] as { type: string; payload?: { audit?: string } }).filter((e: { type: string; payload?: Record<string, unknown> }) => e.type === "user.action");
+    expect(audits.map((a: { type: string; payload?: Record<string, unknown> }) => a.payload?.audit)).toEqual(["else"]);
   });
 
   it("http.respond inuti for-each kortsluter loopen", async () => {

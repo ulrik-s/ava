@@ -2,7 +2,7 @@
  * Tester för `createGhPagesCloneFn` + `resolveGhPagesUrl`.
  */
 
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi } from "vitest-compat";
 import { createGhPagesCloneFn, resolveGhPagesUrl } from "@/lib/server/local-first/gh-pages-loader";
 import { MemFs } from "@/lib/server/local-first/mem-fs";
 

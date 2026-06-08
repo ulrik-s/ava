@@ -5,7 +5,7 @@
  * prebake/store-bygget, inte i datan.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { buildSeed } from "../../tooling/scripts/seed-data";
 import { createGitTarget } from "../../tooling/demo-generator/backend-target";
 import { populate } from "../../tooling/demo-generator/populate";

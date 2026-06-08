@@ -11,7 +11,7 @@
  * projektion-paradigm.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { ProjectionWriter, ProjectionHydrator } from "@/lib/server/local-first/projection-writer";
 import { buildDefaultRegistry } from "@/lib/server/local-first/projections/default-registry";
 import { InMemoryFileSystem } from "@/lib/server/local-first/in-memory-fs";

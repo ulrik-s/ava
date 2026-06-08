@@ -3,7 +3,7 @@
  * med org-scoping och epost-validering.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { contactRouter } from "@/lib/server/routers/contact";
 import { dataStoreFromMockPrisma } from "../helpers/mock-data-store";
 

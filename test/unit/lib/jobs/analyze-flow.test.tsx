@@ -8,10 +8,9 @@
  * sig på `analyzedAt` för att markera analysen som klar — så
  * "⏳ analyseras..."-state:n hängde kvar permanent.
  *
- * @vitest-environment jsdom
  */
 
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest-compat";
 import { jobQueue } from "@/lib/client/jobs/job-queue";
 import { setAnalyzeDispatcher } from "@/lib/client/jobs/analyze-dispatch";
 import "@/lib/client/jobs/register-workers"; // ensure worker is registered

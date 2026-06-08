@@ -7,7 +7,7 @@
  * verifierar att hydreringen är dess invers (round-trip).
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { makeFakeFsa } from "../../../helpers/fake-fsa";
 import { makeFsaWriteBack } from "@/lib/client/firma/fsa-write-back";
 import { hydrateWorkingCopy } from "@/lib/client/firma/hydrate-working-copy";

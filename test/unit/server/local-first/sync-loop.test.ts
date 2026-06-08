@@ -9,7 +9,7 @@
  *     fake timers så vi inte blir flakiga.
  */
 
-import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, vi, afterEach } from "vitest-compat";
 import { SyncLoop } from "@/lib/server/local-first/sync-loop";
 import { InMemoryFileSystem } from "@/lib/server/local-first/in-memory-fs";
 import { InMemoryGitOps } from "@/lib/server/local-first/in-memory-git-ops";

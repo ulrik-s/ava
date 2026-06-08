@@ -7,7 +7,7 @@
  * `slugify(text)` normaliserar fritext till kebab-case ASCII — används
  * för entitet-slugs ("Anna Andersson" → "anna-andersson").
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { uuidv5, slugify, AVA_NAMESPACE } from "@/lib/shared/uuid-derive";
 import { isUuid } from "@/lib/shared/uuid";
 

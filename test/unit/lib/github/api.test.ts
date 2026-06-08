@@ -10,7 +10,7 @@
  *   - parseRepoLocator-varianter (kortform vs github.com)
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest-compat";
 import {
   base64ToBytes,
   createBlob,

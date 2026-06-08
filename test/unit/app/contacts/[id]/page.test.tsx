@@ -2,7 +2,7 @@
  * Test för ContactDetailPage — visning, redigering, kontaktpersoner, ärenden.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { Suspense } from "react";
 import ContactDetailPage from "@/app/contacts/[id]/_client";

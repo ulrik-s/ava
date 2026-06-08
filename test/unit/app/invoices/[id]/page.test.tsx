@@ -2,7 +2,7 @@
  * Test för InvoiceDetailPage — fakturalisning, betalningar, plan, kreditera.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { Suspense } from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import InvoiceDetailPage from "@/app/invoices/[id]/_client";

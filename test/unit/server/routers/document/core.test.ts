@@ -2,7 +2,7 @@
  * Test för document.core — list/tree/search/delete/analyze/updateMetadata.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { dataStoreFromMockPrisma } from "../../helpers/mock-data-store";
 
 vi.mock("@/lib/server/services/meilisearch", () => ({

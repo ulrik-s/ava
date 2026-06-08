@@ -192,7 +192,10 @@ rader till aktuell form innan zod-parsern ser dem. Se
 
 ## Test-stack
 
-- `vitest` i två projekt: node (server/lib/scripts) + jsdom (komponenter + sidor)
+- `bun test --parallel` (#92): enhets-/komponenttester. happy-dom för DOM
+  (komponenter + sidor); `vi`-API:t via shim (`test/bun-compat.ts`).
+  `--parallel` ger per-fil-isolering via worker-pool (motsvarar vitests
+  projektisolering; `--isolate` kraschar på CI-linux).
 - `playwright` för E2E round-trip (docker upp + browser-push)
 - ~2224 unit/integration-tester
 - TDD-fokus på pure helpers (color-palette, classify-document, search-needle, fuzzy-similarity, day-view-layout)

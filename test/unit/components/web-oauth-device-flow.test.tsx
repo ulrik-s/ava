@@ -2,10 +2,9 @@
  * Tester för `WebOAuthDeviceFlow` state-machine (#61): requesting → waiting,
  * fel-grenen, avbryt, och token-polling → onComplete.
  *
- * @vitest-environment jsdom
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest-compat";
+import { render, screen, waitFor, fireEvent, act } from "@testing-library/react";
 import { WebOAuthDeviceFlow } from "@/components/settings/web-oauth-device-flow";
 
 vi.mock("@/lib/client/auth/oauth-config", () => ({
@@ -61,8 +60,13 @@ describe("WebOAuthDeviceFlow", () => {
     const onComplete = vi.fn();
     render(<WebOAuthDeviceFlow onComplete={onComplete} onCancel={vi.fn()} />);
     // Stegvis: flush mount/cfg/device-code → waiting, fira sedan poll-timern.
-    for (let i = 0; i < 4; i++) await vi.advanceTimersByTimeAsync(5001);
-    const calledToken = fetchSpy.mock.calls.some(([u]) => String(u).endsWith("/token"));
+    // act() krävs så React-state-uppdateringar (cfg/code) flushas mellan varven.
+    for (let i = 0; i < 6; i++) {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5001);
+      });
+    }
+    const calledToken = fetchSpy.mock.calls.some(([u]: unknown[]) => String(u).endsWith("/token"));
     expect(calledToken).toBe(true);
     expect(onComplete).toHaveBeenCalledWith("tok-abc");
   });

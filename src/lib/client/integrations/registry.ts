@@ -20,3 +20,11 @@ export function getConnector(id: string): IntegrationConnector | undefined {
 export function listConnectors(): IntegrationConnector[] {
   return Array.from(connectors.values());
 }
+
+/**
+ * Töm registret. För testisolering (bun:test saknar vitests
+ * `vi.resetModules`, så singletonen återställs explicit i stället).
+ */
+export function clearConnectors(): void {
+  connectors.clear();
+}

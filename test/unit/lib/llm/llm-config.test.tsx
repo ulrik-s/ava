@@ -2,7 +2,7 @@
  * Tester för LLM-config — localStorage-baserade flaggor.
  */
 
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest-compat";
 import {
   isLlmEnabled,
   setLlmEnabled,

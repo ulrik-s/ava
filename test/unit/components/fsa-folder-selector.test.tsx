@@ -2,9 +2,8 @@
  * Tester för `FsaFolderSelector` (#61): pure `githubize`-normalisering +
  * "stöds inte"-grenarna (Firefox/Safari/övrig) som inte kräver riktig FSA.
  *
- * @vitest-environment jsdom
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest-compat";
 import { render, screen, waitFor } from "@testing-library/react";
 import { FsaFolderSelector, githubize } from "@/components/settings/fsa-folder-selector";
 

@@ -6,7 +6,7 @@
  * b6fc4c620b67d95f953a5c1c1230aaab5db5a1b0 (med trailing newline).
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { gitBlobSha1 } from "@/lib/client/github/git-blob-hash";
 
 describe("gitBlobSha1", () => {

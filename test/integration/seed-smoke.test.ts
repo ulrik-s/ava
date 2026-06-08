@@ -10,7 +10,7 @@
  * procedure som faller — och i vilken sidkontext.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { buildSeed } from "../../tooling/scripts/seed-data";
 import { DemoDataStore, type DemoSource } from "@/lib/server/data-store/DemoDataStore";
 import { prebakeJoins } from "@/lib/client/demo/prebake-joins";

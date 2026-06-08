@@ -5,7 +5,7 @@
  * (nginx serverar en sentinel-shell; klienten läser riktiga id:t ur URL:en).
  */
 
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi } from "vitest-compat";
 import { renderHook } from "@testing-library/react";
 
 let pathname = "/";

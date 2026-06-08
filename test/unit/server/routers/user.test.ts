@@ -2,7 +2,7 @@
  * Test för userRouter — list/getById/create/update/delete med org-scoping.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { userRouter } from "@/lib/server/routers/user";
 import { dataStoreFromMockPrisma } from "../helpers/mock-data-store";
 

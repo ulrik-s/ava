@@ -1,0 +1,15 @@
+{
+  // Testerna körs av bun:test (#92). Egen tsconfig så root-tsc inte drar in
+  // bun:test-typer i app-bygget: ärver repots strikta flaggor, lägger till
+  // bun-types + jest-dom-matchers-augmentering.
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "types": ["bun-types", "@testing-library/jest-dom"],
+    "noEmit": true,
+    // Egen buildinfo-fil (annars krockar den med root-tsc:s → flakig
+    // incremental-cache som maskerar/visar fel beroende på körordning).
+    "incremental": false
+  },
+  "include": ["**/*.ts", "**/*.tsx", "bun-compat.ts"],
+  "exclude": ["../node_modules"]
+}

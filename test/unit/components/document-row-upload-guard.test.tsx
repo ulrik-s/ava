@@ -5,10 +5,9 @@
  * actions (Öppna, Editera externt, Visa, Ladda ner, Analysera, Ta bort)
  * vara åtkomliga och triggas korrekt.
  *
- * @vitest-environment jsdom
  */
 
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi } from "vitest-compat";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { DocumentRow, type DocumentRecord } from "@/components/documents/_document-row";
 

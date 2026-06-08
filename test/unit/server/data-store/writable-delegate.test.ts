@@ -2,7 +2,7 @@
  * Tester för `WritableDelegate` — basic CRUD + getter-baserad collection.
  */
 
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi } from "vitest-compat";
 import { WritableDelegate, type MutationEvent } from "@/lib/server/data-store/in-memory/writable-delegate";
 
 interface Matter extends Record<string, unknown> {

@@ -3,7 +3,7 @@
  * rensade bara token, lämnade principalId kvar → reload kom till samma
  * sida → upplevdes som "knappen gjorde inget".
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { signOutLocally } from "@/components/shell/sidebar";
 
 const STORAGE_KEY = "ava.firma";

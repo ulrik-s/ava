@@ -3,7 +3,7 @@
  * första migrationen (invoice v1→v2: stripa legacy-`type`), kedjningen och
  * de defensiva fallen i sträng-wrappern.
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { migrateRow, migrateRawJson, migrateEventPayload } from "@/lib/shared/schema-migrations";
 import { CURRENT_SCHEMA_VERSION } from "@/lib/shared/schema-version";
 

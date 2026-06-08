@@ -5,7 +5,7 @@
  * inga fetch-deps vid build-tid.
  */
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest-compat";
 import { isUuid } from "@/lib/shared/uuid";
 
 const realDemoBuild = process.env.DEMO_BUILD;

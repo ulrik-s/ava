@@ -3,7 +3,7 @@
  * in-memory data från `DemoRuntime`.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { DemoDataStore } from "@/lib/server/data-store/DemoDataStore";
 import { ReadOnlyError } from "@/lib/server/data-store/in-memory/read-only-delegate";
 

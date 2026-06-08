@@ -1,0 +1,10 @@
+# bun:test-konfig för huvudappen (#92, vitest → bun test).
+#
+# Tester körs ALLTID med --isolate (se package.json-scripten): bun delar
+# annars en process mellan filer → mock.module/globala stubbar/timers läcker.
+#
+# Coverage-grinden ligger INTE här (skulle annars få varje delmängds-körning
+# att falla mot heltäcknings-golvet). Den körs separat via
+# `bun run test:cov` → tooling/scripts/check-coverage.ts (ratchet).
+[test]
+preload = ["./test/setup/happy-dom-register.ts", "./test/setup/preload.ts"]

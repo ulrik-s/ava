@@ -2,7 +2,7 @@
  * `payment-reminders` — ren scan-kärna (#23). Låser DUE/OVERDUE-semantiken,
  * remaining-grinden, företrädet och idempotensen.
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { computeDueReminders, type PlanForScan, type LoggedReminder } from "@/lib/shared/payment-reminders";
 
 function plan(over: Partial<PlanForScan> = {}): PlanForScan {

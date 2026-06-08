@@ -3,7 +3,7 @@
  * registrerade och att path-routing fungerar i bägge riktningar.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { buildDefaultRegistry } from "@/lib/server/local-first/projections/default-registry";
 
 describe("buildDefaultRegistry", () => {

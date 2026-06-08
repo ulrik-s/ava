@@ -9,7 +9,7 @@
  * Tester använder fake-clone så de inte beror på GitHub.
  */
 
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi } from "vitest-compat";
 import { DemoRuntime } from "@/lib/server/local-first/demo-runtime";
 import type { MemFs } from "@/lib/server/local-first/mem-fs";
 

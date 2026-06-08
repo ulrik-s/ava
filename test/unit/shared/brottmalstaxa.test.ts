@@ -5,7 +5,7 @@
  * tabellen + edge cases.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import {
   computeBrottmalstaxa,
   BROTTMALSTAXA_TABLE,

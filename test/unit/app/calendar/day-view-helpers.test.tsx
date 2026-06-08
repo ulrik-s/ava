@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { eventsForDate, layoutEventsForDay, dayBounds, type DayEvent } from "@/app/calendar/_day-view";
 
 function ev(partial: Partial<DayEvent>): DayEvent {

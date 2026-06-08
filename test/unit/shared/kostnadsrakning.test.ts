@@ -2,7 +2,7 @@
  * Tester för `buildKostnadsrakningContext`.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { buildKostnadsrakningContext, diffMinutes, formatMinutes } from "@/lib/shared/kostnadsrakning";
 
 const baseInput = {

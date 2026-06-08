@@ -2,7 +2,7 @@
  * Tester för renderHandlebars (fulla handlebars-biblioteket).
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { renderHandlebars } from "@/lib/client/kostnadsrakning/render-handlebars";
 
 describe("renderHandlebars", () => {

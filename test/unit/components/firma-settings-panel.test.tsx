@@ -8,10 +8,9 @@
  *     ProxyTestButton, CorsProxyField, AuthTokenSection) testas isolerat via RTL.
  *   - Main FirmaSettingsPanel — happy paths för save/cancel/demo/logout.
  *
- * @vitest-environment jsdom
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest-compat";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import {
   AuthTokenSection,

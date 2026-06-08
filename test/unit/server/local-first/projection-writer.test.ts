@@ -3,7 +3,7 @@
  * helpers som kopplar Prisma-writes mot JSON-filer (och tvärt om).
  */
 
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest-compat";
 import { ProjectionWriter, ProjectionHydrator } from "@/lib/server/local-first/projection-writer";
 import { ProjectionRegistry } from "@/lib/server/local-first/projections/registry";
 import { MatterProjection, type MatterProjectionData } from "@/lib/server/local-first/projections/matter";

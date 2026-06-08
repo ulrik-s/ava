@@ -1,10 +1,9 @@
 /**
  * Tester för `uploadDocumentToFsa`.
  *
- * @vitest-environment jsdom
  */
 
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi } from "vitest-compat";
 import { uploadDocumentToFsa } from "@/lib/client/fsa/upload-document";
 
 interface MockFs {
@@ -35,7 +34,7 @@ describe("uploadDocumentToFsa", () => {
       sizeBytes: file.size,
       storagePath: "documents/content/d-test-1.pdf",
     });
-    const instance = (FsaIsoGitAdapter as unknown as { mock: { instances: MockFs[] } }).mock.instances.at(-1)!;
+    const instance = (FsaIsoGitAdapter as unknown as { mock: { results: { value: MockFs }[] } }).mock.results.at(-1)!.value;
     expect(instance.writeFile).toHaveBeenCalled();
     const [path] = instance.writeFile.mock.calls.at(-1)!;
     expect(path).toBe("/documents/content/d-test-1.pdf");

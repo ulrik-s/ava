@@ -3,10 +3,9 @@
  * Vi exporterar inte readFromFsa direkt — vi testar via reverse-walking
  * en in-memory FSA-tree:n och bekräftar att rätt bytes returneras.
  *
- * @vitest-environment jsdom
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { makeFakeFsa } from "../../../helpers/fake-fsa";
 import { FsaIsoGitAdapter } from "@/lib/client/fsa/fs-adapter";
 

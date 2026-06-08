@@ -1,10 +1,9 @@
 /**
  * Tester för `SyncDiagnostics`-panelen i /settings.
  *
- * @vitest-environment jsdom
  */
 
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi } from "vitest-compat";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { SyncDiagnostics } from "@/components/settings/sync-diagnostics";
 import type { SyncState } from "@/lib/client/sync/use-auto-sync";

@@ -2,7 +2,7 @@
  * Tests för useHelper() — mockar fetch mot localhost:48761.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { render, screen, waitFor } from "@testing-library/react";
 import { useHelper, openViaHelper } from "@/lib/client/helper/use-helper";
 

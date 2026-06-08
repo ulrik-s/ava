@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { colorForUserId, hashString, paletteSize, buildUserColorMap } from "@/lib/client/calendar/user-colors";
 
 describe("colorForUserId", () => {

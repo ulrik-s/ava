@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest-compat";
 import {
   issueStore,
   reportSelfDetected,
@@ -57,9 +57,12 @@ describe("issueRepo", () => {
 });
 
 describe("collectMeta", () => {
-  it("ger ett objekt (utan window i node-miljö)", () => {
+  it("ger ett objekt (utan window)", () => {
+    // happy-dom har global window; ta bort den för att testa SSR-vägen.
+    vi.stubGlobal("window", undefined);
     const meta = collectMeta();
     expect(meta).toBeTypeOf("object");
-    expect(meta.url).toBeUndefined(); // ingen window i node
+    expect(meta.url).toBeUndefined(); // ingen window
+    vi.unstubAllGlobals();
   });
 });

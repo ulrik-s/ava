@@ -3,7 +3,7 @@
  * dokument baserat på deploy-mode. Pure-fn → inga FSA-mocks behövs.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { openDocument, withUtf8CharsetIfText } from "@/lib/client/firma/open-document";
 import { clearGeneratedDocCache, stashGeneratedDoc } from "@/lib/client/demo/generated-doc-cache";
 

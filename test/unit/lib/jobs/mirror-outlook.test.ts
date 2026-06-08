@@ -6,7 +6,7 @@
  * import. Vi måste därför importera den modulen ONCE per testrun.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { jobQueue, type Job } from "@/lib/client/jobs/job-queue";
 import {
   setOutlookTokenProvider,

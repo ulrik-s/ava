@@ -3,7 +3,7 @@
  * orsaka React #418 hydrerings-mismatch, så felrapporten pekar ut orsaken.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { detectDomAnomalies } from "@/lib/client/diagnostics/dom-anomalies";
 
 function doc(opts: {

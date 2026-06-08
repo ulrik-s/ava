@@ -10,7 +10,7 @@
  * giltig fallback (för t.ex. nya ärenden utan CRDT-historik).
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { matterProjectionSchema, MatterProjection } from "@/lib/server/local-first/projections/matter";
 import { YjsTextField } from "@/lib/server/local-first/yjs-text-field";
 

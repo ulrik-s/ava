@@ -20,7 +20,7 @@
  * via `document.tree` + `document.list`. Före fixen: RÖTT (mutationen kastar).
  */
 
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll } from "vitest-compat";
 import { DemoDataStore, type DemoSource } from "@/lib/server/data-store/DemoDataStore";
 import { prebakeJoins } from "@/lib/client/demo/prebake-joins";
 import { appRouter } from "@/lib/server/routers/_app";

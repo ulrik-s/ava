@@ -7,7 +7,7 @@
  * buildTemplateContext + renderHandlebars.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { buildTemplateContext } from "@/lib/client/templates/build-template-context";
 import { renderHandlebars } from "@/lib/client/kostnadsrakning/render-handlebars";
 

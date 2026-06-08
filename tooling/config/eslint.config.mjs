@@ -92,6 +92,10 @@ const eslintConfig = defineConfig([
     rules: {
       "max-lines-per-function": "off",
       complexity: "off",
+      // bun:test:s `expect(...).resolves/.rejects`-matchers är async i runtime
+      // men typas som icke-thenable i bun-types → `await` ger falska positiv.
+      // Stäng av för tester (vi await:ar dem medvetet) (#92).
+      "@typescript-eslint/await-thenable": "off",
     },
   },
   {

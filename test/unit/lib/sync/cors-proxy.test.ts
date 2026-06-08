@@ -4,7 +4,7 @@
  * med en lokal/samma-origin-server (round-trip mot docker:8080/git/).
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { resolveCorsProxy, isLocalOrSameOrigin, DEFAULT_CORS_PROXY } from "@/lib/client/sync/cors-proxy";
 
 describe("isLocalOrSameOrigin", () => {

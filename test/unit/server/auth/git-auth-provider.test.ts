@@ -8,7 +8,7 @@
  * Git-implementationens beteende.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { GitAuthProvider, TEST_PRINCIPAL } from "@/lib/server/auth/git-auth-provider";
 import type { AuthProvider, Principal } from "@/lib/server/auth/principal";
 

@@ -93,13 +93,14 @@ jobs:
         with:
           bun-version: latest
       - run: bun install --frozen-lockfile
+      # bun test --isolate (#92) + coverage-ratchet (rader/funktioner).
       - run: bun run test:cov
       - name: Upload coverage
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: coverage
-          path: reports/coverage/
+          path: coverage/
 
   # ───────────────── E2E (git round-trip) ─────────────────
   # Den riktiga browser-klienten klonar/pushar mot docker-git-servern

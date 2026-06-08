@@ -1,10 +1,9 @@
 /**
  * Tester för `RenderErrorBoundary`.
  *
- * @vitest-environment jsdom
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest-compat";
 import { render, screen } from "@testing-library/react";
 import { RenderErrorBoundary } from "@/components/ui/render-error-boundary";
 

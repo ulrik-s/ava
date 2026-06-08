@@ -2,7 +2,7 @@
  * Test för EventsPanel — rendering av events, accept/dismiss, .ics-länk.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { EventsPanel } from "@/components/matter/events-panel";
 

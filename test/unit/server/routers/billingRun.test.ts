@@ -6,7 +6,7 @@
  *  KOSTNADSRAKNING  — Ingen Invoice ännu, status PENDING_VERDICT
  *  setVerdict       — Invoice + ev. Prutning + frysning
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { appRouter } from "@/lib/server/routers/_app";
 import { DemoDataStore } from "@/lib/server/data-store/DemoDataStore";
 import { buildContext } from "@/lib/server/build-context";

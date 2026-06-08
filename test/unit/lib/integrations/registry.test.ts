@@ -2,7 +2,7 @@
  * Tester för integrationsregistry — singleton-Map över connectors.
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest-compat";
 import type { IntegrationConnector } from "@/lib/client/integrations/types";
 
 function makeConnector(id: string, displayName = id): IntegrationConnector {
@@ -18,9 +18,10 @@ function makeConnector(id: string, displayName = id): IntegrationConnector {
   };
 }
 
-// Singleton — varje test krävs att man importerar fresh.
+// Singleton — töm registret mellan tester (bun:test saknar vi.resetModules).
 beforeEach(async () => {
-  vi.resetModules();
+  const { clearConnectors } = await import("@/lib/client/integrations/registry");
+  clearConnectors();
 });
 
 describe("integrations/registry", () => {

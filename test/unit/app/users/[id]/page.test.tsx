@@ -2,7 +2,7 @@
  * Test för EditUserPage — laddar användare, sparar, tar bort.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { render, screen, fireEvent } from "@testing-library/react";
 import EditUserClient from "@/app/users/[id]/_edit-client";
 
