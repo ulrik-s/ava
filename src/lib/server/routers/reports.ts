@@ -1,5 +1,10 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../trpc";
+import {
+  billedPerLawyer,
+  type BilledInvoiceInput,
+  type FrozenWorkInput,
+} from "@/lib/shared/billed-per-lawyer";
 
 /**
  * Advokat-fokuserade rapporter: användaren väljer period (from/to) och
@@ -53,6 +58,55 @@ function weeksInRange(from: Date, to: Date): { isoYear: number; week: number; st
 
 function weekKey(isoYear: number, week: number): string {
   return `${isoYear}-W${String(week).padStart(2, "0")}`;
+}
+
+// ─── Hjälpare för "Fakturerat per advokat" (#90) ─────────────────────
+
+/** Demo-projektionen lagrar datum som ISO-strängar → coerca till Date. */
+function coerceDate(v: unknown): Date {
+  return v instanceof Date ? v : new Date(v as string);
+}
+
+interface RawTimeEntry {
+  userId: string; minutes: number; hourlyRate: number;
+  invoiceId: string | null | undefined; frozenByBillingRunId: string | null | undefined;
+}
+interface RawInvoice { id: string; amount: number; status: string; invoiceDate: unknown; updatedAt: unknown }
+
+/** Karta frozen tidsposter → arbetsvärde per (faktura, advokat). En post knyts
+ *  till sin faktura via direkt `invoiceId` (legacy) eller via BillingRun. */
+function buildFrozenWork(
+  timeEntries: RawTimeEntry[],
+  runToInvoice: Map<string, string>,
+): FrozenWorkInput[] {
+  const out: FrozenWorkInput[] = [];
+  for (const te of timeEntries) {
+    const invoiceId = te.invoiceId ?? (te.frozenByBillingRunId ? runToInvoice.get(te.frozenByBillingRunId) : undefined);
+    if (!invoiceId) continue;
+    out.push({ invoiceId, userId: te.userId, workOre: Math.round((te.minutes / 60) * te.hourlyRate) });
+  }
+  return out;
+}
+
+function toInvoiceInputs(invoices: RawInvoice[]): BilledInvoiceInput[] {
+  return invoices.map((i) => ({
+    id: i.id,
+    amountOre: i.amount,
+    invoiceDate: coerceDate(i.invoiceDate),
+    status: i.status,
+    // Avskrivnings-tidpunkt: invoice.updatedAt vid BAD_DEBT (#90-beslut).
+    writtenOffAt: i.status === "BAD_DEBT" ? coerceDate(i.updatedAt) : null,
+  }));
+}
+
+/** Föregående kalendermånad relativt periodstarten (UTC). */
+function previousCalendarMonth(periodStart: Date): { from: Date; to: Date } {
+  const y = periodStart.getUTCFullYear();
+  const m = periodStart.getUTCMonth();
+  return {
+    from: new Date(Date.UTC(y, m - 1, 1, 0, 0, 0, 0)),
+    to: new Date(Date.UTC(y, m, 0, 23, 59, 59, 999)), // dag 0 i denna månad = sista dagen i föregående
+  };
 }
 
 // ─── Router ──────────────────────────────────────────────────────────
@@ -304,6 +358,84 @@ export const reportsRouter = router({
         weeklyRows,
         unbilled: { rows: unbilledRows, total: unbilledTotal },
         totals,
+      };
+    }),
+
+  /**
+   * "Fakturerat per advokat och period" (#90). För vald advokat + period:
+   * fakturor som gått ut (attribuerade proportionellt mot advokatens andel
+   * av frozen arbetsvärde i fakturan), deras summa, och netto efter avdrag
+   * för fakturor avskrivna i FÖREGÅENDE kalendermånad.
+   */
+  billed: protectedProcedure
+    .input(z.object({
+      from: z.string(),
+      to: z.string(),
+      userId: z.string(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const fromDate = new Date(input.from);
+      const toDate = new Date(input.to);
+      toDate.setUTCHours(23, 59, 59, 999);
+      const prevPeriod = previousCalendarMonth(fromDate);
+      const orgScope = { matter: { organizationId: ctx.user.organizationId } };
+
+      const [user, invoices, billingRuns, timeEntries] = await Promise.all([
+        ctx.dataStore.users.findFirst({
+          where: { id: input.userId, organizationId: ctx.user.organizationId },
+          select: { id: true, name: true },
+        }),
+        ctx.dataStore.invoices.findMany({
+          where: orgScope,
+          select: {
+            id: true, amount: true, status: true, invoiceDate: true, updatedAt: true,
+            matter: { select: { matterNumber: true, title: true } },
+          },
+        }),
+        ctx.dataStore.billingRuns.findMany({ where: orgScope, select: { id: true, invoiceId: true } }),
+        ctx.dataStore.timeEntries.findMany({
+          where: { ...orgScope, billable: true },
+          select: { userId: true, minutes: true, hourlyRate: true, invoiceId: true, frozenByBillingRunId: true },
+        }),
+      ]);
+
+      if (!user) return null;
+
+      const runToInvoice = new Map<string, string>();
+      for (const r of billingRuns) if (r.invoiceId) runToInvoice.set(r.id, r.invoiceId);
+
+      const result = billedPerLawyer({
+        userId: input.userId,
+        invoices: toInvoiceInputs(invoices as RawInvoice[]),
+        frozenWork: buildFrozenWork(timeEntries as RawTimeEntry[], runToInvoice),
+        period: { from: fromDate, to: toDate },
+        prevPeriod,
+      });
+
+      const matterByInvoice = new Map(
+        (invoices as Array<{ id: string; matter?: { matterNumber?: string; title?: string } | null }>)
+          .map((i) => [i.id, i.matter]),
+      );
+      const rows = result.invoices.map((r) => ({
+        id: r.id,
+        invoiceDate: r.invoiceDate.toISOString(),
+        amountOre: r.amountOre,
+        shareOre: r.shareOre,
+        matterNumber: matterByInvoice.get(r.id)?.matterNumber ?? "",
+        title: matterByInvoice.get(r.id)?.title ?? "",
+      }));
+
+      return {
+        user: { id: user.id, name: user.name },
+        period: { from: input.from, to: input.to },
+        prevPeriod: {
+          from: prevPeriod.from.toISOString().slice(0, 10),
+          to: prevPeriod.to.toISOString().slice(0, 10),
+        },
+        invoices: rows,
+        billedOre: result.billedOre,
+        writeOffOre: result.writeOffOre,
+        netOre: result.netOre,
       };
     }),
 });

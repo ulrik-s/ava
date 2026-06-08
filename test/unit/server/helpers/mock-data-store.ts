@@ -33,6 +33,7 @@ export interface MockDataStore {
   paymentPlans: unknown;
   paymentPlanReminders: unknown;
   accontoDeductions: unknown;
+  billingRuns: unknown;
   calendarEvents: unknown;
   tasks: unknown;
   userPreferences: unknown;
@@ -73,6 +74,7 @@ export function dataStoreFromMockPrisma(mockPrisma: Record<string, unknown>): Mo
       paymentPlans: mockPrisma.paymentPlan,
       paymentPlanReminders: mockPrisma.paymentPlanReminder,
       accontoDeductions: mockPrisma.invoiceAccontoDeduction,
+      billingRuns: mockPrisma.billingRun,
       calendarEvents: mockPrisma.calendarEvent,
       tasks: mockPrisma.task,
       userPreferences: mockPrisma.userPreference,
@@ -97,6 +99,7 @@ export function dataStoreFromMockPrisma(mockPrisma: Record<string, unknown>): Mo
     paymentPlans: mockPrisma.paymentPlan,
     paymentPlanReminders: mockPrisma.paymentPlanReminder,
     accontoDeductions: mockPrisma.invoiceAccontoDeduction,
+    billingRuns: mockPrisma.billingRun,
     calendarEvents: mockPrisma.calendarEvent,
     tasks: mockPrisma.task,
     userPreferences: mockPrisma.userPreference,
