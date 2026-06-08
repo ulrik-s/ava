@@ -4,6 +4,14 @@ Liten localhost-bryggar-app som låter AVA-webbappen öppna dokument i
 användarens native-editorer (PDF Gear, Word, Preview, …) och automatiskt
 synka tillbaka ändringar till AVA-servern.
 
+Skriven i **TypeScript** och kompilerad till en fristående binär med
+`bun build --compile` (ADR 0005 §Språk: all icke-frontend-kod i TS med
+samma kod-/arkitektur-regler som resten av repot, #78). Request-/
+response-protokollet delas med webbappen via
+[`../src/lib/shared/helper/protocol.ts`](../src/lib/shared/helper/protocol.ts)
+— en enda källa till sanning så helpern och `use-helper.ts` aldrig glider
+isär.
+
 ## Vad den gör
 
 * Lyssnar på `127.0.0.1:48761` (inga externa portar)
@@ -26,14 +34,26 @@ synka tillbaka ändringar till AVA-servern.
   läs/skriv-skydd 0700
 * Filnamn valideras (ingen path-traversal)
 
-## Bygg lokalt
+## Bygg & kör lokalt
 
 ```bash
 cd helper-app
-go build .
-./ava-helper --version
-./ava-helper            # startar på 127.0.0.1:48761
+bun install
+bun run start           # kör direkt (dev), startar på 127.0.0.1:48761
+bun test                # kör testerna
+bun run typecheck       # tsc mot ../tsconfig.json (samma regler som repot)
+
+# Kompilera fristående binärer (en per plattform) → dist/
+bun run build           # baka in version "dev"
+bun build.ts helper-v1.0.0   # baka in en konkret version
+
+./dist/ava-helper-darwin-arm64 --version
 ```
+
+`build.ts` cross-kompilerar till alla 5 målplattformar (mac arm64/x64,
+linux arm64/x64, windows x64) och namnger binärerna
+`ava-helper-<os>-<arch>` — samma namn som självuppdateringen
+(`src/update.ts`) letar efter i GitHub-releasen.
 
 ## Installera
 
@@ -58,14 +78,20 @@ behövs.
 ## Release-process
 
 Helper-releaser är taggade `helper-vX.Y.Z` (separerat från web-app-
-releaser). Skicka in en tag → GitHub Actions kör `goreleaser` →
-binärer + checksums laddas upp till releasen → installerade helpers
-plockar upp den vid nästa daglig kontroll.
+releaser). Skicka in en tag → GitHub Actions (`helper-release.yml`) kör
+`bun build.ts <tag>` → 5 binärer + `checksums.txt` laddas upp till
+releasen → installerade helpers plockar upp den vid nästa daglig
+kontroll (`src/update.ts`).
 
 ```bash
 git tag helper-v1.0.0
 git push origin helper-v1.0.0
 ```
+
+> **Paketering:** install-scripten under `service/` letar efter en binär
+> som heter `ava-helper` (resp. `ava-helper.exe`). Release-arkiveringen
+> (per-plattform-tarball med rätt binär-namn + `service/`) hör till
+> installer-/release-arbetet i #86/#87.
 
 ## Loggar
 

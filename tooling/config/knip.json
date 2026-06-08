@@ -12,6 +12,7 @@
     "postcss.config.{js,mjs}",
 
     "src/lib/shared/schemas/*.ts",
+    "src/lib/shared/helper/protocol.ts",
     "src/lib/server/data-store/IDataStore.ts",
     "src/lib/server/ports.ts",
     "src/lib/server/events/schema.ts",

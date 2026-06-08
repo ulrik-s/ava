@@ -7,18 +7,21 @@
  * eller falla tillbaka till den befintliga download/modal-vägen.
  *
  * Helpern lyssnar på 127.0.0.1:48761 (se [[helper-app/README.md]]).
+ * Request-/response-former + URL delas med själva helper-binären via
+ * `@/lib/shared/helper/protocol` (#78) så sidorna aldrig glider isär.
  */
 
 import { useEffect, useState } from "react";
 
-const HELPER_BASE = "http://127.0.0.1:48761";
+import {
+  HELPER_BASE,
+  parsePingVersion,
+  type ComposeMailRequest,
+  type HelperOpenRequest,
+  type HelperStatus,
+} from "@/lib/shared/helper/protocol";
 
-export interface HelperStatus {
-  /** undefined = inte kontrollerat än, null = inte tillgänglig, string = installerad version. */
-  version: string | undefined | null;
-  /** Klart att fetcha mot? (efter första ping). */
-  checked: boolean;
-}
+export type { HelperStatus };
 
 export function useHelper(): HelperStatus {
   const [status, setStatus] = useState<HelperStatus>({ version: undefined, checked: false });
@@ -31,11 +34,9 @@ export function useHelper(): HelperStatus {
           signal: AbortSignal.timeout(500),
         });
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        const text = (await r.text()).trim();
-        // Format: "ava-helper v1.2.3"
-        const m = text.match(/^ava-helper\s+(\S+)/);
+        const text = await r.text();
         if (cancelled) return;
-        setStatus({ version: m?.[1] ?? null, checked: true });
+        setStatus({ version: parsePingVersion(text), checked: true });
       } catch {
         if (cancelled) return;
         setStatus({ version: null, checked: true });
@@ -53,14 +54,7 @@ export function useHelper(): HelperStatus {
  * konstruerar absolute download/upload-URLs baserat på vilken backend
  * som körs (git-http eller REST).
  */
-export interface HelperOpenInput {
-  fileName: string;
-  downloadUrl: string;
-  uploadUrl?: string;
-  authHeader?: string;
-}
-
-export async function openViaHelper(input: HelperOpenInput): Promise<void> {
+export async function openViaHelper(input: HelperOpenRequest): Promise<void> {
   const r = await fetch(`${HELPER_BASE}/open`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -90,18 +84,7 @@ export async function triggerHelperUpdateCheck(): Promise<void> {
  * gick fel (404 = helper kör äldre version utan endpoint, network
  * error, etc.) så caller kan logga + falla tillbaka tyst.
  */
-export interface ComposeMailInput {
-  fileName: string;
-  /** base64-kodade bytes. */
-  contentBase64: string;
-  /** MIME-typ för bilagan. */
-  mimeType: string;
-  to?: string;
-  subject: string;
-  body: string;
-}
-
-export async function composeMailViaHelper(input: ComposeMailInput): Promise<boolean> {
+export async function composeMailViaHelper(input: ComposeMailRequest): Promise<boolean> {
   try {
     const r = await fetch(`${HELPER_BASE}/compose-mail`, {
       method: "POST",
