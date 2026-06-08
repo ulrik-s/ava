@@ -10,7 +10,7 @@
  * Kräver system-`git` (samma som node-git-ops.test.ts) — hoppas annars över.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from "vitest-compat";
+import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
 import { mkdtemp, rm, mkdir, writeFile, readdir, readFile, stat } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { tmpdir } from "node:os";
@@ -53,14 +53,18 @@ async function initWorkingCopy(dir: string): Promise<void> {
 }
 
 suite("openServerWorkingCopy — skriv-väg (#116)", () => {
+  // EN delad git working copy för hela sviten (init är dyrt och spawnar git —
+  // håller nere subprocess-kontentionen under `bun test --parallel` på CI,
+  // jfr #112/#116). bun kör tester i en fil sekventiellt, så delat git-state
+  // är säkert; varje test använder egna id:n + fångar sitt eget bas-HEAD.
   let dir: string;
 
-  beforeEach(async () => {
+  beforeAll(async () => {
     dir = await mkdtemp(join(tmpdir(), "ava-swc-write-"));
     await initWorkingCopy(dir);
   });
 
-  afterEach(async () => {
+  afterAll(async () => {
     await rm(dir, { recursive: true, force: true });
   });
 
