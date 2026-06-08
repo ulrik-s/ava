@@ -26,10 +26,14 @@ const TEST_GLOBS = ["test/unit", "test/integration", "test/scripts"];
 function runTests(): void {
   const proc = spawnSync(
     "bun",
-    // --timeout 20000: realgit-/integrationstester (NodeGitOps spawnar git)
-    // är legitimt långsamma under --parallel-kontention på CI; default 5s
-    // är för snålt och gav flakiga timeouts (#112).
-    ["test", "--parallel", "--timeout", "20000", "--coverage", "--coverage-reporter=lcov", ...TEST_GLOBS],
+    // --parallel=2: cappar worker-processerna. Default = CPU-kärnor (4 på
+    // ubuntu-latest) → för många samtidiga git-spawnande sviter (NodeGitOps,
+    // git-ops-changed-files, server-working-copy) → `git clone` i tunga
+    // beforeEach-hooks hängde sig (subprocess-I/O-kontention, samma epoll-
+    // familj som --isolate-kraschen) och slog i timeout:en (#112, #116).
+    // Färre workers = stabilt; Unit-jobbet är fortfarande snabbt.
+    // --timeout 30000: realgit-tester är legitimt långsamma under kontention.
+    ["test", "--parallel=2", "--timeout", "30000", "--coverage", "--coverage-reporter=lcov", ...TEST_GLOBS],
     { stdio: "inherit" },
   );
   if (proc.status !== 0) {
