@@ -28,12 +28,11 @@
   ],
   "ignoreExportsUsedInFile": true,
   "ignoreDependencies": [
-    "tailwindcss",
-    "@commitlint/cli"
+    "tailwindcss"
   ],
   "ignoreBinaries": [
     "dot",
-    "commitlint"
+    "tooling/scripts/generate-demo-manifest.ts"
   ],
   "commitlint": {
     "config": ["tooling/config/commitlint.config.mjs"]
