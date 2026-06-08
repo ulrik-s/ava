@@ -2,7 +2,7 @@
  * Test för conflictRouter — javskontroll mot personnummer + namn (trigram).
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { conflictRouter } from "@/lib/server/routers/conflict";
 import { dataStoreFromMockPrisma } from "../helpers/mock-data-store";
 

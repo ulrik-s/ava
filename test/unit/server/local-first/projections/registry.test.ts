@@ -6,7 +6,7 @@
  * fil → entitet.
  */
 
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest-compat";
 import { ProjectionRegistry } from "@/lib/server/local-first/projections/registry";
 import { MatterProjection, type MatterProjectionData } from "@/lib/server/local-first/projections/matter";
 

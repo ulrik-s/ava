@@ -11,7 +11,7 @@
  * `PostgresBackendRuntime` (httpBatchLink) byggs ska den droppa in här.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { observable } from "@trpc/server/observable";
 import { createTRPCClient, type TRPCLink } from "@trpc/client";
 import superjson from "superjson";

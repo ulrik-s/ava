@@ -1,10 +1,9 @@
 /**
  * Tester för `AuthProvider` + `useAuthMode`.
  *
- * @vitest-environment jsdom
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { renderHook, waitFor, act } from "@testing-library/react";
 import {
   AuthProvider,

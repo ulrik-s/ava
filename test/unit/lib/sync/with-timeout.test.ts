@@ -5,7 +5,7 @@
  *   - cleara timern så vi inte läcker timers
  */
 
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi } from "vitest-compat";
 import { withTimeout, SyncTimeoutError } from "@/lib/client/sync/with-timeout";
 
 describe("withTimeout", () => {

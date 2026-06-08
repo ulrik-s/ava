@@ -2,7 +2,7 @@
  * `renderFakturaPdf` — client-side faktura-PDF (pdf-lib). Verifierar giltig PDF
  * för både full och minimal input.
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { renderFakturaPdf } from "@/lib/client/kostnadsrakning/render-faktura-pdf";
 
 const head = (b: Uint8Array) => String.fromCharCode(b[0]!, b[1]!, b[2]!, b[3]!);

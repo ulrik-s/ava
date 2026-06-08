@@ -2,7 +2,7 @@
  * Tester för `classifyDocument` — LLM-först-med-fallback-logiken.
  */
 
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi } from "vitest-compat";
 import { classifyDocument, guessFromFilename, KNOWN_KINDS } from "@/lib/client/llm/classify-document";
 import { NoopExtractor, StubExtractor, type ILlmExtractor } from "@/lib/server/llm/llm-extractor";
 

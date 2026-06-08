@@ -2,7 +2,7 @@
  * `loadDemoMeta` — fetchar meta.json från same-origin-demon. Testen säkrar
  * URL-konstruktionen, validerings-kasten och cache-beteendet.
  */
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest-compat";
 import { loadDemoMeta, demoMetaUrl, _resetDemoMetaCache } from "@/lib/client/demo/demo-meta";
 
 const VALID_META = {
@@ -16,7 +16,7 @@ const VALID_META = {
 };
 
 function mockFetch(body: unknown, status = 200): typeof fetch {
-  return (() => Promise.resolve(new Response(JSON.stringify(body), { status }))) as typeof fetch;
+  return (() => Promise.resolve(new Response(JSON.stringify(body), { status }))) as unknown as typeof fetch;
 }
 
 beforeEach(() => _resetDemoMetaCache());
@@ -44,7 +44,7 @@ describe("loadDemoMeta", () => {
     const fetchFn: typeof fetch = ((_url: unknown, opts?: RequestInit) => {
       init = opts;
       return Promise.resolve(new Response(JSON.stringify(VALID_META)));
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
     await loadDemoMeta("ulrik-s/ava", fetchFn);
     expect(init?.cache).toBe("no-store");
   });
@@ -54,7 +54,7 @@ describe("loadDemoMeta", () => {
     const fetchFn: typeof fetch = (() => {
       calls++;
       return Promise.resolve(new Response(JSON.stringify(VALID_META)));
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
     await loadDemoMeta("ulrik-s/ava", fetchFn);
     await loadDemoMeta("ulrik-s/ava", fetchFn);
     expect(calls).toBe(1);

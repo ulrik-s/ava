@@ -17,8 +17,8 @@
  * testen failar på ALLA error-svåra brott (även framtida regler) så att en
  * ny regel automatiskt blir en del av sviten.
  */
-import { describe, it, expect, beforeAll } from "vitest";
-import { cruise } from "dependency-cruiser";
+import { describe, it, expect, beforeAll } from "vitest-compat";
+import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -36,26 +36,26 @@ type Violation = {
 let violations: Violation[] = [];
 let errorCount = 0;
 
-beforeAll(async () => {
-  const cruiseOptions = {
-    ...config.options,
-    ruleSet: { forbidden: config.forbidden },
-    validate: true,
-  };
-  // Spegla `bun run deps:check`: cruisa både prod- och testkod (regeln
-  // "produktionskod importerar inte testfiler" behöver test/ i grafen).
-  const result = await cruise(
-    [path.join(repoRoot, "src"), path.join(repoRoot, "test")],
-    cruiseOptions,
-  );
-  // `result.output` är `string | ICruiseResult`; med validate:true och ingen
-  // sträng-reporter är det alltid ICruiseResult. Narrowa explicit så tsc inte
-  // tror att `.summary` saknas på sträng-grenen.
-  if (typeof result.output === "string") {
-    throw new Error("dependency-cruiser gav sträng-output — förväntade ICruiseResult");
+beforeAll(() => {
+  // Kör dependency-cruiser via CLI:t (under node) i stället för in-process:
+  // dess ESM (extract/transpile/meta.mjs) träffar en TDZ-bugg under buns
+  // loader. CLI-binären har node-shebang, så samma motor som `bun run
+  // deps:check` i CI. Spegla deps:check: cruisa både src/ och test/.
+  const bin = path.join(repoRoot, "node_modules", ".bin", "depcruise");
+  const configPath = path.join(repoRoot, "tooling", "config", "dependency-cruiser.cjs");
+  const args = [bin, "--config", configPath, "--output-type", "json", "src", "test"];
+  let stdout: string;
+  try {
+    stdout = execFileSync("node", args, { cwd: repoRoot, encoding: "utf8", maxBuffer: 128 * 1024 * 1024 });
+  } catch (e) {
+    // depcruise exitar !=0 när error-svåra brott finns; JSON ligger på stdout.
+    const err = e as { stdout?: string };
+    if (err.stdout === undefined || err.stdout === "") throw e;
+    stdout = err.stdout;
   }
-  violations = result.output.summary.violations as Violation[];
-  errorCount = result.output.summary.error;
+  const result = JSON.parse(stdout) as { summary: { violations: Violation[]; error: number } };
+  violations = result.summary.violations;
+  errorCount = result.summary.error;
 }, 60_000);
 
 /** Brott (error-svåra) för en given regel, formaterade för läsbart fel-meddelande. */

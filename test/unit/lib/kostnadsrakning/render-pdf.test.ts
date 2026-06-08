@@ -3,7 +3,7 @@
  * Verifierar att den producerar en giltig PDF (%PDF-header) för både taxa- och
  * icke-taxa-fallet (förhandling > maxgräns) utan att kasta.
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { buildKostnadsrakningContext } from "@/lib/shared/kostnadsrakning";
 import { renderKostnadsrakningPdf } from "@/lib/client/kostnadsrakning/render-pdf";
 

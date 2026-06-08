@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { detectMatterInvariants, type MatterInvariantInput } from "@/lib/shared/diagnostics/invariants";
 import { KOSTNADSRAKNING_DOCUMENT_TYPE } from "@/lib/shared/schemas/document";
 

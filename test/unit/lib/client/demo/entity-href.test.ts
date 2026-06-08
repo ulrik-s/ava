@@ -4,7 +4,7 @@
  * hård `<a href>`-navigering + 404-shim istället för Next-`<Link>` (→ #418).
  */
 
-import { describe, it, expect, afterEach, vi } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest-compat";
 import { entityHref, shellPath } from "@/lib/client/demo/entity-href";
 
 afterEach(() => {

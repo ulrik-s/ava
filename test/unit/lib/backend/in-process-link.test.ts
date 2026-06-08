@@ -7,7 +7,7 @@
  *   - ports-override i GitBackendRuntime
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { createTRPCClient } from "@trpc/client";
 import superjson from "superjson";
 import type { AppRouter } from "@/lib/server/routers/_app";

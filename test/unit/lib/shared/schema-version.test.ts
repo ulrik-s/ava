@@ -2,7 +2,7 @@
  * `schema-version` — datamodellens version + versionsgrinden (ADR 0004).
  * Testen lockar fast grindens fyra fall och den defensiva parsningen.
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import {
   CURRENT_SCHEMA_VERSION,
   IncompatibleSchemaVersionError,

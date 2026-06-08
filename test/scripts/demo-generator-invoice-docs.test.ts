@@ -3,7 +3,7 @@
  * kopplat till fakturan (invoiceId) → syns under inv.documents i detaljen.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { buildSeed } from "../../tooling/scripts/seed-data";
 import { createGitTarget } from "../../tooling/demo-generator/backend-target";
 import { populate } from "../../tooling/demo-generator/populate";

@@ -5,7 +5,7 @@
  * Vi mock:ar FSA-API:et genom ett minimal in-memory tree.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { FsaIsoGitAdapter } from "@/lib/client/fsa/fs-adapter";
 
 // ─── In-memory FSA-mock ────────────────────────────────────────────

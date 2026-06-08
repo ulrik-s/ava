@@ -32,7 +32,8 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "vitest-compat": ["./test/bun-compat.ts"]
     }
   },
   "include": [
@@ -43,5 +44,5 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules", "helper-app"]
+  "exclude": ["node_modules", "helper-app", "test"]
 }

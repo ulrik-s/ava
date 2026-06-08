@@ -6,7 +6,7 @@
  * och Node-git-writeBack:en skriver ren JSON i rätt git-layout.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { mkdtempSync, readFileSync, existsSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import os from "node:os";

@@ -2,7 +2,7 @@
  * Smoke-test för `LlmSettingsCard` — toggle + modell-väljare + download-knapp.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { LlmSettingsCard } from "@/components/llm/llm-settings-card";
 import { resetLlmConfig } from "@/lib/client/llm/llm-config";

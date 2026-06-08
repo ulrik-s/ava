@@ -3,7 +3,7 @@
  * hämtar/raderar filer, skriver ny sync-state.
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest-compat";
 import { pullViaRest } from "@/lib/client/github/pull";
 import { writeSyncState, readSyncState } from "@/lib/client/github/sync-state";
 import { writeFile } from "@/lib/client/github/fsa-walker";

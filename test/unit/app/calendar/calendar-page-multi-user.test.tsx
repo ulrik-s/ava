@@ -6,7 +6,7 @@
  * userIds när picker-klicket propageras.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import CalendarPage from "@/app/calendar/page";
 

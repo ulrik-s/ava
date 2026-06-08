@@ -2,7 +2,7 @@
  * Tester för pure-funktion `searchDocuments` i demo-search-index.
  */
 
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest-compat";
 import { searchDocuments, compileNeedle } from "@/lib/server/adapters/demo-search-index";
 import { setDocumentContent, clearDocumentContentCache } from "@/lib/client/demo/document-content-cache";
 

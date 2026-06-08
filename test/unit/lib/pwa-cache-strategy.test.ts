@@ -11,7 +11,7 @@
  *   - DRY: kan återanvändas i en eventuell SSR-cache-warmup
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import {
   cacheStrategyFor,
   shouldCacheResponse,

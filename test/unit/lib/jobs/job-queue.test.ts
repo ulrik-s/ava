@@ -3,7 +3,7 @@
  * subscribe-notifieringar.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { jobQueue, type Job } from "@/lib/client/jobs/job-queue";
 
 beforeEach(() => {

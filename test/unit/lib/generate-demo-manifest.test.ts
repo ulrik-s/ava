@@ -4,7 +4,7 @@
  * den fetchar t.ex. /payment-plans/.json.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { mkdirSync, writeFileSync, rmSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { execFileSync } from "node:child_process";

@@ -7,7 +7,7 @@
  * _count.select) → undefined → 0.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { DemoDataStore } from "@/lib/server/data-store/DemoDataStore";
 
 const ORG = "firma-ab";

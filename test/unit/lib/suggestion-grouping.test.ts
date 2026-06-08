@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { groupingKey, groupSuggestions, type RawSuggestion } from "@/lib/shared/suggestion-grouping";
 
 function sug(overrides: Partial<RawSuggestion> = {}): RawSuggestion {

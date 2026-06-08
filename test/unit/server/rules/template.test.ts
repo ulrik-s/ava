@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { lookup, template, templateValue } from "@/lib/server/rules/template";
 
 describe("lookup", () => {

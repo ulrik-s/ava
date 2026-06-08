@@ -8,7 +8,7 @@
  * blocket → "många saker kommer inte med i PDF:en".
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { renderHandlebars } from "@/lib/client/kostnadsrakning/render-handlebars";
 import { buildKostnadsrakningContext } from "@/lib/shared/kostnadsrakning";
 import { KOSTNADSRAKNING_DEFAULT_HTML } from "@/lib/shared/kostnadsrakning-template";

@@ -3,7 +3,7 @@
  * Ed25519-pubkey:s ssh-format ska matcha det ssh-keygen producerar.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { buildSshPublicKey, sshFingerprint } from "@/lib/client/keys/ssh-format";
 
 // Test-vector: 32 noll-bytes → välbestämd SSH-string

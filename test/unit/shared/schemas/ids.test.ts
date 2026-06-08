@@ -10,7 +10,7 @@
  *      de ska. Tas en brand bort → typecheck blir rött.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import {
   matterIdSchema,
   contactIdSchema,

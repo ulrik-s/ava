@@ -6,7 +6,7 @@
  * som faktiskt används av routrarna (se grep i Fas B-PR).
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { InMemoryQueryEngine } from "@/lib/server/data-store/in-memory/query-engine";
 
 type Row = {

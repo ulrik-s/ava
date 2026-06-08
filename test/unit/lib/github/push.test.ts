@@ -10,7 +10,7 @@
  *   - kastar om sync-state saknas (push utan föregående pull)
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest-compat";
 import { pushViaRest } from "@/lib/client/github/push";
 import { writeSyncState } from "@/lib/client/github/sync-state";
 import { writeFile, deleteFile } from "@/lib/client/github/fsa-walker";

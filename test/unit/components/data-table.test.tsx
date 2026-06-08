@@ -4,7 +4,7 @@
  * vaktar vi datalogiken.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { mergePrefs, sortRows, visibleColumns, type Column } from "@/components/ui/data-table";
 
 type Row = { id: string; name: string; age: number };

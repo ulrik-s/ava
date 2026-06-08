@@ -1,10 +1,9 @@
 /**
  * Tester för `AuthStatusBanner` — visar auth-mode i top-baren.
  *
- * @vitest-environment jsdom
  */
 
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi } from "vitest-compat";
 import { render, screen } from "@testing-library/react";
 import { AuthStatusBanner } from "@/components/shell/auth-status-banner";
 

@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { FilesystemEventLog } from "@/lib/server/local-first/filesystem-event-log";
 import { InMemoryFileSystem } from "@/lib/server/local-first/in-memory-fs";
 
@@ -101,7 +101,7 @@ describe("FilesystemEventLog — query", () => {
   });
 });
 
-import { vi } from "vitest";
+import { vi } from "vitest-compat";
 
 describe("FilesystemEventLog — migrate-on-read (#58)", () => {
   // Skriv en v1-event-rad (payload bär legacy `type`) direkt till loggen.

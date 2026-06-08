@@ -10,7 +10,7 @@
  *     production-sync-loopen — DRY.
  */
 
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi } from "vitest-compat";
 import { DemoLoader } from "@/lib/server/local-first/demo-loader";
 import { MemFs } from "@/lib/server/local-first/mem-fs";
 import { buildDefaultRegistry } from "@/lib/server/local-first/projections/default-registry";

@@ -3,7 +3,7 @@
  * vilken repo+token AVA pekar mot (Tier 1/2/3).
  */
 
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest-compat";
 import {
   loadFirmaConfig, saveFirmaConfig, resetToDemo, inferTier,
   defaultConfigForHost, gitAuthUsername,

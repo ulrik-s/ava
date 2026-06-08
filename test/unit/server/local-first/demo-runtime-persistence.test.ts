@@ -8,7 +8,7 @@
  *   - Persistens är opt-in: utan persistence-arg fungerar runtime som förr.
  */
 
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi } from "vitest-compat";
 import { DemoRuntime } from "@/lib/server/local-first/demo-runtime";
 import { InMemoryPersistence } from "@/lib/server/local-first/persistence";
 import { demoSourceFromRuntime } from "@/lib/client/demo/demo-source-from-runtime";

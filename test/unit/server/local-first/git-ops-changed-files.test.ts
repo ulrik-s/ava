@@ -4,7 +4,7 @@
  * och de ska bete sig identiskt.
  */
 
-import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest-compat";
 import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";

@@ -3,7 +3,7 @@
  * och DemoDataStore.
  */
 
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi } from "vitest-compat";
 import { demoSourceFromRuntime } from "@/lib/client/demo/demo-source-from-runtime";
 import { DemoRuntime } from "@/lib/server/local-first/demo-runtime";
 import type { MemFs } from "@/lib/server/local-first/mem-fs";

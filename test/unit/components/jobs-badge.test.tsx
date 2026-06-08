@@ -1,10 +1,9 @@
 /**
  * Tester för `JobsBadge` — top-bar-indikator för jobbkön.
  *
- * @vitest-environment jsdom
  */
 
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi } from "vitest-compat";
 import { render, screen } from "@testing-library/react";
 import { JobsBadge } from "@/components/shell/jobs-badge";
 

@@ -5,7 +5,7 @@
  * pure-git-modellen, så vi vill ha pragmatiska, inte exakta, värden.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { bigrams, normalize, similarity } from "@/lib/shared/fuzzy-similarity";
 
 describe("normalize", () => {

@@ -4,7 +4,7 @@
  * alreadyRanFromEventLog (slå upp idempotency-key i event-loggen).
  */
 
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi } from "vitest-compat";
 import {
   expandTicks,
   idempotencyKey,
@@ -79,8 +79,8 @@ describe("runScheduledTick", () => {
     expect(res.ticksExecuted).toBe(2);
     expect(res.ticksSkipped).toBe(0);
     // Heartbeat per tick + rule.executed per tick.
-    expect(emit.mock.calls.some((c) => (c[0] as { type: string }).type === "system.heartbeat")).toBe(true);
-    expect(emit.mock.calls.some((c) => (c[0] as { type: string }).type === "rule.executed")).toBe(true);
+    expect(emit.mock.calls.some((c: unknown[]) => (c[0] as { type: string }).type === "system.heartbeat")).toBe(true);
+    expect(emit.mock.calls.some((c: unknown[]) => (c[0] as { type: string }).type === "rule.executed")).toBe(true);
   });
 
   it("hoppar ticks som redan körts (alreadyRan → true)", async () => {

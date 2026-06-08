@@ -5,7 +5,7 @@
  * vi kan jämföra exakt med kanoniska SHA-värden från `git hash-object`.
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest-compat";
 import { walkFsa, writeFile, deleteFile } from "@/lib/client/github/fsa-walker";
 import { gitBlobSha1 } from "@/lib/client/github/git-blob-hash";
 import { makeFakeFsa } from "../../../helpers/fake-fsa";

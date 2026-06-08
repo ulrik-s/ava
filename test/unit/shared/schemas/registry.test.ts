@@ -4,7 +4,7 @@
  * Validerar också att schemana är funktionsdugliga på minimala exempel.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import {
   ENTITY_REGISTRY,
   ENTITY_NAMES,

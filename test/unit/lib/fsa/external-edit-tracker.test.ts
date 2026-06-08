@@ -11,7 +11,7 @@
  *   5. Polling stoppas när tracker:n disposas.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest-compat";
 import { ExternalEditTracker } from "@/lib/client/fsa/external-edit-tracker";
 
 // Minimal FileSystemFileHandle-fake: vi mutar `lastModified` mellan ticks.

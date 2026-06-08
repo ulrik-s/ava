@@ -13,7 +13,7 @@
  *   - list/getById: org-scoping
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { invoiceRouter } from "@/lib/server/routers/invoice";
 import { dataStoreFromMockPrisma } from "../helpers/mock-data-store";
 

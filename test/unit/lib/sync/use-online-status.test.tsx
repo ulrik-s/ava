@@ -1,10 +1,9 @@
 /**
  * Tester för `useOnlineStatus`.
  *
- * @vitest-environment jsdom
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { renderHook, act } from "@testing-library/react";
 import { useOnlineStatus } from "@/lib/client/sync/use-online-status";
 

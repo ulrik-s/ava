@@ -7,7 +7,7 @@
  * "kalendern är tom" trots att event:t existerar.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { resolveSelectedUsers } from "@/lib/client/calendar/select-users";
 
 const ALL = ["u-anna", "u-bjorn", "u-eva"];

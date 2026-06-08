@@ -2,7 +2,7 @@
  * Tester för auth-client. Mockar fetch och verifierar request-formerna.
  */
 
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi } from "vitest-compat";
 import { createAuthClient } from "@/lib/client/auth/auth-client";
 
 function mockFetch(handler: (url: string, init?: RequestInit) => Response | Promise<Response>) {

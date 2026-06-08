@@ -3,7 +3,7 @@
  * dokumentmall med ärendets kontext → HTML-dokument registrerat på ärendet.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { createGitTarget } from "../../tooling/demo-generator/backend-target";
 import { populate } from "../../tooling/demo-generator/populate";
 import { populateTemplateDocs } from "../../tooling/demo-generator/populate-template-docs";

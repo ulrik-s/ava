@@ -6,7 +6,7 @@
  * `schema.parse` kastade → raderna droppades vid hydrering → tomma listor.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { InvoiceProjection } from "@/lib/server/local-first/projections/invoice";
 import { TimeEntryProjection } from "@/lib/server/local-first/projections/time-entry";
 import { ExpenseProjection } from "@/lib/server/local-first/projections/expense";

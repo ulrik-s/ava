@@ -1,10 +1,9 @@
 /**
  * Tester för `AutoSync` — top-bar wrapper runt SyncStatusPill.
  *
- * @vitest-environment jsdom
  */
 
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi } from "vitest-compat";
 import { render, screen } from "@testing-library/react";
 import { AutoSync } from "@/components/shell/auto-sync";
 import type { SyncState } from "@/lib/client/sync/use-auto-sync";

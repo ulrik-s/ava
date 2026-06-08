@@ -3,9 +3,8 @@
  * Själva useEffect-orkestreringen är effekt-tung; här låses den testbara
  * kärnan: bootstrap-grinden, auth-skip-mönstret och dokument-helpers.
  *
- * @vitest-environment jsdom
  */
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest-compat";
 import {
   pathSkipsAuth,
   checkBootstrapGate,

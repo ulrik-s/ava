@@ -2,7 +2,7 @@
  * Test för utils.ts — cn() för class-merging, formatMinutes, formatCurrency.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { cn, formatMinutes, formatCurrency } from "@/lib/client/utils";
 
 describe("cn()", () => {

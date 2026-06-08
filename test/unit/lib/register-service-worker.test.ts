@@ -5,7 +5,7 @@
  * SW-runtime.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest-compat";
 import { registerServiceWorker } from "@/lib/client/register-service-worker";
 
 describe("registerServiceWorker", () => {

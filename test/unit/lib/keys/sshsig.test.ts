@@ -6,7 +6,7 @@
  *   - Pubkey + namespace + signature embed:as i rätt offsets
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { sshsigSign } from "@/lib/client/keys/sshsig";
 
 const ZERO_PUBKEY = new Uint8Array(32);

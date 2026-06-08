@@ -3,7 +3,7 @@
  * filskrivningar i FSA-mounted folder.
  */
 
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi } from "vitest-compat";
 import { makeFsaWriteBack } from "@/lib/client/firma/fsa-write-back";
 
 interface MockFs {
@@ -29,7 +29,7 @@ describe("makeFsaWriteBack", () => {
   it("matter create → matters/active/<id>.json", async () => {
     const onCounted = vi.fn();
     const writeBack = makeFsaWriteBack({ handle, onCounted });
-    const instance = (FsaIsoGitAdapter as unknown as { mock: { instances: MockFs[] } }).mock.instances.at(-1)!;
+    const instance = (FsaIsoGitAdapter as unknown as { mock: { results: { value: MockFs }[] } }).mock.results.at(-1)!.value;
     await writeBack({
       entity: "matter",
       kind: "create",
@@ -44,7 +44,7 @@ describe("makeFsaWriteBack", () => {
 
   it("contact update → contacts/<id>.json", async () => {
     const writeBack = makeFsaWriteBack({ handle });
-    const instance = (FsaIsoGitAdapter as unknown as { mock: { instances: MockFs[] } }).mock.instances.at(-1)!;
+    const instance = (FsaIsoGitAdapter as unknown as { mock: { results: { value: MockFs }[] } }).mock.results.at(-1)!.value;
     await writeBack({
       entity: "contact", kind: "update",
       row: { id: "c1", name: "Anna", organizationId: "o1" },
@@ -54,7 +54,7 @@ describe("makeFsaWriteBack", () => {
 
   it("matterContact create → matter-contacts/<id>.json", async () => {
     const writeBack = makeFsaWriteBack({ handle });
-    const instance = (FsaIsoGitAdapter as unknown as { mock: { instances: MockFs[] } }).mock.instances.at(-1)!;
+    const instance = (FsaIsoGitAdapter as unknown as { mock: { results: { value: MockFs }[] } }).mock.results.at(-1)!.value;
     await writeBack({
       entity: "matterContact", kind: "create",
       row: { id: "mc1", matterId: "m1", contactId: "c1", organizationId: "o1" },
@@ -64,7 +64,7 @@ describe("makeFsaWriteBack", () => {
 
   it("delete → unlink", async () => {
     const writeBack = makeFsaWriteBack({ handle });
-    const instance = (FsaIsoGitAdapter as unknown as { mock: { instances: MockFs[] } }).mock.instances.at(-1)!;
+    const instance = (FsaIsoGitAdapter as unknown as { mock: { results: { value: MockFs }[] } }).mock.results.at(-1)!.value;
     await writeBack({
       entity: "contact", kind: "delete",
       row: { id: "c1", name: "Anna" },
@@ -75,7 +75,7 @@ describe("makeFsaWriteBack", () => {
 
   it("user → .ava/users/<email>.json (om email finns)", async () => {
     const writeBack = makeFsaWriteBack({ handle });
-    const instance = (FsaIsoGitAdapter as unknown as { mock: { instances: MockFs[] } }).mock.instances.at(-1)!;
+    const instance = (FsaIsoGitAdapter as unknown as { mock: { results: { value: MockFs }[] } }).mock.results.at(-1)!.value;
     await writeBack({
       entity: "user", kind: "create",
       row: { id: "u1", email: "anna@firma.se", name: "Anna" },
@@ -100,14 +100,14 @@ describe("makeFsaWriteBack", () => {
   ])("%s create → %s", async (entity, expectedPath) => {
     const id = expectedPath.split("/").pop()!.replace(".json", "");
     const writeBack = makeFsaWriteBack({ handle });
-    const instance = (FsaIsoGitAdapter as unknown as { mock: { instances: MockFs[] } }).mock.instances.at(-1)!;
+    const instance = (FsaIsoGitAdapter as unknown as { mock: { results: { value: MockFs }[] } }).mock.results.at(-1)!.value;
     await writeBack({ entity, kind: "create", row: { id, organizationId: "o1" } });
     expect(instance.writeFile.mock.calls.at(-1)![0]).toBe(expectedPath);
   });
 
   it("okänd entitet ignoreras tyst", async () => {
     const writeBack = makeFsaWriteBack({ handle });
-    const instance = (FsaIsoGitAdapter as unknown as { mock: { instances: MockFs[] } }).mock.instances.at(-1)!;
+    const instance = (FsaIsoGitAdapter as unknown as { mock: { results: { value: MockFs }[] } }).mock.results.at(-1)!.value;
     instance.writeFile.mockClear();
     await writeBack({
       entity: "okand", kind: "create",

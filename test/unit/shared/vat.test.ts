@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { splitVat, isVatRate, VAT_RATES, DEFAULT_VAT_RATE } from "@/lib/shared/vat";
 
 describe("splitVat", () => {

@@ -10,10 +10,9 @@
  * — den exercise:ar inte den faktiska skrivvägen). Den här testen
  * fångar bug:s där PDF:n inte hamnar i FSA-folder pga path/dir-fel.
  *
- * @vitest-environment jsdom
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { uploadDocumentToFsa } from "@/lib/client/fsa/upload-document";
 import { makeFsaWriteBack } from "@/lib/client/firma/fsa-write-back";
 import { makeFakeFsa } from "../../../helpers/fake-fsa";

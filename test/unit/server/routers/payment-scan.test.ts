@@ -2,7 +2,7 @@
  * `paymentPlan.scanDueReminders` (#23) — end-to-end mot riktig DemoDataStore.
  * Verifierar DUE/OVERDUE-generering, att påminnelser loggas, och idempotens.
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { appRouter } from "@/lib/server/routers/_app";
 import { DemoDataStore } from "@/lib/server/data-store/DemoDataStore";
 import { buildContext } from "@/lib/server/build-context";

@@ -4,7 +4,7 @@
  * istället re-konfigurera + fetcha.
  */
 
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi } from "vitest-compat";
 
 const mockClone = vi.fn();
 const mockSetConfig = vi.fn();

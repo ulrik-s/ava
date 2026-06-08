@@ -6,10 +6,9 @@
  *   2. identified-read  — token funkar, men inga push-rättigheter på repo
  *   3. identified-write — token funkar och kan pusha till repo
  *
- * @vitest-environment jsdom
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import {
   detectAuthMode,
   getCurrentUser,

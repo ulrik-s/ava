@@ -2,7 +2,7 @@
  * `populateUnbilledTime` — verifierar att färska time-entries skapas
  * utan invoiceId (= "upparbetad men inte fakturerad").
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { populateUnbilledTime } from "../../tooling/demo-generator/populate-unbilled-time";
 import { createGitTarget } from "../../tooling/demo-generator/backend-target";
 import { buildSeed } from "../../tooling/scripts/seed-data";

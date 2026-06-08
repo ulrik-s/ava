@@ -3,7 +3,7 @@
  * + persistar dismiss i sessionStorage.
  */
 
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest-compat";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { DemoModeBanner } from "@/components/shell/demo-mode-banner";
 import { saveFirmaConfig, resetToDemo } from "@/lib/client/firma/firma-config";

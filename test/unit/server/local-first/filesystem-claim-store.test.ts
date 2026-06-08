@@ -6,7 +6,7 @@
  * korrekthet och failover utan att spinna upp riktig git.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { FilesystemClaimStore } from "@/lib/server/local-first/filesystem-claim-store";
 import { InMemoryFileSystem } from "@/lib/server/local-first/in-memory-fs";
 import { InMemoryGitOps } from "@/lib/server/local-first/in-memory-git-ops";

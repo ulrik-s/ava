@@ -5,7 +5,7 @@
  * eller jsdom-fork). Täcks via e2e/round-trip-suiten istället.
  */
 
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest-compat";
 
 describe("ensureReadWrite", () => {
   it("OPFS-handle (saknar query/requestPermission) → alltid granted", async () => {

@@ -8,7 +8,7 @@
  * assertera på event-emit utan att behöva DB.
  */
 
-import { vi } from "vitest";
+import { vi } from "vitest-compat";
 
 export interface MockDataStore {
   events: { emit: ReturnType<typeof vi.fn>; query: ReturnType<typeof vi.fn>; iterate: ReturnType<typeof vi.fn>; onNewEvent: ReturnType<typeof vi.fn> };

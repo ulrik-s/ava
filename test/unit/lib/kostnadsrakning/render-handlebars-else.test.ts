@@ -7,7 +7,7 @@
  * efter {{#if taxaApplies}} → för frångångstaxa (HUF>225) försvann allt.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { renderHandlebars } from "@/lib/client/kostnadsrakning/render-handlebars";
 
 describe("renderHandlebars — {{else}}", () => {

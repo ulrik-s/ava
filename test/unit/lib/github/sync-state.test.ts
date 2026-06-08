@@ -2,7 +2,7 @@
  * Tester för sync-state — JSON-metadata om senaste pull i FSA-mappen.
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest-compat";
 import { readSyncState, writeSyncState, pathFor } from "@/lib/client/github/sync-state";
 import { makeFakeFsa } from "../../../helpers/fake-fsa";
 

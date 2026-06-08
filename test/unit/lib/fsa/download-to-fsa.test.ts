@@ -6,7 +6,7 @@
  *   3. HTTP-fel kastar med tydligt meddelande.
  */
 
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi } from "vitest-compat";
 import { downloadToFsa } from "@/lib/client/fsa/download-to-fsa";
 
 // ── Minimal FSA-fake ─────────────────────────────────────────────────

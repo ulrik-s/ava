@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { renderHook } from "@testing-library/react";
 
 // Mockbara query-resultat — styrs per test via dessa variabler.

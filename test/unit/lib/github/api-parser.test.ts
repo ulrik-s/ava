@@ -2,7 +2,7 @@
  * Tester för parseRepoLocator.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { parseRepoLocator } from "@/lib/client/github/api";
 
 describe("parseRepoLocator", () => {

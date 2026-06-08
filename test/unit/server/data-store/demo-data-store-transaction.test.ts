@@ -9,7 +9,7 @@
  *     write-back-event emitteras.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { DemoDataStore, type DemoSource } from "@/lib/server/data-store/DemoDataStore";
 import type { MutationEvent } from "@/lib/server/data-store/in-memory/writable-delegate";
 

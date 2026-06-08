@@ -3,7 +3,7 @@
  * sidornas innehåll.
  */
 
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi } from "vitest-compat";
 import { render, screen } from "@testing-library/react";
 import { AppShell } from "@/components/shell/app-shell";
 

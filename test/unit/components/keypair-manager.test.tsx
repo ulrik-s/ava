@@ -3,9 +3,8 @@
  * krypto-lagret (`ed25519-keypair`/`ssh-format`) mockas — testen verifierar
  * komponentens orkestrering: stöd-check, generera → visa nyckel, lägg-till.
  *
- * @vitest-environment jsdom
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { KeypairManager } from "@/components/settings/keypair-manager";
 import { isEd25519Supported, generateKeypair, loadKeypair } from "@/lib/client/keys/ed25519-keypair";

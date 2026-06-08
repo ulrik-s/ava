@@ -2,10 +2,9 @@
  * Tester för `useAutoSync` — fokus på offline-safety, timeout och
  * state-övergångar. Vi mockar SyncProvider och driver klockan manuellt.
  *
- * @vitest-environment jsdom
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest-compat";
 import { renderHook, act, waitFor } from "@testing-library/react";
 import { useAutoSync, type SyncProvider } from "@/lib/client/sync/use-auto-sync";
 

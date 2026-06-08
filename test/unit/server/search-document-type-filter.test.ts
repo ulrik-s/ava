@@ -6,7 +6,7 @@
  *   4. Filter på okänd typ → inga träffar.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { searchDocuments } from "@/lib/server/adapters/demo-search-index";
 
 const ORG = "demo-firma-ab";

@@ -3,7 +3,7 @@
  * som exponerar läs-metoder mot en collection och kastar på mutations.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { ReadOnlyDelegate, ReadOnlyError } from "@/lib/server/data-store/in-memory/read-only-delegate";
 
 type Matter = {

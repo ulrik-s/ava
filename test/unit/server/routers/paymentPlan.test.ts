@@ -3,7 +3,7 @@
  * Org-scope via planens invoice; NOT_FOUND när planen inte finns/ej i org.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { TRPCError } from "@trpc/server";
 import { paymentPlanRouter } from "@/lib/server/routers/paymentPlan";
 import { dataStoreFromMockPrisma } from "../helpers/mock-data-store";

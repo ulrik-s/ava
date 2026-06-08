@@ -3,7 +3,7 @@
  * vi testar primärt format-detektering och plain-text-pathway här.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { extractText, detectKind } from "@/lib/client/jobs/extract-text";
 
 describe("detectKind", () => {

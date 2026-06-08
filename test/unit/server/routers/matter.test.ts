@@ -11,7 +11,7 @@
  *   - removeContact:  normal + cross-org spärr
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { matterRouter } from "@/lib/server/routers/matter";
 import { dataStoreFromMockPrisma } from "../helpers/mock-data-store";
 
@@ -166,7 +166,7 @@ describe("matter.getById", () => {
 describe("matter.create", () => {
   it("skapar nytt matter med matterNumber när inga finns", async () => {
     mockPrisma.matter.findFirst.mockResolvedValue(null);
-    mockPrisma.matter.create.mockImplementation(async ({ data }) => ({
+    mockPrisma.matter.create.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({
       ...data,
       id: "new",
     }));
@@ -181,7 +181,7 @@ describe("matter.create", () => {
     mockPrisma.matter.findFirst.mockResolvedValue({
       matterNumber: `${year}-0042`,
     });
-    mockPrisma.matter.create.mockImplementation(async ({ data }) => ({
+    mockPrisma.matter.create.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({
       ...data,
       id: "new",
     }));

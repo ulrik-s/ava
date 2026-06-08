@@ -11,10 +11,9 @@
  * exakta closure:n från demo-bootstrap, så testet replicerar
  * logiken (samma kod) och verifierar mot fake-FSA + fake-handle-store.
  *
- * @vitest-environment jsdom
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { makeFakeFsa } from "../../helpers/fake-fsa";
 
 // Mock:a handle-store så vi kan styra vad loadHandle returnerar.

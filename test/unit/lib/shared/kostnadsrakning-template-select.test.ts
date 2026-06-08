@@ -8,7 +8,7 @@
  * "Brottmålstaxa nivå X" och en taxa-tabell istället för timkostnadsnorm-
  * specifikationen.
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import {
   KOSTNADSRAKNING_TEMPLATE_CATEGORY,
   KOSTNADSRAKNING_ICKE_TAXA_TEMPLATE_CATEGORY,

@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { InMemoryGitOps } from "@/lib/server/local-first/in-memory-git-ops";
 
 describe("InMemoryGitOps", () => {

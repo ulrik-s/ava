@@ -7,7 +7,7 @@
  *   - Tidsfönsterfiltrering i list
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { calendarRouter } from "@/lib/server/routers/calendar";
 import { dataStoreFromMockPrisma } from "../helpers/mock-data-store";
 

@@ -13,7 +13,7 @@
  *     IFileSystem-delen dit och lägger BARA till node-fs-API:t ovanpå.
  */
 
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest-compat";
 import { MemFs } from "@/lib/server/local-first/mem-fs";
 
 describe("MemFs — IFileSystem-yta", () => {

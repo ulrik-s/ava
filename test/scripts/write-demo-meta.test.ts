@@ -3,7 +3,7 @@
  * hårdkodade demo-identifierare i web-appen. Testen lockar fast schemat och
  * de defensiva validerings-kasten.
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { buildDemoMeta } from "../../tooling/scripts/write-demo-meta";
 import { createIdTranslator } from "../../tooling/demo-generator/id-translator";
 import { isUuid } from "../../src/lib/shared/uuid";

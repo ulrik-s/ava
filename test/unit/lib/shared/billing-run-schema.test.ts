@@ -10,7 +10,7 @@
  *   tills advokaten anger om kostnadsräkningen prutats.
  * - PRUTNING är ett Expense med kind=PRUTNING, negativt amount, ingen moms.
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import {
   billingRunSchema,
   timeEntrySchema,

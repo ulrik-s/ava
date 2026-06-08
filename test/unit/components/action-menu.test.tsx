@@ -6,10 +6,9 @@
  * disabled-trigger, disabled-item, Escape-stäng, utanför-klick-stäng,
  * aria-attribut.
  *
- * @vitest-environment jsdom
  */
 
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi } from "vitest-compat";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { ActionMenu, type ActionMenuItem } from "@/components/ui/action-menu";
 

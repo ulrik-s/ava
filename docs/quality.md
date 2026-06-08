@@ -16,11 +16,13 @@ ava/
 │       ├── server/      # tRPC routers, data-store, adapters, ports, auth, events, rules
 │       └── shared/      # zod-schemas + ramverks-agnostiska helpers (single source of truth)
 ├── test/
-│   ├── unit/            # vitest enhets-/komponenttester
+│   ├── unit/            # bun:test enhets-/komponenttester
 │   ├── integration/     # seed-smoke + cross-router-tester
+│   ├── setup/           # bun:test-preloads (happy-dom + jest-dom + cleanup)
+│   ├── bun-compat.ts    # vitest→bun:test-shim (vi-API)
 │   └── e2e/             # Playwright (round-trip mot docker)
 ├── tooling/
-│   ├── config/          # eslint, vitest, playwright, knip, jscpd, dependency-cruiser
+│   ├── config/          # eslint, playwright, knip, jscpd, dependency-cruiser
 │   ├── docker/          # docker-compose, nginx, web-image, optional auth-server
 │   └── scripts/         # seed-data, build-demo, generate-manifest, add-user
 ├── reports/             # CI-artefakter (coverage, jscpd, playwright-report)
@@ -38,10 +40,10 @@ lever som JSON i ett git-repo (se [`architecture.md`](./architecture.md)).
 |---|---|---|
 | Statisk typkontroll | TypeScript `tsc --noEmit` | `tsconfig.json` |
 | Lint + komplexitet | ESLint + `complexity` / `max-depth` / `max-params` | `tooling/config/eslint.config.mjs` |
-| Enhetstester (Node) | Vitest | `tooling/config/vitest.config.ts` (project: `node`) |
-| Komponenttester (DOM) | Vitest + jsdom + Testing Library | `tooling/config/vitest.config.ts` (project: `jsdom`), `tooling/config/vitest.setup.ts` |
+| Enhetstester | `bun test --isolate` | `bunfig.toml`, `test/unit/`, `test/integration/`, `test/scripts/` |
+| Komponenttester (DOM) | `bun test` + happy-dom + Testing Library | `test/setup/happy-dom-register.ts`, `test/setup/preload.ts` |
 | E2E-tester | Playwright (Chromium) | `tooling/config/playwright.config.ts`, `test/e2e/` |
-| Kodtäckning | Vitest + V8 | `tooling/config/vitest.config.ts` `coverage`-block |
+| Kodtäckning | `bun test --coverage` (lcov) + ratchet-skript | `tooling/scripts/check-coverage.ts` |
 | Duplikatdetektering (DRY) | jscpd | `tooling/config/jscpd.json` |
 | Arkitektur (SOLID/lager) | dependency-cruiser | `tooling/config/dependency-cruiser.cjs` |
 | Död kod / oanvända exports | knip | `tooling/config/knip.json` |
@@ -52,25 +54,27 @@ lever som JSON i ett git-repo (se [`architecture.md`](./architecture.md)).
 
 ### Kodtäckning (`bun run test:cov`)
 
-Initial baslinje-tröskel — höj efterhand som tester läggs till. Tröskeln finns i `vitest.config.ts → coverage.thresholds`:
+Sedan vitest→bun test-migrationen (#92) körs hela sviten med
+`bun test --parallel --coverage` och `tooling/scripts/check-coverage.ts`
+summerar lcov över `src/` och faller om täckningen sjunker under golvet.
 
-| Mått | Tröskel (baslinje) | Mål inom 3 mån |
+> **OBS 1:** bun:test rapporterar bara **rader + funktioner**, inte
+> branches/statements (som vitest+V8 gjorde). Branch-/statement-grindarna
+> är därmed borta — en medveten tradeoff vid migrationen (#92).
+>
+> **OBS 2:** vi kör `--parallel` (inte `--isolate`) eftersom `--isolate`
+> kraschar på CI-linux (`epoll_ctl EEXIST`). `--parallel` ger korrekt
+> isolering men under-rapporterar coverage något (bun aggregerar löst över
+> workers) — deterministiskt, så golvet är giltigt.
+
+Aktuell baslinje (~2334 tester över 258 filer; ratchet, strax under faktisk):
+
+| Mått | Golv (`check-coverage.ts`) | Faktisk (lcov, src/, --parallel) |
 |---|---|---|
-| Lines | 25 % | 60 % |
-| Functions | 17 % | 60 % |
-| Branches | 18 % | 70 % |
-| Statements | 25 % | 60 % |
+| Lines | 76 % | ~78.0 % |
+| Functions | 77 % | ~78.3 % |
 
-Aktuell baslinje (~2300 tester över ~254 testfiler; #43, strax under faktisk):
-
-| Mått | Tröskel (vitest-config) | Faktisk |
-|---|---|---|
-| Statements | 72.9 % | 72.99 % |
-| Lines | 75.2 % | 75.27 % |
-| Functions | 69.5 % | 69.59 % |
-| Branches | 66.1 % | 66.26 % |
-
-Coverage-rapporten skrivs till `reports/coverage/` (HTML, lcov, json-summary, text).
+Coverage-rapporten skrivs till `coverage/` (lcov).
 
 ### Komplexitet (`bun run lint`)
 

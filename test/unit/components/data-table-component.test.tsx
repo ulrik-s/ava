@@ -6,7 +6,7 @@
  * Admin-knappar (Spara org-default etc.) sitter i samma toolbar.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { DataTable, type Column } from "@/components/ui/data-table";
 

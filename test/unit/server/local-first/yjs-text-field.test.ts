@@ -16,7 +16,7 @@
  *   4. Determinism — same updates, same final state
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { YjsTextField } from "@/lib/server/local-first/yjs-text-field";
 
 describe("YjsTextField — grundläggande operationer", () => {

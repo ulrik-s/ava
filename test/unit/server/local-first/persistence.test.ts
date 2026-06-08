@@ -11,7 +11,7 @@
  * bara var datat hamnar.
  */
 
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest-compat";
 import {
   InMemoryPersistence,
   OpfsPersistence,

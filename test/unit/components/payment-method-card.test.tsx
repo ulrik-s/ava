@@ -5,7 +5,7 @@
  * Vi mockar trpc-hooken så testet inte behöver en riktig server.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { PaymentMethodCard } from "@/components/matter/payment-method-card";
 

@@ -4,7 +4,7 @@
  * localhost-fällan (default-tier = self-hosted) undviks.
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest-compat";
 
 // handle-store importeras dynamiskt i reset-demo → mocka deleteHandle.
 const deleteHandle = vi.fn(async () => {});

@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { matterRoleLabels, matterRoleOptions, contactTypeLabels, contactTypeOptions } from "@/lib/client/labels";
 
 describe("matterRoleLabels", () => {

@@ -2,7 +2,7 @@
  * Test för timeEntryRouter — list/create/update/delete/report.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { timeEntryRouter } from "@/lib/server/routers/timeEntry";
 import { dataStoreFromMockPrisma } from "../helpers/mock-data-store";
 

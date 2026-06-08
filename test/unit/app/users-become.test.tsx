@@ -1,7 +1,7 @@
 /**
  * Phase 4: "Bli X" — admin byter principal genom user-listan.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { becomeUser } from "@/app/users/page";
 
 describe("becomeUser", () => {

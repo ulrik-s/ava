@@ -9,7 +9,7 @@
  *   - `translateIds(row)` skriver om `id` + alla `*Id`-fält i en post
  *   - cyklomatisk komplexitet ≤ 8 per funktion (regel i AGENTS.md)
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { createIdTranslator, translateIds, translateSeed } from "../../tooling/demo-generator/id-translator";
 import { uuidv5, AVA_NAMESPACE } from "../../src/lib/shared/uuid-derive";
 import { isUuid } from "../../src/lib/shared/uuid";

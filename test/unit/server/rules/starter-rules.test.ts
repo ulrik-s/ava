@@ -4,7 +4,7 @@
  * startregler vill vi att build:en kraschar innan vi push:ar till git.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vitest-compat";
 import { avaRuleSchema } from "@/lib/server/rules/schema";
 import { STARTER_RULES } from "@/lib/server/rules/starter-rules";
 
