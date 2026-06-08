@@ -56,24 +56,22 @@ function dnsName(name: string): forge.asn1.Asn1 {
   return forge.asn1.create(forge.asn1.Class.CONTEXT_SPECIFIC, 2, false, name);
 }
 
-/** GeneralName [7] iPAddress för Name Constraints: adress-bytes + full mask. */
-function ipNameConstraint(addr: readonly number[]): forge.asn1.Asn1 {
-  const bytes = [...addr, ...addr.map(() => 0xff)];
-  return forge.asn1.create(forge.asn1.Class.CONTEXT_SPECIFIC, 7, false, String.fromCharCode(...bytes));
-}
-
 function subtree(generalName: forge.asn1.Asn1): forge.asn1.Asn1 {
   return forge.asn1.create(forge.asn1.Class.UNIVERSAL, forge.asn1.Type.SEQUENCE, true, [generalName]);
 }
 
-const LOOPBACK_V6 = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1];
-
-/** X.509 Name Constraints: tillåt ENDAST localhost / 127.0.0.1 / ::1. */
+/**
+ * X.509 Name Constraints: tillåt ENDAST dNSName `localhost`. Det säkrar det
+ * kritiska — en läckt CA-nyckel kan inte signera cert för riktiga domäner
+ * (*.com etc.). iPAddress-constraints utelämnas MEDVETET: BoringSSL (Bun) och
+ * flera andra verifierare avvisar kedjan med "unsupported name constraint
+ * type" på iPAddress-subtrees, vilket skulle bryta hela HTTPS-flödet. IP-SANs
+ * (127.0.0.1/::1) blir därmed obegränsade, vilket är acceptabelt (domän-
+ * förfalskning är den verkliga risken, inte loopback-IP).
+ */
 function nameConstraintsExtension(): { id: string; critical: boolean; value: string } {
   const permitted = forge.asn1.create(forge.asn1.Class.CONTEXT_SPECIFIC, 0, true, [
     subtree(dnsName("localhost")),
-    subtree(ipNameConstraint([127, 0, 0, 1])),
-    subtree(ipNameConstraint(LOOPBACK_V6)),
   ]);
   const nc = forge.asn1.create(forge.asn1.Class.UNIVERSAL, forge.asn1.Type.SEQUENCE, true, [permitted]);
   return { id: "2.5.29.30", critical: true, value: forge.asn1.toDer(nc).getBytes() };
