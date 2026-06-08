@@ -1,7 +1,7 @@
 /**
  * Smoke-test för demo-flödet end-to-end mot ett riktigt GitHub-repo.
  *
- *   yarn tsx tooling/scripts/smoke-test-demo.ts https://github.com/<user>/ava-demo.git
+ *   bun tooling/scripts/smoke-test-demo.ts https://github.com/<user>/ava-demo.git
  *
  * Bekräftar att:
  *   1. cloneFromGithub() pratar HTTPS korrekt med GitHub
@@ -16,7 +16,7 @@ import { cloneFromGithub } from "@/lib/server/local-first/clone-from-github";
 async function main(): Promise<void> {
   const url = process.argv[2];
   if (!url) {
-    console.error("Användning: yarn tsx tooling/scripts/smoke-test-demo.ts <github-url>");
+    console.error("Användning: bun tooling/scripts/smoke-test-demo.ts <github-url>");
     process.exit(1);
   }
 

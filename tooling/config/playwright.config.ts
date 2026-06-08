@@ -4,7 +4,7 @@ import path from "node:path";
 const projectRoot = path.resolve(__dirname, "..", "..");
 
 /**
- * E2E-tester körs mot riktiga Next.js + WebDAV-servrar (samma `npm run dev`-
+ * E2E-tester körs mot riktiga Next.js + WebDAV-servrar (samma `bun run dev`-
  * stack som utvecklarmiljön). Tester ligger i `e2e/`.
  *
  * Kör: `npx playwright test`
@@ -15,7 +15,7 @@ export default defineConfig({
   testDir: path.join(projectRoot, "test/e2e"),
   // demo-invoice-document.spec.ts körs mot den deployade demon via
   // playwright-demo.config.ts (ingen dev-server) — uteslut den här så
-  // `yarn e2e` inte kör den mot :3000. (demo-smoke.spec.ts lämnas orörd.)
+  // `bun run e2e` inte kör den mot :3000. (demo-smoke.spec.ts lämnas orörd.)
   testIgnore: /demo-invoice-document\.spec\.ts$/,
   timeout: 30_000,
   expect: { timeout: 5_000 },
@@ -40,13 +40,13 @@ export default defineConfig({
   ],
   webServer: process.env.CI
     ? {
-        command: "npm run dev",
+        command: "bun run dev",
         url: "http://localhost:3000",
         reuseExistingServer: false,
         timeout: 120_000,
       }
     : {
-        command: "npm run dev",
+        command: "bun run dev",
         url: "http://localhost:3000",
         reuseExistingServer: true,
         timeout: 120_000,

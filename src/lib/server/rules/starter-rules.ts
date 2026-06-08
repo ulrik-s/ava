@@ -7,7 +7,7 @@
  * stänga av dem utan att vi behöver code-deploy.
  *
  * Ingen av dem är aktiv per default i `seed-rules` — du måste manuellt
- * `enabled: true` via UI eller `yarn ava rules enable <id>`.
+ * `enabled: true` via UI eller `bun run ava rules enable <id>`.
  */
 
 import type { AvaRule } from "./schema";

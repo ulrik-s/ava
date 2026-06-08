@@ -15,7 +15,7 @@ export const GIT_URL = process.env.AVA_RT_GIT_URL ?? "http://localhost:8080/git/
  * Web-containern bootstrap:ar en slumpad admin-PAT vid första uppstart
  * och printar den i loggen. Hämta den med:
  *   docker logs ava-web-1 2>&1 | grep "Admin-token"
- * och exportera AVA_RT_GIT_PAT=<pat> innan yarn round-trip.
+ * och exportera AVA_RT_GIT_PAT=<pat> innan bun run round-trip.
  */
 function urlWithAuth(url: string): string {
   const pat = process.env.AVA_RT_GIT_PAT;

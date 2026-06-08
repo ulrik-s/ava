@@ -12,10 +12,10 @@ import nextTs from "eslint-config-next/typescript";
  *
  * Struktur-reglerna är `error`, inte `warn`: CI körs med `--max-warnings 0`
  * så NYA brott blockerar bygget. Befintlig skuld ligger som en baseline i
- * `eslint-suppressions.json` (genererad via `yarn lint:suppress`, en
+ * `eslint-suppressions.json` (genererad via `bun run lint:suppress`, en
  * ESLint-10-bulk-suppression) — den fungerar som ventil så orelaterat arbete
  * aldrig blockeras av gammal skuld, och betas av mekaniskt: när en lång
- * funktion refaktoreras kör `yarn lint:prune` bort dess post och filen krymper
+ * funktion refaktoreras kör `bun run lint:prune` bort dess post och filen krymper
  * i git. Se docs/quality.md ("max-lines-cap & ventil") och #41.
  */
 const eslintConfig = defineConfig([

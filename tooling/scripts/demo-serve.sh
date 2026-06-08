@@ -6,7 +6,7 @@
 # Användning:
 #   bash tooling/scripts/demo-serve.sh
 #   # eller via package.json:
-#   yarn demo:serve
+#   bun run demo:serve
 #
 # Öppna sedan http://localhost:8080/ava/ i webbläsaren.
 # Ctrl-C stoppar nginx-containern.

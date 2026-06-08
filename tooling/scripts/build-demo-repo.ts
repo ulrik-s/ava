@@ -9,8 +9,8 @@
  * 6 templates, 5 jäv-historik-rader).
  *
  * Användning:
- *     yarn build:demo-repo                    # default ./demo-repo
- *     yarn build:demo-repo --dir ./custom     # alt dir
+ *     bun run build:demo-repo                    # default ./demo-repo
+ *     bun run build:demo-repo --dir ./custom     # alt dir
  *
  * För GH-Pages-demon används orgId="demo-firma-ab" + currentUserId="u-anna"
  * (legacy-id-namn så befintliga bokmärken funkar). E-mail-domän "ava.demo".

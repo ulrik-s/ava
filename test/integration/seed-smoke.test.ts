@@ -2,7 +2,7 @@
  * Integrationstest: kör hela demo-seed:n genom DemoDataStore + appRouter
  * och anropar alla tRPC-procedurer som menyn:s sidor använder.
  *
- * Vi tar samma data som `yarn seed:local` genererar (`buildSeed()`) →
+ * Vi tar samma data som `bun run seed:local` genererar (`buildSeed()`) →
  * DemoSource → DemoDataStore → tRPC-caller. Allt som routrarna kraschar
  * på här, kraschar också i UI:n när användaren klickar runt.
  *

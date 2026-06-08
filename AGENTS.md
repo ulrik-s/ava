@@ -26,12 +26,12 @@ The loop for every change:
 3. **Conventional Commits** are mandatory — `feat(scope): …`, `fix:`, `chore:`,
    `refactor:`, `docs:`, `test:`, `ci:`. Enforced by `.husky/commit-msg`
    (commitlint, config at `tooling/config/commitlint.config.mjs`) **and** in CI.
-   Run `yarn install` so the hook's `commitlint` binary is present.
+   Run `bun install` so the hook's `commitlint` binary is present.
 4. **Before opening the PR, verify locally** (CI mirrors these):
-   - `yarn quality:fast` — typecheck + type-aware lint + `test:fast`.
-   - `yarn build:demo` — the GH Pages static export. **It fails silently in
+   - `bun run quality:fast` — typecheck + type-aware lint + `test:fast`.
+   - `bun run build:demo` — the GH Pages static export. **It fails silently in
      CI/Pages otherwise**, so always run it for app changes.
-   - `yarn round-trip` — for changes touching the git push/pull e2e path.
+   - `bun run round-trip` — for changes touching the git push/pull e2e path.
 5. **Open a PR** to `main`. CI runs four required checks that must be green
    before merge: **Static analysis** (typecheck + ESLint + knip + dep-cruiser
    + jscpd), **Unit / komponent / integration** (vitest + coverage floor),
@@ -58,7 +58,7 @@ overview. Then [`docs/auth.md`](docs/auth.md) for the self-hosted auth model.
 
 ## Operational facts (easy to get wrong)
 
-- **`yarn build` does NOT produce `out/`.** `output: "export"` is blocked by
+- **`bun run build` does NOT produce `out/`.** `output: "export"` is blocked by
   the `src/app/api/` route handlers. Build the static export with
   `DEMO_BASE_PATH=/ava bash tooling/scripts/build-demo.sh` (it stashes `api/`
   + seeds data + generates `manifest.json` + touches `.nojekyll`).
@@ -67,8 +67,8 @@ overview. Then [`docs/auth.md`](docs/auth.md) for the self-hosted auth model.
   browser pushes to `http://localhost:8080/git/firma.git` with no CORS proxy.
 - **`rm -rf out` breaks the docker bind-mount** → restart with:
   `docker compose -f tooling/docker/docker-compose.yml restart web`.
-- Run the browser round-trip e2e with `yarn round-trip` (needs docker up +
-  `out/` built). Unit tests: `yarn test:fast` (~2224 tests, ~18s).
+- Run the browser round-trip e2e with `bun run round-trip` (needs docker up +
+  `out/` built). Unit tests: `bun run test:fast` (~2224 tests, ~18s).
 
 ## Two deploy modes (selected by `firma-config.tier`)
 

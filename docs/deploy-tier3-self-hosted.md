@@ -40,7 +40,7 @@ ssh admin@firma-server
 sudo apt install docker.io docker-compose-v2 git
 git clone https://github.com/<owner>/ava.git /opt/ava
 cd /opt/ava
-yarn install
+bun run install
 DEMO_BASE_PATH=/ava bash tooling/scripts/build-demo.sh   # bygger out/
 ```
 
@@ -103,7 +103,7 @@ Om byrån vill börja med en rik demo-datamängd:
 
 ```bash
 # Lokalt mot servern
-SEED_REPO_URL=https://firma.se/git/firma.git yarn seed:local
+SEED_REPO_URL=https://firma.se/git/firma.git bun run seed:local
 # Kräver att din `git`-CLI har auth-credentials sparade för repo:t.
 ```
 
@@ -145,7 +145,7 @@ docker exec ava-web-1 htpasswd -D /auth-data/htpasswd anna@firma.se
 ```bash
 cd /opt/ava
 git pull
-yarn install
+bun run install
 DEMO_BASE_PATH=/ava bash tooling/scripts/build-demo.sh
 docker compose -f tooling/docker/docker-compose.yml restart web
 ```

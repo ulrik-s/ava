@@ -12,8 +12,8 @@
  * #418 dyker upp.
  *
  * Kör mot live-demon (default) eller en lokalt serverad out/:
- *   yarn e2e:demo
- *   AVA_DEMO_BASE_URL=http://localhost:8080/ava yarn e2e:demo
+ *   bun run e2e:demo
+ *   AVA_DEMO_BASE_URL=http://localhost:8080/ava bun run e2e:demo
  */
 import { test, expect, type ConsoleMessage } from "@playwright/test";
 

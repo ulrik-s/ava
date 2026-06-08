@@ -9,8 +9,8 @@ const projectRoot = path.resolve(__dirname, "..", "..");
  * vanliga playwright.config.ts startar denna INGEN dev-server — den pekar på
  * en redan körande demo. Default = live-sajten.
  *
- *   yarn e2e:demo
- *   AVA_DEMO_BASE_URL=http://localhost:8080/ava yarn e2e:demo   # lokal out/
+ *   bun run e2e:demo
+ *   AVA_DEMO_BASE_URL=http://localhost:8080/ava bun run e2e:demo   # lokal out/
  */
 export default defineConfig({
   testDir: path.join(projectRoot, "test/e2e"),

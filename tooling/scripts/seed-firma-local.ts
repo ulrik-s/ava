@@ -2,7 +2,7 @@
  * `seed-firma-local` — seed:ar docker-firma:n med demo-data.
  *
  * Användning:
- *     yarn seed:local
+ *     bun run seed:local
  *
  * Förutsättning: `tooling/docker/docker-compose.yml` är igång och
  * `firma.git` är nåbar på `http://localhost:8080/git/firma.git`.

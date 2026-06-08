@@ -24,7 +24,7 @@ describe("generate-demo-manifest", () => {
   }
 
   function runScript(): { paths: string[]; generatedAt: string; version: number } {
-    execFileSync("yarn", ["tsx", "tooling/scripts/generate-demo-manifest.ts", TMP], {
+    execFileSync("bun", ["tooling/scripts/generate-demo-manifest.ts", TMP], {
       cwd: resolve(__dirname, "..", "..", ".."),
       stdio: ["ignore", "pipe", "pipe"],
     });

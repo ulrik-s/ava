@@ -1,4 +1,4 @@
 #!/usr/bin/env sh
 # Validerar commit-meddelandet mot Conventional Commits (feat/fix/chore/...).
 # Blockerar felformaterade commits lokalt → maskinläsbar historik för changelog/semver.
-npx --no-install commitlint --edit "$1" --config tooling/config/commitlint.config.mjs
+bunx commitlint --edit "$1" --config tooling/config/commitlint.config.mjs
