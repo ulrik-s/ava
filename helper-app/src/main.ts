@@ -27,6 +27,12 @@ function extraOrigins(): string[] {
   return (process.env.AVA_HELPER_ORIGINS ?? "").split(",").map((s) => s.trim()).filter((s) => s !== "");
 }
 
+/** Lyssningsport: AVA_HELPER_PORT om satt (e2e-test/ops), annars default. */
+function listenPort(): number {
+  const p = Number(process.env.AVA_HELPER_PORT);
+  return Number.isInteger(p) && p > 0 ? p : HELPER_PORT;
+}
+
 function buildUpdateConfig(): UpdateConfig {
   return {
     currentVersion: VERSION,
@@ -48,14 +54,15 @@ function main(): void {
   }
 
   initLog();
-  log(`ava-helper ${VERSION} startar på 127.0.0.1:${HELPER_PORT}`);
+  const port = listenPort();
+  log(`ava-helper ${VERSION} startar på 127.0.0.1:${port}`);
 
   const updateCfg = buildUpdateConfig();
   const abort = new AbortController();
   void runUpdateLoop(updateCfg, abort.signal);
 
   const server = Bun.serve({
-    port: HELPER_PORT,
+    port,
     hostname: "127.0.0.1",
     fetch: createHandler({
       version: VERSION,
