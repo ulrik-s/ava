@@ -12,7 +12,7 @@
 
 import { FsaIsoGitAdapter } from "@/lib/client/fsa/fs-adapter";
 import type { DemoSource } from "@/lib/server/data-store/DemoDataStore";
-import { prebakeJoins } from "@/lib/client/demo/prebake-joins";
+import { prebakeJoins } from "@/lib/shared/demo-source";
 import { ENTITY_REGISTRY, ENTITY_NAMES, type EntityName } from "@/lib/shared/schemas";
 import { CURRENT_SCHEMA_VERSION } from "@/lib/shared/schema-version";
 import { migrateRow } from "@/lib/shared/schema-migrations";

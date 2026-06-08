@@ -13,7 +13,7 @@
 import { describe, it, expect } from "vitest-compat";
 import { buildSeed } from "../../tooling/scripts/seed-data";
 import { DemoDataStore, type DemoSource } from "@/lib/server/data-store/DemoDataStore";
-import { prebakeJoins } from "@/lib/client/demo/prebake-joins";
+import { prebakeJoins } from "@/lib/shared/demo-source";
 import { appRouter } from "@/lib/server/routers/_app";
 import { buildGitPorts } from "@/lib/server/adapters/git-ports";
 

@@ -50,34 +50,12 @@ import type {
   TaskDelegate,
 } from "./IDataStore";
 import type { AvaEvent, EmitInput, EventFilter } from "../events/schema";
+// `DemoSource` bor numera i shared/ (delas av browser- + server-runtime).
+// Re-exporteras nedan så alla befintliga importörer av
+// `@/lib/server/data-store/DemoDataStore` fungerar oförändrat.
+import type { DemoSource } from "@/lib/shared/demo-source";
 
-/** Demo-data per entitet. Saknade entiteter får tom array. */
-export interface DemoSource {
-  matters?: readonly Record<string, unknown>[];
-  matterContacts?: readonly Record<string, unknown>[];
-  contacts?: readonly Record<string, unknown>[];
-  documents?: readonly Record<string, unknown>[];
-  documentFolders?: readonly Record<string, unknown>[];
-  documentTemplates?: readonly Record<string, unknown>[];
-  documentAnalysisSuggestions?: readonly Record<string, unknown>[];
-  matterEventSuggestions?: readonly Record<string, unknown>[];
-  invoices?: readonly Record<string, unknown>[];
-  timeEntries?: readonly Record<string, unknown>[];
-  expenses?: readonly Record<string, unknown>[];
-  users?: readonly Record<string, unknown>[];
-  organizations?: readonly Record<string, unknown>[];
-  offices?: readonly Record<string, unknown>[];
-  conflictChecks?: readonly Record<string, unknown>[];
-  payments?: readonly Record<string, unknown>[];
-  paymentPlans?: readonly Record<string, unknown>[];
-  paymentPlanReminders?: readonly Record<string, unknown>[];
-  accontoDeductions?: readonly Record<string, unknown>[];
-  billingRuns?: readonly Record<string, unknown>[];
-  calendarEvents?: readonly Record<string, unknown>[];
-  tasks?: readonly Record<string, unknown>[];
-  userPreferences?: readonly Record<string, unknown>[];
-  orgPreferences?: readonly Record<string, unknown>[];
-}
+export type { DemoSource } from "@/lib/shared/demo-source";
 
 export class DemoDataStore implements IDataStore {
   readonly matters: MatterDelegate;

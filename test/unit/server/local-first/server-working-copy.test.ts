@@ -17,8 +17,21 @@ import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { tmpdir } from "node:os";
 import { buildSeed, seedToFiles } from "../../../../tooling/scripts/seed-data";
-import { hydrateEntitiesFromWorkingCopy } from "@/lib/server/local-first/server-working-copy";
+import {
+  hydrateEntitiesFromWorkingCopy,
+  entitiesToDemoSource,
+  createWorkingCopyCaller,
+} from "@/lib/server/local-first/server-working-copy";
 import { CURRENT_SCHEMA_VERSION } from "@/lib/shared/schema-version";
+import type { Principal } from "@/lib/server/auth/principal";
+
+const ADMIN: Principal = {
+  id: "current-user",
+  email: "anna@firma.local",
+  name: "Anna Advokat",
+  role: "ADMIN",
+  organizationId: "test-org",
+};
 
 /** Skriv alla seed-filer + .ava/meta.json till `dir` som en äkta working copy. */
 async function writeWorkingCopy(
@@ -100,5 +113,60 @@ describe("hydrateEntitiesFromWorkingCopy", () => {
     // Data skriven av nuvarande kod hydreras utan migration.
     expect(entities.matter?.length).toBe(seed.matters.length);
     expect(entities.user?.length).toBe(seed.users.length);
+  });
+});
+
+describe("entitiesToDemoSource", () => {
+  it("mappar projektions-namn → DemoSource-fält via ENTITY_REGISTRY", () => {
+    const source = entitiesToDemoSource({
+      matter: [{ id: "m1", matterId: "m1" }],
+      contact: [{ id: "c1" }],
+      user: [{ id: "u1" }],
+    });
+    expect(source.matters).toHaveLength(1);
+    expect(source.contacts).toHaveLength(1);
+    expect(source.users).toHaveLength(1);
+  });
+
+  it("hoppar över okända entiteter utan sourceKey", () => {
+    const source = entitiesToDemoSource({ inteEnEntitet: [{ id: "x" }] });
+    expect(Object.keys(source)).toHaveLength(0);
+  });
+});
+
+describe("createWorkingCopyCaller", () => {
+  let dir: string;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "ava-swc-caller-"));
+    const seed = buildSeed({ orgId: "test-org" });
+    await writeWorkingCopy(dir, seed);
+  });
+
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it("kör matter.list mot working copy och får tillbaka seed-ärendena", async () => {
+    const trpc = await createWorkingCopyCaller(dir, ADMIN);
+    const list = await trpc.matter.list({ page: 1, pageSize: 100, status: "ACTIVE" });
+    expect(list.matters.length).toBeGreaterThan(0);
+    // Alla hör till org:en vi seedade.
+    for (const m of list.matters) {
+      expect((m as { organizationId?: unknown }).organizationId).toBe("test-org");
+    }
+  });
+
+  it("kör user.list och får tillbaka de seedade användarna", async () => {
+    const trpc = await createWorkingCopyCaller(dir, ADMIN);
+    const { users } = await trpc.user.list();
+    const seed = buildSeed({ orgId: "test-org" });
+    expect(users.length).toBe(seed.users.length);
+  });
+
+  it("kör contacts.list och får tillbaka de seedade kontakterna", async () => {
+    const trpc = await createWorkingCopyCaller(dir, ADMIN);
+    const list = await trpc.contacts.list({ page: 1, pageSize: 100 });
+    expect(list.contacts.length).toBeGreaterThan(0);
   });
 });
