@@ -79,7 +79,10 @@ function nameConstraintsExtension(): { id: string; critical: boolean; value: str
   return { id: "2.5.29.30", critical: true, value: forge.asn1.toDer(nc).getBytes() };
 }
 
-const CA_ATTRS = [{ name: "commonName", value: "AVA Helper Local CA" }];
+/** CN på den lokala CA:n — används av trust-install/-uninstall (#103). */
+export const CA_COMMON_NAME = "AVA Helper Local CA";
+
+const CA_ATTRS = [{ name: "commonName", value: CA_COMMON_NAME }];
 
 /** Generera en self-signed, name-constrained lokal CA. */
 export function generateCa(now: Date = new Date()): CertPair {

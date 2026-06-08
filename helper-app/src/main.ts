@@ -22,6 +22,7 @@ import { dataDir } from "./paths.ts";
 import { initLog, log } from "./log.ts";
 import { createHandler } from "./server.ts";
 import { loadOrCreateTls } from "./tls/certs.ts";
+import { installCaTrust, removeCaTrust } from "./tls/trust.ts";
 import { checkOnce, runUpdateLoop, type UpdateConfig } from "./update.ts";
 import { VERSION } from "./version.ts";
 
@@ -40,6 +41,25 @@ function listenPort(): number {
 function httpsPort(): number {
   const p = Number(process.env.AVA_HELPER_HTTPS_PORT);
   return Number.isInteger(p) && p > 0 ? p : HELPER_HTTPS_PORT;
+}
+
+/** `--install-trust` / `--uninstall-trust`: lägg/ta bort CA i macOS-keychain. */
+function handleTrust(action: "install" | "uninstall"): void {
+  const dir = dataDir();
+  if (dir === null) {
+    process.stderr.write("ingen data-dir tillgänglig\n");
+    process.exitCode = 1;
+    return;
+  }
+  const tlsDir = join(dir, "tls");
+  loadOrCreateTls(tlsDir); // säkerställ att CA finns
+  const caPath = join(tlsDir, "ca.pem");
+  const res = action === "install" ? installCaTrust(caPath) : removeCaTrust(caPath);
+  const label = `CA-trust ${action}`;
+  process.stdout.write(
+    res.skipped ? `${label}: hoppad (${res.reason ?? ""})\n` : `${label}: ${res.ok ? "ok" : "misslyckades"}\n`,
+  );
+  if (!res.ok && !res.skipped) process.exitCode = 1;
 }
 
 type Handler = (req: Request) => Promise<Response>;
@@ -88,6 +108,14 @@ function buildUpdateConfig(): UpdateConfig {
 function main(): void {
   if (process.argv.includes("--version")) {
     process.stdout.write(`${VERSION}\n`);
+    return;
+  }
+  if (process.argv.includes("--install-trust")) {
+    handleTrust("install");
+    return;
+  }
+  if (process.argv.includes("--uninstall-trust")) {
+    handleTrust("uninstall");
     return;
   }
 
