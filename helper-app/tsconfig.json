@@ -1,0 +1,17 @@
+{
+  // Ärver repots strikta kompilator-/kodregler (ADR 0005 §Språk: samma
+  // regler som resten av repot). Overridear bara det som skiljer en
+  // Bun-binär från Next-appen: Bun-globaler i stället för auto-@types,
+  // en egen `paths`-bas, och en egen include/exclude (root excluderar
+  // "helper-app" → måste nollställas här annars hittas inga inputs).
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "types": ["bun-types"],
+    "paths": {
+      "@/*": ["../src/*"]
+    },
+    "noEmit": true
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts", "build.ts"],
+  "exclude": ["node_modules"]
+}

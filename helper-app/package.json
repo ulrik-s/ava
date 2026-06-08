@@ -1,0 +1,16 @@
+{
+  "name": "@ava/helper",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "AVA Helper — localhost-bryggar-app (TS/Bun-binär). Delar protokoll-typer med webbappen.",
+  "scripts": {
+    "start": "bun src/main.ts",
+    "build": "bun build.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "bun-types": "^1.3.14"
+  }
+}

@@ -1,15 +1,16 @@
 name: Helper release
 
 # Triggas av tag som börjar med "helper-v" (helper-v1.0.0, helper-v1.2.3…).
-# Vi använder prefix så helper-releaser inte krockar med eventuella
-# web-app-releaser i samma monorepo.
+# Prefix så helper-releaser inte krockar med eventuella web-app-releaser
+# i samma monorepo. Bygger 5 fristående Bun-binärer + checksums och
+# laddar upp dem till en GitHub-release. (Ersätter GoReleaser, #78.)
 on:
   push:
     tags:
       - "helper-v*"
 
 permissions:
-  contents: write   # för att ladda upp release-artefakter
+  contents: write # för att ladda upp release-artefakter
 
 jobs:
   release:
@@ -20,41 +21,32 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          fetch-depth: 0   # GoReleaser behöver hela git-historiken
+          bun-version: latest
 
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: helper-app/go.mod
-          cache-dependency-path: helper-app/go.sum
+      - name: Install
+        run: bun install --frozen-lockfile
 
-      - name: Run Go tests
-        run: go test ./...
+      - name: Test
+        run: bun test
 
-      - name: Setup GoReleaser
-        uses: goreleaser/goreleaser-action@v6
-        with:
-          distribution: goreleaser
-          version: "~> v2"
-          install-only: true
+      - name: Cross-build
+        run: bun build.ts "${GITHUB_REF#refs/tags/}"
 
-      # GoReleaser OSS parsar bara rena semver-tags. Vår monorepo
-      # taggar `helper-vX.Y.Z`; vi skapar en lokal alias-tag `vX.Y.Z`
-      # i CI så goreleaser plockar upp den. Aliasen pushas inte
-      # tillbaka — den lever bara under CI-körningen.
-      - name: Create semver alias for GoReleaser
-        working-directory: ${{ github.workspace }}
+      - name: Checksums
         run: |
-          TAG="${GITHUB_REF#refs/tags/}"
-          VERSION="${TAG#helper-}"
-          echo "Trigger tag: $TAG → goreleaser semver: $VERSION"
-          git config user.name github-actions
-          git config user.email github-actions@github.com
-          git tag -a "$VERSION" -m "alias for $TAG" "$TAG"
-          echo "GORELEASER_CURRENT_TAG=$VERSION" >> "$GITHUB_ENV"
+          cd dist
+          sha256sum ava-helper-* > "ava-helper_${GITHUB_REF#refs/tags/}_checksums.txt"
+          ls -lh
 
-      - name: Run GoReleaser
-        run: goreleaser release --clean
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: helper-app/dist/*
+          fail_on_unmatched_files: true
+          body: |
+            AVA Helper auto-uppdaterar sig en gång per dygn — den här releasen
+            plockas upp automatiskt av befintliga installationer (#78).

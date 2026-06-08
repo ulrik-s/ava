@@ -1,5 +1,9 @@
+# Dependencies (bun.lock committas; node_modules ignoreras)
+node_modules/
+
 # Compiled binaries
 ava-helper
+ava-helper-*
 helper-app
 *.exe
 
