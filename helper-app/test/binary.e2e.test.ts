@@ -6,12 +6,14 @@
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { connect } from "node:tls";
 
 import { HELPER_PING_PREFIX } from "@/lib/shared/helper/protocol";
+import { resolveDataDir } from "../src/paths.ts";
+import { currentPlatform } from "../src/platform/runtime.ts";
 
 const VERSION = "helper-v9.9.9-e2e";
 const HTTP_PORT = 48799;
@@ -110,14 +112,27 @@ describe("kompilerad binär (--compile)", () => {
     expect(upd.status).toBe(202);
   });
 
-  test("HTTPS: serverar /ping med ett localhost-cert (ADR 0006)", async () => {
-    // Certet är signerat av helperns egen lokala CA → validera inte kedjan här.
-    const ping = await fetch(`${HTTPS_BASE}/ping`, {
-      tls: { rejectUnauthorized: false },
-    } as RequestInit);
+  test("HTTPS: leaf-certet kedjar till helperns lokala CA (full validering)", async () => {
+    // Läs helperns egen CA ur data-dir (temp-HOME) och använd som trust-anchor
+    // → bevisar att leaf:et faktiskt validerar mot CA:n (inte bara att TLS svarar).
+    const dataRoot = resolveDataDir(currentPlatform(), dir, { localAppData: dir, xdgDataHome: dir });
+    if (dataRoot === null) throw new Error("kunde inte härleda data-dir");
+    const ca = await readFile(join(dataRoot, "tls", "ca.pem"), "utf8");
+
+    const ping = await fetch(`${HTTPS_BASE}/ping`, { tls: { ca } } as RequestInit);
     expect(ping.status).toBe(200);
     expect((await ping.text()).trim()).toBe(`${HELPER_PING_PREFIX} ${VERSION}`);
-
     expect(await peerCertCommonName(HTTPS_PORT)).toBe("localhost");
+  });
+
+  test("HTTPS: avvisas utan helperns CA (självsignerad → ej betrodd)", async () => {
+    // Utan CA i trust-store ska kedje-valideringen fela (mixed-trust-skydd).
+    let rejected = false;
+    try {
+      await fetch(`${HTTPS_BASE}/ping`);
+    } catch {
+      rejected = true;
+    }
+    expect(rejected).toBe(true);
   });
 });

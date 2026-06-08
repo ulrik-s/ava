@@ -96,3 +96,23 @@ describe("loadOrCreateTls", () => {
     expect(second.leaf.cert).not.toBe(first.leaf.cert); // leaf återutfärdad
   });
 });
+
+describe("cert-egenskaper", () => {
+  const now = new Date("2026-01-01T00:00:00Z");
+  const ca = generateCa(now);
+  const leaf = issueLeaf(ca, now);
+  const years = (ms: number): number => ms / (365 * 24 * 60 * 60 * 1000);
+
+  test("leaf har serverAuth EKU", () => {
+    // node X509Certificate.keyUsage exponerar extended key usage-OID:erna.
+    expect(new X509Certificate(leaf.cert).keyUsage).toContain("1.3.6.1.5.5.7.3.1");
+  });
+
+  test("giltighetsfönster: CA långlivad (~10 år), leaf kortlivad (~1 år)", () => {
+    const caTo = new X509Certificate(ca.cert).validToDate.getTime();
+    const leafTo = new X509Certificate(leaf.cert).validToDate.getTime();
+    expect(years(caTo - now.getTime())).toBeGreaterThan(9);
+    expect(years(leafTo - now.getTime())).toBeGreaterThan(0.9);
+    expect(years(leafTo - now.getTime())).toBeLessThan(1.1);
+  });
+});

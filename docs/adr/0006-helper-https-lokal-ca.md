@@ -25,7 +25,7 @@ Två vägar ger ett betrott cert:
 Vi väljer **B — lokal CA (mkcert-stil)**, av-scopad till **macOS** (enda plattformen där en webview kräver det).
 
 1. **Cert-infra (helpern).** Vid första körning genererar helpern en **lokal CA** (root cert + nyckel, lagrade i data-dir med `0600`) och ett **leaf-cert** för `localhost`/`127.0.0.1`/`::1`, signerat av CA:n. Helpern serverar **HTTPS parallellt med HTTP** (`Bun.serve({ tls })`); HTTP-porten lever kvar för Chromium/Firefox.
-2. **Härdning — Name Constraints.** CA:n utfärdas med X.509 *Name Constraints* som begränsar den till `localhost`/`127.0.0.1`. En läckt CA-nyckel kan då **inte** förfalska cert för riktiga domäner — bara för loopback (där en angripare ändå behöver lokal åtkomst). Detta är striktare än vad `mkcert` gör som standard.
+2. **Härdning — Name Constraints.** CA:n utfärdas med X.509 *Name Constraints* som begränsar den till `dNSName: localhost`. En läckt CA-nyckel kan då **inte** förfalska cert för riktiga domäner (*.com etc.) — den verkliga risken. Striktare än vad `mkcert` gör som standard. (Implementationsnotis, #105: iPAddress-constraints utelämnades — BoringSSL/Bun m.fl. avvisar kedjan med "unsupported name constraint type" på iPAddress-subtrees. IP-SANs blir därmed obegränsade, vilket är acceptabelt.)
 3. **Trust-injection — endast macOS.** CA-roten installeras i macOS-keychain (`security add-trusted-cert`) som en del av install-macos-flödet. Det kostar **en engångs-auktoriseringsprompt** (TouchID/lösenord). Avinstallation tar bort den.
 4. **Web-klienten.** På WebKit/Safari pratar klienten mot `https://localhost:<port>`; på Chromium/Firefox duger HTTP-loopback som idag. Ping-logiken provar HTTPS och faller tillbaka på HTTP.
 
