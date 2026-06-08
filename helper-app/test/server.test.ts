@@ -1,15 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
 import { createHandler, type ServerDeps } from "../src/server.ts";
-
-const BASE = "http://127.0.0.1:48761";
+import { mkRequest as req } from "./helpers.ts";
 
 function handler(overrides: Partial<ServerDeps> = {}): (req: Request) => Promise<Response> {
   return createHandler({ version: "v1.2.3-test", ...overrides });
-}
-
-function req(path: string, init: RequestInit = {}): Request {
-  return new Request(`${BASE}${path}`, init);
 }
 
 describe("GET /ping", () => {

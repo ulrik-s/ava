@@ -1,0 +1,13 @@
+# Test-/coverage-konfig för helper-app.
+#
+# Coverage-grinden är en RATCHET (jfr repots vitest-golv): förankrad strax
+# under nuvarande siffror och flyttas bara uppåt. `bun test` (med coverage
+# påslaget nedan) faller om täckningen sjunker under golvet.
+[test]
+coverage = true
+coverageReporter = ["text"]
+coverageSkipTestFiles = true
+# Mät bara helperns egen källkod: hoppa över test-fixturer och det delade
+# protokollet (../src/...) som täcks av repots vitest-svit, inte här.
+coveragePathIgnorePatterns = ["../src/**", "**/helpers.ts"]
+coverageThreshold = { line = 0.90, function = 0.82 }

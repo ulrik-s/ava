@@ -85,13 +85,38 @@ function errMsg(err: unknown): string {
 }
 
 /** GET med valfri Authorization-header → skriv body till `path`. */
-async function downloadTo(path: string, url: string, authHeader?: string): Promise<void> {
+export async function downloadTo(path: string, url: string, authHeader?: string): Promise<void> {
   const headers: Record<string, string> = {};
   if (authHeader) headers.Authorization = authHeader;
   const resp = await fetch(url, { headers });
   if (resp.status >= 400) throw new Error(`HTTP ${resp.status}`);
   await Bun.write(path, resp);
 }
+
+export async function uploadFile(path: string, uploadUrl: string, authHeader: string | undefined): Promise<void> {
+  const headers: Record<string, string> = { "Content-Type": "application/octet-stream" };
+  if (authHeader) headers.Authorization = authHeader;
+  const resp = await fetch(uploadUrl, { method: "PUT", headers, body: Bun.file(path) });
+  if (resp.status >= 400) throw new Error(`upload HTTP ${resp.status}`);
+}
+
+/**
+ * Injicerbara beroenden för watch-loopen (SOLID): klocka + sleep + IO så
+ * loopen kan testas deterministiskt utan riktig tid/fs/nät.
+ */
+export interface WatchDeps {
+  statMtime: (path: string) => Promise<number | null>;
+  upload: (path: string, uploadUrl: string, authHeader: string | undefined) => Promise<void>;
+  sleep: (ms: number) => Promise<void>;
+  now: () => number;
+}
+
+export const defaultWatchDeps: WatchDeps = {
+  statMtime,
+  upload: uploadFile,
+  sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  now: () => Date.now(),
+};
 
 /**
  * Pollar filens mtime och PUT:ar nya bytes vid varje save. Stänger efter
@@ -102,28 +127,35 @@ export function watchAndUpload(
   uploadUrl: string,
   authHeader: string | undefined,
   timeoutMs: number,
+  deps: WatchDeps = defaultWatchDeps,
 ): void {
-  void runWatch(path, uploadUrl, authHeader, timeoutMs);
+  void runWatch(path, uploadUrl, authHeader, timeoutMs, deps);
 }
 
-async function runWatch(path: string, uploadUrl: string, authHeader: string | undefined, timeoutMs: number): Promise<void> {
-  let lastMtime = (await statMtime(path)) ?? 0;
-  if (lastMtime === 0) return;
-  let deadline = Date.now() + timeoutMs;
+export async function runWatch(
+  path: string,
+  uploadUrl: string,
+  authHeader: string | undefined,
+  timeoutMs: number,
+  deps: WatchDeps,
+): Promise<void> {
+  let lastMtime = (await deps.statMtime(path)) ?? 0;
+  if (lastMtime === 0) return; // filen försvann innan watch hann starta
+  let deadline = deps.now() + timeoutMs;
 
   for (;;) {
-    await sleep(POLL_INTERVAL_MS);
-    if (Date.now() > deadline) {
+    await deps.sleep(POLL_INTERVAL_MS);
+    if (deps.now() > deadline) {
       log(`watch timeout: ${path}`);
       return;
     }
-    const mtime = await statMtime(path);
+    const mtime = await deps.statMtime(path);
     if (mtime === null || mtime <= lastMtime) continue;
     try {
-      await uploadFile(path, uploadUrl, authHeader);
+      await deps.upload(path, uploadUrl, authHeader);
       log(`uploaded changes: ${path}`);
       lastMtime = mtime;
-      deadline = Date.now() + timeoutMs; // aktivitet → förläng
+      deadline = deps.now() + timeoutMs; // aktivitet → förläng
     } catch (err) {
       log(`upload failed (${path}): ${errMsg(err)}`);
     }
@@ -136,15 +168,4 @@ async function statMtime(path: string): Promise<number | null> {
   } catch {
     return null;
   }
-}
-
-async function uploadFile(path: string, uploadUrl: string, authHeader: string | undefined): Promise<void> {
-  const headers: Record<string, string> = { "Content-Type": "application/octet-stream" };
-  if (authHeader) headers.Authorization = authHeader;
-  const resp = await fetch(uploadUrl, { method: "PUT", headers, body: Bun.file(path) });
-  if (resp.status >= 400) throw new Error(`upload HTTP ${resp.status}`);
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }

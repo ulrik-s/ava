@@ -36,7 +36,9 @@ jobs:
       - name: Typecheck
         run: bun run typecheck
 
-      - name: Test
+      - name: Test + coverage-grind
+        # bunfig.toml har coverage=true + coverageThreshold → faller om
+        # täckningen sjunker under golvet (ratchet).
         run: bun test
 
       - name: Cross-build (snapshot)
