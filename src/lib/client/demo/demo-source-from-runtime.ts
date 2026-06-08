@@ -11,7 +11,7 @@
 
 import type { DemoRuntime } from "@/lib/server/local-first/demo-runtime";
 import type { DemoSource } from "@/lib/server/data-store/DemoDataStore";
-import { prebakeJoins } from "./prebake-joins";
+import { prebakeJoins } from "@/lib/shared/demo-source";
 
 /** Projection-namn → DemoSource-fält. */
 const ENTITY_TO_SOURCE_KEY: Record<string, keyof DemoSource> = {

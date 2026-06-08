@@ -10,7 +10,7 @@ import { buildSeed } from "../../tooling/scripts/seed-data";
 import { createGitTarget } from "../../tooling/demo-generator/backend-target";
 import { populate } from "../../tooling/demo-generator/populate";
 import { populateBilling } from "../../tooling/demo-generator/populate-billing";
-import { prebakeJoins } from "../../src/lib/client/demo/prebake-joins";
+import { prebakeJoins } from "@/lib/shared/demo-source";
 import { DemoDataStore, type DemoSource } from "../../src/lib/server/data-store/DemoDataStore";
 import { buildContext } from "../../src/lib/server/build-context";
 import { noopPorts } from "../../src/lib/server/adapters/noop-ports";
