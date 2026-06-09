@@ -18,7 +18,7 @@ import { TRPCError } from "@trpc/server";
 import { router, orgProcedure } from "../trpc";
 import type { DataStoreTx } from "../data-store/IDataStore";
 import { computeFinalInvoiceBreakdown, isPaymentPlanSettled } from "@/lib/shared/invoice-calc";
-import { computeInvoiceLedger, deriveInvoiceStatus } from "@/lib/shared/write-off-calc";
+import { computeInvoiceLedger, deriveInvoiceStatus, invoicePartitionViolation } from "@/lib/shared/write-off-calc";
 import type { InvoiceStatus } from "@/lib/shared/schemas/enums";
 import { emit } from "../events/emit";
 import {
@@ -116,9 +116,9 @@ async function gatherInvoiceLedger(
 ): Promise<{ paid: number; credited: number; writtenOff: number; ledger: ReturnType<typeof computeInvoiceLedger> }> {
   const paid = (inv.payments ?? []).reduce((s, p) => s + p.amount, 0);
   const credits = await tx.invoices.findMany({ where: { creditedInvoiceId: inv.id, matter: { organizationId: orgId } } });
-  const credited = (credits as ReadonlyArray<{ amount: number }>).reduce((s, c) => s + Math.abs(c.amount), 0);
+  const credited = ((credits ?? []) as ReadonlyArray<{ amount: number }>).reduce((s, c) => s + Math.abs(c.amount), 0);
   const existing = await tx.writeOffs.findMany({ where: { invoiceId: inv.id } });
-  const writtenOff = (existing as ReadonlyArray<{ amount: number }>).reduce((s, w) => s + w.amount, 0);
+  const writtenOff = ((existing ?? []) as ReadonlyArray<{ amount: number }>).reduce((s, w) => s + w.amount, 0);
   return { paid, credited, writtenOff, ledger: computeInvoiceLedger(inv.amount, paid, credited, writtenOff) };
 }
 
@@ -383,6 +383,16 @@ export const invoiceRouter = router({
           include: { paymentPlan: true, payments: true },
         });
         if (!inv) throw new TRPCError({ code: "NOT_FOUND" });
+
+        // Konsistens-skydd (ADR 0007): en betalning får inte översumera fakturan
+        // (betalt + krediterat + avskrivet > belopp → utestående < 0). Validera
+        // FÖRE skapandet så vi inte lämnar en partition-brytande rad.
+        const { paid, credited, writtenOff } = await gatherInvoiceLedger(tx, ctx.orgId, inv);
+        const afterLedger = computeInvoiceLedger(inv.amount, paid + input.amount, credited, writtenOff);
+        const violation = invoicePartitionViolation(inv.amount, afterLedger);
+        if (violation) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: `Betalningen kan inte registreras: ${violation}` });
+        }
 
         const payment = await tx.payments.create({
           data: {

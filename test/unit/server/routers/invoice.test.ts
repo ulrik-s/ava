@@ -71,6 +71,11 @@ beforeEach(() => {
   mockPrisma.$transaction.mockImplementation(
     <T,>(fn: (tx: typeof mockPrisma) => Promise<T>) => fn(mockPrisma),
   );
+  // Säkra defaults så gatherInvoiceLedger (krediterings-/writeOff-frågor i
+  // recordPayment/writeOff) inte ärver en annan tests mockResolvedValue
+  // (clearAllMocks rensar call-data men inte implementationer).
+  mockPrisma.invoice.findMany.mockResolvedValue([]);
+  mockPrisma.writeOff.findMany.mockResolvedValue([]);
 });
 
 const MATTER_A = { id: "matter-1", organizationId: "org-a", matterNumber: "2026-0001", title: "T" };
@@ -330,6 +335,20 @@ describe("invoice.recordPayment", () => {
         paidAt: "2026-05-15",
       }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(mockPrisma.payment.create).not.toHaveBeenCalled();
+  });
+
+  it("avvisar översummerande betalning (partition-invariant, ADR 0007)", async () => {
+    mockPrisma.invoice.findFirst.mockResolvedValue({
+      id: "inv-1", amount: 1_000_000, status: "SENT", paymentPlan: null,
+      payments: [{ amount: 900_000 }],
+    });
+    mockPrisma.invoice.findMany.mockResolvedValue([]); // inga krediteringar
+    mockPrisma.writeOff.findMany.mockResolvedValue([]); // inget avskrivet
+
+    // utestående = 100 000; försök betala 200 000 → utestående < 0
+    await expect(makeCaller().recordPayment({ invoiceId: "inv-1", amount: 200_000, paidAt: "2026-05-15" }))
+      .rejects.toMatchObject({ code: "BAD_REQUEST" });
     expect(mockPrisma.payment.create).not.toHaveBeenCalled();
   });
 });
