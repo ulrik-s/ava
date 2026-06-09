@@ -9,6 +9,7 @@ import { labelForPaymentMethod, creditRiskFor, CREDIT_RISK_LABELS, type CreditRi
 import type { AppRouter } from "@/lib/server/routers/_app";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { ArSummarySection } from "./_ar-summary";
+import { omitUndefined } from "@/lib/shared/omit-undefined";
 
 const RISK_BADGE_CLASSES: Record<CreditRisk, string> = {
   LOW: "bg-green-50 text-green-700 border-green-200",
@@ -129,7 +130,12 @@ export default function ReportsPage() {
 
       <div className="flex-1 overflow-y-auto min-h-0 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8">
         <div className="mb-6">
-          <ArSummarySection from={from} to={to} />
+          <ArSummarySection
+            from={from}
+            to={to}
+            userId={userId}
+            {...omitUndefined({ lawyerName: users.data?.users.find((u) => u.id === userId)?.name })}
+          />
         </div>
 
         {report.isLoading && (

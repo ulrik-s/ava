@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect } from "vitest-compat";
-import { computeArBridge, computeAging, scopeArToPeriod } from "@/lib/shared/ar-summary";
+import { computeArBridge, computeAging, scopeArToPeriod, attributeArToLawyer } from "@/lib/shared/ar-summary";
 
 const NOW = new Date("2026-06-01T00:00:00Z");
 const daysAgo = (n: number) => new Date(NOW.getTime() - n * 86_400_000).toISOString();
@@ -80,6 +80,33 @@ describe("scopeArToPeriod", () => {
     expect(b.fakturerat).toBe(100_00); // bara "in"
     expect(b.krediterat).toBe(10_00);
     expect(b.inbetalt).toBe(30_00);
+  });
+});
+
+describe("attributeArToLawyer", () => {
+  const invoices = [
+    { id: "a", status: "SENT", invoiceType: "STANDARD", amount: 100_00, dueDate: "2026-05-01" },
+    { id: "b", status: "SENT", invoiceType: "STANDARD", amount: 200_00, dueDate: "2026-05-01" }, // ej i ratio → droppas
+    { id: "cred", status: "SENT", invoiceType: "CREDIT", creditedInvoiceId: "a", amount: -40_00 },
+  ];
+  const payments = [{ invoiceId: "a", amount: 40_00 }, { invoiceId: "b", amount: 10_00 }];
+  const writeOffs = [{ invoiceId: "a", amount: 0 }];
+  const ratios = new Map<string, number>([["a", 0.5]]); // advokaten gjorde 50 % av "a"
+
+  it("skalar fakturans + dess raders belopp med andelen; droppar 0-andel", () => {
+    const s = attributeArToLawyer(invoices, payments, writeOffs, ratios);
+    expect(s.invoices.map((i) => [i.id, i.amount])).toEqual([["a", 50_00], ["cred", -20_00]]); // b borta
+    expect(s.payments).toEqual([{ invoiceId: "a", amount: 20_00 }]); // b:s betalning borta
+  });
+
+  it("bryggan på attribuerad data = advokatens andel", () => {
+    const s = attributeArToLawyer(invoices, payments, writeOffs, ratios);
+    const b = computeArBridge(s.invoices, s.payments, s.writeOffs, new Date("2026-06-01T00:00:00Z"));
+    expect(b.fakturerat).toBe(50_00); // 50 % av 100 00
+    expect(b.krediterat).toBe(20_00); // 50 % av kreditnotan
+    expect(b.inbetalt).toBe(20_00);
+    // invariant består
+    expect(b.utestaende).toBe(b.justerat - b.inbetalt - b.konstateradKundforlust);
   });
 });
 
