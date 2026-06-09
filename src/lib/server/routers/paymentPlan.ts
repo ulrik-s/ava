@@ -109,6 +109,8 @@ export const paymentPlanRouter = router({
               },
               // Inkludera payments så list-vyn kan visa progress (X av Y betalt)
               payments: { orderBy: { paidAt: "desc" } },
+              // + writeOffs så utestående kan beräknas via ledgern (ADR 0007).
+              writeOffs: true,
             },
           },
         },
@@ -146,6 +148,7 @@ export const paymentPlanRouter = router({
                 },
               },
               payments: { orderBy: { paidAt: "desc" } },
+              writeOffs: true,
             },
           },
           reminders: { orderBy: { sentAt: "desc" } },
