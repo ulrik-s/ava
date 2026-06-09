@@ -12,10 +12,12 @@ import { useRouteId } from "@/lib/client/demo/use-route-id";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { formatCurrency } from "@/lib/client/utils";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
+import { computeInvoiceLedger } from "@/lib/shared/write-off-calc";
 import type { AppRouter } from "@/lib/server/routers/_app";
 import { PaymentModal } from "./_payment-modal";
 import { PlanModal } from "./_plan-modal";
 import { CreditModal } from "./_credit-modal";
+import { WriteOffModal } from "./_write-off-modal";
 import { InvoiceActions } from "./_invoice-actions";
 import { PaymentsTable } from "./_payments-table";
 
@@ -28,7 +30,7 @@ const STATUS_LABELS: Record<string, string> = {
   INSTALLMENT_PLAN: "Avbetalningsplan",
 };
 
-// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'InvoiceDetailClient' has a complexity of 14. Maximum allowed is 8.)
+// eslint-disable-next-line complexity, max-lines-per-function -- komponerande sid-komponent: header + summering + flera modals/sektioner (inkl. writeOff, ADR 0007).
 export default function InvoiceDetailClient({ id: paramId }: { id: string }) {
   // Static export: sentinel-shell för nya id:n → läs riktiga id:t ur URL:en.
   const id = useRouteId() ?? paramId;
@@ -38,6 +40,7 @@ export default function InvoiceDetailClient({ id: paramId }: { id: string }) {
   const [showPayment, setShowPayment] = useState(false);
   const [showPlan, setShowPlan] = useState(false);
   const [showCredit, setShowCredit] = useState(false);
+  const [showWriteOff, setShowWriteOff] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const refetchAll = () => {
@@ -55,6 +58,10 @@ export default function InvoiceDetailClient({ id: paramId }: { id: string }) {
   });
   const cancelPlan = trpc.invoice.cancelPaymentPlan.useMutation({ onSuccess: refetchAll });
   const setStatus = trpc.invoice.setStatus.useMutation({ onSuccess: refetchAll });
+  const writeOff = trpc.invoice.writeOff.useMutation({
+    onSuccess: () => { refetchAll(); setShowWriteOff(false); setError(null); },
+    onError: (e) => setError(e.message),
+  });
   const createCredit = trpc.invoice.createCredit.useMutation({
     onSuccess: () => { refetchAll(); setShowCredit(false); setError(null); },
     onError: (e) => setError(e.message),
@@ -65,6 +72,12 @@ export default function InvoiceDetailClient({ id: paramId }: { id: string }) {
   const inv = invoice.data;
 
   const paidSum = inv.payments.reduce((s: number, p: { amount: number }) => s + p.amount, 0);
+  // Kundfordrings-ledger (ADR 0007): krediterat = ev. kreditnota, avskrivet =
+  // summa WriteOff-poster. outstanding = amount − betalt − krediterat − avskrivet.
+  const writeOffs = (inv.writeOffs ?? []) as ReadonlyArray<{ amount: number; writtenOffAt?: string | Date; reason?: string | null }>;
+  const writtenOffSum = writeOffs.reduce((s, w) => s + w.amount, 0);
+  const creditedSum = Math.abs(creditNoteOf(inv)?.amount ?? 0);
+  const ledger = computeInvoiceLedger(inv.amount, paidSum, creditedSum, writtenOffSum);
   const accontoDeductions = accontoDeductionsOf(inv);
   const accontoDeductionTotal = accontoDeductions.reduce(
     (s: number, d: AccontoDeductionRow) => s + d.accontoInvoice.amount,
@@ -80,6 +93,8 @@ export default function InvoiceDetailClient({ id: paramId }: { id: string }) {
         <SummaryGrid
           inv={inv}
           paidSum={paidSum}
+          writtenOffSum={writtenOffSum}
+          outstanding={ledger.outstanding}
           accontoDeductionTotal={accontoDeductionTotal}
           netAmount={netAmount}
         />
@@ -88,9 +103,11 @@ export default function InvoiceDetailClient({ id: paramId }: { id: string }) {
           status={inv.status}
           hasPlan={inv.paymentPlan?.status === "ACTIVE"}
           hasCreditNote={!!inv.creditNote}
+          outstanding={ledger.outstanding}
           onShowPayment={() => setShowPayment(true)}
           onShowPlan={() => setShowPlan(true)}
           onShowCredit={() => setShowCredit(true)}
+          onShowWriteOff={() => setShowWriteOff(true)}
           onSetStatus={(status) => setStatus.mutate({ invoiceId: inv.id, status: status as Parameters<typeof setStatus.mutate>[0]["status"] })}
         />
         {inv.notes && <p className="mt-4 text-sm text-gray-600 border-t pt-3">{inv.notes}</p>}
@@ -111,6 +128,8 @@ export default function InvoiceDetailClient({ id: paramId }: { id: string }) {
       )}
 
       <PaymentsTable payments={inv.payments} paidSum={paidSum} />
+
+      {writeOffs.length > 0 && <WriteOffsCard writeOffs={writeOffs} />}
 
       {showPayment && (
         <PaymentModal
@@ -143,6 +162,38 @@ export default function InvoiceDetailClient({ id: paramId }: { id: string }) {
           onClose={() => setShowPlan(false)}
         />
       )}
+
+      {showWriteOff && (
+        <WriteOffModal
+          invoiceId={inv.id}
+          outstanding={ledger.outstanding}
+          isPending={writeOff.isPending}
+          error={error}
+          onSubmit={(data) => writeOff.mutate(data)}
+          onClose={() => { setShowWriteOff(false); setError(null); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function WriteOffsCard({ writeOffs }: { writeOffs: ReadonlyArray<{ amount: number; writtenOffAt?: string | Date; reason?: string | null }> }) {
+  return (
+    <div className="bg-white rounded-lg border border-red-200 p-6">
+      <h2 className="font-semibold text-red-900 mb-3">Konstaterad kundförlust</h2>
+      <table className="min-w-full text-sm">
+        <tbody className="divide-y divide-gray-100">
+          {writeOffs.map((w, i) => (
+            <tr key={i}>
+              <td className="py-1.5 whitespace-nowrap text-gray-600">
+                {w.writtenOffAt ? new Date(w.writtenOffAt).toLocaleDateString("sv-SE") : "—"}
+              </td>
+              <td className="py-1.5 text-gray-700">{w.reason ?? "Avskriven"}</td>
+              <td className="py-1.5 text-right font-mono text-red-700">−{formatCurrency(w.amount)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -183,11 +234,15 @@ function InvoiceHeader({ inv }: { inv: Inv }) {
 function SummaryGrid({
   inv,
   paidSum,
+  writtenOffSum,
+  outstanding,
   accontoDeductionTotal,
   netAmount,
 }: {
   inv: Inv;
   paidSum: number;
+  writtenOffSum: number;
+  outstanding: number;
   accontoDeductionTotal: number;
   netAmount: number;
 }) {
@@ -203,6 +258,10 @@ function SummaryGrid({
       )}
       {inv.dueDate && <div><p className="text-xs text-gray-500">Förfallodatum</p><p>{new Date(inv.dueDate).toLocaleDateString("sv-SE")}</p></div>}
       <div><p className="text-xs text-gray-500">Betalat totalt</p><p className="font-mono">{formatCurrency(paidSum)}</p></div>
+      {writtenOffSum > 0 && (
+        <div><p className="text-xs text-gray-500">Avskrivet</p><p className="font-mono text-red-700">−{formatCurrency(writtenOffSum)}</p></div>
+      )}
+      <div><p className="text-xs text-gray-500">Utestående</p><p className="font-mono font-semibold">{formatCurrency(outstanding)}</p></div>
     </div>
   );
 }
