@@ -35,7 +35,7 @@ const DEFAULT_SCAN_PATHS = [
   // tasks, avbetalningsplaner eller jäv-historik.
   "calendar", "tasks",
   "payment-plans", "payment-plan-reminders", "payments",
-  "acconto-deductions", "billing-runs", "conflict-checks", "offices",
+  "acconto-deductions", "billing-runs", "write-offs", "conflict-checks", "offices",
 ];
 
 async function listProjectionFiles(root: string, dir: string): Promise<string[]> {
