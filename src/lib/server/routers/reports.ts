@@ -89,14 +89,27 @@ function buildFrozenWork(
   return out;
 }
 
-function toInvoiceInputs(invoices: RawInvoice[]): BilledInvoiceInput[] {
+/** invoiceId → senaste avskrivnings-tidpunkt ur WriteOff-posterna (ADR 0007). */
+function writtenOffDates(writeOffs: Array<{ invoiceId?: string; writtenOffAt?: unknown }>): Map<string, Date> {
+  const m = new Map<string, Date>();
+  for (const w of writeOffs) {
+    if (!w.invoiceId) continue;
+    const d = coerceDate(w.writtenOffAt);
+    const cur = m.get(w.invoiceId);
+    if (!cur || d.getTime() > cur.getTime()) m.set(w.invoiceId, d);
+  }
+  return m;
+}
+
+function toInvoiceInputs(invoices: RawInvoice[], writtenOff: Map<string, Date>): BilledInvoiceInput[] {
   return invoices.map((i) => ({
     id: i.id,
     amountOre: i.amount,
     invoiceDate: coerceDate(i.invoiceDate),
     status: i.status,
-    // Avskrivnings-tidpunkt: invoice.updatedAt vid BAD_DEBT (#90-beslut).
-    writtenOffAt: i.status === "BAD_DEBT" ? coerceDate(i.updatedAt) : null,
+    // Avskrivnings-tidpunkt från WriteOff-posten (ADR 0007); fallback till
+    // updatedAt-heuristiken (#90) för ev. BAD_DEBT-faktura utan post.
+    writtenOffAt: writtenOff.get(i.id) ?? (i.status === "BAD_DEBT" ? coerceDate(i.updatedAt) : null),
   }));
 }
 
@@ -381,7 +394,7 @@ export const reportsRouter = router({
       const prevPeriod = previousCalendarMonth(fromDate);
       const orgScope = { matter: { organizationId: ctx.user.organizationId } };
 
-      const [user, invoices, billingRuns, timeEntries] = await Promise.all([
+      const [user, invoices, billingRuns, timeEntries, writeOffs] = await Promise.all([
         ctx.dataStore.users.findFirst({
           where: { id: input.userId, organizationId: ctx.user.organizationId },
           select: { id: true, name: true },
@@ -398,6 +411,7 @@ export const reportsRouter = router({
           where: { ...orgScope, billable: true },
           select: { userId: true, minutes: true, hourlyRate: true, invoiceId: true, frozenByBillingRunId: true },
         }),
+        ctx.dataStore.writeOffs.findMany({ select: { invoiceId: true, writtenOffAt: true } }),
       ]);
 
       if (!user) return null;
@@ -407,7 +421,7 @@ export const reportsRouter = router({
 
       const result = billedPerLawyer({
         userId: input.userId,
-        invoices: toInvoiceInputs(invoices as RawInvoice[]),
+        invoices: toInvoiceInputs(invoices as RawInvoice[], writtenOffDates(writeOffs as Array<{ invoiceId?: string; writtenOffAt?: unknown }>)),
         frozenWork: buildFrozenWork(timeEntries as RawTimeEntry[], runToInvoice),
         period: { from: fromDate, to: toDate },
         prevPeriod,
