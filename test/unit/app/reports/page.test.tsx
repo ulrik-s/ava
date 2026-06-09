@@ -28,6 +28,7 @@ vi.mock("@/lib/client/trpc", () => ({
     reports: {
       perLawyer: { useQuery: () => reportQuery },
       billed: { useQuery: () => billedQuery },
+      arSummary: { useQuery: () => ({ data: undefined, isLoading: false }) },
     },
     prefs: {
       get: { useQuery: () => ({ data: undefined, isLoading: false }) },

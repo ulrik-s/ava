@@ -5,6 +5,7 @@ import {
   type BilledInvoiceInput,
   type FrozenWorkInput,
 } from "@/lib/shared/billed-per-lawyer";
+import { computeArBridge, computeAging } from "@/lib/shared/ar-summary";
 
 /**
  * Advokat-fokuserade rapporter: användaren väljer period (from/to) och
@@ -438,4 +439,31 @@ export const reportsRouter = router({
         netOre: result.netOre,
       };
     }),
+
+  /**
+   * Kundfordrings-sammanställning (ADR 0007), LIVSTID: brygga + åldersanalys.
+   * Bygger på WriteOff-posterna (#136–139) → konstaterad kundförlust är en
+   * daterad sanning, inte en härledd updatedAt-gissning.
+   */
+  arSummary: protectedProcedure.query(async ({ ctx }) => {
+    const orgScope = { matter: { organizationId: ctx.user.organizationId } };
+    const invoices = await ctx.dataStore.invoices.findMany({
+      where: orgScope,
+      select: { id: true, amount: true, status: true, invoiceType: true, creditedInvoiceId: true, dueDate: true, dueAt: true },
+    });
+    const ids = (invoices as Array<{ id: string }>).map((i) => i.id);
+    const [payments, writeOffs] = await Promise.all([
+      ctx.dataStore.payments.findMany({ where: { invoiceId: { in: ids } }, select: { invoiceId: true, amount: true } }),
+      ctx.dataStore.writeOffs.findMany({ where: { invoiceId: { in: ids } }, select: { invoiceId: true, amount: true } }),
+    ]);
+
+    const now = new Date();
+    const inv = invoices as Record<string, unknown>[];
+    const pay = payments as Record<string, unknown>[];
+    const wo = writeOffs as Record<string, unknown>[];
+    return {
+      bridge: computeArBridge(inv, pay, wo, now),
+      aging: computeAging(inv, pay, wo, now),
+    };
+  }),
 });
