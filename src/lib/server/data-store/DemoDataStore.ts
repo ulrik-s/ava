@@ -43,6 +43,7 @@ import type {
   OfficeDelegate,
   ConflictCheckDelegate,
   PaymentDelegate,
+  WriteOffDelegate,
   PaymentPlanDelegate,
   AccontoDeductionDelegate,
   BillingRunDelegate,
@@ -74,6 +75,7 @@ export class DemoDataStore implements IDataStore {
   readonly offices: OfficeDelegate;
   readonly conflictChecks: ConflictCheckDelegate;
   readonly payments: PaymentDelegate;
+  readonly writeOffs: WriteOffDelegate;
   readonly paymentPlans: PaymentPlanDelegate;
   readonly paymentPlanReminders: Delegate;
   readonly accontoDeductions: AccontoDeductionDelegate;
@@ -201,6 +203,7 @@ export class DemoDataStore implements IDataStore {
       checkedBy: this.rel("users", "id", "checkedById", "one"),
     }) as unknown as ConflictCheckDelegate;
     this.payments = this.makeDelegate("payments") as unknown as PaymentDelegate;
+    this.writeOffs = this.makeDelegate("writeOffs") as unknown as WriteOffDelegate;
     // invoice (+ nested matter) krävs för cancelPaymentPlan:s where
     // `invoice: { matter: { organizationId } }`.
     this.paymentPlans = this.makeDelegate("paymentPlans", {
@@ -329,6 +332,7 @@ export class DemoDataStore implements IDataStore {
       offices: "office",
       conflictChecks: "conflictCheck",
       payments: "payment",
+      writeOffs: "writeOff",
       paymentPlans: "paymentPlan",
       paymentPlanReminders: "paymentPlanReminder",
       accontoDeductions: "accontoDeduction",
@@ -400,6 +404,7 @@ export class DemoDataStore implements IDataStore {
       offices: this.offices,
       conflictChecks: this.conflictChecks,
       payments: this.payments,
+      writeOffs: this.writeOffs,
       paymentPlans: this.paymentPlans,
       accontoDeductions: this.accontoDeductions,
       billingRuns: this.billingRuns,

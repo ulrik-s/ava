@@ -96,6 +96,9 @@ export const emit = {
   invoicePaymentReceived: (ctx: EmitCtx, invoiceId: string, matterId: string, amount: number) =>
     emitUser(ctx, "invoice.payment_received", { invoiceId, amount }, matterId),
 
+  invoiceWrittenOff: (ctx: EmitCtx, invoiceId: string, matterId: string, amount: number) =>
+    emitUser(ctx, "invoice.written_off", { invoiceId, amount }, matterId),
+
   // ── time-entry ─────────────────────────────────────────────────
   timeEntryAdded: (ctx: EmitCtx, entry: { id: string; matterId: string; minutes: number }) =>
     emitUser(ctx, "time-entry.added", { entryId: entry.id, minutes: entry.minutes }, entry.matterId),

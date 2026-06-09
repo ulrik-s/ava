@@ -17,7 +17,7 @@ import type {
   Contact, Matter, MatterContact, Document, DocumentFolder,
   DocumentTemplate, DocumentAnalysisSuggestion, MatterEventSuggestion,
   Invoice, TimeEntry, Expense, User, Organization, Office, ConflictCheck,
-  Payment, PaymentPlan, AccontoDeduction, BillingRun,
+  Payment, PaymentPlan, AccontoDeduction, BillingRun, WriteOff,
   CalendarEvent, Task,
 } from "@/lib/shared/schemas";
 
@@ -128,6 +128,7 @@ export type OrganizationDelegate = Delegate<Organization>;
 export type OfficeDelegate = Delegate<Office>;
 export type ConflictCheckDelegate = Delegate<ConflictCheck>;
 export type PaymentDelegate = Delegate<Payment>;
+export type WriteOffDelegate = Delegate<WriteOff>;
 export type PaymentPlanDelegate = Delegate<PaymentPlan>;
 export type AccontoDeductionDelegate = Delegate<AccontoDeduction>;
 export type BillingRunDelegate = Delegate<BillingRun>;
@@ -181,6 +182,7 @@ export interface DataStoreTx {
   offices: OfficeDelegate;
   conflictChecks: ConflictCheckDelegate;
   payments: PaymentDelegate;
+  writeOffs: WriteOffDelegate;
   paymentPlans: PaymentPlanDelegate;
   accontoDeductions: AccontoDeductionDelegate;
   billingRuns: BillingRunDelegate;
@@ -216,6 +218,7 @@ export interface IDataStore {
   readonly offices: OfficeDelegate;
   readonly conflictChecks: ConflictCheckDelegate;
   readonly payments: PaymentDelegate;
+  readonly writeOffs: WriteOffDelegate;
   readonly paymentPlans: PaymentPlanDelegate;
   readonly paymentPlanReminders: Delegate;
   readonly accontoDeductions: AccontoDeductionDelegate;

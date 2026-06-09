@@ -43,6 +43,10 @@ const mockPrisma = {
   payment: {
     create: vi.fn(),
   },
+  writeOff: {
+    findMany: vi.fn(),
+    create: vi.fn(),
+  },
   paymentPlan: {
     create: vi.fn(),
     update: vi.fn(),
@@ -436,6 +440,69 @@ describe("invoice.cancelPaymentPlan", () => {
       makeCaller("org-b").cancelPaymentPlan({ planId: "plan-1" }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect(mockPrisma.paymentPlan.update).not.toHaveBeenCalled();
+  });
+});
+
+// ─── writeOff (ADR 0007) ─────────────────────────────────────────
+
+describe("invoice.writeOff", () => {
+  it("delbetald → avskriven återstod: skapar WriteOff + härleder BAD_DEBT", async () => {
+    mockPrisma.invoice.findFirst.mockResolvedValue({
+      id: "inv-1", matterId: "matter-1", amount: 100_000, status: "SENT",
+      payments: [{ amount: 30_000 }],
+    });
+    mockPrisma.invoice.findMany.mockResolvedValue([]); // inga krediteringar
+    mockPrisma.writeOff.findMany.mockResolvedValue([]); // inget avskrivet än
+    mockPrisma.writeOff.create.mockResolvedValue({ id: "wo-1", invoiceId: "inv-1", amount: 70_000 });
+    mockPrisma.invoice.update.mockResolvedValue({ id: "inv-1", status: "BAD_DEBT" });
+
+    const res = await makeCaller().writeOff({ invoiceId: "inv-1", reason: "Konkurs" });
+
+    // amount defaultar till återstoden (100000 − 30000 = 70000)
+    expect(mockPrisma.writeOff.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ invoiceId: "inv-1", amount: 70_000, reason: "Konkurs" }) }),
+    );
+    expect(res.outstanding).toBe(0);
+    expect(res.status).toBe("BAD_DEBT");
+    expect(mockPrisma.invoice.update).toHaveBeenCalledWith({
+      where: { id: "inv-1" }, data: { status: "BAD_DEBT" },
+    });
+  });
+
+  it("räkna en gång: redan avskriven faktura (outstanding 0) → BAD_REQUEST", async () => {
+    mockPrisma.invoice.findFirst.mockResolvedValue({
+      id: "inv-1", matterId: "matter-1", amount: 100_000, status: "BAD_DEBT",
+      payments: [],
+    });
+    mockPrisma.invoice.findMany.mockResolvedValue([]);
+    mockPrisma.writeOff.findMany.mockResolvedValue([{ amount: 100_000 }]); // hela redan avskrivet
+
+    await expect(makeCaller().writeOff({ invoiceId: "inv-1" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(mockPrisma.writeOff.create).not.toHaveBeenCalled();
+  });
+
+  it("avskrivningsbelopp > utestående → BAD_REQUEST", async () => {
+    mockPrisma.invoice.findFirst.mockResolvedValue({
+      id: "inv-1", matterId: "matter-1", amount: 100_000, status: "SENT", payments: [{ amount: 60_000 }],
+    });
+    mockPrisma.invoice.findMany.mockResolvedValue([]);
+    mockPrisma.writeOff.findMany.mockResolvedValue([]);
+
+    // utestående = 40000; försök skriva av 50000
+    await expect(makeCaller().writeOff({ invoiceId: "inv-1", amount: 50_000 })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(mockPrisma.writeOff.create).not.toHaveBeenCalled();
+  });
+
+  it("DRAFT-faktura kan inte skrivas av → BAD_REQUEST", async () => {
+    mockPrisma.invoice.findFirst.mockResolvedValue({
+      id: "inv-1", matterId: "matter-1", amount: 100_000, status: "DRAFT", payments: [],
+    });
+    await expect(makeCaller().writeOff({ invoiceId: "inv-1" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("okänd faktura → NOT_FOUND", async () => {
+    mockPrisma.invoice.findFirst.mockResolvedValue(null);
+    await expect(makeCaller().writeOff({ invoiceId: "nope" })).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 });
 

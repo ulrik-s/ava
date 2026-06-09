@@ -18,6 +18,8 @@ import { TRPCError } from "@trpc/server";
 import { router, orgProcedure } from "../trpc";
 import type { DataStoreTx } from "../data-store/IDataStore";
 import { computeFinalInvoiceBreakdown, isPaymentPlanSettled } from "@/lib/shared/invoice-calc";
+import { computeInvoiceLedger, deriveInvoiceStatus } from "@/lib/shared/write-off-calc";
+import type { InvoiceStatus } from "@/lib/shared/schemas/enums";
 import { emit } from "../events/emit";
 import {
   asId,
@@ -90,6 +92,52 @@ async function linkBilledItems(
   for (const a of accontos) {
     await tx.accontoDeductions.create({ data: { finalInvoiceId: invoiceId, accontoInvoiceId: a.id } });
   }
+}
+
+// ─── writeOff-helpers (ADR 0007) — håller mutationen under complexity ≤ 8 ──
+
+/** Avvisa avskrivning av en faktura som inte är utställd. Returnerar den smala fakturan. */
+function ensureWritableOff<T extends { status?: string } | null>(inv: T): NonNullable<T> {
+  if (!inv) throw new TRPCError({ code: "NOT_FOUND" });
+  if (inv.status === "DRAFT" || inv.status === "CANCELLED") {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Endast utställda fakturor kan skrivas av (ej DRAFT/CANCELLED).",
+    });
+  }
+  return inv as NonNullable<T>;
+}
+
+/** Summera fakturans avräkningshinkar (betalt/krediterat/avskrivet) → ledger. */
+async function gatherInvoiceLedger(
+  tx: DataStoreTx,
+  orgId: string,
+  inv: { id: string; amount: number; payments?: ReadonlyArray<{ amount: number }> },
+): Promise<{ paid: number; credited: number; writtenOff: number; ledger: ReturnType<typeof computeInvoiceLedger> }> {
+  const paid = (inv.payments ?? []).reduce((s, p) => s + p.amount, 0);
+  const credits = await tx.invoices.findMany({ where: { creditedInvoiceId: inv.id, matter: { organizationId: orgId } } });
+  const credited = (credits as ReadonlyArray<{ amount: number }>).reduce((s, c) => s + Math.abs(c.amount), 0);
+  const existing = await tx.writeOffs.findMany({ where: { invoiceId: inv.id } });
+  const writtenOff = (existing as ReadonlyArray<{ amount: number }>).reduce((s, w) => s + w.amount, 0);
+  return { paid, credited, writtenOff, ledger: computeInvoiceLedger(inv.amount, paid, credited, writtenOff) };
+}
+
+/** Lös avskrivningsbeloppet mot utestående (default = hela återstoden) + vakt. */
+function resolveWriteOffAmount(outstanding: number, requested?: number): number {
+  if (outstanding <= 0) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Inget utestående att skriva av — fakturan är redan reglerad eller avskriven.",
+    });
+  }
+  const amount = requested ?? outstanding;
+  if (amount > outstanding) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: `Avskrivningsbeloppet (${amount} öre) överstiger utestående (${outstanding} öre).`,
+    });
+  }
+  return amount;
 }
 
 const invoiceTypeSchema = z.enum(["STANDARD", "ACCONTO", "FINAL"]);
@@ -444,7 +492,67 @@ export const invoiceRouter = router({
       });
     }),
 
-  /** Manuell statusändring för DRAFT→SENT, SENT→CANCELLED, SENT→BAD_DEBT. */
+  /**
+   * Boka en konstaterad kundförlust (ADR 0007). Skapar en daterad WriteOff-post
+   * (sanningskällan) och persisterar härledd `BAD_DEBT` när återstoden stängs.
+   *
+   * Vakt (räkna-en-gång): endast utställda fakturor med utestående > 0; en redan
+   * reglerad/avskriven faktura (outstanding ≤ 0) avvisas → en "dålig" faktura
+   * räknas exakt en gång. Avskrivningsbeloppet får inte överstiga utestående.
+   *
+   * `amount` default = hela återstoden (`amount − betalt − krediterat − redan avskrivet`).
+   */
+  writeOff: orgProcedure
+    .input(
+      z.object({
+        invoiceId: z.string(),
+        amount: z.number().int().min(1).optional(),
+        reason: z.string().optional(),
+        writtenOffAt: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      return ctx.dataStore.transaction(async (tx) => {
+        const inv = ensureWritableOff(
+          await tx.invoices.findFirst({
+            where: { id: input.invoiceId, matter: { organizationId: ctx.orgId } },
+            include: { payments: true },
+          }),
+        );
+
+        const { paid, credited, writtenOff, ledger } = await gatherInvoiceLedger(tx, ctx.orgId, inv);
+        const amount = resolveWriteOffAmount(ledger.outstanding, input.amount);
+
+        const writeOff = await tx.writeOffs.create({
+          data: {
+            invoiceId: inv.id,
+            amount,
+            writtenOffAt: input.writtenOffAt ? new Date(input.writtenOffAt) : new Date(),
+            ...omitUndefined({ reason: input.reason }),
+            recordedById: asId<"UserId">(ctx.user.id),
+          },
+        });
+
+        // Härled status efter avskrivningen och persistera om återstoden stängdes.
+        const after = computeInvoiceLedger(inv.amount, paid, credited, writtenOff + amount);
+        const derived = deriveInvoiceStatus(inv.status as InvoiceStatus, after);
+        if (derived !== inv.status) {
+          await tx.invoices.update({ where: { id: inv.id }, data: { status: derived } });
+        }
+
+        await emit.invoiceWrittenOff(ctx, inv.id, inv.matterId, amount);
+        return { writeOff, outstanding: after.outstanding, status: derived };
+      });
+    }),
+
+  /**
+   * Manuell statusändring för DRAFT→SENT, SENT→CANCELLED, SENT→BAD_DEBT.
+   *
+   * BAD_DEBT via `setStatus` är LEGACY (sätter bara flaggan, ingen daterad post).
+   * ADR 0007:s väg är `writeOff` ovan, som skapar en WriteOff-post + härleder
+   * status. UI-knappen "Kundförlust" byts till `writeOff` separat; tills dess
+   * lever båda vägarna (gamla BAD_DEBT-rader migreras i #139).
+   */
   setStatus: orgProcedure
     .input(
       z.object({
