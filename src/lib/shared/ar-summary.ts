@@ -57,40 +57,46 @@ function creditedByInvoice(invoices: readonly Row[]): Map<string, number> {
   return m;
 }
 
-export interface InvoiceOutstanding {
+export interface ArInvoiceLedgerRow {
   invoiceId: string;
+  /** Fakturabelopp (efter ev. advokat-attribution). */
+  amount: number;
+  paid: number;
+  credited: number;
+  writtenOff: number;
   outstanding: number;
   dueDate: Date | null;
 }
 
-/** Utestående för EN utställd icke-CREDIT-faktura, annars null. */
-function outstandingForInvoice(
+/** Full ledger-rad för EN utställd icke-CREDIT-faktura, annars null. */
+function invoiceLedgerRow(
   inv: Row,
   paid: Map<string, number>,
   credited: Map<string, number>,
   written: Map<string, number>,
-): InvoiceOutstanding | null {
+): ArInvoiceLedgerRow | null {
   if (!ISSUED_STATUSES.has(String(inv.status)) || inv.invoiceType === "CREDIT") return null;
   const id = String(inv.id ?? "");
-  const ledger = computeInvoiceLedger(num(inv.amount), paid.get(id) ?? 0, credited.get(id) ?? 0, written.get(id) ?? 0);
-  return { invoiceId: id, outstanding: ledger.outstanding, dueDate: coerceDateOrNull(inv.dueDate ?? inv.dueAt) };
+  const p = paid.get(id) ?? 0;
+  const c = credited.get(id) ?? 0;
+  const w = written.get(id) ?? 0;
+  const ledger = computeInvoiceLedger(num(inv.amount), p, c, w);
+  return { invoiceId: id, amount: num(inv.amount), paid: p, credited: c, writtenOff: w, outstanding: ledger.outstanding, dueDate: coerceDateOrNull(inv.dueDate ?? inv.dueAt) };
 }
 
-/** Per utställd (icke-CREDIT) faktura: utestående + förfallodatum. */
-export function perInvoiceOutstanding(
+/** Per utställd (icke-CREDIT) faktura: full ledger (belopp/betalt/krediterat/avskrivet/utestående). */
+export function perInvoiceRows(
   invoices: readonly Row[],
   payments: readonly Row[],
   writeOffs: readonly Row[],
-): InvoiceOutstanding[] {
+): ArInvoiceLedgerRow[] {
   const paid = sumAmountByKey(payments, "invoiceId");
   const credited = creditedByInvoice(invoices);
   const written = sumAmountByKey(writeOffs, "invoiceId");
-  const out: InvoiceOutstanding[] = [];
-  for (const inv of invoices) {
-    const row = outstandingForInvoice(inv, paid, credited, written);
-    if (row) out.push(row);
-  }
-  return out;
+  return invoices.flatMap((inv) => {
+    const row = invoiceLedgerRow(inv, paid, credited, written);
+    return row ? [row] : [];
+  });
 }
 
 export interface ArPeriod {
@@ -193,7 +199,7 @@ export function computeArBridge(
   const utestaende = justerat - inbetalt - konstateradKundforlust;
   const nettoRealiserat = justerat - konstateradKundforlust;
 
-  const ledgers = perInvoiceOutstanding(invoices, payments, writeOffs);
+  const ledgers = perInvoiceRows(invoices, payments, writeOffs);
   let ejForfallet = 0;
   for (const l of ledgers) {
     if (l.outstanding <= 0) continue;
@@ -229,7 +235,7 @@ export function computeAging(
   now: Date,
 ): AgingBucket[] {
   const amounts: [number, number, number, number] = [0, 0, 0, 0];
-  for (const l of perInvoiceOutstanding(invoices, payments, writeOffs)) {
+  for (const l of perInvoiceRows(invoices, payments, writeOffs)) {
     if (l.outstanding <= 0 || !l.dueDate) continue;
     const days = Math.floor((now.getTime() - l.dueDate.getTime()) / 86_400_000);
     if (days <= 0) continue; // ej förfallet

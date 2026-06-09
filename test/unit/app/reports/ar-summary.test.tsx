@@ -39,6 +39,9 @@ describe("ArSummarySection", () => {
         { label: "61–90 dagar", amount: 0 },
         { label: ">90 dagar", amount: 300_00 },
       ],
+      rows: [
+        { id: "i1", invoiceDate: "2026-03-10", matterNumber: "2026-0001", title: "Tvist", fakturerat: 100_00, inbetalt: 30_00, avskrivet: 0, utestaende: 70_00 },
+      ],
     };
     render(<ArSummarySection from="2026-01-01" to="2026-06-30" />);
     expect(screen.getByText("Kundfordringar")).toBeInTheDocument();
@@ -47,6 +50,9 @@ describe("ArSummarySection", () => {
     expect(screen.getByText("Netto realiserat")).toBeInTheDocument();
     expect(screen.getByText("0–30 dagar")).toBeInTheDocument();
     expect(screen.getByText(">90 dagar")).toBeInTheDocument();
+    // per-faktura-tabellen (sammanslagen från "Fakturerat"-panelen)
+    expect(screen.getByText("Per faktura")).toBeInTheDocument();
+    expect(screen.getByText(/2026-0001 — Tvist/)).toBeInTheDocument();
   });
 
   it("visar 'inga förfallna' när alla hinkar är 0", () => {
@@ -59,6 +65,7 @@ describe("ArSummarySection", () => {
         { label: "0–30 dagar", amount: 0 }, { label: "31–60 dagar", amount: 0 },
         { label: "61–90 dagar", amount: 0 }, { label: ">90 dagar", amount: 0 },
       ],
+      rows: [],
     };
     render(<ArSummarySection from="2026-01-01" to="2026-06-30" />);
     expect(screen.getByText("Inga förfallna fakturor.")).toBeInTheDocument();

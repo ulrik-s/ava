@@ -5,7 +5,7 @@ import {
   type BilledInvoiceInput,
   type FrozenWorkInput,
 } from "@/lib/shared/billed-per-lawyer";
-import { computeArBridge, computeAging, scopeArToPeriod, attributeArToLawyer } from "@/lib/shared/ar-summary";
+import { computeArBridge, computeAging, scopeArToPeriod, attributeArToLawyer, perInvoiceRows } from "@/lib/shared/ar-summary";
 
 /**
  * Advokat-fokuserade rapporter: användaren väljer period (from/to) och
@@ -481,7 +481,11 @@ export const reportsRouter = router({
       const orgScope = { matter: { organizationId: ctx.user.organizationId } };
       const invoices = await ctx.dataStore.invoices.findMany({
         where: orgScope,
-        select: { id: true, amount: true, status: true, invoiceType: true, creditedInvoiceId: true, invoiceDate: true, dueDate: true, dueAt: true },
+        select: {
+          id: true, amount: true, status: true, invoiceType: true, creditedInvoiceId: true,
+          invoiceDate: true, dueDate: true, dueAt: true,
+          matter: { select: { matterNumber: true, title: true } },
+        },
       });
       const ids = (invoices as Array<{ id: string }>).map((i) => i.id);
       const [payments, writeOffs] = await Promise.all([
@@ -517,9 +521,28 @@ export const reportsRouter = router({
       }
 
       const now = new Date();
+      // Per-faktura-rader (slår ihop "Fakturerat"-tabellen in i Kundfordringar).
+      const meta = new Map(
+        (scoped.invoices as Array<{ id?: string; invoiceDate?: unknown; matter?: { matterNumber?: string; title?: string } | null }>)
+          .map((i) => [String(i.id ?? ""), { invoiceDate: i.invoiceDate, matter: i.matter }]),
+      );
+      const rows = perInvoiceRows(scoped.invoices, scoped.payments, scoped.writeOffs).map((r) => {
+        const m = meta.get(r.invoiceId);
+        return {
+          id: r.invoiceId,
+          invoiceDate: coerceDate(m?.invoiceDate).toISOString(),
+          matterNumber: m?.matter?.matterNumber ?? "",
+          title: m?.matter?.title ?? "",
+          fakturerat: r.amount,
+          inbetalt: r.paid,
+          avskrivet: r.writtenOff,
+          utestaende: r.outstanding,
+        };
+      });
       return {
         bridge: computeArBridge(scoped.invoices, scoped.payments, scoped.writeOffs, now),
         aging: computeAging(scoped.invoices, scoped.payments, scoped.writeOffs, now),
+        rows,
       };
     }),
 });

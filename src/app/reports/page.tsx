@@ -55,10 +55,6 @@ export default function ReportsPage() {
     { from, to, userId },
     { enabled: !!userId },
   );
-  const billed = trpc.reports.billed.useQuery(
-    { from, to, userId },
-    { enabled: !!userId },
-  );
 
   async function handleExport() {
     const params = new URLSearchParams({ from, to });
@@ -150,8 +146,6 @@ export default function ReportsPage() {
             <UnbilledTable report={report.data} />
           </>
         )}
-
-        {billed.data && <BilledReport report={billed.data} />}
       </div>
     </div>
   );
@@ -366,63 +360,6 @@ function UnbilledTable({ report }: { report: Report }) {
           />
         </>
       )}
-    </div>
-  );
-}
-
-// ─── 4. Fakturerat per advokat och period (#90) ──────────────────────
-
-type BilledReportData = NonNullable<inferRouterOutputs<AppRouter>["reports"]["billed"]>;
-type BilledRow = BilledReportData["invoices"][number];
-
-function fmtDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("sv-SE", { year: "numeric", month: "short", day: "numeric" });
-}
-
-const billedColumns: Column<BilledRow>[] = [
-  { key: "invoiceDate", label: "Fakturadatum", sortable: true, sortValue: (r) => r.invoiceDate,
-    render: (r) => <span className="font-mono text-xs">{fmtDate(r.invoiceDate)}</span> },
-  { key: "matter", label: "Ärende", sortable: true, sortValue: (r) => r.matterNumber,
-    render: (r) => <span className="text-gray-700">{r.matterNumber}{r.title ? ` — ${r.title}` : ""}</span> },
-  { key: "amountOre", label: "Fakturabelopp", sortable: true, align: "right", sortValue: (r) => r.amountOre,
-    summary: (rs) => <span className="font-mono">{formatCurrency(rs.reduce((s, r) => s + r.amountOre, 0))}</span>,
-    render: (r) => <span className="font-mono text-gray-600">{formatCurrency(r.amountOre)}</span> },
-  { key: "shareOre", label: "Andel advokat", sortable: true, align: "right", sortValue: (r) => r.shareOre,
-    summary: (rs) => <strong className="font-mono">{formatCurrency(rs.reduce((s, r) => s + r.shareOre, 0))}</strong>,
-    render: (r) => <strong className="font-mono">{formatCurrency(r.shareOre)}</strong> },
-];
-
-function BilledReport({ report }: { report: BilledReportData }) {
-  return (
-    <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
-      <h2 className="text-lg font-semibold text-gray-900 mb-1">Fakturerat — {report.user.name}</h2>
-      <p className="text-xs text-gray-500 mb-4">
-        Fakturor som gått ut under perioden, attribuerade proportionellt mot advokatens andel
-        av debiterad tid. Avdrag avser fakturor avskrivna föregående period ({report.prevPeriod.from} – {report.prevPeriod.to}).
-      </p>
-
-      <div className="flex flex-wrap gap-6 text-sm mb-5">
-        <div>
-          <div className="text-gray-500 text-xs uppercase">Fakturerat</div>
-          <div className="font-mono font-medium text-gray-900">{formatCurrency(report.billedOre)}</div>
-        </div>
-        <div>
-          <div className="text-gray-500 text-xs uppercase">− Avskrivet (förra perioden)</div>
-          <div className="font-mono font-medium text-red-700">−{formatCurrency(report.writeOffOre)}</div>
-        </div>
-        <div>
-          <div className="text-gray-500 text-xs uppercase">Netto-fakturerat</div>
-          <div className="font-mono font-semibold text-gray-900">{formatCurrency(report.netOre)}</div>
-        </div>
-      </div>
-
-      <DataTable
-        prefKey="list.reports-billed"
-        columns={billedColumns}
-        data={report.invoices}
-        rowKey={(r) => r.id}
-        emptyMessage="Inga utgångna fakturor för advokaten under perioden."
-      />
     </div>
   );
 }
