@@ -50,6 +50,8 @@ Vi modellerar kundfordringar som **daterade, immutabla händelser** (event-sourc
 
 4. **Livstid som primär vy.** Rubriktalet är ett löpande totalsaldo ("allt fram till nu"). Det eliminerar restatement-problematik helt: upptäcks en gammal faktura vara dålig idag, bokas write-offen **idag** och livstids-nettot sjunker idag — rätt, utan dubbelräkning, utan retroaktiv redigering av utställandet.
 
+   > **Ändring 2026-06-09 (#158):** Rapport-panelen `Kundfordringar` följer nu i stället **rapport-perioden**, scopad på fakturor utställda i perioden (`invoiceDate ∈ [from,to]`) — samma nyckel som billed-panelen. Skälet: panelen sitter på en sida med periodväljare, och en livstidsvy bredvid period-paneler var förvirrande för användaren. Per-faktura-partitionen består (betalningar/krediteringar/avskrivningar räknas mot periodens fakturor). Den rena aggregeringen (`computeArBridge`/`computeAging`) är oförändrad; periodfiltret läggs ovanpå via `scopeArToPeriod`.
+
 5. **Vakt för räkna-en-gång.** En `WriteOff` får bara skapas när utestående > 0. Full avskrivning → härledd status `BAD_DEBT` → vidare write-offs avvisas.
 
 6. **Sammanställningen presenteras som två kompletterande vyer:**

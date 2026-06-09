@@ -93,6 +93,46 @@ export function perInvoiceOutstanding(
   return out;
 }
 
+export interface ArPeriod {
+  from: Date;
+  to: Date;
+}
+
+function issueDateOf(inv: Row): Date | null {
+  return coerceDateOrNull(inv.invoiceDate ?? inv.issuedAt);
+}
+
+/**
+ * Scopa kundfordrings-datat till fakturor UTSTÄLLDA i perioden (invoiceDate ∈
+ * [from,to]) — samma nyckel som billed-panelen. Betalningar, krediteringar och
+ * avskrivningar tas med för dessa fakturor (oavsett egen datering) så per-faktura-
+ * partitionen består. CREDIT-fakturor följer med om de krediterar en periodfaktura.
+ */
+export function scopeArToPeriod(
+  invoices: readonly Row[],
+  payments: readonly Row[],
+  writeOffs: readonly Row[],
+  period: ArPeriod,
+): { invoices: Row[]; payments: Row[]; writeOffs: Row[] } {
+  const fromMs = period.from.getTime();
+  const toMs = period.to.getTime();
+  const periodIds = new Set<string>();
+  for (const inv of invoices) {
+    if (inv.invoiceType === "CREDIT") continue;
+    const d = issueDateOf(inv);
+    if (d && d.getTime() >= fromMs && d.getTime() <= toMs) periodIds.add(String(inv.id ?? ""));
+  }
+  const belongs = (inv: Row): boolean =>
+    inv.invoiceType === "CREDIT"
+      ? periodIds.has(String(inv.creditedInvoiceId ?? ""))
+      : periodIds.has(String(inv.id ?? ""));
+  return {
+    invoices: invoices.filter(belongs),
+    payments: payments.filter((p) => periodIds.has(String(p.invoiceId ?? ""))),
+    writeOffs: writeOffs.filter((w) => periodIds.has(String(w.invoiceId ?? ""))),
+  };
+}
+
 export interface ArBridge {
   fakturerat: number;
   krediterat: number;

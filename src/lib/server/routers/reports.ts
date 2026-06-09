@@ -5,7 +5,7 @@ import {
   type BilledInvoiceInput,
   type FrozenWorkInput,
 } from "@/lib/shared/billed-per-lawyer";
-import { computeArBridge, computeAging } from "@/lib/shared/ar-summary";
+import { computeArBridge, computeAging, scopeArToPeriod } from "@/lib/shared/ar-summary";
 
 /**
  * Advokat-fokuserade rapporter: användaren väljer period (from/to) och
@@ -459,25 +459,35 @@ export const reportsRouter = router({
    * Bygger på WriteOff-posterna (#136–139) → konstaterad kundförlust är en
    * daterad sanning, inte en härledd updatedAt-gissning.
    */
-  arSummary: protectedProcedure.query(async ({ ctx }) => {
-    const orgScope = { matter: { organizationId: ctx.user.organizationId } };
-    const invoices = await ctx.dataStore.invoices.findMany({
-      where: orgScope,
-      select: { id: true, amount: true, status: true, invoiceType: true, creditedInvoiceId: true, dueDate: true, dueAt: true },
-    });
-    const ids = (invoices as Array<{ id: string }>).map((i) => i.id);
-    const [payments, writeOffs] = await Promise.all([
-      ctx.dataStore.payments.findMany({ where: { invoiceId: { in: ids } }, select: { invoiceId: true, amount: true } }),
-      ctx.dataStore.writeOffs.findMany({ where: { invoiceId: { in: ids } }, select: { invoiceId: true, amount: true } }),
-    ]);
+  arSummary: protectedProcedure
+    .input(z.object({ from: z.string(), to: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const fromDate = new Date(input.from);
+      const toDate = new Date(input.to);
+      toDate.setUTCHours(23, 59, 59, 999);
+      const orgScope = { matter: { organizationId: ctx.user.organizationId } };
+      const invoices = await ctx.dataStore.invoices.findMany({
+        where: orgScope,
+        select: { id: true, amount: true, status: true, invoiceType: true, creditedInvoiceId: true, invoiceDate: true, dueDate: true, dueAt: true },
+      });
+      const ids = (invoices as Array<{ id: string }>).map((i) => i.id);
+      const [payments, writeOffs] = await Promise.all([
+        ctx.dataStore.payments.findMany({ where: { invoiceId: { in: ids } }, select: { invoiceId: true, amount: true } }),
+        ctx.dataStore.writeOffs.findMany({ where: { invoiceId: { in: ids } }, select: { invoiceId: true, amount: true } }),
+      ]);
 
-    const now = new Date();
-    const inv = invoices as Record<string, unknown>[];
-    const pay = payments as Record<string, unknown>[];
-    const wo = writeOffs as Record<string, unknown>[];
-    return {
-      bridge: computeArBridge(inv, pay, wo, now),
-      aging: computeAging(inv, pay, wo, now),
-    };
-  }),
+      // Scopa till fakturor utställda i perioden (ADR 0007 #4, uppdaterat) så
+      // panelen följer rapport-filtret som de övriga rapporterna.
+      const scoped = scopeArToPeriod(
+        invoices as Record<string, unknown>[],
+        payments as Record<string, unknown>[],
+        writeOffs as Record<string, unknown>[],
+        { from: fromDate, to: toDate },
+      );
+      const now = new Date();
+      return {
+        bridge: computeArBridge(scoped.invoices, scoped.payments, scoped.writeOffs, now),
+        aging: computeAging(scoped.invoices, scoped.payments, scoped.writeOffs, now),
+      };
+    }),
 });

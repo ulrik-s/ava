@@ -129,7 +129,7 @@ export default function ReportsPage() {
 
       <div className="flex-1 overflow-y-auto min-h-0 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8">
         <div className="mb-6">
-          <ArSummarySection />
+          <ArSummarySection from={from} to={to} />
         </div>
 
         {report.isLoading && (
