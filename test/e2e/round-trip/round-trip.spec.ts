@@ -150,8 +150,9 @@ async function createMatterAndOpen(page: Page, title: string, client: string): P
   await page.getByLabel(/^Titel/).fill(title);
   // Vänta tills klient-optionen hydratiserats i dropdownen (kontakten skrevs
   // i föregående sid-session → läses tillbaka ur OPFS vid omladdning).
+  // 30s (var 20s): OPFS-hydreringen kan vara långsam på en lastad CI-runner (#131).
   const klient = page.getByLabel(/Klient/);
-  await expect(klient.locator("option", { hasText: client })).toHaveCount(1, { timeout: 20_000 });
+  await expect(klient.locator("option", { hasText: client })).toHaveCount(1, { timeout: 30_000 });
   await klient.selectOption({ label: client });
   await page.getByLabel(/Ärendetyp/).fill("Testtyp");
   await page.getByRole("button", { name: /Skapa ärende/i }).click();
