@@ -77,6 +77,9 @@ export type AccontoDeductionId = z.infer<typeof accontoDeductionIdSchema>;
 export const billingRunIdSchema = brandedId<"BillingRunId">();
 export type BillingRunId = z.infer<typeof billingRunIdSchema>;
 
+export const writeOffIdSchema = brandedId<"WriteOffId">();
+export type WriteOffId = z.infer<typeof writeOffIdSchema>;
+
 export const documentTemplateIdSchema = brandedId<"DocumentTemplateId">();
 export type DocumentTemplateId = z.infer<typeof documentTemplateIdSchema>;
 
