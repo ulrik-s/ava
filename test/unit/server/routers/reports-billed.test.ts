@@ -13,6 +13,7 @@ const mockPrisma = {
   invoice: { findMany: vi.fn() },
   billingRun: { findMany: vi.fn() },
   timeEntry: { findMany: vi.fn() },
+  writeOff: { findMany: vi.fn() },
 };
 
 function makeCaller(orgId = "org-a") {
@@ -32,6 +33,7 @@ beforeEach(() => {
   mockPrisma.invoice.findMany.mockResolvedValue([]);
   mockPrisma.billingRun.findMany.mockResolvedValue([]);
   mockPrisma.timeEntry.findMany.mockResolvedValue([]);
+  mockPrisma.writeOff.findMany.mockResolvedValue([]);
 });
 
 const te = (o: Record<string, unknown> = {}) => ({
@@ -97,5 +99,19 @@ describe("reports.billed", () => {
     expect(res?.prevPeriod).toEqual({ from: "2026-05-01", to: "2026-05-31" });
     // Den avskrivna (utfärdad i mars) syns inte i periodens billed-lista.
     expect(res?.invoices.map((i) => i.id)).toEqual(["billed"]);
+  });
+
+  it("writtenOffAt tas från WriteOff-posten, inte invoice.updatedAt (ADR 0007)", async () => {
+    // updatedAt i juni (utanför maj-perioden) men WriteOff-posten daterad i maj
+    // → avdraget ska ske → bevisar att posten styr, inte updatedAt-hacket.
+    mockPrisma.invoice.findMany.mockResolvedValue([
+      { id: "wo", amount: 40_000, status: "BAD_DEBT", invoiceDate: new Date("2026-03-01"), updatedAt: new Date("2026-06-20"), matter: { matterNumber: "B", title: "B" } },
+    ]);
+    mockPrisma.timeEntry.findMany.mockResolvedValue([te({ invoiceId: "wo" })]);
+    mockPrisma.writeOff.findMany.mockResolvedValue([
+      { invoiceId: "wo", writtenOffAt: new Date("2026-05-10") },
+    ]);
+    const res = await makeCaller().billed({ ...JUNE, userId: "u1" });
+    expect(res?.writeOffOre).toBe(40_000);
   });
 });
