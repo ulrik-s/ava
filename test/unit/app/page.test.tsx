@@ -35,7 +35,7 @@ beforeEach(() => {
 describe("Dashboard", () => {
   it("renderar rubrik + tre paneler", () => {
     render(<Dashboard />);
-    expect(screen.getByRole("heading", { name: /Dashboard/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Startsida/i })).toBeInTheDocument();
     expect(screen.getByText(/Att göra/i)).toBeInTheDocument();
     expect(screen.getByText(/Tidrapportering/i)).toBeInTheDocument();
     expect(screen.getByText(/Senaste ärenden/i)).toBeInTheDocument();

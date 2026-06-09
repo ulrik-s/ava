@@ -25,7 +25,7 @@ export function signOutLocally(): void {
 const navigation = [
   // Jävskontroll överst — första steget i ärendehantering, mest framträdande (#89).
   { name: "Jävskontroll", href: "/conflicts", icon: "🔍" },
-  { name: "Dashboard", href: "/", icon: "📊" },
+  { name: "Startsida", href: "/", icon: "📊" },
   { name: "Att göra", href: "/todo", icon: "✅" },
   { name: "Kontakter", href: "/contacts", icon: "👤" },
   { name: "Ärenden", href: "/matters", icon: "📁" },
