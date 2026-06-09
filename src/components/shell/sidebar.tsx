@@ -24,11 +24,12 @@ export function signOutLocally(): void {
 
 const navigation = [
   // Jävskontroll överst — första steget i ärendehantering, mest framträdande (#89).
+  // Ärenden direkt under — kärnan i det dagliga arbetet.
   { name: "Jävskontroll", href: "/conflicts", icon: "🔍" },
+  { name: "Ärenden", href: "/matters", icon: "📁" },
   { name: "Dashboard", href: "/", icon: "📊" },
   { name: "Att göra", href: "/todo", icon: "✅" },
   { name: "Kontakter", href: "/contacts", icon: "👤" },
-  { name: "Ärenden", href: "/matters", icon: "📁" },
   { name: "Dokumentsök", href: "/search", icon: "📄" },
   { name: "Dokumentmallar", href: "/templates", icon: "📝" },
   { name: "Tidregistrering", href: "/time", icon: "⏱️" },
