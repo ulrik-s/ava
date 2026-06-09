@@ -26,6 +26,7 @@ export interface BillingResult {
   paymentPlans: number;
   credits: number;
   reminders: number;
+  writeOffs: number;
 }
 
 interface Ctx {
@@ -150,10 +151,24 @@ async function scenarioDraft(ctx: Ctx, matterId: string, daysAgo: number): Promi
   ctx.res.invoices++; // lämnas DRAFT
 }
 
+/** Delbetald faktura → konstaterad kundförlust på återstoden (ADR 0007). */
+async function scenarioWriteOff(ctx: Ctx, matterId: string | undefined, daysAgo: number): Promise<void> {
+  if (!matterId) return;
+  const inv = await finalSent(ctx, matterId, daysAgo);
+  const part = Math.floor(inv.amount / 4);
+  if (part > 0) {
+    await ctx.c.invoice.recordPayment({ invoiceId: inv.id, amount: part, paidAt: isoDaysAgo(daysAgo - 15), note: "Delbetalning" });
+    ctx.res.payments++;
+  }
+  // writeOff skriver av återstoden → daterad WriteOff-post + härledd BAD_DEBT.
+  await ctx.c.invoice.writeOff({ invoiceId: inv.id, reason: "Klient försatt i konkurs", writtenOffAt: isoDaysAgo(daysAgo - 30) });
+  ctx.res.writeOffs++;
+}
+
 export async function populateBilling(caller: GeneratorCaller, seed: SeedDataset): Promise<BillingResult> {
   const ctx: Ctx = {
     c: caller as AnyCaller,
-    res: { invoices: 0, payments: 0, paymentPlans: 0, credits: 0, reminders: 0 },
+    res: { invoices: 0, payments: 0, paymentPlans: 0, credits: 0, reminders: 0, writeOffs: 0 },
     time: groupIds(arr(seed, "timeEntries"), "matterId"),
     exp: groupIds(arr(seed, "expenses"), "matterId"),
   };
@@ -177,6 +192,7 @@ export async function populateBilling(caller: GeneratorCaller, seed: SeedDataset
   await scenarioCompletedPlan(ctx, next(), 200);
   await scenarioCancelledPlan(ctx, next(), 55);
   await scenarioCredit(ctx, next(), 35);
+  await scenarioWriteOff(ctx, next(), 80); // konstaterad kundförlust (ADR 0007)
   for (const id of billable.slice(i)) await scenarioDraft(ctx, id, 20); // resten → DRAFT
 
   return ctx.res;

@@ -13,6 +13,8 @@
  * `shared-must-be-framework-agnostic`.
  */
 
+import { synthesizeBadDebtWriteOffs } from "./write-off-migration";
+
 /** Demo-data per entitet. Saknade entiteter får tom array. */
 export interface DemoSource {
   matters?: readonly Record<string, unknown>[];
@@ -90,5 +92,17 @@ export function prebakeJoins(source: DemoSource): DemoSource {
     }) as readonly Record<string, unknown>[];
   }
 
+  applyBadDebtWriteOffMigration(out);
   return out;
+}
+
+/**
+ * Migrate-on-read (ADR 0007): ge legacy-BAD_DEBT-fakturor en daterad WriteOff.
+ * Idempotent — hoppar fakturor som redan har en (inkl. seedens explicita).
+ */
+function applyBadDebtWriteOffMigration(out: DemoSource): void {
+  const synthetic = synthesizeBadDebtWriteOffs(out.invoices ?? [], out.payments ?? [], out.writeOffs ?? []);
+  if (synthetic.length) {
+    out.writeOffs = [...(out.writeOffs ?? []), ...synthetic] as readonly Record<string, unknown>[];
+  }
 }
