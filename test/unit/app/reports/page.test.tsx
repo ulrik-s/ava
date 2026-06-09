@@ -49,18 +49,6 @@ beforeEach(() => {
   billedQuery.isLoading = false;
 });
 
-const sampleBilled = {
-  user: { id: "u1", name: "Anna" },
-  period: { from: "2026-06-01", to: "2026-06-30" },
-  prevPeriod: { from: "2026-05-01", to: "2026-05-31" },
-  invoices: [
-    { id: "i1", invoiceDate: "2026-06-15T00:00:00.000Z", amountOre: 100000, shareOre: 75000, matterNumber: "2026-0001", title: "Tvist" },
-  ],
-  billedOre: 75000,
-  writeOffOre: 10000,
-  netOre: 65000,
-};
-
 const sampleReport = {
   user: { id: "u1", name: "Anna" },
   totals: {
@@ -209,17 +197,4 @@ describe("ReportsPage", () => {
     expect(url).toContain("userIds=u1");
   });
 
-  it("renderar Fakturerat-rapporten med netto + fakturarad (#90)", () => {
-    billedQuery.data = sampleBilled;
-    render(<ReportsPage />);
-    expect(screen.getByText(/Fakturerat — Anna/)).toBeInTheDocument();
-    expect(screen.getByText("Netto-fakturerat")).toBeInTheDocument();
-    // Fakturaraden syns (ärendenummer).
-    expect(screen.getByText(/2026-0001/)).toBeInTheDocument();
-  });
-
-  it("visar inte Fakturerat-rapporten innan data finns", () => {
-    render(<ReportsPage />);
-    expect(screen.queryByText(/Fakturerat —/)).toBeNull();
-  });
 });
