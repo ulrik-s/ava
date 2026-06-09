@@ -21,6 +21,9 @@
 >   integrationer + alltid-på-jobb utan att offra local-first.
 > - [ADR 0006](./adr/0006-helper-https-lokal-ca.md) — helper-HTTPS via lokal CA
 >   (mkcert-stil), macOS-scopat, för Safari/WKWebView (Office-add-ins).
+> - [ADR 0007](./adr/0007-kundfordringar-konstaterad-kundforlust.md) — kund­
+>   fordringar: daterade händelser + konstaterad kundförlust (`WriteOff`-post,
+>   livstidsvy, brygga + åldersanalys).
 
 ## Tre lager
 
