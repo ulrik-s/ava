@@ -1,24 +1,35 @@
 #!/usr/bin/env bash
-# Kör HELA test-stacken lokalt — speglar exakt vad CI gör.
+# Kör HELA bygg-/test-stacken lokalt — speglar exakt CI (.github/workflows/ci.yml).
 #
-# Lager:
-#   - static:      typecheck + lint + deps:check + duplicates + knip
-#   - vitest:      unit + komponent + integration (med coverage)
-#   - build:       bun run build (production Next.js)
-#   - demo-build:  bash tooling/scripts/build-demo.sh (statisk export för GH Pages)
-#   - e2e:         Playwright round-trip mot tier 3-stacken (docker-compose.yml)
+# CI har fyra jobb; detta script speglar de tre som rör bygg + test (commitlint
+# körs lokalt av .husky/commit-msg vid varje commit):
 #
-# Arkitekturen är pure git-modell — ingen Postgres längre. Dev-stacken
-# (postgres+meili+tika) togs bort i samband med Prisma-borttagningen.
+#   1. static:  typecheck + lint --max-warnings 0 + deps:check + knip + duplicates
+#   2. unit:    test:cov  (bun test --parallel=2 + lcov-coverage-golv, check-coverage.ts)
+#   3. e2e:     build:demo + e2e:install + docker (--wait) + round-trip
+#
+# Arkitekturen är pure git-modell — ingen Postgres. Test-runner är bun:test
+# (vitest borttaget i #92). Coverage = coverage/lcov.info (check-coverage.ts).
+#
+# Två lokala fällor som CI slipper (CI bygger out/ INNAN containern startar och
+# kör i en färsk runner), men som detta script hanterar explicit:
+#   - Bind-mount-staleness: build:demo gör `rm -rf out` → den redan körande
+#     web-containerns mount pekar på gamla inoden → nginx 404. Vi `restart web`
+#     efter bygget så färsk out/ remountas (AGENTS.md).
+#   - Admin-PAT: web-containern bootstrappar en slumpad PAT som round-trip behöver
+#     (git-clone + browser-push) via AVA_RT_GIT_PAT. Vi extraherar den ur loggen,
+#     precis som CI:s e2e-jobb.
 #
 # Användning:
 #   bun run test:all              # hela stacken inkl. e2e (kräver docker)
-#   bun run test:all --no-e2e     # hoppar e2e + docker (fast lokal feedback)
+#   bun run test:all --no-e2e     # hoppar e2e + docker (snabb lokal feedback)
 
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
+
+COMPOSE="docker compose -f tooling/docker/docker-compose.yml"
 
 SKIP_E2E=0
 for arg in "$@"; do
@@ -33,40 +44,78 @@ ok()   { printf "    \033[32m✓\033[0m %s\n" "$*"; }
 
 START=$SECONDS
 
-# ─── 1. Static analysis ──────────────────────────────────────────
-bold "[1/5] Static analysis (typecheck + lint + deps + duplicates + knip)"
+# ─── 1. Static analysis (CI-jobb: static) ────────────────────────
+# Speglar ci.yml exakt: lint med --max-warnings 0 (ratchet-ventil) och knip
+# som GATE (inte knip:report som är rådgivande).
+bold "[1/3] Static analysis (typecheck + lint + deps + knip + duplicates)"
 bun run typecheck && ok "typecheck"
-bun run lint && ok "lint"
-bun run deps:check && ok "deps:check (cycle detection)"
+bun run lint --max-warnings 0 && ok "lint (--max-warnings 0)"
+bun run deps:check && ok "deps:check (cykeldetektion)"
+bun run knip && ok "knip (död kod — gate)"
 bun run duplicates && ok "duplicates (jscpd)"
-bun run knip:report && ok "knip (dead code)"
 
-# ─── 2. Vitest med coverage ──────────────────────────────────────
-bold "[2/5] Vitest (unit + komponent)"
-bunx vitest run --config tooling/config/vitest.config.ts --coverage && ok "vitest"
+# ─── 2. Unit / komponent / integration (CI-jobb: unit) ───────────
+# test:cov = check-coverage.ts: bun test --parallel=2 --coverage + lcov-golv.
+bold "[2/3] Unit / komponent / integration (test:cov)"
+bun run test:cov && ok "test:cov (bun test + coverage-golv)"
 
-# ─── 3. Build (Next.js production) ───────────────────────────────
-bold "[3/5] bun run build (Next.js production)"
-bun run build >/dev/null && ok "next build"
-
-# ─── 4. Demo-build (statisk export för GH Pages) ─────────────────
-bold "[4/5] bash tooling/scripts/build-demo.sh (GH Pages-export)"
-bash tooling/scripts/build-demo.sh >/dev/null && ok "demo-build"
-
-# ─── 5. Round-trip e2e ───────────────────────────────────────────
+# ─── 3. E2E git round-trip (CI-jobb: e2e) ────────────────────────
 if [[ $SKIP_E2E -eq 1 ]]; then
-  bold "[5/5] Round-trip e2e — HOPPAR (--no-e2e)"
+  bold "[3/3] E2E (git round-trip) — HOPPAR (--no-e2e)"
 else
-  bold "[5/5] Round-trip e2e (tier 3-stacken)"
-  bun run tier3:up >/dev/null && ok "docker compose up"
-  # Vänta tills web-servicen svarar
-  for i in {1..15}; do
-    if curl -sf -o /dev/null http://localhost:8080/ava/ 2>/dev/null; then
-      ok "web redo"; break
-    fi
-    sleep 1
-    if [[ $i -eq 15 ]]; then echo "    web svarar inte efter 15s"; exit 1; fi
-  done
+  bold "[3/3] E2E (git round-trip mot tier 3-stacken)"
+
+  # build:demo FÖRST (CI bygger out/ före containern). Producerar out/.
+  bun run build:demo >/dev/null && ok "build:demo (GH Pages-export)"
+
+  bun run e2e:install >/dev/null 2>&1 && ok "playwright chromium (idempotent)"
+
+  # Vänta tills web servar en RIKTIG out/-sida (inte nginx 404 från stale mount).
+  wait_for_web() {
+    for i in $(seq 1 30); do
+      curl -sf http://localhost:8080/ava/ 2>/dev/null | grep -q "AVA" && return 0
+      sleep 1
+    done
+    return 1
+  }
+
+  # Extrahera bootstrappad admin-PAT ur web-loggen. `|| true`: under
+  # `set -e`+`pipefail` ger `grep | head -1` SIGPIPE på grep (head stänger pipen
+  # efter rad 1) → pipeline-exit ≠ 0 trots att PAT:en lästes; vi neutraliserar.
+  extract_pat() {
+    local p=""
+    for i in $(seq 1 30); do
+      p=$($COMPOSE logs web 2>&1 \
+        | grep -oE 'Admin-token:[[:space:]]+[A-Za-z0-9]{40}' | grep -oE '[A-Za-z0-9]{40}' | head -1) || true
+      [ -n "$p" ] && break
+      sleep 1
+    done
+    printf '%s' "$p"
+  }
+
+  # Primär uppstart UTAN --build → recreate:ar inte en redan körande container,
+  # så bootstrap-PAT:en bevaras i loggen (snabb väg). --wait gatar på healthcheck.
+  $COMPOSE up -d --wait --wait-timeout 180 >/dev/null 2>&1 && ok "docker compose up (--wait)"
+  # Bind-mount-fix: remounta färsk out/ (build:demo gjorde rm -rf out → stale mount).
+  $COMPOSE restart web >/dev/null 2>&1 && ok "restart web (remountar färsk out/)"
+  wait_for_web && ok "web servar out/ (ej 404)" || { echo "    web servar inte out/ (404?)"; exit 1; }
+
+  PAT=$(extract_pat)
+
+  # Self-heal: ingen PAT i loggen (t.ex. container recreate:ad och bootstrap-raden
+  # borta, men htpasswd kvar → ingen ny PAT). Tvinga fram en ren bootstrap precis
+  # som CI:s färska runner: down -v nollar volymerna → entrypoint bootstrappar nytt.
+  if [[ -z "$PAT" ]]; then
+    bold "    ingen PAT i loggen → ren omstart (down -v) för färsk bootstrap"
+    $COMPOSE down -v >/dev/null 2>&1
+    $COMPOSE up -d --build --wait --wait-timeout 180 >/dev/null 2>&1 && ok "fresh docker compose up"
+    wait_for_web && ok "web servar out/ (ej 404)" || { echo "    web servar inte out/ (404?)"; exit 1; }
+    PAT=$(extract_pat)
+  fi
+  [[ -z "$PAT" ]] && { echo "    Kunde inte hämta admin-PAT ens efter ren omstart."; exit 1; }
+  ok "admin-PAT extraherad (AVA_RT_GIT_PAT)"
+  export AVA_RT_GIT_PAT="$PAT"
+
   bun run round-trip && ok "round-trip"
 fi
 
@@ -74,23 +123,8 @@ fi
 bold "Klart"
 ELAPSED=$((SECONDS - START))
 echo "  Tid:                          ${ELAPSED}s"
-echo "  Coverage-rapport:             reports/coverage/index.html"
+echo "  Coverage (lcov):              coverage/lcov.info  (golv: check-coverage.ts)"
 echo "  Playwright-rapport:           reports/playwright-round-trip/index.html"
-echo "  jscpd-rapport:                reports/jscpd/html/index.html"
-echo
-if [[ -f reports/coverage/coverage-summary.json ]]; then
-  node - <<'NODE'
-const s = require("./reports/coverage/coverage-summary.json").total;
-const pad = (n) => String(n).padStart(7);
-const row = (label, m) =>
-  console.log(`  ${label.padEnd(11)} ${pad(m.pct + "%")}   (${m.covered}/${m.total})`);
-console.log("  Mått        Täckning   (covered/total)");
-console.log("  ─────────── ──────────────────────────");
-row("Statements", s.statements);
-row("Branches",   s.branches);
-row("Functions",  s.functions);
-row("Lines",      s.lines);
-NODE
-fi
+echo "  jscpd-rapport:                reports/jscpd/jscpd-report.html"
 echo
 printf "  \033[32m✅ Allt grönt\033[0m\n"
