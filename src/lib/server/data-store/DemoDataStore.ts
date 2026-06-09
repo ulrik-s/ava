@@ -174,6 +174,7 @@ export class DemoDataStore implements IDataStore {
       payments: this.rel("payments", "invoiceId", "id", "many", {
         recordedBy: this.rel("users", "id", "recordedById", "one"),
       }),
+      writeOffs: this.rel("writeOffs", "invoiceId", "id", "many"),
       accontoDeductions: this.rel("accontoDeductions", "finalInvoiceId", "id", "many", {
         accontoInvoice: this.rel("invoices", "id", "accontoInvoiceId", "one"),
       }),

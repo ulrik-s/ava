@@ -5,9 +5,12 @@ interface Props {
   status: string;
   hasPlan: boolean;
   hasCreditNote: boolean;
+  /** Utestående (öre) > 0 → avskrivning möjlig (räkna-en-gång, ADR 0007). */
+  outstanding: number;
   onShowPayment: () => void;
   onShowPlan: () => void;
   onShowCredit: () => void;
+  onShowWriteOff: () => void;
   onSetStatus: (status: string) => void;
 }
 
@@ -17,25 +20,33 @@ interface Visibility {
   draft: boolean;
   cancel: boolean;
   credit: boolean;
+  writeOff: boolean;
 }
 
-function computeVisibility(invoiceType: string, status: string, hasPlan: boolean, hasCreditNote: boolean): Visibility {
+const TERMINAL_STATUS: ReadonlySet<string> = new Set(["PAID", "CANCELLED"]);
+
+function computeVisibility(invoiceType: string, status: string, hasPlan: boolean, hasCreditNote: boolean, outstanding: number): Visibility {
   const isCredit = invoiceType === "CREDIT";
   const sentNoPlan = !isCredit && status === "SENT" && !hasPlan;
+  // Utställd & aktiv (SENT eller pågående avbetalningsplan, ej kreditfaktura).
+  const issuedActive = !isCredit && (status === "SENT" || status === "INSTALLMENT_PLAN");
   return {
-    pay: !isCredit && status !== "PAID" && status !== "CANCELLED",
+    pay: !isCredit && !TERMINAL_STATUS.has(status),
     plan: sentNoPlan,
     draft: status === "DRAFT",
     cancel: sentNoPlan,
-    credit: (status === "SENT" || status === "INSTALLMENT_PLAN") && !isCredit && !hasCreditNote,
+    credit: issuedActive && !hasCreditNote,
+    // Avskrivning: utställd faktura med utestående kvar (även en plan-faktura
+    // som klienten slutat betala) → räkna-en-gång (ADR 0007).
+    writeOff: issuedActive && outstanding > 0,
   };
 }
 
 export function InvoiceActions({
-  invoiceType, status, hasPlan, hasCreditNote,
-  onShowPayment, onShowPlan, onShowCredit, onSetStatus,
+  invoiceType, status, hasPlan, hasCreditNote, outstanding,
+  onShowPayment, onShowPlan, onShowCredit, onShowWriteOff, onSetStatus,
 }: Props) {
-  const v = computeVisibility(invoiceType, status, hasPlan, hasCreditNote);
+  const v = computeVisibility(invoiceType, status, hasPlan, hasCreditNote, outstanding);
 
   return (
     <div className="mt-5 flex gap-2 flex-wrap">
@@ -55,14 +66,14 @@ export function InvoiceActions({
         </button>
       )}
       {v.cancel && (
-        <>
-          <button onClick={() => onSetStatus("CANCELLED")} className="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50">
-            Annullera
-          </button>
-          <button onClick={() => onSetStatus("BAD_DEBT")} className="px-3 py-1.5 text-sm border border-red-200 text-red-700 rounded hover:bg-red-50">
-            Skriv av som kundförlust
-          </button>
-        </>
+        <button onClick={() => onSetStatus("CANCELLED")} className="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50">
+          Annullera
+        </button>
+      )}
+      {v.writeOff && (
+        <button onClick={onShowWriteOff} className="px-3 py-1.5 text-sm border border-red-200 text-red-700 rounded hover:bg-red-50">
+          Skriv av som kundförlust
+        </button>
       )}
       {v.credit && (
         <button onClick={onShowCredit} className="px-3 py-1.5 text-sm border border-orange-200 text-orange-700 rounded hover:bg-orange-50">

@@ -192,6 +192,7 @@ export const invoiceRouter = router({
             orderBy: { paidAt: "desc" },
             include: { recordedBy: { select: { name: true } } },
           },
+          writeOffs: { orderBy: { writtenOffAt: "desc" } },
           timeEntries: true,
           expenses: true,
           documents: { orderBy: { createdAt: "desc" } },

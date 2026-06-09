@@ -25,6 +25,7 @@ const stubs = {
   cancelPaymentPlan: { mutate: vi.fn(), isPending: false },
   setStatus: { mutate: vi.fn(), isPending: false },
   createCredit: { mutate: vi.fn(), isPending: false },
+  writeOff: { mutate: vi.fn(), isPending: false },
 };
 
 vi.mock("@/lib/client/trpc", () => ({
@@ -37,6 +38,7 @@ vi.mock("@/lib/client/trpc", () => ({
       cancelPaymentPlan: { useMutation: () => stubs.cancelPaymentPlan },
       setStatus: { useMutation: () => stubs.setStatus },
       createCredit: { useMutation: () => stubs.createCredit },
+      writeOff: { useMutation: () => stubs.writeOff },
     },
   },
 }));
@@ -86,6 +88,7 @@ beforeEach(() => {
   stubs.cancelPaymentPlan.mutate = vi.fn();
   stubs.setStatus.mutate = vi.fn();
   stubs.createCredit.mutate = vi.fn();
+  stubs.writeOff.mutate = vi.fn();
 });
 
 describe("InvoiceDetailPage", () => {
@@ -260,16 +263,18 @@ describe("InvoiceDetailPage", () => {
     });
   });
 
-  it("Skriv av som kundförlust sätter BAD_DEBT", async () => {
+  it("Skriv av som kundförlust öppnar modal → writeOff-mutationen (ADR 0007)", async () => {
     renderPage();
-    const btn = await waitFor(() =>
-      screen.getByRole("button", { name: /Skriv av/i }),
+    const open = await waitFor(() =>
+      screen.getByRole("button", { name: /Skriv av som kundförlust/i }),
     );
-    fireEvent.click(btn);
-    expect(stubs.setStatus.mutate).toHaveBeenCalledWith({
-      invoiceId: "i1",
-      status: "BAD_DEBT",
-    });
+    fireEvent.click(open);
+    // Modalens submit-knapp heter "Skriv av"; default-belopp = hela utestående.
+    const submit = await waitFor(() => screen.getByRole("button", { name: "Skriv av" }));
+    fireEvent.click(submit);
+    expect(stubs.writeOff.mutate).toHaveBeenCalled();
+    expect(stubs.writeOff.mutate.mock.calls[0]![0]).toMatchObject({ invoiceId: "i1", amount: 1000000 });
+    expect(stubs.setStatus.mutate).not.toHaveBeenCalledWith(expect.objectContaining({ status: "BAD_DEBT" }));
   });
 
   it("DRAFT-faktura visar Markera som skickad", async () => {
