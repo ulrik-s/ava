@@ -138,6 +138,33 @@ function previousCalendarMonth(periodStart: Date): { from: Date; to: Date } {
 
 // ─── Router ──────────────────────────────────────────────────────────
 
+/** Per-faktura-rader för Kundfordrings-tabellen (slår ihop "Fakturerat"-tabellen). */
+interface ArRowMeta { invoiceDate: string; matterId: string; matterNumber: string; title: string }
+const EMPTY_AR_META: ArRowMeta = { invoiceDate: "", matterId: "", matterNumber: "", title: "" };
+
+/** Förresolva faktura-metadata (datum + ärende) per id — håller rad-mappningen trivial. */
+function arMetaById(invoices: Record<string, unknown>[]): Map<string, ArRowMeta> {
+  const m = new Map<string, ArRowMeta>();
+  for (const inv of invoices as Array<{ id?: string; invoiceDate?: unknown; matter?: { id?: string; matterNumber?: string; title?: string } | null }>) {
+    const mt = inv.matter ?? {};
+    m.set(String(inv.id ?? ""), {
+      invoiceDate: coerceDate(inv.invoiceDate).toISOString(),
+      matterId: mt.id ?? "",
+      matterNumber: mt.matterNumber ?? "",
+      title: mt.title ?? "",
+    });
+  }
+  return m;
+}
+
+function arRowsFrom(scoped: { invoices: Record<string, unknown>[]; payments: Record<string, unknown>[]; writeOffs: Record<string, unknown>[] }) {
+  const meta = arMetaById(scoped.invoices);
+  return perInvoiceRows(scoped.invoices, scoped.payments, scoped.writeOffs).map((r) => {
+    const m = meta.get(r.invoiceId) ?? EMPTY_AR_META;
+    return { id: r.invoiceId, ...m, fakturerat: r.amount, inbetalt: r.paid, avskrivet: r.writtenOff, utestaende: r.outstanding };
+  });
+}
+
 export const reportsRouter = router({
   /**
    * Advokatrapport: en advokat, en period, tre delrapporter.
@@ -484,7 +511,7 @@ export const reportsRouter = router({
         select: {
           id: true, amount: true, status: true, invoiceType: true, creditedInvoiceId: true,
           invoiceDate: true, dueDate: true, dueAt: true,
-          matter: { select: { matterNumber: true, title: true } },
+          matter: { select: { id: true, matterNumber: true, title: true } },
         },
       });
       const ids = (invoices as Array<{ id: string }>).map((i) => i.id);
@@ -521,28 +548,10 @@ export const reportsRouter = router({
       }
 
       const now = new Date();
-      // Per-faktura-rader (slår ihop "Fakturerat"-tabellen in i Kundfordringar).
-      const meta = new Map(
-        (scoped.invoices as Array<{ id?: string; invoiceDate?: unknown; matter?: { matterNumber?: string; title?: string } | null }>)
-          .map((i) => [String(i.id ?? ""), { invoiceDate: i.invoiceDate, matter: i.matter }]),
-      );
-      const rows = perInvoiceRows(scoped.invoices, scoped.payments, scoped.writeOffs).map((r) => {
-        const m = meta.get(r.invoiceId);
-        return {
-          id: r.invoiceId,
-          invoiceDate: coerceDate(m?.invoiceDate).toISOString(),
-          matterNumber: m?.matter?.matterNumber ?? "",
-          title: m?.matter?.title ?? "",
-          fakturerat: r.amount,
-          inbetalt: r.paid,
-          avskrivet: r.writtenOff,
-          utestaende: r.outstanding,
-        };
-      });
       return {
         bridge: computeArBridge(scoped.invoices, scoped.payments, scoped.writeOffs, now),
         aging: computeAging(scoped.invoices, scoped.payments, scoped.writeOffs, now),
-        rows,
+        rows: arRowsFrom(scoped),
       };
     }),
 });

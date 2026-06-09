@@ -40,7 +40,7 @@ describe("ArSummarySection", () => {
         { label: ">90 dagar", amount: 300_00 },
       ],
       rows: [
-        { id: "i1", invoiceDate: "2026-03-10", matterNumber: "2026-0001", title: "Tvist", fakturerat: 100_00, inbetalt: 30_00, avskrivet: 0, utestaende: 70_00 },
+        { id: "i1", invoiceDate: "2026-03-10", matterId: "m1", matterNumber: "2026-0001", title: "Tvist", fakturerat: 100_00, inbetalt: 30_00, avskrivet: 0, utestaende: 70_00 },
       ],
     };
     render(<ArSummarySection from="2026-01-01" to="2026-06-30" />);
@@ -52,7 +52,11 @@ describe("ArSummarySection", () => {
     expect(screen.getByText(">90 dagar")).toBeInTheDocument();
     // per-faktura-tabellen (sammanslagen från "Fakturerat"-panelen)
     expect(screen.getByText("Per faktura")).toBeInTheDocument();
-    expect(screen.getByText(/2026-0001 — Tvist/)).toBeInTheDocument();
+    // ärendet är klickbart → /matters, fakturadatumet → /invoices
+    const matterLink = screen.getByRole("link", { name: /2026-0001 — Tvist/ });
+    expect(matterLink.getAttribute("href")).toContain("matters");
+    const invoiceLink = screen.getByRole("link", { name: /2026-03-10/ });
+    expect(invoiceLink.getAttribute("href")).toContain("invoices");
   });
 
   it("visar 'inga förfallna' när alla hinkar är 0", () => {

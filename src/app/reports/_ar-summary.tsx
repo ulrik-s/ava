@@ -9,6 +9,7 @@
 import type { inferRouterOutputs } from "@trpc/server";
 import { trpc } from "@/lib/client/trpc";
 import type { AppRouter } from "@/lib/server/routers/_app";
+import { EntityLink } from "@/lib/client/demo/entity-link";
 import { formatCurrency } from "@/lib/client/utils";
 
 function Row({ label, value, kind = "normal" }: { label: string; value: number; kind?: "normal" | "subtotal" | "result" | "sub" }) {
@@ -83,7 +84,7 @@ function ArSummaryBody({ data }: { data: ArData }) {
   );
 }
 
-interface ArRow { id: string; invoiceDate: string; matterNumber: string; title: string; fakturerat: number; inbetalt: number; avskrivet: number; utestaende: number }
+interface ArRow { id: string; invoiceDate: string; matterId: string; matterNumber: string; title: string; fakturerat: number; inbetalt: number; avskrivet: number; utestaende: number }
 
 function ArInvoiceTable({ rows }: { rows: readonly ArRow[] }) {
   return (
@@ -101,18 +102,33 @@ function ArInvoiceTable({ rows }: { rows: readonly ArRow[] }) {
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100">
-          {rows.map((r) => (
-            <tr key={r.id}>
-              <td className="py-1.5 whitespace-nowrap font-mono text-xs">{new Date(r.invoiceDate).toLocaleDateString("sv-SE")}</td>
-              <td className="py-1.5 text-gray-700">{r.matterNumber}{r.title ? ` — ${r.title}` : ""}</td>
-              <td className="py-1.5 text-right font-mono">{formatCurrency(r.fakturerat)}</td>
-              <td className="py-1.5 text-right font-mono text-gray-600">{formatCurrency(r.inbetalt)}</td>
-              <td className="py-1.5 text-right font-mono text-red-700">{r.avskrivet > 0 ? `−${formatCurrency(r.avskrivet)}` : "—"}</td>
-              <td className="py-1.5 text-right font-mono font-medium">{formatCurrency(r.utestaende)}</td>
-            </tr>
-          ))}
+          {rows.map((r) => <ArInvoiceRow key={r.id} r={r} />)}
         </tbody>
       </table>
     </div>
+  );
+}
+
+function ArInvoiceRow({ r }: { r: ArRow }) {
+  const matterLabel = `${r.matterNumber}${r.title ? ` — ${r.title}` : ""}`;
+  return (
+    <tr>
+      <td className="py-1.5 whitespace-nowrap font-mono text-xs">
+        <EntityLink route="invoices" id={r.id} className="text-blue-600 hover:underline">
+          {new Date(r.invoiceDate).toLocaleDateString("sv-SE")}
+        </EntityLink>
+      </td>
+      <td className="py-1.5">
+        {r.matterId ? (
+          <EntityLink route="matters" id={r.matterId} className="text-gray-700 hover:underline">{matterLabel}</EntityLink>
+        ) : (
+          <span className="text-gray-700">{matterLabel}</span>
+        )}
+      </td>
+      <td className="py-1.5 text-right font-mono">{formatCurrency(r.fakturerat)}</td>
+      <td className="py-1.5 text-right font-mono text-gray-600">{formatCurrency(r.inbetalt)}</td>
+      <td className="py-1.5 text-right font-mono text-red-700">{r.avskrivet > 0 ? `−${formatCurrency(r.avskrivet)}` : "—"}</td>
+      <td className="py-1.5 text-right font-mono font-medium">{formatCurrency(r.utestaende)}</td>
+    </tr>
   );
 }
