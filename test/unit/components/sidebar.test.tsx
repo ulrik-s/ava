@@ -31,7 +31,7 @@ describe("Sidebar", () => {
   it("renderar alla huvudlänkar", () => {
     render(<Sidebar />);
     // Mobile + desktop visar samma — så vi får dubbletter; firstMatch räcker
-    expect(screen.getAllByText("Dashboard")[0]).toBeInTheDocument();
+    expect(screen.getAllByText("Startsida")[0]).toBeInTheDocument();
     expect(screen.getAllByText("Kontakter")[0]).toBeInTheDocument();
     expect(screen.getAllByText("Ärenden")[0]).toBeInTheDocument();
     expect(screen.getAllByText("Tidregistrering")[0]).toBeInTheDocument();
@@ -39,12 +39,12 @@ describe("Sidebar", () => {
     expect(screen.getAllByText("Användare")[0]).toBeInTheDocument();
   });
 
-  it("visar Jävskontroll överst, sedan Ärenden, före Dashboard (#89)", () => {
+  it("visar Jävskontroll överst, sedan Ärenden, före Startsida (#89)", () => {
     render(<Sidebar />);
     const texts = screen.getAllByRole("link").map((l) => l.textContent ?? "");
     const jav = texts.findIndex((t) => t.includes("Jävskontroll"));
     const arenden = texts.findIndex((t) => t.includes("Ärenden"));
-    const dash = texts.findIndex((t) => t.includes("Dashboard"));
+    const dash = texts.findIndex((t) => t.includes("Startsida"));
     expect(jav).toBeGreaterThanOrEqual(0);
     expect(arenden).toBe(jav + 1);
     expect(arenden).toBeLessThan(dash);
@@ -53,7 +53,7 @@ describe("Sidebar", () => {
   it("markerar dashboard som aktiv när pathname=/", () => {
     pathnameMock.mockReturnValue("/");
     render(<Sidebar />);
-    const dashboardLinks = screen.getAllByRole("link", { name: /Dashboard/ });
+    const dashboardLinks = screen.getAllByRole("link", { name: /Startsida/ });
     // Minst en aktiv (har bg-blue-50 i className)
     expect(dashboardLinks.some((l) => l.className.includes("bg-blue-50"))).toBe(true);
   });

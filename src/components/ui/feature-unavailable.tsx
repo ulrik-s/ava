@@ -24,7 +24,7 @@ export function FeatureUnavailable({ title, description }: Props) {
         <p className="text-xs text-amber-800">
           Den här sidan kräver auth/server-funktionalitet som demo-deployen
           inte har. I full-deploy (Tier 2/3) — se{" "}
-          <Link href="/" className="underline">Dashboard</Link> för att gå
+          <Link href="/" className="underline">Startsida</Link> för att gå
           tillbaka till de delar som fungerar:
         </p>
         <ul className="mt-3 text-xs text-amber-800 space-y-1">

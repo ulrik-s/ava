@@ -27,7 +27,7 @@ const navigation = [
   // Ärenden direkt under — kärnan i det dagliga arbetet.
   { name: "Jävskontroll", href: "/conflicts", icon: "🔍" },
   { name: "Ärenden", href: "/matters", icon: "📁" },
-  { name: "Dashboard", href: "/", icon: "📊" },
+  { name: "Startsida", href: "/", icon: "📊" },
   { name: "Att göra", href: "/todo", icon: "✅" },
   { name: "Kontakter", href: "/contacts", icon: "👤" },
   { name: "Dokumentsök", href: "/search", icon: "📄" },

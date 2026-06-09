@@ -48,7 +48,7 @@ export default function Dashboard() {
     <div>
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Startsida</h1>
           <p className="text-sm text-gray-500 capitalize">{dayLabel(ymd)}</p>
         </div>
         <DaySwitcher ymd={ymd} onChange={setYmd} />

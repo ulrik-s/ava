@@ -15,7 +15,7 @@ import { test, expect } from "@playwright/test";
 const BASE = process.env.AVA_DEMO_BASE_URL ?? "https://ulrik-s.github.io/ava";
 
 const ROUTES = [
-  { path: "/", expectText: /Dashboard|AVA/i },
+  { path: "/", expectText: /Startsida|AVA/i },
   { path: "/demo/", expectText: /AVA Demo|Vill du prova/i },
   { path: "/matters/", expectText: /Ärenden|Nytt ärende/i },
   { path: "/contacts/", expectText: /Kontakter/i },
