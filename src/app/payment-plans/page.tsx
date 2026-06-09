@@ -11,6 +11,7 @@ import { Wallet, Search } from "lucide-react";
 import { trpc } from "@/lib/client/trpc";
 import { shellPath } from "@/lib/client/demo/entity-href";
 import { formatCurrency } from "@/lib/client/utils";
+import { computeInvoiceLedger } from "@/lib/shared/write-off-calc";
 import { DataTable, type Column } from "@/components/ui/data-table";
 
 type Status = "ACTIVE" | "COMPLETED" | "CANCELLED";
@@ -34,6 +35,7 @@ interface PlanRow {
   invoice?: {
     amount?: number;
     payments?: Array<{ amount: number }>;
+    writeOffs?: Array<{ amount: number }>;
     matter?: {
       matterNumber?: string;
       title?: string;
@@ -48,6 +50,12 @@ function paidOf(p: PlanRow): number {
 
 function totalOf(p: PlanRow): number {
   return p.invoice?.amount ?? 0;
+}
+
+/** Utestående via ledgern (ADR 0007): total − inbetalt − avskrivet. */
+function outstandingOf(p: PlanRow): number {
+  const writtenOff = (p.invoice?.writeOffs ?? []).reduce((s, w) => s + w.amount, 0);
+  return computeInvoiceLedger(totalOf(p), paidOf(p), 0, writtenOff).outstanding;
 }
 
 const planColumns: Column<PlanRow>[] = [
@@ -76,6 +84,9 @@ const planColumns: Column<PlanRow>[] = [
   { key: "total", label: "Totalt", sortable: true, align: "right",
     sortValue: (p) => totalOf(p),
     render: (p) => <span className="font-mono text-sm">{formatCurrency(totalOf(p))}</span> },
+  { key: "outstanding", label: "Utestående", sortable: true, align: "right",
+    sortValue: (p) => outstandingOf(p),
+    render: (p) => <span className="font-mono text-sm">{formatCurrency(outstandingOf(p))}</span> },
   { key: "pct", label: "Andel", sortable: true, align: "right",
     sortValue: (p) => totalOf(p) > 0 ? paidOf(p) / totalOf(p) : 0,
     render: (p) => {

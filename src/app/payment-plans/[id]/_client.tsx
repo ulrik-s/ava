@@ -5,6 +5,7 @@ import { trpc } from "@/lib/client/trpc";
 import { useRouteId } from "@/lib/client/demo/use-route-id";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { formatCurrency } from "@/lib/client/utils";
+import { computeInvoiceLedger } from "@/lib/shared/write-off-calc";
 import { ArrowLeft, Ban, Wallet } from "lucide-react";
 
 const STATUS_LABEL: Record<string, string> = {
@@ -140,6 +141,19 @@ export default function PaymentPlanDetailClient({ id: paramId }: { id: string })
                 <span className="font-mono">{p.invoice ? formatCurrency(p.invoice.amount) : ""}</span>
               </span>
             </div>
+            {p.invoice && (
+              <div className="mt-1 text-xs flex justify-end gap-1">
+                <span className="text-gray-500">Utestående:</span>
+                <span className="font-mono font-semibold text-gray-900">
+                  {formatCurrency(computeInvoiceLedger(
+                    p.invoice.amount,
+                    (p.invoice.payments ?? []).reduce((s, x) => s + x.amount, 0),
+                    0,
+                    ((p.invoice as { writeOffs?: Array<{ amount: number }> }).writeOffs ?? []).reduce((s, w) => s + w.amount, 0),
+                  ).outstanding)}
+                </span>
+              </div>
+            )}
           </>
         )}
       </section>
