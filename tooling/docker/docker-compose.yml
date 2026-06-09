@@ -49,8 +49,15 @@ services:
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/ava/"]
       interval: 10s
-      timeout: 3s
-      retries: 5
+      # timeout 10s (var 3s): en wget kan ta >3s på en lastad CI-runner.
+      timeout: 10s
+      # retries 10 (var 5): tål fler transienta misslyckanden innan unhealthy.
+      retries: 10
+      # start_period: misslyckade checks under bootstrap (htpasswd + git-seed +
+      # nginx-start) räknas INTE mot retries → containern markeras inte unhealthy
+      # under uppstart, vilket annars fick `docker compose up --wait` att avbryta
+      # med exit 1 i CI:s e2e-jobb (#131). Räknas inte mot --wait-timeout.
+      start_period: 40s
 
   # ─── (Valbar) Auth-server med invite-token-UI ──────────────
   # Default off — bara för kunder som vill ha self-service-provisionering
