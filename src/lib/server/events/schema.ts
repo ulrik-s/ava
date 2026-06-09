@@ -40,6 +40,7 @@ export const EVENT_TYPES = [
   "invoice.sent",
   "invoice.payment_received",
   "invoice.overdue",
+  "invoice.written_off",
   // payment-plan (avbetalningsplaner) — driver av påminnelser
   "payment.due",
   "payment.overdue",
