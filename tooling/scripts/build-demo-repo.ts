@@ -52,7 +52,7 @@ async function main(): Promise<void> {
     ".ava/organizations", ".ava/users", ".ava/templates",
     "offices", "contacts", "matters/active", "matter-contacts",
     "documents", "document-folders",
-    "time-entries", "expenses", "invoices", "payments",
+    "time-entries", "expenses", "invoices", "payments", "write-offs",
     "calendar", "tasks", "conflict-checks",
     "payment-plans", "payment-plan-reminders",
   ];
