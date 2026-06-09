@@ -41,6 +41,16 @@ done
 
 bold() { printf "\n\033[1m==> %s\033[0m\n" "$*"; }
 ok()   { printf "    \033[32m✓\033[0m %s\n" "$*"; }
+fail() { printf "    \033[31m✗ %s misslyckades\033[0m\n" "$*"; exit 1; }
+
+# Kör ett byggsteg och AVBRYT med tydligt fel om det fallerar.
+#
+# `cmd && ok "label"` räcker INTE under `set -e`: bash undertrycker
+# exit-on-error för kommandon i en &&-lista (utom det sista), så ett fallerat
+# steg passerar tyst och scriptet rapporterar "Allt grönt" med exit 0 (#143).
+# run/run_quiet kollar exit-koden explicit istället.
+run()       { local label="$1"; shift; "$@"            && ok "$label" || fail "$label"; }
+run_quiet() { local label="$1"; shift; "$@" >/dev/null 2>&1 && ok "$label" || fail "$label"; }
 
 START=$SECONDS
 
@@ -48,16 +58,16 @@ START=$SECONDS
 # Speglar ci.yml exakt: lint med --max-warnings 0 (ratchet-ventil) och knip
 # som GATE (inte knip:report som är rådgivande).
 bold "[1/3] Static analysis (typecheck + lint + deps + knip + duplicates)"
-bun run typecheck && ok "typecheck"
-bun run lint --max-warnings 0 && ok "lint (--max-warnings 0)"
-bun run deps:check && ok "deps:check (cykeldetektion)"
-bun run knip && ok "knip (död kod — gate)"
-bun run duplicates && ok "duplicates (jscpd)"
+run "typecheck"             bun run typecheck
+run "lint (--max-warnings 0)" bun run lint --max-warnings 0
+run "deps:check (cykeldetektion)" bun run deps:check
+run "knip (död kod — gate)" bun run knip
+run "duplicates (jscpd)"    bun run duplicates
 
 # ─── 2. Unit / komponent / integration (CI-jobb: unit) ───────────
 # test:cov = check-coverage.ts: bun test --parallel=2 --coverage + lcov-golv.
 bold "[2/3] Unit / komponent / integration (test:cov)"
-bun run test:cov && ok "test:cov (bun test + coverage-golv)"
+run "test:cov (bun test + coverage-golv)" bun run test:cov
 
 # ─── 3. E2E git round-trip (CI-jobb: e2e) ────────────────────────
 if [[ $SKIP_E2E -eq 1 ]]; then
@@ -66,9 +76,8 @@ else
   bold "[3/3] E2E (git round-trip mot tier 3-stacken)"
 
   # build:demo FÖRST (CI bygger out/ före containern). Producerar out/.
-  bun run build:demo >/dev/null && ok "build:demo (GH Pages-export)"
-
-  bun run e2e:install >/dev/null 2>&1 && ok "playwright chromium (idempotent)"
+  run_quiet "build:demo (GH Pages-export)" bun run build:demo
+  run_quiet "playwright chromium (idempotent)" bun run e2e:install
 
   # Vänta tills web servar en RIKTIG out/-sida (inte nginx 404 från stale mount).
   wait_for_web() {
@@ -95,10 +104,10 @@ else
 
   # Primär uppstart UTAN --build → recreate:ar inte en redan körande container,
   # så bootstrap-PAT:en bevaras i loggen (snabb väg). --wait gatar på healthcheck.
-  $COMPOSE up -d --wait --wait-timeout 180 >/dev/null 2>&1 && ok "docker compose up (--wait)"
+  run_quiet "docker compose up (--wait)" $COMPOSE up -d --wait --wait-timeout 180
   # Bind-mount-fix: remounta färsk out/ (build:demo gjorde rm -rf out → stale mount).
-  $COMPOSE restart web >/dev/null 2>&1 && ok "restart web (remountar färsk out/)"
-  wait_for_web && ok "web servar out/ (ej 404)" || { echo "    web servar inte out/ (404?)"; exit 1; }
+  run_quiet "restart web (remountar färsk out/)" $COMPOSE restart web
+  if wait_for_web; then ok "web servar out/ (ej 404)"; else fail "web servar out/ (404?)"; fi
 
   PAT=$(extract_pat)
 
@@ -107,16 +116,16 @@ else
   # som CI:s färska runner: down -v nollar volymerna → entrypoint bootstrappar nytt.
   if [[ -z "$PAT" ]]; then
     bold "    ingen PAT i loggen → ren omstart (down -v) för färsk bootstrap"
-    $COMPOSE down -v >/dev/null 2>&1
-    $COMPOSE up -d --build --wait --wait-timeout 180 >/dev/null 2>&1 && ok "fresh docker compose up"
-    wait_for_web && ok "web servar out/ (ej 404)" || { echo "    web servar inte out/ (404?)"; exit 1; }
+    $COMPOSE down -v >/dev/null 2>&1 || true
+    run_quiet "fresh docker compose up" $COMPOSE up -d --build --wait --wait-timeout 180
+    if wait_for_web; then ok "web servar out/ (ej 404)"; else fail "web servar out/ (404?)"; fi
     PAT=$(extract_pat)
   fi
   [[ -z "$PAT" ]] && { echo "    Kunde inte hämta admin-PAT ens efter ren omstart."; exit 1; }
   ok "admin-PAT extraherad (AVA_RT_GIT_PAT)"
   export AVA_RT_GIT_PAT="$PAT"
 
-  bun run round-trip && ok "round-trip"
+  run "round-trip" bun run round-trip
 fi
 
 # ─── Sammanställning ─────────────────────────────────────────────
