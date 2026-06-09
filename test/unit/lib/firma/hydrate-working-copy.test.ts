@@ -64,6 +64,30 @@ describe("hydrateWorkingCopy", () => {
     expect(src.matters ?? []).toHaveLength(0);
   });
 
+  it("round-trip: writeOff write-back → hydrate (ADR 0007)", async () => {
+    const fsa = makeFakeFsa();
+    const writeBack = makeFsaWriteBack({ handle: fsa.root });
+    await writeBack({ entity: "invoice", kind: "create", row: { id: "inv1", matterId: "m1", amount: 1000, status: "SENT" } });
+    await writeBack({ entity: "writeOff", kind: "create", row: { id: "wo1", invoiceId: "inv1", amount: 1000, writtenOffAt: new Date("2026-05-01T00:00:00.000Z"), reason: "Konkurs", recordedById: "u1" } });
+
+    const src = await hydrateWorkingCopy(fsa.root);
+    expect(src.writeOffs).toHaveLength(1);
+    const wo = src.writeOffs![0] as { invoiceId: string; amount: number; writtenOffAt: unknown };
+    expect(wo.invoiceId).toBe("inv1");
+    expect(wo.amount).toBe(1000);
+    expect(wo.writtenOffAt).toBeInstanceOf(Date);
+  });
+
+  it("gammalt repo utan write-offs/ → ingen krasch, writeOffs tom (ADR 0007)", async () => {
+    const fsa = makeFakeFsa();
+    const writeBack = makeFsaWriteBack({ handle: fsa.root });
+    await writeBack({ entity: "invoice", kind: "create", row: { id: "inv1", matterId: "m1", amount: 1000 } });
+
+    const src = await hydrateWorkingCopy(fsa.root);
+    expect(src.writeOffs ?? []).toHaveLength(0);
+    expect(src.invoices).toHaveLength(1);
+  });
+
   it("migrate-on-read: repoVersion=1 strippar invoice-`type` (ADR 0004)", async () => {
     const fsa = makeFakeFsa();
     const writeBack = makeFsaWriteBack({ handle: fsa.root });

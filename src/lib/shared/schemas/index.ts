@@ -32,6 +32,7 @@ import {
   paymentPlanReminderSchema,
   accontoDeductionSchema,
   billingRunSchema,
+  writeOffSchema,
 } from "./billing";
 import { documentTemplateSchema, conflictCheckSchema } from "./misc";
 import { calendarEventSchema, taskSchema } from "./calendar";
@@ -183,6 +184,12 @@ export const ENTITY_REGISTRY: Record<string, EntityEntry> = {
     gitPrefix: "billing-runs",
     sourceKey: "billingRuns",
   },
+  writeOff: {
+    schema: writeOffSchema,
+    gitPath: p((id) => `write-offs/${id}.json`),
+    gitPrefix: "write-offs",
+    sourceKey: "writeOffs",
+  },
   documentTemplate: {
     schema: documentTemplateSchema,
     gitPath: p((id) => `.ava/templates/${id}.json`),
@@ -228,7 +235,7 @@ export type EntityName =
   | "organization" | "office" | "user" | "contact" | "matter" | "matterContact"
   | "document" | "documentFolder" | "documentAnalysisSuggestion" | "matterEventSuggestion"
   | "timeEntry" | "expense" | "invoice" | "payment" | "paymentPlan"
-  | "paymentPlanReminder" | "accontoDeduction" | "billingRun"
+  | "paymentPlanReminder" | "accontoDeduction" | "billingRun" | "writeOff"
   | "documentTemplate" | "conflictCheck"
   | "calendarEvent" | "task"
   | "userPreference" | "orgPreference";

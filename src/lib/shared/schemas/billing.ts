@@ -19,6 +19,7 @@ import {
   paymentPlanReminderIdSchema,
   accontoDeductionIdSchema,
   billingRunIdSchema,
+  writeOffIdSchema,
   matterIdSchema,
   userIdSchema,
 } from "./ids";
@@ -129,6 +130,26 @@ export const paymentSchema = z.object({
 }).passthrough();
 
 export type Payment = z.infer<typeof paymentSchema>;
+
+/**
+ * WriteOff — konstaterad kundförlust mot en faktura ([ADR 0007]). `amount` i öre
+ * (= återstoden vid avskrivningstillfället). Egen daterad post, symmetrisk med
+ * `Payment` — sanningskällan; `Invoice.status = BAD_DEBT` härleds av projektionen
+ * (#137). Lagras i `write-offs/<id>.json`.
+ *
+ * [ADR 0007]: ../../../../docs/adr/0007-kundfordringar-konstaterad-kundforlust.md
+ */
+export const writeOffSchema = z.object({
+  id: writeOffIdSchema,
+  invoiceId: invoiceIdSchema,
+  amount: z.number().int(),
+  writtenOffAt: dateLike,
+  reason: z.string().nullish(),
+  recordedById: userIdSchema,
+  createdAt: dateLike,
+}).passthrough();
+
+export type WriteOff = z.infer<typeof writeOffSchema>;
 
 /**
  * PaymentPlan — avbetalningsplan kopplad 1:1 till en Invoice. När den är

@@ -35,6 +35,7 @@ export interface DemoSource {
   paymentPlanReminders?: readonly Record<string, unknown>[];
   accontoDeductions?: readonly Record<string, unknown>[];
   billingRuns?: readonly Record<string, unknown>[];
+  writeOffs?: readonly Record<string, unknown>[];
   calendarEvents?: readonly Record<string, unknown>[];
   tasks?: readonly Record<string, unknown>[];
   userPreferences?: readonly Record<string, unknown>[];

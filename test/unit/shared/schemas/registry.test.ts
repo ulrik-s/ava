@@ -17,6 +17,7 @@ import {
   paymentPlanSchema,
   taskSchema,
   userSchema,
+  writeOffSchema,
 } from "@/lib/shared/schemas";
 
 describe("ENTITY_REGISTRY", () => {
@@ -24,6 +25,14 @@ describe("ENTITY_REGISTRY", () => {
     expect(ENTITY_NAMES.length).toBeGreaterThanOrEqual(21);
     expect(ENTITY_NAMES).toContain("calendarEvent");
     expect(ENTITY_NAMES).toContain("task");
+  });
+
+  it("writeOff: i registry:t med flat gitPath write-offs/<id>.json (ADR 0007)", () => {
+    expect(ENTITY_NAMES).toContain("writeOff");
+    const entry = ENTITY_REGISTRY.writeOff!;
+    expect(entry.gitPath("wo-1", {})).toBe("write-offs/wo-1.json");
+    expect(entry.gitPrefix).toBe("write-offs");
+    expect(entry.sourceKey).toBe("writeOffs");
   });
 
   it("calendar + task: gitPath flat (inte per-user-mapp)", () => {
@@ -110,6 +119,17 @@ describe("schemas — minimal valid input", () => {
       paidAt: "2026-05-24", recordedById: "u-1", createdAt: now,
     });
     expect(p.amount).toBe(50000);
+  });
+
+  it("writeOffSchema kräver invoiceId + amount + writtenOffAt + recordedById (ADR 0007)", () => {
+    expect(() => writeOffSchema.parse({ id: "wo-1" })).toThrow();
+    const wo = writeOffSchema.parse({
+      id: "wo-1", invoiceId: "i-1", amount: 70000,
+      writtenOffAt: "2026-05-24", reason: "Konkurs", recordedById: "u-1", createdAt: now,
+    });
+    expect(wo.amount).toBe(70000);
+    expect(wo.writtenOffAt).toBeInstanceOf(Date);
+    expect(wo.reason).toBe("Konkurs");
   });
 
   it("paymentPlanSchema validerar dayOfMonth-range (1-28)", () => {
