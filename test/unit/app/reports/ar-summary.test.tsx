@@ -21,7 +21,7 @@ beforeEach(() => {
 describe("ArSummarySection", () => {
   it("visar laddningsläge", () => {
     arQuery.isLoading = true;
-    render(<ArSummarySection />);
+    render(<ArSummarySection from="2026-01-01" to="2026-06-30" />);
     expect(screen.getByText("Laddar…")).toBeInTheDocument();
   });
 
@@ -40,7 +40,7 @@ describe("ArSummarySection", () => {
         { label: ">90 dagar", amount: 300_00 },
       ],
     };
-    render(<ArSummarySection />);
+    render(<ArSummarySection from="2026-01-01" to="2026-06-30" />);
     expect(screen.getByText("Kundfordringar")).toBeInTheDocument();
     expect(screen.getByText("Fakturerat (brutto)")).toBeInTheDocument();
     expect(screen.getByText("= Utestående fordran")).toBeInTheDocument();
@@ -60,7 +60,7 @@ describe("ArSummarySection", () => {
         { label: "61–90 dagar", amount: 0 }, { label: ">90 dagar", amount: 0 },
       ],
     };
-    render(<ArSummarySection />);
+    render(<ArSummarySection from="2026-01-01" to="2026-06-30" />);
     expect(screen.getByText("Inga förfallna fakturor.")).toBeInTheDocument();
   });
 });
