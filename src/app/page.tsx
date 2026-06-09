@@ -6,7 +6,7 @@
  *   - Tidrapportering för vald dag (summa + lista)
  *   - Senaste 5 ärenden man jobbat i (timeEntry order desc, dedup)
  *
- * Dagsval: Idag / Igår / Förrgår / fritt datum.
+ * Dagsval: Igår / Idag / Imorgon / fritt datum.
  */
 
 import { useMemo, useState } from "react";
@@ -37,7 +37,7 @@ function rangeForDay(ymd: string): { from: Date; to: Date } {
 function dayLabel(ymd: string): string {
   if (ymd === todayYmd()) return "Idag";
   if (ymd === offsetDayYmd(1)) return "Igår";
-  if (ymd === offsetDayYmd(2)) return "Förrgår";
+  if (ymd === offsetDayYmd(-1)) return "Imorgon";
   return new Date(`${ymd}T12:00:00`).toLocaleDateString("sv-SE", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
 }
 
@@ -69,9 +69,9 @@ function DaySwitcher({ ymd, onChange }: { ymd: string; onChange: (y: string) => 
     <div className="flex items-center gap-2">
       <div className="inline-flex rounded-md border border-gray-200 bg-white text-xs">
         {[
-          { label: "Förrgår", v: offsetDayYmd(2) },
           { label: "Igår", v: offsetDayYmd(1) },
           { label: "Idag", v: todayYmd() },
+          { label: "Imorgon", v: offsetDayYmd(-1) },
         ].map((b) => (
           <button key={b.v} type="button" onClick={() => onChange(b.v)}
             className={`px-3 py-1.5 ${ymd === b.v ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-600 hover:bg-gray-50"}`}>
