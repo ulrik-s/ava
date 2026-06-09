@@ -133,6 +133,35 @@ export function scopeArToPeriod(
   };
 }
 
+/**
+ * Attribuera kundfordrings-datat till EN advokat: skala varje fakturas belopp
+ * (och dess betalningar/krediteringar/avskrivningar) med advokatens andel
+ * (`userWork / totalWork` per faktura, ∈ [0,1]). Droppar fakturor utan andel.
+ *
+ * Samma attributions-modell som "Fakturerat per advokat" (#90), generaliserad
+ * till hela bryggan. Partitionen består eftersom ALLA komponenter skalas med
+ * samma andel per faktura. CREDIT-fakturor ärver andelen från fakturan de krediterar.
+ */
+export function attributeArToLawyer(
+  invoices: readonly Row[],
+  payments: readonly Row[],
+  writeOffs: readonly Row[],
+  ratioByInvoice: ReadonlyMap<string, number>,
+): { invoices: Row[]; payments: Row[]; writeOffs: Row[] } {
+  const ratioForInvoice = (inv: Row): number =>
+    inv.invoiceType === "CREDIT"
+      ? ratioByInvoice.get(String(inv.creditedInvoiceId ?? "")) ?? 0
+      : ratioByInvoice.get(String(inv.id ?? "")) ?? 0;
+  const ratioByRow = (row: Row): number => ratioByInvoice.get(String(row.invoiceId ?? "")) ?? 0;
+  const scaled = (row: Row, ratio: number): Row => ({ ...row, amount: Math.round(num(row.amount) * ratio) });
+
+  return {
+    invoices: invoices.flatMap((i) => { const r = ratioForInvoice(i); return r > 0 ? [scaled(i, r)] : []; }),
+    payments: payments.flatMap((p) => { const r = ratioByRow(p); return r > 0 ? [scaled(p, r)] : []; }),
+    writeOffs: writeOffs.flatMap((w) => { const r = ratioByRow(w); return r > 0 ? [scaled(w, r)] : []; }),
+  };
+}
+
 export interface ArBridge {
   fakturerat: number;
   krediterat: number;

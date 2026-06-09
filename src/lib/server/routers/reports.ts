@@ -5,7 +5,7 @@ import {
   type BilledInvoiceInput,
   type FrozenWorkInput,
 } from "@/lib/shared/billed-per-lawyer";
-import { computeArBridge, computeAging, scopeArToPeriod } from "@/lib/shared/ar-summary";
+import { computeArBridge, computeAging, scopeArToPeriod, attributeArToLawyer } from "@/lib/shared/ar-summary";
 
 /**
  * Advokat-fokuserade rapporter: användaren väljer period (from/to) och
@@ -87,6 +87,19 @@ function buildFrozenWork(
     out.push({ invoiceId, userId: te.userId, workOre: Math.round((te.minutes / 60) * te.hourlyRate) });
   }
   return out;
+}
+
+/** invoiceId → advokatens andel (userWork/totalWork ∈ [0,1]) ur frysta tidsposter. */
+function lawyerShareRatios(frozenWork: FrozenWorkInput[], userId: string): Map<string, number> {
+  const total = new Map<string, number>();
+  const user = new Map<string, number>();
+  for (const fw of frozenWork) {
+    total.set(fw.invoiceId, (total.get(fw.invoiceId) ?? 0) + fw.workOre);
+    if (fw.userId === userId) user.set(fw.invoiceId, (user.get(fw.invoiceId) ?? 0) + fw.workOre);
+  }
+  const ratio = new Map<string, number>();
+  for (const [inv, t] of total) if (t > 0) ratio.set(inv, (user.get(inv) ?? 0) / t);
+  return ratio;
 }
 
 /** invoiceId → senaste avskrivnings-tidpunkt ur WriteOff-posterna (ADR 0007). */
@@ -460,7 +473,7 @@ export const reportsRouter = router({
    * daterad sanning, inte en härledd updatedAt-gissning.
    */
   arSummary: protectedProcedure
-    .input(z.object({ from: z.string(), to: z.string() }))
+    .input(z.object({ from: z.string(), to: z.string(), userId: z.string().optional() }))
     .query(async ({ ctx, input }) => {
       const fromDate = new Date(input.from);
       const toDate = new Date(input.to);
@@ -478,12 +491,31 @@ export const reportsRouter = router({
 
       // Scopa till fakturor utställda i perioden (ADR 0007 #4, uppdaterat) så
       // panelen följer rapport-filtret som de övriga rapporterna.
-      const scoped = scopeArToPeriod(
+      let scoped = scopeArToPeriod(
         invoices as Record<string, unknown>[],
         payments as Record<string, unknown>[],
         writeOffs as Record<string, unknown>[],
         { from: fromDate, to: toDate },
       );
+
+      // Filtrera på vald advokat: attribuera proportionellt mot advokatens
+      // frysta arbetsvärde per faktura (samma modell som "Fakturerat per advokat").
+      if (input.userId) {
+        const [billingRuns, timeEntries] = await Promise.all([
+          ctx.dataStore.billingRuns.findMany({ where: orgScope, select: { id: true, invoiceId: true } }),
+          ctx.dataStore.timeEntries.findMany({
+            where: { ...orgScope, billable: true },
+            select: { userId: true, minutes: true, hourlyRate: true, invoiceId: true, frozenByBillingRunId: true },
+          }),
+        ]);
+        const runToInvoice = new Map<string, string>();
+        for (const r of billingRuns as Array<{ id: string; invoiceId?: string }>) {
+          if (r.invoiceId) runToInvoice.set(r.id, r.invoiceId);
+        }
+        const ratios = lawyerShareRatios(buildFrozenWork(timeEntries as RawTimeEntry[], runToInvoice), input.userId);
+        scoped = attributeArToLawyer(scoped.invoices, scoped.payments, scoped.writeOffs, ratios);
+      }
+
       const now = new Date();
       return {
         bridge: computeArBridge(scoped.invoices, scoped.payments, scoped.writeOffs, now),

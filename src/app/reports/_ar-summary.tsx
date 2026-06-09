@@ -23,13 +23,15 @@ function Row({ label, value, kind = "normal" }: { label: string; value: number; 
   );
 }
 
-export function ArSummarySection({ from, to }: { from: string; to: string }) {
-  const q = trpc.reports.arSummary.useQuery({ from, to });
+export function ArSummarySection({ from, to, userId, lawyerName }: { from: string; to: string; userId?: string; lawyerName?: string }) {
+  const q = trpc.reports.arSummary.useQuery({ from, to, ...(userId ? { userId } : {}) });
 
   return (
     <section className="bg-white rounded-lg border border-gray-200 p-6">
       <h2 className="font-semibold text-gray-900 mb-1">Kundfordringar</h2>
-      <p className="text-sm text-gray-500 mb-4">Fakturor utställda i perioden — fakturerat, inbetalt och konstaterad kundförlust.</p>
+      <p className="text-sm text-gray-500 mb-4">
+        Fakturor utställda i perioden{userId && lawyerName ? ` — andel för ${lawyerName}` : ""} — fakturerat, inbetalt och konstaterad kundförlust.
+      </p>
 
       {q.isLoading && <p className="text-sm text-gray-500">Laddar…</p>}
       {q.data && (
