@@ -20,6 +20,9 @@
 # production
 /build
 
+# server-runtime — kompilerade binärer (bun build --compile, #118)
+/dist/
+
 # misc
 .DS_Store
 *.pem
