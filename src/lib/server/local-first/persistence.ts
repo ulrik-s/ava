@@ -14,7 +14,11 @@
  *   - (Framtid) `IndexedDBPersistence` om vi behöver bredare browser-stöd.
  */
 
-export type FsSnapshot = Record<string, string>;
+import { z } from "zod";
+
+// Zod vid parsegränsen (#187): snapshotten läses från OPFS — validera formen.
+export const fsSnapshotSchema = z.record(z.string(), z.string());
+export type FsSnapshot = z.infer<typeof fsSnapshotSchema>;
 
 export interface IPersistence {
   /** Returnera tidigare sparad snapshot, eller null om inget finns. */
@@ -106,7 +110,8 @@ export class OpfsPersistence implements IPersistence {
       const dir = await this.getKeyDir();
       const file = await dir.getFileHandle(FILE_NAME);
       const content = await (await file.getFile()).text();
-      return JSON.parse(content) as FsSnapshot;
+      const parsed = fsSnapshotSchema.safeParse(JSON.parse(content));
+      return parsed.success ? parsed.data : null;
     } catch (err) {
       // Filen finns inte, OPFS stödjs inte, eller JSON kunde inte parsas.
       // För en cache är "ingen data" rätt fallback. Om felet beror på att

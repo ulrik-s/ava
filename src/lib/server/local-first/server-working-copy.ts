@@ -12,7 +12,8 @@
  * Servern är en git-peer, inte dataägare.
  */
 
-import { CURRENT_SCHEMA_VERSION, parseSchemaVersion } from "@/lib/shared/schema-version";
+import { CURRENT_SCHEMA_VERSION } from "@/lib/shared/schema-version";
+import { schemaVersionFromMetaJson } from "@/lib/shared/meta-json";
 import { ENTITY_REGISTRY } from "@/lib/shared/schemas";
 import { type DemoSource, prebakeJoins } from "@/lib/shared/demo-source";
 import { DemoDataStore } from "@/lib/server/data-store/DemoDataStore";
@@ -37,8 +38,8 @@ import { buildDefaultRegistry } from "./projections/default-registry";
 async function repoSchemaVersion(fs: IFileSystem): Promise<number> {
   try {
     if (!(await fs.exists(DEMO_META_PATH))) return CURRENT_SCHEMA_VERSION;
-    const raw = JSON.parse(await fs.readFile(DEMO_META_PATH)) as { schemaVersion?: unknown };
-    return parseSchemaVersion(raw.schemaVersion) ?? CURRENT_SCHEMA_VERSION;
+    // Zod vid parsegränsen (#187) — delad helper för alla meta.json-läsare.
+    return schemaVersionFromMetaJson(await fs.readFile(DEMO_META_PATH)) ?? CURRENT_SCHEMA_VERSION;
   } catch {
     return CURRENT_SCHEMA_VERSION;
   }

@@ -8,30 +8,27 @@
  * pratar direkt mot GitHub via libcurl (ingen CORS).
  */
 
+import { z } from "zod";
+
+import { loadFromStorage } from "@/lib/client/load-from-storage";
+
 const STORAGE_KEY = "ava.oauthConfig";
 
-export interface OAuthConfig {
+// Zod vid parsegränsen (#187). `.catch("")` = fältvis tolerans (fel typ på
+// ett fält nollar bara det fältet, som förr) — men aldrig ovaliderad data ut.
+const oauthConfigSchema = z.object({
   /** URL till deployerad Cloudflare Worker (eller liknande proxy). */
-  proxyUrl: string;
+  proxyUrl: z.string().catch(""),
   /** GitHub OAuth App Client ID (publik). */
-  clientId: string;
-}
+  clientId: z.string().catch(""),
+});
+
+export type OAuthConfig = z.infer<typeof oauthConfigSchema>;
 
 const DEFAULT: OAuthConfig = { proxyUrl: "", clientId: "" };
 
 export function loadOAuthConfig(): OAuthConfig {
-  if (typeof window === "undefined") return DEFAULT;
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return DEFAULT;
-    const parsed = JSON.parse(raw) as Partial<OAuthConfig>;
-    return {
-      proxyUrl: typeof parsed.proxyUrl === "string" ? parsed.proxyUrl : "",
-      clientId: typeof parsed.clientId === "string" ? parsed.clientId : "",
-    };
-  } catch {
-    return DEFAULT;
-  }
+  return loadFromStorage(STORAGE_KEY, oauthConfigSchema, DEFAULT);
 }
 
 export function saveOAuthConfig(cfg: OAuthConfig): void {

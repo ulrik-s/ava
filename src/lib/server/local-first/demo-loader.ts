@@ -27,10 +27,8 @@ import type { MemFs } from "./mem-fs";
 import { ProjectionHydrator } from "./projection-writer";
 import type { ProjectionRegistry } from "./projections/registry";
 import { ENTITY_REGISTRY } from "@/lib/shared/schemas";
-import {
-  assertRepoSchemaCompatible,
-  parseSchemaVersion,
-} from "@/lib/shared/schema-version";
+import { assertRepoSchemaCompatible } from "@/lib/shared/schema-version";
+import { schemaVersionFromMetaJson } from "@/lib/shared/meta-json";
 import { DEMO_META_PATH } from "../../../../tooling/demo-config";
 
 export type DemoCloneFn = (fs: MemFs, url: string) => Promise<void>;
@@ -151,10 +149,8 @@ export class DemoLoader {
   private async readRepoSchemaVersion(): Promise<number | undefined> {
     try {
       if (!(await this.deps.fs.exists(DEMO_META_PATH))) return undefined;
-      const raw = JSON.parse(await this.deps.fs.readFile(DEMO_META_PATH)) as {
-        schemaVersion?: unknown;
-      };
-      return parseSchemaVersion(raw.schemaVersion);
+      // Zod vid parsegränsen (#187) — delad helper för alla meta.json-läsare.
+      return schemaVersionFromMetaJson(await this.deps.fs.readFile(DEMO_META_PATH));
     } catch {
       return undefined;
     }

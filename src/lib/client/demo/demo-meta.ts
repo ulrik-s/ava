@@ -7,31 +7,37 @@
  *
  * Cachas i minne efter första hämtningen (samma data hela sessionen).
  */
+import { z } from "zod";
+
 import { DEMO_META_PATH } from "../../../../tooling/demo-config";
 import { resolveGhPagesUrl } from "@/lib/shared/gh-pages-url";
-import {
-  assertRepoSchemaCompatible,
-  parseSchemaVersion,
-} from "@/lib/shared/schema-version";
+import { assertRepoSchemaCompatible } from "@/lib/shared/schema-version";
 
-export interface DemoMetaUser {
+// Zod vid parsegränsen (#187): meta.json är extern nätverksdata — valideras
+// strikt här i stället för handrullade typeof-helpers. Felmeddelandena är
+// del av kontraktet ("saknar X" pekar byggaren rätt).
+export const demoMetaUserSchema = z.object({
   /** UUID — principalId som /login sparar i firma-config. */
-  id: string;
-  name: string;
-  email: string;
-  role: "ADMIN" | "LAWYER" | "ASSISTANT";
-  title?: string;
-}
+  id: z.string({ message: "saknar id" }).min(1, "saknar id"),
+  name: z.string({ message: "saknar name" }).min(1, "saknar name"),
+  email: z.string().default(""),
+  role: z.enum(["ADMIN", "LAWYER", "ASSISTANT"]),
+  title: z.string().optional(),
+});
 
-export interface DemoMeta {
-  /** Datamodellens version (ADR 0004). Saknas i repon byggda före grinden. */
-  schemaVersion?: number;
+export const demoMetaSchema = z.object({
+  /** Datamodellens version (ADR 0004). Saknas/ogiltig i repon byggda före
+   *  grinden → undefined = v1-baslinje (samma tolerans som parseSchemaVersion). */
+  schemaVersion: z.number().int().positive().optional().catch(undefined),
   /** UUID på orgen. */
-  organizationId: string;
-  organizationName: string;
-  users: DemoMetaUser[];
-  buildAt: string;
-}
+  organizationId: z.string({ message: "saknar organizationId" }).min(1, "saknar organizationId"),
+  organizationName: z.string({ message: "saknar organizationName" }).min(1, "saknar organizationName"),
+  users: z.array(demoMetaUserSchema).min(1, "saknar users"),
+  buildAt: z.string().default(""),
+});
+
+export type DemoMetaUser = z.infer<typeof demoMetaUserSchema>;
+export type DemoMeta = z.infer<typeof demoMetaSchema>;
 
 let cache: { url: string; data: DemoMeta } | null = null;
 
@@ -58,8 +64,15 @@ export async function loadDemoMeta(
       `Är meta.json genererad av build-demo-repo?`,
     );
   }
-  const json = await res.json() as unknown;
-  const meta = validate(json, url);
+  const json: unknown = await res.json();
+  const parsed = demoMetaSchema.safeParse(json);
+  if (!parsed.success) {
+    const issues = parsed.error.issues
+      .map((i) => (i.path.length ? `${i.path.join(".")}: ${i.message}` : i.message))
+      .join("; ");
+    throw new Error(`meta.json från ${url} ogiltig: ${issues}`);
+  }
+  const meta = parsed.data;
   // Versionsgrind (ADR 0004): vägra ett repo som är nyare än koden förstår,
   // INNAN user-/org-data används. Saknad version → baslinje (v1) → OK.
   assertRepoSchemaCompatible(meta.schemaVersion);
@@ -69,44 +82,3 @@ export async function loadDemoMeta(
 
 /** Bara för tester. */
 export function _resetDemoMetaCache(): void { cache = null; }
-
-function requireString(value: unknown, errorMsg: string): string {
-  if (typeof value !== "string" || !value) throw new Error(errorMsg);
-  return value;
-}
-
-function asObject(value: unknown, errorMsg: string): Record<string, unknown> {
-  if (!value || typeof value !== "object") throw new Error(errorMsg);
-  return value as Record<string, unknown>;
-}
-
-function validate(json: unknown, url: string): DemoMeta {
-  const o = asObject(json, `meta.json från ${url} är inte ett objekt`);
-  if (!Array.isArray(o.users) || o.users.length === 0) {
-    throw new Error(`meta.json från ${url} saknar users`);
-  }
-  const schemaVersion = parseSchemaVersion(o.schemaVersion);
-  return {
-    // exactOptionalPropertyTypes: utelämna nyckeln helt när den saknas
-    // istället för att sätta `undefined`.
-    ...(schemaVersion !== undefined ? { schemaVersion } : {}),
-    organizationId: requireString(o.organizationId, `meta.json från ${url} saknar organizationId`),
-    organizationName: requireString(o.organizationName, `meta.json från ${url} saknar organizationName`),
-    users: o.users.map((u, i) => validateUser(u, url, i)),
-    buildAt: typeof o.buildAt === "string" ? o.buildAt : "",
-  };
-}
-
-function validateUser(raw: unknown, url: string, idx: number): DemoMetaUser {
-  const u = asObject(raw, `meta.json från ${url}: users[${idx}] är inte objekt`);
-  if (typeof u.name !== "string" || typeof u.role !== "string") {
-    throw new Error(`meta.json från ${url}: users[${idx}] saknar name/role`);
-  }
-  return {
-    id: requireString(u.id, `meta.json från ${url}: users[${idx}] saknar id`),
-    name: u.name,
-    email: typeof u.email === "string" ? u.email : "",
-    role: u.role as "ADMIN" | "LAWYER" | "ASSISTANT",
-    ...(typeof u.title === "string" ? { title: u.title } : {}),
-  };
-}

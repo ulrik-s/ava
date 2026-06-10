@@ -8,6 +8,8 @@
  * minns vilka man tittar på mellan sessioner.
  */
 
+import { z } from "zod";
+import { loadFromStorage } from "@/lib/client/load-from-storage";
 import { useEffect } from "react";
 import { Users } from "lucide-react";
 import { trpc } from "@/lib/client/trpc";
@@ -85,13 +87,10 @@ export function UserPicker({ selectedUserIds, onChange, enforceAtLeastOne, userC
 
 /** Läs sparat val från localStorage. Returnerar tom array om inget eller fel. */
 export function loadSelectedUserIds(): string[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = localStorage.getItem(LS_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter((x) => typeof x === "string") : [];
-  } catch {
-    return [];
-  }
+  // Zod vid parsegränsen (#187); trasigt innehåll → tomt val (ofarligt).
+  const schema = z
+    .array(z.unknown())
+    .catch([])
+    .transform((arr) => arr.filter((x): x is string => typeof x === "string"));
+  return loadFromStorage(LS_KEY, schema, []);
 }

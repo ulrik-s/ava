@@ -15,6 +15,8 @@
  * sidopanelen, mutation-knappar etc. kan reagera direkt.
  */
 
+import { z } from "zod";
+import { loadFromStorage } from "@/lib/client/load-from-storage";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { detectAuthMode, getCurrentUser, type AuthMode, type GitHubUser } from "./github-auth";
 
@@ -28,15 +30,11 @@ export interface AuthSettings {
   allowAnonymousRead: boolean;
 }
 
+// Zod vid parsegränsen (#187): inga ovaliderade spreads in i access-konfig.
+const authSettingsSchema = z.object({ allowAnonymousRead: z.boolean().catch(true) });
+
 export function loadAuthSettings(): AuthSettings {
-  if (typeof window === "undefined") return { allowAnonymousRead: true };
-  try {
-    const raw = localStorage.getItem(SETTINGS_KEY);
-    if (!raw) return { allowAnonymousRead: true };
-    return { allowAnonymousRead: true, ...JSON.parse(raw) };
-  } catch {
-    return { allowAnonymousRead: true };
-  }
+  return loadFromStorage(SETTINGS_KEY, authSettingsSchema, { allowAnonymousRead: true });
 }
 
 export function saveAuthSettings(s: AuthSettings): void {

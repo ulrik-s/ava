@@ -13,6 +13,8 @@
 
 const GRAPH_BASE = "https://graph.microsoft.com/v1.0";
 
+import { z } from "zod";
+
 export interface GraphEventBody {
   subject: string;
   body?: { contentType: "HTML" | "text"; content: string };
@@ -23,12 +25,17 @@ export interface GraphEventBody {
   sensitivity?: "normal" | "personal" | "private" | "confidential";
 }
 
-export interface GraphEventResponse {
-  id: string;
-  subject: string;
-  start: { dateTime: string; timeZone: string };
-  end: { dateTime: string; timeZone: string };
-}
+// Zod vid parsegränsen (#187): Graph-svar valideras i expectOk.
+const graphDateTimeSchema = z.object({ dateTime: z.string(), timeZone: z.string() });
+const graphEventResponseSchema = z.object({
+  id: z.string(),
+  subject: z.string(),
+  start: graphDateTimeSchema,
+  end: graphDateTimeSchema,
+});
+const graphErrorBodySchema = z.object({ error: z.object({ message: z.string().optional() }).optional() }).passthrough();
+
+export type GraphEventResponse = z.infer<typeof graphEventResponseSchema>;
 
 export interface GraphOpts {
   token: string;
@@ -55,13 +62,13 @@ async function graphFetch(
   });
 }
 
-async function expectOk<T>(res: Response, label: string): Promise<T> {
-  if (res.ok) return res.json() as Promise<T>;
+async function expectOk<S extends z.ZodType>(res: Response, label: string, schema: S): Promise<z.infer<S>> {
+  if (res.ok) return schema.parse(await res.json()) as z.infer<S>;
   const body = await res.text().catch(() => "");
   let msg = body;
   try {
-    const j = JSON.parse(body) as { error?: { message?: string } };
-    msg = j.error?.message ?? body;
+    const parsed = graphErrorBodySchema.safeParse(JSON.parse(body));
+    if (parsed.success && parsed.data.error?.message) msg = parsed.data.error.message;
   } catch { /* använd rå body */ }
   throw new Error(`${label}: ${res.status} ${res.statusText}${msg ? ` — ${msg}` : ""}`);
 }
@@ -76,7 +83,7 @@ export async function createGraphEvent(body: GraphEventBody, opts: GraphOpts): P
     method: "POST",
     body: JSON.stringify(body),
   }, opts);
-  return expectOk<GraphEventResponse>(res, "createGraphEvent");
+  return expectOk(res, "createGraphEvent", graphEventResponseSchema);
 }
 
 /** PATCH → uppdatera ett befintligt event. */
@@ -92,7 +99,7 @@ export async function updateGraphEvent(
     method: "PATCH",
     body: JSON.stringify(body),
   }, opts);
-  return expectOk<GraphEventResponse>(res, "updateGraphEvent");
+  return expectOk(res, "updateGraphEvent", graphEventResponseSchema);
 }
 
 /** DELETE → ta bort ett event. 404 räknas som ok (redan borta). */

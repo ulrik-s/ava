@@ -9,6 +9,11 @@
  * Persisteras i localStorage. Browser-only (SSR-safe via guard).
  */
 
+import { z } from "zod";
+
+import { loadFromStorage } from "@/lib/client/load-from-storage";
+import { omitUndefined } from "@/lib/shared/omit-undefined";
+
 export type FirmaTier = "demo" | "github" | "self-hosted";
 
 export interface FirmaConfig {
@@ -112,16 +117,30 @@ export function defaultConfigForHost(hostname: string | undefined): FirmaConfig 
   return DEMO_DEFAULT;
 }
 
+
+// Zod vid parsegränsen (#187): lagrad config valideras innan spread in i
+// domänobjektet. Alla fält optionella (partiella skrivningar förekommer);
+// .passthrough() bevarar okända fält från nyare versioner i andra flikar.
+const storedFirmaConfigSchema = z.object({
+  tier: z.enum(["demo", "github", "self-hosted"]).optional(),
+  repo: z.string().optional(),
+  token: z.string().optional(),
+  organizationId: z.string().optional(),
+  principalId: z.string().optional(),
+  authorName: z.string().optional(),
+  authorEmail: z.string().optional(),
+  gitUsername: z.string().optional(),
+  corsProxy: z.string().optional(),
+}).passthrough();
+
 export function loadFirmaConfig(): FirmaConfig {
   if (typeof window === "undefined") return DEMO_DEFAULT;
   const fallback = defaultConfigForHost(window.location.hostname);
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return fallback;
-    const parsed = JSON.parse(raw) as Partial<FirmaConfig>;
+    const parsed = loadFromStorage(STORAGE_KEY, storedFirmaConfigSchema, {});
     return {
       ...fallback,
-      ...parsed,
+      ...omitUndefined(parsed),
       // Tomt repo → fall tillbaka till hostens default
       repo: parsed.repo || fallback.repo,
     };

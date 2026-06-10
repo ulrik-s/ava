@@ -22,23 +22,28 @@
 
 const PATH = ".ava/sync-state.json";
 
-export interface SyncState {
-  version: 1;
-  branch: string;
-  lastHead: string;
-  lastTree: string;
-  lastSyncedAt: string;
-  files: Record<string, string>;
-}
+import { z } from "zod";
+
+// Zod vid parsegränsen (#187): versionen bärs av z.literal — fel version
+// eller form → null (samma utfall som förr, men validerat fält för fält).
+const syncStateSchema = z.object({
+  version: z.literal(1),
+  branch: z.string(),
+  lastHead: z.string(),
+  lastTree: z.string(),
+  lastSyncedAt: z.string(),
+  files: z.record(z.string(), z.string()),
+});
+
+export type SyncState = z.infer<typeof syncStateSchema>;
 
 export async function readSyncState(handle: FileSystemDirectoryHandle): Promise<SyncState | null> {
   try {
     const ava = await handle.getDirectoryHandle(".ava");
     const file = await ava.getFileHandle("sync-state.json");
     const text = await (await file.getFile()).text();
-    const parsed = JSON.parse(text) as SyncState;
-    if (parsed.version !== 1) return null;
-    return parsed;
+    const parsed = syncStateSchema.safeParse(JSON.parse(text));
+    return parsed.success ? parsed.data : null;
   } catch {
     return null;
   }

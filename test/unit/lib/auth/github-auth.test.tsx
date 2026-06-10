@@ -106,13 +106,13 @@ describe("detectAuthMode", () => {
     expect(m).toBe("anonymous");
   });
   it("token + push → identified-write", async () => {
-    fetchMock.mockResolvedValueOnce(ok({ login: "anna" })); // GET user
+    fetchMock.mockResolvedValueOnce(ok({ login: "anna", id: 1 })); // GET user
     fetchMock.mockResolvedValueOnce(ok({ permissions: { push: true } })); // GET repo
     const m = await detectAuthMode({ token: "ghp_x", repoUrl: "ulrik-s/ava-demo" });
     expect(m).toBe("identified-write");
   });
   it("token + ingen push → identified-read", async () => {
-    fetchMock.mockResolvedValueOnce(ok({ login: "guest" }));
+    fetchMock.mockResolvedValueOnce(ok({ login: "guest", id: 2 }));
     fetchMock.mockResolvedValueOnce(ok({ permissions: { push: false } }));
     const m = await detectAuthMode({ token: "ghp_x", repoUrl: "ulrik-s/ava-demo" });
     expect(m).toBe("identified-read");

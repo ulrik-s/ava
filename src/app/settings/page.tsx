@@ -1,5 +1,6 @@
 "use client";
 
+import { z } from "zod";
 import { useEffect, useId, useRef, useState } from "react";
 import { trpc } from "@/lib/client/trpc";
 import { Upload, Trash2, Building2, Plus, Pencil, X, Check } from "lucide-react";
@@ -9,6 +10,10 @@ import { EditorExtensionsSection } from "@/components/settings/editor-extensions
 import { LlmSettingsCard } from "@/components/llm/llm-settings-card";
 import { OrgDefaultsSection } from "@/components/settings/org-defaults-section";
 import { HelperSection } from "@/components/settings/helper-section";
+
+// Zod vid parsegränsen (#187): logo-API:ts svar valideras.
+const logoResponseSchema = z.object({ logoUrl: z.string().nullable() });
+const uploadErrorSchema = z.object({ error: z.string().optional() }).passthrough();
 
 // ─── Offices sub-component ───────────────────────────────────────
 
@@ -264,7 +269,7 @@ export default function SettingsPage() {
     // Fetch current logo
     fetch("/api/organization/logo")
       .then((r) => r.json())
-      .then((d: { logoUrl: string | null }) => setLogoUrl(d.logoUrl))
+      .then((d: unknown) => setLogoUrl(logoResponseSchema.parse(d).logoUrl))
       .catch(() => {});
   }
 
@@ -295,10 +300,10 @@ export default function SettingsPage() {
       fd.append("file", file);
       const res = await fetch("/api/organization/logo", { method: "POST", body: fd });
       if (!res.ok) {
-        const err = await res.json() as { error?: string };
+        const err = uploadErrorSchema.parse(await res.json());
         throw new Error(err.error ?? "Uppladdning misslyckades");
       }
-      const data = await res.json() as { logoUrl: string };
+      const data = logoResponseSchema.parse(await res.json());
       setLogoUrl(data.logoUrl);
     } catch (e) {
       setLogoError(e instanceof Error ? e.message : "Okänt fel");

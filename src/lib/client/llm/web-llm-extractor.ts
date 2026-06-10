@@ -21,6 +21,7 @@
  *     separat för testbarhet utan att behöva instansiera WebGPU.
  */
 
+import { z } from "zod";
 import type { MLCEngine } from "@mlc-ai/web-llm";
 import type { ExtractionResult, ExtractionSchema, FieldType, ILlmExtractor } from "@/lib/server/llm/llm-extractor";
 import type { LlmModelId } from "./llm-config";
@@ -121,14 +122,14 @@ export function buildPrompt(text: string, schema: ExtractionSchema): string {
  */
 export function parseJsonResponse(raw: string, schema: ExtractionSchema): ExtractionResult {
   const json = extractJsonObject(raw);
+  // Zod vid parsegränsen (#187): LLM-svar är ostrukturerad text — validera
+  // som objekt; första kandidaten rå, andra med trailing commas rensade.
   let parsed: Record<string, unknown> = {};
-  try {
-    parsed = JSON.parse(json) as Record<string, unknown>;
-  } catch {
-    // Sista försök: ta bort trailing commas före fältnamn
+  for (const candidate of [json, json.replace(/,\s*([}\]])/g, "$1")]) {
     try {
-      parsed = JSON.parse(json.replace(/,\s*([}\]])/g, "$1")) as Record<string, unknown>;
-    } catch { /* fall back to defaults */ }
+      const obj = z.record(z.string(), z.unknown()).safeParse(JSON.parse(candidate));
+      if (obj.success) { parsed = obj.data; break; }
+    } catch { /* prova nästa kandidat, annars defaults */ }
   }
   const out: ExtractionResult = {};
   for (const [name, spec] of Object.entries(schema)) {
