@@ -398,6 +398,8 @@ export const invoiceRouter = router({
         amount: z.number().int().min(1),
         paidAt: z.string(),
         note: z.string().optional(),
+        /** Extern betalningsreferens (camt-import #181) — för idempotent re-import. */
+        reference: z.string().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -424,6 +426,7 @@ export const invoiceRouter = router({
             amount: input.amount,
             paidAt: new Date(input.paidAt),
             note: input.note,
+            reference: input.reference,
             recordedById: asId<"UserId">(ctx.user.id),
           },
         });
