@@ -16,6 +16,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { invoiceRouter } from "@/lib/server/routers/invoice";
 import { dataStoreFromMockPrisma } from "../helpers/mock-data-store";
+import { ocrFromInvoiceNumber, isValidOcrReference } from "@/lib/shared/ocr-reference";
 
 // ─── Mock prisma ─────────────────────────────────────────────────
 
@@ -725,5 +726,38 @@ describe("invoice.createCredit", () => {
       where: { id: "pp1" },
       data: { status: "CANCELLED" },
     });
+  });
+});
+
+// ─── OCR-referens (#182) ─────────────────────────────────────────
+
+describe("OCR-referens på kundfakturor (#182)", () => {
+  it("createAcconto sätter ocrReference härledd ur fakturanumret", async () => {
+    mockPrisma.matter.findFirst.mockResolvedValue(MATTER_A);
+    mockPrisma.invoice.findFirst.mockResolvedValue(null); // nextInvoiceNumber: första
+    mockPrisma.invoice.create.mockResolvedValue({ id: "inv-1", invoiceType: "ACCONTO", amount: 100 });
+
+    await makeCaller().createAcconto({ matterId: "matter-1", amount: 100 });
+
+    const data = mockPrisma.invoice.create.mock.calls[0]?.[0]?.data as {
+      invoiceNumber?: string; ocrReference?: string;
+    };
+    expect(data.invoiceNumber).toBeTruthy();
+    expect(data.ocrReference).toBe(ocrFromInvoiceNumber(data.invoiceNumber));
+    expect(isValidOcrReference(data.ocrReference as string)).toBe(true);
+  });
+
+  it("createCredit sätter INGEN ocrReference (krediter betalas inte med OCR)", async () => {
+    mockPrisma.invoice.findFirst.mockResolvedValue({
+      id: "inv-1", matterId: "m1", invoiceType: "STANDARD", status: "SENT",
+      amount: 1000, creditNote: null, paymentPlan: null,
+    });
+    mockPrisma.invoice.create.mockResolvedValue({ id: "credit-1", invoiceType: "CREDIT", amount: -1000 });
+    mockPrisma.invoice.update.mockResolvedValue({});
+
+    await makeCaller().createCredit({ invoiceId: "inv-1" });
+
+    const data = mockPrisma.invoice.create.mock.calls[0]?.[0]?.data as { ocrReference?: string };
+    expect(data.ocrReference).toBeUndefined();
   });
 });

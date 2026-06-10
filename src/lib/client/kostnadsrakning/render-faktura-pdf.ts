@@ -14,6 +14,8 @@ export interface FakturaInput {
   invoice: {
     amount: number; // öre
     invoiceNumber?: string | null;
+    /** Bankgiro-OCR (#182). Null på kostnadsräkningar/CREDIT → raden utelämnas. */
+    ocrReference?: string | null;
     invoiceDate?: string | Date | null;
   };
   meta: {
@@ -24,6 +26,17 @@ export interface FakturaInput {
     organizationName?: string;
     organizationOrgNumber?: string;
   };
+}
+
+type LineFn = (text: string, opts?: { size?: number; b?: boolean; gap?: number; gray?: boolean }) => void;
+
+/** Identitetsraderna under rubriken (fakturanr, datum, mottagare, klient). */
+function drawIdentityLines(line: LineFn, input: FakturaInput): void {
+  const date = input.invoice.invoiceDate ? new Date(input.invoice.invoiceDate).toLocaleDateString("sv-SE") : "";
+  if (input.invoice.invoiceNumber) line(`Fakturanr: ${input.invoice.invoiceNumber}`);
+  if (date) line(`Fakturadatum: ${date}`);
+  if (input.meta.recipient) line(`Mottagare: ${input.meta.recipient}`);
+  if (input.meta.clientName) line(`Klient: ${input.meta.clientName}`);
 }
 
 export async function renderFakturaPdf(input: FakturaInput): Promise<Uint8Array> {
@@ -51,17 +64,14 @@ export async function renderFakturaPdf(input: FakturaInput): Promise<Uint8Array>
   if (input.meta.organizationOrgNumber) line(`Org.nr ${input.meta.organizationOrgNumber}`, { size: 9 });
   y -= 8;
   line(`Mål ${input.meta.matterNumber} — ${input.meta.matterTitle}`, { size: 11, b: true, gap: 16 });
-  const date = input.invoice.invoiceDate ? new Date(input.invoice.invoiceDate).toLocaleDateString("sv-SE") : "";
-  if (input.invoice.invoiceNumber) line(`Fakturanr: ${input.invoice.invoiceNumber}`);
-  if (date) line(`Fakturadatum: ${date}`);
-  if (input.meta.recipient) line(`Mottagare: ${input.meta.recipient}`);
-  if (input.meta.clientName) line(`Klient: ${input.meta.clientName}`);
+  drawIdentityLines(line, input);
   y -= 10;
   page.drawLine({ start: { x: M, y }, end: { x: RIGHT, y }, thickness: 0.5, color: rgb(0.7, 0.7, 0.7) });
   y -= 26;
   page.drawText("Att betala", { x: M, y, size: 12, font: bold });
   page.drawText(formatCurrency(input.invoice.amount), { x: RIGHT - 130, y, size: 14, font: bold });
   y -= 28;
+  if (input.invoice.ocrReference) line(`OCR-referens: ${input.invoice.ocrReference}`, { size: 11, b: true, gap: 16 });
   line("Belopp enligt domstolens beslut / fakturaunderlag.", { size: 9, gray: true });
 
   return pdf.save();

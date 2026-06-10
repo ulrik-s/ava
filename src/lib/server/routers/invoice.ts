@@ -18,6 +18,7 @@ import { TRPCError } from "@trpc/server";
 import { router, orgProcedure } from "../trpc";
 import type { DataStoreTx } from "../data-store/IDataStore";
 import { computeFinalInvoiceBreakdown, isPaymentPlanSettled } from "@/lib/shared/invoice-calc";
+import { ocrFromInvoiceNumber } from "@/lib/shared/ocr-reference";
 import { computeInvoiceLedger, deriveInvoiceStatus, invoicePartitionViolation } from "@/lib/shared/write-off-calc";
 import type { InvoiceStatus } from "@/lib/shared/schemas/enums";
 import { emit } from "../events/emit";
@@ -238,11 +239,15 @@ export const invoiceRouter = router({
         where: { id: input.matterId, organizationId: ctx.orgId },
       });
       if (!matter) throw new TRPCError({ code: "NOT_FOUND" });
+      const accontoNumber = await nextInvoiceNumber(ctx.dataStore.invoices, ctx.orgId);
       const invoice = await ctx.dataStore.invoices.create({
         data: omitUndefined({
           id: input.id, // undefined → store genererar
           matterId: input.matterId,
-          invoiceNumber: await nextInvoiceNumber(ctx.dataStore.invoices, ctx.orgId),
+          invoiceNumber: accontoNumber,
+          // Kundfaktura → Bankgiro-OCR (#182). Kostnadsräkningar (billingRun-
+          // flödet) och CREDIT får ingen OCR — betalas inte med OCR.
+          ocrReference: ocrFromInvoiceNumber(accontoNumber),
           amount: input.amount,
           invoiceType: "ACCONTO",
           status: "DRAFT",
@@ -291,11 +296,13 @@ export const invoiceRouter = router({
           accontos.map((a) => ({ id: a.id, amount: a.amount })),
         );
 
+        const finalNumber = await nextInvoiceNumber(tx.invoices, ctx.orgId);
         const invoice = await tx.invoices.create({
           data: omitUndefined({
             id: input.id, // undefined → store genererar
             matterId: input.matterId,
-            invoiceNumber: await nextInvoiceNumber(tx.invoices, ctx.orgId),
+            invoiceNumber: finalNumber,
+            ocrReference: ocrFromInvoiceNumber(finalNumber), // kundfaktura → OCR (#182)
             amount: breakdown.grossAmount,
             invoiceType: "FINAL",
             status: "DRAFT",
