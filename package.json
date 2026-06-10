@@ -100,7 +100,7 @@
     "husky": "^9.1.7",
     "jscpd": "^5.0.4",
     "knip": "^6.16.1",
-    "lint-staged": "^16.4.0",
+    "lint-staged": "^17.0.7",
     "pdf-lib": "^1.17.1",
     "playwright": "^1.60.0",
     "tailwindcss": "^4",
@@ -108,5 +108,8 @@
   },
   "trustedDependencies": [
     "unrs-resolver"
-  ]
+  ],
+  "patchedDependencies": {
+    "lint-staged@17.0.7": "patches/lint-staged@17.0.7.patch"
+  }
 }

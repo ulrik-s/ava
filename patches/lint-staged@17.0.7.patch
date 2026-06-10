@@ -1,0 +1,37 @@
+diff --git a/lib/assertGitVersion.js b/lib/assertGitVersion.js
+index 5ddf27a628f3f41fcfb9d595ad2ef361ad54c347..41a8d42e568b077bd7999e0bb2b604c7f82d7945 100644
+--- a/lib/assertGitVersion.js
++++ b/lib/assertGitVersion.js
+@@ -2,21 +2,26 @@
+ export const MIN_GIT_VERSION = '2.32.0'
+ 
+ /**
++ * AVA-patch (issue #17): tolerate a missing/non-numeric patch component so a
++ * source-built git that reports e.g. `git version 2.51.GIT` is parsed as 2.51.0
++ * instead of failing the regex and falsely tripping the min-version guard.
++ *
+  * @param {string} gitVersionOutput the Git version command output
+- * @returns {string} the Git version number in format `<major>.<minor>.<patch>`
++ * @returns {string} the Git version number in format `<major>.<minor>[.<patch>]`
+  */
+ const extractGitVersionNumber = (gitVersionOutput) => {
+-  const match = gitVersionOutput.match(/git version\s+(\d+\.\d+\.\d+)/i)
++  const match = gitVersionOutput.match(/git version\s+(\d+\.\d+(?:\.\d+)?)/i)
+   return match?.[1]
+ }
+ 
+ /**
+- * @param {string} version the version number in format `<major>.<minor>.<patch>`
+- * @returns {[string, string, string]} the version number parsed as integers `[major, minor, patch]`
++ * @param {string} version the version number in format `<major>.<minor>[.<patch>]`
++ * @returns {[number, number, number] | undefined} the version parsed as integers `[major, minor, patch]` (patch defaults to 0)
+  */
+ const parseSemver = (version) => {
+-  const match = /(\d+)\.(\d+)\.(\d+)/.exec(version)
+-  return match?.slice(1, 4).map(Number)
++  const match = /(\d+)\.(\d+)(?:\.(\d+))?/.exec(version)
++  if (!match) return undefined
++  return [Number(match[1]), Number(match[2]), Number(match[3] ?? 0)]
+ }
+ 
+ /**
