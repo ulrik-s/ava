@@ -6,13 +6,6 @@ on:
   pull_request:
   workflow_dispatch: # för on-demand e2e (git round-trip)
 
-# Opta in GitHub Actions runtime på Node 24. Annars kör checkout/setup-node/
-# upload-artifact på Node 20 som tvångsbyts 2026-06-16 och EOL:ar 2026-09-16
-# (deprecation-varning i loggen). Detta är skilt från setup-node:s node-version
-# nedan (= Node:n som tool-binärerna tsc/eslint/vitest/next kör under via shebang).
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-
 # Bun (#91) är pakethanterare + script-runner. setup-bun ger `bun` på PATH
 # (kör `bun install --frozen-lockfile` + `bun run X` + `bun *.ts`-scripten);
 # setup-node behålls för att tool-binärerna (tsc/eslint/vitest/next/playwright)
@@ -32,10 +25,10 @@ jobs:
     if: github.event_name == 'pull_request'
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0 # commitlint behöver hela historiken för --from..--to
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 24
       - uses: oven-sh/setup-bun@v2
@@ -50,8 +43,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 24
       - uses: oven-sh/setup-bun@v2
@@ -72,7 +65,7 @@ jobs:
       - run: bun run duplicates
       - name: Upload jscpd report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: jscpd-report
           path: reports/jscpd/
@@ -85,8 +78,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 24
       - uses: oven-sh/setup-bun@v2
@@ -97,7 +90,7 @@ jobs:
       - run: bun run test:cov
       - name: Upload coverage
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage
           path: coverage/
@@ -114,8 +107,8 @@ jobs:
     env:
       CI: "true"
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 24
       - uses: oven-sh/setup-bun@v2
@@ -152,7 +145,7 @@ jobs:
         run: docker compose -f tooling/docker/docker-compose.yml down -v
       - name: Upload Playwright report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-report
           # round-trip-konfigen skriver till reports/playwright-round-trip/
