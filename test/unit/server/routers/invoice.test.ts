@@ -761,3 +761,23 @@ describe("OCR-referens på kundfakturor (#182)", () => {
     expect(data.ocrReference).toBeUndefined();
   });
 });
+
+// ─── recordPayment: extern referens (#181) ───────────────────────
+
+describe("recordPayment med extern referens (#181)", () => {
+  it("referensen lagras på betalningen (idempotent betalfils-import)", async () => {
+    mockPrisma.invoice.findFirst.mockResolvedValue({
+      id: "inv-1", amount: 1000, status: "SENT", paymentPlan: null, payments: [],
+    });
+    mockPrisma.payment.create.mockResolvedValue({ id: "pay-1" });
+    mockPrisma.invoice.update.mockResolvedValue({});
+
+    await makeCaller().recordPayment({
+      invoiceId: "inv-1", amount: 1000, paidAt: "2026-06-01", reference: "REF-A",
+    });
+
+    expect(mockPrisma.payment.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ reference: "REF-A" }) }),
+    );
+  });
+});

@@ -132,6 +132,9 @@ export const paymentSchema = z.object({
   amount: z.number().int(),
   paidAt: dateLike,
   note: z.string().nullish(),
+  /** Extern betalningsreferens (camt AcctSvcrRef m.m., #181) — idempotent
+   *  betalfils-import: samma fil omladdad bokför inte om samma betalning. */
+  reference: z.string().nullish(),
   recordedById: userIdSchema,
   createdAt: dateLike,
 }).passthrough();
