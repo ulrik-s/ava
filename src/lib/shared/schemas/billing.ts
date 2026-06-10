@@ -108,6 +108,10 @@ export const invoiceSchema = z.object({
   /** Per-byrå löpande fakturanummer (F-YYYY-NNNN), genereras vid skapande.
    *  Nullish: legacy-fakturor saknar nummer → UI faller tillbaka på datum. */
   invoiceNumber: z.string().nullish(),
+  /** Bankgiro-OCR (mod-10 + längdsiffra, #182), härledd ur fakturanumret vid
+   *  skapande. BARA kundfakturor (ACCONTO/FINAL) — kostnadsräkningar till
+   *  domstol och CREDIT har null (betalas inte med OCR, jfr #173/#175). */
+  ocrReference: z.string().nullish(),
   fortnoxId: z.string().nullish(),
   invoiceDate: dateLike,
   dueDate: optionalDateLike,

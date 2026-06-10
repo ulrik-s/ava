@@ -221,6 +221,7 @@ function InvoiceHeader({ inv }: { inv: Inv }) {
     : inv.invoiceType === "CREDIT" ? "Kreditfaktura"
     : "Faktura";
   const invoiceNumber = (inv as { invoiceNumber?: string | null }).invoiceNumber;
+  const ocrReference = (inv as { ocrReference?: string | null }).ocrReference;
   return (
     <div>
       <EntityLink route="matters" id={inv.matter.id} className="text-sm text-blue-600 hover:underline">← {inv.matter.matterNumber} {inv.matter.title}</EntityLink>
@@ -229,6 +230,7 @@ function InvoiceHeader({ inv }: { inv: Inv }) {
         {invoiceNumber && <span className="ml-3 text-base font-normal text-gray-700">{invoiceNumber}</span>}
         <span className="ml-3 text-sm font-normal text-gray-500">{new Date(inv.invoiceDate).toLocaleDateString("sv-SE")}</span>
       </h1>
+      {ocrReference && <p className="text-sm text-gray-500 mt-1">OCR: <span className="font-mono">{ocrReference}</span></p>}
     </div>
   );
 }
