@@ -22,6 +22,7 @@
 import { ReadOnlyDelegate, ReadOnlyError, type RelationConfig } from "./in-memory/read-only-delegate";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { WritableDelegate, type MutationEvent, type WritableDelegateOpts } from "./in-memory/writable-delegate";
+import { buildRelations } from "./relations";
 import type {
   IDataStore,
   IEventLog,
@@ -106,155 +107,39 @@ export class DemoDataStore implements IDataStore {
     // Bygg delegates för varje entitet. `as unknown as XDelegate` är
     // ofrånkomligt — Prisma's typer är för komplexa att matcha exakt,
     // men strukturellt har vi rätt metoder.
-    this.matters = this.makeDelegate("matters", {
-      contacts: {
-        collection: () => this.source.matterContacts ?? [],
-        where: (parent) => ({ matterId: (parent as { id: string }).id }),
-      },
-      documents: {
-        collection: () => this.source.documents ?? [],
-        where: (parent) => ({ matterId: (parent as { id: string }).id }),
-      },
-      timeEntries: {
-        collection: () => this.source.timeEntries ?? [],
-        where: (parent) => ({ matterId: (parent as { id: string }).id }),
-      },
-      expenses: {
-        collection: () => this.source.expenses ?? [],
-        where: (parent) => ({ matterId: (parent as { id: string }).id }),
-      },
-      invoices: {
-        collection: () => this.source.invoices ?? [],
-        where: (parent) => ({ matterId: (parent as { id: string }).id }),
-      },
-    }) as unknown as MatterDelegate;
+    // Relations-grafen är extraherad till `relations.ts` (#189). `getSource`
+    // läser den AKTUELLA source-referensen så mutable-lägets `mergeSource`-byten
+    // syns även i collections.
+    const relations = buildRelations(() => this.source);
 
-    this.matterContacts = this.makeDelegate("matterContacts", {
-      // kind:"one" — varje matter-contact-länk har EN kontakt och EN matter.
-      contact: this.rel("contacts", "id", "contactId", "one"),
-      // Nested-include från conflict.ts (matter.contacts.contact) kräver
-      // att sub-relationerna registreras här — annars blir matter.contacts
-      // undefined även om include säger annat.
-      matter: this.rel("matters", "id", "matterId", "one", {
-        contacts: this.rel("matterContacts", "matterId", "id", "many", {
-          contact: this.rel("contacts", "id", "contactId", "one"),
-        }),
-      }),
-    }) as unknown as MatterContactDelegate;
-
-    this.contacts = this.makeDelegate("contacts", {
-      matterLinks: {
-        collection: () => this.source.matterContacts ?? [],
-        where: (parent) => ({ contactId: (parent as { id: string }).id }),
-      },
-      // Hierarki: en kontakt kan ha barn (t.ex. en organisation med
-      // anställda) och en parent. Båda valfria; UI:n kräver children
-      // som array — utan denna relation blev c.children undefined och
-      // .map() kraschade.
-      children: this.rel("contacts", "parentId", "id"),
-      parent: this.rel("contacts", "id", "parentId", "one"),
-    }) as unknown as ContactDelegate;
-    this.documents = this.makeDelegate("documents", {
-      // kind:"one" är AVGÖRANDE — utan det matcheras nested where
-      // `matter: { organizationId }` mot en array istället för ett objekt
-      // → assertDocAccess returnerar NOT_FOUND. Manifest: tidigare bugg.
-      matter: this.rel("matters", "id", "matterId", "one"),
-    }) as unknown as DocumentDelegate;
+    this.matters = this.makeDelegate("matters", relations.matters) as unknown as MatterDelegate;
+    this.matterContacts = this.makeDelegate("matterContacts", relations.matterContacts) as unknown as MatterContactDelegate;
+    this.contacts = this.makeDelegate("contacts", relations.contacts) as unknown as ContactDelegate;
+    this.documents = this.makeDelegate("documents", relations.documents) as unknown as DocumentDelegate;
     this.documentFolders = this.makeDelegate("documentFolders") as unknown as DocumentFolderDelegate;
-    this.documentTemplates = this.makeDelegate("documentTemplates", {
-      createdBy: this.rel("users", "id", "createdById", "one"),
-    }) as unknown as DocumentTemplateDelegate;
+    this.documentTemplates = this.makeDelegate("documentTemplates", relations.documentTemplates) as unknown as DocumentTemplateDelegate;
     this.documentAnalysisSuggestions = this.makeDelegate("documentAnalysisSuggestions") as unknown as DocumentAnalysisSuggestionDelegate;
     this.matterEventSuggestions = this.makeDelegate("matterEventSuggestions") as unknown as MatterEventSuggestionDelegate;
-    this.invoices = this.makeDelegate("invoices", {
-      matter: this.rel("matters", "id", "matterId", "one"),
-      paymentPlan: this.rel("paymentPlans", "invoiceId", "id", "one", {
-        reminders: this.rel("paymentPlanReminders", "planId", "id"),
-      }),
-      payments: this.rel("payments", "invoiceId", "id", "many", {
-        recordedBy: this.rel("users", "id", "recordedById", "one"),
-      }),
-      writeOffs: this.rel("writeOffs", "invoiceId", "id", "many"),
-      accontoDeductions: this.rel("accontoDeductions", "finalInvoiceId", "id", "many", {
-        accontoInvoice: this.rel("invoices", "id", "accontoInvoiceId", "one"),
-      }),
-      deductedOnFinals: this.rel("accontoDeductions", "accontoInvoiceId", "id", "many", {
-        finalInvoice: this.rel("invoices", "id", "finalInvoiceId", "one"),
-      }),
-      timeEntries: this.rel("timeEntries", "invoiceId", "id"),
-      expenses: this.rel("expenses", "invoiceId", "id"),
-      documents: this.rel("documents", "invoiceId", "id"), // genererade faktura-/underlag-dokument
-      creditNote: this.rel("invoices", "creditedInvoiceId", "id", "one"),
-      creditedInvoice: this.rel("invoices", "id", "creditedInvoiceId", "one"),
-    }) as unknown as InvoiceDelegate;
-    this.timeEntries = this.makeDelegate("timeEntries", {
-      user: this.rel("users", "id", "userId", "one"),
-      matter: this.rel("matters", "id", "matterId", "one"),
-      invoice: this.rel("invoices", "id", "invoiceId", "one"),
-    }) as unknown as TimeEntryDelegate;
-    this.expenses = this.makeDelegate("expenses", {
-      matter: this.rel("matters", "id", "matterId", "one"),
-      user: this.rel("users", "id", "userId", "one"),
-      invoice: this.rel("invoices", "id", "invoiceId", "one"),
-    }) as unknown as ExpenseDelegate;
+    this.invoices = this.makeDelegate("invoices", relations.invoices) as unknown as InvoiceDelegate;
+    this.timeEntries = this.makeDelegate("timeEntries", relations.timeEntries) as unknown as TimeEntryDelegate;
+    this.expenses = this.makeDelegate("expenses", relations.expenses) as unknown as ExpenseDelegate;
     this.users = this.makeDelegate("users") as unknown as UserDelegate;
     this.organizations = this.makeDelegate("organizations") as unknown as OrganizationDelegate;
     this.offices = this.makeDelegate("offices") as unknown as OfficeDelegate;
-    this.conflictChecks = this.makeDelegate("conflictChecks", {
-      checkedBy: this.rel("users", "id", "checkedById", "one"),
-    }) as unknown as ConflictCheckDelegate;
+    this.conflictChecks = this.makeDelegate("conflictChecks", relations.conflictChecks) as unknown as ConflictCheckDelegate;
     this.payments = this.makeDelegate("payments") as unknown as PaymentDelegate;
     this.writeOffs = this.makeDelegate("writeOffs") as unknown as WriteOffDelegate;
-    // invoice (+ nested matter) krävs för cancelPaymentPlan:s where
-    // `invoice: { matter: { organizationId } }`.
-    this.paymentPlans = this.makeDelegate("paymentPlans", {
-      invoice: this.rel("invoices", "id", "invoiceId", "one", {
-        matter: this.rel("matters", "id", "matterId", "one", {
-          // Klient-kontakt joinas under matter för "vem fakturan gäller"-rad i UI
-          contacts: this.rel("matterContacts", "matterId", "id"),
-        }),
-        payments: this.rel("payments", "invoiceId", "id"),
-      }),
-      reminders: this.rel("paymentPlanReminders", "planId", "id"),
-    }) as unknown as PaymentPlanDelegate;
+    this.paymentPlans = this.makeDelegate("paymentPlans", relations.paymentPlans) as unknown as PaymentPlanDelegate;
     this.paymentPlanReminders = this.makeDelegate("paymentPlanReminders") as unknown as Delegate;
     this.accontoDeductions = this.makeDelegate("accontoDeductions") as unknown as AccontoDeductionDelegate;
-    this.billingRuns = this.makeDelegate("billingRuns", {
-      invoice: this.rel("invoices", "id", "invoiceId", "one"),
-      matter: this.rel("matters", "id", "matterId", "one"),
-    }) as unknown as BillingRunDelegate;
-    this.calendarEvents = this.makeDelegate("calendarEvents", {
-      matter: this.rel("matters", "id", "matterId", "one"),
-    }) as unknown as CalendarEventDelegate;
-    this.tasks = this.makeDelegate("tasks", {
-      matter: this.rel("matters", "id", "matterId", "one"),
-    }) as unknown as TaskDelegate;
+    this.billingRuns = this.makeDelegate("billingRuns", relations.billingRuns) as unknown as BillingRunDelegate;
+    this.calendarEvents = this.makeDelegate("calendarEvents", relations.calendarEvents) as unknown as CalendarEventDelegate;
+    this.tasks = this.makeDelegate("tasks", relations.tasks) as unknown as TaskDelegate;
     this.userPreferences = this.makeDelegate("userPreferences") as unknown as Delegate;
     this.orgPreferences = this.makeDelegate("orgPreferences") as unknown as Delegate;
 
     this.events = new ReadOnlyEventLog();
     this.raw = makeThrowingProxy() as unknown as IDataStore["raw"];
-  }
-
-  /**
-   * Bygg en `RelationConfig`: barn-collection `key`, kopplad via
-   * `child[childField] === parent[parentField]`. `relations` ger nested
-   * include/where-stöd.
-   */
-  private rel(
-    key: keyof DemoSource,
-    childField: string,
-    parentField: string,
-    kind: "one" | "many" = "many",
-    relations?: Record<string, RelationConfig<Record<string, unknown>>>,
-  ): RelationConfig<Record<string, unknown>> {
-    const cfg = omitUndefined({
-      kind,
-      collection: () => (this.source[key] ?? []) as readonly Record<string, unknown>[],
-      where: (p: Record<string, unknown>) => ({ [childField]: p[parentField] }),
-      relations,
-    });
-    return cfg as RelationConfig<Record<string, unknown>>;
   }
 
   private makeDelegate<T extends Record<string, unknown>>(

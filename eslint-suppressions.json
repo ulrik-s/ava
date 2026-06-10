@@ -152,11 +152,6 @@
       "count": 1
     }
   },
-  "src/lib/server/data-store/DemoDataStore.ts": {
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
   "src/lib/server/local-first/demo-loader.ts": {
     "max-depth": {
       "count": 4
