@@ -14,16 +14,25 @@
  * token-närvaro: token → identified-write, annars anonymous.
  */
 
+import { z } from "zod";
 import { isLocalOrSameOrigin } from "@/lib/client/sync/cors-proxy";
 
 export type AuthMode = "anonymous" | "identified-read" | "identified-write";
 
-export interface GitHubUser {
-  login: string;
-  id: number;
-  name?: string | null;
-  avatar_url?: string;
-}
+// Zod vid parsegränsen (#187): GitHub-API-svar (identitet + access-beslut)
+// valideras — aldrig rena casts på nätverksdata.
+const gitHubUserSchema = z.object({
+  login: z.string().min(1),
+  id: z.number().int(),
+  name: z.string().nullish(),
+  avatar_url: z.string().optional(),
+});
+
+const repoResponseSchema = z.object({
+  permissions: z.object({ push: z.boolean().optional(), pull: z.boolean().optional() }).optional(),
+}).passthrough();
+
+export type GitHubUser = z.infer<typeof gitHubUserSchema>;
 
 export interface RepoPermissions {
   canRead: boolean;
@@ -78,7 +87,8 @@ export async function getCurrentUser(token: string): Promise<GitHubUser | null> 
   try {
     const res = await fetch("https://api.github.com/user", { headers: authHeaders(token) });
     if (!res.ok) return null;
-    return await res.json() as GitHubUser;
+    const parsed = gitHubUserSchema.safeParse(await res.json());
+    return parsed.success ? parsed.data : null;
   } catch {
     return null;
   }
@@ -99,8 +109,8 @@ export async function getRepoPermissions(
       { headers: authHeaders(token) },
     );
     if (!res.ok) return null;
-    const body = await res.json() as { permissions?: { push?: boolean; pull?: boolean } };
-    const perms = body.permissions;
+    const body = repoResponseSchema.safeParse(await res.json());
+    const perms = body.success ? body.data.permissions : undefined;
     if (!perms) {
       // Publika repo: kan läsa men inte pusha
       return { canRead: true, canPush: false };

@@ -9,6 +9,7 @@
  * parallella blob-fetches, bara skapade objekt postas.
  */
 
+import { z } from "zod";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 
 const API = "https://api.github.com";
@@ -23,36 +24,51 @@ interface ApiOpts {
   signal?: AbortSignal;
 }
 
-export interface TreeEntry {
-  path: string;
-  mode: string;       // "100644" (file), "100755" (exec), "040000" (tree)
-  type: "blob" | "tree" | "commit";
-  sha: string;
-  size?: number;
-  url?: string;
-}
+// Zod vid parsegränsen (#187): GitHub-API-svar valideras per endpoint-schema
+// i expectOk — typerna är z.infer-härledda (samma exporterade namn som förr).
+// Kräver det koden KONSUMERAR (path/type/sha resp. tree.sha, encoding,
+// content); övriga API-fält är optionella — strikt där det räknas, utan att
+// vara skört mot API-tillägg.
+const treeEntrySchema = z.object({
+  path: z.string(),
+  mode: z.string().optional(), // "100644" (file), "100755" (exec), "040000" (tree)
+  type: z.enum(["blob", "tree", "commit"]),
+  sha: z.string(),
+  size: z.number().optional(),
+  url: z.string().optional(),
+});
 
-export interface TreeData {
-  sha: string;
-  truncated: boolean;
-  tree: TreeEntry[];
-}
+const treeDataSchema = z.object({
+  sha: z.string(),
+  truncated: z.boolean(),
+  tree: z.array(treeEntrySchema),
+});
 
-export interface CommitData {
-  sha: string;
-  message: string;
-  tree: { sha: string };
-  parents: Array<{ sha: string }>;
-  author: { name: string; email: string; date: string };
-  committer: { name: string; email: string; date: string };
-}
+const gitActorSchema = z.object({ name: z.string(), email: z.string(), date: z.string() });
 
-export interface BlobData {
-  sha: string;
-  content: string;
-  encoding: "base64" | "utf-8";
-  size: number;
-}
+const commitDataSchema = z.object({
+  sha: z.string(),
+  message: z.string().optional(),
+  tree: z.object({ sha: z.string() }),
+  parents: z.array(z.object({ sha: z.string() })).optional(),
+  author: gitActorSchema.optional(),
+  committer: gitActorSchema.optional(),
+});
+
+const blobDataSchema = z.object({
+  sha: z.string().optional(),
+  content: z.string(),
+  encoding: z.enum(["base64", "utf-8"]),
+  size: z.number().optional(),
+});
+
+const shaResponseSchema = z.object({ sha: z.string() });
+const branchHeadSchema = z.object({ object: z.object({ sha: z.string() }) });
+const errorBodySchema = z.object({ message: z.string().optional() }).passthrough();
+
+export type TreeData = z.infer<typeof treeDataSchema>;
+export type CommitData = z.infer<typeof commitDataSchema>;
+export type BlobData = z.infer<typeof blobDataSchema>;
 
 async function apiFetch(path: string, init: RequestInit, opts: ApiOpts): Promise<Response> {
   const res = await fetch(`${API}${path}`, {
@@ -68,39 +84,42 @@ async function apiFetch(path: string, init: RequestInit, opts: ApiOpts): Promise
   return res;
 }
 
-async function expectOk<T>(res: Response, label: string): Promise<T> {
+async function expectOk<S extends z.ZodType>(res: Response, label: string, schema: S): Promise<z.infer<S>> {
   if (!res.ok) {
     const body = await res.text().catch(() => "");
     let msg = body;
-    try { msg = (JSON.parse(body) as { message?: string }).message ?? body; } catch { /* ignorera */ }
+    try {
+      const parsed = errorBodySchema.safeParse(JSON.parse(body));
+      if (parsed.success && parsed.data.message) msg = parsed.data.message;
+    } catch { /* ignorera — rå body */ }
     throw new Error(`${label}: ${res.status} ${res.statusText} ${msg ? "— " + msg : ""}`);
   }
-  return res.json() as Promise<T>;
+  return schema.parse(await res.json()) as z.infer<S>;
 }
 
 /** GET /repos/{o}/{r}/git/refs/heads/{branch} */
 export async function getBranchHead(repo: RepoLocator, branch: string, opts: ApiOpts): Promise<string> {
   const res = await apiFetch(`/repos/${repo.owner}/${repo.repo}/git/ref/heads/${encodeURIComponent(branch)}`, {}, opts);
-  const data = await expectOk<{ object: { sha: string } }>(res, "getBranchHead");
+  const data = await expectOk(res, "getBranchHead", branchHeadSchema);
   return data.object.sha;
 }
 
 /** GET /repos/{o}/{r}/git/commits/{sha} */
 export async function getCommit(repo: RepoLocator, sha: string, opts: ApiOpts): Promise<CommitData> {
   const res = await apiFetch(`/repos/${repo.owner}/${repo.repo}/git/commits/${sha}`, {}, opts);
-  return expectOk<CommitData>(res, "getCommit");
+  return expectOk(res, "getCommit", commitDataSchema);
 }
 
 /** GET /repos/{o}/{r}/git/trees/{sha}?recursive=1 */
 export async function getTreeRecursive(repo: RepoLocator, treeSha: string, opts: ApiOpts): Promise<TreeData> {
   const res = await apiFetch(`/repos/${repo.owner}/${repo.repo}/git/trees/${treeSha}?recursive=1`, {}, opts);
-  return expectOk<TreeData>(res, "getTreeRecursive");
+  return expectOk(res, "getTreeRecursive", treeDataSchema);
 }
 
 /** GET /repos/{o}/{r}/git/blobs/{sha} */
 export async function getBlob(repo: RepoLocator, sha: string, opts: ApiOpts): Promise<BlobData> {
   const res = await apiFetch(`/repos/${repo.owner}/${repo.repo}/git/blobs/${sha}`, {}, opts);
-  return expectOk<BlobData>(res, "getBlob");
+  return expectOk(res, "getBlob", blobDataSchema);
 }
 
 /** POST /repos/{o}/{r}/git/blobs */
@@ -117,7 +136,7 @@ export async function createBlob(repo: RepoLocator, content: Uint8Array, opts: A
     },
     opts,
   );
-  const data = await expectOk<{ sha: string }>(res, "createBlob");
+  const data = await expectOk(res, "createBlob", shaResponseSchema);
   return data.sha;
 }
 
@@ -139,7 +158,7 @@ export async function createTree(
     },
     opts,
   );
-  const data = await expectOk<{ sha: string }>(res, "createTree");
+  const data = await expectOk(res, "createTree", shaResponseSchema);
   return data.sha;
 }
 
@@ -165,7 +184,7 @@ export async function createCommit(
     },
     opts,
   );
-  const data = await expectOk<{ sha: string }>(res, "createCommit");
+  const data = await expectOk(res, "createCommit", shaResponseSchema);
   return data.sha;
 }
 
@@ -185,7 +204,7 @@ export async function updateRef(
     },
     opts,
   );
-  await expectOk(res, "updateRef");
+  await expectOk(res, "updateRef", z.record(z.string(), z.unknown()));
 }
 
 // ─── Hjälpfunktioner ─────────────────────────────────────────────────

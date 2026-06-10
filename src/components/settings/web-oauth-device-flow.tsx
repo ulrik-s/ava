@@ -13,6 +13,7 @@
  * Tauri-builden använder `OAuthDeviceFlow` (libcurl direkt) istället.
  */
 
+import { z } from "zod";
 import { useEffect, useState } from "react";
 import { ExternalLink } from "lucide-react";
 import { loadOAuthConfig } from "@/lib/client/auth/oauth-config";
@@ -22,19 +23,22 @@ interface Props {
   onCancel: () => void;
 }
 
-interface DeviceCodeResponse {
-  device_code: string;
-  user_code: string;
-  verification_uri: string;
-  expires_in: number;
-  interval: number;
-}
+// Zod vid parsegränsen (#187): OAuth-proxysvar valideras innan bruk.
+const deviceCodeResponseSchema = z.object({
+  device_code: z.string().min(1),
+  user_code: z.string(),
+  verification_uri: z.string(),
+  expires_in: z.number(),
+  interval: z.number(),
+});
 
-interface TokenResponse {
-  access_token?: string;
-  error?: string;
-  error_description?: string;
-}
+const tokenResponseSchema = z.object({
+  access_token: z.string().optional(),
+  error: z.string().optional(),
+  error_description: z.string().optional(),
+}).passthrough();
+
+type DeviceCodeResponse = z.infer<typeof deviceCodeResponseSchema>;
 
 export function WebOAuthDeviceFlow({ onComplete, onCancel }: Props) {
   // SSR-stabil initial — riktig config läses post-mount
@@ -53,9 +57,10 @@ export function WebOAuthDeviceFlow({ onComplete, onCancel }: Props) {
           headers: { "Content-Type": "application/json" },
         });
         if (!res.ok) throw new Error(`Proxy ${res.status}`);
-        const data = await res.json() as DeviceCodeResponse;
+        const parsed = deviceCodeResponseSchema.safeParse(await res.json());
         if (cancelled) return;
-        if (!data.device_code) throw new Error("Proxy returnerade ingen device_code");
+        if (!parsed.success) throw new Error("Proxy returnerade ingen giltig device_code");
+        const data = parsed.data;
         setCode(data);
         setStep("waiting");
       } catch (e) {
@@ -88,7 +93,7 @@ export function WebOAuthDeviceFlow({ onComplete, onCancel }: Props) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ device_code: code.device_code }),
         });
-        const data = await res.json() as TokenResponse;
+        const data = tokenResponseSchema.parse(await res.json());
         if (cancelled) return;
         if (data.access_token) {
           onComplete(data.access_token);

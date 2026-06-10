@@ -15,6 +15,7 @@
  * "Förladdar 7 av 40…".
  */
 
+import { z } from "zod";
 import { downloadToFsa } from "./download-to-fsa";
 
 export interface PreloadOpts {
@@ -32,7 +33,9 @@ export interface PreloadResult {
   failed: number;
 }
 
-interface DocMeta { storagePath?: string }
+// Zod vid parsegränsen (#187).
+const manifestSchema = z.object({ paths: z.array(z.string()).optional() }).passthrough();
+const docMetaSchema = z.object({ storagePath: z.string().optional() }).passthrough();
 
 // eslint-disable-next-line complexity
 export async function preloadAllDocuments(opts: PreloadOpts): Promise<PreloadResult> {
@@ -42,7 +45,7 @@ export async function preloadAllDocuments(opts: PreloadOpts): Promise<PreloadRes
   // 1. Manifest → metadata-JSONs
   const manifestRes = await fetchFn(`${base}/manifest.json`);
   if (!manifestRes.ok) throw new Error(`preload: HTTP ${manifestRes.status} på manifest`);
-  const manifest = await manifestRes.json() as { paths?: string[] };
+  const manifest = manifestSchema.parse(await manifestRes.json());
   const docMetaPaths = (manifest.paths ?? []).filter(
     (p) => p.startsWith("documents/") && p.endsWith(".json"),
   );
@@ -53,7 +56,7 @@ export async function preloadAllDocuments(opts: PreloadOpts): Promise<PreloadRes
     try {
       const r = await fetchFn(`${base}/${metaPath}`);
       if (!r.ok) continue;
-      const meta = await r.json() as DocMeta;
+      const meta = docMetaSchema.parse(await r.json());
       if (meta.storagePath) binaryPaths.push(meta.storagePath);
     } catch {
       // tyst — räknas som failed vid download-loop

@@ -14,6 +14,7 @@
  *
  * [ADR 0004]: ../../../docs/adr/0004-schemaversion-och-versionsgrind.md
  */
+import { z } from "zod";
 import { CURRENT_SCHEMA_VERSION } from "./schema-version";
 
 /** Lyfter en rå rad exakt ETT versionssteg (from → from+1). Ren funktion. */
@@ -70,8 +71,11 @@ export function migrateRawJson(
   } catch {
     return raw;
   }
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return raw;
-  const migrated = migrateRow(entity, parsed as Record<string, unknown>, fromVersion, toVersion);
+  // Zod vid parsegränsen (#187); array-guard kvar (record accepterar inte arrays semantiskt här).
+  if (Array.isArray(parsed)) return raw;
+  const obj = z.record(z.string(), z.unknown()).safeParse(parsed);
+  if (!obj.success) return raw;
+  const migrated = migrateRow(entity, obj.data, fromVersion, toVersion);
   return JSON.stringify(migrated);
 }
 

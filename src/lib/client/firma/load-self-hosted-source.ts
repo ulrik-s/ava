@@ -19,10 +19,8 @@ import { resolveCorsProxy } from "@/lib/client/sync/cors-proxy";
 import { hydrateWorkingCopy } from "./hydrate-working-copy";
 import { setDocumentContent } from "@/lib/client/demo/document-content-cache";
 import type { DemoSource } from "@/lib/server/data-store/DemoDataStore";
-import {
-  assertRepoSchemaCompatible,
-  parseSchemaVersion,
-} from "@/lib/shared/schema-version";
+import { assertRepoSchemaCompatible } from "@/lib/shared/schema-version";
+import { schemaVersionFromMetaJson } from "@/lib/shared/meta-json";
 import { DEMO_META_PATH } from "../../../../tooling/demo-config";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 
@@ -109,10 +107,8 @@ async function readWorkingCopySchemaVersion(
   fs: FsaIsoGitAdapter,
 ): Promise<number | undefined> {
   try {
-    const raw = JSON.parse(
-      (await fs.readFile(`/${DEMO_META_PATH}`, "utf8")) as string,
-    ) as { schemaVersion?: unknown };
-    return parseSchemaVersion(raw.schemaVersion);
+    // Zod vid parsegränsen (#187) — delad helper för alla meta.json-läsare.
+    return schemaVersionFromMetaJson((await fs.readFile(`/${DEMO_META_PATH}`, "utf8")) as string);
   } catch {
     return undefined;
   }

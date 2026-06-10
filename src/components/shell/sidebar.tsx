@@ -4,6 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/client/utils";
+import { z } from "zod";
+import { loadFromStorage } from "@/lib/client/load-from-storage";
 
 /**
  * Pure git-modell — ingen NextAuth-session. "Logga ut" rensar
@@ -13,7 +15,8 @@ import { cn } from "@/lib/client/utils";
  */
 export function signOutLocally(): void {
   try {
-    const cfg = JSON.parse(localStorage.getItem("ava.firma") ?? "{}") as Record<string, unknown>;
+    // Zod vid parsegränsen (#187): validera som objekt; trasigt → {} (utloggning rensar ändå).
+    const cfg = loadFromStorage("ava.firma", z.record(z.string(), z.unknown()).catch({}), {});
     delete cfg.token;
     delete cfg.principalId;
     localStorage.setItem("ava.firma", JSON.stringify(cfg));

@@ -15,6 +15,10 @@
  * `@mlc-ai/web-llm` prebuiltAppConfig.model_list-strängar — checka in nya
  * här innan UI-toggle kan välja dem.
  */
+import { z } from "zod";
+
+import { loadFromStorage } from "@/lib/client/load-from-storage";
+
 export const LLM_MODELS = [
   "Llama-3.2-1B-Instruct-q4f16_1-MLC",
   "Llama-3.2-3B-Instruct-q4f16_1-MLC",
@@ -26,24 +30,16 @@ export const DEFAULT_LLM_MODEL: LlmModelId = "Llama-3.2-1B-Instruct-q4f16_1-MLC"
 
 const KEY = "ava.llm";
 
-interface LlmConfig {
-  enabled: boolean;
-  modelId: LlmModelId;
-}
+// Zod vid parsegränsen (#187): enum-validerad modell + boolean, fältvis tolerans.
+const llmConfigSchema = z.object({
+  enabled: z.boolean().catch(false),
+  modelId: z.enum(LLM_MODELS).catch(DEFAULT_LLM_MODEL),
+});
+
+type LlmConfig = z.infer<typeof llmConfigSchema>;
 
 function loadConfig(): LlmConfig {
-  if (typeof window === "undefined") return { enabled: false, modelId: DEFAULT_LLM_MODEL };
-  try {
-    const raw = localStorage.getItem(KEY);
-    if (!raw) return { enabled: false, modelId: DEFAULT_LLM_MODEL };
-    const parsed = JSON.parse(raw) as Partial<LlmConfig>;
-    const modelId = (LLM_MODELS as readonly string[]).includes(parsed.modelId as string)
-      ? (parsed.modelId as LlmModelId)
-      : DEFAULT_LLM_MODEL;
-    return { enabled: Boolean(parsed.enabled), modelId };
-  } catch {
-    return { enabled: false, modelId: DEFAULT_LLM_MODEL };
-  }
+  return loadFromStorage(KEY, llmConfigSchema, { enabled: false, modelId: DEFAULT_LLM_MODEL });
 }
 
 function saveConfig(cfg: LlmConfig): void {
