@@ -14,7 +14,12 @@ import { describe, it, expect } from "vitest-compat";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { parseCamtXml } from "@/lib/shared/payments/camt-parse";
+import {
+  parseCamtXml,
+  camtFileSchema,
+  camtTransactionSchema,
+  camtStructuredRefSchema,
+} from "@/lib/shared/payments/camt-parse";
 
 const FIXTURES = resolve(__dirname, "../../../fixtures/camt-seb");
 const read = (f: string): string => readFileSync(resolve(FIXTURES, f), "utf8");
@@ -82,5 +87,47 @@ describe("parseCamtXml — felfall", () => {
   it("kastar på icke-camt-XML", () => {
     expect(() => parseCamtXml("<foo/>")).toThrow(/camt/);
     expect(() => parseCamtXml("<Document><Other/></Document>")).toThrow(/camt\.053\/054/);
+  });
+});
+
+describe("zod-validering vid parsegränsen (#185)", () => {
+  const VALID_TX = {
+    reference: "REF-1", amountOre: 100_00, currency: "SEK", valueDate: "2026-06-01",
+    debtorName: "Klient AB", creditDebit: "CRDT", structuredRefs: [], freeTexts: [],
+  };
+
+  it("camtTransactionSchema avvisar trasiga fält (strikta datatyper)", () => {
+    expect(camtTransactionSchema.safeParse(VALID_TX).success).toBe(true);
+    expect(camtTransactionSchema.safeParse({ ...VALID_TX, creditDebit: "KRED" }).success).toBe(false);
+    expect(camtTransactionSchema.safeParse({ ...VALID_TX, valueDate: "01/06/2026" }).success).toBe(false);
+    expect(camtTransactionSchema.safeParse({ ...VALID_TX, amountOre: 100.5 }).success).toBe(false);
+    expect(camtTransactionSchema.safeParse({ ...VALID_TX, currency: "sek" }).success).toBe(false);
+    expect(camtTransactionSchema.safeParse({ ...VALID_TX, reference: "" }).success).toBe(false);
+  });
+
+  it("camtStructuredRefSchema kräver icke-tom referens + heltals-delbelopp", () => {
+    expect(camtStructuredRefSchema.safeParse({ ref: "98547", amountOre: 50_00 }).success).toBe(true);
+    expect(camtStructuredRefSchema.safeParse({ ref: "", amountOre: null }).success).toBe(false);
+    expect(camtStructuredRefSchema.safeParse({ ref: "98547", amountOre: 12.3 }).success).toBe(false);
+  });
+
+  it("parseCamtXml failar HÖGT på fil med okänd CdtDbtInd (validering, inte propagering)", () => {
+    const bad = `<?xml version="1.0"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.054.001.02">
+  <BkToCstmrDbtCdtNtfctn>
+    <GrpHdr><MsgId>M</MsgId></GrpHdr>
+    <Ntfctn><Ntry>
+      <Amt Ccy="SEK">10.00</Amt>
+      <CdtDbtInd>KREDIT</CdtDbtInd>
+      <ValDt><Dt>2026-06-01</Dt></ValDt>
+    </Ntry></Ntfctn>
+  </BkToCstmrDbtCdtNtfctn>
+</Document>`;
+    expect(() => parseCamtXml(bad)).toThrow();
+  });
+
+  it("fixturernas utdata passerar camtFileSchema oförändrat (round-trip)", () => {
+    const file = parseCamtXml(read("camt.054_SE_CRED_BGC.xml"));
+    expect(camtFileSchema.safeParse(file).success).toBe(true);
   });
 });
