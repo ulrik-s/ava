@@ -20,36 +20,49 @@
  *
  * Använder DOMParser (browser-nativ; happy-dom i bun-test). Parsern är pure:
  * XML-sträng in → transaktioner ut. Ingen IO.
+ *
+ * STRIKTA DATATYPER: utdatat valideras med zod vid parsegränsen
+ * (`camtFileSchema.parse`) — trasig/oväntad fildata failar högt här i stället
+ * för att propagera in i matchning/bokföring. Typerna är z.infer-härledda.
  */
 
-export interface CamtStructuredRef {
+import { z } from "zod";
+
+export const camtStructuredRefSchema = z.object({
   /** Referensen (OCR eller fakturanr/dokumentnr), trimmad. */
-  ref: string;
+  ref: z.string().min(1),
   /** Delbelopp i öre för just denna referens (RfrdDocAmt), eller null. */
-  amountOre: number | null;
-}
+  amountOre: z.number().int().nullable(),
+});
 
-export interface CamtTransaction {
+export type CamtStructuredRef = z.infer<typeof camtStructuredRefSchema>;
+
+export const camtTransactionSchema = z.object({
   /** Unik transaktionsreferens för idempotent import (AcctSvcrRef → EndToEndId → msgId:index). */
-  reference: string;
+  reference: z.string().min(1),
   /** Transaktionsbelopp i öre (TxAmt, annars Ntry-beloppet). */
-  amountOre: number;
-  currency: string;
-  /** Valutadatum (YYYY-MM-DD) från Ntry/ValDt, eller null. */
-  valueDate: string | null;
+  amountOre: z.number().int(),
+  /** ISO 4217-valutakod (SEK, EUR, …). */
+  currency: z.string().regex(/^[A-Z]{3}$/),
+  /** Valutadatum från Ntry/ValDt, eller null. */
+  valueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
   /** Betalarens namn (RltdPties/Dbtr/Nm), eller null. */
-  debtorName: string | null;
+  debtorName: z.string().min(1).nullable(),
   /** CRDT = inbetalning (det vi prickar av). DBIT hoppas över i matchningen. */
-  creditDebit: "CRDT" | "DBIT";
-  structuredRefs: CamtStructuredRef[];
+  creditDebit: z.enum(["CRDT", "DBIT"]),
+  structuredRefs: z.array(camtStructuredRefSchema),
   /** Ostrukturerad remittance-info (Ustrd-rader). */
-  freeTexts: string[];
-}
+  freeTexts: z.array(z.string().min(1)),
+});
 
-export interface CamtFile {
-  messageId: string | null;
-  transactions: CamtTransaction[];
-}
+export type CamtTransaction = z.infer<typeof camtTransactionSchema>;
+
+export const camtFileSchema = z.object({
+  messageId: z.string().min(1).nullable(),
+  transactions: z.array(camtTransactionSchema),
+});
+
+export type CamtFile = z.infer<typeof camtFileSchema>;
 
 /** Direkta barn-element med givet tag-namn (getElementsByTagName är subtree-vid). */
 function children(el: Element, tag: string): Element[] {
@@ -168,5 +181,7 @@ export function parseCamtXml(xml: string): CamtFile {
       transactions.push(...transactionsOfEntry(ntry, entryContextOf(ntry, messageId, index)));
     }
   }
-  return { messageId, transactions };
+  // Strikta datatyper (#185): hela utdatat valideras vid parsegränsen — en
+  // fil med t.ex. okänd CdtDbtInd eller trasigt datum failar HÄR, högt.
+  return camtFileSchema.parse({ messageId, transactions });
 }
