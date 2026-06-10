@@ -105,6 +105,9 @@ export const invoiceSchema = z.object({
   amount: z.number().int(),
   status: invoiceStatusSchema.default("DRAFT"),
   invoiceType: invoiceTypeSchema.default("STANDARD"),
+  /** Per-byrå löpande fakturanummer (F-YYYY-NNNN), genereras vid skapande.
+   *  Nullish: legacy-fakturor saknar nummer → UI faller tillbaka på datum. */
+  invoiceNumber: z.string().nullish(),
   fortnoxId: z.string().nullish(),
   invoiceDate: dateLike,
   dueDate: optionalDateLike,

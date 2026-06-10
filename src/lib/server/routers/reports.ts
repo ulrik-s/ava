@@ -139,15 +139,16 @@ function previousCalendarMonth(periodStart: Date): { from: Date; to: Date } {
 // ─── Router ──────────────────────────────────────────────────────────
 
 /** Per-faktura-rader för Kundfordrings-tabellen (slår ihop "Fakturerat"-tabellen). */
-interface ArRowMeta { invoiceDate: string; matterId: string; matterNumber: string; title: string }
-const EMPTY_AR_META: ArRowMeta = { invoiceDate: "", matterId: "", matterNumber: "", title: "" };
+interface ArRowMeta { invoiceNumber: string; invoiceDate: string; matterId: string; matterNumber: string; title: string }
+const EMPTY_AR_META: ArRowMeta = { invoiceNumber: "", invoiceDate: "", matterId: "", matterNumber: "", title: "" };
 
-/** Förresolva faktura-metadata (datum + ärende) per id — håller rad-mappningen trivial. */
+/** Förresolva faktura-metadata (nummer + datum + ärende) per id — håller rad-mappningen trivial. */
 function arMetaById(invoices: Record<string, unknown>[]): Map<string, ArRowMeta> {
   const m = new Map<string, ArRowMeta>();
-  for (const inv of invoices as Array<{ id?: string; invoiceDate?: unknown; matter?: { id?: string; matterNumber?: string; title?: string } | null }>) {
+  for (const inv of invoices as Array<{ id?: string; invoiceNumber?: string | null; invoiceDate?: unknown; matter?: { id?: string; matterNumber?: string; title?: string } | null }>) {
     const mt = inv.matter ?? {};
     m.set(String(inv.id ?? ""), {
+      invoiceNumber: inv.invoiceNumber ?? "",
       invoiceDate: coerceDate(inv.invoiceDate).toISOString(),
       matterId: mt.id ?? "",
       matterNumber: mt.matterNumber ?? "",
@@ -510,7 +511,7 @@ export const reportsRouter = router({
         where: orgScope,
         select: {
           id: true, amount: true, status: true, invoiceType: true, creditedInvoiceId: true,
-          invoiceDate: true, dueDate: true, dueAt: true,
+          invoiceNumber: true, invoiceDate: true, dueDate: true, dueAt: true,
           matter: { select: { id: true, matterNumber: true, title: true } },
         },
       });

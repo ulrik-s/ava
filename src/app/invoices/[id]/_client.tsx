@@ -220,11 +220,13 @@ function InvoiceHeader({ inv }: { inv: Inv }) {
     : inv.invoiceType === "FINAL" ? "Slutfaktura"
     : inv.invoiceType === "CREDIT" ? "Kreditfaktura"
     : "Faktura";
+  const invoiceNumber = (inv as { invoiceNumber?: string | null }).invoiceNumber;
   return (
     <div>
       <EntityLink route="matters" id={inv.matter.id} className="text-sm text-blue-600 hover:underline">← {inv.matter.matterNumber} {inv.matter.title}</EntityLink>
       <h1 className="text-2xl font-bold mt-2">
         {heading}
+        {invoiceNumber && <span className="ml-3 text-base font-normal text-gray-700">{invoiceNumber}</span>}
         <span className="ml-3 text-sm font-normal text-gray-500">{new Date(inv.invoiceDate).toLocaleDateString("sv-SE")}</span>
       </h1>
     </div>
