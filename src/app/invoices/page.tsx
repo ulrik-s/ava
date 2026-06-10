@@ -32,6 +32,7 @@ function statusBadgeClass(status: string): string {
 
 interface InvoiceRow {
   id: string;
+  invoiceNumber?: string | null;
   invoiceDate: string | Date;
   invoiceType: string;
   status: string;
@@ -40,6 +41,13 @@ interface InvoiceRow {
 }
 
 const invoiceColumns: Column<InvoiceRow>[] = [
+  { key: "invoiceNumber", label: "Fakturanr", sortable: true, sortValue: (i) => i.invoiceNumber ?? "",
+    render: (i) => (
+      <EntityLink route="invoices" id={i.id} className="text-blue-600 hover:underline font-mono text-xs">
+        {i.invoiceNumber || "—"}
+      </EntityLink>
+    ),
+  },
   { key: "invoiceDate", label: "Datum", sortable: true, sortValue: (i) => new Date(i.invoiceDate),
     // EntityLink soft-navigerar till __shell__?id (ingen omladdning). Runtime-
     // skapade faktura-id:n finns inte i generateStaticParams, så en Next-Link

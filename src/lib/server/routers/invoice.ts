@@ -140,6 +140,20 @@ function resolveWriteOffAmount(outstanding: number, requested?: number): number 
   return amount;
 }
 
+/** Nästa lediga fakturanummer (F-YYYY-NNNN) för org:en. Speglar nextMatterNumber. */
+async function nextInvoiceNumber(
+  invoices: { findFirst: (args: unknown) => Promise<unknown> },
+  orgId: string,
+): Promise<string> {
+  const prefix = `F-${new Date().getFullYear()}-`;
+  const last = (await invoices.findFirst({
+    where: { matter: { organizationId: orgId }, invoiceNumber: { startsWith: prefix } },
+    orderBy: { invoiceNumber: "desc" },
+  })) as { invoiceNumber?: string | null } | null;
+  const seq = last?.invoiceNumber ? parseInt(last.invoiceNumber.slice(prefix.length), 10) + 1 : 1;
+  return `${prefix}${seq.toString().padStart(4, "0")}`;
+}
+
 const invoiceTypeSchema = z.enum(["STANDARD", "ACCONTO", "FINAL"]);
 const invoiceStatusSchema = z.enum([
   "DRAFT",
@@ -228,6 +242,7 @@ export const invoiceRouter = router({
         data: omitUndefined({
           id: input.id, // undefined → store genererar
           matterId: input.matterId,
+          invoiceNumber: await nextInvoiceNumber(ctx.dataStore.invoices, ctx.orgId),
           amount: input.amount,
           invoiceType: "ACCONTO",
           status: "DRAFT",
@@ -280,6 +295,7 @@ export const invoiceRouter = router({
           data: omitUndefined({
             id: input.id, // undefined → store genererar
             matterId: input.matterId,
+            invoiceNumber: await nextInvoiceNumber(tx.invoices, ctx.orgId),
             amount: breakdown.grossAmount,
             invoiceType: "FINAL",
             status: "DRAFT",
@@ -350,6 +366,7 @@ export const invoiceRouter = router({
           data: {
             ...omitUndefined({ id: input.id, notes: input.notes }), // undefined → store genererar
             matterId: original.matterId,
+            invoiceNumber: await nextInvoiceNumber(tx.invoices, ctx.orgId),
             amount: -original.amount,
             invoiceType: "CREDIT",
             status: "SENT", // kreditfaktura är "färdig" direkt

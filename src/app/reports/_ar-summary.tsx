@@ -84,7 +84,7 @@ function ArSummaryBody({ data }: { data: ArData }) {
   );
 }
 
-interface ArRow { id: string; invoiceDate: string; matterId: string; matterNumber: string; title: string; fakturerat: number; inbetalt: number; avskrivet: number; utestaende: number }
+interface ArRow { id: string; invoiceNumber: string; invoiceDate: string; matterId: string; matterNumber: string; title: string; fakturerat: number; inbetalt: number; avskrivet: number; utestaende: number }
 
 function ArInvoiceTable({ rows }: { rows: readonly ArRow[] }) {
   return (
@@ -93,6 +93,7 @@ function ArInvoiceTable({ rows }: { rows: readonly ArRow[] }) {
       <table className="min-w-full text-sm">
         <thead>
           <tr className="text-left text-xs text-gray-500 border-b border-gray-200">
+            <th className="py-1.5 font-normal">Fakturanr</th>
             <th className="py-1.5 font-normal">Fakturadatum</th>
             <th className="py-1.5 font-normal">Ärende</th>
             <th className="py-1.5 font-normal text-right">Fakturerat</th>
@@ -115,9 +116,10 @@ function ArInvoiceRow({ r }: { r: ArRow }) {
     <tr>
       <td className="py-1.5 whitespace-nowrap font-mono text-xs">
         <EntityLink route="invoices" id={r.id} className="text-blue-600 hover:underline">
-          {new Date(r.invoiceDate).toLocaleDateString("sv-SE")}
+          {r.invoiceNumber || new Date(r.invoiceDate).toLocaleDateString("sv-SE")}
         </EntityLink>
       </td>
+      <td className="py-1.5 whitespace-nowrap font-mono text-xs text-gray-500">{new Date(r.invoiceDate).toLocaleDateString("sv-SE")}</td>
       <td className="py-1.5">
         {r.matterId ? (
           <EntityLink route="matters" id={r.matterId} className="text-gray-700 hover:underline">{matterLabel}</EntityLink>
