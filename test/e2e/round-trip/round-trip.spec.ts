@@ -50,6 +50,19 @@ function contactNamesInRepo(): string[] {
   return rowsInRepo("contacts").map((c) => String(c.name ?? ""));
 }
 
+/**
+ * Vänta tills en UI-mutation faktiskt committats + pushats till git-db:n,
+ * i st.f. att racea browserns 10 s push-debounce mot ett pollfönster (#209).
+ *
+ * Sync-pillen visar `✓ Sparat` (synced) ENBART när inga ändringar väntar — en
+ * mutation gör pillen pending/syncing tills push:en landat. Anropa EFTER att
+ * UI:t bekräftat att ändringen sparats (då är pillen redan pending), så att vi
+ * inte matchar ett gammalt "Sparat" från en tidigare cykel.
+ */
+async function waitForGitDbPush(page: Page): Promise<void> {
+  await expect(page.getByTestId("sync-pill")).toContainText("Sparat", { timeout: 90_000 });
+}
+
 /** Skapa en org-scopad kontakt via UI:t (förutsättning för flera flöden). */
 async function createContact(page: Page, name: string): Promise<void> {
   await page.goto("/ava/contacts/");
@@ -426,6 +439,7 @@ test("jävskontroll: sök på personnummer → conflict-checks i git-db:n", asyn
   await expect(page.getByRole("heading", { name: /Resultat för/i })).toBeVisible({ timeout: 15_000 });
 
   // En conflict-checks-rad ska landa i git-db:n (loggas oavsett antal träffar)
+  await waitForGitDbPush(page);
   await expect.poll(() => rowsInRepo("conflict-checks").map((c) => String(c.searchTerm)), POLL).toContain(pnr);
 });
 
@@ -500,6 +514,7 @@ test("användare: skapa via /users/new + inaktivera → .ava/users i git-db:n", 
   await expect(page.getByText(name)).toBeVisible({ timeout: 15_000 });
 
   // Användarrow:n persisterad till .ava/users/<email>.json
+  await waitForGitDbPush(page);
   await expect.poll(() => rowsInRepo(".ava/users").map((u) => String(u.email)), POLL).toContain(email);
 
   // Inaktivera användaren — confirm()-dialog accepteras automatiskt
@@ -507,6 +522,7 @@ test("användare: skapa via /users/new + inaktivera → .ava/users i git-db:n", 
   await page.getByRole("row", { name: new RegExp(name) }).getByRole("button", { name: /Inaktivera/ }).click();
 
   // active: false ska persisteras till samma fil
+  await waitForGitDbPush(page);
   await expect.poll(() => {
     const row = rowsInRepo(".ava/users").find((u) => String(u.email) === email);
     return row ? row.active : "(saknas)";

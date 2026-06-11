@@ -26,6 +26,7 @@ export function SyncStatusPill({ state }: Props) {
     <Link
       href="/settings"
       title={title}
+      data-testid="sync-pill"
       className={`text-xs px-2 py-1 rounded border inline-flex items-center gap-1.5 hover:opacity-80 ${cls}`}
     >
       <span aria-hidden>{icon}</span>
