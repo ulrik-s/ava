@@ -30,6 +30,13 @@ export const userSchema = z.object({
   /** bcrypt-hash. Frivilligt — fattas för demo-användare och Azure-only. */
   passwordHash: z.string().nullish(),
   azureOid: z.string().nullish(),
+  /**
+   * Generisk OIDC-bindning (#223, ADR 0009) — `sub`/`iss` från IdP:n, sätts
+   * vid första login. `azureOid` ovan är Entra-specifik och behålls för
+   * bakåtkompat; dessa två är IdP-agnostiska (BYO-IdP).
+   */
+  oidcSubject: z.string().nullish(),
+  oidcIssuer: z.string().nullish(),
   lastLoginAt: optionalDateLike,
   publicKeys: z.array(publicKeySchema).default([]),
 }).passthrough();
