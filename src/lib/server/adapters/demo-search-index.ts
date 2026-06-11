@@ -90,6 +90,76 @@ export interface SearchOpts {
   documentTypes?: string[];
 }
 
+type SearchHit = SearchResponse["hits"][number];
+
+/** Viktad träff: `weight` om needle matchar `text`, annars 0. */
+function hit(matcher: NeedleMatcher, text: string, weight: number): number {
+  return matcher.test(text) ? weight : 0;
+}
+
+/** Poängsätt ett dokument. Boost för träff i fileName/documentType (mer specifika). */
+function scoreDoc(
+  d: DocLike,
+  matcher: NeedleMatcher,
+  contentLc: string,
+): { score: number; metaHit: number; contentHit: number } {
+  const haystack = [d.fileName ?? "", d.documentType ?? "", d.summary ?? ""].join(" ").toLowerCase();
+  const metaHit = hit(matcher, haystack, 1);
+  const contentHit = hit(matcher, contentLc, 1);
+  const titleHit = hit(matcher, d.fileName ?? "", 2);
+  const typeHit = hit(matcher, d.documentType ?? "", 1);
+  return { score: metaHit + contentHit + titleHit + typeHit, metaHit, contentHit };
+}
+
+/** Snippet med kontext runt query för UI:n (faller tillbaka på summary). */
+function buildSnippet(
+  d: DocLike,
+  matcher: NeedleMatcher,
+  contentOrig: string,
+  contentLc: string,
+  s: { metaHit: number; contentHit: number },
+): string {
+  let snippet = d.summary ?? "";
+  if (s.contentHit && !s.metaHit) {
+    const m = matcher.findMatch(contentLc);
+    if (m) {
+      const start = Math.max(0, m.index - 60);
+      const end = Math.min(contentOrig.length, m.index + m.length + 60);
+      snippet = (start > 0 ? "…" : "") + contentOrig.slice(start, end) + (end < contentOrig.length ? "…" : "");
+    }
+  }
+  return snippet;
+}
+
+/** Matter-härledda fält med tom-sträng-defaults. */
+function matterFields(m: MatterLike | undefined): {
+  matterNumber: string;
+  matterTitle: string;
+  organizationId: string;
+} {
+  return {
+    matterNumber: m?.matterNumber ?? "",
+    matterTitle: m?.title ?? "",
+    organizationId: m?.organizationId ?? "",
+  };
+}
+
+function toSearchHit(doc: DocLike, snippet: string, matters: Map<string, MatterLike>): SearchHit {
+  const mf = matterFields(matters.get(doc.matterId));
+  return {
+    id: doc.id,
+    fileName: doc.fileName ?? "",
+    storagePath: doc.storagePath ?? null,
+    matterId: doc.matterId,
+    matterNumber: mf.matterNumber,
+    matterTitle: mf.matterTitle,
+    organizationId: doc.organizationId ?? mf.organizationId,
+    _formatted: {
+      content: snippet,
+    },
+  };
+}
+
 export function searchDocuments(
   docs: DocLike[],
   matters: Map<string, MatterLike>,
@@ -130,53 +200,19 @@ export function searchDocuments(
 
   const matched = orgDocs
     .filter((d) => typeFilter === null || (d.documentType !== null && d.documentType !== undefined && typeFilter.has(d.documentType)))
-    // eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Arrow function has a complexity of 15. Maximum allowed is 8.)
     .map((d) => {
       // Bevara original-content för snippet-rendering (case-känsligt),
       // sök case-insensitively via lowercase-kopia.
       const contentOrig = getDocumentContent(d.id);
       const contentLc = contentOrig.toLowerCase();
-      const haystack = [
-        d.fileName ?? "",
-        d.documentType ?? "",
-        d.summary ?? "",
-      ].join(" ").toLowerCase();
-      const metaHit = matcher.test(haystack) ? 1 : 0;
-      const contentHit = matcher.test(contentLc) ? 1 : 0;
-      // Boost för träff i fileName/documentType (mer specifika)
-      const titleHit = matcher.test(d.fileName ?? "") ? 2 : 0;
-      const typeHit = matcher.test(d.documentType ?? "") ? 1 : 0;
-      // Hitta snippet med kontext runt query för UI:n
-      let snippet = d.summary ?? "";
-      if (contentHit && !metaHit) {
-        const m = matcher.findMatch(contentLc);
-        if (m) {
-          const start = Math.max(0, m.index - 60);
-          const end = Math.min(contentOrig.length, m.index + m.length + 60);
-          snippet = (start > 0 ? "…" : "") + contentOrig.slice(start, end) + (end < contentOrig.length ? "…" : "");
-        }
-      }
-      return { doc: d, score: metaHit + contentHit + titleHit + typeHit, snippet };
+      const s = scoreDoc(d, matcher, contentLc);
+      const snippet = buildSnippet(d, matcher, contentOrig, contentLc, s);
+      return { doc: d, score: s.score, snippet };
     })
     .filter((x) => x.score > 0)
     .sort((a, b) => b.score - a.score)
     .slice(0, limit)
-    // eslint-disable-next-line complexity
-    .map(({ doc, snippet }) => {
-      const m = matters.get(doc.matterId);
-      return {
-        id: doc.id,
-        fileName: doc.fileName ?? "",
-        storagePath: doc.storagePath ?? null,
-        matterId: doc.matterId,
-        matterNumber: m?.matterNumber ?? "",
-        matterTitle: m?.title ?? "",
-        organizationId: doc.organizationId ?? m?.organizationId ?? "",
-        _formatted: {
-          content: snippet,
-        },
-      };
-    });
+    .map(({ doc, snippet }) => toSearchHit(doc, snippet, matters));
 
   return {
     hits: matched,
