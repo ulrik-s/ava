@@ -1,0 +1,18 @@
+# Build-context-filter. Gäller ENDAST builds med context = repo-roten, dvs
+# server-runtime-imagen (#81). web/git-ssh/auth-server bygger från egna
+# under-kataloger och påverkas inte.
+#
+# Whitelist: imagen behöver bara den förbyggda binären + entrypoint:en, så vi
+# ignorerar allt och släpper bara in de två sökvägarna. Håller contexten på
+# några MB (istf. hela monorepo:t) och undviker att läcka källkod/hemligheter.
+*
+!dist
+dist/*
+!dist/server-runtime
+# imagen kör bara linux — darwin-binärerna behövs ej i contexten.
+dist/server-runtime/*darwin*
+!tooling
+tooling/*
+!tooling/docker
+tooling/docker/*
+!tooling/docker/server-runtime
