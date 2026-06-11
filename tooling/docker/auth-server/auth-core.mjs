@@ -111,3 +111,33 @@ export function redeemInvite(invites, token, now = new Date()) {
 export function hasAdmin(htpasswdMap) {
   return htpasswdMap.size > 0;
 }
+
+// ─── OIDC first-admin-claim (#224, ADR 0009) ───────────────────────────────
+//
+// I OIDC-läget (oauth2-proxy, #222) finns inga htpasswd-användare för
+// människor — allowlisten är User-raderna i firma.git (#223). Bootstrappen
+// kan därför inte basera "har admin" på htpasswd; vi spårar admin-emails i
+// `admins.txt` (`adminsSet`). Första inloggade OIDC-användaren löser in en
+// engångs claim-secret (= BOOT_SECRET, printad i loggen vid första start) →
+// blir admin. auth-servern "pratar inte git" → den AUKTORISERAR bara; klienten
+// skriver själva `.ava/users/<email>.json` (role ADMIN) och pushar.
+
+/**
+ * Beslut om en admin-claim får göras. Rent (ingen I/O) → unit-testbart.
+ *   - bootSecret saknas på servern        → { ok:false, status:503 }
+ *   - admin finns redan (adminsSet ej tom) → { ok:false, status:409 } (engångs)
+ *   - fel secret                           → { ok:false, status:403 }
+ *   - ogiltig email                        → { ok:false, status:400 }
+ *   - annars                               → { ok:true, email: <normaliserad> }
+ */
+export function claimAdminDecision(adminsSet, providedSecret, email, bootSecret) {
+  if (!bootSecret) return { ok: false, status: 503, reason: "BOOT_SECRET ej konfigurerat" };
+  if (adminsSet.size > 0) return { ok: false, status: 409, reason: "admin redan provisionerad" };
+  if (typeof providedSecret !== "string" || !safeEqual(providedSecret, bootSecret)) {
+    return { ok: false, status: 403, reason: "felaktig claim-secret" };
+  }
+  if (typeof email !== "string" || !email.includes("@")) {
+    return { ok: false, status: 400, reason: "giltig email krävs" };
+  }
+  return { ok: true, email: email.toLowerCase().trim() };
+}
