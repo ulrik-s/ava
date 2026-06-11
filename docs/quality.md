@@ -88,6 +88,18 @@ Alla struktur-regler är `error` (inte `warn`). CI kör `bun run lint --max-warn
 | Parametrar per funktion | 5 | error |
 | Nästade callbacks | 4 | error |
 
+#### `src/lib` strikt på complexity (#40)
+
+`complexity@8` gäller globalt, men kunde kringgås med inline-disable eller en
+post i `eslint-suppressions.json`. **`src/lib/**` (ren logik) hålls nu helt
+fritt från complexity-undantag** — `bun run lint:lib-complexity`
+([`check-lib-complexity-strict.ts`](../tooling/scripts/check-lib-complexity-strict.ts))
+faller om någon återinför en complexity-disable eller -suppression där. Den
+körs i CI:s static-jobb. Bryt ut hjälpfunktioner i stället (alla 23 tidigare
+offenders refaktorerades i #40). UI-lagret (`src/app`/`src/components`), där
+JSX-grenar blåser upp cyklomatisk komplexitet, får en egen komponentmedveten
+tröskel separat (#199).
+
 #### max-lines-cap & ventil (#41)
 
 Tidigare låg lint på `--max-warnings 45` med struktur-reglerna som `warn` —
