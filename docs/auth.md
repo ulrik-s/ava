@@ -57,6 +57,24 @@ mock-OIDC och verifierar wiringen strukturellt (auth_request → oauth2-proxy �
 discovery → authorize-redirect). Hela token-dansen valideras mot din riktiga
 IdP (browser-inloggning).
 
+### Första-admin (bootstrap, #224)
+
+Hönan-och-ägget: en färsk firma.git har inga User-rader → ingen är allowlistad.
+Rotförtroende = den som kör `docker compose up` (host shell-access).
+
+- Vid första start (tom allowlist) printas en **engångs claim-secret**
+  (`BOOT_SECRET`) i auth-tjänstens logg.
+- Första inloggade OIDC-användaren löser in den: `POST /auth/claim-admin`
+  `{ secret, email }`. auth-servern verifierar secret + att ingen admin finns
+  än (`admins.txt`), engångs (409 därefter). auth-servern **pratar inte git** →
+  den auktoriserar bara; **klienten** skriver `.ava/users/<email>.json`
+  (role ADMIN, `oidcSubject`) och pushar.
+- Alternativ: `add-user.sh --admin <epost>` på hosten.
+
+OIDC-bootstrap kräver alltså att **auth-tjänsten** körs (profil `invite-server`)
+vid sidan av `oauth2-proxy`. Pure-besluts-logiken (`claimAdminDecision`) är
+enhetstestad i `test/unit/lib/auth-server-core.test.ts`.
+
 ## Designmål
 
 - **Tunn server**: ingen custom auth-tjänst, inga long-running processer

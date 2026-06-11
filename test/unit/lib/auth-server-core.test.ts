@@ -13,6 +13,7 @@ const {
   hashToken, safeEqual, newToken,
   parseHtpasswd, serializeHtpasswd, upsertHtpasswd,
   createInvite, findValidInvite, redeemInvite, hasAdmin,
+  claimAdminDecision,
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 } = core as any;
 
@@ -127,5 +128,39 @@ describe("hasAdmin", () => {
 
   it("true när minst en användare finns", () => {
     expect(hasAdmin(parseHtpasswd("anna:h\n"))).toBe(true);
+  });
+});
+
+describe("claimAdminDecision (#224 OIDC first-admin)", () => {
+  const SECRET = "boot-secret-xyz";
+
+  it("ok när tom allowlist + rätt secret + giltig email", () => {
+    const d = claimAdminDecision(new Set(), SECRET, "Anna@Byra.SE", SECRET);
+    expect(d).toEqual({ ok: true, email: "anna@byra.se" });
+  });
+
+  it("503 när BOOT_SECRET saknas på servern", () => {
+    const d = claimAdminDecision(new Set(), SECRET, "a@b.se", "");
+    expect(d).toMatchObject({ ok: false, status: 503 });
+  });
+
+  it("409 (engångs) när admin redan finns", () => {
+    const d = claimAdminDecision(new Set(["x@y.se"]), SECRET, "a@b.se", SECRET);
+    expect(d).toMatchObject({ ok: false, status: 409 });
+  });
+
+  it("403 vid fel secret", () => {
+    const d = claimAdminDecision(new Set(), "fel", "a@b.se", SECRET);
+    expect(d).toMatchObject({ ok: false, status: 403 });
+  });
+
+  it("400 vid ogiltig email", () => {
+    const d = claimAdminDecision(new Set(), SECRET, "inte-en-email", SECRET);
+    expect(d).toMatchObject({ ok: false, status: 400 });
+  });
+
+  it("400 när email saknas (icke-sträng)", () => {
+    const d = claimAdminDecision(new Set(), SECRET, undefined, SECRET);
+    expect(d).toMatchObject({ ok: false, status: 400 });
   });
 });

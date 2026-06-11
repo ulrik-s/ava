@@ -28,7 +28,7 @@ import { resolve } from "node:path";
 import {
   parseHtpasswd, serializeHtpasswd, upsertHtpasswd, hasAdmin,
   createInvite, findValidInvite, redeemInvite,
-  newToken, safeEqual,
+  newToken, safeEqual, claimAdminDecision,
 } from "./auth-core.mjs";
 
 const PORT = Number(process.env.PORT || 3001);
@@ -191,6 +191,23 @@ async function handleRedeem(req, res) {
   json(res, 200, { email: email.toLowerCase().trim(), token: pat, role: result.invite.role });
 }
 
+/**
+ * OIDC first-admin-claim (#224). Första inloggade OIDC-användaren löser in
+ * engångs claim-secret:n (= BOOT_SECRET) → blir admin. auth-servern pratar
+ * inte git → den auktoriserar bara (+ spårar admin i admins.txt); klienten
+ * skriver `.ava/users/<email>.json` (role ADMIN, oidcSubject) och pushar.
+ */
+async function handleClaimAdmin(req, res) {
+  const body = await readBody(req);
+  if (!body) return json(res, 400, { error: "fel JSON" });
+  const admins = await loadAdmins();
+  const decision = claimAdminDecision(admins, body.secret, body.email, BOOT_SECRET);
+  if (!decision.ok) return json(res, decision.status, { error: decision.reason });
+  admins.add(decision.email);
+  await saveAdmins(admins);
+  json(res, 200, { ok: true, email: decision.email, role: "ADMIN" });
+}
+
 // ─── Router ──────────────────────────────────────────────────────────────
 
 async function handle(req, res) {
@@ -209,6 +226,7 @@ async function handle(req, res) {
   try {
     if (req.method === "GET" && (path === "/status" || path === "/")) return await handleStatus(req, res);
     if (req.method === "POST" && path === "/bootstrap") return await handleBootstrap(req, res);
+    if (req.method === "POST" && path === "/claim-admin") return await handleClaimAdmin(req, res);
     if (req.method === "POST" && path === "/invite") return await handleInvite(req, res);
     if (req.method === "POST" && path === "/redeem-invite") return await handleRedeem(req, res);
     return json(res, 404, { error: `Okänd path: ${path}` });
