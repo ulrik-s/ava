@@ -59,7 +59,6 @@ export class DemoLoader {
    * Klona repo och hydratisera alla entiteter.
    * Idempotent — fler anrop ersätter tidigare snapshot.
    */
-  // eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Async method 'loadDemo' has a complexity of 10. Maximum allowed is 8.)
   async loadDemo(url: string): Promise<LoadResult> {
     // Reset state — flera ladd-anrop ger fresh data
     await this.clearFs();
@@ -81,26 +80,40 @@ export class DemoLoader {
     // konvention som production-hydrator.
     for (const entity of this.deps.registry.entities()) {
       for (const prefix of this.knownPrefixes(entity)) {
-        const items = await this.deps.fs.listDir(prefix);
-        for (const item of items) {
-          if (!item.endsWith(".json")) continue;
-          const path = `${prefix}/${item}`;
-          try {
-            const r = await hydrator.hydratePath(path);
-            if (!r) continue;
-            if (!this.hydrated.has(r.entity)) this.hydrated.set(r.entity, []);
-            this.hydrated.get(r.entity)!.push(r.data);
-            result.entities[r.entity] = (result.entities[r.entity] ?? 0) + 1;
-            result.totalCount += 1;
-          } catch (err) {
-            result.errors.push({ path, error: err instanceof Error ? err.message : String(err) });
-            console.error(`[demo-loader] kunde inte hydratisera ${path}:`, err);
-          }
-        }
+        await this.hydratePrefix(hydrator, prefix, result);
       }
     }
 
     return result;
+  }
+
+  /** Hydratisera alla .json-filer under ett prefix; fel per fil loggas + samlas. */
+  private async hydratePrefix(
+    hydrator: ProjectionHydrator,
+    prefix: string,
+    result: LoadResult,
+  ): Promise<void> {
+    const items = await this.deps.fs.listDir(prefix);
+    for (const item of items) {
+      if (!item.endsWith(".json")) continue;
+      const path = `${prefix}/${item}`;
+      try {
+        const r = await hydrator.hydratePath(path);
+        if (!r) continue;
+        this.recordHydrated(r, result);
+      } catch (err) {
+        result.errors.push({ path, error: err instanceof Error ? err.message : String(err) });
+        console.error(`[demo-loader] kunde inte hydratisera ${path}:`, err);
+      }
+    }
+  }
+
+  /** Bokför en hydratiserad rad i snapshot + räknare. */
+  private recordHydrated(r: { entity: string; data: unknown }, result: LoadResult): void {
+    if (!this.hydrated.has(r.entity)) this.hydrated.set(r.entity, []);
+    this.hydrated.get(r.entity)!.push(r.data);
+    result.entities[r.entity] = (result.entities[r.entity] ?? 0) + 1;
+    result.totalCount += 1;
   }
 
   /** Returnera hydratiserade entiteter per typ. */

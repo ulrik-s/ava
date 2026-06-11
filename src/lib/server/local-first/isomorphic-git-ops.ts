@@ -25,6 +25,16 @@ import * as git from "isomorphic-git";
 import type { GitCommit, IGitOps, PushResult } from "./git-ops";
 import type { MemFs } from "./mem-fs";
 
+type PushFailReason = NonNullable<PushResult["reason"]>;
+
+/** Klassificera ett push-fel till en stabil reason-kod via meddelande-mönster. */
+function classifyPushError(err: unknown): PushFailReason {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (/non-fast-forward|rejected|push not fast-forward/i.test(msg)) return "NonFastForward";
+  if (/network|fetch|timeout|connection/i.test(msg)) return "NetworkError";
+  return "Unknown";
+}
+
 export interface IsomorphicGitOpsDeps {
   /** MemFs (eller annan IFileSystem som även exponerar `nodeFs()`). */
   fs: MemFs;
@@ -122,7 +132,6 @@ export class IsomorphicGitOps implements IGitOps {
     return this.toCommit(head);
   }
 
-  // eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Async method 'push' has a complexity of 9. Maximum allowed is 8.)
   async push(): Promise<PushResult> {
     if (!this.deps.remoteUrl || !this.deps.http) {
       return { ok: false, reason: "Unknown" };
@@ -137,17 +146,9 @@ export class IsomorphicGitOps implements IGitOps {
         url: this.deps.remoteUrl,
         ...(this.deps.token ? { onAuth: () => ({ username: "token", password: this.deps.token! }) } : {}),
       });
-      if (result.ok) return { ok: true };
-      return { ok: false, reason: "NonFastForward" };
+      return result.ok ? { ok: true } : { ok: false, reason: "NonFastForward" };
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (/non-fast-forward|rejected|push not fast-forward/i.test(msg)) {
-        return { ok: false, reason: "NonFastForward" };
-      }
-      if (/network|fetch|timeout|connection/i.test(msg)) {
-        return { ok: false, reason: "NetworkError" };
-      }
-      return { ok: false, reason: "Unknown" };
+      return { ok: false, reason: classifyPushError(err) };
     }
   }
 

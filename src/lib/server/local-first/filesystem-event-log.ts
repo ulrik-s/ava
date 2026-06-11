@@ -77,7 +77,6 @@ export class FilesystemEventLog implements IEventLog {
     return results;
   }
 
-  // eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Async generator method 'iterate' has a complexity of 10. Maximum allowed is 8.)
   async *iterate(filter: EventFilter): AsyncIterable<AvaEvent> {
     // För nu: linjär scan över alla års-mappar (sorterade lex). Optimering
     // (slice efter `since/until`) kommer när vi har realistisk last.
@@ -88,17 +87,21 @@ export class FilesystemEventLog implements IEventLog {
         const days = (await this.fs.listDir(`events/${year}/${month}`)).sort();
         for (const day of days) {
           if (!day.endsWith(".jsonl")) continue;
-          const path = `events/${year}/${month}/${day}`;
-          let content: string;
-          try { content = await this.fs.readFile(path); } catch { continue; }
-          for (const line of content.split("\n")) {
-            if (!line) continue;
-            let event: AvaEvent;
-            try { event = this.projection.deserializeLine(line); } catch { continue; }
-            if (this.matches(event, filter)) yield event;
-          }
+          yield* this.iterateFile(`events/${year}/${month}/${day}`, filter);
         }
       }
+    }
+  }
+
+  /** Läs en .jsonl-dag-fil och yield:a matchande events (rad för rad). */
+  private async *iterateFile(path: string, filter: EventFilter): AsyncIterable<AvaEvent> {
+    let content: string;
+    try { content = await this.fs.readFile(path); } catch { return; }
+    for (const line of content.split("\n")) {
+      if (!line) continue;
+      let event: AvaEvent;
+      try { event = this.projection.deserializeLine(line); } catch { continue; }
+      if (this.matches(event, filter)) yield event;
     }
   }
 
@@ -109,15 +112,28 @@ export class FilesystemEventLog implements IEventLog {
 
   // ── intern matching (delar logik med PostgresEventLog) ─────────
 
-  // eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Method 'matches' has a complexity of 14. Maximum allowed is 8.)
   private matches(event: AvaEvent, filter: EventFilter): boolean {
-    if (filter.type) {
-      const types = Array.isArray(filter.type) ? filter.type : [filter.type];
-      if (!types.includes(event.type)) return false;
-    }
+    return (
+      this.matchesType(event, filter) &&
+      this.matchesScalars(event, filter) &&
+      this.matchesTimeRange(event, filter)
+    );
+  }
+
+  private matchesType(event: AvaEvent, filter: EventFilter): boolean {
+    if (!filter.type) return true;
+    const types = Array.isArray(filter.type) ? filter.type : [filter.type];
+    return types.includes(event.type);
+  }
+
+  private matchesScalars(event: AvaEvent, filter: EventFilter): boolean {
     if (filter.matterId && event.matterId !== filter.matterId) return false;
     if (filter.actorId && event.actor.id !== filter.actorId) return false;
     if (filter.source && event.source !== filter.source) return false;
+    return true;
+  }
+
+  private matchesTimeRange(event: AvaEvent, filter: EventFilter): boolean {
     if (filter.since && event.ts < filter.since) return false;
     if (filter.until && event.ts > filter.until) return false;
     return true;

@@ -154,12 +154,7 @@
   },
   "src/lib/server/local-first/demo-loader.ts": {
     "max-depth": {
-      "count": 4
-    }
-  },
-  "src/lib/server/local-first/filesystem-event-log.ts": {
-    "max-depth": {
-      "count": 3
+      "count": 2
     }
   },
   "src/lib/server/routers/reports.ts": {
