@@ -106,6 +106,17 @@ export class NodeGitOps implements IGitOps {
     return stdout.split("\n").map((s) => s.trim()).filter(Boolean);
   }
 
+  /**
+   * True om working-tree:t har ändringar att committa (`git status --porcelain`
+   * icke-tomt). Peer-cykeln använder detta för att hoppa över tomma commits när
+   * en connector/regel inte producerade något (#80) — annars skulle en
+   * alltid-på regelmotor pusha en tom commit varje tick.
+   */
+  async hasChanges(): Promise<boolean> {
+    const { stdout } = await this.run(["status", "--porcelain"]);
+    return stdout.trim().length > 0;
+  }
+
   // ── private ───────────────────────────────────────────────────
 
   private async run(args: string[]): Promise<{ stdout: string; stderr: string }> {

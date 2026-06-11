@@ -18,6 +18,8 @@
 import { ENV_KEYS, loadRuntimeConfig } from "@/lib/server/local-first/server-runtime-config";
 import { startServerRuntime } from "@/lib/server/local-first/server-runtime";
 import { buildFortnoxJob } from "@/lib/server/integrations/fortnox/runtime";
+import { makeRulesJob } from "@/lib/server/local-first/rules-job";
+import { composeJobs } from "@/lib/server/local-first/compose-jobs";
 
 const HELP = `ava server-runtime (ADR 0005 fas 1)
 
@@ -54,9 +56,12 @@ async function main(): Promise<void> {
   }
 
   const config = loadRuntimeConfig();
-  // Fortnox-connector (#82): aktiveras bara när byrån anslutit Fortnox (valv +
-  // tokens). Annars null → loopen kör i sync-läge precis som förut.
-  const job = await buildFortnoxJob({ workDir: config.workDir });
+  // Regelmotor (#80): alltid på — schemalagda idempotenta regler (påminnelser).
+  // Fortnox-connector (#82): bara när byrån anslutit Fortnox (valv + tokens).
+  // composeJobs kör båda i samma cykel; no-empty-commit-grinden (#80) ser till
+  // att tomma tick:ar inte pushar.
+  const fortnox = await buildFortnoxJob({ workDir: config.workDir });
+  const job = composeJobs([makeRulesJob({ log }), fortnox]);
   const loop = await startServerRuntime(config, job ? { job } : {});
 
   if (argv.includes("--once")) {

@@ -67,6 +67,8 @@ export interface PeerCycleResult {
   commit?: GitCommit;
   /** Anledning vid misslyckande (sista pushens reason). */
   reason?: PushResult["reason"];
+  /** `act` producerade inga ändringar → ingen commit/push gjordes (#80). */
+  noop?: boolean;
 }
 
 /**
@@ -83,6 +85,12 @@ export interface PeerCycleResult {
  * `act` MÅSTE vara idempotent/additiv (nyckla mot entitets-id) så en omkörning
  * efter konflikt inte dubblerar — det är konflikt-säkerheten (ADR 0002).
  */
+/** Bygg NodeGitOps ur opts (författare/remote/branch-defaults). */
+function gitOpsFor(dir: string, opts: RunPeerCycleOpts): NodeGitOps {
+  const author = opts.author ?? { name: opts.principal.name, email: opts.principal.email };
+  return new NodeGitOps(dir, author.name, author.email, opts.remote ?? "origin", opts.branch ?? "main");
+}
+
 export async function runPeerCycle(
   dir: string,
   act: PeerAct,
@@ -90,8 +98,7 @@ export async function runPeerCycle(
   opts: RunPeerCycleOpts,
 ): Promise<PeerCycleResult> {
   const maxRetries = opts.maxRetries ?? 3;
-  const author = opts.author ?? { name: opts.principal.name, email: opts.principal.email };
-  const gitOps = new NodeGitOps(dir, author.name, author.email, opts.remote ?? "origin", opts.branch ?? "main");
+  const gitOps = gitOpsFor(dir, opts);
 
   let reason: PushResult["reason"];
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -102,6 +109,12 @@ export async function runPeerCycle(
     // Färsk hydrering ovanpå senaste remote → act → commit.
     const wc = await openServerWorkingCopy(dir, opts);
     await act(wc.caller);
+
+    // Inga ändringar (t.ex. en alltid-på regelmotor utan nya påminnelser) →
+    // hoppa över commit + push så vi inte spammar tomma commits varje tick (#80).
+    if (!(await gitOps.hasChanges())) {
+      return { pushed: false, attempts: attempt, noop: true };
+    }
     const commit = await wc.commit(message);
 
     const result = await gitOps.push();

@@ -102,6 +102,20 @@ suite("server-peer — klona + pull→act→push (#117)", () => {
     expect(await remoteFiles("contacts")).toContain("c-happy.json");
   });
 
+  it("no-op: act utan ändringar → ingen commit/push (noop) (#80)", async () => {
+    const headBefore = execSync(`git -C "${bare}" rev-parse main`).toString().trim();
+    const res = await runPeerCycle(
+      peerDir,
+      async () => { /* en regel-tick utan nya effekter */ },
+      "chore: tom regel-tick",
+      { principal: ADMIN },
+    );
+    expect(res.noop).toBe(true);
+    expect(res.pushed).toBe(false);
+    // Remote-HEAD oförändrad → ingen tom commit pushad.
+    expect(execSync(`git -C "${bare}" rev-parse main`).toString().trim()).toBe(headBefore);
+  });
+
   it("konflikt-säkert: konkurrent-push mellan reset och push → retry + additivt resultat", async () => {
     let raced = false;
     const res = await runPeerCycle(
