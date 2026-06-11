@@ -40,7 +40,7 @@
     "smoke:tier3": "bash tooling/scripts/test-tier3-smoke.sh",
     "test:all": "bash tooling/scripts/test-all.sh",
     "duplicates": "jscpd --config tooling/config/jscpd.json src",
-    "deps:check": "depcruise --config tooling/config/dependency-cruiser.cjs --output-type err src test",
+    "deps:check": "depcruise --config tooling/config/dependency-cruiser.cjs --output-type err src test helper-app",
     "deps:graph": "depcruise --config tooling/config/dependency-cruiser.cjs --output-type dot src | dot -Tsvg > reports/dependency-graph.svg",
     "deps:archi": "depcruise --config tooling/config/dependency-cruiser.cjs --output-type archi src | dot -Tsvg > reports/architecture.svg",
     "knip": "knip --config tooling/config/knip.json",
