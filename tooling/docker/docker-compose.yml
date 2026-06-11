@@ -112,7 +112,11 @@ services:
     environment:
       AVA_SR_REPO_URL: ${AVA_SR_REPO_URL:-http://web/git/firma.git}
       AVA_SR_WORK_DIR: /var/lib/ava/firma
-      AVA_SR_ORG_ID: ${AVA_SR_ORG_ID:?sätt AVA_SR_ORG_ID (org-id för server-principalen)}
+      # Obligatorisk när profilen "server" är aktiv — men använd INTE ${VAR:?}
+      # här: compose interpolerar hela filen vid parse (oavsett profil), så :?
+      # skulle bryta `docker compose up` även för web/git-ssh. Saknat org-id
+      # fångas istället vid container-start av runtime:ns zod-validering.
+      AVA_SR_ORG_ID: ${AVA_SR_ORG_ID:-}
       AVA_SR_GIT_USER: ${AVA_SR_GIT_USER:-}
       AVA_SR_GIT_TOKEN: ${AVA_SR_GIT_TOKEN:-}
       AVA_SR_POLL_INTERVAL_MS: ${AVA_SR_POLL_INTERVAL_MS:-15000}
