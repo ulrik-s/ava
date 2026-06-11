@@ -124,83 +124,72 @@ export function useAutoSync(opts: UseAutoSyncOptions): UseAutoSyncReturn {
    * Använder ref:s istället för deps för att slippa effekt-loops →
    * React Compiler kan inte memoizera; vi disable:ar regeln här.
    */
-  // eslint-disable-next-line
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization -- refs är stabila; avsiktligt tom dep-array (React Compiler kan ej bevara memoiseringen p.g.a. bumpBackoff)
   const runSync = useCallback(async (trigger: "auto" | "manual" | "online-reconnect"): Promise<void> => {
-    const provider = providerRef.current;
-    if (!provider || !enabledRef.current) return;
-    if (busyRef.current) return;
+    type Provider = NonNullable<typeof providerRef.current>;
 
-    if (!onlineRef.current) {
-      // Visa hur många ändringar som väntar lokalt
+    /** Visa offline-state med pending-count (fel → 0). */
+    const showOffline = async (p: Provider): Promise<void> => {
       try {
-        const count = await provider.countChanges();
-        setState({ kind: "offline", count });
+        setState({ kind: "offline", count: await p.countChanges() });
       } catch {
         setState({ kind: "offline", count: 0 });
       }
-      return;
-    }
+    };
+
+    /** Guards + offline-hantering. Returnerar provider om cykeln ska köras, annars null. */
+    const precheck = async (): Promise<Provider | null> => {
+      const p = providerRef.current;
+      if (!p || !enabledRef.current || busyRef.current) return null;
+      if (!onlineRef.current) { await showOffline(p); return null; }
+      return p;
+    };
+
+    // Commit/push delar form: setState(syncing) → withTimeout(op) → fel sätter
+    // error-state + backoff. `skip` → no-op (inget att göra). false = abortera.
+    const runGitStep = async (skip: boolean, op: () => Promise<unknown>, timeoutMs: number, label: string, errPrefix: string): Promise<boolean> => {
+      if (skip) return true;
+      setState({ kind: "syncing", what: "push" });
+      try {
+        await withTimeout(op(), timeoutMs, label);
+        return true;
+      } catch (err) {
+        setState({ kind: "error", message: errMsg(err, errPrefix) });
+        bumpBackoff();
+        return false;
+      }
+    };
+
+    /** Pull (working tree antas rent). false vid merge-needed eller fel. */
+    const pullStep = async (p: Provider): Promise<boolean> => {
+      setState({ kind: "syncing", what: "pull" });
+      try {
+        const pullResult = await withTimeout(p.pull(), cfgRef.current.pullTimeoutMs, "git pull");
+        if (pullResult.kind === "merge-needed") {
+          setState({ kind: "merge-needed" });
+          backoffRef.current = cfgRef.current.pullIntervalMs;
+          return false;
+        }
+        return true;
+      } catch (err) {
+        setState({ kind: "error", message: errMsg(err, "Pull") });
+        bumpBackoff();
+        return false;
+      }
+    };
+
+    const provider = await precheck();
+    if (!provider) return;
 
     busyRef.current = true;
     void trigger; // trigger used to gate manual vs auto; nu lika behandlade
     try {
-      // ── 1. Commit lokala ändringar FÖRST ──
-      // Anledning: git.pull/checkout vägrar skriva över "Your local
-      // changes would be overwritten" om working tree är dirty. AVA:s
-      // writeBack skriver kontinuerligt till filer, så vi måste rensa
-      // working tree (= committa) innan vi pullar.
-      const initialChanges = await provider.countChanges();
-      const hasLocalCommit = initialChanges > 0;
-      if (hasLocalCommit) {
-        setState({ kind: "syncing", what: "push" });
-        try {
-          await withTimeout(
-            provider.commitLocal(),
-            cfgRef.current.pushTimeoutMs,
-            "git commit",
-          );
-        } catch (err) {
-          setState({ kind: "error", message: errMsg(err, "Commit") });
-          bumpBackoff();
-          return;
-        }
-      }
-
-      // ── 2. Pull (working tree är nu rent) ──
-      setState({ kind: "syncing", what: "pull" });
-      try {
-        const pullResult = await withTimeout(
-          provider.pull(),
-          cfgRef.current.pullTimeoutMs,
-          "git pull",
-        );
-        if (pullResult.kind === "merge-needed") {
-          setState({ kind: "merge-needed" });
-          backoffRef.current = cfgRef.current.pullIntervalMs;
-          return;
-        }
-      } catch (err) {
-        setState({ kind: "error", message: errMsg(err, "Pull") });
-        bumpBackoff();
-        return;
-      }
-
-      // ── 3. Push lokala commits (om något) ──
-      if (hasLocalCommit) {
-        setState({ kind: "syncing", what: "push" });
-        try {
-          await withTimeout(
-            provider.push(),
-            cfgRef.current.pushTimeoutMs,
-            "git push",
-          );
-        } catch (err) {
-          setState({ kind: "error", message: errMsg(err, "Push") });
-          bumpBackoff();
-          return;
-        }
-      }
-
+      // Commit FÖRST: git.pull/checkout vägrar skriva över en dirty working
+      // tree, och AVA:s writeBack skriver kontinuerligt → committa innan pull.
+      const hasLocalCommit = (await provider.countChanges()) > 0;
+      if (!(await runGitStep(!hasLocalCommit, () => provider.commitLocal(), cfgRef.current.pushTimeoutMs, "git commit", "Commit"))) return;
+      if (!(await pullStep(provider))) return;
+      if (!(await runGitStep(!hasLocalCommit, () => provider.push(), cfgRef.current.pushTimeoutMs, "git push", "Push"))) return;
       setState({ kind: "synced", at: Date.now() });
       backoffRef.current = cfgRef.current.pullIntervalMs;
     } finally {
