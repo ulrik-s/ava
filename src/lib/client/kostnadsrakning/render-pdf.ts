@@ -36,7 +36,7 @@
  */
 
 import type { KostnadsrakningResult } from "@/lib/shared/kostnadsrakning";
-import type { PDFPage, PDFFont } from "pdf-lib";
+import type { PDFPage, PDFFont, RGB } from "pdf-lib";
 
 /** En formaterad utläggsrad i templateContext.expenseLines (se
  *  kostnadsrakning.ts buildTemplateContext) — alla fält är required strings. */
@@ -62,7 +62,6 @@ export interface RenderInput {
   };
 }
 
-// eslint-disable-next-line complexity
 export async function renderKostnadsrakningPdf(input: RenderInput): Promise<Uint8Array> {
   const { PDFDocument, StandardFonts, rgb } = await import("pdf-lib");
   const pdf = await PDFDocument.create();
@@ -135,37 +134,12 @@ export async function renderKostnadsrakningPdf(input: RenderInput): Promise<Uint
     y -= 22;
   }
 
-  // Utlägg. Precis lokal radtyp (alla fält required strings) i st.f.
-  // Record<string,string> — annars ger noUncheckedIndexedAccess `string |
-  // undefined` per fält och tvingar fram döda `?? ""`-fallbacks.
-  const lines = (c.expenseLines as ExpenseRow[] | undefined) ?? [];
-  if (lines.length > 0) {
-    page.drawText("Utlägg", { x: MARGIN, y, size: 11, font: bold });
-    y -= 14;
-    // Tabell-rubriker
-    drawTableHeader(page, y, font);
-    y -= 14;
-    for (const l of lines) {
-      page.drawText(l.date, { x: MARGIN, y, size: 9, font });
-      const desc = l.description.length > 30 ? l.description.slice(0, 28) + "…" : l.description;
-      page.drawText(desc, { x: MARGIN + 70, y, size: 9, font });
-      page.drawText(l.vatRateLabel, { x: MARGIN + 250, y, size: 9, font });
-      page.drawText(l.exclVatFormatted, { x: MARGIN + 290, y, size: 9, font });
-      page.drawText(l.vatFormatted, { x: MARGIN + 370, y, size: 9, font });
-      page.drawText(l.inclVatFormatted, { x: MARGIN + 440, y, size: 9, font });
-      y -= 12;
-      if (y < 100) break; // safety — single-page
-    }
-    y -= 6;
-    page.drawLine({ start: { x: MARGIN, y }, end: { x: PAGE_W - MARGIN, y }, thickness: 0.5, color: rgb(0.7, 0.7, 0.7) });
-    y -= 14;
-    const s = c.expenseSummary as { exclVatFormatted: string; vatFormatted: string; inclVatFormatted: string };
-    page.drawText("Summa utlägg", { x: MARGIN, y, size: 10, font: bold });
-    page.drawText(s.exclVatFormatted, { x: MARGIN + 290, y, size: 10, font: bold });
-    page.drawText(s.vatFormatted, { x: MARGIN + 370, y, size: 10, font: bold });
-    page.drawText(s.inclVatFormatted, { x: MARGIN + 440, y, size: 10, font: bold });
-    y -= 22;
-  }
+  // Utlägg (tabell + summa) — egen sektion för att hålla komplexiteten nere.
+  y = drawExpenseSection(
+    { page, font, bold, marginX: MARGIN, pageW: PAGE_W, lineColor: rgb(0.7, 0.7, 0.7) },
+    c,
+    y,
+  );
 
   // TOTAL
   page.drawLine({ start: { x: MARGIN, y: y + 8 }, end: { x: PAGE_W - MARGIN, y: y + 8 }, thickness: 1, color: rgb(0, 0, 0) });
@@ -184,6 +158,51 @@ export async function renderKostnadsrakningPdf(input: RenderInput): Promise<Uint
   });
 
   return pdf.save();
+}
+
+interface PdfCtx {
+  page: PDFPage;
+  font: PDFFont;
+  bold: PDFFont;
+  marginX: number;
+  pageW: number;
+  lineColor: RGB;
+}
+
+/** Rita utläggs-tabell + summa-rad. Returnerar ny y-position. No-op om inga utlägg. */
+function drawExpenseSection(ctx: PdfCtx, c: Record<string, unknown>, startY: number): number {
+  // Lokal radtyp (alla fält required strings) i st.f. Record<string,string> —
+  // annars ger noUncheckedIndexedAccess `string | undefined` per fält.
+  const lines = (c.expenseLines as ExpenseRow[] | undefined) ?? [];
+  let y = startY;
+  if (lines.length === 0) return y;
+  const { page, font, bold } = ctx;
+
+  page.drawText("Utlägg", { x: ctx.marginX, y, size: 11, font: bold });
+  y -= 14;
+  drawTableHeader(page, y, font);
+  y -= 14;
+  for (const l of lines) {
+    page.drawText(l.date, { x: ctx.marginX, y, size: 9, font });
+    const desc = l.description.length > 30 ? l.description.slice(0, 28) + "…" : l.description;
+    page.drawText(desc, { x: ctx.marginX + 70, y, size: 9, font });
+    page.drawText(l.vatRateLabel, { x: ctx.marginX + 250, y, size: 9, font });
+    page.drawText(l.exclVatFormatted, { x: ctx.marginX + 290, y, size: 9, font });
+    page.drawText(l.vatFormatted, { x: ctx.marginX + 370, y, size: 9, font });
+    page.drawText(l.inclVatFormatted, { x: ctx.marginX + 440, y, size: 9, font });
+    y -= 12;
+    if (y < 100) break; // safety — single-page
+  }
+  y -= 6;
+  page.drawLine({ start: { x: ctx.marginX, y }, end: { x: ctx.pageW - ctx.marginX, y }, thickness: 0.5, color: ctx.lineColor });
+  y -= 14;
+  const s = c.expenseSummary as { exclVatFormatted: string; vatFormatted: string; inclVatFormatted: string };
+  page.drawText("Summa utlägg", { x: ctx.marginX, y, size: 10, font: bold });
+  page.drawText(s.exclVatFormatted, { x: ctx.marginX + 290, y, size: 10, font: bold });
+  page.drawText(s.vatFormatted, { x: ctx.marginX + 370, y, size: 10, font: bold });
+  page.drawText(s.inclVatFormatted, { x: ctx.marginX + 440, y, size: 10, font: bold });
+  y -= 22;
+  return y;
 }
 
 function drawRow(page: PDFPage, y: number, font: PDFFont, label: string, value: string): void {
