@@ -566,6 +566,46 @@ describe("invoice.setStatus", () => {
   });
 });
 
+// ─── markFortnoxBooked (#82) ─────────────────────────────────────
+
+describe("invoice.markFortnoxBooked", () => {
+  it("sätter fortnoxId på obokförd faktura", async () => {
+    mockPrisma.invoice.findFirst.mockResolvedValue({ id: "inv-1", fortnoxId: null });
+    mockPrisma.invoice.update.mockResolvedValue({ id: "inv-1", fortnoxId: "A/1" });
+
+    const res = await makeCaller().markFortnoxBooked({ invoiceId: "inv-1", fortnoxId: "A/1" });
+
+    expect(res.fortnoxId).toBe("A/1");
+    expect(mockPrisma.invoice.update).toHaveBeenCalledWith({
+      where: { id: "inv-1" },
+      data: { fortnoxId: "A/1" },
+    });
+  });
+
+  it("idempotent: skriver INTE över befintlig fortnoxId", async () => {
+    mockPrisma.invoice.findFirst.mockResolvedValue({ id: "inv-1", fortnoxId: "A/7" });
+
+    const res = await makeCaller().markFortnoxBooked({ invoiceId: "inv-1", fortnoxId: "A/99" });
+
+    expect(res.fortnoxId).toBe("A/7"); // oförändrad
+    expect(mockPrisma.invoice.update).not.toHaveBeenCalled();
+  });
+
+  it("NOT_FOUND cross-org", async () => {
+    mockPrisma.invoice.findFirst.mockResolvedValue(null);
+
+    await expect(
+      makeCaller("org-b").markFortnoxBooked({ invoiceId: "inv-1", fortnoxId: "A/1" }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("zod kräver icke-tom fortnoxId", async () => {
+    await expect(
+      makeCaller().markFortnoxBooked({ invoiceId: "inv-1", fortnoxId: "" }),
+    ).rejects.toThrow();
+  });
+});
+
 // ─── list / getById ──────────────────────────────────────────────
 
 describe("invoice.list", () => {
