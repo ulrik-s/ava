@@ -36,7 +36,30 @@ export interface PullResult {
   filesUpdated: number;
 }
 
-// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Async function 'pullViaRest' has a complexity of 13. Maximum allowed is 8.)
+/** Remote blob-SHAs per path (ignorerar tree/non-blob-entries). */
+function buildRemoteFiles(treeEntries: ReadonlyArray<{ type: string; path: string; sha: string }>): Map<string, string> {
+  const remoteFiles = new Map<string, string>();
+  for (const e of treeEntries) {
+    if (e.type === "blob") remoteFiles.set(e.path, e.sha);
+  }
+  return remoteFiles;
+}
+
+/** Filer att hämta: i remote, men saknas lokalt eller har annan SHA. */
+function computeFetchList(remoteFiles: Map<string, string>, localMap: Map<string, string>): Array<{ path: string; sha: string }> {
+  const toFetch: Array<{ path: string; sha: string }> = [];
+  for (const [path, sha] of remoteFiles) {
+    if (localMap.get(path) !== sha) toFetch.push({ path, sha });
+  }
+  return toFetch;
+}
+
+/** Filer att radera: fanns i förra sync-state men inte i remote nu. */
+function computeDeleteList(state: SyncState | null, remoteFiles: Map<string, string>): string[] {
+  if (!state) return [];
+  return Object.keys(state.files).filter((path) => !remoteFiles.has(path));
+}
+
 export async function pullViaRest(args: PullArgs): Promise<PullResult> {
   const opts = { token: args.token, ...(args.signal !== undefined ? { signal: args.signal } : {}) };
   const state = await readSyncState(args.handle);
@@ -52,29 +75,11 @@ export async function pullViaRest(args: PullArgs): Promise<PullResult> {
     throw new Error(`Tree är för stort (>100k entries) — REST-pull kan inte hantera det. Använd CLI-clone som engångsoperation.`);
   }
 
-  // Bygg karta över remote-fil-SHAs
-  const remoteFiles = new Map<string, string>();
-  for (const e of tree.tree) {
-    if (e.type === "blob") remoteFiles.set(e.path, e.sha);
-  }
-
-  // Lokala filer för diff
+  const remoteFiles = buildRemoteFiles(tree.tree);
   const localFiles = await walkFsa(args.handle);
   const localMap = new Map(localFiles.map((f) => [f.path, f.sha]));
-
-  // Filer att hämta: i remote, saknas lokalt ELLER har annan SHA
-  const toFetch: Array<{ path: string; sha: string }> = [];
-  for (const [path, sha] of remoteFiles) {
-    if (localMap.get(path) !== sha) toFetch.push({ path, sha });
-  }
-
-  // Filer att radera: fanns lokalt + i förra sync, men inte i remote nu
-  const toDelete: string[] = [];
-  if (state) {
-    for (const path of Object.keys(state.files)) {
-      if (!remoteFiles.has(path)) toDelete.push(path);
-    }
-  }
+  const toFetch = computeFetchList(remoteFiles, localMap);
+  const toDelete = computeDeleteList(state, remoteFiles);
 
   // Parallell-fetch (men begränsad till 8 samtidigt för att undvika
   // GitHub rate-limit-burst). 5000 req/h auth räcker mer än väl.
@@ -88,16 +93,13 @@ export async function pullViaRest(args: PullArgs): Promise<PullResult> {
     await deleteFile(args.handle, path);
   }
 
-  // Skriv ny sync-state
-  const filesMap: Record<string, string> = {};
-  for (const [path, sha] of remoteFiles) filesMap[path] = sha;
   const newState: SyncState = {
     version: 1,
     branch: args.branch,
     lastHead: newHead,
     lastTree: commit.tree.sha,
     lastSyncedAt: new Date().toISOString(),
-    files: filesMap,
+    files: Object.fromEntries(remoteFiles),
   };
   await writeSyncState(args.handle, newState);
 
