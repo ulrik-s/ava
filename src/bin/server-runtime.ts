@@ -17,6 +17,7 @@
 
 import { ENV_KEYS, loadRuntimeConfig } from "@/lib/server/local-first/server-runtime-config";
 import { startServerRuntime } from "@/lib/server/local-first/server-runtime";
+import { buildFortnoxJob } from "@/lib/server/integrations/fortnox/runtime";
 
 const HELP = `ava server-runtime (ADR 0005 fas 1)
 
@@ -53,7 +54,10 @@ async function main(): Promise<void> {
   }
 
   const config = loadRuntimeConfig();
-  const loop = await startServerRuntime(config);
+  // Fortnox-connector (#82): aktiveras bara när byrån anslutit Fortnox (valv +
+  // tokens). Annars null → loopen kör i sync-läge precis som förut.
+  const job = await buildFortnoxJob({ workDir: config.workDir });
+  const loop = await startServerRuntime(config, job ? { job } : {});
 
   if (argv.includes("--once")) {
     await loop.tickOnce();

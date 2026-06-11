@@ -608,4 +608,27 @@ export const invoiceRouter = router({
         data: { status: input.status },
       });
     }),
+
+  /**
+   * Märk en faktura som bokförd i Fortnox (#82). Anropas av server-runtime:ns
+   * Fortnox-connector efter en lyckad verifikat-push; `fortnoxId` =
+   * "<VoucherSeries>/<VoucherNumber>".
+   *
+   * IDEMPOTENT: skriver ALDRIG över en redan satt `fortnoxId` — det är
+   * dubbelbokförings-skyddet (en omkörd peer-cykel får inte boka om). Redan
+   * märkt → returnera oförändrad rad.
+   */
+  markFortnoxBooked: orgProcedure
+    .input(z.object({ invoiceId: invoiceIdSchema, fortnoxId: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      const inv = await ctx.dataStore.invoices.findFirst({
+        where: { id: input.invoiceId, matter: { organizationId: ctx.orgId } },
+      });
+      if (!inv) throw new TRPCError({ code: "NOT_FOUND" });
+      if (inv.fortnoxId) return inv; // redan bokförd → no-op (idempotens)
+      return ctx.dataStore.invoices.update({
+        where: { id: inv.id },
+        data: { fortnoxId: input.fortnoxId },
+      });
+    }),
 });
