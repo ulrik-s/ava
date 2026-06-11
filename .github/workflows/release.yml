@@ -1,0 +1,135 @@
+name: Release (full package)
+
+# Tag-triggad release av HELA paketet (#87): helper-binärer + server-runtime-
+# binärer + web (statisk demo-export) + auto-genererade release-noter.
+#
+# Tagga `vX.Y.Z` → bygg alla artefakter → en GitHub-release med allt bifogat.
+# `workflow_dispatch` kör en DRY-RUN (bygger allt, publicerar INGET) så
+# pipelinen kan valideras utan att klippa en riktig release.
+#
+# Signering är medvetet UTELÄMNAD här (görs i #110, pinnad nyckel). Office-
+# add-ins läggs till som ett eget bygg-/upload-steg när #83/#84 finns.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write # skapa release + ladda upp artefakter
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  # ─── Helper-binärer (5 plattformar) — speglar helper-release.yml ──────────
+  helper:
+    name: Build helper
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: helper-app
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bun test
+      - name: Cross-build helper
+        run: bun build.ts "${{ github.ref_name }}"
+      - name: Checksums
+        run: |
+          cd dist
+          sha256sum ava-helper-* > "ava-helper_${{ github.ref_name }}_checksums.txt"
+          ls -lh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: helper
+          path: helper-app/dist/*
+          if-no-files-found: error
+
+  # ─── Server-runtime-binärer (4 plattformar) — build-server-runtime.ts ─────
+  server:
+    name: Build server-runtime
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - name: Cross-build server-runtime
+        run: bun run server-runtime:build
+      - name: Checksums
+        run: |
+          cd dist/server-runtime
+          sha256sum ava-server-runtime-* > "ava-server-runtime_${{ github.ref_name }}_checksums.txt"
+          ls -lh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: server-runtime
+          path: dist/server-runtime/*
+          if-no-files-found: error
+
+  # ─── Web (statisk demo-export) — samma bygge som deploy-demo.yml ──────────
+  web:
+    name: Build web demo
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - name: Build demo (app + seeded data)
+        env:
+          DEMO_BUILD: "1"
+          NEXT_PUBLIC_DEMO_BUILD: "1"
+        run: bun run build:demo
+      - name: Zip static export
+        run: |
+          cd out
+          zip -r "../ava-web-demo_${{ github.ref_name }}.zip" .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-demo
+          path: ava-web-demo_*.zip
+          if-no-files-found: error
+
+  # TODO (#83/#84): lägg till ett `office-addins`-jobb här när add-ins finns —
+  # bygg Outlook/Word-paketen och ladda upp som artefakt `office-addins`,
+  # samt lägg dem i `release`-jobbets `needs` + `files`.
+
+  # ─── Samla artefakter → GitHub-release (endast på riktig tag) ─────────────
+  release:
+    name: Publish GitHub release
+    needs: [helper, server, web]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            artifacts/helper/*
+            artifacts/server-runtime/*
+            artifacts/web-demo/*
+          body: |
+            AVA ${{ github.ref_name }} — hela paketet.
+
+            - **Helper** (5 plattformar) — auto-uppdateras hos installationer (#78).
+            - **Server-runtime** (4 plattformar) — git-peer-servern (ADR 0005).
+            - **Web** — statisk demo-export (`ava-web-demo_*.zip`); live-demo deployas
+              löpande via deploy-demo.yml.
+
+            Office-add-ins läggs till i releasen när #83/#84 finns.
+            Artefakter är osignerade i denna version (signering: #110).
