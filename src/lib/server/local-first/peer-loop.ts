@@ -111,7 +111,13 @@ export class PeerLoop {
     try {
       if (job) {
         const result = await this.runCycle(dir, job.act, job.message, cycleOpts);
-        this.log(result.pushed ? `pushade (${result.attempts} försök)` : `push misslyckades: ${result.reason ?? "okänt"}`);
+        this.log(
+          result.pushed
+            ? `pushade (${result.attempts} försök)`
+            : result.noop
+              ? "inga ändringar (noop)"
+              : `push misslyckades: ${result.reason ?? "okänt"}`,
+        );
         return { mode: "cycle", result };
       }
       await this.syncOnce(dir, cycleOpts);
