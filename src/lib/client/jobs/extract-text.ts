@@ -39,20 +39,31 @@ export async function extractText(input: ExtractInput): Promise<string> {
   }
 }
 
+type ExtractKind = "text" | "pdf" | "docx" | "unknown";
+
+const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+/** Datadriven kind-detektering: första regel som matchar mime-prefix/-likhet/ext. */
+const KIND_RULES: ReadonlyArray<{ kind: ExtractKind; mimePrefix?: string; mimes: string[]; exts: string[] }> = [
+  { kind: "text", mimePrefix: "text/", mimes: ["application/json"], exts: ["txt", "md", "csv", "log", "html", "xml", "yaml", "yml", "json"] },
+  { kind: "pdf", mimes: ["application/pdf"], exts: ["pdf"] },
+  { kind: "docx", mimes: [DOCX_MIME], exts: ["docx"] },
+];
+
+/** Filändelse (utan punkt, gemener) ur filnamnet; tom om ingen. */
+function fileExt(fileName: string | undefined): string {
+  return (fileName ?? "").toLowerCase().match(/\.([a-z0-9]+)$/)?.[1] ?? "";
+}
+
 /** Vilket extraktorn ska användas för denna fil. */
-// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'detectKind' has a complexity of 13. Maximum allowed is 8.)
-export function detectKind(input: ExtractInput): "text" | "pdf" | "docx" | "unknown" {
+export function detectKind(input: ExtractInput): ExtractKind {
   const mime = (input.mimeType ?? "").toLowerCase();
-  const ext = (input.fileName ?? "").toLowerCase().match(/\.([a-z0-9]+)$/)?.[1] ?? "";
-
-  if (mime.startsWith("text/") || ["txt", "md", "csv", "log", "html", "xml", "yaml", "yml"].includes(ext)) return "text";
-  if (mime === "application/json" || ext === "json") return "text";
-  if (mime === "application/pdf" || ext === "pdf") return "pdf";
-  if (
-    mime === "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    || ext === "docx"
-  ) return "docx";
-
+  const ext = fileExt(input.fileName);
+  for (const r of KIND_RULES) {
+    if ((r.mimePrefix && mime.startsWith(r.mimePrefix)) || r.mimes.includes(mime) || r.exts.includes(ext)) {
+      return r.kind;
+    }
+  }
   return "unknown";
 }
 

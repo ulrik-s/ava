@@ -49,7 +49,11 @@ interface MirrorPayload extends Record<string, unknown> {
   outlookCalendarId?: string | null;
 }
 
-// eslint-disable-next-line complexity
+/** Graph-anrops-opts: token + (valfritt) calendarId när payload har det. */
+function graphOpts(token: string, payload: MirrorPayload): { token: string; calendarId?: string } {
+  return { token, ...(payload.outlookCalendarId != null ? { calendarId: payload.outlookCalendarId } : {}) };
+}
+
 jobQueue.registerWorker<MirrorPayload>("mirror-to-outlook", async (payload, ctx) => {
   ctx.setProgress(0.1);
   const { getOutlookToken, dispatchMirrorState } = await import("./mirror-outlook-dispatch");
@@ -68,7 +72,7 @@ jobQueue.registerWorker<MirrorPayload>("mirror-to-outlook", async (payload, ctx)
   try {
     if (payload.op === "delete") {
       if (payload.outlookEventId) {
-        await graph.deleteGraphEvent(payload.outlookEventId, { token, ...(payload.outlookCalendarId != null ? { calendarId: payload.outlookCalendarId } : {}) });
+        await graph.deleteGraphEvent(payload.outlookEventId, graphOpts(token, payload));
       }
       // Vid delete på AVA-eventet finns ingen rad att uppdatera — workern
       // slutar bara här. (Calendar-routerns delete tar bort raden helt.)
@@ -80,10 +84,10 @@ jobQueue.registerWorker<MirrorPayload>("mirror-to-outlook", async (payload, ctx)
     const body = graph.toGraphEvent({ ...payload.event });
     let outlookEventId: string;
     if (payload.outlookEventId) {
-      const res = await graph.updateGraphEvent(payload.outlookEventId, body, { token, ...(payload.outlookCalendarId != null ? { calendarId: payload.outlookCalendarId } : {}) });
+      const res = await graph.updateGraphEvent(payload.outlookEventId, body, graphOpts(token, payload));
       outlookEventId = res.id;
     } else {
-      const res = await graph.createGraphEvent(body, { token, ...(payload.outlookCalendarId != null ? { calendarId: payload.outlookCalendarId } : {}) });
+      const res = await graph.createGraphEvent(body, graphOpts(token, payload));
       outlookEventId = res.id;
     }
     ctx.setProgress(0.9);
