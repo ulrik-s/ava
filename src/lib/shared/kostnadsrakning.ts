@@ -130,7 +130,100 @@ function timkostnadsnormResult(totalArbetsMinutes: number, hasFTax: boolean): Ta
   };
 }
 
-// eslint-disable-next-line complexity
+/** Arvode-beräkning: taxa-ärende → brottmålstaxa, annars timkostnadsnorm. */
+function resolveTaxa(
+  input: BuildInput,
+  huvudforhandlingMinutes: number,
+  totalArbetsMinutes: number,
+  level: TaxaLevel,
+): TaxaResult {
+  const isTaxe = input.isTaxeArende ?? true;
+  return isTaxe
+    ? computeBrottmalstaxa({ huvudforhandlingMinutes, level, hasFTax: input.hasFTax ?? true })
+    : timkostnadsnormResult(totalArbetsMinutes, input.hasFTax ?? true);
+}
+
+/** Organisations-fält med tom-sträng-defaults (samlar `?.`/`??` på ett ställe). */
+function orgContext(organization: BuildInput["organization"]): Record<string, string> {
+  const org = organization ?? {};
+  return {
+    organizationName: org.name ?? "",
+    organizationOrgNumber: org.orgNumber ?? "",
+    organizationAddress: org.address ?? "",
+  };
+}
+
+interface KrTemplateArgs {
+  input: BuildInput;
+  start: Date;
+  end: Date;
+  huvudforhandlingMinutes: number;
+  level: TaxaLevel;
+  taxa: TaxaResult;
+  arvodeExclVat: number;
+  arvodeMoms: number;
+  arvodeInclVat: number;
+  totalInclVat: number;
+  expenseLines: ExpenseLine[];
+  expenseSummary: { exclVat: number; vat: number; inclVat: number };
+  timeLines: TimeLine[];
+  billableArbetsMinutes: number;
+  totalArbetsMinutes: number;
+}
+
+/** Bygg Handlebars-context (matchar default-mallen). Ren assemblering. */
+function buildKrTemplateContext(a: KrTemplateArgs): Record<string, unknown> {
+  return {
+    today: toIsoDate(new Date()),
+    matterNumber: a.input.matter.matterNumber,
+    matterTitle: a.input.matter.title,
+    clientName: a.input.matter.clientName ?? "",
+    defenderName: a.input.defender.name,
+    defenderEmail: a.input.defender.email ?? "",
+    ...orgContext(a.input.organization),
+    courtName: a.input.courtName ?? "",
+    hufStart: toIsoDateTime(a.start),
+    hufEnd: toIsoDateTime(a.end),
+    huvudforhandlingMinutes: a.huvudforhandlingMinutes,
+    huvudforhandlingFormatted: formatMinutes(a.huvudforhandlingMinutes),
+    taxaLevel: a.level,
+    taxaApplies: a.taxa.kind === "taxa-applies",
+    taxaIntervalLabel: a.taxa.intervalLabel,
+    taxaNotes: a.taxa.notes,
+    arvodeExclVat: a.arvodeExclVat,
+    arvodeMoms: a.arvodeMoms,
+    arvodeInclVat: a.arvodeInclVat,
+    arvodeExclFormatted: formatOreAsKr(a.arvodeExclVat),
+    arvodeMomsFormatted: formatOreAsKr(a.arvodeMoms),
+    arvodeInclFormatted: formatOreAsKr(a.arvodeInclVat),
+    expenseLines: a.expenseLines.map((l) => ({
+      ...l,
+      exclVatFormatted: formatOreAsKr(l.exclVat),
+      vatFormatted: formatOreAsKr(l.vat),
+      inclVatFormatted: formatOreAsKr(l.inclVat),
+      vatRateLabel: vatRateLabel(l.vatRate),
+    })),
+    expenseSummary: {
+      exclVat: a.expenseSummary.exclVat,
+      vat: a.expenseSummary.vat,
+      inclVat: a.expenseSummary.inclVat,
+      exclVatFormatted: formatOreAsKr(a.expenseSummary.exclVat),
+      vatFormatted: formatOreAsKr(a.expenseSummary.vat),
+      inclVatFormatted: formatOreAsKr(a.expenseSummary.inclVat),
+    },
+    totalInclVat: a.totalInclVat,
+    totalInclFormatted: formatOreAsKr(a.totalInclVat),
+    timeLines: a.timeLines.map((t) => ({
+      ...t,
+      minutesFormatted: formatMinutes(t.minutes),
+    })),
+    billableArbetsMinutes: a.billableArbetsMinutes,
+    billableArbetsFormatted: formatMinutes(a.billableArbetsMinutes),
+    totalArbetsMinutes: a.totalArbetsMinutes,
+    totalArbetsFormatted: formatMinutes(a.totalArbetsMinutes),
+  };
+}
+
 export function buildKostnadsrakningContext(input: BuildInput): KostnadsrakningResult {
   const start = new Date(input.hufStart);
   const end = new Date(input.hufEnd);
@@ -146,10 +239,7 @@ export function buildKostnadsrakningContext(input: BuildInput): KostnadsrakningR
   const totalArbetsMinutes = billableArbetsMinutes + huvudforhandlingMinutes;
 
   const level: TaxaLevel = input.taxaLevel ?? 1;
-  const isTaxe = input.isTaxeArende ?? true;
-  const taxa: TaxaResult = isTaxe
-    ? computeBrottmalstaxa({ huvudforhandlingMinutes, level, hasFTax: input.hasFTax ?? true })
-    : timkostnadsnormResult(totalArbetsMinutes, input.hasFTax ?? true);
+  const taxa = resolveTaxa(input, huvudforhandlingMinutes, totalArbetsMinutes, level);
 
   // Bara billable utlägg ska faktureras — non-billable är firmans egen kostnad.
   const expenses = input.expenses.filter((e) => e.billable !== false);
@@ -181,57 +271,11 @@ export function buildKostnadsrakningContext(input: BuildInput): KostnadsrakningR
   const arvodeInclVat = arvodeExclVat + arvodeMoms;
   const totalInclVat = arvodeInclVat + expenseSummary.inclVat;
 
-  const templateContext: Record<string, unknown> = {
-    today: toIsoDate(new Date()),
-    matterNumber: input.matter.matterNumber,
-    matterTitle: input.matter.title,
-    clientName: input.matter.clientName ?? "",
-    defenderName: input.defender.name,
-    defenderEmail: input.defender.email ?? "",
-    organizationName: input.organization?.name ?? "",
-    organizationOrgNumber: input.organization?.orgNumber ?? "",
-    organizationAddress: input.organization?.address ?? "",
-    courtName: input.courtName ?? "",
-    hufStart: toIsoDateTime(start),
-    hufEnd: toIsoDateTime(end),
-    huvudforhandlingMinutes,
-    huvudforhandlingFormatted: formatMinutes(huvudforhandlingMinutes),
-    taxaLevel: level,
-    taxaApplies: taxa.kind === "taxa-applies",
-    taxaIntervalLabel: taxa.intervalLabel,
-    taxaNotes: taxa.notes,
-    arvodeExclVat,
-    arvodeMoms,
-    arvodeInclVat,
-    arvodeExclFormatted: formatOreAsKr(arvodeExclVat),
-    arvodeMomsFormatted: formatOreAsKr(arvodeMoms),
-    arvodeInclFormatted: formatOreAsKr(arvodeInclVat),
-    expenseLines: expenseLines.map((l) => ({
-      ...l,
-      exclVatFormatted: formatOreAsKr(l.exclVat),
-      vatFormatted: formatOreAsKr(l.vat),
-      inclVatFormatted: formatOreAsKr(l.inclVat),
-      vatRateLabel: vatRateLabel(l.vatRate),
-    })),
-    expenseSummary: {
-      exclVat: expenseSummary.exclVat,
-      vat: expenseSummary.vat,
-      inclVat: expenseSummary.inclVat,
-      exclVatFormatted: formatOreAsKr(expenseSummary.exclVat),
-      vatFormatted: formatOreAsKr(expenseSummary.vat),
-      inclVatFormatted: formatOreAsKr(expenseSummary.inclVat),
-    },
-    totalInclVat,
-    totalInclFormatted: formatOreAsKr(totalInclVat),
-    timeLines: timeLines.map((t) => ({
-      ...t,
-      minutesFormatted: formatMinutes(t.minutes),
-    })),
-    billableArbetsMinutes,
-    billableArbetsFormatted: formatMinutes(billableArbetsMinutes),
-    totalArbetsMinutes,
-    totalArbetsFormatted: formatMinutes(totalArbetsMinutes),
-  };
+  const templateContext = buildKrTemplateContext({
+    input, start, end, huvudforhandlingMinutes, level, taxa,
+    arvodeExclVat, arvodeMoms, arvodeInclVat, totalInclVat,
+    expenseLines, expenseSummary, timeLines, billableArbetsMinutes, totalArbetsMinutes,
+  });
 
   return {
     huvudforhandlingMinutes,
