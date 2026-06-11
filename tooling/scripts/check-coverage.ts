@@ -13,12 +13,12 @@ import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 
 // Förankrat strax under nuvarande lcov-mätning under --parallel (rader
-// ~78.0% / funktioner ~78.3%). RATCHET — flytta bara uppåt.
+// ~82.8% / funktioner ~79.5%). RATCHET — flytta bara uppåt.
 // OBS: --parallel under-rapporterar mot --isolate (bun aggregerar coverage
 // löst över workers), men deterministiskt → giltigt golv. --isolate kraschar
 // på CI-linux (epoll_ctl EEXIST), så --parallel är den körbara vägen (#92).
-const LINE_FLOOR = 0.76;
-const FUNC_FLOOR = 0.77;
+const LINE_FLOOR = 0.82;
+const FUNC_FLOOR = 0.79;
 const LCOV = "coverage/lcov.info";
 
 const TEST_GLOBS = ["test/unit", "test/integration", "test/scripts"];
