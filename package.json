@@ -16,6 +16,7 @@
     "seed:local": "bun tooling/scripts/seed-firma-local.ts",
     "server-runtime": "bun src/bin/server-runtime.ts",
     "server-runtime:build": "bun tooling/scripts/build-server-runtime.ts",
+    "server-runtime:smoke": "bash tooling/scripts/smoke-server-runtime-docker.sh",
     "start": "next start",
     "tier3:up": "docker compose -f tooling/docker/docker-compose.yml up -d --build",
     "tier3:down": "docker compose -f tooling/docker/docker-compose.yml down",
