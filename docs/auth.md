@@ -13,6 +13,50 @@ Denna fil beskriver hur autentisering fungerar för AVA:s **self-hosted**-läge
 > **nuvarande** htpasswd/PAT-modellen tills epiken landar; maskin-/CLI-klienter
 > (server-runtime, `git clone`) behåller PAT/deploy-key även efteråt.
 
+## OIDC-läge (#222, opt-in) — oauth2-proxy
+
+OIDC-inloggning aktiveras med en compose-overlay (default-stacken är oförändrad):
+
+```bash
+docker compose -f tooling/docker/docker-compose.yml \
+               -f tooling/docker/docker-compose.oidc.yml up -d --build
+```
+
+**Komponenter:**
+
+- `nginx-oidc.conf` — nginx gat:ar appen + `/git/` med `auth_request` →
+  `oauth2-proxy`. 401 → `/oauth2/start` (OIDC-inloggning). Eftersom appen och
+  `/git/` är samma origin följer oauth2-proxy-cookien automatiskt med iso-gits
+  `fetch` → git-push/pull funkar utan klient-token-kod.
+- `oauth2-proxy` — OIDC relying party. Pekas mot byråns IdP via
+  `OAUTH2_PROXY_OIDC_ISSUER_URL` + `CLIENT_ID`/`CLIENT_SECRET`; cookie-secret
+  ur secrets-valvet (#79). `mock-oidc`-tjänsten i overlayen är **endast dev**
+  (navikt/mock-oauth2-server) — ta bort den i drift och peka issuer mot Entra
+  ID/Google/BankID-broker.
+- **Klient-bryggan:** appen hämtar inloggad email från `/oauth2/userinfo`
+  (`src/lib/client/auth/oidc-principal.ts`) och auktoriserar mot
+  användar-allowlisten i firma.git via `OidcAuthProvider` (#223). Okänd email
+  nekas (autentisering ≠ auktorisering).
+
+**Skarp drift (env, ur valvet):**
+
+```
+OAUTH2_PROXY_OIDC_ISSUER_URL=https://login.microsoftonline.com/<tenant>/v2.0
+OAUTH2_PROXY_CLIENT_ID=<app-reg-client-id>
+OAUTH2_PROXY_CLIENT_SECRET=<ur valvet #79>
+OAUTH2_PROXY_COOKIE_SECRET=<32 byte, ur valvet>
+OAUTH2_PROXY_REDIRECT_URL=https://<din-host>/oauth2/callback
+```
+
+**CLI/maskin (icke-browser):** behåller Basic-auth/PAT — sätt
+`OAUTH2_PROXY_HTPASSWD_FILE=/auth-data/htpasswd` så oauth2-proxy accepterar
+både OIDC-cookie och PAT på `/git/`. server-runtime (#81) använder PAT/deploy-key.
+
+**Verifiering:** `bun run oidc:smoke` startar stacken (på port 8088) mot
+mock-OIDC och verifierar wiringen strukturellt (auth_request → oauth2-proxy →
+discovery → authorize-redirect). Hela token-dansen valideras mot din riktiga
+IdP (browser-inloggning).
+
 ## Designmål
 
 - **Tunn server**: ingen custom auth-tjänst, inga long-running processer
