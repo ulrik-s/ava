@@ -295,29 +295,26 @@ export function useAutoSync(opts: UseAutoSyncOptions): UseAutoSyncReturn {
   return { state, syncNow, notifyChange };
 }
 
-// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'errMsg' has a complexity of 9. Maximum allowed is 8.)
+// Översätt vanliga isomorphic-git-fel till begripliga råd. Första matchande
+// regel vinner; `match` är RegExp eller predikat mot felmeddelandet.
+const ERR_RULES: ReadonlyArray<{ match: RegExp | ((m: string) => boolean); message: (prefix: string) => string }> = [
+  {
+    match: (m) => m.includes("A requested file or directory could not be found") || m.includes("ENOENT"),
+    message: (p) => `${p}: Mappen är inte ett git-repo (saknar .git/). Klona repo:t först i datakällan ovan.`,
+  },
+  { match: /401|unauthorized|bad credentials/i, message: (p) => `${p}: GitHub-token avvisades (401). Kontrollera att token finns och har 'repo'-scope.` },
+  { match: /404|not found/i, message: (p) => `${p}: Repo eller branch hittades inte (404). Kontrollera repo-URL och att branchen 'main' finns.` },
+  { match: /Failed to fetch|fetch failed/i, message: (p) => `${p}: Nät-fel (Failed to fetch). Vanligast: CORS-proxyn (cors.isomorphic-git.org) är nere eller blockerad. Konfigurera en egen CORS-proxy i Inställningar → Datakälla.` },
+  { match: /CORS/i, message: (p) => `${p}: CORS-fel. Proxyn svarar inte med rätt headers. Byt CORS-proxy i Inställningar.` },
+];
+
 function errMsg(err: unknown, prefix: string): string {
   if (err instanceof SyncTimeoutError) return `${prefix}: timeout — försöker igen senare`;
-  if (err instanceof Error) {
-    const m = err.message;
-    // Översätt vanliga isomorphic-git-fel till begripliga råd
-    if (m.includes("A requested file or directory could not be found")
-        || m.includes("ENOENT")) {
-      return `${prefix}: Mappen är inte ett git-repo (saknar .git/). Klona repo:t först i datakällan ovan.`;
-    }
-    if (/401|unauthorized|bad credentials/i.test(m)) {
-      return `${prefix}: GitHub-token avvisades (401). Kontrollera att token finns och har 'repo'-scope.`;
-    }
-    if (/404|not found/i.test(m)) {
-      return `${prefix}: Repo eller branch hittades inte (404). Kontrollera repo-URL och att branchen 'main' finns.`;
-    }
-    if (/Failed to fetch|fetch failed/i.test(m)) {
-      return `${prefix}: Nät-fel (Failed to fetch). Vanligast: CORS-proxyn (cors.isomorphic-git.org) är nere eller blockerad. Konfigurera en egen CORS-proxy i Inställningar → Datakälla.`;
-    }
-    if (/CORS/i.test(m)) {
-      return `${prefix}: CORS-fel. Proxyn svarar inte med rätt headers. Byt CORS-proxy i Inställningar.`;
-    }
-    return `${prefix}: ${m}`;
+  if (!(err instanceof Error)) return `${prefix}: ${String(err)}`;
+  const m = err.message;
+  for (const rule of ERR_RULES) {
+    const hit = typeof rule.match === "function" ? rule.match(m) : rule.match.test(m);
+    if (hit) return rule.message(prefix);
   }
-  return `${prefix}: ${String(err)}`;
+  return `${prefix}: ${m}`;
 }
