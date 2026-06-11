@@ -97,7 +97,6 @@ export class InMemoryQueryEngine<T extends Record<string, unknown>> {
     return true;
   }
 
-  // eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Method 'fieldMatches' has a complexity of 12. Maximum allowed is 8.)
   private fieldMatches(fieldVal: unknown, expected: unknown): boolean {
     // Primitiv likhet
     if (expected === null || typeof expected !== "object" || expected instanceof Date) {
@@ -109,13 +108,20 @@ export class InMemoryQueryEngine<T extends Record<string, unknown>> {
     // Annars: nested relations-filter ({ matter: { organizationId } }).
     const isOperatorObj =
       keys.length > 0 && keys.every((k) => k === "mode" || k in this.ops);
-    if (!isOperatorObj) {
-      // To-one relation: rekursera ned i det nästlade objektet.
-      if (fieldVal && typeof fieldVal === "object" && !Array.isArray(fieldVal)) {
-        return this.matches(fieldVal as Record<string, unknown>, op);
-      }
-      return false;
+    if (!isOperatorObj) return this.matchesNestedRelation(fieldVal, op);
+    return this.applyOperators(fieldVal, op);
+  }
+
+  /** To-one relation: rekursera ned i det nästlade objektet ({ matter: {…} }). */
+  private matchesNestedRelation(fieldVal: unknown, op: Record<string, unknown>): boolean {
+    if (fieldVal && typeof fieldVal === "object" && !Array.isArray(fieldVal)) {
+      return this.matches(fieldVal as Record<string, unknown>, op);
     }
+    return false;
+  }
+
+  /** Applicera ett operator-objekt ({ in }, { gte, lte }…) på fältvärdet. */
+  private applyOperators(fieldVal: unknown, op: Record<string, unknown>): boolean {
     const ci = op.mode === "insensitive";
     for (const [opName, opVal] of Object.entries(op)) {
       if (opName === "mode") continue;

@@ -80,6 +80,18 @@ function toPlanForScan(p: JoinedPlan): PlanForScan {
   };
 }
 
+/** Sökbar text för en plan-rad: ärendenr + titel + klientnamn + anteckningar. */
+function planHaystack(p: Record<string, unknown>): string {
+  const plan = p as unknown as JoinedPlan;
+  const matter: Matter = plan.invoice?.matter ?? {};
+  return [
+    matter.matterNumber ?? "",
+    matter.title ?? "",
+    resolveRecipient(matter).name,
+    (p.notes as string | null) ?? "",
+  ].join(" ").toLowerCase();
+}
+
 export const paymentPlanRouter = router({
   list: orgProcedure
     .input(
@@ -117,17 +129,7 @@ export const paymentPlanRouter = router({
       });
       if (!input?.search) return plans;
       const needle = input.search.toLowerCase();
-      // eslint-disable-next-line complexity
-      return plans.filter((p: Record<string, unknown>) => {
-        const inv = p.invoice as { matter?: { matterNumber?: string; title?: string; contacts?: Array<{ contact?: { name?: string } }> } } | undefined;
-        const haystack = [
-          inv?.matter?.matterNumber ?? "",
-          inv?.matter?.title ?? "",
-          inv?.matter?.contacts?.[0]?.contact?.name ?? "",
-          (p.notes as string | null) ?? "",
-        ].join(" ").toLowerCase();
-        return haystack.includes(needle);
-      });
+      return plans.filter((p: Record<string, unknown>) => planHaystack(p).includes(needle));
     }),
 
   getById: orgProcedure
