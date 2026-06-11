@@ -29,12 +29,15 @@ const TEXT_MIMES = new Set([
   "application/json", "application/xml",
 ]);
 
-// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'isPlainTextDoc' has a complexity of 9. Maximum allowed is 8.)
+/** Filändelse (gemener, utan punkt) ur storagePath/fileName; tom om ingen. */
+function docExt(doc: ContentDoc): string {
+  return (doc.storagePath ?? doc.fileName ?? "").toLowerCase().match(/\.([a-z0-9]+)$/)?.[1] ?? "";
+}
+
 export function isPlainTextDoc(doc: ContentDoc): boolean {
   const mime = doc.mimeType?.toLowerCase() ?? "";
   if (TEXT_MIMES.has(mime) || mime.startsWith("text/")) return true;
-  const ext = (doc.storagePath ?? doc.fileName ?? "").toLowerCase().match(/\.([a-z0-9]+)$/)?.[1] ?? "";
-  return TEXT_EXTS.has(ext);
+  return TEXT_EXTS.has(docExt(doc));
 }
 
 /**

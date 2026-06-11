@@ -153,11 +153,12 @@ export interface TaxaResult {
  * `kind` säger om taxan tillämpas eller om man måste falla tillbaka på
  * löpande räkning (HUF > 225 min) eller om input var ogiltigt.
  */
-// eslint-disable-next-line complexity
-export function computeBrottmalstaxa(opts: ComputeOpts): TaxaResult {
-  const { huvudforhandlingMinutes: huf, level } = opts;
-  const hasFTax = opts.hasFTax ?? true;
+type CellResult =
+  | { ok: true; row: TaxaRow; e: number; g: number }
+  | { ok: false; note: string };
 
+/** Tidiga input-guards (ogiltigt input / över maxgräns) → TaxaResult, annars null. */
+function validateTaxaInput(huf: number, level: number): TaxaResult | null {
   if (!Number.isFinite(huf) || huf < 0 || !isLevel(level)) {
     return {
       kind: "invalid-input", intervalLabel: "", level: 1,
@@ -165,10 +166,9 @@ export function computeBrottmalstaxa(opts: ComputeOpts): TaxaResult {
       notes: ["Ogiltigt input. HUF-minuter måste vara ≥ 0 och nivå 1-4."],
     };
   }
-
   if (huf > TAXA_MAX_MINUTES) {
     return {
-      kind: "exceeds-max", intervalLabel: "", level,
+      kind: "exceeds-max", intervalLabel: "", level: level as TaxaLevel,
       ersattningExclVat: 0, gransvardeExclVat: 0,
       notes: [
         `Förhandlingstiden överstiger taxans maxgräns (${TAXA_MAX_MINUTES} min = 3 tim 45 min).`,
@@ -176,46 +176,58 @@ export function computeBrottmalstaxa(opts: ComputeOpts): TaxaResult {
       ],
     };
   }
+  return null;
+}
 
+/** Slå upp taxa-rad + ersättning/gränsvärde för nivån (defensiva not-found-fall). */
+function findTaxaCell(huf: number, level: TaxaLevel): CellResult {
   const row = BROTTMALSTAXA_TABLE.find((r) => huf >= r.fromMin && huf <= r.toMin);
-  if (!row) {
-    // Inte väntat men defensiv
-    return {
-      kind: "invalid-input", intervalLabel: "", level,
-      ersattningExclVat: 0, gransvardeExclVat: 0,
-      notes: ["Hittade inget matchande intervall i tabellen."],
-    };
-  }
-
+  if (!row) return { ok: false, note: "Hittade inget matchande intervall i tabellen." };
   const idx = level - 1;
   const e = row.ersattning[idx];
   const g = row.gransvarde[idx];
-  if (e === undefined || g === undefined) {
-    // Inte väntat — idx härleds ur validerad nivå (1-4), men defensiv
-    return {
-      kind: "invalid-input", intervalLabel: "", level,
-      ersattningExclVat: 0, gransvardeExclVat: 0,
-      notes: ["Hittade ingen taxa-rad för angiven nivå."],
-    };
-  }
+  if (e === undefined || g === undefined) return { ok: false, note: "Hittade ingen taxa-rad för angiven nivå." };
+  return { ok: true, row, e, g };
+}
 
-  const ersattning = hasFTax ? e : applyNoFTaxFactor(e);
-  const gransvarde = hasFTax ? g : applyNoFTaxFactor(g);
+/** F-skatt-justering: oförändrat belopp med F-skatt, annars nedjusterat. */
+function adjustForFTax(value: number, hasFTax: boolean): number {
+  return hasFTax ? value : applyNoFTaxFactor(value);
+}
 
+function buildNotes(hasFTax: boolean, huf: number, row: TaxaRow): string[] {
   const notes: string[] = [];
   if (!hasFTax) notes.push("Justerat för advokat utan F-skatt (× 1237/1626).");
   notes.push("Belopp exkl moms. För advokat med F-skatt lägger Domstolsverket 25 % moms ovanpå.");
   if (huf > row.toMin - 5) {
     notes.push("Nära intervallets övre gräns — verifiera faktiskt avslutsklockslag.");
   }
+  return notes;
+}
+
+export function computeBrottmalstaxa(opts: ComputeOpts): TaxaResult {
+  const { huvudforhandlingMinutes: huf, level } = opts;
+  const hasFTax = opts.hasFTax ?? true;
+
+  const invalid = validateTaxaInput(huf, level);
+  if (invalid) return invalid;
+
+  const cell = findTaxaCell(huf, level);
+  if (!cell.ok) {
+    return {
+      kind: "invalid-input", intervalLabel: "", level,
+      ersattningExclVat: 0, gransvardeExclVat: 0,
+      notes: [cell.note],
+    };
+  }
 
   return {
     kind: "taxa-applies",
-    intervalLabel: row.label,
+    intervalLabel: cell.row.label,
     level,
-    ersattningExclVat: ersattning,
-    gransvardeExclVat: gransvarde,
-    notes,
+    ersattningExclVat: adjustForFTax(cell.e, hasFTax),
+    gransvardeExclVat: adjustForFTax(cell.g, hasFTax),
+    notes: buildNotes(hasFTax, huf, cell.row),
   };
 }
 

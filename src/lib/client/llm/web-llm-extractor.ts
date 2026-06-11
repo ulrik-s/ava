@@ -138,25 +138,26 @@ export function parseJsonResponse(raw: string, schema: ExtractionSchema): Extrac
   return out;
 }
 
-// eslint-disable-next-line complexity
+/** Hoppa förbi en JSON-sträng; returnerar index på avslutande citattecknet
+ *  (eller strängens slut om den är oavslutad). `\`-escape hoppar nästa tecken. */
+function skipString(raw: string, openQuoteIdx: number): number {
+  for (let i = openQuoteIdx + 1; i < raw.length; i++) {
+    if (raw[i] === "\\") { i++; continue; }
+    if (raw[i] === '"') return i;
+  }
+  return raw.length;
+}
+
 function extractJsonObject(raw: string): string {
-  // Hitta första `{` och balansera räknaren tills matching `}`
+  // Hitta första `{` och balansera räknaren tills matching `}` (hoppar strängar).
   const start = raw.indexOf("{");
   if (start < 0) return "{}";
   let depth = 0;
-  let inString = false;
-  let escape = false;
   for (let i = start; i < raw.length; i++) {
     const ch = raw[i];
-    if (escape) { escape = false; continue; }
-    if (ch === "\\") { escape = true; continue; }
-    if (ch === '"') { inString = !inString; continue; }
-    if (inString) continue;
+    if (ch === '"') { i = skipString(raw, i); continue; }
     if (ch === "{") depth++;
-    else if (ch === "}") {
-      depth--;
-      if (depth === 0) return raw.slice(start, i + 1);
-    }
+    else if (ch === "}" && --depth === 0) return raw.slice(start, i + 1);
   }
   return raw.slice(start); // unbalanced — låt JSON.parse misslyckas vid behov
 }
