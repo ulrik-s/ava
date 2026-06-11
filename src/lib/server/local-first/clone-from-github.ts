@@ -77,13 +77,16 @@ export function cloneFromGithub(options: CloneFromGithubOptions = {}): DemoClone
  * I browser krävs en CORS-proxy mot github.com. I Node ignoreras
  * proxy:n. `null` = användaren har stängt av explicit.
  */
-// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'resolveCorsProxy' has a complexity of 10. Maximum allowed is 8.)
 function resolveCorsProxy(opt: string | null | undefined): string | null {
   if (opt === null) return null;
   if (opt) return opt;
   const isBrowser = typeof globalThis !== "undefined"
     && (globalThis as { window?: unknown }).window !== undefined;
-  if (!isBrowser) return null;
+  return isBrowser ? resolveBrowserProxy() : null;
+}
+
+/** Auto-vald CORS-proxy i browser: build-time env → lokal dev → publik fallback. */
+function resolveBrowserProxy(): string {
   // 1. Build-time injicerad proxy (Cloudflare Worker i prod-deploy)
   const envProxy = process.env.NEXT_PUBLIC_CORS_PROXY_URL;
   if (envProxy) return envProxy;

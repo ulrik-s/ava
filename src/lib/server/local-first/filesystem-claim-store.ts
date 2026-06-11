@@ -36,7 +36,19 @@ export class FilesystemClaimStore implements IClaimStore {
     private maxRetries: number = DEFAULT_MAX_RETRIES,
   ) {}
 
-  // eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Async method 'tryClaim' has a complexity of 9. Maximum allowed is 8.)
+  /**
+   * Disposition för en befintlig claim:
+   *   "blocked" — någon annan har en levande claim
+   *   "ours"    — vi äger den redan (re-entrant)
+   *   "free"    — saknas eller utgången → fri att ta
+   */
+  private claimState(existing: ClaimRow | null): "blocked" | "ours" | "free" {
+    if (!existing) return "free";
+    if (existing.claimedBy === this.me) return "ours";
+    if (!this.isExpired(existing)) return "blocked";
+    return "free";
+  }
+
   async tryClaim(claimId: string, opts: ClaimOpts): Promise<boolean> {
     const ttlSec = opts.ttlSec ?? DEFAULT_TTL_SEC;
 
@@ -44,13 +56,9 @@ export class FilesystemClaimStore implements IClaimStore {
       await this.git.fetch();
       await this.git.resetHardToRemote();
 
-      const existing = await this.findClaim(claimId);
-      if (existing && existing.claimedBy !== this.me && !this.isExpired(existing)) {
-        return false; // någon annan har en levande claim
-      }
-      if (existing && existing.claimedBy === this.me) {
-        return true; // re-entrant
-      }
+      const state = this.claimState(await this.findClaim(claimId));
+      if (state === "blocked") return false;
+      if (state === "ours") return true; // re-entrant
 
       const row: ClaimRow = {
         claimId,
