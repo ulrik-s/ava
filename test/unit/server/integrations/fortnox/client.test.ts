@@ -30,7 +30,7 @@ function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 }
 
-interface Counts { token: number; voucher: number; lastAuth?: string }
+interface Counts { token: number; voucher: number; lastAuth?: string; lastBody?: unknown }
 
 /** fetch som routar token- vs voucher-endpoint; voucher-status styrs per anrop. */
 function makeFetch(voucherStatuses: number[], counts: Counts) {
@@ -43,6 +43,7 @@ function makeFetch(voucherStatuses: number[], counts: Counts) {
     counts.voucher++;
     const headers = (init?.headers ?? {}) as Record<string, string>;
     counts.lastAuth = headers.Authorization ?? "";
+    counts.lastBody = typeof init?.body === "string" ? JSON.parse(init.body) : undefined;
     const status = voucherStatuses[counts.voucher - 1] ?? 200;
     return status === 200 ? json(200, VOUCHER_RESP) : json(status, { error: "x" });
   }) as typeof globalThis.fetch;
@@ -66,6 +67,18 @@ describe("FortnoxClient.createVoucher", () => {
     expect(counts.token).toBe(0);
     expect(counts.voucher).toBe(1);
     expect(counts.lastAuth).toBe("Bearer at-fresh");
+  });
+
+  it("POST-body: VoucherRows är en plain array (ej XML-nästlad VoucherRow)", async () => {
+    // Regression: Fortnox JSON-API ger 400 \"Felaktig datastruktur\" om raderna
+    // nästlas som { VoucherRow: [...] }. Verifierat mot sandbox 1838388.
+    const counts: Counts = { token: 0, voucher: 0 };
+    const client = new FortnoxClient(config, new InMemoryFortnoxTokenStore(fresh()), makeFetch([200], counts));
+
+    await client.createVoucher(VOUCHER);
+    const body = counts.lastBody as { Voucher: { VoucherRows: unknown } };
+    expect(Array.isArray(body.Voucher.VoucherRows)).toBe(true);
+    expect(body.Voucher.VoucherRows).toEqual(VOUCHER.VoucherRows);
   });
 
   it("utgången token → refreshar först och sparar den roterade token:en", async () => {
