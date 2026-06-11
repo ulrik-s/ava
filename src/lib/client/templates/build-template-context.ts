@@ -40,36 +40,54 @@ export interface BuildTemplateContextInput {
   now?: Date;
 }
 
-// eslint-disable-next-line complexity
+/** `YYYY-MM-DD` lokalt — stabil shape som seed-mallar förväntar sig. */
+function formatToday(now: Date): string {
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+
+function buildMatter(matter: TemplateMatter): Record<string, unknown> {
+  return {
+    matterNumber: matter.matterNumber,
+    title: matter.title,
+    matterType: matter.matterType ?? "",
+  };
+}
+
+/** Mottagare/klient: `null` (ej tomt objekt) när kontakten saknas. */
+function buildRecipient(recipient: TemplateContact | null | undefined): Record<string, unknown> | null {
+  if (!recipient) return null;
+  return {
+    name: recipient.name,
+    email: recipient.email ?? "",
+    phone: recipient.phone ?? "",
+    personalNumber: recipient.personalNumber ?? "",
+    orgNumber: recipient.orgNumber ?? "",
+  };
+}
+
+function buildClient(client: TemplateContact | null | undefined): Record<string, unknown> | null {
+  if (!client) return null;
+  return { name: client.name, email: client.email ?? "", phone: client.phone ?? "" };
+}
+
+function buildOrganization(organization: TemplateOrganization | null | undefined): Record<string, unknown> {
+  const org: TemplateOrganization = organization ?? {};
+  return {
+    name: org.name ?? "",
+    orgNumber: org.orgNumber ?? "",
+    address: org.address ?? "",
+    email: org.email ?? "",
+    phone: org.phone ?? "",
+  };
+}
+
 export function buildTemplateContext(input: BuildTemplateContextInput): Record<string, unknown> {
   const now = input.now ?? new Date();
-  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-
   return {
-    today,
-    matter: {
-      matterNumber: input.matter.matterNumber,
-      title: input.matter.title,
-      matterType: input.matter.matterType ?? "",
-    },
-    recipient: input.recipient
-      ? {
-          name: input.recipient.name,
-          email: input.recipient.email ?? "",
-          phone: input.recipient.phone ?? "",
-          personalNumber: input.recipient.personalNumber ?? "",
-          orgNumber: input.recipient.orgNumber ?? "",
-        }
-      : null,
-    client: input.client
-      ? { name: input.client.name, email: input.client.email ?? "", phone: input.client.phone ?? "" }
-      : null,
-    organization: {
-      name: input.organization?.name ?? "",
-      orgNumber: input.organization?.orgNumber ?? "",
-      address: input.organization?.address ?? "",
-      email: input.organization?.email ?? "",
-      phone: input.organization?.phone ?? "",
-    },
+    today: formatToday(now),
+    matter: buildMatter(input.matter),
+    recipient: buildRecipient(input.recipient),
+    client: buildClient(input.client),
+    organization: buildOrganization(input.organization),
   };
 }
