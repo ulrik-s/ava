@@ -7,7 +7,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Wallet, Search } from "lucide-react";
+import { Wallet, Search, BellRing } from "lucide-react";
 import { trpc } from "@/lib/client/trpc";
 import { shellPath } from "@/lib/client/demo/entity-href";
 import { formatCurrency } from "@/lib/client/utils";
@@ -58,6 +58,20 @@ function outstandingOf(p: PlanRow): number {
   return computeInvoiceLedger(totalOf(p), paidOf(p), 0, writtenOff).outstanding;
 }
 
+/** Resultatet av en `scanDueReminders`-körning (#71). */
+export interface ScanResult {
+  scanned: number;
+  planned: number;
+  due: number;
+  overdue: number;
+}
+
+/** Mänsklig sammanfattning av en påminnelse-skanning. Ren → unit-testbar. */
+export function formatScanResult(r: ScanResult): string {
+  if (r.planned === 0) return `Inga nya påminnelser (skannade ${r.scanned} aktiva planer).`;
+  return `${r.planned} påminnelser skickade — ${r.due} förfaller, ${r.overdue} försenade (av ${r.scanned} planer).`;
+}
+
 const planColumns: Column<PlanRow>[] = [
   { key: "matterNumber", label: "Ärendenr", sortable: true,
     sortValue: (p) => p.invoice?.matter?.matterNumber ?? "",
@@ -99,9 +113,21 @@ const planColumns: Column<PlanRow>[] = [
 
 export default function PaymentPlansPage() {
   const router = useRouter();
+  const utils = trpc.useUtils();
   const [status, setStatus] = useState<Status>("ACTIVE");
   const [search, setSearch] = useState("");
+  const [scanMsg, setScanMsg] = useState<string | null>(null);
   const list = trpc.paymentPlan.list.useQuery({ status, search: search || undefined });
+
+  // #71: manuell väg att köra scanDueReminders (förfallo-/försenings-
+  // påminnelser) utan ett separat tRPC-anrop. Den automatiska job-vägen
+  // väntar på regelmotorn (#80).
+  const scan = trpc.paymentPlan.scanDueReminders.useMutation({
+    onSuccess: (r) => {
+      setScanMsg(formatScanResult(r));
+      void utils.paymentPlan.list.invalidate();
+    },
+  });
 
   return (
     <div>
@@ -112,6 +138,27 @@ export default function PaymentPlansPage() {
         <p className="text-sm text-gray-500 mt-1">
           Alla planer i organisationen. Klicka för detaljer + påminnelse-historik.
         </p>
+      </div>
+
+      <div className="flex items-center gap-3 mb-3">
+        <button
+          type="button"
+          data-testid="send-reminders"
+          onClick={() => scan.mutate({})}
+          disabled={scan.isPending}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+        >
+          <BellRing size={14} />
+          {scan.isPending ? "Skickar…" : "Skicka påminnelser nu"}
+        </button>
+        {scanMsg && (
+          <span data-testid="scan-result" className="text-sm text-gray-600">
+            {scanMsg}
+          </span>
+        )}
+        {scan.error && (
+          <span className="text-sm text-red-600">Kunde inte skicka: {scan.error.message}</span>
+        )}
       </div>
 
       <div className="flex items-center justify-between mb-3 gap-3">
