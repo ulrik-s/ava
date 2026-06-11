@@ -39,7 +39,68 @@ export interface PushResult {
   filesPushed: number;
 }
 
-// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Async function 'pushViaRest' has a complexity of 12. Maximum allowed is 8.)
+interface ChangedFile {
+  path: string;
+  bytes: Uint8Array;
+}
+interface PushDiff {
+  changed: ChangedFile[];
+  deleted: string[];
+}
+type TreeEntry = { path: string; mode: string; type: "blob"; sha: string | null };
+
+/** Diffa lokal working-copy mot sync-state: ändrade (sha skiljer) + raderade. */
+function diffAgainstState(
+  local: Array<{ path: string; bytes: Uint8Array; sha: string }>,
+  state: SyncState,
+): PushDiff {
+  const localMap = new Map(local.map((f) => [f.path, f]));
+  const changed: ChangedFile[] = [];
+  const deleted: string[] = [];
+  for (const f of local) {
+    if (state.files[f.path] !== f.sha) changed.push({ path: f.path, bytes: f.bytes });
+  }
+  for (const path of Object.keys(state.files)) {
+    if (!localMap.has(path)) deleted.push(path);
+  }
+  return { changed, deleted };
+}
+
+/** Tree-entries för GitHub create-tree (sha=null = radering). */
+function buildTreeEntries(diff: PushDiff, newBlobShas: Map<string, string>): TreeEntry[] {
+  const entries: TreeEntry[] = [];
+  for (const item of diff.changed) {
+    entries.push({ path: item.path, mode: "100644", type: "blob", sha: newBlobShas.get(item.path)! });
+  }
+  for (const path of diff.deleted) {
+    entries.push({ path, mode: "100644", type: "blob", sha: null });
+  }
+  return entries;
+}
+
+/** Commit-payload med valfria signature/author (utelämnas när undefined). */
+function buildCommitPayload(args: PushArgs, tree: string, parent: string) {
+  return {
+    message: args.message,
+    tree,
+    parents: [parent],
+    ...(args.signature !== undefined ? { signature: args.signature } : {}),
+    ...(args.author !== undefined ? { author: args.author } : {}),
+  };
+}
+
+/** Ny files-map: applicera ändrade SHAs + ta bort raderade. */
+function applyFileChanges(
+  stateFiles: Record<string, string>,
+  diff: PushDiff,
+  newBlobShas: Map<string, string>,
+): Record<string, string> {
+  const filesMap: Record<string, string> = { ...stateFiles };
+  for (const item of diff.changed) filesMap[item.path] = newBlobShas.get(item.path)!;
+  for (const path of diff.deleted) delete filesMap[path];
+  return filesMap;
+}
+
 export async function pushViaRest(args: PushArgs): Promise<PushResult> {
   const opts = { token: args.token, ...(args.signal !== undefined ? { signal: args.signal } : {}) };
   const state = await readSyncState(args.handle);
@@ -48,62 +109,23 @@ export async function pushViaRest(args: PushArgs): Promise<PushResult> {
   }
 
   const local = await walkFsa(args.handle);
-  const localMap = new Map(local.map((f) => [f.path, f]));
+  const diff = diffAgainstState(local, state);
 
-  // Diff
-  const changed: Array<{ path: string; bytes: Uint8Array }> = [];
-  const deleted: string[] = [];
-
-  for (const f of local) {
-    const lastSha = state.files[f.path];
-    if (lastSha !== f.sha) changed.push({ path: f.path, bytes: f.bytes });
-  }
-  for (const path of Object.keys(state.files)) {
-    if (!localMap.has(path)) deleted.push(path);
-  }
-
-  if (changed.length === 0 && deleted.length === 0) {
+  if (diff.changed.length === 0 && diff.deleted.length === 0) {
     return { kind: "up-to-date", head: state.lastHead, filesPushed: 0 };
   }
 
   // Skapa blobs parallellt
   const newBlobShas = new Map<string, string>();
-  await parallelLimit(changed, 8, async (item) => {
+  await parallelLimit(diff.changed, 8, async (item) => {
     const sha = await createBlob(args.repo, item.bytes, opts);
     newBlobShas.set(item.path, sha);
   });
 
-  // Bygg tree-entries (sha=null = delete)
-  const entries: Array<{ path: string; mode: string; type: "blob"; sha: string | null }> = [];
-  for (const item of changed) {
-    entries.push({
-      path: item.path,
-      mode: "100644",
-      type: "blob",
-      sha: newBlobShas.get(item.path)!,
-    });
-  }
-  for (const path of deleted) {
-    entries.push({ path, mode: "100644", type: "blob", sha: null });
-  }
-
-  const newTreeSha = await createTree(args.repo, state.lastTree, entries, opts);
-  const newCommitSha = await createCommit(args.repo, {
-    message: args.message,
-    tree: newTreeSha,
-    parents: [state.lastHead],
-    ...(args.signature !== undefined ? { signature: args.signature } : {}),
-    ...(args.author !== undefined ? { author: args.author } : {}),
-  }, opts);
+  const newTreeSha = await createTree(args.repo, state.lastTree, buildTreeEntries(diff, newBlobShas), opts);
+  const newCommitSha = await createCommit(args.repo, buildCommitPayload(args, newTreeSha, state.lastHead), opts);
 
   await updateRef(args.repo, args.branch, newCommitSha, opts);
-
-  // Uppdatera sync-state med nya SHAs
-  const filesMap: Record<string, string> = { ...state.files };
-  for (const item of changed) {
-    filesMap[item.path] = newBlobShas.get(item.path)!;
-  }
-  for (const path of deleted) delete filesMap[path];
 
   const newState: SyncState = {
     version: 1,
@@ -111,14 +133,14 @@ export async function pushViaRest(args: PushArgs): Promise<PushResult> {
     lastHead: newCommitSha,
     lastTree: newTreeSha,
     lastSyncedAt: new Date().toISOString(),
-    files: filesMap,
+    files: applyFileChanges(state.files, diff, newBlobShas),
   };
   await writeSyncState(args.handle, newState);
 
   return {
     kind: "pushed",
     head: newCommitSha,
-    filesPushed: changed.length + deleted.length,
+    filesPushed: diff.changed.length + diff.deleted.length,
   };
 }
 
