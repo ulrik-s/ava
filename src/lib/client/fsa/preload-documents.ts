@@ -37,20 +37,18 @@ export interface PreloadResult {
 const manifestSchema = z.object({ paths: z.array(z.string()).optional() }).passthrough();
 const docMetaSchema = z.object({ storagePath: z.string().optional() }).passthrough();
 
-// eslint-disable-next-line complexity
-export async function preloadAllDocuments(opts: PreloadOpts): Promise<PreloadResult> {
-  const fetchFn = opts.fetchFn ?? globalThis.fetch.bind(globalThis);
-  const base = opts.baseUrl.replace(/\/+$/, "");
+type FetchFn = typeof globalThis.fetch;
 
-  // 1. Manifest → metadata-JSONs
+/** Steg 1: manifest → metadata-JSON-paths under documents/. */
+async function fetchDocMetaPaths(base: string, fetchFn: FetchFn): Promise<string[]> {
   const manifestRes = await fetchFn(`${base}/manifest.json`);
   if (!manifestRes.ok) throw new Error(`preload: HTTP ${manifestRes.status} på manifest`);
   const manifest = manifestSchema.parse(await manifestRes.json());
-  const docMetaPaths = (manifest.paths ?? []).filter(
-    (p) => p.startsWith("documents/") && p.endsWith(".json"),
-  );
+  return (manifest.paths ?? []).filter((p) => p.startsWith("documents/") && p.endsWith(".json"));
+}
 
-  // 2. Läs varje metadata och extrahera storagePath
+/** Steg 2: läs varje metadata-fil och extrahera storagePath (fel hoppas tyst). */
+async function collectBinaryPaths(base: string, docMetaPaths: string[], fetchFn: FetchFn): Promise<string[]> {
   const binaryPaths: string[] = [];
   for (const metaPath of docMetaPaths) {
     try {
@@ -62,6 +60,15 @@ export async function preloadAllDocuments(opts: PreloadOpts): Promise<PreloadRes
       // tyst — räknas som failed vid download-loop
     }
   }
+  return binaryPaths;
+}
+
+export async function preloadAllDocuments(opts: PreloadOpts): Promise<PreloadResult> {
+  const fetchFn = opts.fetchFn ?? globalThis.fetch.bind(globalThis);
+  const base = opts.baseUrl.replace(/\/+$/, "");
+
+  const docMetaPaths = await fetchDocMetaPaths(base, fetchFn);
+  const binaryPaths = await collectBinaryPaths(base, docMetaPaths, fetchFn);
 
   // 3. Ladda ner med concurrency
   const queue = [...binaryPaths];

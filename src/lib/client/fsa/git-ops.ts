@@ -153,11 +153,17 @@ export async function cloneRepo(
   });
 }
 
-// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Async function 'statusMatrix' has a complexity of 10. Maximum allowed is 8.)
+// statusMatrix-tupel [filepath, HEAD, WORKDIR, STAGE]: 0=missing, 1=existerar,
+// 2=ändrad, 3=ny stage. Klassificera ett (head,workdir,stage)-läge.
+function classifyStatus(head: number, workdir: number, stage: number): GitStatusEntry["status"] {
+  if (head === 0 && workdir > 0) return "untracked";
+  if (workdir === 0 && head > 0) return "deleted";
+  if (head === 0 && stage > 0) return "added";
+  return "modified";
+}
+
 export async function statusMatrix(fs: FsaIsoGitAdapter): Promise<GitStatusEntry[]> {
   const git = await loadIsoGit();
-  // statusMatrix returnerar tupler [filepath, HEAD, WORKDIR, STAGE]
-  // där 0=missing, 1=existerar, 2=ändrad, 3=ny stage.
   const matrix = await git.statusMatrix({
     fs: asFsClient(fs),
     dir: "/",
@@ -165,12 +171,7 @@ export async function statusMatrix(fs: FsaIsoGitAdapter): Promise<GitStatusEntry
   const entries: GitStatusEntry[] = [];
   for (const [filepath, head, workdir, stage] of matrix) {
     if (head === workdir && workdir === stage) continue; // oförändrad
-    let status: GitStatusEntry["status"];
-    if (head === 0 && workdir > 0) status = "untracked";
-    else if (workdir === 0 && head > 0) status = "deleted";
-    else if (head === 0 && stage > 0) status = "added";
-    else status = "modified";
-    entries.push({ path: filepath, status });
+    entries.push({ path: filepath, status: classifyStatus(head, workdir, stage) });
   }
   return entries;
 }
