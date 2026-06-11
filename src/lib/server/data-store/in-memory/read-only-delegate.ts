@@ -201,24 +201,20 @@ export class ReadOnlyDelegate<T extends Record<string, unknown>> {
     return out;
   }
 
-  // eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Method 'resolveRelation' has a complexity of 11. Maximum allowed is 8.)
   private resolveRelation(
     parent: Record<string, unknown>,
     rc: RelationConfig<Record<string, unknown>>,
     spec: unknown,
     mode: "where" | "include",
   ): unknown {
-    const userWhere = mode === "include" && isObj(spec) ? (spec.where as Record<string, unknown>) ?? {} : {};
-    const finalWhere = { ...rc.where(parent), ...userWhere };
+    const finalWhere = { ...rc.where(parent), ...userWhereFor(spec, mode) };
     let children = rc.collection().filter((c) => this.engine.matches(c, finalWhere));
 
     const subTree = subTreeFor(spec, mode);
     if (subTree && rc.relations) {
       children = children.map((c) => this.hydrateWith(c, rc.relations!, subTree, mode));
     }
-    if (mode === "include" && isObj(spec) && typeof spec.take === "number") {
-      children = children.slice(0, spec.take);
-    }
+    children = applyTake(children, spec, mode);
     return rc.kind === "one" ? (children[0] ?? null) : children;
   }
 
@@ -257,6 +253,24 @@ export class ReadOnlyDelegate<T extends Record<string, unknown>> {
 
 function isObj(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+/** Användar-angivet where från en include-spec ({ where: {…} }); annars tomt. */
+function userWhereFor(spec: unknown, mode: "where" | "include"): Record<string, unknown> {
+  if (mode !== "include" || !isObj(spec)) return {};
+  return (spec.where as Record<string, unknown>) ?? {};
+}
+
+/** Begränsa barn-listan med `take` (bara i include-läge med numeriskt take). */
+function applyTake(
+  children: Record<string, unknown>[],
+  spec: unknown,
+  mode: "where" | "include",
+): Record<string, unknown>[] {
+  if (mode === "include" && isObj(spec) && typeof spec.take === "number") {
+    return children.slice(0, spec.take);
+  }
+  return children;
 }
 
 /** Vilket sub-träd att rekursera ned i för nested include / nested where. */
