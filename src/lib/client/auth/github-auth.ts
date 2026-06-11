@@ -131,18 +131,28 @@ export interface DetectArgs {
  * repo-permissions. För self-hosted (icke-GitHub) URL:er hanteras
  * det optimistiskt: token → write, ingen token → anonymous.
  */
-// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Async function 'detectAuthMode' has a complexity of 11. Maximum allowed is 8.)
+/**
+ * Self-hosted (icke-GitHub): lokal/samma-origin git-server tillåter anonym
+ * push → write även utan token. Annars: token → write, annars anon.
+ */
+function detectSelfHostedMode(repoUrl: string, token: string): AuthMode {
+  const origin = typeof window !== "undefined" ? window.location.origin : undefined;
+  if (isLocalOrSameOrigin(repoUrl, origin)) return "identified-write";
+  return token ? "identified-write" : "anonymous";
+}
+
+/** GitHub-repo med token: verifiera identitet + push-status. */
+async function detectGithubAuthedMode(token: string, owner: string, repo: string): Promise<AuthMode> {
+  const user = await getCurrentUser(token);
+  if (!user) return "anonymous"; // token funkar inte
+  const perms = await getRepoPermissions(token, owner, repo);
+  if (perms?.canPush) return "identified-write";
+  return "identified-read";
+}
+
 export async function detectAuthMode(args: DetectArgs): Promise<AuthMode> {
   const parsed = parseRepoUrl(args.repoUrl);
-
-  // Self-hosted (icke-GitHub) — vi vet inte permissions via API:n.
-  if (!parsed) {
-    // Lokal/samma-origin git-server (docker:8080/git) tillåter anonym
-    // push → write även utan token. Annars: token → write, annars anon.
-    const origin = typeof window !== "undefined" ? window.location.origin : undefined;
-    if (isLocalOrSameOrigin(args.repoUrl, origin)) return "identified-write";
-    return args.token ? "identified-write" : "anonymous";
-  }
+  if (!parsed) return detectSelfHostedMode(args.repoUrl, args.token);
 
   if (!args.token) {
     // Anonymt + GitHub-repo: bekräfta att det är publikt (kan läsas).
@@ -150,10 +160,5 @@ export async function detectAuthMode(args: DetectArgs): Promise<AuthMode> {
     return perms?.canRead ? "anonymous" : "anonymous";
   }
 
-  // Med token: verifiera identitet + push-status.
-  const user = await getCurrentUser(args.token);
-  if (!user) return "anonymous"; // token funkar inte
-  const perms = await getRepoPermissions(args.token, parsed.owner, parsed.repo);
-  if (perms?.canPush) return "identified-write";
-  return "identified-read";
+  return detectGithubAuthedMode(args.token, parsed.owner, parsed.repo);
 }
