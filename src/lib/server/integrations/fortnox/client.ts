@@ -16,9 +16,10 @@ import {
 import type { FortnoxTokenStore } from "./token-store";
 
 /**
- * Wire-format för voucher-payloaden. Enligt Fortnox-dokumentationen nästlas
- * raderna som `VoucherRows: { VoucherRow: [...] }`. (Bekräfta exakt nesting
- * mot sandbox när creds finns — isolerat här så det är en enradsändring.)
+ * Wire-format för voucher-payloaden. VERIFIERAT mot Fortnox sandbox (tenant
+ * 1838388, 2026-06-11): JSON-API:t vill ha `VoucherRows` som en PLAIN ARRAY av
+ * rad-objekt — INTE den XML-style-nästlingen `{ VoucherRow: [...] }` (den ger
+ * `400 Felaktig datastruktur`, code 2002381). Account/Debit/Credit som tal är OK.
  */
 function toWireVoucher(v: FortnoxVoucher): Record<string, unknown> {
   return {
@@ -26,7 +27,7 @@ function toWireVoucher(v: FortnoxVoucher): Record<string, unknown> {
     TransactionDate: v.TransactionDate,
     Description: v.Description,
     ...(v.Comments ? { Comments: v.Comments } : {}),
-    VoucherRows: { VoucherRow: v.VoucherRows },
+    VoucherRows: v.VoucherRows,
   };
 }
 
