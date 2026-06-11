@@ -58,6 +58,9 @@ jobs:
       # warnings OCH oavsedda warning-regler. Skulden betas av via `yarn
       # lint:prune` när en lång funktion bryts ut. Se docs/quality.md.
       - run: bun run lint --max-warnings 0
+      # Enforcing #40: src/lib hålls strikt på complexity@8 — inga complexity-
+      # undantag (inline-disable eller suppressions). Se docs/quality.md.
+      - run: bun run lint:lib-complexity
       - run: bun run deps:check
       # Gating: fäller på strukturfynd (döda filer, oanvända/olistade deps).
       # Export-/typ-fynd är "warn" i knip.json (rådgivande) tills #3/#4 städat dem.
