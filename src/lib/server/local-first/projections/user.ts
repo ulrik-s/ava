@@ -21,6 +21,9 @@ export const userProjectionSchema = z.object({
   /** SSH-public-keys för git-server-auth. Tom array = ingen auth ännu. */
   sshPublicKeys: z.array(z.string()).default([]),
   organizationId: z.string(),
+  /** OIDC-bindning (#223, ADR 0009) — bevaras vid hydrering om satt. */
+  oidcSubject: z.string().nullable().optional(),
+  oidcIssuer: z.string().nullable().optional(),
 });
 
 export type UserProjectionData = z.infer<typeof userProjectionSchema>;
