@@ -43,7 +43,57 @@ export interface OpenInFinderOpts {
   downloadFallbackBase?: string;
 }
 
-// eslint-disable-next-line complexity
+/** Navigera ner genom katalog-delarna (alla utom sista = filnamnet). */
+async function navigateToDir(
+  root: FileSystemDirectoryHandle,
+  parts: string[],
+): Promise<FileSystemDirectoryHandle | null> {
+  let dir = root;
+  for (let i = 0; i < parts.length - 1; i++) {
+    try {
+      dir = await dir.getDirectoryHandle(parts[i]!);
+    } catch {
+      return null;
+    }
+  }
+  return dir;
+}
+
+/** Demo-mode: lazy-ladda filen från GH Pages och skriv till FSA. */
+async function downloadFallback(
+  root: FileSystemDirectoryHandle,
+  storagePath: string,
+  fallbackBase: string,
+): Promise<FileSystemFileHandle | null> {
+  try {
+    const { downloadToFsa } = await import("./download-to-fsa");
+    const base = fallbackBase.replace(/\/+$/, "");
+    const url = `${base}/${storagePath.replace(/^\/+/, "")}`;
+    const result = await downloadToFsa({ root, relativePath: storagePath, url });
+    return result.fileHandle;
+  } catch (err) {
+    console.warn("[openInFinder] download-fallback misslyckades:", err);
+    return null;
+  }
+}
+
+/** Hämta fil-handle; faller tillbaka på download när filen saknas lokalt. */
+async function resolveFileHandle(
+  dir: FileSystemDirectoryHandle,
+  root: FileSystemDirectoryHandle,
+  storagePath: string,
+  lastPart: string,
+  fallbackBase: string | undefined,
+): Promise<{ fileHandle: FileSystemFileHandle; justDownloaded: boolean } | null> {
+  try {
+    return { fileHandle: await dir.getFileHandle(lastPart), justDownloaded: false };
+  } catch {
+    if (!fallbackBase) return null;
+    const dl = await downloadFallback(root, storagePath, fallbackBase);
+    return dl ? { fileHandle: dl, justDownloaded: true } : null;
+  }
+}
+
 export async function openInFinder(storagePath: string, opts: OpenInFinderOpts = {}): Promise<OpenInFinderResult> {
   if (!isFsaSupported()) return { kind: "unsupported" };
   const root = await loadHandle("repo-root");
@@ -51,43 +101,16 @@ export async function openInFinder(storagePath: string, opts: OpenInFinderOpts =
   const granted = await ensureReadWrite(root);
   if (!granted) return { kind: "permission-denied" };
 
-  // Navigera ner till filen
   const parts = storagePath.replace(/^\/+/, "").split("/").filter(Boolean);
   if (parts.length === 0) return { kind: "file-not-found", path: storagePath };
-  let dir: FileSystemDirectoryHandle = root;
-  for (let i = 0; i < parts.length - 1; i++) {
-    try {
-      dir = await dir.getDirectoryHandle(parts[i]!);
-    } catch {
-      return { kind: "file-not-found", path: storagePath };
-    }
-  }
-  let fileHandle: FileSystemFileHandle;
-  let justDownloaded = false;
-  try {
-    fileHandle = await dir.getFileHandle(parts[parts.length - 1]!);
-  } catch {
-    // Demo-mode fallback: filen finns inte i user:s lokala mapp men på GH
-    // Pages. Lazy-download + skriv hit, sen returnera handle till nya filen.
-    if (opts.downloadFallbackBase) {
-      try {
-        const { downloadToFsa } = await import("./download-to-fsa");
-        const base = opts.downloadFallbackBase.replace(/\/+$/, "");
-        const url = `${base}/${storagePath.replace(/^\/+/, "")}`;
-        const result = await downloadToFsa({ root, relativePath: storagePath, url });
-        fileHandle = result.fileHandle;
-        justDownloaded = true;
-      } catch (err) {
-        console.warn("[openInFinder] download-fallback misslyckades:", err);
-        return { kind: "file-not-found", path: storagePath };
-      }
-    } else {
-      return { kind: "file-not-found", path: storagePath };
-    }
-  }
+  const dir = await navigateToDir(root, parts);
+  if (!dir) return { kind: "file-not-found", path: storagePath };
+
+  const resolved = await resolveFileHandle(dir, root, storagePath, parts[parts.length - 1]!, opts.downloadFallbackBase);
+  if (!resolved) return { kind: "file-not-found", path: storagePath };
 
   return {
     kind: "ok",
-    target: { relativePath: storagePath, folderName: root.name, fileHandle, justDownloaded },
+    target: { relativePath: storagePath, folderName: root.name, fileHandle: resolved.fileHandle, justDownloaded: resolved.justDownloaded },
   };
 }
