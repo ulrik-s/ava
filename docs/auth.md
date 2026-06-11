@@ -3,6 +3,16 @@
 Denna fil beskriver hur autentisering fungerar för AVA:s **self-hosted**-läge
 (docker på Linux). Demo-läget på GitHub Pages är read-only och har ingen auth.
 
+> **Beslutad riktning ([ADR 0009](./adr/0009-oidc-login-via-servern.md), epic
+> [#221](https://github.com/ulrik-s/ava/issues/221)):** människo-login flyttar
+> till **OIDC** — AVA blir en *relying party* (bring-your-own-IdP: Entra
+> ID/Google/BankID-broker), enforce:at av `oauth2-proxy` i nginx-fronten, med
+> användar-allowlist i firma.git. Designmålet "ingen extern IdP" nedan revideras
+> då till **delegerad identitet (ej data)** — data lämnar aldrig firma.git — med
+> self-hosted IdP (Authelia) som tillval. Dokumentet nedan beskriver den
+> **nuvarande** htpasswd/PAT-modellen tills epiken landar; maskin-/CLI-klienter
+> (server-runtime, `git clone`) behåller PAT/deploy-key även efteråt.
+
 ## Designmål
 
 - **Tunn server**: ingen custom auth-tjänst, inga long-running processer
