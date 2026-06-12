@@ -36,6 +36,7 @@ import {
   logsCommand,
   extractAdminToken,
 } from "./install-server/orchestrate";
+import { interpretPreflight, runPreflight } from "./install-server/preflight";
 import {
   answersToConfig,
   renderConfigTemplate,
@@ -59,6 +60,17 @@ async function runCommands(cmds: string[][], env: NodeJS.ProcessEnv): Promise<vo
     const r = spawnSync(bin!, args, { stdio: "inherit", env });
     if (r.status !== 0) throw new Error(`kommandot misslyckades (${r.status ?? r.signal}): ${bin}`);
   }
+}
+
+const WEB_PORT = 8080;
+
+/** Preflight: docker + web-port. Returnerar false (+ loggar) vid problem. */
+async function preflightOk(): Promise<boolean> {
+  const { ok, errors } = interpretPreflight(await runPreflight(WEB_PORT));
+  if (!ok) {
+    for (const e of errors) console.error(`[install-server] preflight: ${e}`);
+  }
+  return ok;
 }
 
 /** Bygg + starta stacken och skriv ut den bootstrappade admin-token:n. */
@@ -182,7 +194,8 @@ async function runInstall(argv: string[], paths: InstallPaths): Promise<boolean>
   log(`deploy-env skriven: ${paths.envFile}`);
 
   if (hasFlag(argv, "start")) {
-    // Ett-kommando-vägen: exportera valv-nyckeln + bygg + starta + verifiera.
+    // Ett-kommando-vägen: preflight → exportera valv-nyckeln → bygg → starta.
+    if (!(await preflightOk())) return false;
     process.env.AVA_SECRETS_KEY = masterKey;
     process.env.AVA_SECRETS_FILE = paths.secretsFile;
     await startStack(cfg.authMode === "oidc");
