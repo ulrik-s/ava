@@ -9,7 +9,8 @@
  */
 
 import { trpc } from "@/lib/client/trpc";
-import { downloadTextFile } from "@/lib/client/download-text";
+import { downloadBytes } from "@/lib/client/download-text";
+import { encodePc8 } from "@/lib/shared/accounting/pc8";
 import {
   countExportable,
   invoicesToSie,
@@ -42,7 +43,8 @@ export function SieExportButton() {
       },
       generatedDate: stamp,
     });
-    downloadTextFile(`bokforing_${stamp}.sie`, sie);
+    // SIE deklarerar #FORMAT PC8 → koda bytes i CP437 så åäö tolkas rätt (#247).
+    downloadBytes(`bokforing_${stamp}.sie`, encodePc8(sie));
   }
 
   return (
