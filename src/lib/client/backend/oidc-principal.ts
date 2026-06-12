@@ -61,3 +61,25 @@ export function resolveSelfHostedPrincipal(
 ): Principal | null {
   return new OidcAuthProvider(claims, users).getPrincipal();
 }
+
+/**
+ * Klassificera self-hosted-login utifrån claims + allowlist (#222-wiring):
+ *   - `no-session`  — ingen OIDC-session (ej bakom oauth2-proxy / ej inloggad);
+ *     callern faller tillbaka på sitt vanliga (icke-OIDC) beteende.
+ *   - `denied`      — autentiserad IdP-identitet men INTE i byråns allowlist →
+ *     neka (autentisering ≠ auktorisering, #223).
+ *   - `authorized`  — allowlistad → principal ur firma.git.
+ */
+export type OidcLoginOutcome =
+  | { kind: "authorized"; principal: Principal }
+  | { kind: "denied"; email: string }
+  | { kind: "no-session" };
+
+export function classifyOidcLogin(
+  claims: OidcClaims | null,
+  users: readonly AllowlistedUser[],
+): OidcLoginOutcome {
+  if (!claims) return { kind: "no-session" };
+  const principal = resolveSelfHostedPrincipal(claims, users);
+  return principal ? { kind: "authorized", principal } : { kind: "denied", email: claims.email };
+}

@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest-compat";
 import {
   fetchOidcClaims,
   resolveSelfHostedPrincipal,
+  classifyOidcLogin,
   OIDC_USERINFO_PATH,
 } from "@/lib/client/backend/oidc-principal";
 import type { AllowlistedUser } from "@/lib/server/auth/oidc-auth-provider";
@@ -65,5 +66,22 @@ describe("resolveSelfHostedPrincipal", () => {
       USERS,
     );
     expect(p).toBeNull();
+  });
+});
+
+describe("classifyOidcLogin", () => {
+  it("inga claims → no-session (icke-OIDC/ej inloggad)", () => {
+    expect(classifyOidcLogin(null, USERS)).toEqual({ kind: "no-session" });
+  });
+
+  it("allowlistad email → authorized med principal", () => {
+    const out = classifyOidcLogin({ email: "anna@byra.se", subject: "", issuer: "", name: "Anna" }, USERS);
+    expect(out.kind).toBe("authorized");
+    if (out.kind === "authorized") expect(out.principal.id).toBe("u-1");
+  });
+
+  it("autentiserad men ej allowlistad → denied med email", () => {
+    const out = classifyOidcLogin({ email: "intrang@annan.se", subject: "", issuer: "", name: "" }, USERS);
+    expect(out).toEqual({ kind: "denied", email: "intrang@annan.se" });
   });
 });

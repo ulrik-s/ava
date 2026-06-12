@@ -23,7 +23,7 @@ import { DemoModeProvider } from "@/lib/client/demo/demo-mode-context";
 import { demoSourceFromRuntime } from "@/lib/client/demo/demo-source-from-runtime";
 import { demoCacheKey } from "@/lib/client/demo/demo-cache-key";
 import { trpc } from "@/lib/client/trpc";
-import { loadFirmaConfig, gitAuthUsername, type FirmaConfig } from "@/lib/client/firma/firma-config";
+import { loadFirmaConfig, patchFirmaConfig, gitAuthUsername, type FirmaConfig } from "@/lib/client/firma/firma-config";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { AuthProvider, useAuthMode } from "@/lib/client/auth/use-auth-mode";
 import { AuthStatusBanner } from "./auth-status-banner";
@@ -492,22 +492,54 @@ async function loadSelfHosted(
     if (!isCancelled()) setFsaHandle(opfs);
 
     const origin = typeof window !== "undefined" ? window.location.origin : undefined;
+
+    // OIDC-login (#222/#223): på första self-hosted-laddningen (ingen principal
+    // bunden än) — om vi ligger bakom oauth2-proxy svarar /oauth2/userinfo med
+    // den inloggades email. Då klonar vi UTAN syntetisk currentUser (skriver
+    // ingen "current-user"-rad), löser principalen mot allowlisten och reloadar
+    // med bunden principalId. Utan OIDC-session: oförändrat current-user-flöde.
+    const { fetchOidcClaims, classifyOidcLogin } = await import("@/lib/client/backend/oidc-principal");
+    const needsOidc = firmaConfig.tier === "self-hosted" && !firmaConfig.principalId;
+    const oidcClaims = needsOidc ? await fetchOidcClaims().catch(() => null) : null;
+
+    const currentUser = needsOidc && oidcClaims
+      ? undefined
+      : {
+          // Måste matcha trpcClient-användaren (id principalId ?? "current-user")
+          // så att flöden som slår upp ctx.user (timeEntry.create m.fl.) hittar en rad.
+          id: firmaConfig.principalId ?? "current-user",
+          email: firmaConfig.authorEmail,
+          name: firmaConfig.authorName,
+          organizationId: firmaConfig.organizationId,
+        };
     const src = await loadSelfHostedSource({
       handle: opfs,
       repo: firmaConfig.repo,
       token: firmaConfig.token,
       username: gitAuthUsername(firmaConfig),
-      ...omitUndefined({ origin }),
-      // Måste matcha trpcClient-användaren nedan (id "current-user") så att
-      // flöden som slår upp ctx.user (timeEntry.create m.fl.) hittar en rad.
-      currentUser: {
-        id: "current-user",
-        email: firmaConfig.authorEmail,
-        name: firmaConfig.authorName,
-        organizationId: firmaConfig.organizationId,
-      },
+      ...omitUndefined({ origin, currentUser }),
     });
     if (isCancelled()) return;
+
+    if (needsOidc && oidcClaims) {
+      const outcome = classifyOidcLogin(oidcClaims, (src.users ?? []) as never);
+      if (outcome.kind === "denied") {
+        setStatus("error");
+        setErrorMsg(`Inte behörig: ${outcome.email} finns inte i byråns användarlista.`);
+        return;
+      }
+      if (outcome.kind === "authorized") {
+        // Bind principalen och ladda om med rätt identitet.
+        patchFirmaConfig({
+          principalId: outcome.principal.id,
+          authorEmail: outcome.principal.email,
+          authorName: outcome.principal.name,
+        });
+        if (typeof window !== "undefined") window.location.reload();
+        return;
+      }
+    }
+
     mergeSource(source, src);
     await queryClient.invalidateQueries();
     setStatus("ready");
