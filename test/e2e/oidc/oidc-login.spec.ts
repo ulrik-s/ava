@@ -33,15 +33,18 @@ async function login(page: Page, username: string, password: string): Promise<vo
 }
 
 test.describe("OIDC-login mot Keycloak", () => {
-  test("DIAG: browsern når web-porten direkt (/healthz, ingen redirect)", async ({ page }) => {
-    const resp = await page.goto("/healthz");
-    expect(resp?.status()).toBe(200);
-  });
-
-  test("DIAG: browsern når Keycloak-porten direkt", async ({ page }) => {
-    const issuer = process.env.OIDC_ISSUER_PUBLIC ?? "http://localhost:8089/realms/ava";
-    const resp = await page.goto(`${issuer}/.well-known/openid-configuration`);
-    expect(resp?.status()).toBe(200);
+  test("DIAG: spåra /ava/ redirect-kedjan (vilken hop nekas?)", async ({ page }) => {
+    const chain: string[] = [];
+    page.on("response", (r) => chain.push(`${r.status()} ${r.url()}`));
+    page.on("requestfailed", (r) => chain.push(`FAILED(${r.failure()?.errorText}) ${r.url()}`));
+    try {
+      await page.goto("/ava/", { timeout: 15000, waitUntil: "domcontentloaded" });
+      chain.push(`SLUT-URL ${page.url()}`);
+    } catch (e) {
+      chain.push(`GOTO-THREW ${String((e as Error).message).split("\n")[0]}`);
+    }
+    // Surfa kedjan i CI-loggen.
+    expect(chain.join("  ||  "), chain.join("  ||  ")).toContain("realms/ava/protocol/openid-connect/auth");
   });
 
   test("oautentiserad → redirectas till Keycloak-login", async ({ page }) => {
