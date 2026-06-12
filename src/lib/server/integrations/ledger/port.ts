@@ -88,8 +88,9 @@ export const ledgerPaymentSchema = z.object({
   externalId: z.string().min(1),
   /** Inbetalt belopp i öre (positivt). */
   amount: z.number().int().positive(),
-  /** Bokföringsdatum `YYYY-MM-DD`. */
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  /** Bokförings-/valutadatum `YYYY-MM-DD`. Valfritt — alla källor anger inte
+   *  datum (t.ex. camt utan ValDt); avprickningen nyckar på referens, inte datum. */
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   /** OCR-/betalningsreferens om angiven (mod-10) — primär matchningsnyckel. */
   ocrReference: z.string().min(1).optional(),
   /** Betalarens namn om angivet (heuristik-fallback). */

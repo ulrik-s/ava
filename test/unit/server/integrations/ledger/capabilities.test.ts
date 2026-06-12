@@ -86,7 +86,12 @@ describe("ledgerPaymentSchema (inbound, strikt)", () => {
     expect(p.payerName).toBeUndefined();
   });
 
-  it("avvisar negativt/icke-heltals-belopp och fel datumformat", () => {
+  it("godtar betalning utan datum (date är valfritt — camt kan sakna ValDt)", () => {
+    const p = ledgerPaymentSchema.parse({ externalId: "x", amount: 100 });
+    expect(p.date).toBeUndefined();
+  });
+
+  it("avvisar negativt/icke-heltals-belopp och fel datumformat (när satt)", () => {
     expect(ledgerPaymentSchema.safeParse({ externalId: "x", amount: -1, date: "2026-06-01" }).success).toBe(false);
     expect(ledgerPaymentSchema.safeParse({ externalId: "x", amount: 100.5, date: "2026-06-01" }).success).toBe(false);
     expect(ledgerPaymentSchema.safeParse({ externalId: "x", amount: 100, date: "1/6 2026" }).success).toBe(false);
