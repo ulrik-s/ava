@@ -8,7 +8,7 @@
  * obligatoriska rollerna.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { trpc } from "@/lib/client/trpc";
 import {
   DEFAULT_LEDGER_ACCOUNT_MAP,
@@ -157,8 +157,18 @@ function LedgerAccountForm({ initial }: { initial: LedgerAccountMap }) {
 }
 
 export function LedgerAccountsSection() {
-  const me = trpc.user.current.useQuery();
-  const settings = trpc.organization.getSettings.useQuery();
+  // Mount-grind: rendera inget förrän appen hydrerat + bootstrap:en är klar.
+  // Under self-hosted-bootstrapen ("Laddar data…") pågår en re-render-cykel i
+  // shell:en; att delta i den render-fasen med queries/formulär svälter
+  // commit-fasen (#249-regression). Vi väntar därför till post-mount.
+  const [mounted, setMounted] = useState(false);
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- engångs-flip post-mount; det ÄR avsikten (jfr demo-bootstrap)
+  useEffect(() => setMounted(true), []);
+
+  const me = trpc.user.current.useQuery(undefined, { enabled: mounted });
+  const settings = trpc.organization.getSettings.useQuery(undefined, { enabled: mounted });
+
+  if (!mounted) return null;
 
   if (me.data?.role !== "ADMIN") {
     return (
