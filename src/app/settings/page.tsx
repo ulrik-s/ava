@@ -9,6 +9,7 @@ import { ExternalEditSection } from "@/components/settings/external-edit-section
 import { EditorExtensionsSection } from "@/components/settings/editor-extensions-section";
 import { LlmSettingsCard } from "@/components/llm/llm-settings-card";
 import { OrgDefaultsSection } from "@/components/settings/org-defaults-section";
+import { LedgerAccountsSection } from "@/components/settings/ledger-accounts-section";
 import { HelperSection } from "@/components/settings/helper-section";
 
 // Zod vid parsegränsen (#187): logo-API:ts svar valideras.
@@ -525,8 +526,12 @@ export default function SettingsPage() {
       <SectionHeader num={5} title="Standardvyer (admin)" subtitle="Org-globala kolumn- och sort-defaults för listor. Personliga val vinner över org-defaults." />
       <OrgDefaultsSection />
 
-      {/* 6. Avancerat / opt-in */}
-      <SectionHeader num={6} title="Avancerat" subtitle="Opt-in-funktioner som kräver extra resurser eller setup." />
+      {/* 6. Bokföringsexport */}
+      <SectionHeader num={6} title="Bokföringsexport (admin)" subtitle="Konto-mappning (BAS) som SIE-exporten bokför mot. Förifyllt med standard för advokatbyrå." />
+      <LedgerAccountsSection />
+
+      {/* 7. Avancerat / opt-in */}
+      <SectionHeader num={7} title="Avancerat" subtitle="Opt-in-funktioner som kräver extra resurser eller setup." />
       <div className="mb-5">
         <LlmSettingsCard />
       </div>

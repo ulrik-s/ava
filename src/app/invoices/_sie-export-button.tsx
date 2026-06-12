@@ -12,6 +12,11 @@ import { trpc } from "@/lib/client/trpc";
 import { downloadBytes } from "@/lib/client/download-text";
 import { encodePc8 } from "@/lib/shared/accounting/pc8";
 import {
+  DEFAULT_LEDGER_ACCOUNT_MAP,
+  toSieAccountMap,
+  type LedgerAccountMap,
+} from "@/lib/shared/accounting/account-map";
+import {
   countExportable,
   invoicesToSie,
   type ExportableInvoice,
@@ -36,12 +41,16 @@ export function SieExportButton() {
 
   function handleExport(): void {
     const stamp = todayStamp();
+    // Byråns mappning om konfigurerad (#249), annars BAS-standard.
+    const map = (org.data?.ledgerAccountMap as LedgerAccountMap | null) ?? DEFAULT_LEDGER_ACCOUNT_MAP;
     const sie = invoicesToSie(rows, {
       company: {
         name: org.data?.name ?? "Byrå",
         ...(org.data?.orgNumber ? { orgNr: org.data.orgNumber } : {}),
       },
       generatedDate: stamp,
+      accountMap: toSieAccountMap(map),
+      series: map.voucherSeries,
     });
     // SIE deklarerar #FORMAT PC8 → koda bytes i CP437 så åäö tolkas rätt (#247).
     downloadBytes(`bokforing_${stamp}.sie`, encodePc8(sie));

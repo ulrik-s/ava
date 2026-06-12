@@ -5,21 +5,17 @@
  * → SIE-rendering ([[sie]]). Ren, framework-agnostisk funktion — körs lika gärna
  * i browsern (demo + self-hosted) som på servern; ingen extern integration.
  *
- * Roll→konto använder BAS-standardkonton som default (advokatbyrå); en
- * per-byrå-mappning som org-inställning är en naturlig följd-issue.
+ * Roll→konto använder byråns konto-mappning ([[account-map]]); faller tillbaka
+ * på BAS-standard när ingen mappning är konfigurerad.
  */
 
+import { DEFAULT_LEDGER_ACCOUNT_MAP, toSieAccountMap } from "./account-map";
 import { buildSemanticVoucher, type SemanticVoucherInput } from "./semantic-voucher";
 import { renderSie, type SieAccountMap, type SieCompany } from "./sie";
 import type { VatRate } from "../vat";
 
 /** BAS-standardkonton för en advokatbyrå (default tills byrån mappar själv). */
-export const DEFAULT_BAS_ACCOUNT_MAP: SieAccountMap = {
-  kundfordran: { number: "1510", name: "Kundfordringar" },
-  intaktArvode: { number: "3041", name: "Advokatarvoden" },
-  momsUtgaende: { number: "2611", name: "Utgående moms 25 %" },
-  intaktUtlagg: { number: "3590", name: "Övriga sidointäkter" },
-};
+export const DEFAULT_BAS_ACCOUNT_MAP: SieAccountMap = toSieAccountMap(DEFAULT_LEDGER_ACCOUNT_MAP);
 
 /** Bara utfärdade fakturor bokförs (samma som Fortnox-connectorn); ej DRAFT/CANCELLED/BAD_DEBT. */
 export const SIE_EXPORTABLE_STATUSES: readonly string[] = ["SENT", "PAID", "INSTALLMENT_PLAN"];

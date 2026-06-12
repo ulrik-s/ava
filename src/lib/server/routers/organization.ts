@@ -3,6 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../trpc";
 import { organizationIdSchema, asId } from "@/lib/shared/schemas/ids";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
+import { ledgerAccountMapSchema } from "@/lib/shared/accounting/account-map";
 
 export const organizationRouter = router({
   // ── Settings ────────────────────────────────────────────────────
@@ -19,6 +20,7 @@ export const organizationRouter = router({
         email: true,
         bankgiro: true,
         logoPath: true,
+        ledgerAccountMap: true,
       },
     });
   }),
@@ -32,6 +34,8 @@ export const organizationRouter = router({
         phone: z.string().optional(),
         email: z.string().optional(),
         bankgiro: z.string().optional(),
+        /** Roll→konto-mappning för bokföringsexport (#249). */
+        ledgerAccountMap: ledgerAccountMapSchema.optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
