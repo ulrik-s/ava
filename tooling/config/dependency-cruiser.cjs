@@ -186,6 +186,34 @@ module.exports = {
       to: { path: "^src/lib/(client|server)/" },
     },
     {
+      // Pluggbar ledger/faktura (ADR 0011, #234): faktura-domänen — det
+      // framework-agnostiska shared-lagret + billing-routrarna (invoice/
+      // billingRun/reports) — är SYSTEMOBEROENDE. Den får importera PORTEN
+      // (`integrations/ledger/`) men ALDRIG en konkret connector
+      // (`integrations/<system>/`, t.ex. fortnox). Det bevisar att
+      // fakturamodulen är fristående och utbytbar. Wiring av en connector hör
+      // hemma i composition-root:en (`src/bin/server-runtime.ts`), inte i
+      // domänen. (shared kan ändå inte importera server alls — vaktas av
+      // `shared-must-not-import-up`; raden här fångar billing-routrarna.)
+      name: "invoice-domain-not-import-connector",
+      severity: "error",
+      comment:
+        "Faktura-domänen (shared + billing-routrar) får importera ledger-" +
+        "PORTEN (integrations/ledger/) men aldrig en connector " +
+        "(integrations/<system>/). Wire connectorer i server-runtime, inte i " +
+        "domänen (ADR 0011, #234).",
+      from: {
+        path: [
+          "^src/lib/shared/",
+          "^src/lib/server/routers/(invoice|billingRun|reports)\\.ts$",
+        ],
+      },
+      to: {
+        path: "^src/lib/server/integrations/",
+        pathNot: "^src/lib/server/integrations/ledger/",
+      },
+    },
+    {
       // Kompositions-disciplin: varje top-level-router (`routers/<x>.ts`)
       // exporterar EN `xRouter` och komponeras ihop i `_app.ts`. Routrar får
       // inte importera varandra — det skapar implicit koppling, cykler och gör
