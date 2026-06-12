@@ -23,26 +23,41 @@ const USERS = {
 };
 
 /** Plocka ut Keycloak-login-formulärets action-URL ur login-HTML:en. */
-function loginActionUrl(html: string): string {
-  const m = html.match(/action="([^"]*login-actions\/authenticate[^"]*)"/);
-  if (!m) throw new Error("hittade inte Keycloak-login-formulärets action");
+function loginActionUrl(html: string, ctxInfo: string): string {
+  // Keycloak 26: <form ... action="…/login-actions/authenticate?…">. Var
+  // tolerant mot tema-variationer — matcha valfri authenticate-action.
+  const m = html.match(/action="([^"]*authenticate[^"]*)"/i);
+  if (!m) {
+    throw new Error(
+      `hittade inte Keycloak-login-formulärets action (${ctxInfo}); html[0..300]=` +
+        html.slice(0, 300).replace(/\s+/g, " "),
+    );
+  }
   return m[1]!.replace(/&amp;/g, "&");
 }
 
 /**
- * Kör hela login-flödet i en isolerad cookie-jar. Returnerar contexten (med
- * session-cookien om login lyckades) — caller verifierar via /oauth2/userinfo.
+ * Kör hela login-flödet i en isolerad cookie-jar. Explicita hopp (kontroll +
+ * felsökbarhet): /oauth2/start (302→Keycloak authorize) → GET authorize
+ * (login-HTML + KC-cookies) → POST credentials → callback → oauth2-proxy-session.
  */
 async function login(username: string, password: string): Promise<APIRequestContext> {
   const ctx = await playwrightRequest.newContext({ baseURL: BASE });
-  // 1. /oauth2/start → följer redirects → Keycloaks login-sida (cookies fångas).
-  const startHtml = await (await ctx.get("/oauth2/start?rd=%2Fava%2F")).text();
-  const action = loginActionUrl(startHtml);
-  // 2. POST credentials → Keycloak → (lyckad) 302 callback → oauth2-proxy redeem
+  // 1. Starta → oauth2-proxy sätter CSRF-cookie + 302 till Keycloak authorize.
+  const start = await ctx.get("/oauth2/start?rd=%2Fava%2F", { maxRedirects: 0 });
+  const authorizeUrl = start.headers()["location"];
+  if (!authorizeUrl) {
+    throw new Error(`/oauth2/start gav ingen redirect (status ${start.status()})`);
+  }
+  // 2. GET authorize → Keycloaks login-sida (sätter AUTH_SESSION-cookies).
+  const loginPage = await ctx.get(authorizeUrl);
+  const action = loginActionUrl(
+    await loginPage.text(),
+    `status ${loginPage.status()} url ${loginPage.url()}`,
+  );
+  // 3. POST credentials → Keycloak → (lyckad) 302 callback → oauth2-proxy redeem
   //    → session-cookie → 302 /ava/. request följer redirects automatiskt.
-  await ctx.post(action, {
-    form: { username, password, credentialId: "" },
-  });
+  await ctx.post(action, { form: { username, password, credentialId: "" } });
   return ctx;
 }
 
