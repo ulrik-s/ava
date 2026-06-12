@@ -13,13 +13,13 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 
 PROJECT="${OIDC_E2E_PROJECT:-ava-oidc-e2e}"
-export AVA_WEB_PORT="${AVA_WEB_PORT:-8088}"
+# Web på 8080 + "localhost" = exakt samma kombo som round-trip-e2e:n (som
+# fungerar i CI). 8088/8090 gav ERR_CONNECTION_REFUSED från browsern (men ej
+# från Node/curl) — port/host-specifik Docker-publish-quirk. OIDC-jobbet kör
+# ensamt på en fräsch runner så 8080 är ledig. Keycloak på 8089.
+export AVA_WEB_PORT="${AVA_WEB_PORT:-8080}"
 export KC_PORT="${KC_PORT:-8089}"
-# 127.0.0.1 (ej "localhost") överallt → tvinga IPv4. Docker på linux binder
-# bara IPv4 0.0.0.0:port; en browser som föredrar IPv6 ::1 får annars
-# ERR_CONNECTION_REFUSED medan Node/curl (IPv4) lyckas. Konsekvent host krävs
-# också för att OIDC-cookien (host-baserad) ska följa med callback:en.
-HOST="${OIDC_PUBLIC_HOST:-127.0.0.1}"
+HOST="${OIDC_PUBLIC_HOST:-localhost}"
 export AVA_OIDC_BASE_URL="http://${HOST}:${AVA_WEB_PORT}"
 export OIDC_KC_HOSTNAME="http://${HOST}:${KC_PORT}"
 export OIDC_ISSUER_PUBLIC="http://${HOST}:${KC_PORT}/realms/ava"
