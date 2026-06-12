@@ -17,14 +17,28 @@
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": true,
       "redirectUris": [
-        "http://localhost:*/oauth2/callback",
-        "http://127.0.0.1:*/oauth2/callback"
+        "http://127.0.0.1:8088/oauth2/callback",
+        "http://localhost:8088/oauth2/callback",
+        "http://127.0.0.1:8080/oauth2/callback",
+        "http://localhost:8080/oauth2/callback"
       ],
       "webOrigins": ["+"],
       "attributes": {
         "post.logout.redirect.uris": "+"
       },
-      "defaultClientScopes": ["openid", "email", "profile", "roles"]
+      "defaultClientScopes": ["openid", "email", "profile", "roles"],
+      "protocolMappers": [
+        {
+          "name": "audience-ava",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.client.audience": "ava",
+            "id.token.claim": "true",
+            "access.token.claim": "true"
+          }
+        }
+      ]
     }
   ],
   "users": [
