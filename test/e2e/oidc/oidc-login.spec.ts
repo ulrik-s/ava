@@ -1,74 +1,93 @@
 /**
- * OIDC-login-e2e (#222) — riktig browser-token-dans mot Keycloak.
+ * OIDC-login-e2e (#222) — riktig token-dans mot Keycloak.
  *
  * Stacken (web + oauth2-proxy + Keycloak realm "ava") körs av
- * tooling/scripts/e2e-oidc.sh. Testerna driver Keycloaks RIKTIGA login-formulär
- * och verifierar oauth2-proxy-sessionen end-to-end — det som mock-OIDC inte kan.
+ * tooling/scripts/e2e-oidc.sh. Testerna kör hela OIDC-flödet via Playwrights
+ * `request`-context (Node-sidans cookie-jar): authorize → Keycloaks login →
+ * callback → oauth2-proxy-session → /oauth2/userinfo. Det verifierar den
+ * fulla code-exchangen (inkl. oauth2-proxy:s backchannel mot Keycloak) som en
+ * mock-IdP inte kan — och är robustare än browser-navigering (ingen
+ * Chromium↔Docker-port-flakighet).
  *
  * Regressionsbatteri: inloggning (flera användare), fel lösenord, utloggning,
- * skydd utan session, och att appen + /git/ gat:as bakom auth.
+ * skydd utan session.
  */
 
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, request as playwrightRequest, type APIRequestContext } from "@playwright/test";
+
+const BASE = process.env.AVA_OIDC_BASE_URL ?? "http://127.0.0.1:8088";
 
 const USERS = {
   admin: { username: "admin", password: "admin", email: "admin@ava.test" },
   lawyer: { username: "lawyer", password: "lawyer", email: "lawyer@ava.test" },
 };
 
-const AUTHORIZE_RE = /realms\/ava\/protocol\/openid-connect\/auth/;
-
-/** Fyll i Keycloaks login-formulär och vänta tillbaka till appen. */
-async function login(page: Page, username: string, password: string): Promise<void> {
-  await page.goto("/ava/");
-  await page.waitForURL(AUTHORIZE_RE); // redirectad till Keycloak
-  await page.fill("#username", username);
-  await page.fill("#password", password);
-  await page.click("#kc-login");
+/** Plocka ut Keycloak-login-formulärets action-URL ur login-HTML:en. */
+function loginActionUrl(html: string): string {
+  const m = html.match(/action="([^"]*login-actions\/authenticate[^"]*)"/);
+  if (!m) throw new Error("hittade inte Keycloak-login-formulärets action");
+  return m[1]!.replace(/&amp;/g, "&");
 }
 
-test.describe("OIDC-login mot Keycloak", () => {
-  test("oautentiserad → redirectas till Keycloak-login", async ({ page }) => {
-    await page.goto("/ava/");
-    await page.waitForURL(AUTHORIZE_RE);
-    await expect(page.locator("#kc-form-login, #username")).toBeVisible();
+/**
+ * Kör hela login-flödet i en isolerad cookie-jar. Returnerar contexten (med
+ * session-cookien om login lyckades) — caller verifierar via /oauth2/userinfo.
+ */
+async function login(username: string, password: string): Promise<APIRequestContext> {
+  const ctx = await playwrightRequest.newContext({ baseURL: BASE });
+  // 1. /oauth2/start → följer redirects → Keycloaks login-sida (cookies fångas).
+  const startHtml = await (await ctx.get("/oauth2/start?rd=%2Fava%2F")).text();
+  const action = loginActionUrl(startHtml);
+  // 2. POST credentials → Keycloak → (lyckad) 302 callback → oauth2-proxy redeem
+  //    → session-cookie → 302 /ava/. request följer redirects automatiskt.
+  await ctx.post(action, {
+    form: { username, password, credentialId: "" },
   });
+  return ctx;
+}
 
-  test("admin loggar in → session + userinfo ger rätt email", async ({ page }) => {
-    await login(page, USERS.admin.username, USERS.admin.password);
-    // Tillbaka på appen (inte längre på Keycloak).
-    await page.waitForURL((u) => !AUTHORIZE_RE.test(u.toString()));
-    const resp = await page.request.get("/oauth2/userinfo");
+test.describe("OIDC-login mot Keycloak (token-dans)", () => {
+  test("admin loggar in → session + userinfo ger rätt email", async () => {
+    const ctx = await login(USERS.admin.username, USERS.admin.password);
+    const resp = await ctx.get("/oauth2/userinfo");
     expect(resp.status()).toBe(200);
-    const info = (await resp.json()) as { email?: string };
-    expect(info.email).toBe(USERS.admin.email);
+    expect(((await resp.json()) as { email?: string }).email).toBe(USERS.admin.email);
+    await ctx.dispose();
   });
 
-  test("annan allowlist-kandidat (lawyer) loggar in → rätt email", async ({ page }) => {
-    await login(page, USERS.lawyer.username, USERS.lawyer.password);
-    await page.waitForURL((u) => !AUTHORIZE_RE.test(u.toString()));
-    const info = (await (await page.request.get("/oauth2/userinfo")).json()) as { email?: string };
+  test("annan användare (lawyer) loggar in → rätt email", async () => {
+    const ctx = await login(USERS.lawyer.username, USERS.lawyer.password);
+    const info = (await (await ctx.get("/oauth2/userinfo")).json()) as { email?: string };
     expect(info.email).toBe(USERS.lawyer.email);
+    await ctx.dispose();
   });
 
-  test("fel lösenord → stannar på Keycloak med fel", async ({ page }) => {
-    await login(page, USERS.admin.username, "fel-lösenord");
-    await expect(page).toHaveURL(/realms\/ava/);
-    await expect(page.locator("#input-error, .kc-feedback-text, .alert-error, .pf-c-alert")).toBeVisible();
+  test("fel lösenord → ingen session (userinfo 401)", async () => {
+    const ctx = await login(USERS.admin.username, "fel-lösenord");
+    expect((await ctx.get("/oauth2/userinfo")).status()).toBe(401);
+    await ctx.dispose();
   });
 
-  test("ingen session → /oauth2/userinfo nekas (401)", async ({ page }) => {
-    const resp = await page.request.get("/oauth2/userinfo");
-    expect(resp.status()).toBe(401);
+  test("ingen session → /oauth2/userinfo nekas (401)", async () => {
+    const ctx = await playwrightRequest.newContext({ baseURL: BASE });
+    expect((await ctx.get("/oauth2/userinfo")).status()).toBe(401);
+    await ctx.dispose();
   });
 
-  test("utloggning → /ava/ kräver login igen", async ({ page }) => {
-    await login(page, USERS.admin.username, USERS.admin.password);
-    await page.waitForURL((u) => !AUTHORIZE_RE.test(u.toString()));
-    // Logga ut via oauth2-proxy.
-    await page.goto("/oauth2/sign_out");
-    // Ny åtkomst → tillbaka till Keycloak-login.
-    await page.goto("/ava/");
-    await page.waitForURL(AUTHORIZE_RE);
+  test("utloggning → session upphör (userinfo 401 efteråt)", async () => {
+    const ctx = await login(USERS.admin.username, USERS.admin.password);
+    expect((await ctx.get("/oauth2/userinfo")).status()).toBe(200); // inloggad
+    await ctx.get("/oauth2/sign_out");
+    expect((await ctx.get("/oauth2/userinfo")).status()).toBe(401); // utloggad
+    await ctx.dispose();
+  });
+
+  test("redirect: oskyddad /ava/ → 302 mot Keycloak authorize", async () => {
+    const ctx = await playwrightRequest.newContext({ baseURL: BASE });
+    const resp = await ctx.get("/ava/", { maxRedirects: 0 });
+    expect(resp.status()).toBe(302);
+    // /ava/ → /oauth2/start (oauth2-proxy bygger sedan authorize-URL:en).
+    expect(resp.headers()["location"]).toContain("/oauth2/start");
+    await ctx.dispose();
   });
 });

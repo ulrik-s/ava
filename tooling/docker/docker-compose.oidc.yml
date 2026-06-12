@@ -45,7 +45,7 @@ services:
       OAUTH2_PROXY_CLIENT_ID: "${OAUTH2_PROXY_CLIENT_ID:-ava}"
       OAUTH2_PROXY_CLIENT_SECRET: "${OAUTH2_PROXY_CLIENT_SECRET:-ava-test-secret}"
       OAUTH2_PROXY_COOKIE_SECRET: "${OAUTH2_PROXY_COOKIE_SECRET:-ava-dev-cookie-secret-0123456789}"
-      OAUTH2_PROXY_REDIRECT_URL: "http://localhost:${AVA_WEB_PORT:-8080}/oauth2/callback"
+      OAUTH2_PROXY_REDIRECT_URL: "${OIDC_REDIRECT_URL:-http://localhost:8080/oauth2/callback}"
       # PUBLIK issuer + login-URL (det browsern når) …
       OAUTH2_PROXY_OIDC_ISSUER_URL: "${OIDC_ISSUER_PUBLIC:-http://localhost:8089/realms/ava}"
       OAUTH2_PROXY_LOGIN_URL: "${OIDC_ISSUER_PUBLIC:-http://localhost:8089/realms/ava}/protocol/openid-connect/auth"
