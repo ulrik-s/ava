@@ -55,9 +55,17 @@ async function login(username: string, password: string): Promise<APIRequestCont
     await loginPage.text(),
     `status ${loginPage.status()} url ${loginPage.url()}`,
   );
-  // 3. POST credentials → Keycloak → (lyckad) 302 callback → oauth2-proxy redeem
-  //    → session-cookie → 302 /ava/. request följer redirects automatiskt.
-  await ctx.post(action, { form: { username, password, credentialId: "" } });
+  // 3. POST credentials → Keycloak 302 → callback?code=… (explicit hopp, ej
+  //    auto-follow: auto-follow av POST→302 bär inte cookies pålitligt).
+  const post = await ctx.post(action, {
+    form: { username, password, credentialId: "" },
+    maxRedirects: 0,
+  });
+  const callbackUrl = post.headers()["location"];
+  // 4. GET callback → oauth2-proxy redeemar code (backchannel) → sätter
+  //    session-cookie → 302 /ava/. (Vid fel lösenord saknas callback → ingen
+  //    session, vilket testet för fel lösenord verifierar.)
+  if (callbackUrl) await ctx.get(callbackUrl, { maxRedirects: 0 });
   return ctx;
 }
 
