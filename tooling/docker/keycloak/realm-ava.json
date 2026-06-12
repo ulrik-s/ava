@@ -1,0 +1,73 @@
+{
+  "realm": "ava",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "accessTokenLifespan": 300,
+  "clients": [
+    {
+      "clientId": "ava",
+      "name": "AVA (OIDC test-klient)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "ava-test-secret",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "redirectUris": [
+        "http://127.0.0.1:8088/oauth2/callback",
+        "http://localhost:8088/oauth2/callback",
+        "http://127.0.0.1:8080/oauth2/callback",
+        "http://localhost:8080/oauth2/callback"
+      ],
+      "webOrigins": ["+"],
+      "attributes": {
+        "post.logout.redirect.uris": "+"
+      },
+      "defaultClientScopes": ["openid", "email", "profile", "roles"],
+      "protocolMappers": [
+        {
+          "name": "audience-ava",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.client.audience": "ava",
+            "id.token.claim": "true",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "admin",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "admin@ava.test",
+      "firstName": "Admin",
+      "lastName": "Testsson",
+      "credentials": [{ "type": "password", "value": "admin", "temporary": false }]
+    },
+    {
+      "username": "lawyer",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "lawyer@ava.test",
+      "firstName": "Lena",
+      "lastName": "Advokat",
+      "credentials": [{ "type": "password", "value": "lawyer", "temporary": false }]
+    },
+    {
+      "username": "outsider",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "outsider@ava.test",
+      "firstName": "Ove",
+      "lastName": "Utomstående",
+      "credentials": [{ "type": "password", "value": "outsider", "temporary": false }]
+    }
+  ]
+}

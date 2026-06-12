@@ -30,11 +30,14 @@ docker compose -f tooling/docker/docker-compose.yml \
   `fetch` → git-push/pull funkar utan klient-token-kod.
 - `oauth2-proxy` — OIDC relying party. Pekas mot byråns IdP via
   `OAUTH2_PROXY_OIDC_ISSUER_URL` + `CLIENT_ID`/`CLIENT_SECRET`; cookie-secret
-  ur secrets-valvet (#79). `mock-oidc`-tjänsten i overlayen är **endast dev**
-  (navikt/mock-oauth2-server) — ta bort den i drift och peka issuer mot Entra
-  ID/Google/BankID-broker.
+  ur secrets-valvet (#79). `keycloak`-tjänsten i overlayen är **endast dev/test**
+  (realm `ava` med test-användare admin/lawyer/outsider, importeras vid start)
+  — ta bort den i drift och peka issuer mot byråns IdP (Entra ID/Google/BankID-broker).
+  Dual-URL i docker: publik issuer (det browsern når) + intern backchannel
+  (token/jwks/userinfo via `keycloak:8080`) löses med `SKIP_OIDC_DISCOVERY` +
+  explicita `REDEEM_URL`/`OIDC_JWKS_URL`/`PROFILE_URL`.
 - **Klient-bryggan:** appen hämtar inloggad email från `/oauth2/userinfo`
-  (`src/lib/client/auth/oidc-principal.ts`) och auktoriserar mot
+  (`src/lib/client/backend/oidc-principal.ts`) och auktoriserar mot
   användar-allowlisten i firma.git via `OidcAuthProvider` (#223). Okänd email
   nekas (autentisering ≠ auktorisering).
 
@@ -52,10 +55,14 @@ OAUTH2_PROXY_REDIRECT_URL=https://<din-host>/oauth2/callback
 `OAUTH2_PROXY_HTPASSWD_FILE=/auth-data/htpasswd` så oauth2-proxy accepterar
 både OIDC-cookie och PAT på `/git/`. server-runtime (#81) använder PAT/deploy-key.
 
-**Verifiering:** `bun run oidc:smoke` startar stacken (på port 8088) mot
-mock-OIDC och verifierar wiringen strukturellt (auth_request → oauth2-proxy →
-discovery → authorize-redirect). Hela token-dansen valideras mot din riktiga
-IdP (browser-inloggning).
+**Verifiering / regressionsbatteri:** `bun run e2e:oidc` startar stacken
+(web + oauth2-proxy + Keycloak) och kör Playwright-batteriet
+(`test/e2e/oidc/oidc-login.spec.ts`) som loggar in via Keycloaks RIKTIGA
+login-formulär och verifierar hela token-dansen: redirect → login → callback →
+session-cookie → `/oauth2/userinfo`, plus fel-lösenord, utloggning och
+skydd-utan-session. Körs i CI (jobbet **E2E (OIDC login)**). OBS: lokalt på
+Mac kan Docker Desktop ge flakiga browser→port-anslutningar; CI (linux) är
+den deterministiska grinden (samma mönster som round-trip-e2e:n).
 
 ### Första-admin (bootstrap, #224)
 
