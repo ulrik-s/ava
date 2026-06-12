@@ -41,7 +41,13 @@ function loginActionUrl(html: string, ctxInfo: string): string {
  * felsökbarhet): /oauth2/start (302→Keycloak authorize) → GET authorize
  * (login-HTML + KC-cookies) → POST credentials → callback → oauth2-proxy-session.
  */
-async function login(username: string, password: string): Promise<APIRequestContext> {
+interface LoginResult {
+  ctx: APIRequestContext;
+  /** Diagnostik-spår (visas i assert-meddelandet vid fel). */
+  trace: string;
+}
+
+async function login(username: string, password: string): Promise<LoginResult> {
   const ctx = await playwrightRequest.newContext({ baseURL: BASE });
   // 1. Starta → oauth2-proxy sätter CSRF-cookie + 302 till Keycloak authorize.
   const start = await ctx.get("/oauth2/start?rd=%2Fava%2F", { maxRedirects: 0 });
@@ -55,38 +61,43 @@ async function login(username: string, password: string): Promise<APIRequestCont
     await loginPage.text(),
     `status ${loginPage.status()} url ${loginPage.url()}`,
   );
-  // 3. POST credentials → Keycloak 302 → callback?code=… (explicit hopp, ej
-  //    auto-follow: auto-follow av POST→302 bär inte cookies pålitligt).
+  // 3. POST credentials → Keycloak 302 → callback?code=… (explicit hopp).
   const post = await ctx.post(action, {
     form: { username, password, credentialId: "" },
     maxRedirects: 0,
   });
   const callbackUrl = post.headers()["location"];
   // 4. GET callback → oauth2-proxy redeemar code (backchannel) → sätter
-  //    session-cookie → 302 /ava/. (Vid fel lösenord saknas callback → ingen
-  //    session, vilket testet för fel lösenord verifierar.)
-  if (callbackUrl) await ctx.get(callbackUrl, { maxRedirects: 0 });
-  return ctx;
+  //    session-cookie → 302 /ava/. (Vid fel lösenord saknas callback.)
+  let cbStatus = "—";
+  if (callbackUrl) {
+    const cb = await ctx.get(callbackUrl, { maxRedirects: 0 });
+    cbStatus = String(cb.status());
+  }
+  const cookies = (await ctx.storageState()).cookies.map((c) => c.name).join(",");
+  const trace = `post=${post.status()} cb=${cbStatus} cbUrl=${callbackUrl ? "ja" : "nej"} cookies=[${cookies}]`;
+  return { ctx, trace };
 }
 
 test.describe("OIDC-login mot Keycloak (token-dans)", () => {
   test("admin loggar in → session + userinfo ger rätt email", async () => {
-    const ctx = await login(USERS.admin.username, USERS.admin.password);
+    const { ctx, trace } = await login(USERS.admin.username, USERS.admin.password);
     const resp = await ctx.get("/oauth2/userinfo");
-    expect(resp.status()).toBe(200);
+    expect(resp.status(), trace).toBe(200);
     expect(((await resp.json()) as { email?: string }).email).toBe(USERS.admin.email);
     await ctx.dispose();
   });
 
   test("annan användare (lawyer) loggar in → rätt email", async () => {
-    const ctx = await login(USERS.lawyer.username, USERS.lawyer.password);
-    const info = (await (await ctx.get("/oauth2/userinfo")).json()) as { email?: string };
-    expect(info.email).toBe(USERS.lawyer.email);
+    const { ctx, trace } = await login(USERS.lawyer.username, USERS.lawyer.password);
+    const resp = await ctx.get("/oauth2/userinfo");
+    expect(resp.status(), trace).toBe(200);
+    expect(((await resp.json()) as { email?: string }).email).toBe(USERS.lawyer.email);
     await ctx.dispose();
   });
 
   test("fel lösenord → ingen session (userinfo 401)", async () => {
-    const ctx = await login(USERS.admin.username, "fel-lösenord");
+    const { ctx } = await login(USERS.admin.username, "fel-lösenord");
     expect((await ctx.get("/oauth2/userinfo")).status()).toBe(401);
     await ctx.dispose();
   });
@@ -98,8 +109,8 @@ test.describe("OIDC-login mot Keycloak (token-dans)", () => {
   });
 
   test("utloggning → session upphör (userinfo 401 efteråt)", async () => {
-    const ctx = await login(USERS.admin.username, USERS.admin.password);
-    expect((await ctx.get("/oauth2/userinfo")).status()).toBe(200); // inloggad
+    const { ctx, trace } = await login(USERS.admin.username, USERS.admin.password);
+    expect((await ctx.get("/oauth2/userinfo")).status(), trace).toBe(200); // inloggad
     await ctx.get("/oauth2/sign_out");
     expect((await ctx.get("/oauth2/userinfo")).status()).toBe(401); // utloggad
     await ctx.dispose();
