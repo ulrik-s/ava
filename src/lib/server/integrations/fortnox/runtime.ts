@@ -15,7 +15,9 @@ import { join } from "node:path";
 
 import { createVaultFromEnv, type SecretsVault } from "../../secrets/vault";
 import type { PeerJob } from "../../local-first/peer-loop";
+import type { LedgerConnector } from "../ledger/port";
 import { FortnoxClient } from "./client";
+import { FortnoxLedgerConnector } from "./connector";
 import { makeFortnoxInvoiceJob } from "./invoice-job";
 import {
   fortnoxConfigSchema,
@@ -98,8 +100,13 @@ export async function buildFortnoxJob(opts: BuildFortnoxJobOpts): Promise<PeerJo
   const client = new FortnoxClient(fortnoxConfigFromEnv(env, clientId, clientSecret), store);
   log("connector aktiv — bokför nya fakturor som verifikat");
   return makeFortnoxInvoiceJob({
-    client,
-    loadMapping: () => loadKontoMappning(opts.workDir),
+    // Per cykel: läs färsk konto-mappning ur git och bygg connectorn bakom
+    // porten. null när mappningen saknas → drivern hoppar över (completeness).
+    loadConnector: async (): Promise<LedgerConnector | null> => {
+      const mapping = await loadKontoMappning(opts.workDir);
+      if (!mapping) return null;
+      return new FortnoxLedgerConnector({ client, mapping });
+    },
     log,
   });
 }
