@@ -19,6 +19,7 @@ import { ENV_KEYS, loadRuntimeConfig } from "@/lib/server/local-first/server-run
 import { startServerRuntime } from "@/lib/server/local-first/server-runtime";
 import { buildFortnoxJob } from "@/lib/server/integrations/fortnox/runtime";
 import { buildBankFilePaymentsJob } from "@/lib/server/integrations/ledger/bank-file-runtime";
+import { buildDispatchJob } from "@/lib/server/integrations/email/dispatch-runtime";
 import { makeRulesJob } from "@/lib/server/local-first/rules-job";
 import { composeJobs } from "@/lib/server/local-first/compose-jobs";
 
@@ -65,7 +66,9 @@ async function main(): Promise<void> {
   // Bankfil-avprickning (#245): bara när AVA_CAMT_INBOX pekar på en mapp med
   // camt-filer; annars null → ingen avprickning (riskfritt).
   const payments = buildBankFilePaymentsJob({ log });
-  const job = composeJobs([makeRulesJob({ log }), fortnox, payments]);
+  // Fakturautskick (#180): bara när SMTP-uppgifter finns i valvet; annars null.
+  const dispatch = await buildDispatchJob({ log });
+  const job = composeJobs([makeRulesJob({ log }), fortnox, payments, dispatch]);
   const loop = await startServerRuntime(config, job ? { job } : {});
 
   if (argv.includes("--once")) {

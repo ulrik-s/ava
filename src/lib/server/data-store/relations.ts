@@ -53,6 +53,7 @@ export interface DemoRelations {
   documents: Relations;
   documentTemplates: Relations;
   invoices: Relations;
+  invoiceDispatches: Relations;
   timeEntries: Relations;
   expenses: Relations;
   conflictChecks: Relations;
@@ -117,6 +118,13 @@ export function buildRelations(getSource: GetSource): DemoRelations {
       documents: r("documents", "invoiceId", "id"), // genererade faktura-/underlag-dokument
       creditNote: r("invoices", "creditedInvoiceId", "id", "one"),
       creditedInvoice: r("invoices", "id", "creditedInvoiceId", "one"),
+    },
+    invoiceDispatches: {
+      // dispatch→invoice→matter: ger workern faktura-detaljer (include) + org-
+      // scoping i where (invoice.matter.organizationId), #180.
+      invoice: r("invoices", "id", "invoiceId", "one", {
+        matter: r("matters", "id", "matterId", "one"),
+      }),
     },
     timeEntries: {
       user: r("users", "id", "userId", "one"),
