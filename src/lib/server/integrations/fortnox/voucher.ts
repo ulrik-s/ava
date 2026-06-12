@@ -9,18 +9,12 @@
  * och andra renderare (uppföljning på #233).
  */
 
-import {
-  buildSemanticVoucher,
-  type SemanticVoucher,
-  type SemanticVoucherInput,
-  type SemanticVoucherRow,
-  type VoucherRole,
+import type {
+  SemanticVoucher,
+  SemanticVoucherRow,
+  VoucherRole,
 } from "@/lib/shared/accounting/semantic-voucher";
-import type { VatRate } from "@/lib/shared/vat";
 import type { FortnoxKontoMappning, FortnoxVoucher, FortnoxVoucherRow } from "./schema";
-
-/** Re-export: connectorn (invoice-job) jobbar mot samma input-typ som domänen. */
-export type InvoiceForVoucher = SemanticVoucherInput;
 
 function pad2(n: number): string {
   return String(n).padStart(2, "0");
@@ -71,13 +65,4 @@ export function renderFortnoxVoucher(
     Description: voucher.description,
     VoucherRows: voucher.rows.map((r) => renderRow(r, mapping)),
   };
-}
-
-/** Bekvämlighet: bygg semantiskt verifikat ur fakturan och rendera direkt. */
-export function buildVoucherFromInvoice(
-  invoice: InvoiceForVoucher,
-  mapping: FortnoxKontoMappning,
-  vatRate: VatRate = 2500,
-): FortnoxVoucher {
-  return renderFortnoxVoucher(buildSemanticVoucher(invoice, vatRate), mapping);
 }

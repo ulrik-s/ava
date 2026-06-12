@@ -1,7 +1,12 @@
 import { describe, it, expect } from "vitest-compat";
-import { buildVoucherFromInvoice, renderFortnoxVoucher } from "@/lib/server/integrations/fortnox/voucher";
+import { renderFortnoxVoucher } from "@/lib/server/integrations/fortnox/voucher";
 import type { FortnoxKontoMappning } from "@/lib/server/integrations/fortnox/schema";
-import type { SemanticVoucher } from "@/lib/shared/accounting/semantic-voucher";
+import {
+  buildSemanticVoucher,
+  type SemanticVoucher,
+  type SemanticVoucherInput,
+} from "@/lib/shared/accounting/semantic-voucher";
+import type { VatRate } from "@/lib/shared/vat";
 
 const mapping: FortnoxKontoMappning = {
   voucherSeries: "A",
@@ -13,13 +18,14 @@ const mapping: FortnoxKontoMappning = {
 const sum = (rows: { Debit: number; Credit: number }[], k: "Debit" | "Credit") =>
   rows.reduce((s, r) => s + r[k], 0);
 
-describe("buildVoucherFromInvoice", () => {
+/** Tvåstegs-vägen som connectorn använder: faktura → semantiskt → Fortnox-JSON. */
+const render = (invoice: SemanticVoucherInput, vatRate?: VatRate) =>
+  renderFortnoxVoucher(buildSemanticVoucher(invoice, vatRate), mapping);
+
+describe("faktura → semantiskt verifikat → Fortnox-rendering", () => {
   it("standardfaktura: 3 balanserade rader (debet kundfordran = kredit intäkt+moms)", () => {
     // 12500 öre brutto inkl 25 % moms → 100 kr netto + 25 kr moms = 125 kr.
-    const v = buildVoucherFromInvoice(
-      { amount: 12_500, invoiceDate: "2026-05-25", invoiceNumber: "F-2026-0042" },
-      mapping,
-    );
+    const v = render({ amount: 12_500, invoiceDate: "2026-05-25", invoiceNumber: "F-2026-0042" });
     expect(v.VoucherSeries).toBe("A");
     expect(v.TransactionDate).toBe("2026-05-25");
     expect(v.Description).toBe("Faktura F-2026-0042");
@@ -35,10 +41,11 @@ describe("buildVoucherFromInvoice", () => {
   });
 
   it("kreditfaktura (negativt belopp) vänder debet/kredit men håller balans", () => {
-    const v = buildVoucherFromInvoice(
-      { amount: -12_500, invoiceDate: new Date("2026-05-25T10:00:00Z"), invoiceNumber: "K-2026-0001" },
-      mapping,
-    );
+    const v = render({
+      amount: -12_500,
+      invoiceDate: new Date("2026-05-25T10:00:00Z"),
+      invoiceNumber: "K-2026-0001",
+    });
     const byAcct = (n: number) => v.VoucherRows.find((r) => r.Account === n)!;
     expect(byAcct(1510)).toMatchObject({ Debit: 0, Credit: 125 }); // kundfordran krediteras
     expect(byAcct(3041)).toMatchObject({ Debit: 100, Credit: 0 });
@@ -47,11 +54,7 @@ describe("buildVoucherFromInvoice", () => {
   });
 
   it("0 % moms: moms-raden släpps (2 rader kvar, fortf. balanserat)", () => {
-    const v = buildVoucherFromInvoice(
-      { amount: 10_000, invoiceDate: "2026-01-01" },
-      mapping,
-      0,
-    );
+    const v = render({ amount: 10_000, invoiceDate: "2026-01-01" }, 0);
     expect(v.VoucherRows).toHaveLength(2);
     expect(v.VoucherRows.some((r) => r.Account === 2611)).toBe(false);
     expect(sum(v.VoucherRows, "Debit")).toBe(sum(v.VoucherRows, "Credit"));
@@ -60,7 +63,7 @@ describe("buildVoucherFromInvoice", () => {
 
   it("balans håller även för 'sneda' belopp (öre-rest hamnar i moms)", () => {
     // 10001 öre — momsen blir resten så debet/kredit alltid stämmer.
-    const v = buildVoucherFromInvoice({ amount: 10_001, invoiceDate: "2026-03-03" }, mapping);
+    const v = render({ amount: 10_001, invoiceDate: "2026-03-03" });
     expect(sum(v.VoucherRows, "Debit")).toBeCloseTo(sum(v.VoucherRows, "Credit"), 10);
     expect(sum(v.VoucherRows, "Debit")).toBeCloseTo(100.01, 10);
   });

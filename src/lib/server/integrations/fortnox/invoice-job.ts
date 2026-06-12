@@ -12,18 +12,17 @@
  * ur firma.git (#217); saknas den vägrar connectorn boka (completeness-gate).
  */
 
+import { buildSemanticVoucher, type SemanticVoucherInput } from "@/lib/shared/accounting/semantic-voucher";
 import { DEFAULT_VAT_RATE, type VatRate } from "@/lib/shared/vat";
 import type { InvoiceStatus } from "@/lib/shared/schemas/enums";
 import type { PeerJob } from "../../local-first/peer-loop";
-import type { FortnoxClient } from "./client";
-import type { FortnoxKontoMappning } from "./schema";
-import { buildVoucherFromInvoice, type InvoiceForVoucher } from "./voucher";
+import type { LedgerConnector } from "../ledger/port";
 
 /** Endast verifikat på UTFÄRDADE fakturor; DRAFT/CANCELLED/BAD_DEBT bokförs ej här. */
 export const DEFAULT_BOOKABLE_STATUSES: readonly InvoiceStatus[] = ["SENT", "PAID", "INSTALLMENT_PLAN"];
 
-/** Den delmängd av en faktura-rad connectorn behöver. */
-export interface BookableInvoice extends InvoiceForVoucher {
+/** Den delmängd av en faktura-rad sync-drivern behöver. */
+export interface BookableInvoice extends SemanticVoucherInput {
   id: string;
   status: InvoiceStatus;
   fortnoxId?: string | null;
@@ -38,9 +37,12 @@ export interface FortnoxJobCaller {
 }
 
 export interface FortnoxInvoiceJobDeps {
-  client: Pick<FortnoxClient, "createVoucher">;
-  /** Läs konto-mappningen ur firma.git (#217). null = ej konfigurerad → boka inget. */
-  loadMapping: () => Promise<FortnoxKontoMappning | null>;
+  /**
+   * Bygg ledger-connectorn för den aktuella cykeln (läser färsk konto-mappning
+   * ur firma.git, #217). `null` = ej konfigurerad → boka inget (completeness-
+   * gate). Drivern jobbar mot PORTEN, inte mot Fortnox direkt (ADR 0011).
+   */
+  loadConnector: () => Promise<LedgerConnector | null>;
   vatRate?: VatRate;
   bookableStatuses?: readonly InvoiceStatus[];
   log?: (msg: string) => void;
@@ -56,24 +58,44 @@ function isPending(inv: BookableInvoice, bookable: ReadonlySet<InvoiceStatus>): 
   return !inv.fortnoxId && bookable.has(inv.status);
 }
 
-/** Bygg + pusha ETT verifikat och märk fakturan bokförd. */
+/** Bygg semantiskt verifikat, pusha via porten och märk fakturan bokförd. */
 async function bookOne(
   caller: FortnoxJobCaller,
-  client: Pick<FortnoxClient, "createVoucher">,
+  connector: PushCapableConnector,
   inv: BookableInvoice,
-  mapping: FortnoxKontoMappning,
   vatRate: VatRate,
 ): Promise<void> {
-  const voucher = buildVoucherFromInvoice(inv, mapping, vatRate);
-  const resp = await client.createVoucher(voucher);
-  const fortnoxId = `${resp.Voucher.VoucherSeries}/${resp.Voucher.VoucherNumber}`;
-  await caller.invoice.markFortnoxBooked({ invoiceId: inv.id, fortnoxId });
+  const voucher = buildSemanticVoucher(inv, vatRate);
+  const { externalId } = await connector.pushVoucher(voucher, { idempotencyKey: inv.id });
+  await caller.invoice.markFortnoxBooked({ invoiceId: inv.id, fortnoxId: externalId });
+}
+
+/** En connector vars `pushVoucher` är garanterat närvarande (capability-grindad). */
+type PushCapableConnector = LedgerConnector & Required<Pick<LedgerConnector, "pushVoucher">>;
+
+/**
+ * Bygg connectorn för cykeln och grinda på pushVoucher-capabilityn. null när
+ * connectorn saknas (ej konfigurerad) eller inte kan boka verifikat.
+ */
+async function resolvePushConnector(
+  deps: FortnoxInvoiceJobDeps,
+  log: (msg: string) => void,
+): Promise<PushCapableConnector | null> {
+  const connector = await deps.loadConnector();
+  if (!connector) {
+    log("Fortnox: ingen connector/konto-mappning (settings/fortnox-account-map.json) — hoppar över");
+    return null;
+  }
+  if (!connector.capabilities().pushVoucher || !connector.pushVoucher) {
+    log(`Ledger-connector "${connector.name}" saknar pushVoucher-capability — hoppar över`);
+    return null;
+  }
+  return connector as PushCapableConnector;
 }
 
 interface BookContext {
   caller: FortnoxJobCaller;
-  client: Pick<FortnoxClient, "createVoucher">;
-  mapping: FortnoxKontoMappning;
+  connector: PushCapableConnector;
   vatRate: VatRate;
   log: (msg: string) => void;
 }
@@ -87,7 +109,7 @@ async function bookEach(
   let failed = 0;
   for (const inv of pending) {
     try {
-      await bookOne(ctx.caller, ctx.client, inv, ctx.mapping, ctx.vatRate);
+      await bookOne(ctx.caller, ctx.connector, inv, ctx.vatRate);
       booked += 1;
     } catch (err) {
       failed += 1;
@@ -106,19 +128,15 @@ export async function bookUnsyncedInvoices(
   deps: FortnoxInvoiceJobDeps,
 ): Promise<BookResult> {
   const log = deps.log ?? (() => {});
-  const mapping = await deps.loadMapping();
-  if (!mapping) {
-    log("Fortnox: ingen konto-mappning (settings/fortnox-account-map.json) — hoppar över");
-    return { booked: 0, failed: 0, skipped: 0 };
-  }
+  const connector = await resolvePushConnector(deps, log);
+  if (!connector) return { booked: 0, failed: 0, skipped: 0 };
 
   const bookable = new Set<InvoiceStatus>(deps.bookableStatuses ?? DEFAULT_BOOKABLE_STATUSES);
   const invoices = await caller.invoice.list({});
   const pending = invoices.filter((inv) => isPending(inv, bookable));
   const { booked, failed } = await bookEach(pending, {
     caller,
-    client: deps.client,
-    mapping,
+    connector,
     vatRate: deps.vatRate ?? DEFAULT_VAT_RATE,
     log,
   });

@@ -5,8 +5,10 @@ import {
   type BookableInvoice,
   type FortnoxJobCaller,
 } from "@/lib/server/integrations/fortnox/invoice-job";
+import { FortnoxLedgerConnector } from "@/lib/server/integrations/fortnox/connector";
 import type { FortnoxClient } from "@/lib/server/integrations/fortnox/client";
 import type { FortnoxKontoMappning, FortnoxVoucher, FortnoxVoucherResponse } from "@/lib/server/integrations/fortnox/schema";
+import type { LedgerConnector } from "@/lib/server/integrations/ledger/port";
 
 const MAPPING: FortnoxKontoMappning = {
   voucherSeries: "A",
@@ -55,14 +57,18 @@ function makeClient(failMatch?: (v: FortnoxVoucher) => boolean) {
   return { client, calls };
 }
 
-const mapping = (m: FortnoxKontoMappning | null) => async () => m;
+/** Bygg en `loadConnector` som lindar Fortnox-connectorn runt fake-klienten. */
+const withConnector =
+  (client: Pick<FortnoxClient, "createVoucher">, m: FortnoxKontoMappning | null) =>
+  async (): Promise<LedgerConnector | null> =>
+    m ? new FortnoxLedgerConnector({ client, mapping: m }) : null;
 
 describe("bookUnsyncedInvoices", () => {
   it("bokför obokförda utfärdade fakturor + skriver tillbaka fortnoxId", async () => {
     const { caller, booked } = makeCaller([inv({ id: "a" }), inv({ id: "b" })]);
     const { client, calls } = makeClient();
 
-    const res = await bookUnsyncedInvoices(caller, { client, loadMapping: mapping(MAPPING) });
+    const res = await bookUnsyncedInvoices(caller, { loadConnector: withConnector(client, MAPPING) });
 
     expect(res).toEqual({ booked: 2, failed: 0, skipped: 0 });
     expect(calls).toHaveLength(2);
@@ -76,7 +82,7 @@ describe("bookUnsyncedInvoices", () => {
     const { caller, booked } = makeCaller([inv({ id: "a", fortnoxId: "A/9" }), inv({ id: "b" })]);
     const { client } = makeClient();
 
-    const res = await bookUnsyncedInvoices(caller, { client, loadMapping: mapping(MAPPING) });
+    const res = await bookUnsyncedInvoices(caller, { loadConnector: withConnector(client, MAPPING) });
 
     expect(res).toEqual({ booked: 1, failed: 0, skipped: 1 });
     expect(booked).toEqual([{ invoiceId: "b", fortnoxId: "A/1" }]);
@@ -90,7 +96,7 @@ describe("bookUnsyncedInvoices", () => {
     ]);
     const { client } = makeClient();
 
-    const res = await bookUnsyncedInvoices(caller, { client, loadMapping: mapping(MAPPING) });
+    const res = await bookUnsyncedInvoices(caller, { loadConnector: withConnector(client, MAPPING) });
 
     expect(res).toEqual({ booked: 1, failed: 0, skipped: 2 });
     expect(booked).toEqual([{ invoiceId: "c", fortnoxId: "A/1" }]);
@@ -100,10 +106,21 @@ describe("bookUnsyncedInvoices", () => {
     const { caller, booked } = makeCaller([inv()]);
     const { client, calls } = makeClient();
 
-    const res = await bookUnsyncedInvoices(caller, { client, loadMapping: mapping(null) });
+    const res = await bookUnsyncedInvoices(caller, { loadConnector: withConnector(client, null) });
 
     expect(res).toEqual({ booked: 0, failed: 0, skipped: 0 });
     expect(calls).toHaveLength(0);
+    expect(booked).toHaveLength(0);
+  });
+
+  it("connector utan pushVoucher-capability → bokför inget", async () => {
+    const { caller, booked } = makeCaller([inv()]);
+    const noPush: LedgerConnector = {
+      name: "saknar-push",
+      capabilities: () => ({ pushVoucher: false, pushInvoice: false, pullPayments: false, exportSie: false }),
+    };
+    const res = await bookUnsyncedInvoices(caller, { loadConnector: async () => noPush });
+    expect(res).toEqual({ booked: 0, failed: 0, skipped: 0 });
     expect(booked).toHaveLength(0);
   });
 
@@ -111,7 +128,7 @@ describe("bookUnsyncedInvoices", () => {
     const { caller, booked } = makeCaller([inv({ id: "a", invoiceNumber: "F-A" }), inv({ id: "b", invoiceNumber: "F-B" })]);
     const { client } = makeClient((v) => v.Description.includes("F-A"));
 
-    const res = await bookUnsyncedInvoices(caller, { client, loadMapping: mapping(MAPPING) });
+    const res = await bookUnsyncedInvoices(caller, { loadConnector: withConnector(client, MAPPING) });
 
     expect(res).toEqual({ booked: 1, failed: 1, skipped: 0 });
     expect(booked).toEqual([{ invoiceId: "b", fortnoxId: "A/1" }]); // bara den lyckade
@@ -121,7 +138,7 @@ describe("bookUnsyncedInvoices", () => {
     const { caller } = makeCaller([inv()]);
     const { client, calls } = makeClient();
 
-    await bookUnsyncedInvoices(caller, { client, loadMapping: mapping(MAPPING) });
+    await bookUnsyncedInvoices(caller, { loadConnector: withConnector(client, MAPPING) });
 
     const rows = calls[0]!.VoucherRows;
     const debit = rows.reduce((s, r) => s + r.Debit, 0);
@@ -136,7 +153,7 @@ describe("makeFortnoxInvoiceJob", () => {
   it("returnerar ett PeerJob vars act bokför via callern", async () => {
     const { caller, booked } = makeCaller([inv({ id: "a" })]);
     const { client } = makeClient();
-    const job = makeFortnoxInvoiceJob({ client, loadMapping: mapping(MAPPING) });
+    const job = makeFortnoxInvoiceJob({ loadConnector: withConnector(client, MAPPING) });
 
     expect(job.message).toMatch(/fortnox/i);
     // act tar hela tRPC-callern; vi skickar vår delmängd (samma cast som i wrappern).
