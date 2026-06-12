@@ -155,3 +155,32 @@ jobs:
           # (playwright.round-trip.config.ts) — INTE reports/playwright/. Fel
           # path gjorde att trace/video/HTML aldrig laddades upp vid rött bygge.
           path: reports/playwright-round-trip/
+
+  # ───────────────── E2E (OIDC-login) ─────────────────
+  # Riktig browser-inloggning mot en RIKTIG IdP (Keycloak, realm "ava" med
+  # test-användare) genom oauth2-proxy-stacken (#222, ADR 0009). e2e-oidc.sh
+  # bygger upp stacken (web + oauth2-proxy + keycloak), väntar in realm-import
+  # + web-health, och kör Playwright-batteriet. Regressionsskydd för auth.
+  e2e-oidc:
+    name: E2E (OIDC login)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CI: "true"
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bun run e2e:install
+      - run: bun run e2e:oidc
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-oidc-report
+          path: reports/playwright-oidc/
