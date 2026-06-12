@@ -33,6 +33,17 @@ async function login(page: Page, username: string, password: string): Promise<vo
 }
 
 test.describe("OIDC-login mot Keycloak", () => {
+  test("DIAG: browsern når web-porten direkt (/healthz, ingen redirect)", async ({ page }) => {
+    const resp = await page.goto("/healthz");
+    expect(resp?.status()).toBe(200);
+  });
+
+  test("DIAG: browsern når Keycloak-porten direkt", async ({ page }) => {
+    const issuer = process.env.OIDC_ISSUER_PUBLIC ?? "http://localhost:8089/realms/ava";
+    const resp = await page.goto(`${issuer}/.well-known/openid-configuration`);
+    expect(resp?.status()).toBe(200);
+  });
+
   test("oautentiserad → redirectas till Keycloak-login", async ({ page }) => {
     await page.goto("/ava/");
     await page.waitForURL(AUTHORIZE_RE);
