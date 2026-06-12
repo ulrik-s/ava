@@ -75,7 +75,13 @@ async function login(username: string, password: string): Promise<LoginResult> {
     cbStatus = String(cb.status());
   }
   const cookies = (await ctx.storageState()).cookies.map((c) => c.name).join(",");
-  const trace = `post=${post.status()} cb=${cbStatus} cbUrl=${callbackUrl ? "ja" : "nej"} cookies=[${cookies}]`;
+  let postBody = "";
+  if (post.status() >= 400) {
+    const t = await post.text();
+    const err = t.match(/(Invalid username or password|timed out|Cookie not found|We are sorry|kc-error-message[^<]*|<title>[^<]*<\/title>)/i);
+    postBody = ` postBody="${(err?.[0] ?? t.slice(0, 120)).replace(/\s+/g, " ")}"`;
+  }
+  const trace = `post=${post.status()} cb=${cbStatus} cbUrl=${callbackUrl ? "ja" : "nej"} cookies=[${cookies}]${postBody}`;
   return { ctx, trace };
 }
 
