@@ -37,6 +37,10 @@ vi.mock("@/components/settings/datasource-section", () => ({
 vi.mock("@/components/settings/org-defaults-section", () => ({
   OrgDefaultsSection: () => null,
 }));
+// LedgerAccountsSection har separat täckning — stubba ut för isolering.
+vi.mock("@/components/settings/ledger-accounts-section", () => ({
+  LedgerAccountsSection: () => null,
+}));
 
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {

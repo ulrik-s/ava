@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { baseFields, dateLike } from "./common";
 import { organizationIdSchema, officeIdSchema } from "./ids";
+import { ledgerAccountMapSchema } from "../accounting/account-map";
 
 /**
  * Organisation = byrå. En per git-repo (vanligen). Lagras i
@@ -18,6 +19,8 @@ export const organizationSchema = z.object({
   logoPath: z.string().nullish(),
   /** Entra ID tenant-id för O365 single-tenant-inloggning. Server-only fält. */
   azureTenantId: z.string().nullish(),
+  /** Per-byrå roll→konto-mappning för bokföringsexport (SIE m.fl., #249). */
+  ledgerAccountMap: ledgerAccountMapSchema.nullish(),
 }).passthrough();
 
 export type Organization = z.infer<typeof organizationSchema>;
