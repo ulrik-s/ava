@@ -20,6 +20,7 @@ import { CreditModal } from "./_credit-modal";
 import { WriteOffModal } from "./_write-off-modal";
 import { InvoiceActions } from "./_invoice-actions";
 import { PaymentsTable } from "./_payments-table";
+import { DispatchHistory } from "./_dispatch-history";
 
 const STATUS_LABELS: Record<string, string> = {
   DRAFT: "Utkast",
@@ -128,6 +129,8 @@ export default function InvoiceDetailClient({ id: paramId }: { id: string }) {
       )}
 
       <PaymentsTable payments={inv.payments} paidSum={paidSum} />
+
+      <DispatchHistory invoiceId={inv.id} />
 
       {writeOffs.length > 0 && <WriteOffsCard writeOffs={writeOffs} />}
 

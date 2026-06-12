@@ -40,6 +40,9 @@ vi.mock("@/lib/client/trpc", () => ({
       createCredit: { useMutation: () => stubs.createCredit },
       writeOff: { useMutation: () => stubs.writeOff },
     },
+    invoiceDispatch: {
+      list: { useQuery: () => ({ data: [], isLoading: false }) },
+    },
   },
 }));
 
