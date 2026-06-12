@@ -28,8 +28,6 @@ import {
   vaultSecretsFor,
   validateInstallConfig,
   VAULT_KEYS,
-  type AuthMode,
-  type OidcInstallConfig,
   type ServerInstallConfig,
 } from "./install-server/core";
 import {
@@ -38,6 +36,11 @@ import {
   logsCommand,
   extractAdminToken,
 } from "./install-server/orchestrate";
+import {
+  answersToConfig,
+  renderConfigTemplate,
+  parseConfigFile,
+} from "./install-server/wizard";
 
 function flag(argv: string[], name: string): string | undefined {
   const i = argv.indexOf(`--${name}`);
@@ -68,25 +71,29 @@ async function startStack(oidc: boolean): Promise<void> {
   log(token ? `admin-token (engångs): ${token} — lägg till användare med add-user.sh` : "admin-token ej funnen i loggen ännu (kolla `docker compose logs web`)");
 }
 
-function buildOidc(argv: string[]): OidcInstallConfig {
-  return {
-    issuerUrl: flag(argv, "oidc-issuer") ?? "",
-    clientId: flag(argv, "oidc-client-id") ?? "",
-    clientSecret: flag(argv, "oidc-client-secret") ?? "",
-    redirectUrl: flag(argv, "oidc-redirect") ?? "",
-  };
+const ANSWER_KEYS = [
+  "repo", "work-dir", "org", "auth",
+  "oidc-issuer", "oidc-client-id", "oidc-client-secret", "oidc-redirect",
+] as const;
+
+/** Plocka kända flaggor till en svar-map (flagg-vägen). */
+function argvToAnswers(argv: string[]): Record<string, string | undefined> {
+  const answers: Record<string, string | undefined> = {};
+  for (const key of ANSWER_KEYS) answers[key] = flag(argv, key);
+  return answers;
 }
 
-function buildConfig(argv: string[], secretsFile: string): ServerInstallConfig {
-  const authMode = (flag(argv, "auth") ?? "htpasswd") as AuthMode;
-  return {
-    repoUrl: flag(argv, "repo") ?? "",
-    workDir: flag(argv, "work-dir") ?? "",
-    organizationId: flag(argv, "org") ?? "",
-    secretsFile,
-    authMode,
-    ...(authMode === "oidc" ? { oidc: buildOidc(argv) } : {}),
-  };
+/** Slå ihop config-fil (om angiven) med flaggor — flaggor vinner. */
+async function gatherAnswers(argv: string[]): Promise<Record<string, string | undefined>> {
+  const configPath = flag(argv, "config");
+  const fromFlags = argvToAnswers(argv);
+  if (!configPath) return fromFlags;
+  const { readFile } = await import("node:fs/promises");
+  const fromFile = parseConfigFile(await readFile(configPath, "utf8"));
+  // Flaggor vinner över filen (tillåter override per körning).
+  const merged: Record<string, string | undefined> = { ...fromFile };
+  for (const [k, v] of Object.entries(fromFlags)) if (v !== undefined) merged[k] = v;
+  return merged;
 }
 
 function log(msg: string): void {
@@ -150,7 +157,8 @@ function resolvePaths(argv: string[]): InstallPaths {
 
 /** Secrets-valv + env-bootstrap (+ valfri start). Returnerar false vid config-fel. */
 async function runInstall(argv: string[], paths: InstallPaths): Promise<boolean> {
-  const cfg = buildConfig(argv, paths.secretsFile);
+  const answers = await gatherAnswers(argv);
+  const cfg = answersToConfig(answers, paths.secretsFile);
   const errors = validateInstallConfig(cfg);
   if (errors.length) {
     for (const e of errors) console.error(`[install-server] FEL: ${e}`);
@@ -187,6 +195,12 @@ async function runInstall(argv: string[], paths: InstallPaths): Promise<boolean>
 
 async function main(): Promise<void> {
   const argv = process.argv.slice(2);
+
+  // Skriv ut en config-mall att fylla i (--config-vägen). Inga sidoeffekter.
+  if (hasFlag(argv, "print-config-template")) {
+    process.stdout.write(renderConfigTemplate());
+    return;
+  }
 
   // Avinstallation/nedrivning: stoppa stacken + ta bort volymer, sen klart.
   if (hasFlag(argv, "down")) {
