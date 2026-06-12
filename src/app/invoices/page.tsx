@@ -5,6 +5,7 @@ import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { DataTable, type Column } from "@/components/ui/data-table";
+import { SieExportButton } from "./_sie-export-button";
 
 const STATUS_LABELS: Record<string, string> = {
   DRAFT: "Utkast",
@@ -87,9 +88,12 @@ export default function InvoicesPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Fakturor</h1>
-        <Link href="/payments/import" className="text-sm text-blue-600 hover:underline">
-          Importera betalfil →
-        </Link>
+        <div className="flex items-center gap-4">
+          <SieExportButton />
+          <Link href="/payments/import" className="text-sm text-blue-600 hover:underline">
+            Importera betalfil →
+          </Link>
+        </div>
       </div>
       {invoices.isLoading ? (
         <div className="bg-white rounded-lg border border-gray-200 p-6">

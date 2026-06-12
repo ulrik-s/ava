@@ -17,6 +17,9 @@ vi.mock("@/lib/client/trpc", () => ({
     invoice: {
       list: { useQuery: () => invoicesQuery },
     },
+    organization: {
+      getSettings: { useQuery: () => ({ data: { name: "Byrå", orgNumber: "5566778899" } }) },
+    },
     prefs: {
       get: { useQuery: () => ({ data: undefined, isLoading: false }) },
       save: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
