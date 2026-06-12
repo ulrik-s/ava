@@ -45,6 +45,7 @@ import type {
   ConflictCheckDelegate,
   PaymentDelegate,
   WriteOffDelegate,
+  InvoiceDispatchDelegate,
   PaymentPlanDelegate,
   AccontoDeductionDelegate,
   BillingRunDelegate,
@@ -77,6 +78,7 @@ export class DemoDataStore implements IDataStore {
   readonly conflictChecks: ConflictCheckDelegate;
   readonly payments: PaymentDelegate;
   readonly writeOffs: WriteOffDelegate;
+  readonly invoiceDispatches: InvoiceDispatchDelegate;
   readonly paymentPlans: PaymentPlanDelegate;
   readonly paymentPlanReminders: Delegate;
   readonly accontoDeductions: AccontoDeductionDelegate;
@@ -129,6 +131,7 @@ export class DemoDataStore implements IDataStore {
     this.conflictChecks = this.makeDelegate("conflictChecks", relations.conflictChecks) as unknown as ConflictCheckDelegate;
     this.payments = this.makeDelegate("payments") as unknown as PaymentDelegate;
     this.writeOffs = this.makeDelegate("writeOffs") as unknown as WriteOffDelegate;
+    this.invoiceDispatches = this.makeDelegate("invoiceDispatches") as unknown as InvoiceDispatchDelegate;
     this.paymentPlans = this.makeDelegate("paymentPlans", relations.paymentPlans) as unknown as PaymentPlanDelegate;
     this.paymentPlanReminders = this.makeDelegate("paymentPlanReminders") as unknown as Delegate;
     this.accontoDeductions = this.makeDelegate("accontoDeductions") as unknown as AccontoDeductionDelegate;
@@ -219,6 +222,7 @@ export class DemoDataStore implements IDataStore {
       conflictChecks: "conflictCheck",
       payments: "payment",
       writeOffs: "writeOff",
+      invoiceDispatches: "invoiceDispatch",
       paymentPlans: "paymentPlan",
       paymentPlanReminders: "paymentPlanReminder",
       accontoDeductions: "accontoDeduction",
@@ -291,6 +295,7 @@ export class DemoDataStore implements IDataStore {
       conflictChecks: this.conflictChecks,
       payments: this.payments,
       writeOffs: this.writeOffs,
+      invoiceDispatches: this.invoiceDispatches,
       paymentPlans: this.paymentPlans,
       accontoDeductions: this.accontoDeductions,
       billingRuns: this.billingRuns,

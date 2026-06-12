@@ -105,6 +105,7 @@ export function buildRelations(getSource: GetSource): DemoRelations {
         recordedBy: r("users", "id", "recordedById", "one"),
       }),
       writeOffs: r("writeOffs", "invoiceId", "id", "many"),
+      invoiceDispatches: r("invoiceDispatches", "invoiceId", "id", "many"),
       accontoDeductions: r("accontoDeductions", "finalInvoiceId", "id", "many", {
         accontoInvoice: r("invoices", "id", "accontoInvoiceId", "one"),
       }),

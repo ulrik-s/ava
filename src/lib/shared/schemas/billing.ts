@@ -20,6 +20,7 @@ import {
   accontoDeductionIdSchema,
   billingRunIdSchema,
   writeOffIdSchema,
+  invoiceDispatchIdSchema,
   matterIdSchema,
   userIdSchema,
 } from "./ids";
@@ -160,6 +161,39 @@ export const writeOffSchema = z.object({
 }).passthrough();
 
 export type WriteOff = z.infer<typeof writeOffSchema>;
+
+/**
+ * Fakturautskick (#178) — kanal-agnostisk avsikt + status, ADDITIV (en post per
+ * försök, jfr WriteOff/ADR 0007). Skrivs av BÅDE den manuella vägen (#179) och
+ * server-runtime-dispatch-workern (#180); status:en uppdateras idempotent på
+ * samma post (queued → sent → delivered/failed). AVA äger faktura/PDF/OCR.
+ */
+export const dispatchChannelSchema = z.enum(["email", "efaktura", "kivra", "print", "manual"]);
+export type DispatchChannel = z.infer<typeof dispatchChannelSchema>;
+
+export const dispatchStatusSchema = z.enum(["queued", "sent", "delivered", "failed"]);
+export type DispatchStatus = z.infer<typeof dispatchStatusSchema>;
+
+export const invoiceDispatchSchema = z.object({
+  id: invoiceDispatchIdSchema,
+  invoiceId: invoiceIdSchema,
+  channel: dispatchChannelSchema,
+  /** Mottagare: e-post / e-fakturaadress / personnr (Kivra). Kanalberoende sträng. */
+  recipient: z.string().min(1),
+  status: dispatchStatusSchema.default("queued"),
+  queuedAt: dateLike,
+  sentAt: optionalDateLike,
+  deliveredAt: optionalDateLike,
+  failedAt: optionalDateLike,
+  /** Connector-/kanalspecifikt meddelande-id (SMTP message-id m.m.). */
+  messageId: z.string().nullish(),
+  /** Felmeddelande vid status=failed. */
+  error: z.string().nullish(),
+  recordedById: userIdSchema,
+  createdAt: dateLike,
+}).passthrough();
+
+export type InvoiceDispatch = z.infer<typeof invoiceDispatchSchema>;
 
 /**
  * PaymentPlan — avbetalningsplan kopplad 1:1 till en Invoice. När den är

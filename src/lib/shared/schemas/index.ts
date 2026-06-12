@@ -33,6 +33,7 @@ import {
   accontoDeductionSchema,
   billingRunSchema,
   writeOffSchema,
+  invoiceDispatchSchema,
 } from "./billing";
 import { documentTemplateSchema, conflictCheckSchema } from "./misc";
 import { calendarEventSchema, taskSchema } from "./calendar";
@@ -189,6 +190,12 @@ export const ENTITY_REGISTRY: Record<string, EntityEntry> = {
     gitPath: p((id) => `write-offs/${id}.json`),
     gitPrefix: "write-offs",
     sourceKey: "writeOffs",
+  },
+  invoiceDispatch: {
+    schema: invoiceDispatchSchema,
+    gitPath: p((id) => `invoice-dispatches/${id}.json`),
+    gitPrefix: "invoice-dispatches",
+    sourceKey: "invoiceDispatches",
   },
   documentTemplate: {
     schema: documentTemplateSchema,
