@@ -1,29 +1,26 @@
 /**
- * Bygg ett Fortnox-verifikat (voucher) från en AVA-kundfaktura (#82).
+ * Fortnox-renderare för det semantiska verifikatet (#82, #235, ADR 0011).
  *
- * Standard kundfaktura (brutto, inkl moms) → balanserat verifikat:
- *   Debet  kundfordran      = brutto
- *   Kredit intäkt (arvode)  = netto (exkl moms)
- *   Kredit utgående moms     = moms
- *
- * Kreditfaktura (negativt belopp) vänder debet/kredit. Balans GARANTERAS
- * genom att moms räknas som brutto − netto (ingen avrundnings-glipa).
- *
- * Belopp i AVA är öre (heltal); Fortnox vill ha kronor (SEK med 2 decimaler).
- * Endast en VAT-sats i taget (default 25 %); flersats-/utläggs-uppdelning
- * läggs till när vi kopplar in fakturarader (uppföljning).
+ * Domänen bygger ett systemoberoende verifikat mot ROLLER
+ * ([[semantic-voucher]]). Den här filen är Fortnox-connectorns renderare:
+ * den översätter roll→kontonummer (via byråns konto-mappning) och öre→SEK,
+ * och paketerar Fortnox Voucher-JSON. Inget moms-/balans-resonemang sker här
+ * — det äger domänmodellen. Samma semantiska modell ger gratis SIE-export
+ * och andra renderare (uppföljning på #233).
  */
 
-import { splitVat, type VatRate } from "@/lib/shared/vat";
+import {
+  buildSemanticVoucher,
+  type SemanticVoucher,
+  type SemanticVoucherInput,
+  type SemanticVoucherRow,
+  type VoucherRole,
+} from "@/lib/shared/accounting/semantic-voucher";
+import type { VatRate } from "@/lib/shared/vat";
 import type { FortnoxKontoMappning, FortnoxVoucher, FortnoxVoucherRow } from "./schema";
 
-/** Minsta fält connectorn behöver — frikopplat från hela Invoice-schemat. */
-export interface InvoiceForVoucher {
-  /** Brutto i öre (negativt = kreditfaktura). */
-  amount: number;
-  invoiceDate: Date | string;
-  invoiceNumber?: string | null;
-}
+/** Re-export: connectorn (invoice-job) jobbar mot samma input-typ som domänen. */
+export type InvoiceForVoucher = SemanticVoucherInput;
 
 function pad2(n: number): string {
   return String(n).padStart(2, "0");
@@ -40,34 +37,47 @@ function oreToSek(ore: number): number {
   return ore / 100;
 }
 
-function row(account: string, sekAmount: number, debit: boolean): FortnoxVoucherRow {
+/** Roll → Fortnox-kontonummer via byråns mappning. Kastar om rollen är omappad. */
+function accountForRole(role: VoucherRole, mapping: FortnoxKontoMappning): string {
+  switch (role) {
+    case "kundfordran":
+      return mapping.kundfordran;
+    case "intaktArvode":
+      return mapping.intaktArvode;
+    case "momsUtgaende":
+      return mapping.momsUtgaende;
+    case "intaktUtlagg":
+      if (!mapping.intaktUtlagg) throw new Error("Rollen 'intaktUtlagg' saknar kontomappning");
+      return mapping.intaktUtlagg;
+  }
+}
+
+function renderRow(row: SemanticVoucherRow, mapping: FortnoxKontoMappning): FortnoxVoucherRow {
   return {
-    Account: Number(account),
-    Debit: debit ? sekAmount : 0,
-    Credit: debit ? 0 : sekAmount,
+    Account: Number(accountForRole(row.role, mapping)),
+    Debit: oreToSek(row.debit),
+    Credit: oreToSek(row.credit),
   };
 }
 
+/** Rendera ett färdigt semantiskt verifikat till Fortnox Voucher-JSON. */
+export function renderFortnoxVoucher(
+  voucher: SemanticVoucher,
+  mapping: FortnoxKontoMappning,
+): FortnoxVoucher {
+  return {
+    VoucherSeries: mapping.voucherSeries,
+    TransactionDate: isoDate(voucher.date),
+    Description: voucher.description,
+    VoucherRows: voucher.rows.map((r) => renderRow(r, mapping)),
+  };
+}
+
+/** Bekvämlighet: bygg semantiskt verifikat ur fakturan och rendera direkt. */
 export function buildVoucherFromInvoice(
   invoice: InvoiceForVoucher,
   mapping: FortnoxKontoMappning,
   vatRate: VatRate = 2500,
 ): FortnoxVoucher {
-  const bruttoOre = Math.abs(invoice.amount);
-  const { exclVat } = splitVat({ amount: bruttoOre, vatRate, vatIncluded: true });
-  const momsOre = bruttoOre - exclVat; // balans-säker rest
-  const kundfordranIsDebit = invoice.amount >= 0; // kreditfaktura vänder
-
-  const rows = [
-    row(mapping.kundfordran, oreToSek(bruttoOre), kundfordranIsDebit),
-    row(mapping.intaktArvode, oreToSek(exclVat), !kundfordranIsDebit),
-    row(mapping.momsUtgaende, oreToSek(momsOre), !kundfordranIsDebit),
-  ].filter((r) => r.Debit > 0 || r.Credit > 0); // släng 0-rader (t.ex. moms vid 0 %)
-
-  return {
-    VoucherSeries: mapping.voucherSeries,
-    TransactionDate: isoDate(invoice.invoiceDate),
-    Description: invoice.invoiceNumber ? `Faktura ${invoice.invoiceNumber}` : "Kundfaktura (AVA)",
-    VoucherRows: rows,
-  };
+  return renderFortnoxVoucher(buildSemanticVoucher(invoice, vatRate), mapping);
 }
