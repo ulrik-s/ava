@@ -32,10 +32,40 @@ import {
   type OidcInstallConfig,
   type ServerInstallConfig,
 } from "./install-server/core";
+import {
+  buildStartCommands,
+  buildStopCommands,
+  logsCommand,
+  extractAdminToken,
+} from "./install-server/orchestrate";
 
 function flag(argv: string[], name: string): string | undefined {
   const i = argv.indexOf(`--${name}`);
   return i >= 0 ? argv[i + 1] : undefined;
+}
+
+function hasFlag(argv: string[], name: string): boolean {
+  return argv.includes(`--${name}`);
+}
+
+/** Kör en kommandosekvens (ärver stdio); kasta vid första misslyckande. */
+async function runCommands(cmds: string[][], env: NodeJS.ProcessEnv): Promise<void> {
+  const { spawnSync } = await import("node:child_process");
+  for (const [bin, ...args] of cmds) {
+    log(`$ ${bin} ${args.join(" ")}`);
+    const r = spawnSync(bin!, args, { stdio: "inherit", env });
+    if (r.status !== 0) throw new Error(`kommandot misslyckades (${r.status ?? r.signal}): ${bin}`);
+  }
+}
+
+/** Bygg + starta stacken och skriv ut den bootstrappade admin-token:n. */
+async function startStack(oidc: boolean): Promise<void> {
+  const { spawnSync } = await import("node:child_process");
+  await runCommands(buildStartCommands({ oidc }), { ...process.env, DEMO_BASE_PATH: "/ava" });
+  const [bin, ...args] = logsCommand(oidc);
+  const logs = spawnSync(bin!, args, { encoding: "utf8" }).stdout ?? "";
+  const token = extractAdminToken(logs);
+  log(token ? `admin-token (engångs): ${token} — lägg till användare med add-user.sh` : "admin-token ej funnen i loggen ännu (kolla `docker compose logs web`)");
 }
 
 function buildOidc(argv: string[]): OidcInstallConfig {
@@ -101,37 +131,72 @@ function printNextSteps(cfg: ServerInstallConfig, masterKeyFile: string, envFile
 `);
 }
 
-async function main(): Promise<void> {
-  const argv = process.argv.slice(2);
-  const secretsDir = flag(argv, "secrets-dir") ?? join(homedir(), ".ava-secrets");
-  const masterKeyFile = join(secretsDir, "master.key");
-  const secretsFile = join(secretsDir, "vault.enc");
-  const envFile = flag(argv, "env-out") ?? join(process.cwd(), "ava-server.env");
+interface InstallPaths {
+  secretsDir: string;
+  masterKeyFile: string;
+  secretsFile: string;
+  envFile: string;
+}
 
-  const cfg = buildConfig(argv, secretsFile);
+function resolvePaths(argv: string[]): InstallPaths {
+  const secretsDir = flag(argv, "secrets-dir") ?? join(homedir(), ".ava-secrets");
+  return {
+    secretsDir,
+    masterKeyFile: join(secretsDir, "master.key"),
+    secretsFile: join(secretsDir, "vault.enc"),
+    envFile: flag(argv, "env-out") ?? join(process.cwd(), "ava-server.env"),
+  };
+}
+
+/** Secrets-valv + env-bootstrap (+ valfri start). Returnerar false vid config-fel. */
+async function runInstall(argv: string[], paths: InstallPaths): Promise<boolean> {
+  const cfg = buildConfig(argv, paths.secretsFile);
   const errors = validateInstallConfig(cfg);
   if (errors.length) {
     for (const e of errors) console.error(`[install-server] FEL: ${e}`);
-    process.exitCode = 1;
-    return;
+    return false;
   }
 
   const { mkdir, writeFile } = await import("node:fs/promises");
-  await mkdir(secretsDir, { recursive: true, mode: 0o700 });
+  await mkdir(paths.secretsDir, { recursive: true, mode: 0o700 });
 
   const plan = planInstall(
-    { masterKeyExists: await exists(masterKeyFile), vaultExists: await exists(secretsFile) },
+    { masterKeyExists: await exists(paths.masterKeyFile), vaultExists: await exists(paths.secretsFile) },
     cfg,
   );
   if (!plan.generateMasterKey) log("befintlig master-nyckel behålls (skrivs ej över)");
 
-  const masterKey = await ensureMasterKey(masterKeyFile, plan.generateMasterKey);
-  const vault = new EncryptedFileVault(secretsFile, Buffer.from(masterKey, "base64"), nodeVaultFs());
+  const masterKey = await ensureMasterKey(paths.masterKeyFile, plan.generateMasterKey);
+  const vault = new EncryptedFileVault(paths.secretsFile, Buffer.from(masterKey, "base64"), nodeVaultFs());
   if (plan.storeSecrets) await storeVaultSecrets(vault, cfg);
 
-  await writeFile(envFile, renderServerEnv(cfg), { mode: 0o600 });
-  log(`deploy-env skriven: ${envFile}`);
-  printNextSteps(cfg, masterKeyFile, envFile);
+  await writeFile(paths.envFile, renderServerEnv(cfg), { mode: 0o600 });
+  log(`deploy-env skriven: ${paths.envFile}`);
+
+  if (hasFlag(argv, "start")) {
+    // Ett-kommando-vägen: exportera valv-nyckeln + bygg + starta + verifiera.
+    process.env.AVA_SECRETS_KEY = masterKey;
+    process.env.AVA_SECRETS_FILE = paths.secretsFile;
+    await startStack(cfg.authMode === "oidc");
+    log("backenden uppe. Lägg till användare med tooling/scripts/add-user.sh.");
+    return true;
+  }
+  printNextSteps(cfg, paths.masterKeyFile, paths.envFile);
+  return true;
+}
+
+async function main(): Promise<void> {
+  const argv = process.argv.slice(2);
+
+  // Avinstallation/nedrivning: stoppa stacken + ta bort volymer, sen klart.
+  if (hasFlag(argv, "down")) {
+    await runCommands(buildStopCommands({ oidc: (flag(argv, "auth") ?? "htpasswd") === "oidc" }), process.env);
+    log("stacken nedriven (volymer borttagna). Secrets-valvet är oförändrat.");
+    return;
+  }
+
+  const ok = await runInstall(argv, resolvePaths(argv));
+  if (!ok) process.exitCode = 1;
 }
 
 main().catch((err: unknown) => {
