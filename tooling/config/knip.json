@@ -16,6 +16,7 @@
     "src/lib/shared/helper/protocol.ts",
     "src/lib/server/data-store/IDataStore.ts",
     "src/lib/server/ports.ts",
+    "src/lib/server/integrations/ledger/port.ts",
     "src/lib/server/events/schema.ts",
     "src/lib/server/rules/schema.ts",
     "src/lib/server/trpc.ts",
