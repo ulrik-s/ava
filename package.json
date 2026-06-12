@@ -15,6 +15,7 @@
     "demo:serve:fast": "SKIP_BUILD=1 bash tooling/scripts/demo-serve.sh",
     "seed:local": "bun tooling/scripts/seed-firma-local.ts",
     "server-runtime": "bun src/bin/server-runtime.ts",
+    "install:server": "bun tooling/scripts/install-server.ts",
     "server-runtime:build": "bun tooling/scripts/build-server-runtime.ts",
     "server-runtime:smoke": "bash tooling/scripts/smoke-server-runtime-docker.sh",
     "start": "next start",
