@@ -43,6 +43,15 @@ export const invoiceDispatchRouter = router({
       });
     }),
 
+  /** Alla köade utskick i org:en — server-runtime-dispatch-workern (#180) plockar dessa. */
+  listQueued: orgProcedure.query(async ({ ctx }) => {
+    return ctx.dataStore.invoiceDispatches.findMany({
+      where: { status: "queued", invoice: { matter: { organizationId: ctx.orgId } } },
+      include: { invoice: { select: { id: true, invoiceNumber: true, amount: true, ocrReference: true, dueDate: true } } },
+      orderBy: { queuedAt: "asc" },
+    });
+  }),
+
   queue: orgProcedure
     .input(z.object({
       invoiceId: z.string(),

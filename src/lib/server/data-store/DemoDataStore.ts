@@ -131,7 +131,7 @@ export class DemoDataStore implements IDataStore {
     this.conflictChecks = this.makeDelegate("conflictChecks", relations.conflictChecks) as unknown as ConflictCheckDelegate;
     this.payments = this.makeDelegate("payments") as unknown as PaymentDelegate;
     this.writeOffs = this.makeDelegate("writeOffs") as unknown as WriteOffDelegate;
-    this.invoiceDispatches = this.makeDelegate("invoiceDispatches") as unknown as InvoiceDispatchDelegate;
+    this.invoiceDispatches = this.makeDelegate("invoiceDispatches", relations.invoiceDispatches) as unknown as InvoiceDispatchDelegate;
     this.paymentPlans = this.makeDelegate("paymentPlans", relations.paymentPlans) as unknown as PaymentPlanDelegate;
     this.paymentPlanReminders = this.makeDelegate("paymentPlanReminders") as unknown as Delegate;
     this.accontoDeductions = this.makeDelegate("accontoDeductions") as unknown as AccontoDeductionDelegate;
