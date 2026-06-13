@@ -11,8 +11,22 @@
     2. Inkommande klientbetalning (CRDT) med fri-text-referens (RfrdDocInf/Nb).
     3. DOMSTOLSVERKET (Dbtr "SVERIGES DOMSTOLAR Utbetalning SCR"): EN betalning
        som splittats över MÅNGA <Strd>-rader, var och en en kostnadsräkning med
-       referens i fri text (Nb = "<fakturanr> <målnr> <namn>"). Detta är
-       nyckelfallet för #173 (fordran utan faktura) + #175 (fri-text-match).
+       referens i fri text. Detta är nyckelfallet för #173 (fordran utan
+       faktura) + #175 (fri-text-match).
+
+  REFERENSFORMATET (verifierat med byrån) — i både <InstrId> och <Strd>/<Nb>:
+       "1154602 3288-26 ENOKSSON"
+        ├ 1154602  = ÄRENDENUMMER (byråns system idag/KATS; framtida AVA-
+        │            ärendenummer #174) → matchningsnyckel mot Matter
+        ├ 3288-26  = MÅLNUMMER i tingsrätten → matchar Matter.courtCaseNumber (#173)
+        └ ENOKSSON = ANSVARIG ADVOKATS efternamn (#174 responsibleLawyer) — INTE
+                     klienten. Sekundär verifieringsnyckel.
+  → #175 bör matcha på ärendenummer ELLER målnummer (båda finns i referensen),
+    och kan validera mot ansvarig jurist. Referensen finns i TVÅ fält: <InstrId>
+    (Refs) och <RmtInf>/<Strd>/<RfrdDocInf>/<Nb> — matcha gärna på båda.
+
+  (Anonymiserade exempel nedan: efternamnen är fejkade, men numerken behåller
+   formatet ärendenr + målnr så matchningslogiken kan testas.)
 -->
 <Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.02" xsi:schemaLocation="urn:iso:std:iso:20022:tech:xsd:camt.053.001.02 camt.053.001.02.xsd" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <BkToCstmrStmt>
