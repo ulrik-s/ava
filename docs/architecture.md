@@ -24,6 +24,18 @@
 > - [ADR 0007](./adr/0007-kundfordringar-konstaterad-kundforlust.md) — kund­
 >   fordringar: daterade händelser + konstaterad kundförlust (`WriteOff`-post,
 >   livstidsvy, brygga + åldersanalys).
+> - [ADR 0008](./adr/0008-secrets-valv-krypterad-fil.md) — secrets-valv:
+>   krypterad fil (AES-256-GCM) i server-data-dir, master-nyckel utanför repo.
+> - [ADR 0009](./adr/0009-oidc-login-via-servern.md) — self-hosted-login som
+>   OIDC relying party (oauth2-proxy, BYO-IdP), aldrig egen IdP.
+> - [ADR 0010](./adr/0010-regelmotor-som-idempotenta-peeracts.md) — regelmotor
+>   som idempotenta, schemalagda PeerActs (server-as-git-peer, ADR 0005).
+> - [ADR 0011](./adr/0011-pluggbar-ledger-connector.md) — pluggbar
+>   ledger-/faktura-connector: systemoberoende fakturadomän, Fortnox är en av
+>   flera bakom en port (samexistens + utbytbarhet).
+> - [ADR 0012](./adr/0012-fakturanummerserier.md) — fakturanummerserier: AVA och
+>   externt system (Fortnox) har var sin obrutna serie, aldrig en delad räknare
+>   (lagligt enl. 17 kap. 24 § 2 ML / art. 226.2 momsdirektivet).
 
 ## Tre lager
 
