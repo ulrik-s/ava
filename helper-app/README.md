@@ -33,6 +33,10 @@ isär.
 * Filer skrivs till per-session-tempkatalog under `os.TempDir()` med
   läs/skriv-skydd 0700
 * Filnamn valideras (ingen path-traversal)
+* **Signerade self-updates (#110):** en nedladdad binär verifieras mot en
+  inbyggd, pinnad Ed25519-pubkey innan byte. Ingen giltig signatur (eller ingen
+  pinnad nyckel) → uppdateringen vägras och gamla binären behålls (fail-closed).
+  Skyddar mot en komprometterad GitHub-release. Se nedan + `src/update-verify.ts`.
 
 ## Bygg & kör lokalt
 
@@ -84,14 +88,36 @@ Chrome/Edge/Firefox + Windows/Linux behöver inte detta (HTTP-loopback funkar).
 
 Helper-releaser är taggade `helper-vX.Y.Z` (separerat från web-app-
 releaser). Skicka in en tag → GitHub Actions (`helper-release.yml`) kör
-`bun build.ts <tag>` → 5 binärer + `checksums.txt` laddas upp till
-releasen → installerade helpers plockar upp den vid nästa daglig
-kontroll (`src/update.ts`).
+`bun build.ts <tag>` → 5 binärer + `checksums.txt` + en detached
+`.sig` per binär laddas upp till releasen → installerade helpers
+verifierar signaturen och plockar upp den vid nästa dagliga kontroll
+(`src/update.ts`).
 
 ```bash
 git tag helper-v1.0.0
 git push origin helper-v1.0.0
 ```
+
+### Release-signeringsnyckel (#110, engångs-setup)
+
+Self-update kräver att binären är signerad med byråns release-nyckel.
+
+```bash
+# 1. Generera ett Ed25519-nyckelpar
+openssl genpkey -algorithm ed25519 -out helper-release.key
+
+# 2. Lägg PRIVATA nyckeln som GitHub Actions-secret HELPER_SIGNING_KEY
+#    (Settings → Secrets → Actions). Hela PEM:en. Används bara i release-jobbet.
+
+# 3. Härled PUBLIKA nyckeln (base64 DER SPKI) och baka in den i koden:
+openssl pkey -in helper-release.key -pubout -outform DER | base64 -w0
+#    → klistra i RELEASE_PUBLIC_KEY_SPKI_B64 i src/update-verify.ts
+```
+
+Tills nyckeln är inbakad **vägrar** nya helpers att uppdatera (fail-closed).
+**Nyckelrotation:** släpp först en version som litar på både gammal + ny nyckel
+(`acceptedPublicKeys` i `update-verify.ts`), låt flottan uppdatera, byt sedan
+secret:en. Detaljer i filhuvudet på `src/update-verify.ts`.
 
 > **Paketering:** install-scripten under `service/` letar efter en binär
 > som heter `ava-helper` (resp. `ava-helper.exe`). Release-arkiveringen

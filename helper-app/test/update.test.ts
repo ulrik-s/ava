@@ -1,5 +1,6 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import { chmod, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { generateKeyPairSync, sign } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -25,8 +26,11 @@ function rel(tag: string, draft = false): Rel {
   return { tag_name: tag, draft, assets: [] };
 }
 
-function relWithAsset(tag: string, assetNameStr: string, url: string): GithubRelease {
-  return { tag_name: tag, draft: false, assets: [{ name: assetNameStr, browser_download_url: url }] };
+/** Release med binär-asset + (default) dess `.sig`-asset. */
+function relWithAsset(tag: string, assetNameStr: string, url: string, withSig = true): GithubRelease {
+  const assets = [{ name: assetNameStr, browser_download_url: url }];
+  if (withSig) assets.push({ name: `${assetNameStr}.sig`, browser_download_url: `${url}.sig` });
+  return { tag_name: tag, draft: false, assets };
 }
 
 describe("assetName", () => {
@@ -67,7 +71,7 @@ describe("pickLatest", () => {
 interface CheckHarness {
   cfg: UpdateConfig;
   deps: CheckDeps;
-  replaced: Array<{ url: string; target: string }>;
+  replaced: Array<{ url: string; target: string; sigUrl: string }>;
   updated: string[];
 }
 
@@ -79,7 +83,7 @@ function checkHarness(releases: GithubRelease[], asset = "ava-helper-test"): Che
     updated,
     deps: {
       fetchReleases: async () => releases,
-      replace: async (url, target) => { replaced.push({ url, target }); },
+      replace: async (url, target, sigUrl) => { replaced.push({ url, target, sigUrl }); },
       targetPath: "/bin/ava-helper",
       asset,
     },
@@ -102,15 +106,22 @@ describe("checkOnce", () => {
     expect(h.updated).toHaveLength(0);
   });
 
-  test("nyare + matchande asset → replace(url,target) + onUpdated(tag)", async () => {
+  test("nyare + matchande asset + signatur → replace(url,target,sigUrl) + onUpdated(tag)", async () => {
     const h = checkHarness([relWithAsset("helper-v1.5.0", "ava-helper-test", "http://dl/bin")]);
     await checkOnce(h.cfg, h.deps);
-    expect(h.replaced).toEqual([{ url: "http://dl/bin", target: "/bin/ava-helper" }]);
+    expect(h.replaced).toEqual([{ url: "http://dl/bin", target: "/bin/ava-helper", sigUrl: "http://dl/bin.sig" }]);
     expect(h.updated).toEqual(["helper-v1.5.0"]);
   });
 
   test("nyare men inget matchande asset → ingen replace/onUpdated", async () => {
     const h = checkHarness([relWithAsset("helper-v1.5.0", "ava-helper-annat-os", "http://x")]);
+    await checkOnce(h.cfg, h.deps);
+    expect(h.replaced).toHaveLength(0);
+    expect(h.updated).toHaveLength(0);
+  });
+
+  test("binär finns men signatur-asset saknas → vägrar (fail-closed)", async () => {
+    const h = checkHarness([relWithAsset("helper-v1.5.0", "ava-helper-test", "http://dl/bin", false)]);
     await checkOnce(h.cfg, h.deps);
     expect(h.replaced).toHaveLength(0);
     expect(h.updated).toHaveLength(0);
@@ -151,19 +162,62 @@ describe("downloadAndReplace (integration)", () => {
     await Promise.all(dirs.map((d) => rm(d, { recursive: true, force: true })));
   });
 
-  test("laddar ner ny binär och byter ut målet + sätter exec-bit", async () => {
+  const BINARY = "NY BINÄR v2";
+  // Färskt test-nyckelpar; den publika nyckeln injiceras i downloadAndReplace.
+  const { privateKey, publicKey } = generateKeyPairSync("ed25519");
+  const pubB64 = publicKey.export({ format: "der", type: "spki" }).toString("base64");
+  const goodSig = sign(null, Buffer.from(BINARY), privateKey);
+
+  /** Kopiera bytes till en färsk ArrayBuffer (entydig BodyInit för Response). */
+  function toArrayBuffer(u: Uint8Array): ArrayBuffer {
+    const ab = new ArrayBuffer(u.byteLength);
+    new Uint8Array(ab).set(u);
+    return ab;
+  }
+
+  /** Bun-server som serverar binären på /bin och signaturen på /bin.sig. */
+  function serveBinaryAndSig(sig: Uint8Array) {
+    return Bun.serve({
+      port: 0,
+      fetch: (req) =>
+        new URL(req.url).pathname.endsWith(".sig")
+          ? new Response(toArrayBuffer(sig))
+          : new Response(BINARY),
+    });
+  }
+
+  test("verifierar signaturen, laddar ner + byter ut målet + sätter exec-bit", async () => {
     const dir = await mkdtemp(join(tmpdir(), "ava-upd-"));
     dirs.push(dir);
     const target = join(dir, "ava-helper");
     await writeFile(target, "GAMMAL BINÄR");
     await chmod(target, 0o644);
 
-    const server = Bun.serve({ port: 0, fetch: () => new Response("NY BINÄR v2") });
+    const server = serveBinaryAndSig(goodSig);
     try {
-      await downloadAndReplace(`http://127.0.0.1:${server.port}/bin`, target);
-      expect(await readFile(target, "utf8")).toBe("NY BINÄR v2");
+      const base = `http://127.0.0.1:${server.port}`;
+      await downloadAndReplace(`${base}/bin`, target, `${base}/bin.sig`, [pubB64]);
+      expect(await readFile(target, "utf8")).toBe(BINARY);
       const mode = (await stat(target)).mode & 0o777;
       expect(mode & 0o100).toBe(0o100); // owner-exec satt
+    } finally {
+      void server.stop(true);
+    }
+  });
+
+  test("ogiltig signatur → kastar och behåller gamla binären (fail-closed)", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "ava-upd-"));
+    dirs.push(dir);
+    const target = join(dir, "ava-helper");
+    await writeFile(target, "GAMMAL BINÄR");
+
+    const badSig = sign(null, Buffer.from(" fel innehåll "), privateKey);
+    const server = serveBinaryAndSig(badSig);
+    try {
+      const base = `http://127.0.0.1:${server.port}`;
+      const err = await expectRejection(downloadAndReplace(`${base}/bin`, target, `${base}/bin.sig`, [pubB64]));
+      expect(String(err)).toContain("matchar ingen pinnad release-nyckel");
+      expect(await readFile(target, "utf8")).toBe("GAMMAL BINÄR"); // oförändrad
     } finally {
       void server.stop(true);
     }
@@ -172,7 +226,8 @@ describe("downloadAndReplace (integration)", () => {
   test("HTTP-fel → kastar", async () => {
     const server = Bun.serve({ port: 0, fetch: () => new Response("nope", { status: 500 }) });
     try {
-      const err = await expectRejection(downloadAndReplace(`http://127.0.0.1:${server.port}/x`, "/tmp/whatever"));
+      const base = `http://127.0.0.1:${server.port}`;
+      const err = await expectRejection(downloadAndReplace(`${base}/x`, "/tmp/whatever", `${base}/x.sig`, [pubB64]));
       expect(String(err)).toContain("download HTTP 500");
     } finally {
       void server.stop(true);
