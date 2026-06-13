@@ -5,7 +5,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest-compat";
 import { render, screen, waitFor, fireEvent, act } from "@testing-library/react";
-import { WebOAuthDeviceFlow } from "@/components/settings/web-oauth-device-flow";
+import { WebOAuthDeviceFlow, classifyTokenResponse } from "@/components/settings/web-oauth-device-flow";
 
 vi.mock("@/lib/client/auth/oauth-config", () => ({
   loadOAuthConfig: () => ({ proxyUrl: "https://proxy.test", clientId: "cid" }),
@@ -69,5 +69,40 @@ describe("WebOAuthDeviceFlow", () => {
     const calledToken = fetchSpy.mock.calls.some(([u]: unknown[]) => String(u).endsWith("/token"));
     expect(calledToken).toBe(true);
     expect(onComplete).toHaveBeenCalledWith("tok-abc");
+  });
+
+  it("terminalt token-fel → error-grenen", async () => {
+    vi.useFakeTimers();
+    globalThis.fetch = vi.fn(async (url: string | URL | Request) =>
+      new Response(JSON.stringify(
+        String(url).endsWith("/token")
+          ? { error: "access_denied", error_description: "Användaren nekade åtkomst" }
+          : deviceCode,
+      ), { status: 200 }),
+    ) as typeof fetch;
+    render(<WebOAuthDeviceFlow onComplete={vi.fn()} onCancel={vi.fn()} />);
+    for (let i = 0; i < 6; i++) {
+      await act(async () => { await vi.advanceTimersByTimeAsync(5001); });
+    }
+    vi.useRealTimers();
+    await waitFor(() => expect(screen.getByText("Inloggning misslyckades")).toBeInTheDocument());
+    expect(screen.getByText("Användaren nekade åtkomst")).toBeInTheDocument();
+  });
+});
+
+describe("classifyTokenResponse", () => {
+  it("access_token → token-utfall", () => {
+    expect(classifyTokenResponse({ access_token: "tok-1" })).toEqual({ token: "tok-1" });
+  });
+  it("authorization_pending/slow_down → pending (fortsätt polla)", () => {
+    expect(classifyTokenResponse({ error: "authorization_pending" })).toBe("pending");
+    expect(classifyTokenResponse({ error: "slow_down" })).toBe("pending");
+    expect(classifyTokenResponse({})).toBe("pending");
+  });
+  it("terminalt fel → error-utfall (error_description prioriteras)", () => {
+    expect(classifyTokenResponse({ error: "access_denied", error_description: "nekad" }))
+      .toEqual({ error: "nekad" });
+    expect(classifyTokenResponse({ error: "expired_token" }))
+      .toEqual({ error: "expired_token" });
   });
 });
