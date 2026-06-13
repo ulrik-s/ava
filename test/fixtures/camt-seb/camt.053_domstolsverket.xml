@@ -1,0 +1,347 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ANONYMISERAD fixtur (#173/#175). Strukturen kommer från ett VERKLIGT
+  camt.053-kontoutdrag (SEB) där bl.a. Domstolsverket betalar kostnadsräkningar
+  till en advokatbyrå. Alla personuppgifter (byrå-/klientnamn, adresser,
+  konto-/bankgironummer, OCR-/referensnummer) är utbytta mot påhittade värden —
+  bara FORMATET är bevarat. Spara aldrig verklig klient-PII i repot (GDPR).
+
+  Tre intressanta fall för avprickningen:
+    1. Utgående betalning (DBIT) med strukturerad OCR-referens (SCOR/CdtrRefInf).
+    2. Inkommande klientbetalning (CRDT) med fri-text-referens (RfrdDocInf/Nb).
+    3. DOMSTOLSVERKET (Dbtr "SVERIGES DOMSTOLAR Utbetalning SCR"): EN betalning
+       som splittats över MÅNGA <Strd>-rader, var och en en kostnadsräkning med
+       referens i fri text (Nb = "<fakturanr> <målnr> <namn>"). Detta är
+       nyckelfallet för #173 (fordran utan faktura) + #175 (fri-text-match).
+-->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.02" xsi:schemaLocation="urn:iso:std:iso:20022:tech:xsd:camt.053.001.02 camt.053.001.02.xsd" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <BkToCstmrStmt>
+    <GrpHdr>
+      <MsgId>100000001</MsgId>
+      <CreDtTm>2026-06-13T04:11:16+01:00</CreDtTm>
+      <MsgRcpt>
+        <Id>
+          <OrgId>
+            <Othr>
+              <Id>11111111110000</Id>
+              <SchmeNm><Cd>BANK</Cd></SchmeNm>
+            </Othr>
+          </OrgId>
+        </Id>
+      </MsgRcpt>
+    </GrpHdr>
+    <Stmt>
+      <Id>STOIID25260613040632000013</Id>
+      <ElctrncSeqNb>1</ElctrncSeqNb>
+      <LglSeqNb>1</LglSeqNb>
+      <CreDtTm>2026-06-13T04:06:32+01:00</CreDtTm>
+      <FrToDt>
+        <FrDtTm>2026-06-12T00:00:00+01:00</FrDtTm>
+        <ToDtTm>2026-06-12T23:59:59+01:00</ToDtTm>
+      </FrToDt>
+      <Acct>
+        <Id>
+          <Othr>
+            <Id>12345678901</Id>
+            <SchmeNm><Cd>BBAN</Cd></SchmeNm>
+          </Othr>
+        </Id>
+        <Ccy>SEK</Ccy>
+        <Nm>EXEMPEL &amp; PARTNER ADVOKATER AB</Nm>
+        <Ownr>
+          <Nm>EXEMPEL &amp; PARTNER ADVOKATER AB</Nm>
+          <Id>
+            <OrgId>
+              <Othr>
+                <Id>11111111110000</Id>
+                <SchmeNm><Cd>BANK</Cd></SchmeNm>
+              </Othr>
+            </OrgId>
+          </Id>
+        </Ownr>
+        <Svcr>
+          <FinInstnId><BIC>ESSESESSXXX</BIC></FinInstnId>
+        </Svcr>
+      </Acct>
+      <Bal>
+        <Tp><CdOrPrtry><Cd>OPBD</Cd></CdOrPrtry></Tp>
+        <Amt Ccy="SEK">2111930.67</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <Dt><Dt>2026-06-12</Dt></Dt>
+      </Bal>
+      <Bal>
+        <Tp><CdOrPrtry><Cd>CLBD</Cd></CdOrPrtry></Tp>
+        <CdtLine><Incl>false</Incl></CdtLine>
+        <Amt Ccy="SEK">2298832.67</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <Dt><Dt>2026-06-12</Dt></Dt>
+      </Bal>
+      <Bal>
+        <Tp><CdOrPrtry><Cd>CLAV</Cd></CdOrPrtry></Tp>
+        <CdtLine><Incl>false</Incl></CdtLine>
+        <Amt Ccy="SEK">2298832.67</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <Dt><Dt>2026-06-12</Dt></Dt>
+      </Bal>
+      <Bal>
+        <Tp><CdOrPrtry><Cd>FWAV</Cd></CdOrPrtry></Tp>
+        <Amt Ccy="SEK">2298832.67</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <Dt><Dt>2026-06-15</Dt></Dt>
+      </Bal>
+      <TxsSummry>
+        <TtlCdtNtries>
+          <NbOfNtries>2</NbOfNtries>
+          <Sum>191982.00</Sum>
+        </TtlCdtNtries>
+        <TtlDbtNtries>
+          <NbOfNtries>1</NbOfNtries>
+          <Sum>5080.00</Sum>
+        </TtlDbtNtries>
+      </TxsSummry>
+
+      <!-- 1. Utgående betalning (DBIT) med strukturerad OCR-referens (SCOR). -->
+      <Ntry>
+        <NtryRef>LBE 555-0000-0011129</NtryRef>
+        <Amt Ccy="SEK">5080.00</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <Sts>BOOK</Sts>
+        <BookgDt><Dt>2026-06-12</Dt></BookgDt>
+        <ValDt><Dt>2026-06-12</Dt></ValDt>
+        <AcctSvcrRef>STOI123456789010011129</AcctSvcrRef>
+        <BkTxCd>
+          <Domn>
+            <Cd>PMNT</Cd>
+            <Fmly><Cd>ICDT</Cd><SubFmlyCd>ATXN</SubFmlyCd></Fmly>
+          </Domn>
+          <Prtry><Cd>TRF</Cd><Issr>SWIFT</Issr></Prtry>
+        </BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Refs>
+              <MsgId>0AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA0</MsgId>
+              <AcctSvcrRef>STOESI05260604101532903978000001</AcctSvcrRef>
+              <PmtInfId>1000000-360-0000000000000000000000</PmtInfId>
+              <InstrId>360</InstrId>
+              <EndToEndId>C1000000-360-0000000000000000000000</EndToEndId>
+            </Refs>
+            <AmtDtls><TxAmt><Amt Ccy="SEK">1270.00</Amt></TxAmt></AmtDtls>
+            <RltdPties>
+              <Dbtr><Nm>EXEMPEL &amp; PARTNER ADVOKATER AB</Nm></Dbtr>
+              <DbtrAcct><Id><Othr><Id>5550000</Id><SchmeNm><Prtry>BGNR</Prtry></SchmeNm></Othr></Id></DbtrAcct>
+              <Cdtr><Nm>EXEMPEL PASTORAT</Nm></Cdtr>
+              <CdtrAcct><Id><Othr><Id>9990001</Id><SchmeNm><Prtry>BGNR</Prtry></SchmeNm><Issr>BGC</Issr></Othr></Id></CdtrAcct>
+            </RltdPties>
+            <RltdAgts><DbtrAgt><FinInstnId><Nm>Skandinaviska Enskilda Banken</Nm></FinInstnId></DbtrAgt></RltdAgts>
+            <RmtInf>
+              <Strd>
+                <RfrdDocAmt><RmtdAmt Ccy="SEK">1270.00</RmtdAmt></RfrdDocAmt>
+                <CdtrRefInf>
+                  <Tp><CdOrPrtry><Cd>SCOR</Cd></CdOrPrtry></Tp>
+                  <Ref>20000001</Ref>
+                </CdtrRefInf>
+              </Strd>
+            </RmtInf>
+          </TxDtls>
+          <TxDtls>
+            <Refs>
+              <MsgId>0AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA0</MsgId>
+              <AcctSvcrRef>STOESI05260604101532903980000001</AcctSvcrRef>
+              <PmtInfId>1000000-358-0000000000000000000000</PmtInfId>
+              <InstrId>358</InstrId>
+              <EndToEndId>C1000000-358-0000000000000000000000</EndToEndId>
+            </Refs>
+            <AmtDtls><TxAmt><Amt Ccy="SEK">3810.00</Amt></TxAmt></AmtDtls>
+            <RltdPties>
+              <Dbtr><Nm>EXEMPEL &amp; PARTNER ADVOKATER AB</Nm></Dbtr>
+              <DbtrAcct><Id><Othr><Id>5550000</Id><SchmeNm><Prtry>BGNR</Prtry></SchmeNm></Othr></Id></DbtrAcct>
+              <Cdtr><Nm>EXEMPEL PASTORAT</Nm></Cdtr>
+              <CdtrAcct><Id><Othr><Id>9990001</Id><SchmeNm><Prtry>BGNR</Prtry></SchmeNm><Issr>BGC</Issr></Othr></Id></CdtrAcct>
+            </RltdPties>
+            <RltdAgts><DbtrAgt><FinInstnId><Nm>Skandinaviska Enskilda Banken</Nm></FinInstnId></DbtrAgt></RltdAgts>
+            <RmtInf>
+              <Strd>
+                <RfrdDocAmt><RmtdAmt Ccy="SEK">3810.00</RmtdAmt></RfrdDocAmt>
+                <CdtrRefInf>
+                  <Tp><CdOrPrtry><Cd>SCOR</Cd></CdOrPrtry></Tp>
+                  <Ref>20000002</Ref>
+                </CdtrRefInf>
+              </Strd>
+            </RmtInf>
+          </TxDtls>
+        </NtryDtls>
+      </Ntry>
+
+      <!-- 2. Inkommande klientbetalning (CRDT) med fri-text-referens. -->
+      <Ntry>
+        <NtryRef>BG05550000 00143-0011130</NtryRef>
+        <Amt Ccy="SEK">4598.00</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <Sts>BOOK</Sts>
+        <BookgDt><Dt>2026-06-12</Dt></BookgDt>
+        <ValDt><Dt>2026-06-12</Dt></ValDt>
+        <AcctSvcrRef>STOI123456789010011130</AcctSvcrRef>
+        <BkTxCd>
+          <Domn>
+            <Cd>PMNT</Cd>
+            <Fmly><Cd>RCDT</Cd><SubFmlyCd>ATXN</SubFmlyCd></Fmly>
+          </Domn>
+          <Prtry><Cd>TRF</Cd><Issr>SWIFT</Issr></Prtry>
+        </BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Refs>
+              <AcctSvcrRef>STOIIQ0I260612134125105030000001</AcctSvcrRef>
+              <InstrId>EXEMPEL KLIENT</InstrId>
+            </Refs>
+            <AmtDtls><TxAmt><Amt Ccy="SEK">4598.00</Amt></TxAmt></AmtDtls>
+            <RltdPties>
+              <Dbtr>
+                <Nm>KLIENT EXEMPEL</Nm>
+                <PstlAdr>
+                  <StrtNm>EXEMPELGATAN 1 LGH 1101</StrtNm>
+                  <PstCd>216 12</PstCd>
+                  <TwnNm>LIMHAMN</TwnNm>
+                </PstlAdr>
+              </Dbtr>
+              <Cdtr><Nm>EXEMPEL &amp; PARTNER ADVOKATER AB</Nm></Cdtr>
+              <CdtrAcct><Id><Othr><Id>5550000</Id><SchmeNm><Prtry>BGNR</Prtry></SchmeNm></Othr></Id></CdtrAcct>
+            </RltdPties>
+            <RltdAgts>
+              <DbtrAgt><FinInstnId><BIC>ESSESESS</BIC></FinInstnId></DbtrAgt>
+              <CdtrAgt><FinInstnId><BIC>ESSESESS</BIC></FinInstnId></CdtrAgt>
+            </RltdAgts>
+            <RmtInf>
+              <Strd>
+                <RfrdDocInf>
+                  <Tp><CdOrPrtry><Cd>CINV</Cd></CdOrPrtry></Tp>
+                  <Nb>EXEMPEL KLIENT</Nb>
+                </RfrdDocInf>
+                <RfrdDocAmt><RmtdAmt Ccy="SEK">4598.00</RmtdAmt></RfrdDocAmt>
+              </Strd>
+            </RmtInf>
+          </TxDtls>
+        </NtryDtls>
+      </Ntry>
+
+      <!-- 3. DOMSTOLSVERKET: en betalning splittad över många kostnadsräkningar. -->
+      <Ntry>
+        <NtryRef>BG05550000 00144-0011131</NtryRef>
+        <Amt Ccy="SEK">187384.00</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <Sts>BOOK</Sts>
+        <BookgDt><Dt>2026-06-12</Dt></BookgDt>
+        <ValDt><Dt>2026-06-12</Dt></ValDt>
+        <AcctSvcrRef>STOI123456789010011131</AcctSvcrRef>
+        <BkTxCd>
+          <Domn>
+            <Cd>PMNT</Cd>
+            <Fmly><Cd>RCDT</Cd><SubFmlyCd>ATXN</SubFmlyCd></Fmly>
+          </Domn>
+          <Prtry><Cd>TRF</Cd><Issr>SWIFT</Issr></Prtry>
+        </BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Refs>
+              <AcctSvcrRef>STOIIQ0I260612134125127019000001</AcctSvcrRef>
+              <InstrId>6130/1154501 AC Klient Ex</InstrId>
+            </Refs>
+            <AmtDtls><TxAmt><Amt Ccy="SEK">2033.00</Amt></TxAmt></AmtDtls>
+            <RltdPties>
+              <Dbtr>
+                <Nm>ANNAN KLIENT EXEMPEL</Nm>
+                <PstlAdr>
+                  <StrtNm>EXEMPELVÄGEN 22 LGH 1202</StrtNm>
+                  <PstCd>222 24</PstCd>
+                  <TwnNm>LUND</TwnNm>
+                </PstlAdr>
+              </Dbtr>
+              <Cdtr><Nm>EXEMPEL &amp; PARTNER ADVOKATER AB</Nm></Cdtr>
+              <CdtrAcct><Id><Othr><Id>5550000</Id><SchmeNm><Prtry>BGNR</Prtry></SchmeNm></Othr></Id></CdtrAcct>
+            </RltdPties>
+            <RltdAgts>
+              <DbtrAgt><FinInstnId><BIC>ESSESESS</BIC></FinInstnId></DbtrAgt>
+              <CdtrAgt><FinInstnId><BIC>ESSESESS</BIC></FinInstnId></CdtrAgt>
+            </RltdAgts>
+            <RmtInf>
+              <Strd>
+                <RfrdDocInf>
+                  <Tp><CdOrPrtry><Cd>CINV</Cd></CdOrPrtry></Tp>
+                  <Nb>6130/1154501 AC Klient Ex</Nb>
+                </RfrdDocInf>
+                <RfrdDocAmt><RmtdAmt Ccy="SEK">2033.00</RmtdAmt></RfrdDocAmt>
+                <AddtlRmtInf>lan</AddtlRmtInf>
+              </Strd>
+            </RmtInf>
+          </TxDtls>
+          <TxDtls>
+            <Refs>
+              <AcctSvcrRef>STOIIQ0I260612134125128930000001</AcctSvcrRef>
+              <InstrId>1154602 3288-26 EXEMPELSSON</InstrId>
+            </Refs>
+            <AmtDtls><TxAmt><Amt Ccy="SEK">185351.00</Amt></TxAmt></AmtDtls>
+            <RltdPties>
+              <Dbtr>
+                <Nm>SVERIGES DOMSTOLAR Utbetalning SCR</Nm>
+                <PstlAdr>
+                  <StrtNm>BOX</StrtNm>
+                  <PstCd>55181</PstCd>
+                  <TwnNm>JÖNKÖPING</TwnNm>
+                </PstlAdr>
+              </Dbtr>
+              <DbtrAcct>
+                <Id><Othr><Id>5990000</Id><SchmeNm><Prtry>BGNR</Prtry></SchmeNm></Othr></Id>
+                <Ccy>SEK</Ccy>
+              </DbtrAcct>
+              <Cdtr><Nm>EXEMPEL &amp; PARTNER ADVOKATER AB</Nm></Cdtr>
+              <CdtrAcct><Id><Othr><Id>5550000</Id><SchmeNm><Prtry>BGNR</Prtry></SchmeNm></Othr></Id></CdtrAcct>
+            </RltdPties>
+            <RltdAgts><CdtrAgt><FinInstnId><BIC>ESSESESS</BIC></FinInstnId></CdtrAgt></RltdAgts>
+            <RmtInf>
+              <Strd>
+                <RfrdDocInf><Tp><CdOrPrtry><Cd>CINV</Cd></CdOrPrtry></Tp><Nb>1154602 3288-26 EXEMPELSSON</Nb></RfrdDocInf>
+                <RfrdDocAmt><RmtdAmt Ccy="SEK">7246.00</RmtdAmt></RfrdDocAmt>
+              </Strd>
+              <Strd>
+                <RfrdDocInf><Tp><CdOrPrtry><Cd>CINV</Cd></CdOrPrtry></Tp><Nb>1160301 3290-26 EXEMPELSSON</Nb></RfrdDocInf>
+                <RfrdDocAmt><RmtdAmt Ccy="SEK">7246.00</RmtdAmt></RfrdDocAmt>
+              </Strd>
+              <Strd>
+                <RfrdDocInf><Tp><CdOrPrtry><Cd>CINV</Cd></CdOrPrtry></Tp><Nb>1160601 3330-26 DIAZ EXEMPEL</Nb></RfrdDocInf>
+                <RfrdDocAmt><RmtdAmt Ccy="SEK">11963.00</RmtdAmt></RfrdDocAmt>
+              </Strd>
+              <Strd>
+                <RfrdDocInf><Tp><CdOrPrtry><Cd>CINV</Cd></CdOrPrtry></Tp><Nb>5311 5040-25 TEST CECILIA</Nb></RfrdDocInf>
+                <RfrdDocAmt><RmtdAmt Ccy="SEK">22352.00</RmtdAmt></RfrdDocAmt>
+              </Strd>
+              <Strd>
+                <RfrdDocInf><Tp><CdOrPrtry><Cd>CINV</Cd></CdOrPrtry></Tp><Nb>1101601 695-26 TEST CECIL</Nb></RfrdDocInf>
+                <RfrdDocAmt><RmtdAmt Ccy="SEK">14105.00</RmtdAmt></RfrdDocAmt>
+              </Strd>
+              <Strd>
+                <RfrdDocInf><Tp><CdOrPrtry><Cd>CINV</Cd></CdOrPrtry></Tp><Nb>5291 5799-25 PARTNER MA</Nb></RfrdDocInf>
+                <RfrdDocAmt><RmtdAmt Ccy="SEK">73143.00</RmtdAmt></RfrdDocAmt>
+              </Strd>
+              <Strd>
+                <RfrdDocInf><Tp><CdOrPrtry><Cd>CINV</Cd></CdOrPrtry></Tp><Nb>1162902 3415-26 EXEMPEL P</Nb></RfrdDocInf>
+                <RfrdDocAmt><RmtdAmt Ccy="SEK">10265.00</RmtdAmt></RfrdDocAmt>
+              </Strd>
+              <Strd>
+                <RfrdDocInf><Tp><CdOrPrtry><Cd>CINV</Cd></CdOrPrtry></Tp><Nb>1005701 5603-26 EXEMPEL B</Nb></RfrdDocInf>
+                <RfrdDocAmt><RmtdAmt Ccy="SEK">23981.00</RmtdAmt></RfrdDocAmt>
+              </Strd>
+              <Strd>
+                <RfrdDocInf><Tp><CdOrPrtry><Cd>CINV</Cd></CdOrPrtry></Tp><Nb>1163501 3477-26 TEST CECI</Nb></RfrdDocInf>
+                <RfrdDocAmt><RmtdAmt Ccy="SEK">6066.00</RmtdAmt></RfrdDocAmt>
+              </Strd>
+              <Strd>
+                <RfrdDocInf><Tp><CdOrPrtry><Cd>CINV</Cd></CdOrPrtry></Tp><Nb>1065101 2938-26 EXEMPEL</Nb></RfrdDocInf>
+                <RfrdDocAmt><RmtdAmt Ccy="SEK">8984.00</RmtdAmt></RfrdDocAmt>
+              </Strd>
+            </RmtInf>
+          </TxDtls>
+        </NtryDtls>
+      </Ntry>
+    </Stmt>
+  </BkToCstmrStmt>
+</Document>

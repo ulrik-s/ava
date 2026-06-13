@@ -131,3 +131,22 @@ describe("zod-validering vid parsegränsen (#185)", () => {
     expect(camtFileSchema.safeParse(file).success).toBe(true);
   });
 });
+
+describe("parseCamtXml — Domstolsverket (#173/#175, anonymiserad real-fixtur)", () => {
+  const file = parseCamtXml(read("camt.053_domstolsverket.xml"));
+
+  it("parsar utan fel + passerar schemat", () => {
+    expect(camtFileSchema.safeParse(file).success).toBe(true);
+    expect(file.transactions.length).toBeGreaterThan(0);
+  });
+
+  it("hittar Domstolsverkets betalning med MÅNGA kostnadsräknings-referenser", () => {
+    const dom = file.transactions.find((t) => (t.debtorName ?? "").includes("SVERIGES DOMSTOLAR"));
+    expect(dom).toBeTruthy();
+    expect(dom!.amountOre).toBe(185_351_00);
+    // En betalning → 10 strukturerade referenser (fri-text Nb, ej OCR).
+    expect(dom!.structuredRefs.length).toBe(10);
+    // Referenserna bär fakturanr + målnr i fri text (matchningsnyckel #175).
+    expect(dom!.structuredRefs.some((r) => r.ref.includes("3288-26"))).toBe(true);
+  });
+});
