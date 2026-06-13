@@ -89,11 +89,6 @@
       "count": 1
     }
   },
-  "src/components/documents/external-edit-modal.tsx": {
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
   "src/components/llm/llm-settings-card.tsx": {
     "max-lines-per-function": {
       "count": 1
