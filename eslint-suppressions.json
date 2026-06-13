@@ -104,11 +104,6 @@
       "count": 1
     }
   },
-  "src/components/matter/payment-method-card.tsx": {
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
   "src/components/settings/fsa-folder-selector.tsx": {
     "max-lines-per-function": {
       "count": 1
