@@ -45,6 +45,7 @@ lever som JSON i ett git-repo (se [`architecture.md`](./architecture.md)).
 | E2E-tester | Playwright (Chromium) | `tooling/config/playwright.config.ts`, `test/e2e/` |
 | Kodtäckning | `bun test --coverage` (lcov) + ratchet-skript | `tooling/scripts/check-coverage.ts` |
 | Duplikatdetektering (DRY) | jscpd | `tooling/config/jscpd.json` |
+| Bundle-size-budget | gzip-summa av klient-chunks + ratchet-skript | `tooling/scripts/check-bundle-size.ts` |
 | Arkitektur (SOLID/lager) | dependency-cruiser | `tooling/config/dependency-cruiser.cjs` |
 | Död kod / oanvända exports | knip | `tooling/config/knip.json` |
 | Pre-commit | husky + lint-staged | `.husky/pre-commit`, `package.json` |
@@ -137,6 +138,22 @@ ratchet-loosening — undvik den; bryt hellre ut funktionen. Antalet poster i
 |---|---|
 | Duplicerade kodblock | ≥ 8 rader / ≥ 80 tokens |
 | Procent duplikat | < 1.5 % av kodbasen |
+
+### Bundle-size (`bun run size`, #14)
+
+Browser-bundeln är tung (LLM opt-in, pdfjs/exceljs/mammoth, Temporal-polyfill).
+[`check-bundle-size.ts`](../tooling/scripts/check-bundle-size.ts) summerar alla
+statiska JS-chunks i demo-exporten (`out/`, kräver `bun run build:demo` först)
+**gzip-komprimerat** och faller om summan överstiger budgeten.
+
+| Mått | Gräns |
+|---|---|
+| Total klient-JS (gzip) | `BUDGET_KB` i skriptet (nu 3400 KB; baslinje ~3223 KB) |
+
+Budgeten är en **ratchet** (samma anda som coverage/complexity): den ligger
+strax över dagens siffra. Höj `BUDGET_KB` BARA när en ökning är medveten —
+lazy-loada annars tunga libs. CI kör `bun run size` direkt efter `build:demo`
+(återanvänder samma `out/`, ingen extra build).
 
 ### Arkitektur (`bun run deps:check`)
 

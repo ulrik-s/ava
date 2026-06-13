@@ -10,6 +10,7 @@
     "build": "next build",
     "build:demo": "DEMO_BASE_PATH=/ava bash tooling/scripts/build-demo.sh",
     "build:demo-repo": "bun tooling/scripts/build-demo-repo.ts",
+    "size": "bun tooling/scripts/check-bundle-size.ts",
     "demo:generate": "bun tooling/demo-generator/generate.ts",
     "demo:serve": "bash tooling/scripts/demo-serve.sh",
     "demo:serve:fast": "SKIP_BUILD=1 bash tooling/scripts/demo-serve.sh",
