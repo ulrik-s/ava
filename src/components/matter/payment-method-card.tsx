@@ -32,19 +32,55 @@ interface Props {
   paymentMethodDecidedAt: Date | string | null;
 }
 
-export function PaymentMethodCard({
-  matterId,
+/** Läsvy: nuvarande betalningssätt + kreditrisk-badge + ev. notering/datum. */
+function PaymentMethodView({
   paymentMethod,
   paymentMethodNote,
   paymentMethodDecidedAt,
-}: Props) {
-  const [editing, setEditing] = useState(false);
-  const [method, setMethod] = useState(paymentMethod);
-  const [note, setNote] = useState(paymentMethodNote ?? "");
+  onEdit,
+}: {
+  paymentMethod: string;
+  paymentMethodNote: string | null;
+  paymentMethodDecidedAt: Date | string | null;
+  onEdit: () => void;
+}) {
+  const risk = creditRiskFor(paymentMethod);
+  const badgeClass = RISK_BADGE[risk];
+  const label = PAYMENT_METHOD_LABELS[paymentMethod as keyof typeof PAYMENT_METHOD_LABELS] ?? paymentMethod;
+  return (
+    <div className="bg-white rounded-lg border border-gray-200 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
+            Betalningssätt
+          </p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-semibold text-gray-900">{label}</span>
+            <span className={`text-xs rounded-full px-2 py-0.5 border ${badgeClass}`}>
+              Kreditrisk: {CREDIT_RISK_LABELS[risk]}
+            </span>
+          </div>
+          {paymentMethodNote && <p className="text-sm text-gray-600 mt-1">{paymentMethodNote}</p>}
+          {paymentMethodDecidedAt && (
+            <p className="text-xs text-gray-400 mt-0.5">
+              Beslut mottaget {new Date(paymentMethodDecidedAt).toLocaleDateString("sv-SE")}
+            </p>
+          )}
+        </div>
+        <button onClick={onEdit} className="text-sm text-blue-600 hover:underline whitespace-nowrap">
+          Ändra
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Redigeringsformulär: äger sitt formulär-state + spar-mutationen. */
+function PaymentMethodEditor({ matterId, initial, onDone }: { matterId: string; initial: Props; onDone: () => void }) {
+  const [method, setMethod] = useState(initial.paymentMethod);
+  const [note, setNote] = useState(initial.paymentMethodNote ?? "");
   const [decidedAt, setDecidedAt] = useState(
-    paymentMethodDecidedAt
-      ? new Date(paymentMethodDecidedAt).toISOString().slice(0, 10)
-      : "",
+    initial.paymentMethodDecidedAt ? new Date(initial.paymentMethodDecidedAt).toISOString().slice(0, 10) : "",
   );
   const methodId = useId();
   const decidedAtId = useId();
@@ -54,54 +90,13 @@ export function PaymentMethodCard({
   const update = trpc.matter.update.useMutation({
     onSuccess: () => {
       void utils.matter.getById.invalidate({ id: matterId });
-      setEditing(false);
+      onDone();
     },
   });
 
-  const risk = creditRiskFor(paymentMethod);
-  const riskLabel = CREDIT_RISK_LABELS[risk];
-  const badgeClass = RISK_BADGE[risk];
-  const label = PAYMENT_METHOD_LABELS[paymentMethod as keyof typeof PAYMENT_METHOD_LABELS] ?? paymentMethod;
-
-  if (!editing) {
-    return (
-      <div className="bg-white rounded-lg border border-gray-200 p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex-1 min-w-0">
-            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
-              Betalningssätt
-            </p>
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-semibold text-gray-900">{label}</span>
-              <span className={`text-xs rounded-full px-2 py-0.5 border ${badgeClass}`}>
-                Kreditrisk: {riskLabel}
-              </span>
-            </div>
-            {paymentMethodNote && (
-              <p className="text-sm text-gray-600 mt-1">{paymentMethodNote}</p>
-            )}
-            {paymentMethodDecidedAt && (
-              <p className="text-xs text-gray-400 mt-0.5">
-                Beslut mottaget {new Date(paymentMethodDecidedAt).toLocaleDateString("sv-SE")}
-              </p>
-            )}
-          </div>
-          <button
-            onClick={() => setEditing(true)}
-            className="text-sm text-blue-600 hover:underline whitespace-nowrap"
-          >
-            Ändra
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-4">
-      <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">
-        Ändra betalningssätt
-      </p>
+      <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">Ändra betalningssätt</p>
       <div className="space-y-3">
         <div>
           <label htmlFor={methodId} className="block text-xs font-medium mb-1">Betalningssätt</label>
@@ -142,10 +137,7 @@ export function PaymentMethodCard({
           />
         </div>
         <div className="flex gap-2 justify-end">
-          <button
-            onClick={() => setEditing(false)}
-            className="px-3 py-1.5 text-sm border border-gray-300 rounded"
-          >
+          <button onClick={onDone} className="px-3 py-1.5 text-sm border border-gray-300 rounded">
             Avbryt
           </button>
           <button
@@ -165,5 +157,20 @@ export function PaymentMethodCard({
         </div>
       </div>
     </div>
+  );
+}
+
+export function PaymentMethodCard(props: Props) {
+  const [editing, setEditing] = useState(false);
+  if (editing) {
+    return <PaymentMethodEditor matterId={props.matterId} initial={props} onDone={() => setEditing(false)} />;
+  }
+  return (
+    <PaymentMethodView
+      paymentMethod={props.paymentMethod}
+      paymentMethodNote={props.paymentMethodNote}
+      paymentMethodDecidedAt={props.paymentMethodDecidedAt}
+      onEdit={() => setEditing(true)}
+    />
   );
 }
