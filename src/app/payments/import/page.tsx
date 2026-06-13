@@ -21,6 +21,11 @@ import {
   type MatchOutcome,
   type BookablePayment,
 } from "@/lib/shared/payments/match-payments";
+import {
+  matchReceivables,
+  type ReceivableCandidate,
+  type ReceivableSuggestion,
+} from "@/lib/shared/payments/match-receivables";
 
 interface InvoiceRowData {
   id: string;
@@ -57,8 +62,10 @@ export default function PaymentImportPage() {
   const [xml, setXml] = useState("");
   const [doneMsg, setDoneMsg] = useState<string | null>(null);
   const invoices = trpc.invoice.list.useQuery({});
+  const receivables = trpc.expectedReceivable.candidates.useQuery();
   const utils = trpc.useUtils();
   const recordPayment = trpc.invoice.recordPayment.useMutation();
+  const settleReceivable = trpc.expectedReceivable.settle.useMutation();
 
   const parsed = useMemo((): { file?: CamtFile; error?: string } => {
     if (!xml.trim()) return {};
@@ -79,6 +86,26 @@ export default function PaymentImportPage() {
     for (const r of (invoices.data ?? []) as InvoiceRowData[]) out[r.id] = r.invoiceNumber ?? r.id;
     return out;
   }, [invoices.data]);
+
+  // #175: matcha domstolsbetalningar (fri text) mot förväntade fordringar.
+  const receivableSuggestions = useMemo((): ReceivableSuggestion[] => {
+    if (!parsed.file || !receivables.data) return [];
+    const cands: ReceivableCandidate[] = (receivables.data as Array<Omit<ReceivableCandidate, "settledReferences">>).map((c) => ({ ...c, settledReferences: [] }));
+    return matchReceivables(parsed.file.transactions, cands).suggestions;
+  }, [parsed.file, receivables.data]);
+
+  const receivableLabels = useMemo((): Record<string, string> => {
+    const out: Record<string, string> = {};
+    for (const c of (receivables.data ?? []) as Array<{ id: string; description: string }>) out[c.id] = c.description;
+    return out;
+  }, [receivables.data]);
+
+  const settleSuggestion = async (s: ReceivableSuggestion): Promise<void> => {
+    await settleReceivable.mutateAsync({ id: s.receivableId, settledAmount: s.amountOre, paymentReference: s.reference });
+    await utils.expectedReceivable.candidates.invalidate();
+    await utils.expectedReceivable.list.invalidate();
+    setDoneMsg("Domstolsbetalning avprickad mot fordran.");
+  };
 
   const book = async (bookable: BookablePayment[]): Promise<void> => {
     let ok = 0;
@@ -102,6 +129,9 @@ export default function PaymentImportPage() {
       <h1 className="text-2xl font-bold text-gray-900 mb-2">Importera betalfil</h1>
       <p className="text-sm text-gray-500 mb-6">
         camt.054/053 (SEB/Bankgirot &quot;Kontohändelser via fil&quot;) — matchas mot OCR, fakturanummer eller fri text.
+        Domstolsbetalningar (utan OCR) matchas på ärende-/målnummer mot förväntade fordringar (#173).
+        Driftskrav: ta emot domstolsbetalningar på ett bankgiro/konto som tillåter <em>fri referens</em> —
+        ett OCR-låst bankgiro kan avvisa betalningar utan OCR.
       </p>
       {doneMsg && <p className="mb-4 text-sm text-green-700 bg-green-50 rounded p-3">{doneMsg}</p>}
       <FilePicker onXml={(s) => { setDoneMsg(null); setXml(s); }} xml={xml} />
@@ -109,6 +139,57 @@ export default function PaymentImportPage() {
       {outcome && (
         <ImportPreview outcome={outcome} labels={labels} busy={recordPayment.isPending} onBook={() => void book(outcome.bookable)} />
       )}
+      {receivableSuggestions.length > 0 && (
+        <ReceivableSuggestions
+          suggestions={receivableSuggestions}
+          labels={receivableLabels}
+          busy={settleReceivable.isPending}
+          onSettle={(s) => void settleSuggestion(s)}
+        />
+      )}
+    </div>
+  );
+}
+
+/** #175: föreslagna avprickningar mot förväntade domstols-fordringar (manuell bekräftelse). */
+function ReceivableSuggestions({
+  suggestions,
+  labels,
+  busy,
+  onSettle,
+}: {
+  suggestions: ReceivableSuggestion[];
+  labels: Record<string, string>;
+  busy: boolean;
+  onSettle: (s: ReceivableSuggestion) => void;
+}) {
+  return (
+    <div className="mt-6 bg-white rounded-lg border border-gray-200 p-5">
+      <h2 className="font-semibold text-gray-900 mb-1">Domstolsbetalningar — förväntade fordringar ({suggestions.length})</h2>
+      <p className="text-xs text-gray-500 mb-3">
+        Matchade på ärende-/målnummer i betalningens referens. Bekräfta varje avprickning —
+        utbetalt belopp bokas (ev. prutning hanteras automatiskt, #173).
+      </p>
+      <table className="min-w-full text-sm">
+        <tbody className="divide-y divide-gray-100">
+          {suggestions.map((s) => (
+            <tr key={s.reference}>
+              <td className="py-2">{labels[s.receivableId] ?? s.receivableId}</td>
+              <td className="py-2 text-xs text-gray-500 font-mono">{s.matchedText}</td>
+              <td className="py-2 text-right font-mono">{formatCurrency(s.amountOre)}</td>
+              <td className="py-2 text-right">
+                <button
+                  onClick={() => onSettle(s)}
+                  disabled={busy}
+                  className="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+                >
+                  Pricka av
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
