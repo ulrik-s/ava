@@ -83,7 +83,7 @@ export function renderServerEnv(cfg: ServerInstallConfig): string {
   if (cfg.authMode === "oidc" && cfg.oidc) {
     lines.push(
       `OAUTH2_PROXY_CLIENT_ID=${cfg.oidc.clientId}`,
-      `OIDC_ISSUER_PUBLIC=${cfg.oidc.issuerUrl}`,
+      `OIDC_ISSUER_URL=${cfg.oidc.issuerUrl}`,
       `OIDC_REDIRECT_URL=${cfg.oidc.redirectUrl}`,
     );
   }

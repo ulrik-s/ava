@@ -15,7 +15,13 @@
  */
 
 import { join } from "node:path";
-import { buildAdminUserRow, adminUserGitPath } from "./bootstrap-admin/core";
+import {
+  buildAdminUserRow,
+  adminUserGitPath,
+  buildOrgRow,
+  orgGitPath,
+  metaJsonContent,
+} from "./bootstrap-admin/core";
 
 function flag(argv: string[], name: string): string | undefined {
   const i = argv.indexOf(`--${name}`);
@@ -37,12 +43,53 @@ async function alreadyAdmin(path: string): Promise<boolean> {
   }
 }
 
-async function gitCommit(workDir: string, relPath: string, email: string): Promise<void> {
+async function gitCommit(workDir: string, email: string): Promise<void> {
   const { spawnSync } = await import("node:child_process");
   const run = (args: string[]) => spawnSync("git", ["-C", workDir, ...args], { stdio: "inherit" });
-  run(["add", relPath]);
-  run(["commit", "-m", `feat(auth): bootstrap admin ${email} i allowlisten (#224)`]);
+  run(["add", "-A"]);
+  run(["commit", "-m", `feat(auth): bootstrap admin ${email} i firma.git (#224)`]);
   log("committat — pusha med `git push` (eller låt server-runtime-peern göra det).");
+}
+
+async function exists(path: string): Promise<boolean> {
+  const { access } = await import("node:fs/promises");
+  return access(path).then(() => true).catch(() => false);
+}
+
+/** Seeda org-roten + meta.json om de saknas (färsk firma.git). Returnerar true om något skrevs. */
+async function seedOrgAndMeta(workDir: string, orgId: string, orgName: string): Promise<boolean> {
+  const { mkdir, writeFile } = await import("node:fs/promises");
+  await mkdir(join(workDir, ".ava", "organizations"), { recursive: true });
+  let wrote = false;
+
+  const orgPath = join(workDir, orgGitPath(orgId));
+  if (!(await exists(orgPath))) {
+    await writeFile(orgPath, JSON.stringify(buildOrgRow({ id: orgId, name: orgName }), null, 2) + "\n");
+    log(`org-rad skriven: ${orgGitPath(orgId)} (${orgName})`);
+    wrote = true;
+  }
+  const metaPath = join(workDir, ".ava", "meta.json");
+  if (!(await exists(metaPath))) {
+    await writeFile(metaPath, metaJsonContent());
+    log("meta.json skriven (.ava/meta.json)");
+    wrote = true;
+  }
+  return wrote;
+}
+
+/** Seeda admin-allowlist-raden om den saknas. Returnerar true om den skrevs. */
+async function seedAdmin(workDir: string, email: string, org: string, name: string | undefined): Promise<boolean> {
+  const fullPath = join(workDir, adminUserGitPath(email));
+  if (await alreadyAdmin(fullPath)) {
+    log(`${email} är redan ADMIN — admin-raden lämnas orörd.`);
+    return false;
+  }
+  const { mkdir, writeFile } = await import("node:fs/promises");
+  const row = buildAdminUserRow({ email, organizationId: org, ...(name ? { name } : {}) });
+  await mkdir(join(workDir, ".ava", "users"), { recursive: true });
+  await writeFile(fullPath, JSON.stringify(row, null, 2) + "\n");
+  log(`admin-rad skriven: ${adminUserGitPath(email)} (role=ADMIN, id=${row.id})`);
+  return true;
 }
 
 async function main(): Promise<void> {
@@ -56,21 +103,16 @@ async function main(): Promise<void> {
     return;
   }
 
-  const relPath = adminUserGitPath(email);
-  const fullPath = join(workDir, relPath);
-  if (await alreadyAdmin(fullPath)) {
-    log(`${email} är redan ADMIN i allowlisten — inget att göra.`);
+  // Färsk firma.git: seeda org + meta så appen inte kraschar (--org-name).
+  const orgName = flag(argv, "org-name");
+  const seededOrg = orgName ? await seedOrgAndMeta(workDir, org, orgName) : false;
+  const seededAdmin = await seedAdmin(workDir, email, org, flag(argv, "name"));
+
+  if (!seededOrg && !seededAdmin) {
+    log("inget att göra — firma.git redan bootstrappad.");
     return;
   }
-
-  const nameFlag = flag(argv, "name");
-  const row = buildAdminUserRow({ email, organizationId: org, ...(nameFlag ? { name: nameFlag } : {}) });
-  const { mkdir, writeFile } = await import("node:fs/promises");
-  await mkdir(join(workDir, ".ava", "users"), { recursive: true });
-  await writeFile(fullPath, JSON.stringify(row, null, 2) + "\n");
-  log(`admin-rad skriven: ${relPath} (role=ADMIN, id=${row.id})`);
-
-  if (argv.includes("--commit")) await gitCommit(workDir, relPath, email);
+  if (argv.includes("--commit")) await gitCommit(workDir, email);
   else log("kör om med --commit för att committa, eller commita/pusha själv.");
 }
 

@@ -19,7 +19,7 @@ describe("buildStartCommands", () => {
 
   it("oidc: inkluderar overlay-filen", () => {
     const up = buildStartCommands({ oidc: true })[1]!;
-    expect(up).toContain("tooling/docker/docker-compose.oidc.yml");
+    expect(up).toContain("tooling/docker/docker-compose.oidc-byoidp.yml");
     // bägge -f-filerna före up
     expect(up.indexOf("-f")).toBeLessThan(up.indexOf("up"));
   });

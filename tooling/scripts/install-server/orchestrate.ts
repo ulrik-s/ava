@@ -5,7 +5,7 @@
  */
 
 const DEMO_COMPOSE = "tooling/docker/docker-compose.yml";
-const OIDC_OVERLAY = "tooling/docker/docker-compose.oidc.yml";
+const OIDC_OVERLAY = "tooling/docker/docker-compose.oidc-byoidp.yml";
 /** Web-containern printar `Admin-token:      <40 tecken>` EN gång vid bootstrap. */
 const ADMIN_TOKEN_RE = /Admin-token:\s+([A-Za-z0-9]{40})/;
 const WAIT_TIMEOUT_S = "180";

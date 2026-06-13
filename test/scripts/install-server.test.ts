@@ -68,7 +68,7 @@ describe("renderServerEnv", () => {
     expect(env).toContain("AVA_SECRETS_FILE=/home/ava/.ava-secrets/vault.enc");
     expect(env).toContain("AVA_SR_REPO_URL=https://git.byra.se/firma.git");
     expect(env).toContain("OAUTH2_PROXY_CLIENT_ID=ava");
-    expect(env).toContain("OIDC_ISSUER_PUBLIC=https://idp/realms/byra");
+    expect(env).toContain("OIDC_ISSUER_URL=https://idp/realms/byra");
     // Hemligheter får ALDRIG hamna i .env (kommentar som nämner nyckeln är ok,
     // men ingen RIKTIG env-rad får sätta master-nyckeln).
     expect(env).not.toContain("s3cr3t");
