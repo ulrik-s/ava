@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  AVA Word-add-in (#84) — task-pane-manifest.
+
+  Pekar på en HTTPS-serverad task-pane-bundle (SourceLocation). Add-in:en är en
+  tunn tRPC-HTTP-klient (se src/lib/client/addin/addin-client.ts) mot
+  AVA-serverns /api/trpc (ADR 0013). Byt ut https://localhost:3443 mot den
+  faktiska bundle-värden vid sideload/AppSource.
+
+  Sideload (dev): Word → Infoga → Mina tillägg → Ladda upp mitt tillägg →
+  välj denna fil. Kräver att task-pane-bundlen serveras över HTTPS.
+-->
+<OfficeApp
+  xmlns="http://schemas.microsoft.com/office/appforoffice/1.1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/1.0"
+  xsi:type="TaskPaneApp">
+  <Id>2f9b8a3c-1d4e-4a6b-9c2f-0a1b2c3d4e5f</Id>
+  <Version>0.1.0</Version>
+  <ProviderName>AVA</ProviderName>
+  <DefaultLocale>sv-SE</DefaultLocale>
+  <DisplayName DefaultValue="AVA" />
+  <Description DefaultValue="Infoga ärende-, klient- och malldata från AVA och spara dokument till ärendets git-db." />
+  <IconUrl DefaultValue="https://localhost:3443/assets/icon-32.png" />
+  <HighResolutionIconUrl DefaultValue="https://localhost:3443/assets/icon-80.png" />
+  <SupportUrl DefaultValue="https://github.com/ulrik-s/ava" />
+  <Hosts>
+    <Host Name="Document" />
+  </Hosts>
+  <DefaultSettings>
+    <SourceLocation DefaultValue="https://localhost:3443/taskpane.html" />
+  </DefaultSettings>
+  <Permissions>ReadWriteDocument</Permissions>
+</OfficeApp>
