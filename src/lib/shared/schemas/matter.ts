@@ -18,6 +18,12 @@ export const matterSchema = z.object({
    * serie utan prefix (`2026-0001`, bakåtkompatibelt).
    */
   responsibleLawyerId: userIdSchema.nullish(),
+  /**
+   * Domstolens målnummer (#173/#175) — matchningsnyckel för avprickning av
+   * domstolsbetalningar utan OCR (Domstolsverket anger målnummer i fri text).
+   * Fri sträng (format varierar per domstol, t.ex. "B 1234-26").
+   */
+  courtCaseNumber: z.string().nullish(),
   title: z.string(),
   description: z.string().nullish(),
   status: matterStatusSchema.default("ACTIVE"),

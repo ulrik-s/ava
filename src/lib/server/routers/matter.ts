@@ -53,6 +53,8 @@ const matterCreateInput = z.object({
   taxaHasFTax: z.boolean().nullable().optional(),
   /** Ansvarig advokat/biträdande jurist (#174) — styr ärendenummerserien. */
   responsibleLawyerId: z.string().optional(),
+  /** Domstolens målnummer (#173) — matchningsnyckel för domstolsbetalningar. */
+  courtCaseNumber: z.string().optional(),
   /** Historiskt skapad-datum (demo-generator/fixtures, ADR 0003) — annars now(). */
   createdAt: z.string().optional(),
   klientId: z.string().optional(),
@@ -126,6 +128,7 @@ function buildMatterData(
   const optional: Record<string, unknown> = {
     id: input.id,
     responsibleLawyerId,
+    courtCaseNumber: input.courtCaseNumber,
     paymentMethod: input.paymentMethod,
     paymentMethodNote: input.paymentMethodNote,
     paymentMethodDecidedAt: toDateOrNull(input.paymentMethodDecidedAt),
@@ -251,6 +254,8 @@ export const matterRouter = router({
         matterType: z.string().optional(),
         /** Byt ansvarig jurist (#174). Befintligt ärendenummer ändras EJ. */
         responsibleLawyerId: z.string().nullable().optional(),
+        /** Domstolens målnummer (#173) — för avprickning av domstolsbetalningar. */
+        courtCaseNumber: z.string().nullable().optional(),
         paymentMethod: z
           .enum(["PENDING", "RATTSHJALP", "RATTSSKYDD", "OFFENTLIG_FORSVARARE", "PRIVAT", "MIX"])
           .optional(),

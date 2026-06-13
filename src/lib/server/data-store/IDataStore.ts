@@ -18,6 +18,7 @@ import type {
   DocumentTemplate, DocumentAnalysisSuggestion, MatterEventSuggestion,
   Invoice, TimeEntry, Expense, User, Organization, Office, ConflictCheck,
   Payment, PaymentPlan, AccontoDeduction, BillingRun, WriteOff, InvoiceDispatch,
+  ExpectedReceivable,
   CalendarEvent, Task,
 } from "@/lib/shared/schemas";
 
@@ -130,6 +131,7 @@ export type ConflictCheckDelegate = Delegate<ConflictCheck>;
 export type PaymentDelegate = Delegate<Payment>;
 export type WriteOffDelegate = Delegate<WriteOff>;
 export type InvoiceDispatchDelegate = Delegate<InvoiceDispatch>;
+export type ExpectedReceivableDelegate = Delegate<ExpectedReceivable>;
 export type PaymentPlanDelegate = Delegate<PaymentPlan>;
 export type AccontoDeductionDelegate = Delegate<AccontoDeduction>;
 export type BillingRunDelegate = Delegate<BillingRun>;
@@ -185,6 +187,7 @@ export interface DataStoreTx {
   payments: PaymentDelegate;
   writeOffs: WriteOffDelegate;
   invoiceDispatches: InvoiceDispatchDelegate;
+  expectedReceivables: ExpectedReceivableDelegate;
   paymentPlans: PaymentPlanDelegate;
   accontoDeductions: AccontoDeductionDelegate;
   billingRuns: BillingRunDelegate;
@@ -222,6 +225,7 @@ export interface IDataStore {
   readonly payments: PaymentDelegate;
   readonly writeOffs: WriteOffDelegate;
   readonly invoiceDispatches: InvoiceDispatchDelegate;
+  readonly expectedReceivables: ExpectedReceivableDelegate;
   readonly paymentPlans: PaymentPlanDelegate;
   readonly paymentPlanReminders: Delegate;
   readonly accontoDeductions: AccontoDeductionDelegate;

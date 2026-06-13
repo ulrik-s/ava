@@ -80,10 +80,13 @@ async function createContact(page: Page, name: string): Promise<void> {
 /** Registrera en tidspost (120 min) på öppen matter-detalj. */
 async function registerTime(page: Page, desc: string): Promise<void> {
   await page.getByRole("button", { name: /Registrera tid/i }).click();
-  await page.locator('input[type="date"]').first().fill(new Date().toISOString().slice(0, 10));
-  await page.locator('input[type="number"]').first().fill("120");
-  await page.getByPlaceholder(/Beskrivning/i).fill(desc);
-  await page.getByRole("button", { name: /^Spara$/ }).click();
+  // Scopa till modalen — matter-sidan har egna number-fält (t.ex. förväntade
+  // domstolsbetalningar #173) så en sid-bred `.first()` blir tvetydig.
+  const modal = page.getByRole("dialog");
+  await modal.locator('input[type="date"]').first().fill(new Date().toISOString().slice(0, 10));
+  await modal.locator('input[type="number"]').first().fill("120");
+  await modal.getByPlaceholder(/Beskrivning/i).fill(desc);
+  await modal.getByRole("button", { name: /^Spara$/ }).click();
   await expect(page.getByText(desc)).toBeVisible({ timeout: 10_000 });
 }
 
@@ -263,10 +266,13 @@ test("fakturering: tid → acconto → betalning landar i git-db:n", async ({ pa
 
   // ── Registrera tid (120 min) ──
   await page.getByRole("button", { name: /Registrera tid/i }).click();
-  await page.locator('input[type="date"]').first().fill(new Date().toISOString().slice(0, 10));
-  await page.locator('input[type="number"]').first().fill("120");
-  await page.getByPlaceholder(/Beskrivning/i).fill(timeDesc);
-  await page.getByRole("button", { name: /^Spara$/ }).click();
+  // Scopa till modalen (matter-sidan har egna number-fält, #173) — annars
+  // träffar `.first()` fel fält och minuterna blir kvar på default (30).
+  const timeModal = page.getByRole("dialog");
+  await timeModal.locator('input[type="date"]').first().fill(new Date().toISOString().slice(0, 10));
+  await timeModal.locator('input[type="number"]').first().fill("120");
+  await timeModal.getByPlaceholder(/Beskrivning/i).fill(timeDesc);
+  await timeModal.getByRole("button", { name: /^Spara$/ }).click();
   await expect(page.getByText(timeDesc)).toBeVisible({ timeout: 10_000 });
 
   // ── Skapa acconto-faktura (1000 kr) via BillingPanel ──

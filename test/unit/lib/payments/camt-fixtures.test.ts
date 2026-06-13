@@ -23,6 +23,7 @@ const XML_FIXTURES = [
   { file: "camt.054_SE.xml", ns: "camt.054.001.02", root: "BkToCstmrDbtCdtNtfctn" },
   { file: "camt.053_SE.xml", ns: "camt.053.001.02", root: "BkToCstmrStmt" },
   { file: "camt.053_SE_BGC_Credit.xml", ns: "camt.053.001.02", root: "BkToCstmrStmt" },
+  { file: "camt.053_domstolsverket.xml", ns: "camt.053.001.02", root: "BkToCstmrStmt" },
 ] as const;
 
 describe("SEB camt-fixturer", () => {
@@ -55,6 +56,20 @@ describe("SEB camt-fixturer", () => {
     // Ingen Strd/CdtrRefInf-OCR i denna → just det fall avprickningen måste
     // klara via fri-text (målnummer / ärendereferens).
     expect(xml).not.toContain("<CdtrRefInf>");
+  });
+
+  it("Domstolsverket-filen: en betalning splittad över många kostnadsräkningar (#173/#175)", () => {
+    const xml = read("camt.053_domstolsverket.xml");
+    // Domstolsverket som betalare (Dbtr) — nyckeln för att känna igen
+    // domstolsbetalningar utan AVA-faktura.
+    expect(xml).toContain("SVERIGES DOMSTOLAR");
+    // EN <Ntry>/<TxDtls> med MÅNGA <Strd> (kostnadsräkningar) → fri-text-refer
+    // i <Nb> (fakturanr + målnr + namn), inte OCR. Minst 10 i exemplet.
+    const strdCount = xml.split("<Strd>").length - 1;
+    expect(strdCount).toBeGreaterThanOrEqual(10);
+    // Får INTE innehålla verklig klient-PII (anonymiserad fixtur).
+    expect(xml).not.toContain("GROSSKOPF");
+    expect(xml).toContain("ANONYMISERAD");
   });
 
   it("XSD:erna är scheman för rätt camt-version", () => {

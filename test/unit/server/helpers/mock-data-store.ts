@@ -31,6 +31,7 @@ export interface MockDataStore {
   conflictChecks: unknown;
   payments: unknown;
   writeOffs: unknown;
+  expectedReceivables: unknown;
   paymentPlans: unknown;
   paymentPlanReminders: unknown;
   accontoDeductions: unknown;
@@ -73,6 +74,7 @@ export function dataStoreFromMockPrisma(mockPrisma: Record<string, unknown>): Mo
       conflictChecks: mockPrisma.conflictCheck,
       payments: mockPrisma.payment,
       writeOffs: mockPrisma.writeOff,
+      expectedReceivables: mockPrisma.expectedReceivable,
       paymentPlans: mockPrisma.paymentPlan,
       paymentPlanReminders: mockPrisma.paymentPlanReminder,
       accontoDeductions: mockPrisma.invoiceAccontoDeduction,
@@ -99,6 +101,7 @@ export function dataStoreFromMockPrisma(mockPrisma: Record<string, unknown>): Mo
     conflictChecks: mockPrisma.conflictCheck,
     payments: mockPrisma.payment,
     writeOffs: mockPrisma.writeOff,
+    expectedReceivables: mockPrisma.expectedReceivable,
     paymentPlans: mockPrisma.paymentPlan,
     paymentPlanReminders: mockPrisma.paymentPlanReminder,
     accontoDeductions: mockPrisma.invoiceAccontoDeduction,

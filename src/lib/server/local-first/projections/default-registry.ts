@@ -40,6 +40,7 @@ export function buildDefaultRegistry(): ProjectionRegistry {
   // händelser hydrerades inte vid restore → "Inga billingruns ännu" efter reload.
   r.register({ entity: "billingRun", projection: new GenericProjection("billing-runs"), ownsPath: (p) => p.startsWith("billing-runs/") });
   r.register({ entity: "accontoDeduction", projection: new GenericProjection("acconto-deductions"), ownsPath: (p) => p.startsWith("acconto-deductions/") });
+  r.register({ entity: "expectedReceivable", projection: new GenericProjection("expected-receivables"), ownsPath: (p) => p.startsWith("expected-receivables/") });
   r.register({ entity: "task", projection: new GenericProjection("tasks"), ownsPath: (p) => p.startsWith("tasks/") });
   r.register({ entity: "conflictCheck", projection: new GenericProjection("conflict-checks"), ownsPath: (p) => p.startsWith("conflict-checks/") });
   r.register({ entity: "documentTemplate", projection: new GenericProjection(".ava/templates"), ownsPath: (p) => p.startsWith(".ava/templates/") });

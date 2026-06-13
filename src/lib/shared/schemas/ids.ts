@@ -83,6 +83,9 @@ export type WriteOffId = z.infer<typeof writeOffIdSchema>;
 export const invoiceDispatchIdSchema = brandedId<"InvoiceDispatchId">();
 export type InvoiceDispatchId = z.infer<typeof invoiceDispatchIdSchema>;
 
+export const expectedReceivableIdSchema = brandedId<"ExpectedReceivableId">();
+export type ExpectedReceivableId = z.infer<typeof expectedReceivableIdSchema>;
+
 export const documentTemplateIdSchema = brandedId<"DocumentTemplateId">();
 export type DocumentTemplateId = z.infer<typeof documentTemplateIdSchema>;
 
