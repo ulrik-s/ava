@@ -74,6 +74,37 @@ export const invoiceDispatchRouter = router({
       });
     }),
 
+  /**
+   * Registrera ett MANUELLT utskick som redan skett (#179) — t.ex. när
+   * advokaten skickat fakturan via sin egen mailklient (helper compose-mail)
+   * eller laddat ner PDF:en och bifogat själv. Skapas direkt som `sent` (med
+   * `sentAt`), ALDRIG `queued` — annars skulle server-runtime-dispatch-workern
+   * (#180) plocka upp den och skicka igen. AVA kan inte verifiera leverans här:
+   * "sent" = "användaren bekräftade att hen skickade".
+   */
+  recordManual: orgProcedure
+    .input(z.object({
+      invoiceId: z.string(),
+      channel: dispatchChannelSchema,
+      recipient: z.string().min(1),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      await assertInvoiceInOrg(ctx, input.invoiceId);
+      const now = new Date();
+      return ctx.dataStore.invoiceDispatches.create({
+        data: {
+          invoiceId: asId<"InvoiceId">(input.invoiceId),
+          channel: input.channel,
+          recipient: input.recipient,
+          status: "sent",
+          queuedAt: now,
+          sentAt: now,
+          recordedById: asId<"UserId">(ctx.user.id),
+          createdAt: now,
+        },
+      });
+    }),
+
   updateStatus: orgProcedure
     .input(z.object({
       dispatchId: z.string(),

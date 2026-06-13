@@ -11,6 +11,7 @@ interface Props {
   onShowPlan: () => void;
   onShowCredit: () => void;
   onShowWriteOff: () => void;
+  onShowSend: () => void;
   onSetStatus: (status: string) => void;
 }
 
@@ -21,9 +22,19 @@ interface Visibility {
   cancel: boolean;
   credit: boolean;
   writeOff: boolean;
+  send: boolean;
 }
 
 const TERMINAL_STATUS: ReadonlySet<string> = new Set(["PAID", "CANCELLED"]);
+
+/**
+ * E-posta-knappen (#179): en utställd faktura (SENT/avbetalningsplan) eller en
+ * icke-annullerad kreditfaktura kan skickas manuellt till klienten.
+ */
+function canEmail(isCredit: boolean, status: string): boolean {
+  if (status === "SENT" || status === "INSTALLMENT_PLAN") return true;
+  return isCredit && status !== "CANCELLED";
+}
 
 function computeVisibility(invoiceType: string, status: string, hasPlan: boolean, hasCreditNote: boolean, outstanding: number): Visibility {
   const isCredit = invoiceType === "CREDIT";
@@ -39,12 +50,13 @@ function computeVisibility(invoiceType: string, status: string, hasPlan: boolean
     // Avskrivning: utställd faktura med utestående kvar (även en plan-faktura
     // som klienten slutat betala) → räkna-en-gång (ADR 0007).
     writeOff: issuedActive && outstanding > 0,
+    send: canEmail(isCredit, status),
   };
 }
 
 export function InvoiceActions({
   invoiceType, status, hasPlan, hasCreditNote, outstanding,
-  onShowPayment, onShowPlan, onShowCredit, onShowWriteOff, onSetStatus,
+  onShowPayment, onShowPlan, onShowCredit, onShowWriteOff, onShowSend, onSetStatus,
 }: Props) {
   const v = computeVisibility(invoiceType, status, hasPlan, hasCreditNote, outstanding);
 
@@ -58,6 +70,11 @@ export function InvoiceActions({
       {v.plan && (
         <button onClick={onShowPlan} className="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700">
           Skapa avbetalningsplan
+        </button>
+      )}
+      {v.send && (
+        <button onClick={onShowSend} className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700">
+          E-posta faktura
         </button>
       )}
       {v.draft && (

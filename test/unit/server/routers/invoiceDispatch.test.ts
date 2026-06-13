@@ -45,6 +45,37 @@ describe("invoiceDispatch.queue + list", () => {
   });
 });
 
+describe("invoiceDispatch.recordManual (#179)", () => {
+  it("skapar ett utskick direkt som sent (med sentAt), aldrig queued", async () => {
+    const { caller } = makeCaller();
+    const d = await caller.invoiceDispatch.recordManual({ invoiceId: "inv-1", channel: "manual", recipient: "Manuellt utskick" });
+    expect(d.status).toBe("sent");
+    expect(d.sentAt).toBeTruthy();
+    expect(d.channel).toBe("manual");
+
+    // Får INTE dyka upp i listQueued (annars dubbel-skickar #180-workern).
+    const queued = await caller.invoiceDispatch.listQueued();
+    expect(queued.find((q) => q.id === d.id)).toBeUndefined();
+
+    const list = await caller.invoiceDispatch.list({ invoiceId: "inv-1" });
+    expect(list[0]!.status).toBe("sent");
+  });
+
+  it("e-postkanal med mottagaradress", async () => {
+    const { caller } = makeCaller();
+    const d = await caller.invoiceDispatch.recordManual({ invoiceId: "inv-1", channel: "email", recipient: "klient@x.se" });
+    expect(d.channel).toBe("email");
+    expect(d.recipient).toBe("klient@x.se");
+  });
+
+  it("nekar mot faktura i annan org (NOT_FOUND)", async () => {
+    const { caller } = makeCaller();
+    await expect(
+      caller.invoiceDispatch.recordManual({ invoiceId: "inv-foreign", channel: "manual", recipient: "x" }),
+    ).rejects.toThrow();
+  });
+});
+
 describe("invoiceDispatch.updateStatus", () => {
   it("queued → sent sätter sentAt + messageId (idempotent)", async () => {
     const { caller } = makeCaller();
