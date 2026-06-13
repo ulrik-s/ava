@@ -5,7 +5,7 @@
 
 import { describe, it, expect, vi } from "vitest-compat";
 import { render, screen } from "@testing-library/react";
-import { JobsBadge } from "@/components/shell/jobs-badge";
+import { JobsBadge, jobsBadgeView } from "@/components/shell/jobs-badge";
 
 const summary = { total: 0, queued: 0, running: 0, failed: 0, lastError: null as string | null };
 vi.mock("@/lib/client/jobs/use-jobs", () => ({
@@ -60,5 +60,22 @@ describe("JobsBadge", () => {
     setSummary({ running: 1 });
     render(<JobsBadge />);
     expect(screen.getByRole("link")).toHaveAttribute("href", "/jobs");
+  });
+});
+
+describe("jobsBadgeView (#6-ratchet)", () => {
+  it("tom kö → null", () => {
+    expect(jobsBadgeView({ queued: 0, running: 0, failed: 0 })).toBeNull();
+  });
+  it("aktiva jobb → blå ↻ (vinner över failed)", () => {
+    expect(jobsBadgeView({ queued: 0, running: 1, failed: 2 })).toEqual({
+      icon: "↻", cls: "bg-blue-50 text-blue-800 border-blue-200", label: "1 jobb körs",
+    });
+    expect(jobsBadgeView({ queued: 3, running: 0, failed: 0 })!.label).toBe("3 jobb väntar");
+  });
+  it("bara failed → röd ✗ (singular/plural)", () => {
+    const one = jobsBadgeView({ queued: 0, running: 0, failed: 1 });
+    expect(one).toEqual({ icon: "✗", cls: "bg-red-50 text-red-800 border-red-200", label: "1 misslyckat" });
+    expect(jobsBadgeView({ queued: 0, running: 0, failed: 4 })!.label).toBe("4 misslyckata");
   });
 });
