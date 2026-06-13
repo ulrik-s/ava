@@ -20,6 +20,7 @@ import { DemoDataStore } from "@/lib/server/data-store/DemoDataStore";
 import { buildGitPorts } from "@/lib/server/adapters/git-ports";
 import { buildContext } from "@/lib/server/build-context";
 import { appRouter } from "@/lib/server/routers/_app";
+import type { Context } from "@/lib/server/trpc-core";
 import type { Principal } from "@/lib/server/auth/principal";
 // Skriv-vägens kärna delas med klientens FSA-/OPFS-write-back (DRY). Lager-
 // regeln `server-contracts-must-not-import-client` undantar uttryckligen
@@ -102,6 +103,12 @@ class NodeWriteBackFs implements WriteBackFs {
 export interface ServerWorkingCopy {
   /** tRPC-caller — samma routrar som klienten, bara node-fs som datakälla. */
   readonly caller: ReturnType<typeof appRouter.createCaller>;
+  /**
+   * Den byggda tRPC-`Context`:en (dataStore/ports/principal). Exponeras för
+   * HTTP-vägen (#83), som kör routern via `fetchRequestHandler` (egen caller)
+   * och därför behöver själva contexten, inte den färdiga callern.
+   */
+  readonly context: Context;
   /** Underliggande git-operationer (fetch/commit/push/...) mot working-copy:n. */
   readonly gitOps: NodeGitOps;
   /**
@@ -148,6 +155,7 @@ export async function openServerWorkingCopy(
   const gitOps = new NodeGitOps(dir, author.name, author.email, opts.remote ?? "origin", opts.branch ?? "main");
   return {
     caller: appRouter.createCaller(ctx),
+    context: ctx,
     gitOps,
     commit: (message) => gitOps.commit(message),
   };

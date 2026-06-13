@@ -64,6 +64,20 @@ describe("PeerLoop (#118)", () => {
     expect(tick).toEqual({ mode: "error", error: boom });
   });
 
+  it("lock: omsluter hela ticket (acquire → arbete → release)", async () => {
+    const events: string[] = [];
+    const lock = async <T>(fn: () => Promise<T>): Promise<T> => {
+      events.push("acquire");
+      try { return await fn(); } finally { events.push("release"); }
+    };
+    const loop = new PeerLoop(baseDeps({
+      syncOnce: async () => { events.push("sync"); },
+      lock,
+    }));
+    await loop.tickOnce();
+    expect(events).toEqual(["acquire", "sync", "release"]);
+  });
+
   it("start() är idempotent och stop() rensar timern", async () => {
     let ticks = 0;
     const loop = new PeerLoop(baseDeps({
