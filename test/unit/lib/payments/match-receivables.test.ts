@@ -13,13 +13,15 @@ import {
 } from "@/lib/shared/payments/match-receivables";
 
 const FIXTURES = resolve(__dirname, "../../../fixtures/camt-seb");
-const domstol = parseCamtXml(readFileSync(resolve(FIXTURES, "camt.053_domstolsverket.xml"), "utf8"));
+const readDomstol = () => parseCamtXml(readFileSync(resolve(FIXTURES, "camt.053_domstolsverket.xml"), "utf8"));
 
 function cand(over: Partial<ReceivableCandidate> & { id: string }): ReceivableCandidate {
   return { matterNumber: null, courtCaseNumber: null, expectedAmount: 0, settledReferences: [], ...over };
 }
 
 describe("matchReceivables — Domstolsverket-fixtur (#175)", () => {
+  // Parsa i describe (DOMParser kräver happy-dom-setup) — ej på modul-toppnivå.
+  const domstol = readDomstol();
   it("matchar en kostnadsräkning på MÅLNUMMER och föreslår delbeloppet", () => {
     // "1154602 3288-26 EXEMPELSSON" → RfrdDocAmt 7246.00.
     const out = matchReceivables(domstol.transactions, [
