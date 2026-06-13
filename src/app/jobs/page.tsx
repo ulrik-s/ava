@@ -75,7 +75,6 @@ function Section({ title, jobs, emptyText }: { title: string; jobs: Job[]; empty
   );
 }
 
-// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'JobRow' has a complexity of 9. Maximum allowed is 8.)
 function JobRow({ job }: { job: Job }) {
   // För körande jobb visar vi inget exakt millisek-värde (annars triggar
   // varje setInterval en re-render). Bara start-tid och status räcker.
@@ -95,30 +94,38 @@ function JobRow({ job }: { job: Job }) {
       </td>
       <td className="px-3 py-2 text-xs text-gray-500 font-mono">{job.kind}</td>
       <td className="px-3 py-2 text-xs text-gray-500">{elapsed !== null ? formatMs(elapsed) : "—"}</td>
-      <td className="px-3 py-2 text-right">
-        {(job.status === "queued" || job.status === "running") && (
-          <button
-            type="button"
-            onClick={() => jobQueue.cancel(job.id)}
-            className="text-xs text-gray-500 hover:text-red-600 inline-flex items-center gap-1"
-            title="Avbryt"
-          >
-            <X size={12} /> Avbryt
-          </button>
-        )}
-        {(job.status === "failed" || job.status === "canceled") && (
-          <button
-            type="button"
-            onClick={() => jobQueue.retry(job.id)}
-            className="text-xs text-gray-500 hover:text-blue-600 inline-flex items-center gap-1"
-            title="Försök igen"
-          >
-            <RotateCcw size={12} /> Försök igen
-          </button>
-        )}
-      </td>
+      <td className="px-3 py-2 text-right"><JobActions job={job} /></td>
     </tr>
   );
+}
+
+/** Rad-actions: Avbryt (köad/körande) eller Försök igen (misslyckad/avbruten). */
+function JobActions({ job }: { job: Job }) {
+  if (job.status === "queued" || job.status === "running") {
+    return (
+      <button
+        type="button"
+        onClick={() => jobQueue.cancel(job.id)}
+        className="text-xs text-gray-500 hover:text-red-600 inline-flex items-center gap-1"
+        title="Avbryt"
+      >
+        <X size={12} /> Avbryt
+      </button>
+    );
+  }
+  if (job.status === "failed" || job.status === "canceled") {
+    return (
+      <button
+        type="button"
+        onClick={() => jobQueue.retry(job.id)}
+        className="text-xs text-gray-500 hover:text-blue-600 inline-flex items-center gap-1"
+        title="Försök igen"
+      >
+        <RotateCcw size={12} /> Försök igen
+      </button>
+    );
+  }
+  return null;
 }
 
 function StatusBadge({ status, progress }: { status: Job["status"]; progress?: number | undefined }) {
