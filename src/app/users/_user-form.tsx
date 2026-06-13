@@ -8,6 +8,7 @@ export interface UserFormState {
   title: string;
   email: string;
   role: string;
+  matterNumberPrefix: string;
   hourlyRate: string;
   mileageRate: string;
   password: string;
@@ -45,10 +46,9 @@ export function UserForm({
   const titleId = useId();
   const emailId = useId();
   const roleId = useId();
+  const matterPrefixId = useId();
   const hourlyRateId = useId();
   const mileageRateId = useId();
-  const passwordId = useId();
-  const confirmPasswordId = useId();
 
   return (
     <form onSubmit={onSubmit}>
@@ -77,6 +77,15 @@ export function UserForm({
             <option value="ASSISTANT">Assistent</option>
           </select>
         </FormField>
+        <FormField id={matterPrefixId} label="Ärendenummer-prefix (1–3 versaler)">
+          <input id={matterPrefixId} type="text" maxLength={3} value={form.matterNumberPrefix}
+            onChange={(e) => setForm({ ...form, matterNumberPrefix: e.target.value.toUpperCase() })}
+            placeholder="t.ex. AA"
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono uppercase" />
+          <p className="mt-1 text-xs text-gray-500">
+            Juristens egen ärendenummerserie (AA2026-0001). Byte fortsätter serien.
+          </p>
+        </FormField>
         <FormField id={hourlyRateId} label="Timtaxa (kr/h)">
           <input id={hourlyRateId} type="number" value={form.hourlyRate}
             onChange={(e) => setForm({ ...form, hourlyRate: e.target.value })}
@@ -87,17 +96,7 @@ export function UserForm({
             onChange={(e) => setForm({ ...form, mileageRate: e.target.value })}
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
         </FormField>
-        <FormField id={passwordId} label={passwordRequired ? "Lösenord *" : "Nytt lösenord"}>
-          <input id={passwordId} type="password" required={passwordRequired} value={form.password}
-            onChange={(e) => setForm({ ...form, password: e.target.value })}
-            placeholder={passwordPlaceholder}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-        </FormField>
-        <FormField id={confirmPasswordId} label={passwordRequired ? "Bekräfta lösenord *" : "Bekräfta lösenord"}>
-          <input id={confirmPasswordId} type="password" required={passwordRequired} value={form.confirmPassword}
-            onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-        </FormField>
+        <PasswordFields form={form} setForm={setForm} required={passwordRequired} placeholder={passwordPlaceholder} />
       </div>
 
       {passwordError && <p className="mt-2 text-sm text-red-600">{passwordError}</p>}
@@ -122,6 +121,36 @@ export function UserForm({
         {extraActions}
       </div>
     </form>
+  );
+}
+
+function PasswordFields({
+  form,
+  setForm,
+  required,
+  placeholder,
+}: {
+  form: UserFormState;
+  setForm: (f: UserFormState) => void;
+  required: boolean;
+  placeholder?: string | undefined;
+}) {
+  const passwordId = useId();
+  const confirmPasswordId = useId();
+  return (
+    <>
+      <FormField id={passwordId} label={required ? "Lösenord *" : "Nytt lösenord"}>
+        <input id={passwordId} type="password" required={required} value={form.password}
+          onChange={(e) => setForm({ ...form, password: e.target.value })}
+          placeholder={placeholder}
+          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+      </FormField>
+      <FormField id={confirmPasswordId} label={required ? "Bekräfta lösenord *" : "Bekräfta lösenord"}>
+        <input id={confirmPasswordId} type="password" required={required} value={form.confirmPassword}
+          onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })}
+          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+      </FormField>
+    </>
   );
 }
 

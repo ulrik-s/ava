@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { orgScopedFields, optionalDateLike } from "./common";
 import { matterStatusSchema, paymentMethodSchema, matterRoleSchema } from "./enums";
-import { matterIdSchema, matterContactIdSchema, contactIdSchema } from "./ids";
+import { matterIdSchema, matterContactIdSchema, contactIdSchema, userIdSchema } from "./ids";
 
 /**
  * Matter (Ärende) — lagras i `matters/active/<id>.json`. Vi har inte längre
@@ -11,6 +11,13 @@ export const matterSchema = z.object({
   ...orgScopedFields,
   id: matterIdSchema,
   matterNumber: z.string(),
+  /**
+   * Ansvarig advokat/biträdande jurist (#174). Styr ärendenummerserien:
+   * numret prefixas med juristens `matterNumberPrefix` och löpnumret räknas
+   * per jurist (`AA2026-0001`). Nullish = ingen ansvarig satt → org-gemensam
+   * serie utan prefix (`2026-0001`, bakåtkompatibelt).
+   */
+  responsibleLawyerId: userIdSchema.nullish(),
   title: z.string(),
   description: z.string().nullish(),
   status: matterStatusSchema.default("ACTIVE"),

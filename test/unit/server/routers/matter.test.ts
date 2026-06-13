@@ -35,6 +35,9 @@ const mockPrisma = {
     create: vi.fn(),
     delete: vi.fn(),
   },
+  user: {
+    findUnique: vi.fn(),
+  },
 };
 
 function makeCaller(orgId = "org-a", userId = "user-1") {
@@ -48,6 +51,9 @@ function makeCaller(orgId = "org-a", userId = "user-1") {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Default: ansvarig jurist (ctx.user) finns i org:en utan prefix (#174) →
+  // nextMatterNumber faller tillbaka på org-gemensam serie utan prefix.
+  mockPrisma.user.findUnique.mockResolvedValue({ organizationId: "org-a", matterNumberPrefix: null });
 });
 
 const MATTER_A = {
@@ -165,7 +171,7 @@ describe("matter.getById", () => {
 
 describe("matter.create", () => {
   it("skapar nytt matter med matterNumber när inga finns", async () => {
-    mockPrisma.matter.findFirst.mockResolvedValue(null);
+    mockPrisma.matter.findMany.mockResolvedValue([]);
     mockPrisma.matter.create.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({
       ...data,
       id: "new",
@@ -178,9 +184,7 @@ describe("matter.create", () => {
 
   it("ökar serienumret från senaste matter", async () => {
     const year = new Date().getFullYear();
-    mockPrisma.matter.findFirst.mockResolvedValue({
-      matterNumber: `${year}-0042`,
-    });
+    mockPrisma.matter.findMany.mockResolvedValue([{ matterNumber: `${year}-0042` }]);
     mockPrisma.matter.create.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({
       ...data,
       id: "new",
@@ -190,8 +194,35 @@ describe("matter.create", () => {
     expect(res.matterNumber).toBe(`${year}-0043`);
   });
 
+  it("prefixar serien med ansvarig jurists prefix (#174)", async () => {
+    const year = new Date().getFullYear();
+    mockPrisma.user.findUnique.mockResolvedValue({ organizationId: "org-a", matterNumberPrefix: "AA" });
+    mockPrisma.matter.findMany.mockResolvedValue([]);
+    mockPrisma.matter.create.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({ ...data, id: "new" }));
+
+    const res = await makeCaller().create({ title: "T" });
+    expect(res.matterNumber).toBe(`AA${year}-0001`);
+  });
+
+  it("fortsätter serien vid prefix-byte: räknar på juristens egna ärenden (#174)", async () => {
+    const year = new Date().getFullYear();
+    mockPrisma.user.findUnique.mockResolvedValue({ organizationId: "org-a", matterNumberPrefix: "AB" });
+    // Juristens egna ärenden i år bär gamla prefixet AA (seq upp till 2) men
+    // inga AB-nummer finns ännu → nästa ska bli AB...0003, inte AB...0001.
+    mockPrisma.matter.findMany.mockImplementation(async ({ where }: { where: Record<string, unknown> }) => {
+      if ((where as { responsibleLawyerId?: string }).responsibleLawyerId) {
+        return [{ matterNumber: `AA${year}-0001` }, { matterNumber: `AA${year}-0002` }];
+      }
+      return []; // inga befintliga AB-nummer
+    });
+    mockPrisma.matter.create.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({ ...data, id: "new" }));
+
+    const res = await makeCaller().create({ title: "T" });
+    expect(res.matterNumber).toBe(`AB${year}-0003`);
+  });
+
   it("kopplar klient när klientId angivits", async () => {
-    mockPrisma.matter.findFirst.mockResolvedValue(null);
+    mockPrisma.matter.findMany.mockResolvedValue([]);
     mockPrisma.matter.create.mockResolvedValue({ id: "matter-1", organizationId: "org-a" });
     mockPrisma.contact.findUnique.mockResolvedValue({ id: "c1", organizationId: "org-a" });
     mockPrisma.matterContact.create.mockResolvedValue({});
@@ -203,7 +234,7 @@ describe("matter.create", () => {
   });
 
   it("vägrar att koppla klient från annan org", async () => {
-    mockPrisma.matter.findFirst.mockResolvedValue(null);
+    mockPrisma.matter.findMany.mockResolvedValue([]);
     mockPrisma.matter.create.mockResolvedValue({ id: "matter-1", organizationId: "org-a" });
     mockPrisma.contact.findUnique.mockResolvedValue({ id: "c1", organizationId: "org-b" });
 

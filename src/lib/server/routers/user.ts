@@ -11,7 +11,7 @@ async function hashPassword(password: string): Promise<string> {
   return `placeholder:${password.length}-chars`;
 }
 import { TRPCError } from "@trpc/server";
-import { publicKeySchema, type PublicKey } from "@/lib/shared/schemas/user";
+import { publicKeySchema, matterNumberPrefixSchema, type PublicKey } from "@/lib/shared/schemas/user";
 import { userIdSchema, asId } from "@/lib/shared/schemas/ids";
 
 // Smal select för listor — håller utgående typ stabil för konsumenter
@@ -24,6 +24,7 @@ const USER_LIST_SELECT = {
   role: true,
   hourlyRate: true,
   mileageRate: true,
+  matterNumberPrefix: true,
   createdAt: true,
 } as const;
 // Profil-select inkluderar publicKeys. Lagras som JSON-array på User
@@ -42,6 +43,7 @@ export interface UserProfile {
   role: string;
   hourlyRate: number | null;
   mileageRate: number | null;
+  matterNumberPrefix: string | null;
   createdAt: Date;
   publicKeys: PublicKey[];
 }
@@ -78,6 +80,7 @@ export const userRouter = router({
         role: ctx.user.role,
         hourlyRate: null,
         mileageRate: null,
+        matterNumberPrefix: null,
         createdAt: new Date(),
         publicKeys: [],
       };
@@ -120,6 +123,8 @@ export const userRouter = router({
       role: z.enum(["ADMIN", "LAWYER", "ASSISTANT"]).default("LAWYER"),
       hourlyRate: z.number().nullable().optional(),
       mileageRate: z.number().nullable().optional(),
+      /** Ärendenummer-prefix (#174) — juristens egen serie. */
+      matterNumberPrefix: matterNumberPrefixSchema.optional(),
       password: z.string().min(6).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
@@ -134,6 +139,7 @@ export const userRouter = router({
           role: input.role,
           hourlyRate: input.hourlyRate,
           mileageRate: input.mileageRate,
+          ...(input.matterNumberPrefix ? { matterNumberPrefix: input.matterNumberPrefix } : {}),
           passwordHash,
           organizationId: asId<"OrganizationId">(ctx.user.organizationId),
           publicKeys: [],
@@ -155,6 +161,8 @@ export const userRouter = router({
       role: z.enum(["ADMIN", "LAWYER", "ASSISTANT"]).optional(),
       hourlyRate: z.number().nullable().optional(),
       mileageRate: z.number().nullable().optional(),
+      /** Ärendenummer-prefix (#174); null rensar den. Byte fortsätter serien. */
+      matterNumberPrefix: matterNumberPrefixSchema.nullable().optional(),
       password: z.string().min(6).optional(),
     }))
     .mutation(async ({ ctx, input }) => {

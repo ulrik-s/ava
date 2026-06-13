@@ -51,21 +51,65 @@ const matterCreateInput = z.object({
   taxaLevel: z.number().int().min(1).max(4).nullable().optional(),
   taxaHuvudforhandlingMin: z.number().int().nonnegative().nullable().optional(),
   taxaHasFTax: z.boolean().nullable().optional(),
+  /** Ansvarig advokat/biträdande jurist (#174) — styr ärendenummerserien. */
+  responsibleLawyerId: z.string().optional(),
   /** Historiskt skapad-datum (demo-generator/fixtures, ADR 0003) — annars now(). */
   createdAt: z.string().optional(),
   klientId: z.string().optional(),
 });
 type MatterCreateInput = z.infer<typeof matterCreateInput>;
 
-/** Nästa lediga ärendenummer (YYYY-NNNN) för org:en. */
-async function nextMatterNumber(ctx: MatterCtx): Promise<string> {
+/** Format `<PREFIX?><YYYY>-<NNNN>` — fångar (prefix, år, löpnummer). */
+const MATTER_NUMBER_RE = /^([A-ZÅÄÖ]{1,3})?(\d{4})-(\d{4})$/;
+
+/** Löpnumret i ett ärendenummer OM det avser `year`, annars 0. */
+function seqForYear(matterNumber: string, year: number): number {
+  const m = MATTER_NUMBER_RE.exec(matterNumber);
+  if (!m || Number(m[2]) !== year) return 0;
+  return parseInt(m[3] ?? "0", 10);
+}
+
+/** Högsta löpnumret för `year` bland en uppsättning ärenden. */
+function maxSeq(matters: ReadonlyArray<{ matterNumber: string }>, year: number): number {
+  return matters.reduce((mx, m) => Math.max(mx, seqForYear(m.matterNumber, year)), 0);
+}
+
+/** Den ansvariga juristens prefix (tom om okänd/ej i org:en/ingen prefix satt). */
+async function lawyerPrefix(ctx: MatterCtx, userId: string): Promise<string> {
+  const u = (await ctx.dataStore.users.findUnique({ where: { id: userId } })) as
+    | { organizationId?: string; matterNumberPrefix?: string | null }
+    | null;
+  if (!u || u.organizationId !== ctx.orgId) return "";
+  return u.matterNumberPrefix ?? "";
+}
+
+/**
+ * Nästa ärendenummer (#174) — per ANSVARIG JURIST-serie.
+ *
+ * Löpnumret = max(juristens egna ärenden i år, befintliga nummer med
+ * mål-prefixet i år) + 1. Dubbel-maxen ger två garantier:
+ *   - **Fortsätt vid prefix-byte:** numret räknas på juristens EGNA ärenden,
+ *     inte på prefix-strängen → byter juristen `AA`→`AB` fortsätter serien
+ *     (`AB2026-0003`) i stället för att börja om på 1.
+ *   - **Kollisionsfritt vid prefix-återbruk:** räknas även mot befintliga
+ *     nummer som redan bär mål-prefixet, så en ny jurist som tar ett frigjort
+ *     prefix inte återanvänder gamla nummer.
+ * Format `<PREFIX><YYYY>-<NNNN>`; utan prefix `<YYYY>-<NNNN>` (org-gemensam
+ * fallback, bakåtkompatibelt).
+ */
+async function nextMatterNumber(ctx: MatterCtx, responsibleLawyerId?: string): Promise<string> {
   const year = new Date().getFullYear();
-  const last = await ctx.dataStore.matters.findFirst({
-    where: { organizationId: ctx.orgId, matterNumber: { startsWith: `${year}-` } },
-    orderBy: { matterNumber: "desc" },
+  const prefix = responsibleLawyerId ? await lawyerPrefix(ctx, responsibleLawyerId) : "";
+
+  const ownMatters = responsibleLawyerId
+    ? await ctx.dataStore.matters.findMany({ where: { organizationId: ctx.orgId, responsibleLawyerId } })
+    : [];
+  const prefixMatters = await ctx.dataStore.matters.findMany({
+    where: { organizationId: ctx.orgId, matterNumber: { startsWith: `${prefix}${year}-` } },
   });
-  const seq = last ? parseInt(last.matterNumber.split("-")[1] ?? "0", 10) + 1 : 1;
-  return `${year}-${seq.toString().padStart(4, "0")}`;
+
+  const seq = Math.max(maxSeq(ownMatters, year), maxSeq(prefixMatters, year)) + 1;
+  return `${prefix}${year}-${seq.toString().padStart(4, "0")}`;
 }
 
 function toDateOrNull(v: string | null | undefined): Date | null | undefined {
@@ -73,9 +117,15 @@ function toDateOrNull(v: string | null | undefined): Date | null | undefined {
   return v ? new Date(v) : null;
 }
 
-function buildMatterData(orgId: string, matterNumber: string, input: MatterCreateInput): Record<string, unknown> {
+function buildMatterData(
+  orgId: string,
+  matterNumber: string,
+  responsibleLawyerId: string,
+  input: MatterCreateInput,
+): Record<string, unknown> {
   const optional: Record<string, unknown> = {
     id: input.id,
+    responsibleLawyerId,
     paymentMethod: input.paymentMethod,
     paymentMethodNote: input.paymentMethodNote,
     paymentMethodDecidedAt: toDateOrNull(input.paymentMethodDecidedAt),
@@ -176,9 +226,11 @@ export const matterRouter = router({
   create: orgProcedure
     .input(matterCreateInput)
     .mutation(async ({ ctx, input }) => {
-      const matterNumber = input.matterNumber ?? (await nextMatterNumber(ctx));
+      // Ansvarig jurist = explicit val, annars skaparen (#174). Styr serien.
+      const responsibleLawyerId = input.responsibleLawyerId ?? ctx.user.id;
+      const matterNumber = input.matterNumber ?? (await nextMatterNumber(ctx, responsibleLawyerId));
       const matter = await ctx.dataStore.matters.create({
-        data: buildMatterData(ctx.orgId, matterNumber, input),
+        data: buildMatterData(ctx.orgId, matterNumber, responsibleLawyerId, input),
       });
       await emit.matterCreated(ctx, matter);
       // matter.id washar till `any` via Joined<>; brand explicit. klientId
@@ -197,6 +249,8 @@ export const matterRouter = router({
         description: z.string().optional(),
         status: z.enum(["ACTIVE", "CLOSED", "ARCHIVED"]).optional(),
         matterType: z.string().optional(),
+        /** Byt ansvarig jurist (#174). Befintligt ärendenummer ändras EJ. */
+        responsibleLawyerId: z.string().nullable().optional(),
         paymentMethod: z
           .enum(["PENDING", "RATTSHJALP", "RATTSSKYDD", "OFFENTLIG_FORSVARARE", "PRIVAT", "MIX"])
           .optional(),

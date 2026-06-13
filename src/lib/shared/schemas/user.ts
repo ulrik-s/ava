@@ -16,6 +16,11 @@ export const publicKeySchema = z.object({
   addedAt: z.string(),
 });
 
+/** Ärendenummer-prefix (#174): 1–3 versaler A–Ö (svensk alfabet). */
+export const matterNumberPrefixSchema = z
+  .string()
+  .regex(/^[A-ZÅÄÖ]{1,3}$/, "Prefix ska vara 1–3 versaler (A–Ö)");
+
 export const userSchema = z.object({
   ...baseFields,
   id: userIdSchema,
@@ -24,6 +29,13 @@ export const userSchema = z.object({
   name: z.string(),
   title: z.string().nullish(),
   role: userRoleSchema.default("LAWYER"),
+  /**
+   * Ärendenummer-prefix (#174): 1–3 versaler som inleder ärendenumren för
+   * ärenden där juristen är ansvarig (`AA2026-0001`). Löpnumret räknas PER
+   * jurist (`responsibleLawyerId`), inte per prefix — så att byte av prefix
+   * fortsätter serien i stället för att börja om. Nullish = ingen prefix.
+   */
+  matterNumberPrefix: matterNumberPrefixSchema.nullish(),
   hourlyRate: z.number().int().nullish(),
   mileageRate: z.number().int().nullish(),
   active: z.boolean().default(true),
