@@ -53,6 +53,12 @@ export interface PeerLoopDeps {
   /** Sätts → cykel-läge; utelämnas → sync-läge. */
   job?: PeerJob;
   log?: (msg: string) => void;
+  /**
+   * Serialiserar varje tick mot andra skrivare av samma working-copy (#83,
+   * ADR 0013 beslut A: HTTP-API:t delar detta lås). Default: ingen
+   * serialisering (kör direkt) — bevarar beteendet när inget API är monterat.
+   */
+  lock?: <T>(fn: () => Promise<T>) => Promise<T>;
   /** Injicerbara seams för test. */
   runCycle?: RunCycle;
   syncOnce?: SyncOnce;
@@ -77,12 +83,14 @@ export class PeerLoop {
   private readonly log: (msg: string) => void;
   private readonly runCycle: RunCycle;
   private readonly syncOnce: SyncOnce;
+  private readonly lock: <T>(fn: () => Promise<T>) => Promise<T>;
 
   constructor(private readonly deps: PeerLoopDeps) {
     this.intervalMs = deps.intervalMs ?? DEFAULT_INTERVAL_MS;
     this.log = deps.log ?? ((msg) => console.log(`[server-runtime] ${msg}`));
     this.runCycle = deps.runCycle ?? runPeerCycle;
     this.syncOnce = deps.syncOnce ?? defaultSyncOnce;
+    this.lock = deps.lock ?? (<T>(fn: () => Promise<T>) => fn());
   }
 
   /** Starta polling. Idempotent — andra anrop är no-op om redan startad. */
@@ -109,19 +117,22 @@ export class PeerLoop {
   async tickOnce(): Promise<PeerLoopTick> {
     const { job, dir, cycleOpts } = this.deps;
     try {
-      if (job) {
-        const result = await this.runCycle(dir, job.act, job.message, cycleOpts);
-        this.log(
-          result.pushed
-            ? `pushade (${result.attempts} försök)`
-            : result.noop
-              ? "inga ändringar (noop)"
-              : `push misslyckades: ${result.reason ?? "okänt"}`,
-        );
-        return { mode: "cycle", result };
-      }
-      await this.syncOnce(dir, cycleOpts);
-      return { mode: "sync" };
+      // Serialisera mot HTTP-API:t som delar samma working-copy (ADR 0013 A).
+      return await this.lock<PeerLoopTick>(async () => {
+        if (job) {
+          const result = await this.runCycle(dir, job.act, job.message, cycleOpts);
+          this.log(
+            result.pushed
+              ? `pushade (${result.attempts} försök)`
+              : result.noop
+                ? "inga ändringar (noop)"
+                : `push misslyckades: ${result.reason ?? "okänt"}`,
+          );
+          return { mode: "cycle", result };
+        }
+        await this.syncOnce(dir, cycleOpts);
+        return { mode: "sync" };
+      });
     } catch (error) {
       this.log(`tick-fel: ${String(error)}`);
       return { mode: "error", error };
