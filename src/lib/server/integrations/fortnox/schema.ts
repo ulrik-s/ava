@@ -30,6 +30,14 @@ export const fortnoxConfigSchema = z.object({
   /** Override för sandbox/test; default = produktions-endpoints. */
   authBase: z.string().url().default(FORTNOX_AUTH_BASE),
   apiBase: z.string().url().default(FORTNOX_API_BASE),
+  /**
+   * Fortnox `account_type` vid authorize (VALFRI; enda giltiga värdet =
+   * "service"). Utelämnad = user-consent (token knyts till användaren) — det
+   * flöde som verifierats mot sandbox. "service" = obevakat service-konto
+   * (överlever att användaren slutar) men kräver att service-konto aktiverats
+   * för appen i Developer Portal + att en sysadmin auktoriserar. Se README. (#213)
+   */
+  accountType: z.literal("service").optional(),
 });
 export type FortnoxConfig = z.infer<typeof fortnoxConfigSchema>;
 

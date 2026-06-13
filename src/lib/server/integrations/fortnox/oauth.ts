@@ -27,15 +27,18 @@ const TOKEN_PATH = "/oauth-v1/token";
 /** Bygg authorize-URL:n användaren skickas till. `state` ska vara slumpad (CSRF). */
 export function buildAuthorizeUrl(config: FortnoxConfig, state: string): string {
   const url = new URL(AUTH_PATH, config.authBase);
-  url.search = new URLSearchParams({
+  const params = new URLSearchParams({
     client_id: config.clientId,
     redirect_uri: config.redirectUri,
     scope: config.scopes.join(" "),
     state,
     access_type: "offline", // krävs för att få en refresh-token
     response_type: "code",
-    account_type: "service",
-  }).toString();
+  });
+  // account_type är VALFRI hos Fortnox: utelämnad = user-consent (det verifierade
+  // flödet). Sätt bara "service" när byrån medvetet kör service-konto (#213).
+  if (config.accountType) params.set("account_type", config.accountType);
+  url.search = params.toString();
   return url.toString();
 }
 

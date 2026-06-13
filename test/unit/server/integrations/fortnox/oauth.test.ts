@@ -52,7 +52,16 @@ describe("buildAuthorizeUrl", () => {
     expect(p.get("state")).toBe("xyz-state");
     expect(p.get("response_type")).toBe("code");
     expect(p.get("access_type")).toBe("offline");
-    expect(p.get("account_type")).toBe("service");
+  });
+
+  it("utelämnar account_type som default (user-consent, det verifierade flödet)", () => {
+    const u = new URL(buildAuthorizeUrl(config, "s"));
+    expect(u.searchParams.has("account_type")).toBe(false);
+  });
+
+  it("sätter account_type=service bara när det konfigurerats (opt-in)", () => {
+    const u = new URL(buildAuthorizeUrl({ ...config, accountType: "service" }, "s"));
+    expect(u.searchParams.get("account_type")).toBe("service");
   });
 });
 
