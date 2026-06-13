@@ -17,6 +17,7 @@ import { useSyncContext } from "@/lib/client/sync/sync-context";
 import type { SyncState } from "@/lib/client/sync/use-auto-sync";
 import { loadFirmaConfig } from "@/lib/client/firma/firma-config";
 import { loadHandle } from "@/lib/client/fsa/handle-store";
+import { pluralChanges } from "@/lib/client/utils";
 
 // eslint-disable-next-line complexity
 export function SyncDiagnostics() {
@@ -110,11 +111,6 @@ export function SyncDiagnostics() {
 
 type SyncKind = SyncState["kind"];
 type SyncVariant<K extends SyncKind> = Extract<SyncState, { kind: K }>;
-
-/** "ändring"/"ändringar" — svensk pluralisering. */
-function pluralChanges(n: number): string {
-  return `ändring${n === 1 ? "" : "ar"}`;
-}
 
 /**
  * En renderare per sync-läge. Uppslag i st.f. en 7-grenars switch håller
