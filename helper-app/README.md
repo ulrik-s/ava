@@ -59,30 +59,46 @@ linux arm64/x64, windows x64) och namnger binärerna
 `ava-helper-<os>-<arch>` — samma namn som självuppdateringen
 (`src/update.ts`) letar efter i GitHub-releasen.
 
-## Installera
+## Installera (#86)
 
-| OS | Kommando |
-|---|---|
-| macOS | `bash service/install-macos.sh` |
-| Linux | `bash service/install-linux.sh` |
-| Windows | `powershell -File service\install-windows.ps1` |
+**Self-install — ett kommando, samma binär på alla OS:**
 
-Script:en kopierar binären till user-writable plats, registrerar
-service-units och startar processen. Inga sudo/admin-rättigheter
-behövs.
+```bash
+./ava-helper --install      # registrera som user-service + (macOS) CA-trust
+./ava-helper --uninstall    # avregistrera servicen
+```
 
-På **macOS** installerar scriptet även helperns lokala CA i login-keychain
-(`ava-helper --install-trust`) så Safari/WKWebView (Office-add-ins) litar på
-HTTPS-loopback-certet — det ger en engångs-auktoriseringsprompt (ADR 0006).
-Chrome/Edge/Firefox + Windows/Linux behöver inte detta (HTTP-loopback funkar).
+`--install` (beslut #86: self-install, ingen sudo, ingen .pkg/.msi/.deb):
+
+1. kopierar binären till data-dir (`~/Library/Application Support/AVA`,
+   `~/.local/share/AVA`, `%LOCALAPPDATA%\AVA`),
+2. skriver service-definitionen (launchd-plist / systemd user-unit / Task
+   Scheduler-XML) med absolut path till binären,
+3. registrerar + startar servicen (`launchctl load` / `systemctl --user enable
+   --now` / `schtasks /Create`) → startar vid login, lyssnar på loopback,
+4. på **macOS** installerar helperns lokala CA i login-keychain
+   (`--install-trust`, ADR 0006) så Safari/WKWebView (Office-add-ins) litar på
+   HTTPS-loopback-certet (engångs-auktoriseringsprompt). Chrome/Edge/Firefox +
+   Windows/Linux behöver inte detta.
+
+Self-update (#78/#110) sköts sedan av den körande servicen.
+
+> ⚠️ **Signering/notarisering (kvarstår, kräver dina certifikat):** för att köra
+> UTAN OS-varningar måste binären vara **Apple Developer ID-signerad + notariserad**
+> (macOS) resp. **Authenticode-signerad** (Windows). Det kräver byråns/utgivarens
+> kodsignerings-certifikat och kan inte göras i koden — se uppföljnings-issue.
+> Osignerad binär fungerar men ger en Gatekeeper-/SmartScreen-varning vid första
+> körning.
+
+De äldre shell-skripten under `service/` (`install-macos.sh` m.fl.) finns kvar
+som referens men `--install` är den primära vägen.
 
 ## Avinstallera
 
-| OS | Kommando |
-|---|---|
-| macOS | `~/Library/Application\ Support/AVA/ava-helper --uninstall-trust; launchctl unload -w ~/Library/LaunchAgents/se.ava.helper.plist && rm "$_"` |
-| Linux | `systemctl --user disable --now ava-helper` |
-| Windows | `schtasks /delete /tn "AVA Helper" /f` |
+`./ava-helper --uninstall` avregistrerar servicen på alla OS (launchctl unload /
+systemctl --user disable / schtasks /Delete). Binär + data-dir lämnas kvar; ta
+bort dem manuellt vid behov. På macOS: `--uninstall-trust` tar bort CA:n ur
+keychain.
 
 ## Release-process
 
