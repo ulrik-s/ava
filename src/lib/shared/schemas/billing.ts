@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { baseFields, dateLike, optionalDateLike } from "./common";
+import { baseFields, orgScopedFields, dateLike, optionalDateLike } from "./common";
 import {
   billingRunRecipientSchema,
   billingRunStatusSchema,
@@ -21,6 +21,7 @@ import {
   billingRunIdSchema,
   writeOffIdSchema,
   invoiceDispatchIdSchema,
+  expectedReceivableIdSchema,
   matterIdSchema,
   userIdSchema,
 } from "./ids";
@@ -293,3 +294,40 @@ export const billingRunSchema = z.object({
 }).passthrough();
 
 export type BillingRun = z.infer<typeof billingRunSchema>;
+
+/**
+ * ExpectedReceivable (#173) — en FÖRVÄNTAD inbetalning utan faktura, typiskt
+ * en kostnadsräkning till domstol som Domstolsverket betalar. Det finns ingen
+ * AVA-faktura att pricka av mot, betalaren anger ärende-/målnummer (ej OCR),
+ * och utbetalt belopp kan avvika från begärt (domstolen prutar).
+ *
+ * Bokföringsmodell (beslut, #173): **försiktighetsprincipen (3b-ii)** — vi
+ * bokar BARA det domstolen faktiskt betalar. `expectedAmount` är ett memo (vad
+ * kostnadsräkningen begärde, för uppföljning), inte en bokförd fordran;
+ * `settledAmount` är det som faktiskt kom in. Skillnaden (prutning) bokförs
+ * varken som intäkt eller kundförlust — den är bara "begärt minus utfall".
+ *
+ * Separat entitet (INTE en faktura-typ): ingen PDF, inget fakturanummer,
+ * ingen OCR, ingen Fortnox-push. Org-scopad + kopplad till ett ärende.
+ */
+export const expectedReceivableStatusSchema = z.enum(["PENDING", "SETTLED", "CANCELLED"]);
+export type ExpectedReceivableStatus = z.infer<typeof expectedReceivableStatusSchema>;
+
+export const expectedReceivableSchema = z.object({
+  ...orgScopedFields,
+  id: expectedReceivableIdSchema,
+  matterId: matterIdSchema,
+  /** Kort beskrivning, t.ex. "Kostnadsräkning Svea HovR mål B 1234-26". */
+  description: z.string().min(1),
+  /** Begärt belopp (öre) — MEMO, ej bokförd fordran (försiktighetsprincip). */
+  expectedAmount: z.number().int().nonnegative(),
+  status: expectedReceivableStatusSchema.default("PENDING"),
+  /** Faktiskt utbetalt (öre) — sätts vid avprickning. Detta är det som "bokas". */
+  settledAmount: z.number().int().nonnegative().nullish(),
+  settledAt: optionalDateLike,
+  /** Bankbetalningens externalId (idempotens vid camt-avprickning, #175). */
+  paymentReference: z.string().nullish(),
+  recordedById: userIdSchema,
+}).passthrough();
+
+export type ExpectedReceivable = z.infer<typeof expectedReceivableSchema>;

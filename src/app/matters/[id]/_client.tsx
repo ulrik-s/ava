@@ -8,6 +8,7 @@ import { DocumentBrowser } from "@/components/documents/document-browser";
 import { SuggestionsPanel } from "@/components/matter/suggestions-panel";
 import { EventsPanel } from "@/components/matter/events-panel";
 import { PaymentMethodCard } from "@/components/matter/payment-method-card";
+import { ExpectedReceivablesSection } from "./_expected-receivables-section";
 import { FileDown } from "lucide-react";
 import { ContactsSection } from "./_contacts-section";
 import { TimeSection } from "./_time-section";
@@ -17,6 +18,11 @@ import { GenerateModal } from "./_generate-modal";
 import { useRouteId } from "@/lib/client/demo/use-route-id";
 
  
+/** Ärendets målnummer som sträng (getById-typen saknar fältet i select-typen). */
+function courtCaseOf(m: unknown): string {
+  return (m as { courtCaseNumber?: string | null }).courtCaseNumber ?? "";
+}
+
 export default function MatterDetailClient({ id: paramId }: { id: string }) {
   // Static export serverar en sentinel-shell för nya id:n → läs riktiga
   // id:t ur URL:en (faller tillbaka till build-time-param i server-mode).
@@ -58,6 +64,7 @@ export default function MatterDetailClient({ id: paramId }: { id: string }) {
         <ContactsSection matterId={id} contacts={m.contacts} />
         <DocumentBrowser matterId={id} />
         <BillingPanel matterId={id} matter={m} />
+        <ExpectedReceivablesSection matterId={id} courtCaseNumber={courtCaseOf(m)} />
         <TimeSection matterId={id} isTaxeArende={m.isTaxeArende} />
         <ExpenseSection matterId={id} isTaxeArende={m.isTaxeArende} />
       </div>

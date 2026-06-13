@@ -46,6 +46,7 @@ import type {
   PaymentDelegate,
   WriteOffDelegate,
   InvoiceDispatchDelegate,
+  ExpectedReceivableDelegate,
   PaymentPlanDelegate,
   AccontoDeductionDelegate,
   BillingRunDelegate,
@@ -79,6 +80,7 @@ export class DemoDataStore implements IDataStore {
   readonly payments: PaymentDelegate;
   readonly writeOffs: WriteOffDelegate;
   readonly invoiceDispatches: InvoiceDispatchDelegate;
+  readonly expectedReceivables: ExpectedReceivableDelegate;
   readonly paymentPlans: PaymentPlanDelegate;
   readonly paymentPlanReminders: Delegate;
   readonly accontoDeductions: AccontoDeductionDelegate;
@@ -132,6 +134,7 @@ export class DemoDataStore implements IDataStore {
     this.payments = this.makeDelegate("payments") as unknown as PaymentDelegate;
     this.writeOffs = this.makeDelegate("writeOffs") as unknown as WriteOffDelegate;
     this.invoiceDispatches = this.makeDelegate("invoiceDispatches", relations.invoiceDispatches) as unknown as InvoiceDispatchDelegate;
+    this.expectedReceivables = this.makeDelegate("expectedReceivables") as unknown as ExpectedReceivableDelegate;
     this.paymentPlans = this.makeDelegate("paymentPlans", relations.paymentPlans) as unknown as PaymentPlanDelegate;
     this.paymentPlanReminders = this.makeDelegate("paymentPlanReminders") as unknown as Delegate;
     this.accontoDeductions = this.makeDelegate("accontoDeductions") as unknown as AccontoDeductionDelegate;
@@ -223,6 +226,7 @@ export class DemoDataStore implements IDataStore {
       payments: "payment",
       writeOffs: "writeOff",
       invoiceDispatches: "invoiceDispatch",
+      expectedReceivables: "expectedReceivable",
       paymentPlans: "paymentPlan",
       paymentPlanReminders: "paymentPlanReminder",
       accontoDeductions: "accontoDeduction",
@@ -296,6 +300,7 @@ export class DemoDataStore implements IDataStore {
       payments: this.payments,
       writeOffs: this.writeOffs,
       invoiceDispatches: this.invoiceDispatches,
+      expectedReceivables: this.expectedReceivables,
       paymentPlans: this.paymentPlans,
       accontoDeductions: this.accontoDeductions,
       billingRuns: this.billingRuns,

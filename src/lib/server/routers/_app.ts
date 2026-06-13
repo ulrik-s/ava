@@ -11,6 +11,7 @@ import { organizationRouter } from "./organization";
 import { reportsRouter } from "./reports";
 import { invoiceRouter } from "./invoice";
 import { invoiceDispatchRouter } from "./invoiceDispatch";
+import { expectedReceivableRouter } from "./expectedReceivable";
 import { billingRunRouter } from "./billingRun";
 import { paymentPlanRouter } from "./paymentPlan";
 import { kostnadsrakningRouter } from "./kostnadsrakning";
@@ -32,6 +33,7 @@ export const appRouter = router({
   reports: reportsRouter,
   invoice: invoiceRouter,
   invoiceDispatch: invoiceDispatchRouter,
+  expectedReceivable: expectedReceivableRouter,
   billingRun: billingRunRouter,
   paymentPlan: paymentPlanRouter,
   kostnadsrakning: kostnadsrakningRouter,

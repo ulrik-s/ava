@@ -34,6 +34,7 @@ import {
   billingRunSchema,
   writeOffSchema,
   invoiceDispatchSchema,
+  expectedReceivableSchema,
 } from "./billing";
 import { documentTemplateSchema, conflictCheckSchema } from "./misc";
 import { calendarEventSchema, taskSchema } from "./calendar";
@@ -197,6 +198,12 @@ export const ENTITY_REGISTRY: Record<string, EntityEntry> = {
     gitPrefix: "invoice-dispatches",
     sourceKey: "invoiceDispatches",
   },
+  expectedReceivable: {
+    schema: expectedReceivableSchema,
+    gitPath: p((id) => `expected-receivables/${id}.json`),
+    gitPrefix: "expected-receivables",
+    sourceKey: "expectedReceivables",
+  },
   documentTemplate: {
     schema: documentTemplateSchema,
     gitPath: p((id) => `.ava/templates/${id}.json`),
@@ -243,6 +250,7 @@ export type EntityName =
   | "document" | "documentFolder" | "documentAnalysisSuggestion" | "matterEventSuggestion"
   | "timeEntry" | "expense" | "invoice" | "payment" | "paymentPlan"
   | "paymentPlanReminder" | "accontoDeduction" | "billingRun" | "writeOff"
+  | "invoiceDispatch" | "expectedReceivable"
   | "documentTemplate" | "conflictCheck"
   | "calendarEvent" | "task"
   | "userPreference" | "orgPreference";
