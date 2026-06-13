@@ -5,7 +5,7 @@
 
 import { describe, it, expect, vi } from "vitest-compat";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { SyncDiagnostics } from "@/components/settings/sync-diagnostics";
+import { SyncDiagnostics, StateLabel } from "@/components/settings/sync-diagnostics";
 import type { SyncState } from "@/lib/client/sync/use-auto-sync";
 
 const ctxState = {
@@ -88,4 +88,24 @@ describe("SyncDiagnostics", () => {
     render(<SyncDiagnostics />);
     expect(screen.getByText(/Web FSA/)).toBeInTheDocument();
   });
+});
+
+describe("StateLabel (#6-ratchet: renderar-uppslag per läge)", () => {
+  const cases: Array<[SyncState, RegExp]> = [
+    [{ kind: "idle" }, /Väntar på första synk/],
+    [{ kind: "synced", at: Date.now() }, /Allt sparat/],
+    [{ kind: "syncing", what: "pull" }, /Hämtar uppdateringar/],
+    [{ kind: "syncing", what: "push" }, /Sparar ändringar/],
+    [{ kind: "pending", count: 1 }, /1 ändring —/],
+    [{ kind: "pending", count: 3 }, /3 ändringar —/],
+    [{ kind: "offline", count: 2 }, /Off-line — 2 ändringar/],
+    [{ kind: "merge-needed" }, /Konflikt/],
+    [{ kind: "error", message: "x" }, /misslyckades/],
+  ];
+  for (const [state, re] of cases) {
+    it(`renderar "${state.kind}"`, () => {
+      const { container } = render(<StateLabel state={state} />);
+      expect(container.textContent ?? "").toMatch(re);
+    });
+  }
 });
