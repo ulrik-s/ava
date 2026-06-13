@@ -39,6 +39,9 @@ function makeCaller(invoices: BookableInvoice[]) {
         return {};
       },
     },
+    // Konto-mappningen deriveras härifrån i prod; dessa tester injicerar dock
+    // connectorn direkt via loadConnector, så getSettings träffas inte.
+    organization: { getSettings: async () => ({ ledgerAccountMap: null }) },
   };
   return { caller, booked };
 }

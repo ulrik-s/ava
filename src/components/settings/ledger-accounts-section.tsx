@@ -117,7 +117,9 @@ function LedgerAccountForm({ initial }: { initial: LedgerAccountMap }) {
     <div className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
       <h2 className="font-semibold text-gray-900 mb-1">Konto-mappning (bokföringsexport)</h2>
       <p className="text-xs text-gray-500 mb-4">
-        BAS-konton som SIE-exporten bokför mot. Förifyllt med standard för advokatbyrå.
+        BAS-konton som bokföringen bokför mot — driver både SIE-exporten och
+        Fortnox-connectorn. Förifyllt med standard för advokatbyrå. Saknas
+        mappningen vägrar Fortnox-connectorn att boka (completeness-grind).
       </p>
 
       <div className="flex items-center gap-3 py-1.5 mb-2">

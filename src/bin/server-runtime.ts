@@ -62,7 +62,7 @@ async function main(): Promise<void> {
   // Fortnox-connector (#82): bara när byrån anslutit Fortnox (valv + tokens).
   // composeJobs kör båda i samma cykel; no-empty-commit-grinden (#80) ser till
   // att tomma tick:ar inte pushar.
-  const fortnox = await buildFortnoxJob({ workDir: config.workDir });
+  const fortnox = await buildFortnoxJob();
   // Bankfil-avprickning (#245): bara när AVA_CAMT_INBOX pekar på en mapp med
   // camt-filer; annars null → ingen avprickning (riskfritt).
   const payments = buildBankFilePaymentsJob({ log });

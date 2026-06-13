@@ -3,7 +3,8 @@
  *
  * Bygger ett `PeerJob` ur:
  *   - secrets-valvet (#79): client_id/secret + de roterande OAuth-tokens,
- *   - firma.git: konto-mappningen (`settings/fortnox-account-map.json`, #217).
+ *   - firma.git: konto-mappningen, deriverad ur byråns org-inställning
+ *     `ledgerAccountMap` (#217/#249) som admin redigerar i /settings.
  *
  * Returnerar `null` (→ loopen stannar i sync-läge) när Fortnox inte är
  * konfigurerat: inget valv, inga credentials, eller inte auktoriserad än.
@@ -11,43 +12,33 @@
  * när en byrå faktiskt anslutit Fortnox.
  */
 
-import { join } from "node:path";
-
 import { createVaultFromEnv, type SecretsVault } from "../../secrets/vault";
 import type { PeerJob } from "../../local-first/peer-loop";
 import type { LedgerConnector } from "../ledger/port";
 import { FortnoxClient } from "./client";
 import { FortnoxLedgerConnector } from "./connector";
-import { makeFortnoxInvoiceJob } from "./invoice-job";
-import {
-  fortnoxConfigSchema,
-  fortnoxKontoMappningSchema,
-  type FortnoxConfig,
-  type FortnoxKontoMappning,
-} from "./schema";
+import { makeFortnoxInvoiceJob, type FortnoxJobCaller } from "./invoice-job";
+import { fortnoxConfigSchema, fortnoxMappingFromLedgerMap, type FortnoxConfig } from "./schema";
 import { VaultFortnoxTokenStore } from "./token-store";
 
-/** Sökväg (relativt working-copy:n) till byråns konto-mappning. */
-export const KONTO_MAPPNING_PATH = "settings/fortnox-account-map.json";
-
 export interface BuildFortnoxJobOpts {
-  /** Server-runtime:ns working-copy (firma.git-klonen). */
-  workDir: string;
   env?: NodeJS.ProcessEnv;
   log?: (msg: string) => void;
 }
 
-/** Läs + strikt-parsa konto-mappningen ur firma.git. null om filen saknas. */
-export async function loadKontoMappning(workDir: string): Promise<FortnoxKontoMappning | null> {
-  const { readFile } = await import("node:fs/promises");
-  let raw: string;
-  try {
-    raw = await readFile(join(workDir, KONTO_MAPPNING_PATH), "utf8");
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") return null;
-    throw err;
-  }
-  return fortnoxKontoMappningSchema.parse(JSON.parse(raw));
+/**
+ * Bygg cykelns `loadConnector`: läs byråns `ledgerAccountMap` via callern
+ * (samma org-projektion som /settings skriver), derivera Fortnox-mappningen
+ * och linda connectorn runt klienten. `null` när mappningen saknas →
+ * completeness-gate (drivern bokför inget).
+ */
+export function makeLoadConnector(client: FortnoxClient) {
+  return async (caller: FortnoxJobCaller): Promise<LedgerConnector | null> => {
+    const settings = await caller.organization.getSettings();
+    const mapping = fortnoxMappingFromLedgerMap(settings.ledgerAccountMap);
+    if (!mapping) return null;
+    return new FortnoxLedgerConnector({ client, mapping });
+  };
 }
 
 /** Bygg FortnoxConfig ur env + valv-credentials (overridebar bas-URL för sandbox). */
@@ -74,7 +65,7 @@ function vaultIfConfigured(env: NodeJS.ProcessEnv): SecretsVault | null {
   return createVaultFromEnv(env);
 }
 
-export async function buildFortnoxJob(opts: BuildFortnoxJobOpts): Promise<PeerJob | null> {
+export async function buildFortnoxJob(opts: BuildFortnoxJobOpts = {}): Promise<PeerJob | null> {
   const env = opts.env ?? process.env;
   const log = opts.log ?? ((msg: string) => console.log(`[fortnox] ${msg}`));
 
@@ -99,14 +90,7 @@ export async function buildFortnoxJob(opts: BuildFortnoxJobOpts): Promise<PeerJo
 
   const client = new FortnoxClient(fortnoxConfigFromEnv(env, clientId, clientSecret), store);
   log("connector aktiv — bokför nya fakturor som verifikat");
-  return makeFortnoxInvoiceJob({
-    // Per cykel: läs färsk konto-mappning ur git och bygg connectorn bakom
-    // porten. null när mappningen saknas → drivern hoppar över (completeness).
-    loadConnector: async (): Promise<LedgerConnector | null> => {
-      const mapping = await loadKontoMappning(opts.workDir);
-      if (!mapping) return null;
-      return new FortnoxLedgerConnector({ client, mapping });
-    },
-    log,
-  });
+  // Per cykel: derivera färsk konto-mappning ur byråns ledgerAccountMap (via
+  // callern) och bygg connectorn bakom porten. null → completeness-gate.
+  return makeFortnoxInvoiceJob({ loadConnector: makeLoadConnector(client), log });
 }
