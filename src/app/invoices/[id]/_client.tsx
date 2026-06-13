@@ -21,6 +21,7 @@ import { WriteOffModal } from "./_write-off-modal";
 import { InvoiceActions } from "./_invoice-actions";
 import { PaymentsTable } from "./_payments-table";
 import { DispatchHistory } from "./_dispatch-history";
+import { SendInvoiceModal } from "./_send-invoice-modal";
 
 const STATUS_LABELS: Record<string, string> = {
   DRAFT: "Utkast",
@@ -42,6 +43,7 @@ export default function InvoiceDetailClient({ id: paramId }: { id: string }) {
   const [showPlan, setShowPlan] = useState(false);
   const [showCredit, setShowCredit] = useState(false);
   const [showWriteOff, setShowWriteOff] = useState(false);
+  const [showSend, setShowSend] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const refetchAll = () => {
@@ -109,6 +111,7 @@ export default function InvoiceDetailClient({ id: paramId }: { id: string }) {
           onShowPlan={() => setShowPlan(true)}
           onShowCredit={() => setShowCredit(true)}
           onShowWriteOff={() => setShowWriteOff(true)}
+          onShowSend={() => setShowSend(true)}
           onSetStatus={(status) => setStatus.mutate({ invoiceId: inv.id, status: status as Parameters<typeof setStatus.mutate>[0]["status"] })}
         />
         {inv.notes && <p className="mt-4 text-sm text-gray-600 border-t pt-3">{inv.notes}</p>}
@@ -174,6 +177,20 @@ export default function InvoiceDetailClient({ id: paramId }: { id: string }) {
           error={error}
           onSubmit={(data) => writeOff.mutate(data)}
           onClose={() => { setShowWriteOff(false); setError(null); }}
+        />
+      )}
+
+      {showSend && (
+        <SendInvoiceModal
+          invoiceId={inv.id}
+          invoiceNumber={(inv as { invoiceNumber?: string | null }).invoiceNumber}
+          amount={inv.amount}
+          ocrReference={(inv as { ocrReference?: string | null }).ocrReference}
+          invoiceDate={inv.invoiceDate}
+          matterNumber={inv.matter.matterNumber}
+          matterTitle={inv.matter.title}
+          onRecorded={() => { void utils.invoiceDispatch.list.invalidate({ invoiceId: inv.id }); }}
+          onClose={() => setShowSend(false)}
         />
       )}
     </div>

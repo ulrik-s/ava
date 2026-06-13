@@ -26,6 +26,7 @@ import { omitUndefined } from "@/lib/shared/omit-undefined";
 import type { TaxaLevel } from "@/lib/shared/brottmalstaxa";
 import { renderKostnadsrakningPdf } from "@/lib/client/kostnadsrakning/render-pdf";
 import { useHelper, composeMailViaHelper } from "@/lib/client/helper/use-helper";
+import { bytesToBase64 } from "@/lib/client/bytes-base64";
 import { formatCurrency } from "@/lib/client/utils";
 import { persistGeneratedDoc } from "@/lib/client/demo/persist-generated-doc";
 
@@ -112,12 +113,6 @@ async function recordDocument(opts: RecordDocOpts): Promise<void> {
   } catch (e) {
     console.warn("[kostnadsrakning] dokument-invalidering misslyckades (best-effort):", e);
   }
-}
-
-function bytesToBase64(bytes: Uint8Array): string {
-  let bin = "";
-  for (const byte of bytes) bin += String.fromCharCode(byte);
-  return btoa(bin);
 }
 
 interface MailOpts {
