@@ -52,15 +52,34 @@ function contactNamesInRepo(): string[] {
 
 /**
  * Vänta tills en UI-mutation faktiskt committats + pushats till git-db:n,
- * i st.f. att racea browserns 10 s push-debounce mot ett pollfönster (#209).
+ * i st.f. att racea browserns 10 s push-debounce mot ett pollfönster (#209, #216).
  *
- * Sync-pillen visar `✓ Sparat` (synced) ENBART när inga ändringar väntar — en
- * mutation gör pillen pending/syncing tills push:en landat. Anropa EFTER att
- * UI:t bekräftat att ändringen sparats (då är pillen redan pending), så att vi
- * inte matchar ett gammalt "Sparat" från en tidigare cykel.
+ * Sync-pillen visar `✓ Sparat` (synced) ENBART när inga ändringar väntar; en
+ * mutation gör pillen pending/syncing ("⏳ … sparas snart" / "↻ Sparar…") tills
+ * push:en landat (då blir den "✓ Sparat" igen).
+ *
+ * #216-fix: det räcker INTE att vänta på "Sparat" — pillen kan fortfarande visa
+ * ett GAMMALT "Sparat" (från initial-synken) i ögonblicket vi tittar, innan
+ * denna mutations pending-state hunnit renderas. Då returnerar vi för tidigt och
+ * pollfönstret startar INNAN push-cykeln ens börjat (debounce 10 s + ev. upptagen
+ * initial-sync + push-tid) → bare-repo:t ses tomt och 60 s tar slut.
+ *
+ * Vi väntar därför på en RIKTIG pending→synced-övergång: först att pillen LÄMNAR
+ * "Sparat" (ändringen registrerad), sedan att den blir "Sparat" igen (push klar).
+ * När detta returnerar HAR raden nått bare-repo:t → efterföljande poll träffar
+ * direkt. Steget "lämna Sparat" är best-effort: en mycket snabb cykel kan hinna
+ * bli synkad igen innan vi ser pending — då går vi vidare på synced-väntan.
  */
 async function waitForGitDbPush(page: Page): Promise<void> {
-  await expect(page.getByTestId("sync-pill")).toContainText("Sparat", { timeout: 90_000 });
+  const pill = page.getByTestId("sync-pill");
+  try {
+    await expect(pill).not.toContainText("Sparat", { timeout: 20_000 });
+  } catch {
+    // Pillen lämnade aldrig "Sparat" inom fönstret — antingen redan synkad
+    // (snabb push) eller ingen ändring registrerades. Synced-väntan nedan
+    // verifierar slutläget oavsett.
+  }
+  await expect(pill).toContainText("Sparat", { timeout: 120_000 });
 }
 
 /** Skapa en org-scopad kontakt via UI:t (förutsättning för flera flöden). */
