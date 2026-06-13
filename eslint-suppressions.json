@@ -69,11 +69,6 @@
       "count": 1
     }
   },
-  "src/app/time/page.tsx": {
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
   "src/app/users/[id]/_edit-client.tsx": {
     "max-lines-per-function": {
       "count": 1
