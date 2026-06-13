@@ -11,7 +11,7 @@
  *   - "Synka nu" → triggar manuell sync
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { RefreshCw } from "lucide-react";
 import { useSyncContext } from "@/lib/client/sync/sync-context";
 import type { SyncState } from "@/lib/client/sync/use-auto-sync";
@@ -108,15 +108,31 @@ export function SyncDiagnostics() {
   );
 }
 
-// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'StateLabel' has a complexity of 11. Maximum allowed is 8.)
-function StateLabel({ state }: { state: SyncState }) {
-  switch (state.kind) {
-    case "idle":           return <>Vänlar på första synk…</>;
-    case "synced":         return <>✓ Allt sparat — senast {new Date(state.at).toLocaleTimeString("sv-SE")}</>;
-    case "syncing":        return <>↻ {state.what === "pull" ? "Hämtar uppdateringar…" : "Sparar ändringar…"}</>;
-    case "pending":        return <>⏳ {state.count} ändring{state.count === 1 ? "" : "ar"} — sparas inom kort</>;
-    case "offline":        return <>⚠ Off-line — {state.count} ändring{state.count === 1 ? "" : "ar"} sparas lokalt</>;
-    case "merge-needed":   return <>⚠ Konflikt — behöver lösas manuellt</>;
-    case "error":          return <>✗ Synk misslyckades — försöker igen automatiskt</>;
-  }
+type SyncKind = SyncState["kind"];
+type SyncVariant<K extends SyncKind> = Extract<SyncState, { kind: K }>;
+
+/** "ändring"/"ändringar" — svensk pluralisering. */
+function pluralChanges(n: number): string {
+  return `ändring${n === 1 ? "" : "ar"}`;
+}
+
+/**
+ * En renderare per sync-läge. Uppslag i st.f. en 7-grenars switch håller
+ * `StateLabel` under complexity@8 (#6-ratchet) — den mappade typen ger varje
+ * renderare den smalnade varianten (t.ex. `synced` får `.at`, `pending` `.count`).
+ */
+const LABEL_RENDERERS: { [K in SyncKind]: (s: SyncVariant<K>) => ReactNode } = {
+  idle: () => <>Väntar på första synk…</>,
+  synced: (s) => <>✓ Allt sparat — senast {new Date(s.at).toLocaleTimeString("sv-SE")}</>,
+  syncing: (s) => <>↻ {s.what === "pull" ? "Hämtar uppdateringar…" : "Sparar ändringar…"}</>,
+  pending: (s) => <>⏳ {s.count} {pluralChanges(s.count)} — sparas inom kort</>,
+  offline: (s) => <>⚠ Off-line — {s.count} {pluralChanges(s.count)} sparas lokalt</>,
+  "merge-needed": () => <>⚠ Konflikt — behöver lösas manuellt</>,
+  error: () => <>✗ Synk misslyckades — försöker igen automatiskt</>,
+};
+
+export function StateLabel({ state }: { state: SyncState }) {
+  // Uppslaget kan inte korreleras med `state`:s variant av TS → en lokal cast.
+  const render = LABEL_RENDERERS[state.kind] as (s: SyncState) => ReactNode;
+  return <>{render(state)}</>;
 }
