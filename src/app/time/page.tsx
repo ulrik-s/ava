@@ -5,7 +5,7 @@ import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
 import { formatMinutes } from "@/lib/client/utils";
 import { periodFrom, periodTo } from "@/lib/client/time-filter";
-import { MatterCombobox } from "@/components/matter/matter-combobox";
+import { MatterCombobox, type MatterOption } from "@/components/matter/matter-combobox";
 import { DataTable, type Column } from "@/components/ui/data-table";
 
 interface TimeRow {
@@ -74,7 +74,79 @@ function PeriodFilter({ from, to, onFrom, onTo, onClear }: PeriodFilterProps) {
   );
 }
 
-// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'TimePage' has a complexity of 9. Maximum allowed is 8.)
+interface TimeForm {
+  matterId: string;
+  date: string;
+  minutes: number;
+  description: string;
+  billable: boolean;
+}
+
+interface TimeEntryFormProps {
+  form: TimeForm;
+  setForm: (f: TimeForm) => void;
+  mattersData: { matters: MatterOption[] } | undefined;
+  isPending: boolean;
+  onSubmit: () => void;
+}
+
+/** Registrerings-formuläret (utbrutet ur TimePage, #6-ratchet). Äger sina
+ *  fält-id:n; tar emot form-state + submit som props (presentational). */
+function TimeEntryForm({ form, setForm, mattersData, isPending, onSubmit }: TimeEntryFormProps) {
+  const dateFieldId = useId();
+  const minutesFieldId = useId();
+  const descriptionFieldId = useId();
+  const matters = mattersData ? mattersData.matters : [];
+  return (
+    <form onSubmit={(e) => { e.preventDefault(); onSubmit(); }}
+      className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div>
+          <MatterCombobox
+            label="Ärende *"
+            required
+            matters={matters}
+            value={form.matterId}
+            onChange={(id) => setForm({ ...form, matterId: id })}
+          />
+          {mattersData && matters.length === 0 && (
+            <p className="text-xs text-amber-600 mt-1">Inga aktiva ärenden — skapa ett under Ärenden.</p>
+          )}
+        </div>
+        <div>
+          <label htmlFor={dateFieldId} className="block text-sm text-gray-500 mb-1">Datum *</label>
+          <input id={dateFieldId} type="date" required value={form.date}
+            onChange={(e) => setForm({ ...form, date: e.target.value })}
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label htmlFor={minutesFieldId} className="block text-sm text-gray-500 mb-1">Tid (minuter) *</label>
+          <input id={minutesFieldId} type="number" required min={1} value={form.minutes}
+            onChange={(e) => setForm({ ...form, minutes: parseInt(e.target.value) || 0 })}
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label htmlFor={descriptionFieldId} className="block text-sm text-gray-500 mb-1">Beskrivning *</label>
+          <input id={descriptionFieldId} type="text" required value={form.description}
+            onChange={(e) => setForm({ ...form, description: e.target.value })}
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+        </div>
+      </div>
+      <div className="mt-4 flex items-center gap-4">
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={form.billable}
+            onChange={(e) => setForm({ ...form, billable: e.target.checked })} />
+          Debiterbar
+        </label>
+        <button type="submit" disabled={isPending}
+          className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50">
+          {isPending ? "Sparar..." : "Spara"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
 export default function TimePage() {
   const [page, setPage] = useState(1);
   const [fromDate, setFromDate] = useState("");
@@ -91,10 +163,7 @@ export default function TimePage() {
   const utils = trpc.useUtils();
 
   const [showForm, setShowForm] = useState(false);
-  const dateFieldId = useId();
-  const minutesFieldId = useId();
-  const descriptionFieldId = useId();
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<TimeForm>({
     matterId: "",
     date: new Date().toISOString().split("T")[0]!,
     minutes: 30,
@@ -126,52 +195,13 @@ export default function TimePage() {
       </div>
 
       {showForm && (
-        <form onSubmit={(e) => { e.preventDefault(); createTimeEntry.mutate(form); }}
-          className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div>
-              <MatterCombobox
-                label="Ärende *"
-                required
-                matters={matters.data?.matters ?? []}
-                value={form.matterId}
-                onChange={(id) => setForm({ ...form, matterId: id })}
-              />
-              {matters.data && matters.data.matters.length === 0 && (
-                <p className="text-xs text-amber-600 mt-1">Inga aktiva ärenden — skapa ett under Ärenden.</p>
-              )}
-            </div>
-            <div>
-              <label htmlFor={dateFieldId} className="block text-sm text-gray-500 mb-1">Datum *</label>
-              <input id={dateFieldId} type="date" required value={form.date}
-                onChange={(e) => setForm({ ...form, date: e.target.value })}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-            </div>
-            <div>
-              <label htmlFor={minutesFieldId} className="block text-sm text-gray-500 mb-1">Tid (minuter) *</label>
-              <input id={minutesFieldId} type="number" required min={1} value={form.minutes}
-                onChange={(e) => setForm({ ...form, minutes: parseInt(e.target.value) || 0 })}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-            </div>
-            <div>
-              <label htmlFor={descriptionFieldId} className="block text-sm text-gray-500 mb-1">Beskrivning *</label>
-              <input id={descriptionFieldId} type="text" required value={form.description}
-                onChange={(e) => setForm({ ...form, description: e.target.value })}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-            </div>
-          </div>
-          <div className="mt-4 flex items-center gap-4">
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={form.billable}
-                onChange={(e) => setForm({ ...form, billable: e.target.checked })} />
-              Debiterbar
-            </label>
-            <button type="submit" disabled={createTimeEntry.isPending}
-              className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50">
-              {createTimeEntry.isPending ? "Sparar..." : "Spara"}
-            </button>
-          </div>
-        </form>
+        <TimeEntryForm
+          form={form}
+          setForm={setForm}
+          mattersData={matters.data}
+          isPending={createTimeEntry.isPending}
+          onSubmit={() => createTimeEntry.mutate(form)}
+        />
       )}
 
       <PeriodFilter
