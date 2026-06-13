@@ -21,8 +21,19 @@ function statusLabel(s: string): string {
   return s === "ACTIVE" ? "Aktivt" : s === "CLOSED" ? "Stängt" : "Arkiverat";
 }
 
+/**
+ * Sorteringsnyckel för ärendenummer (#174). Format `<PREFIX?><YYYY>-<NNNN>`
+ * → `${prefix}${year}${seq}` så prefixade och oprefixade nummer sorteras
+ * stabilt (prefix-grupp, sedan år, sedan löpnummer). Okänt format faller
+ * tillbaka på råsträngen.
+ */
+function matterNumberSortKey(matterNumber: string): string {
+  const m = /^([A-ZÅÄÖ]{1,3})?(\d{4})-(\d{4})$/.exec(matterNumber);
+  return m ? `${m[1] ?? ""}${m[2]}${m[3]}` : matterNumber;
+}
+
 const matterColumns: Column<MatterRow>[] = [
-  { key: "matterNumber", label: "Ärendenr", sortable: true, sortValue: (m) => m.matterNumber,
+  { key: "matterNumber", label: "Ärendenr", sortable: true, sortValue: (m) => matterNumberSortKey(m.matterNumber),
     render: (m) => <span className="text-sm font-mono text-gray-500">{m.matterNumber}</span> },
   { key: "title", label: "Titel", sortable: true, sortValue: (m) => m.title,
     render: (m) => (
@@ -64,6 +75,7 @@ function MattersContent() {
   const klientId = useId();
   const matterTypeId = useId();
   const descriptionId = useId();
+  const responsibleId = useId();
 
   const matters = trpc.matter.list.useQuery({
     search,
@@ -89,6 +101,7 @@ function MattersContent() {
     description: "",
     matterType: "",
     klientId: "",
+    responsibleLawyerId: "",
     isTaxeArende: false,
   });
 
@@ -99,6 +112,7 @@ function MattersContent() {
       description: form.description || undefined,
       matterType: form.matterType || undefined,
       klientId: form.klientId || undefined,
+      responsibleLawyerId: form.responsibleLawyerId || undefined,
       isTaxeArende: form.isTaxeArende || undefined,
     });
   }
@@ -143,6 +157,18 @@ function MattersContent() {
                 onChange={(e) => setForm({ ...form, matterType: e.target.value })}
                 placeholder="T.ex. Familjerätt, Brottmål..."
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label htmlFor={responsibleId} className="block text-sm font-medium text-gray-700 mb-1">Ansvarig advokat/jurist</label>
+              <select id={responsibleId} value={form.responsibleLawyerId}
+                onChange={(e) => setForm({ ...form, responsibleLawyerId: e.target.value })}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
+                <option value="">Jag själv (standard)</option>
+                {employees.data?.users.map((u) => (
+                  <option key={u.id} value={u.id}>{u.name}</option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-gray-500">Styr ärendenummerserien (juristens prefix).</p>
             </div>
             <div className="md:col-span-2">
               <label htmlFor={descriptionId} className="block text-sm font-medium text-gray-700 mb-1">Beskrivning</label>

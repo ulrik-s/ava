@@ -90,6 +90,18 @@ describe("user.create", () => {
     expect(args.data.role).toBe("LAWYER");
   });
 
+  it("lagrar ärendenummer-prefix när angivet (#174)", async () => {
+    mockPrisma.user.create.mockResolvedValue({});
+    await makeCaller().create({ email: "x@y.se", name: "Y", matterNumberPrefix: "AA" });
+    const args = mockPrisma.user.create.mock.calls[0]![0];
+    expect(args.data.matterNumberPrefix).toBe("AA");
+  });
+
+  it("avvisar ogiltigt prefix (gemener/för långt) (#174)", async () => {
+    await expect(makeCaller().create({ email: "x@y.se", name: "Y", matterNumberPrefix: "aa" })).rejects.toThrow();
+    await expect(makeCaller().create({ email: "x@y.se", name: "Y", matterNumberPrefix: "ABCD" })).rejects.toThrow();
+  });
+
   it("validerar epost-format", async () => {
     await expect(makeCaller().create({ email: "inte-epost", name: "X" })).rejects.toThrow();
   });
