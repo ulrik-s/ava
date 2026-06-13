@@ -119,6 +119,9 @@ jobs:
           bun-version: latest
       - run: bun install --frozen-lockfile
       - run: bun run build:demo
+      # Bundle-size-budget (#14): fäll om klient-JS:en svällt över budgeten.
+      # Återanvänder demo-bygget ovan (out/) — ingen extra build.
+      - run: bun run size
       - run: bun run e2e:install
       - name: Start docker + hämta bootstrappad admin-PAT
         run: |
