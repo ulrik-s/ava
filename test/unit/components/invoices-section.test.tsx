@@ -5,7 +5,7 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { InvoicesSection } from "@/components/matter/invoices-section";
+import { InvoicesSection, statusBadge } from "@/components/matter/invoices-section";
 
 const invoicesQuery = { isLoading: false, data: [] as Array<Record<string, unknown>> };
 const timeQuery: { data: { entries: Array<Record<string, unknown>> } } = { data: { entries: [] } };
@@ -341,5 +341,26 @@ describe("InvoicesSection", () => {
     fireEvent.click(screen.getByRole("button", { name: /Skapa slutfaktura/ }));
     const arg = createFinalMutate.mock.calls[0]![0];
     expect(arg.accontoInvoiceIds).toEqual(["ac1"]);
+  });
+});
+
+describe("statusBadge (#6-ratchet: uppslag i st.f. if/switch)", () => {
+  it("faktura-typ vinner över status", () => {
+    expect(statusBadge("PAID", "ACCONTO")).toContain("bg-purple-100");
+    expect(statusBadge("SENT", "FINAL")).toContain("bg-blue-100");
+    expect(statusBadge("PAID", "CREDIT")).toContain("bg-orange-100");
+  });
+  it("faller till status-färg när typen saknar egen färg", () => {
+    expect(statusBadge("PAID", "STANDARD")).toContain("bg-green-100");
+    expect(statusBadge("SENT", "STANDARD")).toContain("bg-amber-100");
+    expect(statusBadge("INSTALLMENT_PLAN", "STANDARD")).toContain("bg-indigo-100");
+    expect(statusBadge("CANCELLED", "STANDARD")).toContain("bg-gray-200");
+    expect(statusBadge("BAD_DEBT", "STANDARD")).toContain("bg-red-100");
+  });
+  it("okänd typ + okänd status → grå default", () => {
+    expect(statusBadge("DRAFT", "STANDARD")).toContain("bg-gray-100");
+  });
+  it("behåller bas-klasserna", () => {
+    expect(statusBadge("PAID", "ACCONTO")).toContain("rounded-full");
   });
 });
