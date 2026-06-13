@@ -68,12 +68,22 @@ nginx-fronten.
   första login binds `oidcSubject`. Okänd identitet utan allowlist-rad nekas
   (autentisering ≠ auktorisering). Avprovisionering = ta bort rad + invalidera
   session.
-- **Första användaren (bootstrap):** rotförtroende = den som kör
-  `docker compose up` (host shell-access). Vid tom allowlist mint:as en
-  **engångs admin-claim-token** som printas i serverloggen (samma mönster som
-  dagens admin-PAT-bootstrap); första personen löser in den vid OIDC-login och
-  binds som admin, varefter token invalideras. Alternativ: `add-user.sh --admin
-  <epost>` på hosten. (Detalj: [#224](https://github.com/ulrik-s/ava/issues/224).)
+- **Första användaren (bootstrap) — BESLUTAT ([#224](https://github.com/ulrik-s/ava/issues/224), stängd):**
+  rotförtroende = den som kör `docker compose up` (host shell-access). Första
+  admin seedas med **`bun run bootstrap:admin --email <epost> --org <namn>`**
+  som skriver `.ava/users/<epost>.json` (role ADMIN, deterministiskt uuidv5-id,
+  idempotent) i firma.git. Därefter loggar personen in via OIDC och resolvas som
+  ADMIN (allowlisten = User-raderna, ingen parallell lista).
+  - **Engångs-token-via-HTTP-flödet förkastades** (YAGNI): alla self-hosted-
+    deploys har shell-access vid uppsättning, så CLI:n räcker och undviker en
+    admin-mintande endpoint + token-livscykel. (Ett token-flöde kan återupptas
+    om en *managed* deploy utan shell blir aktuell; auth-tjänstens `claim-admin`
+    finns kvar som valfri, ej default-väg.)
+  - **Auktorisering är email-only** (`oidcSubject`-bindning uppskjuten): byrån
+    kör EN IdP via oauth2-proxy → email är auktoritativ. `OidcAuthProvider`
+    stödjer redan sub/iss-bindning (kräver bunden rad matcha claims), men
+    bindning skrivs inte än — det blir relevant först vid multi-IdP-allowlist
+    och kräver att oauth2-proxy exponerar `sub`/`iss` (gör det ej i userinfo idag).
 
 ### Demo-tier
 

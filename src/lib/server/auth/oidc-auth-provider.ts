@@ -14,7 +14,10 @@
  *   - Inaktiverad användare → `null` (avprovisionerad).
  *   - Bunden identitet (`oidcSubject` satt) måste matcha claims sub+iss → annars
  *     `null` (skydd mot att kapa någon annans email hos en annan IdP). Obunden
- *     rad accepteras via email (första login; bindningen skrivs separat, #224).
+ *     rad accepteras via email — det är den BESLUTADE modellen (#224, ADR 0009):
+ *     single-IdP → email är auktoritativ, sub/iss-bindning uppskjuten tills
+ *     multi-IdP blir aktuellt. Matchningen nedan stödjer redan bindning den dag
+ *     allowlist-rader får `oidcSubject` satt.
  */
 
 import type { AuthProvider, Principal } from "./principal";
@@ -38,7 +41,8 @@ export interface AllowlistedUser {
   name: string;
   role: string;
   organizationId: string;
-  /** Bunden OIDC-identitet (sätts vid första login, #224). */
+  /** Bunden OIDC-identitet. Email-only idag (#224/ADR 0009); sätts först när
+   *  sub/iss-bindning införs (multi-IdP). Satt → måste matcha claims sub+iss. */
   oidcSubject?: string | null;
   oidcIssuer?: string | null;
   /** false = avprovisionerad. */

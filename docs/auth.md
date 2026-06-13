@@ -64,23 +64,33 @@ skydd-utan-session. Körs i CI (jobbet **E2E (OIDC login)**). OBS: lokalt på
 Mac kan Docker Desktop ge flakiga browser→port-anslutningar; CI (linux) är
 den deterministiska grinden (samma mönster som round-trip-e2e:n).
 
-### Första-admin (bootstrap, #224)
+### Första-admin (bootstrap, #224 — BESLUTAT)
 
 Hönan-och-ägget: en färsk firma.git har inga User-rader → ingen är allowlistad.
 Rotförtroende = den som kör `docker compose up` (host shell-access).
 
-- Vid första start (tom allowlist) printas en **engångs claim-secret**
-  (`BOOT_SECRET`) i auth-tjänstens logg.
-- Första inloggade OIDC-användaren löser in den: `POST /auth/claim-admin`
-  `{ secret, email }`. auth-servern verifierar secret + att ingen admin finns
-  än (`admins.txt`), engångs (409 därefter). auth-servern **pratar inte git** →
-  den auktoriserar bara; **klienten** skriver `.ava/users/<email>.json`
-  (role ADMIN, `oidcSubject`) och pushar.
-- Alternativ: `add-user.sh --admin <epost>` på hosten.
+**Kanonisk väg — host-shell-CLI:**
 
-OIDC-bootstrap kräver alltså att **auth-tjänsten** körs (profil `invite-server`)
-vid sidan av `oauth2-proxy`. Pure-besluts-logiken (`claimAdminDecision`) är
-enhetstestad i `test/unit/lib/auth-server-core.test.ts`.
+```bash
+bun run bootstrap:admin --work-dir <firma.git-klon> --email du@byrå.se --org "Byrå AB" --commit
+```
+
+Skriver `.ava/users/<email>.json` (role ADMIN, deterministiskt uuidv5-id,
+idempotent) + org + `.ava/meta.json`, committar i firma.git. Därefter loggar du
+in via OIDC och resolvas som ADMIN (allowlisten = User-raderna). Se runbooken
+[`self-hosted-entra.md`](./self-hosted-entra.md) steg 3.
+
+> **Beslut #224:** vi bygger INTE ett engångs-token-via-HTTP-bootstrap för
+> standard-self-hosted (alla sådana deploys har shell → CLI:n räcker; undviker
+> en admin-mintande endpoint). Auktorisering är **email-only** — `oidcSubject`-
+> bindning är uppskjuten (relevant först vid multi-IdP; kräver att oauth2-proxy
+> exponerar sub/iss). Se [ADR 0009](./adr/0009-oidc-login-via-servern.md).
+
+**Valfritt (ej default-väg):** auth-tjänsten (profil `invite-server`) har ett
+`POST /auth/claim-admin` (engångs `BOOT_SECRET` i loggen) som låter en inloggad
+OIDC-användare claima admin utan shell. Kvar för en eventuell *managed* deploy
+utan shell-access men ingår inte i standard-flödet. Pure-logiken
+(`claimAdminDecision`) är enhetstestad i `test/unit/lib/auth-server-core.test.ts`.
 
 ## Designmål
 
