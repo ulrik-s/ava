@@ -1,23 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest-compat";
-import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
-import {
-  buildFortnoxJob,
-  loadKontoMappning,
-  KONTO_MAPPNING_PATH,
-} from "@/lib/server/integrations/fortnox/runtime";
+import { buildFortnoxJob, makeLoadConnector } from "@/lib/server/integrations/fortnox/runtime";
 import { createVaultFromEnv } from "@/lib/server/secrets/vault";
 import { VaultFortnoxTokenStore } from "@/lib/server/integrations/fortnox/token-store";
-import type { FortnoxKontoMappning } from "@/lib/server/integrations/fortnox/schema";
-
-const MAPPING: FortnoxKontoMappning = {
-  voucherSeries: "A",
-  kundfordran: "1510",
-  intaktArvode: "3000",
-  momsUtgaende: "2611",
-};
+import type { FortnoxClient } from "@/lib/server/integrations/fortnox/client";
+import type { FortnoxJobCaller } from "@/lib/server/integrations/fortnox/invoice-job";
+import { DEFAULT_LEDGER_ACCOUNT_MAP, type LedgerAccountMap } from "@/lib/shared/accounting/account-map";
 
 let dir: string;
 const silent = () => {};
@@ -37,34 +28,43 @@ function vaultEnv(): NodeJS.ProcessEnv {
   } as NodeJS.ProcessEnv;
 }
 
-async function writeMapping(value: unknown): Promise<void> {
-  await mkdir(join(dir, "settings"), { recursive: true });
-  await writeFile(join(dir, KONTO_MAPPNING_PATH), JSON.stringify(value), "utf8");
+/** Fake-caller vars org.getSettings ger angiven (eller ingen) ledger-map. */
+function callerWithMap(map: LedgerAccountMap | null): FortnoxJobCaller {
+  return {
+    invoice: {
+      list: async () => [],
+      markFortnoxBooked: async () => ({}),
+    },
+    organization: {
+      getSettings: async () => ({ ledgerAccountMap: map }),
+    },
+  };
 }
 
-describe("loadKontoMappning", () => {
-  it("läser + strikt-parsar mappningen ur firma.git", async () => {
-    await writeMapping(MAPPING);
-    expect(await loadKontoMappning(dir)).toEqual(MAPPING);
+// FortnoxLedgerConnector lagrar bara klienten; loadConnector anropar den inte.
+const fakeClient = {} as unknown as FortnoxClient;
+
+describe("makeLoadConnector", () => {
+  it("deriverar connectorn ur byråns ledgerAccountMap (via callern)", async () => {
+    const loadConnector = makeLoadConnector(fakeClient);
+    const connector = await loadConnector(callerWithMap(DEFAULT_LEDGER_ACCOUNT_MAP));
+    expect(connector).not.toBeNull();
+    expect(connector?.capabilities().pushVoucher).toBe(true);
   });
 
-  it("saknad fil → null", async () => {
-    expect(await loadKontoMappning(dir)).toBeNull();
-  });
-
-  it("ogiltig mappning → kastar (strikt parsning)", async () => {
-    await writeMapping({ voucherSeries: "A" }); // saknar obligatoriska konton
-    await expect(loadKontoMappning(dir)).rejects.toThrow();
+  it("ingen ledgerAccountMap → null (completeness-gate)", async () => {
+    const loadConnector = makeLoadConnector(fakeClient);
+    expect(await loadConnector(callerWithMap(null))).toBeNull();
   });
 });
 
 describe("buildFortnoxJob", () => {
   it("valv ej konfigurerat (env saknas) → null", async () => {
-    expect(await buildFortnoxJob({ workDir: dir, env: {}, log: silent })).toBeNull();
+    expect(await buildFortnoxJob({ env: {}, log: silent })).toBeNull();
   });
 
   it("valv men inga credentials → null", async () => {
-    const job = await buildFortnoxJob({ workDir: dir, env: vaultEnv(), log: silent });
+    const job = await buildFortnoxJob({ env: vaultEnv(), log: silent });
     expect(job).toBeNull();
   });
 
@@ -74,7 +74,7 @@ describe("buildFortnoxJob", () => {
     await vault.set("fortnox.client_id", "cid");
     await vault.set("fortnox.client_secret", "secret");
 
-    const job = await buildFortnoxJob({ workDir: dir, env, log: silent });
+    const job = await buildFortnoxJob({ env, log: silent });
     expect(job).toBeNull();
   });
 
@@ -89,7 +89,7 @@ describe("buildFortnoxJob", () => {
       accessTokenExpiresAt: Date.now() + 600_000,
     });
 
-    const job = await buildFortnoxJob({ workDir: dir, env, log: silent });
+    const job = await buildFortnoxJob({ env, log: silent });
     expect(job).not.toBeNull();
     expect(job?.message).toMatch(/fortnox/i);
     expect(typeof job?.act).toBe("function");

@@ -12,6 +12,8 @@
 
 import { z } from "zod";
 
+import type { LedgerAccountMap } from "@/lib/shared/accounting/account-map";
+
 // ─── OAuth ──────────────────────────────────────────────────────────────
 
 /** Fortnox-endpoints. Bas-URL:er är overridebara för test/sandbox. */
@@ -60,6 +62,12 @@ export type FortnoxStoredTokens = z.infer<typeof fortnoxStoredTokensSchema>;
  * Per-byrå kontoplan-mappning. VÄRDENA är ett bokföringsbeslut byrån gör —
  * connectorn levereras utan defaults (tomt = connectorn vägrar köra och ber
  * om konfiguration). BAS-kontona nedan är bara typ-dokumentation.
+ *
+ * Detta är connector-LOKAL form (bara kontonummer). Sanningskällan är byråns
+ * org-inställning `ledgerAccountMap` (#249, redigeras i /settings); connectorn
+ * deriverar denna delmängd via `fortnoxMappingFromLedgerMap` (#217). Roll→konto-
+ * översättning är connector-specifik (ADR 0011) — därför lever den här, inte i
+ * shared (som aldrig får bero på `integrations/*`).
  */
 export const fortnoxKontoMappningSchema = z.object({
   /** Verifikatserie i Fortnox (t.ex. "A" eller en kundfaktura-serie). */
@@ -74,6 +82,27 @@ export const fortnoxKontoMappningSchema = z.object({
   intaktUtlagg: z.string().min(1).optional(),
 });
 export type FortnoxKontoMappning = z.infer<typeof fortnoxKontoMappningSchema>;
+
+/**
+ * Derivera Fortnox-konto-mappningen ur byråns `ledgerAccountMap` (#217/#249).
+ * Plockar kontoNUMREN (Fortnox vill inte ha namnen) + verifikatserien.
+ *
+ * `null` när byrån inte konfigurerat någon mappning → connectorn vägrar köra
+ * (completeness-gate). Är `ledgerAccountMap` satt är den per schema komplett
+ * (alla obligatoriska roller finns), så ingen ytterligare lucka-koll behövs.
+ */
+export function fortnoxMappingFromLedgerMap(
+  map: LedgerAccountMap | null | undefined,
+): FortnoxKontoMappning | null {
+  if (!map) return null;
+  return fortnoxKontoMappningSchema.parse({
+    voucherSeries: map.voucherSeries,
+    kundfordran: map.kundfordran.number,
+    intaktArvode: map.intaktArvode.number,
+    momsUtgaende: map.momsUtgaende.number,
+    ...(map.intaktUtlagg ? { intaktUtlagg: map.intaktUtlagg.number } : {}),
+  });
+}
 
 // ─── Voucher (verifikat) ────────────────────────────────────────────────
 

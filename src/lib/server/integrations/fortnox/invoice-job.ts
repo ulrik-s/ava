@@ -15,6 +15,7 @@
 import { buildSemanticVoucher, type SemanticVoucherInput } from "@/lib/shared/accounting/semantic-voucher";
 import { DEFAULT_VAT_RATE, type VatRate } from "@/lib/shared/vat";
 import type { InvoiceStatus } from "@/lib/shared/schemas/enums";
+import type { LedgerAccountMap } from "@/lib/shared/accounting/account-map";
 import type { PeerJob } from "../../local-first/peer-loop";
 import type { LedgerConnector } from "../ledger/port";
 
@@ -34,15 +35,20 @@ export interface FortnoxJobCaller {
     list: (input: Record<string, never>) => Promise<BookableInvoice[]>;
     markFortnoxBooked: (input: { invoiceId: string; fortnoxId: string }) => Promise<unknown>;
   };
+  /** Byråns org-inställningar — konto-mappningen läses härifrån (#217/#249). */
+  organization: {
+    getSettings: () => Promise<{ ledgerAccountMap?: LedgerAccountMap | null }>;
+  };
 }
 
 export interface FortnoxInvoiceJobDeps {
   /**
-   * Bygg ledger-connectorn för den aktuella cykeln (läser färsk konto-mappning
-   * ur firma.git, #217). `null` = ej konfigurerad → boka inget (completeness-
-   * gate). Drivern jobbar mot PORTEN, inte mot Fortnox direkt (ADR 0011).
+   * Bygg ledger-connectorn för den aktuella cykeln. Får callern → läser färsk
+   * konto-mappning ur byråns org-inställning (`ledgerAccountMap`, #217/#249).
+   * `null` = ej konfigurerad → boka inget (completeness-gate). Drivern jobbar
+   * mot PORTEN, inte mot Fortnox direkt (ADR 0011).
    */
-  loadConnector: () => Promise<LedgerConnector | null>;
+  loadConnector: (caller: FortnoxJobCaller) => Promise<LedgerConnector | null>;
   vatRate?: VatRate;
   bookableStatuses?: readonly InvoiceStatus[];
   log?: (msg: string) => void;
@@ -78,12 +84,13 @@ type PushCapableConnector = LedgerConnector & Required<Pick<LedgerConnector, "pu
  * connectorn saknas (ej konfigurerad) eller inte kan boka verifikat.
  */
 async function resolvePushConnector(
+  caller: FortnoxJobCaller,
   deps: FortnoxInvoiceJobDeps,
   log: (msg: string) => void,
 ): Promise<PushCapableConnector | null> {
-  const connector = await deps.loadConnector();
+  const connector = await deps.loadConnector(caller);
   if (!connector) {
-    log("Fortnox: ingen connector/konto-mappning (settings/fortnox-account-map.json) — hoppar över");
+    log("Fortnox: ingen konto-mappning konfigurerad (ledgerAccountMap i /settings) — hoppar över");
     return null;
   }
   if (!connector.capabilities().pushVoucher || !connector.pushVoucher) {
@@ -128,7 +135,7 @@ export async function bookUnsyncedInvoices(
   deps: FortnoxInvoiceJobDeps,
 ): Promise<BookResult> {
   const log = deps.log ?? (() => {});
-  const connector = await resolvePushConnector(deps, log);
+  const connector = await resolvePushConnector(caller, deps, log);
   if (!connector) return { booked: 0, failed: 0, skipped: 0 };
 
   const bookable = new Set<InvoiceStatus>(deps.bookableStatuses ?? DEFAULT_BOOKABLE_STATUSES);
