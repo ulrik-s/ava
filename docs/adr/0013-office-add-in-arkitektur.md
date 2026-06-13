@@ -127,6 +127,26 @@ Då blir **#84 (Word)** och **#72 (Outlook)** tunna feature-lager.
   + reimplementation. tRPC-over-HTTP (A1) räcker eftersom add-ins är AVA-klienter,
   inte tredje part.
 
+## Concurrency (beslut A, 2026-06-13)
+
+Server-runtime:ns HTTP-API och dess peer-loop (15 s pull→act→push) arbetar mot
+**samma** `firma.git`-working-copy. För att aldrig skriva git samtidigt
+serialiseras de via **ett delat async-lås (Mutex)** — beslut **A** av tre:
+
+- **A (valt):** en working-copy + ett delat lås. Enklast, en skrivare i taget,
+  återanvänder commit/push-vägen. Add-in-trafik är låg-QPS → kostnaden trivial.
+  Per HTTP-mutation (inuti låset): fetch+reset → hydrera → kör → commit+push
+  (bara POST, bara vid faktisk ändring).
+- **B (förkastat):** klon per request — ingen kontention men dyrt + fler peers
+  mot remote (mer last-write-wins-churn). Överdrivet vid add-in-QPS.
+- **C (förkastat):** köa mutationer in i peer-loopens act-fas — eventual/async,
+  ger upp till intervallets latens på en interaktiv "spara". Fel trade-off.
+
+Levererat i tre steg: **1** (PR #283) transport + Bearer-PAT-grind; **1b**
+(PR #286) Mutex + `openSession`/`finalize`-seam + working-copy-session +
+peer-loop-låsinjektion; **1c** HTTP-listener i server-runtime-processen
+(node:http) + nginx `/api/`-proxy + docker + PAT-provisioning via env.
+
 ## Ändringshistorik
 
 - **2026-06-13 (rev 1):** Datatväg 1B (helpern som git-peer + loopback-brygga) →
