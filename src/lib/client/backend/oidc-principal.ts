@@ -7,8 +7,9 @@
  * användar-allowlisten i firma.git via `OidcAuthProvider` (#223).
  *
  * `sub`/`iss`-bindning utelämnas här (oauth2-proxy:s userinfo ger inte dem) →
- * matchning sker på email (obunden = första-login-vägen i resolvern). Att
- * skriva bindningen vid första login hanteras separat (#224).
+ * matchning sker på email. Det är den BESLUTADE modellen (#224, ADR 0009):
+ * single-IdP → email-only; sub/iss-bindning uppskjuten tills multi-IdP blir
+ * aktuellt (kräver då att oauth2-proxy exponerar sub/iss).
  */
 
 import { z } from "zod";
