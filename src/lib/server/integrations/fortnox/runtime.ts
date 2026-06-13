@@ -56,6 +56,8 @@ function fortnoxConfigFromEnv(
     scopes: ["bookkeeping"],
     ...(env.AVA_FORTNOX_AUTH_BASE ? { authBase: env.AVA_FORTNOX_AUTH_BASE } : {}),
     ...(env.AVA_FORTNOX_API_BASE ? { apiBase: env.AVA_FORTNOX_API_BASE } : {}),
+    // Opt-in service-konto (#213); default (utelämnad) = user-consent.
+    ...(env.AVA_FORTNOX_ACCOUNT_TYPE === "service" ? { accountType: "service" as const } : {}),
   });
 }
 
