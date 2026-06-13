@@ -86,3 +86,16 @@ obevakade källor.
 - *Domstols-/fri-text-betalningar utan OCR (Domstolsverket)* — egen uppföljning
   i **#175** (fri-text-match på camt `RmtInf/Ustrd`) + **#173** (fordran utan
   faktura). Utanför denna spike.
+
+## Driftskrav: OCR-låst bankgiro (#175)
+
+Sverige inför OCR-kontroll på filbetalningar — ett bankgiro som är **låst för
+OCR kan AVVISA** inbetalningar utan OCR-referens. Domstolsverket betalar
+kostnadsräkningar med **fri referens** (ärende-/målnummer, ej OCR), så byrån
+måste ta emot domstolsbetalningar på ett bankgiro/konto som **tillåter fri
+referens** (ej OCR-låst). Avprickningen (#175) matchar dessa på ärende-/
+målnummer mot förväntade fordringar (#173) och föreslår avprickning för manuell
+bekräftelse (aldrig auto-bokföring av pengar). Referensformat verifierat med
+byrå: `<ärendenummer> <målnummer> <ansvarig advokat>`, t.ex.
+`1154602 3288-26 ENOKSSON` — finns i både camt `<InstrId>` och `<Strd>/<Nb>`.
+Fixtur: `test/fixtures/camt-seb/camt.053_domstolsverket.xml` (anonymiserad).

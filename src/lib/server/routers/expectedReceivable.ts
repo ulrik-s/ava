@@ -46,6 +46,33 @@ export const expectedReceivableRouter = router({
       });
     }),
 
+  /**
+   * Matchnings-kandidater för camt-avprickning (#175): öppna (PENDING)
+   * fordringar berikade med ärende-/målnummer (matchningsnycklarna). Belopp
+   * och referens matchas client-side av `matchReceivables`.
+   */
+  candidates: orgProcedure.query(async ({ ctx }) => {
+    const rows = (await ctx.dataStore.expectedReceivables.findMany({
+      where: { organizationId: ctx.orgId, status: "PENDING" },
+      orderBy: { createdAt: "desc" },
+    })) as Array<{ id: string; matterId: string; description: string; expectedAmount: number }>;
+    const matters = (await ctx.dataStore.matters.findMany({
+      where: { organizationId: ctx.orgId },
+    })) as Array<{ id: string; matterNumber?: string | null; courtCaseNumber?: string | null }>;
+    const byId = new Map(matters.map((m) => [String(m.id), m]));
+    return rows.map((r) => {
+      const m = byId.get(String(r.matterId));
+      return {
+        id: String(r.id),
+        description: r.description,
+        expectedAmount: r.expectedAmount,
+        matterId: String(r.matterId),
+        matterNumber: m?.matterNumber ?? null,
+        courtCaseNumber: m?.courtCaseNumber ?? null,
+      };
+    });
+  }),
+
   /** Registrera en förväntad domstolsbetalning (status PENDING). */
   create: orgProcedure
     .input(z.object({

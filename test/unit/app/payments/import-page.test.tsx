@@ -26,10 +26,17 @@ const invoiceList = {
 
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
-    useUtils: () => ({ invoice: { list: { invalidate } } }),
+    useUtils: () => ({
+      invoice: { list: { invalidate } },
+      expectedReceivable: { candidates: { invalidate }, list: { invalidate } },
+    }),
     invoice: {
       list: { useQuery: () => invoiceList },
       recordPayment: { useMutation: () => ({ mutateAsync, isPending: false }) },
+    },
+    expectedReceivable: {
+      candidates: { useQuery: () => ({ data: [] as Array<Record<string, unknown>> }) },
+      settle: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
     },
   },
 }));
