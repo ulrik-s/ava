@@ -37,9 +37,9 @@
 >   externt system (Fortnox) har var sin obrutna serie, aldrig en delad räknare
 >   (lagligt enl. 17 kap. 24 § 2 ML / art. 226.2 momsdirektivet).
 > - [ADR 0013](./adr/0013-office-add-in-arkitektur.md) — Office-add-ins (Word/
->   Outlook): add-in:en är en git-medveten AVA-klient som importerar web-appens
->   lib (git-db-klient + routrar) och kör/pushar själv — INGEN helper i
->   datatvägen; egen push-credential (PAT v1); delad task-pane-shell.
+>   Outlook): tunna servern äger git-db + exponerar tRPC-over-HTTP; add-ins är
+>   tunna HTTP-klienter (Bearer-PAT). Web-app/demo förblir lokal-först (USP).
+>   Delad task-pane-shell; #84/#72 tunna lager.
 
 ## Tre lager
 
