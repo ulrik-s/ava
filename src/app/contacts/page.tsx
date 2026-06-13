@@ -35,14 +35,29 @@ function ContactsTable({ rows }: { rows: ContactRow[] }) {
   return <DataTable prefKey="list.contacts" columns={contactColumns} data={rows} rowKey={(c) => c.id} emptyMessage="Inga kontakter." />;
 }
 
-// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'ContactsContent' has a complexity of 11. Maximum allowed is 8.)
-function ContactsContent() {
-  const searchParams = useSearchParams();
-  const readOnly = useIsReadOnly();
-  const [search, setSearch] = useState("");
-  const [typeFilter, setTypeFilter] = useState("");
-  const [page, setPage] = useState(1);
-  const [showForm, setShowForm] = useState(searchParams.get("new") === "1");
+interface ContactForm {
+  name: string;
+  contactType: string;
+  personalNumber: string;
+  orgNumber: string;
+  email: string;
+  phone: string;
+  address: string;
+  notes: string;
+}
+
+interface NewContactFormProps {
+  form: ContactForm;
+  setForm: (f: ContactForm) => void;
+  onSubmit: (e: React.FormEvent) => void;
+  onCancel: () => void;
+  isPending: boolean;
+  error: { message: string } | null | undefined;
+}
+
+/** Ny-kontakt-formuläret (utbrutet ur ContactsContent, #6-ratchet). Äger sina
+ *  fält-id:n; presentational (form-state + submit som props). */
+function NewContactForm({ form, setForm, onSubmit, onCancel, isPending, error }: NewContactFormProps) {
   const nameId = useId();
   const typeId = useId();
   const personalNumberId = useId();
@@ -51,6 +66,110 @@ function ContactsContent() {
   const phoneId = useId();
   const addressId = useId();
   const notesId = useId();
+  const showPersonalNumber = form.contactType === "PERSON";
+  return (
+    <form onSubmit={onSubmit} className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
+      <h2 className="font-semibold text-gray-900 mb-4">Ny kontakt</h2>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label htmlFor={nameId} className="block text-sm font-medium text-gray-700 mb-1">Namn *</label>
+          <input id={nameId} type="text" required value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label htmlFor={typeId} className="block text-sm font-medium text-gray-700 mb-1">Typ</label>
+          <select id={typeId} value={form.contactType}
+            onChange={(e) => setForm({ ...form, contactType: e.target.value })}
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
+            {contactTypeOptions.map((t) => (
+              <option key={t.value} value={t.value}>{t.label}</option>
+            ))}
+          </select>
+        </div>
+        {showPersonalNumber ? (
+          <div>
+            <label htmlFor={personalNumberId} className="block text-sm font-medium text-gray-700 mb-1">Personnummer</label>
+            <input id={personalNumberId} type="text" value={form.personalNumber}
+              onChange={(e) => setForm({ ...form, personalNumber: e.target.value })}
+              placeholder="YYYYMMDD-XXXX"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+          </div>
+        ) : (
+          <div>
+            <label htmlFor={orgNumberId} className="block text-sm font-medium text-gray-700 mb-1">Organisationsnummer</label>
+            <input id={orgNumberId} type="text" value={form.orgNumber}
+              onChange={(e) => setForm({ ...form, orgNumber: e.target.value })}
+              placeholder="XXXXXX-XXXX"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+          </div>
+        )}
+        <div>
+          <label htmlFor={emailId} className="block text-sm font-medium text-gray-700 mb-1">E-post</label>
+          <input id={emailId} type="email" value={form.email}
+            onChange={(e) => setForm({ ...form, email: e.target.value })}
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label htmlFor={phoneId} className="block text-sm font-medium text-gray-700 mb-1">Telefon</label>
+          <input id={phoneId} type="text" value={form.phone}
+            onChange={(e) => setForm({ ...form, phone: e.target.value })}
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label htmlFor={addressId} className="block text-sm font-medium text-gray-700 mb-1">Adress</label>
+          <input id={addressId} type="text" value={form.address}
+            onChange={(e) => setForm({ ...form, address: e.target.value })}
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+        </div>
+        <div className="md:col-span-2">
+          <label htmlFor={notesId} className="block text-sm font-medium text-gray-700 mb-1">Anteckningar</label>
+          <textarea id={notesId} value={form.notes}
+            onChange={(e) => setForm({ ...form, notes: e.target.value })}
+            rows={2} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+        </div>
+      </div>
+      <div className="mt-4 flex gap-2">
+        <button type="submit" disabled={isPending}
+          className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50">
+          {isPending ? "Sparar..." : "Spara kontakt"}
+        </button>
+        <button type="button" onClick={onCancel}
+          className="px-4 py-2 bg-white text-gray-700 text-sm font-medium rounded-lg border border-gray-300 hover:bg-gray-50">
+          Avbryt
+        </button>
+      </div>
+      {error && <p className="mt-2 text-sm text-red-600">{error.message}</p>}
+    </form>
+  );
+}
+
+/** Pagineringsfot (utbruten ur ContactsContent, #6-ratchet). Renderar inget
+ *  när det bara finns en sida. */
+function ListPager(
+  { data, page, onPage }: { data: { pages: number; total: number } | undefined; page: number; onPage: (p: number) => void },
+) {
+  if (!data || data.pages <= 1) return null;
+  return (
+    <div className="px-6 py-3 mt-2 bg-white border border-gray-200 rounded-lg flex items-center justify-between">
+      <p className="text-sm text-gray-500">Sida {page} av {data.pages} ({data.total} totalt)</p>
+      <div className="flex gap-2">
+        <button disabled={page <= 1} onClick={() => onPage(page - 1)}
+          className="px-3 py-1 text-sm border rounded disabled:opacity-50">Föregående</button>
+        <button disabled={page >= data.pages} onClick={() => onPage(page + 1)}
+          className="px-3 py-1 text-sm border rounded disabled:opacity-50">Nästa</button>
+      </div>
+    </div>
+  );
+}
+
+function ContactsContent() {
+  const searchParams = useSearchParams();
+  const readOnly = useIsReadOnly();
+  const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState("");
+  const [page, setPage] = useState(1);
+  const [showForm, setShowForm] = useState(searchParams.get("new") === "1");
 
   const contacts = trpc.contacts.list.useQuery({
     search,
@@ -68,9 +187,9 @@ function ContactsContent() {
     },
   });
 
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<ContactForm>({
     name: "",
-    contactType: "PERSON" as string,
+    contactType: "PERSON",
     personalNumber: "",
     orgNumber: "",
     email: "",
@@ -83,8 +202,6 @@ function ContactsContent() {
     e.preventDefault();
     createContact.mutate(form as Parameters<typeof createContact.mutate>[0]);
   }
-
-  const showPersonalNumber = form.contactType === "PERSON";
 
   return (
     <div>
@@ -101,81 +218,14 @@ function ContactsContent() {
       </div>
 
       {showForm && (
-        <form onSubmit={handleSubmit} className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
-          <h2 className="font-semibold text-gray-900 mb-4">Ny kontakt</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label htmlFor={nameId} className="block text-sm font-medium text-gray-700 mb-1">Namn *</label>
-              <input id={nameId} type="text" required value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-            </div>
-            <div>
-              <label htmlFor={typeId} className="block text-sm font-medium text-gray-700 mb-1">Typ</label>
-              <select id={typeId} value={form.contactType}
-                onChange={(e) => setForm({ ...form, contactType: e.target.value })}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
-                {contactTypeOptions.map((t) => (
-                  <option key={t.value} value={t.value}>{t.label}</option>
-                ))}
-              </select>
-            </div>
-            {showPersonalNumber ? (
-              <div>
-                <label htmlFor={personalNumberId} className="block text-sm font-medium text-gray-700 mb-1">Personnummer</label>
-                <input id={personalNumberId} type="text" value={form.personalNumber}
-                  onChange={(e) => setForm({ ...form, personalNumber: e.target.value })}
-                  placeholder="YYYYMMDD-XXXX"
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-              </div>
-            ) : (
-              <div>
-                <label htmlFor={orgNumberId} className="block text-sm font-medium text-gray-700 mb-1">Organisationsnummer</label>
-                <input id={orgNumberId} type="text" value={form.orgNumber}
-                  onChange={(e) => setForm({ ...form, orgNumber: e.target.value })}
-                  placeholder="XXXXXX-XXXX"
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-              </div>
-            )}
-            <div>
-              <label htmlFor={emailId} className="block text-sm font-medium text-gray-700 mb-1">E-post</label>
-              <input id={emailId} type="email" value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-            </div>
-            <div>
-              <label htmlFor={phoneId} className="block text-sm font-medium text-gray-700 mb-1">Telefon</label>
-              <input id={phoneId} type="text" value={form.phone}
-                onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-            </div>
-            <div>
-              <label htmlFor={addressId} className="block text-sm font-medium text-gray-700 mb-1">Adress</label>
-              <input id={addressId} type="text" value={form.address}
-                onChange={(e) => setForm({ ...form, address: e.target.value })}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-            </div>
-            <div className="md:col-span-2">
-              <label htmlFor={notesId} className="block text-sm font-medium text-gray-700 mb-1">Anteckningar</label>
-              <textarea id={notesId} value={form.notes}
-                onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                rows={2} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-            </div>
-          </div>
-          <div className="mt-4 flex gap-2">
-            <button type="submit" disabled={createContact.isPending}
-              className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50">
-              {createContact.isPending ? "Sparar..." : "Spara kontakt"}
-            </button>
-            <button type="button" onClick={() => setShowForm(false)}
-              className="px-4 py-2 bg-white text-gray-700 text-sm font-medium rounded-lg border border-gray-300 hover:bg-gray-50">
-              Avbryt
-            </button>
-          </div>
-          {createContact.error && (
-            <p className="mt-2 text-sm text-red-600">{createContact.error.message}</p>
-          )}
-        </form>
+        <NewContactForm
+          form={form}
+          setForm={setForm}
+          onSubmit={handleSubmit}
+          onCancel={() => setShowForm(false)}
+          isPending={createContact.isPending}
+          error={createContact.error}
+        />
       )}
 
       <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-4">
@@ -193,17 +243,7 @@ function ContactsContent() {
       </div>
 
       <ContactsTable rows={(contacts.data?.contacts ?? []) as ContactRow[]} />
-      {contacts.data && contacts.data.pages > 1 && (
-        <div className="px-6 py-3 mt-2 bg-white border border-gray-200 rounded-lg flex items-center justify-between">
-          <p className="text-sm text-gray-500">Sida {page} av {contacts.data.pages} ({contacts.data.total} totalt)</p>
-          <div className="flex gap-2">
-            <button disabled={page <= 1} onClick={() => setPage(page - 1)}
-              className="px-3 py-1 text-sm border rounded disabled:opacity-50">Föregående</button>
-            <button disabled={page >= contacts.data.pages} onClick={() => setPage(page + 1)}
-              className="px-3 py-1 text-sm border rounded disabled:opacity-50">Nästa</button>
-          </div>
-        </div>
-      )}
+      <ListPager data={contacts.data} page={page} onPage={setPage} />
     </div>
   );
 }
