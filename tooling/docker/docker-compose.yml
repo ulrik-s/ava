@@ -122,9 +122,18 @@ services:
       AVA_SR_GIT_USER: ${AVA_SR_GIT_USER:-}
       AVA_SR_GIT_TOKEN: ${AVA_SR_GIT_TOKEN:-}
       AVA_SR_POLL_INTERVAL_MS: ${AVA_SR_POLL_INTERVAL_MS:-15000}
+      # tRPC-over-HTTP-API (#83): nginx /api/ proxar hit. Lyssnar på 0.0.0.0
+      # (annan container når den över docker-nätet); porten publiceras INTE
+      # mot host:en — bara nåbar via nginx-fronten. API:t monteras bara när
+      # minst en token finns i AVA_SR_API_TOKENS (komma-separerade Bearer-PAT).
+      AVA_SR_API_PORT: ${AVA_SR_API_PORT:-9443}
+      AVA_SR_API_HOST: 0.0.0.0
+      AVA_SR_API_TOKENS: ${AVA_SR_API_TOKENS:-}
       # Fortnox-connector (#82/#79): aktiveras när valv-env + mount finns.
       AVA_SECRETS_KEY: ${AVA_SECRETS_KEY:-}
       AVA_SECRETS_FILE: ${AVA_SECRETS_FILE:-}
+    expose:
+      - "9443"
     volumes:
       - server_work:/var/lib/ava
       # Montera byråns secrets-valv (utanför repo:t) för Fortnox-connectorn:

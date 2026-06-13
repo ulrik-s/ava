@@ -15,13 +15,18 @@
  * git-config/credential-helper — inga hemligheter via env.
  */
 
-import { ENV_KEYS, loadRuntimeConfig } from "@/lib/server/local-first/server-runtime-config";
+import type { Server } from "node:http";
+
+import { ENV_KEYS, loadRuntimeConfig, type RuntimeConfig } from "@/lib/server/local-first/server-runtime-config";
 import { startServerRuntime } from "@/lib/server/local-first/server-runtime";
 import { buildFortnoxJob } from "@/lib/server/integrations/fortnox/runtime";
 import { buildBankFilePaymentsJob } from "@/lib/server/integrations/ledger/bank-file-runtime";
 import { buildDispatchJob } from "@/lib/server/integrations/email/dispatch-runtime";
 import { makeRulesJob } from "@/lib/server/local-first/rules-job";
 import { composeJobs } from "@/lib/server/local-first/compose-jobs";
+import { Mutex } from "@/lib/server/concurrency/mutex";
+import { buildServerApiHandler } from "@/lib/server/http/server-api";
+import { serveFetchHandler } from "@/lib/server/http/node-http-adapter";
 
 const HELP = `ava server-runtime (ADR 0005 fas 1)
 
@@ -44,10 +49,39 @@ Miljövariabler:
   ${ENV_KEYS.pollIntervalMs}  (default 15000)
   ${ENV_KEYS.maxRetries}       (default 3)
   ${ENV_KEYS.principalId} / ${ENV_KEYS.principalEmail} / ${ENV_KEYS.principalName} / ${ENV_KEYS.principalRole}
+  ${ENV_KEYS.httpPort}        (valfri)  port för tRPC-over-HTTP-API:t (#83)
+  ${ENV_KEYS.apiTokens}      (valfri)  komma-separerade Bearer-PAT:er mot API:t
 `;
 
 function log(msg: string): void {
   console.log(`[server-runtime] ${msg}`);
+}
+
+/**
+ * Montera det additiva tRPC-over-HTTP-API:t (#83) om port + token finns.
+ * Delar `lock` med peer-loopen (ADR 0013 beslut A). Returnerar servern (att
+ * stänga vid nedstängning) eller `undefined` när API:t inte är konfigurerat.
+ */
+function startApi(config: RuntimeConfig, lock: <T>(fn: () => Promise<T>) => Promise<T>): Server | undefined {
+  const handler = buildServerApiHandler(
+    {
+      workDir: config.workDir,
+      remote: config.remote,
+      branch: config.branch,
+      apiTokens: config.apiTokens,
+      principal: config.principal,
+    },
+    { lock, log },
+  );
+  if (!handler || config.httpPort === undefined) {
+    if (config.apiTokens.length > 0 || config.httpPort !== undefined) {
+      log("HTTP-API ej monterat: kräver både " + `${ENV_KEYS.httpPort} och ${ENV_KEYS.apiTokens}`);
+    }
+    return undefined;
+  }
+  const server = serveFetchHandler(handler, { port: config.httpPort, hostname: config.httpHost });
+  log(`tRPC-API lyssnar på ${config.httpHost}:${config.httpPort} (${config.apiTokens.length} token)`);
+  return server;
 }
 
 async function main(): Promise<void> {
@@ -58,6 +92,11 @@ async function main(): Promise<void> {
   }
 
   const config = loadRuntimeConfig();
+  // EN delad Mutex (ADR 0013 beslut A): peer-loopen och HTTP-API:t serialiseras
+  // mot samma working-copy så de aldrig skriver git samtidigt.
+  const mutex = new Mutex();
+  const lock = <T>(fn: () => Promise<T>): Promise<T> => mutex.runExclusive(fn);
+
   // Regelmotor (#80): alltid på — schemalagda idempotenta regler (påminnelser).
   // Fortnox-connector (#82): bara när byrån anslutit Fortnox (valv + tokens).
   // composeJobs kör båda i samma cykel; no-empty-commit-grinden (#80) ser till
@@ -69,11 +108,13 @@ async function main(): Promise<void> {
   // Fakturautskick (#180): bara när SMTP-uppgifter finns i valvet; annars null.
   const dispatch = await buildDispatchJob({ log });
   const job = composeJobs([makeRulesJob({ log }), fortnox, payments, dispatch]);
-  const loop = await startServerRuntime(config, job ? { job } : {});
+  const loop = await startServerRuntime(config, { ...(job ? { job } : {}), lock });
+  const apiServer = startApi(config, lock);
 
   if (argv.includes("--once")) {
     await loop.tickOnce();
     loop.stop();
+    apiServer?.close();
     return;
   }
 
@@ -81,6 +122,7 @@ async function main(): Promise<void> {
     process.on(sig, () => {
       log(`${sig} — stoppar`);
       loop.stop();
+      apiServer?.close();
       process.exit(0);
     });
   }

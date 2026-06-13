@@ -76,4 +76,32 @@ describe("loadRuntimeConfig (#118)", () => {
   it("samlar flera fel i ett kast", () => {
     expect(() => loadRuntimeConfig({})).toThrow(/repoUrl[\s\S]*workDir|workDir[\s\S]*repoUrl/);
   });
+
+  it("HTTP-API (#83): default → ingen port, inga tokens, loopback-host", () => {
+    const cfg = loadRuntimeConfig(MINIMAL);
+    expect(cfg.httpPort).toBeUndefined();
+    expect(cfg.apiTokens).toEqual([]);
+    expect(cfg.httpHost).toBe("127.0.0.1");
+  });
+
+  it("HTTP-API: parsar port, host och komma-separerade tokens (trim + tomma bort)", () => {
+    const cfg = loadRuntimeConfig({
+      ...MINIMAL,
+      AVA_SR_API_PORT: "9443",
+      AVA_SR_API_HOST: "0.0.0.0",
+      AVA_SR_API_TOKENS: " tok-a , tok-b ,, ",
+    });
+    expect(cfg.httpPort).toBe(9443);
+    expect(cfg.httpHost).toBe("0.0.0.0");
+    expect(cfg.apiTokens).toEqual(["tok-a", "tok-b"]);
+  });
+
+  it("HTTP-API: tom token-sträng → [] (default)", () => {
+    const cfg = loadRuntimeConfig({ ...MINIMAL, AVA_SR_API_TOKENS: "  ,  " });
+    expect(cfg.apiTokens).toEqual([]);
+  });
+
+  it("HTTP-API: ogiltig port kastar", () => {
+    expect(() => loadRuntimeConfig({ ...MINIMAL, AVA_SR_API_PORT: "-5" })).toThrow(/httpPort/);
+  });
 });

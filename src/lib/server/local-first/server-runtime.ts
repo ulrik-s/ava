@@ -22,6 +22,12 @@ export interface StartServerRuntimeDeps {
   /** Connector-mutationen per tick. Utelämnas → loopen kör i sync-läge. */
   job?: PeerJob;
   log?: (msg: string) => void;
+  /**
+   * Delat lås runt varje tick (#83, ADR 0013 beslut A). Entryn skapar EN
+   * Mutex och delar den mellan peer-loopen och HTTP-API:t så de aldrig skriver
+   * working-copy:n samtidigt. Utelämnas → ingen serialisering (default).
+   */
+  lock?: <T>(fn: () => Promise<T>) => Promise<T>;
 }
 
 async function defaultIsGitRepo(dir: string): Promise<boolean> {
@@ -46,6 +52,7 @@ function buildLoopDeps(config: RuntimeConfig, deps: StartServerRuntimeDeps): Pee
     intervalMs: config.pollIntervalMs,
     ...(deps.job ? { job: deps.job } : {}),
     ...(deps.log ? { log: deps.log } : {}),
+    ...(deps.lock ? { lock: deps.lock } : {}),
   };
 }
 

@@ -40,6 +40,8 @@ function cfg(over: Partial<RuntimeConfig>): RuntimeConfig {
     remote: "origin",
     pollIntervalMs: 600_000, // högt → interval-timern firar inte under testet
     maxRetries: 3,
+    httpHost: "127.0.0.1",
+    apiTokens: [],
     principal: PRINCIPAL,
     ...over,
   };
