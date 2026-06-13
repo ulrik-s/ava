@@ -42,6 +42,29 @@ jobs:
           sha256sum ava-helper-* > "ava-helper_${GITHUB_REF#refs/tags/}_checksums.txt"
           ls -lh
 
+      # Signera varje binär med release-nyckeln (#110). Helpers verifierar den
+      # detached Ed25519-signaturen mot en inbyggd pinnad pubkey före byte.
+      # Privata nyckeln (PEM) ligger som secret HELPER_SIGNING_KEY och används
+      # BARA här. Saknas secret:en → hoppa (osignerad release; nya helpers
+      # vägrar då uppdatera, fail-closed — sätt nyckeln innan skarp release).
+      - name: Sign binaries (Ed25519)
+        env:
+          HELPER_SIGNING_KEY: ${{ secrets.HELPER_SIGNING_KEY }}
+        run: |
+          if [ -z "$HELPER_SIGNING_KEY" ]; then
+            echo "::warning::HELPER_SIGNING_KEY saknas — hoppar signering (#110). Nya helpers vägrar uppdatera."
+            exit 0
+          fi
+          cd dist
+          printf '%s' "$HELPER_SIGNING_KEY" > "$RUNNER_TEMP/helper-release.key"
+          for f in ava-helper-*; do
+            case "$f" in *.sig|*.txt) continue;; esac
+            openssl pkeyutl -sign -inkey "$RUNNER_TEMP/helper-release.key" -rawin -in "$f" -out "$f.sig"
+            echo "signed $f → $f.sig"
+          done
+          rm -f "$RUNNER_TEMP/helper-release.key"
+          ls -lh
+
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:

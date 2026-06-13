@@ -16,6 +16,7 @@ import { chmod, rename } from "node:fs/promises";
 import { log } from "./log.ts";
 import { currentPlatform, type Platform } from "./platform/runtime.ts";
 import { isNewer } from "./semver.ts";
+import { acceptedPublicKeys, assertSignature, signatureAssetName } from "./update-verify.ts";
 
 export interface UpdateConfig {
   currentVersion: string;
@@ -73,7 +74,8 @@ export async function runUpdateLoop(
 /** Injicerbara beroenden för en kontroll → testbar utan nät/fs. */
 export interface CheckDeps {
   fetchReleases: (repo: string) => Promise<GithubRelease[]>;
-  replace: (url: string, targetPath: string) => Promise<void>;
+  /** Verifiera signaturen (`sigUrl`) över binären (`url`) → byt bara vid match. */
+  replace: (url: string, targetPath: string, sigUrl: string) => Promise<void>;
   targetPath: string;
   asset: string;
 }
@@ -95,8 +97,15 @@ export async function checkOnce(cfg: UpdateConfig, deps: CheckDeps = defaultChec
     log(`no asset ${deps.asset} in ${latest.tag_name}`);
     return;
   }
+  // Äkthetskrav (#110): en detached signatur MÅSTE finnas + verifieras innan
+  // byte. Saknas .sig-asseten → vägra (fail-closed), behåll gamla binären.
+  const sig = latest.assets.find((a) => a.name === signatureAssetName(deps.asset));
+  if (sig === undefined) {
+    log(`no signature ${signatureAssetName(deps.asset)} in ${latest.tag_name} — refusing update`);
+    return;
+  }
   log(`updating ${cfg.currentVersion} → ${latest.tag_name}`);
-  await deps.replace(asset.browser_download_url, deps.targetPath);
+  await deps.replace(asset.browser_download_url, deps.targetPath, sig.browser_download_url);
   cfg.onUpdated(latest.tag_name);
 }
 
@@ -124,17 +133,33 @@ export function pickLatest(
   return best;
 }
 
-/**
- * Ladda ner binären till en temp-fil bredvid målet, gör den körbar och
- * byt ut den löpande binären. På unix funkar rename-over direkt; på
- * Windows flyttas den gamla undan först (kan inte skrivas över medan den
- * körs).
- */
-export async function downloadAndReplace(url: string, targetPath: string): Promise<void> {
-  const tmpPath = `${targetPath}.new`;
+/** Hämta bytes från en URL (delad av binär- + signatur-nedladdning). */
+async function fetchBytes(url: string, what: string): Promise<Uint8Array> {
   const resp = await fetch(url);
-  if (resp.status >= 400) throw new Error(`download HTTP ${resp.status}`);
-  await Bun.write(tmpPath, resp);
+  if (resp.status >= 400) throw new Error(`${what} HTTP ${resp.status}`);
+  return new Uint8Array(await resp.arrayBuffer());
+}
+
+/**
+ * Ladda ner binären + dess detached signatur, **verifiera signaturen mot den
+ * pinnade release-nyckeln** (#110) och byt först därefter ut den löpande
+ * binären. Ingen match → kasta, behåll gamla binären (fail-closed).
+ *
+ * På unix funkar rename-over direkt; på Windows flyttas den gamla undan först
+ * (kan inte skrivas över medan den körs).
+ */
+export async function downloadAndReplace(
+  url: string,
+  targetPath: string,
+  sigUrl: string,
+  keys: readonly string[] = acceptedPublicKeys(),
+): Promise<void> {
+  const bytes = await fetchBytes(url, "download");
+  const signature = await fetchBytes(sigUrl, "signature download");
+  assertSignature(bytes, signature, keys); // kastar om osignerad/ej matchande
+
+  const tmpPath = `${targetPath}.new`;
+  await Bun.write(tmpPath, bytes);
   await chmod(tmpPath, 0o755);
   if (currentPlatform() === "windows") {
     await rename(targetPath, `${targetPath}.old`).catch(() => undefined);
