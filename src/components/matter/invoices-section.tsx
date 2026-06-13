@@ -24,20 +24,26 @@ interface InvoiceRow {
   amount: number;
 }
 
-// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'statusBadge' has a complexity of 9. Maximum allowed is 8.)
-function statusBadge(status: string, invoiceType: string): string {
-  const base = "text-[10px] rounded-full px-2 py-0.5 font-medium";
-  if (invoiceType === "ACCONTO") return `${base} bg-purple-100 text-purple-700`;
-  if (invoiceType === "FINAL") return `${base} bg-blue-100 text-blue-700`;
-  if (invoiceType === "CREDIT") return `${base} bg-orange-100 text-orange-700`;
-  switch (status) {
-    case "PAID": return `${base} bg-green-100 text-green-700`;
-    case "SENT": return `${base} bg-amber-100 text-amber-700`;
-    case "INSTALLMENT_PLAN": return `${base} bg-indigo-100 text-indigo-700`;
-    case "CANCELLED": return `${base} bg-gray-200 text-gray-600`;
-    case "BAD_DEBT": return `${base} bg-red-100 text-red-700`;
-    default: return `${base} bg-gray-100 text-gray-600`;
-  }
+const BADGE_BASE = "text-[10px] rounded-full px-2 py-0.5 font-medium";
+/** Faktura-typ vinner över status (acconto/slut/kredit får egen färg). */
+const TYPE_BADGE: Record<string, string> = {
+  ACCONTO: "bg-purple-100 text-purple-700",
+  FINAL: "bg-blue-100 text-blue-700",
+  CREDIT: "bg-orange-100 text-orange-700",
+};
+const STATUS_BADGE: Record<string, string> = {
+  PAID: "bg-green-100 text-green-700",
+  SENT: "bg-amber-100 text-amber-700",
+  INSTALLMENT_PLAN: "bg-indigo-100 text-indigo-700",
+  CANCELLED: "bg-gray-200 text-gray-600",
+  BAD_DEBT: "bg-red-100 text-red-700",
+};
+
+/** Badge-klass för en faktura: typ-färg först, annars status-färg, annars grå.
+ *  Uppslag i st.f. if/switch-kedja (håller under complexity@8). Exporterad för test. */
+export function statusBadge(status: string, invoiceType: string): string {
+  const color = TYPE_BADGE[invoiceType] ?? STATUS_BADGE[status] ?? "bg-gray-100 text-gray-600";
+  return `${BADGE_BASE} ${color}`;
 }
 
 function statusLabel(status: string): string {
