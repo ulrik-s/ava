@@ -29,11 +29,6 @@
       "count": 1
     }
   },
-  "src/app/matters/page.tsx": {
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
   "src/app/payment-plans/[id]/_client.tsx": {
     "max-lines-per-function": {
       "count": 1

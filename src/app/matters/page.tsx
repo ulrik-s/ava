@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { trpc } from "@/lib/client/trpc";
 import { useIsReadOnly } from "@/lib/client/demo/demo-mode-context";
 import { DataTable, type Column } from "@/components/ui/data-table";
+import { Pager } from "@/components/ui/pager";
 
 interface MatterRow {
   id: string;
@@ -62,29 +63,182 @@ const matterColumns: Column<MatterRow>[] = [
     render: (m) => <span className="text-sm text-gray-500">{m._count.contacts}</span> },
 ];
 
-// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'MattersContent' has a complexity of 11. Maximum allowed is 8.)
-function MattersContent() {
-  const searchParams = useSearchParams();
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"ACTIVE" | "CLOSED" | "ARCHIVED" | "">("");
-  const [employeeId, setEmployeeId] = useState("");
-  const [page, setPage] = useState(1);
-  const [showForm, setShowForm] = useState(searchParams.get("new") === "1");
-  const readOnly = useIsReadOnly();
+type StatusFilter = "ACTIVE" | "CLOSED" | "ARCHIVED" | "";
+type NamedOption = { id: string; name: string };
+
+interface MatterForm {
+  title: string;
+  description: string;
+  matterType: string;
+  klientId: string;
+  responsibleLawyerId: string;
+  courtCaseNumber: string;
+  isTaxeArende: boolean;
+}
+
+/** Bygg query-args för matter.list (flyttar `|| undefined`-grenarna ut ur
+ *  MattersContent → håller den under complexity@8). */
+function matterListArgs(p: { search: string; status: StatusFilter; employeeId: string; page: number }) {
+  return {
+    search: p.search,
+    status: p.status || undefined,
+    employeeId: p.employeeId || undefined,
+    page: p.page,
+    pageSize: 20,
+  };
+}
+
+interface NewMatterFormProps {
+  form: MatterForm;
+  setForm: (f: MatterForm) => void;
+  contactsData: { contacts: NamedOption[] } | undefined;
+  employeesData: { users: NamedOption[] } | undefined;
+  onSubmit: (e: React.FormEvent) => void;
+  isPending: boolean;
+  error: { message: string } | null | undefined;
+}
+
+/** Nytt-ärende-formuläret (utbrutet ur MattersContent, #6-ratchet). Äger sina
+ *  fält-id:n; presentational (form-state + submit som props). */
+function NewMatterForm({ form, setForm, contactsData, employeesData, onSubmit, isPending, error }: NewMatterFormProps) {
   const titleId = useId();
   const klientId = useId();
   const matterTypeId = useId();
   const descriptionId = useId();
   const responsibleId = useId();
   const courtCaseId = useId();
+  return (
+    <form onSubmit={onSubmit} className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
+      <h2 className="font-semibold text-gray-900 mb-4">Nytt ärende</h2>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label htmlFor={titleId} className="block text-sm font-medium text-gray-700 mb-1">Titel *</label>
+          <input id={titleId} type="text" required value={form.title}
+            onChange={(e) => setForm({ ...form, title: e.target.value })}
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label htmlFor={klientId} className="block text-sm font-medium text-gray-700 mb-1">Klient</label>
+          <select id={klientId} value={form.klientId}
+            onChange={(e) => setForm({ ...form, klientId: e.target.value })}
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
+            <option value="">Välj klient (valfritt)...</option>
+            {contactsData?.contacts.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label htmlFor={matterTypeId} className="block text-sm font-medium text-gray-700 mb-1">Ärendetyp</label>
+          <input id={matterTypeId} type="text" value={form.matterType}
+            onChange={(e) => setForm({ ...form, matterType: e.target.value })}
+            placeholder="T.ex. Familjerätt, Brottmål..."
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label htmlFor={responsibleId} className="block text-sm font-medium text-gray-700 mb-1">Ansvarig advokat/jurist</label>
+          <select id={responsibleId} value={form.responsibleLawyerId}
+            onChange={(e) => setForm({ ...form, responsibleLawyerId: e.target.value })}
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
+            <option value="">Jag själv (standard)</option>
+            {employeesData?.users.map((u) => (
+              <option key={u.id} value={u.id}>{u.name}</option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-gray-500">Styr ärendenummerserien (juristens prefix).</p>
+        </div>
+        <div>
+          <label htmlFor={courtCaseId} className="block text-sm font-medium text-gray-700 mb-1">Domstolens målnummer</label>
+          <input id={courtCaseId} type="text" value={form.courtCaseNumber}
+            onChange={(e) => setForm({ ...form, courtCaseNumber: e.target.value })}
+            placeholder="t.ex. B 1234-26 (valfritt)"
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono" />
+          <p className="mt-1 text-xs text-gray-500">Matchningsnyckel för domstolsbetalningar (#173).</p>
+        </div>
+        <div className="md:col-span-2">
+          <label htmlFor={descriptionId} className="block text-sm font-medium text-gray-700 mb-1">Beskrivning</label>
+          <textarea id={descriptionId} value={form.description}
+            onChange={(e) => setForm({ ...form, description: e.target.value })}
+            rows={2} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+        </div>
+        <div className="md:col-span-2">
+          <label className="inline-flex items-start gap-2 text-sm cursor-pointer">
+            <input
+              type="checkbox"
+              checked={form.isTaxeArende}
+              onChange={(e) => setForm({ ...form, isTaxeArende: e.target.checked })}
+              className="mt-0.5"
+            />
+            <span>
+              <span className="font-medium text-gray-900">Taxeärende</span>
+              <span className="block text-xs text-gray-500 mt-0.5">
+                Ersättning enligt Domstolsverkets fastställda taxa (schablon)
+                istället för löpande timdebitering. Vanligast för brottmål med
+                offentlig försvarare, konkursförvaltning och förordnandemål.
+              </span>
+            </span>
+          </label>
+        </div>
+      </div>
+      <div className="mt-4 flex gap-2">
+        <button type="submit" disabled={isPending}
+          className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50">
+          {isPending ? "Skapar..." : "Skapa ärende"}
+        </button>
+      </div>
+      {error && <p className="mt-2 text-sm text-red-600">{error.message}</p>}
+    </form>
+  );
+}
 
-  const matters = trpc.matter.list.useQuery({
-    search,
-    status: statusFilter || undefined,
-    employeeId: employeeId || undefined,
-    page,
-    pageSize: 20,
-  });
+interface MatterFiltersProps {
+  search: string;
+  status: StatusFilter;
+  employeeId: string;
+  employeesData: { users: NamedOption[] } | undefined;
+  onSearch: (v: string) => void;
+  onStatus: (v: StatusFilter) => void;
+  onEmployee: (v: string) => void;
+}
+
+/** Sök- + status- + medarbetar-filter (utbrutet ur MattersContent, #6-ratchet). */
+function MatterFilters({ search, status, employeeId, employeesData, onSearch, onStatus, onEmployee }: MatterFiltersProps) {
+  return (
+    <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-4">
+      <input type="text" placeholder="Sök ärenden..." value={search}
+        onChange={(e) => onSearch(e.target.value)}
+        className="flex-1 sm:max-w-md rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+      <select value={status}
+        onChange={(e) => onStatus(e.target.value as StatusFilter)}
+        className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
+        <option value="">Alla statusar</option>
+        <option value="ACTIVE">Aktiva</option>
+        <option value="CLOSED">Stängda</option>
+        <option value="ARCHIVED">Arkiverade</option>
+      </select>
+      <select value={employeeId}
+        onChange={(e) => onEmployee(e.target.value)}
+        title="Visa ärenden som medarbetaren har arbetat på (har tidsposter på)"
+        className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
+        <option value="">Alla medarbetare</option>
+        {employeesData?.users.map((u) => (
+          <option key={u.id} value={u.id}>{u.name}</option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+function MattersContent() {
+  const searchParams = useSearchParams();
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("");
+  const [employeeId, setEmployeeId] = useState("");
+  const [page, setPage] = useState(1);
+  const [showForm, setShowForm] = useState(searchParams.get("new") === "1");
+  const readOnly = useIsReadOnly();
+
+  const matters = trpc.matter.list.useQuery(matterListArgs({ search, status: statusFilter, employeeId, page }));
 
   const contacts = trpc.contacts.list.useQuery({ pageSize: 100 });
   const employees = trpc.user.list.useQuery();
@@ -97,7 +251,7 @@ function MattersContent() {
     },
   });
 
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<MatterForm>({
     title: "",
     description: "",
     matterType: "",
@@ -134,110 +288,26 @@ function MattersContent() {
       </div>
 
       {showForm && (
-        <form onSubmit={handleSubmit} className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
-          <h2 className="font-semibold text-gray-900 mb-4">Nytt ärende</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label htmlFor={titleId} className="block text-sm font-medium text-gray-700 mb-1">Titel *</label>
-              <input id={titleId} type="text" required value={form.title}
-                onChange={(e) => setForm({ ...form, title: e.target.value })}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-            </div>
-            <div>
-              <label htmlFor={klientId} className="block text-sm font-medium text-gray-700 mb-1">Klient</label>
-              <select id={klientId} value={form.klientId}
-                onChange={(e) => setForm({ ...form, klientId: e.target.value })}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
-                <option value="">Välj klient (valfritt)...</option>
-                {contacts.data?.contacts.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label htmlFor={matterTypeId} className="block text-sm font-medium text-gray-700 mb-1">Ärendetyp</label>
-              <input id={matterTypeId} type="text" value={form.matterType}
-                onChange={(e) => setForm({ ...form, matterType: e.target.value })}
-                placeholder="T.ex. Familjerätt, Brottmål..."
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-            </div>
-            <div>
-              <label htmlFor={responsibleId} className="block text-sm font-medium text-gray-700 mb-1">Ansvarig advokat/jurist</label>
-              <select id={responsibleId} value={form.responsibleLawyerId}
-                onChange={(e) => setForm({ ...form, responsibleLawyerId: e.target.value })}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
-                <option value="">Jag själv (standard)</option>
-                {employees.data?.users.map((u) => (
-                  <option key={u.id} value={u.id}>{u.name}</option>
-                ))}
-              </select>
-              <p className="mt-1 text-xs text-gray-500">Styr ärendenummerserien (juristens prefix).</p>
-            </div>
-            <div>
-              <label htmlFor={courtCaseId} className="block text-sm font-medium text-gray-700 mb-1">Domstolens målnummer</label>
-              <input id={courtCaseId} type="text" value={form.courtCaseNumber}
-                onChange={(e) => setForm({ ...form, courtCaseNumber: e.target.value })}
-                placeholder="t.ex. B 1234-26 (valfritt)"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono" />
-              <p className="mt-1 text-xs text-gray-500">Matchningsnyckel för domstolsbetalningar (#173).</p>
-            </div>
-            <div className="md:col-span-2">
-              <label htmlFor={descriptionId} className="block text-sm font-medium text-gray-700 mb-1">Beskrivning</label>
-              <textarea id={descriptionId} value={form.description}
-                onChange={(e) => setForm({ ...form, description: e.target.value })}
-                rows={2} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-            </div>
-            <div className="md:col-span-2">
-              <label className="inline-flex items-start gap-2 text-sm cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={form.isTaxeArende}
-                  onChange={(e) => setForm({ ...form, isTaxeArende: e.target.checked })}
-                  className="mt-0.5"
-                />
-                <span>
-                  <span className="font-medium text-gray-900">Taxeärende</span>
-                  <span className="block text-xs text-gray-500 mt-0.5">
-                    Ersättning enligt Domstolsverkets fastställda taxa (schablon)
-                    istället för löpande timdebitering. Vanligast för brottmål med
-                    offentlig försvarare, konkursförvaltning och förordnandemål.
-                  </span>
-                </span>
-              </label>
-            </div>
-          </div>
-          <div className="mt-4 flex gap-2">
-            <button type="submit" disabled={createMatter.isPending}
-              className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50">
-              {createMatter.isPending ? "Skapar..." : "Skapa ärende"}
-            </button>
-          </div>
-          {createMatter.error && <p className="mt-2 text-sm text-red-600">{createMatter.error.message}</p>}
-        </form>
+        <NewMatterForm
+          form={form}
+          setForm={setForm}
+          contactsData={contacts.data}
+          employeesData={employees.data}
+          onSubmit={handleSubmit}
+          isPending={createMatter.isPending}
+          error={createMatter.error}
+        />
       )}
 
-      <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-4">
-        <input type="text" placeholder="Sök ärenden..." value={search}
-          onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-          className="flex-1 sm:max-w-md rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-        <select value={statusFilter}
-          onChange={(e) => { setStatusFilter(e.target.value as typeof statusFilter); setPage(1); }}
-          className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
-          <option value="">Alla statusar</option>
-          <option value="ACTIVE">Aktiva</option>
-          <option value="CLOSED">Stängda</option>
-          <option value="ARCHIVED">Arkiverade</option>
-        </select>
-        <select value={employeeId}
-          onChange={(e) => { setEmployeeId(e.target.value); setPage(1); }}
-          title="Visa ärenden som medarbetaren har arbetat på (har tidsposter på)"
-          className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
-          <option value="">Alla medarbetare</option>
-          {employees.data?.users.map((u) => (
-            <option key={u.id} value={u.id}>{u.name}</option>
-          ))}
-        </select>
-      </div>
+      <MatterFilters
+        search={search}
+        status={statusFilter}
+        employeeId={employeeId}
+        employeesData={employees.data}
+        onSearch={(v) => { setSearch(v); setPage(1); }}
+        onStatus={(v) => { setStatusFilter(v); setPage(1); }}
+        onEmployee={(v) => { setEmployeeId(v); setPage(1); }}
+      />
 
       <DataTable
         prefKey="list.matters"
@@ -246,15 +316,7 @@ function MattersContent() {
         rowKey={(m) => m.id}
         emptyMessage="Inga ärenden."
       />
-      {matters.data && matters.data.pages > 1 && (
-        <div className="px-6 py-3 mt-2 bg-white border border-gray-200 rounded-lg flex items-center justify-between">
-          <p className="text-sm text-gray-500">Sida {page} av {matters.data.pages}</p>
-          <div className="flex gap-2">
-            <button disabled={page <= 1} onClick={() => setPage(page - 1)} className="px-3 py-1 text-sm border rounded disabled:opacity-50">Föregående</button>
-            <button disabled={page >= matters.data.pages} onClick={() => setPage(page + 1)} className="px-3 py-1 text-sm border rounded disabled:opacity-50">Nästa</button>
-          </div>
-        </div>
-      )}
+      <Pager data={matters.data} page={page} onPage={setPage} />
     </div>
   );
 }
