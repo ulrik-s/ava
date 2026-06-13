@@ -13,6 +13,8 @@
 
 import { uuidv5, AVA_NAMESPACE } from "@/lib/shared/uuid-derive";
 import { userSchema, type User } from "@/lib/shared/schemas/user";
+import { organizationSchema, type Organization } from "@/lib/shared/schemas/organization";
+import { CURRENT_SCHEMA_VERSION } from "@/lib/shared/schema-version";
 
 export interface AdminBootstrapInput {
   email: string;
@@ -43,4 +45,28 @@ export function buildAdminUserRow(input: AdminBootstrapInput): User {
 /** Relativ git-path till allowlist-raden (samma som fsa-write-back/#223). */
 export function adminUserGitPath(email: string): string {
   return `.ava/users/${email.trim().toLowerCase()}.json`;
+}
+
+/**
+ * Bygg + validera org-roten för en färsk firma.git. Utan en organisation
+ * kraschar appen (organization.getSettings → findUniqueOrThrow). Lagras i
+ * `.ava/organizations/<id>.json`.
+ */
+export function buildOrgRow(input: { id: string; name: string; now?: Date }): Organization {
+  const now = (input.now ?? new Date()).toISOString();
+  return organizationSchema.parse({
+    id: input.id,
+    name: input.name,
+    createdAt: now,
+    updatedAt: now,
+  });
+}
+
+export function orgGitPath(orgId: string): string {
+  return `.ava/organizations/${orgId}.json`;
+}
+
+/** `.ava/meta.json`-innehåll (schemaVersion) för en färsk firma.git. */
+export function metaJsonContent(): string {
+  return JSON.stringify({ schemaVersion: CURRENT_SCHEMA_VERSION }, null, 2) + "\n";
 }

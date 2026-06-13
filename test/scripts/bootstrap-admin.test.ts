@@ -1,6 +1,14 @@
 import { describe, it, expect } from "vitest-compat";
-import { buildAdminUserRow, adminUserGitPath } from "../../tooling/scripts/bootstrap-admin/core";
+import {
+  buildAdminUserRow,
+  adminUserGitPath,
+  buildOrgRow,
+  orgGitPath,
+  metaJsonContent,
+} from "../../tooling/scripts/bootstrap-admin/core";
 import { userSchema } from "@/lib/shared/schemas/user";
+import { organizationSchema } from "@/lib/shared/schemas/organization";
+import { metaJsonSchema } from "@/lib/shared/meta-json";
 import { classifyOidcLogin } from "@/lib/client/backend/oidc-principal";
 import type { AllowlistedUser } from "@/lib/server/auth/oidc-auth-provider";
 
@@ -40,6 +48,25 @@ describe("bootstrap → OIDC-login (stänger chicken-egg-loopen)", () => {
     );
     expect(outcome.kind).toBe("authorized");
     if (outcome.kind === "authorized") expect(outcome.principal.role).toBe("ADMIN");
+  });
+});
+
+describe("buildOrgRow + meta (färsk firma.git-seed)", () => {
+  it("bygger en giltig org-rad (validerar mot organizationSchema)", () => {
+    const org = buildOrgRow({ id: ORG, name: "Advokatbyrå AB", now: new Date("2026-06-13T10:00:00Z") });
+    expect(organizationSchema.safeParse(org).success).toBe(true);
+    expect(org.id).toBe(ORG);
+    expect(org.name).toBe("Advokatbyrå AB");
+  });
+
+  it("orgGitPath pekar på .ava/organizations/<id>.json", () => {
+    expect(orgGitPath(ORG)).toBe(`.ava/organizations/${ORG}.json`);
+  });
+
+  it("metaJsonContent är giltig meta.json med schemaVersion", () => {
+    const parsed = metaJsonSchema.safeParse(JSON.parse(metaJsonContent()));
+    expect(parsed.success).toBe(true);
+    if (parsed.success) expect(parsed.data.schemaVersion).toBeGreaterThan(0);
   });
 });
 

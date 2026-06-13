@@ -62,6 +62,21 @@ async function runCommands(cmds: string[][], env: NodeJS.ProcessEnv): Promise<vo
   }
 }
 
+/** Bygg env för OIDC-overlayen: issuer/client-id/redirect (config) + secrets (valv). */
+async function buildOidcStartEnv(
+  cfg: ServerInstallConfig,
+  vault: EncryptedFileVault,
+): Promise<Record<string, string>> {
+  if (cfg.authMode !== "oidc" || !cfg.oidc) return {};
+  return {
+    OIDC_ISSUER_URL: cfg.oidc.issuerUrl,
+    OAUTH2_PROXY_CLIENT_ID: cfg.oidc.clientId,
+    OIDC_REDIRECT_URL: cfg.oidc.redirectUrl,
+    OAUTH2_PROXY_CLIENT_SECRET: (await vault.get(VAULT_KEYS.oidcClientSecret)) ?? "",
+    OAUTH2_PROXY_COOKIE_SECRET: (await vault.get(VAULT_KEYS.oidcCookieSecret)) ?? "",
+  };
+}
+
 const WEB_PORT = 8080;
 
 /** Preflight: docker + web-port. Returnerar false (+ loggar) vid problem. */
@@ -74,13 +89,16 @@ async function preflightOk(): Promise<boolean> {
 }
 
 /** Bygg + starta stacken och skriv ut den bootstrappade admin-token:n. */
-async function startStack(oidc: boolean): Promise<void> {
+async function startStack(oidc: boolean, extraEnv: Record<string, string> = {}): Promise<void> {
   const { spawnSync } = await import("node:child_process");
-  await runCommands(buildStartCommands({ oidc }), { ...process.env, DEMO_BASE_PATH: "/ava" });
+  const env = { ...process.env, DEMO_BASE_PATH: "/ava", ...extraEnv };
+  await runCommands(buildStartCommands({ oidc }), env);
   const [bin, ...args] = logsCommand(oidc);
-  const logs = spawnSync(bin!, args, { encoding: "utf8" }).stdout ?? "";
+  const logs = spawnSync(bin!, args, { encoding: "utf8", env }).stdout ?? "";
   const token = extractAdminToken(logs);
-  log(token ? `admin-token (engångs): ${token} — lägg till användare med add-user.sh` : "admin-token ej funnen i loggen ännu (kolla `docker compose logs web`)");
+  if (!oidc) {
+    log(token ? `admin-token (engångs): ${token} — lägg till användare med add-user.sh` : "admin-token ej funnen i loggen ännu (kolla `docker compose logs web`)");
+  }
 }
 
 const ANSWER_KEYS = [
@@ -198,8 +216,15 @@ async function runInstall(argv: string[], paths: InstallPaths): Promise<boolean>
     if (!(await preflightOk())) return false;
     process.env.AVA_SECRETS_KEY = masterKey;
     process.env.AVA_SECRETS_FILE = paths.secretsFile;
-    await startStack(cfg.authMode === "oidc");
-    log("backenden uppe. Lägg till användare med tooling/scripts/add-user.sh.");
+    const oidc = cfg.authMode === "oidc";
+    await startStack(oidc, await buildOidcStartEnv(cfg, vault));
+    if (oidc) {
+      log("backenden uppe (OIDC). Seeda första admin + org i firma.git:");
+      log(`  bun run bootstrap:admin --work-dir <klon-av-firma.git> --email <din-epost> --org ${cfg.organizationId} --org-name "<Byrå>" --commit`);
+      log("Öppna sedan http://localhost:8080/ava/ och logga in via din IdP.");
+    } else {
+      log("backenden uppe. Lägg till användare med tooling/scripts/add-user.sh.");
+    }
     return true;
   }
   printNextSteps(cfg, paths.masterKeyFile, paths.envFile);

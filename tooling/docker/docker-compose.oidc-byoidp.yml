@@ -1,0 +1,64 @@
+# BYO-IdP OIDC-overlay (#224/#222, ADR 0009) — människo-auth via oauth2-proxy
+# mot byråns EGEN OIDC-IdP (Microsoft Entra ID, Google, BankID-broker, …).
+#
+# Till skillnad från docker-compose.oidc.yml (som bundlar Keycloak för e2e) har
+# denna overlay INGEN inbyggd IdP — oauth2-proxy gör vanlig OIDC-discovery mot
+# den publika issuern (nås från proxy:n över internet). Aktivera ovanpå bas:
+#
+#   set -a && . ava-server.env && set +a       # OIDC_ISSUER_URL m.m. (icke-secret)
+#   export OAUTH2_PROXY_CLIENT_SECRET=…         # ur secrets-valvet (#79)
+#   export OAUTH2_PROXY_COOKIE_SECRET=…         # ur secrets-valvet
+#   docker compose -f tooling/docker/docker-compose.yml \
+#                  -f tooling/docker/docker-compose.oidc-byoidp.yml up -d --build
+#
+# `install:server --auth oidc --start` gör allt detta åt dig (surfar valv-
+# secrets → env, väljer denna overlay). Se docs/self-hosted-entra.md.
+
+name: ava
+
+services:
+  # Byt nginx-config till OIDC-varianten (samma absolute_redirect off m.m. som
+  # Keycloak-overlayen — nginx-oidc.conf är IdP-agnostisk).
+  web:
+    volumes:
+      - ../../out:/usr/share/nginx/html:ro
+      - ./nginx-oidc.conf:/etc/nginx/conf.d/default.conf:ro
+      - git_repos:/srv/git
+      - auth_data:/auth-data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+    depends_on:
+      - oauth2-proxy
+
+  # ─── oauth2-proxy: OIDC relying party mot byråns IdP (generisk OIDC) ──────
+  oauth2-proxy:
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.6.0
+    restart: unless-stopped
+    environment:
+      OAUTH2_PROXY_HTTP_ADDRESS: "0.0.0.0:4180"
+      # Generisk OIDC-provider → vanlig discovery mot issuern (Entra: v2.0).
+      OAUTH2_PROXY_PROVIDER: "${OIDC_PROVIDER:-oidc}"
+      OAUTH2_PROXY_OIDC_ISSUER_URL: "${OIDC_ISSUER_URL:?OIDC_ISSUER_URL krävs (t.ex. https://login.microsoftonline.com/<tenant>/v2.0)}"
+      # Single-tenant Entra (rekommenderat): konkret tenant-issuer matchar
+      # discovery → lämna false. Multi-tenant (.../common/ el. /organizations/)
+      # ger en TEMPLAD issuer (`{tenantid}`) som ej matchar → sätt true.
+      OAUTH2_PROXY_INSECURE_OIDC_SKIP_ISSUER_VERIFICATION: "${OIDC_SKIP_ISSUER_VERIFICATION:-false}"
+      OAUTH2_PROXY_CLIENT_ID: "${OAUTH2_PROXY_CLIENT_ID:?OAUTH2_PROXY_CLIENT_ID krävs (Entra app-id)}"
+      OAUTH2_PROXY_CLIENT_SECRET: "${OAUTH2_PROXY_CLIENT_SECRET:?OAUTH2_PROXY_CLIENT_SECRET krävs (ur valvet)}"
+      OAUTH2_PROXY_COOKIE_SECRET: "${OAUTH2_PROXY_COOKIE_SECRET:?OAUTH2_PROXY_COOKIE_SECRET krävs (ur valvet)}"
+      OAUTH2_PROXY_REDIRECT_URL: "${OIDC_REDIRECT_URL:-http://localhost:8080/oauth2/callback}"
+      # Entra lägger email i `email`-claim (kräver optional claim) eller upn.
+      OAUTH2_PROXY_OIDC_EMAIL_CLAIM: "${OIDC_EMAIL_CLAIM:-email}"
+      OAUTH2_PROXY_SCOPE: "${OIDC_SCOPE:-openid email profile}"
+      # AVA auktoriserar via allowlist i firma.git → proxy:n släpper alla domäner.
+      OAUTH2_PROXY_EMAIL_DOMAINS: "*"
+      OAUTH2_PROXY_UPSTREAMS: "static://202"
+      OAUTH2_PROXY_REVERSE_PROXY: "true"
+      OAUTH2_PROXY_SET_XAUTHREQUEST: "true"
+      OAUTH2_PROXY_SKIP_PROVIDER_BUTTON: "true"
+      # localhost-dev → http-cookie OK. I skarp drift bakom HTTPS: sätt true.
+      OAUTH2_PROXY_COOKIE_SECURE: "${OIDC_COOKIE_SECURE:-false}"
