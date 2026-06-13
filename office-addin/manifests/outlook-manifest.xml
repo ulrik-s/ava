@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  AVA Outlook-add-in (#72) — task-pane-manifest (read/compose surface).
+
+  Pekar på en HTTPS-serverad task-pane-bundle (SourceLocation via bt:Url).
+  Add-in:en är en tunn tRPC-HTTP-klient (src/lib/client/addin/addin-client.ts)
+  mot AVA-serverns /api/trpc (ADR 0013). Byt ut https://localhost:3443 mot den
+  faktiska bundle-värden vid sideload/AppSource.
+
+  Sideload (dev): Outlook → Hämta tillägg → Mina tillägg → Egna tillägg →
+  Lägg till från fil → välj denna fil (kräver HTTPS-serverad bundle).
+-->
+<OfficeApp
+  xmlns="http://schemas.microsoft.com/office/appforoffice/1.1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/1.0"
+  xmlns:mailappor="http://schemas.microsoft.com/office/mailappversionoverrides/1.0"
+  xsi:type="MailApp">
+  <Id>3a0c9b4d-2e5f-4b7c-8d3a-1b2c3d4e5f60</Id>
+  <Version>0.1.0</Version>
+  <ProviderName>AVA</ProviderName>
+  <DefaultLocale>sv-SE</DefaultLocale>
+  <DisplayName DefaultValue="AVA" />
+  <Description DefaultValue="Koppla mail till ärenden och spara mail/bilagor till ärendets git-db från Outlook." />
+  <IconUrl DefaultValue="https://localhost:3443/assets/icon-64.png" />
+  <HighResolutionIconUrl DefaultValue="https://localhost:3443/assets/icon-128.png" />
+  <SupportUrl DefaultValue="https://github.com/ulrik-s/ava" />
+  <Hosts>
+    <Host Name="Mailbox" />
+  </Hosts>
+  <Requirements>
+    <Sets>
+      <Set Name="Mailbox" MinVersion="1.5" />
+    </Sets>
+  </Requirements>
+  <FormSettings>
+    <Form xsi:type="ItemRead">
+      <DesktopSettings>
+        <SourceLocation DefaultValue="https://localhost:3443/taskpane.html" />
+        <RequestedHeight>450</RequestedHeight>
+      </DesktopSettings>
+    </Form>
+  </FormSettings>
+  <Permissions>ReadWriteItem</Permissions>
+  <Rule xsi:type="RuleCollection" Mode="Or">
+    <Rule xsi:type="ItemIs" ItemType="Message" FormType="Read" />
+  </Rule>
+</OfficeApp>
