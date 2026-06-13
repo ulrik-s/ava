@@ -15,6 +15,7 @@
 
 import Link from "next/link";
 import type { SyncState } from "@/lib/client/sync/use-auto-sync";
+import { pluralChanges } from "@/lib/client/utils";
 
 interface Props {
   state: SyncState;
@@ -35,53 +36,33 @@ export function SyncStatusPill({ state }: Props) {
   );
 }
 
-// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'formatState' has a complexity of 12. Maximum allowed is 8.)
-function formatState(s: SyncState): { icon: string; label: string; cls: string; title: string } {
-  switch (s.kind) {
-    case "idle":
-      return { icon: "○", label: "Inte synkat ännu", cls: "bg-gray-50 text-gray-700 border-gray-200", title: "Synk inte påbörjad" };
-    case "synced":
-      return {
-        icon: "✓", label: "Sparat",
-        cls: "bg-green-50 text-green-800 border-green-200",
-        title: `Senast synkat ${formatRelative(s.at)}`,
-      };
-    case "syncing":
-      return {
-        icon: "↻",
-        label: s.what === "pull" ? "Hämtar…" : "Sparar…",
-        cls: "bg-blue-50 text-blue-800 border-blue-200",
-        title: "Synkar med GitHub",
-      };
-    case "pending":
-      return {
-        icon: "⏳",
-        label: `${s.count} ändring${s.count === 1 ? "" : "ar"} — sparas snart`,
-        cls: "bg-amber-50 text-amber-800 border-amber-200",
-        title: "Sparas automatiskt om några sekunder",
-      };
-    case "offline":
-      return {
-        icon: "⚠",
-        label: s.count > 0
-          ? `Off-line — ${s.count} ändring${s.count === 1 ? "" : "ar"} väntar`
-          : "Off-line",
-        cls: "bg-gray-100 text-gray-700 border-gray-300",
-        title: "Sparas till disk lokalt; pushas när du är tillbaka online",
-      };
-    case "merge-needed":
-      return {
-        icon: "⚠", label: "Merge behövs",
-        cls: "bg-orange-50 text-orange-900 border-orange-200",
-        title: "Konflikt — öppna inställningar för att lösa",
-      };
-    case "error":
-      return {
-        icon: "✗", label: "Synk-fel — försöker igen",
-        cls: "bg-red-50 text-red-800 border-red-200",
-        title: s.message,
-      };
-  }
+interface PillView { icon: string; label: string; cls: string; title: string }
+type SyncKind = SyncState["kind"];
+type SyncVariant<K extends SyncKind> = Extract<SyncState, { kind: K }>;
+
+function offlineLabel(count: number): string {
+  return count > 0 ? `Off-line — ${count} ${pluralChanges(count)} väntar` : "Off-line";
+}
+
+/**
+ * En vy per sync-läge. Uppslag i st.f. en 7-grenars switch håller `formatState`
+ * under complexity@8 (#6-ratchet); den mappade typen ger varje vy den smalnade
+ * varianten (t.ex. `synced` får `.at`, `error` `.message`).
+ */
+const PILL_VIEWS: { [K in SyncKind]: (s: SyncVariant<K>) => PillView } = {
+  idle: () => ({ icon: "○", label: "Inte synkat ännu", cls: "bg-gray-50 text-gray-700 border-gray-200", title: "Synk inte påbörjad" }),
+  synced: (s) => ({ icon: "✓", label: "Sparat", cls: "bg-green-50 text-green-800 border-green-200", title: `Senast synkat ${formatRelative(s.at)}` }),
+  syncing: (s) => ({ icon: "↻", label: s.what === "pull" ? "Hämtar…" : "Sparar…", cls: "bg-blue-50 text-blue-800 border-blue-200", title: "Synkar med GitHub" }),
+  pending: (s) => ({ icon: "⏳", label: `${s.count} ${pluralChanges(s.count)} — sparas snart`, cls: "bg-amber-50 text-amber-800 border-amber-200", title: "Sparas automatiskt om några sekunder" }),
+  offline: (s) => ({ icon: "⚠", label: offlineLabel(s.count), cls: "bg-gray-100 text-gray-700 border-gray-300", title: "Sparas till disk lokalt; pushas när du är tillbaka online" }),
+  "merge-needed": () => ({ icon: "⚠", label: "Merge behövs", cls: "bg-orange-50 text-orange-900 border-orange-200", title: "Konflikt — öppna inställningar för att lösa" }),
+  error: (s) => ({ icon: "✗", label: "Synk-fel — försöker igen", cls: "bg-red-50 text-red-800 border-red-200", title: s.message }),
+};
+
+function formatState(s: SyncState): PillView {
+  // Uppslaget kan inte korreleras med `s`:s variant av TS → en lokal cast.
+  const view = PILL_VIEWS[s.kind] as (x: SyncState) => PillView;
+  return view(s);
 }
 
 function formatRelative(at: number): string {
