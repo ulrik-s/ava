@@ -15,6 +15,9 @@
  */
 
 import { join } from "node:path";
+import { homedir } from "node:os";
+import { mkdirSync, copyFileSync, chmodSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 
 import { HELPER_HTTPS_PORT, HELPER_PORT } from "@/lib/shared/helper/protocol";
 
@@ -24,6 +27,8 @@ import { createHandler } from "./server.ts";
 import { loadOrCreateTls } from "./tls/certs.ts";
 import { installCaTrust, removeCaTrust } from "./tls/trust.ts";
 import { checkOnce, runUpdateLoop, type UpdateConfig } from "./update.ts";
+import { installService, uninstallService, type InstallDeps } from "./install.ts";
+import { currentPlatform } from "./platform/runtime.ts";
 import { VERSION } from "./version.ts";
 
 const SHUTDOWN_TIMEOUT_MS = 5_000;
@@ -60,6 +65,28 @@ function handleTrust(action: "install" | "uninstall"): void {
     res.skipped ? `${label}: hoppad (${res.reason ?? ""})\n` : `${label}: ${res.ok ? "ok" : "misslyckades"}\n`,
   );
   if (!res.ok && !res.skipped) process.exitCode = 1;
+}
+
+/** Riktiga OS-/fs-deps för self-install (#86). */
+function installDeps(): InstallDeps {
+  return {
+    mkdirp: (dir) => mkdirSync(dir, { recursive: true }),
+    copyFile: (from, to) => copyFileSync(from, to),
+    chmodExec: (path) => chmodSync(path, 0o755),
+    writeFile: (path, content) => writeFileSync(path, content, "utf8"),
+    run: (cmd, args) => { spawnSync(cmd, args, { stdio: "inherit" }); },
+    installTrust: () => handleTrust("install"),
+    log: (msg) => process.stdout.write(`${msg}\n`),
+  };
+}
+
+/** `--install` / `--uninstall`: registrera/avregistrera helpern som user-service. */
+function handleInstall(action: "install" | "uninstall"): void {
+  const ok =
+    action === "install"
+      ? installService(currentPlatform(), homedir(), process.execPath, installDeps())
+      : uninstallService(currentPlatform(), homedir(), installDeps());
+  if (!ok) process.exitCode = 1;
 }
 
 type Handler = (req: Request) => Promise<Response>;
@@ -116,6 +143,14 @@ function main(): void {
   }
   if (process.argv.includes("--uninstall-trust")) {
     handleTrust("uninstall");
+    return;
+  }
+  if (process.argv.includes("--install")) {
+    handleInstall("install");
+    return;
+  }
+  if (process.argv.includes("--uninstall")) {
+    handleInstall("uninstall");
     return;
   }
 
