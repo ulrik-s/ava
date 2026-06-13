@@ -39,12 +39,35 @@ const tokenResponseSchema = z.object({
 }).passthrough();
 
 type DeviceCodeResponse = z.infer<typeof deviceCodeResponseSchema>;
+type TokenResponse = z.infer<typeof tokenResponseSchema>;
+type Step = "requesting" | "waiting" | "error";
 
-export function WebOAuthDeviceFlow({ onComplete, onCancel }: Props) {
-  // SSR-stabil initial — riktig config läses post-mount
-  const [cfg, setCfg] = useState<{ proxyUrl: string; clientId: string }>({ proxyUrl: "", clientId: "" });
-  useEffect(() => { queueMicrotask(() => setCfg(loadOAuthConfig())); }, []);
-  const [step, setStep] = useState<"requesting" | "waiting" | "error">("requesting");
+/**
+ * Tolka GitHubs token-svar (ren → testbar; håller poll-loopen under complexity@8).
+ * `authorization_pending`/`slow_down` = fortsätt polla.
+ */
+export function classifyTokenResponse(data: TokenResponse): { token: string } | { error: string } | "pending" {
+  if (data.access_token) return { token: data.access_token };
+  if (data.error && data.error !== "authorization_pending" && data.error !== "slow_down") {
+    return { error: data.error_description ?? data.error };
+  }
+  return "pending";
+}
+
+/** Verkställ ett token-utfall mot poll-callbacks; "done" = sluta polla. */
+function applyTokenOutcome(
+  outcome: ReturnType<typeof classifyTokenResponse>,
+  handlers: { onToken: (t: string) => void; onError: (e: string) => void },
+): "done" | "pending" {
+  if (outcome === "pending") return "pending";
+  if ("token" in outcome) { handlers.onToken(outcome.token); return "done"; }
+  handlers.onError(outcome.error);
+  return "done";
+}
+
+/** Device-flow-state + de två effekterna (hämta device_code, polla token). */
+function useDeviceFlow(proxyUrl: string, onComplete: (token: string) => void): { step: Step; code: DeviceCodeResponse | null; err: string | null } {
+  const [step, setStep] = useState<Step>("requesting");
   const [code, setCode] = useState<DeviceCodeResponse | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
@@ -52,16 +75,12 @@ export function WebOAuthDeviceFlow({ onComplete, onCancel }: Props) {
     let cancelled = false;
     void (async () => {
       try {
-        const res = await fetch(`${cfg.proxyUrl}/device/code`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-        });
+        const res = await fetch(`${proxyUrl}/device/code`, { method: "POST", headers: { "Content-Type": "application/json" } });
         if (!res.ok) throw new Error(`Proxy ${res.status}`);
         const parsed = deviceCodeResponseSchema.safeParse(await res.json());
         if (cancelled) return;
         if (!parsed.success) throw new Error("Proxy returnerade ingen giltig device_code");
-        const data = parsed.data;
-        setCode(data);
+        setCode(parsed.data);
         setStep("waiting");
       } catch (e) {
         if (cancelled) return;
@@ -70,52 +89,49 @@ export function WebOAuthDeviceFlow({ onComplete, onCancel }: Props) {
       }
     })();
     return () => { cancelled = true; };
-  }, [cfg.proxyUrl]);
+  }, [proxyUrl]);
 
-  // Polla token-endpoint
   useEffect(() => {
     if (step !== "waiting" || !code) return;
     let cancelled = false;
     const intervalMs = Math.max(code.interval, 5) * 1000;
     const deadline = Date.now() + code.expires_in * 1000;
 
-    // eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Async arrow function has a complexity of 11. Maximum allowed is 8.)
     const poll = async () => {
       if (cancelled) return;
-      if (Date.now() > deadline) {
-        setErr("Tidsgräns: koden förfallit. Försök igen.");
-        setStep("error");
-        return;
-      }
+      if (Date.now() > deadline) { setErr("Tidsgräns: koden förfallit. Försök igen."); setStep("error"); return; }
       try {
-        const res = await fetch(`${cfg.proxyUrl}/token`, {
+        const res = await fetch(`${proxyUrl}/token`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ device_code: code.device_code }),
         });
-        const data = tokenResponseSchema.parse(await res.json());
+        const outcome = classifyTokenResponse(tokenResponseSchema.parse(await res.json()));
         if (cancelled) return;
-        if (data.access_token) {
-          onComplete(data.access_token);
-          return;
-        }
-        // authorization_pending eller slow_down → fortsätt polla
-        if (data.error && data.error !== "authorization_pending" && data.error !== "slow_down") {
-          setErr(data.error_description ?? data.error);
-          setStep("error");
-          return;
-        }
+        const result = applyTokenOutcome(outcome, {
+          onToken: onComplete,
+          onError: (e) => { setErr(e); setStep("error"); },
+        });
+        if (result === "done") return;
       } catch (e) {
         if (cancelled) return;
-        // Tillfälligt nät-fel — fortsätt polla
-        console.warn("[oauth] poll error:", e);
+        console.warn("[oauth] poll error:", e); // tillfälligt nät-fel → fortsätt polla
       }
       setTimeout(() => { void poll(); }, intervalMs);
     };
 
     const timer = setTimeout(() => { void poll(); }, intervalMs);
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [step, code, cfg.proxyUrl, onComplete]);
+  }, [step, code, proxyUrl, onComplete]);
+
+  return { step, code, err };
+}
+
+export function WebOAuthDeviceFlow({ onComplete, onCancel }: Props) {
+  // SSR-stabil initial — riktig config läses post-mount
+  const [cfg, setCfg] = useState<{ proxyUrl: string; clientId: string }>({ proxyUrl: "", clientId: "" });
+  useEffect(() => { queueMicrotask(() => setCfg(loadOAuthConfig())); }, []);
+  const { step, code, err } = useDeviceFlow(cfg.proxyUrl, onComplete);
 
   if (step === "error") {
     return (
