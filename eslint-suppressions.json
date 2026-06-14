@@ -72,11 +72,6 @@
       "count": 1
     }
   },
-  "src/components/shell/sidebar.tsx": {
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
   "src/lib/client/sync/use-auto-sync.ts": {
     "max-lines-per-function": {
       "count": 1

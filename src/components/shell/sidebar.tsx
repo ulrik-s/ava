@@ -48,6 +48,52 @@ interface SidebarProps {
   userName?: string | null;
 }
 
+function isActive(pathname: string, href: string): boolean {
+  return href === "/" ? pathname === "/" : pathname.startsWith(href);
+}
+
+/** Navigations-länkarna (delas av mobil-drawern + desktop-sidofältet, DRY). */
+function NavLinks({ pathname, onNavigate, py = "py-2" }: { pathname: string; onNavigate?: () => void; py?: string }) {
+  return (
+    <>
+      {navigation.map((item) => (
+        <Link
+          key={item.href}
+          href={item.href}
+          {...(onNavigate ? { onClick: onNavigate } : {})}
+          className={cn(
+            "flex items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors",
+            py,
+            isActive(pathname, item.href)
+              ? "bg-blue-50 text-blue-700"
+              : "text-gray-700 hover:bg-gray-100 hover:text-gray-900",
+          )}
+        >
+          <span className="text-lg">{item.icon}</span>
+          {item.name}
+        </Link>
+      ))}
+    </>
+  );
+}
+
+/** Användarnamn + "Logga ut" (delas av mobil-drawern + desktop-sidofältet). */
+function UserSection({ userName, nameMargin = "mb-1" }: { userName?: string | null | undefined; nameMargin?: string }) {
+  return (
+    <div className="px-4 py-4 border-t border-gray-200">
+      {userName && (
+        <p className={cn("text-sm font-medium text-gray-900 truncate", nameMargin)}>{userName}</p>
+      )}
+      <button
+        onClick={() => signOutLocally()}
+        className="text-sm text-gray-500 hover:text-gray-700"
+      >
+        Logga ut
+      </button>
+    </div>
+  );
+}
+
 export function Sidebar({ userName }: SidebarProps) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
@@ -90,41 +136,9 @@ export function Sidebar({ userName }: SidebarProps) {
               <span className="ml-2 text-sm text-gray-500">Advokat CRM</span>
             </div>
             <div className="px-3 space-y-1 flex-1">
-              {navigation.map((item) => {
-                const isActive =
-                  item.href === "/"
-                    ? pathname === "/"
-                    : pathname.startsWith(item.href);
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    onClick={() => setOpen(false)}
-                    className={cn(
-                      "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-                      isActive
-                        ? "bg-blue-50 text-blue-700"
-                        : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
-                    )}
-                  >
-                    <span className="text-lg">{item.icon}</span>
-                    {item.name}
-                  </Link>
-                );
-              })}
+              <NavLinks pathname={pathname} onNavigate={() => setOpen(false)} py="py-2.5" />
             </div>
-            {/* User section mobile */}
-            <div className="px-4 py-4 border-t border-gray-200">
-              {userName && (
-                <p className="text-sm font-medium text-gray-900 mb-2 truncate">{userName}</p>
-              )}
-              <button
-                onClick={() => signOutLocally()}
-                className="text-sm text-gray-500 hover:text-gray-700"
-              >
-                Logga ut
-              </button>
-            </div>
+            <UserSection userName={userName} nameMargin="mb-2" />
           </nav>
         </div>
       )}
@@ -136,40 +150,9 @@ export function Sidebar({ userName }: SidebarProps) {
           <span className="ml-2 text-sm text-gray-500">Advokat CRM</span>
         </div>
         <nav className="flex-1 px-3 py-4 space-y-1">
-          {navigation.map((item) => {
-            const isActive =
-              item.href === "/"
-                ? pathname === "/"
-                : pathname.startsWith(item.href);
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-                  isActive
-                    ? "bg-blue-50 text-blue-700"
-                    : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
-                )}
-              >
-                <span className="text-lg">{item.icon}</span>
-                {item.name}
-              </Link>
-            );
-          })}
+          <NavLinks pathname={pathname} />
         </nav>
-        {/* User section desktop */}
-        <div className="px-4 py-4 border-t border-gray-200">
-          {userName && (
-            <p className="text-sm font-medium text-gray-900 mb-1 truncate">{userName}</p>
-          )}
-          <button
-            onClick={() => signOutLocally()}
-            className="text-sm text-gray-500 hover:text-gray-700"
-          >
-            Logga ut
-          </button>
-        </div>
+        <UserSection userName={userName} />
       </div>
     </>
   );
