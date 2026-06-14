@@ -15,9 +15,9 @@
  * sidopanelen, mutation-knappar etc. kan reagera direkt.
  */
 
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { z } from "zod";
 import { loadFromStorage } from "@/lib/client/load-from-storage";
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { detectAuthMode, getCurrentUser, type AuthMode, type GitHubUser } from "./github-auth";
 
 const SETTINGS_KEY = "ava.authSettings";

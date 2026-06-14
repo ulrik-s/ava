@@ -11,6 +11,7 @@
  */
 
 import { describe, it, expect } from "vitest-compat";
+import { matterSchema, matterContactSchema } from "@/lib/shared/schemas";
 import {
   matterIdSchema,
   contactIdSchema,
@@ -18,7 +19,6 @@ import {
   type MatterId,
   type ContactId,
 } from "@/lib/shared/schemas/ids";
-import { matterSchema, matterContactSchema } from "@/lib/shared/schemas";
 
 const now = "2026-05-24T10:00:00Z";
 

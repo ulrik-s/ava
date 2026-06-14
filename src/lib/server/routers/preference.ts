@@ -8,8 +8,8 @@
  * fri-formig så vi inte behöver schema-ändra när vi lägger till nya vyer.
  */
 
-import { z } from "zod";
 import { TRPCError } from "@trpc/server";
+import { z } from "zod";
 import { router, orgProcedure, protectedProcedure } from "../trpc";
 
 const prefsPayloadSchema = z.record(z.string(), z.unknown());

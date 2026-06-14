@@ -10,12 +10,12 @@
  */
 
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest-compat";
-import { SyncLoop } from "@/lib/server/local-first/sync-loop";
 import { InMemoryFileSystem } from "@/lib/server/local-first/in-memory-fs";
 import { InMemoryGitOps } from "@/lib/server/local-first/in-memory-git-ops";
 import { ProjectionWriter, ProjectionHydrator } from "@/lib/server/local-first/projection-writer";
 import { buildDefaultRegistry } from "@/lib/server/local-first/projections/default-registry";
 import type { MatterProjectionData } from "@/lib/server/local-first/projections/matter";
+import { SyncLoop } from "@/lib/server/local-first/sync-loop";
 
 const sampleMatter: MatterProjectionData = {
   id: "matter-1",

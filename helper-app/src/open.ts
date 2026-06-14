@@ -11,10 +11,10 @@ import { mkdtemp, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { json, parseJsonBody, textError } from "./http.ts";
-import { openWithDefaultApp } from "./platform/open-app.ts";
-import { log } from "./log.ts";
 import { isSafeFileName, type HelperOpenRequest } from "@/lib/shared/helper/protocol";
+import { json, parseJsonBody, textError } from "./http.ts";
+import { log } from "./log.ts";
+import { openWithDefaultApp } from "./platform/open-app.ts";
 
 const DEFAULT_WATCH_MINUTES = 60;
 const POLL_INTERVAL_MS = 2_000;

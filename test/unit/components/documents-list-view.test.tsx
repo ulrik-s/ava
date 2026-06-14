@@ -2,8 +2,8 @@
  * DocumentsListView — flat-vy för dokument med folder-path-kolumn.
  */
 
-import { describe, it, expect, vi } from "vitest-compat";
 import { render, screen } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest-compat";
 import { DocumentsListView } from "@/components/documents/_documents-list-view";
 
 vi.mock("@/lib/client/trpc", () => ({

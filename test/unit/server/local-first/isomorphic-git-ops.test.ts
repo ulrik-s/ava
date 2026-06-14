@@ -7,10 +7,10 @@
  * remote skulle kräva en HTTP-git-server.
  */
 
+import * as git from "isomorphic-git";
 import { describe, it, expect, beforeEach, vi } from "vitest-compat";
 import { IsomorphicGitOps } from "@/lib/server/local-first/isomorphic-git-ops";
 import { MemFs } from "@/lib/server/local-first/mem-fs";
-import * as git from "isomorphic-git";
 
 async function initRepo(mem: MemFs): Promise<void> {
   await git.init({

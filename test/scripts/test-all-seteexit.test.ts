@@ -11,10 +11,10 @@
  * ett fallerat steg ger exit ≠ 0.
  */
 
-import { describe, it, expect } from "vitest-compat";
-import { readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { describe, it, expect } from "vitest-compat";
 
 const SCRIPT = resolve(__dirname, "..", "..", "tooling", "scripts", "test-all.sh");
 

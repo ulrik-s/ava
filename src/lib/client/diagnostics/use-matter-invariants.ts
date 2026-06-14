@@ -10,9 +10,9 @@
  */
 
 import { useEffect } from "react";
+import { reportSelfDetected } from "@/lib/client/diagnostics";
 import { trpc } from "@/lib/client/trpc";
 import { detectMatterInvariants, type BillingRunView, type DocumentView } from "@/lib/shared/diagnostics/invariants";
-import { reportSelfDetected } from "@/lib/client/diagnostics";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 
 export function useMatterInvariants(input: { matterId: string; matterNumber?: string }): void {

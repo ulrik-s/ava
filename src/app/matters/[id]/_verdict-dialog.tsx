@@ -11,13 +11,13 @@
  * Domen anger det FAKTISKA beloppet, inte hur mycket som prutats — så
  * det är vad advokaten skriver in.
  */
-import { useState } from "react";
 import type { inferRouterInputs } from "@trpc/server";
-import { trpc } from "@/lib/client/trpc";
-import type { AppRouter } from "@/lib/server/routers/_app";
-import { formatCurrency } from "@/lib/client/utils";
-import { omitUndefined } from "@/lib/shared/omit-undefined";
+import { useState } from "react";
 import { Modal } from "@/components/ui/modal";
+import { trpc } from "@/lib/client/trpc";
+import { formatCurrency } from "@/lib/client/utils";
+import type { AppRouter } from "@/lib/server/routers/_app";
+import { omitUndefined } from "@/lib/shared/omit-undefined";
 
 type RouterInputs = inferRouterInputs<AppRouter>;
 

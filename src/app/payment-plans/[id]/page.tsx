@@ -3,8 +3,8 @@
  * `demoStaticParams` så static export funkar.
  */
 
-import PaymentPlanDetailClient from "./_client";
 import { demoStaticParams } from "@/lib/client/demo/static-params";
+import PaymentPlanDetailClient from "./_client";
 
 export async function generateStaticParams(): Promise<{ id: string }[]> {
   return demoStaticParams("payment-plans");

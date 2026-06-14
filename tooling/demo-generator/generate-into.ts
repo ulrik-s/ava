@@ -13,19 +13,19 @@
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import type { Principal } from "@/lib/server/auth/principal";
 import { buildSeed, type BuildSeedOpts } from "../scripts/seed-data";
-import { makeNodeGitWriteBack } from "./node-git-writeback";
 import { createGitTarget } from "./backend-target";
+import { createIdTranslator, translateSeed, type IdTranslator } from "./id-translator";
+import { makeNodeGitWriteBack } from "./node-git-writeback";
 import { populate, type PopulateResult } from "./populate";
 import { populateBilling, type BillingResult } from "./populate-billing";
+import { populateBillingRuns, type BillingRunsResult } from "./populate-billing-runs";
 import { populateDocuments } from "./populate-documents";
-import { populateTemplateDocs } from "./populate-template-docs";
 import { populateInvoiceDocs } from "./populate-invoice-docs";
 import { populateKostnadsrakningDocs } from "./populate-kostnadsrakning-docs";
+import { populateTemplateDocs } from "./populate-template-docs";
 import { populateUnbilledTime } from "./populate-unbilled-time";
-import { populateBillingRuns, type BillingRunsResult } from "./populate-billing-runs";
-import { createIdTranslator, translateSeed, type IdTranslator } from "./id-translator";
-import type { Principal } from "@/lib/server/auth/principal";
 
 export interface GenerateResult extends PopulateResult {
   documents: number;

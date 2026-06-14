@@ -16,8 +16,8 @@
  */
 
 import * as git from "isomorphic-git";
-import type { MemFs } from "./mem-fs";
 import type { DemoCloneFn } from "./demo-loader";
+import type { MemFs } from "./mem-fs";
 
 export interface CloneFromGithubOptions {
   /**

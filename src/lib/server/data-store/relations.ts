@@ -13,9 +13,9 @@
  * och en infrusen referens skulle peka på gammal data.
  */
 
-import type { RelationConfig } from "./in-memory/read-only-delegate";
-import { omitUndefined } from "@/lib/shared/omit-undefined";
 import type { DemoSource } from "@/lib/shared/demo-source";
+import { omitUndefined } from "@/lib/shared/omit-undefined";
+import type { RelationConfig } from "./in-memory/read-only-delegate";
 
 type GetSource = () => DemoSource;
 type Relations = Record<string, RelationConfig<Record<string, unknown>>>;

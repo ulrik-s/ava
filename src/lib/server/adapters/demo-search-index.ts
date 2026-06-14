@@ -10,9 +10,9 @@
  * utan port-mocking.
  */
 
-import type { ISearchIndex, SearchResponse } from "../ports";
-import type { IDataStore } from "../data-store/IDataStore";
 import { getDocumentContent } from "@/lib/client/demo/document-content-cache";
+import type { IDataStore } from "../data-store/IDataStore";
+import type { ISearchIndex, SearchResponse } from "../ports";
 
 interface DocLike {
   id: string;

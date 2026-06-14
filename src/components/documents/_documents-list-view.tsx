@@ -9,13 +9,13 @@
  */
 
 import { useState } from "react";
-import { trpc } from "@/lib/client/trpc";
-import { DataTable, type Column } from "@/components/ui/data-table";
-import { formatFileSize } from "./_drag-helpers";
 import { ActionMenu, type ActionMenuItem } from "@/components/ui/action-menu";
-import { ExternalEditModal, type ModalState } from "./external-edit-modal";
+import { DataTable, type Column } from "@/components/ui/data-table";
+import { trpc } from "@/lib/client/trpc";
 import type { DocumentRecord } from "./_document-row";
+import { formatFileSize } from "./_drag-helpers";
 import type { FolderRecord } from "./_folder-row";
+import { ExternalEditModal, type ModalState } from "./external-edit-modal";
 
 interface Props {
   matterId: string;

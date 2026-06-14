@@ -2,8 +2,8 @@
  * Tests för useHelper() + transport-resolution (https→http, ADR 0006).
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { render, screen, waitFor } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import {
   useHelper,
   openViaHelper,

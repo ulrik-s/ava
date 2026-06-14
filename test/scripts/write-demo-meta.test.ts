@@ -4,10 +4,10 @@
  * de defensiva validerings-kasten.
  */
 import { describe, it, expect } from "vitest-compat";
-import { buildDemoMeta } from "../../tooling/scripts/write-demo-meta";
-import { createIdTranslator } from "../../tooling/demo-generator/id-translator";
-import { isUuid } from "../../src/lib/shared/uuid";
 import { CURRENT_SCHEMA_VERSION } from "../../src/lib/shared/schema-version";
+import { isUuid } from "../../src/lib/shared/uuid";
+import { createIdTranslator } from "../../tooling/demo-generator/id-translator";
+import { buildDemoMeta } from "../../tooling/scripts/write-demo-meta";
 
 const FIXED_NOW = new Date("2026-05-31T10:00:00.000Z");
 

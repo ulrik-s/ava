@@ -13,16 +13,16 @@
  * `clone`/`dirExists` injiceras för testbarhet (DI).
  */
 
+import { setDocumentContent } from "@/lib/client/demo/document-content-cache";
 import { FsaIsoGitAdapter } from "@/lib/client/fsa/fs-adapter";
 import { cloneRepo, type CloneOptions } from "@/lib/client/fsa/git-ops";
 import { resolveCorsProxy } from "@/lib/client/sync/cors-proxy";
-import { hydrateWorkingCopy } from "./hydrate-working-copy";
-import { setDocumentContent } from "@/lib/client/demo/document-content-cache";
 import type { DemoSource } from "@/lib/server/data-store/DemoDataStore";
-import { assertRepoSchemaCompatible } from "@/lib/shared/schema-version";
 import { schemaVersionFromMetaJson } from "@/lib/shared/meta-json";
-import { DEMO_META_PATH } from "../../../../tooling/demo-config";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
+import { assertRepoSchemaCompatible } from "@/lib/shared/schema-version";
+import { DEMO_META_PATH } from "../../../../tooling/demo-config";
+import { hydrateWorkingCopy } from "./hydrate-working-copy";
 
 export interface CurrentUser {
   id: string;

@@ -2,11 +2,11 @@
  * Smoke-test för `LlmSettingsCard` — toggle + modell-väljare + download-knapp.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { LlmSettingsCard } from "@/components/llm/llm-settings-card";
-import { resetLlmConfig } from "@/lib/client/llm/llm-config";
 import { resetActiveLlm } from "@/lib/client/llm/active-llm";
+import { resetLlmConfig } from "@/lib/client/llm/llm-config";
 
 const engineHoisted = vi.hoisted(() => ({
   CreateMLCEngine: vi.fn(async (_id, opts) => {

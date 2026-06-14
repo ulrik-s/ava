@@ -15,8 +15,8 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { invoiceRouter } from "@/lib/server/routers/invoice";
-import { dataStoreFromMockPrisma } from "../helpers/mock-data-store";
 import { ocrFromInvoiceNumber, isValidOcrReference } from "@/lib/shared/ocr-reference";
+import { dataStoreFromMockPrisma } from "../helpers/mock-data-store";
 
 // ─── Mock prisma ─────────────────────────────────────────────────
 

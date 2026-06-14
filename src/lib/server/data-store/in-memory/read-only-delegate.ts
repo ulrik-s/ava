@@ -17,8 +17,8 @@
  * de bygger `DemoDataStore`.
  */
 
-import { InMemoryQueryEngine, type QueryOptions } from "./query-engine";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
+import { InMemoryQueryEngine, type QueryOptions } from "./query-engine";
 
 export class ReadOnlyError extends Error {
   constructor(operation: string) {

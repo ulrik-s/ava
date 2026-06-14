@@ -8,8 +8,8 @@
  * docs/architecture.md ("Routing till runtime-skapade id:n").
  */
 
-import { describe, it, expect, vi } from "vitest-compat";
 import { render, screen } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest-compat";
 import { EventDetailModal, type EventDetail } from "@/app/calendar/_event-detail-modal";
 
 vi.mock("@/lib/client/trpc", () => ({

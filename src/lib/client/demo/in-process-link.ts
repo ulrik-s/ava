@@ -11,8 +11,8 @@
  * de går via `GitBackendRuntime`.
  */
 
-import { observable } from "@trpc/server/observable";
 import { TRPCClientError, type TRPCLink } from "@trpc/client";
+import { observable } from "@trpc/server/observable";
 import type { AppRouter } from "@/lib/server/routers/_app";
 import { appRouter } from "@/lib/server/routers/_app";
 import type { Context } from "@/lib/server/trpc-core";

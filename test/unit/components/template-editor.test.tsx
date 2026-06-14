@@ -2,8 +2,8 @@
  * Test för TemplateEditor — formulärfält, tab-växling, variabel-sidebar.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { TemplateEditor } from "@/components/settings/template-editor";
 
 const onSave = vi.fn();

@@ -8,8 +8,8 @@
  */
 
 import { describe, it, expect } from "vitest-compat";
-import { buildTemplateContext } from "@/lib/client/templates/build-template-context";
 import { renderHandlebars } from "@/lib/client/kostnadsrakning/render-handlebars";
+import { buildTemplateContext } from "@/lib/client/templates/build-template-context";
 
 const NOW = new Date("2026-05-26T10:00:00Z");
 

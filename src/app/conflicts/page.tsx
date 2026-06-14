@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { EntityLink } from "@/lib/client/demo/entity-link";
-import { trpc } from "@/lib/client/trpc";
-import { labelForContactType, labelForMatterRole } from "@/lib/client/labels";
 import { DataTable, type Column } from "@/components/ui/data-table";
+import { EntityLink } from "@/lib/client/demo/entity-link";
+import { labelForContactType, labelForMatterRole } from "@/lib/client/labels";
+import { trpc } from "@/lib/client/trpc";
 
 interface ConflictRow {
   contactId: string;

@@ -2,8 +2,8 @@
  * Tester för `UserPicker` + `loadSelectedUserIds`.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { UserPicker, loadSelectedUserIds } from "@/app/calendar/_user-picker";
 
 const usersQuery = {

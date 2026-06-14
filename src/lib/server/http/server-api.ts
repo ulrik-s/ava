@@ -13,10 +13,10 @@
  * uppgradering. Detta håller #83-MVP:n enkel: en byrå-server, en principal.
  */
 
+import type { Principal } from "@/lib/server/auth/principal";
+import { StaticPatVerifier, patRecord } from "./pat";
 import { createTrpcHttpHandler } from "./trpc-http-handler";
 import { makeWorkingCopySessionOpener } from "./working-copy-session";
-import { StaticPatVerifier, patRecord } from "./pat";
-import type { Principal } from "@/lib/server/auth/principal";
 
 export interface ServerApiConfig {
   /** Working-copy-katalogen (delas med peer-loopen). */

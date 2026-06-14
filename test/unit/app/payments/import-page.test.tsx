@@ -4,10 +4,12 @@
  * (idempotens) och rätt belopp/datum.
  */
 
-import { describe, it, expect, beforeEach, vi } from "vitest-compat";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { describe, it, expect, beforeEach, vi } from "vitest-compat";
 
+import PaymentImportPage from "@/app/payments/import/page";
 import { buildOcrReference } from "@/lib/shared/ocr-reference";
+
 
 const OCR = buildOcrReference("20260001");
 
@@ -40,8 +42,6 @@ vi.mock("@/lib/client/trpc", () => ({
     },
   },
 }));
-
-import PaymentImportPage from "@/app/payments/import/page";
 
 /** Minimal camt.054: en CRDT-Ntry med en TxDtls som bär OCR:en + en omatchbar. */
 const CAMT = `<?xml version="1.0" encoding="UTF-8"?>

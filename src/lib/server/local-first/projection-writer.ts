@@ -21,10 +21,10 @@
  *     ny entitet räcker en gång och fungerar i bägge riktningar.
  */
 
+import { migrateRawJson } from "@/lib/shared/schema-migrations";
+import { CURRENT_SCHEMA_VERSION } from "@/lib/shared/schema-version";
 import type { IFileSystem } from "./file-system";
 import type { ProjectionRegistry } from "./projections/registry";
-import { CURRENT_SCHEMA_VERSION } from "@/lib/shared/schema-version";
-import { migrateRawJson } from "@/lib/shared/schema-migrations";
 
 export class ProjectionWriter {
   constructor(

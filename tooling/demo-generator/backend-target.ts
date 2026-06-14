@@ -7,11 +7,11 @@
  *   - Postgres: PostgresStore (ADR 0001 Fas 3) — stub tills den finns.
  */
 
-import { appRouter, type AppRouter } from "@/lib/server/routers/_app";
-import { DemoDataStore, type DemoSource } from "@/lib/server/data-store/DemoDataStore";
-import { buildContext } from "@/lib/server/build-context";
 import { noopPorts } from "@/lib/server/adapters/noop-ports";
 import type { Principal } from "@/lib/server/auth/principal";
+import { buildContext } from "@/lib/server/build-context";
+import { DemoDataStore, type DemoSource } from "@/lib/server/data-store/DemoDataStore";
+import { appRouter, type AppRouter } from "@/lib/server/routers/_app";
 import type { WriteBackEvent } from "./node-git-writeback";
 
 export type GeneratorCaller = ReturnType<typeof appRouter.createCaller>;

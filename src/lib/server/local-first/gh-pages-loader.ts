@@ -32,13 +32,14 @@
  * demo-repo:t och commitas. Trigga via en GitHub Action vid push.
  */
 
-import type { MemFs } from "./mem-fs";
+import { resolveGhPagesUrl } from "@/lib/shared/gh-pages-url";
 import type { DemoCloneFn } from "./demo-loader";
+import type { MemFs } from "./mem-fs";
 
 // `resolveGhPagesUrl` är en ren URL-helper som flyttats till shared (delad
 // kod). Importeras + re-exporteras här så både den interna användningen och
 // befintliga server-sidiga anropare är opåverkade.
-import { resolveGhPagesUrl } from "@/lib/shared/gh-pages-url";
+
 export { resolveGhPagesUrl };
 
 export interface GhPagesLoaderOpts {

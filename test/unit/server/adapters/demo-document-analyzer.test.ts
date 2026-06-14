@@ -5,8 +5,8 @@
  */
 
 import { describe, it, expect, beforeEach } from "vitest-compat";
-import { demoDocumentAnalyzer } from "@/lib/server/adapters/demo-document-analyzer";
 import { jobQueue } from "@/lib/client/jobs/job-queue";
+import { demoDocumentAnalyzer } from "@/lib/server/adapters/demo-document-analyzer";
 
 beforeEach(() => {
   // Rensa kön mellan testen

@@ -31,11 +31,11 @@
  */
 
 import { describe, it, expect, beforeAll } from "vitest-compat";
-import { DemoDataStore, type DemoSource } from "@/lib/server/data-store/DemoDataStore";
-import { prebakeJoins } from "@/lib/shared/demo-source";
-import { appRouter } from "@/lib/server/routers/_app";
 import { buildGitPorts } from "@/lib/server/adapters/git-ports";
+import { DemoDataStore, type DemoSource } from "@/lib/server/data-store/DemoDataStore";
+import { appRouter } from "@/lib/server/routers/_app";
 import { computeBrottmalstaxa, BROTTMALSTAXA_TABLE } from "@/lib/shared/brottmalstaxa";
+import { prebakeJoins } from "@/lib/shared/demo-source";
 import { buildKostnadsrakningContext } from "@/lib/shared/kostnadsrakning";
 
 const ORG_ID = "firma-ab";

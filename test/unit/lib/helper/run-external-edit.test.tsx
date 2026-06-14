@@ -6,6 +6,8 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 
+import { runExternalEdit } from "@/lib/client/firma/open-document-externally";
+
 const openInFinderMock = vi.fn();
 const trackerWatch = vi.fn(async () => {});
 let trackerValue: { watch: typeof trackerWatch } | null = { watch: trackerWatch };
@@ -16,8 +18,6 @@ vi.mock("@/lib/client/fsa/open-in-finder", () => ({
 vi.mock("@/lib/client/fsa/external-edit-tracker", () => ({
   getExternalEditTracker: () => trackerValue,
 }));
-
-import { runExternalEdit } from "@/lib/client/firma/open-document-externally";
 
 const DOC = { id: "d1", fileName: "rapport.pdf", storagePath: "documents/d1.pdf" };
 

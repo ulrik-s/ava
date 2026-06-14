@@ -10,8 +10,8 @@
  *   - Form-rad stackar på mobil (flex-col), row på tablet+ (sm:flex-row).
  */
 
-import { describe, it, expect, vi } from "vitest-compat";
 import { render, screen } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest-compat";
 import { DemoClient } from "@/app/demo/_demo-client";
 import { DemoRuntime } from "@/lib/server/local-first/demo-runtime";
 

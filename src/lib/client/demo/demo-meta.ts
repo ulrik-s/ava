@@ -9,9 +9,9 @@
  */
 import { z } from "zod";
 
-import { DEMO_META_PATH } from "../../../../tooling/demo-config";
 import { resolveGhPagesUrl } from "@/lib/shared/gh-pages-url";
 import { assertRepoSchemaCompatible } from "@/lib/shared/schema-version";
+import { DEMO_META_PATH } from "../../../../tooling/demo-config";
 
 // Zod vid parsegränsen (#187): meta.json är extern nätverksdata — valideras
 // strikt här i stället för handrullade typeof-helpers. Felmeddelandena är

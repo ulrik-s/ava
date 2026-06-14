@@ -1,12 +1,12 @@
 "use client";
 
 import { useId, useState } from "react";
-import { EntityLink } from "@/lib/client/demo/entity-link";
-import { trpc } from "@/lib/client/trpc";
-import { formatMinutes } from "@/lib/client/utils";
-import { periodFrom, periodTo } from "@/lib/client/time-filter";
 import { MatterCombobox, type MatterOption } from "@/components/matter/matter-combobox";
 import { DataTable, type Column } from "@/components/ui/data-table";
+import { EntityLink } from "@/lib/client/demo/entity-link";
+import { periodFrom, periodTo } from "@/lib/client/time-filter";
+import { trpc } from "@/lib/client/trpc";
+import { formatMinutes } from "@/lib/client/utils";
 
 interface TimeRow {
   id: string;

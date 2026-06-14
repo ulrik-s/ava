@@ -8,19 +8,19 @@
  * `enqueueMirror()` när `mirrorToOutlook=true`.
  */
 
-import { useState, useEffect, useMemo } from "react";
-import { trpc } from "@/lib/client/trpc";
 import { Calendar as CalendarIcon, Plus, ExternalLink, Trash2, CheckCircle2, List, LayoutGrid, CalendarDays, Sun } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { MatterCombobox } from "@/components/matter/matter-combobox";
+import { CheckboxList } from "@/components/ui/checkbox-list";
+import { resolveSelectedUsers } from "@/lib/client/calendar/select-users";
+import { buildUserColorMap, type UserColor } from "@/lib/client/calendar/user-colors";
 import { jobQueue } from "@/lib/client/jobs/job-queue";
+import { trpc } from "@/lib/client/trpc";
+import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { CalendarGrid, startOfDay } from "./_calendar-grid";
 import { DayView } from "./_day-view";
 import { EventDetailModal, type EventDetail } from "./_event-detail-modal";
-import { MatterCombobox } from "@/components/matter/matter-combobox";
-import { CheckboxList } from "@/components/ui/checkbox-list";
 import { UserPicker, loadSelectedUserIds } from "./_user-picker";
-import { buildUserColorMap, type UserColor } from "@/lib/client/calendar/user-colors";
-import { resolveSelectedUsers } from "@/lib/client/calendar/select-users";
-import { omitUndefined } from "@/lib/shared/omit-undefined";
 
 type ViewMode = "list" | "day" | "week" | "month";
 

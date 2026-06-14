@@ -10,8 +10,8 @@
  */
 
 import { useEffect } from "react";
-import { installConsoleCapture } from "@/lib/client/diagnostics/log-buffer";
 import { logBuffer } from "@/lib/client/diagnostics";
+import { installConsoleCapture } from "@/lib/client/diagnostics/log-buffer";
 
 export function DiagnosticsRegistrar() {
   useEffect(() => {

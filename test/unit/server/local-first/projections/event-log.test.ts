@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest-compat";
+import type { AvaEvent } from "@/lib/server/events/schema";
 import { EventLogProjection } from "@/lib/server/local-first/projections/event-log";
 import { dayBucketPath, monthBucketPath } from "@/lib/server/local-first/projections/time-bucket";
-import type { AvaEvent } from "@/lib/server/events/schema";
 
 describe("time-bucket helpers", () => {
   it("dayBucketPath zero-pad:ar månad och dag", () => {

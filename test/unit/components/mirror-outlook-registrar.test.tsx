@@ -3,8 +3,14 @@
  * Verifierar token-providerns tre källor (manuell localStorage → o365-connector
  * → null) inkl. icke-ansluten + kast, samt mirror-state-dispatchern och cleanup.
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest-compat";
 import { render } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest-compat";
+
+import { MirrorOutlookRegistrar } from "@/components/matter/mirror-outlook-registrar";
+import {
+  getOutlookToken, dispatchMirrorState,
+  setOutlookTokenProvider, setMirrorStateDispatcher,
+} from "@/lib/client/jobs/mirror-outlook-dispatch";
 
 const mutateAsync = vi.fn(async () => {});
 const getConnectorMock = vi.fn();
@@ -15,12 +21,6 @@ vi.mock("@/lib/client/trpc", () => ({
 vi.mock("@/lib/client/integrations/registry", () => ({
   getConnector: (...a: unknown[]) => getConnectorMock(...a),
 }));
-
-import { MirrorOutlookRegistrar } from "@/components/matter/mirror-outlook-registrar";
-import {
-  getOutlookToken, dispatchMirrorState,
-  setOutlookTokenProvider, setMirrorStateDispatcher,
-} from "@/lib/client/jobs/mirror-outlook-dispatch";
 
 beforeEach(() => {
   vi.clearAllMocks();

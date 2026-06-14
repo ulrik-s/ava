@@ -9,11 +9,11 @@
  * inte deras nycklar — de är privata).
  */
 
-import { useEffect, useState } from "react";
-import { trpc } from "@/lib/client/trpc";
 import { User, KeyRound, Plus, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { IntegrationsSection } from "@/components/settings/integrations-section";
 import { KeypairManager } from "@/components/settings/keypair-manager";
+import { trpc } from "@/lib/client/trpc";
 import type { PublicKey } from "@/lib/shared/schemas/user";
 
 export default function ProfilePage() {

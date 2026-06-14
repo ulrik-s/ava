@@ -2,8 +2,8 @@
  * Test för Sidebar — navigation, aktiv markering, mobile drawer, lokal sign-out.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { Sidebar } from "@/components/shell/sidebar";
 
 const pathnameMock = vi.fn(() => "/");

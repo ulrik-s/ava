@@ -10,13 +10,13 @@
  * är bara ihop-koppling + miljö-config.
  */
 
-import { LogBuffer } from "./log-buffer";
-import { IssueStore } from "./issue-store";
-import { detectDomAnomalies } from "./dom-anomalies";
-import { buildIssueReport, githubIssueNewUrl, type IssueReport } from "./report";
 import { parseRepoLocator, type RepoLocator } from "@/lib/client/github/api";
 import type { InvariantViolation } from "@/lib/shared/diagnostics/invariants";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
+import { detectDomAnomalies } from "./dom-anomalies";
+import { IssueStore } from "./issue-store";
+import { LogBuffer } from "./log-buffer";
+import { buildIssueReport, githubIssueNewUrl, type IssueReport } from "./report";
 
 /** App-wide console-/fel-ringbuffert. */
 export const logBuffer = new LogBuffer(300);

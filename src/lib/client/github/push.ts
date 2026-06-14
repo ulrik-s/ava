@@ -14,12 +14,12 @@
  *   7. Skriv uppdaterad sync-state.json
  */
 
-import { readSyncState, writeSyncState, type SyncState } from "./sync-state";
-import { walkFsa } from "./fsa-walker";
 import {
   createBlob, createTree, createCommit, updateRef,
   type RepoLocator,
 } from "./api";
+import { walkFsa } from "./fsa-walker";
+import { readSyncState, writeSyncState, type SyncState } from "./sync-state";
 
 export interface PushArgs {
   handle: FileSystemDirectoryHandle;

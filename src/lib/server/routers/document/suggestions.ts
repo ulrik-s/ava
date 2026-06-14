@@ -7,16 +7,16 @@
  * `@/lib/shared/contact-dedup`. Routern sköter IO och transaktionsflöde.
  */
 
-import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { orgProcedure } from "../../trpc";
-import { groupSuggestions, type RawSuggestion } from "@/lib/shared/suggestion-grouping";
-import { matterRoleSchema, contactTypeSchema, type SuggestionStatus } from "@/lib/shared/schemas/enums";
-import { asId, type ContactId } from "@/lib/shared/schemas/ids";
+import { z } from "zod";
 import {
   findExistingContactForSuggestion,
   type ContactCandidate,
 } from "@/lib/shared/contact-dedup";
+import { matterRoleSchema, contactTypeSchema, type SuggestionStatus } from "@/lib/shared/schemas/enums";
+import { asId, type ContactId } from "@/lib/shared/schemas/ids";
+import { groupSuggestions, type RawSuggestion } from "@/lib/shared/suggestion-grouping";
+import { orgProcedure } from "../../trpc";
 
 // ─── Helpers för acceptSuggestion ─────────────────────────────────────────
 

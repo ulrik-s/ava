@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest-compat";
+import type { AvaEvent } from "@/lib/server/events/schema";
 import { matchEventTriggers, matchHttpTrigger } from "@/lib/server/rules/match";
 import type { AvaRule } from "@/lib/server/rules/schema";
-import type { AvaEvent } from "@/lib/server/events/schema";
 
 const baseEvent: AvaEvent = {
   id: "e1",

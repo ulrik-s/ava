@@ -26,6 +26,7 @@ import {
   isFilterable, isGroupable, mergePrefs, sortRows, filterRows, groupRows,
   isColumnHidden, visibleColumns, hasOverrides, hasSummary, buildSummaryContent,
 } from "./data-table-logic";
+
 export type { SortDir, Column, DataTablePrefs, RowGroup } from "./data-table-logic";
 export {
   isFilterable, isGroupable, mergePrefs, sortRows, filterRows, groupRows,

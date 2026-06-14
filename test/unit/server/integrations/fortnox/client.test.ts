@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest-compat";
 import { FortnoxClient } from "@/lib/server/integrations/fortnox/client";
-import { InMemoryFortnoxTokenStore } from "@/lib/server/integrations/fortnox/token-store";
 import type { FortnoxConfig, FortnoxStoredTokens, FortnoxVoucher } from "@/lib/server/integrations/fortnox/schema";
+import { InMemoryFortnoxTokenStore } from "@/lib/server/integrations/fortnox/token-store";
 
 const config: FortnoxConfig = {
   clientId: "cid",

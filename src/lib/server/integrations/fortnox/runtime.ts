@@ -12,8 +12,8 @@
  * när en byrå faktiskt anslutit Fortnox.
  */
 
-import { createVaultFromEnv, type SecretsVault } from "../../secrets/vault";
 import type { PeerJob } from "../../local-first/peer-loop";
+import { createVaultFromEnv, type SecretsVault } from "../../secrets/vault";
 import type { LedgerConnector } from "../ledger/port";
 import { FortnoxClient } from "./client";
 import { FortnoxLedgerConnector } from "./connector";

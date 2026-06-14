@@ -2,8 +2,8 @@
  * Test för NewUserPage — formulär för att skapa användare.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import NewUserPage from "@/app/users/new/page";
 
 const routerPush = vi.fn();

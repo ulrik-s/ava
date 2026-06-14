@@ -1,9 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { trpc } from "@/lib/client/trpc";
 import { TemplateEditor } from "@/components/settings/template-editor";
 import { useRouteId } from "@/lib/client/demo/use-route-id";
+import { trpc } from "@/lib/client/trpc";
 
 export default function EditTemplateClient({ id: paramId }: { id: string }) {
   // Static export serverar __shell__ för okända id:n → läs riktiga id:t

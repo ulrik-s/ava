@@ -10,8 +10,8 @@
  *
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest-compat";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest-compat";
 import {
   AuthTokenSection,
   CorsProxyField,

@@ -2,8 +2,8 @@
  * Test för SuggestionsPanel — rendering, accept/reject, dedup-grupper.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { SuggestionsPanel } from "@/components/matter/suggestions-panel";
 
 type Group = {

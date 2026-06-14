@@ -4,12 +4,12 @@
  * HTTPS serveras med ett lokalt genererat cert (ADR 0006).
  */
 
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { connect } from "node:tls";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
 import { HELPER_PING_PREFIX } from "@/lib/shared/helper/protocol";
 import { resolveDataDir } from "../src/paths.ts";

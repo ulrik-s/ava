@@ -6,6 +6,9 @@
 
 import { describe, it, expect, vi } from "vitest-compat";
 
+import type { FsaIsoGitAdapter } from "@/lib/client/fsa/fs-adapter";
+import { cloneRepo } from "@/lib/client/fsa/git-ops";
+
 const mockClone = vi.fn();
 const mockSetConfig = vi.fn();
 const mockFetch = vi.fn();
@@ -21,9 +24,6 @@ vi.mock("isomorphic-git", () => ({
 vi.mock("isomorphic-git/http/web", () => ({
   default: { request: vi.fn() },
 }));
-
-import { cloneRepo } from "@/lib/client/fsa/git-ops";
-import type { FsaIsoGitAdapter } from "@/lib/client/fsa/fs-adapter";
 
 const fsStub = {} as FsaIsoGitAdapter;
 

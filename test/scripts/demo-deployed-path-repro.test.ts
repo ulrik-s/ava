@@ -6,16 +6,16 @@
  */
 
 import { describe, it, expect } from "vitest-compat";
-import { buildSeed } from "../../tooling/scripts/seed-data";
+import { prebakeJoins } from "@/lib/shared/demo-source";
+import { noopPorts } from "../../src/lib/server/adapters/noop-ports";
+import { buildContext } from "../../src/lib/server/build-context";
+import { DemoDataStore, type DemoSource } from "../../src/lib/server/data-store/DemoDataStore";
+import { buildDefaultRegistry } from "../../src/lib/server/local-first/projections/default-registry";
+import { appRouter } from "../../src/lib/server/routers/_app";
 import { createGitTarget } from "../../tooling/demo-generator/backend-target";
 import { populate } from "../../tooling/demo-generator/populate";
 import { populateBilling } from "../../tooling/demo-generator/populate-billing";
-import { prebakeJoins } from "@/lib/shared/demo-source";
-import { DemoDataStore, type DemoSource } from "../../src/lib/server/data-store/DemoDataStore";
-import { buildContext } from "../../src/lib/server/build-context";
-import { noopPorts } from "../../src/lib/server/adapters/noop-ports";
-import { appRouter } from "../../src/lib/server/routers/_app";
-import { buildDefaultRegistry } from "../../src/lib/server/local-first/projections/default-registry";
+import { buildSeed } from "../../tooling/scripts/seed-data";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = any;

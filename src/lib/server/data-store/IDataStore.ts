@@ -12,7 +12,6 @@
  * Tighten i framtiden mot Zod-inferade row-typer per delegate.
  */
 
-import type { AvaEvent, EmitInput, EventFilter } from "../events/schema";
 import type {
   Contact, Matter, MatterContact, Document, DocumentFolder,
   DocumentTemplate, DocumentAnalysisSuggestion, MatterEventSuggestion,
@@ -21,6 +20,7 @@ import type {
   ExpectedReceivable,
   CalendarEvent, Task,
 } from "@/lib/shared/schemas";
+import type { AvaEvent, EmitInput, EventFilter } from "../events/schema";
 
 // ─── Event-log ────────────────────────────────────────────────────────
 

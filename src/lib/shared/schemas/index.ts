@@ -13,16 +13,6 @@
  */
 
 import type { z } from "zod";
-import { organizationSchema, officeSchema } from "./organization";
-import { userSchema } from "./user";
-import { contactSchema } from "./contact";
-import { matterSchema, matterContactSchema } from "./matter";
-import {
-  documentSchema,
-  documentFolderSchema,
-  documentAnalysisSuggestionSchema,
-  matterEventSuggestionSchema,
-} from "./document";
 import {
   timeEntrySchema,
   expenseSchema,
@@ -36,9 +26,19 @@ import {
   invoiceDispatchSchema,
   expectedReceivableSchema,
 } from "./billing";
-import { documentTemplateSchema, conflictCheckSchema } from "./misc";
 import { calendarEventSchema, taskSchema } from "./calendar";
+import { contactSchema } from "./contact";
+import {
+  documentSchema,
+  documentFolderSchema,
+  documentAnalysisSuggestionSchema,
+  matterEventSuggestionSchema,
+} from "./document";
+import { matterSchema, matterContactSchema } from "./matter";
+import { documentTemplateSchema, conflictCheckSchema } from "./misc";
+import { organizationSchema, officeSchema } from "./organization";
 import { userPreferenceSchema, orgPreferenceSchema } from "./preference";
+import { userSchema } from "./user";
 
 export * from "./enums";
 export * from "./ids";

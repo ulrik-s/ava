@@ -2,8 +2,8 @@
  * GitUsernameField — visa/dölj på tier + tomt → "härleds"-placeholder.
  */
 
-import { describe, it, expect, vi } from "vitest-compat";
 import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest-compat";
 import { GitUsernameField } from "@/components/settings/firma-settings-panel";
 
 describe("GitUsernameField", () => {

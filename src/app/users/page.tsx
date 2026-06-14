@@ -1,11 +1,11 @@
 "use client";
 
-import Link from "next/link";
-import { EntityLink } from "@/lib/client/demo/entity-link";
-import { trpc } from "@/lib/client/trpc";
 import { ShieldAlert, UserX, UserRound } from "lucide-react";
+import Link from "next/link";
 import { DataTable, type Column } from "@/components/ui/data-table";
+import { EntityLink } from "@/lib/client/demo/entity-link";
 import { patchFirmaConfig } from "@/lib/client/firma/firma-config";
+import { trpc } from "@/lib/client/trpc";
 
 const roleLabels: Record<string, string> = {
   ADMIN: "Admin",

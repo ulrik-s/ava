@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { DataTable, type Column } from "@/components/ui/data-table";
+import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
-import { EntityLink } from "@/lib/client/demo/entity-link";
-import { DataTable, type Column } from "@/components/ui/data-table";
 import { SieExportButton } from "./_sie-export-button";
 
 const STATUS_LABELS: Record<string, string> = {

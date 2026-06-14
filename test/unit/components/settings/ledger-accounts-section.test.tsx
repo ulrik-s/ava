@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from "vitest-compat";
 import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest-compat";
 import { LedgerAccountsSection } from "@/components/settings/ledger-accounts-section";
 
 const state = { role: "ADMIN" as string };

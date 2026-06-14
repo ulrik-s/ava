@@ -1,12 +1,12 @@
 "use client";
 
-import { Suspense, useId, useState } from "react";
-import { EntityLink } from "@/lib/client/demo/entity-link";
 import { useSearchParams } from "next/navigation";
-import { trpc } from "@/lib/client/trpc";
-import { useIsReadOnly } from "@/lib/client/demo/demo-mode-context";
+import { Suspense, useId, useState } from "react";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { Pager } from "@/components/ui/pager";
+import { useIsReadOnly } from "@/lib/client/demo/demo-mode-context";
+import { EntityLink } from "@/lib/client/demo/entity-link";
+import { trpc } from "@/lib/client/trpc";
 
 interface MatterRow {
   id: string;

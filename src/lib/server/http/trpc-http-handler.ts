@@ -19,9 +19,9 @@
  */
 
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
+import type { Principal } from "@/lib/server/auth/principal";
 import { appRouter } from "@/lib/server/routers/_app";
 import type { Context } from "@/lib/server/trpc-core";
-import type { Principal } from "@/lib/server/auth/principal";
 import { parseBearerToken, type PatVerifier } from "./pat";
 
 /** Default-URL-prefix mot vilket klienten gör tRPC-anrop. */

@@ -7,8 +7,8 @@
  * varje gång hen öppnar en fil.
  */
 
-import { useEffect, useState } from "react";
 import { Pencil } from "lucide-react";
+import { useEffect, useState } from "react";
 import { isFsaSupported, loadHandle, ensureReadWrite } from "@/lib/client/fsa/handle-store";
 import { preloadAllDocuments } from "@/lib/client/fsa/preload-documents";
 

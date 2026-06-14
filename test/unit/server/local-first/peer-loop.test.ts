@@ -8,9 +8,9 @@
 
 import { describe, it, expect } from "vitest-compat";
 
+import type { Principal } from "@/lib/server/auth/principal";
 import { PeerLoop, type PeerLoopDeps } from "@/lib/server/local-first/peer-loop";
 import type { PeerCycleResult } from "@/lib/server/local-first/server-peer";
-import type { Principal } from "@/lib/server/auth/principal";
 
 const PRINCIPAL: Principal = {
   id: "server-runtime",

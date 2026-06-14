@@ -9,9 +9,9 @@
  * Tooling/test-fixtures FÅR använda strängar som "u-anna" — bara web-app
  * runtime-koden är gated.
  */
-import { describe, it, expect } from "vitest-compat";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { describe, it, expect } from "vitest-compat";
 
 const ROOTS = [
   "src/app",

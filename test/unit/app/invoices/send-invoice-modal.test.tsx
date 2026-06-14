@@ -3,8 +3,10 @@
  * + explicit "skickad"-bekräftelse som registrerar dispatch.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
+
+import { SendInvoiceModal } from "@/app/invoices/[id]/_send-invoice-modal";
 
 const recordMutate = vi.fn();
 const composeMail = vi.fn(async () => true);
@@ -25,8 +27,6 @@ vi.mock("@/lib/client/helper/use-helper", () => ({
 }));
 vi.mock("@/lib/client/download-text", () => ({ downloadBytes: (...a: unknown[]) => downloadBytes(...a) }));
 vi.mock("@/lib/client/kostnadsrakning/render-faktura-pdf", () => ({ renderFakturaPdf: (...a: unknown[]) => renderFakturaPdf(...a) }));
-
-import { SendInvoiceModal } from "@/app/invoices/[id]/_send-invoice-modal";
 
 const baseProps = {
   invoiceId: "inv-1",

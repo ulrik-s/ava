@@ -186,6 +186,21 @@ module.exports = {
       to: { path: "^src/lib/(client|server)/" },
     },
     {
+      // Add-in-gräns (#72, ADR 0013): Outlook-add-in:en är en TUNN HTTP-klient.
+      // Den återanvänder web-appens klient-lager (tRPC-add-in-klient + Graph-
+      // helpers) men får bara referera backend-lagret via TYPER (AppRouter-
+      // kontraktet) — aldrig dra in körbar server-kod i bundlen. Samma princip
+      // som `ui-imports-server-by-type-only`, fast för add-in-target:et.
+      name: "addin-imports-server-by-type-only",
+      severity: "error",
+      comment:
+        "Office-add-in (office-addin/) får bara type-only-importera server/ " +
+        "(tRPC-kontraktet AppRouter). Värde-importer av server-kod hör inte " +
+        "hemma i en tunn HTTP-klient (ADR 0013).",
+      from: { path: "^office-addin/" },
+      to: { path: "^src/lib/server/", dependencyTypesNot: ["type-only"] },
+    },
+    {
       // Pluggbar ledger/faktura (ADR 0011, #234): faktura-domänen — det
       // framework-agnostiska shared-lagret + billing-routrarna (invoice/
       // billingRun/reports) — är SYSTEMOBEROENDE. Den får importera PORTEN
@@ -273,6 +288,7 @@ module.exports = {
         "(^|/)reports(/|$)",
         "(^|/)storage(/|$)",
         "(^|/)src/shared/generated(/|$)",
+        "(^|/)office-addin/dist(/|$)", // bygg-artefakt (bun-bundlad taskpane.js)
       ],
     },
     tsConfig: { fileName: "tsconfig.json" },

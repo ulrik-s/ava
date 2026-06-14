@@ -3,8 +3,8 @@
  * RIKTIGA extract-text-dispatchern (ingen mock): mount registrerar en dispatcher
  * som dispatchar `ava:document-text-extracted`; unmount avregistrerar.
  */
-import { describe, it, expect, afterEach } from "vitest-compat";
 import { render } from "@testing-library/react";
+import { describe, it, expect, afterEach } from "vitest-compat";
 import { ExtractTextDispatcherRegistrar } from "@/components/documents/extract-text-dispatcher-registrar";
 import { dispatchExtractText, setExtractTextDispatcher } from "@/lib/client/jobs/extract-text-dispatch";
 

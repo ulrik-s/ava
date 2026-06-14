@@ -16,10 +16,10 @@
  * dataset oavsett deploy-läge. Idempotent — tom diff: ingen commit/push.
  */
 
-import { mkdirSync, rmSync, existsSync } from "node:fs";
 import { execSync } from "node:child_process";
-import { resolve } from "node:path";
+import { mkdirSync, rmSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { resolve } from "node:path";
 import { generateInto } from "../demo-generator/generate-into";
 
 const REPO_URL = process.env.SEED_REPO_URL ?? "http://localhost:8080/git/firma.git";

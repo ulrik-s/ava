@@ -4,8 +4,8 @@
  */
 
 import { describe, it, expect, vi } from "vitest-compat";
-import { mailDocument } from "@/lib/client/graph/mail-document";
 import { GRAPH_BASE, type GraphFetch } from "@/lib/client/graph/graph-mail";
+import { mailDocument } from "@/lib/client/graph/mail-document";
 
 const doc = { fileName: "stamning.pdf", mimeType: "application/pdf", bytes: new Uint8Array([37, 80, 68, 70]) };
 const b64 = Buffer.from([37, 80, 68, 70]).toString("base64");

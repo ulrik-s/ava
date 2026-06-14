@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest-compat";
+import type { FortnoxStoredTokens } from "@/lib/server/integrations/fortnox/schema";
 import { VaultFortnoxTokenStore } from "@/lib/server/integrations/fortnox/token-store";
 import type { SecretsVault } from "@/lib/server/secrets/vault";
-import type { FortnoxStoredTokens } from "@/lib/server/integrations/fortnox/schema";
 
 class MemVault implements SecretsVault {
   readonly m = new Map<string, string>();

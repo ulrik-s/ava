@@ -1,12 +1,12 @@
 "use client";
 
+import { ArrowLeft, Ban, Wallet } from "lucide-react";
 import Link from "next/link";
-import { trpc } from "@/lib/client/trpc";
-import { useRouteId } from "@/lib/client/demo/use-route-id";
 import { EntityLink } from "@/lib/client/demo/entity-link";
+import { useRouteId } from "@/lib/client/demo/use-route-id";
+import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
 import { computeInvoiceLedger } from "@/lib/shared/write-off-calc";
-import { ArrowLeft, Ban, Wallet } from "lucide-react";
 
 const STATUS_LABEL: Record<string, string> = {
   ACTIVE: "Aktiv",

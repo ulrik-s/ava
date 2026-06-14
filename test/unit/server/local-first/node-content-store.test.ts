@@ -4,12 +4,12 @@
  * isolering per suite.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from "vitest-compat";
 import { mkdtemp, rm, readFile } from "node:fs/promises";
-import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { NodeContentStore } from "@/lib/server/local-first/node-content-store";
+import { join } from "node:path";
+import { describe, it, expect, beforeEach, afterEach } from "vitest-compat";
 import { noopContentStore } from "@/lib/server/adapters/noop-ports";
+import { NodeContentStore } from "@/lib/server/local-first/node-content-store";
 
 describe("noopContentStore", () => {
   it("är en tyst no-op (demo/web skriver bytes klient-sidigt via FSA)", async () => {

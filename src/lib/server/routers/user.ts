@@ -1,4 +1,7 @@
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import { userIdSchema, asId } from "@/lib/shared/schemas/ids";
+import { publicKeySchema, matterNumberPrefixSchema, type PublicKey } from "@/lib/shared/schemas/user";
 import { router, protectedProcedure } from "../trpc";
 // bcryptjs är borttagen — pure-git-modellen har inte server-side
 // password-hashing. Om/när lokal HTTP Basic Auth införs på Linux-boxen
@@ -10,9 +13,6 @@ async function hashPassword(password: string): Promise<string> {
   // bcrypt-hash. Riktig hashing måste göras innan vi går prod.
   return `placeholder:${password.length}-chars`;
 }
-import { TRPCError } from "@trpc/server";
-import { publicKeySchema, matterNumberPrefixSchema, type PublicKey } from "@/lib/shared/schemas/user";
-import { userIdSchema, asId } from "@/lib/shared/schemas/ids";
 
 // Smal select för listor — håller utgående typ stabil för konsumenter
 // (reports, tids-rader, etc.) som inte bryr sig om nycklar.

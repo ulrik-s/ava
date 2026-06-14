@@ -13,12 +13,12 @@
  *     `Access-Control-Allow-Origin: *`.
  */
 
-import type { FsaIsoGitAdapter } from "./fs-adapter";
-import { sshToHttps } from "./url-rewrite";
-import { DEFAULT_CORS_PROXY } from "@/lib/client/sync/cors-proxy";
 import type * as IsomorphicGit from "isomorphic-git";
 import type { FsClient } from "isomorphic-git";
 import type * as IsomorphicGitHttp from "isomorphic-git/http/web";
+import { DEFAULT_CORS_PROXY } from "@/lib/client/sync/cors-proxy";
+import type { FsaIsoGitAdapter } from "./fs-adapter";
+import { sshToHttps } from "./url-rewrite";
 
 /**
  * `FsaIsoGitAdapter` exponerar `promises`-API:t som isomorphic-git

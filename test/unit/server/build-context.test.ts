@@ -7,10 +7,10 @@
  */
 
 import { describe, it, expect } from "vitest-compat";
+import type { Principal } from "@/lib/server/auth/principal";
 import { buildContext } from "@/lib/server/build-context";
 import type { IDataStore } from "@/lib/server/data-store/IDataStore";
 import type { IPorts } from "@/lib/server/ports";
-import type { Principal } from "@/lib/server/auth/principal";
 
 const fakeStore = { marker: "store" } as unknown as IDataStore;
 const fakePorts = { marker: "ports" } as unknown as IPorts;

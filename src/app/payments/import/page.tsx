@@ -11,9 +11,9 @@
  */
 
 import { useMemo, useState } from "react";
+import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
-import { EntityLink } from "@/lib/client/demo/entity-link";
 import { parseCamtXml, type CamtFile } from "@/lib/shared/payments/camt-parse";
 import {
   matchTransactions,

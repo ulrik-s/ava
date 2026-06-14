@@ -3,8 +3,8 @@
  * för en användare/dag-range, sorterat på tid.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { TRPCError } from "@trpc/server";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { todoRouter } from "@/lib/server/routers/todo";
 import { dataStoreFromMockPrisma } from "../helpers/mock-data-store";
 

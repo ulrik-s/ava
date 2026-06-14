@@ -1,13 +1,13 @@
 "use client";
 
-import { Suspense, useId, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { EntityLink } from "@/lib/client/demo/entity-link";
-import { trpc } from "@/lib/client/trpc";
-import { labelForContactType, contactTypeOptions } from "@/lib/client/labels";
-import { useIsReadOnly } from "@/lib/client/demo/demo-mode-context";
+import { Suspense, useId, useState } from "react";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { Pager } from "@/components/ui/pager";
+import { useIsReadOnly } from "@/lib/client/demo/demo-mode-context";
+import { EntityLink } from "@/lib/client/demo/entity-link";
+import { labelForContactType, contactTypeOptions } from "@/lib/client/labels";
+import { trpc } from "@/lib/client/trpc";
 
 interface ContactRow {
   id: string;

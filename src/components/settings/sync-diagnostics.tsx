@@ -11,12 +11,12 @@
  *   - "Synka nu" → triggar manuell sync
  */
 
-import { useEffect, useState, type ReactNode } from "react";
 import { RefreshCw } from "lucide-react";
-import { useSyncContext } from "@/lib/client/sync/sync-context";
-import type { SyncState } from "@/lib/client/sync/use-auto-sync";
+import { useEffect, useState, type ReactNode } from "react";
 import { loadFirmaConfig } from "@/lib/client/firma/firma-config";
 import { loadHandle } from "@/lib/client/fsa/handle-store";
+import { useSyncContext } from "@/lib/client/sync/sync-context";
+import type { SyncState } from "@/lib/client/sync/use-auto-sync";
 import { pluralChanges } from "@/lib/client/utils";
 
 // eslint-disable-next-line complexity

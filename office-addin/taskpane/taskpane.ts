@@ -139,9 +139,11 @@ function getRestToken(): Promise<string> {
   });
 }
 
-function debounce<T extends (...a: any[]) => void>(fn: T, ms: number): T { // eslint-disable-line @typescript-eslint/no-explicit-any
+// fn får returnera Promise (async-handlers) — vi void:ar den i setTimeout så
+// no-misused-promises är nöjd och flytande promise:n är medveten.
+function debounce<A extends unknown[]>(fn: (...a: A) => unknown, ms: number): (...a: A) => void {
   let t: ReturnType<typeof setTimeout>;
-  return ((...a: any[]) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }) as T; // eslint-disable-line @typescript-eslint/no-explicit-any
+  return (...a: A) => { clearTimeout(t); t = setTimeout(() => { void fn(...a); }, ms); };
 }
 
 function errMsg(e: unknown): string {

@@ -7,11 +7,11 @@
  * i sandbox).
  */
 
-import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest-compat";
-import { mkdtemp, rm, writeFile, mkdir } from "node:fs/promises";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
 import { execSync, spawnSync } from "node:child_process";
+import { mkdtemp, rm, writeFile, mkdir } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest-compat";
 import { NodeGitOps } from "@/lib/server/local-first/node-git-ops";
 
 function hasGit(): boolean {

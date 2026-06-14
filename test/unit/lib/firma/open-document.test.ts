@@ -4,8 +4,8 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
-import { openDocument, withUtf8CharsetIfText } from "@/lib/client/firma/open-document";
 import { clearGeneratedDocCache, stashGeneratedDoc } from "@/lib/client/demo/generated-doc-cache";
+import { openDocument, withUtf8CharsetIfText } from "@/lib/client/firma/open-document";
 
 const baseDoc = { id: "doc-1", storagePath: "documents/content/doc-1.md", fileName: "x.md" };
 

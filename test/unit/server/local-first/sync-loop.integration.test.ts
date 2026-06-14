@@ -5,12 +5,11 @@
  * fungerar identiskt mot subprocess-git som mot InMemory-mocken.
  */
 
-import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from "vitest-compat";
-import { mkdtemp, rm, mkdir } from "node:fs/promises";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
 import { execSync, spawnSync } from "node:child_process";
-import { SyncLoop } from "@/lib/server/local-first/sync-loop";
+import { mkdtemp, rm, mkdir } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from "vitest-compat";
 import { NodeFileSystem } from "@/lib/server/local-first/node-fs";
 import { NodeGitOps } from "@/lib/server/local-first/node-git-ops";
 import {
@@ -19,6 +18,7 @@ import {
 } from "@/lib/server/local-first/projection-writer";
 import { buildDefaultRegistry } from "@/lib/server/local-first/projections/default-registry";
 import type { MatterProjectionData } from "@/lib/server/local-first/projections/matter";
+import { SyncLoop } from "@/lib/server/local-first/sync-loop";
 
 function hasGit(): boolean {
   return spawnSync("git", ["--version"], { stdio: "ignore" }).status === 0;

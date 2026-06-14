@@ -17,11 +17,11 @@
  * testen failar på ALLA error-svåra brott (även framtida regler) så att en
  * ny regel automatiskt blir en del av sviten.
  */
-import { describe, it, expect, beforeAll } from "vitest-compat";
 import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
-import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { describe, it, expect, beforeAll } from "vitest-compat";
 
 const require = createRequire(import.meta.url);
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..");

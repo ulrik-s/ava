@@ -17,10 +17,10 @@
 
 import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
+import { asId } from "@/lib/shared/schemas/ids";
+import type { Principal } from "./auth/principal";
 import type { IDataStore } from "./data-store/IDataStore";
 import type { IPorts } from "./ports";
-import type { Principal } from "./auth/principal";
-import { asId } from "@/lib/shared/schemas/ids";
 
 export type Context = {
   /** Read/write-data via abstraktion. Git-backenden wirar DemoDataStore. */

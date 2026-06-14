@@ -9,7 +9,6 @@
  */
 
 import { useId, useState } from "react";
-import { trpc } from "@/lib/client/trpc";
 import {
   PAYMENT_METHOD_LABELS,
   paymentMethodOptions,
@@ -17,6 +16,7 @@ import {
   CREDIT_RISK_LABELS,
   type CreditRisk,
 } from "@/lib/client/labels";
+import { trpc } from "@/lib/client/trpc";
 
 const RISK_BADGE: Record<CreditRisk, string> = {
   LOW: "bg-green-50 text-green-700 border-green-200",

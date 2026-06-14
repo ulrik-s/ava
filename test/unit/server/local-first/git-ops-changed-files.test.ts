@@ -4,15 +4,15 @@
  * och de ska bete sig identiskt.
  */
 
-import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest-compat";
-import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
 import { execSync, spawnSync } from "node:child_process";
-import { InMemoryGitOps } from "@/lib/server/local-first/in-memory-git-ops";
-import { InMemoryFileSystem } from "@/lib/server/local-first/in-memory-fs";
-import { NodeGitOps } from "@/lib/server/local-first/node-git-ops";
+import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest-compat";
 import type { IGitOps } from "@/lib/server/local-first/git-ops";
+import { InMemoryFileSystem } from "@/lib/server/local-first/in-memory-fs";
+import { InMemoryGitOps } from "@/lib/server/local-first/in-memory-git-ops";
+import { NodeGitOps } from "@/lib/server/local-first/node-git-ops";
 
 function hasGit() { return spawnSync("git", ["--version"], { stdio: "ignore" }).status === 0; }
 

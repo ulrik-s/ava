@@ -2,8 +2,8 @@
  * Tester för `DemoModeContext` + `useIsReadOnly()`.
  */
 
-import { describe, it, expect } from "vitest-compat";
 import { renderHook } from "@testing-library/react";
+import { describe, it, expect } from "vitest-compat";
 import { DemoModeProvider, useIsReadOnly } from "@/lib/client/demo/demo-mode-context";
 
 describe("useIsReadOnly", () => {

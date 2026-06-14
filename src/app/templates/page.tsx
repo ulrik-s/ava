@@ -1,13 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { Plus, Pencil, Trash2, FileText } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { trpc } from "@/lib/client/trpc";
-import { EntityLink } from "@/lib/client/demo/entity-link";
-import { shellPath } from "@/lib/client/demo/entity-href";
-import { Plus, Pencil, Trash2, FileText } from "lucide-react";
+import { useState } from "react";
 import { DataTable, type Column } from "@/components/ui/data-table";
+import { shellPath } from "@/lib/client/demo/entity-href";
+import { EntityLink } from "@/lib/client/demo/entity-link";
+import { trpc } from "@/lib/client/trpc";
 
 interface Template {
   id: string;

@@ -12,9 +12,9 @@
  * primitiverna i src/lib/client/demo beskriver mönstret i prosa och undantas.
  */
 
-import { describe, it, expect } from "vitest-compat";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { describe, it, expect } from "vitest-compat";
 
 const ROUTES = "matters|contacts|invoices|payment-plans|users|templates";
 

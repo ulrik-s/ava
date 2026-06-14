@@ -12,8 +12,8 @@
  * vi i en omdirigerings-loop med demo-bootstrap.
  */
 import { useEffect, useState } from "react";
-import { loadFirmaConfig, patchFirmaConfig } from "@/lib/client/firma/firma-config";
 import { loadDemoMeta, type DemoMeta, type DemoMetaUser } from "@/lib/client/demo/demo-meta";
+import { loadFirmaConfig, patchFirmaConfig } from "@/lib/client/firma/firma-config";
 import { DEMO_PASSWORD } from "../../../tooling/demo-config";
 
 type State =

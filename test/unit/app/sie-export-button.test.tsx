@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from "vitest-compat";
 import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest-compat";
 import { SieExportButton } from "@/app/invoices/_sie-export-button";
 import { encodePc8 } from "@/lib/shared/accounting/pc8";
 

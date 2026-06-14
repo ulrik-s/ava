@@ -10,10 +10,10 @@
  * sync- och claim-logik.
  */
 
-import type { GitCommit, IGitOps, PushResult } from "./git-ops";
-import type { IFileSystem } from "./file-system";
-import { InMemoryFileSystem } from "./in-memory-fs";
 import { createHash } from "node:crypto";
+import type { IFileSystem } from "./file-system";
+import type { GitCommit, IGitOps, PushResult } from "./git-ops";
+import { InMemoryFileSystem } from "./in-memory-fs";
 
 interface SharedRemote {
   commits: GitCommit[]; // hela linje från initial commit

@@ -14,8 +14,8 @@
  * en git-db-entitet — bara en sökindex-cache — så ligger inte i registry:t.
  */
 
-import type { MutationEvent } from "@/lib/server/data-store/in-memory/writable-delegate";
 import { FsaIsoGitAdapter } from "@/lib/client/fsa/fs-adapter";
+import type { MutationEvent } from "@/lib/server/data-store/in-memory/writable-delegate";
 import { ENTITY_REGISTRY } from "@/lib/shared/schemas";
 
 /**

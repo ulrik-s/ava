@@ -3,9 +3,9 @@
  * "Låst på faktura"-state. Rättshjälp/rättsskydd-flödet bryter 1:1-
  * kopplingen mellan tidsrad och faktura, så koppling visas inte längre.
  */
-import { describe, it, expect, vi } from "vitest-compat";
-import { render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { render, screen } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest-compat";
 import { TimeSection } from "@/app/matters/[id]/_time-section";
 
 vi.mock("@/lib/client/trpc", () => {

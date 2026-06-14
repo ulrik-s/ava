@@ -13,9 +13,9 @@
  * Tauri-builden använder `OAuthDeviceFlow` (libcurl direkt) istället.
  */
 
-import { z } from "zod";
-import { useEffect, useState } from "react";
 import { ExternalLink } from "lucide-react";
+import { useEffect, useState } from "react";
+import { z } from "zod";
 import { loadOAuthConfig } from "@/lib/client/auth/oauth-config";
 
 interface Props {

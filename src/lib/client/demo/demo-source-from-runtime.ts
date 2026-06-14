@@ -9,8 +9,8 @@
  * implementera rekursiv hydrate.
  */
 
-import type { DemoRuntime } from "@/lib/server/local-first/demo-runtime";
 import type { DemoSource } from "@/lib/server/data-store/DemoDataStore";
+import type { DemoRuntime } from "@/lib/server/local-first/demo-runtime";
 import { prebakeJoins } from "@/lib/shared/demo-source";
 
 /** Projection-namn → DemoSource-fält. */

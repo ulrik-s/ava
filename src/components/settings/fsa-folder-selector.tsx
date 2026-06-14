@@ -11,9 +11,9 @@
  *   - Mapp vald → visa namn + "Byt mapp"
  */
 
-import { useEffect, useState } from "react";
-import { FolderOpen } from "lucide-react";
 import type { FsClient } from "isomorphic-git";
+import { FolderOpen } from "lucide-react";
+import { useEffect, useState } from "react";
 
 const HANDLE_KEY = "repo-root";
 

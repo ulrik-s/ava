@@ -11,14 +11,14 @@
  * Kräver system-`git` (samma som node-git-ops.test.ts) — hoppas annars över.
  */
 
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest-compat";
-import { mkdtemp, rm, readdir, mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
 import { execSync, spawnSync } from "node:child_process";
+import { mkdtemp, rm, readdir, mkdir, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest-compat";
+import type { Principal } from "@/lib/server/auth/principal";
 import { cloneWorkingCopy, runPeerCycle } from "@/lib/server/local-first/server-peer";
 import { CURRENT_SCHEMA_VERSION } from "@/lib/shared/schema-version";
-import type { Principal } from "@/lib/server/auth/principal";
 
 const ADMIN: Principal = {
   id: "current-user",

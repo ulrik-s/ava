@@ -6,10 +6,10 @@
  * CalendarGrid eller DayView.
  */
 
-import { EntityLink } from "@/lib/client/demo/entity-link";
-import { trpc } from "@/lib/client/trpc";
 import { Trash2, X, MapPin, Clock, User as UserIcon, Briefcase, Pencil, CalendarDays, Users } from "lucide-react";
 import type { UserColor } from "@/lib/client/calendar/user-colors";
+import { EntityLink } from "@/lib/client/demo/entity-link";
+import { trpc } from "@/lib/client/trpc";
 
 export interface EventDetail {
   id: string;

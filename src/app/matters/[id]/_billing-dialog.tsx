@@ -7,9 +7,9 @@
  *   KOSTNADSRAKNING  — bara notes + bekräftelse (väntar på dom efteråt)
  */
 import { useState } from "react";
+import { Modal } from "@/components/ui/modal";
 import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
-import { Modal } from "@/components/ui/modal";
 
 interface AccontoRow { id: string; amountOre: number; recipient: string }
 

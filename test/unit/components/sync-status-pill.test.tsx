@@ -3,8 +3,8 @@
  *
  */
 
-import { describe, it, expect } from "vitest-compat";
 import { render, screen } from "@testing-library/react";
+import { describe, it, expect } from "vitest-compat";
 import { SyncStatusPill } from "@/components/shell/sync-status-pill";
 import type { SyncState } from "@/lib/client/sync/use-auto-sync";
 

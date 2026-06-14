@@ -4,8 +4,8 @@
  *
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest-compat";
 import { renderHook, act, waitFor } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest-compat";
 import { useAutoSync, type SyncProvider } from "@/lib/client/sync/use-auto-sync";
 
 function makeProvider(overrides: Partial<SyncProvider> = {}): SyncProvider {

@@ -10,8 +10,8 @@
  */
 
 import type { inferRouterInputs } from "@trpc/server";
-import type { AppRouter } from "@/lib/server/routers/_app";
 import { fetchMessageEml, type GraphFetch } from "@/lib/client/graph/graph-mail";
+import type { AppRouter } from "@/lib/server/routers/_app";
 
 type SaveIncomingInput = inferRouterInputs<AppRouter>["mail"]["saveIncoming"];
 

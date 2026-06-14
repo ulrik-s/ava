@@ -1,5 +1,7 @@
 "use client";
 
+import { z } from "zod";
+
 /**
  * `.ava/sync-state.json` — lokal metadata-fil i FSA-mappen som spårar
  * vad vi senast pull:ade. Eliminerar behovet av en .git/-katalog för
@@ -21,8 +23,6 @@
  */
 
 const PATH = ".ava/sync-state.json";
-
-import { z } from "zod";
 
 // Zod vid parsegränsen (#187): versionen bärs av z.literal — fel version
 // eller form → null (samma utfall som förr, men validerat fält för fält).

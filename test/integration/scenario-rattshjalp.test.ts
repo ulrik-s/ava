@@ -22,10 +22,9 @@
  */
 
 import { describe, it, expect, beforeAll } from "vitest-compat";
-import { DemoDataStore, type DemoSource } from "@/lib/server/data-store/DemoDataStore";
-import { prebakeJoins } from "@/lib/shared/demo-source";
-import { appRouter } from "@/lib/server/routers/_app";
 import { buildGitPorts } from "@/lib/server/adapters/git-ports";
+import { DemoDataStore, type DemoSource } from "@/lib/server/data-store/DemoDataStore";
+import { appRouter } from "@/lib/server/routers/_app";
 import {
   computeBrottmalstaxa,
   computeTimkostnadsnorm,
@@ -33,6 +32,7 @@ import {
   TIMKOSTNADSNORM_NO_FTAX_ORE_PER_H,
   TAXA_MAX_MINUTES,
 } from "@/lib/shared/brottmalstaxa";
+import { prebakeJoins } from "@/lib/shared/demo-source";
 
 const ORG_ID = "firma-ab";
 const ADMIN_USER = {

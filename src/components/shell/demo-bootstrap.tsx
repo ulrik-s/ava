@@ -8,33 +8,33 @@
  * skippas här för att undvika double-load mot OPFS.
  */
 
-import { useEffect, useState, type ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useEffect, useState, type ReactNode } from "react";
 import superjson from "superjson";
-import { RenderErrorBoundary } from "@/components/ui/render-error-boundary";
-import { DemoRuntime } from "@/lib/server/local-first/demo-runtime";
-import { createGhPagesCloneFn } from "@/lib/server/local-first/gh-pages-loader";
-import { OpfsPersistence } from "@/lib/server/local-first/persistence";
-import { DemoDataStore, type DemoSource } from "@/lib/server/data-store/DemoDataStore";
-import type { MutationEvent } from "@/lib/server/data-store/in-memory/writable-delegate";
-import { GitBackendRuntime } from "@/lib/client/backend/git-backend-runtime";
-import { GitAuthProvider } from "@/lib/server/auth/git-auth-provider";
-import { DemoModeProvider } from "@/lib/client/demo/demo-mode-context";
-import { demoSourceFromRuntime } from "@/lib/client/demo/demo-source-from-runtime";
-import { demoCacheKey } from "@/lib/client/demo/demo-cache-key";
-import { trpc } from "@/lib/client/trpc";
-import { loadFirmaConfig, patchFirmaConfig, gitAuthUsername, type FirmaConfig } from "@/lib/client/firma/firma-config";
-import { omitUndefined } from "@/lib/shared/omit-undefined";
-import { AuthProvider, useAuthMode } from "@/lib/client/auth/use-auth-mode";
-import { AuthStatusBanner } from "./auth-status-banner";
-import { AutoSync } from "./auto-sync";
-import { SyncProviderRoot } from "@/lib/client/sync/sync-context";
-import { pickProvider } from "@/lib/client/sync/pick-provider";
-import { JobsBadge } from "./jobs-badge";
 import { AnalyzeDispatcherRegistrar } from "@/components/documents/analyze-dispatcher-registrar";
 import { ExtractTextDispatcherRegistrar } from "@/components/documents/extract-text-dispatcher-registrar";
 import { MirrorOutlookRegistrar } from "@/components/matter/mirror-outlook-registrar";
+import { RenderErrorBoundary } from "@/components/ui/render-error-boundary";
+import { AuthProvider, useAuthMode } from "@/lib/client/auth/use-auth-mode";
+import { GitBackendRuntime } from "@/lib/client/backend/git-backend-runtime";
+import { demoCacheKey } from "@/lib/client/demo/demo-cache-key";
+import { DemoModeProvider } from "@/lib/client/demo/demo-mode-context";
+import { demoSourceFromRuntime } from "@/lib/client/demo/demo-source-from-runtime";
+import { loadFirmaConfig, patchFirmaConfig, gitAuthUsername, type FirmaConfig } from "@/lib/client/firma/firma-config";
+import { pickProvider } from "@/lib/client/sync/pick-provider";
+import { SyncProviderRoot } from "@/lib/client/sync/sync-context";
+import { trpc } from "@/lib/client/trpc";
+import { GitAuthProvider } from "@/lib/server/auth/git-auth-provider";
+import { DemoDataStore, type DemoSource } from "@/lib/server/data-store/DemoDataStore";
+import type { MutationEvent } from "@/lib/server/data-store/in-memory/writable-delegate";
+import { DemoRuntime } from "@/lib/server/local-first/demo-runtime";
+import { createGhPagesCloneFn } from "@/lib/server/local-first/gh-pages-loader";
+import { OpfsPersistence } from "@/lib/server/local-first/persistence";
+import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { AppShell } from "./app-shell";
+import { AuthStatusBanner } from "./auth-status-banner";
+import { AutoSync } from "./auto-sync";
+import { JobsBadge } from "./jobs-badge";
 import "@/lib/client/jobs/register-workers"; // ⚠ side-effect: registrerar workers
 
 type Status = "loading" | "ready" | "error";

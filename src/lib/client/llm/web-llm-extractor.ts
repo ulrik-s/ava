@@ -21,8 +21,8 @@
  *     separat för testbarhet utan att behöva instansiera WebGPU.
  */
 
-import { z } from "zod";
 import type { MLCEngine } from "@mlc-ai/web-llm";
+import { z } from "zod";
 import type { ExtractionResult, ExtractionSchema, FieldType, ILlmExtractor } from "@/lib/server/llm/llm-extractor";
 import type { LlmModelId } from "./llm-config";
 

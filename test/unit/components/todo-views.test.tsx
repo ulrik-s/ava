@@ -4,8 +4,8 @@
  * (Färg- och vy-LOGIKEN är enhetstestad separat i deadline-color/todo-views.)
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import TodoClient from "@/app/todo/_client";
 
 const DAY = 86_400_000;

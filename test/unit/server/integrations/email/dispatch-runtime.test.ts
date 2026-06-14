@@ -1,8 +1,8 @@
-import { describe, it, expect } from "vitest-compat";
-import { mkdtempSync, rmSync } from "node:fs";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
 import { randomBytes } from "node:crypto";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { describe, it, expect } from "vitest-compat";
 import { buildDispatchJob, SMTP_VAULT_KEYS } from "@/lib/server/integrations/email/dispatch-runtime";
 import { EncryptedFileVault, nodeVaultFs } from "@/lib/server/secrets/vault";
 

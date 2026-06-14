@@ -10,15 +10,15 @@
  * Kräver system-`git` (samma som node-git-ops.test.ts) — hoppas annars över.
  */
 
-import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
-import { mkdtemp, rm, mkdir, writeFile, readdir, readFile, stat } from "node:fs/promises";
-import { join, dirname } from "node:path";
-import { tmpdir } from "node:os";
 import { execSync, spawnSync } from "node:child_process";
-import { buildSeed, seedToFiles } from "../../../../tooling/scripts/seed-data";
+import { mkdtemp, rm, mkdir, writeFile, readdir, readFile, stat } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, dirname } from "node:path";
+import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
+import type { Principal } from "@/lib/server/auth/principal";
 import { openServerWorkingCopy } from "@/lib/server/local-first/server-working-copy";
 import { CURRENT_SCHEMA_VERSION } from "@/lib/shared/schema-version";
-import type { Principal } from "@/lib/server/auth/principal";
+import { buildSeed, seedToFiles } from "../../../../tooling/scripts/seed-data";
 
 const ADMIN: Principal = {
   id: "current-user",

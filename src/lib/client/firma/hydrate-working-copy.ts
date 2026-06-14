@@ -13,9 +13,9 @@
 import { FsaIsoGitAdapter } from "@/lib/client/fsa/fs-adapter";
 import type { DemoSource } from "@/lib/server/data-store/DemoDataStore";
 import { prebakeJoins } from "@/lib/shared/demo-source";
-import { ENTITY_REGISTRY, ENTITY_NAMES, type EntityName } from "@/lib/shared/schemas";
-import { CURRENT_SCHEMA_VERSION } from "@/lib/shared/schema-version";
 import { migrateRow } from "@/lib/shared/schema-migrations";
+import { CURRENT_SCHEMA_VERSION } from "@/lib/shared/schema-version";
+import { ENTITY_REGISTRY, ENTITY_NAMES, type EntityName } from "@/lib/shared/schemas";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/;
 

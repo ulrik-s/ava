@@ -5,6 +5,8 @@
  */
 
 import { describe, it, expect, vi } from "vitest-compat";
+import type { IDataStore } from "@/lib/server/data-store/IDataStore";
+import type { StepHandlers } from "@/lib/server/rules/execute";
 import {
   expandTicks,
   idempotencyKey,
@@ -12,9 +14,7 @@ import {
   alreadyRanFromEventLog,
   type SchedulerDeps,
 } from "@/lib/server/rules/scheduler";
-import type { StepHandlers } from "@/lib/server/rules/execute";
 import type { AvaRule } from "@/lib/server/rules/schema";
-import type { IDataStore } from "@/lib/server/data-store/IDataStore";
 
 function makeHandlers(): StepHandlers {
   return { sendEmail: vi.fn(async () => true), updateMatter: vi.fn(async () => {}), extractFromDocument: vi.fn(async () => {}), createTask: vi.fn(async () => {}) };

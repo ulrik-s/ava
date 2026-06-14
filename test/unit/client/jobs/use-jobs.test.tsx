@@ -2,9 +2,11 @@
  * Tester för `useJobs` / `useJobsSummary` (#27 — otestad). Mockar jobQueue och
  * verifierar snapshot + summerings-logiken (counts + senaste fel).
  */
-import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { render, screen } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import type { Job } from "@/lib/client/jobs/job-queue";
+
+import { useJobs, useJobsSummary } from "@/lib/client/jobs/use-jobs";
 
 let jobsData: Job[] = [];
 vi.mock("@/lib/client/jobs/job-queue", () => ({
@@ -13,8 +15,6 @@ vi.mock("@/lib/client/jobs/job-queue", () => ({
     subscribe: (_fn: (j: Job[]) => void) => () => {},
   },
 }));
-
-import { useJobs, useJobsSummary } from "@/lib/client/jobs/use-jobs";
 
 function job(over: Partial<Job> & Pick<Job, "id" | "status">): Job {
   return { kind: "classify-document", label: `J ${over.id}`, enqueuedAt: 0, ...over } as Job;

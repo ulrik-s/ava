@@ -14,9 +14,9 @@
  * Demo-mode (gh-pages): ingen auth — visa info-meddelande och länk till start.
  */
 
-import { useEffect, useState } from "react";
-import Link from "next/link";
 import { KeyRound, ShieldCheck, Info, AlertTriangle, Check, Loader2, Settings } from "lucide-react";
+import Link from "next/link";
+import { useEffect, useState } from "react";
 import { createAuthClient, type ProvisionedAccount } from "@/lib/client/auth/auth-client";
 import { loadFirmaConfig, saveFirmaConfig } from "@/lib/client/firma/firma-config";
 

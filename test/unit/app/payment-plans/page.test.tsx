@@ -3,8 +3,10 @@
  * − avskrivet via ledgern.
  */
 
-import { describe, it, expect, beforeEach, vi } from "vitest-compat";
 import { render, screen, fireEvent, act } from "@testing-library/react";
+import { describe, it, expect, beforeEach, vi } from "vitest-compat";
+
+import PaymentPlansPage, { formatScanResult } from "@/app/payment-plans/page";
 
 const listQuery = { data: undefined as unknown[] | undefined, isLoading: false };
 type ScanResult = { scanned: number; planned: number; due: number; overdue: number };
@@ -39,8 +41,6 @@ vi.mock("@/lib/client/trpc", () => ({
   },
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
-
-import PaymentPlansPage, { formatScanResult } from "@/app/payment-plans/page";
 
 beforeEach(() => {
   vi.clearAllMocks();

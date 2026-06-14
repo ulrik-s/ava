@@ -10,8 +10,8 @@
  * placeholder; flyttas till /profile när användarmodellen är klar.
  */
 
-import { useEffect, useState } from "react";
 import { Plug } from "lucide-react";
+import { useEffect, useState } from "react";
 import "@/lib/client/integrations/office365-connector"; // ⚠ side-effect: registrerar
 import { listConnectors } from "@/lib/client/integrations/registry";
 import type { ConnectionStatus, IntegrationConnector } from "@/lib/client/integrations/types";

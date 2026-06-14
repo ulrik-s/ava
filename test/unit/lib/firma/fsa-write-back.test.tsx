@@ -6,6 +6,8 @@
 import { describe, it, expect, vi } from "vitest-compat";
 import { makeFsaWriteBack } from "@/lib/client/firma/fsa-write-back";
 
+import { FsaIsoGitAdapter } from "@/lib/client/fsa/fs-adapter";
+
 interface MockFs {
   writeFile: ReturnType<typeof vi.fn>;
   unlink: ReturnType<typeof vi.fn>;
@@ -20,8 +22,6 @@ vi.mock("@/lib/client/fsa/fs-adapter", () => ({
     return this;
   }),
 }));
-
-import { FsaIsoGitAdapter } from "@/lib/client/fsa/fs-adapter";
 
 describe("makeFsaWriteBack", () => {
   const handle = {} as FileSystemDirectoryHandle;

@@ -11,10 +11,10 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest-compat";
-import { pushViaRest } from "@/lib/client/github/push";
-import { writeSyncState } from "@/lib/client/github/sync-state";
 import { writeFile, deleteFile } from "@/lib/client/github/fsa-walker";
 import { gitBlobSha1 } from "@/lib/client/github/git-blob-hash";
+import { pushViaRest } from "@/lib/client/github/push";
+import { writeSyncState } from "@/lib/client/github/sync-state";
 import { makeFakeFsa } from "../../../helpers/fake-fsa";
 
 const REPO = { owner: "ulrik-s", repo: "ava" };

@@ -1,7 +1,7 @@
-import { afterAll, describe, expect, test } from "bun:test";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { afterAll, describe, expect, test } from "bun:test";
 
 import { initLog, log, resolveLogDir } from "../src/log.ts";
 

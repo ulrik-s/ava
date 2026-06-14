@@ -11,9 +11,9 @@
 
 import type { IDataStore } from "../data-store/IDataStore";
 import type { IPorts } from "../ports";
-import { noopPorts } from "./noop-ports";
 import { demoDocumentAnalyzer } from "./demo-document-analyzer";
 import { makeDemoSearchIndex } from "./demo-search-index";
+import { noopPorts } from "./noop-ports";
 
 export function buildGitPorts(dataStore: IDataStore): IPorts {
   return {

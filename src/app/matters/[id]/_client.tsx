@@ -1,21 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { FileDown } from "lucide-react";
 import Link from "next/link";
-import { EntityLink } from "@/lib/client/demo/entity-link";
-import { trpc } from "@/lib/client/trpc";
+import { useState } from "react";
 import { DocumentBrowser } from "@/components/documents/document-browser";
-import { SuggestionsPanel } from "@/components/matter/suggestions-panel";
 import { EventsPanel } from "@/components/matter/events-panel";
 import { PaymentMethodCard } from "@/components/matter/payment-method-card";
-import { ExpectedReceivablesSection } from "./_expected-receivables-section";
-import { FileDown } from "lucide-react";
-import { ContactsSection } from "./_contacts-section";
-import { TimeSection } from "./_time-section";
-import { ExpenseSection } from "./_expense-section";
-import { BillingPanel } from "./_billing-panel";
-import { GenerateModal } from "./_generate-modal";
+import { SuggestionsPanel } from "@/components/matter/suggestions-panel";
+import { EntityLink } from "@/lib/client/demo/entity-link";
 import { useRouteId } from "@/lib/client/demo/use-route-id";
+import { trpc } from "@/lib/client/trpc";
+import { BillingPanel } from "./_billing-panel";
+import { ContactsSection } from "./_contacts-section";
+import { ExpectedReceivablesSection } from "./_expected-receivables-section";
+import { ExpenseSection } from "./_expense-section";
+import { GenerateModal } from "./_generate-modal";
+import { TimeSection } from "./_time-section";
 
  
 /** Ärendets målnummer som sträng (getById-typen saknar fältet i select-typen). */

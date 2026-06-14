@@ -7,11 +7,11 @@
  * 0011-anda: ingen sändare → ingen utskicks-peer.
  */
 
-import { createVaultFromEnv, type SecretsVault } from "../../secrets/vault";
 import type { PeerJob } from "../../local-first/peer-loop";
-import { createSmtpSender, type SmtpConfig } from "./smtp-sender";
+import { createVaultFromEnv, type SecretsVault } from "../../secrets/vault";
 import { makeDispatchJob } from "./dispatch-job";
 import type { EmailSender } from "./email-sender";
+import { createSmtpSender, type SmtpConfig } from "./smtp-sender";
 
 export interface BuildDispatchJobOpts {
   env?: NodeJS.ProcessEnv;

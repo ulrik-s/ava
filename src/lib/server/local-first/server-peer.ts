@@ -20,8 +20,8 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
-import { NodeGitOps } from "./node-git-ops";
 import type { GitCommit, PushResult } from "./git-ops";
+import { NodeGitOps } from "./node-git-ops";
 import {
   openServerWorkingCopy,
   type OpenServerWorkingCopyOpts,

@@ -3,8 +3,8 @@
  * med dagsväxlare (Idag/Igår/Förrgår/datum).
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import Dashboard from "@/app/page";
 
 const todoQuery: { data: unknown; isLoading: boolean } = { data: undefined, isLoading: false };

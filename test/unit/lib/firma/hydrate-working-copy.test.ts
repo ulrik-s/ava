@@ -8,9 +8,9 @@
  */
 
 import { describe, it, expect } from "vitest-compat";
-import { makeFakeFsa } from "../../../helpers/fake-fsa";
 import { makeFsaWriteBack } from "@/lib/client/firma/fsa-write-back";
 import { hydrateWorkingCopy } from "@/lib/client/firma/hydrate-working-copy";
+import { makeFakeFsa } from "../../../helpers/fake-fsa";
 
 describe("hydrateWorkingCopy", () => {
   it("round-trip: write-back → hydrate ger tillbaka entiteterna", async () => {

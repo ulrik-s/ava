@@ -12,9 +12,9 @@
  * en slutförd plan, en avbruten plan och en kreditfaktura.
  */
 
+import { demoFinalInvoiceId, demoAccontoInvoiceId, demoCreditInvoiceId, demoPaymentPlanId } from "../scripts/demo-billing-ids";
 import type { SeedDataset } from "../scripts/seed-data";
 import type { GeneratorCaller } from "./backend-target";
-import { demoFinalInvoiceId, demoAccontoInvoiceId, demoCreditInvoiceId, demoPaymentPlanId } from "../scripts/demo-billing-ids";
 
 type Row = Record<string, unknown>;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

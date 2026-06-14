@@ -1,7 +1,7 @@
 import { z } from "zod";
+import { ledgerAccountMapSchema } from "../accounting/account-map";
 import { baseFields, dateLike } from "./common";
 import { organizationIdSchema, officeIdSchema } from "./ids";
-import { ledgerAccountMapSchema } from "../accounting/account-map";
 
 /**
  * Organisation = byrå. En per git-repo (vanligen). Lagras i

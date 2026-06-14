@@ -4,10 +4,10 @@
  * defensiv hantering av okända/trasiga tokens.
  */
 import { describe, it, expect } from "vitest-compat";
+import type { Principal } from "@/lib/server/auth/principal";
 import {
   sha256Hex, parseBearerToken, StaticPatVerifier, patRecord, type PatRecord,
 } from "@/lib/server/http/pat";
-import type { Principal } from "@/lib/server/auth/principal";
 
 const PRINCIPAL: Principal = {
   id: "p-1", email: "advokat@byra.se", name: "Ada Advokat",

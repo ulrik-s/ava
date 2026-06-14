@@ -11,15 +11,15 @@
  * `PostgresBackendRuntime` (httpBatchLink) byggs ska den droppa in här.
  */
 
-import { describe, it, expect } from "vitest-compat";
-import { observable } from "@trpc/server/observable";
 import { createTRPCClient, type TRPCLink } from "@trpc/client";
+import { observable } from "@trpc/server/observable";
 import superjson from "superjson";
-import type { AppRouter } from "@/lib/server/routers/_app";
+import { describe, it, expect } from "vitest-compat";
 import type { BackendRuntime } from "@/lib/client/backend/backend-runtime";
 import { GitBackendRuntime } from "@/lib/client/backend/git-backend-runtime";
 import { GitAuthProvider } from "@/lib/server/auth/git-auth-provider";
 import { DemoDataStore } from "@/lib/server/data-store/DemoDataStore";
+import type { AppRouter } from "@/lib/server/routers/_app";
 
 /**
  * En fejk-backend som INTE rör git/DemoDataStore alls — den simulerar en

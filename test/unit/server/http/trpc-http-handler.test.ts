@@ -8,14 +8,14 @@
  *   - Giltig token → routern körs, principalen ur token flödar in i `ctx.user`.
  *   - `finalize` anropas efter requesten; `lock` serialiserar hela requesten.
  */
-import { describe, it, expect, vi } from "vitest-compat";
 import { createTRPCClient, httpBatchLink, TRPCClientError } from "@trpc/client";
 import superjson from "superjson";
+import { describe, it, expect, vi } from "vitest-compat";
+import type { Principal } from "@/lib/server/auth/principal";
+import { StaticPatVerifier, patRecord } from "@/lib/server/http/pat";
+import { createTrpcHttpHandler, type RequestSession } from "@/lib/server/http/trpc-http-handler";
 import type { AppRouter } from "@/lib/server/routers/_app";
 import type { Context } from "@/lib/server/trpc-core";
-import type { Principal } from "@/lib/server/auth/principal";
-import { createTrpcHttpHandler, type RequestSession } from "@/lib/server/http/trpc-http-handler";
-import { StaticPatVerifier, patRecord } from "@/lib/server/http/pat";
 
 const PRINCIPAL: Principal = {
   id: "p-1", email: "advokat@byra.se", name: "Ada Advokat",

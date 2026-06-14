@@ -9,8 +9,8 @@
  * finns bara så vitest räknar filen.
  */
 
-import { describe, it, expect } from "vitest-compat";
 import type { inferRouterOutputs } from "@trpc/server";
+import { describe, it, expect } from "vitest-compat";
 import type { AppRouter } from "@/lib/server/routers/_app";
 import type { MatterId, ContactId } from "@/lib/shared/schemas/ids";
 

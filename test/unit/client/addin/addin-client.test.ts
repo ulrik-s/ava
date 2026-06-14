@@ -9,10 +9,10 @@
  */
 import { describe, it, expect } from "vitest-compat";
 import { createAddinClient, addinTrpcEndpoint, type AddinFetch } from "@/lib/client/addin/addin-client";
-import { createTrpcHttpHandler } from "@/lib/server/http/trpc-http-handler";
-import { StaticPatVerifier, patRecord } from "@/lib/server/http/pat";
-import type { Context } from "@/lib/server/trpc-core";
 import type { Principal } from "@/lib/server/auth/principal";
+import { StaticPatVerifier, patRecord } from "@/lib/server/http/pat";
+import { createTrpcHttpHandler } from "@/lib/server/http/trpc-http-handler";
+import type { Context } from "@/lib/server/trpc-core";
 
 const PRINCIPAL: Principal = {
   id: "p-1", email: "advokat@byra.se", name: "Ada Advokat",

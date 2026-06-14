@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest-compat";
 import { createServer } from "node:net";
+import { describe, it, expect } from "vitest-compat";
 import {
   interpretPreflight,
   dockerAvailable,

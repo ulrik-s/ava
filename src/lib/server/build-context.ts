@@ -6,10 +6,10 @@
  * backend. Ren funktion — inga sidoeffekter, lätt att testa.
  */
 
-import type { Context } from "./trpc-core";
+import type { Principal } from "./auth/principal";
 import type { IDataStore } from "./data-store/IDataStore";
 import type { IPorts } from "./ports";
-import type { Principal } from "./auth/principal";
+import type { Context } from "./trpc-core";
 
 export interface BuildContextDeps {
   dataStore: IDataStore;

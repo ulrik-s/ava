@@ -4,8 +4,8 @@
  * komponentens orkestrering: stöd-check, generera → visa nyckel, lägg-till.
  *
  */
-import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { KeypairManager } from "@/components/settings/keypair-manager";
 import { isEd25519Supported, generateKeypair, loadKeypair } from "@/lib/client/keys/ed25519-keypair";
 

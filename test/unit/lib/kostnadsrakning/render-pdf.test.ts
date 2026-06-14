@@ -4,8 +4,8 @@
  * icke-taxa-fallet (förhandling > maxgräns) utan att kasta.
  */
 import { describe, it, expect } from "vitest-compat";
-import { buildKostnadsrakningContext } from "@/lib/shared/kostnadsrakning";
 import { renderKostnadsrakningPdf } from "@/lib/client/kostnadsrakning/render-pdf";
+import { buildKostnadsrakningContext } from "@/lib/shared/kostnadsrakning";
 
 function pdfHeader(bytes: Uint8Array): string {
   return String.fromCharCode(bytes[0]!, bytes[1]!, bytes[2]!, bytes[3]!);

@@ -2,8 +2,8 @@
  * Test för `PreloadResult` (#6 — utbruten ur ExternalEditSection). Täcker
  * idle→inget, done+resultat (med/utan failed), och done+fel.
  */
-import { describe, it, expect } from "vitest-compat";
 import { render, screen } from "@testing-library/react";
+import { describe, it, expect } from "vitest-compat";
 import { PreloadResult } from "@/components/settings/external-edit-section";
 
 describe("PreloadResult", () => {

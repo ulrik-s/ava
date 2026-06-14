@@ -3,8 +3,8 @@
  *
  */
 
-import { describe, it, expect, vi } from "vitest-compat";
 import { render, screen } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest-compat";
 import { JobsBadge, jobsBadgeView } from "@/components/shell/jobs-badge";
 
 const summary = { total: 0, queued: 0, running: 0, failed: 0, lastError: null as string | null };

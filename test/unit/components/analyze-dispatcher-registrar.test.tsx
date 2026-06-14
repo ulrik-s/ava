@@ -3,8 +3,11 @@
  * registrerade dispatchern anropar document.updateMetadata + invaliderar
  * document.tree, och att unmount avregistrerar.
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest-compat";
 import { render } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest-compat";
+
+import { AnalyzeDispatcherRegistrar } from "@/components/documents/analyze-dispatcher-registrar";
+import { dispatchAnalyze, setAnalyzeDispatcher } from "@/lib/client/jobs/analyze-dispatch";
 
 const mutateAsync = vi.fn(async () => {});
 const treeInvalidate = vi.fn(async () => {});
@@ -14,9 +17,6 @@ vi.mock("@/lib/client/trpc", () => ({
     useUtils: () => ({ document: { tree: { invalidate: treeInvalidate } } }),
   },
 }));
-
-import { AnalyzeDispatcherRegistrar } from "@/components/documents/analyze-dispatcher-registrar";
-import { dispatchAnalyze, setAnalyzeDispatcher } from "@/lib/client/jobs/analyze-dispatch";
 
 beforeEach(() => vi.clearAllMocks());
 afterEach(() => setAnalyzeDispatcher(null));

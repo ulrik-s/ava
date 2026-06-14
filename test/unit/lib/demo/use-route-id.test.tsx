@@ -5,16 +5,16 @@
  * (nginx serverar en sentinel-shell; klienten läser riktiga id:t ur URL:en).
  */
 
-import { describe, it, expect, vi } from "vitest-compat";
 import { renderHook } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest-compat";
+
+import { useRouteId } from "@/lib/client/demo/use-route-id";
 
 let pathname = "/";
 vi.mock("next/navigation", () => ({
   usePathname: () => pathname,
   useSearchParams: () => new URLSearchParams(),
 }));
-
-import { useRouteId } from "@/lib/client/demo/use-route-id";
 
 describe("useRouteId", () => {
   it("sista segmentet (matters/[id])", () => {

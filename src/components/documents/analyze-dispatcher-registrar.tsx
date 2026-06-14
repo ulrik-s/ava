@@ -7,8 +7,8 @@
  */
 
 import { useEffect } from "react";
-import { trpc } from "@/lib/client/trpc";
 import { setAnalyzeDispatcher } from "@/lib/client/jobs/analyze-dispatch";
+import { trpc } from "@/lib/client/trpc";
 
 export function AnalyzeDispatcherRegistrar() {
   const updateMetadata = trpc.document.updateMetadata.useMutation();

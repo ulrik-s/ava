@@ -18,14 +18,15 @@
  */
 
 import { useEffect, useState } from "react";
-import { type FirmaConfig, type FirmaTier, inferTier, saveFirmaConfig, resetToDemo } from "@/lib/client/firma/firma-config";
-import { loadAuthSettings, saveAuthSettings } from "@/lib/client/auth/use-auth-mode";
 import { loadOAuthConfig, saveOAuthConfig, isOAuthConfigured } from "@/lib/client/auth/oauth-config";
-import { WebOAuthDeviceFlow } from "./web-oauth-device-flow";
+import { loadAuthSettings, saveAuthSettings } from "@/lib/client/auth/use-auth-mode";
+import { type FirmaConfig, type FirmaTier, inferTier, saveFirmaConfig, resetToDemo } from "@/lib/client/firma/firma-config";
 // Nätverks-/validerings-helpers bor i firma-settings-net.ts (#62). Re-exporteras
 // så importörer + tester fortsätter peka på "@/components/settings/firma-settings-panel".
 import { validateGithubToken, testOAuthProxy, testCorsProxy } from "./firma-settings-net";
 import type { ProxyTestResult } from "./firma-settings-net";
+import { WebOAuthDeviceFlow } from "./web-oauth-device-flow";
+
 export { validateGithubToken, testOAuthProxy, testCorsProxy } from "./firma-settings-net";
 export type { TokenValidationResult, ProxyTestResult } from "./firma-settings-net";
 

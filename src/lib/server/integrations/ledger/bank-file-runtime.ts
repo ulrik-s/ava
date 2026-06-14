@@ -12,9 +12,9 @@
  */
 
 import { join } from "node:path";
+import type { PeerJob } from "../../local-first/peer-loop";
 import { BankFileLedgerConnector } from "./bank-file-connector";
 import { makeLedgerPaymentsJob } from "./payments-job";
-import type { PeerJob } from "../../local-first/peer-loop";
 
 /** Env-nyckel för inkorg-katalogen med camt-filer. */
 export const CAMT_INBOX_ENV = "AVA_CAMT_INBOX";

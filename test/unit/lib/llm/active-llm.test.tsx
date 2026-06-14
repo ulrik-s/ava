@@ -6,8 +6,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { getActiveLlm, resetActiveLlm, subscribeLlmProgress, downloadActiveModel } from "@/lib/client/llm/active-llm";
 import { setLlmEnabled, setLlmModelId, resetLlmConfig } from "@/lib/client/llm/llm-config";
-import { NoopExtractor } from "@/lib/server/llm/llm-extractor";
 import { WebLlmExtractor } from "@/lib/client/llm/web-llm-extractor";
+import { NoopExtractor } from "@/lib/server/llm/llm-extractor";
 
 // Mocka MLC så vi inte triggar någon riktig WebGPU-init
 const engineHoisted = vi.hoisted(() => ({

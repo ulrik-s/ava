@@ -6,6 +6,8 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest-compat";
 
+import { persistGeneratedDoc } from "@/lib/client/demo/persist-generated-doc";
+
 const stashMock = vi.fn();
 const loadHandleMock = vi.fn();
 const writeFileMock = vi.fn(async () => {});
@@ -19,8 +21,6 @@ vi.mock("@/lib/client/fsa/handle-store", () => ({
 vi.mock("@/lib/client/fsa/fs-adapter", () => ({
   FsaIsoGitAdapter: class { constructor(_h: unknown) {} writeFile = writeFileMock; },
 }));
-
-import { persistGeneratedDoc } from "@/lib/client/demo/persist-generated-doc";
 
 const BYTES = new Uint8Array([72, 105]); // "Hi" → base64 "SGk="
 const DOC = { id: "d1", storagePath: "documents/d1.pdf", fileName: "d1.pdf", mimeType: "application/pdf", bytes: BYTES };
