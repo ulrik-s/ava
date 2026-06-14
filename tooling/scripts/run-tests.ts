@@ -62,8 +62,31 @@ function allTestFiles(): string[] {
   return [...out];
 }
 
+// Wall-clock-timeout per pass (#327). Realgit-passet (B) kan hänga indefinit
+// om en git-barnprocess (clone/push mot temp-repo) blockerar — bun:s per-test-
+// `--timeout` dödar inte alltid barnet, så hela processen lever vidare och
+// HÄNGER jobbet tills GitHubs jobb-timeout (sågs som 15-min hang, PR #326).
+// En SIGKILL-timeout gör en hang till ett bounded fel → snabb röd + rerun.
+// Generöst tilltaget över normal körtid (pass A ~60s, pass B ~30s).
+const PASS_A_TIMEOUT_MS = 360_000;
+const PASS_B_TIMEOUT_MS = 240_000;
+
+interface PassResult { status: number | null; signal: NodeJS.Signals | null; error?: Error | undefined }
+
+/** Klassa ett spawnSync-resultat → felmeddelande (eller null = ok). Ren/testbar. */
+export function passError(label: string, timeoutMs: number, r: PassResult): string | null {
+  const code = (r.error as NodeJS.ErrnoException | undefined)?.code;
+  if (code === "ETIMEDOUT") {
+    return `${label}: översteg ${Math.round(timeoutMs / 1000)}s och dödades (SIGKILL) — trolig hängande git-barnprocess (#327). Kör om; undersök realgit-testet vid upprepning.`;
+  }
+  if (r.error) return `${label}: kunde inte köras: ${r.error.message}`;
+  if (r.signal) return `${label}: dödad av signal ${r.signal}`;
+  if (r.status !== 0) return `${label}: exit ${r.status ?? "okänd"}`;
+  return null;
+}
+
 /**
- * Kör ett test-pass; avbryt processen om det fallerar.
+ * Kör ett test-pass; avbryt processen om det fallerar (eller hänger > `timeoutMs`).
  *
  * `workers`:
  *   - `N` → `--parallel=N` (worker-pool; implicerar --isolate).
@@ -74,15 +97,17 @@ function allTestFiles(): string[] {
  *     realgit-tunga filerna saknar `mock.module`/globala stubbar → trygga att
  *     dela process.
  */
-function runPass(label: string, files: string[], workers: number | null, covDir: string | null): void {
+function runPass(label: string, files: string[], workers: number | null, covDir: string | null, timeoutMs: number): void {
   if (files.length === 0) return;
   const args = ["test", "--timeout", "30000"];
   if (workers !== null) args.push(`--parallel=${workers}`);
   if (covDir) args.push("--coverage", "--coverage-reporter=lcov", `--coverage-dir=${covDir}`);
   args.push(...files);
-  const proc = spawnSync("bun", args, { stdio: "inherit" });
-  if (proc.status !== 0) {
-    console.error(`\n✗ Tester misslyckades (${label}, exit ${proc.status ?? "signal"}).`);
+  // timeout + SIGKILL: en hängande pass dödas i st.f. att hänga hela jobbet (#327).
+  const proc = spawnSync("bun", args, { stdio: "inherit", timeout: timeoutMs, killSignal: "SIGKILL" });
+  const err = passError(label, timeoutMs, proc);
+  if (err) {
+    console.error(`\n✗ Tester misslyckades (${err}).`);
     process.exit(proc.status ?? 1);
   }
 }
@@ -177,10 +202,12 @@ function main(): void {
   // Pass A: parallell-säkra tester (--parallel=2, snabbt). Pass B: realgit
   // sekventiellt (inget --parallel → enprocess, ingen kontention, ingen
   // --isolate/epoll-krasch på CI-linux).
-  runPass("pass A (parallell)", rest, 2, COVERAGE ? "coverage/a" : null);
-  runPass("pass B (realgit, sekventiellt)", realgit, null, COVERAGE ? "coverage/b" : null);
+  runPass("pass A (parallell)", rest, 2, COVERAGE ? "coverage/a" : null, PASS_A_TIMEOUT_MS);
+  runPass("pass B (realgit, sekventiellt)", realgit, null, COVERAGE ? "coverage/b" : null, PASS_B_TIMEOUT_MS);
 
   if (COVERAGE) checkCoverage(["coverage/a", "coverage/b"]);
 }
 
-main();
+// Kör bara när scriptet körs direkt (`bun …/run-tests.ts`), inte när en test
+// importerar `passError` härifrån (då skulle main() spawna en bun-test-körning).
+if (process.argv[1]?.endsWith("run-tests.ts")) main();
