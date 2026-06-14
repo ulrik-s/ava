@@ -113,6 +113,7 @@ const eslintConfig = defineConfig([
     ".claude/**",     // worktrees och personliga scratchfiler
     "src/shared/generated/**", // genererade Prisma-typer
     "next-env.d.ts",
+    "office-addin/**", // separat Office.js-bundle (egen tsconfig + bun build, #72)
   ]),
 ]);
 
