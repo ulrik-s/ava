@@ -156,3 +156,8 @@ peer-loop-låsinjektion; **1c** HTTP-listener i server-runtime-processen
   enklaste cross-platform-modellen (add-in = dum HTTP-klient, inga
   webview-storage/CORS-antaganden); web-app/demo förblir lokal-först (USP intakt).
   Inget hade byggts på de tidigare varianterna.
+- **2026-06-14 (scope-avgränsning):** **Word-add-in (#84) borttagen** — AVA
+  behöver bara **Outlook** (#72). Plattformen (server-tRPC-over-HTTP + delad
+  klient) är oförändrad men konsumeras nu av en enda host. Outlook-add-in:en har
+  två funktioner: (1) spara inkommande mail → ärende + tidspost (kräver add-in);
+  (2) maila ut ett ärende-dokument (web-app-funktion, ej add-in — triggas i AVA).
