@@ -45,7 +45,7 @@ The loop for every change:
 
 ### Quality ratchet — gates only tighten
 
-Coverage thresholds (`tooling/scripts/check-coverage.ts`), the lint
+Coverage thresholds (`tooling/scripts/run-tests.ts`), the lint
 `--max-warnings` cap, and knip are **ratchets**: anchored just under today's
 numbers and only moved tighter. **Never loosen a gate to land code** — fix the
 code or extract a sub-component (a "ratchet-step", cf. PR #6). See
