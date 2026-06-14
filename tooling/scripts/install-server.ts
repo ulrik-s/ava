@@ -38,6 +38,7 @@ import {
 } from "./install-server/orchestrate";
 import { interpretPreflight, runPreflight } from "./install-server/preflight";
 import { checkServices, summarizeServiceChecks } from "./install-server/service-checks";
+import { renderTrialRealm } from "./install-server/trial-realm";
 import {
   answersToConfig,
   renderConfigTemplate,
@@ -254,28 +255,58 @@ async function runInstall(argv: string[], paths: InstallPaths): Promise<boolean>
   return true;
 }
 
-async function main(): Promise<void> {
-  const argv = process.argv.slice(2);
+/** Skriv ut en Keycloak trial-realm (#337, ADR 0014 §4) ur flaggor → stdout. */
+function printTrialRealm(argv: string[]): boolean {
+  const adminEmail = flag(argv, "admin-email");
+  const adminPassword = flag(argv, "admin-password");
+  const clientSecret = flag(argv, "client-secret");
+  if (!adminEmail || !adminPassword || !clientSecret) {
+    console.error("[install-server] --print-realm kräver --admin-email, --admin-password och --client-secret");
+    return false;
+  }
+  const realm = renderTrialRealm({
+    realm: flag(argv, "realm") ?? "ava",
+    adminEmail,
+    adminPassword,
+    clientId: flag(argv, "client-id") ?? "ava",
+    clientSecret,
+    redirectUris: (flag(argv, "redirect-uri") ?? "http://localhost:8080/oauth2/callback").split(",").map((s) => s.trim()),
+  });
+  process.stdout.write(JSON.stringify(realm, null, 2) + "\n");
+  return true;
+}
 
-  // Skriv ut en config-mall att fylla i (--config-vägen). Inga sidoeffekter.
+/**
+ * Icke-install-subkommandon (rena utskrifter / nedrivning / nåbarhetskoll).
+ * Returnerar true om ett hanterades → main() ska INTE installera.
+ */
+async function handleSubcommand(argv: string[]): Promise<boolean> {
   if (hasFlag(argv, "print-config-template")) {
     process.stdout.write(renderConfigTemplate());
-    return;
+    return true;
   }
-
-  // Tjänste-kommunikationskoll (#323): verifiera att en (redan körande)
-  // installation når web/git/IdP. Ingen install — bara nåbarhets-rapport.
+  // Trial-Keycloak-realm (#337) ur flaggor.
+  if (hasFlag(argv, "print-realm")) {
+    process.exitCode = printTrialRealm(argv) ? 0 : 1;
+    return true;
+  }
+  // Tjänste-kommunikationskoll (#323): når en körande installation web/git/IdP?
   if (hasFlag(argv, "check-services")) {
     process.exitCode = (await runServiceChecks(argv)) ? 0 : 1;
-    return;
+    return true;
   }
-
-  // Avinstallation/nedrivning: stoppa stacken + ta bort volymer, sen klart.
+  // Nedrivning: stoppa stacken + ta bort volymer.
   if (hasFlag(argv, "down")) {
     await runCommands(buildStopCommands({ oidc: (flag(argv, "auth") ?? "htpasswd") === "oidc" }), process.env);
     log("stacken nedriven (volymer borttagna). Secrets-valvet är oförändrat.");
-    return;
+    return true;
   }
+  return false;
+}
+
+async function main(): Promise<void> {
+  const argv = process.argv.slice(2);
+  if (await handleSubcommand(argv)) return;
 
   const ok = await runInstall(argv, resolvePaths(argv));
   if (!ok) process.exitCode = 1;
