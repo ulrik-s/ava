@@ -8,8 +8,8 @@
  * för entitet-slugs ("Anna Andersson" → "anna-andersson").
  */
 import { describe, it, expect } from "vitest-compat";
-import { uuidv5, slugify, AVA_NAMESPACE } from "@/lib/shared/uuid-derive";
 import { isUuid } from "@/lib/shared/uuid";
+import { uuidv5, slugify, AVA_NAMESPACE } from "@/lib/shared/uuid-derive";
 
 describe("uuidv5", () => {
   it("producerar giltig UUID v5 (version-bits = 5, variant = RFC4122)", () => {

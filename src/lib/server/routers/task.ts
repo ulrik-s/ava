@@ -8,10 +8,10 @@
  */
 
 import { z } from "zod";
-import { router, protectedProcedure } from "../trpc";
+import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { taskPrioritySchema, taskStatusSchema } from "@/lib/shared/schemas";
 import { asId, taskIdSchema, matterIdSchema, userIdSchema } from "@/lib/shared/schemas/ids";
-import { omitUndefined } from "@/lib/shared/omit-undefined";
+import { router, protectedProcedure } from "../trpc";
 
 const createInput = z.object({
   title: z.string().min(1),

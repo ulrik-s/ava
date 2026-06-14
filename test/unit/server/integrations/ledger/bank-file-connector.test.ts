@@ -1,6 +1,6 @@
-import { describe, it, expect } from "vitest-compat";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { describe, it, expect } from "vitest-compat";
 import { BankFileLedgerConnector } from "@/lib/server/integrations/ledger/bank-file-connector";
 import { assertConnectorMatchesCapabilities } from "@/lib/server/integrations/ledger/capabilities";
 import { ledgerPaymentSchema } from "@/lib/server/integrations/ledger/port";

@@ -1,5 +1,5 @@
-import EditUserClient from "./_edit-client";
 import { demoStaticParamsBySeedId } from "@/lib/client/demo/static-params";
+import EditUserClient from "./_edit-client";
 
 // Static export: pre-rendera 1 HTML per seed-user + sentinel-shell.
 // Users-filerna namnges på email men route-id:t är user.id (u-anna) →

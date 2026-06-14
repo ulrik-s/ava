@@ -2,8 +2,8 @@
  * Test för ContactsPage — listrendering, filter, +Ny kontakt-form.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import ContactsPage from "@/app/contacts/page";
 
 const contactsQuery: {

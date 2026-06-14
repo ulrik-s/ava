@@ -14,9 +14,9 @@
  * Allt I/O (sync/open) injiceras så enheten är testbar utan riktig git.
  */
 
-import { openServerWorkingCopy, type ServerWorkingCopy } from "@/lib/server/local-first/server-working-copy";
-import { NodeGitOps } from "@/lib/server/local-first/node-git-ops";
 import type { Principal } from "@/lib/server/auth/principal";
+import { NodeGitOps } from "@/lib/server/local-first/node-git-ops";
+import { openServerWorkingCopy, type ServerWorkingCopy } from "@/lib/server/local-first/server-working-copy";
 import type { RequestSession } from "./trpc-http-handler";
 
 /** tRPC över HTTP: GET = query, POST = mutation (httpBatchLink-konventionen). */

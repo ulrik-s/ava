@@ -2,8 +2,8 @@
  * Test för den delade `Pager` (#6-ratchet, DRY). Täcker: dold vid ≤1 sida /
  * saknad data, sidräknare, "(N totalt)" bara med showTotal, och prev/next.
  */
-import { describe, it, expect, vi } from "vitest-compat";
 import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest-compat";
 import { Pager } from "@/components/ui/pager";
 
 describe("Pager", () => {

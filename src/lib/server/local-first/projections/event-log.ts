@@ -12,11 +12,11 @@
  * `time-bucket.ts`.
  */
 
+import { migrateEventPayload } from "@/lib/shared/schema-migrations";
+import { CURRENT_SCHEMA_VERSION } from "@/lib/shared/schema-version";
 import { avaEventSchema, type AvaEvent } from "../../events/schema";
 import { JsonLinesProjection } from "./base";
 import { dayBucketPath } from "./time-bucket";
-import { CURRENT_SCHEMA_VERSION } from "@/lib/shared/schema-version";
-import { migrateEventPayload } from "@/lib/shared/schema-migrations";
 
 export class EventLogProjection extends JsonLinesProjection<AvaEvent> {
   /**

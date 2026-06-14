@@ -13,11 +13,11 @@
  */
 
 import { useEffect } from "react";
-import { trpc } from "@/lib/client/trpc";
 import {
   setMirrorStateDispatcher,
   setOutlookTokenProvider,
 } from "@/lib/client/jobs/mirror-outlook-dispatch";
+import { trpc } from "@/lib/client/trpc";
 
 export function MirrorOutlookRegistrar() {
   const setMirror = trpc.calendar.setMirrorState.useMutation();

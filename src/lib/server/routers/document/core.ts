@@ -4,10 +4,10 @@
  */
 
 import { z } from "zod";
-import { orgProcedure } from "../../trpc";
 import { isJunkFileName } from "@/lib/shared/junk-files";
-import { assertDocAccess } from "./shared";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
+import { orgProcedure } from "../../trpc";
+import { assertDocAccess } from "./shared";
 
 export const coreProcedures = {
   /** Paginerad lista över dokument + mappar i ett visst ärende/folder. */

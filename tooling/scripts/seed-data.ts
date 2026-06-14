@@ -10,12 +10,12 @@
  * får två sourcer of truth.
  */
 
-import { ENTITY_REGISTRY } from "@/lib/shared/schemas";
 import {
   KOSTNADSRAKNING_TEMPLATE_NAME,
   KOSTNADSRAKNING_TEMPLATE_CATEGORY,
   KOSTNADSRAKNING_DEFAULT_HTML,
 } from "@/lib/shared/kostnadsrakning-template";
+import { ENTITY_REGISTRY } from "@/lib/shared/schemas";
 
 export const ORG_ID = "firma-ab";
 

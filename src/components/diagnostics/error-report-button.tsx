@@ -11,10 +11,10 @@
  * index.ts (testad) — komponenten är tunn.
  */
 
-import { useState } from "react";
 import { Bug, X, Copy, ExternalLink, Check } from "lucide-react";
-import { useSelfDetectedIssues } from "@/lib/client/diagnostics/use-issues";
+import { useState } from "react";
 import { buildSessionIssueUrl, issueStore } from "@/lib/client/diagnostics";
+import { useSelfDetectedIssues } from "@/lib/client/diagnostics/use-issues";
 
 export function ErrorReportButton() {
   const [open, setOpen] = useState(false);

@@ -10,8 +10,8 @@
 import { access } from "node:fs/promises";
 import { join } from "node:path";
 
-import { cloneWorkingCopy, type CloneWorkingCopyOpts } from "./server-peer";
 import { PeerLoop, type PeerJob, type PeerLoopDeps } from "./peer-loop";
+import { cloneWorkingCopy, type CloneWorkingCopyOpts } from "./server-peer";
 import type { RuntimeConfig } from "./server-runtime-config";
 
 export interface StartServerRuntimeDeps {

@@ -3,9 +3,12 @@
  * rad-actions (Avbryt / Försök igen). Täcker den utbrutna `JobActions`
  * (#6-ratchet: JobRow låg på complexity 9) i alla tre grenar.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { render, screen, fireEvent, within } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
+import JobsPage from "@/app/jobs/page";
 import type { Job } from "@/lib/client/jobs/job-queue";
+
+// Importeras efter mockarna (bun/vitest hoistar vi.mock).
 
 let JOBS: Job[] = [];
 const cancel = vi.fn();
@@ -16,9 +19,6 @@ vi.mock("@/lib/client/jobs/use-jobs", () => ({ useJobs: () => JOBS }));
 vi.mock("@/lib/client/jobs/job-queue", () => ({
   jobQueue: { cancel, retry, clearFinished },
 }));
-
-// Importeras efter mockarna (bun/vitest hoistar vi.mock).
-import JobsPage from "@/app/jobs/page";
 
 function job(over: Partial<Job> & Pick<Job, "id" | "status">): Job {
   return { kind: "classify-document", label: `Jobb ${over.id}`, enqueuedAt: 1000, ...over } as Job;

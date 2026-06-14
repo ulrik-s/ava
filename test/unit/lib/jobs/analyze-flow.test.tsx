@@ -11,8 +11,8 @@
  */
 
 import { describe, it, expect, beforeEach } from "vitest-compat";
-import { jobQueue } from "@/lib/client/jobs/job-queue";
 import { setAnalyzeDispatcher } from "@/lib/client/jobs/analyze-dispatch";
+import { jobQueue } from "@/lib/client/jobs/job-queue";
 import "@/lib/client/jobs/register-workers"; // ensure worker is registered
 
 beforeEach(() => {

@@ -1,7 +1,7 @@
-import { describe, it, expect } from "vitest-compat";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { describe, it, expect } from "vitest-compat";
 import { EncryptedFileVault, createVaultFromEnv, nodeVaultFs, type VaultFs } from "@/lib/server/secrets/vault";
 
 const key = Buffer.alloc(32, 3);

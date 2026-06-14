@@ -3,8 +3,8 @@
  *
  */
 
-import { describe, it, expect } from "vitest-compat";
 import { renderHook, act } from "@testing-library/react";
+import { describe, it, expect } from "vitest-compat";
 import { useOnlineStatus } from "@/lib/client/sync/use-online-status";
 
 describe("useOnlineStatus", () => {

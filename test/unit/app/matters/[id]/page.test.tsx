@@ -4,9 +4,9 @@
  * Mockar alla relaterade trpc-queries + mutations + barnkomponenter.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest-compat";
-import { Suspense } from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { Suspense } from "react";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import MatterDetailPage from "@/app/matters/[id]/_client";
 
 const matterQuery = {

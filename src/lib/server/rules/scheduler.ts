@@ -22,11 +22,11 @@
  */
 
 import { CronExpressionParser } from "cron-parser";
-import type { AvaRule } from "./schema";
-import type { AvaEvent } from "../events/schema";
 import type { IDataStore } from "../data-store/IDataStore";
+import type { AvaEvent } from "../events/schema";
 import { uuidv7 } from "../events/uuid7";
 import { executeRule, type StepHandlers } from "./execute";
+import type { AvaRule } from "./schema";
 
 export interface SchedulerDeps {
   rules: AvaRule[];

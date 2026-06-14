@@ -13,15 +13,12 @@
  * kan aldrig se/mutera en annan orgs fakturor.
  */
 
-import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { router, orgProcedure } from "../trpc";
-import type { DataStoreTx } from "../data-store/IDataStore";
+import { z } from "zod";
 import { computeFinalInvoiceBreakdown, isPaymentPlanSettled } from "@/lib/shared/invoice-calc";
 import { ocrFromInvoiceNumber } from "@/lib/shared/ocr-reference";
-import { computeInvoiceLedger, deriveInvoiceStatus, invoicePartitionViolation } from "@/lib/shared/write-off-calc";
+import { omitUndefined } from "@/lib/shared/omit-undefined";
 import type { InvoiceStatus } from "@/lib/shared/schemas/enums";
-import { emit } from "../events/emit";
 import {
   asId,
   matterIdSchema,
@@ -31,7 +28,10 @@ import {
   type TimeEntryId,
   type ExpenseId,
 } from "@/lib/shared/schemas/ids";
-import { omitUndefined } from "@/lib/shared/omit-undefined";
+import { computeInvoiceLedger, deriveInvoiceStatus, invoicePartitionViolation } from "@/lib/shared/write-off-calc";
+import type { DataStoreTx } from "../data-store/IDataStore";
+import { emit } from "../events/emit";
+import { router, orgProcedure } from "../trpc";
 
 // ─── createFinal-hjälpare (validera + koppla poster) ──────────────
 

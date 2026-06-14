@@ -6,8 +6,8 @@
  */
 
 import { describe, it, expect } from "vitest-compat";
-import { makeFakeFsa } from "../../../helpers/fake-fsa";
 import { FsaIsoGitAdapter } from "@/lib/client/fsa/fs-adapter";
+import { makeFakeFsa } from "../../../helpers/fake-fsa";
 
 // Vi testar samma walk-pattern som readFromFsa i _document-row.tsx
 // genom att direkt anropa getDirectoryHandle/getFileHandle.

@@ -13,8 +13,8 @@
  */
 
 import { readdir, readFile, stat } from "node:fs/promises";
-import { gzipSync } from "node:zlib";
 import { join } from "node:path";
+import { gzipSync } from "node:zlib";
 
 /** Total gzip-budget för all statisk klient-JS (KB). Dagens nivå ~3164 KB. */
 const BUDGET_KB = 3400;

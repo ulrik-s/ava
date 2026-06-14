@@ -9,13 +9,13 @@
  * Dagsval: Igår / Idag / Imorgon / fritt datum.
  */
 
-import { useMemo, useState } from "react";
+import { Plus, Calendar as CalendarIcon, Clock, MapPin } from "lucide-react";
 import Link from "next/link";
+import { useMemo, useState } from "react";
+import { Modal } from "@/components/ui/modal";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
 import { formatMinutes } from "@/lib/client/utils";
-import { Plus, Calendar as CalendarIcon, Clock, MapPin } from "lucide-react";
-import { Modal } from "@/components/ui/modal";
 
 function todayYmd(): string {
   const d = new Date();

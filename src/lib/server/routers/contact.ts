@@ -1,9 +1,9 @@
 import { z } from "zod";
-import { router, orgProcedure, requireOrgOwned } from "../trpc";
+import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { contactTypeSchema } from "@/lib/shared/schemas/enums";
 import { contactIdSchema, asId } from "@/lib/shared/schemas/ids";
 import { emit } from "../events/emit";
-import { omitUndefined } from "@/lib/shared/omit-undefined";
+import { router, orgProcedure, requireOrgOwned } from "../trpc";
 
 export const contactRouter = router({
   list: orgProcedure

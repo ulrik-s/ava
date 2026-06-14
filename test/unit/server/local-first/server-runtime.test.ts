@@ -10,11 +10,11 @@
  * Kräver system-`git` (som server-peer.test.ts) — hoppas annars över.
  */
 
-import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
-import { mkdtemp, rm, readdir, mkdir, writeFile, access } from "node:fs/promises";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
 import { execSync, spawnSync } from "node:child_process";
+import { mkdtemp, rm, readdir, mkdir, writeFile, access } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
 
 import { startServerRuntime } from "@/lib/server/local-first/server-runtime";
 import type { RuntimeConfig } from "@/lib/server/local-first/server-runtime-config";

@@ -1,5 +1,5 @@
-import EditTemplateClient from "./_edit-client";
 import { demoStaticParams } from "@/lib/client/demo/static-params";
+import EditTemplateClient from "./_edit-client";
 
 // Static export: pre-rendera 1 HTML per seed-mall + sentinel-shell.
 // Tidigare stashades hela templates/[id] bort → klick "Redigera mall"

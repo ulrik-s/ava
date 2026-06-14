@@ -15,15 +15,15 @@
  *   4. För att radera: knapp "Glöm den här enheten"
  */
 
-import { useEffect, useState } from "react";
 import { KeyRound, Copy, ExternalLink, Trash2, RefreshCw } from "lucide-react";
+import { useEffect, useState } from "react";
+import { loadFirmaConfig } from "@/lib/client/firma/firma-config";
+import { registerSshKeyOnGithub } from "@/lib/client/github/register-ssh-key";
 import {
   generateKeypair, saveKeypair, loadKeypair, deleteKeypair,
   isEd25519Supported, type StoredKeypair,
 } from "@/lib/client/keys/ed25519-keypair";
 import { buildSshPublicKey, sshFingerprint } from "@/lib/client/keys/ssh-format";
-import { registerSshKeyOnGithub } from "@/lib/client/github/register-ssh-key";
-import { loadFirmaConfig } from "@/lib/client/firma/firma-config";
 
 interface Props {
   /** Callback när användaren bekräftar att de vill addera nyckeln till profilen. */

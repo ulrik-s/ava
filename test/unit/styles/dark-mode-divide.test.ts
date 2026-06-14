@@ -9,9 +9,9 @@
  * `border-bottom` Tailwinds default-färg (ljus) → vit linje under första
  * list-item i dark mode. Den buggen får inte återkomma.
  */
-import { describe, it, expect } from "vitest-compat";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { describe, it, expect } from "vitest-compat";
 
 const css = readFileSync(join(process.cwd(), "src/app/globals.css"), "utf8");
 

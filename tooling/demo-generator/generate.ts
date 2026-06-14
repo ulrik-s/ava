@@ -14,8 +14,8 @@
  * dokument (metadata via API + binärinnehåll), se task-TODO.
  */
 
-import { rmSync, mkdirSync } from "node:fs";
 import { execFileSync } from "node:child_process";
+import { rmSync, mkdirSync } from "node:fs";
 import { createPostgresTarget } from "./backend-target";
 import { generateInto } from "./generate-into";
 

@@ -2,8 +2,8 @@
  * Test för UsersPage (lista).
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { render, screen } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import UsersPage from "@/app/users/page";
 
 const usersQuery = {

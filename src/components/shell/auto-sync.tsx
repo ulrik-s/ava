@@ -6,8 +6,8 @@
  * och `SyncDiagnostics` i /settings).
  */
 
-import { SyncStatusPill } from "./sync-status-pill";
 import { useSyncContext } from "@/lib/client/sync/sync-context";
+import { SyncStatusPill } from "./sync-status-pill";
 
 export function AutoSync() {
   const { state, providerKind } = useSyncContext();

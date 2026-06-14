@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { DataTable, type Column } from "@/components/ui/data-table";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
-import { DataTable, type Column } from "@/components/ui/data-table";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 
 interface SearchHit {

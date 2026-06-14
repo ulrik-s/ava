@@ -2,9 +2,9 @@
  * Test för ContactDetailPage — visning, redigering, kontaktpersoner, ärenden.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { Suspense } from "react";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import ContactDetailPage from "@/app/contacts/[id]/_client";
 
 const routerPush = vi.fn();

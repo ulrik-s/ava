@@ -4,10 +4,10 @@
  * node:http-klient (test-miljöns happy-dom-`fetch` blockerar cross-origin mot
  * 127.0.0.1). Verifierar Request-/Response-översättningen + 500 vid kast.
  */
-import { describe, it, expect, afterEach } from "vitest-compat";
 import { once } from "node:events";
 import { request, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
+import { describe, it, expect, afterEach } from "vitest-compat";
 import { serveFetchHandler } from "@/lib/server/http/node-http-adapter";
 
 let server: Server | undefined;

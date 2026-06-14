@@ -4,11 +4,11 @@
  */
 
 import { describe, it, expect } from "vitest-compat";
-import { buildSeed } from "../../tooling/scripts/seed-data";
 import { createGitTarget } from "../../tooling/demo-generator/backend-target";
 import { populate } from "../../tooling/demo-generator/populate";
 import { populateBilling } from "../../tooling/demo-generator/populate-billing";
 import { populateInvoiceDocs } from "../../tooling/demo-generator/populate-invoice-docs";
+import { buildSeed } from "../../tooling/scripts/seed-data";
 
 const ADMIN = { id: "gen", email: "g@a.se", name: "G", role: "ADMIN", organizationId: "firma-ab" };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -14,21 +14,21 @@
  * delar protokoll-typer med webbappen via @/lib/shared/helper/protocol (#78).
  */
 
-import { join } from "node:path";
-import { homedir } from "node:os";
-import { mkdirSync, copyFileSync, chmodSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
+import { mkdirSync, copyFileSync, chmodSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 
 import { HELPER_HTTPS_PORT, HELPER_PORT } from "@/lib/shared/helper/protocol";
 
-import { dataDir } from "./paths.ts";
+import { installService, uninstallService, type InstallDeps } from "./install.ts";
 import { initLog, log } from "./log.ts";
+import { dataDir } from "./paths.ts";
+import { currentPlatform } from "./platform/runtime.ts";
 import { createHandler } from "./server.ts";
 import { loadOrCreateTls } from "./tls/certs.ts";
 import { installCaTrust, removeCaTrust } from "./tls/trust.ts";
 import { checkOnce, runUpdateLoop, type UpdateConfig } from "./update.ts";
-import { installService, uninstallService, type InstallDeps } from "./install.ts";
-import { currentPlatform } from "./platform/runtime.ts";
 import { VERSION } from "./version.ts";
 
 const SHUTDOWN_TIMEOUT_MS = 5_000;

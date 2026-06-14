@@ -1,13 +1,13 @@
 "use client";
 
-import { Fragment, useState } from "react";
 import { Trash2 } from "lucide-react";
-import { formatFileSize } from "./_drag-helpers";
-import { readFromFsa } from "@/lib/client/fsa/read-from-fsa";
-import { ExternalEditModal, type ModalState } from "./external-edit-modal";
+import { Fragment, useState } from "react";
 import { ActionMenu, type ActionMenuItem } from "@/components/ui/action-menu";
 import type { OpenDocumentDeps } from "@/lib/client/firma/open-document";
+import { readFromFsa } from "@/lib/client/fsa/read-from-fsa";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
+import { formatFileSize } from "./_drag-helpers";
+import { ExternalEditModal, type ModalState } from "./external-edit-modal";
 
 export interface DocumentRecord {
   id: string;

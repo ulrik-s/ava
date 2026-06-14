@@ -17,10 +17,10 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+import { useDemoRuntime } from "@/lib/client/use-demo-runtime";
 import { DemoRuntime } from "@/lib/server/local-first/demo-runtime";
 import { createGhPagesCloneFn } from "@/lib/server/local-first/gh-pages-loader";
 import { OpfsPersistence } from "@/lib/server/local-first/persistence";
-import { useDemoRuntime } from "@/lib/client/use-demo-runtime";
 
 /**
  * Default demo-data-repo. Användare kan klistra in eget om de vill,

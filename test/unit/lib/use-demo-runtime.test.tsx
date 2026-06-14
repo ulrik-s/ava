@@ -13,8 +13,8 @@
  *   - Den vet inget om Next, isomorphic-git eller fs.
  */
 
-import { describe, it, expect, vi } from "vitest-compat";
 import { renderHook, act, waitFor } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest-compat";
 import { useDemoRuntime } from "@/lib/client/use-demo-runtime";
 import { DemoRuntime } from "@/lib/server/local-first/demo-runtime";
 

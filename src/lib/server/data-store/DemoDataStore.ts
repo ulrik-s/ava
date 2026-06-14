@@ -19,10 +19,9 @@
  *     casta delegaten till rätt Prisma-typ. Inga andra ändringar.
  */
 
-import { ReadOnlyDelegate, ReadOnlyError, type RelationConfig } from "./in-memory/read-only-delegate";
+import type { DemoSource } from "@/lib/shared/demo-source";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
-import { WritableDelegate, type MutationEvent, type WritableDelegateOpts } from "./in-memory/writable-delegate";
-import { buildRelations } from "./relations";
+import type { AvaEvent, EmitInput, EventFilter } from "../events/schema";
 import type {
   IDataStore,
   IEventLog,
@@ -53,11 +52,12 @@ import type {
   CalendarEventDelegate,
   TaskDelegate,
 } from "./IDataStore";
-import type { AvaEvent, EmitInput, EventFilter } from "../events/schema";
+import { ReadOnlyDelegate, ReadOnlyError, type RelationConfig } from "./in-memory/read-only-delegate";
+import { WritableDelegate, type MutationEvent, type WritableDelegateOpts } from "./in-memory/writable-delegate";
+import { buildRelations } from "./relations";
 // `DemoSource` bor numera i shared/ (delas av browser- + server-runtime).
 // Re-exporteras nedan så alla befintliga importörer av
 // `@/lib/server/data-store/DemoDataStore` fungerar oförändrat.
-import type { DemoSource } from "@/lib/shared/demo-source";
 
 export type { DemoSource } from "@/lib/shared/demo-source";
 

@@ -3,8 +3,8 @@
  * fel-grenen, avbryt, och token-polling → onComplete.
  *
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest-compat";
 import { render, screen, waitFor, fireEvent, act } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest-compat";
 import { WebOAuthDeviceFlow, classifyTokenResponse } from "@/components/settings/web-oauth-device-flow";
 
 vi.mock("@/lib/client/auth/oauth-config", () => ({

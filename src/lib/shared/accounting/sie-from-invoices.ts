@@ -9,10 +9,10 @@
  * på BAS-standard när ingen mappning är konfigurerad.
  */
 
+import type { VatRate } from "../vat";
 import { DEFAULT_LEDGER_ACCOUNT_MAP, toSieAccountMap } from "./account-map";
 import { buildSemanticVoucher, type SemanticVoucherInput } from "./semantic-voucher";
 import { renderSie, type SieAccountMap, type SieCompany } from "./sie";
-import type { VatRate } from "../vat";
 
 /** BAS-standardkonton för en advokatbyrå (default tills byrån mappar själv). */
 export const DEFAULT_BAS_ACCOUNT_MAP: SieAccountMap = toSieAccountMap(DEFAULT_LEDGER_ACCOUNT_MAP);

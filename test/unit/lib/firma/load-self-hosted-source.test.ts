@@ -4,9 +4,9 @@
  */
 
 import { describe, it, expect, vi } from "vitest-compat";
-import { makeFakeFsa } from "../../../helpers/fake-fsa";
 import { makeFsaWriteBack } from "@/lib/client/firma/fsa-write-back";
 import { loadSelfHostedSource } from "@/lib/client/firma/load-self-hosted-source";
+import { makeFakeFsa } from "../../../helpers/fake-fsa";
 
 describe("loadSelfHostedSource", () => {
   it("klonar när working copy saknar .git, hydrerar sedan", async () => {

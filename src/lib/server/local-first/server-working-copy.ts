@@ -12,27 +12,27 @@
  * Servern är en git-peer, inte dataägare.
  */
 
-import { CURRENT_SCHEMA_VERSION } from "@/lib/shared/schema-version";
-import { schemaVersionFromMetaJson } from "@/lib/shared/meta-json";
-import { ENTITY_REGISTRY } from "@/lib/shared/schemas";
-import { type DemoSource, prebakeJoins } from "@/lib/shared/demo-source";
-import { DemoDataStore } from "@/lib/server/data-store/DemoDataStore";
+import { makeWriteBack, type WriteBackFs } from "@/lib/client/firma/fsa-write-back";
 import { buildGitPorts } from "@/lib/server/adapters/git-ports";
+import type { Principal } from "@/lib/server/auth/principal";
 import { buildContext } from "@/lib/server/build-context";
+import { DemoDataStore } from "@/lib/server/data-store/DemoDataStore";
 import { appRouter } from "@/lib/server/routers/_app";
 import type { Context } from "@/lib/server/trpc-core";
-import type { Principal } from "@/lib/server/auth/principal";
+import { type DemoSource, prebakeJoins } from "@/lib/shared/demo-source";
+import { schemaVersionFromMetaJson } from "@/lib/shared/meta-json";
+import { CURRENT_SCHEMA_VERSION } from "@/lib/shared/schema-version";
+import { ENTITY_REGISTRY } from "@/lib/shared/schemas";
 // Skriv-vägens kärna delas med klientens FSA-/OPFS-write-back (DRY). Lager-
 // regeln `server-contracts-must-not-import-client` undantar uttryckligen
 // `server/local-first/` — composition-root:en för git-peer-runtimen.
-import { makeWriteBack, type WriteBackFs } from "@/lib/client/firma/fsa-write-back";
 
 import { DEMO_META_PATH } from "../../../../tooling/demo-config";
 import type { IFileSystem } from "./file-system";
-import { NodeFileSystem } from "./node-fs";
-import { NodeContentStore } from "./node-content-store";
-import { NodeGitOps } from "./node-git-ops";
 import type { GitCommit } from "./git-ops";
+import { NodeContentStore } from "./node-content-store";
+import { NodeFileSystem } from "./node-fs";
+import { NodeGitOps } from "./node-git-ops";
 import { ProjectionHydrator } from "./projection-writer";
 import { buildDefaultRegistry } from "./projections/default-registry";
 

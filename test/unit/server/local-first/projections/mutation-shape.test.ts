@@ -7,10 +7,10 @@
  */
 
 import { describe, it, expect } from "vitest-compat";
-import { InvoiceProjection } from "@/lib/server/local-first/projections/invoice";
-import { TimeEntryProjection } from "@/lib/server/local-first/projections/time-entry";
 import { ExpenseProjection } from "@/lib/server/local-first/projections/expense";
+import { InvoiceProjection } from "@/lib/server/local-first/projections/invoice";
 import { MatterContactProjection } from "@/lib/server/local-first/projections/matter-contact";
+import { TimeEntryProjection } from "@/lib/server/local-first/projections/time-entry";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const de = (p: { deserialize: (s: string) => any }, row: unknown) => p.deserialize(JSON.stringify(row));

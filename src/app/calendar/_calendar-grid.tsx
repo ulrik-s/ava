@@ -9,10 +9,10 @@
  * men ger ändå sv-SE-formatterade rubriker.
  */
 
-import { useMemo } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { trpc } from "@/lib/client/trpc";
+import { useMemo } from "react";
 import { colorForUserId, type UserColor } from "@/lib/client/calendar/user-colors";
+import { trpc } from "@/lib/client/trpc";
 
 export interface CalendarGridEvent {
   id: string;

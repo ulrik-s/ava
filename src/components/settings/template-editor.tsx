@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
 import { ChevronDown, ChevronRight, Eye, Code } from "lucide-react";
+import { useState, useMemo } from "react";
 
 const VARIABLE_REFERENCE = [
   {

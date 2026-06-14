@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { router, protectedProcedure, orgProcedure, TRPCError } from "../trpc";
+import { omitUndefined } from "@/lib/shared/omit-undefined";
 import {
   asId,
   matterIdSchema,
@@ -7,7 +7,7 @@ import {
   expenseIdSchema,
   invoiceIdSchema,
 } from "@/lib/shared/schemas/ids";
-import { omitUndefined } from "@/lib/shared/omit-undefined";
+import { router, protectedProcedure, orgProcedure, TRPCError } from "../trpc";
 
 export const expenseRouter = router({
   list: protectedProcedure

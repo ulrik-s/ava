@@ -12,8 +12,8 @@
  *     att stjäla fokus från huvudinnehållet.
  */
 
-import { useState } from "react";
 import { Moon, Sun } from "lucide-react";
+import { useState } from "react";
 
 const STORAGE_KEY = "ava.theme";
 

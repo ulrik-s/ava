@@ -8,9 +8,9 @@ import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { composeMail, type ComposeMailOpts } from "./platform/mail.ts";
-import { json, parseJsonBody, textError } from "./http.ts";
 import { isSafeFileName, type ComposeMailRequest } from "@/lib/shared/helper/protocol";
+import { json, parseJsonBody, textError } from "./http.ts";
+import { composeMail, type ComposeMailOpts } from "./platform/mail.ts";
 
 export interface ComposeMailDeps {
   compose: (opts: ComposeMailOpts) => Promise<void>;

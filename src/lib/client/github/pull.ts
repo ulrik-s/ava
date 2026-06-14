@@ -15,12 +15,12 @@
  *   7. Skriv ny sync-state.json
  */
 
-import { readSyncState, writeSyncState, type SyncState } from "./sync-state";
-import { walkFsa, writeFile, deleteFile } from "./fsa-walker";
 import {
   getBranchHead, getCommit, getTreeRecursive, getBlob, base64ToBytes,
   type RepoLocator,
 } from "./api";
+import { walkFsa, writeFile, deleteFile } from "./fsa-walker";
+import { readSyncState, writeSyncState, type SyncState } from "./sync-state";
 
 export interface PullArgs {
   handle: FileSystemDirectoryHandle;

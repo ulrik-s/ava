@@ -3,8 +3,8 @@
  *
  */
 
-import { describe, it, expect, vi } from "vitest-compat";
 import { render, screen } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest-compat";
 import { AuthStatusBanner } from "@/components/shell/auth-status-banner";
 
 const mockState = {

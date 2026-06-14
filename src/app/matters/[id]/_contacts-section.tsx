@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { EntityLink } from "@/lib/client/demo/entity-link";
-import { trpc } from "@/lib/client/trpc";
-import { labelForMatterRole, matterRoleOptions, contactTypeOptions } from "@/lib/client/labels";
 import { DataTable, type Column } from "@/components/ui/data-table";
+import { EntityLink } from "@/lib/client/demo/entity-link";
+import { labelForMatterRole, matterRoleOptions, contactTypeOptions } from "@/lib/client/labels";
+import { trpc } from "@/lib/client/trpc";
 
 type Contact = {
   id: string;

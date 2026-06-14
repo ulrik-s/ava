@@ -14,9 +14,9 @@
  *   6. Uppdatera HEAD så commit:n blir den nya HEAD
  */
 
-import type { FsaIsoGitAdapter } from "@/lib/client/fsa/fs-adapter";
 import type { FsClient } from "isomorphic-git";
 import type * as IsomorphicGit from "isomorphic-git";
+import type { FsaIsoGitAdapter } from "@/lib/client/fsa/fs-adapter";
 import { sshsigSign } from "./sshsig";
 
 /** Det dynamiskt importerade isomorphic-git-modulnamespacet. */

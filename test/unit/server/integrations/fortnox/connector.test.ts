@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest-compat";
-import { FortnoxLedgerConnector } from "@/lib/server/integrations/fortnox/connector";
-import { assertConnectorMatchesCapabilities } from "@/lib/server/integrations/ledger/capabilities";
 import type { FortnoxClient } from "@/lib/server/integrations/fortnox/client";
+import { FortnoxLedgerConnector } from "@/lib/server/integrations/fortnox/connector";
 import type { FortnoxKontoMappning, FortnoxVoucher, FortnoxVoucherResponse } from "@/lib/server/integrations/fortnox/schema";
+import { assertConnectorMatchesCapabilities } from "@/lib/server/integrations/ledger/capabilities";
 import type { SemanticVoucher } from "@/lib/shared/accounting/semantic-voucher";
 
 const MAPPING: FortnoxKontoMappning = {

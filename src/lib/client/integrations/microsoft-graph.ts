@@ -1,5 +1,7 @@
 "use client";
 
+import { z } from "zod";
+
 /**
  * Tunna wrappers runt Microsoft Graph `/me/events` (Outlook Calendar).
  *
@@ -12,8 +14,6 @@
  */
 
 const GRAPH_BASE = "https://graph.microsoft.com/v1.0";
-
-import { z } from "zod";
 
 export interface GraphEventBody {
   subject: string;

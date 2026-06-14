@@ -1,12 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { trpc } from "@/lib/client/trpc";
-import { formatCurrency } from "@/lib/client/utils";
-import { EntityLink } from "@/lib/client/demo/entity-link";
-import { splitVat, VAT_RATES, VAT_RATE_LABELS, type VatRate } from "@/lib/shared/vat";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { Modal } from "@/components/ui/modal";
+import { EntityLink } from "@/lib/client/demo/entity-link";
+import { trpc } from "@/lib/client/trpc";
+import { formatCurrency } from "@/lib/client/utils";
+import { splitVat, VAT_RATES, VAT_RATE_LABELS, type VatRate } from "@/lib/shared/vat";
 
 interface Props {
   matterId: string;

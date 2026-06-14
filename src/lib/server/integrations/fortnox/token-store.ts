@@ -8,8 +8,8 @@
  * connectorn oförändrad.
  */
 
-import { fortnoxStoredTokensSchema, type FortnoxStoredTokens } from "./schema";
 import type { SecretsVault } from "../../secrets/vault";
+import { fortnoxStoredTokensSchema, type FortnoxStoredTokens } from "./schema";
 
 export interface FortnoxTokenStore {
   /** Hämta sparade tokens, eller null om byrån inte auth:at än. */

@@ -1,5 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { renderHook } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
+
+import { issueStore } from "@/lib/client/diagnostics";
+import { useMatterInvariants } from "@/lib/client/diagnostics/use-matter-invariants";
 
 // Mockbara query-resultat — styrs per test via dessa variabler.
 let runsResult: { data?: { runs: unknown[] } } = {};
@@ -11,9 +14,6 @@ vi.mock("@/lib/client/trpc", () => ({
     document: { list: { useQuery: () => docsResult } },
   },
 }));
-
-import { useMatterInvariants } from "@/lib/client/diagnostics/use-matter-invariants";
-import { issueStore } from "@/lib/client/diagnostics";
 
 const pendingKr = { id: "br-1", type: "KOSTNADSRAKNING", status: "PENDING_VERDICT" };
 

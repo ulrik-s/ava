@@ -1,11 +1,11 @@
 import { describe, it, expect } from "vitest-compat";
+import type { LogEntry } from "@/lib/client/diagnostics/log-buffer";
 import {
   buildIssueReport,
   githubIssueNewUrl,
   DEFAULT_MAX_URL_LENGTH,
 } from "@/lib/client/diagnostics/report";
 import type { InvariantViolation } from "@/lib/shared/diagnostics/invariants";
-import type { LogEntry } from "@/lib/client/diagnostics/log-buffer";
 
 const repo = { owner: "ulrik-s", repo: "ava" };
 

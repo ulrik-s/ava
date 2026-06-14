@@ -2,8 +2,8 @@
  * Test för OrgDefaultsSection — admin-only-gate, lista, ta bort-knapp.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { OrgDefaultsSection } from "@/components/settings/org-defaults-section";
 
 const meQuery: { data: { role: string } | undefined } = { data: undefined };

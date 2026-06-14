@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest-compat";
-import { renderSie, type SieAccountMap, type SieRenderInput } from "@/lib/shared/accounting/sie";
 import type { SemanticVoucher } from "@/lib/shared/accounting/semantic-voucher";
+import { renderSie, type SieAccountMap, type SieRenderInput } from "@/lib/shared/accounting/sie";
 
 const accountMap: SieAccountMap = {
   kundfordran: { number: "1510", name: "Kundfordringar" },

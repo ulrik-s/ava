@@ -11,10 +11,10 @@
  */
 
 import { useId, useState } from "react";
+import { DataTable, type Column } from "@/components/ui/data-table";
+import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
-import { EntityLink } from "@/lib/client/demo/entity-link";
-import { DataTable, type Column } from "@/components/ui/data-table";
 
 interface InvoiceRow {
   id: string;

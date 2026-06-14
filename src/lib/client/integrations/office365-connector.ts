@@ -13,8 +13,8 @@
  * localStorage (samma mönster som OAuth-config för GitHub).
  */
 
-import type { IntegrationConnector, ConnectionStatus } from "./types";
 import { registerConnector } from "./registry";
+import type { IntegrationConnector, ConnectionStatus } from "./types";
 
 const SCOPES_DEFAULT = [
   "User.Read",

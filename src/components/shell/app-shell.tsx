@@ -10,12 +10,12 @@
  */
 
 import { usePathname } from "next/navigation";
-import { Sidebar } from "./sidebar";
-import { DemoModeBanner } from "./demo-mode-banner";
-import { ExternalEditRegistrar } from "@/components/documents/external-edit-registrar";
-import { ExternalEditIndicator } from "@/components/documents/external-edit-indicator";
 import { ErrorReportButton } from "@/components/diagnostics/error-report-button";
+import { ExternalEditIndicator } from "@/components/documents/external-edit-indicator";
+import { ExternalEditRegistrar } from "@/components/documents/external-edit-registrar";
 import { trpc } from "@/lib/client/trpc";
+import { DemoModeBanner } from "./demo-mode-banner";
+import { Sidebar } from "./sidebar";
 
 /**
  * Routes som ska renderas utan sidebar (deras egen layout tar över).

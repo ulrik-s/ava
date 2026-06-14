@@ -5,8 +5,8 @@
  * Tomt/saknat id renderar en `<span>` (aldrig en trasig URL).
  */
 
-import { describe, it, expect } from "vitest-compat";
 import { render, screen } from "@testing-library/react";
+import { describe, it, expect } from "vitest-compat";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 
 describe("EntityLink", () => {

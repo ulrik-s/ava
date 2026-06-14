@@ -12,8 +12,8 @@
  * `#GEN` kommer från en injicerad klocka (deterministisk i test).
  */
 
-import { renderSie, type SieAccountMap, type SieCompany, type SieVoucherMeta } from "@/lib/shared/accounting/sie";
 import type { SemanticVoucher } from "@/lib/shared/accounting/semantic-voucher";
+import { renderSie, type SieAccountMap, type SieCompany, type SieVoucherMeta } from "@/lib/shared/accounting/sie";
 import type {
   LedgerCapabilities,
   LedgerConnector,

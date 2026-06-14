@@ -2,8 +2,8 @@
  * Test för EditUserPage — laddar användare, sparar, tar bort.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import EditUserClient from "@/app/users/[id]/_edit-client";
 
 // Vi testar klient-komponenten direkt. Den async server-wrappern (page.tsx)

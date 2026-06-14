@@ -13,9 +13,9 @@
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
+import { CURRENT_SCHEMA_VERSION } from "../../src/lib/shared/schema-version";
 import { DEMO_META_PATH } from "../demo-config";
 import type { IdTranslator } from "../demo-generator/id-translator";
-import { CURRENT_SCHEMA_VERSION } from "../../src/lib/shared/schema-version";
 
 export interface DemoMetaUser {
   /** UUID — det `principalId` som /login sparar i firma-config. */

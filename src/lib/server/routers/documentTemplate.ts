@@ -1,12 +1,12 @@
-import { z } from "zod";
-import { router, protectedProcedure } from "../trpc";
 import { TRPCError } from "@trpc/server";
+import { z } from "zod";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import {
   asId,
   documentTemplateIdSchema,
   userIdSchema,
 } from "@/lib/shared/schemas/ids";
+import { router, protectedProcedure } from "../trpc";
 
 export const documentTemplateRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {

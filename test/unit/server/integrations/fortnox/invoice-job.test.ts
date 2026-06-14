@@ -1,12 +1,12 @@
 import { describe, it, expect } from "vitest-compat";
+import type { FortnoxClient } from "@/lib/server/integrations/fortnox/client";
+import { FortnoxLedgerConnector } from "@/lib/server/integrations/fortnox/connector";
 import {
   bookUnsyncedInvoices,
   makeFortnoxInvoiceJob,
   type BookableInvoice,
   type FortnoxJobCaller,
 } from "@/lib/server/integrations/fortnox/invoice-job";
-import { FortnoxLedgerConnector } from "@/lib/server/integrations/fortnox/connector";
-import type { FortnoxClient } from "@/lib/server/integrations/fortnox/client";
 import type { FortnoxKontoMappning, FortnoxVoucher, FortnoxVoucherResponse } from "@/lib/server/integrations/fortnox/schema";
 import type { LedgerConnector } from "@/lib/server/integrations/ledger/port";
 

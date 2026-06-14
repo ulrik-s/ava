@@ -1,14 +1,14 @@
 "use client";
 
-import { useId, useState } from "react";
+import type { inferRouterOutputs } from "@trpc/server";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { inferRouterOutputs } from "@trpc/server";
-import type { AppRouter } from "@/lib/server/routers/_app";
+import { useId, useState } from "react";
 import { EntityLink } from "@/lib/client/demo/entity-link";
-import { trpc } from "@/lib/client/trpc";
-import { labelForContactType, labelForMatterRole, contactTypeOptions } from "@/lib/client/labels";
 import { useRouteId } from "@/lib/client/demo/use-route-id";
+import { labelForContactType, labelForMatterRole, contactTypeOptions } from "@/lib/client/labels";
+import { trpc } from "@/lib/client/trpc";
+import type { AppRouter } from "@/lib/server/routers/_app";
 
 type ContactData = NonNullable<inferRouterOutputs<AppRouter>["contacts"]["getById"]>;
 

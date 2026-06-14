@@ -5,23 +5,23 @@
  * Detaljerad UI är extraherad till _underscore-prefixade child-moduler.
  */
 
-import { useState } from "react";
 import type { inferRouterOutputs } from "@trpc/server";
-import { trpc } from "@/lib/client/trpc";
-import { useRouteId } from "@/lib/client/demo/use-route-id";
+import { useState } from "react";
 import { EntityLink } from "@/lib/client/demo/entity-link";
+import { useRouteId } from "@/lib/client/demo/use-route-id";
+import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
+import type { AppRouter } from "@/lib/server/routers/_app";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { computeInvoiceLedger } from "@/lib/shared/write-off-calc";
-import type { AppRouter } from "@/lib/server/routers/_app";
-import { PaymentModal } from "./_payment-modal";
-import { PlanModal } from "./_plan-modal";
 import { CreditModal } from "./_credit-modal";
-import { WriteOffModal } from "./_write-off-modal";
-import { InvoiceActions } from "./_invoice-actions";
-import { PaymentsTable } from "./_payments-table";
 import { DispatchHistory } from "./_dispatch-history";
+import { InvoiceActions } from "./_invoice-actions";
+import { PaymentModal } from "./_payment-modal";
+import { PaymentsTable } from "./_payments-table";
+import { PlanModal } from "./_plan-modal";
 import { SendInvoiceModal } from "./_send-invoice-modal";
+import { WriteOffModal } from "./_write-off-modal";
 
 const STATUS_LABELS: Record<string, string> = {
   DRAFT: "Utkast",

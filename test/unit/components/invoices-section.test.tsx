@@ -3,8 +3,8 @@
  * acconto-modalens grundflöde.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { InvoicesSection, statusBadge } from "@/components/matter/invoices-section";
 
 const invoicesQuery = { isLoading: false, data: [] as Array<Record<string, unknown>> };

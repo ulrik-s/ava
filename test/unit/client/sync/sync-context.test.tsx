@@ -4,9 +4,11 @@
  * Täcker: default utanför provider, provider-val + enabled-beräkning,
  * data-changed→notifyChange, lastError-persistens, och ava:repo-ready-ompick.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { render, screen, waitFor, act } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
+import { SyncProviderRoot, useSyncContext } from "@/lib/client/sync/sync-context";
 import type { SyncState } from "@/lib/client/sync/use-auto-sync";
+
 
 const autoSync: { state: SyncState; syncNow: ReturnType<typeof vi.fn>; notifyChange: ReturnType<typeof vi.fn> } = {
   state: { kind: "synced", at: 0 },
@@ -17,8 +19,6 @@ let authMode = "identified-write";
 
 vi.mock("@/lib/client/sync/use-auto-sync", () => ({ useAutoSync: () => autoSync }));
 vi.mock("@/lib/client/auth/use-auth-mode", () => ({ useAuthMode: () => ({ mode: authMode }) }));
-
-import { SyncProviderRoot, useSyncContext } from "@/lib/client/sync/sync-context";
 
 function Probe() {
   const c = useSyncContext();

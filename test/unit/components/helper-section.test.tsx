@@ -2,8 +2,8 @@
  * HelperSection — visar AVA Helper-status i Inställningar.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { render, screen, waitFor } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { HelperSection } from "@/components/settings/helper-section";
 
 const originalFetch = global.fetch;

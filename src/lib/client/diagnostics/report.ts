@@ -16,8 +16,8 @@
  * Rena funktioner — ingen DOM. UI-lagret står för window.open/clipboard.
  */
 
-import type { LogEntry } from "./log-buffer";
 import type { InvariantViolation as Violation } from "@/lib/shared/diagnostics/invariants";
+import type { LogEntry } from "./log-buffer";
 
 export interface RepoLocator {
   owner: string;

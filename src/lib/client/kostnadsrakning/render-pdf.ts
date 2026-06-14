@@ -35,8 +35,8 @@
  *   └────────────────────────────────────────────┘
  */
 
-import type { KostnadsrakningResult } from "@/lib/shared/kostnadsrakning";
 import type { PDFPage, PDFFont, RGB } from "pdf-lib";
+import type { KostnadsrakningResult } from "@/lib/shared/kostnadsrakning";
 
 /** En formaterad utläggsrad i templateContext.expenseLines (se
  *  kostnadsrakning.ts buildTemplateContext) — alla fält är required strings. */

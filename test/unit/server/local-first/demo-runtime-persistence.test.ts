@@ -9,9 +9,9 @@
  */
 
 import { describe, it, expect, vi } from "vitest-compat";
+import { demoSourceFromRuntime } from "@/lib/client/demo/demo-source-from-runtime";
 import { DemoRuntime } from "@/lib/server/local-first/demo-runtime";
 import { InMemoryPersistence } from "@/lib/server/local-first/persistence";
-import { demoSourceFromRuntime } from "@/lib/client/demo/demo-source-from-runtime";
 
 const matter1 = JSON.stringify({
   id: "m1", matterNumber: "2026-0001", title: "T",

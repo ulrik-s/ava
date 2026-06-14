@@ -4,7 +4,9 @@
  */
 
 import { describe, it, expect, vi } from "vitest-compat";
+import { FsaIsoGitAdapter } from "@/lib/client/fsa/fs-adapter";
 import { uploadDocumentToFsa } from "@/lib/client/fsa/upload-document";
+
 
 interface MockFs {
   writeFile: ReturnType<typeof vi.fn>;
@@ -16,8 +18,6 @@ vi.mock("@/lib/client/fsa/fs-adapter", () => ({
     return this;
   }),
 }));
-
-import { FsaIsoGitAdapter } from "@/lib/client/fsa/fs-adapter";
 
 describe("uploadDocumentToFsa", () => {
   it("genererar id + skriver fil till documents/content/<id>.<ext>", async () => {

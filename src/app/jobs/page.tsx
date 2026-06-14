@@ -5,9 +5,9 @@
  * färdiga, misslyckade). Cancel/Retry per rad. Rensa-historik-knapp.
  */
 
-import { useJobs } from "@/lib/client/jobs/use-jobs";
-import { jobQueue, type Job } from "@/lib/client/jobs/job-queue";
 import { X, RotateCcw, Trash2 } from "lucide-react";
+import { jobQueue, type Job } from "@/lib/client/jobs/job-queue";
+import { useJobs } from "@/lib/client/jobs/use-jobs";
 
 export default function JobsPage() {
   const jobs = useJobs();

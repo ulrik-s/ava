@@ -12,18 +12,18 @@
  * projektion; här bevisar vi disk-rundturen (skriv → läs via node-fs).
  */
 
-import { describe, it, expect, beforeEach, afterEach } from "vitest-compat";
 import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises";
-import { join, dirname } from "node:path";
 import { tmpdir } from "node:os";
-import { buildSeed, seedToFiles } from "../../../../tooling/scripts/seed-data";
+import { join, dirname } from "node:path";
+import { describe, it, expect, beforeEach, afterEach } from "vitest-compat";
+import type { Principal } from "@/lib/server/auth/principal";
 import {
   hydrateEntitiesFromWorkingCopy,
   entitiesToDemoSource,
   createWorkingCopyCaller,
 } from "@/lib/server/local-first/server-working-copy";
 import { CURRENT_SCHEMA_VERSION } from "@/lib/shared/schema-version";
-import type { Principal } from "@/lib/server/auth/principal";
+import { buildSeed, seedToFiles } from "../../../../tooling/scripts/seed-data";
 
 const ADMIN: Principal = {
   id: "current-user",

@@ -10,9 +10,9 @@
  */
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { useAuthMode } from "@/lib/client/auth/use-auth-mode";
 import type { SyncProvider, SyncState } from "./use-auto-sync";
 import { useAutoSync } from "./use-auto-sync";
-import { useAuthMode } from "@/lib/client/auth/use-auth-mode";
 
 export interface SyncContextValue {
   state: SyncState;

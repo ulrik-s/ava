@@ -1,5 +1,5 @@
-import { describe, expect, test } from "bun:test";
 import { generateKeyPairSync, sign } from "node:crypto";
+import { describe, expect, test } from "bun:test";
 
 import {
   acceptedPublicKeys,

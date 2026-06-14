@@ -9,8 +9,8 @@
  *     filename + ev. innehåll. Heuristik först; WebLLM senare.
  */
 
-import { jobQueue } from "./job-queue";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
+import { jobQueue } from "./job-queue";
 
 interface ClassifyPayload extends Record<string, unknown> {
   documentId: string;

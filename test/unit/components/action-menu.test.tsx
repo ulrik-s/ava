@@ -8,8 +8,8 @@
  *
  */
 
-import { describe, it, expect, vi } from "vitest-compat";
 import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest-compat";
 import { ActionMenu, type ActionMenuItem } from "@/components/ui/action-menu";
 
 function setup(items: ActionMenuItem[], props: Partial<React.ComponentProps<typeof ActionMenu>> = {}) {

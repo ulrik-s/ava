@@ -7,8 +7,8 @@
  */
 
 import { useSyncExternalStore } from "react";
-import { issueStore } from "./index";
 import type { InvariantViolation } from "@/lib/shared/diagnostics/invariants";
+import { issueStore } from "./index";
 
 // Stabil tom-referens så getSnapshot inte triggar oändlig re-render när
 // store:n är tom (useSyncExternalStore kräver referens-stabilitet).

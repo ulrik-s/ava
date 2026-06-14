@@ -9,8 +9,8 @@
  * Visas en gång per session; användaren kan stänga den manuellt.
  */
 
-import { useEffect, useState } from "react";
 import { Info, X } from "lucide-react";
+import { useEffect, useState } from "react";
 import { loadFirmaConfig } from "@/lib/client/firma/firma-config";
 
 const STORAGE_KEY = "ava.demoBannerDismissed";

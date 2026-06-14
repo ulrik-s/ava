@@ -2,8 +2,8 @@
  * Test för TemplatesPage — listrendering, gruppering, ta-bort-dialog.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import TemplatesPage from "@/app/templates/page";
 
 const templatesQuery = {

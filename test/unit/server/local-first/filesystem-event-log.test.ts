@@ -1,6 +1,7 @@
-import { describe, it, expect } from "vitest-compat";
+import { describe, it, expect, vi  } from "vitest-compat";
 import { FilesystemEventLog } from "@/lib/server/local-first/filesystem-event-log";
 import { InMemoryFileSystem } from "@/lib/server/local-first/in-memory-fs";
+
 
 function makeLog() {
   const fs = new InMemoryFileSystem();
@@ -100,8 +101,6 @@ describe("FilesystemEventLog — query", () => {
     expect(m1Events[0]!.matterId).toBe("m1");
   });
 });
-
-import { vi } from "vitest-compat";
 
 describe("FilesystemEventLog — migrate-on-read (#58)", () => {
   // Skriv en v1-event-rad (payload bär legacy `type`) direkt till loggen.

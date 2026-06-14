@@ -7,10 +7,10 @@
  */
 
 import type { inferRouterOutputs } from "@trpc/server";
-import { trpc } from "@/lib/client/trpc";
-import type { AppRouter } from "@/lib/server/routers/_app";
 import { EntityLink } from "@/lib/client/demo/entity-link";
+import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
+import type { AppRouter } from "@/lib/server/routers/_app";
 
 function Row({ label, value, kind = "normal" }: { label: string; value: number; kind?: "normal" | "subtotal" | "result" | "sub" }) {
   const cls =

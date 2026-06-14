@@ -11,10 +11,10 @@
  * ingen dubblettrad. zod-validerat mot `userSchema`.
  */
 
-import { uuidv5, AVA_NAMESPACE } from "@/lib/shared/uuid-derive";
-import { userSchema, type User } from "@/lib/shared/schemas/user";
-import { organizationSchema, type Organization } from "@/lib/shared/schemas/organization";
 import { CURRENT_SCHEMA_VERSION } from "@/lib/shared/schema-version";
+import { organizationSchema, type Organization } from "@/lib/shared/schemas/organization";
+import { userSchema, type User } from "@/lib/shared/schemas/user";
+import { uuidv5, AVA_NAMESPACE } from "@/lib/shared/uuid-derive";
 
 export interface AdminBootstrapInput {
   email: string;

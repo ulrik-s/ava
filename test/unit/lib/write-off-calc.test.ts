@@ -3,13 +3,13 @@
  */
 
 import { describe, it, expect } from "vitest-compat";
+import type { InvoiceStatus } from "@/lib/shared/schemas/enums";
 import {
   computeInvoiceLedger,
   deriveInvoiceStatus,
   invoicePartitionViolation,
   type InvoiceLedger,
 } from "@/lib/shared/write-off-calc";
-import type { InvoiceStatus } from "@/lib/shared/schemas/enums";
 
 describe("computeInvoiceLedger", () => {
   it("outstanding = amount − paid − credited − writtenOff", () => {

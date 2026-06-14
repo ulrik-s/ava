@@ -9,8 +9,8 @@
  *   - DI: factory injiceras så vi mockar bort isomorphic-git
  */
 
-import { describe, it, expect, vi } from "vitest-compat";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest-compat";
 import { DemoClient } from "@/app/demo/_demo-client";
 import { DemoRuntime } from "@/lib/server/local-first/demo-runtime";
 

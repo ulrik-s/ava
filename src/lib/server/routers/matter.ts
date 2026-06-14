@@ -1,6 +1,5 @@
 import { z } from "zod";
-import { router, orgProcedure, requireOrgOwned } from "../trpc";
-import type { IDataStore } from "../data-store/IDataStore";
+import { omitUndefined } from "@/lib/shared/omit-undefined";
 import {
   matterRoleSchema,
   contactTypeSchema,
@@ -15,8 +14,9 @@ import {
   type MatterId,
   type ContactId,
 } from "@/lib/shared/schemas/ids";
+import type { IDataStore } from "../data-store/IDataStore";
 import { emit } from "../events/emit";
-import { omitUndefined } from "@/lib/shared/omit-undefined";
+import { router, orgProcedure, requireOrgOwned } from "../trpc";
 
 type MatterCtx = { dataStore: IDataStore; orgId: string };
 

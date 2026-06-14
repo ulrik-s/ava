@@ -11,19 +11,19 @@
  * KOSTNADSRAKNING i PENDING_VERDICT-state får en "Ange dom"-knapp som
  * öppnar verdict-dialogen (sätter prutning + skapar faktura).
  */
-import { useState } from "react";
 import type { inferRouterOutputs } from "@trpc/server";
+import { useState } from "react";
+import { EntityLink } from "@/lib/client/demo/entity-link";
+import { hasGeneratedDoc, openGeneratedDoc } from "@/lib/client/demo/generated-doc-cache";
+import { useMatterInvariants } from "@/lib/client/diagnostics/use-matter-invariants";
 import { trpc } from "@/lib/client/trpc";
-import type { AppRouter } from "@/lib/server/routers/_app";
 import { formatCurrency } from "@/lib/client/utils";
+import type { AppRouter } from "@/lib/server/routers/_app";
+import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { BILLING_RUN_TYPE_LABELS, BILLING_RUN_STATUS_LABELS } from "@/lib/shared/schemas/enums";
 import { BillingDialog } from "./_billing-dialog";
-import { VerdictDialog } from "./_verdict-dialog";
 import { KostnadsrakningModal } from "./_kostnadsrakning-modal";
-import { hasGeneratedDoc, openGeneratedDoc } from "@/lib/client/demo/generated-doc-cache";
-import { EntityLink } from "@/lib/client/demo/entity-link";
-import { useMatterInvariants } from "@/lib/client/diagnostics/use-matter-invariants";
-import { omitUndefined } from "@/lib/shared/omit-undefined";
+import { VerdictDialog } from "./_verdict-dialog";
 
 interface MatterContext {
   matterNumber: string;

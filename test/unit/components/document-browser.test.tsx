@@ -6,8 +6,8 @@
  * etc.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { DocumentBrowser } from "@/components/documents/document-browser";
 
 // Self-hosted-läget letar efter ett FSA-handle via IndexedDB; jsdom har inte

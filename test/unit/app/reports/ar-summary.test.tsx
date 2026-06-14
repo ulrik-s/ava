@@ -2,16 +2,16 @@
  * Test för ArSummarySection (ADR 0007): brygga + åldersanalys renderas.
  */
 
-import { describe, it, expect, beforeEach, vi } from "vitest-compat";
 import { render, screen } from "@testing-library/react";
+import { describe, it, expect, beforeEach, vi } from "vitest-compat";
+
+import { ArSummarySection } from "@/app/reports/_ar-summary";
 
 const arQuery = { data: undefined as Record<string, unknown> | undefined, isLoading: false };
 
 vi.mock("@/lib/client/trpc", () => ({
   trpc: { reports: { arSummary: { useQuery: () => arQuery } } },
 }));
-
-import { ArSummarySection } from "@/app/reports/_ar-summary";
 
 beforeEach(() => {
   arQuery.data = undefined;

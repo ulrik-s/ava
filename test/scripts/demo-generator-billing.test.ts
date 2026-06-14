@@ -8,10 +8,10 @@
  */
 
 import { describe, it, expect } from "vitest-compat";
-import { buildSeed } from "../../tooling/scripts/seed-data";
 import { createGitTarget } from "../../tooling/demo-generator/backend-target";
 import { populate } from "../../tooling/demo-generator/populate";
 import { populateBilling } from "../../tooling/demo-generator/populate-billing";
+import { buildSeed } from "../../tooling/scripts/seed-data";
 
 const ADMIN = { id: "gen", email: "gen@ava.local", name: "Generator", role: "ADMIN", organizationId: "firma-ab" };
 

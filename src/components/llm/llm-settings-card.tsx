@@ -10,14 +10,14 @@
  *   4. När progress = 100 % används LLM:n av classify-document-jobbet
  */
 
-import { useEffect, useState } from "react";
 import { Brain, Download, Check, AlertTriangle, Loader2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { downloadActiveModel, subscribeLlmProgress, getActiveLlm } from "@/lib/client/llm/active-llm";
 import {
   isLlmEnabled, setLlmEnabled,
   getLlmModelId, setLlmModelId,
   LLM_MODELS, type LlmModelId,
 } from "@/lib/client/llm/llm-config";
-import { downloadActiveModel, subscribeLlmProgress, getActiveLlm } from "@/lib/client/llm/active-llm";
 
 const MODEL_LABELS: Record<LlmModelId, string> = {
   "Llama-3.2-1B-Instruct-q4f16_1-MLC": "Llama 3.2 1B — snabb, ~700 MB",

@@ -4,8 +4,8 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
-import { dataStoreFromMockPrisma, type MockDataStore } from "../helpers/mock-data-store";
 import { mailRouter } from "@/lib/server/routers/mail";
+import { dataStoreFromMockPrisma, type MockDataStore } from "../helpers/mock-data-store";
 
 const mockPrisma = {
   matter: { findFirstOrThrow: vi.fn() },

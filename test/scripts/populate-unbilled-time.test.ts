@@ -3,10 +3,10 @@
  * utan invoiceId (= "upparbetad men inte fakturerad").
  */
 import { describe, it, expect } from "vitest-compat";
-import { populateUnbilledTime } from "../../tooling/demo-generator/populate-unbilled-time";
 import { createGitTarget } from "../../tooling/demo-generator/backend-target";
-import { buildSeed } from "../../tooling/scripts/seed-data";
 import { translateSeed, createIdTranslator } from "../../tooling/demo-generator/id-translator";
+import { populateUnbilledTime } from "../../tooling/demo-generator/populate-unbilled-time";
+import { buildSeed } from "../../tooling/scripts/seed-data";
 
 async function runTarget() {
   const translator = createIdTranslator();

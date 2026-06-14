@@ -5,8 +5,8 @@
  * browser-resize.
  */
 
-import { describe, it, expect, vi, afterEach } from "vitest-compat";
 import { renderHook, act } from "@testing-library/react";
+import { describe, it, expect, vi, afterEach } from "vitest-compat";
 import { useMediaQuery } from "@/lib/client/use-media-query";
 
 interface MQL {

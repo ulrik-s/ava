@@ -6,8 +6,8 @@
  * array och Next:n fall:er tillbaka till dynamisk rendering.
  */
 
-import MatterDetailClient from "./_client";
 import { demoStaticParams } from "@/lib/client/demo/static-params";
+import MatterDetailClient from "./_client";
 
 export async function generateStaticParams(): Promise<{ id: string }[]> {
   return demoStaticParams("matters/active");

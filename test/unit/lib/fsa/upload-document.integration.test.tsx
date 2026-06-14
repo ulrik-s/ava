@@ -13,8 +13,8 @@
  */
 
 import { describe, it, expect } from "vitest-compat";
-import { uploadDocumentToFsa } from "@/lib/client/fsa/upload-document";
 import { makeFsaWriteBack } from "@/lib/client/firma/fsa-write-back";
+import { uploadDocumentToFsa } from "@/lib/client/fsa/upload-document";
 import { makeFakeFsa } from "../../../helpers/fake-fsa";
 
 describe("Document upload — integration mot fake FSA", () => {

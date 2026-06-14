@@ -12,8 +12,8 @@
  */
 
 import { describe, it, expect } from "vitest-compat";
-import { buildSeed, seedToFiles } from "../../tooling/scripts/seed-data";
 import { buildDefaultRegistry } from "@/lib/server/local-first/projections/default-registry";
+import { buildSeed, seedToFiles } from "../../tooling/scripts/seed-data";
 
 describe("seed-data hydration", () => {
   it("alla seed-genererade filer parsar med sina projektion-schemas", () => {

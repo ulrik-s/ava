@@ -11,9 +11,9 @@
  * fixturerna inte ruttnar (t.ex. råkar tas bort eller bytas ut) under tiden.
  */
 
-import { describe, it, expect } from "vitest-compat";
 import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
+import { describe, it, expect } from "vitest-compat";
 
 const DIR = resolve(__dirname, "../../../fixtures/camt-seb");
 const read = (name: string): string => readFileSync(resolve(DIR, name), "utf8");

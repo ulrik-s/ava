@@ -1,14 +1,14 @@
 "use client";
 
-import { useState, useRef, useCallback, useMemo } from "react";
 import type { inferRouterInputs } from "@trpc/server";
+import { useState, useRef, useCallback, useMemo } from "react";
 import { trpc } from "@/lib/client/trpc";
 import type { AppRouter } from "@/lib/server/routers/_app";
-import { FolderRow, type FolderRecord } from "./_folder-row";
 import { DocumentRow, type DocumentRecord } from "./_document-row";
-import { NewFolderForm } from "./_new-folder-form";
-import { type DragItem } from "./_drag-helpers";
 import { DocumentsListView } from "./_documents-list-view";
+import { type DragItem } from "./_drag-helpers";
+import { FolderRow, type FolderRecord } from "./_folder-row";
+import { NewFolderForm } from "./_new-folder-form";
 
 type ViewMode = "tree" | "list";
 const VIEW_MODE_KEY = "ava.documents.viewMode";

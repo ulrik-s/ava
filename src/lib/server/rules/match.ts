@@ -7,8 +7,8 @@
  */
 
 import jsonLogic from "json-logic-js";
-import type { AvaRule } from "./schema";
 import type { AvaEvent } from "../events/schema";
+import type { AvaRule } from "./schema";
 
 export function matchEventTriggers(rules: AvaRule[], event: AvaEvent): AvaRule[] {
   return rules.filter((rule) => {

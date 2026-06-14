@@ -3,7 +3,9 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
+import { documentRouter } from "@/lib/server/routers/document";
 import { dataStoreFromMockPrisma } from "../../helpers/mock-data-store";
+
 
 vi.mock("@/lib/server/services/meilisearch", () => ({
   searchDocuments: vi.fn(),
@@ -12,8 +14,6 @@ vi.mock("@/lib/server/services/meilisearch", () => ({
 vi.mock("@/lib/server/services/document-analysis", () => ({
   analyzeDocument: vi.fn().mockResolvedValue(undefined),
 }));
-
-import { documentRouter } from "@/lib/server/routers/document";
 
 const mockPrisma = {
   document: {

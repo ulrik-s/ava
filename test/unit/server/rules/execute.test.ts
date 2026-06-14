@@ -5,9 +5,9 @@
  */
 
 import { describe, it, expect, vi } from "vitest-compat";
+import type { AvaEvent } from "@/lib/server/events/schema";
 import { executeRule, type ExecutionContext, type StepHandlers } from "@/lib/server/rules/execute";
 import type { RuleStep } from "@/lib/server/rules/schema";
-import type { AvaEvent } from "@/lib/server/events/schema";
 
 function makeHandlers(overrides: Partial<StepHandlers> = {}): StepHandlers {
   return {

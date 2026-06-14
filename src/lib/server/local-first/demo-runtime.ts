@@ -29,10 +29,10 @@
  *     i tester, eller utelämnas helt.
  */
 
-import { MemFs } from "./mem-fs";
 import { DemoLoader, type DemoCloneFn, type LoadResult } from "./demo-loader";
-import { buildDefaultRegistry } from "./projections/default-registry";
+import { MemFs } from "./mem-fs";
 import type { IPersistence } from "./persistence";
+import { buildDefaultRegistry } from "./projections/default-registry";
 
 export type DemoStatus = "idle" | "loading" | "loaded" | "error";
 

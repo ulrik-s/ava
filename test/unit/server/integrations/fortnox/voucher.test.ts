@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest-compat";
-import { renderFortnoxVoucher } from "@/lib/server/integrations/fortnox/voucher";
 import type { FortnoxKontoMappning } from "@/lib/server/integrations/fortnox/schema";
+import { renderFortnoxVoucher } from "@/lib/server/integrations/fortnox/voucher";
 import {
   buildSemanticVoucher,
   type SemanticVoucher,

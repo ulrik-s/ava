@@ -13,6 +13,9 @@ import {
   setMirrorStateDispatcher,
 } from "@/lib/client/jobs/mirror-outlook-dispatch";
 
+// Trigger registreringen av workern.
+import "@/lib/client/jobs/register-workers";
+
 // Mocka Graph-modulen. `vi.hoisted` säkerställer att fns finns när workern
 // dynamiskt import:ar dem inuti job-körningen.
 const graph = vi.hoisted(() => ({
@@ -22,9 +25,6 @@ const graph = vi.hoisted(() => ({
   toGraphEvent: vi.fn((ev: { title: string }) => ({ subject: ev.title })),
 }));
 vi.mock("@/lib/client/integrations/microsoft-graph", () => graph);
-
-// Trigger registreringen av workern.
-import "@/lib/client/jobs/register-workers";
 
 function waitForFinish(id: string, timeoutMs = 1000): Promise<Job> {
   return new Promise((resolve, reject) => {

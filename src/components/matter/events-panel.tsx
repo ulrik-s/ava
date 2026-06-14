@@ -1,8 +1,8 @@
 "use client";
 
 import type { inferRouterOutputs } from "@trpc/server";
-import type { AppRouter } from "@/lib/server/routers/_app";
 import { trpc } from "@/lib/client/trpc";
+import type { AppRouter } from "@/lib/server/routers/_app";
 
 interface EventsPanelProps {
   matterId: string;

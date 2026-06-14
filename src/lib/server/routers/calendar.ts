@@ -13,7 +13,6 @@
  */
 
 import { z } from "zod";
-import { router, protectedProcedure } from "../trpc";
 import { calendarEventKindSchema, calendarEventVisibilitySchema } from "@/lib/shared/schemas";
 import {
   asId,
@@ -22,6 +21,7 @@ import {
   userIdSchema,
   contactIdSchema,
 } from "@/lib/shared/schemas/ids";
+import { router, protectedProcedure } from "../trpc";
 
 const createInput = z.object({
   kind: calendarEventKindSchema.default("appointment"),

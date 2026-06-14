@@ -3,11 +3,11 @@
  * Verifierar DUE/OVERDUE-generering, att påminnelser loggas, och idempotens.
  */
 import { describe, it, expect } from "vitest-compat";
-import { appRouter } from "@/lib/server/routers/_app";
-import { DemoDataStore } from "@/lib/server/data-store/DemoDataStore";
-import { buildContext } from "@/lib/server/build-context";
 import { noopPorts } from "@/lib/server/adapters/noop-ports";
 import type { Principal } from "@/lib/server/auth/principal";
+import { buildContext } from "@/lib/server/build-context";
+import { DemoDataStore } from "@/lib/server/data-store/DemoDataStore";
+import { appRouter } from "@/lib/server/routers/_app";
 
 const PRINCIPAL: Principal = { id: "u-1", email: "a@x", name: "Anna", role: "ADMIN", organizationId: "org-1" };
 

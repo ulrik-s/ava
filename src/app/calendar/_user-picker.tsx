@@ -8,12 +8,12 @@
  * minns vilka man tittar på mellan sessioner.
  */
 
-import { z } from "zod";
-import { loadFromStorage } from "@/lib/client/load-from-storage";
-import { useEffect } from "react";
 import { Users } from "lucide-react";
-import { trpc } from "@/lib/client/trpc";
+import { useEffect } from "react";
+import { z } from "zod";
 import { colorForUserId, type UserColor } from "@/lib/client/calendar/user-colors";
+import { loadFromStorage } from "@/lib/client/load-from-storage";
+import { trpc } from "@/lib/client/trpc";
 
 interface UserPickerProps {
   selectedUserIds: readonly string[];

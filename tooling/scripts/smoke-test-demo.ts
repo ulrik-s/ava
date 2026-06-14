@@ -10,8 +10,8 @@
  *   4. DemoRuntime exponerar entiteterna
  */
 
-import { DemoRuntime } from "@/lib/server/local-first/demo-runtime";
 import { cloneFromGithub } from "@/lib/server/local-first/clone-from-github";
+import { DemoRuntime } from "@/lib/server/local-first/demo-runtime";
 
 async function main(): Promise<void> {
   const url = process.argv[2];

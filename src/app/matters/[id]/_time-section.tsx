@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { trpc } from "@/lib/client/trpc";
-import { formatMinutes } from "@/lib/client/utils";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { Modal } from "@/components/ui/modal";
+import { trpc } from "@/lib/client/trpc";
+import { formatMinutes } from "@/lib/client/utils";
 
 interface Props {
   matterId: string;

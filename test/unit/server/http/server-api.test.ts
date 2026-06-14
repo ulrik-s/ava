@@ -4,8 +4,8 @@
  * konfigurerad token krävs (401 utan/fel token, session/git aldrig nådd).
  */
 import { describe, it, expect } from "vitest-compat";
-import { buildServerApiHandler, type ServerApiConfig } from "@/lib/server/http/server-api";
 import type { Principal } from "@/lib/server/auth/principal";
+import { buildServerApiHandler, type ServerApiConfig } from "@/lib/server/http/server-api";
 
 const PRINCIPAL: Principal = {
   id: "sr", email: "sr@ava.local", name: "SR", role: "ADMIN", organizationId: "org-1",

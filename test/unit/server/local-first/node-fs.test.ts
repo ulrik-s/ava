@@ -5,10 +5,10 @@
  * Använder os.tmpdir() så testen är isolerade per-suite.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from "vitest-compat";
 import { mkdtemp, rm, readFile, mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { describe, it, expect, beforeEach, afterEach } from "vitest-compat";
 import { NodeFileSystem } from "@/lib/server/local-first/node-fs";
 
 describe("NodeFileSystem", () => {

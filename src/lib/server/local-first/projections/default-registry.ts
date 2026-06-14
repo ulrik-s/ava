@@ -4,16 +4,16 @@
  * `LocalGitStore` levererar idag.
  */
 
-import { ProjectionRegistry } from "./registry";
-import { MatterProjection } from "./matter";
 import { ContactProjection } from "./contact";
-import { UserProjection } from "./user";
-import { MatterContactProjection } from "./matter-contact";
 import { DocumentProjection } from "./document";
-import { TimeEntryProjection } from "./time-entry";
 import { ExpenseProjection } from "./expense";
-import { InvoiceProjection } from "./invoice";
 import { GenericProjection } from "./generic";
+import { InvoiceProjection } from "./invoice";
+import { MatterProjection } from "./matter";
+import { MatterContactProjection } from "./matter-contact";
+import { ProjectionRegistry } from "./registry";
+import { TimeEntryProjection } from "./time-entry";
+import { UserProjection } from "./user";
 
 export function buildDefaultRegistry(): ProjectionRegistry {
   const r = new ProjectionRegistry();

@@ -1,15 +1,15 @@
 "use client";
 
-import { useId, useState } from "react";
-import { EntityLink } from "@/lib/client/demo/entity-link";
 import type { inferRouterOutputs } from "@trpc/server";
+import { useId, useState } from "react";
+import { DataTable, type Column } from "@/components/ui/data-table";
+import { EntityLink } from "@/lib/client/demo/entity-link";
+import { labelForPaymentMethod, creditRiskFor, CREDIT_RISK_LABELS, type CreditRisk } from "@/lib/client/labels";
 import { trpc } from "@/lib/client/trpc";
 import { formatMinutes, formatCurrency } from "@/lib/client/utils";
-import { labelForPaymentMethod, creditRiskFor, CREDIT_RISK_LABELS, type CreditRisk } from "@/lib/client/labels";
 import type { AppRouter } from "@/lib/server/routers/_app";
-import { DataTable, type Column } from "@/components/ui/data-table";
-import { ArSummarySection } from "./_ar-summary";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
+import { ArSummarySection } from "./_ar-summary";
 
 const RISK_BADGE_CLASSES: Record<CreditRisk, string> = {
   LOW: "bg-green-50 text-green-700 border-green-200",

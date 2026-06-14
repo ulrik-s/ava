@@ -23,13 +23,13 @@
  *     code path som production sync-loopen.
  */
 
+import { schemaVersionFromMetaJson } from "@/lib/shared/meta-json";
+import { assertRepoSchemaCompatible } from "@/lib/shared/schema-version";
+import { ENTITY_REGISTRY } from "@/lib/shared/schemas";
+import { DEMO_META_PATH } from "../../../../tooling/demo-config";
 import type { MemFs } from "./mem-fs";
 import { ProjectionHydrator } from "./projection-writer";
 import type { ProjectionRegistry } from "./projections/registry";
-import { ENTITY_REGISTRY } from "@/lib/shared/schemas";
-import { assertRepoSchemaCompatible } from "@/lib/shared/schema-version";
-import { schemaVersionFromMetaJson } from "@/lib/shared/meta-json";
-import { DEMO_META_PATH } from "../../../../tooling/demo-config";
 
 export type DemoCloneFn = (fs: MemFs, url: string) => Promise<void>;
 

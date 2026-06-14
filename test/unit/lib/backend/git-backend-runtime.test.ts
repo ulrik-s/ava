@@ -6,13 +6,13 @@
  * principalen (org-scoping) styrs via en injicerad AuthProvider.
  */
 
-import { describe, it, expect } from "vitest-compat";
 import { createTRPCClient } from "@trpc/client";
 import superjson from "superjson";
-import type { AppRouter } from "@/lib/server/routers/_app";
+import { describe, it, expect } from "vitest-compat";
 import { GitBackendRuntime } from "@/lib/client/backend/git-backend-runtime";
 import { GitAuthProvider } from "@/lib/server/auth/git-auth-provider";
 import { DemoDataStore } from "@/lib/server/data-store/DemoDataStore";
+import type { AppRouter } from "@/lib/server/routers/_app";
 
 const matters = [
   { id: "m1", title: "Demo Avtal", organizationId: "demo-firma-ab", status: "ACTIVE", matterNumber: "2025-0001", createdAt: new Date("2025-01-01") },

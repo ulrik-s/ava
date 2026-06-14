@@ -7,10 +7,10 @@
  *   - mutation (POST) utan ändringar → ingen commit (inga tomma commits)
  */
 import { describe, it, expect, vi } from "vitest-compat";
+import type { Principal } from "@/lib/server/auth/principal";
 import { makeWorkingCopySessionOpener } from "@/lib/server/http/working-copy-session";
 import type { ServerWorkingCopy } from "@/lib/server/local-first/server-working-copy";
 import type { Context } from "@/lib/server/trpc-core";
-import type { Principal } from "@/lib/server/auth/principal";
 
 const PRINCIPAL: Principal = {
   id: "p-1", email: "advokat@byra.se", name: "Ada", role: "LAWYER", organizationId: "org-1",

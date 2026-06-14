@@ -2,8 +2,8 @@
  * Test för SettingsPage — logo, WebDAV, kontor, kontaktuppgifter.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import SettingsPage from "@/app/settings/page";
 
 const settingsQuery = {

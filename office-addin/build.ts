@@ -9,8 +9,8 @@
  * INTE CI-verifierbart (kräver Office-värd) → kör + sideload-testa lokalt.
  */
 
-import { join } from "node:path";
 import { cp } from "node:fs/promises";
+import { join } from "node:path";
 
 const root = import.meta.dir;
 const outdir = join(root, "dist");

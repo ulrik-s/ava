@@ -3,8 +3,8 @@
  *
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest-compat";
 import { render, screen } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest-compat";
 import { RenderErrorBoundary } from "@/components/ui/render-error-boundary";
 
 function Crash(): never { throw new Error("Boom"); }

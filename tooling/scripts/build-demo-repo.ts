@@ -18,15 +18,15 @@
 
 import { mkdirSync, rmSync, existsSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
-import { generateInto } from "../demo-generator/generate-into";
 import {
   DEMO_ORG_ID,
   DEMO_CURRENT_USER_ID,
   DEMO_EMAIL_DOMAIN,
   DEMO_ORG_NAME,
 } from "../demo-config";
-import { writeDemoMeta } from "./write-demo-meta";
+import { generateInto } from "../demo-generator/generate-into";
 import { buildSeed } from "./seed-data";
+import { writeDemoMeta } from "./write-demo-meta";
 
 function parseDirArg(): string {
   const idx = process.argv.indexOf("--dir");

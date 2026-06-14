@@ -1,4 +1,9 @@
 import { describe, it, expect } from "vitest-compat";
+import { classifyOidcLogin } from "@/lib/client/backend/oidc-principal";
+import type { AllowlistedUser } from "@/lib/server/auth/oidc-auth-provider";
+import { metaJsonSchema } from "@/lib/shared/meta-json";
+import { organizationSchema } from "@/lib/shared/schemas/organization";
+import { userSchema } from "@/lib/shared/schemas/user";
 import {
   buildAdminUserRow,
   adminUserGitPath,
@@ -6,11 +11,6 @@ import {
   orgGitPath,
   metaJsonContent,
 } from "../../tooling/scripts/bootstrap-admin/core";
-import { userSchema } from "@/lib/shared/schemas/user";
-import { organizationSchema } from "@/lib/shared/schemas/organization";
-import { metaJsonSchema } from "@/lib/shared/meta-json";
-import { classifyOidcLogin } from "@/lib/client/backend/oidc-principal";
-import type { AllowlistedUser } from "@/lib/server/auth/oidc-auth-provider";
 
 const ORG = "11111111-1111-5111-8111-111111111111";
 

@@ -7,16 +7,16 @@
  *   - ports-override i GitBackendRuntime
  */
 
-import { describe, it, expect } from "vitest-compat";
 import { createTRPCClient } from "@trpc/client";
 import superjson from "superjson";
-import type { AppRouter } from "@/lib/server/routers/_app";
+import { describe, it, expect } from "vitest-compat";
 import { GitBackendRuntime } from "@/lib/client/backend/git-backend-runtime";
 import { inProcessLink } from "@/lib/client/demo/in-process-link";
-import { buildContext } from "@/lib/server/build-context";
-import { GitAuthProvider } from "@/lib/server/auth/git-auth-provider";
 import { buildGitPorts } from "@/lib/server/adapters/git-ports";
+import { GitAuthProvider } from "@/lib/server/auth/git-auth-provider";
+import { buildContext } from "@/lib/server/build-context";
 import { DemoDataStore } from "@/lib/server/data-store/DemoDataStore";
+import type { AppRouter } from "@/lib/server/routers/_app";
 
 const store = () => new DemoDataStore({
   matters: [{ id: "m1", title: "T", organizationId: "demo-firma-ab", status: "ACTIVE", matterNumber: "2025-0001", createdAt: new Date() }],

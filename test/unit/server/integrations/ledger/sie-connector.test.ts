@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest-compat";
-import { SieLedgerConnector, type ExportableVoucher } from "@/lib/server/integrations/ledger/sie-connector";
 import { assertConnectorMatchesCapabilities } from "@/lib/server/integrations/ledger/capabilities";
+import { SieLedgerConnector, type ExportableVoucher } from "@/lib/server/integrations/ledger/sie-connector";
 import type { SieAccountMap } from "@/lib/shared/accounting/sie";
 
 const accountMap: SieAccountMap = {

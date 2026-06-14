@@ -1,6 +1,7 @@
 import { defineConfig, globalIgnores } from "eslint/config";
 import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";
+import importX from "eslint-plugin-import-x";
 
 /**
  * ESLint-konfiguration med extra regler för kodkvalitet (alla HARD error):
@@ -87,6 +88,46 @@ const eslintConfig = defineConfig([
     },
   },
   {
+    // ── Import-hygien (#-import-lint) ────────────────────────────────
+    // Arkitektur-GRÄNSERNA (cykler, lager, phantom-deps, router-komposition)
+    // vaktas av dependency-cruiser (tooling/config/dependency-cruiser.cjs).
+    // ESLint kompletterar med KÄLLNIVÅ-hygien som dep-cruiser inte uttrycker:
+    // deterministisk ordning, inga dubbletter, konsekvent type-import-stil.
+    // Alla `error` → CI (`--max-warnings 0`) fäller nya brott.
+    files: ["**/*.{ts,tsx,mts}"],
+    plugins: { "import-x": importX },
+    rules: {
+      // Deterministisk import-ordning: externa paket → interna (@/...) →
+      // relativa. Inga blank-rader påtvingas (newlines-between: ignore) och
+      // side-effect-importer flyttas inte → ingen runtime-risk. Alfabetisering
+      // inom grupp håller diffar små vid nya importer.
+      "import-x/order": [
+        "error",
+        {
+          groups: ["builtin", "external", "internal", "parent", "sibling", "index", "object"],
+          pathGroups: [{ pattern: "@/**", group: "internal", position: "after" }],
+          pathGroupsExcludedImportTypes: ["builtin"],
+          "newlines-between": "ignore",
+          alphabetize: { order: "asc", caseInsensitive: true },
+        },
+      ],
+      // Slå ihop flera importer från samma modul (vanlig merge-artefakt).
+      "import-x/no-duplicates": "error",
+      // En modul får inte importera sig själv.
+      "import-x/no-self-import": "error",
+      // `./foo/../bar` → `./bar`; städar onödiga path-segment.
+      "import-x/no-useless-path-segments": ["error", { noUselessIndex: false }],
+      // Importer ska ligga först i filen + ha en blank rad efter blocket.
+      "import-x/first": "error",
+      "import-x/newline-after-import": "error",
+      // Exporterade bindningar får inte vara muterbara (let/var) → undvik
+      // spökmutation av en annan moduls state.
+      "import-x/no-mutable-exports": "error",
+      // `import {} from "x"` (tomt namngivet block) är nästan alltid ett misstag.
+      "import-x/no-empty-named-blocks": "error",
+    },
+  },
+  {
     // Mjuka upp för testfiler — de tenderar vara längre med setup/teardown.
     files: ["**/*.test.{ts,tsx}", "**/*.spec.{ts,tsx}", "test/**/*.{ts,tsx}"],
     rules: {
@@ -113,7 +154,7 @@ const eslintConfig = defineConfig([
     ".claude/**",     // worktrees och personliga scratchfiler
     "src/shared/generated/**", // genererade Prisma-typer
     "next-env.d.ts",
-    "office-addin/**", // separat Office.js-bundle (egen tsconfig + bun build, #72)
+    "office-addin/dist/**", // bygg-artefakt (taskpane.js/html)
   ]),
 ]);
 

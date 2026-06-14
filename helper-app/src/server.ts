@@ -13,14 +13,14 @@
  * exekverar godtyckliga kommandon.
  */
 
-import { handleComposeMail } from "./compose-mail.ts";
-import { handleOpen } from "./open.ts";
-import { json, textError } from "./http.ts";
 import {
   formatPing,
   isAllowedOrigin,
   type HelperVersionResponse,
 } from "@/lib/shared/helper/protocol";
+import { handleComposeMail } from "./compose-mail.ts";
+import { json, textError } from "./http.ts";
+import { handleOpen } from "./open.ts";
 
 export interface ServerDeps {
   version: string;

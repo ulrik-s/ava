@@ -2,8 +2,8 @@
  * Test för EditTemplatePage.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import EditTemplateClient from "@/app/templates/[id]/edit/_edit-client";
 
 // Testar klient-komponenten direkt — den async server-wrappern (page.tsx)

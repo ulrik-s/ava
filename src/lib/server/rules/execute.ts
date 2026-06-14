@@ -9,11 +9,11 @@
  */
 
 import jsonLogic from "json-logic-js";
-import type { AvaRule, RuleStep } from "./schema";
-import type { AvaEvent } from "../events/schema";
-import { templateValue, lookup } from "./template";
-import type { IDataStore } from "../data-store/IDataStore";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
+import type { IDataStore } from "../data-store/IDataStore";
+import type { AvaEvent } from "../events/schema";
+import type { AvaRule, RuleStep } from "./schema";
+import { templateValue, lookup } from "./template";
 
 export type StepHandlers = {
   /** Skicka mail. Returnerar `false` om idempotency-key blockerade. */

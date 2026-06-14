@@ -13,14 +13,14 @@
  */
 
 import type { TRPCLink } from "@trpc/client";
-import type { AppRouter } from "@/lib/server/routers/_app";
+import { inProcessLink } from "@/lib/client/demo/in-process-link";
+import { buildGitPorts } from "@/lib/server/adapters/git-ports";
+import { GitAuthProvider } from "@/lib/server/auth/git-auth-provider";
+import type { AuthProvider } from "@/lib/server/auth/principal";
+import { buildContext } from "@/lib/server/build-context";
 import type { IDataStore } from "@/lib/server/data-store/IDataStore";
 import type { IPorts } from "@/lib/server/ports";
-import type { AuthProvider } from "@/lib/server/auth/principal";
-import { GitAuthProvider } from "@/lib/server/auth/git-auth-provider";
-import { buildContext } from "@/lib/server/build-context";
-import { buildGitPorts } from "@/lib/server/adapters/git-ports";
-import { inProcessLink } from "@/lib/client/demo/in-process-link";
+import type { AppRouter } from "@/lib/server/routers/_app";
 import type { BackendRuntime } from "./backend-runtime";
 
 export interface GitBackendRuntimeDeps {

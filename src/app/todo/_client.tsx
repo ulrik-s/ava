@@ -13,13 +13,13 @@
  * Events visas read-only (skapas via integrationer; ej CRUD här).
  */
 
-import { useEffect, useMemo, useState } from "react";
 import { Calendar, CheckSquare, Square, Clock, MapPin, Trash2, Pencil, Plus } from "lucide-react";
-import { EntityLink } from "@/lib/client/demo/entity-link";
-import { trpc } from "@/lib/client/trpc";
+import { useEffect, useMemo, useState } from "react";
 import { Modal } from "@/components/ui/modal";
-import { deadlineColor, type DeadlineColor } from "@/lib/shared/deadline-color";
+import { EntityLink } from "@/lib/client/demo/entity-link";
 import { rangeForView, shiftAnchor, viewRangeLabel, groupByDay, type TodoView } from "@/lib/client/todo/todo-views";
+import { trpc } from "@/lib/client/trpc";
+import { deadlineColor, type DeadlineColor } from "@/lib/shared/deadline-color";
 
 const TASK_STATUS_LABELS: Record<string, string> = { TODO: "Att göra", IN_PROGRESS: "Pågår", DONE: "Klar" };
 const TASK_PRIORITY_LABELS: Record<string, string> = { LOW: "Låg", MEDIUM: "Medium", HIGH: "Hög" };
