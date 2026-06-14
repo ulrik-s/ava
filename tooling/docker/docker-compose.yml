@@ -12,10 +12,13 @@
 #
 # OBS: compose-filen ligger i docker/. Kör ALLTID med -f från repo-roten:
 #   1. Bygg web-app:n statiskt:  DEMO_BASE_PATH=/ava bash tooling/scripts/build-demo.sh
-#   2. Lägg din SSH-nyckel i:    tooling/docker/git-ssh/authorized_keys
-#   3. Starta:                   docker compose -f tooling/docker/docker-compose.yml up -d --build
-#   4. Browser:                  http://localhost:8080/ava
-#   5. Klona repo:                git clone ssh://git@localhost:2222/srv/git/firma.git
+#   2. Starta:                   docker compose -f tooling/docker/docker-compose.yml up -d --build
+#   3. Browser:                  http://localhost:8080/ava
+#   4. Git via HTTP (default):   git clone http://localhost:8080/git/firma.git
+#
+# SSH-git är OPT-IN (ADR 0014 §5): lägg din nyckel i
+# tooling/docker/git-ssh/authorized_keys och starta med `--profile ssh`, sedan
+#   git clone ssh://git@localhost:2222/srv/git/firma.git
 #
 # `name: ava` håller projekt-/volymnamnen stabila (ava_git_repos) oavsett
 # att filen flyttats till docker/ — annars skulle de prefixas "docker_".
@@ -79,8 +82,12 @@ services:
     volumes:
       - auth_data:/data
 
-  # ─── SSH + bare git-repos = datalagring ────────────────────
+  # ─── (Valbar) SSH-åtkomst till bare git-repos ──────────────
+  # Opt-in (ADR 0014 §5): default-stacken når git via HTTP (web/`/git/`), och
+  # web-containerns entrypoint skapar default-repot självt → git-ssh behövs bara
+  # om du vill klona/pusha över SSH. Aktivera med `--profile ssh`.
   git-ssh:
+    profiles: ["ssh"]
     build:
       context: ./git-ssh
       dockerfile: Dockerfile
