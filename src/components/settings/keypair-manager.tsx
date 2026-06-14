@@ -32,7 +32,6 @@ interface Props {
   saving?: boolean;
 }
 
-// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'KeypairManager' has a complexity of 12. Maximum allowed is 8.)
 export function KeypairManager({ onAddToProfile, saving }: Props) {
   const [supported, setSupported] = useState<boolean | null>(null);
   const [keypair, setKeypair] = useState<StoredKeypair | null>(null);
@@ -157,17 +156,7 @@ export function KeypairManager({ onAddToProfile, saving }: Props) {
         <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
           <KeyRound size={14} /> Generera nyckel i browser
         </h3>
-        {!keypair && (
-          <button
-            type="button"
-            onClick={() => void onGenerate()}
-            disabled={busy}
-            className="text-xs px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300 inline-flex items-center gap-1"
-          >
-            <RefreshCw size={12} className={busy ? "animate-spin" : ""} />
-            {busy ? "Genererar…" : "Generera nytt nyckelpar"}
-          </button>
-        )}
+        {!keypair && <GenerateKeyButton busy={busy} onGenerate={() => void onGenerate()} />}
       </div>
 
       <p className="text-xs text-gray-600">
@@ -179,78 +168,128 @@ export function KeypairManager({ onAddToProfile, saving }: Props) {
       {err && <p className="text-xs text-red-700">✗ {err}</p>}
 
       {keypair && (
-        <div className="space-y-3">
-          <div>
-            <label className="text-[11px] text-gray-500 block mb-1">Kommentar (visas i SSH-strängen)</label>
-            <input
-              type="text"
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-              placeholder="anna@macbook"
-              className="w-full rounded border border-gray-300 px-2 py-1 text-xs"
-            />
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-[11px] text-gray-500">Publik nyckel (SSH-format)</span>
-              <button
-                type="button"
-                onClick={() => void onCopy()}
-                className="text-[11px] text-blue-600 hover:underline inline-flex items-center gap-1"
-              >
-                <Copy size={11} /> {copied ? "Kopierat!" : "Kopiera"}
-              </button>
-            </div>
-            <textarea
-              readOnly
-              value={sshString}
-              rows={3}
-              className="w-full rounded border border-gray-300 px-2 py-1.5 text-[11px] font-mono bg-white"
-            />
-          </div>
-
-          <div className="text-xs text-gray-600">
-            <strong>Fingerprint:</strong> <code className="bg-white px-1 rounded">{fingerprint}</code>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2 pt-1">
-            <button
-              type="button"
-              onClick={onAdd}
-              disabled={saving}
-              className="text-xs px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300"
-            >
-              {saving ? "Lägger till…" : "Lägg till i min profil"}
-            </button>
-            <button
-              type="button"
-              onClick={() => void onRegisterOnGithub()}
-              disabled={registering}
-              className="text-xs px-3 py-1.5 bg-gray-900 text-white rounded hover:bg-gray-800 disabled:bg-gray-400 inline-flex items-center gap-1"
-              title="POSTar direkt till api.github.com/user/keys"
-            >
-              {registering ? "Registrerar…" : registeredOk ? "✓ Registrerad" : "Registrera på GitHub (auto)"}
-            </button>
-            <a
-              href="https://github.com/settings/ssh/new"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs px-3 py-1.5 bg-white border border-gray-300 text-gray-700 rounded hover:bg-gray-50 inline-flex items-center gap-1"
-              title="Öppna GitHub manuellt"
-            >
-              <ExternalLink size={12} /> Manuellt
-            </a>
-            <button
-              type="button"
-              onClick={() => void onForget()}
-              className="ml-auto text-xs text-gray-500 hover:text-red-600 inline-flex items-center gap-1"
-            >
-              <Trash2 size={12} /> Glöm enheten
-            </button>
-          </div>
-        </div>
+        <KeypairPanel
+          comment={comment}
+          setComment={setComment}
+          sshString={sshString}
+          fingerprint={fingerprint}
+          copied={copied}
+          saving={saving}
+          registering={registering}
+          registeredOk={registeredOk}
+          onCopy={() => void onCopy()}
+          onAdd={onAdd}
+          onRegister={() => void onRegisterOnGithub()}
+          onForget={() => void onForget()}
+        />
       )}
+    </div>
+  );
+}
+
+function GenerateKeyButton({ busy, onGenerate }: { busy: boolean; onGenerate: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onGenerate}
+      disabled={busy}
+      className="text-xs px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300 inline-flex items-center gap-1"
+    >
+      <RefreshCw size={12} className={busy ? "animate-spin" : ""} />
+      {busy ? "Genererar…" : "Generera nytt nyckelpar"}
+    </button>
+  );
+}
+
+interface KeypairPanelProps {
+  comment: string;
+  setComment: (v: string) => void;
+  sshString: string;
+  fingerprint: string;
+  copied: boolean;
+  saving: boolean | undefined;
+  registering: boolean;
+  registeredOk: boolean;
+  onCopy: () => void;
+  onAdd: () => void;
+  onRegister: () => void;
+  onForget: () => void;
+}
+
+/** Genererad-nyckel-panelen: kommentar, SSH-sträng (kopiera), fingerprint,
+ *  och åtgärder (lägg till i profil / registrera på GitHub / glöm enheten). */
+function KeypairPanel(p: KeypairPanelProps) {
+  return (
+    <div className="space-y-3">
+      <div>
+        <label className="text-[11px] text-gray-500 block mb-1">Kommentar (visas i SSH-strängen)</label>
+        <input
+          type="text"
+          value={p.comment}
+          onChange={(e) => p.setComment(e.target.value)}
+          placeholder="anna@macbook"
+          className="w-full rounded border border-gray-300 px-2 py-1 text-xs"
+        />
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-[11px] text-gray-500">Publik nyckel (SSH-format)</span>
+          <button
+            type="button"
+            onClick={p.onCopy}
+            className="text-[11px] text-blue-600 hover:underline inline-flex items-center gap-1"
+          >
+            <Copy size={11} /> {p.copied ? "Kopierat!" : "Kopiera"}
+          </button>
+        </div>
+        <textarea
+          readOnly
+          value={p.sshString}
+          rows={3}
+          className="w-full rounded border border-gray-300 px-2 py-1.5 text-[11px] font-mono bg-white"
+        />
+      </div>
+
+      <div className="text-xs text-gray-600">
+        <strong>Fingerprint:</strong> <code className="bg-white px-1 rounded">{p.fingerprint}</code>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 pt-1">
+        <button
+          type="button"
+          onClick={p.onAdd}
+          disabled={p.saving}
+          className="text-xs px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300"
+        >
+          {p.saving ? "Lägger till…" : "Lägg till i min profil"}
+        </button>
+        <button
+          type="button"
+          onClick={p.onRegister}
+          disabled={p.registering}
+          className="text-xs px-3 py-1.5 bg-gray-900 text-white rounded hover:bg-gray-800 disabled:bg-gray-400 inline-flex items-center gap-1"
+          title="POSTar direkt till api.github.com/user/keys"
+        >
+          {p.registering ? "Registrerar…" : p.registeredOk ? "✓ Registrerad" : "Registrera på GitHub (auto)"}
+        </button>
+        <a
+          href="https://github.com/settings/ssh/new"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-xs px-3 py-1.5 bg-white border border-gray-300 text-gray-700 rounded hover:bg-gray-50 inline-flex items-center gap-1"
+          title="Öppna GitHub manuellt"
+        >
+          <ExternalLink size={12} /> Manuellt
+        </a>
+        <button
+          type="button"
+          onClick={p.onForget}
+          className="ml-auto text-xs text-gray-500 hover:text-red-600 inline-flex items-center gap-1"
+        >
+          <Trash2 size={12} /> Glöm enheten
+        </button>
+      </div>
     </div>
   );
 }
