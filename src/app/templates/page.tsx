@@ -18,20 +18,9 @@ interface Template {
   updatedAt: string | Date;
 }
 
-export default function TemplatesPage() {
-  const router = useRouter();
-  const templates = trpc.documentTemplate.list.useQuery();
-  const utils = trpc.useUtils();
-  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
-
-  const deleteTemplate = trpc.documentTemplate.delete.useMutation({
-    onSuccess: () => {
-      void utils.documentTemplate.list.invalidate();
-      setConfirmDelete(null);
-    },
-  });
-
-  const columns: Column<Template>[] = [
+/** Tabell-kolumner; `onDelete` öppnar bekräftelse-dialogen för rad-id:t. */
+function templateColumns(onDelete: (id: string) => void): Column<Template>[] {
+  return [
     { key: "name", label: "Namn", sortable: true, sortValue: (t) => t.name,
       render: (t) => <span className="text-sm font-medium text-gray-900">{t.name}</span> },
     { key: "category", label: "Kategori", sortable: true,
@@ -53,7 +42,7 @@ export default function TemplatesPage() {
             className="p-1.5 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-700" title="Redigera">
             <Pencil size={14} />
           </EntityLink>
-          <button onClick={() => setConfirmDelete(t.id)}
+          <button onClick={() => onDelete(t.id)}
             className="p-1.5 rounded hover:bg-red-50 text-gray-500 hover:text-red-600" title="Ta bort">
             <Trash2 size={14} />
           </button>
@@ -61,6 +50,63 @@ export default function TemplatesPage() {
       ),
     },
   ];
+}
+
+function EmptyTemplates() {
+  return (
+    <div className="text-center py-16 border-2 border-dashed border-gray-200 rounded-xl">
+      <FileText className="mx-auto text-gray-300 mb-3" size={40} />
+      <p className="text-gray-500 font-medium">Inga mallar än</p>
+      <p className="text-gray-400 text-sm mt-1">Skapa din första mall för att komma igång.</p>
+      <Link
+        href="/templates/new"
+        className="inline-flex items-center gap-2 mt-4 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700"
+      >
+        <Plus size={14} /> Ny mall
+      </Link>
+    </div>
+  );
+}
+
+function DeleteTemplateDialog({ deleting, onCancel, onConfirm }: { deleting: boolean; onCancel: () => void; onConfirm: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+      <div className="bg-white rounded-xl shadow-xl p-6 max-w-sm w-full mx-4">
+        <h3 className="font-semibold text-gray-900 mb-2">Ta bort mall?</h3>
+        <p className="text-sm text-gray-500 mb-4">
+          Åtgärden kan inte ångras. Mallen tas bort permanent.
+        </p>
+        <div className="flex gap-2 justify-end">
+          <button onClick={onCancel} className="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50">
+            Avbryt
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={deleting}
+            className="px-3 py-1.5 text-sm bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
+          >
+            {deleting ? "Tar bort…" : "Ta bort"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function TemplatesPage() {
+  const router = useRouter();
+  const templates = trpc.documentTemplate.list.useQuery();
+  const utils = trpc.useUtils();
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+
+  const deleteTemplate = trpc.documentTemplate.delete.useMutation({
+    onSuccess: () => {
+      void utils.documentTemplate.list.invalidate();
+      setConfirmDelete(null);
+    },
+  });
+
+  const columns = templateColumns(setConfirmDelete);
 
   return (
     <div className="p-6 max-w-5xl">
@@ -81,19 +127,7 @@ export default function TemplatesPage() {
 
       {templates.isLoading && <p className="text-gray-500 text-sm">Laddar mallar…</p>}
 
-      {templates.data && templates.data.length === 0 && (
-        <div className="text-center py-16 border-2 border-dashed border-gray-200 rounded-xl">
-          <FileText className="mx-auto text-gray-300 mb-3" size={40} />
-          <p className="text-gray-500 font-medium">Inga mallar än</p>
-          <p className="text-gray-400 text-sm mt-1">Skapa din första mall för att komma igång.</p>
-          <Link
-            href="/templates/new"
-            className="inline-flex items-center gap-2 mt-4 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700"
-          >
-            <Plus size={14} /> Ny mall
-          </Link>
-        </div>
-      )}
+      {templates.data && templates.data.length === 0 && <EmptyTemplates />}
 
       {templates.data && templates.data.length > 0 && (
         <DataTable
@@ -107,29 +141,11 @@ export default function TemplatesPage() {
       )}
 
       {confirmDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-          <div className="bg-white rounded-xl shadow-xl p-6 max-w-sm w-full mx-4">
-            <h3 className="font-semibold text-gray-900 mb-2">Ta bort mall?</h3>
-            <p className="text-sm text-gray-500 mb-4">
-              Åtgärden kan inte ångras. Mallen tas bort permanent.
-            </p>
-            <div className="flex gap-2 justify-end">
-              <button
-                onClick={() => setConfirmDelete(null)}
-                className="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50"
-              >
-                Avbryt
-              </button>
-              <button
-                onClick={() => deleteTemplate.mutate({ id: confirmDelete })}
-                disabled={deleteTemplate.isPending}
-                className="px-3 py-1.5 text-sm bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
-              >
-                {deleteTemplate.isPending ? "Tar bort…" : "Ta bort"}
-              </button>
-            </div>
-          </div>
-        </div>
+        <DeleteTemplateDialog
+          deleting={deleteTemplate.isPending}
+          onCancel={() => setConfirmDelete(null)}
+          onConfirm={() => deleteTemplate.mutate({ id: confirmDelete })}
+        />
       )}
     </div>
   );
