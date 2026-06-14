@@ -161,3 +161,22 @@ peer-loop-låsinjektion; **1c** HTTP-listener i server-runtime-processen
   klient) är oförändrad men konsumeras nu av en enda host. Outlook-add-in:en har
   två funktioner: (1) spara inkommande mail → ärende + tidspost (kräver add-in);
   (2) maila ut ett ärende-dokument (web-app-funktion, ej add-in — triggas i AVA).
+- **2026-06-14 (designval för #72:s två funktioner, beslut Ulrik):** byrån är
+  **helt på M365** och **mobil (iOS/Android) är ett krav**. Det styr båda:
+  - **Funktion 1 — lagringsformat: rå `.eml` (RFC822 med inbäddade bilagor).**
+    Full mejl-fidelitet, ett dokument, öppningsbart i valfri klient. Office.js
+    exponerar inte rå MIME (subject/body/attachments är styckevisa fält → bara en
+    rekonstruktion), så .eml **hämtas via MS Graph** `GET /me/messages/{id}/$value`
+    (M365 → Graph alltid tillgängligt). Add-in:en konverterar Office-`itemId` →
+    REST-id (`convertToRestId`), hämtar MIME via Graph, och **POST:ar .eml +
+    metadata till AVA-servern via den tunna tRPC-klienten** (Bearer-PAT) → servern
+    commit:ar till ärendets git-db + skapar tidsposten. EWS (`makeEwsRequestAsync`
+    + `IncludeMimeContent`) **förkastat** — bara värt det vid on-prem/icke-M365.
+  - **Funktion 2 — utgående: MS Graph `sendMail`/draft** från web-appen.
+    Browser→Graph funkar på **iOS/Android** (avgörande — helper-app `/compose-mail`
+    (2A) **förkastad** för att den är desktop-only: PowerShell-COM/AppleScript finns
+    inte på mobil). Web Share API (2D) övervägt men 2B vald p.g.a. förifyllda
+    mottagare + utkast-i-Outlook och eftersom Graph-plumbingen ändå krävs för F1.
+  - **Synergi:** F1 och F2 **delar samma Graph-OAuth/consent + token-flöde** (en
+    app-registrering). MS Graph-token är ortogonal mot AVA:s Bearer-PAT (C1): PAT
+    auktoriserar mot AVA-servern, Graph-token mot Office-sidans maildata.
