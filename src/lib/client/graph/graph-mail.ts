@@ -51,9 +51,14 @@ export interface ComposeMailInput {
   attachments?: GraphFileAttachment[];
 }
 
-/** URL för att hämta ett meddelandes råa MIME (`.eml`). */
-export function messageMimeUrl(restId: string): string {
-  return `${GRAPH_BASE}/me/messages/${encodeURIComponent(restId)}/$value`;
+/**
+ * URL för att hämta ett meddelandes råa MIME (`.eml`). `$value`-segmentet finns
+ * både på Graph (`graph.microsoft.com/v1.0`, default) och på Outlook REST
+ * (`{mailbox.restUrl}/v2.0`) — add-in:en kan peka på den senare med en
+ * `getCallbackTokenAsync`-token (funkar vid sideload utan Azure-app-registrering).
+ */
+export function messageMimeUrl(restId: string, baseUrl: string = GRAPH_BASE): string {
+  return `${baseUrl.replace(/\/+$/, "")}/me/messages/${encodeURIComponent(restId)}/$value`;
 }
 
 /** Bygg en fil-bilaga ur råa bytes (base64-kodas för Graph). */
@@ -87,12 +92,13 @@ function authHeaders(token: string): Record<string, string> {
   return { authorization: `Bearer ${token}`, "content-type": "application/json" };
 }
 
-/** Hämta ett meddelandes `.eml` (rå MIME) som bytes + base64. */
+/** Hämta ett meddelandes `.eml` (rå MIME) som bytes + base64. `baseUrl`
+ *  default = Graph; add-in:en kan ange mailbox-REST-URL:en. */
 export async function fetchMessageEml(
-  opts: { token: string; restId: string; fetch?: GraphFetch },
+  opts: { token: string; restId: string; baseUrl?: string; fetch?: GraphFetch },
 ): Promise<{ bytes: Uint8Array; base64: string }> {
   const doFetch = opts.fetch ?? fetch;
-  const res = await doFetch(messageMimeUrl(opts.restId), {
+  const res = await doFetch(messageMimeUrl(opts.restId, opts.baseUrl), {
     headers: { authorization: `Bearer ${opts.token}` },
   });
   if (!res.ok) return graphError(res, "GET $value");

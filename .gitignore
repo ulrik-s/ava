@@ -72,3 +72,6 @@ package-lock.json
 docs/.claude-flow/
 .mcp.json
 reports/ui-diagnose/
+
+# Office add-in build-artefakt (#72)
+office-addin/dist/
