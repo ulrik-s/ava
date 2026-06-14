@@ -1,0 +1,20 @@
+{
+  "//": "Separat tsconfig för Outlook-add-in-bundlen (#72). Bundlen byggs av bun (office-addin/build.ts), inte av huvud-tsconfig:en (office-addin är exkluderad där). @/*-alias → ../src/* så bundlern hittar den delade klient-koden.",
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "types": [],
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "allowImportingTsExtensions": true,
+    "paths": {
+      "@/*": ["../src/*"]
+    }
+  },
+  "include": ["**/*.ts"]
+}

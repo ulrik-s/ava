@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<!--
+  AVA Outlook-add-in — task-pane (#72, ADR 0013). Funktion 1: spara öppet mail
+  som .eml till valt ärende + valfri tidspost.
+
+  Office.js laddas från Microsofts CDN (krav). Resten (taskpane.js) är en
+  bun-byggd bundle av taskpane.ts som anropar AVA-serverns tRPC + MS Graph/
+  Outlook-REST. Serveras över HTTPS (Office kräver det vid sideload).
+-->
+<html lang="sv">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AVA — spara mail till ärende</title>
+    <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+    <style>
+      body { font-family: -apple-system, "Segoe UI", sans-serif; margin: 0; padding: 12px; color: #1a1a2e; }
+      h1 { font-size: 15px; margin: 0 0 8px; }
+      label { display: block; font-size: 12px; font-weight: 600; margin: 10px 0 3px; }
+      input, button { font-size: 13px; padding: 6px 8px; box-sizing: border-box; width: 100%; }
+      button { background: #4f46e5; color: #fff; border: none; border-radius: 4px; cursor: pointer; margin-top: 12px; }
+      button:disabled { opacity: .5; cursor: default; }
+      .matter { padding: 6px 8px; border: 1px solid #e5e7eb; border-radius: 4px; cursor: pointer; margin-top: 4px; }
+      .matter.sel { border-color: #4f46e5; background: #eef2ff; }
+      .status { margin-top: 12px; font-size: 12px; }
+      .err { color: #b91c1c; } .ok { color: #15803d; }
+      .row { display: flex; gap: 8px; } .row > * { flex: 1; }
+    </style>
+  </head>
+  <body>
+    <h1>📎 Spara mail till ärende</h1>
+    <div id="app">Laddar…</div>
+
+    <template id="form-tpl">
+      <label for="server">AVA-server</label>
+      <input id="server" type="url" placeholder="https://byra.example" />
+      <label for="pat">PAT (Bearer-token)</label>
+      <input id="pat" type="password" placeholder="ava_pat_…" />
+
+      <label for="q">Sök ärende</label>
+      <input id="q" type="search" placeholder="Ärendenummer eller titel" />
+      <div id="results"></div>
+
+      <div class="row">
+        <div>
+          <label for="minutes">Tidspost (min, valfritt)</label>
+          <input id="minutes" type="number" min="1" placeholder="t.ex. 15" />
+        </div>
+      </div>
+
+      <button id="save" disabled>Spara mail till valt ärende</button>
+      <div id="status" class="status"></div>
+    </template>
+
+    <script src="./taskpane.js"></script>
+  </body>
+</html>

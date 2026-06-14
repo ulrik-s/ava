@@ -12,8 +12,14 @@ import {
 const ok = (body: BodyInit, status = 200) => new Response(body, { status });
 
 describe("messageMimeUrl", () => {
-  it("bygger /me/messages/{id}/$value och url-enkodar id:t", () => {
+  it("bygger /me/messages/{id}/$value och url-enkodar id:t (default Graph)", () => {
     expect(messageMimeUrl("AAMk=")).toBe(`${GRAPH_BASE}/me/messages/AAMk%3D/$value`);
+  });
+
+  it("respekterar baseUrl-override (Outlook REST) + trimmar slash", () => {
+    expect(messageMimeUrl("id1", "https://outlook.office.com/api/v2.0/")).toBe(
+      "https://outlook.office.com/api/v2.0/me/messages/id1/$value",
+    );
   });
 });
 

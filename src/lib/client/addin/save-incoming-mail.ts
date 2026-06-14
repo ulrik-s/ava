@@ -38,6 +38,8 @@ export interface SaveIncomingMailDeps {
   time?: { minutes: number; description?: string };
   /** Valfri folder i ärendet. */
   folderId?: string | null;
+  /** MIME-bas-URL (default Graph; add-in:en kan ange mailbox-REST-URL:en). */
+  mimeBaseUrl?: string;
   /** Valfri Graph-`fetch`-override (test). */
   fetch?: GraphFetch;
 }
@@ -51,6 +53,7 @@ export async function saveIncomingMail(deps: SaveIncomingMailDeps): Promise<unkn
   const { base64 } = await fetchMessageEml({
     token: deps.graphToken,
     restId: deps.restId,
+    ...(deps.mimeBaseUrl ? { baseUrl: deps.mimeBaseUrl } : {}),
     ...(deps.fetch ? { fetch: deps.fetch } : {}),
   });
   return deps.client.mail.saveIncoming.mutate({
