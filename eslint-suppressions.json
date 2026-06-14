@@ -39,11 +39,6 @@
       "count": 1
     }
   },
-  "src/app/settings/page.tsx": {
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
   "src/app/setup/page.tsx": {
     "max-lines-per-function": {
       "count": 1

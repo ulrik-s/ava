@@ -222,10 +222,34 @@ function OfficeFormRow({ value, onChange, onSave, onCancel, saving }: OfficeForm
 
 // ─── Main page ───────────────────────────────────────────────────
 
-// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'SettingsPage' has a complexity of 21. Maximum allowed is 8.)
-export default function SettingsPage() {
+interface OrgForm {
+  name: string;
+  orgNumber: string;
+  address: string;
+  phone: string;
+  email: string;
+  bankgiro: string;
+}
+
+type NullableStr = string | null | undefined;
+/** Settings-data → form (null/undefined → ""). Egen helper håller
+ *  useOrgSettings under complexity@8 (annars 6× `??`). */
+function toOrgForm(d: { name?: NullableStr; orgNumber?: NullableStr; address?: NullableStr; phone?: NullableStr; email?: NullableStr; bankgiro?: NullableStr }): OrgForm {
+  const s = (v: NullableStr): string => v ?? "";
+  return {
+    name: s(d.name), orgNumber: s(d.orgNumber), address: s(d.address),
+    phone: s(d.phone), email: s(d.email), bankgiro: s(d.bankgiro),
+  };
+}
+
+/** Byrå-inställningar: query + auto-save (debounce 800ms) + form-state.
+ *  Populerar formuläret i render-fasen när data anlänt (samma som förr). */
+function useOrgSettings() {
   const settings = trpc.organization.getSettings.useQuery();
   const utils = trpc.useUtils();
+  const [form, setForm] = useState<OrgForm>({ name: "", orgNumber: "", address: "", phone: "", email: "", bankgiro: "" });
+  const [formReady, setFormReady] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   const updateSettings = trpc.organization.updateSettings.useMutation({
     onSuccess: () => {
@@ -235,65 +259,49 @@ export default function SettingsPage() {
     },
   });
 
-  const [form, setForm] = useState({
-    name: "",
-    orgNumber: "",
-    address: "",
-    phone: "",
-    email: "",
-    bankgiro: "",
-  });
-  const [formReady, setFormReady] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [logoUrl, setLogoUrl] = useState<string | null>(null);
-  const [logoLoading, setLogoLoading] = useState(false);
-  const [logoError, setLogoError] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const orgNameId = useId();
-  const orgNumberId = useId();
-  const orgAddressId = useId();
-  const orgPhoneId = useId();
-  const orgEmailId = useId();
-  const orgBankgiroId = useId();
-
-  // Populate form once data arrives
   if (settings.data && !formReady) {
-    setForm({
-      name: settings.data.name ?? "",
-      orgNumber: settings.data.orgNumber ?? "",
-      address: settings.data.address ?? "",
-      phone: settings.data.phone ?? "",
-      email: settings.data.email ?? "",
-      bankgiro: settings.data.bankgiro ?? "",
-    });
+    setForm(toOrgForm(settings.data));
     setFormReady(true);
-    // Fetch current logo
-    fetch("/api/organization/logo")
-      .then((r) => r.json())
-      .then((d: unknown) => setLogoUrl(logoResponseSchema.parse(d).logoUrl))
-      .catch(() => {});
   }
 
-  // Auto-save: debounce 800ms efter senaste change. Visar "Sparar…" /
-  // "✓ Sparat"-status istället för en separat Spara-knapp. Mönster lånat
-  // från Notion/Linear-settings — färre klick, mindre "vad-händer-om-jag-glömmer".
   useEffect(() => {
     if (!formReady) return;
     const id = setTimeout(() => {
       updateSettings.mutate({
-        name: form.name || undefined,
-        orgNumber: form.orgNumber || undefined,
-        address: form.address || undefined,
-        phone: form.phone || undefined,
-        email: form.email || undefined,
-        bankgiro: form.bankgiro || undefined,
+        name: form.name || undefined, orgNumber: form.orgNumber || undefined,
+        address: form.address || undefined, phone: form.phone || undefined,
+        email: form.email || undefined, bankgiro: form.bankgiro || undefined,
       });
     }, 800);
     return () => clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form, formReady]);
 
-  const handleLogoUpload = async (file: File) => {
+  return { settings, form, setForm, saved, updateSettings };
+}
+
+interface OrgLogo {
+  logoUrl: string | null;
+  logoLoading: boolean;
+  logoError: string | null;
+  onUpload: (file: File) => Promise<void>;
+  onDelete: () => Promise<void>;
+}
+
+/** Logo-state + upp-/nedladdning mot /api/organization/logo. */
+function useOrgLogo(): OrgLogo {
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [logoLoading, setLogoLoading] = useState(false);
+  const [logoError, setLogoError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/organization/logo")
+      .then((r) => r.json())
+      .then((d: unknown) => setLogoUrl(logoResponseSchema.parse(d).logoUrl))
+      .catch(() => {});
+  }, []);
+
+  const onUpload = async (file: File): Promise<void> => {
     setLogoLoading(true);
     setLogoError(null);
     try {
@@ -304,8 +312,7 @@ export default function SettingsPage() {
         const err = uploadErrorSchema.parse(await res.json());
         throw new Error(err.error ?? "Uppladdning misslyckades");
       }
-      const data = logoResponseSchema.parse(await res.json());
-      setLogoUrl(data.logoUrl);
+      setLogoUrl(logoResponseSchema.parse(await res.json()).logoUrl);
     } catch (e) {
       setLogoError(e instanceof Error ? e.message : "Okänt fel");
     } finally {
@@ -313,7 +320,7 @@ export default function SettingsPage() {
     }
   };
 
-  const handleLogoDelete = async () => {
+  const onDelete = async (): Promise<void> => {
     setLogoLoading(true);
     setLogoError(null);
     try {
@@ -325,6 +332,173 @@ export default function SettingsPage() {
       setLogoLoading(false);
     }
   };
+
+  return { logoUrl, logoLoading, logoError, onUpload, onDelete };
+}
+
+/** Logotyp-sektionen (preview + ladda upp/byt/ta bort). */
+function OrgLogoSection({ logo }: { logo: OrgLogo }) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  return (
+    <div className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
+      <div className="flex items-center gap-2 mb-4">
+        <Building2 size={16} className="text-gray-500" />
+        <h3 className="font-semibold text-gray-900">Logotyp</h3>
+      </div>
+      <p className="text-xs text-gray-500 mb-4">
+        Visas i sidhuvudet på alla genererade dokument. PNG, JPEG eller SVG, max 2 MB.
+      </p>
+
+      <div className="flex items-center gap-4">
+        <div className="w-40 h-20 border border-gray-200 rounded flex items-center justify-center bg-gray-50 shrink-0 overflow-hidden">
+          {logo.logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={logo.logoUrl} alt="Logotyp" className="max-h-full max-w-full object-contain p-2" />
+          ) : (
+            <span className="text-xs text-gray-400">Ingen logotyp</span>
+          )}
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/svg+xml,image/webp"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) void logo.onUpload(file);
+              e.target.value = "";
+            }}
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={logo.logoLoading}
+            className="flex items-center gap-2 px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50"
+          >
+            <Upload size={14} />
+            {logo.logoLoading ? "Laddar upp…" : logo.logoUrl ? "Byt logotyp" : "Ladda upp logotyp"}
+          </button>
+          {logo.logoUrl && (
+            <button
+              onClick={() => void logo.onDelete()}
+              disabled={logo.logoLoading}
+              className="flex items-center gap-2 px-3 py-1.5 text-sm border border-red-200 text-red-600 rounded hover:bg-red-50 disabled:opacity-50"
+            >
+              <Trash2 size={14} /> Ta bort
+            </button>
+          )}
+        </div>
+      </div>
+      {logo.logoError && <p className="mt-2 text-sm text-red-600">{logo.logoError}</p>}
+    </div>
+  );
+}
+
+interface OrgFieldsProps {
+  form: OrgForm;
+  setForm: (f: OrgForm) => void;
+  isPending: boolean;
+  saved: boolean;
+  error: string | null;
+}
+
+/** Byråns kontaktuppgifter (auto-save-status i foten). */
+function OrgFieldsForm({ form, setForm, isPending, saved, error }: OrgFieldsProps) {
+  const nameId = useId();
+  const numberId = useId();
+  const addressId = useId();
+  const phoneId = useId();
+  const emailId = useId();
+  const bankgiroId = useId();
+  return (
+    <div className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
+      <h3 className="font-semibold text-gray-900 mb-4">Kontaktuppgifter</h3>
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label htmlFor={nameId} className="block text-xs font-medium text-gray-700 mb-1">Byråns namn</label>
+            <input id={nameId} type="text" value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+          </div>
+          <div>
+            <label htmlFor={numberId} className="block text-xs font-medium text-gray-700 mb-1">Organisationsnummer</label>
+            <input id={numberId} type="text" value={form.orgNumber} placeholder="556123-4567"
+              onChange={(e) => setForm({ ...form, orgNumber: e.target.value })}
+              className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+          </div>
+        </div>
+
+        <div>
+          <label htmlFor={addressId} className="block text-xs font-medium text-gray-700 mb-1">Adress (huvudkontor)</label>
+          <input id={addressId} type="text" value={form.address} placeholder="Storgatan 1, 111 23 Stockholm"
+            onChange={(e) => setForm({ ...form, address: e.target.value })}
+            className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label htmlFor={phoneId} className="block text-xs font-medium text-gray-700 mb-1">Telefon</label>
+            <input id={phoneId} type="text" value={form.phone} placeholder="08-123 456 78"
+              onChange={(e) => setForm({ ...form, phone: e.target.value })}
+              className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+          </div>
+          <div>
+            <label htmlFor={emailId} className="block text-xs font-medium text-gray-700 mb-1">E-post</label>
+            <input id={emailId} type="email" value={form.email} placeholder="info@byrå.se"
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+              className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+          </div>
+        </div>
+
+        <div>
+          <label htmlFor={bankgiroId} className="block text-xs font-medium text-gray-700 mb-1">Bankgiro</label>
+          <input id={bankgiroId} type="text" value={form.bankgiro} placeholder="123-4567"
+            onChange={(e) => setForm({ ...form, bankgiro: e.target.value })}
+            className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3 mt-3 text-xs text-gray-500">
+        <span className="italic">Ändringar sparas automatiskt.</span>
+        {isPending && <span>Sparar…</span>}
+        {saved && <span className="text-green-600">✓ Sparat</span>}
+        {error && <span className="text-red-600">{error}</span>}
+      </div>
+    </div>
+  );
+}
+
+/** Förhandsgranskning av dokument-sidfoten från byrå-uppgifterna. */
+function DocFooterPreview({ form }: { form: OrgForm }) {
+  return (
+    <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-5">
+      <p className="text-xs font-medium text-gray-500 mb-2 uppercase tracking-wider">Förhandsgranskning av sidfot</p>
+      <div className="bg-white border border-gray-200 rounded p-3 text-[11px] text-gray-500 border-t-2">
+        <div className="flex items-center justify-between">
+          <span>
+            {[
+              form.name,
+              form.address,
+              form.phone,
+              form.email,
+              form.orgNumber ? `Org.nr ${form.orgNumber}` : "",
+              form.bankgiro ? `Bg ${form.bankgiro}` : "",
+            ]
+              .filter(Boolean)
+              .join("  ·  ") || <span className="italic text-gray-300">Fyll i uppgifter ovan</span>}
+          </span>
+          <span className="text-gray-300">Sida 1 av 1</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function SettingsPage() {
+  const { settings, form, setForm, saved, updateSettings } = useOrgSettings();
+  const logo = useOrgLogo();
 
   if (settings.isLoading) {
     return <div className="p-6 text-sm text-gray-500">Laddar inställningar…</div>;
@@ -346,171 +520,15 @@ export default function SettingsPage() {
 
       {/* 2. Byråns uppgifter — kontakt + logo (auto-save) */}
       <SectionHeader num={2} title="Byråns uppgifter" subtitle="Visas i genererade dokument (offerter, fakturor, kostnadsräkningar)." />
-
-      <div className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
-        <div className="flex items-center gap-2 mb-4">
-          <Building2 size={16} className="text-gray-500" />
-          <h3 className="font-semibold text-gray-900">Logotyp</h3>
-        </div>
-        <p className="text-xs text-gray-500 mb-4">
-          Visas i sidhuvudet på alla genererade dokument. PNG, JPEG eller SVG, max 2 MB.
-        </p>
-
-        <div className="flex items-center gap-4">
-          {/* Preview */}
-          <div className="w-40 h-20 border border-gray-200 rounded flex items-center justify-center bg-gray-50 shrink-0 overflow-hidden">
-            {logoUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={logoUrl} alt="Logotyp" className="max-h-full max-w-full object-contain p-2" />
-            ) : (
-              <span className="text-xs text-gray-400">Ingen logotyp</span>
-            )}
-          </div>
-
-          {/* Controls */}
-          <div className="flex flex-col gap-2">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/png,image/jpeg,image/svg+xml,image/webp"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) void handleLogoUpload(file);
-                e.target.value = "";
-              }}
-            />
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={logoLoading}
-              className="flex items-center gap-2 px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50"
-            >
-              <Upload size={14} />
-              {logoLoading ? "Laddar upp…" : logoUrl ? "Byt logotyp" : "Ladda upp logotyp"}
-            </button>
-            {logoUrl && (
-              <button
-                onClick={() => void handleLogoDelete()}
-                disabled={logoLoading}
-                className="flex items-center gap-2 px-3 py-1.5 text-sm border border-red-200 text-red-600 rounded hover:bg-red-50 disabled:opacity-50"
-              >
-                <Trash2 size={14} /> Ta bort
-              </button>
-            )}
-          </div>
-        </div>
-        {logoError && <p className="mt-2 text-sm text-red-600">{logoError}</p>}
-      </div>
-
-      {/* Kontaktuppgifter — del av sektion 2 */}
-      <div className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
-        <h3 className="font-semibold text-gray-900 mb-4">Kontaktuppgifter</h3>
-        <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label htmlFor={orgNameId} className="block text-xs font-medium text-gray-700 mb-1">Byråns namn</label>
-              <input
-                id={orgNameId}
-                type="text"
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label htmlFor={orgNumberId} className="block text-xs font-medium text-gray-700 mb-1">Organisationsnummer</label>
-              <input
-                id={orgNumberId}
-                type="text"
-                value={form.orgNumber}
-                placeholder="556123-4567"
-                onChange={(e) => setForm({ ...form, orgNumber: e.target.value })}
-                className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label htmlFor={orgAddressId} className="block text-xs font-medium text-gray-700 mb-1">Adress (huvudkontor)</label>
-            <input
-              id={orgAddressId}
-              type="text"
-              value={form.address}
-              placeholder="Storgatan 1, 111 23 Stockholm"
-              onChange={(e) => setForm({ ...form, address: e.target.value })}
-              className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label htmlFor={orgPhoneId} className="block text-xs font-medium text-gray-700 mb-1">Telefon</label>
-              <input
-                id={orgPhoneId}
-                type="text"
-                value={form.phone}
-                placeholder="08-123 456 78"
-                onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label htmlFor={orgEmailId} className="block text-xs font-medium text-gray-700 mb-1">E-post</label>
-              <input
-                id={orgEmailId}
-                type="email"
-                value={form.email}
-                placeholder="info@byrå.se"
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
-                className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label htmlFor={orgBankgiroId} className="block text-xs font-medium text-gray-700 mb-1">Bankgiro</label>
-            <input
-              id={orgBankgiroId}
-              type="text"
-              value={form.bankgiro}
-              placeholder="123-4567"
-              onChange={(e) => setForm({ ...form, bankgiro: e.target.value })}
-              className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3 mt-3 text-xs text-gray-500">
-          <span className="italic">Ändringar sparas automatiskt.</span>
-          {updateSettings.isPending && <span>Sparar…</span>}
-          {saved && <span className="text-green-600">✓ Sparat</span>}
-          {updateSettings.error && (
-            <span className="text-red-600">{updateSettings.error.message}</span>
-          )}
-        </div>
-      </div>
-
-      {/* Preview of how footer looks */}
-      <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-5">
-        <p className="text-xs font-medium text-gray-500 mb-2 uppercase tracking-wider">Förhandsgranskning av sidfot</p>
-        <div className="bg-white border border-gray-200 rounded p-3 text-[11px] text-gray-500 border-t-2">
-          <div className="flex items-center justify-between">
-            <span>
-              {[
-                form.name,
-                form.address,
-                form.phone,
-                form.email,
-                form.orgNumber ? `Org.nr ${form.orgNumber}` : "",
-                form.bankgiro ? `Bg ${form.bankgiro}` : "",
-              ]
-                .filter(Boolean)
-                .join("  ·  ") || <span className="italic text-gray-300">Fyll i uppgifter ovan</span>}
-            </span>
-            <span className="text-gray-300">Sida 1 av 1</span>
-          </div>
-        </div>
-      </div>
+      <OrgLogoSection logo={logo} />
+      <OrgFieldsForm
+        form={form}
+        setForm={setForm}
+        isPending={updateSettings.isPending}
+        saved={saved}
+        error={updateSettings.error?.message ?? null}
+      />
+      <DocFooterPreview form={form} />
 
       {/* 3. Lokala kontor */}
       <SectionHeader num={3} title="Lokala kontor" subtitle="Lägg till adresser för Stockholm, Göteborg osv. — visas på dokument-sidfot." />
