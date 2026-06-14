@@ -60,8 +60,14 @@ describe("SyncProviderRoot", () => {
   it("ava:data-changed → notifyChange (när write + provider)", async () => {
     render(<SyncProviderRoot token="t" pickProvider={pickFsa()}><Probe /></SyncProviderRoot>);
     await waitFor(() => expect(read().enabled).toBe(true));
-    act(() => { window.dispatchEvent(new Event("ava:data-changed")); });
-    expect(autoSync.notifyChange).toHaveBeenCalled();
+    // Re-dispatcha inuti waitFor: lyssnaren kopplas i en effekt EFTER att
+    // `enabled` blivit true → ett enstaka dispatch kan racea attach:en under
+    // --parallel-last. Engångs-event:et "förbrukas" om lyssnaren inte hunnit,
+    // så vi måste dispatcha om tills notifyChange faktiskt anropats.
+    await waitFor(() => {
+      act(() => { window.dispatchEvent(new Event("ava:data-changed")); });
+      expect(autoSync.notifyChange).toHaveBeenCalled();
+    });
   });
 
   it("persisterar lastError från error-state", async () => {
