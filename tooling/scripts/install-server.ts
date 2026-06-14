@@ -37,6 +37,7 @@ import {
   extractAdminToken,
 } from "./install-server/orchestrate";
 import { interpretPreflight, runPreflight } from "./install-server/preflight";
+import { checkServices, summarizeServiceChecks } from "./install-server/service-checks";
 import {
   answersToConfig,
   renderConfigTemplate,
@@ -130,6 +131,25 @@ function log(msg: string): void {
   console.log(`[install-server] ${msg}`);
 }
 
+/** Verifiera att den körande installationen NÅR tjänsterna (#323): web, git
+ *  smart-HTTP och — vid OIDC — IdP:ns discovery-endpoint. Ren rapport + bool. */
+async function runServiceChecks(argv: string[]): Promise<boolean> {
+  const cfg = answersToConfig(await gatherAnswers(argv), "");
+  const baseUrl = flag(argv, "base-url") ?? `http://localhost:${WEB_PORT}`;
+  const repoPath = flag(argv, "repo-path");
+  const checks = await checkServices(cfg, { baseUrl, ...(repoPath ? { repoPath } : {}) });
+  const { ok, lines } = summarizeServiceChecks(checks);
+  for (const l of lines) log(l);
+  log(ok ? "alla tjänster svarar." : "en eller flera tjänster svarar INTE — se ovan.");
+  return ok;
+}
+
+/** Kör tjänste-kontroller mot den lokala stacken + logga raderna (post-start). */
+async function reportServiceChecks(cfg: ServerInstallConfig): Promise<void> {
+  const { lines } = summarizeServiceChecks(await checkServices(cfg, { baseUrl: `http://localhost:${WEB_PORT}` }));
+  for (const l of lines) log(l);
+}
+
 async function exists(path: string): Promise<boolean> {
   const { access } = await import("node:fs/promises");
   return access(path).then(() => true).catch(() => false);
@@ -218,6 +238,9 @@ async function runInstall(argv: string[], paths: InstallPaths): Promise<boolean>
     process.env.AVA_SECRETS_FILE = paths.secretsFile;
     const oidc = cfg.authMode === "oidc";
     await startStack(oidc, await buildOidcStartEnv(cfg, vault));
+    // Verifiera att tjänsterna faktiskt svarar (#323) — rapport, ej hård-fail
+    // (vissa kan behöva några sekunder till; kör `--check-services` igen vid behov).
+    await reportServiceChecks(cfg);
     if (oidc) {
       log("backenden uppe (OIDC). Seeda första admin + org i firma.git:");
       log(`  bun run bootstrap:admin --work-dir <klon-av-firma.git> --email <din-epost> --org ${cfg.organizationId} --org-name "<Byrå>" --commit`);
@@ -237,6 +260,13 @@ async function main(): Promise<void> {
   // Skriv ut en config-mall att fylla i (--config-vägen). Inga sidoeffekter.
   if (hasFlag(argv, "print-config-template")) {
     process.stdout.write(renderConfigTemplate());
+    return;
+  }
+
+  // Tjänste-kommunikationskoll (#323): verifiera att en (redan körande)
+  // installation når web/git/IdP. Ingen install — bara nåbarhets-rapport.
+  if (hasFlag(argv, "check-services")) {
+    process.exitCode = (await runServiceChecks(argv)) ? 0 : 1;
     return;
   }
 
