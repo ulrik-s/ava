@@ -97,6 +97,100 @@ const DEFAULTS = {
   maxBackoffMs: 5 * 60_000,
 };
 
+// ─── Sync-motor (utbruten ur hooken → modul-nivå, testbar + under max-lines) ──
+// All körning sker via refs + setState som hooken äger; vi buntar dem i en
+// SyncCtx så cykel-logiken kan ligga utanför hook-kroppen.
+
+interface SyncCfg { pullIntervalMs: number; pushTimeoutMs: number; pullTimeoutMs: number; maxBackoffMs: number }
+interface SyncCtx {
+  setState: (s: SyncState) => void;
+  providerRef: { current: SyncProvider | null };
+  enabledRef: { current: boolean };
+  onlineRef: { current: boolean };
+  busyRef: { current: boolean };
+  backoffRef: { current: number };
+  cfgRef: { current: SyncCfg };
+}
+
+/** Dubbla nästa intervall (tak = maxBackoff). */
+function bumpBackoff(ctx: SyncCtx): void {
+  ctx.backoffRef.current = Math.min(ctx.backoffRef.current * 2, ctx.cfgRef.current.maxBackoffMs);
+}
+
+/** Visa offline-state med pending-count (fel → 0). */
+async function showOffline(ctx: SyncCtx, p: SyncProvider): Promise<void> {
+  try {
+    ctx.setState({ kind: "offline", count: await p.countChanges() });
+  } catch {
+    ctx.setState({ kind: "offline", count: 0 });
+  }
+}
+
+/** Guards + offline-hantering. Returnerar provider om cykeln ska köras, annars null. */
+async function precheck(ctx: SyncCtx): Promise<SyncProvider | null> {
+  const p = ctx.providerRef.current;
+  if (!p || !ctx.enabledRef.current || ctx.busyRef.current) return null;
+  if (!ctx.onlineRef.current) { await showOffline(ctx, p); return null; }
+  return p;
+}
+
+interface GitStep { timeoutMs: number; label: string; errPrefix: string }
+
+/** Commit/push delar form: setState(syncing) → withTimeout(op) → fel sätter
+ *  error-state + backoff. `skip` → no-op (inget att göra). false = abortera. */
+async function runGitStep(ctx: SyncCtx, skip: boolean, op: () => Promise<unknown>, step: GitStep): Promise<boolean> {
+  if (skip) return true;
+  ctx.setState({ kind: "syncing", what: "push" });
+  try {
+    await withTimeout(op(), step.timeoutMs, step.label);
+    return true;
+  } catch (err) {
+    ctx.setState({ kind: "error", message: errMsg(err, step.errPrefix) });
+    bumpBackoff(ctx);
+    return false;
+  }
+}
+
+/** Pull (working tree antas rent). false vid merge-needed eller fel. */
+async function pullStep(ctx: SyncCtx, p: SyncProvider): Promise<boolean> {
+  ctx.setState({ kind: "syncing", what: "pull" });
+  try {
+    const pullResult = await withTimeout(p.pull(), ctx.cfgRef.current.pullTimeoutMs, "git pull");
+    if (pullResult.kind === "merge-needed") {
+      ctx.setState({ kind: "merge-needed" });
+      ctx.backoffRef.current = ctx.cfgRef.current.pullIntervalMs;
+      return false;
+    }
+    return true;
+  } catch (err) {
+    ctx.setState({ kind: "error", message: errMsg(err, "Pull") });
+    bumpBackoff(ctx);
+    return false;
+  }
+}
+
+/**
+ * Kör en sync-cykel: commit → pull → push. Tar busy-lock, sätter state, kastar
+ * aldrig. Commit FÖRST: git.pull/checkout vägrar skriva över en dirty working
+ * tree, och AVA:s writeBack skriver kontinuerligt → committa innan pull.
+ */
+async function runSyncCycle(ctx: SyncCtx): Promise<void> {
+  const provider = await precheck(ctx);
+  if (!provider) return;
+  ctx.busyRef.current = true;
+  try {
+    const hasLocalCommit = (await provider.countChanges()) > 0;
+    const t = ctx.cfgRef.current.pushTimeoutMs;
+    if (!(await runGitStep(ctx, !hasLocalCommit, () => provider.commitLocal(), { timeoutMs: t, label: "git commit", errPrefix: "Commit" }))) return;
+    if (!(await pullStep(ctx, provider))) return;
+    if (!(await runGitStep(ctx, !hasLocalCommit, () => provider.push(), { timeoutMs: t, label: "git push", errPrefix: "Push" }))) return;
+    ctx.setState({ kind: "synced", at: Date.now() });
+    ctx.backoffRef.current = ctx.cfgRef.current.pullIntervalMs;
+  } finally {
+    ctx.busyRef.current = false;
+  }
+}
+
 export function useAutoSync(opts: UseAutoSyncOptions): UseAutoSyncReturn {
   const cfg = useMemo(() => ({ ...DEFAULTS, ...opts }), [opts]);
   const online = useOnlineStatus();
@@ -117,101 +211,22 @@ export function useAutoSync(opts: UseAutoSyncOptions): UseAutoSyncReturn {
   useEffect(() => { onlineRef.current = online; }, [online]);
   useEffect(() => { cfgRef.current = cfg; }, [cfg]);
 
-  /**
-   * Kör en sync-cykel: pull → räkna ändringar → ev push.
-   * Tar busy-lock. Sätter state. Inget kastar.
-   *
-   * Använder ref:s istället för deps för att slippa effekt-loops →
-   * React Compiler kan inte memoizera; vi disable:ar regeln här.
-   */
-  // eslint-disable-next-line react-hooks/preserve-manual-memoization -- refs är stabila; avsiktligt tom dep-array (React Compiler kan ej bevara memoiseringen p.g.a. bumpBackoff)
-  const runSync = useCallback(async (trigger: "auto" | "manual" | "online-reconnect"): Promise<void> => {
-    type Provider = NonNullable<typeof providerRef.current>;
-
-    /** Visa offline-state med pending-count (fel → 0). */
-    const showOffline = async (p: Provider): Promise<void> => {
-      try {
-        setState({ kind: "offline", count: await p.countChanges() });
-      } catch {
-        setState({ kind: "offline", count: 0 });
-      }
-    };
-
-    /** Guards + offline-hantering. Returnerar provider om cykeln ska köras, annars null. */
-    const precheck = async (): Promise<Provider | null> => {
-      const p = providerRef.current;
-      if (!p || !enabledRef.current || busyRef.current) return null;
-      if (!onlineRef.current) { await showOffline(p); return null; }
-      return p;
-    };
-
-    // Commit/push delar form: setState(syncing) → withTimeout(op) → fel sätter
-    // error-state + backoff. `skip` → no-op (inget att göra). false = abortera.
-    const runGitStep = async (skip: boolean, op: () => Promise<unknown>, timeoutMs: number, label: string, errPrefix: string): Promise<boolean> => {
-      if (skip) return true;
-      setState({ kind: "syncing", what: "push" });
-      try {
-        await withTimeout(op(), timeoutMs, label);
-        return true;
-      } catch (err) {
-        setState({ kind: "error", message: errMsg(err, errPrefix) });
-        bumpBackoff();
-        return false;
-      }
-    };
-
-    /** Pull (working tree antas rent). false vid merge-needed eller fel. */
-    const pullStep = async (p: Provider): Promise<boolean> => {
-      setState({ kind: "syncing", what: "pull" });
-      try {
-        const pullResult = await withTimeout(p.pull(), cfgRef.current.pullTimeoutMs, "git pull");
-        if (pullResult.kind === "merge-needed") {
-          setState({ kind: "merge-needed" });
-          backoffRef.current = cfgRef.current.pullIntervalMs;
-          return false;
-        }
-        return true;
-      } catch (err) {
-        setState({ kind: "error", message: errMsg(err, "Pull") });
-        bumpBackoff();
-        return false;
-      }
-    };
-
-    const provider = await precheck();
-    if (!provider) return;
-
-    busyRef.current = true;
-    void trigger; // trigger used to gate manual vs auto; nu lika behandlade
-    try {
-      // Commit FÖRST: git.pull/checkout vägrar skriva över en dirty working
-      // tree, och AVA:s writeBack skriver kontinuerligt → committa innan pull.
-      const hasLocalCommit = (await provider.countChanges()) > 0;
-      if (!(await runGitStep(!hasLocalCommit, () => provider.commitLocal(), cfgRef.current.pushTimeoutMs, "git commit", "Commit"))) return;
-      if (!(await pullStep(provider))) return;
-      if (!(await runGitStep(!hasLocalCommit, () => provider.push(), cfgRef.current.pushTimeoutMs, "git push", "Push"))) return;
-      setState({ kind: "synced", at: Date.now() });
-      backoffRef.current = cfgRef.current.pullIntervalMs;
-    } finally {
-      busyRef.current = false;
-    }
-  }, []);
-
-  const bumpBackoff = () => {
-    const next = Math.min(backoffRef.current * 2, cfgRef.current.maxBackoffMs);
-    backoffRef.current = next;
-  };
+  /** Kör en sync-cykel via den modul-nivå-utbrutna {@link runSyncCycle}. Bunten
+   *  av refs + setState är stabil → tom dep-array. */
+  const runSync = useCallback((): Promise<void> => runSyncCycle({
+    setState, providerRef, enabledRef, onlineRef, busyRef, backoffRef, cfgRef,
+  }), []);
 
   /** Schemalägg auto-pull med nuvarande backoff-intervall. */
   useEffect(() => {
     if (!opts.enabled || !opts.provider) return;
     // Kör en initial sync (om online), annars sätt offline-state
-    void runSync("auto");
+    void runSync();
 
     const tick = () => {
       if (!enabledRef.current) return;
       if (!onlineRef.current) return; // offline → vänta på "online"-event
-      void runSync("auto");
+      void runSync();
     };
 
     // Vi använder ett setInterval och bytar intervall vid backoff-byte
@@ -230,7 +245,7 @@ export function useAutoSync(opts: UseAutoSyncOptions): UseAutoSyncReturn {
     if (!online) return;
     if (!opts.enabled || !opts.provider) return;
     // Liten delay så browsern hinner ge oss riktig connectivity
-    const t = setTimeout(() => { void runSync("online-reconnect"); }, 500);
+    const t = setTimeout(() => { void runSync(); }, 500);
     return () => clearTimeout(t);
   }, [online, opts.enabled, opts.provider, runSync]);
 
@@ -263,7 +278,7 @@ export function useAutoSync(opts: UseAutoSyncOptions): UseAutoSyncReturn {
 
     pushTimerRef.current = setTimeout(() => {
       pushTimerRef.current = null;
-      void runSync("auto");
+      void runSync();
     }, cfgRef.current.pushDebounceMs);
   }, [runSync]);
 
@@ -272,7 +287,7 @@ export function useAutoSync(opts: UseAutoSyncOptions): UseAutoSyncReturn {
       clearTimeout(pushTimerRef.current);
       pushTimerRef.current = null;
     }
-    await runSync("manual");
+    await runSync();
   }, [runSync]);
 
   // Cleanup
