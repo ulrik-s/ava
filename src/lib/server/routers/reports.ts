@@ -166,6 +166,152 @@ function arRowsFrom(scoped: { invoices: Record<string, unknown>[]; payments: Rec
   });
 }
 
+// ─── perLawyer-delrapporter (#6: utbrutna ur query-arrowen → testbara) ──
+
+/** Den delmängd av matter-selecten delrapporterna läser. */
+interface ReportMatterRef {
+  id: string;
+  matterNumber: string;
+  title: string;
+  paymentMethod: string;
+  paymentMethodNote: string | null;
+  paymentMethodDecidedAt: Date | null;
+  contacts: { contact: { name: string } }[];
+}
+interface ReportTimeEntry {
+  date: Date; minutes: number; billable: boolean; hourlyRate: number;
+  invoiceId?: string | null | undefined; matter?: ReportMatterRef | undefined;
+}
+interface ReportExpense {
+  date: Date; amount: number; billable: boolean;
+  invoiceId?: string | null | undefined; matter?: ReportMatterRef | undefined;
+}
+
+interface MatterAgg {
+  matterId: string; matterNumber: string; title: string; client: string | null;
+  paymentMethod: string; paymentMethodNote: string | null; paymentMethodDecidedAt: Date | null;
+  totalMinutes: number; billableMinutes: number;
+  workValueOre: number; // tid × timpris (öre)
+  expenseOre: number;   // utlägg totalt (öre, bara billable)
+}
+interface UnbilledRow {
+  matterId: string; matterNumber: string; title: string; client: string | null;
+  paymentMethod: string; timeOre: number; expenseOre: number; total: number;
+}
+
+/** hourlyRate ÄR REDAN ÖRE (öre/h) → (min/60) × öre/h = öre. */
+function workValueOre(minutes: number, hourlyRate: number): number {
+  return Math.round((minutes / 60) * hourlyRate);
+}
+
+const clientName = (m: ReportMatterRef): string | null => m.contacts?.[0]?.contact?.name ?? null;
+
+/** Debiterbar och ännu inte knuten till en faktura. */
+const isOpenBillable = (x: { billable: boolean; invoiceId?: string | null | undefined }): boolean =>
+  x.billable && !x.invoiceId;
+
+/** 1. Ärenden advokaten jobbat i under perioden. */
+function buildMatters(timeEntries: ReportTimeEntry[], expenses: ReportExpense[]): MatterAgg[] {
+  const map = new Map<string, MatterAgg>();
+  const ensure = (m: ReportMatterRef): MatterAgg => {
+    const existing = map.get(m.id);
+    if (existing) return existing;
+    const agg: MatterAgg = {
+      matterId: m.id, matterNumber: m.matterNumber, title: m.title, client: clientName(m),
+      paymentMethod: m.paymentMethod, paymentMethodNote: m.paymentMethodNote,
+      paymentMethodDecidedAt: m.paymentMethodDecidedAt,
+      totalMinutes: 0, billableMinutes: 0, workValueOre: 0, expenseOre: 0,
+    };
+    map.set(m.id, agg);
+    return agg;
+  };
+  for (const te of timeEntries) {
+    if (!te.matter) continue;
+    const agg = ensure(te.matter);
+    agg.totalMinutes += te.minutes;
+    if (te.billable) {
+      agg.billableMinutes += te.minutes;
+      agg.workValueOre += workValueOre(te.minutes, te.hourlyRate);
+    }
+  }
+  for (const ex of expenses) {
+    if (!ex.matter) continue;
+    const agg = ensure(ex.matter);
+    if (ex.billable) agg.expenseOre += ex.amount;
+  }
+  return Array.from(map.values()).sort((a, b) => a.matterNumber.localeCompare(b.matterNumber, "sv"));
+}
+
+/** 2. Timdebitering per vecka (alla veckor i perioden, även tomma). */
+function buildWeeklyRows(timeEntries: ReportTimeEntry[], fromDate: Date, toDate: Date) {
+  const weeks = weeksInRange(fromDate, toDate);
+  const grid = new Map<string, { totalMinutes: number; billableMinutes: number; workValueOre: number }>();
+  for (const w of weeks) grid.set(weekKey(w.isoYear, w.week), { totalMinutes: 0, billableMinutes: 0, workValueOre: 0 });
+  for (const te of timeEntries) {
+    const { year, week } = isoWeek(te.date);
+    const cell = grid.get(weekKey(year, week));
+    if (!cell) continue;
+    cell.totalMinutes += te.minutes;
+    if (te.billable) {
+      cell.billableMinutes += te.minutes;
+      cell.workValueOre += workValueOre(te.minutes, te.hourlyRate);
+    }
+  }
+  return weeks.map((w) => {
+    const cell = grid.get(weekKey(w.isoYear, w.week))!;
+    return {
+      isoYear: w.isoYear, week: w.week,
+      start: w.start.toISOString().slice(0, 10),
+      end: w.end.toISOString().slice(0, 10),
+      ...cell,
+    };
+  });
+}
+
+/** 3. Upparbetat, icke fakturerat: debiterbar tid+utlägg utan invoiceId. */
+function buildUnbilled(timeEntries: ReportTimeEntry[], expenses: ReportExpense[]): { rows: UnbilledRow[]; total: number } {
+  const map = new Map<string, UnbilledRow>();
+  const ensure = (m: ReportMatterRef): UnbilledRow => {
+    const existing = map.get(m.id);
+    if (existing) return existing;
+    const row: UnbilledRow = {
+      matterId: m.id, matterNumber: m.matterNumber, title: m.title, client: clientName(m),
+      paymentMethod: m.paymentMethod, timeOre: 0, expenseOre: 0, total: 0,
+    };
+    map.set(m.id, row);
+    return row;
+  };
+  let total = 0;
+  for (const te of timeEntries) {
+    if (!te.matter || !isOpenBillable(te)) continue;
+    const ore = workValueOre(te.minutes, te.hourlyRate);
+    const row = ensure(te.matter);
+    row.timeOre += ore; row.total += ore; total += ore;
+  }
+  for (const ex of expenses) {
+    if (!ex.matter || !isOpenBillable(ex)) continue;
+    const row = ensure(ex.matter);
+    row.expenseOre += ex.amount; row.total += ex.amount; total += ex.amount;
+  }
+  const rows = Array.from(map.values())
+    .filter((r) => r.total > 0)
+    .sort((a, b) => a.matterNumber.localeCompare(b.matterNumber, "sv"));
+  return { rows, total };
+}
+
+/** Summera matter-aggregaten till period-totaler. */
+function sumMatterTotals(matters: MatterAgg[]) {
+  return matters.reduce(
+    (acc, m) => ({
+      totalMinutes: acc.totalMinutes + m.totalMinutes,
+      billableMinutes: acc.billableMinutes + m.billableMinutes,
+      workValueOre: acc.workValueOre + m.workValueOre,
+      expenseOre: acc.expenseOre + m.expenseOre,
+    }),
+    { totalMinutes: 0, billableMinutes: 0, workValueOre: 0, expenseOre: 0 },
+  );
+}
+
 export const reportsRouter = router({
   /**
    * Advokatrapport: en advokat, en period, tre delrapporter.
@@ -260,172 +406,16 @@ export const reportsRouter = router({
         return null;
       }
 
-      // Tre rena delrapporter över redan-hämtad data. Varje sektion bryts
-      // ut i en nästlad funktion (sluter över timeEntries/expenses) så
-      // query-arrowen håller complexity ≤8 utan att namnge select-typerna.
-      type MatterAgg = {
-        matterId: string;
-        matterNumber: string;
-        title: string;
-        client: string | null;
-        paymentMethod: string;
-        paymentMethodNote: string | null;
-        paymentMethodDecidedAt: Date | null;
-        totalMinutes: number;
-        billableMinutes: number;
-        workValueOre: number;     // tid × timpris (öre)
-        expenseOre: number;       // utlägg totalt (öre, bara billable)
-      };
-      type UnbilledRow = {
-        matterId: string;
-        matterNumber: string;
-        title: string;
-        client: string | null;
-        paymentMethod: string;
-        timeOre: number;
-        expenseOre: number;
-        total: number;
-      };
-
-      // ─── 1. Ärenden advokaten jobbat i ─────────────────────────────
-      function buildMatters(): MatterAgg[] {
-        const mattersMap = new Map<string, MatterAgg>();
-        const ensureMatter = (m: NonNullable<typeof timeEntries[number]["matter"]>): MatterAgg => {
-          const existing = mattersMap.get(m.id);
-          if (existing) return existing;
-          const agg: MatterAgg = {
-            matterId: m.id,
-            matterNumber: m.matterNumber,
-            title: m.title,
-            client: m.contacts?.[0]?.contact?.name ?? null,
-            paymentMethod: m.paymentMethod,
-            paymentMethodNote: m.paymentMethodNote,
-            paymentMethodDecidedAt: m.paymentMethodDecidedAt,
-            totalMinutes: 0,
-            billableMinutes: 0,
-            workValueOre: 0,
-            expenseOre: 0,
-          };
-          mattersMap.set(m.id, agg);
-          return agg;
-        };
-
-        for (const te of timeEntries) {
-          const agg = ensureMatter(te.matter);
-          agg.totalMinutes += te.minutes;
-          if (te.billable) {
-            agg.billableMinutes += te.minutes;
-            // hourlyRate ÄR REDAN ÖRE (öre/h) → (min/60) × öre/h = öre.
-            // Tidigare hade vi en extra * 100 som gjorde värdet 100x för stort.
-            agg.workValueOre += Math.round((te.minutes / 60) * te.hourlyRate);
-          }
-        }
-        for (const ex of expenses) {
-          const agg = ensureMatter(ex.matter);
-          if (ex.billable) agg.expenseOre += ex.amount;
-        }
-
-        return Array.from(mattersMap.values()).sort((a, b) =>
-          a.matterNumber.localeCompare(b.matterNumber, "sv"),
-        );
-      }
-
-      // ─── 2. Timdebitering per vecka ────────────────────────────────
-      function buildWeeklyRows() {
-        const weeks = weeksInRange(fromDate, toDate);
-        const weekGrid = new Map<string, { totalMinutes: number; billableMinutes: number; workValueOre: number }>();
-        for (const w of weeks) weekGrid.set(weekKey(w.isoYear, w.week), { totalMinutes: 0, billableMinutes: 0, workValueOre: 0 });
-
-        for (const te of timeEntries) {
-          const { year, week } = isoWeek(te.date);
-          const cell = weekGrid.get(weekKey(year, week));
-          if (!cell) continue;
-          cell.totalMinutes += te.minutes;
-          if (te.billable) {
-            cell.billableMinutes += te.minutes;
-            cell.workValueOre += Math.round((te.minutes / 60) * te.hourlyRate);
-          }
-        }
-
-        return weeks.map((w) => {
-          const cell = weekGrid.get(weekKey(w.isoYear, w.week))!;
-          return {
-            isoYear: w.isoYear,
-            week: w.week,
-            start: w.start.toISOString().slice(0, 10),
-            end: w.end.toISOString().slice(0, 10),
-            ...cell,
-          };
-        });
-      }
-
-      // ─── 3. Upparbetat, icke fakturerat ────────────────────────────
-      // Summan av debiterbar tid+utlägg för advokaten inom perioden där
-      // posten ännu inte är knuten till en faktura.
-      function buildUnbilled(): { rows: UnbilledRow[]; total: number } {
-        const unbilledMap = new Map<string, UnbilledRow>();
-        const ensureUnbilled = (m: NonNullable<typeof timeEntries[number]["matter"]>): UnbilledRow => {
-          const existing = unbilledMap.get(m.id);
-          if (existing) return existing;
-          const row: UnbilledRow = {
-            matterId: m.id,
-            matterNumber: m.matterNumber,
-            title: m.title,
-            client: m.contacts?.[0]?.contact?.name ?? null,
-            paymentMethod: m.paymentMethod,
-            timeOre: 0,
-            expenseOre: 0,
-            total: 0,
-          };
-          unbilledMap.set(m.id, row);
-          return row;
-        };
-
-        let total = 0;
-        for (const te of timeEntries) {
-          if (!te.billable || te.invoiceId) continue;
-          const ore = Math.round((te.minutes / 60) * te.hourlyRate);
-          const row = ensureUnbilled(te.matter);
-          row.timeOre += ore;
-          row.total += ore;
-          total += ore;
-        }
-        for (const ex of expenses) {
-          if (!ex.billable || ex.invoiceId) continue;
-          const row = ensureUnbilled(ex.matter);
-          row.expenseOre += ex.amount;
-          row.total += ex.amount;
-          total += ex.amount;
-        }
-
-        const rows = Array.from(unbilledMap.values())
-          .filter((r) => r.total > 0)
-          .sort((a, b) => a.matterNumber.localeCompare(b.matterNumber, "sv"));
-        return { rows, total };
-      }
-
-      const matters = buildMatters();
-      const weeklyRows = buildWeeklyRows();
-      const unbilled = buildUnbilled();
-
-      // ─── Totaler ───────────────────────────────────────────────────
-      const totals = matters.reduce(
-        (acc, m) => ({
-          totalMinutes: acc.totalMinutes + m.totalMinutes,
-          billableMinutes: acc.billableMinutes + m.billableMinutes,
-          workValueOre: acc.workValueOre + m.workValueOre,
-          expenseOre: acc.expenseOre + m.expenseOre,
-        }),
-        { totalMinutes: 0, billableMinutes: 0, workValueOre: 0, expenseOre: 0 },
-      );
-
+      // Tre rena delrapporter över redan-hämtad data (utbrutna till
+      // modul-nivå → query-arrowen hålls kort + delrapporterna testbara).
+      const matters = buildMatters(timeEntries, expenses);
       return {
         user: { id: user.id, name: user.name, hourlyRate: user.hourlyRate },
         period: { from: input.from, to: input.to },
         matters,
-        weeklyRows,
-        unbilled,
-        totals,
+        weeklyRows: buildWeeklyRows(timeEntries, fromDate, toDate),
+        unbilled: buildUnbilled(timeEntries, expenses),
+        totals: sumMatterTotals(matters),
       };
     }),
 

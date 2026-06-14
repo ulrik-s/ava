@@ -97,11 +97,6 @@
       "count": 2
     }
   },
-  "src/lib/server/routers/reports.ts": {
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
   "tooling/scripts/seed-data.ts": {
     "max-lines-per-function": {
       "count": 1
