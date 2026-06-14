@@ -1,9 +1,4 @@
 {
-  "src/app/calendar/_event-detail-modal.tsx": {
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
   "src/app/calendar/page.tsx": {
     "max-lines-per-function": {
       "count": 2
