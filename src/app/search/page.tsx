@@ -70,7 +70,86 @@ function searchColumns(open: (h: SearchHit) => Promise<void>): Column<SearchHit>
   ];
 }
 
-// eslint-disable-next-line complexity
+interface DocTypeCount { type: string; count: number }
+interface SearchData { totalHits: number; hits: unknown[]; facets?: { documentTypes?: DocTypeCount[] } }
+
+/** Före sökning: totalantal per typ. Efter: facet-träffar (0 för icke-matchande). */
+function facetRows(types: DocTypeCount[], data: SearchData | undefined): DocTypeCount[] {
+  if (!data) return types;
+  const facetMap = new Map((data.facets?.documentTypes ?? []).map((f) => [f.type, f.count]));
+  return types.map(({ type }) => ({ type, count: facetMap.get(type) ?? 0 }));
+}
+
+interface DocTypeFilterProps {
+  types: DocTypeCount[];
+  data: SearchData | undefined;
+  searchTerm: string;
+  selectedTypes: string[];
+  onToggle: (type: string) => void;
+  onClear: () => void;
+}
+
+function DocTypeFilter({ types, data, searchTerm, selectedTypes, onToggle, onClear }: DocTypeFilterProps) {
+  return (
+    <div className="mt-4">
+      <p className="text-xs font-medium text-gray-600 mb-2">
+        Begränsa till dokumenttyp:
+        {data && (
+          <span className="text-gray-400 font-normal">
+            {" "}— räknarna visar träffar för &quot;{searchTerm}&quot; per typ
+          </span>
+        )}
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {facetRows(types, data).map(({ type, count }) => {
+          const checked = selectedTypes.includes(type);
+          const zeroAfterSearch = data !== undefined && count === 0;
+          return (
+            <label
+              key={type}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs cursor-pointer border ${checked ? "bg-blue-100 border-blue-300 text-blue-900" : zeroAfterSearch ? "bg-gray-50 border-gray-200 text-gray-400" : "bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100"}`}
+            >
+              <input type="checkbox" className="sr-only" checked={checked} onChange={() => onToggle(type)} />
+              {type} <span className={zeroAfterSearch ? "text-gray-300" : "text-gray-400"}>({count})</span>
+            </label>
+          );
+        })}
+        {selectedTypes.length > 0 && (
+          <button type="button" onClick={onClear} className="text-xs text-gray-500 hover:text-gray-900 underline ml-1">
+            Rensa filter
+          </button>
+        )}
+      </div>
+      <p className="text-[11px] text-gray-400 mt-1">
+        {selectedTypes.length === 0
+          ? "Inga filter — söker i alla typer."
+          : `Filter aktivt: ${selectedTypes.length} typ(er) — klicka Sök för att tillämpa.`}
+      </p>
+    </div>
+  );
+}
+
+function SearchResults({ searchTerm, data }: { searchTerm: string; data: SearchData }) {
+  return (
+    <div>
+      <p className="text-sm text-gray-500 mb-2">
+        {data.totalHits > 0
+          ? `${data.totalHits} träff(ar) för "${searchTerm}"`
+          : `Inga träffar för "${searchTerm}"`}
+      </p>
+      {data.hits.length > 0 && (
+        <DataTable
+          prefKey="list.doc-search"
+          columns={searchColumns(openHit)}
+          data={data.hits as SearchHit[]}
+          rowKey={(h) => h.documentId}
+          emptyMessage="Inga träffar."
+        />
+      )}
+    </div>
+  );
+}
+
 export default function DocumentSearchPage() {
   const [query, setQuery] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
@@ -126,81 +205,18 @@ export default function DocumentSearchPage() {
         </div>
 
         {docTypes.data && docTypes.data.length > 0 && (
-          <div className="mt-4">
-            <p className="text-xs font-medium text-gray-600 mb-2">
-              Begränsa till dokumenttyp:
-              {results.data && (
-                <span className="text-gray-400 font-normal">
-                  {" "}— räknarna visar träffar för &quot;{searchTerm}&quot; per typ
-                </span>
-              )}
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {(() => {
-                // Före sökning: visa totalantal per typ ur listDocumentTypes.
-                // Efter sökning: visa antal träffar i query-result per typ
-                //   (facets), och lägg till 0-räkningar för icke-matchande typer
-                //   så user ser att de finns men inte träffas.
-                const facetMap = new Map((results.data?.facets?.documentTypes ?? []).map((f) => [f.type, f.count]));
-                const rows = results.data
-                  ? docTypes.data.map(({ type }) => ({ type, count: facetMap.get(type) ?? 0 }))
-                  : docTypes.data;
-                return rows.map(({ type, count }) => {
-                  const checked = selectedTypes.includes(type);
-                  const zeroAfterSearch = results.data !== undefined && count === 0;
-                  return (
-                    <label
-                      key={type}
-                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs cursor-pointer border ${checked ? "bg-blue-100 border-blue-300 text-blue-900" : zeroAfterSearch ? "bg-gray-50 border-gray-200 text-gray-400" : "bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100"}`}
-                    >
-                      <input
-                        type="checkbox"
-                        className="sr-only"
-                        checked={checked}
-                        onChange={() => toggleType(type)}
-                      />
-                      {type} <span className={zeroAfterSearch ? "text-gray-300" : "text-gray-400"}>({count})</span>
-                    </label>
-                  );
-                });
-              })()}
-              {selectedTypes.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setSelectedTypes([])}
-                  className="text-xs text-gray-500 hover:text-gray-900 underline ml-1"
-                >
-                  Rensa filter
-                </button>
-              )}
-            </div>
-            <p className="text-[11px] text-gray-400 mt-1">
-              {selectedTypes.length === 0
-                ? "Inga filter — söker i alla typer."
-                : `Filter aktivt: ${selectedTypes.length} typ(er) — klicka Sök för att tillämpa.`}
-            </p>
-          </div>
+          <DocTypeFilter
+            types={docTypes.data}
+            data={results.data as SearchData | undefined}
+            searchTerm={searchTerm}
+            selectedTypes={selectedTypes}
+            onToggle={toggleType}
+            onClear={() => setSelectedTypes([])}
+          />
         )}
       </form>
 
-      {searchTerm && results.data && (
-        <div>
-          <p className="text-sm text-gray-500 mb-2">
-            {results.data.totalHits > 0
-              ? `${results.data.totalHits} träff(ar) för "${searchTerm}"`
-              : `Inga träffar för "${searchTerm}"`}
-          </p>
-          {results.data.hits.length > 0 && (
-            <DataTable
-              prefKey="list.doc-search"
-              columns={searchColumns(openHit)}
-              data={results.data.hits as SearchHit[]}
-              rowKey={(h) => h.documentId}
-              emptyMessage="Inga träffar."
-            />
-          )}
-        </div>
-      )}
+      {searchTerm && results.data && <SearchResults searchTerm={searchTerm} data={results.data as SearchData} />}
 
       {results.error && (
         <div className="rounded-lg border border-red-200 bg-red-50 p-4">
