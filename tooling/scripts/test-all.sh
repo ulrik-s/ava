@@ -5,11 +5,11 @@
 # körs lokalt av .husky/commit-msg vid varje commit):
 #
 #   1. static:  typecheck + lint --max-warnings 0 + deps:check + knip + duplicates
-#   2. unit:    test:cov  (bun test --parallel=2 + lcov-coverage-golv, check-coverage.ts)
+#   2. unit:    test:cov  (bun test --parallel=2 + lcov-coverage-golv, run-tests.ts)
 #   3. e2e:     build:demo + e2e:install + docker (--wait) + round-trip
 #
 # Arkitekturen är pure git-modell — ingen Postgres. Test-runner är bun:test
-# (vitest borttaget i #92). Coverage = coverage/lcov.info (check-coverage.ts).
+# (vitest borttaget i #92). Coverage = coverage/lcov.info (run-tests.ts).
 #
 # Två lokala fällor som CI slipper (CI bygger out/ INNAN containern startar och
 # kör i en färsk runner), men som detta script hanterar explicit:
@@ -66,7 +66,7 @@ run "knip (död kod — gate)" bun run knip
 run "duplicates (jscpd)"    bun run duplicates
 
 # ─── 2. Unit / komponent / integration (CI-jobb: unit) ───────────
-# test:cov = check-coverage.ts: bun test --parallel=2 --coverage + lcov-golv.
+# test:cov = run-tests.ts: bun test --parallel=2 --coverage + lcov-golv.
 bold "[2/3] Unit / komponent / integration (test:cov)"
 run "test:cov (bun test + coverage-golv)" bun run test:cov
 
@@ -133,7 +133,7 @@ fi
 bold "Klart"
 ELAPSED=$((SECONDS - START))
 echo "  Tid:                          ${ELAPSED}s"
-echo "  Coverage (lcov):              coverage/lcov.info  (golv: check-coverage.ts)"
+echo "  Coverage (lcov):              coverage/{a,b}/lcov.info  (golv: run-tests.ts)"
 echo "  Playwright-rapport:           reports/playwright-round-trip/index.html"
 echo "  jscpd-rapport:                reports/jscpd/jscpd-report.html"
 echo

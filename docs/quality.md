@@ -43,7 +43,7 @@ lever som JSON i ett git-repo (se [`architecture.md`](./architecture.md)).
 | Enhetstester | `bun test --isolate` | `bunfig.toml`, `test/unit/`, `test/integration/`, `test/scripts/` |
 | Komponenttester (DOM) | `bun test` + happy-dom + Testing Library | `test/setup/happy-dom-register.ts`, `test/setup/preload.ts` |
 | E2E-tester | Playwright (Chromium) | `tooling/config/playwright.config.ts`, `test/e2e/` |
-| Kodtäckning | `bun test --coverage` (lcov) + ratchet-skript | `tooling/scripts/check-coverage.ts` |
+| Kodtäckning | `bun test --coverage` (lcov) + ratchet-skript | `tooling/scripts/run-tests.ts` (`--coverage`) |
 | Duplikatdetektering (DRY) | jscpd | `tooling/config/jscpd.json` |
 | Bundle-size-budget | gzip-summa av klient-chunks + ratchet-skript | `tooling/scripts/check-bundle-size.ts` |
 | Arkitektur (SOLID/lager) | dependency-cruiser | `tooling/config/dependency-cruiser.cjs` |
@@ -56,8 +56,11 @@ lever som JSON i ett git-repo (se [`architecture.md`](./architecture.md)).
 ### Kodtäckning (`bun run test:cov`)
 
 Sedan vitest→bun test-migrationen (#92) körs hela sviten med
-`bun test --parallel --coverage` och `tooling/scripts/check-coverage.ts`
-summerar lcov över `src/` och faller om täckningen sjunker under golvet.
+`bun test --parallel --coverage` och `tooling/scripts/run-tests.ts` summerar
+lcov över `src/` och faller om täckningen sjunker under golvet. Sedan #318 körs
+det i **två pass** (parallell-säkra tester parallellt + de realgit-tunga
+integrationstesterna seriellt) vars lcov union-merge:as (rader exakt via DA,
+funktioner per-fil-max av FNF/FNH) → eliminerar `--parallel`-flaken.
 
 > **OBS 1:** bun:test rapporterar bara **rader + funktioner**, inte
 > branches/statements (som vitest+V8 gjorde). Branch-/statement-grindarna

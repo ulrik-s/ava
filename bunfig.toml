@@ -5,6 +5,7 @@
 #
 # Coverage-grinden ligger INTE här (skulle annars få varje delmängds-körning
 # att falla mot heltäcknings-golvet). Den körs separat via
-# `bun run test:cov` → tooling/scripts/check-coverage.ts (ratchet).
+# `bun run test:cov` → tooling/scripts/run-tests.ts --coverage (ratchet + #318
+# två-pass: realgit-tunga tester i eget seriellt pass).
 [test]
 preload = ["./test/setup/happy-dom-register.ts", "./test/setup/preload.ts"]
