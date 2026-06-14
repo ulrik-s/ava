@@ -19,6 +19,7 @@ import { calendarRouter } from "./calendar";
 import { taskRouter } from "./task";
 import { todoRouter } from "./todo";
 import { preferenceRouter } from "./preference";
+import { mailRouter } from "./mail";
 
 export const appRouter = router({
   contacts: contactRouter,
@@ -41,6 +42,7 @@ export const appRouter = router({
   task: taskRouter,
   todo: todoRouter,
   prefs: preferenceRouter,
+  mail: mailRouter,
 });
 
 export type AppRouter = typeof appRouter;

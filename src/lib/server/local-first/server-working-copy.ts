@@ -30,6 +30,7 @@ import { makeWriteBack, type WriteBackFs } from "@/lib/client/firma/fsa-write-ba
 import { DEMO_META_PATH } from "../../../../tooling/demo-config";
 import type { IFileSystem } from "./file-system";
 import { NodeFileSystem } from "./node-fs";
+import { NodeContentStore } from "./node-content-store";
 import { NodeGitOps } from "./node-git-ops";
 import type { GitCommit } from "./git-ops";
 import { ProjectionHydrator } from "./projection-writer";
@@ -150,7 +151,11 @@ export async function openServerWorkingCopy(
   const source = entitiesToDemoSource(entities);
   const writeBack = makeWriteBack(new NodeWriteBackFs(dir));
   const dataStore = new DemoDataStore(source, writeBack);
-  const ctx = buildContext({ dataStore, ports: buildGitPorts(dataStore), principal: opts.principal });
+  // Git-peer:n äger filsystemet → dokument-bytes (t.ex. .eml från Outlook-
+  // add-in:en, #72) persisteras in i working-copy:n via NodeContentStore.
+  // Övriga ports = git-defaults (no-op content ersätts).
+  const ports = { ...buildGitPorts(dataStore), content: new NodeContentStore(dir) };
+  const ctx = buildContext({ dataStore, ports, principal: opts.principal });
   const author = opts.author ?? { name: opts.principal.name, email: opts.principal.email };
   const gitOps = new NodeGitOps(dir, author.name, author.email, opts.remote ?? "origin", opts.branch ?? "main");
   return {

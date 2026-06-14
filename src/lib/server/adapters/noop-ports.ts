@@ -8,6 +8,7 @@ import type {
   IDocumentAnalyzer,
   ISearchIndex,
   IPaymentScanner,
+  IContentStore,
   IPorts,
 } from "../ports";
 
@@ -31,9 +32,20 @@ export const noopPaymentScanner: IPaymentScanner = {
   async scan() { /* no-op */ },
 };
 
+/**
+ * No-op content-store: i demo/web skrivs dokument-bytes klient-sidigt via
+ * FSA (`uploadDocumentToFsa`), aldrig server-sidigt — så detta är en tyst
+ * no-op (konsistent med demo:ns read-only-semantik). Server-runtime:n
+ * (git-peer) ersätter denna med en skrivande impl (`NodeContentStore`).
+ */
+export const noopContentStore: IContentStore = {
+  async write() { /* no-op */ },
+};
+
 export const noopPorts: IPorts = {
   email: noopEmail,
   documentAnalyzer: noopDocumentAnalyzer,
   searchIndex: noopSearchIndex,
   paymentScanner: noopPaymentScanner,
+  content: noopContentStore,
 };

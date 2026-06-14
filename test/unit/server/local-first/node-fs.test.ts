@@ -97,4 +97,22 @@ describe("NodeFileSystem", () => {
     const real = await readFile(join(root, "on-disk.txt"), "utf8");
     expect(real).toBe("syns");
   });
+
+  it("writeFileBytes skriver rå-bytes (binärt, ingen utf8-tolkning)", async () => {
+    // Bytes som INTE är giltig utf8 (0xff 0xfe ...) → måste bevaras exakt.
+    const bytes = new Uint8Array([0x00, 0xff, 0xfe, 0x42, 0x0a]);
+    await fs.writeFileBytes("documents/content/x.eml", bytes);
+    const real = await readFile(join(root, "documents/content/x.eml"));
+    expect(new Uint8Array(real)).toEqual(bytes);
+  });
+
+  it("writeFileBytes skapar nested mappar automatiskt", async () => {
+    await fs.writeFileBytes("a/b/c.bin", new Uint8Array([1, 2, 3]));
+    expect(await fs.exists("a/b/c.bin")).toBe(true);
+  });
+
+  it("writeFileBytes avvisar path-traversal", async () => {
+    await expect(fs.writeFileBytes("../escape.eml", new Uint8Array([1])))
+      .rejects.toThrow(/path.*outside|escape/i);
+  });
 });

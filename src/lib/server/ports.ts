@@ -86,6 +86,26 @@ export interface IPaymentScanner {
   scan(organizationId: string): Promise<void>;
 }
 
+// ─── ContentStore ──────────────────────────────────────────────────
+
+/**
+ * Skriv dokument-binärinnehåll (PDF/DOCX/.eml …) till lagringen. Skild
+ * från entitets-projektionerna (JSON): `document.register` skriver bara
+ * metadata, bytes:en skrivs separat. I web-/FSA-flödet sker det
+ * klient-sidigt (`uploadDocumentToFsa`) INNAN register; för native-klienter
+ * (Office-add-in, #72/ADR 0013) som inte når serverns filsystem skickas
+ * bytes:en över tRPC och servern persisterar dem hit i sin git-working-copy.
+ */
+export interface IContentStore {
+  /**
+   * Skriv `bytes` till `storagePath` (repo-relativ, t.ex.
+   * `documents/content/<id>.eml`). Server-runtime:n skriver in i
+   * git-working-copy:n så de commit:as + push:as; demo/web är no-op
+   * (innehåll skrivs klient-sidigt via FSA).
+   */
+  write(storagePath: string, bytes: Uint8Array): Promise<void>;
+}
+
 // ─── Aggregat ──────────────────────────────────────────────────────
 
 /**
@@ -98,6 +118,7 @@ export interface IPorts {
   documentAnalyzer: IDocumentAnalyzer;
   searchIndex: ISearchIndex;
   paymentScanner: IPaymentScanner;
+  content: IContentStore;
 }
 
 // Buffer-typen exporteras så impl:erna kan importera utan Node:

@@ -36,6 +36,18 @@ export class NodeFileSystem implements IFileSystem {
     await writeFile(abs, content, "utf8");
   }
 
+  /**
+   * Skriv rå-bytes (icke-text-innehåll: PDF/DOCX/.eml …). Samband med
+   * {@link writeFile} men utan utf8-antagandet. `resolveSafe` ger samma
+   * path-traversal-skydd, vilket är avgörande när `path` härleds ur
+   * användar-/klient-data (t.ex. ett dokument-id från en add-in).
+   */
+  async writeFileBytes(path: string, content: Uint8Array): Promise<void> {
+    const abs = this.resolveSafe(path);
+    await mkdir(dirname(abs), { recursive: true });
+    await writeFile(abs, content);
+  }
+
   async appendFile(path: string, content: string): Promise<void> {
     const abs = this.resolveSafe(path);
     await mkdir(dirname(abs), { recursive: true });
