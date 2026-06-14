@@ -5,14 +5,16 @@
  *   - Pass A — alla parallell-säkra tester, `--parallel=2` (in-memory/mockad
  *     git, rena enheter): snabbt.
  *   - Pass B — de realgit-tunga integrationstesterna (spawnar `git`-binären mot
- *     temp-repon), `--parallel=1`: körs SERIELLT → aldrig två git-`clone`/
- *     `commit`/`push` samtidigt → ingen subprocess-/IO-kontention → ingen flake.
+ *     temp-repon): SEKVENTIELLT (inget `--parallel` → enprocess) → aldrig två
+ *     git-`clone`/`commit`/`push` samtidigt → ingen subprocess-/IO-kontention.
  *
- * Bakgrund: `--isolate` kraschar på CI-linux (epoll, #92) så `--parallel` är
- * enda vägen; men default-pool:en (= CPU-kärnor) och även `--parallel=2`
- * schemalägger ibland två realgit-filer samtidigt → timeouts / "git commit
- * failed". Att köra dem i ett eget seriellt pass löser roten i stället för att
- * höja timeouten (band-aid, #112).
+ * Bakgrund: `--parallel` (worker-pool) implicerar `--isolate`, som vid
+ * EN worker (`--parallel=1`) kraschar på CI-linux (`epoll_ctl EEXIST`, #92).
+ * Default-pool:en (= CPU-kärnor) och även `--parallel=2` schemalägger dessutom
+ * ibland två realgit-filer samtidigt → timeouts / "git commit failed". Pass B
+ * kör därför HELT utan `--parallel` (klassiskt enprocess-läge: ingen isolate,
+ * ingen epoll-krasch, ingen kontention) — löser roten i stället för att höja
+ * timeouten (band-aid, #112).
  *
  * Flaggor:
  *   --coverage  kör lcov-coverage i båda passen, slår ihop dem (per-rad-union)
@@ -60,10 +62,22 @@ function allTestFiles(): string[] {
   return [...out];
 }
 
-/** Kör ett test-pass; avbryt processen om det fallerar. */
-function runPass(label: string, files: string[], workers: number, covDir: string | null): void {
+/**
+ * Kör ett test-pass; avbryt processen om det fallerar.
+ *
+ * `workers`:
+ *   - `N` → `--parallel=N` (worker-pool; implicerar --isolate).
+ *   - `null` → INGEN `--parallel` → klassiskt sekventiellt enprocess-läge.
+ *     Används för realgit-passet: dels för att seriell körning eliminerar
+ *     git-kontentionen, dels för att `--parallel` (även `=1`) implicerar
+ *     --isolate som KRASCHAR på CI-linux (`epoll_ctl EEXIST`, #92). De
+ *     realgit-tunga filerna saknar `mock.module`/globala stubbar → trygga att
+ *     dela process.
+ */
+function runPass(label: string, files: string[], workers: number | null, covDir: string | null): void {
   if (files.length === 0) return;
-  const args = ["test", `--parallel=${workers}`, "--timeout", "30000"];
+  const args = ["test", "--timeout", "30000"];
+  if (workers !== null) args.push(`--parallel=${workers}`);
   if (covDir) args.push("--coverage", "--coverage-reporter=lcov", `--coverage-dir=${covDir}`);
   args.push(...files);
   const proc = spawnSync("bun", args, { stdio: "inherit" });
@@ -160,9 +174,11 @@ function main(): void {
   const realgit = all.filter((f) => realgitSet.has(f));
   const rest = all.filter((f) => !realgitSet.has(f));
 
-  // Pass A: parallell-säkra tester (snabbt). Pass B: realgit seriellt.
+  // Pass A: parallell-säkra tester (--parallel=2, snabbt). Pass B: realgit
+  // sekventiellt (inget --parallel → enprocess, ingen kontention, ingen
+  // --isolate/epoll-krasch på CI-linux).
   runPass("pass A (parallell)", rest, 2, COVERAGE ? "coverage/a" : null);
-  runPass("pass B (realgit, seriellt)", realgit, 1, COVERAGE ? "coverage/b" : null);
+  runPass("pass B (realgit, sekventiellt)", realgit, null, COVERAGE ? "coverage/b" : null);
 
   if (COVERAGE) checkCoverage(["coverage/a", "coverage/b"]);
 }
