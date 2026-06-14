@@ -13,25 +13,18 @@ const roleLabels: Record<string, string> = {
   ASSISTANT: "Assistent",
 };
 
-export default function EditUserClient({ id: paramId }: { id: string }) {
-  // Static export serverar __shell__ för okända id:n → läs riktiga id:t
-  // ur URL:en (faller tillbaka till build-time-param i server-mode).
-  const id = useRouteId() ?? paramId;
+const EMPTY_FORM: UserFormState = {
+  name: "", title: "", email: "", role: "LAWYER", matterNumberPrefix: "",
+  hourlyRate: "", mileageRate: "", password: "", confirmPassword: "",
+};
+
+/** Datalager + handlers för redigera-användare (utbrutet → komponenten ≤ max-lines/#6). */
+function useEditUser(id: string) {
   const router = useRouter();
   const utils = trpc.useUtils();
   const user = trpc.user.getById.useQuery({ id });
 
-  const [form, setForm] = useState<UserFormState>({
-    name: "",
-    title: "",
-    email: "",
-    role: "LAWYER",
-    matterNumberPrefix: "",
-    hourlyRate: "",
-    mileageRate: "",
-    password: "",
-    confirmPassword: "",
-  });
+  const [form, setForm] = useState<UserFormState>(EMPTY_FORM);
   const [passwordError, setPasswordError] = useState("");
   const [initialized, setInitialized] = useState(false);
 
@@ -72,12 +65,10 @@ export default function EditUserClient({ id: paramId }: { id: string }) {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setPasswordError("");
-
     if (form.password && form.password !== form.confirmPassword) {
       setPasswordError("Lösenorden matchar inte");
       return;
     }
-
     updateUser.mutate({
       id,
       name: form.name,
@@ -95,6 +86,15 @@ export default function EditUserClient({ id: paramId }: { id: string }) {
     if (!confirm("Är du säker på att du vill ta bort denna användare?")) return;
     deleteUser.mutate({ id });
   }
+
+  return { user, form, setForm, passwordError, handleSubmit, handleDelete, updateUser, deleteUser };
+}
+
+export default function EditUserClient({ id: paramId }: { id: string }) {
+  // Static export serverar __shell__ för okända id:n → läs riktiga id:t
+  // ur URL:en (faller tillbaka till build-time-param i server-mode).
+  const id = useRouteId() ?? paramId;
+  const { user, form, setForm, passwordError, handleSubmit, handleDelete, updateUser, deleteUser } = useEditUser(id);
 
   if (user.isLoading) return <p className="text-gray-500">Laddar...</p>;
   if (user.error) return <p className="text-red-600">Fel: {user.error.message}</p>;

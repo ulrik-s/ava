@@ -39,11 +39,6 @@
       "count": 1
     }
   },
-  "src/app/users/[id]/_edit-client.tsx": {
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
   "src/components/documents/_document-row.tsx": {
     "max-depth": {
       "count": 1
