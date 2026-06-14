@@ -20,7 +20,19 @@ interface PreloadState {
   error?: string;
 }
 
-// eslint-disable-next-line complexity
+/** Resultat-/fel-rad efter en preload-körning (visas när phase === "done"). */
+export function PreloadResult({ preload }: { preload: PreloadState }) {
+  if (preload.phase !== "done") return null;
+  if (preload.error) return <p className="mt-2 text-xs text-red-600">✗ {preload.error}</p>;
+  if (!preload.result) return null;
+  return (
+    <p className="mt-2 text-xs text-gray-600">
+      ✓ Klart — {preload.result.downloaded} nedladdade, {preload.result.skipped} fanns redan
+      {preload.result.failed > 0 && `, ${preload.result.failed} misslyckades`}.
+    </p>
+  );
+}
+
 export function ExternalEditSection() {
   const supported = isFsaSupported();
   const [folderName, setFolderName] = useState<string | null>(null);
@@ -95,15 +107,7 @@ export function ExternalEditSection() {
         {preload.phase === "running" ? `Förladdar ${preload.done}/${preload.total}…` : "Förladda alla dokument lokalt"}
       </button>
 
-      {preload.phase === "done" && preload.result && (
-        <p className="mt-2 text-xs text-gray-600">
-          ✓ Klart — {preload.result.downloaded} nedladdade, {preload.result.skipped} fanns redan
-          {preload.result.failed > 0 && `, ${preload.result.failed} misslyckades`}.
-        </p>
-      )}
-      {preload.phase === "done" && preload.error && (
-        <p className="mt-2 text-xs text-red-600">✗ {preload.error}</p>
-      )}
+      <PreloadResult preload={preload} />
     </div>
   );
 }
