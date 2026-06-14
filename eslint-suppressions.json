@@ -9,11 +9,6 @@
       "count": 2
     }
   },
-  "src/app/contacts/[id]/_client.tsx": {
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
   "src/app/demo/_demo-client.tsx": {
     "max-lines-per-function": {
       "count": 1
