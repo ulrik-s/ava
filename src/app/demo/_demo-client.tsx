@@ -63,7 +63,6 @@ interface MatterLike { id: string; matterNumber: string; title: string; status: 
 interface ContactLike { id: string; name: string; contactType: string; email?: string | null }
 interface UserLike { id: string; email: string; name: string; role: string }
 
-// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'DemoClient' has a complexity of 15. Maximum allowed is 8.)
 export function DemoClient({
   runtimeFactory = defaultRuntimeFactory,
   defaultRepo = DEFAULT_DEMO_REPO,
@@ -105,98 +104,120 @@ export function DemoClient({
         GitHub-repo-URL nedan.
       </p>
 
-      {/* Stack på mobil, row på tablet+. Touch-target min 44px (min-h-12). */}
-      <div className="flex flex-col sm:flex-row gap-2 mb-6">
-        <input
-          type="url"
-          inputMode="url"
-          autoComplete="off"
-          autoCapitalize="off"
-          aria-label="GitHub-url"
-          placeholder="användare/ava-demo"
-          className="flex-1 min-h-12 px-3 border rounded text-base"
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") void handleLoad(); }}
-        />
-        <button
-          type="button"
-          onClick={() => void handleLoad()}
-          disabled={status === "loading"}
-          className="min-h-12 px-6 bg-blue-600 text-white rounded font-medium disabled:opacity-50 active:bg-blue-700"
-        >
-          Ladda demo
-        </button>
-      </div>
+      <DemoLoadForm url={url} onUrlChange={setUrl} onLoad={() => void handleLoad()} loading={status === "loading"} />
+      <DemoStatusBanners status={status} error={error} fromCache={fromCache} />
+      {status === "loaded" && <DemoResults matters={matters} contacts={contacts} users={users} />}
+    </div>
+  );
+}
 
+interface LoadFormProps { url: string; onUrlChange: (v: string) => void; onLoad: () => void; loading: boolean }
+
+/** URL-input + Ladda-knapp (stackar på mobil, touch-target min-h-12). */
+function DemoLoadForm({ url, onUrlChange, onLoad, loading }: LoadFormProps) {
+  return (
+    <div className="flex flex-col sm:flex-row gap-2 mb-6">
+      <input
+        type="url"
+        inputMode="url"
+        autoComplete="off"
+        autoCapitalize="off"
+        aria-label="GitHub-url"
+        placeholder="användare/ava-demo"
+        className="flex-1 min-h-12 px-3 border rounded text-base"
+        value={url}
+        onChange={(e) => onUrlChange(e.target.value)}
+        onKeyDown={(e) => { if (e.key === "Enter") onLoad(); }}
+      />
+      <button
+        type="button"
+        onClick={onLoad}
+        disabled={loading}
+        className="min-h-12 px-6 bg-blue-600 text-white rounded font-medium disabled:opacity-50 active:bg-blue-700"
+      >
+        Ladda demo
+      </button>
+    </div>
+  );
+}
+
+interface StatusBannersProps { status: string; error: { message: string } | null; fromCache: boolean }
+
+/** Status-banners (laddar / fel / cachad data). */
+function DemoStatusBanners({ status, error, fromCache }: StatusBannersProps) {
+  return (
+    <>
       {status === "loading" && (
         <div className="p-4 bg-blue-50 border-l-4 border-blue-400 mb-4">
           Laddar demo-data…
         </div>
       )}
-
       {status === "error" && error && (
         <div className="p-4 bg-red-50 border-l-4 border-red-400 mb-4">
           <strong>Kunde inte ladda demon:</strong> {error.message}
         </div>
       )}
-
       {status === "loaded" && fromCache && (
         <div className="p-3 bg-green-50 border-l-4 border-green-400 mb-4 text-sm">
           Visar cachad data från senaste session. Klicka &quot;Ladda demo&quot;
           för att hämta senaste version från GitHub.
         </div>
       )}
+    </>
+  );
+}
 
-      {status === "loaded" && (
-        <div className="space-y-6">
-          <SummaryRow
-            counts={{
-              ärenden: matters.length,
-              kontakter: contacts.length,
-              användare: users.length,
-            }}
-          />
-          {matters.length > 0 && (
-            <Section title="Ärenden">
-              <ul className="divide-y border rounded">
-                {matters.map((m) => (
-                  <li key={m.id} className="p-3 flex justify-between">
-                    <span>
-                      <span className="font-mono text-sm text-gray-500 mr-2">{m.matterNumber}</span>
-                      {m.title}
-                    </span>
-                    <span className="text-sm text-gray-500">{m.status}</span>
-                  </li>
-                ))}
-              </ul>
-            </Section>
-          )}
-          {contacts.length > 0 && (
-            <Section title="Kontakter">
-              <ul className="divide-y border rounded">
-                {contacts.map((c) => (
-                  <li key={c.id} className="p-3">
-                    {c.name}
-                    {c.email && <span className="ml-2 text-sm text-gray-500">{c.email}</span>}
-                  </li>
-                ))}
-              </ul>
-            </Section>
-          )}
-          {users.length > 0 && (
-            <Section title="Användare">
-              <ul className="divide-y border rounded">
-                {users.map((u) => (
-                  <li key={u.id} className="p-3 flex justify-between">
-                    <span>{u.name}</span>
-                    <span className="text-sm text-gray-500">{u.email} · {u.role}</span>
-                  </li>
-                ))}
-              </ul>
-            </Section>
-          )}
-        </div>
+interface ResultsProps { matters: MatterLike[]; contacts: ContactLike[]; users: UserLike[] }
+
+/** Resultat-vyn när demon laddats: summering + listor per entitet. */
+function DemoResults({ matters, contacts, users }: ResultsProps) {
+  return (
+    <div className="space-y-6">
+      <SummaryRow
+        counts={{
+          ärenden: matters.length,
+          kontakter: contacts.length,
+          användare: users.length,
+        }}
+      />
+      {matters.length > 0 && (
+        <Section title="Ärenden">
+          <ul className="divide-y border rounded">
+            {matters.map((m) => (
+              <li key={m.id} className="p-3 flex justify-between">
+                <span>
+                  <span className="font-mono text-sm text-gray-500 mr-2">{m.matterNumber}</span>
+                  {m.title}
+                </span>
+                <span className="text-sm text-gray-500">{m.status}</span>
+              </li>
+            ))}
+          </ul>
+        </Section>
+      )}
+      {contacts.length > 0 && (
+        <Section title="Kontakter">
+          <ul className="divide-y border rounded">
+            {contacts.map((c) => (
+              <li key={c.id} className="p-3">
+                {c.name}
+                {c.email && <span className="ml-2 text-sm text-gray-500">{c.email}</span>}
+              </li>
+            ))}
+          </ul>
+        </Section>
+      )}
+      {users.length > 0 && (
+        <Section title="Användare">
+          <ul className="divide-y border rounded">
+            {users.map((u) => (
+              <li key={u.id} className="p-3 flex justify-between">
+                <span>{u.name}</span>
+                <span className="text-sm text-gray-500">{u.email} · {u.role}</span>
+              </li>
+            ))}
+          </ul>
+        </Section>
       )}
     </div>
   );
