@@ -4,13 +4,15 @@
  * Fakturablock på matter-sidan:
  *   - lista alla fakturor på ärendet med typ/status/belopp
  *   - knappar: "Skapa acconto" + "Skapa slutfaktura"
- *   - modal för ACCONTO (belopp, förfallodatum, notes)
- *   - modal för FINAL (välj time entries, expenses, acconto-avdrag)
+ *   - modal för ACCONTO (belopp, förfallodatum, notes) → {@link AccontoModal}
+ *   - modal för FINAL (välj time entries, expenses, acconto-avdrag) → {@link FinalInvoiceModal}
  *
+ * Modalerna + den generiska {@link CheckboxList} är utbrutna ur containern (#6)
+ * så InvoicesSection håller sig under complexity@8 + max-lines utan undantag.
  * Detaljer (betalningar, avbetalningsplan) hanteras på /invoices/[id].
  */
 
-import { useId, useState } from "react";
+import { useId, useState, type ReactNode } from "react";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
@@ -78,64 +80,303 @@ const invoiceCols: Column<InvoiceRow>[] = [
     render: (i) => <EntityLink route="invoices" id={i.id} className="text-blue-600 hover:underline text-xs">Öppna</EntityLink> },
 ];
 
-// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Function 'InvoicesSection' har JSX-conditionals)
-export function InvoicesSection({ matterId }: { matterId: string }) {
-  const invoices = trpc.invoice.list.useQuery({ matterId });
-  const timeEntries = trpc.timeEntry.list.useQuery({ matterId });
-  const expenses = trpc.expense.list.useQuery({ matterId });
+// ─── Generisk kryssruta-lista (delas av slutfaktura-modalens tre sektioner) ──
+
+interface CheckboxListProps<T> {
+  title: string;
+  emptyMessage: string;
+  items: T[];
+  getId: (item: T) => string;
+  selectedIds: string[];
+  onToggle: (id: string) => void;
+  renderRow: (item: T) => ReactNode;
+  /** Tailwind max-höjd för scroll (tom = ingen). */
+  maxHeight?: string;
+}
+
+function CheckboxList<T>({ title, emptyMessage, items, getId, selectedIds, onToggle, renderRow, maxHeight = "max-h-40" }: CheckboxListProps<T>) {
+  return (
+    <div>
+      <p className="text-xs font-medium mb-1">{title}</p>
+      {items.length === 0 ? (
+        <p className="text-xs text-gray-400">{emptyMessage}</p>
+      ) : (
+        <div className={`${maxHeight} overflow-y-auto border border-gray-200 rounded divide-y divide-gray-100`}>
+          {items.map((item) => {
+            const id = getId(item);
+            return (
+              <label key={id} className="flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-gray-50 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={selectedIds.includes(id)}
+                  onChange={() => onToggle(id)}
+                  className="accent-blue-600"
+                />
+                {renderRow(item)}
+              </label>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── ACCONTO-modal ───────────────────────────────────────────────────
+
+function AccontoModal({ matterId, onClose }: { matterId: string; onClose: () => void }) {
   const utils = trpc.useUtils();
-
-  const [showAcconto, setShowAcconto] = useState(false);
-  const [showFinal, setShowFinal] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const accontoAmountId = useId();
-  const accontoDueDateId = useId();
-  const accontoNotesId = useId();
-  const finalDueDateId = useId();
-  const finalNotesId = useId();
+  const [amountSek, setAmountSek] = useState("");
+  const [dueDate, setDueDate] = useState("");
+  const [notes, setNotes] = useState("");
+  const amountId = useId();
+  const dueDateId = useId();
+  const notesId = useId();
 
-  const createAcconto = trpc.invoice.createAcconto.useMutation({
-    onSuccess: () => {
-      void utils.invoice.list.invalidate({ matterId });
-      setShowAcconto(false);
-      setError(null);
-    },
+  const create = trpc.invoice.createAcconto.useMutation({
+    onSuccess: () => { void utils.invoice.list.invalidate({ matterId }); onClose(); },
     onError: (e) => setError(e.message),
   });
-  const createFinal = trpc.invoice.createFinal.useMutation({
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+      <div className="bg-white rounded-xl shadow-xl p-6 max-w-md w-full mx-4">
+        <h3 className="font-semibold mb-4">Ny acconto-faktura</h3>
+        <div className="space-y-3">
+          <div>
+            <label htmlFor={amountId} className="block text-xs font-medium mb-1">Belopp (kr)</label>
+            <input
+              id={amountId}
+              type="number" min={1}
+              value={amountSek}
+              onChange={(e) => setAmountSek(e.target.value)}
+              className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
+            />
+          </div>
+          <div>
+            <label htmlFor={dueDateId} className="block text-xs font-medium mb-1">Förfallodatum</label>
+            <input
+              id={dueDateId}
+              type="date"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+              className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
+            />
+          </div>
+          <div>
+            <label htmlFor={notesId} className="block text-xs font-medium mb-1">Notering (valfri)</label>
+            <textarea
+              id={notesId}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={2}
+              className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
+            />
+          </div>
+          {error && <p className="text-sm text-red-600">{error}</p>}
+        </div>
+        <div className="flex gap-2 justify-end mt-5">
+          <button onClick={onClose} className="px-3 py-1.5 text-sm border border-gray-300 rounded">Avbryt</button>
+          <button
+            disabled={!amountSek || create.isPending}
+            onClick={() =>
+              create.mutate({
+                matterId,
+                amount: Math.round(Number(amountSek) * 100),
+                dueDate: dueDate || undefined,
+                notes: notes || undefined,
+              })
+            }
+            className="px-4 py-1.5 text-sm bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50"
+          >
+            {create.isPending ? "Skapar…" : "Skapa"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── FINAL-modal (slutfaktura) ───────────────────────────────────────
+
+interface UnbilledTime { id: string; date: string | Date; description: string; minutes: number }
+interface UnbilledExpense { id: string; date: string | Date; description: string; amount: number }
+interface AccontoOption { id: string; invoiceDate: string | Date; amount: number }
+
+interface FinalModalProps {
+  matterId: string;
+  timeEntries: UnbilledTime[];
+  expenses: UnbilledExpense[];
+  accontos: AccontoOption[];
+  onClose: () => void;
+}
+
+const sv = (d: string | Date): string => new Date(d).toLocaleDateString("sv-SE");
+
+const timeRow = (t: UnbilledTime): ReactNode => (
+  <>
+    <span className="flex-1 truncate">{sv(t.date)} — {t.description}</span>
+    <span className="text-gray-500">{(t.minutes / 60).toFixed(1)}h</span>
+  </>
+);
+const expenseRow = (e: UnbilledExpense): ReactNode => (
+  <>
+    <span className="flex-1 truncate">{sv(e.date)} — {e.description}</span>
+    <span className="text-gray-500">{formatCurrency(e.amount)}</span>
+  </>
+);
+const accontoRow = (a: AccontoOption): ReactNode => (
+  <>
+    <span className="flex-1">Acconto {sv(a.invoiceDate)}</span>
+    <span className="font-mono">−{formatCurrency(a.amount)}</span>
+  </>
+);
+
+/** Förfallodatum + notering + Avbryt/Skapa-knappar (footer för slutfaktura-modalen). */
+function FinalModalFooter({ dueDate, setDueDate, notes, setNotes, error, disabled, pending, onCancel, onSubmit }: {
+  dueDate: string; setDueDate: (v: string) => void;
+  notes: string; setNotes: (v: string) => void;
+  error: string | null; disabled: boolean; pending: boolean;
+  onCancel: () => void; onSubmit: () => void;
+}) {
+  const dueDateId = useId();
+  const notesId = useId();
+  return (
+    <>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label htmlFor={dueDateId} className="block text-xs font-medium mb-1">Förfallodatum</label>
+          <input id={dueDateId} type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm" />
+        </div>
+        <div>
+          <label htmlFor={notesId} className="block text-xs font-medium mb-1">Notering</label>
+          <input id={notesId} value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm" />
+        </div>
+      </div>
+      {error && <p className="text-sm text-red-600">{error}</p>}
+      <div className="flex gap-2 justify-end mt-1">
+        <button onClick={onCancel} className="px-3 py-1.5 text-sm border border-gray-300 rounded">Avbryt</button>
+        <button
+          disabled={disabled}
+          onClick={onSubmit}
+          className="px-4 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+        >
+          {pending ? "Skapar…" : "Skapa slutfaktura"}
+        </button>
+      </div>
+    </>
+  );
+}
+
+function FinalInvoiceModal({ matterId, timeEntries, expenses, accontos, onClose }: FinalModalProps) {
+  const utils = trpc.useUtils();
+  const [error, setError] = useState<string | null>(null);
+  const [timeIds, setTimeIds] = useState<string[]>([]);
+  const [expenseIds, setExpenseIds] = useState<string[]>([]);
+  const [accontoIds, setAccontoIds] = useState<string[]>([]);
+  const [dueDate, setDueDate] = useState("");
+  const [notes, setNotes] = useState("");
+
+  const create = trpc.invoice.createFinal.useMutation({
     onSuccess: () => {
       void utils.invoice.list.invalidate({ matterId });
       void utils.timeEntry.list.invalidate({ matterId });
       void utils.expense.list.invalidate({ matterId });
-      setShowFinal(false);
-      setError(null);
+      onClose();
     },
     onError: (e) => setError(e.message),
   });
 
-  // Acconto-form state
-  const [accontoAmountSek, setAccontoAmountSek] = useState("");
-  const [accontoDueDate, setAccontoDueDate] = useState("");
-  const [accontoNotes, setAccontoNotes] = useState("");
+  const toggle = (ids: string[], setter: (v: string[]) => void, id: string) =>
+    setter(ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]);
 
-  // Final-form state
-  const [selectedTimeIds, setSelectedTimeIds] = useState<string[]>([]);
-  const [selectedExpenseIds, setSelectedExpenseIds] = useState<string[]>([]);
-  const [selectedAccontoIds, setSelectedAccontoIds] = useState<string[]>([]);
-  const [finalDueDate, setFinalDueDate] = useState("");
-  const [finalNotes, setFinalNotes] = useState("");
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+      <div className="bg-white rounded-xl shadow-xl p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+        <h3 className="font-semibold mb-4">Skapa slutfaktura</h3>
 
-  const toggle = (list: string[], id: string, setter: (v: string[]) => void) =>
-    setter(list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
+        <div className="space-y-4">
+          <CheckboxList
+            title="Tidsposter att fakturera"
+            emptyMessage="Inga ofakturerade tidsposter."
+            items={timeEntries}
+            getId={(t) => t.id}
+            selectedIds={timeIds}
+            onToggle={(id) => toggle(timeIds, setTimeIds, id)}
+            renderRow={timeRow}
+          />
 
-  const unbilled = {
-    timeEntries: timeEntries.data?.entries.filter((t) => !t.invoiceId) ?? [],
-    expenses: expenses.data?.expenses.filter((e) => !e.invoiceId) ?? [],
-  };
-  const availableAccontos = (invoices.data ?? []).filter((i) => {
-    const deductedOnFinals = i.deductedOnFinals as unknown as { id: string }[] | undefined;
-    return i.invoiceType === "ACCONTO" && deductedOnFinals?.length === 0 && i.status !== "CANCELLED";
+          <CheckboxList
+            title="Utlägg"
+            emptyMessage="Inga ofakturerade utlägg."
+            items={expenses}
+            getId={(e) => e.id}
+            selectedIds={expenseIds}
+            onToggle={(id) => toggle(expenseIds, setExpenseIds, id)}
+            maxHeight="max-h-32"
+            renderRow={expenseRow}
+          />
+
+          <CheckboxList
+            title="Dra av acconto-fakturor"
+            emptyMessage="Inga tillgängliga acconto-fakturor."
+            items={accontos}
+            getId={(a) => a.id}
+            selectedIds={accontoIds}
+            onToggle={(id) => toggle(accontoIds, setAccontoIds, id)}
+            maxHeight=""
+            renderRow={accontoRow}
+          />
+
+          <FinalModalFooter
+            dueDate={dueDate} setDueDate={setDueDate}
+            notes={notes} setNotes={setNotes}
+            error={error}
+            disabled={create.isPending || (timeIds.length === 0 && expenseIds.length === 0)}
+            pending={create.isPending}
+            onCancel={onClose}
+            onSubmit={() =>
+              create.mutate({
+                matterId,
+                timeEntryIds: timeIds,
+                expenseIds,
+                accontoInvoiceIds: accontoIds,
+                dueDate: dueDate || undefined,
+                notes: notes || undefined,
+              })
+            }
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Härledning (utbruten → containern håller complexity ≤8) ──────────
+
+/** Poster utan koppling till en faktura. */
+function unbilled<T extends { invoiceId?: string | null | undefined }>(items: T[] | undefined): T[] {
+  return items?.filter((x) => !x.invoiceId) ?? [];
+}
+
+/** Acconto-fakturor som ännu kan dras av på en slutfaktura. */
+function pickAvailableAccontos<T extends { invoiceType: string; status: string; deductedOnFinals?: unknown }>(invoices: T[]): T[] {
+  return invoices.filter((i) => {
+    const deducted = i.deductedOnFinals as { id: string }[] | undefined;
+    return i.invoiceType === "ACCONTO" && deducted?.length === 0 && i.status !== "CANCELLED";
   });
+}
+
+// ─── Container ───────────────────────────────────────────────────────
+
+export function InvoicesSection({ matterId }: { matterId: string }) {
+  const invoices = trpc.invoice.list.useQuery({ matterId });
+  const timeEntries = trpc.timeEntry.list.useQuery({ matterId });
+  const expenses = trpc.expense.list.useQuery({ matterId });
+
+  const [showAcconto, setShowAcconto] = useState(false);
+  const [showFinal, setShowFinal] = useState(false);
 
   return (
     <div className="bg-white rounded-lg border border-gray-200">
@@ -143,13 +384,13 @@ export function InvoicesSection({ matterId }: { matterId: string }) {
         <h2 className="text-lg font-semibold">Fakturor</h2>
         <div className="flex gap-2">
           <button
-            onClick={() => { setShowAcconto(true); setError(null); }}
+            onClick={() => setShowAcconto(true)}
             className="px-3 py-1.5 text-sm border border-purple-200 bg-purple-50 text-purple-700 rounded hover:bg-purple-100"
           >
             + Acconto
           </button>
           <button
-            onClick={() => { setShowFinal(true); setError(null); }}
+            onClick={() => setShowFinal(true)}
             className="px-3 py-1.5 text-sm border border-blue-200 bg-blue-50 text-blue-700 rounded hover:bg-blue-100"
           >
             + Slutfaktura
@@ -171,173 +412,15 @@ export function InvoicesSection({ matterId }: { matterId: string }) {
         </div>
       )}
 
-      {/* ACCONTO modal */}
-      {showAcconto && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-          <div className="bg-white rounded-xl shadow-xl p-6 max-w-md w-full mx-4">
-            <h3 className="font-semibold mb-4">Ny acconto-faktura</h3>
-            <div className="space-y-3">
-              <div>
-                <label htmlFor={accontoAmountId} className="block text-xs font-medium mb-1">Belopp (kr)</label>
-                <input
-                  id={accontoAmountId}
-                  type="number" min={1}
-                  value={accontoAmountSek}
-                  onChange={(e) => setAccontoAmountSek(e.target.value)}
-                  className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
-                />
-              </div>
-              <div>
-                <label htmlFor={accontoDueDateId} className="block text-xs font-medium mb-1">Förfallodatum</label>
-                <input
-                  id={accontoDueDateId}
-                  type="date"
-                  value={accontoDueDate}
-                  onChange={(e) => setAccontoDueDate(e.target.value)}
-                  className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
-                />
-              </div>
-              <div>
-                <label htmlFor={accontoNotesId} className="block text-xs font-medium mb-1">Notering (valfri)</label>
-                <textarea
-                  id={accontoNotesId}
-                  value={accontoNotes}
-                  onChange={(e) => setAccontoNotes(e.target.value)}
-                  rows={2}
-                  className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
-                />
-              </div>
-              {error && <p className="text-sm text-red-600">{error}</p>}
-            </div>
-            <div className="flex gap-2 justify-end mt-5">
-              <button onClick={() => setShowAcconto(false)} className="px-3 py-1.5 text-sm border border-gray-300 rounded">Avbryt</button>
-              <button
-                disabled={!accontoAmountSek || createAcconto.isPending}
-                onClick={() =>
-                  createAcconto.mutate({
-                    matterId,
-                    amount: Math.round(Number(accontoAmountSek) * 100),
-                    dueDate: accontoDueDate || undefined,
-                    notes: accontoNotes || undefined,
-                  })
-                }
-                className="px-4 py-1.5 text-sm bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50"
-              >
-                {createAcconto.isPending ? "Skapar…" : "Skapa"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* FINAL modal */}
+      {showAcconto && <AccontoModal matterId={matterId} onClose={() => setShowAcconto(false)} />}
       {showFinal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-          <div className="bg-white rounded-xl shadow-xl p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <h3 className="font-semibold mb-4">Skapa slutfaktura</h3>
-
-            <div className="space-y-4">
-              <div>
-                <p className="text-xs font-medium mb-1">Tidsposter att fakturera</p>
-                {unbilled.timeEntries.length === 0 ? (
-                  <p className="text-xs text-gray-400">Inga ofakturerade tidsposter.</p>
-                ) : (
-                  <div className="max-h-40 overflow-y-auto border border-gray-200 rounded divide-y divide-gray-100">
-                    {unbilled.timeEntries.map((t) => (
-                      <label key={t.id} className="flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-gray-50 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={selectedTimeIds.includes(t.id)}
-                          onChange={() => toggle(selectedTimeIds, t.id, setSelectedTimeIds)}
-                          className="accent-blue-600"
-                        />
-                        <span className="flex-1 truncate">{new Date(t.date).toLocaleDateString("sv-SE")} — {t.description}</span>
-                        <span className="text-gray-500">{(t.minutes / 60).toFixed(1)}h</span>
-                      </label>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <p className="text-xs font-medium mb-1">Utlägg</p>
-                {unbilled.expenses.length === 0 ? (
-                  <p className="text-xs text-gray-400">Inga ofakturerade utlägg.</p>
-                ) : (
-                  <div className="max-h-32 overflow-y-auto border border-gray-200 rounded divide-y divide-gray-100">
-                    {unbilled.expenses.map((e) => (
-                      <label key={e.id} className="flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-gray-50 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={selectedExpenseIds.includes(e.id)}
-                          onChange={() => toggle(selectedExpenseIds, e.id, setSelectedExpenseIds)}
-                          className="accent-blue-600"
-                        />
-                        <span className="flex-1 truncate">{new Date(e.date).toLocaleDateString("sv-SE")} — {e.description}</span>
-                        <span className="text-gray-500">{formatCurrency(e.amount)}</span>
-                      </label>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <p className="text-xs font-medium mb-1">Dra av acconto-fakturor</p>
-                {availableAccontos.length === 0 ? (
-                  <p className="text-xs text-gray-400">Inga tillgängliga acconto-fakturor.</p>
-                ) : (
-                  <div className="border border-gray-200 rounded divide-y divide-gray-100">
-                    {availableAccontos.map((a) => (
-                      <label key={a.id} className="flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-gray-50 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={selectedAccontoIds.includes(a.id)}
-                          onChange={() => toggle(selectedAccontoIds, a.id, setSelectedAccontoIds)}
-                          className="accent-blue-600"
-                        />
-                        <span className="flex-1">Acconto {new Date(a.invoiceDate).toLocaleDateString("sv-SE")}</span>
-                        <span className="font-mono">−{formatCurrency(a.amount)}</span>
-                      </label>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label htmlFor={finalDueDateId} className="block text-xs font-medium mb-1">Förfallodatum</label>
-                  <input id={finalDueDateId} type="date" value={finalDueDate} onChange={(e) => setFinalDueDate(e.target.value)} className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm" />
-                </div>
-                <div>
-                  <label htmlFor={finalNotesId} className="block text-xs font-medium mb-1">Notering</label>
-                  <input id={finalNotesId} value={finalNotes} onChange={(e) => setFinalNotes(e.target.value)} className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm" />
-                </div>
-              </div>
-
-              {error && <p className="text-sm text-red-600">{error}</p>}
-            </div>
-
-            <div className="flex gap-2 justify-end mt-5">
-              <button onClick={() => setShowFinal(false)} className="px-3 py-1.5 text-sm border border-gray-300 rounded">Avbryt</button>
-              <button
-                disabled={createFinal.isPending || (selectedTimeIds.length === 0 && selectedExpenseIds.length === 0)}
-                onClick={() =>
-                  createFinal.mutate({
-                    matterId,
-                    timeEntryIds: selectedTimeIds,
-                    expenseIds: selectedExpenseIds,
-                    accontoInvoiceIds: selectedAccontoIds,
-                    dueDate: finalDueDate || undefined,
-                    notes: finalNotes || undefined,
-                  })
-                }
-                className="px-4 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
-              >
-                {createFinal.isPending ? "Skapar…" : "Skapa slutfaktura"}
-              </button>
-            </div>
-          </div>
-        </div>
+        <FinalInvoiceModal
+          matterId={matterId}
+          timeEntries={unbilled(timeEntries.data?.entries)}
+          expenses={unbilled(expenses.data?.expenses)}
+          accontos={pickAvailableAccontos(invoices.data ?? [])}
+          onClose={() => setShowFinal(false)}
+        />
       )}
     </div>
   );
