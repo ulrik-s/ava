@@ -64,11 +64,6 @@
       "count": 1
     }
   },
-  "src/components/settings/fsa-folder-selector.tsx": {
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
   "src/components/settings/keypair-manager.tsx": {
     "max-lines-per-function": {
       "count": 1
