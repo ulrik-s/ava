@@ -9,11 +9,6 @@
       "count": 2
     }
   },
-  "src/app/demo/_demo-client.tsx": {
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
   "src/app/matters/[id]/_expense-section.tsx": {
     "max-lines-per-function": {
       "count": 1
