@@ -20,6 +20,10 @@ import {
 } from "@/lib/server/auth/oidc-auth-provider";
 import type { Principal } from "@/lib/server/auth/principal";
 
+// Re-export så klient-konsumenter (t.ex. demo-bootstrap) kan typa claims utan
+// att importera server-modulen direkt över boundary.
+export type { OidcClaims } from "@/lib/server/auth/oidc-auth-provider";
+
 /** Delmängd av oauth2-proxy:s `/oauth2/userinfo`-svar vi använder. */
 const oidcUserinfoSchema = z
   .object({

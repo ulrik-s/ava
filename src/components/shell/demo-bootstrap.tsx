@@ -17,6 +17,7 @@ import { MirrorOutlookRegistrar } from "@/components/matter/mirror-outlook-regis
 import { RenderErrorBoundary } from "@/components/ui/render-error-boundary";
 import { AuthProvider, useAuthMode } from "@/lib/client/auth/use-auth-mode";
 import { GitBackendRuntime } from "@/lib/client/backend/git-backend-runtime";
+import type { OidcLoginOutcome, OidcClaims } from "@/lib/client/backend/oidc-principal";
 import { demoCacheKey } from "@/lib/client/demo/demo-cache-key";
 import { DemoModeProvider } from "@/lib/client/demo/demo-mode-context";
 import { demoSourceFromRuntime } from "@/lib/client/demo/demo-source-from-runtime";
@@ -517,43 +518,110 @@ interface LoadSelfHostedArgs {
   isCancelled: () => boolean;
 }
 
-// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Async function 'loadSelfHosted' has a complexity of 9. Maximum allowed is 8.)
+/** Öppna OPFS-working-copyn + registrera handle:n som "repo-root". Sätter
+ *  fel-status + returnerar null om OPFS saknas. */
+async function openWorkingCopy(a: {
+  fsaRef: { current: FileSystemDirectoryHandle | null };
+  setFsaHandle: (h: FileSystemDirectoryHandle | null) => void;
+  setStatus: (s: Status) => void;
+  setErrorMsg: (m: string | null) => void;
+  isCancelled: () => boolean;
+}): Promise<FileSystemDirectoryHandle | null> {
+  const { getOpfsRoot, saveHandle } = await import("@/lib/client/fsa/handle-store");
+  const opfs = await getOpfsRoot("working-copy");
+  if (!opfs) {
+    a.setStatus("error");
+    a.setErrorMsg("OPFS stöds inte i denna webbläsare — self-hosted-läget kräver det.");
+    return null;
+  }
+  await saveHandle("repo-root", opfs); // så write-back + pick-provider hittar samma handle
+  a.fsaRef.current = opfs;
+  if (!a.isCancelled()) a.setFsaHandle(opfs);
+  return opfs;
+}
+
+/** OIDC-status (#222/#223): på första self-hosted-laddningen (ingen principal
+ *  bunden) hämtas claims från oauth2-proxy. `skipUser` = klona utan syntetisk
+ *  currentUser (principalen bind:s efteråt istället). */
+async function resolveOidcLogin(firmaConfig: FirmaConfig): Promise<{
+  needsOidc: boolean; oidcClaims: OidcClaims | null; skipUser: boolean;
+}> {
+  const { fetchOidcClaims } = await import("@/lib/client/backend/oidc-principal");
+  const needsOidc = firmaConfig.tier === "self-hosted" && !firmaConfig.principalId;
+  const oidcClaims = needsOidc ? await fetchOidcClaims().catch(() => null) : null;
+  return { needsOidc, oidcClaims, skipUser: needsOidc && oidcClaims != null };
+}
+
+/** Klassificera + applicera OIDC-utfallet efter klon. Returnerar true om
+ *  anroparen ska avbryta (terminalt). No-op (false) utan OIDC-session. */
+async function finishOidcLogin(a: {
+  needsOidc: boolean; oidcClaims: OidcClaims | null; users: unknown;
+  setStatus: (s: Status) => void; setErrorMsg: (m: string | null) => void;
+}): Promise<boolean> {
+  if (!a.needsOidc || !a.oidcClaims) return false;
+  const { classifyOidcLogin } = await import("@/lib/client/backend/oidc-principal");
+  const outcome = classifyOidcLogin(a.oidcClaims, (a.users ?? []) as never);
+  return applyOidcOutcome(outcome, a.setStatus, a.setErrorMsg);
+}
+
+/** Fel-rapportering för loadSelfHosted-catch (no-op om laddningen avbrutits). */
+function reportLoadError(
+  err: unknown, isCancelled: () => boolean,
+  setStatus: (s: Status) => void, setErrorMsg: (m: string | null) => void,
+): void {
+  if (isCancelled()) return;
+  setStatus("error");
+  setErrorMsg(err instanceof Error ? err.message : String(err));
+}
+
+/** Syntetisk currentUser för self-hosted-klonen. Hoppas över (undefined) när
+ *  OIDC-login pågår (då bind:s principalen efteråt istället). Måste matcha
+ *  trpcClient-användaren (id = principalId ?? "current-user"). */
+function selfHostedCurrentUser(firmaConfig: FirmaConfig, skip: boolean) {
+  if (skip) return undefined;
+  return {
+    id: firmaConfig.principalId ?? "current-user",
+    email: firmaConfig.authorEmail,
+    name: firmaConfig.authorName,
+    organizationId: firmaConfig.organizationId,
+  };
+}
+
+/** Applicera OIDC-utfallet efter klon. Returnerar true om anroparen ska
+ *  avbryta (terminalt): nekad → fel-status; behörig → bind principal + reload. */
+function applyOidcOutcome(
+  outcome: OidcLoginOutcome,
+  setStatus: (s: Status) => void,
+  setErrorMsg: (m: string | null) => void,
+): boolean {
+  if (outcome.kind === "denied") {
+    setStatus("error");
+    setErrorMsg(`Inte behörig: ${outcome.email} finns inte i byråns användarlista.`);
+    return true;
+  }
+  if (outcome.kind === "authorized") {
+    // Bind principalen och ladda om med rätt identitet.
+    patchFirmaConfig({
+      principalId: outcome.principal.id,
+      authorEmail: outcome.principal.email,
+      authorName: outcome.principal.name,
+    });
+    if (typeof window !== "undefined") window.location.reload();
+    return true;
+  }
+  return false;
+}
+
 async function loadSelfHosted(args: LoadSelfHostedArgs): Promise<void> {
   const { firmaConfig, source, queryClient, fsaRef, setFsaHandle, setStatus, setErrorMsg, isCancelled } = args;
   try {
-    const { getOpfsRoot, saveHandle } = await import("@/lib/client/fsa/handle-store");
     const { loadSelfHostedSource } = await import("@/lib/client/firma/load-self-hosted-source");
-    const opfs = await getOpfsRoot("working-copy");
-    if (!opfs) {
-      setStatus("error");
-      setErrorMsg("OPFS stöds inte i denna webbläsare — self-hosted-läget kräver det.");
-      return;
-    }
-    await saveHandle("repo-root", opfs); // så write-back + pick-provider hittar samma handle
-    fsaRef.current = opfs;
-    if (!isCancelled()) setFsaHandle(opfs);
+    const opfs = await openWorkingCopy({ fsaRef, setFsaHandle, setStatus, setErrorMsg, isCancelled });
+    if (!opfs) return;
 
     const origin = typeof window !== "undefined" ? window.location.origin : undefined;
-
-    // OIDC-login (#222/#223): på första self-hosted-laddningen (ingen principal
-    // bunden än) — om vi ligger bakom oauth2-proxy svarar /oauth2/userinfo med
-    // den inloggades email. Då klonar vi UTAN syntetisk currentUser (skriver
-    // ingen "current-user"-rad), löser principalen mot allowlisten och reloadar
-    // med bunden principalId. Utan OIDC-session: oförändrat current-user-flöde.
-    const { fetchOidcClaims, classifyOidcLogin } = await import("@/lib/client/backend/oidc-principal");
-    const needsOidc = firmaConfig.tier === "self-hosted" && !firmaConfig.principalId;
-    const oidcClaims = needsOidc ? await fetchOidcClaims().catch(() => null) : null;
-
-    const currentUser = needsOidc && oidcClaims
-      ? undefined
-      : {
-          // Måste matcha trpcClient-användaren (id principalId ?? "current-user")
-          // så att flöden som slår upp ctx.user (timeEntry.create m.fl.) hittar en rad.
-          id: firmaConfig.principalId ?? "current-user",
-          email: firmaConfig.authorEmail,
-          name: firmaConfig.authorName,
-          organizationId: firmaConfig.organizationId,
-        };
+    const { needsOidc, oidcClaims, skipUser } = await resolveOidcLogin(firmaConfig);
+    const currentUser = selfHostedCurrentUser(firmaConfig, skipUser);
     const src = await loadSelfHostedSource({
       handle: opfs,
       repo: firmaConfig.repo,
@@ -563,24 +631,9 @@ async function loadSelfHosted(args: LoadSelfHostedArgs): Promise<void> {
     });
     if (isCancelled()) return;
 
-    if (needsOidc && oidcClaims) {
-      const outcome = classifyOidcLogin(oidcClaims, (src.users ?? []) as never);
-      if (outcome.kind === "denied") {
-        setStatus("error");
-        setErrorMsg(`Inte behörig: ${outcome.email} finns inte i byråns användarlista.`);
-        return;
-      }
-      if (outcome.kind === "authorized") {
-        // Bind principalen och ladda om med rätt identitet.
-        patchFirmaConfig({
-          principalId: outcome.principal.id,
-          authorEmail: outcome.principal.email,
-          authorName: outcome.principal.name,
-        });
-        if (typeof window !== "undefined") window.location.reload();
-        return;
-      }
-    }
+    // OIDC-login: löser principalen mot allowlisten + reloadar med bunden
+    // principalId (eller nekar). Utan OIDC-session → no-op.
+    if (await finishOidcLogin({ needsOidc, oidcClaims, users: src.users, setStatus, setErrorMsg })) return;
 
     mergeSource(source, src);
     await queryClient.invalidateQueries();
@@ -589,9 +642,7 @@ async function loadSelfHosted(args: LoadSelfHostedArgs): Promise<void> {
     // plockar om sync-provider:n (den kördes på mount innan handle:n fanns).
     if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("ava:repo-ready"));
   } catch (err) {
-    if (isCancelled()) return;
-    setStatus("error");
-    setErrorMsg(err instanceof Error ? err.message : String(err));
+    reportLoadError(err, isCancelled, setStatus, setErrorMsg);
   }
 }
 
