@@ -154,7 +154,51 @@ function isWithinAnalysisGrace(doc: DocumentRecord): boolean {
  *   - demo-build → GH Pages-URL (Visa/Ladda ner).
  *   - server-build → /api/documents/<id>/download.
  */
-// eslint-disable-next-line complexity -- bygger länk-URL:er + actions (demo vs server)
+/** Bygg Visa/Ladda-ner-URL:erna (demo → GH Pages, server → /api). Utbruten
+ *  ur DocumentActions så komplexiteten (demo vs server + repo-parsning) bor
+ *  i en egen funktion. */
+function buildDocHrefs(doc: DocumentRecord): { viewHref: string; downloadHref: string } {
+  const isDemo = process.env.NEXT_PUBLIC_DEMO_BUILD === "1";
+  if (!isDemo) {
+    return {
+      viewHref: `/api/documents/${doc.id}/download`,
+      downloadHref: `/api/documents/${doc.id}/download?download=1`,
+    };
+  }
+  const repo = process.env.NEXT_PUBLIC_DEFAULT_DEMO_REPO ?? "ulrik-s/ava-demo";
+  const m = repo.match(/^([^/\s]+)\/([^/\s]+)$/);
+  const base = m ? `https://${m[1]}.github.io/${m[2]}` : repo.replace(/\/+$/, "");
+  const rec = doc as DocumentRecord & { storagePath?: string };
+  const path = rec.storagePath ?? `documents/${doc.id}`;
+  const viewHref = `${base}/${path}`;
+  return { viewHref, downloadHref: viewHref };
+}
+
+interface ActionItemsOpts {
+  isDisabled: boolean;
+  reanalyzePending: boolean;
+  viewHref: string;
+  downloadHref: string;
+  uploadingTitle: string | undefined;
+  onOpenInEditor: () => void;
+  onExternal: () => void;
+  onReanalyze: () => void;
+  onDelete: () => void;
+}
+
+/** Bygg kebab-menyns rader. Utbruten ur DocumentActions — alla `uploadingTitle
+ *  ?? …`-defaults bor här istället för i komponentkroppen. */
+function buildActionItems(o: ActionItemsOpts): ActionMenuItem[] {
+  return [
+    { key: "open", label: "Öppna i webbläsaren", icon: <span aria-hidden>🖊</span>, onSelect: o.onOpenInEditor, disabled: o.isDisabled, title: o.uploadingTitle ?? "Öppna i din browser" },
+    { key: "external", label: "Editera externt (PDF Gear, Preview…)", icon: <span aria-hidden>🖥</span>, onSelect: o.onExternal, disabled: o.isDisabled, title: o.uploadingTitle ?? "AVA committar dina ändringar automatiskt" },
+    { key: "view", label: "Visa", icon: <span aria-hidden>👁</span>, href: o.viewHref, newTab: true, disabled: o.isDisabled, title: o.uploadingTitle ?? "Visa i webbläsaren" },
+    { key: "download", label: "Ladda ner", icon: <span aria-hidden>⬇</span>, href: o.downloadHref, download: true, disabled: o.isDisabled, title: o.uploadingTitle ?? "Ladda ner" },
+    { key: "reanalyze", label: "Analysera (AI)", icon: <span aria-hidden>🧠</span>, onSelect: o.onReanalyze, disabled: o.isDisabled || o.reanalyzePending, title: o.uploadingTitle ?? "Kör AI-analys på nytt" },
+    omitUndefined({ key: "delete", label: "Ta bort", icon: <Trash2 size={15} />, onSelect: o.onDelete, danger: true, disabled: o.isDisabled, title: o.uploadingTitle }) as ActionMenuItem,
+  ];
+}
+
 function DocumentActions({
   doc,
   disabled,
@@ -170,23 +214,9 @@ function DocumentActions({
   reanalyzePending: boolean;
   onExternalEdit: () => Promise<void>;
 }) {
-  const isDemo = process.env.NEXT_PUBLIC_DEMO_BUILD === "1";
-  let viewHref: string;
-  let downloadHref: string;
-  if (isDemo) {
-    const repo = process.env.NEXT_PUBLIC_DEFAULT_DEMO_REPO ?? "ulrik-s/ava-demo";
-    const m = repo.match(/^([^/\s]+)\/([^/\s]+)$/);
-    const base = m ? `https://${m[1]}.github.io/${m[2]}` : repo.replace(/\/+$/, "");
-    const rec = doc as DocumentRecord & { storagePath?: string };
-    const path = rec.storagePath ?? `documents/${doc.id}`;
-    viewHref = `${base}/${path}`;
-    downloadHref = viewHref;
-  } else {
-    viewHref = `/api/documents/${doc.id}/download`;
-    downloadHref = `/api/documents/${doc.id}/download?download=1`;
-  }
+  const { viewHref, downloadHref } = buildDocHrefs(doc);
 
-   
+
   const openInEditor = async () => {
     // Web/demo: läs lokal kopia från FSA om den finns (nyligen uppladdade
     // filer hinner inte till remote än), annars GH Pages-URL.
@@ -211,18 +241,14 @@ function DocumentActions({
     window.open(viewHref, "_blank", "noopener,noreferrer");
   };
 
-  const openExternal = onExternalEdit;
-
   const isDisabled = !!disabled;
   const uploadingTitle = isDisabled ? "Vänta tills uppladdningen är klar" : undefined;
-  const items: ActionMenuItem[] = [
-    { key: "open", label: "Öppna i webbläsaren", icon: <span aria-hidden>🖊</span>, onSelect: () => void openInEditor(), disabled: isDisabled, title: uploadingTitle ?? "Öppna i din browser" },
-    { key: "external", label: "Editera externt (PDF Gear, Preview…)", icon: <span aria-hidden>🖥</span>, onSelect: () => void openExternal(), disabled: isDisabled, title: uploadingTitle ?? "AVA committar dina ändringar automatiskt" },
-    { key: "view", label: "Visa", icon: <span aria-hidden>👁</span>, href: viewHref, newTab: true, disabled: isDisabled, title: uploadingTitle ?? "Visa i webbläsaren" },
-    { key: "download", label: "Ladda ner", icon: <span aria-hidden>⬇</span>, href: downloadHref, download: true, disabled: isDisabled, title: uploadingTitle ?? "Ladda ner" },
-    { key: "reanalyze", label: "Analysera (AI)", icon: <span aria-hidden>🧠</span>, onSelect: onReanalyze, disabled: isDisabled || reanalyzePending, title: uploadingTitle ?? "Kör AI-analys på nytt" },
-    omitUndefined({ key: "delete", label: "Ta bort", icon: <Trash2 size={15} />, onSelect: onDelete, danger: true, disabled: isDisabled, title: uploadingTitle }) as ActionMenuItem,
-  ];
+  const items = buildActionItems({
+    isDisabled, reanalyzePending, viewHref, downloadHref, uploadingTitle,
+    onOpenInEditor: () => void openInEditor(),
+    onExternal: () => void onExternalEdit(),
+    onReanalyze, onDelete,
+  });
 
   return <ActionMenu items={items} disabled={isDisabled} label="Dokumentåtgärder" />;
 }
@@ -240,7 +266,27 @@ interface NameButtonProps {
   onExternalEdit?: () => void;
 }
 
-// eslint-disable-next-line complexity
+/** Meta-raden under filnamnet (typ-badge, filnamn, analys-status). Utbruten
+ *  ur DocumentNameButton — alla villkorade `&&`-render-grenar bor här. */
+function DocumentNameMeta({ doc, isAnalyzing, isWaitingAnalysis }: { doc: DocumentRecord; isAnalyzing: boolean; isWaitingAnalysis: boolean }) {
+  return (
+    <span className="flex items-center gap-1.5 text-xs text-gray-500 font-normal min-w-0">
+      {doc.documentType && (
+        <span className="inline-block rounded-full bg-purple-50 text-purple-700 px-1.5 py-0.5 text-[10px] font-medium flex-shrink-0">
+          {doc.documentType}
+        </span>
+      )}
+      {doc.title && <span className="truncate">{doc.fileName}</span>}
+      {isWaitingAnalysis && <span className="text-amber-600 text-[10px]">⏳ analyseras…</span>}
+      {doc.analysisError && !isAnalyzing && (
+        <span className="text-red-500 text-[10px]" title={doc.analysisError}>
+          ⚠ analys-fel
+        </span>
+      )}
+    </span>
+  );
+}
+
 function DocumentNameButton({ doc, isAnalyzing, disabled, onExternalEdit }: NameButtonProps) {
   const isWaitingAnalysis = isAnalyzing || isWithinAnalysisGrace(doc);
 
@@ -284,20 +330,7 @@ function DocumentNameButton({ doc, isAnalyzing, disabled, onExternalEdit }: Name
       <span className="text-lg leading-tight flex-shrink-0">📄</span>
       <span className="flex flex-col min-w-0">
         <span className="font-medium break-words">{doc.title || doc.fileName}</span>
-        <span className="flex items-center gap-1.5 text-xs text-gray-500 font-normal min-w-0">
-          {doc.documentType && (
-            <span className="inline-block rounded-full bg-purple-50 text-purple-700 px-1.5 py-0.5 text-[10px] font-medium flex-shrink-0">
-              {doc.documentType}
-            </span>
-          )}
-          {doc.title && <span className="truncate">{doc.fileName}</span>}
-          {isWaitingAnalysis && <span className="text-amber-600 text-[10px]">⏳ analyseras…</span>}
-          {doc.analysisError && !isAnalyzing && (
-            <span className="text-red-500 text-[10px]" title={doc.analysisError}>
-              ⚠ analys-fel
-            </span>
-          )}
-        </span>
+        <DocumentNameMeta doc={doc} isAnalyzing={isAnalyzing} isWaitingAnalysis={isWaitingAnalysis} />
       </span>
     </button>
   );
