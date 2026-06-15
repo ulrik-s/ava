@@ -23,26 +23,26 @@ const matters = new Map([
 
 describe("searchDocuments", () => {
   it("matchar mot fileName (case-insensitive)", () => {
-    const r = searchDocuments(docs, matters, "vårdnad", "org-1", 20);
+    const r = searchDocuments(docs, matters, "vårdnad", "org-1", { limit: 20 });
     expect(r.hits.length).toBe(2); // d-1 (fileName+summary), d-2 (summary)
     expect(r.hits.map((h) => h.id)).toContain("d-1");
     expect(r.hits.map((h) => h.id)).toContain("d-2");
   });
 
   it("matchar mot documentType", () => {
-    const r = searchDocuments(docs, matters, "stämning", "org-1", 20);
+    const r = searchDocuments(docs, matters, "stämning", "org-1", { limit: 20 });
     expect(r.hits.length).toBeGreaterThan(0);
     expect(r.hits[0]!.id).toBe("d-1");
   });
 
   it("matchar mot summary", () => {
-    const r = searchDocuments(docs, matters, "Eriksson", "org-1", 20);
+    const r = searchDocuments(docs, matters, "Eriksson", "org-1", { limit: 20 });
     expect(r.hits.length).toBe(1);
     expect(r.hits[0]!.id).toBe("d-3");
   });
 
   it("filtrerar bort dokument från annan org", () => {
-    const r = searchDocuments(docs, matters, "Hemlig", "org-1", 20);
+    const r = searchDocuments(docs, matters, "Hemlig", "org-1", { limit: 20 });
     expect(r.hits.length).toBe(0);
   });
 
@@ -57,23 +57,23 @@ describe("searchDocuments", () => {
       ["m-firma", { id: "m-firma", matterNumber: "F-1", title: "Internt", organizationId: "firma-ab" }],
       ["m-extern", { id: "m-extern", matterNumber: "E-1", title: "Extern", organizationId: "other-org" }],
     ]) as unknown as Parameters<typeof searchDocuments>[1];
-    const r = searchDocuments(docsWithoutOrg, mattersByOrg, "Note", "firma-ab", 20);
+    const r = searchDocuments(docsWithoutOrg, mattersByOrg, "Note", "firma-ab", { limit: 20 });
     expect(r.hits.map((h) => h.id)).toEqual(["d-a"]);
   });
 
   it("tomt query → inga träffar", () => {
-    expect(searchDocuments(docs, matters, "", "org-1", 20).hits).toEqual([]);
-    expect(searchDocuments(docs, matters, "   ", "org-1", 20).hits).toEqual([]);
+    expect(searchDocuments(docs, matters, "", "org-1", { limit: 20 }).hits).toEqual([]);
+    expect(searchDocuments(docs, matters, "   ", "org-1", { limit: 20 }).hits).toEqual([]);
   });
 
   it("inkluderar matter-info i resultat", () => {
-    const r = searchDocuments(docs, matters, "Stämningsansökan", "org-1", 20);
+    const r = searchDocuments(docs, matters, "Stämningsansökan", "org-1", { limit: 20 });
     expect(r.hits[0]!.matterNumber).toBe("2026-001");
     expect(r.hits[0]!.matterTitle).toBe("Vårdnad");
   });
 
   it("respekterar limit", () => {
-    const r = searchDocuments(docs, matters, "pdf", "org-1", 1);
+    const r = searchDocuments(docs, matters, "pdf", "org-1", { limit: 1 });
     // Inte alla matchar "pdf" eftersom det är ej i fileName/type/summary normalt
     expect(r.hits.length).toBeLessThanOrEqual(1);
   });
@@ -81,14 +81,14 @@ describe("searchDocuments", () => {
   it("ranking: fileName-träff prioriteras över summary-träff", () => {
     // "vårdnad" finns i d-1.fileName + d-1.summary + d-2.summary
     // d-1 ska ranka högst eftersom det har träff i både fileName + summary
-    const r = searchDocuments(docs, matters, "vårdnad", "org-1", 20);
+    const r = searchDocuments(docs, matters, "vårdnad", "org-1", { limit: 20 });
     expect(r.hits[0]!.id).toBe("d-1");
   });
 
   it("hittar ord som ENDAST finns i dokumentinnehåll (content-cache)", () => {
     // Inget av docs har "skadan" i metadata, men vi cachar det i content
     setDocumentContent("d-3", "BRF beslutar avslag pga att skadan inte är dokumenterad.");
-    const r = searchDocuments(docs, matters, "skadan", "org-1", 20);
+    const r = searchDocuments(docs, matters, "skadan", "org-1", { limit: 20 });
     expect(r.hits.length).toBe(1);
     expect(r.hits[0]!.id).toBe("d-3");
     // Snippet ska innehålla kontext runt query
@@ -101,7 +101,7 @@ describe("searchDocuments", () => {
       "och någonstans i mitten finns ordet TARGET som vi söker efter, " +
       "och sedan fortsätter det med ännu mer information som inte är relevant."
     );
-    const r = searchDocuments(docs, matters, "target", "org-1", 20);
+    const r = searchDocuments(docs, matters, "target", "org-1", { limit: 20 });
     expect(r.hits.length).toBe(1);
     const snippet = r.hits[0]!._formatted?.content ?? "";
     expect(snippet).toContain("TARGET");
@@ -111,7 +111,7 @@ describe("searchDocuments", () => {
 
   it("kombinerar metadata- + content-träff (boost-summa)", () => {
     setDocumentContent("d-1", "innehåller också vårdnad-text");
-    const r = searchDocuments(docs, matters, "vårdnad", "org-1", 20);
+    const r = searchDocuments(docs, matters, "vårdnad", "org-1", { limit: 20 });
     expect(r.hits[0]!.id).toBe("d-1");
     // d-1 har: fileName(2) + summary(1) + content(1) + meta(1) = 5
     // d-2 har: summary(1) + meta(1) = 2
@@ -120,28 +120,28 @@ describe("searchDocuments", () => {
   // ─── Wildcard (*) ────────────────────────────────────────────────────
   describe("wildcard *", () => {
     it("'stäm*' matchar 'Stämningsansökan'", () => {
-      const r = searchDocuments(docs, matters, "stäm*", "org-1", 20);
+      const r = searchDocuments(docs, matters, "stäm*", "org-1", { limit: 20 });
       expect(r.hits.map((h) => h.id)).toContain("d-1");
     });
 
     it("'*ansökan*' matchar i mitten av ord", () => {
-      const r = searchDocuments(docs, matters, "*ansökan*", "org-1", 20);
+      const r = searchDocuments(docs, matters, "*ansökan*", "org-1", { limit: 20 });
       expect(r.hits.map((h) => h.id)).toContain("d-1");
     });
 
     it("'dom*tings*' matchar flera ord i ordning", () => {
-      const r = searchDocuments(docs, matters, "dom*tings*", "org-1", 20);
+      const r = searchDocuments(docs, matters, "dom*tings*", "org-1", { limit: 20 });
       expect(r.hits.map((h) => h.id)).toContain("d-2");
     });
 
     it("ren prefix utan * fungerar fortsatt (substring)", () => {
-      const r = searchDocuments(docs, matters, "vårdnad", "org-1", 20);
+      const r = searchDocuments(docs, matters, "vårdnad", "org-1", { limit: 20 });
       expect(r.hits.map((h) => h.id)).toContain("d-1");
     });
 
     it("* i content-cache matchas och ger snippet", () => {
       setDocumentContent("d-3", "Vid arvskiftet upptäcktes att testamentet var ogiltigt.");
-      const r = searchDocuments(docs, matters, "testa*", "org-1", 20);
+      const r = searchDocuments(docs, matters, "testa*", "org-1", { limit: 20 });
       expect(r.hits.map((h) => h.id)).toContain("d-3");
       const snippet = r.hits.find((h) => h.id === "d-3")?._formatted?.content ?? "";
       expect(snippet).toContain("testamentet");
@@ -149,12 +149,12 @@ describe("searchDocuments", () => {
 
     it("regex-metachars i query escapas (.+ ska INTE matcha annat)", () => {
       // ".+" som literal sträng finns inte i någon doc → inga träffar.
-      const r = searchDocuments(docs, matters, ".+", "org-1", 20);
+      const r = searchDocuments(docs, matters, ".+", "org-1", { limit: 20 });
       expect(r.hits).toEqual([]);
     });
 
     it("'*' ensamt matchar allt (om q inte är tomt)", () => {
-      const r = searchDocuments(docs, matters, "*", "org-1", 20);
+      const r = searchDocuments(docs, matters, "*", "org-1", { limit: 20 });
       // Alla 3 doks i org-1 ska träffas
       expect(r.hits.length).toBe(3);
     });

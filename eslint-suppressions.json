@@ -1,17 +1,2 @@
 {
-  "src/components/documents/_document-row.tsx": {
-    "max-depth": {
-      "count": 1
-    }
-  },
-  "src/lib/server/adapters/demo-search-index.ts": {
-    "max-params": {
-      "count": 1
-    }
-  },
-  "src/lib/server/local-first/demo-loader.ts": {
-    "max-depth": {
-      "count": 2
-    }
-  }
 }

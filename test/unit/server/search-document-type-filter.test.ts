@@ -23,30 +23,30 @@ const docs = [
 
 describe("searchDocuments — documentTypes-filter", () => {
   it("utan filter returnerar träffar i alla typer", () => {
-    const r = searchDocuments(docs, matters, "tvist", ORG, 50);
+    const r = searchDocuments(docs, matters, "tvist", ORG, { limit: 50 });
     const types = r.hits.map((h) => docs.find((d) => d.id === h.id)?.documentType);
     expect(types.sort()).toEqual(["Dom", "Stämningsansökan", "Yttrande"]);
   });
 
   it("filter ['Dom'] returnerar bara dom-träffar", () => {
-    const r = searchDocuments(docs, matters, "tvist", ORG, 50, { documentTypes: ["Dom"] });
+    const r = searchDocuments(docs, matters, "tvist", ORG, { limit: 50, documentTypes: ["Dom"] });
     expect(r.hits).toHaveLength(1);
     expect(r.hits[0]!.id).toBe("d2");
   });
 
   it("filter ['Dom', 'Yttrande'] inkluderar båda", () => {
-    const r = searchDocuments(docs, matters, "tvist", ORG, 50, { documentTypes: ["Dom", "Yttrande"] });
+    const r = searchDocuments(docs, matters, "tvist", ORG, { limit: 50, documentTypes: ["Dom", "Yttrande"] });
     const ids = r.hits.map((h) => h.id).sort();
     expect(ids).toEqual(["d2", "d3"]);
   });
 
   it("filter på okänd typ → inga träffar", () => {
-    const r = searchDocuments(docs, matters, "tvist", ORG, 50, { documentTypes: ["FinnsEj"] });
+    const r = searchDocuments(docs, matters, "tvist", ORG, { limit: 50, documentTypes: ["FinnsEj"] });
     expect(r.hits).toHaveLength(0);
   });
 
   it("tom array → samma som inget filter (alla typer)", () => {
-    const r = searchDocuments(docs, matters, "tvist", ORG, 50, { documentTypes: [] });
+    const r = searchDocuments(docs, matters, "tvist", ORG, { limit: 50, documentTypes: [] });
     expect(r.hits).toHaveLength(3);
   });
 
@@ -54,7 +54,7 @@ describe("searchDocuments — documentTypes-filter", () => {
   // Räknas alltid på fullständigt query-result så badges visar hur många
   // träffar varje filter SKULLE ge.
   it("facets innehåller alla typer som matchar query (utan type-filter)", () => {
-    const r = searchDocuments(docs, matters, "tvist", ORG, 50);
+    const r = searchDocuments(docs, matters, "tvist", ORG, { limit: 50 });
     expect(r.facets?.documentTypes?.sort((a, b) => a.type.localeCompare(b.type)))
       .toEqual([
         { type: "Dom", count: 1 },
@@ -64,7 +64,7 @@ describe("searchDocuments — documentTypes-filter", () => {
   });
 
   it("facets är samma även när type-filter är satt (badges = vad MAN SKULLE få)", () => {
-    const r = searchDocuments(docs, matters, "tvist", ORG, 50, { documentTypes: ["Dom"] });
+    const r = searchDocuments(docs, matters, "tvist", ORG, { limit: 50, documentTypes: ["Dom"] });
     // Hits begränsas till Dom (1 träff), men facets-counts visar att Yttrande
     // + Stämningsansökan SKULLE ge 1 träff vardera om man togglade dem.
     expect(r.hits).toHaveLength(1);
@@ -72,7 +72,7 @@ describe("searchDocuments — documentTypes-filter", () => {
   });
 
   it("facets exkluderar dokument som inte matchar query alls", () => {
-    const r = searchDocuments(docs, matters, "klientens", ORG, 50);
+    const r = searchDocuments(docs, matters, "klientens", ORG, { limit: 50 });
     // Bara d3 (Yttrande) har "klientens" i summary
     expect(r.facets?.documentTypes).toEqual([{ type: "Yttrande", count: 1 }]);
   });

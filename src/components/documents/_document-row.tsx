@@ -9,6 +9,26 @@ import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { formatFileSize } from "./_drag-helpers";
 import { ExternalEditModal, type ModalState } from "./external-edit-modal";
 
+/**
+ * Försök öppna dokumentet från den lokala FSA-working-copyn som blob:-URL
+ * (nyligen uppladdade filer hinner inte till remote än). Returnerar `true`
+ * om filen öppnades, annars `false` (→ caller faller tillbaka på GH Pages-URL).
+ * Platta tidiga returer håller nästlingsdjupet under gränsen.
+ */
+async function tryOpenViaFsa(path: string): Promise<boolean> {
+  const { isFsaSupported, loadHandle } = await import("@/lib/client/fsa/handle-store");
+  if (!isFsaSupported()) return false;
+  const handle = await loadHandle("repo-root");
+  if (!handle) return false;
+  const blob = await readFromFsa(handle, path);
+  if (!blob) return false;
+  const url = URL.createObjectURL(blob);
+  window.open(url, "_blank", "noopener,noreferrer");
+  // Återvinn URL:n efter en stund (browsern behåller den medan tab:n öppen)
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  return true;
+}
+
 export interface DocumentRecord {
   id: string;
   fileName: string;
@@ -178,20 +198,7 @@ function DocumentActions({
 
     if (path) {
       try {
-        const { isFsaSupported, loadHandle } = await import("@/lib/client/fsa/handle-store");
-        if (isFsaSupported()) {
-          const handle = await loadHandle("repo-root");
-          if (handle) {
-            const blob = await readFromFsa(handle, path);
-            if (blob) {
-              const url = URL.createObjectURL(blob);
-              window.open(url, "_blank", "noopener,noreferrer");
-              // Återvinn URL:n efter en stund (browsern behåller den medan tab:n öppen)
-              setTimeout(() => URL.revokeObjectURL(url), 60_000);
-              return;
-            }
-          }
-        }
+        if (await tryOpenViaFsa(path)) return;
       } catch (err) {
         console.warn("[open] FSA-läsning misslyckades, faller tillbaka till GH Pages:", err);
       }

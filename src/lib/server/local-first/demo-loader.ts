@@ -136,19 +136,26 @@ export class DemoLoader {
     for (const entity of this.deps.registry.entities()) {
       for (const prefix of this.knownPrefixes(entity)) {
         const items = await this.deps.fs.listDir(prefix);
-        for (const item of items) {
-          if (!item.endsWith(".json")) continue;
-          const path = `${prefix}/${item}`;
-          try {
-            const r = await hydrator.hydratePath(path);
-            if (!r) continue;
-            if (!this.hydrated.has(r.entity)) this.hydrated.set(r.entity, []);
-            this.hydrated.get(r.entity)!.push(r.data);
-          } catch {
-            // Korrupta filer i cache — hoppa över
-          }
-        }
+        for (const item of items) await this.hydrateItemInto(hydrator, prefix, item);
       }
+    }
+  }
+
+  /** Hydratisera en enskild fil in i `this.hydrated` (korrupta filer hoppas över). */
+  private async hydrateItemInto(
+    hydrator: { hydratePath: (path: string) => Promise<{ entity: string; data: unknown } | null> },
+    prefix: string,
+    item: string,
+  ): Promise<void> {
+    if (!item.endsWith(".json")) return;
+    const path = `${prefix}/${item}`;
+    try {
+      const r = await hydrator.hydratePath(path);
+      if (!r) return;
+      if (!this.hydrated.has(r.entity)) this.hydrated.set(r.entity, []);
+      this.hydrated.get(r.entity)!.push(r.data);
+    } catch {
+      // Korrupta filer i cache — hoppa över
     }
   }
 

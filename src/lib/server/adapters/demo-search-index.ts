@@ -88,6 +88,8 @@ export interface SearchOpts {
   /** Begränsa till dokument vars documentType matchar någon i listan.
    *  Tomt array eller undefined = alla typer. */
   documentTypes?: string[];
+  /** Max antal träffar (default 20). */
+  limit?: number;
 }
 
 type SearchHit = SearchResponse["hits"][number];
@@ -160,14 +162,26 @@ function toSearchHit(doc: DocLike, snippet: string, matters: Map<string, MatterL
   };
 }
 
+/** Facet-räknare per documentType (för typ-filter-badges), sorterad fallande. */
+function computeFacetEntries(queryMatches: DocLike[]): Array<{ type: string; count: number }> {
+  const facetCounts = new Map<string, number>();
+  for (const d of queryMatches) {
+    if (!d.documentType) continue;
+    facetCounts.set(d.documentType, (facetCounts.get(d.documentType) ?? 0) + 1);
+  }
+  return [...facetCounts.entries()]
+    .map(([type, count]) => ({ type, count }))
+    .sort((a, b) => b.count - a.count || a.type.localeCompare(b.type, "sv"));
+}
+
 export function searchDocuments(
   docs: DocLike[],
   matters: Map<string, MatterLike>,
   query: string,
   organizationId: string,
-  limit: number,
   opts: SearchOpts = {},
 ): SearchResponse {
+  const limit = opts.limit ?? 20;
   const matcher = compileNeedle(query);
   if (!matcher.raw) return { hits: [], estimatedTotalHits: 0 };
 
@@ -188,15 +202,7 @@ export function searchDocuments(
     if (matcher.test(haystack)) return true;
     return matcher.test(getDocumentContent(d.id).toLowerCase());
   });
-  // Facet-räknare per typ
-  const facetCounts = new Map<string, number>();
-  for (const d of queryMatches) {
-    if (!d.documentType) continue;
-    facetCounts.set(d.documentType, (facetCounts.get(d.documentType) ?? 0) + 1);
-  }
-  const facetEntries = [...facetCounts.entries()]
-    .map(([type, count]) => ({ type, count }))
-    .sort((a, b) => b.count - a.count || a.type.localeCompare(b.type, "sv"));
+  const facetEntries = computeFacetEntries(queryMatches);
 
   const matched = orgDocs
     .filter((d) => typeFilter === null || (d.documentType !== null && d.documentType !== undefined && typeFilter.has(d.documentType)))
@@ -236,7 +242,7 @@ export function makeDemoSearchIndex(dataStore: IDataStore): ISearchIndex {
         where: { organizationId },
       }) as unknown as MatterLike[];
       const matters = new Map(matterRows.map((m) => [m.id, m]));
-      return searchDocuments(docs, matters, query, organizationId, limit, opts);
+      return searchDocuments(docs, matters, query, organizationId, { ...opts, limit });
     },
     async upsert() { /* no-op — vi använder live data-store, inget index att uppdatera */ },
     async remove() { /* no-op */ },
