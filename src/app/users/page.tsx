@@ -97,7 +97,45 @@ function confirmDeactivate(id: string, name: string, run: (args: { id: string })
   }
 }
 
-// eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8 — JSX-conditionals i list-headern)
+function UsersHeader({ isAdmin }: { isAdmin: boolean }) {
+  return (
+    <div className="flex items-center justify-between mb-6">
+      <h1 className="text-2xl font-bold text-gray-900">Användare</h1>
+      {isAdmin && (
+        <Link
+          href="/users/new"
+          className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700"
+        >
+          + Ny användare
+        </Link>
+      )}
+    </div>
+  );
+}
+
+function UsersNotice({ isAdmin }: { isAdmin: boolean }) {
+  if (isAdmin) return null;
+  return (
+    <div className="mb-4 bg-amber-50 border border-amber-200 rounded p-3 text-sm text-amber-900 flex items-center gap-2">
+      <ShieldAlert size={16} /> Endast administratörer kan skapa eller inaktivera användare.
+    </div>
+  );
+}
+
+/** Ladd-/fel-rader under tabellen. Utbruten så dess tre `&&`-grenar inte
+ *  räknas in i UsersPage-komponentens komplexitet (#199). */
+function UsersStatus({ isLoading, listError, deactivateError }: {
+  isLoading: boolean; listError?: string; deactivateError?: string;
+}) {
+  return (
+    <>
+      {isLoading && <p className="mt-4 text-sm text-gray-500">Laddar...</p>}
+      {listError && <p className="mt-4 text-sm text-red-600">Fel: {listError}</p>}
+      {deactivateError && <p className="mt-4 text-sm text-red-600">{deactivateError}</p>}
+    </>
+  );
+}
+
 export default function UsersPage() {
   const me = trpc.user.current.useQuery();
   const users = trpc.user.list.useQuery();
@@ -116,23 +154,8 @@ export default function UsersPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Användare</h1>
-        {isAdmin && (
-          <Link
-            href="/users/new"
-            className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700"
-          >
-            + Ny användare
-          </Link>
-        )}
-      </div>
-
-      {!isAdmin && (
-        <div className="mb-4 bg-amber-50 border border-amber-200 rounded p-3 text-sm text-amber-900 flex items-center gap-2">
-          <ShieldAlert size={16} /> Endast administratörer kan skapa eller inaktivera användare.
-        </div>
-      )}
+      <UsersHeader isAdmin={isAdmin} />
+      <UsersNotice isAdmin={isAdmin} />
 
       <DataTable
         prefKey="list.users"
@@ -142,9 +165,11 @@ export default function UsersPage() {
         emptyMessage="Inga användare."
       />
 
-      {users.isLoading && <p className="mt-4 text-sm text-gray-500">Laddar...</p>}
-      {users.error && <p className="mt-4 text-sm text-red-600">Fel: {users.error.message}</p>}
-      {deactivate.error && <p className="mt-4 text-sm text-red-600">{deactivate.error.message}</p>}
+      <UsersStatus
+        isLoading={users.isLoading}
+        {...(users.error ? { listError: users.error.message } : {})}
+        {...(deactivate.error ? { deactivateError: deactivate.error.message } : {})}
+      />
     </div>
   );
 }
