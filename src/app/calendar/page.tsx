@@ -371,23 +371,40 @@ function toLocalInput(d: Date | string | null | undefined): string {
   return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
 }
 
-/**
- * Initialvärden för event-formuläret ur en ev. redigerad rad. Platt
- * fält-mappning utan logik — komplexiteten är enbart nullish-defaults.
- */
-// eslint-disable-next-line complexity
-function eventFormDefaults(initial?: EventRow) {
+/** Tomma initialvärden för ett nytt event (ingen redigerad rad). */
+function emptyEventForm() {
   return {
-    title: initial?.title ?? "",
-    kind: initial?.kind ?? "appointment",
-    startAt: initial ? toLocalInput(initial.startAt) : new Date().toISOString().slice(0, 16),
-    endAt: initial?.endAt ? toLocalInput(initial.endAt) : "",
-    location: initial?.location ?? "",
-    matterId: initial?.matterId ?? "",
-    mirrorToOutlook: initial?.mirrorToOutlook ?? false,
-    inviteeUserIds: initial?.inviteeUserIds ?? [],
-    inviteeContactIds: initial?.inviteeContactIds ?? [],
+    title: "",
+    kind: "appointment" as "appointment" | "deadline",
+    startAt: new Date().toISOString().slice(0, 16),
+    endAt: "",
+    location: "",
+    matterId: "",
+    mirrorToOutlook: false,
+    inviteeUserIds: [] as string[],
+    inviteeContactIds: [] as string[],
   };
+}
+
+/** Initialvärden ur en redigerad rad. `i` är garanterat satt → vanlig
+ *  fält-access (inte optional-chain), så komplexiteten stannar lågt. */
+function eventFormFromRow(i: EventRow) {
+  return {
+    title: i.title,
+    kind: i.kind,
+    startAt: toLocalInput(i.startAt),
+    endAt: i.endAt ? toLocalInput(i.endAt) : "",
+    location: i.location ?? "",
+    matterId: i.matterId ?? "",
+    mirrorToOutlook: i.mirrorToOutlook ?? false,
+    inviteeUserIds: i.inviteeUserIds ?? [],
+    inviteeContactIds: i.inviteeContactIds ?? [],
+  };
+}
+
+/** Initialvärden för event-formuläret ur en ev. redigerad rad. */
+function eventFormDefaults(initial?: EventRow) {
+  return initial ? eventFormFromRow(initial) : emptyEventForm();
 }
 
 /** Bygger mirror-to-outlook-argumenten (upsert) för en sparad event-rad. */
