@@ -156,7 +156,6 @@ export interface SeedDataset {
   paymentPlanReminders: Record<string, unknown>[];
 }
 
-// eslint-disable-next-line complexity
 export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
   const orgId = opts.orgId ?? ORG_ID;
   const currentUserId = opts.currentUserId ?? "current-user";
@@ -216,18 +215,49 @@ export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
     paymentPlanReminders: [],
   };
 
+  out.matterContacts = buildMatterContacts(orgId);
+
+  out.documents = buildDocuments(orgId, users);
+
+  out.timeEntries = buildTimeEntries(orgId, users);
+
+  out.expenses = buildExpenses(orgId, users);
+
+  out.invoices = buildInvoices(orgId);
+
+  const plan = buildPaymentPlans({ orgId, currentUserId, invoices: out.invoices });
+  out.payments = plan.payments;
+  out.paymentPlans = plan.paymentPlans;
+  out.paymentPlanReminders = plan.paymentPlanReminders;
+
+  out.calendarEvents = buildCalendarEvents(orgId, ASSIGN_USERS);
+  out.tasks = buildTasks(orgId, ASSIGN_USERS);
+  out.documentTemplates = buildTemplates(orgId, currentUserId);
+  out.conflictChecks = buildConflictChecks(currentUserId);
+
+  return out;
+}
+
+// ─── Per-entitet-byggare (utbrutna ur buildSeed för max-lines, #6) ──────────
+
+function buildMatterContacts(orgId: string): SeedDataset["matterContacts"] {
+  const out: SeedDataset["matterContacts"] = [];
   // matterContacts — klient + (motpart, motpartsombud, domstol där relevant).
   for (const m of MATTERS) {
     const created = isoDate(-m.createdDaysAgo);
-    out.matterContacts.push({ id: `mc-${m.id}-klient`, matterId: m.id, contactId: m.klientId, role: "KLIENT", organizationId: orgId, createdAt: created });
+    out.push({ id: `mc-${m.id}-klient`, matterId: m.id, contactId: m.klientId, role: "KLIENT", organizationId: orgId, createdAt: created });
     if (m.motpartId) {
-      out.matterContacts.push({ id: `mc-${m.id}-motpart`, matterId: m.id, contactId: m.motpartId, role: "MOTPART", organizationId: orgId, createdAt: created });
+      out.push({ id: `mc-${m.id}-motpart`, matterId: m.id, contactId: m.motpartId, role: "MOTPART", organizationId: orgId, createdAt: created });
       // Motpartsombud (advokatbyrå) — gör parts-vyn fylligare + jäv-träffar rikare.
-      out.matterContacts.push({ id: `mc-${m.id}-ombud`, matterId: m.id, contactId: "c-advokatbyran-nord", role: "MOTPARTSOMBUD", organizationId: orgId, createdAt: created });
+      out.push({ id: `mc-${m.id}-ombud`, matterId: m.id, contactId: "c-advokatbyran-nord", role: "MOTPARTSOMBUD", organizationId: orgId, createdAt: created });
     }
-    if (m.domstolId) out.matterContacts.push({ id: `mc-${m.id}-domstol`, matterId: m.id, contactId: m.domstolId, role: "DOMSTOL", organizationId: orgId, createdAt: created });
+    if (m.domstolId) out.push({ id: `mc-${m.id}-domstol`, matterId: m.id, contactId: m.domstolId, role: "DOMSTOL", organizationId: orgId, createdAt: created });
   }
+  return out;
+}
 
+function buildDocuments(orgId: string, users: UserSeed[]): SeedDataset["documents"] {
+  const out: SeedDataset["documents"] = [];
   // documents — 20 PDF + 20 DOCX. Faktiska binärfiler skrivs av
   // `seed-firma-local.ts` via `generateDocumentBytes()` exporterad nedan.
   const docKinds = [
@@ -254,7 +284,7 @@ export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
       const id = `doc-${fmt.ext}-${String(i + 1).padStart(2, "0")}`;
       const daysAgo = (docSeq * 2) + 3;
       docSeq++;
-      out.documents.push({
+      out.push({
         id, organizationId: orgId, matterId: matter.id, folderId: null,
         fileName: `${k.baseName} ${matter.matterNumber}.${fmt.ext}`,
         mimeType: fmt.mime,
@@ -270,7 +300,11 @@ export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
       });
     }
   }
+  return out;
+}
 
+function buildTimeEntries(orgId: string, users: UserSeed[]): SeedDataset["timeEntries"] {
+  const out: SeedDataset["timeEntries"] = [];
   // time entries — 4-6 per aktivt ärende (annars ser ärende-vyn tom ut).
   const tasks = ["Genomgång av handlingar", "Klientmöte", "Skrivit inlaga", "Telefon med motpart", "Förberedelse inför huvudförhandling", "Granskning av dom", "Möte med domstolen", "Korrespondens", "Förlikningsdiskussion", "Strategisk analys"];
   const activeMatters = MATTERS.filter((m) => m.status === "ACTIVE");
@@ -282,7 +316,7 @@ export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
       const user = users[(mi + j) % users.length];
       if (!user) continue;
       const daysAgo = (teSeq * 2) + 1;
-      out.timeEntries.push({
+      out.push({
         id: `te-${String(teSeq).padStart(3, "0")}`,
         organizationId: orgId,
         userId: user.id, matterId: matter.id, date: isoDate(-daysAgo, 14),
@@ -293,7 +327,11 @@ export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
       });
     }
   });
+  return out;
+}
 
+function buildExpenses(orgId: string, users: UserSeed[]): SeedDataset["expenses"] {
+  const out: SeedDataset["expenses"] = [];
   // expenses
   // Moms-modellen följer Skatteverket: persontransporter + restaurang 12 %,
   // myndighetsavgifter 0 %, övrigt 25 %. Kvitto-beloppet är inkl moms.
@@ -308,6 +346,7 @@ export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
     { amount: 15000, description: "Expertutlåtande", vatRate: 2500 },
   ];
   let exSeq = 0;
+  const activeMatters = MATTERS.filter((m) => m.status === "ACTIVE");
   activeMatters.forEach((matter, mi) => {
     const count = 2 + (mi % 2); // 2-3 per aktivt ärende
     for (let j = 0; j < count; j++) {
@@ -316,7 +355,7 @@ export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
       const cat = cats[exSeq % cats.length];
       if (!user || !cat) continue;
       const daysAgo = (exSeq * 3) + 2;
-      out.expenses.push({
+      out.push({
         id: `ex-${String(exSeq).padStart(3, "0")}`,
         organizationId: orgId,
         userId: user.id, matterId: matter.id, date: isoDate(-daysAgo, 12),
@@ -327,7 +366,11 @@ export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
       });
     }
   });
+  return out;
+}
 
+function buildInvoices(orgId: string): SeedDataset["invoices"] {
+  const out: SeedDataset["invoices"] = [];
   // invoices
   const statuses: Array<"DRAFT" | "SENT" | "PAID" | "INSTALLMENT_PLAN"> = ["DRAFT", "SENT", "PAID", "INSTALLMENT_PLAN"];
   for (let i = 0; i < 12; i++) {
@@ -341,7 +384,7 @@ export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
     const issuedAt = isoDate(-daysAgo);
     const dueAt = isoDate(-daysAgo + 30);
     const paidAt = status === "PAID" ? isoDate(-daysAgo + 20) : null;
-    out.invoices.push({
+    out.push({
       id: `inv-${String(i + 1).padStart(3, "0")}`,
       organizationId: orgId,
       matterId: matter.id,
@@ -367,116 +410,133 @@ export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
       updatedAt: issuedAt,
     });
   }
+  return out;
+}
 
-  // Payment plans + reminders + faktiska inbetalningar.
-  //
-  // Vi vill att data:n känns levande:
-  //   • 5 ACTIVE planer i olika faser (precis startad, mitt i, nästan klar)
-  //   • 1 COMPLETED plan (alla månadsbetalningar finns som payments)
-  //   • 1 CANCELLED plan (avbruten utan inbetalningar)
-  // INVARIANT: varje INSTALLMENT_PLAN-faktura MÅSTE ha en motsvarande
-  // ACTIVE-plan. Vi patchar fakturornas status här så det stämmer.
-  interface PlanTarget {
-    invoiceId: string;
-    status: "ACTIVE" | "COMPLETED" | "CANCELLED";
-    monthlyAmount: number;
-    dayOfMonth: number;
-    startsDaysAgo: number;
-    /** Hur många månads-inbetalningar som redan kommit in. */
-    paymentsMade: number;
-    /** Senaste-månader reminders. */
-    withReminders: boolean;
+interface PlanBundle {
+  paymentPlans: SeedDataset["paymentPlans"];
+  paymentPlanReminders: SeedDataset["paymentPlanReminders"];
+  payments: SeedDataset["payments"];
+}
+
+// Payment plans — vi vill att data:n känns levande:
+//   • 5 ACTIVE planer i olika faser (precis startad, mitt i, nästan klar)
+//   • 1 COMPLETED plan (alla månadsbetalningar finns som payments)
+//   • 1 CANCELLED plan (avbruten utan inbetalningar)
+// INVARIANT: varje INSTALLMENT_PLAN-faktura MÅSTE ha en motsvarande ACTIVE-plan.
+// buildPaymentPlans patchar fakturornas status så det stämmer.
+interface PlanTarget {
+  invoiceId: string;
+  status: "ACTIVE" | "COMPLETED" | "CANCELLED";
+  monthlyAmount: number;
+  dayOfMonth: number;
+  startsDaysAgo: number;
+  /** Hur många månads-inbetalningar som redan kommit in. */
+  paymentsMade: number;
+  /** Senaste-månader reminders. */
+  withReminders: boolean;
+}
+const PLAN_TARGETS: PlanTarget[] = [
+  { invoiceId: "inv-001", status: "ACTIVE", monthlyAmount: 20_000, dayOfMonth: 15, startsDaysAgo: 30, paymentsMade: 1, withReminders: true },
+  { invoiceId: "inv-004", status: "ACTIVE", monthlyAmount: 25_000, dayOfMonth: 15, startsDaysAgo: 90, paymentsMade: 3, withReminders: true },
+  { invoiceId: "inv-005", status: "ACTIVE", monthlyAmount: 15_000, dayOfMonth: 1, startsDaysAgo: 120, paymentsMade: 4, withReminders: true },
+  { invoiceId: "inv-009", status: "ACTIVE", monthlyAmount: 35_000, dayOfMonth: 25, startsDaysAgo: 60, paymentsMade: 2, withReminders: true },
+  { invoiceId: "inv-010", status: "ACTIVE", monthlyAmount: 22_000, dayOfMonth: 10, startsDaysAgo: 45, paymentsMade: 1, withReminders: false },
+  { invoiceId: "inv-008", status: "COMPLETED", monthlyAmount: 18_000, dayOfMonth: 1, startsDaysAgo: 365, paymentsMade: 6, withReminders: true },
+  { invoiceId: "inv-012", status: "CANCELLED", monthlyAmount: 30_000, dayOfMonth: 28, startsDaysAgo: 60, paymentsMade: 0, withReminders: false },
+];
+
+/** Reminders för en plan (aktiva: senaste 2 mån; completed: hela historiken). */
+function planReminders(p: PlanTarget, planId: string): SeedDataset["paymentPlanReminders"] {
+  const out: SeedDataset["paymentPlanReminders"] = [];
+  if (!p.withReminders) return out;
+  const monthsBack = p.status === "COMPLETED" ? 6 : Math.min(2, p.paymentsMade + 1);
+  for (let m = monthsBack; m >= 1; m--) {
+    const due = new Date();
+    due.setMonth(due.getMonth() - m);
+    const dueMonth = `${due.getFullYear()}-${String(due.getMonth() + 1).padStart(2, "0")}`;
+    out.push({
+      id: `ppr-${planId}-${dueMonth}-DUE`,
+      planId, dueMonth, type: "DUE",
+      sentAt: new Date(due.getFullYear(), due.getMonth(), p.dayOfMonth - 5),
+    });
   }
-  const planTargets: PlanTarget[] = [
-    { invoiceId: "inv-001", status: "ACTIVE", monthlyAmount: 20_000, dayOfMonth: 15, startsDaysAgo: 30, paymentsMade: 1, withReminders: true },
-    { invoiceId: "inv-004", status: "ACTIVE", monthlyAmount: 25_000, dayOfMonth: 15, startsDaysAgo: 90, paymentsMade: 3, withReminders: true },
-    { invoiceId: "inv-005", status: "ACTIVE", monthlyAmount: 15_000, dayOfMonth: 1, startsDaysAgo: 120, paymentsMade: 4, withReminders: true },
-    { invoiceId: "inv-009", status: "ACTIVE", monthlyAmount: 35_000, dayOfMonth: 25, startsDaysAgo: 60, paymentsMade: 2, withReminders: true },
-    { invoiceId: "inv-010", status: "ACTIVE", monthlyAmount: 22_000, dayOfMonth: 10, startsDaysAgo: 45, paymentsMade: 1, withReminders: false },
-    { invoiceId: "inv-008", status: "COMPLETED", monthlyAmount: 18_000, dayOfMonth: 1, startsDaysAgo: 365, paymentsMade: 6, withReminders: true },
-    { invoiceId: "inv-012", status: "CANCELLED", monthlyAmount: 30_000, dayOfMonth: 28, startsDaysAgo: 60, paymentsMade: 0, withReminders: false },
-  ];
+  return out;
+}
+
+/** Invoice-status som matchar planens livscykel. */
+function invoiceStatusForPlan(planStatus: PlanTarget["status"]): string {
+  if (planStatus === "ACTIVE") return "INSTALLMENT_PLAN";
+  if (planStatus === "COMPLETED") return "PAID";
+  return "SENT";
+}
+
+/** Bonus-payments mot vanliga PAID-fakturor (utan plan) så payment-historiken
+ *  inte är 100 % avbetalningsplan-knuten. Numreras från `startSeq`. */
+function extraPayments(invoices: SeedDataset["invoices"], startSeq: number, currentUserId: string): SeedDataset["payments"] {
+  const out: SeedDataset["payments"] = [];
+  const paidExtras = invoices.filter((x) => {
+    const r = x as { status: string; id: string };
+    return r.status === "PAID" && !PLAN_TARGETS.some((p) => p.invoiceId === r.id);
+  });
+  let seq = startSeq;
+  for (const inv of paidExtras.slice(0, 3)) {
+    const r = inv as { id: string; amountInclVat: number; issuedAt: Date | string };
+    seq++;
+    const issuedIso = typeof r.issuedAt === "string" ? r.issuedAt : r.issuedAt.toISOString();
+    out.push({
+      id: `pay-${String(seq).padStart(3, "0")}`,
+      invoiceId: r.id, amount: r.amountInclVat, paidAt: new Date(issuedIso),
+      note: "Engångsbetalning", recordedById: currentUserId, createdAt: new Date(issuedIso),
+    });
+  }
+  return out;
+}
+
+function buildPaymentPlans({ currentUserId, invoices }: {
+  orgId: string; currentUserId: string; invoices: SeedDataset["invoices"];
+}): PlanBundle {
+  const paymentPlans: SeedDataset["paymentPlans"] = [];
+  const paymentPlanReminders: SeedDataset["paymentPlanReminders"] = [];
+  const payments: SeedDataset["payments"] = [];
 
   let paymentSeq = 0;
-  for (let i = 0; i < planTargets.length; i++) {
-    const p = planTargets[i];
+  for (let i = 0; i < PLAN_TARGETS.length; i++) {
+    const p = PLAN_TARGETS[i];
     if (!p) continue;
     const planId = `pp-${String(i + 1).padStart(3, "0")}`;
-    out.paymentPlans.push({
-      id: planId,
-      invoiceId: p.invoiceId,
-      monthlyAmount: p.monthlyAmount,
-      dayOfMonth: p.dayOfMonth,
-      startDate: isoDate(-p.startsDaysAgo),
-      status: p.status,
+    paymentPlans.push({
+      id: planId, invoiceId: p.invoiceId, monthlyAmount: p.monthlyAmount,
+      dayOfMonth: p.dayOfMonth, startDate: isoDate(-p.startsDaysAgo), status: p.status,
       notes: p.status === "CANCELLED" ? "Avbruten på klientens begäran" : null,
-      createdAt: isoDate(-p.startsDaysAgo - 1),
-      updatedAt: isoDate(-1),
+      createdAt: isoDate(-p.startsDaysAgo - 1), updatedAt: isoDate(-1),
     });
-
-    // Reminders (för aktiva: senaste 2 månader; completed: hela historiken)
-    if (p.withReminders) {
-      const monthsBack = p.status === "COMPLETED" ? 6 : Math.min(2, p.paymentsMade + 1);
-      for (let m = monthsBack; m >= 1; m--) {
-        const due = new Date();
-        due.setMonth(due.getMonth() - m);
-        const dueMonth = `${due.getFullYear()}-${String(due.getMonth() + 1).padStart(2, "0")}`;
-        out.paymentPlanReminders.push({
-          id: `ppr-${planId}-${dueMonth}-DUE`,
-          planId, dueMonth, type: "DUE",
-          sentAt: new Date(due.getFullYear(), due.getMonth(), p.dayOfMonth - 5),
-        });
-      }
-    }
+    paymentPlanReminders.push(...planReminders(p, planId));
 
     // Faktiska inbetalningar — en payment-rad per månad som "kommit in".
-    // Datum sätts bakåt så de syns som progress-historik i UI:n.
     for (let m = p.paymentsMade; m >= 1; m--) {
       const due = new Date();
       due.setMonth(due.getMonth() - m + 1);
       due.setDate(p.dayOfMonth);
       paymentSeq++;
-      out.payments.push({
+      payments.push({
         id: `pay-${String(paymentSeq).padStart(3, "0")}`,
-        invoiceId: p.invoiceId,
-        amount: p.monthlyAmount,
-        paidAt: due,
-        note: `Månadsbetalning ${m} av planen`,
-        recordedById: currentUserId,
-        createdAt: due,
+        invoiceId: p.invoiceId, amount: p.monthlyAmount, paidAt: due,
+        note: `Månadsbetalning ${m} av planen`, recordedById: currentUserId, createdAt: due,
       });
     }
 
-    // Patcha invoice-statusen så den matchar planen
-    const inv = out.invoices.find((x) => (x as { id: string }).id === p.invoiceId) as Record<string, unknown> | undefined;
-    if (inv) {
-      inv.status = p.status === "ACTIVE" ? "INSTALLMENT_PLAN"
-        : p.status === "COMPLETED" ? "PAID"
-        : "SENT";
-    }
+    // Patcha invoice-statusen så den matchar planen.
+    const inv = invoices.find((x) => (x as { id: string }).id === p.invoiceId) as Record<string, unknown> | undefined;
+    if (inv) inv.status = invoiceStatusForPlan(p.status);
   }
 
-  // Bonus: några payments mot vanliga PAID-fakturor (utan plan) — så payment-
-  // historiken inte är 100 % avbetalningsplan-knuten.
-  const paidExtras = out.invoices.filter((x) => {
-    const r = x as { status: string; id: string };
-    return r.status === "PAID" && !planTargets.some((p) => p.invoiceId === r.id);
-  });
-  for (const inv of paidExtras.slice(0, 3)) {
-    const r = inv as { id: string; amountInclVat: number; issuedAt: Date | string };
-    paymentSeq++;
-    const issuedIso = typeof r.issuedAt === "string" ? r.issuedAt : r.issuedAt.toISOString();
-    out.payments.push({
-      id: `pay-${String(paymentSeq).padStart(3, "0")}`,
-      invoiceId: r.id,
-      amount: r.amountInclVat,
-      paidAt: new Date(issuedIso),
-      note: "Engångsbetalning",
-      recordedById: currentUserId,
-      createdAt: new Date(issuedIso),
-    });
-  }
+  payments.push(...extraPayments(invoices, paymentSeq, currentUserId));
+  return { paymentPlans, paymentPlanReminders, payments };
+}
 
+function buildCalendarEvents(orgId: string, ASSIGN_USERS: string[]): SeedDataset["calendarEvents"] {
+  const out: SeedDataset["calendarEvents"] = [];
   // calendar events
   const tpl: Array<{ kind: "appointment" | "deadline"; title: string; location?: string; hoursLong: number }> = [
     { kind: "appointment", title: "Klientmöte", location: "Kontoret", hoursLong: 1 },
@@ -499,7 +559,7 @@ export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
     const daysOffset = (i % 14) - 5; // -5..+8 dagar runt idag
     const start = isoDate(daysOffset, 9 + (i % 4) * 2);
     const endAt = t.hoursLong > 0 ? new Date(start.getTime() + t.hoursLong * 3600_000) : null;
-    out.calendarEvents.push({
+    out.push({
       id: `cal-${String(i + 1).padStart(3, "0")}`,
       userId, organizationId: orgId, kind: t.kind,
       title: `${t.title} — ${matter.matterNumber}`, description: null,
@@ -509,6 +569,11 @@ export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
     });
   }
 
+  return out;
+}
+
+function buildTasks(orgId: string, ASSIGN_USERS: string[]): SeedDataset["tasks"] {
+  const out: SeedDataset["tasks"] = [];
   // tasks — sprid 80 stycken över förfluten + framtid, alla användare,
   // alla ärenden, mix av status/prioritet. Ger realistisk volym till
   // dashboard-widgeten och /todo-vyn.
@@ -541,31 +606,49 @@ export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
   for (const uid of ASSIGN_USERS) {
     for (let j = 0; j < userTaskOffsets.length; j++) {
       const matter = MATTERS[taskSeq % MATTERS.length];
-      const title = taskTitles[taskSeq % taskTitles.length];
       const status = taskStatusPool[taskSeq % taskStatusPool.length];
       const dueOffset = userTaskOffsets[j];
-      if (!matter || dueOffset === undefined) continue;
-      const dueAt = isoDate(dueOffset, [9, 11, 14, 16][j % 4] ?? 9);
-      dueAt.setMinutes([0, 15, 30, 45][j % 4] ?? 0);
-      const createdOffset = -((taskSeq * 3) % 30 + 1);
-      out.tasks.push({
-        id: `task-${String(taskSeq + 1).padStart(3, "0")}`,
-        userId: uid,
-        organizationId: orgId,
-        title,
-        description: taskSeq % 3 === 0 ? `Uppgift kopplad till ärende ${matter.title}.` : null,
-        status,
-        priority: priorities[taskSeq % priorities.length],
-        dueAt,
-        completedAt: status === "DONE" ? isoDate(dueOffset - 1) : null,
-        matterId: matter.id,
-        createdAt: isoDate(createdOffset),
-        updatedAt: isoDate(Math.max(-1, createdOffset + 2)),
-      });
+      if (!matter || dueOffset === undefined || !status) continue;
+      out.push(makeTaskRow({
+        taskSeq, uid, orgId, j, matter, status, dueOffset,
+        title: taskTitles[taskSeq % taskTitles.length]!,
+        priority: priorities[taskSeq % priorities.length]!,
+      }));
       taskSeq++;
     }
   }
 
+  return out;
+}
+
+/** Bygger en enskild task-rad ur loop-index + utvald matter/status/prioritet. */
+function makeTaskRow(args: {
+  taskSeq: number; uid: string; orgId: string; j: number;
+  matter: MatterSeed; title: string; status: "TODO" | "IN_PROGRESS" | "DONE";
+  priority: "LOW" | "MEDIUM" | "HIGH"; dueOffset: number;
+}): SeedDataset["tasks"][number] {
+  const { taskSeq, uid, orgId, j, matter, title, status, priority, dueOffset } = args;
+  const dueAt = isoDate(dueOffset, [9, 11, 14, 16][j % 4] ?? 9);
+  dueAt.setMinutes([0, 15, 30, 45][j % 4] ?? 0);
+  const createdOffset = -((taskSeq * 3) % 30 + 1);
+  return {
+    id: `task-${String(taskSeq + 1).padStart(3, "0")}`,
+    userId: uid,
+    organizationId: orgId,
+    title,
+    description: taskSeq % 3 === 0 ? `Uppgift kopplad till ärende ${matter.title}.` : null,
+    status,
+    priority,
+    dueAt,
+    completedAt: status === "DONE" ? isoDate(dueOffset - 1) : null,
+    matterId: matter.id,
+    createdAt: isoDate(createdOffset),
+    updatedAt: isoDate(Math.max(-1, createdOffset + 2)),
+  };
+}
+
+function buildTemplates(orgId: string, currentUserId: string): SeedDataset["documentTemplates"] {
+  const out: SeedDataset["documentTemplates"] = [];
   // templates
   const templates = [
     { id: "tpl-fullmakt", name: "Fullmakt", category: "Allmänt", body: "<h1>Fullmakt</h1><p>{{contact.name}} ger härmed {{user.name}} rätt att företräda mig i ärende {{matter.matterNumber}}.</p>" },
@@ -576,7 +659,7 @@ export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
     { id: "tpl-kostnadsrakning", name: KOSTNADSRAKNING_TEMPLATE_NAME, category: KOSTNADSRAKNING_TEMPLATE_CATEGORY, body: KOSTNADSRAKNING_DEFAULT_HTML },
   ];
   for (const t of templates) {
-    out.documentTemplates.push({
+    out.push({
       id: t.id, organizationId: orgId, name: t.name,
       description: `Standardmall för ${t.name.toLowerCase()}.`,
       category: t.category, content: t.body, createdById: currentUserId,
@@ -584,6 +667,11 @@ export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
     });
   }
 
+  return out;
+}
+
+function buildConflictChecks(currentUserId: string): SeedDataset["conflictChecks"] {
+  const out: SeedDataset["conflictChecks"] = [];
   // conflict checks
   const cc = [
     { id: "cc-01", searchTerm: "Andersson", searchType: "name" as const },
@@ -595,7 +683,7 @@ export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
   for (let i = 0; i < cc.length; i++) {
     const c = cc[i];
     if (!c) continue;
-    out.conflictChecks.push({
+    out.push({
       id: c.id, searchTerm: c.searchTerm, searchType: c.searchType,
       results: [], checkedById: currentUserId, createdAt: isoDate(-(i * 3 + 1)),
     });
