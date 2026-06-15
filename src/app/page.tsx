@@ -85,7 +85,6 @@ function DaySwitcher({ ymd, onChange }: { ymd: string; onChange: (y: string) => 
   );
 }
 
-// eslint-disable-next-line complexity -- många JSX-conditionals + modal
 function TodoCard({ ymd }: { ymd: string }) {
   const range = useMemo(() => rangeForDay(ymd), [ymd]);
   // Vänta på me.data innan vi frågar — todo.list verifierar att user finns
@@ -101,6 +100,12 @@ function TodoCard({ ymd }: { ymd: string }) {
   const completeTask = trpc.task.complete.useMutation({ onSuccess: () => utils.todo.list.invalidate() });
   const updateTask = trpc.task.update.useMutation({ onSuccess: () => utils.todo.list.invalidate() });
 
+  const toggleDone = (item: TodoItem): void => {
+    if (item.status === "DONE") updateTask.mutate({ id: item.id, status: "TODO" });
+    else completeTask.mutate({ id: item.id });
+    setSelected(null);
+  };
+
   return (
     <div className="bg-white rounded-lg border border-gray-200">
       <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
@@ -110,34 +115,47 @@ function TodoCard({ ymd }: { ymd: string }) {
         </h2>
         <Link href="/todo" className="text-sm text-blue-600 hover:underline">Öppna alla →</Link>
       </div>
-      <div className="divide-y divide-gray-100">
-        {todo.isLoading && <p className="px-6 py-3 text-sm text-gray-500">Laddar…</p>}
-        {todo.data && todo.data.length === 0 && (
-          <p className="px-6 py-4 text-sm text-gray-500">Inget att göra {ymd === todayYmd() ? "idag" : "denna dag"}.</p>
-        )}
-        {todo.data?.map((item) => (
-          <TodoRow key={`${item.source}-${item.id}`} item={item as TodoItem} onSelect={setSelected} />
-        ))}
-      </div>
-
-      <Modal open={!!selected} title={selected?.title ?? ""} onClose={() => setSelected(null)} widthClass="max-w-lg">
-        {selected && (
-          <TodoDetailCard
-            item={selected}
-            isOwn={!!me.data?.id && selected.userId === me.data.id}
-            onToggleDone={() => {
-              if (selected.status === "DONE") {
-                updateTask.mutate({ id: selected.id, status: "TODO" });
-              } else {
-                completeTask.mutate({ id: selected.id });
-              }
-              setSelected(null);
-            }}
-            onClose={() => setSelected(null)}
-          />
-        )}
-      </Modal>
+      <TodoList todo={todo} ymd={ymd} onSelect={setSelected} />
+      <TodoDetailModal selected={selected} meId={me.data?.id ?? null} onClose={() => setSelected(null)} onToggle={toggleDone} />
     </div>
+  );
+}
+
+interface TodoQueryLike { data?: TodoItem[] | undefined; isLoading: boolean }
+
+/** Listinnehållet: laddar / tomt / rader. */
+function TodoList({ todo, ymd, onSelect }: { todo: TodoQueryLike; ymd: string; onSelect: (i: TodoItem) => void }) {
+  return (
+    <div className="divide-y divide-gray-100">
+      {todo.isLoading && <p className="px-6 py-3 text-sm text-gray-500">Laddar…</p>}
+      {todo.data && todo.data.length === 0 && (
+        <p className="px-6 py-4 text-sm text-gray-500">Inget att göra {ymd === todayYmd() ? "idag" : "denna dag"}.</p>
+      )}
+      {todo.data?.map((item) => (
+        <TodoRow key={`${item.source}-${item.id}`} item={item as TodoItem} onSelect={onSelect} />
+      ))}
+    </div>
+  );
+}
+
+/** Detalj-modalen för en vald todo-rad. */
+function TodoDetailModal({ selected, meId, onClose, onToggle }: {
+  selected: TodoItem | null;
+  meId: string | null;
+  onClose: () => void;
+  onToggle: (item: TodoItem) => void;
+}) {
+  return (
+    <Modal open={!!selected} title={selected?.title ?? ""} onClose={onClose} widthClass="max-w-lg">
+      {selected && (
+        <TodoDetailCard
+          item={selected}
+          isOwn={!!meId && selected.userId === meId}
+          onToggleDone={() => onToggle(selected)}
+          onClose={onClose}
+        />
+      )}
+    </Modal>
   );
 }
 
@@ -189,43 +207,25 @@ function TodoRow({ item, onSelect }: { item: TodoItem; onSelect: (item: TodoItem
 const PRIORITY_LABELS: Record<string, string> = { LOW: "Låg", MEDIUM: "Medium", HIGH: "Hög" };
 const STATUS_LABELS: Record<string, string> = { TODO: "Att göra", IN_PROGRESS: "Pågår", DONE: "Klar" };
 
-// eslint-disable-next-line complexity -- många JSX-conditional-rader (status/prioritet/plats/beskrivning/ärende/own-actions)
 function TodoDetailCard({ item, isOwn, onToggleDone, onClose }: {
   item: TodoItem;
   isOwn: boolean;
   onToggleDone: () => void;
   onClose: () => void;
 }) {
-  const date = new Date(item.at);
-  const dateStr = date.toLocaleDateString("sv-SE", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
-  const timeStr = item.allDay ? "Hela dagen" : date.toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" });
-  const endStr = item.endAt && !item.allDay ? new Date(item.endAt).toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" }) : null;
-  const badge = badgeFor(item);
   return (
     <div className="space-y-3 text-sm">
-      <div className="flex items-center gap-2">
-        <span className={`inline-flex text-[10px] font-medium uppercase rounded-full px-1.5 py-0.5 ${badge.cls}`}>{badge.label}</span>
-        {item.source === "task" && item.status && (
-          <span className="text-xs text-gray-600">{STATUS_LABELS[item.status] ?? item.status}</span>
-        )}
-        {item.source === "task" && item.priority && (
-          <span className="text-xs text-gray-600">· Prioritet: {PRIORITY_LABELS[item.priority] ?? item.priority}</span>
-        )}
-      </div>
-
-      <p className="text-gray-700"><span className="capitalize">{dateStr}</span>{!item.allDay && <> · {timeStr}{endStr ? `–${endStr}` : ""}</>}</p>
-
+      <DetailBadges item={item} />
+      <DetailWhen item={item} />
       {item.location && (
         <p className="text-gray-700 inline-flex items-center gap-1"><MapPin size={12} className="text-gray-400" /> {item.location}</p>
       )}
-
       {item.description && (
         <div>
           <p className="text-xs font-medium text-gray-500 mb-1">Beskrivning</p>
           <p className="text-gray-700 whitespace-pre-wrap">{item.description}</p>
         </div>
       )}
-
       {item.matter && (
         <div>
           <p className="text-xs font-medium text-gray-500 mb-1">Ärende</p>
@@ -234,41 +234,79 @@ function TodoDetailCard({ item, isOwn, onToggleDone, onClose }: {
           </EntityLink>
         </div>
       )}
+      <DetailActions item={item} isOwn={isOwn} onToggleDone={onToggleDone} onClose={onClose} />
+    </div>
+  );
+}
 
-      <div className="flex justify-between gap-2 pt-3 border-t border-gray-200">
-        <div>
-          {isOwn && item.source === "task" && (
-            <button type="button" onClick={onToggleDone}
-              className="px-3 py-1.5 text-sm bg-green-600 text-white rounded hover:bg-green-700">
-              {item.status === "DONE" ? "Markera ej klar" : "Markera klar"}
-            </button>
-          )}
-        </div>
-        <div className="flex gap-2">
-          {isOwn && item.source === "task" && (
-            <Link href="/todo" onClick={onClose}
-              className="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50">
-              Ändra…
-            </Link>
-          )}
-          <button type="button" onClick={onClose}
-            className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700">
-            Stäng
+/** Badge + status + prioritet. */
+function DetailBadges({ item }: { item: TodoItem }) {
+  const badge = badgeFor(item);
+  return (
+    <div className="flex items-center gap-2">
+      <span className={`inline-flex text-[10px] font-medium uppercase rounded-full px-1.5 py-0.5 ${badge.cls}`}>{badge.label}</span>
+      {item.source === "task" && item.status && (
+        <span className="text-xs text-gray-600">{STATUS_LABELS[item.status] ?? item.status}</span>
+      )}
+      {item.source === "task" && item.priority && (
+        <span className="text-xs text-gray-600">· Prioritet: {PRIORITY_LABELS[item.priority] ?? item.priority}</span>
+      )}
+    </div>
+  );
+}
+
+/** Datum + tid (+ ev. sluttid). */
+function DetailWhen({ item }: { item: TodoItem }) {
+  const date = new Date(item.at);
+  const dateStr = date.toLocaleDateString("sv-SE", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+  const timeStr = item.allDay ? "Hela dagen" : date.toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" });
+  const endStr = item.endAt && !item.allDay ? new Date(item.endAt).toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" }) : null;
+  return (
+    <p className="text-gray-700"><span className="capitalize">{dateStr}</span>{!item.allDay && <> · {timeStr}{endStr ? `–${endStr}` : ""}</>}</p>
+  );
+}
+
+/** Footer-knappar: markera klar (egen task) + ändra + stäng. */
+function DetailActions({ item, isOwn, onToggleDone, onClose }: {
+  item: TodoItem; isOwn: boolean; onToggleDone: () => void; onClose: () => void;
+}) {
+  const ownTask = isOwn && item.source === "task";
+  return (
+    <div className="flex justify-between gap-2 pt-3 border-t border-gray-200">
+      <div>
+        {ownTask && (
+          <button type="button" onClick={onToggleDone}
+            className="px-3 py-1.5 text-sm bg-green-600 text-white rounded hover:bg-green-700">
+            {item.status === "DONE" ? "Markera ej klar" : "Markera klar"}
           </button>
-        </div>
+        )}
+      </div>
+      <div className="flex gap-2">
+        {ownTask && (
+          <Link href="/todo" onClick={onClose}
+            className="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50">
+            Ändra…
+          </Link>
+        )}
+        <button type="button" onClick={onClose}
+          className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700">
+          Stäng
+        </button>
       </div>
     </div>
   );
 }
 
-// eslint-disable-next-line complexity -- JSX-conditionals (laddar/tomt/lista)
+interface TimeEntryRow { id: string; minutes: number; description: string; billable: boolean; matter: { id: string; matterNumber: string; title: string } }
+interface TimeQueryLike { data?: { entries: TimeEntryRow[]; totalMinutes: number } | undefined; isLoading: boolean }
+
 function TimeCard({ ymd }: { ymd: string }) {
   const range = useMemo(() => rangeForDay(ymd), [ymd]);
   const me = trpc.user.current.useQuery();
   const entries = trpc.timeEntry.list.useQuery(
     { userId: me.data?.id, from: range.from, to: range.to, pageSize: 50 },
     { enabled: !!me.data?.id },
-  );
+  ) as unknown as TimeQueryLike;
 
   return (
     <div className="bg-white rounded-lg border border-gray-200">
@@ -283,23 +321,30 @@ function TimeCard({ ymd }: { ymd: string }) {
           <Plus size={12} /> Ny tid
         </Link>
       </div>
-      <div className="divide-y divide-gray-100">
-        {entries.isLoading && <p className="px-6 py-3 text-sm text-gray-500">Laddar…</p>}
-        {entries.data && entries.data.entries.length === 0 && (
-          <p className="px-6 py-4 text-sm text-gray-500">Ingen tid registrerad {ymd === todayYmd() ? "idag" : "denna dag"} — <Link href="/time" className="text-blue-600 hover:underline">registrera tid</Link></p>
-        )}
-        {entries.data?.entries.map((e) => (
-          <EntityLink key={e.id} route="matters" id={e.matter.id}
-            className="block px-6 py-3 hover:bg-gray-50 flex items-center gap-3">
-            <span className="text-sm font-mono text-gray-700 w-14 text-right">{formatMinutes(e.minutes)}</span>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm text-gray-900 truncate">{e.description}</p>
-              <p className="text-xs text-gray-500 truncate">{e.matter.matterNumber} — {e.matter.title}</p>
-            </div>
-            {!e.billable && <span className="text-[10px] text-gray-400 uppercase">Ej deb.</span>}
-          </EntityLink>
-        ))}
-      </div>
+      <TimeList entries={entries} ymd={ymd} />
+    </div>
+  );
+}
+
+/** Tidslistan: laddar / tomt / rader. */
+function TimeList({ entries, ymd }: { entries: TimeQueryLike; ymd: string }) {
+  return (
+    <div className="divide-y divide-gray-100">
+      {entries.isLoading && <p className="px-6 py-3 text-sm text-gray-500">Laddar…</p>}
+      {entries.data && entries.data.entries.length === 0 && (
+        <p className="px-6 py-4 text-sm text-gray-500">Ingen tid registrerad {ymd === todayYmd() ? "idag" : "denna dag"} — <Link href="/time" className="text-blue-600 hover:underline">registrera tid</Link></p>
+      )}
+      {entries.data?.entries.map((e) => (
+        <EntityLink key={e.id} route="matters" id={e.matter.id}
+          className="block px-6 py-3 hover:bg-gray-50 flex items-center gap-3">
+          <span className="text-sm font-mono text-gray-700 w-14 text-right">{formatMinutes(e.minutes)}</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm text-gray-900 truncate">{e.description}</p>
+            <p className="text-xs text-gray-500 truncate">{e.matter.matterNumber} — {e.matter.title}</p>
+          </div>
+          {!e.billable && <span className="text-[10px] text-gray-400 uppercase">Ej deb.</span>}
+        </EntityLink>
+      ))}
     </div>
   );
 }
