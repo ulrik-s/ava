@@ -1,9 +1,4 @@
 {
-  "src/app/calendar/page.tsx": {
-    "max-lines-per-function": {
-      "count": 2
-    }
-  },
   "src/app/matters/[id]/_expense-section.tsx": {
     "max-lines-per-function": {
       "count": 1
