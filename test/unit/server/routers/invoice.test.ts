@@ -339,6 +339,28 @@ describe("invoice.recordPayment", () => {
     expect(mockPrisma.payment.create).not.toHaveBeenCalled();
   });
 
+  it("vägrar betalning på DRAFT-faktura — PAID kan inte uppstå utan SENT (#350)", async () => {
+    mockPrisma.invoice.findFirst.mockResolvedValue({
+      id: "inv-1", amount: 1_000_000, status: "DRAFT", paymentPlan: null, payments: [],
+    });
+
+    await expect(
+      makeCaller().recordPayment({ invoiceId: "inv-1", amount: 100_000, paidAt: "2026-05-15" }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(mockPrisma.payment.create).not.toHaveBeenCalled();
+  });
+
+  it("vägrar betalning på CANCELLED-faktura (#350)", async () => {
+    mockPrisma.invoice.findFirst.mockResolvedValue({
+      id: "inv-1", amount: 1_000_000, status: "CANCELLED", paymentPlan: null, payments: [],
+    });
+
+    await expect(
+      makeCaller().recordPayment({ invoiceId: "inv-1", amount: 100_000, paidAt: "2026-05-15" }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(mockPrisma.payment.create).not.toHaveBeenCalled();
+  });
+
   it("avvisar översummerande betalning (partition-invariant, ADR 0007)", async () => {
     mockPrisma.invoice.findFirst.mockResolvedValue({
       id: "inv-1", amount: 1_000_000, status: "SENT", paymentPlan: null,
@@ -563,6 +585,24 @@ describe("invoice.setStatus", () => {
     await expect(
       makeCaller("org-b").setStatus({ invoiceId: "inv-1", status: "SENT" }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("blockerar omöjlig övergång DRAFT → BAD_DEBT (#350)", async () => {
+    mockPrisma.invoice.findFirst.mockResolvedValue({ id: "inv-1", status: "DRAFT" });
+
+    await expect(
+      makeCaller().setStatus({ invoiceId: "inv-1", status: "BAD_DEBT" }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(mockPrisma.invoice.update).not.toHaveBeenCalled();
+  });
+
+  it("blockerar övergång från terminalt CANCELLED → SENT (#350)", async () => {
+    mockPrisma.invoice.findFirst.mockResolvedValue({ id: "inv-1", status: "CANCELLED" });
+
+    await expect(
+      makeCaller().setStatus({ invoiceId: "inv-1", status: "SENT" }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(mockPrisma.invoice.update).not.toHaveBeenCalled();
   });
 });
 
