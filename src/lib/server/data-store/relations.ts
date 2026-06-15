@@ -61,6 +61,7 @@ export interface DemoRelations {
   billingRuns: Relations;
   calendarEvents: Relations;
   tasks: Relations;
+  serviceNotes: Relations;
 }
 
 /**
@@ -76,6 +77,7 @@ export function buildRelations(getSource: GetSource): DemoRelations {
       timeEntries: r("timeEntries", "matterId", "id"),
       expenses: r("expenses", "matterId", "id"),
       invoices: r("invoices", "matterId", "id"),
+      serviceNotes: r("serviceNotes", "matterId", "id"),
     },
     matterContacts: {
       contact: r("contacts", "id", "contactId", "one"),
@@ -154,5 +156,9 @@ export function buildRelations(getSource: GetSource): DemoRelations {
     },
     calendarEvents: { matter: r("matters", "id", "matterId", "one") },
     tasks: { matter: r("matters", "id", "matterId", "one") },
+    serviceNotes: {
+      matter: r("matters", "id", "matterId", "one"),
+      author: r("users", "id", "authorId", "one"),
+    },
   };
 }

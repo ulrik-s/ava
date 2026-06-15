@@ -38,6 +38,7 @@ export interface MockDataStore {
   billingRuns: unknown;
   calendarEvents: unknown;
   tasks: unknown;
+  serviceNotes: unknown;
   userPreferences: unknown;
   orgPreferences: unknown;
 }
@@ -81,6 +82,7 @@ export function dataStoreFromMockPrisma(mockPrisma: Record<string, unknown>): Mo
       billingRuns: mockPrisma.billingRun,
       calendarEvents: mockPrisma.calendarEvent,
       tasks: mockPrisma.task,
+      serviceNotes: mockPrisma.serviceNote,
       userPreferences: mockPrisma.userPreference,
       orgPreferences: mockPrisma.orgPreference,
     }),
@@ -108,6 +110,7 @@ export function dataStoreFromMockPrisma(mockPrisma: Record<string, unknown>): Mo
     billingRuns: mockPrisma.billingRun,
     calendarEvents: mockPrisma.calendarEvent,
     tasks: mockPrisma.task,
+    serviceNotes: mockPrisma.serviceNote,
     userPreferences: mockPrisma.userPreference,
     orgPreferences: mockPrisma.orgPreference,
   };

@@ -33,7 +33,7 @@ const DEFAULT_SCAN_PATHS = [
   "time-entries", "expenses", "invoices",
   // Senare tillagda entiteter — utan dessa skulle demo:n inte se kalender,
   // tasks, avbetalningsplaner eller jäv-historik.
-  "calendar", "tasks",
+  "calendar", "tasks", "service-notes",
   "payment-plans", "payment-plan-reminders", "payments",
   "acconto-deductions", "billing-runs", "write-offs", "conflict-checks", "offices",
   "invoice-dispatches", "expected-receivables",

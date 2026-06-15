@@ -15,6 +15,7 @@ import { ContactsSection } from "./_contacts-section";
 import { ExpectedReceivablesSection } from "./_expected-receivables-section";
 import { ExpenseSection } from "./_expense-section";
 import { GenerateModal } from "./_generate-modal";
+import { ServiceNotesSection } from "./_service-notes-section";
 import { TimeSection } from "./_time-section";
 
  
@@ -67,6 +68,7 @@ export default function MatterDetailClient({ id: paramId }: { id: string }) {
         <ExpectedReceivablesSection matterId={id} courtCaseNumber={courtCaseOf(m)} />
         <TimeSection matterId={id} isTaxeArende={m.isTaxeArende} />
         <ExpenseSection matterId={id} isTaxeArende={m.isTaxeArende} />
+        <ServiceNotesSection matterId={id} />
       </div>
 
       {showGenerateModal && (

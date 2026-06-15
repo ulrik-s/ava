@@ -16,6 +16,7 @@ import { organizationRouter } from "./organization";
 import { paymentPlanRouter } from "./paymentPlan";
 import { preferenceRouter } from "./preference";
 import { reportsRouter } from "./reports";
+import { serviceNoteRouter } from "./serviceNote";
 import { taskRouter } from "./task";
 import { timeEntryRouter } from "./timeEntry";
 import { todoRouter } from "./todo";
@@ -40,6 +41,7 @@ export const appRouter = router({
   kostnadsrakning: kostnadsrakningRouter,
   calendar: calendarRouter,
   task: taskRouter,
+  serviceNote: serviceNoteRouter,
   todo: todoRouter,
   prefs: preferenceRouter,
   mail: mailRouter,
