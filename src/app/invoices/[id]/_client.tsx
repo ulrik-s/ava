@@ -32,13 +32,9 @@ const STATUS_LABELS: Record<string, string> = {
   INSTALLMENT_PLAN: "Avbetalningsplan",
 };
 
-// eslint-disable-next-line complexity, max-lines-per-function -- komponerande sid-komponent: header + summering + flera modals/sektioner (inkl. writeOff, ADR 0007).
-export default function InvoiceDetailClient({ id: paramId }: { id: string }) {
-  // Static export: sentinel-shell för nya id:n → läs riktiga id:t ur URL:en.
-  const id = useRouteId() ?? paramId;
-  const invoice = trpc.invoice.getById.useQuery({ id });
+/** All state + mutationer för fakturadetaljsidan (sätter/öppnar modals, fel). */
+function useInvoiceDetail(id: string) {
   const utils = trpc.useUtils();
-
   const [showPayment, setShowPayment] = useState(false);
   const [showPlan, setShowPlan] = useState(false);
   const [showCredit, setShowCredit] = useState(false);
@@ -50,7 +46,6 @@ export default function InvoiceDetailClient({ id: paramId }: { id: string }) {
     void utils.invoice.getById.invalidate({ id });
     void utils.invoice.list.invalidate();
   };
-
   const recordPayment = trpc.invoice.recordPayment.useMutation({
     onSuccess: () => { refetchAll(); setShowPayment(false); setError(null); },
     onError: (e) => setError(e.message),
@@ -70,117 +65,120 @@ export default function InvoiceDetailClient({ id: paramId }: { id: string }) {
     onError: (e) => setError(e.message),
   });
 
+  return {
+    utils, error, setError,
+    show: { payment: showPayment, plan: showPlan, credit: showCredit, writeOff: showWriteOff, send: showSend },
+    setShowPayment, setShowPlan, setShowCredit, setShowWriteOff, setShowSend,
+    recordPayment, createPlan, cancelPlan, setStatus, writeOff, createCredit,
+  };
+}
+type InvoiceDetailState = ReturnType<typeof useInvoiceDetail>;
+
+type WriteOffRow = { amount: number; writtenOffAt?: string | Date; reason?: string | null };
+interface LedgerView {
+  paidSum: number; writtenOffSum: number; writeOffs: WriteOffRow[]; outstanding: number;
+  accontoDeductions: AccontoDeductionRow[]; accontoDeductionTotal: number; netAmount: number;
+}
+
+/** Kundfordrings-ledger (ADR 0007): outstanding = belopp − betalt − krediterat − avskrivet. */
+function invoiceLedger(inv: Inv): LedgerView {
+  const paidSum = inv.payments.reduce((s: number, p: { amount: number }) => s + p.amount, 0);
+  const writeOffs = (inv.writeOffs ?? []) as unknown as WriteOffRow[];
+  const writtenOffSum = writeOffs.reduce((s, w) => s + w.amount, 0);
+  const creditedSum = Math.abs(creditNoteOf(inv)?.amount ?? 0);
+  const { outstanding } = computeInvoiceLedger(inv.amount, paidSum, creditedSum, writtenOffSum);
+  const accontoDeductions = accontoDeductionsOf(inv);
+  const accontoDeductionTotal = accontoDeductions.reduce((s, d) => s + d.accontoInvoice.amount, 0);
+  return { paidSum, writtenOffSum, writeOffs, outstanding, accontoDeductions, accontoDeductionTotal, netAmount: inv.amount - accontoDeductionTotal };
+}
+
+export default function InvoiceDetailClient({ id: paramId }: { id: string }) {
+  // Static export: sentinel-shell för nya id:n → läs riktiga id:t ur URL:en.
+  const id = useRouteId() ?? paramId;
+  const invoice = trpc.invoice.getById.useQuery({ id });
+  const s = useInvoiceDetail(id);
+
   if (invoice.isLoading) return <p className="p-6 text-sm text-gray-400">Laddar…</p>;
   if (invoice.error || !invoice.data) return <p className="p-6 text-sm text-red-600">Kunde inte ladda fakturan.</p>;
   const inv = invoice.data;
-
-  const paidSum = inv.payments.reduce((s: number, p: { amount: number }) => s + p.amount, 0);
-  // Kundfordrings-ledger (ADR 0007): krediterat = ev. kreditnota, avskrivet =
-  // summa WriteOff-poster. outstanding = amount − betalt − krediterat − avskrivet.
-  const writeOffs = (inv.writeOffs ?? []) as ReadonlyArray<{ amount: number; writtenOffAt?: string | Date; reason?: string | null }>;
-  const writtenOffSum = writeOffs.reduce((s, w) => s + w.amount, 0);
-  const creditedSum = Math.abs(creditNoteOf(inv)?.amount ?? 0);
-  const ledger = computeInvoiceLedger(inv.amount, paidSum, creditedSum, writtenOffSum);
-  const accontoDeductions = accontoDeductionsOf(inv);
-  const accontoDeductionTotal = accontoDeductions.reduce(
-    (s: number, d: AccontoDeductionRow) => s + d.accontoInvoice.amount,
-    0,
-  );
-  const netAmount = inv.amount - accontoDeductionTotal;
+  const ledger = invoiceLedger(inv);
 
   return (
     <div className="space-y-6">
       <InvoiceHeader inv={inv} />
+      <InvoiceSummaryCard inv={inv} ledger={ledger} s={s} />
+      <InvoiceSections inv={inv} ledger={ledger} onCancelPlan={() => s.cancelPlan.mutate({ planId: inv.paymentPlan!.id })} />
+      <InvoiceModals inv={inv} ledger={ledger} s={s} />
+    </div>
+  );
+}
 
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <SummaryGrid
-          inv={inv}
-          paidSum={paidSum}
-          writtenOffSum={writtenOffSum}
-          outstanding={ledger.outstanding}
-          accontoDeductionTotal={accontoDeductionTotal}
-          netAmount={netAmount}
-        />
-        <InvoiceActions
-          invoiceType={inv.invoiceType}
-          status={inv.status}
-          hasPlan={inv.paymentPlan?.status === "ACTIVE"}
-          hasCreditNote={!!inv.creditNote}
-          outstanding={ledger.outstanding}
-          onShowPayment={() => setShowPayment(true)}
-          onShowPlan={() => setShowPlan(true)}
-          onShowCredit={() => setShowCredit(true)}
-          onShowWriteOff={() => setShowWriteOff(true)}
-          onShowSend={() => setShowSend(true)}
-          onSetStatus={(status) => setStatus.mutate({ invoiceId: inv.id, status: status as Parameters<typeof setStatus.mutate>[0]["status"] })}
-        />
-        {inv.notes && <p className="mt-4 text-sm text-gray-600 border-t pt-3">{inv.notes}</p>}
-      </div>
+/** Vita summerings-kortet: SummaryGrid + åtgärdsknappar + ev. notering. */
+function InvoiceSummaryCard({ inv, ledger, s }: { inv: Inv; ledger: LedgerView; s: InvoiceDetailState }) {
+  return (
+    <div className="bg-white rounded-lg border border-gray-200 p-6">
+      <SummaryGrid
+        inv={inv} paidSum={ledger.paidSum} writtenOffSum={ledger.writtenOffSum}
+        outstanding={ledger.outstanding} accontoDeductionTotal={ledger.accontoDeductionTotal} netAmount={ledger.netAmount}
+      />
+      <InvoiceActions
+        invoiceType={inv.invoiceType}
+        status={inv.status}
+        hasPlan={inv.paymentPlan?.status === "ACTIVE"}
+        hasCreditNote={!!inv.creditNote}
+        outstanding={ledger.outstanding}
+        onShowPayment={() => s.setShowPayment(true)}
+        onShowPlan={() => s.setShowPlan(true)}
+        onShowCredit={() => s.setShowCredit(true)}
+        onShowWriteOff={() => s.setShowWriteOff(true)}
+        onShowSend={() => s.setShowSend(true)}
+        onSetStatus={(status) => s.setStatus.mutate({ invoiceId: inv.id, status: status as Parameters<typeof s.setStatus.mutate>[0]["status"] })}
+      />
+      {inv.notes && <p className="mt-4 text-sm text-gray-600 border-t pt-3">{inv.notes}</p>}
+    </div>
+  );
+}
 
+/** Sektions-kort under summeringen (spec, dokument, kredit, plan, acconto, betalningar …). */
+function InvoiceSections({ inv, ledger, onCancelPlan }: { inv: Inv; ledger: LedgerView; onCancelPlan: () => void }) {
+  return (
+    <>
       <SpecificationCard timeEntries={(inv.timeEntries ?? []) as unknown as SpecTimeRow[]} expenses={(inv.expenses ?? []) as unknown as SpecExpenseRow[]} />
-
       <InvoiceDocumentsCard documents={(inv.documents ?? []) as unknown as InvoiceDocRow[]} />
-
       <CreditBanners inv={inv} />
-
-      {inv.paymentPlan && (
-        <PaymentPlanCard plan={inv.paymentPlan} onCancel={() => cancelPlan.mutate({ planId: inv.paymentPlan!.id })} />
+      {inv.paymentPlan && <PaymentPlanCard plan={inv.paymentPlan} onCancel={onCancelPlan} />}
+      {inv.invoiceType === "FINAL" && ledger.accontoDeductions.length > 0 && (
+        <AccontoDeductions deductions={ledger.accontoDeductions} />
       )}
-
-      {inv.invoiceType === "FINAL" && accontoDeductions.length > 0 && (
-        <AccontoDeductions deductions={accontoDeductions} />
-      )}
-
-      <PaymentsTable payments={inv.payments} paidSum={paidSum} />
-
+      <PaymentsTable payments={inv.payments} paidSum={ledger.paidSum} />
       <DispatchHistory invoiceId={inv.id} />
+      {ledger.writeOffs.length > 0 && <WriteOffsCard writeOffs={ledger.writeOffs} />}
+    </>
+  );
+}
 
-      {writeOffs.length > 0 && <WriteOffsCard writeOffs={writeOffs} />}
-
-      {showPayment && (
-        <PaymentModal
-          invoiceId={inv.id}
-          isPending={recordPayment.isPending}
-          error={error}
-          onSubmit={(data) => recordPayment.mutate(data)}
-          onClose={() => setShowPayment(false)}
-        />
+/** Alla åtgärds-modals (betalning, kredit, plan, avskrivning, skicka). */
+function InvoiceModals({ inv, ledger, s }: { inv: Inv; ledger: LedgerView; s: InvoiceDetailState }) {
+  return (
+    <>
+      {s.show.payment && (
+        <PaymentModal invoiceId={inv.id} isPending={s.recordPayment.isPending} error={s.error}
+          onSubmit={(data) => s.recordPayment.mutate(data)} onClose={() => s.setShowPayment(false)} />
       )}
-
-      {showCredit && (
-        <CreditModal
-          invoiceId={inv.id}
-          amount={inv.amount}
-          hasActivePlan={inv.paymentPlan?.status === "ACTIVE"}
-          isPending={createCredit.isPending}
-          error={error}
-          onSubmit={(data) => createCredit.mutate(data)}
-          onClose={() => { setShowCredit(false); setError(null); }}
-        />
+      {s.show.credit && (
+        <CreditModal invoiceId={inv.id} amount={inv.amount} hasActivePlan={inv.paymentPlan?.status === "ACTIVE"}
+          isPending={s.createCredit.isPending} error={s.error}
+          onSubmit={(data) => s.createCredit.mutate(data)} onClose={() => { s.setShowCredit(false); s.setError(null); }} />
       )}
-
-      {showPlan && (
-        <PlanModal
-          invoiceId={inv.id}
-          isPending={createPlan.isPending}
-          error={error}
-          onSubmit={(data) => createPlan.mutate(data)}
-          onClose={() => setShowPlan(false)}
-        />
+      {s.show.plan && (
+        <PlanModal invoiceId={inv.id} isPending={s.createPlan.isPending} error={s.error}
+          onSubmit={(data) => s.createPlan.mutate(data)} onClose={() => s.setShowPlan(false)} />
       )}
-
-      {showWriteOff && (
-        <WriteOffModal
-          invoiceId={inv.id}
-          outstanding={ledger.outstanding}
-          isPending={writeOff.isPending}
-          error={error}
-          onSubmit={(data) => writeOff.mutate(data)}
-          onClose={() => { setShowWriteOff(false); setError(null); }}
-        />
+      {s.show.writeOff && (
+        <WriteOffModal invoiceId={inv.id} outstanding={ledger.outstanding} isPending={s.writeOff.isPending} error={s.error}
+          onSubmit={(data) => s.writeOff.mutate(data)} onClose={() => { s.setShowWriteOff(false); s.setError(null); }} />
       )}
-
-      {showSend && (
+      {s.show.send && (
         <SendInvoiceModal
           invoiceId={inv.id}
           invoiceNumber={(inv as { invoiceNumber?: string | null }).invoiceNumber}
@@ -189,11 +187,11 @@ export default function InvoiceDetailClient({ id: paramId }: { id: string }) {
           invoiceDate={inv.invoiceDate}
           matterNumber={inv.matter.matterNumber}
           matterTitle={inv.matter.title}
-          onRecorded={() => { void utils.invoiceDispatch.list.invalidate({ invoiceId: inv.id }); }}
-          onClose={() => setShowSend(false)}
+          onRecorded={() => { void s.utils.invoiceDispatch.list.invalidate({ invoiceId: inv.id }); }}
+          onClose={() => s.setShowSend(false)}
         />
       )}
-    </div>
+    </>
   );
 }
 
