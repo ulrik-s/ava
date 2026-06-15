@@ -41,7 +41,6 @@ interface Props {
   children?: React.ReactNode;
 }
 
-// eslint-disable-next-line complexity -- många tier-conditionals i JSX
 export function FirmaSettingsPanel({ initial, onSaved, onCancel, inline = false, children }: Props) {
   const [tier, setTier] = useState<FirmaTier>(initial.tier);
   const [repo, setRepo] = useState(initial.repo);
@@ -101,28 +100,18 @@ export function FirmaSettingsPanel({ initial, onSaved, onCancel, inline = false,
     <div className={wrapperCls}>
       {!inline && <PanelHeader />}
 
-      <div className={`${inline ? "" : "mt-4 "}space-y-3 text-sm`}>
-        <TierPicker value={tier} onChange={setTier} />
-        <RepoField tier={tier} value={repo} onChange={handleRepoChange} />
-
-        {tier !== "demo" && (
-          <AuthTokenSection
-            tier={tier} token={token} onTokenChange={setToken}
-            oauth={oauth} onOauthChange={setOauth}
-            orgId={orgId}
-          />
-        )}
-
-        <OrgIdField value={orgId} onChange={setOrgId} />
-        <AnonymousReadToggle checked={allowAnonymousRead} onChange={setAllowAnonymousRead} />
-        <IdentityFields name={name} email={email} onNameChange={setName} onEmailChange={setEmail} />
-
-        {tier === "self-hosted" && (
-          <GitUsernameField tier={tier} value={gitUsername} onChange={setGitUsername} authorEmail={email} />
-        )}
-
-        {tier !== "demo" && <CorsProxyField value={corsProxy} onChange={setCorsProxy} />}
-      </div>
+      <FirmaConfigFields
+        inline={inline}
+        tier={tier} onTier={setTier}
+        repo={repo} onRepo={handleRepoChange}
+        token={token} onToken={setToken}
+        oauth={oauth} onOauth={setOauth}
+        orgId={orgId} onOrgId={setOrgId}
+        allowAnonymousRead={allowAnonymousRead} onAnon={setAllowAnonymousRead}
+        name={name} email={email} onName={setName} onEmail={setEmail}
+        gitUsername={gitUsername} onGitUsername={setGitUsername}
+        corsProxy={corsProxy} onCorsProxy={setCorsProxy}
+      />
 
       {children}
 
@@ -135,6 +124,48 @@ export function FirmaSettingsPanel({ initial, onSaved, onCancel, inline = false,
         onLogOut={logOut}
         onUseDemo={useDemo}
       />
+    </div>
+  );
+}
+
+interface ConfigFieldsProps {
+  inline: boolean;
+  tier: FirmaTier; onTier: (t: FirmaTier) => void;
+  repo: string; onRepo: (v: string) => void;
+  token: string; onToken: (v: string) => void;
+  oauth: { proxyUrl: string; clientId: string }; onOauth: (o: { proxyUrl: string; clientId: string }) => void;
+  orgId: string; onOrgId: (v: string) => void;
+  allowAnonymousRead: boolean; onAnon: (b: boolean) => void;
+  name: string; email: string; onName: (v: string) => void; onEmail: (v: string) => void;
+  gitUsername: string; onGitUsername: (v: string) => void;
+  corsProxy: string; onCorsProxy: (v: string) => void;
+}
+
+/** Konfig-fälten. Utbruten ur FirmaSettingsPanel så tier-conditionals +
+ *  inline-className inte räknas in i panel-komponentens komplexitet (#199). */
+function FirmaConfigFields(p: ConfigFieldsProps) {
+  return (
+    <div className={`${p.inline ? "" : "mt-4 "}space-y-3 text-sm`}>
+      <TierPicker value={p.tier} onChange={p.onTier} />
+      <RepoField tier={p.tier} value={p.repo} onChange={p.onRepo} />
+
+      {p.tier !== "demo" && (
+        <AuthTokenSection
+          tier={p.tier} token={p.token} onTokenChange={p.onToken}
+          oauth={p.oauth} onOauthChange={p.onOauth}
+          orgId={p.orgId}
+        />
+      )}
+
+      <OrgIdField value={p.orgId} onChange={p.onOrgId} />
+      <AnonymousReadToggle checked={p.allowAnonymousRead} onChange={p.onAnon} />
+      <IdentityFields name={p.name} email={p.email} onNameChange={p.onName} onEmailChange={p.onEmail} />
+
+      {p.tier === "self-hosted" && (
+        <GitUsernameField tier={p.tier} value={p.gitUsername} onChange={p.onGitUsername} authorEmail={p.email} />
+      )}
+
+      {p.tier !== "demo" && <CorsProxyField value={p.corsProxy} onChange={p.onCorsProxy} />}
     </div>
   );
 }
