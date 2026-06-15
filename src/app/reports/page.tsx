@@ -30,7 +30,81 @@ function PaymentBadge({ method }: { method: string }) {
   );
 }
 
-// eslint-disable-next-line complexity, max-lines-per-function -- JSX-tung sid-komponent: filterrad + flera rapport-sektioner (perLawyer + billed #90).
+type UserList = { users: Array<{ id: string; name: string }> } | undefined;
+
+/** Förvald advokat = explicit vald, annars första i listan. Derivat istället
+ *  för effekt + setState (undviker kaskaderenderingar). */
+function resolveUserId(explicit: string, users: UserList): string {
+  return explicit || users?.users[0]?.id || "";
+}
+
+/** Namnet på vald advokat (för AR-summary-rubriken). */
+function lawyerNameFor(users: UserList, userId: string): string | undefined {
+  return users?.users.find((u) => u.id === userId)?.name;
+}
+
+/** Hämta Excel-exporten och trigga en nedladdning i browsern. */
+async function exportExcel(from: string, to: string, userId: string): Promise<void> {
+  const params = new URLSearchParams({ from, to });
+  if (userId) params.set("userIds", userId);
+  const res = await fetch(`/api/reports/excel?${params}`);
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `tidsrapport_${from}_${to}.xlsx`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+interface FilterBarProps {
+  from: string;
+  to: string;
+  userId: string;
+  users: UserList;
+  canExport: boolean;
+  onFrom: (v: string) => void;
+  onTo: (v: string) => void;
+  onUser: (v: string) => void;
+  onExport: () => void;
+}
+
+function ReportsFilterBar({ from, to, userId, users, canExport, onFrom, onTo, onUser, onExport }: FilterBarProps) {
+  const fromId = useId();
+  const toId = useId();
+  const lawyerId = useId();
+  return (
+    <div className="bg-white rounded-lg border border-gray-200 p-6">
+      <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 sm:items-end">
+        <div>
+          <label htmlFor={fromId} className="block text-sm text-gray-500 mb-1">Från</label>
+          <input id={fromId} type="date" value={from} onChange={(e) => onFrom(e.target.value)}
+            className="w-full sm:w-auto rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label htmlFor={toId} className="block text-sm text-gray-500 mb-1">Till</label>
+          <input id={toId} type="date" value={to} onChange={(e) => onTo(e.target.value)}
+            className="w-full sm:w-auto rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+        </div>
+        <div className="flex-1">
+          <label htmlFor={lawyerId} className="block text-sm text-gray-500 mb-1">Advokat</label>
+          <select id={lawyerId} value={userId} onChange={(e) => onUser(e.target.value)}
+            className="w-full sm:w-64 rounded-lg border border-gray-300 px-3 py-2 text-sm">
+            {!users && <option value="">Laddar...</option>}
+            {users?.users.map((u) => (
+              <option key={u.id} value={u.id}>{u.name}</option>
+            ))}
+          </select>
+        </div>
+        <button onClick={onExport} disabled={!canExport}
+          className="px-4 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 disabled:opacity-50">
+          Exportera Excel
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function ReportsPage() {
   const now = new Date();
   // split("T") ger alltid minst ett element → [0] är aldrig undefined.
@@ -40,88 +114,25 @@ export default function ReportsPage() {
   const [from, setFrom] = useState(firstOfYear);
   const [to, setTo] = useState(today);
   const [explicitUserId, setExplicitUserId] = useState<string>("");
-  const fromId = useId();
-  const toId = useId();
-  const lawyerId = useId();
 
   const users = trpc.user.list.useQuery({});
-
-  // Förvald advokat = första i listan (om ingen vald ännu). Derivat istället
-  // för effekt + setState så vi undviker kaskaderenderingar.
-  const userId = explicitUserId || users.data?.users[0]?.id || "";
-  const setUserId = setExplicitUserId;
+  const userId = resolveUserId(explicitUserId, users.data);
 
   const report = trpc.reports.perLawyer.useQuery(
     { from, to, userId },
     { enabled: !!userId },
   );
 
-  async function handleExport() {
-    const params = new URLSearchParams({ from, to });
-    if (userId) params.set("userIds", userId);
-    const res = await fetch(`/api/reports/excel?${params}`);
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `tidsrapport_${from}_${to}.xlsx`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
   return (
     <div className="flex flex-col h-full">
       <div className="flex-none mb-6">
         <h1 className="text-2xl font-bold text-gray-900 mb-6">Rapporter</h1>
-
-        {/* Period + advokat */}
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 sm:items-end">
-          <div>
-            <label htmlFor={fromId} className="block text-sm text-gray-500 mb-1">Från</label>
-            <input
-              id={fromId}
-              type="date"
-              value={from}
-              onChange={(e) => setFrom(e.target.value)}
-              className="w-full sm:w-auto rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            />
-          </div>
-          <div>
-            <label htmlFor={toId} className="block text-sm text-gray-500 mb-1">Till</label>
-            <input
-              id={toId}
-              type="date"
-              value={to}
-              onChange={(e) => setTo(e.target.value)}
-              className="w-full sm:w-auto rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            />
-          </div>
-          <div className="flex-1">
-            <label htmlFor={lawyerId} className="block text-sm text-gray-500 mb-1">Advokat</label>
-            <select
-              id={lawyerId}
-              value={userId}
-              onChange={(e) => setUserId(e.target.value)}
-              className="w-full sm:w-64 rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            >
-              {!users.data && <option value="">Laddar...</option>}
-              {users.data?.users.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <button
-            onClick={() => void handleExport()}
-            disabled={!userId || !report.data}
-            className="px-4 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 disabled:opacity-50"
-          >
-            Exportera Excel
-          </button>
-          </div>
-        </div>
+        <ReportsFilterBar
+          from={from} to={to} userId={userId} users={users.data}
+          canExport={!!userId && !!report.data}
+          onFrom={setFrom} onTo={setTo} onUser={setExplicitUserId}
+          onExport={() => void exportExcel(from, to, userId)}
+        />
       </div>
 
       <div className="flex-1 overflow-y-auto min-h-0 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8">
@@ -130,7 +141,7 @@ export default function ReportsPage() {
             from={from}
             to={to}
             userId={userId}
-            {...omitUndefined({ lawyerName: users.data?.users.find((u) => u.id === userId)?.name })}
+            {...omitUndefined({ lawyerName: lawyerNameFor(users.data, userId) })}
           />
         </div>
 
