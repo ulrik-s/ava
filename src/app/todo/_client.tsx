@@ -70,12 +70,18 @@ function emptyForm(defaultDate: Date): TaskForm {
   };
 }
 
-/* eslint-disable max-lines-per-function, complexity -- JSX-tung med dag/user-väljare + lista + modal-CRUD */
+type ModalState = { mode: "create" | "edit"; form: TaskForm } | null;
+
+/** Vem listan visar: vald kollega eller jag själv (+ om det är min egen lista). */
+function resolveViewer(userId: string, meId: string | undefined): { effectiveUserId: string | undefined; isOwn: boolean } {
+  return { effectiveUserId: userId || meId, isOwn: !userId || userId === meId };
+}
+
 export default function TodoClient() {
   const [day, setDay] = useState<Date>(() => startOfDay(new Date()));
   const [view, setView] = useState<TodoView>(() => readStoredView());
   const [userId, setUserId] = useState<string>("");
-  const [modalState, setModalState] = useState<{ mode: "create" | "edit"; form: TaskForm } | null>(null);
+  const [modalState, setModalState] = useState<ModalState>(null);
 
   useEffect(() => {
     try { localStorage.setItem(VIEW_PREF_KEY, view); } catch { /* pref ej kritisk */ }
@@ -84,15 +90,15 @@ export default function TodoClient() {
 
   const users = trpc.user.list.useQuery();
   const me = trpc.user.current.useQuery();
-  const effectiveUserId = userId || me.data?.id;
-  const isOwn = !userId || userId === me.data?.id;
+  const meId = me.data?.id;
+  const { effectiveUserId, isOwn } = resolveViewer(userId, meId);
 
   const range = useMemo(() => rangeForView(view, day), [view, day]);
   const items = trpc.todo.list.useQuery(
     { from: range.from, to: range.to, ...(effectiveUserId ? { userId: effectiveUserId } : {}) },
     // Gate på me.data → demo-runtime hydrerar users asynkront; utan gate
     // kraschar första query:n innan user existerar i datalagret.
-    { enabled: !!effectiveUserId && !!me.data?.id },
+    { enabled: !!effectiveUserId && !!meId },
   );
   const matters = trpc.matter.list.useQuery({ pageSize: 200, status: "ACTIVE" });
   const utils = trpc.useUtils();
@@ -104,8 +110,6 @@ export default function TodoClient() {
   const updateTaskStatus = trpc.task.update.useMutation({ onSuccess: refresh });
   const deleteTask = trpc.task.delete.useMutation({ onSuccess: refresh });
 
-  const periodLabel = viewRangeLabel(view, day);
-
   function submitForm(): void {
     if (!modalState) return;
     const f = modalState.form;
@@ -116,97 +120,106 @@ export default function TodoClient() {
       dueAt: f.dueAt ? new Date(f.dueAt) : undefined,
       matterId: f.matterId || undefined,
     };
-    if (modalState.mode === "edit" && f.id) {
-      updateTask.mutate({ id: f.id, ...payload });
-    } else {
-      createTask.mutate(payload);
-    }
+    if (modalState.mode === "edit" && f.id) updateTask.mutate({ id: f.id, ...payload });
+    else createTask.mutate(payload);
   }
+
+  const onToggle = (it: TodoRow): void => {
+    if (it.status === "DONE") updateTaskStatus.mutate({ id: it.id, status: "TODO" });
+    else completeTask.mutate({ id: it.id });
+  };
+  const onEdit = (it: TodoRow): void => setModalState({
+    mode: "edit",
+    form: { id: it.id, title: it.title, description: "", priority: "MEDIUM", dueAt: new Date(it.at).toISOString().slice(0, 16), matterId: it.matter?.id ?? "" },
+  });
+  const onDelete = (it: TodoRow): void => { if (confirm(`Ta bort "${it.title}"?`)) deleteTask.mutate({ id: it.id }); };
 
   return (
     <div className="p-6 space-y-4">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold">Att göra <span className="ml-2 text-base font-normal text-gray-500 capitalize">{periodLabel}</span></h1>
-        <div className="flex items-center gap-2">
-          {/* Vy-växel Dag/Vecka/Månad (#88) */}
-          <div role="group" aria-label="Vy" className="inline-flex rounded border overflow-hidden">
-            {(["day", "week", "month"] as const).map((v) => (
-              <button
-                key={v}
-                type="button"
-                aria-pressed={view === v}
-                onClick={() => setView(v)}
-                className={`px-3 py-1.5 text-sm ${view === v ? "bg-blue-600 text-white" : "bg-white hover:bg-gray-50"}`}
-              >
-                {VIEW_LABELS[v]}
-              </button>
-            ))}
-          </div>
-          <button onClick={() => setDay((d) => shiftAnchor(view, d, -1))} aria-label="Föregående" className="px-3 py-1.5 text-sm border rounded hover:bg-gray-50">←</button>
-          <button onClick={() => setDay(startOfDay(new Date()))} className="px-3 py-1.5 text-sm border rounded hover:bg-gray-50">Idag</button>
-          <button onClick={() => setDay((d) => shiftAnchor(view, d, 1))} aria-label="Nästa" className="px-3 py-1.5 text-sm border rounded hover:bg-gray-50">→</button>
-          <input
-            type="date"
-            value={toInputDate(day)}
-            onChange={(e) => setDay(startOfDay(fromInputDate(e.target.value)))}
-            className="px-2 py-1.5 text-sm border rounded"
-          />
-          {isOwn && (
-            <button onClick={() => setModalState({ mode: "create", form: emptyForm(day) })}
-              className="ml-2 inline-flex items-center gap-1 px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700">
-              <Plus size={14} /> Ny
-            </button>
-          )}
-        </div>
-      </header>
-
-      <div className="flex items-center gap-2 text-sm">
-        <label className="text-gray-600">Visa för:</label>
-        <select value={userId} onChange={(e) => setUserId(e.target.value)} className="px-2 py-1 border rounded">
-          <option value="">Mig själv</option>
-          {(users.data?.users ?? []).map((u: { id: string; name: string }) => (
-            <option key={u.id} value={u.id}>{u.name}</option>
-          ))}
-        </select>
-      </div>
-
-      {(() => {
-        const handlers = {
-          isOwn,
-          now,
-          onToggle: (it: TodoRow) => {
-            if (it.status === "DONE") updateTaskStatus.mutate({ id: it.id, status: "TODO" });
-            else completeTask.mutate({ id: it.id });
-          },
-          onEdit: (it: TodoRow) => setModalState({
-            mode: "edit",
-            form: {
-              id: it.id, title: it.title, description: "", priority: "MEDIUM",
-              dueAt: new Date(it.at).toISOString().slice(0, 16),
-              matterId: it.matter?.id ?? "",
-            },
-          }),
-          onDelete: (it: TodoRow) => { if (confirm(`Ta bort "${it.title}"?`)) deleteTask.mutate({ id: it.id }); },
-        };
-        const data = items.data ?? [];
-        if (view === "day") return <TodoList items={data} isLoading={items.isLoading} {...handlers} />;
-        return <GroupedTodoList items={data} isLoading={items.isLoading} {...handlers} />;
-      })()}
-
-      <Modal open={!!modalState} title={modalState?.mode === "edit" ? "Ändra Att-göra" : "Ny Att-göra"} onClose={() => setModalState(null)} widthClass="max-w-xl">
-        {modalState && (
-          <TaskForm
-            form={modalState.form}
-            setForm={(f) => setModalState({ ...modalState, form: f })}
-            matters={matters.data?.matters ?? []}
-            onCancel={() => setModalState(null)}
-            onSubmit={submitForm}
-            isPending={createTask.isPending || updateTask.isPending}
-            submitLabel={modalState.mode === "edit" ? "Spara" : "Skapa"}
-          />
-        )}
-      </Modal>
+      <TodoToolbar view={view} setView={setView} day={day} setDay={setDay}
+        periodLabel={viewRangeLabel(view, day)} isOwn={isOwn}
+        onNew={() => setModalState({ mode: "create", form: emptyForm(day) })} />
+      <TodoUserPicker userId={userId} setUserId={setUserId} users={users.data?.users} />
+      <TodoListView view={view} items={items.data} isLoading={items.isLoading}
+        isOwn={isOwn} now={now} onToggle={onToggle} onEdit={onEdit} onDelete={onDelete} />
+      <TaskModal modalState={modalState} onChange={setModalState} matters={matters.data?.matters}
+        onSubmit={submitForm} saving={createTask.isPending || updateTask.isPending} />
     </div>
+  );
+}
+
+/** Rubrik + vy-växel (dag/vecka/månad) + datum-navigering + "Ny". */
+function TodoToolbar({ view, setView, day, setDay, periodLabel, isOwn, onNew }: {
+  view: TodoView; setView: (v: TodoView) => void;
+  day: Date; setDay: (updater: Date | ((d: Date) => Date)) => void;
+  periodLabel: string; isOwn: boolean; onNew: () => void;
+}) {
+  return (
+    <header className="flex flex-wrap items-center justify-between gap-3">
+      <h1 className="text-2xl font-bold">Att göra <span className="ml-2 text-base font-normal text-gray-500 capitalize">{periodLabel}</span></h1>
+      <div className="flex items-center gap-2">
+        <div role="group" aria-label="Vy" className="inline-flex rounded border overflow-hidden">
+          {(["day", "week", "month"] as const).map((v) => (
+            <button key={v} type="button" aria-pressed={view === v} onClick={() => setView(v)}
+              className={`px-3 py-1.5 text-sm ${view === v ? "bg-blue-600 text-white" : "bg-white hover:bg-gray-50"}`}>
+              {VIEW_LABELS[v]}
+            </button>
+          ))}
+        </div>
+        <button onClick={() => setDay((d) => shiftAnchor(view, d, -1))} aria-label="Föregående" className="px-3 py-1.5 text-sm border rounded hover:bg-gray-50">←</button>
+        <button onClick={() => setDay(startOfDay(new Date()))} className="px-3 py-1.5 text-sm border rounded hover:bg-gray-50">Idag</button>
+        <button onClick={() => setDay((d) => shiftAnchor(view, d, 1))} aria-label="Nästa" className="px-3 py-1.5 text-sm border rounded hover:bg-gray-50">→</button>
+        <input type="date" value={toInputDate(day)} onChange={(e) => setDay(startOfDay(fromInputDate(e.target.value)))} className="px-2 py-1.5 text-sm border rounded" />
+        {isOwn && (
+          <button onClick={onNew} className="ml-2 inline-flex items-center gap-1 px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700">
+            <Plus size={14} /> Ny
+          </button>
+        )}
+      </div>
+    </header>
+  );
+}
+
+/** "Visa för:"-väljaren (mig själv eller en kollega). */
+function TodoUserPicker({ userId, setUserId, users }: { userId: string; setUserId: (v: string) => void; users?: Array<{ id: string; name: string }> | undefined }) {
+  return (
+    <div className="flex items-center gap-2 text-sm">
+      <label className="text-gray-600">Visa för:</label>
+      <select value={userId} onChange={(e) => setUserId(e.target.value)} className="px-2 py-1 border rounded">
+        <option value="">Mig själv</option>
+        {(users ?? []).map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+      </select>
+    </div>
+  );
+}
+
+/** Väljer platt lista (dag) eller dag-grupperad lista (vecka/månad). */
+function TodoListView({ view, items, ...rest }: { view: TodoView; items?: TodoRow[] | undefined } & Omit<ListProps, "items">) {
+  const rows = items ?? [];
+  if (view === "day") return <TodoList items={rows} {...rest} />;
+  return <GroupedTodoList items={rows} {...rest} />;
+}
+
+/** Skapa/ändra-modalen. */
+function TaskModal({ modalState, onChange, matters, onSubmit, saving }: {
+  modalState: ModalState; onChange: (s: ModalState) => void;
+  matters?: Array<{ id: string; matterNumber: string; title: string }> | undefined;
+  onSubmit: () => void; saving: boolean;
+}) {
+  return (
+    <Modal open={!!modalState} title={modalState?.mode === "edit" ? "Ändra Att-göra" : "Ny Att-göra"} onClose={() => onChange(null)} widthClass="max-w-xl">
+      {modalState && (
+        <TaskForm
+          form={modalState.form}
+          setForm={(f) => onChange({ ...modalState, form: f })}
+          matters={matters ?? []}
+          onCancel={() => onChange(null)}
+          onSubmit={onSubmit}
+          isPending={saving}
+          submitLabel={modalState.mode === "edit" ? "Spara" : "Skapa"}
+        />
+      )}
+    </Modal>
   );
 }
 
@@ -308,31 +321,45 @@ interface LiProps {
   onDelete: (it: TodoRow) => void;
 }
 
+/** Vänster-kant-deadline-färg (#88): bara uppgifter, transparent annars. */
+function deadlineBorder(it: TodoRow, now: Date, isDone: boolean): { cls: string; mark: string } {
+  const color = it.source === "task" ? deadlineColor(it.at, now, { done: isDone }) : null;
+  return { cls: color ? DEADLINE_BORDER[color] : "border-l-4 border-transparent", mark: color ?? "none" };
+}
+
+/** Titeln — klickbar (öppna/ändra) för egna tasks, annars text. */
+function TodoTitle({ it, editable, isDone, onEdit }: { it: TodoRow; editable: boolean; isDone: boolean; onEdit: (it: TodoRow) => void }) {
+  const cls = `flex-1 min-w-0 truncate ${isDone ? "line-through" : ""}`;
+  if (!editable) return <span className={cls}>{it.title}</span>;
+  return (
+    <button type="button" onClick={() => onEdit(it)} title="Öppna och ändra" className={`${cls} text-left text-blue-600 hover:underline`}>
+      {it.title}
+    </button>
+  );
+}
+
+/** Ändra/ta-bort-knappar (egna tasks). */
+function TodoRowActions({ it, onEdit, onDelete }: { it: TodoRow; onEdit: (it: TodoRow) => void; onDelete: (it: TodoRow) => void }) {
+  return (
+    <span className="flex items-center gap-1">
+      <button type="button" onClick={() => onEdit(it)} className="text-gray-400 hover:text-blue-600" aria-label="Ändra"><Pencil size={14} /></button>
+      <button type="button" onClick={() => onDelete(it)} className="text-gray-400 hover:text-red-600" aria-label="Ta bort"><Trash2 size={14} /></button>
+    </span>
+  );
+}
+
 function TodoLi({ it, isOwn, now, onToggle, onEdit, onDelete }: LiProps) {
   const isDone = it.source === "task" && it.status === "DONE";
   const editable = isOwn && it.source === "task";
-  // Deadline-färg endast för uppgifter (events har egen tidslogik). #88
-  const color = it.source === "task" ? deadlineColor(it.at, now, { done: isDone }) : null;
-  const borderClass = color ? DEADLINE_BORDER[color] : "border-l-4 border-transparent";
+  const border = deadlineBorder(it, now, isDone);
   return (
     <li
-      data-deadline={color ?? "none"}
-      className={`flex items-center gap-3 px-4 py-3 hover:bg-gray-50 ${borderClass} ${isDone ? "opacity-60" : ""}`}
+      data-deadline={border.mark}
+      className={`flex items-center gap-3 px-4 py-3 hover:bg-gray-50 ${border.cls} ${isDone ? "opacity-60" : ""}`}
     >
       <TodoIcon it={it} onToggle={onToggle} isOwn={isOwn} />
       <span className="font-mono text-xs text-gray-500 w-28 shrink-0">{timeLabelFor(it)}</span>
-      {editable ? (
-        <button
-          type="button"
-          onClick={() => onEdit(it)}
-          title="Öppna och ändra"
-          className={`flex-1 min-w-0 truncate text-left text-blue-600 hover:underline ${isDone ? "line-through" : ""}`}
-        >
-          {it.title}
-        </button>
-      ) : (
-        <span className={`flex-1 min-w-0 truncate ${isDone ? "line-through" : ""}`}>{it.title}</span>
-      )}
+      <TodoTitle it={it} editable={editable} isDone={isDone} onEdit={onEdit} />
       {it.location && (
         <span className="hidden sm:inline-flex items-center gap-1 text-xs text-gray-500"><MapPin size={11} /> {it.location}</span>
       )}
@@ -342,16 +369,7 @@ function TodoLi({ it, isOwn, now, onToggle, onEdit, onDelete }: LiProps) {
         </EntityLink>
       )}
       <span className="text-[10px] rounded-full bg-gray-100 text-gray-700 px-2 py-0.5">{tagFor(it)}</span>
-      {isOwn && it.source === "task" && (
-        <span className="flex items-center gap-1">
-          <button type="button" onClick={() => onEdit(it)} className="text-gray-400 hover:text-blue-600" aria-label="Ändra">
-            <Pencil size={14} />
-          </button>
-          <button type="button" onClick={() => onDelete(it)} className="text-gray-400 hover:text-red-600" aria-label="Ta bort">
-            <Trash2 size={14} />
-          </button>
-        </span>
-      )}
+      {editable && <TodoRowActions it={it} onEdit={onEdit} onDelete={onDelete} />}
     </li>
   );
 }
