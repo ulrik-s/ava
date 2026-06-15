@@ -98,6 +98,9 @@ export type CalendarEventId = z.infer<typeof calendarEventIdSchema>;
 export const taskIdSchema = brandedId<"TaskId">();
 export type TaskId = z.infer<typeof taskIdSchema>;
 
+export const serviceNoteIdSchema = brandedId<"ServiceNoteId">();
+export type ServiceNoteId = z.infer<typeof serviceNoteIdSchema>;
+
 export const userPreferenceIdSchema = brandedId<"UserPreferenceId">();
 export type UserPreferenceId = z.infer<typeof userPreferenceIdSchema>;
 

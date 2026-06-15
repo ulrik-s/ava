@@ -51,6 +51,7 @@ import type {
   BillingRunDelegate,
   CalendarEventDelegate,
   TaskDelegate,
+  ServiceNoteDelegate,
 } from "./IDataStore";
 import { ReadOnlyDelegate, ReadOnlyError, type RelationConfig } from "./in-memory/read-only-delegate";
 import { WritableDelegate, type MutationEvent, type WritableDelegateOpts } from "./in-memory/writable-delegate";
@@ -87,6 +88,7 @@ export class DemoDataStore implements IDataStore {
   readonly billingRuns: BillingRunDelegate;
   readonly calendarEvents: CalendarEventDelegate;
   readonly tasks: TaskDelegate;
+  readonly serviceNotes: ServiceNoteDelegate;
   readonly userPreferences: Delegate;
   readonly orgPreferences: Delegate;
   readonly events: IEventLog;
@@ -141,6 +143,7 @@ export class DemoDataStore implements IDataStore {
     this.billingRuns = this.makeDelegate("billingRuns", relations.billingRuns) as unknown as BillingRunDelegate;
     this.calendarEvents = this.makeDelegate("calendarEvents", relations.calendarEvents) as unknown as CalendarEventDelegate;
     this.tasks = this.makeDelegate("tasks", relations.tasks) as unknown as TaskDelegate;
+    this.serviceNotes = this.makeDelegate("serviceNotes", relations.serviceNotes) as unknown as ServiceNoteDelegate;
     this.userPreferences = this.makeDelegate("userPreferences") as unknown as Delegate;
     this.orgPreferences = this.makeDelegate("orgPreferences") as unknown as Delegate;
 
@@ -233,6 +236,7 @@ export class DemoDataStore implements IDataStore {
       billingRuns: "billingRun",
       calendarEvents: "calendarEvent",
       tasks: "task",
+      serviceNotes: "serviceNote",
       userPreferences: "userPreference",
       orgPreferences: "orgPreference",
     };
@@ -306,6 +310,7 @@ export class DemoDataStore implements IDataStore {
       billingRuns: this.billingRuns,
       calendarEvents: this.calendarEvents,
       tasks: this.tasks,
+      serviceNotes: this.serviceNotes,
       userPreferences: this.userPreferences,
       orgPreferences: this.orgPreferences,
     };

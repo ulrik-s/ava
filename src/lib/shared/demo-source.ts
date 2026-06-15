@@ -42,6 +42,7 @@ export interface DemoSource {
   expectedReceivables?: readonly Record<string, unknown>[];
   calendarEvents?: readonly Record<string, unknown>[];
   tasks?: readonly Record<string, unknown>[];
+  serviceNotes?: readonly Record<string, unknown>[];
   userPreferences?: readonly Record<string, unknown>[];
   orgPreferences?: readonly Record<string, unknown>[];
 }

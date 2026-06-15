@@ -18,7 +18,7 @@ import type {
   Invoice, TimeEntry, Expense, User, Organization, Office, ConflictCheck,
   Payment, PaymentPlan, AccontoDeduction, BillingRun, WriteOff, InvoiceDispatch,
   ExpectedReceivable,
-  CalendarEvent, Task,
+  CalendarEvent, Task, ServiceNote,
 } from "@/lib/shared/schemas";
 import type { AvaEvent, EmitInput, EventFilter } from "../events/schema";
 
@@ -77,6 +77,7 @@ export interface JoinedRelations {
   folder?: any; paymentPlan?: any; billingRun?: any; reminders?: any;
   accontoInvoice?: any; finalInvoice?: any; creditNote?: any;
   uploadedBy?: any; recordedBy?: any; createdBy?: any; checkedBy?: any;
+  author?: any; serviceNotes?: any;
   user?: any; emails?: any; _count?: any;
 }
 
@@ -137,6 +138,7 @@ export type AccontoDeductionDelegate = Delegate<AccontoDeduction>;
 export type BillingRunDelegate = Delegate<BillingRun>;
 export type CalendarEventDelegate = Delegate<CalendarEvent>;
 export type TaskDelegate = Delegate<Task>;
+export type ServiceNoteDelegate = Delegate<ServiceNote>;
 
 // Opt-in: enskilda callers som vill ha striktare row-typ kan importera
 // dessa istället. T.ex. `const matters = ctx.dataStore.matters as MattersStrict`.
@@ -193,6 +195,7 @@ export interface DataStoreTx {
   billingRuns: BillingRunDelegate;
   calendarEvents: CalendarEventDelegate;
   tasks: TaskDelegate;
+  serviceNotes: ServiceNoteDelegate;
   userPreferences: Delegate;
   orgPreferences: Delegate;
 }
@@ -232,6 +235,7 @@ export interface IDataStore {
   readonly billingRuns: BillingRunDelegate;
   readonly calendarEvents: CalendarEventDelegate;
   readonly tasks: TaskDelegate;
+  readonly serviceNotes: ServiceNoteDelegate;
   readonly userPreferences: Delegate;
   readonly orgPreferences: Delegate;
 

@@ -154,6 +154,7 @@ export interface SeedDataset {
   conflictChecks: Record<string, unknown>[];
   paymentPlans: Record<string, unknown>[];
   paymentPlanReminders: Record<string, unknown>[];
+  serviceNotes: Record<string, unknown>[];
 }
 
 export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
@@ -213,6 +214,7 @@ export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
     conflictChecks: [],
     paymentPlans: [],
     paymentPlanReminders: [],
+    serviceNotes: [],
   };
 
   out.matterContacts = buildMatterContacts(orgId);
@@ -234,7 +236,44 @@ export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
   out.tasks = buildTasks(orgId, ASSIGN_USERS);
   out.documentTemplates = buildTemplates(orgId, currentUserId);
   out.conflictChecks = buildConflictChecks(currentUserId);
+  out.serviceNotes = buildServiceNotes(orgId, ASSIGN_USERS);
 
+  return out;
+}
+
+/** Tjänsteanteckningar (#348) — 2-3 per aktivt ärende, spridda författare/datum. */
+function buildServiceNotes(orgId: string, assignUsers: string[]): SeedDataset["serviceNotes"] {
+  const out: SeedDataset["serviceNotes"] = [];
+  const texts = [
+    "Telefonsamtal med klienten — gick igenom nästa steg och tidplan.",
+    "Genomgång av motpartens svaromål; noterade två svaga punkter.",
+    "Kort avstämning med domstolen om förhandlingsdatum.",
+    "Klienten inkom med kompletterande underlag, diarieförde.",
+    "Övervägande kring förlikningsbud — bevakar klientens instruktion.",
+  ];
+  const activeMatters = MATTERS.filter((m) => m.status === "ACTIVE");
+  let seq = 0;
+  activeMatters.forEach((matter, mi) => {
+    const count = 2 + (mi % 2); // 2-3 per aktivt ärende
+    for (let j = 0; j < count; j++) {
+      seq++;
+      const authorId = assignUsers[(mi + j) % assignUsers.length];
+      const daysAgo = (seq * 2) + 1;
+      const d = isoDate(-daysAgo, 9 + (j % 6));
+      const pad = (n: number) => String(n).padStart(2, "0");
+      out.push({
+        id: `sn-${String(seq).padStart(3, "0")}`,
+        organizationId: orgId,
+        matterId: matter.id,
+        authorId,
+        date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
+        time: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
+        text: texts[seq % texts.length],
+        createdAt: d,
+        updatedAt: d,
+      });
+    }
+  });
   return out;
 }
 

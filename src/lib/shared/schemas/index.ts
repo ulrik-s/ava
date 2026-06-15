@@ -38,6 +38,7 @@ import { matterSchema, matterContactSchema } from "./matter";
 import { documentTemplateSchema, conflictCheckSchema } from "./misc";
 import { organizationSchema, officeSchema } from "./organization";
 import { userPreferenceSchema, orgPreferenceSchema } from "./preference";
+import { serviceNoteSchema } from "./service-note";
 import { userSchema } from "./user";
 
 export * from "./enums";
@@ -51,6 +52,7 @@ export * from "./document";
 export * from "./billing";
 export * from "./misc";
 export * from "./calendar";
+export * from "./service-note";
 
 /**
  * Pathfunktion för en entitet. Andra argumentet är raden själv — vissa
@@ -230,6 +232,12 @@ export const ENTITY_REGISTRY: Record<string, EntityEntry> = {
     gitPrefix: "tasks",
     sourceKey: "tasks",
   },
+  serviceNote: {
+    schema: serviceNoteSchema,
+    gitPath: p((id) => `service-notes/${id}.json`),
+    gitPrefix: "service-notes",
+    sourceKey: "serviceNotes",
+  },
   userPreference: {
     schema: userPreferenceSchema,
     gitPath: p((id) => `.ava/user-preferences/${id}.json`),
@@ -252,7 +260,7 @@ export type EntityName =
   | "paymentPlanReminder" | "accontoDeduction" | "billingRun" | "writeOff"
   | "invoiceDispatch" | "expectedReceivable"
   | "documentTemplate" | "conflictCheck"
-  | "calendarEvent" | "task"
+  | "calendarEvent" | "task" | "serviceNote"
   | "userPreference" | "orgPreference";
 
 /** Lista alla entity-namn (för iteration). */
