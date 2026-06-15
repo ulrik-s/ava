@@ -173,10 +173,13 @@ interface KeysSectionProps {
   addingGenerated: boolean;
 }
 
-function KeysSection({ keys, onAdd, onRemove, addErr, onAddGenerated, addingGenerated }: KeysSectionProps) {
+/** Manuell paste-nyckel-state: parsning + add via tRPC, reset vid avbryt/klar. */
+function useManualKeyAdd(onAdd: (key: PublicKey) => void) {
   const [adding, setAdding] = useState(false);
   const [input, setInput] = useState("");
   const [comment, setComment] = useState("");
+
+  const cancel = () => { setAdding(false); setInput(""); setComment(""); };
 
   const tryAdd = async () => {
     const trimmed = input.trim();
@@ -193,10 +196,14 @@ function KeysSection({ keys, onAdd, onRemove, addErr, onAddGenerated, addingGene
       comment: comment || parsed.comment,
       addedAt: new Date().toISOString(),
     });
-    setInput("");
-    setComment("");
-    setAdding(false);
+    cancel();
   };
+
+  return { adding, setAdding, input, setInput, comment, setComment, cancel, tryAdd };
+}
+
+function KeysSection({ keys, onAdd, onRemove, addErr, onAddGenerated, addingGenerated }: KeysSectionProps) {
+  const add = useManualKeyAdd(onAdd);
 
   return (
     <section className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
@@ -204,10 +211,10 @@ function KeysSection({ keys, onAdd, onRemove, addErr, onAddGenerated, addingGene
         <h2 className="font-semibold text-gray-900 flex items-center gap-2">
           <KeyRound size={16} /> Publika nycklar
         </h2>
-        {!adding && (
+        {!add.adding && (
           <button
             type="button"
-            onClick={() => setAdding(true)}
+            onClick={() => add.setAdding(true)}
             className="text-xs px-2 py-1 bg-white border border-gray-300 text-gray-700 rounded hover:bg-gray-50 inline-flex items-center gap-1"
           >
             <Plus size={12} /> Lägg till nyckel
@@ -219,7 +226,7 @@ function KeysSection({ keys, onAdd, onRemove, addErr, onAddGenerated, addingGene
         commits. Nycklarna är privata — bara du ser dem.
       </p>
 
-      {keys.length === 0 && !adding && (
+      {keys.length === 0 && !add.adding && (
         <p className="text-sm text-gray-400 italic mb-4">Inga nycklar registrerade ännu.</p>
       )}
 
@@ -230,70 +237,100 @@ function KeysSection({ keys, onAdd, onRemove, addErr, onAddGenerated, addingGene
         <code>ssh-keygen -t ed25519</code>):
       </div>
 
-      <ul className="space-y-2">
-        {keys.map((k) => (
-          <li key={k.fingerprint} className="flex items-start justify-between gap-3 py-2 border-b border-gray-100 last:border-0">
-            <div className="min-w-0">
-              <div className="text-sm font-mono text-gray-900">{k.fingerprint}</div>
-              <div className="text-xs text-gray-500 mt-0.5">
-                {k.type} {k.comment && `· ${k.comment}`}
-                <span className="ml-2 text-gray-400">tillagd {new Date(k.addedAt).toLocaleDateString("sv-SE")}</span>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => { if (confirm(`Ta bort nyckeln ${k.fingerprint}?`)) onRemove(k.fingerprint); }}
-              className="text-xs text-gray-400 hover:text-red-600 inline-flex items-center gap-1"
-              title="Ta bort"
-            >
-              <Trash2 size={12} /> Ta bort
-            </button>
-          </li>
-        ))}
-      </ul>
+      <KeyList keys={keys} onRemove={onRemove} />
 
-      {adding && (
-        <div className="mt-4 bg-blue-50 border border-blue-200 rounded p-3 space-y-2">
-          <label className="block">
-            <span className="text-xs text-blue-900 mb-1 block">Publik nyckel (innehåll från ~/.ssh/id_ed25519.pub)</span>
-            <textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="ssh-ed25519 AAAA... du@dator"
-              rows={3}
-              className="w-full rounded border border-gray-300 px-2 py-1.5 text-xs font-mono"
-            />
-          </label>
-          <label className="block">
-            <span className="text-xs text-blue-900 mb-1 block">Kommentar (valfri, t.ex. enhetens namn)</span>
-            <input
-              type="text"
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-              placeholder="MacBook Pro 2024"
-              className="w-full rounded border border-gray-300 px-2 py-1 text-xs"
-            />
-          </label>
-          {addErr && <p className="text-xs text-red-700">{addErr}</p>}
-          <div className="flex gap-2 justify-end">
-            <button
-              type="button"
-              onClick={() => { setAdding(false); setInput(""); setComment(""); }}
-              className="text-xs text-gray-500 hover:underline"
-            >
-              Avbryt
-            </button>
-            <button
-              type="button"
-              onClick={() => void tryAdd()}
-              className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
-            >
-              Lägg till
-            </button>
-          </div>
-        </div>
+      {add.adding && (
+        <AddKeyForm
+          input={add.input}
+          setInput={add.setInput}
+          comment={add.comment}
+          setComment={add.setComment}
+          addErr={addErr}
+          onCancel={add.cancel}
+          onSubmit={() => void add.tryAdd()}
+        />
       )}
     </section>
+  );
+}
+
+/** Listan över registrerade publika nycklar (med ta-bort-bekräftelse). */
+function KeyList({ keys, onRemove }: { keys: PublicKey[]; onRemove: (fingerprint: string) => void }) {
+  return (
+    <ul className="space-y-2">
+      {keys.map((k) => (
+        <li key={k.fingerprint} className="flex items-start justify-between gap-3 py-2 border-b border-gray-100 last:border-0">
+          <div className="min-w-0">
+            <div className="text-sm font-mono text-gray-900">{k.fingerprint}</div>
+            <div className="text-xs text-gray-500 mt-0.5">
+              {k.type} {k.comment && `· ${k.comment}`}
+              <span className="ml-2 text-gray-400">tillagd {new Date(k.addedAt).toLocaleDateString("sv-SE")}</span>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => { if (confirm(`Ta bort nyckeln ${k.fingerprint}?`)) onRemove(k.fingerprint); }}
+            className="text-xs text-gray-400 hover:text-red-600 inline-flex items-center gap-1"
+            title="Ta bort"
+          >
+            <Trash2 size={12} /> Ta bort
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Formuläret för att klistra in en extern SSH-pubkey. */
+function AddKeyForm({ input, setInput, comment, setComment, addErr, onCancel, onSubmit }: {
+  input: string;
+  setInput: (v: string) => void;
+  comment: string;
+  setComment: (v: string) => void;
+  addErr: string | null;
+  onCancel: () => void;
+  onSubmit: () => void;
+}) {
+  return (
+    <div className="mt-4 bg-blue-50 border border-blue-200 rounded p-3 space-y-2">
+      <label className="block">
+        <span className="text-xs text-blue-900 mb-1 block">Publik nyckel (innehåll från ~/.ssh/id_ed25519.pub)</span>
+        <textarea
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="ssh-ed25519 AAAA... du@dator"
+          rows={3}
+          className="w-full rounded border border-gray-300 px-2 py-1.5 text-xs font-mono"
+        />
+      </label>
+      <label className="block">
+        <span className="text-xs text-blue-900 mb-1 block">Kommentar (valfri, t.ex. enhetens namn)</span>
+        <input
+          type="text"
+          value={comment}
+          onChange={(e) => setComment(e.target.value)}
+          placeholder="MacBook Pro 2024"
+          className="w-full rounded border border-gray-300 px-2 py-1 text-xs"
+        />
+      </label>
+      {addErr && <p className="text-xs text-red-700">{addErr}</p>}
+      <div className="flex gap-2 justify-end">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="text-xs text-gray-500 hover:underline"
+        >
+          Avbryt
+        </button>
+        <button
+          type="button"
+          onClick={onSubmit}
+          className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+        >
+          Lägg till
+        </button>
+      </div>
+    </div>
   );
 }
 
