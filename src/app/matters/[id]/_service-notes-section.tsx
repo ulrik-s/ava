@@ -7,6 +7,7 @@
 
 import { NotebookPen } from "lucide-react";
 import { useState } from "react";
+import { DataTable, type Column } from "@/components/ui/data-table";
 import { trpc } from "@/lib/client/trpc";
 
 interface ServiceNote {
@@ -29,6 +30,29 @@ function nowParts(): { date: string; time: string } {
 /** Fallande sortering på notens egna datum+tid (senaste först). */
 function byDateTimeDesc(a: ServiceNote, b: ServiceNote): number {
   return `${b.date}T${b.time}`.localeCompare(`${a.date}T${a.time}`);
+}
+
+function authorName(n: ServiceNote): string {
+  return n.author?.name ?? "—";
+}
+
+/** Kolumnerna för tjänsteanteckningstabellen — en rad per anteckning, alla
+ *  sorterbara/filterbara precis som övriga AVA-tabeller (#367). */
+function noteColumns(): Column<ServiceNote>[] {
+  return [
+    { key: "date", label: "Datum", sortable: true, filterable: true,
+      sortValue: (n) => n.date, filterValue: (n) => n.date,
+      render: (n) => <span className="text-sm text-gray-500 whitespace-nowrap">{n.date}</span> },
+    { key: "time", label: "Tid", sortable: true, filterable: true,
+      sortValue: (n) => n.time, filterValue: (n) => n.time,
+      render: (n) => <span className="text-sm text-gray-500 whitespace-nowrap">{n.time}</span> },
+    { key: "author", label: "Författare", sortable: true, filterable: true, groupable: true,
+      sortValue: authorName, filterValue: authorName, groupValue: authorName,
+      render: (n) => <span className="text-sm text-gray-900 whitespace-nowrap">{authorName(n)}</span> },
+    { key: "text", label: "Anteckning", sortable: true, filterable: true,
+      sortValue: (n) => n.text, filterValue: (n) => n.text,
+      render: (n) => <span className="text-sm text-gray-800 whitespace-pre-wrap">{n.text}</span> },
+  ];
 }
 
 export function ServiceNotesSection({ matterId }: { matterId: string }) {
@@ -62,31 +86,17 @@ export function ServiceNotesSection({ matterId }: { matterId: string }) {
 
         {notes.isLoading ? (
           <p className="text-sm text-gray-500">Laddar…</p>
-        ) : items.length === 0 ? (
-          <p className="text-sm text-gray-400 italic">Inga tjänsteanteckningar ännu.</p>
         ) : (
-          <NoteList items={items} />
+          <DataTable
+            prefKey={`list.matter-service-notes.${matterId}`}
+            columns={noteColumns()}
+            data={items}
+            rowKey={(n) => n.id}
+            emptyMessage="Inga tjänsteanteckningar ännu."
+          />
         )}
       </div>
     </div>
-  );
-}
-
-function NoteList({ items }: { items: ServiceNote[] }) {
-  return (
-    <ul className="divide-y divide-gray-100">
-      {items.map((n) => (
-        <li key={n.id} className="py-3">
-          <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
-            <span>
-              {n.date} {n.time}
-              <span className="ml-2 text-gray-400">· {n.author?.name ?? "—"}</span>
-            </span>
-          </div>
-          <p className="text-sm text-gray-800 whitespace-pre-wrap">{n.text}</p>
-        </li>
-      ))}
-    </ul>
   );
 }
 
