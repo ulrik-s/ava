@@ -52,8 +52,9 @@ DRAFT ──(skicka)──▶ SENT ──(full betalning)─────▶ PAID
 
 1. **`PAID`/`INSTALLMENT_PLAN`/`BAD_DEBT` nås bara via `SENT`** (eller via
    varandra) — aldrig direkt från `DRAFT`.
-2. **`recordPayment` vägrar på `DRAFT`/`CANCELLED`** — skicka fakturan först.
-   Det är den konkreta vakten mot "PAID utan SENT".
+2. **`recordPayment` på en `DRAFT` auto-skickar fakturan** (`DRAFT → SENT`)
+   innan betalningen registreras — så att `PAID` aldrig uppstår utan att ha
+   passerat `SENT`. En `CANCELLED`-faktura kan aldrig betalas (avvisas).
 3. **`CREDIT`-fakturor** skapas direkt i `SENT` ("färdig"); originalet går
    `* → CANCELLED`.
 4. **Härledda tillstånd** (`PAID`/`BAD_DEBT`) fortsätter härledas ur ledgern

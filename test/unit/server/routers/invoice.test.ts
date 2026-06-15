@@ -339,15 +339,18 @@ describe("invoice.recordPayment", () => {
     expect(mockPrisma.payment.create).not.toHaveBeenCalled();
   });
 
-  it("vägrar betalning på DRAFT-faktura — PAID kan inte uppstå utan SENT (#350)", async () => {
+  it("auto-skickar en DRAFT vid första betalningen (#350: PAID passerar SENT)", async () => {
     mockPrisma.invoice.findFirst.mockResolvedValue({
       id: "inv-1", amount: 1_000_000, status: "DRAFT", paymentPlan: null, payments: [],
     });
+    mockPrisma.payment.create.mockResolvedValue({ id: "pay-1", amount: 300_000 });
 
-    await expect(
-      makeCaller().recordPayment({ invoiceId: "inv-1", amount: 100_000, paidAt: "2026-05-15" }),
-    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
-    expect(mockPrisma.payment.create).not.toHaveBeenCalled();
+    const res = await makeCaller().recordPayment({ invoiceId: "inv-1", amount: 300_000, paidAt: "2026-05-15" });
+
+    // Betalningen registreras OCH fakturan auto-sätts SENT (inte kvar som DRAFT).
+    expect(mockPrisma.payment.create).toHaveBeenCalled();
+    expect(mockPrisma.invoice.update).toHaveBeenCalledWith({ where: { id: "inv-1" }, data: { status: "SENT" } });
+    expect(res.settled).toBe(false); // delbetalning → stannar SENT
   });
 
   it("vägrar betalning på CANCELLED-faktura (#350)", async () => {

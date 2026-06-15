@@ -411,14 +411,17 @@ export const invoiceRouter = router({
         });
         if (!inv) throw new TRPCError({ code: "NOT_FOUND" });
 
-        // Tillståndsmaskin (#350): en betalning får inte registreras på en faktura
-        // som inte skickats (DRAFT) eller är annullerad (CANCELLED) — annars kan
-        // PAID uppstå utan att ha passerat SENT. Se [ADR 0015].
-        if (inv.status === "DRAFT" || inv.status === "CANCELLED") {
+        // Tillståndsmaskin (#350, [ADR 0015]): en CANCELLED-faktura kan aldrig
+        // betalas. En DRAFT auto-skickas vid första betalningen (kräver-auto-SENT
+        // -varianten) så att PAID aldrig uppstår utan att ha passerat SENT.
+        if (inv.status === "CANCELLED") {
           throw new TRPCError({
             code: "BAD_REQUEST",
-            message: `Kan inte registrera betalning på en faktura med status ${inv.status} — skicka fakturan först.`,
+            message: "Kan inte registrera betalning på en annullerad faktura.",
           });
+        }
+        if (inv.status === "DRAFT") {
+          await tx.invoices.update({ where: { id: inv.id }, data: { status: "SENT" } });
         }
 
         // Konsistens-skydd (ADR 0007): en betalning får inte översumera fakturan
