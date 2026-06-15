@@ -510,8 +510,9 @@ function invoiceStatusForPlan(planStatus: PlanTarget["status"]): string {
   return "SENT";
 }
 
-/** Bonus-payments mot vanliga PAID-fakturor (utan plan) så payment-historiken
- *  inte är 100 % avbetalningsplan-knuten. Numreras från `startSeq`. */
+/** Full betalning mot VARJE vanlig PAID-faktura (utan plan) så att en PAID-
+ *  status alltid är ledger-koherent (#350: ingen PAID utan täckande betalning).
+ *  Numreras från `startSeq`. */
 function extraPayments(invoices: SeedDataset["invoices"], startSeq: number, currentUserId: string): SeedDataset["payments"] {
   const out: SeedDataset["payments"] = [];
   const paidExtras = invoices.filter((x) => {
@@ -519,7 +520,7 @@ function extraPayments(invoices: SeedDataset["invoices"], startSeq: number, curr
     return r.status === "PAID" && !PLAN_TARGETS.some((p) => p.invoiceId === r.id);
   });
   let seq = startSeq;
-  for (const inv of paidExtras.slice(0, 3)) {
+  for (const inv of paidExtras) {
     const r = inv as { id: string; amountInclVat: number; issuedAt: Date | string };
     seq++;
     const issuedIso = typeof r.issuedAt === "string" ? r.issuedAt : r.issuedAt.toISOString();
@@ -552,26 +553,49 @@ function buildPaymentPlans({ currentUserId, invoices }: {
     });
     paymentPlanReminders.push(...planReminders(p, planId));
 
-    // Faktiska inbetalningar — en payment-rad per månad som "kommit in".
-    for (let m = p.paymentsMade; m >= 1; m--) {
-      const due = new Date();
-      due.setMonth(due.getMonth() - m + 1);
-      due.setDate(p.dayOfMonth);
-      paymentSeq++;
-      payments.push({
-        id: `pay-${String(paymentSeq).padStart(3, "0")}`,
-        invoiceId: p.invoiceId, amount: p.monthlyAmount, paidAt: due,
-        note: `Månadsbetalning ${m} av planen`, recordedById: currentUserId, createdAt: due,
-      });
-    }
-
     // Patcha invoice-statusen så den matchar planen.
     const inv = invoices.find((x) => (x as { id: string }).id === p.invoiceId) as Record<string, unknown> | undefined;
     if (inv) inv.status = invoiceStatusForPlan(p.status);
+
+    const rows = planPaymentRows(p, inv, paymentSeq, currentUserId);
+    payments.push(...rows);
+    paymentSeq += rows.length;
   }
 
   payments.push(...extraPayments(invoices, paymentSeq, currentUserId));
   return { paymentPlans, paymentPlanReminders, payments };
+}
+
+/** Payment-rader för en plan: en per "inkommen" månad + (för COMPLETED) en
+ *  slutbetalning som täcker resten av fakturan (#350: PAID ⇒ ledger-koherent). */
+function planPaymentRows(
+  p: PlanTarget, inv: Record<string, unknown> | undefined, startSeq: number, currentUserId: string,
+): SeedDataset["payments"] {
+  const rows: SeedDataset["payments"] = [];
+  let seq = startSeq;
+  for (let m = p.paymentsMade; m >= 1; m--) {
+    const due = new Date();
+    due.setMonth(due.getMonth() - m + 1);
+    due.setDate(p.dayOfMonth);
+    seq++;
+    rows.push({
+      id: `pay-${String(seq).padStart(3, "0")}`,
+      invoiceId: p.invoiceId, amount: p.monthlyAmount, paidAt: due,
+      note: `Månadsbetalning ${m} av planen`, recordedById: currentUserId, createdAt: due,
+    });
+  }
+  const remainder = inv ? Number(inv.amountInclVat ?? inv.amount ?? 0) - p.paymentsMade * p.monthlyAmount : 0;
+  if (p.status === "COMPLETED" && remainder > 0) {
+    const due = new Date();
+    due.setDate(p.dayOfMonth);
+    seq++;
+    rows.push({
+      id: `pay-${String(seq).padStart(3, "0")}`,
+      invoiceId: p.invoiceId, amount: remainder, paidAt: due,
+      note: "Slutbetalning (planen fullföljd)", recordedById: currentUserId, createdAt: due,
+    });
+  }
+  return rows;
 }
 
 function buildCalendarEvents(orgId: string, ASSIGN_USERS: string[]): SeedDataset["calendarEvents"] {

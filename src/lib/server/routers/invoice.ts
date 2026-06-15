@@ -16,6 +16,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { computeFinalInvoiceBreakdown, isPaymentPlanSettled } from "@/lib/shared/invoice-calc";
+import { canTransition, transitionErrorMessage } from "@/lib/shared/invoice-state-machine";
 import { ocrFromInvoiceNumber } from "@/lib/shared/ocr-reference";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import type { InvoiceStatus } from "@/lib/shared/schemas/enums";
@@ -410,6 +411,19 @@ export const invoiceRouter = router({
         });
         if (!inv) throw new TRPCError({ code: "NOT_FOUND" });
 
+        // Tillståndsmaskin (#350, [ADR 0015]): en CANCELLED-faktura kan aldrig
+        // betalas. En DRAFT auto-skickas vid första betalningen (kräver-auto-SENT
+        // -varianten) så att PAID aldrig uppstår utan att ha passerat SENT.
+        if (inv.status === "CANCELLED") {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Kan inte registrera betalning på en annullerad faktura.",
+          });
+        }
+        if (inv.status === "DRAFT") {
+          await tx.invoices.update({ where: { id: inv.id }, data: { status: "SENT" } });
+        }
+
         // Konsistens-skydd (ADR 0007): en betalning får inte översumera fakturan
         // (betalt + krediterat + avskrivet > belopp → utestående < 0). Validera
         // FÖRE skapandet så vi inte lämnar en partition-brytande rad.
@@ -603,6 +617,11 @@ export const invoiceRouter = router({
         where: { id: input.invoiceId, matter: { organizationId: ctx.orgId } },
       });
       if (!inv) throw new TRPCError({ code: "NOT_FOUND" });
+      // Tillståndsmaskin (#350): blockera omöjliga övergångar (t.ex. DRAFT→BAD_DEBT
+      // utan att ha skickats). Se [ADR 0015].
+      if (!canTransition(inv.status as InvoiceStatus, input.status)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: transitionErrorMessage(inv.status as InvoiceStatus, input.status) });
+      }
       return ctx.dataStore.invoices.update({
         where: { id: inv.id },
         data: { status: input.status },
