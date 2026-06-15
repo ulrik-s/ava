@@ -60,7 +60,7 @@ START=$SECONDS
 bold "[1/3] Static analysis (typecheck + lint + deps + knip + duplicates)"
 run "typecheck"             bun run typecheck
 run "lint (--max-warnings 0)" bun run lint --max-warnings 0
-run "lint:lib-complexity (#40 strikt)" bun run lint:lib-complexity
+run "lint:complexity-strict (#40+#199 strikt)" bun run lint:complexity-strict
 run "deps:check (cykeldetektion)" bun run deps:check
 run "knip (död kod — gate)" bun run knip
 run "duplicates (jscpd)"    bun run duplicates
