@@ -19,6 +19,14 @@ interface DocumentBrowserProps {
   matterId: string;
 }
 
+type DragApi = ReturnType<typeof useDragHandlers>;
+interface RenameApi {
+  renamingFolderId: string | null;
+  renameValue: string;
+  setRenameValue: (v: string) => void;
+  setRenamingFolderId: (v: string | null) => void;
+}
+
 export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     if (typeof window === "undefined") return "list";
@@ -33,21 +41,8 @@ export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
   const [showNewFolder, setShowNewFolder] = useState(false);
   const [renamingFolderId, setRenamingFolderId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
-  const [dragItem, setDragItem] = useState<DragItem | null>(null);
-  const [dropTarget, setDropTarget] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
   const [analyzingIds, setAnalyzingIds] = useState<Set<string>>(new Set());
-  // Dokument-ID:n som fortfarande är mid-upload — visas men inte
-  // klickbara förrän hela kedjan (FSA-write + tRPC-register +
-  // invalidate) klar.
-  const [uploadingIds, setUploadingIds] = useState<Set<string>>(new Set());
-  // Optimistiska rader: dyker upp i listan direkt när användaren väljer en
-  // fil, innan FSA-write och tRPC-register hunnits. Tas bort när tree-
-  // refetch klart (då dyker den "riktiga" raden upp på samma plats).
-  const [pendingUploads, setPendingUploads] = useState<DocumentRecord[]>([]);
-  const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const utils = trpc.useUtils();
 
   const tree = trpc.document.tree.useQuery({ matterId });
   const folders = useMemo<FolderRecord[]>(
@@ -66,12 +61,14 @@ export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
     setRenamingFolderId,
     setAnalyzingIds,
   });
+  const upload = useFileUpload({ matterId, mutations, fileInputRef });
+  const drag = useDragHandlers(mutations);
 
   const foldersByParent = useMemo(() => groupBy(folders, (f) => f.parentId ?? null), [folders]);
   // Optimistiska rader läggs i root-foldern (de saknar ännu folderId).
   const docsByFolder = useMemo(
-    () => groupBy([...documents, ...pendingUploads], (d) => d.folderId ?? null),
-    [documents, pendingUploads]
+    () => groupBy([...documents, ...upload.pendingUploads], (d) => d.folderId ?? null),
+    [documents, upload.pendingUploads]
   );
 
   const toggleFolder = useCallback((folderId: string) => {
@@ -82,6 +79,177 @@ export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
       return next;
     });
   }, []);
+
+  return (
+    <div className="bg-white rounded-lg border border-gray-200">
+      <BrowserHeader
+        showNewFolder={() => setShowNewFolder(true)}
+        uploading={upload.uploading}
+        fileInputRef={fileInputRef}
+        onUpload={(e) => { void upload.handleFileUpload(e); }}
+        viewMode={viewMode}
+        onChangeViewMode={changeViewMode}
+      />
+
+      {upload.uploadError && (
+        <UploadErrorBanner message={upload.uploadError} onDismiss={() => upload.setUploadError(null)} />
+      )}
+
+      {showNewFolder && (
+        <NewFolderForm
+          isPending={mutations.createFolder.isPending}
+          onSubmit={(name) => mutations.createFolder.mutate({ matterId, name, parentId: null })}
+          onCancel={() => setShowNewFolder(false)}
+        />
+      )}
+
+      {viewMode === "tree" ? (
+        <DocumentTree
+          foldersByParent={foldersByParent}
+          docsByFolder={docsByFolder}
+          collapsedFolders={collapsedFolders}
+          toggleFolder={toggleFolder}
+          drag={drag}
+          analyzingIds={analyzingIds}
+          uploadingIds={upload.uploadingIds}
+          rename={{ renamingFolderId, renameValue, setRenameValue, setRenamingFolderId }}
+          mutations={mutations}
+        />
+      ) : (
+        <DocumentsListView
+          matterId={matterId}
+          documents={documents}
+          folders={folders}
+          onDelete={(id) => mutations.deleteDocument.mutate({ id })}
+          onReanalyze={(id) => mutations.reanalyze.mutate({ documentId: id })}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Träd-vyn: rekursiv mapp-/dokumentrendering med drag-and-drop + rename. */
+function DocumentTree({
+  foldersByParent, docsByFolder, collapsedFolders, toggleFolder,
+  drag, analyzingIds, uploadingIds, rename, mutations,
+}: {
+  foldersByParent: Map<string | null, FolderRecord[]>;
+  docsByFolder: Map<string | null, DocumentRecord[]>;
+  collapsedFolders: Set<string>;
+  toggleFolder: (folderId: string) => void;
+  drag: DragApi;
+  analyzingIds: Set<string>;
+  uploadingIds: Set<string>;
+  rename: RenameApi;
+  mutations: ReturnType<typeof useDocumentMutations>;
+}) {
+  const { dragItem, dropTarget, setDropTarget, handleDragStart, handleDragOver, handleDragLeave, handleDrop, handleDragEnd } = drag;
+  const { renamingFolderId, renameValue, setRenameValue, setRenamingFolderId } = rename;
+
+  const renderDocRow = (doc: DocumentRecord, depth: number) => (
+    <DocumentRow
+      key={doc.id}
+      doc={doc}
+      depth={depth}
+      isDragging={dragItem?.id === doc.id}
+      isAnalyzing={analyzingIds.has(doc.id)}
+      isUploading={uploadingIds.has(doc.id)}
+      onDragStart={handleDragStart("document", doc.id)}
+      onDragEnd={handleDragEnd}
+      onReanalyze={() => mutations.reanalyze.mutate({ documentId: doc.id })}
+      onDelete={() => {
+        if (confirm(`Ta bort "${doc.fileName}"?`)) {
+          mutations.deleteDocument.mutate({ id: doc.id });
+        }
+      }}
+      reanalyzePending={mutations.reanalyze.isPending}
+    />
+  );
+
+  const renderFolderRow = (folder: FolderRecord, depth: number): React.ReactNode => {
+    const childFolders = foldersByParent.get(folder.id) ?? [];
+    const childDocs = docsByFolder.get(folder.id) ?? [];
+    return (
+      <FolderRow
+        key={folder.id}
+        folder={folder}
+        depth={depth}
+        isCollapsed={collapsedFolders.has(folder.id)}
+        isDropTarget={dropTarget === folder.id}
+        isDragging={dragItem?.id === folder.id}
+        isRenaming={renamingFolderId === folder.id}
+        renameValue={renameValue}
+        setRenameValue={setRenameValue}
+        onToggle={() => toggleFolder(folder.id)}
+        onDragStart={handleDragStart("folder", folder.id)}
+        onDragEnd={handleDragEnd}
+        onDragOver={handleDragOver(folder.id)}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop(folder.id)}
+        onRenameSubmit={() => {
+          if (renameValue.trim()) {
+            mutations.renameFolder.mutate({ id: folder.id, name: renameValue.trim() });
+          }
+        }}
+        onRenameCancel={() => setRenamingFolderId(null)}
+        onStartRename={() => { setRenamingFolderId(folder.id); setRenameValue(folder.name); }}
+        onDelete={() => {
+          if (confirm(`Ta bort mappen "${folder.name}"? Innehållet flyttas till överliggande mapp.`)) {
+            mutations.deleteFolder.mutate({ id: folder.id });
+          }
+        }}
+      >
+        {childFolders.map((child) => renderFolderRow(child, depth + 1))}
+        {childDocs.map((doc) => renderDocRow(doc, depth + 1))}
+      </FolderRow>
+    );
+  };
+
+  return (
+    <BrowserTable
+      rootFolders={foldersByParent.get(null) ?? []}
+      rootDocs={docsByFolder.get(null) ?? []}
+      renderFolderRow={renderFolderRow}
+      renderDocRow={renderDocRow}
+      dropTarget={dropTarget}
+      setDropTarget={setDropTarget}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop(null)}
+    />
+  );
+}
+
+/** Felbanner när en uppladdning misslyckas. */
+function UploadErrorBanner({ message, onDismiss }: { message: string; onDismiss: () => void }) {
+  return (
+    <div className="mx-6 mt-3 p-3 rounded-md border border-red-200 bg-red-50 text-sm text-red-800 flex items-start justify-between gap-3">
+      <span><strong>Uppladdning misslyckades:</strong> {message}</span>
+      <button
+        type="button"
+        onClick={onDismiss}
+        className="text-red-600 hover:text-red-800 text-xs"
+        aria-label="Stäng felmeddelande"
+      >
+        ✕
+      </button>
+    </div>
+  );
+}
+
+/**
+ * Uppladdnings-state + handler: optimistiska placeholder-rader, FSA-write,
+ * tRPC-register, invalidate och bakgrundsjobb (klassificering + text-extraktion).
+ */
+function useFileUpload({ matterId, mutations, fileInputRef }: {
+  matterId: string;
+  mutations: ReturnType<typeof useDocumentMutations>;
+  fileInputRef: React.RefObject<HTMLInputElement | null>;
+}) {
+  const utils = trpc.useUtils();
+  const [uploading, setUploading] = useState(false);
+  const [uploadingIds, setUploadingIds] = useState<Set<string>>(new Set());
+  const [pendingUploads, setPendingUploads] = useState<DocumentRecord[]>([]);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -167,6 +335,14 @@ export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
     }
   }
 
+  return { uploading, uploadingIds, pendingUploads, uploadError, setUploadError, handleFileUpload };
+}
+
+/** Drag-and-drop-state + handlers (flytta dokument/mappar). */
+function useDragHandlers(mutations: ReturnType<typeof useDocumentMutations>) {
+  const [dragItem, setDragItem] = useState<DragItem | null>(null);
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
+
   const handleDragStart = useCallback(
     (type: "document" | "folder", id: string) => (e: React.DragEvent) => {
       setDragItem({ type, id });
@@ -205,123 +381,7 @@ export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
     setDropTarget(null);
   }, []);
 
-  const renderDocRow = (doc: DocumentRecord, depth: number) => (
-    <DocumentRow
-      key={doc.id}
-      doc={doc}
-      depth={depth}
-      isDragging={dragItem?.id === doc.id}
-      isAnalyzing={analyzingIds.has(doc.id)}
-      isUploading={uploadingIds.has(doc.id)}
-      onDragStart={handleDragStart("document", doc.id)}
-      onDragEnd={handleDragEnd}
-      onReanalyze={() => mutations.reanalyze.mutate({ documentId: doc.id })}
-      onDelete={() => {
-        if (confirm(`Ta bort "${doc.fileName}"?`)) {
-          mutations.deleteDocument.mutate({ id: doc.id });
-        }
-      }}
-      reanalyzePending={mutations.reanalyze.isPending}
-    />
-  );
-
-  const renderFolderRow = (folder: FolderRecord, depth: number): React.ReactNode => {
-    const childFolders = foldersByParent.get(folder.id) ?? [];
-    const childDocs = docsByFolder.get(folder.id) ?? [];
-    return (
-      <FolderRow
-        key={folder.id}
-        folder={folder}
-        depth={depth}
-        isCollapsed={collapsedFolders.has(folder.id)}
-        isDropTarget={dropTarget === folder.id}
-        isDragging={dragItem?.id === folder.id}
-        isRenaming={renamingFolderId === folder.id}
-        renameValue={renameValue}
-        setRenameValue={setRenameValue}
-        onToggle={() => toggleFolder(folder.id)}
-        onDragStart={handleDragStart("folder", folder.id)}
-        onDragEnd={handleDragEnd}
-        onDragOver={handleDragOver(folder.id)}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop(folder.id)}
-        onRenameSubmit={() => {
-          if (renameValue.trim()) {
-            mutations.renameFolder.mutate({ id: folder.id, name: renameValue.trim() });
-          }
-        }}
-        onRenameCancel={() => setRenamingFolderId(null)}
-        onStartRename={() => { setRenamingFolderId(folder.id); setRenameValue(folder.name); }}
-        onDelete={() => {
-          if (confirm(`Ta bort mappen "${folder.name}"? Innehållet flyttas till överliggande mapp.`)) {
-            mutations.deleteFolder.mutate({ id: folder.id });
-          }
-        }}
-      >
-        {childFolders.map((child) => renderFolderRow(child, depth + 1))}
-        {childDocs.map((doc) => renderDocRow(doc, depth + 1))}
-      </FolderRow>
-    );
-  };
-
-  const rootFolders = foldersByParent.get(null) ?? [];
-  const rootDocs = docsByFolder.get(null) ?? [];
-
-  return (
-    <div className="bg-white rounded-lg border border-gray-200">
-      <BrowserHeader
-        showNewFolder={() => setShowNewFolder(true)}
-        uploading={uploading}
-        fileInputRef={fileInputRef}
-        onUpload={(e) => { void handleFileUpload(e); }}
-        viewMode={viewMode}
-        onChangeViewMode={changeViewMode}
-      />
-
-      {uploadError && (
-        <div className="mx-6 mt-3 p-3 rounded-md border border-red-200 bg-red-50 text-sm text-red-800 flex items-start justify-between gap-3">
-          <span><strong>Uppladdning misslyckades:</strong> {uploadError}</span>
-          <button
-            type="button"
-            onClick={() => setUploadError(null)}
-            className="text-red-600 hover:text-red-800 text-xs"
-            aria-label="Stäng felmeddelande"
-          >
-            ✕
-          </button>
-        </div>
-      )}
-
-      {showNewFolder && (
-        <NewFolderForm
-          isPending={mutations.createFolder.isPending}
-          onSubmit={(name) => mutations.createFolder.mutate({ matterId, name, parentId: null })}
-          onCancel={() => setShowNewFolder(false)}
-        />
-      )}
-
-      {viewMode === "tree" ? (
-        <BrowserTable
-          rootFolders={rootFolders}
-          rootDocs={rootDocs}
-          renderFolderRow={renderFolderRow}
-          renderDocRow={renderDocRow}
-          dropTarget={dropTarget}
-          setDropTarget={setDropTarget}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop(null)}
-        />
-      ) : (
-        <DocumentsListView
-          matterId={matterId}
-          documents={documents}
-          folders={folders}
-          onDelete={(id) => mutations.deleteDocument.mutate({ id })}
-          onReanalyze={(id) => mutations.reanalyze.mutate({ documentId: id })}
-        />
-      )}
-    </div>
-  );
+  return { dragItem, dropTarget, setDropTarget, handleDragStart, handleDragOver, handleDragLeave, handleDrop, handleDragEnd };
 }
 
 function BrowserTable({
