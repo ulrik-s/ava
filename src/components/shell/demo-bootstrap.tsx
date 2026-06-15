@@ -156,23 +156,16 @@ async function rehydrateGeneratedDocs(runtime: DemoRuntime, source: DemoSource):
   for (const f of files) await stashSlabDoc(runtime, f, docs, stashGeneratedDoc);
 }
 
-export function DemoBootstrap({ children }: { children: ReactNode }) {
-  const [firmaConfig] = useState<FirmaConfig>(() => loadFirmaConfig());
-  // Hydrerings-grind: server-prerender och klientens FÖRSTA render måste vara
-  // byte-identiska. Hela demo-appen är klient-renderad (data laddas client-side),
-  // så vi renderar en minimal platshållare tills komponenten monterat — då kan
-  // ingen server/klient-mismatch uppstå (React #418), oavsett mängd återställd
-  // OPFS-data, datum/locale eller webbläsartillägg. Allt dynamiskt körs efter
-  // commit. Se [[dom-anomalies]] / docs/architecture.md.
-  const [mounted, setMounted] = useState(false);
-  const [source] = useState<DemoSource>(() => ({}));
-  const [fsaHandle, setFsaHandle] = useState<FileSystemDirectoryHandle | null>(null);
-  // FSA-handle laddas async — uppdatera mutable container via setHandle
-  // som även triggar React-state och stänger ESLint:s ref-during-render.
+/**
+ * Write-back-pipeline: muterar FSA-working-copy (self-hosted/demo-med-mapp)
+ * och annars pure-demo-slaben. Returnerar writeBack + de mutable refs som
+ * bootstrap-effekten fyller (persistTimer debouncar snapshot-skrivningen).
+ */
+function useDemoWriteBack() {
+  // FSA-handle laddas async — fylls av bootstrap-effekten.
   const fsaRef = useRefBox<FileSystemDirectoryHandle | null>(null);
   // Slab-referens: writeBack skriver demo-mutationer till denna runtime:s
-  // persisterade MemFs (sätts i boot-effekten). persistTimer debouncar
-  // snapshot-skrivningen till OPFS.
+  // persisterade MemFs (sätts i boot-effekten).
   const runtimeRef = useRefBox<DemoRuntime | null>(null);
   const persistTimer = useRefBox<ReturnType<typeof setTimeout> | null>(null);
   const writeBack = useState(() => async (event: WriteBackEvent) => {
@@ -182,9 +175,18 @@ export function DemoBootstrap({ children }: { children: ReactNode }) {
     const rt = runtimeRef.current;
     if (rt) await writeViaSlab(rt, event, persistTimer);
   })[0];
+  return { writeBack, fsaRef, runtimeRef };
+}
 
-  // Lyssna på text-extraktions-event från job-workers. Skriver via
-  // samma writeBack-pipeline så filen hamnar i FSA + auto-sync push:ar.
+/**
+ * Lyssnar på text-extraktions- och generated-doc-event från job-workers och
+ * skriver via writeBack-pipelinen / demo-slaben (överlever reload, kan öppnas
+ * via blob:-URL). Self-hosted utan demo-runtime → generated-doc är no-op.
+ */
+function useWriteBackListeners(
+  writeBack: (event: WriteBackEvent) => Promise<void>,
+  runtimeRef: { current: DemoRuntime | null },
+) {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const handler = (e: Event) => {
@@ -200,10 +202,6 @@ export function DemoBootstrap({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("ava:document-text-extracted", handler);
   }, [writeBack]);
 
-  // Persistera klient-genererat dokument-innehåll (kostnadsräkning m.fl.) till
-  // demo-slaben så det överlever reload och kan öppnas igen via blob:-URL.
-  // Self-hosted (ingen demo-runtime) → no-op; där skrev modalens writeFsa redan
-  // till FSA-working-copyn.
   useEffect(() => {
     if (typeof window === "undefined") return;
     const handler = (e: Event) => {
@@ -222,28 +220,27 @@ export function DemoBootstrap({ children }: { children: ReactNode }) {
     window.addEventListener("ava:generated-doc", handler);
     return () => window.removeEventListener("ava:generated-doc", handler);
   }, [runtimeRef]);
+}
 
-  const [dataStore] = useState(() => new DemoDataStore(source, writeBack));
-  // Initial status MÅSTE vara SSR-stabil för att undvika hydration-
-  // mismatch (React #418). Pathname-baserad logik flyttas till useEffect.
-  const [status, setStatus] = useState<Status>("loading");
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [queryClient] = useState(() => new QueryClient({
+function makeDemoQueryClient(): QueryClient {
+  return new QueryClient({
     defaultOptions: {
       queries: { staleTime: 60_000, refetchOnWindowFocus: false, retry: false },
       mutations: { retry: false },
     },
-  }));
-  const [trpcClient] = useState(() => trpc.createClient({
+  });
+}
+
+function createDemoTrpcClient(dataStore: DemoDataStore, firmaConfig: FirmaConfig) {
+  return trpc.createClient({
     links: [
       new GitBackendRuntime({
         dataStore,
         authProvider: new GitAuthProvider({
-          // principalId sätts av login-flowet (`/login`). Demo-mode utan
-          // satt principal → guest-id (datakällan filtrerar bort
-          // user-bundna queries tills login är gjort). Self-hosted-seed:en
-          // använder fortfarande "current-user" tills self-hosted-login är
-          // implementerad.
+          // principalId sätts av login-flowet (`/login`). Demo utan satt
+          // principal → guest-id (datakällan filtrerar bort user-bundna
+          // queries tills login gjorts). Self-hosted-seed:en använder
+          // "current-user" tills self-hosted-login är implementerad.
           id: firmaConfig.principalId
             || (firmaConfig.tier === "self-hosted" ? "current-user" : ""),
           email: firmaConfig.authorEmail,
@@ -254,13 +251,26 @@ export function DemoBootstrap({ children }: { children: ReactNode }) {
       }).createLink(),
     ],
     transformer: superjson,
-  } as never));
+  } as never);
+}
 
-  // Flippa efter första commit → byter från platshållare till full app-tree.
-  // Egen effekt (separat från boot-effekten) så hydreringen hinner committa rent.
-  // eslint-disable-next-line react-hooks/set-state-in-effect -- engångs-flip; det ÄR avsikten
-  useEffect(() => { setMounted(true); }, []);
+interface BootstrapArgs {
+  firmaConfig: FirmaConfig;
+  source: DemoSource;
+  queryClient: QueryClient;
+  fsaRef: { current: FileSystemDirectoryHandle | null };
+  runtimeRef: { current: DemoRuntime | null };
+  setFsaHandle: (h: FileSystemDirectoryHandle | null) => void;
+  setStatus: (s: Status) => void;
+  setErrorMsg: (m: string | null) => void;
+}
 
+/**
+ * Mount-only bootstrap: gate-check → self-hosted-clone, eller demo-slab-
+ * restore/fresh-clone + FSA-handle-laddning. Fyller refs och sätter status.
+ */
+function useDemoBootstrap(args: BootstrapArgs) {
+  const { firmaConfig, source, queryClient, fsaRef, runtimeRef, setFsaHandle, setStatus, setErrorMsg } = args;
   useEffect(() => {
     const gate = checkBootstrapGate(firmaConfig);
     if (gate === "skip-ready") { queueMicrotask(() => setStatus("ready")); return; }
@@ -273,7 +283,7 @@ export function DemoBootstrap({ children }: { children: ReactNode }) {
     // (egen git-server, t.ex. docker:8080/git eller firma-Linux-låda).
     // OPFS kräver ingen mapp-dialog → fungerar headless (e2e) + iOS.
     if (firmaConfig.tier === "self-hosted") {
-      void loadSelfHosted(firmaConfig, source, queryClient, fsaRef, setFsaHandle, setStatus, setErrorMsg, () => cancelled);
+      void loadSelfHosted({ firmaConfig, source, queryClient, fsaRef, setFsaHandle, setStatus, setErrorMsg, isCancelled: () => cancelled });
       return () => { cancelled = true; };
     }
     // Försök ladda FSA-handle innan första render. Om vi har en handle
@@ -354,6 +364,35 @@ export function DemoBootstrap({ children }: { children: ReactNode }) {
     // stabila och behöver inte vara deps.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+}
+
+export function DemoBootstrap({ children }: { children: ReactNode }) {
+  const [firmaConfig] = useState<FirmaConfig>(() => loadFirmaConfig());
+  // Hydrerings-grind: server-prerender och klientens FÖRSTA render måste vara
+  // byte-identiska. Hela demo-appen är klient-renderad (data laddas client-side),
+  // så vi renderar en minimal platshållare tills komponenten monterat — då kan
+  // ingen server/klient-mismatch uppstå (React #418). Se docs/architecture.md.
+  const [mounted, setMounted] = useState(false);
+  const [source] = useState<DemoSource>(() => ({}));
+  const [fsaHandle, setFsaHandle] = useState<FileSystemDirectoryHandle | null>(null);
+
+  const { writeBack, fsaRef, runtimeRef } = useDemoWriteBack();
+  useWriteBackListeners(writeBack, runtimeRef);
+
+  const [dataStore] = useState(() => new DemoDataStore(source, writeBack));
+  // Initial status MÅSTE vara SSR-stabil för att undvika hydration-mismatch
+  // (React #418). Pathname-baserad logik flyttas till useDemoBootstrap.
+  const [status, setStatus] = useState<Status>("loading");
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [queryClient] = useState(makeDemoQueryClient);
+  const [trpcClient] = useState(() => createDemoTrpcClient(dataStore, firmaConfig));
+
+  // Flippa efter första commit → byter från platshållare till full app-tree.
+  // Egen effekt (separat från boot-effekten) så hydreringen hinner committa rent.
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- engångs-flip; det ÄR avsikten
+  useEffect(() => { setMounted(true); }, []);
+
+  useDemoBootstrap({ firmaConfig, source, queryClient, fsaRef, runtimeRef, setFsaHandle, setStatus, setErrorMsg });
 
   // Hydrerings-grind: identisk markup på server + klientens första render.
   if (!mounted) {
@@ -467,17 +506,20 @@ function AuthGatedDemoTree(props: TreeProps) {
  * redan), hydrera DemoSource från clonen. Skrivningar + sync sköts av
  * samma FSA-pipeline (OPFS-handle:n sparas som "repo-root").
  */
+interface LoadSelfHostedArgs {
+  firmaConfig: FirmaConfig;
+  source: DemoSource;
+  queryClient: QueryClient;
+  fsaRef: { current: FileSystemDirectoryHandle | null };
+  setFsaHandle: (h: FileSystemDirectoryHandle | null) => void;
+  setStatus: (s: Status) => void;
+  setErrorMsg: (m: string | null) => void;
+  isCancelled: () => boolean;
+}
+
 // eslint-disable-next-line complexity -- TODO: refactor (currently fails complexity@8: Async function 'loadSelfHosted' has a complexity of 9. Maximum allowed is 8.)
-async function loadSelfHosted(
-  firmaConfig: FirmaConfig,
-  source: DemoSource,
-  queryClient: QueryClient,
-  fsaRef: { current: FileSystemDirectoryHandle | null },
-  setFsaHandle: (h: FileSystemDirectoryHandle | null) => void,
-  setStatus: (s: Status) => void,
-  setErrorMsg: (m: string | null) => void,
-  isCancelled: () => boolean,
-): Promise<void> {
+async function loadSelfHosted(args: LoadSelfHostedArgs): Promise<void> {
+  const { firmaConfig, source, queryClient, fsaRef, setFsaHandle, setStatus, setErrorMsg, isCancelled } = args;
   try {
     const { getOpfsRoot, saveHandle } = await import("@/lib/client/fsa/handle-store");
     const { loadSelfHostedSource } = await import("@/lib/client/firma/load-self-hosted-source");
