@@ -10,6 +10,8 @@ import { ServiceNotesSection } from "@/app/matters/[id]/_service-notes-section";
 
 const listQuery = { data: [] as unknown[], isLoading: false };
 const createMutate = vi.fn();
+const updateMutate = vi.fn();
+const deleteMutate = vi.fn();
 let createOnSuccess: (() => void) | undefined;
 const invalidate = vi.fn();
 
@@ -27,6 +29,8 @@ vi.mock("@/lib/client/trpc", () => ({
           return { mutate: (a: unknown) => createMutate(a), isPending: false };
         },
       },
+      update: { useMutation: () => ({ mutate: (a: unknown) => updateMutate(a), isPending: false }) },
+      delete: { useMutation: () => ({ mutate: (a: unknown) => deleteMutate(a), isPending: false }) },
     },
     // DataTable-beroenden (#367): tjänsteanteckningarna renderas nu i en
     // DataTable som läser prefs + current user.
@@ -89,5 +93,41 @@ describe("ServiceNotesSection", () => {
     const form = screen.getByPlaceholderText(/Vad hände/).closest("form")!;
     fireEvent.submit(form);
     expect(createMutate).not.toHaveBeenCalled();
+  });
+
+  it("Redigera öppnar formuläret förifyllt och submit skickar update med id (#375)", () => {
+    listQuery.data = [
+      { id: "a", date: "2026-06-10", time: "08:00", text: "Gammal text", author: { name: "Anna" } },
+    ];
+    render(<ServiceNotesSection matterId="m1" />);
+    fireEvent.click(screen.getByTitle("Redigera"));
+    const textarea = screen.getByPlaceholderText(/Vad hände/) as HTMLTextAreaElement;
+    expect(textarea.value).toBe("Gammal text"); // förifyllt
+    fireEvent.change(textarea, { target: { value: "Ny text" } });
+    fireEvent.click(screen.getByRole("button", { name: "Spara" }));
+    expect(updateMutate).toHaveBeenCalledWith(expect.objectContaining({ id: "a", text: "Ny text" }));
+    expect(createMutate).not.toHaveBeenCalled();
+  });
+
+  it("Ta bort kallar delete med id efter confirm (#375)", () => {
+    listQuery.data = [
+      { id: "a", date: "2026-06-10", time: "08:00", text: "Text", author: { name: "Anna" } },
+    ];
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    render(<ServiceNotesSection matterId="m1" />);
+    fireEvent.click(screen.getByTitle("Ta bort"));
+    expect(deleteMutate).toHaveBeenCalledWith({ id: "a" });
+    confirmSpy.mockRestore();
+  });
+
+  it("Ta bort gör inget om confirm avbryts (#375)", () => {
+    listQuery.data = [
+      { id: "a", date: "2026-06-10", time: "08:00", text: "Text", author: { name: "Anna" } },
+    ];
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+    render(<ServiceNotesSection matterId="m1" />);
+    fireEvent.click(screen.getByTitle("Ta bort"));
+    expect(deleteMutate).not.toHaveBeenCalled();
+    confirmSpy.mockRestore();
   });
 });

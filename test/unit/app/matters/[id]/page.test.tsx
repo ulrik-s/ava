@@ -106,6 +106,8 @@ vi.mock("@/lib/client/trpc", () => ({
     serviceNote: {
       list: { useQuery: () => ({ data: [], isLoading: false }) },
       create: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      update: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      delete: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
     user: {
       current: { useQuery: () => ({ data: { id: "u1", name: "Anna", email: "anna@firma.local" } }) },
