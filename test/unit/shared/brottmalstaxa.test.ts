@@ -8,8 +8,11 @@
 import { describe, it, expect } from "vitest-compat";
 import {
   computeBrottmalstaxa,
+  computeTimkostnadsnorm,
   BROTTMALSTAXA_TABLE,
   TAXA_MAX_MINUTES,
+  TIMKOSTNADSNORM_FTAX_ORE_PER_H,
+  TIMKOSTNADSNORM_NO_FTAX_ORE_PER_H,
   applyNoFTaxFactor,
 } from "@/lib/shared/brottmalstaxa";
 
@@ -90,6 +93,56 @@ describe("F-skatt-justering", () => {
   it("applyNoFTaxFactor — 2809 kr × 1237/1626 = ca 2137 kr", () => {
     // 280900 * 1237 / 1626 = 213697.59... → 213698 öre
     expect(applyNoFTaxFactor(280900)).toBe(213698);
+  });
+});
+
+describe("computeTimkostnadsnorm (löpande räkning > taxetak / non-taxemål)", () => {
+  it("F-skatt (default): 60 min arbete → 1 626 kr, rate 162600 öre/h", () => {
+    const r = computeTimkostnadsnorm({ arbetsMinutes: 60 });
+    expect(r.rateOrePerH).toBe(TIMKOSTNADSNORM_FTAX_ORE_PER_H);
+    expect(r.arbete).toBe(162_600);
+    expect(r.tidsspillan).toBe(0);
+    expect(r.total).toBe(162_600);
+  });
+
+  it("utan F-skatt: lägre timkostnadsnorm (1 237 kr/h)", () => {
+    const r = computeTimkostnadsnorm({ arbetsMinutes: 60, hasFTax: false });
+    expect(r.rateOrePerH).toBe(TIMKOSTNADSNORM_NO_FTAX_ORE_PER_H);
+    expect(r.arbete).toBe(123_700);
+  });
+
+  it("tidsspillan ersätts med samma norm och adderas till total", () => {
+    const r = computeTimkostnadsnorm({ arbetsMinutes: 30, tidsspillanMinutes: 30 });
+    expect(r.arbete).toBe(Math.round((30 * TIMKOSTNADSNORM_FTAX_ORE_PER_H) / 60));
+    expect(r.tidsspillan).toBe(Math.round((30 * TIMKOSTNADSNORM_FTAX_ORE_PER_H) / 60));
+    expect(r.total).toBe(r.arbete + r.tidsspillan);
+  });
+
+  it("avrundar till hela ören (1 min)", () => {
+    const r = computeTimkostnadsnorm({ arbetsMinutes: 1 });
+    expect(r.arbete).toBe(Math.round(TIMKOSTNADSNORM_FTAX_ORE_PER_H / 60));
+  });
+
+  it("0 min → 0 kr", () => {
+    expect(computeTimkostnadsnorm({ arbetsMinutes: 0 }).total).toBe(0);
+  });
+});
+
+describe("buildNotes-grenar", () => {
+  it("nära intervallets övre gräns → varningsnot om avslutsklockslag", () => {
+    // 12 min ligger i 0-14-intervallet, > toMin-5 (=9) → noten ska finnas.
+    const r = computeBrottmalstaxa({ huvudforhandlingMinutes: 12, level: 1 });
+    expect(r.notes.join(" ")).toMatch(/övre gräns/i);
+  });
+
+  it("mitt i intervallet → ingen övre-gräns-not", () => {
+    const r = computeBrottmalstaxa({ huvudforhandlingMinutes: 2, level: 1 });
+    expect(r.notes.join(" ")).not.toMatch(/övre gräns/i);
+  });
+
+  it("gränsvärdet F-skatt-justeras också utan F-skatt", () => {
+    const withoutFTax = computeBrottmalstaxa({ huvudforhandlingMinutes: 0, level: 1, hasFTax: false });
+    expect(withoutFTax.gransvardeExclVat).toBe(applyNoFTaxFactor(421900));
   });
 });
 
