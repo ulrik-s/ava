@@ -15,7 +15,10 @@ const invalidate = vi.fn();
 
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
-    useUtils: () => ({ serviceNote: { list: { invalidate } } }),
+    useUtils: () => ({
+      serviceNote: { list: { invalidate } },
+      prefs: { get: { invalidate: vi.fn() } },
+    }),
     serviceNote: {
       list: { useQuery: () => listQuery },
       create: {
@@ -24,6 +27,16 @@ vi.mock("@/lib/client/trpc", () => ({
           return { mutate: (a: unknown) => createMutate(a), isPending: false };
         },
       },
+    },
+    // DataTable-beroenden (#367): tjänsteanteckningarna renderas nu i en
+    // DataTable som läser prefs + current user.
+    user: { current: { useQuery: () => ({ data: { id: "u1", name: "Anna", role: "USER" } }) } },
+    prefs: {
+      get: { useQuery: () => ({ data: undefined, isLoading: false }) },
+      save: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      clear: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      setOrgDefault: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      clearOrgDefault: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
   },
 }));
