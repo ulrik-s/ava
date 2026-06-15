@@ -13,6 +13,7 @@ import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
 import type { AppRouter } from "@/lib/server/routers/_app";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
+import { computeMatterSettlement, computeRadgivningsavgift, type MatterSettlement } from "@/lib/shared/rattshjalp";
 import { computeInvoiceLedger } from "@/lib/shared/write-off-calc";
 import { CreditModal } from "./_credit-modal";
 import { DispatchHistory } from "./_dispatch-history";
@@ -147,9 +148,7 @@ function InvoiceSections({ inv, ledger, onCancelPlan }: { inv: Inv; ledger: Ledg
       <InvoiceDocumentsCard documents={(inv.documents ?? []) as unknown as InvoiceDocRow[]} />
       <CreditBanners inv={inv} />
       {inv.paymentPlan && <PaymentPlanCard plan={inv.paymentPlan} onCancel={onCancelPlan} />}
-      {inv.invoiceType === "FINAL" && ledger.accontoDeductions.length > 0 && (
-        <AccontoDeductions deductions={ledger.accontoDeductions} />
-      )}
+      <FinalInvoiceExtras inv={inv} ledger={ledger} />
       <PaymentsTable payments={inv.payments} paidSum={ledger.paidSum} />
       <DispatchHistory invoiceId={inv.id} />
       {ledger.writeOffs.length > 0 && <WriteOffsCard writeOffs={ledger.writeOffs} />}
@@ -364,6 +363,71 @@ function PaymentPlanCard({
 type SpecTimeRow = { id: string; date: string | Date; description: string; minutes: number; hourlyRate?: number | null };
 type SpecExpenseRow = { id: string; date: string | Date; description: string; amount: number };
 type InvoiceDocRow = { id: string; fileName: string; documentType?: string | null; createdAt?: string | Date | null; storagePath?: string | null; mimeType?: string | null };
+
+/** Bygg slutfaktura-sammanställningen (#349 C) ur fakturans spec + ledger.
+ *  Rådgivningstimmen (rättshjälpstaxa) tas med för rättshjälpsärenden. */
+function buildSettlement(inv: Inv, ledger: LedgerView): MatterSettlement {
+  const times = (inv.timeEntries ?? []) as unknown as SpecTimeRow[];
+  const exps = (inv.expenses ?? []) as unknown as SpecExpenseRow[];
+  const arvodeOre = times.reduce((s, t) => s + Math.round((t.minutes / 60) * (t.hourlyRate ?? 0)), 0);
+  const utlaggOre = exps.reduce((s, e) => s + e.amount, 0);
+  const m = inv.matter as { paymentMethod?: string | null; taxaHasFTax?: boolean | null } | null;
+  const radgivningOre = m?.paymentMethod === "RATTSHJALP"
+    ? computeRadgivningsavgift({ hasFTax: m.taxaHasFTax ?? true }).beloppExclVatOre
+    : 0;
+  return computeMatterSettlement({
+    arvodeOre, utlaggOre, radgivningOre,
+    accontoPaidOre: ledger.accontoDeductionTotal,
+    paymentsOre: ledger.paidSum,
+  });
+}
+
+/** Rader för sammanställningskortet (negativa = avdrag). */
+function settlementRows(s: MatterSettlement): Array<{ label: string; ore: number; strong?: boolean }> {
+  const rows: Array<{ label: string; ore: number; strong?: boolean }> = [
+    { label: "Upparbetat arvode", ore: s.arvodeOre },
+    { label: "Utlägg", ore: s.utlaggOre },
+  ];
+  if (s.prutningOre !== 0) rows.push({ label: "Prutning (domstol)", ore: s.prutningOre });
+  rows.push({ label: "Brutto", ore: s.bruttoOre, strong: true });
+  if (s.accontoPaidOre !== 0) rows.push({ label: "Avgår betalda acconton", ore: -s.accontoPaidOre });
+  rows.push({ label: "Slutfaktura", ore: s.slutfakturaOre, strong: true });
+  if (s.paymentsOre !== 0) rows.push({ label: "Avgår inbetalt", ore: -s.paymentsOre });
+  if (s.radgivningOre !== 0) {
+    rows.push({ label: "Rådgivningstimme (rättshjälpstaxa, separat klientfaktura)", ore: s.radgivningOre });
+  }
+  rows.push({ label: "Utestående", ore: s.outstandingOre, strong: true });
+  return rows;
+}
+
+/** FINAL-fakturans extra sektioner: accontoavdrag + ärende-sammanställning (#349). */
+function FinalInvoiceExtras({ inv, ledger }: { inv: Inv; ledger: LedgerView }) {
+  if (inv.invoiceType !== "FINAL") return null;
+  return (
+    <>
+      {ledger.accontoDeductions.length > 0 && <AccontoDeductions deductions={ledger.accontoDeductions} />}
+      <SettlementSummaryCard settlement={buildSettlement(inv, ledger)} />
+    </>
+  );
+}
+
+/** Slutfaktura-sammanställning (#349 C): hela ärendets belopp + betalningar. */
+function SettlementSummaryCard({ settlement }: { settlement: MatterSettlement }) {
+  return (
+    <div className="bg-white rounded-lg border border-gray-200 p-6">
+      <h2 className="font-semibold text-gray-900 mb-1">Sammanställning</h2>
+      <p className="text-sm text-gray-500 mb-4">Hela ärendets belopp och betalningar.</p>
+      <dl className="divide-y divide-gray-100">
+        {settlementRows(settlement).map((r) => (
+          <div key={r.label} className="flex items-center justify-between py-1.5">
+            <dt className={r.strong ? "text-sm font-semibold text-gray-900" : "text-sm text-gray-600"}>{r.label}</dt>
+            <dd className={`text-sm font-mono ${r.strong ? "font-semibold text-gray-900" : "text-gray-700"}`}>{formatCurrency(r.ore)}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+}
 
 /**
  * Öppna ett fakturadokument (PDF m.fl.) i en ny flik — SAMMA flöde som
