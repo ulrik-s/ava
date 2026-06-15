@@ -19,7 +19,46 @@ import { useSyncContext } from "@/lib/client/sync/sync-context";
 import type { SyncState } from "@/lib/client/sync/use-auto-sync";
 import { pluralChanges } from "@/lib/client/utils";
 
-// eslint-disable-next-line complexity
+/** Meddelandet när ingen sync-provider finns (demo-läge eller saknad token/
+ *  mapp). Utbruten ur SyncDiagnostics så dess två ternarier inte räknas in. */
+function NoProviderNotice({ tier, folderName }: { tier: string | null; folderName: string | null }) {
+  return (
+    <div className="bg-gray-50 border border-gray-200 rounded p-3 text-xs text-gray-600 mt-4 space-y-1">
+      <p>
+        <strong className="text-gray-800">Synk:</strong>{" "}
+        {tier === "demo"
+          ? "demo-läge — ingen remote-sync. Ändringar lever bara i denna tab/mappen lokalt."
+          : "auto-sync inaktiv — token för git-remote saknas, eller mapp ej vald."}
+      </p>
+      <p>
+        <strong className="text-gray-800">Lokal mapp:</strong>{" "}
+        {folderName
+          ? <>vald (<code className="bg-gray-100 px-1 rounded">{folderName}/</code>)</>
+          : "ingen mapp vald — välj under 'Datakälla' ovan."}
+      </p>
+    </div>
+  );
+}
+
+/** "Synka nu"-knappen. Utbruten så dess `||`/ternarier inte räknas in i
+ *  SyncDiagnostics-komponentens komplexitet. */
+function SyncNowButton({ enabled, running, state, onTrigger }: {
+  enabled: boolean; running: boolean; state: SyncState; onTrigger: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onTrigger}
+      disabled={!enabled || running || state.kind === "syncing"}
+      title={!enabled ? "Sync inaktiv — kräver write-mode-token" : undefined}
+      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+    >
+      <RefreshCw size={14} className={running ? "animate-spin" : ""} />
+      {running ? "Synkar…" : "Synka nu"}
+    </button>
+  );
+}
+
 export function SyncDiagnostics() {
   const { state, syncNow, providerKind, lastError, enabled } = useSyncContext();
   const [running, setRunning] = useState(false);
@@ -32,26 +71,11 @@ export function SyncDiagnostics() {
     void loadHandle("repo-root").then((h) => setFolderName(h?.name ?? null));
   }, []);
 
+  // Förfina meddelandet: i demo-mode är det INTE en konfig-fel utan ett
+  // medvetet val (data hämtas från GH Pages, ändringar persisteras bara i
+  // tab:en). Visa rätt förklaring per tier + redan-valda fakta.
   if (!providerKind) {
-    // Förfina meddelandet: i demo-mode är det INTE en konfig-fel utan
-    // ett medvetet val (data hämtas från GH Pages, ändringar persisteras
-    // bara i tab:en). Visa rätt förklaring per tier + redan-valda fakta.
-    return (
-      <div className="bg-gray-50 border border-gray-200 rounded p-3 text-xs text-gray-600 mt-4 space-y-1">
-        <p>
-          <strong className="text-gray-800">Synk:</strong>{" "}
-          {tier === "demo"
-            ? "demo-läge — ingen remote-sync. Ändringar lever bara i denna tab/mappen lokalt."
-            : "auto-sync inaktiv — token för git-remote saknas, eller mapp ej vald."}
-        </p>
-        <p>
-          <strong className="text-gray-800">Lokal mapp:</strong>{" "}
-          {folderName
-            ? <>vald (<code className="bg-gray-100 px-1 rounded">{folderName}/</code>)</>
-            : "ingen mapp vald — välj under 'Datakälla' ovan."}
-        </p>
-      </div>
-    );
+    return <NoProviderNotice tier={tier} folderName={folderName} />;
   }
 
   const trigger = async () => {
@@ -76,16 +100,7 @@ export function SyncDiagnostics() {
             </p>
           )}
         </div>
-        <button
-          type="button"
-          onClick={() => void trigger()}
-          disabled={!enabled || running || state.kind === "syncing"}
-          title={!enabled ? "Sync inaktiv — kräver write-mode-token" : undefined}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
-        >
-          <RefreshCw size={14} className={running ? "animate-spin" : ""} />
-          {running ? "Synkar…" : "Synka nu"}
-        </button>
+        <SyncNowButton enabled={enabled} running={running} state={state} onTrigger={() => void trigger()} />
       </div>
 
       {lastError && (
