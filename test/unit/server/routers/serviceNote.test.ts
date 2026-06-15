@@ -1,7 +1,7 @@
 /**
- * Test för serviceNoteRouter (#348) — append-only list + create.
+ * Test för serviceNoteRouter (#348/#375) — list + create + update + delete.
  * list org-scopas via matter.organizationId; create sätter authorId + org
- * från context.
+ * från context; update/delete ägarkollar via matter (findFirst) → NOT_FOUND.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
@@ -12,6 +12,9 @@ const mockPrisma = {
   serviceNote: {
     findMany: vi.fn(),
     create: vi.fn(),
+    findFirst: vi.fn(),
+    update: vi.fn(),
+    delete: vi.fn(),
   },
 };
 
@@ -28,6 +31,9 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockPrisma.serviceNote.findMany.mockResolvedValue([]);
   mockPrisma.serviceNote.create.mockResolvedValue({ id: "sn1" });
+  mockPrisma.serviceNote.findFirst.mockResolvedValue({ id: "sn1" });
+  mockPrisma.serviceNote.update.mockResolvedValue({ id: "sn1" });
+  mockPrisma.serviceNote.delete.mockResolvedValue({ id: "sn1" });
 });
 
 describe("serviceNote.list", () => {
@@ -67,5 +73,43 @@ describe("serviceNote.create", () => {
       matterId: "m1", date: "2026-06-15", time: "09:30", text: "X", authorId: "u-fix",
     });
     expect(mockPrisma.serviceNote.create.mock.calls[0]![0].data.authorId).toBe("u-fix");
+  });
+});
+
+describe("serviceNote.update (#375)", () => {
+  it("ägarkollar via matter.organizationId innan update", async () => {
+    await makeCaller("org-a").update({ id: "sn1", text: "Rättad" });
+    expect(mockPrisma.serviceNote.findFirst).toHaveBeenCalledWith({
+      where: { id: "sn1", matter: { organizationId: "org-a" } },
+    });
+    expect(mockPrisma.serviceNote.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "sn1" }, data: expect.objectContaining({ text: "Rättad" }) }),
+    );
+  });
+
+  it("kastar NOT_FOUND vid org-mismatch (läcker inte existens)", async () => {
+    mockPrisma.serviceNote.findFirst.mockResolvedValue(null);
+    await expect(makeCaller("org-x").update({ id: "sn1", text: "X" })).rejects.toThrow();
+    expect(mockPrisma.serviceNote.update).not.toHaveBeenCalled();
+  });
+
+  it("kräver icke-tom text när text anges", async () => {
+    await expect(makeCaller().update({ id: "sn1", text: "" })).rejects.toThrow();
+  });
+});
+
+describe("serviceNote.delete (#375)", () => {
+  it("ägarkollar via matter.organizationId innan delete", async () => {
+    await makeCaller("org-a").delete({ id: "sn1" });
+    expect(mockPrisma.serviceNote.findFirst).toHaveBeenCalledWith({
+      where: { id: "sn1", matter: { organizationId: "org-a" } },
+    });
+    expect(mockPrisma.serviceNote.delete).toHaveBeenCalledWith({ where: { id: "sn1" } });
+  });
+
+  it("kastar NOT_FOUND vid org-mismatch", async () => {
+    mockPrisma.serviceNote.findFirst.mockResolvedValue(null);
+    await expect(makeCaller("org-x").delete({ id: "sn1" })).rejects.toThrow();
+    expect(mockPrisma.serviceNote.delete).not.toHaveBeenCalled();
   });
 });

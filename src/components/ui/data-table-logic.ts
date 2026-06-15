@@ -28,6 +28,9 @@ export interface Column<T> {
   groupable?: boolean;
   defaultWidth?: number;
   align?: "left" | "right" | "center";
+  /** Låt cellens innehåll wrappa över flera rader (annars `nowrap`). Använd
+   *  för fri-text-kolumner (t.ex. tjänsteanteckningar) som annars trunkeras. */
+  wrap?: boolean;
   hideable?: boolean;
   /** Kolumnen finns i katalogen men är inte visad förrän användaren explicit
    *  väljer "+ Visa kolumn → <denna>". Använd för fält som är intressanta

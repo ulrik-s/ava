@@ -6,12 +6,13 @@ import {
   userIdSchema,
   serviceNoteIdSchema,
 } from "@/lib/shared/schemas/ids";
-import { router, protectedProcedure } from "../trpc";
+import { router, protectedProcedure, orgProcedure, TRPCError } from "../trpc";
 
 /**
  * Tjänsteanteckningar (#348) — korta, daterade noteringar i ett ärende.
- * Append-only i v1 (juridisk spårbarhet): bara `list` + `create`, ingen
- * update/delete. `authorId` sätts från principalen (ej editerbart i UI:t).
+ * `list` + `create` + `update` + `delete` (#375). `authorId` sätts från
+ * principalen vid create (ej editerbart i UI:t). Redigera/ta-bort är
+ * org-scopade: ägarkoll via matter INNAN mutation, NOT_FOUND vid mismatch.
  */
 export const serviceNoteRouter = router({
   list: protectedProcedure
@@ -53,5 +54,38 @@ export const serviceNoteRouter = router({
           ...(input.createdAt ? { createdAt: new Date(input.createdAt) } : {}),
         }),
       });
+    }),
+
+  update: orgProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        date: z.string().min(1).optional(),
+        time: z.string().min(1).optional(),
+        text: z.string().min(1).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      // Ägarkoll (samma org-scopning som `list`) INNAN update — NOT_FOUND vid
+      // mismatch läcker inte existens.
+      const owned = await ctx.dataStore.serviceNotes.findFirst({
+        where: { id: input.id, matter: { organizationId: ctx.orgId } },
+      });
+      if (!owned) throw new TRPCError({ code: "NOT_FOUND" });
+      const { id, date, time, text } = input;
+      return ctx.dataStore.serviceNotes.update({
+        where: { id },
+        data: omitUndefined({ date, time, text }),
+      });
+    }),
+
+  delete: orgProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const owned = await ctx.dataStore.serviceNotes.findFirst({
+        where: { id: input.id, matter: { organizationId: ctx.orgId } },
+      });
+      if (!owned) throw new TRPCError({ code: "NOT_FOUND" });
+      return ctx.dataStore.serviceNotes.delete({ where: { id: input.id } });
     }),
 });

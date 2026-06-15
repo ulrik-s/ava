@@ -51,6 +51,12 @@ function widthOf<T>(col: Column<T>, prefs: DataTablePrefs): number | undefined {
   return prefs.columns?.find((c) => c.key === col.key)?.width ?? col.defaultWidth;
 }
 
+/** Cell-klass för data-rader: wrappande kolumner bryter text över flera rader,
+ *  övriga håller `nowrap` (default). */
+function cellClass<T>(col: Column<T>): string {
+  return `px-3 py-2 ${col.wrap ? "whitespace-normal break-words" : "whitespace-nowrap"}`;
+}
+
 export function DataTable<T>({ prefKey, columns, data, rowKey, onRowClick, emptyMessage, footer }: Props<T>) {
   const persisted = trpc.prefs.get.useQuery({ key: prefKey });
   const save = trpc.prefs.save.useMutation();
@@ -383,7 +389,7 @@ function GroupBlock<T>({ group, vCols, prefs, rowKey, onRowClick, showSummary, c
       {group.rows.map((r) => (
         <tr key={rowKey(r)} className={onRowClick ? "hover:bg-gray-50 cursor-pointer" : ""} onClick={onRowClick ? () => onRowClick(r) : undefined}>
           {vCols.map((c) => (
-            <td key={c.key} style={{ width: widthOf(c, prefs), textAlign: c.align ?? "left" }} className="px-3 py-2 whitespace-nowrap">
+            <td key={c.key} style={{ width: widthOf(c, prefs), textAlign: c.align ?? "left" }} className={cellClass(c)}>
               {c.render(r)}
             </td>
           ))}
