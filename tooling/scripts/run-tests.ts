@@ -31,9 +31,10 @@ const COVERAGE = process.argv.includes("--coverage");
 const FAST = process.argv.includes("--fast");
 
 // Ratchet-golv (flyttat hit från check-coverage.ts) — flytta BARA uppåt.
-// #27: 84.0 → 84.8 (pick-provider) → 85.2 (external-edit-modal, lokalt 85.63%
-// rader, ~0.43% marginal — FUNC_FLOOR lämnas konservativt pga Node-version-varians).
-const LINE_FLOOR = 0.852;
+// #27: 84.0 → 84.8 (pick-provider) → 85.2 (external-edit-modal) → 85.5
+// (verdict-dialog, lokalt 85.92% rader, ~0.42% marginal — FUNC_FLOOR lämnas
+// konservativt pga Node-version-varians).
+const LINE_FLOOR = 0.855;
 const FUNC_FLOOR = 0.80;
 
 /**
