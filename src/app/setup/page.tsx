@@ -22,15 +22,22 @@ import { loadFirmaConfig, saveFirmaConfig } from "@/lib/client/firma/firma-confi
 
 type Stage = "loading" | "done" | "paste" | "advanced" | "demo";
 
-// eslint-disable-next-line complexity
-export default function SetupPage() {
+interface SetupState {
+  stage: Stage;
+  hasAuthServer: boolean;
+  success: ProvisionedAccount | null;
+  email: string; setEmail: (v: string) => void;
+  name: string; setName: (v: string) => void;
+  pat: string; setPat: (v: string) => void;
+  error: string | null;
+  onPasteSubmit: (e: React.FormEvent) => void;
+}
+
+/** Provisionerings-state: avgör stage från firma-config vid mount + paste-PAT-flödet. */
+function useSetupStage(): SetupState {
   const [stage, setStage] = useState<Stage>("loading");
   const [hasAuthServer, setHasAuthServer] = useState(false);
-
-  // Klar-state
   const [success, setSuccess] = useState<ProvisionedAccount | null>(null);
-
-  // Paste-PAT-form
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [pat, setPat] = useState("");
@@ -44,7 +51,6 @@ export default function SetupPage() {
       return;
     }
     if (cfg.tier === "demo") {
-       
       setStage("demo");
       return;
     }
@@ -72,94 +78,112 @@ export default function SetupPage() {
     setStage("done");
   }
 
+  return { stage, hasAuthServer, success, email, setEmail, name, setName, pat, setPat, error, onPasteSubmit };
+}
+
+export default function SetupPage() {
+  const s = useSetupStage();
   return (
     <div className="max-w-xl mx-auto py-8">
       <h1 className="text-2xl font-bold text-gray-900 mb-2 flex items-center gap-2">
         <ShieldCheck size={22} /> AVA setup
       </h1>
 
-      {stage === "loading" && (
+      {s.stage === "loading" && (
         <p className="text-sm text-gray-500"><Loader2 className="inline animate-spin mr-1" size={14} /> Hämtar status…</p>
       )}
+      {s.stage === "demo" && <DemoStage />}
+      {s.stage === "paste" && <PasteStage state={s} />}
+      {s.stage === "done" && <DoneStage success={s.success} />}
+    </div>
+  );
+}
 
-      {stage === "demo" && (
-        <div className="bg-blue-50 border border-blue-200 rounded p-5 text-sm text-blue-900">
-          <p className="flex items-center gap-1 mb-2"><Info size={14} /> <strong>Demo-läge</strong></p>
-          <p>Du kör mot publik demo-data — ingen inloggning behövs. Ändringar gäller bara i den här fliken.</p>
-          <Link href="/" className="inline-block mt-3 text-sm text-blue-700 hover:underline">→ Till startsidan</Link>
-        </div>
-      )}
+/** Demo-läge (gh-pages): ingen auth — info + länk till start. */
+function DemoStage() {
+  return (
+    <div className="bg-blue-50 border border-blue-200 rounded p-5 text-sm text-blue-900">
+      <p className="flex items-center gap-1 mb-2"><Info size={14} /> <strong>Demo-läge</strong></p>
+      <p>Du kör mot publik demo-data — ingen inloggning behövs. Ändringar gäller bara i den här fliken.</p>
+      <Link href="/" className="inline-block mt-3 text-sm text-blue-700 hover:underline">→ Till startsidan</Link>
+    </div>
+  );
+}
 
-      {stage === "paste" && (
-        <>
-          <p className="text-sm text-gray-500 mb-4">
-            Din administratör har skapat ett konto åt dig och delat en PAT
-            (Personal Access Token) via säker kanal. Klistra in den nedan.
+/** Paste-PAT-formuläret + valbart "Avancerat"-disclosure (invite-server). */
+function PasteStage({ state }: { state: SetupState }) {
+  const { email, setEmail, name, setName, pat, setPat, error, onPasteSubmit, hasAuthServer } = state;
+  return (
+    <>
+      <p className="text-sm text-gray-500 mb-4">
+        Din administratör har skapat ett konto åt dig och delat en PAT
+        (Personal Access Token) via säker kanal. Klistra in den nedan.
+      </p>
+      <form onSubmit={onPasteSubmit} className="bg-white border border-gray-200 rounded-lg p-5 space-y-3">
+        <label className="block">
+          <span className="text-xs text-gray-700 mb-1 block">E-post</span>
+          <input
+            type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
+            placeholder="anna@firma.se"
+            className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+          />
+        </label>
+        <label className="block">
+          <span className="text-xs text-gray-700 mb-1 block">Visningsnamn (för commit-signaturer)</span>
+          <input
+            type="text" value={name} onChange={(e) => setName(e.target.value)}
+            placeholder="Anna Advokat"
+            className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+          />
+        </label>
+        <label className="block">
+          <span className="text-xs text-gray-700 mb-1 block">PAT (från admin)</span>
+          <input
+            type="password" required value={pat} onChange={(e) => setPat(e.target.value)}
+            className="w-full rounded border border-gray-300 px-3 py-2 text-sm font-mono"
+          />
+        </label>
+        {error && <p className="text-xs text-red-600"><AlertTriangle size={12} className="inline" /> {error}</p>}
+        <button type="submit"
+          className="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700">
+          <KeyRound size={14} className="inline mr-1" /> Spara och logga in
+        </button>
+      </form>
+
+      {hasAuthServer && (
+        <details className="mt-4 text-xs text-gray-500">
+          <summary className="cursor-pointer flex items-center gap-1">
+            <Settings size={12} /> Avancerat: bootstrap admin / lös in invite-token
+          </summary>
+          <p className="mt-2 italic">
+            Den valbara invite-server-profilen är aktiv. Du kan provisionera dig
+            själv via{" "}
+            <Link href="/setup/advanced" className="text-blue-600 hover:underline">
+              /setup/advanced
+            </Link>{" "}
+            om du har en bootstrap-secret eller invite-token istället för PAT.
           </p>
-          <form onSubmit={onPasteSubmit} className="bg-white border border-gray-200 rounded-lg p-5 space-y-3">
-            <label className="block">
-              <span className="text-xs text-gray-700 mb-1 block">E-post</span>
-              <input
-                type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
-                placeholder="anna@firma.se"
-                className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-              />
-            </label>
-            <label className="block">
-              <span className="text-xs text-gray-700 mb-1 block">Visningsnamn (för commit-signaturer)</span>
-              <input
-                type="text" value={name} onChange={(e) => setName(e.target.value)}
-                placeholder="Anna Advokat"
-                className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-              />
-            </label>
-            <label className="block">
-              <span className="text-xs text-gray-700 mb-1 block">PAT (från admin)</span>
-              <input
-                type="password" required value={pat} onChange={(e) => setPat(e.target.value)}
-                className="w-full rounded border border-gray-300 px-3 py-2 text-sm font-mono"
-              />
-            </label>
-            {error && <p className="text-xs text-red-600"><AlertTriangle size={12} className="inline" /> {error}</p>}
-            <button type="submit"
-              className="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700">
-              <KeyRound size={14} className="inline mr-1" /> Spara och logga in
-            </button>
-          </form>
-
-          {hasAuthServer && (
-            <details className="mt-4 text-xs text-gray-500">
-              <summary className="cursor-pointer flex items-center gap-1">
-                <Settings size={12} /> Avancerat: bootstrap admin / lös in invite-token
-              </summary>
-              <p className="mt-2 italic">
-                Den valbara invite-server-profilen är aktiv. Du kan provisionera dig
-                själv via{" "}
-                <Link href="/setup/advanced" className="text-blue-600 hover:underline">
-                  /setup/advanced
-                </Link>{" "}
-                om du har en bootstrap-secret eller invite-token istället för PAT.
-              </p>
-            </details>
-          )}
-        </>
+        </details>
       )}
+    </>
+  );
+}
 
-      {stage === "done" && (
-        <div className="bg-green-50 border border-green-200 rounded p-5">
-          <p className="text-sm text-green-900 flex items-center gap-1">
-            <Check size={14} /> {success ? "Inloggad" : "Du är redan inloggad"}
-          </p>
-          {success && (
-            <p className="text-xs text-green-700 mt-1">
-              Email: <strong>{success.email}</strong>
-            </p>
-          )}
-          <Link href="/" className="inline-block mt-3 text-sm text-blue-600 hover:underline">
-            → Till startsidan
-          </Link>
-        </div>
+/** Klar-läge: bekräftelse + länk till start (ny inloggning eller redan inloggad). */
+function DoneStage({ success }: { success: ProvisionedAccount | null }) {
+  return (
+    <div className="bg-green-50 border border-green-200 rounded p-5">
+      <p className="text-sm text-green-900 flex items-center gap-1">
+        <Check size={14} /> {success ? "Inloggad" : "Du är redan inloggad"}
+      </p>
+      {success && (
+        <p className="text-xs text-green-700 mt-1">
+          Email: <strong>{success.email}</strong>
+        </p>
       )}
+      <Link href="/" className="inline-block mt-3 text-sm text-blue-600 hover:underline">
+        → Till startsidan
+      </Link>
     </div>
   );
 }
