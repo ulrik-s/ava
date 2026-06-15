@@ -31,7 +31,7 @@ const COVERAGE = process.argv.includes("--coverage");
 const FAST = process.argv.includes("--fast");
 
 // Ratchet-golv (flyttat hit från check-coverage.ts) — flytta BARA uppåt.
-const LINE_FLOOR = 0.83;
+const LINE_FLOOR = 0.84;
 const FUNC_FLOOR = 0.80;
 
 /**
