@@ -145,8 +145,11 @@ async function maybeComposeMail(opts: MailOpts): Promise<boolean> {
   });
 }
 
-// eslint-disable-next-line complexity
-export function KostnadsrakningModal(props: Props) {
+type KostnContext = ReturnType<typeof buildKostnadsrakningContext>;
+type HelperState = ReturnType<typeof useHelper>;
+
+/** All state, auto-save, ctx-beräkning och generate-flödet för modalen. */
+function useKostnadsrakningModal(props: Props) {
   const [hufStart, setHufStart] = useState<string>(() => defaultStart(props.initialHufStart));
   const [hufEnd, setHufEnd] = useState<string>(() => toDatetimeLocalValue(new Date()));
   const [isTaxe, setIsTaxe] = useState<boolean>(props.initialIsTaxe ?? true);
@@ -250,8 +253,15 @@ export function KostnadsrakningModal(props: Props) {
     }
   };
 
-  const hufMin = ctx.huvudforhandlingMinutes;
+  return {
+    hufStart, setHufStart, hufEnd, setHufEnd, isTaxe, setIsTaxe, level, setLevel,
+    generating, error, done, helper, ctx, stoppaNu, generate,
+  };
+}
 
+export function KostnadsrakningModal(props: Props) {
+  const k = useKostnadsrakningModal(props);
+  const { ctx } = k;
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex md:items-center md:justify-center md:p-4">
       <div className="bg-white w-full md:max-w-2xl md:rounded-xl flex flex-col h-full md:h-auto md:max-h-[95vh] overflow-hidden shadow-2xl">
@@ -267,152 +277,220 @@ export function KostnadsrakningModal(props: Props) {
         </div>
 
         <div className="p-4 sm:p-6 space-y-5 overflow-y-auto flex-1">
-          <section>
-            <h3 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1.5">
-              <Clock size={14} /> Huvudförhandling
-            </h3>
-            <div className="space-y-3">
-              <label className="block">
-                <span className="text-xs text-gray-600 mb-1 block">Start</span>
-                <input
-                  type="datetime-local" value={hufStart}
-                  onChange={(e) => setHufStart(e.target.value)}
-                  className="w-full rounded border border-gray-300 px-3 py-2.5 text-base font-mono"
-                />
-                <span className="text-[10px] text-gray-400 mt-0.5 block">Sparas automatiskt</span>
-              </label>
-
-              <button
-                type="button"
-                onClick={stoppaNu}
-                className="w-full py-5 bg-red-600 text-white text-xl font-bold rounded-lg shadow-lg hover:bg-red-700 active:scale-[0.98] transition-transform touch-manipulation"
-                title="Sätt sluttid = nu"
-              >
-                ⏱  STOPPA NU
-              </button>
-
-              <label className="block">
-                <span className="text-xs text-gray-600 mb-1 block">Slut</span>
-                <input
-                  type="datetime-local" value={hufEnd}
-                  onChange={(e) => setHufEnd(e.target.value)}
-                  className="w-full rounded border border-gray-300 px-3 py-2.5 text-base font-mono"
-                />
-              </label>
-
-              <p className="text-center text-2xl sm:text-3xl font-bold text-indigo-700">
-                {ctx.templateContext.huvudforhandlingFormatted as string}
-                <span className="text-xs text-gray-500 font-normal ml-2">({hufMin} min)</span>
-              </p>
-            </div>
-          </section>
-
-          <section className="space-y-3">
-            <div>
-              <span className="text-xs text-gray-700 mb-1 block">Ersättningstyp</span>
-              <div className="flex flex-col sm:flex-row gap-3">
-                <label className="flex items-center gap-2 text-base">
-                  <input type="radio" checked={isTaxe} onChange={() => setIsTaxe(true)} className="w-5 h-5" />
-                  Taxa (brottmålstaxan DVFS 2025:6)
-                </label>
-                <label className="flex items-center gap-2 text-base">
-                  <input type="radio" checked={!isTaxe} onChange={() => setIsTaxe(false)} className="w-5 h-5" />
-                  Icke-taxa (timkostnadsnorm × all tid)
-                </label>
-              </div>
-            </div>
-            {isTaxe && (
-              <label className="block">
-                <span className="text-xs text-gray-700 mb-1 block">Ersättningsnivå (DVFS 2025:6)</span>
-                <select value={level} onChange={(e) => setLevel(Number(e.target.value) as TaxaLevel)}
-                  className="w-full rounded border border-gray-300 px-3 py-2.5 text-base">
-                  <option value={1}>1 — Grundersättning</option>
-                  <option value={2}>2 — + häktningsförh. m.m.</option>
-                  <option value={3}>3 — + RPU</option>
-                  <option value={4}>4 — + häktning m.m. + RPU</option>
-                </select>
-              </label>
-            )}
-          </section>
-
-          {ctx.timeLines.length > 0 && (
-            <section>
-              <h3 className="text-sm font-semibold text-gray-700 mb-2">Tidsspecifikation</h3>
-              <div className="text-xs text-gray-600 mb-2">
-                {ctx.timeLines.length} billable {ctx.timeLines.length === 1 ? "rad" : "rader"} — tot{" "}
-                <span className="font-mono">{Math.round(ctx.billableArbetsMinutes / 60 * 10) / 10} h</span>
-                {" + HUF "}
-                <span className="font-mono">{Math.round(ctx.huvudforhandlingMinutes / 60 * 10) / 10} h</span>
-                {" = "}
-                <span className="font-mono font-semibold">{Math.round(ctx.totalArbetsMinutes / 60 * 10) / 10} h</span>
-                {!isTaxe && " (grunden för icke-taxa-beräkningen)"}
-              </div>
-            </section>
-          )}
-
-          <section className="bg-gray-50 border border-gray-200 rounded p-4">
-            <h3 className="text-sm font-semibold text-gray-700 mb-2">Förhandsvisning</h3>
-            {ctx.taxa.kind === "exceeds-max" && (
-              <div className="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded p-2 mb-2">
-                <AlertTriangle size={12} className="inline mr-1" />
-                Tid &gt; 3 tim 45 min. Ersättning räknas enligt timkostnadsnorm × faktisk tid.
-              </div>
-            )}
-            <dl className="grid grid-cols-2 gap-y-1 text-sm">
-              <dt className="text-gray-600">Arvode inkl moms</dt>
-              <dd className="font-mono text-right">{formatCurrency(ctx.arvodeInclVat)}</dd>
-              <dt className="text-gray-600">Utlägg inkl moms ({ctx.expenseLines.length} st)</dt>
-              <dd className="font-mono text-right">{formatCurrency(ctx.expenseSummary.inclVat)}</dd>
-              <dt className="text-gray-900 font-bold pt-1 border-t border-gray-200">Total</dt>
-              <dd className="font-mono text-right font-bold text-gray-900 pt-1 border-t border-gray-200">{formatCurrency(ctx.totalInclVat)}</dd>
-            </dl>
-          </section>
-
-          <section className="text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded px-3 py-2">
-            {helper.checked && helper.version
-              ? <>✓ AVA Helper {helper.version} installerad — mail-appen öppnas med bilaga efter generering.</>
-              : helper.checked
-                ? <>Helper ej installerad — dokumentet sparas i ärendet, du kan skicka mail manuellt därifrån.</>
-                : <>Kontrollerar helper-status…</>}
-          </section>
-
-          {error && (
-            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded p-3">
-              <AlertTriangle size={12} className="inline mr-1" /> {error}
-            </p>
-          )}
-          {done && (
-            <p className="text-sm text-green-800 bg-green-50 border border-green-200 rounded p-3">
-              ✓ <strong>{done.filename}</strong> sparad i ärendets dokument.
-              {done.mailOpened
-                ? <> Mail-appen öppnas med kostnadsräkningen som bilaga — fyll i adressaten och skicka.</>
-                : <> Bifoga manuellt när du skickar mail till rätten.</>}
-            </p>
-          )}
+          <HufSection
+            hufStart={k.hufStart} setHufStart={k.setHufStart}
+            hufEnd={k.hufEnd} setHufEnd={k.setHufEnd}
+            onStoppaNu={k.stoppaNu}
+            hufFormatted={ctx.templateContext.huvudforhandlingFormatted as string}
+            hufMin={ctx.huvudforhandlingMinutes}
+          />
+          <ErsattningSection isTaxe={k.isTaxe} setIsTaxe={k.setIsTaxe} level={k.level} setLevel={k.setLevel} />
+          <TimeSpecSection ctx={ctx} isTaxe={k.isTaxe} />
+          <PreviewSection ctx={ctx} />
+          <HelperStatusNote helper={k.helper} />
+          <StatusMessages error={k.error} done={k.done} />
         </div>
 
-        <div className="border-t border-gray-200 px-4 sm:px-6 py-3 bg-gray-50 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sticky bottom-0">
-          <button onClick={props.onClose}
-            className="text-sm text-gray-600 hover:text-gray-900 py-2 px-3 order-2 sm:order-1">
-            {done ? "Stäng" : "Avbryt"}
-          </button>
-          <button
-            type="button"
-            onClick={() => void generate()}
-            disabled={generating || hufMin <= 0}
-            className="w-full sm:w-auto px-6 py-3.5 bg-indigo-600 text-white text-base font-semibold rounded-lg shadow hover:bg-indigo-700 disabled:opacity-50 inline-flex items-center justify-center gap-2 touch-manipulation order-1 sm:order-2"
-          >
-            {generating ? (
-              <>Genererar…</>
-            ) : (
-              <>
-                <Save size={18} />
-                {helper.version ? "Generera + öppna mail" : "Generera + spara"}
-              </>
-            )}
-          </button>
+        <ModalFooter
+          done={k.done !== null}
+          generating={k.generating}
+          hufMin={ctx.huvudforhandlingMinutes}
+          helperVersion={k.helper.version}
+          onClose={props.onClose}
+          onGenerate={() => void k.generate()}
+        />
+      </div>
+    </div>
+  );
+}
+
+/** Huvudförhandling: start/slut + "STOPPA NU" + live längd. */
+function HufSection({ hufStart, setHufStart, hufEnd, setHufEnd, onStoppaNu, hufFormatted, hufMin }: {
+  hufStart: string; setHufStart: (v: string) => void;
+  hufEnd: string; setHufEnd: (v: string) => void;
+  onStoppaNu: () => void; hufFormatted: string; hufMin: number;
+}) {
+  return (
+    <section>
+      <h3 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1.5">
+        <Clock size={14} /> Huvudförhandling
+      </h3>
+      <div className="space-y-3">
+        <label className="block">
+          <span className="text-xs text-gray-600 mb-1 block">Start</span>
+          <input
+            type="datetime-local" value={hufStart}
+            onChange={(e) => setHufStart(e.target.value)}
+            className="w-full rounded border border-gray-300 px-3 py-2.5 text-base font-mono"
+          />
+          <span className="text-[10px] text-gray-400 mt-0.5 block">Sparas automatiskt</span>
+        </label>
+
+        <button
+          type="button"
+          onClick={onStoppaNu}
+          className="w-full py-5 bg-red-600 text-white text-xl font-bold rounded-lg shadow-lg hover:bg-red-700 active:scale-[0.98] transition-transform touch-manipulation"
+          title="Sätt sluttid = nu"
+        >
+          ⏱  STOPPA NU
+        </button>
+
+        <label className="block">
+          <span className="text-xs text-gray-600 mb-1 block">Slut</span>
+          <input
+            type="datetime-local" value={hufEnd}
+            onChange={(e) => setHufEnd(e.target.value)}
+            className="w-full rounded border border-gray-300 px-3 py-2.5 text-base font-mono"
+          />
+        </label>
+
+        <p className="text-center text-2xl sm:text-3xl font-bold text-indigo-700">
+          {hufFormatted}
+          <span className="text-xs text-gray-500 font-normal ml-2">({hufMin} min)</span>
+        </p>
+      </div>
+    </section>
+  );
+}
+
+/** Ersättningstyp (taxa/icke-taxa) + ev. taxa-nivå. */
+function ErsattningSection({ isTaxe, setIsTaxe, level, setLevel }: {
+  isTaxe: boolean; setIsTaxe: (v: boolean) => void;
+  level: TaxaLevel; setLevel: (v: TaxaLevel) => void;
+}) {
+  return (
+    <section className="space-y-3">
+      <div>
+        <span className="text-xs text-gray-700 mb-1 block">Ersättningstyp</span>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <label className="flex items-center gap-2 text-base">
+            <input type="radio" checked={isTaxe} onChange={() => setIsTaxe(true)} className="w-5 h-5" />
+            Taxa (brottmålstaxan DVFS 2025:6)
+          </label>
+          <label className="flex items-center gap-2 text-base">
+            <input type="radio" checked={!isTaxe} onChange={() => setIsTaxe(false)} className="w-5 h-5" />
+            Icke-taxa (timkostnadsnorm × all tid)
+          </label>
         </div>
       </div>
+      {isTaxe && (
+        <label className="block">
+          <span className="text-xs text-gray-700 mb-1 block">Ersättningsnivå (DVFS 2025:6)</span>
+          <select value={level} onChange={(e) => setLevel(Number(e.target.value) as TaxaLevel)}
+            className="w-full rounded border border-gray-300 px-3 py-2.5 text-base">
+            <option value={1}>1 — Grundersättning</option>
+            <option value={2}>2 — + häktningsförh. m.m.</option>
+            <option value={3}>3 — + RPU</option>
+            <option value={4}>4 — + häktning m.m. + RPU</option>
+          </select>
+        </label>
+      )}
+    </section>
+  );
+}
+
+/** Tidsspecifikation — bara när det finns billable rader. */
+function TimeSpecSection({ ctx, isTaxe }: { ctx: KostnContext; isTaxe: boolean }) {
+  if (ctx.timeLines.length === 0) return null;
+  return (
+    <section>
+      <h3 className="text-sm font-semibold text-gray-700 mb-2">Tidsspecifikation</h3>
+      <div className="text-xs text-gray-600 mb-2">
+        {ctx.timeLines.length} billable {ctx.timeLines.length === 1 ? "rad" : "rader"} — tot{" "}
+        <span className="font-mono">{Math.round(ctx.billableArbetsMinutes / 60 * 10) / 10} h</span>
+        {" + HUF "}
+        <span className="font-mono">{Math.round(ctx.huvudforhandlingMinutes / 60 * 10) / 10} h</span>
+        {" = "}
+        <span className="font-mono font-semibold">{Math.round(ctx.totalArbetsMinutes / 60 * 10) / 10} h</span>
+        {!isTaxe && " (grunden för icke-taxa-beräkningen)"}
+      </div>
+    </section>
+  );
+}
+
+/** Belopps-förhandsvisning (arvode + utlägg + total). */
+function PreviewSection({ ctx }: { ctx: KostnContext }) {
+  return (
+    <section className="bg-gray-50 border border-gray-200 rounded p-4">
+      <h3 className="text-sm font-semibold text-gray-700 mb-2">Förhandsvisning</h3>
+      {ctx.taxa.kind === "exceeds-max" && (
+        <div className="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded p-2 mb-2">
+          <AlertTriangle size={12} className="inline mr-1" />
+          Tid &gt; 3 tim 45 min. Ersättning räknas enligt timkostnadsnorm × faktisk tid.
+        </div>
+      )}
+      <dl className="grid grid-cols-2 gap-y-1 text-sm">
+        <dt className="text-gray-600">Arvode inkl moms</dt>
+        <dd className="font-mono text-right">{formatCurrency(ctx.arvodeInclVat)}</dd>
+        <dt className="text-gray-600">Utlägg inkl moms ({ctx.expenseLines.length} st)</dt>
+        <dd className="font-mono text-right">{formatCurrency(ctx.expenseSummary.inclVat)}</dd>
+        <dt className="text-gray-900 font-bold pt-1 border-t border-gray-200">Total</dt>
+        <dd className="font-mono text-right font-bold text-gray-900 pt-1 border-t border-gray-200">{formatCurrency(ctx.totalInclVat)}</dd>
+      </dl>
+    </section>
+  );
+}
+
+/** Helper-status-noten (mail-app-integration). */
+function HelperStatusNote({ helper }: { helper: HelperState }) {
+  return (
+    <section className="text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded px-3 py-2">
+      {helper.checked && helper.version
+        ? <>✓ AVA Helper {helper.version} installerad — mail-appen öppnas med bilaga efter generering.</>
+        : helper.checked
+          ? <>Helper ej installerad — dokumentet sparas i ärendet, du kan skicka mail manuellt därifrån.</>
+          : <>Kontrollerar helper-status…</>}
+    </section>
+  );
+}
+
+/** Fel- och klar-meddelanden. */
+function StatusMessages({ error, done }: { error: string | null; done: { filename: string; mailOpened: boolean } | null }) {
+  return (
+    <>
+      {error && (
+        <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded p-3">
+          <AlertTriangle size={12} className="inline mr-1" /> {error}
+        </p>
+      )}
+      {done && (
+        <p className="text-sm text-green-800 bg-green-50 border border-green-200 rounded p-3">
+          ✓ <strong>{done.filename}</strong> sparad i ärendets dokument.
+          {done.mailOpened
+            ? <> Mail-appen öppnas med kostnadsräkningen som bilaga — fyll i adressaten och skicka.</>
+            : <> Bifoga manuellt när du skickar mail till rätten.</>}
+        </p>
+      )}
+    </>
+  );
+}
+
+/** Footer: avbryt/stäng + generera-knappen. */
+function ModalFooter({ done, generating, hufMin, helperVersion, onClose, onGenerate }: {
+  done: boolean; generating: boolean; hufMin: number;
+  helperVersion: HelperState["version"]; onClose: () => void; onGenerate: () => void;
+}) {
+  return (
+    <div className="border-t border-gray-200 px-4 sm:px-6 py-3 bg-gray-50 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sticky bottom-0">
+      <button onClick={onClose}
+        className="text-sm text-gray-600 hover:text-gray-900 py-2 px-3 order-2 sm:order-1">
+        {done ? "Stäng" : "Avbryt"}
+      </button>
+      <button
+        type="button"
+        onClick={onGenerate}
+        disabled={generating || hufMin <= 0}
+        className="w-full sm:w-auto px-6 py-3.5 bg-indigo-600 text-white text-base font-semibold rounded-lg shadow hover:bg-indigo-700 disabled:opacity-50 inline-flex items-center justify-center gap-2 touch-manipulation order-1 sm:order-2"
+      >
+        {generating ? (
+          <>Genererar…</>
+        ) : (
+          <>
+            <Save size={18} />
+            {helperVersion ? "Generera + öppna mail" : "Generera + spara"}
+          </>
+        )}
+      </button>
     </div>
   );
 }
