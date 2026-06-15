@@ -1,9 +1,4 @@
 {
-  "src/app/matters/[id]/_expense-section.tsx": {
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
   "src/app/matters/[id]/_kostnadsrakning-modal.tsx": {
     "max-lines-per-function": {
       "count": 1

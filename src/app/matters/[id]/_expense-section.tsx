@@ -86,45 +86,20 @@ function computeTotals(expenses: Expense[]): { exclVat: number; vat: number; inc
 }
 
  
-export function ExpenseSection({ matterId, isTaxeArende }: Props) {
-  const utils = trpc.useUtils();
-  const expenses = trpc.expense.list.useQuery({ matterId });
-  const [showCreate, setShowCreate] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState<ExpenseForm>(initialForm);
+function vatOf(e: Expense) {
+  return splitVat({ amount: e.amount, vatRate: e.vatRate ?? 2500, vatIncluded: e.vatIncluded ?? true });
+}
+function invoiceLabel(e: Expense): string {
+  return e.invoice?.invoiceNumber ?? (e.invoiceId ? "(faktura)" : "Ej fakturerad");
+}
+function isInvoiced(e: Expense): boolean {
+  return e.invoiceId != null && e.invoiceId !== "";
+}
 
-  function resetClose(): void {
-    setShowCreate(false);
-    setEditingId(null);
-    setForm(initialForm());
-  }
-
-  const createExpense = trpc.expense.create.useMutation({ onSuccess: () => { void utils.expense.list.invalidate({ matterId }); resetClose(); } });
-  const updateExpense = trpc.expense.update.useMutation({ onSuccess: () => { void utils.expense.list.invalidate({ matterId }); resetClose(); } });
-  const deleteExpense = trpc.expense.delete.useMutation({ onSuccess: () => void utils.expense.list.invalidate({ matterId }) });
-
-  function startEdit(e: Expense): void {
-    setEditingId(e.id);
-    setForm(toForm(e));
-  }
-
-  function submitForm(): void {
-    const payload = payloadOf(form);
-    if (editingId) updateExpense.mutate({ id: editingId, ...payload });
-    else createExpense.mutate({ matterId, ...payload });
-  }
-
-  const items = (expenses.data?.expenses ?? []) as Expense[];
-  const isPending = createExpense.isPending || updateExpense.isPending;
-
-  function vatOf(e: Expense) {
-    return splitVat({ amount: e.amount, vatRate: e.vatRate ?? 2500, vatIncluded: e.vatIncluded ?? true });
-  }
-  function invoiceLabel(e: Expense): string {
-    return e.invoice?.invoiceNumber ?? (e.invoiceId ? "(faktura)" : "Ej fakturerad");
-  }
-  const isInvoiced = (e: Expense): boolean => e.invoiceId != null && e.invoiceId !== "";
-  const columns: Column<Expense>[] = [
+/** Tabell-kolumnerna för utläggslistan. Redigera/ta-bort låsta för
+ *  fakturerade utlägg (de sitter på en utställd faktura). */
+function expenseColumns({ onEdit, onDelete }: { onEdit: (e: Expense) => void; onDelete: (id: string) => void }): Column<Expense>[] {
+  return [
     { key: "date", label: "Datum", sortable: true, filterable: true, sortValue: (e) => new Date(e.date),
       filterValue: (e) => new Date(e.date).toLocaleDateString("sv-SE"),
       render: (e) => <span className="text-sm text-gray-500 whitespace-nowrap">{new Date(e.date).toLocaleDateString("sv-SE")}</span> },
@@ -159,22 +134,57 @@ export function ExpenseSection({ matterId, isTaxeArende }: Props) {
         isInvoiced(e)
           ? <span className="text-xs text-gray-400 italic">Låst (på faktura)</span>
           : <span className="whitespace-nowrap">
-              <button onClick={() => startEdit(e)} className="text-xs text-gray-500 hover:text-blue-600 hover:underline mr-3">Ändra</button>
-              <button onClick={() => { if (confirm("Ta bort utlägget?")) deleteExpense.mutate({ id: e.id }); }} className="text-xs text-red-500 hover:underline">Ta bort</button>
+              <button onClick={() => onEdit(e)} className="text-xs text-gray-500 hover:text-blue-600 hover:underline mr-3">Ändra</button>
+              <button onClick={() => { if (confirm("Ta bort utlägget?")) onDelete(e.id); }} className="text-xs text-red-500 hover:underline">Ta bort</button>
             </span>
       ),
     },
   ];
+}
 
-  function footerContent(rows: Expense[]): Partial<Record<string, React.ReactNode>> {
-    const t = computeTotals(rows);
-    return {
-      description: <span className="text-gray-700">Summa</span>,
-      exclVat: <span className="font-mono text-gray-900">{formatCurrency(t.exclVat)}</span>,
-      vat: <span className="font-mono text-gray-700">{formatCurrency(t.vat)}</span>,
-      inclVat: <span className="font-mono text-gray-900">{formatCurrency(t.inclVat)}</span>,
-    };
+/** Summa-rad (footer) för utläggstabellen. */
+function expenseFooter(rows: Expense[]): Partial<Record<string, React.ReactNode>> {
+  const t = computeTotals(rows);
+  return {
+    description: <span className="text-gray-700">Summa</span>,
+    exclVat: <span className="font-mono text-gray-900">{formatCurrency(t.exclVat)}</span>,
+    vat: <span className="font-mono text-gray-700">{formatCurrency(t.vat)}</span>,
+    inclVat: <span className="font-mono text-gray-900">{formatCurrency(t.inclVat)}</span>,
+  };
+}
+
+export function ExpenseSection({ matterId, isTaxeArende }: Props) {
+  const utils = trpc.useUtils();
+  const expenses = trpc.expense.list.useQuery({ matterId });
+  const [showCreate, setShowCreate] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState<ExpenseForm>(initialForm);
+
+  function resetClose(): void {
+    setShowCreate(false);
+    setEditingId(null);
+    setForm(initialForm());
   }
+
+  const createExpense = trpc.expense.create.useMutation({ onSuccess: () => { void utils.expense.list.invalidate({ matterId }); resetClose(); } });
+  const updateExpense = trpc.expense.update.useMutation({ onSuccess: () => { void utils.expense.list.invalidate({ matterId }); resetClose(); } });
+  const deleteExpense = trpc.expense.delete.useMutation({ onSuccess: () => void utils.expense.list.invalidate({ matterId }) });
+
+  function startEdit(e: Expense): void {
+    setEditingId(e.id);
+    setForm(toForm(e));
+  }
+
+  function submitForm(): void {
+    const payload = payloadOf(form);
+    if (editingId) updateExpense.mutate({ id: editingId, ...payload });
+    else createExpense.mutate({ matterId, ...payload });
+  }
+
+  const items = (expenses.data?.expenses ?? []) as Expense[];
+  const isPending = createExpense.isPending || updateExpense.isPending;
+
+  const columns = expenseColumns({ onEdit: startEdit, onDelete: (id) => deleteExpense.mutate({ id }) });
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 lg:col-span-2">
@@ -195,7 +205,7 @@ export function ExpenseSection({ matterId, isTaxeArende }: Props) {
           data={items}
           rowKey={(e) => e.id}
           emptyMessage="Inga utlägg registrerade"
-          footer={footerContent}
+          footer={expenseFooter}
         />
       </div>
 
