@@ -102,7 +102,63 @@ interface HeaderProps {
   onOpenGenerate: () => void;
 }
 
-// eslint-disable-next-line complexity -- JSX-conditionals (klient-länk + matterType + isTaxeArende + status-actions)
+/** Klient + ärendetyp-raden under titeln. Utbruten ur MatterHeader så dess
+ *  optional-chain/&&-grenar inte räknas in i komponentkomplexiteten (#199). */
+function MatterClientLine({ klient, matterType }: { klient: MatterContact[]; matterType?: string | null | undefined }) {
+  return (
+    <p className="text-sm text-gray-500 mt-1">
+      {klient[0]?.contact && (
+        <>Klient: <EntityLink route="contacts" id={klient[0].contact.id} className="text-blue-600 hover:underline">{klient[0].contact.name}</EntityLink></>
+      )}
+      {matterType && <>{klient.length > 0 ? " · " : ""}{matterType}</>}
+    </p>
+  );
+}
+
+/** Taxa-badge + status-badge + status-/genererings-actions (höger sida av
+ *  headern). Utbruten ur MatterHeader (status-ternarierna). */
+function MatterHeaderActions({ m, isPending, onClose, onReopen, onGenerate }: {
+  m: HeaderProps["matter"]; isPending: boolean;
+  onClose: () => void; onReopen: () => void; onGenerate: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      {m.isTaxeArende && (
+        <span
+          className="inline-flex items-center rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide"
+          title="Taxeärende — ersättning enligt Domstolsverkets fastställda taxa (DVFS) istället för löpande timdebitering. Domstolen kan frångå taxan när avsevärt mer arbete än normalt krävts."
+        >
+          Taxa
+        </span>
+      )}
+      <StatusBadge status={m.status} />
+      {m.status === "ACTIVE" ? (
+        <button
+          onClick={onClose}
+          disabled={isPending}
+          className="px-3 py-1 text-xs font-medium bg-white border border-gray-300 rounded-full hover:bg-gray-50 text-gray-700 disabled:opacity-50"
+        >
+          Avsluta ärende
+        </button>
+      ) : m.status === "CLOSED" ? (
+        <button
+          onClick={onReopen}
+          disabled={isPending}
+          className="px-3 py-1 text-xs font-medium bg-white border border-gray-300 rounded-full hover:bg-gray-50 text-gray-700 disabled:opacity-50"
+        >
+          Återöppna
+        </button>
+      ) : null}
+      <button
+        onClick={onGenerate}
+        className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium bg-white border border-gray-300 rounded-full hover:bg-gray-50 text-gray-700"
+      >
+        <FileDown size={13} /> Generera dokument
+      </button>
+    </div>
+  );
+}
+
 function MatterHeader({ matter: m, klient, onOpenGenerate }: HeaderProps) {
   const utils = trpc.useUtils();
   const updateStatus = trpc.matter.update.useMutation({
@@ -123,47 +179,15 @@ function MatterHeader({ matter: m, klient, onOpenGenerate }: HeaderProps) {
         <div>
           <p className="text-sm font-mono text-gray-500">{m.matterNumber}</p>
           <h1 className="text-2xl font-bold text-gray-900 mt-1">{m.title}</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            {klient[0]?.contact && (
-              <>Klient: <EntityLink route="contacts" id={klient[0].contact.id} className="text-blue-600 hover:underline">{klient[0].contact.name}</EntityLink></>
-            )}
-            {m.matterType && <>{klient.length > 0 ? " · " : ""}{m.matterType}</>}
-          </p>
+          <MatterClientLine klient={klient} matterType={m.matterType} />
         </div>
-        <div className="flex items-center gap-2">
-          {m.isTaxeArende && (
-            <span
-              className="inline-flex items-center rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide"
-              title="Taxeärende — ersättning enligt Domstolsverkets fastställda taxa (DVFS) istället för löpande timdebitering. Domstolen kan frångå taxan när avsevärt mer arbete än normalt krävts."
-            >
-              Taxa
-            </span>
-          )}
-          <StatusBadge status={m.status} />
-          {m.status === "ACTIVE" ? (
-            <button
-              onClick={onCloseMatter}
-              disabled={updateStatus.isPending}
-              className="px-3 py-1 text-xs font-medium bg-white border border-gray-300 rounded-full hover:bg-gray-50 text-gray-700 disabled:opacity-50"
-            >
-              Avsluta ärende
-            </button>
-          ) : m.status === "CLOSED" ? (
-            <button
-              onClick={onReopenMatter}
-              disabled={updateStatus.isPending}
-              className="px-3 py-1 text-xs font-medium bg-white border border-gray-300 rounded-full hover:bg-gray-50 text-gray-700 disabled:opacity-50"
-            >
-              Återöppna
-            </button>
-          ) : null}
-          <button
-            onClick={onOpenGenerate}
-            className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium bg-white border border-gray-300 rounded-full hover:bg-gray-50 text-gray-700"
-          >
-            <FileDown size={13} /> Generera dokument
-          </button>
-        </div>
+        <MatterHeaderActions
+          m={m}
+          isPending={updateStatus.isPending}
+          onClose={onCloseMatter}
+          onReopen={onReopenMatter}
+          onGenerate={onOpenGenerate}
+        />
       </div>
       {m.description && <p className="text-sm text-gray-700 mt-3">{m.description}</p>}
     </div>
