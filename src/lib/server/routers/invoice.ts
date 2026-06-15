@@ -202,7 +202,9 @@ export const invoiceRouter = router({
       const inv = await ctx.dataStore.invoices.findFirst({
         where: { id: input.id, matter: { organizationId: ctx.orgId } },
         include: {
-          matter: { select: { id: true, matterNumber: true, title: true } },
+          // paymentMethod + taxaHasFTax: slutfaktura-sammanställningen (#349)
+          // visar rådgivningstimmen enligt rättshjälpstaxan för rättshjälpsärenden.
+          matter: { select: { id: true, matterNumber: true, title: true, paymentMethod: true, taxaHasFTax: true } },
           paymentPlan: { include: { reminders: { orderBy: { sentAt: "desc" } } } },
           payments: {
             orderBy: { paidAt: "desc" },
