@@ -9,11 +9,6 @@
       "count": 1
     }
   },
-  "src/app/payment-plans/[id]/_client.tsx": {
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
   "src/components/documents/_document-row.tsx": {
     "max-depth": {
       "count": 1
