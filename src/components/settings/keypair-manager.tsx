@@ -32,7 +32,12 @@ interface Props {
   saving?: boolean;
 }
 
-export function KeypairManager({ onAddToProfile, saving }: Props) {
+/**
+ * All nyckel-state + WebCrypto/IndexedDB-effekter + åtgärder (generera,
+ * glöm, kopiera, lägg till i profil, registrera på GitHub). Bryts ut ur
+ * KeypairManager så komponenten blir en tunn render-shell.
+ */
+function useKeypair(onAddToProfile: Props["onAddToProfile"]) {
   const [supported, setSupported] = useState<boolean | null>(null);
   const [keypair, setKeypair] = useState<StoredKeypair | null>(null);
   const [sshString, setSshString] = useState<string>("");
@@ -138,10 +143,20 @@ export function KeypairManager({ onAddToProfile, saving }: Props) {
     });
   }, [comment, keypair]);
 
-  if (supported === null) {
+  return {
+    supported, keypair, sshString, fingerprint, comment, setComment,
+    busy, err, copied, registering, registeredOk,
+    onGenerate, onForget, onCopy, onAdd, onRegisterOnGithub,
+  };
+}
+
+export function KeypairManager({ onAddToProfile, saving }: Props) {
+  const k = useKeypair(onAddToProfile);
+
+  if (k.supported === null) {
     return <p className="text-xs text-gray-400">Kontrollerar webbläsarstöd…</p>;
   }
-  if (!supported) {
+  if (!k.supported) {
     return (
       <div className="bg-amber-50 border border-amber-200 rounded p-3 text-xs text-amber-900">
         Webbläsaren stöder inte WebCrypto Ed25519. Kräver Chrome 113+, Safari 17+ eller Firefox 130+.
@@ -156,7 +171,7 @@ export function KeypairManager({ onAddToProfile, saving }: Props) {
         <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
           <KeyRound size={14} /> Generera nyckel i browser
         </h3>
-        {!keypair && <GenerateKeyButton busy={busy} onGenerate={() => void onGenerate()} />}
+        {!k.keypair && <GenerateKeyButton busy={k.busy} onGenerate={() => void k.onGenerate()} />}
       </div>
 
       <p className="text-xs text-gray-600">
@@ -165,22 +180,22 @@ export function KeypairManager({ onAddToProfile, saving }: Props) {
         den lämnar aldrig den här enheten, inte ens via vår egen kod.
       </p>
 
-      {err && <p className="text-xs text-red-700">✗ {err}</p>}
+      {k.err && <p className="text-xs text-red-700">✗ {k.err}</p>}
 
-      {keypair && (
+      {k.keypair && (
         <KeypairPanel
-          comment={comment}
-          setComment={setComment}
-          sshString={sshString}
-          fingerprint={fingerprint}
-          copied={copied}
+          comment={k.comment}
+          setComment={k.setComment}
+          sshString={k.sshString}
+          fingerprint={k.fingerprint}
+          copied={k.copied}
           saving={saving}
-          registering={registering}
-          registeredOk={registeredOk}
-          onCopy={() => void onCopy()}
-          onAdd={onAdd}
-          onRegister={() => void onRegisterOnGithub()}
-          onForget={() => void onForget()}
+          registering={k.registering}
+          registeredOk={k.registeredOk}
+          onCopy={() => void k.onCopy()}
+          onAdd={k.onAdd}
+          onRegister={() => void k.onRegisterOnGithub()}
+          onForget={() => void k.onForget()}
         />
       )}
     </div>
