@@ -18,7 +18,85 @@ interface Props {
   onClose: () => void;
 }
 
-// eslint-disable-next-line max-lines-per-function
+type Recipient = { name: string; email?: string | null; phone?: string | null };
+type GenMatter = { matterNumber: string; title: string; matterType?: string | null; contacts?: Array<{ role: string; contact: { name: string } }> };
+type GenOrg = { name: string; orgNumber?: string | null; address?: string | null; email?: string | null } | undefined;
+type RegisterDocInput = { id: string; matterId: string; fileName: string; mimeType: string; sizeBytes: number; storagePath: string };
+
+interface GenerateArgs {
+  templateId: string;
+  format: "pdf" | "docx";
+  recipientIds: string[];
+  templates: Array<{ id: string; content?: string | null; name: string }> | undefined;
+  matter: GenMatter | undefined;
+  org: GenOrg;
+  contacts: MatterContact[];
+  matterId: string;
+  registerDoc: (d: RegisterDocInput) => Promise<unknown>;
+}
+
+/** Bygg mall-kontexten för en mottagare (eller ett generellt dokument). */
+function buildDocCtx(m: GenMatter, recipient: Recipient | null, org: GenOrg) {
+  const clientLink = m.contacts?.find((c) => c.role === "KLIENT");
+  return buildTemplateContext({
+    matter: { matterNumber: m.matterNumber, title: m.title, ...omitUndefined({ matterType: m.matterType }) },
+    recipient: recipient ? { name: recipient.name, ...omitUndefined({ email: recipient.email, phone: recipient.phone }) } : null,
+    client: clientLink ? { name: clientLink.contact.name } : null,
+    organization: org ? { name: org.name, ...omitUndefined({ orgNumber: org.orgNumber, address: org.address, email: org.email }) } : null,
+  });
+}
+
+/** Rendera + öppna print-flik + skriv till FSA + registrera ETT dokument. */
+async function generateOneDoc(opts: {
+  content: string; name: string; ctx: ReturnType<typeof buildTemplateContext>;
+  format: "pdf" | "docx"; recipient: Recipient | null; matterId: string;
+  registerDoc: (d: RegisterDocInput) => Promise<unknown>;
+}): Promise<void> {
+  const { content, name, ctx, format, recipient, matterId, registerDoc } = opts;
+  const html = renderHandlebars(content, ctx);
+  const printable = format === "pdf"
+    ? html.replace("</body>", `<script>setTimeout(function(){window.print();},200);<\/script></body>`)
+    : html;
+  const blob = new Blob([printable.includes("<body") ? printable : `<!doctype html><html><body>${printable}</body></html>`], { type: "text/html; charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  window.open(url, "_blank", "noopener,noreferrer");
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+
+  const suffix = recipient ? ` ${recipient.name}` : "";
+  const fileName = `${name}${suffix} ${ctx.today as string}.html`;
+  const docId = `gen-${matterId}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+  const storagePath = `documents/content/${docId}.html`;
+  const bytes = new TextEncoder().encode(html);
+  try {
+    const { loadHandle } = await import("@/lib/client/fsa/handle-store");
+    const { FsaIsoGitAdapter } = await import("@/lib/client/fsa/fs-adapter");
+    const handle = await loadHandle("repo-root");
+    if (handle) await new FsaIsoGitAdapter(handle).writeFile("/" + storagePath, bytes);
+  } catch (e) {
+    console.warn("[generate] FSA-skrivning misslyckades:", e);
+  }
+  await registerDoc({ id: docId, matterId, fileName, mimeType: "text/html; charset=utf-8", sizeBytes: bytes.byteLength, storagePath });
+}
+
+/**
+ * Klientsidig generering — demo/static-export har ingen /api/-route. Renderar
+ * mallen i browsern, öppnar print-flik (PDF via utskriftsdialogen), skriver
+ * HTML till FSA och registrerar dokumentet. Ett dokument per vald mottagare
+ * (eller ett generellt om inga valda). Kastar vid fel.
+ */
+async function runGenerate(a: GenerateArgs): Promise<void> {
+  const tpl = (a.templates ?? []).find((t) => t.id === a.templateId);
+  if (!tpl?.content) throw new Error("Mallen saknar innehåll.");
+  if (!a.matter) throw new Error("Ärendedata kunde inte laddas.");
+  const recipients: Array<Recipient | null> = a.recipientIds.length > 0
+    ? a.contacts.filter((mc) => a.recipientIds.includes(mc.contact.id)).map((mc) => mc.contact)
+    : [null];
+  for (const recipient of recipients) {
+    const ctx = buildDocCtx(a.matter, recipient, a.org);
+    await generateOneDoc({ content: tpl.content, name: tpl.name, ctx, format: a.format, recipient, matterId: a.matterId, registerDoc: a.registerDoc });
+  }
+}
+
 export function GenerateModal({ matterId, contacts, onClose }: Props) {
   const utils = trpc.useUtils();
   const templates = trpc.documentTemplate.list.useQuery();
@@ -38,77 +116,17 @@ export function GenerateModal({ matterId, contacts, onClose }: Props) {
     );
   };
 
-  // Klientsidig generering — demo/static-export har ingen /api/-route.
-  // Vi renderar mallen i browsern via renderHandlebars, öppnar print-flik
-  // (PDF via "Spara som PDF" i utskriftsdialogen) + skriver HTML till FSA
-  // och registrerar dokumentet via tRPC.
-  // eslint-disable-next-line complexity
   const handleGenerate = async () => {
     if (!generateTemplateId) return;
     setGenerating(true);
     setGenerateError(null);
     try {
-      const tpl = (templates.data ?? []).find((t: { id: string; content?: string; name: string }) => t.id === generateTemplateId);
-      if (!tpl?.content) throw new Error("Mallen saknar innehåll.");
-      const m = matter.data;
-      if (!m) throw new Error("Ärendedata kunde inte laddas.");
-
-      const clientLink = m.contacts?.find((c: { role: string }) => c.role === "KLIENT");
-      const recipients = generateRecipientIds.length > 0
-        ? contacts.filter((mc) => generateRecipientIds.includes(mc.contact.id)).map((mc) => mc.contact)
-        : [null];
-
-      for (const recipient of recipients) {
-        const ctx = buildTemplateContext({
-          matter: {
-            matterNumber: m.matterNumber,
-            title: m.title,
-            ...omitUndefined({ matterType: m.matterType }),
-          },
-          recipient: recipient ? {
-            name: recipient.name,
-            ...omitUndefined({ email: recipient.email, phone: recipient.phone }),
-          } : null,
-          client: clientLink ? { name: clientLink.contact.name } : null,
-          organization: org.data ? {
-            name: org.data.name,
-            ...omitUndefined({
-              orgNumber: org.data.orgNumber,
-              address: org.data.address,
-              email: org.data.email,
-            }),
-          } : null,
-        });
-        const html = renderHandlebars(tpl.content, ctx);
-
-        // Öppna i ny flik (auto-print för PDF-format)
-        const printable = generateFormat === "pdf"
-          ? html.replace("</body>", `<script>setTimeout(function(){window.print();},200);<\/script></body>`)
-          : html;
-        const blob = new Blob([printable.includes("<body") ? printable : `<!doctype html><html><body>${printable}</body></html>`], { type: "text/html; charset=utf-8" });
-        const url = URL.createObjectURL(blob);
-        window.open(url, "_blank", "noopener,noreferrer");
-        setTimeout(() => URL.revokeObjectURL(url), 60_000);
-
-        // Spara + registrera dokument
-        const suffix = recipient ? ` ${recipient.name}` : "";
-        const fileName = `${tpl.name}${suffix} ${ctx.today as string}.html`;
-        const docId = `gen-${m.matterNumber}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
-        const storagePath = `documents/content/${docId}.html`;
-        const bytes = new TextEncoder().encode(html);
-        try {
-          const { loadHandle } = await import("@/lib/client/fsa/handle-store");
-          const { FsaIsoGitAdapter } = await import("@/lib/client/fsa/fs-adapter");
-          const handle = await loadHandle("repo-root");
-          if (handle) await new FsaIsoGitAdapter(handle).writeFile("/" + storagePath, bytes);
-        } catch (e) {
-          console.warn("[generate] FSA-skrivning misslyckades:", e);
-        }
-        await register.mutateAsync({
-          id: docId, matterId, fileName,
-          mimeType: "text/html; charset=utf-8", sizeBytes: bytes.byteLength, storagePath,
-        });
-      }
+      await runGenerate({
+        templateId: generateTemplateId, format: generateFormat, recipientIds: generateRecipientIds,
+        templates: templates.data, matter: matter.data as GenMatter | undefined, org: org.data as GenOrg,
+        contacts, matterId,
+        registerDoc: (d) => register.mutateAsync(d as Parameters<typeof register.mutateAsync>[0]),
+      });
       void utils.document.tree.invalidate({ matterId });
       onClose();
     } catch (e) {
