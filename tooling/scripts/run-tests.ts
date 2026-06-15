@@ -35,18 +35,40 @@ const LINE_FLOOR = 0.84;
 const FUNC_FLOOR = 0.80;
 
 /**
- * Realgit-tunga filer som spawnar `git`-binären mot temp-repon (#318). Körs
- * seriellt i pass B. Single source of truth — om en fil läggs till/flyttas
- * och listan blir inaktuell faller runnern (se assertKnown nedan).
+ * SERIAL_FILES — testfiler som SYNKRONT spawnar en barnprocess via
+ * `execFileSync`/`spawnSync`: antingen git-binären mot temp-repon, eller
+ * bash/bun/node (installer-script, dep-cruiser, manifest-generator). Körs
+ * seriellt i pass B (inget `--parallel`).
+ *
+ * Varför seriellt (#327): en SYNKRON spawn från en bun `--parallel`-worker är
+ * osäker på CI-linux. bun:s per-test-`--timeout` är asynkron och kan INTE
+ * avbryta ett blockerande `execFileSync`/`spawnSync` — workern hänger då tills
+ * pass-timeouten SIGKILL:ar (sågs som 360s-"git"-hang) ELLER så kraschar
+ * worker-poolens epoll (`epoll_ctl EEXIST`). Båda felmoderna har SAMMA rot:
+ * sync child-spawn under worker-poolen. Seriellt pass = inget pool/epoll →
+ * trygg spawn. (#318 flyttade git-filerna hit; #327 generaliserade till alla
+ * sync-spawnare — det hängande testet var test-all-seteexit, inte git.)
+ *
+ * Single source of truth. Regressionsvakten i main() fäller om (a) en fil här
+ * saknas, eller (b) en pass-A-fil börjar sync-spawna utan att läggas till här.
  */
-const REALGIT_FILES = [
+const SERIAL_FILES = [
+  // realgit — spawnar git-binären mot temp-repon:
   "test/unit/server/local-first/node-git-ops.test.ts",
   "test/unit/server/local-first/git-ops-changed-files.test.ts",
   "test/unit/server/local-first/sync-loop.integration.test.ts",
   "test/unit/server/local-first/server-peer.test.ts",
   "test/unit/server/local-first/server-runtime.test.ts",
   "test/unit/server/local-first/server-working-copy.write.test.ts",
+  // övriga sync-spawnare — bash/bun/node via execFileSync/spawnSync:
+  "test/scripts/install-from-release.test.ts",
+  "test/scripts/test-all-seteexit.test.ts",
+  "test/unit/lib/generate-demo-manifest.test.ts",
+  "test/unit/architecture/fitness.test.ts",
 ];
+
+/** Matchar ett SYNKRONT child-spawn-anrop (regressionsvakt, #327). */
+const SYNC_SPAWN_RE = /\b(?:execFileSync|spawnSync|execSync)\s*\(/;
 
 const ROOTS = FAST ? ["test/unit"] : ["test/unit", "test/integration", "test/scripts"];
 
@@ -62,10 +84,10 @@ function allTestFiles(): string[] {
   return [...out];
 }
 
-// Wall-clock-timeout per pass (#327). Realgit-passet (B) kan hänga indefinit
-// om en git-barnprocess (clone/push mot temp-repo) blockerar — bun:s per-test-
-// `--timeout` dödar inte alltid barnet, så hela processen lever vidare och
-// HÄNGER jobbet tills GitHubs jobb-timeout (sågs som 15-min hang, PR #326).
+// Wall-clock-timeout per pass (#327). Ett pass kan hänga indefinit om en
+// SYNKRONT spawnad barnprocess (git/bash/bun/node) blockerar — bun:s per-test-
+// `--timeout` är asynkron och avbryter inte ett `execFileSync`/`spawnSync`, så
+// hela processen lever vidare och HÄNGER jobbet (sågs som 15-min hang, PR #326).
 // En SIGKILL-timeout gör en hang till ett bounded fel → snabb röd + rerun.
 // Generöst tilltaget över normal körtid (pass A ~60s, pass B ~30s).
 const PASS_A_TIMEOUT_MS = 360_000;
@@ -77,7 +99,7 @@ interface PassResult { status: number | null; signal: NodeJS.Signals | null; err
 export function passError(label: string, timeoutMs: number, r: PassResult): string | null {
   const code = (r.error as NodeJS.ErrnoException | undefined)?.code;
   if (code === "ETIMEDOUT") {
-    return `${label}: översteg ${Math.round(timeoutMs / 1000)}s och dödades (SIGKILL) — trolig hängande git-barnprocess (#327). Kör om; undersök realgit-testet vid upprepning.`;
+    return `${label}: översteg ${Math.round(timeoutMs / 1000)}s och dödades (SIGKILL) — trolig hängande sync-spawnad barnprocess (git/bash/bun/node, #327). Kör om; sync-spawnande tester hör hemma i SERIAL_FILES.`;
   }
   if (r.error) return `${label}: kunde inte köras: ${r.error.message}`;
   if (r.signal) return `${label}: dödad av signal ${r.signal}`;
@@ -190,20 +212,34 @@ function checkCoverage(covDirs: string[]): void {
 
 function main(): void {
   const all = allTestFiles();
-  const realgitSet = new Set(REALGIT_FILES);
-  const missing = REALGIT_FILES.filter((f) => !all.includes(f));
+  const serialSet = new Set(SERIAL_FILES);
+  const missing = SERIAL_FILES.filter((f) => !all.includes(f));
   if (missing.length > 0 && !FAST) {
-    console.error(`✗ Inaktuell REALGIT_FILES-lista (#318) — saknas: ${missing.join(", ")}`);
+    console.error(`✗ Inaktuell SERIAL_FILES-lista (#318/#327) — saknas: ${missing.join(", ")}`);
     process.exit(1);
   }
-  const realgit = all.filter((f) => realgitSet.has(f));
-  const rest = all.filter((f) => !realgitSet.has(f));
+  const serial = all.filter((f) => serialSet.has(f));
+  const rest = all.filter((f) => !serialSet.has(f));
 
-  // Pass A: parallell-säkra tester (--parallel=2, snabbt). Pass B: realgit
-  // sekventiellt (inget --parallel → enprocess, ingen kontention, ingen
-  // --isolate/epoll-krasch på CI-linux).
+  // Regressionsvakt (#327): en pass-A-fil får ALDRIG synkront spawna en
+  // barnprocess — det hänger/kraschar under bun:s --parallel-worker på
+  // CI-linux. Fäll med tydligt besked om en sådan smyger in i parallell-passet.
+  if (!FAST) {
+    const leaked = rest.filter((f) => SYNC_SPAWN_RE.test(readFileSync(f, "utf8")));
+    if (leaked.length > 0) {
+      console.error(
+        `✗ Sync-spawnande testfil(er) i parallell-passet (#327) — execFileSync/spawnSync\n` +
+        `  hänger/kraschar under --parallel på CI-linux. Lägg till i SERIAL_FILES:\n  ${leaked.join("\n  ")}`,
+      );
+      process.exit(1);
+    }
+  }
+
+  // Pass A: parallell-säkra tester (--parallel=2, snabbt). Pass B: sync-spawnare
+  // (git/bash/bun/node) seriellt — inget --parallel → enprocess, ingen
+  // kontention, ingen --isolate/epoll-krasch på CI-linux.
   runPass("pass A (parallell)", rest, 2, COVERAGE ? "coverage/a" : null, PASS_A_TIMEOUT_MS);
-  runPass("pass B (realgit, sekventiellt)", realgit, null, COVERAGE ? "coverage/b" : null, PASS_B_TIMEOUT_MS);
+  runPass("pass B (seriell — sync-spawn)", serial, null, COVERAGE ? "coverage/b" : null, PASS_B_TIMEOUT_MS);
 
   if (COVERAGE) checkCoverage(["coverage/a", "coverage/b"]);
 }
