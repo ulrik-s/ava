@@ -44,6 +44,50 @@ describe("billingRun.createAcconto", () => {
     const te = await ds.timeEntries.findFirst({ where: { id: "te-1" } }) as { frozenAt?: Date | null };
     expect(te.frozenAt).toBeFalsy();
   });
+
+  it("proposedAmountOre = %-sats × upparbetat (inga tidigare aconton) — #397", async () => {
+    const { caller } = makeCaller({ workMinutes: 120 }); // 5000 kr
+    const res = await caller.billingRun.createAcconto({
+      matterId: "m-1", clientShareBips: 2000, amountOre: 100000,
+    });
+    // 20% × 500000 − 0 = 100000
+    expect((res.run as { proposedAmountOre: number }).proposedAmountOre).toBe(100000);
+  });
+
+  it("proposedAmountOre drar av tidigare ACCONTO-runs (#397)", async () => {
+    const { caller } = makeCaller({ workMinutes: 120 }); // 5000 kr
+    await caller.billingRun.createAcconto({ matterId: "m-1", clientShareBips: 2000, amountOre: 100000 });
+    const second = await caller.billingRun.createAcconto({ matterId: "m-1", clientShareBips: 5000, amountOre: 1 });
+    // 50% × 500000 − 100000 (tidigare) = 150000
+    expect((second.run as { proposedAmountOre: number }).proposedAmountOre).toBe(150000);
+  });
+});
+
+describe("billingRun.proposal (#397)", () => {
+  it("returnerar ofakturerade poster, upparbetat värde och tidigare aconto-summa", async () => {
+    const { caller } = makeCaller({ workMinutes: 120, expenseOre: 90000 }); // 5000 + 900 kr
+    await caller.billingRun.createAcconto({ matterId: "m-1", clientShareBips: 2000, amountOre: 60000 });
+    const p = await caller.billingRun.proposal({ matterId: "m-1" });
+    expect(p.workValueOre).toBe(500000 + 90000);
+    expect(p.priorAccontoSumOre).toBe(60000);
+    expect(p.timeEntries).toHaveLength(1);
+    expect(p.timeEntries[0]!.valueOre).toBe(500000);
+    expect(p.expenses).toHaveLength(1);
+    expect(p.expenses[0]!.amount).toBe(90000);
+  });
+
+  it("utelämnar frysta poster efter en FINAL", async () => {
+    const { caller } = makeCaller({ workMinutes: 60 });
+    await caller.billingRun.createFinal({ matterId: "m-1", recipient: "KLIENT" });
+    const p = await caller.billingRun.proposal({ matterId: "m-1" });
+    expect(p.timeEntries).toHaveLength(0);
+    expect(p.workValueOre).toBe(0);
+  });
+
+  it("nekar ärende i annan org (NOT_FOUND)", async () => {
+    const { caller } = makeCaller({ workMinutes: 60 });
+    await expect(caller.billingRun.proposal({ matterId: "m-saknas" })).rejects.toThrow();
+  });
 });
 
 describe("billingRun.createFinal", () => {

@@ -13,10 +13,10 @@ import { formatCurrency } from "@/lib/client/utils";
 export interface FakturaInput {
   invoice: {
     amount: number; // öre
-    invoiceNumber?: string | null;
+    invoiceNumber?: string | null | undefined;
     /** Bankgiro-OCR (#182). Null på kostnadsräkningar/CREDIT → raden utelämnas. */
-    ocrReference?: string | null;
-    invoiceDate?: string | Date | null;
+    ocrReference?: string | null | undefined;
+    invoiceDate?: string | Date | null | undefined;
   };
   meta: {
     matterNumber: string;

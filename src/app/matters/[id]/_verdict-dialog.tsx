@@ -11,15 +11,12 @@
  * Domen anger det FAKTISKA beloppet, inte hur mycket som prutats — så
  * det är vad advokaten skriver in.
  */
-import type { inferRouterInputs } from "@trpc/server";
 import { useState } from "react";
 import { Modal } from "@/components/ui/modal";
+import { generateFakturaDoc, type DocUtils } from "@/lib/client/kostnadsrakning/generate-faktura-doc";
 import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
-import type { AppRouter } from "@/lib/server/routers/_app";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
-
-type RouterInputs = inferRouterInputs<AppRouter>;
 
 interface Props {
   billingRunId: string;
@@ -33,54 +30,6 @@ interface Props {
   onClose: () => void;
 }
 
-type RegisterMut = { mutateAsync: (i: RouterInputs["document"]["register"]) => Promise<unknown> };
-type TreeFilter = RouterInputs["document"]["tree"];
-type ListFilter = RouterInputs["document"]["list"];
-type DocUtils = {
-  document: {
-    tree: { invalidate: (f?: TreeFilter) => Promise<unknown>; refetch: (f?: TreeFilter) => Promise<unknown> };
-    list: { invalidate: (f?: ListFilter) => Promise<unknown> };
-  };
-};
-
-/**
- * Generera ett faktura-DOKUMENT (PDF) ur den nyss skapade invoice-entiteten och
- * lägg det i ärendets fil-lista (parallellt med Invoice-objektet). document.register
- * emittar inga events (ingen read-only-trap), så detta funkar i demo/git-backend.
- */
-async function generateFakturaDoc(
-  invoice: { id: string; amount: number; invoiceNumber?: string | null; invoiceDate?: string | Date | null },
-  props: Props, register: RegisterMut, utils: DocUtils,
-): Promise<void> {
-  const { renderFakturaPdf } = await import("@/lib/client/kostnadsrakning/render-faktura-pdf");
-  const { persistGeneratedDoc } = await import("@/lib/client/demo/persist-generated-doc");
-  const bytes = await renderFakturaPdf({
-    invoice,
-    meta: {
-      matterNumber: props.matterNumber, matterTitle: props.matterTitle,
-      ...omitUndefined({
-        clientName: props.clientName,
-        organizationName: props.organizationName,
-        organizationOrgNumber: props.organizationOrgNumber,
-      }),
-    },
-  });
-  const docId = `faktura-${invoice.id}`;
-  const fileName = `Faktura ${props.matterNumber} ${new Date().toISOString().slice(0, 10)}.pdf`;
-  const storagePath = `documents/content/${docId}.pdf`;
-  await register.mutateAsync({
-    id: docId, matterId: props.matterId, fileName, mimeType: "application/pdf",
-    sizeBytes: bytes.byteLength, storagePath, documentType: "Faktura",
-    invoiceId: invoice.id, analysisStatus: "DONE",
-  });
-  await persistGeneratedDoc({ id: docId, storagePath, fileName, mimeType: "application/pdf", bytes });
-  try {
-    await utils.document.tree.invalidate({ matterId: props.matterId });
-    await utils.document.tree.refetch({ matterId: props.matterId });
-    await utils.document.list.invalidate();
-  } catch { /* best-effort */ }
-}
-
 export function VerdictDialog(props: Props) {
   const { billingRunId, workValueOre, onClose } = props;
   const [awardedKr, setAwardedKr] = useState(workValueOre / 100);
@@ -89,8 +38,21 @@ export function VerdictDialog(props: Props) {
   const mut = trpc.billingRun.setVerdict.useMutation({
     onSuccess: async (res) => {
       // Lägg ett faktura-dokument i fil-listan ur den skapade fakturan.
-      try { await generateFakturaDoc((res as { invoice: Parameters<typeof generateFakturaDoc>[0] }).invoice, props, register, utils as unknown as DocUtils); }
-      catch (e) { console.warn("[verdict] faktura-dokument misslyckades:", e); }
+      try {
+        await generateFakturaDoc({
+          invoice: (res as { invoice: Parameters<typeof generateFakturaDoc>[0]["invoice"] }).invoice,
+          matterId: props.matterId,
+          meta: {
+            matterNumber: props.matterNumber, matterTitle: props.matterTitle,
+            ...omitUndefined({
+              clientName: props.clientName,
+              organizationName: props.organizationName,
+              organizationOrgNumber: props.organizationOrgNumber,
+            }),
+          },
+          register, utils: utils as unknown as DocUtils,
+        });
+      } catch (e) { console.warn("[verdict] faktura-dokument misslyckades:", e); }
       onClose();
     },
   });
