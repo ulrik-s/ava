@@ -13,27 +13,14 @@ import { and, desc, eq, isNull } from "drizzle-orm";
 import type { Invoice, Payment, WriteOff } from "@/lib/shared/schemas/billing";
 import { accontoDeductions, invoices, matters, paymentPlans, payments, writeOffs } from "../db/schema";
 import type { AppDb } from "../db/types";
+import { DrizzleRepository, type VersionedTable } from "./drizzle-repository";
 import type {
   InvoiceFull, InvoiceListFilter, InvoiceListRow, InvoiceRepository, InvoiceWithLedger, InvoiceWithRelations,
 } from "./invoice-repository";
 
-export class DrizzleInvoiceRepository implements InvoiceRepository {
-  constructor(
-    private readonly db: AppDb,
-    private readonly now: () => Date = () => new Date(),
-  ) {}
-
-  async getById(id: string): Promise<Invoice | null> {
-    const rows = await this.db
-      .select().from(invoices)
-      .where(and(eq(invoices.id, id), isNull(invoices.deletedAt))).limit(1);
-    return (rows[0] as unknown as Invoice | undefined) ?? null;
-  }
-
-  async getByIdOrThrow(id: string): Promise<Invoice> {
-    const row = await this.getById(id);
-    if (!row) throw new Error(`Ingen faktura med id ${id}`);
-    return row;
+export class DrizzleInvoiceRepository extends DrizzleRepository<Invoice> implements InvoiceRepository {
+  constructor(db: AppDb, now: () => Date = () => new Date()) {
+    super(db, invoices as unknown as VersionedTable, now);
   }
 
   async getByIdInOrg(id: string, organizationId: string): Promise<Invoice | null> {
@@ -46,28 +33,6 @@ export class DrizzleInvoiceRepository implements InvoiceRepository {
         isNull(invoices.deletedAt),
       )).limit(1);
     return (rows[0]?.inv as unknown as Invoice | undefined) ?? null;
-  }
-
-  async create(data: Partial<Invoice>): Promise<Invoice> {
-    const [row] = await this.db.insert(invoices)
-      .values({ ...data, version: 1 } as never).returning();
-    return row as unknown as Invoice;
-  }
-
-  async update(id: string, patch: Partial<Invoice>): Promise<Invoice> {
-    const current = await this.getByIdOrThrow(id);
-    const [row] = await this.db.update(invoices)
-      .set({ ...patch, version: nextVersion(current), updatedAt: this.now() } as never)
-      .where(eq(invoices.id, id)).returning();
-    return row as unknown as Invoice;
-  }
-
-  async softDelete(id: string): Promise<Invoice> {
-    const current = await this.getByIdOrThrow(id);
-    const [row] = await this.db.update(invoices)
-      .set({ deletedAt: this.now(), version: nextVersion(current) } as never)
-      .where(eq(invoices.id, id)).returning();
-    return row as unknown as Invoice;
   }
 
   /** Bar faktura-rad utan org/delete-filter (för self-ref-uppslag). */
@@ -173,8 +138,4 @@ export class DrizzleInvoiceRepository implements InvoiceRepository {
       .orderBy(desc(invoices.invoiceDate));
     return rows as unknown as Invoice[];
   }
-}
-
-function nextVersion(row: Invoice): number {
-  return ((row as { version?: number }).version ?? 1) + 1;
 }
