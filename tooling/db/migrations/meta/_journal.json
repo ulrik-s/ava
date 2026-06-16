@@ -8,6 +8,13 @@
       "when": 1781612731463,
       "tag": "0000_init_core",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1781613540522,
+      "tag": "0001_add_billing_docs_calendar",
+      "breakpoints": true
     }
   ]
 }
