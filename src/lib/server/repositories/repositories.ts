@@ -8,10 +8,14 @@
 import type { InvoiceRepository } from "./invoice-repository";
 import type { MatterRepository } from "./matter-repository";
 import type { PaymentPlanRepository } from "./payment-plan-repository";
+import type { PaymentRepository } from "./payment-repository";
+import type { WriteOffRepository } from "./write-off-repository";
 
 export interface Repositories {
   invoices: InvoiceRepository;
   matters: MatterRepository;
+  payments: PaymentRepository;
+  writeOffs: WriteOffRepository;
   paymentPlans: PaymentPlanRepository;
   transaction<T>(fn: (tx: Repositories) => Promise<T>): Promise<T>;
 }

@@ -45,6 +45,7 @@ const mockPrisma = {
     create: vi.fn(),
   },
   payment: {
+    findMany: vi.fn(),
     create: vi.fn(),
   },
   writeOff: {
@@ -83,6 +84,8 @@ beforeEach(() => {
   // (clearAllMocks rensar call-data men inte implementationer).
   mockPrisma.invoice.findMany.mockResolvedValue([]);
   mockPrisma.writeOff.findMany.mockResolvedValue([]);
+  // Repository-sömmens ledger läser betalt-hinken via payments.sumByInvoice.
+  mockPrisma.payment.findMany.mockResolvedValue([]);
 });
 
 const MATTER_A = { id: "matter-1", organizationId: "org-a", matterNumber: "2026-0001", title: "T" };
@@ -306,8 +309,8 @@ describe("invoice.recordPayment", () => {
       amount: 1_000_000,
       status: "SENT",
       paymentPlan: null,
-      payments: [{ amount: 200_000 }],
     });
+    mockPrisma.payment.findMany.mockResolvedValue([{ amount: 200_000 }]); // betalt före
     mockPrisma.payment.create.mockResolvedValue({ id: "pay-1", amount: 300_000 });
 
     const res = await makeCaller().recordPayment({
@@ -327,8 +330,8 @@ describe("invoice.recordPayment", () => {
       amount: 1_000_000,
       status: "SENT",
       paymentPlan: null,
-      payments: [{ amount: 900_000 }],
     });
+    mockPrisma.payment.findMany.mockResolvedValue([{ amount: 900_000 }]); // betalt före
     mockPrisma.payment.create.mockResolvedValue({ id: "pay-2", amount: 100_000 });
 
     const res = await makeCaller().recordPayment({
@@ -338,10 +341,9 @@ describe("invoice.recordPayment", () => {
     });
 
     expect(res.settled).toBe(true);
-    expect(mockPrisma.invoice.update).toHaveBeenCalledWith({
-      where: { id: "inv-1" },
-      data: { status: "PAID" },
-    });
+    expect(mockPrisma.invoice.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "inv-1" }, data: expect.objectContaining({ status: "PAID" }) }),
+    );
     expect(mockPrisma.paymentPlan.update).not.toHaveBeenCalled();
   });
 
@@ -350,9 +352,9 @@ describe("invoice.recordPayment", () => {
       id: "inv-1",
       amount: 1_000_000,
       status: "INSTALLMENT_PLAN",
-      paymentPlan: { id: "plan-1" },
-      payments: [{ amount: 999_999 }],
     });
+    mockPrisma.payment.findMany.mockResolvedValue([{ amount: 999_999 }]); // betalt före
+    mockPrisma.paymentPlan.findFirst.mockResolvedValue({ id: "plan-1", invoiceId: "inv-1" });
     mockPrisma.payment.create.mockResolvedValue({ id: "pay-last", amount: 1 });
 
     await makeCaller().recordPayment({
@@ -361,14 +363,12 @@ describe("invoice.recordPayment", () => {
       paidAt: "2026-05-15",
     });
 
-    expect(mockPrisma.invoice.update).toHaveBeenCalledWith({
-      where: { id: "inv-1" },
-      data: { status: "PAID" },
-    });
-    expect(mockPrisma.paymentPlan.update).toHaveBeenCalledWith({
-      where: { id: "plan-1" },
-      data: { status: "COMPLETED" },
-    });
+    expect(mockPrisma.invoice.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "inv-1" }, data: expect.objectContaining({ status: "PAID" }) }),
+    );
+    expect(mockPrisma.paymentPlan.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "plan-1" }, data: expect.objectContaining({ status: "COMPLETED" }) }),
+    );
   });
 
   it("NOT_FOUND när fakturan tillhör annan org", async () => {
@@ -394,7 +394,9 @@ describe("invoice.recordPayment", () => {
 
     // Betalningen registreras OCH fakturan auto-sätts SENT (inte kvar som DRAFT).
     expect(mockPrisma.payment.create).toHaveBeenCalled();
-    expect(mockPrisma.invoice.update).toHaveBeenCalledWith({ where: { id: "inv-1" }, data: { status: "SENT" } });
+    expect(mockPrisma.invoice.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "inv-1" }, data: expect.objectContaining({ status: "SENT" }) }),
+    );
     expect(res.settled).toBe(false); // delbetalning → stannar SENT
   });
 
@@ -412,8 +414,8 @@ describe("invoice.recordPayment", () => {
   it("avvisar översummerande betalning (partition-invariant, ADR 0007)", async () => {
     mockPrisma.invoice.findFirst.mockResolvedValue({
       id: "inv-1", amount: 1_000_000, status: "SENT", paymentPlan: null,
-      payments: [{ amount: 900_000 }],
     });
+    mockPrisma.payment.findMany.mockResolvedValue([{ amount: 900_000 }]); // betalt före
     mockPrisma.invoice.findMany.mockResolvedValue([]); // inga krediteringar
     mockPrisma.writeOff.findMany.mockResolvedValue([]); // inget avskrivet
 
@@ -542,8 +544,8 @@ describe("invoice.writeOff", () => {
   it("delbetald → avskriven återstod: skapar WriteOff + härleder BAD_DEBT", async () => {
     mockPrisma.invoice.findFirst.mockResolvedValue({
       id: "inv-1", matterId: "matter-1", amount: 100_000, status: "SENT",
-      payments: [{ amount: 30_000 }],
     });
+    mockPrisma.payment.findMany.mockResolvedValue([{ amount: 30_000 }]); // betalt
     mockPrisma.invoice.findMany.mockResolvedValue([]); // inga krediteringar
     mockPrisma.writeOff.findMany.mockResolvedValue([]); // inget avskrivet än
     mockPrisma.writeOff.create.mockResolvedValue({ id: "wo-1", invoiceId: "inv-1", amount: 70_000 });
@@ -557,9 +559,10 @@ describe("invoice.writeOff", () => {
     );
     expect(res.outstanding).toBe(0);
     expect(res.status).toBe("BAD_DEBT");
-    expect(mockPrisma.invoice.update).toHaveBeenCalledWith({
-      where: { id: "inv-1" }, data: { status: "BAD_DEBT" },
-    });
+    // Repo.update bumpar version + updatedAt (ADR 0019) → matcha löst på status.
+    expect(mockPrisma.invoice.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "inv-1" }, data: expect.objectContaining({ status: "BAD_DEBT" }) }),
+    );
   });
 
   it("räkna en gång: redan avskriven faktura (outstanding 0) → BAD_REQUEST", async () => {
@@ -576,8 +579,9 @@ describe("invoice.writeOff", () => {
 
   it("avskrivningsbelopp > utestående → BAD_REQUEST", async () => {
     mockPrisma.invoice.findFirst.mockResolvedValue({
-      id: "inv-1", matterId: "matter-1", amount: 100_000, status: "SENT", payments: [{ amount: 60_000 }],
+      id: "inv-1", matterId: "matter-1", amount: 100_000, status: "SENT",
     });
+    mockPrisma.payment.findMany.mockResolvedValue([{ amount: 60_000 }]); // betalt
     mockPrisma.invoice.findMany.mockResolvedValue([]);
     mockPrisma.writeOff.findMany.mockResolvedValue([]);
 

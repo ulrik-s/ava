@@ -34,6 +34,7 @@ function setup(overrides?: Partial<DemoSource>) {
   const caller = (orgId = "o1") => invoiceRouter.createCaller({
     user: { id: "u1", email: "a@b.c", name: "A", role: "LAWYER", organizationId: orgId },
     dataStore: ds,
+    repos: buildInMemoryRepositories(ds),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any);
   return { source, events, caller };

@@ -22,4 +22,9 @@ export class InMemoryPaymentPlanRepository extends InMemoryRepository<PaymentPla
       .findFirst({ where: { id: planId, invoice: { matter: { organizationId } } } })) as PaymentPlan | null;
     return row && !(row as { deletedAt?: unknown }).deletedAt ? row : null;
   }
+
+  async getByInvoiceId(invoiceId: string): Promise<PaymentPlan | null> {
+    const row = (await this.delegate.findFirst({ where: { invoiceId } })) as PaymentPlan | null;
+    return row && !(row as { deletedAt?: unknown }).deletedAt ? row : null;
+  }
 }

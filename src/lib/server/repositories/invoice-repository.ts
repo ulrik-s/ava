@@ -95,6 +95,8 @@ export interface InvoiceRepository extends Repository<Invoice> {
   listForOrg(organizationId: string, filter?: InvoiceListFilter): Promise<InvoiceListRow[]>;
   /** Nästa lediga fakturanummer (`F-YYYY-NNNN`) för org:en (året från repots klocka). */
   nextInvoiceNumber(organizationId: string): Promise<string>;
+  /** Summa krediterat på en faktura: |belopp| av dess kreditnotor, org-scopat (öre). */
+  sumCreditNotesFor(invoiceId: string, organizationId: string): Promise<number>;
   /** Alla (icke-raderade) fakturor i ett ärende, nyaste först. */
   listByMatter(matterId: string): Promise<Invoice[]>;
 }
