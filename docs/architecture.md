@@ -11,6 +11,7 @@
 > [`docs/adr/`](./adr/). Aktuella beslut:
 > - [ADR 0001](./adr/0001-pluggbar-backend-bakom-idatastore.md) — pluggbar
 >   backend: Git (local-first, offline) ⟷ Postgres (server, online).
+>   **Reviderad av ADR 0016** (server-first; git-vägen pensioneras).
 > - [ADR 0002](./adr/0002-git-konflikthantering-backend-a.md) — git-konflikt­
 >   hantering i Git-backenden: last-write-wins + diskret överskrivnings-notis.
 > - [ADR 0003](./adr/0003-nyckelstrategi-app-genererad-uuidv7.md) — nyckel­
@@ -40,6 +41,10 @@
 >   Outlook): tunna servern äger git-db + exponerar tRPC-over-HTTP; add-ins är
 >   tunna HTTP-klienter (Bearer-PAT). Web-app/demo förblir lokal-först (USP).
 >   Delad task-pane-shell; #84/#72 tunna lager.
+> - [ADR 0016](./adr/0016-server-first-med-offline-first-klient.md) — **server-first**
+>   (Postgres + tRPC auktoritativt); varje klient är offline-first via lokal store
+>   + optimistisk mutations-kö + server-auktoritativ reconcile; GH Pages-demon =
+>   samma store utan synk-mål. Reviderar ADR 0001 (git-vägen pensioneras).
 
 ## Tre lager
 
