@@ -36,9 +36,10 @@ const FAST = process.argv.includes("--fast");
 // (integrations-section) → 86.2 (expectedReceivable) → 86.6 (DayView-render) →
 // 86.7 (datasource-section) → 86.8 (extract-text pdf/docx) → 86.9 (reports
 // arSummary-router) → 87.0 (paymentPlan list/cancel/scanDueReminders) → 87.1
-// (document/core listDocumentTypes/markExternallyEdited/analyze-catch, lokalt
-// 87.83% rader, ~0.73% marginal — FUNC_FLOOR konservativt pga Node-version-varians).
-const LINE_FLOOR = 0.871;
+// (document/core listDocumentTypes/markExternallyEdited/analyze-catch) → 87.2
+// (calendar getById/listForMatter/setMirrorState, lokalt 87.89% rader, ~0.69%
+// marginal — FUNC_FLOOR konservativt pga Node-version-varians).
+const LINE_FLOOR = 0.872;
 const FUNC_FLOOR = 0.80;
 
 /**
