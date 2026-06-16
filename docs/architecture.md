@@ -49,6 +49,10 @@
 >   konfliktpolicy: per-entitet `version` + delta-cursor, idempotent UUIDv7-mutations-
 >   kö, tre konfliktklasser (append / LWW / surface-validera). Foundation för
 >   ADR 0016-migreringen (#404).
+> - [ADR 0019](./adr/0019-postgres-schema-och-db-toolchain.md) — Postgres-schema &
+>   DB-toolchain: **Drizzle** + drizzle-kit, `uuid`-kolumner, app-nivå version-bump,
+>   global `BIGSERIAL` per-org change-log, och en **frusen IDataStore-arg-subset**
+>   (= query-engine.ts). zod förblir sanningskälla. Konkretiserar #408.
 
 ## Tre lager
 
