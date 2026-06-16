@@ -1,6 +1,6 @@
 # ADR 0016 — Server-first med offline-first klient (Postgres + tRPC, lokal store + sync)
 
-- **Status:** Föreslagen
+- **Status:** Accepterad
 - **Datum:** 2026-06-16
 - **Beslutsfattare:** Ulrik Sjölin
 - **Berör:** datalager, tRPC-transport, deploy-modeller, offline-UX, demo, auth
