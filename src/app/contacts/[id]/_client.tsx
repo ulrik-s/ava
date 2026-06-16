@@ -298,7 +298,7 @@ function ChildContactsSection(p: ChildSectionProps) {
         />
       )}
       <div className="divide-y divide-gray-100">
-        {children.map((child: { id: string; name: string; contactType: string; email: string | null; phone: string | null; notes: string | null }) => (
+        {children.map((child) => (
           <EntityLink key={child.id} route="contacts" id={child.id} className="block px-6 py-3 hover:bg-gray-50">
             <p className="text-sm font-medium text-gray-900">{child.name}</p>
             <p className="text-xs text-gray-500">

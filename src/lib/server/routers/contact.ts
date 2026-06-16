@@ -1,9 +1,10 @@
 import { z } from "zod";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
+import type { Contact } from "@/lib/shared/schemas/contact";
 import { contactTypeSchema } from "@/lib/shared/schemas/enums";
 import { contactIdSchema, asId } from "@/lib/shared/schemas/ids";
 import { emit } from "../events/emit";
-import { router, orgProcedure, requireOrgOwned } from "../trpc";
+import { router, orgProcedure, requireOrgOwned, TRPCError } from "../trpc";
 
 export const contactRouter = router({
   list: orgProcedure
@@ -17,57 +18,25 @@ export const contactRouter = router({
         pageSize: z.number().min(1).max(1000).default(20),
       })
     )
+    // Migrerad till repository-sömmen (ADR 0020): listForOrg kapslar in
+    // topp-nivå-filter, sök och _count.
     .query(async ({ ctx, input }) => {
-      const where = {
-        organizationId: ctx.orgId,
-        parentId: null, // Only top-level contacts, not sub-contacts
-        ...(input.contactType ? { contactType: input.contactType } : {}),
-        ...(input.search
-          ? {
-              OR: [
-                { name: { contains: input.search, mode: "insensitive" as const } },
-                { personalNumber: { contains: input.search } },
-                { orgNumber: { contains: input.search } },
-                { email: { contains: input.search, mode: "insensitive" as const } },
-              ],
-            }
-          : {}),
-      };
-
-      const [contacts, total] = await Promise.all([
-        ctx.dataStore.contacts.findMany({
-          where,
-          orderBy: { name: "asc" },
-          skip: (input.page - 1) * input.pageSize,
-          take: input.pageSize,
-          include: {
-            _count: { select: { matterLinks: true, children: true } },
-          },
-        }),
-        ctx.dataStore.contacts.count({ where }),
-      ]);
-
+      const { contacts, total } = await ctx.repos.contacts.listForOrg(ctx.orgId, {
+        search: input.search,
+        contactType: input.contactType,
+        page: input.page,
+        pageSize: input.pageSize,
+      });
       return { contacts, total, pages: Math.ceil(total / input.pageSize) };
     }),
 
   getById: orgProcedure
     .input(z.object({ id: z.string() }))
+    // Migrerad: getByIdFull (barn/förälder/ärende-kopplingar), org-scopad.
     .query(async ({ ctx, input }) => {
-      return ctx.dataStore.contacts.findFirstOrThrow({
-        where: { id: input.id, organizationId: ctx.orgId },
-        include: {
-          children: { orderBy: { name: "asc" } },
-          parent: { select: { id: true, name: true } },
-          matterLinks: {
-            orderBy: { createdAt: "desc" },
-            include: {
-              matter: {
-                select: { id: true, matterNumber: true, title: true, status: true },
-              },
-            },
-          },
-        },
-      });
+      const contact = await ctx.repos.contacts.getByIdFull(input.id, ctx.orgId);
+      if (!contact) throw new TRPCError({ code: "NOT_FOUND" });
+      return contact;
     }),
 
   create: orgProcedure
@@ -87,13 +56,11 @@ export const contactRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const contact = await ctx.dataStore.contacts.create({
-        data: {
-          ...omitUndefined(input),
-          email: input.email || null,
-          organizationId: asId<"OrganizationId">(ctx.orgId),
-        },
-      });
+      const contact = await ctx.repos.contacts.create({
+        ...omitUndefined(input),
+        email: input.email || null,
+        organizationId: asId<"OrganizationId">(ctx.orgId),
+      } as Partial<Contact>);
       await emit.contactCreated(ctx, contact);
       return contact;
     }),
@@ -115,18 +82,15 @@ export const contactRouter = router({
     .mutation(async ({ ctx, input }) => {
       // Säkerhet: verifiera att kontakten tillhör anropande org innan update.
       await requireOrgOwned(
-        () => ctx.dataStore.contacts.findUnique({ where: { id: input.id } }),
+        () => ctx.repos.contacts.getById(input.id),
         ctx.orgId,
         (c) => c.organizationId,
       );
       const { id, ...data } = input;
-      const updated = await ctx.dataStore.contacts.update({
-        where: { id },
-        data: {
-          ...omitUndefined(data),
-          email: input.email || null,
-        },
-      });
+      const updated = await ctx.repos.contacts.update(id, {
+        ...omitUndefined(data),
+        email: input.email || null,
+      } as Partial<Contact>);
       await emit.contactUpdated(ctx, id, data);
       return updated;
     }),
@@ -135,13 +99,14 @@ export const contactRouter = router({
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
       await requireOrgOwned(
-        () => ctx.dataStore.contacts.findUnique({ where: { id: input.id } }),
+        () => ctx.repos.contacts.getById(input.id),
         ctx.orgId,
         (c) => c.organizationId,
       );
-      const result = await ctx.dataStore.contacts.delete({ where: { id: input.id } });
+      // Hård delete bevarar dagens beteende (se ADR 0017-not om delete-policy).
+      await ctx.repos.contacts.hardDelete(input.id);
       await emit.contactDeleted(ctx, input.id);
-      return result;
+      return { id: input.id };
     }),
 
   // Add a contact person to an organization
@@ -157,20 +122,18 @@ export const contactRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       await requireOrgOwned(
-        () => ctx.dataStore.contacts.findUnique({ where: { id: input.parentId } }),
+        () => ctx.repos.contacts.getById(input.parentId),
         ctx.orgId,
         (c) => c.organizationId,
       );
-      return ctx.dataStore.contacts.create({
-        data: {
-          name: input.name,
-          contactType: "PERSON",
-          email: input.email || null,
-          phone: input.phone,
-          notes: input.notes,
-          parentId: input.parentId,
-          organizationId: asId<"OrganizationId">(ctx.orgId),
-        },
-      });
+      return ctx.repos.contacts.create({
+        name: input.name,
+        contactType: "PERSON",
+        email: input.email || null,
+        phone: input.phone,
+        notes: input.notes,
+        parentId: input.parentId,
+        organizationId: asId<"OrganizationId">(ctx.orgId),
+      } as Partial<Contact>);
     }),
 });

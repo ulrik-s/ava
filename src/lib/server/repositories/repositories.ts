@@ -6,6 +6,7 @@
  */
 
 import type { AccontoDeductionRepository } from "./acconto-deduction-repository";
+import type { ContactRepository } from "./contact-repository";
 import type { ExpenseRepository } from "./expense-repository";
 import type { InvoiceRepository } from "./invoice-repository";
 import type { MatterRepository } from "./matter-repository";
@@ -23,5 +24,6 @@ export interface Repositories {
   timeEntries: TimeEntryRepository;
   expenses: ExpenseRepository;
   accontoDeductions: AccontoDeductionRepository;
+  contacts: ContactRepository;
   transaction<T>(fn: (tx: Repositories) => Promise<T>): Promise<T>;
 }

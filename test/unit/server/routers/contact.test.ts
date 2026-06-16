@@ -4,6 +4,8 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
+import type { IDataStore } from "@/lib/server/data-store/IDataStore";
+import { buildInMemoryRepositories } from "@/lib/server/repositories/in-memory-repositories";
 import { contactRouter } from "@/lib/server/routers/contact";
 import { dataStoreFromMockPrisma } from "../helpers/mock-data-store";
 
@@ -21,9 +23,11 @@ const mockPrisma = {
 };
 
 function makeCaller(orgId = "org-a") {
+  const dataStore = dataStoreFromMockPrisma(mockPrisma as unknown as Record<string, unknown>);
   const ctx = {
     user: { id: "u", email: "a@b.se", name: "T", role: "LAWYER", organizationId: orgId },
-    prisma: mockPrisma, dataStore: dataStoreFromMockPrisma(mockPrisma as unknown as Record<string, unknown>),
+    prisma: mockPrisma, dataStore,
+    repos: buildInMemoryRepositories(dataStore as unknown as IDataStore),
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return contactRouter.createCaller(ctx as any);
@@ -75,9 +79,10 @@ describe("contact.list", () => {
 
 describe("contact.getById", () => {
   it("hämtar med org-scope och inkluderar relationer", async () => {
-    mockPrisma.contact.findFirstOrThrow.mockResolvedValue(C);
+    // getByIdFull använder findFirst (ej findFirstOrThrow) — repo:t kastar NOT_FOUND vid null.
+    mockPrisma.contact.findFirst.mockResolvedValue(C);
     await makeCaller().getById({ id: "c1" });
-    expect(mockPrisma.contact.findFirstOrThrow).toHaveBeenCalledWith(
+    expect(mockPrisma.contact.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: "c1", organizationId: "org-a" },
         include: expect.objectContaining({
@@ -86,6 +91,11 @@ describe("contact.getById", () => {
         }),
       }),
     );
+  });
+
+  it("NOT_FOUND när kontakten saknas/annan org", async () => {
+    mockPrisma.contact.findFirst.mockResolvedValue(null);
+    await expect(makeCaller().getById({ id: "nope" })).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 });
 
@@ -116,7 +126,7 @@ describe("contact.create", () => {
 
 describe("contact.update", () => {
   it("uppdaterar med org-scope", async () => {
-    mockPrisma.contact.findUnique.mockResolvedValue(C);
+    mockPrisma.contact.findFirst.mockResolvedValue(C);
     mockPrisma.contact.update.mockResolvedValue(C);
 
     await makeCaller().update({ id: "c1", name: "Nytt" });
@@ -129,7 +139,7 @@ describe("contact.update", () => {
   });
 
   it("vägrar uppdatera kontakt från annan org", async () => {
-    mockPrisma.contact.findUnique.mockResolvedValue({ id: "c1", organizationId: "org-b" });
+    mockPrisma.contact.findFirst.mockResolvedValue({ id: "c1", organizationId: "org-b" });
     await expect(
       makeCaller("org-a").update({ id: "c1", name: "X" }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
@@ -139,14 +149,14 @@ describe("contact.update", () => {
 
 describe("contact.delete", () => {
   it("tar bort med org-scope", async () => {
-    mockPrisma.contact.findUnique.mockResolvedValue(C);
+    mockPrisma.contact.findFirst.mockResolvedValue(C);
     mockPrisma.contact.delete.mockResolvedValue(C);
     await makeCaller().delete({ id: "c1" });
     expect(mockPrisma.contact.delete).toHaveBeenCalledWith({ where: { id: "c1" } });
   });
 
   it("vägrar ta bort kontakt från annan org", async () => {
-    mockPrisma.contact.findUnique.mockResolvedValue({ id: "c1", organizationId: "org-b" });
+    mockPrisma.contact.findFirst.mockResolvedValue({ id: "c1", organizationId: "org-b" });
     await expect(
       makeCaller("org-a").delete({ id: "c1" }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
@@ -155,7 +165,7 @@ describe("contact.delete", () => {
 
 describe("contact.addChild", () => {
   it("lägger till child-kontakt under parent", async () => {
-    mockPrisma.contact.findUnique.mockResolvedValue(C);
+    mockPrisma.contact.findFirst.mockResolvedValue(C);
     mockPrisma.contact.create.mockResolvedValue({ id: "child" });
     await makeCaller().addChild({ parentId: "c1", name: "Anställd" });
     const args = mockPrisma.contact.create.mock.calls[0]![0];
@@ -165,7 +175,7 @@ describe("contact.addChild", () => {
   });
 
   it("vägrar lägga child under förälder från annan org", async () => {
-    mockPrisma.contact.findUnique.mockResolvedValue({ id: "c1", organizationId: "org-b" });
+    mockPrisma.contact.findFirst.mockResolvedValue({ id: "c1", organizationId: "org-b" });
     await expect(
       makeCaller("org-a").addChild({ parentId: "c1", name: "X" }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
