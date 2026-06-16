@@ -656,19 +656,15 @@ export const invoiceRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const inv = await ctx.dataStore.invoices.findFirst({
-        where: { id: input.invoiceId, matter: { organizationId: ctx.orgId } },
-      });
+      // Migrerad till repository-sömmen (ADR 0020). Statemaskinen stannar i routern.
+      const inv = await ctx.repos.invoices.getByIdInOrg(input.invoiceId, ctx.orgId);
       if (!inv) throw new TRPCError({ code: "NOT_FOUND" });
       // Tillståndsmaskin (#350): blockera omöjliga övergångar (t.ex. DRAFT→BAD_DEBT
       // utan att ha skickats). Se [ADR 0015].
       if (!canTransition(inv.status as InvoiceStatus, input.status)) {
         throw new TRPCError({ code: "BAD_REQUEST", message: transitionErrorMessage(inv.status as InvoiceStatus, input.status) });
       }
-      return ctx.dataStore.invoices.update({
-        where: { id: inv.id },
-        data: { status: input.status },
-      });
+      return ctx.repos.invoices.update(input.invoiceId, { status: input.status });
     }),
 
   /**

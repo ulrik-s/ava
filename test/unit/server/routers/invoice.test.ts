@@ -614,10 +614,13 @@ describe("invoice.setStatus", () => {
 
     await makeCaller().setStatus({ invoiceId: "inv-1", status: "BAD_DEBT" });
 
-    expect(mockPrisma.invoice.update).toHaveBeenCalledWith({
-      where: { id: "inv-1" },
-      data: { status: "BAD_DEBT" },
-    });
+    // Repo.update bumpar version + updatedAt (ADR 0019) → matcha löst på status.
+    expect(mockPrisma.invoice.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "inv-1" },
+        data: expect.objectContaining({ status: "BAD_DEBT" }),
+      }),
+    );
   });
 
   it("zod tillåter inte godtyckliga statusar (t.ex. PAID)", async () => {
