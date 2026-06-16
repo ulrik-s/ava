@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
+import type { Expense } from "@/lib/shared/schemas/billing";
 import {
   asId,
   matterIdSchema,
@@ -18,36 +19,17 @@ export const expenseRouter = router({
         pageSize: z.number().min(1).max(100).default(50),
       })
     )
+    // Migrerad till repository-sömmen (ADR 0020): paginerad list + summa via
+    // typad listForOrg (org-scope, include + count + sum inkapslat).
     .query(async ({ ctx, input }) => {
-      const where = {
-        matter: { organizationId: ctx.user.organizationId },
-        ...(input.matterId ? { matterId: input.matterId } : {}),
-      };
-
-      const [expenses, total] = await Promise.all([
-        ctx.dataStore.expenses.findMany({
-          where,
-          orderBy: { date: "desc" },
-          skip: (input.page - 1) * input.pageSize,
-          take: input.pageSize,
-          include: {
-            user: { select: { id: true, name: true } },
-            matter: { select: { id: true, matterNumber: true, title: true } },
-            invoice: { select: { id: true, invoiceNumber: true } },
-          },
-        }),
-        ctx.dataStore.expenses.count({ where }),
-      ]);
-
-      const totalAmount = await ctx.dataStore.expenses.aggregate({
-        where,
-        _sum: { amount: true },
-      });
-
+      const { expenses, total, totalAmount } = await ctx.repos.expenses.listForOrg(
+        ctx.user.organizationId,
+        { matterId: input.matterId, page: input.page, pageSize: input.pageSize },
+      );
       return {
         expenses,
         total,
-        totalAmount: totalAmount._sum.amount ?? 0,
+        totalAmount,
         pages: Math.ceil(total / input.pageSize),
       };
     }),
@@ -72,21 +54,19 @@ export const expenseRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      return ctx.dataStore.expenses.create({
-        data: omitUndefined({
-          id: input.id, // undefined → store genererar
-          userId: input.userId ?? asId<"UserId">(ctx.user.id),
-          matterId: input.matterId,
-          date: new Date(input.date),
-          amount: input.amount,
-          description: input.description,
-          billable: input.billable,
-          vatRate: input.vatRate,
-          vatIncluded: input.vatIncluded,
-          invoiceId: input.invoiceId ?? null,
-          ...(input.createdAt ? { createdAt: new Date(input.createdAt) } : {}),
-        }),
-      });
+      return ctx.repos.expenses.create(omitUndefined({
+        id: input.id, // undefined → store genererar
+        userId: input.userId ?? asId<"UserId">(ctx.user.id),
+        matterId: input.matterId,
+        date: new Date(input.date),
+        amount: input.amount,
+        description: input.description,
+        billable: input.billable,
+        vatRate: input.vatRate,
+        vatIncluded: input.vatIncluded,
+        invoiceId: input.invoiceId ?? null,
+        ...(input.createdAt ? { createdAt: new Date(input.createdAt) } : {}),
+      }) as Partial<Expense>);
     }),
 
   update: orgProcedure
@@ -104,31 +84,27 @@ export const expenseRouter = router({
     .mutation(async ({ ctx, input }) => {
       // Säkerhet (#60): verifiera org-ägarskap (via matter, samma scopning som
       // `list`) INNAN update. NOT_FOUND vid mismatch — läcker inte existens.
-      const owned = await ctx.dataStore.expenses.findFirst({
-        where: { id: input.id, matter: { organizationId: ctx.orgId } },
-      });
+      const owned = await ctx.repos.expenses.getByIdInOrg(input.id, ctx.orgId);
       if (!owned) throw new TRPCError({ code: "NOT_FOUND" });
       const { id, date, amount, description, billable, vatRate, vatIncluded } = input;
-      return ctx.dataStore.expenses.update({
-        where: { id },
-        data: omitUndefined({
-          amount,
-          description,
-          billable,
-          vatRate,
-          vatIncluded,
-          ...(date ? { date: new Date(date) } : {}),
-        }),
-      });
+      return ctx.repos.expenses.update(id, omitUndefined({
+        amount,
+        description,
+        billable,
+        vatRate,
+        vatIncluded,
+        ...(date ? { date: new Date(date) } : {}),
+      }) as Partial<Expense>);
     }),
 
   delete: orgProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const owned = await ctx.dataStore.expenses.findFirst({
-        where: { id: input.id, matter: { organizationId: ctx.orgId } },
-      });
+      const owned = await ctx.repos.expenses.getByIdInOrg(input.id, ctx.orgId);
       if (!owned) throw new TRPCError({ code: "NOT_FOUND" });
-      return ctx.dataStore.expenses.delete({ where: { id: input.id } });
+      // Hård delete bevarar dagens beteende (utlägg tombstone-as ej). Se ADR 0017-
+      // not om delete-policy (cross-cutting, ej avgjort per router).
+      await ctx.repos.expenses.hardDelete(input.id);
+      return { id: input.id };
     }),
 });
