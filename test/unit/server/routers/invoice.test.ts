@@ -56,6 +56,7 @@ const mockPrisma = {
     create: vi.fn(),
     update: vi.fn(),
     findFirst: vi.fn(),
+    delete: vi.fn(),
   },
   // $transaction(fn) kör callbacken direkt mot samma mock.
   $transaction: vi.fn(<T,>(fn: (tx: typeof mockPrisma) => Promise<T>) => fn(mockPrisma)),
@@ -86,6 +87,9 @@ beforeEach(() => {
   mockPrisma.writeOff.findMany.mockResolvedValue([]);
   // Repository-sömmens ledger läser betalt-hinken via payments.sumByInvoice.
   mockPrisma.payment.findMany.mockResolvedValue([]);
+  // paymentPlans.getByInvoiceId default: ingen plan (clearAllMocks nollar inte
+  // mockResolvedValue → annars läcker en annan tests plan hit).
+  mockPrisma.paymentPlan.findFirst.mockResolvedValue(null);
 });
 
 const MATTER_A = { id: "matter-1", organizationId: "org-a", matterNumber: "2026-0001", title: "T" };
@@ -453,18 +457,18 @@ describe("invoice.createPaymentPlan", () => {
         }),
       }),
     );
-    expect(mockPrisma.invoice.update).toHaveBeenCalledWith({
-      where: { id: "inv-1" },
-      data: { status: "INSTALLMENT_PLAN" },
-    });
+    expect(mockPrisma.invoice.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "inv-1" }, data: expect.objectContaining({ status: "INSTALLMENT_PLAN" }) }),
+    );
   });
 
   it("BAD_REQUEST om fakturan redan har en plan", async () => {
     mockPrisma.invoice.findFirst.mockResolvedValue({
       id: "inv-1",
       status: "INSTALLMENT_PLAN",
-      paymentPlan: { id: "existing" },
     });
+    // getByInvoiceId returnerar en AKTIV plan → blockerar.
+    mockPrisma.paymentPlan.findFirst.mockResolvedValue({ id: "existing", status: "ACTIVE" });
 
     await expect(
       makeCaller().createPaymentPlan({

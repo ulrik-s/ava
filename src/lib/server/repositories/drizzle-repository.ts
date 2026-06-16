@@ -60,6 +60,11 @@ export class DrizzleRepository<Row extends RowBase> implements Repository<Row> {
       .where(eq(this.table.id, id)).returning();
     return row as unknown as Row;
   }
+
+  /** Hård delete — se `Repository.hardDelete` (medvetet ADR 0017-undantag). */
+  async hardDelete(id: string): Promise<void> {
+    await this.db.delete(this.table).where(eq(this.table.id, id));
+  }
 }
 
 function nextVersion(row: RowBase): number {

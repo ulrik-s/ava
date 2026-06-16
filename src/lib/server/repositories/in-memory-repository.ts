@@ -45,4 +45,9 @@ export class InMemoryRepository<Row extends RowBase> implements Repository<Row> 
     const data = { deletedAt: this.now(), version: (current.version ?? 1) + 1 } as Partial<Row>;
     return (await this.delegate.update({ where: { id }, data })) as Row;
   }
+
+  /** Hård delete — se `Repository.hardDelete` (medvetet ADR 0017-undantag). */
+  async hardDelete(id: string): Promise<void> {
+    await this.delegate.delete({ where: { id } });
+  }
 }
