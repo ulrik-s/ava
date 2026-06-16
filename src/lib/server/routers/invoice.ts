@@ -20,7 +20,7 @@ import { canTransition, transitionErrorMessage } from "@/lib/shared/invoice-stat
 import { ocrFromInvoiceNumber } from "@/lib/shared/ocr-reference";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { computeRadgivningsavgift } from "@/lib/shared/rattshjalp";
-import type { Invoice } from "@/lib/shared/schemas/billing";
+import type { Invoice, Payment, WriteOff } from "@/lib/shared/schemas/billing";
 import type { InvoiceStatus } from "@/lib/shared/schemas/enums";
 import {
   asId,
@@ -35,6 +35,7 @@ import { computeInvoiceLedger, deriveInvoiceStatus, invoicePartitionViolation } 
 import type { DataStoreTx } from "../data-store/IDataStore";
 import { emit } from "../events/emit";
 import { invoiceNumberPrefix, nextInvoiceNumberFrom } from "../repositories/invoice-repository";
+import type { Repositories } from "../repositories/repositories";
 import { router, orgProcedure } from "../trpc";
 
 // ─── createFinal-hjälpare (validera + koppla poster) ──────────────
@@ -113,17 +114,20 @@ function ensureWritableOff<T extends { status?: string } | null>(inv: T): NonNul
   return inv as NonNullable<T>;
 }
 
-/** Summera fakturans avräkningshinkar (betalt/krediterat/avskrivet) → ledger. */
+/**
+ * Summera fakturans avräkningshinkar (betalt/krediterat/avskrivet) → ledger.
+ * Migrerad till repository-sömmen (ADR 0020): typade `sumByInvoice`/
+ * `sumCreditNotesFor` i st.f. dynamiska `findMany`-reduce. Den rena matematiken
+ * (`computeInvoiceLedger`) + tillståndslogiken bor kvar i routern.
+ */
 async function gatherInvoiceLedger(
-  tx: DataStoreTx,
+  repos: Repositories,
   orgId: string,
-  inv: { id: string; amount: number; payments?: ReadonlyArray<{ amount: number }> },
+  inv: { id: string; amount: number },
 ): Promise<{ paid: number; credited: number; writtenOff: number; ledger: ReturnType<typeof computeInvoiceLedger> }> {
-  const paid = (inv.payments ?? []).reduce((s, p) => s + p.amount, 0);
-  const credits = await tx.invoices.findMany({ where: { creditedInvoiceId: inv.id, matter: { organizationId: orgId } } });
-  const credited = ((credits ?? []) as ReadonlyArray<{ amount: number }>).reduce((s, c) => s + Math.abs(c.amount), 0);
-  const existing = await tx.writeOffs.findMany({ where: { invoiceId: inv.id } });
-  const writtenOff = ((existing ?? []) as ReadonlyArray<{ amount: number }>).reduce((s, w) => s + w.amount, 0);
+  const paid = await repos.payments.sumByInvoice(inv.id);
+  const credited = await repos.invoices.sumCreditNotesFor(inv.id, orgId);
+  const writtenOff = await repos.writeOffs.sumByInvoice(inv.id);
   return { paid, credited, writtenOff, ledger: computeInvoiceLedger(inv.amount, paid, credited, writtenOff) };
 }
 
@@ -416,12 +420,11 @@ export const invoiceRouter = router({
         reference: z.string().optional(),
       }),
     )
-    .mutation(async ({ ctx, input }) => {
-      return ctx.dataStore.transaction(async (tx) => {
-        const inv = await tx.invoices.findFirst({
-          where: { id: input.invoiceId, matter: { organizationId: ctx.orgId } },
-          include: { paymentPlan: true, payments: true },
-        });
+    // Migrerad till repository-sömmen (ADR 0020). Tillståndsmaskinen + ledger-
+    // matematiken bor kvar här; reads/writes går via typade repos i transaktionen.
+    .mutation(({ ctx, input }) =>
+      ctx.repos.transaction(async (repos) => {
+        const inv = await repos.invoices.getByIdInOrg(input.invoiceId, ctx.orgId);
         if (!inv) throw new TRPCError({ code: "NOT_FOUND" });
 
         // Tillståndsmaskin (#350, [ADR 0015]): en CANCELLED-faktura kan aldrig
@@ -434,48 +437,41 @@ export const invoiceRouter = router({
           });
         }
         if (inv.status === "DRAFT") {
-          await tx.invoices.update({ where: { id: inv.id }, data: { status: "SENT" } });
+          await repos.invoices.update(inv.id, { status: "SENT" });
         }
 
         // Konsistens-skydd (ADR 0007): en betalning får inte översumera fakturan
         // (betalt + krediterat + avskrivet > belopp → utestående < 0). Validera
         // FÖRE skapandet så vi inte lämnar en partition-brytande rad.
-        const { paid, credited, writtenOff } = await gatherInvoiceLedger(tx, ctx.orgId, inv);
+        const { paid, credited, writtenOff } = await gatherInvoiceLedger(repos, ctx.orgId, inv);
         const afterLedger = computeInvoiceLedger(inv.amount, paid + input.amount, credited, writtenOff);
         const violation = invoicePartitionViolation(inv.amount, afterLedger);
         if (violation) {
           throw new TRPCError({ code: "BAD_REQUEST", message: `Betalningen kan inte registreras: ${violation}` });
         }
 
-        const payment = await tx.payments.create({
-          data: {
-            invoiceId: inv.id,
-            amount: input.amount,
-            paidAt: new Date(input.paidAt),
-            note: input.note,
-            reference: input.reference,
-            recordedById: asId<"UserId">(ctx.user.id),
-          },
-        });
+        const payment = await repos.payments.create(omitUndefined({
+          invoiceId: inv.id,
+          amount: input.amount,
+          paidAt: new Date(input.paidAt),
+          note: input.note,
+          reference: input.reference,
+          recordedById: asId<"UserId">(ctx.user.id),
+        }) as Partial<Payment>);
 
-        const paidSum =
-          inv.payments.reduce((s: number, p: { amount: number }) => s + p.amount, 0) + input.amount;
+        // `paid` = betalt FÖRE denna betalning (sumByInvoice) → + input.amount.
+        const paidSum = paid + input.amount;
 
         if (isPaymentPlanSettled(inv.amount, paidSum)) {
-          await tx.invoices.update({
-            where: { id: inv.id },
-            data: { status: "PAID" },
-          });
-          if (inv.paymentPlan) {
-            await tx.paymentPlans.update({
-              where: { id: inv.paymentPlan.id },
-              data: { status: "COMPLETED" },
-            });
+          await repos.invoices.update(inv.id, { status: "PAID" });
+          const plan = await repos.paymentPlans.getByInvoiceId(inv.id);
+          if (plan) {
+            await repos.paymentPlans.update(plan.id, { status: "COMPLETED" });
           }
         }
         return { payment, paidSum, settled: isPaymentPlanSettled(inv.amount, paidSum) };
-      });
-    }),
+      }),
+    ),
 
   createPaymentPlan: orgProcedure
     .input(
@@ -567,39 +563,35 @@ export const invoiceRouter = router({
         writtenOffAt: z.string().optional(),
       }),
     )
-    .mutation(async ({ ctx, input }) => {
-      return ctx.dataStore.transaction(async (tx) => {
-        const inv = ensureWritableOff(
-          await tx.invoices.findFirst({
-            where: { id: input.invoiceId, matter: { organizationId: ctx.orgId } },
-            include: { payments: true },
-          }),
-        );
+    // Migrerad till repository-sömmen (ADR 0020). Ledger-läsningarna är typade
+    // repo-metoder; ADR 0007-vakterna (ensureWritableOff/resolveWriteOffAmount)
+    // + status-härledningen bor kvar i routern.
+    .mutation(({ ctx, input }) =>
+      ctx.repos.transaction(async (repos) => {
+        const inv = ensureWritableOff(await repos.invoices.getByIdInOrg(input.invoiceId, ctx.orgId));
 
-        const { paid, credited, writtenOff, ledger } = await gatherInvoiceLedger(tx, ctx.orgId, inv);
+        const { paid, credited, writtenOff, ledger } = await gatherInvoiceLedger(repos, ctx.orgId, inv);
         const amount = resolveWriteOffAmount(ledger.outstanding, input.amount);
 
-        const writeOff = await tx.writeOffs.create({
-          data: {
-            invoiceId: inv.id,
-            amount,
-            writtenOffAt: input.writtenOffAt ? new Date(input.writtenOffAt) : new Date(),
-            ...omitUndefined({ reason: input.reason }),
-            recordedById: asId<"UserId">(ctx.user.id),
-          },
-        });
+        const writeOff = await repos.writeOffs.create(omitUndefined({
+          invoiceId: inv.id,
+          amount,
+          writtenOffAt: input.writtenOffAt ? new Date(input.writtenOffAt) : new Date(),
+          reason: input.reason,
+          recordedById: asId<"UserId">(ctx.user.id),
+        }) as Partial<WriteOff>);
 
         // Härled status efter avskrivningen och persistera om återstoden stängdes.
         const after = computeInvoiceLedger(inv.amount, paid, credited, writtenOff + amount);
         const derived = deriveInvoiceStatus(inv.status as InvoiceStatus, after);
         if (derived !== inv.status) {
-          await tx.invoices.update({ where: { id: inv.id }, data: { status: derived } });
+          await repos.invoices.update(inv.id, { status: derived });
         }
 
         await emit.invoiceWrittenOff(ctx, inv.id, inv.matterId, amount);
         return { writeOff, outstanding: after.outstanding, status: derived };
-      });
-    }),
+      }),
+    ),
 
   /**
    * Manuell statusändring för DRAFT→SENT, SENT→CANCELLED, SENT→BAD_DEBT.

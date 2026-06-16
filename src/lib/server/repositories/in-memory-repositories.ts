@@ -12,6 +12,8 @@ import type { DataStoreTx, IDataStore } from "../data-store/IDataStore";
 import { InMemoryInvoiceRepository } from "./in-memory-invoice-repository";
 import { InMemoryMatterRepository } from "./in-memory-matter-repository";
 import { InMemoryPaymentPlanRepository } from "./in-memory-payment-plan-repository";
+import { InMemoryPaymentRepository } from "./in-memory-payment-repository";
+import { InMemoryWriteOffRepository } from "./in-memory-write-off-repository";
 import type { Repositories } from "./repositories";
 
 /** Repos-vy bunden till en transaktions-tx (reentrant transaction). */
@@ -19,6 +21,8 @@ function reposForTx(tx: DataStoreTx): Repositories {
   const repos: Repositories = {
     invoices: new InMemoryInvoiceRepository(tx),
     matters: new InMemoryMatterRepository(tx),
+    payments: new InMemoryPaymentRepository(tx),
+    writeOffs: new InMemoryWriteOffRepository(tx),
     paymentPlans: new InMemoryPaymentPlanRepository(tx),
     transaction: (fn) => fn(repos),
   };
@@ -29,6 +33,8 @@ export function buildInMemoryRepositories(dataStore: IDataStore): Repositories {
   return {
     invoices: new InMemoryInvoiceRepository(dataStore),
     matters: new InMemoryMatterRepository(dataStore),
+    payments: new InMemoryPaymentRepository(dataStore),
+    writeOffs: new InMemoryWriteOffRepository(dataStore),
     paymentPlans: new InMemoryPaymentPlanRepository(dataStore),
     transaction: (fn) => dataStore.transaction((tx) => fn(reposForTx(tx))),
   };

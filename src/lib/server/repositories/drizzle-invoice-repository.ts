@@ -9,7 +9,7 @@
  * helper när vi fan-out:ar entiteterna; pilotens korrekthet bevisas av pglite-testerna.
  */
 
-import { and, desc, eq, isNull, like } from "drizzle-orm";
+import { and, desc, eq, isNull, like, sql } from "drizzle-orm";
 import type { Invoice, Payment, WriteOff } from "@/lib/shared/schemas/billing";
 import { accontoDeductions, invoices, matters, paymentPlans, payments, writeOffs } from "../db/schema";
 import type { AppDb } from "../db/types";
@@ -133,6 +133,18 @@ export class DrizzleInvoiceRepository extends DrizzleRepository<Invoice> impleme
       .where(and(eq(matters.organizationId, organizationId), like(invoices.invoiceNumber, `${prefix}%`)))
       .orderBy(desc(invoices.invoiceNumber)).limit(1);
     return nextInvoiceNumberFrom(prefix, rows[0]?.invoiceNumber);
+  }
+
+  async sumCreditNotesFor(invoiceId: string, organizationId: string): Promise<number> {
+    const rows = await this.db
+      .select({ total: sql<number>`coalesce(sum(abs(${invoices.amount})), 0)` }).from(invoices)
+      .innerJoin(matters, eq(invoices.matterId, matters.id))
+      .where(and(
+        eq(invoices.creditedInvoiceId, invoiceId),
+        eq(matters.organizationId, organizationId),
+        isNull(invoices.deletedAt),
+      ));
+    return Number(rows[0]?.total ?? 0);
   }
 
   async getByIdWithLedger(id: string): Promise<InvoiceWithLedger | null> {

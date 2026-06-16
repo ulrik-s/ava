@@ -11,4 +11,6 @@ import type { Repository } from "./types";
 export interface PaymentPlanRepository extends Repository<PaymentPlan> {
   /** Plan by id, org-scopad via faktura→ärende (null om saknas/annan org/raderad). */
   getByIdInOrg(planId: string, organizationId: string): Promise<PaymentPlan | null>;
+  /** Plan för en faktura (invoiceId är unik på planen) — null om ingen/raderad. */
+  getByInvoiceId(invoiceId: string): Promise<PaymentPlan | null>;
 }

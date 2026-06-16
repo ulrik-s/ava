@@ -109,6 +109,14 @@ export class InMemoryInvoiceRepository extends InMemoryRepository<Invoice> imple
     return nextInvoiceNumberFrom(prefix, last?.invoiceNumber);
   }
 
+  async sumCreditNotesFor(invoiceId: string, organizationId: string): Promise<number> {
+    const rows = (await (this.store.invoices as unknown as Delegate)
+      .findMany({ where: { creditedInvoiceId: invoiceId, matter: { organizationId } } })) as ReadonlyArray<Invoice>;
+    return rows
+      .filter((r) => !(r as { deletedAt?: unknown }).deletedAt)
+      .reduce((s, c) => s + Math.abs(c.amount), 0);
+  }
+
   async listByMatter(matterId: string): Promise<Invoice[]> {
     const rows = (await (this.store.invoices as unknown as Delegate)
       .findMany({ where: { matterId }, orderBy: { invoiceDate: "desc" } })) as Invoice[];

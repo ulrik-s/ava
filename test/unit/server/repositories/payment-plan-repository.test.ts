@@ -57,6 +57,13 @@ describe("PaymentPlanRepository — in-memory", () => {
     expect(await repo.getByIdInOrg(planId, "org-1")).toMatchObject({ id: planId });
     expect(await repo.getByIdInOrg(planId, "org-2")).toBeNull(); // fel org
   });
+
+  it("getByInvoiceId hämtar planen för en faktura", async () => {
+    const store = new LocalStore({ paymentPlans: [plan({ id: planId, invoiceId })] }, async () => {});
+    const repo = new InMemoryPaymentPlanRepository(store);
+    expect(await repo.getByInvoiceId(invoiceId)).toMatchObject({ id: planId });
+    expect(await repo.getByInvoiceId(uuidv7())).toBeNull(); // ingen plan
+  });
 });
 
 describe("PaymentPlanRepository — Drizzle (pglite)", () => {
@@ -83,5 +90,17 @@ describe("PaymentPlanRepository — Drizzle (pglite)", () => {
     const repo = new DrizzlePaymentPlanRepository(handle.db as unknown as AppDb);
     expect(await repo.getByIdInOrg(pId, org)).toMatchObject({ id: pId });
     expect(await repo.getByIdInOrg(pId, uuidv7())).toBeNull(); // fel org
+  });
+
+  it("getByInvoiceId hämtar planen för en faktura", async () => {
+    const db = handle.db;
+    const invId = uuidv7();
+    const pId = uuidv7();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const v = (o: Record<string, unknown>) => ({ version: 1, ...o }) as any;
+    await db.insert(paymentPlans).values(v({ id: pId, invoiceId: invId, monthlyAmount: 100, dayOfMonth: 15, startDate: new Date(), status: "ACTIVE" }));
+    const repo = new DrizzlePaymentPlanRepository(handle.db as unknown as AppDb);
+    expect(await repo.getByInvoiceId(invId)).toMatchObject({ id: pId });
+    expect(await repo.getByInvoiceId(uuidv7())).toBeNull(); // ingen plan
   });
 });

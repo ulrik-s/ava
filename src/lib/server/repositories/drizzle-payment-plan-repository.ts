@@ -28,4 +28,11 @@ export class DrizzlePaymentPlanRepository extends DrizzleRepository<PaymentPlan>
       )).limit(1);
     return (rows[0]?.plan as unknown as PaymentPlan | undefined) ?? null;
   }
+
+  async getByInvoiceId(invoiceId: string): Promise<PaymentPlan | null> {
+    const rows = await this.db
+      .select().from(paymentPlans)
+      .where(and(eq(paymentPlans.invoiceId, invoiceId), isNull(paymentPlans.deletedAt))).limit(1);
+    return (rows[0] as unknown as PaymentPlan | undefined) ?? null;
+  }
 }
