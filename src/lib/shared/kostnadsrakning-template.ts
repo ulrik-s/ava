@@ -52,6 +52,7 @@ export const KOSTNADSRAKNING_DEFAULT_HTML = `<!DOCTYPE html>
   tfoot td { font-weight: 700; border-top: 1px solid #aaa; padding-top: 6pt; }
   .footer { margin-top: 32pt; color: #666; font-size: 9pt; }
   .warn { background: #fff7e6; border: 1px solid #f0c574; padding: 6pt 10pt; border-radius: 4pt; margin: 8pt 0; font-size: 10pt; color: #8a5a00; }
+  .note { background: #f3f6fb; border: 1px solid #c9d6ea; padding: 6pt 10pt; border-radius: 4pt; margin: 8pt 0; font-size: 10pt; color: #33415c; }
   @media print { .noprint { display: none !important; } }
   .noprint { background: #eef; padding: 8pt; text-align: center; font-size: 9pt; color: #335; border-bottom: 1px solid #aac; }
 </style>
@@ -95,6 +96,10 @@ export const KOSTNADSRAKNING_DEFAULT_HTML = `<!DOCTYPE html>
     Förhandlingstiden överstiger taxans maxgräns (3 tim 45 min).
     Ersättning beräknas enligt timkostnadsnorm × faktisk tid (DVFS 2025:6 § 8).
   </div>
+{{/if}}
+
+{{#if radgivningNotice}}
+<div class="note">{{radgivningNotice}}</div>
 {{/if}}
 
 {{#if expenseLines.length}}

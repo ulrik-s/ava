@@ -19,6 +19,7 @@ import { computeFinalInvoiceBreakdown, isPaymentPlanSettled } from "@/lib/shared
 import { canTransition, transitionErrorMessage } from "@/lib/shared/invoice-state-machine";
 import { ocrFromInvoiceNumber } from "@/lib/shared/ocr-reference";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
+import { computeRadgivningsavgift } from "@/lib/shared/rattshjalp";
 import type { InvoiceStatus } from "@/lib/shared/schemas/enums";
 import {
   asId,
@@ -261,6 +262,46 @@ export const invoiceRouter = router({
       });
       await emit.invoiceCreated(ctx, invoice);
       return invoice;
+    }),
+
+  /**
+   * RÅDGIVNING (#383, rättshjälp del A): registrera klientens betalda
+   * rådgivningstimme (1 tim enligt rättshjälpstaxan) som en SEPARAT klient-
+   * faktura (STANDARD mot KLIENT) + märk ärendet (`radgivningBetaldAt`) så
+   * domstolens kostnadsräkning visar text-raden. Timmen ingår ALDRIG i
+   * domstolens kostnadsräkning som debiterbar post. Idempotent: avvisar om
+   * redan registrerad.
+   */
+  createRadgivning: orgProcedure
+    .input(z.object({ matterId: matterIdSchema, hasFTax: z.boolean().optional() }))
+    .mutation(async ({ ctx, input }) => {
+      return ctx.dataStore.transaction(async (tx) => {
+        const matter = await tx.matters.findFirst({
+          where: { id: input.matterId, organizationId: ctx.orgId },
+        });
+        if (!matter) throw new TRPCError({ code: "NOT_FOUND" });
+        if ((matter as { radgivningBetaldAt?: unknown }).radgivningBetaldAt) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Rådgivningstimmen är redan registrerad för detta ärende." });
+        }
+        const avgift = computeRadgivningsavgift({ ...omitUndefined({ hasFTax: input.hasFTax }) });
+        const invoiceNumber = await nextInvoiceNumber(tx.invoices, ctx.orgId);
+        const invoice = await tx.invoices.create({
+          data: {
+            matterId: input.matterId,
+            invoiceNumber,
+            ocrReference: ocrFromInvoiceNumber(invoiceNumber),
+            amount: avgift.beloppExclVatOre,
+            invoiceType: "STANDARD",
+            status: "DRAFT",
+            invoiceDate: new Date(),
+            dueDate: null,
+            notes: "Rådgivningstimme enligt rättshjälpstaxan (1 tim).",
+          },
+        });
+        await tx.matters.update({ where: { id: input.matterId }, data: { radgivningBetaldAt: new Date() } });
+        await emit.invoiceCreated(ctx, invoice);
+        return { invoice, beloppExclVatOre: avgift.beloppExclVatOre };
+      });
     }),
 
   /**

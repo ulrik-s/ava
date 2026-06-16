@@ -20,6 +20,7 @@ import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
 import type { AppRouter } from "@/lib/server/routers/_app";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
+import { computeRadgivningsavgift } from "@/lib/shared/rattshjalp";
 import { BILLING_RUN_TYPE_LABELS, BILLING_RUN_STATUS_LABELS } from "@/lib/shared/schemas/enums";
 import { BillingDialog } from "./_billing-dialog";
 import { KostnadsrakningModal } from "./_kostnadsrakning-modal";
@@ -33,6 +34,7 @@ interface MatterContext {
   taxaHufStart?: string | Date | null | undefined;
   isTaxeArende?: boolean | null | undefined;
   paymentMethod?: string | null | undefined;
+  radgivningBetaldAt?: string | Date | null | undefined;
   contacts?: ReadonlyArray<{ role: string; contact?: { name?: string | null | undefined; email?: string | null | undefined } | null | undefined }> | undefined;
 }
 
@@ -223,6 +225,7 @@ function KostnadsrakningTrigger({ matterId, matter, open, onClose, onRecorded }:
       initialHasFTax={matter.taxaHasFTax ?? undefined}
       initialHufStart={matter.taxaHufStart ?? undefined}
       initialIsTaxe={matter.isTaxeArende ?? undefined}
+      radgivningPaid={!!matter.radgivningBetaldAt}
       onClose={onModalClose}
     />
   );
@@ -249,6 +252,7 @@ export function BillingPanel({ matterId, matter }: Props) {
         <BillingActions paymentMethod={matter.paymentMethod ?? ""} onPick={onPick} />
       </div>
       <SummaryCards totals={computeTotals(rows)} />
+      <RadgivningBanner matterId={matterId} matter={matter} onRecorded={refetch} />
       {pending && <PendingVerdictBanner matterId={matterId} run={pending} onClick={() => setVerdictRunId(pending.id)} />}
       <RunsList rows={rows} loading={runs.isLoading} />
       <BillingDialogs matterId={matterId} matter={matter} rows={rows}
@@ -261,6 +265,31 @@ export function BillingPanel({ matterId, matter }: Props) {
         onClose={() => setShowKr(false)}
         onRecorded={refetch}
       />
+    </div>
+  );
+}
+
+/** Rättshjälp (#383): registrera klientens betalda rådgivningstimme som en
+ *  separat klientfaktura. Self-gating — null för icke-rättshjälpsärenden. */
+function RadgivningBanner({ matterId, matter, onRecorded }: { matterId: string; matter: MatterContext; onRecorded: () => void }) {
+  const create = trpc.invoice.createRadgivning.useMutation({ onSuccess: onRecorded });
+  if (matter.paymentMethod !== "RATTSHJALP") return null;
+  const hasFTaxArg = omitUndefined({ hasFTax: matter.taxaHasFTax ?? undefined });
+  const avgift = computeRadgivningsavgift(hasFTaxArg);
+  return (
+    <div className="mx-6 mb-4 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 flex items-center justify-between gap-3">
+      <div className="text-xs text-blue-900">
+        <strong>Rådgivningstimme (rättshjälp)</strong> — klientens 1 tim enligt rättshjälpstaxan,{" "}
+        <span className="font-mono">{formatCurrency(avgift.beloppExclVatOre)}</span> exkl moms, faktureras separat till klienten.
+      </div>
+      {matter.radgivningBetaldAt ? (
+        <span className="text-xs text-green-700 whitespace-nowrap">✓ Registrerad</span>
+      ) : (
+        <button type="button" onClick={() => create.mutate({ matterId, ...hasFTaxArg })} disabled={create.isPending}
+          className="text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 whitespace-nowrap">
+          {create.isPending ? "Registrerar…" : "Registrera betald"}
+        </button>
+      )}
     </div>
   );
 }

@@ -29,6 +29,7 @@ const mockPrisma = {
   },
   matter: {
     findFirst: vi.fn(),
+    update: vi.fn(),
   },
   timeEntry: {
     findMany: vi.fn(),
@@ -249,6 +250,45 @@ describe("invoice.createFinal", () => {
         expenseIds: [],
       }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+});
+
+// ─── createRadgivning (#383, rättshjälp) ─────────────────────────
+
+describe("invoice.createRadgivning", () => {
+  beforeEach(() => {
+    mockPrisma.invoice.findFirst.mockResolvedValue(null); // nextInvoiceNumber → seq 1
+    mockPrisma.invoice.create.mockImplementation(async (a: { data: Record<string, unknown> }) => ({ id: "rad-1", ...a.data }));
+    mockPrisma.matter.update.mockResolvedValue({});
+  });
+
+  it("skapar en separat STANDARD-klientfaktura för rådgivningstimmen + märker ärendet", async () => {
+    mockPrisma.matter.findFirst.mockResolvedValue({ id: "m1", organizationId: "org-a", radgivningBetaldAt: null });
+
+    const res = await makeCaller().createRadgivning({ matterId: "m1" });
+
+    // 1 tim × timkostnadsnorm (F-skatt default) = 162 600 öre.
+    expect(res.beloppExclVatOre).toBe(162_600);
+    const data = mockPrisma.invoice.create.mock.calls[0]![0].data;
+    expect(data.invoiceType).toBe("STANDARD");
+    expect(data.amount).toBe(162_600);
+    expect(data.status).toBe("DRAFT");
+    // Ärendet märks som registrerat.
+    expect(mockPrisma.matter.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "m1" }, data: expect.objectContaining({ radgivningBetaldAt: expect.any(Date) }) }),
+    );
+  });
+
+  it("är idempotent — avvisar om redan registrerad", async () => {
+    mockPrisma.matter.findFirst.mockResolvedValue({ id: "m1", organizationId: "org-a", radgivningBetaldAt: new Date() });
+
+    await expect(makeCaller().createRadgivning({ matterId: "m1" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(mockPrisma.invoice.create).not.toHaveBeenCalled();
+  });
+
+  it("NOT_FOUND cross-org", async () => {
+    mockPrisma.matter.findFirst.mockResolvedValue(null);
+    await expect(makeCaller("org-b").createRadgivning({ matterId: "m1" })).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 });
 
