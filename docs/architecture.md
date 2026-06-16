@@ -45,6 +45,10 @@
 >   (Postgres + tRPC auktoritativt); varje klient är offline-first via lokal store
 >   + optimistisk mutations-kö + server-auktoritativ reconcile; GH Pages-demon =
 >   samma store utan synk-mål. Reviderar ADR 0001 (git-vägen pensioneras).
+> - [ADR 0017](./adr/0017-sync-reconcile-protokoll.md) — sync/reconcile-protokoll +
+>   konfliktpolicy: per-entitet `version` + delta-cursor, idempotent UUIDv7-mutations-
+>   kö, tre konfliktklasser (append / LWW / surface-validera). Foundation för
+>   ADR 0016-migreringen (#404).
 
 ## Tre lager
 
