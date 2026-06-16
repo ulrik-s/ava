@@ -69,6 +69,19 @@ export interface InvoiceListRow extends Invoice {
   creditNote: Pick<Invoice, "id" | "invoiceDate" | "amount"> | null;
 }
 
+/** Fakturanummer-prefix för ett år (`F-YYYY-`). Delad mellan repo-impls + router. */
+export function invoiceNumberPrefix(year: number): string {
+  return `F-${year}-`;
+}
+
+/** Nästa nummer givet prefix + senaste numret (öka sekvensen, annars 0001). */
+export function nextInvoiceNumberFrom(prefix: string, lastNumber: string | null | undefined): string {
+  const seq = lastNumber && lastNumber.startsWith(prefix)
+    ? parseInt(lastNumber.slice(prefix.length), 10) + 1
+    : 1;
+  return `${prefix}${seq.toString().padStart(4, "0")}`;
+}
+
 export interface InvoiceRepository extends Repository<Invoice> {
   /** Faktura by id, org-scopad via ärendet (null om saknas/annan org/raderad). */
   getByIdInOrg(id: string, organizationId: string): Promise<Invoice | null>;
@@ -80,6 +93,8 @@ export interface InvoiceRepository extends Repository<Invoice> {
   getByIdWithRelations(id: string, organizationId: string): Promise<InvoiceWithRelations | null>;
   /** Org-bred fakturalista (listvyns include), nyaste först, valfritt filtrerad. */
   listForOrg(organizationId: string, filter?: InvoiceListFilter): Promise<InvoiceListRow[]>;
+  /** Nästa lediga fakturanummer (`F-YYYY-NNNN`) för org:en (året från repots klocka). */
+  nextInvoiceNumber(organizationId: string): Promise<string>;
   /** Alla (icke-raderade) fakturor i ett ärende, nyaste först. */
   listByMatter(matterId: string): Promise<Invoice[]>;
 }

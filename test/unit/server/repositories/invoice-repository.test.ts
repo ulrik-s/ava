@@ -147,6 +147,21 @@ describe("InvoiceRepository — in-memory", () => {
     expect((await repo.listForOrg("org-1", { status: "PAID" })).map((i) => i.id)).toEqual([accontoId]);
     expect((await repo.listForOrg("org-1", { invoiceType: "FINAL" })).map((i) => i.id)).toEqual([invId]);
   });
+
+  it("nextInvoiceNumber ökar sekvensen per org/år", async () => {
+    const mId = uuidv7();
+    const store = new LocalStore({
+      matters: [{ id: mId, organizationId: "org-1" }],
+      invoices: [
+        inv({ id: uuidv7(), matterId: mId, invoiceNumber: "F-2026-0001" }),
+        inv({ id: uuidv7(), matterId: mId, invoiceNumber: "F-2026-0002" }),
+      ],
+      payments: [], writeOffs: [],
+    }, async () => {});
+    const repo = new InMemoryInvoiceRepository(store, () => new Date("2026-06-01T00:00:00.000Z"));
+    expect(await repo.nextInvoiceNumber("org-1")).toBe("F-2026-0003");
+    expect(await repo.nextInvoiceNumber("org-2")).toBe("F-2026-0001"); // tom org → 0001
+  });
 });
 
 describe("InvoiceRepository — Drizzle (pglite)", () => {
@@ -267,5 +282,19 @@ describe("InvoiceRepository — Drizzle (pglite)", () => {
     expect(final.payments).toHaveLength(1);
     expect(final.accontoDeductions[0]?.accontoInvoice?.id).toBe(accontoId);
     expect((await repo.listForOrg(org, { status: "PAID" })).map((i) => i.id)).toEqual([accontoId]);
+  });
+
+  it("nextInvoiceNumber ökar sekvensen per org/år (join mot matters)", async () => {
+    const db = handle.db;
+    const org = uuidv7();
+    const mId = uuidv7();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const v = (o: Record<string, unknown>) => ({ version: 1, ...o }) as any;
+    await db.insert(matters).values(v({ id: mId, organizationId: org, matterNumber: "2026-1", title: "T" }));
+    await db.insert(invoices).values(inv({ id: uuidv7(), matterId: mId, invoiceNumber: "F-2026-0001" }) as never);
+    await db.insert(invoices).values(inv({ id: uuidv7(), matterId: mId, invoiceNumber: "F-2026-0002" }) as never);
+    const repo = new DrizzleInvoiceRepository(handle.db as unknown as AppDb, () => new Date("2026-06-01T00:00:00.000Z"));
+    expect(await repo.nextInvoiceNumber(org)).toBe("F-2026-0003");
+    expect(await repo.nextInvoiceNumber(uuidv7())).toBe("F-2026-0001"); // tom org → 0001
   });
 });
