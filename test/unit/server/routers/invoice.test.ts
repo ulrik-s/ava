@@ -14,6 +14,8 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
+import type { IDataStore } from "@/lib/server/data-store/IDataStore";
+import { buildInMemoryRepositories } from "@/lib/server/repositories/in-memory-repositories";
 import { invoiceRouter } from "@/lib/server/routers/invoice";
 import { ocrFromInvoiceNumber, isValidOcrReference } from "@/lib/shared/ocr-reference";
 import { dataStoreFromMockPrisma } from "../helpers/mock-data-store";
@@ -59,9 +61,12 @@ const mockPrisma = {
 };
 
 function makeCaller(orgId = "org-a", userId = "user-1") {
+  const dataStore = dataStoreFromMockPrisma(mockPrisma as unknown as Record<string, unknown>);
   const ctx = {
     user: { id: userId, email: "a@b.com", name: "Test", role: "LAWYER", organizationId: orgId },
-    prisma: mockPrisma, dataStore: dataStoreFromMockPrisma(mockPrisma as unknown as Record<string, unknown>),
+    prisma: mockPrisma, dataStore,
+    // ADR 0020: markFortnoxBooked är migrerad till ctx.repos → wira in-memory-repos.
+    repos: buildInMemoryRepositories(dataStore as unknown as IDataStore),
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return invoiceRouter.createCaller(ctx as any);
@@ -659,10 +664,13 @@ describe("invoice.markFortnoxBooked", () => {
     const res = await makeCaller().markFortnoxBooked({ invoiceId: "inv-1", fortnoxId: "A/1" });
 
     expect(res.fortnoxId).toBe("A/1");
-    expect(mockPrisma.invoice.update).toHaveBeenCalledWith({
-      where: { id: "inv-1" },
-      data: { fortnoxId: "A/1" },
-    });
+    // Repo.update bumpar version + updatedAt (ADR 0019), så matcha löst på fortnoxId.
+    expect(mockPrisma.invoice.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "inv-1" },
+        data: expect.objectContaining({ fortnoxId: "A/1" }),
+      }),
+    );
   });
 
   it("idempotent: skriver INTE över befintlig fortnoxId", async () => {

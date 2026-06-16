@@ -683,14 +683,10 @@ export const invoiceRouter = router({
   markFortnoxBooked: orgProcedure
     .input(z.object({ invoiceId: invoiceIdSchema, fortnoxId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
-      const inv = await ctx.dataStore.invoices.findFirst({
-        where: { id: input.invoiceId, matter: { organizationId: ctx.orgId } },
-      });
+      // Migrerad till repository-sömmen (ADR 0020). Org-scope via getByIdInOrg.
+      const inv = await ctx.repos.invoices.getByIdInOrg(input.invoiceId, ctx.orgId);
       if (!inv) throw new TRPCError({ code: "NOT_FOUND" });
       if (inv.fortnoxId) return inv; // redan bokförd → no-op (idempotens)
-      return ctx.dataStore.invoices.update({
-        where: { id: inv.id },
-        data: { fortnoxId: input.fortnoxId },
-      });
+      return ctx.repos.invoices.update(input.invoiceId, { fortnoxId: input.fortnoxId });
     }),
 });

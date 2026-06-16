@@ -20,6 +20,8 @@ export interface InvoiceWithLedger extends Invoice {
 }
 
 export interface InvoiceRepository extends Repository<Invoice> {
+  /** Faktura by id, org-scopad via ärendet (null om saknas/annan org/raderad). */
+  getByIdInOrg(id: string, organizationId: string): Promise<Invoice | null>;
   /** Faktura med betalningar + avskrivningar (ledger). Null om saknas/raderad. */
   getByIdWithLedger(id: string): Promise<InvoiceWithLedger | null>;
   /** Alla (icke-raderade) fakturor i ett ärende, nyaste först. */
