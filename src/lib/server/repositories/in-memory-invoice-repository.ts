@@ -123,6 +123,13 @@ export class InMemoryInvoiceRepository extends InMemoryRepository<Invoice> imple
     return row && !(row as { deletedAt?: unknown }).deletedAt ? row : null;
   }
 
+  async listDeductibleAccontos(matterId: string, ids: string[]): Promise<Invoice[]> {
+    if (!ids.length) return [];
+    return (await (this.store.invoices as unknown as Delegate).findMany({
+      where: { id: { in: ids }, matterId, invoiceType: "ACCONTO", deductedOnFinals: { none: {} } },
+    })) as Invoice[];
+  }
+
   async listByMatter(matterId: string): Promise<Invoice[]> {
     const rows = (await (this.store.invoices as unknown as Delegate)
       .findMany({ where: { matterId }, orderBy: { invoiceDate: "desc" } })) as Invoice[];

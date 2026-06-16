@@ -99,6 +99,8 @@ export interface InvoiceRepository extends Repository<Invoice> {
   sumCreditNotesFor(invoiceId: string, organizationId: string): Promise<number>;
   /** Kreditnotan för en faktura (`creditedInvoiceId = id`) — null om ej krediterad. */
   getCreditNoteFor(invoiceId: string): Promise<Invoice | null>;
+  /** Valda ACCONTO-fakturor i ett ärende som ÄNNU INTE dragits av på en FINAL. Tom vid tomma ids. */
+  listDeductibleAccontos(matterId: string, ids: string[]): Promise<Invoice[]>;
   /** Alla (icke-raderade) fakturor i ett ärende, nyaste först. */
   listByMatter(matterId: string): Promise<Invoice[]>;
 }

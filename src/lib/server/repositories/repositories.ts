@@ -5,10 +5,13 @@
  * importeras av entitets-repositories utan cirkel-beroende.
  */
 
+import type { AccontoDeductionRepository } from "./acconto-deduction-repository";
+import type { ExpenseRepository } from "./expense-repository";
 import type { InvoiceRepository } from "./invoice-repository";
 import type { MatterRepository } from "./matter-repository";
 import type { PaymentPlanRepository } from "./payment-plan-repository";
 import type { PaymentRepository } from "./payment-repository";
+import type { TimeEntryRepository } from "./time-entry-repository";
 import type { WriteOffRepository } from "./write-off-repository";
 
 export interface Repositories {
@@ -17,5 +20,8 @@ export interface Repositories {
   payments: PaymentRepository;
   writeOffs: WriteOffRepository;
   paymentPlans: PaymentPlanRepository;
+  timeEntries: TimeEntryRepository;
+  expenses: ExpenseRepository;
+  accontoDeductions: AccontoDeductionRepository;
   transaction<T>(fn: (tx: Repositories) => Promise<T>): Promise<T>;
 }

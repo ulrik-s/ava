@@ -194,9 +194,12 @@ describe("invoice.createFinal", () => {
       where: { id: { in: ["e1", "e2"] } },
       data: { invoiceId: "final-1" },
     });
-    expect(mockPrisma.invoiceAccontoDeduction.create).toHaveBeenCalledWith({
-      data: { finalInvoiceId: "final-1", accontoInvoiceId: "acc1" },
-    });
+    // Repo.create lägger version → matcha löst.
+    expect(mockPrisma.invoiceAccontoDeduction.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ finalInvoiceId: "final-1", accontoInvoiceId: "acc1" }),
+      }),
+    );
   });
 
   it("BAD_REQUEST om någon time entry redan är fakturerad (eller tillhör annat ärende)", async () => {

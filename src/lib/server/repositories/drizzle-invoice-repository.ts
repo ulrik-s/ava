@@ -9,7 +9,7 @@
  * helper när vi fan-out:ar entiteterna; pilotens korrekthet bevisas av pglite-testerna.
  */
 
-import { and, desc, eq, isNull, like, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, like, sql } from "drizzle-orm";
 import type { Invoice, Payment, WriteOff } from "@/lib/shared/schemas/billing";
 import { accontoDeductions, invoices, matters, paymentPlans, payments, writeOffs } from "../db/schema";
 import type { AppDb } from "../db/types";
@@ -152,6 +152,23 @@ export class DrizzleInvoiceRepository extends DrizzleRepository<Invoice> impleme
       .select().from(invoices)
       .where(and(eq(invoices.creditedInvoiceId, invoiceId), isNull(invoices.deletedAt))).limit(1);
     return (rows[0] as unknown as Invoice | undefined) ?? null;
+  }
+
+  async listDeductibleAccontos(matterId: string, ids: string[]): Promise<Invoice[]> {
+    if (!ids.length) return [];
+    // ACCONTO i ärendet som ännu inte dragits av: left-join acconto_deductions
+    // på accontoInvoiceId + filtrera bort träffar (deductedOnFinals = none).
+    const rows = await this.db
+      .select({ inv: invoices }).from(invoices)
+      .leftJoin(accontoDeductions, eq(accontoDeductions.accontoInvoiceId, invoices.id))
+      .where(and(
+        inArray(invoices.id, ids),
+        eq(invoices.matterId, matterId),
+        eq(invoices.invoiceType, "ACCONTO"),
+        isNull(invoices.deletedAt),
+        isNull(accontoDeductions.id),
+      ));
+    return rows.map((r) => r.inv) as unknown as Invoice[];
   }
 
   async getByIdWithLedger(id: string): Promise<InvoiceWithLedger | null> {
