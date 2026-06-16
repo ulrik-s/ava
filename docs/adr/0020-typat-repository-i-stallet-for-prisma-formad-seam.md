@@ -1,6 +1,6 @@
 # ADR 0020 — Typat repository i stället för Prisma-formad `IDataStore`-söm
 
-- **Status:** Föreslagen
+- **Status:** Accepterad
 - **Datum:** 2026-06-16
 - **Beslutsfattare:** Ulrik Sjölin
 - **Berör:** datalager-söm, routrar, PostgresStore, offline-klient, alla backends
