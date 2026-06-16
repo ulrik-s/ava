@@ -32,9 +32,10 @@ const FAST = process.argv.includes("--fast");
 
 // Ratchet-golv (flyttat hit från check-coverage.ts) — flytta BARA uppåt.
 // #27: 84.0 → 84.8 (pick-provider) → 85.2 (external-edit-modal) → 85.5
-// (verdict-dialog) → 85.7 (billing-dialog) → 85.8 (expected-receivables, lokalt
-// 86.30% rader, ~0.50% marginal — FUNC_FLOOR konservativt pga Node-version-varians).
-const LINE_FLOOR = 0.858;
+// (verdict-dialog) → 85.7 (billing-dialog) → 85.8 (expected-receivables) → 86.0
+// (integrations-section, lokalt 86.57% rader, ~0.57% marginal — FUNC_FLOOR
+// konservativt pga Node-version-varians).
+const LINE_FLOOR = 0.860;
 const FUNC_FLOOR = 0.80;
 
 /**
