@@ -200,27 +200,9 @@ export const invoiceRouter = router({
   getById: orgProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
-      const inv = await ctx.dataStore.invoices.findFirst({
-        where: { id: input.id, matter: { organizationId: ctx.orgId } },
-        include: {
-          // paymentMethod + taxaHasFTax: slutfaktura-sammanställningen (#349)
-          // visar rådgivningstimmen enligt rättshjälpstaxan för rättshjälpsärenden.
-          matter: { select: { id: true, matterNumber: true, title: true, paymentMethod: true, taxaHasFTax: true } },
-          paymentPlan: { include: { reminders: { orderBy: { sentAt: "desc" } } } },
-          payments: {
-            orderBy: { paidAt: "desc" },
-            include: { recordedBy: { select: { name: true } } },
-          },
-          writeOffs: { orderBy: { writtenOffAt: "desc" } },
-          timeEntries: true,
-          expenses: true,
-          documents: { orderBy: { createdAt: "desc" } },
-          accontoDeductions: { include: { accontoInvoice: true } },
-          deductedOnFinals: { include: { finalInvoice: true } },
-          creditedInvoice: { select: { id: true, invoiceDate: true, amount: true, invoiceType: true } },
-          creditNote: { select: { id: true, invoiceDate: true, amount: true } },
-        },
-      });
+      // Migrerad till repository-sömmen (ADR 0020). getByIdFull org-scopar +
+      // hämtar hela detalj-shapen (relations + aconto-avdrag/kredit).
+      const inv = await ctx.repos.invoices.getByIdFull(input.id, ctx.orgId);
       if (!inv) throw new TRPCError({ code: "NOT_FOUND" });
       return inv;
     }),

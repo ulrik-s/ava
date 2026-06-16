@@ -11,7 +11,7 @@
  */
 
 import type {
-  Expense, Invoice, Payment, PaymentPlan, PaymentPlanReminder, TimeEntry, WriteOff,
+  AccontoDeduction, Expense, Invoice, Payment, PaymentPlan, PaymentPlanReminder, TimeEntry, WriteOff,
 } from "@/lib/shared/schemas/billing";
 import type { Document } from "@/lib/shared/schemas/document";
 import type { Matter } from "@/lib/shared/schemas/matter";
@@ -29,7 +29,8 @@ export interface InvoiceWithLedger extends Invoice {
  * creditedInvoice/creditNote) läggs till i steget som migrerar `getById`.
  */
 export interface InvoiceWithRelations extends Invoice {
-  matter: Matter | null;
+  /** Alltid satt — metoderna org-scopar via ärendet, så en träff har alltid matter. */
+  matter: Matter;
   payments: Array<Payment & { recordedBy: { name: string } | null }>;
   writeOffs: WriteOff[];
   paymentPlan: (PaymentPlan & { reminders: PaymentPlanReminder[] }) | null;
@@ -38,9 +39,19 @@ export interface InvoiceWithRelations extends Invoice {
   documents: Document[];
 }
 
+/** Full faktura-detalj (motsvarar `invoice.getById`-routerns include exakt). */
+export interface InvoiceFull extends InvoiceWithRelations {
+  accontoDeductions: Array<AccontoDeduction & { accontoInvoice: Invoice | null }>;
+  deductedOnFinals: Array<AccontoDeduction & { finalInvoice: Invoice | null }>;
+  creditedInvoice: Pick<Invoice, "id" | "invoiceDate" | "amount" | "invoiceType"> | null;
+  creditNote: Pick<Invoice, "id" | "invoiceDate" | "amount"> | null;
+}
+
 export interface InvoiceRepository extends Repository<Invoice> {
   /** Faktura by id, org-scopad via ärendet (null om saknas/annan org/raderad). */
   getByIdInOrg(id: string, organizationId: string): Promise<Invoice | null>;
+  /** Full faktura-detalj (alla relationer inkl. aconto-avdrag/kredit), org-scopad. */
+  getByIdFull(id: string, organizationId: string): Promise<InvoiceFull | null>;
   /** Faktura med betalningar + avskrivningar (ledger). Null om saknas/raderad. */
   getByIdWithLedger(id: string): Promise<InvoiceWithLedger | null>;
   /** Faktura + huvudrelationer (matter/payments/writeOffs/plan/tid/utlägg/dok), org-scopad. */

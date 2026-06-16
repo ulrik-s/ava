@@ -24,6 +24,7 @@
 import { describe, it, expect, beforeAll } from "vitest-compat";
 import { buildGitPorts } from "@/lib/server/adapters/git-ports";
 import { DemoDataStore, type DemoSource } from "@/lib/server/data-store/DemoDataStore";
+import { buildInMemoryRepositories } from "@/lib/server/repositories/in-memory-repositories";
 import { appRouter } from "@/lib/server/routers/_app";
 import {
   computeBrottmalstaxa,
@@ -55,7 +56,7 @@ function makeStore(): { caller: ReturnType<typeof appRouter.createCaller>; sourc
   const dataStore = new DemoDataStore(source, async () => { /* no-op */ });
   const ports = buildGitPorts(dataStore);
   const caller = appRouter.createCaller({
-    user: ADMIN_USER, dataStore, ports,
+    user: ADMIN_USER, dataStore, ports, repos: buildInMemoryRepositories(dataStore),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any);
   return { caller, source };
