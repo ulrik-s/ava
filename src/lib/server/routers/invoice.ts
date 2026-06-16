@@ -176,26 +176,9 @@ export const invoiceRouter = router({
         status: invoiceStatusSchema.optional(),
       }),
     )
-    .query(({ ctx, input }) =>
-      ctx.dataStore.invoices.findMany({
-        where: {
-          matter: { organizationId: ctx.orgId },
-          ...(input.matterId ? { matterId: input.matterId } : {}),
-          ...(input.invoiceType ? { invoiceType: input.invoiceType } : {}),
-          ...(input.status ? { status: input.status } : {}),
-        },
-        orderBy: { invoiceDate: "desc" },
-        include: {
-          matter: { select: { id: true, matterNumber: true, title: true } },
-          paymentPlan: true,
-          payments: { orderBy: { paidAt: "desc" } },
-          accontoDeductions: { include: { accontoInvoice: true } },
-          deductedOnFinals: { select: { id: true } },
-          creditedInvoice: { select: { id: true, invoiceDate: true, amount: true } },
-          creditNote: { select: { id: true, invoiceDate: true, amount: true } },
-        },
-      }),
-    ),
+    // Migrerad till repository-sömmen (ADR 0020). listForOrg org-scopar +
+    // hämtar listvyns include (matter-subset, plan, betalningar, aconto-avdrag).
+    .query(({ ctx, input }) => ctx.repos.invoices.listForOrg(ctx.orgId, input)),
 
   getById: orgProcedure
     .input(z.object({ id: z.string() }))

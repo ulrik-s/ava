@@ -47,6 +47,28 @@ export interface InvoiceFull extends InvoiceWithRelations {
   creditNote: Pick<Invoice, "id" | "invoiceDate" | "amount"> | null;
 }
 
+/** Filter för `listForOrg` (alla optional → org-bred lista). */
+export interface InvoiceListFilter {
+  matterId?: string | undefined;
+  invoiceType?: Invoice["invoiceType"] | undefined;
+  status?: Invoice["status"] | undefined;
+}
+
+/**
+ * Faktura-rad för listvyn (motsvarar `invoice.list`-routerns include exakt).
+ * Lättare shape än `InvoiceFull`: ärendet är en select-delmängd, inga
+ * write-offs/tid/utlägg/dok, och `deductedOnFinals` bara `id` (för räkning).
+ */
+export interface InvoiceListRow extends Invoice {
+  matter: Pick<Matter, "id" | "matterNumber" | "title">;
+  paymentPlan: PaymentPlan | null;
+  payments: Payment[];
+  accontoDeductions: Array<AccontoDeduction & { accontoInvoice: Invoice | null }>;
+  deductedOnFinals: Array<Pick<AccontoDeduction, "id">>;
+  creditedInvoice: Pick<Invoice, "id" | "invoiceDate" | "amount"> | null;
+  creditNote: Pick<Invoice, "id" | "invoiceDate" | "amount"> | null;
+}
+
 export interface InvoiceRepository extends Repository<Invoice> {
   /** Faktura by id, org-scopad via ärendet (null om saknas/annan org/raderad). */
   getByIdInOrg(id: string, organizationId: string): Promise<Invoice | null>;
@@ -56,6 +78,8 @@ export interface InvoiceRepository extends Repository<Invoice> {
   getByIdWithLedger(id: string): Promise<InvoiceWithLedger | null>;
   /** Faktura + huvudrelationer (matter/payments/writeOffs/plan/tid/utlägg/dok), org-scopad. */
   getByIdWithRelations(id: string, organizationId: string): Promise<InvoiceWithRelations | null>;
+  /** Org-bred fakturalista (listvyns include), nyaste först, valfritt filtrerad. */
+  listForOrg(organizationId: string, filter?: InvoiceListFilter): Promise<InvoiceListRow[]>;
   /** Alla (icke-raderade) fakturor i ett ärende, nyaste först. */
   listByMatter(matterId: string): Promise<Invoice[]>;
 }

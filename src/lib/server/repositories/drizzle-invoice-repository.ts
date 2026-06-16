@@ -11,9 +11,11 @@
 
 import { and, desc, eq, isNull } from "drizzle-orm";
 import type { Invoice, Payment, WriteOff } from "@/lib/shared/schemas/billing";
-import { accontoDeductions, invoices, matters, payments, writeOffs } from "../db/schema";
+import { accontoDeductions, invoices, matters, paymentPlans, payments, writeOffs } from "../db/schema";
 import type { AppDb } from "../db/types";
-import type { InvoiceFull, InvoiceRepository, InvoiceWithLedger, InvoiceWithRelations } from "./invoice-repository";
+import type {
+  InvoiceFull, InvoiceListFilter, InvoiceListRow, InvoiceRepository, InvoiceWithLedger, InvoiceWithRelations,
+} from "./invoice-repository";
 
 export class DrizzleInvoiceRepository implements InvoiceRepository {
   constructor(
@@ -116,6 +118,44 @@ export class DrizzleInvoiceRepository implements InvoiceRepository {
       return null;
     }
     return row as unknown as InvoiceWithRelations;
+  }
+
+  async listForOrg(organizationId: string, filter?: InvoiceListFilter): Promise<InvoiceListRow[]> {
+    // Bas-rader: org-scope via inner-join på ärendet + valfria filter (undefined
+    // ignoreras av `and`). Relationerna berikas per rad (self-ref → sekundär-queries).
+    const baseRows = await this.db
+      .select({ inv: invoices, matter: matters }).from(invoices)
+      .innerJoin(matters, eq(invoices.matterId, matters.id))
+      .where(and(
+        eq(matters.organizationId, organizationId),
+        isNull(invoices.deletedAt),
+        filter?.matterId ? eq(invoices.matterId, filter.matterId) : undefined,
+        filter?.invoiceType ? eq(invoices.invoiceType, filter.invoiceType) : undefined,
+        filter?.status ? eq(invoices.status, filter.status) : undefined,
+      ))
+      .orderBy(desc(invoices.invoiceDate));
+    return Promise.all(baseRows.map(async ({ inv, matter }) => {
+      const id = (inv as { id: string }).id;
+      const plan = await this.db.select().from(paymentPlans).where(eq(paymentPlans.invoiceId, id)).limit(1);
+      const pays = await this.db.select().from(payments).where(eq(payments.invoiceId, id)).orderBy(desc(payments.paidAt));
+      const deductions = await this.db.select().from(accontoDeductions).where(eq(accontoDeductions.finalInvoiceId, id));
+      const accontoDeductionsFull = await Promise.all(
+        deductions.map(async (d) => ({ ...d, accontoInvoice: await this.rawInvoice((d as { accontoInvoiceId: string }).accontoInvoiceId) })),
+      );
+      const usages = await this.db.select({ id: accontoDeductions.id }).from(accontoDeductions).where(eq(accontoDeductions.accontoInvoiceId, id));
+      const creditedInvoice = await this.rawInvoice((inv as { creditedInvoiceId?: string | null }).creditedInvoiceId);
+      const creditNoteRows = await this.db.select().from(invoices).where(eq(invoices.creditedInvoiceId, id)).limit(1);
+      return {
+        ...inv,
+        matter: { id: (matter as { id: string }).id, matterNumber: (matter as { matterNumber: string }).matterNumber, title: (matter as { title: string }).title },
+        paymentPlan: (plan[0] as unknown) ?? null,
+        payments: pays as unknown as Payment[],
+        accontoDeductions: accontoDeductionsFull,
+        deductedOnFinals: usages,
+        creditedInvoice: creditedInvoice as InvoiceListRow["creditedInvoice"],
+        creditNote: (creditNoteRows[0] as unknown as InvoiceListRow["creditNote"]) ?? null,
+      };
+    })) as unknown as InvoiceListRow[];
   }
 
   async getByIdWithLedger(id: string): Promise<InvoiceWithLedger | null> {

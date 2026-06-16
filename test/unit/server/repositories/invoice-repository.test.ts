@@ -118,6 +118,35 @@ describe("InvoiceRepository — in-memory", () => {
     expect(full?.accontoDeductions).toHaveLength(1);
     expect((full?.accontoDeductions[0]?.accontoInvoice as { id?: string } | null)?.id).toBe(accontoId);
   });
+
+  it("listForOrg org-scopar, filtrerar och tar med listrelationer", async () => {
+    const accontoId = uuidv7();
+    const otherId = uuidv7();
+    const otherMatter = uuidv7();
+    const store = new LocalStore({
+      matters: [
+        { id: matterId, organizationId: "org-1", matterNumber: "2026-1", title: "T" },
+        { id: otherMatter, organizationId: "org-2", matterNumber: "2026-2", title: "U" },
+      ],
+      invoices: [
+        inv({ id: invId, matterId, invoiceType: "FINAL", status: "SENT" }),
+        inv({ id: accontoId, matterId, invoiceType: "ACCONTO", status: "PAID" }),
+        inv({ id: otherId, matterId: otherMatter, status: "SENT" }),
+      ],
+      accontoDeductions: [{ id: uuidv7(), finalInvoiceId: invId, accontoInvoiceId: accontoId }],
+      payments: [{ id: uuidv7(), invoiceId: invId, amount: 400 }],
+      paymentPlans: [], writeOffs: [],
+    }, async () => {});
+    const repo = new InMemoryInvoiceRepository(store);
+    const all = await repo.listForOrg("org-1");
+    expect(all.map((i) => i.id).sort()).toEqual([invId, accontoId].sort()); // org-2-fakturan exkluderad
+    const final = all.find((i) => i.id === invId)!;
+    expect(final.matter.matterNumber).toBe("2026-1");
+    expect(final.payments).toHaveLength(1);
+    expect((final.accontoDeductions[0]?.accontoInvoice as { id?: string } | null)?.id).toBe(accontoId);
+    expect((await repo.listForOrg("org-1", { status: "PAID" })).map((i) => i.id)).toEqual([accontoId]);
+    expect((await repo.listForOrg("org-1", { invoiceType: "FINAL" })).map((i) => i.id)).toEqual([invId]);
+  });
 });
 
 describe("InvoiceRepository — Drizzle (pglite)", () => {
@@ -209,5 +238,34 @@ describe("InvoiceRepository — Drizzle (pglite)", () => {
     expect(full?.accontoDeductions).toHaveLength(1);
     expect(full?.accontoDeductions[0]?.accontoInvoice?.id).toBe(accontoId);
     expect(full?.creditNote?.id).toBe(creditId);
+  });
+
+  it("listForOrg: org-scope via join + self-ref-berikning per rad", async () => {
+    const db = handle.db;
+    const org = uuidv7();
+    const otherOrg = uuidv7();
+    const mId = uuidv7();
+    const otherMatter = uuidv7();
+    const finalId = uuidv7();
+    const accontoId = uuidv7();
+    const otherId = uuidv7();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const v = (o: Record<string, unknown>) => ({ version: 1, ...o }) as any;
+    await db.insert(matters).values(v({ id: mId, organizationId: org, matterNumber: "2026-1", title: "T" }));
+    await db.insert(matters).values(v({ id: otherMatter, organizationId: otherOrg, matterNumber: "2026-2", title: "U" }));
+    await db.insert(invoices).values(inv({ id: finalId, matterId: mId, invoiceType: "FINAL", status: "SENT" }) as never);
+    await db.insert(invoices).values(inv({ id: accontoId, matterId: mId, invoiceType: "ACCONTO", status: "PAID" }) as never);
+    await db.insert(invoices).values(inv({ id: otherId, matterId: otherMatter, status: "SENT" }) as never);
+    await db.insert(accontoDeductions).values(v({ id: uuidv7(), finalInvoiceId: finalId, accontoInvoiceId: accontoId }));
+    await db.insert(payments).values(v({ id: uuidv7(), invoiceId: finalId, amount: 400, paidAt: new Date(), recordedById: uuidv7() }));
+
+    const repo = new DrizzleInvoiceRepository(handle.db as unknown as AppDb);
+    const all = await repo.listForOrg(org);
+    expect(all.map((i) => i.id).sort()).toEqual([finalId, accontoId].sort()); // annan org exkluderad
+    const final = all.find((i) => i.id === finalId)!;
+    expect(final.matter.matterNumber).toBe("2026-1");
+    expect(final.payments).toHaveLength(1);
+    expect(final.accontoDeductions[0]?.accontoInvoice?.id).toBe(accontoId);
+    expect((await repo.listForOrg(org, { status: "PAID" })).map((i) => i.id)).toEqual([accontoId]);
   });
 });

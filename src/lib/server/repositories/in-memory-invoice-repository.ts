@@ -7,7 +7,9 @@
 import type { Invoice } from "@/lib/shared/schemas/billing";
 import type { Delegate, IDataStore } from "../data-store/IDataStore";
 import { InMemoryRepository } from "./in-memory-repository";
-import type { InvoiceFull, InvoiceRepository, InvoiceWithLedger, InvoiceWithRelations } from "./invoice-repository";
+import type {
+  InvoiceFull, InvoiceListFilter, InvoiceListRow, InvoiceRepository, InvoiceWithLedger, InvoiceWithRelations,
+} from "./invoice-repository";
 
 /** Delegaterna repot behöver — uppfylls av `IDataStore`, `DataStoreTx` och `LocalStore`. */
 export type InvoiceRepoSource = Pick<IDataStore, "invoices" | "payments" | "writeOffs">;
@@ -70,6 +72,30 @@ export class InMemoryInvoiceRepository extends InMemoryRepository<Invoice> imple
     const writeOffs = (await (this.store.writeOffs as unknown as Delegate)
       .findMany({ where: { invoiceId: id } })) as InvoiceWithLedger["writeOffs"];
     return { ...invoice, payments, writeOffs };
+  }
+
+  async listForOrg(organizationId: string, filter?: InvoiceListFilter): Promise<InvoiceListRow[]> {
+    // Samma where/include som routern använde mot DemoDataStore — query-engine:n
+    // resolvar relationerna i ett anrop (jfr Drizzle-impl:ens sekundär-queries).
+    const rows = (await (this.store.invoices as unknown as Delegate).findMany({
+      where: {
+        matter: { organizationId },
+        ...(filter?.matterId ? { matterId: filter.matterId } : {}),
+        ...(filter?.invoiceType ? { invoiceType: filter.invoiceType } : {}),
+        ...(filter?.status ? { status: filter.status } : {}),
+      },
+      orderBy: { invoiceDate: "desc" },
+      include: {
+        matter: { select: { id: true, matterNumber: true, title: true } },
+        paymentPlan: true,
+        payments: { orderBy: { paidAt: "desc" } },
+        accontoDeductions: { include: { accontoInvoice: true } },
+        deductedOnFinals: { select: { id: true } },
+        creditedInvoice: { select: { id: true, invoiceDate: true, amount: true } },
+        creditNote: { select: { id: true, invoiceDate: true, amount: true } },
+      },
+    })) as InvoiceListRow[];
+    return rows.filter((r) => !(r as { deletedAt?: unknown }).deletedAt);
   }
 
   async listByMatter(matterId: string): Promise<Invoice[]> {
