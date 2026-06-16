@@ -9,13 +9,15 @@
  * helper när vi fan-out:ar entiteterna; pilotens korrekthet bevisas av pglite-testerna.
  */
 
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull, like } from "drizzle-orm";
 import type { Invoice, Payment, WriteOff } from "@/lib/shared/schemas/billing";
 import { accontoDeductions, invoices, matters, paymentPlans, payments, writeOffs } from "../db/schema";
 import type { AppDb } from "../db/types";
 import { DrizzleRepository, type VersionedTable } from "./drizzle-repository";
-import type {
-  InvoiceFull, InvoiceListFilter, InvoiceListRow, InvoiceRepository, InvoiceWithLedger, InvoiceWithRelations,
+import {
+  invoiceNumberPrefix, nextInvoiceNumberFrom,
+  type InvoiceFull, type InvoiceListFilter, type InvoiceListRow, type InvoiceRepository,
+  type InvoiceWithLedger, type InvoiceWithRelations,
 } from "./invoice-repository";
 
 export class DrizzleInvoiceRepository extends DrizzleRepository<Invoice> implements InvoiceRepository {
@@ -121,6 +123,16 @@ export class DrizzleInvoiceRepository extends DrizzleRepository<Invoice> impleme
         creditNote: (creditNoteRows[0] as unknown as InvoiceListRow["creditNote"]) ?? null,
       };
     })) as unknown as InvoiceListRow[];
+  }
+
+  async nextInvoiceNumber(organizationId: string): Promise<string> {
+    const prefix = invoiceNumberPrefix(this.now().getFullYear());
+    const rows = await this.db
+      .select({ invoiceNumber: invoices.invoiceNumber }).from(invoices)
+      .innerJoin(matters, eq(invoices.matterId, matters.id))
+      .where(and(eq(matters.organizationId, organizationId), like(invoices.invoiceNumber, `${prefix}%`)))
+      .orderBy(desc(invoices.invoiceNumber)).limit(1);
+    return nextInvoiceNumberFrom(prefix, rows[0]?.invoiceNumber);
   }
 
   async getByIdWithLedger(id: string): Promise<InvoiceWithLedger | null> {

@@ -6,10 +6,12 @@
  */
 
 import type { InvoiceRepository } from "./invoice-repository";
+import type { MatterRepository } from "./matter-repository";
 import type { PaymentPlanRepository } from "./payment-plan-repository";
 
 export interface Repositories {
   invoices: InvoiceRepository;
+  matters: MatterRepository;
   paymentPlans: PaymentPlanRepository;
   transaction<T>(fn: (tx: Repositories) => Promise<T>): Promise<T>;
 }

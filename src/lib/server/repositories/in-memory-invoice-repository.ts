@@ -7,8 +7,10 @@
 import type { Invoice } from "@/lib/shared/schemas/billing";
 import type { Delegate, IDataStore } from "../data-store/IDataStore";
 import { InMemoryRepository } from "./in-memory-repository";
-import type {
-  InvoiceFull, InvoiceListFilter, InvoiceListRow, InvoiceRepository, InvoiceWithLedger, InvoiceWithRelations,
+import {
+  invoiceNumberPrefix, nextInvoiceNumberFrom,
+  type InvoiceFull, type InvoiceListFilter, type InvoiceListRow, type InvoiceRepository,
+  type InvoiceWithLedger, type InvoiceWithRelations,
 } from "./invoice-repository";
 
 /** Delegaterna repot behöver — uppfylls av `IDataStore`, `DataStoreTx` och `LocalStore`. */
@@ -96,6 +98,15 @@ export class InMemoryInvoiceRepository extends InMemoryRepository<Invoice> imple
       },
     })) as InvoiceListRow[];
     return rows.filter((r) => !(r as { deletedAt?: unknown }).deletedAt);
+  }
+
+  async nextInvoiceNumber(organizationId: string): Promise<string> {
+    const prefix = invoiceNumberPrefix(this.now().getFullYear());
+    const last = (await (this.store.invoices as unknown as Delegate).findFirst({
+      where: { matter: { organizationId }, invoiceNumber: { startsWith: prefix } },
+      orderBy: { invoiceNumber: "desc" },
+    })) as { invoiceNumber?: string | null } | null;
+    return nextInvoiceNumberFrom(prefix, last?.invoiceNumber);
   }
 
   async listByMatter(matterId: string): Promise<Invoice[]> {

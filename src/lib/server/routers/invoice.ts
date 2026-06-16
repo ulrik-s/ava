@@ -20,6 +20,7 @@ import { canTransition, transitionErrorMessage } from "@/lib/shared/invoice-stat
 import { ocrFromInvoiceNumber } from "@/lib/shared/ocr-reference";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { computeRadgivningsavgift } from "@/lib/shared/rattshjalp";
+import type { Invoice } from "@/lib/shared/schemas/billing";
 import type { InvoiceStatus } from "@/lib/shared/schemas/enums";
 import {
   asId,
@@ -33,6 +34,7 @@ import {
 import { computeInvoiceLedger, deriveInvoiceStatus, invoicePartitionViolation } from "@/lib/shared/write-off-calc";
 import type { DataStoreTx } from "../data-store/IDataStore";
 import { emit } from "../events/emit";
+import { invoiceNumberPrefix, nextInvoiceNumberFrom } from "../repositories/invoice-repository";
 import { router, orgProcedure } from "../trpc";
 
 // ─── createFinal-hjälpare (validera + koppla poster) ──────────────
@@ -143,18 +145,21 @@ function resolveWriteOffAmount(outstanding: number, requested?: number): number 
   return amount;
 }
 
-/** Nästa lediga fakturanummer (F-YYYY-NNNN) för org:en. Speglar nextMatterNumber. */
+/**
+ * Nästa lediga fakturanummer (F-YYYY-NNNN) för org:en. Kvarvarande tx-väg för
+ * de ännu icke-migrerade mutationerna (createRadgivning/createFinal/createCredit);
+ * delar format-logiken med `InvoiceRepository.nextInvoiceNumber` (ADR 0020).
+ */
 async function nextInvoiceNumber(
   invoices: { findFirst: (args: unknown) => Promise<unknown> },
   orgId: string,
 ): Promise<string> {
-  const prefix = `F-${new Date().getFullYear()}-`;
+  const prefix = invoiceNumberPrefix(new Date().getFullYear());
   const last = (await invoices.findFirst({
     where: { matter: { organizationId: orgId }, invoiceNumber: { startsWith: prefix } },
     orderBy: { invoiceNumber: "desc" },
   })) as { invoiceNumber?: string | null } | null;
-  const seq = last?.invoiceNumber ? parseInt(last.invoiceNumber.slice(prefix.length), 10) + 1 : 1;
-  return `${prefix}${seq.toString().padStart(4, "0")}`;
+  return nextInvoiceNumberFrom(prefix, last?.invoiceNumber);
 }
 
 const invoiceTypeSchema = z.enum(["STANDARD", "ACCONTO", "FINAL"]);
@@ -203,14 +208,14 @@ export const invoiceRouter = router({
         notes: z.string().optional(),
       }),
     )
+    // Migrerad till repository-sömmen (ADR 0020): org-scopad ärende-koll +
+    // typad nummergenerering + create (inget dynamiskt where/data-objekt).
     .mutation(async ({ ctx, input }) => {
-      const matter = await ctx.dataStore.matters.findFirst({
-        where: { id: input.matterId, organizationId: ctx.orgId },
-      });
+      const matter = await ctx.repos.matters.getByIdInOrg(input.matterId, ctx.orgId);
       if (!matter) throw new TRPCError({ code: "NOT_FOUND" });
-      const accontoNumber = await nextInvoiceNumber(ctx.dataStore.invoices, ctx.orgId);
-      const invoice = await ctx.dataStore.invoices.create({
-        data: omitUndefined({
+      const accontoNumber = await ctx.repos.invoices.nextInvoiceNumber(ctx.orgId);
+      const invoice = await ctx.repos.invoices.create(
+        omitUndefined({
           id: input.id, // undefined → store genererar
           matterId: input.matterId,
           invoiceNumber: accontoNumber,
@@ -223,8 +228,8 @@ export const invoiceRouter = router({
           invoiceDate: input.invoiceDate ? new Date(input.invoiceDate) : new Date(),
           dueDate: input.dueDate ? new Date(input.dueDate) : null,
           notes: input.notes,
-        }),
-      });
+        }) as Partial<Invoice>,
+      );
       await emit.invoiceCreated(ctx, invoice);
       return invoice;
     }),
