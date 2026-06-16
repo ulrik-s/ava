@@ -20,7 +20,7 @@ import { canTransition, transitionErrorMessage } from "@/lib/shared/invoice-stat
 import { ocrFromInvoiceNumber } from "@/lib/shared/ocr-reference";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { computeRadgivningsavgift } from "@/lib/shared/rattshjalp";
-import type { Invoice, Payment, PaymentPlan, WriteOff } from "@/lib/shared/schemas/billing";
+import type { AccontoDeduction, Invoice, Payment, PaymentPlan, WriteOff } from "@/lib/shared/schemas/billing";
 import type { InvoiceStatus } from "@/lib/shared/schemas/enums";
 import {
   asId,
@@ -33,22 +33,15 @@ import {
 } from "@/lib/shared/schemas/ids";
 import type { Matter } from "@/lib/shared/schemas/matter";
 import { computeInvoiceLedger, deriveInvoiceStatus, invoicePartitionViolation } from "@/lib/shared/write-off-calc";
-import type { DataStoreTx } from "../data-store/IDataStore";
 import { emit } from "../events/emit";
-import { invoiceNumberPrefix, nextInvoiceNumberFrom } from "../repositories/invoice-repository";
 import type { Repositories } from "../repositories/repositories";
 import { router, orgProcedure } from "../trpc";
 
 // ─── createFinal-hjälpare (validera + koppla poster) ──────────────
 
 /** Hämta valda obetalda tidsposter; kasta om någon redan fakturerats/ägs av annat ärende. */
-async function fetchUnbilledTimeEntries(tx: DataStoreTx, matterId: string, ids: string[]) {
-  const rows = ids.length
-    ? await tx.timeEntries.findMany({
-        where: { id: { in: ids }, matterId, invoiceId: null },
-        include: { user: { select: { hourlyRate: true } } },
-      })
-    : [];
+async function fetchUnbilledTimeEntries(repos: Repositories, matterId: string, ids: string[]) {
+  const rows = await repos.timeEntries.listUnbilled(matterId, ids);
   if (rows.length !== ids.length) {
     throw new TRPCError({ code: "BAD_REQUEST", message: "Några tidsposter är redan fakturerade eller tillhör annat ärende." });
   }
@@ -56,10 +49,8 @@ async function fetchUnbilledTimeEntries(tx: DataStoreTx, matterId: string, ids: 
 }
 
 /** Hämta valda obetalda utlägg; kasta om någon redan fakturerats/ägs av annat ärende. */
-async function fetchUnbilledExpenses(tx: DataStoreTx, matterId: string, ids: string[]) {
-  const rows = ids.length
-    ? await tx.expenses.findMany({ where: { id: { in: ids }, matterId, invoiceId: null } })
-    : [];
+async function fetchUnbilledExpenses(repos: Repositories, matterId: string, ids: string[]) {
+  const rows = await repos.expenses.listUnbilled(matterId, ids);
   if (rows.length !== ids.length) {
     throw new TRPCError({ code: "BAD_REQUEST", message: "Några utlägg är redan fakturerade eller tillhör annat ärende." });
   }
@@ -67,12 +58,8 @@ async function fetchUnbilledExpenses(tx: DataStoreTx, matterId: string, ids: str
 }
 
 /** Validera accontos: samma ärende, typ ACCONTO, ej redan avdragna på en FINAL. */
-async function fetchDeductibleAccontos(tx: DataStoreTx, matterId: string, ids: string[]) {
-  const rows = ids.length
-    ? await tx.invoices.findMany({
-        where: { id: { in: ids }, matterId, invoiceType: "ACCONTO", deductedOnFinals: { none: {} } },
-      })
-    : [];
+async function fetchDeductibleAccontos(repos: Repositories, matterId: string, ids: string[]) {
+  const rows = await repos.invoices.listDeductibleAccontos(matterId, ids);
   if (rows.length !== ids.length) {
     throw new TRPCError({ code: "BAD_REQUEST", message: "Några acconto-fakturor är redan avdragna eller tillhör annat ärende." });
   }
@@ -80,24 +67,20 @@ async function fetchDeductibleAccontos(tx: DataStoreTx, matterId: string, ids: s
 }
 
 /**
- * Koppla poster till fakturan + skapa acconto-avdrag via explicita anrop
+ * Koppla poster till fakturan + skapa acconto-avdrag via typade repo-anrop
  * (ej Prisma nested writes) så samma kod kör mot både Postgres och git-store:n.
  */
 async function linkBilledItems(
-  tx: DataStoreTx,
+  repos: Repositories,
   invoiceId: InvoiceId,
   timeEntries: ReadonlyArray<{ id: TimeEntryId }>,
   expenses: ReadonlyArray<{ id: ExpenseId }>,
   accontos: ReadonlyArray<{ id: InvoiceId }>,
 ): Promise<void> {
-  if (timeEntries.length) {
-    await tx.timeEntries.updateMany({ where: { id: { in: timeEntries.map((t) => t.id) } }, data: { invoiceId } });
-  }
-  if (expenses.length) {
-    await tx.expenses.updateMany({ where: { id: { in: expenses.map((e) => e.id) } }, data: { invoiceId } });
-  }
+  await repos.timeEntries.flagBilled(timeEntries.map((t) => t.id), invoiceId);
+  await repos.expenses.flagBilled(expenses.map((e) => e.id), invoiceId);
   for (const a of accontos) {
-    await tx.accontoDeductions.create({ data: { finalInvoiceId: invoiceId, accontoInvoiceId: a.id } });
+    await repos.accontoDeductions.create({ finalInvoiceId: invoiceId, accontoInvoiceId: a.id } as Partial<AccontoDeduction>);
   }
 }
 
@@ -148,23 +131,6 @@ function resolveWriteOffAmount(outstanding: number, requested?: number): number 
     });
   }
   return amount;
-}
-
-/**
- * Nästa lediga fakturanummer (F-YYYY-NNNN) för org:en. Kvarvarande tx-väg för
- * de ännu icke-migrerade mutationerna (createRadgivning/createFinal/createCredit);
- * delar format-logiken med `InvoiceRepository.nextInvoiceNumber` (ADR 0020).
- */
-async function nextInvoiceNumber(
-  invoices: { findFirst: (args: unknown) => Promise<unknown> },
-  orgId: string,
-): Promise<string> {
-  const prefix = invoiceNumberPrefix(new Date().getFullYear());
-  const last = (await invoices.findFirst({
-    where: { matter: { organizationId: orgId }, invoiceNumber: { startsWith: prefix } },
-    orderBy: { invoiceNumber: "desc" },
-  })) as { invoiceNumber?: string | null } | null;
-  return nextInvoiceNumberFrom(prefix, last?.invoiceNumber);
 }
 
 const invoiceTypeSchema = z.enum(["STANDARD", "ACCONTO", "FINAL"]);
@@ -296,16 +262,16 @@ export const invoiceRouter = router({
         notes: z.string().optional(),
       }),
     )
+    // Migrerad till repository-sömmen (ADR 0020). Typade list/flag-metoder +
+    // accontoDeductions-repo; beräkningen (computeFinalInvoiceBreakdown) i routern.
     .mutation(async ({ ctx, input }) => {
-      return ctx.dataStore.transaction(async (tx) => {
-        const matter = await tx.matters.findFirst({
-          where: { id: input.matterId, organizationId: ctx.orgId },
-        });
+      const result = await ctx.repos.transaction(async (repos) => {
+        const matter = await repos.matters.getByIdInOrg(input.matterId, ctx.orgId);
         if (!matter) throw new TRPCError({ code: "NOT_FOUND" });
 
-        const timeEntries = await fetchUnbilledTimeEntries(tx, input.matterId, input.timeEntryIds);
-        const expenses = await fetchUnbilledExpenses(tx, input.matterId, input.expenseIds);
-        const accontos = await fetchDeductibleAccontos(tx, input.matterId, input.accontoInvoiceIds);
+        const timeEntries = await fetchUnbilledTimeEntries(repos, input.matterId, input.timeEntryIds);
+        const expenses = await fetchUnbilledExpenses(repos, input.matterId, input.expenseIds);
+        const accontos = await fetchDeductibleAccontos(repos, input.matterId, input.accontoInvoiceIds);
 
         const breakdown = computeFinalInvoiceBreakdown(
           timeEntries.map((t) => ({ minutes: t.minutes, hourlyRate: t.user.hourlyRate ?? 0 })),
@@ -313,28 +279,25 @@ export const invoiceRouter = router({
           accontos.map((a) => ({ id: a.id, amount: a.amount })),
         );
 
-        const finalNumber = await nextInvoiceNumber(tx.invoices, ctx.orgId);
-        const invoice = await tx.invoices.create({
-          data: omitUndefined({
-            id: input.id, // undefined → store genererar
-            matterId: input.matterId,
-            invoiceNumber: finalNumber,
-            ocrReference: ocrFromInvoiceNumber(finalNumber), // kundfaktura → OCR (#182)
-            amount: breakdown.grossAmount,
-            invoiceType: "FINAL",
-            status: "DRAFT",
-            invoiceDate: input.invoiceDate ? new Date(input.invoiceDate) : new Date(),
-            dueDate: input.dueDate ? new Date(input.dueDate) : null,
-            notes: input.notes,
-          }),
-        });
+        const finalNumber = await repos.invoices.nextInvoiceNumber(ctx.orgId);
+        const invoice = await repos.invoices.create(omitUndefined({
+          id: input.id, // undefined → store genererar
+          matterId: input.matterId,
+          invoiceNumber: finalNumber,
+          ocrReference: ocrFromInvoiceNumber(finalNumber), // kundfaktura → OCR (#182)
+          amount: breakdown.grossAmount,
+          invoiceType: "FINAL",
+          status: "DRAFT",
+          invoiceDate: input.invoiceDate ? new Date(input.invoiceDate) : new Date(),
+          dueDate: input.dueDate ? new Date(input.dueDate) : null,
+          notes: input.notes,
+        }) as Partial<Invoice>);
 
-        await linkBilledItems(tx, invoice.id, timeEntries, expenses, accontos);
+        await linkBilledItems(repos, invoice.id as InvoiceId, timeEntries, expenses, accontos);
         return { invoice, breakdown };
-      }).then(async (result) => {
-        await emit.invoiceCreated(ctx, result.invoice);
-        return result;
       });
+      await emit.invoiceCreated(ctx, result.invoice);
+      return result;
     }),
 
   /**

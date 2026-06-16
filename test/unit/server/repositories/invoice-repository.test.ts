@@ -197,6 +197,26 @@ describe("InvoiceRepository — in-memory", () => {
     expect((await repo.getCreditNoteFor(origId))?.id).toBe(creditId);
     expect(await repo.getCreditNoteFor(uuidv7())).toBeNull(); // ej krediterad
   });
+
+  it("listDeductibleAccontos: ACCONTO i ärendet som ej redan avdragits", async () => {
+    const mId = uuidv7();
+    const acc1 = uuidv7();
+    const acc2 = uuidv7();
+    const finalId = uuidv7();
+    const store = new LocalStore({
+      matters: [{ id: mId, organizationId: "org-1", matterNumber: "2026-1", title: "T" }],
+      invoices: [
+        inv({ id: acc1, matterId: mId, invoiceType: "ACCONTO" }),
+        inv({ id: acc2, matterId: mId, invoiceType: "ACCONTO" }), // redan avdragen
+        inv({ id: finalId, matterId: mId, invoiceType: "FINAL" }),
+      ],
+      accontoDeductions: [{ id: uuidv7(), finalInvoiceId: finalId, accontoInvoiceId: acc2 }],
+      payments: [], writeOffs: [],
+    }, async () => {});
+    const repo = new InMemoryInvoiceRepository(store);
+    expect((await repo.listDeductibleAccontos(mId, [acc1, acc2])).map((a) => a.id)).toEqual([acc1]); // acc2 utesluten
+    expect(await repo.listDeductibleAccontos(mId, [])).toEqual([]);
+  });
 });
 
 describe("InvoiceRepository — Drizzle (pglite)", () => {
@@ -363,5 +383,22 @@ describe("InvoiceRepository — Drizzle (pglite)", () => {
     const repo = new DrizzleInvoiceRepository(handle.db as unknown as AppDb);
     expect((await repo.getCreditNoteFor(origId))?.id).toBe(creditId);
     expect(await repo.getCreditNoteFor(uuidv7())).toBeNull();
+  });
+
+  it("listDeductibleAccontos: ACCONTO ej redan avdragna (left-join)", async () => {
+    const db = handle.db;
+    const mId = uuidv7();
+    const acc1 = uuidv7();
+    const acc2 = uuidv7();
+    const finalId = uuidv7();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const v = (o: Record<string, unknown>) => ({ version: 1, ...o }) as any;
+    await db.insert(matters).values(v({ id: mId, organizationId: uuidv7(), matterNumber: "2026-1", title: "T" }));
+    await db.insert(invoices).values(inv({ id: acc1, matterId: mId, invoiceType: "ACCONTO" }) as never);
+    await db.insert(invoices).values(inv({ id: acc2, matterId: mId, invoiceType: "ACCONTO" }) as never);
+    await db.insert(invoices).values(inv({ id: finalId, matterId: mId, invoiceType: "FINAL" }) as never);
+    await db.insert(accontoDeductions).values(v({ id: uuidv7(), finalInvoiceId: finalId, accontoInvoiceId: acc2 }));
+    const repo = new DrizzleInvoiceRepository(handle.db as unknown as AppDb);
+    expect((await repo.listDeductibleAccontos(mId, [acc1, acc2])).map((a) => a.id)).toEqual([acc1]);
   });
 });
