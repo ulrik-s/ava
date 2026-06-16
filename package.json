@@ -92,6 +92,7 @@
   "devDependencies": {
     "@commitlint/cli": "^21.0.2",
     "@commitlint/config-conventional": "^21.0.2",
+    "@electric-sql/pglite": "^0.5.2",
     "@happy-dom/global-registrator": "^20.10.2",
     "@isomorphic-git/cors-proxy": "^3.0.1",
     "@playwright/test": "^1.60.0",
