@@ -24,6 +24,7 @@ describe("buildContext", () => {
     expect(ctx.dataStore).toBe(fakeStore);
     expect(ctx.ports).toBe(fakePorts);
     expect(ctx.user).toBe(principal);
+    expect(ctx.repos).toBeDefined(); // ADR 0020 — default in-memory-repos
   });
 
   it("principal=null → ctx.user=null (anonym/publik)", () => {
@@ -33,6 +34,6 @@ describe("buildContext", () => {
 
   it("returnerar exakt Context-formen (inga extra fält)", () => {
     const ctx = buildContext({ dataStore: fakeStore, ports: fakePorts, principal });
-    expect(Object.keys(ctx).sort()).toEqual(["dataStore", "ports", "user"]);
+    expect(Object.keys(ctx).sort()).toEqual(["dataStore", "ports", "repos", "user"]);
   });
 });

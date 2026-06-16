@@ -21,10 +21,16 @@ import { asId } from "@/lib/shared/schemas/ids";
 import type { Principal } from "./auth/principal";
 import type { IDataStore } from "./data-store/IDataStore";
 import type { IPorts } from "./ports";
+import type { Repositories } from "./repositories/repositories";
 
 export type Context = {
   /** Read/write-data via abstraktion. Git-backenden wirar DemoDataStore. */
   dataStore: IDataStore;
+  /**
+   * Typat repository-aggregat (ADR 0020) — den nya sömmen routrarna migreras
+   * till, entitet för entitet. Samexisterar med `dataStore` under övergången.
+   */
+  repos: Repositories;
   /** Server-side ports (email, search, etc). Git-backenden wirar no-ops. */
   ports: IPorts;
   /**
