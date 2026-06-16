@@ -15,6 +15,13 @@
       "when": 1781613540522,
       "tag": "0001_add_billing_docs_calendar",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1781624412428,
+      "tag": "0002_add_document_invoice_id",
+      "breakpoints": true
     }
   ]
 }
