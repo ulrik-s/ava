@@ -147,6 +147,13 @@ export class DrizzleInvoiceRepository extends DrizzleRepository<Invoice> impleme
     return Number(rows[0]?.total ?? 0);
   }
 
+  async getCreditNoteFor(invoiceId: string): Promise<Invoice | null> {
+    const rows = await this.db
+      .select().from(invoices)
+      .where(and(eq(invoices.creditedInvoiceId, invoiceId), isNull(invoices.deletedAt))).limit(1);
+    return (rows[0] as unknown as Invoice | undefined) ?? null;
+  }
+
   async getByIdWithLedger(id: string): Promise<InvoiceWithLedger | null> {
     const invoice = await this.getById(id);
     if (!invoice) return null;
