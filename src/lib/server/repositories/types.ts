@@ -31,11 +31,3 @@ export interface Repository<Row extends RowBase> {
   /** Mjuk delete (sätter `deletedAt`, bumpar `version`) — tombstone, ADR 0017. */
   softDelete(id: string): Promise<Row>;
 }
-
-/**
- * Aggregatet som ersätter `IDataStore` i `ctx`. Växer per migrerad entitet
- * (fan-out); samexisterar med `IDataStore` tills sista entiteten migrerats.
- */
-export interface Repositories {
-  transaction<T>(fn: (tx: Repositories) => Promise<T>): Promise<T>;
-}

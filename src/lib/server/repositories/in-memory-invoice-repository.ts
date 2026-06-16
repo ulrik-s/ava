@@ -5,13 +5,15 @@
  */
 
 import type { Invoice } from "@/lib/shared/schemas/billing";
-import type { Delegate } from "../data-store/IDataStore";
-import type { LocalStore } from "../data-store/in-memory/local-store";
+import type { Delegate, IDataStore } from "../data-store/IDataStore";
 import { InMemoryRepository } from "./in-memory-repository";
 import type { InvoiceRepository, InvoiceWithLedger } from "./invoice-repository";
 
+/** Delegaterna repot behöver — uppfylls av `IDataStore`, `DataStoreTx` och `LocalStore`. */
+export type InvoiceRepoSource = Pick<IDataStore, "invoices" | "payments" | "writeOffs">;
+
 export class InMemoryInvoiceRepository extends InMemoryRepository<Invoice> implements InvoiceRepository {
-  constructor(private readonly store: LocalStore, now?: () => Date) {
+  constructor(private readonly store: InvoiceRepoSource, now?: () => Date) {
     super(store.invoices as unknown as Delegate, now ?? (() => new Date()));
   }
 
