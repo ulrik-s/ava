@@ -84,6 +84,7 @@ vi.mock("@/lib/client/trpc", () => ({
     },
     billingRun: {
       list: { useQuery: () => ({ data: { runs: [] }, isLoading: false, refetch: vi.fn() }) },
+      proposal: { useQuery: () => ({ data: undefined, isLoading: false }) },
       createAcconto: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       createFinal: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       createKostnadsrakning: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },

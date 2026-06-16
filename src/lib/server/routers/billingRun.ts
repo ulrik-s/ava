@@ -16,6 +16,7 @@
  */
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import { proposedAccontoOre } from "@/lib/shared/billing-proposal";
 import { billingRunRecipientSchema, type ExpenseKind } from "@/lib/shared/schemas/enums";
 import {
   matterIdSchema,
@@ -32,6 +33,36 @@ interface UnfrozenWork {
   expenses: Array<{ id: string; amount: number; billable: boolean }>;
 }
 
+/** En itemiserad rad i fakturaförslaget (#397) — tidspost med beräknat värde. */
+interface ProposalTimeEntry {
+  id: string;
+  description: string;
+  minutes: number;
+  hourlyRate: number;
+  billable: boolean;
+  valueOre: number;
+}
+
+interface ProposalExpense {
+  id: string;
+  description: string;
+  amount: number;
+  billable: boolean;
+}
+
+/** Avdragsmedvetet fakturaförslag (#397): ofakturerade poster + nyckeltal. */
+interface BillingProposal {
+  workValueOre: number;
+  priorAccontoSumOre: number;
+  timeEntries: ProposalTimeEntry[];
+  expenses: ProposalExpense[];
+}
+
+/** Värdet på en (debiterbar) tidspost i öre — speglar workValueOre:s ton. */
+function timeEntryValueOre(minutes: number, hourlyRate: number): number {
+  return Math.round((minutes / 60) * hourlyRate);
+}
+
 async function fetchUnfrozenWork(tx: DataStoreTx, matterId: string): Promise<UnfrozenWork> {
   const te = await tx.timeEntries.findMany({
     where: { matterId, frozenByBillingRunId: null },
@@ -45,11 +76,40 @@ async function fetchUnfrozenWork(tx: DataStoreTx, matterId: string): Promise<Unf
 function workValueOre(work: UnfrozenWork): number {
   const time = work.timeEntries
     .filter((t) => t.billable)
-    .reduce((sum, t) => sum + Math.round((t.minutes / 60) * t.hourlyRate), 0);
+    .reduce((sum, t) => sum + timeEntryValueOre(t.minutes, t.hourlyRate), 0);
   const exp = work.expenses
     .filter((e) => e.billable)
     .reduce((sum, e) => sum + e.amount, 0);
   return time + exp;
+}
+
+/** Bygg ett itemiserat fakturaförslag ur ofrysta tids-/utläggsrader (#397). */
+function buildProposal(
+  te: ReadonlyArray<{ id: string; description?: string | null; minutes: number; hourlyRate: number; billable: boolean }>,
+  ex: ReadonlyArray<{ id: string; description?: string | null; amount: number; billable: boolean; kind?: ExpenseKind }>,
+  priorAccontoSumOre: number,
+): BillingProposal {
+  const timeEntries: ProposalTimeEntry[] = te.map((t) => ({
+    id: t.id, description: t.description ?? "", minutes: t.minutes, hourlyRate: t.hourlyRate,
+    billable: t.billable, valueOre: timeEntryValueOre(t.minutes, t.hourlyRate),
+  }));
+  const expenses: ProposalExpense[] = ex
+    .filter((e) => e.kind !== "PRUTNING")
+    .map((e) => ({ id: e.id, description: e.description ?? "", amount: e.amount, billable: e.billable }));
+  const workValueOre = timeEntries.filter((t) => t.billable).reduce((s, t) => s + t.valueOre, 0)
+    + expenses.filter((e) => e.billable).reduce((s, e) => s + e.amount, 0);
+  return { workValueOre, priorAccontoSumOre, timeEntries, expenses };
+}
+
+/** Summan av tidigare utställda ACCONTO-fakturors belopp för ett ärende (#397). */
+async function sumPriorAccontos(
+  billingRuns: { findMany: (args: unknown) => Promise<unknown> },
+  matterId: string,
+): Promise<number> {
+  const runs = (await billingRuns.findMany({
+    where: { matterId, type: "ACCONTO", status: "SENT" },
+  })) as ReadonlyArray<{ amountOre?: number }>;
+  return runs.reduce((sum, r) => sum + (r.amountOre ?? 0), 0);
 }
 
 async function freezeWork(tx: DataStoreTx, matterId: string, billingRunId: BillingRunId): Promise<void> {
@@ -95,6 +155,31 @@ export const billingRunRouter = router({
       });
     }),
 
+  /**
+   * Avdragsmedvetet fakturaförslag (#397): vilka tids-/utläggsposter är
+   * ofakturerade (ej frysta) i ärendet, deras sammanlagda upparbetade värde,
+   * och summan av tidigare aconto-fakturor. Klienten beräknar aconto-beloppet
+   * = %-sats × workValueOre − priorAccontoSumOre och visar förslaget. Org-scopat.
+   */
+  proposal: orgProcedure
+    .input(z.object({ matterId: matterIdSchema }))
+    .query(async ({ ctx, input }) => {
+      const matter = await ctx.dataStore.matters.findFirst({
+        where: { id: input.matterId, organizationId: ctx.orgId },
+      });
+      if (!matter) throw new TRPCError({ code: "NOT_FOUND", message: "Ärendet finns inte." });
+      const te = (await ctx.dataStore.timeEntries.findMany({
+        where: { matterId: input.matterId, frozenByBillingRunId: null },
+        orderBy: { date: "asc" },
+      })) as Array<{ id: string; description?: string | null; minutes: number; hourlyRate: number; billable: boolean }>;
+      const ex = (await ctx.dataStore.expenses.findMany({
+        where: { matterId: input.matterId, frozenByBillingRunId: null },
+        orderBy: { date: "asc" },
+      })) as Array<{ id: string; description?: string | null; amount: number; billable: boolean; kind?: ExpenseKind }>;
+      const priorAccontoSumOre = await sumPriorAccontos(ctx.dataStore.billingRuns, input.matterId);
+      return buildProposal(te, ex, priorAccontoSumOre);
+    }),
+
   createAcconto: orgProcedure
     .input(z.object({
       matterId: matterIdSchema,
@@ -108,7 +193,10 @@ export const billingRunRouter = router({
         await assertMatterInOrg(tx, input.matterId, ctx.orgId);
         const work = await fetchUnfrozenWork(tx, input.matterId);
         const value = workValueOre(work);
-        const proposedOre = Math.round((value * input.clientShareBips) / 10000);
+        // #397: dra av tidigare aconton i det FÖRESLAGNA beloppet —
+        // belopp = %-sats × upparbetat − Σ tidigare aconto-fakturor.
+        const priorAccontoSumOre = await sumPriorAccontos(tx.billingRuns, input.matterId);
+        const proposedOre = proposedAccontoOre(value, input.clientShareBips, priorAccontoSumOre);
         const invoice = await tx.invoices.create({
           data: {
             matterId: input.matterId, amount: input.amountOre,

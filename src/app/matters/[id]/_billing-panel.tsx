@@ -22,7 +22,7 @@ import type { AppRouter } from "@/lib/server/routers/_app";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { computeRadgivningsavgift } from "@/lib/shared/rattshjalp";
 import { BILLING_RUN_TYPE_LABELS, BILLING_RUN_STATUS_LABELS } from "@/lib/shared/schemas/enums";
-import { BillingDialog } from "./_billing-dialog";
+import { BillingDialog, type BillingMeta } from "./_billing-dialog";
 import { KostnadsrakningModal } from "./_kostnadsrakning-modal";
 import { VerdictDialog } from "./_verdict-dialog";
 
@@ -141,12 +141,21 @@ interface DialogsProps {
   onRefetch: () => void;
 }
 
+function useBillingMeta(matter: MatterContext): BillingMeta {
+  const org = orgProps(trpc.organization.getSettings.useQuery().data ?? undefined);
+  return {
+    matterNumber: matter.matterNumber, matterTitle: matter.title,
+    ...omitUndefined({ clientName: clientOf(matter) || undefined, organizationName: org.name, organizationOrgNumber: org.orgNumber }),
+  };
+}
+
 function BillingDialogs({ matterId, matter, rows, dialog, setDialog, verdictRunId, setVerdictRunId, onRefetch }: DialogsProps) {
   const pending = findPendingVerdict(rows);
+  const meta = useBillingMeta(matter);
   return (
     <>
       {dialog !== "NONE" && (
-        <BillingDialog matterId={matterId} type={dialog}
+        <BillingDialog matterId={matterId} type={dialog} meta={meta}
           existingAccontos={rows.filter((r) => r.type === "ACCONTO" && r.status === "SENT")}
           onClose={() => { setDialog("NONE"); onRefetch(); }} />
       )}
