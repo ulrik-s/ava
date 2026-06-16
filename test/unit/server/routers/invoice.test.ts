@@ -784,43 +784,32 @@ describe("invoice.createCredit", () => {
   });
 
   it("kastar BAD_REQUEST när fakturan redan är krediterad", async () => {
-    mockPrisma.invoice.findFirst.mockResolvedValue({
-      id: "inv-1",
-      invoiceType: "STANDARD",
-      status: "SENT",
-      amount: 1000,
-      creditNote: { id: "cn1" },
-      paymentPlan: null,
-    });
+    // getByIdInOrg → originalet; getCreditNoteFor ({creditedInvoiceId}) → kreditnota finns.
+    mockPrisma.invoice.findFirst.mockImplementation((args?: { where?: Record<string, unknown> }) =>
+      args?.where?.creditedInvoiceId
+        ? { id: "cn1" }
+        : { id: "inv-1", invoiceType: "STANDARD", status: "SENT", amount: 1000 });
     await expect(
       makeCaller().createCredit({ invoiceId: "inv-1" }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 
   it("kastar BAD_REQUEST när fakturan är CANCELLED", async () => {
-    mockPrisma.invoice.findFirst.mockResolvedValue({
-      id: "inv-1",
-      invoiceType: "STANDARD",
-      status: "CANCELLED",
-      amount: 1000,
-      creditNote: null,
-      paymentPlan: null,
-    });
+    // Ingen kreditnota → getCreditNoteFor passerar → CANCELLED-kollen nås.
+    mockPrisma.invoice.findFirst.mockImplementation((args?: { where?: Record<string, unknown> }) =>
+      args?.where?.creditedInvoiceId
+        ? null
+        : { id: "inv-1", invoiceType: "STANDARD", status: "CANCELLED", amount: 1000 });
     await expect(
       makeCaller().createCredit({ invoiceId: "inv-1" }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 
   it("skapar kreditfaktura med negativt belopp och annullerar originalet", async () => {
-    mockPrisma.invoice.findFirst.mockResolvedValue({
-      id: "inv-1",
-      matterId: "m1",
-      invoiceType: "STANDARD",
-      status: "SENT",
-      amount: 1000,
-      creditNote: null,
-      paymentPlan: null,
-    });
+    mockPrisma.invoice.findFirst.mockImplementation((args?: { where?: Record<string, unknown> }) =>
+      args?.where?.creditedInvoiceId || args?.where?.invoiceNumber
+        ? null
+        : { id: "inv-1", matterId: "m1", invoiceType: "STANDARD", status: "SENT", amount: 1000 });
     mockPrisma.invoice.create.mockResolvedValue({
       id: "credit-1",
       invoiceType: "CREDIT",
@@ -845,32 +834,27 @@ describe("invoice.createCredit", () => {
         }),
       }),
     );
-    expect(mockPrisma.invoice.update).toHaveBeenCalledWith({
-      where: { id: "inv-1" },
-      data: { status: "CANCELLED" },
-    });
+    // Repo.update bumpar version + updatedAt → matcha löst på status.
+    expect(mockPrisma.invoice.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "inv-1" }, data: expect.objectContaining({ status: "CANCELLED" }) }),
+    );
   });
 
   it("avbryter aktiv avbetalningsplan när originalet krediteras", async () => {
-    mockPrisma.invoice.findFirst.mockResolvedValue({
-      id: "inv-1",
-      matterId: "m1",
-      invoiceType: "STANDARD",
-      status: "INSTALLMENT_PLAN",
-      amount: 1000,
-      creditNote: null,
-      paymentPlan: { id: "pp1", status: "ACTIVE" },
-    });
+    mockPrisma.invoice.findFirst.mockImplementation((args?: { where?: Record<string, unknown> }) =>
+      args?.where?.creditedInvoiceId || args?.where?.invoiceNumber
+        ? null
+        : { id: "inv-1", matterId: "m1", invoiceType: "STANDARD", status: "INSTALLMENT_PLAN", amount: 1000 });
+    mockPrisma.paymentPlan.findFirst.mockResolvedValue({ id: "pp1", status: "ACTIVE" }); // getByInvoiceId
     mockPrisma.invoice.create.mockResolvedValue({ id: "credit-1" });
     mockPrisma.invoice.update.mockResolvedValue({});
     mockPrisma.paymentPlan.update.mockResolvedValue({});
 
     await makeCaller().createCredit({ invoiceId: "inv-1" });
 
-    expect(mockPrisma.paymentPlan.update).toHaveBeenCalledWith({
-      where: { id: "pp1" },
-      data: { status: "CANCELLED" },
-    });
+    expect(mockPrisma.paymentPlan.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "pp1" }, data: expect.objectContaining({ status: "CANCELLED" }) }),
+    );
   });
 });
 
@@ -893,10 +877,10 @@ describe("OCR-referens på kundfakturor (#182)", () => {
   });
 
   it("createCredit sätter INGEN ocrReference (krediter betalas inte med OCR)", async () => {
-    mockPrisma.invoice.findFirst.mockResolvedValue({
-      id: "inv-1", matterId: "m1", invoiceType: "STANDARD", status: "SENT",
-      amount: 1000, creditNote: null, paymentPlan: null,
-    });
+    mockPrisma.invoice.findFirst.mockImplementation((args?: { where?: Record<string, unknown> }) =>
+      args?.where?.creditedInvoiceId || args?.where?.invoiceNumber
+        ? null
+        : { id: "inv-1", matterId: "m1", invoiceType: "STANDARD", status: "SENT", amount: 1000 });
     mockPrisma.invoice.create.mockResolvedValue({ id: "credit-1", invoiceType: "CREDIT", amount: -1000 });
     mockPrisma.invoice.update.mockResolvedValue({});
 

@@ -352,12 +352,11 @@ export const invoiceRouter = router({
         notes: z.string().optional(),
       }),
     )
-    .mutation(async ({ ctx, input }) => {
-      return ctx.dataStore.transaction(async (tx) => {
-        const original = await tx.invoices.findFirst({
-          where: { id: input.invoiceId, matter: { organizationId: ctx.orgId } },
-          include: { creditNote: true, paymentPlan: true },
-        });
+    // Migrerad till repository-sömmen (ADR 0020). "Redan krediterad"-kollen via
+    // getCreditNoteFor; aktiv plan avbryts via paymentPlans; allt i transaktionen.
+    .mutation(({ ctx, input }) =>
+      ctx.repos.transaction(async (repos) => {
+        const original = await repos.invoices.getByIdInOrg(input.invoiceId, ctx.orgId);
         if (!original) throw new TRPCError({ code: "NOT_FOUND" });
         if (original.invoiceType === "CREDIT") {
           throw new TRPCError({
@@ -365,7 +364,7 @@ export const invoiceRouter = router({
             message: "Kan inte kreditera en kreditfaktura.",
           });
         }
-        if (original.creditNote) {
+        if (await repos.invoices.getCreditNoteFor(original.id)) {
           throw new TRPCError({
             code: "BAD_REQUEST",
             message: "Fakturan är redan krediterad.",
@@ -379,34 +378,27 @@ export const invoiceRouter = router({
         }
 
         // Om originalet har en aktiv avbetalningsplan: avbryt den
-        if (original.paymentPlan && original.paymentPlan.status === "ACTIVE") {
-          await tx.paymentPlans.update({
-            where: { id: original.paymentPlan.id },
-            data: { status: "CANCELLED" },
-          });
+        const plan = await repos.paymentPlans.getByInvoiceId(original.id);
+        if (plan && plan.status === "ACTIVE") {
+          await repos.paymentPlans.update(plan.id, { status: "CANCELLED" });
         }
 
-        const credit = await tx.invoices.create({
-          data: {
-            ...omitUndefined({ id: input.id, notes: input.notes }), // undefined → store genererar
-            matterId: original.matterId,
-            invoiceNumber: await nextInvoiceNumber(tx.invoices, ctx.orgId),
-            amount: -original.amount,
-            invoiceType: "CREDIT",
-            status: "SENT", // kreditfaktura är "färdig" direkt
-            invoiceDate: new Date(),
-            creditedInvoiceId: original.id,
-          },
-        });
+        const credit = await repos.invoices.create(omitUndefined({
+          id: input.id, // undefined → store genererar
+          notes: input.notes,
+          matterId: original.matterId,
+          invoiceNumber: await repos.invoices.nextInvoiceNumber(ctx.orgId),
+          amount: -original.amount,
+          invoiceType: "CREDIT",
+          status: "SENT", // kreditfaktura är "färdig" direkt
+          invoiceDate: new Date(),
+          creditedInvoiceId: original.id,
+        }) as Partial<Invoice>);
 
-        await tx.invoices.update({
-          where: { id: original.id },
-          data: { status: "CANCELLED" },
-        });
-
+        await repos.invoices.update(original.id, { status: "CANCELLED" });
         return credit;
-      });
-    }),
+      }),
+    ),
 
   recordPayment: orgProcedure
     .input(

@@ -180,6 +180,23 @@ describe("InvoiceRepository — in-memory", () => {
     expect(await repo.sumCreditNotesFor(finalId, "org-2")).toBe(0); // fel org
     expect(await repo.sumCreditNotesFor(uuidv7(), "org-1")).toBe(0); // inga kreditnotor
   });
+
+  it("getCreditNoteFor hittar kreditnotan för en faktura", async () => {
+    const mId = uuidv7();
+    const origId = uuidv7();
+    const creditId = uuidv7();
+    const store = new LocalStore({
+      matters: [{ id: mId, organizationId: "org-1", matterNumber: "2026-1", title: "T" }],
+      invoices: [
+        inv({ id: origId, matterId: mId, invoiceType: "STANDARD" }),
+        inv({ id: creditId, matterId: mId, invoiceType: "CREDIT", amount: -100, creditedInvoiceId: origId }),
+      ],
+      payments: [], writeOffs: [],
+    }, async () => {});
+    const repo = new InMemoryInvoiceRepository(store);
+    expect((await repo.getCreditNoteFor(origId))?.id).toBe(creditId);
+    expect(await repo.getCreditNoteFor(uuidv7())).toBeNull(); // ej krediterad
+  });
 });
 
 describe("InvoiceRepository — Drizzle (pglite)", () => {
@@ -331,5 +348,20 @@ describe("InvoiceRepository — Drizzle (pglite)", () => {
     const repo = new DrizzleInvoiceRepository(handle.db as unknown as AppDb);
     expect(await repo.sumCreditNotesFor(finalId, org)).toBe(50_000);
     expect(await repo.sumCreditNotesFor(finalId, uuidv7())).toBe(0); // fel org
+  });
+
+  it("getCreditNoteFor hittar kreditnotan (creditedInvoiceId)", async () => {
+    const db = handle.db;
+    const mId = uuidv7();
+    const origId = uuidv7();
+    const creditId = uuidv7();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const v = (o: Record<string, unknown>) => ({ version: 1, ...o }) as any;
+    await db.insert(matters).values(v({ id: mId, organizationId: uuidv7(), matterNumber: "2026-1", title: "T" }));
+    await db.insert(invoices).values(inv({ id: origId, matterId: mId, invoiceType: "STANDARD" }) as never);
+    await db.insert(invoices).values(inv({ id: creditId, matterId: mId, invoiceType: "CREDIT", amount: -100, creditedInvoiceId: origId }) as never);
+    const repo = new DrizzleInvoiceRepository(handle.db as unknown as AppDb);
+    expect((await repo.getCreditNoteFor(origId))?.id).toBe(creditId);
+    expect(await repo.getCreditNoteFor(uuidv7())).toBeNull();
   });
 });
