@@ -10,18 +10,31 @@
 
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import { canTransition } from "@/lib/shared/invoice-state-machine";
 import { dispatchChannelSchema, dispatchStatusSchema, type DispatchStatus } from "@/lib/shared/schemas/billing";
+import type { InvoiceStatus } from "@/lib/shared/schemas/enums";
 import { asId } from "@/lib/shared/schemas/ids";
+import type { IDataStore } from "../data-store/IDataStore";
 import { router, orgProcedure } from "../trpc";
 
-async function assertInvoiceInOrg(
-  ctx: { dataStore: { invoices: { findFirst: (a: unknown) => Promise<unknown> } }; orgId: string },
-  invoiceId: string,
-): Promise<void> {
-  const inv = await ctx.dataStore.invoices.findFirst({
+type DispatchCtx = { dataStore: IDataStore; orgId: string };
+
+/** Verifiera org-tillhörighet + returnera fakturans id/status. */
+async function assertInvoiceInOrg(ctx: DispatchCtx, invoiceId: string): Promise<{ id: string; status: string }> {
+  const inv = (await ctx.dataStore.invoices.findFirst({
     where: { id: invoiceId, matter: { organizationId: ctx.orgId } },
-  });
+  })) as { id: string; status: string } | null;
   if (!inv) throw new TRPCError({ code: "NOT_FOUND", message: "Fakturan finns inte i organisationen." });
+  return inv;
+}
+
+/**
+ * En köad/skickad faktura är inte längre ett utkast (#392). Flippa DRAFT → SENT
+ * via tillståndsmaskinen (#350); redan utställd faktura lämnas oförändrad.
+ */
+async function markSentIfDraft(ctx: DispatchCtx, inv: { id: string; status: string }): Promise<void> {
+  if (inv.status !== "DRAFT" || !canTransition("DRAFT", "SENT")) return;
+  await ctx.dataStore.invoices.update({ where: { id: inv.id }, data: { status: "SENT" satisfies InvoiceStatus } });
 }
 
 /** Tidsstämpelfältet som en statusövergång sätter (queued sätts vid skapande). */
@@ -59,9 +72,9 @@ export const invoiceDispatchRouter = router({
       recipient: z.string().min(1),
     }))
     .mutation(async ({ ctx, input }) => {
-      await assertInvoiceInOrg(ctx, input.invoiceId);
+      const inv = await assertInvoiceInOrg(ctx, input.invoiceId);
       const now = new Date();
-      return ctx.dataStore.invoiceDispatches.create({
+      const dispatch = await ctx.dataStore.invoiceDispatches.create({
         data: {
           invoiceId: asId<"InvoiceId">(input.invoiceId),
           channel: input.channel,
@@ -72,6 +85,9 @@ export const invoiceDispatchRouter = router({
           createdAt: now,
         },
       });
+      // Köad för automatiskt utskick → fakturan är inte längre ett utkast (#392).
+      await markSentIfDraft(ctx, inv);
+      return dispatch;
     }),
 
   /**
@@ -89,9 +105,9 @@ export const invoiceDispatchRouter = router({
       recipient: z.string().min(1),
     }))
     .mutation(async ({ ctx, input }) => {
-      await assertInvoiceInOrg(ctx, input.invoiceId);
+      const inv = await assertInvoiceInOrg(ctx, input.invoiceId);
       const now = new Date();
-      return ctx.dataStore.invoiceDispatches.create({
+      const dispatch = await ctx.dataStore.invoiceDispatches.create({
         data: {
           invoiceId: asId<"InvoiceId">(input.invoiceId),
           channel: input.channel,
@@ -103,6 +119,9 @@ export const invoiceDispatchRouter = router({
           createdAt: now,
         },
       });
+      // Manuellt skickad → fakturan är inte längre ett utkast (#392).
+      await markSentIfDraft(ctx, inv);
+      return dispatch;
     }),
 
   updateStatus: orgProcedure

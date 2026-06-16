@@ -28,11 +28,12 @@ interface Visibility {
 const TERMINAL_STATUS: ReadonlySet<string> = new Set(["PAID", "CANCELLED"]);
 
 /**
- * E-posta-knappen (#179): en utställd faktura (SENT/avbetalningsplan) eller en
- * icke-annullerad kreditfaktura kan skickas manuellt till klienten.
+ * Skicka-knappen (#179/#392): en faktura kan skickas i DRAFT (då blir den SENT),
+ * är utställd (SENT/avbetalningsplan → kan skickas om), eller är en icke-annullerad
+ * kreditfaktura. Modalen erbjuder automatiskt (köa → server) + manuellt utskick.
  */
-function canEmail(isCredit: boolean, status: string): boolean {
-  if (status === "SENT" || status === "INSTALLMENT_PLAN") return true;
+function canSend(isCredit: boolean, status: string): boolean {
+  if (status === "DRAFT" || status === "SENT" || status === "INSTALLMENT_PLAN") return true;
   return isCredit && status !== "CANCELLED";
 }
 
@@ -50,7 +51,7 @@ function computeVisibility(invoiceType: string, status: string, hasPlan: boolean
     // Avskrivning: utställd faktura med utestående kvar (även en plan-faktura
     // som klienten slutat betala) → räkna-en-gång (ADR 0007).
     writeOff: issuedActive && outstanding > 0,
-    send: canEmail(isCredit, status),
+    send: canSend(isCredit, status),
   };
 }
 
@@ -74,7 +75,7 @@ export function InvoiceActions({
       )}
       {v.send && (
         <button onClick={onShowSend} className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700">
-          E-posta faktura
+          Skicka faktura
         </button>
       )}
       {v.draft && (

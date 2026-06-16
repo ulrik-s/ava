@@ -9,6 +9,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { SendInvoiceModal } from "@/app/invoices/[id]/_send-invoice-modal";
 
 const recordMutate = vi.fn();
+const queueMutate = vi.fn();
 const composeMail = vi.fn(async () => true);
 const downloadBytes = vi.fn();
 const renderFakturaPdf = vi.fn(async () => new Uint8Array([1, 2, 3]));
@@ -18,6 +19,7 @@ vi.mock("@/lib/client/trpc", () => ({
   trpc: {
     invoiceDispatch: {
       recordManual: { useMutation: (opts: { onSuccess?: () => void }) => ({ mutate: (...a: unknown[]) => { recordMutate(...a); opts.onSuccess?.(); }, isPending: false, error: null }) },
+      queue: { useMutation: (opts: { onSuccess?: () => void }) => ({ mutate: (...a: unknown[]) => { queueMutate(...a); opts.onSuccess?.(); }, isPending: false, error: null }) },
     },
   },
 }));
@@ -46,11 +48,28 @@ beforeEach(() => {
 });
 
 describe("SendInvoiceModal", () => {
-  it("renderar rubrik + åtgärdsknappar", () => {
+  it("renderar rubrik + automatisk/manuell sektion", () => {
     render(<SendInvoiceModal {...baseProps} />);
-    expect(screen.getByRole("heading", { name: /E-posta faktura/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Skicka faktura/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Köa för automatiskt utskick/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Öppna i mailklient/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Ladda ner PDF/i })).toBeInTheDocument();
+  });
+
+  it("automatiskt: köar utskick (server) med e-postkanal + mottagare (#392)", async () => {
+    render(<SendInvoiceModal {...baseProps} />);
+    fireEvent.change(screen.getByPlaceholderText(/klient@/i), { target: { value: "k@x.se" } });
+    fireEvent.click(screen.getByRole("button", { name: /Köa för automatiskt utskick/i }));
+    await waitFor(() => expect(queueMutate).toHaveBeenCalled());
+    expect(queueMutate.mock.calls[0]![0]).toMatchObject({ invoiceId: "inv-1", channel: "email", recipient: "k@x.se" });
+    expect(baseProps.onRecorded).toHaveBeenCalled();
+  });
+
+  it("automatiskt utan e-post → fel, ingen köning", async () => {
+    render(<SendInvoiceModal {...baseProps} />);
+    fireEvent.click(screen.getByRole("button", { name: /Köa för automatiskt utskick/i }));
+    expect(await screen.findByText(/Ange mottagarens e-post/i)).toBeInTheDocument();
+    expect(queueMutate).not.toHaveBeenCalled();
   });
 
   it("nedladdning genererar PDF + laddar ner, sedan visas bekräftelse", async () => {

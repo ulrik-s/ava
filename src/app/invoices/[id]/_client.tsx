@@ -186,7 +186,12 @@ function InvoiceModals({ inv, ledger, s }: { inv: Inv; ledger: LedgerView; s: In
           invoiceDate={inv.invoiceDate}
           matterNumber={inv.matter.matterNumber}
           matterTitle={inv.matter.title}
-          onRecorded={() => { void s.utils.invoiceDispatch.list.invalidate({ invoiceId: inv.id }); }}
+          onRecorded={() => {
+            void s.utils.invoiceDispatch.list.invalidate({ invoiceId: inv.id });
+            // #392: utskick (auto/manuellt) flippar DRAFT→SENT → ladda om fakturan.
+            void s.utils.invoice.getById.invalidate({ id: inv.id });
+            void s.utils.invoice.list.invalidate();
+          }}
           onClose={() => s.setShowSend(false)}
         />
       )}
