@@ -18,6 +18,7 @@
  */
 
 import { computeBrottmalstaxa, computeTimkostnadsnorm, type TaxaLevel, type TaxaResult } from "./brottmalstaxa";
+import { radgivningTextRad } from "./rattshjalp";
 import { splitVat } from "./vat";
 
 export interface ExpenseInput {
@@ -38,6 +39,9 @@ export interface BuildInput {
     matterNumber: string;
     title: string;
     clientName?: string;
+    /** Rättshjälp (#383): klienten har betalat en rådgivningstimme separat →
+     *  visa transparens-textraden på kostnadsräkningen (inget belopp). */
+    radgivningPaid?: boolean;
   };
   defender: {
     name: string;
@@ -178,6 +182,9 @@ function buildKrTemplateContext(a: KrTemplateArgs): Record<string, unknown> {
     matterNumber: a.input.matter.matterNumber,
     matterTitle: a.input.matter.title,
     clientName: a.input.matter.clientName ?? "",
+    // #383: rådgivningstimmen redovisas som textrad (utan belopp) — ingår ej
+    // i domstolens kostnadsräkning, klienten har betalat den separat.
+    radgivningNotice: a.input.matter.radgivningPaid ? radgivningTextRad() : null,
     defenderName: a.input.defender.name,
     defenderEmail: a.input.defender.email ?? "",
     ...orgContext(a.input.organization),

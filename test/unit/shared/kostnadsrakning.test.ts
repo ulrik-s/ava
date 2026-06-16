@@ -146,3 +146,28 @@ describe("templateContext — formaterad data för Handlebars", () => {
     expect(lines[0]!.inclVatFormatted).toMatch(/450,00\s+kr/);
   });
 });
+
+describe("buildKostnadsrakningContext — rådgivningstimme (#383)", () => {
+  it("radgivningPaid=true → textrad i templateContext (utan belopp)", () => {
+    const r = buildKostnadsrakningContext({
+      ...baseInput,
+      matter: { ...baseInput.matter, radgivningPaid: true },
+    });
+    const notice = r.templateContext.radgivningNotice as string | null;
+    expect(notice).toMatch(/rådgivningstimme/i);
+    expect(notice).toMatch(/ingår ej/i);
+    expect(notice).not.toMatch(/kr|öre|\bSEK\b/i); // inget belopp domstolen ska betala
+  });
+
+  it("default (ej satt) → ingen textrad", () => {
+    const r = buildKostnadsrakningContext(baseInput);
+    expect(r.templateContext.radgivningNotice).toBeNull();
+  });
+
+  it("rådgivningstimmen påverkar inte arvode/totaler (dubbelräknas ej mot domstolen)", () => {
+    const withR = buildKostnadsrakningContext({ ...baseInput, matter: { ...baseInput.matter, radgivningPaid: true } });
+    const without = buildKostnadsrakningContext(baseInput);
+    expect(withR.templateContext.arvodeInclVat).toBe(without.templateContext.arvodeInclVat);
+    expect(withR.templateContext.totalInclVat).toBe(without.templateContext.totalInclVat);
+  });
+});

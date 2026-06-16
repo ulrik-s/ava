@@ -37,6 +37,15 @@ export function computeRadgivningsavgift(opts: { hasFTax?: boolean } = {}): Radg
   return { minutes: RADGIVNING_MINUTES, rateOrePerH: norm.rateOrePerH, beloppExclVatOre: norm.arbete };
 }
 
+/**
+ * Textraden om den klient-betalda rådgivningstimmen som ska synas på domstolens
+ * kostnadsräkning (#383): transparens, inget belopp domstolen ska betala.
+ */
+export function radgivningTextRad(): string {
+  return "Klienten har betalat en rådgivningstimme (1 tim) enligt rättshjälpstaxan separat. " +
+    "Ingår ej i denna kostnadsräkning.";
+}
+
 export interface MatterSettlementInput {
   /** Upparbetat arvode (debiterbar tid), öre. */
   arvodeOre: number;

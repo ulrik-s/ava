@@ -50,6 +50,9 @@ interface Props {
   initialHasFTax?: boolean | undefined;
   initialHufStart?: string | Date | null | undefined;
   initialIsTaxe?: boolean | undefined;
+  /** Rättshjälp (#383): klienten har betalat rådgivningstimmen separat →
+   *  text-rad på kostnadsräkningen. */
+  radgivningPaid?: boolean | undefined;
   onClose: () => void;
 }
 
@@ -179,7 +182,7 @@ function useKostnadsrakningModal(props: Props) {
   }, [hufStart]);
 
   const ctx = useMemo(() => buildKostnadsrakningContext({
-    matter: { matterNumber: props.matterNumber, title: props.matterTitle, clientName: props.clientName },
+    matter: { matterNumber: props.matterNumber, title: props.matterTitle, clientName: props.clientName, ...omitUndefined({ radgivningPaid: props.radgivningPaid }) },
     defender: {
       name: props.defenderName,
       ...omitUndefined({ email: props.defenderEmail }),

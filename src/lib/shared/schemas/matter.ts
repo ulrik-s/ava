@@ -70,6 +70,12 @@ export const matterSchema = z.object({
    * rättssalen — slut-tidpunkten triggas av "STOPPA NU".
    */
   taxaHufStart: optionalDateLike,
+  /**
+   * Rättshjälp (#349/#383): tidpunkt då klientens rådgivningstimme (1 tim
+   * enligt rättshjälpstaxan) registrerades som betald + fakturerad separat.
+   * Null = ej registrerad. Styr text-raden på domstolens kostnadsräkning.
+   */
+  radgivningBetaldAt: optionalDateLike,
 }).passthrough();
 
 export type Matter = z.infer<typeof matterSchema>;
