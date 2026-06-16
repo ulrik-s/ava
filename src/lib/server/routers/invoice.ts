@@ -31,6 +31,7 @@ import {
   type TimeEntryId,
   type ExpenseId,
 } from "@/lib/shared/schemas/ids";
+import type { Matter } from "@/lib/shared/schemas/matter";
 import { computeInvoiceLedger, deriveInvoiceStatus, invoicePartitionViolation } from "@/lib/shared/write-off-calc";
 import type { DataStoreTx } from "../data-store/IDataStore";
 import { emit } from "../events/emit";
@@ -248,35 +249,33 @@ export const invoiceRouter = router({
    */
   createRadgivning: orgProcedure
     .input(z.object({ matterId: matterIdSchema, hasFTax: z.boolean().optional() }))
-    .mutation(async ({ ctx, input }) => {
-      return ctx.dataStore.transaction(async (tx) => {
-        const matter = await tx.matters.findFirst({
-          where: { id: input.matterId, organizationId: ctx.orgId },
-        });
+    // Migrerad till repository-sömmen (ADR 0020): matters + invoices via typade
+    // repos i transaktionen (rör inga ännu omigrerade entiteter).
+    .mutation(({ ctx, input }) =>
+      ctx.repos.transaction(async (repos) => {
+        const matter = await repos.matters.getByIdInOrg(input.matterId, ctx.orgId);
         if (!matter) throw new TRPCError({ code: "NOT_FOUND" });
         if ((matter as { radgivningBetaldAt?: unknown }).radgivningBetaldAt) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Rådgivningstimmen är redan registrerad för detta ärende." });
         }
         const avgift = computeRadgivningsavgift({ ...omitUndefined({ hasFTax: input.hasFTax }) });
-        const invoiceNumber = await nextInvoiceNumber(tx.invoices, ctx.orgId);
-        const invoice = await tx.invoices.create({
-          data: {
-            matterId: input.matterId,
-            invoiceNumber,
-            ocrReference: ocrFromInvoiceNumber(invoiceNumber),
-            amount: avgift.beloppExclVatOre,
-            invoiceType: "STANDARD",
-            status: "DRAFT",
-            invoiceDate: new Date(),
-            dueDate: null,
-            notes: "Rådgivningstimme enligt rättshjälpstaxan (1 tim).",
-          },
-        });
-        await tx.matters.update({ where: { id: input.matterId }, data: { radgivningBetaldAt: new Date() } });
+        const invoiceNumber = await repos.invoices.nextInvoiceNumber(ctx.orgId);
+        const invoice = await repos.invoices.create({
+          matterId: input.matterId,
+          invoiceNumber,
+          ocrReference: ocrFromInvoiceNumber(invoiceNumber),
+          amount: avgift.beloppExclVatOre,
+          invoiceType: "STANDARD",
+          status: "DRAFT",
+          invoiceDate: new Date(),
+          dueDate: null,
+          notes: "Rådgivningstimme enligt rättshjälpstaxan (1 tim).",
+        } as Partial<Invoice>);
+        await repos.matters.update(input.matterId, { radgivningBetaldAt: new Date() } as Partial<Matter>);
         await emit.invoiceCreated(ctx, invoice);
         return { invoice, beloppExclVatOre: avgift.beloppExclVatOre };
-      });
-    }),
+      }),
+    ),
 
   /**
    * FINAL: summerar valda time entries + expenses, drar av valda acconto-
