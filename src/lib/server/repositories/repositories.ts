@@ -6,8 +6,10 @@
  */
 
 import type { InvoiceRepository } from "./invoice-repository";
+import type { PaymentPlanRepository } from "./payment-plan-repository";
 
 export interface Repositories {
   invoices: InvoiceRepository;
+  paymentPlans: PaymentPlanRepository;
   transaction<T>(fn: (tx: Repositories) => Promise<T>): Promise<T>;
 }

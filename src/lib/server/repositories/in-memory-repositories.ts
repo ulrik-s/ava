@@ -10,12 +10,14 @@
 
 import type { DataStoreTx, IDataStore } from "../data-store/IDataStore";
 import { InMemoryInvoiceRepository } from "./in-memory-invoice-repository";
+import { InMemoryPaymentPlanRepository } from "./in-memory-payment-plan-repository";
 import type { Repositories } from "./repositories";
 
 /** Repos-vy bunden till en transaktions-tx (reentrant transaction). */
 function reposForTx(tx: DataStoreTx): Repositories {
   const repos: Repositories = {
     invoices: new InMemoryInvoiceRepository(tx),
+    paymentPlans: new InMemoryPaymentPlanRepository(tx),
     transaction: (fn) => fn(repos),
   };
   return repos;
@@ -24,6 +26,7 @@ function reposForTx(tx: DataStoreTx): Repositories {
 export function buildInMemoryRepositories(dataStore: IDataStore): Repositories {
   return {
     invoices: new InMemoryInvoiceRepository(dataStore),
+    paymentPlans: new InMemoryPaymentPlanRepository(dataStore),
     transaction: (fn) => dataStore.transaction((tx) => fn(reposForTx(tx))),
   };
 }

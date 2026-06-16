@@ -510,17 +510,20 @@ describe("invoice.createPaymentPlan", () => {
 describe("invoice.cancelPaymentPlan", () => {
   it("sätter plan CANCELLED och invoice tillbaka till SENT", async () => {
     mockPrisma.paymentPlan.findFirst.mockResolvedValue({ id: "plan-1", invoiceId: "inv-1" });
+    // Repository-sömmens update läser nuvarande rad (version-bump) före skrivning.
+    mockPrisma.invoice.findFirst.mockResolvedValue({ id: "inv-1", status: "INSTALLMENT_PLAN" });
 
     await makeCaller().cancelPaymentPlan({ planId: "plan-1" });
 
-    expect(mockPrisma.paymentPlan.update).toHaveBeenCalledWith({
+    // objectContaining: repo:t lägger till version/updatedAt i data utöver status.
+    expect(mockPrisma.paymentPlan.update).toHaveBeenCalledWith(expect.objectContaining({
       where: { id: "plan-1" },
-      data: { status: "CANCELLED" },
-    });
-    expect(mockPrisma.invoice.update).toHaveBeenCalledWith({
+      data: expect.objectContaining({ status: "CANCELLED" }),
+    }));
+    expect(mockPrisma.invoice.update).toHaveBeenCalledWith(expect.objectContaining({
       where: { id: "inv-1" },
-      data: { status: "SENT" },
-    });
+      data: expect.objectContaining({ status: "SENT" }),
+    }));
   });
 
   it("NOT_FOUND om planen tillhör annan org", async () => {
