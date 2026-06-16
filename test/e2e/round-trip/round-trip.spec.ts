@@ -349,6 +349,17 @@ test("fakturering: tid → acconto → betalning landar i git-db:n", async ({ pa
 
 const POLL = { timeout: 60_000, intervals: [3_000, 3_000, 5_000, 5_000, 5_000, 10_000] };
 
+/**
+ * Längre poll-fönster (#216) för git-db-skrivningar som följer en HÅRD
+ * sid-navigering (t.ex. /users/new → router.push("/users")). Navigeringen
+ * remountar sync-providern och kan skjuta upp den debouncade push:en (10 s)
+ * bakom en pågående initial-clone-sync → push:en kan landa först efter > 60 s
+ * på en långsam CI-körning. Den fristående clone-poll:en är auktoritativ;
+ * vi ger den helt enkelt tillräckligt med tid (sync-pillen är opålitlig över
+ * navigeringen, jfr hypotes 1 i #216).
+ */
+const POLL_LONG = { timeout: 150_000, intervals: [3_000, 3_000, 5_000, 5_000, 10_000, 10_000, 15_000, 15_000, 20_000] };
+
 test("utlägg: + Nytt utlägg i UI:t → expenses i git-db:n", async ({ page }) => {
   const stamp = Date.now();
   const desc = `Utlägg ${stamp}`;
@@ -517,6 +528,11 @@ test("kontor: lägg till kontor i settings → offices i git-db:n", async ({ pag
 });
 
 test("användare: skapa via /users/new + inaktivera → .ava/users i git-db:n", async ({ page }) => {
+  // #216: detta flöde navigerar hårt (/users/new → /users) vilket kan skjuta
+  // upp den debouncade push:en förbi standard-poll:ens 60 s på långsam CI.
+  // Ge testet + bare-repo-poll:erna (POLL_LONG) gott om tid; happy path är
+  // fortfarande sekundsnabbt.
+  test.setTimeout(360_000);
   const stamp = Date.now();
   const email = `new-${stamp}@firma.local`;
   const name = `Ny Användare ${stamp}`;
@@ -538,9 +554,10 @@ test("användare: skapa via /users/new + inaktivera → .ava/users i git-db:n", 
   await page.waitForURL(/\/users\/?$/, { timeout: 15_000 });
   await expect(page.getByText(name)).toBeVisible({ timeout: 15_000 });
 
-  // Användarrow:n persisterad till .ava/users/<email>.json
+  // Användarrow:n persisterad till .ava/users/<email>.json. POLL_LONG: push:en
+  // kan dröja efter den hårda navigeringen (#216) — clone-poll:en är auktoritativ.
   await waitForGitDbPush(page);
-  await expect.poll(() => rowsInRepo(".ava/users").map((u) => String(u.email)), POLL).toContain(email);
+  await expect.poll(() => rowsInRepo(".ava/users").map((u) => String(u.email)), POLL_LONG).toContain(email);
 
   // Inaktivera användaren — confirm()-dialog accepteras automatiskt
   page.once("dialog", (d) => d.accept());
@@ -551,7 +568,7 @@ test("användare: skapa via /users/new + inaktivera → .ava/users i git-db:n", 
   await expect.poll(() => {
     const row = rowsInRepo(".ava/users").find((u) => String(u.email) === email);
     return row ? row.active : "(saknas)";
-  }, POLL).toBe(false);
+  }, POLL_LONG).toBe(false);
 });
 
 test("dokument: ladda upp fil på matter → documents/<id>.json + content-fil i git-db:n", async ({ page }) => {
