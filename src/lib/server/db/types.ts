@@ -4,7 +4,9 @@
  * så de inte kopplas till en specifik driver.
  */
 
+import type { ExtractTablesWithRelations } from "drizzle-orm";
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import type * as schema from "./schema";
 
-export type AppDb = PgDatabase<PgQueryResultHKT, typeof schema>;
+/** Tredje generic-parametern ger den typade `db.query`-ytan (RQB, relations). */
+export type AppDb = PgDatabase<PgQueryResultHKT, typeof schema, ExtractTablesWithRelations<typeof schema>>;

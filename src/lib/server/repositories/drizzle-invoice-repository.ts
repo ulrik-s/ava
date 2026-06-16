@@ -13,7 +13,7 @@ import { and, desc, eq, isNull } from "drizzle-orm";
 import type { Invoice, Payment, WriteOff } from "@/lib/shared/schemas/billing";
 import { invoices, matters, payments, writeOffs } from "../db/schema";
 import type { AppDb } from "../db/types";
-import type { InvoiceRepository, InvoiceWithLedger } from "./invoice-repository";
+import type { InvoiceRepository, InvoiceWithLedger, InvoiceWithRelations } from "./invoice-repository";
 
 export class DrizzleInvoiceRepository implements InvoiceRepository {
   constructor(
@@ -66,6 +66,26 @@ export class DrizzleInvoiceRepository implements InvoiceRepository {
       .set({ deletedAt: this.now(), version: nextVersion(current) } as never)
       .where(eq(invoices.id, id)).returning();
     return row as unknown as Invoice;
+  }
+
+  async getByIdWithRelations(id: string, organizationId: string): Promise<InvoiceWithRelations | null> {
+    const row = await this.db.query.invoices.findFirst({
+      where: eq(invoices.id, id),
+      with: {
+        matter: true,
+        payments: { with: { recordedBy: true }, orderBy: (p, { desc }) => [desc(p.paidAt)] },
+        writeOffs: { orderBy: (w, { desc }) => [desc(w.writtenOffAt)] },
+        paymentPlan: { with: { reminders: { orderBy: (r, { desc }) => [desc(r.sentAt)] } } },
+        timeEntries: true,
+        expenses: true,
+        documents: { orderBy: (d, { desc }) => [desc(d.createdAt)] },
+      },
+    });
+    // Org-scope via ärendet + mjuk-delete-filter (db.query saknar relations-where).
+    if (!row || row.deletedAt || (row.matter as { organizationId?: string } | null)?.organizationId !== organizationId) {
+      return null;
+    }
+    return row as unknown as InvoiceWithRelations;
   }
 
   async getByIdWithLedger(id: string): Promise<InvoiceWithLedger | null> {

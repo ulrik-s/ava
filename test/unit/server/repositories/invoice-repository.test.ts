@@ -6,7 +6,10 @@
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
-import { invoices, matters, payments } from "@/lib/server/db/schema";
+import {
+  invoices, matters, payments, writeOffs, paymentPlans, paymentPlanReminders,
+  timeEntries, expenses, documents, users,
+} from "@/lib/server/db/schema";
 import type { AppDb } from "@/lib/server/db/types";
 import { DrizzleInvoiceRepository } from "@/lib/server/repositories/drizzle-invoice-repository";
 import { InMemoryInvoiceRepository } from "@/lib/server/repositories/in-memory-invoice-repository";
@@ -71,6 +74,34 @@ describe("InvoiceRepository — in-memory", () => {
     expect(await repo.getByIdInOrg(invId, "org-1")).toMatchObject({ id: invId });
     expect(await repo.getByIdInOrg(invId, "org-2")).toBeNull(); // fel org
   });
+
+  it("getByIdWithRelations hämtar huvudrelationerna", async () => {
+    const userId = uuidv7();
+    const planId = uuidv7();
+    const store = new LocalStore({
+      matters: [{ id: matterId, organizationId: "org-1", matterNumber: "2026-1", title: "T" }],
+      users: [{ id: userId, name: "Anna" }],
+      invoices: [inv({ id: invId, matterId })],
+      payments: [{ id: uuidv7(), invoiceId: invId, amount: 400, recordedById: userId }],
+      writeOffs: [{ id: uuidv7(), invoiceId: invId, amount: 100 }],
+      paymentPlans: [{ id: planId, invoiceId: invId, status: "ACTIVE" }],
+      paymentPlanReminders: [{ id: uuidv7(), planId, dueMonth: "2026-06", type: "DUE" }],
+      timeEntries: [{ id: uuidv7(), invoiceId: invId, matterId, minutes: 60, billable: true, hourlyRate: 1000 }],
+      expenses: [{ id: uuidv7(), invoiceId: invId, matterId, amount: 50, billable: true }],
+      documents: [{ id: uuidv7(), invoiceId: invId, matterId, fileName: "f.pdf" }],
+    }, async () => {});
+    const repo = new InMemoryInvoiceRepository(store);
+    const full = await repo.getByIdWithRelations(invId, "org-1");
+    expect(full?.matter?.matterNumber).toBe("2026-1");
+    expect(full?.payments).toHaveLength(1);
+    expect(full?.payments[0]?.recordedBy?.name).toBe("Anna");
+    expect(full?.paymentPlan?.reminders).toHaveLength(1);
+    expect(full?.writeOffs).toHaveLength(1);
+    expect(full?.timeEntries).toHaveLength(1);
+    expect(full?.expenses).toHaveLength(1);
+    expect(full?.documents).toHaveLength(1);
+    expect(await repo.getByIdWithRelations(invId, "org-2")).toBeNull(); // fel org
+  });
 });
 
 describe("InvoiceRepository — Drizzle (pglite)", () => {
@@ -108,5 +139,38 @@ describe("InvoiceRepository — Drizzle (pglite)", () => {
     const repo = new DrizzleInvoiceRepository(handle.db as unknown as AppDb);
     expect(await repo.getByIdInOrg(id, org)).toMatchObject({ id });
     expect(await repo.getByIdInOrg(id, uuidv7())).toBeNull();
+  });
+
+  it("getByIdWithRelations hämtar huvudrelationerna (with-query)", async () => {
+    const db = handle.db;
+    const id = uuidv7();
+    const mId = uuidv7();
+    const org = uuidv7();
+    const userId = uuidv7();
+    const planId = uuidv7();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const v = (o: Record<string, unknown>) => ({ version: 1, ...o }) as any;
+    await db.insert(matters).values(v({ id: mId, organizationId: org, matterNumber: "2026-1", title: "T" }));
+    await db.insert(users).values(v({ id: userId, organizationId: org, email: "a@x", name: "Anna" }));
+    await db.insert(invoices).values(inv({ id, matterId: mId }) as never);
+    await db.insert(payments).values(v({ id: uuidv7(), invoiceId: id, amount: 400, paidAt: new Date(), recordedById: userId }));
+    await db.insert(writeOffs).values(v({ id: uuidv7(), invoiceId: id, amount: 100, writtenOffAt: new Date(), recordedById: userId }));
+    await db.insert(paymentPlans).values(v({ id: planId, invoiceId: id, monthlyAmount: 100, dayOfMonth: 15, startDate: new Date(), status: "ACTIVE" }));
+    await db.insert(paymentPlanReminders).values(v({ id: uuidv7(), planId, dueMonth: "2026-06", type: "DUE", sentAt: new Date() }));
+    await db.insert(timeEntries).values(v({ id: uuidv7(), userId, matterId: mId, invoiceId: id, date: new Date(), minutes: 60, description: "x", hourlyRate: 1000 }));
+    await db.insert(expenses).values(v({ id: uuidv7(), userId, matterId: mId, invoiceId: id, date: new Date(), amount: 50, description: "x" }));
+    await db.insert(documents).values(v({ id: uuidv7(), matterId: mId, invoiceId: id, fileName: "f.pdf", mimeType: "application/pdf", sizeBytes: 1, storagePath: "p", uploadedById: userId }));
+
+    const repo = new DrizzleInvoiceRepository(handle.db as unknown as AppDb);
+    const full = await repo.getByIdWithRelations(id, org);
+    expect(full?.matter?.matterNumber).toBe("2026-1");
+    expect(full?.payments).toHaveLength(1);
+    expect(full?.payments[0]?.recordedBy?.name).toBe("Anna");
+    expect(full?.paymentPlan?.reminders).toHaveLength(1);
+    expect(full?.writeOffs).toHaveLength(1);
+    expect(full?.timeEntries).toHaveLength(1);
+    expect(full?.expenses).toHaveLength(1);
+    expect(full?.documents).toHaveLength(1);
+    expect(await repo.getByIdWithRelations(id, uuidv7())).toBeNull(); // fel org
   });
 });
