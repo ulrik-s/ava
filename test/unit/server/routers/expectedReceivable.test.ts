@@ -74,3 +74,36 @@ describe("expectedReceivable.cancel", () => {
     expect(c.status).toBe("CANCELLED");
   });
 });
+
+describe("expectedReceivable.candidates (#175 camt-matchning)", () => {
+  it("returnerar bara PENDING + berikar med ärende-/målnummer", async () => {
+    const caller = makeCaller();
+    // Sätt målnummer på ärendet (matchningsnyckeln).
+    await caller.matter.update({ id: "m-1", courtCaseNumber: "B 1234-26" });
+    const pending = await caller.expectedReceivable.create({ matterId: "m-1", description: "Öppen", expectedAmount: 50_000 });
+    const settledOne = await caller.expectedReceivable.create({ matterId: "m-1", description: "Avprickad", expectedAmount: 30_000 });
+    await caller.expectedReceivable.settle({ id: String(settledOne.id), settledAmount: 30_000 });
+
+    const cands = await caller.expectedReceivable.candidates();
+    expect(cands).toHaveLength(1); // bara den PENDING
+    expect(cands[0]!.id).toBe(String(pending.id));
+    expect(cands[0]!.matterNumber).toBe("2026-0001");
+    expect(cands[0]!.courtCaseNumber).toBe("B 1234-26");
+    expect(cands[0]!.expectedAmount).toBe(50_000);
+  });
+});
+
+describe("expectedReceivable.update", () => {
+  it("uppdaterar memo-fält (beskrivning + begärt belopp)", async () => {
+    const caller = makeCaller();
+    const r = await caller.expectedReceivable.create({ matterId: "m-1", description: "Gammal", expectedAmount: 10_000 });
+    const u = await caller.expectedReceivable.update({ id: String(r.id), description: "Ny", expectedAmount: 12_000 });
+    expect(u.description).toBe("Ny");
+    expect(u.expectedAmount).toBe(12_000);
+  });
+
+  it("NOT_FOUND för fordran i annan org", async () => {
+    const caller = makeCaller();
+    await expect(caller.expectedReceivable.update({ id: "nope", description: "X" })).rejects.toThrow();
+  });
+});
