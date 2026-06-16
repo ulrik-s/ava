@@ -10,6 +10,7 @@
 
 import type { DataStoreTx, IDataStore } from "../data-store/IDataStore";
 import { InMemoryAccontoDeductionRepository } from "./in-memory-acconto-deduction-repository";
+import { InMemoryContactRepository } from "./in-memory-contact-repository";
 import { InMemoryExpenseRepository } from "./in-memory-expense-repository";
 import { InMemoryInvoiceRepository } from "./in-memory-invoice-repository";
 import { InMemoryMatterRepository } from "./in-memory-matter-repository";
@@ -30,6 +31,7 @@ function reposForTx(tx: DataStoreTx): Repositories {
     timeEntries: new InMemoryTimeEntryRepository(tx),
     expenses: new InMemoryExpenseRepository(tx),
     accontoDeductions: new InMemoryAccontoDeductionRepository(tx),
+    contacts: new InMemoryContactRepository(tx),
     transaction: (fn) => fn(repos),
   };
   return repos;
@@ -45,6 +47,7 @@ export function buildInMemoryRepositories(dataStore: IDataStore): Repositories {
     timeEntries: new InMemoryTimeEntryRepository(dataStore),
     expenses: new InMemoryExpenseRepository(dataStore),
     accontoDeductions: new InMemoryAccontoDeductionRepository(dataStore),
+    contacts: new InMemoryContactRepository(dataStore),
     transaction: (fn) => dataStore.transaction((tx) => fn(reposForTx(tx))),
   };
 }
