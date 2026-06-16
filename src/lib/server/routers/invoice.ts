@@ -20,7 +20,7 @@ import { canTransition, transitionErrorMessage } from "@/lib/shared/invoice-stat
 import { ocrFromInvoiceNumber } from "@/lib/shared/ocr-reference";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { computeRadgivningsavgift } from "@/lib/shared/rattshjalp";
-import type { Invoice, Payment, WriteOff } from "@/lib/shared/schemas/billing";
+import type { Invoice, Payment, PaymentPlan, WriteOff } from "@/lib/shared/schemas/billing";
 import type { InvoiceStatus } from "@/lib/shared/schemas/enums";
 import {
   asId,
@@ -484,14 +484,15 @@ export const invoiceRouter = router({
         notes: z.string().optional(),
       }),
     )
-    .mutation(async ({ ctx, input }) => {
-      return ctx.dataStore.transaction(async (tx) => {
-        const inv = await tx.invoices.findFirst({
-          where: { id: input.invoiceId, matter: { organizationId: ctx.orgId } },
-          include: { paymentPlan: true },
-        });
+    // Migrerad till repository-sömmen (ADR 0020). Planen läses via
+    // getByInvoiceId; en gammal CANCELLED-plan hårdraderas (invoiceId @unique →
+    // medvetet ADR 0017-undantag, se Repository.hardDelete).
+    .mutation(({ ctx, input }) =>
+      ctx.repos.transaction(async (repos) => {
+        const inv = await repos.invoices.getByIdInOrg(input.invoiceId, ctx.orgId);
         if (!inv) throw new TRPCError({ code: "NOT_FOUND" });
-        if (inv.paymentPlan && inv.paymentPlan.status === "ACTIVE") {
+        const existing = await repos.paymentPlans.getByInvoiceId(inv.id);
+        if (existing && existing.status === "ACTIVE") {
           throw new TRPCError({
             code: "BAD_REQUEST",
             message: "En aktiv avbetalningsplan finns redan för denna faktura.",
@@ -506,28 +507,24 @@ export const invoiceRouter = router({
 
         // Om en gammal CANCELLED-plan finns, ta bort den först — `invoiceId`
         // är @unique på PaymentPlan så vi kan inte ha två rader.
-        if (inv.paymentPlan && inv.paymentPlan.status !== "ACTIVE") {
-          await tx.paymentPlans.delete({ where: { id: inv.paymentPlan.id } });
+        if (existing && existing.status !== "ACTIVE") {
+          await repos.paymentPlans.hardDelete(existing.id);
         }
 
-        const plan = await tx.paymentPlans.create({
-          data: {
-            ...omitUndefined({ id: input.id, notes: input.notes }), // undefined → store genererar
-            invoiceId: inv.id,
-            monthlyAmount: input.monthlyAmount,
-            dayOfMonth: input.dayOfMonth,
-            startDate: new Date(input.startDate),
-            // Explicit (Prisma schema-default appliceras inte av in-memory-store:n).
-            status: "ACTIVE",
-          },
-        });
-        await tx.invoices.update({
-          where: { id: inv.id },
-          data: { status: "INSTALLMENT_PLAN" },
-        });
+        const plan = await repos.paymentPlans.create(omitUndefined({
+          id: input.id, // undefined → store genererar
+          notes: input.notes,
+          invoiceId: inv.id,
+          monthlyAmount: input.monthlyAmount,
+          dayOfMonth: input.dayOfMonth,
+          startDate: new Date(input.startDate),
+          // Explicit (Prisma schema-default appliceras inte av in-memory-store:n).
+          status: "ACTIVE",
+        }) as Partial<PaymentPlan>);
+        await repos.invoices.update(inv.id, { status: "INSTALLMENT_PLAN" });
         return plan;
-      });
-    }),
+      }),
+    ),
 
   cancelPaymentPlan: orgProcedure
     .input(z.object({ planId: z.string() }))

@@ -30,4 +30,11 @@ export interface Repository<Row extends RowBase> {
   update(id: string, patch: Partial<Row>): Promise<Row>;
   /** Mjuk delete (sätter `deletedAt`, bumpar `version`) — tombstone, ADR 0017. */
   softDelete(id: string): Promise<Row>;
+  /**
+   * Hård delete (tar bort raden helt). MEDVETEN ADR 0017-undantag: en hård
+   * delete kan inte reconcile:as/replikeras (raden bara försvinner). Använd
+   * BARA där en unik-constraint kräver det (t.ex. PaymentPlan.invoiceId @unique
+   * när en gammal CANCELLED-plan måste ge plats åt en ny). Default = softDelete.
+   */
+  hardDelete(id: string): Promise<void>;
 }

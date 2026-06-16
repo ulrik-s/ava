@@ -38,6 +38,13 @@ async function assertContract(repo: PaymentPlanRepository): Promise<void> {
 
   await repo.softDelete(planId);
   expect(await repo.getById(planId)).toBeNull();
+
+  // hardDelete (ADR 0017-undantag, används av createPaymentPlan): raden försvinner helt.
+  const hardId = uuidv7();
+  await repo.create(plan({ id: hardId }));
+  expect(await repo.getById(hardId)).toMatchObject({ id: hardId });
+  await repo.hardDelete(hardId);
+  expect(await repo.getById(hardId)).toBeNull();
 }
 
 describe("PaymentPlanRepository — in-memory", () => {
