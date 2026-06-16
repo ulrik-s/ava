@@ -11,7 +11,7 @@
 
 import { and, desc, eq, isNull } from "drizzle-orm";
 import type { Invoice, Payment, WriteOff } from "@/lib/shared/schemas/billing";
-import { invoices, payments, writeOffs } from "../db/schema";
+import { invoices, matters, payments, writeOffs } from "../db/schema";
 import type { AppDb } from "../db/types";
 import type { InvoiceRepository, InvoiceWithLedger } from "./invoice-repository";
 
@@ -32,6 +32,18 @@ export class DrizzleInvoiceRepository implements InvoiceRepository {
     const row = await this.getById(id);
     if (!row) throw new Error(`Ingen faktura med id ${id}`);
     return row;
+  }
+
+  async getByIdInOrg(id: string, organizationId: string): Promise<Invoice | null> {
+    const rows = await this.db
+      .select({ inv: invoices }).from(invoices)
+      .innerJoin(matters, eq(invoices.matterId, matters.id))
+      .where(and(
+        eq(invoices.id, id),
+        eq(matters.organizationId, organizationId),
+        isNull(invoices.deletedAt),
+      )).limit(1);
+    return (rows[0]?.inv as unknown as Invoice | undefined) ?? null;
   }
 
   async create(data: Partial<Invoice>): Promise<Invoice> {

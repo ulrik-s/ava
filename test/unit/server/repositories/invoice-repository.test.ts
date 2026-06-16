@@ -6,7 +6,7 @@
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
-import { invoices, payments } from "@/lib/server/db/schema";
+import { invoices, matters, payments } from "@/lib/server/db/schema";
 import type { AppDb } from "@/lib/server/db/types";
 import { DrizzleInvoiceRepository } from "@/lib/server/repositories/drizzle-invoice-repository";
 import { InMemoryInvoiceRepository } from "@/lib/server/repositories/in-memory-invoice-repository";
@@ -60,6 +60,17 @@ describe("InvoiceRepository — in-memory", () => {
     expect(ledger?.writeOffs).toHaveLength(1);
     expect(ledger?.payments[0]!.amount).toBe(5_000);
   });
+
+  it("getByIdInOrg org-scopar via ärendet", async () => {
+    const store = new LocalStore({
+      matters: [{ id: matterId, organizationId: "org-1" }],
+      invoices: [inv({ id: invId, matterId })],
+      payments: [], writeOffs: [],
+    }, async () => {});
+    const repo = new InMemoryInvoiceRepository(store);
+    expect(await repo.getByIdInOrg(invId, "org-1")).toMatchObject({ id: invId });
+    expect(await repo.getByIdInOrg(invId, "org-2")).toBeNull(); // fel org
+  });
 });
 
 describe("InvoiceRepository — Drizzle (pglite)", () => {
@@ -83,5 +94,19 @@ describe("InvoiceRepository — Drizzle (pglite)", () => {
     const ledger = await new DrizzleInvoiceRepository(handle.db as unknown as AppDb).getByIdWithLedger(id);
     expect(ledger?.payments).toHaveLength(1);
     expect(ledger?.payments[0]!.amount).toBe(7_500);
+  });
+
+  it("getByIdInOrg org-scopar via join mot matters", async () => {
+    const db = handle.db;
+    const id = uuidv7();
+    const mId = uuidv7();
+    const org = uuidv7(); // uuid-kolumn → måste vara giltig UUID
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await db.insert(matters).values({ id: mId, organizationId: org, matterNumber: "2026-1", title: "T", version: 1 } as any);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await db.insert(invoices).values(inv({ id, matterId: mId }) as any);
+    const repo = new DrizzleInvoiceRepository(handle.db as unknown as AppDb);
+    expect(await repo.getByIdInOrg(id, org)).toMatchObject({ id });
+    expect(await repo.getByIdInOrg(id, uuidv7())).toBeNull();
   });
 });

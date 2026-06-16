@@ -17,6 +17,13 @@ export class InMemoryInvoiceRepository extends InMemoryRepository<Invoice> imple
     super(store.invoices as unknown as Delegate, now ?? (() => new Date()));
   }
 
+  async getByIdInOrg(id: string, organizationId: string): Promise<Invoice | null> {
+    // Samma relations-filter som routern använde mot DemoDataStore (org via ärende).
+    const row = (await (this.store.invoices as unknown as Delegate)
+      .findFirst({ where: { id, matter: { organizationId } } })) as Invoice | null;
+    return row && !(row as { deletedAt?: unknown }).deletedAt ? row : null;
+  }
+
   async getByIdWithLedger(id: string): Promise<InvoiceWithLedger | null> {
     const invoice = await this.getById(id);
     if (!invoice) return null;
