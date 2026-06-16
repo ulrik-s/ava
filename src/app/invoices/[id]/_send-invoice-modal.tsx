@@ -64,8 +64,10 @@ interface SendInvoiceState {
   note: string | null;
   error: string | null;
   isPending: boolean;
+  queuePending: boolean;
   onEmail: () => void;
   onDownload: () => void;
+  onQueue: () => void;
   confirmSent: () => void;
 }
 
@@ -82,6 +84,18 @@ function useSendInvoice(props: SendInvoiceModalProps): SendInvoiceState {
     onSuccess: () => { props.onRecorded(); props.onClose(); },
     onError: (e) => setError(e.message),
   });
+  // Automatiskt utskick (#392): köa → server-runtime-workern skickar via SMTP.
+  const queue = trpc.invoiceDispatch.queue.useMutation({
+    onSuccess: () => { props.onRecorded(); props.onClose(); },
+    onError: (e) => setError(e.message),
+  });
+
+  const onQueue = (): void => {
+    const trimmed = recipient.trim();
+    if (!trimmed.includes("@")) { setError("Ange mottagarens e-post för automatiskt utskick."); return; }
+    setError(null);
+    queue.mutate({ invoiceId: props.invoiceId, channel: "email", recipient: trimmed });
+  };
 
   const run = async (fn: () => Promise<string>): Promise<void> => {
     setBusy(true);
@@ -126,7 +140,11 @@ function useSendInvoice(props: SendInvoiceModalProps): SendInvoiceState {
     });
   };
 
-  return { recipient, setRecipient, prepared, busy, note, error, isPending: record.isPending, onEmail, onDownload, confirmSent };
+  return {
+    recipient, setRecipient, prepared, busy, note, error,
+    isPending: record.isPending, queuePending: queue.isPending,
+    onEmail, onDownload, onQueue, confirmSent,
+  };
 }
 
 export function SendInvoiceModal(props: SendInvoiceModalProps) {
@@ -137,7 +155,7 @@ export function SendInvoiceModal(props: SendInvoiceModalProps) {
         <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
           <h2 className="text-base sm:text-lg font-bold text-gray-900 flex items-center gap-2">
             <Mail size={18} className="text-blue-600" />
-            E-posta faktura {props.invoiceNumber ?? ""}
+            Skicka faktura {props.invoiceNumber ?? ""}
           </h2>
           <button onClick={props.onClose} aria-label="Stäng" className="p-2 hover:bg-gray-100 rounded">
             <X size={18} />
@@ -155,46 +173,85 @@ export function SendInvoiceModal(props: SendInvoiceModalProps) {
               className="mt-1 w-full rounded border border-gray-300 px-3 py-1.5 text-sm"
             />
             <span className="mt-1 block text-xs text-gray-400">
-              Förifylls i mailklienten. Mailet skickas från din egen e-post — ingen server inblandad.
+              Används för både automatiskt och manuellt utskick.
             </span>
           </label>
 
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={s.onEmail}
-              disabled={s.busy || s.isPending}
-              className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5"
-            >
-              <Mail size={15} /> Öppna i mailklient
-            </button>
-            <button
-              onClick={s.onDownload}
-              disabled={s.busy || s.isPending}
-              className="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 flex items-center gap-1.5"
-            >
-              <Download size={15} /> Ladda ner PDF
-            </button>
-          </div>
+          <AutoSendSection s={s} />
+          <ManualSendSection s={s} />
 
           {s.note && <p className="text-sm text-gray-600 bg-gray-50 border border-gray-200 rounded p-2">{s.note}</p>}
           {s.error && <p className="text-sm text-red-600">{s.error}</p>}
 
-          {s.prepared && (
-            <div className="border-t pt-3">
-              <p className="text-sm text-gray-700 mb-2">
-                Har du skickat fakturan? Markera den som skickad så registreras utskicket i AVA.
-              </p>
-              <button
-                onClick={s.confirmSent}
-                disabled={s.isPending}
-                className="px-3 py-1.5 text-sm bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
-              >
-                {s.isPending ? "Registrerar…" : "Markera som skickad"}
-              </button>
-            </div>
-          )}
+          <ConfirmSentBlock s={s} />
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Automatiskt utskick: köa → server-runtime skickar via SMTP (#392). */
+function AutoSendSection({ s }: { s: SendInvoiceState }) {
+  return (
+    <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
+      <p className="text-sm font-medium text-blue-900 mb-1">Automatiskt utskick</p>
+      <p className="text-xs text-blue-800 mb-2">
+        Köa fakturan — servern skickar den via e-post (kräver konfigurerad SMTP).
+      </p>
+      <button
+        onClick={s.onQueue}
+        disabled={s.busy || s.queuePending || s.isPending}
+        className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5"
+      >
+        <Mail size={15} /> {s.queuePending ? "Köar…" : "Köa för automatiskt utskick"}
+      </button>
+    </div>
+  );
+}
+
+/** Manuellt utskick: advokaten skickar via egen mailklient (helper) / nedladdning. */
+function ManualSendSection({ s }: { s: SendInvoiceState }) {
+  return (
+    <div className="rounded-lg border border-gray-200 p-3">
+      <p className="text-sm font-medium text-gray-900 mb-1">Manuellt utskick</p>
+      <p className="text-xs text-gray-500 mb-2">
+        Skicka från din egen e-post via helper-appen, eller ladda ner PDF:en och bifoga själv.
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <button
+          onClick={s.onEmail}
+          disabled={s.busy || s.isPending}
+          className="px-3 py-1.5 text-sm bg-gray-800 text-white rounded hover:bg-gray-900 disabled:opacity-50 flex items-center gap-1.5"
+        >
+          <Mail size={15} /> Öppna i mailklient
+        </button>
+        <button
+          onClick={s.onDownload}
+          disabled={s.busy || s.isPending}
+          className="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 flex items-center gap-1.5"
+        >
+          <Download size={15} /> Ladda ner PDF
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** "Markera som skickad" efter att man förberett ett manuellt utskick. */
+function ConfirmSentBlock({ s }: { s: SendInvoiceState }) {
+  if (!s.prepared) return null;
+  return (
+    <div className="border-t pt-3">
+      <p className="text-sm text-gray-700 mb-2">
+        Har du skickat fakturan? Markera den som skickad så registreras utskicket i AVA.
+      </p>
+      <button
+        onClick={s.confirmSent}
+        disabled={s.isPending}
+        className="px-3 py-1.5 text-sm bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+      >
+        {s.isPending ? "Registrerar…" : "Markera som skickad"}
+      </button>
     </div>
   );
 }

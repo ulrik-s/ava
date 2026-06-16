@@ -17,6 +17,7 @@ function makeCaller() {
     users: [{ id: "u-1", organizationId: "org-1", email: "a@x", name: "Anna", role: "ADMIN" }],
     invoices: [
       { id: "inv-1", matterId: "m-1", amount: 12_500, status: "SENT", invoiceType: "STANDARD", invoiceDate: new Date(), createdAt: new Date() },
+      { id: "inv-draft", matterId: "m-1", amount: 9_000, status: "DRAFT", invoiceType: "STANDARD", invoiceDate: new Date(), createdAt: new Date() },
       { id: "inv-foreign", matterId: "m-2", amount: 5_000, status: "SENT", invoiceType: "STANDARD", invoiceDate: new Date(), createdAt: new Date() },
     ],
   }, async () => {});
@@ -73,6 +74,29 @@ describe("invoiceDispatch.recordManual (#179)", () => {
     await expect(
       caller.invoiceDispatch.recordManual({ invoiceId: "inv-foreign", channel: "manual", recipient: "x" }),
     ).rejects.toThrow();
+  });
+});
+
+describe("skickning flippar DRAFT → SENT (#392)", () => {
+  it("queue på en DRAFT-faktura → fakturan blir SENT", async () => {
+    const { caller } = makeCaller();
+    await caller.invoiceDispatch.queue({ invoiceId: "inv-draft", channel: "email", recipient: "k@x.se" });
+    const inv = await caller.invoice.getById({ id: "inv-draft" });
+    expect(inv.status).toBe("SENT");
+  });
+
+  it("recordManual på en DRAFT-faktura → fakturan blir SENT", async () => {
+    const { caller } = makeCaller();
+    await caller.invoiceDispatch.recordManual({ invoiceId: "inv-draft", channel: "manual", recipient: "Manuellt" });
+    const inv = await caller.invoice.getById({ id: "inv-draft" });
+    expect(inv.status).toBe("SENT");
+  });
+
+  it("redan SENT lämnas oförändrad (ingen otillåten övergång)", async () => {
+    const { caller } = makeCaller();
+    await caller.invoiceDispatch.queue({ invoiceId: "inv-1", channel: "email", recipient: "k@x.se" });
+    const inv = await caller.invoice.getById({ id: "inv-1" });
+    expect(inv.status).toBe("SENT");
   });
 });
 
