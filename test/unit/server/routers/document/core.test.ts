@@ -19,6 +19,7 @@ const mockPrisma = {
   document: {
     findMany: vi.fn(),
     findFirst: vi.fn(),
+    findUniqueOrThrow: vi.fn(),
     count: vi.fn(),
     delete: vi.fn(),
     update: vi.fn(),
@@ -177,6 +178,79 @@ describe("document.analyze", () => {
     const res = await makeCaller().analyze({ documentId: "d1" });
     expect(res).toEqual({ ok: true });
     expect(mockPorts.documentAnalyzer.analyze).toHaveBeenCalledWith("d1");
+  });
+
+  it("sväljer ett analys-fel (fire-and-forget .catch) utan att kasta", async () => {
+    mockPrisma.document.findFirst.mockResolvedValue({ id: "d1", matterId: "m1" });
+    mockPorts.documentAnalyzer.analyze.mockRejectedValue(new Error("analys-krasch"));
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const res = await makeCaller().analyze({ documentId: "d1" });
+    expect(res).toEqual({ ok: true });
+    await new Promise((r) => setTimeout(r, 0)); // låt .catch:en köra
+    expect(errSpy).toHaveBeenCalled();
+    errSpy.mockRestore();
+  });
+});
+
+describe("document.listDocumentTypes", () => {
+  it("räknar unika documentType:er, hoppar null, sorterar på sv", async () => {
+    mockPrisma.document.findMany.mockResolvedValue([
+      { documentType: "Faktura" },
+      { documentType: "Avtal" },
+      { documentType: "Avtal" },
+      { documentType: null },
+      { documentType: "Ärende" },
+    ]);
+    const res = await makeCaller().listDocumentTypes();
+    expect(res).toEqual([
+      { type: "Avtal", count: 2 },
+      { type: "Faktura", count: 1 },
+      { type: "Ärende", count: 1 },
+    ]);
+  });
+
+  it("tom lista när inga dokument", async () => {
+    mockPrisma.document.findMany.mockResolvedValue([]);
+    expect(await makeCaller().listDocumentTypes()).toEqual([]);
+  });
+});
+
+describe("document.markExternallyEdited", () => {
+  it("bumpar version + updatedAt + sizeBytes efter access-check", async () => {
+    mockPrisma.document.findFirst.mockResolvedValue({ id: "d1", matterId: "m1" });
+    mockPrisma.document.findUniqueOrThrow.mockResolvedValue({ id: "d1", version: 2 });
+    mockPrisma.document.update.mockResolvedValue({ id: "d1", version: 3 });
+
+    await makeCaller().markExternallyEdited({
+      id: "d1", saves: 2, sessionStartedAt: "2026-06-16T08:00:00Z", sizeBytes: 4096,
+    });
+
+    const arg = mockPrisma.document.update.mock.calls[0]![0] as { where: unknown; data: Record<string, unknown> };
+    expect(arg.where).toEqual({ id: "d1" });
+    expect(arg.data.version).toBe(3);
+    expect(arg.data.updatedAt).toBeInstanceOf(Date);
+    expect(arg.data.sizeBytes).toBe(4096);
+    expect(arg.data.fileSize).toBe(4096);
+  });
+
+  it("defaultar version till 1→2 när raden saknar version", async () => {
+    mockPrisma.document.findFirst.mockResolvedValue({ id: "d1", matterId: "m1" });
+    mockPrisma.document.findUniqueOrThrow.mockResolvedValue({ id: "d1" });
+    mockPrisma.document.update.mockResolvedValue({ id: "d1" });
+
+    await makeCaller().markExternallyEdited({ id: "d1", saves: 1, sessionStartedAt: new Date() });
+    const arg = mockPrisma.document.update.mock.calls[0]![0] as { data: Record<string, unknown> };
+    expect(arg.data.version).toBe(2);
+    expect(arg.data.sizeBytes).toBeUndefined(); // utelämnad → ej satt
+  });
+
+  it("vägrar mot dokument i annan org", async () => {
+    mockPrisma.document.findFirst.mockResolvedValue(null);
+    await expect(
+      makeCaller("org-b").markExternallyEdited({ id: "d1", saves: 1, sessionStartedAt: new Date() }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(mockPrisma.document.update).not.toHaveBeenCalled();
   });
 });
 
