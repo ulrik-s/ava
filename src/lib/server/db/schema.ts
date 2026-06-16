@@ -1,15 +1,21 @@
 /**
- * Drizzle-schema för Postgres-backenden (ADR 0019, #408) — INKREMENT 1:
- * kärn-identitet + ärende (organizations, offices, users, contacts, matters,
- * matterContacts) + den globala `change_log` som driver delta-sync (ADR 0017).
+ * Drizzle-schema för Postgres-backenden (ADR 0019, #408) — alla entiteter:
+ * kärn-identitet + ärende, billing (faktura/tid/utlägg/betalning/plan/run/…),
+ * dokument, kalender/task, tjänsteanteckning, preferenser, mallar, jävssök, samt
+ * den globala `change_log` som driver delta-sync (ADR 0017).
  *
  * Speglar zod-schemana i `src/lib/shared/schemas/` (zod = sanningskälla, ADR 0019).
- * Enum-fält lagras som `text` (samma strängvärden som zod-enums). Resterande
- * entiteter (faktura, tid, utlägg, kalender, …) följer i #408 inkrement 2.
+ * Enum-fält lagras som `text` (samma strängvärden som zod-enums). Monetära öre-
+ * belopp + sizeBytes är `bigint` (mode:number) för att undvika int4-overflow.
+ * Reconcile-konventionerna (version/updatedAt/deletedAt) gäller ALLA tabeller,
+ * även de vars zod-schema saknar dem (zod `.passthrough()` tolererar vid läsning).
  */
 
-import { bigserial, index, integer, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { bigint, bigserial, index, integer, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { baseColumns, boolDefault, orgScopedColumns } from "./columns";
+
+/** Monetärt öre-belopp (bigint → ingen int4-overflow för stora fakturor). */
+const ore = (name: string) => bigint(name, { mode: "number" });
 
 export const organizations = pgTable("organizations", {
   ...baseColumns,
@@ -112,3 +118,270 @@ export const changeLog = pgTable("change_log", {
   op: text("op").notNull(),
   at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index("change_log_org_seq_idx").on(t.organizationId, t.seq)]);
+
+// ─── Billing (scopar via matter/invoice — ingen egen organization_id) ──────
+
+export const timeEntries = pgTable("time_entries", {
+  ...baseColumns,
+  userId: uuid("user_id").notNull(),
+  matterId: uuid("matter_id").notNull(),
+  date: timestamp("date", { withTimezone: true }).notNull(),
+  minutes: integer("minutes").notNull(),
+  description: text("description").notNull(),
+  hourlyRate: integer("hourly_rate").notNull(),
+  billable: boolDefault("billable", true),
+  invoiceId: uuid("invoice_id"),
+  frozenAt: timestamp("frozen_at", { withTimezone: true }),
+  frozenByBillingRunId: uuid("frozen_by_billing_run_id"),
+}, (t) => [index("time_entries_matter_idx").on(t.matterId)]);
+
+export const expenses = pgTable("expenses", {
+  ...baseColumns,
+  userId: uuid("user_id").notNull(),
+  matterId: uuid("matter_id").notNull(),
+  date: timestamp("date", { withTimezone: true }).notNull(),
+  amount: ore("amount").notNull(),
+  description: text("description").notNull(),
+  billable: boolDefault("billable", true),
+  invoiceId: uuid("invoice_id"),
+  vatRate: integer("vat_rate").notNull().default(2500),
+  vatIncluded: boolDefault("vat_included", true),
+  kind: text("kind").notNull().default("EXPENSE"),
+  frozenAt: timestamp("frozen_at", { withTimezone: true }),
+  frozenByBillingRunId: uuid("frozen_by_billing_run_id"),
+}, (t) => [index("expenses_matter_idx").on(t.matterId)]);
+
+export const invoices = pgTable("invoices", {
+  ...baseColumns,
+  matterId: uuid("matter_id").notNull(),
+  amount: ore("amount").notNull(),
+  status: text("status").notNull().default("DRAFT"),
+  invoiceType: text("invoice_type").notNull().default("STANDARD"),
+  invoiceNumber: text("invoice_number"),
+  ocrReference: text("ocr_reference"),
+  fortnoxId: text("fortnox_id"),
+  invoiceDate: timestamp("invoice_date", { withTimezone: true }).notNull(),
+  dueDate: timestamp("due_date", { withTimezone: true }),
+  notes: text("notes"),
+  creditedInvoiceId: uuid("credited_invoice_id"),
+}, (t) => [index("invoices_matter_idx").on(t.matterId)]);
+
+export const payments = pgTable("payments", {
+  ...baseColumns,
+  invoiceId: uuid("invoice_id").notNull(),
+  amount: ore("amount").notNull(),
+  paidAt: timestamp("paid_at", { withTimezone: true }).notNull(),
+  note: text("note"),
+  reference: text("reference"),
+  recordedById: uuid("recorded_by_id").notNull(),
+}, (t) => [index("payments_invoice_idx").on(t.invoiceId)]);
+
+export const writeOffs = pgTable("write_offs", {
+  ...baseColumns,
+  invoiceId: uuid("invoice_id").notNull(),
+  amount: ore("amount").notNull(),
+  writtenOffAt: timestamp("written_off_at", { withTimezone: true }).notNull(),
+  reason: text("reason"),
+  recordedById: uuid("recorded_by_id").notNull(),
+}, (t) => [index("write_offs_invoice_idx").on(t.invoiceId)]);
+
+export const invoiceDispatches = pgTable("invoice_dispatches", {
+  ...baseColumns,
+  invoiceId: uuid("invoice_id").notNull(),
+  channel: text("channel").notNull(),
+  recipient: text("recipient").notNull(),
+  status: text("status").notNull().default("queued"),
+  queuedAt: timestamp("queued_at", { withTimezone: true }).notNull(),
+  sentAt: timestamp("sent_at", { withTimezone: true }),
+  deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+  failedAt: timestamp("failed_at", { withTimezone: true }),
+  messageId: text("message_id"),
+  error: text("error"),
+  recordedById: uuid("recorded_by_id").notNull(),
+}, (t) => [index("invoice_dispatches_invoice_idx").on(t.invoiceId)]);
+
+export const paymentPlans = pgTable("payment_plans", {
+  ...baseColumns,
+  invoiceId: uuid("invoice_id").notNull(),
+  monthlyAmount: ore("monthly_amount").notNull(),
+  dayOfMonth: integer("day_of_month").notNull(),
+  startDate: timestamp("start_date", { withTimezone: true }).notNull(),
+  status: text("status").notNull().default("ACTIVE"),
+  notes: text("notes"),
+}, (t) => [index("payment_plans_invoice_idx").on(t.invoiceId)]);
+
+export const paymentPlanReminders = pgTable("payment_plan_reminders", {
+  ...baseColumns,
+  planId: uuid("plan_id").notNull(),
+  dueMonth: text("due_month").notNull(),
+  type: text("type").notNull(),
+  sentAt: timestamp("sent_at", { withTimezone: true }).notNull(),
+}, (t) => [index("payment_plan_reminders_plan_idx").on(t.planId)]);
+
+export const accontoDeductions = pgTable("acconto_deductions", {
+  ...baseColumns,
+  finalInvoiceId: uuid("final_invoice_id").notNull(),
+  accontoInvoiceId: uuid("acconto_invoice_id").notNull(),
+});
+
+export const billingRuns = pgTable("billing_runs", {
+  ...baseColumns,
+  matterId: uuid("matter_id").notNull(),
+  type: text("type").notNull(),
+  recipient: text("recipient").notNull(),
+  status: text("status").notNull().default("DRAFT"),
+  workValueOreAtRun: ore("work_value_ore_at_run").notNull(),
+  clientShareBips: integer("client_share_bips"),
+  proposedAmountOre: ore("proposed_amount_ore").notNull(),
+  amountOre: ore("amount_ore").notNull(),
+  prutningOre: ore("prutning_ore"),
+  invoiceId: uuid("invoice_id"),
+  deductedBillingRunIds: jsonb("deducted_billing_run_ids").notNull().default([]),
+  periodFrom: timestamp("period_from", { withTimezone: true }),
+  periodTo: timestamp("period_to", { withTimezone: true }),
+  notes: text("notes"),
+}, (t) => [index("billing_runs_matter_idx").on(t.matterId)]);
+
+export const expectedReceivables = pgTable("expected_receivables", {
+  ...orgScopedColumns,
+  matterId: uuid("matter_id").notNull(),
+  description: text("description").notNull(),
+  expectedAmount: ore("expected_amount").notNull(),
+  status: text("status").notNull().default("PENDING"),
+  settledAmount: ore("settled_amount"),
+  settledAt: timestamp("settled_at", { withTimezone: true }),
+  paymentReference: text("payment_reference"),
+  recordedById: uuid("recorded_by_id").notNull(),
+}, (t) => [index("expected_receivables_matter_idx").on(t.matterId)]);
+
+// ─── Dokument ──────────────────────────────────────────────────────────────
+
+export const documentFolders = pgTable("document_folders", {
+  ...baseColumns,
+  name: text("name").notNull(),
+  matterId: uuid("matter_id").notNull(),
+  parentId: uuid("parent_id"),
+}, (t) => [index("document_folders_matter_idx").on(t.matterId)]);
+
+export const documents = pgTable("documents", {
+  ...baseColumns,
+  matterId: uuid("matter_id").notNull(),
+  folderId: uuid("folder_id"),
+  fileName: text("file_name").notNull(),
+  mimeType: text("mime_type").notNull(),
+  sizeBytes: bigint("size_bytes", { mode: "number" }).notNull(),
+  storagePath: text("storage_path").notNull(),
+  uploadedById: uuid("uploaded_by_id").notNull(),
+  title: text("title"),
+  documentType: text("document_type"),
+  summary: text("summary"),
+  analyzedAt: timestamp("analyzed_at", { withTimezone: true }),
+  analysisStatus: text("analysis_status"),
+  analysisModel: text("analysis_model"),
+  analysisError: text("analysis_error"),
+}, (t) => [index("documents_matter_idx").on(t.matterId)]);
+
+export const documentAnalysisSuggestions = pgTable("document_analysis_suggestions", {
+  ...baseColumns,
+  documentId: uuid("document_id").notNull(),
+  name: text("name").notNull(),
+  role: text("role").notNull(),
+  contactType: text("contact_type").notNull(),
+  email: text("email"),
+  phone: text("phone"),
+  orgNumber: text("org_number"),
+  personalNumber: text("personal_number"),
+  notes: text("notes"),
+  status: text("status").notNull().default("PENDING"),
+  acceptedContactId: uuid("accepted_contact_id"),
+}, (t) => [index("doc_analysis_suggestions_doc_idx").on(t.documentId)]);
+
+export const matterEventSuggestions = pgTable("matter_event_suggestions", {
+  ...baseColumns,
+  documentId: uuid("document_id").notNull(),
+  title: text("title").notNull(),
+  description: text("description"),
+  eventType: text("event_type"),
+  startAt: timestamp("start_at", { withTimezone: true }).notNull(),
+  endAt: timestamp("end_at", { withTimezone: true }),
+  allDay: boolDefault("all_day", false),
+  location: text("location"),
+  status: text("status").notNull().default("PENDING"),
+}, (t) => [index("matter_event_suggestions_doc_idx").on(t.documentId)]);
+
+// ─── Kalender / Task ─────────────────────────────────────────────────────────
+
+export const calendarEvents = pgTable("calendar_events", {
+  ...orgScopedColumns,
+  userId: uuid("user_id").notNull(),
+  kind: text("kind").notNull().default("appointment"),
+  title: text("title").notNull(),
+  description: text("description"),
+  location: text("location"),
+  startAt: timestamp("start_at", { withTimezone: true }).notNull(),
+  endAt: timestamp("end_at", { withTimezone: true }),
+  allDay: boolDefault("all_day", false),
+  matterId: uuid("matter_id"),
+  visibility: text("visibility").notNull().default("normal"),
+  mirrorToOutlook: boolDefault("mirror_to_outlook", false),
+  outlookEventId: text("outlook_event_id"),
+  outlookCalendarId: text("outlook_calendar_id"),
+  mirrorStatus: text("mirror_status"),
+  mirrorError: text("mirror_error"),
+  mirrorLastSyncedAt: timestamp("mirror_last_synced_at", { withTimezone: true }),
+}, (t) => [index("calendar_events_user_idx").on(t.userId)]);
+
+export const tasks = pgTable("tasks", {
+  ...orgScopedColumns,
+  userId: uuid("user_id").notNull(),
+  title: text("title").notNull(),
+  description: text("description"),
+  status: text("status").notNull().default("TODO"),
+  priority: text("priority").notNull().default("MEDIUM"),
+  dueAt: timestamp("due_at", { withTimezone: true }),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  matterId: uuid("matter_id"),
+}, (t) => [index("tasks_user_idx").on(t.userId)]);
+
+// ─── Tjänsteanteckning / Preferenser / Mallar / Jävssök ──────────────────────
+
+export const serviceNotes = pgTable("service_notes", {
+  ...orgScopedColumns,
+  matterId: uuid("matter_id").notNull(),
+  authorId: uuid("author_id").notNull(),
+  date: text("date").notNull(),
+  time: text("time").notNull(),
+  text: text("text").notNull(),
+}, (t) => [index("service_notes_matter_idx").on(t.matterId)]);
+
+export const userPreferences = pgTable("user_preferences", {
+  ...baseColumns,
+  userId: uuid("user_id").notNull(),
+  organizationId: uuid("organization_id"),
+  key: text("key").notNull(),
+  prefs: jsonb("prefs").notNull(),
+}, (t) => [index("user_preferences_user_idx").on(t.userId)]);
+
+export const orgPreferences = pgTable("org_preferences", {
+  ...orgScopedColumns,
+  key: text("key").notNull(),
+  prefs: jsonb("prefs").notNull(),
+  createdById: uuid("created_by_id"),
+});
+
+export const documentTemplates = pgTable("document_templates", {
+  ...orgScopedColumns,
+  name: text("name").notNull(),
+  description: text("description"),
+  category: text("category"),
+  content: text("content").notNull(),
+  createdById: uuid("created_by_id").notNull(),
+});
+
+export const conflictChecks = pgTable("conflict_checks", {
+  ...baseColumns,
+  searchTerm: text("search_term").notNull(),
+  searchType: text("search_type").notNull(),
+  results: jsonb("results").notNull().default([]),
+  checkedById: uuid("checked_by_id").notNull(),
+});

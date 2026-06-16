@@ -1,41 +1,66 @@
 /**
- * Drizzle-schema (#408) — verifierar reconcile-konventionerna (ADR 0017/0019):
- * varje muterbar tabell har id/createdAt/updatedAt/version/deletedAt, org-scopade
- * har organizationId, och change_log har sin delta-sync-form.
+ * Drizzle-schema (#408) — verifierar reconcile-konventionerna (ADR 0017/0019)
+ * över ALLA entiteter: id/createdAt/updatedAt/version/deletedAt, org-scope där
+ * zod har det, och change_log:s delta-sync-form.
  */
 
 import { getTableColumns } from "drizzle-orm";
 import { describe, it, expect } from "vitest-compat";
-import {
-  organizations, offices, users, contacts, matters, matterContacts, changeLog,
-} from "@/lib/server/db/schema";
+import * as schema from "@/lib/server/db/schema";
 
 const baseCols = ["id", "createdAt", "updatedAt", "version", "deletedAt"];
-const tables = { organizations, offices, users, contacts, matters, matterContacts };
 
-describe("Drizzle-schema — bas-konventioner", () => {
-  for (const [name, table] of Object.entries(tables)) {
-    it(`${name} har bas-kolumnerna ${baseCols.join("/")}`, () => {
-      const cols = Object.keys(getTableColumns(table));
+// Alla muterbara entitets-tabeller (change_log undantaget — egen form).
+const entityTables = Object.entries(schema).filter(
+  ([name, t]) => name !== "changeLog" && t && typeof t === "object" && "id" in getTableColumnsSafe(t),
+);
+
+function getTableColumnsSafe(t: unknown): Record<string, unknown> {
+  try {
+    return getTableColumns(t as Parameters<typeof getTableColumns>[0]);
+  } catch {
+    return {};
+  }
+}
+
+const ORG_SCOPED = ["offices", "users", "contacts", "matters", "expectedReceivables",
+  "calendarEvents", "tasks", "serviceNotes", "orgPreferences", "documentTemplates"];
+
+describe("Drizzle-schema — bas-konventioner (alla entiteter)", () => {
+  it(`täcker ${entityTables.length} entitets-tabeller`, () => {
+    expect(entityTables.length).toBeGreaterThanOrEqual(28);
+  });
+
+  for (const [name, table] of entityTables) {
+    it(`${name} har ${baseCols.join("/")}`, () => {
+      const cols = Object.keys(getTableColumns(table as Parameters<typeof getTableColumns>[0]));
       for (const c of baseCols) expect(cols).toContain(c);
     });
   }
+});
 
-  it("org-scopade tabeller har organizationId; organizations + matterContacts har det inte", () => {
-    for (const t of [offices, users, contacts, matters]) {
-      expect(Object.keys(getTableColumns(t))).toContain("organizationId");
+describe("Drizzle-schema — org-scope", () => {
+  it("org-scopade tabeller har organizationId", () => {
+    for (const name of ORG_SCOPED) {
+      const t = (schema as Record<string, unknown>)[name];
+      expect(Object.keys(getTableColumns(t as Parameters<typeof getTableColumns>[0]))).toContain("organizationId");
     }
-    // organizations ÄR org:en (ingen själv-referens); matterContacts scopar via matter.
-    expect(Object.keys(getTableColumns(organizations))).not.toContain("organizationId");
-    const mc = Object.keys(getTableColumns(matterContacts));
-    expect(mc).toContain("matterId");
-    expect(mc).not.toContain("organizationId");
+  });
+
+  it("organizations har INTE organizationId (är org:en själv)", () => {
+    expect(Object.keys(getTableColumns(schema.organizations))).not.toContain("organizationId");
+  });
+
+  it("billing-entiteter scopar via parent (ingen egen organizationId)", () => {
+    for (const t of [schema.timeEntries, schema.expenses, schema.invoices, schema.payments, schema.billingRuns]) {
+      expect(Object.keys(getTableColumns(t))).not.toContain("organizationId");
+    }
   });
 });
 
 describe("change_log — delta-sync-form", () => {
   it("har seq/organizationId/entity/rowId/version/op/at", () => {
-    const cols = Object.keys(getTableColumns(changeLog));
+    const cols = Object.keys(getTableColumns(schema.changeLog));
     for (const c of ["seq", "organizationId", "entity", "rowId", "version", "op", "at"]) {
       expect(cols).toContain(c);
     }
