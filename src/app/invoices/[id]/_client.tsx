@@ -6,7 +6,7 @@
  */
 
 import type { inferRouterOutputs } from "@trpc/server";
-import { useState } from "react";
+import { type ComponentProps, useState } from "react";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { useRouteId } from "@/lib/client/demo/use-route-id";
 import { trpc } from "@/lib/client/trpc";
@@ -149,7 +149,7 @@ function InvoiceSections({ inv, ledger, onCancelPlan }: { inv: Inv; ledger: Ledg
       <CreditBanners inv={inv} />
       {inv.paymentPlan && <PaymentPlanCard plan={inv.paymentPlan} onCancel={onCancelPlan} />}
       <FinalInvoiceExtras inv={inv} ledger={ledger} />
-      <PaymentsTable payments={inv.payments} paidSum={ledger.paidSum} />
+      <PaymentsTable payments={inv.payments as unknown as ComponentProps<typeof PaymentsTable>["payments"]} paidSum={ledger.paidSum} />
       <DispatchHistory invoiceId={inv.id} />
       {ledger.writeOffs.length > 0 && <WriteOffsCard writeOffs={ledger.writeOffs} />}
     </>

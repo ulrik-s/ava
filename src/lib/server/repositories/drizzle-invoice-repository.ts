@@ -11,9 +11,9 @@
 
 import { and, desc, eq, isNull } from "drizzle-orm";
 import type { Invoice, Payment, WriteOff } from "@/lib/shared/schemas/billing";
-import { invoices, matters, payments, writeOffs } from "../db/schema";
+import { accontoDeductions, invoices, matters, payments, writeOffs } from "../db/schema";
 import type { AppDb } from "../db/types";
-import type { InvoiceRepository, InvoiceWithLedger, InvoiceWithRelations } from "./invoice-repository";
+import type { InvoiceFull, InvoiceRepository, InvoiceWithLedger, InvoiceWithRelations } from "./invoice-repository";
 
 export class DrizzleInvoiceRepository implements InvoiceRepository {
   constructor(
@@ -66,6 +66,36 @@ export class DrizzleInvoiceRepository implements InvoiceRepository {
       .set({ deletedAt: this.now(), version: nextVersion(current) } as never)
       .where(eq(invoices.id, id)).returning();
     return row as unknown as Invoice;
+  }
+
+  /** Bar faktura-rad utan org/delete-filter (för self-ref-uppslag). */
+  private async rawInvoice(id: string | null | undefined): Promise<Invoice | null> {
+    if (!id) return null;
+    const rows = await this.db.select().from(invoices).where(eq(invoices.id, id)).limit(1);
+    return (rows[0] as unknown as Invoice | undefined) ?? null;
+  }
+
+  async getByIdFull(id: string, organizationId: string): Promise<InvoiceFull | null> {
+    const base = await this.getByIdWithRelations(id, organizationId);
+    if (!base) return null;
+    // Self-ref/dubbel-FK via sekundär-queries (relations() täcker dem inte).
+    const deductions = await this.db.select().from(accontoDeductions).where(eq(accontoDeductions.finalInvoiceId, id));
+    const usages = await this.db.select().from(accontoDeductions).where(eq(accontoDeductions.accontoInvoiceId, id));
+    const accontoDeductionsFull = await Promise.all(
+      deductions.map(async (d) => ({ ...d, accontoInvoice: await this.rawInvoice((d as { accontoInvoiceId: string }).accontoInvoiceId) })),
+    );
+    const deductedOnFinals = await Promise.all(
+      usages.map(async (d) => ({ ...d, finalInvoice: await this.rawInvoice((d as { finalInvoiceId: string }).finalInvoiceId) })),
+    );
+    const creditedInvoice = await this.rawInvoice((base as { creditedInvoiceId?: string | null }).creditedInvoiceId);
+    const creditNoteRows = await this.db.select().from(invoices).where(eq(invoices.creditedInvoiceId, id)).limit(1);
+    return {
+      ...base,
+      accontoDeductions: accontoDeductionsFull,
+      deductedOnFinals,
+      creditedInvoice,
+      creditNote: (creditNoteRows[0] as unknown as Invoice | undefined) ?? null,
+    } as unknown as InvoiceFull;
   }
 
   async getByIdWithRelations(id: string, organizationId: string): Promise<InvoiceWithRelations | null> {

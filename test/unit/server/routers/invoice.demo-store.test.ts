@@ -13,6 +13,7 @@
 import { describe, it, expect, vi } from "vitest-compat";
 import { DemoDataStore, type DemoSource } from "@/lib/server/data-store/DemoDataStore";
 import type { MutationEvent } from "@/lib/server/data-store/in-memory/writable-delegate";
+import { buildInMemoryRepositories } from "@/lib/server/repositories/in-memory-repositories";
 import { invoiceRouter } from "@/lib/server/routers/invoice";
 
 function setup(overrides?: Partial<DemoSource>) {
@@ -96,6 +97,7 @@ describe("invoiceRouter mot riktig DemoDataStore", () => {
     const caller = invoiceRouter.createCaller({
       user: { id: "u1", email: "a@b.c", name: "A", role: "LAWYER", organizationId: "o1" },
       dataStore: ds,
+      repos: buildInMemoryRepositories(ds),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
 
@@ -132,6 +134,7 @@ describe("invoiceRouter mot riktig DemoDataStore", () => {
     const call = (org: string) => invoiceRouter.createCaller({
       user: { id: "u1", email: "a@b.c", name: "A", role: "LAWYER", organizationId: org },
       dataStore: ds,
+      repos: buildInMemoryRepositories(ds),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
 
@@ -155,6 +158,7 @@ describe("invoiceRouter mot riktig DemoDataStore", () => {
     const caller = invoiceRouter.createCaller({
       user: { id: "u1", email: "a@b.c", name: "A", role: "LAWYER", organizationId: "o1" },
       dataStore: ds,
+      repos: buildInMemoryRepositories(ds),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
 
