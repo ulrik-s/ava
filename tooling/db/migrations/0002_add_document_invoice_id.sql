@@ -1,0 +1,1 @@
+ALTER TABLE "documents" ADD COLUMN "invoice_id" uuid;

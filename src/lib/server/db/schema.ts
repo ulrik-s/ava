@@ -11,6 +11,7 @@
  * även de vars zod-schema saknar dem (zod `.passthrough()` tolererar vid läsning).
  */
 
+import { relations } from "drizzle-orm";
 import { bigint, bigserial, index, integer, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { baseColumns, boolDefault, orgScopedColumns } from "./columns";
 
@@ -266,6 +267,8 @@ export const documentFolders = pgTable("document_folders", {
 export const documents = pgTable("documents", {
   ...baseColumns,
   matterId: uuid("matter_id").notNull(),
+  /** Valfri faktura-koppling (#397: genererade faktura-dokument). */
+  invoiceId: uuid("invoice_id"),
   folderId: uuid("folder_id"),
   fileName: text("file_name").notNull(),
   mimeType: text("mime_type").notNull(),
@@ -385,3 +388,51 @@ export const conflictChecks = pgTable("conflict_checks", {
   results: jsonb("results").notNull().default([]),
   checkedById: uuid("checked_by_id").notNull(),
 });
+
+// ─── Relations (ADR 0020) — driver Drizzles relationella `with`-queries för
+//     repository-läsningar (getByIdWith…/list). Genererar ingen SQL (app-nivå).
+//     Self-ref/dubbel-FK (accontoDeductions, credited/creditNote) hanteras via
+//     explicita sekundär-queries i repona (undviker relationName-komplexitet här).
+
+export const invoicesRelations = relations(invoices, ({ one, many }) => ({
+  matter: one(matters, { fields: [invoices.matterId], references: [matters.id] }),
+  payments: many(payments),
+  writeOffs: many(writeOffs),
+  paymentPlan: one(paymentPlans),
+  timeEntries: many(timeEntries),
+  expenses: many(expenses),
+  documents: many(documents),
+}));
+
+export const paymentsRelations = relations(payments, ({ one }) => ({
+  invoice: one(invoices, { fields: [payments.invoiceId], references: [invoices.id] }),
+  recordedBy: one(users, { fields: [payments.recordedById], references: [users.id] }),
+}));
+
+export const writeOffsRelations = relations(writeOffs, ({ one }) => ({
+  invoice: one(invoices, { fields: [writeOffs.invoiceId], references: [invoices.id] }),
+}));
+
+export const paymentPlansRelations = relations(paymentPlans, ({ one, many }) => ({
+  invoice: one(invoices, { fields: [paymentPlans.invoiceId], references: [invoices.id] }),
+  reminders: many(paymentPlanReminders),
+}));
+
+export const paymentPlanRemindersRelations = relations(paymentPlanReminders, ({ one }) => ({
+  plan: one(paymentPlans, { fields: [paymentPlanReminders.planId], references: [paymentPlans.id] }),
+}));
+
+export const timeEntriesRelations = relations(timeEntries, ({ one }) => ({
+  invoice: one(invoices, { fields: [timeEntries.invoiceId], references: [invoices.id] }),
+  matter: one(matters, { fields: [timeEntries.matterId], references: [matters.id] }),
+}));
+
+export const expensesRelations = relations(expenses, ({ one }) => ({
+  invoice: one(invoices, { fields: [expenses.invoiceId], references: [invoices.id] }),
+  matter: one(matters, { fields: [expenses.matterId], references: [matters.id] }),
+}));
+
+export const documentsRelations = relations(documents, ({ one }) => ({
+  invoice: one(invoices, { fields: [documents.invoiceId], references: [invoices.id] }),
+  matter: one(matters, { fields: [documents.matterId], references: [matters.id] }),
+}));

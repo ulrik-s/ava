@@ -17,7 +17,9 @@ const entityTables = Object.entries(schema).filter(
 
 function getTableColumnsSafe(t: unknown): Record<string, unknown> {
   try {
-    return getTableColumns(t as Parameters<typeof getTableColumns>[0]);
+    const cols = getTableColumns(t as Parameters<typeof getTableColumns>[0]);
+    // relations()-exporter ger ingen kolumn-map → behandla som "ingen tabell".
+    return cols && typeof cols === "object" ? cols : {};
   } catch {
     return {};
   }
