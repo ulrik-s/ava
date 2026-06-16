@@ -208,6 +208,63 @@ describe("calendar.update", () => {
   });
 });
 
+describe("calendar.getById", () => {
+  it("scopar till id + aktiv användare + org", async () => {
+    mockPrisma.calendarEvent.findFirstOrThrow.mockResolvedValue({ id: "e1", title: "Möte" });
+    const res = await makeCaller("u-anna", "org-x").getById({ id: "e1" });
+    expect(res).toMatchObject({ id: "e1" });
+    expect(mockPrisma.calendarEvent.findFirstOrThrow).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "e1", userId: "u-anna", organizationId: "org-x" },
+      }),
+    );
+  });
+
+  it("kastar när eventet inte är användarens", async () => {
+    mockPrisma.calendarEvent.findFirstOrThrow.mockRejectedValue(new Error("Not found"));
+    await expect(makeCaller().getById({ id: "e1" })).rejects.toThrow("Not found");
+  });
+});
+
+describe("calendar.listForMatter", () => {
+  it("scopar på matterId + org, kronologiskt", async () => {
+    mockPrisma.calendarEvent.findMany.mockResolvedValue([{ id: "e1" }, { id: "e2" }]);
+    const res = await makeCaller("u1", "org-x").listForMatter({ matterId: "m1" });
+    expect(res).toHaveLength(2);
+    expect(mockPrisma.calendarEvent.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { matterId: "m1", organizationId: "org-x" },
+        orderBy: { startAt: "asc" },
+      }),
+    );
+  });
+});
+
+describe("calendar.setMirrorState", () => {
+  it("guardar ownership innan uppdatering", async () => {
+    mockPrisma.calendarEvent.findFirstOrThrow.mockRejectedValue(new Error("Not found"));
+    await expect(
+      makeCaller().setMirrorState({ id: "e1", mirrorStatus: "synced" }),
+    ).rejects.toThrow("Not found");
+    expect(mockPrisma.calendarEvent.update).not.toHaveBeenCalled();
+  });
+
+  it("skriver mirror-fält rakt av UTAN computeMirrorPatch (ingen pending-loop)", async () => {
+    mockPrisma.calendarEvent.findFirstOrThrow.mockResolvedValue({ id: "e1" });
+    mockPrisma.calendarEvent.update.mockResolvedValue({});
+    await makeCaller().setMirrorState({
+      id: "e1", outlookEventId: "ou-1", mirrorStatus: "synced",
+    });
+    const arg = mockPrisma.calendarEvent.update.mock.calls[0]![0] as {
+      where: unknown; data: Record<string, unknown>;
+    };
+    expect(arg.where).toEqual({ id: "e1" });
+    expect(arg.data.mirrorStatus).toBe("synced"); // INTE flippad till pending
+    expect(arg.data.outlookEventId).toBe("ou-1");
+    expect(arg.data).not.toHaveProperty("id"); // id lyfts ut ur data
+  });
+});
+
 describe("calendar.delete", () => {
   it("guardar ownership innan delete", async () => {
     mockPrisma.calendarEvent.findFirstOrThrow.mockRejectedValue(new Error("Not found"));
