@@ -53,6 +53,11 @@
 >   DB-toolchain: **Drizzle** + drizzle-kit, `uuid`-kolumner, app-nivå version-bump,
 >   global `BIGSERIAL` per-org change-log, och en **frusen IDataStore-arg-subset**
 >   (= query-engine.ts). zod förblir sanningskälla. Konkretiserar #408.
+> - [ADR 0020](./adr/0020-typat-repository-i-stallet-for-prisma-formad-seam.md) —
+>   ersätter den Prisma-formade `IDataStore`-sömmen med ett **typat repository**
+>   (explicita metoder + typade returer, två impls), tar bort tolken. Amenderar
+>   ADR 0019 #5. Inkrementell per-entitet-migrering; query-engine/LocalStore (#412)
+>   återanvänds internt.
 
 ## Tre lager
 
