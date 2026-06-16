@@ -34,9 +34,9 @@ const FAST = process.argv.includes("--fast");
 // #27: 84.0 → 84.8 (pick-provider) → 85.2 (external-edit-modal) → 85.5
 // (verdict-dialog) → 85.7 (billing-dialog) → 85.8 (expected-receivables) → 86.0
 // (integrations-section) → 86.2 (expectedReceivable) → 86.6 (DayView-render) →
-// 86.7 (datasource-section, lokalt 87.14% rader, ~0.44% marginal — FUNC_FLOOR
-// konservativt pga Node-version-varians).
-const LINE_FLOOR = 0.867;
+// 86.7 (datasource-section) → 86.8 (extract-text pdf/docx, lokalt 87.29% rader,
+// ~0.49% marginal — FUNC_FLOOR konservativt pga Node-version-varians).
+const LINE_FLOOR = 0.868;
 const FUNC_FLOOR = 0.80;
 
 /**
