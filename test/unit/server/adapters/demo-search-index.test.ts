@@ -4,7 +4,8 @@
 
 import { describe, it, expect, beforeEach } from "vitest-compat";
 import { setDocumentContent, clearDocumentContentCache } from "@/lib/client/demo/document-content-cache";
-import { searchDocuments, compileNeedle } from "@/lib/server/adapters/demo-search-index";
+import { searchDocuments, compileNeedle, makeDemoSearchIndex } from "@/lib/server/adapters/demo-search-index";
+import type { IDataStore } from "@/lib/server/data-store/IDataStore";
 
 beforeEach(() => clearDocumentContentCache());
 
@@ -158,6 +159,33 @@ describe("searchDocuments", () => {
       // Alla 3 doks i org-1 ska träffas
       expect(r.hits.length).toBe(3);
     });
+  });
+});
+
+describe("makeDemoSearchIndex (ISearchIndex över DataStore)", () => {
+  const fakeStore = {
+    documents: {
+      findMany: async () => [
+        { id: "d-1", fileName: "Stämningsansökan.pdf", documentType: "Stämningsansökan", summary: "", matterId: "m-1", organizationId: "org-1" },
+        { id: "d-x", fileName: "Annan.pdf", documentType: "X", summary: "", matterId: "m-other", organizationId: "org-other" },
+      ],
+    },
+    matters: {
+      findMany: async () => [{ id: "m-1", matterNumber: "2026-1", title: "Vårdnad", organizationId: "org-1" }],
+    },
+  } as unknown as IDataStore;
+
+  it("search delegerar till searchDocuments + org-scopar", async () => {
+    const idx = makeDemoSearchIndex(fakeStore);
+    const res = await idx.search("stämning", "org-1", 10);
+    expect(res.hits.map((h) => h.id)).toEqual(["d-1"]);
+    expect(res.hits[0]!.matterNumber).toBe("2026-1");
+  });
+
+  it("upsert/remove är no-ops (live data-store, inget index)", async () => {
+    const idx = makeDemoSearchIndex(fakeStore);
+    await expect(idx.upsert({ id: "d-1" } as never)).resolves.toBeUndefined();
+    await expect(idx.remove("d-1")).resolves.toBeUndefined();
   });
 });
 
