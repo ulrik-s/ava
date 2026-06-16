@@ -531,26 +531,17 @@ export const invoiceRouter = router({
 
   cancelPaymentPlan: orgProcedure
     .input(z.object({ planId: z.string() }))
-    .mutation(async ({ ctx, input }) => {
-      return ctx.dataStore.transaction(async (tx) => {
-        const plan = await tx.paymentPlans.findFirst({
-          where: {
-            id: input.planId,
-            invoice: { matter: { organizationId: ctx.orgId } },
-          },
-        });
+    // Migrerad till repository-sömmen (ADR 0020). Transaktionen korsar två repos
+    // (paymentPlans + invoices); getByIdInOrg org-scopar via faktura→ärende.
+    .mutation(({ ctx, input }) =>
+      ctx.repos.transaction(async (repos) => {
+        const plan = await repos.paymentPlans.getByIdInOrg(input.planId, ctx.orgId);
         if (!plan) throw new TRPCError({ code: "NOT_FOUND" });
-        await tx.paymentPlans.update({
-          where: { id: plan.id },
-          data: { status: "CANCELLED" },
-        });
-        await tx.invoices.update({
-          where: { id: plan.invoiceId },
-          data: { status: "SENT" },
-        });
+        await repos.paymentPlans.update(plan.id, { status: "CANCELLED" });
+        await repos.invoices.update(plan.invoiceId, { status: "SENT" });
         return { ok: true };
-      });
-    }),
+      }),
+    ),
 
   /**
    * Boka en konstaterad kundförlust (ADR 0007). Skapar en daterad WriteOff-post
