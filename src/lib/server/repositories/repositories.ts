@@ -7,6 +7,7 @@
 
 import type { AccontoDeductionRepository } from "./acconto-deduction-repository";
 import type { CalendarEventRepository } from "./calendar-event-repository";
+import type { ConflictCheckRepository } from "./conflict-check-repository";
 import type { ContactRepository } from "./contact-repository";
 import type { DocumentFolderRepository } from "./document-folder-repository";
 import type { DocumentRepository } from "./document-repository";
@@ -15,6 +16,7 @@ import type { ExpectedReceivableRepository } from "./expected-receivable-reposit
 import type { ExpenseRepository } from "./expense-repository";
 import type { InvoiceDispatchRepository } from "./invoice-dispatch-repository";
 import type { InvoiceRepository } from "./invoice-repository";
+import type { MatterContactRepository } from "./matter-contact-repository";
 import type { MatterEventSuggestionRepository } from "./matter-event-suggestion-repository";
 import type { MatterRepository } from "./matter-repository";
 import type { OfficeRepository } from "./office-repository";
@@ -39,6 +41,8 @@ export interface Repositories {
   expenses: ExpenseRepository;
   accontoDeductions: AccontoDeductionRepository;
   contacts: ContactRepository;
+  matterContacts: MatterContactRepository;
+  conflictChecks: ConflictCheckRepository;
   users: UserRepository;
   tasks: TaskRepository;
   calendarEvents: CalendarEventRepository;

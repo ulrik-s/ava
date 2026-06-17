@@ -11,6 +11,7 @@
 import type { DataStoreTx, IDataStore } from "../data-store/IDataStore";
 import { InMemoryAccontoDeductionRepository } from "./in-memory-acconto-deduction-repository";
 import { InMemoryCalendarEventRepository } from "./in-memory-calendar-event-repository";
+import { InMemoryConflictCheckRepository } from "./in-memory-conflict-check-repository";
 import { InMemoryContactRepository } from "./in-memory-contact-repository";
 import { InMemoryDocumentFolderRepository } from "./in-memory-document-folder-repository";
 import { InMemoryDocumentRepository } from "./in-memory-document-repository";
@@ -19,6 +20,7 @@ import { InMemoryExpectedReceivableRepository } from "./in-memory-expected-recei
 import { InMemoryExpenseRepository } from "./in-memory-expense-repository";
 import { InMemoryInvoiceDispatchRepository } from "./in-memory-invoice-dispatch-repository";
 import { InMemoryInvoiceRepository } from "./in-memory-invoice-repository";
+import { InMemoryMatterContactRepository } from "./in-memory-matter-contact-repository";
 import { InMemoryMatterEventSuggestionRepository } from "./in-memory-matter-event-suggestion-repository";
 import { InMemoryMatterRepository } from "./in-memory-matter-repository";
 import { InMemoryOfficeRepository } from "./in-memory-office-repository";
@@ -46,6 +48,8 @@ function reposForTx(tx: DataStoreTx): Repositories {
     expenses: new InMemoryExpenseRepository(tx),
     accontoDeductions: new InMemoryAccontoDeductionRepository(tx),
     contacts: new InMemoryContactRepository(tx),
+    matterContacts: new InMemoryMatterContactRepository(tx),
+    conflictChecks: new InMemoryConflictCheckRepository(tx),
     users: new InMemoryUserRepository(tx),
     tasks: new InMemoryTaskRepository(tx),
     calendarEvents: new InMemoryCalendarEventRepository(tx),
@@ -76,6 +80,8 @@ export function buildInMemoryRepositories(dataStore: IDataStore): Repositories {
     expenses: new InMemoryExpenseRepository(dataStore),
     accontoDeductions: new InMemoryAccontoDeductionRepository(dataStore),
     contacts: new InMemoryContactRepository(dataStore),
+    matterContacts: new InMemoryMatterContactRepository(dataStore),
+    conflictChecks: new InMemoryConflictCheckRepository(dataStore),
     users: new InMemoryUserRepository(dataStore),
     tasks: new InMemoryTaskRepository(dataStore),
     calendarEvents: new InMemoryCalendarEventRepository(dataStore),
