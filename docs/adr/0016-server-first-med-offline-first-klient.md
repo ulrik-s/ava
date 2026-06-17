@@ -1,10 +1,27 @@
 # ADR 0016 — Server-first med offline-first klient (Postgres + tRPC, lokal store + sync)
 
-- **Status:** Accepterad (mål-arkitektur — genomförande pågår)
-- **Genomförande (per 2026-06-17):** Repository-sömmen (ADR 0020) klar med Drizzle-
-  + in-memory-impl. ÄNNU EJ byggt: Postgres-backad HTTP-tRPC-runtime + server-verifierad
-  Principal (#410), klientens `HttpDataStore` (#411) och `CachingSyncDataStore` (#415).
-  Server-runtimen är fortfarande git-peer (ADR 0005). Diagrammet/flödena nedan beskriver MÅLET.
+- **Status:** Accepterad (mål-arkitektur — genomförande långt gånget; cutover återstår)
+- **Genomförande (per 2026-06-17):** Server-first-stacken är BYGGD och verifierad mot
+  riktig Postgres; **default-cutovern återstår**. Klart:
+  - Repository-söm (ADR 0020, Drizzle + in-memory).
+  - **#410** server-runtime: `createServerTrpcHandler` serverar `appRouter` över tRPC-over-HTTP
+    mot Postgres med **server-verifierad** Principal ur oauth2-proxy-headers (`forwarded-claims`);
+    `orgProcedure` enforce:as server-side.
+  - **#411** klient: `HttpBackendRuntime` (httpBatchLink, "alltid-online"-väg).
+  - **#415** klient: `CachingSyncDataStore` (LocalStore + optimistisk kö + reconcile).
+  - **#468** sync-brygga: `change_log`-population + `DrizzleSyncStore` (pull/push per konfliktklass)
+    + `sync`-router + klientens `TrpcSyncTransport`. Reconcile end-to-end mot riktig Postgres.
+  - **#477/#479** deploy: `db:migrate` + `server-first:build` → docker-image + container-deploy-E2E.
+  - **#481** self-hosted-klient-store: `createServerFirstStore` (CachingSyncDataStore +
+    TrpcSyncTransport + IndexedDB), **additiv** — ännu inte default.
+  - **#483/#485** demo: kör på IndexedDB-cache (`IndexedDbFsPersistence`, best-effort) i st.f. OPFS.
+  - **#405/ADR 0018** offline-auth beslutad.
+  
+  **ÅTERSTÅR (finalen, ej gjord — ändrar live-default):** flippa self-hosted-default till
+  `createServerFirstStore`; pensionera iso-git/OPFS/MemFs-slab (#420) + git-peer-server-runtimen
+  (#421); ersätt git-round-trip-E2E med server-sync-E2E (#422). OBS: #420:s MemFs-borttagning
+  kräver att demons dokument/text/genererade-dok flyttas av MemFs (DemoRuntime) först. Tills
+  cutovern är self-hosted fortfarande git-peer (ADR 0005). Diagrammet/flödena nedan = MÅLET.
 - **Datum:** 2026-06-16
 - **Beslutsfattare:** Ulrik Sjölin
 - **Berör:** datalager, tRPC-transport, deploy-modeller, offline-UX, demo, auth
