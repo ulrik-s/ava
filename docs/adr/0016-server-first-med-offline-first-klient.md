@@ -1,6 +1,10 @@
 # ADR 0016 — Server-first med offline-first klient (Postgres + tRPC, lokal store + sync)
 
-- **Status:** Accepterad
+- **Status:** Accepterad (mål-arkitektur — genomförande pågår)
+- **Genomförande (per 2026-06-17):** Repository-sömmen (ADR 0020) klar med Drizzle-
+  + in-memory-impl. ÄNNU EJ byggt: Postgres-backad HTTP-tRPC-runtime + server-verifierad
+  Principal (#410), klientens `HttpDataStore` (#411) och `CachingSyncDataStore` (#415).
+  Server-runtimen är fortfarande git-peer (ADR 0005). Diagrammet/flödena nedan beskriver MÅLET.
 - **Datum:** 2026-06-16
 - **Beslutsfattare:** Ulrik Sjölin
 - **Berör:** datalager, tRPC-transport, deploy-modeller, offline-UX, demo, auth
