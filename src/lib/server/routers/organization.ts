@@ -3,26 +3,32 @@ import { z } from "zod";
 import { ledgerAccountMapSchema } from "@/lib/shared/accounting/account-map";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { organizationIdSchema, asId } from "@/lib/shared/schemas/ids";
+import type { Office, Organization } from "@/lib/shared/schemas/organization";
 import { router, protectedProcedure } from "../trpc";
+
+/** Projektion för settings-vyn (nullish → null). Egen helper för låg komplexitet. */
+function toOrgSettings(org: Organization) {
+  return {
+    id: org.id,
+    name: org.name,
+    orgNumber: org.orgNumber ?? null,
+    address: org.address ?? null,
+    phone: org.phone ?? null,
+    email: org.email ?? null,
+    bankgiro: org.bankgiro ?? null,
+    logoPath: org.logoPath ?? null,
+    ledgerAccountMap: org.ledgerAccountMap ?? null,
+  };
+}
 
 export const organizationRouter = router({
   // ── Settings ────────────────────────────────────────────────────
 
+  // Migrerad till repository-sömmen (ADR 0020). Org är rot-entiteten (scope:n).
   getSettings: protectedProcedure.query(async ({ ctx }) => {
-    return ctx.dataStore.organizations.findUniqueOrThrow({
-      where: { id: ctx.user.organizationId },
-      select: {
-        id: true,
-        name: true,
-        orgNumber: true,
-        address: true,
-        phone: true,
-        email: true,
-        bankgiro: true,
-        logoPath: true,
-        ledgerAccountMap: true,
-      },
-    });
+    const org = await ctx.repos.organizations.getById(ctx.user.organizationId);
+    if (!org) throw new TRPCError({ code: "NOT_FOUND" });
+    return toOrgSettings(org);
   }),
 
   updateSettings: protectedProcedure
@@ -38,12 +44,9 @@ export const organizationRouter = router({
         ledgerAccountMap: ledgerAccountMapSchema.optional(),
       })
     )
-    .mutation(async ({ ctx, input }) => {
-      return ctx.dataStore.organizations.update({
-        where: { id: ctx.user.organizationId },
-        data: omitUndefined(input),
-      });
-    }),
+    .mutation(({ ctx, input }) =>
+      ctx.repos.organizations.update(ctx.user.organizationId, omitUndefined(input) as Partial<Organization>),
+    ),
 
   /**
    * Skapa en organisation med explicit id (rot-entiteten — den ÄR scope:n,
@@ -63,18 +66,15 @@ export const organizationRouter = router({
         bankgiro: z.string().optional(),
       })
     )
-    .mutation(async ({ ctx, input }) => {
-      return ctx.dataStore.organizations.create({ data: input });
-    }),
+    .mutation(({ ctx, input }) =>
+      ctx.repos.organizations.create(input as Partial<Organization>),
+    ),
 
   // ── Offices ─────────────────────────────────────────────────────
 
-  listOffices: protectedProcedure.query(async ({ ctx }) => {
-    return ctx.dataStore.offices.findMany({
-      where: { organizationId: ctx.user.organizationId },
-      orderBy: [{ isMain: "desc" }, { name: "asc" }],
-    });
-  }),
+  listOffices: protectedProcedure.query(({ ctx }) =>
+    ctx.repos.offices.listByOrg(ctx.user.organizationId),
+  ),
 
   addOffice: protectedProcedure
     .input(
@@ -88,18 +88,11 @@ export const organizationRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       // If new office is main, demote existing main first
-      if (input.isMain) {
-        await ctx.dataStore.offices.updateMany({
-          where: { organizationId: ctx.user.organizationId, isMain: true },
-          data: { isMain: false },
-        });
-      }
-      return ctx.dataStore.offices.create({
-        data: {
-          ...input,
-          organizationId: asId<"OrganizationId">(ctx.user.organizationId),
-        },
-      });
+      if (input.isMain) await ctx.repos.offices.demoteMains(ctx.user.organizationId);
+      return ctx.repos.offices.create({
+        ...input,
+        organizationId: asId<"OrganizationId">(ctx.user.organizationId),
+      } as Partial<Office>);
     }),
 
   updateOffice: protectedProcedure
@@ -115,27 +108,19 @@ export const organizationRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const { id, ...data } = input;
-      const office = await ctx.dataStore.offices.findUnique({ where: { id } });
-      if (!office || office.organizationId !== ctx.user.organizationId) {
-        throw new TRPCError({ code: "NOT_FOUND" });
-      }
+      const office = await ctx.repos.offices.getByIdInOrg(id, ctx.user.organizationId);
+      if (!office) throw new TRPCError({ code: "NOT_FOUND" });
       // If setting as main, demote others first
-      if (data.isMain) {
-        await ctx.dataStore.offices.updateMany({
-          where: { organizationId: ctx.user.organizationId, isMain: true },
-          data: { isMain: false },
-        });
-      }
-      return ctx.dataStore.offices.update({ where: { id }, data: omitUndefined(data) });
+      if (data.isMain) await ctx.repos.offices.demoteMains(ctx.user.organizationId);
+      return ctx.repos.offices.update(id, omitUndefined(data) as Partial<Office>);
     }),
 
   deleteOffice: protectedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const office = await ctx.dataStore.offices.findUnique({ where: { id: input.id } });
-      if (!office || office.organizationId !== ctx.user.organizationId) {
-        throw new TRPCError({ code: "NOT_FOUND" });
-      }
-      return ctx.dataStore.offices.delete({ where: { id: input.id } });
+      const office = await ctx.repos.offices.getByIdInOrg(input.id, ctx.user.organizationId);
+      if (!office) throw new TRPCError({ code: "NOT_FOUND" });
+      await ctx.repos.offices.hardDelete(input.id);
+      return { id: input.id };
     }),
 });

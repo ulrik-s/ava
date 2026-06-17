@@ -14,6 +14,8 @@ import type { ExpenseRepository } from "./expense-repository";
 import type { InvoiceDispatchRepository } from "./invoice-dispatch-repository";
 import type { InvoiceRepository } from "./invoice-repository";
 import type { MatterRepository } from "./matter-repository";
+import type { OfficeRepository } from "./office-repository";
+import type { OrganizationRepository } from "./organization-repository";
 import type { PaymentPlanRepository } from "./payment-plan-repository";
 import type { PaymentRepository } from "./payment-repository";
 import type { ServiceNoteRepository } from "./service-note-repository";
@@ -39,5 +41,7 @@ export interface Repositories {
   documentTemplates: DocumentTemplateRepository;
   expectedReceivables: ExpectedReceivableRepository;
   invoiceDispatches: InvoiceDispatchRepository;
+  organizations: OrganizationRepository;
+  offices: OfficeRepository;
   transaction<T>(fn: (tx: Repositories) => Promise<T>): Promise<T>;
 }
