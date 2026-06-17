@@ -3,6 +3,8 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
+import type { IDataStore } from "@/lib/server/data-store/IDataStore";
+import { buildInMemoryRepositories } from "@/lib/server/repositories/in-memory-repositories";
 import { reportsRouter } from "@/lib/server/routers/reports";
 import { dataStoreFromMockPrisma } from "../helpers/mock-data-store";
 
@@ -15,7 +17,9 @@ const mockPrisma = {
 function makeCaller(orgId = "org-a") {
   const ctx = {
     user: { id: "u-self", email: "a@b.se", name: "T", role: "LAWYER", organizationId: orgId },
-    prisma: mockPrisma, dataStore: dataStoreFromMockPrisma(mockPrisma as unknown as Record<string, unknown>),
+    prisma: mockPrisma,
+    dataStore: dataStoreFromMockPrisma(mockPrisma as unknown as Record<string, unknown>),
+    get repos() { return buildInMemoryRepositories(this.dataStore as unknown as IDataStore); },
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return reportsRouter.createCaller(ctx as any);

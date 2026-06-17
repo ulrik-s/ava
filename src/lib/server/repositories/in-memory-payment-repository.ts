@@ -22,4 +22,9 @@ export class InMemoryPaymentRepository extends InMemoryRepository<Payment> imple
       .filter((r) => !(r as { deletedAt?: unknown }).deletedAt)
       .reduce((s, p) => s + p.amount, 0);
   }
+
+  async listByInvoiceIds(invoiceIds: string[]): Promise<Payment[]> {
+    if (!invoiceIds.length) return [];
+    return (await this.delegate.findMany({ where: { invoiceId: { in: invoiceIds } } })) as Payment[];
+  }
 }

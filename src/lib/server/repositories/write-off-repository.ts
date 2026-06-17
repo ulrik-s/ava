@@ -10,4 +10,6 @@ import type { Repository } from "./types";
 export interface WriteOffRepository extends Repository<WriteOff> {
   /** Summa av alla (icke-raderade) avskrivningar på en faktura (öre). */
   sumByInvoice(invoiceId: string): Promise<number>;
+  /** Avskrivningar för en uppsättning fakturor (rapporter). Tom lista vid tomma ids. */
+  listByInvoiceIds(invoiceIds: string[]): Promise<WriteOff[]>;
 }

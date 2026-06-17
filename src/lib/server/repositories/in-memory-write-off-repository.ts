@@ -22,4 +22,9 @@ export class InMemoryWriteOffRepository extends InMemoryRepository<WriteOff> imp
       .filter((r) => !(r as { deletedAt?: unknown }).deletedAt)
       .reduce((s, w) => s + w.amount, 0);
   }
+
+  async listByInvoiceIds(invoiceIds: string[]): Promise<WriteOff[]> {
+    if (!invoiceIds.length) return [];
+    return (await this.delegate.findMany({ where: { invoiceId: { in: invoiceIds } } })) as WriteOff[];
+  }
 }

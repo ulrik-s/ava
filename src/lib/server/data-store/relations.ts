@@ -169,7 +169,13 @@ export function buildRelations(getSource: GetSource): DemoRelations {
       invoice: r("invoices", "id", "invoiceId", "one"),
     },
     expenses: {
-      matter: r("matters", "id", "matterId", "one"),
+      // Nested matter.contacts.contact krävs för advokatrapportens KLIENT-kontakt
+      // (listForLawyerInPeriod), speglar timeEntries.matter.
+      matter: r("matters", "id", "matterId", "one", {
+        contacts: r("matterContacts", "matterId", "id", "many", {
+          contact: r("contacts", "id", "contactId", "one"),
+        }),
+      }),
       user: r("users", "id", "userId", "one"),
       invoice: r("invoices", "id", "invoiceId", "one"),
     },

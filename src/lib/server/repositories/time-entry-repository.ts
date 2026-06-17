@@ -48,6 +48,22 @@ export interface TimeEntryReportFilter {
   matterId?: string | undefined;
 }
 
+/** Ärende-projektionen advokatrapporten (reports.perLawyer) läser. */
+export interface ReportMatterRef {
+  id: string;
+  matterNumber: string;
+  title: string;
+  paymentMethod: string;
+  paymentMethodNote: string | null;
+  paymentMethodDecidedAt: Date | null;
+  contacts: Array<{ contact: { name: string } }>;
+}
+
+/** Tidspost för advokatrapporten — med ärende-ref (KLIENT + betalsätt). */
+export interface LawyerReportTimeEntry extends TimeEntry {
+  matter: ReportMatterRef | null;
+}
+
 export interface TimeEntryRepository extends Repository<TimeEntry> {
   /** Org-scopad paginerad lista (datum desc) + total + summa minuter. */
   listForOrg(organizationId: string, filter: TimeEntryListFilter): Promise<TimeEntryListResult>;
@@ -63,4 +79,8 @@ export interface TimeEntryRepository extends Repository<TimeEntry> {
   listUnfrozenForMatter(matterId: string): Promise<TimeEntry[]>;
   /** Frys alla ofrysta tidsposter i ett ärende mot en billing-run (bulk). */
   freezeForMatter(matterId: string, billingRunId: string, now: Date): Promise<void>;
+  /** En advokats tidsposter i en period (date asc), med ärende-ref (perLawyer-rapporten). */
+  listForLawyerInPeriod(organizationId: string, userId: string, from: Date, to: Date): Promise<LawyerReportTimeEntry[]>;
+  /** Alla debiterbara tidsposter i org:en (för fakturerat/AR-attribuering). */
+  listBillableForOrg(organizationId: string): Promise<TimeEntry[]>;
 }

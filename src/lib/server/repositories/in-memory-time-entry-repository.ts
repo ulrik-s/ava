@@ -8,8 +8,8 @@ import type { TimeEntry } from "@/lib/shared/schemas/billing";
 import type { Delegate, IDataStore } from "../data-store/IDataStore";
 import { InMemoryRepository } from "./in-memory-repository";
 import type {
-  TimeEntryListFilter, TimeEntryListResult, TimeEntryListRow, TimeEntryReportFilter,
-  TimeEntryReportRow, TimeEntryRepository, UnbilledTimeEntry,
+  LawyerReportTimeEntry, TimeEntryListFilter, TimeEntryListResult, TimeEntryListRow,
+  TimeEntryReportFilter, TimeEntryReportRow, TimeEntryRepository, UnbilledTimeEntry,
 } from "./time-entry-repository";
 
 /** Delegaten repot behöver — uppfylls av `IDataStore`, `DataStoreTx` och `LocalStore`. */
@@ -109,5 +109,21 @@ export class InMemoryTimeEntryRepository extends InMemoryRepository<TimeEntry> i
       where: { matterId, frozenByBillingRunId: null },
       data: { frozenAt: now, frozenByBillingRunId: billingRunId } as Partial<TimeEntry>,
     });
+  }
+
+  async listForLawyerInPeriod(
+    organizationId: string, userId: string, from: Date, to: Date,
+  ): Promise<LawyerReportTimeEntry[]> {
+    return (await this.delegate.findMany({
+      where: { matter: { organizationId }, userId, date: { gte: from, lte: to } },
+      include: { matter: { include: { contacts: { where: { role: "KLIENT" }, include: { contact: { select: { name: true } } }, take: 1 } } } },
+      orderBy: { date: "asc" },
+    })) as LawyerReportTimeEntry[];
+  }
+
+  async listBillableForOrg(organizationId: string): Promise<TimeEntry[]> {
+    return (await this.delegate.findMany({
+      where: { matter: { organizationId }, billable: true },
+    })) as TimeEntry[];
   }
 }

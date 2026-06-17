@@ -5,7 +5,9 @@
 
 import type { Expense } from "@/lib/shared/schemas/billing";
 import type { Delegate, IDataStore } from "../data-store/IDataStore";
-import type { ExpenseListOptions, ExpenseListResult, ExpenseListRow, ExpenseRepository } from "./expense-repository";
+import type {
+  ExpenseListOptions, ExpenseListResult, ExpenseListRow, ExpenseRepository, LawyerReportExpense,
+} from "./expense-repository";
 import { InMemoryRepository } from "./in-memory-repository";
 
 /** Delegaten repot behöver — uppfylls av `IDataStore`, `DataStoreTx` och `LocalStore`. */
@@ -68,5 +70,15 @@ export class InMemoryExpenseRepository extends InMemoryRepository<Expense> imple
       where: { matterId, frozenByBillingRunId: null },
       data: { frozenAt: now, frozenByBillingRunId: billingRunId } as Partial<Expense>,
     });
+  }
+
+  async listForLawyerInPeriod(
+    organizationId: string, userId: string, from: Date, to: Date,
+  ): Promise<LawyerReportExpense[]> {
+    return (await this.delegate.findMany({
+      where: { matter: { organizationId }, userId, date: { gte: from, lte: to } },
+      include: { matter: { include: { contacts: { where: { role: "KLIENT" }, include: { contact: { select: { name: true } } }, take: 1 } } } },
+      orderBy: { date: "asc" },
+    })) as LawyerReportExpense[];
   }
 }

@@ -180,11 +180,11 @@ interface ReportMatterRef {
 }
 interface ReportTimeEntry {
   date: Date; minutes: number; billable: boolean; hourlyRate: number;
-  invoiceId?: string | null | undefined; matter?: ReportMatterRef | undefined;
+  invoiceId?: string | null | undefined; matter?: ReportMatterRef | null | undefined;
 }
 interface ReportExpense {
   date: Date; amount: number; billable: boolean;
-  invoiceId?: string | null | undefined; matter?: ReportMatterRef | undefined;
+  invoiceId?: string | null | undefined; matter?: ReportMatterRef | null | undefined;
 }
 
 interface MatterAgg {
@@ -331,75 +331,14 @@ export const reportsRouter = router({
       const toDate = new Date(input.to);
       toDate.setUTCHours(23, 59, 59, 999);
 
-      const orgScope = { matter: { organizationId: ctx.user.organizationId } };
+      const org = ctx.user.organizationId;
 
+      // Migrerad till repository-sömmen (ADR 0020): listForLawyerInPeriod kapslar
+      // in org-scoping + matter-projektionen (betalsätt + KLIENT-kontakt).
       const [user, timeEntries, expenses] = await Promise.all([
-        ctx.dataStore.users.findFirst({
-          where: { id: input.userId, organizationId: ctx.user.organizationId },
-          select: { id: true, name: true, hourlyRate: true },
-        }),
-        ctx.dataStore.timeEntries.findMany({
-          where: {
-            ...orgScope,
-            userId: input.userId,
-            date: { gte: fromDate, lte: toDate },
-          },
-          select: {
-            id: true,
-            date: true,
-            minutes: true,
-            billable: true,
-            hourlyRate: true,
-            description: true,
-            invoiceId: true,
-            matter: {
-              select: {
-                id: true,
-                matterNumber: true,
-                title: true,
-                paymentMethod: true,
-                paymentMethodNote: true,
-                paymentMethodDecidedAt: true,
-                contacts: {
-                  where: { role: "KLIENT" },
-                  select: { contact: { select: { name: true } } },
-                  take: 1,
-                },
-              },
-            },
-          },
-          orderBy: { date: "asc" },
-        }),
-        ctx.dataStore.expenses.findMany({
-          where: {
-            ...orgScope,
-            userId: input.userId,
-            date: { gte: fromDate, lte: toDate },
-          },
-          select: {
-            id: true,
-            date: true,
-            amount: true,
-            billable: true,
-            invoiceId: true,
-            matter: {
-              select: {
-                id: true,
-                matterNumber: true,
-                title: true,
-                paymentMethod: true,
-                paymentMethodNote: true,
-                paymentMethodDecidedAt: true,
-                contacts: {
-                  where: { role: "KLIENT" },
-                  select: { contact: { select: { name: true } } },
-                  take: 1,
-                },
-              },
-            },
-          },
-          orderBy: { date: "asc" },
-        }),
+        ctx.repos.users.getByIdInOrg(input.userId, org),
+        ctx.repos.timeEntries.listForLawyerInPeriod(org, input.userId, fromDate, toDate),
+        ctx.repos.expenses.listForLawyerInPeriod(org, input.userId, fromDate, toDate),
       ]);
 
       if (!user) {
@@ -436,27 +375,18 @@ export const reportsRouter = router({
       const toDate = new Date(input.to);
       toDate.setUTCHours(23, 59, 59, 999);
       const prevPeriod = previousCalendarMonth(fromDate);
-      const orgScope = { matter: { organizationId: ctx.user.organizationId } };
+      const org = ctx.user.organizationId;
 
-      const [user, invoices, billingRuns, timeEntries, writeOffs] = await Promise.all([
-        ctx.dataStore.users.findFirst({
-          where: { id: input.userId, organizationId: ctx.user.organizationId },
-          select: { id: true, name: true },
-        }),
-        ctx.dataStore.invoices.findMany({
-          where: orgScope,
-          select: {
-            id: true, amount: true, status: true, invoiceDate: true, updatedAt: true,
-            matter: { select: { matterNumber: true, title: true } },
-          },
-        }),
-        ctx.dataStore.billingRuns.findMany({ where: orgScope, select: { id: true, invoiceId: true } }),
-        ctx.dataStore.timeEntries.findMany({
-          where: { ...orgScope, billable: true },
-          select: { userId: true, minutes: true, hourlyRate: true, invoiceId: true, frozenByBillingRunId: true },
-        }),
-        ctx.dataStore.writeOffs.findMany({ select: { invoiceId: true, writtenOffAt: true } }),
+      const [user, invoices, billingRuns, timeEntries] = await Promise.all([
+        ctx.repos.users.getByIdInOrg(input.userId, org),
+        ctx.repos.invoices.listForOrg(org),
+        ctx.repos.billingRuns.listForOrg(org),
+        ctx.repos.timeEntries.listBillableForOrg(org),
       ]);
+      // Avskrivningar org-scopas via fakturornas id:n (tidigare global findMany).
+      const writeOffs = await ctx.repos.writeOffs.listByInvoiceIds(
+        (invoices as Array<{ id: string }>).map((i) => i.id),
+      );
 
       if (!user) return null;
 
@@ -509,19 +439,12 @@ export const reportsRouter = router({
       const fromDate = new Date(input.from);
       const toDate = new Date(input.to);
       toDate.setUTCHours(23, 59, 59, 999);
-      const orgScope = { matter: { organizationId: ctx.user.organizationId } };
-      const invoices = await ctx.dataStore.invoices.findMany({
-        where: orgScope,
-        select: {
-          id: true, amount: true, status: true, invoiceType: true, creditedInvoiceId: true,
-          invoiceNumber: true, invoiceDate: true, dueDate: true, dueAt: true,
-          matter: { select: { id: true, matterNumber: true, title: true } },
-        },
-      });
+      const org = ctx.user.organizationId;
+      const invoices = await ctx.repos.invoices.listForOrg(org);
       const ids = (invoices as Array<{ id: string }>).map((i) => i.id);
       const [payments, writeOffs] = await Promise.all([
-        ctx.dataStore.payments.findMany({ where: { invoiceId: { in: ids } }, select: { invoiceId: true, amount: true } }),
-        ctx.dataStore.writeOffs.findMany({ where: { invoiceId: { in: ids } }, select: { invoiceId: true, amount: true } }),
+        ctx.repos.payments.listByInvoiceIds(ids),
+        ctx.repos.writeOffs.listByInvoiceIds(ids),
       ]);
 
       // Scopa till fakturor utställda i perioden (ADR 0007 #4, uppdaterat) så
@@ -537,14 +460,11 @@ export const reportsRouter = router({
       // frysta arbetsvärde per faktura (samma modell som "Fakturerat per advokat").
       if (input.userId) {
         const [billingRuns, timeEntries] = await Promise.all([
-          ctx.dataStore.billingRuns.findMany({ where: orgScope, select: { id: true, invoiceId: true } }),
-          ctx.dataStore.timeEntries.findMany({
-            where: { ...orgScope, billable: true },
-            select: { userId: true, minutes: true, hourlyRate: true, invoiceId: true, frozenByBillingRunId: true },
-          }),
+          ctx.repos.billingRuns.listForOrg(org),
+          ctx.repos.timeEntries.listBillableForOrg(org),
         ]);
         const runToInvoice = new Map<string, string>();
-        for (const r of billingRuns as Array<{ id: string; invoiceId?: string }>) {
+        for (const r of billingRuns as Array<{ id: string; invoiceId?: string | null }>) {
           if (r.invoiceId) runToInvoice.set(r.id, r.invoiceId);
         }
         const ratios = lawyerShareRatios(buildFrozenWork(timeEntries as RawTimeEntry[], runToInvoice), input.userId);

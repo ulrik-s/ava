@@ -9,8 +9,8 @@ import { matters, timeEntries, users } from "../db/schema";
 import type { AppDb } from "../db/types";
 import { DrizzleRepository, type VersionedTable } from "./drizzle-repository";
 import type {
-  TimeEntryListFilter, TimeEntryListResult, TimeEntryListRow, TimeEntryReportFilter,
-  TimeEntryReportRow, TimeEntryRepository, UnbilledTimeEntry,
+  LawyerReportTimeEntry, TimeEntryListFilter, TimeEntryListResult, TimeEntryListRow,
+  TimeEntryReportFilter, TimeEntryReportRow, TimeEntryRepository, UnbilledTimeEntry,
 } from "./time-entry-repository";
 
 /** Org-scopat where för `listForOrg` (utbruten för komplexitet ≤8). */
@@ -117,6 +117,43 @@ export class DrizzleTimeEntryRepository extends DrizzleRepository<TimeEntry> imp
       .where(and(eq(timeEntries.matterId, matterId), isNull(timeEntries.frozenByBillingRunId), isNull(timeEntries.deletedAt)))
       .orderBy(asc(timeEntries.date));
     return rows as unknown as TimeEntry[];
+  }
+
+  async listForLawyerInPeriod(
+    organizationId: string, userId: string, from: Date, to: Date,
+  ): Promise<LawyerReportTimeEntry[]> {
+    const klient = sql<string | null>`(select c.name from matter_contacts mc join contacts c on mc.contact_id = c.id where mc.matter_id = ${matters.id} and mc.role = 'KLIENT' limit 1)`;
+    const rows = await this.db
+      .select({
+        te: timeEntries,
+        mId: matters.id, mNum: matters.matterNumber, mTitle: matters.title,
+        mPay: matters.paymentMethod, mNote: matters.paymentMethodNote, mDecided: matters.paymentMethodDecidedAt,
+        klient,
+      })
+      .from(timeEntries)
+      .innerJoin(matters, eq(timeEntries.matterId, matters.id))
+      .where(and(
+        eq(matters.organizationId, organizationId), eq(timeEntries.userId, userId),
+        gte(timeEntries.date, from), lte(timeEntries.date, to), isNull(timeEntries.deletedAt),
+      ))
+      .orderBy(asc(timeEntries.date));
+    return rows.map((r) => ({
+      ...(r.te as object),
+      matter: {
+        id: r.mId as string, matterNumber: r.mNum as string, title: r.mTitle as string,
+        paymentMethod: r.mPay as string, paymentMethodNote: (r.mNote as string | null) ?? null,
+        paymentMethodDecidedAt: (r.mDecided as Date | null) ?? null,
+        contacts: r.klient ? [{ contact: { name: r.klient as string } }] : [],
+      },
+    })) as unknown as LawyerReportTimeEntry[];
+  }
+
+  async listBillableForOrg(organizationId: string): Promise<TimeEntry[]> {
+    const rows = await this.db
+      .select({ te: timeEntries }).from(timeEntries)
+      .innerJoin(matters, eq(timeEntries.matterId, matters.id))
+      .where(and(eq(matters.organizationId, organizationId), eq(timeEntries.billable, true), isNull(timeEntries.deletedAt)));
+    return rows.map((r) => r.te) as unknown as TimeEntry[];
   }
 
   async freezeForMatter(matterId: string, billingRunId: string, now: Date): Promise<void> {

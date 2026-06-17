@@ -3,13 +3,13 @@
  * `flagBilled` bulk-sätter invoiceId.
  */
 
-import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
 import type { Expense } from "@/lib/shared/schemas/billing";
 import { expenses, invoices, matters, users } from "../db/schema";
 import type { AppDb } from "../db/types";
 import { DrizzleRepository, type VersionedTable } from "./drizzle-repository";
 import type {
-  ExpenseListOptions, ExpenseListResult, ExpenseListRow, ExpenseRepository,
+  ExpenseListOptions, ExpenseListResult, ExpenseListRow, ExpenseRepository, LawyerReportExpense,
 } from "./expense-repository";
 
 export class DrizzleExpenseRepository extends DrizzleRepository<Expense> implements ExpenseRepository {
@@ -85,5 +85,34 @@ export class DrizzleExpenseRepository extends DrizzleRepository<Expense> impleme
     await this.db.update(expenses)
       .set({ frozenAt: now, frozenByBillingRunId: billingRunId } as never)
       .where(and(eq(expenses.matterId, matterId), isNull(expenses.frozenByBillingRunId)));
+  }
+
+  async listForLawyerInPeriod(
+    organizationId: string, userId: string, from: Date, to: Date,
+  ): Promise<LawyerReportExpense[]> {
+    const klient = sql<string | null>`(select c.name from matter_contacts mc join contacts c on mc.contact_id = c.id where mc.matter_id = ${matters.id} and mc.role = 'KLIENT' limit 1)`;
+    const rows = await this.db
+      .select({
+        exp: expenses,
+        mId: matters.id, mNum: matters.matterNumber, mTitle: matters.title,
+        mPay: matters.paymentMethod, mNote: matters.paymentMethodNote, mDecided: matters.paymentMethodDecidedAt,
+        klient,
+      })
+      .from(expenses)
+      .innerJoin(matters, eq(expenses.matterId, matters.id))
+      .where(and(
+        eq(matters.organizationId, organizationId), eq(expenses.userId, userId),
+        gte(expenses.date, from), lte(expenses.date, to), isNull(expenses.deletedAt),
+      ))
+      .orderBy(asc(expenses.date));
+    return rows.map((r) => ({
+      ...(r.exp as object),
+      matter: {
+        id: r.mId as string, matterNumber: r.mNum as string, title: r.mTitle as string,
+        paymentMethod: r.mPay as string, paymentMethodNote: (r.mNote as string | null) ?? null,
+        paymentMethodDecidedAt: (r.mDecided as Date | null) ?? null,
+        contacts: r.klient ? [{ contact: { name: r.klient as string } }] : [],
+      },
+    })) as unknown as LawyerReportExpense[];
   }
 }
