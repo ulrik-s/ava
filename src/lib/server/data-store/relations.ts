@@ -52,6 +52,7 @@ export interface DemoRelations {
   contacts: Relations;
   documents: Relations;
   documentFolders: Relations;
+  matterEventSuggestions: Relations;
   documentTemplates: Relations;
   invoices: Relations;
   invoiceDispatches: Relations;
@@ -69,6 +70,35 @@ export interface DemoRelations {
  * Bygg relations-mappen per entitet. Endast entiteter MED relationer listas;
  * övriga (users, offices, payments, writeOffs, …) skapas utan relations.
  */
+/**
+ * Dokument-relaterade relations (documents/folders/event-suggestions). Utbruten
+ * ur `buildRelations` för att hålla den under max-lines-per-function.
+ *
+ * - documents.matter `one` är AVGÖRANDE — annars matchas nested where
+ *   `matter: { organizationId }` mot en array → assertDocAccess NOT_FOUND.
+ * - folder documents/children krävs för `_count` i dokumentlistan (core.list).
+ * - matterEventSuggestions.document→matter krävs för org-scoping + include.
+ */
+function documentRelations(r: Rel): Pick<DemoRelations, "documents" | "documentFolders" | "matterEventSuggestions"> {
+  return {
+    documents: {
+      matter: r("matters", "id", "matterId", "one"),
+      uploadedBy: r("users", "id", "uploadedById", "one"),
+    },
+    documentFolders: {
+      matter: r("matters", "id", "matterId", "one"),
+      parent: r("documentFolders", "id", "parentId", "one"),
+      documents: r("documents", "folderId", "id"),
+      children: r("documentFolders", "parentId", "id"),
+    },
+    matterEventSuggestions: {
+      document: r("documents", "id", "documentId", "one", {
+        matter: r("matters", "id", "matterId", "one"),
+      }),
+    },
+  };
+}
+
 export function buildRelations(getSource: GetSource): DemoRelations {
   const r = makeRel(getSource);
   return {
@@ -96,19 +126,7 @@ export function buildRelations(getSource: GetSource): DemoRelations {
       children: r("contacts", "parentId", "id"),
       parent: r("contacts", "id", "parentId", "one"),
     },
-    // kind:"one" är AVGÖRANDE — annars matchas nested where `matter:
-    // { organizationId }` mot en array → assertDocAccess NOT_FOUND (tidigare bugg).
-    documents: {
-      matter: r("matters", "id", "matterId", "one"),
-      uploadedBy: r("users", "id", "uploadedById", "one"),
-    },
-    // documents/children krävs för `_count` i dokumentlistan (core.list).
-    documentFolders: {
-      matter: r("matters", "id", "matterId", "one"),
-      parent: r("documentFolders", "id", "parentId", "one"),
-      documents: r("documents", "folderId", "id"),
-      children: r("documentFolders", "parentId", "id"),
-    },
+    ...documentRelations(r),
     documentTemplates: { createdBy: r("users", "id", "createdById", "one") },
     invoices: {
       matter: r("matters", "id", "matterId", "one"),

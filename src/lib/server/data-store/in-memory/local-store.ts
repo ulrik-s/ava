@@ -109,7 +109,7 @@ export class LocalStore implements IDataStore {
     this.documentFolders = this.makeDelegate("documentFolders", relations.documentFolders) as unknown as DocumentFolderDelegate;
     this.documentTemplates = this.makeDelegate("documentTemplates", relations.documentTemplates) as unknown as DocumentTemplateDelegate;
     this.documentAnalysisSuggestions = this.makeDelegate("documentAnalysisSuggestions") as unknown as DocumentAnalysisSuggestionDelegate;
-    this.matterEventSuggestions = this.makeDelegate("matterEventSuggestions") as unknown as MatterEventSuggestionDelegate;
+    this.matterEventSuggestions = this.makeDelegate("matterEventSuggestions", relations.matterEventSuggestions) as unknown as MatterEventSuggestionDelegate;
     this.invoices = this.makeDelegate("invoices", relations.invoices) as unknown as InvoiceDelegate;
     this.timeEntries = this.makeDelegate("timeEntries", relations.timeEntries) as unknown as TimeEntryDelegate;
     this.expenses = this.makeDelegate("expenses", relations.expenses) as unknown as ExpenseDelegate;

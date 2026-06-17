@@ -1,186 +1,97 @@
+/**
+ * Test för document events (MatterEventSuggestion) — events/rejectEvent/
+ * markEventAdded. Kör mot en riktig in-memory-store (repos, ADR 0020).
+ */
+
 import { TRPCError } from "@trpc/server";
-import { describe, it, expect, vi, beforeEach } from "vitest-compat";
+import { describe, it, expect, vi } from "vitest-compat";
+import type { DemoSource } from "@/lib/server/data-store/DemoDataStore";
+import type { IDataStore } from "@/lib/server/data-store/IDataStore";
+import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
+import { buildInMemoryRepositories } from "@/lib/server/repositories/in-memory-repositories";
 import { documentRouter } from "@/lib/server/routers/document";
-import { dataStoreFromMockPrisma } from "../helpers/mock-data-store";
+import { prebakeJoins } from "@/lib/shared/demo-source";
 
-// ─── Helpers ─────────────────────────────────────────────────────
+vi.mock("@/lib/server/services/meilisearch", () => ({ searchDocuments: vi.fn(), removeDocument: vi.fn() }));
+vi.mock("@/lib/server/services/document-analysis", () => ({ analyzeDocument: vi.fn() }));
 
-const mockPrisma = {
-  matterEventSuggestion: {
-    findMany: vi.fn(),
-    findFirst: vi.fn(),
-    update: vi.fn(),
-  },
-};
+const ORG = "org-a";
 
-function makeCaller(orgId = "org-a") {
+function makeCaller(seed: Partial<DemoSource> = {}, orgId = ORG) {
+  const source = prebakeJoins({
+    matters: [{ id: "mat-1", organizationId: ORG, matterNumber: "2026-1", title: "T" }],
+    documents: [{ id: "doc-1", matterId: "mat-1", fileName: "stamning.pdf", title: "Stämningsansökan" }],
+    matterEventSuggestions: [],
+    ...seed,
+  } as DemoSource);
+  const store = new LocalStore(source, async () => {});
+  const repos = buildInMemoryRepositories(store as unknown as IDataStore);
   const ctx = {
     user: { id: "user-1", email: "a@b.com", name: "Test", role: "ADMIN", organizationId: orgId },
-    prisma: mockPrisma, dataStore: dataStoreFromMockPrisma(mockPrisma as unknown as Record<string, unknown>),
+    dataStore: store, repos, orgId,
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return documentRouter.createCaller(ctx as any);
+  return { caller: documentRouter.createCaller(ctx as any), store };
 }
 
-const EVENT_PENDING = {
-  id: "ev-1",
-  documentId: "doc-1",
-  title: "Huvudförhandling",
-  description: null,
-  eventType: "Förhandling",
-  startAt: new Date("2026-05-14T09:00:00Z"),
-  endAt: null,
-  allDay: false,
-  location: "Stockholms tingsrätt",
-  status: "PENDING",
-  createdAt: new Date(),
-  updatedAt: new Date(),
-  document: { id: "doc-1", fileName: "stamning.pdf", title: "Stämningsansökan" },
-};
+function events(store: LocalStore): Array<{ id: string; status: string }> {
+  return (store as unknown as { source: DemoSource }).source.matterEventSuggestions as never;
+}
 
-beforeEach(() => {
-  vi.clearAllMocks();
+const ev = (over: Record<string, unknown>) => ({
+  id: "ev-1", documentId: "doc-1", title: "Huvudförhandling", description: null,
+  eventType: "Förhandling", startAt: new Date("2026-05-14T09:00:00Z"), endAt: null,
+  allDay: false, location: "Stockholms tingsrätt", status: "PENDING", ...over,
 });
 
-// ─── events (list) ───────────────────────────────────────────────
-
 describe("document.events — lista tidpunkter för ärende", () => {
-  it("returnerar ej avvisade events för ärende, sorterade på startAt", async () => {
-    mockPrisma.matterEventSuggestion.findMany.mockResolvedValue([EVENT_PENDING]);
-
-    const result = await makeCaller("org-a").events({ matterId: "mat-1" });
-
-    expect(result).toHaveLength(1);
-    expect(result[0]!.title).toBe("Huvudförhandling");
-    expect(mockPrisma.matterEventSuggestion.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          status: { not: "REJECTED" },
-          document: expect.objectContaining({
-            matterId: "mat-1",
-            matter: { organizationId: "org-a" },
-          }),
-        }),
-        orderBy: { startAt: "asc" },
-      })
-    );
+  it("returnerar ej avvisade events sorterade på startAt, med dokumentmetadata", async () => {
+    const { caller } = makeCaller({
+      matterEventSuggestions: [
+        ev({ id: "ev-late", startAt: new Date("2026-06-01T09:00:00Z") }),
+        ev({ id: "ev-1", startAt: new Date("2026-05-14T09:00:00Z") }),
+        ev({ id: "ev-rejected", status: "REJECTED", startAt: new Date("2026-04-01T09:00:00Z") }),
+      ],
+    });
+    const result = await caller.events({ matterId: "mat-1" });
+    expect(result.map((r) => r.id)).toEqual(["ev-1", "ev-late"]); // sorterat, REJECTED bort
+    // In-memory-motorn projicerar inte `select` strikt (Drizzle gör); asserta delmängd.
+    expect(result[0]!.document).toMatchObject({ id: "doc-1", fileName: "stamning.pdf", title: "Stämningsansökan" });
   });
 
   it("filtrerar på anropande användares organisation", async () => {
-    mockPrisma.matterEventSuggestion.findMany.mockResolvedValue([]);
-
-    await makeCaller("org-b").events({ matterId: "mat-1" });
-
-    expect(mockPrisma.matterEventSuggestion.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          document: expect.objectContaining({
-            matter: { organizationId: "org-b" },
-          }),
-        }),
-      })
-    );
-  });
-
-  it("inkluderar dokumentmetadata för visning", async () => {
-    mockPrisma.matterEventSuggestion.findMany.mockResolvedValue([]);
-
-    await makeCaller("org-a").events({ matterId: "mat-1" });
-
-    expect(mockPrisma.matterEventSuggestion.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        include: { document: { select: { id: true, fileName: true, title: true } } },
-      })
-    );
+    const { caller } = makeCaller({ matterEventSuggestions: [ev({})] }, "org-b");
+    expect(await caller.events({ matterId: "mat-1" })).toHaveLength(0);
   });
 });
-
-// ─── rejectEvent ─────────────────────────────────────────────────
 
 describe("document.rejectEvent", () => {
   it("markerar event som REJECTED", async () => {
-    mockPrisma.matterEventSuggestion.findFirst.mockResolvedValue(EVENT_PENDING);
-    mockPrisma.matterEventSuggestion.update.mockResolvedValue({
-      ...EVENT_PENDING,
-      status: "REJECTED",
-    });
-
-    const result = await makeCaller("org-a").rejectEvent({ eventId: "ev-1" });
-
+    const { caller, store } = makeCaller({ matterEventSuggestions: [ev({})] });
+    const result = await caller.rejectEvent({ eventId: "ev-1" });
     expect(result.status).toBe("REJECTED");
-    expect(mockPrisma.matterEventSuggestion.update).toHaveBeenCalledWith({
-      where: { id: "ev-1" },
-      data: { status: "REJECTED" },
-    });
-  });
-
-  it("verifierar att eventet tillhör anropande org innan update", async () => {
-    mockPrisma.matterEventSuggestion.findFirst.mockResolvedValue(EVENT_PENDING);
-    mockPrisma.matterEventSuggestion.update.mockResolvedValue(EVENT_PENDING);
-
-    await makeCaller("org-a").rejectEvent({ eventId: "ev-1" });
-
-    expect(mockPrisma.matterEventSuggestion.findFirst).toHaveBeenCalledWith({
-      where: {
-        id: "ev-1",
-        document: { matter: { organizationId: "org-a" } },
-      },
-    });
+    expect(events(store).find((e) => e.id === "ev-1")!.status).toBe("REJECTED");
   });
 
   it("kastar NOT_FOUND om event inte finns eller tillhör annan org", async () => {
-    mockPrisma.matterEventSuggestion.findFirst.mockResolvedValue(null);
-
-    await expect(
-      makeCaller("org-a").rejectEvent({ eventId: "ev-ghost" })
-    ).rejects.toBeInstanceOf(TRPCError);
-    await expect(
-      makeCaller("org-a").rejectEvent({ eventId: "ev-ghost" })
-    ).rejects.toMatchObject({ code: "NOT_FOUND" });
-    expect(mockPrisma.matterEventSuggestion.update).not.toHaveBeenCalled();
+    const { caller, store } = makeCaller({ matterEventSuggestions: [ev({})] }, "org-b");
+    await expect(caller.rejectEvent({ eventId: "ev-1" })).rejects.toBeInstanceOf(TRPCError);
+    await expect(caller.rejectEvent({ eventId: "ev-1" })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(events(store).find((e) => e.id === "ev-1")!.status).toBe("PENDING");
   });
 });
 
-// ─── markEventAdded ──────────────────────────────────────────────
-
 describe("document.markEventAdded", () => {
   it("markerar event som ACCEPTED (tillagd i kalender)", async () => {
-    mockPrisma.matterEventSuggestion.findFirst.mockResolvedValue(EVENT_PENDING);
-    mockPrisma.matterEventSuggestion.update.mockResolvedValue({
-      ...EVENT_PENDING,
-      status: "ACCEPTED",
-    });
-
-    const result = await makeCaller("org-a").markEventAdded({ eventId: "ev-1" });
-
+    const { caller, store } = makeCaller({ matterEventSuggestions: [ev({})] });
+    const result = await caller.markEventAdded({ eventId: "ev-1" });
     expect(result.status).toBe("ACCEPTED");
-    expect(mockPrisma.matterEventSuggestion.update).toHaveBeenCalledWith({
-      where: { id: "ev-1" },
-      data: { status: "ACCEPTED" },
-    });
-  });
-
-  it("kastar NOT_FOUND för okänt event", async () => {
-    mockPrisma.matterEventSuggestion.findFirst.mockResolvedValue(null);
-
-    await expect(
-      makeCaller("org-a").markEventAdded({ eventId: "ev-ghost" })
-    ).rejects.toMatchObject({ code: "NOT_FOUND" });
-    expect(mockPrisma.matterEventSuggestion.update).not.toHaveBeenCalled();
+    expect(events(store).find((e) => e.id === "ev-1")!.status).toBe("ACCEPTED");
   });
 
   it("org-isolation: event i annan org kan inte markeras", async () => {
-    // findFirst returnerar null eftersom where-villkoret inte matchar annan org
-    mockPrisma.matterEventSuggestion.findFirst.mockResolvedValue(null);
-
-    await expect(
-      makeCaller("org-b").markEventAdded({ eventId: "ev-1" })
-    ).rejects.toMatchObject({ code: "NOT_FOUND" });
-    expect(mockPrisma.matterEventSuggestion.findFirst).toHaveBeenCalledWith({
-      where: {
-        id: "ev-1",
-        document: { matter: { organizationId: "org-b" } },
-      },
-    });
+    const { caller, store } = makeCaller({ matterEventSuggestions: [ev({})] }, "org-b");
+    await expect(caller.markEventAdded({ eventId: "ev-1" })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(events(store).find((e) => e.id === "ev-1")!.status).toBe("PENDING");
   });
 });
