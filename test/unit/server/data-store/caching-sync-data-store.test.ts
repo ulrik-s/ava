@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect } from "vitest-compat";
-import { CachingSyncDataStore } from "@/lib/server/data-store/in-memory/caching-sync-data-store";
+import { CachingSyncDataStore, noSyncTransport } from "@/lib/server/data-store/in-memory/caching-sync-data-store";
 import { InMemoryPersistence } from "@/lib/server/data-store/in-memory/local-store-persistence";
 import type { QueuedMutation } from "@/lib/server/data-store/in-memory/mutation-queue";
 import type { PullResult, PushResult, SyncTransport } from "@/lib/server/data-store/in-memory/sync-transport";
@@ -118,6 +118,42 @@ describe("CachingSyncDataStore (#415)", () => {
       expect(res.conflicts).toHaveLength(1);
       expect(res.conflicts[0]).toMatchObject({ conflictClass: "surface", reason: "stale-status" });
       expect(ds.pendingCount()).toBe(0); // acked trots konflikt (blockerar inte kön)
+    });
+  });
+
+  describe("createEphemeral (demo-vägen #419 — synkron, writeBack, inget synk-mål)", () => {
+    it("skriver lokalt, anropar writeBack per mutation, köar (men synkar aldrig)", async () => {
+      const events: string[] = [];
+      const ds = CachingSyncDataStore.createEphemeral({
+        transport: noSyncTransport,
+        writeBack: (e) => { events.push(`${e.kind}:${e.entity}`); },
+      });
+      const m1 = uuidv7();
+      await ds.store.matters.create({ data: matter(m1) as never });
+
+      expect(await ds.store.matters.findUnique({ where: { id: m1 } })).toMatchObject({ id: m1 });
+      expect(events).toEqual(["create:matter"]); // writeBack-pipelinen (slab/FSA) fick eventet
+      expect(ds.pendingCount()).toBe(1); // köad lokalt
+    });
+
+    it("delar seed-referensen (clone fyller source efter create)", async () => {
+      const source: { matters?: Record<string, unknown>[] } = {};
+      const ds = CachingSyncDataStore.createEphemeral({ transport: noSyncTransport, seed: source as never });
+      // Simulera att clone fyller den delade source-refen efteråt.
+      source.matters = [matter(uuidv7())];
+      const list = await ds.store.matters.findMany({});
+      expect(list).toHaveLength(1);
+    });
+  });
+
+  describe("noSyncTransport", () => {
+    it("pull ger tom delta, push ekar raden som accepted", async () => {
+      expect(await noSyncTransport.pull(0)).toEqual({ changes: [], cursor: 0 });
+      const row = { id: "x" };
+      expect(await noSyncTransport.push({ mutationId: "m", entity: "matter", kind: "create", row, enqueuedAt: 0 })).toEqual({
+        status: "accepted",
+        row,
+      });
     });
   });
 });

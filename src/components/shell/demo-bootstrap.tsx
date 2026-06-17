@@ -1,8 +1,12 @@
 "use client";
 
 /**
- * `DemoBootstrap` — singleton-init av DemoRuntime + DemoDataStore i
+ * `DemoBootstrap` — singleton-init av DemoRuntime + offline-first-store i
  * demo-builden. Tillåter alla sidor att köra tRPC mot demo-data.
+ *
+ * Sedan #419 kör demon på `CachingSyncDataStore` (ADR 0016 offline-first-kärna)
+ * UTAN synk-mål — `.store` (LocalStore) är datalagret, mutationer persisteras via
+ * `writeBack` (slab/FSA) som förr, och kön ackumuleras lokalt men synkas aldrig.
  *
  * /demo-routen kör sin egen runtime (DemoClient → useDemoRuntime) och
  * skippas här för att undvika double-load mot OPFS.
@@ -26,11 +30,13 @@ import { pickProvider } from "@/lib/client/sync/pick-provider";
 import { SyncProviderRoot } from "@/lib/client/sync/sync-context";
 import { trpc } from "@/lib/client/trpc";
 import { GitAuthProvider } from "@/lib/server/auth/git-auth-provider";
-import { DemoDataStore, type DemoSource } from "@/lib/server/data-store/DemoDataStore";
+import type { IDataStore } from "@/lib/server/data-store/IDataStore";
+import { CachingSyncDataStore, noSyncTransport } from "@/lib/server/data-store/in-memory/caching-sync-data-store";
 import type { MutationEvent } from "@/lib/server/data-store/in-memory/writable-delegate";
 import { DemoRuntime } from "@/lib/server/local-first/demo-runtime";
 import { createGhPagesCloneFn } from "@/lib/server/local-first/gh-pages-loader";
 import { OpfsPersistence } from "@/lib/server/local-first/persistence";
+import type { DemoSource } from "@/lib/shared/demo-source";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { AppShell } from "./app-shell";
 import { AuthStatusBanner } from "./auth-status-banner";
@@ -232,7 +238,7 @@ function makeDemoQueryClient(): QueryClient {
   });
 }
 
-function createDemoTrpcClient(dataStore: DemoDataStore, firmaConfig: FirmaConfig) {
+function createDemoTrpcClient(dataStore: IDataStore, firmaConfig: FirmaConfig) {
   return trpc.createClient({
     links: [
       new GitBackendRuntime({
@@ -380,13 +386,20 @@ export function DemoBootstrap({ children }: { children: ReactNode }) {
   const { writeBack, fsaRef, runtimeRef } = useDemoWriteBack();
   useWriteBackListeners(writeBack, runtimeRef);
 
-  const [dataStore] = useState(() => new DemoDataStore(source, writeBack));
+  // Demon kör nu på offline-first-kärnan (ADR 0016/#419): CachingSyncDataStore
+  // UTAN synk-mål (noSyncTransport). `.store` är LocalStore-kärnan appen läser/
+  // skriver mot; `source` fylls async av clone/restore (delad mutabel ref).
+  // Mutationer persisteras via samma `writeBack` (slab/FSA) som förr; kön
+  // ackumuleras lokalt men synkas aldrig (demon = degenerat-fallet).
+  const [cachingSync] = useState(() =>
+    CachingSyncDataStore.createEphemeral({ transport: noSyncTransport, seed: source, writeBack }),
+  );
   // Initial status MÅSTE vara SSR-stabil för att undvika hydration-mismatch
   // (React #418). Pathname-baserad logik flyttas till useDemoBootstrap.
   const [status, setStatus] = useState<Status>("loading");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [queryClient] = useState(makeDemoQueryClient);
-  const [trpcClient] = useState(() => createDemoTrpcClient(dataStore, firmaConfig));
+  const [trpcClient] = useState(() => createDemoTrpcClient(cachingSync.store, firmaConfig));
 
   // Flippa efter första commit → byter från platshållare till full app-tree.
   // Egen effekt (separat från boot-effekten) så hydreringen hinner committa rent.

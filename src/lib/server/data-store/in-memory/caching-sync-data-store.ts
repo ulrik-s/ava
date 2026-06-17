@@ -38,13 +38,25 @@ export interface CachingSyncDeps {
   transport: SyncTransport;
   /** Seed-data om persistensen är tom (eller saknas). */
   seed?: DemoSource;
-  /** Hydrera/spara hela source:n (IndexedDB i browsern; in-memory i tester). */
+  /** Hydrera/spara hela source:n (snapshot — IndexedDB i browsern). */
   persistence?: LocalStorePersistence;
+  /**
+   * Per-mutation write-back (alternativ till `persistence`): anropas med varje
+   * `MutationEvent` så caller:n kan persistera finkornigt. Demo-vägen (#419) ger
+   * sin slab/FSA-pipeline här i st.f. snapshot-persistens.
+   */
+  writeBack?: (event: MutationEvent<Record<string, unknown>>) => void | Promise<void>;
   /** Persistens för mutations-kön (IndexedDB i browsern). */
   queuePersistence?: MutationQueuePersistence;
   /** Delta-sync-cursor-lagring. Default: in-memory. */
   cursor?: CursorStore;
 }
+
+/** No-op-transport: ingen synk (demon = degenerat-fallet, ADR 0016 — inget synk-mål). */
+export const noSyncTransport: SyncTransport = {
+  pull: () => Promise.resolve({ changes: [], cursor: 0 }),
+  push: (mutation) => Promise.resolve({ status: "accepted", row: mutation.row }),
+};
 
 /**
  * Skriv en kanonisk server-rad TYST till lokal source (ingen re-enqueue):
@@ -73,14 +85,26 @@ export class CachingSyncDataStore {
     private readonly engine: ReconcileEngine,
   ) {}
 
-  /** Hydrera (kö + source) och komponera klossarna. */
+  /** Hydrera (kö + source ur persistens) och komponera klossarna (server-vägen). */
   static async create(deps: CachingSyncDeps): Promise<CachingSyncDataStore> {
     const queue = await MutationQueue.hydrate(deps.queuePersistence);
-    const cursor = deps.cursor ?? new InMemoryCursorStore();
     const hydrated = deps.persistence ? await deps.persistence.hydrate() : null;
     const source: DemoSource = hydrated ?? deps.seed ?? {};
+    return CachingSyncDataStore.wire(deps, queue, source);
+  }
 
-    const persist = (): Promise<void> =>
+  /**
+   * Synkron variant utan async-hydrering: tom kö, seed direkt. Demo-vägen (#419)
+   * — inget synk-mål, ingen kö-persistens; mutationer persisteras via `writeBack`.
+   */
+  static createEphemeral(deps: CachingSyncDeps): CachingSyncDataStore {
+    return CachingSyncDataStore.wire(deps, new MutationQueue(), deps.seed ?? {});
+  }
+
+  /** Komponera LocalStore (onMutate → enqueue + persist) + ReconcileEngine. */
+  private static wire(deps: CachingSyncDeps, queue: MutationQueue, source: DemoSource): CachingSyncDataStore {
+    const cursor = deps.cursor ?? new InMemoryCursorStore();
+    const persistSnapshot = (): Promise<void> =>
       deps.persistence ? deps.persistence.save(store.currentSource) : Promise.resolve();
 
     const onLocalMutation = async (event: MutationEvent<Record<string, unknown>>): Promise<void> => {
@@ -94,14 +118,15 @@ export class CachingSyncDataStore {
         },
         typeof version === "number" ? { baseVersion: version } : {},
       );
-      await persist();
+      await persistSnapshot();
+      if (deps.writeBack) await deps.writeBack(event);
     };
 
     const store = new LocalStore(source, onLocalMutation);
 
     const apply: ApplyCanonical = async (entity, row, deleted) => {
       writeCanonical(store, entity, row, deleted);
-      await persist();
+      await persistSnapshot();
     };
 
     const engine = new ReconcileEngine({ transport: deps.transport, queue, cursor, apply });
