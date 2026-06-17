@@ -13,17 +13,19 @@
  */
 
 import { z } from "zod";
+import type { TimeEntry } from "@/lib/shared/schemas/billing";
+import type { Document } from "@/lib/shared/schemas/document";
 import { asId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
-import type { IDataStore } from "../data-store/IDataStore";
-import { emit } from "../events/emit";
-import { router, orgProcedure } from "../trpc";
+import { emit, type EmitCtx } from "../events/emit";
+import type { Repositories } from "../repositories/repositories";
+import { router, orgProcedure, TRPCError } from "../trpc";
 
-/** Den delmängd av tRPC-context tidspost-helpern + emit behöver. */
-interface MailCtx {
-  dataStore: IDataStore;
-  user: { id: string };
-}
+/**
+ * Den delmängd av tRPC-context tidspost-helpern + emit behöver. Data-skrivningar
+ * går via `repos` (ADR 0020); `emit` använder fortfarande events-sömmen (dataStore).
+ */
+type MailCtx = EmitCtx & { repos: Repositories };
 
 /** Avkoda base64 → bytes (browser+Node-säkert; routern bundlas för bägge). */
 function base64ToBytes(b64: string): Uint8Array {
@@ -66,9 +68,8 @@ export const mailRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       // 1. Verifiera att ärendet tillhör anroparens org.
-      await ctx.dataStore.matters.findFirstOrThrow({
-        where: { id: input.matterId, organizationId: ctx.orgId },
-      });
+      const matter = await ctx.repos.matters.getByIdInOrg(input.matterId, ctx.orgId);
+      if (!matter) throw new TRPCError({ code: "NOT_FOUND" });
 
       // 2. Skriv .eml-bytes till git-working-copy:n (server-runtime).
       const id = input.documentId ?? uuidv7();
@@ -78,24 +79,23 @@ export const mailRouter = router({
 
       // 3. Registrera dokument-metadata (projektion).
       const fileName = emlFileName(input.subject);
-      const doc = await ctx.dataStore.documents.create({
-        data: {
-          id,
-          matterId: input.matterId,
-          fileName,
-          mimeType: "message/rfc822",
-          sizeBytes: bytes.byteLength,
-          fileSize: bytes.byteLength, // denormaliserat (UI läser fileSize)
-          storagePath,
-          folderId: input.folderId ?? null,
-          organizationId: ctx.orgId,
-          analysisStatus: "PENDING",
-          uploadedById: ctx.user.id,
-          title: input.subject,
-          documentType: "E-post",
-          createdAt: new Date(input.receivedAt),
-        } as never,
-      });
+      const docData = {
+        id,
+        matterId: input.matterId,
+        fileName,
+        mimeType: "message/rfc822",
+        sizeBytes: bytes.byteLength,
+        fileSize: bytes.byteLength, // denormaliserat (UI läser fileSize)
+        storagePath,
+        folderId: input.folderId ?? null,
+        organizationId: ctx.orgId,
+        analysisStatus: "PENDING",
+        uploadedById: ctx.user.id,
+        title: input.subject,
+        documentType: "E-post",
+        createdAt: new Date(input.receivedAt),
+      };
+      const doc = await ctx.repos.documents.create(docData as unknown as Partial<Document>);
       await emit.documentUploaded(ctx, { id, fileName, matterId: input.matterId });
 
       // 4. Valfri tidspost kopplad till mailet.
@@ -116,21 +116,17 @@ async function createMailTimeEntry(
   time: z.infer<typeof timeInput>,
 ) {
   const userId = asId<"UserId">(ctx.user.id);
-  const user = await ctx.dataStore.users.findUniqueOrThrow({
-    where: { id: userId },
-    select: { hourlyRate: true },
-  });
-  const entry = await ctx.dataStore.timeEntries.create({
-    data: {
-      userId,
-      matterId,
-      date: new Date(receivedAt),
-      minutes: time.minutes,
-      description: time.description ?? subject,
-      hourlyRate: user.hourlyRate ?? 0,
-      billable: true,
-    } as never,
-  });
+  const user = await ctx.repos.users.getByIdOrThrow(userId);
+  const entryData = {
+    userId,
+    matterId,
+    date: new Date(receivedAt),
+    minutes: time.minutes,
+    description: time.description ?? subject,
+    hourlyRate: user.hourlyRate ?? 0,
+    billable: true,
+  };
+  const entry = await ctx.repos.timeEntries.create(entryData as unknown as Partial<TimeEntry>);
   await emit.timeEntryAdded(ctx, { id: entry.id, matterId: entry.matterId, minutes: entry.minutes });
   return entry;
 }

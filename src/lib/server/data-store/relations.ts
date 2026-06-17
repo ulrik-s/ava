@@ -51,6 +51,7 @@ export interface DemoRelations {
   matterContacts: Relations;
   contacts: Relations;
   documents: Relations;
+  documentFolders: Relations;
   documentTemplates: Relations;
   invoices: Relations;
   invoiceDispatches: Relations;
@@ -97,7 +98,17 @@ export function buildRelations(getSource: GetSource): DemoRelations {
     },
     // kind:"one" är AVGÖRANDE — annars matchas nested where `matter:
     // { organizationId }` mot en array → assertDocAccess NOT_FOUND (tidigare bugg).
-    documents: { matter: r("matters", "id", "matterId", "one") },
+    documents: {
+      matter: r("matters", "id", "matterId", "one"),
+      uploadedBy: r("users", "id", "uploadedById", "one"),
+    },
+    // documents/children krävs för `_count` i dokumentlistan (core.list).
+    documentFolders: {
+      matter: r("matters", "id", "matterId", "one"),
+      parent: r("documentFolders", "id", "parentId", "one"),
+      documents: r("documents", "folderId", "id"),
+      children: r("documentFolders", "parentId", "id"),
+    },
     documentTemplates: { createdBy: r("users", "id", "createdById", "one") },
     invoices: {
       matter: r("matters", "id", "matterId", "one"),

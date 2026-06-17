@@ -8,6 +8,8 @@
 import type { AccontoDeductionRepository } from "./acconto-deduction-repository";
 import type { CalendarEventRepository } from "./calendar-event-repository";
 import type { ContactRepository } from "./contact-repository";
+import type { DocumentFolderRepository } from "./document-folder-repository";
+import type { DocumentRepository } from "./document-repository";
 import type { DocumentTemplateRepository } from "./document-template-repository";
 import type { ExpectedReceivableRepository } from "./expected-receivable-repository";
 import type { ExpenseRepository } from "./expense-repository";
@@ -40,6 +42,8 @@ export interface Repositories {
   tasks: TaskRepository;
   calendarEvents: CalendarEventRepository;
   serviceNotes: ServiceNoteRepository;
+  documents: DocumentRepository;
+  documentFolders: DocumentFolderRepository;
   documentTemplates: DocumentTemplateRepository;
   expectedReceivables: ExpectedReceivableRepository;
   invoiceDispatches: InvoiceDispatchRepository;

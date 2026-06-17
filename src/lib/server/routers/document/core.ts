@@ -3,9 +3,11 @@
  * Inga subgrupper eller förslag — bara själva dokumenten.
  */
 
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { isJunkFileName } from "@/lib/shared/junk-files";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
+import type { Document } from "@/lib/shared/schemas/document";
 import { orgProcedure } from "../../trpc";
 import { assertDocAccess } from "./shared";
 
@@ -21,23 +23,11 @@ export const coreProcedures = {
       }),
     )
     .query(async ({ ctx, input }) => {
-      const [documents, folders, total] = await Promise.all([
-        ctx.dataStore.documents.findMany({
-          where: { matterId: input.matterId, folderId: input.folderId },
-          orderBy: { createdAt: "desc" },
-          skip: (input.page - 1) * input.pageSize,
-          take: input.pageSize,
-          include: { uploadedBy: { select: { name: true } } },
-        }),
-        ctx.dataStore.documentFolders.findMany({
-          where: { matterId: input.matterId, parentId: input.folderId },
-          orderBy: { name: "asc" },
-          include: { _count: { select: { documents: true, children: true } } },
-        }),
-        ctx.dataStore.documents.count({
-          where: { matterId: input.matterId, folderId: input.folderId },
-        }),
+      const [docs, folders] = await Promise.all([
+        ctx.repos.documents.listInFolder(input.matterId, input.folderId, input.page, input.pageSize),
+        ctx.repos.documentFolders.listInParent(input.matterId, input.folderId),
       ]);
+      const { documents, total } = docs;
       return { documents, folders, total, pages: Math.ceil(total / input.pageSize) };
     }),
 
@@ -46,15 +36,8 @@ export const coreProcedures = {
     .input(z.object({ matterId: z.string() }))
     .query(async ({ ctx, input }) => {
       const [folders, documents] = await Promise.all([
-        ctx.dataStore.documentFolders.findMany({
-          where: { matterId: input.matterId },
-          orderBy: { name: "asc" },
-        }),
-        ctx.dataStore.documents.findMany({
-          where: { matterId: input.matterId },
-          orderBy: { createdAt: "desc" },
-          include: { uploadedBy: { select: { name: true } } },
-        }),
+        ctx.repos.documentFolders.listByMatter(input.matterId),
+        ctx.repos.documents.listByMatter(input.matterId),
       ]);
       // Defense-in-depth: gömmer OS-metadata-sidecars (AppleDouble ._*,
       // .DS_Store etc.) som kan ligga kvar från tidigare uploads.
@@ -93,26 +76,13 @@ export const coreProcedures = {
   /** Lista alla unika documentType-värden inom org + antal per typ.
    *  Används av sök-sidan för att rendera filter-checkboxar. */
   listDocumentTypes: orgProcedure
-    .query(async ({ ctx }) => {
-      const docs = await ctx.dataStore.documents.findMany({
-        where: { matter: { organizationId: ctx.orgId } },
-        include: { matter: { select: { organizationId: true } } },
-      }) as Array<{ documentType?: string | null }>;
-      const counts = new Map<string, number>();
-      for (const d of docs) {
-        if (!d.documentType) continue;
-        counts.set(d.documentType, (counts.get(d.documentType) ?? 0) + 1);
-      }
-      return [...counts.entries()]
-        .map(([type, count]) => ({ type, count }))
-        .sort((a, b) => a.type.localeCompare(b.type, "sv"));
-    }),
+    .query(({ ctx }) => ctx.repos.documents.listDocumentTypesForOrg(ctx.orgId)),
 
   delete: orgProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      await assertDocAccess(ctx, input.id);
-      const doc = await ctx.dataStore.documents.delete({ where: { id: input.id } });
+      const doc = await assertDocAccess(ctx, input.id);
+      await ctx.repos.documents.hardDelete(input.id);
       ctx.ports.searchIndex.remove(input.id).catch(() => {});
       return doc;
     }),
@@ -148,32 +118,29 @@ export const coreProcedures = {
     }))
     .mutation(async ({ ctx, input }) => {
       // Verifiera matter:n tillhör org:n
-      await ctx.dataStore.matters.findFirstOrThrow({
-        where: { id: input.matterId, organizationId: ctx.orgId },
-      });
-      const doc = await ctx.dataStore.documents.create({
-        data: {
-          id: input.id,
-          matterId: input.matterId,
-          fileName: input.fileName,
-          mimeType: input.mimeType,
-          sizeBytes: input.sizeBytes,
-          fileSize: input.sizeBytes, // denormaliserat (UI läser fileSize)
-          storagePath: input.storagePath,
-          folderId: input.folderId ?? null,
-          organizationId: ctx.orgId,
-          analysisStatus: input.analysisStatus ?? "PENDING",
-          uploadedById: input.uploadedById ?? ctx.user.id,
-          version: input.version,
-          title: input.title,
-          documentType: input.documentType,
-          summary: input.summary,
-          analyzedAt: input.analyzedAt ? new Date(input.analyzedAt) : undefined,
-          createdAt: input.createdAt ? new Date(input.createdAt) : undefined,
-          invoiceId: input.invoiceId ?? undefined,
-        } as never,
-      });
-      return doc;
+      const matter = await ctx.repos.matters.getByIdInOrg(input.matterId, ctx.orgId);
+      if (!matter) throw new TRPCError({ code: "NOT_FOUND" });
+      const data = {
+        id: input.id,
+        matterId: input.matterId,
+        fileName: input.fileName,
+        mimeType: input.mimeType,
+        sizeBytes: input.sizeBytes,
+        fileSize: input.sizeBytes, // denormaliserat (UI läser fileSize)
+        storagePath: input.storagePath,
+        folderId: input.folderId ?? null,
+        organizationId: ctx.orgId,
+        analysisStatus: input.analysisStatus ?? "PENDING",
+        uploadedById: input.uploadedById ?? ctx.user.id,
+        version: input.version,
+        title: input.title,
+        documentType: input.documentType,
+        summary: input.summary,
+        analyzedAt: input.analyzedAt ? new Date(input.analyzedAt) : undefined,
+        createdAt: input.createdAt ? new Date(input.createdAt) : undefined,
+        invoiceId: input.invoiceId ?? undefined,
+      };
+      return ctx.repos.documents.create(data as unknown as Partial<Document>);
     }),
 
   /** Kör (eller kör om) AI-analys på ett dokument. Returnerar omedelbart. */
@@ -222,7 +189,7 @@ export const coreProcedures = {
                 : analyzedAt,
         }),
       };
-      return ctx.dataStore.documents.update({ where: { id: documentId }, data });
+      return ctx.repos.documents.update(documentId, data as unknown as Partial<Document>);
     }),
 
   /**
@@ -243,14 +210,10 @@ export const coreProcedures = {
     )
     .mutation(async ({ ctx, input }) => {
       await assertDocAccess(ctx, input.id);
-      const doc = await ctx.dataStore.documents.findUniqueOrThrow({ where: { id: input.id } }) as { version?: number };
-      return ctx.dataStore.documents.update({
-        where: { id: input.id },
-        data: {
-          version: (doc.version ?? 1) + 1,
-          updatedAt: new Date(),
-          ...omitUndefined({ sizeBytes: input.sizeBytes, fileSize: input.sizeBytes }),
-        },
-      });
+      // repo.update bumpar version + updatedAt automatiskt (reconcile-konvention).
+      return ctx.repos.documents.update(
+        input.id,
+        omitUndefined({ sizeBytes: input.sizeBytes, fileSize: input.sizeBytes }) as unknown as Partial<Document>,
+      );
     }),
 };

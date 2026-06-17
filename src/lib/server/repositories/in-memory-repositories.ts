@@ -12,6 +12,8 @@ import type { DataStoreTx, IDataStore } from "../data-store/IDataStore";
 import { InMemoryAccontoDeductionRepository } from "./in-memory-acconto-deduction-repository";
 import { InMemoryCalendarEventRepository } from "./in-memory-calendar-event-repository";
 import { InMemoryContactRepository } from "./in-memory-contact-repository";
+import { InMemoryDocumentFolderRepository } from "./in-memory-document-folder-repository";
+import { InMemoryDocumentRepository } from "./in-memory-document-repository";
 import { InMemoryDocumentTemplateRepository } from "./in-memory-document-template-repository";
 import { InMemoryExpectedReceivableRepository } from "./in-memory-expected-receivable-repository";
 import { InMemoryExpenseRepository } from "./in-memory-expense-repository";
@@ -47,6 +49,8 @@ function reposForTx(tx: DataStoreTx): Repositories {
     tasks: new InMemoryTaskRepository(tx),
     calendarEvents: new InMemoryCalendarEventRepository(tx),
     serviceNotes: new InMemoryServiceNoteRepository(tx),
+    documents: new InMemoryDocumentRepository(tx),
+    documentFolders: new InMemoryDocumentFolderRepository(tx),
     documentTemplates: new InMemoryDocumentTemplateRepository(tx),
     expectedReceivables: new InMemoryExpectedReceivableRepository(tx),
     invoiceDispatches: new InMemoryInvoiceDispatchRepository(tx),
@@ -74,6 +78,8 @@ export function buildInMemoryRepositories(dataStore: IDataStore): Repositories {
     tasks: new InMemoryTaskRepository(dataStore),
     calendarEvents: new InMemoryCalendarEventRepository(dataStore),
     serviceNotes: new InMemoryServiceNoteRepository(dataStore),
+    documents: new InMemoryDocumentRepository(dataStore),
+    documentFolders: new InMemoryDocumentFolderRepository(dataStore),
     documentTemplates: new InMemoryDocumentTemplateRepository(dataStore),
     expectedReceivables: new InMemoryExpectedReceivableRepository(dataStore),
     invoiceDispatches: new InMemoryInvoiceDispatchRepository(dataStore),

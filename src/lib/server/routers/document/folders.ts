@@ -8,6 +8,7 @@
 
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import type { Document, DocumentFolder } from "@/lib/shared/schemas/document";
 import {
   matterIdSchema,
   documentFolderIdSchema,
@@ -28,50 +29,36 @@ export const folderProcedures = {
     )
     .mutation(async ({ ctx, input }) => {
       await assertMatterAccess(ctx, input.matterId);
-      return ctx.dataStore.documentFolders.create({
-        data: {
-          name: input.name,
-          matterId: input.matterId,
-          parentId: input.parentId,
-        },
-      });
+      return ctx.repos.documentFolders.create({
+        name: input.name,
+        matterId: input.matterId,
+        parentId: input.parentId,
+      } as Partial<DocumentFolder>);
     }),
 
   renameFolder: orgProcedure
     .input(z.object({ id: documentFolderIdSchema, name: z.string().min(1) }))
-    .mutation(async ({ ctx, input }) => {
-      return ctx.dataStore.documentFolders.update({
-        where: { id: input.id },
-        data: { name: input.name },
-      });
-    }),
+    .mutation(({ ctx, input }) =>
+      ctx.repos.documentFolders.update(input.id, { name: input.name } as Partial<DocumentFolder>),
+    ),
 
   /** Flyttar innehåll till parent och raderar mappen. */
   deleteFolder: orgProcedure
     .input(z.object({ id: documentFolderIdSchema }))
     .mutation(async ({ ctx, input }) => {
-      const folder = await ctx.dataStore.documentFolders.findUniqueOrThrow({
-        where: { id: input.id },
-      });
-      await ctx.dataStore.documents.updateMany({
-        where: { folderId: input.id },
-        data: { folderId: folder.parentId },
-      });
-      await ctx.dataStore.documentFolders.updateMany({
-        where: { parentId: input.id },
-        data: { parentId: folder.parentId },
-      });
-      return ctx.dataStore.documentFolders.delete({ where: { id: input.id } });
+      const folder = await ctx.repos.documentFolders.getByIdOrThrow(input.id);
+      const parentId = (folder.parentId as DocumentFolderId | null | undefined) ?? null;
+      await ctx.repos.documents.reassignFolder(input.id, parentId);
+      await ctx.repos.documentFolders.reassignParent(input.id, parentId);
+      await ctx.repos.documentFolders.hardDelete(input.id);
+      return folder;
     }),
 
   moveDocument: orgProcedure
     .input(z.object({ documentId: documentIdSchema, folderId: documentFolderIdSchema.nullable() }))
-    .mutation(async ({ ctx, input }) => {
-      return ctx.dataStore.documents.update({
-        where: { id: input.documentId },
-        data: { folderId: input.folderId },
-      });
-    }),
+    .mutation(({ ctx, input }) =>
+      ctx.repos.documents.update(input.documentId, { folderId: input.folderId } as unknown as Partial<Document>),
+    ),
 
   /** Flyttar en mapp; blockerar cykler (mapp-in-i-sig-själv/descendant). */
   moveFolder: orgProcedure
@@ -86,17 +73,13 @@ export const folderProcedures = {
               message: "Cannot move a folder into itself or a descendant",
             });
           }
-          const parent = await ctx.dataStore.documentFolders.findUnique({
-            where: { id: checkId },
-            select: { parentId: true },
-          });
+          const parent = await ctx.repos.documentFolders.getById(checkId);
           checkId = (parent?.parentId as DocumentFolderId | null | undefined) ?? null;
         }
       }
-      return ctx.dataStore.documentFolders.update({
-        where: { id: input.folderId },
-        data: { parentId: input.targetParentId },
-      });
+      return ctx.repos.documentFolders.update(
+        input.folderId, { parentId: input.targetParentId } as Partial<DocumentFolder>,
+      );
     }),
 
   /** Breadcrumb-stig från rot till vald mapp. */
@@ -106,10 +89,7 @@ export const folderProcedures = {
       const path: { id: string; name: string }[] = [];
       let currentId: DocumentFolderId | null = input.folderId;
       while (currentId) {
-        const folder = await ctx.dataStore.documentFolders.findUnique({
-          where: { id: currentId },
-          select: { id: true, name: true, parentId: true },
-        });
+        const folder = await ctx.repos.documentFolders.getById(currentId);
         if (!folder) break;
         path.unshift({ id: folder.id, name: folder.name });
         currentId = (folder.parentId as DocumentFolderId | null | undefined) ?? null;

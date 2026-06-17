@@ -4,13 +4,17 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
+import type { IDataStore } from "@/lib/server/data-store/IDataStore";
+import { buildInMemoryRepositories } from "@/lib/server/repositories/in-memory-repositories";
 import { mailRouter } from "@/lib/server/routers/mail";
 import { dataStoreFromMockPrisma, type MockDataStore } from "../helpers/mock-data-store";
 
+// Data-skrivningar går via repos (ADR 0020) som delegerar till samma mock-
+// delegates; emit använder dataStore.events.emit (kvarvarande events-söm).
 const mockPrisma = {
-  matter: { findFirstOrThrow: vi.fn() },
+  matter: { findFirst: vi.fn() },
   document: { create: vi.fn() },
-  user: { findUniqueOrThrow: vi.fn() },
+  user: { findFirst: vi.fn() },
   timeEntry: { create: vi.fn() },
 };
 
@@ -31,6 +35,7 @@ function makeCaller(orgId = "org-a", userId = "u1") {
     user: { id: userId, email: "a@b.se", name: "T", role: "LAWYER", organizationId: orgId },
     prisma: mockPrisma,
     dataStore,
+    repos: buildInMemoryRepositories(dataStore as unknown as IDataStore),
     ports: mockPorts,
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -43,9 +48,9 @@ const EML_B64 = Buffer.from(RAW_EML, "utf8").toString("base64");
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockPrisma.matter.findFirstOrThrow.mockResolvedValue({ id: "m1", organizationId: "org-a" });
+  mockPrisma.matter.findFirst.mockResolvedValue({ id: "m1", organizationId: "org-a" });
   mockPrisma.document.create.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => data);
-  mockPrisma.user.findUniqueOrThrow.mockResolvedValue({ hourlyRate: 1800 });
+  mockPrisma.user.findFirst.mockResolvedValue({ id: "u1", hourlyRate: 1800 });
   mockPrisma.timeEntry.create.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({ id: "te-1", ...data }));
 });
 
@@ -54,7 +59,7 @@ describe("mail.saveIncoming", () => {
 
   it("verifierar att ärendet tillhör org:n", async () => {
     await makeCaller("org-a").saveIncoming({ ...base, documentId: "doc-1" });
-    expect(mockPrisma.matter.findFirstOrThrow).toHaveBeenCalledWith({
+    expect(mockPrisma.matter.findFirst).toHaveBeenCalledWith({
       where: { id: "m1", organizationId: "org-a" },
     });
   });
@@ -142,7 +147,7 @@ describe("mail.saveIncoming", () => {
   });
 
   it("propagerar fel om ärendet inte tillhör org:n", async () => {
-    mockPrisma.matter.findFirstOrThrow.mockRejectedValue(new Error("not found"));
+    mockPrisma.matter.findFirst.mockResolvedValue(null);
     await expect(makeCaller().saveIncoming({ ...base, documentId: "doc-1" })).rejects.toThrow();
     expect(contentWrite).not.toHaveBeenCalled();
   });

@@ -1,11 +1,17 @@
 /**
  * Test för document.core — list/tree/search/delete/analyze/updateMetadata.
+ *
+ * Kör mot en RIKTIG in-memory-store (LocalStore + repos, ADR 0020); portar
+ * (meili/analys) är mockade. Asserterar på observerbart resultat.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
+import type { DemoSource } from "@/lib/server/data-store/DemoDataStore";
+import type { IDataStore } from "@/lib/server/data-store/IDataStore";
+import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
+import { buildInMemoryRepositories } from "@/lib/server/repositories/in-memory-repositories";
 import { documentRouter } from "@/lib/server/routers/document";
-import { dataStoreFromMockPrisma } from "../../helpers/mock-data-store";
-
+import { prebakeJoins } from "@/lib/shared/demo-source";
 
 vi.mock("@/lib/server/services/meilisearch", () => ({
   searchDocuments: vi.fn(),
@@ -15,22 +21,7 @@ vi.mock("@/lib/server/services/document-analysis", () => ({
   analyzeDocument: vi.fn().mockResolvedValue(undefined),
 }));
 
-const mockPrisma = {
-  document: {
-    findMany: vi.fn(),
-    findFirst: vi.fn(),
-    findUniqueOrThrow: vi.fn(),
-    count: vi.fn(),
-    delete: vi.fn(),
-    update: vi.fn(),
-  },
-  documentFolder: {
-    findMany: vi.fn(),
-  },
-  matter: {
-    findFirst: vi.fn(),
-  },
-};
+const ORG = "org-a";
 
 const mockPorts = {
   email: { send: vi.fn() },
@@ -43,54 +34,65 @@ const mockPorts = {
   },
 };
 
-function makeCaller(orgId = "org-a") {
+function makeCaller(seed: Partial<DemoSource> = {}, orgId = ORG) {
+  const source = prebakeJoins({
+    matters: [{ id: "m1", organizationId: ORG, matterNumber: "2026-1", title: "T" }],
+    documentFolders: [],
+    documents: [],
+    ...seed,
+  } as DemoSource);
+  const store = new LocalStore(source, async () => {});
+  const repos = buildInMemoryRepositories(store as unknown as IDataStore);
   const ctx = {
     user: { id: "u1", email: "a@b.se", name: "T", role: "LAWYER", organizationId: orgId },
-    prisma: mockPrisma,
-    dataStore: dataStoreFromMockPrisma(mockPrisma as unknown as Record<string, unknown>),
-    ports: mockPorts,
+    dataStore: store, repos, orgId, ports: mockPorts,
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return documentRouter.createCaller(ctx as any);
+  return { caller: documentRouter.createCaller(ctx as any), store };
 }
 
-beforeEach(() => {
-  vi.clearAllMocks();
-  mockPrisma.document.findMany.mockResolvedValue([]);
-  mockPrisma.documentFolder.findMany.mockResolvedValue([]);
-  mockPrisma.document.count.mockResolvedValue(0);
-});
+function docs(store: LocalStore): Array<Record<string, unknown>> {
+  return (store as unknown as { source: DemoSource }).source.documents as never;
+}
+
+beforeEach(() => vi.clearAllMocks());
 
 describe("document.list", () => {
   it("filtrerar på matterId och folderId", async () => {
-    await makeCaller().list({ matterId: "m1", folderId: "f1" });
-    expect(mockPrisma.document.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { matterId: "m1", folderId: "f1" },
-      }),
-    );
+    const { caller } = makeCaller({
+      documents: [
+        { id: "d1", matterId: "m1", folderId: "f1", fileName: "a.pdf" },
+        { id: "d2", matterId: "m1", folderId: null, fileName: "b.pdf" },
+      ],
+    });
+    const res = await caller.list({ matterId: "m1", folderId: "f1" });
+    expect(res.documents.map((d) => d.id)).toEqual(["d1"]);
+    expect(res.total).toBe(1);
   });
 
   it("default folderId = null (rot-nivå)", async () => {
-    await makeCaller().list({ matterId: "m1" });
-    expect(mockPrisma.document.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { matterId: "m1", folderId: null },
-      }),
-    );
+    const { caller } = makeCaller({
+      documents: [
+        { id: "d1", matterId: "m1", folderId: "f1", fileName: "a.pdf" },
+        { id: "d2", matterId: "m1", folderId: null, fileName: "b.pdf" },
+      ],
+    });
+    const res = await caller.list({ matterId: "m1" });
+    expect(res.documents.map((d) => d.id)).toEqual(["d2"]);
   });
 });
 
 describe("document.tree", () => {
   it("returnerar alla mappar + dokument exkl junk-filer", async () => {
-    mockPrisma.document.findMany.mockResolvedValue([
-      { id: "d1", fileName: "real.pdf" },
-      { id: "d2", fileName: "._junk.pdf" }, // AppleDouble
-      { id: "d3", fileName: ".DS_Store" },
-    ]);
-    mockPrisma.documentFolder.findMany.mockResolvedValue([{ id: "f1" }]);
-
-    const res = await makeCaller().tree({ matterId: "m1" });
+    const { caller } = makeCaller({
+      documentFolders: [{ id: "f1", name: "Mapp", matterId: "m1", parentId: null }],
+      documents: [
+        { id: "d1", matterId: "m1", folderId: null, fileName: "real.pdf" },
+        { id: "d2", matterId: "m1", folderId: null, fileName: "._junk.pdf" }, // AppleDouble
+        { id: "d3", matterId: "m1", folderId: null, fileName: ".DS_Store" },
+      ],
+    });
+    const res = await caller.tree({ matterId: "m1" });
     expect(res.folders).toHaveLength(1);
     expect(res.documents).toHaveLength(1);
     expect(res.documents[0]!.fileName).toBe("real.pdf");
@@ -113,7 +115,8 @@ describe("document.search", () => {
       estimatedTotalHits: 1,
     } as never);
 
-    const res = await makeCaller("org-a").search({ query: "test" });
+    const { caller } = makeCaller({}, "org-a");
+    const res = await caller.search({ query: "test" });
     expect(mockPorts.searchIndex.search).toHaveBeenCalledWith("test", "org-a", 20, { documentTypes: undefined });
     expect(res.totalHits).toBe(1);
     expect(res.hits[0]!.documentId).toBe("d1");
@@ -134,58 +137,63 @@ describe("document.search", () => {
       estimatedTotalHits: 1,
     } as never);
 
-    const res = await makeCaller().search({ query: "x" });
+    const { caller } = makeCaller();
+    const res = await caller.search({ query: "x" });
     expect(res.hits[0]!.highlight).toBe("");
   });
 
   it("kräver query min(1)", async () => {
-    await expect(makeCaller().search({ query: "" })).rejects.toThrow();
+    const { caller } = makeCaller();
+    await expect(caller.search({ query: "" })).rejects.toThrow();
   });
 });
 
 describe("document.delete", () => {
   it("vägrar radera när dokument ej tillhör org", async () => {
-    mockPrisma.document.findFirst.mockResolvedValue(null);
-    await expect(makeCaller().delete({ id: "d1" })).rejects.toMatchObject({
-      code: "NOT_FOUND",
-    });
-    expect(mockPrisma.document.delete).not.toHaveBeenCalled();
+    const { caller, store } = makeCaller({
+      documents: [{ id: "d1", matterId: "m1", folderId: null, fileName: "a.pdf" }],
+    }, "org-other");
+    await expect(caller.delete({ id: "d1" })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(docs(store).some((d) => d.id === "d1")).toBe(true);
+    expect(mockPorts.searchIndex.remove).not.toHaveBeenCalled();
   });
 
   it("raderar och triggar Meili-cleanup när tillgång OK", async () => {
-    mockPrisma.document.findFirst.mockResolvedValue({ id: "d1", matterId: "m1" });
-    mockPrisma.document.delete.mockResolvedValue({ id: "d1" });
-
-    await makeCaller().delete({ id: "d1" });
-    expect(mockPrisma.document.delete).toHaveBeenCalledWith({ where: { id: "d1" } });
+    const { caller, store } = makeCaller({
+      documents: [{ id: "d1", matterId: "m1", folderId: null, fileName: "a.pdf" }],
+    });
+    await caller.delete({ id: "d1" });
+    expect(docs(store).some((d) => d.id === "d1")).toBe(false);
     expect(mockPorts.searchIndex.remove).toHaveBeenCalledWith("d1");
   });
 });
 
 describe("document.analyze", () => {
   it("vägrar när dokument tillhör annan org", async () => {
-    mockPrisma.document.findFirst.mockResolvedValue(null);
-    await expect(
-      makeCaller().analyze({ documentId: "d1" }),
-    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    const { caller } = makeCaller({
+      documents: [{ id: "d1", matterId: "m1", folderId: null, fileName: "a.pdf" }],
+    }, "org-other");
+    await expect(caller.analyze({ documentId: "d1" })).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect(mockPorts.documentAnalyzer.analyze).not.toHaveBeenCalled();
   });
 
   it("triggar fire-and-forget analys när tillgång OK", async () => {
-    mockPrisma.document.findFirst.mockResolvedValue({ id: "d1", matterId: "m1" });
+    const { caller } = makeCaller({
+      documents: [{ id: "d1", matterId: "m1", folderId: null, fileName: "a.pdf" }],
+    });
     mockPorts.documentAnalyzer.analyze.mockResolvedValue(undefined);
-
-    const res = await makeCaller().analyze({ documentId: "d1" });
+    const res = await caller.analyze({ documentId: "d1" });
     expect(res).toEqual({ ok: true });
     expect(mockPorts.documentAnalyzer.analyze).toHaveBeenCalledWith("d1");
   });
 
   it("sväljer ett analys-fel (fire-and-forget .catch) utan att kasta", async () => {
-    mockPrisma.document.findFirst.mockResolvedValue({ id: "d1", matterId: "m1" });
+    const { caller } = makeCaller({
+      documents: [{ id: "d1", matterId: "m1", folderId: null, fileName: "a.pdf" }],
+    });
     mockPorts.documentAnalyzer.analyze.mockRejectedValue(new Error("analys-krasch"));
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-
-    const res = await makeCaller().analyze({ documentId: "d1" });
+    const res = await caller.analyze({ documentId: "d1" });
     expect(res).toEqual({ ok: true });
     await new Promise((r) => setTimeout(r, 0)); // låt .catch:en köra
     expect(errSpy).toHaveBeenCalled();
@@ -195,14 +203,16 @@ describe("document.analyze", () => {
 
 describe("document.listDocumentTypes", () => {
   it("räknar unika documentType:er, hoppar null, sorterar på sv", async () => {
-    mockPrisma.document.findMany.mockResolvedValue([
-      { documentType: "Faktura" },
-      { documentType: "Avtal" },
-      { documentType: "Avtal" },
-      { documentType: null },
-      { documentType: "Ärende" },
-    ]);
-    const res = await makeCaller().listDocumentTypes();
+    const { caller } = makeCaller({
+      documents: [
+        { id: "d1", matterId: "m1", documentType: "Faktura", fileName: "1" },
+        { id: "d2", matterId: "m1", documentType: "Avtal", fileName: "2" },
+        { id: "d3", matterId: "m1", documentType: "Avtal", fileName: "3" },
+        { id: "d4", matterId: "m1", documentType: null, fileName: "4" },
+        { id: "d5", matterId: "m1", documentType: "Ärende", fileName: "5" },
+      ],
+    });
+    const res = await caller.listDocumentTypes();
     expect(res).toEqual([
       { type: "Avtal", count: 2 },
       { type: "Faktura", count: 1 },
@@ -211,68 +221,64 @@ describe("document.listDocumentTypes", () => {
   });
 
   it("tom lista när inga dokument", async () => {
-    mockPrisma.document.findMany.mockResolvedValue([]);
-    expect(await makeCaller().listDocumentTypes()).toEqual([]);
+    const { caller } = makeCaller();
+    expect(await caller.listDocumentTypes()).toEqual([]);
   });
 });
 
 describe("document.markExternallyEdited", () => {
   it("bumpar version + updatedAt + sizeBytes efter access-check", async () => {
-    mockPrisma.document.findFirst.mockResolvedValue({ id: "d1", matterId: "m1" });
-    mockPrisma.document.findUniqueOrThrow.mockResolvedValue({ id: "d1", version: 2 });
-    mockPrisma.document.update.mockResolvedValue({ id: "d1", version: 3 });
-
-    await makeCaller().markExternallyEdited({
+    const { caller, store } = makeCaller({
+      documents: [{ id: "d1", matterId: "m1", version: 2, sizeBytes: 10, fileName: "a.pdf" }],
+    });
+    await caller.markExternallyEdited({
       id: "d1", saves: 2, sessionStartedAt: "2026-06-16T08:00:00Z", sizeBytes: 4096,
     });
-
-    const arg = mockPrisma.document.update.mock.calls[0]![0] as { where: unknown; data: Record<string, unknown> };
-    expect(arg.where).toEqual({ id: "d1" });
-    expect(arg.data.version).toBe(3);
-    expect(arg.data.updatedAt).toBeInstanceOf(Date);
-    expect(arg.data.sizeBytes).toBe(4096);
-    expect(arg.data.fileSize).toBe(4096);
+    const doc = docs(store).find((d) => d.id === "d1")!;
+    expect(doc.version).toBe(3);
+    expect(doc.updatedAt).toBeInstanceOf(Date);
+    expect(doc.sizeBytes).toBe(4096);
+    expect(doc.fileSize).toBe(4096);
   });
 
   it("defaultar version till 1→2 när raden saknar version", async () => {
-    mockPrisma.document.findFirst.mockResolvedValue({ id: "d1", matterId: "m1" });
-    mockPrisma.document.findUniqueOrThrow.mockResolvedValue({ id: "d1" });
-    mockPrisma.document.update.mockResolvedValue({ id: "d1" });
-
-    await makeCaller().markExternallyEdited({ id: "d1", saves: 1, sessionStartedAt: new Date() });
-    const arg = mockPrisma.document.update.mock.calls[0]![0] as { data: Record<string, unknown> };
-    expect(arg.data.version).toBe(2);
-    expect(arg.data.sizeBytes).toBeUndefined(); // utelämnad → ej satt
+    const { caller, store } = makeCaller({
+      documents: [{ id: "d1", matterId: "m1", sizeBytes: 10, fileName: "a.pdf" }],
+    });
+    await caller.markExternallyEdited({ id: "d1", saves: 1, sessionStartedAt: new Date() });
+    const doc = docs(store).find((d) => d.id === "d1")!;
+    expect(doc.version).toBe(2);
+    expect(doc.sizeBytes).toBe(10); // utelämnad → oförändrad
   });
 
   it("vägrar mot dokument i annan org", async () => {
-    mockPrisma.document.findFirst.mockResolvedValue(null);
+    const { caller, store } = makeCaller({
+      documents: [{ id: "d1", matterId: "m1", version: 1, fileName: "a.pdf" }],
+    }, "org-b");
     await expect(
-      makeCaller("org-b").markExternallyEdited({ id: "d1", saves: 1, sessionStartedAt: new Date() }),
+      caller.markExternallyEdited({ id: "d1", saves: 1, sessionStartedAt: new Date() }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
-    expect(mockPrisma.document.update).not.toHaveBeenCalled();
+    expect(docs(store).find((d) => d.id === "d1")!.version).toBe(1);
   });
 });
 
 describe("document.updateMetadata", () => {
   it("uppdaterar bara skickade fält efter access-check", async () => {
-    mockPrisma.document.findFirst.mockResolvedValue({ id: "d1", matterId: "m1" });
-    mockPrisma.document.update.mockResolvedValue({ id: "d1" });
-
-    await makeCaller().updateMetadata({
-      documentId: "d1",
-      title: "Manuell titel",
+    const { caller, store } = makeCaller({
+      documents: [{ id: "d1", matterId: "m1", title: "Gammal", documentType: "Avtal", fileName: "a.pdf" }],
     });
-    expect(mockPrisma.document.update).toHaveBeenCalledWith({
-      where: { id: "d1" },
-      data: { title: "Manuell titel" },
-    });
+    await caller.updateMetadata({ documentId: "d1", title: "Manuell titel" });
+    const doc = docs(store).find((d) => d.id === "d1")!;
+    expect(doc.title).toBe("Manuell titel");
+    expect(doc.documentType).toBe("Avtal"); // oförändrad
   });
 
   it("vägrar uppdatera dokument från annan org", async () => {
-    mockPrisma.document.findFirst.mockResolvedValue(null);
+    const { caller } = makeCaller({
+      documents: [{ id: "d1", matterId: "m1", fileName: "a.pdf" }],
+    }, "org-other");
     await expect(
-      makeCaller().updateMetadata({ documentId: "x", title: "Y" }),
+      caller.updateMetadata({ documentId: "d1", title: "Y" }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 });

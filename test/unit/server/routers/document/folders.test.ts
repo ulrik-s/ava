@@ -1,12 +1,18 @@
 /**
  * Test för document folders — createFolder/renameFolder/deleteFolder/
  * moveDocument/moveFolder/breadcrumb. Inkluderar cykel-detektering.
+ *
+ * Kör mot en RIKTIG in-memory-store (LocalStore + repos, ADR 0020) och
+ * asserterar på observerbart resultat i st.f. Prisma-formade mock-anrop.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest-compat";
+import { describe, it, expect, vi } from "vitest-compat";
+import type { DemoSource } from "@/lib/server/data-store/DemoDataStore";
+import type { IDataStore } from "@/lib/server/data-store/IDataStore";
+import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
+import { buildInMemoryRepositories } from "@/lib/server/repositories/in-memory-repositories";
 import { documentRouter } from "@/lib/server/routers/document";
-import { dataStoreFromMockPrisma } from "../../helpers/mock-data-store";
-
+import { prebakeJoins } from "@/lib/shared/demo-source";
 
 vi.mock("@/lib/server/services/meilisearch", () => ({
   searchDocuments: vi.fn(),
@@ -16,171 +22,160 @@ vi.mock("@/lib/server/services/document-analysis", () => ({
   analyzeDocument: vi.fn(),
 }));
 
-const mockPrisma = {
-  documentFolder: {
-    create: vi.fn(),
-    update: vi.fn(),
-    updateMany: vi.fn(),
-    delete: vi.fn(),
-    findUnique: vi.fn(),
-    findUniqueOrThrow: vi.fn(),
-    findFirst: vi.fn(),
-  },
-  document: {
-    update: vi.fn(),
-    updateMany: vi.fn(),
-  },
-  matter: {
-    findFirst: vi.fn(),
-  },
-};
+const ORG = "org-a";
 
-function makeCaller(orgId = "org-a") {
+function makeCaller(seed: Partial<DemoSource> = {}, orgId = ORG) {
+  const source = prebakeJoins({
+    matters: [{ id: "m1", organizationId: ORG, matterNumber: "2026-1", title: "T" }],
+    documentFolders: [],
+    documents: [],
+    ...seed,
+  } as DemoSource);
+  const store = new LocalStore(source, async () => {});
+  const repos = buildInMemoryRepositories(store as unknown as IDataStore);
   const ctx = {
     user: { id: "u1", email: "a@b.se", name: "T", role: "LAWYER", organizationId: orgId },
-    prisma: mockPrisma, dataStore: dataStoreFromMockPrisma(mockPrisma as unknown as Record<string, unknown>),
+    dataStore: store, repos, orgId,
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return documentRouter.createCaller(ctx as any);
+  return { caller: documentRouter.createCaller(ctx as any), store };
 }
 
-beforeEach(() => vi.clearAllMocks());
+/** Läs ut mapparna direkt ur store:n (utan att gå via routern). */
+function folders(store: LocalStore): Array<{ id: string; name: string; parentId: string | null }> {
+  return (store as unknown as { source: DemoSource }).source.documentFolders as never;
+}
+function docs(store: LocalStore): Array<{ id: string; folderId: string | null }> {
+  return (store as unknown as { source: DemoSource }).source.documents as never;
+}
 
 describe("document.createFolder", () => {
   it("skapar mapp efter access-check på matter", async () => {
-    mockPrisma.matter.findFirst.mockResolvedValue({ id: "m1" });
-    mockPrisma.documentFolder.create.mockResolvedValue({ id: "f1" });
-
-    await makeCaller().createFolder({ matterId: "m1", name: "Inlagor" });
-    expect(mockPrisma.documentFolder.create).toHaveBeenCalledWith({
-      data: { name: "Inlagor", matterId: "m1", parentId: null },
-    });
+    const { caller, store } = makeCaller();
+    const created = await caller.createFolder({ matterId: "m1", name: "Inlagor" });
+    expect(created.name).toBe("Inlagor");
+    expect(folders(store).some((f) => f.name === "Inlagor" && f.parentId === null)).toBe(true);
   });
 
   it("vägrar skapa mapp i ärende från annan org", async () => {
-    mockPrisma.matter.findFirst.mockResolvedValue(null);
+    const { caller, store } = makeCaller({}, "org-other");
     await expect(
-      makeCaller().createFolder({ matterId: "x", name: "Inlagor" }),
+      caller.createFolder({ matterId: "m1", name: "Inlagor" }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
-    expect(mockPrisma.documentFolder.create).not.toHaveBeenCalled();
+    expect(folders(store)).toHaveLength(0);
   });
 });
 
 describe("document.renameFolder", () => {
   it("uppdaterar namnet", async () => {
-    mockPrisma.documentFolder.update.mockResolvedValue({});
-    await makeCaller().renameFolder({ id: "f1", name: "Nytt" });
-    expect(mockPrisma.documentFolder.update).toHaveBeenCalledWith({
-      where: { id: "f1" },
-      data: { name: "Nytt" },
+    const { caller, store } = makeCaller({
+      documentFolders: [{ id: "f1", name: "Gammalt", matterId: "m1", parentId: null }],
     });
+    await caller.renameFolder({ id: "f1", name: "Nytt" });
+    expect(folders(store).find((f) => f.id === "f1")!.name).toBe("Nytt");
   });
 });
 
 describe("document.deleteFolder", () => {
   it("flyttar barn till parent och raderar mappen", async () => {
-    mockPrisma.documentFolder.findUniqueOrThrow.mockResolvedValue({
-      id: "f1",
-      parentId: "f-parent",
+    const { caller, store } = makeCaller({
+      documentFolders: [
+        { id: "f1", name: "Mapp", matterId: "m1", parentId: "f-parent" },
+        { id: "f-child", name: "Barn", matterId: "m1", parentId: "f1" },
+      ],
+      documents: [{ id: "d1", matterId: "m1", folderId: "f1", fileName: "a.pdf" }],
     });
-    mockPrisma.document.updateMany.mockResolvedValue({});
-    mockPrisma.documentFolder.updateMany.mockResolvedValue({});
-    mockPrisma.documentFolder.delete.mockResolvedValue({});
-
-    await makeCaller().deleteFolder({ id: "f1" });
-    expect(mockPrisma.document.updateMany).toHaveBeenCalledWith({
-      where: { folderId: "f1" },
-      data: { folderId: "f-parent" },
-    });
-    expect(mockPrisma.documentFolder.updateMany).toHaveBeenCalledWith({
-      where: { parentId: "f1" },
-      data: { parentId: "f-parent" },
-    });
-    expect(mockPrisma.documentFolder.delete).toHaveBeenCalled();
+    await caller.deleteFolder({ id: "f1" });
+    expect(folders(store).some((f) => f.id === "f1")).toBe(false);
+    expect(docs(store).find((d) => d.id === "d1")!.folderId).toBe("f-parent");
+    expect(folders(store).find((f) => f.id === "f-child")!.parentId).toBe("f-parent");
   });
 
   it("flyttar till null när rotmapp raderas", async () => {
-    mockPrisma.documentFolder.findUniqueOrThrow.mockResolvedValue({
-      id: "f1",
-      parentId: null,
+    const { caller, store } = makeCaller({
+      documentFolders: [{ id: "f1", name: "Rot", matterId: "m1", parentId: null }],
+      documents: [{ id: "d1", matterId: "m1", folderId: "f1", fileName: "a.pdf" }],
     });
-    mockPrisma.document.updateMany.mockResolvedValue({});
-    mockPrisma.documentFolder.updateMany.mockResolvedValue({});
-    mockPrisma.documentFolder.delete.mockResolvedValue({});
-
-    await makeCaller().deleteFolder({ id: "f1" });
-    expect(mockPrisma.document.updateMany).toHaveBeenCalledWith({
-      where: { folderId: "f1" },
-      data: { folderId: null },
-    });
+    await caller.deleteFolder({ id: "f1" });
+    expect(docs(store).find((d) => d.id === "d1")!.folderId).toBeNull();
   });
 });
 
 describe("document.moveDocument", () => {
   it("flyttar dokumentet", async () => {
-    mockPrisma.document.update.mockResolvedValue({});
-    await makeCaller().moveDocument({ documentId: "d1", folderId: "f2" });
-    expect(mockPrisma.document.update).toHaveBeenCalledWith({
-      where: { id: "d1" },
-      data: { folderId: "f2" },
+    const { caller, store } = makeCaller({
+      documentFolders: [{ id: "f2", name: "Mål", matterId: "m1", parentId: null }],
+      documents: [{ id: "d1", matterId: "m1", folderId: null, fileName: "a.pdf" }],
     });
+    await caller.moveDocument({ documentId: "d1", folderId: "f2" });
+    expect(docs(store).find((d) => d.id === "d1")!.folderId).toBe("f2");
   });
 
   it("flyttar till rot (folderId=null)", async () => {
-    mockPrisma.document.update.mockResolvedValue({});
-    await makeCaller().moveDocument({ documentId: "d1", folderId: null });
-    expect(mockPrisma.document.update.mock.calls[0]![0].data.folderId).toBeNull();
+    const { caller, store } = makeCaller({
+      documentFolders: [{ id: "f2", name: "Mål", matterId: "m1", parentId: null }],
+      documents: [{ id: "d1", matterId: "m1", folderId: "f2", fileName: "a.pdf" }],
+    });
+    await caller.moveDocument({ documentId: "d1", folderId: null });
+    expect(docs(store).find((d) => d.id === "d1")!.folderId).toBeNull();
   });
 });
 
 describe("document.moveFolder", () => {
   it("blockerar flytt in i sig själv", async () => {
-    mockPrisma.documentFolder.findUnique.mockResolvedValue({ parentId: null });
+    const { caller, store } = makeCaller({
+      documentFolders: [{ id: "f1", name: "F1", matterId: "m1", parentId: null }],
+    });
     await expect(
-      makeCaller().moveFolder({ folderId: "f1", targetParentId: "f1" }),
+      caller.moveFolder({ folderId: "f1", targetParentId: "f1" }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
-    expect(mockPrisma.documentFolder.update).not.toHaveBeenCalled();
+    expect(folders(store).find((f) => f.id === "f1")!.parentId).toBeNull();
   });
 
   it("blockerar flytt in i descendant", async () => {
     // f1 → f2 → f3. Försök flytta f1 in i f3.
-    mockPrisma.documentFolder.findUnique
-      .mockResolvedValueOnce({ parentId: "f2" })
-      .mockResolvedValueOnce({ parentId: "f1" });
-
+    const { caller } = makeCaller({
+      documentFolders: [
+        { id: "f1", name: "F1", matterId: "m1", parentId: null },
+        { id: "f2", name: "F2", matterId: "m1", parentId: "f1" },
+        { id: "f3", name: "F3", matterId: "m1", parentId: "f2" },
+      ],
+    });
     await expect(
-      makeCaller().moveFolder({ folderId: "f1", targetParentId: "f3" }),
+      caller.moveFolder({ folderId: "f1", targetParentId: "f3" }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 
   it("tillåter flytt till annan gren", async () => {
-    // target har null som parent (root)
-    mockPrisma.documentFolder.findUnique.mockResolvedValue({ parentId: null });
-    mockPrisma.documentFolder.update.mockResolvedValue({});
-
-    await makeCaller().moveFolder({ folderId: "f1", targetParentId: "f-other" });
-    expect(mockPrisma.documentFolder.update).toHaveBeenCalled();
+    const { caller, store } = makeCaller({
+      documentFolders: [
+        { id: "f1", name: "F1", matterId: "m1", parentId: null },
+        { id: "f-other", name: "Annan", matterId: "m1", parentId: null },
+      ],
+    });
+    await caller.moveFolder({ folderId: "f1", targetParentId: "f-other" });
+    expect(folders(store).find((f) => f.id === "f1")!.parentId).toBe("f-other");
   });
 
   it("tillåter flytt till rot (targetParentId=null)", async () => {
-    mockPrisma.documentFolder.update.mockResolvedValue({});
-    await makeCaller().moveFolder({ folderId: "f1", targetParentId: null });
-    expect(mockPrisma.documentFolder.update).toHaveBeenCalledWith({
-      where: { id: "f1" },
-      data: { parentId: null },
+    const { caller, store } = makeCaller({
+      documentFolders: [{ id: "f1", name: "F1", matterId: "m1", parentId: "f-x" }],
     });
+    await caller.moveFolder({ folderId: "f1", targetParentId: null });
+    expect(folders(store).find((f) => f.id === "f1")!.parentId).toBeNull();
   });
 });
 
 describe("document.breadcrumb", () => {
   it("bygger sökväg från rot till vald mapp", async () => {
-    // f3 → f2 → f1 → null
-    mockPrisma.documentFolder.findUnique
-      .mockResolvedValueOnce({ id: "f3", name: "Beslut", parentId: "f2" })
-      .mockResolvedValueOnce({ id: "f2", name: "2024", parentId: "f1" })
-      .mockResolvedValueOnce({ id: "f1", name: "Inlagor", parentId: null });
-
-    const path = await makeCaller().breadcrumb({ folderId: "f3" });
+    const { caller } = makeCaller({
+      documentFolders: [
+        { id: "f1", name: "Inlagor", matterId: "m1", parentId: null },
+        { id: "f2", name: "2024", matterId: "m1", parentId: "f1" },
+        { id: "f3", name: "Beslut", matterId: "m1", parentId: "f2" },
+      ],
+    });
+    const path = await caller.breadcrumb({ folderId: "f3" });
     expect(path).toEqual([
       { id: "f1", name: "Inlagor" },
       { id: "f2", name: "2024" },
@@ -189,8 +184,8 @@ describe("document.breadcrumb", () => {
   });
 
   it("returnerar tom array när mapp ej finns", async () => {
-    mockPrisma.documentFolder.findUnique.mockResolvedValue(null);
-    const path = await makeCaller().breadcrumb({ folderId: "x" });
+    const { caller } = makeCaller();
+    const path = await caller.breadcrumb({ folderId: "x" });
     expect(path).toEqual([]);
   });
 });
