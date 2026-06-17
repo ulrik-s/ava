@@ -8,6 +8,7 @@
 import type { AccontoDeductionRepository } from "./acconto-deduction-repository";
 import type { CalendarEventRepository } from "./calendar-event-repository";
 import type { ContactRepository } from "./contact-repository";
+import type { DocumentTemplateRepository } from "./document-template-repository";
 import type { ExpenseRepository } from "./expense-repository";
 import type { InvoiceRepository } from "./invoice-repository";
 import type { MatterRepository } from "./matter-repository";
@@ -33,5 +34,6 @@ export interface Repositories {
   tasks: TaskRepository;
   calendarEvents: CalendarEventRepository;
   serviceNotes: ServiceNoteRepository;
+  documentTemplates: DocumentTemplateRepository;
   transaction<T>(fn: (tx: Repositories) => Promise<T>): Promise<T>;
 }

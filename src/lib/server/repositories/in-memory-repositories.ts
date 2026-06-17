@@ -12,6 +12,7 @@ import type { DataStoreTx, IDataStore } from "../data-store/IDataStore";
 import { InMemoryAccontoDeductionRepository } from "./in-memory-acconto-deduction-repository";
 import { InMemoryCalendarEventRepository } from "./in-memory-calendar-event-repository";
 import { InMemoryContactRepository } from "./in-memory-contact-repository";
+import { InMemoryDocumentTemplateRepository } from "./in-memory-document-template-repository";
 import { InMemoryExpenseRepository } from "./in-memory-expense-repository";
 import { InMemoryInvoiceRepository } from "./in-memory-invoice-repository";
 import { InMemoryMatterRepository } from "./in-memory-matter-repository";
@@ -40,6 +41,7 @@ function reposForTx(tx: DataStoreTx): Repositories {
     tasks: new InMemoryTaskRepository(tx),
     calendarEvents: new InMemoryCalendarEventRepository(tx),
     serviceNotes: new InMemoryServiceNoteRepository(tx),
+    documentTemplates: new InMemoryDocumentTemplateRepository(tx),
     transaction: (fn) => fn(repos),
   };
   return repos;
@@ -60,6 +62,7 @@ export function buildInMemoryRepositories(dataStore: IDataStore): Repositories {
     tasks: new InMemoryTaskRepository(dataStore),
     calendarEvents: new InMemoryCalendarEventRepository(dataStore),
     serviceNotes: new InMemoryServiceNoteRepository(dataStore),
+    documentTemplates: new InMemoryDocumentTemplateRepository(dataStore),
     transaction: (fn) => dataStore.transaction((tx) => fn(reposForTx(tx))),
   };
 }

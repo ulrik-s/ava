@@ -1,5 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
+import type { IDataStore } from "@/lib/server/data-store/IDataStore";
+import { buildInMemoryRepositories } from "@/lib/server/repositories/in-memory-repositories";
 import { documentTemplateRouter } from "@/lib/server/routers/documentTemplate";
 import { dataStoreFromMockPrisma } from "../helpers/mock-data-store";
 
@@ -7,9 +9,11 @@ import { dataStoreFromMockPrisma } from "../helpers/mock-data-store";
 
 /** Build a caller with a given org context. */
 function makeCaller(orgId = "org-a") {
+  const dataStore = dataStoreFromMockPrisma(mockPrisma as unknown as Record<string, unknown>);
   const ctx = {
     user: { id: "user-1", email: "a@b.com", name: "Test", role: "ADMIN", organizationId: orgId },
-    prisma: mockPrisma, dataStore: dataStoreFromMockPrisma(mockPrisma as unknown as Record<string, unknown>),
+    prisma: mockPrisma, dataStore,
+    repos: buildInMemoryRepositories(dataStore as unknown as IDataStore),
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return documentTemplateRouter.createCaller(ctx as any);
@@ -31,7 +35,7 @@ const TEMPLATE_A = {
 const mockPrisma = {
   documentTemplate: {
     findMany: vi.fn(),
-    findUnique: vi.fn(),
+    findFirst: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
     delete: vi.fn(),
@@ -81,22 +85,20 @@ describe("documentTemplate.list", () => {
 
 describe("documentTemplate.getById", () => {
   it("returns the template when it belongs to the caller's org", async () => {
-    mockPrisma.documentTemplate.findUnique.mockResolvedValue(TEMPLATE_A);
+    mockPrisma.documentTemplate.findFirst.mockResolvedValue(TEMPLATE_A);
     const result = await makeCaller("org-a").getById({ id: "tpl-1" });
     expect(result.id).toBe("tpl-1");
     expect(result.content).toBe("<h1>{{matter.title}}</h1>");
   });
 
   it("throws NOT_FOUND when template doesn't exist", async () => {
-    mockPrisma.documentTemplate.findUnique.mockResolvedValue(null);
+    mockPrisma.documentTemplate.findFirst.mockResolvedValue(null);
     await expect(makeCaller().getById({ id: "tpl-999" })).rejects.toThrow(TRPCError);
   });
 
   it("throws NOT_FOUND when template belongs to a different org", async () => {
-    mockPrisma.documentTemplate.findUnique.mockResolvedValue({
-      ...TEMPLATE_A,
-      organizationId: "org-b", // different org
-    });
+    // getByIdInOrg org-scopar via where → annan org ger ingen träff (null).
+    mockPrisma.documentTemplate.findFirst.mockResolvedValue(null);
     await expect(makeCaller("org-a").getById({ id: "tpl-1" })).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
@@ -155,7 +157,7 @@ describe("documentTemplate.create", () => {
 
 describe("documentTemplate.update", () => {
   it("updates a template that belongs to the caller's org", async () => {
-    mockPrisma.documentTemplate.findUnique.mockResolvedValue({ organizationId: "org-a" });
+    mockPrisma.documentTemplate.findFirst.mockResolvedValue({ organizationId: "org-a" });
     mockPrisma.documentTemplate.update.mockResolvedValue({ ...TEMPLATE_A, name: "Nytt namn" });
 
     const result = await makeCaller("org-a").update({ id: "tpl-1", name: "Nytt namn" });
@@ -166,7 +168,7 @@ describe("documentTemplate.update", () => {
   });
 
   it("throws NOT_FOUND when updating a template from another org", async () => {
-    mockPrisma.documentTemplate.findUnique.mockResolvedValue({ organizationId: "org-b" });
+    mockPrisma.documentTemplate.findFirst.mockResolvedValue(null);
     await expect(
       makeCaller("org-a").update({ id: "tpl-1", name: "Hacked" })
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
@@ -174,7 +176,7 @@ describe("documentTemplate.update", () => {
   });
 
   it("throws NOT_FOUND when template does not exist", async () => {
-    mockPrisma.documentTemplate.findUnique.mockResolvedValue(null);
+    mockPrisma.documentTemplate.findFirst.mockResolvedValue(null);
     await expect(
       makeCaller().update({ id: "tpl-999", name: "Ghost" })
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
@@ -185,7 +187,7 @@ describe("documentTemplate.update", () => {
 
 describe("documentTemplate.delete", () => {
   it("deletes a template that belongs to the caller's org", async () => {
-    mockPrisma.documentTemplate.findUnique.mockResolvedValue({ organizationId: "org-a" });
+    mockPrisma.documentTemplate.findFirst.mockResolvedValue({ organizationId: "org-a" });
     mockPrisma.documentTemplate.delete.mockResolvedValue(TEMPLATE_A);
 
     await makeCaller("org-a").delete({ id: "tpl-1" });
@@ -193,7 +195,7 @@ describe("documentTemplate.delete", () => {
   });
 
   it("throws NOT_FOUND when trying to delete from another org", async () => {
-    mockPrisma.documentTemplate.findUnique.mockResolvedValue({ organizationId: "org-b" });
+    mockPrisma.documentTemplate.findFirst.mockResolvedValue(null);
     await expect(makeCaller("org-a").delete({ id: "tpl-1" })).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
@@ -201,7 +203,7 @@ describe("documentTemplate.delete", () => {
   });
 
   it("throws NOT_FOUND when template does not exist", async () => {
-    mockPrisma.documentTemplate.findUnique.mockResolvedValue(null);
+    mockPrisma.documentTemplate.findFirst.mockResolvedValue(null);
     await expect(makeCaller().delete({ id: "tpl-999" })).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
