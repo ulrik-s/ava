@@ -13,6 +13,7 @@ import type { InvoiceRepository } from "./invoice-repository";
 import type { MatterRepository } from "./matter-repository";
 import type { PaymentPlanRepository } from "./payment-plan-repository";
 import type { PaymentRepository } from "./payment-repository";
+import type { ServiceNoteRepository } from "./service-note-repository";
 import type { TaskRepository } from "./task-repository";
 import type { TimeEntryRepository } from "./time-entry-repository";
 import type { UserRepository } from "./user-repository";
@@ -31,5 +32,6 @@ export interface Repositories {
   users: UserRepository;
   tasks: TaskRepository;
   calendarEvents: CalendarEventRepository;
+  serviceNotes: ServiceNoteRepository;
   transaction<T>(fn: (tx: Repositories) => Promise<T>): Promise<T>;
 }
