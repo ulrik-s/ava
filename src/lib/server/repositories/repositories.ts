@@ -6,6 +6,7 @@
  */
 
 import type { AccontoDeductionRepository } from "./acconto-deduction-repository";
+import type { CalendarEventRepository } from "./calendar-event-repository";
 import type { ContactRepository } from "./contact-repository";
 import type { ExpenseRepository } from "./expense-repository";
 import type { InvoiceRepository } from "./invoice-repository";
@@ -29,5 +30,6 @@ export interface Repositories {
   contacts: ContactRepository;
   users: UserRepository;
   tasks: TaskRepository;
+  calendarEvents: CalendarEventRepository;
   transaction<T>(fn: (tx: Repositories) => Promise<T>): Promise<T>;
 }

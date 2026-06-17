@@ -13,7 +13,7 @@
  */
 
 import { z } from "zod";
-import { calendarEventKindSchema, calendarEventVisibilitySchema } from "@/lib/shared/schemas";
+import { calendarEventKindSchema, calendarEventVisibilitySchema, type CalendarEvent } from "@/lib/shared/schemas";
 import {
   asId,
   calendarEventIdSchema,
@@ -21,7 +21,7 @@ import {
   userIdSchema,
   contactIdSchema,
 } from "@/lib/shared/schemas/ids";
-import { router, protectedProcedure } from "../trpc";
+import { router, protectedProcedure, TRPCError } from "../trpc";
 
 const createInput = z.object({
   kind: calendarEventKindSchema.default("appointment"),
@@ -97,14 +97,7 @@ export const calendarRouter = router({
       }).optional(),
     )
     .query(async ({ ctx, input }) => {
-      const events = await ctx.dataStore.calendarEvents.findMany({
-        where: {
-          userId: ctx.user.id,
-          organizationId: ctx.user.organizationId,
-        },
-        orderBy: { startAt: "asc" },
-        include: { matter: { select: { id: true, matterNumber: true, title: true } } },
-      });
+      const events = await ctx.repos.calendarEvents.listForUser(ctx.user.id, ctx.user.organizationId);
       // Tidsfilter sker i minne (in-memory query-engine stödjer inte range över Date)
       if (!input?.from && !input?.to) return events;
       return events.filter((e: { startAt: Date | string }) => {
@@ -134,14 +127,7 @@ export const calendarRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       if (input.userIds.length === 0) return [];
-      const events = await ctx.dataStore.calendarEvents.findMany({
-        where: {
-          organizationId: ctx.user.organizationId,
-          userId: { in: input.userIds },
-        },
-        orderBy: { startAt: "asc" },
-        include: { matter: { select: { id: true, matterNumber: true, title: true } } },
-      });
+      const events = await ctx.repos.calendarEvents.listForUsers(input.userIds, ctx.user.organizationId);
       const visible = events.filter((e: { userId: string; visibility?: string }) =>
         e.visibility !== "private" || e.userId === ctx.user.id,
       );
@@ -156,12 +142,11 @@ export const calendarRouter = router({
 
   getById: protectedProcedure
     .input(z.object({ id: z.string() }))
-    .query(({ ctx, input }) =>
-      ctx.dataStore.calendarEvents.findFirstOrThrow({
-        where: { id: input.id, userId: ctx.user.id, organizationId: ctx.user.organizationId },
-        include: { matter: { select: { id: true, matterNumber: true, title: true } } },
-      }),
-    ),
+    .query(async ({ ctx, input }) => {
+      const ev = await ctx.repos.calendarEvents.getOwnedWithMatter(input.id, ctx.user.id, ctx.user.organizationId);
+      if (!ev) throw new TRPCError({ code: "NOT_FOUND" });
+      return ev;
+    }),
 
   create: protectedProcedure
     .input(createInput)
@@ -171,53 +156,47 @@ export const calendarRouter = router({
       const cleanInput = Object.fromEntries(
         Object.entries(input).filter(([, v]) => v !== undefined),
       );
-      return ctx.dataStore.calendarEvents.create({
-        data: {
-          ...cleanInput,
-          userId: input.userId ?? asId<"UserId">(ctx.user.id),
-          organizationId: asId<"OrganizationId">(ctx.user.organizationId),
-          mirrorStatus: input.mirrorToOutlook ? "pending" : null,
-        },
-      });
+      return ctx.repos.calendarEvents.create({
+        ...cleanInput,
+        userId: input.userId ?? asId<"UserId">(ctx.user.id),
+        organizationId: asId<"OrganizationId">(ctx.user.organizationId),
+        mirrorStatus: input.mirrorToOutlook ? "pending" : null,
+      } as Partial<CalendarEvent>);
     }),
 
   /** Alla events kopplade till ett specifikt ärende, kronologiskt. */
   listForMatter: protectedProcedure
     .input(z.object({ matterId: z.string() }))
-    .query(async ({ ctx, input }) => {
-      return ctx.dataStore.calendarEvents.findMany({
-        where: { matterId: input.matterId, organizationId: ctx.user.organizationId },
-        orderBy: { startAt: "asc" },
-      });
-    }),
+    .query(({ ctx, input }) =>
+      ctx.repos.calendarEvents.listForMatter(input.matterId, ctx.user.organizationId),
+    ),
 
   update: protectedProcedure
     .input(updateInput)
     .mutation(async ({ ctx, input }) => {
       const { id, ...data } = input;
-      const existing = await ctx.dataStore.calendarEvents.findFirstOrThrow({
-        where: { id, userId: ctx.user.id, organizationId: ctx.user.organizationId },
-      });
+      const existing = await ctx.repos.calendarEvents.getOwned(id, ctx.user.id, ctx.user.organizationId);
+      if (!existing) throw new TRPCError({ code: "NOT_FOUND" });
       // exactOptionalPropertyTypes: utelämna nycklar vars värde är undefined
       // i write-payloaden (förr droppades de ändå). `computeMirrorPatch` får
       // dock det råa `data` så dess nyckel-räkning av "ändrade fält" bevaras.
       const writeData = Object.fromEntries(
         Object.entries(data).filter(([, v]) => v !== undefined),
       );
-      return ctx.dataStore.calendarEvents.update({
-        where: { id },
-        data: { ...writeData, ...computeMirrorPatch(data, existing) },
-      });
+      return ctx.repos.calendarEvents.update(id, {
+        ...writeData, ...computeMirrorPatch(data, existing),
+      } as Partial<CalendarEvent>);
     }),
 
   delete: protectedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
       // Säkerställ ownership innan delete
-      await ctx.dataStore.calendarEvents.findFirstOrThrow({
-        where: { id: input.id, userId: ctx.user.id, organizationId: ctx.user.organizationId },
-      });
-      return ctx.dataStore.calendarEvents.delete({ where: { id: input.id } });
+      const owned = await ctx.repos.calendarEvents.getOwned(input.id, ctx.user.id, ctx.user.organizationId);
+      if (!owned) throw new TRPCError({ code: "NOT_FOUND" });
+      // Hård delete bevarar dagens beteende (ADR 0017-delete-policy öppen).
+      await ctx.repos.calendarEvents.hardDelete(input.id);
+      return { id: input.id };
     }),
 
   /**
@@ -237,10 +216,9 @@ export const calendarRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      await ctx.dataStore.calendarEvents.findFirstOrThrow({
-        where: { id: input.id, userId: ctx.user.id, organizationId: ctx.user.organizationId },
-      });
+      const owned = await ctx.repos.calendarEvents.getOwned(input.id, ctx.user.id, ctx.user.organizationId);
+      if (!owned) throw new TRPCError({ code: "NOT_FOUND" });
       const { id, ...data } = input;
-      return ctx.dataStore.calendarEvents.update({ where: { id }, data });
+      return ctx.repos.calendarEvents.update(id, data as Partial<CalendarEvent>);
     }),
 });
