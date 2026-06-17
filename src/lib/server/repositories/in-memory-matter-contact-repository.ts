@@ -7,7 +7,9 @@
 import type { MatterContact } from "@/lib/shared/schemas/matter";
 import type { Delegate, IDataStore } from "../data-store/IDataStore";
 import { InMemoryRepository } from "./in-memory-repository";
-import type { ConflictContactRow, MatterContactRepository } from "./matter-contact-repository";
+import type {
+  ConflictContactRow, MatterContactRepository, MatterContactWithContact,
+} from "./matter-contact-repository";
 
 export type MatterContactRepoSource = Pick<IDataStore, "matterContacts">;
 
@@ -35,5 +37,17 @@ export class InMemoryMatterContactRepository
         }
       : { matter: { organizationId } };
     return (await this.delegate.findMany({ where, include: MC_INCLUDE })) as ConflictContactRow[];
+  }
+
+  async getByIdInOrg(id: string, organizationId: string): Promise<MatterContact | null> {
+    const row = (await this.delegate.findFirst({
+      where: { id, matter: { organizationId } },
+    })) as (MatterContact & { deletedAt?: unknown }) | null;
+    return row && !row.deletedAt ? row : null;
+  }
+
+  async linkContact(data: Partial<MatterContact>): Promise<MatterContactWithContact> {
+    // create enrichar raden med contact (LocalStore.enrichRowForEntity).
+    return (await this.create(data)) as unknown as MatterContactWithContact;
   }
 }

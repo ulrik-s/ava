@@ -5,11 +5,14 @@
  */
 
 import { and, eq, isNull, or, sql } from "drizzle-orm";
+import type { Contact } from "@/lib/shared/schemas/contact";
 import type { MatterContact } from "@/lib/shared/schemas/matter";
 import { contacts, matterContacts, matters } from "../db/schema";
 import type { AppDb } from "../db/types";
 import { DrizzleRepository, type VersionedTable } from "./drizzle-repository";
-import type { ConflictContactRow, MatterContactRepository } from "./matter-contact-repository";
+import type {
+  ConflictContactRow, MatterContactRepository, MatterContactWithContact,
+} from "./matter-contact-repository";
 
 export class DrizzleMatterContactRepository
   extends DrizzleRepository<MatterContact>
@@ -48,5 +51,21 @@ export class DrizzleMatterContactRepository
         contacts: r.klient ? [{ contact: { name: r.klient as string } }] : [],
       },
     }));
+  }
+
+  async getByIdInOrg(id: string, organizationId: string): Promise<MatterContact | null> {
+    const rows = await this.db
+      .select({ mc: matterContacts }).from(matterContacts)
+      .innerJoin(matters, eq(matterContacts.matterId, matters.id))
+      .where(and(eq(matterContacts.id, id), eq(matters.organizationId, organizationId), isNull(matterContacts.deletedAt)))
+      .limit(1);
+    return (rows[0]?.mc as unknown as MatterContact | undefined) ?? null;
+  }
+
+  async linkContact(data: Partial<MatterContact>): Promise<MatterContactWithContact> {
+    const link = await this.create(data);
+    const [contact] = await this.db
+      .select().from(contacts).where(eq(contacts.id, (link as { contactId: string }).contactId)).limit(1);
+    return { ...(link as object), contact: contact as unknown as Contact } as MatterContactWithContact;
   }
 }

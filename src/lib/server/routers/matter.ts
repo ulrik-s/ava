@@ -14,23 +14,23 @@ import {
   type MatterId,
   type ContactId,
 } from "@/lib/shared/schemas/ids";
-import type { IDataStore } from "../data-store/IDataStore";
+import type { Matter, MatterContact } from "@/lib/shared/schemas/matter";
 import { emit } from "../events/emit";
-import { router, orgProcedure, requireOrgOwned } from "../trpc";
+import type { Repositories } from "../repositories/repositories";
+import { router, orgProcedure, TRPCError } from "../trpc";
 
-type MatterCtx = { dataStore: IDataStore; orgId: string };
+type MatterCtx = { repos: Repositories; orgId: string };
 
 /**
  * Hjälpare: hämta matter och verifiera att den tillhör anropande org.
  * `matterId` är branded ([[ids]]) — TS hindrar att man råkar skicka en
- * `ContactId` hit.
+ * `ContactId` hit. Kastar NOT_FOUND vid mismatch (speglar `requireOrgOwned`).
  */
-const assertMatterInOrg = (ctx: MatterCtx, matterId: MatterId) =>
-  requireOrgOwned(
-    () => ctx.dataStore.matters.findUnique({ where: { id: matterId } }),
-    ctx.orgId,
-    (m) => m.organizationId,
-  );
+async function assertMatterInOrg(ctx: MatterCtx, matterId: MatterId): Promise<Matter> {
+  const m = await ctx.repos.matters.getByIdInOrg(matterId, ctx.orgId);
+  if (!m) throw new TRPCError({ code: "NOT_FOUND" });
+  return m;
+}
 
 /**
  * create-input. Optionella setup-fält (id, matterNumber, status,
@@ -78,11 +78,10 @@ function maxSeq(matters: ReadonlyArray<{ matterNumber: string }>, year: number):
 
 /** Den ansvariga juristens prefix (tom om okänd/ej i org:en/ingen prefix satt). */
 async function lawyerPrefix(ctx: MatterCtx, userId: string): Promise<string> {
-  const u = (await ctx.dataStore.users.findUnique({ where: { id: userId } })) as
-    | { organizationId?: string; matterNumberPrefix?: string | null }
+  const u = (await ctx.repos.users.getByIdInOrg(userId, ctx.orgId)) as
+    | { matterNumberPrefix?: string | null }
     | null;
-  if (!u || u.organizationId !== ctx.orgId) return "";
-  return u.matterNumberPrefix ?? "";
+  return u?.matterNumberPrefix ?? "";
 }
 
 /**
@@ -104,11 +103,9 @@ async function nextMatterNumber(ctx: MatterCtx, responsibleLawyerId?: string): P
   const prefix = responsibleLawyerId ? await lawyerPrefix(ctx, responsibleLawyerId) : "";
 
   const ownMatters = responsibleLawyerId
-    ? await ctx.dataStore.matters.findMany({ where: { organizationId: ctx.orgId, responsibleLawyerId } })
+    ? await ctx.repos.matters.listByResponsibleLawyer(ctx.orgId, responsibleLawyerId)
     : [];
-  const prefixMatters = await ctx.dataStore.matters.findMany({
-    where: { organizationId: ctx.orgId, matterNumber: { startsWith: `${prefix}${year}-` } },
-  });
+  const prefixMatters = await ctx.repos.matters.listByNumberPrefix(ctx.orgId, `${prefix}${year}-`);
 
   const seq = Math.max(maxSeq(ownMatters, year), maxSeq(prefixMatters, year)) + 1;
   return `${prefix}${year}-${seq.toString().padStart(4, "0")}`;
@@ -153,12 +150,9 @@ function buildMatterData(
 
 // Branded params: en swap av argumenten (matterId ↔ klientId) blir ett TS-fel.
 async function linkKlient(ctx: MatterCtx, matterId: MatterId, klientId: ContactId): Promise<void> {
-  await requireOrgOwned(
-    () => ctx.dataStore.contacts.findUnique({ where: { id: klientId } }),
-    ctx.orgId,
-    (c) => c.organizationId,
-  );
-  await ctx.dataStore.matterContacts.create({ data: { matterId, contactId: klientId, role: "KLIENT" } });
+  const contact = await ctx.repos.contacts.getByIdFull(klientId, ctx.orgId);
+  if (!contact) throw new TRPCError({ code: "NOT_FOUND" });
+  await ctx.repos.matterContacts.create({ matterId, contactId: klientId, role: "KLIENT" } as Partial<MatterContact>);
 }
 
 export const matterRouter = router({
@@ -173,57 +167,25 @@ export const matterRouter = router({
         pageSize: z.number().min(1).max(500).default(20),
       })
     )
+    // Migrerad till repository-sömmen (ADR 0020): listForOrg kapslar in
+    // filter/sök-where + KLIENT-include + _count + total.
     .query(async ({ ctx, input }) => {
-      const where = {
-        organizationId: ctx.orgId,
-        ...(input.status ? { status: input.status } : {}),
-        ...(input.employeeId ? { timeEntries: { some: { userId: input.employeeId } } } : {}),
-        ...(input.search
-          ? {
-              OR: [
-                { title: { contains: input.search, mode: "insensitive" as const } },
-                { matterNumber: { contains: input.search, mode: "insensitive" as const } },
-                { contacts: { some: { contact: { name: { contains: input.search, mode: "insensitive" as const } } } } },
-              ],
-            }
-          : {}),
-      };
-
-      const [matters, total] = await Promise.all([
-        ctx.dataStore.matters.findMany({
-          where,
-          orderBy: { createdAt: "desc" },
-          skip: (input.page - 1) * input.pageSize,
-          take: input.pageSize,
-          include: {
-            contacts: {
-              where: { role: "KLIENT" },
-              include: { contact: { select: { id: true, name: true } } },
-              take: 1,
-            },
-            _count: { select: { documents: true, timeEntries: true, contacts: true } },
-          },
-          // paymentMethod, paymentMethodNote, paymentMethodDecidedAt ingår som del av Matter
-        }),
-        ctx.dataStore.matters.count({ where }),
-      ]);
-
+      const { matters, total } = await ctx.repos.matters.listForOrg(ctx.orgId, {
+        search: input.search,
+        status: input.status,
+        employeeId: input.employeeId,
+        page: input.page,
+        pageSize: input.pageSize,
+      });
       return { matters, total, pages: Math.ceil(total / input.pageSize) };
     }),
 
   getById: orgProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
-      return ctx.dataStore.matters.findFirstOrThrow({
-        where: { id: input.id, organizationId: ctx.orgId },
-        include: {
-          contacts: {
-            include: { contact: true },
-            orderBy: { createdAt: "asc" },
-          },
-          _count: { select: { documents: true, timeEntries: true, emails: true } },
-        },
-      });
+      const matter = await ctx.repos.matters.getByIdWithContacts(input.id, ctx.orgId);
+      if (!matter) throw new TRPCError({ code: "NOT_FOUND", message: "Ärendet finns inte." });
+      return matter;
     }),
 
   create: orgProcedure
@@ -232,9 +194,9 @@ export const matterRouter = router({
       // Ansvarig jurist = explicit val, annars skaparen (#174). Styr serien.
       const responsibleLawyerId = input.responsibleLawyerId ?? ctx.user.id;
       const matterNumber = input.matterNumber ?? (await nextMatterNumber(ctx, responsibleLawyerId));
-      const matter = await ctx.dataStore.matters.create({
-        data: buildMatterData(ctx.orgId, matterNumber, responsibleLawyerId, input),
-      });
+      const matter = await ctx.repos.matters.create(
+        buildMatterData(ctx.orgId, matterNumber, responsibleLawyerId, input) as Partial<Matter>,
+      );
       await emit.matterCreated(ctx, matter);
       // matter.id washar till `any` via Joined<>; brand explicit. klientId
       // kommer från (redan validerad) input-sträng → trusted boundary-cast.
@@ -280,7 +242,7 @@ export const matterRouter = router({
       if (taxaHufStart !== undefined) {
         data.taxaHufStart = taxaHufStart ? new Date(taxaHufStart) : null;
       }
-      const updated = await ctx.dataStore.matters.update({ where: { id }, data });
+      const updated = await ctx.repos.matters.update(id, data as Partial<Matter>);
       await emit.matterUpdated(ctx, id, data);
       if (input.status && input.status !== before.status) {
         await emit.matterStatusChanged(ctx, id, before.status, input.status);
@@ -304,21 +266,15 @@ export const matterRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       await assertMatterInOrg(ctx, input.matterId);
-      await requireOrgOwned(
-        () => ctx.dataStore.contacts.findUnique({ where: { id: input.contactId } }),
-        ctx.orgId,
-        (c) => c.organizationId,
-      );
+      const contact = await ctx.repos.contacts.getByIdFull(input.contactId, ctx.orgId);
+      if (!contact) throw new TRPCError({ code: "NOT_FOUND" });
       const { createdAt, id, notes, ...rest } = input;
-      return ctx.dataStore.matterContacts.create({
-        data: omitUndefined({
-          ...rest,
-          id,
-          notes,
-          ...(createdAt ? { createdAt: new Date(createdAt) } : {}),
-        }),
-        include: { contact: true },
-      });
+      return ctx.repos.matterContacts.linkContact(omitUndefined({
+        ...rest,
+        id,
+        notes,
+        ...(createdAt ? { createdAt: new Date(createdAt) } : {}),
+      }) as Partial<MatterContact>);
     }),
 
   // Create a new contact and link it to the matter in one step
@@ -340,43 +296,30 @@ export const matterRouter = router({
       await assertMatterInOrg(ctx, input.matterId);
       const { matterId, role, notes, ...contactData } = input;
 
-      // Check if contact already exists by personal/org number
-      let contact = null;
+      // Återanvänd befintlig kontakt på pnr/orgnr, annars skapa ny.
+      let contact: { id: string } | null = null;
       if (contactData.personalNumber) {
-        contact = await ctx.dataStore.contacts.findFirst({
-          where: { personalNumber: contactData.personalNumber, organizationId: ctx.orgId },
-        });
+        contact = await ctx.repos.contacts.findByPersonalNumber(ctx.orgId, contactData.personalNumber);
       } else if (contactData.orgNumber) {
-        contact = await ctx.dataStore.contacts.findFirst({
-          where: { orgNumber: contactData.orgNumber, organizationId: ctx.orgId },
-        });
+        contact = await ctx.repos.contacts.findByOrgNumber(ctx.orgId, contactData.orgNumber);
       }
 
       if (!contact) {
-        contact = await ctx.dataStore.contacts.create({
-          data: { ...contactData, organizationId: ctx.orgId },
-        });
+        contact = await ctx.repos.contacts.create({ ...contactData, organizationId: ctx.orgId } as never);
       }
 
-      return ctx.dataStore.matterContacts.create({
-        data: { matterId, contactId: contact.id, role, notes },
-        include: { contact: true },
-      });
+      return ctx.repos.matterContacts.linkContact(
+        { matterId, contactId: contact.id, role, notes } as Partial<MatterContact>,
+      );
     }),
 
   removeContact: orgProcedure
     .input(z.object({ matterContactId: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      // Verifiera via matterContact→matter→org
-      await requireOrgOwned(
-        () =>
-          ctx.dataStore.matterContacts.findUnique({
-            where: { id: input.matterContactId },
-            include: { matter: { select: { organizationId: true } } },
-          }),
-        ctx.orgId,
-        (mc) => mc.matter.organizationId,
-      );
-      return ctx.dataStore.matterContacts.delete({ where: { id: input.matterContactId } });
+      // Verifiera via matterContact→matter→org INNAN delete.
+      const owned = await ctx.repos.matterContacts.getByIdInOrg(input.matterContactId, ctx.orgId);
+      if (!owned) throw new TRPCError({ code: "NOT_FOUND" });
+      await ctx.repos.matterContacts.hardDelete(input.matterContactId);
+      return owned;
     }),
 });

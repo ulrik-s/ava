@@ -1,432 +1,276 @@
 /**
- * Integrationstest för matterRouter.
- *
- * Mockar prisma-klienten och kör routern via createCaller. Täcker:
- *   - list:           pagination, status-filter, sökning, org-scoping
- *   - getById:        normalt fall + cross-org NOT_FOUND
- *   - create:         autogenerering av matterNumber, klient-koppling
- *   - update:         status, paymentMethod, paymentMethodDecidedAt-konvertering
- *   - addContact:     normal + cross-org spärr
- *   - addNewContact:  återanvändning av befintlig kontakt + skapande
- *   - removeContact:  normal + cross-org spärr
+ * Integrationstest för matterRouter — kör mot en riktig DemoDataStore via
+ * buildContext (repos, ADR 0020). Täcker list/getById/create/update/
+ * addContact/addNewContact/removeContact inkl. org-scoping + #174-serien.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest-compat";
-import { matterRouter } from "@/lib/server/routers/matter";
-import { dataStoreFromMockPrisma } from "../helpers/mock-data-store";
+import { describe, it, expect } from "vitest-compat";
+import { noopPorts } from "@/lib/server/adapters/noop-ports";
+import type { Principal } from "@/lib/server/auth/principal";
+import { buildContext } from "@/lib/server/build-context";
+import { DemoDataStore } from "@/lib/server/data-store/DemoDataStore";
+import type { DemoSource } from "@/lib/server/data-store/DemoDataStore";
+import { appRouter } from "@/lib/server/routers/_app";
 
-const mockPrisma = {
-  matter: {
-    findFirst: vi.fn(),
-    findUnique: vi.fn(),
-    findFirstOrThrow: vi.fn(),
-    findMany: vi.fn(),
-    count: vi.fn(),
-    create: vi.fn(),
-    update: vi.fn(),
-  },
-  contact: {
-    findFirst: vi.fn(),
-    findUnique: vi.fn(),
-    create: vi.fn(),
-  },
-  matterContact: {
-    findUnique: vi.fn(),
-    create: vi.fn(),
-    delete: vi.fn(),
-  },
-  user: {
-    findUnique: vi.fn(),
-  },
-};
+const ORG = "org-a";
+const YEAR = new Date().getFullYear();
 
-function makeCaller(orgId = "org-a", userId = "user-1") {
-  const ctx = {
-    user: { id: userId, email: "a@b.com", name: "Test", role: "LAWYER", organizationId: orgId },
-    prisma: mockPrisma, dataStore: dataStoreFromMockPrisma(mockPrisma as unknown as Record<string, unknown>),
-  };
+function makeCaller(seed: Partial<DemoSource> = {}, orgId = ORG, userId = "user-1") {
+  const ds = new DemoDataStore({
+    organizations: [{ id: ORG, name: "X" }, { id: "org-b", name: "Y" }],
+    users: [{ id: "user-1", organizationId: ORG, email: "a@b.com", name: "Test", role: "LAWYER" }],
+    matters: [],
+    contacts: [],
+    matterContacts: [],
+    ...seed,
+  } as DemoSource, async () => { /* writable */ });
+  const principal: Principal = { id: userId, email: "a@b.com", name: "Test", role: "LAWYER", organizationId: orgId };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return matterRouter.createCaller(ctx as any);
+  const caller = appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal }) as any);
+  return { ds, caller: caller.matter };
 }
 
-beforeEach(() => {
-  vi.clearAllMocks();
-  // Default: ansvarig jurist (ctx.user) finns i org:en utan prefix (#174) →
-  // nextMatterNumber faller tillbaka på org-gemensam serie utan prefix.
-  mockPrisma.user.findUnique.mockResolvedValue({ organizationId: "org-a", matterNumberPrefix: null });
+function src(ds: DemoDataStore): DemoSource {
+  return (ds as unknown as { source: DemoSource }).source;
+}
+function mcs(ds: DemoDataStore): Array<Record<string, unknown>> {
+  return (src(ds).matterContacts ?? []) as Array<Record<string, unknown>>;
+}
+
+const matter = (o: Record<string, unknown> = {}) => ({
+  id: "matter-1", organizationId: ORG, matterNumber: `${YEAR}-0001`, title: "Bodelning",
+  status: "ACTIVE", createdAt: new Date(), ...o,
 });
 
-const MATTER_A = {
-  id: "matter-1",
-  organizationId: "org-a",
-  matterNumber: "2026-0001",
-  title: "Bodelning",
-};
-
-// ─── list ────────────────────────────────────────────────────────
-
 describe("matter.list", () => {
-  it("returnerar paginerat resultat", async () => {
-    mockPrisma.matter.findMany.mockResolvedValue([MATTER_A]);
-    mockPrisma.matter.count.mockResolvedValue(1);
-
-    const res = await makeCaller().list({ page: 1, pageSize: 20 });
-    expect(res.matters).toHaveLength(1);
-    expect(res.total).toBe(1);
+  it("returnerar paginerat resultat, org-scopat", async () => {
+    const { caller } = makeCaller({ matters: [matter(), matter({ id: "m2", matterNumber: `${YEAR}-0002` })] });
+    const res = await caller.list({ page: 1, pageSize: 20 });
+    expect(res.matters).toHaveLength(2);
+    expect(res.total).toBe(2);
     expect(res.pages).toBe(1);
   });
 
-  it("scopar alltid på organizationId", async () => {
-    mockPrisma.matter.findMany.mockResolvedValue([]);
-    mockPrisma.matter.count.mockResolvedValue(0);
-
-    await makeCaller("org-a").list({});
-    expect(mockPrisma.matter.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({ organizationId: "org-a" }),
-      }),
-    );
+  it("scopar alltid på organizationId (ingen läcka)", async () => {
+    const { caller } = makeCaller({ matters: [matter()] }, "org-b");
+    expect((await caller.list({})).matters).toHaveLength(0);
   });
 
-  it("filtrerar på status när angivet", async () => {
-    mockPrisma.matter.findMany.mockResolvedValue([]);
-    mockPrisma.matter.count.mockResolvedValue(0);
-
-    await makeCaller().list({ status: "ACTIVE" });
-    expect(mockPrisma.matter.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({ status: "ACTIVE" }),
-      }),
-    );
+  it("filtrerar på status", async () => {
+    const { caller } = makeCaller({
+      matters: [matter(), matter({ id: "m2", matterNumber: `${YEAR}-0002`, status: "CLOSED" })],
+    });
+    const res = await caller.list({ status: "CLOSED" });
+    expect(res.matters.map((m) => m.id)).toEqual(["m2"]);
   });
 
-  it("filtrerar på medarbetare (tidsposter) när employeeId angivet", async () => {
-    mockPrisma.matter.findMany.mockResolvedValue([]);
-    mockPrisma.matter.count.mockResolvedValue(0);
-
-    await makeCaller().list({ employeeId: "u-bjorn" });
-    expect(mockPrisma.matter.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          timeEntries: { some: { userId: "u-bjorn" } },
-        }),
-      }),
-    );
+  it("filtrerar på medarbetare (tidsposter)", async () => {
+    const { caller } = makeCaller({
+      matters: [matter(), matter({ id: "m2", matterNumber: `${YEAR}-0002` })],
+      timeEntries: [{ id: "te1", organizationId: ORG, userId: "u-bjorn", matterId: "m2", minutes: 60, date: new Date(), hourlyRate: 1000, billable: true, description: "x" }],
+    });
+    const res = await caller.list({ employeeId: "u-bjorn" });
+    expect(res.matters.map((m) => m.id)).toEqual(["m2"]);
   });
 
-  it("utelämnar timeEntries-filter när employeeId saknas", async () => {
-    mockPrisma.matter.findMany.mockResolvedValue([]);
-    mockPrisma.matter.count.mockResolvedValue(0);
-
-    await makeCaller().list({});
-    const where = mockPrisma.matter.findMany.mock.calls[0]![0].where;
-    expect(where).not.toHaveProperty("timeEntries");
+  it("söker på titel/ärendenummer/klientnamn", async () => {
+    const { caller } = makeCaller({
+      matters: [matter({ title: "Tvist Bergström" }), matter({ id: "m2", matterNumber: `${YEAR}-0002`, title: "Annat" })],
+    });
+    expect((await caller.list({ search: "bergström" })).matters).toHaveLength(1);
   });
 
-  it("bygger OR-sökning på title/matterNumber/contacts", async () => {
-    mockPrisma.matter.findMany.mockResolvedValue([]);
-    mockPrisma.matter.count.mockResolvedValue(0);
-
-    await makeCaller().list({ search: "Berg" });
-    const callArgs = mockPrisma.matter.findMany.mock.calls[0]![0];
-    expect(callArgs.where.OR).toBeDefined();
-    expect(callArgs.where.OR).toHaveLength(3);
-  });
-
-  it("räknar pages korrekt vid total > pageSize", async () => {
-    mockPrisma.matter.findMany.mockResolvedValue([]);
-    mockPrisma.matter.count.mockResolvedValue(45);
-
-    const res = await makeCaller().list({ pageSize: 20 });
-    expect(res.pages).toBe(3); // ceil(45/20)
+  it("räknar pages korrekt", async () => {
+    const { caller } = makeCaller({
+      matters: [matter(), matter({ id: "m2", matterNumber: `${YEAR}-0002` }), matter({ id: "m3", matterNumber: `${YEAR}-0003` })],
+    });
+    expect((await caller.list({ pageSize: 2 })).pages).toBe(2); // ceil(3/2)
   });
 
   it("validerar pageSize-gränser via zod", async () => {
-    await expect(makeCaller().list({ pageSize: 600 })).rejects.toThrow(); // max 500
-    await expect(makeCaller().list({ page: 0 })).rejects.toThrow();
+    const { caller } = makeCaller();
+    await expect(caller.list({ pageSize: 600 })).rejects.toThrow();
+    await expect(caller.list({ page: 0 })).rejects.toThrow();
   });
 });
-
-// ─── getById ─────────────────────────────────────────────────────
 
 describe("matter.getById", () => {
-  it("hämtar matter med kontakter + counts", async () => {
-    mockPrisma.matter.findFirstOrThrow.mockResolvedValue(MATTER_A);
-    const res = await makeCaller().getById({ id: "matter-1" });
-    expect(res).toEqual(MATTER_A);
-    expect(mockPrisma.matter.findFirstOrThrow).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: "matter-1", organizationId: "org-a" },
-      }),
-    );
+  it("hämtar matter med kontakter", async () => {
+    const { caller } = makeCaller({
+      matters: [matter()],
+      contacts: [{ id: "c1", organizationId: ORG, name: "Klient", contactType: "PERSON" }],
+      matterContacts: [{ id: "mc1", matterId: "matter-1", contactId: "c1", role: "KLIENT" }],
+    });
+    const res = await caller.getById({ id: "matter-1" });
+    expect(res.id).toBe("matter-1");
+    expect(res.contacts).toHaveLength(1);
   });
 
-  it("kastar när matter saknas / fel org", async () => {
-    mockPrisma.matter.findFirstOrThrow.mockRejectedValue(new Error("not found"));
-    await expect(makeCaller().getById({ id: "x" })).rejects.toThrow();
+  it("NOT_FOUND när matter saknas / fel org", async () => {
+    const { caller } = makeCaller({ matters: [matter()] }, "org-b");
+    await expect(caller.getById({ id: "matter-1" })).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 });
 
-// ─── create ──────────────────────────────────────────────────────
-
 describe("matter.create", () => {
-  it("skapar nytt matter med matterNumber när inga finns", async () => {
-    mockPrisma.matter.findMany.mockResolvedValue([]);
-    mockPrisma.matter.create.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({
-      ...data,
-      id: "new",
-    }));
-
-    const year = new Date().getFullYear();
-    const res = await makeCaller().create({ title: "Nytt" });
-    expect(res.matterNumber).toBe(`${year}-0001`);
+  it("genererar matterNumber YYYY-0001 i tom serie", async () => {
+    const { caller } = makeCaller();
+    expect((await caller.create({ title: "Nytt" })).matterNumber).toBe(`${YEAR}-0001`);
   });
 
-  it("ökar serienumret från senaste matter", async () => {
-    const year = new Date().getFullYear();
-    mockPrisma.matter.findMany.mockResolvedValue([{ matterNumber: `${year}-0042` }]);
-    mockPrisma.matter.create.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({
-      ...data,
-      id: "new",
-    }));
-
-    const res = await makeCaller().create({ title: "T" });
-    expect(res.matterNumber).toBe(`${year}-0043`);
-  });
-
-  it("prefixar serien med ansvarig jurists prefix (#174)", async () => {
-    const year = new Date().getFullYear();
-    mockPrisma.user.findUnique.mockResolvedValue({ organizationId: "org-a", matterNumberPrefix: "AA" });
-    mockPrisma.matter.findMany.mockResolvedValue([]);
-    mockPrisma.matter.create.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({ ...data, id: "new" }));
-
-    const res = await makeCaller().create({ title: "T" });
-    expect(res.matterNumber).toBe(`AA${year}-0001`);
-  });
-
-  it("fortsätter serien vid prefix-byte: räknar på juristens egna ärenden (#174)", async () => {
-    const year = new Date().getFullYear();
-    mockPrisma.user.findUnique.mockResolvedValue({ organizationId: "org-a", matterNumberPrefix: "AB" });
-    // Juristens egna ärenden i år bär gamla prefixet AA (seq upp till 2) men
-    // inga AB-nummer finns ännu → nästa ska bli AB...0003, inte AB...0001.
-    mockPrisma.matter.findMany.mockImplementation(async ({ where }: { where: Record<string, unknown> }) => {
-      if ((where as { responsibleLawyerId?: string }).responsibleLawyerId) {
-        return [{ matterNumber: `AA${year}-0001` }, { matterNumber: `AA${year}-0002` }];
-      }
-      return []; // inga befintliga AB-nummer
+  it("ökar serienumret från juristens senaste ärende", async () => {
+    const { caller } = makeCaller({
+      matters: [matter({ id: "m0", matterNumber: `${YEAR}-0042`, responsibleLawyerId: "user-1" })],
     });
-    mockPrisma.matter.create.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({ ...data, id: "new" }));
+    expect((await caller.create({ title: "T" })).matterNumber).toBe(`${YEAR}-0043`);
+  });
 
-    const res = await makeCaller().create({ title: "T" });
-    expect(res.matterNumber).toBe(`AB${year}-0003`);
+  it("prefixar med ansvarig jurists prefix (#174)", async () => {
+    const { caller } = makeCaller({
+      users: [{ id: "user-1", organizationId: ORG, email: "a@b.com", name: "T", role: "LAWYER", matterNumberPrefix: "AA" }],
+    });
+    expect((await caller.create({ title: "T" })).matterNumber).toBe(`AA${YEAR}-0001`);
+  });
+
+  it("fortsätter serien vid prefix-byte (räknar juristens egna ärenden, #174)", async () => {
+    const { caller } = makeCaller({
+      users: [{ id: "user-1", organizationId: ORG, email: "a@b.com", name: "T", role: "LAWYER", matterNumberPrefix: "AB" }],
+      matters: [
+        matter({ id: "m1", matterNumber: `AA${YEAR}-0001`, responsibleLawyerId: "user-1" }),
+        matter({ id: "m2", matterNumber: `AA${YEAR}-0002`, responsibleLawyerId: "user-1" }),
+      ],
+    });
+    expect((await caller.create({ title: "T" })).matterNumber).toBe(`AB${YEAR}-0003`);
   });
 
   it("kopplar klient när klientId angivits", async () => {
-    mockPrisma.matter.findMany.mockResolvedValue([]);
-    mockPrisma.matter.create.mockResolvedValue({ id: "matter-1", organizationId: "org-a" });
-    mockPrisma.contact.findUnique.mockResolvedValue({ id: "c1", organizationId: "org-a" });
-    mockPrisma.matterContact.create.mockResolvedValue({});
-
-    await makeCaller().create({ title: "T", klientId: "c1" });
-    expect(mockPrisma.matterContact.create).toHaveBeenCalledWith({
-      data: { matterId: "matter-1", contactId: "c1", role: "KLIENT" },
+    const { caller, ds } = makeCaller({
+      contacts: [{ id: "c1", organizationId: ORG, name: "K", contactType: "PERSON" }],
     });
+    await caller.create({ title: "T", klientId: "c1" });
+    expect(mcs(ds).some((mc) => mc.contactId === "c1" && mc.role === "KLIENT")).toBe(true);
   });
 
-  it("vägrar att koppla klient från annan org", async () => {
-    mockPrisma.matter.findMany.mockResolvedValue([]);
-    mockPrisma.matter.create.mockResolvedValue({ id: "matter-1", organizationId: "org-a" });
-    mockPrisma.contact.findUnique.mockResolvedValue({ id: "c1", organizationId: "org-b" });
-
-    await expect(
-      makeCaller("org-a").create({ title: "T", klientId: "c1" }),
-    ).rejects.toMatchObject({ code: "NOT_FOUND" });
-    expect(mockPrisma.matterContact.create).not.toHaveBeenCalled();
+  it("vägrar koppla klient från annan org", async () => {
+    const { caller, ds } = makeCaller({
+      contacts: [{ id: "c1", organizationId: "org-b", name: "K", contactType: "PERSON" }],
+    });
+    await expect(caller.create({ title: "T", klientId: "c1" })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(mcs(ds)).toHaveLength(0);
   });
 
   it("kräver title (zod min(1))", async () => {
-    await expect(makeCaller().create({ title: "" })).rejects.toThrow();
+    const { caller } = makeCaller();
+    await expect(caller.create({ title: "" })).rejects.toThrow();
   });
 });
-
-// ─── update ──────────────────────────────────────────────────────
 
 describe("matter.update", () => {
   it("uppdaterar status", async () => {
-    mockPrisma.matter.findUnique.mockResolvedValue(MATTER_A);
-    mockPrisma.matter.update.mockResolvedValue({ ...MATTER_A, status: "CLOSED" });
-
-    await makeCaller().update({ id: "matter-1", status: "CLOSED" });
-    expect(mockPrisma.matter.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: "matter-1" },
-        data: expect.objectContaining({ status: "CLOSED" }),
-      }),
-    );
+    const { caller, ds } = makeCaller({ matters: [matter()] });
+    await caller.update({ id: "matter-1", status: "CLOSED" });
+    expect((src(ds).matters as Array<{ id: string; status: string }>).find((m) => m.id === "matter-1")!.status).toBe("CLOSED");
   });
 
   it("konverterar paymentMethodDecidedAt-sträng till Date", async () => {
-    mockPrisma.matter.findUnique.mockResolvedValue(MATTER_A);
-    mockPrisma.matter.update.mockResolvedValue(MATTER_A);
-
-    await makeCaller().update({
-      id: "matter-1",
-      paymentMethod: "RATTSHJALP",
-      paymentMethodDecidedAt: "2026-03-02",
-    });
-    const args = mockPrisma.matter.update.mock.calls[0]![0];
-    expect(args.data.paymentMethodDecidedAt).toBeInstanceOf(Date);
-    expect((args.data.paymentMethodDecidedAt as Date).toISOString()).toContain("2026-03-02");
+    const { caller, ds } = makeCaller({ matters: [matter()] });
+    await caller.update({ id: "matter-1", paymentMethod: "RATTSHJALP", paymentMethodDecidedAt: "2026-03-02" });
+    const m = (src(ds).matters as Array<{ id: string; paymentMethodDecidedAt?: Date }>).find((x) => x.id === "matter-1")!;
+    expect(m.paymentMethodDecidedAt).toBeInstanceOf(Date);
   });
 
-  it("nullar paymentMethodDecidedAt när tom sträng/null", async () => {
-    mockPrisma.matter.findUnique.mockResolvedValue(MATTER_A);
-    mockPrisma.matter.update.mockResolvedValue(MATTER_A);
-
-    await makeCaller().update({ id: "matter-1", paymentMethodDecidedAt: null });
-    const args = mockPrisma.matter.update.mock.calls[0]![0];
-    expect(args.data.paymentMethodDecidedAt).toBeNull();
+  it("nullar paymentMethodDecidedAt när null", async () => {
+    const { caller, ds } = makeCaller({ matters: [matter({ paymentMethodDecidedAt: new Date() })] });
+    await caller.update({ id: "matter-1", paymentMethodDecidedAt: null });
+    const m = (src(ds).matters as Array<{ id: string; paymentMethodDecidedAt?: Date | null }>).find((x) => x.id === "matter-1")!;
+    expect(m.paymentMethodDecidedAt).toBeNull();
   });
 
   it("vägrar uppdatera matter från annan org", async () => {
-    mockPrisma.matter.findUnique.mockResolvedValue({ id: "x", organizationId: "org-b" });
-
-    await expect(
-      makeCaller("org-a").update({ id: "x", status: "CLOSED" }),
-    ).rejects.toMatchObject({ code: "NOT_FOUND" });
-    expect(mockPrisma.matter.update).not.toHaveBeenCalled();
+    const { caller } = makeCaller({ matters: [matter()] }, "org-b");
+    await expect(caller.update({ id: "matter-1", status: "CLOSED" })).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 });
 
-// ─── addContact ──────────────────────────────────────────────────
-
 describe("matter.addContact", () => {
   it("kopplar befintlig kontakt", async () => {
-    mockPrisma.matter.findUnique.mockResolvedValue(MATTER_A);
-    mockPrisma.contact.findUnique.mockResolvedValue({ id: "c1", organizationId: "org-a" });
-    mockPrisma.matterContact.create.mockResolvedValue({ id: "mc1" });
-
-    await makeCaller().addContact({
-      matterId: "matter-1",
-      contactId: "c1",
-      role: "MOTPART",
+    const { caller, ds } = makeCaller({
+      matters: [matter()],
+      contacts: [{ id: "c1", organizationId: ORG, name: "K", contactType: "PERSON" }],
     });
-    expect(mockPrisma.matterContact.create).toHaveBeenCalled();
+    await caller.addContact({ matterId: "matter-1", contactId: "c1", role: "MOTPART" });
+    expect(mcs(ds).some((mc) => mc.contactId === "c1" && mc.role === "MOTPART")).toBe(true);
   });
 
   it("vägrar koppla matter från annan org", async () => {
-    mockPrisma.matter.findUnique.mockResolvedValue({ id: "x", organizationId: "org-b" });
-
+    const { caller } = makeCaller({ matters: [matter()] }, "org-b");
     await expect(
-      makeCaller("org-a").addContact({
-        matterId: "x",
-        contactId: "c1",
-        role: "MOTPART",
-      }),
+      caller.addContact({ matterId: "matter-1", contactId: "c1", role: "MOTPART" }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 
   it("vägrar koppla kontakt från annan org", async () => {
-    mockPrisma.matter.findUnique.mockResolvedValue(MATTER_A);
-    mockPrisma.contact.findUnique.mockResolvedValue({
-      id: "c1",
-      organizationId: "org-b",
+    const { caller } = makeCaller({
+      matters: [matter()],
+      contacts: [{ id: "c1", organizationId: "org-b", name: "K", contactType: "PERSON" }],
     });
-
     await expect(
-      makeCaller("org-a").addContact({
-        matterId: "matter-1",
-        contactId: "c1",
-        role: "MOTPART",
-      }),
+      caller.addContact({ matterId: "matter-1", contactId: "c1", role: "MOTPART" }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 });
-
-// ─── addNewContact ───────────────────────────────────────────────
 
 describe("matter.addNewContact", () => {
   it("återanvänder befintlig kontakt med samma personnummer", async () => {
-    mockPrisma.matter.findUnique.mockResolvedValue(MATTER_A);
-    mockPrisma.contact.findFirst.mockResolvedValue({ id: "existing", organizationId: "org-a" });
-    mockPrisma.matterContact.create.mockResolvedValue({ id: "mc1" });
-
-    await makeCaller().addNewContact({
-      matterId: "matter-1",
-      name: "Test Person",
-      contactType: "PERSON",
-      personalNumber: "19850225-6655",
-      role: "MOTPART",
+    const { caller, ds } = makeCaller({
+      matters: [matter()],
+      contacts: [{ id: "existing", organizationId: ORG, name: "P", contactType: "PERSON", personalNumber: "19850225-6655" }],
     });
-    expect(mockPrisma.contact.create).not.toHaveBeenCalled();
-    expect(mockPrisma.matterContact.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ contactId: "existing" }),
-      }),
-    );
+    await caller.addNewContact({
+      matterId: "matter-1", name: "Test Person", contactType: "PERSON", personalNumber: "19850225-6655", role: "MOTPART",
+    });
+    expect((src(ds).contacts as unknown[]).length).toBe(1); // ingen ny kontakt
+    expect(mcs(ds).some((mc) => mc.contactId === "existing")).toBe(true);
   });
 
   it("skapar ny kontakt när ingen matchar", async () => {
-    mockPrisma.matter.findUnique.mockResolvedValue(MATTER_A);
-    mockPrisma.contact.findFirst.mockResolvedValue(null);
-    mockPrisma.contact.create.mockResolvedValue({ id: "new", name: "Ny" });
-    mockPrisma.matterContact.create.mockResolvedValue({ id: "mc1" });
-
-    await makeCaller().addNewContact({
-      matterId: "matter-1",
-      name: "Ny",
-      contactType: "PERSON",
-      role: "MOTPART",
-    });
-    expect(mockPrisma.contact.create).toHaveBeenCalled();
-    expect(mockPrisma.matterContact.create).toHaveBeenCalled();
+    const { caller, ds } = makeCaller({ matters: [matter()] });
+    await caller.addNewContact({ matterId: "matter-1", name: "Ny", contactType: "PERSON", role: "MOTPART" });
+    expect((src(ds).contacts as unknown[]).length).toBe(1);
+    expect(mcs(ds)).toHaveLength(1);
   });
 
   it("matchar på orgnummer för företag", async () => {
-    mockPrisma.matter.findUnique.mockResolvedValue(MATTER_A);
-    mockPrisma.contact.findFirst.mockResolvedValue({ id: "co", organizationId: "org-a" });
-    mockPrisma.matterContact.create.mockResolvedValue({});
-
-    await makeCaller().addNewContact({
-      matterId: "matter-1",
-      name: "AB",
-      contactType: "COMPANY",
-      orgNumber: "556677-8899",
-      role: "MOTPART",
+    const { caller, ds } = makeCaller({
+      matters: [matter()],
+      contacts: [{ id: "co", organizationId: ORG, name: "AB", contactType: "COMPANY", orgNumber: "556677-8899" }],
     });
-    expect(mockPrisma.contact.findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({ orgNumber: "556677-8899" }),
-      }),
-    );
-    expect(mockPrisma.contact.create).not.toHaveBeenCalled();
+    await caller.addNewContact({
+      matterId: "matter-1", name: "AB", contactType: "COMPANY", orgNumber: "556677-8899", role: "MOTPART",
+    });
+    expect((src(ds).contacts as unknown[]).length).toBe(1);
+    expect(mcs(ds).some((mc) => mc.contactId === "co")).toBe(true);
   });
 });
 
-// ─── removeContact ───────────────────────────────────────────────
-
 describe("matter.removeContact", () => {
   it("tar bort koppling med korrekt org-scoping", async () => {
-    mockPrisma.matterContact.findUnique.mockResolvedValue({
-      id: "mc1",
-      matter: { organizationId: "org-a" },
+    const { caller, ds } = makeCaller({
+      matters: [matter()],
+      contacts: [{ id: "c1", organizationId: ORG, name: "K", contactType: "PERSON" }],
+      matterContacts: [{ id: "mc1", matterId: "matter-1", contactId: "c1", role: "MOTPART" }],
     });
-    mockPrisma.matterContact.delete.mockResolvedValue({});
-
-    await makeCaller().removeContact({ matterContactId: "mc1" });
-    expect(mockPrisma.matterContact.delete).toHaveBeenCalledWith({
-      where: { id: "mc1" },
-    });
+    await caller.removeContact({ matterContactId: "mc1" });
+    expect(mcs(ds).some((mc) => mc.id === "mc1")).toBe(false);
   });
 
   it("vägrar ta bort koppling från annan org", async () => {
-    mockPrisma.matterContact.findUnique.mockResolvedValue({
-      id: "mc1",
-      matter: { organizationId: "org-b" },
-    });
-    await expect(
-      makeCaller("org-a").removeContact({ matterContactId: "mc1" }),
-    ).rejects.toMatchObject({ code: "NOT_FOUND" });
-    expect(mockPrisma.matterContact.delete).not.toHaveBeenCalled();
+    const { caller, ds } = makeCaller({
+      matters: [matter()],
+      contacts: [{ id: "c1", organizationId: ORG, name: "K", contactType: "PERSON" }],
+      matterContacts: [{ id: "mc1", matterId: "matter-1", contactId: "c1", role: "MOTPART" }],
+    }, "org-b");
+    await expect(caller.removeContact({ matterContactId: "mc1" })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(mcs(ds).some((mc) => mc.id === "mc1")).toBe(true);
   });
 });

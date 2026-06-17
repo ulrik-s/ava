@@ -62,4 +62,12 @@ export class InMemoryContactRepository extends InMemoryRepository<Contact> imple
     })) as ContactFull | null;
     return row && !(row as { deletedAt?: unknown }).deletedAt ? row : null;
   }
+
+  async findByPersonalNumber(organizationId: string, personalNumber: string): Promise<Contact | null> {
+    return (await this.delegate.findFirst({ where: { personalNumber, organizationId } })) as Contact | null;
+  }
+
+  async findByOrgNumber(organizationId: string, orgNumber: string): Promise<Contact | null> {
+    return (await this.delegate.findFirst({ where: { orgNumber, organizationId } })) as Contact | null;
+  }
 }
