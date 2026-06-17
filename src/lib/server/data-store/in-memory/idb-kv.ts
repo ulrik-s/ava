@@ -54,4 +54,19 @@ export class IdbKv {
       db.close();
     }
   }
+
+  async delete(key: string): Promise<void> {
+    const db = await this.open();
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction(this.storeName, "readwrite");
+        tx.objectStore(this.storeName).delete(key);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error ?? new Error("indexedDB delete misslyckades"));
+        tx.onabort = () => reject(tx.error ?? new Error("indexedDB-transaktion avbröts"));
+      });
+    } finally {
+      db.close();
+    }
+  }
 }

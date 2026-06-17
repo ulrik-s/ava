@@ -20,7 +20,7 @@ import { useEffect, useRef, useState } from "react";
 import { useDemoRuntime } from "@/lib/client/use-demo-runtime";
 import { DemoRuntime } from "@/lib/server/local-first/demo-runtime";
 import { createGhPagesCloneFn } from "@/lib/server/local-first/gh-pages-loader";
-import { OpfsPersistence } from "@/lib/server/local-first/persistence";
+import { IndexedDbFsPersistence } from "@/lib/server/local-first/indexeddb-fs-persistence";
 
 /**
  * Default demo-data-repo. Användare kan klistra in eget om de vill,
@@ -51,11 +51,11 @@ function defaultRuntimeFactory(): DemoRuntime {
   // isomorphic-git, ingen git-historik — bara filer-via-CDN. Se
   // `gh-pages-loader.ts` för detaljer. För full git-historik
   // (Tauri/Node-läget) använd `cloneFromGithub()` istället.
-  // OpfsPersistence skapas alltid — implementationen sväljer fel
-  // tyst i runtimes som inte stödjer OPFS (vissa Safari-versioner).
+  // IndexedDB-persistens (#3): slab-snapshotten cachas i IndexedDB (samma nyckel
+  // som förr) i st.f. OPFS — populerar demo-cachen utan OPFS-beroende.
   return DemoRuntime.create({
     cloneFn: createGhPagesCloneFn(),
-    persistence: new OpfsPersistence("ava-demo"),
+    persistence: new IndexedDbFsPersistence("ava-demo"),
   });
 }
 
