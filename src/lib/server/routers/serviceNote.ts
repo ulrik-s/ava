@@ -6,6 +6,7 @@ import {
   userIdSchema,
   serviceNoteIdSchema,
 } from "@/lib/shared/schemas/ids";
+import type { ServiceNote } from "@/lib/shared/schemas/service-note";
 import { router, protectedProcedure, orgProcedure, TRPCError } from "../trpc";
 
 /**
@@ -17,16 +18,10 @@ import { router, protectedProcedure, orgProcedure, TRPCError } from "../trpc";
 export const serviceNoteRouter = router({
   list: protectedProcedure
     .input(z.object({ matterId: z.string() }))
-    .query(async ({ ctx, input }) => {
-      return ctx.dataStore.serviceNotes.findMany({
-        where: {
-          matterId: input.matterId,
-          matter: { organizationId: ctx.user.organizationId },
-        },
-        orderBy: { createdAt: "desc" },
-        include: { author: { select: { id: true, name: true } } },
-      });
-    }),
+    // Migrerad till repository-sömmen (ADR 0020): listByMatter org-scopar via ärendet.
+    .query(({ ctx, input }) =>
+      ctx.repos.serviceNotes.listByMatter(input.matterId, ctx.user.organizationId),
+    ),
 
   create: protectedProcedure
     .input(
@@ -42,18 +37,16 @@ export const serviceNoteRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      return ctx.dataStore.serviceNotes.create({
-        data: omitUndefined({
-          id: input.id, // undefined → store genererar
-          organizationId: asId<"OrganizationId">(ctx.user.organizationId),
-          matterId: input.matterId,
-          authorId: input.authorId ?? asId<"UserId">(ctx.user.id),
-          date: input.date,
-          time: input.time,
-          text: input.text,
-          ...(input.createdAt ? { createdAt: new Date(input.createdAt) } : {}),
-        }),
-      });
+      return ctx.repos.serviceNotes.create(omitUndefined({
+        id: input.id, // undefined → store genererar
+        organizationId: asId<"OrganizationId">(ctx.user.organizationId),
+        matterId: input.matterId,
+        authorId: input.authorId ?? asId<"UserId">(ctx.user.id),
+        date: input.date,
+        time: input.time,
+        text: input.text,
+        ...(input.createdAt ? { createdAt: new Date(input.createdAt) } : {}),
+      }) as Partial<ServiceNote>);
     }),
 
   update: orgProcedure
@@ -68,24 +61,19 @@ export const serviceNoteRouter = router({
     .mutation(async ({ ctx, input }) => {
       // Ägarkoll (samma org-scopning som `list`) INNAN update — NOT_FOUND vid
       // mismatch läcker inte existens.
-      const owned = await ctx.dataStore.serviceNotes.findFirst({
-        where: { id: input.id, matter: { organizationId: ctx.orgId } },
-      });
+      const owned = await ctx.repos.serviceNotes.getByIdInOrg(input.id, ctx.orgId);
       if (!owned) throw new TRPCError({ code: "NOT_FOUND" });
       const { id, date, time, text } = input;
-      return ctx.dataStore.serviceNotes.update({
-        where: { id },
-        data: omitUndefined({ date, time, text }),
-      });
+      return ctx.repos.serviceNotes.update(id, omitUndefined({ date, time, text }) as Partial<ServiceNote>);
     }),
 
   delete: orgProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const owned = await ctx.dataStore.serviceNotes.findFirst({
-        where: { id: input.id, matter: { organizationId: ctx.orgId } },
-      });
+      const owned = await ctx.repos.serviceNotes.getByIdInOrg(input.id, ctx.orgId);
       if (!owned) throw new TRPCError({ code: "NOT_FOUND" });
-      return ctx.dataStore.serviceNotes.delete({ where: { id: input.id } });
+      // Hård delete bevarar dagens beteende (ADR 0017-delete-policy öppen).
+      await ctx.repos.serviceNotes.hardDelete(input.id);
+      return { id: input.id };
     }),
 });
