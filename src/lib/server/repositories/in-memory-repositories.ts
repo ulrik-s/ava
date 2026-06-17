@@ -26,6 +26,7 @@ import { InMemoryMatterRepository } from "./in-memory-matter-repository";
 import { InMemoryOfficeRepository } from "./in-memory-office-repository";
 import { InMemoryOrgPreferenceRepository } from "./in-memory-org-preference-repository";
 import { InMemoryOrganizationRepository } from "./in-memory-organization-repository";
+import { InMemoryPaymentPlanReminderRepository } from "./in-memory-payment-plan-reminder-repository";
 import { InMemoryPaymentPlanRepository } from "./in-memory-payment-plan-repository";
 import { InMemoryPaymentRepository } from "./in-memory-payment-repository";
 import { InMemoryServiceNoteRepository } from "./in-memory-service-note-repository";
@@ -44,6 +45,7 @@ function reposForTx(tx: DataStoreTx): Repositories {
     payments: new InMemoryPaymentRepository(tx),
     writeOffs: new InMemoryWriteOffRepository(tx),
     paymentPlans: new InMemoryPaymentPlanRepository(tx),
+    paymentPlanReminders: new InMemoryPaymentPlanReminderRepository(tx),
     timeEntries: new InMemoryTimeEntryRepository(tx),
     expenses: new InMemoryExpenseRepository(tx),
     accontoDeductions: new InMemoryAccontoDeductionRepository(tx),
@@ -76,6 +78,7 @@ export function buildInMemoryRepositories(dataStore: IDataStore): Repositories {
     payments: new InMemoryPaymentRepository(dataStore),
     writeOffs: new InMemoryWriteOffRepository(dataStore),
     paymentPlans: new InMemoryPaymentPlanRepository(dataStore),
+    paymentPlanReminders: new InMemoryPaymentPlanReminderRepository(dataStore),
     timeEntries: new InMemoryTimeEntryRepository(dataStore),
     expenses: new InMemoryExpenseRepository(dataStore),
     accontoDeductions: new InMemoryAccontoDeductionRepository(dataStore),

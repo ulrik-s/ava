@@ -191,6 +191,7 @@ export interface DataStoreTx {
   invoiceDispatches: InvoiceDispatchDelegate;
   expectedReceivables: ExpectedReceivableDelegate;
   paymentPlans: PaymentPlanDelegate;
+  paymentPlanReminders: Delegate;
   accontoDeductions: AccontoDeductionDelegate;
   billingRuns: BillingRunDelegate;
   calendarEvents: CalendarEventDelegate;

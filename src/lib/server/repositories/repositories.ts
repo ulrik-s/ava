@@ -22,6 +22,7 @@ import type { MatterRepository } from "./matter-repository";
 import type { OfficeRepository } from "./office-repository";
 import type { OrgPreferenceRepository } from "./org-preference-repository";
 import type { OrganizationRepository } from "./organization-repository";
+import type { PaymentPlanReminderRepository } from "./payment-plan-reminder-repository";
 import type { PaymentPlanRepository } from "./payment-plan-repository";
 import type { PaymentRepository } from "./payment-repository";
 import type { ServiceNoteRepository } from "./service-note-repository";
@@ -37,6 +38,7 @@ export interface Repositories {
   payments: PaymentRepository;
   writeOffs: WriteOffRepository;
   paymentPlans: PaymentPlanRepository;
+  paymentPlanReminders: PaymentPlanReminderRepository;
   timeEntries: TimeEntryRepository;
   expenses: ExpenseRepository;
   accontoDeductions: AccontoDeductionRepository;

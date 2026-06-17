@@ -294,6 +294,7 @@ export class LocalStore implements IDataStore {
       invoiceDispatches: this.invoiceDispatches,
       expectedReceivables: this.expectedReceivables,
       paymentPlans: this.paymentPlans,
+      paymentPlanReminders: this.paymentPlanReminders,
       accontoDeductions: this.accontoDeductions,
       billingRuns: this.billingRuns,
       calendarEvents: this.calendarEvents,

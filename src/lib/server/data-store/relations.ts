@@ -179,9 +179,12 @@ export function buildRelations(getSource: GetSource): DemoRelations {
     paymentPlans: {
       invoice: r("invoices", "id", "invoiceId", "one", {
         matter: r("matters", "id", "matterId", "one", {
-          contacts: r("matterContacts", "matterId", "id"),
+          contacts: r("matterContacts", "matterId", "id", "many", {
+            contact: r("contacts", "id", "contactId", "one"),
+          }),
         }),
         payments: r("payments", "invoiceId", "id"),
+        writeOffs: r("writeOffs", "invoiceId", "id"),
       }),
       reminders: r("paymentPlanReminders", "planId", "id"),
     },
