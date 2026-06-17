@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
+import type { TimeEntry } from "@/lib/shared/schemas/billing";
 import {
   asId,
   matterIdSchema,
@@ -22,47 +23,18 @@ export const timeEntryRouter = router({
         pageSize: z.number().min(1).max(100).default(50),
       })
     )
+    // Migrerad till repository-sömmen (ADR 0020): listForOrg kapslar in
+    // filter/include/count/summa.
     .query(async ({ ctx, input }) => {
-      const where = {
-        matter: { organizationId: ctx.user.organizationId },
-        ...(input.matterId ? { matterId: input.matterId } : {}),
-        ...(input.userId ? { userId: input.userId } : {}),
-        ...(input.from || input.to
-          ? {
-              date: {
-                ...(input.from ? { gte: input.from } : {}),
-                ...(input.to ? { lte: input.to } : {}),
-              },
-            }
-          : {}),
-      };
-
-      const [entries, total] = await Promise.all([
-        ctx.dataStore.timeEntries.findMany({
-          where,
-          orderBy: { date: "desc" },
-          skip: (input.page - 1) * input.pageSize,
-          take: input.pageSize,
-          include: {
-            user: { select: { id: true, name: true } },
-            matter: { select: { id: true, matterNumber: true, title: true } },
-            invoice: { select: { id: true, invoiceNumber: true } },
-          },
-        }),
-        ctx.dataStore.timeEntries.count({ where }),
-      ]);
-
-      const totalMinutes = await ctx.dataStore.timeEntries.aggregate({
-        where,
-        _sum: { minutes: true },
+      const { entries, total, totalMinutes } = await ctx.repos.timeEntries.listForOrg(ctx.user.organizationId, {
+        matterId: input.matterId,
+        userId: input.userId,
+        from: input.from,
+        to: input.to,
+        page: input.page,
+        pageSize: input.pageSize,
       });
-
-      return {
-        entries,
-        total,
-        totalMinutes: totalMinutes._sum.minutes ?? 0,
-        pages: Math.ceil(total / input.pageSize),
-      };
+      return { entries, total, totalMinutes, pages: Math.ceil(total / input.pageSize) };
     }),
 
   create: protectedProcedure
@@ -83,25 +55,21 @@ export const timeEntryRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const userId = input.userId ?? asId<"UserId">(ctx.user.id);
-      const user = await ctx.dataStore.users.findUniqueOrThrow({
-        where: { id: userId },
-        select: { hourlyRate: true },
-      });
+      const user = await ctx.repos.users.getById(userId);
+      if (!user) throw new TRPCError({ code: "NOT_FOUND", message: "Användare finns inte." });
 
-      const entry = await ctx.dataStore.timeEntries.create({
-        data: omitUndefined({
-          id: input.id, // undefined → store genererar
-          userId,
-          matterId: input.matterId,
-          date: new Date(input.date),
-          minutes: input.minutes,
-          description: input.description,
-          hourlyRate: input.hourlyRate ?? user.hourlyRate ?? 0,
-          billable: input.billable,
-          invoiceId: input.invoiceId ?? null,
-          ...(input.createdAt ? { createdAt: new Date(input.createdAt) } : {}),
-        }),
-      });
+      const entry = await ctx.repos.timeEntries.create(omitUndefined({
+        id: input.id, // undefined → store genererar
+        userId,
+        matterId: input.matterId,
+        date: new Date(input.date),
+        minutes: input.minutes,
+        description: input.description,
+        hourlyRate: input.hourlyRate ?? user.hourlyRate ?? 0,
+        billable: input.billable,
+        invoiceId: input.invoiceId ?? null,
+        ...(input.createdAt ? { createdAt: new Date(input.createdAt) } : {}),
+      }) as Partial<TimeEntry>);
       await emit.timeEntryAdded(ctx, { id: entry.id, matterId: entry.matterId, minutes: entry.minutes });
       return entry;
     }),
@@ -119,20 +87,15 @@ export const timeEntryRouter = router({
     .mutation(async ({ ctx, input }) => {
       // Säkerhet (#60): org-ägarskap via matter (samma scopning som `list`)
       // INNAN update. NOT_FOUND vid mismatch.
-      const owned = await ctx.dataStore.timeEntries.findFirst({
-        where: { id: input.id, matter: { organizationId: ctx.orgId } },
-      });
+      const owned = await ctx.repos.timeEntries.getByIdInOrg(input.id, ctx.orgId);
       if (!owned) throw new TRPCError({ code: "NOT_FOUND" });
       const { id, date, minutes, description, billable } = input;
-      const updated = await ctx.dataStore.timeEntries.update({
-        where: { id },
-        data: omitUndefined({
-          minutes,
-          description,
-          billable,
-          ...(date ? { date: new Date(date) } : {}),
-        }),
-      });
+      const updated = await ctx.repos.timeEntries.update(id, omitUndefined({
+        minutes,
+        description,
+        billable,
+        ...(date ? { date: new Date(date) } : {}),
+      }) as Partial<TimeEntry>);
       await emit.timeEntryUpdated(ctx, { id: updated.id, matterId: updated.matterId });
       return updated;
     }),
@@ -140,13 +103,12 @@ export const timeEntryRouter = router({
   delete: orgProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const owned = await ctx.dataStore.timeEntries.findFirst({
-        where: { id: input.id, matter: { organizationId: ctx.orgId } },
-      });
+      const owned = await ctx.repos.timeEntries.getByIdInOrg(input.id, ctx.orgId);
       if (!owned) throw new TRPCError({ code: "NOT_FOUND" });
-      const entry = await ctx.dataStore.timeEntries.delete({ where: { id: input.id } });
-      await emit.timeEntryDeleted(ctx, entry.id, entry.matterId);
-      return entry;
+      // Hård delete bevarar dagens beteende (ADR 0017-delete-policy öppen).
+      await ctx.repos.timeEntries.hardDelete(input.id);
+      await emit.timeEntryDeleted(ctx, input.id, owned.matterId);
+      return { id: input.id };
     }),
 
   report: protectedProcedure
@@ -159,35 +121,15 @@ export const timeEntryRouter = router({
         matterId: z.string().optional(),
       })
     )
+    // Migrerad till repository-sömmen (ADR 0020): listForReport (jurist + ärende
+    // inkl. KLIENT-kontakt). Grupperingen per jurist bor kvar i routern.
     .query(async ({ ctx, input }) => {
-      const userFilter = input.userIds && input.userIds.length > 0
-        ? { userId: { in: input.userIds } }
-        : input.userId
-          ? { userId: input.userId }
-          : {};
-      const where = {
-        matter: { organizationId: ctx.user.organizationId },
-        date: { gte: new Date(input.from), lte: new Date(input.to) },
-        ...userFilter,
-        ...(input.matterId ? { matterId: input.matterId } : {}),
-      };
-
-      const entries = await ctx.dataStore.timeEntries.findMany({
-        where,
-        include: {
-          user: { select: { id: true, name: true } },
-          matter: {
-            select: {
-              id: true, matterNumber: true, title: true,
-              contacts: {
-                where: { role: "KLIENT" },
-                select: { contact: { select: { name: true } } },
-                take: 1,
-              },
-            },
-          },
-        },
-        orderBy: [{ userId: "asc" }, { date: "asc" }],
+      const entries = await ctx.repos.timeEntries.listForReport(ctx.user.organizationId, {
+        from: new Date(input.from),
+        to: new Date(input.to),
+        userId: input.userId,
+        userIds: input.userIds,
+        matterId: input.matterId,
       });
 
       // Group by user

@@ -130,7 +130,13 @@ export function buildRelations(getSource: GetSource): DemoRelations {
     },
     timeEntries: {
       user: r("users", "id", "userId", "one"),
-      matter: r("matters", "id", "matterId", "one"),
+      // Nested matter.contacts.contact krävs för tidsrapportens KLIENT-kontakt
+      // (listForReport), annars blir matter.contacts undefined in-memory.
+      matter: r("matters", "id", "matterId", "one", {
+        contacts: r("matterContacts", "matterId", "id", "many", {
+          contact: r("contacts", "id", "contactId", "one"),
+        }),
+      }),
       invoice: r("invoices", "id", "invoiceId", "one"),
     },
     expenses: {
