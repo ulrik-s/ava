@@ -47,6 +47,7 @@ import type {
   ServiceNoteDelegate,
 } from "../IDataStore";
 import { buildRelations } from "../relations";
+import { ENTITY_NAME_BY_SOURCE_KEY } from "./entity-source-keys";
 import { ReadOnlyDelegate, ReadOnlyError, type RelationConfig } from "./read-only-delegate";
 import { WritableDelegate, type MutationEvent, type WritableDelegateOpts } from "./writable-delegate";
 
@@ -196,39 +197,10 @@ export class LocalStore implements IDataStore {
     return row;
   }
 
-  /** Map DemoSource-nyckel → projection-entitetsnamn för write-back. */
+  /** Map DemoSource-nyckel → projection-entitetsnamn för write-back.
+   *  Mappningen bor i `entity-source-keys.ts` (DRY — delas med reconcile-apply). */
   private entityNameFor(key: keyof DemoSource): string {
-    const map: Record<string, string> = {
-      matters: "matter",
-      contacts: "contact",
-      matterContacts: "matterContact",
-      documents: "document",
-      documentFolders: "documentFolder",
-      documentTemplates: "documentTemplate",
-      documentAnalysisSuggestions: "documentAnalysisSuggestion",
-      matterEventSuggestions: "matterEventSuggestion",
-      timeEntries: "timeEntry",
-      expenses: "expense",
-      invoices: "invoice",
-      users: "user",
-      organizations: "organization",
-      offices: "office",
-      conflictChecks: "conflictCheck",
-      payments: "payment",
-      writeOffs: "writeOff",
-      invoiceDispatches: "invoiceDispatch",
-      expectedReceivables: "expectedReceivable",
-      paymentPlans: "paymentPlan",
-      paymentPlanReminders: "paymentPlanReminder",
-      accontoDeductions: "accontoDeduction",
-      billingRuns: "billingRun",
-      calendarEvents: "calendarEvent",
-      tasks: "task",
-      serviceNotes: "serviceNote",
-      userPreferences: "userPreference",
-      orgPreferences: "orgPreference",
-    };
-    return map[key as string] ?? String(key);
+    return ENTITY_NAME_BY_SOURCE_KEY[key as string] ?? String(key);
   }
 
   // ─── Transaktioner (in-memory snapshot/rollback) ──────────────────
