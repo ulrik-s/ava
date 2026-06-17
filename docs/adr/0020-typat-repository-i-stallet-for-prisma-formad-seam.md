@@ -1,6 +1,12 @@
 # ADR 0020 — Typat repository i stället för Prisma-formad `IDataStore`-söm
 
 - **Status:** Accepterad
+- **Genomförande:** Implementerad (2026-06-17). Alla router-filer läser/skriver via
+  `ctx.repos` (`Repositories`-aggregatet); in-memory- + Drizzle-impl finns för alla
+  28 entiteter; `buildInMemoryRepositories` (live demo/git-väg) + `buildDrizzleRepositories`
+  (server, transaktioner) byggda; per-repo paritetstester (pglite). `IDataStore`
+  samexisterar men används inte längre för dataåtkomst i routrarna. CI kör hela
+  Drizzle-repository-sviten mot riktig Postgres (`tooling/docker/docker-compose.test.yml`).
 - **Datum:** 2026-06-16
 - **Beslutsfattare:** Ulrik Sjölin
 - **Berör:** datalager-söm, routrar, PostgresStore, offline-klient, alla backends

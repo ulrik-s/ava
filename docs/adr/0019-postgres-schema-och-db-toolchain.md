@@ -1,6 +1,7 @@
 # ADR 0019 — Postgres-schema & DB-toolchain (Drizzle, version/change-log, IDataStore-subset)
 
 - **Status:** Accepterad (beslut 5 — frusen arg-subset + tolk — **amenderat av [ADR 0020](0020-typat-repository-i-stallet-for-prisma-formad-seam.md)**: tolken ersätts av ett typat repository. Schema/toolchain/version/change-log (beslut 1–4) gäller fortsatt.)
+- **Genomförande:** Beslut 1–4 implementerade — `src/lib/server/db/schema.ts` + migrations (`tooling/db/migrations/`) + Drizzle-toolchain. Testas mot pglite (unit) och, sedan 2026-06-17, mot riktig Postgres i CI (`tooling/docker/docker-compose.test.yml`).
 - **Datum:** 2026-06-16
 - **Beslutsfattare:** Ulrik Sjölin
 - **Berör:** server-backend, DB-schema, migrations, reconcile, IDataStore-kontrakt
