@@ -6,7 +6,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
 import { noopPorts } from "@/lib/server/adapters/noop-ports";
 import { users } from "@/lib/server/db/schema";
-import type { AppDb } from "@/lib/server/db/types";
 import {
   createServerContext,
   serverFirstEventLog,
