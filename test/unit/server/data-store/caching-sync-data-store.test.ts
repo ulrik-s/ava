@@ -38,7 +38,7 @@ describe("CachingSyncDataStore (#415)", () => {
       const ds = await CachingSyncDataStore.create({ transport, persistence });
 
       const m1 = uuidv7();
-      await ds.store.matters.create({ data: matter(m1) });
+      await ds.store.matters.create({ data: matter(m1) as never });
 
       // Läsbart direkt lokalt (offline).
       expect(await ds.store.matters.findUnique({ where: { id: m1 } })).toMatchObject({ id: m1, title: "Ärende" });
@@ -57,7 +57,7 @@ describe("CachingSyncDataStore (#415)", () => {
       const ds = await CachingSyncDataStore.create({ transport, persistence: new InMemoryPersistence() });
 
       const m1 = uuidv7();
-      await ds.store.matters.create({ data: matter(m1) });
+      await ds.store.matters.create({ data: matter(m1) as never });
       // Servern accepterar och bumpar version.
       transport.pushImpl = (m) => ({ status: "accepted", row: { ...m.row, version: 5 } });
 
@@ -109,7 +109,7 @@ describe("CachingSyncDataStore (#415)", () => {
       const ds = await CachingSyncDataStore.create({ transport, persistence: new InMemoryPersistence() });
 
       const inv = uuidv7();
-      await ds.store.invoices.create({ data: { id: inv, organizationId: ORG, matterId: uuidv7(), status: "DRAFT" } });
+      await ds.store.invoices.create({ data: { id: inv, organizationId: ORG, matterId: uuidv7(), status: "DRAFT" } as never });
       transport.pushImpl = () => ({ status: "conflict", reason: "stale-status" });
 
       const res = await ds.reconcile();
