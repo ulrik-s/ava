@@ -17,6 +17,7 @@
     "seed:local": "bun tooling/scripts/seed-firma-local.ts",
     "server-runtime": "bun src/bin/server-runtime.ts",
     "server-first": "bun src/bin/server-first.ts",
+    "server-first:build": "bun tooling/scripts/build-server-first.ts",
     "install:server": "bun tooling/scripts/install-server.ts",
     "bootstrap:admin": "bun tooling/scripts/bootstrap-admin.ts",
     "server-runtime:build": "bun tooling/scripts/build-server-runtime.ts",

@@ -127,6 +127,42 @@ jobs:
         if: always()
         run: docker compose -f tooling/docker/docker-compose.test.yml down -v
 
+  # ───────────────── Server-first (docker deploy-E2E) ─────────────────
+  # Bygger server-first-binären, kör den som en RIKTIG docker-container mot
+  # Postgres, applicerar schemat (db:migrate) och synkar push/pull via
+  # TrpcSyncTransport över HTTP. Bevisar att den deployade artefakten fungerar
+  # (grund för self-hosted server-first + #421/#422). Demon/git orörda.
+  server-first-e2e:
+    name: Server-first (deploy E2E)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - name: Bygg server-first-binär
+        run: bun run server-first:build
+      - name: Starta Postgres + server-first (docker)
+        run: docker compose -f tooling/docker/docker-compose.server-first.yml up -d --build --wait --wait-timeout 120
+      - name: Applicera schema (db:migrate)
+        env:
+          AVA_DATABASE_URL: postgres://ava:ava@localhost:5433/ava_test
+        run: bun run db:migrate
+      - name: Server-sync deploy-E2E
+        env:
+          SERVER_URL: http://localhost:3001
+          AVA_DATABASE_URL: postgres://ava:ava@localhost:5433/ava_test
+          AVA_ORGANIZATION_ID: "00000000-0000-0000-0000-000000000001"
+        run: bun tooling/scripts/server-first-sync-e2e.ts
+      - name: Tear down docker
+        if: always()
+        run: docker compose -f tooling/docker/docker-compose.server-first.yml down -v
+
   # ───────────────── E2E (git round-trip) ─────────────────
   # Den riktiga browser-klienten klonar/pushar mot docker-git-servern
   # (self-hosted). Auth: PAT bootstrappas av web-containern; vi exporterar
