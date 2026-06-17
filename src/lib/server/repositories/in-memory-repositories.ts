@@ -13,6 +13,7 @@ import { InMemoryAccontoDeductionRepository } from "./in-memory-acconto-deductio
 import { InMemoryCalendarEventRepository } from "./in-memory-calendar-event-repository";
 import { InMemoryContactRepository } from "./in-memory-contact-repository";
 import { InMemoryDocumentTemplateRepository } from "./in-memory-document-template-repository";
+import { InMemoryExpectedReceivableRepository } from "./in-memory-expected-receivable-repository";
 import { InMemoryExpenseRepository } from "./in-memory-expense-repository";
 import { InMemoryInvoiceRepository } from "./in-memory-invoice-repository";
 import { InMemoryMatterRepository } from "./in-memory-matter-repository";
@@ -42,6 +43,7 @@ function reposForTx(tx: DataStoreTx): Repositories {
     calendarEvents: new InMemoryCalendarEventRepository(tx),
     serviceNotes: new InMemoryServiceNoteRepository(tx),
     documentTemplates: new InMemoryDocumentTemplateRepository(tx),
+    expectedReceivables: new InMemoryExpectedReceivableRepository(tx),
     transaction: (fn) => fn(repos),
   };
   return repos;
@@ -63,6 +65,7 @@ export function buildInMemoryRepositories(dataStore: IDataStore): Repositories {
     calendarEvents: new InMemoryCalendarEventRepository(dataStore),
     serviceNotes: new InMemoryServiceNoteRepository(dataStore),
     documentTemplates: new InMemoryDocumentTemplateRepository(dataStore),
+    expectedReceivables: new InMemoryExpectedReceivableRepository(dataStore),
     transaction: (fn) => dataStore.transaction((tx) => fn(reposForTx(tx))),
   };
 }

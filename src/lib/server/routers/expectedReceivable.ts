@@ -15,20 +15,16 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
+import type { ExpectedReceivable } from "@/lib/shared/schemas/billing";
 import { expectedReceivableStatusSchema } from "@/lib/shared/schemas/billing";
 import { asId } from "@/lib/shared/schemas/ids";
+import type { Repositories } from "../repositories/repositories";
 import { router, orgProcedure } from "../trpc";
 
-type Ctx = { dataStore: { expectedReceivables: { findUnique: (a: unknown) => Promise<unknown> } }; orgId: string };
-
-/** Hämta en fordran och verifiera org-tillhörighet. */
-async function assertInOrg(ctx: Ctx, id: string): Promise<{ id: string; status: string }> {
-  const row = (await ctx.dataStore.expectedReceivables.findUnique({ where: { id } })) as
-    | { id: string; organizationId?: string; status: string }
-    | null;
-  if (!row || row.organizationId !== ctx.orgId) {
-    throw new TRPCError({ code: "NOT_FOUND", message: "Fordran finns inte i organisationen." });
-  }
+/** Hämta en fordran och verifiera org-tillhörighet (repository-sömmen, ADR 0020). */
+async function assertInOrg(repos: Repositories, orgId: string, id: string): Promise<ExpectedReceivable> {
+  const row = await repos.expectedReceivables.getByIdInOrg(id, orgId);
+  if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Fordran finns inte i organisationen." });
   return row;
 }
 
@@ -36,15 +32,9 @@ export const expectedReceivableRouter = router({
   /** Lista fordringar i org:en, valfritt filtrerat på ärende. */
   list: orgProcedure
     .input(z.object({ matterId: z.string().optional() }).optional())
-    .query(async ({ ctx, input }) => {
-      return ctx.dataStore.expectedReceivables.findMany({
-        where: {
-          organizationId: ctx.orgId,
-          ...(input?.matterId ? { matterId: input.matterId } : {}),
-        },
-        orderBy: { createdAt: "desc" },
-      });
-    }),
+    .query(({ ctx, input }) =>
+      ctx.repos.expectedReceivables.listForOrg(ctx.orgId, { matterId: input?.matterId }),
+    ),
 
   /**
    * Matchnings-kandidater för camt-avprickning (#175): öppna (PENDING)
@@ -52,13 +42,10 @@ export const expectedReceivableRouter = router({
    * och referens matchas client-side av `matchReceivables`.
    */
   candidates: orgProcedure.query(async ({ ctx }) => {
-    const rows = (await ctx.dataStore.expectedReceivables.findMany({
-      where: { organizationId: ctx.orgId, status: "PENDING" },
-      orderBy: { createdAt: "desc" },
-    })) as Array<{ id: string; matterId: string; description: string; expectedAmount: number }>;
-    const matters = (await ctx.dataStore.matters.findMany({
-      where: { organizationId: ctx.orgId },
-    })) as Array<{ id: string; matterNumber?: string | null; courtCaseNumber?: string | null }>;
+    const rows = (await ctx.repos.expectedReceivables.listForOrg(ctx.orgId, { status: "PENDING" })) as
+      Array<{ id: string; matterId: string; description: string; expectedAmount: number }>;
+    const matters = (await ctx.repos.matters.listByOrg(ctx.orgId)) as
+      Array<{ id: string; matterNumber?: string | null; courtCaseNumber?: string | null }>;
     const byId = new Map(matters.map((m) => [String(m.id), m]));
     return rows.map((r) => {
       const m = byId.get(String(r.matterId));
@@ -82,24 +69,20 @@ export const expectedReceivableRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       // Ärendet måste tillhöra org:en (annars läcker man fordringar in i andra byråer).
-      const matter = await ctx.dataStore.matters.findFirst({
-        where: { id: input.matterId, organizationId: ctx.orgId },
-      });
+      const matter = await ctx.repos.matters.getByIdInOrg(input.matterId, ctx.orgId);
       if (!matter) throw new TRPCError({ code: "NOT_FOUND", message: "Ärendet finns inte i organisationen." });
 
       const now = new Date();
-      return ctx.dataStore.expectedReceivables.create({
-        data: {
-          matterId: asId<"MatterId">(input.matterId),
-          description: input.description,
-          expectedAmount: input.expectedAmount,
-          status: "PENDING",
-          organizationId: asId<"OrganizationId">(ctx.orgId),
-          recordedById: asId<"UserId">(ctx.user.id),
-          createdAt: now,
-          updatedAt: now,
-        },
-      });
+      return ctx.repos.expectedReceivables.create({
+        matterId: asId<"MatterId">(input.matterId),
+        description: input.description,
+        expectedAmount: input.expectedAmount,
+        status: "PENDING",
+        organizationId: asId<"OrganizationId">(ctx.orgId),
+        recordedById: asId<"UserId">(ctx.user.id),
+        createdAt: now,
+        updatedAt: now,
+      } as Partial<ExpectedReceivable>);
     }),
 
   /**
@@ -115,28 +98,22 @@ export const expectedReceivableRouter = router({
       paymentReference: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      await assertInOrg(ctx, input.id);
-      return ctx.dataStore.expectedReceivables.update({
-        where: { id: input.id },
-        data: {
-          status: "SETTLED",
-          settledAmount: input.settledAmount,
-          settledAt: input.settledAt ? new Date(input.settledAt) : new Date(),
-          ...(input.paymentReference !== undefined ? { paymentReference: input.paymentReference } : {}),
-          updatedAt: new Date(),
-        },
-      });
+      await assertInOrg(ctx.repos, ctx.orgId, input.id);
+      return ctx.repos.expectedReceivables.update(input.id, {
+        status: "SETTLED",
+        settledAmount: input.settledAmount,
+        settledAt: input.settledAt ? new Date(input.settledAt) : new Date(),
+        ...(input.paymentReference !== undefined ? { paymentReference: input.paymentReference } : {}),
+        updatedAt: new Date(),
+      } as Partial<ExpectedReceivable>);
     }),
 
   /** Avbryt en fordran (t.ex. felregistrerad eller domstolen avslog helt). */
   cancel: orgProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      await assertInOrg(ctx, input.id);
-      return ctx.dataStore.expectedReceivables.update({
-        where: { id: input.id },
-        data: { status: "CANCELLED", updatedAt: new Date() },
-      });
+      await assertInOrg(ctx.repos, ctx.orgId, input.id);
+      return ctx.repos.expectedReceivables.update(input.id, { status: "CANCELLED", updatedAt: new Date() } as Partial<ExpectedReceivable>);
     }),
 
   /** Uppdatera memo-fälten (begärt belopp/beskrivning) medan PENDING. */
@@ -148,11 +125,8 @@ export const expectedReceivableRouter = router({
       status: expectedReceivableStatusSchema.optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      await assertInOrg(ctx, input.id);
+      await assertInOrg(ctx.repos, ctx.orgId, input.id);
       const { id, ...rest } = input;
-      return ctx.dataStore.expectedReceivables.update({
-        where: { id },
-        data: { ...omitUndefined(rest), updatedAt: new Date() },
-      });
+      return ctx.repos.expectedReceivables.update(id, { ...omitUndefined(rest), updatedAt: new Date() } as Partial<ExpectedReceivable>);
     }),
 });

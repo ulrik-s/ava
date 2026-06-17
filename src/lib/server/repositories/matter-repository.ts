@@ -12,4 +12,6 @@ import type { Repository } from "./types";
 export interface MatterRepository extends Repository<Matter> {
   /** Ärende by id, org-scopat (null om saknas/annan org/raderat). */
   getByIdInOrg(id: string, organizationId: string): Promise<Matter | null>;
+  /** Alla (icke-raderade) ärenden i org:en. */
+  listByOrg(organizationId: string): Promise<Matter[]>;
 }

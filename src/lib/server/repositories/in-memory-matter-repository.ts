@@ -20,4 +20,9 @@ export class InMemoryMatterRepository extends InMemoryRepository<Matter> impleme
     const row = (await this.delegate.findFirst({ where: { id, organizationId } })) as Matter | null;
     return row && !(row as { deletedAt?: unknown }).deletedAt ? row : null;
   }
+
+  async listByOrg(organizationId: string): Promise<Matter[]> {
+    const rows = (await this.delegate.findMany({ where: { organizationId } })) as Matter[];
+    return rows.filter((r) => !(r as { deletedAt?: unknown }).deletedAt);
+  }
 }

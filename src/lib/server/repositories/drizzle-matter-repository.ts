@@ -22,4 +22,11 @@ export class DrizzleMatterRepository extends DrizzleRepository<Matter> implement
       .limit(1);
     return (rows[0] as unknown as Matter | undefined) ?? null;
   }
+
+  async listByOrg(organizationId: string): Promise<Matter[]> {
+    const rows = await this.db
+      .select().from(matters)
+      .where(and(eq(matters.organizationId, organizationId), isNull(matters.deletedAt)));
+    return rows as unknown as Matter[];
+  }
 }
