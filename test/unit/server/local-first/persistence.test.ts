@@ -1,22 +1,12 @@
 /**
  * Tester för `IPersistence`-implementationer.
  *
- * Vi testar:
- *   - `InMemoryPersistence` (för enhet-tester av högre lager)
- *   - `OpfsPersistence` (browser-runtime — testas mot en mockad OPFS-API
- *     i jsdom)
- *
- * Designval: en gemensam test-svit körs mot bägge backends så de
- * uppfyller Liskov-substitutionsprincipen. Skiljnaden mellan dem är
- * bara var datat hamnar.
+ * `InMemoryPersistence` (tester/fallback). `OpfsPersistence` togs bort i #420
+ * (demon kör på IndexedDB sedan #483 — se `indexeddb-fs-persistence.test.ts`).
  */
 
-import { describe, it, expect, beforeEach, vi } from "vitest-compat";
-import {
-  InMemoryPersistence,
-  OpfsPersistence,
-  type IPersistence,
-} from "@/lib/server/local-first/persistence";
+import { describe, it, expect, beforeEach } from "vitest-compat";
+import { InMemoryPersistence, type IPersistence } from "@/lib/server/local-first/persistence";
 
 function contractTests(name: string, factory: () => Promise<IPersistence>) {
   describe(name, () => {
@@ -47,121 +37,3 @@ function contractTests(name: string, factory: () => Promise<IPersistence>) {
 }
 
 contractTests("InMemoryPersistence", async () => new InMemoryPersistence());
-
-describe("OpfsPersistence (browser-mock)", () => {
-  // Mocka navigator.storage.getDirectory + FileSystemDirectoryHandle/FileHandle
-  beforeEach(() => {
-    const fileMap = new Map<string, string>();
-
-    const fileHandle = (name: string) => ({
-      async getFile() {
-        const content = fileMap.get(name);
-        if (content === undefined) throw new Error("not found");
-        return {
-          async text() { return content; },
-        };
-      },
-      async createWritable() {
-        return {
-          async write(text: string) { fileMap.set(name, text); },
-          async close() {},
-        };
-      },
-    });
-
-    const dirHandle = {
-      async getFileHandle(name: string, opts?: { create?: boolean }) {
-        if (!fileMap.has(name) && !opts?.create) throw new Error("ENOENT");
-        return fileHandle(name);
-      },
-      async removeEntry(name: string) {
-        if (!fileMap.has(name)) throw new Error("ENOENT");
-        fileMap.delete(name);
-      },
-    };
-
-    vi.stubGlobal("navigator", {
-      storage: { getDirectory: async () => dirHandle },
-    });
-    (globalThis as { __opfsMockStore?: Map<string, string> }).__opfsMockStore = fileMap;
-  });
-
-  it("är inte stödd när navigator.storage saknas", async () => {
-    vi.stubGlobal("navigator", undefined);
-    expect(await OpfsPersistence.isSupported()).toBe(false);
-  });
-
-  it("är stödd när navigator.storage.getDirectory finns", async () => {
-    expect(await OpfsPersistence.isSupported()).toBe(true);
-  });
-
-  it("är INTE stödd när getDirectory finns men kastar (Firefox SecurityError)", async () => {
-    (globalThis as { navigator?: { storage: { getDirectory: () => unknown } } }).navigator!.storage.getDirectory =
-      () => { throw new DOMException("Security error when calling GetDirectory", "SecurityError"); };
-    expect(await OpfsPersistence.isSupported()).toBe(false);
-  });
-
-  it("SecurityError → save blir tyst no-op och loggar EN gång (ingen spam)", async () => {
-    const p = new OpfsPersistence("ava-demo");
-    (globalThis as { navigator?: { storage: { getDirectory: () => unknown } } }).navigator!.storage.getDirectory =
-      () => { throw new DOMException("Security error when calling GetDirectory", "SecurityError"); };
-    const info = vi.spyOn(console, "info").mockImplementation(() => {});
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    await p.save({ "x": "y" });
-    await p.save({ "x": "z" });
-    await p.save({ "x": "w" });
-    // Exakt en informativ rad totalt, aldrig console.warn.
-    expect(info).toHaveBeenCalledTimes(1);
-    expect(warn).not.toHaveBeenCalled();
-    info.mockRestore();
-    warn.mockRestore();
-  });
-
-  it("efter SecurityError blir load tyst no-op (returnerar null utan att kasta)", async () => {
-    const p = new OpfsPersistence("ava-demo");
-    (globalThis as { navigator?: { storage: { getDirectory: () => unknown } } }).navigator!.storage.getDirectory =
-      () => { throw new DOMException("blocked", "SecurityError"); };
-    const info = vi.spyOn(console, "info").mockImplementation(() => {});
-    expect(await p.load()).toBeNull();
-    expect(await p.load()).toBeNull();
-    expect(info).toHaveBeenCalledTimes(1); // markerad oanvändbar vid första anropet
-    info.mockRestore();
-  });
-
-  it("save → load round-trip via OPFS", async () => {
-    const p = new OpfsPersistence("ava-demo");
-    await p.save({ "matters/active/m1.json": "ewogICJpZCI6ICJtMSIKfQ==" });
-    expect(await p.load()).toEqual({ "matters/active/m1.json": "ewogICJpZCI6ICJtMSIKfQ==" });
-  });
-
-  it("clear gör att load returnerar null", async () => {
-    const p = new OpfsPersistence("ava-demo");
-    await p.save({ "x": "y" });
-    await p.clear();
-    expect(await p.load()).toBeNull();
-  });
-
-  it("isolerat per key (olika instanser delar inte data)", async () => {
-    const a = new OpfsPersistence("demo-a");
-    const b = new OpfsPersistence("demo-b");
-    await a.save({ "f": "AAAA" });
-    await b.save({ "f": "BBBB" });
-    expect((await a.load())!.f).toBe("AAAA");
-    expect((await b.load())!.f).toBe("BBBB");
-  });
-
-  it("load returnerar null vid OPFS-fel istället för att kasta", async () => {
-    const p = new OpfsPersistence("ava-demo");
-    // Sabotera getDirectory så det kastar
-    (globalThis as { navigator?: { storage: { getDirectory: () => unknown } } }).navigator!.storage.getDirectory = () => { throw new Error("OPFS nere"); };
-    expect(await p.load()).toBeNull();
-  });
-
-  it("save sväljer fel tyst (för icke-kritisk cache)", async () => {
-    const p = new OpfsPersistence("ava-demo");
-    (globalThis as { navigator?: { storage: { getDirectory: () => unknown } } }).navigator!.storage.getDirectory = () => { throw new Error("OPFS nere"); };
-    const spy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    await expect(p.save({ "x": "y" })).resolves.toBeUndefined();
-    spy.mockRestore();
-  });
-});
