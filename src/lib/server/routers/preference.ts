@@ -10,6 +10,8 @@
 
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import type { OrgPreferenceRow } from "../repositories/org-preference-repository";
+import type { UserPreferenceRow } from "../repositories/user-preference-repository";
 import { router, orgProcedure, protectedProcedure } from "../trpc";
 
 const prefsPayloadSchema = z.record(z.string(), z.unknown());
@@ -20,12 +22,8 @@ export const preferenceRouter = router({
     .input(z.object({ key: z.string().min(1) }))
     .query(async ({ ctx, input }) => {
       const [user, org] = await Promise.all([
-        ctx.dataStore.userPreferences.findFirst({
-          where: { userId: ctx.user.id, organizationId: ctx.user.organizationId, key: input.key },
-        }),
-        ctx.dataStore.orgPreferences.findFirst({
-          where: { organizationId: ctx.user.organizationId, key: input.key },
-        }),
+        ctx.repos.userPreferences.getByUserKey(ctx.user.id, ctx.user.organizationId, input.key),
+        ctx.repos.orgPreferences.getByOrgKey(ctx.user.organizationId, input.key),
       ]);
       return {
         user: (user as { prefs?: Record<string, unknown> } | null)?.prefs ?? null,
@@ -37,28 +35,22 @@ export const preferenceRouter = router({
   save: protectedProcedure
     .input(z.object({ key: z.string().min(1), prefs: prefsPayloadSchema }))
     .mutation(async ({ ctx, input }) => {
-      const existing = await ctx.dataStore.userPreferences.findFirst({
-        where: { userId: ctx.user.id, organizationId: ctx.user.organizationId, key: input.key },
-      });
+      const existing = await ctx.repos.userPreferences.getByUserKey(ctx.user.id, ctx.user.organizationId, input.key);
       if (existing) {
-        const ex = existing as { id: string };
-        return ctx.dataStore.userPreferences.update({ where: { id: ex.id }, data: { prefs: input.prefs } });
+        return ctx.repos.userPreferences.update(existing.id, { prefs: input.prefs } as Partial<UserPreferenceRow>);
       }
-      return ctx.dataStore.userPreferences.create({
-        data: { userId: ctx.user.id, organizationId: ctx.user.organizationId, key: input.key, prefs: input.prefs },
-      });
+      return ctx.repos.userPreferences.create({
+        userId: ctx.user.id, organizationId: ctx.user.organizationId, key: input.key, prefs: input.prefs,
+      } as Partial<UserPreferenceRow>);
     }),
 
   /** Återställ user-pref (faller tillbaka till org/komponent-default). */
   clear: protectedProcedure
     .input(z.object({ key: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
-      const existing = await ctx.dataStore.userPreferences.findFirst({
-        where: { userId: ctx.user.id, organizationId: ctx.user.organizationId, key: input.key },
-      });
+      const existing = await ctx.repos.userPreferences.getByUserKey(ctx.user.id, ctx.user.organizationId, input.key);
       if (!existing) return { ok: true };
-      const ex = existing as { id: string };
-      await ctx.dataStore.userPreferences.delete({ where: { id: ex.id } });
+      await ctx.repos.userPreferences.hardDelete(existing.id);
       return { ok: true };
     }),
 
@@ -67,16 +59,13 @@ export const preferenceRouter = router({
     .input(z.object({ key: z.string().min(1), prefs: prefsPayloadSchema }))
     .mutation(async ({ ctx, input }) => {
       requireAdmin(ctx.user.role);
-      const existing = await ctx.dataStore.orgPreferences.findFirst({
-        where: { organizationId: ctx.user.organizationId, key: input.key },
-      });
+      const existing = await ctx.repos.orgPreferences.getByOrgKey(ctx.user.organizationId, input.key);
       if (existing) {
-        const ex = existing as { id: string };
-        return ctx.dataStore.orgPreferences.update({ where: { id: ex.id }, data: { prefs: input.prefs, createdById: ctx.user.id } });
+        return ctx.repos.orgPreferences.update(existing.id, { prefs: input.prefs, createdById: ctx.user.id } as Partial<OrgPreferenceRow>);
       }
-      return ctx.dataStore.orgPreferences.create({
-        data: { organizationId: ctx.user.organizationId, key: input.key, prefs: input.prefs, createdById: ctx.user.id },
-      });
+      return ctx.repos.orgPreferences.create({
+        organizationId: ctx.user.organizationId, key: input.key, prefs: input.prefs, createdById: ctx.user.id,
+      } as Partial<OrgPreferenceRow>);
     }),
 
   /** Rensa org-default (endast ADMIN). */
@@ -84,22 +73,16 @@ export const preferenceRouter = router({
     .input(z.object({ key: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
       requireAdmin(ctx.user.role);
-      const existing = await ctx.dataStore.orgPreferences.findFirst({
-        where: { organizationId: ctx.user.organizationId, key: input.key },
-      });
+      const existing = await ctx.repos.orgPreferences.getByOrgKey(ctx.user.organizationId, input.key);
       if (!existing) return { ok: true };
-      const ex = existing as { id: string };
-      await ctx.dataStore.orgPreferences.delete({ where: { id: ex.id } });
+      await ctx.repos.orgPreferences.hardDelete(existing.id);
       return { ok: true };
     }),
 
   /** Lista alla nycklar som har en org-default (för admin-UI:t). */
-  listOrgDefaults: orgProcedure.query(async ({ ctx }) => {
+  listOrgDefaults: orgProcedure.query(({ ctx }) => {
     requireAdmin(ctx.user.role);
-    return ctx.dataStore.orgPreferences.findMany({
-      where: { organizationId: ctx.user.organizationId },
-      orderBy: { key: "asc" },
-    });
+    return ctx.repos.orgPreferences.listByOrg(ctx.user.organizationId);
   }),
 });
 

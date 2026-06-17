@@ -19,12 +19,14 @@ import { InMemoryInvoiceDispatchRepository } from "./in-memory-invoice-dispatch-
 import { InMemoryInvoiceRepository } from "./in-memory-invoice-repository";
 import { InMemoryMatterRepository } from "./in-memory-matter-repository";
 import { InMemoryOfficeRepository } from "./in-memory-office-repository";
+import { InMemoryOrgPreferenceRepository } from "./in-memory-org-preference-repository";
 import { InMemoryOrganizationRepository } from "./in-memory-organization-repository";
 import { InMemoryPaymentPlanRepository } from "./in-memory-payment-plan-repository";
 import { InMemoryPaymentRepository } from "./in-memory-payment-repository";
 import { InMemoryServiceNoteRepository } from "./in-memory-service-note-repository";
 import { InMemoryTaskRepository } from "./in-memory-task-repository";
 import { InMemoryTimeEntryRepository } from "./in-memory-time-entry-repository";
+import { InMemoryUserPreferenceRepository } from "./in-memory-user-preference-repository";
 import { InMemoryUserRepository } from "./in-memory-user-repository";
 import { InMemoryWriteOffRepository } from "./in-memory-write-off-repository";
 import type { Repositories } from "./repositories";
@@ -50,6 +52,8 @@ function reposForTx(tx: DataStoreTx): Repositories {
     invoiceDispatches: new InMemoryInvoiceDispatchRepository(tx),
     organizations: new InMemoryOrganizationRepository(tx),
     offices: new InMemoryOfficeRepository(tx),
+    userPreferences: new InMemoryUserPreferenceRepository(tx),
+    orgPreferences: new InMemoryOrgPreferenceRepository(tx),
     transaction: (fn) => fn(repos),
   };
   return repos;
@@ -75,6 +79,8 @@ export function buildInMemoryRepositories(dataStore: IDataStore): Repositories {
     invoiceDispatches: new InMemoryInvoiceDispatchRepository(dataStore),
     organizations: new InMemoryOrganizationRepository(dataStore),
     offices: new InMemoryOfficeRepository(dataStore),
+    userPreferences: new InMemoryUserPreferenceRepository(dataStore),
+    orgPreferences: new InMemoryOrgPreferenceRepository(dataStore),
     transaction: (fn) => dataStore.transaction((tx) => fn(reposForTx(tx))),
   };
 }

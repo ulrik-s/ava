@@ -5,6 +5,8 @@
 
 import { TRPCError } from "@trpc/server";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
+import type { IDataStore } from "@/lib/server/data-store/IDataStore";
+import { buildInMemoryRepositories } from "@/lib/server/repositories/in-memory-repositories";
 import { preferenceRouter } from "@/lib/server/routers/preference";
 import { dataStoreFromMockPrisma } from "../helpers/mock-data-store";
 
@@ -16,10 +18,11 @@ const mockPrisma = {
 };
 
 function makeCaller(role: "ADMIN" | "LAWYER" = "LAWYER", orgId = "org-a", userId = "u1") {
+  const dataStore = dataStoreFromMockPrisma(mockPrisma as unknown as Record<string, unknown>);
   const ctx = {
     user: { id: userId, email: "a@b.se", name: "T", role, organizationId: orgId },
-    prisma: mockPrisma,
-    dataStore: dataStoreFromMockPrisma(mockPrisma as unknown as Record<string, unknown>),
+    prisma: mockPrisma, dataStore,
+    repos: buildInMemoryRepositories(dataStore as unknown as IDataStore),
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return preferenceRouter.createCaller(ctx as any);
@@ -57,7 +60,7 @@ describe("prefs.save (upsert)", () => {
     mockPrisma.userPreference.update.mockResolvedValue({ id: "p1" });
     await makeCaller().save({ key: "list.contacts", prefs: { sort: "email" } });
     expect(mockPrisma.userPreference.update).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: "p1" }, data: { prefs: { sort: "email" } },
+      where: { id: "p1" }, data: expect.objectContaining({ prefs: { sort: "email" } }),
     }));
   });
 });
