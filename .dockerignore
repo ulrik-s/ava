@@ -9,10 +9,13 @@
 !dist
 dist/*
 !dist/server-runtime
+!dist/server-first
 # imagen kör bara linux — darwin-binärerna behövs ej i contexten.
 dist/server-runtime/*darwin*
+dist/server-first/*darwin*
 !tooling
 tooling/*
 !tooling/docker
 tooling/docker/*
 !tooling/docker/server-runtime
+!tooling/docker/server-first
