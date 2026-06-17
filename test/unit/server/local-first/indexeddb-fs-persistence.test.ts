@@ -45,4 +45,14 @@ describe("IndexedDbFsPersistence", () => {
   it("tom key → kastar", () => {
     expect(() => new IndexedDbFsPersistence("", new IDBFactory())).toThrow();
   });
+
+  it("IndexedDB blockerat → best-effort no-op (kastar ej; load → null)", async () => {
+    // IDBFactory vars open() kastar (t.ex. privat läge / blockerad storage).
+    const blocked = { open: () => { throw new Error("IndexedDB blocked"); } } as unknown as IDBFactory;
+    const p = new IndexedDbFsPersistence("ava-fs-blocked", blocked);
+    // Inga av dessa får kasta — demon ska köra vidare i minnesläge.
+    await expect(p.save({ "a.json": "x" })).resolves.toBeUndefined();
+    await expect(p.load()).resolves.toBeNull();
+    await expect(p.clear()).resolves.toBeUndefined();
+  });
 });
