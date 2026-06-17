@@ -12,8 +12,6 @@
 
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import type { Task, CalendarEvent } from "@/lib/shared/schemas";
-import type { Joined } from "../data-store/IDataStore";
 import { router, orgProcedure } from "../trpc";
 
 export interface TodoItem {
@@ -32,8 +30,6 @@ export interface TodoItem {
   userId: string;
 }
 
-const includeMatter = { matter: { select: { id: true, matterNumber: true, title: true } } };
-
 export const todoRouter = router({
   list: orgProcedure
     .input(z.object({
@@ -50,22 +46,16 @@ export const todoRouter = router({
       // autentiserad. Det undviker race när demo-runtime hydrerar users
       // asynkront → todo.list slog tidigare in innan u-anna fanns i datalagret.
       if (userId !== ctx.user.id) {
-        const user = await ctx.dataStore.users.findFirst({
-          where: { id: userId, organizationId: ctx.user.organizationId },
-        });
+        const user = await ctx.repos.users.getByIdInOrg(userId, ctx.user.organizationId);
         if (!user) throw new TRPCError({ code: "NOT_FOUND", message: "Användare finns inte i organisationen." });
       }
 
-      const where = { userId, organizationId: ctx.user.organizationId };
+      // Migrerad till repository-sömmen (ADR 0020): hämta alla user-poster och
+      // filtrera tidsfönstret i minne (samma mönster som calendar; in-memory
+      // query-engine stödjer inte Date-range i where).
       const [tasks, events] = await Promise.all([
-        ctx.dataStore.tasks.findMany({
-          where: { ...where, dueAt: { gte: input.from, lte: input.to } },
-          include: includeMatter,
-        }),
-        ctx.dataStore.calendarEvents.findMany({
-          where: { ...where, startAt: { gte: input.from, lte: input.to } },
-          include: includeMatter,
-        }),
+        ctx.repos.tasks.listForUser(userId, ctx.user.organizationId, {}),
+        ctx.repos.calendarEvents.listForUser(userId, ctx.user.organizationId),
       ]);
 
       // Demo-projektionen (passthrough) sparar datum som ISO-strängar →
@@ -74,19 +64,25 @@ export const todoRouter = router({
       // och behöll förra resultatet → tom dashboard).
       const toDate = (v: unknown): Date => v instanceof Date ? v : new Date(v as string);
 
-      const taskItems: TodoItem[] = tasks.map((t: Joined<Task>) => ({
+      const taskItems: TodoItem[] = tasks.map((t) => ({
         id: t.id, source: "task", title: t.title, description: t.description ?? null,
         at: toDate(t.dueAt), endAt: null, allDay: false,
         status: t.status, priority: t.priority, kind: null, location: null,
         matter: t.matter ?? null, userId: t.userId,
       }));
-      const eventItems: TodoItem[] = events.map((e: Joined<CalendarEvent>) => ({
+      const eventItems: TodoItem[] = events.map((e) => ({
         id: e.id, source: "event", title: e.title, description: e.description ?? null,
         at: toDate(e.startAt), endAt: e.endAt ? toDate(e.endAt) : null, allDay: e.allDay ?? false,
         status: null, priority: null, kind: e.kind, location: e.location ?? null,
         matter: e.matter ?? null, userId: e.userId,
       }));
 
-      return [...taskItems, ...eventItems].sort((a, b) => a.at.getTime() - b.at.getTime());
+      // Tidsfönster-filter i minne: behåll poster vars `at` ligger i [from, to]
+      // (tasks utan dueAt → ogiltigt/utanför → faller bort, som förr via gte/lte).
+      const fromT = input.from.getTime();
+      const toT = input.to.getTime();
+      return [...taskItems, ...eventItems]
+        .filter((i) => { const t = i.at.getTime(); return !Number.isNaN(t) && t >= fromT && t <= toT; })
+        .sort((a, b) => a.at.getTime() - b.at.getTime());
     }),
 });
