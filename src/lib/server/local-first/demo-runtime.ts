@@ -25,8 +25,8 @@
  * Designval (DI):
  *   - `cloneFn` injiceras — produktion använder en wrapper kring
  *     `isomorphic-git.clone`; tester använder en fake.
- *   - `persistence` injiceras — OpfsPersistence i browser, InMemory
- *     i tester, eller utelämnas helt.
+ *   - `persistence` injiceras — IndexedDbFsPersistence i browser (#483),
+ *     InMemory i tester, eller utelämnas helt.
  */
 
 import { DemoLoader, type DemoCloneFn, type LoadResult } from "./demo-loader";
