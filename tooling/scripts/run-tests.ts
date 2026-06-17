@@ -42,9 +42,11 @@ const FAST = process.argv.includes("--fast");
 // 83.0 funktioner (ADR 0020 repo-migrering #409: alla routrar mot ctx.repos +
 // per-repo paritetstester lyfte lokalt till 88.33% rader / 84.53% funktioner;
 // golvet låses just under, ~0.5% rad-marginal / ~1.5% funktions-marginal för
-// Node-version-varians).
-const LINE_FLOOR = 0.878;
-const FUNC_FLOOR = 0.83;
+// Node-version-varians) → 87.9 rader / 83.2 funktioner (#27: äkta
+// WebCrypto-/IndexedDB-tester för ed25519-keypair lyfte lokalt till 88.38%
+// rader / 84.89% funktioner; samma marginal-konvention behålls).
+const LINE_FLOOR = 0.879;
+const FUNC_FLOOR = 0.832;
 
 /**
  * SERIAL_FILES — testfiler som SYNKRONT spawnar en barnprocess via
