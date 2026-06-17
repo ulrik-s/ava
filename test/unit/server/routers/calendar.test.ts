@@ -8,13 +8,14 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
+import type { IDataStore } from "@/lib/server/data-store/IDataStore";
+import { buildInMemoryRepositories } from "@/lib/server/repositories/in-memory-repositories";
 import { calendarRouter } from "@/lib/server/routers/calendar";
 import { dataStoreFromMockPrisma } from "../helpers/mock-data-store";
 
 const mockPrisma = {
   calendarEvent: {
     findFirst: vi.fn(),
-    findFirstOrThrow: vi.fn(),
     findMany: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
@@ -23,9 +24,11 @@ const mockPrisma = {
 };
 
 function makeCaller(userId = "u1", orgId = "org-a") {
+  const dataStore = dataStoreFromMockPrisma(mockPrisma as unknown as Record<string, unknown>);
   const ctx = {
     user: { id: userId, email: "a@b.se", name: "T", role: "LAWYER", organizationId: orgId },
-    dataStore: dataStoreFromMockPrisma(mockPrisma as unknown as Record<string, unknown>),
+    dataStore,
+    repos: buildInMemoryRepositories(dataStore as unknown as IDataStore),
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return calendarRouter.createCaller(ctx as any);
@@ -168,16 +171,16 @@ describe("calendar.create", () => {
 
 describe("calendar.update", () => {
   it("guardar ownership innan update", async () => {
-    mockPrisma.calendarEvent.findFirstOrThrow.mockRejectedValue(new Error("Not found"));
+    mockPrisma.calendarEvent.findFirst.mockResolvedValue(null);
     await expect(makeCaller().update({
       id: "e1",
       title: "Försöker ändra andras",
-    })).rejects.toThrow("Not found");
+    })).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect(mockPrisma.calendarEvent.update).not.toHaveBeenCalled();
   });
 
   it("flippa till mirrorToOutlook=true → sätt mirrorStatus=pending", async () => {
-    mockPrisma.calendarEvent.findFirstOrThrow.mockResolvedValue({
+    mockPrisma.calendarEvent.findFirst.mockResolvedValue({
       id: "e1", mirrorToOutlook: false, mirrorStatus: null,
     });
     mockPrisma.calendarEvent.update.mockResolvedValue({});
@@ -187,7 +190,7 @@ describe("calendar.update", () => {
   });
 
   it("flippa till mirrorToOutlook=false → nollställ outlookEventId + status", async () => {
-    mockPrisma.calendarEvent.findFirstOrThrow.mockResolvedValue({
+    mockPrisma.calendarEvent.findFirst.mockResolvedValue({
       id: "e1", mirrorToOutlook: true, mirrorStatus: "synced", outlookEventId: "ou-1",
     });
     mockPrisma.calendarEvent.update.mockResolvedValue({});
@@ -198,7 +201,7 @@ describe("calendar.update", () => {
   });
 
   it("ändra title på mirrored event → mirrorStatus=pending (re-push)", async () => {
-    mockPrisma.calendarEvent.findFirstOrThrow.mockResolvedValue({
+    mockPrisma.calendarEvent.findFirst.mockResolvedValue({
       id: "e1", mirrorToOutlook: true, mirrorStatus: "synced",
     });
     mockPrisma.calendarEvent.update.mockResolvedValue({});
@@ -210,10 +213,10 @@ describe("calendar.update", () => {
 
 describe("calendar.getById", () => {
   it("scopar till id + aktiv användare + org", async () => {
-    mockPrisma.calendarEvent.findFirstOrThrow.mockResolvedValue({ id: "e1", title: "Möte" });
+    mockPrisma.calendarEvent.findFirst.mockResolvedValue({ id: "e1", title: "Möte" });
     const res = await makeCaller("u-anna", "org-x").getById({ id: "e1" });
     expect(res).toMatchObject({ id: "e1" });
-    expect(mockPrisma.calendarEvent.findFirstOrThrow).toHaveBeenCalledWith(
+    expect(mockPrisma.calendarEvent.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: "e1", userId: "u-anna", organizationId: "org-x" },
       }),
@@ -221,8 +224,8 @@ describe("calendar.getById", () => {
   });
 
   it("kastar när eventet inte är användarens", async () => {
-    mockPrisma.calendarEvent.findFirstOrThrow.mockRejectedValue(new Error("Not found"));
-    await expect(makeCaller().getById({ id: "e1" })).rejects.toThrow("Not found");
+    mockPrisma.calendarEvent.findFirst.mockResolvedValue(null);
+    await expect(makeCaller().getById({ id: "e1" })).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 });
 
@@ -242,15 +245,15 @@ describe("calendar.listForMatter", () => {
 
 describe("calendar.setMirrorState", () => {
   it("guardar ownership innan uppdatering", async () => {
-    mockPrisma.calendarEvent.findFirstOrThrow.mockRejectedValue(new Error("Not found"));
+    mockPrisma.calendarEvent.findFirst.mockResolvedValue(null);
     await expect(
       makeCaller().setMirrorState({ id: "e1", mirrorStatus: "synced" }),
-    ).rejects.toThrow("Not found");
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect(mockPrisma.calendarEvent.update).not.toHaveBeenCalled();
   });
 
   it("skriver mirror-fält rakt av UTAN computeMirrorPatch (ingen pending-loop)", async () => {
-    mockPrisma.calendarEvent.findFirstOrThrow.mockResolvedValue({ id: "e1" });
+    mockPrisma.calendarEvent.findFirst.mockResolvedValue({ id: "e1" });
     mockPrisma.calendarEvent.update.mockResolvedValue({});
     await makeCaller().setMirrorState({
       id: "e1", outlookEventId: "ou-1", mirrorStatus: "synced",
@@ -267,13 +270,13 @@ describe("calendar.setMirrorState", () => {
 
 describe("calendar.delete", () => {
   it("guardar ownership innan delete", async () => {
-    mockPrisma.calendarEvent.findFirstOrThrow.mockRejectedValue(new Error("Not found"));
-    await expect(makeCaller().delete({ id: "e1" })).rejects.toThrow("Not found");
+    mockPrisma.calendarEvent.findFirst.mockResolvedValue(null);
+    await expect(makeCaller().delete({ id: "e1" })).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect(mockPrisma.calendarEvent.delete).not.toHaveBeenCalled();
   });
 
   it("delete forwardar till dataStore", async () => {
-    mockPrisma.calendarEvent.findFirstOrThrow.mockResolvedValue({ id: "e1" });
+    mockPrisma.calendarEvent.findFirst.mockResolvedValue({ id: "e1" });
     mockPrisma.calendarEvent.delete.mockResolvedValue({});
     await makeCaller().delete({ id: "e1" });
     expect(mockPrisma.calendarEvent.delete).toHaveBeenCalledWith({ where: { id: "e1" } });
