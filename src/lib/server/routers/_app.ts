@@ -17,6 +17,7 @@ import { paymentPlanRouter } from "./paymentPlan";
 import { preferenceRouter } from "./preference";
 import { reportsRouter } from "./reports";
 import { serviceNoteRouter } from "./serviceNote";
+import { syncRouter } from "./sync";
 import { taskRouter } from "./task";
 import { timeEntryRouter } from "./timeEntry";
 import { todoRouter } from "./todo";
@@ -45,6 +46,7 @@ export const appRouter = router({
   todo: todoRouter,
   prefs: preferenceRouter,
   mail: mailRouter,
+  sync: syncRouter,
 });
 
 export type AppRouter = typeof appRouter;

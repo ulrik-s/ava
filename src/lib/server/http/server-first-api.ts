@@ -14,7 +14,9 @@
 import { noopPorts } from "@/lib/server/adapters/noop-ports";
 import { createPostgresDb } from "@/lib/server/db/client";
 import type { IPorts } from "@/lib/server/ports";
+import { createDbChangeLogRecorder, enableChangeLogOnAll } from "@/lib/server/repositories/change-log-recorder";
 import { buildDrizzleRepositories } from "@/lib/server/repositories/drizzle-repositories";
+import { DrizzleSyncStore } from "@/lib/server/sync/drizzle-sync-store";
 import { createServerTrpcHandler } from "./server-trpc-handler";
 
 export interface ServerFirstApiConfig {
@@ -46,10 +48,14 @@ export function buildServerFirstApi(config: ServerFirstApiConfig): ServerFirstAp
     config.maxConnections !== undefined ? { max: config.maxConnections } : {},
   );
   const repos = buildDrizzleRepositories(db);
+  // Driv delta-sync: varje accepterad skrivning loggas i change_log (pull),
+  // och `ctx.sync` ger sync-routern dess pull/push (ADR 0017).
+  enableChangeLogOnAll(repos, createDbChangeLogRecorder(db));
   const handler = createServerTrpcHandler({
     repos,
     ports: config.ports ?? noopPorts,
     organizationId: config.organizationId,
+    sync: new DrizzleSyncStore(db, repos),
     ...(config.endpoint ? { endpoint: config.endpoint } : {}),
     ...(config.onError ? { onError: config.onError } : {}),
   });

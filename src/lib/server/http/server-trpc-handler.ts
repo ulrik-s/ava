@@ -37,6 +37,7 @@ export function createServerTrpcHandler(
     ports: deps.ports,
     organizationId: deps.organizationId,
     ...(deps.headerNames ? { headerNames: deps.headerNames } : {}),
+    ...(deps.sync ? { sync: deps.sync } : {}),
   };
   return (req: Request): Promise<Response> =>
     fetchRequestHandler({
