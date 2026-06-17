@@ -49,4 +49,8 @@ export interface ContactRepository extends Repository<Contact> {
   listForOrg(organizationId: string, opts: ContactListOptions): Promise<ContactListResult>;
   /** Full kontakt-detalj (barn/förälder/ärende-kopplingar), org-scopad. Null om saknas/raderad. */
   getByIdFull(id: string, organizationId: string): Promise<ContactFull | null>;
+  /** Kontakt med givet personnummer i org:en (dedup). Null om ingen. */
+  findByPersonalNumber(organizationId: string, personalNumber: string): Promise<Contact | null>;
+  /** Kontakt med givet org-nummer i org:en (dedup). Null om ingen. */
+  findByOrgNumber(organizationId: string, orgNumber: string): Promise<Contact | null>;
 }

@@ -436,3 +436,14 @@ export const documentsRelations = relations(documents, ({ one }) => ({
   invoice: one(invoices, { fields: [documents.invoiceId], references: [invoices.id] }),
   matter: one(matters, { fields: [documents.matterId], references: [matters.id] }),
 }));
+
+// matter↔kontakt via junction (matterContacts). Driver `with`-nesting för
+// repository-läsningar som behöver KLIENT-kontakten (paymentPlan/matter m.fl.).
+export const mattersRelations = relations(matters, ({ many }) => ({
+  contacts: many(matterContacts),
+}));
+
+export const matterContactsRelations = relations(matterContacts, ({ one }) => ({
+  matter: one(matters, { fields: [matterContacts.matterId], references: [matters.id] }),
+  contact: one(contacts, { fields: [matterContacts.contactId], references: [contacts.id] }),
+}));

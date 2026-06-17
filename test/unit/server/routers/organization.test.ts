@@ -1,5 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
+import type { IDataStore } from "@/lib/server/data-store/IDataStore";
+import { buildInMemoryRepositories } from "@/lib/server/repositories/in-memory-repositories";
 import { organizationRouter } from "@/lib/server/routers/organization";
 import { dataStoreFromMockPrisma } from "../helpers/mock-data-store";
 
@@ -7,12 +9,13 @@ import { dataStoreFromMockPrisma } from "../helpers/mock-data-store";
 
 const mockPrisma = {
   organization: {
-    findUniqueOrThrow: vi.fn(),
+    findFirst: vi.fn(),
     update: vi.fn(),
+    create: vi.fn(),
   },
   office: {
     findMany: vi.fn(),
-    findUnique: vi.fn(),
+    findFirst: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
     updateMany: vi.fn(),
@@ -21,9 +24,11 @@ const mockPrisma = {
 };
 
 function makeCaller(orgId = "org-a") {
+  const dataStore = dataStoreFromMockPrisma(mockPrisma as unknown as Record<string, unknown>);
   const ctx = {
     user: { id: "user-1", email: "a@b.com", name: "Test", role: "ADMIN", organizationId: orgId },
-    prisma: mockPrisma, dataStore: dataStoreFromMockPrisma(mockPrisma as unknown as Record<string, unknown>),
+    prisma: mockPrisma, dataStore,
+    repos: buildInMemoryRepositories(dataStore as unknown as IDataStore),
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return organizationRouter.createCaller(ctx as any);
@@ -211,7 +216,7 @@ describe("organization — komplett flöde: registrera huvudkontor och filial", 
 
 describe("organization.updateOffice", () => {
   it("uppdaterar ett kontor i anropande organisation", async () => {
-    mockPrisma.office.findUnique.mockResolvedValue(BRANCH_OFFICE);
+    mockPrisma.office.findFirst.mockResolvedValue(BRANCH_OFFICE);
     mockPrisma.office.update.mockResolvedValue({ ...BRANCH_OFFICE, phone: "031-000 00 00" });
 
     const result = await makeCaller("org-a").updateOffice({
@@ -226,7 +231,7 @@ describe("organization.updateOffice", () => {
   });
 
   it("degraderar tidigare huvudkontor när en filial befordras", async () => {
-    mockPrisma.office.findUnique.mockResolvedValue(BRANCH_OFFICE);
+    mockPrisma.office.findFirst.mockResolvedValue(BRANCH_OFFICE);
     mockPrisma.office.updateMany.mockResolvedValue({ count: 1 });
     mockPrisma.office.update.mockResolvedValue({ ...BRANCH_OFFICE, isMain: true });
 
@@ -239,7 +244,7 @@ describe("organization.updateOffice", () => {
   });
 
   it("kastar NOT_FOUND när kontor tillhör annan organisation", async () => {
-    mockPrisma.office.findUnique.mockResolvedValue({ ...BRANCH_OFFICE, organizationId: "org-b" });
+    mockPrisma.office.findFirst.mockResolvedValue(null);
 
     await expect(
       makeCaller("org-a").updateOffice({ id: "off-branch", name: "Hijacked" })
@@ -248,7 +253,7 @@ describe("organization.updateOffice", () => {
   });
 
   it("kastar NOT_FOUND när kontor inte existerar", async () => {
-    mockPrisma.office.findUnique.mockResolvedValue(null);
+    mockPrisma.office.findFirst.mockResolvedValue(null);
 
     await expect(
       makeCaller("org-a").updateOffice({ id: "off-ghost", name: "X" })
@@ -260,7 +265,7 @@ describe("organization.updateOffice", () => {
 
 describe("organization.deleteOffice", () => {
   it("tar bort ett kontor i anropande organisation", async () => {
-    mockPrisma.office.findUnique.mockResolvedValue(BRANCH_OFFICE);
+    mockPrisma.office.findFirst.mockResolvedValue(BRANCH_OFFICE);
     mockPrisma.office.delete.mockResolvedValue(BRANCH_OFFICE);
 
     await makeCaller("org-a").deleteOffice({ id: "off-branch" });
@@ -269,7 +274,7 @@ describe("organization.deleteOffice", () => {
   });
 
   it("kastar NOT_FOUND vid borttagning från annan organisation", async () => {
-    mockPrisma.office.findUnique.mockResolvedValue({ ...BRANCH_OFFICE, organizationId: "org-b" });
+    mockPrisma.office.findFirst.mockResolvedValue(null);
 
     await expect(makeCaller("org-a").deleteOffice({ id: "off-branch" })).rejects.toMatchObject({
       code: "NOT_FOUND",
@@ -282,7 +287,7 @@ describe("organization.deleteOffice", () => {
 
 describe("organization.getSettings", () => {
   it("returnerar org-inställningar för anropande användares org", async () => {
-    mockPrisma.organization.findUniqueOrThrow.mockResolvedValue({
+    mockPrisma.organization.findFirst.mockResolvedValue({
       id: "org-a",
       name: "Advokat AB",
       orgNumber: "556123-4567",
@@ -297,7 +302,7 @@ describe("organization.getSettings", () => {
 
     expect(result.name).toBe("Advokat AB");
     expect(result.bankgiro).toBe("123-4567");
-    expect(mockPrisma.organization.findUniqueOrThrow).toHaveBeenCalledWith(
+    expect(mockPrisma.organization.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: "org-a" } })
     );
   });
@@ -305,6 +310,8 @@ describe("organization.getSettings", () => {
 
 describe("organization.updateSettings", () => {
   it("uppdaterar bankgiro och övriga fält", async () => {
+    // Repo.update läser nuvarande raden (version-bump) före skrivning.
+    mockPrisma.organization.findFirst.mockResolvedValue({ id: "org-a" });
     mockPrisma.organization.update.mockResolvedValue({
       id: "org-a",
       name: "Advokat AB",
@@ -313,9 +320,9 @@ describe("organization.updateSettings", () => {
 
     await makeCaller("org-a").updateSettings({ bankgiro: "999-8888" });
 
-    expect(mockPrisma.organization.update).toHaveBeenCalledWith({
-      where: { id: "org-a" },
-      data: { bankgiro: "999-8888" },
-    });
+    // objectContaining: repo lägger version/updatedAt utöver bankgiro.
+    expect(mockPrisma.organization.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "org-a" }, data: expect.objectContaining({ bankgiro: "999-8888" }) }),
+    );
   });
 });

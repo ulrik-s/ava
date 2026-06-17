@@ -51,6 +51,9 @@ export interface DemoRelations {
   matterContacts: Relations;
   contacts: Relations;
   documents: Relations;
+  documentFolders: Relations;
+  matterEventSuggestions: Relations;
+  documentAnalysisSuggestions: Relations;
   documentTemplates: Relations;
   invoices: Relations;
   invoiceDispatches: Relations;
@@ -68,6 +71,40 @@ export interface DemoRelations {
  * Bygg relations-mappen per entitet. Endast entiteter MED relationer listas;
  * övriga (users, offices, payments, writeOffs, …) skapas utan relations.
  */
+/**
+ * Dokument-relaterade relations (documents/folders/event-suggestions). Utbruten
+ * ur `buildRelations` för att hålla den under max-lines-per-function.
+ *
+ * - documents.matter `one` är AVGÖRANDE — annars matchas nested where
+ *   `matter: { organizationId }` mot en array → assertDocAccess NOT_FOUND.
+ * - folder documents/children krävs för `_count` i dokumentlistan (core.list).
+ * - matterEventSuggestions.document→matter krävs för org-scoping + include.
+ */
+function documentRelations(r: Rel): Pick<DemoRelations, "documents" | "documentFolders" | "matterEventSuggestions" | "documentAnalysisSuggestions"> {
+  return {
+    documents: {
+      matter: r("matters", "id", "matterId", "one"),
+      uploadedBy: r("users", "id", "uploadedById", "one"),
+    },
+    documentFolders: {
+      matter: r("matters", "id", "matterId", "one"),
+      parent: r("documentFolders", "id", "parentId", "one"),
+      documents: r("documents", "folderId", "id"),
+      children: r("documentFolders", "parentId", "id"),
+    },
+    matterEventSuggestions: {
+      document: r("documents", "id", "documentId", "one", {
+        matter: r("matters", "id", "matterId", "one"),
+      }),
+    },
+    documentAnalysisSuggestions: {
+      document: r("documents", "id", "documentId", "one", {
+        matter: r("matters", "id", "matterId", "one"),
+      }),
+    },
+  };
+}
+
 export function buildRelations(getSource: GetSource): DemoRelations {
   const r = makeRel(getSource);
   return {
@@ -95,9 +132,7 @@ export function buildRelations(getSource: GetSource): DemoRelations {
       children: r("contacts", "parentId", "id"),
       parent: r("contacts", "id", "parentId", "one"),
     },
-    // kind:"one" är AVGÖRANDE — annars matchas nested where `matter:
-    // { organizationId }` mot en array → assertDocAccess NOT_FOUND (tidigare bugg).
-    documents: { matter: r("matters", "id", "matterId", "one") },
+    ...documentRelations(r),
     documentTemplates: { createdBy: r("users", "id", "createdById", "one") },
     invoices: {
       matter: r("matters", "id", "matterId", "one"),
@@ -130,11 +165,23 @@ export function buildRelations(getSource: GetSource): DemoRelations {
     },
     timeEntries: {
       user: r("users", "id", "userId", "one"),
-      matter: r("matters", "id", "matterId", "one"),
+      // Nested matter.contacts.contact krävs för tidsrapportens KLIENT-kontakt
+      // (listForReport), annars blir matter.contacts undefined in-memory.
+      matter: r("matters", "id", "matterId", "one", {
+        contacts: r("matterContacts", "matterId", "id", "many", {
+          contact: r("contacts", "id", "contactId", "one"),
+        }),
+      }),
       invoice: r("invoices", "id", "invoiceId", "one"),
     },
     expenses: {
-      matter: r("matters", "id", "matterId", "one"),
+      // Nested matter.contacts.contact krävs för advokatrapportens KLIENT-kontakt
+      // (listForLawyerInPeriod), speglar timeEntries.matter.
+      matter: r("matters", "id", "matterId", "one", {
+        contacts: r("matterContacts", "matterId", "id", "many", {
+          contact: r("contacts", "id", "contactId", "one"),
+        }),
+      }),
       user: r("users", "id", "userId", "one"),
       invoice: r("invoices", "id", "invoiceId", "one"),
     },
@@ -144,9 +191,12 @@ export function buildRelations(getSource: GetSource): DemoRelations {
     paymentPlans: {
       invoice: r("invoices", "id", "invoiceId", "one", {
         matter: r("matters", "id", "matterId", "one", {
-          contacts: r("matterContacts", "matterId", "id"),
+          contacts: r("matterContacts", "matterId", "id", "many", {
+            contact: r("contacts", "id", "contactId", "one"),
+          }),
         }),
         payments: r("payments", "invoiceId", "id"),
+        writeOffs: r("writeOffs", "invoiceId", "id"),
       }),
       reminders: r("paymentPlanReminders", "planId", "id"),
     },

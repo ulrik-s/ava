@@ -20,49 +20,37 @@ import { z } from "zod";
 import {
   computeDueReminders,
   type PlanForScan,
-  type ReminderKind,
 } from "@/lib/shared/payment-reminders";
-import { paymentPlanStatusSchema, reminderTypeSchema, type PaymentPlanStatus } from "@/lib/shared/schemas";
+import { paymentPlanStatusSchema, reminderTypeSchema, type Invoice, type PaymentPlan, type PaymentPlanReminder } from "@/lib/shared/schemas";
 import { emit } from "../events/emit";
+import type {
+  JoinedPaymentPlan, JoinedPaymentPlanWithReminders,
+} from "../repositories/payment-plan-repository";
 import { router, protectedProcedure, orgProcedure, TRPCError } from "../trpc";
 
-type Plan = { id: string; status: PaymentPlanStatus; invoiceId: string };
-
-/** Joinad plan-rad (IDataStore:s query-yta är otypad — vi formar lokalt). */
-interface JoinedPlan {
-  id: string;
-  status: string;
-  monthlyAmount: number;
-  dayOfMonth: number;
-  startDate: Date | string;
-  invoice?: {
-    amount?: number;
-    payments?: Array<{ amount?: number }>;
-    matter?: {
-      id?: string;
-      matterNumber?: string;
-      title?: string;
-      contacts?: Array<{ contact?: { name?: string; email?: string | null } }>;
-    };
-  };
-  reminders?: Array<{ dueMonth: string; type: ReminderKind }>;
-}
+/** Lokalt alias för den joinade plan-formen repot returnerar. */
+type JoinedPlan = JoinedPaymentPlanWithReminders;
 
 function sumPaidOre(payments?: Array<{ amount?: number }>): number {
   return (payments ?? []).reduce((sum, p) => sum + (p.amount ?? 0), 0);
 }
 
-type Matter = NonNullable<NonNullable<JoinedPlan["invoice"]>["matter"]>;
+type PlanMatter = NonNullable<NonNullable<JoinedPlan["invoice"]>["matter"]>;
 
 /** KLIENT-kontaktens namn/email för påminnelse-payloaden (tom om saknas). */
-function resolveRecipient(matter: Matter): { email: string; name: string } {
-  const client = matter.contacts?.[0]?.contact ?? {};
-  return { email: client.email ?? "", name: client.name ?? "" };
+function resolveRecipient(matter: PlanMatter | null): { email: string; name: string } {
+  const client = matter?.contacts?.[0]?.contact;
+  return { email: client?.email ?? "", name: client?.name ?? "" };
+}
+
+/** Ärende-fälten scannern behöver (tomma om ärendet saknas). */
+function scanMatterFields(m: PlanMatter | null): { matterId: string; matterNumber: string; matterTitle: string } {
+  return { matterId: m?.id ?? "", matterNumber: m?.matterNumber ?? "", matterTitle: m?.title ?? "" };
 }
 
 function toPlanForScan(p: JoinedPlan): PlanForScan {
-  const inv = p.invoice ?? {};
-  const matter: Matter = inv.matter ?? {};
+  const inv = p.invoice;
+  const matter = inv?.matter ?? null;
   const recipient = resolveRecipient(matter);
   return {
     planId: p.id,
@@ -70,25 +58,22 @@ function toPlanForScan(p: JoinedPlan): PlanForScan {
     monthlyAmount: p.monthlyAmount,
     dayOfMonth: p.dayOfMonth,
     startDate: new Date(p.startDate),
-    invoiceTotalOre: inv.amount ?? 0,
-    paidOre: sumPaidOre(inv.payments),
-    matterId: matter.id ?? "",
-    matterNumber: matter.matterNumber ?? "",
-    matterTitle: matter.title ?? "",
+    invoiceTotalOre: inv?.amount ?? 0,
+    paidOre: sumPaidOre(inv?.payments),
+    ...scanMatterFields(matter),
     recipientEmail: recipient.email,
     recipientName: recipient.name,
   };
 }
 
 /** Sökbar text för en plan-rad: ärendenr + titel + klientnamn + anteckningar. */
-function planHaystack(p: Record<string, unknown>): string {
-  const plan = p as unknown as JoinedPlan;
-  const matter: Matter = plan.invoice?.matter ?? {};
+function planHaystack(p: JoinedPaymentPlan): string {
+  const matter = p.invoice?.matter ?? null;
   return [
-    matter.matterNumber ?? "",
-    matter.title ?? "",
+    matter?.matterNumber ?? "",
+    matter?.title ?? "",
     resolveRecipient(matter).name,
-    (p.notes as string | null) ?? "",
+    (p as { notes?: string | null }).notes ?? "",
   ].join(" ").toLowerCase();
 }
 
@@ -100,62 +85,19 @@ export const paymentPlanRouter = router({
         search: z.string().optional(),
       }).optional(),
     )
+    // Migrerad till repository-sömmen (ADR 0020): listForOrg kapslar in
+    // org-scoping + den joinade faktura/ärende/KLIENT/betalnings-formen.
     .query(async ({ ctx, input }) => {
-      const plans = await ctx.dataStore.paymentPlans.findMany({
-        where: {
-          ...(input?.status ? { status: input.status } : {}),
-          invoice: { matter: { organizationId: ctx.orgId } },
-        },
-        orderBy: { createdAt: "desc" },
-        include: {
-          invoice: {
-            include: {
-              matter: {
-                include: {
-                  contacts: {
-                    where: { role: "KLIENT" },
-                    include: { contact: { select: { id: true, name: true } } },
-                    take: 1,
-                  },
-                },
-              },
-              // Inkludera payments så list-vyn kan visa progress (X av Y betalt)
-              payments: { orderBy: { paidAt: "desc" } },
-              // + writeOffs så utestående kan beräknas via ledgern (ADR 0007).
-              writeOffs: true,
-            },
-          },
-        },
-      });
+      const plans = await ctx.repos.paymentPlans.listForOrg(ctx.orgId, input?.status);
       if (!input?.search) return plans;
       const needle = input.search.toLowerCase();
-      return plans.filter((p: Record<string, unknown>) => planHaystack(p).includes(needle));
+      return plans.filter((p) => planHaystack(p).includes(needle));
     }),
 
   getById: orgProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
-      const plan = await ctx.dataStore.paymentPlans.findFirst({
-        where: { id: input.id, invoice: { matter: { organizationId: ctx.orgId } } },
-        include: {
-          invoice: {
-            include: {
-              matter: {
-                include: {
-                  contacts: {
-                    where: { role: "KLIENT" },
-                    include: { contact: { select: { id: true, name: true } } },
-                    take: 1,
-                  },
-                },
-              },
-              payments: { orderBy: { paidAt: "desc" } },
-              writeOffs: true,
-            },
-          },
-          reminders: { orderBy: { sentAt: "desc" } },
-        },
-      });
+      const plan = await ctx.repos.paymentPlans.getByIdWithDetails(input.id, ctx.orgId);
       if (!plan) throw new TRPCError({ code: "NOT_FOUND", message: "Avbetalningsplan hittades inte" });
       return plan;
     }),
@@ -169,19 +111,14 @@ export const paymentPlanRouter = router({
   cancel: protectedProcedure
     .input(z.object({ planId: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      return ctx.dataStore.transaction(async (tx) => {
-        const plan = await tx.paymentPlans.findFirst({
-          where: {
-            id: input.planId,
-            invoice: { matter: { organizationId: ctx.user.organizationId } },
-          },
-        }) as Plan | null;
+      return ctx.repos.transaction(async (tx) => {
+        const plan = await tx.paymentPlans.getByIdInOrg(input.planId, ctx.user.organizationId);
         if (!plan) throw new TRPCError({ code: "NOT_FOUND" });
         if (plan.status !== "ACTIVE") {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Endast aktiva planer kan avbrytas" });
         }
-        await tx.paymentPlans.update({ where: { id: plan.id }, data: { status: "CANCELLED" } });
-        await tx.invoices.update({ where: { id: plan.invoiceId }, data: { status: "SENT" } });
+        await tx.paymentPlans.update(plan.id, { status: "CANCELLED" } as Partial<PaymentPlan>);
+        await tx.invoices.update(plan.invoiceId, { status: "SENT" } as Partial<Invoice>);
         return { ok: true };
       });
     }),
@@ -202,19 +139,15 @@ export const paymentPlanRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const plan = await ctx.dataStore.paymentPlans.findFirst({
-        where: { id: input.planId, invoice: { matter: { organizationId: ctx.orgId } } },
-      });
+      const plan = await ctx.repos.paymentPlans.getByIdInOrg(input.planId, ctx.orgId);
       if (!plan) throw new TRPCError({ code: "NOT_FOUND" });
-      return ctx.dataStore.paymentPlanReminders.create({
-        data: {
-          id: input.id,
-          planId: input.planId,
-          dueMonth: input.dueMonth,
-          type: input.type,
-          sentAt: input.sentAt ? new Date(input.sentAt) : new Date(),
-        },
-      });
+      return ctx.repos.paymentPlanReminders.create({
+        id: input.id,
+        planId: input.planId,
+        dueMonth: input.dueMonth,
+        type: input.type,
+        sentAt: input.sentAt ? new Date(input.sentAt) : new Date(),
+      } as unknown as Partial<PaymentPlanReminder>);
     }),
 
   /**
@@ -231,26 +164,7 @@ export const paymentPlanRouter = router({
     .input(z.object({ asOf: z.string().datetime().optional() }).optional())
     .mutation(async ({ ctx, input }) => {
       const now = input?.asOf ? new Date(input.asOf) : new Date();
-      const plans = await ctx.dataStore.paymentPlans.findMany({
-        where: { status: "ACTIVE", invoice: { matter: { organizationId: ctx.orgId } } },
-        include: {
-          invoice: {
-            include: {
-              payments: true,
-              matter: {
-                include: {
-                  contacts: {
-                    where: { role: "KLIENT" },
-                    include: { contact: { select: { id: true, name: true, email: true } } },
-                    take: 1,
-                  },
-                },
-              },
-            },
-          },
-          reminders: true,
-        },
-      }) as unknown as JoinedPlan[];
+      const plans = await ctx.repos.paymentPlans.listActiveForScan(ctx.orgId);
 
       const logged = plans.flatMap((p) =>
         (p.reminders ?? []).map((r) => ({ planId: p.id, dueMonth: r.dueMonth, type: r.type })),
@@ -258,9 +172,9 @@ export const paymentPlanRouter = router({
       const planned = computeDueReminders(plans.map(toPlanForScan), now, logged);
 
       for (const r of planned) {
-        await ctx.dataStore.paymentPlanReminders.create({
-          data: { planId: r.planId, dueMonth: r.dueMonth, type: r.type, sentAt: now },
-        });
+        await ctx.repos.paymentPlanReminders.create({
+          planId: r.planId, dueMonth: r.dueMonth, type: r.type, sentAt: now,
+        } as unknown as Partial<PaymentPlanReminder>);
         if (r.type === "DUE") await emit.paymentDue(ctx, r.payload, r.matterId);
         else await emit.paymentOverdue(ctx, r.payload, r.matterId);
       }

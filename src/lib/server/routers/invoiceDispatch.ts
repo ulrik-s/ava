@@ -11,19 +11,17 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { canTransition } from "@/lib/shared/invoice-state-machine";
-import { dispatchChannelSchema, dispatchStatusSchema, type DispatchStatus } from "@/lib/shared/schemas/billing";
+import { dispatchChannelSchema, dispatchStatusSchema, type DispatchStatus, type InvoiceDispatch } from "@/lib/shared/schemas/billing";
 import type { InvoiceStatus } from "@/lib/shared/schemas/enums";
 import { asId } from "@/lib/shared/schemas/ids";
-import type { IDataStore } from "../data-store/IDataStore";
+import type { Repositories } from "../repositories/repositories";
 import { router, orgProcedure } from "../trpc";
 
-type DispatchCtx = { dataStore: IDataStore; orgId: string };
+type DispatchCtx = { repos: Repositories; orgId: string };
 
-/** Verifiera org-tillhörighet + returnera fakturans id/status. */
+/** Verifiera org-tillhörighet + returnera fakturans id/status (repository-sömmen, ADR 0020). */
 async function assertInvoiceInOrg(ctx: DispatchCtx, invoiceId: string): Promise<{ id: string; status: string }> {
-  const inv = (await ctx.dataStore.invoices.findFirst({
-    where: { id: invoiceId, matter: { organizationId: ctx.orgId } },
-  })) as { id: string; status: string } | null;
+  const inv = await ctx.repos.invoices.getByIdInOrg(invoiceId, ctx.orgId);
   if (!inv) throw new TRPCError({ code: "NOT_FOUND", message: "Fakturan finns inte i organisationen." });
   return inv;
 }
@@ -34,7 +32,7 @@ async function assertInvoiceInOrg(ctx: DispatchCtx, invoiceId: string): Promise<
  */
 async function markSentIfDraft(ctx: DispatchCtx, inv: { id: string; status: string }): Promise<void> {
   if (inv.status !== "DRAFT" || !canTransition("DRAFT", "SENT")) return;
-  await ctx.dataStore.invoices.update({ where: { id: inv.id }, data: { status: "SENT" satisfies InvoiceStatus } });
+  await ctx.repos.invoices.update(inv.id, { status: "SENT" satisfies InvoiceStatus });
 }
 
 /** Tidsstämpelfältet som en statusövergång sätter (queued sätts vid skapande). */
@@ -50,20 +48,13 @@ export const invoiceDispatchRouter = router({
     .input(z.object({ invoiceId: z.string() }))
     .query(async ({ ctx, input }) => {
       await assertInvoiceInOrg(ctx, input.invoiceId);
-      return ctx.dataStore.invoiceDispatches.findMany({
-        where: { invoiceId: input.invoiceId },
-        orderBy: { queuedAt: "desc" },
-      });
+      return ctx.repos.invoiceDispatches.listByInvoice(input.invoiceId);
     }),
 
   /** Alla köade utskick i org:en — server-runtime-dispatch-workern (#180) plockar dessa. */
-  listQueued: orgProcedure.query(async ({ ctx }) => {
-    return ctx.dataStore.invoiceDispatches.findMany({
-      where: { status: "queued", invoice: { matter: { organizationId: ctx.orgId } } },
-      include: { invoice: { select: { id: true, invoiceNumber: true, amount: true, ocrReference: true, dueDate: true } } },
-      orderBy: { queuedAt: "asc" },
-    });
-  }),
+  listQueued: orgProcedure.query(({ ctx }) =>
+    ctx.repos.invoiceDispatches.listQueuedForOrg(ctx.orgId),
+  ),
 
   queue: orgProcedure
     .input(z.object({
@@ -74,17 +65,15 @@ export const invoiceDispatchRouter = router({
     .mutation(async ({ ctx, input }) => {
       const inv = await assertInvoiceInOrg(ctx, input.invoiceId);
       const now = new Date();
-      const dispatch = await ctx.dataStore.invoiceDispatches.create({
-        data: {
-          invoiceId: asId<"InvoiceId">(input.invoiceId),
-          channel: input.channel,
-          recipient: input.recipient,
-          status: "queued",
-          queuedAt: now,
-          recordedById: asId<"UserId">(ctx.user.id),
-          createdAt: now,
-        },
-      });
+      const dispatch = await ctx.repos.invoiceDispatches.create({
+        invoiceId: asId<"InvoiceId">(input.invoiceId),
+        channel: input.channel,
+        recipient: input.recipient,
+        status: "queued",
+        queuedAt: now,
+        recordedById: asId<"UserId">(ctx.user.id),
+        createdAt: now,
+      } as Partial<InvoiceDispatch>);
       // Köad för automatiskt utskick → fakturan är inte längre ett utkast (#392).
       await markSentIfDraft(ctx, inv);
       return dispatch;
@@ -107,18 +96,16 @@ export const invoiceDispatchRouter = router({
     .mutation(async ({ ctx, input }) => {
       const inv = await assertInvoiceInOrg(ctx, input.invoiceId);
       const now = new Date();
-      const dispatch = await ctx.dataStore.invoiceDispatches.create({
-        data: {
-          invoiceId: asId<"InvoiceId">(input.invoiceId),
-          channel: input.channel,
-          recipient: input.recipient,
-          status: "sent",
-          queuedAt: now,
-          sentAt: now,
-          recordedById: asId<"UserId">(ctx.user.id),
-          createdAt: now,
-        },
-      });
+      const dispatch = await ctx.repos.invoiceDispatches.create({
+        invoiceId: asId<"InvoiceId">(input.invoiceId),
+        channel: input.channel,
+        recipient: input.recipient,
+        status: "sent",
+        queuedAt: now,
+        sentAt: now,
+        recordedById: asId<"UserId">(ctx.user.id),
+        createdAt: now,
+      } as Partial<InvoiceDispatch>);
       // Manuellt skickad → fakturan är inte längre ett utkast (#392).
       await markSentIfDraft(ctx, inv);
       return dispatch;
@@ -132,19 +119,16 @@ export const invoiceDispatchRouter = router({
       error: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      const dispatch = await ctx.dataStore.invoiceDispatches.findUnique({ where: { id: input.dispatchId } });
+      const dispatch = await ctx.repos.invoiceDispatches.getById(input.dispatchId);
       if (!dispatch) throw new TRPCError({ code: "NOT_FOUND" });
       await assertInvoiceInOrg(ctx, String(dispatch.invoiceId));
 
       const tsField = STATUS_TIMESTAMP[input.status];
-      return ctx.dataStore.invoiceDispatches.update({
-        where: { id: input.dispatchId },
-        data: {
-          status: input.status,
-          ...(tsField ? { [tsField]: new Date() } : {}),
-          ...(input.messageId !== undefined ? { messageId: input.messageId } : {}),
-          ...(input.error !== undefined ? { error: input.error } : {}),
-        },
-      });
+      return ctx.repos.invoiceDispatches.update(input.dispatchId, {
+        status: input.status,
+        ...(tsField ? { [tsField]: new Date() } : {}),
+        ...(input.messageId !== undefined ? { messageId: input.messageId } : {}),
+        ...(input.error !== undefined ? { error: input.error } : {}),
+      } as Partial<InvoiceDispatch>);
     }),
 });

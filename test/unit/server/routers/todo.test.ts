@@ -5,6 +5,8 @@
 
 import { TRPCError } from "@trpc/server";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
+import type { IDataStore } from "@/lib/server/data-store/IDataStore";
+import { buildInMemoryRepositories } from "@/lib/server/repositories/in-memory-repositories";
 import { todoRouter } from "@/lib/server/routers/todo";
 import { dataStoreFromMockPrisma } from "../helpers/mock-data-store";
 
@@ -17,10 +19,11 @@ const mockPrisma = {
 };
 
 function makeCaller(orgId = "org-a", userId = "u1") {
+  const dataStore = dataStoreFromMockPrisma(mockPrisma as unknown as Record<string, unknown>);
   const ctx = {
     user: { id: userId, email: "a@b.se", name: "T", role: "LAWYER", organizationId: orgId },
-    prisma: mockPrisma,
-    dataStore: dataStoreFromMockPrisma(mockPrisma as unknown as Record<string, unknown>),
+    prisma: mockPrisma, dataStore,
+    repos: buildInMemoryRepositories(dataStore as unknown as IDataStore),
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return todoRouter.createCaller(ctx as any);

@@ -3,7 +3,7 @@
  * `sumByInvoice` summerar i SQL bland icke-raderade.
  */
 
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { WriteOff } from "@/lib/shared/schemas/billing";
 import { writeOffs } from "../db/schema";
 import type { AppDb } from "../db/types";
@@ -20,5 +20,13 @@ export class DrizzleWriteOffRepository extends DrizzleRepository<WriteOff> imple
       .select({ total: sql<number>`coalesce(sum(${writeOffs.amount}), 0)` }).from(writeOffs)
       .where(and(eq(writeOffs.invoiceId, invoiceId), isNull(writeOffs.deletedAt)));
     return Number(rows[0]?.total ?? 0);
+  }
+
+  async listByInvoiceIds(invoiceIds: string[]): Promise<WriteOff[]> {
+    if (!invoiceIds.length) return [];
+    const rows = await this.db
+      .select().from(writeOffs)
+      .where(and(inArray(writeOffs.invoiceId, invoiceIds), isNull(writeOffs.deletedAt)));
+    return rows as unknown as WriteOff[];
   }
 }

@@ -13,7 +13,7 @@
  */
 
 import { z } from "zod";
-import { KOSTNADSRAKNING_DOCUMENT_TYPE } from "@/lib/shared/schemas/document";
+import { KOSTNADSRAKNING_DOCUMENT_TYPE, type Document } from "@/lib/shared/schemas/document";
 import { emit } from "../events/emit";
 import { router, orgProcedure } from "../trpc";
 
@@ -40,22 +40,21 @@ export const kostnadsrakningRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       // 1. Registrera dokumentet (samma som document.register-flödet)
-      const doc = await ctx.dataStore.documents.create({
-        data: {
-          id: input.id,
-          matterId: input.matterId,
-          fileName: input.fileName,
-          mimeType: input.mimeType,
-          sizeBytes: input.sizeBytes,
-          storagePath: input.storagePath,
-          folderId: null,
-          organizationId: ctx.orgId,
-          documentType: KOSTNADSRAKNING_DOCUMENT_TYPE,
-          analysisStatus: "DONE",
-          analyzedAt: new Date(),
-          uploadedById: ctx.user.id,
-        } as never,
-      });
+      const docData = {
+        id: input.id,
+        matterId: input.matterId,
+        fileName: input.fileName,
+        mimeType: input.mimeType,
+        sizeBytes: input.sizeBytes,
+        storagePath: input.storagePath,
+        folderId: null,
+        organizationId: ctx.orgId,
+        documentType: KOSTNADSRAKNING_DOCUMENT_TYPE,
+        analysisStatus: "DONE",
+        analyzedAt: new Date(),
+        uploadedById: ctx.user.id,
+      };
+      const doc = await ctx.repos.documents.create(docData as unknown as Partial<Document>);
 
       // 2. Emit event så regelmotorn kan trigga.
       //    OBS: går via `emit`-helpern (safeEmit) — INTE `ctx.dataStore.events.emit`

@@ -10,4 +10,6 @@ import type { Repository } from "./types";
 export interface PaymentRepository extends Repository<Payment> {
   /** Summa av alla (icke-raderade) betalningar på en faktura (öre). */
   sumByInvoice(invoiceId: string): Promise<number>;
+  /** Betalningar för en uppsättning fakturor (rapporter). Tom lista vid tomma ids. */
+  listByInvoiceIds(invoiceIds: string[]): Promise<Payment[]>;
 }

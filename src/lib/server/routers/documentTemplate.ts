@@ -6,35 +6,20 @@ import {
   documentTemplateIdSchema,
   userIdSchema,
 } from "@/lib/shared/schemas/ids";
+import type { DocumentTemplate } from "@/lib/shared/schemas/misc";
 import { router, protectedProcedure } from "../trpc";
 
 export const documentTemplateRouter = router({
-  list: protectedProcedure.query(async ({ ctx }) => {
-    return ctx.dataStore.documentTemplates.findMany({
-      where: { organizationId: ctx.user.organizationId },
-      select: {
-        id: true,
-        name: true,
-        description: true,
-        category: true,
-        createdAt: true,
-        updatedAt: true,
-        createdBy: { select: { name: true } },
-      },
-      orderBy: [{ category: "asc" }, { name: "asc" }],
-    });
-  }),
+  // Migrerad till repository-sömmen (ADR 0020).
+  list: protectedProcedure.query(({ ctx }) =>
+    ctx.repos.documentTemplates.listForOrg(ctx.user.organizationId),
+  ),
 
   getById: protectedProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
-      const template = await ctx.dataStore.documentTemplates.findUnique({
-        where: { id: input.id },
-        include: { createdBy: { select: { name: true } } },
-      });
-      if (!template || template.organizationId !== ctx.user.organizationId) {
-        throw new TRPCError({ code: "NOT_FOUND" });
-      }
+      const template = await ctx.repos.documentTemplates.getByIdInOrg(input.id, ctx.user.organizationId);
+      if (!template) throw new TRPCError({ code: "NOT_FOUND" });
       return template;
     }),
 
@@ -52,20 +37,18 @@ export const documentTemplateRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      return ctx.dataStore.documentTemplates.create({
-        data: {
-          ...omitUndefined({
-            id: input.id, // undefined → store genererar
-            name: input.name,
-            description: input.description,
-            category: input.category,
-            content: input.content,
-            organizationId: asId<"OrganizationId">(ctx.user.organizationId),
-            createdById: input.createdById ?? asId<"UserId">(ctx.user.id),
-          }),
-          ...(input.createdAt ? { createdAt: new Date(input.createdAt) } : {}),
-        },
-      });
+      return ctx.repos.documentTemplates.create({
+        ...omitUndefined({
+          id: input.id, // undefined → store genererar
+          name: input.name,
+          description: input.description,
+          category: input.category,
+          content: input.content,
+          organizationId: asId<"OrganizationId">(ctx.user.organizationId),
+          createdById: input.createdById ?? asId<"UserId">(ctx.user.id),
+        }),
+        ...(input.createdAt ? { createdAt: new Date(input.createdAt) } : {}),
+      } as Partial<DocumentTemplate>);
     }),
 
   update: protectedProcedure
@@ -79,30 +62,17 @@ export const documentTemplateRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const existing = await ctx.dataStore.documentTemplates.findUnique({
-        where: { id: input.id },
-        select: { organizationId: true },
-      });
-      if (!existing || existing.organizationId !== ctx.user.organizationId) {
-        throw new TRPCError({ code: "NOT_FOUND" });
-      }
+      const existing = await ctx.repos.documentTemplates.getByIdInOrg(input.id, ctx.user.organizationId);
+      if (!existing) throw new TRPCError({ code: "NOT_FOUND" });
       const { id, name, description, category, content } = input;
-      return ctx.dataStore.documentTemplates.update({
-        where: { id },
-        data: omitUndefined({ name, description, category, content }),
-      });
+      return ctx.repos.documentTemplates.update(id, omitUndefined({ name, description, category, content }) as Partial<DocumentTemplate>);
     }),
 
   delete: protectedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const existing = await ctx.dataStore.documentTemplates.findUnique({
-        where: { id: input.id },
-        select: { organizationId: true },
-      });
-      if (!existing || existing.organizationId !== ctx.user.organizationId) {
-        throw new TRPCError({ code: "NOT_FOUND" });
-      }
-      await ctx.dataStore.documentTemplates.delete({ where: { id: input.id } });
+      const existing = await ctx.repos.documentTemplates.getByIdInOrg(input.id, ctx.user.organizationId);
+      if (!existing) throw new TRPCError({ code: "NOT_FOUND" });
+      await ctx.repos.documentTemplates.hardDelete(input.id);
     }),
 });

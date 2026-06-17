@@ -10,16 +10,31 @@
 
 import type { DataStoreTx, IDataStore } from "../data-store/IDataStore";
 import { InMemoryAccontoDeductionRepository } from "./in-memory-acconto-deduction-repository";
+import { InMemoryBillingRunRepository } from "./in-memory-billing-run-repository";
 import { InMemoryCalendarEventRepository } from "./in-memory-calendar-event-repository";
+import { InMemoryConflictCheckRepository } from "./in-memory-conflict-check-repository";
 import { InMemoryContactRepository } from "./in-memory-contact-repository";
+import { InMemoryDocumentFolderRepository } from "./in-memory-document-folder-repository";
+import { InMemoryDocumentRepository } from "./in-memory-document-repository";
+import { InMemoryDocumentSuggestionRepository } from "./in-memory-document-suggestion-repository";
+import { InMemoryDocumentTemplateRepository } from "./in-memory-document-template-repository";
+import { InMemoryExpectedReceivableRepository } from "./in-memory-expected-receivable-repository";
 import { InMemoryExpenseRepository } from "./in-memory-expense-repository";
+import { InMemoryInvoiceDispatchRepository } from "./in-memory-invoice-dispatch-repository";
 import { InMemoryInvoiceRepository } from "./in-memory-invoice-repository";
+import { InMemoryMatterContactRepository } from "./in-memory-matter-contact-repository";
+import { InMemoryMatterEventSuggestionRepository } from "./in-memory-matter-event-suggestion-repository";
 import { InMemoryMatterRepository } from "./in-memory-matter-repository";
+import { InMemoryOfficeRepository } from "./in-memory-office-repository";
+import { InMemoryOrgPreferenceRepository } from "./in-memory-org-preference-repository";
+import { InMemoryOrganizationRepository } from "./in-memory-organization-repository";
+import { InMemoryPaymentPlanReminderRepository } from "./in-memory-payment-plan-reminder-repository";
 import { InMemoryPaymentPlanRepository } from "./in-memory-payment-plan-repository";
 import { InMemoryPaymentRepository } from "./in-memory-payment-repository";
 import { InMemoryServiceNoteRepository } from "./in-memory-service-note-repository";
 import { InMemoryTaskRepository } from "./in-memory-task-repository";
 import { InMemoryTimeEntryRepository } from "./in-memory-time-entry-repository";
+import { InMemoryUserPreferenceRepository } from "./in-memory-user-preference-repository";
 import { InMemoryUserRepository } from "./in-memory-user-repository";
 import { InMemoryWriteOffRepository } from "./in-memory-write-off-repository";
 import type { Repositories } from "./repositories";
@@ -32,14 +47,29 @@ function reposForTx(tx: DataStoreTx): Repositories {
     payments: new InMemoryPaymentRepository(tx),
     writeOffs: new InMemoryWriteOffRepository(tx),
     paymentPlans: new InMemoryPaymentPlanRepository(tx),
+    paymentPlanReminders: new InMemoryPaymentPlanReminderRepository(tx),
     timeEntries: new InMemoryTimeEntryRepository(tx),
     expenses: new InMemoryExpenseRepository(tx),
     accontoDeductions: new InMemoryAccontoDeductionRepository(tx),
+    billingRuns: new InMemoryBillingRunRepository(tx),
     contacts: new InMemoryContactRepository(tx),
+    matterContacts: new InMemoryMatterContactRepository(tx),
+    conflictChecks: new InMemoryConflictCheckRepository(tx),
     users: new InMemoryUserRepository(tx),
     tasks: new InMemoryTaskRepository(tx),
     calendarEvents: new InMemoryCalendarEventRepository(tx),
     serviceNotes: new InMemoryServiceNoteRepository(tx),
+    documents: new InMemoryDocumentRepository(tx),
+    documentFolders: new InMemoryDocumentFolderRepository(tx),
+    matterEventSuggestions: new InMemoryMatterEventSuggestionRepository(tx),
+    documentAnalysisSuggestions: new InMemoryDocumentSuggestionRepository(tx),
+    documentTemplates: new InMemoryDocumentTemplateRepository(tx),
+    expectedReceivables: new InMemoryExpectedReceivableRepository(tx),
+    invoiceDispatches: new InMemoryInvoiceDispatchRepository(tx),
+    organizations: new InMemoryOrganizationRepository(tx),
+    offices: new InMemoryOfficeRepository(tx),
+    userPreferences: new InMemoryUserPreferenceRepository(tx),
+    orgPreferences: new InMemoryOrgPreferenceRepository(tx),
     transaction: (fn) => fn(repos),
   };
   return repos;
@@ -52,14 +82,29 @@ export function buildInMemoryRepositories(dataStore: IDataStore): Repositories {
     payments: new InMemoryPaymentRepository(dataStore),
     writeOffs: new InMemoryWriteOffRepository(dataStore),
     paymentPlans: new InMemoryPaymentPlanRepository(dataStore),
+    paymentPlanReminders: new InMemoryPaymentPlanReminderRepository(dataStore),
     timeEntries: new InMemoryTimeEntryRepository(dataStore),
     expenses: new InMemoryExpenseRepository(dataStore),
     accontoDeductions: new InMemoryAccontoDeductionRepository(dataStore),
+    billingRuns: new InMemoryBillingRunRepository(dataStore),
     contacts: new InMemoryContactRepository(dataStore),
+    matterContacts: new InMemoryMatterContactRepository(dataStore),
+    conflictChecks: new InMemoryConflictCheckRepository(dataStore),
     users: new InMemoryUserRepository(dataStore),
     tasks: new InMemoryTaskRepository(dataStore),
     calendarEvents: new InMemoryCalendarEventRepository(dataStore),
     serviceNotes: new InMemoryServiceNoteRepository(dataStore),
+    documents: new InMemoryDocumentRepository(dataStore),
+    documentFolders: new InMemoryDocumentFolderRepository(dataStore),
+    matterEventSuggestions: new InMemoryMatterEventSuggestionRepository(dataStore),
+    documentAnalysisSuggestions: new InMemoryDocumentSuggestionRepository(dataStore),
+    documentTemplates: new InMemoryDocumentTemplateRepository(dataStore),
+    expectedReceivables: new InMemoryExpectedReceivableRepository(dataStore),
+    invoiceDispatches: new InMemoryInvoiceDispatchRepository(dataStore),
+    organizations: new InMemoryOrganizationRepository(dataStore),
+    offices: new InMemoryOfficeRepository(dataStore),
+    userPreferences: new InMemoryUserPreferenceRepository(dataStore),
+    orgPreferences: new InMemoryOrgPreferenceRepository(dataStore),
     transaction: (fn) => dataStore.transaction((tx) => fn(reposForTx(tx))),
   };
 }

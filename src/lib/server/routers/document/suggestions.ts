@@ -13,33 +13,18 @@ import {
   findExistingContactForSuggestion,
   type ContactCandidate,
 } from "@/lib/shared/contact-dedup";
+import type { DocumentAnalysisSuggestion } from "@/lib/shared/schemas/document";
 import { matterRoleSchema, contactTypeSchema, type SuggestionStatus } from "@/lib/shared/schemas/enums";
 import { asId, type ContactId } from "@/lib/shared/schemas/ids";
+import type { MatterContact } from "@/lib/shared/schemas/matter";
 import { groupSuggestions, type RawSuggestion } from "@/lib/shared/suggestion-grouping";
+import type { Repositories } from "../../repositories/repositories";
 import { orgProcedure } from "../../trpc";
 
 // ─── Helpers för acceptSuggestion ─────────────────────────────────────────
 
-type Ctx = {
-  dataStore: {
-    documentAnalysisSuggestions: {
-      findFirst: (...a: never[]) => Promise<unknown>;
-      findMany: (...a: never[]) => Promise<unknown>;
-      update: (...a: never[]) => Promise<unknown>;
-      updateMany: (...a: never[]) => Promise<unknown>;
-    };
-    contacts: {
-      findFirst: (...a: never[]) => Promise<unknown>;
-      create: (...a: never[]) => Promise<unknown>;
-    };
-    matterContacts: {
-      findFirst: (...a: never[]) => Promise<unknown>;
-      findMany: (...a: never[]) => Promise<unknown>;
-      create: (...a: never[]) => Promise<unknown>;
-    };
-  };
-  orgId: string;
-};
+// Migrerad till repository-sömmen (ADR 0020): all IO går via ctx.repos.
+type Ctx = { repos: Repositories; orgId: string };
 type SuggOverride = {
   name?: string | undefined;
   role?: string | undefined;
@@ -64,13 +49,7 @@ type Suggestion = {
 };
 
 async function loadPendingSuggestion(ctx: Ctx, suggestionId: string): Promise<Suggestion> {
-  const sugg = (await ctx.dataStore.documentAnalysisSuggestions.findFirst({
-    where: {
-      id: suggestionId,
-      document: { matter: { organizationId: ctx.orgId } },
-    },
-    include: { document: { select: { matterId: true } } },
-  } as never)) as Suggestion | null;
+  const sugg = (await ctx.repos.documentAnalysisSuggestions.getByIdInOrg(suggestionId, ctx.orgId)) as Suggestion | null;
   if (!sugg) throw new TRPCError({ code: "NOT_FOUND" });
   if (sugg.status !== "PENDING") {
     throw new TRPCError({ code: "BAD_REQUEST", message: "Suggestion already handled" });
@@ -79,9 +58,7 @@ async function loadPendingSuggestion(ctx: Ctx, suggestionId: string): Promise<Su
 }
 
 async function resolveExistingContact(ctx: Ctx, contactId: string): Promise<ContactId> {
-  const existing = (await ctx.dataStore.contacts.findFirst({
-    where: { id: contactId, organizationId: ctx.orgId },
-  } as never)) as { id: ContactId } | null;
+  const existing = (await ctx.repos.contacts.getByIdFull(contactId, ctx.orgId)) as { id: ContactId } | null;
   if (!existing) throw new TRPCError({ code: "NOT_FOUND" });
   return existing.id;
 }
@@ -96,19 +73,12 @@ async function findContactByNumberOrName(
   const pn = o.personalNumber ?? sugg.personalNumber;
   const on = o.orgNumber ?? sugg.orgNumber;
   if (pn) {
-    return (await ctx.dataStore.contacts.findFirst({
-      where: { personalNumber: pn, organizationId: ctx.orgId },
-    } as never)) as ContactCandidate | null;
+    return (await ctx.repos.contacts.findByPersonalNumber(ctx.orgId, pn)) as ContactCandidate | null;
   }
   if (on) {
-    return (await ctx.dataStore.contacts.findFirst({
-      where: { orgNumber: on, organizationId: ctx.orgId },
-    } as never)) as ContactCandidate | null;
+    return (await ctx.repos.contacts.findByOrgNumber(ctx.orgId, on)) as ContactCandidate | null;
   }
-  const matterLinks = (await ctx.dataStore.matterContacts.findMany({
-    where: { matterId },
-    include: { contact: true },
-  } as never)) as Array<{ contact: ContactCandidate }>;
+  const matterContacts = (await ctx.repos.matterContacts.listContactsForMatter(matterId)) as ContactCandidate[];
   const dedup = findExistingContactForSuggestion(
     {
       name: o.name ?? sugg.name,
@@ -117,7 +87,7 @@ async function findContactByNumberOrName(
       orgNumber: null,
     },
     [],
-    matterLinks.map((l) => l.contact),
+    matterContacts,
   );
   return dedup.kind === "match" ? dedup.contact : null;
 }
@@ -150,9 +120,9 @@ async function resolveOrCreateContact(
 ): Promise<ContactId> {
   const existing = await findContactByNumberOrName(ctx, sugg, o, matterId);
   if (existing) return asId<"ContactId">(existing.id);
-  const created = (await ctx.dataStore.contacts.create({
-    data: { ...applyOverride(sugg, o), organizationId: ctx.orgId },
-  } as never)) as { id: ContactId };
+  const created = (await ctx.repos.contacts.create(
+    { ...applyOverride(sugg, o), organizationId: ctx.orgId } as never,
+  )) as { id: ContactId };
   return created.id;
 }
 
@@ -163,13 +133,9 @@ async function ensureMatterContactLink(
   role: string,
   notes: string | null,
 ): Promise<void> {
-  const existing = await ctx.dataStore.matterContacts.findFirst({
-    where: { matterId, contactId, role },
-  } as never);
+  const existing = await ctx.repos.matterContacts.findLink(matterId, contactId, role);
   if (!existing) {
-    await ctx.dataStore.matterContacts.create({
-      data: { matterId, contactId, role, notes },
-    } as never);
+    await ctx.repos.matterContacts.create({ matterId, contactId, role, notes } as Partial<MatterContact>);
   }
 }
 
@@ -177,14 +143,7 @@ async function ensureMatterContactLink(
 
 /** Hämta + validera en grupp av förslag (existerar, pending, samma ärende). */
 async function loadPendingGroup(ctx: Ctx, suggestionIds: string[]): Promise<Suggestion[]> {
-  const suggs = (await ctx.dataStore.documentAnalysisSuggestions.findMany({
-    where: {
-      id: { in: suggestionIds },
-      status: "PENDING",
-      document: { matter: { organizationId: ctx.orgId } },
-    },
-    include: { document: { select: { matterId: true } } },
-  } as never)) as Suggestion[];
+  const suggs = (await ctx.repos.documentAnalysisSuggestions.listPendingByIds(suggestionIds, ctx.orgId)) as Suggestion[];
 
   if (suggs.length === 0) throw new TRPCError({ code: "NOT_FOUND" });
   if (suggs.length !== suggestionIds.length) {
@@ -222,16 +181,14 @@ async function resolveOrCreateGroupContact(
   const orgNumber = pickFirstFromGroup(suggs, "orgNumber");
   const existing = await findGroupContact(ctx, suggs, matterId, personalNumber, orgNumber);
   if (existing) return asId<"ContactId">(existing.id);
-  const created = (await ctx.dataStore.contacts.create({
-    data: {
-      name: first.name,
-      contactType: first.contactType,
-      email: pickFirstFromGroup(suggs, "email"),
-      phone: pickFirstFromGroup(suggs, "phone"),
-      personalNumber,
-      orgNumber,
-      organizationId: ctx.orgId,
-    },
+  const created = (await ctx.repos.contacts.create({
+    name: first.name,
+    contactType: first.contactType,
+    email: pickFirstFromGroup(suggs, "email"),
+    phone: pickFirstFromGroup(suggs, "phone"),
+    personalNumber,
+    orgNumber,
+    organizationId: ctx.orgId,
   } as never)) as { id: ContactId };
   return created.id;
 }
@@ -244,20 +201,13 @@ async function findGroupContact(
   orgNumber: string | null,
 ): Promise<ContactCandidate | null> {
   if (personalNumber) {
-    return (await ctx.dataStore.contacts.findFirst({
-      where: { personalNumber, organizationId: ctx.orgId },
-    } as never)) as ContactCandidate | null;
+    return (await ctx.repos.contacts.findByPersonalNumber(ctx.orgId, personalNumber)) as ContactCandidate | null;
   }
   if (orgNumber) {
-    return (await ctx.dataStore.contacts.findFirst({
-      where: { orgNumber, organizationId: ctx.orgId },
-    } as never)) as ContactCandidate | null;
+    return (await ctx.repos.contacts.findByOrgNumber(ctx.orgId, orgNumber)) as ContactCandidate | null;
   }
   // Namn-fallback scopad till ärendet (se contact-dedup.ts).
-  const matterLinks = (await ctx.dataStore.matterContacts.findMany({
-    where: { matterId },
-    include: { contact: true },
-  } as never)) as Array<{ contact: ContactCandidate }>;
+  const matterContacts = (await ctx.repos.matterContacts.listContactsForMatter(matterId)) as ContactCandidate[];
   const first = suggs[0];
   if (!first) return null;
   const dedup = findExistingContactForSuggestion(
@@ -268,7 +218,7 @@ async function findGroupContact(
       orgNumber: null,
     },
     [],
-    matterLinks.map((l) => l.contact),
+    matterContacts,
   );
   return dedup.kind === "match" ? dedup.contact : null;
 }
@@ -295,17 +245,7 @@ export const suggestionProcedures = {
   pendingSuggestions: orgProcedure
     .input(z.object({ matterId: z.string() }))
     .query(({ ctx, input }) =>
-      ctx.dataStore.documentAnalysisSuggestions.findMany({
-        where: {
-          status: "PENDING",
-          document: {
-            matterId: input.matterId,
-            matter: { organizationId: ctx.orgId },
-          },
-        },
-        include: { document: { select: { id: true, fileName: true, title: true } } },
-        orderBy: { createdAt: "desc" },
-      }),
+      ctx.repos.documentAnalysisSuggestions.listPendingForMatter(input.matterId, ctx.orgId, "desc"),
     ),
 
   /**
@@ -315,17 +255,7 @@ export const suggestionProcedures = {
   pendingSuggestionsGrouped: orgProcedure
     .input(z.object({ matterId: z.string() }))
     .query(async ({ ctx, input }) => {
-      const rows = await ctx.dataStore.documentAnalysisSuggestions.findMany({
-        where: {
-          status: "PENDING",
-          document: {
-            matterId: input.matterId,
-            matter: { organizationId: ctx.orgId },
-          },
-        },
-        include: { document: { select: { id: true, fileName: true, title: true } } },
-        orderBy: { createdAt: "asc" }, // asc → första förekomst vinner i first-non-empty
-      });
+      const rows = await ctx.repos.documentAnalysisSuggestions.listPendingForMatter(input.matterId, ctx.orgId, "asc");
       return groupSuggestions(rows as unknown as RawSuggestion[]);
     }),
 
@@ -365,27 +295,20 @@ export const suggestionProcedures = {
         : await resolveOrCreateContact(ctx, sugg, o, matterId);
 
       await ensureMatterContactLink(ctx, matterId, contactId, finalRole, sugg.notes);
-      await ctx.dataStore.documentAnalysisSuggestions.update({
-        where: { id: sugg.id },
-        data: { status: "ACCEPTED", acceptedContactId: contactId },
-      });
+      await ctx.repos.documentAnalysisSuggestions.update(
+        sugg.id, { status: "ACCEPTED", acceptedContactId: contactId } as Partial<DocumentAnalysisSuggestion>,
+      );
       return { contactId };
     }),
 
   rejectSuggestion: orgProcedure
     .input(z.object({ suggestionId: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const sugg = await ctx.dataStore.documentAnalysisSuggestions.findFirst({
-        where: {
-          id: input.suggestionId,
-          document: { matter: { organizationId: ctx.orgId } },
-        },
-      });
+      const sugg = await ctx.repos.documentAnalysisSuggestions.getByIdInOrg(input.suggestionId, ctx.orgId);
       if (!sugg) throw new TRPCError({ code: "NOT_FOUND" });
-      return ctx.dataStore.documentAnalysisSuggestions.update({
-        where: { id: sugg.id },
-        data: { status: "REJECTED" },
-      });
+      return ctx.repos.documentAnalysisSuggestions.update(
+        sugg.id, { status: "REJECTED" } as Partial<DocumentAnalysisSuggestion>,
+      );
     }),
 
   /**
@@ -412,10 +335,10 @@ export const suggestionProcedures = {
         : await resolveOrCreateGroupContact(ctx, suggs, matterId);
 
       const distinctRoles = await linkGroupRoles(ctx, suggs, matterId, contactId);
-      await ctx.dataStore.documentAnalysisSuggestions.updateMany({
-        where: { id: { in: suggs.map((s) => s.id) } },
-        data: { status: "ACCEPTED", acceptedContactId: contactId },
-      } as never);
+      await ctx.repos.documentAnalysisSuggestions.updateManyByIds(
+        suggs.map((s) => s.id),
+        { status: "ACCEPTED", acceptedContactId: contactId } as Partial<DocumentAnalysisSuggestion>,
+      );
       return { contactId, acceptedRoles: distinctRoles };
     }),
 
@@ -423,13 +346,7 @@ export const suggestionProcedures = {
   rejectSuggestionGroup: orgProcedure
     .input(z.object({ suggestionIds: z.array(z.string()).min(1) }))
     .mutation(async ({ ctx, input }) => {
-      const suggs = await ctx.dataStore.documentAnalysisSuggestions.findMany({
-        where: {
-          id: { in: input.suggestionIds },
-          document: { matter: { organizationId: ctx.orgId } },
-        },
-        select: { id: true },
-      });
+      const suggs = await ctx.repos.documentAnalysisSuggestions.listByIdsInOrg(input.suggestionIds, ctx.orgId);
       if (suggs.length === 0) throw new TRPCError({ code: "NOT_FOUND" });
       if (suggs.length !== input.suggestionIds.length) {
         throw new TRPCError({
@@ -437,10 +354,9 @@ export const suggestionProcedures = {
           message: "Några förslag saknas eller tillhör annan org.",
         });
       }
-      await ctx.dataStore.documentAnalysisSuggestions.updateMany({
-        where: { id: { in: suggs.map((s) => s.id) } },
-        data: { status: "REJECTED" },
-      });
+      await ctx.repos.documentAnalysisSuggestions.updateManyByIds(
+        suggs.map((s) => s.id), { status: "REJECTED" } as Partial<DocumentAnalysisSuggestion>,
+      );
       return { rejected: suggs.length };
     }),
 };

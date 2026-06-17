@@ -100,4 +100,18 @@ export class DrizzleContactRepository extends DrizzleRepository<Contact> impleme
       })),
     } as unknown as ContactFull;
   }
+
+  async findByPersonalNumber(organizationId: string, personalNumber: string): Promise<Contact | null> {
+    const rows = await this.db.select().from(contacts)
+      .where(and(eq(contacts.organizationId, organizationId), eq(contacts.personalNumber, personalNumber), isNull(contacts.deletedAt)))
+      .limit(1);
+    return (rows[0] as unknown as Contact | undefined) ?? null;
+  }
+
+  async findByOrgNumber(organizationId: string, orgNumber: string): Promise<Contact | null> {
+    const rows = await this.db.select().from(contacts)
+      .where(and(eq(contacts.organizationId, organizationId), eq(contacts.orgNumber, orgNumber), isNull(contacts.deletedAt)))
+      .limit(1);
+    return (rows[0] as unknown as Contact | undefined) ?? null;
+  }
 }

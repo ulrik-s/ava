@@ -1,10 +1,12 @@
 import { z } from "zod";
 import { similarity } from "@/lib/shared/fuzzy-similarity";
 import { asId } from "@/lib/shared/schemas/ids";
-import type { IDataStore } from "../data-store/IDataStore";
+import type { ConflictCheck } from "@/lib/shared/schemas/misc";
+import type { ConflictContactRow } from "../repositories/matter-contact-repository";
+import type { Repositories } from "../repositories/repositories";
 import { router, protectedProcedure } from "../trpc";
 
-type ConflictCtx = { dataStore: IDataStore; user: { id: string; organizationId: string } };
+type ConflictCtx = { repos: Repositories; user: { id: string; organizationId: string } };
 
 interface ConflictResult {
   contactId: string;
@@ -19,22 +21,8 @@ interface ConflictResult {
   klient: string | null;
 }
 
-/** Rad-form från matterContacts.findMany med MC_INCLUDE. */
-interface ConflictRow {
-  contact: { id: string; name: string; contactType: string; personalNumber: string | null; orgNumber: string | null };
-  matter: { id: string; matterNumber: string; title: string; contacts: Array<{ contact: { name: string } }> };
-  role: string;
-}
-
-// Tar med klient-namnet (kontext) ihop med kontakt + ärende.
-const MC_INCLUDE = {
-  contact: true,
-  matter: {
-    include: {
-      contacts: { where: { role: "KLIENT" }, include: { contact: { select: { name: true } } }, take: 1 },
-    },
-  },
-} as const;
+/** Rad-form från `repos.matterContacts.findForConflict`. */
+type ConflictRow = ConflictContactRow;
 
 function toResult(mc: ConflictRow): ConflictResult {
   return {
@@ -53,14 +41,8 @@ function toResult(mc: ConflictRow): ConflictResult {
 
 /** Exakt delsträngsmatch på person-/org-nummer. */
 async function searchByNumber(ctx: ConflictCtx, term: string): Promise<ConflictResult[]> {
-  const rows = await ctx.dataStore.matterContacts.findMany({
-    where: {
-      matter: { organizationId: ctx.user.organizationId },
-      contact: { OR: [{ personalNumber: { contains: term } }, { orgNumber: { contains: term } }] },
-    },
-    include: MC_INCLUDE,
-  });
-  return (rows as ConflictRow[]).map(toResult);
+  const rows = await ctx.repos.matterContacts.findForConflict(ctx.user.organizationId, term);
+  return rows.map(toResult);
 }
 
 /**
@@ -70,11 +52,8 @@ async function searchByNumber(ctx: ConflictCtx, term: string): Promise<ConflictR
  */
 async function searchByName(ctx: ConflictCtx, term: string): Promise<ConflictResult[]> {
   const SIM_THRESHOLD = 0.4;
-  const rows = await ctx.dataStore.matterContacts.findMany({
-    where: { matter: { organizationId: ctx.user.organizationId } },
-    include: MC_INCLUDE,
-  });
-  return (rows as ConflictRow[])
+  const rows = await ctx.repos.matterContacts.findForConflict(ctx.user.organizationId);
+  return rows
     .map((row) => ({ row, score: similarity(row.contact.name, term) }))
     .filter((s) => s.score > SIM_THRESHOLD)
     .sort((a, b) => b.score - a.score)
@@ -103,14 +82,12 @@ export const conflictRouter = router({
       if (input.searchType !== "personalNumber") pushUnique(results, await searchByName(ctx, input.searchTerm));
 
       // Logga sökningen
-      await ctx.dataStore.conflictChecks.create({
-        data: {
-          searchTerm: input.searchTerm,
-          searchType: input.searchType,
-          results: results as unknown as unknown[],
-          checkedById: asId<"UserId">(ctx.user.id),
-        },
-      });
+      await ctx.repos.conflictChecks.create({
+        searchTerm: input.searchTerm,
+        searchType: input.searchType,
+        results: results as unknown as unknown[],
+        checkedById: asId<"UserId">(ctx.user.id),
+      } as unknown as Partial<ConflictCheck>);
 
       return { results, matchCount: results.length, searchTerm: input.searchTerm };
     }),
@@ -123,16 +100,7 @@ export const conflictRouter = router({
       })
     )
     .query(async ({ ctx, input }) => {
-      const [checks, total] = await Promise.all([
-        ctx.dataStore.conflictChecks.findMany({
-          orderBy: { createdAt: "desc" },
-          skip: (input.page - 1) * input.pageSize,
-          take: input.pageSize,
-          include: { checkedBy: { select: { name: true } } },
-        }),
-        ctx.dataStore.conflictChecks.count(),
-      ]);
-
+      const { checks, total } = await ctx.repos.conflictChecks.listHistory(input.page, input.pageSize);
       return { checks, total, pages: Math.ceil(total / input.pageSize) };
     }),
 });

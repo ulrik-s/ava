@@ -106,10 +106,10 @@ export class LocalStore implements IDataStore {
     this.matterContacts = this.makeDelegate("matterContacts", relations.matterContacts) as unknown as MatterContactDelegate;
     this.contacts = this.makeDelegate("contacts", relations.contacts) as unknown as ContactDelegate;
     this.documents = this.makeDelegate("documents", relations.documents) as unknown as DocumentDelegate;
-    this.documentFolders = this.makeDelegate("documentFolders") as unknown as DocumentFolderDelegate;
+    this.documentFolders = this.makeDelegate("documentFolders", relations.documentFolders) as unknown as DocumentFolderDelegate;
     this.documentTemplates = this.makeDelegate("documentTemplates", relations.documentTemplates) as unknown as DocumentTemplateDelegate;
-    this.documentAnalysisSuggestions = this.makeDelegate("documentAnalysisSuggestions") as unknown as DocumentAnalysisSuggestionDelegate;
-    this.matterEventSuggestions = this.makeDelegate("matterEventSuggestions") as unknown as MatterEventSuggestionDelegate;
+    this.documentAnalysisSuggestions = this.makeDelegate("documentAnalysisSuggestions", relations.documentAnalysisSuggestions) as unknown as DocumentAnalysisSuggestionDelegate;
+    this.matterEventSuggestions = this.makeDelegate("matterEventSuggestions", relations.matterEventSuggestions) as unknown as MatterEventSuggestionDelegate;
     this.invoices = this.makeDelegate("invoices", relations.invoices) as unknown as InvoiceDelegate;
     this.timeEntries = this.makeDelegate("timeEntries", relations.timeEntries) as unknown as TimeEntryDelegate;
     this.expenses = this.makeDelegate("expenses", relations.expenses) as unknown as ExpenseDelegate;
@@ -294,6 +294,7 @@ export class LocalStore implements IDataStore {
       invoiceDispatches: this.invoiceDispatches,
       expectedReceivables: this.expectedReceivables,
       paymentPlans: this.paymentPlans,
+      paymentPlanReminders: this.paymentPlanReminders,
       accontoDeductions: this.accontoDeductions,
       billingRuns: this.billingRuns,
       calendarEvents: this.calendarEvents,
