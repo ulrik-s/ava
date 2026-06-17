@@ -99,6 +99,34 @@ jobs:
           name: coverage
           path: coverage/
 
+  # ───────────────── Repository (Postgres) ─────────────────
+  # Kör Drizzle-repository-sviten (+ buildDrizzleRepositories-aggregatet) mot en
+  # RIKTIG Postgres i docker (compose), inte bara pglite (WASM). Fångar driver-/
+  # SQL-skillnader inför server-runtimen (#410). Grunden för server-sync-E2E (#422):
+  # docker-compose.test.yml får en `server`-tjänst när #410 landar.
+  repository-postgres:
+    name: Repository (Postgres)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - name: Start Postgres (docker compose)
+        run: docker compose -f tooling/docker/docker-compose.test.yml up -d --wait --wait-timeout 90
+      - name: Repository-tester mot riktig Postgres
+        env:
+          PG_TEST_URL: postgres://ava:ava@localhost:5433/ava_test
+        run: bun test test/unit/server/repositories/ test/unit/server/db/relations.test.ts
+      - name: Tear down docker
+        if: always()
+        run: docker compose -f tooling/docker/docker-compose.test.yml down -v
+
   # ───────────────── E2E (git round-trip) ─────────────────
   # Den riktiga browser-klienten klonar/pushar mot docker-git-servern
   # (self-hosted). Auth: PAT bootstrappas av web-containern; vi exporterar
