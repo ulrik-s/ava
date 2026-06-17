@@ -10,8 +10,10 @@
 import { describe, it, expect } from "vitest-compat";
 import { createAddinClient, addinTrpcEndpoint, type AddinFetch } from "@/lib/client/addin/addin-client";
 import type { Principal } from "@/lib/server/auth/principal";
+import type { IDataStore } from "@/lib/server/data-store/IDataStore";
 import { StaticPatVerifier, patRecord } from "@/lib/server/http/pat";
 import { createTrpcHttpHandler } from "@/lib/server/http/trpc-http-handler";
+import { buildInMemoryRepositories } from "@/lib/server/repositories/in-memory-repositories";
 import type { Context } from "@/lib/server/trpc-core";
 
 const PRINCIPAL: Principal = {
@@ -22,9 +24,10 @@ const PRINCIPAL: Principal = {
 /** Server-handler med fake-context (user.current faller tillbaka på ctx.user). */
 function serverHandler() {
   const verifier = new StaticPatVerifier([patRecord("good-token", PRINCIPAL)]);
+  const dataStore = { users: { findFirst: async () => null } } as unknown as IDataStore;
   const context = {
-    dataStore: { users: { findUniqueOrThrow: async () => { throw new Error("no row"); } } },
-    ports: {}, user: PRINCIPAL,
+    dataStore, ports: {}, user: PRINCIPAL,
+    repos: buildInMemoryRepositories(dataStore),
   } as unknown as Context;
   return createTrpcHttpHandler({
     verifier,

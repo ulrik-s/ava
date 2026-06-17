@@ -13,6 +13,7 @@ import type { MatterRepository } from "./matter-repository";
 import type { PaymentPlanRepository } from "./payment-plan-repository";
 import type { PaymentRepository } from "./payment-repository";
 import type { TimeEntryRepository } from "./time-entry-repository";
+import type { UserRepository } from "./user-repository";
 import type { WriteOffRepository } from "./write-off-repository";
 
 export interface Repositories {
@@ -25,5 +26,6 @@ export interface Repositories {
   expenses: ExpenseRepository;
   accontoDeductions: AccontoDeductionRepository;
   contacts: ContactRepository;
+  users: UserRepository;
   transaction<T>(fn: (tx: Repositories) => Promise<T>): Promise<T>;
 }

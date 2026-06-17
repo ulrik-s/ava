@@ -1,8 +1,17 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { userIdSchema, asId } from "@/lib/shared/schemas/ids";
-import { publicKeySchema, matterNumberPrefixSchema, type PublicKey } from "@/lib/shared/schemas/user";
+import { publicKeySchema, matterNumberPrefixSchema, type PublicKey, type User } from "@/lib/shared/schemas/user";
 import { router, protectedProcedure } from "../trpc";
+
+/** Projektion till listvyns fält (utan publicKeys/passwordHash). */
+function pickList(u: User) {
+  return {
+    id: u.id, email: u.email, name: u.name, title: u.title ?? null, role: u.role,
+    hourlyRate: u.hourlyRate ?? null, mileageRate: u.mileageRate ?? null,
+    matterNumberPrefix: u.matterNumberPrefix ?? null, createdAt: u.createdAt as Date,
+  };
+}
 // bcryptjs är borttagen — pure-git-modellen har inte server-side
 // password-hashing. Om/när lokal HTTP Basic Auth införs på Linux-boxen
 // hanteras htpasswd av nginx (bcrypt-strängar genereras med `htpasswd -B`,
@@ -13,27 +22,6 @@ async function hashPassword(password: string): Promise<string> {
   // bcrypt-hash. Riktig hashing måste göras innan vi går prod.
   return `placeholder:${password.length}-chars`;
 }
-
-// Smal select för listor — håller utgående typ stabil för konsumenter
-// (reports, tids-rader, etc.) som inte bryr sig om nycklar.
-const USER_LIST_SELECT = {
-  id: true,
-  email: true,
-  name: true,
-  title: true,
-  role: true,
-  hourlyRate: true,
-  mileageRate: true,
-  matterNumberPrefix: true,
-  createdAt: true,
-} as const;
-// Profil-select inkluderar publicKeys. Lagras som JSON-array på User
-// (`Json`-fält i Prisma eller serialiserad sträng). I demo:n läses
-// det in från användarens .json-fil.
-const USER_PROFILE_SELECT = {
-  ...USER_LIST_SELECT,
-  publicKeys: true,
-} as const;
 
 export interface UserProfile {
   id: string;
@@ -65,13 +53,10 @@ export const userRouter = router({
    * representation som UI:n kan visa men inte mutera.
    */
   current: protectedProcedure.query(async ({ ctx }): Promise<UserProfile> => {
-    try {
-      const u = await ctx.dataStore.users.findUniqueOrThrow({
-        where: { id: ctx.user.id, organizationId: ctx.user.organizationId },
-        select: USER_PROFILE_SELECT,
-      }) as unknown as UserProfile;
-      return { ...u, publicKeys: Array.isArray(u.publicKeys) ? u.publicKeys : [] };
-    } catch (_e) {
+    // Migrerad till repository-sömmen (ADR 0020). Saknas user:n (demoanvändaren)
+    // returnerar vi en transient profil som UI:n kan visa men inte mutera.
+    const u = await ctx.repos.users.getByIdInOrg(ctx.user.id, ctx.user.organizationId);
+    if (!u) {
       return {
         id: ctx.user.id,
         email: ctx.user.email,
@@ -85,28 +70,24 @@ export const userRouter = router({
         publicKeys: [],
       };
     }
+    return { ...pickList(u), publicKeys: Array.isArray(u.publicKeys) ? u.publicKeys : [] };
   }),
 
   list: protectedProcedure
     .input(z.object({ pageSize: z.number().min(1).max(100).default(50) }).optional())
     .query(async ({ ctx }) => {
-      const users = await ctx.dataStore.users.findMany({
-        where: { organizationId: ctx.user.organizationId },
-        orderBy: { name: "asc" },
-        select: USER_LIST_SELECT,
-      });
-      return { users };
+      const rows = await ctx.repos.users.listByOrg(ctx.user.organizationId);
+      return { users: rows.map(pickList) };
     }),
 
   getById: protectedProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
-      // Använder list-select (utan publicKeys) eftersom nycklar är
+      // Använder list-projektionen (utan publicKeys) eftersom nycklar är
       // privata — bara `current` exponerar dem.
-      return ctx.dataStore.users.findUniqueOrThrow({
-        where: { id: input.id, organizationId: ctx.user.organizationId },
-        select: USER_LIST_SELECT,
-      });
+      const u = await ctx.repos.users.getByIdInOrg(input.id, ctx.user.organizationId);
+      if (!u) throw new TRPCError({ code: "NOT_FOUND" });
+      return pickList(u);
     }),
 
   /**
@@ -130,21 +111,19 @@ export const userRouter = router({
     .mutation(async ({ ctx, input }) => {
       assertAdmin(ctx);
       const passwordHash = input.password ? await hashPassword(input.password) : null;
-      return ctx.dataStore.users.create({
-        data: {
-          ...(input.id ? { id: input.id } : {}),
-          email: input.email,
-          name: input.name,
-          title: input.title,
-          role: input.role,
-          hourlyRate: input.hourlyRate,
-          mileageRate: input.mileageRate,
-          ...(input.matterNumberPrefix ? { matterNumberPrefix: input.matterNumberPrefix } : {}),
-          passwordHash,
-          organizationId: asId<"OrganizationId">(ctx.user.organizationId),
-          publicKeys: [],
-        },
-      });
+      return ctx.repos.users.create({
+        ...(input.id ? { id: input.id } : {}),
+        email: input.email,
+        name: input.name,
+        title: input.title,
+        role: input.role,
+        hourlyRate: input.hourlyRate,
+        mileageRate: input.mileageRate,
+        ...(input.matterNumberPrefix ? { matterNumberPrefix: input.matterNumberPrefix } : {}),
+        passwordHash,
+        organizationId: asId<"OrganizationId">(ctx.user.organizationId),
+        publicKeys: [],
+      } as Partial<User>);
     }),
 
   /**
@@ -175,12 +154,12 @@ export const userRouter = router({
         throw new TRPCError({ code: "FORBIDDEN", message: "Endast administratörer kan ändra roller." });
       }
       const { id, password, ...data } = input;
+      // Org-scope: verifiera ägarskap (motsvarar gamla where:{id,organizationId}).
+      const owned = await ctx.repos.users.getByIdInOrg(id, ctx.user.organizationId);
+      if (!owned) throw new TRPCError({ code: "NOT_FOUND" });
       const updateData: Record<string, unknown> = { ...data };
       if (password) updateData.passwordHash = await hashPassword(password);
-      return ctx.dataStore.users.update({
-        where: { id, organizationId: ctx.user.organizationId },
-        data: updateData,
-      });
+      return ctx.repos.users.update(id, updateData as Partial<User>);
     }),
 
   /**
@@ -190,34 +169,24 @@ export const userRouter = router({
   addKey: protectedProcedure
     .input(publicKeySchema)
     .mutation(async ({ ctx, input }) => {
-      const u = await ctx.dataStore.users.findUniqueOrThrow({
-        where: { id: ctx.user.id, organizationId: ctx.user.organizationId },
-        select: { publicKeys: true },
-      }) as unknown as { publicKeys?: unknown[] };
+      const u = await ctx.repos.users.getByIdInOrg(ctx.user.id, ctx.user.organizationId);
+      if (!u) throw new TRPCError({ code: "NOT_FOUND" });
       const keys = Array.isArray(u.publicKeys) ? u.publicKeys : [];
       if (keys.some((k) => (k as { fingerprint: string }).fingerprint === input.fingerprint)) {
         throw new TRPCError({ code: "CONFLICT", message: "Nyckel med samma fingerprint finns redan." });
       }
-      return ctx.dataStore.users.update({
-        where: { id: ctx.user.id, organizationId: ctx.user.organizationId },
-        data: { publicKeys: [...keys, input] } as unknown as Record<string, unknown>,
-      });
+      return ctx.repos.users.update(ctx.user.id, { publicKeys: [...keys, input] } as unknown as Partial<User>);
     }),
 
   removeKey: protectedProcedure
     .input(z.object({ fingerprint: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const u = await ctx.dataStore.users.findUniqueOrThrow({
-        where: { id: ctx.user.id, organizationId: ctx.user.organizationId },
-        select: { publicKeys: true },
-      }) as unknown as { publicKeys?: unknown[] };
+      const u = await ctx.repos.users.getByIdInOrg(ctx.user.id, ctx.user.organizationId);
+      if (!u) throw new TRPCError({ code: "NOT_FOUND" });
       const keys = (Array.isArray(u.publicKeys) ? u.publicKeys : []).filter(
         (k) => (k as { fingerprint: string }).fingerprint !== input.fingerprint,
       );
-      return ctx.dataStore.users.update({
-        where: { id: ctx.user.id, organizationId: ctx.user.organizationId },
-        data: { publicKeys: keys } as unknown as Record<string, unknown>,
-      });
+      return ctx.repos.users.update(ctx.user.id, { publicKeys: keys } as unknown as Partial<User>);
     }),
 
   /**
@@ -231,10 +200,9 @@ export const userRouter = router({
       if (input.id === ctx.user.id) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Du kan inte inaktivera dig själv." });
       }
-      return ctx.dataStore.users.update({
-        where: { id: input.id, organizationId: ctx.user.organizationId },
-        data: { active: false } as unknown as Record<string, unknown>,
-      });
+      const owned = await ctx.repos.users.getByIdInOrg(input.id, ctx.user.organizationId);
+      if (!owned) throw new TRPCError({ code: "NOT_FOUND" });
+      return ctx.repos.users.update(input.id, { active: false } as unknown as Partial<User>);
     }),
 
   /** Hård-delete behållen för bakåtkompabilitet, men ADMIN-only. */
@@ -245,8 +213,10 @@ export const userRouter = router({
       if (input.id === ctx.user.id) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Du kan inte ta bort dig själv." });
       }
-      return ctx.dataStore.users.delete({
-        where: { id: input.id, organizationId: ctx.user.organizationId },
-      });
+      const owned = await ctx.repos.users.getByIdInOrg(input.id, ctx.user.organizationId);
+      if (!owned) throw new TRPCError({ code: "NOT_FOUND" });
+      // Hård delete bevarad (bakåtkompat, ADR 0017-delete-policy öppen).
+      await ctx.repos.users.hardDelete(input.id);
+      return { id: input.id };
     }),
 });
