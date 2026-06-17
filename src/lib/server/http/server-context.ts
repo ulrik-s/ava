@@ -25,6 +25,7 @@ import type { IDataStore } from "@/lib/server/data-store/IDataStore";
 import type { AvaEvent, EmitInput } from "@/lib/server/events/schema";
 import type { IPorts } from "@/lib/server/ports";
 import type { Repositories } from "@/lib/server/repositories/repositories";
+import type { SyncStore } from "@/lib/server/sync/sync-store";
 import type { Context } from "@/lib/server/trpc-core";
 import type { User } from "@/lib/shared/schemas/user";
 import { forwardedClaims, type ForwardedHeaderNames } from "./forwarded-claims";
@@ -66,6 +67,8 @@ export interface ServerContextDeps {
   organizationId: string;
   /** Override av forwarded-header-namn (default oauth2-proxy `X-Auth-Request-*`). */
   headerNames?: ForwardedHeaderNames;
+  /** Server-sidans delta-sync-port (ADR 0017) — driver `sync`-routern. */
+  sync?: SyncStore;
 }
 
 /** Mappa en allowlist-rad ur full `User` → den delmängd `OidcAuthProvider` behöver. */
@@ -87,5 +90,11 @@ export async function createServerContext(req: Request, deps: ServerContextDeps)
   const claims = forwardedClaims(req.headers, deps.headerNames);
   const users = await deps.repos.users.listByOrg(deps.organizationId);
   const principal = new OidcAuthProvider(claims, toAllowlist(users)).getPrincipal();
-  return buildContext({ dataStore: serverDataStore, ports: deps.ports, principal, repos: deps.repos });
+  return buildContext({
+    dataStore: serverDataStore,
+    ports: deps.ports,
+    principal,
+    repos: deps.repos,
+    ...(deps.sync ? { sync: deps.sync } : {}),
+  });
 }

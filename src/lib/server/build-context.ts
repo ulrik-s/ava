@@ -11,6 +11,7 @@ import type { IDataStore } from "./data-store/IDataStore";
 import type { IPorts } from "./ports";
 import { buildInMemoryRepositories } from "./repositories/in-memory-repositories";
 import type { Repositories } from "./repositories/repositories";
+import type { SyncStore } from "./sync/sync-store";
 import type { Context } from "./trpc-core";
 
 export interface BuildContextDeps {
@@ -23,6 +24,8 @@ export interface BuildContextDeps {
    * (git/demo/offline-vägen). Server-runtimen (#410) injicerar Drizzle-repos.
    */
   repos?: Repositories;
+  /** Server-sidans delta-sync-port (ADR 0017). Bara server-first-runtimen. */
+  sync?: SyncStore;
 }
 
 export function buildContext(deps: BuildContextDeps): Context {
@@ -31,5 +34,6 @@ export function buildContext(deps: BuildContextDeps): Context {
     repos: deps.repos ?? buildInMemoryRepositories(deps.dataStore),
     ports: deps.ports,
     user: deps.principal,
+    ...(deps.sync ? { sync: deps.sync } : {}),
   };
 }

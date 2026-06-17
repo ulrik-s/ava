@@ -22,6 +22,7 @@ import type { Principal } from "./auth/principal";
 import type { IDataStore } from "./data-store/IDataStore";
 import type { IPorts } from "./ports";
 import type { Repositories } from "./repositories/repositories";
+import type { SyncStore } from "./sync/sync-store";
 
 export type Context = {
   /** Read/write-data via abstraktion. Git-backenden wirar DemoDataStore. */
@@ -39,6 +40,12 @@ export type Context = {
    * `Principal` i `auth/principal.ts`.
    */
   user: Principal | null;
+  /**
+   * Server-sidans delta-sync-port (ADR 0017). Injiceras BARA i server-first-
+   * runtimen (#410); `undefined` i git/demo-vägen → `sync`-routern svarar
+   * NOT_IMPLEMENTED. Konkret impl (Drizzle) hålls server-side (ej i bundeln).
+   */
+  sync?: SyncStore;
 };
 
 const t = initTRPC.context<Context>().create({
