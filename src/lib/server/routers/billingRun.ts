@@ -17,6 +17,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { proposedAccontoOre } from "@/lib/shared/billing-proposal";
+import type { BillingRun, Expense, Invoice } from "@/lib/shared/schemas/billing";
 import { billingRunRecipientSchema, type ExpenseKind } from "@/lib/shared/schemas/enums";
 import {
   matterIdSchema,
@@ -24,8 +25,8 @@ import {
   asId,
   type BillingRunId,
 } from "@/lib/shared/schemas/ids";
-import type { DataStoreTx } from "../data-store/IDataStore";
 import { emit } from "../events/emit";
+import type { Repositories } from "../repositories/repositories";
 import { router, orgProcedure } from "../trpc";
 
 interface UnfrozenWork {
@@ -63,13 +64,11 @@ function timeEntryValueOre(minutes: number, hourlyRate: number): number {
   return Math.round((minutes / 60) * hourlyRate);
 }
 
-async function fetchUnfrozenWork(tx: DataStoreTx, matterId: string): Promise<UnfrozenWork> {
-  const te = await tx.timeEntries.findMany({
-    where: { matterId, frozenByBillingRunId: null },
-  }) as Array<{ id: string; minutes: number; hourlyRate: number; billable: boolean }>;
-  const ex = await tx.expenses.findMany({
-    where: { matterId, frozenByBillingRunId: null },
-  }) as Array<{ id: string; amount: number; billable: boolean; kind?: ExpenseKind }>;
+async function fetchUnfrozenWork(repos: Repositories, matterId: string): Promise<UnfrozenWork> {
+  const te = await repos.timeEntries.listUnfrozenForMatter(matterId) as unknown as
+    Array<{ id: string; minutes: number; hourlyRate: number; billable: boolean }>;
+  const ex = await repos.expenses.listUnfrozenForMatter(matterId) as unknown as
+    Array<{ id: string; amount: number; billable: boolean; kind?: ExpenseKind }>;
   return { timeEntries: te, expenses: ex.filter((e) => e.kind !== "PRUTNING") };
 }
 
@@ -102,30 +101,19 @@ function buildProposal(
 }
 
 /** Summan av tidigare utställda ACCONTO-fakturors belopp för ett ärende (#397). */
-async function sumPriorAccontos(
-  billingRuns: { findMany: (args: unknown) => Promise<unknown> },
-  matterId: string,
-): Promise<number> {
-  const runs = (await billingRuns.findMany({
-    where: { matterId, type: "ACCONTO", status: "SENT" },
-  })) as ReadonlyArray<{ amountOre?: number }>;
+async function sumPriorAccontos(repos: Repositories, matterId: string): Promise<number> {
+  const runs = (await repos.billingRuns.listAccontoSent(matterId)) as ReadonlyArray<{ amountOre?: number }>;
   return runs.reduce((sum, r) => sum + (r.amountOre ?? 0), 0);
 }
 
-async function freezeWork(tx: DataStoreTx, matterId: string, billingRunId: BillingRunId): Promise<void> {
+async function freezeWork(repos: Repositories, matterId: string, billingRunId: BillingRunId): Promise<void> {
   const now = new Date();
-  await tx.timeEntries.updateMany({
-    where: { matterId, frozenByBillingRunId: null },
-    data: { frozenAt: now, frozenByBillingRunId: billingRunId },
-  });
-  await tx.expenses.updateMany({
-    where: { matterId, frozenByBillingRunId: null },
-    data: { frozenAt: now, frozenByBillingRunId: billingRunId },
-  });
+  await repos.timeEntries.freezeForMatter(matterId, billingRunId, now);
+  await repos.expenses.freezeForMatter(matterId, billingRunId, now);
 }
 
-async function assertMatterInOrg(tx: DataStoreTx, matterId: string, orgId: string): Promise<void> {
-  const m = await tx.matters.findFirst({ where: { id: matterId, organizationId: orgId } });
+async function assertMatterInOrg(repos: Repositories, matterId: string, orgId: string): Promise<void> {
+  const m = await repos.matters.getByIdInOrg(matterId, orgId);
   if (!m) throw new TRPCError({ code: "NOT_FOUND", message: "Ärendet finns inte." });
 }
 
@@ -133,26 +121,16 @@ export const billingRunRouter = router({
   list: orgProcedure
     .input(z.object({ matterId: z.string().optional() }))
     .query(async ({ ctx, input }) => {
-      const where = input.matterId
-        ? { matterId: input.matterId, matter: { organizationId: ctx.orgId } }
-        : { matter: { organizationId: ctx.orgId } };
-      const runs = await ctx.dataStore.billingRuns.findMany({
-        where, orderBy: { createdAt: "desc" },
-        include: { invoice: { select: { id: true, invoiceNumber: true, status: true } } },
-      });
+      const runs = await ctx.repos.billingRuns.listForOrg(ctx.orgId, input.matterId);
       return { runs };
     }),
 
   byId: orgProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
-      return ctx.dataStore.billingRuns.findFirstOrThrow({
-        where: { id: input.id, matter: { organizationId: ctx.orgId } },
-        include: {
-          invoice: { select: { id: true, invoiceNumber: true, status: true, amount: true } },
-          matter: { select: { id: true, matterNumber: true, title: true, paymentMethod: true } },
-        },
-      });
+      const run = await ctx.repos.billingRuns.getByIdInOrg(input.id, ctx.orgId);
+      if (!run) throw new TRPCError({ code: "NOT_FOUND", message: "Faktureringshändelsen finns inte." });
+      return run;
     }),
 
   /**
@@ -164,19 +142,13 @@ export const billingRunRouter = router({
   proposal: orgProcedure
     .input(z.object({ matterId: matterIdSchema }))
     .query(async ({ ctx, input }) => {
-      const matter = await ctx.dataStore.matters.findFirst({
-        where: { id: input.matterId, organizationId: ctx.orgId },
-      });
+      const matter = await ctx.repos.matters.getByIdInOrg(input.matterId, ctx.orgId);
       if (!matter) throw new TRPCError({ code: "NOT_FOUND", message: "Ärendet finns inte." });
-      const te = (await ctx.dataStore.timeEntries.findMany({
-        where: { matterId: input.matterId, frozenByBillingRunId: null },
-        orderBy: { date: "asc" },
-      })) as Array<{ id: string; description?: string | null; minutes: number; hourlyRate: number; billable: boolean }>;
-      const ex = (await ctx.dataStore.expenses.findMany({
-        where: { matterId: input.matterId, frozenByBillingRunId: null },
-        orderBy: { date: "asc" },
-      })) as Array<{ id: string; description?: string | null; amount: number; billable: boolean; kind?: ExpenseKind }>;
-      const priorAccontoSumOre = await sumPriorAccontos(ctx.dataStore.billingRuns, input.matterId);
+      const te = (await ctx.repos.timeEntries.listUnfrozenForMatter(input.matterId)) as unknown as
+        Array<{ id: string; description?: string | null; minutes: number; hourlyRate: number; billable: boolean }>;
+      const ex = (await ctx.repos.expenses.listUnfrozenForMatter(input.matterId)) as unknown as
+        Array<{ id: string; description?: string | null; amount: number; billable: boolean; kind?: ExpenseKind }>;
+      const priorAccontoSumOre = await sumPriorAccontos(ctx.repos, input.matterId);
       return buildProposal(te, ex, priorAccontoSumOre);
     }),
 
@@ -189,30 +161,26 @@ export const billingRunRouter = router({
       notes: z.string().nullish(),
     }))
     .mutation(async ({ ctx, input }) => {
-      return ctx.dataStore.transaction(async (tx) => {
+      return ctx.repos.transaction(async (tx) => {
         await assertMatterInOrg(tx, input.matterId, ctx.orgId);
         const work = await fetchUnfrozenWork(tx, input.matterId);
         const value = workValueOre(work);
         // #397: dra av tidigare aconton i det FÖRESLAGNA beloppet —
         // belopp = %-sats × upparbetat − Σ tidigare aconto-fakturor.
-        const priorAccontoSumOre = await sumPriorAccontos(tx.billingRuns, input.matterId);
+        const priorAccontoSumOre = await sumPriorAccontos(tx, input.matterId);
         const proposedOre = proposedAccontoOre(value, input.clientShareBips, priorAccontoSumOre);
         const invoice = await tx.invoices.create({
-          data: {
-            matterId: input.matterId, amount: input.amountOre,
-            invoiceType: "ACCONTO", status: "DRAFT",
-            invoiceDate: new Date(), notes: input.notes,
-          },
-        });
+          matterId: input.matterId, amount: input.amountOre,
+          invoiceType: "ACCONTO", status: "DRAFT",
+          invoiceDate: new Date(), notes: input.notes,
+        } as unknown as Partial<Invoice>);
         const run = await tx.billingRuns.create({
-          data: {
-            matterId: input.matterId, type: "ACCONTO", recipient: input.recipient,
-            status: "SENT", workValueOreAtRun: value, clientShareBips: input.clientShareBips,
-            proposedAmountOre: proposedOre, amountOre: input.amountOre,
-            invoiceId: invoice.id, deductedBillingRunIds: [],
-            periodTo: new Date(), notes: input.notes,
-          },
-        });
+          matterId: input.matterId, type: "ACCONTO", recipient: input.recipient,
+          status: "SENT", workValueOreAtRun: value, clientShareBips: input.clientShareBips,
+          proposedAmountOre: proposedOre, amountOre: input.amountOre,
+          invoiceId: invoice.id, deductedBillingRunIds: [],
+          periodTo: new Date(), notes: input.notes,
+        } as unknown as Partial<BillingRun>);
         await emit.invoiceCreated(ctx, invoice);
         return { run, invoice };
       });
@@ -226,29 +194,25 @@ export const billingRunRouter = router({
       notes: z.string().nullish(),
     }))
     .mutation(async ({ ctx, input }) => {
-      return ctx.dataStore.transaction(async (tx) => {
+      return ctx.repos.transaction(async (tx) => {
         await assertMatterInOrg(tx, input.matterId, ctx.orgId);
         const work = await fetchUnfrozenWork(tx, input.matterId);
         const value = workValueOre(work);
         const deductionOre = await sumDeductions(tx, input.matterId, input.deductedBillingRunIds);
         const finalAmount = Math.max(0, value - deductionOre);
         const invoice = await tx.invoices.create({
-          data: {
-            matterId: input.matterId, amount: finalAmount,
-            invoiceType: "FINAL", status: "DRAFT",
-            invoiceDate: new Date(), notes: input.notes,
-          },
-        });
+          matterId: input.matterId, amount: finalAmount,
+          invoiceType: "FINAL", status: "DRAFT",
+          invoiceDate: new Date(), notes: input.notes,
+        } as unknown as Partial<Invoice>);
         const run = await tx.billingRuns.create({
-          data: {
-            matterId: input.matterId, type: "FINAL", recipient: input.recipient,
-            status: "SENT", workValueOreAtRun: value,
-            proposedAmountOre: value, amountOre: finalAmount,
-            invoiceId: invoice.id, deductedBillingRunIds: input.deductedBillingRunIds,
-            periodTo: new Date(), notes: input.notes,
-          },
-        });
-        await freezeWork(tx, input.matterId, run.id);
+          matterId: input.matterId, type: "FINAL", recipient: input.recipient,
+          status: "SENT", workValueOreAtRun: value,
+          proposedAmountOre: value, amountOre: finalAmount,
+          invoiceId: invoice.id, deductedBillingRunIds: input.deductedBillingRunIds,
+          periodTo: new Date(), notes: input.notes,
+        } as unknown as Partial<BillingRun>);
+        await freezeWork(tx, input.matterId, run.id as BillingRunId);
         await emit.invoiceCreated(ctx, invoice);
         return { run, invoice };
       });
@@ -257,19 +221,17 @@ export const billingRunRouter = router({
   createKostnadsrakning: orgProcedure
     .input(z.object({ matterId: matterIdSchema, notes: z.string().nullish() }))
     .mutation(async ({ ctx, input }) => {
-      return ctx.dataStore.transaction(async (tx) => {
+      return ctx.repos.transaction(async (tx) => {
         await assertMatterInOrg(tx, input.matterId, ctx.orgId);
         const work = await fetchUnfrozenWork(tx, input.matterId);
         const value = workValueOre(work);
         const run = await tx.billingRuns.create({
-          data: {
-            matterId: input.matterId, type: "KOSTNADSRAKNING", recipient: "DOMSTOL",
-            status: "PENDING_VERDICT", workValueOreAtRun: value,
-            proposedAmountOre: value, amountOre: value,
-            invoiceId: null, deductedBillingRunIds: [],
-            periodTo: new Date(), notes: input.notes,
-          },
-        });
+          matterId: input.matterId, type: "KOSTNADSRAKNING", recipient: "DOMSTOL",
+          status: "PENDING_VERDICT", workValueOreAtRun: value,
+          proposedAmountOre: value, amountOre: value,
+          invoiceId: null, deductedBillingRunIds: [],
+          periodTo: new Date(), notes: input.notes,
+        } as unknown as Partial<BillingRun>);
         return { run };
       });
     }),
@@ -280,35 +242,29 @@ export const billingRunRouter = router({
       prutningOre: z.number().int().nonpositive(),
     }))
     .mutation(async ({ ctx, input }) => {
-      return ctx.dataStore.transaction(async (tx) => {
-        const run = await tx.billingRuns.findFirstOrThrow({
-          where: { id: input.billingRunId, matter: { organizationId: ctx.orgId } },
-        });
+      return ctx.repos.transaction(async (tx) => {
+        const run = await tx.billingRuns.getByIdInOrg(input.billingRunId, ctx.orgId);
+        if (!run) throw new TRPCError({ code: "NOT_FOUND", message: "Faktureringshändelsen finns inte." });
         if (run.type !== "KOSTNADSRAKNING" || run.status !== "PENDING_VERDICT") {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Bara KOSTNADSRAKNING i PENDING_VERDICT kan domsläggas." });
         }
         const finalAmount = Math.max(0, run.workValueOreAtRun + input.prutningOre);
         if (input.prutningOre < 0) {
           await tx.expenses.create({
-            data: {
-              matterId: run.matterId, userId: asId<"UserId">(ctx.user.id), date: new Date(),
-              amount: input.prutningOre, description: "Prutning enligt dom",
-              billable: true, vatRate: 0, vatIncluded: false, kind: "PRUTNING",
-            },
-          });
+            matterId: run.matterId, userId: asId<"UserId">(ctx.user.id), date: new Date(),
+            amount: input.prutningOre, description: "Prutning enligt dom",
+            billable: true, vatRate: 0, vatIncluded: false, kind: "PRUTNING",
+          } as unknown as Partial<Expense>);
         }
         const invoice = await tx.invoices.create({
-          data: {
-            matterId: run.matterId, amount: finalAmount,
-            invoiceType: "FINAL", status: "DRAFT",
-            invoiceDate: new Date(),
-          },
-        });
-        await tx.billingRuns.update({
-          where: { id: run.id },
-          data: { status: "SENT", invoiceId: invoice.id, amountOre: finalAmount, prutningOre: input.prutningOre },
-        });
-        await freezeWork(tx, run.matterId, run.id);
+          matterId: run.matterId, amount: finalAmount,
+          invoiceType: "FINAL", status: "DRAFT",
+          invoiceDate: new Date(),
+        } as unknown as Partial<Invoice>);
+        await tx.billingRuns.update(run.id, {
+          status: "SENT", invoiceId: invoice.id, amountOre: finalAmount, prutningOre: input.prutningOre,
+        } as unknown as Partial<BillingRun>);
+        await freezeWork(tx, run.matterId, run.id as BillingRunId);
         await emit.invoiceCreated(ctx, invoice);
         return { run, invoice };
       });
@@ -316,7 +272,7 @@ export const billingRunRouter = router({
 });
 
 async function sumDeductions(
-  tx: DataStoreTx,
+  repos: Repositories,
   matterId: string,
   ids: ReadonlyArray<string>,
 ): Promise<number> {
@@ -324,9 +280,7 @@ async function sumDeductions(
   // Säkerhet (#60): avdragsposterna måste tillhöra SAMMA ärende och vara
   // ACCONTO-körningar — annars kunde en FINAL dra av främmande/fel-typade
   // billing-runs och förvanska beloppet. Kasta om någon id inte matchar.
-  const runs = await tx.billingRuns.findMany({
-    where: { id: { in: ids }, matterId, type: "ACCONTO" },
-  });
+  const runs = await repos.billingRuns.listAccontoByIds(matterId, [...ids]);
   if (runs.length !== ids.length) {
     throw new TRPCError({
       code: "BAD_REQUEST",

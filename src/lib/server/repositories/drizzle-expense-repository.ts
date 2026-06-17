@@ -3,7 +3,7 @@
  * `flagBilled` bulk-sätter invoiceId.
  */
 
-import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { Expense } from "@/lib/shared/schemas/billing";
 import { expenses, invoices, matters, users } from "../db/schema";
 import type { AppDb } from "../db/types";
@@ -71,5 +71,19 @@ export class DrizzleExpenseRepository extends DrizzleRepository<Expense> impleme
   async flagBilled(ids: string[], invoiceId: string): Promise<void> {
     if (!ids.length) return;
     await this.db.update(expenses).set({ invoiceId } as never).where(inArray(expenses.id, ids));
+  }
+
+  async listUnfrozenForMatter(matterId: string): Promise<Expense[]> {
+    const rows = await this.db
+      .select().from(expenses)
+      .where(and(eq(expenses.matterId, matterId), isNull(expenses.frozenByBillingRunId), isNull(expenses.deletedAt)))
+      .orderBy(asc(expenses.date));
+    return rows as unknown as Expense[];
+  }
+
+  async freezeForMatter(matterId: string, billingRunId: string, now: Date): Promise<void> {
+    await this.db.update(expenses)
+      .set({ frozenAt: now, frozenByBillingRunId: billingRunId } as never)
+      .where(and(eq(expenses.matterId, matterId), isNull(expenses.frozenByBillingRunId)));
   }
 }

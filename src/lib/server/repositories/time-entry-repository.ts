@@ -59,4 +59,8 @@ export interface TimeEntryRepository extends Repository<TimeEntry> {
   listUnbilled(matterId: string, ids: string[]): Promise<UnbilledTimeEntry[]>;
   /** Koppla tidsposter till en faktura (sätter invoiceId). No-op vid tomma ids. */
   flagBilled(ids: string[], invoiceId: string): Promise<void>;
+  /** Ofrysta tidsposter i ett ärende (date asc) — underlag för billing-run. */
+  listUnfrozenForMatter(matterId: string): Promise<TimeEntry[]>;
+  /** Frys alla ofrysta tidsposter i ett ärende mot en billing-run (bulk). */
+  freezeForMatter(matterId: string, billingRunId: string, now: Date): Promise<void>;
 }

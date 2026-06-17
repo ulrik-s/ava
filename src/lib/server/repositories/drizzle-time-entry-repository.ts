@@ -110,4 +110,18 @@ export class DrizzleTimeEntryRepository extends DrizzleRepository<TimeEntry> imp
     if (!ids.length) return;
     await this.db.update(timeEntries).set({ invoiceId } as never).where(inArray(timeEntries.id, ids));
   }
+
+  async listUnfrozenForMatter(matterId: string): Promise<TimeEntry[]> {
+    const rows = await this.db
+      .select().from(timeEntries)
+      .where(and(eq(timeEntries.matterId, matterId), isNull(timeEntries.frozenByBillingRunId), isNull(timeEntries.deletedAt)))
+      .orderBy(asc(timeEntries.date));
+    return rows as unknown as TimeEntry[];
+  }
+
+  async freezeForMatter(matterId: string, billingRunId: string, now: Date): Promise<void> {
+    await this.db.update(timeEntries)
+      .set({ frozenAt: now, frozenByBillingRunId: billingRunId } as never)
+      .where(and(eq(timeEntries.matterId, matterId), isNull(timeEntries.frozenByBillingRunId)));
+  }
 }

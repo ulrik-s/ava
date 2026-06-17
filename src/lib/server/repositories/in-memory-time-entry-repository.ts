@@ -97,4 +97,17 @@ export class InMemoryTimeEntryRepository extends InMemoryRepository<TimeEntry> i
     if (!ids.length) return;
     await this.delegate.updateMany({ where: { id: { in: ids } }, data: { invoiceId } as Partial<TimeEntry> });
   }
+
+  async listUnfrozenForMatter(matterId: string): Promise<TimeEntry[]> {
+    return (await this.delegate.findMany({
+      where: { matterId, frozenByBillingRunId: null }, orderBy: { date: "asc" },
+    })) as TimeEntry[];
+  }
+
+  async freezeForMatter(matterId: string, billingRunId: string, now: Date): Promise<void> {
+    await this.delegate.updateMany({
+      where: { matterId, frozenByBillingRunId: null },
+      data: { frozenAt: now, frozenByBillingRunId: billingRunId } as Partial<TimeEntry>,
+    });
+  }
 }

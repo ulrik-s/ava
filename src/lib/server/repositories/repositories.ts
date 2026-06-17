@@ -6,6 +6,7 @@
  */
 
 import type { AccontoDeductionRepository } from "./acconto-deduction-repository";
+import type { BillingRunRepository } from "./billing-run-repository";
 import type { CalendarEventRepository } from "./calendar-event-repository";
 import type { ConflictCheckRepository } from "./conflict-check-repository";
 import type { ContactRepository } from "./contact-repository";
@@ -42,6 +43,7 @@ export interface Repositories {
   timeEntries: TimeEntryRepository;
   expenses: ExpenseRepository;
   accontoDeductions: AccontoDeductionRepository;
+  billingRuns: BillingRunRepository;
   contacts: ContactRepository;
   matterContacts: MatterContactRepository;
   conflictChecks: ConflictCheckRepository;

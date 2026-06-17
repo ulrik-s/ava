@@ -10,6 +10,7 @@
 
 import type { DataStoreTx, IDataStore } from "../data-store/IDataStore";
 import { InMemoryAccontoDeductionRepository } from "./in-memory-acconto-deduction-repository";
+import { InMemoryBillingRunRepository } from "./in-memory-billing-run-repository";
 import { InMemoryCalendarEventRepository } from "./in-memory-calendar-event-repository";
 import { InMemoryConflictCheckRepository } from "./in-memory-conflict-check-repository";
 import { InMemoryContactRepository } from "./in-memory-contact-repository";
@@ -49,6 +50,7 @@ function reposForTx(tx: DataStoreTx): Repositories {
     timeEntries: new InMemoryTimeEntryRepository(tx),
     expenses: new InMemoryExpenseRepository(tx),
     accontoDeductions: new InMemoryAccontoDeductionRepository(tx),
+    billingRuns: new InMemoryBillingRunRepository(tx),
     contacts: new InMemoryContactRepository(tx),
     matterContacts: new InMemoryMatterContactRepository(tx),
     conflictChecks: new InMemoryConflictCheckRepository(tx),
@@ -82,6 +84,7 @@ export function buildInMemoryRepositories(dataStore: IDataStore): Repositories {
     timeEntries: new InMemoryTimeEntryRepository(dataStore),
     expenses: new InMemoryExpenseRepository(dataStore),
     accontoDeductions: new InMemoryAccontoDeductionRepository(dataStore),
+    billingRuns: new InMemoryBillingRunRepository(dataStore),
     contacts: new InMemoryContactRepository(dataStore),
     matterContacts: new InMemoryMatterContactRepository(dataStore),
     conflictChecks: new InMemoryConflictCheckRepository(dataStore),
