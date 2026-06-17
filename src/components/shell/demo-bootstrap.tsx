@@ -35,7 +35,7 @@ import { CachingSyncDataStore, noSyncTransport } from "@/lib/server/data-store/i
 import type { MutationEvent } from "@/lib/server/data-store/in-memory/writable-delegate";
 import { DemoRuntime } from "@/lib/server/local-first/demo-runtime";
 import { createGhPagesCloneFn } from "@/lib/server/local-first/gh-pages-loader";
-import { OpfsPersistence } from "@/lib/server/local-first/persistence";
+import { IndexedDbFsPersistence } from "@/lib/server/local-first/indexeddb-fs-persistence";
 import type { DemoSource } from "@/lib/shared/demo-source";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { AppShell } from "./app-shell";
@@ -311,7 +311,9 @@ function useDemoBootstrap(args: BootstrapArgs) {
 
     const runtime = DemoRuntime.create({
       cloneFn: createGhPagesCloneFn(),
-      persistence: new OpfsPersistence(demoCacheKey()),
+      // Demon persisterar slab-snapshotten i IndexedDB (#3) — "populera cachen
+      // med demo-data" — i st.f. OPFS. Survivar reload utan OPFS-beroende.
+      persistence: new IndexedDbFsPersistence(demoCacheKey()),
     });
     runtimeRef.current = runtime; // exponera slaben för writeBack (persisterad demo-skrivning)
 
