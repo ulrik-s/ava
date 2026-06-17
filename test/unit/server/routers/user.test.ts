@@ -1,28 +1,42 @@
 /**
  * Test för userRouter — list/getById/create/update/delete med org-scoping.
+ * Migrerad till repository-sömmen (ADR 0020): projektionen (säkra fält) sker i
+ * routern, repot läser hela raden via findFirst/findMany.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
+import type { IDataStore } from "@/lib/server/data-store/IDataStore";
+import { buildInMemoryRepositories } from "@/lib/server/repositories/in-memory-repositories";
 import { userRouter } from "@/lib/server/routers/user";
 import { dataStoreFromMockPrisma } from "../helpers/mock-data-store";
 
 const mockPrisma = {
   user: {
     findMany: vi.fn(),
-    findUniqueOrThrow: vi.fn(),
+    findFirst: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
     delete: vi.fn(),
   },
 };
 
-function makeCaller(userId = "user-1", orgId = "org-a") {
+function callerFor(role: "ADMIN" | "LAWYER" | "ASSISTANT", userId: string, orgId: string) {
+  const dataStore = dataStoreFromMockPrisma(mockPrisma as unknown as Record<string, unknown>);
   const ctx = {
-    user: { id: userId, email: "a@b.com", name: "Test", role: "ADMIN", organizationId: orgId },
-    prisma: mockPrisma, dataStore: dataStoreFromMockPrisma(mockPrisma as unknown as Record<string, unknown>),
+    user: { id: userId, email: "a@b.com", name: "Test", role, organizationId: orgId },
+    prisma: mockPrisma, dataStore,
+    repos: buildInMemoryRepositories(dataStore as unknown as IDataStore),
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return userRouter.createCaller(ctx as any);
+}
+
+function makeCaller(userId = "user-1", orgId = "org-a") {
+  return callerFor("ADMIN", userId, orgId);
+}
+
+function makeCallerWithRole(role: "ADMIN" | "LAWYER" | "ASSISTANT", userId = "u1", orgId = "org-a") {
+  return callerFor(role, userId, orgId);
 }
 
 beforeEach(() => vi.clearAllMocks());
@@ -39,25 +53,34 @@ describe("user.list", () => {
     );
   });
 
-  it("returnerar bara säkra fält (inte passwordHash)", async () => {
-    mockPrisma.user.findMany.mockResolvedValue([]);
-    await makeCaller().list();
-    const args = mockPrisma.user.findMany.mock.calls[0]![0];
-    expect(args.select.passwordHash).toBeUndefined();
-    expect(args.select.email).toBe(true);
-    expect(args.select.name).toBe(true);
+  it("projicerar bara säkra fält (inte passwordHash)", async () => {
+    // Repot läser hela raden; routern (pickList) släpper passwordHash/publicKeys.
+    mockPrisma.user.findMany.mockResolvedValue([
+      { id: "u1", email: "u1@x", name: "A", role: "LAWYER", passwordHash: "secret", publicKeys: [{ fingerprint: "x" }] },
+    ]);
+    const res = await makeCaller().list();
+    const u = res.users[0] as Record<string, unknown>;
+    expect(u.passwordHash).toBeUndefined();
+    expect(u.publicKeys).toBeUndefined();
+    expect(u.email).toBe("u1@x");
+    expect(u.name).toBe("A");
   });
 });
 
 describe("user.getById", () => {
-  it("hämtar med org-scope", async () => {
-    mockPrisma.user.findUniqueOrThrow.mockResolvedValue({ id: "u1", name: "A" });
+  it("hämtar med org-scope (findFirst)", async () => {
+    mockPrisma.user.findFirst.mockResolvedValue({ id: "u1", name: "A" });
     await makeCaller().getById({ id: "u1" });
-    expect(mockPrisma.user.findUniqueOrThrow).toHaveBeenCalledWith(
+    expect(mockPrisma.user.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: "u1", organizationId: "org-a" },
       }),
     );
+  });
+
+  it("NOT_FOUND när användaren saknas/annan org", async () => {
+    mockPrisma.user.findFirst.mockResolvedValue(null);
+    await expect(makeCaller().getById({ id: "nope" })).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 });
 
@@ -115,6 +138,7 @@ describe("user.create", () => {
 
 describe("user.update", () => {
   it("hashar lösenord när password skickas", async () => {
+    mockPrisma.user.findFirst.mockResolvedValue({ id: "u1", organizationId: "org-a" });
     mockPrisma.user.update.mockResolvedValue({ id: "u1" });
     await makeCaller().update({ id: "u1", password: "nytt-hemligt-pwd" });
     const args = mockPrisma.user.update.mock.calls[0]![0];
@@ -123,6 +147,7 @@ describe("user.update", () => {
   });
 
   it("uppdaterar utan att röra passwordHash om password ej skickas", async () => {
+    mockPrisma.user.findFirst.mockResolvedValue({ id: "u1", organizationId: "org-a" });
     mockPrisma.user.update.mockResolvedValue({});
     await makeCaller().update({ id: "u1", name: "Nytt namn" });
     const args = mockPrisma.user.update.mock.calls[0]![0];
@@ -130,21 +155,28 @@ describe("user.update", () => {
     expect(args.data.name).toBe("Nytt namn");
   });
 
-  it("scopar where på organizationId", async () => {
+  it("org-scopar ägarkollen (findFirst) innan update", async () => {
+    mockPrisma.user.findFirst.mockResolvedValue({ id: "u1", organizationId: "org-a" });
     mockPrisma.user.update.mockResolvedValue({});
     await makeCaller().update({ id: "u1", name: "X" });
-    const args = mockPrisma.user.update.mock.calls[0]![0];
-    expect(args.where).toEqual({ id: "u1", organizationId: "org-a" });
+    expect(mockPrisma.user.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "u1", organizationId: "org-a" } }),
+    );
+  });
+
+  it("NOT_FOUND när användaren tillhör annan org", async () => {
+    mockPrisma.user.findFirst.mockResolvedValue(null);
+    await expect(makeCaller().update({ id: "u1", name: "X" })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(mockPrisma.user.update).not.toHaveBeenCalled();
   });
 });
 
 describe("user.delete", () => {
-  it("tar bort användare", async () => {
+  it("tar bort användare (org-scopad ägarkoll + hård delete)", async () => {
+    mockPrisma.user.findFirst.mockResolvedValue({ id: "other-user", organizationId: "org-a" });
     mockPrisma.user.delete.mockResolvedValue({});
     await makeCaller("admin-1").delete({ id: "other-user" });
-    expect(mockPrisma.user.delete).toHaveBeenCalledWith({
-      where: { id: "other-user", organizationId: "org-a" },
-    });
+    expect(mockPrisma.user.delete).toHaveBeenCalledWith({ where: { id: "other-user" } });
   });
 
   it("vägrar ta bort sig själv", async () => {
@@ -155,16 +187,7 @@ describe("user.delete", () => {
   });
 });
 
-// ─── Nya tester: admin-only-kontroll + key-management ────────────────
-
-function makeCallerWithRole(role: "ADMIN" | "LAWYER" | "ASSISTANT", userId = "u1", orgId = "org-a") {
-  const ctx = {
-    user: { id: userId, email: "x@y", name: "X", role, organizationId: orgId },
-    prisma: mockPrisma, dataStore: dataStoreFromMockPrisma(mockPrisma as unknown as Record<string, unknown>),
-  };
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return userRouter.createCaller(ctx as any);
-}
+// ─── admin-only-kontroll + key-management ────────────────────────────
 
 describe("admin-only checks", () => {
   it("user.create kräver ADMIN", async () => {
@@ -200,7 +223,7 @@ describe("admin-only checks", () => {
 
 describe("user.addKey / removeKey", () => {
   it("addKey läser publicKeys + uppdaterar (tom array → 1 nyckel)", async () => {
-    mockPrisma.user.findUniqueOrThrow.mockResolvedValue({ publicKeys: [] });
+    mockPrisma.user.findFirst.mockResolvedValue({ id: "u1", organizationId: "org-a", publicKeys: [] });
     mockPrisma.user.update.mockResolvedValue({});
     await makeCallerWithRole("LAWYER", "u1").addKey({
       fingerprint: "SHA256:abc", type: "ssh-ed25519", publicKey: "ssh-ed25519 AAAA",
@@ -212,7 +235,8 @@ describe("user.addKey / removeKey", () => {
   });
 
   it("addKey nekar dubblett-fingerprint", async () => {
-    mockPrisma.user.findUniqueOrThrow.mockResolvedValue({
+    mockPrisma.user.findFirst.mockResolvedValue({
+      id: "u1", organizationId: "org-a",
       publicKeys: [{ fingerprint: "SHA256:abc", type: "ssh-ed25519", publicKey: "x", addedAt: "..." }],
     });
     await expect(
@@ -223,7 +247,8 @@ describe("user.addKey / removeKey", () => {
   });
 
   it("removeKey filtrerar bort efter fingerprint", async () => {
-    mockPrisma.user.findUniqueOrThrow.mockResolvedValue({
+    mockPrisma.user.findFirst.mockResolvedValue({
+      id: "u1", organizationId: "org-a",
       publicKeys: [
         { fingerprint: "SHA256:a", type: "ssh-ed25519", publicKey: "x", addedAt: "..." },
         { fingerprint: "SHA256:b", type: "ssh-ed25519", publicKey: "y", addedAt: "..." },
@@ -239,15 +264,15 @@ describe("user.addKey / removeKey", () => {
 
 describe("user.current", () => {
   it("returnerar ctx.user om saknas i tabellen (demo-läget)", async () => {
-    mockPrisma.user.findUniqueOrThrow.mockRejectedValue(new Error("not found"));
+    mockPrisma.user.findFirst.mockResolvedValue(null);
     const me = await makeCallerWithRole("ADMIN", "demo-user").current();
     expect(me.id).toBe("demo-user");
     expect(me.publicKeys).toEqual([]);
   });
 
   it("returnerar databas-rad om finns", async () => {
-    mockPrisma.user.findUniqueOrThrow.mockResolvedValue({
-      id: "u1", email: "u1@x", name: "U1", title: null, role: "LAWYER",
+    mockPrisma.user.findFirst.mockResolvedValue({
+      id: "u1", organizationId: "org-a", email: "u1@x", name: "U1", title: null, role: "LAWYER",
       hourlyRate: null, mileageRate: null, createdAt: new Date(),
       publicKeys: [{ fingerprint: "SHA256:x", type: "ssh-ed25519", publicKey: "k", addedAt: "..." }],
     });

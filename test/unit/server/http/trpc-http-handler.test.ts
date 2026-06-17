@@ -12,8 +12,10 @@ import { createTRPCClient, httpBatchLink, TRPCClientError } from "@trpc/client";
 import superjson from "superjson";
 import { describe, it, expect, vi } from "vitest-compat";
 import type { Principal } from "@/lib/server/auth/principal";
+import type { IDataStore } from "@/lib/server/data-store/IDataStore";
 import { StaticPatVerifier, patRecord } from "@/lib/server/http/pat";
 import { createTrpcHttpHandler, type RequestSession } from "@/lib/server/http/trpc-http-handler";
+import { buildInMemoryRepositories } from "@/lib/server/repositories/in-memory-repositories";
 import type { AppRouter } from "@/lib/server/routers/_app";
 import type { Context } from "@/lib/server/trpc-core";
 
@@ -22,13 +24,17 @@ const PRINCIPAL: Principal = {
   role: "LAWYER", organizationId: "org-1",
 };
 
-/** Minimal Context: `users.findUniqueOrThrow` kastar → user.current faller
- *  tillbaka på ctx.user, vilket bevisar att principalen flödade in. */
+/** Minimal Context: `users.findFirst` ger null → user.current faller tillbaka
+ *  på ctx.user (via repos.users.getByIdInOrg), vilket bevisar att principalen
+ *  flödade in. */
 function fakeContext(principal: Principal): Context {
   const dataStore = {
-    users: { findUniqueOrThrow: async () => { throw new Error("no row"); } },
-  };
-  return { dataStore, ports: {}, user: principal } as unknown as Context;
+    users: { findFirst: async () => null },
+  } as unknown as IDataStore;
+  return {
+    dataStore, ports: {}, user: principal,
+    repos: buildInMemoryRepositories(dataStore),
+  } as unknown as Context;
 }
 
 interface Harness {
