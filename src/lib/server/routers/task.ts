@@ -9,9 +9,9 @@
 
 import { z } from "zod";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
-import { taskPrioritySchema, taskStatusSchema } from "@/lib/shared/schemas";
+import { taskPrioritySchema, taskStatusSchema, type Task } from "@/lib/shared/schemas";
 import { asId, taskIdSchema, matterIdSchema, userIdSchema } from "@/lib/shared/schemas/ids";
-import { router, protectedProcedure } from "../trpc";
+import { router, protectedProcedure, TRPCError } from "../trpc";
 
 const createInput = z.object({
   title: z.string().min(1),
@@ -40,69 +40,57 @@ export const taskRouter = router({
         matterId: z.string().optional(),
       }).optional(),
     )
-    .query(async ({ ctx, input }) => {
-      const where: Record<string, unknown> = {
-        userId: ctx.user.id,
-        organizationId: ctx.user.organizationId,
-      };
-      if (input?.status) where.status = input.status;
-      if (input?.matterId) where.matterId = input.matterId;
-      return ctx.dataStore.tasks.findMany({
-        where,
-        orderBy: { dueAt: "asc" },
-        include: { matter: { select: { id: true, matterNumber: true, title: true } } },
-      });
-    }),
+    // Migrerad till repository-sömmen (ADR 0020): ägar-/org-scopad listForUser.
+    .query(({ ctx, input }) =>
+      ctx.repos.tasks.listForUser(ctx.user.id, ctx.user.organizationId, {
+        status: input?.status,
+        matterId: input?.matterId,
+      }),
+    ),
 
   create: protectedProcedure
     .input(createInput)
     .mutation(({ ctx, input }) => {
       const { id, createdAt, ...rest } = input;
-      return ctx.dataStore.tasks.create({
-        data: {
-          ...rest,
-          status: input.status ?? "TODO",
-          userId: input.userId ?? asId<"UserId">(ctx.user.id),
-          organizationId: asId<"OrganizationId">(ctx.user.organizationId),
-          ...omitUndefined({ id }),
-          ...(createdAt != null ? { createdAt } : {}),
-        },
-      });
+      return ctx.repos.tasks.create({
+        ...rest,
+        status: input.status ?? "TODO",
+        userId: input.userId ?? asId<"UserId">(ctx.user.id),
+        organizationId: asId<"OrganizationId">(ctx.user.organizationId),
+        ...omitUndefined({ id }),
+        ...(createdAt != null ? { createdAt } : {}),
+      } as Partial<Task>);
     }),
 
   update: protectedProcedure
     .input(updateInput)
     .mutation(async ({ ctx, input }) => {
       const { id, ...data } = input;
-      // Ownership-guard
-      await ctx.dataStore.tasks.findFirstOrThrow({
-        where: { id, userId: ctx.user.id, organizationId: ctx.user.organizationId },
-      });
+      // Ownership-guard (id + userId + org).
+      const owned = await ctx.repos.tasks.getOwned(id, ctx.user.id, ctx.user.organizationId);
+      if (!owned) throw new TRPCError({ code: "NOT_FOUND" });
       // Auto-set completedAt när status flippas till DONE
       const patch: Record<string, unknown> = { ...data };
       if (data.status === "DONE") patch.completedAt = new Date();
       if (data.status && data.status !== "DONE") patch.completedAt = null;
-      return ctx.dataStore.tasks.update({ where: { id }, data: patch });
+      return ctx.repos.tasks.update(id, patch as Partial<Task>);
     }),
 
   complete: protectedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      await ctx.dataStore.tasks.findFirstOrThrow({
-        where: { id: input.id, userId: ctx.user.id, organizationId: ctx.user.organizationId },
-      });
-      return ctx.dataStore.tasks.update({
-        where: { id: input.id },
-        data: { status: "DONE", completedAt: new Date() },
-      });
+      const owned = await ctx.repos.tasks.getOwned(input.id, ctx.user.id, ctx.user.organizationId);
+      if (!owned) throw new TRPCError({ code: "NOT_FOUND" });
+      return ctx.repos.tasks.update(input.id, { status: "DONE", completedAt: new Date() } as Partial<Task>);
     }),
 
   delete: protectedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      await ctx.dataStore.tasks.findFirstOrThrow({
-        where: { id: input.id, userId: ctx.user.id, organizationId: ctx.user.organizationId },
-      });
-      return ctx.dataStore.tasks.delete({ where: { id: input.id } });
+      const owned = await ctx.repos.tasks.getOwned(input.id, ctx.user.id, ctx.user.organizationId);
+      if (!owned) throw new TRPCError({ code: "NOT_FOUND" });
+      // Hård delete bevarar dagens beteende (ADR 0017-delete-policy öppen).
+      await ctx.repos.tasks.hardDelete(input.id);
+      return { id: input.id };
     }),
 });
