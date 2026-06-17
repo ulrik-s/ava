@@ -16,6 +16,7 @@ import { InMemoryConflictCheckRepository } from "./in-memory-conflict-check-repo
 import { InMemoryContactRepository } from "./in-memory-contact-repository";
 import { InMemoryDocumentFolderRepository } from "./in-memory-document-folder-repository";
 import { InMemoryDocumentRepository } from "./in-memory-document-repository";
+import { InMemoryDocumentSuggestionRepository } from "./in-memory-document-suggestion-repository";
 import { InMemoryDocumentTemplateRepository } from "./in-memory-document-template-repository";
 import { InMemoryExpectedReceivableRepository } from "./in-memory-expected-receivable-repository";
 import { InMemoryExpenseRepository } from "./in-memory-expense-repository";
@@ -61,6 +62,7 @@ function reposForTx(tx: DataStoreTx): Repositories {
     documents: new InMemoryDocumentRepository(tx),
     documentFolders: new InMemoryDocumentFolderRepository(tx),
     matterEventSuggestions: new InMemoryMatterEventSuggestionRepository(tx),
+    documentAnalysisSuggestions: new InMemoryDocumentSuggestionRepository(tx),
     documentTemplates: new InMemoryDocumentTemplateRepository(tx),
     expectedReceivables: new InMemoryExpectedReceivableRepository(tx),
     invoiceDispatches: new InMemoryInvoiceDispatchRepository(tx),
@@ -95,6 +97,7 @@ export function buildInMemoryRepositories(dataStore: IDataStore): Repositories {
     documents: new InMemoryDocumentRepository(dataStore),
     documentFolders: new InMemoryDocumentFolderRepository(dataStore),
     matterEventSuggestions: new InMemoryMatterEventSuggestionRepository(dataStore),
+    documentAnalysisSuggestions: new InMemoryDocumentSuggestionRepository(dataStore),
     documentTemplates: new InMemoryDocumentTemplateRepository(dataStore),
     expectedReceivables: new InMemoryExpectedReceivableRepository(dataStore),
     invoiceDispatches: new InMemoryInvoiceDispatchRepository(dataStore),

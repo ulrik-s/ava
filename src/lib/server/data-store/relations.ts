@@ -53,6 +53,7 @@ export interface DemoRelations {
   documents: Relations;
   documentFolders: Relations;
   matterEventSuggestions: Relations;
+  documentAnalysisSuggestions: Relations;
   documentTemplates: Relations;
   invoices: Relations;
   invoiceDispatches: Relations;
@@ -79,7 +80,7 @@ export interface DemoRelations {
  * - folder documents/children krävs för `_count` i dokumentlistan (core.list).
  * - matterEventSuggestions.document→matter krävs för org-scoping + include.
  */
-function documentRelations(r: Rel): Pick<DemoRelations, "documents" | "documentFolders" | "matterEventSuggestions"> {
+function documentRelations(r: Rel): Pick<DemoRelations, "documents" | "documentFolders" | "matterEventSuggestions" | "documentAnalysisSuggestions"> {
   return {
     documents: {
       matter: r("matters", "id", "matterId", "one"),
@@ -92,6 +93,11 @@ function documentRelations(r: Rel): Pick<DemoRelations, "documents" | "documentF
       children: r("documentFolders", "parentId", "id"),
     },
     matterEventSuggestions: {
+      document: r("documents", "id", "documentId", "one", {
+        matter: r("matters", "id", "matterId", "one"),
+      }),
+    },
+    documentAnalysisSuggestions: {
       document: r("documents", "id", "documentId", "one", {
         matter: r("matters", "id", "matterId", "one"),
       }),

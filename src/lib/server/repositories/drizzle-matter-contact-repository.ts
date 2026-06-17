@@ -68,4 +68,21 @@ export class DrizzleMatterContactRepository
       .select().from(contacts).where(eq(contacts.id, (link as { contactId: string }).contactId)).limit(1);
     return { ...(link as object), contact: contact as unknown as Contact } as MatterContactWithContact;
   }
+
+  async findLink(matterId: string, contactId: string, role: string): Promise<MatterContact | null> {
+    const rows = await this.db.select().from(matterContacts)
+      .where(and(
+        eq(matterContacts.matterId, matterId), eq(matterContacts.contactId, contactId),
+        eq(matterContacts.role, role), isNull(matterContacts.deletedAt),
+      )).limit(1);
+    return (rows[0] as unknown as MatterContact | undefined) ?? null;
+  }
+
+  async listContactsForMatter(matterId: string): Promise<Contact[]> {
+    const rows = await this.db
+      .select({ contact: contacts }).from(matterContacts)
+      .innerJoin(contacts, eq(matterContacts.contactId, contacts.id))
+      .where(and(eq(matterContacts.matterId, matterId), isNull(matterContacts.deletedAt)));
+    return rows.map((r) => r.contact as unknown as Contact);
+  }
 }

@@ -4,6 +4,7 @@
  * KLIENT-kontakt); matterContacts-relations registrerade i relations.ts.
  */
 
+import type { Contact } from "@/lib/shared/schemas/contact";
 import type { MatterContact } from "@/lib/shared/schemas/matter";
 import type { Delegate, IDataStore } from "../data-store/IDataStore";
 import { InMemoryRepository } from "./in-memory-repository";
@@ -49,5 +50,16 @@ export class InMemoryMatterContactRepository
   async linkContact(data: Partial<MatterContact>): Promise<MatterContactWithContact> {
     // create enrichar raden med contact (LocalStore.enrichRowForEntity).
     return (await this.create(data)) as unknown as MatterContactWithContact;
+  }
+
+  async findLink(matterId: string, contactId: string, role: string): Promise<MatterContact | null> {
+    return (await this.delegate.findFirst({ where: { matterId, contactId, role } })) as MatterContact | null;
+  }
+
+  async listContactsForMatter(matterId: string): Promise<Contact[]> {
+    const rows = (await this.delegate.findMany({
+      where: { matterId }, include: { contact: true },
+    })) as Array<{ contact: Contact }>;
+    return rows.map((r) => r.contact).filter(Boolean);
   }
 }

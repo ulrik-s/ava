@@ -37,4 +37,8 @@ export interface MatterContactRepository extends Repository<MatterContact> {
   getByIdInOrg(id: string, organizationId: string): Promise<MatterContact | null>;
   /** Skapa en länk och returnera den med kontakten (matter.addContact/addNewContact). */
   linkContact(data: Partial<MatterContact>): Promise<MatterContactWithContact>;
+  /** Befintlig länk (ärende, kontakt, roll) — för idempotent koppling. Null om ingen. */
+  findLink(matterId: string, contactId: string, role: string): Promise<MatterContact | null>;
+  /** Kontakterna kopplade till ett ärende (dedup-underlag i förslags-flödet). */
+  listContactsForMatter(matterId: string): Promise<Contact[]>;
 }
