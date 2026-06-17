@@ -38,9 +38,13 @@ const FAST = process.argv.includes("--fast");
 // arSummary-router) → 87.0 (paymentPlan list/cancel/scanDueReminders) → 87.1
 // (document/core listDocumentTypes/markExternallyEdited/analyze-catch) → 87.2
 // (calendar getById/listForMatter/setMirrorState, lokalt 87.89% rader, ~0.69%
-// marginal — FUNC_FLOOR konservativt pga Node-version-varians).
-const LINE_FLOOR = 0.872;
-const FUNC_FLOOR = 0.80;
+// marginal — FUNC_FLOOR konservativt pga Node-version-varians) → 87.8 rader /
+// 83.0 funktioner (ADR 0020 repo-migrering #409: alla routrar mot ctx.repos +
+// per-repo paritetstester lyfte lokalt till 88.33% rader / 84.53% funktioner;
+// golvet låses just under, ~0.5% rad-marginal / ~1.5% funktions-marginal för
+// Node-version-varians).
+const LINE_FLOOR = 0.878;
+const FUNC_FLOOR = 0.83;
 
 /**
  * SERIAL_FILES — testfiler som SYNKRONT spawnar en barnprocess via
