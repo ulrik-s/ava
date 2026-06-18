@@ -158,19 +158,14 @@ jobQueue.registerWorker<ClassifyPayload>("classify-document", async (payload, ct
   ctx.setProgress(0.1);
   await sleepWithAbort(50, ctx.signal);
 
-  // Försök hämta extraherad text (om extract-text-jobbet redan körts) +
-  // den aktiva LLM:n. classifyDocument:s fallback-logik tar hand om
-  // alla edge cases (no text / LLM off / LLM error).
-  const { getDocumentContent } = await import("@/lib/client/demo/document-content-cache");
-  const { getActiveLlm } = await import("@/lib/client/llm/active-llm");
-  const { classifyDocument } = await import("@/lib/client/llm/classify-document");
+  // Klient-LLM borttagen (#518 Fas 5): klassificering på klienten är ren,
+  // deterministisk filnamns-heuristik. Text-baserad LLM-klassning sker
+  // server-side via jobb-kön + ollama (self-hosted); demo/offline saknar
+  // server-LLM och faller därför tillbaka på heuristiken här.
+  const { guessFromFilename } = await import("@/lib/shared/document-kind");
 
   ctx.setProgress(0.3);
-  const guess = await classifyDocument({
-    fileName: payload.fileName,
-    text: getDocumentContent(payload.documentId),
-    extractor: getActiveLlm(),
-  });
+  const guess = guessFromFilename(payload.fileName);
 
   // Skriv `documentType` + `analyzedAt` + `analysisStatus` via tRPC.
   // Alla tre fält måste sättas så UI:n vet att analysen körts klart —
