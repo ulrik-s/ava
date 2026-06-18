@@ -44,9 +44,11 @@ const FAST = process.argv.includes("--fast");
 // golvet låses just under, ~0.5% rad-marginal / ~1.5% funktions-marginal för
 // Node-version-varians) → 87.9 rader / 83.2 funktioner (#27: äkta
 // WebCrypto-/IndexedDB-tester för ed25519-keypair lyfte lokalt till 88.38%
-// rader / 84.89% funktioner; samma marginal-konvention behålls).
-const LINE_FLOOR = 0.879;
-const FUNC_FLOOR = 0.832;
+// rader / 84.89% funktioner; samma marginal-konvention behålls) → 88.0 rader /
+// 83.4 funktioner (#27: smtp-sender + ExternalEditIndicator-tester lyfte lokalt
+// till 88.46% rader / 84.97% funktioner; samma ~0.5%/~1.5%-marginal).
+const LINE_FLOOR = 0.88;
+const FUNC_FLOOR = 0.834;
 
 /**
  * SERIAL_FILES — testfiler som SYNKRONT spawnar en barnprocess via
