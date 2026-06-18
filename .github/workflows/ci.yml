@@ -122,7 +122,7 @@ jobs:
       - name: Repository-tester mot riktig Postgres
         env:
           PG_TEST_URL: postgres://ava:ava@localhost:5433/ava_test
-        run: bun test test/unit/server/repositories/ test/unit/server/db/relations.test.ts test/unit/server/http/server-context.test.ts test/unit/server/http/server-trpc-handler.test.ts test/unit/server/sync/ test/unit/client/sync/trpc-sync-transport.test.ts test/unit/server/http/server-first-http-e2e.test.ts test/unit/server/db/server-first-deploy.test.ts test/unit/client/backend/server-first-store.test.ts
+        run: bun test test/unit/server/repositories/ test/unit/server/db/relations.test.ts test/unit/server/http/server-context.test.ts test/unit/server/http/server-trpc-handler.test.ts test/unit/server/sync/ test/unit/server/jobs/ test/unit/client/sync/trpc-sync-transport.test.ts test/unit/server/http/server-first-http-e2e.test.ts test/unit/server/db/server-first-deploy.test.ts test/unit/client/backend/server-first-store.test.ts
       - name: Tear down docker
         if: always()
         run: docker compose -f tooling/docker/docker-compose.test.yml down -v
