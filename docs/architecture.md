@@ -1,17 +1,17 @@
 # AVA — Arkitektur
 
-> **TL;DR**: Pure git-first. Browser är runtime. Servern är så tunn det går.
-> Två deploy-mode: **demo** på GitHub Pages (read-only, auto-seedad av CI),
-> **self-hosted** på en Linux-server med docker (nginx + git-http-backend).
-> Ingen databas, ingen NextAuth, ingen Prisma. Allt persisteras som JSON +
-> binärfiler i ett git-repo.
+> **TL;DR**: **Server-first med offline-first klient** (ADR 0016). Self-hosted kör
+> en tunn server (Postgres + tRPC-over-HTTP bakom oauth2-proxy); klienten är
+> offline-first via en lokal store + optimistisk mutations-kö + server-auktoritativ
+> reconcile. **Demon** (GitHub Pages) är samma offline-first-kärna utan synk-mål,
+> seedad från CDN-JSON in i IndexedDB. Server-sidiga jobb (utskick m.m.) körs
+> durabelt via pg-boss. **Git-vägen (iso-git/OPFS/MemFs) är pensionerad** (#420–#422).
 
-> **Arkitekturbeslut (ADR):** Längre fram finns en valbar Postgres-backend.
-> Gränsen `IDataStore` + tRPC är designad för att vara backend-pluggbar — se
-> [`docs/adr/`](./adr/). Aktuella beslut:
-> - [ADR 0001](./adr/0001-pluggbar-backend-bakom-idatastore.md) — pluggbar
->   backend: Git (local-first, offline) ⟷ Postgres (server, online).
->   **Reviderad av ADR 0016** (server-first; git-vägen pensioneras).
+> **Arkitekturbeslut (ADR):** Se [`docs/adr/`](./adr/). De som formar dagens
+> arkitektur:
+> - [ADR 0001](./adr/0001-pluggbar-backend-bakom-idatastore.md) — pluggbar backend
+>   bakom `IDataStore`/tRPC-sömmen. **Reviderad av ADR 0016**: git local-first är
+>   pensionerad; server-first (Postgres) är den enda backenden för self-hosted.
 > - [ADR 0002](./adr/0002-git-konflikthantering-backend-a.md) — git-konflikt­
 >   hantering i Git-backenden: last-write-wins + diskret överskrivnings-notis.
 > - [ADR 0003](./adr/0003-nyckelstrategi-app-genererad-uuidv7.md) — nyckel­
@@ -59,42 +59,63 @@
 >   ADR 0019 #5. Inkrementell per-entitet-migrering; query-engine/LocalStore (#412)
 >   återanvänds internt.
 
-## Tre lager
+## Två lager
 
 ```
 ┌────────────────────────────────────────────────────────────┐
-│  Browser (Next.js + tRPC + DemoDataStore in-memory)       │
-│  ├─ /demo: läser data från gh-pages CDN (read-only)        │
-│  └─ /self-hosted: clone:ar git-repo till OPFS,             │
-│                   write-back via isomorphic-git              │
+│  Browser (Next.js + tRPC + offline-first store)            │
+│  ├─ /demo: seed från gh-pages CDN → IndexedDB,             │
+│  │         CachingSyncDataStore UTAN synk-mål              │
+│  └─ self-hosted: CachingSyncDataStore + optimistisk        │
+│                  mutations-kö → reconcile mot servern      │
 └────────────────────────────────────────────────────────────┘
-                          ▲ HTTPS
+                          ▲ HTTPS (tRPC), self-hosted
 ┌────────────────────────────────────────────────────────────┐
-│  Server (val 1 av 2)                                       │
-│  ├─ GitHub Pages: bara statiska filer (app + data)         │
-│  └─ Linux/docker: nginx + git-http-backend + sshd          │
+│  Server (self-hosted)                                      │
+│  ├─ oauth2-proxy (OIDC) → server-first-runtimen            │
+│  ├─ tRPC-over-HTTP (appRouter) mot Postgres (Drizzle)      │
+│  └─ pg-boss jobb-kö (utskick m.m.) på samma Postgres       │
+│  Demo = GitHub Pages: bara statiska filer (app + seed)     │
 └────────────────────────────────────────────────────────────┘
 ```
 
 ## Komponenter
 
-### Frontend (oavsett deploy-mode)
-- **Next.js 16** App Router, `output: "export"` för statisk export
-- **tRPC 11** in-process (anrop går genom `GitBackendRuntime` → `inProcessLink` direkt till routrar — INGEN HTTP-server). Backend väljs bakom `BackendRuntime`-seamen (Git ⟷ framtida Postgres), se [ADR 0001](./adr/0001-pluggbar-backend-bakom-idatastore.md)
-- **DemoDataStore**: in-memory data-lager. Prisma-API:t (`findMany`, `create`, ...) emuleras mot vanliga JS-arrays. Write-back-callback skriver tillbaka JSON till git working copy.
-- **isomorphic-git**: browser-side git clone/pull/push (pure JS)
-- **OPFS (Origin Private File System)**: lokal working-copy som inte kräver fil-väljardialog
-- **File System Access API** (Chrome/Edge): valbar för advanced users som vill ha repo i synlig mapp
+### Frontend (klient, oavsett tier)
+- **Next.js 16** App Router, `output: "export"` (statisk export — samma bundle för demo + self-hosted)
+- **tRPC 11**: `appRouter` körs **in-process i klienten** mot den lokala storen
+  (snabbt, offline). Self-hosted **synkar** mot servern via `TrpcSyncTransport`
+  (HTTP); demon har inget synk-mål.
+- **CachingSyncDataStore** (ADR 0016/0017): LocalStore-kärna + optimistisk
+  mutations-kö (IndexedDB-persisterad, idempotent UUIDv7) + reconcile-motor
+  (pull→apply→replay→advance). `.store` är `ctx.dataStore`. Demon kör
+  `createEphemeral`-varianten utan transport.
+- **IndexedDB**: klientens persistens — både datalagret (snapshot) och mutations-
+  kön + genererade dok-blobbar (`generated-doc-idb`). Ersätter den gamla
+  OPFS/MemFs-vägen.
+- **Repository-söm** (ADR 0020): routrarna läser/skriver via `ctx.repos`
+  (typade per-entitet-repos); `buildInMemoryRepositories` (klient/demo) +
+  `buildDrizzleRepositories` (server).
 
-### Self-hosted server (docker-compose)
-- `web`: nginx 1.27 + git-http-backend via fcgiwrap. Servar `/ava/` statisk + `/git/firma.git` (auth_basic-gated)
-- `git-ssh`: sshd för git+ssh-access (delar bare-repo med web via volym)
-- Allt + git-binärerna ryms i 2 docker-imager. Inget custom server-kod-skikt.
+### Self-hosted server (server-first, ADR 0016)
+- `src/bin/server-first.ts` → `buildServerFirstApi`: tRPC-over-HTTP (`appRouter`)
+  mot **Postgres** (Drizzle), med server-verifierad principal ur oauth2-proxy:s
+  forwarded headers (ADR 0009). Sitter bakom nginx + oauth2-proxy (loopback).
+- **Sync** (ADR 0017): varje accepterad skrivning loggas i `change_log`
+  (BIGSERIAL per org) → delta-pull; klientens kö replay:as idempotent.
+- **pg-boss jobb-kö** (#504): durabel server-sidig kö på samma Postgres (eget
+  `pgboss`-schema). Claim/lease (FOR UPDATE SKIP LOCKED), retry/backoff,
+  dead-letter. Handlers (t.ex. e-postutskick via smtp-sender) registreras i
+  runtimen; `ctx.ports.email` köar durabelt.
+- Schemat appliceras med `db:migrate` (versionerade SQL-migrationer); binären
+  byggs med `bun build --compile` och körs som docker-image.
 
 ### Demo-deploy (GitHub Pages)
-- CI bygger statisk export + seedar data direkt i `out/` (samma `buildSeed()` som docker)
-- Sajten serverar både app:en och data:n från samma origin
-- Read-only i praktiken (ingen write-back kan ske mot CDN), men UI:n tillåter mutations som lever in-memory tills tab:en reload:ar
+- CI bygger statisk export + seedar `out/` (`buildSeed()` → `.ava/*.json` + manifest).
+- Klienten fetchar seed-filerna och bygger `DemoSource` **direkt** (ingen MemFs/
+  git), hydratiserar `CachingSyncDataStore` (noSync) → IndexedDB.
+- Mutationer landar i storen + **persisteras i IndexedDB** (överlever reload);
+  ingen server finns att synka mot. DemoModeBanner förklarar.
 
 ## Routing till runtime-skapade id:n (`__shell__`-route + `EntityLink`)
 
@@ -132,9 +153,9 @@ ingen #418.**
 och klientens första render är en identisk minimal platshållare, så ingen
 server/klient-hydrerings-mismatch (#418) kan uppstå — och detalj-sidornas
 `useSearchParams` anropas aldrig vid prerender (slipper Suspense-kravet under
-`output: export`). `MemFs-slaben` (skriv-pipelinen nedan) är **ortogonal**: den
-får entitetens *data* att överleva en eventuell omladdning, men påverkar inte
-routing.
+`output: export`). Den lokala storens **IndexedDB-persistens** (skriv-pipelinen
+nedan) är **ortogonal**: den får entitetens *data* att överleva en omladdning,
+men påverkar inte routing.
 
 **Att lägga till en ny dynamisk entity-route — fyra kopplade rörliga delar
 (håll dem i synk):**
@@ -153,7 +174,15 @@ Kontraktet vaktas i CI av `test/unit/lib/client/demo/no-detail-link-regression.t
 
 ## Data-modell
 
-Alla entiteter lagras som JSON-rader i ett git-repo:
+**Sanningskälla:** `src/lib/shared/schemas/index.ts` — `ENTITY_REGISTRY` (zod-schema
++ sourceKey per entitet). Drizzle-schemat (`src/lib/server/db/schema.ts`, ADR 0019)
+speglar zod för Postgres.
+
+**Persistens per tier:**
+- **self-hosted:** Postgres (Drizzle-repos via `ctx.repos`, ADR 0020).
+- **klient (offline-first):** IndexedDB-snapshot av `DemoSource` + mutations-kö.
+- **demo-seed (CDN):** entiteterna serialiseras till JSON-filer som GH Pages servar
+  och klienten bygger `DemoSource` ur. Den fillayouten (kvar från seed-formatet):
 
 ```
 .ava/
@@ -180,33 +209,35 @@ manifest.json                        # för demo-läget (paths-lista)
 
 `src/lib/shared/schemas/index.ts` — `ENTITY_REGISTRY` är single source of truth: zod-schema + gitPath + sourceKey per entitet.
 
-## Skriv-pipelinen (self-hosted)
+## Skriv- + synk-pipelinen (offline-first, ADR 0016/0017)
 
 ```
-Router-mutation (t.ex. paymentPlan.cancel)
+Router-mutation (t.ex. paymentPlan.cancel) — körs in-process mot lokala storen
   ↓
-DemoDataStore.transaction(tx => { tx.paymentPlans.update(...) })
-  ↓
-WritableDelegate.update → onMutate-callback
-  ↓
-fsa-write-back: skriv JSON till FSA-handle (OPFS-folder)
-  ↓
-window.dispatchEvent("ava:data-changed")
-  ↓
-AutoSync (debounced): stageAllAndCommit + pushBranch via isomorphic-git
-  ↓
-HTTPS POST /git/firma.git/git-receive-pack (Authorization: Basic <PAT>)
-  ↓
-nginx auth_basic → fcgiwrap → git-http-backend → bare-repo
+CachingSyncDataStore: LocalStore uppdateras OPTIMISTISKT (UI ser ändringen direkt)
+  ↓ + mutationen enqueue:as (UUIDv7, idempotent) och persisteras i IndexedDB
+  │
+  ├─ demo:        ingen transport — kön ackumuleras men synkas aldrig
+  └─ self-hosted: reconcile() → TrpcSyncTransport.push (HTTP) → servern
+                    ↓
+        server-first: appRouter mot Postgres bumpar version + loggar i change_log
+                    ↓
+        reconcile pull: delta sedan cursor → apply → replay kvarvarande kö → advance
 ```
+
+Server-sidiga sido-effekter (e-postutskick m.m.) går INTE synkront i request:en —
+de **köas durabelt** via pg-boss (`ctx.ports.email.send` → `email-dispatch`-kön →
+handler → smtp-sender, med retry/backoff/dead-letter). Tål server-restart (#504).
 
 ## Auth
 
-Demo-mode: ingen auth, read-only.
+Demo: ingen auth (offline-first-kärna utan synk-mål).
 
-Self-hosted: nginx `auth_basic` mot htpasswd. Initial admin-PAT genereras av web-containerns entrypoint vid första uppstart (printas en gång i loggen). Vidare användare läggs till av admin via `tooling/scripts/add-user.sh`. Se [`auth.md`](./auth.md).
-
-Commit-attribution: varje browser genererar ett Ed25519-keypar lagrat i IndexedDB. Public key persisteras på user-raden (`publicKeys`-array). Commits signeras med SSH-format så identitet kan verifieras off-server om så önskas.
+Self-hosted: **OIDC relying party via oauth2-proxy** (ADR 0009) — AVA äger aldrig
+en egen IdP. oauth2-proxy gat:ar åtkomsten och vidarebefordrar identiteten som
+`X-Auth-Request-*`-headers; server-first-runtimen löser principalen ur dem mot
+byråns allowlist (`forwarded-claims` → `server-context`). htpasswd/Basic-auth +
+PAT är legacy från git-peer-eran. Se [`auth.md`](./auth.md).
 
 ## LLM (opt-in)
 
@@ -233,9 +264,14 @@ rader till aktuell form innan zod-parsern ser dem. Se
 
 - `bun test --parallel` (#92): enhets-/komponenttester. happy-dom för DOM
   (komponenter + sidor); `vi`-API:t via shim (`test/bun-compat.ts`).
-  `--parallel` ger per-fil-isolering via worker-pool (motsvarar vitests
-  projektisolering; `--isolate` kraschar på CI-linux).
-- `playwright` för E2E round-trip (docker upp + browser-push)
-- ~2224 unit/integration-tester
-- TDD-fokus på pure helpers (color-palette, classify-document, search-needle, fuzzy-similarity, day-view-layout)
-- Smoke-test:en `test/integration/seed-smoke.test.ts` kör varje meny-sidas tRPC-procedurer mot riktig DemoDataStore med seed-datan
+  `--parallel` ger per-fil-isolering via worker-pool (`--isolate` kraschar på CI-linux).
+- **CI-jobb**: Static analysis · Unit/komponent/integration (coverage-ratchet) ·
+  **Repository (Postgres)** (Drizzle-repos + sync + pg-boss mot riktig Postgres) ·
+  **Server-first (deploy E2E)** (kompilerad binär i docker + push/pull-synk) ·
+  **Demo build** (`build:demo`) · **E2E (OIDC login)** (oauth2-proxy + Keycloak).
+- `playwright`: browser-demo-E2E (`e2e:demo`, mot nginx-serverad `out/`) + OIDC-login.
+  *(Git-round-trip-E2E:n pensionerades med git-vägen, #422.)*
+- Postgres-tester kör mot **pglite** (in-process WASM) lokalt och mot riktig
+  Postgres i Repository-jobbet (`PG_TEST_URL`); pg-boss-testerna kräver riktig PG.
+- Smoke-test:en `test/integration/seed-smoke.test.ts` kör varje meny-sidas
+  tRPC-procedurer mot en seedad store.
