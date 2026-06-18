@@ -5,7 +5,7 @@
 
 import { describe, it, expect, beforeEach } from "vitest-compat";
 import {
-  loadFirmaConfig, saveFirmaConfig, resetToDemo, inferTier,
+  loadFirmaConfig, saveFirmaConfig, resetToDemo,
   defaultConfigForHost,
   type FirmaConfig,
 } from "@/lib/client/firma/firma-config";
@@ -50,9 +50,9 @@ describe("firma-config", () => {
 
     it("returnerar sparad config", () => {
       const cfg: FirmaConfig = {
-        tier: "github",
-        repo: "firma/data",
-        token: "ghp_x",
+        tier: "self-hosted",
+        repo: "https://firma.se/git/data",
+        token: "tk",
         organizationId: "firma",
         authorName: "Anna",
         authorEmail: "anna@firma.se",
@@ -61,8 +61,13 @@ describe("firma-config", () => {
       expect(loadFirmaConfig()).toEqual(cfg);
     });
 
+    it("migrerar pensionerad tier=github → demo (#514)", () => {
+      localStorage.setItem(KEY, JSON.stringify({ tier: "github", repo: "user/repo" }));
+      expect(loadFirmaConfig().tier).toBe("demo");
+    });
+
     it("faller tillbaka till host-default-repo om sparad config saknar repo", () => {
-      localStorage.setItem(KEY, JSON.stringify({ tier: "github", repo: "" }));
+      localStorage.setItem(KEY, JSON.stringify({ tier: "self-hosted", repo: "" }));
       const cfg = loadFirmaConfig();
       // jsdom = localhost → self-hosted-default
       expect(cfg.repo).toBe("http://localhost:8080/git/firma.git");
@@ -93,18 +98,4 @@ describe("firma-config", () => {
     });
   });
 
-  describe("inferTier", () => {
-    it("github.com-URL → github", () => {
-      expect(inferTier("https://github.com/user/repo.git")).toBe("github");
-    });
-    it("kortform user/repo → github", () => {
-      expect(inferTier("ulrik-s/ava-demo")).toBe("github");
-    });
-    it("HTTPS-URL utan github → self-hosted", () => {
-      expect(inferTier("https://git.firma.se/data.git")).toBe("self-hosted");
-    });
-    it("tom sträng → demo", () => {
-      expect(inferTier("")).toBe("demo");
-    });
-  });
 });
