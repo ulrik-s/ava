@@ -41,6 +41,7 @@ export const noopPaymentScanner: IPaymentScanner = {
 export const noopContentStore: IContentStore = {
   async write() { /* no-op */ },
   async read() { return null; },
+  async exists() { return false; },
 };
 
 export const noopPorts: IPorts = {
