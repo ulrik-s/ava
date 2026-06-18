@@ -17,9 +17,11 @@
  *   AVA_HTTP_HOST         (default 127.0.0.1)
  */
 
+import { noopPorts } from "@/lib/server/adapters/noop-ports";
 import { serveFetchHandler } from "@/lib/server/http/node-http-adapter";
 import { buildServerFirstApi, loadServerFirstConfig } from "@/lib/server/http/server-first-api";
 import { startJobRuntime, type JobRuntime } from "@/lib/server/jobs/job-worker-runtime";
+import { QueueBackedEmailSender } from "@/lib/server/jobs/queue-backed-email-sender";
 import { buildServerFirstJobHandlers, loadSmtpConfigFromEnv } from "@/lib/server/jobs/server-first-handlers";
 
 function log(msg: string): void {
@@ -39,9 +41,16 @@ function main(): void {
   }
 
   const config = loadServerFirstConfig();
+
+  // E-post-porten köar durabelt på pg-boss (#504). Boss:en hämtas lazy — den
+  // startas best-effort NEDAN, efter att API:t byggts. Porten skapas här uppe.
+  let jobRuntime: JobRuntime | null = null;
+  const ports = { ...noopPorts, email: new QueueBackedEmailSender(() => jobRuntime?.boss ?? null) };
+
   const api = buildServerFirstApi({
     databaseUrl: config.databaseUrl,
     organizationId: config.organizationId,
+    ports,
     onError: (err) => log(`router-fel: ${String(err)}`),
   });
   const server = serveFetchHandler(api.handler, { port: config.httpPort, hostname: config.httpHost });
@@ -51,7 +60,6 @@ function main(): void {
   // serveringen. Handlers per konfigurerad integration (e-post via AVA_SMTP_*).
   const smtp = loadSmtpConfigFromEnv();
   const handlers = buildServerFirstJobHandlers(smtp ? { smtp } : {});
-  let jobRuntime: JobRuntime | null = null;
   void startJobRuntime({ connectionString: config.databaseUrl, handlers })
     .then((rt) => { jobRuntime = rt; log(`jobb-kö startad (pg-boss; ${Object.keys(handlers).length} handlers)`); })
     .catch((err) => log(`jobb-kö start misslyckades (fortsätter utan): ${String(err)}`));

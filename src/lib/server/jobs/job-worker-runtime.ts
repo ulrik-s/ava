@@ -9,7 +9,7 @@
  * (redo att ta emot jobb) men ingen handler konsumerar ännu.
  */
 
-import type { Job } from "pg-boss";
+import type { Job, PgBoss } from "pg-boss";
 import { JOB_QUEUES, type JobQueueName, createJobQueue, startJobQueue } from "./job-queue";
 
 /** En handler kör ETT jobb. Kastar → pg-boss retry:ar (backoff) → dead-letter. */
@@ -19,6 +19,8 @@ export type JobHandler = (job: Job) => Promise<void>;
 export type JobHandlers = Partial<Record<JobQueueName, JobHandler>>;
 
 export interface JobRuntime {
+  /** Den startade pg-boss-instansen (för enqueue, t.ex. QueueBackedEmailSender). */
+  boss: PgBoss;
   /** Stoppa pollingen och stäng pg-boss-anslutningen (graceful). */
   stop(): Promise<void>;
 }
@@ -42,7 +44,7 @@ export async function startJobRuntime(opts: JobRuntimeOptions): Promise<JobRunti
   boss.on("error", (err) => console.error("[job-queue] fel:", err));
   await startJobQueue(boss);
   await registerWorkers(boss, opts.handlers ?? {});
-  return { stop: () => boss.stop({ graceful: true }) };
+  return { boss, stop: () => boss.stop({ graceful: true }) };
 }
 
 /** Registrera en `boss.work`-worker per kö som har en handler. */
