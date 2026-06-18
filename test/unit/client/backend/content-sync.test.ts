@@ -4,9 +4,11 @@
  * har), upload av saknade, markUploaded alltid, samt no-op vid tom pending.
  */
 
+import { IDBFactory } from "fake-indexeddb";
 import { describe, expect, it, vi } from "vitest-compat";
-import { runContentSync } from "@/lib/client/backend/content-sync";
-import { contentStoragePath } from "@/lib/shared/content-address";
+import { DocumentContentCache } from "@/lib/client/backend/content-cache";
+import { runContentSync, syncDocumentContent } from "@/lib/client/backend/content-sync";
+import { base64ToBytes, contentStoragePath, sha256Hex } from "@/lib/shared/content-address";
 
 describe("runContentSync", () => {
   it("tom pending → no-op", async () => {
@@ -51,5 +53,44 @@ describe("runContentSync", () => {
     expect(out).toEqual([]);
     expect(upload).not.toHaveBeenCalled();
     expect(markUploaded).toHaveBeenCalledWith("d1");
+  });
+});
+
+describe("syncDocumentContent (wirad mot tRPC + cache)", () => {
+  it("laddar upp pending blob via uploadContent + rensar pending", async () => {
+    const cache = new DocumentContentCache(new IDBFactory());
+    const bytes = new Uint8Array([5, 6, 7]);
+    const sha = await sha256Hex(bytes);
+    await cache.cache("d1", sha, bytes);
+
+    const uploads: Array<{ documentId: string; contentBase64: string }> = [];
+    const client = {
+      document: {
+        missingContent: { query: async (i: { storagePaths: string[] }) => ({ missing: i.storagePaths }) },
+        uploadContent: { mutate: async (i: { documentId: string; contentBase64: string }) => { uploads.push(i); } },
+      },
+    };
+
+    const out = await syncDocumentContent(client, cache);
+    expect(out).toEqual([sha]);
+    expect(uploads).toHaveLength(1);
+    expect(uploads[0]!.documentId).toBe("d1");
+    expect(Array.from(base64ToBytes(uploads[0]!.contentBase64))).toEqual([5, 6, 7]);
+    expect(await cache.pendingUploads()).toEqual([]); // rensad efter upload
+  });
+
+  it("servern har redan blobben → ingen upload, pending rensas", async () => {
+    const cache = new DocumentContentCache(new IDBFactory());
+    await cache.cache("d2", await sha256Hex(new Uint8Array([1])), new Uint8Array([1]));
+    const uploads: unknown[] = [];
+    const client = {
+      document: {
+        missingContent: { query: async () => ({ missing: [] }) }, // servern har allt
+        uploadContent: { mutate: async (i: unknown) => { uploads.push(i); } },
+      },
+    };
+    expect(await syncDocumentContent(client, cache)).toEqual([]);
+    expect(uploads).toHaveLength(0);
+    expect(await cache.pendingUploads()).toEqual([]);
   });
 });
