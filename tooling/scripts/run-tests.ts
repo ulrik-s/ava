@@ -49,8 +49,11 @@ const FAST = process.argv.includes("--fast");
 // till 88.46% rader / 84.97% funktioner; samma ~0.5%/~1.5%-marginal) → 88.0
 // rader / 83.5 funktioner (#27: handle-store IndexedDB-persistens mot fake-
 // indexeddb lyfte lokalt till 88.53% rader / 85.07% funktioner; FUNC-golvet
-// låses just under 85%-milstolpen, LINE oförändrat ~0.5% marginal).
-const LINE_FLOOR = 0.88;
+// låses just under 85%-milstolpen, LINE oförändrat ~0.5% marginal) → 88.1 rader
+// / 83.5 funktioner (#27: demoStaticParamsBySeedId + billing-grenarna i static-
+// params lyfte lokalt till 88.58% rader / 85.12% funktioner; LINE dras upp,
+// FUNC oförändrat ~1.6% marginal).
+const LINE_FLOOR = 0.881;
 const FUNC_FLOOR = 0.835;
 
 /**
