@@ -1,10 +1,12 @@
 "use client";
 
 /**
- * `/login` — demo-läget:s användarväljare. Self-hosted lägger till
- * username/password-fält i nästa iteration.
+ * `/login` — demo-lägets användarväljare. ENDAST demo: i self-hosted sker
+ * inloggning via OIDC (ADR 0009) — oauth2-proxy gat:ar nginx-fronten och
+ * dirigerar till byråns IdP innan appen laddas, och principalen binds i
+ * bootstrappen (`resolveOidcLogin`). Den här sidan nås aldrig i det flödet.
  *
- * Användaren väljer ett konto, skriver "demo" som lösenord, klickar
+ * Demo: användaren väljer ett konto, skriver "demo" som lösenord, klickar
  * "Logga in" → `principalId` + `organizationId` sparas i `ava.firma`
  * localStorage och vi navigerar till `/`.
  *
@@ -19,6 +21,7 @@ import { DEMO_PASSWORD } from "../../../tooling/demo-config";
 type State =
   | { kind: "loading" }
   | { kind: "ready"; meta: DemoMeta }
+  | { kind: "info"; message: string }
   | { kind: "error"; message: string };
 
 async function initLogin(
@@ -28,10 +31,11 @@ async function initLogin(
   const cfg = loadFirmaConfig();
   if (cfg.tier !== "demo") {
     setState({
-      kind: "error",
+      kind: "info",
       message:
-        "Self-hosted-login ännu ej implementerad — använd nginx auth_basic " +
-        "via /settings tills vidare.",
+        "Self-hosted: inloggning sker via din identitetsleverantör (OIDC). " +
+        "oauth2-proxy dirigerar dig dit automatiskt — den här sidan används " +
+        "bara i demo-läget.",
     });
     return;
   }
@@ -95,6 +99,19 @@ export default function LoginPage() {
           <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded p-3">
             {state.message}
           </p>
+        )}
+        {state.kind === "info" && (
+          <div className="space-y-3">
+            <p className="text-sm text-blue-800 bg-blue-50 border border-blue-200 rounded p-3">
+              {state.message}
+            </p>
+            <a
+              href={`${process.env.NEXT_PUBLIC_DEMO_BASE_PATH ?? ""}/`}
+              className="inline-block w-full text-center rounded-md bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 text-sm font-medium"
+            >
+              Till startsidan
+            </a>
+          </div>
         )}
         {state.kind === "ready" && (
           <LoginForm
