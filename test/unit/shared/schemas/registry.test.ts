@@ -82,7 +82,6 @@ describe("schemas — minimal valid input", () => {
     });
     expect(u.role).toBe("LAWYER");
     expect(u.active).toBe(true);
-    expect(u.publicKeys).toEqual([]);
   });
 
   it("contactSchema defaultar contactType=PERSON", () => {

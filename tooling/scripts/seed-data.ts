@@ -180,7 +180,7 @@ export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
     users: users.map((u) => ({
       id: u.id, organizationId: orgId, email: u.email, name: u.name,
       title: u.title, role: u.role, hourlyRate: u.hourlyRate, mileageRate: 250,
-      active: true, publicKeys: [],
+      active: true,
       createdAt: isoDate(-200), updatedAt: isoDate(-30),
     })),
     contacts: CONTACTS.map((c) => ({

@@ -8,14 +8,6 @@ import { userIdSchema, organizationIdSchema } from "./ids";
  * azureOid, lastLoginAt) lever bara i självhostade installationer.
  */
 
-export const publicKeySchema = z.object({
-  fingerprint: z.string(),
-  type: z.enum(["ssh-ed25519", "ssh-rsa", "ssh-ecdsa", "gpg"]),
-  publicKey: z.string(),
-  comment: z.string().optional(),
-  addedAt: z.string(),
-});
-
 /** Ärendenummer-prefix (#174): 1–3 versaler A–Ö (svensk alfabet). */
 export const matterNumberPrefixSchema = z
   .string()
@@ -50,8 +42,6 @@ export const userSchema = z.object({
   oidcSubject: z.string().nullish(),
   oidcIssuer: z.string().nullish(),
   lastLoginAt: optionalDateLike,
-  publicKeys: z.array(publicKeySchema).default([]),
 }).passthrough();
 
 export type User = z.infer<typeof userSchema>;
-export type PublicKey = z.infer<typeof publicKeySchema>;
