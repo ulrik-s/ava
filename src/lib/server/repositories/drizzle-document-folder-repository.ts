@@ -11,6 +11,7 @@ import type {
   DocumentFolderRepository, DocumentFolderWithCounts,
 } from "./document-folder-repository";
 import { DrizzleRepository, type VersionedTable } from "./drizzle-repository";
+import { matterOrg } from "./matter-org";
 
 /** documentFolders.parentId = X, eller IS NULL för rot. */
 function parentEq(parentId: string | null) {
@@ -22,6 +23,11 @@ export class DrizzleDocumentFolderRepository
   implements DocumentFolderRepository {
   constructor(db: AppDb, now: () => Date = () => new Date()) {
     super(db, documentFolders as unknown as VersionedTable, now);
+  }
+
+  /** Mappar saknar org-kolumn → härled via ärendet (#528) så change_log/pull funkar. */
+  protected override resolveOrg(row: unknown): Promise<string | undefined> {
+    return matterOrg(this.db, (row as { matterId?: string }).matterId);
   }
 
   async listInParent(matterId: string, parentId: string | null): Promise<DocumentFolderWithCounts[]> {

@@ -11,6 +11,7 @@ import type {
   DocumentAccessRow, DocumentListRow, DocumentRepository,
 } from "./document-repository";
 import { DrizzleRepository, type VersionedTable } from "./drizzle-repository";
+import { matterOrg } from "./matter-org";
 
 /** documents.folderId = X, eller IS NULL för rot. */
 function folderEq(folderId: string | null) {
@@ -29,6 +30,11 @@ export class DrizzleDocumentRepository
   implements DocumentRepository {
   constructor(db: AppDb, now: () => Date = () => new Date()) {
     super(db, documents as unknown as VersionedTable, now);
+  }
+
+  /** Dokument saknar org-kolumn → härled via ärendet (#528) så change_log/pull funkar. */
+  protected override resolveOrg(row: unknown): Promise<string | undefined> {
+    return matterOrg(this.db, (row as { matterId?: string }).matterId);
   }
 
   async listInFolder(

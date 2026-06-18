@@ -84,4 +84,22 @@ describe("DrizzleSyncStore (#sync-bridge)", () => {
     expect(change).toMatchObject({ entity: "matter", deleted: true });
     expect(await repos.matters.getById(m2)).toBeNull();
   });
+
+  // #528: document/documentFolder saknar org-kolumn → org härleds via ärendet
+  // (resolveOrg-override) så de loggas i change_log och delta-synkas via pull.
+  it("document + documentFolder delta-synkas via pull (org härledd ur ärendet, #528)", async () => {
+    const m3 = uuidv7(), folder = uuidv7(), doc = uuidv7(), user = uuidv7();
+    await repos.matters.create({ id: m3, organizationId: ORG, title: "Dok-synk", status: "ACTIVE", matterNumber: "2026-0011" } as never);
+    const cursor = (await sync.pull(ORG, 0)).cursor;
+
+    await repos.documentFolders.create({ id: folder, matterId: m3, name: "Inlagor", parentId: null } as never);
+    await repos.documents.create({
+      id: doc, matterId: m3, fileName: "stamning.pdf", mimeType: "application/pdf",
+      sizeBytes: 10, storagePath: "documents/content/x", uploadedById: user, folderId: folder,
+    } as never);
+
+    const changes = (await sync.pull(ORG, cursor)).changes;
+    expect(changes.find((c) => c.row.id === folder)).toMatchObject({ entity: "documentFolder" });
+    expect(changes.find((c) => c.row.id === doc)).toMatchObject({ entity: "document" });
+  });
 });

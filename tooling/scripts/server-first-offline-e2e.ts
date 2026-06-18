@@ -77,11 +77,9 @@ function assert(cond: boolean, msg: string): void {
 }
 
 /**
- * Verifiera mot den AUKTORITATIVA server-staten (Postgres-tabellerna) i st.f.
- * change_log/pull — pull täcker bara org-scopade entiteter (matter), medan
- * document/documentFolder (utan org-kolumn) skrivs till sina tabeller men
- * loggas inte i change_log (känd lucka, separat issue). DB-frågan svarar på det
- * scenariot faktiskt frågar: "nådde offline-ändringen servern?".
+ * Verifiera mot den AUKTORITATIVA server-staten (Postgres-tabellerna). Svarar
+ * direkt på det scenariot frågar: "nådde offline-ändringen servern?". (Sedan
+ * #528 delta-synkas document/documentFolder även via pull — se assert nedan.)
  */
 async function withDb<T>(fn: (sql: ReturnType<typeof postgres>) => Promise<T>): Promise<T> {
   const sql = postgres(DB_URL, { max: 1, onnotice: () => {} });
@@ -124,7 +122,11 @@ async function main(): Promise<void> {
   assert(doc0?.file_name === "stamning.pdf", "dokumentet skapat med rätt namn");
   assert(doc0?.folder_id === folderA, "dokumentet ligger i mapp A");
   assert(await folderExists(folderB), "mapp B skapad");
-  console.log("✓ FAS 1 (online): ärende + mappar + dokument synkade");
+  // #528: document/documentFolder delta-synkas nu via pull (org härledd ur ärendet).
+  const pulledIds = new Set((await t.pull(0)).changes.map((c) => c.row.id));
+  assert(pulledIds.has(doc1), "dokumentet delta-synkas via pull (#528)");
+  assert(pulledIds.has(folderA) && pulledIds.has(folderB), "mapparna delta-synkas via pull (#528)");
+  console.log("✓ FAS 1 (online): ärende + mappar + dokument synkade (+ pull-bara, #528)");
 
   // ── FAS 2: OFFLINE — köa ändringar UTAN att pusha ────────────────
   const offlineMuts = [
