@@ -18,7 +18,9 @@
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { appRouter } from "@/lib/server/routers/_app";
 import { createServerContext, type ServerContextDeps } from "./server-context";
-import { DEFAULT_TRPC_ENDPOINT } from "./trpc-http-handler";
+
+/** Default-URL-prefix mot vilket klienten gör tRPC-anrop. */
+export const DEFAULT_TRPC_ENDPOINT = "/api/trpc";
 
 export interface ServerTrpcHandlerDeps extends ServerContextDeps {
   /** URL-prefix (default {@link DEFAULT_TRPC_ENDPOINT}). */
