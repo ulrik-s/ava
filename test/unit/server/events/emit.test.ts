@@ -51,6 +51,46 @@ describe("emit-helpers", () => {
     expect(arg.payload).toEqual({ entryId: "t1", minutes: 90 });
   });
 
+  it("täcker alla emit-helpers (varje typ → ett event)", async () => {
+    const { ctx, emitFn } = makeCtx();
+    await emit.matterUpdated(ctx, "m1", { title: "ny" });
+    await emit.matterArchived(ctx, "m1");
+    await emit.contactCreated(ctx, { id: "c1", name: "Anna" });
+    await emit.contactUpdated(ctx, "c1", { name: "Anna B" });
+    await emit.contactDeleted(ctx, "c1");
+    await emit.documentUploaded(ctx, { id: "d1", fileName: "f.pdf", matterId: "m1" });
+    await emit.documentDeleted(ctx, { id: "d1", matterId: "m1" });
+    await emit.documentAnalyzed(ctx, { id: "d1", matterId: "m1" }, { kind: "kontrakt" });
+    await emit.invoiceCreated(ctx, { id: "inv1", matterId: "m1", amount: 1000 });
+    await emit.invoiceSent(ctx, "inv1", "m1");
+    await emit.invoiceWrittenOff(ctx, "inv1", "m1", 250);
+    await emit.timeEntryUpdated(ctx, { id: "t1", matterId: "m1" });
+    await emit.timeEntryDeleted(ctx, "t1", "m1");
+    await emit.kostnadsrakningGenerated(ctx, "m1", {
+      documentId: "d1", fileName: "kr.pdf", totalInclVat: 5000,
+      huvudforhandlingMinutes: 120, organizationId: "org-1",
+    });
+    await emit.paymentDue(ctx, { invoiceId: "inv1" }, "m1");
+    await emit.paymentOverdue(ctx, { invoiceId: "inv1" });
+    await emit.userAction(ctx, { action: "login" });
+
+    const types = emitFn.mock.calls.map((c: unknown[]) => (c[0] as { type: string }).type);
+    expect(types).toEqual([
+      "matter.updated", "matter.archived",
+      "contact.created", "contact.updated", "contact.deleted",
+      "document.uploaded", "document.deleted", "document.analyzed",
+      "invoice.created", "invoice.sent", "invoice.written_off",
+      "time-entry.updated", "time-entry.deleted",
+      "kostnadsrakning.generated",
+      "payment.due", "payment.overdue",
+      "user.action",
+    ]);
+    // System-källan sätts för payment-scan-events; user-källan för övriga.
+    const paymentDue = emitFn.mock.calls.find((c: unknown[]) => (c[0] as { type: string }).type === "payment.due")![0] as Record<string, unknown>;
+    expect(paymentDue.source).toBe("system");
+    expect(paymentDue.actor).toEqual({ kind: "system", id: "payment-scan" });
+  });
+
   it("emit-fel kraschar INTE caller (safeEmit sväljer)", async () => {
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const ctx = {
