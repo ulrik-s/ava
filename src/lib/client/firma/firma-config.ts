@@ -42,14 +42,6 @@ export interface FirmaConfig {
   authorName: string;
   authorEmail: string;
   /**
-   * Git-auth-användarnamn (Basic-auth mot self-hosted nginx auth_basic).
-   * nginx htpasswd-användaren är "admin" (bootstrap) eller en e-post
-   * (add-user.sh). GitHub använder "x-access-token". Tomt → härleds:
-   * self-hosted faller till `authorEmail`, annars "x-access-token".
-   * Se `gitAuthUsername()`.
-   */
-  gitUsername?: string;
-  /**
    * URL till CORS-proxy för git smart-HTTP-trafiken. GitHub:s git-
    * endpoints saknar CORS-headers så vi måste gå via en proxy.
    * Tomt → använd default (cors.isomorphic-git.org, instabil).
@@ -129,7 +121,6 @@ const storedFirmaConfigSchema = z.object({
   principalId: z.string().optional(),
   authorName: z.string().optional(),
   authorEmail: z.string().optional(),
-  gitUsername: z.string().optional(),
   corsProxy: z.string().optional(),
 }).passthrough();
 
@@ -191,22 +182,4 @@ export function inferTier(repo: string): FirmaTier {
     return "self-hosted";
   }
   return "demo";
-}
-
-/**
- * Git-auth-användarnamn för Basic-auth.
- *
- * - **self-hosted** (nginx auth_basic + htpasswd): den faktiska htpasswd-
- *   användaren — explicit `gitUsername`, annars `authorEmail` (add-user.sh
- *   lägger till på e-post). "x-access-token" som sista fallback.
- * - **github/demo**: GitHub:s konvention "x-access-token".
- *
- * Varför detta behövs: nginx auth_basic validerar användarnamnet mot
- * htpasswd. "x-access-token" finns inte där → 401. (Bug-fix.)
- */
-export function gitAuthUsername(cfg: Pick<FirmaConfig, "tier" | "gitUsername" | "authorEmail">): string {
-  if (cfg.tier === "self-hosted") {
-    return cfg.gitUsername || cfg.authorEmail || "x-access-token";
-  }
-  return "x-access-token";
 }

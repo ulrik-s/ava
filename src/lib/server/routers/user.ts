@@ -1,10 +1,10 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { userIdSchema, asId } from "@/lib/shared/schemas/ids";
-import { publicKeySchema, matterNumberPrefixSchema, type PublicKey, type User } from "@/lib/shared/schemas/user";
+import { matterNumberPrefixSchema, type User } from "@/lib/shared/schemas/user";
 import { router, protectedProcedure } from "../trpc";
 
-/** Projektion till listvyns fält (utan publicKeys/passwordHash). */
+/** Projektion till listvyns fält (utan passwordHash). */
 function pickList(u: User) {
   return {
     id: u.id, email: u.email, name: u.name, title: u.title ?? null, role: u.role,
@@ -33,7 +33,6 @@ export interface UserProfile {
   mileageRate: number | null;
   matterNumberPrefix: string | null;
   createdAt: Date;
-  publicKeys: PublicKey[];
 }
 
 function assertAdmin(ctx: { user: { role: string; id: string } }): void {
@@ -67,10 +66,9 @@ export const userRouter = router({
         mileageRate: null,
         matterNumberPrefix: null,
         createdAt: new Date(),
-        publicKeys: [],
       };
     }
-    return { ...pickList(u), publicKeys: Array.isArray(u.publicKeys) ? u.publicKeys : [] };
+    return pickList(u);
   }),
 
   list: protectedProcedure
@@ -83,16 +81,13 @@ export const userRouter = router({
   getById: protectedProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
-      // Använder list-projektionen (utan publicKeys) eftersom nycklar är
-      // privata — bara `current` exponerar dem.
       const u = await ctx.repos.users.getByIdInOrg(input.id, ctx.user.organizationId);
       if (!u) throw new TRPCError({ code: "NOT_FOUND" });
       return pickList(u);
     }),
 
   /**
-   * Skapa användare. ADMIN-bara. Användaren registrerar sedan själv
-   * sina egna nycklar via `addKey` — admin har inte tillgång till dem.
+   * Skapa användare. ADMIN-bara.
    */
   create: protectedProcedure
     .input(z.object({
@@ -122,7 +117,6 @@ export const userRouter = router({
         ...(input.matterNumberPrefix ? { matterNumberPrefix: input.matterNumberPrefix } : {}),
         passwordHash,
         organizationId: asId<"OrganizationId">(ctx.user.organizationId),
-        publicKeys: [],
       } as Partial<User>);
     }),
 
@@ -160,33 +154,6 @@ export const userRouter = router({
       const updateData: Record<string, unknown> = { ...data };
       if (password) updateData.passwordHash = await hashPassword(password);
       return ctx.repos.users.update(id, updateData as Partial<User>);
-    }),
-
-  /**
-   * Lägg till en publik nyckel på EGEN profil. Admin kan inte göra
-   * detta åt andra — nyckeln är användarens egendom.
-   */
-  addKey: protectedProcedure
-    .input(publicKeySchema)
-    .mutation(async ({ ctx, input }) => {
-      const u = await ctx.repos.users.getByIdInOrg(ctx.user.id, ctx.user.organizationId);
-      if (!u) throw new TRPCError({ code: "NOT_FOUND" });
-      const keys = Array.isArray(u.publicKeys) ? u.publicKeys : [];
-      if (keys.some((k) => (k as { fingerprint: string }).fingerprint === input.fingerprint)) {
-        throw new TRPCError({ code: "CONFLICT", message: "Nyckel med samma fingerprint finns redan." });
-      }
-      return ctx.repos.users.update(ctx.user.id, { publicKeys: [...keys, input] } as unknown as Partial<User>);
-    }),
-
-  removeKey: protectedProcedure
-    .input(z.object({ fingerprint: z.string() }))
-    .mutation(async ({ ctx, input }) => {
-      const u = await ctx.repos.users.getByIdInOrg(ctx.user.id, ctx.user.organizationId);
-      if (!u) throw new TRPCError({ code: "NOT_FOUND" });
-      const keys = (Array.isArray(u.publicKeys) ? u.publicKeys : []).filter(
-        (k) => (k as { fingerprint: string }).fingerprint !== input.fingerprint,
-      );
-      return ctx.repos.users.update(ctx.user.id, { publicKeys: keys } as unknown as Partial<User>);
     }),
 
   /**

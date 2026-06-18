@@ -54,14 +54,13 @@ describe("user.list", () => {
   });
 
   it("projicerar bara säkra fält (inte passwordHash)", async () => {
-    // Repot läser hela raden; routern (pickList) släpper passwordHash/publicKeys.
+    // Repot läser hela raden; routern (pickList) släpper passwordHash.
     mockPrisma.user.findMany.mockResolvedValue([
-      { id: "u1", email: "u1@x", name: "A", role: "LAWYER", passwordHash: "secret", publicKeys: [{ fingerprint: "x" }] },
+      { id: "u1", email: "u1@x", name: "A", role: "LAWYER", passwordHash: "secret" },
     ]);
     const res = await makeCaller().list();
     const u = res.users[0] as Record<string, unknown>;
     expect(u.passwordHash).toBeUndefined();
-    expect(u.publicKeys).toBeUndefined();
     expect(u.email).toBe("u1@x");
     expect(u.name).toBe("A");
   });
@@ -221,62 +220,19 @@ describe("admin-only checks", () => {
   });
 });
 
-describe("user.addKey / removeKey", () => {
-  it("addKey läser publicKeys + uppdaterar (tom array → 1 nyckel)", async () => {
-    mockPrisma.user.findFirst.mockResolvedValue({ id: "u1", organizationId: "org-a", publicKeys: [] });
-    mockPrisma.user.update.mockResolvedValue({});
-    await makeCallerWithRole("LAWYER", "u1").addKey({
-      fingerprint: "SHA256:abc", type: "ssh-ed25519", publicKey: "ssh-ed25519 AAAA",
-      addedAt: "2026-05-21T00:00:00Z",
-    });
-    const call = mockPrisma.user.update.mock.calls[0]![0];
-    expect(call.data.publicKeys).toHaveLength(1);
-    expect(call.data.publicKeys[0].fingerprint).toBe("SHA256:abc");
-  });
-
-  it("addKey nekar dubblett-fingerprint", async () => {
-    mockPrisma.user.findFirst.mockResolvedValue({
-      id: "u1", organizationId: "org-a",
-      publicKeys: [{ fingerprint: "SHA256:abc", type: "ssh-ed25519", publicKey: "x", addedAt: "..." }],
-    });
-    await expect(
-      makeCallerWithRole("LAWYER", "u1").addKey({
-        fingerprint: "SHA256:abc", type: "ssh-ed25519", publicKey: "y", addedAt: "..."
-      }),
-    ).rejects.toThrow(/finns redan/i);
-  });
-
-  it("removeKey filtrerar bort efter fingerprint", async () => {
-    mockPrisma.user.findFirst.mockResolvedValue({
-      id: "u1", organizationId: "org-a",
-      publicKeys: [
-        { fingerprint: "SHA256:a", type: "ssh-ed25519", publicKey: "x", addedAt: "..." },
-        { fingerprint: "SHA256:b", type: "ssh-ed25519", publicKey: "y", addedAt: "..." },
-      ],
-    });
-    mockPrisma.user.update.mockResolvedValue({});
-    await makeCallerWithRole("LAWYER", "u1").removeKey({ fingerprint: "SHA256:a" });
-    const call = mockPrisma.user.update.mock.calls[0]![0];
-    expect(call.data.publicKeys).toHaveLength(1);
-    expect(call.data.publicKeys[0].fingerprint).toBe("SHA256:b");
-  });
-});
-
 describe("user.current", () => {
   it("returnerar ctx.user om saknas i tabellen (demo-läget)", async () => {
     mockPrisma.user.findFirst.mockResolvedValue(null);
     const me = await makeCallerWithRole("ADMIN", "demo-user").current();
     expect(me.id).toBe("demo-user");
-    expect(me.publicKeys).toEqual([]);
   });
 
   it("returnerar databas-rad om finns", async () => {
     mockPrisma.user.findFirst.mockResolvedValue({
       id: "u1", organizationId: "org-a", email: "u1@x", name: "U1", title: null, role: "LAWYER",
       hourlyRate: null, mileageRate: null, createdAt: new Date(),
-      publicKeys: [{ fingerprint: "SHA256:x", type: "ssh-ed25519", publicKey: "k", addedAt: "..." }],
     });
     const me = await makeCallerWithRole("LAWYER", "u1").current();
-    expect(me.publicKeys).toHaveLength(1);
+    expect(me.id).toBe("u1");
   });
 });

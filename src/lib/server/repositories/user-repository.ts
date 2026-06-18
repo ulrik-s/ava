@@ -1,7 +1,7 @@
 /**
  * `UserRepository` (ADR 0020, #409 fan-out) — användare. Bas-CRUD ärvs;
  * org-scopas direkt på `organizationId`. Repot returnerar HELA raden
- * (inkl. passwordHash/publicKeys) — projektionen (vilka fält som exponeras)
+ * (inkl. passwordHash) — projektionen (vilka fält som exponeras)
  * bor kvar i routern, så känsliga fält inte läcker av misstag.
  */
 

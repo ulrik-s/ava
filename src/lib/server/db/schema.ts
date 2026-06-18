@@ -55,7 +55,6 @@ export const users = pgTable("users", {
   oidcSubject: text("oidc_subject"),
   oidcIssuer: text("oidc_issuer"),
   lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
-  publicKeys: jsonb("public_keys").notNull().default([]),
 }, (t) => [index("users_org_idx").on(t.organizationId)]);
 
 export const contacts = pgTable("contacts", {
