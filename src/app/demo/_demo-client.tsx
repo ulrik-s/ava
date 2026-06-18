@@ -4,23 +4,20 @@
  * `DemoClient` — Client Component som visar AVA i read-only demo-läge.
  *
  * Designval (Single responsibility):
- *   - Bara UI. Ingen affärslogik här — all state hanteras av
- *     `useDemoRuntime`-hooken.
+ *   - Bara UI. All data-laddning sköts av `useDemoSeed`-hooken som fetchar
+ *     en `DemoSource` direkt från GH Pages (ADR 0016, #420 — ingen MemFs/runtime).
  *
  * Designval (DI):
- *   - `runtimeFactory` propas in → tester kan injicera en fake utan att
- *     röra browserns isomorphic-git/http. Produktion använder
- *     `cloneFromGithub()`.
+ *   - `loader` propas in → tester kan injicera en fake utan att röra
+ *     `fetch`/GH Pages. Produktion använder `loadDemoSeed`.
  *
  * UI: enkel landing — input för URL + Ladda-knapp + listor per entitet.
- * Stylas senare; just nu plain Tailwind-klasser för läsbarhet.
  */
 
 import { useEffect, useRef, useState } from "react";
-import { useDemoRuntime } from "@/lib/client/use-demo-runtime";
-import { DemoRuntime } from "@/lib/server/local-first/demo-runtime";
-import { createGhPagesCloneFn } from "@/lib/server/local-first/gh-pages-loader";
-import { IndexedDbFsPersistence } from "@/lib/server/local-first/indexeddb-fs-persistence";
+import { loadDemoSeed } from "@/lib/client/demo/demo-seed-loader";
+import { useDemoSeed } from "@/lib/client/demo/use-demo-seed";
+import type { DemoSource } from "@/lib/shared/demo-source";
 
 /**
  * Default demo-data-repo. Användare kan klistra in eget om de vill,
@@ -32,31 +29,16 @@ const DEFAULT_DEMO_REPO =
 
 export interface DemoClientProps {
   /**
-   * Valfri runtime-factory. Default = GH Pages-loader + OPFS-persistens.
-   * Tester injicerar en fake. Server Components MÅSTE INTE passa
-   * funktioner till Client Components (Next 16/RSC) — därför är
-   * prop:en optional och defaultas till client-side-konstruktion.
+   * Valfri seed-loader. Default = GH Pages-fetch (`loadDemoSeed`). Tester
+   * injicerar en fake. Server Components MÅSTE INTE passa funktioner till
+   * Client Components (Next 16/RSC) — därför är prop:en optional.
    */
-  runtimeFactory?: () => DemoRuntime;
+  loader?: (repo: string) => Promise<DemoSource>;
   /**
-   * Default-repo som auto-laddas vid mount. Sätt till tom sträng
-   * för att kräva användar-input (gamla beteendet). Override via
-   * `NEXT_PUBLIC_DEFAULT_DEMO_REPO` vid build-time.
+   * Default-repo som auto-laddas vid mount. Sätt till tom sträng för att
+   * kräva användar-input. Override via `NEXT_PUBLIC_DEFAULT_DEMO_REPO`.
    */
   defaultRepo?: string;
-}
-
-function defaultRuntimeFactory(): DemoRuntime {
-  // GH Pages som data-källa: inget CORS-proxy-beroende, ingen
-  // isomorphic-git, ingen git-historik — bara filer-via-CDN. Se
-  // `gh-pages-loader.ts` för detaljer. För full git-historik
-  // (Tauri/Node-läget) använd `cloneFromGithub()` istället.
-  // IndexedDB-persistens (#3): slab-snapshotten cachas i IndexedDB (samma nyckel
-  // som förr) i st.f. OPFS — populerar demo-cachen utan OPFS-beroende.
-  return DemoRuntime.create({
-    cloneFn: createGhPagesCloneFn(),
-    persistence: new IndexedDbFsPersistence("ava-demo"),
-  });
 }
 
 interface MatterLike { id: string; matterNumber: string; title: string; status: string }
@@ -64,28 +46,25 @@ interface ContactLike { id: string; name: string; contactType: string; email?: s
 interface UserLike { id: string; email: string; name: string; role: string }
 
 export function DemoClient({
-  runtimeFactory = defaultRuntimeFactory,
+  loader = loadDemoSeed,
   defaultRepo = DEFAULT_DEMO_REPO,
 }: DemoClientProps) {
-  const { status, error, entities, loadDemo, fromCache } = useDemoRuntime(runtimeFactory);
+  const { status, error, source, loadDemo } = useDemoSeed(loader);
   const [url, setUrl] = useState(defaultRepo);
-  // Ref istället för state — vi vill inte trigga rerender när flaggan
-  // sätts (React 19:s set-state-in-effect-regel skulle annars klaga).
+  // Ref istället för state — vi vill inte trigga rerender när flaggan sätts.
   const autoLoadAttempted = useRef(false);
 
-  const matters = (entities.matter ?? []) as MatterLike[];
-  const contacts = (entities.contact ?? []) as ContactLike[];
-  const users = (entities.user ?? []) as UserLike[];
+  const matters = (source.matters ?? []) as unknown as MatterLike[];
+  const contacts = (source.contacts ?? []) as unknown as ContactLike[];
+  const users = (source.users ?? []) as unknown as UserLike[];
 
   async function handleLoad(): Promise<void> {
     if (!url.trim()) return;
     try { await loadDemo(url.trim()); } catch { /* error visas via state */ }
   }
 
-  // Auto-load default-repo vid mount så användaren får en komplett
-  // upplevelse direkt utan att behöva mecka med inställningar.
-  // Triggar bara en gång och bara om vi inte redan har data (från
-  // OPFS-cache via useDemoRuntime:s restoreFromCache).
+  // Auto-load default-repo vid mount så användaren får en komplett upplevelse
+  // direkt. Triggar bara en gång och bara om vi inte redan laddat.
   useEffect(() => {
     if (autoLoadAttempted.current) return;
     if (status !== "idle") return;
@@ -105,7 +84,7 @@ export function DemoClient({
       </p>
 
       <DemoLoadForm url={url} onUrlChange={setUrl} onLoad={() => void handleLoad()} loading={status === "loading"} />
-      <DemoStatusBanners status={status} error={error} fromCache={fromCache} />
+      <DemoStatusBanners status={status} error={error} />
       {status === "loaded" && <DemoResults matters={matters} contacts={contacts} users={users} />}
     </div>
   );
@@ -141,10 +120,10 @@ function DemoLoadForm({ url, onUrlChange, onLoad, loading }: LoadFormProps) {
   );
 }
 
-interface StatusBannersProps { status: string; error: { message: string } | null; fromCache: boolean }
+interface StatusBannersProps { status: string; error: { message: string } | null }
 
-/** Status-banners (laddar / fel / cachad data). */
-function DemoStatusBanners({ status, error, fromCache }: StatusBannersProps) {
+/** Status-banners (laddar / fel). */
+function DemoStatusBanners({ status, error }: StatusBannersProps) {
   return (
     <>
       {status === "loading" && (
@@ -155,12 +134,6 @@ function DemoStatusBanners({ status, error, fromCache }: StatusBannersProps) {
       {status === "error" && error && (
         <div className="p-4 bg-red-50 border-l-4 border-red-400 mb-4">
           <strong>Kunde inte ladda demon:</strong> {error.message}
-        </div>
-      )}
-      {status === "loaded" && fromCache && (
-        <div className="p-3 bg-green-50 border-l-4 border-green-400 mb-4 text-sm">
-          Visar cachad data från senaste session. Klicka &quot;Ladda demo&quot;
-          för att hämta senaste version från GitHub.
         </div>
       )}
     </>

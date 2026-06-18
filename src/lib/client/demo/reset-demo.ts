@@ -87,6 +87,38 @@ async function clearFsaHandle(): Promise<void> {
   }
 }
 
+/** Radera en IndexedDB-databas (best-effort, sväljer fel/blockering). */
+function deleteIdb(factory: IDBFactory, name: string): Promise<void> {
+  return new Promise((resolve) => {
+    try {
+      const req = factory.deleteDatabase(name);
+      req.onsuccess = () => resolve();
+      req.onerror = () => resolve();
+      req.onblocked = () => resolve();
+    } catch {
+      resolve();
+    }
+  });
+}
+
+/**
+ * Rensa demons IndexedDB-cache (#420): den persisterade `CachingSyncDataStore`
+ * lagrar source-snapshotten + mutations-kön i IndexedDB (`ava-demo*-source` /
+ * `-queue`), inte längre i OPFS-slaben. Radera ALLA `ava-demo*`-databaser
+ * (även gamla version-namespaces) så "Återställ demo" verkligen ger färsk seed.
+ */
+async function clearDemoIdb(): Promise<void> {
+  const factory = (globalThis as unknown as { indexedDB?: IDBFactory }).indexedDB;
+  if (!factory) return;
+  try {
+    const dbs = typeof factory.databases === "function" ? await factory.databases() : [];
+    const names = dbs.map((d) => d.name).filter((n): n is string => !!n && n.startsWith(DEMO_SNAPSHOT_PREFIX));
+    await Promise.all(names.map((n) => deleteIdb(factory, n)));
+  } catch {
+    /* databases() saknas/fel → bästa-fall redan rensat via localStorage-reset */
+  }
+}
+
 /** Ta bort alla `ava.*`-nycklar ur en Storage (samlar först, raderar sen). */
 function clearAvaStorage(store: Storage | undefined): void {
   if (!store) return;
@@ -104,6 +136,7 @@ export async function resetDemoCompletely(): Promise<void> {
   const prevPrincipal = loadFirmaConfig().principalId;
 
   await clearOpfsArtifacts();
+  await clearDemoIdb();
   await clearFsaHandle();
   clearAvaStorage(window.localStorage);
   clearAvaStorage(window.sessionStorage);

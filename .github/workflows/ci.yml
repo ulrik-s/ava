@@ -198,3 +198,25 @@ jobs:
         with:
           name: playwright-oidc-report
           path: reports/playwright-oidc/
+
+  # ───────────────── Demo build (GH Pages-export) ─────────────────
+  # `bun run build:demo` (static export → out/) misslyckas TYST i CI/Pages om
+  # något bryter den statiska exporten. Round-trip-jobbet som förr körde
+  # build:demo togs bort i #422 → ingen PR-grind kvar för att demon BYGGER.
+  # Det här jobbet återinför grinden (kör på PR; INTE required check — ingen
+  # branch-protection-ändring). Speglar `bun run build:demo` lokalt. (#420)
+  demo-build:
+    name: Demo build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bun run build:demo

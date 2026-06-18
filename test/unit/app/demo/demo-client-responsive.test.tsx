@@ -11,22 +11,21 @@
  */
 
 import { render, screen } from "@testing-library/react";
-import { describe, it, expect, vi } from "vitest-compat";
+import { describe, it, expect } from "vitest-compat";
 import { DemoClient } from "@/app/demo/_demo-client";
-import { DemoRuntime } from "@/lib/server/local-first/demo-runtime";
 
-function factory() { return DemoRuntime.create({ cloneFn: vi.fn() }); }
+const loader = () => Promise.resolve({});
 
 describe("DemoClient — responsiv UI", () => {
   it("input har URL-tangentbord + ingen auto-cap", () => {
-    render(<DemoClient runtimeFactory={factory} />);
+    render(<DemoClient loader={loader} defaultRepo="" />);
     const input = screen.getByRole("textbox", { name: /GitHub-url/i });
     expect(input).toHaveAttribute("inputMode", "url");
     expect(input).toHaveAttribute("autoCapitalize", "off");
   });
 
   it("input + knapp har min-h-12 (48 px touch-target)", () => {
-    render(<DemoClient runtimeFactory={factory} />);
+    render(<DemoClient loader={loader} defaultRepo="" />);
     const input = screen.getByRole("textbox", { name: /GitHub-url/i });
     const button = screen.getByRole("button", { name: /Ladda demo/i });
     expect(input.className).toMatch(/min-h-12/);
@@ -34,13 +33,13 @@ describe("DemoClient — responsiv UI", () => {
   });
 
   it("input/knapp-rad har flex-col som default + sm:flex-row för bredare", () => {
-    const { container } = render(<DemoClient runtimeFactory={factory} />);
+    const { container } = render(<DemoClient loader={loader} defaultRepo="" />);
     const row = container.querySelector("div.flex.flex-col.sm\\:flex-row");
     expect(row).not.toBeNull();
   });
 
   it("container har skalande padding", () => {
-    const { container } = render(<DemoClient runtimeFactory={factory} />);
+    const { container } = render(<DemoClient loader={loader} defaultRepo="" />);
     const outer = container.querySelector("div");
     expect(outer?.className).toMatch(/p-4/);
     expect(outer?.className).toMatch(/sm:p-6/);
@@ -48,7 +47,7 @@ describe("DemoClient — responsiv UI", () => {
   });
 
   it("rubriken är mindre på mobil (text-2xl) och större på sm+ (text-3xl)", () => {
-    render(<DemoClient runtimeFactory={factory} />);
+    render(<DemoClient loader={loader} defaultRepo="" />);
     const heading = screen.getByRole("heading", { name: /AVA Demo/i });
     expect(heading.className).toMatch(/text-2xl/);
     expect(heading.className).toMatch(/sm:text-3xl/);
