@@ -236,6 +236,31 @@ function UploadErrorBanner({ message, onDismiss }: { message: string; onDismiss:
   );
 }
 
+interface UploadResult { id: string; fileName: string; mimeType: string; sizeBytes: number; storagePath: string }
+
+/**
+ * Lös var bytes hamnar: FSA (lokal working copy om ansluten) eller server-first
+ * (#518) — generera id + läs bytes som laddas upp content-adresserat efter
+ * register. `serverBytes` är null i FSA-fallet.
+ */
+async function resolveUpload(file: File, matterId: string): Promise<{ result: UploadResult; serverBytes: Uint8Array | null }> {
+  const { isFsaSupported, loadHandle } = await import("@/lib/client/fsa/handle-store");
+  const handle = isFsaSupported() ? await loadHandle("repo-root") : null;
+  if (handle) {
+    const { uploadDocumentToFsa } = await import("@/lib/client/fsa/upload-document");
+    return { result: await uploadDocumentToFsa({ handle, matterId, file }), serverBytes: null };
+  }
+  const { uuidv7 } = await import("@/lib/shared/uuid");
+  const id = uuidv7();
+  return {
+    result: {
+      id, fileName: file.name, mimeType: file.type || "application/octet-stream",
+      sizeBytes: file.size, storagePath: `documents/content/pending-${id}`,
+    },
+    serverBytes: new Uint8Array(await file.arrayBuffer()),
+  };
+}
+
 /**
  * Uppladdnings-state + handler: optimistiska placeholder-rader, FSA-write,
  * tRPC-register, invalidate och bakgrundsjobb (klassificering + text-extraktion).
@@ -272,21 +297,7 @@ function useFileUpload({ matterId, mutations, fileInputRef }: {
     };
 
     try {
-      const { isFsaSupported, loadHandle } = await import("@/lib/client/fsa/handle-store");
-      if (!isFsaSupported()) {
-        throw new Error(
-          "Din webbläsare stödjer inte File System Access. Använd Chrome eller Edge."
-        );
-      }
-      const handle = await loadHandle("repo-root");
-      if (!handle) {
-        throw new Error(
-          "Ingen lokal mapp är vald. Gå till Inställningar → välj din firma-mapp och försök igen."
-        );
-      }
-
-      const { uploadDocumentToFsa } = await import("@/lib/client/fsa/upload-document");
-      const result = await uploadDocumentToFsa({ handle, matterId, file });
+      const { result, serverBytes } = await resolveUpload(file, matterId);
 
       // Byt placeholder-id mot riktigt id så raden inte hoppar.
       setUploadingIds((s) => {
@@ -303,6 +314,12 @@ function useFileUpload({ matterId, mutations, fileInputRef }: {
           sizeBytes: result.sizeBytes,
           storagePath: result.storagePath,
         });
+        // Server-first: ladda upp bytes (content-adresserat) efter att metadatan
+        // registrerats → repekar storagePath + triggar server-klassificering.
+        if (serverBytes) {
+          const { saveDocumentContent } = await import("@/lib/client/backend/save-document-content");
+          await saveDocumentContent(utils.client, result.id, serverBytes);
+        }
       } finally {
         await utils.document.tree.invalidate({ matterId });
         setUploadingIds((s) => {
