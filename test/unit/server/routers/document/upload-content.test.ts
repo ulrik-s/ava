@@ -45,6 +45,7 @@ function makeCaller(orgId = ORG) {
     content: {
       write: async (p: string, b: Uint8Array) => { blobs.set(p, b); },
       read: async (p: string) => blobs.get(p) ?? null,
+      exists: async (p: string) => blobs.has(p),
     },
   };
   const ctx = { user: { id: "u1", email: "a@b.se", name: "T", role: "LAWYER", organizationId: orgId }, dataStore: store, repos, orgId, ports };
@@ -91,5 +92,16 @@ describe("document.downloadContent", () => {
     const { caller } = makeCaller();
     // Inget uppladdat → storagePath "documents/content/old" finns ej i content-store.
     await expect(caller.downloadContent({ documentId: "d1" })).rejects.toThrow(/saknas/i);
+  });
+});
+
+describe("document.missingContent", () => {
+  it("returnerar bara sökvägar servern saknar (byte-synk-dedup)", async () => {
+    const { caller } = makeCaller();
+    const bytes = new Uint8Array([7, 7]);
+    await caller.uploadContent({ documentId: "d1", contentBase64: bytesToBase64(bytes) });
+    const have = contentStoragePath(await sha256Hex(bytes));
+    const res = await caller.missingContent({ storagePaths: [have, "documents/content/finns-ej"] });
+    expect(res.missing).toEqual(["documents/content/finns-ej"]);
   });
 });

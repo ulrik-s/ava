@@ -84,6 +84,17 @@ export class GitContentStore implements IContentStore {
       return null; // saknas / oläsbar → null (anroparen hanterar)
     }
   }
+
+  async exists(storagePath: string): Promise<boolean> {
+    const abs = this.safeResolve(storagePath);
+    if (!abs) return false;
+    try {
+      await access(abs);
+      return true;
+    } catch {
+      return false;
+    }
+  }
 }
 
 /**

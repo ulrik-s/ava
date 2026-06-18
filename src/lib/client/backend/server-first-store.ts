@@ -62,6 +62,12 @@ export async function createServerFirstStore(deps: ServerFirstStoreDeps = {}): P
     persistence: deps.persistence ?? new IndexedDbPersistence(),
     queuePersistence: deps.queuePersistence ?? new IndexedDbMutationQueuePersistence(),
   });
-  if (!deps.skipInitialReconcile) await cachingSync.reconcile();
+  if (!deps.skipInitialReconcile) {
+    await cachingSync.reconcile();
+    // Byte-synk (#518, ADR 0023): ladda upp dokument-blobbar servern saknar.
+    // Best-effort — får aldrig ta ned bootstrappen (tom pending → no-op).
+    const { syncDocumentContent } = await import("./content-sync");
+    void syncDocumentContent(client as unknown as Parameters<typeof syncDocumentContent>[0]).catch(() => {});
+  }
   return cachingSync;
 }

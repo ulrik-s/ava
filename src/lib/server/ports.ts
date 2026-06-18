@@ -112,6 +112,13 @@ export interface IContentStore {
    * klient-sidigt, inte på servern).
    */
   read(storagePath: string): Promise<Uint8Array | null>;
+
+  /**
+   * Finns bytes för `storagePath`? Billig (ingen läsning av innehållet) —
+   * byte-synken (#518, ADR 0023) frågar vilka content-adresserade sha:n
+   * servern saknar innan klienten laddar upp. Demo/web → `false`.
+   */
+  exists(storagePath: string): Promise<boolean>;
 }
 
 // ─── Aggregat ──────────────────────────────────────────────────────

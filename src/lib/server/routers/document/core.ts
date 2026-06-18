@@ -199,6 +199,20 @@ export const coreProcedures = {
     }),
 
   /**
+   * `missingContent` (#518, ADR 0023) — vilka content-adresserade sökvägar
+   * saknar servern? Byte-synken frågar detta vid reconnect och laddar bara
+   * upp blobbar servern inte redan har (dedup på sha).
+   */
+  missingContent: orgProcedure
+    .input(z.object({ storagePaths: z.array(z.string()).max(500) }))
+    .query(async ({ ctx, input }) => {
+      const checks = await Promise.all(
+        input.storagePaths.map(async (p) => ({ p, has: await ctx.ports.content.exists(p) })),
+      );
+      return { missing: checks.filter((c) => !c.has).map((c) => c.p) };
+    }),
+
+  /**
    * Skriv AI-genererad metadata (eller manuell override). Accepterar
    * även `analyzedAt` + `analysisStatus` så client-side workers kan
    * markera dokumentet som färdiganalyserat.
