@@ -19,6 +19,7 @@
 
 import { serveFetchHandler } from "@/lib/server/http/node-http-adapter";
 import { buildServerFirstApi, loadServerFirstConfig } from "@/lib/server/http/server-first-api";
+import { startJobRuntime, type JobRuntime } from "@/lib/server/jobs/job-worker-runtime";
 
 function log(msg: string): void {
   console.log(`[server-first] ${msg}`);
@@ -43,11 +44,19 @@ function main(): void {
   const server = serveFetchHandler(api.handler, { port: config.httpPort, hostname: config.httpHost });
   log(`lyssnar på ${config.httpHost}:${config.httpPort} (org ${config.organizationId})`);
 
+  // Jobb-kö (#504): best-effort start — en kö-hicka får ALDRIG ta ned HTTP-
+  // serveringen. Tom handler-karta tills Fas 3 (utskick/Fortnox/regler).
+  let jobRuntime: JobRuntime | null = null;
+  void startJobRuntime({ connectionString: config.databaseUrl })
+    .then((rt) => { jobRuntime = rt; log("jobb-kö startad (pg-boss)"); })
+    .catch((err) => log(`jobb-kö start misslyckades (fortsätter utan): ${String(err)}`));
+
   for (const sig of ["SIGTERM", "SIGINT"] as const) {
     process.on(sig, () => {
       log(`${sig} — stoppar`);
       server.close();
-      void api.close().finally(() => process.exit(0));
+      void Promise.allSettled([api.close(), jobRuntime?.stop() ?? Promise.resolve()])
+        .finally(() => process.exit(0));
     });
   }
 }

@@ -26,6 +26,8 @@ export const JOB_QUEUES = {
   outlookMirror: "outlook-mirror",
 } as const;
 
+export type JobQueueName = (typeof JOB_QUEUES)[keyof typeof JOB_QUEUES];
+
 const DEFAULT_SCHEMA = "pgboss";
 const DEFAULT_RETRY_LIMIT = 5;
 
