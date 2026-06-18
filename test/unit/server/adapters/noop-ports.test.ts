@@ -52,6 +52,10 @@ describe("noop-ports", () => {
     ).resolves.toBeUndefined();
   });
 
+  it("noopContentStore.read ger null (inget innehåll på servern)", async () => {
+    await expect(noopContentStore.read("documents/content/d1.pdf")).resolves.toBeNull();
+  });
+
   it("noopPorts aggregerar alla no-op-portar", () => {
     expect(noopPorts.email).toBe(noopEmail);
     expect(noopPorts.documentAnalyzer).toBe(noopDocumentAnalyzer);

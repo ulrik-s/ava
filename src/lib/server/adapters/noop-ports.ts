@@ -34,12 +34,13 @@ export const noopPaymentScanner: IPaymentScanner = {
 
 /**
  * No-op content-store: i demo/web skrivs dokument-bytes klient-sidigt via
- * FSA (`uploadDocumentToFsa`), aldrig server-sidigt — så detta är en tyst
- * no-op (konsistent med demo:ns read-only-semantik). Server-runtime:n
- * (git-peer) ersätter denna med en skrivande impl (`NodeContentStore`).
+ * FSA (`uploadDocumentToFsa`), aldrig server-sidigt — så write är en tyst
+ * no-op och read ger `null` (inget innehåll bor på servern). Server-first-
+ * runtime:n ersätter denna med `FsContentStore`.
  */
 export const noopContentStore: IContentStore = {
   async write() { /* no-op */ },
+  async read() { return null; },
 };
 
 export const noopPorts: IPorts = {

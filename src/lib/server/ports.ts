@@ -99,11 +99,19 @@ export interface IPaymentScanner {
 export interface IContentStore {
   /**
    * Skriv `bytes` till `storagePath` (repo-relativ, t.ex.
-   * `documents/content/<id>.eml`). Server-runtime:n skriver in i
-   * git-working-copy:n så de commit:as + push:as; demo/web är no-op
-   * (innehåll skrivs klient-sidigt via FSA).
+   * `documents/content/<id>.eml`). Server-first-runtime:n skriver till sitt
+   * content-dir (`FsContentStore`); demo/web är no-op (innehåll skrivs
+   * klient-sidigt via FSA).
    */
   write(storagePath: string, bytes: Uint8Array): Promise<void>;
+
+  /**
+   * Läs tillbaka `bytes` för `storagePath`, eller `null` om de saknas.
+   * Server-side bruk: dokument-klassificerings-jobbet (#518) läser bytes
+   * för text-extraktion. Demo/web returnerar `null` (innehållet bor
+   * klient-sidigt, inte på servern).
+   */
+  read(storagePath: string): Promise<Uint8Array | null>;
 }
 
 // ─── Aggregat ──────────────────────────────────────────────────────
