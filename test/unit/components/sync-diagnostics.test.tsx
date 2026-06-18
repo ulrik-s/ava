@@ -82,11 +82,11 @@ describe("SyncDiagnostics", () => {
     expect(screen.getByText(/Vanliga orsaker/i)).toBeInTheDocument();
   });
 
-  it("visar Web FSA-miljö-label", () => {
+  it("visar server-first-synk-label", () => {
     reset();
     ctxState.providerKind = "fsa";
     render(<SyncDiagnostics />);
-    expect(screen.getByText(/Web FSA/)).toBeInTheDocument();
+    expect(screen.getByText(/server-first/)).toBeInTheDocument();
   });
 });
 

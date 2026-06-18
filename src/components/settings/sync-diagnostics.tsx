@@ -110,15 +110,14 @@ export function SyncDiagnostics() {
             {lastError}
           </pre>
           <p className="text-xs text-red-700 mt-2">
-            <strong>Vanliga orsaker:</strong> ogiltig/utgången GitHub-token,
-            ingen läs- eller skrivbehörighet på repo:t, eller fel branch.
-            Kolla datakälla-fältet ovan.
+            <strong>Vanliga orsaker:</strong> servern är inte nåbar, utloggad
+            session (logga in på nytt), eller tillfälligt nätverksavbrott.
           </p>
         </div>
       )}
 
       <p className="text-[11px] text-gray-400 mt-3">
-        Miljö: Web FSA (isomorphic-git)
+        Synk: server-first (tRPC mot servern); offline-ändringar synkas när du är online igen.
       </p>
     </div>
   );

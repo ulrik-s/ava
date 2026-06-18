@@ -1,18 +1,13 @@
 /**
  * Test för ProfilePage — egen profil: uppgifts-formulär (hydreras från
- * user.current) + publika nycklar (lista, ta bort, manuell paste-add).
- *
- * KeypairManager (WebCrypto/IndexedDB) och IntegrationsSection (tRPC) stubbas
- * — de testas separat; här verifierar vi profil-sidans egen logik.
+ * user.current) + Spara. (SSH-nyckel-hanteringen togs bort med git-vägen;
+ * server-first identifierar via OIDC.) IntegrationsSection stubbas (testas separat).
  */
 
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, beforeEach, vi } from "vitest-compat";
 import ProfilePage from "@/app/profile/page";
 
-vi.mock("@/components/settings/keypair-manager", () => ({
-  KeypairManager: () => <div data-testid="keypair-manager-stub" />,
-}));
 vi.mock("@/components/settings/integrations-section", () => ({
   IntegrationsSection: () => <div data-testid="integrations-stub" />,
 }));
@@ -23,14 +18,9 @@ const meData = {
   title: "Advokat",
   email: "anna@firma.se",
   role: "LAWYER",
-  publicKeys: [
-    { fingerprint: "SHA256:abc123", type: "ssh-ed25519", comment: "mac", addedAt: "2026-01-01T00:00:00Z" },
-  ],
 };
 const meQuery = { data: meData as unknown, isLoading: false };
 const updateMutate = vi.fn();
-const addMutate = vi.fn();
-const removeMutate = vi.fn();
 
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
@@ -38,8 +28,6 @@ vi.mock("@/lib/client/trpc", () => ({
     user: {
       current: { useQuery: () => meQuery },
       update: { useMutation: () => ({ mutate: updateMutate, isPending: false, error: null }) },
-      addKey: { useMutation: () => ({ mutate: addMutate, isPending: false, error: null }) },
-      removeKey: { useMutation: () => ({ mutate: removeMutate, isPending: false, error: null }) },
     },
   },
 }));
@@ -56,9 +44,15 @@ describe("ProfilePage", () => {
     expect(screen.getByDisplayValue("anna@firma.se")).toBeInTheDocument();
   });
 
-  it("visar registrerade nycklar", () => {
+  it("renderar anslutna tjänster (IntegrationsSection)", () => {
     render(<ProfilePage />);
-    expect(screen.getByText("SHA256:abc123")).toBeInTheDocument();
+    expect(screen.getByTestId("integrations-stub")).toBeInTheDocument();
+  });
+
+  it("nämner inte längre SSH-nycklar / commit-signering", () => {
+    render(<ProfilePage />);
+    expect(screen.queryByText(/signera dina commits/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Publika nycklar/)).not.toBeInTheDocument();
   });
 
   it("Spara → update.mutate med formulärvärdena", async () => {
@@ -71,23 +65,5 @@ describe("ProfilePage", () => {
       title: "Advokat",
       email: "anna@firma.se",
     });
-  });
-
-  it("Lägg till nyckel öppnar paste-formuläret; Avbryt stänger det", async () => {
-    render(<ProfilePage />);
-    await screen.findByDisplayValue("Anna Advokat");
-    fireEvent.click(screen.getByRole("button", { name: /Lägg till nyckel/ }));
-    expect(screen.getByPlaceholderText(/ssh-ed25519 AAAA/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /Avbryt/ }));
-    await waitFor(() => expect(screen.queryByPlaceholderText(/ssh-ed25519 AAAA/)).not.toBeInTheDocument());
-  });
-
-  it("Ta bort nyckel med confirm → removeKey.mutate", async () => {
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
-    render(<ProfilePage />);
-    await screen.findByDisplayValue("Anna Advokat");
-    fireEvent.click(screen.getByRole("button", { name: /Ta bort/ }));
-    expect(removeMutate).toHaveBeenCalledWith({ fingerprint: "SHA256:abc123" });
-    confirmSpy.mockRestore();
   });
 });

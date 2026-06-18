@@ -38,9 +38,9 @@ export function DatasourceSection() {
         <h2 className="font-semibold text-gray-900">Datakälla & inloggning</h2>
       </div>
       <p className="text-xs text-gray-500 mb-4">
-        AVA är multi-tenant via git — varje firma har sin egen repo som
-        källa till all data. Konfigurera en gång; appen synkar därefter
-        automatiskt i bakgrunden.
+        Self-hosted: din byrås data ligger på er server (Postgres) som du loggar
+        in på via OIDC. Klienten är offline-first — ändringar sparas lokalt och
+        synkas automatiskt mot servern när du är online. Demon kör utan server.
       </p>
       <FirmaSettingsPanel
         initial={config}
