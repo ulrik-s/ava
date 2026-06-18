@@ -68,6 +68,54 @@ describe("todo.list", () => {
     const taskQ = mockPrisma.task.findMany.mock.calls[0]![0] as { where: { userId: string } };
     expect(taskQ.where.userId).toBe("u1");
   });
+
+  it("coercar ISO-sträng-datum (demo-projektionen) till Date för sort + endAt", async () => {
+    mockPrisma.task.findMany.mockResolvedValue([
+      { id: "t1", title: "Inlaga", dueAt: "2026-05-28T16:00:00Z", description: "x", status: "TODO", priority: "LOW", userId: "u1", matter: null },
+    ]);
+    mockPrisma.calendarEvent.findMany.mockResolvedValue([
+      { id: "e1", title: "Möte", startAt: "2026-05-28T09:00:00Z", endAt: "2026-05-28T10:00:00Z", description: null, kind: "appointment", allDay: false, location: "Sal", userId: "u1", matter: null },
+    ]);
+    const items = await makeCaller().list({ from: FROM, to: TO });
+    expect(items.map((i) => i.id)).toEqual(["e1", "t1"]); // ISO-strängar sorteras rätt
+    expect(items[0]!.at).toBeInstanceOf(Date);
+    expect(items[0]!.endAt).toBeInstanceOf(Date);
+  });
+
+  it("event utan endAt + allDay → endAt null, allDay true", async () => {
+    mockPrisma.task.findMany.mockResolvedValue([]);
+    mockPrisma.calendarEvent.findMany.mockResolvedValue([
+      { id: "e1", title: "Heldag", startAt: new Date("2026-05-28T08:00:00Z"), endAt: null, description: null, kind: "deadline", allDay: true, location: null, userId: "u1", matter: null },
+    ]);
+    const items = await makeCaller().list({ from: FROM, to: TO });
+    expect(items).toHaveLength(1);
+    expect(items[0]!.endAt).toBeNull();
+    expect(items[0]!.allDay).toBe(true);
+    expect(items[0]!.location).toBeNull();
+  });
+
+  it("filtrerar bort poster utanför [from,to] + ogiltiga (saknad) datum", async () => {
+    mockPrisma.task.findMany.mockResolvedValue([
+      { id: "out", title: "Imorgon", dueAt: new Date("2026-05-30T10:00:00Z"), description: null, status: "TODO", priority: "LOW", userId: "u1", matter: null },
+      { id: "nan", title: "Utan frist", dueAt: undefined, description: null, status: "TODO", priority: "LOW", userId: "u1", matter: null },
+      { id: "in", title: "Idag", dueAt: new Date("2026-05-28T12:00:00Z"), description: null, status: "TODO", priority: "LOW", userId: "u1", matter: null },
+    ]);
+    mockPrisma.calendarEvent.findMany.mockResolvedValue([]);
+    const items = await makeCaller().list({ from: FROM, to: TO });
+    expect(items.map((i) => i.id)).toEqual(["in"]); // out (utanför) + nan (ogiltig) bortfiltrerade
+  });
+
+  it("kollegial look-up: user i org → listar kollegans poster", async () => {
+    mockPrisma.user.findFirst.mockResolvedValue({ id: "u2", organizationId: "org-a" });
+    mockPrisma.task.findMany.mockResolvedValue([
+      { id: "t2", title: "Kollegans task", dueAt: new Date("2026-05-28T11:00:00Z"), description: null, status: "TODO", priority: "LOW", userId: "u2", matter: null },
+    ]);
+    mockPrisma.calendarEvent.findMany.mockResolvedValue([]);
+    const items = await makeCaller("org-a", "u1").list({ from: FROM, to: TO, userId: "u2" });
+    expect(mockPrisma.user.findFirst).toHaveBeenCalled();
+    expect(items.map((i) => i.id)).toEqual(["t2"]);
+    expect(items[0]!.userId).toBe("u2");
+  });
 });
 
 // TRPCError import retained even if unused above — tests may extend.
