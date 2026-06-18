@@ -124,43 +124,17 @@ async function writeViaSlab(
 
 /**
  * Återfyll in-memory blob-cachen för klient-genererade dokument (kostnadsräkning
- * m.fl.) från slaben efter en reload, så `openDocument`/`openGeneratedDoc`
- * (blob:-URL) fungerar igen. Slabens `documents/content/` innehåller ENBART
- * runtime-genererat innehåll — seed-dokumentens content ligger inte i manifestet
- * (hämtas on-demand från GH Pages), så ingen krock.
+ * m.fl.) från IndexedDB efter en reload, så `openDocument`/`openGeneratedDoc`
+ * (blob:-URL) fungerar igen. Endast runtime-genererat innehåll lagras här —
+ * seed-dokumentens content hämtas on-demand från GH Pages (CDN-URL), så ingen
+ * krock. (Ersätter den gamla MemFs-slab-rehydreringen, ADR 0016 / #420.)
  */
-interface DocMeta { id: string; fileName?: string; storagePath?: string; mimeType?: string }
-type StashFn = (id: string, bytes: Uint8Array, mimeType: string, fileName: string) => void;
-
-/** base64 → bytes (för event-transport av binärt dokument-innehåll). */
-export function base64ToBytes(b64: string): Uint8Array {
-  const bin = atob(b64);
-  const out = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-  return out;
-}
-
-export function inferDocMime(file: string, meta: DocMeta | undefined): string {
-  if (meta?.mimeType) return meta.mimeType;
-  if (file.endsWith(".pdf")) return "application/pdf";
-  return file.endsWith(".html") ? "text/html; charset=utf-8" : "application/octet-stream";
-}
-
-async function stashSlabDoc(runtime: DemoRuntime, file: string, docs: readonly DocMeta[], stash: StashFn): Promise<void> {
-  const meta = docs.find((d) => d.storagePath === `documents/content/${file}`);
-  const bytes = await runtime.readFileBytes(`documents/content/${file}`).catch(() => null);
-  if (bytes == null) return; // trasig/oläsbar fil → hoppa över
-  const id = meta?.id ?? file.replace(/\.[^.]+$/, "");
-  stash(id, bytes, inferDocMime(file, meta), meta?.fileName ?? file);
-}
-
-async function rehydrateGeneratedDocs(runtime: DemoRuntime, source: DemoSource): Promise<void> {
-  let files: string[];
-  try { files = await runtime.listFiles("documents/content"); } catch { return; }
-  if (!files.length) return;
+async function rehydrateGeneratedDocs(): Promise<void> {
+  const { loadAllGeneratedDocBlobs } = await import("@/lib/client/demo/generated-doc-idb");
+  const blobs = await loadAllGeneratedDocBlobs();
+  if (!blobs.length) return;
   const { stashGeneratedDoc } = await import("@/lib/client/demo/generated-doc-cache");
-  const docs = (source.documents ?? []) as unknown as readonly DocMeta[];
-  for (const f of files) await stashSlabDoc(runtime, f, docs, stashGeneratedDoc);
+  for (const b of blobs) stashGeneratedDoc(b.id, b.bytes, b.mimeType, b.fileName);
 }
 
 /**
@@ -186,13 +160,12 @@ function useDemoWriteBack() {
 }
 
 /**
- * Lyssnar på text-extraktions- och generated-doc-event från job-workers och
- * skriver via writeBack-pipelinen / demo-slaben (överlever reload, kan öppnas
- * via blob:-URL). Self-hosted utan demo-runtime → generated-doc är no-op.
+ * Lyssnar på text-extraktions-event från job-workers och skriver via writeBack-
+ * pipelinen. (Genererade dokument-blobbar persisteras numera direkt till
+ * IndexedDB i `persistGeneratedDoc`, ADR 0016 / #420 — inget event behövs.)
  */
 function useWriteBackListeners(
   writeBack: (event: WriteBackEvent) => Promise<void>,
-  runtimeRef: { current: DemoRuntime | null },
 ) {
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -208,25 +181,6 @@ function useWriteBackListeners(
     window.addEventListener("ava:document-text-extracted", handler);
     return () => window.removeEventListener("ava:document-text-extracted", handler);
   }, [writeBack]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent<{ id: string; storagePath: string; contentBase64: string }>).detail;
-      const rt = runtimeRef.current;
-      if (!detail || !rt) return;
-      void (async () => {
-        try {
-          await rt.writeFileBytes(detail.storagePath, base64ToBytes(detail.contentBase64));
-          await rt.persist();
-        } catch (err) {
-          console.warn("[demo] generated-doc persist failed:", err);
-        }
-      })();
-    };
-    window.addEventListener("ava:generated-doc", handler);
-    return () => window.removeEventListener("ava:generated-doc", handler);
-  }, [runtimeRef]);
 }
 
 function makeDemoQueryClient(): QueryClient {
@@ -343,7 +297,7 @@ function useDemoBootstrap(args: BootstrapArgs) {
           await queryClient.invalidateQueries();
           setStatus("ready");
           void preloadDocs();
-          void rehydrateGeneratedDocs(runtime, source);
+          void rehydrateGeneratedDocs();
           return;
         }
       } catch { /* fall through to fresh clone */ }
@@ -361,6 +315,7 @@ function useDemoBootstrap(args: BootstrapArgs) {
         await queryClient.invalidateQueries();
         setStatus("ready");
         void preloadDocs();
+        void rehydrateGeneratedDocs();
       } catch (err) {
         if (cancelled) return;
         setStatus("error");
@@ -386,7 +341,7 @@ export function DemoBootstrap({ children }: { children: ReactNode }) {
   const [fsaHandle, setFsaHandle] = useState<FileSystemDirectoryHandle | null>(null);
 
   const { writeBack, fsaRef, runtimeRef } = useDemoWriteBack();
-  useWriteBackListeners(writeBack, runtimeRef);
+  useWriteBackListeners(writeBack);
 
   // Demon kör nu på offline-first-kärnan (ADR 0016/#419): CachingSyncDataStore
   // UTAN synk-mål (noSyncTransport). `.store` är LocalStore-kärnan appen läser/

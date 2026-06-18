@@ -7,21 +7,15 @@
  *
  *   1. in-memory blob-cache (`generated-doc-cache`) → öppnas direkt i sessionen.
  *   2. FSA-working-copy (self-hosted/demo-med-mapp) → riktiga bytes på disk.
- *   3. demo-slaben (MemFs) via `ava:generated-doc`-eventet → DemoBootstrap
- *      skriver bytes + persist:ar till OPFS → överlever reload (rehydreras till
- *      blob-cachen vid boot).
+ *   3. IndexedDB (`generated-doc-idb`) → överlever reload (rehydreras till
+ *      blob-cachen vid boot). Ersätter den gamla MemFs-slaben (ADR 0016 / #420).
  *
  * Metadata-raden (Document-entiteten) skapas av anroparen via tRPC
  * (kostnadsrakning.record / document.register) — detta hanterar bara INNEHÅLLET.
  */
 
 import { stashGeneratedDoc } from "./generated-doc-cache";
-
-function bytesToBase64(bytes: Uint8Array): string {
-  let bin = "";
-  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]!);
-  return btoa(bin);
-}
+import { saveGeneratedDocBlob } from "./generated-doc-idb";
 
 /** Skriv bytes till FSA-working-copyn om en handle finns (annars no-op). */
 async function writeFsa(storagePath: string, bytes: Uint8Array): Promise<void> {
@@ -47,9 +41,11 @@ export interface GeneratedDoc {
 export async function persistGeneratedDoc(doc: GeneratedDoc): Promise<void> {
   stashGeneratedDoc(doc.id, doc.bytes, doc.mimeType, doc.fileName);
   await writeFsa(doc.storagePath, doc.bytes);
-  if (typeof window !== "undefined") {
-    window.dispatchEvent(new CustomEvent("ava:generated-doc", {
-      detail: { id: doc.id, storagePath: doc.storagePath, contentBase64: bytesToBase64(doc.bytes) },
-    }));
-  }
+  await saveGeneratedDocBlob({
+    id: doc.id,
+    storagePath: doc.storagePath,
+    fileName: doc.fileName,
+    mimeType: doc.mimeType,
+    bytes: doc.bytes,
+  });
 }
