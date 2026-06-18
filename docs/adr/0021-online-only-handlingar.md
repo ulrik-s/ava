@@ -1,7 +1,7 @@
 # ADR 0021 — Online-only-handlingar (kö-modell + UI) i offline-first-klienten
 
-- **Status:** Föreslagen
-- **Datum:** 2026-06-17
+- **Status:** Accepterad
+- **Datum:** 2026-06-17 (accepterad 2026-06-18)
 - **Beslutsfattare:** Ulrik Sjölin
 - **Berör:** offline-first-klient, server-runtime, integrationer (mail/Fortnox/webhooks), sync, UI
 - **Issue:** [#407](https://github.com/ulrik-s/ava/issues/407) (design; blockerar #417-implementationen)
