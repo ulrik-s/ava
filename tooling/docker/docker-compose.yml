@@ -98,62 +98,9 @@ services:
       - git_repos:/srv/git
       - ./git-ssh/authorized_keys:/keys/authorized_keys:ro
 
-  # ─── (Valbar) Server-runtime: git-peer för integrationer/påminnelser ──
-  # ADR 0005 fas 2. Default OFF — bara byråer som vill ha server-drivna
-  # integrationer (Fortnox #82, påminnelser) kör den; 1-mans utan
-  # integrationer kör utan denna tjänst precis som förut (USP: din data,
-  # ingen tredjepartsinfra).
-  #
-  # Aktivera:
-  #   bun run server-runtime:build      # förbygg linux-binären (dist/server-runtime/)
-  #   AVA_SR_ORG_ID=<org> AVA_SR_GIT_USER=<htpasswd-user> AVA_SR_GIT_TOKEN=<pat> \
-  #     docker compose -f tooling/docker/docker-compose.yml --profile server up -d --build
-  #
-  # Auth mot firma.git: HTTP-basic (htpasswd-användare/PAT, samma som browser-
-  # push). Pekar default på web-containerns /git/-endpoint i det interna nätet.
-  # Fortnox-connectorn (#82) aktiveras om secrets-valvet monteras (se nedan).
-  server-runtime:
-    profiles: ["server"]
-    build:
-      context: ../..
-      dockerfile: tooling/docker/server-runtime/Dockerfile
-    restart: unless-stopped
-    environment:
-      AVA_SR_REPO_URL: ${AVA_SR_REPO_URL:-http://web/git/firma.git}
-      AVA_SR_WORK_DIR: /var/lib/ava/firma
-      # Obligatorisk när profilen "server" är aktiv — men använd INTE ${VAR:?}
-      # här: compose interpolerar hela filen vid parse (oavsett profil), så :?
-      # skulle bryta `docker compose up` även för web/git-ssh. Saknat org-id
-      # fångas istället vid container-start av runtime:ns zod-validering.
-      AVA_SR_ORG_ID: ${AVA_SR_ORG_ID:-}
-      AVA_SR_GIT_USER: ${AVA_SR_GIT_USER:-}
-      AVA_SR_GIT_TOKEN: ${AVA_SR_GIT_TOKEN:-}
-      AVA_SR_POLL_INTERVAL_MS: ${AVA_SR_POLL_INTERVAL_MS:-15000}
-      # tRPC-over-HTTP-API (#83): nginx /api/ proxar hit. Lyssnar på 0.0.0.0
-      # (annan container når den över docker-nätet); porten publiceras INTE
-      # mot host:en — bara nåbar via nginx-fronten. API:t monteras bara när
-      # minst en token finns i AVA_SR_API_TOKENS (komma-separerade Bearer-PAT).
-      AVA_SR_API_PORT: ${AVA_SR_API_PORT:-9443}
-      AVA_SR_API_HOST: 0.0.0.0
-      AVA_SR_API_TOKENS: ${AVA_SR_API_TOKENS:-}
-      # Fortnox-connector (#82/#79): aktiveras när valv-env + mount finns.
-      AVA_SECRETS_KEY: ${AVA_SECRETS_KEY:-}
-      AVA_SECRETS_FILE: ${AVA_SECRETS_FILE:-}
-    expose:
-      - "9443"
-    volumes:
-      - server_work:/var/lib/ava
-      # Montera byråns secrets-valv (utanför repo:t) för Fortnox-connectorn:
-      #   - ${AVA_SECRETS_HOST_FILE:-/dev/null}:/run/ava/vault.enc:ro
-    depends_on:
-      - web
-
 volumes:
   # Persistent storage för bare git-repos. Backup = `tar` på denna volym.
   git_repos:
   # Persistent storage för auth-state (htpasswd, invites). Delad mellan
   # auth-tjänsten (read/write) och web/nginx (read).
   auth_data:
-  # Server-runtime:ns egen working-copy (firma.git-klon). Engångs-/cache-data
-  # — kan raderas, klonas om vid nästa start.
-  server_work:

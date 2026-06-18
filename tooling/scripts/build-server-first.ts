@@ -2,8 +2,8 @@
  * Server-first-runtime (#410, ADR 0016) — paketering till fristående binärer.
  *
  * Cross-compile:ar `src/bin/server-first.ts` (Postgres + tRPC-over-HTTP) till
- * linux-binärer för docker-imagen (`tooling/docker/server-first/`). Samma
- * `bun build --compile`-mönster som `build-server-runtime.ts`.
+ * linux-binärer för docker-imagen (`tooling/docker/server-first/`). Använder
+ * `bun build --compile`-mönstret.
  *
  *   bun run server-first:build
  *

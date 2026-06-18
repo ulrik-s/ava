@@ -75,14 +75,7 @@ const FUNC_FLOOR = 0.835;
  * saknas, eller (b) en pass-A-fil börjar sync-spawna utan att läggas till här.
  */
 const SERIAL_FILES = [
-  // realgit — spawnar git-binären mot temp-repon:
-  "test/unit/server/local-first/node-git-ops.test.ts",
-  "test/unit/server/local-first/git-ops-changed-files.test.ts",
-  "test/unit/server/local-first/sync-loop.integration.test.ts",
-  "test/unit/server/local-first/server-peer.test.ts",
-  "test/unit/server/local-first/server-runtime.test.ts",
-  "test/unit/server/local-first/server-working-copy.write.test.ts",
-  // övriga sync-spawnare — bash/bun/node via execFileSync/spawnSync:
+  // sync-spawnare — bash/bun/node via execFileSync/spawnSync:
   "test/scripts/install-from-release.test.ts",
   "test/scripts/test-all-seteexit.test.ts",
   "test/unit/lib/generate-demo-manifest.test.ts",

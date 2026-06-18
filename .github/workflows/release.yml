@@ -1,7 +1,7 @@
 name: Release (full package)
 
-# Tag-triggad release av HELA paketet (#87): helper-binärer + server-runtime-
-# binärer + web (statisk demo-export) + auto-genererade release-noter.
+# Tag-triggad release av HELA paketet (#87): helper-binärer + web (statisk
+# demo-export) + auto-genererade release-noter.
 #
 # Tagga `vX.Y.Z` → bygg alla artefakter → en GitHub-release med allt bifogat.
 # `workflow_dispatch` kör en DRY-RUN (bygger allt, publicerar INGET) så
@@ -49,29 +49,6 @@ jobs:
           path: helper-app/dist/*
           if-no-files-found: error
 
-  # ─── Server-runtime-binärer (4 plattformar) — build-server-runtime.ts ─────
-  server:
-    name: Build server-runtime
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-      - run: bun install --frozen-lockfile
-      - name: Cross-build server-runtime
-        run: bun run server-runtime:build
-      - name: Checksums
-        run: |
-          cd dist/server-runtime
-          sha256sum ava-server-runtime-* > "ava-server-runtime_${{ github.ref_name }}_checksums.txt"
-          ls -lh
-      - uses: actions/upload-artifact@v4
-        with:
-          name: server-runtime
-          path: dist/server-runtime/*
-          if-no-files-found: error
-
   # ─── Web (statisk demo-export) — samma bygge som deploy-demo.yml ──────────
   web:
     name: Build web demo
@@ -107,7 +84,7 @@ jobs:
   # ─── Samla artefakter → GitHub-release (endast på riktig tag) ─────────────
   release:
     name: Publish GitHub release
-    needs: [helper, server, web]
+    needs: [helper, web]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
@@ -121,13 +98,11 @@ jobs:
           fail_on_unmatched_files: true
           files: |
             artifacts/helper/*
-            artifacts/server-runtime/*
             artifacts/web-demo/*
           body: |
             AVA ${{ github.ref_name }} — hela paketet.
 
             - **Helper** (5 plattformar) — auto-uppdateras hos installationer (#78).
-            - **Server-runtime** (4 plattformar) — git-peer-servern (ADR 0005).
             - **Web** — statisk demo-export (`ava-web-demo_*.zip`); live-demo deployas
               löpande via deploy-demo.yml.
 
