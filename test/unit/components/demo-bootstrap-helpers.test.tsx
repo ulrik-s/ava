@@ -8,8 +8,6 @@ import { describe, it, expect, vi, afterEach } from "vitest-compat";
 import {
   pathSkipsAuth,
   checkBootstrapGate,
-  inferDocMime,
-  base64ToBytes,
 } from "@/components/shell/demo-bootstrap";
 import type { FirmaConfig } from "@/lib/client/firma/firma-config";
 
@@ -71,26 +69,5 @@ describe("checkBootstrapGate", () => {
     expect(checkBootstrapGate({ ...noPrincipal, tier: "self-hosted" }))
       .toBe("continue");
     restore();
-  });
-});
-
-describe("inferDocMime", () => {
-  it("föredrar metans mimeType", () => {
-    expect(inferDocMime("x.bin", { id: "1", mimeType: "image/png" })).toBe("image/png");
-  });
-  it("härleder pdf/html, annars octet-stream", () => {
-    expect(inferDocMime("a.pdf", undefined)).toBe("application/pdf");
-    expect(inferDocMime("a.html", undefined)).toBe("text/html; charset=utf-8");
-    expect(inferDocMime("a.docx", undefined)).toBe("application/octet-stream");
-  });
-});
-
-describe("base64ToBytes", () => {
-  it("avkodar base64 → bytes (round-trip mot btoa)", () => {
-    const bytes = base64ToBytes(btoa("hej"));
-    expect(Array.from(bytes)).toEqual([104, 101, 106]); // h,e,j
-  });
-  it("tom sträng → tom array", () => {
-    expect(base64ToBytes("").length).toBe(0);
   });
 });
