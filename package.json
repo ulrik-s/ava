@@ -40,7 +40,6 @@
     "e2e:ui": "playwright test --config tooling/config/playwright.config.ts --ui",
     "e2e:demo": "playwright test --config tooling/config/playwright-demo.config.ts",
     "e2e:install": "playwright install --with-deps chromium",
-    "round-trip": "playwright test --config tooling/config/playwright.round-trip.config.ts",
     "e2e:oidc": "bash tooling/scripts/e2e-oidc.sh",
     "diagnose-ui": "bun tooling/scripts/diagnose-ui.ts",
     "smoke:tier3": "bash tooling/scripts/test-tier3-smoke.sh",

@@ -6,19 +6,19 @@
 #
 #   1. static:  typecheck + lint --max-warnings 0 + deps:check + knip + duplicates
 #   2. unit:    test:cov  (bun test --parallel=2 + lcov-coverage-golv, run-tests.ts)
-#   3. e2e:     build:demo + e2e:install + docker (--wait) + round-trip
+#   3. e2e:     build:demo + e2e:install + demo-serve (nginx över out/) + e2e:demo
 #
-# Arkitekturen är pure git-modell — ingen Postgres. Test-runner är bun:test
-# (vitest borttaget i #92). Coverage = coverage/lcov.info (run-tests.ts).
+# Arkitekturen är server-first (Postgres + tRPC, ADR 0016); demon kör offline-
+# first-kärnan på IndexedDB (ingen git/MemFs sedan #420). Git-round-trip-E2E:n är
+# pensionerad (#422) — server-synken gatas av CI:s "Server-first (deploy E2E)"
+# (server-first-sync-e2e mot Postgres) + "E2E (OIDC login)"; här kör vi den
+# snabba browser-demo-E2E:n som regressionsskydd för demons data-load.
+# Test-runner är bun:test (vitest borttaget i #92). Coverage = run-tests.ts.
 #
-# Två lokala fällor som CI slipper (CI bygger out/ INNAN containern startar och
-# kör i en färsk runner), men som detta script hanterar explicit:
-#   - Bind-mount-staleness: build:demo gör `rm -rf out` → den redan körande
-#     web-containerns mount pekar på gamla inoden → nginx 404. Vi `restart web`
-#     efter bygget så färsk out/ remountas (AGENTS.md).
-#   - Admin-PAT: web-containern bootstrappar en slumpad PAT som round-trip behöver
-#     (git-clone + browser-push) via AVA_RT_GIT_PAT. Vi extraherar den ur loggen,
-#     precis som CI:s e2e-jobb.
+# Lokal fälla som CI slipper (CI bygger out/ i en färsk runner):
+#   - Bind-mount-staleness: build:demo gör `rm -rf out` → en redan körande
+#     web-containers mount pekar på gamla inoden → nginx 404. demo-serve.sh
+#     hanterar detta (bygger + remountar färsk out/).
 #
 # Användning:
 #   bun run test:all              # hela stacken inkl. e2e (kräver docker)
@@ -28,8 +28,6 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
-
-COMPOSE="docker compose -f tooling/docker/docker-compose.yml"
 
 SKIP_E2E=0
 for arg in "$@"; do
@@ -70,63 +68,30 @@ run "duplicates (jscpd)"    bun run duplicates
 bold "[2/3] Unit / komponent / integration (test:cov)"
 run "test:cov (bun test + coverage-golv)" bun run test:cov
 
-# ─── 3. E2E git round-trip (CI-jobb: e2e) ────────────────────────
+# ─── 3. E2E demo (CI-jobb: Demo build + browser-demo-E2E) ────────
 if [[ $SKIP_E2E -eq 1 ]]; then
-  bold "[3/3] E2E (git round-trip) — HOPPAR (--no-e2e)"
+  bold "[3/3] E2E (demo) — HOPPAR (--no-e2e)"
 else
-  bold "[3/3] E2E (git round-trip mot tier 3-stacken)"
+  bold "[3/3] E2E (browser-demo mot nginx-serverad out/)"
 
-  # build:demo FÖRST (CI bygger out/ före containern). Producerar out/.
+  # build:demo FÖRST (= CI:s "Demo build"-jobb). Producerar out/.
   run_quiet "build:demo (GH Pages-export)" bun run build:demo
   run_quiet "playwright chromium (idempotent)" bun run e2e:install
 
-  # Vänta tills web servar en RIKTIG out/-sida (inte nginx 404 från stale mount).
+  # Servera out/ via nginx (demo-serve.sh bygger + remountar färsk out/ → inget
+  # bind-mount-404), vänta in /ava/, kör browser-demo-E2E:n mot den.
   wait_for_web() {
-    for i in $(seq 1 30); do
+    for i in $(seq 1 60); do
       curl -sf http://localhost:8080/ava/ 2>/dev/null | grep -q "AVA" && return 0
-      sleep 1
+      sleep 2
     done
     return 1
   }
 
-  # Extrahera bootstrappad admin-PAT ur web-loggen. `|| true`: under
-  # `set -e`+`pipefail` ger `grep | head -1` SIGPIPE på grep (head stänger pipen
-  # efter rad 1) → pipeline-exit ≠ 0 trots att PAT:en lästes; vi neutraliserar.
-  extract_pat() {
-    local p=""
-    for i in $(seq 1 30); do
-      p=$($COMPOSE logs web 2>&1 \
-        | grep -oE 'Admin-token:[[:space:]]+[A-Za-z0-9]{40}' | grep -oE '[A-Za-z0-9]{40}' | head -1) || true
-      [ -n "$p" ] && break
-      sleep 1
-    done
-    printf '%s' "$p"
-  }
+  bash tooling/scripts/demo-serve.sh >/tmp/ava-demo-serve.log 2>&1 &
+  if wait_for_web; then ok "demon servar out/ på :8080/ava (ej 404)"; else fail "demon servar out/ (404?)"; fi
 
-  # Primär uppstart UTAN --build → recreate:ar inte en redan körande container,
-  # så bootstrap-PAT:en bevaras i loggen (snabb väg). --wait gatar på healthcheck.
-  run_quiet "docker compose up (--wait)" $COMPOSE up -d --wait --wait-timeout 180
-  # Bind-mount-fix: remounta färsk out/ (build:demo gjorde rm -rf out → stale mount).
-  run_quiet "restart web (remountar färsk out/)" $COMPOSE restart web
-  if wait_for_web; then ok "web servar out/ (ej 404)"; else fail "web servar out/ (404?)"; fi
-
-  PAT=$(extract_pat)
-
-  # Self-heal: ingen PAT i loggen (t.ex. container recreate:ad och bootstrap-raden
-  # borta, men htpasswd kvar → ingen ny PAT). Tvinga fram en ren bootstrap precis
-  # som CI:s färska runner: down -v nollar volymerna → entrypoint bootstrappar nytt.
-  if [[ -z "$PAT" ]]; then
-    bold "    ingen PAT i loggen → ren omstart (down -v) för färsk bootstrap"
-    $COMPOSE down -v >/dev/null 2>&1 || true
-    run_quiet "fresh docker compose up" $COMPOSE up -d --build --wait --wait-timeout 180
-    if wait_for_web; then ok "web servar out/ (ej 404)"; else fail "web servar out/ (404?)"; fi
-    PAT=$(extract_pat)
-  fi
-  [[ -z "$PAT" ]] && { echo "    Kunde inte hämta admin-PAT ens efter ren omstart."; exit 1; }
-  ok "admin-PAT extraherad (AVA_RT_GIT_PAT)"
-  export AVA_RT_GIT_PAT="$PAT"
-
-  run "round-trip" bun run round-trip
+  AVA_DEMO_BASE_URL=http://localhost:8080/ava run "e2e:demo (fakturadokument)" bun run e2e:demo
 fi
 
 # ─── Sammanställning ─────────────────────────────────────────────
@@ -134,7 +99,7 @@ bold "Klart"
 ELAPSED=$((SECONDS - START))
 echo "  Tid:                          ${ELAPSED}s"
 echo "  Coverage (lcov):              coverage/{a,b}/lcov.info  (golv: run-tests.ts)"
-echo "  Playwright-rapport:           reports/playwright-round-trip/index.html"
+echo "  Playwright-rapport:           reports/playwright-demo/index.html"
 echo "  jscpd-rapport:                reports/jscpd/jscpd-report.html"
 echo
 printf "  \033[32m✅ Allt grönt\033[0m\n"
