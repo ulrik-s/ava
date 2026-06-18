@@ -4,7 +4,7 @@
  */
 
 import { IDBFactory } from "fake-indexeddb";
-import { beforeEach, describe, expect, it, vi } from "vitest-compat";
+import { beforeEach, describe, expect, it } from "vitest-compat";
 import { DocumentContentCache } from "@/lib/client/backend/content-cache";
 import { saveDocumentContent } from "@/lib/client/backend/save-document-content";
 import { base64ToBytes, sha256Hex } from "@/lib/shared/content-address";
