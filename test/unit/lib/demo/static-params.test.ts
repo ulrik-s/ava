@@ -35,6 +35,62 @@ describe("collectDemoIds", () => {
     const { collectDemoIds } = await import("@/lib/client/demo/static-params");
     expect(await collectDemoIds("does-not-exist")).toEqual([]);
   });
+
+  it("invoices → inkluderar deterministiska billing-id:n (collectBillingIds)", async () => {
+    const { collectDemoIds } = await import("@/lib/client/demo/static-params");
+    const ids = await collectDemoIds("invoices");
+    expect(Array.isArray(ids)).toBe(true);
+    expect(ids.length).toBeGreaterThan(0);
+    expect(ids.every((i) => typeof i === "string")).toBe(true);
+  });
+
+  it("payment-plans → billing-plan-id:n via collectBillingIds", async () => {
+    const { collectDemoIds } = await import("@/lib/client/demo/static-params");
+    const ids = await collectDemoIds("payment-plans");
+    expect(Array.isArray(ids)).toBe(true);
+    expect(ids.every((i) => typeof i === "string")).toBe(true);
+  });
+});
+
+describe("demoStaticParams — invoices/payment-plans kortsluts till bara sentinel", () => {
+  beforeEach(() => { process.env.DEMO_BUILD = "1"; });
+
+  it("invoices → ENDAST SHELL_PARAM (per-id-prerendering vore skadlig här)", async () => {
+    const { demoStaticParams, SHELL_PARAM } = await import("@/lib/client/demo/static-params");
+    expect(await demoStaticParams("invoices")).toEqual([{ id: SHELL_PARAM }]);
+  });
+
+  it("payment-plans → ENDAST SHELL_PARAM", async () => {
+    const { demoStaticParams, SHELL_PARAM } = await import("@/lib/client/demo/static-params");
+    expect(await demoStaticParams("payment-plans")).toEqual([{ id: SHELL_PARAM }]);
+  });
+});
+
+describe("demoStaticParamsBySeedId", () => {
+  afterEach(() => { delete process.env.DEMO_BUILD; });
+
+  it("returnerar [] när DEMO_BUILD inte är satt", async () => {
+    delete process.env.DEMO_BUILD;
+    const { demoStaticParamsBySeedId } = await import("@/lib/client/demo/static-params");
+    expect(await demoStaticParamsBySeedId("users")).toEqual([]);
+  });
+
+  it("läser seed-objektens .id (ej filnamn) + sentinel när DEMO_BUILD=1", async () => {
+    process.env.DEMO_BUILD = "1";
+    const { demoStaticParamsBySeedId, SHELL_PARAM } = await import("@/lib/client/demo/static-params");
+    const params = await demoStaticParamsBySeedId("users");
+    const ids = params.map((p) => p.id);
+    // users-seeden har UUID-id:n (≠ filnamnet som är e-post)
+    expect(ids.filter((i) => i !== SHELL_PARAM).length).toBeGreaterThan(0);
+    expect(ids.filter((i) => i !== SHELL_PARAM).every((i) => isUuid(i))).toBe(true);
+    expect(ids[ids.length - 1]).toBe(SHELL_PARAM);
+  });
+
+  it("okänd sourceKey → bara sentinel (tom lista + SHELL_PARAM)", async () => {
+    process.env.DEMO_BUILD = "1";
+    const { demoStaticParamsBySeedId, SHELL_PARAM } = await import("@/lib/client/demo/static-params");
+    expect(await demoStaticParamsBySeedId("does-not-exist")).toEqual([{ id: SHELL_PARAM }]);
+  });
 });
 
 describe("demoStaticParams", () => {
