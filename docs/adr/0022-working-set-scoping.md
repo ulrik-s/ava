@@ -1,7 +1,7 @@
 # ADR 0022 — Working-set-scoping (prefetch + budget) för offline-first-klienten
 
-- **Status:** Föreslagen
-- **Datum:** 2026-06-17
+- **Status:** Accepterad
+- **Datum:** 2026-06-17 (accepterad 2026-06-18)
 - **Beslutsfattare:** Ulrik Sjölin
 - **Berör:** offline-first-klient, prefetch, sync (delta-pull), lokal store, lagringsbudget
 - **Issue:** [#406](https://github.com/ulrik-s/ava/issues/406) (design; blockerar #418-implementationen)

@@ -1,7 +1,7 @@
 # ADR 0017 — Sync/reconcile-protokoll + konfliktpolicy (offline-first klient)
 
-- **Status:** Föreslagen
-- **Datum:** 2026-06-16
+- **Status:** Accepterad
+- **Datum:** 2026-06-16 (accepterad 2026-06-18)
 - **Beslutsfattare:** Ulrik Sjölin
 - **Berör:** offline-sync, datalager, konflikthantering, DB-schema, statemaskin
 - **Bygger på:** [ADR 0016](0016-server-first-med-offline-first-klient.md) (server-first +
