@@ -24,6 +24,7 @@ import { noopPorts } from "@/lib/server/adapters/noop-ports";
 import { serveFetchHandler } from "@/lib/server/http/node-http-adapter";
 import { buildServerFirstApi, loadServerFirstConfig } from "@/lib/server/http/server-first-api";
 import { startJobRuntime, type JobRuntime } from "@/lib/server/jobs/job-worker-runtime";
+import { QueueBackedDocumentAnalyzer } from "@/lib/server/jobs/queue-backed-document-analyzer";
 import { QueueBackedEmailSender } from "@/lib/server/jobs/queue-backed-email-sender";
 import { buildServerFirstJobHandlers, loadSmtpConfigFromEnv } from "@/lib/server/jobs/server-first-handlers";
 
@@ -56,6 +57,9 @@ function main(): void {
   const ports = {
     ...noopPorts,
     email: new QueueBackedEmailSender(() => jobRuntime?.boss ?? null),
+    // Dokumentklassificering (#518): `document.analyze` enqueue:ar ett
+    // classify-document-jobb durabelt på pg-boss i st.f. noop.
+    documentAnalyzer: new QueueBackedDocumentAnalyzer(() => jobRuntime?.boss ?? null, config.organizationId),
     ...(contentStore ? { content: contentStore } : {}),
   };
 
@@ -69,9 +73,13 @@ function main(): void {
   log(`lyssnar på ${config.httpHost}:${config.httpPort} (org ${config.organizationId})`);
 
   // Jobb-kö (#504): best-effort start — en kö-hicka får ALDRIG ta ned HTTP-
-  // serveringen. Handlers per konfigurerad integration (e-post via AVA_SMTP_*).
+  // serveringen. Handlers per konfigurerad integration (e-post via AVA_SMTP_*,
+  // dokumentklassificering via repos #518).
   const smtp = loadSmtpConfigFromEnv();
-  const handlers = buildServerFirstJobHandlers(smtp ? { smtp } : {});
+  const handlers = buildServerFirstJobHandlers({
+    ...(smtp ? { smtp } : {}),
+    documents: api.repos.documents,
+  });
   void startJobRuntime({ connectionString: config.databaseUrl, handlers })
     .then((rt) => { jobRuntime = rt; log(`jobb-kö startad (pg-boss; ${Object.keys(handlers).length} handlers)`); })
     .catch((err) => log(`jobb-kö start misslyckades (fortsätter utan): ${String(err)}`));
