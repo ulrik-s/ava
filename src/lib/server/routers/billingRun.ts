@@ -17,7 +17,6 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { proposedAccontoOre } from "@/lib/shared/billing-proposal";
-import type { BillingRun, Expense, Invoice } from "@/lib/shared/schemas/billing";
 import { billingRunRecipientSchema, type ExpenseKind } from "@/lib/shared/schemas/enums";
 import {
   matterIdSchema,
@@ -173,14 +172,14 @@ export const billingRunRouter = router({
           matterId: input.matterId, amount: input.amountOre,
           invoiceType: "ACCONTO", status: "DRAFT",
           invoiceDate: new Date(), notes: input.notes,
-        } as unknown as Partial<Invoice>);
+        });
         const run = await tx.billingRuns.create({
           matterId: input.matterId, type: "ACCONTO", recipient: input.recipient,
           status: "SENT", workValueOreAtRun: value, clientShareBips: input.clientShareBips,
           proposedAmountOre: proposedOre, amountOre: input.amountOre,
           invoiceId: invoice.id, deductedBillingRunIds: [],
           periodTo: new Date(), notes: input.notes,
-        } as unknown as Partial<BillingRun>);
+        });
         await emit.invoiceCreated(ctx, invoice);
         return { run, invoice };
       });
@@ -204,14 +203,14 @@ export const billingRunRouter = router({
           matterId: input.matterId, amount: finalAmount,
           invoiceType: "FINAL", status: "DRAFT",
           invoiceDate: new Date(), notes: input.notes,
-        } as unknown as Partial<Invoice>);
+        });
         const run = await tx.billingRuns.create({
           matterId: input.matterId, type: "FINAL", recipient: input.recipient,
           status: "SENT", workValueOreAtRun: value,
           proposedAmountOre: value, amountOre: finalAmount,
           invoiceId: invoice.id, deductedBillingRunIds: input.deductedBillingRunIds,
           periodTo: new Date(), notes: input.notes,
-        } as unknown as Partial<BillingRun>);
+        });
         await freezeWork(tx, input.matterId, run.id as BillingRunId);
         await emit.invoiceCreated(ctx, invoice);
         return { run, invoice };
@@ -231,7 +230,7 @@ export const billingRunRouter = router({
           proposedAmountOre: value, amountOre: value,
           invoiceId: null, deductedBillingRunIds: [],
           periodTo: new Date(), notes: input.notes,
-        } as unknown as Partial<BillingRun>);
+        });
         return { run };
       });
     }),
@@ -254,16 +253,16 @@ export const billingRunRouter = router({
             matterId: run.matterId, userId: asId<"UserId">(ctx.user.id), date: new Date(),
             amount: input.prutningOre, description: "Prutning enligt dom",
             billable: true, vatRate: 0, vatIncluded: false, kind: "PRUTNING",
-          } as unknown as Partial<Expense>);
+          });
         }
         const invoice = await tx.invoices.create({
           matterId: run.matterId, amount: finalAmount,
           invoiceType: "FINAL", status: "DRAFT",
           invoiceDate: new Date(),
-        } as unknown as Partial<Invoice>);
+        });
         await tx.billingRuns.update(run.id, {
           status: "SENT", invoiceId: invoice.id, amountOre: finalAmount, prutningOre: input.prutningOre,
-        } as unknown as Partial<BillingRun>);
+        });
         await freezeWork(tx, run.matterId, run.id as BillingRunId);
         await emit.invoiceCreated(ctx, invoice);
         return { run, invoice };

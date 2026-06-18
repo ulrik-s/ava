@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { similarity } from "@/lib/shared/fuzzy-similarity";
 import { asId } from "@/lib/shared/schemas/ids";
-import type { ConflictCheck } from "@/lib/shared/schemas/misc";
 import type { ConflictContactRow } from "../repositories/matter-contact-repository";
 import type { Repositories } from "../repositories/repositories";
 import { router, protectedProcedure } from "../trpc";
@@ -87,7 +86,7 @@ export const conflictRouter = router({
         searchType: input.searchType,
         results: results as unknown as unknown[],
         checkedById: asId<"UserId">(ctx.user.id),
-      } as unknown as Partial<ConflictCheck>);
+      });
 
       return { results, matchCount: results.length, searchTerm: input.searchTerm };
     }),

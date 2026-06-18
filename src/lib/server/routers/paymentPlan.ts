@@ -21,7 +21,8 @@ import {
   computeDueReminders,
   type PlanForScan,
 } from "@/lib/shared/payment-reminders";
-import { paymentPlanStatusSchema, reminderTypeSchema, type Invoice, type PaymentPlan, type PaymentPlanReminder } from "@/lib/shared/schemas";
+import { paymentPlanStatusSchema, reminderTypeSchema, type Invoice, type PaymentPlan } from "@/lib/shared/schemas";
+import { asId } from "@/lib/shared/schemas/ids";
 import { emit } from "../events/emit";
 import type {
   JoinedPaymentPlan, JoinedPaymentPlanWithReminders,
@@ -142,12 +143,12 @@ export const paymentPlanRouter = router({
       const plan = await ctx.repos.paymentPlans.getByIdInOrg(input.planId, ctx.orgId);
       if (!plan) throw new TRPCError({ code: "NOT_FOUND" });
       return ctx.repos.paymentPlanReminders.create({
-        id: input.id,
-        planId: input.planId,
+        ...(input.id ? { id: asId<"PaymentPlanReminderId">(input.id) } : {}),
+        planId: asId<"PaymentPlanId">(input.planId),
         dueMonth: input.dueMonth,
         type: input.type,
         sentAt: input.sentAt ? new Date(input.sentAt) : new Date(),
-      } as unknown as Partial<PaymentPlanReminder>);
+      });
     }),
 
   /**
@@ -173,8 +174,8 @@ export const paymentPlanRouter = router({
 
       for (const r of planned) {
         await ctx.repos.paymentPlanReminders.create({
-          planId: r.planId, dueMonth: r.dueMonth, type: r.type, sentAt: now,
-        } as unknown as Partial<PaymentPlanReminder>);
+          planId: asId<"PaymentPlanId">(r.planId), dueMonth: r.dueMonth, type: r.type, sentAt: now,
+        });
         if (r.type === "DUE") await emit.paymentDue(ctx, r.payload, r.matterId);
         else await emit.paymentOverdue(ctx, r.payload, r.matterId);
       }

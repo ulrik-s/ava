@@ -58,6 +58,6 @@ export function createClassifyDocumentHandler(deps: ClassifyDocumentDeps): JobHa
       analyzedAt: now(),
       analysisStatus: "DONE",
       analysisModel: model,
-    } as unknown as Partial<Document>);
+    });
   };
 }
