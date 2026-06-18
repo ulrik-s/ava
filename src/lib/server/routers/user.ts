@@ -169,7 +169,7 @@ export const userRouter = router({
       }
       const owned = await ctx.repos.users.getByIdInOrg(input.id, ctx.user.organizationId);
       if (!owned) throw new TRPCError({ code: "NOT_FOUND" });
-      return ctx.repos.users.update(input.id, { active: false } as unknown as Partial<User>);
+      return ctx.repos.users.update(input.id, { active: false });
     }),
 
   /** Hård-delete behållen för bakåtkompabilitet, men ADMIN-only. */

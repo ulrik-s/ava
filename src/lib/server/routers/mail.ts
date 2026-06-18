@@ -13,8 +13,6 @@
  */
 
 import { z } from "zod";
-import type { TimeEntry } from "@/lib/shared/schemas/billing";
-import type { Document } from "@/lib/shared/schemas/document";
 import { asId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { emit, type EmitCtx } from "../events/emit";
@@ -80,22 +78,22 @@ export const mailRouter = router({
       // 3. Registrera dokument-metadata (projektion).
       const fileName = emlFileName(input.subject);
       const docData = {
-        id,
-        matterId: input.matterId,
+        id: asId<"DocumentId">(id),
+        matterId: asId<"MatterId">(input.matterId),
         fileName,
         mimeType: "message/rfc822",
         sizeBytes: bytes.byteLength,
         fileSize: bytes.byteLength, // denormaliserat (UI läser fileSize)
         storagePath,
-        folderId: input.folderId ?? null,
+        folderId: input.folderId ? asId<"DocumentFolderId">(input.folderId) : null,
         organizationId: ctx.orgId,
-        analysisStatus: "PENDING",
-        uploadedById: ctx.user.id,
+        analysisStatus: "PENDING" as const,
+        uploadedById: asId<"UserId">(ctx.user.id),
         title: input.subject,
         documentType: "E-post",
         createdAt: new Date(input.receivedAt),
       };
-      const doc = await ctx.repos.documents.create(docData as unknown as Partial<Document>);
+      const doc = await ctx.repos.documents.create(docData);
       await emit.documentUploaded(ctx, { id, fileName, matterId: input.matterId });
 
       // 4. Valfri tidspost kopplad till mailet.
@@ -119,14 +117,14 @@ async function createMailTimeEntry(
   const user = await ctx.repos.users.getByIdOrThrow(userId);
   const entryData = {
     userId,
-    matterId,
+    matterId: asId<"MatterId">(matterId),
     date: new Date(receivedAt),
     minutes: time.minutes,
     description: time.description ?? subject,
     hourlyRate: user.hourlyRate ?? 0,
     billable: true,
   };
-  const entry = await ctx.repos.timeEntries.create(entryData as unknown as Partial<TimeEntry>);
+  const entry = await ctx.repos.timeEntries.create(entryData);
   await emit.timeEntryAdded(ctx, { id: entry.id, matterId: entry.matterId, minutes: entry.minutes });
   return entry;
 }

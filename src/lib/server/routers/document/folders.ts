@@ -8,7 +8,7 @@
 
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import type { Document, DocumentFolder } from "@/lib/shared/schemas/document";
+import type { DocumentFolder } from "@/lib/shared/schemas/document";
 import {
   matterIdSchema,
   documentFolderIdSchema,
@@ -57,7 +57,7 @@ export const folderProcedures = {
   moveDocument: orgProcedure
     .input(z.object({ documentId: documentIdSchema, folderId: documentFolderIdSchema.nullable() }))
     .mutation(({ ctx, input }) =>
-      ctx.repos.documents.update(input.documentId, { folderId: input.folderId } as unknown as Partial<Document>),
+      ctx.repos.documents.update(input.documentId, { folderId: input.folderId }),
     ),
 
   /** Flyttar en mapp; blockerar cykler (mapp-in-i-sig-själv/descendant). */

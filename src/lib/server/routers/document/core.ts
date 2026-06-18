@@ -9,6 +9,7 @@ import { base64ToBytes, bytesToBase64, contentStoragePath, sha256Hex } from "@/l
 import { isJunkFileName } from "@/lib/shared/junk-files";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import type { Document } from "@/lib/shared/schemas/document";
+import { asId } from "@/lib/shared/schemas/ids";
 import { orgProcedure } from "../../trpc";
 import { assertDocAccess } from "./shared";
 
@@ -121,18 +122,18 @@ export const coreProcedures = {
       // Verifiera matter:n tillhör org:n
       const matter = await ctx.repos.matters.getByIdInOrg(input.matterId, ctx.orgId);
       if (!matter) throw new TRPCError({ code: "NOT_FOUND" });
-      const data = {
-        id: input.id,
-        matterId: input.matterId,
+      const data = omitUndefined({
+        id: asId<"DocumentId">(input.id),
+        matterId: asId<"MatterId">(input.matterId),
         fileName: input.fileName,
         mimeType: input.mimeType,
         sizeBytes: input.sizeBytes,
         fileSize: input.sizeBytes, // denormaliserat (UI läser fileSize)
         storagePath: input.storagePath,
-        folderId: input.folderId ?? null,
+        folderId: input.folderId ? asId<"DocumentFolderId">(input.folderId) : null,
         organizationId: ctx.orgId,
         analysisStatus: input.analysisStatus ?? "PENDING",
-        uploadedById: input.uploadedById ?? ctx.user.id,
+        uploadedById: asId<"UserId">(input.uploadedById ?? ctx.user.id),
         version: input.version,
         title: input.title,
         documentType: input.documentType,
@@ -140,8 +141,8 @@ export const coreProcedures = {
         analyzedAt: input.analyzedAt ? new Date(input.analyzedAt) : undefined,
         createdAt: input.createdAt ? new Date(input.createdAt) : undefined,
         invoiceId: input.invoiceId ?? undefined,
-      };
-      return ctx.repos.documents.create(data as unknown as Partial<Document>);
+      });
+      return ctx.repos.documents.create(data);
     }),
 
   /** Kör (eller kör om) AI-analys på ett dokument. Returnerar omedelbart. */
@@ -175,7 +176,7 @@ export const coreProcedures = {
         sizeBytes: bytes.byteLength,
         fileSize: bytes.byteLength,
         analysisStatus: "PENDING",
-      } as unknown as Partial<Document>);
+      });
       ctx.ports.documentAnalyzer.analyze(input.documentId).catch((e: unknown) =>
         console.error("classify after upload failed:", e),
       );
@@ -246,7 +247,7 @@ export const coreProcedures = {
                 : analyzedAt,
         }),
       };
-      return ctx.repos.documents.update(documentId, data as unknown as Partial<Document>);
+      return ctx.repos.documents.update(documentId, data);
     }),
 
   /**
@@ -270,7 +271,7 @@ export const coreProcedures = {
       // repo.update bumpar version + updatedAt automatiskt (reconcile-konvention).
       return ctx.repos.documents.update(
         input.id,
-        omitUndefined({ sizeBytes: input.sizeBytes, fileSize: input.sizeBytes }) as unknown as Partial<Document>,
+        omitUndefined({ sizeBytes: input.sizeBytes, fileSize: input.sizeBytes }),
       );
     }),
 };
