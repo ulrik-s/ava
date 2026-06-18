@@ -59,9 +59,14 @@ const FAST = process.argv.includes("--fast");
 // medan FUNC behåller ~1.3% Node-version-marginal) → 88.9 rader / 84.0
 // funktioner (#518: byte-synk + content-address + uploadContent/download +
 // syncDocumentContent-wiring täckta → lokalt 90.70% rader / 85.51% funktioner;
-// båda golven dras upp en knapp, ~1.5% FUNC-marginal behålls).
+// båda golven dras upp en knapp, ~1.5% FUNC-marginal behålls) → 88.9 rader /
+// 84.1 funktioner (#27: icke-taxa-/timkostnadsnorm-grenen, timeEntries-
+// specifikationen och vatRateLabel-varianterna i kostnadsräkningen testade →
+// kostnadsrakning.ts 91%→100% rader, 15/20→20/20 funktioner; lokalt 90.74%
+// rader / 85.64% funktioner. FUNC dras upp en knapp, ~1.5%-marginal behålls;
+// LINE oförändrat — dess marginal är en avsiktlig Node-version-buffert).
 const LINE_FLOOR = 0.889;
-const FUNC_FLOOR = 0.840;
+const FUNC_FLOOR = 0.841;
 
 /**
  * SERIAL_FILES — testfiler som SYNKRONT spawnar en barnprocess via

@@ -147,6 +147,93 @@ describe("templateContext — formaterad data för Handlebars", () => {
   });
 });
 
+describe("buildKostnadsrakningContext — icke-taxa-ärende (timkostnadsnorm)", () => {
+  // isTaxeArende=false → arvode = timkostnadsnorm × (billable tid + HUF),
+  // INTE brottmålstaxan. Täcker timkostnadsnormResult + resolveTaxa-grenen.
+  const r = buildKostnadsrakningContext({
+    ...baseInput,
+    isTaxeArende: false,
+    timeEntries: [
+      { id: "t1", date: "2026-05-20", description: "Genomgång förundersökning", minutes: 120, billable: true },
+      { id: "t2", date: "2026-05-22", description: "Klientmöte", minutes: 30, billable: true },
+      { id: "t3", date: "2026-05-23", description: "Intern admin", minutes: 45, billable: false },
+    ],
+  });
+
+  it("billable tid summeras (exkl HUF), icke-debiterbar filtreras bort", () => {
+    expect(r.billableArbetsMinutes).toBe(150); // 120 + 30, ej 45
+    expect(r.timeLines.map((t) => t.id).sort()).toEqual(["t1", "t2"]);
+  });
+
+  it("totalArbetsMinutes = billable tid + HUF", () => {
+    expect(r.totalArbetsMinutes).toBe(150 + 95); // 245
+  });
+
+  it("arvode = timkostnadsnorm (1 626 kr/h) × 245 min, ej brottmålstaxan", () => {
+    expect(r.taxa.kind).toBe("taxa-applies");
+    expect(r.taxa.intervalLabel).toBe("Timkostnadsnorm");
+    expect(r.arvodeExclVat).toBe(663950);
+    expect(r.arvodeMoms).toBe(165988);
+    expect(r.arvodeInclVat).toBe(829938);
+  });
+
+  it("noten beskriver timkostnadsnorm-beräkningen", () => {
+    expect(r.taxa.notes.join(" ")).toMatch(/Icke-taxa/i);
+    expect(r.taxa.notes.join(" ")).toMatch(/1626 kr\/h/);
+  });
+
+  it("icke-taxa utan F-skatt → lägre timkostnadsnorm (1 237 kr\/h)", () => {
+    const noFtax = buildKostnadsrakningContext({
+      ...baseInput,
+      isTaxeArende: false,
+      hasFTax: false,
+      timeEntries: [{ id: "t1", date: "2026-05-20", description: "Arbete", minutes: 60, billable: true }],
+    });
+    // 60 + 95 = 155 min × 1237 kr/h
+    expect(noFtax.arvodeExclVat).toBe(Math.round((155 * 123700) / 60));
+    expect(noFtax.taxa.notes.join(" ")).toMatch(/1237 kr\/h/);
+  });
+});
+
+describe("buildKostnadsrakningContext — timeLines i taxa-ärende", () => {
+  // I taxa-ärenden visas tidsposterna som information men påverkar inte arvodet.
+  const r = buildKostnadsrakningContext({
+    ...baseInput,
+    timeEntries: [{ id: "t1", date: "2026-05-20", description: "Förberedelse", minutes: 90, billable: true }],
+  });
+
+  it("timeLines visas och formateras i templateContext", () => {
+    const lines = r.templateContext.timeLines as Array<Record<string, unknown>>;
+    expect(lines).toHaveLength(1);
+    expect(lines[0]!.minutesFormatted).toBe("1 tim 30 min");
+    expect(r.templateContext.billableArbetsFormatted).toBe("1 tim 30 min");
+  });
+
+  it("arvodet styrs fortfarande av taxan (oförändrat mot utan tidsposter)", () => {
+    expect(r.arvodeExclVat).toBe(563500); // samma som 95 min nivå 1
+  });
+});
+
+describe("vatRateLabel — alla momssatser via templateContext", () => {
+  const r = buildKostnadsrakningContext({
+    ...baseInput,
+    expenses: [
+      { id: "v0", date: "2026-05-20", description: "Momsfritt", amount: 10000, vatRate: 0, vatIncluded: true, billable: true },
+      { id: "v12", date: "2026-05-20", description: "Mat 12 %", amount: 10000, vatRate: 1200, vatIncluded: true, billable: true },
+      { id: "v25", date: "2026-05-20", description: "Standard (default 25 %)", amount: 10000, vatIncluded: true, billable: true },
+    ],
+  });
+
+  it("mappar momssats-baspoäng till etikett (0/12/25 %)", () => {
+    const byId = new Map(
+      (r.templateContext.expenseLines as Array<Record<string, unknown>>).map((l) => [l.id, l.vatRateLabel]),
+    );
+    expect(byId.get("v0")).toBe("0 %");
+    expect(byId.get("v12")).toBe("12 %");
+    expect(byId.get("v25")).toBe("25 %"); // vatRate utelämnad → default 2500
+  });
+});
+
 describe("buildKostnadsrakningContext — rådgivningstimme (#383)", () => {
   it("radgivningPaid=true → textrad i templateContext (utan belopp)", () => {
     const r = buildKostnadsrakningContext({
