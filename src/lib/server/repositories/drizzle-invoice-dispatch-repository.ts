@@ -7,14 +7,14 @@ import { and, asc, desc, eq, isNull } from "drizzle-orm";
 import type { InvoiceDispatch } from "@/lib/shared/schemas/billing";
 import { invoiceDispatches, invoices, matters } from "../db/schema";
 import type { AppDb } from "../db/types";
-import { DrizzleRepository, type VersionedTable } from "./drizzle-repository";
+import { DrizzleRepository, versionedTable } from "./drizzle-repository";
 import type { InvoiceDispatchQueuedRow, InvoiceDispatchRepository } from "./invoice-dispatch-repository";
 
 export class DrizzleInvoiceDispatchRepository
   extends DrizzleRepository<InvoiceDispatch>
   implements InvoiceDispatchRepository {
   constructor(db: AppDb, now: () => Date = () => new Date()) {
-    super(db, invoiceDispatches as unknown as VersionedTable, now);
+    super(db, versionedTable(invoiceDispatches), now);
   }
 
   async listByInvoice(invoiceId: string): Promise<InvoiceDispatch[]> {

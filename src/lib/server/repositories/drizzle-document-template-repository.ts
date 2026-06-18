@@ -10,13 +10,13 @@ import type { AppDb } from "../db/types";
 import type {
   DocumentTemplateListRow, DocumentTemplateRepository, DocumentTemplateRow,
 } from "./document-template-repository";
-import { DrizzleRepository, type VersionedTable } from "./drizzle-repository";
+import { DrizzleRepository, versionedTable } from "./drizzle-repository";
 
 export class DrizzleDocumentTemplateRepository
   extends DrizzleRepository<DocumentTemplate>
   implements DocumentTemplateRepository {
   constructor(db: AppDb, now: () => Date = () => new Date()) {
-    super(db, documentTemplates as unknown as VersionedTable, now);
+    super(db, versionedTable(documentTemplates), now);
   }
 
   async listForOrg(organizationId: string): Promise<DocumentTemplateListRow[]> {

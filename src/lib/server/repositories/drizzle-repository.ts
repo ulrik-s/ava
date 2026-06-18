@@ -26,6 +26,16 @@ import type { Repository, RowBase } from "./types";
 /** En tabell med de reconcile-kolumner bas-CRUD:n läser/skriver. */
 export type VersionedTable = PgTable & Record<"id" | "deletedAt" | "version", AnyColumn>;
 
+/**
+ * Markera en konkret tabell som `VersionedTable`. Type-checkat: tabellen MÅSTE
+ * ha reconcile-kolumnerna (id/version/deletedAt via `baseColumns`) — saknas de
+ * blir det kompileringsfel. Ersätter `as unknown as VersionedTable` med ett
+ * kontrollerat anrop i alla repo-konstruktorer (#typing).
+ */
+export function versionedTable<T extends VersionedTable>(table: T): VersionedTable {
+  return table;
+}
+
 export class DrizzleRepository<Row extends RowBase> implements Repository<Row> {
   private changeLog?: ChangeLogRecorder;
 

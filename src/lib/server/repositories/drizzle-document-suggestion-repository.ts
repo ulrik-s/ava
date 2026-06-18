@@ -10,7 +10,7 @@ import type { AppDb } from "../db/types";
 import type {
   DocumentSuggestionRepository, SuggestionListRow, SuggestionWithMatter,
 } from "./document-suggestion-repository";
-import { DrizzleRepository, type VersionedTable } from "./drizzle-repository";
+import { DrizzleRepository, versionedTable } from "./drizzle-repository";
 
 const S = documentAnalysisSuggestions;
 
@@ -18,7 +18,7 @@ export class DrizzleDocumentSuggestionRepository
   extends DrizzleRepository<DocumentAnalysisSuggestion>
   implements DocumentSuggestionRepository {
   constructor(db: AppDb, now: () => Date = () => new Date()) {
-    super(db, S as unknown as VersionedTable, now);
+    super(db, versionedTable(S), now);
   }
 
   async getByIdInOrg(id: string, organizationId: string): Promise<SuggestionWithMatter | null> {

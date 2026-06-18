@@ -7,12 +7,12 @@ import { and, asc, eq, isNull } from "drizzle-orm";
 import type { Task } from "@/lib/shared/schemas/calendar";
 import { matters, tasks } from "../db/schema";
 import type { AppDb } from "../db/types";
-import { DrizzleRepository, type VersionedTable } from "./drizzle-repository";
+import { DrizzleRepository, versionedTable } from "./drizzle-repository";
 import type { TaskListFilter, TaskListRow, TaskRepository } from "./task-repository";
 
 export class DrizzleTaskRepository extends DrizzleRepository<Task> implements TaskRepository {
   constructor(db: AppDb, now: () => Date = () => new Date()) {
-    super(db, tasks as unknown as VersionedTable, now);
+    super(db, versionedTable(tasks), now);
   }
 
   async listForUser(userId: string, organizationId: string, filter: TaskListFilter): Promise<TaskListRow[]> {

@@ -7,12 +7,12 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { WriteOff } from "@/lib/shared/schemas/billing";
 import { writeOffs } from "../db/schema";
 import type { AppDb } from "../db/types";
-import { DrizzleRepository, type VersionedTable } from "./drizzle-repository";
+import { DrizzleRepository, versionedTable } from "./drizzle-repository";
 import type { WriteOffRepository } from "./write-off-repository";
 
 export class DrizzleWriteOffRepository extends DrizzleRepository<WriteOff> implements WriteOffRepository {
   constructor(db: AppDb, now: () => Date = () => new Date()) {
-    super(db, writeOffs as unknown as VersionedTable, now);
+    super(db, versionedTable(writeOffs), now);
   }
 
   async sumByInvoice(invoiceId: string): Promise<number> {

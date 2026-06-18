@@ -8,13 +8,13 @@ import type { ConflictCheck } from "@/lib/shared/schemas/misc";
 import { conflictChecks, users } from "../db/schema";
 import type { AppDb } from "../db/types";
 import type { ConflictCheckRepository, ConflictCheckRow } from "./conflict-check-repository";
-import { DrizzleRepository, type VersionedTable } from "./drizzle-repository";
+import { DrizzleRepository, versionedTable } from "./drizzle-repository";
 
 export class DrizzleConflictCheckRepository
   extends DrizzleRepository<ConflictCheck>
   implements ConflictCheckRepository {
   constructor(db: AppDb, now: () => Date = () => new Date()) {
-    super(db, conflictChecks as unknown as VersionedTable, now);
+    super(db, versionedTable(conflictChecks), now);
   }
 
   async listHistory(page: number, pageSize: number): Promise<{ checks: ConflictCheckRow[]; total: number }> {

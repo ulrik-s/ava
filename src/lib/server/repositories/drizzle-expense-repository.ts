@@ -7,14 +7,14 @@ import { and, asc, desc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm"
 import type { Expense } from "@/lib/shared/schemas/billing";
 import { expenses, invoices, matters, users } from "../db/schema";
 import type { AppDb } from "../db/types";
-import { DrizzleRepository, type VersionedTable } from "./drizzle-repository";
+import { DrizzleRepository, versionedTable } from "./drizzle-repository";
 import type {
   ExpenseListOptions, ExpenseListResult, ExpenseListRow, ExpenseRepository, LawyerReportExpense,
 } from "./expense-repository";
 
 export class DrizzleExpenseRepository extends DrizzleRepository<Expense> implements ExpenseRepository {
   constructor(db: AppDb, now: () => Date = () => new Date()) {
-    super(db, expenses as unknown as VersionedTable, now);
+    super(db, versionedTable(expenses), now);
   }
 
   async listForOrg(organizationId: string, opts: ExpenseListOptions): Promise<ExpenseListResult> {
