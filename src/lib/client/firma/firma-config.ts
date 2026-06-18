@@ -1,10 +1,13 @@
 /**
  * `FirmaConfig` — vilken repo + token AVA-appen ska peka mot.
  *
- * Tre tier:s av deploy:
- *   1. Demo (default) — publikt `ulrik-s/ava-demo` via GH Pages
- *   2. GitHub private — user-vald repo + PAT
- *   3. Self-hosted — user-vald HTTPS git-URL (Cleura/Linux) + token
+ * Två tier:s av deploy (ADR 0016, server-first):
+ *   1. Demo (default) — publikt `ulrik-s/ava-demo` via GH Pages (read-only)
+ *   2. Self-hosted — byråns server (Postgres + tRPC bakom oauth2-proxy/OIDC),
+ *      nås same-origin; ingen git-URL eller token behövs
+ *
+ * (Den gamla `github`-tiern — eget privat git-repo via iso-git — pensionerades
+ * i #500–#502. Lagrad `github` migreras till `demo` vid inläsning.)
  *
  * Persisteras i localStorage. Browser-only (SSR-safe via guard).
  */
@@ -14,15 +17,14 @@ import { z } from "zod";
 import { loadFromStorage } from "@/lib/client/load-from-storage";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 
-export type FirmaTier = "demo" | "github" | "self-hosted";
+export type FirmaTier = "demo" | "self-hosted";
 
 export interface FirmaConfig {
   tier: FirmaTier;
   /**
    * Repo-identifierare:
-   *   - tier=demo: "user/repo" (kortform mot GH Pages)
-   *   - tier=github: "user/repo" eller "https://github.com/user/repo.git"
-   *   - tier=self-hosted: full HTTPS-URL (t.ex. "https://git.firma.se/data.git")
+   *   - tier=demo: "user/repo" (kortform mot GH Pages — demons datakälla)
+   *   - tier=self-hosted: oanvänd (servern nås same-origin via tRPC)
    */
   repo: string;
   /** GitHub PAT eller motsvarande auth-token. Tomt för publik demo. */
@@ -114,7 +116,8 @@ export function defaultConfigForHost(hostname: string | undefined): FirmaConfig 
 // domänobjektet. Alla fält optionella (partiella skrivningar förekommer);
 // .passthrough() bevarar okända fält från nyare versioner i andra flikar.
 const storedFirmaConfigSchema = z.object({
-  tier: z.enum(["demo", "github", "self-hosted"]).optional(),
+  // Migrera bort den pensionerade `github`-tiern → `demo` (#514).
+  tier: z.preprocess((v) => (v === "github" ? "demo" : v), z.enum(["demo", "self-hosted"]).optional()),
   repo: z.string().optional(),
   token: z.string().optional(),
   organizationId: z.string().optional(),
@@ -168,18 +171,4 @@ export function resetToDemo(): void {
  */
 export function demoConfig(): FirmaConfig {
   return { ...DEMO_DEFAULT };
-}
-
-/**
- * Heuristik för tier baserat på repo-strängen. Används om user
- * inte explicit valt tier.
- */
-export function inferTier(repo: string): FirmaTier {
-  if (repo.includes("github.com") || /^[^/]+\/[^/]+$/.test(repo)) {
-    return "github";
-  }
-  if (repo.startsWith("https://") || repo.startsWith("http://")) {
-    return "self-hosted";
-  }
-  return "demo";
 }
