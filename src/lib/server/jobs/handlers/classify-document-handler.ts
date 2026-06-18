@@ -21,11 +21,18 @@ const classifyJobSchema = z.object({
   organizationId: z.string().optional(),
 });
 
+/** Dokument-fälten klassificeraren behöver (filnamn + var bytes ligger). */
+export interface ClassifiableDoc {
+  fileName: string;
+  storagePath: string;
+  mimeType: string;
+}
+
 export interface ClassifyDocumentDeps {
   /** Dokument-repo (läs hela raden + skriv tillbaka metadatan). */
   documents: Pick<DocumentRepository, "getById" | "update">;
   /** Klassificerare; default = filnamns-heuristik. Fas 3 injicerar LLM-varianten. */
-  classify?: (doc: { fileName: string }) => Promise<DocumentKind>;
+  classify?: (doc: ClassifiableDoc) => Promise<DocumentKind>;
   /** Modell-etikett som sparas i `analysisModel`. */
   model?: string;
   /** Injicerbar nu-tid för deterministiska tester. */
@@ -33,15 +40,19 @@ export interface ClassifyDocumentDeps {
 }
 
 export function createClassifyDocumentHandler(deps: ClassifyDocumentDeps): JobHandler {
-  const classify = deps.classify ?? (async (doc) => guessFromFilename(doc.fileName));
+  const classify = deps.classify ?? (async (doc: ClassifiableDoc) => guessFromFilename(doc.fileName));
   const model = deps.model ?? "filename-heuristic";
   const now = deps.now ?? (() => new Date());
 
   return async (job): Promise<void> => {
     const { documentId } = classifyJobSchema.parse(job.data);
-    const doc = await deps.documents.getById(documentId);
+    const doc = (await deps.documents.getById(documentId)) as Document | null;
     if (!doc) return; // raderat innan jobbet kördes → no-op
-    const kind = await classify({ fileName: (doc as Document).fileName });
+    const kind = await classify({
+      fileName: doc.fileName,
+      storagePath: doc.storagePath,
+      mimeType: doc.mimeType,
+    });
     await deps.documents.update(documentId, {
       documentType: kind,
       analyzedAt: now(),
