@@ -5,6 +5,7 @@
 
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import { base64ToBytes, bytesToBase64, contentStoragePath, sha256Hex } from "@/lib/shared/content-address";
 import { isJunkFileName } from "@/lib/shared/junk-files";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import type { Document } from "@/lib/shared/schemas/document";
@@ -153,6 +154,48 @@ export const coreProcedures = {
         console.error("analyze failed:", e),
       );
       return { ok: true };
+    }),
+
+  /**
+   * `uploadContent` (#518, ADR 0023) — ta emot dokument-bytes (base64) och
+   * lagra dem INNEHÅLLS-ADRESSERAT (sha256). Repekar dokumentets `storagePath`
+   * till den nya hashen → ny immutabel version (repo.update bumpar `version`
+   * automatiskt, reconcile-konvention). Nytt innehåll → klassificera om
+   * (analysen körs server-side via jobb-kön). Gamla bytes behålls (git-historik).
+   */
+  uploadContent: orgProcedure
+    .input(z.object({ documentId: z.string(), contentBase64: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      await assertDocAccess(ctx, input.documentId);
+      const bytes = base64ToBytes(input.contentBase64);
+      const storagePath = contentStoragePath(await sha256Hex(bytes));
+      await ctx.ports.content.write(storagePath, bytes);
+      const updated = await ctx.repos.documents.update(input.documentId, {
+        storagePath,
+        sizeBytes: bytes.byteLength,
+        fileSize: bytes.byteLength,
+        analysisStatus: "PENDING",
+      } as unknown as Partial<Document>);
+      ctx.ports.documentAnalyzer.analyze(input.documentId).catch((e: unknown) =>
+        console.error("classify after upload failed:", e),
+      );
+      return updated;
+    }),
+
+  /**
+   * `downloadContent` (#518, ADR 0023) — läs tillbaka dokument-bytes (base64)
+   * från content-store:n via dokumentets `storagePath`. Klienten cachar
+   * resultatet innehålls-adresserat (immutabelt → cacha för evigt).
+   */
+  downloadContent: orgProcedure
+    .input(z.object({ documentId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      await assertDocAccess(ctx, input.documentId);
+      const doc = (await ctx.repos.documents.getById(input.documentId)) as Document | null;
+      if (!doc) throw new TRPCError({ code: "NOT_FOUND" });
+      const bytes = await ctx.ports.content.read(doc.storagePath);
+      if (!bytes) throw new TRPCError({ code: "NOT_FOUND", message: "Innehåll saknas på servern." });
+      return { contentBase64: bytesToBase64(bytes), mimeType: doc.mimeType, fileName: doc.fileName };
     }),
 
   /**
