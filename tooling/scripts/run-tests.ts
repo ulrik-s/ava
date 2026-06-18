@@ -46,9 +46,12 @@ const FAST = process.argv.includes("--fast");
 // WebCrypto-/IndexedDB-tester för ed25519-keypair lyfte lokalt till 88.38%
 // rader / 84.89% funktioner; samma marginal-konvention behålls) → 88.0 rader /
 // 83.4 funktioner (#27: smtp-sender + ExternalEditIndicator-tester lyfte lokalt
-// till 88.46% rader / 84.97% funktioner; samma ~0.5%/~1.5%-marginal).
+// till 88.46% rader / 84.97% funktioner; samma ~0.5%/~1.5%-marginal) → 88.0
+// rader / 83.5 funktioner (#27: handle-store IndexedDB-persistens mot fake-
+// indexeddb lyfte lokalt till 88.53% rader / 85.07% funktioner; FUNC-golvet
+// låses just under 85%-milstolpen, LINE oförändrat ~0.5% marginal).
 const LINE_FLOOR = 0.88;
-const FUNC_FLOOR = 0.834;
+const FUNC_FLOOR = 0.835;
 
 /**
  * SERIAL_FILES — testfiler som SYNKRONT spawnar en barnprocess via
