@@ -56,9 +56,12 @@ const FAST = process.argv.includes("--fast");
 // noop-ports + alla emit-helpers täckta efter server-first-migreringen, som
 // dessutom tog bort otestad git/OPFS/mem-fs-kod → lokalt 90.50% rader / 85.11%
 // funktioner; LINE-marginalen krymps mot den deterministiska kod-borttagningen
-// medan FUNC behåller ~1.3% Node-version-marginal).
-const LINE_FLOOR = 0.888;
-const FUNC_FLOOR = 0.838;
+// medan FUNC behåller ~1.3% Node-version-marginal) → 88.9 rader / 84.0
+// funktioner (#518: byte-synk + content-address + uploadContent/download +
+// syncDocumentContent-wiring täckta → lokalt 90.70% rader / 85.51% funktioner;
+// båda golven dras upp en knapp, ~1.5% FUNC-marginal behålls).
+const LINE_FLOOR = 0.889;
+const FUNC_FLOOR = 0.840;
 
 /**
  * SERIAL_FILES — testfiler som SYNKRONT spawnar en barnprocess via
