@@ -27,6 +27,7 @@ import { startJobRuntime, type JobRuntime } from "@/lib/server/jobs/job-worker-r
 import { QueueBackedDocumentAnalyzer } from "@/lib/server/jobs/queue-backed-document-analyzer";
 import { QueueBackedEmailSender } from "@/lib/server/jobs/queue-backed-email-sender";
 import { buildServerFirstJobHandlers, loadSmtpConfigFromEnv } from "@/lib/server/jobs/server-first-handlers";
+import { loadLlmConfigFromEnv } from "@/lib/server/llm/ollama-classifier";
 
 function log(msg: string): void {
   console.log(`[server-first] ${msg}`);
@@ -40,7 +41,10 @@ function main(): void {
         "Env: AVA_DATABASE_URL, AVA_ORGANIZATION_ID, AVA_HTTP_PORT, AVA_HTTP_HOST,\n" +
         "     AVA_CONTENT_DIR (dokument-bytes på disk, #518)\n" +
         "Jobb-kö (#504): pg-boss på samma DB. E-postutskick aktiveras när\n" +
-        "AVA_SMTP_HOST/PORT/USER/PASS/FROM (+ valfri AVA_SMTP_SECURE) är satta.\n",
+        "AVA_SMTP_HOST/PORT/USER/PASS/FROM (+ valfri AVA_SMTP_SECURE) är satta.\n" +
+        "Dokumentklassificering (#518): server-LLM aktiveras när AVA_CONTENT_DIR +\n" +
+        "AVA_LLM_ENDPOINT + AVA_LLM_MODEL (+ valfri AVA_LLM_API_KEY) är satta\n" +
+        "(annars filnamns-heuristik). Kör ollama via docker `--profile llm`.\n",
     );
     return;
   }
@@ -76,9 +80,14 @@ function main(): void {
   // serveringen. Handlers per konfigurerad integration (e-post via AVA_SMTP_*,
   // dokumentklassificering via repos #518).
   const smtp = loadSmtpConfigFromEnv();
+  const llm = loadLlmConfigFromEnv();
   const handlers = buildServerFirstJobHandlers({
     ...(smtp ? { smtp } : {}),
     documents: api.repos.documents,
+    // Server-LLM-klassificering (#518 Fas 3): med content-store + AVA_LLM_*
+    // läses bytes → text extraheras (PDF/DOCX) → ollama klassificerar.
+    ...(contentStore ? { content: contentStore } : {}),
+    ...(llm ? { llm } : {}),
   });
   void startJobRuntime({ connectionString: config.databaseUrl, handlers })
     .then((rt) => { jobRuntime = rt; log(`jobb-kö startad (pg-boss; ${Object.keys(handlers).length} handlers)`); })

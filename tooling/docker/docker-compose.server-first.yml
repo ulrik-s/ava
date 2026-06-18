@@ -35,8 +35,34 @@ services:
       AVA_ORGANIZATION_ID: "${AVA_ORGANIZATION_ID:-00000000-0000-0000-0000-000000000001}"
       AVA_HTTP_HOST: 0.0.0.0
       AVA_HTTP_PORT: "3001"
+      # Dokument-bytes på disk (#518 Fas 1) — krävs för server-LLM-klassificering.
+      AVA_CONTENT_DIR: /data/content
+      # Server-LLM-klassificering (#518 Fas 3): sätts BARA när llm-profilen körs
+      # (annars faller jobbet tillbaka på filnamns-heuristik). Pekar på ollama nedan.
+      AVA_LLM_ENDPOINT: "${AVA_LLM_ENDPOINT:-}"
+      AVA_LLM_MODEL: "${AVA_LLM_MODEL:-}"
+    volumes:
+      - content_repo:/data/content
     ports:
       - "3001:3001"
     depends_on:
       postgres:
         condition: service_healthy
+
+  # ─── (Valbar) Lokal LLM för dokumentklassificering (#518) ──────────
+  # Default off — dra in med `docker compose --profile llm up`. Sätt sedan
+  #   AVA_LLM_ENDPOINT=http://ollama:11434/v1  AVA_LLM_MODEL=llama3.2
+  # på server-first-tjänsten (env ovan läser dem). Modellen dras ner i
+  # containern (ingen klient-nedladdning). Ollama exponerar ett
+  # OpenAI-kompatibelt API på /v1.
+  ollama:
+    profiles: ["llm"]
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_models:/root/.ollama
+
+volumes:
+  content_repo:
+  ollama_models:
