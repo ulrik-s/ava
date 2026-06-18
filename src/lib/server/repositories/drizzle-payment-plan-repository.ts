@@ -11,14 +11,14 @@ import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import type { PaymentPlan, PaymentPlanReminder } from "@/lib/shared/schemas/billing";
 import { invoices, matters, paymentPlanReminders, paymentPlans } from "../db/schema";
 import type { AppDb } from "../db/types";
-import { DrizzleRepository, type VersionedTable } from "./drizzle-repository";
+import { DrizzleRepository, versionedTable } from "./drizzle-repository";
 import type {
   JoinedPaymentPlan, JoinedPaymentPlanWithReminders, PaymentPlanRepository,
 } from "./payment-plan-repository";
 
 export class DrizzlePaymentPlanRepository extends DrizzleRepository<PaymentPlan> implements PaymentPlanRepository {
   constructor(db: AppDb, now: () => Date = () => new Date()) {
-    super(db, paymentPlans as unknown as VersionedTable, now);
+    super(db, versionedTable(paymentPlans), now);
   }
 
   async getByIdInOrg(planId: string, organizationId: string): Promise<PaymentPlan | null> {

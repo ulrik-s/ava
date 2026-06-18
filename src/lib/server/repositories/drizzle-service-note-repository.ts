@@ -7,12 +7,12 @@ import { and, desc, eq, isNull } from "drizzle-orm";
 import type { ServiceNote } from "@/lib/shared/schemas/service-note";
 import { matters, serviceNotes, users } from "../db/schema";
 import type { AppDb } from "../db/types";
-import { DrizzleRepository, type VersionedTable } from "./drizzle-repository";
+import { DrizzleRepository, versionedTable } from "./drizzle-repository";
 import type { ServiceNoteRepository, ServiceNoteRow } from "./service-note-repository";
 
 export class DrizzleServiceNoteRepository extends DrizzleRepository<ServiceNote> implements ServiceNoteRepository {
   constructor(db: AppDb, now: () => Date = () => new Date()) {
-    super(db, serviceNotes as unknown as VersionedTable, now);
+    super(db, versionedTable(serviceNotes), now);
   }
 
   async listByMatter(matterId: string, organizationId: string): Promise<ServiceNoteRow[]> {

@@ -7,7 +7,7 @@ import { and, asc, eq, isNull, ne } from "drizzle-orm";
 import type { MatterEventSuggestion } from "@/lib/shared/schemas/document";
 import { documents, matterEventSuggestions, matters } from "../db/schema";
 import type { AppDb } from "../db/types";
-import { DrizzleRepository, type VersionedTable } from "./drizzle-repository";
+import { DrizzleRepository, versionedTable } from "./drizzle-repository";
 import type {
   MatterEventSuggestionRepository, MatterEventSuggestionRow,
 } from "./matter-event-suggestion-repository";
@@ -16,7 +16,7 @@ export class DrizzleMatterEventSuggestionRepository
   extends DrizzleRepository<MatterEventSuggestion>
   implements MatterEventSuggestionRepository {
   constructor(db: AppDb, now: () => Date = () => new Date()) {
-    super(db, matterEventSuggestions as unknown as VersionedTable, now);
+    super(db, versionedTable(matterEventSuggestions), now);
   }
 
   async listForMatter(matterId: string, organizationId: string): Promise<MatterEventSuggestionRow[]> {

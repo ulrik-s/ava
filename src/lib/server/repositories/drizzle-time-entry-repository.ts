@@ -7,7 +7,7 @@ import { and, asc, desc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm"
 import type { TimeEntry } from "@/lib/shared/schemas/billing";
 import { matters, timeEntries, users } from "../db/schema";
 import type { AppDb } from "../db/types";
-import { DrizzleRepository, type VersionedTable } from "./drizzle-repository";
+import { DrizzleRepository, versionedTable } from "./drizzle-repository";
 import type {
   LawyerReportTimeEntry, TimeEntryListFilter, TimeEntryListResult, TimeEntryListRow,
   TimeEntryReportFilter, TimeEntryReportRow, TimeEntryRepository, UnbilledTimeEntry,
@@ -27,7 +27,7 @@ function listWhere(organizationId: string, opts: TimeEntryListFilter) {
 
 export class DrizzleTimeEntryRepository extends DrizzleRepository<TimeEntry> implements TimeEntryRepository {
   constructor(db: AppDb, now: () => Date = () => new Date()) {
-    super(db, timeEntries as unknown as VersionedTable, now);
+    super(db, versionedTable(timeEntries), now);
   }
 
   async listForOrg(organizationId: string, opts: TimeEntryListFilter): Promise<TimeEntryListResult> {

@@ -8,7 +8,7 @@ import type { CalendarEvent } from "@/lib/shared/schemas/calendar";
 import { calendarEvents, matters } from "../db/schema";
 import type { AppDb } from "../db/types";
 import type { CalendarEventRepository, CalendarEventRow } from "./calendar-event-repository";
-import { DrizzleRepository, type VersionedTable } from "./drizzle-repository";
+import { DrizzleRepository, versionedTable } from "./drizzle-repository";
 
 type MatterCols = { mId: string | null; mNum: string | null; mTitle: string | null };
 
@@ -21,7 +21,7 @@ function withMatter<T extends MatterCols & { ev: unknown }>(r: T): CalendarEvent
 
 export class DrizzleCalendarEventRepository extends DrizzleRepository<CalendarEvent> implements CalendarEventRepository {
   constructor(db: AppDb, now: () => Date = () => new Date()) {
-    super(db, calendarEvents as unknown as VersionedTable, now);
+    super(db, versionedTable(calendarEvents), now);
   }
 
   private matterSelect() {

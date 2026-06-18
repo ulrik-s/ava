@@ -6,14 +6,14 @@ import { and, desc, eq, isNull } from "drizzle-orm";
 import type { ExpectedReceivable } from "@/lib/shared/schemas/billing";
 import { expectedReceivables } from "../db/schema";
 import type { AppDb } from "../db/types";
-import { DrizzleRepository, type VersionedTable } from "./drizzle-repository";
+import { DrizzleRepository, versionedTable } from "./drizzle-repository";
 import type { ExpectedReceivableListFilter, ExpectedReceivableRepository } from "./expected-receivable-repository";
 
 export class DrizzleExpectedReceivableRepository
   extends DrizzleRepository<ExpectedReceivable>
   implements ExpectedReceivableRepository {
   constructor(db: AppDb, now: () => Date = () => new Date()) {
-    super(db, expectedReceivables as unknown as VersionedTable, now);
+    super(db, versionedTable(expectedReceivables), now);
   }
 
   async listForOrg(organizationId: string, filter?: ExpectedReceivableListFilter): Promise<ExpectedReceivable[]> {

@@ -7,12 +7,12 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { Payment } from "@/lib/shared/schemas/billing";
 import { payments } from "../db/schema";
 import type { AppDb } from "../db/types";
-import { DrizzleRepository, type VersionedTable } from "./drizzle-repository";
+import { DrizzleRepository, versionedTable } from "./drizzle-repository";
 import type { PaymentRepository } from "./payment-repository";
 
 export class DrizzlePaymentRepository extends DrizzleRepository<Payment> implements PaymentRepository {
   constructor(db: AppDb, now: () => Date = () => new Date()) {
-    super(db, payments as unknown as VersionedTable, now);
+    super(db, versionedTable(payments), now);
   }
 
   async sumByInvoice(invoiceId: string): Promise<number> {

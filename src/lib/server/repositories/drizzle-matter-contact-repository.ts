@@ -9,7 +9,7 @@ import type { Contact } from "@/lib/shared/schemas/contact";
 import type { MatterContact } from "@/lib/shared/schemas/matter";
 import { contacts, matterContacts, matters } from "../db/schema";
 import type { AppDb } from "../db/types";
-import { DrizzleRepository, type VersionedTable } from "./drizzle-repository";
+import { DrizzleRepository, versionedTable } from "./drizzle-repository";
 import type {
   ConflictContactRow, MatterContactRepository, MatterContactWithContact,
 } from "./matter-contact-repository";
@@ -18,7 +18,7 @@ export class DrizzleMatterContactRepository
   extends DrizzleRepository<MatterContact>
   implements MatterContactRepository {
   constructor(db: AppDb, now: () => Date = () => new Date()) {
-    super(db, matterContacts as unknown as VersionedTable, now);
+    super(db, versionedTable(matterContacts), now);
   }
 
   async findForConflict(organizationId: string, numberTerm?: string): Promise<ConflictContactRow[]> {

@@ -10,13 +10,13 @@ import type { AppDb } from "../db/types";
 import type {
   BillingRunDetailRow, BillingRunListRow, BillingRunRepository,
 } from "./billing-run-repository";
-import { DrizzleRepository, type VersionedTable } from "./drizzle-repository";
+import { DrizzleRepository, versionedTable } from "./drizzle-repository";
 
 export class DrizzleBillingRunRepository
   extends DrizzleRepository<BillingRun>
   implements BillingRunRepository {
   constructor(db: AppDb, now: () => Date = () => new Date()) {
-    super(db, billingRuns as unknown as VersionedTable, now);
+    super(db, versionedTable(billingRuns), now);
   }
 
   async listForOrg(organizationId: string, matterId?: string): Promise<BillingRunListRow[]> {

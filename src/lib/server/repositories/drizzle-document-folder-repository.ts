@@ -10,7 +10,7 @@ import type { AppDb } from "../db/types";
 import type {
   DocumentFolderRepository, DocumentFolderWithCounts,
 } from "./document-folder-repository";
-import { DrizzleRepository, type VersionedTable } from "./drizzle-repository";
+import { DrizzleRepository, versionedTable } from "./drizzle-repository";
 import { matterOrg } from "./matter-org";
 
 /** documentFolders.parentId = X, eller IS NULL för rot. */
@@ -22,7 +22,7 @@ export class DrizzleDocumentFolderRepository
   extends DrizzleRepository<DocumentFolder>
   implements DocumentFolderRepository {
   constructor(db: AppDb, now: () => Date = () => new Date()) {
-    super(db, documentFolders as unknown as VersionedTable, now);
+    super(db, versionedTable(documentFolders), now);
   }
 
   /** Mappar saknar org-kolumn → härled via ärendet (#528) så change_log/pull funkar. */

@@ -4,12 +4,12 @@ import { and, asc, eq, isNull } from "drizzle-orm";
 import type { OrgPreference } from "@/lib/shared/schemas/preference";
 import { orgPreferences } from "../db/schema";
 import type { AppDb } from "../db/types";
-import { DrizzleRepository, type VersionedTable } from "./drizzle-repository";
+import { DrizzleRepository, versionedTable } from "./drizzle-repository";
 import type { OrgPreferenceRepository, OrgPreferenceRow } from "./org-preference-repository";
 
 export class DrizzleOrgPreferenceRepository extends DrizzleRepository<OrgPreferenceRow> implements OrgPreferenceRepository {
   constructor(db: AppDb, now: () => Date = () => new Date()) {
-    super(db, orgPreferences as unknown as VersionedTable, now);
+    super(db, versionedTable(orgPreferences), now);
   }
 
   async getByOrgKey(organizationId: string, key: string): Promise<OrgPreference | null> {

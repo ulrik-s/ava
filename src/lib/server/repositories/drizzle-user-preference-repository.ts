@@ -4,12 +4,12 @@ import { and, eq, isNull } from "drizzle-orm";
 import type { UserPreference } from "@/lib/shared/schemas/preference";
 import { userPreferences } from "../db/schema";
 import type { AppDb } from "../db/types";
-import { DrizzleRepository, type VersionedTable } from "./drizzle-repository";
+import { DrizzleRepository, versionedTable } from "./drizzle-repository";
 import type { UserPreferenceRepository, UserPreferenceRow } from "./user-preference-repository";
 
 export class DrizzleUserPreferenceRepository extends DrizzleRepository<UserPreferenceRow> implements UserPreferenceRepository {
   constructor(db: AppDb, now: () => Date = () => new Date()) {
-    super(db, userPreferences as unknown as VersionedTable, now);
+    super(db, versionedTable(userPreferences), now);
   }
 
   async getByUserKey(userId: string, organizationId: string, key: string): Promise<UserPreference | null> {

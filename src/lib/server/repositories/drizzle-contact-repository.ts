@@ -12,11 +12,11 @@ import type { AppDb } from "../db/types";
 import type {
   ContactFull, ContactListOptions, ContactListResult, ContactListRow, ContactRepository,
 } from "./contact-repository";
-import { DrizzleRepository, type VersionedTable } from "./drizzle-repository";
+import { DrizzleRepository, versionedTable } from "./drizzle-repository";
 
 export class DrizzleContactRepository extends DrizzleRepository<Contact> implements ContactRepository {
   constructor(db: AppDb, now: () => Date = () => new Date()) {
-    super(db, contacts as unknown as VersionedTable, now);
+    super(db, versionedTable(contacts), now);
   }
 
   async listForOrg(organizationId: string, opts: ContactListOptions): Promise<ContactListResult> {

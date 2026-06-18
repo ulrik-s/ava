@@ -13,7 +13,7 @@ import { and, desc, eq, inArray, isNull, like, sql } from "drizzle-orm";
 import type { Invoice, Payment, WriteOff } from "@/lib/shared/schemas/billing";
 import { accontoDeductions, invoices, matters, paymentPlans, payments, writeOffs } from "../db/schema";
 import type { AppDb } from "../db/types";
-import { DrizzleRepository, type VersionedTable } from "./drizzle-repository";
+import { DrizzleRepository, versionedTable } from "./drizzle-repository";
 import {
   invoiceNumberPrefix, nextInvoiceNumberFrom,
   type InvoiceFull, type InvoiceListFilter, type InvoiceListRow, type InvoiceRepository,
@@ -22,7 +22,7 @@ import {
 
 export class DrizzleInvoiceRepository extends DrizzleRepository<Invoice> implements InvoiceRepository {
   constructor(db: AppDb, now: () => Date = () => new Date()) {
-    super(db, invoices as unknown as VersionedTable, now);
+    super(db, versionedTable(invoices), now);
   }
 
   async getByIdInOrg(id: string, organizationId: string): Promise<Invoice | null> {

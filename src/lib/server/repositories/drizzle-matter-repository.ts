@@ -9,14 +9,14 @@ import { and, asc, desc, eq, ilike, inArray, isNull, or, sql } from "drizzle-orm
 import type { Matter, MatterContact } from "@/lib/shared/schemas/matter";
 import { contacts, documents, matterContacts, matters, timeEntries } from "../db/schema";
 import type { AppDb } from "../db/types";
-import { DrizzleRepository, type VersionedTable } from "./drizzle-repository";
+import { DrizzleRepository, versionedTable } from "./drizzle-repository";
 import type {
   MatterDetailRow, MatterListFilter, MatterListResult, MatterListRow, MatterRepository,
 } from "./matter-repository";
 
 export class DrizzleMatterRepository extends DrizzleRepository<Matter> implements MatterRepository {
   constructor(db: AppDb, now: () => Date = () => new Date()) {
-    super(db, matters as unknown as VersionedTable, now);
+    super(db, versionedTable(matters), now);
   }
 
   async getByIdInOrg(id: string, organizationId: string): Promise<Matter | null> {

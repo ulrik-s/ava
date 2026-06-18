@@ -6,12 +6,12 @@ import { and, asc, desc, eq, isNull } from "drizzle-orm";
 import type { Office } from "@/lib/shared/schemas/organization";
 import { offices } from "../db/schema";
 import type { AppDb } from "../db/types";
-import { DrizzleRepository, type VersionedTable } from "./drizzle-repository";
+import { DrizzleRepository, versionedTable } from "./drizzle-repository";
 import type { OfficeRepository } from "./office-repository";
 
 export class DrizzleOfficeRepository extends DrizzleRepository<Office> implements OfficeRepository {
   constructor(db: AppDb, now: () => Date = () => new Date()) {
-    super(db, offices as unknown as VersionedTable, now);
+    super(db, versionedTable(offices), now);
   }
 
   async listByOrg(organizationId: string): Promise<Office[]> {
