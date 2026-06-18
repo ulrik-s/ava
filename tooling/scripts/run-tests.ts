@@ -52,9 +52,13 @@ const FAST = process.argv.includes("--fast");
 // låses just under 85%-milstolpen, LINE oförändrat ~0.5% marginal) → 88.1 rader
 // / 83.5 funktioner (#27: demoStaticParamsBySeedId + billing-grenarna i static-
 // params lyfte lokalt till 88.58% rader / 85.12% funktioner; LINE dras upp,
-// FUNC oförändrat ~1.6% marginal).
-const LINE_FLOOR = 0.881;
-const FUNC_FLOOR = 0.835;
+// FUNC oförändrat ~1.6% marginal) → 88.8 rader / 83.8 funktioner (#27:
+// noop-ports + alla emit-helpers täckta efter server-first-migreringen, som
+// dessutom tog bort otestad git/OPFS/mem-fs-kod → lokalt 90.50% rader / 85.11%
+// funktioner; LINE-marginalen krymps mot den deterministiska kod-borttagningen
+// medan FUNC behåller ~1.3% Node-version-marginal).
+const LINE_FLOOR = 0.888;
+const FUNC_FLOOR = 0.838;
 
 /**
  * SERIAL_FILES — testfiler som SYNKRONT spawnar en barnprocess via
