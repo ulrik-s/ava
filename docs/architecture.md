@@ -239,9 +239,18 @@ en egen IdP. oauth2-proxy gat:ar åtkomsten och vidarebefordrar identiteten som
 byråns allowlist (`forwarded-claims` → `server-context`). htpasswd/Basic-auth +
 PAT är legacy från git-peer-eran. Se [`auth.md`](./auth.md).
 
-## LLM (opt-in)
+## Dokumentklassificering (LLM)
 
-`/settings` har en toggle "AI (lokal LLM)". När den är på laddas en Llama-3.2-modell (~700 MB - 2 GB) ner till browserns Cache Storage första gången, via `@mlc-ai/web-llm` + WebGPU. Klassificering av dokument körs då via LLM:n med filename-heuristik som fallback. Helt offline efter första nedladdningen — modellen lämnar aldrig browsern.
+Klassificering av dokument (`documentType`) körs **server-side** via jobb-kön
+(#518): vid upload enqueue:as ett `classify-document`-jobb som läser dokument-
+bytes, extraherar text (pdfjs/mammoth) och frågar en ollama-tjänst bakom
+docker-`--profile llm` (`AVA_LLM_ENDPOINT`/`AVA_LLM_MODEL`). Fail-soft hela
+vägen → filnamns-heuristik (`guessFromFilename`) om LLM:en är av/nere. Ingen
+användare behöver ladda ner en LLM lokalt.
+
+Klienten (web/demo/offline) har **ingen** lokal LLM längre (den WebGPU-baserade
+`@mlc-ai/web-llm`-modellen togs bort i #518 Fas 5). Demo/offline saknar server-
+LLM och klassificerar därför enbart med filnamns-heuristiken.
 
 ## Seed-data (DRY)
 

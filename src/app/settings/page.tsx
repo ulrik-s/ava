@@ -3,7 +3,6 @@
 import { Upload, Trash2, Building2, Plus, Pencil, X, Check } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { z } from "zod";
-import { LlmSettingsCard } from "@/components/llm/llm-settings-card";
 import { DatasourceSection } from "@/components/settings/datasource-section";
 import { EditorExtensionsSection } from "@/components/settings/editor-extensions-section";
 import { ExternalEditSection } from "@/components/settings/external-edit-section";
@@ -547,12 +546,6 @@ export default function SettingsPage() {
       {/* 6. Bokföringsexport */}
       <SectionHeader num={6} title="Bokföringsexport (admin)" subtitle="Konto-mappning (BAS) som SIE-exporten bokför mot. Förifyllt med standard för advokatbyrå." />
       <LedgerAccountsSection />
-
-      {/* 7. Avancerat / opt-in */}
-      <SectionHeader num={7} title="Avancerat" subtitle="Opt-in-funktioner som kräver extra resurser eller setup." />
-      <div className="mb-5">
-        <LlmSettingsCard />
-      </div>
     </div>
   );
 }

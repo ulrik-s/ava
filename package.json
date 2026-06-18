@@ -64,7 +64,6 @@
   },
   "dependencies": {
     "@js-temporal/polyfill": "^0.5.1",
-    "@mlc-ai/web-llm": "^0.2.84",
     "@tanstack/react-query": "^5.101.0",
     "@testing-library/dom": "^10.4.1",
     "@trpc/client": "^11.17.0",
