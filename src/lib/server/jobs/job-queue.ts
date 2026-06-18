@@ -21,6 +21,7 @@ import { PgBoss } from "pg-boss";
 /** De server-sidiga jobb-köerna (Fas 3 kopplar in handlers). */
 export const JOB_QUEUES = {
   emailDispatch: "email-dispatch",
+  classifyDocument: "classify-document",
   fortnoxSync: "fortnox-sync",
   rulesTick: "rules-tick",
   outlookMirror: "outlook-mirror",
