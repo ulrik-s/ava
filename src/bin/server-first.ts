@@ -20,6 +20,7 @@
 import { serveFetchHandler } from "@/lib/server/http/node-http-adapter";
 import { buildServerFirstApi, loadServerFirstConfig } from "@/lib/server/http/server-first-api";
 import { startJobRuntime, type JobRuntime } from "@/lib/server/jobs/job-worker-runtime";
+import { buildServerFirstJobHandlers, loadSmtpConfigFromEnv } from "@/lib/server/jobs/server-first-handlers";
 
 function log(msg: string): void {
   console.log(`[server-first] ${msg}`);
@@ -30,7 +31,9 @@ function main(): void {
     process.stdout.write(
       "ava server-first (#410, ADR 0016)\n\n" +
         "tRPC-over-HTTP mot Postgres med server-verifierad principal.\n\n" +
-        "Env: AVA_DATABASE_URL, AVA_ORGANIZATION_ID, AVA_HTTP_PORT, AVA_HTTP_HOST\n",
+        "Env: AVA_DATABASE_URL, AVA_ORGANIZATION_ID, AVA_HTTP_PORT, AVA_HTTP_HOST\n" +
+        "Jobb-kö (#504): pg-boss på samma DB. E-postutskick aktiveras när\n" +
+        "AVA_SMTP_HOST/PORT/USER/PASS/FROM (+ valfri AVA_SMTP_SECURE) är satta.\n",
     );
     return;
   }
@@ -45,10 +48,12 @@ function main(): void {
   log(`lyssnar på ${config.httpHost}:${config.httpPort} (org ${config.organizationId})`);
 
   // Jobb-kö (#504): best-effort start — en kö-hicka får ALDRIG ta ned HTTP-
-  // serveringen. Tom handler-karta tills Fas 3 (utskick/Fortnox/regler).
+  // serveringen. Handlers per konfigurerad integration (e-post via AVA_SMTP_*).
+  const smtp = loadSmtpConfigFromEnv();
+  const handlers = buildServerFirstJobHandlers(smtp ? { smtp } : {});
   let jobRuntime: JobRuntime | null = null;
-  void startJobRuntime({ connectionString: config.databaseUrl })
-    .then((rt) => { jobRuntime = rt; log("jobb-kö startad (pg-boss)"); })
+  void startJobRuntime({ connectionString: config.databaseUrl, handlers })
+    .then((rt) => { jobRuntime = rt; log(`jobb-kö startad (pg-boss; ${Object.keys(handlers).length} handlers)`); })
     .catch((err) => log(`jobb-kö start misslyckades (fortsätter utan): ${String(err)}`));
 
   for (const sig of ["SIGTERM", "SIGINT"] as const) {
