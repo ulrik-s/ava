@@ -25,7 +25,7 @@ import type { OidcLoginOutcome, OidcClaims } from "@/lib/client/backend/oidc-pri
 import { demoCacheKey } from "@/lib/client/demo/demo-cache-key";
 import { DemoModeProvider } from "@/lib/client/demo/demo-mode-context";
 import { demoSourceFromRuntime } from "@/lib/client/demo/demo-source-from-runtime";
-import { loadFirmaConfig, patchFirmaConfig, gitAuthUsername, type FirmaConfig } from "@/lib/client/firma/firma-config";
+import { loadFirmaConfig, patchFirmaConfig, type FirmaConfig } from "@/lib/client/firma/firma-config";
 import { pickProvider } from "@/lib/client/sync/pick-provider";
 import { SyncProviderRoot } from "@/lib/client/sync/sync-context";
 import { trpc } from "@/lib/client/trpc";
@@ -37,7 +37,6 @@ import { DemoRuntime } from "@/lib/server/local-first/demo-runtime";
 import { createGhPagesCloneFn } from "@/lib/server/local-first/gh-pages-loader";
 import { IndexedDbFsPersistence } from "@/lib/server/local-first/indexeddb-fs-persistence";
 import type { DemoSource } from "@/lib/shared/demo-source";
-import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { AppShell } from "./app-shell";
 import { AuthStatusBanner } from "./auth-status-banner";
 import { AutoSync } from "./auto-sync";
@@ -224,6 +223,8 @@ interface BootstrapArgs {
   setFsaHandle: (h: FileSystemDirectoryHandle | null) => void;
   setStatus: (s: Status) => void;
   setErrorMsg: (m: string | null) => void;
+  /** Self-hosted: server-first-storen + dess in-process tRPC-klient (async-byggda). */
+  onStoreReady: (store: CachingSyncDataStore, client: ReturnType<typeof createDemoTrpcClient>) => void;
 }
 
 /**
@@ -231,7 +232,7 @@ interface BootstrapArgs {
  * restore/fresh-clone + FSA-handle-laddning. Fyller refs och sätter status.
  */
 function useDemoBootstrap(args: BootstrapArgs) {
-  const { firmaConfig, source, queryClient, fsaRef, runtimeRef, setFsaHandle, setStatus, setErrorMsg } = args;
+  const { firmaConfig, source, queryClient, fsaRef, runtimeRef, setFsaHandle, setStatus, setErrorMsg, onStoreReady } = args;
   useEffect(() => {
     const gate = checkBootstrapGate(firmaConfig);
     if (gate === "skip-ready") { queueMicrotask(() => setStatus("ready")); return; }
@@ -240,11 +241,13 @@ function useDemoBootstrap(args: BootstrapArgs) {
 
     let cancelled = false;
 
-    // ── Self-hosted-tier: klona repo:t in i OPFS + hydrera därifrån ──
-    // (egen git-server, t.ex. docker:8080/git eller firma-Linux-låda).
-    // OPFS kräver ingen mapp-dialog → fungerar headless (e2e) + iOS.
+    // ── Self-hosted-tier: server-first (ADR 0016, cutover #420–#422) ──
+    // Bygg `createServerFirstStore` (CachingSyncDataStore synkad mot servern via
+    // HTTP + IndexedDB; auth via oauth2-proxy:s samma-origin-cookie) och dess
+    // in-process tRPC-klient. Ersätter iso-git-clonen i OPFS. OIDC-first-login
+    // (#222/#223) bevaras: allowlisten läses ur den reconcile:ade storen.
     if (firmaConfig.tier === "self-hosted") {
-      void loadSelfHosted({ firmaConfig, source, queryClient, fsaRef, setFsaHandle, setStatus, setErrorMsg, isCancelled: () => cancelled });
+      void bootstrapSelfHosted({ firmaConfig, queryClient, setStatus, setErrorMsg, onStoreReady, isCancelled: () => cancelled });
       return () => { cancelled = true; };
     }
     // Försök ladda FSA-handle innan första render. Om vi har en handle
@@ -343,30 +346,38 @@ export function DemoBootstrap({ children }: { children: ReactNode }) {
   const { writeBack, fsaRef, runtimeRef } = useDemoWriteBack();
   useWriteBackListeners(writeBack);
 
-  // Demon kör nu på offline-first-kärnan (ADR 0016/#419): CachingSyncDataStore
-  // UTAN synk-mål (noSyncTransport). `.store` är LocalStore-kärnan appen läser/
-  // skriver mot; `source` fylls async av clone/restore (delad mutabel ref).
-  // Mutationer persisteras via samma `writeBack` (slab/FSA) som förr; kön
-  // ackumuleras lokalt men synkas aldrig (demon = degenerat-fallet).
-  const [cachingSync] = useState(() =>
-    CachingSyncDataStore.createEphemeral({ transport: noSyncTransport, seed: source, writeBack }),
+  // Store-val per tier (ADR 0016, cutover #420–#422):
+  //   • demo/github → offline-first-kärnan UTAN synk-mål (noSyncTransport),
+  //     byggd synkront; `.store` är LocalStore appen läser/skriver mot.
+  //   • self-hosted → server-first: `createServerFirstStore` (CachingSyncDataStore
+  //     synkad mot servern via HTTP) byggs ASYNK i useDemoBootstrap → null tills
+  //     den är klar (render gate:ar på trpcClient nedan).
+  const isSelfHosted = firmaConfig.tier === "self-hosted";
+  const [cachingSync, setCachingSync] = useState<CachingSyncDataStore | null>(() =>
+    isSelfHosted ? null : CachingSyncDataStore.createEphemeral({ transport: noSyncTransport, seed: source, writeBack }),
   );
   // Initial status MÅSTE vara SSR-stabil för att undvika hydration-mismatch
   // (React #418). Pathname-baserad logik flyttas till useDemoBootstrap.
   const [status, setStatus] = useState<Status>("loading");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [queryClient] = useState(makeDemoQueryClient);
-  const [trpcClient] = useState(() => createDemoTrpcClient(cachingSync.store, firmaConfig));
+  const [trpcClient, setTrpcClient] = useState<ReturnType<typeof createDemoTrpcClient> | null>(() =>
+    cachingSync ? createDemoTrpcClient(cachingSync.store, firmaConfig) : null,
+  );
 
   // Flippa efter första commit → byter från platshållare till full app-tree.
   // Egen effekt (separat från boot-effekten) så hydreringen hinner committa rent.
   // eslint-disable-next-line react-hooks/set-state-in-effect -- engångs-flip; det ÄR avsikten
   useEffect(() => { setMounted(true); }, []);
 
-  useDemoBootstrap({ firmaConfig, source, queryClient, fsaRef, runtimeRef, setFsaHandle, setStatus, setErrorMsg });
+  useDemoBootstrap({
+    firmaConfig, source, queryClient, fsaRef, runtimeRef, setFsaHandle, setStatus, setErrorMsg,
+    onStoreReady: (store, client) => { setCachingSync(store); setTrpcClient(client); },
+  });
 
   // Hydrerings-grind: identisk markup på server + klientens första render.
-  if (!mounted) {
+  // För self-hosted gate:ar vi även på att server-first-storen byggts (trpcClient).
+  if (!mounted || !trpcClient) {
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-white">
         <div className="text-center">
@@ -407,15 +418,17 @@ function AuthGatedDemoTree(props: TreeProps) {
   const { firmaConfig, trpcClient, queryClient, status, errorMsg, fsaHandle, children } = props;
   const auth = useAuthMode();
 
-  // readOnly avgörs av auth-mode. FSA-handle krävs fortfarande för att
-  // write faktiskt ska landa på disk; om vi saknar handle visar vi UI:n
-  // som write-mode men sync-pillen kommer berätta att inget skrivs.
-  //
-  // I demo-tier ger vi däremot full write-känsla i UI:n — mutationer
-  // landar i DemoDataStore (in-memory), de bara persister inte över
-  // page reload. DemoModeBanner förklarar för användaren.
+  // readOnly avgörs av auth-mode:
+  //   • demo  → alltid skrivbart (mutationer i in-memory-store; DemoModeBanner förklarar).
+  //   • self-hosted (server-first) → enbart auth-mode; skrivningar går till storen
+  //     + synkas till servern, ingen FSA-handle behövs (ADR 0016).
+  //   • github  → kräver dessutom en FSA-handle (write-back till working-copyn).
   const isDemoTier = firmaConfig.tier === "demo";
-  const readOnly = isDemoTier ? false : (auth.mode !== "identified-write" || fsaHandle === null);
+  const readOnly = isDemoTier
+    ? false
+    : firmaConfig.tier === "self-hosted"
+      ? auth.mode !== "identified-write"
+      : (auth.mode !== "identified-write" || fsaHandle === null);
 
   return (
     <DemoModeProvider readOnly={readOnly}>
@@ -472,44 +485,6 @@ function AuthGatedDemoTree(props: TreeProps) {
   );
 }
 
-/**
- * Self-hosted-laddning: hämta OPFS-working-copy, klona repo:t in (om ej
- * redan), hydrera DemoSource från clonen. Skrivningar + sync sköts av
- * samma FSA-pipeline (OPFS-handle:n sparas som "repo-root").
- */
-interface LoadSelfHostedArgs {
-  firmaConfig: FirmaConfig;
-  source: DemoSource;
-  queryClient: QueryClient;
-  fsaRef: { current: FileSystemDirectoryHandle | null };
-  setFsaHandle: (h: FileSystemDirectoryHandle | null) => void;
-  setStatus: (s: Status) => void;
-  setErrorMsg: (m: string | null) => void;
-  isCancelled: () => boolean;
-}
-
-/** Öppna OPFS-working-copyn + registrera handle:n som "repo-root". Sätter
- *  fel-status + returnerar null om OPFS saknas. */
-async function openWorkingCopy(a: {
-  fsaRef: { current: FileSystemDirectoryHandle | null };
-  setFsaHandle: (h: FileSystemDirectoryHandle | null) => void;
-  setStatus: (s: Status) => void;
-  setErrorMsg: (m: string | null) => void;
-  isCancelled: () => boolean;
-}): Promise<FileSystemDirectoryHandle | null> {
-  const { getOpfsRoot, saveHandle } = await import("@/lib/client/fsa/handle-store");
-  const opfs = await getOpfsRoot("working-copy");
-  if (!opfs) {
-    a.setStatus("error");
-    a.setErrorMsg("OPFS stöds inte i denna webbläsare — self-hosted-läget kräver det.");
-    return null;
-  }
-  await saveHandle("repo-root", opfs); // så write-back + pick-provider hittar samma handle
-  a.fsaRef.current = opfs;
-  if (!a.isCancelled()) a.setFsaHandle(opfs);
-  return opfs;
-}
-
 /** OIDC-status (#222/#223): på första self-hosted-laddningen (ingen principal
  *  bunden) hämtas claims från oauth2-proxy. `skipUser` = klona utan syntetisk
  *  currentUser (principalen bind:s efteråt istället). */
@@ -544,19 +519,6 @@ function reportLoadError(
   setErrorMsg(err instanceof Error ? err.message : String(err));
 }
 
-/** Syntetisk currentUser för self-hosted-klonen. Hoppas över (undefined) när
- *  OIDC-login pågår (då bind:s principalen efteråt istället). Måste matcha
- *  trpcClient-användaren (id = principalId ?? "current-user"). */
-function selfHostedCurrentUser(firmaConfig: FirmaConfig, skip: boolean) {
-  if (skip) return undefined;
-  return {
-    id: firmaConfig.principalId ?? "current-user",
-    email: firmaConfig.authorEmail,
-    name: firmaConfig.authorName,
-    organizationId: firmaConfig.organizationId,
-  };
-}
-
 /** Applicera OIDC-utfallet efter klon. Returnerar true om anroparen ska
  *  avbryta (terminalt): nekad → fel-status; behörig → bind principal + reload. */
 function applyOidcOutcome(
@@ -582,34 +544,59 @@ function applyOidcOutcome(
   return false;
 }
 
-async function loadSelfHosted(args: LoadSelfHostedArgs): Promise<void> {
-  const { firmaConfig, source, queryClient, fsaRef, setFsaHandle, setStatus, setErrorMsg, isCancelled } = args;
+type SelfHostedClient = ReturnType<typeof createDemoTrpcClient>;
+
+interface SelfHostedBootstrapArgs {
+  firmaConfig: FirmaConfig;
+  queryClient: QueryClient;
+  setStatus: (s: Status) => void;
+  setErrorMsg: (m: string | null) => void;
+  onStoreReady: (store: CachingSyncDataStore, client: SelfHostedClient) => void;
+  isCancelled: () => boolean;
+  /** Injicerbara för test; default = riktiga server-first-storen + in-process-klienten. */
+  makeStore?: () => Promise<CachingSyncDataStore>;
+  makeClient?: (store: CachingSyncDataStore) => SelfHostedClient;
+}
+
+/**
+ * Self-hosted server-first-bootstrap (ADR 0016, cutover #420–#422): bygg
+ * `createServerFirstStore` + dess in-process tRPC-klient, bevara OIDC-first-
+ * login-bindningen (allowlisten läses ur den reconcile:ade storen), och
+ * signalera redo. Ersätter den gamla iso-git-OPFS-clonen. Exporterad +
+ * dep-injicerbar för enhetstest (bootstrap-effekten är annars effekt-tung).
+ */
+async function defaultServerFirstStore(): Promise<CachingSyncDataStore> {
+  const { createServerFirstStore } = await import("@/lib/client/backend/server-first-store");
+  return createServerFirstStore();
+}
+
+/** OIDC-first-login-bindning för server-first: läs allowlisten ur storens klient
+ *  och bind/avvisa principalen. Returnerar true om anroparen ska avbryta. No-op
+ *  (false) när ingen OIDC-session pågår. */
+async function bindOidcFirstLogin(a: {
+  needsOidc: boolean; oidcClaims: OidcClaims | null; client: SelfHostedClient;
+  setStatus: (s: Status) => void; setErrorMsg: (m: string | null) => void;
+}): Promise<boolean> {
+  if (!a.needsOidc) return false;
+  const users = await a.client.user.list.query();
+  return finishOidcLogin({ needsOidc: a.needsOidc, oidcClaims: a.oidcClaims, users, setStatus: a.setStatus, setErrorMsg: a.setErrorMsg });
+}
+
+export async function bootstrapSelfHosted(a: SelfHostedBootstrapArgs): Promise<void> {
+  const { firmaConfig, queryClient, setStatus, setErrorMsg, onStoreReady, isCancelled } = a;
+  const makeStore = a.makeStore ?? defaultServerFirstStore;
+  const makeClient = a.makeClient ?? ((store: CachingSyncDataStore) => createDemoTrpcClient(store.store, firmaConfig));
   try {
-    const { loadSelfHostedSource } = await import("@/lib/client/firma/load-self-hosted-source");
-    const opfs = await openWorkingCopy({ fsaRef, setFsaHandle, setStatus, setErrorMsg, isCancelled });
-    if (!opfs) return;
-
-    const origin = typeof window !== "undefined" ? window.location.origin : undefined;
-    const { needsOidc, oidcClaims, skipUser } = await resolveOidcLogin(firmaConfig);
-    const currentUser = selfHostedCurrentUser(firmaConfig, skipUser);
-    const src = await loadSelfHostedSource({
-      handle: opfs,
-      repo: firmaConfig.repo,
-      token: firmaConfig.token,
-      username: gitAuthUsername(firmaConfig),
-      ...omitUndefined({ origin, currentUser }),
-    });
+    const { needsOidc, oidcClaims } = await resolveOidcLogin(firmaConfig);
+    const store = await makeStore();
     if (isCancelled()) return;
-
-    // OIDC-login: löser principalen mot allowlisten + reloadar med bunden
-    // principalId (eller nekar). Utan OIDC-session → no-op.
-    if (await finishOidcLogin({ needsOidc, oidcClaims, users: src.users, setStatus, setErrorMsg })) return;
-
-    mergeSource(source, src);
+    const client = makeClient(store);
+    if (await bindOidcFirstLogin({ needsOidc, oidcClaims, client, setStatus, setErrorMsg })) return;
+    if (isCancelled()) return;
+    onStoreReady(store, client);
     await queryClient.invalidateQueries();
     setStatus("ready");
-    // Signalera att working copy + handle är redo → SyncProviderRoot
-    // plockar om sync-provider:n (den kördes på mount innan handle:n fanns).
+    // Signalera redo → SyncProviderRoot plockar om sync-provider:n.
     if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("ava:repo-ready"));
   } catch (err) {
     reportLoadError(err, isCancelled, setStatus, setErrorMsg);
