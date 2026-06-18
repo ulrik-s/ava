@@ -37,6 +37,11 @@ export class DocumentContentCache {
     await this.kv.put(PENDING_KEY, pending);
   }
 
+  /** Cacha bytes utan pending-markering (läs-cache: download→cache vid öppning). */
+  async putBytes(sha: string, bytes: Uint8Array): Promise<void> {
+    await this.kv.put(blobKey(sha), bytes);
+  }
+
   /** Cachade bytes för en sha, eller null. */
   async getBytes(sha: string): Promise<Uint8Array | null> {
     const v = await this.kv.get<Uint8Array | ArrayBuffer>(blobKey(sha));

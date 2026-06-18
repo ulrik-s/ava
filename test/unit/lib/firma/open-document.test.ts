@@ -92,6 +92,42 @@ describe("openDocument", () => {
     expect(openUrl).toHaveBeenCalledWith("blob:fake-url");
   });
 
+  it("server-first: fetchBlob används före FSA → opened-blob (loadHandle ej anropad)", async () => {
+    globalThis.URL.createObjectURL = vi.fn(() => "blob:server-first");
+    globalThis.URL.revokeObjectURL = vi.fn();
+    const loadHandle = vi.fn(async () => null);
+    const openUrl = vi.fn();
+    const result = await openDocument({
+      doc: baseDoc,
+      isDemo: false,
+      loadHandle,
+      readFromHandle: async () => null,
+      fetchBlob: async () => new Blob(["pdf"], { type: "application/pdf" }),
+      openUrl,
+      notifyError: vi.fn(),
+    });
+    expect(result).toBe("opened-blob");
+    expect(openUrl).toHaveBeenCalledWith("blob:server-first");
+    expect(loadHandle).not.toHaveBeenCalled(); // FSA hoppas helt
+  });
+
+  it("server-first: fetchBlob → null → notifyError, ingen URL", async () => {
+    const openUrl = vi.fn();
+    const notifyError = vi.fn();
+    const result = await openDocument({
+      doc: baseDoc,
+      isDemo: false,
+      loadHandle: async () => null,
+      readFromHandle: async () => null,
+      fetchBlob: async () => null,
+      openUrl,
+      notifyError,
+    });
+    expect(result).toBe("error");
+    expect(notifyError.mock.calls[0]![0]).toMatch(/kunde inte hämtas/i);
+    expect(openUrl).not.toHaveBeenCalled();
+  });
+
   it("self-hosted med .md fil → blob taggas med UTF-8 charset (annars trasas å/ä/ö)", async () => {
     globalThis.URL.createObjectURL = vi.fn(() => "blob:url");
     globalThis.URL.revokeObjectURL = vi.fn();

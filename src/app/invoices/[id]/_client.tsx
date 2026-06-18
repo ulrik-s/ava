@@ -7,6 +7,7 @@
 
 import type { inferRouterOutputs } from "@trpc/server";
 import { type ComponentProps, useState } from "react";
+import type { DownloadClient } from "@/lib/client/backend/load-document-blob";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { useRouteId } from "@/lib/client/demo/use-route-id";
 import { trpc } from "@/lib/client/trpc";
@@ -441,22 +442,26 @@ function SettlementSummaryCard({ settlement }: { settlement: MatterSettlement })
  * Tidigare länkade namnet felaktigt till /matters → man dirigerades in i
  * ärendet istället för att få upp filen.
  */
-async function openInvoiceDoc(doc: InvoiceDocRow): Promise<void> {
+async function openInvoiceDoc(doc: InvoiceDocRow, client: DownloadClient): Promise<void> {
   const { openDocument } = await import("@/lib/client/firma/open-document");
   const { loadHandle } = await import("@/lib/client/fsa/handle-store");
   const { readFromFsa } = await import("@/lib/client/fsa/read-from-fsa");
+  const { loadDocumentBlob } = await import("@/lib/client/backend/load-document-blob");
   await openDocument({
     doc: { id: doc.id, ...(doc.storagePath != null ? { storagePath: doc.storagePath } : {}), fileName: doc.fileName },
     isDemo: process.env.NEXT_PUBLIC_DEMO_BUILD === "1",
     ...omitUndefined({ demoRepo: process.env.NEXT_PUBLIC_DEFAULT_DEMO_REPO }),
     loadHandle: () => loadHandle("repo-root"),
     readFromHandle: readFromFsa,
+    // Server-first (#518): hämta bytes från servern (+ klient-cache) i st.f. FSA.
+    fetchBlob: () => loadDocumentBlob(client, { id: doc.id, storagePath: doc.storagePath ?? null, fileName: doc.fileName }),
     openUrl: (u) => window.open(u, "_blank", "noopener,noreferrer"),
     notifyError: (m) => alert(m),
   });
 }
 
 function InvoiceDocumentsCard({ documents }: { documents: InvoiceDocRow[] }) {
+  const utils = trpc.useUtils();
   if (documents.length === 0) return null;
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-6">
@@ -466,7 +471,7 @@ function InvoiceDocumentsCard({ documents }: { documents: InvoiceDocRow[] }) {
           <li key={d.id} className="py-2 flex items-center justify-between">
             <button
               type="button"
-              onClick={() => void openInvoiceDoc(d)}
+              onClick={() => void openInvoiceDoc(d, utils.client)}
               className="text-blue-600 hover:underline text-left"
             >
               {d.fileName}

@@ -27,10 +27,22 @@ export interface OpenDocumentDeps {
   openUrl: (url: string) => void;
   /** Visar fel till användaren (injicerbar för test). */
   notifyError: (msg: string) => void;
+  /**
+   * Server-first (#518): hämta dokument-bytes från servern (+ klient-cache) i
+   * st.f. den borttagna FSA-working-copyn. Sätts → används före FSA-vägen.
+   */
+  fetchBlob?: () => Promise<Blob | null>;
+}
+
+/** Öppna en blob i ny flik (charset-taggad för text). Revoke efter 60 s. */
+function openBlobUrl(blob: Blob, storagePath: string, openUrl: (url: string) => void): void {
+  const url = URL.createObjectURL(withUtf8CharsetIfText(blob, storagePath));
+  openUrl(url);
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 export async function openDocument(deps: OpenDocumentDeps): Promise<"opened-gh-pages" | "opened-blob" | "opened-generated" | "error"> {
-  const { doc, isDemo, demoRepo, loadHandle, readFromHandle, openUrl, notifyError } = deps;
+  const { doc, isDemo, demoRepo, openUrl, notifyError, fetchBlob } = deps;
   const storagePath = doc.storagePath ?? `documents/${doc.id}`;
 
   // Demo + self-hosted: dokument som genererats client-side under denna
@@ -50,25 +62,31 @@ export async function openDocument(deps: OpenDocumentDeps): Promise<"opened-gh-p
     return "opened-gh-pages";
   }
 
+  // Server-first (#518): hämta bytes från servern (+ klient-cache). Före FSA.
+  if (fetchBlob) {
+    const blob = await fetchBlob();
+    if (!blob) { notifyError(`Dokumentet kunde inte hämtas (${storagePath}).`); return "error"; }
+    openBlobUrl(blob, storagePath, openUrl);
+    return "opened-blob";
+  }
+
+  return openFromFsa(deps, storagePath);
+}
+
+/** Öppna ur den lokala FSA-working-copyn (legacy git-first-vägen). */
+async function openFromFsa(deps: OpenDocumentDeps, storagePath: string): Promise<"opened-blob" | "error"> {
+  const { loadHandle, readFromHandle, openUrl, notifyError } = deps;
   const handle = await loadHandle();
   if (!handle) {
     notifyError("Ingen working copy är ansluten — anslut via /settings.");
     return "error";
   }
-
   const blob = await readFromHandle(handle, storagePath);
   if (!blob) {
     notifyError(`Dokumentet kunde inte hittas på disk (${storagePath}).`);
     return "error";
   }
-
-  // För text-baserade format MÅSTE vi tagga blob:en med "charset=utf-8",
-  // annars renderar browsern ofta som ISO-8859-1 → å/ä/ö blir trasiga.
-  // Binärformat (PDF, DOCX, bilder) behåller sin mime-type oförändrad.
-  const url = URL.createObjectURL(withUtf8CharsetIfText(blob, storagePath));
-  openUrl(url);
-  // Vänta lite innan revoke så browsern hinner ladda — 60 s är gott nog.
-  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  openBlobUrl(blob, storagePath, openUrl);
   return "opened-blob";
 }
 
