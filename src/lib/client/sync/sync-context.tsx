@@ -32,14 +32,22 @@ const SyncCtx = createContext<SyncContextValue | null>(null);
 
 interface RootProps {
   token: string;
-  pickProvider: (token: string) => Promise<{ provider: SyncProvider; kind: "fsa" } | null>;
+  /**
+   * Väljer en SyncProvider. Default = ingen (returnerar null) — demon/github-
+   * tier synkar inte via git längre (ADR 0016, #420); self-hosted reconcile:ar
+   * via den server-first-storen, inte via den här loopen. Behålls så
+   * status-pillen + `useSyncContext` (settings/diagnostics) fortsätter fungera.
+   */
+  pickProvider?: (token: string) => Promise<{ provider: SyncProvider; kind: "fsa" } | null>;
   children: ReactNode;
 }
+
+const noPickProvider = (): Promise<null> => Promise.resolve(null);
 
 /**
  * Mountas en gång (i DemoBootstrap). Äger sync-loopen + state.
  */
-export function SyncProviderRoot({ token, pickProvider, children }: RootProps) {
+export function SyncProviderRoot({ token, pickProvider = noPickProvider, children }: RootProps) {
   const [picked, setPicked] = useState<{ provider: SyncProvider; kind: "fsa" } | null>(null);
   const auth = useAuthMode();
   const writeAllowed = auth.mode === "identified-write";

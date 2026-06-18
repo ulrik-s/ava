@@ -1,22 +1,24 @@
 /**
  * Hydratiserings-smoke: kör samma `buildSeed()` som demo-bygget använder
- * och validera att VARJE genererad fil parsar med sin projektion-schema.
+ * och validera att VARJE genererad fil parsar med sitt entitets-schema.
  *
  * Bevisar att alla obligatoriska fält (t.ex. organizationId) faktiskt
- * sätts i seed:n — annars kraschar appen vid laddning i browsern (Zod-fel
- * → ingen data syns för användaren).
+ * sätts i seed:n — annars kraschar appen vid laddning i browsern.
  *
- * Bakgrund: matter-contacts m.fl. saknade organizationId i seed-output:n
- * trots att schemat krävde det → demon visade tomma sektioner på GH Pages.
- * Det testet hade fångat det innan deploy.
+ * Sedan #420 (ADR 0016) finns ingen MemFs/projektion-hydrering: demon bygger
+ * en `DemoSource` direkt via `pathToSourceKey`. Den här smoke:n validerar
+ * därför mot `ENTITY_REGISTRY` — den kanoniska sanningskällan för varje
+ * entitets schema + gitPrefix — via samma path→entitet-mappning.
  */
 
 import { describe, it, expect } from "vitest-compat";
-import { buildDefaultRegistry } from "@/lib/server/local-first/projections/default-registry";
+import { pathToSourceKey } from "@/lib/client/demo/demo-source-keys";
+import { ENTITY_NAME_BY_SOURCE_KEY } from "@/lib/server/data-store/in-memory/entity-source-keys";
+import { ENTITY_REGISTRY } from "@/lib/shared/schemas";
 import { buildSeed, seedToFiles } from "../../tooling/scripts/seed-data";
 
 describe("seed-data hydration", () => {
-  it("alla seed-genererade filer parsar med sina projektion-schemas", () => {
+  it("alla seed-genererade filer parsar med sina entitets-schemas", () => {
     const seed = buildSeed({
       orgId: "demo-firma-ab",
       currentUserId: "u-anna",
@@ -26,19 +28,18 @@ describe("seed-data hydration", () => {
     const files = seedToFiles(seed);
     expect(files.length).toBeGreaterThan(100);
 
-    const registry = buildDefaultRegistry();
     const failures: Array<{ path: string; error: string }> = [];
 
     for (const { path, data } of files) {
-      const entry = registry.matchPath(path);
-      if (!entry) continue; // ignorera paths utan projektion (sällsynt)
+      const sourceKey = pathToSourceKey(path);
+      if (!sourceKey) continue; // paths utan entitet (meta.json, innehåll) hoppas
+      const entity = ENTITY_NAME_BY_SOURCE_KEY[sourceKey];
+      const entry = entity ? ENTITY_REGISTRY[entity] : undefined;
+      if (!entry) continue;
       try {
-        // Schemat hydratiserar via projection.deserialize (samma path som
-        // ProjectionHydrator kör i browsern vid clone). Append-projektioner
-        // (JSONL) har deserializeLine — vi täcker bara JSON-projektioner här.
-        const proj = entry.projection as { deserialize?: (s: string) => unknown };
-        if (typeof proj.deserialize !== "function") continue;
-        proj.deserialize(JSON.stringify(data));
+        // Samma validering som tRPC-routrarnas input + DemoDataScope kör i
+        // browsern: entitetens kanoniska zod-schema måste acceptera raden.
+        entry.schema.parse(data);
       } catch (err) {
         failures.push({
           path,
@@ -48,7 +49,6 @@ describe("seed-data hydration", () => {
     }
 
     if (failures.length > 0) {
-      // Lista UNIKA path-prefix för snabb diagnostisk
       const prefixes = new Set(failures.map((f) => f.path.split("/")[0]));
       const summary = failures.slice(0, 3).map((f) => `  ${f.path}\n    ${f.error.slice(0, 200)}`).join("\n");
       throw new Error(
@@ -61,22 +61,19 @@ describe("seed-data hydration", () => {
   it("alla entitetstyper med organizationId-fält har det satt", () => {
     const seed = buildSeed({ orgId: "test-org" });
     const files = seedToFiles(seed);
-    const registry = buildDefaultRegistry();
 
-    // Lista entiteter där projektion-schemat har required organizationId
+    // Entiteter där schemat har required organizationId. (.ava/organizations/
+    // — organisationen ÄR själv organisationen, ingen organizationId behövs.)
     const requiresOrgId = [
       "contacts/", "matters/", "matter-contacts/",
       "documents/", "time-entries/", "expenses/", "invoices/",
       ".ava/users/",
-      // .ava/organizations/ — organisationen ÄR själv organisationen,
-      // ingen organizationId nödvändig
     ];
 
     for (const { path, data } of files) {
       const needsOrg = requiresOrgId.some((p) => path.startsWith(p));
       if (!needsOrg) continue;
-      const entry = registry.matchPath(path);
-      if (!entry) continue;
+      if (!pathToSourceKey(path)) continue;
       expect((data as { organizationId?: unknown }).organizationId, `${path} ska ha organizationId`).toBe("test-org");
     }
   });

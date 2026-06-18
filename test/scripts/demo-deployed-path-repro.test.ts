@@ -10,7 +10,6 @@ import { prebakeJoins } from "@/lib/shared/demo-source";
 import { noopPorts } from "../../src/lib/server/adapters/noop-ports";
 import { buildContext } from "../../src/lib/server/build-context";
 import { DemoDataStore, type DemoSource } from "../../src/lib/server/data-store/DemoDataStore";
-import { buildDefaultRegistry } from "../../src/lib/server/local-first/projections/default-registry";
 import { appRouter } from "../../src/lib/server/routers/_app";
 import { createGitTarget } from "../../tooling/demo-generator/backend-target";
 import { populate } from "../../tooling/demo-generator/populate";
@@ -47,25 +46,16 @@ describe("deployed-path repro (prebakeJoins + ny store)", () => {
     await populate(target.caller, seed);
     await populateBilling(target.caller, seed);
 
-    // Kör varje rad genom sin PROJEKTION (som den deployade hydreringen gör).
-    // En projektion som kastar → raden hoppas över (precis som demo-loader).
-    const registry = buildDefaultRegistry();
+    // Samla raderna per entitet (som den deployade hydreringen gör sedan #420:
+    // `loadDemoSeed` JSON-parsar filerna och bygger en DemoSource direkt, utan
+    // projektion-deserialize — schema-validering sker i tRPC-routrarnas input).
     const source: DemoSource = {};
-    let dropped = 0;
-    for (const [entity, k] of Object.entries(ENTITY_TO_KEY)) {
+    for (const [, k] of Object.entries(ENTITY_TO_KEY)) {
       const m = stores[k];
       if (!m) continue;
-      const entry = registry.forEntity(entity);
-      const survivors: Any[] = [];
-      for (const row of m.values()) {
-        try {
-          survivors.push(entry ? entry.projection.deserialize(JSON.stringify(row)) : row);
-        } catch { dropped++; }
-      }
-      (source as Any)[k] = survivors;
+      (source as Any)[k] = [...m.values()];
     }
-     
-    if (dropped) console.log(`REPRO: ${dropped} rader droppade av projektioner`);
+
     const baked = prebakeJoins(source);
 
     const store = new DemoDataStore(baked);

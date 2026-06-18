@@ -6,52 +6,45 @@
  *   - Input → click → state-övergångar (idle/loading/loaded/error)
  *   - Renderar listor av matters, contacts, users
  *   - Tomt URL ger ingen load
- *   - DI: factory injiceras så vi mockar bort isomorphic-git
+ *   - DI: `loader` injiceras så vi mockar bort GH-Pages-fetchen (#420)
  */
 
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest-compat";
 import { DemoClient } from "@/app/demo/_demo-client";
-import { DemoRuntime } from "@/lib/server/local-first/demo-runtime";
+import type { DemoSource } from "@/lib/shared/demo-source";
 
-function fakeRuntimeFactory(data: Record<string, string>) {
-  return () => DemoRuntime.create({
-    async cloneFn(fs) {
-      for (const [p, c] of Object.entries(data)) await fs.writeFile(p, c);
-    },
-  });
-}
-
-const matterJson = JSON.stringify({
+const matter = {
   id: "m1", matterNumber: "2026-0001", title: "Demo-ärende",
   status: "ACTIVE", organizationId: "demo",
-});
-const contactJson = JSON.stringify({
+};
+const contact = {
   id: "c1", name: "Demo Klient", contactType: "PERSON", organizationId: "demo",
-});
+};
+
+/** Fake-loader som returnerar en färdig DemoSource (ingen fetch). */
+function fakeLoader(source: DemoSource) {
+  return () => Promise.resolve(source);
+}
 
 describe("DemoClient", () => {
   it("renderar URL-input och tom-state initialt (utan auto-load)", () => {
-    render(<DemoClient runtimeFactory={fakeRuntimeFactory({})} defaultRepo="" />);
+    render(<DemoClient loader={fakeLoader({})} defaultRepo="" />);
     expect(screen.getByRole("textbox", { name: /GitHub-url/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Ladda demo/i })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: /Ärenden/i })).not.toBeInTheDocument();
   });
 
   it("klick på 'Ladda demo' utan url gör ingen request", () => {
-    const factory = vi.fn(fakeRuntimeFactory({}));
-    render(<DemoClient runtimeFactory={factory} defaultRepo="" />);
+    const loader = vi.fn(fakeLoader({}));
+    render(<DemoClient loader={loader} defaultRepo="" />);
     fireEvent.click(screen.getByRole("button", { name: /Ladda demo/i }));
-    // Factory anropas vid mount (för memo) men loadDemo ska inte ha körts
-    // → ingen "Laddar..."-text
+    expect(loader).not.toHaveBeenCalled();
     expect(screen.queryByText(/Laddar/i)).not.toBeInTheDocument();
   });
 
   it("vid lyckad load renderas ärenden + kontakter", async () => {
-    render(<DemoClient runtimeFactory={fakeRuntimeFactory({
-      "matters/active/m1.json": matterJson,
-      "contacts/c1.json": contactJson,
-    })} defaultRepo="" />);
+    render(<DemoClient loader={fakeLoader({ matters: [matter], contacts: [contact] })} defaultRepo="" />);
 
     fireEvent.change(screen.getByRole("textbox", { name: /GitHub-url/i }), {
       target: { value: "https://github.com/x/demo.git" },
@@ -62,11 +55,9 @@ describe("DemoClient", () => {
     expect(screen.getByText(/Demo Klient/i)).toBeInTheDocument();
   });
 
-  it("visar felmeddelande vid clone-fel", async () => {
+  it("visar felmeddelande vid ladd-fel", async () => {
     render(<DemoClient
-      runtimeFactory={() => DemoRuntime.create({
-        cloneFn: async () => { throw new Error("Repo hittades inte"); },
-      })}
+      loader={() => Promise.reject(new Error("Repo hittades inte"))}
       defaultRepo=""
     />);
 
@@ -78,12 +69,10 @@ describe("DemoClient", () => {
     await waitFor(() => expect(screen.getByText(/Repo hittades inte/i)).toBeInTheDocument());
   });
 
-  it("visar 'Laddar...' under pågående clone", async () => {
-    let resolve: () => void = () => {};
+  it("visar 'Laddar...' under pågående load", async () => {
+    let resolve: (s: DemoSource) => void = () => {};
     render(<DemoClient
-      runtimeFactory={() => DemoRuntime.create({
-        cloneFn: () => new Promise<void>((r) => { resolve = r; }),
-      })}
+      loader={() => new Promise<DemoSource>((r) => { resolve = r; })}
       defaultRepo=""
     />);
 
@@ -93,18 +82,12 @@ describe("DemoClient", () => {
     fireEvent.click(screen.getByRole("button", { name: /Ladda demo/i }));
 
     expect(await screen.findByText(/Laddar/i)).toBeInTheDocument();
-    resolve();
+    resolve({});
   });
 
   it("renderar antal-räknare per entitetstyp", async () => {
-    render(<DemoClient runtimeFactory={fakeRuntimeFactory({
-      "matters/active/m1.json": matterJson,
-      "matters/active/m2.json": JSON.stringify({
-        id: "m2", matterNumber: "2026-0002", title: "T2",
-        status: "ACTIVE", organizationId: "demo",
-      }),
-      "contacts/c1.json": contactJson,
-    })} defaultRepo="" />);
+    const m2 = { id: "m2", matterNumber: "2026-0002", title: "T2", status: "ACTIVE", organizationId: "demo" };
+    render(<DemoClient loader={fakeLoader({ matters: [matter, m2], contacts: [contact] })} defaultRepo="" />);
 
     fireEvent.change(screen.getByRole("textbox", { name: /GitHub-url/i }), {
       target: { value: "x" },
@@ -116,15 +99,12 @@ describe("DemoClient", () => {
   });
 
   it("auto-laddar default-repo vid mount (utan att kräva user-input)", async () => {
-    const cloneFn = vi.fn(async (fs, url: string) => {
-      expect(url).toBe("ulrik-s/ava-demo");
-      await fs.writeFile("matters/active/m1.json", matterJson);
+    const loader = vi.fn(async (repo: string) => {
+      expect(repo).toBe("ulrik-s/ava-demo");
+      return { matters: [matter] } as DemoSource;
     });
-    render(<DemoClient
-      runtimeFactory={() => DemoRuntime.create({ cloneFn })}
-      defaultRepo="ulrik-s/ava-demo"
-    />);
-    await waitFor(() => expect(cloneFn).toHaveBeenCalledTimes(1));
+    render(<DemoClient loader={loader} defaultRepo="ulrik-s/ava-demo" />);
+    await waitFor(() => expect(loader).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(screen.getByText(/Demo-ärende/i)).toBeInTheDocument());
   });
 });
