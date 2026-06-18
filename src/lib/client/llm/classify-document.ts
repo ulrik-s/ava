@@ -15,18 +15,13 @@
  */
 
 import type { ILlmExtractor } from "@/lib/server/llm/llm-extractor";
+import { KNOWN_KINDS, type DocumentKind, guessFromFilename } from "@/lib/shared/document-kind";
 
-export const KNOWN_KINDS = [
-  "STAMNING",
-  "DOM",
-  "BEVIS",
-  "FULLMAKT",
-  "AVTAL",
-  "FAKTURA",
-  "RAPPORT",
-  "OKLASSIFICERAT",
-] as const;
-export type DocumentKind = (typeof KNOWN_KINDS)[number];
+// Kategorierna + filnamns-heuristiken bor numera i `lib/shared/document-kind`
+// (delas med server-jobbet, #518). Re-exporteras så befintliga importörer
+// (register-workers m.fl.) fortsätter peka hit.
+export { KNOWN_KINDS, guessFromFilename };
+export type { DocumentKind };
 
 export interface ClassifyInput {
   fileName: string;
@@ -53,16 +48,4 @@ export async function classifyDocument(input: ClassifyInput): Promise<DocumentKi
     }
   }
   return heuristic;
-}
-
-export function guessFromFilename(name: string): DocumentKind {
-  const lower = name.toLowerCase();
-  if (/(stamning|kallelse|stämning)/.test(lower)) return "STAMNING";
-  if (/(dom|beslut|tingsr|domstol)/.test(lower)) return "DOM";
-  if (/(bevis|fotografi|bilaga|exhibit)/.test(lower)) return "BEVIS";
-  if (/(fullmakt|poa|power)/.test(lower)) return "FULLMAKT";
-  if (/(avtal|kontrakt|hyres|köpe|köpeavtal)/.test(lower)) return "AVTAL";
-  if (/(faktura|invoice|kvitto|receipt)/.test(lower)) return "FAKTURA";
-  if (/(rapport|utlatande|utlåtande|expert)/.test(lower)) return "RAPPORT";
-  return "OKLASSIFICERAT";
 }

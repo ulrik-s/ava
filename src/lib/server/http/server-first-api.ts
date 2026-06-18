@@ -37,6 +37,8 @@ export interface ServerFirstApiConfig {
 export interface ServerFirstApi {
   /** Fetch-handler att montera (t.ex. via `serveFetchHandler`). */
   handler: (req: Request) => Promise<Response>;
+  /** Typade repos ovanpå db:n — exponeras så jobb-handlers (#518) kan läsa/skriva. */
+  repos: ReturnType<typeof buildDrizzleRepositories>;
   /** Stäng db-poolen vid nedstängning. */
   close: () => Promise<void>;
 }
@@ -59,7 +61,7 @@ export function buildServerFirstApi(config: ServerFirstApiConfig): ServerFirstAp
     ...(config.endpoint ? { endpoint: config.endpoint } : {}),
     ...(config.onError ? { onError: config.onError } : {}),
   });
-  return { handler, close };
+  return { handler, repos, close };
 }
 
 /** Env-nycklar för den körbara entryn. */

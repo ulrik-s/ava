@@ -8,6 +8,7 @@
  */
 
 import { createSmtpSender, type SmtpConfig } from "@/lib/server/integrations/email/smtp-sender";
+import { createClassifyDocumentHandler, type ClassifyDocumentDeps } from "./handlers/classify-document-handler";
 import { createEmailDispatchHandler } from "./handlers/email-dispatch-handler";
 import { JOB_QUEUES } from "./job-queue";
 import type { JobHandlers } from "./job-worker-runtime";
@@ -15,6 +16,8 @@ import type { JobHandlers } from "./job-worker-runtime";
 export interface JobHandlerConfig {
   /** SMTP-konfig för e-postutskick. Saknas → ingen email-worker registreras. */
   smtp?: SmtpConfig;
+  /** Dokument-repo för `classify-document`-jobbet (#518). Saknas → ingen classify-worker. */
+  documents?: ClassifyDocumentDeps["documents"];
 }
 
 /** Bygg handler-kartan ur den tillgängliga integrations-konfigen. */
@@ -22,6 +25,9 @@ export function buildServerFirstJobHandlers(cfg: JobHandlerConfig): JobHandlers 
   const handlers: JobHandlers = {};
   if (cfg.smtp) {
     handlers[JOB_QUEUES.emailDispatch] = createEmailDispatchHandler(createSmtpSender(cfg.smtp));
+  }
+  if (cfg.documents) {
+    handlers[JOB_QUEUES.classifyDocument] = createClassifyDocumentHandler({ documents: cfg.documents });
   }
   return handlers;
 }
