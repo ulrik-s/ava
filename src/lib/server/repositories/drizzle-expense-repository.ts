@@ -1,10 +1,14 @@
 /**
  * Drizzle `ExpenseRepository` (ADR 0020) — server-impl. Ärver bas-CRUD;
  * `flagBilled` bulk-sätter invoiceId.
+ *
+ * `expenses`-kolumnerna är brandade (#562) → `...r.exp`-spreaden i projektionerna
+ * är typad och query-params brandas vid gränsen med `asId` (typad tag, ej dubbel-cast).
  */
 
 import { and, asc, desc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
 import type { Expense } from "@/lib/shared/schemas/billing";
+import { asId } from "@/lib/shared/schemas/ids";
 import { expenses, invoices, matters, users } from "../db/schema";
 import type { AppDb } from "../db/types";
 import { DrizzleRepository, versionedTable } from "./drizzle-repository";
@@ -20,7 +24,7 @@ export class DrizzleExpenseRepository extends DrizzleRepository<Expense> impleme
   async listForOrg(organizationId: string, opts: ExpenseListOptions): Promise<ExpenseListResult> {
     const where = and(
       eq(matters.organizationId, organizationId),
-      opts.matterId ? eq(expenses.matterId, opts.matterId) : undefined,
+      opts.matterId ? eq(expenses.matterId, asId<"MatterId">(opts.matterId)) : undefined,
     );
     const rows = await this.db
       .select({
@@ -40,12 +44,12 @@ export class DrizzleExpenseRepository extends DrizzleRepository<Expense> impleme
       .select({ total: sql<number>`count(*)`, sum: sql<number>`coalesce(sum(${expenses.amount}), 0)` })
       .from(expenses).innerJoin(matters, eq(expenses.matterId, matters.id)).where(where);
     return {
-      expenses: rows.map((r) => ({
-        ...(r.exp as object),
-        user: r.uId ? { id: r.uId, name: r.uName as string } : null,
-        matter: r.mId ? { id: r.mId, matterNumber: r.mNum as string, title: r.mTitle as string } : null,
+      expenses: rows.map((r): ExpenseListRow => ({
+        ...r.exp,
+        user: r.uId ? { id: r.uId, name: r.uName ?? "" } : null,
+        matter: r.mId ? { id: r.mId, matterNumber: r.mNum ?? "", title: r.mTitle ?? "" } : null,
         invoice: r.invId ? { id: r.invId, invoiceNumber: r.invNum } : null,
-      })) as unknown as ExpenseListRow[],
+      })),
       total: Number(agg?.total ?? 0),
       totalAmount: Number(agg?.sum ?? 0),
     };
@@ -55,36 +59,37 @@ export class DrizzleExpenseRepository extends DrizzleRepository<Expense> impleme
     const rows = await this.db
       .select({ exp: expenses }).from(expenses)
       .innerJoin(matters, eq(expenses.matterId, matters.id))
-      .where(and(eq(expenses.id, id), eq(matters.organizationId, organizationId), isNull(expenses.deletedAt)))
+      .where(and(eq(expenses.id, asId<"ExpenseId">(id)), eq(matters.organizationId, organizationId), isNull(expenses.deletedAt)))
       .limit(1);
-    return this.asRow(rows[0]?.exp);
+    return rows[0]?.exp ?? null;
   }
 
   async listUnbilled(matterId: string, ids: string[]): Promise<Expense[]> {
     if (!ids.length) return [];
     const rows = await this.db
       .select().from(expenses)
-      .where(and(inArray(expenses.id, ids), eq(expenses.matterId, matterId), isNull(expenses.invoiceId)));
-    return this.asRows(rows);
+      .where(and(inArray(expenses.id, ids.map((i) => asId<"ExpenseId">(i))), eq(expenses.matterId, asId<"MatterId">(matterId)), isNull(expenses.invoiceId)));
+    return rows;
   }
 
   async flagBilled(ids: string[], invoiceId: string): Promise<void> {
     if (!ids.length) return;
-    await this.db.update(expenses).set({ invoiceId } as never).where(inArray(expenses.id, ids));
+    await this.db.update(expenses).set({ invoiceId: asId<"InvoiceId">(invoiceId) })
+      .where(inArray(expenses.id, ids.map((i) => asId<"ExpenseId">(i))));
   }
 
   async listUnfrozenForMatter(matterId: string): Promise<Expense[]> {
     const rows = await this.db
       .select().from(expenses)
-      .where(and(eq(expenses.matterId, matterId), isNull(expenses.frozenByBillingRunId), isNull(expenses.deletedAt)))
+      .where(and(eq(expenses.matterId, asId<"MatterId">(matterId)), isNull(expenses.frozenByBillingRunId), isNull(expenses.deletedAt)))
       .orderBy(asc(expenses.date));
-    return this.asRows(rows);
+    return rows;
   }
 
   async freezeForMatter(matterId: string, billingRunId: string, now: Date): Promise<void> {
     await this.db.update(expenses)
-      .set({ frozenAt: now, frozenByBillingRunId: billingRunId } as never)
-      .where(and(eq(expenses.matterId, matterId), isNull(expenses.frozenByBillingRunId)));
+      .set({ frozenAt: now, frozenByBillingRunId: asId<"BillingRunId">(billingRunId) })
+      .where(and(eq(expenses.matterId, asId<"MatterId">(matterId)), isNull(expenses.frozenByBillingRunId)));
   }
 
   async listForLawyerInPeriod(
@@ -101,18 +106,18 @@ export class DrizzleExpenseRepository extends DrizzleRepository<Expense> impleme
       .from(expenses)
       .innerJoin(matters, eq(expenses.matterId, matters.id))
       .where(and(
-        eq(matters.organizationId, organizationId), eq(expenses.userId, userId),
+        eq(matters.organizationId, organizationId), eq(expenses.userId, asId<"UserId">(userId)),
         gte(expenses.date, from), lte(expenses.date, to), isNull(expenses.deletedAt),
       ))
       .orderBy(asc(expenses.date));
-    return rows.map((r) => ({
-      ...(r.exp as object),
+    return rows.map((r): LawyerReportExpense => ({
+      ...r.exp,
       matter: {
-        id: r.mId as string, matterNumber: r.mNum as string, title: r.mTitle as string,
-        paymentMethod: r.mPay as string, paymentMethodNote: (r.mNote as string | null) ?? null,
-        paymentMethodDecidedAt: (r.mDecided as Date | null) ?? null,
-        contacts: r.klient ? [{ contact: { name: r.klient as string } }] : [],
+        id: r.mId, matterNumber: r.mNum, title: r.mTitle,
+        paymentMethod: r.mPay, paymentMethodNote: r.mNote ?? null,
+        paymentMethodDecidedAt: r.mDecided ?? null,
+        contacts: r.klient ? [{ contact: { name: r.klient } }] : [],
       },
-    })) as unknown as LawyerReportExpense[];
+    }));
   }
 }

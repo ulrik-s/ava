@@ -13,9 +13,9 @@
 
 import { relations } from "drizzle-orm";
 import { bigint, bigserial, index, integer, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
-import type { ReminderType } from "@/lib/shared/schemas/enums";
+import type { ExpenseKind, ReminderType } from "@/lib/shared/schemas/enums";
 import type {
-  BillingRunId, InvoiceId, MatterId, PaymentId, PaymentPlanId, PaymentPlanReminderId,
+  BillingRunId, ExpenseId, InvoiceId, MatterId, PaymentId, PaymentPlanId, PaymentPlanReminderId,
   TimeEntryId, UserId, WriteOffId,
 } from "@/lib/shared/schemas/ids";
 import { baseColumns, boolDefault, orgScopedColumns } from "./columns";
@@ -143,18 +143,19 @@ export const timeEntries = pgTable("time_entries", {
 
 export const expenses = pgTable("expenses", {
   ...baseColumns,
-  userId: uuid("user_id").notNull(),
-  matterId: uuid("matter_id").notNull(),
+  id: uuid("id").primaryKey().$type<ExpenseId>(),
+  userId: uuid("user_id").notNull().$type<UserId>(),
+  matterId: uuid("matter_id").notNull().$type<MatterId>(),
   date: timestamp("date", { withTimezone: true }).notNull(),
   amount: ore("amount").notNull(),
   description: text("description").notNull(),
   billable: boolDefault("billable", true),
-  invoiceId: uuid("invoice_id"),
+  invoiceId: uuid("invoice_id").$type<InvoiceId>(),
   vatRate: integer("vat_rate").notNull().default(2500),
   vatIncluded: boolDefault("vat_included", true),
-  kind: text("kind").notNull().default("EXPENSE"),
+  kind: text("kind").notNull().default("EXPENSE").$type<ExpenseKind>(),
   frozenAt: timestamp("frozen_at", { withTimezone: true }),
-  frozenByBillingRunId: uuid("frozen_by_billing_run_id"),
+  frozenByBillingRunId: uuid("frozen_by_billing_run_id").$type<BillingRunId>(),
 }, (t) => [index("expenses_matter_idx").on(t.matterId)]);
 
 export const invoices = pgTable("invoices", {
