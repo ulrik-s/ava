@@ -59,11 +59,6 @@
       "count": 1
     }
   },
-  "src/lib/server/repositories/drizzle-document-suggestion-repository.ts": {
-    "no-restricted-syntax": {
-      "count": 3
-    }
-  },
   "src/lib/server/repositories/drizzle-org-preference-repository.ts": {
     "no-restricted-syntax": {
       "count": 2
@@ -90,11 +85,6 @@
     }
   },
   "src/lib/server/repositories/in-memory-write-off-repository.ts": {
-    "no-restricted-syntax": {
-      "count": 1
-    }
-  },
-  "src/lib/server/routers/document/suggestions.ts": {
     "no-restricted-syntax": {
       "count": 1
     }

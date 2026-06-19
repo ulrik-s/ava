@@ -27,10 +27,10 @@ export class DrizzleDocumentSuggestionRepository
       .select({ s: S, matterId: documents.matterId }).from(S)
       .innerJoin(documents, eq(S.documentId, documents.id))
       .innerJoin(matters, eq(documents.matterId, matters.id))
-      .where(and(eq(S.id, id), eq(matters.organizationId, asId<"OrganizationId">(organizationId)), isNull(S.deletedAt)))
+      .where(and(eq(S.id, asId<"DocumentAnalysisSuggestionId">(id)), eq(matters.organizationId, asId<"OrganizationId">(organizationId)), isNull(S.deletedAt)))
       .limit(1);
     const r = rows[0];
-    return r ? ({ ...(r.s as object), document: { matterId: r.matterId as string } } as unknown as SuggestionWithMatter) : null;
+    return r ? ({ ...r.s, document: { matterId: r.matterId } }) : null;
   }
 
   async listPendingForMatter(matterId: string, organizationId: string, order: "asc" | "desc"): Promise<SuggestionListRow[]> {
@@ -44,9 +44,9 @@ export class DrizzleDocumentSuggestionRepository
       ))
       .orderBy(order === "asc" ? asc(S.createdAt) : desc(S.createdAt));
     return rows.map((r) => ({
-      ...(r.s as object),
-      document: { id: r.dId as string, fileName: r.dFile as string, title: (r.dTitle as string | null) ?? null },
-    })) as unknown as SuggestionListRow[];
+      ...r.s,
+      document: { id: r.dId, fileName: r.dFile, title: r.dTitle ?? null },
+    }));
   }
 
   async listPendingByIds(ids: string[], organizationId: string): Promise<SuggestionWithMatter[]> {
@@ -55,8 +55,8 @@ export class DrizzleDocumentSuggestionRepository
       .select({ s: S, matterId: documents.matterId }).from(S)
       .innerJoin(documents, eq(S.documentId, documents.id))
       .innerJoin(matters, eq(documents.matterId, matters.id))
-      .where(and(inArray(S.id, ids), eq(S.status, "PENDING"), eq(matters.organizationId, asId<"OrganizationId">(organizationId)), isNull(S.deletedAt)));
-    return rows.map((r) => ({ ...(r.s as object), document: { matterId: r.matterId as string } })) as unknown as SuggestionWithMatter[];
+      .where(and(inArray(S.id, ids.map((i) => asId<"DocumentAnalysisSuggestionId">(i))), eq(S.status, "PENDING"), eq(matters.organizationId, asId<"OrganizationId">(organizationId)), isNull(S.deletedAt)));
+    return rows.map((r) => ({ ...r.s, document: { matterId: r.matterId } }));
   }
 
   async listByIdsInOrg(ids: string[], organizationId: string): Promise<Array<{ id: string }>> {
@@ -65,12 +65,12 @@ export class DrizzleDocumentSuggestionRepository
       .select({ id: S.id }).from(S)
       .innerJoin(documents, eq(S.documentId, documents.id))
       .innerJoin(matters, eq(documents.matterId, matters.id))
-      .where(and(inArray(S.id, ids), eq(matters.organizationId, asId<"OrganizationId">(organizationId)), isNull(S.deletedAt)));
+      .where(and(inArray(S.id, ids.map((i) => asId<"DocumentAnalysisSuggestionId">(i))), eq(matters.organizationId, asId<"OrganizationId">(organizationId)), isNull(S.deletedAt)));
     return rows.map((r) => ({ id: r.id as string }));
   }
 
   async updateManyByIds(ids: string[], patch: Partial<DocumentAnalysisSuggestion>): Promise<void> {
     if (!ids.length) return;
-    await this.db.update(S).set(patch as never).where(inArray(S.id, ids));
+    await this.db.update(S).set(patch as never).where(inArray(S.id, ids.map((i) => asId<"DocumentAnalysisSuggestionId">(i))));
   }
 }

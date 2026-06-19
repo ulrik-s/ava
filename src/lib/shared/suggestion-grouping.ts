@@ -19,11 +19,11 @@ export interface RawSuggestion {
   name: string;
   role: string;
   contactType: string;
-  email: string | null;
-  phone: string | null;
-  orgNumber: string | null;
-  personalNumber: string | null;
-  notes: string | null;
+  email?: string | null | undefined;
+  phone?: string | null | undefined;
+  orgNumber?: string | null | undefined;
+  personalNumber?: string | null | undefined;
+  notes?: string | null | undefined;
   document: { id: string; fileName: string; title: string | null };
 }
 

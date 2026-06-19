@@ -17,7 +17,7 @@ import type { DocumentAnalysisSuggestion } from "@/lib/shared/schemas/document";
 import { matterRoleSchema, contactTypeSchema, type SuggestionStatus } from "@/lib/shared/schemas/enums";
 import { asId, type ContactId } from "@/lib/shared/schemas/ids";
 import type { MatterContact } from "@/lib/shared/schemas/matter";
-import { groupSuggestions, type RawSuggestion } from "@/lib/shared/suggestion-grouping";
+import { groupSuggestions } from "@/lib/shared/suggestion-grouping";
 import type { Repositories } from "../../repositories/repositories";
 import { orgProcedure } from "../../trpc";
 
@@ -256,7 +256,7 @@ export const suggestionProcedures = {
     .input(z.object({ matterId: z.string() }))
     .query(async ({ ctx, input }) => {
       const rows = await ctx.repos.documentAnalysisSuggestions.listPendingForMatter(input.matterId, ctx.orgId, "asc");
-      return groupSuggestions(rows as unknown as RawSuggestion[]);
+      return groupSuggestions(rows);
     }),
 
   /**

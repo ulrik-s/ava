@@ -23,7 +23,8 @@ import type {
   SuggestionStatus,
 } from "@/lib/shared/schemas/enums";
 import type {
-  AccontoDeductionId, BillingRunId, CalendarEventId, ConflictCheckId, ContactId, DocumentFolderId, DocumentId,
+  AccontoDeductionId, BillingRunId, CalendarEventId, ConflictCheckId, ContactId,
+  DocumentAnalysisSuggestionId, DocumentFolderId, DocumentId,
   DocumentTemplateId, ExpenseId, InvoiceDispatchId, InvoiceId, MatterContactId, MatterEventSuggestionId,
   MatterId, OrganizationId, PaymentId, PaymentPlanId, PaymentPlanReminderId, ServiceNoteId, TaskId,
   TimeEntryId, UserId, WriteOffId,
@@ -317,17 +318,18 @@ export const documents = pgTable("documents", {
 
 export const documentAnalysisSuggestions = pgTable("document_analysis_suggestions", {
   ...baseColumns,
-  documentId: uuid("document_id").notNull(),
+  id: uuid("id").primaryKey().$type<DocumentAnalysisSuggestionId>(),
+  documentId: uuid("document_id").notNull().$type<DocumentId>(),
   name: text("name").notNull(),
-  role: text("role").notNull(),
-  contactType: text("contact_type").notNull(),
+  role: text("role").notNull().$type<MatterRole>(),
+  contactType: text("contact_type").notNull().$type<ContactType>(),
   email: text("email"),
   phone: text("phone"),
   orgNumber: text("org_number"),
   personalNumber: text("personal_number"),
   notes: text("notes"),
-  status: text("status").notNull().default("PENDING"),
-  acceptedContactId: uuid("accepted_contact_id"),
+  status: text("status").notNull().default("PENDING").$type<SuggestionStatus>(),
+  acceptedContactId: uuid("accepted_contact_id").$type<ContactId>(),
 }, (t) => [index("doc_analysis_suggestions_doc_idx").on(t.documentId)]);
 
 export const matterEventSuggestions = pgTable("matter_event_suggestions", {
