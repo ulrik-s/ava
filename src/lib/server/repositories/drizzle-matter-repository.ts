@@ -84,7 +84,7 @@ export class DrizzleMatterRepository extends DrizzleRepository<Matter> implement
     };
     const [docs, tes, mcs] = await Promise.all([
       this.db.select({ id: documents.matterId, n: sql<number>`count(*)` }).from(documents)
-        .where(and(inArray(documents.matterId, ids), isNull(documents.deletedAt))).groupBy(documents.matterId),
+        .where(and(inArray(documents.matterId, ids.map((i) => asId<"MatterId">(i))), isNull(documents.deletedAt))).groupBy(documents.matterId),
       this.db.select({ id: timeEntries.matterId, n: sql<number>`count(*)` }).from(timeEntries)
         .where(and(inArray(timeEntries.matterId, ids.map((i) => asId<"MatterId">(i))), isNull(timeEntries.deletedAt))).groupBy(timeEntries.matterId),
       this.db.select({ id: matterContacts.matterId, n: sql<number>`count(*)` }).from(matterContacts)

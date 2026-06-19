@@ -74,16 +74,6 @@
       "count": 2
     }
   },
-  "src/lib/server/repositories/drizzle-document-folder-repository.ts": {
-    "no-restricted-syntax": {
-      "count": 1
-    }
-  },
-  "src/lib/server/repositories/drizzle-document-repository.ts": {
-    "no-restricted-syntax": {
-      "count": 1
-    }
-  },
   "src/lib/server/repositories/drizzle-document-suggestion-repository.ts": {
     "no-restricted-syntax": {
       "count": 3

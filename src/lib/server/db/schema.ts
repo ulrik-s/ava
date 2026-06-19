@@ -21,9 +21,10 @@ import type {
   BillingRunRecipient, BillingRunStatus, BillingRunType, ExpenseKind, ReminderType, SuggestionStatus,
 } from "@/lib/shared/schemas/enums";
 import type {
-  BillingRunId, CalendarEventId, ConflictCheckId, DocumentId, DocumentTemplateId, ExpenseId,
-  InvoiceDispatchId, InvoiceId, MatterEventSuggestionId, MatterId, OrganizationId, PaymentId,
-  PaymentPlanId, PaymentPlanReminderId, ServiceNoteId, TaskId, TimeEntryId, UserId, WriteOffId,
+  BillingRunId, CalendarEventId, ConflictCheckId, DocumentFolderId, DocumentId, DocumentTemplateId,
+  ExpenseId, InvoiceDispatchId, InvoiceId, MatterEventSuggestionId, MatterId, OrganizationId,
+  PaymentId, PaymentPlanId, PaymentPlanReminderId, ServiceNoteId, TaskId, TimeEntryId, UserId,
+  WriteOffId,
 } from "@/lib/shared/schemas/ids";
 import { baseColumns, boolDefault, orgScopedColumns } from "./columns";
 
@@ -277,27 +278,29 @@ export const expectedReceivables = pgTable("expected_receivables", {
 
 export const documentFolders = pgTable("document_folders", {
   ...baseColumns,
+  id: uuid("id").primaryKey().$type<DocumentFolderId>(),
   name: text("name").notNull(),
-  matterId: uuid("matter_id").notNull(),
-  parentId: uuid("parent_id"),
+  matterId: uuid("matter_id").notNull().$type<MatterId>(),
+  parentId: uuid("parent_id").$type<DocumentFolderId>(),
 }, (t) => [index("document_folders_matter_idx").on(t.matterId)]);
 
 export const documents = pgTable("documents", {
   ...baseColumns,
-  matterId: uuid("matter_id").notNull(),
+  id: uuid("id").primaryKey().$type<DocumentId>(),
+  matterId: uuid("matter_id").notNull().$type<MatterId>(),
   /** Valfri faktura-koppling (#397: genererade faktura-dokument). */
-  invoiceId: uuid("invoice_id"),
-  folderId: uuid("folder_id"),
+  invoiceId: uuid("invoice_id").$type<InvoiceId>(),
+  folderId: uuid("folder_id").$type<DocumentFolderId>(),
   fileName: text("file_name").notNull(),
   mimeType: text("mime_type").notNull(),
   sizeBytes: bigint("size_bytes", { mode: "number" }).notNull(),
   storagePath: text("storage_path").notNull(),
-  uploadedById: uuid("uploaded_by_id").notNull(),
+  uploadedById: uuid("uploaded_by_id").notNull().$type<UserId>(),
   title: text("title"),
   documentType: text("document_type"),
   summary: text("summary"),
   analyzedAt: timestamp("analyzed_at", { withTimezone: true }),
-  analysisStatus: text("analysis_status"),
+  analysisStatus: text("analysis_status").$type<"PENDING" | "RUNNING" | "DONE" | "ERROR">(),
   analysisModel: text("analysis_model"),
   analysisError: text("analysis_error"),
 }, (t) => [index("documents_matter_idx").on(t.matterId)]);
