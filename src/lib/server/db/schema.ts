@@ -15,7 +15,8 @@ import { relations } from "drizzle-orm";
 import { bigint, bigserial, index, integer, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import type { ReminderType } from "@/lib/shared/schemas/enums";
 import type {
-  InvoiceId, PaymentId, PaymentPlanId, PaymentPlanReminderId, UserId, WriteOffId,
+  BillingRunId, InvoiceId, MatterId, PaymentId, PaymentPlanId, PaymentPlanReminderId,
+  TimeEntryId, UserId, WriteOffId,
 } from "@/lib/shared/schemas/ids";
 import { baseColumns, boolDefault, orgScopedColumns } from "./columns";
 
@@ -127,16 +128,17 @@ export const changeLog = pgTable("change_log", {
 
 export const timeEntries = pgTable("time_entries", {
   ...baseColumns,
-  userId: uuid("user_id").notNull(),
-  matterId: uuid("matter_id").notNull(),
+  id: uuid("id").primaryKey().$type<TimeEntryId>(),
+  userId: uuid("user_id").notNull().$type<UserId>(),
+  matterId: uuid("matter_id").notNull().$type<MatterId>(),
   date: timestamp("date", { withTimezone: true }).notNull(),
   minutes: integer("minutes").notNull(),
   description: text("description").notNull(),
   hourlyRate: integer("hourly_rate").notNull(),
   billable: boolDefault("billable", true),
-  invoiceId: uuid("invoice_id"),
+  invoiceId: uuid("invoice_id").$type<InvoiceId>(),
   frozenAt: timestamp("frozen_at", { withTimezone: true }),
-  frozenByBillingRunId: uuid("frozen_by_billing_run_id"),
+  frozenByBillingRunId: uuid("frozen_by_billing_run_id").$type<BillingRunId>(),
 }, (t) => [index("time_entries_matter_idx").on(t.matterId)]);
 
 export const expenses = pgTable("expenses", {

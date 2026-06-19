@@ -6,6 +6,7 @@
  */
 
 import { and, asc, desc, eq, ilike, inArray, isNull, or, sql } from "drizzle-orm";
+import { asId } from "@/lib/shared/schemas/ids";
 import type { Matter, MatterContact } from "@/lib/shared/schemas/matter";
 import { contacts, documents, matterContacts, matters, timeEntries } from "../db/schema";
 import type { AppDb } from "../db/types";
@@ -85,7 +86,7 @@ export class DrizzleMatterRepository extends DrizzleRepository<Matter> implement
       this.db.select({ id: documents.matterId, n: sql<number>`count(*)` }).from(documents)
         .where(and(inArray(documents.matterId, ids), isNull(documents.deletedAt))).groupBy(documents.matterId),
       this.db.select({ id: timeEntries.matterId, n: sql<number>`count(*)` }).from(timeEntries)
-        .where(and(inArray(timeEntries.matterId, ids), isNull(timeEntries.deletedAt))).groupBy(timeEntries.matterId),
+        .where(and(inArray(timeEntries.matterId, ids.map((i) => asId<"MatterId">(i))), isNull(timeEntries.deletedAt))).groupBy(timeEntries.matterId),
       this.db.select({ id: matterContacts.matterId, n: sql<number>`count(*)` }).from(matterContacts)
         .where(and(inArray(matterContacts.matterId, ids), isNull(matterContacts.deletedAt))).groupBy(matterContacts.matterId),
     ]);
