@@ -17,7 +17,9 @@ import type { DispatchChannel, DispatchStatus } from "@/lib/shared/schemas/billi
 import type {
   CalendarEventKind, CalendarEventVisibility, TaskPriority, TaskStatus,
 } from "@/lib/shared/schemas/calendar";
-import type { ExpenseKind, ReminderType, SuggestionStatus } from "@/lib/shared/schemas/enums";
+import type {
+  BillingRunRecipient, BillingRunStatus, BillingRunType, ExpenseKind, ReminderType, SuggestionStatus,
+} from "@/lib/shared/schemas/enums";
 import type {
   BillingRunId, CalendarEventId, ConflictCheckId, DocumentId, DocumentTemplateId, ExpenseId,
   InvoiceDispatchId, InvoiceId, MatterEventSuggestionId, MatterId, OrganizationId, PaymentId,
@@ -242,17 +244,18 @@ export const accontoDeductions = pgTable("acconto_deductions", {
 
 export const billingRuns = pgTable("billing_runs", {
   ...baseColumns,
-  matterId: uuid("matter_id").notNull(),
-  type: text("type").notNull(),
-  recipient: text("recipient").notNull(),
-  status: text("status").notNull().default("DRAFT"),
+  id: uuid("id").primaryKey().$type<BillingRunId>(),
+  matterId: uuid("matter_id").notNull().$type<MatterId>(),
+  type: text("type").notNull().$type<BillingRunType>(),
+  recipient: text("recipient").notNull().$type<BillingRunRecipient>(),
+  status: text("status").notNull().default("DRAFT").$type<BillingRunStatus>(),
   workValueOreAtRun: ore("work_value_ore_at_run").notNull(),
   clientShareBips: integer("client_share_bips"),
   proposedAmountOre: ore("proposed_amount_ore").notNull(),
   amountOre: ore("amount_ore").notNull(),
   prutningOre: ore("prutning_ore"),
-  invoiceId: uuid("invoice_id"),
-  deductedBillingRunIds: jsonb("deducted_billing_run_ids").notNull().default([]),
+  invoiceId: uuid("invoice_id").$type<InvoiceId>(),
+  deductedBillingRunIds: jsonb("deducted_billing_run_ids").notNull().default([]).$type<BillingRunId[]>(),
   periodFrom: timestamp("period_from", { withTimezone: true }),
   periodTo: timestamp("period_to", { withTimezone: true }),
   notes: text("notes"),

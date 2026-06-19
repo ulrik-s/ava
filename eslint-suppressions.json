@@ -69,11 +69,6 @@
       "count": 1
     }
   },
-  "src/lib/server/repositories/drizzle-billing-run-repository.ts": {
-    "no-restricted-syntax": {
-      "count": 2
-    }
-  },
   "src/lib/server/repositories/drizzle-contact-repository.ts": {
     "no-restricted-syntax": {
       "count": 2
