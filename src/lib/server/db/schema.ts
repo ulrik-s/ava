@@ -13,7 +13,10 @@
 
 import { relations } from "drizzle-orm";
 import { bigint, bigserial, index, integer, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
-import type { InvoiceId, PaymentId, UserId } from "@/lib/shared/schemas/ids";
+import type { ReminderType } from "@/lib/shared/schemas/enums";
+import type {
+  InvoiceId, PaymentId, PaymentPlanId, PaymentPlanReminderId, UserId, WriteOffId,
+} from "@/lib/shared/schemas/ids";
 import { baseColumns, boolDefault, orgScopedColumns } from "./columns";
 
 /** Monetärt öre-belopp (bigint → ingen int4-overflow för stora fakturor). */
@@ -180,11 +183,12 @@ export const payments = pgTable("payments", {
 
 export const writeOffs = pgTable("write_offs", {
   ...baseColumns,
-  invoiceId: uuid("invoice_id").notNull(),
+  id: uuid("id").primaryKey().$type<WriteOffId>(),
+  invoiceId: uuid("invoice_id").notNull().$type<InvoiceId>(),
   amount: ore("amount").notNull(),
   writtenOffAt: timestamp("written_off_at", { withTimezone: true }).notNull(),
   reason: text("reason"),
-  recordedById: uuid("recorded_by_id").notNull(),
+  recordedById: uuid("recorded_by_id").notNull().$type<UserId>(),
 }, (t) => [index("write_offs_invoice_idx").on(t.invoiceId)]);
 
 export const invoiceDispatches = pgTable("invoice_dispatches", {
@@ -214,9 +218,10 @@ export const paymentPlans = pgTable("payment_plans", {
 
 export const paymentPlanReminders = pgTable("payment_plan_reminders", {
   ...baseColumns,
-  planId: uuid("plan_id").notNull(),
+  id: uuid("id").primaryKey().$type<PaymentPlanReminderId>(),
+  planId: uuid("plan_id").notNull().$type<PaymentPlanId>(),
   dueMonth: text("due_month").notNull(),
-  type: text("type").notNull(),
+  type: text("type").notNull().$type<ReminderType>(),
   sentAt: timestamp("sent_at", { withTimezone: true }).notNull(),
 }, (t) => [index("payment_plan_reminders_plan_idx").on(t.planId)]);
 

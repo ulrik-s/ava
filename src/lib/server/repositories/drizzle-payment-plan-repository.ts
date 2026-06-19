@@ -9,6 +9,7 @@
 
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import type { PaymentPlan, PaymentPlanReminder } from "@/lib/shared/schemas/billing";
+import { asId } from "@/lib/shared/schemas/ids";
 import { invoices, matters, paymentPlanReminders, paymentPlans } from "../db/schema";
 import type { AppDb } from "../db/types";
 import { DrizzleRepository, versionedTable } from "./drizzle-repository";
@@ -84,9 +85,9 @@ export class DrizzlePaymentPlanRepository extends DrizzleRepository<PaymentPlan>
     if (ids.length === 0) return out;
     const rows = await this.db
       .select().from(paymentPlanReminders)
-      .where(inArray(paymentPlanReminders.planId, ids))
+      .where(inArray(paymentPlanReminders.planId, ids.map((id) => asId<"PaymentPlanId">(id))))
       .orderBy(desc(paymentPlanReminders.sentAt));
-    for (const r of rows as unknown as PaymentPlanReminder[]) {
+    for (const r of rows) {
       (out.get(r.planId) ?? out.set(r.planId, []).get(r.planId)!).push(r);
     }
     return out;
