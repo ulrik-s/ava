@@ -56,6 +56,27 @@ const eslintConfig = defineConfig([
       // query-yta (IDataStore.ts, block-disabled + dokumenterad). Skärper från
       // next/typescript:s `warn` → `error` så NYA `any` blockerar CI.
       "@typescript-eslint/no-explicit-any": "error",
+      // Förbjud dubbel-castar (`x as unknown as T` / `x as any as T`): de
+      // kringgår typsystemet helt (raderar formen via unknown/any och påstår en
+      // ny). Använd riktiga typer i stället — branda drizzle-kolumner + `asId`
+      // vid gränsen, zod-parse extern data, eller typa seamen. Befintliga brott
+      // är baselineade i `eslint-suppressions.json` och avvecklas i #562/ADR 0026;
+      // NYA dubbel-castar fäller CI (Static analysis kör `lint` med --max-warnings 0).
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector:
+            "TSAsExpression[expression.type='TSAsExpression'][expression.typeAnnotation.type=/^TS(Unknown|Any)Keyword$/]",
+          message:
+            "Dubbel-cast (`as unknown as` / `as any as`) är förbjuden — den raderar typsäkerheten. Använd riktiga typer: branda kolumner + asId, zod-parse, eller typa seamen (#562, ADR 0026).",
+        },
+        {
+          selector:
+            "TSTypeAssertion[expression.type='TSTypeAssertion']",
+          message:
+            "Dubbel-cast (`<T><U>x`) är förbjuden — den raderar typsäkerheten. Använd riktiga typer (#562, ADR 0026).",
+        },
+      ],
       // Promise-säkerhet: oavsiktligt obevakade promises, async-callbacks i
       // synkron/void-kontext, och `await` på icke-thenables är vanliga
       // buggkällor som bara typinfo kan upptäcka (#9).

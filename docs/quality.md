@@ -115,10 +115,17 @@ Tidigare låg lint på `--max-warnings 45` med struktur-reglerna som `warn` —
 bygget tills den bröts ut, och den delade budgeten gjorde att vilken ny warning
 som helst kunde spränga taket. Den frös skulden utan att beta av den.
 
-Nu: struktur-reglerna är `error` och dagens skuld (43 brott) ligger som en
+Nu: struktur-reglerna är `error` och dagens skuld ligger som en
 **baseline** i [`eslint-suppressions.json`](../eslint-suppressions.json) i
 repo-roten — ESLint 10:s inbyggda
 [bulk-suppressions](https://eslint.org/docs/latest/use/suppressions). Det ger:
+
+> **Dubbel-castar** (`x as unknown as T` / `x as any as T`) omfattas också:
+> `no-restricted-syntax` är `error` (de raderar typsäkerheten helt). Den
+> befintliga skulden är baselinead och avvecklas i #562 (ADR 0026); **nya**
+> dubbel-castar fäller CI direkt. Använd riktiga typer i stället — branda
+> drizzle-kolumner + `asId`, zod-parse extern data, eller typa seamen.
+
 
 - **Ventil** — orelaterat arbete blockeras aldrig av gammal skuld. Det finns
   ingen delad warning-budget kvar att spränga; bara *nya* brott fäller bygget.
