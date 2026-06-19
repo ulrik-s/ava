@@ -5,6 +5,7 @@
 
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import type { BillingRun } from "@/lib/shared/schemas/billing";
+import { asId } from "@/lib/shared/schemas/ids";
 import { billingRuns, invoices, matters } from "../db/schema";
 import type { AppDb } from "../db/types";
 import type {
@@ -30,14 +31,14 @@ export class DrizzleBillingRunRepository
       .leftJoin(invoices, eq(billingRuns.invoiceId, invoices.id))
       .where(and(
         eq(matters.organizationId, organizationId),
-        matterId ? eq(billingRuns.matterId, matterId) : undefined,
+        matterId ? eq(billingRuns.matterId, asId<"MatterId">(matterId)) : undefined,
         isNull(billingRuns.deletedAt),
       ))
       .orderBy(desc(billingRuns.createdAt));
-    return rows.map((r) => ({
-      ...(r.run as object),
+    return rows.map((r): BillingRunListRow => ({
+      ...r.run,
       invoice: r.invId ? { id: r.invId, invoiceNumber: r.invNum, status: r.invStatus as string } : null,
-    })) as unknown as BillingRunListRow[];
+    }));
   }
 
   async getByIdInOrg(id: string, organizationId: string): Promise<BillingRunDetailRow | null> {
@@ -50,29 +51,29 @@ export class DrizzleBillingRunRepository
       .from(billingRuns)
       .innerJoin(matters, eq(billingRuns.matterId, matters.id))
       .leftJoin(invoices, eq(billingRuns.invoiceId, invoices.id))
-      .where(and(eq(billingRuns.id, id), eq(matters.organizationId, organizationId), isNull(billingRuns.deletedAt)))
+      .where(and(eq(billingRuns.id, asId<"BillingRunId">(id)), eq(matters.organizationId, organizationId), isNull(billingRuns.deletedAt)))
       .limit(1);
     const r = rows[0];
     if (!r) return null;
     return {
-      ...(r.run as object),
+      ...r.run,
       invoice: r.invId
         ? { id: r.invId, invoiceNumber: r.invNum, status: r.invStatus as string, amount: Number(r.invAmount ?? 0) }
         : null,
       matter: r.mId
-        ? { id: r.mId, matterNumber: r.mNum as string, title: r.mTitle as string, paymentMethod: (r.mPay as string | null) ?? null }
+        ? { id: r.mId, matterNumber: r.mNum, title: r.mTitle, paymentMethod: r.mPay ?? null }
         : null,
-    } as unknown as BillingRunDetailRow;
+    };
   }
 
   async listAccontoSent(matterId: string): Promise<BillingRun[]> {
     const rows = await this.db
       .select().from(billingRuns)
       .where(and(
-        eq(billingRuns.matterId, matterId), eq(billingRuns.type, "ACCONTO"),
+        eq(billingRuns.matterId, asId<"MatterId">(matterId)), eq(billingRuns.type, "ACCONTO"),
         eq(billingRuns.status, "SENT"), isNull(billingRuns.deletedAt),
       ));
-    return this.asRows(rows);
+    return rows;
   }
 
   async listAccontoByIds(matterId: string, ids: string[]): Promise<BillingRun[]> {
@@ -80,9 +81,9 @@ export class DrizzleBillingRunRepository
     const rows = await this.db
       .select().from(billingRuns)
       .where(and(
-        inArray(billingRuns.id, ids), eq(billingRuns.matterId, matterId),
+        inArray(billingRuns.id, ids.map((i) => asId<"BillingRunId">(i))), eq(billingRuns.matterId, asId<"MatterId">(matterId)),
         eq(billingRuns.type, "ACCONTO"), isNull(billingRuns.deletedAt),
       ));
-    return this.asRows(rows);
+    return rows;
   }
 }
