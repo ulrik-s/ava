@@ -8,6 +8,11 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import TodoClient from "@/app/todo/_client";
 
+const createMut = vi.fn();
+const updateMut = vi.fn();
+const completeMut = vi.fn();
+const deleteMut = vi.fn();
+
 const DAY = 86_400_000;
 interface Row {
   id: string; source: "task" | "event"; title: string; at: Date; endAt: Date | null;
@@ -31,10 +36,10 @@ vi.mock("@/lib/client/trpc", () => ({
     todo: { list: { useQuery: () => todoQuery } },
     matter: { list: { useQuery: () => ({ data: { matters: [] } }) } },
     task: {
-      create: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
-      update: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
-      complete: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
-      delete: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      create: { useMutation: () => ({ mutate: createMut, isPending: false }) },
+      update: { useMutation: () => ({ mutate: updateMut, isPending: false }) },
+      complete: { useMutation: () => ({ mutate: completeMut, isPending: false }) },
+      delete: { useMutation: () => ({ mutate: deleteMut, isPending: false }) },
     },
   },
 }));
@@ -83,5 +88,65 @@ describe("TodoClient — vyer + deadline-färg (#88)", () => {
     const { container } = render(<TodoClient />);
     expect(container.querySelectorAll('[data-deadline="red"]').length).toBe(0);
     expect(container.querySelectorAll('[data-deadline="none"]').length).toBe(1);
+  });
+});
+
+describe("TodoClient — navigering + CRUD-interaktioner (#27)", () => {
+  it("dag-navigering (Föregående/Idag/Nästa/datum) kraschar inte", () => {
+    render(<TodoClient />);
+    fireEvent.click(screen.getByRole("button", { name: "Nästa" }));
+    fireEvent.click(screen.getByRole("button", { name: "Föregående" }));
+    fireEvent.click(screen.getByText("Idag"));
+    const dateInput = document.querySelector('input[type="date"]') as HTMLInputElement;
+    fireEvent.change(dateInput, { target: { value: "2026-07-01" } });
+    expect(screen.getByText("Idag")).toBeInTheDocument();
+  });
+
+  it("toggla en TODO klar → task.complete; en DONE → task.update status TODO", () => {
+    todoQuery.data = [row({ id: "t1", status: "TODO" })];
+    const { rerender } = render(<TodoClient />);
+    fireEvent.click(screen.getByRole("button", { name: "Toggla klar" }));
+    expect(completeMut).toHaveBeenCalledWith({ id: "t1" });
+    todoQuery.data = [row({ id: "t2", status: "DONE" })];
+    rerender(<TodoClient />);
+    fireEvent.click(screen.getByRole("button", { name: "Toggla klar" }));
+    expect(updateMut).toHaveBeenCalledWith({ id: "t2", status: "TODO" });
+  });
+
+  it("'Ny' öppnar modalen, fyll titel + Skapa → task.create", () => {
+    render(<TodoClient />);
+    fireEvent.click(screen.getByRole("button", { name: "Ny" }));
+    expect(screen.getByText("Ny Att-göra")).toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText(/Ring klient/), { target: { value: "Ring klient" } });
+    fireEvent.click(screen.getByRole("button", { name: "Skapa" }));
+    expect(createMut).toHaveBeenCalledWith(expect.objectContaining({ title: "Ring klient" }));
+  });
+
+  it("Ändra-action öppnar edit-modalen → Spara → task.update med id", () => {
+    todoQuery.data = [row({ id: "t9", title: "Befintlig" })];
+    render(<TodoClient />);
+    fireEvent.click(screen.getByRole("button", { name: "Ändra" }));
+    expect(screen.getByText("Ändra Att-göra")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Spara" }));
+    expect(updateMut).toHaveBeenCalledWith(expect.objectContaining({ id: "t9" }));
+  });
+
+  it("Ta bort med confirm → task.delete med id", () => {
+    todoQuery.data = [row({ id: "t5", title: "Radera mig" })];
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    render(<TodoClient />);
+    fireEvent.click(screen.getByRole("button", { name: "Ta bort" }));
+    expect(deleteMut).toHaveBeenCalledWith({ id: "t5" });
+    confirmSpy.mockRestore();
+  });
+
+  it("användar-väljaren byter vald medarbetare", () => {
+    render(<TodoClient />);
+    const userSel = screen.getAllByRole("combobox")[0] as HTMLSelectElement;
+    const opts = userSel.querySelectorAll("option");
+    if (opts.length > 1) {
+      fireEvent.change(userSel, { target: { value: (opts[1] as HTMLOptionElement).value } });
+      expect(userSel.value).toBe((opts[1] as HTMLOptionElement).value);
+    }
   });
 });
