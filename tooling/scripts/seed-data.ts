@@ -328,7 +328,6 @@ function buildDocuments(orgId: string, users: UserSeed[]): SeedDataset["document
         fileName: `${k.baseName} ${matter.matterNumber}.${fmt.ext}`,
         mimeType: fmt.mime,
         sizeBytes: 0, // fylls i av seed-script efter att binärfilen genererats
-        fileSize: 0,  // dito (UI använder fileSize, schema sizeBytes)
         storagePath: `documents/content/${id}.${fmt.ext}`, version: 1,
         uploadedById: uploader.id,
         title: `${k.baseName} ${matter.matterNumber}`,

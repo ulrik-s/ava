@@ -16,7 +16,7 @@ const baseDoc = {
   matterId: "m-1",
   folderId: null,
   fileName: "stamning.pdf",
-  fileSize: 1024,
+  sizeBytes: 1024,
   mimeType: "application/pdf",
   storagePath: "documents/content/d-1.pdf",
   summary: null,

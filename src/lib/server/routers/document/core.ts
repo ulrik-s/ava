@@ -128,7 +128,6 @@ export const coreProcedures = {
         fileName: input.fileName,
         mimeType: input.mimeType,
         sizeBytes: input.sizeBytes,
-        fileSize: input.sizeBytes, // denormaliserat (UI läser fileSize)
         storagePath: input.storagePath,
         folderId: input.folderId ? asId<"DocumentFolderId">(input.folderId) : null,
         organizationId: ctx.orgId,
@@ -174,7 +173,6 @@ export const coreProcedures = {
       const updated = await ctx.repos.documents.update(input.documentId, {
         storagePath,
         sizeBytes: bytes.byteLength,
-        fileSize: bytes.byteLength,
         analysisStatus: "PENDING",
       });
       ctx.ports.documentAnalyzer.analyze(input.documentId).catch((e: unknown) =>
@@ -271,7 +269,7 @@ export const coreProcedures = {
       // repo.update bumpar version + updatedAt automatiskt (reconcile-konvention).
       return ctx.repos.documents.update(
         input.id,
-        omitUndefined({ sizeBytes: input.sizeBytes, fileSize: input.sizeBytes }),
+        omitUndefined({ sizeBytes: input.sizeBytes }),
       );
     }),
 };

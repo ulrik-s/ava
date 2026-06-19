@@ -24,11 +24,6 @@
       "count": 1
     }
   },
-  "src/components/documents/document-browser.tsx": {
-    "no-restricted-syntax": {
-      "count": 2
-    }
-  },
   "src/lib/client/backend/server-first-store.ts": {
     "no-restricted-syntax": {
       "count": 1

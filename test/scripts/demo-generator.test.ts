@@ -78,18 +78,19 @@ describe("demo-generator — populate (org/users/contacts via tRPC)", () => {
 });
 
 describe("makeNodeGitWriteBack — git-fillayout (speglar fsa-write-back)", () => {
-  it("skriver event.row rakt av till registryns gitPath (inkl denormaliserade fält)", async () => {
+  it("skriver event.row rakt av till registryns gitPath (inkl fält utanför schemat)", async () => {
     const dir = mkdtempSync(join(os.tmpdir(), "ava-gen-"));
     try {
       const wb = makeNodeGitWriteBack(dir);
-      // Denormaliserat fält (fileSize) ligger utanför schemat men UI:t läser
-      // det → måste bevaras precis som appens self-hosted writeBack gör.
-      await wb({ entity: "document", kind: "create", row: { id: "doc1", matterId: "m1", fileName: "X.pdf", mimeType: "application/pdf", sizeBytes: 100, fileSize: 100, storagePath: "documents/content/doc1.pdf", uploadedById: "u1", organizationId: "org-test", createdAt: now, updatedAt: now } });
+      // writeBack får INTE strippa fält som ligger utanför zod-schemat — den
+      // skriver event.row rakt av (som appens self-hosted writeBack). `extraField`
+      // är ett godtyckligt icke-schema-fält som måste bevaras.
+      await wb({ entity: "document", kind: "create", row: { id: "doc1", matterId: "m1", fileName: "X.pdf", mimeType: "application/pdf", sizeBytes: 100, extraField: 100, storagePath: "documents/content/doc1.pdf", uploadedById: "u1", organizationId: "org-test", createdAt: now, updatedAt: now } });
       const p = join(dir, "documents/doc1.json");
       expect(existsSync(p)).toBe(true);
       const data = JSON.parse(readFileSync(p, "utf8"));
       expect(data.id).toBe("doc1");
-      expect(data.fileSize).toBe(100); // denormaliserat fält bevarat (ej strippat)
+      expect(data.extraField).toBe(100); // fält utanför schemat bevarat (ej strippat)
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

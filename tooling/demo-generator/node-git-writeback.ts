@@ -5,7 +5,6 @@
  *
  * Skriver `event.row` RAKT AV (som fsa-write-back gör) → identiskt
  * fil-innehåll oavsett om datan skapas i browsern eller av generatorn.
- * (Denormaliserade fält som `fileSize` bevaras — UI:t läser dem.)
  */
 
 import { mkdirSync, writeFileSync } from "node:fs";

@@ -7,7 +7,7 @@ import { ActionMenu, type ActionMenuItem } from "@/components/ui/action-menu";
 export interface FolderRecord {
   id: string;
   name: string;
-  parentId: string | null;
+  parentId?: string | null | undefined;
   matterId: string;
   createdAt: string | Date;
 }
