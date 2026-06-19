@@ -202,3 +202,36 @@ describe("InMemoryQueryEngine — first/unique", () => {
     expect(engine.findUnique(rows, { where: { id: "1" } })?.name).toBe("Alpha");
   });
 });
+
+// ─── Operatorer som saknade täckning (endsWith, notIn) ───────────────
+
+describe("InMemoryQueryEngine endsWith / notIn", () => {
+  it("endsWith matchar suffix (case-sensitive)", () => {
+    const out = engine.query(rows, { where: { name: { endsWith: "ta" } } });
+    expect(out.map((r) => r.id).sort()).toEqual(["2", "4"]); // Beta, Delta
+  });
+
+  it("endsWith med mode: insensitive ignorerar skiftläge", () => {
+    const out = engine.query(rows, { where: { name: { endsWith: "TA", mode: "insensitive" } } });
+    expect(out.map((r) => r.id).sort()).toEqual(["2", "4"]);
+  });
+
+  it("endsWith på icke-strängfält → ingen match (strOp-guard)", () => {
+    expect(engine.query(rows, { where: { count: { endsWith: "0" } } })).toHaveLength(0);
+  });
+
+  it("notIn exkluderar de uppräknade värdena", () => {
+    const out = engine.query(rows, { where: { status: { notIn: ["CLOSED"] } } });
+    expect(out.map((r) => r.id).sort()).toEqual(["1", "3", "4"]); // alla ACTIVE
+  });
+
+  it("notIn med icke-array → false (ingen match)", () => {
+    // opVal måste vara en array; annars matchar notIn inget.
+    expect(engine.query(rows, { where: { id: { notIn: "1" } } })).toHaveLength(0);
+  });
+
+  it("cmp coercar Date↔ISO-sträng (gte med sträng mot Date-fält)", () => {
+    const out = engine.query(rows, { where: { createdAt: { gte: "2025-03-01" } } });
+    expect(out.map((r) => r.id).sort()).toEqual(["3", "4"]);
+  });
+});
