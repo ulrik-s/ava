@@ -17,8 +17,8 @@ import type { ISearchIndex, SearchResponse } from "../ports";
 interface DocLike {
   id: string;
   fileName?: string;
-  documentType?: string | null;
-  summary?: string | null;
+  documentType?: string | null | undefined;
+  summary?: string | null | undefined;
   matterId: string;
   /** Path till filinnehållet — propageras till hit:en så UI kan öppna. */
   storagePath?: string | null;
@@ -237,10 +237,10 @@ export function makeDemoSearchIndex(dataStore: IDataStore): ISearchIndex {
       // (DocumentWhereInput har ingen organizationId-direkt, det går
       // via matter-relation som vår in-memory-implementation inte
       // expanderar transparent).
-      const docs = await dataStore.documents.findMany({}) as unknown as DocLike[];
-      const matterRows = await dataStore.matters.findMany({
+      const docs: DocLike[] = await dataStore.documents.findMany({});
+      const matterRows: MatterLike[] = await dataStore.matters.findMany({
         where: { organizationId },
-      }) as unknown as MatterLike[];
+      });
       const matters = new Map(matterRows.map((m) => [m.id, m]));
       return searchDocuments(docs, matters, query, organizationId, { ...opts, limit });
     },
