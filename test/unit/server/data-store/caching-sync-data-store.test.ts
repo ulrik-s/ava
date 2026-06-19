@@ -156,4 +156,29 @@ describe("CachingSyncDataStore (#415)", () => {
       });
     });
   });
+
+  // #544/ADR 0025 regression: en reconcile som pullar in N rader (demons seed-
+  // hydrering) får INTE persistera per rad — det blev O(n²) bytes och hängde
+  // demon på mobil-IndexedDB ("AVA laddar…"). EN skrivning per batch, och tom
+  // poll-reconcile skriver inte alls.
+  describe("persist-per-batch (inte per rad)", () => {
+    it("persisterar snapshotet en gång för en N-raders pull; tom reconcile = 0 skrivningar", async () => {
+      const transport = new FakeTransport();
+      transport.pullResult = {
+        changes: Array.from({ length: 5 }, (_, i) => ({ entity: "matter", row: matter(uuidv7(), `M${i}`) })),
+        cursor: 5,
+      };
+      let saves = 0;
+      const persistence = { hydrate: async () => null, save: async () => { saves++; } };
+      const ds = await CachingSyncDataStore.create({ transport, persistence });
+
+      const r = await ds.reconcile();
+      expect(r.pulled).toBe(5);
+      expect(saves).toBe(1); // EN skrivning för hela batchen, inte 5
+
+      transport.pullResult = { changes: [], cursor: 5 };
+      await ds.reconcile();
+      expect(saves).toBe(1); // tom poll-reconcile → ingen extra skrivning
+    });
+  });
 });
