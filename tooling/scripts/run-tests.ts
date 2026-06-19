@@ -104,9 +104,12 @@ const FAST = process.argv.includes("--fast");
 // ~1.57% marginal. LINE oförändrat) → 89.5 rader / 85.1 funktioner (#27:
 // MattersPage NewMatterForm-fält (typ/målnr/beskrivning/taxeärende) + Föregående-
 // paginering → lokalt 86.66% funktioner. FUNC dras upp 85.0 → 85.1, ~1.56%
-// marginal. LINE oförändrat).
+// marginal. LINE oförändrat) → 89.5 rader / 85.3 funktioner (#27: TodoClient
+// dag-navigering + toggle/create/edit/delete-flöden + användar-väljare → lokalt
+// 86.95% funktioner / 91.13% rader. FUNC dras upp 85.1 → 85.3 (~1.65% marginal,
+// konservativt pga större hopp). LINE oförändrat — lcov-line-brus + Node-buffert).
 const LINE_FLOOR = 0.895;
-const FUNC_FLOOR = 0.851;
+const FUNC_FLOOR = 0.853;
 
 /**
  * SERIAL_FILES — testfiler som SYNKRONT spawnar en barnprocess via
