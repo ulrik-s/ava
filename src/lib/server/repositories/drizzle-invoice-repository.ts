@@ -10,7 +10,7 @@
  */
 
 import { and, desc, eq, inArray, isNull, like, sql } from "drizzle-orm";
-import type { Invoice, Payment, WriteOff } from "@/lib/shared/schemas/billing";
+import type { Invoice } from "@/lib/shared/schemas/billing";
 import { asId } from "@/lib/shared/schemas/ids";
 import { accontoDeductions, invoices, matters, paymentPlans, payments, writeOffs } from "../db/schema";
 import type { AppDb } from "../db/types";
@@ -117,7 +117,7 @@ export class DrizzleInvoiceRepository extends DrizzleRepository<Invoice> impleme
         ...inv,
         matter: { id: (matter as { id: string }).id, matterNumber: (matter as { matterNumber: string }).matterNumber, title: (matter as { title: string }).title },
         paymentPlan: (plan[0] as unknown) ?? null,
-        payments: pays as unknown as Payment[],
+        payments: pays,
         accontoDeductions: accontoDeductionsFull,
         deductedOnFinals: usages,
         creditedInvoice: creditedInvoice as InvoiceListRow["creditedInvoice"],
@@ -176,8 +176,8 @@ export class DrizzleInvoiceRepository extends DrizzleRepository<Invoice> impleme
     const invoice = await this.getById(id);
     if (!invoice) return null;
     const pays = await this.db.select().from(payments).where(eq(payments.invoiceId, asId<"InvoiceId">(id)));
-    const wos = await this.db.select().from(writeOffs).where(eq(writeOffs.invoiceId, id));
-    return { ...invoice, payments: pays, writeOffs: wos as unknown as WriteOff[] };
+    const wos = await this.db.select().from(writeOffs).where(eq(writeOffs.invoiceId, asId<"InvoiceId">(id)));
+    return { ...invoice, payments: pays, writeOffs: wos };
   }
 
   async listByMatter(matterId: string): Promise<Invoice[]> {
