@@ -14,19 +14,28 @@ export type DocumentTemplateRepoSource = Pick<IDataStore, "documentTemplates">;
 export class InMemoryDocumentTemplateRepository
   extends InMemoryRepository<DocumentTemplate>
   implements DocumentTemplateRepository {
-  constructor(store: DocumentTemplateRepoSource, now?: () => Date) {
-    super(store.documentTemplates, now ?? (() => new Date()));
+  constructor(private readonly source: DocumentTemplateRepoSource, now?: () => Date) {
+    super(source.documentTemplates, now ?? (() => new Date()));
   }
 
   async listForOrg(organizationId: string): Promise<DocumentTemplateListRow[]> {
-    return (await this.delegate.findMany({
+    const rows = await this.source.documentTemplates.findMany({
       where: { organizationId },
       select: {
         id: true, name: true, description: true, category: true,
         createdAt: true, updatedAt: true, createdBy: { select: { name: true } },
       },
       orderBy: [{ category: "asc" }, { name: "asc" }],
-    })) as unknown as DocumentTemplateListRow[];
+    });
+    return rows.map((r): DocumentTemplateListRow => ({
+      id: r.id,
+      name: r.name,
+      description: r.description ?? null,
+      category: r.category ?? null,
+      createdAt: r.createdAt,
+      updatedAt: r.updatedAt ?? null,
+      createdBy: (r.createdBy ?? null) as { name: string } | null,
+    }));
   }
 
   async getByIdInOrg(id: string, organizationId: string): Promise<DocumentTemplateRow | null> {

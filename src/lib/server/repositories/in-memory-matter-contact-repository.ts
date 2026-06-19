@@ -26,8 +26,8 @@ const MC_INCLUDE = {
 export class InMemoryMatterContactRepository
   extends InMemoryRepository<MatterContact>
   implements MatterContactRepository {
-  constructor(store: MatterContactRepoSource, now?: () => Date) {
-    super(store.matterContacts, now ?? (() => new Date()));
+  constructor(private readonly source: MatterContactRepoSource, now?: () => Date) {
+    super(source.matterContacts, now ?? (() => new Date()));
   }
 
   async findForConflict(organizationId: string, numberTerm?: string): Promise<ConflictContactRow[]> {
@@ -37,7 +37,14 @@ export class InMemoryMatterContactRepository
           contact: { OR: [{ personalNumber: { contains: numberTerm } }, { orgNumber: { contains: numberTerm } }] },
         }
       : { matter: { organizationId } };
-    return (await this.delegate.findMany({ where, include: MC_INCLUDE })) as unknown as ConflictContactRow[];
+    const rows = await this.source.matterContacts.findMany({ where, include: MC_INCLUDE });
+    // contact/matter joinas i runtime (MC_INCLUDE) men typas `unknown` av
+    // JoinedRelations — narrowa varje join till jävskontroll-projektionen.
+    return rows.map((r): ConflictContactRow => ({
+      role: r.role,
+      contact: r.contact as ConflictContactRow["contact"],
+      matter: r.matter as ConflictContactRow["matter"],
+    }));
   }
 
   async getByIdInOrg(id: string, organizationId: string): Promise<MatterContact | null> {
@@ -48,8 +55,10 @@ export class InMemoryMatterContactRepository
   }
 
   async linkContact(data: Partial<MatterContact>): Promise<MatterContactWithContact> {
-    // create enrichar raden med contact (LocalStore.enrichRowForEntity).
-    return (await this.create(data)) as unknown as MatterContactWithContact;
+    // create enrichar raden med contact (LocalStore.enrichRowForEntity) — den
+    // körda raden är en MatterContactWithContact (smal subtyp-assertion).
+    const row = await this.create(data);
+    return row as MatterContactWithContact;
   }
 
   async findLink(matterId: string, contactId: string, role: string): Promise<MatterContact | null> {

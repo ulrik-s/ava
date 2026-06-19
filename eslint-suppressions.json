@@ -59,26 +59,6 @@
       "count": 1
     }
   },
-  "src/lib/server/repositories/in-memory-document-template-repository.ts": {
-    "no-restricted-syntax": {
-      "count": 1
-    }
-  },
-  "src/lib/server/repositories/in-memory-matter-contact-repository.ts": {
-    "no-restricted-syntax": {
-      "count": 2
-    }
-  },
-  "src/lib/server/repositories/in-memory-payment-repository.ts": {
-    "no-restricted-syntax": {
-      "count": 1
-    }
-  },
-  "src/lib/server/repositories/in-memory-write-off-repository.ts": {
-    "no-restricted-syntax": {
-      "count": 1
-    }
-  },
   "src/lib/shared/demo-source.ts": {
     "no-restricted-syntax": {
       "count": 1
