@@ -67,12 +67,16 @@ export class WritableDelegate<T extends Record<string, unknown>> extends ReadOnl
   override async create(args: unknown): Promise<never> {
     const a = args as { data: Partial<T> };
     const id = (a.data as { id?: string }).id ?? (this.wopts.generateId ?? genId)();
-    const row = {
+    // Bygg raden som Record<string, unknown> (T extends den) → `as T` blir en
+    // enkel boundary-cast i st.f. en double-cast. Runtime-fullständigheten
+    // garanteras av routern (Partial<T> + id/timestamps).
+    const built: Record<string, unknown> = {
       ...a.data,
       id,
       createdAt: (a.data as { createdAt?: Date }).createdAt ?? new Date(),
       updatedAt: new Date(),
-    } as unknown as T;
+    };
+    const row = built as T;
     this.collection.push(row);
     const enriched = this.wopts.enrichRow ? this.wopts.enrichRow(row) : row;
     // Skriv tillbaka enriched-row så framtida read:s ser pre-bakade joins
@@ -110,7 +114,7 @@ export class WritableDelegate<T extends Record<string, unknown>> extends ReadOnl
     const matches = await this.findMany(a.where !== undefined ? { where: a.where } : {});
     let count = 0;
     for (const m of matches) {
-      await this.update({ where: { id: (m as unknown as { id: string }).id }, data: a.data });
+      await this.update({ where: { id: m.id as string }, data: a.data });
       count++;
     }
     return { count } as never;
@@ -121,7 +125,7 @@ export class WritableDelegate<T extends Record<string, unknown>> extends ReadOnl
     const matches = await this.findMany(a.where !== undefined ? { where: a.where } : {});
     let count = 0;
     for (const m of matches) {
-      await this.delete({ where: { id: (m as unknown as { id: string }).id } });
+      await this.delete({ where: { id: m.id as string } });
       count++;
     }
     return { count } as never;

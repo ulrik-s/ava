@@ -136,7 +136,7 @@ export class LocalStore implements IDataStore {
     this.orgPreferences = this.makeDelegate("orgPreferences");
 
     this.events = new ReadOnlyEventLog();
-    this.raw = makeThrowingProxy() as unknown as IDataStore["raw"];
+    this.raw = makeThrowingProxy();
   }
 
   /** Den aktuella in-memory-källan (för persistens/snapshot). Läs, mutera ej. */
@@ -156,7 +156,7 @@ export class LocalStore implements IDataStore {
           if (!this.source[key]) {
             (this.source as Record<string, unknown[]>)[key as string] = [];
           }
-          return (this.source[key] ?? []) as unknown as T[];
+          return (this.source[key] ?? []) as T[];
         },
         relations,
         // Routa via handleMutate så att event buffras under en transaction()
