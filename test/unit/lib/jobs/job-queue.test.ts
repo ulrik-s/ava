@@ -133,4 +133,31 @@ describe("JobQueue", () => {
     jobQueue.clearFinished();
     expect(jobQueue.list().filter((j) => j.status === "done").length).toBe(0);
   });
+
+  it("kind utan registrerad worker → status=failed med tydligt felmeddelande", async () => {
+    // "sync" registreras aldrig i denna fil → pump-grenen "ingen worker".
+    const id = jobQueue.enqueue("sync", "Saknar worker");
+    const job = await waitForStatus(id, "failed");
+    expect(job.error).toContain("Ingen worker registrerad");
+    expect(job.error).toContain("sync");
+  });
+
+  it("en kastande listener bryter inte kön (notify fångar och fortsätter)", async () => {
+    const good = vi.fn();
+    // Kasta först vid notify (inte den initiala subscribe-snapshoten, som inte
+    // är try/catch-skyddad) → träffar notify:s try/catch.
+    let first = true;
+    const unsubBad = jobQueue.subscribe(() => {
+      if (first) { first = false; return; }
+      throw new Error("trasig listener");
+    });
+    const unsubGood = jobQueue.subscribe(good);
+    jobQueue.registerWorker("custom", async () => {});
+    const id = jobQueue.enqueue("custom", "Trots trasig listener");
+    const job = await waitForStatus(id, "done");
+    expect(job.status).toBe("done"); // kön körde klart trots att en listener kastade
+    expect(good).toHaveBeenCalled();
+    unsubBad();
+    unsubGood();
+  });
 });
