@@ -5,7 +5,6 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
-import type { AppDb } from "@/lib/server/db/types";
 import { buildDrizzleRepositories } from "@/lib/server/repositories/drizzle-repositories";
 import type { Organization } from "@/lib/shared/schemas/organization";
 import { uuidv7 } from "@/lib/shared/uuid";
@@ -27,7 +26,7 @@ describe("buildDrizzleRepositories — kontrakt (pglite)", () => {
   afterAll(async () => { await handle.close(); });
 
   it("wirar alla 28 entitets-repos + transaction", () => {
-    const repos = buildDrizzleRepositories(handle.db as unknown as AppDb);
+    const repos = buildDrizzleRepositories(handle.db);
     for (const k of ORG_KEYS) {
       expect(repos[k], `saknar repo: ${k}`).toBeDefined();
       expect(typeof (repos[k] as { getById?: unknown }).getById).toBe("function");
@@ -36,7 +35,7 @@ describe("buildDrizzleRepositories — kontrakt (pglite)", () => {
   });
 
   it("bas-CRUD round-trippar via aggregatet (create → getById)", async () => {
-    const repos = buildDrizzleRepositories(handle.db as unknown as AppDb);
+    const repos = buildDrizzleRepositories(handle.db);
     const id = uuidv7();
     const created = await repos.organizations.create(org(id, "Aggregat AB"));
     expect((created as { version?: number }).version).toBe(1);
@@ -44,14 +43,14 @@ describe("buildDrizzleRepositories — kontrakt (pglite)", () => {
   });
 
   it("transaction committar vid success", async () => {
-    const repos = buildDrizzleRepositories(handle.db as unknown as AppDb);
+    const repos = buildDrizzleRepositories(handle.db);
     const id = uuidv7();
     await repos.transaction(async (tx) => { await tx.organizations.create(org(id)); });
     expect(await repos.organizations.getById(id)).toMatchObject({ id });
   });
 
   it("transaction rullar tillbaka vid kast (inget delvis committat)", async () => {
-    const repos = buildDrizzleRepositories(handle.db as unknown as AppDb);
+    const repos = buildDrizzleRepositories(handle.db);
     const id = uuidv7();
     await expect(
       repos.transaction(async (tx) => {
@@ -63,7 +62,7 @@ describe("buildDrizzleRepositories — kontrakt (pglite)", () => {
   });
 
   it("nästlad transaction är reentrant (delar samma tx → committar tillsammans)", async () => {
-    const repos = buildDrizzleRepositories(handle.db as unknown as AppDb);
+    const repos = buildDrizzleRepositories(handle.db);
     const a = uuidv7();
     const b = uuidv7();
     await repos.transaction(async (tx) => {

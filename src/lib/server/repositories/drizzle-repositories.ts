@@ -87,6 +87,6 @@ function reposForTx(tx: AppDb): Repositories {
 export function buildDrizzleRepositories(db: AppDb): Repositories {
   return {
     ...entityRepos(db),
-    transaction: (fn) => db.transaction((tx) => fn(reposForTx(tx as unknown as AppDb))),
+    transaction: (fn) => db.transaction((tx) => fn(reposForTx(tx))),
   };
 }

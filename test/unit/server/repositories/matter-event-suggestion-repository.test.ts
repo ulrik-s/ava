@@ -7,7 +7,6 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
 import type { DemoSource } from "@/lib/server/data-store/DemoDataStore";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 import { documents, matterEventSuggestions, matters } from "@/lib/server/db/schema";
-import type { AppDb } from "@/lib/server/db/types";
 import { DrizzleMatterEventSuggestionRepository } from "@/lib/server/repositories/drizzle-matter-event-suggestion-repository";
 import { InMemoryMatterEventSuggestionRepository } from "@/lib/server/repositories/in-memory-matter-event-suggestion-repository";
 import { prebakeJoins } from "@/lib/shared/demo-source";
@@ -59,7 +58,7 @@ describe("MatterEventSuggestionRepository — Drizzle (pglite)", () => {
     await db.insert(matterEventSuggestions).values(v({ id: e1, documentId: dId, title: "Sen", startAt: new Date("2026-06-01"), status: "PENDING" }));
     await db.insert(matterEventSuggestions).values(v({ id: uuidv7(), documentId: dId, title: "Tidig", startAt: new Date("2026-05-01"), status: "PENDING" }));
     await db.insert(matterEventSuggestions).values(v({ id: uuidv7(), documentId: dId, title: "Avvisad", startAt: new Date("2026-04-01"), status: "REJECTED" }));
-    const repo = new DrizzleMatterEventSuggestionRepository(db as unknown as AppDb);
+    const repo = new DrizzleMatterEventSuggestionRepository(db);
 
     const list = await repo.listForMatter(mId, org);
     expect(list.map((r) => r.title)).toEqual(["Tidig", "Sen"]);

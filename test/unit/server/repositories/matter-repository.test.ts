@@ -7,7 +7,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 import { matters } from "@/lib/server/db/schema";
-import type { AppDb } from "@/lib/server/db/types";
 import { DrizzleMatterRepository } from "@/lib/server/repositories/drizzle-matter-repository";
 import { InMemoryMatterRepository } from "@/lib/server/repositories/in-memory-matter-repository";
 import type { MatterRepository } from "@/lib/server/repositories/matter-repository";
@@ -58,7 +57,7 @@ describe("MatterRepository — Drizzle (pglite)", () => {
 
   it("uppfyller kontraktet", async () => {
     const org = uuidv7();
-    const repo = new DrizzleMatterRepository(handle.db as unknown as AppDb);
+    const repo = new DrizzleMatterRepository(handle.db);
     // org-kolumnen är uuid → kontraktets create() måste ha giltig UUID-org.
     const id = uuidv7();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -76,7 +75,7 @@ describe("MatterRepository — Drizzle (pglite)", () => {
     const id = uuidv7();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await db.insert(matters).values({ id, organizationId: org, matterNumber: "2026-2", title: "T", version: 1 } as any);
-    const repo = new DrizzleMatterRepository(handle.db as unknown as AppDb);
+    const repo = new DrizzleMatterRepository(handle.db);
     expect(await repo.getByIdInOrg(id, org)).toMatchObject({ id });
     expect(await repo.getByIdInOrg(id, uuidv7())).toBeNull(); // fel org
   });

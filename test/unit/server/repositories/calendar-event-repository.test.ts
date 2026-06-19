@@ -6,7 +6,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 import { calendarEvents, matters } from "@/lib/server/db/schema";
-import type { AppDb } from "@/lib/server/db/types";
 import { DrizzleCalendarEventRepository } from "@/lib/server/repositories/drizzle-calendar-event-repository";
 import { InMemoryCalendarEventRepository } from "@/lib/server/repositories/in-memory-calendar-event-repository";
 import { uuidv7 } from "@/lib/shared/uuid";
@@ -54,7 +53,7 @@ describe("CalendarEventRepository — Drizzle (pglite)", () => {
     await db.insert(calendarEvents).values(v({ id: e1, userId, organizationId: org, title: "A", startAt: new Date("2026-06-02"), matterId: mId }));
     await db.insert(calendarEvents).values(v({ id: uuidv7(), userId, organizationId: org, title: "B", startAt: new Date("2026-06-01") }));
     await db.insert(calendarEvents).values(v({ id: uuidv7(), userId: other, organizationId: org, title: "C", startAt: new Date("2026-06-03"), matterId: mId }));
-    const repo = new DrizzleCalendarEventRepository(handle.db as unknown as AppDb);
+    const repo = new DrizzleCalendarEventRepository(handle.db);
     expect(await repo.listForUser(userId, org)).toHaveLength(2);
     expect(await repo.listForUsers([userId, other], org)).toHaveLength(3);
     expect(await repo.listForUsers([], org)).toEqual([]);

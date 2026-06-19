@@ -8,7 +8,6 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
 import type { DemoSource } from "@/lib/server/data-store/DemoDataStore";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 import { documentFolders, documents, matters, users } from "@/lib/server/db/schema";
-import type { AppDb } from "@/lib/server/db/types";
 import { DrizzleDocumentFolderRepository } from "@/lib/server/repositories/drizzle-document-folder-repository";
 import { InMemoryDocumentFolderRepository } from "@/lib/server/repositories/in-memory-document-folder-repository";
 import { prebakeJoins } from "@/lib/shared/demo-source";
@@ -81,7 +80,7 @@ describe("DocumentFolderRepository — Drizzle (pglite)", () => {
     await db.insert(users).values(v({ id: t.uId, organizationId: ORG, email: "j@x", name: "Jurist" }));
     for (const f of t.folders) await db.insert(documentFolders).values(v(f));
     for (const d of t.docs) await db.insert(documents).values(v(d));
-    const repo = new DrizzleDocumentFolderRepository(db as unknown as AppDb);
+    const repo = new DrizzleDocumentFolderRepository(db);
 
     // listInParent(root) — sorterad + _count (A: 2 dok, 2 undermappar; B: tomt)
     const roots = await repo.listInParent(t.mId, null);

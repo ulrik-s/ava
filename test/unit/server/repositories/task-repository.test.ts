@@ -6,7 +6,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 import { matters, tasks } from "@/lib/server/db/schema";
-import type { AppDb } from "@/lib/server/db/types";
 import { DrizzleTaskRepository } from "@/lib/server/repositories/drizzle-task-repository";
 import { InMemoryTaskRepository } from "@/lib/server/repositories/in-memory-task-repository";
 import { uuidv7 } from "@/lib/shared/uuid";
@@ -52,7 +51,7 @@ describe("TaskRepository — Drizzle (pglite)", () => {
     await db.insert(tasks).values(v({ id: t1, userId, organizationId: org, title: "A", status: "TODO", matterId: mId }));
     await db.insert(tasks).values(v({ id: uuidv7(), userId, organizationId: org, title: "B", status: "DONE" }));
     await db.insert(tasks).values(v({ id: uuidv7(), userId: uuidv7(), organizationId: org, title: "Annan", status: "TODO" }));
-    const repo = new DrizzleTaskRepository(handle.db as unknown as AppDb);
+    const repo = new DrizzleTaskRepository(handle.db);
     expect(await repo.listForUser(userId, org, {})).toHaveLength(2);
     expect(await repo.listForUser(userId, org, { status: "DONE" })).toHaveLength(1);
     const withMatter = (await repo.listForUser(userId, org, { status: "TODO" }))[0]!;

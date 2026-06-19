@@ -5,7 +5,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 import { offices, organizations } from "@/lib/server/db/schema";
-import type { AppDb } from "@/lib/server/db/types";
 import { DrizzleOfficeRepository } from "@/lib/server/repositories/drizzle-office-repository";
 import { DrizzleOrganizationRepository } from "@/lib/server/repositories/drizzle-organization-repository";
 import { InMemoryOfficeRepository } from "@/lib/server/repositories/in-memory-office-repository";
@@ -54,8 +53,8 @@ describe("Organization/Office — Drizzle (pglite)", () => {
     await db.insert(organizations).values(v({ id: org, name: "Byrå AB" }));
     await db.insert(offices).values(v({ id: main, organizationId: org, name: "Sthlm", isMain: true }));
     await db.insert(offices).values(v({ id: branch, organizationId: org, name: "Gbg", isMain: false }));
-    const offRepo = new DrizzleOfficeRepository(handle.db as unknown as AppDb);
-    expect(await new DrizzleOrganizationRepository(handle.db as unknown as AppDb).getById(org)).toMatchObject({ id: org });
+    const offRepo = new DrizzleOfficeRepository(handle.db);
+    expect(await new DrizzleOrganizationRepository(handle.db).getById(org)).toMatchObject({ id: org });
     expect((await offRepo.listByOrg(org)).map((o) => o.id)).toEqual([main, branch]);
     expect(await offRepo.getByIdInOrg(branch, org)).toMatchObject({ id: branch });
     expect(await offRepo.getByIdInOrg(branch, uuidv7())).toBeNull();

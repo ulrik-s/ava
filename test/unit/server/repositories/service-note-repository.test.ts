@@ -7,7 +7,6 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
 import type { DemoSource } from "@/lib/server/data-store/DemoDataStore";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 import { matters, serviceNotes, users } from "@/lib/server/db/schema";
-import type { AppDb } from "@/lib/server/db/types";
 import { DrizzleServiceNoteRepository } from "@/lib/server/repositories/drizzle-service-note-repository";
 import { InMemoryServiceNoteRepository } from "@/lib/server/repositories/in-memory-service-note-repository";
 import { prebakeJoins } from "@/lib/shared/demo-source";
@@ -52,7 +51,7 @@ describe("ServiceNoteRepository — Drizzle (pglite)", () => {
     await db.insert(matters).values(v({ id: mId, organizationId: org, matterNumber: "2026-1", title: "T" }));
     await db.insert(users).values(v({ id: userId, organizationId: org, email: "a@x", name: "Anna" }));
     await db.insert(serviceNotes).values(v({ id: sn1, matterId: mId, organizationId: org, authorId: userId, date: "2026-06-15", time: "09:30", text: "A" }));
-    const repo = new DrizzleServiceNoteRepository(handle.db as unknown as AppDb);
+    const repo = new DrizzleServiceNoteRepository(handle.db);
     const list = await repo.listByMatter(mId, org);
     expect(list).toHaveLength(1);
     expect(list[0]!.author?.name).toBe("Anna");

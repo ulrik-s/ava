@@ -6,7 +6,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 import { expectedReceivables, matters } from "@/lib/server/db/schema";
-import type { AppDb } from "@/lib/server/db/types";
 import { DrizzleExpectedReceivableRepository } from "@/lib/server/repositories/drizzle-expected-receivable-repository";
 import { DrizzleMatterRepository } from "@/lib/server/repositories/drizzle-matter-repository";
 import { InMemoryExpectedReceivableRepository } from "@/lib/server/repositories/in-memory-expected-receivable-repository";
@@ -49,11 +48,11 @@ describe("ExpectedReceivableRepository — Drizzle (pglite)", () => {
     await db.insert(matters).values(v({ id: mId, organizationId: org, matterNumber: "2026-1", title: "T" }));
     await db.insert(expectedReceivables).values(v({ id: r1, organizationId: org, matterId: mId, description: "A", expectedAmount: 100, status: "PENDING", recordedById: uuidv7() }));
     await db.insert(expectedReceivables).values(v({ id: uuidv7(), organizationId: org, matterId: mId, description: "B", expectedAmount: 50, status: "SETTLED", recordedById: uuidv7() }));
-    const repo = new DrizzleExpectedReceivableRepository(handle.db as unknown as AppDb);
+    const repo = new DrizzleExpectedReceivableRepository(handle.db);
     expect(await repo.listForOrg(org)).toHaveLength(2);
     expect(await repo.listForOrg(org, { status: "PENDING" })).toHaveLength(1);
     expect(await repo.getByIdInOrg(r1, org)).toMatchObject({ id: r1 });
     expect(await repo.getByIdInOrg(r1, uuidv7())).toBeNull();
-    expect(await new DrizzleMatterRepository(handle.db as unknown as AppDb).listByOrg(org)).toHaveLength(1);
+    expect(await new DrizzleMatterRepository(handle.db).listByOrg(org)).toHaveLength(1);
   });
 });

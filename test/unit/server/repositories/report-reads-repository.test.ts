@@ -8,7 +8,6 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
 import type { DemoSource } from "@/lib/server/data-store/DemoDataStore";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 import { contacts, expenses, invoices, matterContacts, matters, payments, timeEntries, users, writeOffs } from "@/lib/server/db/schema";
-import type { AppDb } from "@/lib/server/db/types";
 import { DrizzleExpenseRepository } from "@/lib/server/repositories/drizzle-expense-repository";
 import { DrizzlePaymentRepository } from "@/lib/server/repositories/drizzle-payment-repository";
 import { DrizzleTimeEntryRepository } from "@/lib/server/repositories/drizzle-time-entry-repository";
@@ -93,10 +92,10 @@ describe("Report-läsningar — Drizzle (pglite)", () => {
     await db.insert(expenses).values(v({ id: uuidv7(), userId: uId, matterId: mId, amount: 500, billable: true, description: "e", date: new Date("2026-06-12"), vatRate: 0, vatIncluded: false }));
     await db.insert(payments).values(v({ id: uuidv7(), invoiceId: invId, amount: 200, paidAt: new Date(), recordedById: uId }));
     await db.insert(writeOffs).values(v({ id: uuidv7(), invoiceId: invId, amount: 100, writtenOffAt: new Date("2026-06-20"), recordedById: uId }));
-    const te = new DrizzleTimeEntryRepository(db as unknown as AppDb);
-    const ex = new DrizzleExpenseRepository(db as unknown as AppDb);
-    const pay = new DrizzlePaymentRepository(db as unknown as AppDb);
-    const wo = new DrizzleWriteOffRepository(db as unknown as AppDb);
+    const te = new DrizzleTimeEntryRepository(db);
+    const ex = new DrizzleExpenseRepository(db);
+    const pay = new DrizzlePaymentRepository(db);
+    const wo = new DrizzleWriteOffRepository(db);
 
     const lawyerTime = await te.listForLawyerInPeriod(org, uId, FROM, TO);
     expect(lawyerTime).toHaveLength(2);

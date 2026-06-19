@@ -5,7 +5,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 import { orgPreferences, userPreferences } from "@/lib/server/db/schema";
-import type { AppDb } from "@/lib/server/db/types";
 import { DrizzleOrgPreferenceRepository } from "@/lib/server/repositories/drizzle-org-preference-repository";
 import { DrizzleUserPreferenceRepository } from "@/lib/server/repositories/drizzle-user-preference-repository";
 import { InMemoryOrgPreferenceRepository } from "@/lib/server/repositories/in-memory-org-preference-repository";
@@ -46,8 +45,8 @@ describe("Preference repos — Drizzle (pglite)", () => {
     const v = (o: Record<string, unknown>) => ({ version: 1, ...o }) as any;
     await db.insert(userPreferences).values(v({ id: up, userId, organizationId: org, key: "list.contacts", prefs: { sort: "name" } }));
     await db.insert(orgPreferences).values(v({ id: op, organizationId: org, key: "list.contacts", prefs: { sort: "createdAt" } }));
-    const uRepo = new DrizzleUserPreferenceRepository(handle.db as unknown as AppDb);
-    const oRepo = new DrizzleOrgPreferenceRepository(handle.db as unknown as AppDb);
+    const uRepo = new DrizzleUserPreferenceRepository(handle.db);
+    const oRepo = new DrizzleOrgPreferenceRepository(handle.db);
     expect((await uRepo.getByUserKey(userId, org, "list.contacts"))?.id).toBe(up);
     expect(await uRepo.getByUserKey(userId, org, "list.x")).toBeNull();
     expect((await oRepo.getByOrgKey(org, "list.contacts"))?.id).toBe(op);

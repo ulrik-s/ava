@@ -7,7 +7,6 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
 import type { DemoSource } from "@/lib/server/data-store/DemoDataStore";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 import { contacts, matterContacts, matters, timeEntries, users } from "@/lib/server/db/schema";
-import type { AppDb } from "@/lib/server/db/types";
 import { DrizzleTimeEntryRepository } from "@/lib/server/repositories/drizzle-time-entry-repository";
 import { InMemoryTimeEntryRepository } from "@/lib/server/repositories/in-memory-time-entry-repository";
 import { prebakeJoins } from "@/lib/shared/demo-source";
@@ -65,7 +64,7 @@ describe("TimeEntryRepository list/report — Drizzle (pglite)", () => {
     await db.insert(matterContacts).values(v({ id: uuidv7(), matterId: mId, contactId: cId, role: "KLIENT" }));
     await db.insert(timeEntries).values(v({ id: t1, userId, matterId: mId, minutes: 60, description: "a", hourlyRate: 1000, date: new Date("2026-06-02") }));
     await db.insert(timeEntries).values(v({ id: uuidv7(), userId, matterId: mId, minutes: 30, description: "b", hourlyRate: 1000, date: new Date("2026-06-03") }));
-    const repo = new DrizzleTimeEntryRepository(handle.db as unknown as AppDb);
+    const repo = new DrizzleTimeEntryRepository(handle.db);
 
     const list = await repo.listForOrg(org, { page: 1, pageSize: 50 });
     expect(list.total).toBe(2);

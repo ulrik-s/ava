@@ -8,7 +8,6 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
 import type { DemoSource } from "@/lib/server/data-store/DemoDataStore";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 import { contacts, matterContacts, matters } from "@/lib/server/db/schema";
-import type { AppDb } from "@/lib/server/db/types";
 import { DrizzleContactRepository } from "@/lib/server/repositories/drizzle-contact-repository";
 import { InMemoryContactRepository } from "@/lib/server/repositories/in-memory-contact-repository";
 import { prebakeJoins } from "@/lib/shared/demo-source";
@@ -75,7 +74,7 @@ describe("ContactRepository — Drizzle (pglite)", () => {
     await db.insert(contacts).values(v({ id: child, organizationId: org, name: "Anställd", contactType: "PERSON", parentId: c1 }));
     await db.insert(matters).values(v({ id: mId, organizationId: org, matterNumber: "2026-1", title: "T", status: "ACTIVE" }));
     await db.insert(matterContacts).values(v({ id: uuidv7(), matterId: mId, contactId: c1, role: "KLIENT" }));
-    const repo = new DrizzleContactRepository(handle.db as unknown as AppDb);
+    const repo = new DrizzleContactRepository(handle.db);
 
     const res = await repo.listForOrg(org, { page: 1, pageSize: 50 });
     expect(res.total).toBe(1); // child exkluderad (parentId satt)
