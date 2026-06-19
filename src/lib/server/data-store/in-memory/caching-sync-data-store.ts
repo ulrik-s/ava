@@ -83,6 +83,8 @@ export class CachingSyncDataStore {
     readonly store: LocalStore,
     private readonly queue: MutationQueue,
     private readonly engine: ReconcileEngine,
+    /** Persistera hela source-snapshotet (en gång per reconcile-batch). */
+    private readonly persistSnapshot: () => Promise<void>,
   ) {}
 
   /** Hydrera (kö + source ur persistens) och komponera klossarna (server-vägen). */
@@ -124,18 +126,29 @@ export class CachingSyncDataStore {
 
     const store = new LocalStore(source, onLocalMutation);
 
-    const apply: ApplyCanonical = async (entity, row, deleted) => {
+    // apply skriver bara till lokal store — INGEN persist per rad. En reconcile
+    // som hydrerar hela seeden (#544: ~500 rader) skulle annars trigga ~500
+    // snapshot-skrivningar av en växande source (O(n²) bytes → hängde demon på
+    // mobil-IndexedDB, "AVA laddar…"). `reconcile()` persisterar EN gång efter
+    // hela batchen i st.f. Mid-reconcile-krasch → cursorn ej advancerad → rader
+    // re-pullas nästa gång (idempotent), så inget tappas.
+    const apply: ApplyCanonical = (entity, row, deleted) => {
       writeCanonical(store, entity, row, deleted);
-      await persistSnapshot();
     };
 
     const engine = new ReconcileEngine({ transport: deps.transport, queue, cursor, apply });
-    return new CachingSyncDataStore(store, queue, engine);
+    return new CachingSyncDataStore(store, queue, engine, persistSnapshot);
   }
 
-  /** Reconcile mot servern (pull→apply→replay→advance) — online-vägen. */
-  reconcile(): Promise<ReconcileResult> {
-    return this.engine.reconcile();
+  /** Reconcile mot servern (pull→apply→replay→advance) — online-vägen.
+   *  Persisterar snapshotet EN gång efter hela batchen (se `apply` ovan), och
+   *  bara om något faktiskt ändrades (tom poll-reconcile → ingen skrivning). */
+  async reconcile(): Promise<ReconcileResult> {
+    const result = await this.engine.reconcile();
+    if (result.pulled > 0 || result.pushed > 0 || result.rebased > 0) {
+      await this.persistSnapshot();
+    }
+    return result;
   }
 
   /** Antal ej-synkade (köade) mutationer. */
