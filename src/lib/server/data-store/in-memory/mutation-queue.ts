@@ -50,7 +50,7 @@ export class InMemoryMutationQueuePersistence implements MutationQueuePersistenc
 export class IndexedDbMutationQueuePersistence implements MutationQueuePersistence {
   private readonly kv: IdbKv;
   constructor(
-    factory: IDBFactory = (globalThis as unknown as { indexedDB: IDBFactory }).indexedDB,
+    factory: IDBFactory = globalThis.indexedDB,
     dbName = "ava-mutation-queue",
   ) {
     this.kv = new IdbKv(factory, dbName, "queue");

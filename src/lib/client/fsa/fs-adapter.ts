@@ -19,14 +19,6 @@
  *   - Recursive mkdir hanteras manuellt eftersom FSA inte har det.
  */
 
-/**
- * `FileSystemDirectoryHandle.entries()` är en del av File System Access API
- * men saknas i den lib.dom-version vi kompilerar mot. Vi beskriver bara den
- * delen vi använder (async-iteration över [namn, handle]-par).
- */
-interface DirectoryHandleWithEntries {
-  entries(): AsyncIterableIterator<[string, FileSystemHandle]>;
-}
 
 interface IsoFsStat {
   type: "file" | "dir";
@@ -146,10 +138,7 @@ export class FsaIsoGitAdapter {
     let dir: FileSystemDirectoryHandle;
     try { dir = await resolveDir(this.root, parts); } catch { throw enoent(path); }
     const names: string[] = [];
-    // `entries()` finns på FileSystemDirectoryHandle men saknas i vår
-    // lib.dom-version. Narrow till en lokal vy istället för `any`.
-    const iterable = dir as unknown as DirectoryHandleWithEntries;
-    for await (const [name] of iterable.entries()) names.push(name);
+    for await (const [name] of dir.entries()) names.push(name);
     return names;
   }
 

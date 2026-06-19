@@ -19,6 +19,7 @@
 
 import { httpBatchLink, type TRPCLink } from "@trpc/client";
 import superjson from "superjson";
+import { toLinkFetch, type InjectableFetch } from "@/lib/client/link-fetch";
 import type { AppRouter } from "@/lib/server/routers/_app";
 import type { BackendRuntime } from "./backend-runtime";
 
@@ -27,11 +28,7 @@ export const SERVER_TRPC_PATH = "/api/trpc";
 
 /** Minimal fetch-form för override (test/icke-standard-runtime). En DOM-`fetch`
  *  uppfyller den; tRPC:s interna `FetchEsque` är inte publikt exporterad. */
-export type HttpBackendFetch = (input: string | URL, init?: RequestInit) => Promise<Response>;
-
-/** tRPC:s httpBatchLink-fetch-typ (icke-exporterad `FetchEsque`), härledd ur
- *  länkens optionsparameter så vi kan brygga en DOM-fetch dit utan import. */
-type LinkFetch = NonNullable<NonNullable<Parameters<typeof httpBatchLink<AppRouter>>[0]>["fetch"]>;
+export type HttpBackendFetch = InjectableFetch;
 
 /** Bygg full tRPC-endpoint-URL ur serverns bas-URL. Tom bas = samma origin
  *  (web-appen bakom nginx). Trimmar avslutande "/". */
@@ -53,9 +50,7 @@ export class HttpBackendRuntime implements BackendRuntime {
     return httpBatchLink({
       url: serverTrpcEndpoint(this.deps.baseUrl),
       transformer: superjson,
-      // En DOM-fetch är runtime-kompatibel med tRPC:s FetchEsque; typerna
-      // skiljer bara i exactOptional-detaljer (signal null vs undefined).
-      ...(this.deps.fetch ? { fetch: this.deps.fetch as unknown as LinkFetch } : {}),
+      ...(this.deps.fetch ? { fetch: toLinkFetch(this.deps.fetch) } : {}),
     });
   }
 }

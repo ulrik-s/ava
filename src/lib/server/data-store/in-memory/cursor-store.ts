@@ -24,7 +24,7 @@ export class InMemoryCursorStore implements CursorStore {
 export class IndexedDbCursorStore implements CursorStore {
   private readonly kv: IdbKv;
   constructor(
-    factory: IDBFactory = (globalThis as unknown as { indexedDB: IDBFactory }).indexedDB,
+    factory: IDBFactory = globalThis.indexedDB,
     dbName = "ava-sync-cursor",
   ) {
     this.kv = new IdbKv(factory, dbName, "cursor");
