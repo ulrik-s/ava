@@ -227,8 +227,28 @@ export function DemoBootstrap({ children }: { children: ReactNode }) {
   });
 
   // Hydrerings-grind: identisk markup på server + klientens första render.
-  // Vi gate:ar även på att storen byggts (trpcClient).
-  if (!mounted || !trpcClient) {
+  if (!mounted) {
+    return (
+      <div className="fixed inset-0 flex items-center justify-center bg-white">
+        <div className="text-center">
+          <div className="text-lg font-medium text-gray-900 mb-2">AVA</div>
+          <div className="text-sm text-gray-500">Laddar…</div>
+        </div>
+      </div>
+    );
+  }
+
+  // Skip-auth-sidor (/login, /demo) bygger ALDRIG en demo-store/trpc-klient
+  // (skip-ready-gaten i useDemoBootstrap returnerar tidigt). De renderar sitt
+  // eget innehåll utan datakällan → gate:a INTE på trpcClient, annars fastnar
+  // de för evigt på "AVA Laddar…" (regression från #498:s !trpcClient-gate; en
+  // ny besökare utan principalId dirigeras till /login och kunde inte logga in).
+  if (pathSkipsAuth(window.location.pathname)) {
+    return <>{children}</>;
+  }
+
+  // Data-sidor väntar på att storen byggts.
+  if (!trpcClient) {
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-white">
         <div className="text-center">
