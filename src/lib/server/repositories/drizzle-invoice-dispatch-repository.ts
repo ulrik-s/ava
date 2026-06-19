@@ -5,6 +5,7 @@
 
 import { and, asc, desc, eq, isNull } from "drizzle-orm";
 import type { InvoiceDispatch } from "@/lib/shared/schemas/billing";
+import { asId } from "@/lib/shared/schemas/ids";
 import { invoiceDispatches, invoices, matters } from "../db/schema";
 import type { AppDb } from "../db/types";
 import { DrizzleRepository, versionedTable } from "./drizzle-repository";
@@ -20,9 +21,9 @@ export class DrizzleInvoiceDispatchRepository
   async listByInvoice(invoiceId: string): Promise<InvoiceDispatch[]> {
     const rows = await this.db
       .select().from(invoiceDispatches)
-      .where(and(eq(invoiceDispatches.invoiceId, invoiceId), isNull(invoiceDispatches.deletedAt)))
+      .where(and(eq(invoiceDispatches.invoiceId, asId<"InvoiceId">(invoiceId)), isNull(invoiceDispatches.deletedAt)))
       .orderBy(desc(invoiceDispatches.queuedAt));
-    return this.asRows(rows);
+    return rows;
   }
 
   async listQueuedForOrg(organizationId: string): Promise<InvoiceDispatchQueuedRow[]> {
@@ -41,9 +42,9 @@ export class DrizzleInvoiceDispatchRepository
         isNull(invoiceDispatches.deletedAt),
       ))
       .orderBy(asc(invoiceDispatches.queuedAt));
-    return rows.map((r) => ({
-      ...(r.d as object),
-      invoice: { id: r.iId, invoiceNumber: r.iNum, amount: r.iAmount as number, ocrReference: r.iOcr, dueDate: r.iDue },
-    })) as unknown as InvoiceDispatchQueuedRow[];
+    return rows.map((r): InvoiceDispatchQueuedRow => ({
+      ...r.d,
+      invoice: { id: r.iId, invoiceNumber: r.iNum, amount: r.iAmount, ocrReference: r.iOcr, dueDate: r.iDue },
+    }));
   }
 }

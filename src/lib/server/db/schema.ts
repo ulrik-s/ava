@@ -13,14 +13,15 @@
 
 import { relations } from "drizzle-orm";
 import { bigint, bigserial, index, integer, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import type { DispatchChannel, DispatchStatus } from "@/lib/shared/schemas/billing";
 import type {
   CalendarEventKind, CalendarEventVisibility, TaskPriority, TaskStatus,
 } from "@/lib/shared/schemas/calendar";
-import type { ExpenseKind, ReminderType } from "@/lib/shared/schemas/enums";
+import type { ExpenseKind, ReminderType, SuggestionStatus } from "@/lib/shared/schemas/enums";
 import type {
-  BillingRunId, CalendarEventId, ConflictCheckId, DocumentTemplateId, ExpenseId, InvoiceId,
-  MatterId, OrganizationId, PaymentId, PaymentPlanId, PaymentPlanReminderId, ServiceNoteId,
-  TaskId, TimeEntryId, UserId, WriteOffId,
+  BillingRunId, CalendarEventId, ConflictCheckId, DocumentId, DocumentTemplateId, ExpenseId,
+  InvoiceDispatchId, InvoiceId, MatterEventSuggestionId, MatterId, OrganizationId, PaymentId,
+  PaymentPlanId, PaymentPlanReminderId, ServiceNoteId, TaskId, TimeEntryId, UserId, WriteOffId,
 } from "@/lib/shared/schemas/ids";
 import { baseColumns, boolDefault, orgScopedColumns } from "./columns";
 
@@ -200,17 +201,18 @@ export const writeOffs = pgTable("write_offs", {
 
 export const invoiceDispatches = pgTable("invoice_dispatches", {
   ...baseColumns,
-  invoiceId: uuid("invoice_id").notNull(),
-  channel: text("channel").notNull(),
+  id: uuid("id").primaryKey().$type<InvoiceDispatchId>(),
+  invoiceId: uuid("invoice_id").notNull().$type<InvoiceId>(),
+  channel: text("channel").notNull().$type<DispatchChannel>(),
   recipient: text("recipient").notNull(),
-  status: text("status").notNull().default("queued"),
+  status: text("status").notNull().default("queued").$type<DispatchStatus>(),
   queuedAt: timestamp("queued_at", { withTimezone: true }).notNull(),
   sentAt: timestamp("sent_at", { withTimezone: true }),
   deliveredAt: timestamp("delivered_at", { withTimezone: true }),
   failedAt: timestamp("failed_at", { withTimezone: true }),
   messageId: text("message_id"),
   error: text("error"),
-  recordedById: uuid("recorded_by_id").notNull(),
+  recordedById: uuid("recorded_by_id").notNull().$type<UserId>(),
 }, (t) => [index("invoice_dispatches_invoice_idx").on(t.invoiceId)]);
 
 export const paymentPlans = pgTable("payment_plans", {
@@ -314,7 +316,8 @@ export const documentAnalysisSuggestions = pgTable("document_analysis_suggestion
 
 export const matterEventSuggestions = pgTable("matter_event_suggestions", {
   ...baseColumns,
-  documentId: uuid("document_id").notNull(),
+  id: uuid("id").primaryKey().$type<MatterEventSuggestionId>(),
+  documentId: uuid("document_id").notNull().$type<DocumentId>(),
   title: text("title").notNull(),
   description: text("description"),
   eventType: text("event_type"),
@@ -322,7 +325,7 @@ export const matterEventSuggestions = pgTable("matter_event_suggestions", {
   endAt: timestamp("end_at", { withTimezone: true }),
   allDay: boolDefault("all_day", false),
   location: text("location"),
-  status: text("status").notNull().default("PENDING"),
+  status: text("status").notNull().default("PENDING").$type<SuggestionStatus>(),
 }, (t) => [index("matter_event_suggestions_doc_idx").on(t.documentId)]);
 
 // ─── Kalender / Task ─────────────────────────────────────────────────────────
