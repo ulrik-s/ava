@@ -19,7 +19,7 @@ import type {
 } from "@/lib/shared/schemas/calendar";
 import type {
   BillingRunRecipient, BillingRunStatus, BillingRunType, ContactType, ExpenseKind, MatterRole,
-  ReminderType, SuggestionStatus,
+  MatterStatus, PaymentMethod, ReminderType, SuggestionStatus,
 } from "@/lib/shared/schemas/enums";
 import type {
   BillingRunId, CalendarEventId, ConflictCheckId, ContactId, DocumentFolderId, DocumentId,
@@ -88,14 +88,16 @@ export const contacts = pgTable("contacts", {
 
 export const matters = pgTable("matters", {
   ...orgScopedColumns,
+  id: uuid("id").primaryKey().$type<MatterId>(),
+  organizationId: uuid("organization_id").notNull().$type<OrganizationId>(),
   matterNumber: text("matter_number").notNull(),
-  responsibleLawyerId: uuid("responsible_lawyer_id"),
+  responsibleLawyerId: uuid("responsible_lawyer_id").$type<UserId>(),
   courtCaseNumber: text("court_case_number"),
   title: text("title").notNull(),
   description: text("description"),
-  status: text("status").notNull().default("ACTIVE"),
+  status: text("status").notNull().default("ACTIVE").$type<MatterStatus>(),
   matterType: text("matter_type"),
-  paymentMethod: text("payment_method").notNull().default("PENDING"),
+  paymentMethod: text("payment_method").notNull().default("PENDING").$type<PaymentMethod>(),
   paymentMethodNote: text("payment_method_note"),
   paymentMethodDecidedAt: timestamp("payment_method_decided_at", { withTimezone: true }),
   isTaxeArende: boolDefault("is_taxe_arende", false),

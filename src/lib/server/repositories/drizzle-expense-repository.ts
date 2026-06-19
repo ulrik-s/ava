@@ -23,7 +23,7 @@ export class DrizzleExpenseRepository extends DrizzleRepository<Expense> impleme
 
   async listForOrg(organizationId: string, opts: ExpenseListOptions): Promise<ExpenseListResult> {
     const where = and(
-      eq(matters.organizationId, organizationId),
+      eq(matters.organizationId, asId<"OrganizationId">(organizationId)),
       opts.matterId ? eq(expenses.matterId, asId<"MatterId">(opts.matterId)) : undefined,
     );
     const rows = await this.db
@@ -59,7 +59,7 @@ export class DrizzleExpenseRepository extends DrizzleRepository<Expense> impleme
     const rows = await this.db
       .select({ exp: expenses }).from(expenses)
       .innerJoin(matters, eq(expenses.matterId, matters.id))
-      .where(and(eq(expenses.id, asId<"ExpenseId">(id)), eq(matters.organizationId, organizationId), isNull(expenses.deletedAt)))
+      .where(and(eq(expenses.id, asId<"ExpenseId">(id)), eq(matters.organizationId, asId<"OrganizationId">(organizationId)), isNull(expenses.deletedAt)))
       .limit(1);
     return rows[0]?.exp ?? null;
   }
@@ -106,7 +106,7 @@ export class DrizzleExpenseRepository extends DrizzleRepository<Expense> impleme
       .from(expenses)
       .innerJoin(matters, eq(expenses.matterId, matters.id))
       .where(and(
-        eq(matters.organizationId, organizationId), eq(expenses.userId, asId<"UserId">(userId)),
+        eq(matters.organizationId, asId<"OrganizationId">(organizationId)), eq(expenses.userId, asId<"UserId">(userId)),
         gte(expenses.date, from), lte(expenses.date, to), isNull(expenses.deletedAt),
       ))
       .orderBy(asc(expenses.date));

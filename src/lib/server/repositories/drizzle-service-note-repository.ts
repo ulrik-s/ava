@@ -23,7 +23,7 @@ export class DrizzleServiceNoteRepository extends DrizzleRepository<ServiceNote>
       .leftJoin(users, eq(serviceNotes.authorId, users.id))
       .where(and(
         eq(serviceNotes.matterId, asId<"MatterId">(matterId)),
-        eq(matters.organizationId, organizationId),
+        eq(matters.organizationId, asId<"OrganizationId">(organizationId)),
         isNull(serviceNotes.deletedAt),
       ))
       .orderBy(desc(serviceNotes.createdAt));
@@ -37,7 +37,7 @@ export class DrizzleServiceNoteRepository extends DrizzleRepository<ServiceNote>
     const rows = await this.db
       .select({ note: serviceNotes }).from(serviceNotes)
       .innerJoin(matters, eq(serviceNotes.matterId, matters.id))
-      .where(and(eq(serviceNotes.id, asId<"ServiceNoteId">(id)), eq(matters.organizationId, organizationId), isNull(serviceNotes.deletedAt)))
+      .where(and(eq(serviceNotes.id, asId<"ServiceNoteId">(id)), eq(matters.organizationId, asId<"OrganizationId">(organizationId)), isNull(serviceNotes.deletedAt)))
       .limit(1);
     return rows[0]?.note ?? null;
   }

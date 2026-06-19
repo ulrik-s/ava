@@ -65,7 +65,7 @@ export class DrizzleDocumentRepository
     const rows = await this.db
       .select({ type: documents.documentType, count: sql<number>`count(*)` })
       .from(documents).innerJoin(matters, eq(documents.matterId, matters.id))
-      .where(and(eq(matters.organizationId, organizationId), isNull(documents.deletedAt)))
+      .where(and(eq(matters.organizationId, asId<"OrganizationId">(organizationId)), isNull(documents.deletedAt)))
       .groupBy(documents.documentType);
     return rows
       .filter((r): r is { type: string; count: number } => Boolean(r.type))
@@ -77,7 +77,7 @@ export class DrizzleDocumentRepository
     const rows = await this.db
       .select({ id: documents.id, matterId: documents.matterId }).from(documents)
       .innerJoin(matters, eq(documents.matterId, matters.id))
-      .where(and(eq(documents.id, asId<"DocumentId">(id)), eq(matters.organizationId, organizationId), isNull(documents.deletedAt)))
+      .where(and(eq(documents.id, asId<"DocumentId">(id)), eq(matters.organizationId, asId<"OrganizationId">(organizationId)), isNull(documents.deletedAt)))
       .limit(1);
     const row = rows[0];
     return row ? { id: row.id, matterId: row.matterId } : null;

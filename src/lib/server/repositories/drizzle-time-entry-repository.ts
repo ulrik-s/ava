@@ -23,7 +23,7 @@ import type {
 /** Org-scopat where för `listForOrg` (utbruten för komplexitet ≤8). */
 function listWhere(organizationId: string, opts: TimeEntryListFilter) {
   return and(
-    eq(matters.organizationId, organizationId),
+    eq(matters.organizationId, asId<"OrganizationId">(organizationId)),
     isNull(timeEntries.deletedAt),
     opts.matterId ? eq(timeEntries.matterId, asId<"MatterId">(opts.matterId)) : undefined,
     opts.userId ? eq(timeEntries.userId, asId<"UserId">(opts.userId)) : undefined,
@@ -66,7 +66,7 @@ export class DrizzleTimeEntryRepository extends DrizzleRepository<TimeEntry> imp
     const rows = await this.db
       .select({ te: timeEntries }).from(timeEntries)
       .innerJoin(matters, eq(timeEntries.matterId, matters.id))
-      .where(and(eq(timeEntries.id, asId<"TimeEntryId">(id)), eq(matters.organizationId, organizationId), isNull(timeEntries.deletedAt)))
+      .where(and(eq(timeEntries.id, asId<"TimeEntryId">(id)), eq(matters.organizationId, asId<"OrganizationId">(organizationId)), isNull(timeEntries.deletedAt)))
       .limit(1);
     return rows[0]?.te ?? null;
   }
@@ -82,7 +82,7 @@ export class DrizzleTimeEntryRepository extends DrizzleRepository<TimeEntry> imp
       .innerJoin(matters, eq(timeEntries.matterId, matters.id))
       .leftJoin(users, eq(timeEntries.userId, users.id))
       .where(and(
-        eq(matters.organizationId, organizationId),
+        eq(matters.organizationId, asId<"OrganizationId">(organizationId)),
         isNull(timeEntries.deletedAt),
         gte(timeEntries.date, filter.from),
         lte(timeEntries.date, filter.to),
@@ -141,7 +141,7 @@ export class DrizzleTimeEntryRepository extends DrizzleRepository<TimeEntry> imp
       .from(timeEntries)
       .innerJoin(matters, eq(timeEntries.matterId, matters.id))
       .where(and(
-        eq(matters.organizationId, organizationId), eq(timeEntries.userId, asId<"UserId">(userId)),
+        eq(matters.organizationId, asId<"OrganizationId">(organizationId)), eq(timeEntries.userId, asId<"UserId">(userId)),
         gte(timeEntries.date, from), lte(timeEntries.date, to), isNull(timeEntries.deletedAt),
       ))
       .orderBy(asc(timeEntries.date));
@@ -160,7 +160,7 @@ export class DrizzleTimeEntryRepository extends DrizzleRepository<TimeEntry> imp
     const rows = await this.db
       .select({ te: timeEntries }).from(timeEntries)
       .innerJoin(matters, eq(timeEntries.matterId, matters.id))
-      .where(and(eq(matters.organizationId, organizationId), eq(timeEntries.billable, true), isNull(timeEntries.deletedAt)));
+      .where(and(eq(matters.organizationId, asId<"OrganizationId">(organizationId)), eq(timeEntries.billable, true), isNull(timeEntries.deletedAt)));
     return rows.map((r) => r.te);
   }
 
