@@ -25,10 +25,10 @@ export class DrizzleConflictCheckRepository
       .limit(pageSize).offset((page - 1) * pageSize);
     const [agg] = await this.db.select({ total: sql<number>`count(*)` }).from(conflictChecks);
     return {
-      checks: rows.map((r) => ({
-        ...(r.chk as object),
-        checkedBy: r.cbName ? { name: r.cbName as string } : null,
-      })) as unknown as ConflictCheckRow[],
+      checks: rows.map((r): ConflictCheckRow => ({
+        ...r.chk,
+        checkedBy: r.cbName ? { name: r.cbName } : null,
+      })),
       total: Number(agg?.total ?? 0),
     };
   }

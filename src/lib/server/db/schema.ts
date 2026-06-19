@@ -13,11 +13,14 @@
 
 import { relations } from "drizzle-orm";
 import { bigint, bigserial, index, integer, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
-import type { TaskPriority, TaskStatus } from "@/lib/shared/schemas/calendar";
+import type {
+  CalendarEventKind, CalendarEventVisibility, TaskPriority, TaskStatus,
+} from "@/lib/shared/schemas/calendar";
 import type { ExpenseKind, ReminderType } from "@/lib/shared/schemas/enums";
 import type {
-  BillingRunId, DocumentTemplateId, ExpenseId, InvoiceId, MatterId, OrganizationId, PaymentId,
-  PaymentPlanId, PaymentPlanReminderId, ServiceNoteId, TaskId, TimeEntryId, UserId, WriteOffId,
+  BillingRunId, CalendarEventId, ConflictCheckId, DocumentTemplateId, ExpenseId, InvoiceId,
+  MatterId, OrganizationId, PaymentId, PaymentPlanId, PaymentPlanReminderId, ServiceNoteId,
+  TaskId, TimeEntryId, UserId, WriteOffId,
 } from "@/lib/shared/schemas/ids";
 import { baseColumns, boolDefault, orgScopedColumns } from "./columns";
 
@@ -326,20 +329,22 @@ export const matterEventSuggestions = pgTable("matter_event_suggestions", {
 
 export const calendarEvents = pgTable("calendar_events", {
   ...orgScopedColumns,
-  userId: uuid("user_id").notNull(),
-  kind: text("kind").notNull().default("appointment"),
+  id: uuid("id").primaryKey().$type<CalendarEventId>(),
+  organizationId: uuid("organization_id").notNull().$type<OrganizationId>(),
+  userId: uuid("user_id").notNull().$type<UserId>(),
+  kind: text("kind").notNull().default("appointment").$type<CalendarEventKind>(),
   title: text("title").notNull(),
   description: text("description"),
   location: text("location"),
   startAt: timestamp("start_at", { withTimezone: true }).notNull(),
   endAt: timestamp("end_at", { withTimezone: true }),
   allDay: boolDefault("all_day", false),
-  matterId: uuid("matter_id"),
-  visibility: text("visibility").notNull().default("normal"),
+  matterId: uuid("matter_id").$type<MatterId>(),
+  visibility: text("visibility").notNull().default("normal").$type<CalendarEventVisibility>(),
   mirrorToOutlook: boolDefault("mirror_to_outlook", false),
   outlookEventId: text("outlook_event_id"),
   outlookCalendarId: text("outlook_calendar_id"),
-  mirrorStatus: text("mirror_status"),
+  mirrorStatus: text("mirror_status").$type<"pending" | "synced" | "failed">(),
   mirrorError: text("mirror_error"),
   mirrorLastSyncedAt: timestamp("mirror_last_synced_at", { withTimezone: true }),
 }, (t) => [index("calendar_events_user_idx").on(t.userId)]);
@@ -399,10 +404,11 @@ export const documentTemplates = pgTable("document_templates", {
 
 export const conflictChecks = pgTable("conflict_checks", {
   ...baseColumns,
+  id: uuid("id").primaryKey().$type<ConflictCheckId>(),
   searchTerm: text("search_term").notNull(),
-  searchType: text("search_type").notNull(),
-  results: jsonb("results").notNull().default([]),
-  checkedById: uuid("checked_by_id").notNull(),
+  searchType: text("search_type").notNull().$type<"name" | "personalNumber" | "both">(),
+  results: jsonb("results").notNull().default([]).$type<unknown[]>(),
+  checkedById: uuid("checked_by_id").notNull().$type<UserId>(),
 });
 
 // ─── Relations (ADR 0020) — driver Drizzles relationella `with`-queries för
