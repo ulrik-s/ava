@@ -113,9 +113,13 @@ const FAST = process.argv.includes("--fast");
 // 85.4, ~1.62% marginal. LINE oförändrat) → 89.5 rader / 85.5 funktioner (#27:
 // UsersPage behörighets-grenar (admin/icke-admin) + inaktivera-flöde (confirm
 // ja/nej) + egen-rad-vakt + laddar-tillstånd → lokalt 87.08% funktioner. FUNC
-// dras upp 85.4 → 85.5, ~1.58% marginal. LINE oförändrat).
-const LINE_FLOOR = 0.895;
-const FUNC_FLOOR = 0.855;
+// dras upp 85.4 → 85.5, ~1.58% marginal. LINE oförändrat) → 90.0 rader / 85.6
+// funktioner (#27: CalendarPage lista-vy + Nytt event/Ny task-formulär + rad-
+// åtgärder → lokalt 92.34% rader / 87.21% funktioner. Rad-täckningen har stigit
+// stadigt över ~14 steg (90.86 → 92.34) → LINE-golvet dras ÄNTLIGEN upp 89.5 →
+// 90.0 (~2.34% marginal, fortsatt generös Node-buffert). FUNC 85.5 → 85.6).
+const LINE_FLOOR = 0.900;
+const FUNC_FLOOR = 0.856;
 
 /**
  * SERIAL_FILES — testfiler som SYNKRONT spawnar en barnprocess via
