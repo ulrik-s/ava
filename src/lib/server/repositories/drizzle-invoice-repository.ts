@@ -11,6 +11,7 @@
 
 import { and, desc, eq, inArray, isNull, like, sql } from "drizzle-orm";
 import type { Invoice, Payment, WriteOff } from "@/lib/shared/schemas/billing";
+import { asId } from "@/lib/shared/schemas/ids";
 import { accontoDeductions, invoices, matters, paymentPlans, payments, writeOffs } from "../db/schema";
 import type { AppDb } from "../db/types";
 import { DrizzleRepository, versionedTable } from "./drizzle-repository";
@@ -104,7 +105,7 @@ export class DrizzleInvoiceRepository extends DrizzleRepository<Invoice> impleme
     return Promise.all(baseRows.map(async ({ inv, matter }) => {
       const id = (inv as { id: string }).id;
       const plan = await this.db.select().from(paymentPlans).where(eq(paymentPlans.invoiceId, id)).limit(1);
-      const pays = await this.db.select().from(payments).where(eq(payments.invoiceId, id)).orderBy(desc(payments.paidAt));
+      const pays = await this.db.select().from(payments).where(eq(payments.invoiceId, asId<"InvoiceId">(id))).orderBy(desc(payments.paidAt));
       const deductions = await this.db.select().from(accontoDeductions).where(eq(accontoDeductions.finalInvoiceId, id));
       const accontoDeductionsFull = await Promise.all(
         deductions.map(async (d) => ({ ...d, accontoInvoice: await this.rawInvoice((d as { accontoInvoiceId: string }).accontoInvoiceId) })),
@@ -174,9 +175,9 @@ export class DrizzleInvoiceRepository extends DrizzleRepository<Invoice> impleme
   async getByIdWithLedger(id: string): Promise<InvoiceWithLedger | null> {
     const invoice = await this.getById(id);
     if (!invoice) return null;
-    const pays = await this.db.select().from(payments).where(eq(payments.invoiceId, id));
+    const pays = await this.db.select().from(payments).where(eq(payments.invoiceId, asId<"InvoiceId">(id)));
     const wos = await this.db.select().from(writeOffs).where(eq(writeOffs.invoiceId, id));
-    return { ...invoice, payments: pays as unknown as Payment[], writeOffs: wos as unknown as WriteOff[] };
+    return { ...invoice, payments: pays, writeOffs: wos as unknown as WriteOff[] };
   }
 
   async listByMatter(matterId: string): Promise<Invoice[]> {

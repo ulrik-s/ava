@@ -13,6 +13,7 @@
 
 import { relations } from "drizzle-orm";
 import { bigint, bigserial, index, integer, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import type { InvoiceId, PaymentId, UserId } from "@/lib/shared/schemas/ids";
 import { baseColumns, boolDefault, orgScopedColumns } from "./columns";
 
 /** Monetärt öre-belopp (bigint → ingen int4-overflow för stora fakturor). */
@@ -168,12 +169,13 @@ export const invoices = pgTable("invoices", {
 
 export const payments = pgTable("payments", {
   ...baseColumns,
-  invoiceId: uuid("invoice_id").notNull(),
+  id: uuid("id").primaryKey().$type<PaymentId>(),
+  invoiceId: uuid("invoice_id").notNull().$type<InvoiceId>(),
   amount: ore("amount").notNull(),
   paidAt: timestamp("paid_at", { withTimezone: true }).notNull(),
   note: text("note"),
   reference: text("reference"),
-  recordedById: uuid("recorded_by_id").notNull(),
+  recordedById: uuid("recorded_by_id").notNull().$type<UserId>(),
 }, (t) => [index("payments_invoice_idx").on(t.invoiceId)]);
 
 export const writeOffs = pgTable("write_offs", {
