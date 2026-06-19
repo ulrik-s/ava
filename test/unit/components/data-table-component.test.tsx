@@ -171,3 +171,56 @@ describe("DataTable", () => {
     expect(screen.queryByText(/\+ Visa kolumn/)).not.toBeInTheDocument();
   });
 });
+
+// ── Footer / summa-rader + chip-borttagning + unhide-interaktioner ──────
+
+const colsSummary: Column<Row>[] = [
+  { key: "name", label: "Namn", render: (r) => r.name, sortable: true, sortValue: (r) => r.name, groupable: true },
+  { key: "age", label: "Ålder", render: (r) => r.age, align: "right", summary: (rs) => `Σ ${rs.reduce((s, r) => s + r.age, 0)}` },
+];
+
+describe("DataTable — footer/summa + interaktioner", () => {
+  it("kolumn med summary auto-renderar en footer-summa-rad", () => {
+    render(<DataTable prefKey="x" columns={colsSummary} data={rows} rowKey={(r) => r.id} />);
+    expect(screen.getByText("Σ 65")).toBeInTheDocument(); // 25 + 40
+  });
+
+  it("explicit footer-prop renderar footer-cell-innehåll", () => {
+    render(
+      <DataTable
+        prefKey="x" columns={cols} data={rows} rowKey={(r) => r.id}
+        footer={(rs) => ({ age: `Antal ${rs.length}` })}
+      />,
+    );
+    expect(screen.getByText("Antal 2")).toBeInTheDocument();
+  });
+
+  it("gruppering + summary → en summa-rad per grupp", () => {
+    persisted.data = { user: { groupBy: "name" }, org: null };
+    render(<DataTable prefKey="x" columns={colsSummary} data={rows} rowKey={(r) => r.id} />);
+    // En grupp per namn (Anna=25, Bo=40) → två grupp-summa-rader + en total-footer.
+    expect(screen.getByText("Σ 25")).toBeInTheDocument();
+    expect(screen.getByText("Σ 40")).toBeInTheDocument();
+  });
+
+  it("klick på chip-kryss (Ta bort) rensar sorteringen → persist", () => {
+    persisted.data = { user: { sortBy: "name", sortDir: "asc" }, org: null };
+    render(<DataTable prefKey="x" columns={cols} data={rows} rowKey={(r) => r.id} />);
+    fireEvent.click(screen.getByRole("button", { name: "Ta bort" }));
+    return new Promise<void>((resolve) => {
+      setTimeout(() => { expect(saveMutate).toHaveBeenCalled(); resolve(); }, 500);
+    });
+  });
+
+  it("unhide via '+ Visa kolumn'-listan triggar persist", () => {
+    persisted.data = { user: { columns: [{ key: "age", hidden: true }] }, org: null };
+    render(<DataTable prefKey="x" columns={cols} data={rows} rowKey={(r) => r.id} />);
+    fireEvent.click(screen.getByText(/\+ Visa kolumn/));
+    // Klicka kolumnen i "Dolda kolumner"-listan (sista "Ålder"-träffen = lista).
+    const ages = screen.getAllByText("Ålder");
+    fireEvent.click(ages[ages.length - 1]!);
+    return new Promise<void>((resolve) => {
+      setTimeout(() => { expect(saveMutate).toHaveBeenCalled(); resolve(); }, 500);
+    });
+  });
+});
