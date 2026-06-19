@@ -168,4 +168,30 @@ describe("MattersPage", () => {
     expect(screen.getByText("Stängt")).toBeInTheDocument();
     expect(screen.getByText("Arkiverat")).toBeInTheDocument();
   });
+
+  it("fyller alla fält i Nytt ärende-formuläret → create med komplett payload", () => {
+    render(<MattersPage />);
+    fireEvent.click(screen.getByRole("button", { name: /\+ Nytt ärende/i }));
+    fireEvent.change(screen.getByLabelText(/Titel/), { target: { value: "Tvist AB" } });
+    fireEvent.change(screen.getByLabelText("Ärendetyp"), { target: { value: "Brottmål" } });
+    fireEvent.change(screen.getByLabelText(/målnummer/), { target: { value: "B 1234-26" } });
+    fireEvent.change(screen.getByLabelText("Beskrivning"), { target: { value: "Misshandel" } });
+    fireEvent.click(screen.getByRole("checkbox")); // Taxeärende
+    fireEvent.click(screen.getByRole("button", { name: /Skapa ärende/i }));
+    expect(createMatterMutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Tvist AB", matterType: "Brottmål",
+        courtCaseNumber: "B 1234-26", description: "Misshandel", isTaxeArende: true,
+      }),
+    );
+  });
+
+  it("paginering: Nästa följt av Föregående går tillbaka till sida 1", () => {
+    mattersQuery.data = { matters: [], total: 50, pages: 3 };
+    render(<MattersPage />);
+    fireEvent.click(screen.getByRole("button", { name: /Nästa/i }));
+    expect(screen.getByText(/Sida 2 av 3/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Föregående/i }));
+    expect(screen.getByText(/Sida 1 av 3/)).toBeInTheDocument();
+  });
 });
