@@ -20,11 +20,27 @@ import type { PullResult, PulledChange, PushResult } from "../data-store/in-memo
 import { changeLog } from "../db/schema";
 import type { AppDb } from "../db/types";
 import type { Repositories } from "../repositories/repositories";
-import type { Repository, RowBase } from "../repositories/types";
 import type { SyncStore } from "./sync-store";
 
 type Row = Record<string, unknown>;
-type BaseRepo = Pick<Repository<RowBase>, "getById" | "create" | "update" | "softDelete">;
+
+/**
+ * Den heterogena delmängd av en entitets-repo som sync-bryggan kallar, typad mot
+ * den strukturella rad-formen (`Record<string, unknown>`) i st.f. en specifik
+ * entitet. Domän-rad-typerna (zod `.passthrough()`) bär en index-signatur och är
+ * därför tilldelningsbara hit — så varje `Repository<Domän>` uppfyller `BaseRepo`
+ * (metod-bivarians på param + kovariant retur via index-signaturen). Det låter
+ * `repoFor` returnera en TYPAD repo utan rad-castar nedströms.
+ */
+interface BaseRepo {
+  getById(id: string): Promise<Row | null>;
+  create(data: Row): Promise<Row>;
+  update(id: string, patch: Row): Promise<Row>;
+  softDelete(id: string): Promise<Row>;
+}
+
+/** Repo-nycklarna i registret (alla fält utom `transaction`). */
+type RepoKey = keyof Omit<Repositories, "transaction">;
 
 interface ChangeRow {
   seq: number;
@@ -50,15 +66,17 @@ export class DrizzleSyncStore implements SyncStore {
   private repoFor(entity: string): BaseRepo | null {
     const key = SOURCE_KEY_BY_ENTITY[entity];
     if (!key) return null;
-    return (this.repos as unknown as Record<string, BaseRepo | undefined>)[key] ?? null;
+    // `key` är en source-key (= repo-fältnamn); den dynamiska dispatchen kräver
+    // en keyof-assertion (sträng→nyckel), men VÄRDET förblir typat (BaseRepo).
+    return this.repos[key as RepoKey] ?? null;
   }
 
   async pull(organizationId: string, sinceCursor: number): Promise<PullResult> {
-    const rows = (await this.db
+    const rows: ChangeRow[] = await this.db
       .select({ seq: changeLog.seq, entity: changeLog.entity, rowId: changeLog.rowId, op: changeLog.op })
       .from(changeLog)
       .where(and(eq(changeLog.organizationId, organizationId), gt(changeLog.seq, sinceCursor)))
-      .orderBy(asc(changeLog.seq))) as ChangeRow[];
+      .orderBy(asc(changeLog.seq));
 
     // Deduppa: senaste op per (entity,rowId) räcker (kanonisk rad hämtas ändå).
     const latest = new Map<string, ChangeRow>();
@@ -77,7 +95,7 @@ export class DrizzleSyncStore implements SyncStore {
 
   private async toChange(r: ChangeRow): Promise<PulledChange> {
     const repo = this.repoFor(r.entity);
-    const current = repo ? ((await repo.getById(r.rowId)) as unknown as Row | null) : null;
+    const current = repo ? await repo.getById(r.rowId) : null;
     if (r.op === "delete" || !current) {
       return { entity: r.entity, row: { id: r.rowId }, deleted: true };
     }
@@ -93,27 +111,27 @@ export class DrizzleSyncStore implements SyncStore {
   }
 
   private async applyCreate(repo: BaseRepo, m: QueuedMutation): Promise<PushResult> {
-    const existing = (await repo.getById(rowId(m))) as unknown as Row | null;
+    const existing = await repo.getById(rowId(m));
     if (existing) return { status: "accepted", row: existing }; // idempotent replay
-    const created = (await repo.create(m.row as never)) as unknown as Row;
+    const created = await repo.create(m.row);
     return { status: "accepted", row: created };
   }
 
   private async applyUpdate(repo: BaseRepo, m: QueuedMutation): Promise<PushResult> {
-    const existing = (await repo.getById(rowId(m))) as unknown as Row | null;
-    if (!existing) return { status: "accepted", row: (await repo.create(m.row as never)) as unknown as Row };
+    const existing = await repo.getById(rowId(m));
+    if (!existing) return { status: "accepted", row: await repo.create(m.row) };
     const serverVersion = versionOf(existing);
     if (conflictClassOf(m.entity) === "surface" && m.baseVersion != null && serverVersion !== m.baseVersion) {
       return { status: "conflict", reason: "stale", current: existing };
     }
-    const updated = (await repo.update(rowId(m), m.row as never)) as unknown as Row;
+    const updated = await repo.update(rowId(m), m.row);
     const rebased = m.baseVersion != null && serverVersion > m.baseVersion;
     return { status: rebased ? "rebased" : "accepted", row: updated };
   }
 
   private async applyDelete(repo: BaseRepo, m: QueuedMutation): Promise<PushResult> {
-    const existing = (await repo.getById(rowId(m))) as unknown as Row | null;
+    const existing = await repo.getById(rowId(m));
     if (!existing) return { status: "accepted", row: { id: rowId(m) } }; // redan borta
-    return { status: "accepted", row: (await repo.softDelete(rowId(m))) as unknown as Row };
+    return { status: "accepted", row: await repo.softDelete(rowId(m)) };
   }
 }
