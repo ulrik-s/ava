@@ -76,9 +76,14 @@ const FAST = process.argv.includes("--fast");
 // nyligen täckta repo-metoderna (folder/matter-contact) är FUNC-marginalen
 // återhämtad efter #518 Fas 5 till ~1.45% → FUNC-golvet dras upp 84.1 → 84.2
 // (~1.35% marginal, inom historiska 1.3–1.5%). LINE oförändrat (rader dippar
-// till 90.64% på vissa körningar → 0.895 är nära taket).
+// till 90.64% på vissa körningar → 0.895 är nära taket) → 89.5 rader / 84.3
+// funktioner (#27: TimeEntryRepository.listUnfrozenForMatter/freezeForMatter/
+// listForLawyerInPeriod/listBillableForOrg testade → drizzle-time-entry 81%→100%.
+// Repo-täckningssvepet (matter-contact/folder/expense/time-entry) klart →
+// lokalt 90.77% rader / 85.63% funktioner. FUNC dras upp 84.2 → 84.3
+// (~1.33% marginal). LINE oförändrat).
 const LINE_FLOOR = 0.895;
-const FUNC_FLOOR = 0.842;
+const FUNC_FLOOR = 0.843;
 
 /**
  * SERIAL_FILES — testfiler som SYNKRONT spawnar en barnprocess via
