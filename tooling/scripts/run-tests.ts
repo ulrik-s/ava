@@ -98,9 +98,12 @@ const FAST = process.argv.includes("--fast");
 // upp 84.7 → 84.8, ~1.48% marginal. LINE oförändrat) → 89.5 rader / 84.9
 // funktioner (#27: TimeSection registrera/ändra/ta-bort-flöden + TimeForm-
 // handlers → lokalt 86.48% funktioner. FUNC dras upp 84.8 → 84.9, ~1.58%
-// marginal. LINE oförändrat).
+// marginal. LINE oförändrat) → 89.5 rader / 85.0 funktioner (#27:
+// ContactsSection ny/befintlig-kontakt-formulär (PERSON/ORG-grenar, roll-
+// select) → lokalt 86.57% funktioner. FUNC passerar 85%-milstolpen 84.9 → 85.0,
+// ~1.57% marginal. LINE oförändrat).
 const LINE_FLOOR = 0.895;
-const FUNC_FLOOR = 0.849;
+const FUNC_FLOOR = 0.850;
 
 /**
  * SERIAL_FILES — testfiler som SYNKRONT spawnar en barnprocess via
