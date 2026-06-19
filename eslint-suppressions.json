@@ -109,11 +109,6 @@
       "count": 1
     }
   },
-  "src/lib/server/repositories/drizzle-expense-repository.ts": {
-    "no-restricted-syntax": {
-      "count": 2
-    }
-  },
   "src/lib/server/repositories/drizzle-invoice-dispatch-repository.ts": {
     "no-restricted-syntax": {
       "count": 1
