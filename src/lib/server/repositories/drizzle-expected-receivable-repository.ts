@@ -26,7 +26,7 @@ export class DrizzleExpectedReceivableRepository
         filter?.status ? eq(expectedReceivables.status, filter.status) : undefined,
       ))
       .orderBy(desc(expectedReceivables.createdAt));
-    return rows as unknown as ExpectedReceivable[];
+    return this.asRows(rows);
   }
 
   async getByIdInOrg(id: string, organizationId: string): Promise<ExpectedReceivable | null> {
@@ -34,6 +34,6 @@ export class DrizzleExpectedReceivableRepository
       .select().from(expectedReceivables)
       .where(and(eq(expectedReceivables.id, id), eq(expectedReceivables.organizationId, organizationId), isNull(expectedReceivables.deletedAt)))
       .limit(1);
-    return (rows[0] as unknown as ExpectedReceivable | undefined) ?? null;
+    return this.asRow(rows[0]);
   }
 }

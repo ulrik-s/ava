@@ -27,6 +27,6 @@ export class DrizzleWriteOffRepository extends DrizzleRepository<WriteOff> imple
     const rows = await this.db
       .select().from(writeOffs)
       .where(and(inArray(writeOffs.invoiceId, invoiceIds), isNull(writeOffs.deletedAt)));
-    return rows as unknown as WriteOff[];
+    return this.asRows(rows);
   }
 }

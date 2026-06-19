@@ -38,6 +38,6 @@ export class DrizzleServiceNoteRepository extends DrizzleRepository<ServiceNote>
       .innerJoin(matters, eq(serviceNotes.matterId, matters.id))
       .where(and(eq(serviceNotes.id, id), eq(matters.organizationId, organizationId), isNull(serviceNotes.deletedAt)))
       .limit(1);
-    return (rows[0]?.note as unknown as ServiceNote | undefined) ?? null;
+    return this.asRow(rows[0]?.note);
   }
 }

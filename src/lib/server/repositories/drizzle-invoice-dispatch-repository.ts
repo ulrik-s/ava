@@ -22,7 +22,7 @@ export class DrizzleInvoiceDispatchRepository
       .select().from(invoiceDispatches)
       .where(and(eq(invoiceDispatches.invoiceId, invoiceId), isNull(invoiceDispatches.deletedAt)))
       .orderBy(desc(invoiceDispatches.queuedAt));
-    return rows as unknown as InvoiceDispatch[];
+    return this.asRows(rows);
   }
 
   async listQueuedForOrg(organizationId: string): Promise<InvoiceDispatchQueuedRow[]> {

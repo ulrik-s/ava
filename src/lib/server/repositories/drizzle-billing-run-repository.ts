@@ -72,7 +72,7 @@ export class DrizzleBillingRunRepository
         eq(billingRuns.matterId, matterId), eq(billingRuns.type, "ACCONTO"),
         eq(billingRuns.status, "SENT"), isNull(billingRuns.deletedAt),
       ));
-    return rows as unknown as BillingRun[];
+    return this.asRows(rows);
   }
 
   async listAccontoByIds(matterId: string, ids: string[]): Promise<BillingRun[]> {
@@ -83,6 +83,6 @@ export class DrizzleBillingRunRepository
         inArray(billingRuns.id, ids), eq(billingRuns.matterId, matterId),
         eq(billingRuns.type, "ACCONTO"), isNull(billingRuns.deletedAt),
       ));
-    return rows as unknown as BillingRun[];
+    return this.asRows(rows);
   }
 }

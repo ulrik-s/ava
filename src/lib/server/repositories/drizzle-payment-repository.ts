@@ -27,6 +27,6 @@ export class DrizzlePaymentRepository extends DrizzleRepository<Payment> impleme
     const rows = await this.db
       .select().from(payments)
       .where(and(inArray(payments.invoiceId, invoiceIds), isNull(payments.deletedAt)));
-    return rows as unknown as Payment[];
+    return this.asRows(rows);
   }
 }

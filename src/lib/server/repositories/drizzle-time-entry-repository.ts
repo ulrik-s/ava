@@ -61,7 +61,7 @@ export class DrizzleTimeEntryRepository extends DrizzleRepository<TimeEntry> imp
       .innerJoin(matters, eq(timeEntries.matterId, matters.id))
       .where(and(eq(timeEntries.id, id), eq(matters.organizationId, organizationId), isNull(timeEntries.deletedAt)))
       .limit(1);
-    return (rows[0]?.te as unknown as TimeEntry | undefined) ?? null;
+    return this.asRow(rows[0]?.te);
   }
 
   async listForReport(organizationId: string, filter: TimeEntryReportFilter): Promise<TimeEntryReportRow[]> {
@@ -116,7 +116,7 @@ export class DrizzleTimeEntryRepository extends DrizzleRepository<TimeEntry> imp
       .select().from(timeEntries)
       .where(and(eq(timeEntries.matterId, matterId), isNull(timeEntries.frozenByBillingRunId), isNull(timeEntries.deletedAt)))
       .orderBy(asc(timeEntries.date));
-    return rows as unknown as TimeEntry[];
+    return this.asRows(rows);
   }
 
   async listForLawyerInPeriod(

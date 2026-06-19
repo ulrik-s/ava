@@ -52,6 +52,6 @@ export class DrizzleMatterEventSuggestionRepository
         isNull(matterEventSuggestions.deletedAt),
       ))
       .limit(1);
-    return (rows[0]?.ev as unknown as MatterEventSuggestion | undefined) ?? null;
+    return this.asRow(rows[0]?.ev);
   }
 }

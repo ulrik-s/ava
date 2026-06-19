@@ -31,14 +31,14 @@ export class DrizzlePaymentPlanRepository extends DrizzleRepository<PaymentPlan>
         eq(matters.organizationId, organizationId),
         isNull(paymentPlans.deletedAt),
       )).limit(1);
-    return (rows[0]?.plan as unknown as PaymentPlan | undefined) ?? null;
+    return this.asRow(rows[0]?.plan);
   }
 
   async getByInvoiceId(invoiceId: string): Promise<PaymentPlan | null> {
     const rows = await this.db
       .select().from(paymentPlans)
       .where(and(eq(paymentPlans.invoiceId, invoiceId), isNull(paymentPlans.deletedAt))).limit(1);
-    return (rows[0] as unknown as PaymentPlan | undefined) ?? null;
+    return this.asRow(rows[0]);
   }
 
   /** Plan-id:n i org:en (via faktura→ärende), valfritt status-filtrerade. */

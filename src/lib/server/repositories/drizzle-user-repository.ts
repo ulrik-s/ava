@@ -20,7 +20,7 @@ export class DrizzleUserRepository extends DrizzleRepository<User> implements Us
       .select().from(users)
       .where(and(eq(users.id, id), eq(users.organizationId, organizationId), isNull(users.deletedAt)))
       .limit(1);
-    return (rows[0] as unknown as User | undefined) ?? null;
+    return this.asRow(rows[0]);
   }
 
   async listByOrg(organizationId: string): Promise<User[]> {
@@ -28,6 +28,6 @@ export class DrizzleUserRepository extends DrizzleRepository<User> implements Us
       .select().from(users)
       .where(and(eq(users.organizationId, organizationId), isNull(users.deletedAt)))
       .orderBy(asc(users.name));
-    return rows as unknown as User[];
+    return this.asRows(rows);
   }
 }
