@@ -10,6 +10,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
 import {
   documents, invoices, matters, payments, writeOffs, paymentPlans, paymentPlanReminders, users,
 } from "@/lib/server/db/schema";
+import { asId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { createTestDb, type TestDbHandle } from "./pg-test-db";
 
@@ -35,7 +36,7 @@ describe("Drizzle relations (pglite)", () => {
     await db.insert(paymentPlanReminders).values({ id: uuidv7(), planId, dueMonth: "2026-06", type: "DUE", sentAt: new Date(), version: 1 } as never);
 
     const row = await db.query.invoices.findFirst({
-      where: eq(invoices.id, invId),
+      where: eq(invoices.id, asId<"InvoiceId">(invId)),
       with: {
         matter: true,
         payments: { with: { recordedBy: true } },
@@ -62,7 +63,7 @@ describe("Drizzle relations (pglite)", () => {
     await db.insert(invoices).values({ id: invId, matterId: mId, amount: 1, status: "DRAFT", invoiceType: "FINAL", invoiceDate: new Date(), version: 1 } as never);
     await db.insert(documents).values({ id: docId, matterId: mId, invoiceId: invId, fileName: "Faktura.pdf", mimeType: "application/pdf", sizeBytes: 10, storagePath: "p", uploadedById: uuidv7(), version: 1 } as never);
 
-    const inv = await db.query.invoices.findFirst({ where: eq(invoices.id, invId), with: { documents: true } });
+    const inv = await db.query.invoices.findFirst({ where: eq(invoices.id, asId<"InvoiceId">(invId)), with: { documents: true } });
     expect(inv?.documents.map((d) => d.id)).toContain(docId);
   });
 });

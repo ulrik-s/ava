@@ -31,7 +31,7 @@ export class DrizzleInvoiceRepository extends DrizzleRepository<Invoice> impleme
       .select({ inv: invoices }).from(invoices)
       .innerJoin(matters, eq(invoices.matterId, matters.id))
       .where(and(
-        eq(invoices.id, id),
+        eq(invoices.id, asId<"InvoiceId">(id)),
         eq(matters.organizationId, asId<"OrganizationId">(organizationId)),
         isNull(invoices.deletedAt),
       )).limit(1);
@@ -41,7 +41,7 @@ export class DrizzleInvoiceRepository extends DrizzleRepository<Invoice> impleme
   /** Bar faktura-rad utan org/delete-filter (för self-ref-uppslag). */
   private async rawInvoice(id: string | null | undefined): Promise<Invoice | null> {
     if (!id) return null;
-    const rows = await this.db.select().from(invoices).where(eq(invoices.id, id)).limit(1);
+    const rows = await this.db.select().from(invoices).where(eq(invoices.id, asId<"InvoiceId">(id))).limit(1);
     return this.asRow(rows[0]);
   }
 
@@ -49,28 +49,28 @@ export class DrizzleInvoiceRepository extends DrizzleRepository<Invoice> impleme
     const base = await this.getByIdWithRelations(id, organizationId);
     if (!base) return null;
     // Self-ref/dubbel-FK via sekundär-queries (relations() täcker dem inte).
-    const deductions = await this.db.select().from(accontoDeductions).where(eq(accontoDeductions.finalInvoiceId, id));
-    const usages = await this.db.select().from(accontoDeductions).where(eq(accontoDeductions.accontoInvoiceId, id));
+    const deductions = await this.db.select().from(accontoDeductions).where(eq(accontoDeductions.finalInvoiceId, asId<"InvoiceId">(id)));
+    const usages = await this.db.select().from(accontoDeductions).where(eq(accontoDeductions.accontoInvoiceId, asId<"InvoiceId">(id)));
     const accontoDeductionsFull = await Promise.all(
-      deductions.map(async (d) => ({ ...d, accontoInvoice: await this.rawInvoice((d as { accontoInvoiceId: string }).accontoInvoiceId) })),
+      deductions.map(async (d) => ({ ...d, accontoInvoice: await this.rawInvoice(d.accontoInvoiceId) })),
     );
     const deductedOnFinals = await Promise.all(
-      usages.map(async (d) => ({ ...d, finalInvoice: await this.rawInvoice((d as { finalInvoiceId: string }).finalInvoiceId) })),
+      usages.map(async (d) => ({ ...d, finalInvoice: await this.rawInvoice(d.finalInvoiceId) })),
     );
-    const creditedInvoice = await this.rawInvoice((base as { creditedInvoiceId?: string | null }).creditedInvoiceId);
-    const creditNoteRows = await this.db.select().from(invoices).where(eq(invoices.creditedInvoiceId, id)).limit(1);
+    const creditedInvoice = await this.rawInvoice(base.creditedInvoiceId);
+    const creditNoteRows = await this.db.select().from(invoices).where(eq(invoices.creditedInvoiceId, asId<"InvoiceId">(id))).limit(1);
     return {
       ...base,
       accontoDeductions: accontoDeductionsFull,
       deductedOnFinals,
       creditedInvoice,
-      creditNote: this.asRow(creditNoteRows[0]),
-    } as unknown as InvoiceFull;
+      creditNote: creditNoteRows[0] ?? null,
+    };
   }
 
   async getByIdWithRelations(id: string, organizationId: string): Promise<InvoiceWithRelations | null> {
     const row = await this.db.query.invoices.findFirst({
-      where: eq(invoices.id, id),
+      where: eq(invoices.id, asId<"InvoiceId">(id)),
       with: {
         matter: true,
         payments: { with: { recordedBy: true }, orderBy: (p, { desc }) => [desc(p.paidAt)] },
@@ -82,10 +82,10 @@ export class DrizzleInvoiceRepository extends DrizzleRepository<Invoice> impleme
       },
     });
     // Org-scope via ärendet + mjuk-delete-filter (db.query saknar relations-where).
-    if (!row || row.deletedAt || (row.matter as { organizationId?: string } | null)?.organizationId !== organizationId) {
+    if (!row || row.deletedAt || row.matter?.organizationId !== organizationId) {
       return null;
     }
-    return row as unknown as InvoiceWithRelations;
+    return row;
   }
 
   async listForOrg(organizationId: string, filter?: InvoiceListFilter): Promise<InvoiceListRow[]> {
@@ -97,33 +97,33 @@ export class DrizzleInvoiceRepository extends DrizzleRepository<Invoice> impleme
       .where(and(
         eq(matters.organizationId, asId<"OrganizationId">(organizationId)),
         isNull(invoices.deletedAt),
-        filter?.matterId ? eq(invoices.matterId, filter.matterId) : undefined,
+        filter?.matterId ? eq(invoices.matterId, asId<"MatterId">(filter.matterId)) : undefined,
         filter?.invoiceType ? eq(invoices.invoiceType, filter.invoiceType) : undefined,
         filter?.status ? eq(invoices.status, filter.status) : undefined,
       ))
       .orderBy(desc(invoices.invoiceDate));
-    return Promise.all(baseRows.map(async ({ inv, matter }) => {
-      const id = (inv as { id: string }).id;
-      const plan = await this.db.select().from(paymentPlans).where(eq(paymentPlans.invoiceId, id)).limit(1);
+    return Promise.all(baseRows.map(async ({ inv, matter }): Promise<InvoiceListRow> => {
+      const id = inv.id;
+      const plan = await this.db.select().from(paymentPlans).where(eq(paymentPlans.invoiceId, asId<"InvoiceId">(id))).limit(1);
       const pays = await this.db.select().from(payments).where(eq(payments.invoiceId, asId<"InvoiceId">(id))).orderBy(desc(payments.paidAt));
-      const deductions = await this.db.select().from(accontoDeductions).where(eq(accontoDeductions.finalInvoiceId, id));
+      const deductions = await this.db.select().from(accontoDeductions).where(eq(accontoDeductions.finalInvoiceId, asId<"InvoiceId">(id)));
       const accontoDeductionsFull = await Promise.all(
-        deductions.map(async (d) => ({ ...d, accontoInvoice: await this.rawInvoice((d as { accontoInvoiceId: string }).accontoInvoiceId) })),
+        deductions.map(async (d) => ({ ...d, accontoInvoice: await this.rawInvoice(d.accontoInvoiceId) })),
       );
-      const usages = await this.db.select({ id: accontoDeductions.id }).from(accontoDeductions).where(eq(accontoDeductions.accontoInvoiceId, id));
-      const creditedInvoice = await this.rawInvoice((inv as { creditedInvoiceId?: string | null }).creditedInvoiceId);
-      const creditNoteRows = await this.db.select().from(invoices).where(eq(invoices.creditedInvoiceId, id)).limit(1);
+      const usages = await this.db.select({ id: accontoDeductions.id }).from(accontoDeductions).where(eq(accontoDeductions.accontoInvoiceId, asId<"InvoiceId">(id)));
+      const creditedInvoice = await this.rawInvoice(inv.creditedInvoiceId);
+      const creditNoteRows = await this.db.select().from(invoices).where(eq(invoices.creditedInvoiceId, asId<"InvoiceId">(id))).limit(1);
       return {
         ...inv,
-        matter: { id: (matter as { id: string }).id, matterNumber: (matter as { matterNumber: string }).matterNumber, title: (matter as { title: string }).title },
-        paymentPlan: (plan[0] as unknown) ?? null,
+        matter: { id: matter.id, matterNumber: matter.matterNumber, title: matter.title },
+        paymentPlan: plan[0] ?? null,
         payments: pays,
         accontoDeductions: accontoDeductionsFull,
         deductedOnFinals: usages,
-        creditedInvoice: creditedInvoice as InvoiceListRow["creditedInvoice"],
-        creditNote: (creditNoteRows[0] as unknown as InvoiceListRow["creditNote"]) ?? null,
+        creditedInvoice: creditedInvoice ?? null,
+        creditNote: creditNoteRows[0] ?? null,
       };
-    })) as unknown as InvoiceListRow[];
+    }));
   }
 
   async nextInvoiceNumber(organizationId: string): Promise<string> {
@@ -141,7 +141,7 @@ export class DrizzleInvoiceRepository extends DrizzleRepository<Invoice> impleme
       .select({ total: sql<number>`coalesce(sum(abs(${invoices.amount})), 0)` }).from(invoices)
       .innerJoin(matters, eq(invoices.matterId, matters.id))
       .where(and(
-        eq(invoices.creditedInvoiceId, invoiceId),
+        eq(invoices.creditedInvoiceId, asId<"InvoiceId">(invoiceId)),
         eq(matters.organizationId, asId<"OrganizationId">(organizationId)),
         isNull(invoices.deletedAt),
       ));
@@ -151,7 +151,7 @@ export class DrizzleInvoiceRepository extends DrizzleRepository<Invoice> impleme
   async getCreditNoteFor(invoiceId: string): Promise<Invoice | null> {
     const rows = await this.db
       .select().from(invoices)
-      .where(and(eq(invoices.creditedInvoiceId, invoiceId), isNull(invoices.deletedAt))).limit(1);
+      .where(and(eq(invoices.creditedInvoiceId, asId<"InvoiceId">(invoiceId)), isNull(invoices.deletedAt))).limit(1);
     return this.asRow(rows[0]);
   }
 
@@ -163,13 +163,13 @@ export class DrizzleInvoiceRepository extends DrizzleRepository<Invoice> impleme
       .select({ inv: invoices }).from(invoices)
       .leftJoin(accontoDeductions, eq(accontoDeductions.accontoInvoiceId, invoices.id))
       .where(and(
-        inArray(invoices.id, ids),
-        eq(invoices.matterId, matterId),
+        inArray(invoices.id, ids.map((i) => asId<"InvoiceId">(i))),
+        eq(invoices.matterId, asId<"MatterId">(matterId)),
         eq(invoices.invoiceType, "ACCONTO"),
         isNull(invoices.deletedAt),
         isNull(accontoDeductions.id),
       ));
-    return rows.map((r) => r.inv) as unknown as Invoice[];
+    return rows.map((r) => r.inv);
   }
 
   async getByIdWithLedger(id: string): Promise<InvoiceWithLedger | null> {
@@ -183,7 +183,7 @@ export class DrizzleInvoiceRepository extends DrizzleRepository<Invoice> impleme
   async listByMatter(matterId: string): Promise<Invoice[]> {
     const rows = await this.db
       .select().from(invoices)
-      .where(and(eq(invoices.matterId, matterId), isNull(invoices.deletedAt)))
+      .where(and(eq(invoices.matterId, asId<"MatterId">(matterId)), isNull(invoices.deletedAt)))
       .orderBy(desc(invoices.invoiceDate));
     return this.asRows(rows);
   }

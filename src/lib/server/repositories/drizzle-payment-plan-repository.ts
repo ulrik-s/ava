@@ -9,6 +9,7 @@
 
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import type { PaymentPlan, PaymentPlanReminder } from "@/lib/shared/schemas/billing";
+import type { PaymentPlanStatus } from "@/lib/shared/schemas/enums";
 import { asId } from "@/lib/shared/schemas/ids";
 import { invoices, matters, paymentPlanReminders, paymentPlans } from "../db/schema";
 import type { AppDb } from "../db/types";
@@ -28,7 +29,7 @@ export class DrizzlePaymentPlanRepository extends DrizzleRepository<PaymentPlan>
       .innerJoin(invoices, eq(paymentPlans.invoiceId, invoices.id))
       .innerJoin(matters, eq(invoices.matterId, matters.id))
       .where(and(
-        eq(paymentPlans.id, planId),
+        eq(paymentPlans.id, asId<"PaymentPlanId">(planId)),
         eq(matters.organizationId, asId<"OrganizationId">(organizationId)),
         isNull(paymentPlans.deletedAt),
       )).limit(1);
@@ -38,7 +39,7 @@ export class DrizzlePaymentPlanRepository extends DrizzleRepository<PaymentPlan>
   async getByInvoiceId(invoiceId: string): Promise<PaymentPlan | null> {
     const rows = await this.db
       .select().from(paymentPlans)
-      .where(and(eq(paymentPlans.invoiceId, invoiceId), isNull(paymentPlans.deletedAt))).limit(1);
+      .where(and(eq(paymentPlans.invoiceId, asId<"InvoiceId">(invoiceId)), isNull(paymentPlans.deletedAt))).limit(1);
     return this.asRow(rows[0]);
   }
 
@@ -50,7 +51,7 @@ export class DrizzlePaymentPlanRepository extends DrizzleRepository<PaymentPlan>
       .innerJoin(matters, eq(invoices.matterId, matters.id))
       .where(and(
         eq(matters.organizationId, asId<"OrganizationId">(organizationId)),
-        status ? eq(paymentPlans.status, status) : undefined,
+        status ? eq(paymentPlans.status, status as PaymentPlanStatus) : undefined,
         isNull(paymentPlans.deletedAt),
       ));
     return rows.map((r) => r.id as string);
@@ -60,7 +61,7 @@ export class DrizzlePaymentPlanRepository extends DrizzleRepository<PaymentPlan>
   private async fetchJoined(ids: string[]): Promise<JoinedPaymentPlan[]> {
     if (ids.length === 0) return [];
     const rows = await this.db.query.paymentPlans.findMany({
-      where: inArray(paymentPlans.id, ids),
+      where: inArray(paymentPlans.id, ids.map((i) => asId<"PaymentPlanId">(i))),
       orderBy: (pp, { desc: d }) => [d(pp.createdAt)],
       with: {
         invoice: {
@@ -76,7 +77,7 @@ export class DrizzlePaymentPlanRepository extends DrizzleRepository<PaymentPlan>
         },
       },
     });
-    return rows as unknown as JoinedPaymentPlan[];
+    return rows;
   }
 
   /** Påminnelser per plan (sentAt desc), grupperade. */
