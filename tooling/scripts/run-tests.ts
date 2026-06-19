@@ -70,9 +70,15 @@ const FAST = process.argv.includes("--fast");
 // drizzle-matter-contact-repository 68%→100% rader. #518 Fas 5 tog bort väl-
 // testad klient-LLM-kod vilket krympte FUNC-marginalen, så FUNC lämnas vid 84.1
 // (~1.37% marginal). LINE har legat stabilt ≥90.5% i ~5 PR → golvet dras upp
-// till 89.5, ~1.18% marginal).
+// till 89.5, ~1.18% marginal) → 89.5 rader / 84.2 funktioner (#27:
+// ExpenseRepository.listUnfrozenForMatter/freezeForMatter/listForLawyerInPeriod
+// testade i båda impl:erna → drizzle-expense-repository 77%→100% rader. Med de
+// nyligen täckta repo-metoderna (folder/matter-contact) är FUNC-marginalen
+// återhämtad efter #518 Fas 5 till ~1.45% → FUNC-golvet dras upp 84.1 → 84.2
+// (~1.35% marginal, inom historiska 1.3–1.5%). LINE oförändrat (rader dippar
+// till 90.64% på vissa körningar → 0.895 är nära taket).
 const LINE_FLOOR = 0.895;
-const FUNC_FLOOR = 0.841;
+const FUNC_FLOOR = 0.842;
 
 /**
  * SERIAL_FILES — testfiler som SYNKRONT spawnar en barnprocess via

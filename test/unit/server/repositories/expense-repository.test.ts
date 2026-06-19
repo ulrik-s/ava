@@ -5,7 +5,7 @@
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
-import { expenses, matters, users } from "@/lib/server/db/schema";
+import { contacts, expenses, matterContacts, matters, users } from "@/lib/server/db/schema";
 import type { AppDb } from "@/lib/server/db/types";
 import { DrizzleExpenseRepository } from "@/lib/server/repositories/drizzle-expense-repository";
 import { InMemoryExpenseRepository } from "@/lib/server/repositories/in-memory-expense-repository";
@@ -125,5 +125,81 @@ describe("ExpenseRepository — Drizzle (pglite)", () => {
     const repo = new DrizzleExpenseRepository(handle.db as unknown as AppDb);
     expect(await repo.getByIdInOrg(eId, org)).toMatchObject({ id: eId });
     expect(await repo.getByIdInOrg(eId, uuidv7())).toBeNull();
+  });
+});
+
+// ─── Billing-run-frysning + perLawyer-period (#27: tidigare otäckta metoder) ───
+
+describe("ExpenseRepository — frysning + perLawyer-period (in-memory)", () => {
+  it("listUnfrozenForMatter + freezeForMatter + listForLawyerInPeriod", async () => {
+    const mId = uuidv7();
+    const uId = uuidv7();
+    const cKli = uuidv7();
+    const eEarly = uuidv7(), eLate = uuidv7(), eFrozen = uuidv7(), eOutside = uuidv7();
+    const store = new LocalStore({
+      matters: [{ id: mId, organizationId: "org-1", matterNumber: "2026-1", title: "T", paymentMethod: "PRIVAT" }],
+      users: [{ id: uId, name: "Anna" }],
+      contacts: [{ id: cKli, organizationId: "org-1", name: "Klient AB", contactType: "COMPANY" }],
+      matterContacts: [{ id: uuidv7(), matterId: mId, contactId: cKli, role: "KLIENT" }],
+      expenses: [
+        { id: eLate, userId: uId, matterId: mId, amount: 200, date: new Date("2026-06-10"), description: "sen", frozenByBillingRunId: null },
+        { id: eEarly, userId: uId, matterId: mId, amount: 100, date: new Date("2026-06-01"), description: "tidig", frozenByBillingRunId: null },
+        { id: eFrozen, userId: uId, matterId: mId, amount: 300, date: new Date("2026-06-05"), description: "fryst", frozenByBillingRunId: uuidv7() },
+        { id: eOutside, userId: uId, matterId: mId, amount: 400, date: new Date("2026-05-01"), description: "utanför period", frozenByBillingRunId: null },
+      ],
+    }, async () => {});
+    const repo = new InMemoryExpenseRepository(store);
+
+    // listUnfrozenForMatter: bara de ofrysta, date asc (ej den frusna)
+    const unfrozen = await repo.listUnfrozenForMatter(mId);
+    expect(unfrozen.map((e) => e.id)).toEqual([eOutside, eEarly, eLate]); // 2026-05-01 < 06-01 < 06-10
+
+    // freezeForMatter: fryser alla ofrysta → inga ofrysta kvar
+    await repo.freezeForMatter(mId, uuidv7(), new Date("2026-06-30"));
+    expect(await repo.listUnfrozenForMatter(mId)).toHaveLength(0);
+
+    // listForLawyerInPeriod: juni-perioden, date asc, med KLIENT-namn på ärendet
+    const rows = await repo.listForLawyerInPeriod("org-1", uId, new Date("2026-06-01"), new Date("2026-06-30"));
+    expect(rows.map((e) => e.id)).toEqual([eEarly, eFrozen, eLate]); // eOutside (maj) exkluderas
+    expect(rows[0]!.matter?.contacts[0]?.contact.name).toBe("Klient AB");
+  });
+});
+
+describe("ExpenseRepository — frysning + perLawyer-period (Drizzle/pglite)", () => {
+  let handle: TestDbHandle;
+  beforeAll(async () => { handle = await createTestDb(); });
+  afterAll(async () => { await handle.close(); });
+
+  it("listUnfrozenForMatter + freezeForMatter + listForLawyerInPeriod", async () => {
+    const db = handle.db;
+    const org = uuidv7();
+    const mId = uuidv7();
+    const uId = uuidv7();
+    const cKli = uuidv7();
+    const eEarly = uuidv7(), eLate = uuidv7(), eFrozen = uuidv7(), eOutside = uuidv7();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const v = (o: Record<string, unknown>) => ({ version: 1, ...o }) as any;
+    await db.insert(matters).values(v({ id: mId, organizationId: org, matterNumber: "2026-1", title: "T", paymentMethod: "PRIVAT" }));
+    await db.insert(users).values(v({ id: uId, organizationId: org, email: "a@x", name: "Anna" }));
+    await db.insert(contacts).values(v({ id: cKli, organizationId: org, name: "Klient AB", contactType: "COMPANY" }));
+    await db.insert(matterContacts).values(v({ id: uuidv7(), matterId: mId, contactId: cKli, role: "KLIENT" }));
+    await db.insert(expenses).values(v({ id: eLate, userId: uId, matterId: mId, amount: 200, date: new Date("2026-06-10"), description: "sen" }));
+    await db.insert(expenses).values(v({ id: eEarly, userId: uId, matterId: mId, amount: 100, date: new Date("2026-06-01"), description: "tidig" }));
+    await db.insert(expenses).values(v({ id: eFrozen, userId: uId, matterId: mId, amount: 300, date: new Date("2026-06-05"), description: "fryst", frozenByBillingRunId: uuidv7() }));
+    await db.insert(expenses).values(v({ id: eOutside, userId: uId, matterId: mId, amount: 400, date: new Date("2026-05-01"), description: "utanför" }));
+    const repo = new DrizzleExpenseRepository(db as unknown as AppDb);
+
+    // listUnfrozenForMatter: ofrysta (eLate/eEarly/eOutside), date asc
+    expect((await repo.listUnfrozenForMatter(mId)).map((e) => e.id)).toEqual([eOutside, eEarly, eLate]);
+
+    // freezeForMatter: fryser alla ofrysta i ärendet
+    await repo.freezeForMatter(mId, uuidv7(), new Date("2026-06-30"));
+    expect(await repo.listUnfrozenForMatter(mId)).toHaveLength(0);
+
+    // listForLawyerInPeriod: juni → eEarly/eFrozen/eLate (date asc), KLIENT-namn joinas
+    const rows = await repo.listForLawyerInPeriod(org, uId, new Date("2026-06-01"), new Date("2026-06-30"));
+    expect(rows.map((e) => e.id)).toEqual([eEarly, eFrozen, eLate]);
+    expect(rows[0]!.matter?.contacts[0]?.contact.name).toBe("Klient AB");
+    expect(rows[0]!.matter?.paymentMethod).toBe("PRIVAT");
   });
 });
