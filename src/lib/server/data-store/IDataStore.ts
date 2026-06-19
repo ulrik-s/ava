@@ -52,63 +52,105 @@ export interface ClaimOpts {
 //   type MatterRow = z.infer<typeof matterSchema>
 //   export type MatterDelegate = Delegate<MatterRow>
 
-// ENDA kvarvarande `no-explicit-any`-undantaget i src efter #47. `args: any`
-// på delegate-metoderna är den flytande Prisma-stil-query-ytan (where/select/
-// include) som inte går att typa exakt utan en massiv router-omskrivning —
-// det egna query-typsystemet spåras separat. `no-explicit-any` är `error`
-// överallt annars (ratchet); detta block är det medvetna, dokumenterade
-// undantaget. Returtyperna är däremot typade (`Joined<Row>`, #39) så branded
-// id:n flödar ut även om query-INPUT förblir `any` här.
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 /**
  * Kända relations-/join-fält som `include` kan lägga på en rad.
  *
- * Uppräknade som optional `any` — INTE en `[k: string]: any`-index-signatur —
- * eftersom en string-index-signatur tvättar bort Row:s EGNA fälttyper (särskilt
- * branded id:n, [[ids]]) till `any` i intersektionen. Med en uppräkning behåller
- * `Joined<Matter>["id"]` sin `MatterId`-typ, medan joinade fält fortsatt är `any`
- * (vi typar inte de exakta include-formerna här — det vore router-omskrivningen).
+ * Uppräknade som optional `unknown` — INTE en `[k: string]: unknown`-index-
+ * signatur — eftersom en string-index-signatur tvättar bort Row:s EGNA fälttyper
+ * (särskilt branded id:n, [[ids]]) i intersektionen. Med en uppräkning behåller
+ * `Joined<Matter>["id"]` sin `MatterId`-typ. De joinade fälten är `unknown` (vi
+ * typar inte de exakta include-formerna här — det vore router-omskrivningen);
+ * caller:n narrowar/castar till sin egen `WithRelations`-typ.
  */
 export interface JoinedRelations {
-  matter?: any; contact?: any; contacts?: any; matterLinks?: any;
-  children?: any; parent?: any; documents?: any; document?: any;
-  timeEntries?: any; expenses?: any; payments?: any; invoice?: any;
-  folder?: any; paymentPlan?: any; billingRun?: any; reminders?: any;
-  accontoInvoice?: any; finalInvoice?: any; creditNote?: any;
-  uploadedBy?: any; recordedBy?: any; createdBy?: any; checkedBy?: any;
-  author?: any; serviceNotes?: any;
-  user?: any; emails?: any; _count?: any;
+  matter?: unknown; contact?: unknown; contacts?: unknown; matterLinks?: unknown;
+  children?: unknown; parent?: unknown; documents?: unknown; document?: unknown;
+  timeEntries?: unknown; expenses?: unknown; payments?: unknown; invoice?: unknown;
+  folder?: unknown; paymentPlan?: unknown; billingRun?: unknown; reminders?: unknown;
+  accontoInvoice?: unknown; finalInvoice?: unknown; creditNote?: unknown;
+  uploadedBy?: unknown; recordedBy?: unknown; createdBy?: unknown; checkedBy?: unknown;
+  author?: unknown; serviceNotes?: unknown;
+  user?: unknown; emails?: unknown; _count?: unknown;
 }
 
 /**
  * Output-typ för en delegate-fråga: basraden (`Row`, från Zod-schemat) plus
  * de optionella relations-fälten. Se `JoinedRelations` för varför det inte är
- * en index-signatur (branded id:n skulle annars tvättas bort till `any`).
+ * en index-signatur (branded id:n skulle annars tvättas bort).
  */
 export type Joined<Row> = Row & JoinedRelations;
 
-export interface Delegate<Row = any> {
-  findUnique(args: any): Promise<Joined<Row> | null>;
-  findUniqueOrThrow(args: any): Promise<Joined<Row>>;
-  findFirst(args?: any): Promise<Joined<Row> | null>;
-  findFirstOrThrow(args?: any): Promise<Joined<Row>>;
-  findMany(args?: any): Promise<Joined<Row>[]>;
-  // Skriv-args: `data`/`create`/`update` typas mot `Partial<Row>` så
-  // write-literals (inkl. enum-fält) typkollas (#24). `where`/`include`/`select`
-  // hålls lösa (flytande query-yta).
-  create(args: { data: Partial<Row>; include?: unknown; select?: unknown }): Promise<Joined<Row>>;
-  update(args: { where: unknown; data: Partial<Row>; include?: unknown; select?: unknown }): Promise<Joined<Row>>;
-  updateMany(args: { where?: unknown; data: Partial<Row> }): Promise<{ count: number }>;
-  upsert(args: { where: unknown; create: Partial<Row>; update: Partial<Row> }): Promise<Joined<Row>>;
-  delete(args: any): Promise<Joined<Row>>;
-  deleteMany(args?: any): Promise<{ count: number }>;
-  count(args?: any): Promise<number>;
-  aggregate(args: any): Promise<any>;
-  $queryRaw?: (...args: any[]) => Promise<any>;
-}
-/* eslint-enable @typescript-eslint/no-explicit-any */
+// ─── Typad query-input (#562, ADR 0026) ──────────────────────────────────
+// Ersätter den gamla `args: any`-ytan. Den enda kvarvarande lösheten är
+// `Record<string, unknown>`-escape-hatchen för relations-filter (vars relaterade
+// rad-typ delegaten inte känner generiskt) + include/select-former. INGEN
+// explicit `any` kvar — `no-explicit-any` är `error` även här.
 
+/** Operatorer query-engine:n stödjer på ett fält (Prisma-subset). */
+export interface WhereOps {
+  equals?: unknown; not?: unknown;
+  in?: readonly unknown[]; notIn?: readonly unknown[];
+  lt?: unknown; lte?: unknown; gt?: unknown; gte?: unknown;
+  contains?: string; startsWith?: string; endsWith?: string;
+  mode?: "insensitive" | "default";
+  some?: WhereInput; none?: WhereInput; every?: WhereInput;
+}
+
+/**
+ * Filter-shape. Fält-nycklarna hintas mot `Row` (autocomplete), men värdena är
+ * `unknown` — ett fält kan vara ett direkt värde, ett `WhereOps`-objekt eller
+ * ett nästlat relations-filter, och repos:en skickar ofta OBRANDADE id-strängar
+ * (metod-params är `string`, inte `MatterId`). `Record<string, unknown>`-escapen
+ * tillåter relations-nycklar (`{ matter: { organizationId } }`) utöver Row:s
+ * egna. INGEN `any` — query-engine:n validerar formen i runtime.
+ */
+export type WhereInput<Row = Record<string, unknown>> =
+  & { [K in keyof Row]?: unknown }
+  & { OR?: readonly WhereInput<Row>[]; AND?: readonly WhereInput<Row>[]; NOT?: WhereInput<Row> }
+  & Record<string, unknown>;
+
+export type OrderDir = "asc" | "desc";
+export type OrderByInput<Row = Record<string, unknown>> =
+  | ({ [K in keyof Row]?: OrderDir } & Record<string, OrderDir>)
+  | Array<{ [K in keyof Row]?: OrderDir } & Record<string, OrderDir>>;
+
+export interface FindArgs<Row = Record<string, unknown>> {
+  where?: WhereInput<Row>;
+  orderBy?: OrderByInput<Row>;
+  skip?: number;
+  take?: number;
+  select?: Record<string, unknown>;
+  include?: Record<string, unknown>;
+  distinct?: string | readonly string[];
+}
+
+/** `aggregate`-subset (Prisma-stil): `_count`/`_sum`/`_avg`/`_min`/`_max`. */
+export interface AggregateArgs {
+  where?: WhereInput;
+  _count?: true | Record<string, true>;
+  _sum?: Record<string, true>;
+  _avg?: Record<string, true>;
+  _min?: Record<string, true>;
+  _max?: Record<string, true>;
+}
+
+export interface Delegate<Row = Record<string, unknown>> {
+  findUnique(args: FindArgs<Row>): Promise<Joined<Row> | null>;
+  findUniqueOrThrow(args: FindArgs<Row>): Promise<Joined<Row>>;
+  findFirst(args?: FindArgs<Row>): Promise<Joined<Row> | null>;
+  findFirstOrThrow(args?: FindArgs<Row>): Promise<Joined<Row>>;
+  findMany(args?: FindArgs<Row>): Promise<Joined<Row>[]>;
+  // Skriv-args: `data`/`create`/`update` typas mot `Partial<Row>` så
+  // write-literals (inkl. enum-fält) typkollas (#24).
+  create(args: { data: Partial<Row>; include?: Record<string, unknown>; select?: Record<string, unknown> }): Promise<Joined<Row>>;
+  update(args: { where: WhereInput<Row>; data: Partial<Row>; include?: Record<string, unknown>; select?: Record<string, unknown> }): Promise<Joined<Row>>;
+  updateMany(args: { where?: WhereInput<Row>; data: Partial<Row> }): Promise<{ count: number }>;
+  upsert(args: { where: WhereInput<Row>; create: Partial<Row>; update: Partial<Row> }): Promise<Joined<Row>>;
+  delete(args: FindArgs<Row>): Promise<Joined<Row>>;
+  deleteMany(args?: FindArgs<Row>): Promise<{ count: number }>;
+  count(args?: FindArgs<Row>): Promise<number>;
+  aggregate(args: AggregateArgs): Promise<Record<string, unknown>>;
+}
 // Per-entitet-delegate: binder `Row` (branded id:n flödar ut via `Joined<Row>`).
 // In-memory-impl:en (`ReadOnlyDelegate<T> implements Delegate<T>`) satisfierar
 // dessa, så `LocalStore` wirar dem TYPADE utan casts (#typing). Den enda kvar-
