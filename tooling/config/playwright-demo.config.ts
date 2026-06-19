@@ -14,7 +14,7 @@ const projectRoot = path.resolve(__dirname, "..", "..");
  */
 export default defineConfig({
   testDir: path.join(projectRoot, "test/e2e"),
-  testMatch: /demo-invoice-document\.spec\.ts$/,
+  testMatch: /demo-(invoice-document|login)\.spec\.ts$/,
   timeout: 90_000,
   expect: { timeout: 15_000 },
   fullyParallel: false,
