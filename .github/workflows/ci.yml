@@ -226,3 +226,44 @@ jobs:
           bun-version: latest
       - run: bun install --frozen-lockfile
       - run: bun run build:demo
+
+  # ───────────────── Demo E2E (browser-smoke) ─────────────────
+  # `build:demo` ovan bevisar att demon BYGGER — men inte att den LADDAR i en
+  # browser. Två produktions-buggar slank igenom just därför (#550/#552: demon
+  # fastnade på "AVA Laddar…"). Det här jobbet serverar den byggda out/ och kör
+  # en deterministisk render-smoke (färsk besökare → /login renderar, fastnar
+  # inte på platshållaren). Det tyngre faktura-flödet (demo-invoice-document)
+  # körs i `test:all` lokalt — här hålls CI-gaten snabb + hermetisk. (Kör på PR;
+  # INTE required check — ingen branch-protection-ändring.)
+  demo-e2e:
+    name: Demo E2E (browser-smoke)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bun run build:demo
+      - run: bun run e2e:install
+      - name: Servera out/ + kör demo render-smoke
+        run: |
+          bun tooling/scripts/serve-demo-static.ts &
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:8799/ava/login/ >/dev/null && break
+            sleep 1
+          done
+          AVA_DEMO_BASE_URL=http://localhost:8799/ava \
+            npx playwright test test/e2e/demo-login.spec.ts \
+            --config tooling/config/playwright-demo.config.ts
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-demo-report
+          path: reports/playwright-demo/
