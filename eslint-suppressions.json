@@ -74,19 +74,9 @@
       "count": 3
     }
   },
-  "src/lib/server/repositories/drizzle-invoice-repository.ts": {
-    "no-restricted-syntax": {
-      "count": 5
-    }
-  },
   "src/lib/server/repositories/drizzle-org-preference-repository.ts": {
     "no-restricted-syntax": {
       "count": 2
-    }
-  },
-  "src/lib/server/repositories/drizzle-payment-plan-repository.ts": {
-    "no-restricted-syntax": {
-      "count": 1
     }
   },
   "src/lib/server/repositories/drizzle-repositories.ts": {

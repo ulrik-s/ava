@@ -18,11 +18,12 @@ import type {
   CalendarEventKind, CalendarEventVisibility, TaskPriority, TaskStatus,
 } from "@/lib/shared/schemas/calendar";
 import type {
-  BillingRunRecipient, BillingRunStatus, BillingRunType, ContactType, ExpenseKind, MatterRole,
-  MatterStatus, PaymentMethod, ReminderType, SuggestionStatus,
+  BillingRunRecipient, BillingRunStatus, BillingRunType, ContactType, ExpenseKind, InvoiceStatus,
+  InvoiceType, MatterRole, MatterStatus, PaymentMethod, PaymentPlanStatus, ReminderType,
+  SuggestionStatus,
 } from "@/lib/shared/schemas/enums";
 import type {
-  BillingRunId, CalendarEventId, ConflictCheckId, ContactId, DocumentFolderId, DocumentId,
+  AccontoDeductionId, BillingRunId, CalendarEventId, ConflictCheckId, ContactId, DocumentFolderId, DocumentId,
   DocumentTemplateId, ExpenseId, InvoiceDispatchId, InvoiceId, MatterContactId, MatterEventSuggestionId,
   MatterId, OrganizationId, PaymentId, PaymentPlanId, PaymentPlanReminderId, ServiceNoteId, TaskId,
   TimeEntryId, UserId, WriteOffId,
@@ -174,17 +175,18 @@ export const expenses = pgTable("expenses", {
 
 export const invoices = pgTable("invoices", {
   ...baseColumns,
-  matterId: uuid("matter_id").notNull(),
+  id: uuid("id").primaryKey().$type<InvoiceId>(),
+  matterId: uuid("matter_id").notNull().$type<MatterId>(),
   amount: ore("amount").notNull(),
-  status: text("status").notNull().default("DRAFT"),
-  invoiceType: text("invoice_type").notNull().default("STANDARD"),
+  status: text("status").notNull().default("DRAFT").$type<InvoiceStatus>(),
+  invoiceType: text("invoice_type").notNull().default("STANDARD").$type<InvoiceType>(),
   invoiceNumber: text("invoice_number"),
   ocrReference: text("ocr_reference"),
   fortnoxId: text("fortnox_id"),
   invoiceDate: timestamp("invoice_date", { withTimezone: true }).notNull(),
   dueDate: timestamp("due_date", { withTimezone: true }),
   notes: text("notes"),
-  creditedInvoiceId: uuid("credited_invoice_id"),
+  creditedInvoiceId: uuid("credited_invoice_id").$type<InvoiceId>(),
 }, (t) => [index("invoices_matter_idx").on(t.matterId)]);
 
 export const payments = pgTable("payments", {
@@ -226,11 +228,12 @@ export const invoiceDispatches = pgTable("invoice_dispatches", {
 
 export const paymentPlans = pgTable("payment_plans", {
   ...baseColumns,
-  invoiceId: uuid("invoice_id").notNull(),
+  id: uuid("id").primaryKey().$type<PaymentPlanId>(),
+  invoiceId: uuid("invoice_id").notNull().$type<InvoiceId>(),
   monthlyAmount: ore("monthly_amount").notNull(),
   dayOfMonth: integer("day_of_month").notNull(),
   startDate: timestamp("start_date", { withTimezone: true }).notNull(),
-  status: text("status").notNull().default("ACTIVE"),
+  status: text("status").notNull().default("ACTIVE").$type<PaymentPlanStatus>(),
   notes: text("notes"),
 }, (t) => [index("payment_plans_invoice_idx").on(t.invoiceId)]);
 
@@ -245,8 +248,9 @@ export const paymentPlanReminders = pgTable("payment_plan_reminders", {
 
 export const accontoDeductions = pgTable("acconto_deductions", {
   ...baseColumns,
-  finalInvoiceId: uuid("final_invoice_id").notNull(),
-  accontoInvoiceId: uuid("acconto_invoice_id").notNull(),
+  id: uuid("id").primaryKey().$type<AccontoDeductionId>(),
+  finalInvoiceId: uuid("final_invoice_id").notNull().$type<InvoiceId>(),
+  accontoInvoiceId: uuid("acconto_invoice_id").notNull().$type<InvoiceId>(),
 });
 
 export const billingRuns = pgTable("billing_runs", {
