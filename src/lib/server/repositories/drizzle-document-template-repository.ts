@@ -4,6 +4,7 @@
  */
 
 import { and, asc, eq, isNull } from "drizzle-orm";
+import { asId } from "@/lib/shared/schemas/ids";
 import type { DocumentTemplate } from "@/lib/shared/schemas/misc";
 import { documentTemplates, users } from "../db/schema";
 import type { AppDb } from "../db/types";
@@ -29,13 +30,13 @@ export class DrizzleDocumentTemplateRepository
       })
       .from(documentTemplates)
       .leftJoin(users, eq(documentTemplates.createdById, users.id))
-      .where(and(eq(documentTemplates.organizationId, organizationId), isNull(documentTemplates.deletedAt)))
+      .where(and(eq(documentTemplates.organizationId, asId<"OrganizationId">(organizationId)), isNull(documentTemplates.deletedAt)))
       .orderBy(asc(documentTemplates.category), asc(documentTemplates.name));
-    return rows.map((r) => ({
-      id: r.id as string, name: r.name as string,
-      description: (r.description as string | null) ?? null, category: (r.category as string | null) ?? null,
-      createdAt: r.createdAt as Date, updatedAt: (r.updatedAt as Date | null) ?? null,
-      createdBy: r.cbName ? { name: r.cbName as string } : null,
+    return rows.map((r): DocumentTemplateListRow => ({
+      id: r.id, name: r.name,
+      description: r.description ?? null, category: r.category ?? null,
+      createdAt: r.createdAt, updatedAt: r.updatedAt ?? null,
+      createdBy: r.cbName ? { name: r.cbName } : null,
     }));
   }
 
@@ -43,9 +44,10 @@ export class DrizzleDocumentTemplateRepository
     const rows = await this.db
       .select({ tpl: documentTemplates, cbName: users.name }).from(documentTemplates)
       .leftJoin(users, eq(documentTemplates.createdById, users.id))
-      .where(and(eq(documentTemplates.id, id), eq(documentTemplates.organizationId, organizationId), isNull(documentTemplates.deletedAt)))
+      .where(and(eq(documentTemplates.id, asId<"DocumentTemplateId">(id)), eq(documentTemplates.organizationId, asId<"OrganizationId">(organizationId)), isNull(documentTemplates.deletedAt)))
       .limit(1);
-    if (!rows[0]) return null;
-    return { ...(rows[0].tpl as object), createdBy: rows[0].cbName ? { name: rows[0].cbName as string } : null } as unknown as DocumentTemplateRow;
+    const row = rows[0];
+    if (!row) return null;
+    return { ...row.tpl, createdBy: row.cbName ? { name: row.cbName } : null };
   }
 }

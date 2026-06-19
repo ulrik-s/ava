@@ -5,7 +5,7 @@
  * ägarskaps-vakten (id + userId + organizationId).
  */
 
-import type { Task } from "@/lib/shared/schemas/calendar";
+import type { Task, TaskStatus } from "@/lib/shared/schemas/calendar";
 import type { Repository } from "./types";
 
 /** Task + ärende-subsetet listvyn visar. */
@@ -15,7 +15,7 @@ export interface TaskListRow extends Task {
 
 /** Filter för `listForUser`. */
 export interface TaskListFilter {
-  status?: string | undefined;
+  status?: TaskStatus | undefined;
   matterId?: string | undefined;
 }
 

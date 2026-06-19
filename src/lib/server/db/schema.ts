@@ -13,10 +13,11 @@
 
 import { relations } from "drizzle-orm";
 import { bigint, bigserial, index, integer, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import type { TaskPriority, TaskStatus } from "@/lib/shared/schemas/calendar";
 import type { ExpenseKind, ReminderType } from "@/lib/shared/schemas/enums";
 import type {
-  BillingRunId, ExpenseId, InvoiceId, MatterId, PaymentId, PaymentPlanId, PaymentPlanReminderId,
-  TimeEntryId, UserId, WriteOffId,
+  BillingRunId, DocumentTemplateId, ExpenseId, InvoiceId, MatterId, OrganizationId, PaymentId,
+  PaymentPlanId, PaymentPlanReminderId, ServiceNoteId, TaskId, TimeEntryId, UserId, WriteOffId,
 } from "@/lib/shared/schemas/ids";
 import { baseColumns, boolDefault, orgScopedColumns } from "./columns";
 
@@ -345,22 +346,26 @@ export const calendarEvents = pgTable("calendar_events", {
 
 export const tasks = pgTable("tasks", {
   ...orgScopedColumns,
-  userId: uuid("user_id").notNull(),
+  id: uuid("id").primaryKey().$type<TaskId>(),
+  organizationId: uuid("organization_id").notNull().$type<OrganizationId>(),
+  userId: uuid("user_id").notNull().$type<UserId>(),
   title: text("title").notNull(),
   description: text("description"),
-  status: text("status").notNull().default("TODO"),
-  priority: text("priority").notNull().default("MEDIUM"),
+  status: text("status").notNull().default("TODO").$type<TaskStatus>(),
+  priority: text("priority").notNull().default("MEDIUM").$type<TaskPriority>(),
   dueAt: timestamp("due_at", { withTimezone: true }),
   completedAt: timestamp("completed_at", { withTimezone: true }),
-  matterId: uuid("matter_id"),
+  matterId: uuid("matter_id").$type<MatterId>(),
 }, (t) => [index("tasks_user_idx").on(t.userId)]);
 
 // ─── Tjänsteanteckning / Preferenser / Mallar / Jävssök ──────────────────────
 
 export const serviceNotes = pgTable("service_notes", {
   ...orgScopedColumns,
-  matterId: uuid("matter_id").notNull(),
-  authorId: uuid("author_id").notNull(),
+  id: uuid("id").primaryKey().$type<ServiceNoteId>(),
+  organizationId: uuid("organization_id").notNull().$type<OrganizationId>(),
+  matterId: uuid("matter_id").notNull().$type<MatterId>(),
+  authorId: uuid("author_id").notNull().$type<UserId>(),
   date: text("date").notNull(),
   time: text("time").notNull(),
   text: text("text").notNull(),
@@ -383,11 +388,13 @@ export const orgPreferences = pgTable("org_preferences", {
 
 export const documentTemplates = pgTable("document_templates", {
   ...orgScopedColumns,
+  id: uuid("id").primaryKey().$type<DocumentTemplateId>(),
+  organizationId: uuid("organization_id").notNull().$type<OrganizationId>(),
   name: text("name").notNull(),
   description: text("description"),
   category: text("category"),
   content: text("content").notNull(),
-  createdById: uuid("created_by_id").notNull(),
+  createdById: uuid("created_by_id").notNull().$type<UserId>(),
 });
 
 export const conflictChecks = pgTable("conflict_checks", {

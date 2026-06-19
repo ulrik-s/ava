@@ -4,6 +4,7 @@
  */
 
 import { and, desc, eq, isNull } from "drizzle-orm";
+import { asId } from "@/lib/shared/schemas/ids";
 import type { ServiceNote } from "@/lib/shared/schemas/service-note";
 import { matters, serviceNotes, users } from "../db/schema";
 import type { AppDb } from "../db/types";
@@ -21,23 +22,23 @@ export class DrizzleServiceNoteRepository extends DrizzleRepository<ServiceNote>
       .innerJoin(matters, eq(serviceNotes.matterId, matters.id))
       .leftJoin(users, eq(serviceNotes.authorId, users.id))
       .where(and(
-        eq(serviceNotes.matterId, matterId),
+        eq(serviceNotes.matterId, asId<"MatterId">(matterId)),
         eq(matters.organizationId, organizationId),
         isNull(serviceNotes.deletedAt),
       ))
       .orderBy(desc(serviceNotes.createdAt));
-    return rows.map((r) => ({
-      ...(r.note as object),
-      author: r.aId ? { id: r.aId, name: r.aName as string } : null,
-    })) as unknown as ServiceNoteRow[];
+    return rows.map((r): ServiceNoteRow => ({
+      ...r.note,
+      author: r.aId ? { id: r.aId, name: r.aName ?? "" } : null,
+    }));
   }
 
   async getByIdInOrg(id: string, organizationId: string): Promise<ServiceNote | null> {
     const rows = await this.db
       .select({ note: serviceNotes }).from(serviceNotes)
       .innerJoin(matters, eq(serviceNotes.matterId, matters.id))
-      .where(and(eq(serviceNotes.id, id), eq(matters.organizationId, organizationId), isNull(serviceNotes.deletedAt)))
+      .where(and(eq(serviceNotes.id, asId<"ServiceNoteId">(id)), eq(matters.organizationId, organizationId), isNull(serviceNotes.deletedAt)))
       .limit(1);
-    return this.asRow(rows[0]?.note);
+    return rows[0]?.note ?? null;
   }
 }
