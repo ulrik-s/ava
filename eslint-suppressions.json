@@ -9,22 +9,7 @@
       "count": 1
     }
   },
-  "src/lib/server/data-store/in-memory/local-store.ts": {
-    "no-restricted-syntax": {
-      "count": 2
-    }
-  },
-  "src/lib/server/data-store/in-memory/writable-delegate.ts": {
-    "no-restricted-syntax": {
-      "count": 3
-    }
-  },
   "src/lib/server/http/server-context.ts": {
-    "no-restricted-syntax": {
-      "count": 1
-    }
-  },
-  "src/lib/shared/demo-source.ts": {
     "no-restricted-syntax": {
       "count": 1
     }

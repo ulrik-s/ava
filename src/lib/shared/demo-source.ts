@@ -47,13 +47,6 @@ export interface DemoSource {
   orgPreferences?: readonly Record<string, unknown>[];
 }
 
-interface RawMatterContact {
-  id: string;
-  matterId: string;
-  contactId: string;
-  [k: string]: unknown;
-}
-
 /**
  * Pre-baka enkla relations-joins på en `DemoSource`
  * (matterContact.contact/matter, document/timeEntry/expense/invoice.matter)
@@ -68,10 +61,10 @@ export function prebakeJoins(source: DemoSource): DemoSource {
   const mattersById = new Map((out.matters ?? []).map((m) => [(m as { id: string }).id, m]));
 
   if (out.matterContacts) {
-    out.matterContacts = (out.matterContacts as unknown as RawMatterContact[]).map((mc) => ({
+    out.matterContacts = out.matterContacts.map((mc) => ({
       ...mc,
-      contact: contactsById.get(mc.contactId) ?? null,
-      matter: mattersById.get(mc.matterId) ?? null,
+      contact: contactsById.get(mc.contactId as string) ?? null,
+      matter: mattersById.get(mc.matterId as string) ?? null,
     })) as readonly Record<string, unknown>[];
   }
 
