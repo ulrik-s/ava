@@ -54,9 +54,26 @@ export function DemoClient({
   // Ref istället för state — vi vill inte trigga rerender när flaggan sätts.
   const autoLoadAttempted = useRef(false);
 
-  const matters = (source.matters ?? []) as unknown as MatterLike[];
-  const contacts = (source.contacts ?? []) as unknown as ContactLike[];
-  const users = (source.users ?? []) as unknown as UserLike[];
+  // `DemoSource`-fälten är medvetet otypad JSON (`Record<string, unknown>`) —
+  // narrowa varje fält till vy-typen vid konsumtions-gränsen.
+  const matters: readonly MatterLike[] = (source.matters ?? []).map((m) => ({
+    id: m.id as string,
+    matterNumber: m.matterNumber as string,
+    title: m.title as string,
+    status: m.status as string,
+  }));
+  const contacts: readonly ContactLike[] = (source.contacts ?? []).map((c) => ({
+    id: c.id as string,
+    name: c.name as string,
+    contactType: c.contactType as string,
+    email: (c.email ?? null) as string | null,
+  }));
+  const users: readonly UserLike[] = (source.users ?? []).map((u) => ({
+    id: u.id as string,
+    email: u.email as string,
+    name: u.name as string,
+    role: u.role as string,
+  }));
 
   async function handleLoad(): Promise<void> {
     if (!url.trim()) return;
@@ -140,7 +157,7 @@ function DemoStatusBanners({ status, error }: StatusBannersProps) {
   );
 }
 
-interface ResultsProps { matters: MatterLike[]; contacts: ContactLike[]; users: UserLike[] }
+interface ResultsProps { matters: readonly MatterLike[]; contacts: readonly ContactLike[]; users: readonly UserLike[] }
 
 /** Resultat-vyn när demon laddats: summering + listor per entitet. */
 function DemoResults({ matters, contacts, users }: ResultsProps) {

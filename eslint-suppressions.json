@@ -9,11 +9,6 @@
       "count": 4
     }
   },
-  "src/app/demo/_demo-client.tsx": {
-    "no-restricted-syntax": {
-      "count": 3
-    }
-  },
   "src/app/matters/[id]/_billing-dialog.tsx": {
     "no-restricted-syntax": {
       "count": 1
