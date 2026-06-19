@@ -6,8 +6,8 @@ interface Payment {
   id: string;
   amount: number;
   paidAt: Date | string;
-  note: string | null;
-  recordedBy: { name: string };
+  note?: string | null | undefined;
+  recordedBy: { name: string } | null;
 }
 
 interface Props {
@@ -35,7 +35,7 @@ export function PaymentsTable({ payments, paidSum }: Props) {
             {payments.map((p) => (
               <tr key={p.id}>
                 <td className="py-2">{new Date(p.paidAt).toLocaleDateString("sv-SE")}</td>
-                <td className="py-2 text-gray-600">{p.recordedBy.name}</td>
+                <td className="py-2 text-gray-600">{p.recordedBy?.name ?? "—"}</td>
                 <td className="py-2 text-gray-600">{p.note ?? "—"}</td>
                 <td className="py-2 text-right font-mono">{formatCurrency(p.amount)}</td>
               </tr>

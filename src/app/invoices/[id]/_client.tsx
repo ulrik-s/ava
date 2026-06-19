@@ -6,7 +6,7 @@
  */
 
 import type { inferRouterOutputs } from "@trpc/server";
-import { type ComponentProps, useState } from "react";
+import { useState } from "react";
 import type { DownloadClient } from "@/lib/client/backend/load-document-blob";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { useRouteId } from "@/lib/client/demo/use-route-id";
@@ -76,7 +76,7 @@ function useInvoiceDetail(id: string) {
 }
 type InvoiceDetailState = ReturnType<typeof useInvoiceDetail>;
 
-type WriteOffRow = { amount: number; writtenOffAt?: string | Date; reason?: string | null };
+type WriteOffRow = Inv["writeOffs"][number];
 interface LedgerView {
   paidSum: number; writtenOffSum: number; writeOffs: WriteOffRow[]; outstanding: number;
   accontoDeductions: AccontoDeductionRow[]; accontoDeductionTotal: number; netAmount: number;
@@ -85,12 +85,12 @@ interface LedgerView {
 /** Kundfordrings-ledger (ADR 0007): outstanding = belopp − betalt − krediterat − avskrivet. */
 function invoiceLedger(inv: Inv): LedgerView {
   const paidSum = inv.payments.reduce((s: number, p: { amount: number }) => s + p.amount, 0);
-  const writeOffs = (inv.writeOffs ?? []) as unknown as WriteOffRow[];
+  const writeOffs = inv.writeOffs ?? [];
   const writtenOffSum = writeOffs.reduce((s, w) => s + w.amount, 0);
   const creditedSum = Math.abs(creditNoteOf(inv)?.amount ?? 0);
   const { outstanding } = computeInvoiceLedger(inv.amount, paidSum, creditedSum, writtenOffSum);
   const accontoDeductions = accontoDeductionsOf(inv);
-  const accontoDeductionTotal = accontoDeductions.reduce((s, d) => s + d.accontoInvoice.amount, 0);
+  const accontoDeductionTotal = accontoDeductions.reduce((s, d) => s + (d.accontoInvoice?.amount ?? 0), 0);
   return { paidSum, writtenOffSum, writeOffs, outstanding, accontoDeductions, accontoDeductionTotal, netAmount: inv.amount - accontoDeductionTotal };
 }
 
@@ -145,12 +145,12 @@ function InvoiceSummaryCard({ inv, ledger, s }: { inv: Inv; ledger: LedgerView; 
 function InvoiceSections({ inv, ledger, onCancelPlan }: { inv: Inv; ledger: LedgerView; onCancelPlan: () => void }) {
   return (
     <>
-      <SpecificationCard timeEntries={(inv.timeEntries ?? []) as unknown as SpecTimeRow[]} expenses={(inv.expenses ?? []) as unknown as SpecExpenseRow[]} />
-      <InvoiceDocumentsCard documents={(inv.documents ?? []) as unknown as InvoiceDocRow[]} />
+      <SpecificationCard timeEntries={inv.timeEntries ?? []} expenses={inv.expenses ?? []} />
+      <InvoiceDocumentsCard documents={inv.documents ?? []} />
       <CreditBanners inv={inv} />
       {inv.paymentPlan && <PaymentPlanCard plan={inv.paymentPlan} onCancel={onCancelPlan} />}
       <FinalInvoiceExtras inv={inv} ledger={ledger} />
-      <PaymentsTable payments={inv.payments as unknown as ComponentProps<typeof PaymentsTable>["payments"]} paidSum={ledger.paidSum} />
+      <PaymentsTable payments={inv.payments} paidSum={ledger.paidSum} />
       <DispatchHistory invoiceId={inv.id} />
       {ledger.writeOffs.length > 0 && <WriteOffsCard writeOffs={ledger.writeOffs} />}
     </>
@@ -200,7 +200,7 @@ function InvoiceModals({ inv, ledger, s }: { inv: Inv; ledger: LedgerView; s: In
   );
 }
 
-function WriteOffsCard({ writeOffs }: { writeOffs: ReadonlyArray<{ amount: number; writtenOffAt?: string | Date; reason?: string | null }> }) {
+function WriteOffsCard({ writeOffs }: { writeOffs: ReadonlyArray<{ amount: number; writtenOffAt?: string | Date; reason?: string | null | undefined }> }) {
   return (
     <div className="bg-white rounded-lg border border-red-200 p-6">
       <h2 className="font-semibold text-red-900 mb-3">Konstaterad kundförlust</h2>
@@ -223,20 +223,14 @@ function WriteOffsCard({ writeOffs }: { writeOffs: ReadonlyArray<{ amount: numbe
 
 type Inv = NonNullable<inferRouterOutputs<AppRouter>["invoice"]["getById"]>;
 
-// ── Boundary-vyer för join-fält (router-read returnerar `unknown`/`{}` på
-//    relationer; vi narrowar dem till de former UI:t faktiskt läser). ──
-type AccontoDeductionRow = {
-  id: string;
-  accontoInvoice: { id: string; invoiceDate: string | Date; amount: number };
-};
-type CreditRefView = { id: string; invoiceDate: string | Date; amount: number } | null;
+// Boundary-vyer härleds direkt ur router-outputen (`invoice.getById` bär nu
+// riktiga branded-typer hela vägen, #562) — inga castar behövs.
+type AccontoDeductionRow = Inv["accontoDeductions"][number];
+type CreditRefView = Inv["creditNote"];
 
-const accontoDeductionsOf = (inv: Inv): AccontoDeductionRow[] =>
-  (inv.accontoDeductions ?? []) as unknown as AccontoDeductionRow[];
-const creditNoteOf = (inv: Inv): CreditRefView =>
-  (inv.creditNote ?? null) as unknown as CreditRefView;
-const creditedInvoiceOf = (inv: Inv): CreditRefView =>
-  (inv.creditedInvoice ?? null) as unknown as CreditRefView;
+const accontoDeductionsOf = (inv: Inv): AccontoDeductionRow[] => inv.accontoDeductions ?? [];
+const creditNoteOf = (inv: Inv): CreditRefView => inv.creditNote ?? null;
+const creditedInvoiceOf = (inv: Inv): CreditRefView => inv.creditedInvoice ?? null;
 
 function InvoiceHeader({ inv }: { inv: Inv }) {
   const heading = inv.invoiceType === "ACCONTO" ? "Acconto-faktura"
@@ -366,15 +360,15 @@ function PaymentPlanCard({
   );
 }
 
-type SpecTimeRow = { id: string; date: string | Date; description: string; minutes: number; hourlyRate?: number | null };
-type SpecExpenseRow = { id: string; date: string | Date; description: string; amount: number };
-type InvoiceDocRow = { id: string; fileName: string; documentType?: string | null; createdAt?: string | Date | null; storagePath?: string | null; mimeType?: string | null };
+type SpecTimeRow = Inv["timeEntries"][number];
+type SpecExpenseRow = Inv["expenses"][number];
+type InvoiceDocRow = Inv["documents"][number];
 
 /** Bygg slutfaktura-sammanställningen (#349 C) ur fakturans spec + ledger.
  *  Rådgivningstimmen (rättshjälpstaxa) tas med för rättshjälpsärenden. */
 function buildSettlement(inv: Inv, ledger: LedgerView): MatterSettlement {
-  const times = (inv.timeEntries ?? []) as unknown as SpecTimeRow[];
-  const exps = (inv.expenses ?? []) as unknown as SpecExpenseRow[];
+  const times = inv.timeEntries ?? [];
+  const exps = inv.expenses ?? [];
   const arvodeOre = times.reduce((s, t) => s + Math.round((t.minutes / 60) * (t.hourlyRate ?? 0)), 0);
   const utlaggOre = exps.reduce((s, e) => s + e.amount, 0);
   const m = inv.matter as { paymentMethod?: string | null; taxaHasFTax?: boolean | null } | null;
@@ -549,7 +543,7 @@ function AccontoDeductions({ deductions }: { deductions: AccontoDeductionRow[] }
       <h2 className="font-semibold mb-3">Accontoavdrag</h2>
       <table className="min-w-full text-sm">
         <tbody className="divide-y divide-gray-100">
-          {deductions.map((d: AccontoDeductionRow) => (
+          {deductions.map((d: AccontoDeductionRow) => d.accontoInvoice && (
             <tr key={d.id}>
               <td className="py-2">
                 <EntityLink route="invoices" id={d.accontoInvoice.id} className="text-blue-600 hover:underline">
