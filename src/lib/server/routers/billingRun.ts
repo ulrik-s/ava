@@ -64,10 +64,8 @@ function timeEntryValueOre(minutes: number, hourlyRate: number): number {
 }
 
 async function fetchUnfrozenWork(repos: Repositories, matterId: string): Promise<UnfrozenWork> {
-  const te = await repos.timeEntries.listUnfrozenForMatter(matterId) as unknown as
-    Array<{ id: string; minutes: number; hourlyRate: number; billable: boolean }>;
-  const ex = await repos.expenses.listUnfrozenForMatter(matterId) as unknown as
-    Array<{ id: string; amount: number; billable: boolean; kind?: ExpenseKind }>;
+  const te = await repos.timeEntries.listUnfrozenForMatter(matterId);
+  const ex = await repos.expenses.listUnfrozenForMatter(matterId);
   return { timeEntries: te, expenses: ex.filter((e) => e.kind !== "PRUTNING") };
 }
 
@@ -143,10 +141,8 @@ export const billingRunRouter = router({
     .query(async ({ ctx, input }) => {
       const matter = await ctx.repos.matters.getByIdInOrg(input.matterId, ctx.orgId);
       if (!matter) throw new TRPCError({ code: "NOT_FOUND", message: "Ärendet finns inte." });
-      const te = (await ctx.repos.timeEntries.listUnfrozenForMatter(input.matterId)) as unknown as
-        Array<{ id: string; description?: string | null; minutes: number; hourlyRate: number; billable: boolean }>;
-      const ex = (await ctx.repos.expenses.listUnfrozenForMatter(input.matterId)) as unknown as
-        Array<{ id: string; description?: string | null; amount: number; billable: boolean; kind?: ExpenseKind }>;
+      const te = await ctx.repos.timeEntries.listUnfrozenForMatter(input.matterId);
+      const ex = await ctx.repos.expenses.listUnfrozenForMatter(input.matterId);
       const priorAccontoSumOre = await sumPriorAccontos(ctx.repos, input.matterId);
       return buildProposal(te, ex, priorAccontoSumOre);
     }),
