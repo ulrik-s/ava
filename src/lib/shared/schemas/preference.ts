@@ -15,7 +15,7 @@ const prefsPayloadSchema = z.record(z.string(), z.unknown());
 export const userPreferenceSchema = z.object({
   id: userPreferenceIdSchema,
   userId: userIdSchema,
-  organizationId: organizationIdSchema.optional(),
+  organizationId: organizationIdSchema.nullish(),
   /** Stabil nyckel: "list.contacts", "list.matters", … (1 per UI-vy). */
   key: z.string(),
   prefs: prefsPayloadSchema,
@@ -31,7 +31,7 @@ export const orgPreferenceSchema = z.object({
   key: z.string(),
   prefs: prefsPayloadSchema,
   /** Admin som satte default:en (audit-spår). */
-  createdById: userIdSchema.optional(),
+  createdById: userIdSchema.nullish(),
   createdAt: z.union([z.date(), z.string()]).optional(),
   updatedAt: z.union([z.date(), z.string()]).optional(),
 }).passthrough();
