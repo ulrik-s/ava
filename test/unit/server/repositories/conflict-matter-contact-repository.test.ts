@@ -94,3 +94,114 @@ describe("Conflict/MatterContact repos — Drizzle (pglite)", () => {
     expect(hist.checks[0]!.checkedBy?.name).toBe("Jurist");
   });
 });
+
+// ─── MatterContactRepository: CRUD-/läs-metoderna (getByIdInOrg, findLink,
+//     listContactsForMatter, linkContact) — paritet in-memory + Drizzle. ───
+
+const ORG2 = "44444444-4444-7444-8444-444444444444";
+const OTHER_ORG = "55555555-5555-7555-8555-555555555555";
+
+describe("MatterContactRepository — läs-/skriv-metoder (in-memory)", () => {
+  const mId = uuidv7();
+  const cKli = uuidv7();
+  const cMot = uuidv7();
+  const linkKli = uuidv7();
+  const linkMot = uuidv7();
+
+  function buildStore(): LocalStore {
+    const source = prebakeJoins({
+      matters: [{ id: mId, organizationId: ORG2, matterNumber: "2026-9", title: "Y" }],
+      contacts: [
+        { id: cKli, organizationId: ORG2, name: "Klient AB", contactType: "COMPANY" },
+        { id: cMot, organizationId: ORG2, name: "Motpart", contactType: "PERSON" },
+      ],
+      matterContacts: [
+        { id: linkKli, matterId: mId, contactId: cKli, role: "KLIENT" },
+        { id: linkMot, matterId: mId, contactId: cMot, role: "MOTPART" },
+      ],
+    } as DemoSource);
+    return new LocalStore(source, async () => {});
+  }
+
+  function repo(store: LocalStore): InMemoryMatterContactRepository {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return new InMemoryMatterContactRepository(store as any);
+  }
+
+  it("getByIdInOrg: hittar i rätt org, null för annan org/saknad id", async () => {
+    const mc = repo(buildStore());
+    const found = await mc.getByIdInOrg(linkKli, ORG2);
+    expect(found?.id).toBe(linkKli);
+    expect(await mc.getByIdInOrg(linkKli, OTHER_ORG)).toBeNull();
+    expect(await mc.getByIdInOrg(uuidv7(), ORG2)).toBeNull();
+  });
+
+  it("findLink: matchar (ärende, kontakt, roll); null vid annan roll", async () => {
+    const mc = repo(buildStore());
+    const link = await mc.findLink(mId, cKli, "KLIENT");
+    expect(link?.id).toBe(linkKli);
+    expect(await mc.findLink(mId, cKli, "MOTPART")).toBeNull();
+  });
+
+  it("listContactsForMatter: returnerar ärendets kopplade kontakter", async () => {
+    const mc = repo(buildStore());
+    const list = await mc.listContactsForMatter(mId);
+    expect(list.map((c) => c.id).sort()).toEqual([cKli, cMot].sort());
+  });
+
+  it("linkContact: skapar länk + går att slå upp via findLink", async () => {
+    const store = buildStore();
+    const mc = repo(store);
+    const cNew = uuidv7();
+    // Lägg in kontakten så enrichment har något att joina mot.
+    await store.contacts.create({ data: { id: cNew, organizationId: ORG2, name: "Vittne", contactType: "PERSON" } as never });
+    const created = await mc.linkContact({ id: uuidv7(), matterId: mId, contactId: cNew, role: "VITTNE" } as never);
+    expect(created.matterId).toBe(mId);
+    expect(created.contactId).toBe(cNew);
+    expect(await mc.findLink(mId, cNew, "VITTNE")).not.toBeNull();
+  });
+});
+
+describe("MatterContactRepository — läs-/skriv-metoder (Drizzle/pglite)", () => {
+  let handle: TestDbHandle;
+  beforeAll(async () => { handle = await createTestDb(); });
+  afterAll(async () => { await handle.close(); });
+
+  it("getByIdInOrg / findLink / listContactsForMatter / linkContact", async () => {
+    const db = handle.db;
+    const org = uuidv7();
+    const mId = uuidv7();
+    const cKli = uuidv7();
+    const cMot = uuidv7();
+    const linkKli = uuidv7();
+    const linkMot = uuidv7();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const v = (o: Record<string, unknown>) => ({ version: 1, ...o }) as any;
+    await db.insert(matters).values(v({ id: mId, organizationId: org, matterNumber: "2026-9", title: "Y" }));
+    await db.insert(contacts).values(v({ id: cKli, organizationId: org, name: "Klient AB", contactType: "COMPANY" }));
+    await db.insert(contacts).values(v({ id: cMot, organizationId: org, name: "Motpart", contactType: "PERSON" }));
+    await db.insert(matterContacts).values(v({ id: linkKli, matterId: mId, contactId: cKli, role: "KLIENT" }));
+    await db.insert(matterContacts).values(v({ id: linkMot, matterId: mId, contactId: cMot, role: "MOTPART" }));
+    const mc = new DrizzleMatterContactRepository(db as unknown as AppDb);
+
+    // getByIdInOrg
+    expect((await mc.getByIdInOrg(linkKli, org))?.id).toBe(linkKli);
+    expect(await mc.getByIdInOrg(linkKli, uuidv7())).toBeNull();
+
+    // findLink
+    expect((await mc.findLink(mId, cKli, "KLIENT"))?.id).toBe(linkKli);
+    expect(await mc.findLink(mId, cKli, "MOTPART")).toBeNull();
+
+    // listContactsForMatter
+    const list = await mc.listContactsForMatter(mId);
+    expect(list.map((c) => c.id).sort()).toEqual([cKli, cMot].sort());
+
+    // linkContact — skapar länk + returnerar med kontakten joinad
+    const cNew = uuidv7();
+    await db.insert(contacts).values(v({ id: cNew, organizationId: org, name: "Vittne", contactType: "PERSON" }));
+    const created = await mc.linkContact({ id: uuidv7(), matterId: mId, contactId: cNew, role: "VITTNE" } as never);
+    expect(created.contactId).toBe(cNew);
+    expect(created.contact.id).toBe(cNew);
+    expect((await mc.findLink(mId, cNew, "VITTNE"))?.id).toBe(created.id);
+  });
+});

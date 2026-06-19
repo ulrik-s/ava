@@ -64,8 +64,14 @@ const FAST = process.argv.includes("--fast");
 // specifikationen och vatRateLabel-varianterna i kostnadsräkningen testade →
 // kostnadsrakning.ts 91%→100% rader, 15/20→20/20 funktioner; lokalt 90.74%
 // rader / 85.64% funktioner. FUNC dras upp en knapp, ~1.5%-marginal behålls;
-// LINE oförändrat — dess marginal är en avsiktlig Node-version-buffert).
-const LINE_FLOOR = 0.889;
+// LINE oförändrat — dess marginal är en avsiktlig Node-version-buffert) → 89.5
+// rader / 84.1 funktioner (#27: MatterContactRepository.getByIdInOrg/findLink/
+// listContactsForMatter/linkContact testade i båda impl:erna —
+// drizzle-matter-contact-repository 68%→100% rader. #518 Fas 5 tog bort väl-
+// testad klient-LLM-kod vilket krympte FUNC-marginalen, så FUNC lämnas vid 84.1
+// (~1.37% marginal). LINE har legat stabilt ≥90.5% i ~5 PR → golvet dras upp
+// till 89.5, ~1.18% marginal).
+const LINE_FLOOR = 0.895;
 const FUNC_FLOOR = 0.841;
 
 /**
