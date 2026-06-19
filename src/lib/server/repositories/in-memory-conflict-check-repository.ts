@@ -3,7 +3,7 @@
  */
 
 import type { ConflictCheck } from "@/lib/shared/schemas/misc";
-import type { Delegate, IDataStore } from "../data-store/IDataStore";
+import type { IDataStore } from "../data-store/IDataStore";
 import type { ConflictCheckRepository, ConflictCheckRow } from "./conflict-check-repository";
 import { InMemoryRepository } from "./in-memory-repository";
 
@@ -13,7 +13,7 @@ export class InMemoryConflictCheckRepository
   extends InMemoryRepository<ConflictCheck>
   implements ConflictCheckRepository {
   constructor(store: ConflictCheckRepoSource, now?: () => Date) {
-    super(store.conflictChecks as unknown as Delegate, now ?? (() => new Date()));
+    super(store.conflictChecks, now ?? (() => new Date()));
   }
 
   async listHistory(page: number, pageSize: number): Promise<{ checks: ConflictCheckRow[]; total: number }> {

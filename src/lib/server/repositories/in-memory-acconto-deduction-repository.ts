@@ -4,7 +4,7 @@
  */
 
 import type { AccontoDeduction } from "@/lib/shared/schemas/billing";
-import type { Delegate, IDataStore } from "../data-store/IDataStore";
+import type { IDataStore } from "../data-store/IDataStore";
 import type { AccontoDeductionRepository } from "./acconto-deduction-repository";
 import { InMemoryRepository } from "./in-memory-repository";
 
@@ -15,6 +15,6 @@ export class InMemoryAccontoDeductionRepository
   extends InMemoryRepository<AccontoDeduction>
   implements AccontoDeductionRepository {
   constructor(store: AccontoDeductionRepoSource, now?: () => Date) {
-    super(store.accontoDeductions as unknown as Delegate, now ?? (() => new Date()));
+    super(store.accontoDeductions, now ?? (() => new Date()));
   }
 }

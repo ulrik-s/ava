@@ -4,7 +4,7 @@
  */
 
 import type { ServiceNote } from "@/lib/shared/schemas/service-note";
-import type { Delegate, IDataStore } from "../data-store/IDataStore";
+import type { IDataStore } from "../data-store/IDataStore";
 import { InMemoryRepository } from "./in-memory-repository";
 import type { ServiceNoteRepository, ServiceNoteRow } from "./service-note-repository";
 
@@ -13,7 +13,7 @@ export type ServiceNoteRepoSource = Pick<IDataStore, "serviceNotes">;
 
 export class InMemoryServiceNoteRepository extends InMemoryRepository<ServiceNote> implements ServiceNoteRepository {
   constructor(store: ServiceNoteRepoSource, now?: () => Date) {
-    super(store.serviceNotes as unknown as Delegate, now ?? (() => new Date()));
+    super(store.serviceNotes, now ?? (() => new Date()));
   }
 
   async listByMatter(matterId: string, organizationId: string): Promise<ServiceNoteRow[]> {

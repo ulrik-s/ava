@@ -5,7 +5,7 @@
  */
 
 import type { Contact } from "@/lib/shared/schemas/contact";
-import type { Delegate, IDataStore } from "../data-store/IDataStore";
+import type { IDataStore } from "../data-store/IDataStore";
 import type {
   ContactFull, ContactListOptions, ContactListResult, ContactListRow, ContactRepository,
 } from "./contact-repository";
@@ -16,7 +16,7 @@ export type ContactRepoSource = Pick<IDataStore, "contacts">;
 
 export class InMemoryContactRepository extends InMemoryRepository<Contact> implements ContactRepository {
   constructor(store: ContactRepoSource, now?: () => Date) {
-    super(store.contacts as unknown as Delegate, now ?? (() => new Date()));
+    super(store.contacts, now ?? (() => new Date()));
   }
 
   async listForOrg(organizationId: string, opts: ContactListOptions): Promise<ContactListResult> {

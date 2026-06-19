@@ -4,7 +4,7 @@
  */
 
 import type { Document } from "@/lib/shared/schemas/document";
-import type { Delegate, IDataStore } from "../data-store/IDataStore";
+import type { IDataStore } from "../data-store/IDataStore";
 import type {
   DocumentAccessRow, DocumentListRow, DocumentRepository,
 } from "./document-repository";
@@ -16,7 +16,7 @@ export class InMemoryDocumentRepository
   extends InMemoryRepository<Document>
   implements DocumentRepository {
   constructor(store: DocumentRepoSource, now?: () => Date) {
-    super(store.documents as unknown as Delegate, now ?? (() => new Date()));
+    super(store.documents, now ?? (() => new Date()));
   }
 
   async listInFolder(

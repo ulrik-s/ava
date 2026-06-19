@@ -4,7 +4,7 @@
  */
 
 import type { Expense } from "@/lib/shared/schemas/billing";
-import type { Delegate, IDataStore } from "../data-store/IDataStore";
+import type { IDataStore } from "../data-store/IDataStore";
 import type {
   ExpenseListOptions, ExpenseListResult, ExpenseListRow, ExpenseRepository, LawyerReportExpense,
 } from "./expense-repository";
@@ -15,7 +15,7 @@ export type ExpenseRepoSource = Pick<IDataStore, "expenses">;
 
 export class InMemoryExpenseRepository extends InMemoryRepository<Expense> implements ExpenseRepository {
   constructor(store: ExpenseRepoSource, now?: () => Date) {
-    super(store.expenses as unknown as Delegate, now ?? (() => new Date()));
+    super(store.expenses, now ?? (() => new Date()));
   }
 
   async listForOrg(organizationId: string, opts: ExpenseListOptions): Promise<ExpenseListResult> {

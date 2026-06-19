@@ -3,7 +3,7 @@
  */
 
 import type { DocumentTemplate } from "@/lib/shared/schemas/misc";
-import type { Delegate, IDataStore } from "../data-store/IDataStore";
+import type { IDataStore } from "../data-store/IDataStore";
 import type {
   DocumentTemplateListRow, DocumentTemplateRepository, DocumentTemplateRow,
 } from "./document-template-repository";
@@ -15,7 +15,7 @@ export class InMemoryDocumentTemplateRepository
   extends InMemoryRepository<DocumentTemplate>
   implements DocumentTemplateRepository {
   constructor(store: DocumentTemplateRepoSource, now?: () => Date) {
-    super(store.documentTemplates as unknown as Delegate, now ?? (() => new Date()));
+    super(store.documentTemplates, now ?? (() => new Date()));
   }
 
   async listForOrg(organizationId: string): Promise<DocumentTemplateListRow[]> {

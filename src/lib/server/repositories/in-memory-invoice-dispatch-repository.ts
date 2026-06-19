@@ -3,7 +3,7 @@
  */
 
 import type { InvoiceDispatch } from "@/lib/shared/schemas/billing";
-import type { Delegate, IDataStore } from "../data-store/IDataStore";
+import type { IDataStore } from "../data-store/IDataStore";
 import { InMemoryRepository } from "./in-memory-repository";
 import type { InvoiceDispatchQueuedRow, InvoiceDispatchRepository } from "./invoice-dispatch-repository";
 
@@ -13,7 +13,7 @@ export class InMemoryInvoiceDispatchRepository
   extends InMemoryRepository<InvoiceDispatch>
   implements InvoiceDispatchRepository {
   constructor(store: InvoiceDispatchRepoSource, now?: () => Date) {
-    super(store.invoiceDispatches as unknown as Delegate, now ?? (() => new Date()));
+    super(store.invoiceDispatches, now ?? (() => new Date()));
   }
 
   async listByInvoice(invoiceId: string): Promise<InvoiceDispatch[]> {

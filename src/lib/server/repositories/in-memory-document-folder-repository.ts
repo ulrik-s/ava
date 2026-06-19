@@ -4,7 +4,7 @@
  */
 
 import type { DocumentFolder } from "@/lib/shared/schemas/document";
-import type { Delegate, IDataStore } from "../data-store/IDataStore";
+import type { IDataStore } from "../data-store/IDataStore";
 import type {
   DocumentFolderRepository, DocumentFolderWithCounts,
 } from "./document-folder-repository";
@@ -16,7 +16,7 @@ export class InMemoryDocumentFolderRepository
   extends InMemoryRepository<DocumentFolder>
   implements DocumentFolderRepository {
   constructor(store: DocumentFolderRepoSource, now?: () => Date) {
-    super(store.documentFolders as unknown as Delegate, now ?? (() => new Date()));
+    super(store.documentFolders, now ?? (() => new Date()));
   }
 
   async listInParent(matterId: string, parentId: string | null): Promise<DocumentFolderWithCounts[]> {

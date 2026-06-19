@@ -4,7 +4,7 @@
  */
 
 import type { DocumentAnalysisSuggestion } from "@/lib/shared/schemas/document";
-import type { Delegate, IDataStore } from "../data-store/IDataStore";
+import type { IDataStore } from "../data-store/IDataStore";
 import type {
   DocumentSuggestionRepository, SuggestionListRow, SuggestionWithMatter,
 } from "./document-suggestion-repository";
@@ -16,7 +16,7 @@ export class InMemoryDocumentSuggestionRepository
   extends InMemoryRepository<DocumentAnalysisSuggestion>
   implements DocumentSuggestionRepository {
   constructor(store: DocumentSuggestionRepoSource, now?: () => Date) {
-    super(store.documentAnalysisSuggestions as unknown as Delegate, now ?? (() => new Date()));
+    super(store.documentAnalysisSuggestions, now ?? (() => new Date()));
   }
 
   async getByIdInOrg(id: string, organizationId: string): Promise<SuggestionWithMatter | null> {

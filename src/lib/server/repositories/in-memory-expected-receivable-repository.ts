@@ -3,7 +3,7 @@
  */
 
 import type { ExpectedReceivable } from "@/lib/shared/schemas/billing";
-import type { Delegate, IDataStore } from "../data-store/IDataStore";
+import type { IDataStore } from "../data-store/IDataStore";
 import type { ExpectedReceivableListFilter, ExpectedReceivableRepository } from "./expected-receivable-repository";
 import { InMemoryRepository } from "./in-memory-repository";
 
@@ -13,7 +13,7 @@ export class InMemoryExpectedReceivableRepository
   extends InMemoryRepository<ExpectedReceivable>
   implements ExpectedReceivableRepository {
   constructor(store: ExpectedReceivableRepoSource, now?: () => Date) {
-    super(store.expectedReceivables as unknown as Delegate, now ?? (() => new Date()));
+    super(store.expectedReceivables, now ?? (() => new Date()));
   }
 
   async listForOrg(organizationId: string, filter?: ExpectedReceivableListFilter): Promise<ExpectedReceivable[]> {
