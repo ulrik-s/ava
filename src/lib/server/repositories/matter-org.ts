@@ -7,6 +7,7 @@
  */
 
 import { eq } from "drizzle-orm";
+import { asId } from "@/lib/shared/schemas/ids";
 import { matters } from "../db/schema";
 import type { AppDb } from "../db/types";
 
@@ -15,7 +16,7 @@ export async function matterOrg(db: AppDb, matterId: string | null | undefined):
   const [m] = await db
     .select({ org: matters.organizationId })
     .from(matters)
-    .where(eq(matters.id, matterId))
+    .where(eq(matters.id, asId<"MatterId">(matterId)))
     .limit(1);
   return m?.org ?? undefined;
 }

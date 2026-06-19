@@ -38,7 +38,7 @@ export class DrizzleInvoiceDispatchRepository
       .innerJoin(matters, eq(invoices.matterId, matters.id))
       .where(and(
         eq(invoiceDispatches.status, "queued"),
-        eq(matters.organizationId, organizationId),
+        eq(matters.organizationId, asId<"OrganizationId">(organizationId)),
         isNull(invoiceDispatches.deletedAt),
       ))
       .orderBy(asc(invoiceDispatches.queuedAt));

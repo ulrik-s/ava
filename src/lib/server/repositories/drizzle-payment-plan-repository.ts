@@ -29,7 +29,7 @@ export class DrizzlePaymentPlanRepository extends DrizzleRepository<PaymentPlan>
       .innerJoin(matters, eq(invoices.matterId, matters.id))
       .where(and(
         eq(paymentPlans.id, planId),
-        eq(matters.organizationId, organizationId),
+        eq(matters.organizationId, asId<"OrganizationId">(organizationId)),
         isNull(paymentPlans.deletedAt),
       )).limit(1);
     return this.asRow(rows[0]?.plan);
@@ -49,7 +49,7 @@ export class DrizzlePaymentPlanRepository extends DrizzleRepository<PaymentPlan>
       .innerJoin(invoices, eq(paymentPlans.invoiceId, invoices.id))
       .innerJoin(matters, eq(invoices.matterId, matters.id))
       .where(and(
-        eq(matters.organizationId, organizationId),
+        eq(matters.organizationId, asId<"OrganizationId">(organizationId)),
         status ? eq(paymentPlans.status, status) : undefined,
         isNull(paymentPlans.deletedAt),
       ));

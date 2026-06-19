@@ -5,6 +5,7 @@
  * Bas-CRUD ärvs; läsmetoderna org-scopar direkt (ärenden bär `organizationId`).
  */
 
+import type { MatterStatus } from "@/lib/shared/schemas/enums";
 import type { Matter, MatterContact } from "@/lib/shared/schemas/matter";
 import type { Repository } from "./types";
 
@@ -34,7 +35,7 @@ export interface MatterDetailRow extends Matter {
 /** Filter/paginering för `listForOrg`. */
 export interface MatterListFilter {
   search?: string | undefined;
-  status?: string | undefined;
+  status?: MatterStatus | undefined;
   employeeId?: string | undefined;
   page: number;
   pageSize: number;

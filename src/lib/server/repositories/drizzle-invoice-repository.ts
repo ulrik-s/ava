@@ -32,7 +32,7 @@ export class DrizzleInvoiceRepository extends DrizzleRepository<Invoice> impleme
       .innerJoin(matters, eq(invoices.matterId, matters.id))
       .where(and(
         eq(invoices.id, id),
-        eq(matters.organizationId, organizationId),
+        eq(matters.organizationId, asId<"OrganizationId">(organizationId)),
         isNull(invoices.deletedAt),
       )).limit(1);
     return this.asRow(rows[0]?.inv);
@@ -95,7 +95,7 @@ export class DrizzleInvoiceRepository extends DrizzleRepository<Invoice> impleme
       .select({ inv: invoices, matter: matters }).from(invoices)
       .innerJoin(matters, eq(invoices.matterId, matters.id))
       .where(and(
-        eq(matters.organizationId, organizationId),
+        eq(matters.organizationId, asId<"OrganizationId">(organizationId)),
         isNull(invoices.deletedAt),
         filter?.matterId ? eq(invoices.matterId, filter.matterId) : undefined,
         filter?.invoiceType ? eq(invoices.invoiceType, filter.invoiceType) : undefined,
@@ -131,7 +131,7 @@ export class DrizzleInvoiceRepository extends DrizzleRepository<Invoice> impleme
     const rows = await this.db
       .select({ invoiceNumber: invoices.invoiceNumber }).from(invoices)
       .innerJoin(matters, eq(invoices.matterId, matters.id))
-      .where(and(eq(matters.organizationId, organizationId), like(invoices.invoiceNumber, `${prefix}%`)))
+      .where(and(eq(matters.organizationId, asId<"OrganizationId">(organizationId)), like(invoices.invoiceNumber, `${prefix}%`)))
       .orderBy(desc(invoices.invoiceNumber)).limit(1);
     return nextInvoiceNumberFrom(prefix, rows[0]?.invoiceNumber);
   }
@@ -142,7 +142,7 @@ export class DrizzleInvoiceRepository extends DrizzleRepository<Invoice> impleme
       .innerJoin(matters, eq(invoices.matterId, matters.id))
       .where(and(
         eq(invoices.creditedInvoiceId, invoiceId),
-        eq(matters.organizationId, organizationId),
+        eq(matters.organizationId, asId<"OrganizationId">(organizationId)),
         isNull(invoices.deletedAt),
       ));
     return Number(rows[0]?.total ?? 0);

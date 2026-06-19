@@ -31,7 +31,7 @@ export class DrizzleMatterEventSuggestionRepository
       .innerJoin(matters, eq(documents.matterId, matters.id))
       .where(and(
         eq(documents.matterId, asId<"MatterId">(matterId)),
-        eq(matters.organizationId, organizationId),
+        eq(matters.organizationId, asId<"OrganizationId">(organizationId)),
         ne(matterEventSuggestions.status, "REJECTED"),
         isNull(matterEventSuggestions.deletedAt),
       ))
@@ -49,7 +49,7 @@ export class DrizzleMatterEventSuggestionRepository
       .innerJoin(matters, eq(documents.matterId, matters.id))
       .where(and(
         eq(matterEventSuggestions.id, asId<"MatterEventSuggestionId">(id)),
-        eq(matters.organizationId, organizationId),
+        eq(matters.organizationId, asId<"OrganizationId">(organizationId)),
         isNull(matterEventSuggestions.deletedAt),
       ))
       .limit(1);

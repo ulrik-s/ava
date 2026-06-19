@@ -27,7 +27,7 @@ export class DrizzleDocumentSuggestionRepository
       .select({ s: S, matterId: documents.matterId }).from(S)
       .innerJoin(documents, eq(S.documentId, documents.id))
       .innerJoin(matters, eq(documents.matterId, matters.id))
-      .where(and(eq(S.id, id), eq(matters.organizationId, organizationId), isNull(S.deletedAt)))
+      .where(and(eq(S.id, id), eq(matters.organizationId, asId<"OrganizationId">(organizationId)), isNull(S.deletedAt)))
       .limit(1);
     const r = rows[0];
     return r ? ({ ...(r.s as object), document: { matterId: r.matterId as string } } as unknown as SuggestionWithMatter) : null;
@@ -40,7 +40,7 @@ export class DrizzleDocumentSuggestionRepository
       .innerJoin(matters, eq(documents.matterId, matters.id))
       .where(and(
         eq(S.status, "PENDING"), eq(documents.matterId, asId<"MatterId">(matterId)),
-        eq(matters.organizationId, organizationId), isNull(S.deletedAt),
+        eq(matters.organizationId, asId<"OrganizationId">(organizationId)), isNull(S.deletedAt),
       ))
       .orderBy(order === "asc" ? asc(S.createdAt) : desc(S.createdAt));
     return rows.map((r) => ({
@@ -55,7 +55,7 @@ export class DrizzleDocumentSuggestionRepository
       .select({ s: S, matterId: documents.matterId }).from(S)
       .innerJoin(documents, eq(S.documentId, documents.id))
       .innerJoin(matters, eq(documents.matterId, matters.id))
-      .where(and(inArray(S.id, ids), eq(S.status, "PENDING"), eq(matters.organizationId, organizationId), isNull(S.deletedAt)));
+      .where(and(inArray(S.id, ids), eq(S.status, "PENDING"), eq(matters.organizationId, asId<"OrganizationId">(organizationId)), isNull(S.deletedAt)));
     return rows.map((r) => ({ ...(r.s as object), document: { matterId: r.matterId as string } })) as unknown as SuggestionWithMatter[];
   }
 
@@ -65,7 +65,7 @@ export class DrizzleDocumentSuggestionRepository
       .select({ id: S.id }).from(S)
       .innerJoin(documents, eq(S.documentId, documents.id))
       .innerJoin(matters, eq(documents.matterId, matters.id))
-      .where(and(inArray(S.id, ids), eq(matters.organizationId, organizationId), isNull(S.deletedAt)));
+      .where(and(inArray(S.id, ids), eq(matters.organizationId, asId<"OrganizationId">(organizationId)), isNull(S.deletedAt)));
     return rows.map((r) => ({ id: r.id as string }));
   }
 

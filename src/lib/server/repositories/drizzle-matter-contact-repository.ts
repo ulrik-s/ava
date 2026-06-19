@@ -41,7 +41,7 @@ export class DrizzleMatterContactRepository
       .from(matterContacts)
       .innerJoin(contacts, eq(matterContacts.contactId, contacts.id))
       .innerJoin(matters, eq(matterContacts.matterId, matters.id))
-      .where(and(eq(matters.organizationId, organizationId), isNull(matterContacts.deletedAt), numberFilter));
+      .where(and(eq(matters.organizationId, asId<"OrganizationId">(organizationId)), isNull(matterContacts.deletedAt), numberFilter));
     return rows.map((r) => ({
       role: r.role as string,
       contact: {
@@ -59,7 +59,7 @@ export class DrizzleMatterContactRepository
     const rows = await this.db
       .select({ mc: matterContacts }).from(matterContacts)
       .innerJoin(matters, eq(matterContacts.matterId, matters.id))
-      .where(and(eq(matterContacts.id, asId<"MatterContactId">(id)), eq(matters.organizationId, organizationId), isNull(matterContacts.deletedAt)))
+      .where(and(eq(matterContacts.id, asId<"MatterContactId">(id)), eq(matters.organizationId, asId<"OrganizationId">(organizationId)), isNull(matterContacts.deletedAt)))
       .limit(1);
     return rows[0]?.mc ?? null;
   }

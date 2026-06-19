@@ -30,7 +30,7 @@ export class DrizzleBillingRunRepository
       .innerJoin(matters, eq(billingRuns.matterId, matters.id))
       .leftJoin(invoices, eq(billingRuns.invoiceId, invoices.id))
       .where(and(
-        eq(matters.organizationId, organizationId),
+        eq(matters.organizationId, asId<"OrganizationId">(organizationId)),
         matterId ? eq(billingRuns.matterId, asId<"MatterId">(matterId)) : undefined,
         isNull(billingRuns.deletedAt),
       ))
@@ -51,7 +51,7 @@ export class DrizzleBillingRunRepository
       .from(billingRuns)
       .innerJoin(matters, eq(billingRuns.matterId, matters.id))
       .leftJoin(invoices, eq(billingRuns.invoiceId, invoices.id))
-      .where(and(eq(billingRuns.id, asId<"BillingRunId">(id)), eq(matters.organizationId, organizationId), isNull(billingRuns.deletedAt)))
+      .where(and(eq(billingRuns.id, asId<"BillingRunId">(id)), eq(matters.organizationId, asId<"OrganizationId">(organizationId)), isNull(billingRuns.deletedAt)))
       .limit(1);
     const r = rows[0];
     if (!r) return null;
