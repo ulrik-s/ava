@@ -59,16 +59,6 @@
       "count": 1
     }
   },
-  "src/lib/server/repositories/drizzle-org-preference-repository.ts": {
-    "no-restricted-syntax": {
-      "count": 2
-    }
-  },
-  "src/lib/server/repositories/drizzle-user-preference-repository.ts": {
-    "no-restricted-syntax": {
-      "count": 1
-    }
-  },
   "src/lib/server/repositories/in-memory-document-template-repository.ts": {
     "no-restricted-syntax": {
       "count": 1

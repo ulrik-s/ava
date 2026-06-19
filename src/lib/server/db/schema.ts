@@ -26,8 +26,8 @@ import type {
   AccontoDeductionId, BillingRunId, CalendarEventId, ConflictCheckId, ContactId,
   DocumentAnalysisSuggestionId, DocumentFolderId, DocumentId,
   DocumentTemplateId, ExpenseId, InvoiceDispatchId, InvoiceId, MatterContactId, MatterEventSuggestionId,
-  MatterId, OrganizationId, PaymentId, PaymentPlanId, PaymentPlanReminderId, ServiceNoteId, TaskId,
-  TimeEntryId, UserId, WriteOffId,
+  MatterId, OrganizationId, OrgPreferenceId, PaymentId, PaymentPlanId, PaymentPlanReminderId,
+  ServiceNoteId, TaskId, TimeEntryId, UserId, UserPreferenceId, WriteOffId,
 } from "@/lib/shared/schemas/ids";
 import { baseColumns, boolDefault, orgScopedColumns } from "./columns";
 
@@ -399,17 +399,20 @@ export const serviceNotes = pgTable("service_notes", {
 
 export const userPreferences = pgTable("user_preferences", {
   ...baseColumns,
-  userId: uuid("user_id").notNull(),
-  organizationId: uuid("organization_id"),
+  id: uuid("id").primaryKey().$type<UserPreferenceId>(),
+  userId: uuid("user_id").notNull().$type<UserId>(),
+  organizationId: uuid("organization_id").$type<OrganizationId>(),
   key: text("key").notNull(),
-  prefs: jsonb("prefs").notNull(),
+  prefs: jsonb("prefs").notNull().$type<Record<string, unknown>>(),
 }, (t) => [index("user_preferences_user_idx").on(t.userId)]);
 
 export const orgPreferences = pgTable("org_preferences", {
   ...orgScopedColumns,
+  id: uuid("id").primaryKey().$type<OrgPreferenceId>(),
+  organizationId: uuid("organization_id").notNull().$type<OrganizationId>(),
   key: text("key").notNull(),
-  prefs: jsonb("prefs").notNull(),
-  createdById: uuid("created_by_id"),
+  prefs: jsonb("prefs").notNull().$type<Record<string, unknown>>(),
+  createdById: uuid("created_by_id").$type<UserId>(),
 });
 
 export const documentTemplates = pgTable("document_templates", {
