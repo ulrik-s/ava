@@ -5,6 +5,7 @@
 
 import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import type { CalendarEvent } from "@/lib/shared/schemas/calendar";
+import { asId } from "@/lib/shared/schemas/ids";
 import { calendarEvents, matters } from "../db/schema";
 import type { AppDb } from "../db/types";
 import type { CalendarEventRepository, CalendarEventRow } from "./calendar-event-repository";
@@ -12,11 +13,11 @@ import { DrizzleRepository, versionedTable } from "./drizzle-repository";
 
 type MatterCols = { mId: string | null; mNum: string | null; mTitle: string | null };
 
-function withMatter<T extends MatterCols & { ev: unknown }>(r: T): CalendarEventRow {
+function withMatter(r: MatterCols & { ev: typeof calendarEvents.$inferSelect }): CalendarEventRow {
   return {
-    ...(r.ev as object),
-    matter: r.mId ? { id: r.mId, matterNumber: r.mNum as string, title: r.mTitle as string } : null,
-  } as unknown as CalendarEventRow;
+    ...r.ev,
+    matter: r.mId ? { id: r.mId, matterNumber: r.mNum ?? "", title: r.mTitle ?? "" } : null,
+  };
 }
 
 export class DrizzleCalendarEventRepository extends DrizzleRepository<CalendarEvent> implements CalendarEventRepository {
@@ -35,7 +36,7 @@ export class DrizzleCalendarEventRepository extends DrizzleRepository<CalendarEv
     const rows = await this.db
       .select(this.matterSelect()).from(calendarEvents)
       .leftJoin(matters, eq(calendarEvents.matterId, matters.id))
-      .where(and(eq(calendarEvents.userId, userId), eq(calendarEvents.organizationId, organizationId), isNull(calendarEvents.deletedAt)))
+      .where(and(eq(calendarEvents.userId, asId<"UserId">(userId)), eq(calendarEvents.organizationId, asId<"OrganizationId">(organizationId)), isNull(calendarEvents.deletedAt)))
       .orderBy(asc(calendarEvents.startAt));
     return rows.map(withMatter);
   }
@@ -45,7 +46,7 @@ export class DrizzleCalendarEventRepository extends DrizzleRepository<CalendarEv
     const rows = await this.db
       .select(this.matterSelect()).from(calendarEvents)
       .leftJoin(matters, eq(calendarEvents.matterId, matters.id))
-      .where(and(eq(calendarEvents.organizationId, organizationId), inArray(calendarEvents.userId, userIds), isNull(calendarEvents.deletedAt)))
+      .where(and(eq(calendarEvents.organizationId, asId<"OrganizationId">(organizationId)), inArray(calendarEvents.userId, userIds.map((u) => asId<"UserId">(u))), isNull(calendarEvents.deletedAt)))
       .orderBy(asc(calendarEvents.startAt));
     return rows.map(withMatter);
   }
@@ -53,24 +54,24 @@ export class DrizzleCalendarEventRepository extends DrizzleRepository<CalendarEv
   async listForMatter(matterId: string, organizationId: string): Promise<CalendarEvent[]> {
     const rows = await this.db
       .select().from(calendarEvents)
-      .where(and(eq(calendarEvents.matterId, matterId), eq(calendarEvents.organizationId, organizationId), isNull(calendarEvents.deletedAt)))
+      .where(and(eq(calendarEvents.matterId, asId<"MatterId">(matterId)), eq(calendarEvents.organizationId, asId<"OrganizationId">(organizationId)), isNull(calendarEvents.deletedAt)))
       .orderBy(asc(calendarEvents.startAt));
-    return this.asRows(rows);
+    return rows;
   }
 
   async getOwned(id: string, userId: string, organizationId: string): Promise<CalendarEvent | null> {
     const rows = await this.db
       .select().from(calendarEvents)
-      .where(and(eq(calendarEvents.id, id), eq(calendarEvents.userId, userId), eq(calendarEvents.organizationId, organizationId), isNull(calendarEvents.deletedAt)))
+      .where(and(eq(calendarEvents.id, asId<"CalendarEventId">(id)), eq(calendarEvents.userId, asId<"UserId">(userId)), eq(calendarEvents.organizationId, asId<"OrganizationId">(organizationId)), isNull(calendarEvents.deletedAt)))
       .limit(1);
-    return this.asRow(rows[0]);
+    return rows[0] ?? null;
   }
 
   async getOwnedWithMatter(id: string, userId: string, organizationId: string): Promise<CalendarEventRow | null> {
     const rows = await this.db
       .select(this.matterSelect()).from(calendarEvents)
       .leftJoin(matters, eq(calendarEvents.matterId, matters.id))
-      .where(and(eq(calendarEvents.id, id), eq(calendarEvents.userId, userId), eq(calendarEvents.organizationId, organizationId), isNull(calendarEvents.deletedAt)))
+      .where(and(eq(calendarEvents.id, asId<"CalendarEventId">(id)), eq(calendarEvents.userId, asId<"UserId">(userId)), eq(calendarEvents.organizationId, asId<"OrganizationId">(organizationId)), isNull(calendarEvents.deletedAt)))
       .limit(1);
     return rows[0] ? withMatter(rows[0]) : null;
   }

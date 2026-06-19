@@ -74,16 +74,6 @@
       "count": 2
     }
   },
-  "src/lib/server/repositories/drizzle-calendar-event-repository.ts": {
-    "no-restricted-syntax": {
-      "count": 1
-    }
-  },
-  "src/lib/server/repositories/drizzle-conflict-check-repository.ts": {
-    "no-restricted-syntax": {
-      "count": 1
-    }
-  },
   "src/lib/server/repositories/drizzle-contact-repository.ts": {
     "no-restricted-syntax": {
       "count": 2
