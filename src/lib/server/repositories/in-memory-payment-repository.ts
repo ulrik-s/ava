@@ -12,12 +12,12 @@ import type { PaymentRepository } from "./payment-repository";
 export type PaymentRepoSource = Pick<IDataStore, "payments">;
 
 export class InMemoryPaymentRepository extends InMemoryRepository<Payment> implements PaymentRepository {
-  constructor(store: PaymentRepoSource, now?: () => Date) {
-    super(store.payments, now ?? (() => new Date()));
+  constructor(private readonly source: PaymentRepoSource, now?: () => Date) {
+    super(source.payments, now ?? (() => new Date()));
   }
 
   async sumByInvoice(invoiceId: string): Promise<number> {
-    const rows = (await this.delegate.findMany({ where: { invoiceId } })) as unknown as ReadonlyArray<Payment>;
+    const rows = await this.source.payments.findMany({ where: { invoiceId } });
     return rows
       .filter((r) => !(r as { deletedAt?: unknown }).deletedAt)
       .reduce((s, p) => s + p.amount, 0);
@@ -25,6 +25,6 @@ export class InMemoryPaymentRepository extends InMemoryRepository<Payment> imple
 
   async listByInvoiceIds(invoiceIds: string[]): Promise<Payment[]> {
     if (!invoiceIds.length) return [];
-    return (await this.delegate.findMany({ where: { invoiceId: { in: invoiceIds } } })) as Payment[];
+    return this.source.payments.findMany({ where: { invoiceId: { in: invoiceIds } } });
   }
 }

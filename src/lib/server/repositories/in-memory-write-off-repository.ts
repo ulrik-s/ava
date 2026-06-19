@@ -12,12 +12,12 @@ import type { WriteOffRepository } from "./write-off-repository";
 export type WriteOffRepoSource = Pick<IDataStore, "writeOffs">;
 
 export class InMemoryWriteOffRepository extends InMemoryRepository<WriteOff> implements WriteOffRepository {
-  constructor(store: WriteOffRepoSource, now?: () => Date) {
-    super(store.writeOffs, now ?? (() => new Date()));
+  constructor(private readonly source: WriteOffRepoSource, now?: () => Date) {
+    super(source.writeOffs, now ?? (() => new Date()));
   }
 
   async sumByInvoice(invoiceId: string): Promise<number> {
-    const rows = (await this.delegate.findMany({ where: { invoiceId } })) as unknown as ReadonlyArray<WriteOff>;
+    const rows = await this.source.writeOffs.findMany({ where: { invoiceId } });
     return rows
       .filter((r) => !(r as { deletedAt?: unknown }).deletedAt)
       .reduce((s, w) => s + w.amount, 0);
@@ -25,6 +25,6 @@ export class InMemoryWriteOffRepository extends InMemoryRepository<WriteOff> imp
 
   async listByInvoiceIds(invoiceIds: string[]): Promise<WriteOff[]> {
     if (!invoiceIds.length) return [];
-    return (await this.delegate.findMany({ where: { invoiceId: { in: invoiceIds } } })) as WriteOff[];
+    return this.source.writeOffs.findMany({ where: { invoiceId: { in: invoiceIds } } });
   }
 }
