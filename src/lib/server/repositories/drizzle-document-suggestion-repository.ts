@@ -5,6 +5,7 @@
 
 import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
 import type { DocumentAnalysisSuggestion } from "@/lib/shared/schemas/document";
+import { asId } from "@/lib/shared/schemas/ids";
 import { documentAnalysisSuggestions, documents, matters } from "../db/schema";
 import type { AppDb } from "../db/types";
 import type {
@@ -38,7 +39,7 @@ export class DrizzleDocumentSuggestionRepository
       .innerJoin(documents, eq(S.documentId, documents.id))
       .innerJoin(matters, eq(documents.matterId, matters.id))
       .where(and(
-        eq(S.status, "PENDING"), eq(documents.matterId, matterId),
+        eq(S.status, "PENDING"), eq(documents.matterId, asId<"MatterId">(matterId)),
         eq(matters.organizationId, organizationId), isNull(S.deletedAt),
       ))
       .orderBy(order === "asc" ? asc(S.createdAt) : desc(S.createdAt));

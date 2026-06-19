@@ -5,6 +5,7 @@
 
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { DocumentFolder } from "@/lib/shared/schemas/document";
+import { asId } from "@/lib/shared/schemas/ids";
 import { documentFolders, documents } from "../db/schema";
 import type { AppDb } from "../db/types";
 import type {
@@ -15,7 +16,7 @@ import { matterOrg } from "./matter-org";
 
 /** documentFolders.parentId = X, eller IS NULL för rot. */
 function parentEq(parentId: string | null) {
-  return parentId === null ? isNull(documentFolders.parentId) : eq(documentFolders.parentId, parentId);
+  return parentId === null ? isNull(documentFolders.parentId) : eq(documentFolders.parentId, asId<"DocumentFolderId">(parentId));
 }
 
 export class DrizzleDocumentFolderRepository
@@ -33,15 +34,14 @@ export class DrizzleDocumentFolderRepository
   async listInParent(matterId: string, parentId: string | null): Promise<DocumentFolderWithCounts[]> {
     const rows = await this.db
       .select().from(documentFolders)
-      .where(and(eq(documentFolders.matterId, matterId), parentEq(parentId), isNull(documentFolders.deletedAt)))
+      .where(and(eq(documentFolders.matterId, asId<"MatterId">(matterId)), parentEq(parentId), isNull(documentFolders.deletedAt)))
       .orderBy(asc(documentFolders.name));
-    const ids = rows.map((r) => (r as { id: string }).id);
+    const ids = rows.map((r) => r.id);
     // Grupperade count-queries (robustare än korrelerade subqueries, jfr #).
     const counts = await this.countsFor(ids);
-    return rows.map((r) => {
-      const id = (r as { id: string }).id;
-      return { ...(r as object), _count: counts.get(id) ?? { documents: 0, children: 0 } };
-    }) as unknown as DocumentFolderWithCounts[];
+    return rows.map((r): DocumentFolderWithCounts => ({
+      ...r, _count: counts.get(r.id) ?? { documents: 0, children: 0 },
+    }));
   }
 
   private async countsFor(folderIds: string[]): Promise<Map<string, { documents: number; children: number }>> {
@@ -49,28 +49,29 @@ export class DrizzleDocumentFolderRepository
     if (folderIds.length === 0) return out;
     const docRows = await this.db
       .select({ id: documents.folderId, n: sql<number>`count(*)` }).from(documents)
-      .where(and(inArray(documents.folderId, folderIds), isNull(documents.deletedAt)))
+      .where(and(inArray(documents.folderId, folderIds.map((i) => asId<"DocumentFolderId">(i))), isNull(documents.deletedAt)))
       .groupBy(documents.folderId);
     const childRows = await this.db
       .select({ id: documentFolders.parentId, n: sql<number>`count(*)` }).from(documentFolders)
-      .where(and(inArray(documentFolders.parentId, folderIds), isNull(documentFolders.deletedAt)))
+      .where(and(inArray(documentFolders.parentId, folderIds.map((i) => asId<"DocumentFolderId">(i))), isNull(documentFolders.deletedAt)))
       .groupBy(documentFolders.parentId);
     for (const id of folderIds) out.set(id, { documents: 0, children: 0 });
-    for (const r of docRows) if (r.id) out.get(r.id as string)!.documents = Number(r.n);
-    for (const r of childRows) if (r.id) out.get(r.id as string)!.children = Number(r.n);
+    for (const r of docRows) if (r.id) out.get(r.id)!.documents = Number(r.n);
+    for (const r of childRows) if (r.id) out.get(r.id)!.children = Number(r.n);
     return out;
   }
 
   async listByMatter(matterId: string): Promise<DocumentFolder[]> {
     const rows = await this.db
       .select().from(documentFolders)
-      .where(and(eq(documentFolders.matterId, matterId), isNull(documentFolders.deletedAt)))
+      .where(and(eq(documentFolders.matterId, asId<"MatterId">(matterId)), isNull(documentFolders.deletedAt)))
       .orderBy(asc(documentFolders.name));
-    return this.asRows(rows);
+    return rows;
   }
 
   async reassignParent(fromParentId: string, toParentId: string | null): Promise<void> {
     await this.db.update(documentFolders)
-      .set({ parentId: toParentId } as never).where(eq(documentFolders.parentId, fromParentId));
+      .set({ parentId: toParentId === null ? null : asId<"DocumentFolderId">(toParentId) })
+      .where(eq(documentFolders.parentId, asId<"DocumentFolderId">(fromParentId)));
   }
 }
