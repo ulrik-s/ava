@@ -14,7 +14,6 @@ import { useState } from "react";
 import { Modal } from "@/components/ui/modal";
 import {
   generateFakturaDoc,
-  type DocUtils,
   type FakturaDocInvoice,
   type FakturaDocMeta,
 } from "@/lib/client/kostnadsrakning/generate-faktura-doc";
@@ -66,7 +65,7 @@ function useFakturaDoc(matterId: string, meta: BillingMeta): (invoice: FakturaDo
   };
   return async (invoice: FakturaDocInvoice) => {
     try {
-      await generateFakturaDoc({ invoice, matterId, meta: docMeta, register, utils: utils as unknown as DocUtils });
+      await generateFakturaDoc({ invoice, matterId, meta: docMeta, register, utils });
     } catch (e) { console.warn("[billing] faktura-dokument misslyckades:", e); }
   };
 }
