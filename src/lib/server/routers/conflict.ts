@@ -84,7 +84,7 @@ export const conflictRouter = router({
       await ctx.repos.conflictChecks.create({
         searchTerm: input.searchTerm,
         searchType: input.searchType,
-        results: results as unknown as unknown[],
+        results,
         checkedById: asId<"UserId">(ctx.user.id),
       });
 
