@@ -15,7 +15,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import { loadDemoSeed } from "@/lib/client/demo/demo-seed-loader";
+import { loadBundledSeed } from "@/lib/client/demo/bundled-seed-loader";
 import { useDemoSeed } from "@/lib/client/demo/use-demo-seed";
 import type { DemoSource } from "@/lib/shared/demo-source";
 
@@ -29,9 +29,9 @@ const DEFAULT_DEMO_REPO =
 
 export interface DemoClientProps {
   /**
-   * Valfri seed-loader. Default = GH Pages-fetch (`loadDemoSeed`). Tester
-   * injicerar en fake. Server Components MÅSTE INTE passa funktioner till
-   * Client Components (Next 16/RSC) — därför är prop:en optional.
+   * Valfri seed-loader. Default = bundlad `demo-seed.json` (`loadBundledSeed`,
+   * ADR 0025). Tester injicerar en fake. Server Components MÅSTE INTE passa
+   * funktioner till Client Components (Next 16/RSC) — därför är prop:en optional.
    */
   loader?: (repo: string) => Promise<DemoSource>;
   /**
@@ -46,7 +46,7 @@ interface ContactLike { id: string; name: string; contactType: string; email?: s
 interface UserLike { id: string; email: string; name: string; role: string }
 
 export function DemoClient({
-  loader = loadDemoSeed,
+  loader = loadBundledSeed,
   defaultRepo = DEFAULT_DEMO_REPO,
 }: DemoClientProps) {
   const { status, error, source, loadDemo } = useDemoSeed(loader);

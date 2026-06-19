@@ -4,14 +4,14 @@
  * `DemoBootstrap` — singleton-init av offline-first-store + tRPC-klient i
  * demo-builden. Tillåter alla sidor att köra tRPC mot demo-data.
  *
- * Sedan #420 (ADR 0016) kör demon på en **persisterad** `CachingSyncDataStore`
- * UTAN synk-mål (`noSyncTransport`):
- *   - `seed` byggs DIREKT av `loadDemoSeed` (fetch av manifest.json + .ava/*.json
- *     från GH Pages → `DemoSource`) — ingen MemFs/slab, ingen projection-hydrering.
+ * Sedan #420 (ADR 0016) kör demon på en **persisterad** `CachingSyncDataStore`;
+ * sedan #544 (ADR 0025) hydreras cachen via den riktiga reconcile/pull-vägen mot
+ * en serverlös `StaticSyncSource`:
+ *   - första besök/cache-miss: `createDemoStore` laddar EN bundlad `demo-seed.json`
+ *     och `reconcile()` pull:ar in den (samma apply-väg som riktiga klienten).
  *   - `persistence` (IndexedDB) + `queuePersistence` (IndexedDB) cachar source:n
- *     och mutations-kön → "populera IndexedDB-cachen med demo-data"-modellen.
- *     `create()` hydrerar cachen först, annars seed:en. Mutationer persisteras
- *     automatiskt (snapshot) → överlever reload utan slab/FSA-write-back.
+ *     och mutations-kön → efterföljande besök hydreras direkt ur snapshotet.
+ *     Mutationer persisteras automatiskt (snapshot) → överlever reload.
  *
  * /demo-routen kör sin egen runtime (DemoClient → useDemoSeed).
  */
@@ -159,8 +159,8 @@ function useDemoBootstrap(args: BootstrapArgs) {
     }
 
     // ── demo/github-tier: persisterad offline-first-kärna utan synk-mål ──
-    // `createDemoStore` hydrerar IndexedDB-cachen om den finns, annars fetchas
-    // seed:en från GH Pages (manifest.json + .ava/*.json) och persisteras.
+    // `createDemoStore` hydrerar IndexedDB-cachen om den finns, annars laddas
+    // den bundlade `demo-seed.json` in via reconcile/pull (ADR 0025).
     void (async () => {
       try {
         const store = await createDemoStore(firmaConfig);

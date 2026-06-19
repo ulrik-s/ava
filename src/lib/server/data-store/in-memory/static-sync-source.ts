@@ -64,4 +64,12 @@ export class StaticSyncSource implements SyncTransport {
     this.append({ entity: mutation.entity, row: mutation.row, deleted: mutation.kind === "delete" });
     return Promise.resolve({ status: "accepted", row: mutation.row });
   }
+
+  /** Ersätt seeden (töm loggen, börja om från seq 0). Demo-vägen laddar seeden
+   *  lazy först vid cache-miss → konstruerar tom och `reset`:ar sedan (#544). */
+  reset(seed: DemoSource): void {
+    this.log.length = 0;
+    this.seq = 0;
+    for (const change of flattenSeedToChanges(seed)) this.append(change);
+  }
 }
