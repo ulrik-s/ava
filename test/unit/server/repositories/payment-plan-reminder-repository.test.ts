@@ -6,7 +6,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 import { paymentPlanReminders } from "@/lib/server/db/schema";
-import type { AppDb } from "@/lib/server/db/types";
 import { DrizzlePaymentPlanReminderRepository } from "@/lib/server/repositories/drizzle-payment-plan-reminder-repository";
 import { InMemoryPaymentPlanReminderRepository } from "@/lib/server/repositories/in-memory-payment-plan-reminder-repository";
 import type { PaymentPlanReminderRepository } from "@/lib/server/repositories/payment-plan-reminder-repository";
@@ -37,7 +36,7 @@ describe("PaymentPlanReminderRepository — Drizzle (pglite)", () => {
   afterAll(async () => { await handle.close(); });
 
   it("uppfyller bas-kontraktet", async () => {
-    await assertContract(new DrizzlePaymentPlanReminderRepository(handle.db as unknown as AppDb));
+    await assertContract(new DrizzlePaymentPlanReminderRepository(handle.db));
     // referera tabellen så schema-importen inte är oanvänd
     expect(paymentPlanReminders).toBeDefined();
   });

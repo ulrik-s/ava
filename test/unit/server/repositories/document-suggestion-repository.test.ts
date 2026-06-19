@@ -8,7 +8,6 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
 import type { DemoSource } from "@/lib/server/data-store/DemoDataStore";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 import { documentAnalysisSuggestions, documents, matters } from "@/lib/server/db/schema";
-import type { AppDb } from "@/lib/server/db/types";
 import { DrizzleDocumentSuggestionRepository } from "@/lib/server/repositories/drizzle-document-suggestion-repository";
 import { InMemoryDocumentSuggestionRepository } from "@/lib/server/repositories/in-memory-document-suggestion-repository";
 import { prebakeJoins } from "@/lib/shared/demo-source";
@@ -63,7 +62,7 @@ describe("DocumentSuggestionRepository — Drizzle (pglite)", () => {
     await db.insert(documents).values(v({ id: dId, matterId: mId, fileName: "f.pdf", mimeType: "application/pdf", sizeBytes: 1, storagePath: "p", uploadedById: uuidv7(), title: "F" }));
     await db.insert(documentAnalysisSuggestions).values(v({ id: s1, documentId: dId, name: "Anna", role: "MOTPART", contactType: "PERSON", status: "PENDING" }));
     await db.insert(documentAnalysisSuggestions).values(v({ id: s2, documentId: dId, name: "Bo", role: "OMBUD", contactType: "PERSON", status: "REJECTED" }));
-    const repo = new DrizzleDocumentSuggestionRepository(db as unknown as AppDb);
+    const repo = new DrizzleDocumentSuggestionRepository(db);
 
     expect(await repo.getByIdInOrg(s1, org)).toMatchObject({ id: s1, document: { matterId: mId } });
     expect(await repo.getByIdInOrg(s1, uuidv7())).toBeNull();

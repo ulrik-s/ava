@@ -54,11 +54,6 @@
       "count": 3
     }
   },
-  "src/lib/server/db/client.ts": {
-    "no-restricted-syntax": {
-      "count": 1
-    }
-  },
   "src/lib/server/http/server-context.ts": {
     "no-restricted-syntax": {
       "count": 1
@@ -72,11 +67,6 @@
   "src/lib/server/repositories/drizzle-org-preference-repository.ts": {
     "no-restricted-syntax": {
       "count": 2
-    }
-  },
-  "src/lib/server/repositories/drizzle-repositories.ts": {
-    "no-restricted-syntax": {
-      "count": 1
     }
   },
   "src/lib/server/repositories/drizzle-user-preference-repository.ts": {
@@ -339,11 +329,6 @@
       "count": 2
     }
   },
-  "test/unit/server/db/pg-test-db.ts": {
-    "no-restricted-syntax": {
-      "count": 2
-    }
-  },
   "test/unit/server/jobs/classify-document-handler.test.ts": {
     "no-restricted-syntax": {
       "count": 1
@@ -364,154 +349,14 @@
       "count": 1
     }
   },
-  "test/unit/server/repositories/acconto-deduction-repository.test.ts": {
-    "no-restricted-syntax": {
-      "count": 1
-    }
-  },
-  "test/unit/server/repositories/billing-run-repository.test.ts": {
-    "no-restricted-syntax": {
-      "count": 1
-    }
-  },
-  "test/unit/server/repositories/calendar-event-repository.test.ts": {
-    "no-restricted-syntax": {
-      "count": 1
-    }
-  },
-  "test/unit/server/repositories/conflict-matter-contact-repository.test.ts": {
-    "no-restricted-syntax": {
-      "count": 3
-    }
-  },
-  "test/unit/server/repositories/contact-repository.test.ts": {
-    "no-restricted-syntax": {
-      "count": 1
-    }
-  },
-  "test/unit/server/repositories/document-folder-repository.test.ts": {
-    "no-restricted-syntax": {
-      "count": 1
-    }
-  },
-  "test/unit/server/repositories/document-repository.test.ts": {
-    "no-restricted-syntax": {
-      "count": 2
-    }
-  },
-  "test/unit/server/repositories/document-suggestion-repository.test.ts": {
-    "no-restricted-syntax": {
-      "count": 1
-    }
-  },
-  "test/unit/server/repositories/document-template-repository.test.ts": {
-    "no-restricted-syntax": {
-      "count": 1
-    }
-  },
   "test/unit/server/repositories/drizzle-repositories.test.ts": {
     "no-restricted-syntax": {
-      "count": 6
-    }
-  },
-  "test/unit/server/repositories/expected-receivable-repository.test.ts": {
-    "no-restricted-syntax": {
-      "count": 2
-    }
-  },
-  "test/unit/server/repositories/expense-repository.test.ts": {
-    "no-restricted-syntax": {
-      "count": 4
+      "count": 1
     }
   },
   "test/unit/server/repositories/in-memory-repository.test.ts": {
     "no-restricted-syntax": {
       "count": 2
-    }
-  },
-  "test/unit/server/repositories/invoice-dispatch-repository.test.ts": {
-    "no-restricted-syntax": {
-      "count": 1
-    }
-  },
-  "test/unit/server/repositories/invoice-repository.test.ts": {
-    "no-restricted-syntax": {
-      "count": 10
-    }
-  },
-  "test/unit/server/repositories/matter-event-suggestion-repository.test.ts": {
-    "no-restricted-syntax": {
-      "count": 1
-    }
-  },
-  "test/unit/server/repositories/matter-reads-repository.test.ts": {
-    "no-restricted-syntax": {
-      "count": 3
-    }
-  },
-  "test/unit/server/repositories/matter-repository.test.ts": {
-    "no-restricted-syntax": {
-      "count": 2
-    }
-  },
-  "test/unit/server/repositories/organization-office-repository.test.ts": {
-    "no-restricted-syntax": {
-      "count": 2
-    }
-  },
-  "test/unit/server/repositories/payment-plan-reminder-repository.test.ts": {
-    "no-restricted-syntax": {
-      "count": 1
-    }
-  },
-  "test/unit/server/repositories/payment-plan-repository.test.ts": {
-    "no-restricted-syntax": {
-      "count": 4
-    }
-  },
-  "test/unit/server/repositories/payment-repository.test.ts": {
-    "no-restricted-syntax": {
-      "count": 1
-    }
-  },
-  "test/unit/server/repositories/preference-repository.test.ts": {
-    "no-restricted-syntax": {
-      "count": 2
-    }
-  },
-  "test/unit/server/repositories/report-reads-repository.test.ts": {
-    "no-restricted-syntax": {
-      "count": 4
-    }
-  },
-  "test/unit/server/repositories/service-note-repository.test.ts": {
-    "no-restricted-syntax": {
-      "count": 1
-    }
-  },
-  "test/unit/server/repositories/task-repository.test.ts": {
-    "no-restricted-syntax": {
-      "count": 1
-    }
-  },
-  "test/unit/server/repositories/time-entry-list-report-repository.test.ts": {
-    "no-restricted-syntax": {
-      "count": 1
-    }
-  },
-  "test/unit/server/repositories/time-entry-repository.test.ts": {
-    "no-restricted-syntax": {
-      "count": 2
-    }
-  },
-  "test/unit/server/repositories/user-repository.test.ts": {
-    "no-restricted-syntax": {
-      "count": 1
-    }
-  },
-  "test/unit/server/repositories/write-off-repository.test.ts": {
-    "no-restricted-syntax": {
-      "count": 1
     }
   },
   "test/unit/server/routers/calendar.test.ts": {

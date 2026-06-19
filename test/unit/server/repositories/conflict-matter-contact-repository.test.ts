@@ -7,7 +7,6 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
 import type { DemoSource } from "@/lib/server/data-store/DemoDataStore";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 import { conflictChecks, contacts, matterContacts, matters, users } from "@/lib/server/db/schema";
-import type { AppDb } from "@/lib/server/db/types";
 import { DrizzleConflictCheckRepository } from "@/lib/server/repositories/drizzle-conflict-check-repository";
 import { DrizzleMatterContactRepository } from "@/lib/server/repositories/drizzle-matter-contact-repository";
 import { InMemoryConflictCheckRepository } from "@/lib/server/repositories/in-memory-conflict-check-repository";
@@ -79,8 +78,8 @@ describe("Conflict/MatterContact repos — Drizzle (pglite)", () => {
     await db.insert(matterContacts).values(v({ id: uuidv7(), matterId: mId, contactId: cMot, role: "MOTPART" }));
     await db.insert(matterContacts).values(v({ id: uuidv7(), matterId: mId, contactId: cKli, role: "KLIENT" }));
     await db.insert(conflictChecks).values(v({ id: uuidv7(), searchTerm: "anna", searchType: "name", results: [], checkedById: uId }));
-    const mc = new DrizzleMatterContactRepository(db as unknown as AppDb);
-    const cc = new DrizzleConflictCheckRepository(db as unknown as AppDb);
+    const mc = new DrizzleMatterContactRepository(db);
+    const cc = new DrizzleConflictCheckRepository(db);
 
     const byNumber = await mc.findForConflict(org, "19850225");
     expect(byNumber).toHaveLength(1);
@@ -182,7 +181,7 @@ describe("MatterContactRepository — läs-/skriv-metoder (Drizzle/pglite)", () 
     await db.insert(contacts).values(v({ id: cMot, organizationId: org, name: "Motpart", contactType: "PERSON" }));
     await db.insert(matterContacts).values(v({ id: linkKli, matterId: mId, contactId: cKli, role: "KLIENT" }));
     await db.insert(matterContacts).values(v({ id: linkMot, matterId: mId, contactId: cMot, role: "MOTPART" }));
-    const mc = new DrizzleMatterContactRepository(db as unknown as AppDb);
+    const mc = new DrizzleMatterContactRepository(db);
 
     // getByIdInOrg
     expect((await mc.getByIdInOrg(linkKli, org))?.id).toBe(linkKli);

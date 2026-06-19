@@ -6,7 +6,6 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
 import type { DemoSource } from "@/lib/server/data-store/DemoDataStore";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 import { documentTemplates, users } from "@/lib/server/db/schema";
-import type { AppDb } from "@/lib/server/db/types";
 import { DrizzleDocumentTemplateRepository } from "@/lib/server/repositories/drizzle-document-template-repository";
 import { InMemoryDocumentTemplateRepository } from "@/lib/server/repositories/in-memory-document-template-repository";
 import { prebakeJoins } from "@/lib/shared/demo-source";
@@ -46,7 +45,7 @@ describe("DocumentTemplateRepository — Drizzle (pglite)", () => {
     const v = (o: Record<string, unknown>) => ({ version: 1, ...o }) as any;
     await db.insert(users).values(v({ id: userId, organizationId: org, email: "a@x", name: "Anna" }));
     await db.insert(documentTemplates).values(v({ id: t1, organizationId: org, name: "Avtal", category: "A", content: "x", createdById: userId }));
-    const repo = new DrizzleDocumentTemplateRepository(handle.db as unknown as AppDb);
+    const repo = new DrizzleDocumentTemplateRepository(handle.db);
     const list = await repo.listForOrg(org);
     expect(list).toHaveLength(1);
     expect(list[0]!.createdBy?.name).toBe("Anna");

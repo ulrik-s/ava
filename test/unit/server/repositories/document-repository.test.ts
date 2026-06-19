@@ -7,7 +7,6 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
 import type { DemoSource } from "@/lib/server/data-store/DemoDataStore";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 import { documentFolders, documents, matters, users } from "@/lib/server/db/schema";
-import type { AppDb } from "@/lib/server/db/types";
 import { DrizzleDocumentFolderRepository } from "@/lib/server/repositories/drizzle-document-folder-repository";
 import { DrizzleDocumentRepository } from "@/lib/server/repositories/drizzle-document-repository";
 import { InMemoryDocumentFolderRepository } from "@/lib/server/repositories/in-memory-document-folder-repository";
@@ -87,8 +86,8 @@ describe("DocumentRepository / DocumentFolderRepository — Drizzle (pglite)", (
       v({ matterId: mId, fileName: "f", mimeType: "application/pdf", sizeBytes: 1, storagePath: "p", uploadedById: uId, ...extra });
     await db.insert(documents).values(doc({ id: d1, folderId: root, documentType: "Avtal" }));
     await db.insert(documents).values(doc({ id: uuidv7(), folderId: null, documentType: "Faktura" }));
-    const docs = new DrizzleDocumentRepository(db as unknown as AppDb);
-    const folders = new DrizzleDocumentFolderRepository(db as unknown as AppDb);
+    const docs = new DrizzleDocumentRepository(db);
+    const folders = new DrizzleDocumentFolderRepository(db);
 
     const inRoot = await docs.listInFolder(mId, root, 1, 50);
     expect(inRoot.total).toBe(1);

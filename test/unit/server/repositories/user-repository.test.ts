@@ -6,7 +6,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 import { users } from "@/lib/server/db/schema";
-import type { AppDb } from "@/lib/server/db/types";
 import { DrizzleUserRepository } from "@/lib/server/repositories/drizzle-user-repository";
 import { InMemoryUserRepository } from "@/lib/server/repositories/in-memory-user-repository";
 import { uuidv7 } from "@/lib/shared/uuid";
@@ -47,7 +46,7 @@ describe("UserRepository — Drizzle (pglite)", () => {
     await db.insert(users).values(v({ id: u1, organizationId: org, email: "a@x", name: "Beta" }));
     await db.insert(users).values(v({ id: u2, organizationId: org, email: "b@x", name: "Alfa" }));
     await db.insert(users).values(v({ id: uuidv7(), organizationId: uuidv7(), email: "c@x", name: "Gamma" }));
-    const repo = new DrizzleUserRepository(handle.db as unknown as AppDb);
+    const repo = new DrizzleUserRepository(handle.db);
     expect(await repo.getByIdInOrg(u1, org)).toMatchObject({ id: u1 });
     expect(await repo.getByIdInOrg(u1, uuidv7())).toBeNull();
     const list = await repo.listByOrg(org);

@@ -7,7 +7,6 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
 import type { DemoSource } from "@/lib/server/data-store/DemoDataStore";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 import { billingRuns, invoices, matters } from "@/lib/server/db/schema";
-import type { AppDb } from "@/lib/server/db/types";
 import { DrizzleBillingRunRepository } from "@/lib/server/repositories/drizzle-billing-run-repository";
 import { InMemoryBillingRunRepository } from "@/lib/server/repositories/in-memory-billing-run-repository";
 import { prebakeJoins } from "@/lib/shared/demo-source";
@@ -72,7 +71,7 @@ describe("BillingRunRepository — Drizzle (pglite)", () => {
     await db.insert(invoices).values(v({ id: invId, matterId: mId, amount: 500, status: "DRAFT", invoiceNumber: "F-1", invoiceDate: new Date() }));
     await db.insert(billingRuns).values(v(run({ id: r1, matterId: mId, invoiceId: invId, type: "ACCONTO", status: "SENT" })));
     await db.insert(billingRuns).values(v(run({ id: r2, matterId: mId, invoiceId: null, type: "FINAL", status: "SENT" })));
-    const repo = new DrizzleBillingRunRepository(db as unknown as AppDb);
+    const repo = new DrizzleBillingRunRepository(db);
 
     const list = await repo.listForOrg(org);
     expect(list).toHaveLength(2);

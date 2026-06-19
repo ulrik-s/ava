@@ -5,7 +5,6 @@
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
-import type { AppDb } from "@/lib/server/db/types";
 import { DrizzleAccontoDeductionRepository } from "@/lib/server/repositories/drizzle-acconto-deduction-repository";
 import { InMemoryAccontoDeductionRepository } from "@/lib/server/repositories/in-memory-acconto-deduction-repository";
 import { uuidv7 } from "@/lib/shared/uuid";
@@ -28,7 +27,7 @@ describe("AccontoDeductionRepository — Drizzle (pglite)", () => {
   afterAll(async () => { await handle.close(); });
 
   it("create + getById (version 1)", async () => {
-    const repo = new DrizzleAccontoDeductionRepository(handle.db as unknown as AppDb);
+    const repo = new DrizzleAccontoDeductionRepository(handle.db);
     const id = uuidv7();
     const created = await repo.create({ id, finalInvoiceId: uuidv7(), accontoInvoiceId: uuidv7() } as never);
     expect((created as { version?: number }).version).toBe(1);

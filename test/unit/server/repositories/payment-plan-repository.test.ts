@@ -7,7 +7,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 import { contacts, invoices, matterContacts, matters, paymentPlanReminders, paymentPlans, payments } from "@/lib/server/db/schema";
-import type { AppDb } from "@/lib/server/db/types";
 import { DrizzlePaymentPlanRepository } from "@/lib/server/repositories/drizzle-payment-plan-repository";
 import { InMemoryPaymentPlanRepository } from "@/lib/server/repositories/in-memory-payment-plan-repository";
 import type { PaymentPlanRepository } from "@/lib/server/repositories/payment-plan-repository";
@@ -108,7 +107,7 @@ describe("PaymentPlanRepository — Drizzle (pglite)", () => {
   afterAll(async () => { await handle.close(); });
 
   it("uppfyller kontraktet", async () => {
-    await assertContract(new DrizzlePaymentPlanRepository(handle.db as unknown as AppDb));
+    await assertContract(new DrizzlePaymentPlanRepository(handle.db));
   });
 
   it("getByIdInOrg org-scopar via join faktura→ärende", async () => {
@@ -123,7 +122,7 @@ describe("PaymentPlanRepository — Drizzle (pglite)", () => {
     await db.insert(invoices).values(v({ id: invId, matterId: mId, amount: 1, status: "INSTALLMENT_PLAN", invoiceDate: new Date() }));
     await db.insert(paymentPlans).values(v({ id: pId, invoiceId: invId, monthlyAmount: 100, dayOfMonth: 15, startDate: new Date(), status: "ACTIVE" }));
 
-    const repo = new DrizzlePaymentPlanRepository(handle.db as unknown as AppDb);
+    const repo = new DrizzlePaymentPlanRepository(handle.db);
     expect(await repo.getByIdInOrg(pId, org)).toMatchObject({ id: pId });
     expect(await repo.getByIdInOrg(pId, uuidv7())).toBeNull(); // fel org
   });
@@ -135,7 +134,7 @@ describe("PaymentPlanRepository — Drizzle (pglite)", () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const v = (o: Record<string, unknown>) => ({ version: 1, ...o }) as any;
     await db.insert(paymentPlans).values(v({ id: pId, invoiceId: invId, monthlyAmount: 100, dayOfMonth: 15, startDate: new Date(), status: "ACTIVE" }));
-    const repo = new DrizzlePaymentPlanRepository(handle.db as unknown as AppDb);
+    const repo = new DrizzlePaymentPlanRepository(handle.db);
     expect(await repo.getByInvoiceId(invId)).toMatchObject({ id: pId });
     expect(await repo.getByInvoiceId(uuidv7())).toBeNull(); // ingen plan
   });
@@ -156,7 +155,7 @@ describe("PaymentPlanRepository — Drizzle (pglite)", () => {
     await db.insert(payments).values(v({ id: uuidv7(), invoiceId: invId, amount: 200, paidAt: new Date("2026-06-10"), recordedById: uuidv7() }));
     await db.insert(paymentPlans).values(v({ id: pId, invoiceId: invId, monthlyAmount: 100, dayOfMonth: 15, startDate: new Date(), status: "ACTIVE" }));
     await db.insert(paymentPlanReminders).values(v({ id: uuidv7(), planId: pId, dueMonth: "2026-06", type: "DUE", sentAt: new Date() }));
-    const repo = new DrizzlePaymentPlanRepository(handle.db as unknown as AppDb);
+    const repo = new DrizzlePaymentPlanRepository(handle.db);
 
     const list = await repo.listForOrg(org);
     expect(list).toHaveLength(1);

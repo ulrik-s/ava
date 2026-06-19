@@ -6,7 +6,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 import { contacts, matterContacts, matters, timeEntries, users } from "@/lib/server/db/schema";
-import type { AppDb } from "@/lib/server/db/types";
 import { DrizzleTimeEntryRepository } from "@/lib/server/repositories/drizzle-time-entry-repository";
 import { InMemoryTimeEntryRepository } from "@/lib/server/repositories/in-memory-time-entry-repository";
 import { uuidv7 } from "@/lib/shared/uuid";
@@ -56,7 +55,7 @@ describe("TimeEntryRepository — Drizzle (pglite)", () => {
     await db.insert(users).values(v({ id: userId, organizationId: org, email: "a@x", name: "Anna", hourlyRate: 150_000 }));
     await db.insert(timeEntries).values(v({ id: t1, userId, matterId: mId, date: new Date(), minutes: 60, description: "x", hourlyRate: 1000 }));
     await db.insert(timeEntries).values(v({ id: t2, userId, matterId: mId, date: new Date(), minutes: 30, description: "y", hourlyRate: 1000 }));
-    const repo = new DrizzleTimeEntryRepository(handle.db as unknown as AppDb);
+    const repo = new DrizzleTimeEntryRepository(handle.db);
 
     const unbilled = await repo.listUnbilled(mId, [t1, t2]);
     expect(unbilled).toHaveLength(2);
@@ -133,7 +132,7 @@ describe("TimeEntryRepository — frysning/perLawyer/billable (Drizzle/pglite)",
     await db.insert(contacts).values(v({ id: f.cKli, organizationId: org, name: "Klient AB", contactType: "COMPANY" }));
     await db.insert(matterContacts).values(v({ id: uuidv7(), matterId: f.mId, contactId: f.cKli, role: "KLIENT" }));
     for (const r of f.rows) await db.insert(timeEntries).values(v({ ...r, organizationId: org, hourlyRate: 1000 }));
-    const repo = new DrizzleTimeEntryRepository(db as unknown as AppDb);
+    const repo = new DrizzleTimeEntryRepository(db);
 
     expect((await repo.listUnfrozenForMatter(f.mId)).map((t) => t.id))
       .toEqual([f.teOutside, f.teEarly, f.teNonBill, f.teLate]);

@@ -36,6 +36,6 @@ export function createPostgresDb(url: string, opts: PostgresDbOptions = {}): Pos
     ...(opts.max !== undefined ? { max: opts.max } : {}),
     onnotice: () => {},
   });
-  const db = drizzle(client, { schema }) as unknown as AppDb;
+  const db = drizzle(client, { schema });
   return { db, close: () => client.end({ timeout: 5 }) };
 }

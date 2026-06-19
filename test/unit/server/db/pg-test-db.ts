@@ -38,7 +38,7 @@ async function createPgliteTestDb(): Promise<TestDbHandle> {
   const client = new PGlite();
   const db = drizzlePglite(client, { schema });
   for (const sql of migrationSql()) await client.exec(sql);
-  return { db: db as unknown as AppDb, close: () => client.close() };
+  return { db: db, close: () => client.close() };
 }
 
 /** Mot riktig Postgres: isolerat schema per handle (parallell-säkert), droppas på close. */
@@ -50,7 +50,7 @@ async function createRealPgTestDb(url: string): Promise<TestDbHandle> {
   for (const sql of migrationSql()) await client.unsafe(sql);
   const db = drizzlePostgres(client, { schema });
   return {
-    db: db as unknown as AppDb,
+    db: db,
     close: async () => {
       await client.unsafe(`DROP SCHEMA "${schemaName}" CASCADE`);
       await client.end({ timeout: 5 });

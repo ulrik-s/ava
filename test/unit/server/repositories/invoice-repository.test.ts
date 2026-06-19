@@ -10,7 +10,6 @@ import {
   invoices, matters, payments, writeOffs, paymentPlans, paymentPlanReminders,
   timeEntries, expenses, documents, users, accontoDeductions,
 } from "@/lib/server/db/schema";
-import type { AppDb } from "@/lib/server/db/types";
 import { DrizzleInvoiceRepository } from "@/lib/server/repositories/drizzle-invoice-repository";
 import { InMemoryInvoiceRepository } from "@/lib/server/repositories/in-memory-invoice-repository";
 import type { InvoiceRepository } from "@/lib/server/repositories/invoice-repository";
@@ -225,7 +224,7 @@ describe("InvoiceRepository — Drizzle (pglite)", () => {
   afterAll(async () => { await handle.close(); });
 
   it("uppfyller kontraktet", async () => {
-    await assertContract(new DrizzleInvoiceRepository(handle.db as unknown as AppDb));
+    await assertContract(new DrizzleInvoiceRepository(handle.db));
   });
 
   it("getByIdWithLedger hämtar betalningar", async () => {
@@ -237,7 +236,7 @@ describe("InvoiceRepository — Drizzle (pglite)", () => {
       id: uuidv7(), invoiceId: id, amount: 7_500, paidAt: new Date(), recordedById: uuidv7(), version: 1,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
-    const ledger = await new DrizzleInvoiceRepository(handle.db as unknown as AppDb).getByIdWithLedger(id);
+    const ledger = await new DrizzleInvoiceRepository(handle.db).getByIdWithLedger(id);
     expect(ledger?.payments).toHaveLength(1);
     expect(ledger?.payments[0]!.amount).toBe(7_500);
   });
@@ -251,7 +250,7 @@ describe("InvoiceRepository — Drizzle (pglite)", () => {
     await db.insert(matters).values({ id: mId, organizationId: org, matterNumber: "2026-1", title: "T", version: 1 } as any);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await db.insert(invoices).values(inv({ id, matterId: mId }) as any);
-    const repo = new DrizzleInvoiceRepository(handle.db as unknown as AppDb);
+    const repo = new DrizzleInvoiceRepository(handle.db);
     expect(await repo.getByIdInOrg(id, org)).toMatchObject({ id });
     expect(await repo.getByIdInOrg(id, uuidv7())).toBeNull();
   });
@@ -276,7 +275,7 @@ describe("InvoiceRepository — Drizzle (pglite)", () => {
     await db.insert(expenses).values(v({ id: uuidv7(), userId, matterId: mId, invoiceId: id, date: new Date(), amount: 50, description: "x" }));
     await db.insert(documents).values(v({ id: uuidv7(), matterId: mId, invoiceId: id, fileName: "f.pdf", mimeType: "application/pdf", sizeBytes: 1, storagePath: "p", uploadedById: userId }));
 
-    const repo = new DrizzleInvoiceRepository(handle.db as unknown as AppDb);
+    const repo = new DrizzleInvoiceRepository(handle.db);
     const full = await repo.getByIdWithRelations(id, org);
     expect(full?.matter?.matterNumber).toBe("2026-1");
     expect(full?.payments).toHaveLength(1);
@@ -304,7 +303,7 @@ describe("InvoiceRepository — Drizzle (pglite)", () => {
     await db.insert(invoices).values(inv({ id: creditId, matterId: mId, invoiceType: "CREDIT", creditedInvoiceId: finalId }) as never);
     await db.insert(accontoDeductions).values(v({ id: uuidv7(), finalInvoiceId: finalId, accontoInvoiceId: accontoId }));
 
-    const full = await new DrizzleInvoiceRepository(handle.db as unknown as AppDb).getByIdFull(finalId, org);
+    const full = await new DrizzleInvoiceRepository(handle.db).getByIdFull(finalId, org);
     expect(full?.accontoDeductions).toHaveLength(1);
     expect(full?.accontoDeductions[0]?.accontoInvoice?.id).toBe(accontoId);
     expect(full?.creditNote?.id).toBe(creditId);
@@ -329,7 +328,7 @@ describe("InvoiceRepository — Drizzle (pglite)", () => {
     await db.insert(accontoDeductions).values(v({ id: uuidv7(), finalInvoiceId: finalId, accontoInvoiceId: accontoId }));
     await db.insert(payments).values(v({ id: uuidv7(), invoiceId: finalId, amount: 400, paidAt: new Date(), recordedById: uuidv7() }));
 
-    const repo = new DrizzleInvoiceRepository(handle.db as unknown as AppDb);
+    const repo = new DrizzleInvoiceRepository(handle.db);
     const all = await repo.listForOrg(org);
     expect(all.map((i) => i.id).sort()).toEqual([finalId, accontoId].sort()); // annan org exkluderad
     const final = all.find((i) => i.id === finalId)!;
@@ -348,7 +347,7 @@ describe("InvoiceRepository — Drizzle (pglite)", () => {
     await db.insert(matters).values(v({ id: mId, organizationId: org, matterNumber: "2026-1", title: "T" }));
     await db.insert(invoices).values(inv({ id: uuidv7(), matterId: mId, invoiceNumber: "F-2026-0001" }) as never);
     await db.insert(invoices).values(inv({ id: uuidv7(), matterId: mId, invoiceNumber: "F-2026-0002" }) as never);
-    const repo = new DrizzleInvoiceRepository(handle.db as unknown as AppDb, () => new Date("2026-06-01T00:00:00.000Z"));
+    const repo = new DrizzleInvoiceRepository(handle.db, () => new Date("2026-06-01T00:00:00.000Z"));
     expect(await repo.nextInvoiceNumber(org)).toBe("F-2026-0003");
     expect(await repo.nextInvoiceNumber(uuidv7())).toBe("F-2026-0001"); // tom org → 0001
   });
@@ -365,7 +364,7 @@ describe("InvoiceRepository — Drizzle (pglite)", () => {
     await db.insert(invoices).values(inv({ id: uuidv7(), matterId: mId, invoiceType: "CREDIT", amount: -40_000, creditedInvoiceId: finalId }) as never);
     await db.insert(invoices).values(inv({ id: uuidv7(), matterId: mId, invoiceType: "CREDIT", amount: -10_000, creditedInvoiceId: finalId }) as never);
 
-    const repo = new DrizzleInvoiceRepository(handle.db as unknown as AppDb);
+    const repo = new DrizzleInvoiceRepository(handle.db);
     expect(await repo.sumCreditNotesFor(finalId, org)).toBe(50_000);
     expect(await repo.sumCreditNotesFor(finalId, uuidv7())).toBe(0); // fel org
   });
@@ -380,7 +379,7 @@ describe("InvoiceRepository — Drizzle (pglite)", () => {
     await db.insert(matters).values(v({ id: mId, organizationId: uuidv7(), matterNumber: "2026-1", title: "T" }));
     await db.insert(invoices).values(inv({ id: origId, matterId: mId, invoiceType: "STANDARD" }) as never);
     await db.insert(invoices).values(inv({ id: creditId, matterId: mId, invoiceType: "CREDIT", amount: -100, creditedInvoiceId: origId }) as never);
-    const repo = new DrizzleInvoiceRepository(handle.db as unknown as AppDb);
+    const repo = new DrizzleInvoiceRepository(handle.db);
     expect((await repo.getCreditNoteFor(origId))?.id).toBe(creditId);
     expect(await repo.getCreditNoteFor(uuidv7())).toBeNull();
   });
@@ -398,7 +397,7 @@ describe("InvoiceRepository — Drizzle (pglite)", () => {
     await db.insert(invoices).values(inv({ id: acc2, matterId: mId, invoiceType: "ACCONTO" }) as never);
     await db.insert(invoices).values(inv({ id: finalId, matterId: mId, invoiceType: "FINAL" }) as never);
     await db.insert(accontoDeductions).values(v({ id: uuidv7(), finalInvoiceId: finalId, accontoInvoiceId: acc2 }));
-    const repo = new DrizzleInvoiceRepository(handle.db as unknown as AppDb);
+    const repo = new DrizzleInvoiceRepository(handle.db);
     expect((await repo.listDeductibleAccontos(mId, [acc1, acc2])).map((a) => a.id)).toEqual([acc1]);
   });
 });

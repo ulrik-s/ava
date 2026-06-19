@@ -9,7 +9,6 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
 import type { DemoSource } from "@/lib/server/data-store/DemoDataStore";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 import { contacts, documents, matterContacts, matters, timeEntries, users } from "@/lib/server/db/schema";
-import type { AppDb } from "@/lib/server/db/types";
 import { DrizzleContactRepository } from "@/lib/server/repositories/drizzle-contact-repository";
 import { DrizzleMatterContactRepository } from "@/lib/server/repositories/drizzle-matter-contact-repository";
 import { DrizzleMatterRepository } from "@/lib/server/repositories/drizzle-matter-repository";
@@ -86,9 +85,9 @@ describe("Matter-läsningar — Drizzle (pglite)", () => {
     await db.insert(matterContacts).values(v({ id: mcId, matterId: mId, contactId: cId, role: "KLIENT" }));
     await db.insert(documents).values(v({ id: uuidv7(), matterId: mId, fileName: "a.pdf", mimeType: "application/pdf", sizeBytes: 1, storagePath: "p", uploadedById: uId }));
     await db.insert(timeEntries).values(v({ id: uuidv7(), matterId: mId, userId: uId, minutes: 30, billable: true, hourlyRate: 1000, description: "x", date: new Date() }));
-    const mRepo = new DrizzleMatterRepository(db as unknown as AppDb);
-    const mcRepo = new DrizzleMatterContactRepository(db as unknown as AppDb);
-    const cRepo = new DrizzleContactRepository(db as unknown as AppDb);
+    const mRepo = new DrizzleMatterRepository(db);
+    const mcRepo = new DrizzleMatterContactRepository(db);
+    const cRepo = new DrizzleContactRepository(db);
 
     const list = await mRepo.listForOrg(org, { page: 1, pageSize: 20 });
     expect(list.total).toBe(1);

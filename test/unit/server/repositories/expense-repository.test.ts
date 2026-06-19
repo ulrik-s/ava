@@ -6,7 +6,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 import { contacts, expenses, matterContacts, matters, users } from "@/lib/server/db/schema";
-import type { AppDb } from "@/lib/server/db/types";
 import { DrizzleExpenseRepository } from "@/lib/server/repositories/drizzle-expense-repository";
 import { InMemoryExpenseRepository } from "@/lib/server/repositories/in-memory-expense-repository";
 import { uuidv7 } from "@/lib/shared/uuid";
@@ -84,7 +83,7 @@ describe("ExpenseRepository — Drizzle (pglite)", () => {
     await db.insert(users).values(v({ id: userId, organizationId: org, email: "a@x", name: "Anna" }));
     await db.insert(expenses).values(v({ id: e1, userId, matterId: mId, date: new Date(), amount: 50_000, description: "x" }));
     await db.insert(expenses).values(v({ id: e2, userId, matterId: mId, date: new Date(), amount: 30_000, description: "y" }));
-    const repo = new DrizzleExpenseRepository(handle.db as unknown as AppDb);
+    const repo = new DrizzleExpenseRepository(handle.db);
 
     expect(await repo.listUnbilled(mId, [e1, e2])).toHaveLength(2);
     await repo.flagBilled([e1], uuidv7());
@@ -102,7 +101,7 @@ describe("ExpenseRepository — Drizzle (pglite)", () => {
     await db.insert(users).values(v({ id: userId, organizationId: org, email: "a@x", name: "Anna" }));
     await db.insert(expenses).values(v({ id: uuidv7(), userId, matterId: mId, date: new Date("2026-06-02"), amount: 50_000, description: "a" }));
     await db.insert(expenses).values(v({ id: uuidv7(), userId, matterId: mId, date: new Date("2026-06-01"), amount: 30_000, description: "b" }));
-    const repo = new DrizzleExpenseRepository(handle.db as unknown as AppDb);
+    const repo = new DrizzleExpenseRepository(handle.db);
     const res = await repo.listForOrg(org, { page: 1, pageSize: 50 });
     expect(res.total).toBe(2);
     expect(res.totalAmount).toBe(80_000);
@@ -122,7 +121,7 @@ describe("ExpenseRepository — Drizzle (pglite)", () => {
     await db.insert(matters).values(v({ id: mId, organizationId: org, matterNumber: "2026-1", title: "T" }));
     await db.insert(users).values(v({ id: userId, organizationId: org, email: "a@x", name: "Anna" }));
     await db.insert(expenses).values(v({ id: eId, userId, matterId: mId, date: new Date(), amount: 1, description: "x" }));
-    const repo = new DrizzleExpenseRepository(handle.db as unknown as AppDb);
+    const repo = new DrizzleExpenseRepository(handle.db);
     expect(await repo.getByIdInOrg(eId, org)).toMatchObject({ id: eId });
     expect(await repo.getByIdInOrg(eId, uuidv7())).toBeNull();
   });
@@ -187,7 +186,7 @@ describe("ExpenseRepository — frysning + perLawyer-period (Drizzle/pglite)", (
     await db.insert(expenses).values(v({ id: eEarly, userId: uId, matterId: mId, amount: 100, date: new Date("2026-06-01"), description: "tidig" }));
     await db.insert(expenses).values(v({ id: eFrozen, userId: uId, matterId: mId, amount: 300, date: new Date("2026-06-05"), description: "fryst", frozenByBillingRunId: uuidv7() }));
     await db.insert(expenses).values(v({ id: eOutside, userId: uId, matterId: mId, amount: 400, date: new Date("2026-05-01"), description: "utanför" }));
-    const repo = new DrizzleExpenseRepository(db as unknown as AppDb);
+    const repo = new DrizzleExpenseRepository(db);
 
     // listUnfrozenForMatter: ofrysta (eLate/eEarly/eOutside), date asc
     expect((await repo.listUnfrozenForMatter(mId)).map((e) => e.id)).toEqual([eOutside, eEarly, eLate]);

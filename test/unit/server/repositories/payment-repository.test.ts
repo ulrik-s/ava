@@ -7,7 +7,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 import { payments } from "@/lib/server/db/schema";
-import type { AppDb } from "@/lib/server/db/types";
 import { DrizzlePaymentRepository } from "@/lib/server/repositories/drizzle-payment-repository";
 import { InMemoryPaymentRepository } from "@/lib/server/repositories/in-memory-payment-repository";
 import { uuidv7 } from "@/lib/shared/uuid";
@@ -33,7 +32,7 @@ describe("PaymentRepository — Drizzle (pglite)", () => {
 
   it("create + sumByInvoice summerar i SQL", async () => {
     const invoiceId = uuidv7();
-    const repo = new DrizzlePaymentRepository(handle.db as unknown as AppDb);
+    const repo = new DrizzlePaymentRepository(handle.db);
     await repo.create({ id: uuidv7(), invoiceId, amount: 30_000, paidAt: new Date(), recordedById: uuidv7() } as never);
     await repo.create({ id: uuidv7(), invoiceId, amount: 20_000, paidAt: new Date(), recordedById: uuidv7() } as never);
     await repo.create({ id: uuidv7(), invoiceId: uuidv7(), amount: 99_000, paidAt: new Date(), recordedById: uuidv7() } as never);
