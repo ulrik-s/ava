@@ -27,6 +27,7 @@
     "lint": "eslint --config tooling/config/eslint.config.mjs",
     "lint:suppress": "eslint --config tooling/config/eslint.config.mjs --suppress-all",
     "lint:prune": "eslint --config tooling/config/eslint.config.mjs --prune-suppressions",
+    "lint:double-casts": "bun tooling/scripts/find-double-casts.ts",
     "commitlint": "commitlint --config tooling/config/commitlint.config.mjs",
     "typecheck": "tsc --noEmit && tsc --noEmit -p test/tsconfig.json",
     "test": "bun tooling/scripts/run-tests.ts",
