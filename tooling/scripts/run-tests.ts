@@ -86,9 +86,12 @@ const FAST = process.argv.includes("--fast");
 // (registry-testet kallade tidigare aldrig callbackarna) → lokalt 90.67% rader /
 // 85.87% funktioner. FUNC dras upp 84.3 → 84.5 (~1.37% marginal; funktions-
 // täckning är Node-version-stabil till skillnad från branches). LINE oförändrat
-// — dess marginal är en avsiktlig Node-version-buffert + lcov-line-bruset).
+// — dess marginal är en avsiktlig Node-version-buffert + lcov-line-bruset) →
+// 89.5 rader / 84.6 funktioner (#27: query-engine endsWith/notIn (#598) +
+// ReadOnlyDelegate _min/_max/findUniqueOrThrow → lokalt 85.99% funktioner.
+// FUNC dras upp 84.5 → 84.6, ~1.39% marginal. LINE oförändrat).
 const LINE_FLOOR = 0.895;
-const FUNC_FLOOR = 0.845;
+const FUNC_FLOOR = 0.846;
 
 /**
  * SERIAL_FILES — testfiler som SYNKRONT spawnar en barnprocess via

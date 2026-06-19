@@ -80,6 +80,30 @@ describe("ReadOnlyDelegate — aggregate", () => {
     expect(r._count).toBe(3);
     expect(r._avg.minutes).toBe(45);
   });
+
+  it("_min + _max över alla rader", async () => {
+    const r = await del.aggregate({ _min: { minutes: true }, _max: { minutes: true } }) as {
+      _min: { minutes: number }; _max: { minutes: number };
+    };
+    expect(r._min.minutes).toBe(15);
+    expect(r._max.minutes).toBe(90);
+  });
+
+  it("_min/_max med where som snävar till en matter", async () => {
+    const r = await del.aggregate({ where: { matterId: "m1" }, _min: { minutes: true }, _max: { minutes: true } }) as {
+      _min: { minutes: number }; _max: { minutes: number };
+    };
+    expect(r._min.minutes).toBe(30);
+    expect(r._max.minutes).toBe(90);
+  });
+
+  it("_min/_max utan träff → null (tom rad-mängd)", async () => {
+    const r = await del.aggregate({ where: { matterId: "x" }, _min: { minutes: true }, _max: { minutes: true } }) as {
+      _min: { minutes: number | null }; _max: { minutes: number | null };
+    };
+    expect(r._min.minutes).toBeNull();
+    expect(r._max.minutes).toBeNull();
+  });
 });
 
 describe("ReadOnlyDelegate — läsning", () => {
@@ -104,6 +128,11 @@ describe("ReadOnlyDelegate — läsning", () => {
 
   it("findFirstOrThrow kastar när inget hittas", async () => {
     await expect(delegate.findFirstOrThrow({ where: { id: "missing" } })).rejects.toThrow();
+  });
+
+  it("findUniqueOrThrow returnerar raden vid träff, kastar annars", async () => {
+    expect((await delegate.findUniqueOrThrow({ where: { id: "m1" } })).id).toBe("m1");
+    await expect(delegate.findUniqueOrThrow({ where: { id: "missing" } })).rejects.toThrow();
   });
 
   it("count", async () => {
