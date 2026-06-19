@@ -7,7 +7,7 @@
  */
 
 import type { Principal } from "./auth/principal";
-import type { IDataStore } from "./data-store/IDataStore";
+import type { IDataStore, IEventLog } from "./data-store/IDataStore";
 import type { IPorts } from "./ports";
 import { buildInMemoryRepositories } from "./repositories/in-memory-repositories";
 import type { Repositories } from "./repositories/repositories";
@@ -15,7 +15,17 @@ import type { SyncStore } from "./sync/sync-store";
 import type { Context } from "./trpc-core";
 
 export interface BuildContextDeps {
-  dataStore: IDataStore;
+  /**
+   * Full in-memory-store (git/demo/offline) — bygger in-memory-repos (om `repos`
+   * utelämnas) OCH levererar event-loggen till `ctx.dataStore`. Server-first
+   * utelämnar den och anger `repos` + `eventLog` i stället.
+   */
+  dataStore?: IDataStore;
+  /**
+   * Event-logg för `ctx.dataStore` när ingen full `dataStore` finns (server-first).
+   * Faller annars tillbaka på `dataStore.events`.
+   */
+  eventLog?: IEventLog;
   ports: IPorts;
   /** Fastställd av en `AuthProvider`. `null` = anonym/publik. */
   principal: Principal | null;
@@ -29,9 +39,20 @@ export interface BuildContextDeps {
 }
 
 export function buildContext(deps: BuildContextDeps): Context {
+  const events = deps.eventLog ?? deps.dataStore?.events;
+  if (!events) {
+    throw new Error("buildContext: ange `dataStore` eller `eventLog`.");
+  }
+  let repos = deps.repos;
+  if (!repos) {
+    if (!deps.dataStore) {
+      throw new Error("buildContext: ange `repos` eller `dataStore` (för in-memory-repos).");
+    }
+    repos = buildInMemoryRepositories(deps.dataStore);
+  }
   return {
-    dataStore: deps.dataStore,
-    repos: deps.repos ?? buildInMemoryRepositories(deps.dataStore),
+    dataStore: { events },
+    repos,
     ports: deps.ports,
     user: deps.principal,
     ...(deps.sync ? { sync: deps.sync } : {}),

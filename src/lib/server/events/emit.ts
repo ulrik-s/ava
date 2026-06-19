@@ -15,7 +15,7 @@ import type { EventType, EmitInput } from "./schema";
 
 /** Den minimal subset av tRPC-context som emit-helpers behöver. */
 export interface EmitCtx {
-  dataStore: IDataStore;
+  dataStore: Pick<IDataStore, "events">;
   user: { id: string };
 }
 

@@ -21,8 +21,8 @@
 import type { AllowlistedUser } from "@/lib/server/auth/oidc-auth-provider";
 import { OidcAuthProvider } from "@/lib/server/auth/oidc-auth-provider";
 import { buildContext } from "@/lib/server/build-context";
-import type { IDataStore } from "@/lib/server/data-store/IDataStore";
-import type { AvaEvent, EmitInput } from "@/lib/server/events/schema";
+import type { IEventLog } from "@/lib/server/data-store/IDataStore";
+import type { AvaEvent, EmitInput, EventFilter } from "@/lib/server/events/schema";
 import type { IPorts } from "@/lib/server/ports";
 import type { Repositories } from "@/lib/server/repositories/repositories";
 import type { SyncStore } from "@/lib/server/sync/sync-store";
@@ -42,18 +42,26 @@ class EventLogNotBuiltError extends Error {
   }
 }
 
-/** Read-only event-logg: `emit` no-op:ar via ReadOnlyError, `query` ger []. */
-export const serverFirstEventLog = {
+/**
+ * Read-only event-logg (full `IEventLog`): `emit` no-op:ar via ReadOnlyError,
+ * `query` ger [], `iterate` ger en tom ström, `onNewEvent` en no-op-avregistrering.
+ * Routrarna rör bara `.events` på `ctx.dataStore` (allt annat via ctx.repos, ADR 0020),
+ * så `ctx.dataStore` är typad `Pick<IDataStore, "events">` och behöver ingen full store.
+ */
+export const serverFirstEventLog: IEventLog = {
   emit(_input: EmitInput): Promise<AvaEvent> {
     return Promise.reject(new EventLogNotBuiltError());
   },
-  query(): Promise<AvaEvent[]> {
+  query(_filter?: EventFilter): Promise<AvaEvent[]> {
     return Promise.resolve([]);
   },
+  async *iterate(_filter?: EventFilter): AsyncIterable<AvaEvent> {
+    // Tom ström — inga events innan change-loggen byggts (#408).
+  },
+  onNewEvent(): () => void {
+    return () => {};
+  },
 };
-
-// Routrarna rör bara `.events` på dataStore (allt annat via ctx.repos, ADR 0020).
-const serverDataStore = { events: serverFirstEventLog } as unknown as IDataStore;
 
 export interface ServerContextDeps {
   /** Typade Drizzle-repositoryn (ADR 0020) för den auktoritativa Postgres-db:n. */
@@ -91,7 +99,7 @@ export async function createServerContext(req: Request, deps: ServerContextDeps)
   const users = await deps.repos.users.listByOrg(deps.organizationId);
   const principal = new OidcAuthProvider(claims, toAllowlist(users)).getPrincipal();
   return buildContext({
-    dataStore: serverDataStore,
+    eventLog: serverFirstEventLog,
     ports: deps.ports,
     principal,
     repos: deps.repos,

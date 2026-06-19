@@ -25,8 +25,13 @@ import type { Repositories } from "./repositories/repositories";
 import type { SyncStore } from "./sync/sync-store";
 
 export type Context = {
-  /** Read/write-data via abstraktion. Git-backenden wirar DemoDataStore. */
-  dataStore: IDataStore;
+  /**
+   * Event-loggen routrarna emit:ar mot. Efter ADR 0020 läser routrarna ALL
+   * data via `ctx.repos` — det enda som rör `ctx.dataStore` är emit-helpern
+   * (`events/emit.ts`), så fältet är medvetet smalt (bara `events`). Demo/git
+   * wirar in fulla `IDataStore`:s `.events`; server-first en sink-logg.
+   */
+  dataStore: Pick<IDataStore, "events">;
   /**
    * Typat repository-aggregat (ADR 0020) — den nya sömmen routrarna migreras
    * till, entitet för entitet. Samexisterar med `dataStore` under övergången.
