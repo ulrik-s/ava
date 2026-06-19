@@ -18,6 +18,7 @@
  */
 
 import { omitUndefined } from "@/lib/shared/omit-undefined";
+import type { Delegate } from "../IDataStore";
 import { InMemoryQueryEngine, type QueryOptions } from "./query-engine";
 
 export class ReadOnlyError extends Error {
@@ -60,7 +61,7 @@ export interface FindArgs {
   include?: Record<string, unknown>;
 }
 
-export class ReadOnlyDelegate<T extends Record<string, unknown>> {
+export class ReadOnlyDelegate<T extends Record<string, unknown>> implements Delegate<T> {
   private engine = new InMemoryQueryEngine<T>();
 
   constructor(
