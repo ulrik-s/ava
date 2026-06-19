@@ -20,7 +20,7 @@ export class IndexedDbPersistence implements LocalStorePersistence {
   private readonly kv: IdbKv;
 
   constructor(
-    factory: IDBFactory = (globalThis as unknown as { indexedDB: IDBFactory }).indexedDB,
+    factory: IDBFactory = globalThis.indexedDB,
     dbName: string = DB_NAME,
   ) {
     this.kv = new IdbKv(factory, dbName, STORE);

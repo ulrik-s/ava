@@ -14,6 +14,7 @@
 
 import { createTRPCClient, httpBatchLink } from "@trpc/client";
 import superjson from "superjson";
+import { toLinkFetch, type InjectableFetch } from "@/lib/client/link-fetch";
 import { TrpcSyncTransport } from "@/lib/client/sync/trpc-sync-transport";
 import { CachingSyncDataStore } from "@/lib/server/data-store/in-memory/caching-sync-data-store";
 import { IndexedDbPersistence } from "@/lib/server/data-store/in-memory/indexeddb-persistence";
@@ -25,9 +26,7 @@ import {
 import type { AppRouter } from "@/lib/server/routers/_app";
 import { serverTrpcEndpoint } from "./http-backend-runtime";
 
-/** tRPC:s httpBatchLink-fetch-typ (icke-exporterad `FetchEsque`). */
-type LinkFetch = NonNullable<NonNullable<Parameters<typeof httpBatchLink<AppRouter>>[0]>["fetch"]>;
-export type ServerFirstFetch = (input: string | URL, init?: RequestInit) => Promise<Response>;
+export type ServerFirstFetch = InjectableFetch;
 
 export interface ServerFirstStoreDeps {
   /** Server-bas-URL. Tom (default) = samma origin (bakom nginx/oauth2-proxy). */
@@ -53,7 +52,7 @@ export async function createServerFirstStore(deps: ServerFirstStoreDeps = {}): P
       httpBatchLink({
         url: serverTrpcEndpoint(deps.baseUrl),
         transformer: superjson,
-        ...(deps.fetch ? { fetch: deps.fetch as unknown as LinkFetch } : {}),
+        ...(deps.fetch ? { fetch: toLinkFetch(deps.fetch) } : {}),
       }),
     ],
   });

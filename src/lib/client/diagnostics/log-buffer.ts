@@ -167,6 +167,5 @@ export function installConsoleCapture(opts: InstallOptions): () => void {
 }
 
 function defaultTarget(): EventTargetLike | null {
-  const g = globalThis as { addEventListener?: unknown; removeEventListener?: unknown };
-  return typeof g.addEventListener === "function" ? (g as unknown as EventTargetLike) : null;
+  return typeof globalThis.addEventListener === "function" ? globalThis : null;
 }

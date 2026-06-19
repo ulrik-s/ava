@@ -30,29 +30,19 @@ const DEMO_SNAPSHOT_PREFIX = "ava-demo";
 const WORKING_COPY_DIR = "working-copy";
 const LS_PREFIX = "ava.";
 
-/** Minimal vy av OPFS-roten — bara det reset:en behöver (jfr persistence.ts). */
-interface OpfsRootHandle {
-  keys(): AsyncIterableIterator<string>;
-  removeEntry(name: string, options?: { recursive?: boolean }): Promise<void>;
-}
-
-interface NavigatorWithStorage {
-  storage?: { getDirectory?: () => Promise<OpfsRootHandle> };
-}
-
 /** OPFS-roten, eller null om OPFS saknas/inte går att öppna. */
-async function opfsRoot(): Promise<OpfsRootHandle | null> {
-  const nav = (globalThis as unknown as { navigator?: NavigatorWithStorage }).navigator;
-  if (!nav?.storage?.getDirectory) return null;
+async function opfsRoot(): Promise<FileSystemDirectoryHandle | null> {
+  const storage = typeof navigator === "undefined" ? undefined : navigator.storage;
+  if (!storage?.getDirectory) return null;
   try {
-    return await nav.storage.getDirectory();
+    return await storage.getDirectory();
   } catch {
     return null;
   }
 }
 
 /** Toppnivå-namn i OPFS-roten, eller [] om de inte kan listas. */
-async function opfsNames(root: OpfsRootHandle): Promise<string[]> {
+async function opfsNames(root: FileSystemDirectoryHandle): Promise<string[]> {
   const names: string[] = [];
   try {
     for await (const name of root.keys()) names.push(name);
@@ -108,7 +98,7 @@ function deleteIdb(factory: IDBFactory, name: string): Promise<void> {
  * (även gamla version-namespaces) så "Återställ demo" verkligen ger färsk seed.
  */
 async function clearDemoIdb(): Promise<void> {
-  const factory = (globalThis as unknown as { indexedDB?: IDBFactory }).indexedDB;
+  const factory = globalThis.indexedDB;
   if (!factory) return;
   try {
     const dbs = typeof factory.databases === "function" ? await factory.databases() : [];

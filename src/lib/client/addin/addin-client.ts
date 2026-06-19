@@ -17,15 +17,12 @@
 
 import { createTRPCClient, httpBatchLink, type TRPCClient } from "@trpc/client";
 import superjson from "superjson";
+import { toLinkFetch, type InjectableFetch } from "@/lib/client/link-fetch";
 import type { AppRouter } from "@/lib/server/routers/_app";
 
 /** Minimal fetch-form för override (test/icke-standard-runtime). En DOM-`fetch`
  *  uppfyller den; tRPC:s interna `FetchEsque` är inte publikt exporterad. */
-export type AddinFetch = (input: string | URL, init?: RequestInit) => Promise<Response>;
-
-/** tRPC:s httpBatchLink-fetch-typ (icke-exporterad `FetchEsque`), härledd ur
- *  länkens optionsparameter så vi kan brygga en DOM-fetch dit utan import. */
-type LinkFetch = NonNullable<NonNullable<Parameters<typeof httpBatchLink<AppRouter>>[0]>["fetch"]>;
+export type AddinFetch = InjectableFetch;
 
 /** tRPC-endpointens default-suffix på serverns origin (matchar DEFAULT_TRPC_ENDPOINT). */
 export const ADDIN_TRPC_PATH = "/api/trpc";
@@ -56,9 +53,7 @@ export function createAddinClient(opts: AddinClientOptions): TRPCClient<AppRoute
         url: addinTrpcEndpoint(opts.baseUrl),
         transformer: superjson,
         headers: () => ({ authorization: `Bearer ${opts.token}` }),
-        // En DOM-fetch är runtime-kompatibel med tRPC:s FetchEsque; typerna
-        // skiljer bara i exactOptional-detaljer (signal null vs undefined).
-        ...(opts.fetch ? { fetch: opts.fetch as unknown as LinkFetch } : {}),
+        ...(opts.fetch ? { fetch: toLinkFetch(opts.fetch) } : {}),
       }),
     ],
   });
