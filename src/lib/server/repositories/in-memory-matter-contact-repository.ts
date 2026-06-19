@@ -37,7 +37,7 @@ export class InMemoryMatterContactRepository
           contact: { OR: [{ personalNumber: { contains: numberTerm } }, { orgNumber: { contains: numberTerm } }] },
         }
       : { matter: { organizationId } };
-    return (await this.delegate.findMany({ where, include: MC_INCLUDE })) as ConflictContactRow[];
+    return (await this.delegate.findMany({ where, include: MC_INCLUDE })) as unknown as ConflictContactRow[];
   }
 
   async getByIdInOrg(id: string, organizationId: string): Promise<MatterContact | null> {

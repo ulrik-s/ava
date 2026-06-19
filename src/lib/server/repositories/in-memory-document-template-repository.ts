@@ -26,7 +26,7 @@ export class InMemoryDocumentTemplateRepository
         createdAt: true, updatedAt: true, createdBy: { select: { name: true } },
       },
       orderBy: [{ category: "asc" }, { name: "asc" }],
-    })) as DocumentTemplateListRow[];
+    })) as unknown as DocumentTemplateListRow[];
   }
 
   async getByIdInOrg(id: string, organizationId: string): Promise<DocumentTemplateRow | null> {

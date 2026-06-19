@@ -17,7 +17,7 @@ export class InMemoryWriteOffRepository extends InMemoryRepository<WriteOff> imp
   }
 
   async sumByInvoice(invoiceId: string): Promise<number> {
-    const rows = (await this.delegate.findMany({ where: { invoiceId } })) as ReadonlyArray<WriteOff>;
+    const rows = (await this.delegate.findMany({ where: { invoiceId } })) as unknown as ReadonlyArray<WriteOff>;
     return rows
       .filter((r) => !(r as { deletedAt?: unknown }).deletedAt)
       .reduce((s, w) => s + w.amount, 0);

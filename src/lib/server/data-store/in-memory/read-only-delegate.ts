@@ -18,8 +18,8 @@
  */
 
 import { omitUndefined } from "@/lib/shared/omit-undefined";
-import type { Delegate } from "../IDataStore";
-import { InMemoryQueryEngine, type QueryOptions } from "./query-engine";
+import type { AggregateArgs, Delegate, FindArgs } from "../IDataStore";
+import { InMemoryQueryEngine } from "./query-engine";
 
 export class ReadOnlyError extends Error {
   constructor(operation: string) {
@@ -52,15 +52,6 @@ export interface ReadOnlyDelegateOpts<T extends Record<string, unknown>> {
   relations?: Record<string, RelationConfig<T>>;
 }
 
-export interface FindArgs {
-  where?: Record<string, unknown>;
-  orderBy?: QueryOptions["orderBy"];
-  skip?: number;
-  take?: number;
-  select?: Record<string, unknown>;
-  include?: Record<string, unknown>;
-}
-
 export class ReadOnlyDelegate<T extends Record<string, unknown>> implements Delegate<T> {
   private engine = new InMemoryQueryEngine<T>();
 
@@ -71,33 +62,33 @@ export class ReadOnlyDelegate<T extends Record<string, unknown>> implements Dele
 
   // ─── Läs-metoder ──────────────────────────────────────────────────
 
-  async findMany(args: FindArgs = {}): Promise<T[]> {
+  async findMany(args: FindArgs<T> = {}): Promise<T[]> {
     const rows = this.queryRows(args);
     return rows.map((r) => this.hydrate(r, args.include ?? args.select));
   }
 
-  async findFirst(args: FindArgs = {}): Promise<T | null> {
+  async findFirst(args: FindArgs<T> = {}): Promise<T | null> {
     const r = this.queryRows({ ...args, take: 1 })[0] ?? null;
     return r ? this.hydrate(r, args.include ?? args.select) : null;
   }
 
-  async findUnique(args: FindArgs = {}): Promise<T | null> {
+  async findUnique(args: FindArgs<T> = {}): Promise<T | null> {
     return this.findFirst(args);
   }
 
-  async findFirstOrThrow(args: FindArgs = {}): Promise<T> {
+  async findFirstOrThrow(args: FindArgs<T> = {}): Promise<T> {
     const r = await this.findFirst(args);
     if (!r) throw new Error("No record found");
     return r;
   }
 
-  async findUniqueOrThrow(args: FindArgs = {}): Promise<T> {
+  async findUniqueOrThrow(args: FindArgs<T> = {}): Promise<T> {
     const r = await this.findUnique(args);
     if (!r) throw new Error("No record found");
     return r;
   }
 
-  async count(args: FindArgs = {}): Promise<number> {
+  async count(args: FindArgs<T> = {}): Promise<number> {
     return this.filterRows(this.rowsFn(), args.where).length;
   }
 
@@ -106,14 +97,7 @@ export class ReadOnlyDelegate<T extends Record<string, unknown>> implements Dele
    * över numeriska fält. Räcker för router-användningarna (timeEntry-summor,
    * rapporter). Okända fält → 0/null.
    */
-  async aggregate(args: {
-    where?: Record<string, unknown>;
-    _count?: true | Record<string, true>;
-    _sum?: Record<string, true>;
-    _avg?: Record<string, true>;
-    _min?: Record<string, true>;
-    _max?: Record<string, true>;
-  } = {}): Promise<Record<string, unknown>> {
+  async aggregate(args: AggregateArgs = {}): Promise<Record<string, unknown>> {
     const rows = this.filterRows(this.rowsFn(), args.where);
     const nums = (field: string) => rows.map((r) => Number((r as Record<string, unknown>)[field]) || 0);
     const out: Record<string, unknown> = {};
@@ -134,7 +118,7 @@ export class ReadOnlyDelegate<T extends Record<string, unknown>> implements Dele
   }
 
   /** Filtrera (med relations-prehydrering) → sortera/paginera. */
-  private queryRows(args: FindArgs): T[] {
+  private queryRows(args: FindArgs<T>): T[] {
     const filtered = this.filterRows(this.rowsFn(), args.where);
     return this.engine.query(filtered, omitUndefined({
       orderBy: args.orderBy,

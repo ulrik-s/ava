@@ -17,7 +17,7 @@ export class InMemoryPaymentRepository extends InMemoryRepository<Payment> imple
   }
 
   async sumByInvoice(invoiceId: string): Promise<number> {
-    const rows = (await this.delegate.findMany({ where: { invoiceId } })) as ReadonlyArray<Payment>;
+    const rows = (await this.delegate.findMany({ where: { invoiceId } })) as unknown as ReadonlyArray<Payment>;
     return rows
       .filter((r) => !(r as { deletedAt?: unknown }).deletedAt)
       .reduce((s, p) => s + p.amount, 0);
