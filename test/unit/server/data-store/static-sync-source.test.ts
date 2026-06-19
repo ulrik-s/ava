@@ -70,6 +70,15 @@ describe("StaticSyncSource — pull/push/cursor", () => {
     const res = await src.pull(3);
     expect(res.changes).toEqual([{ entity: "contact", row: { id: "c1" }, deleted: true }]);
   });
+
+  it("reset() tömmer loggen och seedar om från seq 0", async () => {
+    const src = new StaticSyncSource();
+    expect((await src.pull(0)).cursor).toBe(0);
+    src.reset(seed);
+    const res = await src.pull(0);
+    expect(res.changes).toHaveLength(3);
+    expect(res.cursor).toBe(3);
+  });
 });
 
 describe("StaticSyncSource — integration med CachingSyncDataStore (hela reconcile-loopen)", () => {

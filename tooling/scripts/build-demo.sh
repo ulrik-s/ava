@@ -125,6 +125,11 @@ bun tooling/scripts/build-demo-repo.ts --dir "$ROOT/out"
 echo "[build-demo] Genererar manifest.json över out/..."
 bun tooling/scripts/generate-demo-manifest.ts "$ROOT/out"
 
+# demo-seed.json (#544, ADR 0025): EN bundlad seed som klienten hämtar i st.f.
+# manifest + N filer → hydrerar cachen via den riktiga reconcile/pull-vägen.
+echo "[build-demo] Genererar demo-seed.json över out/..."
+bun tooling/scripts/generate-demo-seed.ts "$ROOT/out"
+
 # .nojekyll: utan denna fil ignorerar GitHub Pages alla dotfile-mappar
 # (t.ex. /.ava/users/) → users + org-data skulle 404:a.
 touch "$ROOT/out/.nojekyll"
