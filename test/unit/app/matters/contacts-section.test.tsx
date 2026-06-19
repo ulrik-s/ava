@@ -89,4 +89,44 @@ describe("ContactsSection", () => {
     fireEvent.click(screen.getByText("Ta bort"));
     expect(removeContact).toHaveBeenCalledWith({ matterContactId: "mc1" });
   });
+
+  it("ny ORGANISATION-kontakt: typ-byte → orgnummer-fältet + roll-select", () => {
+    render(<ContactsSection matterId="m1" contacts={[]} />);
+    fireEvent.click(screen.getByText("+ Lägg till"));
+    fireEvent.change(screen.getByPlaceholderText("Namn *"), { target: { value: "Org AB" } });
+    const [roleSel, typeSel] = screen.getAllByRole("combobox") as HTMLSelectElement[];
+    const roleOpts = roleSel!.querySelectorAll("option");
+    fireEvent.change(roleSel!, { target: { value: (roleOpts[1] as HTMLOptionElement).value } });
+    const typeOpts = Array.from(typeSel!.querySelectorAll("option")) as HTMLOptionElement[];
+    const nonPerson = typeOpts.find((o) => o.value !== "PERSON")!;
+    fireEvent.change(typeSel!, { target: { value: nonPerson.value } });
+    fireEvent.change(screen.getByPlaceholderText("Orgnummer"), { target: { value: "556677-8899" } });
+    fireEvent.click(screen.getByRole("button", { name: /Skapa & lägg till/ }));
+    expect(addNewContact).toHaveBeenCalledWith(
+      expect.objectContaining({ matterId: "m1", name: "Org AB", orgNumber: "556677-8899" }),
+    );
+  });
+
+  it("ny PERSON-kontakt: personnummer-fältet skrivs (PERSON-grenen)", () => {
+    render(<ContactsSection matterId="m1" contacts={[]} />);
+    fireEvent.click(screen.getByText("+ Lägg till"));
+    fireEvent.change(screen.getByPlaceholderText("Namn *"), { target: { value: "Per Person" } });
+    fireEvent.change(screen.getByPlaceholderText("Personnummer"), { target: { value: "19900101-1234" } });
+    fireEvent.click(screen.getByRole("button", { name: /Skapa & lägg till/ }));
+    expect(addNewContact).toHaveBeenCalledWith(
+      expect.objectContaining({ personalNumber: "19900101-1234" }),
+    );
+  });
+
+  it("befintlig-formuläret: roll-select exerceras + koppling", () => {
+    render(<ContactsSection matterId="m1" contacts={[]} />);
+    fireEvent.click(screen.getByText("+ Lägg till"));
+    fireEvent.click(screen.getByText("Befintlig kontakt"));
+    const [contactSel, roleSel] = screen.getAllByRole("combobox") as HTMLSelectElement[];
+    const roleOpts = roleSel!.querySelectorAll("option");
+    fireEvent.change(roleSel!, { target: { value: (roleOpts[1] as HTMLOptionElement).value } });
+    fireEvent.change(contactSel!, { target: { value: "c2" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Lägg till$/ }));
+    expect(addContact).toHaveBeenCalledWith(expect.objectContaining({ matterId: "m1", contactId: "c2" }));
+  });
 });
