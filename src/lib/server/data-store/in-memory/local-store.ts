@@ -14,6 +14,9 @@
 
 import type { DemoSource } from "@/lib/shared/demo-source";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
+import type {
+  AccontoDeduction, BillingRun, CalendarEvent, ConflictCheck, Contact, Document, DocumentAnalysisSuggestion, DocumentFolder, DocumentTemplate, ExpectedReceivable, Expense, Invoice, InvoiceDispatch, Matter, MatterContact, MatterEventSuggestion, Office, Organization, Payment, PaymentPlan, ServiceNote, Task, TimeEntry, User, WriteOff,
+} from "@/lib/shared/schemas";
 import type { AvaEvent, EmitInput, EventFilter } from "../../events/schema";
 import type {
   IDataStore,
@@ -103,34 +106,34 @@ export class LocalStore implements IDataStore {
     // läser den AKTUELLA source-referensen så collections ser senaste arrayen.
     const relations = buildRelations(() => this.source);
 
-    this.matters = this.makeDelegate("matters", relations.matters) as unknown as MatterDelegate;
-    this.matterContacts = this.makeDelegate("matterContacts", relations.matterContacts) as unknown as MatterContactDelegate;
-    this.contacts = this.makeDelegate("contacts", relations.contacts) as unknown as ContactDelegate;
-    this.documents = this.makeDelegate("documents", relations.documents) as unknown as DocumentDelegate;
-    this.documentFolders = this.makeDelegate("documentFolders", relations.documentFolders) as unknown as DocumentFolderDelegate;
-    this.documentTemplates = this.makeDelegate("documentTemplates", relations.documentTemplates) as unknown as DocumentTemplateDelegate;
-    this.documentAnalysisSuggestions = this.makeDelegate("documentAnalysisSuggestions", relations.documentAnalysisSuggestions) as unknown as DocumentAnalysisSuggestionDelegate;
-    this.matterEventSuggestions = this.makeDelegate("matterEventSuggestions", relations.matterEventSuggestions) as unknown as MatterEventSuggestionDelegate;
-    this.invoices = this.makeDelegate("invoices", relations.invoices) as unknown as InvoiceDelegate;
-    this.timeEntries = this.makeDelegate("timeEntries", relations.timeEntries) as unknown as TimeEntryDelegate;
-    this.expenses = this.makeDelegate("expenses", relations.expenses) as unknown as ExpenseDelegate;
-    this.users = this.makeDelegate("users") as unknown as UserDelegate;
-    this.organizations = this.makeDelegate("organizations") as unknown as OrganizationDelegate;
-    this.offices = this.makeDelegate("offices") as unknown as OfficeDelegate;
-    this.conflictChecks = this.makeDelegate("conflictChecks", relations.conflictChecks) as unknown as ConflictCheckDelegate;
-    this.payments = this.makeDelegate("payments") as unknown as PaymentDelegate;
-    this.writeOffs = this.makeDelegate("writeOffs") as unknown as WriteOffDelegate;
-    this.invoiceDispatches = this.makeDelegate("invoiceDispatches", relations.invoiceDispatches) as unknown as InvoiceDispatchDelegate;
-    this.expectedReceivables = this.makeDelegate("expectedReceivables") as unknown as ExpectedReceivableDelegate;
-    this.paymentPlans = this.makeDelegate("paymentPlans", relations.paymentPlans) as unknown as PaymentPlanDelegate;
-    this.paymentPlanReminders = this.makeDelegate("paymentPlanReminders") as unknown as Delegate;
-    this.accontoDeductions = this.makeDelegate("accontoDeductions") as unknown as AccontoDeductionDelegate;
-    this.billingRuns = this.makeDelegate("billingRuns", relations.billingRuns) as unknown as BillingRunDelegate;
-    this.calendarEvents = this.makeDelegate("calendarEvents", relations.calendarEvents) as unknown as CalendarEventDelegate;
-    this.tasks = this.makeDelegate("tasks", relations.tasks) as unknown as TaskDelegate;
-    this.serviceNotes = this.makeDelegate("serviceNotes", relations.serviceNotes) as unknown as ServiceNoteDelegate;
-    this.userPreferences = this.makeDelegate("userPreferences") as unknown as Delegate;
-    this.orgPreferences = this.makeDelegate("orgPreferences") as unknown as Delegate;
+    this.matters = this.makeDelegate<Matter>("matters", relations.matters);
+    this.matterContacts = this.makeDelegate<MatterContact>("matterContacts", relations.matterContacts);
+    this.contacts = this.makeDelegate<Contact>("contacts", relations.contacts);
+    this.documents = this.makeDelegate<Document>("documents", relations.documents);
+    this.documentFolders = this.makeDelegate<DocumentFolder>("documentFolders", relations.documentFolders);
+    this.documentTemplates = this.makeDelegate<DocumentTemplate>("documentTemplates", relations.documentTemplates);
+    this.documentAnalysisSuggestions = this.makeDelegate<DocumentAnalysisSuggestion>("documentAnalysisSuggestions", relations.documentAnalysisSuggestions);
+    this.matterEventSuggestions = this.makeDelegate<MatterEventSuggestion>("matterEventSuggestions", relations.matterEventSuggestions);
+    this.invoices = this.makeDelegate<Invoice>("invoices", relations.invoices);
+    this.timeEntries = this.makeDelegate<TimeEntry>("timeEntries", relations.timeEntries);
+    this.expenses = this.makeDelegate<Expense>("expenses", relations.expenses);
+    this.users = this.makeDelegate<User>("users");
+    this.organizations = this.makeDelegate<Organization>("organizations");
+    this.offices = this.makeDelegate<Office>("offices");
+    this.conflictChecks = this.makeDelegate<ConflictCheck>("conflictChecks", relations.conflictChecks);
+    this.payments = this.makeDelegate<Payment>("payments");
+    this.writeOffs = this.makeDelegate<WriteOff>("writeOffs");
+    this.invoiceDispatches = this.makeDelegate<InvoiceDispatch>("invoiceDispatches", relations.invoiceDispatches);
+    this.expectedReceivables = this.makeDelegate<ExpectedReceivable>("expectedReceivables");
+    this.paymentPlans = this.makeDelegate<PaymentPlan>("paymentPlans", relations.paymentPlans);
+    this.paymentPlanReminders = this.makeDelegate("paymentPlanReminders");
+    this.accontoDeductions = this.makeDelegate<AccontoDeduction>("accontoDeductions");
+    this.billingRuns = this.makeDelegate<BillingRun>("billingRuns", relations.billingRuns);
+    this.calendarEvents = this.makeDelegate<CalendarEvent>("calendarEvents", relations.calendarEvents);
+    this.tasks = this.makeDelegate<Task>("tasks", relations.tasks);
+    this.serviceNotes = this.makeDelegate<ServiceNote>("serviceNotes", relations.serviceNotes);
+    this.userPreferences = this.makeDelegate("userPreferences");
+    this.orgPreferences = this.makeDelegate("orgPreferences");
 
     this.events = new ReadOnlyEventLog();
     this.raw = makeThrowingProxy() as unknown as IDataStore["raw"];

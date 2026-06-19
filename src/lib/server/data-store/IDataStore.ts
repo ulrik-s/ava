@@ -109,11 +109,12 @@ export interface Delegate<Row = any> {
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
-// Delegate-typerna är fortfarande Delegate<any>. Tightening per delegate via
-// `Delegate<Matter>` etc. avslöjar legacy-mismatches mellan schemas (nullish)
-// och kallar (förväntar `null`-only), samt relation-joins (matter.contacts)
-// som inte finns i bas-schemat. Tighten har gjorts opt-in via TypedDelegate
-// nedan så enskilda callers kan välja striktare typer när de vill.
+// Per-entitet-delegate: binder `Row` (branded id:n flödar ut via `Joined<Row>`).
+// In-memory-impl:en (`ReadOnlyDelegate<T> implements Delegate<T>`) satisfierar
+// dessa, så `LocalStore` wirar dem TYPADE utan casts (#typing). Den enda kvar-
+// varande lösheten är query-INPUT (`args`/`where`) inne i `Delegate` ovan — den
+// otypade Prisma-formade ytan (dokumenterad any). Tighta den kräver en
+// `WhereInput<Row>`-modell + 300+ router-anrops-rewrites (eget projekt).
 export type MatterDelegate = Delegate<Matter>;
 export type ContactDelegate = Delegate<Contact>;
 export type MatterContactDelegate = Delegate<MatterContact>;
