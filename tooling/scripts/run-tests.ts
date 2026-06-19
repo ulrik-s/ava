@@ -81,9 +81,14 @@ const FAST = process.argv.includes("--fast");
 // listForLawyerInPeriod/listBillableForOrg testade → drizzle-time-entry 81%→100%.
 // Repo-täckningssvepet (matter-contact/folder/expense/time-entry) klart →
 // lokalt 90.77% rader / 85.63% funktioner. FUNC dras upp 84.2 → 84.3
-// (~1.33% marginal). LINE oförändrat).
+// (~1.33% marginal). LINE oförändrat) → 89.5 rader / 84.5 funktioner (#27:
+// demoCacheKey + ENTITY_REGISTRY.gitPath-callbacks för ALLA entiteter testade
+// (registry-testet kallade tidigare aldrig callbackarna) → lokalt 90.67% rader /
+// 85.87% funktioner. FUNC dras upp 84.3 → 84.5 (~1.37% marginal; funktions-
+// täckning är Node-version-stabil till skillnad från branches). LINE oförändrat
+// — dess marginal är en avsiktlig Node-version-buffert + lcov-line-bruset).
 const LINE_FLOOR = 0.895;
-const FUNC_FLOOR = 0.843;
+const FUNC_FLOOR = 0.845;
 
 /**
  * SERIAL_FILES — testfiler som SYNKRONT spawnar en barnprocess via

@@ -50,6 +50,17 @@ describe("ENTITY_REGISTRY", () => {
     }
   });
 
+  it("varje entitets gitPath() ger en .json-path under sin gitPrefix (kör alla callbacks)", () => {
+    for (const name of ENTITY_NAMES) {
+      const entry = ENTITY_REGISTRY[name]!;
+      // Anropa gitPath för VARJE entitet (annars täcks per-entitet-callbacken
+      // aldrig). `email` sätts så user-pathens row-gren också körs.
+      const path = entry.gitPath(`${name}-1`, { email: "x@y.se", userId: "u-1" });
+      expect(path).toMatch(/\.json$/);
+      expect(path.startsWith(entry.gitPrefix)).toBe(true);
+    }
+  });
+
   it("gitPath:s första argument används i resultatet (för rader utan email-style key)", () => {
     expect(ENTITY_REGISTRY.matter!.gitPath("m-1", {})).toBe("matters/active/m-1.json");
     expect(ENTITY_REGISTRY.contact!.gitPath("c-1", {})).toBe("contacts/c-1.json");
