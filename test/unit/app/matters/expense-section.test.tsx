@@ -87,4 +87,44 @@ describe("ExpenseSection", () => {
     expect(screen.getByText("Nytt utlägg")).toBeInTheDocument();
     expect(screen.getByText("Debiterbar")).toBeInTheDocument();
   });
+
+  it("fyller i skapa-formuläret + Spara → create.mutate med matterId + payload", () => {
+    render(<ExpenseSection matterId="m1" />);
+    fireEvent.click(screen.getByText("+ Nytt utlägg"));
+    const dateInput = document.querySelector('input[type="date"]') as HTMLInputElement;
+    fireEvent.change(dateInput, { target: { value: "2026-03-15" } });
+    fireEvent.change(screen.getByPlaceholderText("0,00"), { target: { value: "150" } });
+    fireEvent.change(screen.getByPlaceholderText("Beskrivning *"), { target: { value: "Parkering" } });
+    // VatPreview-grenen (amount>0) renderar moms-uppdelningen.
+    expect(screen.getByText(/Ex:.*M:.*In:/)).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Spara"));
+    expect(createMutate).toHaveBeenCalledWith(
+      expect.objectContaining({ matterId: "m1", description: "Parkering" }),
+    );
+  });
+
+  it("växlar moms-radio (Exkl moms) + momssats-select utan att krascha", () => {
+    render(<ExpenseSection matterId="m1" />);
+    fireEvent.click(screen.getByText("+ Nytt utlägg"));
+    fireEvent.click(screen.getByRole("radio", { name: /Exkl moms/ }));
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "1200" } });
+    fireEvent.click(screen.getByRole("checkbox")); // Debiterbar av
+    expect(screen.getByText("Spara")).toBeInTheDocument();
+  });
+
+  it("'Ändra' öppnar förifyllt edit-formulär → Spara ändring → update.mutate med id", () => {
+    render(<ExpenseSection matterId="m1" />);
+    fireEvent.click(screen.getByText("Ändra"));
+    expect(screen.getByText("Ändra utlägg")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Tågbiljett")).toBeInTheDocument(); // förifyllt ur e1
+    fireEvent.click(screen.getByText("Spara ändring"));
+    expect(updateMutate).toHaveBeenCalledWith(expect.objectContaining({ id: "e1" }));
+  });
+
+  it("Avbryt stänger skapa-modalen", () => {
+    render(<ExpenseSection matterId="m1" />);
+    fireEvent.click(screen.getByText("+ Nytt utlägg"));
+    fireEvent.click(screen.getByText("Avbryt"));
+    expect(screen.queryByText("Nytt utlägg")).not.toBeInTheDocument();
+  });
 });
