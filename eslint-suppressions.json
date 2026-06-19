@@ -69,11 +69,6 @@
       "count": 1
     }
   },
-  "src/lib/server/repositories/drizzle-contact-repository.ts": {
-    "no-restricted-syntax": {
-      "count": 2
-    }
-  },
   "src/lib/server/repositories/drizzle-document-suggestion-repository.ts": {
     "no-restricted-syntax": {
       "count": 3
@@ -82,11 +77,6 @@
   "src/lib/server/repositories/drizzle-invoice-repository.ts": {
     "no-restricted-syntax": {
       "count": 5
-    }
-  },
-  "src/lib/server/repositories/drizzle-matter-contact-repository.ts": {
-    "no-restricted-syntax": {
-      "count": 2
     }
   },
   "src/lib/server/repositories/drizzle-matter-repository.ts": {

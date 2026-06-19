@@ -18,13 +18,14 @@ import type {
   CalendarEventKind, CalendarEventVisibility, TaskPriority, TaskStatus,
 } from "@/lib/shared/schemas/calendar";
 import type {
-  BillingRunRecipient, BillingRunStatus, BillingRunType, ExpenseKind, ReminderType, SuggestionStatus,
+  BillingRunRecipient, BillingRunStatus, BillingRunType, ContactType, ExpenseKind, MatterRole,
+  ReminderType, SuggestionStatus,
 } from "@/lib/shared/schemas/enums";
 import type {
-  BillingRunId, CalendarEventId, ConflictCheckId, DocumentFolderId, DocumentId, DocumentTemplateId,
-  ExpenseId, InvoiceDispatchId, InvoiceId, MatterEventSuggestionId, MatterId, OrganizationId,
-  PaymentId, PaymentPlanId, PaymentPlanReminderId, ServiceNoteId, TaskId, TimeEntryId, UserId,
-  WriteOffId,
+  BillingRunId, CalendarEventId, ConflictCheckId, ContactId, DocumentFolderId, DocumentId,
+  DocumentTemplateId, ExpenseId, InvoiceDispatchId, InvoiceId, MatterContactId, MatterEventSuggestionId,
+  MatterId, OrganizationId, PaymentId, PaymentPlanId, PaymentPlanReminderId, ServiceNoteId, TaskId,
+  TimeEntryId, UserId, WriteOffId,
 } from "@/lib/shared/schemas/ids";
 import { baseColumns, boolDefault, orgScopedColumns } from "./columns";
 
@@ -72,15 +73,17 @@ export const users = pgTable("users", {
 
 export const contacts = pgTable("contacts", {
   ...orgScopedColumns,
+  id: uuid("id").primaryKey().$type<ContactId>(),
+  organizationId: uuid("organization_id").notNull().$type<OrganizationId>(),
   name: text("name").notNull(),
-  contactType: text("contact_type").notNull().default("PERSON"),
+  contactType: text("contact_type").notNull().default("PERSON").$type<ContactType>(),
   personalNumber: text("personal_number"),
   orgNumber: text("org_number"),
   email: text("email"),
   phone: text("phone"),
   address: text("address"),
   notes: text("notes"),
-  parentId: uuid("parent_id"),
+  parentId: uuid("parent_id").$type<ContactId>(),
 }, (t) => [index("contacts_org_idx").on(t.organizationId)]);
 
 export const matters = pgTable("matters", {
@@ -111,9 +114,10 @@ export const matters = pgTable("matters", {
  */
 export const matterContacts = pgTable("matter_contacts", {
   ...baseColumns,
-  matterId: uuid("matter_id").notNull(),
-  contactId: uuid("contact_id").notNull(),
-  role: text("role").notNull(),
+  id: uuid("id").primaryKey().$type<MatterContactId>(),
+  matterId: uuid("matter_id").notNull().$type<MatterId>(),
+  contactId: uuid("contact_id").notNull().$type<ContactId>(),
+  role: text("role").notNull().$type<MatterRole>(),
   notes: text("notes"),
 }, (t) => [index("matter_contacts_matter_idx").on(t.matterId)]);
 

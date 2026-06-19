@@ -6,6 +6,7 @@
  */
 
 import type { Contact } from "@/lib/shared/schemas/contact";
+import type { ContactType } from "@/lib/shared/schemas/enums";
 import type { Repository } from "./types";
 
 /** Kontakt + antal relationer (listvyns _count). */
@@ -34,7 +35,7 @@ export interface ContactFull extends Contact {
 /** Filter/paginering för `listForOrg`. */
 export interface ContactListOptions {
   search?: string | undefined;
-  contactType?: string | undefined;
+  contactType?: ContactType | undefined;
   page: number;
   pageSize: number;
 }

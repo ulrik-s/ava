@@ -6,6 +6,8 @@
 
 import { and, eq, isNull, or, sql } from "drizzle-orm";
 import type { Contact } from "@/lib/shared/schemas/contact";
+import type { MatterRole } from "@/lib/shared/schemas/enums";
+import { asId } from "@/lib/shared/schemas/ids";
 import type { MatterContact } from "@/lib/shared/schemas/matter";
 import { contacts, matterContacts, matters } from "../db/schema";
 import type { AppDb } from "../db/types";
@@ -57,32 +59,32 @@ export class DrizzleMatterContactRepository
     const rows = await this.db
       .select({ mc: matterContacts }).from(matterContacts)
       .innerJoin(matters, eq(matterContacts.matterId, matters.id))
-      .where(and(eq(matterContacts.id, id), eq(matters.organizationId, organizationId), isNull(matterContacts.deletedAt)))
+      .where(and(eq(matterContacts.id, asId<"MatterContactId">(id)), eq(matters.organizationId, organizationId), isNull(matterContacts.deletedAt)))
       .limit(1);
-    return this.asRow(rows[0]?.mc);
+    return rows[0]?.mc ?? null;
   }
 
   async linkContact(data: Partial<MatterContact>): Promise<MatterContactWithContact> {
     const link = await this.create(data);
     const [contact] = await this.db
-      .select().from(contacts).where(eq(contacts.id, (link as { contactId: string }).contactId)).limit(1);
-    return { ...(link as object), contact: contact as unknown as Contact } as MatterContactWithContact;
+      .select().from(contacts).where(eq(contacts.id, link.contactId)).limit(1);
+    return { ...link, contact: contact as Contact };
   }
 
   async findLink(matterId: string, contactId: string, role: string): Promise<MatterContact | null> {
     const rows = await this.db.select().from(matterContacts)
       .where(and(
-        eq(matterContacts.matterId, matterId), eq(matterContacts.contactId, contactId),
-        eq(matterContacts.role, role), isNull(matterContacts.deletedAt),
+        eq(matterContacts.matterId, asId<"MatterId">(matterId)), eq(matterContacts.contactId, asId<"ContactId">(contactId)),
+        eq(matterContacts.role, role as MatterRole), isNull(matterContacts.deletedAt),
       )).limit(1);
-    return this.asRow(rows[0]);
+    return rows[0] ?? null;
   }
 
   async listContactsForMatter(matterId: string): Promise<Contact[]> {
     const rows = await this.db
       .select({ contact: contacts }).from(matterContacts)
       .innerJoin(contacts, eq(matterContacts.contactId, contacts.id))
-      .where(and(eq(matterContacts.matterId, matterId), isNull(matterContacts.deletedAt)));
-    return rows.map((r) => r.contact as unknown as Contact);
+      .where(and(eq(matterContacts.matterId, asId<"MatterId">(matterId)), isNull(matterContacts.deletedAt)));
+    return rows.map((r) => r.contact);
   }
 }

@@ -7,6 +7,7 @@
 import { and, asc, desc, eq, ilike, inArray, isNull, like, or, sql } from "drizzle-orm";
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import type { Contact } from "@/lib/shared/schemas/contact";
+import { asId } from "@/lib/shared/schemas/ids";
 import { contacts, matterContacts, matters } from "../db/schema";
 import type { AppDb } from "../db/types";
 import type {
@@ -21,7 +22,7 @@ export class DrizzleContactRepository extends DrizzleRepository<Contact> impleme
 
   async listForOrg(organizationId: string, opts: ContactListOptions): Promise<ContactListResult> {
     const where = and(
-      eq(contacts.organizationId, organizationId),
+      eq(contacts.organizationId, asId<"OrganizationId">(organizationId)),
       isNull(contacts.parentId), // bara topp-nivå
       isNull(contacts.deletedAt),
       opts.contactType ? eq(contacts.contactType, opts.contactType) : undefined,
@@ -42,17 +43,14 @@ export class DrizzleContactRepository extends DrizzleRepository<Contact> impleme
     const [{ total } = { total: 0 }] = await this.db
       .select({ total: sql<number>`count(*)` }).from(contacts).where(where);
     // _count via grupperade frågor över sidans ids (robustare än korrelerade subqueries).
-    const ids = rows.map((r) => (r as { id: string }).id);
+    const ids = rows.map((r) => r.id);
     const linkCounts = await this.countBy(matterContacts, matterContacts.contactId, ids);
     const childCounts = await this.countBy(contacts, contacts.parentId, ids);
     return {
-      contacts: rows.map((r) => {
-        const id = (r as { id: string }).id;
-        return {
-          ...(r as object),
-          _count: { matterLinks: linkCounts.get(id) ?? 0, children: childCounts.get(id) ?? 0 },
-        };
-      }) as unknown as ContactListRow[],
+      contacts: rows.map((r): ContactListRow => ({
+        ...r,
+        _count: { matterLinks: linkCounts.get(r.id) ?? 0, children: childCounts.get(r.id) ?? 0 },
+      })),
       total: Number(total),
     };
   }
@@ -71,13 +69,13 @@ export class DrizzleContactRepository extends DrizzleRepository<Contact> impleme
   async getByIdFull(id: string, organizationId: string): Promise<ContactFull | null> {
     const [c] = await this.db
       .select().from(contacts)
-      .where(and(eq(contacts.id, id), eq(contacts.organizationId, organizationId), isNull(contacts.deletedAt)))
+      .where(and(eq(contacts.id, asId<"ContactId">(id)), eq(contacts.organizationId, asId<"OrganizationId">(organizationId)), isNull(contacts.deletedAt)))
       .limit(1);
     if (!c) return null;
     const children = await this.db
       .select().from(contacts)
-      .where(and(eq(contacts.parentId, id), isNull(contacts.deletedAt))).orderBy(asc(contacts.name));
-    const parentId = (c as { parentId?: string | null }).parentId;
+      .where(and(eq(contacts.parentId, asId<"ContactId">(id)), isNull(contacts.deletedAt))).orderBy(asc(contacts.name));
+    const parentId = c.parentId;
     const parentRows = parentId
       ? await this.db.select({ id: contacts.id, name: contacts.name }).from(contacts).where(eq(contacts.id, parentId)).limit(1)
       : [];
@@ -88,29 +86,29 @@ export class DrizzleContactRepository extends DrizzleRepository<Contact> impleme
       })
       .from(matterContacts)
       .innerJoin(matters, eq(matterContacts.matterId, matters.id)) // matterId NOT NULL FK → matter finns alltid
-      .where(eq(matterContacts.contactId, id))
+      .where(eq(matterContacts.contactId, asId<"ContactId">(id)))
       .orderBy(desc(matterContacts.createdAt));
     return {
-      ...(c as object),
-      children: this.asRows(children),
-      parent: parentRows[0] ? { id: parentRows[0].id, name: parentRows[0].name as string } : null,
+      ...c,
+      children,
+      parent: parentRows[0] ? { id: parentRows[0].id, name: parentRows[0].name } : null,
       matterLinks: linkRows.map((l) => ({
-        ...(l.mc as object),
-        matter: { id: l.mId, matterNumber: l.mNum as string, title: l.mTitle as string, status: l.mStatus as string },
+        ...l.mc,
+        matter: { id: l.mId, matterNumber: l.mNum, title: l.mTitle, status: l.mStatus },
       })),
-    } as unknown as ContactFull;
+    };
   }
 
   async findByPersonalNumber(organizationId: string, personalNumber: string): Promise<Contact | null> {
     const rows = await this.db.select().from(contacts)
-      .where(and(eq(contacts.organizationId, organizationId), eq(contacts.personalNumber, personalNumber), isNull(contacts.deletedAt)))
+      .where(and(eq(contacts.organizationId, asId<"OrganizationId">(organizationId)), eq(contacts.personalNumber, personalNumber), isNull(contacts.deletedAt)))
       .limit(1);
     return this.asRow(rows[0]);
   }
 
   async findByOrgNumber(organizationId: string, orgNumber: string): Promise<Contact | null> {
     const rows = await this.db.select().from(contacts)
-      .where(and(eq(contacts.organizationId, organizationId), eq(contacts.orgNumber, orgNumber), isNull(contacts.deletedAt)))
+      .where(and(eq(contacts.organizationId, asId<"OrganizationId">(organizationId)), eq(contacts.orgNumber, orgNumber), isNull(contacts.deletedAt)))
       .limit(1);
     return this.asRow(rows[0]);
   }

@@ -88,7 +88,7 @@ export class DrizzleMatterRepository extends DrizzleRepository<Matter> implement
       this.db.select({ id: timeEntries.matterId, n: sql<number>`count(*)` }).from(timeEntries)
         .where(and(inArray(timeEntries.matterId, ids.map((i) => asId<"MatterId">(i))), isNull(timeEntries.deletedAt))).groupBy(timeEntries.matterId),
       this.db.select({ id: matterContacts.matterId, n: sql<number>`count(*)` }).from(matterContacts)
-        .where(and(inArray(matterContacts.matterId, ids), isNull(matterContacts.deletedAt))).groupBy(matterContacts.matterId),
+        .where(and(inArray(matterContacts.matterId, ids.map((i) => asId<"MatterId">(i))), isNull(matterContacts.deletedAt))).groupBy(matterContacts.matterId),
     ]);
     apply(docs, "documents");
     apply(tes, "timeEntries");
@@ -104,7 +104,7 @@ export class DrizzleMatterRepository extends DrizzleRepository<Matter> implement
       .select({ matterId: matterContacts.matterId, cId: contacts.id, cName: contacts.name })
       .from(matterContacts)
       .innerJoin(contacts, eq(matterContacts.contactId, contacts.id))
-      .where(and(inArray(matterContacts.matterId, ids), eq(matterContacts.role, "KLIENT")));
+      .where(and(inArray(matterContacts.matterId, ids.map((i) => asId<"MatterId">(i))), eq(matterContacts.role, "KLIENT")));
     for (const r of rows) {
       const mid = r.matterId as string;
       if (!out.has(mid)) out.set(mid, { id: r.cId as string, name: r.cName as string });
@@ -119,7 +119,7 @@ export class DrizzleMatterRepository extends DrizzleRepository<Matter> implement
       .select({ mc: matterContacts, contact: contacts })
       .from(matterContacts)
       .innerJoin(contacts, eq(matterContacts.contactId, contacts.id))
-      .where(and(eq(matterContacts.matterId, id), isNull(matterContacts.deletedAt)))
+      .where(and(eq(matterContacts.matterId, asId<"MatterId">(id)), isNull(matterContacts.deletedAt)))
       .orderBy(asc(matterContacts.createdAt));
     const linkContacts = rows.map((r) => ({ ...(r.mc as object), contact: r.contact })) as unknown as MatterContact[];
     const counts = (await this.countsFor([id])).get(id) ?? { documents: 0, timeEntries: 0, contacts: 0 };
