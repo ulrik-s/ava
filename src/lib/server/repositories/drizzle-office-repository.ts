@@ -19,7 +19,7 @@ export class DrizzleOfficeRepository extends DrizzleRepository<Office> implement
       .select().from(offices)
       .where(and(eq(offices.organizationId, organizationId), isNull(offices.deletedAt)))
       .orderBy(desc(offices.isMain), asc(offices.name));
-    return rows as unknown as Office[];
+    return this.asRows(rows);
   }
 
   async getByIdInOrg(id: string, organizationId: string): Promise<Office | null> {
@@ -27,7 +27,7 @@ export class DrizzleOfficeRepository extends DrizzleRepository<Office> implement
       .select().from(offices)
       .where(and(eq(offices.id, id), eq(offices.organizationId, organizationId), isNull(offices.deletedAt)))
       .limit(1);
-    return (rows[0] as unknown as Office | undefined) ?? null;
+    return this.asRow(rows[0]);
   }
 
   async demoteMains(organizationId: string): Promise<void> {

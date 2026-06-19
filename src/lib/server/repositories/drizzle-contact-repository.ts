@@ -92,7 +92,7 @@ export class DrizzleContactRepository extends DrizzleRepository<Contact> impleme
       .orderBy(desc(matterContacts.createdAt));
     return {
       ...(c as object),
-      children: children as unknown as Contact[],
+      children: this.asRows(children),
       parent: parentRows[0] ? { id: parentRows[0].id, name: parentRows[0].name as string } : null,
       matterLinks: linkRows.map((l) => ({
         ...(l.mc as object),
@@ -105,13 +105,13 @@ export class DrizzleContactRepository extends DrizzleRepository<Contact> impleme
     const rows = await this.db.select().from(contacts)
       .where(and(eq(contacts.organizationId, organizationId), eq(contacts.personalNumber, personalNumber), isNull(contacts.deletedAt)))
       .limit(1);
-    return (rows[0] as unknown as Contact | undefined) ?? null;
+    return this.asRow(rows[0]);
   }
 
   async findByOrgNumber(organizationId: string, orgNumber: string): Promise<Contact | null> {
     const rows = await this.db.select().from(contacts)
       .where(and(eq(contacts.organizationId, organizationId), eq(contacts.orgNumber, orgNumber), isNull(contacts.deletedAt)))
       .limit(1);
-    return (rows[0] as unknown as Contact | undefined) ?? null;
+    return this.asRow(rows[0]);
   }
 }

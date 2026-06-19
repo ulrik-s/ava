@@ -43,6 +43,6 @@ export class DrizzleTaskRepository extends DrizzleRepository<Task> implements Ta
       .where(and(
         eq(tasks.id, id), eq(tasks.userId, userId), eq(tasks.organizationId, organizationId), isNull(tasks.deletedAt),
       )).limit(1);
-    return (rows[0] as unknown as Task | undefined) ?? null;
+    return this.asRow(rows[0]);
   }
 }

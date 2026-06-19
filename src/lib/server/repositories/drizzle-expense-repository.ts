@@ -57,7 +57,7 @@ export class DrizzleExpenseRepository extends DrizzleRepository<Expense> impleme
       .innerJoin(matters, eq(expenses.matterId, matters.id))
       .where(and(eq(expenses.id, id), eq(matters.organizationId, organizationId), isNull(expenses.deletedAt)))
       .limit(1);
-    return (rows[0]?.exp as unknown as Expense | undefined) ?? null;
+    return this.asRow(rows[0]?.exp);
   }
 
   async listUnbilled(matterId: string, ids: string[]): Promise<Expense[]> {
@@ -65,7 +65,7 @@ export class DrizzleExpenseRepository extends DrizzleRepository<Expense> impleme
     const rows = await this.db
       .select().from(expenses)
       .where(and(inArray(expenses.id, ids), eq(expenses.matterId, matterId), isNull(expenses.invoiceId)));
-    return rows as unknown as Expense[];
+    return this.asRows(rows);
   }
 
   async flagBilled(ids: string[], invoiceId: string): Promise<void> {
@@ -78,7 +78,7 @@ export class DrizzleExpenseRepository extends DrizzleRepository<Expense> impleme
       .select().from(expenses)
       .where(and(eq(expenses.matterId, matterId), isNull(expenses.frozenByBillingRunId), isNull(expenses.deletedAt)))
       .orderBy(asc(expenses.date));
-    return rows as unknown as Expense[];
+    return this.asRows(rows);
   }
 
   async freezeForMatter(matterId: string, billingRunId: string, now: Date): Promise<void> {

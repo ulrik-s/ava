@@ -34,14 +34,14 @@ export class DrizzleInvoiceRepository extends DrizzleRepository<Invoice> impleme
         eq(matters.organizationId, organizationId),
         isNull(invoices.deletedAt),
       )).limit(1);
-    return (rows[0]?.inv as unknown as Invoice | undefined) ?? null;
+    return this.asRow(rows[0]?.inv);
   }
 
   /** Bar faktura-rad utan org/delete-filter (för self-ref-uppslag). */
   private async rawInvoice(id: string | null | undefined): Promise<Invoice | null> {
     if (!id) return null;
     const rows = await this.db.select().from(invoices).where(eq(invoices.id, id)).limit(1);
-    return (rows[0] as unknown as Invoice | undefined) ?? null;
+    return this.asRow(rows[0]);
   }
 
   async getByIdFull(id: string, organizationId: string): Promise<InvoiceFull | null> {
@@ -63,7 +63,7 @@ export class DrizzleInvoiceRepository extends DrizzleRepository<Invoice> impleme
       accontoDeductions: accontoDeductionsFull,
       deductedOnFinals,
       creditedInvoice,
-      creditNote: (creditNoteRows[0] as unknown as Invoice | undefined) ?? null,
+      creditNote: this.asRow(creditNoteRows[0]),
     } as unknown as InvoiceFull;
   }
 
@@ -151,7 +151,7 @@ export class DrizzleInvoiceRepository extends DrizzleRepository<Invoice> impleme
     const rows = await this.db
       .select().from(invoices)
       .where(and(eq(invoices.creditedInvoiceId, invoiceId), isNull(invoices.deletedAt))).limit(1);
-    return (rows[0] as unknown as Invoice | undefined) ?? null;
+    return this.asRow(rows[0]);
   }
 
   async listDeductibleAccontos(matterId: string, ids: string[]): Promise<Invoice[]> {
@@ -184,6 +184,6 @@ export class DrizzleInvoiceRepository extends DrizzleRepository<Invoice> impleme
       .select().from(invoices)
       .where(and(eq(invoices.matterId, matterId), isNull(invoices.deletedAt)))
       .orderBy(desc(invoices.invoiceDate));
-    return rows as unknown as Invoice[];
+    return this.asRows(rows);
   }
 }

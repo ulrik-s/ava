@@ -50,11 +50,28 @@ export class DrizzleRepository<Row extends RowBase> implements Repository<Row> {
     this.changeLog = recorder;
   }
 
+  /**
+   * DB→domän-gräns (#typing): drizzle-resultatet bär inte branded id:n
+   * (kolumnen är `string`, domäntypen `MatterId` etc.), så raden måste
+   * assertas till `Row` vid ORM-kanten. Centralisera den ENDA assertionen i
+   * `asRow`/`asRows` i st.f. spridda `as unknown as Row` — en audit-punkt + krok
+   * för framtida zod-parse. (Noll-cast skulle kräva `.$type`-branding av
+   * drizzle-kolumnerna, vilket kaskaderar till alla query-param-typer → eget
+   * "branda persistens-gränsen"-projekt.)
+   */
+  protected asRow(raw: unknown): Row | null {
+    return (raw ?? null) as Row | null;
+  }
+
+  protected asRows(raw: readonly unknown[]): Row[] {
+    return raw as Row[];
+  }
+
   async getById(id: string): Promise<Row | null> {
     const rows = await this.db
       .select().from(this.table)
       .where(and(eq(this.table.id, id), isNull(this.table.deletedAt))).limit(1);
-    return (rows[0] as unknown as Row | undefined) ?? null;
+    return this.asRow(rows[0]);
   }
 
   async getByIdOrThrow(id: string): Promise<Row> {
@@ -67,7 +84,7 @@ export class DrizzleRepository<Row extends RowBase> implements Repository<Row> {
     const [row] = await this.db.insert(this.table)
       .values({ ...data, version: 1 } as never).returning();
     await this.logChange(row, "create");
-    return row as unknown as Row;
+    return this.asRow(row) as Row;
   }
 
   async update(id: string, patch: Partial<Row>): Promise<Row> {
@@ -76,7 +93,7 @@ export class DrizzleRepository<Row extends RowBase> implements Repository<Row> {
       .set({ ...patch, version: nextVersion(current), updatedAt: this.now() } as never)
       .where(eq(this.table.id, id)).returning();
     await this.logChange(row, "update");
-    return row as unknown as Row;
+    return this.asRow(row) as Row;
   }
 
   async softDelete(id: string): Promise<Row> {
@@ -85,7 +102,7 @@ export class DrizzleRepository<Row extends RowBase> implements Repository<Row> {
       .set({ deletedAt: this.now(), version: nextVersion(current) } as never)
       .where(eq(this.table.id, id)).returning();
     await this.logChange(row, "delete");
-    return row as unknown as Row;
+    return this.asRow(row) as Row;
   }
 
   /** Hård delete — se `Repository.hardDelete` (medvetet ADR 0017-undantag). */

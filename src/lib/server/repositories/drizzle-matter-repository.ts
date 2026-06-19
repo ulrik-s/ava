@@ -24,14 +24,14 @@ export class DrizzleMatterRepository extends DrizzleRepository<Matter> implement
       .select().from(matters)
       .where(and(eq(matters.id, id), eq(matters.organizationId, organizationId), isNull(matters.deletedAt)))
       .limit(1);
-    return (rows[0] as unknown as Matter | undefined) ?? null;
+    return this.asRow(rows[0]);
   }
 
   async listByOrg(organizationId: string): Promise<Matter[]> {
     const rows = await this.db
       .select().from(matters)
       .where(and(eq(matters.organizationId, organizationId), isNull(matters.deletedAt)));
-    return rows as unknown as Matter[];
+    return this.asRows(rows);
   }
 
   private listWhere(organizationId: string, f: MatterListFilter) {
@@ -136,7 +136,7 @@ export class DrizzleMatterRepository extends DrizzleRepository<Matter> implement
         eq(matters.responsibleLawyerId, responsibleLawyerId),
         isNull(matters.deletedAt),
       ));
-    return rows as unknown as Matter[];
+    return this.asRows(rows);
   }
 
   async listByNumberPrefix(organizationId: string, prefix: string): Promise<Matter[]> {
@@ -146,6 +146,6 @@ export class DrizzleMatterRepository extends DrizzleRepository<Matter> implement
         ilike(matters.matterNumber, `${prefix}%`),
         isNull(matters.deletedAt),
       ));
-    return rows as unknown as Matter[];
+    return this.asRows(rows);
   }
 }

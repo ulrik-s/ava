@@ -59,7 +59,7 @@ export class DrizzleMatterContactRepository
       .innerJoin(matters, eq(matterContacts.matterId, matters.id))
       .where(and(eq(matterContacts.id, id), eq(matters.organizationId, organizationId), isNull(matterContacts.deletedAt)))
       .limit(1);
-    return (rows[0]?.mc as unknown as MatterContact | undefined) ?? null;
+    return this.asRow(rows[0]?.mc);
   }
 
   async linkContact(data: Partial<MatterContact>): Promise<MatterContactWithContact> {
@@ -75,7 +75,7 @@ export class DrizzleMatterContactRepository
         eq(matterContacts.matterId, matterId), eq(matterContacts.contactId, contactId),
         eq(matterContacts.role, role), isNull(matterContacts.deletedAt),
       )).limit(1);
-    return (rows[0] as unknown as MatterContact | undefined) ?? null;
+    return this.asRow(rows[0]);
   }
 
   async listContactsForMatter(matterId: string): Promise<Contact[]> {

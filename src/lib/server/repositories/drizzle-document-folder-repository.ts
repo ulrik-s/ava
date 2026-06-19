@@ -66,7 +66,7 @@ export class DrizzleDocumentFolderRepository
       .select().from(documentFolders)
       .where(and(eq(documentFolders.matterId, matterId), isNull(documentFolders.deletedAt)))
       .orderBy(asc(documentFolders.name));
-    return rows as unknown as DocumentFolder[];
+    return this.asRows(rows);
   }
 
   async reassignParent(fromParentId: string, toParentId: string | null): Promise<void> {

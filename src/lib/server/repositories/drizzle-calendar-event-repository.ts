@@ -55,7 +55,7 @@ export class DrizzleCalendarEventRepository extends DrizzleRepository<CalendarEv
       .select().from(calendarEvents)
       .where(and(eq(calendarEvents.matterId, matterId), eq(calendarEvents.organizationId, organizationId), isNull(calendarEvents.deletedAt)))
       .orderBy(asc(calendarEvents.startAt));
-    return rows as unknown as CalendarEvent[];
+    return this.asRows(rows);
   }
 
   async getOwned(id: string, userId: string, organizationId: string): Promise<CalendarEvent | null> {
@@ -63,7 +63,7 @@ export class DrizzleCalendarEventRepository extends DrizzleRepository<CalendarEv
       .select().from(calendarEvents)
       .where(and(eq(calendarEvents.id, id), eq(calendarEvents.userId, userId), eq(calendarEvents.organizationId, organizationId), isNull(calendarEvents.deletedAt)))
       .limit(1);
-    return (rows[0] as unknown as CalendarEvent | undefined) ?? null;
+    return this.asRow(rows[0]);
   }
 
   async getOwnedWithMatter(id: string, userId: string, organizationId: string): Promise<CalendarEventRow | null> {
