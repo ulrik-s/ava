@@ -21,10 +21,13 @@ export class QueueBackedEmailSender implements IEmailSender {
   async send(input: SendEmailInput): Promise<void> {
     const boss = this.getBoss();
     if (!boss) throw new Error("jobb-kön är inte redo — e-post kunde inte köas");
-    await boss.send(JOB_QUEUES.emailDispatch, {
-      to: input.to,
-      subject: input.subject,
-      text: input.text,
-    });
+    // Idempotens (#504, ADR 0024): om anroparen anger en idempotensnyckel köas
+    // den som pg-boss `singletonKey` → en replay/dubbel-trigger med samma nyckel
+    // skickar inte mejlet två gånger. Utan nyckel: oförändrat beteende.
+    await boss.send(
+      JOB_QUEUES.emailDispatch,
+      { to: input.to, subject: input.subject, text: input.text },
+      input.idempotencyKey ? { singletonKey: input.idempotencyKey } : {},
+    );
   }
 }

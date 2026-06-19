@@ -23,6 +23,14 @@ export class QueueBackedDocumentAnalyzer implements IDocumentAnalyzer {
   async analyze(documentId: string): Promise<void> {
     const boss = this.getBoss();
     if (!boss) throw new Error("jobb-kön är inte redo — dokumentet kunde inte köas för klassificering");
-    await boss.send(JOB_QUEUES.classifyDocument, { documentId, organizationId: this.organizationId });
+    // Idempotens (#504, ADR 0024): `singletonKey = documentId` → som mest ETT
+    // väntande/aktivt classify-jobb per dokument. Upprepade analyze-anrop
+    // (uppladdning + manuell "Analysera" + reconcile-replay) skapar inte
+    // dubbletter; det väntande jobbet läser ändå dokumentets aktuella state.
+    await boss.send(
+      JOB_QUEUES.classifyDocument,
+      { documentId, organizationId: this.organizationId },
+      { singletonKey: documentId },
+    );
   }
 }

@@ -13,6 +13,13 @@ export interface SendEmailInput {
   subject: string;
   text: string;
   html?: string;
+  /**
+   * Idempotensnyckel (#504, ADR 0024). Sätts av anroparen till ett stabilt id
+   * för den utlösande händelsen (t.ex. fakturans/påminnelsens UUIDv7) → köas
+   * som pg-boss `singletonKey` så att en reconcile-replay eller dubbel-trigger
+   * inte skickar samma mejl två gånger (som mest ett väntande jobb per nyckel).
+   */
+  idempotencyKey?: string;
 }
 
 export interface IEmailSender {

@@ -15,13 +15,26 @@ function fakeBoss() {
 }
 
 describe("QueueBackedEmailSender", () => {
-  it("köar ett email-dispatch-jobb med {to,subject,text}", async () => {
+  it("köar ett email-dispatch-jobb med {to,subject,text} (utan nyckel → inga options)", async () => {
     const { boss, send } = fakeBoss();
     const sender = new QueueBackedEmailSender(() => boss);
     await sender.send({ to: "domstol@ex.se", subject: "Faktura F-1", text: "Bifogat.", html: "<p>ignoreras</p>" });
-    expect(send).toHaveBeenCalledWith(JOB_QUEUES.emailDispatch, {
-      to: "domstol@ex.se", subject: "Faktura F-1", text: "Bifogat.",
-    });
+    expect(send).toHaveBeenCalledWith(
+      JOB_QUEUES.emailDispatch,
+      { to: "domstol@ex.se", subject: "Faktura F-1", text: "Bifogat." },
+      {},
+    );
+  });
+
+  it("idempotensnyckel → pg-boss singletonKey (dedupe vid replay/dubbel-trigger)", async () => {
+    const { boss, send } = fakeBoss();
+    const sender = new QueueBackedEmailSender(() => boss);
+    await sender.send({ to: "x@y.se", subject: "s", text: "t", idempotencyKey: "invoice-42" });
+    expect(send).toHaveBeenCalledWith(
+      JOB_QUEUES.emailDispatch,
+      { to: "x@y.se", subject: "s", text: "t" },
+      { singletonKey: "invoice-42" },
+    );
   });
 
   it("kastar tydligt när kön inte är redo (ingen boss)", async () => {
