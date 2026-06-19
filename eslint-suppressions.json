@@ -14,11 +14,6 @@
       "count": 3
     }
   },
-  "src/app/invoices/[id]/_client.tsx": {
-    "no-restricted-syntax": {
-      "count": 10
-    }
-  },
   "src/app/matters/[id]/_billing-dialog.tsx": {
     "no-restricted-syntax": {
       "count": 1
