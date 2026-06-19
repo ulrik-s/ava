@@ -1,2 +1,747 @@
 {
+  "src/app/calendar/_calendar-grid.tsx": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/app/calendar/page.tsx": {
+    "no-restricted-syntax": {
+      "count": 4
+    }
+  },
+  "src/app/demo/_demo-client.tsx": {
+    "no-restricted-syntax": {
+      "count": 3
+    }
+  },
+  "src/app/invoices/[id]/_client.tsx": {
+    "no-restricted-syntax": {
+      "count": 10
+    }
+  },
+  "src/app/matters/[id]/_billing-dialog.tsx": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/app/matters/[id]/_verdict-dialog.tsx": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/app/page.tsx": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/components/documents/document-browser.tsx": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "src/lib/client/backend/server-first-store.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/lib/client/demo/static-params.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/lib/server/data-store/in-memory/local-store.ts": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "src/lib/server/data-store/in-memory/writable-delegate.ts": {
+    "no-restricted-syntax": {
+      "count": 3
+    }
+  },
+  "src/lib/server/db/client.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/lib/server/http/server-context.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/lib/server/repositories/drizzle-billing-run-repository.ts": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "src/lib/server/repositories/drizzle-calendar-event-repository.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/lib/server/repositories/drizzle-conflict-check-repository.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/lib/server/repositories/drizzle-contact-repository.ts": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "src/lib/server/repositories/drizzle-document-folder-repository.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/lib/server/repositories/drizzle-document-repository.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/lib/server/repositories/drizzle-document-suggestion-repository.ts": {
+    "no-restricted-syntax": {
+      "count": 3
+    }
+  },
+  "src/lib/server/repositories/drizzle-document-template-repository.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/lib/server/repositories/drizzle-expense-repository.ts": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "src/lib/server/repositories/drizzle-invoice-dispatch-repository.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/lib/server/repositories/drizzle-invoice-repository.ts": {
+    "no-restricted-syntax": {
+      "count": 5
+    }
+  },
+  "src/lib/server/repositories/drizzle-matter-contact-repository.ts": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "src/lib/server/repositories/drizzle-matter-event-suggestion-repository.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/lib/server/repositories/drizzle-matter-repository.ts": {
+    "no-restricted-syntax": {
+      "count": 3
+    }
+  },
+  "src/lib/server/repositories/drizzle-org-preference-repository.ts": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "src/lib/server/repositories/drizzle-payment-plan-repository.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/lib/server/repositories/drizzle-repositories.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/lib/server/repositories/drizzle-service-note-repository.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/lib/server/repositories/drizzle-task-repository.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/lib/server/repositories/drizzle-user-preference-repository.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/lib/server/repositories/in-memory-document-template-repository.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/lib/server/repositories/in-memory-matter-contact-repository.ts": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "src/lib/server/repositories/in-memory-payment-repository.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/lib/server/repositories/in-memory-write-off-repository.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/lib/server/routers/document/suggestions.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/lib/shared/demo-source.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/bun-compat.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/e2e/demo-invoice-document.spec.ts": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "test/helpers/fake-fsa.ts": {
+    "no-restricted-syntax": {
+      "count": 5
+    }
+  },
+  "test/integration/seed-smoke.test.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/scripts/bootstrap-admin.test.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/scripts/demo-generator-documents.test.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/scripts/demo-generator-template-docs.test.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/scripts/demo-generator.test.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/setup/preload.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/app/reports/page.test.tsx": {
+    "no-restricted-syntax": {
+      "count": 3
+    }
+  },
+  "test/unit/app/users-become.test.tsx": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "test/unit/client/addin/addin-client.test.ts": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "test/unit/client/backend/oidc-principal.test.ts": {
+    "no-restricted-syntax": {
+      "count": 4
+    }
+  },
+  "test/unit/client/fsa/read-from-fsa.test.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/components/auth-status-banner.test.tsx": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/components/document-row-upload-guard.test.tsx": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/components/external-edit-modal.test.tsx": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/components/sidebar-signout.test.tsx": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "test/unit/lib/auth/auth-client.test.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/lib/auth/github-auth.test.tsx": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/lib/backend/backend-runtime-pluggability.test.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/lib/backend/git-backend-runtime.test.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/lib/backend/in-process-link.test.ts": {
+    "no-restricted-syntax": {
+      "count": 4
+    }
+  },
+  "test/unit/lib/backend/static-content-store.test.ts": {
+    "no-restricted-syntax": {
+      "count": 6
+    }
+  },
+  "test/unit/lib/client/demo-meta.test.ts": {
+    "no-restricted-syntax": {
+      "count": 3
+    }
+  },
+  "test/unit/lib/demo/demo-seed-loader.test.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/lib/demo/document-content-cache.test.ts": {
+    "no-restricted-syntax": {
+      "count": 7
+    }
+  },
+  "test/unit/lib/demo/generated-doc-cache.test.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/lib/fsa/download-to-fsa.test.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/lib/fsa/fs-adapter.test.ts": {
+    "no-restricted-syntax": {
+      "count": 4
+    }
+  },
+  "test/unit/lib/fsa/handle-store.test.ts": {
+    "no-restricted-syntax": {
+      "count": 5
+    }
+  },
+  "test/unit/lib/fsa/preload-documents.test.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/lib/fsa/upload-document.integration.test.tsx": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/lib/fsa/upload-document.test.tsx": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/lib/github/api.test.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/lib/integrations/microsoft-graph.test.ts": {
+    "no-restricted-syntax": {
+      "count": 7
+    }
+  },
+  "test/unit/lib/seed-invoice-coherence.test.ts": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "test/unit/server/adapters/demo-search-index.test.ts": {
+    "no-restricted-syntax": {
+      "count": 3
+    }
+  },
+  "test/unit/server/build-context.test.ts": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "test/unit/server/data-store/demo-data-store-writable.test.ts": {
+    "no-restricted-syntax": {
+      "count": 4
+    }
+  },
+  "test/unit/server/data-store/demo-data-store.test.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/server/data-store/in-memory/read-only-delegate.test.ts": {
+    "no-restricted-syntax": {
+      "count": 4
+    }
+  },
+  "test/unit/server/data-store/local-store-persistence.test.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/server/data-store/local-store.test.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/server/data-store/static-sync-source.test.ts": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "test/unit/server/db/pg-test-db.ts": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "test/unit/server/jobs/classify-document-handler.test.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/server/jobs/email-dispatch-handler.test.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/server/jobs/queue-backed-document-analyzer.test.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/server/jobs/queue-backed-email-sender.test.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/server/repositories/acconto-deduction-repository.test.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/server/repositories/billing-run-repository.test.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/server/repositories/calendar-event-repository.test.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/server/repositories/conflict-matter-contact-repository.test.ts": {
+    "no-restricted-syntax": {
+      "count": 3
+    }
+  },
+  "test/unit/server/repositories/contact-repository.test.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/server/repositories/document-folder-repository.test.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/server/repositories/document-repository.test.ts": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "test/unit/server/repositories/document-suggestion-repository.test.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/server/repositories/document-template-repository.test.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/server/repositories/drizzle-repositories.test.ts": {
+    "no-restricted-syntax": {
+      "count": 6
+    }
+  },
+  "test/unit/server/repositories/expected-receivable-repository.test.ts": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "test/unit/server/repositories/expense-repository.test.ts": {
+    "no-restricted-syntax": {
+      "count": 4
+    }
+  },
+  "test/unit/server/repositories/in-memory-repository.test.ts": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "test/unit/server/repositories/invoice-dispatch-repository.test.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/server/repositories/invoice-repository.test.ts": {
+    "no-restricted-syntax": {
+      "count": 10
+    }
+  },
+  "test/unit/server/repositories/matter-event-suggestion-repository.test.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/server/repositories/matter-reads-repository.test.ts": {
+    "no-restricted-syntax": {
+      "count": 3
+    }
+  },
+  "test/unit/server/repositories/matter-repository.test.ts": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "test/unit/server/repositories/organization-office-repository.test.ts": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "test/unit/server/repositories/payment-plan-reminder-repository.test.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/server/repositories/payment-plan-repository.test.ts": {
+    "no-restricted-syntax": {
+      "count": 4
+    }
+  },
+  "test/unit/server/repositories/payment-repository.test.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/server/repositories/preference-repository.test.ts": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "test/unit/server/repositories/report-reads-repository.test.ts": {
+    "no-restricted-syntax": {
+      "count": 4
+    }
+  },
+  "test/unit/server/repositories/service-note-repository.test.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/server/repositories/task-repository.test.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/server/repositories/time-entry-list-report-repository.test.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/server/repositories/time-entry-repository.test.ts": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "test/unit/server/repositories/user-repository.test.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/server/repositories/write-off-repository.test.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/server/routers/calendar.test.ts": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "test/unit/server/routers/conflict.test.ts": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "test/unit/server/routers/contact.test.ts": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "test/unit/server/routers/document.events.test.ts": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "test/unit/server/routers/document.groups.test.ts": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "test/unit/server/routers/document/core.test.ts": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "test/unit/server/routers/document/folders.test.ts": {
+    "no-restricted-syntax": {
+      "count": 3
+    }
+  },
+  "test/unit/server/routers/document/suggestions.test.ts": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "test/unit/server/routers/document/upload-content.test.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/server/routers/documentTemplate.test.ts": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "test/unit/server/routers/expense.test.ts": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "test/unit/server/routers/invoice.demo-store.test.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/server/routers/invoice.test.ts": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "test/unit/server/routers/mail.test.ts": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "test/unit/server/routers/matter.test.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "test/unit/server/routers/organization.test.ts": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "test/unit/server/routers/paymentPlan.test.ts": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "test/unit/server/routers/preference.test.ts": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "test/unit/server/routers/reports-ar-summary.test.ts": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "test/unit/server/routers/reports-billed.test.ts": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "test/unit/server/routers/reports.test.ts": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "test/unit/server/routers/serviceNote.test.ts": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "test/unit/server/routers/task.test.ts": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "test/unit/server/routers/timeEntry.test.ts": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "test/unit/server/routers/todo.test.ts": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "test/unit/server/routers/user.test.ts": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "test/unit/server/rules/execute.test.ts": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "test/unit/server/rules/scheduler.test.ts": {
+    "no-restricted-syntax": {
+      "count": 4
+    }
+  },
+  "tooling/scripts/server-first-offline-e2e.ts": {
+    "no-restricted-syntax": {
+      "count": 5
+    }
+  }
 }
