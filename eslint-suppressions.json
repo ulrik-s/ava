@@ -1,14 +1,4 @@
 {
-  "src/lib/client/backend/server-first-store.ts": {
-    "no-restricted-syntax": {
-      "count": 1
-    }
-  },
-  "src/lib/client/demo/static-params.ts": {
-    "no-restricted-syntax": {
-      "count": 1
-    }
-  },
   "src/lib/server/http/server-context.ts": {
     "no-restricted-syntax": {
       "count": 1

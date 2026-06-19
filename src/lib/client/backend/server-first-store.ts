@@ -66,7 +66,7 @@ export async function createServerFirstStore(deps: ServerFirstStoreDeps = {}): P
     // Byte-synk (#518, ADR 0023): ladda upp dokument-blobbar servern saknar.
     // Best-effort — får aldrig ta ned bootstrappen (tom pending → no-op).
     const { syncDocumentContent } = await import("./content-sync");
-    void syncDocumentContent(client as unknown as Parameters<typeof syncDocumentContent>[0]).catch(() => {});
+    void syncDocumentContent(client).catch(() => {});
   }
   return cachingSync;
 }
