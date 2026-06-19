@@ -306,7 +306,7 @@ function TimeCard({ ymd }: { ymd: string }) {
   const entries = trpc.timeEntry.list.useQuery(
     { userId: me.data?.id, from: range.from, to: range.to, pageSize: 50 },
     { enabled: !!me.data?.id },
-  ) as unknown as TimeQueryLike;
+  ) as TimeQueryLike;
 
   return (
     <div className="bg-white rounded-lg border border-gray-200">

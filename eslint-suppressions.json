@@ -1,19 +1,4 @@
 {
-  "src/app/matters/[id]/_billing-dialog.tsx": {
-    "no-restricted-syntax": {
-      "count": 1
-    }
-  },
-  "src/app/matters/[id]/_verdict-dialog.tsx": {
-    "no-restricted-syntax": {
-      "count": 1
-    }
-  },
-  "src/app/page.tsx": {
-    "no-restricted-syntax": {
-      "count": 1
-    }
-  },
   "src/lib/client/backend/server-first-store.ts": {
     "no-restricted-syntax": {
       "count": 1

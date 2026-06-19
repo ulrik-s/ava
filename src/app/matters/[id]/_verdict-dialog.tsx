@@ -13,7 +13,7 @@
  */
 import { useState } from "react";
 import { Modal } from "@/components/ui/modal";
-import { generateFakturaDoc, type DocUtils } from "@/lib/client/kostnadsrakning/generate-faktura-doc";
+import { generateFakturaDoc } from "@/lib/client/kostnadsrakning/generate-faktura-doc";
 import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
@@ -50,7 +50,7 @@ export function VerdictDialog(props: Props) {
               organizationOrgNumber: props.organizationOrgNumber,
             }),
           },
-          register, utils: utils as unknown as DocUtils,
+          register, utils,
         });
       } catch (e) { console.warn("[verdict] faktura-dokument misslyckades:", e); }
       onClose();
