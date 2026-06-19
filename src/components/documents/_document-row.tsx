@@ -33,19 +33,19 @@ export interface DocumentRecord {
   id: string;
   fileName: string;
   mimeType: string;
-  fileSize: number;
+  sizeBytes: number;
   storagePath: string;
   version: number;
   matterId: string;
-  folderId: string | null;
+  folderId?: string | null | undefined;
   uploadedById: string;
   createdAt: string | Date;
-  uploadedBy: { name: string | null };
-  title: string | null;
-  documentType: string | null;
-  summary: string | null;
-  analyzedAt: string | Date | null;
-  analysisError: string | null;
+  uploadedBy: { name: string | null } | null;
+  title?: string | null | undefined;
+  documentType?: string | null | undefined;
+  summary?: string | null | undefined;
+  analyzedAt?: string | Date | null | undefined;
+  analysisError?: string | null | undefined;
 }
 
 interface Props {
@@ -117,7 +117,7 @@ export function DocumentRow({
             )}
           </div>
         </td>
-        <td className="hidden sm:table-cell px-6 py-2.5 text-sm text-gray-500 whitespace-nowrap">{formatFileSize(doc.fileSize)}</td>
+        <td className="hidden sm:table-cell px-6 py-2.5 text-sm text-gray-500 whitespace-nowrap">{formatFileSize(doc.sizeBytes)}</td>
         <td className="hidden sm:table-cell px-6 py-2.5 text-sm text-gray-500 whitespace-nowrap">
           {new Date(doc.createdAt).toLocaleDateString("sv-SE")}
         </td>

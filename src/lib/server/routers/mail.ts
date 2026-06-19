@@ -83,7 +83,6 @@ export const mailRouter = router({
         fileName,
         mimeType: "message/rfc822",
         sizeBytes: bytes.byteLength,
-        fileSize: bytes.byteLength, // denormaliserat (UI läser fileSize)
         storagePath,
         folderId: input.folderId ? asId<"DocumentFolderId">(input.folderId) : null,
         organizationId: ctx.orgId,

@@ -238,7 +238,6 @@ describe("document.markExternallyEdited", () => {
     expect(doc.version).toBe(3);
     expect(doc.updatedAt).toBeInstanceOf(Date);
     expect(doc.sizeBytes).toBe(4096);
-    expect(doc.fileSize).toBe(4096);
   });
 
   it("defaultar version till 1→2 när raden saknar version", async () => {

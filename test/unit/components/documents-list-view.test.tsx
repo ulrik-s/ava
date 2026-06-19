@@ -25,7 +25,7 @@ const baseDoc = (overrides: any = {}) => ({
   id: "d1",
   fileName: "stamning.pdf",
   mimeType: "application/pdf",
-  fileSize: 1024,
+  sizeBytes: 1024,
   storagePath: "/x",
   version: 1,
   matterId: "m1",

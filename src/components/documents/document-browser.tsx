@@ -46,11 +46,11 @@ export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
 
   const tree = trpc.document.tree.useQuery({ matterId });
   const folders = useMemo<FolderRecord[]>(
-    () => (tree.data?.folders ?? []) as unknown as FolderRecord[],
+    () => tree.data?.folders ?? [],
     [tree.data],
   );
   const documents = useMemo<DocumentRecord[]>(
-    () => (tree.data?.documents ?? []) as unknown as DocumentRecord[],
+    () => tree.data?.documents ?? [],
     [tree.data],
   );
 
@@ -521,7 +521,7 @@ function makePlaceholderDoc({
     id,
     fileName: file.name,
     mimeType: file.type || "application/octet-stream",
-    fileSize: file.size,
+    sizeBytes: file.size,
     storagePath: "",
     version: 1,
     matterId,

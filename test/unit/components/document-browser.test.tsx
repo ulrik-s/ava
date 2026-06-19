@@ -96,7 +96,7 @@ const baseDoc = (overrides: Partial<Doc> = {}): Doc => ({
   id: "d1",
   fileName: "test.pdf",
   mimeType: "application/pdf",
-  fileSize: 1024,
+  sizeBytes: 1024,
   storagePath: "/x",
   version: 1,
   matterId: "m1",
@@ -402,9 +402,9 @@ describe("DocumentBrowser", () => {
     treeQuery.data = {
       folders: [],
       documents: [
-        baseDoc({ id: "d-kb", fileName: "kb.pdf", fileSize: 5000 }),
-        baseDoc({ id: "d-mb", fileName: "mb.pdf", fileSize: 5_000_000 }),
-        baseDoc({ id: "d-b", fileName: "small.pdf", fileSize: 500 }),
+        baseDoc({ id: "d-kb", fileName: "kb.pdf", sizeBytes: 5000 }),
+        baseDoc({ id: "d-mb", fileName: "mb.pdf", sizeBytes: 5_000_000 }),
+        baseDoc({ id: "d-b", fileName: "small.pdf", sizeBytes: 500 }),
       ],
     };
     render(<DocumentBrowser matterId="m1" />);
