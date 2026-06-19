@@ -393,10 +393,5 @@
     "no-restricted-syntax": {
       "count": 4
     }
-  },
-  "tooling/scripts/server-first-offline-e2e.ts": {
-    "no-restricted-syntax": {
-      "count": 5
-    }
   }
 }
