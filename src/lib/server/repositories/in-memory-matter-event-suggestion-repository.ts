@@ -4,7 +4,7 @@
  */
 
 import type { MatterEventSuggestion } from "@/lib/shared/schemas/document";
-import type { Delegate, IDataStore } from "../data-store/IDataStore";
+import type { IDataStore } from "../data-store/IDataStore";
 import { InMemoryRepository } from "./in-memory-repository";
 import type {
   MatterEventSuggestionRepository, MatterEventSuggestionRow,
@@ -16,7 +16,7 @@ export class InMemoryMatterEventSuggestionRepository
   extends InMemoryRepository<MatterEventSuggestion>
   implements MatterEventSuggestionRepository {
   constructor(store: MatterEventSuggestionRepoSource, now?: () => Date) {
-    super(store.matterEventSuggestions as unknown as Delegate, now ?? (() => new Date()));
+    super(store.matterEventSuggestions, now ?? (() => new Date()));
   }
 
   async listForMatter(matterId: string, organizationId: string): Promise<MatterEventSuggestionRow[]> {

@@ -6,7 +6,7 @@
  */
 
 import type { PaymentPlan } from "@/lib/shared/schemas/billing";
-import type { Delegate, IDataStore } from "../data-store/IDataStore";
+import type { IDataStore } from "../data-store/IDataStore";
 import { InMemoryRepository } from "./in-memory-repository";
 import type {
   JoinedPaymentPlan, JoinedPaymentPlanWithReminders, PaymentPlanRepository,
@@ -38,7 +38,7 @@ const SCAN_INVOICE_INCLUDE = {
 
 export class InMemoryPaymentPlanRepository extends InMemoryRepository<PaymentPlan> implements PaymentPlanRepository {
   constructor(store: PaymentPlanRepoSource, now?: () => Date) {
-    super(store.paymentPlans as unknown as Delegate, now ?? (() => new Date()));
+    super(store.paymentPlans, now ?? (() => new Date()));
   }
 
   async getByIdInOrg(planId: string, organizationId: string): Promise<PaymentPlan | null> {

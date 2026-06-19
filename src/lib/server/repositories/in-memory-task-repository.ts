@@ -4,7 +4,7 @@
  */
 
 import type { Task } from "@/lib/shared/schemas/calendar";
-import type { Delegate, IDataStore } from "../data-store/IDataStore";
+import type { IDataStore } from "../data-store/IDataStore";
 import { InMemoryRepository } from "./in-memory-repository";
 import type { TaskListFilter, TaskListRow, TaskRepository } from "./task-repository";
 
@@ -13,7 +13,7 @@ export type TaskRepoSource = Pick<IDataStore, "tasks">;
 
 export class InMemoryTaskRepository extends InMemoryRepository<Task> implements TaskRepository {
   constructor(store: TaskRepoSource, now?: () => Date) {
-    super(store.tasks as unknown as Delegate, now ?? (() => new Date()));
+    super(store.tasks, now ?? (() => new Date()));
   }
 
   async listForUser(userId: string, organizationId: string, filter: TaskListFilter): Promise<TaskListRow[]> {

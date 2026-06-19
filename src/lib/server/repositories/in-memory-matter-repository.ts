@@ -4,7 +4,7 @@
  */
 
 import type { Matter } from "@/lib/shared/schemas/matter";
-import type { Delegate, IDataStore } from "../data-store/IDataStore";
+import type { IDataStore } from "../data-store/IDataStore";
 import { InMemoryRepository } from "./in-memory-repository";
 import type {
   MatterDetailRow, MatterListFilter, MatterListResult, MatterListRow, MatterRepository,
@@ -34,7 +34,7 @@ function listWhere(organizationId: string, f: MatterListFilter): Record<string, 
 
 export class InMemoryMatterRepository extends InMemoryRepository<Matter> implements MatterRepository {
   constructor(store: MatterRepoSource, now?: () => Date) {
-    super(store.matters as unknown as Delegate, now ?? (() => new Date()));
+    super(store.matters, now ?? (() => new Date()));
   }
 
   async getByIdInOrg(id: string, organizationId: string): Promise<Matter | null> {

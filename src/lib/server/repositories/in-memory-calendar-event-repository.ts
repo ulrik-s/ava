@@ -4,7 +4,7 @@
  */
 
 import type { CalendarEvent } from "@/lib/shared/schemas/calendar";
-import type { Delegate, IDataStore } from "../data-store/IDataStore";
+import type { IDataStore } from "../data-store/IDataStore";
 import type { CalendarEventRepository, CalendarEventRow } from "./calendar-event-repository";
 import { InMemoryRepository } from "./in-memory-repository";
 
@@ -15,7 +15,7 @@ const MATTER_INCLUDE = { matter: { select: { id: true, matterNumber: true, title
 
 export class InMemoryCalendarEventRepository extends InMemoryRepository<CalendarEvent> implements CalendarEventRepository {
   constructor(store: CalendarEventRepoSource, now?: () => Date) {
-    super(store.calendarEvents as unknown as Delegate, now ?? (() => new Date()));
+    super(store.calendarEvents, now ?? (() => new Date()));
   }
 
   async listForUser(userId: string, organizationId: string): Promise<CalendarEventRow[]> {

@@ -4,7 +4,7 @@
  */
 
 import type { BillingRun } from "@/lib/shared/schemas/billing";
-import type { Delegate, IDataStore } from "../data-store/IDataStore";
+import type { IDataStore } from "../data-store/IDataStore";
 import type {
   BillingRunDetailRow, BillingRunListRow, BillingRunRepository,
 } from "./billing-run-repository";
@@ -16,7 +16,7 @@ export class InMemoryBillingRunRepository
   extends InMemoryRepository<BillingRun>
   implements BillingRunRepository {
   constructor(store: BillingRunRepoSource, now?: () => Date) {
-    super(store.billingRuns as unknown as Delegate, now ?? (() => new Date()));
+    super(store.billingRuns, now ?? (() => new Date()));
   }
 
   async listForOrg(organizationId: string, matterId?: string): Promise<BillingRunListRow[]> {

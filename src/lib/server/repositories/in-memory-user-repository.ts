@@ -4,7 +4,7 @@
  */
 
 import type { User } from "@/lib/shared/schemas/user";
-import type { Delegate, IDataStore } from "../data-store/IDataStore";
+import type { IDataStore } from "../data-store/IDataStore";
 import { InMemoryRepository } from "./in-memory-repository";
 import type { UserRepository } from "./user-repository";
 
@@ -13,7 +13,7 @@ export type UserRepoSource = Pick<IDataStore, "users">;
 
 export class InMemoryUserRepository extends InMemoryRepository<User> implements UserRepository {
   constructor(store: UserRepoSource, now?: () => Date) {
-    super(store.users as unknown as Delegate, now ?? (() => new Date()));
+    super(store.users, now ?? (() => new Date()));
   }
 
   async getByIdInOrg(id: string, organizationId: string): Promise<User | null> {

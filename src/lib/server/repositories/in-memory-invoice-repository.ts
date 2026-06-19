@@ -5,7 +5,7 @@
  */
 
 import type { Invoice } from "@/lib/shared/schemas/billing";
-import type { Delegate, IDataStore } from "../data-store/IDataStore";
+import type { IDataStore } from "../data-store/IDataStore";
 import { InMemoryRepository } from "./in-memory-repository";
 import {
   invoiceNumberPrefix, nextInvoiceNumberFrom,
@@ -18,12 +18,12 @@ export type InvoiceRepoSource = Pick<IDataStore, "invoices" | "payments" | "writ
 
 export class InMemoryInvoiceRepository extends InMemoryRepository<Invoice> implements InvoiceRepository {
   constructor(private readonly store: InvoiceRepoSource, now?: () => Date) {
-    super(store.invoices as unknown as Delegate, now ?? (() => new Date()));
+    super(store.invoices, now ?? (() => new Date()));
   }
 
   async getByIdInOrg(id: string, organizationId: string): Promise<Invoice | null> {
     // Samma relations-filter som routern använde mot DemoDataStore (org via ärende).
-    const row = (await (this.store.invoices as unknown as Delegate)
+    const row = (await this.store.invoices
       .findFirst({ where: { id, matter: { organizationId } } })) as Invoice | null;
     return row && !(row as { deletedAt?: unknown }).deletedAt ? row : null;
   }
@@ -31,7 +31,7 @@ export class InMemoryInvoiceRepository extends InMemoryRepository<Invoice> imple
   async getByIdFull(id: string, organizationId: string): Promise<InvoiceFull | null> {
     // In-memory query-engine resolvar alla relationer (samma include som routern
     // använt) i ETT anrop — inga sekundär-queries behövs (jfr Drizzle-impl:en).
-    const row = (await (this.store.invoices as unknown as Delegate).findFirst({
+    const row = (await this.store.invoices.findFirst({
       where: { id, matter: { organizationId } },
       include: {
         matter: true,
@@ -51,7 +51,7 @@ export class InMemoryInvoiceRepository extends InMemoryRepository<Invoice> imple
   }
 
   async getByIdWithRelations(id: string, organizationId: string): Promise<InvoiceWithRelations | null> {
-    const row = (await (this.store.invoices as unknown as Delegate).findFirst({
+    const row = (await this.store.invoices.findFirst({
       where: { id, matter: { organizationId } },
       include: {
         matter: true,
@@ -69,9 +69,9 @@ export class InMemoryInvoiceRepository extends InMemoryRepository<Invoice> imple
   async getByIdWithLedger(id: string): Promise<InvoiceWithLedger | null> {
     const invoice = await this.getById(id);
     if (!invoice) return null;
-    const payments = (await (this.store.payments as unknown as Delegate)
+    const payments = (await this.store.payments
       .findMany({ where: { invoiceId: id } })) as InvoiceWithLedger["payments"];
-    const writeOffs = (await (this.store.writeOffs as unknown as Delegate)
+    const writeOffs = (await this.store.writeOffs
       .findMany({ where: { invoiceId: id } })) as InvoiceWithLedger["writeOffs"];
     return { ...invoice, payments, writeOffs };
   }
@@ -79,7 +79,7 @@ export class InMemoryInvoiceRepository extends InMemoryRepository<Invoice> imple
   async listForOrg(organizationId: string, filter?: InvoiceListFilter): Promise<InvoiceListRow[]> {
     // Samma where/include som routern använde mot DemoDataStore — query-engine:n
     // resolvar relationerna i ett anrop (jfr Drizzle-impl:ens sekundär-queries).
-    const rows = (await (this.store.invoices as unknown as Delegate).findMany({
+    const rows = (await this.store.invoices.findMany({
       where: {
         matter: { organizationId },
         ...(filter?.matterId ? { matterId: filter.matterId } : {}),
@@ -102,7 +102,7 @@ export class InMemoryInvoiceRepository extends InMemoryRepository<Invoice> imple
 
   async nextInvoiceNumber(organizationId: string): Promise<string> {
     const prefix = invoiceNumberPrefix(this.now().getFullYear());
-    const last = (await (this.store.invoices as unknown as Delegate).findFirst({
+    const last = (await this.store.invoices.findFirst({
       where: { matter: { organizationId }, invoiceNumber: { startsWith: prefix } },
       orderBy: { invoiceNumber: "desc" },
     })) as { invoiceNumber?: string | null } | null;
@@ -110,7 +110,7 @@ export class InMemoryInvoiceRepository extends InMemoryRepository<Invoice> imple
   }
 
   async sumCreditNotesFor(invoiceId: string, organizationId: string): Promise<number> {
-    const rows = (await (this.store.invoices as unknown as Delegate)
+    const rows = (await this.store.invoices
       .findMany({ where: { creditedInvoiceId: invoiceId, matter: { organizationId } } })) as ReadonlyArray<Invoice>;
     return rows
       .filter((r) => !(r as { deletedAt?: unknown }).deletedAt)
@@ -118,20 +118,20 @@ export class InMemoryInvoiceRepository extends InMemoryRepository<Invoice> imple
   }
 
   async getCreditNoteFor(invoiceId: string): Promise<Invoice | null> {
-    const row = (await (this.store.invoices as unknown as Delegate)
+    const row = (await this.store.invoices
       .findFirst({ where: { creditedInvoiceId: invoiceId } })) as Invoice | null;
     return row && !(row as { deletedAt?: unknown }).deletedAt ? row : null;
   }
 
   async listDeductibleAccontos(matterId: string, ids: string[]): Promise<Invoice[]> {
     if (!ids.length) return [];
-    return (await (this.store.invoices as unknown as Delegate).findMany({
+    return (await this.store.invoices.findMany({
       where: { id: { in: ids }, matterId, invoiceType: "ACCONTO", deductedOnFinals: { none: {} } },
     })) as Invoice[];
   }
 
   async listByMatter(matterId: string): Promise<Invoice[]> {
-    const rows = (await (this.store.invoices as unknown as Delegate)
+    const rows = (await this.store.invoices
       .findMany({ where: { matterId }, orderBy: { invoiceDate: "desc" } })) as Invoice[];
     return rows.filter((r) => !(r as { deletedAt?: unknown }).deletedAt);
   }

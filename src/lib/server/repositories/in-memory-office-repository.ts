@@ -3,7 +3,7 @@
  */
 
 import type { Office } from "@/lib/shared/schemas/organization";
-import type { Delegate, IDataStore } from "../data-store/IDataStore";
+import type { IDataStore } from "../data-store/IDataStore";
 import { InMemoryRepository } from "./in-memory-repository";
 import type { OfficeRepository } from "./office-repository";
 
@@ -11,7 +11,7 @@ export type OfficeRepoSource = Pick<IDataStore, "offices">;
 
 export class InMemoryOfficeRepository extends InMemoryRepository<Office> implements OfficeRepository {
   constructor(store: OfficeRepoSource, now?: () => Date) {
-    super(store.offices as unknown as Delegate, now ?? (() => new Date()));
+    super(store.offices, now ?? (() => new Date()));
   }
 
   async listByOrg(organizationId: string): Promise<Office[]> {

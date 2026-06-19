@@ -6,7 +6,7 @@
 
 import type { Contact } from "@/lib/shared/schemas/contact";
 import type { MatterContact } from "@/lib/shared/schemas/matter";
-import type { Delegate, IDataStore } from "../data-store/IDataStore";
+import type { IDataStore } from "../data-store/IDataStore";
 import { InMemoryRepository } from "./in-memory-repository";
 import type {
   ConflictContactRow, MatterContactRepository, MatterContactWithContact,
@@ -27,7 +27,7 @@ export class InMemoryMatterContactRepository
   extends InMemoryRepository<MatterContact>
   implements MatterContactRepository {
   constructor(store: MatterContactRepoSource, now?: () => Date) {
-    super(store.matterContacts as unknown as Delegate, now ?? (() => new Date()));
+    super(store.matterContacts, now ?? (() => new Date()));
   }
 
   async findForConflict(organizationId: string, numberTerm?: string): Promise<ConflictContactRow[]> {

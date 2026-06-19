@@ -4,7 +4,7 @@
  */
 
 import type { WriteOff } from "@/lib/shared/schemas/billing";
-import type { Delegate, IDataStore } from "../data-store/IDataStore";
+import type { IDataStore } from "../data-store/IDataStore";
 import { InMemoryRepository } from "./in-memory-repository";
 import type { WriteOffRepository } from "./write-off-repository";
 
@@ -13,7 +13,7 @@ export type WriteOffRepoSource = Pick<IDataStore, "writeOffs">;
 
 export class InMemoryWriteOffRepository extends InMemoryRepository<WriteOff> implements WriteOffRepository {
   constructor(store: WriteOffRepoSource, now?: () => Date) {
-    super(store.writeOffs as unknown as Delegate, now ?? (() => new Date()));
+    super(store.writeOffs, now ?? (() => new Date()));
   }
 
   async sumByInvoice(invoiceId: string): Promise<number> {

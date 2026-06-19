@@ -4,7 +4,7 @@
  */
 
 import type { Payment } from "@/lib/shared/schemas/billing";
-import type { Delegate, IDataStore } from "../data-store/IDataStore";
+import type { IDataStore } from "../data-store/IDataStore";
 import { InMemoryRepository } from "./in-memory-repository";
 import type { PaymentRepository } from "./payment-repository";
 
@@ -13,7 +13,7 @@ export type PaymentRepoSource = Pick<IDataStore, "payments">;
 
 export class InMemoryPaymentRepository extends InMemoryRepository<Payment> implements PaymentRepository {
   constructor(store: PaymentRepoSource, now?: () => Date) {
-    super(store.payments as unknown as Delegate, now ?? (() => new Date()));
+    super(store.payments, now ?? (() => new Date()));
   }
 
   async sumByInvoice(invoiceId: string): Promise<number> {
