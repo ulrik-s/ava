@@ -110,9 +110,12 @@ const FAST = process.argv.includes("--fast");
 // konservativt pga större hopp). LINE oförändrat — lcov-line-brus + Node-buffert)
 // → 89.5 rader / 85.4 funktioner (#27: PaymentPlansPage status-filter + sök +
 // rad-klick + laddar-tillstånd → lokalt 87.02% funktioner. FUNC dras upp 85.3 →
-// 85.4, ~1.62% marginal. LINE oförändrat).
+// 85.4, ~1.62% marginal. LINE oförändrat) → 89.5 rader / 85.5 funktioner (#27:
+// UsersPage behörighets-grenar (admin/icke-admin) + inaktivera-flöde (confirm
+// ja/nej) + egen-rad-vakt + laddar-tillstånd → lokalt 87.08% funktioner. FUNC
+// dras upp 85.4 → 85.5, ~1.58% marginal. LINE oförändrat).
 const LINE_FLOOR = 0.895;
-const FUNC_FLOOR = 0.854;
+const FUNC_FLOOR = 0.855;
 
 /**
  * SERIAL_FILES — testfiler som SYNKRONT spawnar en barnprocess via

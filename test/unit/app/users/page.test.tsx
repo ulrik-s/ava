@@ -2,7 +2,7 @@
  * Test för UsersPage (lista).
  */
 
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import UsersPage from "@/app/users/page";
 
@@ -39,8 +39,16 @@ vi.mock("@/lib/client/trpc", () => ({
 }));
 
 beforeEach(() => {
+  vi.clearAllMocks();
   usersQuery.data = { users: [] };
+  usersQuery.isLoading = false;
+  currentQuery.data = { id: "admin", role: "ADMIN" };
 });
+
+const sampleUser = {
+  id: "u1", name: "Anna Karlsson", title: "Advokat", email: "anna@x.se",
+  role: "LAWYER", hourlyRate: 3000, mileageRate: 2500,
+};
 
 describe("UsersPage", () => {
   it("renderar rubrik + Ny användare-länk", () => {
@@ -78,5 +86,46 @@ describe("UsersPage", () => {
     // "Advokat" finns både som roll och titel — matcha minst en
     expect(screen.getAllByText("Advokat").length).toBeGreaterThan(0);
     expect(screen.getByText("Assistent")).toBeInTheDocument();
+  });
+});
+
+describe("UsersPage — behörighet + inaktivera + status", () => {
+  it("icke-admin: visar notis + döljer Ny användare-länk + actions", () => {
+    currentQuery.data = { id: "u9", role: "LAWYER" };
+    usersQuery.data = { users: [sampleUser] };
+    render(<UsersPage />);
+    expect(screen.getByText(/Endast administratörer/)).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /\+ Ny användare/i })).not.toBeInTheDocument();
+    expect(screen.queryByText("Inaktivera")).not.toBeInTheDocument();
+  });
+
+  it("admin: Inaktivera med confirm → deactivate.mutate med id", () => {
+    usersQuery.data = { users: [sampleUser] }; // id "u1" ≠ current "admin"
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    render(<UsersPage />);
+    fireEvent.click(screen.getByText("Inaktivera"));
+    expect(deactivateMutation.mutate).toHaveBeenCalledWith({ id: "u1" });
+    confirmSpy.mockRestore();
+  });
+
+  it("admin: Inaktivera med avbruten confirm → ingen mutation", () => {
+    usersQuery.data = { users: [sampleUser] };
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+    render(<UsersPage />);
+    fireEvent.click(screen.getByText("Inaktivera"));
+    expect(deactivateMutation.mutate).not.toHaveBeenCalled();
+    confirmSpy.mockRestore();
+  });
+
+  it("egen rad får ingen Inaktivera-knapp (kan inte inaktivera sig själv)", () => {
+    usersQuery.data = { users: [{ ...sampleUser, id: "admin" }] }; // = current user
+    render(<UsersPage />);
+    expect(screen.queryByText("Inaktivera")).not.toBeInTheDocument();
+  });
+
+  it("laddar-tillstånd visar 'Laddar...'", () => {
+    usersQuery.isLoading = true;
+    render(<UsersPage />);
+    expect(screen.getByText("Laddar...")).toBeInTheDocument();
   });
 });
