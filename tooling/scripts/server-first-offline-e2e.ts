@@ -38,7 +38,7 @@ function sleep(ms: number): Promise<void> { return new Promise((r) => setTimeout
 async function seedUser(): Promise<string> {
   const sql = postgres(DB_URL, { max: 1, onnotice: () => {} });
   try {
-    const existing = await sql`SELECT id FROM users WHERE email = ${EMAIL} LIMIT 1` as unknown as Array<{ id: string }>;
+    const existing = await sql<Array<{ id: string }>>`SELECT id FROM users WHERE email = ${EMAIL} LIMIT 1`;
     if (existing[0]) return existing[0].id;
     const id = uuidv7();
     await sql`INSERT INTO users (id, organization_id, email, name, role, active)
@@ -86,14 +86,14 @@ async function withDb<T>(fn: (sql: ReturnType<typeof postgres>) => Promise<T>): 
   try { return await fn(sql); } finally { await sql.end({ timeout: 5 }); }
 }
 const matterStatus = (id: string): Promise<string | undefined> =>
-  withDb(async (sql) => ((await sql`SELECT status FROM matters WHERE id = ${id}` as unknown as Array<{ status: string }>)[0]?.status));
+  withDb(async (sql) => (await sql<Array<{ status: string }>>`SELECT status FROM matters WHERE id = ${id}`)[0]?.status);
 const docRow = (id: string): Promise<{ file_name: string; folder_id: string | null } | undefined> =>
-  withDb(async (sql) => ((await sql`SELECT file_name, folder_id FROM documents WHERE id = ${id}` as unknown as Array<{ file_name: string; folder_id: string | null }>)[0]));
+  withDb(async (sql) => (await sql<Array<{ file_name: string; folder_id: string | null }>>`SELECT file_name, folder_id FROM documents WHERE id = ${id}`)[0]);
 const folderExists = (id: string): Promise<boolean> =>
-  withDb(async (sql) => ((await sql`SELECT 1 FROM document_folders WHERE id = ${id}` as unknown as unknown[]).length > 0));
+  withDb(async (sql) => (await sql`SELECT 1 FROM document_folders WHERE id = ${id}`).length > 0);
 interface DocFull { file_name: string; folder_id: string | null; storage_path: string; version: number }
 const docFull = (id: string): Promise<DocFull | undefined> =>
-  withDb(async (sql) => ((await sql`SELECT file_name, folder_id, storage_path, version FROM documents WHERE id = ${id}` as unknown as DocFull[])[0]));
+  withDb(async (sql) => (await sql<DocFull[]>`SELECT file_name, folder_id, storage_path, version FROM documents WHERE id = ${id}`)[0]);
 
 async function pushAll(t: TrpcSyncTransport, muts: Mutation[]): Promise<void> {
   for (const m of muts) {
