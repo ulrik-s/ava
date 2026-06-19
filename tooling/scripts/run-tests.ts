@@ -92,9 +92,12 @@ const FAST = process.argv.includes("--fast");
 // FUNC dras upp 84.5 → 84.6, ~1.39% marginal. LINE oförändrat) → 89.5 rader /
 // 84.7 funktioner (#27: DataTable footer/summa-rader + grupp-summa + chip-
 // borttagning + unhide-via-lista → data-table.tsx 57→65 funktioner, lokalt
-// 86.10% funktioner. FUNC dras upp 84.6 → 84.7, ~1.40% marginal. LINE oförändrat).
+// 86.10% funktioner. FUNC dras upp 84.6 → 84.7, ~1.40% marginal. LINE oförändrat)
+// → 89.5 rader / 84.8 funktioner (#27: ExpenseSection skapa/edit-formulär +
+// VatPreview + moms-radio/select-handlers → lokalt 86.28% funktioner. FUNC dras
+// upp 84.7 → 84.8, ~1.48% marginal. LINE oförändrat).
 const LINE_FLOOR = 0.895;
-const FUNC_FLOOR = 0.847;
+const FUNC_FLOOR = 0.848;
 
 /**
  * SERIAL_FILES — testfiler som SYNKRONT spawnar en barnprocess via
