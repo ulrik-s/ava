@@ -74,6 +74,6 @@ describe("serverFirstEventLog (#410, ADR 0017/#408 ej byggt)", () => {
     await expect(serverFirstEventLog.emit({} as never)).rejects.toMatchObject({ name: "ReadOnlyError" });
   });
   it("query ger tom logg", async () => {
-    expect(await serverFirstEventLog.query()).toEqual([]);
+    expect(await serverFirstEventLog.query({})).toEqual([]);
   });
 });

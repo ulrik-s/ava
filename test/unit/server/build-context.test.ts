@@ -12,16 +12,18 @@ import { buildContext } from "@/lib/server/build-context";
 import type { IDataStore } from "@/lib/server/data-store/IDataStore";
 import type { IPorts } from "@/lib/server/ports";
 
-const fakeStore = { marker: "store" } as unknown as IDataStore;
+const fakeEvents = { marker: "events" };
+const fakeStore = { marker: "store", events: fakeEvents } as unknown as IDataStore;
 const fakePorts = { marker: "ports" } as unknown as IPorts;
 const principal: Principal = {
   id: "u-anna", email: "a@b.se", name: "Anna", role: "ADMIN", organizationId: "org-1",
 };
 
 describe("buildContext", () => {
-  it("mappar principal → ctx.user och släpper igenom dataStore + ports", () => {
+  it("mappar principal → ctx.user och wirar dataStore.events + ports", () => {
     const ctx = buildContext({ dataStore: fakeStore, ports: fakePorts, principal });
-    expect(ctx.dataStore).toBe(fakeStore);
+    // ctx.dataStore är medvetet smal (bara `events`) — ADR 0020.
+    expect(ctx.dataStore.events).toBe(fakeEvents);
     expect(ctx.ports).toBe(fakePorts);
     expect(ctx.user).toBe(principal);
     expect(ctx.repos).toBeDefined(); // ADR 0020 — default in-memory-repos

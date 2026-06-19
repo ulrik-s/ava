@@ -1,9 +1,4 @@
 {
-  "src/lib/server/http/server-context.ts": {
-    "no-restricted-syntax": {
-      "count": 1
-    }
-  },
   "test/bun-compat.ts": {
     "no-restricted-syntax": {
       "count": 1
