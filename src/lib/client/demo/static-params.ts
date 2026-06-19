@@ -93,8 +93,8 @@ export async function demoStaticParamsBySeedId(sourceKey: string): Promise<{ id:
       currentUserId: DEMO_CURRENT_USER_ID,
       emailDomain: DEMO_EMAIL_DOMAIN,
       organizationName: DEMO_ORG_NAME,
-    }), createIdTranslator()) as unknown as Record<string, Array<{ id?: string }>>;
-    const list = seed[sourceKey] ?? [];
+    }), createIdTranslator());
+    const list = (seed[sourceKey as keyof typeof seed] ?? []) as Array<{ id?: string }>;
     const ids = list.map((x) => x.id).filter((x): x is string => typeof x === "string");
     return [...ids, SHELL_PARAM].map((id) => ({ id }));
   } catch {
