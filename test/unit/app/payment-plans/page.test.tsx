@@ -40,7 +40,8 @@ vi.mock("@/lib/client/trpc", () => ({
     },
   },
 }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
+const pushSpy = vi.fn();
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: pushSpy }) }));
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -105,5 +106,46 @@ describe("PaymentPlansPage — Skicka påminnelser nu (#71)", () => {
     const btn = screen.getByTestId("send-reminders") as HTMLButtonElement;
     expect(btn.disabled).toBe(true);
     expect(btn.textContent).toContain("Skickar");
+  });
+});
+
+describe("PaymentPlansPage — filter, sök, rad-klick", () => {
+  const planRow = {
+    id: "pp1", status: "ACTIVE", monthlyAmount: 10_000, dayOfMonth: 15,
+    invoice: {
+      amount: 100_000, payments: [], writeOffs: [],
+      matter: { matterNumber: "2026-0001", title: "Tvist", contacts: [{ contact: { id: "c1", name: "Anna" } }] },
+    },
+  };
+
+  it("status-filter: klick på Slutförda/Avbrutna sätter aria-pressed", () => {
+    render(<PaymentPlansPage />);
+    const completed = screen.getByRole("button", { name: "Slutförda" });
+    fireEvent.click(completed);
+    expect(completed).toHaveAttribute("aria-pressed", "true");
+    const cancelled = screen.getByRole("button", { name: "Avbrutna" });
+    fireEvent.click(cancelled);
+    expect(cancelled).toHaveAttribute("aria-pressed", "true");
+    expect(completed).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("sökfältet uppdaterar värdet", () => {
+    render(<PaymentPlansPage />);
+    const search = screen.getByPlaceholderText(/Sök på klient/) as HTMLInputElement;
+    fireEvent.change(search, { target: { value: "Anna" } });
+    expect(search.value).toBe("Anna");
+  });
+
+  it("rad-klick navigerar till plan-detaljen (router.push)", () => {
+    listQuery.data = [planRow];
+    render(<PaymentPlansPage />);
+    fireEvent.click(screen.getByText("Tvist"));
+    expect(pushSpy).toHaveBeenCalled();
+  });
+
+  it("laddar-tillstånd visar 'Laddar…'", () => {
+    listQuery.isLoading = true;
+    render(<PaymentPlansPage />);
+    expect(screen.getByText("Laddar…")).toBeInTheDocument();
   });
 });
