@@ -35,13 +35,16 @@ interface EventForMirror {
   kind: "appointment" | "deadline";
 }
 
-interface MirrorArgs {
+// type-alias (inte interface) → får implicit index-signatur och är därmed
+// tilldelningsbar till jobQueue.enqueue:s `Record<string, unknown>`-payload
+// utan cast.
+type MirrorArgs = {
   eventId: string;
   op: "upsert" | "delete";
   event?: EventForMirror;
   outlookEventId?: string | null;
   outlookCalendarId?: string | null;
-}
+};
 
 /**
  * Enqueue:a en mirror-to-outlook-worker. Fire-and-forget; workern
@@ -51,7 +54,7 @@ function enqueueMirror(args: MirrorArgs): void {
   const label = args.op === "delete"
     ? `Tar bort i Outlook: ${args.eventId.slice(0, 8)}`
     : `Speglar till Outlook: ${args.event?.title ?? ""}`;
-  jobQueue.enqueue("mirror-to-outlook", label, args as unknown as Record<string, unknown>);
+  jobQueue.enqueue("mirror-to-outlook", label, args);
 }
 
 /**
@@ -173,7 +176,7 @@ export default function CalendarPage() {
             userNames={userNames}
             userColors={userColors}
             onClose={() => setSelectedEvent(null)}
-            onEdit={(ev) => { setSelectedEvent(null); setEditingEvent(ev as unknown as EventRow); }}
+            onEdit={(ev) => { setSelectedEvent(null); setEditingEvent(ev); }}
           />
         </div>
       </section>
@@ -254,9 +257,7 @@ function EventList() {
   return (
     <ul className="divide-y divide-gray-100 bg-white rounded-lg border border-gray-200">
       {events.map((row) => {
-        // Boundary-cast: tRPC-raden är branded/optional och bredare än den
-        // lokala vy-typen EventRow (samma fält, men branded id m.m.).
-        const ev = row as unknown as EventRow;
+        const ev: EventRow = row;
         return (
         <li key={ev.id} className="px-4 py-3 flex items-center justify-between gap-3">
           <div className="min-w-0 flex-1">
@@ -319,9 +320,7 @@ function TaskList() {
   return (
     <ul className="divide-y divide-gray-100 bg-white rounded-lg border border-gray-200">
       {tasks.map((row) => {
-        // Boundary-cast: tRPC-raden är branded/optional och bredare än den
-        // lokala vy-typen TaskRow (samma fält, men branded id m.m.).
-        const t = row as unknown as TaskRow;
+        const t: TaskRow = row;
         return (
         <li key={t.id} className={`px-4 py-3 flex items-center justify-between gap-3 ${t.status === "DONE" ? "opacity-60" : ""}`}>
           <div className="min-w-0 flex-1">
@@ -668,17 +667,17 @@ interface EventRow {
   title: string;
   kind: "appointment" | "deadline";
   startAt: string | Date;
-  endAt?: string | Date | null;
+  endAt?: string | Date | null | undefined;
   allDay: boolean;
-  location?: string | null;
-  matterId?: string | null;
-  matter?: { id: string; matterNumber: string; title: string } | null;
-  inviteeUserIds?: string[];
-  inviteeContactIds?: string[];
-  mirrorToOutlook?: boolean;
-  mirrorStatus?: "pending" | "synced" | "failed" | null;
-  outlookEventId?: string | null;
-  outlookCalendarId?: string | null;
+  location?: string | null | undefined;
+  matterId?: string | null | undefined;
+  matter?: { id: string; matterNumber: string; title: string } | null | undefined;
+  inviteeUserIds?: string[] | undefined;
+  inviteeContactIds?: string[] | undefined;
+  mirrorToOutlook?: boolean | undefined;
+  mirrorStatus?: "pending" | "synced" | "failed" | null | undefined;
+  outlookEventId?: string | null | undefined;
+  outlookCalendarId?: string | null | undefined;
 }
 
 interface TaskRow {
@@ -686,7 +685,7 @@ interface TaskRow {
   title: string;
   status: "TODO" | "IN_PROGRESS" | "DONE" | "CANCELLED";
   priority: "LOW" | "MEDIUM" | "HIGH";
-  dueAt?: string | Date | null;
+  dueAt?: string | Date | null | undefined;
   matter?: { id: string; matterNumber: string; title: string } | null;
 }
 
