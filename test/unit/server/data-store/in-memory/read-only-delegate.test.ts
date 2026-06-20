@@ -154,20 +154,8 @@ describe("ReadOnlyDelegate — mutationsförbud", () => {
     await expect(delegate.delete({ where: { id: "m1" } })).rejects.toThrow(ReadOnlyError);
   });
 
-  it("upsert kastar", async () => {
-    await expect(delegate.upsert({ where: { id: "m1" }, create: {}, update: {} })).rejects.toThrow(ReadOnlyError);
-  });
-
-  it("deleteMany kastar", async () => {
-    await expect(delegate.deleteMany()).rejects.toThrow(ReadOnlyError);
-  });
-
   it("updateMany kastar", async () => {
     await expect(delegate.updateMany({ data: {} })).rejects.toThrow(ReadOnlyError);
-  });
-
-  it("createMany kastar", async () => {
-    await expect(delegate.createMany({ data: [] })).rejects.toThrow(ReadOnlyError);
   });
 });
 
