@@ -1,6 +1,6 @@
 # ADR 0027 — Kapabilitets-tierad klient (samma app, server-närvaro avgör funktionsuppsättning)
 
-- **Status:** Förslag (2026-06-20)
+- **Status:** Accepterad (2026-06-20)
 - **Beslutsfattare:** Ulrik Sjölin
 - **Berör:** bootstrap, auth, demo, LLM/jobb, integrationer, UI-feature-gating
 - **Knyter an till:** [ADR 0016](0016-server-first-med-offline-first-klient.md)
@@ -71,7 +71,7 @@ demo-seeden) syns, men *handlingen* "Analysera med LLM" / "Kör om" döljs. Skil
 |---|---|---|---|
 | Läs/skriv lokalt | ✓ (cache är sanningen) | ✓ | `CachingSyncDataStore` |
 | Sync mot server | — `noSyncTransport`/`StaticSyncSource` | ✓ `TrpcSyncTransport` | `SyncTransport` (ADR 0017) |
-| Login / principal | demo-provider (fast el. växlare) | OIDC (oauth2-proxy/KC) | principal-källa |
+| Login / principal | demo-provider — "logga in som &lt;användare&gt;"-växlare | OIDC (oauth2-proxy/KC) | principal-källa |
 | LLM-klassificering / etikett-förslag | **dold** (seedad analys visas) | ✓ ollama-jobb | tag-suggester-port + jobbkö (ADR 0024) |
 | Durabla jobb | **dold** | ✓ pg-boss | jobbkö |
 | Ledger / Fortnox | **dold** | ✓ om konfigurerad | connector (ADR 0011) |
@@ -86,6 +86,20 @@ Allt annat är dolt-eller-tänt; login skiljer sig i *natur*. Sömmen är en
 den via OIDC. Detta pensionerar samtidigt den legacy GitHub-eran-hook
 `useAuthMode` (källan till "@okänd"-bannern): banner-texten blir "vilken
 principal + vilka kapabiliteter", ärligt i båda lägena.
+
+**Demo-identitet = "logga in som &lt;användare&gt;"-växlare (beslut).** Demon
+exponerar en användarväljare över de seedade användarna (Anna/Björn/…) i st.f.
+en enda fast principal. Det säljer in produkten (varje jurist ser *sin* dashboard/
+tid/todo, precis som #635 byggde) och övar principal-scoping på riktigt — samma
+kod-väg som OIDC-bunden principal i server-läge, bara en annan källa.
+
+### Persistens i demon (beslut)
+
+**Redigeringar persisteras över omladdning + en "Återställ demo"-knapp.** Demons
+cache (IndexedDB/OPFS, ADR 0025) behålls mellan besök så ändringar överlever
+reload — som den riktiga klienten. "Återställ demo" rensar cachen → re-hydreras
+från den bundlade seeden via reconcile-vägen (ADR 0025). Version-bump
+(`NEXT_PUBLIC_DEMO_VERSION`) återställer automatiskt vid redeploy.
 
 ## Konsekvenser
 
@@ -114,14 +128,10 @@ principal + vilka kapabiliteter", ärligt i båda lägena.
 4. **Blob-cache i demon** (knyter an ADR 0025 steg 3 / ADR 0023): seeda
    dokument-bytes i OPFS så dokumentladdning är cache-lokal (inga GH-träffar).
 
-## Öppna frågor (beslut kvar)
+## Beslutade detaljer
 
-- **Demo-identitet:** fast principal (enklast) **eller** en "logga in som
-  &lt;användare&gt;"-växlare (visar per-användar-dashboards vi just byggde; lite
-  mer jobb)? *Lutar mot växlare — säljande och övar principal-scoping.*
-- **Persistens i demon:** redigeringar överlever omladdning + "Återställ demo"-
-  knapp (mest verklighetstroget) eller dagens nollställ-vid-omladdning? (ADR 0025
-  har redan version-gated reset; växlaren-frågan ovan påverkar valet.)
+- **Demo-identitet:** "logga in som &lt;användare&gt;"-växlare (se ovan).
+- **Persistens i demon:** persist över omladdning + "Återställ demo"-knapp (se ovan).
 
 ## Relaterat
 
