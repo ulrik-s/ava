@@ -15,6 +15,7 @@ import { asId } from "@/lib/shared/schemas/ids";
 import { matters, timeEntries, users } from "../db/schema";
 import type { AppDb } from "../db/types";
 import { DrizzleRepository, versionedTable } from "./drizzle-repository";
+import { matterOrg } from "./matter-org";
 import type {
   LawyerReportTimeEntry, TimeEntryListFilter, TimeEntryListResult, TimeEntryListRow,
   TimeEntryReportFilter, TimeEntryReportRow, TimeEntryRepository, UnbilledTimeEntry,
@@ -35,6 +36,11 @@ function listWhere(organizationId: string, opts: TimeEntryListFilter) {
 export class DrizzleTimeEntryRepository extends DrizzleRepository<TimeEntry> implements TimeEntryRepository {
   constructor(db: AppDb, now: () => Date = () => new Date()) {
     super(db, versionedTable(timeEntries), now);
+  }
+
+  /** time_entries saknar org-kolumn → härled via ärendet (#528/#632) så change_log/pull funkar. */
+  protected override resolveOrg(row: unknown): Promise<string | undefined> {
+    return matterOrg(this.db, (row as { matterId?: string }).matterId);
   }
 
   async listForOrg(organizationId: string, opts: TimeEntryListFilter): Promise<TimeEntryListResult> {

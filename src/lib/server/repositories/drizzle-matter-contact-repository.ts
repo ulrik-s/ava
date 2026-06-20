@@ -15,12 +15,18 @@ import { DrizzleRepository, versionedTable } from "./drizzle-repository";
 import type {
   ConflictContactRow, MatterContactRepository, MatterContactWithContact,
 } from "./matter-contact-repository";
+import { matterOrg } from "./matter-org";
 
 export class DrizzleMatterContactRepository
   extends DrizzleRepository<MatterContact>
   implements MatterContactRepository {
   constructor(db: AppDb, now: () => Date = () => new Date()) {
     super(db, versionedTable(matterContacts), now);
+  }
+
+  /** matter_contacts saknar org-kolumn → härled via ärendet (#528/#632) så change_log/pull funkar. */
+  protected override resolveOrg(row: unknown): Promise<string | undefined> {
+    return matterOrg(this.db, (row as { matterId?: string }).matterId);
   }
 
   async findForConflict(organizationId: string, numberTerm?: string): Promise<ConflictContactRow[]> {
