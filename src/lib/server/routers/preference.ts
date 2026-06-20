@@ -10,6 +10,7 @@
 
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import { asId } from "@/lib/shared/schemas/ids";
 import type { OrgPreferenceRow } from "../repositories/org-preference-repository";
 import type { UserPreferenceRow } from "../repositories/user-preference-repository";
 import { router, orgProcedure, protectedProcedure } from "../trpc";
@@ -37,11 +38,13 @@ export const preferenceRouter = router({
     .mutation(async ({ ctx, input }) => {
       const existing = await ctx.repos.userPreferences.getByUserKey(ctx.user.id, ctx.user.organizationId, input.key);
       if (existing) {
-        return ctx.repos.userPreferences.update(existing.id, { prefs: input.prefs } as Partial<UserPreferenceRow>);
+        return ctx.repos.userPreferences.update(existing.id, { prefs: input.prefs } satisfies Partial<UserPreferenceRow>);
       }
       return ctx.repos.userPreferences.create({
-        userId: ctx.user.id, organizationId: ctx.user.organizationId, key: input.key, prefs: input.prefs,
-      } as Partial<UserPreferenceRow>);
+        userId: asId<"UserId">(ctx.user.id),
+        organizationId: asId<"OrganizationId">(ctx.user.organizationId),
+        key: input.key, prefs: input.prefs,
+      } satisfies Partial<UserPreferenceRow>);
     }),
 
   /** Återställ user-pref (faller tillbaka till org/komponent-default). */
@@ -61,11 +64,12 @@ export const preferenceRouter = router({
       requireAdmin(ctx.user.role);
       const existing = await ctx.repos.orgPreferences.getByOrgKey(ctx.user.organizationId, input.key);
       if (existing) {
-        return ctx.repos.orgPreferences.update(existing.id, { prefs: input.prefs, createdById: ctx.user.id } as Partial<OrgPreferenceRow>);
+        return ctx.repos.orgPreferences.update(existing.id, { prefs: input.prefs, createdById: asId<"UserId">(ctx.user.id) } satisfies Partial<OrgPreferenceRow>);
       }
       return ctx.repos.orgPreferences.create({
-        organizationId: ctx.user.organizationId, key: input.key, prefs: input.prefs, createdById: ctx.user.id,
-      } as Partial<OrgPreferenceRow>);
+        organizationId: asId<"OrganizationId">(ctx.user.organizationId),
+        key: input.key, prefs: input.prefs, createdById: asId<"UserId">(ctx.user.id),
+      } satisfies Partial<OrgPreferenceRow>);
     }),
 
   /** Rensa org-default (endast ADMIN). */

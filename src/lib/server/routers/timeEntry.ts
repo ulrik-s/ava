@@ -69,7 +69,7 @@ export const timeEntryRouter = router({
         billable: input.billable,
         invoiceId: input.invoiceId ?? null,
         ...(input.createdAt ? { createdAt: new Date(input.createdAt) } : {}),
-      }) as Partial<TimeEntry>);
+      }) satisfies Partial<TimeEntry>);
       await emit.timeEntryAdded(ctx, { id: entry.id, matterId: entry.matterId, minutes: entry.minutes });
       return entry;
     }),
@@ -95,7 +95,7 @@ export const timeEntryRouter = router({
         description,
         billable,
         ...(date ? { date: new Date(date) } : {}),
-      }) as Partial<TimeEntry>);
+      }) satisfies Partial<TimeEntry>);
       await emit.timeEntryUpdated(ctx, { id: updated.id, matterId: updated.matterId });
       return updated;
     }),

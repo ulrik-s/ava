@@ -153,7 +153,7 @@ function buildMatterData(
 async function linkKlient(ctx: MatterCtx, matterId: MatterId, klientId: ContactId): Promise<void> {
   const contact = await ctx.repos.contacts.getByIdFull(klientId, ctx.orgId);
   if (!contact) throw new TRPCError({ code: "NOT_FOUND" });
-  await ctx.repos.matterContacts.create({ matterId, contactId: klientId, role: "KLIENT" } as Partial<MatterContact>);
+  await ctx.repos.matterContacts.create({ matterId, contactId: klientId, role: "KLIENT" } satisfies Partial<MatterContact>);
 }
 
 export const matterRouter = router({
@@ -196,7 +196,7 @@ export const matterRouter = router({
       const responsibleLawyerId = input.responsibleLawyerId ?? ctx.user.id;
       const matterNumber = input.matterNumber ?? (await nextMatterNumber(ctx, responsibleLawyerId));
       const matter = await ctx.repos.matters.create(
-        buildMatterData(ctx.orgId, matterNumber, responsibleLawyerId, input) as Partial<Matter>,
+        buildMatterData(ctx.orgId, matterNumber, responsibleLawyerId, input) satisfies Partial<Matter>,
       );
       await emit.matterCreated(ctx, matter);
       // matter.id washar till `any` via Joined<>; brand explicit. klientId
@@ -243,7 +243,7 @@ export const matterRouter = router({
       if (taxaHufStart !== undefined) {
         data.taxaHufStart = taxaHufStart ? new Date(taxaHufStart) : null;
       }
-      const updated = await ctx.repos.matters.update(id, data as Partial<Matter>);
+      const updated = await ctx.repos.matters.update(id, data satisfies Partial<Matter>);
       await emit.matterUpdated(ctx, id, data);
       if (input.status && input.status !== before.status) {
         await emit.matterStatusChanged(ctx, id, before.status, input.status);
@@ -275,7 +275,7 @@ export const matterRouter = router({
         id,
         notes,
         ...(createdAt ? { createdAt: new Date(createdAt) } : {}),
-      }) as Partial<MatterContact>);
+      }) satisfies Partial<MatterContact>);
     }),
 
   // Create a new contact and link it to the matter in one step
@@ -310,7 +310,7 @@ export const matterRouter = router({
       }
 
       return ctx.repos.matterContacts.linkContact(
-        { matterId, contactId: contact.id, role, notes } as Partial<MatterContact>,
+        { matterId, contactId: asId<"ContactId">(contact.id), role, notes } satisfies Partial<MatterContact>,
       );
     }),
 

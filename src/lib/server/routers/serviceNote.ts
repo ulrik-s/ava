@@ -46,7 +46,7 @@ export const serviceNoteRouter = router({
         time: input.time,
         text: input.text,
         ...(input.createdAt ? { createdAt: new Date(input.createdAt) } : {}),
-      }) as Partial<ServiceNote>);
+      }) satisfies Partial<ServiceNote>);
     }),
 
   update: orgProcedure
@@ -64,7 +64,7 @@ export const serviceNoteRouter = router({
       const owned = await ctx.repos.serviceNotes.getByIdInOrg(input.id, ctx.orgId);
       if (!owned) throw new TRPCError({ code: "NOT_FOUND" });
       const { id, date, time, text } = input;
-      return ctx.repos.serviceNotes.update(id, omitUndefined({ date, time, text }) as Partial<ServiceNote>);
+      return ctx.repos.serviceNotes.update(id, omitUndefined({ date, time, text }) satisfies Partial<ServiceNote>);
     }),
 
   delete: orgProcedure

@@ -45,7 +45,7 @@ export const organizationRouter = router({
       })
     )
     .mutation(({ ctx, input }) =>
-      ctx.repos.organizations.update(ctx.user.organizationId, omitUndefined(input) as Partial<Organization>),
+      ctx.repos.organizations.update(ctx.user.organizationId, omitUndefined(input) satisfies Partial<Organization>),
     ),
 
   /**
@@ -67,7 +67,7 @@ export const organizationRouter = router({
       })
     )
     .mutation(({ ctx, input }) =>
-      ctx.repos.organizations.create(input as Partial<Organization>),
+      ctx.repos.organizations.create(input satisfies Partial<Organization>),
     ),
 
   // ── Offices ─────────────────────────────────────────────────────
@@ -92,7 +92,7 @@ export const organizationRouter = router({
       return ctx.repos.offices.create({
         ...input,
         organizationId: asId<"OrganizationId">(ctx.user.organizationId),
-      } as Partial<Office>);
+      } satisfies Partial<Office>);
     }),
 
   updateOffice: protectedProcedure
@@ -112,7 +112,7 @@ export const organizationRouter = router({
       if (!office) throw new TRPCError({ code: "NOT_FOUND" });
       // If setting as main, demote others first
       if (data.isMain) await ctx.repos.offices.demoteMains(ctx.user.organizationId);
-      return ctx.repos.offices.update(id, omitUndefined(data) as Partial<Office>);
+      return ctx.repos.offices.update(id, omitUndefined(data) satisfies Partial<Office>);
     }),
 
   deleteOffice: protectedProcedure

@@ -161,7 +161,7 @@ export const calendarRouter = router({
         userId: input.userId ?? asId<"UserId">(ctx.user.id),
         organizationId: asId<"OrganizationId">(ctx.user.organizationId),
         mirrorStatus: input.mirrorToOutlook ? "pending" : null,
-      } as Partial<CalendarEvent>);
+      } satisfies Partial<CalendarEvent>);
     }),
 
   /** Alla events kopplade till ett specifikt ärende, kronologiskt. */
@@ -185,7 +185,7 @@ export const calendarRouter = router({
       );
       return ctx.repos.calendarEvents.update(id, {
         ...writeData, ...computeMirrorPatch(data, existing),
-      } as Partial<CalendarEvent>);
+      } satisfies Partial<CalendarEvent>);
     }),
 
   delete: protectedProcedure
@@ -219,6 +219,6 @@ export const calendarRouter = router({
       const owned = await ctx.repos.calendarEvents.getOwned(input.id, ctx.user.id, ctx.user.organizationId);
       if (!owned) throw new TRPCError({ code: "NOT_FOUND" });
       const { id, ...data } = input;
-      return ctx.repos.calendarEvents.update(id, data as Partial<CalendarEvent>);
+      return ctx.repos.calendarEvents.update(id, data satisfies Partial<CalendarEvent>);
     }),
 });

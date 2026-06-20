@@ -118,8 +118,8 @@ export const paymentPlanRouter = router({
         if (plan.status !== "ACTIVE") {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Endast aktiva planer kan avbrytas" });
         }
-        await tx.paymentPlans.update(plan.id, { status: "CANCELLED" } as Partial<PaymentPlan>);
-        await tx.invoices.update(plan.invoiceId, { status: "SENT" } as Partial<Invoice>);
+        await tx.paymentPlans.update(plan.id, { status: "CANCELLED" } satisfies Partial<PaymentPlan>);
+        await tx.invoices.update(plan.invoiceId, { status: "SENT" } satisfies Partial<Invoice>);
         return { ok: true };
       });
     }),
