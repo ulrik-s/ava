@@ -252,6 +252,26 @@ export const coreProcedures = {
     }),
 
   /**
+   * `setTags` (#621) — sätt dokumentets etiketter. Validerar att alla taggar
+   * finns i byråns vokabulär (`organization.documentTags`) så listan hålls
+   * konsekvent. Etiketter är metadata → bumpar INTE versionen (#619).
+   */
+  setTags: orgProcedure
+    .input(z.object({ documentId: z.string(), tags: z.array(z.string()) }))
+    .mutation(async ({ ctx, input }) => {
+      await assertDocAccess(ctx, input.documentId);
+      const org = await ctx.repos.organizations.getById(ctx.orgId);
+      const vocab = new Set(org?.documentTags ?? []);
+      const invalid = input.tags.filter((t) => !vocab.has(t));
+      if (invalid.length > 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: `Okända etiketter: ${invalid.join(", ")}` });
+      }
+      // Dedup, behåll inmatningsordning.
+      const tags = [...new Set(input.tags)];
+      return ctx.repos.documents.updateMetadata(input.documentId, { tags });
+    }),
+
+  /**
    * `markExternallyEdited` — kallas av `ExternalEditTracker` när user
    * har sparat ändringar i en extern editor (PDF Gear, Word, etc.).
    * Bumpar version + updatedAt + sizeBytes så manifest + commit-pipeline

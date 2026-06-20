@@ -6,11 +6,10 @@ import { organizationIdSchema, asId } from "@/lib/shared/schemas/ids";
 import type { Office, Organization } from "@/lib/shared/schemas/organization";
 import { router, protectedProcedure } from "../trpc";
 
-/** Projektion för settings-vyn (nullish → null). Egen helper för låg komplexitet. */
-function toOrgSettings(org: Organization) {
+/** Nullbara org-fält (nullish → null). Utbruten så komplexiteten (många `??`)
+ *  inte räknas in i `toOrgSettings` (#199 complexity@8). */
+function nullableOrgFields(org: Organization) {
   return {
-    id: org.id,
-    name: org.name,
     orgNumber: org.orgNumber ?? null,
     address: org.address ?? null,
     phone: org.phone ?? null,
@@ -18,6 +17,17 @@ function toOrgSettings(org: Organization) {
     bankgiro: org.bankgiro ?? null,
     logoPath: org.logoPath ?? null,
     ledgerAccountMap: org.ledgerAccountMap ?? null,
+  };
+}
+
+/** Projektion för settings-vyn. */
+function toOrgSettings(org: Organization) {
+  return {
+    id: org.id,
+    name: org.name,
+    ...nullableOrgFields(org),
+    /** Byråns vokabulär av giltiga dokument-etiketter (#621). */
+    documentTags: org.documentTags ?? [],
   };
 }
 
@@ -42,11 +52,19 @@ export const organizationRouter = router({
         bankgiro: z.string().optional(),
         /** Roll→konto-mappning för bokföringsexport (#249). */
         ledgerAccountMap: ledgerAccountMapSchema.optional(),
+        /** Byråns vokabulär av giltiga dokument-etiketter (#621). Hela listan
+         *  ersätts (set-semantik); dedupas + tomma rensas. */
+        documentTags: z.array(z.string()).optional(),
       })
     )
-    .mutation(({ ctx, input }) =>
-      ctx.repos.organizations.update(ctx.user.organizationId, omitUndefined(input) satisfies Partial<Organization>),
-    ),
+    .mutation(({ ctx, input }) => {
+      // Normalisera vokabulären: trimma, släng tomma, dedupa (set-semantik).
+      const patch = omitUndefined(input);
+      if (patch.documentTags) {
+        patch.documentTags = [...new Set(patch.documentTags.map((t) => t.trim()).filter(Boolean))];
+      }
+      return ctx.repos.organizations.update(ctx.user.organizationId, patch satisfies Partial<Organization>);
+    }),
 
   /**
    * Skapa en organisation med explicit id (rot-entiteten — den ÄR scope:n,

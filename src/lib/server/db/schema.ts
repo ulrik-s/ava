@@ -45,6 +45,9 @@ export const organizations = pgTable("organizations", {
   logoPath: text("logo_path"),
   azureTenantId: text("azure_tenant_id"),
   ledgerAccountMap: jsonb("ledger_account_map"),
+  /** Byråns vokabulär av giltiga dokument-etiketter (#621). Dokument får bara
+   *  bära taggar ur denna lista; hanteras i org-inställningarna. */
+  documentTags: jsonb("document_tags").notNull().default([]).$type<string[]>(),
 });
 
 export const offices = pgTable("offices", {
@@ -309,6 +312,10 @@ export const documents = pgTable("documents", {
   uploadedById: uuid("uploaded_by_id").notNull().$type<UserId>(),
   title: text("title"),
   documentType: text("document_type"),
+  /** Fria etiketter ur byråns vokabulär (#621) — komplement till documentType.
+   *  Sätts av LLM (förslag) + användare; skrivs via updateMetadata (ingen
+   *  version-bump, #619). */
+  tags: jsonb("tags").notNull().default([]).$type<string[]>(),
   summary: text("summary"),
   analyzedAt: timestamp("analyzed_at", { withTimezone: true }),
   analysisStatus: text("analysis_status").$type<"PENDING" | "RUNNING" | "DONE" | "ERROR">(),

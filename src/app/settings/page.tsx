@@ -10,6 +10,7 @@ import { HelperSection } from "@/components/settings/helper-section";
 import { LedgerAccountsSection } from "@/components/settings/ledger-accounts-section";
 import { OrgDefaultsSection } from "@/components/settings/org-defaults-section";
 import { trpc } from "@/lib/client/trpc";
+import { DocumentTagsSection } from "./_document-tags-section";
 
 // Zod vid parsegränsen (#187): logo-API:ts svar valideras.
 const logoResponseSchema = z.object({ logoUrl: z.string().nullable() });
@@ -546,6 +547,10 @@ export default function SettingsPage() {
       {/* 6. Bokföringsexport */}
       <SectionHeader num={6} title="Bokföringsexport (admin)" subtitle="Konto-mappning (BAS) som SIE-exporten bokför mot. Förifyllt med standard för advokatbyrå." />
       <LedgerAccountsSection />
+
+      {/* 7. Dokument-etiketter */}
+      <SectionHeader num={7} title="Dokument-etiketter (admin)" subtitle="Vokabulär av giltiga etiketter som dokument kan taggas med — av AI:n och handläggarna." />
+      <DocumentTagsSection />
     </div>
   );
 }

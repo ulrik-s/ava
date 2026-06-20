@@ -21,6 +21,9 @@ export const organizationSchema = z.object({
   azureTenantId: z.string().nullish(),
   /** Per-byrå roll→konto-mappning för bokföringsexport (SIE m.fl., #249). */
   ledgerAccountMap: ledgerAccountMapSchema.nullish(),
+  /** Byråns vokabulär av giltiga dokument-etiketter (#621). Dokument får bara
+   *  bära taggar ur denna lista; redigeras i org-inställningarna. */
+  documentTags: z.array(z.string()).default([]),
 }).passthrough();
 
 export type Organization = z.infer<typeof organizationSchema>;

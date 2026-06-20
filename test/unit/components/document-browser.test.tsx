@@ -65,7 +65,9 @@ vi.mock("@/lib/client/trpc", () => ({
       delete: { useMutation: () => mutationStubs.delete },
       analyze: { useMutation: () => mutationStubs.analyze },
       register: { useMutation: () => mutationStubs.register },
+      setTags: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
+    organization: { getSettings: { useQuery: () => ({ data: { documentTags: [] } }) } },
     prefs: {
       get: { useQuery: () => ({ data: undefined, isLoading: false }) },
       save: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },

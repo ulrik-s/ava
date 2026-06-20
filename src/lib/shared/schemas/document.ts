@@ -44,6 +44,9 @@ export const documentSchema = z.object({
   // AI-genererad metadata (fylls async efter upload)
   title: z.string().nullish(),
   documentType: z.string().nullish(),
+  /** Etiketter ur byråns vokabulär (#621) — flera per dokument, satta av
+   *  LLM (förslag) + användare. Komplement till `documentType`. */
+  tags: z.array(z.string()).default([]),
   summary: z.string().nullish(),
   analyzedAt: optionalDateLike,
   analysisStatus: z.enum(["PENDING", "RUNNING", "DONE", "ERROR"]).nullish(),

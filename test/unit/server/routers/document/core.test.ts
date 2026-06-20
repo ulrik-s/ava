@@ -261,6 +261,45 @@ describe("document.markExternallyEdited", () => {
   });
 });
 
+describe("document.setTags (#621)", () => {
+  const withVocab = (documents: Array<Record<string, unknown>>) => ({
+    organizations: [{ id: ORG, name: "Byrå A", documentTags: ["Sekretess", "Brådskande", "Original"] }],
+    documents,
+  });
+
+  it("sätter etiketter ur vokabulären (dedupar, bumpar INTE version)", async () => {
+    const { caller, store } = makeCaller(withVocab([
+      { id: "d1", matterId: "m1", fileName: "a.pdf", version: 3 },
+    ]));
+    await caller.setTags({ documentId: "d1", tags: ["Sekretess", "Original", "Sekretess"] });
+    const doc = docs(store).find((d) => d.id === "d1")!;
+    expect(doc.tags).toEqual(["Sekretess", "Original"]);
+    expect(doc.version).toBe(3); // etiketter = metadata → ingen version-bump (#619)
+  });
+
+  it("vägrar etiketter utanför vokabulären (BAD_REQUEST)", async () => {
+    const { caller } = makeCaller(withVocab([{ id: "d1", matterId: "m1", fileName: "a.pdf" }]));
+    await expect(
+      caller.setTags({ documentId: "d1", tags: ["Sekretess", "Påhittad"] }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("tom lista rensar etiketterna", async () => {
+    const { caller, store } = makeCaller(withVocab([
+      { id: "d1", matterId: "m1", fileName: "a.pdf", tags: ["Sekretess"] },
+    ]));
+    await caller.setTags({ documentId: "d1", tags: [] });
+    expect(docs(store).find((d) => d.id === "d1")!.tags).toEqual([]);
+  });
+
+  it("vägrar dokument från annan org", async () => {
+    const { caller } = makeCaller(withVocab([{ id: "d1", matterId: "m1", fileName: "a.pdf" }]), "org-other");
+    await expect(
+      caller.setTags({ documentId: "d1", tags: [] }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+});
+
 describe("document.updateMetadata", () => {
   it("uppdaterar bara skickade fält efter access-check", async () => {
     const { caller, store } = makeCaller({
