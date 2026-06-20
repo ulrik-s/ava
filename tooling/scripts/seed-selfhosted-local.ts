@@ -46,6 +46,13 @@ async function main(): Promise<void> {
     if (!(await repos.organizations.getById(ORG))) {
       await repos.organizations.create({ id: asId<"OrganizationId">(ORG), name: "Demobyrå AB" } satisfies Partial<Organization>);
     }
+    // --demo (#633-uppf.): demo-seeden mappar sin admin + huvud-jurist till
+    // KC-login-emailen (admin@/lawyer@ava.test) och ÄGER datan → skapa INTE
+    // separata tomma allowlist-users här (skulle ge dubbletter på samma email).
+    if (process.env.SEED_ORG_ONLY === "1") {
+      console.log(`✓ org ${ORG} klar (SEED_ORG_ONLY — allowlist-users kommer från demo-seeden).`);
+      return;
+    }
     const existing = new Set((await repos.users.listByOrg(ORG)).map((u) => u.email));
     for (const u of USERS) {
       if (existing.has(u.email)) { console.log(`• ${u.email} finns redan`); continue; }
