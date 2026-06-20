@@ -48,7 +48,7 @@ export const documentTemplateRouter = router({
           createdById: input.createdById ?? asId<"UserId">(ctx.user.id),
         }),
         ...(input.createdAt ? { createdAt: new Date(input.createdAt) } : {}),
-      } as Partial<DocumentTemplate>);
+      } satisfies Partial<DocumentTemplate>);
     }),
 
   update: protectedProcedure
@@ -65,7 +65,7 @@ export const documentTemplateRouter = router({
       const existing = await ctx.repos.documentTemplates.getByIdInOrg(input.id, ctx.user.organizationId);
       if (!existing) throw new TRPCError({ code: "NOT_FOUND" });
       const { id, name, description, category, content } = input;
-      return ctx.repos.documentTemplates.update(id, omitUndefined({ name, description, category, content }) as Partial<DocumentTemplate>);
+      return ctx.repos.documentTemplates.update(id, omitUndefined({ name, description, category, content }) satisfies Partial<DocumentTemplate>);
     }),
 
   delete: protectedProcedure

@@ -82,7 +82,7 @@ export const expectedReceivableRouter = router({
         recordedById: asId<"UserId">(ctx.user.id),
         createdAt: now,
         updatedAt: now,
-      } as Partial<ExpectedReceivable>);
+      } satisfies Partial<ExpectedReceivable>);
     }),
 
   /**
@@ -105,7 +105,7 @@ export const expectedReceivableRouter = router({
         settledAt: input.settledAt ? new Date(input.settledAt) : new Date(),
         ...(input.paymentReference !== undefined ? { paymentReference: input.paymentReference } : {}),
         updatedAt: new Date(),
-      } as Partial<ExpectedReceivable>);
+      } satisfies Partial<ExpectedReceivable>);
     }),
 
   /** Avbryt en fordran (t.ex. felregistrerad eller domstolen avslog helt). */
@@ -113,7 +113,7 @@ export const expectedReceivableRouter = router({
     .input(z.object({ id: expectedReceivableIdSchema }))
     .mutation(async ({ ctx, input }) => {
       await assertInOrg(ctx.repos, ctx.orgId, input.id);
-      return ctx.repos.expectedReceivables.update(input.id, { status: "CANCELLED", updatedAt: new Date() } as Partial<ExpectedReceivable>);
+      return ctx.repos.expectedReceivables.update(input.id, { status: "CANCELLED", updatedAt: new Date() } satisfies Partial<ExpectedReceivable>);
     }),
 
   /** Uppdatera memo-fälten (begärt belopp/beskrivning) medan PENDING. */
@@ -127,6 +127,6 @@ export const expectedReceivableRouter = router({
     .mutation(async ({ ctx, input }) => {
       await assertInOrg(ctx.repos, ctx.orgId, input.id);
       const { id, ...rest } = input;
-      return ctx.repos.expectedReceivables.update(id, { ...omitUndefined(rest), updatedAt: new Date() } as Partial<ExpectedReceivable>);
+      return ctx.repos.expectedReceivables.update(id, { ...omitUndefined(rest), updatedAt: new Date() } satisfies Partial<ExpectedReceivable>);
     }),
 });

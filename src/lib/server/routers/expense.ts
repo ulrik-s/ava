@@ -66,7 +66,7 @@ export const expenseRouter = router({
         vatIncluded: input.vatIncluded,
         invoiceId: input.invoiceId ?? null,
         ...(input.createdAt ? { createdAt: new Date(input.createdAt) } : {}),
-      }) as Partial<Expense>);
+      }) satisfies Partial<Expense>);
     }),
 
   update: orgProcedure
@@ -94,7 +94,7 @@ export const expenseRouter = router({
         vatRate,
         vatIncluded,
         ...(date ? { date: new Date(date) } : {}),
-      }) as Partial<Expense>);
+      }) satisfies Partial<Expense>);
     }),
 
   delete: orgProcedure

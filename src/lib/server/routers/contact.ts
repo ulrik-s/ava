@@ -60,7 +60,7 @@ export const contactRouter = router({
         ...omitUndefined(input),
         email: input.email || null,
         organizationId: asId<"OrganizationId">(ctx.orgId),
-      } as Partial<Contact>);
+      } satisfies Partial<Contact>);
       await emit.contactCreated(ctx, contact);
       return contact;
     }),
@@ -90,7 +90,7 @@ export const contactRouter = router({
       const updated = await ctx.repos.contacts.update(id, {
         ...omitUndefined(data),
         email: input.email || null,
-      } as Partial<Contact>);
+      } satisfies Partial<Contact>);
       await emit.contactUpdated(ctx, id, data);
       return updated;
     }),
@@ -134,6 +134,6 @@ export const contactRouter = router({
         notes: input.notes,
         parentId: input.parentId,
         organizationId: asId<"OrganizationId">(ctx.orgId),
-      } as Partial<Contact>);
+      } satisfies Partial<Contact>);
     }),
 });

@@ -73,7 +73,7 @@ export const invoiceDispatchRouter = router({
         queuedAt: now,
         recordedById: asId<"UserId">(ctx.user.id),
         createdAt: now,
-      } as Partial<InvoiceDispatch>);
+      } satisfies Partial<InvoiceDispatch>);
       // Köad för automatiskt utskick → fakturan är inte längre ett utkast (#392).
       await markSentIfDraft(ctx, inv);
       return dispatch;
@@ -105,7 +105,7 @@ export const invoiceDispatchRouter = router({
         sentAt: now,
         recordedById: asId<"UserId">(ctx.user.id),
         createdAt: now,
-      } as Partial<InvoiceDispatch>);
+      } satisfies Partial<InvoiceDispatch>);
       // Manuellt skickad → fakturan är inte längre ett utkast (#392).
       await markSentIfDraft(ctx, inv);
       return dispatch;
@@ -129,6 +129,6 @@ export const invoiceDispatchRouter = router({
         ...(tsField ? { [tsField]: new Date() } : {}),
         ...(input.messageId !== undefined ? { messageId: input.messageId } : {}),
         ...(input.error !== undefined ? { error: input.error } : {}),
-      } as Partial<InvoiceDispatch>);
+      } satisfies Partial<InvoiceDispatch>);
     }),
 });

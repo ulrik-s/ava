@@ -117,7 +117,7 @@ export const userRouter = router({
         ...(input.matterNumberPrefix ? { matterNumberPrefix: input.matterNumberPrefix } : {}),
         passwordHash,
         organizationId: asId<"OrganizationId">(ctx.user.organizationId),
-      } as Partial<User>);
+      } satisfies Partial<User>);
     }),
 
   /**
@@ -153,7 +153,7 @@ export const userRouter = router({
       if (!owned) throw new TRPCError({ code: "NOT_FOUND" });
       const updateData: Record<string, unknown> = { ...data };
       if (password) updateData.passwordHash = await hashPassword(password);
-      return ctx.repos.users.update(id, updateData as Partial<User>);
+      return ctx.repos.users.update(id, updateData satisfies Partial<User>);
     }),
 
   /**

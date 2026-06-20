@@ -80,7 +80,7 @@ async function linkBilledItems(
   await repos.timeEntries.flagBilled(timeEntries.map((t) => t.id), invoiceId);
   await repos.expenses.flagBilled(expenses.map((e) => e.id), invoiceId);
   for (const a of accontos) {
-    await repos.accontoDeductions.create({ finalInvoiceId: invoiceId, accontoInvoiceId: a.id } as Partial<AccontoDeduction>);
+    await repos.accontoDeductions.create({ finalInvoiceId: invoiceId, accontoInvoiceId: a.id } satisfies Partial<AccontoDeduction>);
   }
 }
 
@@ -199,7 +199,7 @@ export const invoiceRouter = router({
           invoiceDate: input.invoiceDate ? new Date(input.invoiceDate) : new Date(),
           dueDate: input.dueDate ? new Date(input.dueDate) : null,
           notes: input.notes,
-        }) as Partial<Invoice>,
+        }) satisfies Partial<Invoice>,
       );
       await emit.invoiceCreated(ctx, invoice);
       return invoice;
@@ -236,8 +236,8 @@ export const invoiceRouter = router({
           invoiceDate: new Date(),
           dueDate: null,
           notes: "Rådgivningstimme enligt rättshjälpstaxan (1 tim).",
-        } as Partial<Invoice>);
-        await repos.matters.update(input.matterId, { radgivningBetaldAt: new Date() } as Partial<Matter>);
+        } satisfies Partial<Invoice>);
+        await repos.matters.update(input.matterId, { radgivningBetaldAt: new Date() } satisfies Partial<Matter>);
         await emit.invoiceCreated(ctx, invoice);
         return { invoice, beloppExclVatOre: avgift.beloppExclVatOre };
       }),
@@ -291,7 +291,7 @@ export const invoiceRouter = router({
           invoiceDate: input.invoiceDate ? new Date(input.invoiceDate) : new Date(),
           dueDate: input.dueDate ? new Date(input.dueDate) : null,
           notes: input.notes,
-        }) as Partial<Invoice>);
+        }) satisfies Partial<Invoice>);
 
         await linkBilledItems(repos, invoice.id as InvoiceId, timeEntries, expenses, accontos);
         return { invoice, breakdown };
@@ -356,7 +356,7 @@ export const invoiceRouter = router({
           status: "SENT", // kreditfaktura är "färdig" direkt
           invoiceDate: new Date(),
           creditedInvoiceId: original.id,
-        }) as Partial<Invoice>);
+        }) satisfies Partial<Invoice>);
 
         await repos.invoices.update(original.id, { status: "CANCELLED" });
         return credit;
@@ -411,7 +411,7 @@ export const invoiceRouter = router({
           note: input.note,
           reference: input.reference,
           recordedById: asId<"UserId">(ctx.user.id),
-        }) as Partial<Payment>);
+        }) satisfies Partial<Payment>);
 
         // `paid` = betalt FÖRE denna betalning (sumByInvoice) → + input.amount.
         const paidSum = paid + input.amount;
@@ -475,7 +475,7 @@ export const invoiceRouter = router({
           startDate: new Date(input.startDate),
           // Explicit (Prisma schema-default appliceras inte av in-memory-store:n).
           status: "ACTIVE",
-        }) as Partial<PaymentPlan>);
+        }) satisfies Partial<PaymentPlan>);
         await repos.invoices.update(inv.id, { status: "INSTALLMENT_PLAN" });
         return plan;
       }),
@@ -530,7 +530,7 @@ export const invoiceRouter = router({
           writtenOffAt: input.writtenOffAt ? new Date(input.writtenOffAt) : new Date(),
           reason: input.reason,
           recordedById: asId<"UserId">(ctx.user.id),
-        }) as Partial<WriteOff>);
+        }) satisfies Partial<WriteOff>);
 
         // Härled status efter avskrivningen och persistera om återstoden stängdes.
         const after = computeInvoiceLedger(inv.amount, paid, credited, writtenOff + amount);

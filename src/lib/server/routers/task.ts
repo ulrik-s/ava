@@ -59,7 +59,7 @@ export const taskRouter = router({
         organizationId: asId<"OrganizationId">(ctx.user.organizationId),
         ...omitUndefined({ id }),
         ...(createdAt != null ? { createdAt } : {}),
-      } as Partial<Task>);
+      } satisfies Partial<Task>);
     }),
 
   update: protectedProcedure
@@ -73,7 +73,7 @@ export const taskRouter = router({
       const patch: Record<string, unknown> = { ...data };
       if (data.status === "DONE") patch.completedAt = new Date();
       if (data.status && data.status !== "DONE") patch.completedAt = null;
-      return ctx.repos.tasks.update(id, patch as Partial<Task>);
+      return ctx.repos.tasks.update(id, patch satisfies Partial<Task>);
     }),
 
   complete: protectedProcedure
@@ -81,7 +81,7 @@ export const taskRouter = router({
     .mutation(async ({ ctx, input }) => {
       const owned = await ctx.repos.tasks.getOwned(input.id, ctx.user.id, ctx.user.organizationId);
       if (!owned) throw new TRPCError({ code: "NOT_FOUND" });
-      return ctx.repos.tasks.update(input.id, { status: "DONE", completedAt: new Date() } as Partial<Task>);
+      return ctx.repos.tasks.update(input.id, { status: "DONE", completedAt: new Date() } satisfies Partial<Task>);
     }),
 
   delete: protectedProcedure
