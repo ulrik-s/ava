@@ -88,6 +88,8 @@ function main(): void {
     // läses bytes → text extraheras (PDF/DOCX) → ollama klassificerar.
     ...(contentStore ? { content: contentStore } : {}),
     ...(llm ? { llm } : {}),
+    // #621 B2: LLM föreslår taggar ur byråns vokabulär (läses lazy per jobb).
+    vocabulary: async () => (await api.repos.organizations.getById(config.organizationId))?.documentTags ?? [],
   });
   void startJobRuntime({ connectionString: config.databaseUrl, handlers })
     .then((rt) => { jobRuntime = rt; log(`jobb-kö startad (pg-boss; ${Object.keys(handlers).length} handlers)`); })
