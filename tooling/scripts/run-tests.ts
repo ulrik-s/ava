@@ -117,9 +117,16 @@ const FAST = process.argv.includes("--fast");
 // funktioner (#27: CalendarPage lista-vy + Nytt event/Ny task-formulär + rad-
 // åtgärder → lokalt 92.34% rader / 87.21% funktioner. Rad-täckningen har stigit
 // stadigt över ~14 steg (90.86 → 92.34) → LINE-golvet dras ÄNTLIGEN upp 89.5 →
-// 90.0 (~2.34% marginal, fortsatt generös Node-buffert). FUNC 85.5 → 85.6).
+// 90.0 (~2.34% marginal, fortsatt generös Node-buffert). FUNC 85.5 → 85.6) →
+// 90.0 rader / 85.8 funktioner (#27: BillingPanel render-test — summa-kort/
+// computeTotals, runs-lista, pending-verdict-banner + KR-dok-öppning,
+// rådgivnings-banner (rättshjälp) och optionsFor-menyn per paymentMethod →
+// _billing-panel.tsx (tidigare otestad) → lokalt 92.80% rader / 87.50%
+// funktioner. FUNC dras upp 85.6 → 85.8 (~1.70% marginal; funktions-täckning
+// är Node-version-stabil). LINE oförändrat — dess marginal är en avsiktlig
+// Node-version-buffert + lcov-line-brus).
 const LINE_FLOOR = 0.900;
-const FUNC_FLOOR = 0.856;
+const FUNC_FLOOR = 0.858;
 
 /**
  * SERIAL_FILES — testfiler som SYNKRONT spawnar en barnprocess via
