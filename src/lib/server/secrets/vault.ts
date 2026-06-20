@@ -12,7 +12,16 @@
  *   - **fs injicerad** (`VaultFs`) → testbar utan riktig disk.
  */
 
+import { z } from "zod";
 import { decryptSecret, encryptSecret, loadMasterKey } from "./crypto";
+
+/**
+ * Valvets på-disk-form: en platt sträng→sträng-karta. Vi zod-parsar den
+ * efter dekryptering (extern data → strikt parsning) så en korrupt eller
+ * manipulerad blob ger ett tydligt fel istället för att tyst flöda vidare
+ * som en feltypad `Record`.
+ */
+const secretsMapSchema = z.record(z.string(), z.string());
 
 export interface SecretsVault {
   get(key: string): Promise<string | null>;
@@ -36,7 +45,7 @@ export class EncryptedFileVault implements SecretsVault {
   private async loadMap(): Promise<Record<string, string>> {
     const blob = await this.fs.read(this.filePath);
     if (!blob) return {};
-    return JSON.parse(decryptSecret(blob, this.key)) as Record<string, string>;
+    return secretsMapSchema.parse(JSON.parse(decryptSecret(blob, this.key)));
   }
 
   private async saveMap(map: Record<string, string>): Promise<void> {
