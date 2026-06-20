@@ -124,9 +124,15 @@ const FAST = process.argv.includes("--fast");
 // _billing-panel.tsx (tidigare otestad) → lokalt 92.80% rader / 87.50%
 // funktioner. FUNC dras upp 85.6 → 85.8 (~1.70% marginal; funktions-täckning
 // är Node-version-stabil). LINE oförändrat — dess marginal är en avsiktlig
-// Node-version-buffert + lcov-line-brus).
+// Node-version-buffert + lcov-line-brus) → 90.0 rader / 85.9 funktioner (#27:
+// GenerateModal render-test — mall-/mottagar-/format-väljare + hela generera-
+// orkestreringen (handleGenerate → runGenerate → buildDocCtx → generateOneDoc
+// → register), ett dok per mottagare resp. generellt, mall-utan-innehåll-fel +
+// ladd/tom-tillstånd → _generate-modal.tsx (tidigare otestad) → lokalt 92.79%
+// rader / 87.57% funktioner. FUNC dras upp 85.8 → 85.9 (~1.67% marginal).
+// LINE oförändrat).
 const LINE_FLOOR = 0.900;
-const FUNC_FLOOR = 0.858;
+const FUNC_FLOOR = 0.859;
 
 /**
  * SERIAL_FILES — testfiler som SYNKRONT spawnar en barnprocess via
