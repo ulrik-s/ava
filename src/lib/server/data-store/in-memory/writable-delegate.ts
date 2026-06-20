@@ -119,24 +119,4 @@ export class WritableDelegate<T extends Record<string, unknown>> extends ReadOnl
     }
     return { count } as never;
   }
-
-  override async deleteMany(args: unknown): Promise<never> {
-    const a = args as { where?: Record<string, unknown> };
-    const matches = await this.findMany(a.where !== undefined ? { where: a.where } : {});
-    let count = 0;
-    for (const m of matches) {
-      await this.delete({ where: { id: m.id as string } });
-      count++;
-    }
-    return { count } as never;
-  }
-
-  override async upsert(args: unknown): Promise<never> {
-    const a = args as { where: { id: string }; create: Partial<T>; update: Partial<T> };
-    const existing = await this.findUnique({ where: { id: a.where.id } });
-    const result = existing
-      ? await this.update({ where: a.where, data: a.update })
-      : await this.create({ data: { ...a.create, id: a.where.id } as Partial<T> });
-    return result as never;
-  }
 }

@@ -142,12 +142,9 @@ export class ReadOnlyDelegate<T extends Record<string, unknown>> implements Dele
   // ─── Mutationer — alla kastar ─────────────────────────────────────
 
   async create(_args: unknown): Promise<never> { throw new ReadOnlyError("create"); }
-  async createMany(_args: unknown): Promise<never> { throw new ReadOnlyError("createMany"); }
   async update(_args: unknown): Promise<never> { throw new ReadOnlyError("update"); }
   async updateMany(_args: unknown): Promise<never> { throw new ReadOnlyError("updateMany"); }
   async delete(_args: unknown): Promise<never> { throw new ReadOnlyError("delete"); }
-  async deleteMany(_args?: unknown): Promise<never> { throw new ReadOnlyError("deleteMany"); }
-  async upsert(_args: unknown): Promise<never> { throw new ReadOnlyError("upsert"); }
 
   // ─── Privat: relations-hydrering ─────────────────────────────────
 

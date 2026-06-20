@@ -31,19 +31,6 @@ export interface IEventLog {
   onNewEvent(handler: (event: AvaEvent) => void | Promise<void>): () => void;
 }
 
-// ─── Claim-store (oanvänd i ren git-modell, kvar för framtida ev. hjälpprocess) ───
-
-export interface IClaimStore {
-  tryClaim(claimId: string, opts: ClaimOpts): Promise<boolean>;
-  isStale(claimId: string): Promise<boolean>;
-}
-
-export interface ClaimOpts {
-  ttlSec?: number;
-  preferredRunnerOrder?: string[];
-  me: string;
-}
-
 // ─── Domän-delegates ──────────────────────────────────────────────────
 //
 // Tunn generisk delegate som täcker den Prisma-stil-yta som routrarna
@@ -145,9 +132,7 @@ export interface Delegate<Row = Record<string, unknown>> {
   create(args: { data: Partial<Row>; include?: Record<string, unknown>; select?: Record<string, unknown> }): Promise<Joined<Row>>;
   update(args: { where: WhereInput<Row>; data: Partial<Row>; include?: Record<string, unknown>; select?: Record<string, unknown> }): Promise<Joined<Row>>;
   updateMany(args: { where?: WhereInput<Row>; data: Partial<Row> }): Promise<{ count: number }>;
-  upsert(args: { where: WhereInput<Row>; create: Partial<Row>; update: Partial<Row> }): Promise<Joined<Row>>;
   delete(args: FindArgs<Row>): Promise<Joined<Row>>;
-  deleteMany(args?: FindArgs<Row>): Promise<{ count: number }>;
   count(args?: FindArgs<Row>): Promise<number>;
   aggregate(args: AggregateArgs): Promise<Record<string, unknown>>;
 }
@@ -183,29 +168,6 @@ export type CalendarEventDelegate = Delegate<CalendarEvent>;
 export type TaskDelegate = Delegate<Task>;
 export type ServiceNoteDelegate = Delegate<ServiceNote>;
 
-// Opt-in: enskilda callers som vill ha striktare row-typ kan importera
-// dessa istället. T.ex. `const matters = ctx.dataStore.matters as MattersStrict`.
-// TODO: när schema-mismatches är fixade kan vi växla över delegaterna ovan.
-export type MattersStrict = Delegate<Matter>;
-export type ContactsStrict = Delegate<Contact>;
-export type MatterContactsStrict = Delegate<MatterContact>;
-export type DocumentsStrict = Delegate<Document>;
-export type DocumentFoldersStrict = Delegate<DocumentFolder>;
-export type DocumentTemplatesStrict = Delegate<DocumentTemplate>;
-export type DocumentAnalysisSuggestionsStrict = Delegate<DocumentAnalysisSuggestion>;
-export type MatterEventSuggestionsStrict = Delegate<MatterEventSuggestion>;
-export type InvoicesStrict = Delegate<Invoice>;
-export type TimeEntriesStrict = Delegate<TimeEntry>;
-export type ExpensesStrict = Delegate<Expense>;
-export type UsersStrict = Delegate<User>;
-export type OrganizationsStrict = Delegate<Organization>;
-export type OfficesStrict = Delegate<Office>;
-export type ConflictChecksStrict = Delegate<ConflictCheck>;
-export type PaymentsStrict = Delegate<Payment>;
-export type PaymentPlansStrict = Delegate<PaymentPlan>;
-export type AccontoDeductionsStrict = Delegate<AccontoDeduction>;
-export type CalendarEventsStrict = Delegate<CalendarEvent>;
-export type TasksStrict = Delegate<Task>;
 
 // ─── Transaktionsvy ───────────────────────────────────────────────────
 //
@@ -249,9 +211,6 @@ export interface DataStoreTx {
 export interface IDataStore {
   /** Event-loggen. */
   events: IEventLog;
-
-  /** Claim-store. Oanvänd just nu (var aktiv i Tauri-helper-läget). */
-  claims?: IClaimStore;
 
   // ─── Domän-repos ────────────────────────────────────────────────
   readonly matters: MatterDelegate;
