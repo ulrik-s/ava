@@ -34,6 +34,12 @@ export interface ClassifyDocumentDeps {
   documents: Pick<DocumentRepository, "getById" | "updateMetadata">;
   /** Klassificerare; default = filnamns-heuristik. Fas 3 injicerar LLM-varianten. */
   classify?: (doc: ClassifiableDoc) => Promise<DocumentKind>;
+  /**
+   * Föreslå etiketter ur byråns vokabulär (#621 B2, LLM-väg). Returnerar en
+   * delmängd av vokabulären; slås ihop (union) med dokumentets befintliga
+   * taggar så manuellt satta taggar ALDRIG skrivs över. Saknas → taggar rörs ej.
+   */
+  suggestTags?: (doc: ClassifiableDoc) => Promise<string[]>;
   /** Modell-etikett som sparas i `analysisModel`. */
   model?: string;
   /** Injicerbar nu-tid för deterministiska tester. */
@@ -49,13 +55,16 @@ export function createClassifyDocumentHandler(deps: ClassifyDocumentDeps): JobHa
     const { documentId } = classifyJobSchema.parse(job.data);
     const doc = (await deps.documents.getById(documentId)) as Document | null;
     if (!doc) return; // raderat innan jobbet kördes → no-op
-    const kind = await classify({
-      fileName: doc.fileName,
-      storagePath: doc.storagePath,
-      mimeType: doc.mimeType,
-    });
+    const fields: ClassifiableDoc = { fileName: doc.fileName, storagePath: doc.storagePath, mimeType: doc.mimeType };
+    const kind = await classify(fields);
+    // LLM-föreslagna taggar slås ihop med befintliga (union) → AI lägger till,
+    // användarens manuella taggar bevaras. Utan suggestTags rörs taggarna inte.
+    const tagPatch = deps.suggestTags
+      ? { tags: [...new Set([...(doc.tags ?? []), ...(await deps.suggestTags(fields))])] }
+      : {};
     await deps.documents.updateMetadata(documentId, {
       documentType: kind,
+      ...tagPatch,
       analyzedAt: now(),
       analysisStatus: "DONE",
       analysisModel: model,

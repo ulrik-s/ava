@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it, vi } from "vitest-compat";
-import { createOllamaClassifier, loadLlmConfigFromEnv } from "@/lib/server/llm/ollama-classifier";
+import { createOllamaClassifier, createOllamaTagSuggester, loadLlmConfigFromEnv } from "@/lib/server/llm/ollama-classifier";
 
 const cfg = { endpoint: "http://ollama:11434/v1", model: "llama3.2" };
 const LONG = "Detta är ett juridiskt dokument med tillräckligt mycket text för att skickas till modellen för klassificering.";
@@ -55,6 +55,42 @@ describe("createOllamaClassifier", () => {
     await classify(LONG, "x.pdf");
     const headers = (fetchFn.mock.calls[0]![1] as RequestInit).headers as Record<string, string>;
     expect(headers.authorization).toBe("Bearer sk-1");
+  });
+});
+
+describe("createOllamaTagSuggester (#621 B2)", () => {
+  const VOCAB = ["Sekretess", "Brådskande", "Original"];
+
+  it("returnerar delmängden LLM:en nämner (⊆ vokabulären)", async () => {
+    const fetchFn = vi.fn(async () => res("Sekretess, Original"));
+    const suggest = createOllamaTagSuggester(cfg, { fetch: fetchFn });
+    expect(await suggest(LONG, VOCAB)).toEqual(["Sekretess", "Original"]);
+  });
+
+  it("filtrerar bort hallucinerade taggar utanför vokabulären", async () => {
+    const fetchFn = vi.fn(async () => res("Sekretess, Påhittad, Topphemlig"));
+    const suggest = createOllamaTagSuggester(cfg, { fetch: fetchFn });
+    expect(await suggest(LONG, VOCAB)).toEqual(["Sekretess"]);
+  });
+
+  it("tom vokabulär → ingen LLM, tom lista", async () => {
+    const fetchFn = vi.fn(async () => res("x"));
+    const suggest = createOllamaTagSuggester(cfg, { fetch: fetchFn });
+    expect(await suggest(LONG, [])).toEqual([]);
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
+  it("för kort text → ingen LLM, tom lista", async () => {
+    const fetchFn = vi.fn(async () => res("Sekretess"));
+    const suggest = createOllamaTagSuggester(cfg, { fetch: fetchFn });
+    expect(await suggest("kort", VOCAB)).toEqual([]);
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
+  it("nät-fel → tom lista (fail-soft)", async () => {
+    const fetchFn = vi.fn(async () => { throw new Error("net down"); });
+    const suggest = createOllamaTagSuggester(cfg, { fetch: fetchFn });
+    expect(await suggest(LONG, VOCAB)).toEqual([]);
   });
 });
 

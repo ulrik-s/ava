@@ -53,4 +53,28 @@ describe("createClassifyDocumentHandler", () => {
     expect(classify).toHaveBeenCalledWith({ fileName: "x.bin" });
     expect(documents.updateMetadata.mock.calls[0]![1]).toMatchObject({ documentType: "AVTAL", analysisModel: "ollama:llama" });
   });
+
+  it("suggestTags (#621 B2) slår ihop förslag med befintliga taggar (union, ingen clobber)", async () => {
+    const documents = {
+      getById: vi.fn(async () => ({ id: "d1", fileName: "x.pdf", tags: ["Manuell", "Sekretess"] })),
+      updateMetadata: vi.fn(async () => ({})),
+    };
+    const suggestTags = vi.fn(async () => ["Sekretess", "Brådskande"]);
+    const handler = createClassifyDocumentHandler({ documents: documents as never, suggestTags });
+    await handler(jobFor("d1"));
+    // union(["Manuell","Sekretess"], ["Sekretess","Brådskande"]) → dedupat
+    expect(documents.updateMetadata.mock.calls[0]![1]).toMatchObject({
+      tags: ["Manuell", "Sekretess", "Brådskande"],
+    });
+  });
+
+  it("utan suggestTags rörs `tags` inte (ingen tags-nyckel i patchen)", async () => {
+    const documents = {
+      getById: vi.fn(async () => ({ id: "d1", fileName: "x.pdf", tags: ["Manuell"] })),
+      updateMetadata: vi.fn(async () => ({})),
+    };
+    const handler = createClassifyDocumentHandler({ documents: documents as never });
+    await handler(jobFor("d1"));
+    expect(documents.updateMetadata.mock.calls[0]![1]).not.toHaveProperty("tags");
+  });
 });

@@ -8,7 +8,7 @@
  */
 
 import { createSmtpSender, type SmtpConfig } from "@/lib/server/integrations/email/smtp-sender";
-import { createOllamaClassifier, type LlmConfig } from "@/lib/server/llm/ollama-classifier";
+import { createOllamaClassifier, createOllamaTagSuggester, type LlmConfig } from "@/lib/server/llm/ollama-classifier";
 import type { IContentStore } from "@/lib/server/ports";
 import { extractText } from "@/lib/shared/extract-text";
 import { createClassifyDocumentHandler, type ClassifiableDoc, type ClassifyDocumentDeps } from "./handlers/classify-document-handler";
@@ -25,24 +25,33 @@ export interface JobHandlerConfig {
    *  (läs bytes → extrahera text → ollama); annars filnamns-heuristik. */
   content?: IContentStore;
   llm?: LlmConfig;
+  /** Byråns etikett-vokabulär (#621 B2). Satt + content + llm → LLM föreslår
+   *  taggar ur listan vid klassificeringen. Lazy så den läses per jobb. */
+  vocabulary?: () => Promise<readonly string[]>;
 }
 
 /**
- * Bygg `classify`-funktionen för dokumentjobbet. Med content-store + LLM-konfig:
- * läs bytes → extrahera text (PDF/DOCX/text) → klassificera via ollama (fail-soft
- * till filnamns-heuristik). Utan dem → handlerns default (ren heuristik).
+ * Bygg `classify` (+ `suggestTags`) för dokumentjobbet. Med content-store +
+ * LLM-konfig: läs bytes → extrahera text (PDF/DOCX/text) → klassificera via
+ * ollama (fail-soft till filnamns-heuristik). Med dessutom en vokabulär (#621
+ * B2): föreslå taggar ur listan. Utan content/llm → handlerns default (heuristik).
  */
-function buildClassify(cfg: JobHandlerConfig): Pick<ClassifyDocumentDeps, "classify" | "model"> {
+function buildClassify(cfg: JobHandlerConfig): Pick<ClassifyDocumentDeps, "classify" | "suggestTags" | "model"> {
   if (!cfg.content || !cfg.llm) return {};
   const content = cfg.content;
   const ollama = createOllamaClassifier(cfg.llm);
+  const tagger = createOllamaTagSuggester(cfg.llm);
+  const { vocabulary } = cfg;
+  const textOf = async (doc: ClassifiableDoc): Promise<string> => {
+    const bytes = await content.read(doc.storagePath);
+    return bytes ? await extractText({ bytes, mimeType: doc.mimeType, fileName: doc.fileName }) : "";
+  };
   return {
     model: `ollama:${cfg.llm.model}`,
-    classify: async (doc: ClassifiableDoc) => {
-      const bytes = await content.read(doc.storagePath);
-      const text = bytes ? await extractText({ bytes, mimeType: doc.mimeType, fileName: doc.fileName }) : "";
-      return ollama(text, doc.fileName);
-    },
+    classify: async (doc: ClassifiableDoc) => ollama(await textOf(doc), doc.fileName),
+    ...(vocabulary ? {
+      suggestTags: async (doc: ClassifiableDoc) => tagger(await textOf(doc), await vocabulary()),
+    } : {}),
   };
 }
 
