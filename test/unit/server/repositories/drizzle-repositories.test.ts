@@ -42,6 +42,17 @@ describe("buildDrizzleRepositories — kontrakt (pglite)", () => {
     expect(await repos.organizations.getById(id)).toMatchObject({ id, name: "Aggregat AB" });
   });
 
+  it("create utan id → genererar ett uuid (server-genererad create, #630)", async () => {
+    const repos = buildDrizzleRepositories(handle.db);
+    const orgId = uuidv7();
+    await repos.organizations.create(org(orgId));
+    // Ingen `id` → repo:t ska generera ett uuidv7 (uuid-PK har inget DB-default).
+    const created = await repos.contacts.create({ organizationId: orgId, name: "Utan id", contactType: "PERSON" } as never);
+    const id = (created as { id?: string }).id;
+    expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+    expect(await repos.contacts.getById(id!)).toMatchObject({ name: "Utan id" });
+  });
+
   it("transaction committar vid success", async () => {
     const repos = buildDrizzleRepositories(handle.db);
     const id = uuidv7();
