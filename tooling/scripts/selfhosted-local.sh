@@ -4,8 +4,9 @@
 # nginx (:8080) → statisk app + /api/trpc → server-first (Postgres) bakom
 # oauth2-proxy + Keycloak (:8089). Lämnas KÖRANDE (ingen teardown).
 #
-#   bash tooling/scripts/selfhosted-local.sh          # starta + lämna uppe
-#   bash tooling/scripts/selfhosted-local.sh --down   # riv ner
+#   bash tooling/scripts/selfhosted-local.sh          # starta (tom byrå) + lämna uppe
+#   bash tooling/scripts/selfhosted-local.sh --demo    # + fyll med demodata
+#   bash tooling/scripts/selfhosted-local.sh --down    # riv ner
 #
 # Login (Keycloak realm "ava"): lawyer/lawyer (allowlistad) · admin/admin ·
 # outsider/outsider (nekas — ej i allowlisten). Verifierad principal-bindning.
@@ -44,6 +45,11 @@ AVA_DATABASE_URL="$DB_URL" bun run db:migrate
 
 echo "▸ [5/6] Seedar org + allowlistade användare…"
 AVA_DATABASE_URL="$DB_URL" AVA_ORGANIZATION_ID="$AVA_ORGANIZATION_ID" bun tooling/scripts/seed-selfhosted-local.ts
+
+if [[ "${1:-}" == "--demo" ]]; then
+  echo "▸ [5b] Fyller byrån med demodata (ärenden/kontakter/tid/fakturering)…"
+  AVA_DATABASE_URL="$DB_URL" AVA_ORGANIZATION_ID="$AVA_ORGANIZATION_ID" bun tooling/scripts/seed-demo-into-server.ts
+fi
 
 echo "▸ [6/6] Väntar in Keycloak + web…"
 for _ in $(seq 1 40); do
