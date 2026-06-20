@@ -9,6 +9,7 @@ import { CachingSyncDataStore, noSyncTransport } from "@/lib/server/data-store/i
 import { InMemoryPersistence } from "@/lib/server/data-store/in-memory/local-store-persistence";
 import type { QueuedMutation } from "@/lib/server/data-store/in-memory/mutation-queue";
 import type { PullResult, PushResult, SyncTransport } from "@/lib/server/data-store/in-memory/sync-transport";
+import { InMemoryMatterRepository } from "@/lib/server/repositories/in-memory-matter-repository";
 import { uuidv7 } from "@/lib/shared/uuid";
 
 class FakeTransport implements SyncTransport {
@@ -100,6 +101,49 @@ describe("CachingSyncDataStore (#415)", () => {
       await ds.reconcile();
 
       expect(await ds.store.matters.findUnique({ where: { id: m1 } })).toBeNull();
+    });
+  });
+
+  // #633: synk-vägen levererar RÅA rader (writeCanonical), men demo-vägen
+  // pre-bakar joins (prebakeJoins) → matterContact.contact mm. UI:t (matter-
+  // detalj `include: { contact: true }`) förlitar sig på den bakade joinen
+  // (matters.contacts-relationen saknar nested contact). Utan prebake på pull
+  // visas "(kontakt saknas)". Reconcile måste re-baka source efter apply.
+  describe("join-prebake på pull (server-first-paritet, #633)", () => {
+    it("pullade matterContacts får bakad contact → matter-detalj resolver namnet", async () => {
+      const mId = uuidv7(), cId = uuidv7(), mcId = uuidv7();
+      const transport = new FakeTransport();
+      transport.pullResult = {
+        changes: [
+          { entity: "matter", row: matter(mId) },
+          { entity: "contact", row: { id: cId, organizationId: ORG, name: "Anna Andersson", contactType: "PERSON" } },
+          { entity: "matterContact", row: { id: mcId, matterId: mId, contactId: cId, role: "KLIENT" } },
+        ],
+        cursor: 10,
+      };
+      const ds = await CachingSyncDataStore.create({ transport, persistence: new InMemoryPersistence() });
+      await ds.reconcile();
+
+      const detail = await new InMemoryMatterRepository(ds.store).getByIdWithContacts(mId, ORG);
+      expect(detail?.contacts).toHaveLength(1);
+      expect(detail?.contacts[0]?.contact?.name).toBe("Anna Andersson");
+    });
+
+    it("pullade timeEntries får bakad matter (te.matter.title resolver)", async () => {
+      const mId = uuidv7(), teId = uuidv7();
+      const transport = new FakeTransport();
+      transport.pullResult = {
+        changes: [
+          { entity: "matter", row: matter(mId, "Vårdnadstvist") },
+          { entity: "timeEntry", row: { id: teId, organizationId: ORG, matterId: mId, minutes: 60, billable: true, hourlyRate: 2000 } },
+        ],
+        cursor: 11,
+      };
+      const ds = await CachingSyncDataStore.create({ transport, persistence: new InMemoryPersistence() });
+      await ds.reconcile();
+
+      const te = await ds.store.timeEntries.findFirst({ where: { id: teId } }) as { matter?: { title?: string } } | null;
+      expect(te?.matter?.title).toBe("Vårdnadstvist");
     });
   });
 
