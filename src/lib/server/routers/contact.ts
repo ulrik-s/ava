@@ -31,7 +31,7 @@ export const contactRouter = router({
     }),
 
   getById: orgProcedure
-    .input(z.object({ id: z.string() }))
+    .input(z.object({ id: contactIdSchema }))
     // Migrerad: getByIdFull (barn/förälder/ärende-kopplingar), org-scopad.
     .query(async ({ ctx, input }) => {
       const contact = await ctx.repos.contacts.getByIdFull(input.id, ctx.orgId);
@@ -68,7 +68,7 @@ export const contactRouter = router({
   update: orgProcedure
     .input(
       z.object({
-        id: z.string(),
+        id: contactIdSchema,
         name: z.string().min(1).optional(),
         contactType: contactTypeSchema.optional(),
         personalNumber: z.string().optional(),
@@ -96,7 +96,7 @@ export const contactRouter = router({
     }),
 
   delete: orgProcedure
-    .input(z.object({ id: z.string() }))
+    .input(z.object({ id: contactIdSchema }))
     .mutation(async ({ ctx, input }) => {
       await requireOrgOwned(
         () => ctx.repos.contacts.getById(input.id),
