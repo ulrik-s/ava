@@ -22,7 +22,7 @@
  * kommer från en cachad session (D2/ADR 0018, `CachedSessionAuthProvider`).
  */
 
-import type { DemoSource } from "@/lib/shared/demo-source";
+import { type DemoSource, prebakeJoins } from "@/lib/shared/demo-source";
 import type { CursorStore } from "./cursor-store";
 import { InMemoryCursorStore } from "./cursor-store";
 import { SOURCE_KEY_BY_ENTITY } from "./entity-source-keys";
@@ -146,9 +146,27 @@ export class CachingSyncDataStore {
   async reconcile(): Promise<ReconcileResult> {
     const result = await this.engine.reconcile();
     if (result.pulled > 0 || result.pushed > 0 || result.rebased > 0) {
+      this.rebakeJoins();
       await this.persistSnapshot();
     }
     return result;
+  }
+
+  /**
+   * Re-baka relations-joins (#633) på source efter en reconcile. `apply`/
+   * `writeCanonical` skriver RÅA kanoniska server-rader (matterContact utan
+   * `.contact`, timeEntry utan `.matter`, …) — men UI:t/routrarna förlitar sig
+   * på de förbakade join-fälten (samma som demo-vägens `prebakeJoins` vid
+   * laddning), och query-motorns nested-include täcker inte alla dessa relationer
+   * (t.ex. `matters.contacts.contact`). Lokala mutationer bakas redan via
+   * `LocalStore.enrichRowForEntity`; bara pullade rader är råa. `prebakeJoins`
+   * är en ren `DemoSource → DemoSource` och idempotent → skriv tillbaka varje
+   * bakad array in-place så `getSource`-closuren (LocalStore) ser dem.
+   */
+  private rebakeJoins(): void {
+    const src = this.store.currentSource as Record<string, unknown>;
+    const baked = prebakeJoins(this.store.currentSource) as Record<string, unknown>;
+    for (const key of Object.keys(baked)) src[key] = baked[key];
   }
 
   /** Antal ej-synkade (köade) mutationer. */
