@@ -45,7 +45,9 @@ describe("firma-config", () => {
       const cfg = loadFirmaConfig();
       expect(cfg.tier).toBe("self-hosted");
       expect(cfg.repo).toBe("http://localhost:8080/git/firma.git");
-      expect(cfg.organizationId).toBe("firma-ab");
+      // #628: org alignad med server-first-runtimens default AVA_ORGANIZATION_ID
+      // (klientens in-process-queries scopar mot samma org som servern seedar).
+      expect(cfg.organizationId).toBe("00000000-0000-0000-0000-000000000001");
     });
 
     it("returnerar sparad config", () => {
