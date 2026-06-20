@@ -15,8 +15,8 @@ export const timeEntryRouter = router({
   list: protectedProcedure
     .input(
       z.object({
-        matterId: z.string().optional(),
-        userId: z.string().optional(),
+        matterId: matterIdSchema.optional(),
+        userId: userIdSchema.optional(),
         from: z.date().optional(),
         to: z.date().optional(),
         page: z.number().min(1).default(1),
@@ -77,7 +77,7 @@ export const timeEntryRouter = router({
   update: orgProcedure
     .input(
       z.object({
-        id: z.string(),
+        id: timeEntryIdSchema,
         date: z.string().optional(),
         minutes: z.number().min(1).optional(),
         description: z.string().min(1).optional(),
@@ -101,7 +101,7 @@ export const timeEntryRouter = router({
     }),
 
   delete: orgProcedure
-    .input(z.object({ id: z.string() }))
+    .input(z.object({ id: timeEntryIdSchema }))
     .mutation(async ({ ctx, input }) => {
       const owned = await ctx.repos.timeEntries.getByIdInOrg(input.id, ctx.orgId);
       if (!owned) throw new TRPCError({ code: "NOT_FOUND" });
@@ -116,9 +116,9 @@ export const timeEntryRouter = router({
       z.object({
         from: z.string(),
         to: z.string(),
-        userId: z.string().optional(),
+        userId: userIdSchema.optional(),
         userIds: z.array(z.string()).optional(),
-        matterId: z.string().optional(),
+        matterId: matterIdSchema.optional(),
       })
     )
     // Migrerad till repository-sömmen (ADR 0020): listForReport (jurist + ärende

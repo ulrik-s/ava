@@ -147,7 +147,7 @@ export const invoiceRouter = router({
   list: orgProcedure
     .input(
       z.object({
-        matterId: z.string().optional(),
+        matterId: matterIdSchema.optional(),
         invoiceType: invoiceTypeSchema.optional(),
         status: invoiceStatusSchema.optional(),
       }),
@@ -157,7 +157,7 @@ export const invoiceRouter = router({
     .query(({ ctx, input }) => ctx.repos.invoices.listForOrg(ctx.orgId, input)),
 
   getById: orgProcedure
-    .input(z.object({ id: z.string() }))
+    .input(z.object({ id: invoiceIdSchema }))
     .query(async ({ ctx, input }) => {
       // Migrerad till repository-sömmen (ADR 0020). getByIdFull org-scopar +
       // hämtar hela detalj-shapen (relations + aconto-avdrag/kredit).
@@ -366,7 +366,7 @@ export const invoiceRouter = router({
   recordPayment: orgProcedure
     .input(
       z.object({
-        invoiceId: z.string(),
+        invoiceId: invoiceIdSchema,
         amount: z.number().int().min(1),
         paidAt: z.string(),
         note: z.string().optional(),
@@ -482,7 +482,7 @@ export const invoiceRouter = router({
     ),
 
   cancelPaymentPlan: orgProcedure
-    .input(z.object({ planId: z.string() }))
+    .input(z.object({ planId: paymentPlanIdSchema }))
     // Migrerad till repository-sömmen (ADR 0020). Transaktionen korsar två repos
     // (paymentPlans + invoices); getByIdInOrg org-scopar via faktura→ärende.
     .mutation(({ ctx, input }) =>
@@ -508,7 +508,7 @@ export const invoiceRouter = router({
   writeOff: orgProcedure
     .input(
       z.object({
-        invoiceId: z.string(),
+        invoiceId: invoiceIdSchema,
         amount: z.number().int().min(1).optional(),
         reason: z.string().optional(),
         writtenOffAt: z.string().optional(),
@@ -555,7 +555,7 @@ export const invoiceRouter = router({
   setStatus: orgProcedure
     .input(
       z.object({
-        invoiceId: z.string(),
+        invoiceId: invoiceIdSchema,
         status: z.enum(["SENT", "CANCELLED", "BAD_DEBT"]),
       }),
     )

@@ -14,7 +14,7 @@
 
 import { z } from "zod";
 import { KOSTNADSRAKNING_DOCUMENT_TYPE } from "@/lib/shared/schemas/document";
-import { asId } from "@/lib/shared/schemas/ids";
+import { asId, documentIdSchema, matterIdSchema } from "@/lib/shared/schemas/ids";
 import { emit } from "../events/emit";
 import { router, orgProcedure } from "../trpc";
 
@@ -28,8 +28,8 @@ export const kostnadsrakningRouter = router({
    */
   record: orgProcedure
     .input(z.object({
-      id: z.string(),
-      matterId: z.string(),
+      id: documentIdSchema,
+      matterId: matterIdSchema,
       fileName: z.string(),
       mimeType: z.string(),
       sizeBytes: z.number(),

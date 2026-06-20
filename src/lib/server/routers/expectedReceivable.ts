@@ -17,7 +17,7 @@ import { z } from "zod";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import type { ExpectedReceivable } from "@/lib/shared/schemas/billing";
 import { expectedReceivableStatusSchema } from "@/lib/shared/schemas/billing";
-import { asId } from "@/lib/shared/schemas/ids";
+import { asId, expectedReceivableIdSchema, matterIdSchema } from "@/lib/shared/schemas/ids";
 import type { Repositories } from "../repositories/repositories";
 import { router, orgProcedure } from "../trpc";
 
@@ -31,7 +31,7 @@ async function assertInOrg(repos: Repositories, orgId: string, id: string): Prom
 export const expectedReceivableRouter = router({
   /** Lista fordringar i org:en, valfritt filtrerat på ärende. */
   list: orgProcedure
-    .input(z.object({ matterId: z.string().optional() }).optional())
+    .input(z.object({ matterId: matterIdSchema.optional() }).optional())
     .query(({ ctx, input }) =>
       ctx.repos.expectedReceivables.listForOrg(ctx.orgId, { matterId: input?.matterId }),
     ),
@@ -63,7 +63,7 @@ export const expectedReceivableRouter = router({
   /** Registrera en förväntad domstolsbetalning (status PENDING). */
   create: orgProcedure
     .input(z.object({
-      matterId: z.string(),
+      matterId: matterIdSchema,
       description: z.string().min(1),
       expectedAmount: z.number().int().nonnegative(),
     }))
@@ -92,7 +92,7 @@ export const expectedReceivableRouter = router({
    */
   settle: orgProcedure
     .input(z.object({
-      id: z.string(),
+      id: expectedReceivableIdSchema,
       settledAmount: z.number().int().nonnegative(),
       settledAt: z.string().optional(),
       paymentReference: z.string().optional(),
@@ -110,7 +110,7 @@ export const expectedReceivableRouter = router({
 
   /** Avbryt en fordran (t.ex. felregistrerad eller domstolen avslog helt). */
   cancel: orgProcedure
-    .input(z.object({ id: z.string() }))
+    .input(z.object({ id: expectedReceivableIdSchema }))
     .mutation(async ({ ctx, input }) => {
       await assertInOrg(ctx.repos, ctx.orgId, input.id);
       return ctx.repos.expectedReceivables.update(input.id, { status: "CANCELLED", updatedAt: new Date() } as Partial<ExpectedReceivable>);
@@ -119,7 +119,7 @@ export const expectedReceivableRouter = router({
   /** Uppdatera memo-fälten (begärt belopp/beskrivning) medan PENDING. */
   update: orgProcedure
     .input(z.object({
-      id: z.string(),
+      id: expectedReceivableIdSchema,
       description: z.string().min(1).optional(),
       expectedAmount: z.number().int().nonnegative().optional(),
       status: expectedReceivableStatusSchema.optional(),

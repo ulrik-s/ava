@@ -98,7 +98,7 @@ export const organizationRouter = router({
   updateOffice: protectedProcedure
     .input(
       z.object({
-        id: z.string(),
+        id: organizationIdSchema,
         name: z.string().min(1).optional(),
         address: z.string().optional(),
         phone: z.string().optional(),
@@ -116,7 +116,7 @@ export const organizationRouter = router({
     }),
 
   deleteOffice: protectedProcedure
-    .input(z.object({ id: z.string() }))
+    .input(z.object({ id: organizationIdSchema }))
     .mutation(async ({ ctx, input }) => {
       const office = await ctx.repos.offices.getByIdInOrg(input.id, ctx.user.organizationId);
       if (!office) throw new TRPCError({ code: "NOT_FOUND" });

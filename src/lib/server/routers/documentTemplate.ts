@@ -16,7 +16,7 @@ export const documentTemplateRouter = router({
   ),
 
   getById: protectedProcedure
-    .input(z.object({ id: z.string() }))
+    .input(z.object({ id: documentTemplateIdSchema }))
     .query(async ({ ctx, input }) => {
       const template = await ctx.repos.documentTemplates.getByIdInOrg(input.id, ctx.user.organizationId);
       if (!template) throw new TRPCError({ code: "NOT_FOUND" });
@@ -54,7 +54,7 @@ export const documentTemplateRouter = router({
   update: protectedProcedure
     .input(
       z.object({
-        id: z.string(),
+        id: documentTemplateIdSchema,
         name: z.string().min(1).optional(),
         description: z.string().optional(),
         category: z.string().optional(),
@@ -69,7 +69,7 @@ export const documentTemplateRouter = router({
     }),
 
   delete: protectedProcedure
-    .input(z.object({ id: z.string() }))
+    .input(z.object({ id: documentTemplateIdSchema }))
     .mutation(async ({ ctx, input }) => {
       const existing = await ctx.repos.documentTemplates.getByIdInOrg(input.id, ctx.user.organizationId);
       if (!existing) throw new TRPCError({ code: "NOT_FOUND" });

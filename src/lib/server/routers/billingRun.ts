@@ -116,14 +116,14 @@ async function assertMatterInOrg(repos: Repositories, matterId: string, orgId: s
 
 export const billingRunRouter = router({
   list: orgProcedure
-    .input(z.object({ matterId: z.string().optional() }))
+    .input(z.object({ matterId: matterIdSchema.optional() }))
     .query(async ({ ctx, input }) => {
       const runs = await ctx.repos.billingRuns.listForOrg(ctx.orgId, input.matterId);
       return { runs };
     }),
 
   byId: orgProcedure
-    .input(z.object({ id: z.string() }))
+    .input(z.object({ id: billingRunIdSchema }))
     .query(async ({ ctx, input }) => {
       const run = await ctx.repos.billingRuns.getByIdInOrg(input.id, ctx.orgId);
       if (!run) throw new TRPCError({ code: "NOT_FOUND", message: "Faktureringshändelsen finns inte." });
@@ -233,7 +233,7 @@ export const billingRunRouter = router({
 
   setVerdict: orgProcedure
     .input(z.object({
-      billingRunId: z.string(),
+      billingRunId: billingRunIdSchema,
       prutningOre: z.number().int().nonpositive(),
     }))
     .mutation(async ({ ctx, input }) => {

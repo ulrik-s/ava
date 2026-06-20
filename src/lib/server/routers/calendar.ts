@@ -141,7 +141,7 @@ export const calendarRouter = router({
     }),
 
   getById: protectedProcedure
-    .input(z.object({ id: z.string() }))
+    .input(z.object({ id: calendarEventIdSchema }))
     .query(async ({ ctx, input }) => {
       const ev = await ctx.repos.calendarEvents.getOwnedWithMatter(input.id, ctx.user.id, ctx.user.organizationId);
       if (!ev) throw new TRPCError({ code: "NOT_FOUND" });
@@ -166,7 +166,7 @@ export const calendarRouter = router({
 
   /** Alla events kopplade till ett specifikt ärende, kronologiskt. */
   listForMatter: protectedProcedure
-    .input(z.object({ matterId: z.string() }))
+    .input(z.object({ matterId: matterIdSchema }))
     .query(({ ctx, input }) =>
       ctx.repos.calendarEvents.listForMatter(input.matterId, ctx.user.organizationId),
     ),
@@ -189,7 +189,7 @@ export const calendarRouter = router({
     }),
 
   delete: protectedProcedure
-    .input(z.object({ id: z.string() }))
+    .input(z.object({ id: calendarEventIdSchema }))
     .mutation(async ({ ctx, input }) => {
       // Säkerställ ownership innan delete
       const owned = await ctx.repos.calendarEvents.getOwned(input.id, ctx.user.id, ctx.user.organizationId);
@@ -208,7 +208,7 @@ export const calendarRouter = router({
   setMirrorState: protectedProcedure
     .input(
       z.object({
-        id: z.string(),
+        id: calendarEventIdSchema,
         outlookEventId: z.string().nullish(),
         mirrorStatus: z.enum(["synced", "failed", "pending"]).nullable(),
         mirrorError: z.string().nullish(),
