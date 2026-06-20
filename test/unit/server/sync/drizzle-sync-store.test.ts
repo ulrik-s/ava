@@ -102,4 +102,27 @@ describe("DrizzleSyncStore (#sync-bridge)", () => {
     expect(changes.find((c) => c.row.id === folder)).toMatchObject({ entity: "documentFolder" });
     expect(changes.find((c) => c.row.id === doc)).toMatchObject({ entity: "document" });
   });
+
+  // #632: matter_contacts/time_entries/expenses saknar org-kolumn (samma form som
+  // document, #528) men missades — utan resolveOrg-override loggas de aldrig →
+  // ärendet visar inga kontakter/tid/utlägg trots att raderna finns server-side.
+  it("matterContact + timeEntry + expense delta-synkas via pull (org härledd ur ärendet, #632)", async () => {
+    const m4 = uuidv7(), contact = uuidv7(), link = uuidv7(), te = uuidv7(), exp = uuidv7(), user = uuidv7();
+    await repos.matters.create({ id: m4, organizationId: ORG, title: "Kontakt-synk", status: "ACTIVE", matterNumber: "2026-0012" } as never);
+    await repos.contacts.create({ id: contact, organizationId: ORG, name: "Klient AB", contactType: "ORGANIZATION" } as never);
+    const cursor = (await sync.pull(ORG, 0)).cursor;
+
+    await repos.matterContacts.create({ id: link, matterId: m4, contactId: contact, role: "KLIENT" } as never);
+    await repos.timeEntries.create({
+      id: te, matterId: m4, userId: user, date: new Date(), minutes: 60, description: "Möte", hourlyRate: 2000,
+    } as never);
+    await repos.expenses.create({
+      id: exp, matterId: m4, userId: user, date: new Date(), description: "Ansökningsavgift", amount: 900, kind: "DISBURSEMENT",
+    } as never);
+
+    const changes = (await sync.pull(ORG, cursor)).changes;
+    expect(changes.find((c) => c.row.id === link)).toMatchObject({ entity: "matterContact" });
+    expect(changes.find((c) => c.row.id === te)).toMatchObject({ entity: "timeEntry" });
+    expect(changes.find((c) => c.row.id === exp)).toMatchObject({ entity: "expense" });
+  });
 });

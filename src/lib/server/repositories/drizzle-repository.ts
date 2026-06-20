@@ -18,6 +18,7 @@
 
 import { and, eq, getTableName, isNull, type AnyColumn } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
+import { uuidv7 } from "@/lib/shared/uuid";
 import { ENTITY_NAME_BY_SOURCE_KEY } from "../data-store/in-memory/entity-source-keys";
 import type { AppDb } from "../db/types";
 import type { ChangeLogRecorder, ChangeOp } from "./change-log-recorder";
@@ -81,8 +82,12 @@ export class DrizzleRepository<Row extends RowBase> implements Repository<Row> {
   }
 
   async create(data: Partial<Row>): Promise<Row> {
+    // Klient-genererat id är normen (ADR 0003); server-genererade creates
+    // (demo-seed, framtida server-side-flöden) saknar id → generera ett uuidv7
+    // (uuid-PK:n har inget DB-default). Speglar in-memory-delegatens id-gen.
+    const id = (data as { id?: string }).id ?? uuidv7();
     const [row] = await this.db.insert(this.table)
-      .values({ ...data, version: 1 } as never).returning();
+      .values({ ...data, id, version: 1 } as never).returning();
     await this.logChange(row, "create");
     return this.asRow(row) as Row;
   }

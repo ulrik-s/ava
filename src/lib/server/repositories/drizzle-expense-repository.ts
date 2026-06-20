@@ -15,10 +15,16 @@ import { DrizzleRepository, versionedTable } from "./drizzle-repository";
 import type {
   ExpenseListOptions, ExpenseListResult, ExpenseListRow, ExpenseRepository, LawyerReportExpense,
 } from "./expense-repository";
+import { matterOrg } from "./matter-org";
 
 export class DrizzleExpenseRepository extends DrizzleRepository<Expense> implements ExpenseRepository {
   constructor(db: AppDb, now: () => Date = () => new Date()) {
     super(db, versionedTable(expenses), now);
+  }
+
+  /** expenses saknar org-kolumn → härled via ärendet (#528/#632) så change_log/pull funkar. */
+  protected override resolveOrg(row: unknown): Promise<string | undefined> {
+    return matterOrg(this.db, (row as { matterId?: string }).matterId);
   }
 
   async listForOrg(organizationId: string, opts: ExpenseListOptions): Promise<ExpenseListResult> {
