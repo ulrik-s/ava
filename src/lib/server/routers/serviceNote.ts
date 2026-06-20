@@ -17,7 +17,7 @@ import { router, protectedProcedure, orgProcedure, TRPCError } from "../trpc";
  */
 export const serviceNoteRouter = router({
   list: protectedProcedure
-    .input(z.object({ matterId: z.string() }))
+    .input(z.object({ matterId: matterIdSchema }))
     // Migrerad till repository-sömmen (ADR 0020): listByMatter org-scopar via ärendet.
     .query(({ ctx, input }) =>
       ctx.repos.serviceNotes.listByMatter(input.matterId, ctx.user.organizationId),
@@ -52,7 +52,7 @@ export const serviceNoteRouter = router({
   update: orgProcedure
     .input(
       z.object({
-        id: z.string(),
+        id: serviceNoteIdSchema,
         date: z.string().min(1).optional(),
         time: z.string().min(1).optional(),
         text: z.string().min(1).optional(),
@@ -68,7 +68,7 @@ export const serviceNoteRouter = router({
     }),
 
   delete: orgProcedure
-    .input(z.object({ id: z.string() }))
+    .input(z.object({ id: serviceNoteIdSchema }))
     .mutation(async ({ ctx, input }) => {
       const owned = await ctx.repos.serviceNotes.getByIdInOrg(input.id, ctx.orgId);
       if (!owned) throw new TRPCError({ code: "NOT_FOUND" });

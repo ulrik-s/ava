@@ -37,7 +37,7 @@ export const taskRouter = router({
     .input(
       z.object({
         status: taskStatusSchema.optional(),
-        matterId: z.string().optional(),
+        matterId: matterIdSchema.optional(),
       }).optional(),
     )
     // Migrerad till repository-sömmen (ADR 0020): ägar-/org-scopad listForUser.
@@ -77,7 +77,7 @@ export const taskRouter = router({
     }),
 
   complete: protectedProcedure
-    .input(z.object({ id: z.string() }))
+    .input(z.object({ id: taskIdSchema }))
     .mutation(async ({ ctx, input }) => {
       const owned = await ctx.repos.tasks.getOwned(input.id, ctx.user.id, ctx.user.organizationId);
       if (!owned) throw new TRPCError({ code: "NOT_FOUND" });
@@ -85,7 +85,7 @@ export const taskRouter = router({
     }),
 
   delete: protectedProcedure
-    .input(z.object({ id: z.string() }))
+    .input(z.object({ id: taskIdSchema }))
     .mutation(async ({ ctx, input }) => {
       const owned = await ctx.repos.tasks.getOwned(input.id, ctx.user.id, ctx.user.organizationId);
       if (!owned) throw new TRPCError({ code: "NOT_FOUND" });
