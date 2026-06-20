@@ -96,6 +96,16 @@ export class DrizzleRepository<Row extends RowBase> implements Repository<Row> {
     return this.asRow(row) as Row;
   }
 
+  /** Metadata-skrivning utan version-bump (se `Repository.updateMetadata`). */
+  async updateMetadata(id: string, patch: Partial<Row>): Promise<Row> {
+    await this.getByIdOrThrow(id);
+    const [row] = await this.db.update(this.table)
+      .set({ ...patch, updatedAt: this.now() } as never)
+      .where(eq(this.table.id, id)).returning();
+    await this.logChange(row, "update");
+    return this.asRow(row) as Row;
+  }
+
   async softDelete(id: string): Promise<Row> {
     const current = await this.getByIdOrThrow(id);
     const [row] = await this.db.update(this.table)

@@ -245,7 +245,10 @@ export const coreProcedures = {
                 : analyzedAt,
         }),
       };
-      return ctx.repos.documents.update(documentId, data);
+      // Metadata-skrivning (titel/typ/summary/analys-status) → INTE en
+      // innehållsändring, så versionen bumpas inte (ADR 0023). Innehållsändringar
+      // går via uploadContent/markExternallyEdited som bumpar versionen.
+      return ctx.repos.documents.updateMetadata(documentId, data);
     }),
 
   /**

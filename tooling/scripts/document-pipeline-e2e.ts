@@ -153,16 +153,17 @@ async function main(): Promise<void> {
     (d) => d?.analysisStatus === "DONE" && kindOk(d?.documentType),
     `server-side klassificering DONE + ${LLM_MODE ? "giltig kategori" : EXPECTED_KIND}`,
   );
-  console.log(`✓ steg 3: server-side klassificering klar → documentType=${classified!.documentType}, status=${classified!.analysisStatus} (modell ${classified!.analysisModel})`);
+  // Klassificering är METADATA → får INTE bumpa dokumentets version (regr-skydd
+  // för #619-beslutet). Versionen ska vara KVAR på uppladdningens värde.
+  assert(classified!.version === versionAfterUpload1,
+    `klassificering bumpar INTE version (kvar på ${versionAfterUpload1}, fick ${classified!.version})`);
+  console.log(`✓ steg 3: klassificering klar UTAN version-bump → documentType=${classified!.documentType}, version ${classified!.version} (modell ${classified!.analysisModel})`);
 
   // ── steg 4: redigera (ny uppladdning) → version bumpas + om-klassas ──
   const v2text = "STÄMNINGSANSÖKAN (reviderad). Käranden justerar yrkandet och åberopar ny bevisning.";
   const up2 = await a.document.uploadContent.mutate({ documentId: docId, contentBase64: b64(v2text) });
   const versionAfterUpload2 = up2.version;
-  assert(versionAfterUpload2 > versionAfterUpload1, `redigering bumpar version (${versionAfterUpload1} → ${versionAfterUpload2})`);
-  // OBS: server-side-klassificeringens metadata-skrivning bumpar OCKSÅ versionen
-  // (reconcile-konvention), så versionen stiger förbi `versionAfterUpload2` när
-  // om-klassificeringen skrivit klart → assert:a monotont (>=), inte exakt.
+  assert(versionAfterUpload2 > versionAfterUpload1, `redigering (innehållsändring) bumpar version (${versionAfterUpload1} → ${versionAfterUpload2})`);
   const reclassified = await waitUntil(
     () => findDoc(a, matterId, docId),
     (d) => d?.analysisStatus === "DONE" && (d?.version ?? 0) >= versionAfterUpload2 && kindOk(d?.documentType),
@@ -170,7 +171,10 @@ async function main(): Promise<void> {
   );
   const finalVersion = reclassified!.version;
   const finalKind = reclassified!.documentType;
-  console.log(`✓ steg 4: redigerat (version ${versionAfterUpload2}) → om-klassificerat (version ${finalVersion}, ${finalKind})`);
+  // Återigen: om-klassificeringen är metadata → versionen står kvar på upload-2.
+  assert(finalVersion === versionAfterUpload2,
+    `om-klassificering bumpar INTE version (kvar på ${versionAfterUpload2}, fick ${finalVersion})`);
+  console.log(`✓ steg 4: redigerat → version ${versionAfterUpload2}, om-klassificerat UTAN ny version-bump (${finalKind})`);
 
   // ── steg 5: ANVÄNDARE B ser senaste versionen + klassificeringen ──
   const seenByB = await findDoc(b, matterId, docId);

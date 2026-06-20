@@ -40,6 +40,13 @@ export class InMemoryRepository<Row extends RowBase> implements Repository<Row> 
     return (await this.delegate.update({ where: { id }, data })) as Row;
   }
 
+  /** Metadata-skrivning utan version-bump (se `Repository.updateMetadata`). */
+  async updateMetadata(id: string, patch: Partial<Row>): Promise<Row> {
+    await this.getByIdOrThrow(id);
+    const data = { ...patch, updatedAt: this.now() } as Partial<Row>;
+    return (await this.delegate.update({ where: { id }, data })) as Row;
+  }
+
   async softDelete(id: string): Promise<Row> {
     const current = await this.getByIdOrThrow(id);
     const data = { deletedAt: this.now(), version: (current.version ?? 1) + 1 } as Partial<Row>;
