@@ -15,6 +15,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+import { z } from "zod";
 import { loadBundledSeed } from "@/lib/client/demo/bundled-seed-loader";
 import { useDemoSeed } from "@/lib/client/demo/use-demo-seed";
 import type { DemoSource } from "@/lib/shared/demo-source";
@@ -41,9 +42,44 @@ export interface DemoClientProps {
   defaultRepo?: string;
 }
 
-interface MatterLike { id: string; matterNumber: string; title: string; status: string }
-interface ContactLike { id: string; name: string; contactType: string; email?: string | null }
-interface UserLike { id: string; email: string; name: string; role: string }
+// `DemoSource`-fälten är medvetet otypad JSON (`Record<string, unknown>`).
+// Vi zod-parsar varje rad vid konsumtions-gränsen (extern data → strikt
+// parsning) och härleder vy-typerna via `z.infer` i stället för handskrivna
+// interfaces. Okända fält strippas; en rad som inte matchar droppas (se
+// `narrowRows`) i stället för att krascha hela demon.
+const matterRowSchema = z.object({
+  id: z.string(),
+  matterNumber: z.string(),
+  title: z.string(),
+  status: z.string(),
+});
+const contactRowSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  contactType: z.string(),
+  email: z.string().nullish().transform((v) => v ?? null),
+});
+const userRowSchema = z.object({
+  id: z.string(),
+  email: z.string(),
+  name: z.string(),
+  role: z.string(),
+});
+
+type MatterLike = z.infer<typeof matterRowSchema>;
+type ContactLike = z.infer<typeof contactRowSchema>;
+type UserLike = z.infer<typeof userRowSchema>;
+
+/** Parsa varje rad; behåll bara de som matchar schemat (drop-on-mismatch). */
+function narrowRows<T>(
+  rows: readonly Record<string, unknown>[] | undefined,
+  schema: z.ZodType<T>,
+): readonly T[] {
+  return (rows ?? []).flatMap((row) => {
+    const parsed = schema.safeParse(row);
+    return parsed.success ? [parsed.data] : [];
+  });
+}
 
 export function DemoClient({
   loader = loadBundledSeed,
@@ -54,26 +90,10 @@ export function DemoClient({
   // Ref istället för state — vi vill inte trigga rerender när flaggan sätts.
   const autoLoadAttempted = useRef(false);
 
-  // `DemoSource`-fälten är medvetet otypad JSON (`Record<string, unknown>`) —
-  // narrowa varje fält till vy-typen vid konsumtions-gränsen.
-  const matters: readonly MatterLike[] = (source.matters ?? []).map((m) => ({
-    id: m.id as string,
-    matterNumber: m.matterNumber as string,
-    title: m.title as string,
-    status: m.status as string,
-  }));
-  const contacts: readonly ContactLike[] = (source.contacts ?? []).map((c) => ({
-    id: c.id as string,
-    name: c.name as string,
-    contactType: c.contactType as string,
-    email: (c.email ?? null) as string | null,
-  }));
-  const users: readonly UserLike[] = (source.users ?? []).map((u) => ({
-    id: u.id as string,
-    email: u.email as string,
-    name: u.name as string,
-    role: u.role as string,
-  }));
+  // Narrowa de otypade JSON-raderna till vy-typerna via zod (se schemana ovan).
+  const matters = narrowRows(source.matters, matterRowSchema);
+  const contacts = narrowRows(source.contacts, contactRowSchema);
+  const users = narrowRows(source.users, userRowSchema);
 
   async function handleLoad(): Promise<void> {
     if (!url.trim()) return;
