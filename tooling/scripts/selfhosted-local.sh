@@ -43,12 +43,17 @@ echo "▸ [3/6] Startar stacken (postgres + server-first + keycloak + oauth2-pro
 echo "▸ [4/6] Migrerar schemat…"
 AVA_DATABASE_URL="$DB_URL" bun run db:migrate
 
-echo "▸ [5/6] Seedar org + allowlistade användare…"
-AVA_DATABASE_URL="$DB_URL" AVA_ORGANIZATION_ID="$AVA_ORGANIZATION_ID" bun tooling/scripts/seed-selfhosted-local.ts
-
 if [[ "${1:-}" == "--demo" ]]; then
-  echo "▸ [5b] Fyller byrån med demodata (ärenden/kontakter/tid/fakturering)…"
+  # --demo: skapa bara org:en här — demo-seeden mappar sin admin + huvud-jurist
+  # till KC-login-emailen (admin@/lawyer@ava.test) och äger datan (dashboarden
+  # fylls för den inloggade). Separata allowlist-users skulle bli dubbletter.
+  echo "▸ [5/6] Seedar org (login-users kommer från demodatan)…"
+  SEED_ORG_ONLY=1 AVA_DATABASE_URL="$DB_URL" AVA_ORGANIZATION_ID="$AVA_ORGANIZATION_ID" bun tooling/scripts/seed-selfhosted-local.ts
+  echo "▸ [5b] Fyller byrån med demodata (ärenden/kontakter/tid/uppgifter…)…"
   AVA_DATABASE_URL="$DB_URL" AVA_ORGANIZATION_ID="$AVA_ORGANIZATION_ID" bun tooling/scripts/seed-demo-into-server.ts
+else
+  echo "▸ [5/6] Seedar org + allowlistade användare…"
+  AVA_DATABASE_URL="$DB_URL" AVA_ORGANIZATION_ID="$AVA_ORGANIZATION_ID" bun tooling/scripts/seed-selfhosted-local.ts
 fi
 
 echo "▸ [6/6] Väntar in Keycloak + web…"
