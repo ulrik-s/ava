@@ -804,11 +804,18 @@ export async function generateDocumentBytes(doc: {
     return pdf.save();
   }
 
-  // DOCX via html-to-docx (saknar typings → dynamisk import + cast)
-  // @ts-expect-error — html-to-docx har inga .d.ts. Default export är callable.
-  const htmlToDocxModule = await import("html-to-docx");
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const htmlToDocx = (htmlToDocxModule as any).default as (html: string, headers?: unknown, opts?: unknown) => Promise<Buffer>;
+  // DOCX via html-to-docx. Paketet skeppar inga typings (otypat 3rd-party,
+  // endast build-time). Vi typar destruktureringen explicit (ingen `any`, ingen
+  // cast) och låter ETT smalt @ts-expect-error svälja TS7016 på importen — en
+  // ambient `declare module` skuggas under moduleResolution:bundler och en
+  // tsconfig-`paths` skulle bryta runtime-resolven (bun följer paths).
+  type HtmlToDocx = (
+    html: string,
+    headerHtml?: string | null,
+    options?: { table?: { row?: { cantSplit?: boolean } } } & Record<string, unknown>,
+  ) => Promise<Buffer>;
+  // @ts-expect-error — html-to-docx saknar .d.ts; default-exporten är callable.
+  const { default: htmlToDocx }: { default: HtmlToDocx } = await import("html-to-docx");
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeXml(title)}</title></head>` +
     `<body><h1>${escapeXml(title)}</h1><h2>${escapeXml(heading)}</h2><p>${escapeXml(body)}</p></body></html>`;
   const buf = await htmlToDocx(html, undefined, { table: { row: { cantSplit: true } } });
