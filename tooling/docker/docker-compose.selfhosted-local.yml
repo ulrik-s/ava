@@ -1,0 +1,114 @@
+# Lokal SELF-HOSTED-stack för manuellt test (#626) — hela kedjan på en origin:
+#
+#   Browser → nginx (:8080)
+#     ├─ /ava/      statisk app (auth_request → oauth2-proxy)
+#     ├─ /api/trpc  → server-first (Postgres-backend), med X-Auth-Request-Email
+#     └─ /oauth2/   → oauth2-proxy ── OIDC-dans ──→ Keycloak (:8089)
+#
+# Self-contained (ingen -f-merge): kör via tooling/scripts/selfhosted-local.sh.
+# Bygg först: `bun run server-first:build` + `bun run build:demo` (out/).
+
+name: ava-selfhosted-local
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ava
+      POSTGRES_PASSWORD: ava
+      POSTGRES_DB: ava_test
+    ports:
+      - "5433:5432" # host-exponerad så `db:migrate` + seed kan nå den
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ava -d ava_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    tmpfs:
+      - /var/lib/postgresql/data
+
+  server-first:
+    build:
+      context: ../..
+      dockerfile: tooling/docker/server-first/Dockerfile
+    environment:
+      AVA_DATABASE_URL: postgres://ava:ava@postgres:5432/ava_test
+      AVA_ORGANIZATION_ID: "${AVA_ORGANIZATION_ID:-00000000-0000-0000-0000-000000000001}"
+      AVA_HTTP_HOST: 0.0.0.0
+      AVA_HTTP_PORT: "3001"
+      AVA_CONTENT_DIR: /data/content
+    volumes:
+      - content_repo:/data/content
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    restart: unless-stopped
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: "admin"
+      KC_BOOTSTRAP_ADMIN_PASSWORD: "admin"
+      KC_HOSTNAME: "${OIDC_KC_HOSTNAME:-http://localhost:8089}"
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+    ports:
+      - "${KC_PORT:-8089}:8080"
+    volumes:
+      - ./keycloak/realm-ava.json:/opt/keycloak/data/import/realm-ava.json:ro
+
+  oauth2-proxy:
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.6.0
+    restart: unless-stopped
+    environment:
+      OAUTH2_PROXY_HTTP_ADDRESS: "0.0.0.0:4180"
+      OAUTH2_PROXY_PROVIDER: "keycloak-oidc"
+      OAUTH2_PROXY_CLIENT_ID: "${OAUTH2_PROXY_CLIENT_ID:-ava}"
+      OAUTH2_PROXY_CLIENT_SECRET: "${OAUTH2_PROXY_CLIENT_SECRET:-ava-test-secret}"
+      OAUTH2_PROXY_COOKIE_SECRET: "${OAUTH2_PROXY_COOKIE_SECRET:-ava-dev-cookie-secret-0123456789}"
+      OAUTH2_PROXY_REDIRECT_URL: "${OIDC_REDIRECT_URL:-http://localhost:8080/oauth2/callback}"
+      OAUTH2_PROXY_OIDC_ISSUER_URL: "${OIDC_ISSUER_PUBLIC:-http://localhost:8089/realms/ava}"
+      OAUTH2_PROXY_LOGIN_URL: "${OIDC_ISSUER_PUBLIC:-http://localhost:8089/realms/ava}/protocol/openid-connect/auth"
+      OAUTH2_PROXY_SKIP_OIDC_DISCOVERY: "true"
+      OAUTH2_PROXY_REDEEM_URL: "http://keycloak:8080/realms/ava/protocol/openid-connect/token"
+      OAUTH2_PROXY_OIDC_JWKS_URL: "http://keycloak:8080/realms/ava/protocol/openid-connect/certs"
+      OAUTH2_PROXY_PROFILE_URL: "http://keycloak:8080/realms/ava/protocol/openid-connect/userinfo"
+      OAUTH2_PROXY_VALIDATE_URL: "http://keycloak:8080/realms/ava/protocol/openid-connect/userinfo"
+      OAUTH2_PROXY_EMAIL_DOMAINS: "*"
+      OAUTH2_PROXY_UPSTREAMS: "static://202"
+      OAUTH2_PROXY_REVERSE_PROXY: "true"
+      OAUTH2_PROXY_SET_XAUTHREQUEST: "true"
+      OAUTH2_PROXY_SKIP_PROVIDER_BUTTON: "true"
+      OAUTH2_PROXY_COOKIE_SECURE: "false"
+      OAUTH2_PROXY_INSECURE_OIDC_ALLOW_UNVERIFIED_EMAIL: "true"
+    depends_on:
+      - keycloak
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${AVA_WEB_PORT:-8080}:80"
+    volumes:
+      - ../../out:/usr/share/nginx/html:ro
+      - ./nginx-selfhosted.conf:/etc/nginx/conf.d/default.conf:ro
+      - git_repos:/srv/git
+      - auth_data:/auth-data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+    depends_on:
+      - oauth2-proxy
+      - server-first
+
+volumes:
+  git_repos:
+  auth_data:
+  content_repo:
