@@ -42,6 +42,7 @@
     "e2e:demo": "playwright test --config tooling/config/playwright-demo.config.ts",
     "e2e:install": "playwright install --with-deps chromium",
     "e2e:oidc": "bash tooling/scripts/e2e-oidc.sh",
+    "e2e:doc-pipeline": "bash tooling/scripts/document-pipeline-e2e.sh",
     "diagnose-ui": "bun tooling/scripts/diagnose-ui.ts",
     "smoke:tier3": "bash tooling/scripts/test-tier3-smoke.sh",
     "test:all": "bash tooling/scripts/test-all.sh",
