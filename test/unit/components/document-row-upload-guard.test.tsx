@@ -11,6 +11,16 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest-compat";
 import { DocumentRow, type DocumentRecord } from "@/components/documents/_document-row";
 
+// DocumentRow renderar DocumentTags (#621), som läser org-vokabulären + setTags.
+// Tom vokabulär → editorn renderar null (påverkar inte guard-assertionerna).
+vi.mock("@/lib/client/trpc", () => ({
+  trpc: {
+    useUtils: () => ({ document: { tree: { invalidate: vi.fn() } } }),
+    organization: { getSettings: { useQuery: () => ({ data: { documentTags: [] } }) } },
+    document: { setTags: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) } },
+  },
+}));
+
 const baseDoc = {
   id: "d-1",
   matterId: "m-1",
