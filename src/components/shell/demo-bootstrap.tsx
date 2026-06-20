@@ -442,7 +442,11 @@ async function bindOidcFirstLogin(a: {
   setStatus: (s: Status) => void; setErrorMsg: (m: string | null) => void;
 }): Promise<boolean> {
   if (!a.needsOidc) return false;
-  const users = await a.client.user.list.query();
+  // `user.list` returnerar `{ users }` (router-formen) — plocka ut ARRAYEN.
+  // (Tidigare skickades hela objektet → `OidcAuthProvider.find` kastade →
+  // boot:en fastnade tyst på "AVA Laddar…" eftersom denna väg lämnar
+  // trpcClient null, så fel-skärmen aldrig renderas.)
+  const { users } = await a.client.user.list.query();
   return finishOidcLogin({ needsOidc: a.needsOidc, oidcClaims: a.oidcClaims, users, setStatus: a.setStatus, setErrorMsg: a.setErrorMsg });
 }
 
