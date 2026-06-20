@@ -13,7 +13,7 @@ import { z } from "zod";
 import { canTransition } from "@/lib/shared/invoice-state-machine";
 import { dispatchChannelSchema, dispatchStatusSchema, type DispatchStatus, type InvoiceDispatch } from "@/lib/shared/schemas/billing";
 import type { InvoiceStatus } from "@/lib/shared/schemas/enums";
-import { asId } from "@/lib/shared/schemas/ids";
+import { asId, invoiceDispatchIdSchema, invoiceIdSchema } from "@/lib/shared/schemas/ids";
 import type { Repositories } from "../repositories/repositories";
 import { router, orgProcedure } from "../trpc";
 
@@ -45,7 +45,7 @@ const STATUS_TIMESTAMP: Record<DispatchStatus, "sentAt" | "deliveredAt" | "faile
 
 export const invoiceDispatchRouter = router({
   list: orgProcedure
-    .input(z.object({ invoiceId: z.string() }))
+    .input(z.object({ invoiceId: invoiceIdSchema }))
     .query(async ({ ctx, input }) => {
       await assertInvoiceInOrg(ctx, input.invoiceId);
       return ctx.repos.invoiceDispatches.listByInvoice(input.invoiceId);
@@ -58,7 +58,7 @@ export const invoiceDispatchRouter = router({
 
   queue: orgProcedure
     .input(z.object({
-      invoiceId: z.string(),
+      invoiceId: invoiceIdSchema,
       channel: dispatchChannelSchema,
       recipient: z.string().min(1),
     }))
@@ -89,7 +89,7 @@ export const invoiceDispatchRouter = router({
    */
   recordManual: orgProcedure
     .input(z.object({
-      invoiceId: z.string(),
+      invoiceId: invoiceIdSchema,
       channel: dispatchChannelSchema,
       recipient: z.string().min(1),
     }))
@@ -113,7 +113,7 @@ export const invoiceDispatchRouter = router({
 
   updateStatus: orgProcedure
     .input(z.object({
-      dispatchId: z.string(),
+      dispatchId: invoiceDispatchIdSchema,
       status: dispatchStatusSchema,
       messageId: z.string().optional(),
       error: z.string().optional(),

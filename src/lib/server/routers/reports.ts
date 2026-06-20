@@ -5,6 +5,7 @@ import {
   type BilledInvoiceInput,
   type FrozenWorkInput,
 } from "@/lib/shared/billed-per-lawyer";
+import { userIdSchema } from "@/lib/shared/schemas/ids";
 import { router, protectedProcedure } from "../trpc";
 
 /**
@@ -324,7 +325,7 @@ export const reportsRouter = router({
     .input(z.object({
       from: z.string(),
       to: z.string(),
-      userId: z.string(),
+      userId: userIdSchema,
     }))
     .query(async ({ ctx, input }) => {
       const fromDate = new Date(input.from);
@@ -368,7 +369,7 @@ export const reportsRouter = router({
     .input(z.object({
       from: z.string(),
       to: z.string(),
-      userId: z.string(),
+      userId: userIdSchema,
     }))
     .query(async ({ ctx, input }) => {
       const fromDate = new Date(input.from);
@@ -434,7 +435,7 @@ export const reportsRouter = router({
    * daterad sanning, inte en härledd updatedAt-gissning.
    */
   arSummary: protectedProcedure
-    .input(z.object({ from: z.string(), to: z.string(), userId: z.string().optional() }))
+    .input(z.object({ from: z.string(), to: z.string(), userId: userIdSchema.optional() }))
     .query(async ({ ctx, input }) => {
       const fromDate = new Date(input.from);
       const toDate = new Date(input.to);

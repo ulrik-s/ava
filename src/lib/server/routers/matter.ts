@@ -10,6 +10,7 @@ import {
   matterIdSchema,
   contactIdSchema,
   matterContactIdSchema,
+  userIdSchema,
   asId,
   type MatterId,
   type ContactId,
@@ -38,7 +39,7 @@ async function assertMatterInOrg(ctx: MatterCtx, matterId: MatterId): Promise<Ma
  * (ADR 0003) — i normalt UI-flöde utelämnas de och defaultas.
  */
 const matterCreateInput = z.object({
-  id: z.string().optional(),
+  id: matterIdSchema.optional(),
   matterNumber: z.string().optional(),
   title: z.string().min(1),
   description: z.string().optional(),
@@ -52,12 +53,12 @@ const matterCreateInput = z.object({
   taxaHuvudforhandlingMin: z.number().int().nonnegative().nullable().optional(),
   taxaHasFTax: z.boolean().nullable().optional(),
   /** Ansvarig advokat/biträdande jurist (#174) — styr ärendenummerserien. */
-  responsibleLawyerId: z.string().optional(),
+  responsibleLawyerId: userIdSchema.optional(),
   /** Domstolens målnummer (#173) — matchningsnyckel för domstolsbetalningar. */
   courtCaseNumber: z.string().optional(),
   /** Historiskt skapad-datum (demo-generator/fixtures, ADR 0003) — annars now(). */
   createdAt: z.string().optional(),
-  klientId: z.string().optional(),
+  klientId: contactIdSchema.optional(),
 });
 type MatterCreateInput = z.infer<typeof matterCreateInput>;
 
@@ -162,7 +163,7 @@ export const matterRouter = router({
         search: z.string().optional(),
         status: z.enum(["ACTIVE", "CLOSED", "ARCHIVED"]).optional(),
         /** Filtrera till ärenden som medarbetaren har arbetat på (har tidsposter på). */
-        employeeId: z.string().optional(),
+        employeeId: userIdSchema.optional(),
         page: z.number().min(1).default(1),
         pageSize: z.number().min(1).max(500).default(20),
       })
@@ -181,7 +182,7 @@ export const matterRouter = router({
     }),
 
   getById: orgProcedure
-    .input(z.object({ id: z.string() }))
+    .input(z.object({ id: matterIdSchema }))
     .query(async ({ ctx, input }) => {
       const matter = await ctx.repos.matters.getByIdWithContacts(input.id, ctx.orgId);
       if (!matter) throw new TRPCError({ code: "NOT_FOUND", message: "Ärendet finns inte." });
@@ -209,13 +210,13 @@ export const matterRouter = router({
   update: orgProcedure
     .input(
       z.object({
-        id: z.string(),
+        id: matterIdSchema,
         title: z.string().min(1).optional(),
         description: z.string().optional(),
         status: z.enum(["ACTIVE", "CLOSED", "ARCHIVED"]).optional(),
         matterType: z.string().optional(),
         /** Byt ansvarig jurist (#174). Befintligt ärendenummer ändras EJ. */
-        responsibleLawyerId: z.string().nullable().optional(),
+        responsibleLawyerId: userIdSchema.nullable().optional(),
         /** Domstolens målnummer (#173) — för avprickning av domstolsbetalningar. */
         courtCaseNumber: z.string().nullable().optional(),
         paymentMethod: z
@@ -314,7 +315,7 @@ export const matterRouter = router({
     }),
 
   removeContact: orgProcedure
-    .input(z.object({ matterContactId: z.string() }))
+    .input(z.object({ matterContactId: matterContactIdSchema }))
     .mutation(async ({ ctx, input }) => {
       // Verifiera via matterContact→matter→org INNAN delete.
       const owned = await ctx.repos.matterContacts.getByIdInOrg(input.matterContactId, ctx.orgId);

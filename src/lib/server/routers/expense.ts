@@ -14,7 +14,7 @@ export const expenseRouter = router({
   list: protectedProcedure
     .input(
       z.object({
-        matterId: z.string().optional(),
+        matterId: matterIdSchema.optional(),
         page: z.number().min(1).default(1),
         pageSize: z.number().min(1).max(100).default(50),
       })
@@ -72,7 +72,7 @@ export const expenseRouter = router({
   update: orgProcedure
     .input(
       z.object({
-        id: z.string(),
+        id: expenseIdSchema,
         date: z.string().optional(),
         amount: z.number().min(1).optional(),
         description: z.string().min(1).optional(),
@@ -98,7 +98,7 @@ export const expenseRouter = router({
     }),
 
   delete: orgProcedure
-    .input(z.object({ id: z.string() }))
+    .input(z.object({ id: expenseIdSchema }))
     .mutation(async ({ ctx, input }) => {
       const owned = await ctx.repos.expenses.getByIdInOrg(input.id, ctx.orgId);
       if (!owned) throw new TRPCError({ code: "NOT_FOUND" });

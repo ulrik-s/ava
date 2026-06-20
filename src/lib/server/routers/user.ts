@@ -79,7 +79,7 @@ export const userRouter = router({
     }),
 
   getById: protectedProcedure
-    .input(z.object({ id: z.string() }))
+    .input(z.object({ id: userIdSchema }))
     .query(async ({ ctx, input }) => {
       const u = await ctx.repos.users.getByIdInOrg(input.id, ctx.user.organizationId);
       if (!u) throw new TRPCError({ code: "NOT_FOUND" });
@@ -127,7 +127,7 @@ export const userRouter = router({
    */
   update: protectedProcedure
     .input(z.object({
-      id: z.string(),
+      id: userIdSchema,
       email: z.string().email().optional(),
       name: z.string().min(1).optional(),
       title: z.string().nullable().optional(),
@@ -161,7 +161,7 @@ export const userRouter = router({
    * så historik bevaras.
    */
   deactivate: protectedProcedure
-    .input(z.object({ id: z.string() }))
+    .input(z.object({ id: userIdSchema }))
     .mutation(async ({ ctx, input }) => {
       assertAdmin(ctx);
       if (input.id === ctx.user.id) {
@@ -174,7 +174,7 @@ export const userRouter = router({
 
   /** Hård-delete behållen för bakåtkompabilitet, men ADMIN-only. */
   delete: protectedProcedure
-    .input(z.object({ id: z.string() }))
+    .input(z.object({ id: userIdSchema }))
     .mutation(async ({ ctx, input }) => {
       assertAdmin(ctx);
       if (input.id === ctx.user.id) {

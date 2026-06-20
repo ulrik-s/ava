@@ -13,7 +13,7 @@
  */
 
 import { z } from "zod";
-import { asId } from "@/lib/shared/schemas/ids";
+import { asId, matterIdSchema } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { emit, type EmitCtx } from "../events/emit";
 import type { Repositories } from "../repositories/repositories";
@@ -52,7 +52,7 @@ export const mailRouter = router({
   saveIncoming: orgProcedure
     .input(
       z.object({
-        matterId: z.string(),
+        matterId: matterIdSchema,
         /** Rå RFC822-MIME, base64-kodad för transport. */
         emlBase64: z.string().min(1),
         subject: z.string(),

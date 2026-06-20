@@ -22,7 +22,7 @@ import {
   type PlanForScan,
 } from "@/lib/shared/payment-reminders";
 import { paymentPlanStatusSchema, reminderTypeSchema, type Invoice, type PaymentPlan } from "@/lib/shared/schemas";
-import { asId } from "@/lib/shared/schemas/ids";
+import { asId, paymentPlanIdSchema, paymentPlanReminderIdSchema } from "@/lib/shared/schemas/ids";
 import { emit } from "../events/emit";
 import type {
   JoinedPaymentPlan, JoinedPaymentPlanWithReminders,
@@ -96,7 +96,7 @@ export const paymentPlanRouter = router({
     }),
 
   getById: orgProcedure
-    .input(z.object({ id: z.string() }))
+    .input(z.object({ id: paymentPlanIdSchema }))
     .query(async ({ ctx, input }) => {
       const plan = await ctx.repos.paymentPlans.getByIdWithDetails(input.id, ctx.orgId);
       if (!plan) throw new TRPCError({ code: "NOT_FOUND", message: "Avbetalningsplan hittades inte" });
@@ -110,7 +110,7 @@ export const paymentPlanRouter = router({
    * vid sida tills UI:n migrerat helt hit; ändringar måste göras på båda.
    */
   cancel: protectedProcedure
-    .input(z.object({ planId: z.string() }))
+    .input(z.object({ planId: paymentPlanIdSchema }))
     .mutation(async ({ ctx, input }) => {
       return ctx.repos.transaction(async (tx) => {
         const plan = await tx.paymentPlans.getByIdInOrg(input.planId, ctx.user.organizationId);
@@ -132,8 +132,8 @@ export const paymentPlanRouter = router({
   recordReminder: orgProcedure
     .input(
       z.object({
-        id: z.string().optional(),
-        planId: z.string(),
+        id: paymentPlanReminderIdSchema.optional(),
+        planId: paymentPlanIdSchema,
         dueMonth: z.string().regex(/^\d{4}-\d{2}$/),
         type: reminderTypeSchema,
         sentAt: z.string().optional(),
