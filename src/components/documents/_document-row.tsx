@@ -6,6 +6,7 @@ import { ActionMenu, type ActionMenuItem } from "@/components/ui/action-menu";
 import type { OpenDocumentDeps } from "@/lib/client/firma/open-document";
 import { readFromFsa } from "@/lib/client/fsa/read-from-fsa";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
+import { DocumentTags } from "./_document-tags";
 import { formatFileSize } from "./_drag-helpers";
 import { ExternalEditModal, type ModalState } from "./external-edit-modal";
 
@@ -43,6 +44,7 @@ export interface DocumentRecord {
   uploadedBy: { name: string | null } | null;
   title?: string | null | undefined;
   documentType?: string | null | undefined;
+  tags?: readonly string[] | undefined;
   summary?: string | null | undefined;
   analyzedAt?: string | Date | null | undefined;
   analysisError?: string | null | undefined;
@@ -101,20 +103,20 @@ export function DocumentRow({
         title={isUploading ? "Laddar upp…" : undefined}
       >
         <td className="px-3 sm:px-6 py-2.5 text-sm">
-          <div
-            style={{ paddingLeft: `${depth * 16 + 4}px` }}
-            className="flex items-center gap-2 min-w-0"
-          >
-            <DocumentNameButton doc={doc} isAnalyzing={isAnalyzing} disabled={!!isUploading}
-              onExternalEdit={() => void triggerExternalEdit()} />
-            {isUploading && (
-              <span
-                className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-100 text-amber-800"
-                title="Sparas lokalt — pushas till git när auto-sync kör"
-              >
-                <span className="animate-pulse">●</span> Lokal
-              </span>
-            )}
+          <div style={{ paddingLeft: `${depth * 16 + 4}px` }} className="min-w-0">
+            <div className="flex items-center gap-2 min-w-0">
+              <DocumentNameButton doc={doc} isAnalyzing={isAnalyzing} disabled={!!isUploading}
+                onExternalEdit={() => void triggerExternalEdit()} />
+              {isUploading && (
+                <span
+                  className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-100 text-amber-800"
+                  title="Sparas lokalt — pushas till git när auto-sync kör"
+                >
+                  <span className="animate-pulse">●</span> Lokal
+                </span>
+              )}
+            </div>
+            <DocumentTags documentId={doc.id} matterId={doc.matterId} tags={doc.tags ?? []} />
           </div>
         </td>
         <td className="hidden sm:table-cell px-6 py-2.5 text-sm text-gray-500 whitespace-nowrap">{formatFileSize(doc.sizeBytes)}</td>
