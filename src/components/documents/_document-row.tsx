@@ -3,6 +3,7 @@
 import { Trash2 } from "lucide-react";
 import { Fragment, useState } from "react";
 import { ActionMenu, type ActionMenuItem } from "@/components/ui/action-menu";
+import { useCapabilities } from "@/lib/client/capabilities/use-capabilities";
 import type { OpenDocumentDeps } from "@/lib/client/firma/open-document";
 import { readFromFsa } from "@/lib/client/fsa/read-from-fsa";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
@@ -182,6 +183,8 @@ interface ActionItemsOpts {
   viewHref: string;
   downloadHref: string;
   uploadingTitle: string | undefined;
+  /** LLM-kapabilitet (ADR 0027): false (demon) → "Analysera (AI)" döljs. */
+  llm: boolean;
   onOpenInEditor: () => void;
   onExternal: () => void;
   onReanalyze: () => void;
@@ -196,7 +199,10 @@ function buildActionItems(o: ActionItemsOpts): ActionMenuItem[] {
     { key: "external", label: "Editera externt (PDF Gear, Preview…)", icon: <span aria-hidden>🖥</span>, onSelect: o.onExternal, disabled: o.isDisabled, title: o.uploadingTitle ?? "AVA committar dina ändringar automatiskt" },
     { key: "view", label: "Visa", icon: <span aria-hidden>👁</span>, href: o.viewHref, newTab: true, disabled: o.isDisabled, title: o.uploadingTitle ?? "Visa i webbläsaren" },
     { key: "download", label: "Ladda ner", icon: <span aria-hidden>⬇</span>, href: o.downloadHref, download: true, disabled: o.isDisabled, title: o.uploadingTitle ?? "Ladda ner" },
-    { key: "reanalyze", label: "Analysera (AI)", icon: <span aria-hidden>🧠</span>, onSelect: o.onReanalyze, disabled: o.isDisabled || o.reanalyzePending, title: o.uploadingTitle ?? "Kör AI-analys på nytt" },
+    // ADR 0027: LLM-analys är en server-förmåga → dölj affordansen utan den.
+    ...(o.llm
+      ? [{ key: "reanalyze", label: "Analysera (AI)", icon: <span aria-hidden>🧠</span>, onSelect: o.onReanalyze, disabled: o.isDisabled || o.reanalyzePending, title: o.uploadingTitle ?? "Kör AI-analys på nytt" }]
+      : []),
     omitUndefined({ key: "delete", label: "Ta bort", icon: <Trash2 size={15} />, onSelect: o.onDelete, danger: true, disabled: o.isDisabled, title: o.uploadingTitle }) as ActionMenuItem,
   ];
 }
@@ -245,8 +251,9 @@ function DocumentActions({
 
   const isDisabled = !!disabled;
   const uploadingTitle = isDisabled ? "Vänta tills uppladdningen är klar" : undefined;
+  const { llm } = useCapabilities();
   const items = buildActionItems({
-    isDisabled, reanalyzePending, viewHref, downloadHref, uploadingTitle,
+    isDisabled, reanalyzePending, viewHref, downloadHref, uploadingTitle, llm,
     onOpenInEditor: () => void openInEditor(),
     onExternal: () => void onExternalEdit(),
     onReanalyze, onDelete,

@@ -193,6 +193,21 @@ describe("DocumentBrowser", () => {
     expect(screen.getByText("Ta bort")).toBeInTheDocument();
   });
 
+  it("döljer 'Analysera (AI)' i demo-tier (LLM-kapabilitet saknas, ADR 0027)", () => {
+    // demo-tier → capabilities.llm = false → analys-affordansen renderas inte.
+    window.localStorage.setItem("ava.firma", JSON.stringify({ tier: "demo", repo: "u/r" }));
+    try {
+      treeQuery.data = { folders: [], documents: [baseDoc()] };
+      render(<DocumentBrowser matterId="m1" />);
+      fireEvent.click(screen.getByLabelText("Dokumentåtgärder"));
+      expect(screen.getByText("Visa")).toBeInTheDocument(); // övriga finns kvar
+      expect(screen.getByText("Ta bort")).toBeInTheDocument();
+      expect(screen.queryByText(/Analysera/)).not.toBeInTheDocument();
+    } finally {
+      window.localStorage.removeItem("ava.firma"); // återställ jsdom-default (self-hosted)
+    }
+  });
+
   it("submittar Ny mapp-formuläret med mappnamn", () => {
     render(<DocumentBrowser matterId="m1" />);
     fireEvent.click(screen.getByRole("button", { name: /\+ Ny mapp/i }));
