@@ -15,8 +15,12 @@
 #   docker build -f tooling/docker/server-first/Dockerfile -t ava-server-first .
 FROM debian:stable-slim
 
+# git krävs av GitContentStore (#518): dokument-bytes lagras innehålls-adresserat
+# i ett git-repo (AVA_CONTENT_DIR) där varje skrivning committas. Utan binären
+# kastar uploadContent "Executable not found in $PATH: git" → server-side-
+# dokumentlagringen (+ klassificeringen som läser bytes:en) fungerar inte.
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates \
+  && apt-get install -y --no-install-recommends ca-certificates git \
   && rm -rf /var/lib/apt/lists/*
 
 COPY dist/server-first/ava-server-first-linux-x64   /opt/ava/bin/ava-server-first-linux-x64

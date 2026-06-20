@@ -56,8 +56,10 @@ export const folderProcedures = {
 
   moveDocument: orgProcedure
     .input(z.object({ documentId: documentIdSchema, folderId: documentFolderIdSchema.nullable() }))
+    // Mapp-placering är organisations-metadata, inte dokumentets innehåll →
+    // bumpar INTE versionen (ADR 0023; jfr klassificering/taggar).
     .mutation(({ ctx, input }) =>
-      ctx.repos.documents.update(input.documentId, { folderId: input.folderId }),
+      ctx.repos.documents.updateMetadata(input.documentId, { folderId: input.folderId }),
     ),
 
   /** Flyttar en mapp; blockerar cykler (mapp-in-i-sig-själv/descendant). */

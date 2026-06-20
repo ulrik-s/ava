@@ -28,6 +28,15 @@ export interface Repository<Row extends RowBase> {
   getByIdOrThrow(id: string): Promise<Row>;
   create(data: Partial<Row>): Promise<Row>;
   update(id: string, patch: Partial<Row>): Promise<Row>;
+  /**
+   * Uppdatera metadata UTAN att bumpa `version`. `version` är radens
+   * INNEHÅLLS-version (för dokument: ADR 0023) — den bumpas BARA av faktiska
+   * innehållsändringar (`uploadContent`, extern redigering). Metadata-
+   * skrivningar (AI-klassificering, taggar, titel, summary) ändrar innehållet
+   * INTE och får därför inte bumpa versionen. `updatedAt` uppdateras dock
+   * fortfarande (radens senaste skrivning), och ändringen delta-synkas som vanligt.
+   */
+  updateMetadata(id: string, patch: Partial<Row>): Promise<Row>;
   /** Mjuk delete (sätter `deletedAt`, bumpar `version`) — tombstone, ADR 0017. */
   softDelete(id: string): Promise<Row>;
   /**

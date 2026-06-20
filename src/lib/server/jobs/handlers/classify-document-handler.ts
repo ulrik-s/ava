@@ -29,8 +29,9 @@ export interface ClassifiableDoc {
 }
 
 export interface ClassifyDocumentDeps {
-  /** Dokument-repo (läs hela raden + skriv tillbaka metadatan). */
-  documents: Pick<DocumentRepository, "getById" | "update">;
+  /** Dokument-repo (läs hela raden + skriv tillbaka metadatan UTAN version-bump:
+   *  klassificering är metadata, inte en innehållsändring → ADR 0023). */
+  documents: Pick<DocumentRepository, "getById" | "updateMetadata">;
   /** Klassificerare; default = filnamns-heuristik. Fas 3 injicerar LLM-varianten. */
   classify?: (doc: ClassifiableDoc) => Promise<DocumentKind>;
   /** Modell-etikett som sparas i `analysisModel`. */
@@ -53,7 +54,7 @@ export function createClassifyDocumentHandler(deps: ClassifyDocumentDeps): JobHa
       storagePath: doc.storagePath,
       mimeType: doc.mimeType,
     });
-    await deps.documents.update(documentId, {
+    await deps.documents.updateMetadata(documentId, {
       documentType: kind,
       analyzedAt: now(),
       analysisStatus: "DONE",

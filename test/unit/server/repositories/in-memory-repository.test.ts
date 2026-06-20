@@ -51,6 +51,14 @@ describe("InMemoryRepository", () => {
     expect(row.updatedAt).toBeInstanceOf(Date);
   });
 
+  it("updateMetadata uppdaterar fält + updatedAt MEN bumpar INTE version", async () => {
+    const repo = makeRepo([{ id: "u1", name: "Anna", version: 2 }]);
+    const row = await repo.updateMetadata("u1", { name: "Anna (metadata)" });
+    expect(row.name).toBe("Anna (metadata)");
+    expect(row.version).toBe(2); // oförändrad — metadata-skrivning, ingen innehållsändring
+    expect(row.updatedAt).toBeInstanceOf(Date);
+  });
+
   it("softDelete sätter deletedAt + bumpar version, raden försvinner ur getById", async () => {
     const repo = makeRepo([{ id: "u1", name: "Anna", version: 1 }]);
     const row = await repo.softDelete("u1");
