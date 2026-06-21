@@ -5,7 +5,7 @@
  *
  * Producerar `office-addin/dist/taskpane.js` (+ kopierar taskpane.html). Servera
  * `dist/` över **HTTPS** (Office kräver det vid sideload — t.ex. en dev-cert à la
- * `helper-app/src/tls/`) och peka manifestets `SourceLocation` dit. Detta steg är
+ * `helper-ui/src/engine/tls/`) och peka manifestets `SourceLocation` dit. Detta steg är
  * INTE CI-verifierbart (kräver Office-värd) → kör + sideload-testa lokalt.
  */
 

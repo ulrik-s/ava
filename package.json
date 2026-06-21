@@ -49,7 +49,7 @@
     "test:all": "bash tooling/scripts/test-all.sh",
     "duplicates": "jscpd --config tooling/config/jscpd.json src",
     "lint:complexity-strict": "bun tooling/scripts/check-complexity-strict.ts",
-    "deps:check": "depcruise --config tooling/config/dependency-cruiser.cjs --output-type err src test helper-app office-addin",
+    "deps:check": "depcruise --config tooling/config/dependency-cruiser.cjs --output-type err src test helper-ui office-addin",
     "deps:graph": "depcruise --config tooling/config/dependency-cruiser.cjs --output-type dot src | dot -Tsvg > reports/dependency-graph.svg",
     "deps:archi": "depcruise --config tooling/config/dependency-cruiser.cjs --output-type archi src | dot -Tsvg > reports/architecture.svg",
     "knip": "knip --config tooling/config/knip.json",
