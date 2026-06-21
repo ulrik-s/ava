@@ -13,7 +13,7 @@
 import { spawn } from "node:child_process";
 import { join } from "node:path";
 
-import { app, Menu, Tray, nativeImage } from "electron";
+import { app, dialog, Menu, Tray, nativeImage } from "electron";
 
 import { HELPER_BASE } from "@/lib/shared/helper/protocol";
 import { EngineSupervisor, type SpawnedProcess } from "./engine.ts";
@@ -39,9 +39,22 @@ function spawnEngine(binPath: string, args: readonly string[]): SpawnedProcess {
   };
 }
 
-/** Starta inloggnings-flödet (loopback-PKCE) som en transient motor-invokation. */
+/**
+ * Starta inloggnings-flödet (loopback-PKCE) som en transient motor-invokation.
+ * Fångar stderr och YTLÄGGER fel i en dialog — login får aldrig misslyckas
+ * tyst (motsatsen till KATS-HIIT). Motorn läser config ur env ELLER
+ * helper-config.json, så en Finder-startad app (utan shell-env) fungerar.
+ */
 function startLogin(binPath: string): void {
-  spawn(binPath, ["--login"], { stdio: "ignore", detached: true, env: process.env }).unref();
+  const child = spawn(binPath, ["--login"], { stdio: ["ignore", "ignore", "pipe"], env: process.env });
+  let stderr = "";
+  child.stderr?.on("data", (d: Buffer) => { stderr += d.toString(); });
+  child.on("error", (e) => dialog.showErrorBox("AVA Helper — inloggning", `Kunde inte starta inloggningen: ${e.message}`));
+  child.on("exit", (code) => {
+    if (code !== null && code !== 0) {
+      dialog.showErrorBox("AVA Helper — inloggning", stderr.trim() || `Inloggningen avslutades (kod ${code}).`);
+    }
+  });
 }
 
 async function triggerUpdateCheck(): Promise<void> {

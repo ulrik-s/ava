@@ -46,7 +46,22 @@ Slå på signering i release-bygget när cert finns (electron-builder `mac.ident
 
 ## Konfiguration
 
-Skalet skickar miljön vidare till motorn. Sätt åtminstone `AVA_OIDC_ISSUER`
-(byråns IdP — Keycloak-fixturen: `http://localhost:8089/realms/ava`) så *Logga in*
-fungerar. Hur configen levereras till icke-tekniska användare (bakad/inställnings-
-vy/hämtad) är en öppen fråga i ADR 0029.
+En app startad **från Finder/Applications ärver inte ditt shell-env**, så
+`AVA_OIDC_ISSUER` är inte satt där. Motorn läser därför även en **config-fil**:
+
+```
+~/Library/Application Support/AVA/helper-config.json
+```
+```json
+{ "oidcIssuer": "http://localhost:8089/realms/ava" }
+```
+
+(env vinner över filen — så `bun run dev` med `AVA_OIDC_ISSUER` satt fungerar
+också). Fält: `oidcIssuer` (krävs för *Logga in*), valfria `oidcClientId`
+(default `ava-helper`), `oidcAudience`, `oidcJwksUri`, `oidcScope`, `redirectPort`
+(default 48765). Utan issuer visar *Logga in* numera ett **felmeddelande** i
+stället för att misslyckas tyst.
+
+Hur configen levereras till icke-tekniska användare i skala (bakad per byrå /
+Inställnings-vy som skriver filen / hämtad från web-appen) är fortsatt en öppen
+fråga i ADR 0029.
