@@ -8,6 +8,7 @@
  * "stäng fliken"-sida; timeout om inget kommer.
  */
 
+import { serveFetchHandler } from "@/lib/shared/http/node-http-adapter";
 import { log } from "../log.ts";
 
 export type CallbackResult = { code: string } | { error: string };
@@ -41,8 +42,8 @@ export interface WaitForCallbackDeps {
 }
 
 const defaultServe: WaitForCallbackDeps["serve"] = (port, handler) => {
-  const server = Bun.serve({ port, hostname: "127.0.0.1", fetch: handler });
-  return { stop: () => void server.stop(true) };
+  const server = serveFetchHandler(async (req) => handler(req), { port, hostname: "127.0.0.1" });
+  return { stop: () => server.close() };
 };
 
 /**

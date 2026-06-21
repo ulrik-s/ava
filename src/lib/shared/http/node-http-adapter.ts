@@ -10,6 +10,7 @@
  */
 
 import { createServer, type Server, type IncomingMessage, type ServerResponse } from "node:http";
+import { createServer as createHttpsServer } from "node:https";
 
 type FetchHandler = (req: Request) => Promise<Response>;
 
@@ -67,14 +68,19 @@ export interface ServeOpts {
   port: number;
   /** Lyssna-adress. Default 127.0.0.1 (loopback; nginx proxar utifrån). */
   hostname?: string;
+  /** TLS-material → https-server (ADR 0006: helperns lokala CA för Safari/add-in). */
+  tls?: { cert: string; key: string };
 }
 
 /**
- * Starta en `node:http`-server som serverar `handler`. Returnerar servern
- * (anropa `.close()` vid nedstängning).
+ * Starta en `node:http`(s)-server som serverar `handler`. Med `opts.tls` blir
+ * det en https-server (annars http). Returnerar servern (`.close()` vid nedstängning).
  */
 export function serveFetchHandler(handler: FetchHandler, opts: ServeOpts): Server {
-  const server = createServer((req, res) => { void handle(handler, req, res); });
+  const onReq = (req: IncomingMessage, res: ServerResponse): void => { void handle(handler, req, res); };
+  const server = opts.tls
+    ? createHttpsServer({ cert: opts.tls.cert, key: opts.tls.key }, onReq)
+    : createServer(onReq);
   server.listen(opts.port, opts.hostname ?? "127.0.0.1");
   return server;
 }

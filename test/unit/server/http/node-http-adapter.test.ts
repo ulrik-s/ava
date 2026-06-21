@@ -8,7 +8,7 @@ import { once } from "node:events";
 import { request, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { describe, it, expect, afterEach } from "vitest-compat";
-import { serveFetchHandler } from "@/lib/server/http/node-http-adapter";
+import { serveFetchHandler } from "@/lib/shared/http/node-http-adapter";
 
 let server: Server | undefined;
 afterEach(() => { server?.close(); server = undefined; });

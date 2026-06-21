@@ -14,7 +14,7 @@
  */
 
 import { createHash } from "node:crypto";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import { log } from "./log.ts";
@@ -59,6 +59,16 @@ export function resolveCacheTtlMs(envValue: string | undefined, defaultDays = DE
 /** SHA-256 (hex) av bytes. Content-adress-nyckeln. */
 export function sha256Hex(bytes: Uint8Array): string {
   return createHash("sha256").update(bytes).digest("hex");
+}
+
+/** Finns filen? (node:fs har ingen ren exists → access + fångst.) */
+async function fileExists(path: string): Promise<boolean> {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -107,7 +117,7 @@ export class ContentStore {
     const index = await this.ensureIndex();
     const hash = sha256Hex(bytes);
     const path = this.blobPath(hash);
-    if (!(await Bun.file(path).exists())) {
+    if (!(await fileExists(path))) {
       await mkdir(join(this.dir, "blobs"), { recursive: true });
       await writeFile(path, bytes);
     }

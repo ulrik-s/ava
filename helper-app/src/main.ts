@@ -20,6 +20,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 import { HELPER_HTTPS_PORT, HELPER_PORT } from "@/lib/shared/helper/protocol";
+import { serveFetchHandler } from "@/lib/shared/http/node-http-adapter";
 
 import { buildAuthHeaderProvider } from "./auth/auth-provider.ts";
 import { loginConfigFromEnv, runLogin } from "./auth/login.ts";
@@ -48,8 +49,6 @@ import { loadOrCreateTls } from "./tls/certs.ts";
 import { installCaTrust, removeCaTrust } from "./tls/trust.ts";
 import { checkOnce, runUpdateLoop, type UpdateConfig } from "./update.ts";
 import { VERSION } from "./version.ts";
-
-const SHUTDOWN_TIMEOUT_MS = 5_000;
 
 function extraOrigins(): string[] {
   return (process.env.AVA_HELPER_ORIGINS ?? "").split(",").map((s) => s.trim()).filter((s) => s !== "");
@@ -114,7 +113,7 @@ type Handler = (req: Request) => Promise<Response>;
  * material i data-dir. Returnerar undefined om data-dir saknas eller TLS
  * inte kan startas — HTTP fortsätter ändå (Chromium/Firefox behöver inte HTTPS).
  */
-function startHttpsServer(handler: Handler): ReturnType<typeof Bun.serve> | undefined {
+function startHttpsServer(handler: Handler): ReturnType<typeof serveFetchHandler> | undefined {
   const dir = dataDir();
   if (dir === null) {
     log("ingen data-dir → hoppar över HTTPS (endast HTTP)");
@@ -122,11 +121,10 @@ function startHttpsServer(handler: Handler): ReturnType<typeof Bun.serve> | unde
   }
   try {
     const tls = loadOrCreateTls(join(dir, "tls"));
-    const server = Bun.serve({
+    const server = serveFetchHandler(handler, {
       port: httpsPort(),
       hostname: "127.0.0.1",
       tls: { cert: tls.leaf.cert, key: tls.leaf.key },
-      fetch: handler,
     });
     log(`ava-helper HTTPS på localhost:${httpsPort()}`);
     return server;
@@ -271,15 +269,16 @@ function main(): void {
       : {}),
   });
 
-  const httpServer = Bun.serve({ port, hostname: "127.0.0.1", fetch: handler });
+  const httpServer = serveFetchHandler(handler, { port, hostname: "127.0.0.1" });
   const httpsServer = startHttpsServer(handler);
 
   for (const sig of ["SIGTERM", "SIGINT"] as const) {
     process.on(sig, () => {
       log(`${sig} — avslutar`);
       abort.abort();
-      void Promise.all([httpServer.stop(), httpsServer?.stop()]).then(() => process.exit(0));
-      setTimeout(() => process.exit(0), SHUTDOWN_TIMEOUT_MS).unref();
+      httpServer.close();
+      httpsServer?.close();
+      process.exit(0);
     });
   }
 }

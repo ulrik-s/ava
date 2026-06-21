@@ -19,13 +19,13 @@ import { TrpcSyncTransport } from "@/lib/client/sync/trpc-sync-transport";
 import { noopPorts } from "@/lib/server/adapters/noop-ports";
 import type { QueuedMutation } from "@/lib/server/data-store/in-memory/mutation-queue";
 import { users } from "@/lib/server/db/schema";
-import { serveFetchHandler } from "@/lib/server/http/node-http-adapter";
 import { createServerTrpcHandler } from "@/lib/server/http/server-trpc-handler";
 import { createDbChangeLogRecorder, enableChangeLogOnAll } from "@/lib/server/repositories/change-log-recorder";
 import { buildDrizzleRepositories } from "@/lib/server/repositories/drizzle-repositories";
 import type { Repositories } from "@/lib/server/repositories/repositories";
 import type { AppRouter } from "@/lib/server/routers/_app";
 import { DrizzleSyncStore } from "@/lib/server/sync/drizzle-sync-store";
+import { serveFetchHandler } from "@/lib/shared/http/node-http-adapter";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { createTestDb, type TestDbHandle } from "../db/pg-test-db";
 

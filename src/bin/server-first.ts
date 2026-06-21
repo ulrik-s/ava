@@ -21,13 +21,13 @@
 
 import { loadContentDirFromEnv, makeContentStore } from "@/lib/server/adapters/git-content-store";
 import { noopPorts } from "@/lib/server/adapters/noop-ports";
-import { serveFetchHandler } from "@/lib/server/http/node-http-adapter";
 import { buildServerFirstApi, loadServerFirstConfig } from "@/lib/server/http/server-first-api";
 import { startJobRuntime, type JobRuntime } from "@/lib/server/jobs/job-worker-runtime";
 import { QueueBackedDocumentAnalyzer } from "@/lib/server/jobs/queue-backed-document-analyzer";
 import { QueueBackedEmailSender } from "@/lib/server/jobs/queue-backed-email-sender";
 import { buildServerFirstJobHandlers, loadSmtpConfigFromEnv } from "@/lib/server/jobs/server-first-handlers";
 import { loadLlmConfigFromEnv } from "@/lib/server/llm/ollama-classifier";
+import { serveFetchHandler } from "@/lib/shared/http/node-http-adapter";
 
 function log(msg: string): void {
   console.log(`[server-first] ${msg}`);

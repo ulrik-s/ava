@@ -18,9 +18,9 @@ import postgres from "postgres";
 import superjson from "superjson";
 import { describe, it, expect } from "vitest-compat";
 import { TrpcSyncTransport } from "@/lib/client/sync/trpc-sync-transport";
-import { serveFetchHandler } from "@/lib/server/http/node-http-adapter";
 import { buildServerFirstApi } from "@/lib/server/http/server-first-api";
 import type { AppRouter } from "@/lib/server/routers/_app";
+import { serveFetchHandler } from "@/lib/shared/http/node-http-adapter";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { applyMigrations } from "../../../../tooling/scripts/db-migrate";
 
