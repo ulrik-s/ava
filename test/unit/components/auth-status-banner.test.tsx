@@ -4,7 +4,7 @@
  */
 
 import { render, screen } from "@testing-library/react";
-import { describe, it, expect, vi } from "vitest-compat";
+import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { AuthStatusBanner } from "@/components/shell/auth-status-banner";
 
 const mockState = {
@@ -16,11 +16,19 @@ const mockState = {
   refresh: async () => {},
 };
 
+// ADR 0027: bannern visar den faktiska principalen (trpc.user.current).
+let currentUser: { name?: string; email?: string } | undefined;
+
 vi.mock("@/lib/client/auth/use-auth-mode", () => ({
   useAuthMode: () => mockState,
 }));
+vi.mock("@/lib/client/trpc", () => ({
+  trpc: { user: { current: { useQuery: () => ({ data: currentUser }) } } },
+}));
 
 describe("AuthStatusBanner", () => {
+  beforeEach(() => { currentUser = undefined; mockState.user = null; });
+
   it("renderar inget medan auth-mode laddas", () => {
     mockState.loading = true;
     const { container } = render(<AuthStatusBanner />);
@@ -30,23 +38,22 @@ describe("AuthStatusBanner", () => {
 
   it("anonymous → 'Demo-läge — endast läsning'", () => {
     mockState.mode = "anonymous";
-    mockState.user = null;
     render(<AuthStatusBanner />);
     expect(screen.getByText(/Demo-läge — endast läsning/i)).toBeInTheDocument();
   });
 
-  it("identified-read → '@user — endast läsning'", () => {
-    mockState.mode = "identified-read";
-    mockState.user = { login: "anna", id: 1 };
+  it("visar principalens namn (trpc.user.current) — inte GitHub-login", () => {
+    mockState.mode = "identified-write";
+    currentUser = { name: "Björn Bauer", email: "lawyer@ava.test" };
     render(<AuthStatusBanner />);
-    expect(screen.getByText(/Inloggad som @anna — endast läsning/i)).toBeInTheDocument();
+    expect(screen.getByText(/Inloggad som Björn Bauer — kan spara/i)).toBeInTheDocument();
   });
 
-  it("identified-write → '@user — kan spara'", () => {
-    mockState.mode = "identified-write";
-    mockState.user = { login: "ulrik", id: 2 };
+  it("faller tillbaka på email när namn saknas", () => {
+    mockState.mode = "identified-read";
+    currentUser = { email: "x@y.se" };
     render(<AuthStatusBanner />);
-    expect(screen.getByText(/Inloggad som @ulrik — kan spara/i)).toBeInTheDocument();
+    expect(screen.getByText(/Inloggad som x@y\.se — endast läsning/i)).toBeInTheDocument();
   });
 
   it("klick leder till /settings (Link-href)", () => {
@@ -56,10 +63,9 @@ describe("AuthStatusBanner", () => {
     expect(link).toHaveAttribute("href", "/settings");
   });
 
-  it("fallback till 'okänd' om user.login saknas", () => {
+  it("fallback till 'okänd' om varken principal eller legacy-login finns", () => {
     mockState.mode = "identified-read";
-    mockState.user = { login: undefined as unknown as string, id: 3 };
     render(<AuthStatusBanner />);
-    expect(screen.getByText(/Inloggad som @okänd/i)).toBeInTheDocument();
+    expect(screen.getByText(/Inloggad som okänd/i)).toBeInTheDocument();
   });
 });

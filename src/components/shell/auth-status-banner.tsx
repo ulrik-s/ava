@@ -13,6 +13,7 @@
 
 import Link from "next/link";
 import { useAuthMode } from "@/lib/client/auth/use-auth-mode";
+import { trpc } from "@/lib/client/trpc";
 
 const STYLES: Record<string, string> = {
   anonymous: "bg-gray-50 text-gray-700",
@@ -26,15 +27,23 @@ const ICONS: Record<string, string> = {
   "identified-write": "✍️",
 };
 
+/** Banner-text per auth-mode. Utbruten ur komponenten för komplexitet ≤8. */
+function bannerLabel(mode: string, who: string): string {
+  if (mode === "anonymous") return "Demo-läge — endast läsning";
+  const suffix = mode === "identified-read" ? "endast läsning" : "kan spara";
+  return `Inloggad som ${who} — ${suffix}`;
+}
+
 export function AuthStatusBanner() {
   const { mode, user, loading } = useAuthMode();
+  // ADR 0027: visa den FAKTISKA inloggade principalen (demo-väljaren ELLER
+  // OIDC) i st.f. det pensionerade GitHub-`login`-fältet (som gav "@okänd" i
+  // server-first). Faller tillbaka på legacy-login → "okänd" om inget finns.
+  const me = trpc.user.current.useQuery();
   if (loading) return null;
 
-  const label = mode === "anonymous"
-    ? "Demo-läge — endast läsning"
-    : mode === "identified-read"
-    ? `Inloggad som @${user?.login ?? "okänd"} — endast läsning`
-    : `Inloggad som @${user?.login ?? "okänd"} — kan spara`;
+  const who = me.data?.name ?? me.data?.email ?? user?.login ?? "okänd";
+  const label = bannerLabel(mode, who);
 
   return (
     <Link

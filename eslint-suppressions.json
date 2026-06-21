@@ -69,11 +69,6 @@
       "count": 1
     }
   },
-  "test/unit/components/auth-status-banner.test.tsx": {
-    "no-restricted-syntax": {
-      "count": 1
-    }
-  },
   "test/unit/components/document-row-upload-guard.test.tsx": {
     "no-restricted-syntax": {
       "count": 1
