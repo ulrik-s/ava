@@ -4,11 +4,50 @@
   "private": true,
   "type": "module",
   "description": "AVA Helper UI — Electron tray-skal runt Bun-helper-motorn (ADR 0029).",
+  "main": "dist/main.cjs",
   "scripts": {
     "test": "bun test",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "icons": "bun make-icons.ts",
+    "bundle": "bun build src/main.ts --target=node --format=cjs --external electron --outfile=dist/main.cjs",
+    "dev": "bun run bundle && electron dist/main.cjs",
+    "dist": "bun run icons && bun run bundle && electron-builder"
   },
   "devDependencies": {
-    "bun-types": "^1.3.14"
+    "bun-types": "^1.3.14",
+    "electron": "^42.4.1",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "se.ava.helper",
+    "productName": "AVA Helper",
+    "directories": {
+      "output": "dist/installers",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/main.cjs",
+      "assets/**"
+    ],
+    "extraResources": [
+      {
+        "from": "../helper-app/dist/ava-helper-darwin-arm64",
+        "to": "ava-helper"
+      }
+    ],
+    "mac": {
+      "target": "dmg",
+      "category": "public.app-category.productivity",
+      "identity": null
+    },
+    "win": {
+      "target": "nsis",
+      "extraResources": [
+        {
+          "from": "../helper-app/dist/ava-helper-windows-x64.exe",
+          "to": "ava-helper.exe"
+        }
+      ]
+    }
   }
 }

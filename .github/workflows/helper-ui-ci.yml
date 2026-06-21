@@ -40,3 +40,8 @@ jobs:
       - name: Test + coverage-grind
         # bunfig.toml: coverage=true + coverageThreshold (ratchet).
         run: bun test
+
+      - name: Bundle (smoke)
+        # Verifierar att Electron-main:en buntlar rent (alias/.ts/imports löser).
+        # Paketering (electron-builder → .app/.exe) körs i release, ej här.
+        run: bun run bundle
