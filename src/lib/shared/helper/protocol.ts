@@ -81,6 +81,24 @@ export interface HelperVersionResponse {
 }
 
 /**
+ * `POST /config` (ADR 0029) — web-appen auto-konfigurerar helpern över localhost
+ * så icke-tekniska användare slipper skapa config-filer. Web-appen hämtar serverns
+ * OIDC-config (`system.helperConfig`) och postar den hit; helpern skriver sin
+ * `helper-config.json` → *Logga in* fungerar utan inmatning. Samma form returneras
+ * av serverns `system.helperConfig` (null = servern har ingen helper-auth).
+ */
+export interface HelperConfigRequest {
+  /** Byråns OIDC-issuer (helpern gör discovery + login mot den). */
+  oidcIssuer: string;
+  /** OIDC-klient (default `ava-helper`). */
+  oidcClientId?: string;
+  /** Förväntad audience (valfri). */
+  oidcAudience?: string;
+  /** Explicit JWKS-URL (valfri; annars härleds ur issuern). */
+  oidcJwksUri?: string;
+}
+
+/**
  * `POST /content` — be helpern leverera dokument-bytes ur sitt durabla,
  * content-adresserade lager (ADR 0028 §3/§5). Cache-hit servas direkt (även
  * offline); miss laddas ner + cachas. Web-appen delegerar dokument-läsningar

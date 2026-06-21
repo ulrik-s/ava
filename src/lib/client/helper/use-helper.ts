@@ -23,6 +23,7 @@ import {
   HELPER_HTTPS_BASE,
   parsePingVersion,
   type ComposeMailRequest,
+  type HelperConfigRequest,
   type HelperContentRequest,
   type HelperOpenRequest,
   type HelperStatus,
@@ -203,6 +204,25 @@ export async function fetchContentViaHelper(req: HelperContentRequest): Promise<
     return new Uint8Array(await r.arrayBuffer());
   } catch {
     return null;
+  }
+}
+
+/**
+ * Auto-konfigurera helpern (`POST /config`, ADR 0029) — web-appen pushar
+ * serverns OIDC-config så användaren slipper skapa config-filer för hand.
+ * Returnerar true om helpern tog emot configen, annars false (helper saknas/fel).
+ */
+export async function configureHelper(config: HelperConfigRequest): Promise<boolean> {
+  try {
+    const r = await helperFetch("/config", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(config),
+      signal: AbortSignal.timeout(3_000),
+    });
+    return r?.ok ?? false;
+  } catch {
+    return false;
   }
 }
 
