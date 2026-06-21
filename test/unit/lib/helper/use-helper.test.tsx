@@ -12,6 +12,7 @@ import {
   resolveHelperBase,
   fetchHelperStatus,
   fetchContentViaHelper,
+  configureHelper,
 } from "@/lib/client/helper/use-helper";
 
 const HTTPS = "https://localhost:48762";
@@ -171,6 +172,35 @@ describe("fetchContentViaHelper", () => {
       [`${HTTPS}/content`, () => new Response("unavailable", { status: 502 })],
     ]);
     expect(await fetchContentViaHelper(REQ)).toBeNull();
+  });
+});
+
+describe("configureHelper (ADR 0029)", () => {
+  const CFG = { oidcIssuer: "https://idp/realms/ava", oidcClientId: "ava-helper" };
+
+  it("POST:ar configen till /config → true", async () => {
+    const fetchMock = routeFetch([
+      [`${HTTPS}/ping`, () => new Response("ava-helper v1\n", { status: 200 })],
+      [`${HTTPS}/config`, () => new Response(JSON.stringify({ status: "configured" }), { status: 200 })],
+    ]);
+    global.fetch = fetchMock;
+    expect(await configureHelper(CFG)).toBe(true);
+    const call = fetchMock.mock.calls.find(([u]: [string]) => String(u).endsWith("/config"))!;
+    expect(call[1].method).toBe("POST");
+    expect(JSON.parse(call[1].body)).toMatchObject({ oidcIssuer: CFG.oidcIssuer });
+  });
+
+  it("false när helpern saknas", async () => {
+    global.fetch = vi.fn().mockRejectedValue(new Error("down"));
+    expect(await configureHelper(CFG)).toBe(false);
+  });
+
+  it("false vid 4xx", async () => {
+    global.fetch = routeFetch([
+      [`${HTTPS}/ping`, () => new Response("ava-helper v1\n", { status: 200 })],
+      [`${HTTPS}/config`, () => new Response("bad", { status: 400 })],
+    ]);
+    expect(await configureHelper(CFG)).toBe(false);
   });
 });
 

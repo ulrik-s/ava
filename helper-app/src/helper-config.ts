@@ -10,7 +10,7 @@
  * en Inställnings-vy i skalet eller bakas per byrå.
  */
 
-import { readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 export interface HelperFileConfig {
@@ -57,6 +57,39 @@ export function loadHelperConfig(dir: string | null, readText: (p: string) => st
   } catch {
     return {}; // ingen fil → tom config
   }
+}
+
+export interface SaveDeps {
+  mkdirp: (dir: string) => void;
+  writeText: (path: string, text: string) => void;
+}
+
+const defaultSaveDeps: SaveDeps = {
+  mkdirp: (dir) => mkdirSync(dir, { recursive: true }),
+  writeText: (path, text) => writeFileSync(path, text, "utf8"),
+};
+
+/**
+ * Skriv `helper-config.json` (ADR 0029) — web-appen postar serverns config hit
+ * (`POST /config`) så användaren slipper skapa filen för hand. Returnerar den
+ * sparade configen, eller null om `oidcIssuer` saknas / data-dir är otillgänglig.
+ */
+export function saveHelperConfig(dir: string | null, input: Partial<HelperFileConfig>, deps: SaveDeps = defaultSaveDeps): HelperFileConfig | null {
+  if (!dir) return null;
+  const issuer = str(input.oidcIssuer);
+  if (!issuer) return null; // issuer är minsta nödvändiga
+  const clientId = str(input.oidcClientId);
+  const audience = str(input.oidcAudience);
+  const jwksUri = str(input.oidcJwksUri);
+  const cfg: HelperFileConfig = {
+    oidcIssuer: issuer,
+    ...(clientId ? { oidcClientId: clientId } : {}),
+    ...(audience ? { oidcAudience: audience } : {}),
+    ...(jwksUri ? { oidcJwksUri: jwksUri } : {}),
+  };
+  deps.mkdirp(dir);
+  deps.writeText(join(dir, "helper-config.json"), JSON.stringify(cfg, null, 2));
+  return cfg;
 }
 
 /**

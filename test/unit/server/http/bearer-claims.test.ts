@@ -6,7 +6,7 @@
 
 import { SignJWT, exportJWK, generateKeyPair, createLocalJWKSet, type JWTVerifyGetKey } from "jose";
 import { describe, it, expect, beforeAll } from "vitest-compat";
-import { bearerClaims, bearerConfigFromEnv } from "@/lib/server/http/bearer-claims";
+import { bearerClaims, bearerConfigFromEnv, helperOidcConfig } from "@/lib/server/http/bearer-claims";
 
 const ISSUER = "https://idp.example/realms/ava";
 const AUDIENCE = "ava";
@@ -108,5 +108,19 @@ describe("bearerConfigFromEnv", () => {
   it("utan audience → ingen aud i config", () => {
     const c = bearerConfigFromEnv({ AVA_OIDC_ISSUER: ISSUER });
     expect(c?.audience).toBeUndefined();
+  });
+});
+
+describe("helperOidcConfig (ADR 0029)", () => {
+  it("null utan issuer (demo)", () => {
+    expect(helperOidcConfig({})).toBeNull();
+  });
+
+  it("issuer + default clientId ava-helper", () => {
+    expect(helperOidcConfig({ AVA_OIDC_ISSUER: ISSUER })).toEqual({ oidcIssuer: ISSUER, oidcClientId: "ava-helper" });
+  });
+
+  it("respekterar AVA_OIDC_CLIENT_ID + AVA_OIDC_AUDIENCE", () => {
+    expect(helperOidcConfig({ AVA_OIDC_ISSUER: ISSUER, AVA_OIDC_CLIENT_ID: "c", AVA_OIDC_AUDIENCE: "a" })).toEqual({ oidcIssuer: ISSUER, oidcClientId: "c", oidcAudience: "a" });
   });
 });

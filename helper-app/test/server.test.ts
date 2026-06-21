@@ -126,6 +126,19 @@ describe("POST /content", () => {
   });
 });
 
+describe("POST /config", () => {
+  test("503 när onConfig ej konfigurerad", async () => {
+    const res = await handler()(req("/config", { method: "POST" }));
+    expect(res.status).toBe(503);
+  });
+
+  test("delegerar till onConfig", async () => {
+    const h = handler({ onConfig: async () => new Response("ok", { status: 200 }) });
+    const res = await h(req("/config", { method: "POST" }));
+    expect(res.status).toBe(200);
+  });
+});
+
 describe("okänd route", () => {
   test("404", async () => {
     const res = await handler()(req("/nope"));

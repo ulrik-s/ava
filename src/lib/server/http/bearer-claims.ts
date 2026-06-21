@@ -16,6 +16,7 @@
 
 import { createRemoteJWKSet, jwtVerify, type JWTPayload, type JWTVerifyGetKey } from "jose";
 import type { OidcClaims } from "@/lib/server/auth/oidc-auth-provider";
+import type { HelperConfigRequest } from "@/lib/shared/helper/protocol";
 import { parseBearerToken } from "./pat";
 
 export interface BearerVerifyConfig {
@@ -75,6 +76,24 @@ export function remoteJwksForIssuer(issuer: string, jwksUri?: string): JWTVerify
  *   - `AVA_OIDC_JWKS_URI` (valfri) — explicit JWKS-URL (annars Keycloak-vägen).
  *   - `AVA_OIDC_AUDIENCE` (valfri) — förväntad `aud`.
  */
+/**
+ * Den OIDC-config web-appen ska auto-pusha till helpern (ADR 0029) — den
+ * PUBLIKA issuern (som helpern på host:en + browsern når) + klient-id, eller
+ * `null` om servern inte har någon helper-/Bearer-auth konfigurerad (demon).
+ * Ingen JWKS-URI: helpern gör sin egen discovery ur issuern (serverns interna
+ * backchannel-JWKS angår inte helpern).
+ */
+export function helperOidcConfig(env: Record<string, string | undefined> = process.env): HelperConfigRequest | null {
+  const issuer = env.AVA_OIDC_ISSUER?.trim();
+  if (!issuer) return null;
+  const audience = env.AVA_OIDC_AUDIENCE?.trim();
+  return {
+    oidcIssuer: issuer,
+    oidcClientId: env.AVA_OIDC_CLIENT_ID?.trim() || "ava-helper",
+    ...(audience ? { oidcAudience: audience } : {}),
+  };
+}
+
 export function bearerConfigFromEnv(env: Record<string, string | undefined> = process.env): BearerVerifyConfig | null {
   const issuer = env.AVA_OIDC_ISSUER?.trim();
   if (!issuer) return null;

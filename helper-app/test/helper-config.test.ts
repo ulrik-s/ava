@@ -4,7 +4,7 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { envWithConfig, loadHelperConfig } from "../src/helper-config.ts";
+import { envWithConfig, loadHelperConfig, saveHelperConfig, type SaveDeps } from "../src/helper-config.ts";
 
 function reader(map: Record<string, string>): (p: string) => string {
   return (p) => {
@@ -35,6 +35,37 @@ describe("loadHelperConfig", () => {
   test("ignorerar tomma/fel-typade fält", () => {
     const cfg = loadHelperConfig("/dir", reader({ "helper-config.json": JSON.stringify({ oidcIssuer: "  ", redirectPort: "nope", oidcClientId: "ava-helper" }) }));
     expect(cfg).toEqual({ oidcClientId: "ava-helper" });
+  });
+});
+
+describe("saveHelperConfig", () => {
+  function spyDeps(): { deps: SaveDeps; written: { path?: string; text?: string } } {
+    const written: { path?: string; text?: string } = {};
+    return { deps: { mkdirp: () => {}, writeText: (p, t) => { written.path = p; written.text = t; } }, written };
+  }
+
+  test("skriver helper-config.json med issuer + valfria fält", () => {
+    const { deps, written } = spyDeps();
+    const saved = saveHelperConfig("/data", { oidcIssuer: "https://idp/realms/ava", oidcClientId: "ava-helper" }, deps);
+    expect(saved).toMatchObject({ oidcIssuer: "https://idp/realms/ava", oidcClientId: "ava-helper" });
+    expect(written.path).toMatch(/helper-config\.json$/);
+    expect(JSON.parse(written.text!)).toMatchObject({ oidcIssuer: "https://idp/realms/ava" });
+  });
+
+  test("null + ingen skrivning utan issuer", () => {
+    const { deps, written } = spyDeps();
+    expect(saveHelperConfig("/data", { oidcClientId: "x" }, deps)).toBeNull();
+    expect(written.path).toBeUndefined();
+  });
+
+  test("null när data-dir saknas", () => {
+    expect(saveHelperConfig(null, { oidcIssuer: "https://idp" }, spyDeps().deps)).toBeNull();
+  });
+
+  test("round-trip: sparad config kan läsas tillbaka", () => {
+    let stored = "";
+    saveHelperConfig("/data", { oidcIssuer: "https://idp/realms/ava" }, { mkdirp: () => {}, writeText: (_p, t) => { stored = t; } });
+    expect(loadHelperConfig("/data", () => stored)).toEqual({ oidcIssuer: "https://idp/realms/ava" });
   });
 });
 

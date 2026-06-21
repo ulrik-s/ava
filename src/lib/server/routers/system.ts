@@ -8,8 +8,15 @@
  */
 
 import { DEMO_CAPABILITIES } from "@/lib/shared/capabilities";
+import { helperOidcConfig } from "../http/bearer-claims";
 import { publicProcedure, router } from "../trpc-core";
 
 export const systemRouter = router({
   capabilities: publicProcedure.query(({ ctx }) => ctx.capabilities ?? DEMO_CAPABILITIES),
+  /**
+   * OIDC-config web-appen auto-pushar till den lokala helpern (ADR 0029) så
+   * användaren slipper konfigurera den för hand; `null` om servern saknar
+   * helper-auth (demon). `publicProcedure` — behövs innan helper-login.
+   */
+  helperConfig: publicProcedure.query(() => helperOidcConfig()),
 });

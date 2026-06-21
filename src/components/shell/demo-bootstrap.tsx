@@ -22,6 +22,7 @@ import superjson from "superjson";
 import { AnalyzeDispatcherRegistrar } from "@/components/documents/analyze-dispatcher-registrar";
 import { ExtractTextDispatcherRegistrar } from "@/components/documents/extract-text-dispatcher-registrar";
 import { MirrorOutlookRegistrar } from "@/components/matter/mirror-outlook-registrar";
+import { HelperAutoConfig } from "@/components/shell/helper-auto-config";
 import { RenderErrorBoundary } from "@/components/ui/render-error-boundary";
 import { AuthProvider, useAuthMode } from "@/lib/client/auth/use-auth-mode";
 import { createDemoStore } from "@/lib/client/backend/create-demo-store";
@@ -304,6 +305,7 @@ function AuthGatedDemoTree(props: TreeProps) {
           <AnalyzeDispatcherRegistrar />
           <ExtractTextDispatcherRegistrar />
           <MirrorOutlookRegistrar />
+          <HelperAutoConfig />
           <div className="flex items-center justify-between gap-2 border-b border-gray-200 bg-white">
             <div className="flex-1 min-w-0">
               <AuthStatusBanner />

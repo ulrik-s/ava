@@ -23,9 +23,10 @@ import { HELPER_HTTPS_PORT, HELPER_PORT } from "@/lib/shared/helper/protocol";
 
 import { buildAuthHeaderProvider } from "./auth/auth-provider.ts";
 import { loginConfigFromEnv, runLogin } from "./auth/login.ts";
+import { handleConfig } from "./config-endpoint.ts";
 import { ContentStore, resolveCacheTtlMs } from "./content-store.ts";
 import { fetchAndCacheContent, handleContent } from "./content.ts";
-import { envWithConfig, loadHelperConfig } from "./helper-config.ts";
+import { envWithConfig, loadHelperConfig, saveHelperConfig } from "./helper-config.ts";
 import { installService, uninstallService, type InstallDeps } from "./install.ts";
 import { initLog, log } from "./log.ts";
 import {
@@ -254,6 +255,8 @@ function main(): void {
     version: VERSION,
     extraOrigins: extraOrigins(),
     onCheckUpdate: () => { void checkOnce(updateCfg).catch((err) => log(`check-update: ${String(err)}`)); },
+    // Auto-konfigurering från web-appen (ADR 0029) — alltid på (skriver helper-config.json).
+    onConfig: (req: Request) => handleConfig(req, { save: (input) => saveHelperConfig(dataDir(), input) }),
     ...(stores
       ? {
           onOpen: queueBackedOnOpen(stores.queue, stores.content, authHeader),

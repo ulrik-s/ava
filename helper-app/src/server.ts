@@ -9,6 +9,7 @@
  *   POST /check-update  → trigga omedelbar self-update-kontroll
  *   GET  /status        → JSON ögonblicksbild av upload-kön (ADR 0028 §8)
  *   POST /content       → dokument-bytes ur durabla cachen (ADR 0028 §3/§5)
+ *   POST /config        → auto-konfigurering från web-appen (ADR 0029)
  *
  * Säkerhet: lyssnar bara på localhost; CORS-whitelist (localhost-portar
  * + *.github.io + custom via AVA_HELPER_ORIGINS); inga endpoints som
@@ -37,6 +38,8 @@ export interface ServerDeps {
   onStatus?: () => HelperStatusResponse;
   /** Leverera dokument-bytes (POST /content). undefined → 503 (ej konfigurerad). */
   onContent?: (req: Request) => Promise<Response>;
+  /** Auto-konfigurering från web-appen (POST /config). undefined → 503. */
+  onConfig?: (req: Request) => Promise<Response>;
 }
 
 const EMPTY_STATUS: HelperStatusResponse = { pending: 0, conflict: 0, total: 0, entries: [] };
@@ -69,6 +72,7 @@ const ROUTES: Record<string, (req: Request, deps: ServerDeps) => Response | Prom
   "/check-update": (_req, deps) => handleCheckUpdate(deps),
   "/status": (_req, deps) => json(deps.onStatus?.() ?? EMPTY_STATUS),
   "/content": (req, deps) => deps.onContent?.(req) ?? textError(503, "content store not configured"),
+  "/config": (req, deps) => deps.onConfig?.(req) ?? textError(503, "config endpoint not configured"),
 };
 
 async function route(req: Request, deps: ServerDeps): Promise<Response> {
