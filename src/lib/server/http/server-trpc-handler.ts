@@ -40,6 +40,7 @@ export function createServerTrpcHandler(
     organizationId: deps.organizationId,
     ...(deps.headerNames ? { headerNames: deps.headerNames } : {}),
     ...(deps.sync ? { sync: deps.sync } : {}),
+    ...(deps.bearer ? { bearer: deps.bearer } : {}),
   };
   return (req: Request): Promise<Response> =>
     fetchRequestHandler({
