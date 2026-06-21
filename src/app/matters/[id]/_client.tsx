@@ -9,6 +9,7 @@ import { PaymentMethodCard } from "@/components/matter/payment-method-card";
 import { SuggestionsPanel } from "@/components/matter/suggestions-panel";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { useRouteId } from "@/lib/client/demo/use-route-id";
+import { useEagerCacheMatterDocuments } from "@/lib/client/firma/use-eager-cache-matter-documents";
 import { trpc } from "@/lib/client/trpc";
 import { BillingPanel } from "./_billing-panel";
 import { ContactsSection } from "./_contacts-section";
@@ -30,6 +31,8 @@ export default function MatterDetailClient({ id: paramId }: { id: string }) {
   const id = useRouteId() ?? paramId;
   const matter = trpc.matter.getById.useQuery({ id });
   const [showGenerateModal, setShowGenerateModal] = useState(false);
+  // ADR 0028 §4a: öppna ärende → eager-cacha dess dokument-bytes (offline).
+  useEagerCacheMatterDocuments(id);
 
   if (matter.isLoading) return <p className="text-gray-500">Laddar...</p>;
   if (matter.error) return <p className="text-red-600">Fel: {matter.error.message}</p>;
