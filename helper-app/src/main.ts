@@ -25,6 +25,7 @@ import { buildAuthHeaderProvider } from "./auth/auth-provider.ts";
 import { loginConfigFromEnv, runLogin } from "./auth/login.ts";
 import { ContentStore, resolveCacheTtlMs } from "./content-store.ts";
 import { fetchAndCacheContent, handleContent } from "./content.ts";
+import { envWithConfig, loadHelperConfig } from "./helper-config.ts";
 import { installService, uninstallService, type InstallDeps } from "./install.ts";
 import { initLog, log } from "./log.ts";
 import {
@@ -197,10 +198,19 @@ function startStores(signal: AbortSignal, authHeader?: AuthHeaderProvider): Stor
 }
 
 /** `--login`: para helpern mot byråns IdP via loopback-PKCE (ADR 0028 §2). */
+/** Env överlagrad med config-filen (data-dir) — så config funkar för en
+ *  GUI-app som inte ärver shell-env (ADR 0029). */
+function helperEnv(): Record<string, string | undefined> {
+  return envWithConfig(process.env, loadHelperConfig(dataDir()));
+}
+
 async function handleLogin(): Promise<void> {
-  const cfg = loginConfigFromEnv();
+  const cfg = loginConfigFromEnv(helperEnv());
   if (!cfg) {
-    process.stderr.write("AVA_OIDC_ISSUER krävs för --login\n");
+    process.stderr.write(
+      "Ingen server konfigurerad. Sätt AVA_OIDC_ISSUER, eller skapa helper-config.json " +
+        "(t.ex. {\"oidcIssuer\":\"http://localhost:8089/realms/ava\"}) i AVA:s data-katalog.\n",
+    );
     process.exitCode = 1;
     return;
   }
@@ -236,7 +246,7 @@ function main(): void {
   void runUpdateLoop(updateCfg, abort.signal);
 
   // Helperns egen OIDC-auth (om parad/konfigurerad) → autonom Bearer mot servern.
-  const loginCfg = loginConfigFromEnv();
+  const loginCfg = loginConfigFromEnv(helperEnv());
   const authHeader: AuthHeaderProvider | undefined = loginCfg ? buildAuthHeaderProvider(loginCfg) : undefined;
 
   const stores = startStores(abort.signal, authHeader);
