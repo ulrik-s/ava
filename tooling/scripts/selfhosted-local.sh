@@ -22,14 +22,20 @@ export OIDC_KC_HOSTNAME="http://localhost:${KC_PORT}"
 export OIDC_ISSUER_PUBLIC="http://localhost:${KC_PORT}/realms/ava"
 export OIDC_REDIRECT_URL="http://localhost:${AVA_WEB_PORT}/oauth2/callback"
 export AVA_ORGANIZATION_ID="${AVA_ORGANIZATION_ID:-00000000-0000-0000-0000-000000000001}"
+# Dokument-bytes (#649): host-katalog som bind-mountas till serverns
+# AVA_CONTENT_DIR. Demo-seeden skriver hit, serverns GitContentStore läser hit.
+export AVA_CONTENT_HOST_DIR="${AVA_CONTENT_HOST_DIR:-$ROOT/tooling/docker/.selfhosted-content}"
 DB_URL="postgres://ava:ava@localhost:5433/ava_test"
 COMPOSE=(docker compose -p ava-selfhosted-local -f tooling/docker/docker-compose.selfhosted-local.yml)
 
 if [[ "${1:-}" == "--down" ]]; then
   echo "▸ River ner self-hosted-stacken…"
   "${COMPOSE[@]}" down -v --remove-orphans
+  rm -rf "$AVA_CONTENT_HOST_DIR"
   exit 0
 fi
+
+mkdir -p "$AVA_CONTENT_HOST_DIR" # bind-mount-måletet måste finnas innan `up`
 
 echo "▸ [1/6] Bygger server-first-binär…"
 bun run server-first:build >/dev/null
