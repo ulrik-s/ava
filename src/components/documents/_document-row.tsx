@@ -72,6 +72,12 @@ export function DocumentRow({
     if (handled) return;
     setModal(await runExternalEdit({ id: doc.id, fileName: doc.fileName, storagePath: doc.storagePath }));
   };
+  // Primärklick: AVA Helper (native-app) → FSA → browser-tab. Samma delade
+  // logik som list-vyn (open-document-externally) så vyerna inte glider isär.
+  const openPrimary = async () => {
+    const { openDocumentSmart } = await import("@/lib/client/firma/open-document-externally");
+    await openDocumentSmart({ id: doc.id, fileName: doc.fileName, storagePath: doc.storagePath }, setModal);
+  };
   return (
     <Fragment>
       <ExternalEditModal state={modal} onClose={() => setModal({ kind: "closed" })} />
@@ -86,7 +92,7 @@ export function DocumentRow({
           <div style={{ paddingLeft: `${depth * 16 + 4}px` }} className="min-w-0">
             <div className="flex items-center gap-2 min-w-0">
               <DocumentNameButton doc={doc} isAnalyzing={isAnalyzing} disabled={!!isUploading}
-                onExternalEdit={() => void triggerExternalEdit()} />
+                onOpen={() => void openPrimary()} />
               {isUploading && (
                 <span
                   className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-100 text-amber-800"
@@ -252,10 +258,9 @@ interface NameButtonProps {
   doc: DocumentRecord;
   isAnalyzing: boolean;
   disabled?: boolean;
-  /** Påkallad av PDF/Office-klick när FSA är tillgänglig: kör external-
-   *  edit-flödet via parent (modal-state ligger där). Om null → faller
-   *  vi alltid tillbaka till browser-tab. */
-  onExternalEdit?: () => void;
+  /** Primärklick: smart öppning (AVA Helper → FSA → browser-tab) via parent
+   *  (modal-state ligger där). */
+  onOpen: () => void;
 }
 
 /** Meta-raden under filnamnet (typ-badge, filnamn, analys-status). Utbruten
@@ -279,33 +284,13 @@ function DocumentNameMeta({ doc, isAnalyzing, isWaitingAnalysis }: { doc: Docume
   );
 }
 
-function DocumentNameButton({ doc, isAnalyzing, disabled, onExternalEdit }: NameButtonProps) {
+function DocumentNameButton({ doc, isAnalyzing, disabled, onOpen }: NameButtonProps) {
   const isWaitingAnalysis = isAnalyzing || isWithinAnalysisGrace(doc);
-
-  const onClick = async () => {
-    if (disabled) return;
-    // PDF/Office-filer öppnas i extern editor (PDF Gear, Preview, Word…)
-    // när FSA är konfigurerad. Browser-tabben är fallback.
-    if (onExternalEdit) {
-      const { shouldPreferExternalEdit } = await import("@/lib/client/firma/open-document-externally");
-      const { isFsaSupported, loadHandle } = await import("@/lib/client/fsa/handle-store");
-      if (shouldPreferExternalEdit(doc.fileName) && isFsaSupported() && await loadHandle("repo-root")) {
-        onExternalEdit();
-        return;
-      }
-    }
-    // Runtime-tier (#651): self-hosted hämtar bytes från servern (+ cache),
-    // demo öppnar GH-Pages-blobben. (Ej bygg-tids-NEXT_PUBLIC_DEMO_BUILD, som är
-    // sant även i den lokala self-hosted-builden → länkade fel till GH.)
-    const rec = doc as DocumentRecord & { storagePath?: string };
-    const { openMatterDocument } = await import("@/lib/client/firma/open-matter-document");
-    await openMatterDocument({ id: doc.id, storagePath: rec.storagePath ?? null, fileName: doc.fileName });
-  };
 
   return (
     <button
       type="button"
-      onClick={() => void onClick()}
+      onClick={() => { if (!disabled) onOpen(); }}
       disabled={disabled}
       className="flex items-start gap-2 text-blue-600 hover:underline text-left disabled:opacity-50 disabled:cursor-not-allowed disabled:no-underline"
       title={disabled ? "Laddar upp — vänta tills filen är registrerad" : (doc.summary || "Öppna i extern app (PDFGear för PDF)")}

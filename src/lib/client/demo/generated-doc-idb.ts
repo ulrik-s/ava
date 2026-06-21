@@ -11,7 +11,7 @@
  * (`generated-doc-cache`) vid boot.
  *
  * Seed-dokument (shippade i demo-repot) berörs inte — de öppnas direkt mot
- * CDN-URL:en (se `_documents-list-view.openDocumentSmart`).
+ * CDN-URL:en (se `open-document-externally.openDocumentSmart`).
  *
  * Best-effort: saknas IndexedDB (SSR/privat flik) → no-op / tom lista, precis
  * som `IndexedDbFsPersistence`. IndexedDB strukturklonar `Uint8Array` direkt,
