@@ -43,16 +43,30 @@ Helpern (inte browsern, inte servern) äger dokument-redigerings-livscykeln:
 - **Browser-oberoende:** browsern kan stängas/reloadas; helpern fortsätter synka.
   (Inverterat beroende: helpern är auktoriteten, browsern en klient.)
 
-### 2. Auth: **OAuth 2.0 Device Authorization Grant** (RFC 8628)
+### 2. Auth: **OIDC mot byråns egen IdP** (BYO-IdP, ADR 0009) — aldrig Keycloak-bunden
 
-- Helpern paras **en gång** mot Keycloak via device-code-flödet (visar en kod,
-  användaren godkänner i browsern), får **egna access- + refresh-tokens** och
-  förnyar dem autonomt. Token lagras i **OS-keychain** (jfr ADR 0006 / keychain-
-  trust-injection).
-- Servern får en **Bearer-token-väg** (idag bara oauth2-proxy-cookie, ADR 0009) —
+AVA är en **OIDC relying party och kör aldrig egen IdP** (ADR 0009). Byrån
+kopplar sin **egen** IdP (Microsoft 365/Entra, Google Workspace, Okta …) och
+`oauth2-proxy` federerar mot den via standard-discovery
+(`.well-known/openid-configuration`, jfr `docker-compose.oidc-byoidp.yml`).
+**Keycloak är bara e2e-/dev-fixturen** (`docker-compose.oidc.yml`), aldrig en
+del av kund-stacken. Helpern måste därför auktorisera mot **vilken OIDC-IdP som
+helst via discovery** — inte mot Keycloak specifikt.
+
+- **Parnings-flöde — loopback-PKCE primärt (RFC 8252), device-code som fallback
+  (RFC 8628):** helpern paras **en gång** genom att öppna systembrowsern mot
+  byråns IdP och ta emot redirect på `http://127.0.0.1:<port>/callback` (PKCE).
+  Loopback-PKCE stöds av **alla** OIDC-IdP:er och är vad native-CLI:er
+  (`gh`/`az`/`gcloud`) använder; device-code (visa en kod) är fallback för
+  headless-installationer eller IdP:er utan loopback. Helpern får **egna
+  access-/refresh-tokens** och förnyar dem autonomt. Token lagras i
+  **OS-keychain** (jfr ADR 0006).
+- **Server-Bearer-väg:** servern validerar IdP:ns **JWT mot dess JWKS** (samma
+  issuer `oauth2-proxy` redan litar på, hämtad via OIDC-discovery) — inget
+  Keycloak-beroende. Idag bara oauth2-proxy-cookie (ADR 0009); Bearer-vägen
   **delas med Office-add-insen** (ADR 0013, samma tunn-klient-behov).
-- Token är **centralt återkallbar** ("Avregistrera enhet") och scopad till
-  användarens dokument — inte hela sessionen.
+- Token är **centralt återkallbar** i byråns IdP ("Avregistrera enhet") och
+  scopad till användarens dokument — inte hela sessionen.
 
 ### 3. Web-appen delegerar dokument-bytes till helpern via **localhost**
 
@@ -99,8 +113,11 @@ ADR 0022 satte working-set:en (mina/senaste/bevakade ärenden, metadata, blobbar
 - **Autonomt:** browsern oberoende → ingen KATS‑HIIT-fragilitet.
 - **Ingen divergens:** ett lokalt dokument-lager (helperns), web-appen delegerar.
 - **Helpern blir en riktig sync-motor** (durabelt lager + persistent kö + selective
-  per-ärende-prefetch + konflikthantering + device-code-auth). Kostnaden delas med
-  Office-add-insen (ADR 0013) och bär dem.
+  per-ärende-prefetch + konflikthantering + OIDC-auth mot byråns IdP). Kostnaden delas
+  med Office-add-insen (ADR 0013) och bär dem.
+- **Ingen IdP-låsning:** auth går via byråns egen IdP (BYO-IdP, ADR 0009) genom
+  OIDC-discovery — Microsoft 365/Entra, Google, Okta … Keycloak är bara dev-/e2e-
+  fixturen. Loopback-PKCE fungerar mot alla OIDC-IdP:er.
 - **Tvådelad sök:** offline-resultat ⊆ online-resultat (bara cachat). Måste vara
   tydligt i UI:t, annars upplevs offline-sök som "saknar dokument".
 - **Eviction-effekt:** ett ärende som inte rörts på 30 dagar vräks → ej tillgängligt
@@ -112,9 +129,10 @@ ADR 0022 satte working-set:en (mina/senaste/bevakade ärenden, metadata, blobbar
 
 ## Genomförande (en PR per steg)
 
-1. **Server-Bearer-auth-väg** (validera Keycloak-JWT på dokument-endpoints) —
-   delad med add-insen (ADR 0013).
-2. **Helper device-code-paring** + keychain-token + auto-refresh.
+1. **Server-Bearer-auth-väg** (validera IdP-JWT mot JWKS via OIDC-discovery på
+   dokument-endpoints, IdP-agnostiskt) — delad med add-insen (ADR 0013).
+2. **Helper loopback-PKCE-paring** (device-code-fallback) mot byråns IdP via
+   OIDC-discovery + keychain-token + auto-refresh.
 3. **Helper durabelt content-lager + persistent upload-kö + reconnect-sync +
    versions-konflikt.**
 4. **Per-ärende eager prefetch** ("öppna ärende" → ärendets metadata + blobbar);
