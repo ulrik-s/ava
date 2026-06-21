@@ -1,112 +1,63 @@
 /**
- * Self-update — daglig kontroll mot GitHub releases + atomisk ersättning
- * av egen binär. Port av Go:s update-paket (som använde go-selfupdate);
- * här en tunn fetch-baserad implementation utan extern dep.
+ * Update-kontroll — daglig koll mot GitHub releases. **Endast notis:** hittar en
+ * nyare release och returnerar dess version + release-sida. Electron-skalet
+ * visar "Ny version finns — ladda ner" i menyraden; användaren installerar
+ * manuellt (osignerat bygge → ingen tyst auto-update, ADR 0030 §2).
+ *
+ * Den gamla binär-self-replacen (download + Ed25519-verifiering + atomiskt byte
+ * av `process.execPath`) är **pensionerad** i och med konsolideringen till en
+ * Electron-app: appen kan inte ersätta sig själv osignerad, och det levereras
+ * ingen fristående binär längre.
  *
  * Tagging: helper-releaser taggas "helper-vX.Y.Z" (separat från web-app).
- * CI laddar upp en binär per plattform med namn `ava-helper-<os>-<arch>`.
- *
- * Restart-policy: efter lyckad uppdatering anropas `onUpdated`, som
- * förväntas avsluta processen (exit 0) → service-runnern (launchd/systemd/
- * Task Scheduler) startar om med nya bytsen.
  */
 
-import { chmod, rename, writeFile } from "node:fs/promises";
-
 import { log } from "./log.ts";
-import { currentPlatform, type Platform } from "./platform/runtime.ts";
 import { isNewer } from "./semver.ts";
-import { acceptedPublicKeys, assertSignature, signatureAssetName } from "./update-verify.ts";
 
-export interface UpdateConfig {
+export interface GithubRelease {
+  tag_name: string;
+  draft: boolean;
+  /** Release-sidan på GitHub — öppnas när användaren väljer "ladda ner". */
+  html_url: string;
+}
+
+/** En nyare release som hittats — version + release-sida att öppna. */
+export interface UpdateNotice {
+  version: string;
+  url: string;
+}
+
+export interface UpdateCheckConfig {
   currentVersion: string;
   /** "owner/name" på GitHub. */
   repo: string;
   /** Bara taggar med detta prefix beaktas (t.ex. "helper-"). Tom = alla. */
   tagFilter: string;
-  checkIntervalMs: number;
-  initialDelayMs: number;
-  /** Anropas när ny binär skrivits; förväntas avsluta processen. */
-  onUpdated: (newVersion: string) => void;
 }
 
-export interface GithubAsset {
-  name: string;
-  browser_download_url: string;
-}
-export interface GithubRelease {
-  tag_name: string;
-  draft: boolean;
-  assets: GithubAsset[];
-}
-
-/** Asset-namn CI laddar upp per plattform, t.ex. `ava-helper-darwin-arm64`. */
-export function assetName(platform: Platform = currentPlatform(), arch: string = process.arch): string {
-  const ext = platform === "windows" ? ".exe" : "";
-  return `ava-helper-${platform}-${arch}${ext}`;
-}
-
-/** Injicerbara IO-beroenden för loopen (SOLID) → testbar utan tid/nät. */
-export interface LoopDeps {
-  check: (cfg: UpdateConfig) => Promise<void>;
-  sleep: (ms: number, signal: AbortSignal) => Promise<void>;
-}
-
-const defaultLoopDeps: LoopDeps = { check: (cfg) => checkOnce(cfg), sleep };
-
-/** Loopa för evigt: kolla, sov. Anropas som bakgrunds-task. */
-export async function runUpdateLoop(
-  cfg: UpdateConfig,
-  signal: AbortSignal,
-  deps: LoopDeps = defaultLoopDeps,
-): Promise<void> {
-  await deps.sleep(cfg.initialDelayMs, signal);
-  while (!signal.aborted) {
-    try {
-      await deps.check(cfg);
-    } catch (err) {
-      log(`update check failed: ${err instanceof Error ? err.message : String(err)}`);
-    }
-    await deps.sleep(cfg.checkIntervalMs, signal);
-  }
-}
-
-/** Injicerbara beroenden för en kontroll → testbar utan nät/fs. */
+/** Injicerbar fetch → testbar utan nät. */
 export interface CheckDeps {
   fetchReleases: (repo: string) => Promise<GithubRelease[]>;
-  /** Verifiera signaturen (`sigUrl`) över binären (`url`) → byt bara vid match. */
-  replace: (url: string, targetPath: string, sigUrl: string) => Promise<void>;
-  targetPath: string;
-  asset: string;
 }
 
 function defaultCheckDeps(): CheckDeps {
-  return { fetchReleases, replace: downloadAndReplace, targetPath: process.execPath, asset: assetName() };
+  return { fetchReleases };
 }
 
-/** En synkron kontroll. Returnerar utan att kasta om allt är OK. */
-export async function checkOnce(cfg: UpdateConfig, deps: CheckDeps = defaultCheckDeps()): Promise<void> {
+/** En kontroll: finns en nyare release? Returnerar notisen, annars null. */
+export async function checkForUpdate(
+  cfg: UpdateCheckConfig,
+  deps: CheckDeps = defaultCheckDeps(),
+): Promise<UpdateNotice | null> {
   const releases = await deps.fetchReleases(cfg.repo);
   const latest = pickLatest(releases, cfg.tagFilter, cfg.currentVersion);
   if (latest === null) {
     log(`already up to date (${cfg.currentVersion})`);
-    return;
+    return null;
   }
-  const asset = latest.assets.find((a) => a.name === deps.asset);
-  if (asset === undefined) {
-    log(`no asset ${deps.asset} in ${latest.tag_name}`);
-    return;
-  }
-  // Äkthetskrav (#110): en detached signatur MÅSTE finnas + verifieras innan
-  // byte. Saknas .sig-asseten → vägra (fail-closed), behåll gamla binären.
-  const sig = latest.assets.find((a) => a.name === signatureAssetName(deps.asset));
-  if (sig === undefined) {
-    log(`no signature ${signatureAssetName(deps.asset)} in ${latest.tag_name} — refusing update`);
-    return;
-  }
-  log(`updating ${cfg.currentVersion} → ${latest.tag_name}`);
-  await deps.replace(asset.browser_download_url, deps.targetPath, sig.browser_download_url);
-  cfg.onUpdated(latest.tag_name);
+  log(`update available: ${cfg.currentVersion} → ${latest.tag_name}`);
+  return { version: latest.tag_name, url: latest.html_url };
 }
 
 async function fetchReleases(repo: string): Promise<GithubRelease[]> {
@@ -133,38 +84,36 @@ export function pickLatest(
   return best;
 }
 
-/** Hämta bytes från en URL (delad av binär- + signatur-nedladdning). */
-async function fetchBytes(url: string, what: string): Promise<Uint8Array> {
-  const resp = await fetch(url);
-  if (resp.status >= 400) throw new Error(`${what} HTTP ${resp.status}`);
-  return new Uint8Array(await resp.arrayBuffer());
+export interface NoticeLoopConfig extends UpdateCheckConfig {
+  checkIntervalMs: number;
+  initialDelayMs: number;
+  /** Anropas efter varje kontroll med resultatet (notis eller null). */
+  onNotice: (notice: UpdateNotice | null) => void;
 }
 
-/**
- * Ladda ner binären + dess detached signatur, **verifiera signaturen mot den
- * pinnade release-nyckeln** (#110) och byt först därefter ut den löpande
- * binären. Ingen match → kasta, behåll gamla binären (fail-closed).
- *
- * På unix funkar rename-over direkt; på Windows flyttas den gamla undan först
- * (kan inte skrivas över medan den körs).
- */
-export async function downloadAndReplace(
-  url: string,
-  targetPath: string,
-  sigUrl: string,
-  keys: readonly string[] = acceptedPublicKeys(),
-): Promise<void> {
-  const bytes = await fetchBytes(url, "download");
-  const signature = await fetchBytes(sigUrl, "signature download");
-  assertSignature(bytes, signature, keys); // kastar om osignerad/ej matchande
+/** Injicerbara IO-beroenden för loopen (SOLID) → testbar utan tid/nät. */
+export interface LoopDeps {
+  check: (cfg: UpdateCheckConfig) => Promise<UpdateNotice | null>;
+  sleep: (ms: number, signal: AbortSignal) => Promise<void>;
+}
 
-  const tmpPath = `${targetPath}.new`;
-  await writeFile(tmpPath, bytes);
-  await chmod(tmpPath, 0o755);
-  if (currentPlatform() === "windows") {
-    await rename(targetPath, `${targetPath}.old`).catch(() => undefined);
+const defaultLoopDeps: LoopDeps = { check: (cfg) => checkForUpdate(cfg), sleep };
+
+/** Loopa: sov, kolla, rapportera notis via `onNotice`. Anropas som bakgrunds-task. */
+export async function runUpdateLoop(
+  cfg: NoticeLoopConfig,
+  signal: AbortSignal,
+  deps: LoopDeps = defaultLoopDeps,
+): Promise<void> {
+  await deps.sleep(cfg.initialDelayMs, signal);
+  while (!signal.aborted) {
+    try {
+      cfg.onNotice(await deps.check(cfg));
+    } catch (err) {
+      log(`update check failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    await deps.sleep(cfg.checkIntervalMs, signal);
   }
-  await rename(tmpPath, targetPath);
 }
 
 function sleep(ms: number, signal: AbortSignal): Promise<void> {

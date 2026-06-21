@@ -14,11 +14,11 @@
 
 import { join } from "node:path";
 
-import { app, dialog, Menu, Tray, nativeImage } from "electron";
+import { app, dialog, Menu, shell, Tray, nativeImage } from "electron";
 
-import { HELPER_BASE } from "@/lib/shared/helper/protocol";
 import { runLogin } from "./engine/auth/login.ts";
 import { resolveLoginConfig, startEngine, type EngineHandle } from "./engine/main.ts";
+import type { UpdateNotice } from "./engine/update.ts";
 import { pollHelper } from "./status-poller.ts";
 import { trayView } from "./tray-status.ts";
 
@@ -49,23 +49,34 @@ async function startLogin(): Promise<void> {
   }
 }
 
-async function triggerUpdateCheck(): Promise<void> {
-  try {
-    await fetch(`${HELPER_BASE}/check-update`, { method: "POST", signal: AbortSignal.timeout(2_000) });
-  } catch {
-    /* motorn ej igång ännu — tyst */
-  }
+interface MenuActions {
+  onCheckUpdate: () => void;
+  onQuit: () => void;
 }
 
-function buildMenu(tooltip: string, onQuit: () => void): Menu {
-  return Menu.buildFromTemplate([
+/**
+ * Bygg tray-menyn. Finns en uppdaterings-notis läggs en "ladda ner"-post överst
+ * (ADR 0030 §2): osignerat bygge → manuell installation, så vi öppnar bara
+ * release-sidan i webbläsaren.
+ */
+function buildMenu(tooltip: string, notice: UpdateNotice | null, actions: MenuActions): Menu {
+  const items: Electron.MenuItemConstructorOptions[] = [
     { label: tooltip, enabled: false },
     { type: "separator" },
+  ];
+  if (notice) {
+    items.push({
+      label: `Ny version finns (${notice.version}) — ladda ner`,
+      click: () => { void shell.openExternal(notice.url); },
+    });
+  }
+  items.push(
     { label: "Logga in…", click: () => { void startLogin(); } },
-    { label: "Sök efter uppdatering", click: () => { void triggerUpdateCheck(); } },
+    { label: "Sök efter uppdatering", click: actions.onCheckUpdate },
     { type: "separator" },
-    { label: "Avsluta AVA Helper", click: onQuit },
-  ]);
+    { label: "Avsluta AVA Helper", click: actions.onQuit },
+  );
+  return Menu.buildFromTemplate(items);
 }
 
 function trayImage(): Electron.NativeImage {
@@ -86,7 +97,11 @@ app.whenReady().then(() => {
     const view = trayView(snap.present, snap.status);
     tray.setTitle(view.title ? ` ${view.title}` : "");
     tray.setToolTip(view.tooltip);
-    tray.setContextMenu(buildMenu(view.tooltip, quit));
+    tray.setContextMenu(buildMenu(view.tooltip, engine.updateNotice(), {
+      // Motorn körs in-process → kolla direkt (ingen HTTP-rundtur) och rita om.
+      onCheckUpdate: () => { void engine.checkForUpdate().then(refresh); },
+      onQuit: quit,
+    }));
   };
   void refresh();
   const timer = setInterval(() => void refresh(), POLL_INTERVAL_MS);

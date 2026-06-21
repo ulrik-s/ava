@@ -6,7 +6,7 @@
  *   GET  /version       → JSON { current, updateAvailable }
  *   POST /open          → ladda ner → spawn default-app → watch+upload
  *   POST /compose-mail  → skriv bilaga → öppna mail-app
- *   POST /check-update  → trigga omedelbar self-update-kontroll
+ *   POST /check-update  → trigga omedelbar uppdaterings-kontroll (notis, ADR 0030)
  *   GET  /status        → JSON ögonblicksbild av upload-kön (ADR 0028 §8)
  *   POST /content       → dokument-bytes ur durabla cachen (ADR 0028 §3/§5)
  *   POST /config        → auto-konfigurering från web-appen (ADR 0029)
@@ -32,8 +32,10 @@ export interface ServerDeps {
   extraOrigins?: readonly string[];
   onOpen?: (req: Request) => Promise<Response>;
   onComposeMail?: (req: Request) => Promise<Response>;
-  /** Trigga self-update. undefined → endpointen svarar 500 (ej konfigurerad). */
+  /** Trigga uppdaterings-kontroll. undefined → endpointen svarar 500 (ej konfigurerad). */
   onCheckUpdate?: () => void;
+  /** Finns en nyare release? Speglas i `GET /version`. undefined → false. */
+  updateAvailable?: () => boolean;
   /** Ögonblicksbild av upload-kön. undefined → tom kö (kön avstängd). */
   onStatus?: () => HelperStatusResponse;
   /** Leverera dokument-bytes (POST /content). undefined → 503 (ej konfigurerad). */
@@ -66,7 +68,7 @@ const ROUTES: Record<string, (req: Request, deps: ServerDeps) => Response | Prom
   "/ping": (_req, deps) =>
     new Response(formatPing(deps.version), { headers: { "Content-Type": "text/plain; charset=utf-8" } }),
   "/version": (_req, deps) =>
-    json({ current: deps.version, updateAvailable: false } satisfies HelperVersionResponse),
+    json({ current: deps.version, updateAvailable: deps.updateAvailable?.() ?? false } satisfies HelperVersionResponse),
   "/open": (req, deps) => (deps.onOpen ?? handleOpen)(req),
   "/compose-mail": (req, deps) => (deps.onComposeMail ?? handleComposeMail)(req),
   "/check-update": (_req, deps) => handleCheckUpdate(deps),
