@@ -20,10 +20,16 @@ import {
   type InvoiceFull, type InvoiceListFilter, type InvoiceListRow, type InvoiceRepository,
   type InvoiceWithLedger, type InvoiceWithRelations,
 } from "./invoice-repository";
+import { matterOrg } from "./matter-org";
 
 export class DrizzleInvoiceRepository extends DrizzleRepository<Invoice> implements InvoiceRepository {
   constructor(db: AppDb, now: () => Date = () => new Date()) {
     super(db, versionedTable(invoices), now);
+  }
+
+  /** invoices saknar org-kolumn → härled via ärendet (#647) så change_log/pull funkar. */
+  protected override resolveOrg(row: unknown): Promise<string | undefined> {
+    return matterOrg(this.db, (row as { matterId?: string }).matterId);
   }
 
   async getByIdInOrg(id: string, organizationId: string): Promise<Invoice | null> {

@@ -151,7 +151,7 @@ export class DrizzleRepository<Row extends RowBase> implements Repository<Row> {
       rowId: r.id,
       version: r.version ?? 1,
       op,
-    });
+    }, this.db); // logga på SAMMA connection (tx-atomiskt, inget dödläge, #647)
   }
 }
 

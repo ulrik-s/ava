@@ -33,6 +33,9 @@ import { asId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { createIdTranslator, translateSeed } from "../demo-generator/id-translator";
 import { populate } from "../demo-generator/populate";
+import { populateBilling } from "../demo-generator/populate-billing";
+import { populateBillingRuns } from "../demo-generator/populate-billing-runs";
+import { populateUnbilledTime } from "../demo-generator/populate-unbilled-time";
 import { buildSeed } from "./seed-data";
 
 const DB_URL = process.env.AVA_DATABASE_URL ?? "postgres://ava:ava@localhost:5433/ava_test";
@@ -111,16 +114,23 @@ async function main(): Promise<void> {
     // Mappa demons admin + huvud-jurist till KC-login-emailen → login äger data.
     const loginIds = remapLoginUsers(seed.users as Row[]);
 
-    // v1: bara kärnentiteterna (org/users/contacts/matters/matter-contacts/
-    // tid/utlägg/kalender/uppgifter/mallar/jävskontroller). Fakturering +
-    // dokument hoppas — populateBilling synthesizar icke-uuid-id:n
-    // (`inv-<matterId>-acc`) som Postgres-uuid-kolumnen avvisar, och dokument
-    // kräver content-store-porten. Båda är uppföljning (#630).
+    // Kärnentiteter (org/users/contacts/matters/matter-contacts/tid/utlägg/
+    // kalender/uppgifter/mallar/jävskontroller).
     const core = await populate(caller, seed);
     await addTodayTimeEntries(repos, seed.timeEntries as Row[], loginIds); // "idag"-tid för dashboarden
-    console.log("✓ demo-data (kärna) seedad i server-first (org", ORG, "):", core);
+
+    // Fakturering (#647): billing-id:na är nu deterministiska uuid:er
+    // (demo-billing-ids), så Postgres-uuid-kolumnerna accepterar dem.
+    // populateBilling = legacy-faktura-flöden; populateBillingRuns = nya
+    // BillingRun-modellen (aconto/slut/kostnadsräkning); unbilled = färsk
+    // upparbetad tid efter fakturering. Dokument hoppas fortfarande (kräver
+    // content-store-porten — nästa steg).
+    const billing = await populateBilling(caller, seed);
+    const billingRuns = await populateBillingRuns(caller, seed);
+    const unbilled = await populateUnbilledTime(caller, seed);
+    console.log("✓ demo-data seedad i server-first (org", ORG, "):", { ...core, billing, billingRuns, unbilled });
     console.log(`  login: ${LOGIN_LAWYER_EMAIL} + ${LOGIN_ADMIN_EMAIL} äger nu data (+ idag-tidpost)`);
-    console.log("  (fakturering + dokument hoppade i v1 — kräver uuid-id-coercion resp. content-store)");
+    console.log("  (dokument hoppas fortfarande — kräver content-store-porten)");
   } finally {
     await close();
   }

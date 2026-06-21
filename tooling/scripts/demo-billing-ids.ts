@@ -14,12 +14,21 @@
  *
  * Delas mellan `populate-billing.ts` (skapar) och `static-params.ts`
  * (enumererar) så de inte kan komma ur synk.
+ *
+ * #647/ADR 0027: id:na är nu deterministiska UUID:er (uuidv5) i st.f.
+ * `inv-<id>-final`-strängar — så faktureringen kan seedas i Postgres
+ * server-first (uuid-kolumner avvisar strängarna) UTAN att tappa
+ * determinismen: static-params enumererar SAMMA uuid:er som populate-billing
+ * skapar (båda kallar dessa funktioner). `__shell__`-sentinellen fångar ändå
+ * okända id:n. Speglar id-translatorns uuidv5(slug, AVA_NAMESPACE).
  */
 
-export function demoFinalInvoiceId(matterId: string): string { return `inv-${matterId}-final`; }
-export function demoAccontoInvoiceId(matterId: string): string { return `inv-${matterId}-acc`; }
-export function demoCreditInvoiceId(matterId: string): string { return `inv-${matterId}-credit`; }
-export function demoPaymentPlanId(matterId: string): string { return `pp-${matterId}`; }
+import { AVA_NAMESPACE, uuidv5 } from "../../src/lib/shared/uuid-derive";
+
+export function demoFinalInvoiceId(matterId: string): string { return uuidv5(`invoice:${matterId}:final`, AVA_NAMESPACE); }
+export function demoAccontoInvoiceId(matterId: string): string { return uuidv5(`invoice:${matterId}:acc`, AVA_NAMESPACE); }
+export function demoCreditInvoiceId(matterId: string): string { return uuidv5(`invoice:${matterId}:credit`, AVA_NAMESPACE); }
+export function demoPaymentPlanId(matterId: string): string { return uuidv5(`paymentPlan:${matterId}`, AVA_NAMESPACE); }
 
 type MatterLike = { id?: unknown };
 

@@ -8,7 +8,7 @@
 
 import { eq } from "drizzle-orm";
 import { asId } from "@/lib/shared/schemas/ids";
-import { matters } from "../db/schema";
+import { invoices, matters, paymentPlans } from "../db/schema";
 import type { AppDb } from "../db/types";
 
 export async function matterOrg(db: AppDb, matterId: string | null | undefined): Promise<string | undefined> {
@@ -19,4 +19,30 @@ export async function matterOrg(db: AppDb, matterId: string | null | undefined):
     .where(eq(matters.id, asId<"MatterId">(matterId)))
     .limit(1);
   return m?.org ?? undefined;
+}
+
+/**
+ * Org via fakturan (#647) — för faktura-scopade entiteter utan egen org- eller
+ * matter-kolumn (payment/writeOff/paymentPlan/accontoDeduction/invoiceDispatch):
+ * faktura → ärende → org. Annars loggas de aldrig i change_log → syns ej i klienten.
+ */
+export async function invoiceOrg(db: AppDb, invoiceId: string | null | undefined): Promise<string | undefined> {
+  if (!invoiceId) return undefined;
+  const [inv] = await db
+    .select({ matterId: invoices.matterId })
+    .from(invoices)
+    .where(eq(invoices.id, asId<"InvoiceId">(invoiceId)))
+    .limit(1);
+  return matterOrg(db, inv?.matterId);
+}
+
+/** Org via avbetalningsplanen (#647): plan → faktura → ärende → org. */
+export async function planOrg(db: AppDb, planId: string | null | undefined): Promise<string | undefined> {
+  if (!planId) return undefined;
+  const [plan] = await db
+    .select({ invoiceId: paymentPlans.invoiceId })
+    .from(paymentPlans)
+    .where(eq(paymentPlans.id, asId<"PaymentPlanId">(planId)))
+    .limit(1);
+  return invoiceOrg(db, plan?.invoiceId);
 }

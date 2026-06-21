@@ -14,6 +14,7 @@
  */
 
 import type { AppDb } from "../db/types";
+import { enableChangeLogOnAll, type ChangeLogRecorder } from "./change-log-recorder";
 import { DrizzleAccontoDeductionRepository } from "./drizzle-acconto-deduction-repository";
 import { DrizzleBillingRunRepository } from "./drizzle-billing-run-repository";
 import { DrizzleCalendarEventRepository } from "./drizzle-calendar-event-repository";
@@ -78,15 +79,30 @@ function entityRepos(db: AppDb): Omit<Repositories, "transaction"> {
   };
 }
 
-/** Repos-vy bunden till en pågående tx — nästlad `transaction` är reentrant. */
-function reposForTx(tx: AppDb): Repositories {
-  const repos: Repositories = { ...entityRepos(tx), transaction: (fn) => fn(repos) };
+/** Repos-vy bunden till en pågående tx — nästlad `transaction` är reentrant.
+ *  `recorder` propageras till tx-repona (#647) så creates/updates INNE i en
+ *  transaktion också skrivs till change_log → delta-synkas (annars loggades
+ *  bara icke-transaktionella skrivningar; faktureringsflödena kör i tx). */
+function reposForTx(tx: AppDb, recorder?: ChangeLogRecorder): Repositories {
+  const entities = entityRepos(tx);
+  if (recorder) enableChangeLogOnAll(entities, recorder);
+  const repos: Repositories = { ...entities, transaction: (fn) => fn(repos) };
   return repos;
 }
 
 export function buildDrizzleRepositories(db: AppDb): Repositories {
+  // Fånga change-log-recordern när `enableChangeLogOnAll` slår på den, så
+  // `transaction` kan ge SAMMA recorder till tx-scopade repos (#647).
+  let recorder: ChangeLogRecorder | undefined;
+  const entities = entityRepos(db);
+  for (const value of Object.values(entities)) {
+    const repo = value as { enableChangeLog?: (r: ChangeLogRecorder) => void };
+    if (typeof repo.enableChangeLog !== "function") continue;
+    const orig = repo.enableChangeLog.bind(repo);
+    repo.enableChangeLog = (r: ChangeLogRecorder) => { recorder = r; orig(r); };
+  }
   return {
-    ...entityRepos(db),
-    transaction: (fn) => db.transaction((tx) => fn(reposForTx(tx))),
+    ...entities,
+    transaction: (fn) => db.transaction((tx) => fn(reposForTx(tx, recorder))),
   };
 }

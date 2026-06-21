@@ -125,4 +125,39 @@ describe("DrizzleSyncStore (#sync-bridge)", () => {
     expect(changes.find((c) => c.row.id === te)).toMatchObject({ entity: "timeEntry" });
     expect(changes.find((c) => c.row.id === exp)).toMatchObject({ entity: "expense" });
   });
+
+  // #647: faktura-entiteterna saknar org-kolumn → härled via ärendet (invoice/
+  // billingRun) resp. fakturan→ärendet (payment/writeOff/paymentPlan), annars
+  // syns ingen fakturering i klienten trots att raderna finns server-side.
+  it("invoice + payment + paymentPlan delta-synkas via pull (org härledd ur fakturan/ärendet, #647)", async () => {
+    const m5 = uuidv7(), inv = uuidv7(), pay = uuidv7(), plan = uuidv7(), wo = uuidv7(), user = uuidv7();
+    await repos.matters.create({ id: m5, organizationId: ORG, title: "Faktura-synk", status: "ACTIVE", matterNumber: "2026-0013" } as never);
+    const cursor = (await sync.pull(ORG, 0)).cursor;
+
+    await repos.invoices.create({ id: inv, matterId: m5, amount: 50000, invoiceDate: new Date(), status: "DRAFT" } as never);
+    await repos.payments.create({ id: pay, invoiceId: inv, amount: 20000, paidAt: new Date(), recordedById: user } as never);
+    await repos.paymentPlans.create({ id: plan, invoiceId: inv, monthlyAmount: 10000, dayOfMonth: 15, startDate: new Date(), status: "ACTIVE" } as never);
+    await repos.writeOffs.create({ id: wo, invoiceId: inv, amount: 5000, writtenOffAt: new Date(), recordedById: user } as never);
+
+    const changes = (await sync.pull(ORG, cursor)).changes;
+    expect(changes.find((c) => c.row.id === inv)).toMatchObject({ entity: "invoice" });
+    expect(changes.find((c) => c.row.id === pay)).toMatchObject({ entity: "payment" });
+    expect(changes.find((c) => c.row.id === plan)).toMatchObject({ entity: "paymentPlan" });
+    expect(changes.find((c) => c.row.id === wo)).toMatchObject({ entity: "writeOff" });
+  });
+
+  // #647: skrivningar INNE i en transaktion måste också loggas (tx-scopade repos
+  // ärver change-log-recordern) — faktureringsflödena kör i tx.
+  it("create inne i transaction loggas i change_log → delta-synkas (#647)", async () => {
+    const m6 = uuidv7(), inv = uuidv7();
+    await repos.matters.create({ id: m6, organizationId: ORG, title: "Tx-synk", status: "ACTIVE", matterNumber: "2026-0014" } as never);
+    const cursor = (await sync.pull(ORG, 0)).cursor;
+
+    await repos.transaction(async (tx) => {
+      await tx.invoices.create({ id: inv, matterId: m6, amount: 12345, invoiceDate: new Date(), status: "DRAFT" } as never);
+    });
+
+    const changes = (await sync.pull(ORG, cursor)).changes;
+    expect(changes.find((c) => c.row.id === inv)).toMatchObject({ entity: "invoice" });
+  });
 });

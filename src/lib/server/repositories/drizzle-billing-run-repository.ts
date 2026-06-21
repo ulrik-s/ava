@@ -12,12 +12,18 @@ import type {
   BillingRunDetailRow, BillingRunListRow, BillingRunRepository,
 } from "./billing-run-repository";
 import { DrizzleRepository, versionedTable } from "./drizzle-repository";
+import { matterOrg } from "./matter-org";
 
 export class DrizzleBillingRunRepository
   extends DrizzleRepository<BillingRun>
   implements BillingRunRepository {
   constructor(db: AppDb, now: () => Date = () => new Date()) {
     super(db, versionedTable(billingRuns), now);
+  }
+
+  /** billing_runs saknar org-kolumn → härled via ärendet (#647). */
+  protected override resolveOrg(row: unknown): Promise<string | undefined> {
+    return matterOrg(this.db, (row as { matterId?: string }).matterId);
   }
 
   async listForOrg(organizationId: string, matterId?: string): Promise<BillingRunListRow[]> {
