@@ -33,6 +33,18 @@ export type { HelperStatus };
 const PROBE_ORDER = [HELPER_HTTPS_BASE, HELPER_BASE] as const;
 let cachedBase: string | undefined;
 
+/**
+ * Skydd mot probe-storm (#653): en MISS cachas inte (helpern kan startas
+ * senare), men utan broms kan en anropare i en render-loop fyra av tusentals
+ * `/ping` per sekund → socket-svält (ERR_INSUFFICIENT_RESOURCES) som svälter
+ * resten av appen (t.ex. fastnade "Laddar inställningar…"). Vi
+ *   1. dedupar samtidiga probar (in-flight) → en faktisk probe åt gången, och
+ *   2. negativ-cachar en miss i `MISS_TTL_MS` → max ~1 probe/intervall.
+ */
+const MISS_TTL_MS = 10_000;
+let inFlight: Promise<{ base: string; version: string | null } | null> | null = null;
+let lastMissAt = 0;
+
 async function pingText(base: string, timeoutMs = 500): Promise<string | null> {
   try {
     const r = await fetch(`${base}/ping`, { signal: AbortSignal.timeout(timeoutMs) });
@@ -44,20 +56,30 @@ async function pingText(base: string, timeoutMs = 500): Promise<string | null> {
 
 /**
  * Pinga helpern och returnera fungerande transport + version. En cachad bas
- * provas direkt (bekräftar liveness); annars provas PROBE_ORDER. En miss
- * cachas INTE — helpern kan startas senare, så nästa anrop provar om.
+ * provas direkt (bekräftar liveness); annars provas PROBE_ORDER. Miss-broms +
+ * in-flight-dedup enligt ovan; `now()` injicerbar för test.
  */
-async function probeHelper(): Promise<{ base: string; version: string | null } | null> {
-  const bases = cachedBase !== undefined ? [cachedBase] : PROBE_ORDER;
-  for (const base of bases) {
-    const text = await pingText(base);
-    if (text !== null) {
-      cachedBase = base;
-      return { base, version: parsePingVersion(text) };
+async function probeHelper(now: () => number = Date.now): Promise<{ base: string; version: string | null } | null> {
+  if (inFlight) return inFlight; // dedup: dela pågående probe
+  if (cachedBase === undefined && now() - lastMissAt < MISS_TTL_MS) return null; // negativ-cache
+  inFlight = (async () => {
+    const bases = cachedBase !== undefined ? [cachedBase] : PROBE_ORDER;
+    for (const base of bases) {
+      const text = await pingText(base);
+      if (text !== null) {
+        cachedBase = base;
+        return { base, version: parsePingVersion(text) };
+      }
     }
+    cachedBase = undefined; // cachad bas svarar inte → prova om efter MISS_TTL_MS
+    lastMissAt = now();
+    return null;
+  })();
+  try {
+    return await inFlight;
+  } finally {
+    inFlight = null;
   }
-  cachedBase = undefined; // cachad bas svarar inte längre → prova om nästa gång
-  return null;
 }
 
 /** Den transport (https/http) helpern svarar på, eller null. */
@@ -65,9 +87,11 @@ export async function resolveHelperBase(): Promise<string | null> {
   return (await probeHelper())?.base ?? null;
 }
 
-/** Endast för tester: nollställ transport-cachen. */
+/** Endast för tester: nollställ transport-cachen + storm-broms-staten. */
 export function resetHelperBaseCache(): void {
   cachedBase = undefined;
+  inFlight = null;
+  lastMissAt = 0;
 }
 
 export function useHelper(): HelperStatus {

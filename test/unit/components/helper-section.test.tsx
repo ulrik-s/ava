@@ -5,11 +5,13 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { HelperSection } from "@/components/settings/helper-section";
+import { resetHelperBaseCache } from "@/lib/client/helper/use-helper";
 
 const originalFetch = global.fetch;
 beforeEach(() => {
   vi.restoreAllMocks();
   global.fetch = originalFetch;
+  resetHelperBaseCache(); // nollställ probe-cache/in-flight/miss-broms (#653) mellan tester
 });
 
 describe("HelperSection", () => {
