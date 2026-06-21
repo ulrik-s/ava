@@ -1,6 +1,10 @@
-import { describe, expect, test } from "bun:test";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterAll, describe, expect, test } from "bun:test";
 
-import { handleOpen, type OpenDeps } from "../src/open.ts";
+import { enqueueSavedFile, handleOpen, type OpenDeps } from "../src/open.ts";
+import { UploadQueue } from "../src/queue.ts";
 import { jsonRequest } from "./helpers.ts";
 
 interface Recorder {
@@ -77,5 +81,25 @@ describe("handleOpen", () => {
     const rec = recorder({ openApp: async () => { throw new Error("no app"); } });
     const res = await handleOpen(openReq({ downloadUrl: "http://x/f", fileName: "a.pdf" }), rec.deps);
     expect(res.status).toBe(500);
+  });
+});
+
+describe("enqueueSavedFile", () => {
+  const dirs: string[] = [];
+  afterAll(async () => { await Promise.all(dirs.map((d) => rm(d, { recursive: true, force: true }))); });
+
+  test("läser sparade bytes och köar dem durabelt i kön", async () => {
+    const work = await mkdtemp(join(tmpdir(), "ava-save-"));
+    const qdir = await mkdtemp(join(tmpdir(), "ava-q-"));
+    dirs.push(work, qdir);
+    const filePath = join(work, "avtal.docx");
+    await writeFile(filePath, "ändrat innehåll", "utf8");
+
+    const queue = new UploadQueue(qdir);
+    await enqueueSavedFile(queue, filePath, "http://s/api/documents/7/upload", "Bearer tok");
+
+    const snap = queue.snapshot();
+    expect(snap.total).toBe(1);
+    expect(snap.entries[0]).toMatchObject({ uploadUrl: "http://s/api/documents/7/upload", fileName: "avtal.docx", status: "pending" });
   });
 });
