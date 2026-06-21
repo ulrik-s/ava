@@ -22,6 +22,7 @@ import { join } from "node:path";
 import { HELPER_HTTPS_PORT, HELPER_PORT } from "@/lib/shared/helper/protocol";
 
 import { ContentStore, resolveCacheTtlMs } from "./content-store.ts";
+import { fetchAndCacheContent, handleContent } from "./content.ts";
 import { installService, uninstallService, type InstallDeps } from "./install.ts";
 import { initLog, log } from "./log.ts";
 import {
@@ -219,7 +220,17 @@ function main(): void {
     version: VERSION,
     extraOrigins: extraOrigins(),
     onCheckUpdate: () => { void checkOnce(updateCfg).catch((err) => log(`check-update: ${String(err)}`)); },
-    ...(stores ? { onOpen: queueBackedOnOpen(stores.queue, stores.content), onStatus: () => stores.queue.snapshot() } : {}),
+    ...(stores
+      ? {
+          onOpen: queueBackedOnOpen(stores.queue, stores.content),
+          onStatus: () => stores.queue.snapshot(),
+          onContent: (req: Request) =>
+            handleContent(req, {
+              load: (url) => stores.content.load(url),
+              fetchAndCache: (url, auth, fileName) => fetchAndCacheContent(stores.content, url, auth, fileName),
+            }),
+        }
+      : {}),
   });
 
   const httpServer = Bun.serve({ port, hostname: "127.0.0.1", fetch: handler });

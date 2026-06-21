@@ -112,6 +112,20 @@ describe("GET /status", () => {
   });
 });
 
+describe("POST /content", () => {
+  test("503 när onContent ej konfigurerad", async () => {
+    const res = await handler()(req("/content", { method: "POST" }));
+    expect(res.status).toBe(503);
+  });
+
+  test("delegerar till onContent när konfigurerad", async () => {
+    const h = handler({ onContent: async () => new Response("bytes", { status: 200 }) });
+    const res = await h(req("/content", { method: "POST" }));
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe("bytes");
+  });
+});
+
 describe("okänd route", () => {
   test("404", async () => {
     const res = await handler()(req("/nope"));

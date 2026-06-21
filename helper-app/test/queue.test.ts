@@ -214,7 +214,8 @@ describe("startDrainLoop", () => {
     await q.enqueue({ uploadUrl: "http://s/u/1", fileName: "a", bytes: bytes("x") });
     const ctrl = new AbortController();
     q.startDrainLoop(ctrl.signal, 5);
-    await new Promise((r) => setTimeout(r, 30));
+    // Poll tills dränerad (robust mot lastad CI-runner) i st.f. fast väntan.
+    for (let i = 0; i < 100 && q.snapshot().total > 0; i++) await new Promise((r) => setTimeout(r, 10));
     ctrl.abort();
     expect(q.snapshot().total).toBe(0); // hann dränera
   });
