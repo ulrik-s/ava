@@ -113,8 +113,7 @@ type Handler = (req: Request) => Promise<Response>;
  * material i data-dir. Returnerar undefined om data-dir saknas eller TLS
  * inte kan startas — HTTP fortsätter ändå (Chromium/Firefox behöver inte HTTPS).
  */
-function startHttpsServer(handler: Handler): ReturnType<typeof serveFetchHandler> | undefined {
-  const dir = dataDir();
+function startHttpsServer(handler: Handler, dir: string | null, port: number): ReturnType<typeof serveFetchHandler> | undefined {
   if (dir === null) {
     log("ingen data-dir → hoppar över HTTPS (endast HTTP)");
     return undefined;
@@ -122,11 +121,12 @@ function startHttpsServer(handler: Handler): ReturnType<typeof serveFetchHandler
   try {
     const tls = loadOrCreateTls(join(dir, "tls"));
     const server = serveFetchHandler(handler, {
-      port: httpsPort(),
+      port,
       hostname: "127.0.0.1",
       tls: { cert: tls.leaf.cert, key: tls.leaf.key },
+      onError: (err) => log(`HTTPS-server-fel (fortsätter med HTTP): ${err.message}`),
     });
-    log(`ava-helper HTTPS på localhost:${httpsPort()}`);
+    log(`ava-helper HTTPS på localhost:${port}`);
     return server;
   } catch (err) {
     log(`HTTPS-start misslyckades (fortsätter med HTTP): ${String(err)}`);
@@ -182,8 +182,7 @@ interface Stores {
 }
 
 /** Skapa + återställ kön + content-lagret (om data-dir finns) och starta dränerings-loopen. */
-function startStores(signal: AbortSignal, authHeader?: AuthHeaderProvider): Stores | undefined {
-  const dir = dataDir();
+function startStores(dir: string | null, signal: AbortSignal, authHeader?: AuthHeaderProvider): Stores | undefined {
   if (dir === null) {
     log("ingen data-dir → durabla lager inaktiverade (direkt-upload, ingen offline-cache)");
     return undefined;
@@ -196,11 +195,79 @@ function startStores(signal: AbortSignal, authHeader?: AuthHeaderProvider): Stor
   return { queue, content };
 }
 
-/** `--login`: para helpern mot byråns IdP via loopback-PKCE (ADR 0028 §2). */
-/** Env överlagrad med config-filen (data-dir) — så config funkar för en
- *  GUI-app som inte ärver shell-env (ADR 0029). */
+export interface EngineOpts {
+  /** Lyssningsport (default `AVA_HELPER_PORT`/48761). */
+  port?: number;
+  /** HTTPS-port (default `AVA_HELPER_HTTPS_PORT`/48762). */
+  httpsPort?: number;
+  /** Data-dir-override (default OS-dir). Sätts i test för hermetik. */
+  dataDir?: string | null;
+}
+
+export interface EngineHandle {
+  port: number;
+  stop: () => void;
+}
+
+/**
+ * Starta motorn: HTTP(S)-servrar + durabla lager + handlers + OIDC-auth.
+ * Återanvänds av CLI-/headless-entryn OCH Electron-skalet (ADR 0030) — all
+ * logik bor här, inte i Electron, så motorn kan köras + debuggas headless.
+ */
+export function startEngine(opts: EngineOpts = {}): EngineHandle {
+  const port = opts.port ?? listenPort();
+  const hsPort = opts.httpsPort ?? httpsPort();
+  const dir = opts.dataDir !== undefined ? opts.dataDir : dataDir();
+  log(`ava-helper ${VERSION} startar på 127.0.0.1:${port}`);
+
+  const updateCfg = buildUpdateConfig();
+  const abort = new AbortController();
+  void runUpdateLoop(updateCfg, abort.signal);
+
+  // Helperns egen OIDC-auth (om parad/konfigurerad) → autonom Bearer mot servern.
+  const loginCfg = loginConfigFromEnv(helperEnvFor(dir));
+  const authHeader: AuthHeaderProvider | undefined = loginCfg ? buildAuthHeaderProvider(loginCfg) : undefined;
+
+  const stores = startStores(dir, abort.signal, authHeader);
+  const handler = createHandler({
+    version: VERSION,
+    extraOrigins: extraOrigins(),
+    onCheckUpdate: () => { void checkOnce(updateCfg).catch((err) => log(`check-update: ${String(err)}`)); },
+    // Auto-konfigurering från web-appen (ADR 0029) — alltid på (skriver helper-config.json).
+    onConfig: (req: Request) => handleConfig(req, { save: (input) => saveHelperConfig(dir, input) }),
+    ...(stores
+      ? {
+          onOpen: queueBackedOnOpen(stores.queue, stores.content, authHeader),
+          onStatus: () => stores.queue.snapshot(),
+          onContent: (req: Request) =>
+            handleContent(req, {
+              load: (url) => stores.content.load(url),
+              fetchAndCache: async (url, auth, fileName) =>
+                fetchAndCacheContent(stores.content, url, auth ?? (authHeader ? await authHeader() : undefined), fileName),
+            }),
+        }
+      : {}),
+  });
+
+  const httpServer = serveFetchHandler(handler, {
+    port,
+    hostname: "127.0.0.1",
+    onError: (err) => log(`HTTP-server-fel: ${err.message}`),
+  });
+  const httpsServer = startHttpsServer(handler, dir, hsPort);
+  return {
+    port,
+    stop: () => { abort.abort(); httpServer.close(); httpsServer?.close(); },
+  };
+}
+
+/** Env överlagrad med config-filen — så config funkar för en GUI-app som inte
+ *  ärver shell-env (ADR 0029). */
+function helperEnvFor(dir: string | null): Record<string, string | undefined> {
+  return envWithConfig(process.env, loadHelperConfig(dir));
+}
 function helperEnv(): Record<string, string | undefined> {
-  return envWithConfig(process.env, loadHelperConfig(dataDir()));
+  return helperEnvFor(dataDir());
 }
 
 async function handleLogin(): Promise<void> {
@@ -237,50 +304,15 @@ function main(): void {
   if (runCliFlag(process.argv)) return;
 
   initLog();
-  const port = listenPort();
-  log(`ava-helper ${VERSION} startar på 127.0.0.1:${port}`);
-
-  const updateCfg = buildUpdateConfig();
-  const abort = new AbortController();
-  void runUpdateLoop(updateCfg, abort.signal);
-
-  // Helperns egen OIDC-auth (om parad/konfigurerad) → autonom Bearer mot servern.
-  const loginCfg = loginConfigFromEnv(helperEnv());
-  const authHeader: AuthHeaderProvider | undefined = loginCfg ? buildAuthHeaderProvider(loginCfg) : undefined;
-
-  const stores = startStores(abort.signal, authHeader);
-  const handler = createHandler({
-    version: VERSION,
-    extraOrigins: extraOrigins(),
-    onCheckUpdate: () => { void checkOnce(updateCfg).catch((err) => log(`check-update: ${String(err)}`)); },
-    // Auto-konfigurering från web-appen (ADR 0029) — alltid på (skriver helper-config.json).
-    onConfig: (req: Request) => handleConfig(req, { save: (input) => saveHelperConfig(dataDir(), input) }),
-    ...(stores
-      ? {
-          onOpen: queueBackedOnOpen(stores.queue, stores.content, authHeader),
-          onStatus: () => stores.queue.snapshot(),
-          onContent: (req: Request) =>
-            handleContent(req, {
-              load: (url) => stores.content.load(url),
-              fetchAndCache: async (url, auth, fileName) =>
-                fetchAndCacheContent(stores.content, url, auth ?? (authHeader ? await authHeader() : undefined), fileName),
-            }),
-        }
-      : {}),
-  });
-
-  const httpServer = serveFetchHandler(handler, { port, hostname: "127.0.0.1" });
-  const httpsServer = startHttpsServer(handler);
-
+  const engine = startEngine();
   for (const sig of ["SIGTERM", "SIGINT"] as const) {
     process.on(sig, () => {
       log(`${sig} — avslutar`);
-      abort.abort();
-      httpServer.close();
-      httpsServer?.close();
+      engine.stop();
       process.exit(0);
     });
   }
 }
 
-main();
+// Bara när filen körs som entry (inte vid import från test/Electron-skal).
+if (import.meta.main) main();

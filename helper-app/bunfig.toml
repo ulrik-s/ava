@@ -7,7 +7,8 @@
 coverage = true
 coverageReporter = ["text"]
 coverageSkipTestFiles = true
-# Mät bara helperns egen källkod: hoppa över test-fixturer och det delade
-# protokollet (../src/...) som täcks av repots vitest-svit, inte här.
-coveragePathIgnorePatterns = ["../src/**", "**/helpers.ts"]
+# Mät bara helperns egen källkod: hoppa över test-fixturer, det delade
+# protokollet (../src/...) som täcks av repots vitest-svit, samt main.ts som är
+# entry-/CLI-lim (startEngine valideras via integration-testet, ej coverage).
+coveragePathIgnorePatterns = ["../src/**", "**/helpers.ts", "**/main.ts"]
 coverageThreshold = { line = 0.90, function = 0.82 }
