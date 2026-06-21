@@ -22,6 +22,12 @@ describe("GET /version", () => {
     expect(body.current).toBe("v1.2.3-test");
     expect(body.updateAvailable).toBe(false);
   });
+
+  test("updateAvailable speglar getter (ADR 0030 notis)", async () => {
+    const res = await handler({ updateAvailable: () => true })(req("/version"));
+    const body = (await res.json()) as { updateAvailable: boolean };
+    expect(body.updateAvailable).toBe(true);
+  });
 });
 
 describe("CORS", () => {
