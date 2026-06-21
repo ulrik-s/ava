@@ -23,6 +23,7 @@ import {
   HELPER_HTTPS_BASE,
   parsePingVersion,
   type ComposeMailRequest,
+  type HelperContentRequest,
   type HelperOpenRequest,
   type HelperStatus,
   type HelperStatusResponse,
@@ -180,6 +181,29 @@ export function useHelperSyncStatus(intervalMs = 5_000): HelperStatusResponse | 
   }, [intervalMs]);
 
   return sync;
+}
+
+/**
+ * Hämta dokument-bytes via helpern (`POST /content`, ADR 0028 §5). Helpern
+ * servar ur sitt durabla, content-adresserade lager (offline-ok) och laddar ner
+ * + cachar vid miss. Returnerar `null` om helpern saknas eller inte kunde
+ * leverera (offline + ej cachat, eller saknad auth) → anroparen faller då
+ * tillbaka på sin egen cache + server. Gör helpern till den enda lokala
+ * dokument-auktoriteten när den finns (ingen divergens mot extern-editor-vägen).
+ */
+export async function fetchContentViaHelper(req: HelperContentRequest): Promise<Uint8Array | null> {
+  try {
+    const r = await helperFetch("/content", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req),
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (r === null || !r.ok) return null;
+    return new Uint8Array(await r.arrayBuffer());
+  } catch {
+    return null;
+  }
 }
 
 /** Trigga omedelbar self-update-kontroll. */

@@ -11,6 +11,7 @@ import {
   resetHelperBaseCache,
   resolveHelperBase,
   fetchHelperStatus,
+  fetchContentViaHelper,
 } from "@/lib/client/helper/use-helper";
 
 const HTTPS = "https://localhost:48762";
@@ -131,6 +132,45 @@ describe("fetchHelperStatus", () => {
       [`${HTTPS}/status`, () => new Response(JSON.stringify({ pending: "nope" }), { status: 200 })],
     ]);
     expect(await fetchHelperStatus()).toBeNull();
+  });
+});
+
+describe("fetchContentViaHelper", () => {
+  const REQ = { downloadUrl: "https://srv/api/documents/9/download", fileName: "a.pdf" };
+
+  it("returnerar bytes från /content", async () => {
+    global.fetch = routeFetch([
+      [`${HTTPS}/ping`, () => new Response("ava-helper v1\n", { status: 200 })],
+      [`${HTTPS}/content`, () => new Response(new Uint8Array([1, 2, 3]), { status: 200 })],
+    ]);
+    const bytes = await fetchContentViaHelper(REQ);
+    expect(bytes).not.toBeNull();
+    expect(Array.from(bytes!)).toEqual([1, 2, 3]);
+  });
+
+  it("POST:ar request-bodyn till /content", async () => {
+    const fetchMock = routeFetch([
+      [`${HTTPS}/ping`, () => new Response("ava-helper v1\n", { status: 200 })],
+      [`${HTTPS}/content`, () => new Response(new Uint8Array([9]), { status: 200 })],
+    ]);
+    global.fetch = fetchMock;
+    await fetchContentViaHelper(REQ);
+    const call = fetchMock.mock.calls.find(([u]: [string]) => String(u).endsWith("/content"))!;
+    expect(call[1].method).toBe("POST");
+    expect(JSON.parse(call[1].body)).toMatchObject({ downloadUrl: REQ.downloadUrl, fileName: "a.pdf" });
+  });
+
+  it("null när helpern saknas (→ caller faller tillbaka)", async () => {
+    global.fetch = vi.fn().mockRejectedValue(new Error("down"));
+    expect(await fetchContentViaHelper(REQ)).toBeNull();
+  });
+
+  it("null vid 502 (offline + ej cachat)", async () => {
+    global.fetch = routeFetch([
+      [`${HTTPS}/ping`, () => new Response("ava-helper v1\n", { status: 200 })],
+      [`${HTTPS}/content`, () => new Response("unavailable", { status: 502 })],
+    ]);
+    expect(await fetchContentViaHelper(REQ)).toBeNull();
   });
 });
 
