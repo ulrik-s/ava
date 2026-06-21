@@ -400,19 +400,23 @@ describe("DocumentBrowser", () => {
     expect(screen.getByText("sub.pdf")).toBeInTheDocument();
   });
 
-  it("klick på dokumentnamnet i self-hosted utan FSA-handle → alert om saknad working copy", async () => {
-    // Self-hosted i jsdom har ingen indexedDB-handle → openDocument:s
-    // notifyError-gren körs istället för att fetcha ett api som inte finns.
+  it("klick på dokumentnamnet i demo öppnar GH-Pages-blobben (runtime-tier, #651)", async () => {
+    // #651: namn-klicket går via openMatterDocument med RUNTIME-tier. I demo →
+    // öppna GH-Pages-URL:en (self-hosted skulle i st.f. hämta via servern).
+    window.localStorage.setItem("ava.firma", JSON.stringify({ tier: "demo", repo: "ulrik-s/ava-demo" }));
     treeQuery.data = { folders: [], documents: [baseDoc()] };
-    const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => {});
-    render(<DocumentBrowser matterId="m1" />);
-    fireEvent.click(screen.getByText("test.pdf"));
-    // openDocument är async + dynamic-import:ar två moduler → vänta med waitFor
-    await import("@testing-library/react").then(({ waitFor }) =>
-      waitFor(() => expect(alertSpy).toHaveBeenCalled(), { timeout: 1000 }),
-    );
-    expect(alertSpy.mock.calls[0]![0]).toMatch(/working copy/i);
-    alertSpy.mockRestore();
+    const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
+    try {
+      render(<DocumentBrowser matterId="m1" />);
+      fireEvent.click(screen.getByText("test.pdf"));
+      await import("@testing-library/react").then(({ waitFor }) =>
+        waitFor(() => expect(openSpy).toHaveBeenCalled(), { timeout: 2000 }),
+      );
+      expect(String(openSpy.mock.calls[0]![0])).toMatch(/github\.io\/ava-demo\//);
+    } finally {
+      openSpy.mockRestore();
+      window.localStorage.removeItem("ava.firma");
+    }
   });
 
   it("formaterar filstorlek korrekt (KB, MB)", () => {

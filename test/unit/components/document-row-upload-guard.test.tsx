@@ -91,13 +91,20 @@ describe("DocumentRow — kebab-meny + isUploading-guard", () => {
     expect(onDelete).toHaveBeenCalledTimes(1);
   });
 
-  it("Visa + Ladda ner renderas som riktiga länkar (a[href])", () => {
+  it("Visa + Ladda ner renderas som riktiga länkar (a[href]) i demo-tier (#651)", () => {
+    // #651: i demo → direkta GH-href:ar. (Self-hosted öppnar i st.f. via servern
+    // — cache-medvetet — så där är de knappar, inte länkar.)
+    window.localStorage.setItem("ava.firma", JSON.stringify({ tier: "demo", repo: "u/r" }));
+    try {
     renderRow({ isUploading: false });
     openMenu();
     expect(screen.getByText("Visa").closest("a")).toHaveAttribute("href");
     const dl = screen.getByText("Ladda ner").closest("a");
     expect(dl).toHaveAttribute("href");
     expect(dl).toHaveAttribute("download");
+    } finally {
+      window.localStorage.removeItem("ava.firma");
+    }
   });
 
   it("isUploading=true: kebab-trigger är disabled → menyn kan inte öppnas", () => {
