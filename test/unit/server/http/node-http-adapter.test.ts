@@ -74,4 +74,17 @@ describe("serveFetchHandler", () => {
     expect(res.status).toBe(500);
     expect(JSON.parse(res.body)).toEqual({ error: "internal" });
   });
+
+  it("port upptagen → onError (async listen-fel kraschar inte)", async () => {
+    const port = await start(async () => new Response("ok"));
+    let captured: Error | undefined;
+    // Andra servern på samma port → EADDRINUSE emittas asynkront som 'error'.
+    const second = serveFetchHandler(async () => new Response("x"), {
+      port,
+      onError: (err) => { captured = err; },
+    });
+    await once(second, "error");
+    expect(captured).toBeInstanceOf(Error);
+    second.close();
+  });
 });

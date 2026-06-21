@@ -70,6 +70,12 @@ export interface ServeOpts {
   hostname?: string;
   /** TLS-material → https-server (ADR 0006: helperns lokala CA för Safari/add-in). */
   tls?: { cert: string; key: string };
+  /**
+   * Hanterar server-`error` (t.ex. EADDRINUSE). I `node:http` emittas listen-fel
+   * ASYNKRONT som ett `error`-event — utan handler kraschar processen
+   * (oträffbart av synkron try/catch). Default: logga till `console.error`.
+   */
+  onError?: (err: Error) => void;
 }
 
 /**
@@ -81,6 +87,7 @@ export function serveFetchHandler(handler: FetchHandler, opts: ServeOpts): Serve
   const server = opts.tls
     ? createHttpsServer({ cert: opts.tls.cert, key: opts.tls.key }, onReq)
     : createServer(onReq);
+  server.on("error", (err: Error) => (opts.onError ?? ((e) => console.error(`serveFetchHandler: ${e.message}`)))(err));
   server.listen(opts.port, opts.hostname ?? "127.0.0.1");
   return server;
 }
