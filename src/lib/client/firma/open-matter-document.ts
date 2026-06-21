@@ -6,7 +6,8 @@
  * self-hosted-builden → länkade fel till GH Pages).
  *
  *   - demo (ingen server): öppna mot GH Pages-URL:en (bundlade blobbar).
- *   - self-hosted (server finns): hämta bytes via serverns
+ *   - self-hosted (server finns): hämta bytes via helpern om den kör
+ *     (`POST /content` — durabelt, offline-ok), annars serverns
  *     `document.downloadContent` (GitContentStore) + cacha i IndexedDB
  *     (`loadDocumentBlob`) → blob:-URL. Saknas i cachen → populeras först.
  *
@@ -26,9 +27,18 @@ export async function openMatterDocument(doc: OpenableDoc): Promise<void> {
   let fetchBlob: (() => Promise<Blob | null>) | undefined;
   if (!isDemo) {
     const { createServerDownloadClient } = await import("@/lib/client/backend/server-download-client");
-    const { loadDocumentBlob } = await import("@/lib/client/backend/load-document-blob");
+    const { loadDocumentBlob, mimeFromName } = await import("@/lib/client/backend/load-document-blob");
+    const { fetchContentViaHelper } = await import("@/lib/client/helper/use-helper");
     const client = createServerDownloadClient();
-    fetchBlob = () => loadDocumentBlob(client, { id: doc.id, storagePath: doc.storagePath ?? null, fileName: doc.fileName ?? doc.id });
+    const fileName = doc.fileName ?? doc.id;
+    fetchBlob = async () => {
+      // Föredra helpern (durabelt, offline-ok, samma lokala lager som extern-
+      // editor-öppning) → annars server-vägen + IndexedDB-cache (ADR 0028 §5).
+      const downloadUrl = new URL(`/api/documents/${doc.id}/download`, window.location.origin).toString();
+      const viaHelper = await fetchContentViaHelper({ downloadUrl, fileName });
+      if (viaHelper) return new Blob([viaHelper as BlobPart], { type: mimeFromName(fileName) });
+      return loadDocumentBlob(client, { id: doc.id, storagePath: doc.storagePath ?? null, fileName });
+    };
   }
 
   await openDocument({

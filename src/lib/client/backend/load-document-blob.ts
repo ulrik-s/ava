@@ -25,7 +25,8 @@ const MIME_BY_EXT: Record<string, string> = {
   doc: "application/msword",
 };
 
-function mimeFromName(fileName: string): string {
+/** MIME-typ ur filändelsen (delas med helper-content-vägen, ADR 0028 §5). */
+export function mimeFromName(fileName: string): string {
   const ext = fileName.toLowerCase().match(/\.([a-z0-9]+)$/)?.[1] ?? "";
   return MIME_BY_EXT[ext] ?? "application/octet-stream";
 }
