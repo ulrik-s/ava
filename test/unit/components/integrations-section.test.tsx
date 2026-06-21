@@ -41,6 +41,16 @@ describe("IntegrationsSection", () => {
     expect(container.firstChild).toBeNull();
   });
 
+  it("döljs i demo-tier (inga server-integrationer, ADR 0027)", () => {
+    window.localStorage.setItem("ava.firma", JSON.stringify({ tier: "demo", repo: "u/r" }));
+    try {
+      const { container } = render(<IntegrationsSection />);
+      expect(container.firstChild).toBeNull();
+    } finally {
+      window.localStorage.removeItem("ava.firma");
+    }
+  });
+
   it("visar connector med namn + capabilities + 'Ej ansluten'", () => {
     render(<IntegrationsSection />);
     expect(screen.getByText("Microsoft 365")).toBeInTheDocument();
