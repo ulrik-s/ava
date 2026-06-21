@@ -11,7 +11,7 @@
  * Task Scheduler) startar om med nya bytsen.
  */
 
-import { chmod, rename } from "node:fs/promises";
+import { chmod, rename, writeFile } from "node:fs/promises";
 
 import { log } from "./log.ts";
 import { currentPlatform, type Platform } from "./platform/runtime.ts";
@@ -159,7 +159,7 @@ export async function downloadAndReplace(
   assertSignature(bytes, signature, keys); // kastar om osignerad/ej matchande
 
   const tmpPath = `${targetPath}.new`;
-  await Bun.write(tmpPath, bytes);
+  await writeFile(tmpPath, bytes);
   await chmod(tmpPath, 0o755);
   if (currentPlatform() === "windows") {
     await rename(targetPath, `${targetPath}.old`).catch(() => undefined);

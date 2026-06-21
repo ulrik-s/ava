@@ -7,7 +7,7 @@
  * nedladdningar/spawns.
  */
 
-import { mkdtemp, stat } from "node:fs/promises";
+import { mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 
@@ -121,13 +121,13 @@ export async function downloadTo(path: string, url: string, authHeader?: string)
   if (authHeader) headers.Authorization = authHeader;
   const resp = await fetch(url, { headers });
   if (resp.status >= 400) throw new Error(`HTTP ${resp.status}`);
-  await Bun.write(path, resp);
+  await writeFile(path, new Uint8Array(await resp.arrayBuffer()));
 }
 
 export async function uploadFile(path: string, uploadUrl: string, authHeader: string | undefined): Promise<void> {
   const headers: Record<string, string> = { "Content-Type": "application/octet-stream" };
   if (authHeader) headers.Authorization = authHeader;
-  const resp = await fetch(uploadUrl, { method: "PUT", headers, body: Bun.file(path) });
+  const resp = await fetch(uploadUrl, { method: "PUT", headers, body: new Blob([new Uint8Array(await readFile(path))]) });
   if (resp.status >= 400) throw new Error(`upload HTTP ${resp.status}`);
 }
 
@@ -142,7 +142,7 @@ export async function persistDownloaded(
   path: string,
   fileName: string,
 ): Promise<void> {
-  const bytes = await Bun.file(path).bytes();
+  const bytes = new Uint8Array(await readFile(path));
   await store.store(downloadUrl, bytes, fileName);
 }
 
@@ -155,7 +155,7 @@ export async function persistDownloaded(
 export async function restoreCached(store: ContentStore, downloadUrl: string, path: string): Promise<boolean> {
   const bytes = await store.load(downloadUrl);
   if (bytes === null) return false;
-  await Bun.write(path, bytes);
+  await writeFile(path, bytes);
   return true;
 }
 
@@ -171,7 +171,7 @@ export async function enqueueSavedFile(
   uploadUrl: string,
   authHeader: string | undefined,
 ): Promise<void> {
-  const bytes = await Bun.file(path).bytes();
+  const bytes = new Uint8Array(await readFile(path));
   await queue.enqueue({ uploadUrl, fileName: basename(path), bytes, ...(authHeader !== undefined ? { authHeader } : {}) });
 }
 
