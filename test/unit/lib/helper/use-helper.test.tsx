@@ -9,6 +9,7 @@ import {
   openViaHelper,
   triggerHelperUpdateCheck,
   resetHelperBaseCache,
+  resolveHelperBase,
 } from "@/lib/client/helper/use-helper";
 
 const HTTPS = "https://localhost:48762";
@@ -65,6 +66,17 @@ describe("useHelper / transport", () => {
     global.fetch = routeFetch([[`${HTTPS}/ping`, () => new Response("garbage", { status: 200 })]]);
     render(<Probe />);
     await waitFor(() => expect(screen.getByText("absent")).toBeInTheDocument());
+  });
+
+  it("negativ-cachar en miss → ingen probe-storm (#653)", async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new Error("down"));
+    global.fetch = fetchMock;
+    expect(await resolveHelperBase()).toBeNull();
+    const afterFirst = fetchMock.mock.calls.length; // PROBE_ORDER (https + http)
+    expect(afterFirst).toBeGreaterThan(0);
+    // En andra probe inom MISS_TTL ska INTE fyra av fler /ping (negativ-cache).
+    expect(await resolveHelperBase()).toBeNull();
+    expect(fetchMock.mock.calls.length).toBe(afterFirst);
   });
 });
 

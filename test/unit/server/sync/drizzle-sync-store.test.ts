@@ -53,6 +53,16 @@ describe("DrizzleSyncStore (#sync-bridge)", () => {
     expect((await sync.pull(ORG, res.cursor)).changes).toHaveLength(0);
   });
 
+  // #653: org-raden saknar organizationId-kolumn (den ÄR org:en) → utan
+  // resolveOrg-override (→ egna id:t) loggas den aldrig → synkas aldrig →
+  // klientens organization.getSettings hittar inget → "Laddar inställningar…".
+  it("organization delta-synkas via pull (org = sitt eget org-scope, #653)", async () => {
+    const org2 = uuidv7();
+    await repos.organizations.create({ id: org2, name: "Synk-byrå AB" } as never);
+    const change = (await sync.pull(org2, 0)).changes.find((c) => c.row.id === org2);
+    expect(change).toMatchObject({ entity: "organization", row: { id: org2, name: "Synk-byrå AB" } });
+  });
+
   it("isolerar per org (pull ser inte en annan byrås ändringar)", async () => {
     expect((await sync.pull(uuidv7(), 0)).changes).toHaveLength(0);
   });
