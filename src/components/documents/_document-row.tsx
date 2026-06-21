@@ -4,32 +4,11 @@ import { Trash2 } from "lucide-react";
 import { Fragment, useState } from "react";
 import { ActionMenu, type ActionMenuItem } from "@/components/ui/action-menu";
 import { useCapabilities } from "@/lib/client/capabilities/use-capabilities";
-import type { OpenDocumentDeps } from "@/lib/client/firma/open-document";
-import { readFromFsa } from "@/lib/client/fsa/read-from-fsa";
+import { loadFirmaConfig } from "@/lib/client/firma/firma-config";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { DocumentTags } from "./_document-tags";
 import { formatFileSize } from "./_drag-helpers";
 import { ExternalEditModal, type ModalState } from "./external-edit-modal";
-
-/**
- * Försök öppna dokumentet från den lokala FSA-working-copyn som blob:-URL
- * (nyligen uppladdade filer hinner inte till remote än). Returnerar `true`
- * om filen öppnades, annars `false` (→ caller faller tillbaka på GH Pages-URL).
- * Platta tidiga returer håller nästlingsdjupet under gränsen.
- */
-async function tryOpenViaFsa(path: string): Promise<boolean> {
-  const { isFsaSupported, loadHandle } = await import("@/lib/client/fsa/handle-store");
-  if (!isFsaSupported()) return false;
-  const handle = await loadHandle("repo-root");
-  if (!handle) return false;
-  const blob = await readFromFsa(handle, path);
-  if (!blob) return false;
-  const url = URL.createObjectURL(blob);
-  window.open(url, "_blank", "noopener,noreferrer");
-  // Återvinn URL:n efter en stund (browsern behåller den medan tab:n öppen)
-  setTimeout(() => URL.revokeObjectURL(url), 60_000);
-  return true;
-}
 
 export interface DocumentRecord {
   id: string;
@@ -185,10 +164,29 @@ interface ActionItemsOpts {
   uploadingTitle: string | undefined;
   /** LLM-kapabilitet (ADR 0027): false (demon) → "Analysera (AI)" döljs. */
   llm: boolean;
+  /** Self-hosted (#651): "Visa"/"Ladda ner" öppnar via servern (cache-medveten)
+   *  i st.f. en GH-Pages-href (som bara funkar i demon). */
+  serverMode: boolean;
   onOpenInEditor: () => void;
+  onView: () => void;
   onExternal: () => void;
   onReanalyze: () => void;
   onDelete: () => void;
+}
+
+/** "Visa"/"Ladda ner": demo → direkt GH-href; self-hosted → hämta via servern
+ *  (cache-medvetet) och öppna blob:-URL:en. */
+function viewDownloadItems(o: ActionItemsOpts): ActionMenuItem[] {
+  if (o.serverMode) {
+    return [
+      { key: "view", label: "Visa", icon: <span aria-hidden>👁</span>, onSelect: o.onView, disabled: o.isDisabled, title: o.uploadingTitle ?? "Visa i webbläsaren" },
+      { key: "download", label: "Ladda ner", icon: <span aria-hidden>⬇</span>, onSelect: o.onView, disabled: o.isDisabled, title: o.uploadingTitle ?? "Hämta från servern" },
+    ];
+  }
+  return [
+    { key: "view", label: "Visa", icon: <span aria-hidden>👁</span>, href: o.viewHref, newTab: true, disabled: o.isDisabled, title: o.uploadingTitle ?? "Visa i webbläsaren" },
+    { key: "download", label: "Ladda ner", icon: <span aria-hidden>⬇</span>, href: o.downloadHref, download: true, disabled: o.isDisabled, title: o.uploadingTitle ?? "Ladda ner" },
+  ];
 }
 
 /** Bygg kebab-menyns rader. Utbruten ur DocumentActions — alla `uploadingTitle
@@ -197,8 +195,7 @@ function buildActionItems(o: ActionItemsOpts): ActionMenuItem[] {
   return [
     { key: "open", label: "Öppna i webbläsaren", icon: <span aria-hidden>🖊</span>, onSelect: o.onOpenInEditor, disabled: o.isDisabled, title: o.uploadingTitle ?? "Öppna i din browser" },
     { key: "external", label: "Editera externt (PDF Gear, Preview…)", icon: <span aria-hidden>🖥</span>, onSelect: o.onExternal, disabled: o.isDisabled, title: o.uploadingTitle ?? "AVA committar dina ändringar automatiskt" },
-    { key: "view", label: "Visa", icon: <span aria-hidden>👁</span>, href: o.viewHref, newTab: true, disabled: o.isDisabled, title: o.uploadingTitle ?? "Visa i webbläsaren" },
-    { key: "download", label: "Ladda ner", icon: <span aria-hidden>⬇</span>, href: o.downloadHref, download: true, disabled: o.isDisabled, title: o.uploadingTitle ?? "Ladda ner" },
+    ...viewDownloadItems(o),
     // ADR 0027: LLM-analys är en server-förmåga → dölj affordansen utan den.
     ...(o.llm
       ? [{ key: "reanalyze", label: "Analysera (AI)", icon: <span aria-hidden>🧠</span>, onSelect: o.onReanalyze, disabled: o.isDisabled || o.reanalyzePending, title: o.uploadingTitle ?? "Kör AI-analys på nytt" }]
@@ -223,38 +220,24 @@ function DocumentActions({
   onExternalEdit: () => Promise<void>;
 }) {
   const { viewHref, downloadHref } = buildDocHrefs(doc);
+  // Runtime-tier (#651): self-hosted öppnar via servern (cache-medveten), demo
+  // via GH-Pages-href. Bygg-tids-NEXT_PUBLIC_DEMO_BUILD duger inte — den är sann
+  // även i den lokala self-hosted-builden (→ tidigare GH-länkar i self-hosted).
+  const serverMode = loadFirmaConfig().tier !== "demo";
 
-
-  const openInEditor = async () => {
-    // Web/demo: läs lokal kopia från FSA om den finns (nyligen uppladdade
-    // filer hinner inte till remote än), annars GH Pages-URL.
-    // Browser kan EJ navigera till file:// från https://, så vi öppnar
-    // som blob:-URL i ny tab → Chrome visar PDF inline.
-    // För PDFGear/Preview/Acrobat → använd "Editera externt" (FSA).
+  const openViaServerOrGh = async () => {
     const rec = doc as DocumentRecord & { storagePath?: string };
-    const path = rec.storagePath ?? "";
-
-    if (path) {
-      try {
-        if (await tryOpenViaFsa(path)) return;
-      } catch (err) {
-        console.warn("[open] FSA-läsning misslyckades, faller tillbaka till GH Pages:", err);
-      }
-    }
-
-    // Fallback: GH Pages (för pushade dokument i demo) eller server-URL.
-    // Vill användaren redigera i en extern app (PDF Gear/Preview/Acrobat)
-    // är vägen "Editera externt" (öppnar filen från din lokala mapp via
-    // File System Access) — inte detta visnings-flöde.
-    window.open(viewHref, "_blank", "noopener,noreferrer");
+    const { openMatterDocument } = await import("@/lib/client/firma/open-matter-document");
+    await openMatterDocument({ id: doc.id, storagePath: rec.storagePath ?? null, fileName: doc.fileName });
   };
 
   const isDisabled = !!disabled;
   const uploadingTitle = isDisabled ? "Vänta tills uppladdningen är klar" : undefined;
   const { llm } = useCapabilities();
   const items = buildActionItems({
-    isDisabled, reanalyzePending, viewHref, downloadHref, uploadingTitle, llm,
-    onOpenInEditor: () => void openInEditor(),
+    isDisabled, reanalyzePending, viewHref, downloadHref, uploadingTitle, llm, serverMode,
+    onOpenInEditor: () => void openViaServerOrGh(),
+    onView: () => void openViaServerOrGh(),
     onExternal: () => void onExternalEdit(),
     onReanalyze, onDelete,
   });
@@ -299,7 +282,6 @@ function DocumentNameMeta({ doc, isAnalyzing, isWaitingAnalysis }: { doc: Docume
 function DocumentNameButton({ doc, isAnalyzing, disabled, onExternalEdit }: NameButtonProps) {
   const isWaitingAnalysis = isAnalyzing || isWithinAnalysisGrace(doc);
 
-  const isDemo = process.env.NEXT_PUBLIC_DEMO_BUILD === "1";
   const onClick = async () => {
     if (disabled) return;
     // PDF/Office-filer öppnas i extern editor (PDF Gear, Preview, Word…)
@@ -312,20 +294,12 @@ function DocumentNameButton({ doc, isAnalyzing, disabled, onExternalEdit }: Name
         return;
       }
     }
-    const { openDocument } = await import("@/lib/client/firma/open-document");
-    const { loadHandle } = await import("@/lib/client/fsa/handle-store");
+    // Runtime-tier (#651): self-hosted hämtar bytes från servern (+ cache),
+    // demo öppnar GH-Pages-blobben. (Ej bygg-tids-NEXT_PUBLIC_DEMO_BUILD, som är
+    // sant även i den lokala self-hosted-builden → länkade fel till GH.)
     const rec = doc as DocumentRecord & { storagePath?: string };
-    const demoRepo = process.env.NEXT_PUBLIC_DEFAULT_DEMO_REPO;
-    const deps: OpenDocumentDeps = {
-      doc: omitUndefined({ id: doc.id, storagePath: rec.storagePath, fileName: doc.fileName }) as OpenDocumentDeps["doc"],
-      isDemo,
-      loadHandle: () => loadHandle("repo-root"),
-      readFromHandle: readFromFsa,
-      openUrl: (u) => window.open(u, "_blank", "noopener,noreferrer"),
-      notifyError: (m) => alert(m),
-      ...omitUndefined({ demoRepo }),
-    };
-    await openDocument(deps);
+    const { openMatterDocument } = await import("@/lib/client/firma/open-matter-document");
+    await openMatterDocument({ id: doc.id, storagePath: rec.storagePath ?? null, fileName: doc.fileName });
   };
 
   return (

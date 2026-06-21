@@ -56,17 +56,10 @@ async function openDocumentSmart(doc: DocumentRecord, setModal: (m: ModalState) 
       return;
     }
   }
-  // Fallback: öppna i browser-tab
-  const isDemo = process.env.NEXT_PUBLIC_DEMO_BUILD === "1";
-  const url = isDemo
-    ? (() => {
-        const repo = process.env.NEXT_PUBLIC_DEFAULT_DEMO_REPO ?? "ulrik-s/ava-demo";
-        const m = repo.match(/^([^/\s]+)\/([^/\s]+)$/);
-        const base = m ? `https://${m[1]}.github.io/${m[2]}` : repo.replace(/\/+$/, "");
-        return `${base}/${doc.storagePath}`;
-      })()
-    : `/api/documents/${doc.id}/download`;
-  window.open(url, "_blank", "noopener,noreferrer");
+  // Fallback: öppna i browser-tab. Runtime-tier (#651): self-hosted via servern
+  // (cache-medveten), demo via GH-Pages-blobben — ej bygg-tids-NEXT_PUBLIC_DEMO_BUILD.
+  const { openMatterDocument } = await import("@/lib/client/firma/open-matter-document");
+  await openMatterDocument({ id: doc.id, storagePath: doc.storagePath ?? null, fileName: doc.fileName });
 }
 
 export function DocumentsListView({ matterId, documents, folders, onDelete, onReanalyze }: Props) {
