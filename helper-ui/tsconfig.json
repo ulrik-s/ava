@@ -1,8 +1,8 @@
 {
-  // Ärver repots strikta regler (ADR 0005 §Språk). Som helper-app: Bun-globaler,
-  // egen paths-bas (delar protokoll-typer med webbappen + motorn), egen include.
-  // Electron-skalets `main.ts` typcheckas i paketerings-steget (ADR 0029 steg 2)
-  // när `electron` är installerat; steg 1 är de Electron-fria logik-modulerna.
+  // Ärver repots strikta regler (ADR 0005 §Språk): Bun-globaler för test,
+  // egen paths-bas (delar protokoll-/adapter-typer med webbappen via @/), egen
+  // include. Täcker både Electron-skalet (src/main.ts) och den in-process-körda
+  // motorn (src/engine/, ADR 0030); `electron` typas via dev-dependency.
   "extends": "../tsconfig.json",
   "compilerOptions": {
     "types": ["bun-types"],

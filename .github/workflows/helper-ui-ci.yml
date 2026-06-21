@@ -1,19 +1,22 @@
 name: Helper UI CI
 
-# Typecheck + test för helper-ui (Electron-tray-skalet, ADR 0029) vid varje PR
-# som rör dess kod. Steg 1 = de Electron-fria logik-modulerna; paketering
-# (electron-builder) + main.ts kommer i ett senare steg.
+# Typecheck + test för helper-ui (Electron-tray-app med in-process-motor,
+# ADR 0029/0030) vid varje PR som rör dess kod. Täcker de Electron-fria
+# logik-modulerna + motorn (src/engine/); interaktiv tray/login + paketering
+# (electron-builder) verifieras på mål-datorn.
 on:
   push:
     branches: [main]
     paths:
       - "helper-ui/**"
       - "src/lib/shared/helper/**"
+      - "src/lib/shared/http/**"
       - ".github/workflows/helper-ui-ci.yml"
   pull_request:
     paths:
       - "helper-ui/**"
       - "src/lib/shared/helper/**"
+      - "src/lib/shared/http/**"
       - ".github/workflows/helper-ui-ci.yml"
 
 jobs:

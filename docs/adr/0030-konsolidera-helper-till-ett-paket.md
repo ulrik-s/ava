@@ -56,13 +56,17 @@ till cert finns — då kan detta bytas ut.)
 
 ## Genomförande (en PR per steg)
 
-1. Flytta `node-http-adapter` → `src/lib/shared/http/`; porta motorns `Bun.serve`
-   → `node:http`/`https`, `Bun.file`/`Bun.write` → `node:fs`. (Kan göras i
-   `helper-app` först, fortsatt grön.)
-2. Slå ihop: flytta motor-modulerna in i `helper-ui`, kör servern in-process i
-   Electron-main; ta bort binär/supervisor/`extraResources`.
-3. Update-notis i menyraden.
-4. Ta bort `helper-app` + `helper-ci`; flytta motor-testerna till `helper-ui`.
+1. ✅ Flytta `node-http-adapter` → `src/lib/shared/http/`; porta motorns
+   `Bun.serve` → `node:http`/`https`, `Bun.file`/`Bun.write` → `node:fs`.
+   (Gjordes i `helper-app` först, fortsatt grön. PR #690, + `startEngine`-
+   extraktion #692.)
+2. ✅ Slå ihop: flytta motor-modulerna in i `helper-ui/src/engine/`, kör motorn
+   in-process i Electron-main (`startEngine`), login in-process (`runLogin`);
+   ta bort binär/supervisor/`extraResources`. (Slogs ihop med steg 4 — att ta
+   bort `helper-app` är den naturliga avslutningen på flytten.)
+3. ⏳ Update-notis i menyraden ("Ny version finns — ladda ner").
+4. ✅ Ta bort `helper-app` + `helper-ci`/`helper-release`; flytta motor-testerna
+   till `helper-ui` (mäts av samma coverage-grind).
 
 ## Relaterat
 

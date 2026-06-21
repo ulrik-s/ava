@@ -65,7 +65,7 @@ och `src/bin/server-runtime.ts` (montering + delad Mutex).
 
 1. `bun run office-addin/build.ts`.
 2. Servera `office-addin/dist/` över **HTTPS** (Office-krav; dev-cert à la
-   `helper-app/src/tls/`). Uppdatera `SourceLocation` i manifestet till URL:en.
+   `helper-ui/src/engine/tls/`). Uppdatera `SourceLocation` i manifestet till URL:en.
 3. Outlook → Hämta tillägg → Mina tillägg → Egna tillägg → Lägg till från fil →
    `manifests/outlook-manifest.xml`.
 4. Öppna ett mail → AVA-panelen: ange server + PAT, sök ärende, (ev.) minuter,

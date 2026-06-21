@@ -59,8 +59,8 @@ bun run server-runtime:build   # → dist/server-runtime/ava-server-runtime-<os>
 ```
 
 `bun build --compile` paketerar hela tRPC-grafen + git-peer-runtimen till en
-fristående binär per server-plattform (darwin/linux), samma mönster som
-helper-appen. Binären behöver bara system-`git` + git-creds vid körning.
+fristående binär per server-plattform (darwin/linux). Binären behöver bara
+system-`git` + git-creds vid körning.
 
 ## Kod
 

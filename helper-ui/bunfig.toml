@@ -1,9 +1,11 @@
-# Test-/coverage-konfig för helper-ui (jfr helper-app). Coverage-grind = ratchet.
+# Test-/coverage-konfig för helper-ui (Electron-skal + in-process-motor,
+# ADR 0030). Coverage-grind = ratchet.
 [test]
 coverage = true
 coverageReporter = ["text"]
 coverageSkipTestFiles = true
-# Mät bara helper-ui:s egen logik: hoppa över det delade protokollet (../src),
-# Electron-skalet (main.ts, typas i paketerings-steget) och test-fixturer.
+# Mät helper-ui:s egen logik (inkl. motorn i src/engine/): hoppa över det delade
+# repo-lagret (../src — mäts av huvud-repot), entry-/wiring-filerna (main.ts,
+# verifieras vid körning/paketering) och test-fixturer.
 coveragePathIgnorePatterns = ["../src/**", "**/main.ts", "**/helpers.ts"]
 coverageThreshold = { line = 0.90, function = 0.85 }

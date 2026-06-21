@@ -1,11 +1,11 @@
 /**
  * AVA Helper-protokoll — det delade kontraktet mellan webbappen
- * (`src/lib/client/helper/use-helper.ts`) och själva helper-binären
- * (`helper-app/`). En enda källa till sanning för portar, request-/
+ * (`src/lib/client/helper/use-helper.ts`) och själva helper-motorn
+ * (`helper-ui/src/engine/`). En enda källa till sanning för portar, request-/
  * response-former och rena hjälpare så de två sidorna aldrig glider isär.
  *
  * Framework-agnostiskt (bara typer + rena funktioner) → bor i `shared`
- * och får importeras av både UI-lagret och den fristående Bun-binären.
+ * och får importeras av både UI-lagret och helper-motorn (Node/Electron).
  *
  * Bakgrund: ADR 0005 §Språk — all icke-frontend-kod i TS med samma
  * kod-/arkitektur-regler, så helpern kan dela typer rakt av (#78).

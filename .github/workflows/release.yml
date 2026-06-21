@@ -1,13 +1,16 @@
 name: Release (full package)
 
-# Tag-triggad release av HELA paketet (#87): helper-binärer + web (statisk
-# demo-export) + auto-genererade release-noter.
+# Tag-triggad release av HELA paketet (#87): web (statisk demo-export) +
+# auto-genererade release-noter.
 #
 # Tagga `vX.Y.Z` → bygg alla artefakter → en GitHub-release med allt bifogat.
 # `workflow_dispatch` kör en DRY-RUN (bygger allt, publicerar INGET) så
 # pipelinen kan valideras utan att klippa en riktig release.
 #
-# Signering är medvetet UTELÄMNAD här (görs i #110, pinnad nyckel). Office-
+# Helper-paketeringen är medvetet UTELÄMNAD här: helpern är numera EN
+# Electron-app (ADR 0030, ingen fristående Bun-binär) som byggs/signeras med
+# electron-builder. Osignerad i nuläget (inget cert, #110) och kan inte
+# headless-byggas i CI → packas + släpps separat när cert finns. Office-
 # add-ins läggs till som ett eget bygg-/upload-steg när #83/#84 finns.
 on:
   push:
@@ -22,33 +25,6 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
-  # ─── Helper-binärer (5 plattformar) — speglar helper-release.yml ──────────
-  helper:
-    name: Build helper
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: helper-app
-    steps:
-      - uses: actions/checkout@v6
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-      - run: bun install --frozen-lockfile
-      - run: bun test
-      - name: Cross-build helper
-        run: bun build.ts "${{ github.ref_name }}"
-      - name: Checksums
-        run: |
-          cd dist
-          sha256sum ava-helper-* > "ava-helper_${{ github.ref_name }}_checksums.txt"
-          ls -lh
-      - uses: actions/upload-artifact@v4
-        with:
-          name: helper
-          path: helper-app/dist/*
-          if-no-files-found: error
-
   # ─── Web (statisk demo-export) — samma bygge som deploy-demo.yml ──────────
   web:
     name: Build web demo
@@ -84,7 +60,7 @@ jobs:
   # ─── Samla artefakter → GitHub-release (endast på riktig tag) ─────────────
   release:
     name: Publish GitHub release
-    needs: [helper, web]
+    needs: [web]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
@@ -97,14 +73,13 @@ jobs:
           generate_release_notes: true
           fail_on_unmatched_files: true
           files: |
-            artifacts/helper/*
             artifacts/web-demo/*
           body: |
             AVA ${{ github.ref_name }} — hela paketet.
 
-            - **Helper** (5 plattformar) — auto-uppdateras hos installationer (#78).
             - **Web** — statisk demo-export (`ava-web-demo_*.zip`); live-demo deployas
               löpande via deploy-demo.yml.
 
-            Office-add-ins läggs till i releasen när #83/#84 finns.
-            Artefakter är osignerade i denna version (signering: #110).
+            Helper-appen (Electron, ADR 0030) släpps separat med electron-builder
+            när signeringscert finns (#110). Office-add-ins läggs till när #83/#84
+            finns. Artefakter är osignerade i denna version.

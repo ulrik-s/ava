@@ -168,21 +168,22 @@ module.exports = {
       to: { path: "node_modules/(react|react-dom|next|@trpc)(/|$)" },
     },
     {
-      // Lager-gräns (#85): helper-appen (@ava/helper) är ett separat build-
-      // target (egen bundler) som delar kod med web-appen ENBART via det
-      // framework-agnostiska shared-lagret (protocol-kontrakt, scheman). Den
-      // får aldrig dra in UI- (client/) eller backend- (server/) kod — det
-      // skulle koppla en fristående process till Next-appens interna lager och
-      // vore första steget mot att tvingas bryta ut ett @ava/core-paket (#85
-      // är deferred just för att den här gränsen räcker som REGEL, utan paket).
-      // Samma gräns gäller framtida add-ins (lägg till from-path per target).
-      name: "helper-app-only-imports-shared",
+      // Lager-gräns (#85): helper-paketet (@ava/helper-ui — Electron-skal +
+      // in-process-motor, ADR 0030) är ett separat build-target (egen bundler)
+      // som delar kod med web-appen ENBART via det framework-agnostiska shared-
+      // lagret (protocol-kontrakt, scheman, node-http-adapter). Den får aldrig
+      // dra in UI- (client/) eller backend- (server/) kod — det skulle koppla en
+      // fristående process till Next-appens interna lager och vore första steget
+      // mot att tvingas bryta ut ett @ava/core-paket (#85 är deferred just för
+      // att den här gränsen räcker som REGEL, utan paket). Samma gräns gäller
+      // framtida add-ins (lägg till from-path per target).
+      name: "helper-ui-only-imports-shared",
       severity: "error",
       comment:
-        "helper-app får bara importera från src/lib/shared/ (delad, framework-" +
+        "helper-ui får bara importera från src/lib/shared/ (delad, framework-" +
         "agnostisk kärna) — aldrig client/ eller server/. Delad kod som helpern " +
         "behöver hör hemma i shared/. (Se #85.)",
-      from: { path: "^helper-app/" },
+      from: { path: "^helper-ui/" },
       to: { path: "^src/lib/(client|server)/" },
     },
     {
