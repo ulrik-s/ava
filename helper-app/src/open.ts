@@ -12,6 +12,7 @@ import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 
 import { isSafeFileName, type HelperOpenRequest } from "@/lib/shared/helper/protocol";
+import type { ContentStore } from "./content-store.ts";
 import { json, parseJsonBody, textError } from "./http.ts";
 import { log } from "./log.ts";
 import { openWithDefaultApp } from "./platform/open-app.ts";
@@ -25,6 +26,10 @@ export interface OpenDeps {
   openApp: (path: string) => Promise<void>;
   makeSessionDir: () => Promise<string>;
   startWatch: (path: string, uploadUrl: string, authHeader: string | undefined, timeoutMs: number) => void;
+  /** Cacha nedladdade bytes durabelt (offline-reopen, ADR 0028 §3). Valfri. */
+  persist?: (downloadUrl: string, path: string, fileName: string) => Promise<void>;
+  /** Återställ cachade bytes till `path` när nedladdning misslyckas (offline). Valfri. */
+  restore?: (downloadUrl: string, path: string) => Promise<boolean>;
 }
 
 export const defaultOpenDeps: OpenDeps = {
@@ -55,13 +60,38 @@ async function runOpen(body: HelperOpenRequest, deps: OpenDeps): Promise<Respons
   const sessionDir = await deps.makeSessionDir();
   const tmpFile = join(sessionDir, body.fileName);
 
-  const dlErr = await tryStep(() => deps.download(tmpFile, body.downloadUrl, body.authHeader), 502, "download failed");
-  if (dlErr) return dlErr;
+  const obtainErr = await obtainFile(body, tmpFile, deps);
+  if (obtainErr) return obtainErr;
   const openErr = await tryStep(() => deps.openApp(tmpFile), 500, "open failed");
   if (openErr) return openErr;
 
   startWatchIfNeeded(body, tmpFile, deps);
   return json({ path: tmpFile, status: "opened" });
+}
+
+/**
+ * Skaffa filen till `tmpFile`: ladda ner och cacha (för offline-reopen), eller
+ * — om nedladdning misslyckas (offline) — återställ en tidigare cachad kopia.
+ * Returnerar en fel-Response om filen inte kan skaffas, annars null.
+ */
+async function obtainFile(body: HelperOpenRequest, tmpFile: string, deps: OpenDeps): Promise<Response | null> {
+  try {
+    await deps.download(tmpFile, body.downloadUrl, body.authHeader);
+  } catch (err) {
+    if (deps.restore && (await deps.restore(body.downloadUrl, tmpFile))) {
+      log(`offline: öppnar cachad kopia av ${body.fileName}`);
+      return null;
+    }
+    return textError(502, `download failed: ${errMsg(err)}`);
+  }
+  if (deps.persist) {
+    try {
+      await deps.persist(body.downloadUrl, tmpFile, body.fileName);
+    } catch (err) {
+      log(`content-cache misslyckades (${body.fileName}): ${errMsg(err)}`);
+    }
+  }
+  return null;
 }
 
 /** Kör ett IO-steg; null vid framgång, annars en fel-Response. */
@@ -99,6 +129,34 @@ export async function uploadFile(path: string, uploadUrl: string, authHeader: st
   if (authHeader) headers.Authorization = authHeader;
   const resp = await fetch(uploadUrl, { method: "PUT", headers, body: Bun.file(path) });
   if (resp.status >= 400) throw new Error(`upload HTTP ${resp.status}`);
+}
+
+/**
+ * Cacha nedladdade bytes durabelt (ADR 0028 §3, läs-sidan): efter en lyckad
+ * nedladdning sparas bytsen content-adresserat så samma dokument kan öppnas
+ * igen OFFLINE. Wiras in som `OpenDeps.persist` i `main`.
+ */
+export async function persistDownloaded(
+  store: ContentStore,
+  downloadUrl: string,
+  path: string,
+  fileName: string,
+): Promise<void> {
+  const bytes = await Bun.file(path).bytes();
+  await store.store(downloadUrl, bytes, fileName);
+}
+
+/**
+ * Återställ cachade bytes till `path` (ADR 0028 §3): när nedladdning misslyckas
+ * (offline) och en tidigare cachad kopia finns skrivs den ut så dokumentet kan
+ * öppnas ändå. Returnerar false om inget cachat finns. Wiras in som
+ * `OpenDeps.restore` i `main`.
+ */
+export async function restoreCached(store: ContentStore, downloadUrl: string, path: string): Promise<boolean> {
+  const bytes = await store.load(downloadUrl);
+  if (bytes === null) return false;
+  await Bun.write(path, bytes);
+  return true;
 }
 
 /**

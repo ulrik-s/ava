@@ -21,9 +21,19 @@ import { join } from "node:path";
 
 import { HELPER_HTTPS_PORT, HELPER_PORT } from "@/lib/shared/helper/protocol";
 
+import { ContentStore } from "./content-store.ts";
 import { installService, uninstallService, type InstallDeps } from "./install.ts";
 import { initLog, log } from "./log.ts";
-import { defaultOpenDeps, defaultWatchDeps, enqueueSavedFile, handleOpen, watchAndUpload, type OpenDeps } from "./open.ts";
+import {
+  defaultOpenDeps,
+  defaultWatchDeps,
+  enqueueSavedFile,
+  handleOpen,
+  persistDownloaded,
+  restoreCached,
+  watchAndUpload,
+  type OpenDeps,
+} from "./open.ts";
 import { dataDir } from "./paths.ts";
 import { currentPlatform } from "./platform/runtime.ts";
 import { UploadQueue } from "./queue.ts";
@@ -135,11 +145,12 @@ function buildUpdateConfig(): UpdateConfig {
 }
 
 /**
- * `/open`-hanterare vars watch-loop ENQUEUE:ar varje save i den durabla
- * kön i stället för att PUT:a direkt. Sparningen blir därmed durabel innan
- * den når nätet (ADR 0028 §3) — kön dränerar autonomt och överlever omstart.
+ * `/open`-hanterare som gör dokument-livscykeln offline-first (ADR 0028 §3):
+ * watch-loopen ENQUEUE:ar varje save i den durabla kön (i st.f. direkt-PUT),
+ * nedladdade bytes cachas content-adresserat (persist) och en cachad kopia
+ * återställs (restore) om nedladdning misslyckas offline.
  */
-export function queueBackedOnOpen(queue: UploadQueue): (req: Request) => Promise<Response> {
+export function queueBackedOnOpen(queue: UploadQueue, content: ContentStore): (req: Request) => Promise<Response> {
   const deps: OpenDeps = {
     ...defaultOpenDeps,
     startWatch: (path, uploadUrl, authHeader, timeoutMs) =>
@@ -147,20 +158,29 @@ export function queueBackedOnOpen(queue: UploadQueue): (req: Request) => Promise
         ...defaultWatchDeps,
         upload: (p, url, auth) => enqueueSavedFile(queue, p, url, auth),
       }),
+    persist: (url, path, fileName) => persistDownloaded(content, url, path, fileName),
+    restore: (url, path) => restoreCached(content, url, path),
   };
   return (req) => handleOpen(req, deps);
 }
 
-/** Skapa + återställ upload-kön (om data-dir finns) och starta dränerings-loopen. */
-function startUploadQueue(signal: AbortSignal): UploadQueue | undefined {
+/** De durabla lagren (kö + content) när data-dir finns. */
+interface Stores {
+  queue: UploadQueue;
+  content: ContentStore;
+}
+
+/** Skapa + återställ kön + content-lagret (om data-dir finns) och starta dränerings-loopen. */
+function startStores(signal: AbortSignal): Stores | undefined {
   const dir = dataDir();
   if (dir === null) {
-    log("ingen data-dir → upload-kö inaktiverad (direkt-upload)");
+    log("ingen data-dir → durabla lager inaktiverade (direkt-upload, ingen offline-cache)");
     return undefined;
   }
   const queue = new UploadQueue(join(dir, "queue"));
   void queue.recover().then(() => queue.startDrainLoop(signal));
-  return queue;
+  const content = new ContentStore(join(dir, "content"));
+  return { queue, content };
 }
 
 function main(): void {
@@ -193,12 +213,12 @@ function main(): void {
   const abort = new AbortController();
   void runUpdateLoop(updateCfg, abort.signal);
 
-  const queue = startUploadQueue(abort.signal);
+  const stores = startStores(abort.signal);
   const handler = createHandler({
     version: VERSION,
     extraOrigins: extraOrigins(),
     onCheckUpdate: () => { void checkOnce(updateCfg).catch((err) => log(`check-update: ${String(err)}`)); },
-    ...(queue ? { onOpen: queueBackedOnOpen(queue), onStatus: () => queue.snapshot() } : {}),
+    ...(stores ? { onOpen: queueBackedOnOpen(stores.queue, stores.content), onStatus: () => stores.queue.snapshot() } : {}),
   });
 
   const httpServer = Bun.serve({ port, hostname: "127.0.0.1", fetch: handler });

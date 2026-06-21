@@ -3,7 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, test } from "bun:test";
 
-import { enqueueSavedFile, handleOpen, type OpenDeps } from "../src/open.ts";
+import { ContentStore } from "../src/content-store.ts";
+import { enqueueSavedFile, handleOpen, persistDownloaded, restoreCached, type OpenDeps } from "../src/open.ts";
 import { UploadQueue } from "../src/queue.ts";
 import { jsonRequest } from "./helpers.ts";
 
@@ -81,6 +82,73 @@ describe("handleOpen", () => {
     const rec = recorder({ openApp: async () => { throw new Error("no app"); } });
     const res = await handleOpen(openReq({ downloadUrl: "http://x/f", fileName: "a.pdf" }), rec.deps);
     expect(res.status).toBe(500);
+  });
+});
+
+describe("offline content-cache (ADR 0028 §3)", () => {
+  test("cachar nedladdade bytes via persist", async () => {
+    const persisted: Array<{ url: string; path: string; fileName: string }> = [];
+    const rec = recorder({
+      persist: async (url, path, fileName) => { persisted.push({ url, path, fileName }); },
+    });
+    const res = await handleOpen(openReq({ downloadUrl: "http://x/f", fileName: "a.pdf" }), rec.deps);
+    expect(res.status).toBe(200);
+    expect(persisted).toEqual([{ url: "http://x/f", path: "/tmp/ava-session/a.pdf", fileName: "a.pdf" }]);
+  });
+
+  test("nedladdning misslyckas men cache finns → öppnar cachad kopia (offline)", async () => {
+    const rec = recorder({
+      download: async () => { throw new Error("offline"); },
+      restore: async () => true,
+    });
+    const res = await handleOpen(openReq({ downloadUrl: "http://x/f", fileName: "a.pdf" }), rec.deps);
+    expect(res.status).toBe(200);
+    expect(rec.opened).toEqual(["/tmp/ava-session/a.pdf"]); // öppnades trots download-fel
+  });
+
+  test("nedladdning misslyckas + ingen cache → 502", async () => {
+    const rec = recorder({
+      download: async () => { throw new Error("offline"); },
+      restore: async () => false,
+    });
+    const res = await handleOpen(openReq({ downloadUrl: "http://x/f", fileName: "a.pdf" }), rec.deps);
+    expect(res.status).toBe(502);
+    expect(rec.opened).toHaveLength(0);
+  });
+
+  test("persist-fel kraschar inte öppningen (cache best-effort)", async () => {
+    const rec = recorder({ persist: async () => { throw new Error("disk full"); } });
+    const res = await handleOpen(openReq({ downloadUrl: "http://x/f", fileName: "a.pdf" }), rec.deps);
+    expect(res.status).toBe(200);
+    expect(rec.opened).toHaveLength(1);
+  });
+});
+
+describe("persistDownloaded + restoreCached", () => {
+  const dirs: string[] = [];
+  afterAll(async () => { await Promise.all(dirs.map((d) => rm(d, { recursive: true, force: true }))); });
+
+  test("round-trip: persist en nedladdad fil, restore till ny path", async () => {
+    const work = await mkdtemp(join(tmpdir(), "ava-dl-"));
+    const cdir = await mkdtemp(join(tmpdir(), "ava-cs-"));
+    dirs.push(work, cdir);
+    const dl = join(work, "doc.pdf");
+    await writeFile(dl, "nedladdat innehåll", "utf8");
+
+    const store = new ContentStore(cdir);
+    await persistDownloaded(store, "http://s/d/1", dl, "doc.pdf");
+
+    const out = join(work, "restored.pdf");
+    const ok = await restoreCached(store, "http://s/d/1", out);
+    expect(ok).toBe(true);
+    expect(await Bun.file(out).text()).toBe("nedladdat innehåll");
+  });
+
+  test("restoreCached → false när inget cachat finns", async () => {
+    const cdir = await mkdtemp(join(tmpdir(), "ava-cs-"));
+    dirs.push(cdir);
+    const store = new ContentStore(cdir);
+    expect(await restoreCached(store, "http://s/saknas", join(cdir, "x"))).toBe(false);
   });
 });
 
