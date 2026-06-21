@@ -8,8 +8,8 @@
  * användaren om helpern är installerad och kör.
  */
 
-import { ExternalLink, CheckCircle2, XCircle, Loader2 } from "lucide-react";
-import { useHelper, triggerHelperUpdateCheck } from "@/lib/client/helper/use-helper";
+import { ExternalLink, CheckCircle2, XCircle, Loader2, CloudUpload, AlertTriangle, CloudCheck } from "lucide-react";
+import { useHelper, useHelperSyncStatus, triggerHelperUpdateCheck } from "@/lib/client/helper/use-helper";
 
 const RELEASES_URL = "https://github.com/ulrik-s/ava/releases?q=helper-&expanded=true";
 
@@ -29,6 +29,7 @@ export function HelperSection() {
       </p>
 
       <Status status={status} />
+      {status.version ? <SyncStatus /> : null}
 
       <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
         <a href={RELEASES_URL} target="_blank" rel="noreferrer"
@@ -43,6 +44,38 @@ export function HelperSection() {
           </button>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Synk-status för helperns durabla upload-kö (ADR 0028 §8): offline-sparningar
+ * får ALDRIG vara osynliga. Visar konflikt > väntande > allt-synkat (i den
+ * prioritetsordningen). Renderar inget innan första pollen / utan /status.
+ */
+function SyncStatus() {
+  const sync = useHelperSyncStatus();
+  if (sync === null) return null;
+  if (sync.conflict > 0) {
+    return (
+      <div className="mt-2 inline-flex items-center gap-2 text-sm text-amber-700">
+        <AlertTriangle size={14} />
+        <span>{sync.conflict} dokument i konflikt — servern har en nyare version. Öppna och spara igen för att lösa.</span>
+      </div>
+    );
+  }
+  if (sync.pending > 0) {
+    return (
+      <div className="mt-2 inline-flex items-center gap-2 text-sm text-blue-700">
+        <CloudUpload size={14} />
+        <span>{sync.pending} {sync.pending === 1 ? "ändring väntar" : "ändringar väntar"} på synk — sparas så fort servern går att nå.</span>
+      </div>
+    );
+  }
+  return (
+    <div className="mt-2 inline-flex items-center gap-2 text-sm text-green-700">
+      <CloudCheck size={14} />
+      <span>Allt synkat — inga väntande ändringar.</span>
     </div>
   );
 }

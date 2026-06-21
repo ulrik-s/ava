@@ -198,7 +198,7 @@ function main(): void {
     version: VERSION,
     extraOrigins: extraOrigins(),
     onCheckUpdate: () => { void checkOnce(updateCfg).catch((err) => log(`check-update: ${String(err)}`)); },
-    ...(queue ? { onOpen: queueBackedOnOpen(queue) } : {}),
+    ...(queue ? { onOpen: queueBackedOnOpen(queue), onStatus: () => queue.snapshot() } : {}),
   });
 
   const httpServer = Bun.serve({ port, hostname: "127.0.0.1", fetch: handler });

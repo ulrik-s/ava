@@ -89,6 +89,29 @@ describe("/check-update", () => {
   });
 });
 
+describe("GET /status", () => {
+  test("tom kö när onStatus ej konfigurerad", async () => {
+    const res = await handler()(req("/status"));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ pending: 0, conflict: 0, total: 0, entries: [] });
+  });
+
+  test("returnerar kö-ögonblicksbilden från onStatus", async () => {
+    const snapshot = {
+      pending: 1,
+      conflict: 1,
+      total: 2,
+      entries: [
+        { id: "a", uploadUrl: "http://s/1", fileName: "x.docx", enqueuedAt: 1, attempts: 0, nextAttemptAt: 1, status: "pending" as const },
+        { id: "b", uploadUrl: "http://s/2", fileName: "y.docx", enqueuedAt: 2, attempts: 3, nextAttemptAt: 9, status: "conflict" as const, lastError: "HTTP 409" },
+      ],
+    };
+    const h = handler({ onStatus: () => snapshot });
+    const res = await h(req("/status"));
+    expect(await res.json()).toEqual(snapshot);
+  });
+});
+
 describe("okänd route", () => {
   test("404", async () => {
     const res = await handler()(req("/nope"));

@@ -10,6 +10,7 @@ import {
   triggerHelperUpdateCheck,
   resetHelperBaseCache,
   resolveHelperBase,
+  fetchHelperStatus,
 } from "@/lib/client/helper/use-helper";
 
 const HTTPS = "https://localhost:48762";
@@ -105,6 +106,31 @@ describe("openViaHelper", () => {
   it("kastar 'inte tillgänglig' när helpern saknas", async () => {
     global.fetch = vi.fn().mockRejectedValue(new Error("down"));
     await expect(openViaHelper({ fileName: "x.pdf", downloadUrl: "u" })).rejects.toThrow(/inte tillgänglig/);
+  });
+});
+
+describe("fetchHelperStatus", () => {
+  const SNAP = { pending: 2, conflict: 1, total: 3, entries: [] };
+
+  it("returnerar kö-status från /status", async () => {
+    global.fetch = routeFetch([
+      [`${HTTPS}/ping`, () => new Response("ava-helper v1\n", { status: 200 })],
+      [`${HTTPS}/status`, () => new Response(JSON.stringify(SNAP), { status: 200 })],
+    ]);
+    expect(await fetchHelperStatus()).toEqual(SNAP);
+  });
+
+  it("null när helpern saknas", async () => {
+    global.fetch = vi.fn().mockRejectedValue(new Error("down"));
+    expect(await fetchHelperStatus()).toBeNull();
+  });
+
+  it("null vid trasigt status-svar (fel form)", async () => {
+    global.fetch = routeFetch([
+      [`${HTTPS}/ping`, () => new Response("ava-helper v1\n", { status: 200 })],
+      [`${HTTPS}/status`, () => new Response(JSON.stringify({ pending: "nope" }), { status: 200 })],
+    ]);
+    expect(await fetchHelperStatus()).toBeNull();
   });
 });
 
