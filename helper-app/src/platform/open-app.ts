@@ -30,3 +30,13 @@ export async function openWithDefaultApp(path: string): Promise<void> {
   const { cmd, args } = openCommand(currentPlatform(), path);
   await spawnDetached(cmd, args).started;
 }
+
+/**
+ * Öppna en URL i systemets default-browser (samma OS-kommandon som
+ * `openWithDefaultApp` — `open`/`xdg-open`/FileProtocolHandler tar även en URL).
+ * Används av auth-loopback-flödet (ADR 0028 §2) för att starta OIDC-login.
+ */
+export async function openUrlInBrowser(url: string): Promise<void> {
+  const { cmd, args } = openCommand(currentPlatform(), url);
+  await spawnDetached(cmd, args).started;
+}

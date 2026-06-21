@@ -37,6 +37,13 @@ services:
       AVA_HTTP_HOST: 0.0.0.0
       AVA_HTTP_PORT: "3001"
       AVA_CONTENT_DIR: /data/content
+      # Bearer-JWT-väg för helpern/add-insen (ADR 0028 §1). Dual-URL (jfr
+      # oauth2-proxy nedan): issuer = PUBLIK hostname (matchar token-`iss` som
+      # browsern + helpern på host:en ser), JWKS = INTERN backchannel (server →
+      # keycloak:8080). Ingen audience-kontroll i fixturen (token bär aud=ava
+      # via mappern men vi sätter inte AVA_OIDC_AUDIENCE → signatur+iss+exp räcker).
+      AVA_OIDC_ISSUER: "${OIDC_KC_HOSTNAME:-http://localhost:8089}/realms/ava"
+      AVA_OIDC_JWKS_URI: "http://keycloak:8080/realms/ava/protocol/openid-connect/certs"
     volumes:
       # Bind-mount (#649): demo-seeden (host) skriver dokument-bytes hit och
       # servern (GitContentStore) läser dem från samma katalog → /documents +

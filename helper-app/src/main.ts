@@ -21,6 +21,8 @@ import { join } from "node:path";
 
 import { HELPER_HTTPS_PORT, HELPER_PORT } from "@/lib/shared/helper/protocol";
 
+import { buildAuthHeaderProvider } from "./auth/auth-provider.ts";
+import { loginConfigFromEnv, runLogin } from "./auth/login.ts";
 import { ContentStore, resolveCacheTtlMs } from "./content-store.ts";
 import { fetchAndCacheContent, handleContent } from "./content.ts";
 import { installService, uninstallService, type InstallDeps } from "./install.ts";
@@ -28,6 +30,7 @@ import { initLog, log } from "./log.ts";
 import {
   defaultOpenDeps,
   defaultWatchDeps,
+  downloadTo,
   enqueueSavedFile,
   handleOpen,
   persistDownloaded,
@@ -151,11 +154,18 @@ function buildUpdateConfig(): UpdateConfig {
  * nedladdade bytes cachas content-adresserat (persist) och en cachad kopia
  * återställs (restore) om nedladdning misslyckas offline.
  */
-export function queueBackedOnOpen(queue: UploadQueue, content: ContentStore): (req: Request) => Promise<Response> {
+/** Färsk `Authorization`-header från helperns OIDC-token, eller undefined. */
+type AuthHeaderProvider = () => Promise<string | undefined>;
+
+export function queueBackedOnOpen(queue: UploadQueue, content: ContentStore, authHeader?: AuthHeaderProvider): (req: Request) => Promise<Response> {
+  // Browserns authHeader först; annars helperns egen OIDC-token (autonom, ADR 0028 §2).
+  const fallback = async (browserAuth: string | undefined): Promise<string | undefined> =>
+    browserAuth ?? (authHeader ? await authHeader() : undefined);
   const deps: OpenDeps = {
     ...defaultOpenDeps,
-    startWatch: (path, uploadUrl, authHeader, timeoutMs) =>
-      watchAndUpload(path, uploadUrl, authHeader, timeoutMs, {
+    download: async (path, url, browserAuth) => downloadTo(path, url, await fallback(browserAuth)),
+    startWatch: (path, uploadUrl, authHeaderArg, timeoutMs) =>
+      watchAndUpload(path, uploadUrl, authHeaderArg, timeoutMs, {
         ...defaultWatchDeps,
         upload: (p, url, auth) => enqueueSavedFile(queue, p, url, auth),
       }),
@@ -172,40 +182,50 @@ interface Stores {
 }
 
 /** Skapa + återställ kön + content-lagret (om data-dir finns) och starta dränerings-loopen. */
-function startStores(signal: AbortSignal): Stores | undefined {
+function startStores(signal: AbortSignal, authHeader?: AuthHeaderProvider): Stores | undefined {
   const dir = dataDir();
   if (dir === null) {
     log("ingen data-dir → durabla lager inaktiverade (direkt-upload, ingen offline-cache)");
     return undefined;
   }
-  const queue = new UploadQueue(join(dir, "queue"));
+  // Kön får token-providern → drar färsk Bearer vid varje upload-försök (ADR 0028 §2).
+  const queue = new UploadQueue(join(dir, "queue"), undefined, authHeader);
   void queue.recover().then(() => queue.startDrainLoop(signal));
   const content = new ContentStore(join(dir, "content"));
   content.startEvictionLoop(signal, resolveCacheTtlMs(process.env.AVA_HELPER_CACHE_TTL_DAYS));
   return { queue, content };
 }
 
+/** `--login`: para helpern mot byråns IdP via loopback-PKCE (ADR 0028 §2). */
+async function handleLogin(): Promise<void> {
+  const cfg = loginConfigFromEnv();
+  if (!cfg) {
+    process.stderr.write("AVA_OIDC_ISSUER krävs för --login\n");
+    process.exitCode = 1;
+    return;
+  }
+  try {
+    await runLogin(cfg);
+    process.stdout.write("Inloggning klar — helpern är parad.\n");
+  } catch (err) {
+    process.stderr.write(`Inloggning misslyckades: ${err instanceof Error ? err.message : String(err)}\n`);
+    process.exitCode = 1;
+  }
+}
+
+/** Hantera engångs-CLI-flaggor; returnerar true om en flagga togs (main avslutar). */
+function runCliFlag(argv: readonly string[]): boolean {
+  if (argv.includes("--version")) { process.stdout.write(`${VERSION}\n`); return true; }
+  if (argv.includes("--login")) { void handleLogin(); return true; }
+  if (argv.includes("--install-trust")) { handleTrust("install"); return true; }
+  if (argv.includes("--uninstall-trust")) { handleTrust("uninstall"); return true; }
+  if (argv.includes("--install")) { handleInstall("install"); return true; }
+  if (argv.includes("--uninstall")) { handleInstall("uninstall"); return true; }
+  return false;
+}
+
 function main(): void {
-  if (process.argv.includes("--version")) {
-    process.stdout.write(`${VERSION}\n`);
-    return;
-  }
-  if (process.argv.includes("--install-trust")) {
-    handleTrust("install");
-    return;
-  }
-  if (process.argv.includes("--uninstall-trust")) {
-    handleTrust("uninstall");
-    return;
-  }
-  if (process.argv.includes("--install")) {
-    handleInstall("install");
-    return;
-  }
-  if (process.argv.includes("--uninstall")) {
-    handleInstall("uninstall");
-    return;
-  }
+  if (runCliFlag(process.argv)) return;
 
   initLog();
   const port = listenPort();
@@ -215,19 +235,24 @@ function main(): void {
   const abort = new AbortController();
   void runUpdateLoop(updateCfg, abort.signal);
 
-  const stores = startStores(abort.signal);
+  // Helperns egen OIDC-auth (om parad/konfigurerad) → autonom Bearer mot servern.
+  const loginCfg = loginConfigFromEnv();
+  const authHeader: AuthHeaderProvider | undefined = loginCfg ? buildAuthHeaderProvider(loginCfg) : undefined;
+
+  const stores = startStores(abort.signal, authHeader);
   const handler = createHandler({
     version: VERSION,
     extraOrigins: extraOrigins(),
     onCheckUpdate: () => { void checkOnce(updateCfg).catch((err) => log(`check-update: ${String(err)}`)); },
     ...(stores
       ? {
-          onOpen: queueBackedOnOpen(stores.queue, stores.content),
+          onOpen: queueBackedOnOpen(stores.queue, stores.content, authHeader),
           onStatus: () => stores.queue.snapshot(),
           onContent: (req: Request) =>
             handleContent(req, {
               load: (url) => stores.content.load(url),
-              fetchAndCache: (url, auth, fileName) => fetchAndCacheContent(stores.content, url, auth, fileName),
+              fetchAndCache: async (url, auth, fileName) =>
+                fetchAndCacheContent(stores.content, url, auth ?? (authHeader ? await authHeader() : undefined), fileName),
             }),
         }
       : {}),

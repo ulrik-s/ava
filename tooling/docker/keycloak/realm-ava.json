@@ -39,6 +39,41 @@
           }
         }
       ]
+    },
+    {
+      "clientId": "ava-helper",
+      "name": "AVA Helper (loopback-PKCE, ADR 0028)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": [
+        "http://127.0.0.1:48765/callback",
+        "http://localhost:48765/callback"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "defaultClientScopes": [
+        "openid",
+        "email",
+        "profile",
+        "roles",
+        "offline_access"
+      ],
+      "protocolMappers": [
+        {
+          "name": "audience-ava",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.client.audience": "ava",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        }
+      ]
     }
   ],
   "users": [
