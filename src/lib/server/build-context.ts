@@ -6,6 +6,8 @@
  * backend. Ren funktion — inga sidoeffekter, lätt att testa.
  */
 
+import type { Capabilities } from "@/lib/shared/capabilities";
+import { DEMO_CAPABILITIES } from "@/lib/shared/capabilities";
 import type { Principal } from "./auth/principal";
 import type { IDataStore, IEventLog } from "./data-store/IDataStore";
 import type { IPorts } from "./ports";
@@ -36,6 +38,8 @@ export interface BuildContextDeps {
   repos?: Repositories;
   /** Server-sidans delta-sync-port (ADR 0017). Bara server-first-runtimen. */
   sync?: SyncStore;
+  /** Kapabilitets-tier (ADR 0027). Default: demo-baslinjen (server-first sätter sina). */
+  capabilities?: Capabilities;
 }
 
 export function buildContext(deps: BuildContextDeps): Context {
@@ -56,5 +60,6 @@ export function buildContext(deps: BuildContextDeps): Context {
     ports: deps.ports,
     user: deps.principal,
     ...(deps.sync ? { sync: deps.sync } : {}),
+    capabilities: deps.capabilities ?? DEMO_CAPABILITIES,
   };
 }

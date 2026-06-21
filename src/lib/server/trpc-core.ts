@@ -17,6 +17,7 @@
 
 import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
+import type { Capabilities } from "@/lib/shared/capabilities";
 import { asId } from "@/lib/shared/schemas/ids";
 import type { Principal } from "./auth/principal";
 import type { IDataStore } from "./data-store/IDataStore";
@@ -51,6 +52,12 @@ export type Context = {
    * NOT_IMPLEMENTED. Konkret impl (Drizzle) hålls server-side (ej i bundeln).
    */
   sync?: SyncStore;
+  /**
+   * Kapabilitets-tier (ADR 0027): vad denna runtime kan. Server-first-contexten
+   * annonserar serverns förmågor (probas av klienten via `system.capabilities`);
+   * git/demo-contexten defaultar till demo-baslinjen. `undefined` → demo.
+   */
+  capabilities?: Capabilities;
 };
 
 const t = initTRPC.context<Context>().create({

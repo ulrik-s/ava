@@ -11,6 +11,7 @@ import type { Principal } from "@/lib/server/auth/principal";
 import { buildContext } from "@/lib/server/build-context";
 import type { IDataStore } from "@/lib/server/data-store/IDataStore";
 import type { IPorts } from "@/lib/server/ports";
+import { DEMO_CAPABILITIES } from "@/lib/shared/capabilities";
 
 const fakeEvents = { marker: "events" };
 const fakeStore = { marker: "store", events: fakeEvents } as unknown as IDataStore;
@@ -36,6 +37,11 @@ describe("buildContext", () => {
 
   it("returnerar exakt Context-formen (inga extra fält)", () => {
     const ctx = buildContext({ dataStore: fakeStore, ports: fakePorts, principal });
-    expect(Object.keys(ctx).sort()).toEqual(["dataStore", "ports", "repos", "user"]);
+    expect(Object.keys(ctx).sort()).toEqual(["capabilities", "dataStore", "ports", "repos", "user"]);
+  });
+
+  it("defaultar capabilities till demo-baslinjen (ADR 0027)", () => {
+    const ctx = buildContext({ dataStore: fakeStore, ports: fakePorts, principal });
+    expect(ctx.capabilities).toEqual(DEMO_CAPABILITIES);
   });
 });
