@@ -75,6 +75,8 @@ vi.mock("@/lib/client/trpc", () => ({
       // useMatterInvariants (diagnostik) frågar dokument-listan för att
       // upptäcka KR-utan-dokument — måste finnas i mocken.
       list: { useQuery: () => ({ data: { documents: [] }, isLoading: false }) },
+      // useEagerCacheMatterDocuments (ADR 0028 §4a) frågar dokument-trädet.
+      tree: { useQuery: () => ({ data: { documents: [] }, isLoading: false }) },
     },
     organization: {
       getSettings: { useQuery: () => ({ data: undefined }) },
