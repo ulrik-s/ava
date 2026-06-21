@@ -12,14 +12,19 @@
 
 import { Plug } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useCapabilities } from "@/lib/client/capabilities/use-capabilities";
 import "@/lib/client/integrations/office365-connector"; // ⚠ side-effect: registrerar
 import { listConnectors } from "@/lib/client/integrations/registry";
 import type { ConnectionStatus, IntegrationConnector } from "@/lib/client/integrations/types";
 
 export function IntegrationsSection() {
+  const caps = useCapabilities();
   const [connectors] = useState(() => listConnectors());
 
   if (connectors.length === 0) return null;
+  // ADR 0027: externa tjänst-anslutningar (mejl/kalender/ledger) kräver en
+  // server → dölj affordansen i demon (capabilities.mailSync/ledger = false).
+  if (!caps.mailSync && !caps.ledger) return null;
 
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
