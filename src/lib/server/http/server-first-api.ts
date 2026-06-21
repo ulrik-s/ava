@@ -17,6 +17,7 @@ import type { IPorts } from "@/lib/server/ports";
 import { createDbChangeLogRecorder, enableChangeLogOnAll } from "@/lib/server/repositories/change-log-recorder";
 import { buildDrizzleRepositories } from "@/lib/server/repositories/drizzle-repositories";
 import { DrizzleSyncStore } from "@/lib/server/sync/drizzle-sync-store";
+import { bearerConfigFromEnv, type BearerVerifyConfig } from "./bearer-claims";
 import { createServerTrpcHandler } from "./server-trpc-handler";
 
 export interface ServerFirstApiConfig {
@@ -32,6 +33,11 @@ export interface ServerFirstApiConfig {
   maxConnections?: number;
   /** Server-side fel-logg. */
   onError?: (err: unknown) => void;
+  /**
+   * Bearer-JWT-verifiering för icke-cookie-klienter (helper/add-in, ADR
+   * 0028/0013). Default: härled ur miljön (`AVA_OIDC_*`); null → av.
+   */
+  bearer?: BearerVerifyConfig | null;
 }
 
 export interface ServerFirstApi {
@@ -53,6 +59,8 @@ export function buildServerFirstApi(config: ServerFirstApiConfig): ServerFirstAp
   // Driv delta-sync: varje accepterad skrivning loggas i change_log (pull),
   // och `ctx.sync` ger sync-routern dess pull/push (ADR 0017).
   enableChangeLogOnAll(repos, createDbChangeLogRecorder(db));
+  // Bearer-JWT-väg: explicit config, annars ur miljön (AVA_OIDC_*). Av som default.
+  const bearer = config.bearer === undefined ? bearerConfigFromEnv() : config.bearer;
   const handler = createServerTrpcHandler({
     repos,
     ports: config.ports ?? noopPorts,
@@ -60,6 +68,7 @@ export function buildServerFirstApi(config: ServerFirstApiConfig): ServerFirstAp
     sync: new DrizzleSyncStore(db, repos),
     ...(config.endpoint ? { endpoint: config.endpoint } : {}),
     ...(config.onError ? { onError: config.onError } : {}),
+    ...(bearer ? { bearer } : {}),
   });
   return { handler, repos, close };
 }

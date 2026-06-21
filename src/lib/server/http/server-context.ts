@@ -29,6 +29,7 @@ import type { SyncStore } from "@/lib/server/sync/sync-store";
 import type { Context } from "@/lib/server/trpc-core";
 import type { Capabilities } from "@/lib/shared/capabilities";
 import type { User } from "@/lib/shared/schemas/user";
+import { bearerClaims, type BearerVerifyConfig } from "./bearer-claims";
 import { forwardedClaims, type ForwardedHeaderNames } from "./forwarded-claims";
 
 /**
@@ -89,6 +90,11 @@ export interface ServerContextDeps {
   headerNames?: ForwardedHeaderNames;
   /** Server-sidans delta-sync-port (ADR 0017) — driver `sync`-routern. */
   sync?: SyncStore;
+  /**
+   * Bearer-JWT-verifiering (ADR 0028/0013) för klienter utan OIDC-cookie
+   * (helper, Office-add-in). Utelämnad → bara cookie-vägen (oförändrat).
+   */
+  bearer?: BearerVerifyConfig;
 }
 
 /** Mappa en allowlist-rad ur full `User` → den delmängd `OidcAuthProvider` behöver. */
@@ -107,7 +113,11 @@ function toAllowlist(users: readonly User[]): AllowlistedUser[] {
 
 /** Bygg en server-first-`Context` för en inkommande HTTP-request. */
 export async function createServerContext(req: Request, deps: ServerContextDeps): Promise<Context> {
-  const claims = forwardedClaims(req.headers, deps.headerNames);
+  // Cookie-vägen (oauth2-proxy forwarded headers) först; annars Bearer-JWT
+  // (helper/add-in) om konfigurerad. Båda → samma OidcClaims → samma allowlist.
+  const claims =
+    forwardedClaims(req.headers, deps.headerNames) ??
+    (deps.bearer ? await bearerClaims(req.headers, deps.bearer) : null);
   const users = await deps.repos.users.listByOrg(deps.organizationId);
   const principal = new OidcAuthProvider(claims, toAllowlist(users)).getPrincipal();
   return buildContext({
