@@ -89,12 +89,20 @@ export interface EnqueueInput {
 export class UploadQueue {
   private readonly dir: string;
   private readonly deps: QueueDeps;
+  private readonly tokenProvider: (() => Promise<string | undefined>) | undefined;
   private readonly entries = new Map<string, QueueEntry>();
   private draining = false;
 
-  constructor(dir: string, deps: QueueDeps = defaultQueueDeps) {
+  /**
+   * `tokenProvider` (ADR 0028 §2): ger en FÄRSK `Authorization`-header vid varje
+   * upload-försök när posten inte bär en egen (helpern auktoriserar autonomt med
+   * sin OIDC-token). Hämtas vid drain-tid — aldrig lagrad — så en utgången token
+   * inte fryses in i en köad post som väntat dagar offline.
+   */
+  constructor(dir: string, deps: QueueDeps = defaultQueueDeps, tokenProvider?: () => Promise<string | undefined>) {
     this.dir = dir;
     this.deps = deps;
+    this.tokenProvider = tokenProvider;
   }
 
   private manifestPath(id: string): string {
@@ -183,7 +191,9 @@ export class UploadQueue {
     let status: number;
     try {
       const bytes = await readFile(this.contentPath(entry.id));
-      status = await this.deps.put(entry.uploadUrl, bytes, entry.authHeader);
+      // Egen authHeader (från browsern) först; annars helperns färska OIDC-token.
+      const auth = entry.authHeader ?? (this.tokenProvider ? await this.tokenProvider() : undefined);
+      status = await this.deps.put(entry.uploadUrl, bytes, auth);
     } catch (err) {
       await this.markFailed(entry, msg(err));
       res.failed++;
