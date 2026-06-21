@@ -14,6 +14,7 @@ import { asId } from "@/lib/shared/schemas/ids";
 import { invoices, matters, paymentPlanReminders, paymentPlans } from "../db/schema";
 import type { AppDb } from "../db/types";
 import { DrizzleRepository, versionedTable } from "./drizzle-repository";
+import { invoiceOrg } from "./matter-org";
 import type {
   JoinedPaymentPlan, JoinedPaymentPlanWithReminders, PaymentPlanRepository,
 } from "./payment-plan-repository";
@@ -21,6 +22,11 @@ import type {
 export class DrizzlePaymentPlanRepository extends DrizzleRepository<PaymentPlan> implements PaymentPlanRepository {
   constructor(db: AppDb, now: () => Date = () => new Date()) {
     super(db, versionedTable(paymentPlans), now);
+  }
+
+  /** payment_plans saknar org-kolumn → härled via fakturan→ärendet (#647). */
+  protected override resolveOrg(row: unknown): Promise<string | undefined> {
+    return invoiceOrg(this.db, (row as { invoiceId?: string }).invoiceId);
   }
 
   async getByIdInOrg(planId: string, organizationId: string): Promise<PaymentPlan | null> {

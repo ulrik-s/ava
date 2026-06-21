@@ -23,7 +23,14 @@ export interface ChangeLogEntry {
 }
 
 export interface ChangeLogRecorder {
-  record(entry: ChangeLogEntry): Promise<void>;
+  /**
+   * `exec` (#647): kör insert:en på en specifik db/tx-handle. Repo:t skickar
+   * `this.db` så loggningen sker på SAMMA connection som skrivningen — inne i en
+   * transaktion blir change_log-raden atomisk med raden (rullas tillbaka ihop)
+   * och undviker dödläge på single-connection-drivers (pglite). Default: den
+   * fångade db:n.
+   */
+  record(entry: ChangeLogEntry, exec?: AppDb): Promise<void>;
 }
 
 /**
@@ -40,8 +47,8 @@ export function enableChangeLogOnAll(repos: object, recorder: ChangeLogRecorder)
 /** Recorder som appendar till `change_log`-tabellen i samma db. */
 export function createDbChangeLogRecorder(db: AppDb): ChangeLogRecorder {
   return {
-    async record(entry: ChangeLogEntry): Promise<void> {
-      await db.insert(changeLog).values({
+    async record(entry: ChangeLogEntry, exec: AppDb = db): Promise<void> {
+      await exec.insert(changeLog).values({
         organizationId: entry.organizationId,
         entity: entry.entity,
         rowId: entry.rowId,

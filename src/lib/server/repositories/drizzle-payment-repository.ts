@@ -9,11 +9,17 @@ import { asId } from "@/lib/shared/schemas/ids";
 import { payments } from "../db/schema";
 import type { AppDb } from "../db/types";
 import { DrizzleRepository, versionedTable } from "./drizzle-repository";
+import { invoiceOrg } from "./matter-org";
 import type { PaymentRepository } from "./payment-repository";
 
 export class DrizzlePaymentRepository extends DrizzleRepository<Payment> implements PaymentRepository {
   constructor(db: AppDb, now: () => Date = () => new Date()) {
     super(db, versionedTable(payments), now);
+  }
+
+  /** payments saknar org-kolumn → härled via fakturan→ärendet (#647). */
+  protected override resolveOrg(row: unknown): Promise<string | undefined> {
+    return invoiceOrg(this.db, (row as { invoiceId?: string }).invoiceId);
   }
 
   async sumByInvoice(invoiceId: string): Promise<number> {

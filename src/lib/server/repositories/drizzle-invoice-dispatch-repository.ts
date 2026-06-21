@@ -10,10 +10,16 @@ import { invoiceDispatches, invoices, matters } from "../db/schema";
 import type { AppDb } from "../db/types";
 import { DrizzleRepository, versionedTable } from "./drizzle-repository";
 import type { InvoiceDispatchQueuedRow, InvoiceDispatchRepository } from "./invoice-dispatch-repository";
+import { invoiceOrg } from "./matter-org";
 
 export class DrizzleInvoiceDispatchRepository
   extends DrizzleRepository<InvoiceDispatch>
   implements InvoiceDispatchRepository {
+  /** invoice_dispatches saknar org-kolumn → härled via fakturan→ärendet (#647). */
+  protected override resolveOrg(row: unknown): Promise<string | undefined> {
+    return invoiceOrg(this.db, (row as { invoiceId?: string }).invoiceId);
+  }
+
   constructor(db: AppDb, now: () => Date = () => new Date()) {
     super(db, versionedTable(invoiceDispatches), now);
   }
