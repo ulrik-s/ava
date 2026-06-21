@@ -93,6 +93,12 @@ services:
       OAUTH2_PROXY_SKIP_PROVIDER_BUTTON: "true"
       OAUTH2_PROXY_COOKIE_SECURE: "false"
       OAUTH2_PROXY_INSECURE_OIDC_ALLOW_UNVERIFIED_EMAIL: "true"
+      # Acceptera en giltig `Authorization: Bearer <JWT>` vid sidan av session-
+      # cookien (ADR 0028): AVA Helper kör utanför browser-sessionen och
+      # autentiserar med sin EGNA OIDC-token (aud=ava, samma issuer). Utan detta
+      # 401:ar oauth2-proxy helperns /api/documents-anrop → 1-klicks-öppning i
+      # native-app faller tillbaka. Token verifieras mot samma JWKS/issuer.
+      OAUTH2_PROXY_SKIP_JWT_BEARER_TOKENS: "true"
     depends_on:
       - keycloak
 
