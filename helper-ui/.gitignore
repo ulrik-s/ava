@@ -1,0 +1,7 @@
+# Dependencies (bun.lock committas; node_modules ignoreras)
+node_modules/
+
+# Build artefacts (Electron-paketering, ADR 0029 steg 2)
+dist/
+out/
+*.tsbuildinfo

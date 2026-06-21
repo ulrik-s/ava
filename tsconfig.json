@@ -44,5 +44,5 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules", "helper-app", "test", "office-addin"]
+  "exclude": ["node_modules", "helper-app", "helper-ui", "test", "office-addin"]
 }

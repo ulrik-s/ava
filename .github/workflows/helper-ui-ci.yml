@@ -1,0 +1,42 @@
+name: Helper UI CI
+
+# Typecheck + test för helper-ui (Electron-tray-skalet, ADR 0029) vid varje PR
+# som rör dess kod. Steg 1 = de Electron-fria logik-modulerna; paketering
+# (electron-builder) + main.ts kommer i ett senare steg.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "helper-ui/**"
+      - "src/lib/shared/helper/**"
+      - ".github/workflows/helper-ui-ci.yml"
+  pull_request:
+    paths:
+      - "helper-ui/**"
+      - "src/lib/shared/helper/**"
+      - ".github/workflows/helper-ui-ci.yml"
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: helper-ui
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Test + coverage-grind
+        # bunfig.toml: coverage=true + coverageThreshold (ratchet).
+        run: bun test
