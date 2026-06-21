@@ -25,9 +25,10 @@ import {
   type ComposeMailRequest,
   type HelperOpenRequest,
   type HelperStatus,
+  type HelperStatusResponse,
 } from "@/lib/shared/helper/protocol";
 
-export type { HelperStatus };
+export type { HelperStatus, HelperStatusResponse };
 
 // HTTPS först (Safari kräver det), sedan HTTP (Chromium/Firefox).
 const PROBE_ORDER = [HELPER_HTTPS_BASE, HELPER_BASE] as const;
@@ -133,6 +134,52 @@ export async function openViaHelper(input: HelperOpenRequest): Promise<void> {
   if (!r.ok) {
     throw new Error(`helper /open: HTTP ${r.status} ${await r.text()}`);
   }
+}
+
+/**
+ * Hämta helperns upload-kö-status (`GET /status`, ADR 0028 §8). Returnerar
+ * null om helpern saknas eller svaret inte går att tolka — så anroparen kan
+ * dölja synk-status helt när ingen helper finns.
+ */
+export async function fetchHelperStatus(): Promise<HelperStatusResponse | null> {
+  try {
+    const r = await helperFetch("/status", { signal: AbortSignal.timeout(2_000) });
+    if (r === null || !r.ok) return null;
+    const data = (await r.json()) as Partial<HelperStatusResponse>;
+    if (typeof data.pending !== "number" || typeof data.conflict !== "number" || typeof data.total !== "number" || !Array.isArray(data.entries)) {
+      return null;
+    }
+    return { pending: data.pending, conflict: data.conflict, total: data.total, entries: data.entries };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Pollar helperns synk-status periodiskt (default var 5:e sekund) så
+ * webbappen kan visa "väntar på synk / konflikt". null tills första svaret,
+ * och om helpern saknas. Pollningen stannar när komponenten avmonteras.
+ */
+export function useHelperSyncStatus(intervalMs = 5_000): HelperStatusResponse | null {
+  const [sync, setSync] = useState<HelperStatusResponse | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    async function poll(): Promise<void> {
+      const s = await fetchHelperStatus();
+      if (cancelled) return;
+      setSync(s);
+      timer = setTimeout(() => void poll(), intervalMs);
+    }
+    void poll();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [intervalMs]);
+
+  return sync;
 }
 
 /** Trigga omedelbar self-update-kontroll. */

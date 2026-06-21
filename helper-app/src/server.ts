@@ -7,6 +7,7 @@
  *   POST /open          → ladda ner → spawn default-app → watch+upload
  *   POST /compose-mail  → skriv bilaga → öppna mail-app
  *   POST /check-update  → trigga omedelbar self-update-kontroll
+ *   GET  /status        → JSON ögonblicksbild av upload-kön (ADR 0028 §8)
  *
  * Säkerhet: lyssnar bara på localhost; CORS-whitelist (localhost-portar
  * + *.github.io + custom via AVA_HELPER_ORIGINS); inga endpoints som
@@ -16,6 +17,7 @@
 import {
   formatPing,
   isAllowedOrigin,
+  type HelperStatusResponse,
   type HelperVersionResponse,
 } from "@/lib/shared/helper/protocol";
 import { handleComposeMail } from "./compose-mail.ts";
@@ -30,7 +32,11 @@ export interface ServerDeps {
   onComposeMail?: (req: Request) => Promise<Response>;
   /** Trigga self-update. undefined → endpointen svarar 500 (ej konfigurerad). */
   onCheckUpdate?: () => void;
+  /** Ögonblicksbild av upload-kön. undefined → tom kö (kön avstängd). */
+  onStatus?: () => HelperStatusResponse;
 }
+
+const EMPTY_STATUS: HelperStatusResponse = { pending: 0, conflict: 0, total: 0, entries: [] };
 
 /** Bygg en fetch-handler (testbar utan att binda en port). */
 export function createHandler(deps: ServerDeps): (req: Request) => Promise<Response> {
@@ -45,24 +51,26 @@ export function createHandler(deps: ServerDeps): (req: Request) => Promise<Respo
   };
 }
 
+/**
+ * Dispatch-tabell pathname → hanterare. Tabell i st.f. switch håller `route`
+ * platt (cyklomatisk komplexitet ≤ 8) när endpoints växer; varje hanterare
+ * bär sin egen lilla logik.
+ */
+const ROUTES: Record<string, (req: Request, deps: ServerDeps) => Response | Promise<Response>> = {
+  "/ping": (_req, deps) =>
+    new Response(formatPing(deps.version), { headers: { "Content-Type": "text/plain; charset=utf-8" } }),
+  "/version": (_req, deps) =>
+    json({ current: deps.version, updateAvailable: false } satisfies HelperVersionResponse),
+  "/open": (req, deps) => (deps.onOpen ?? handleOpen)(req),
+  "/compose-mail": (req, deps) => (deps.onComposeMail ?? handleComposeMail)(req),
+  "/check-update": (_req, deps) => handleCheckUpdate(deps),
+  "/status": (_req, deps) => json(deps.onStatus?.() ?? EMPTY_STATUS),
+};
+
 async function route(req: Request, deps: ServerDeps): Promise<Response> {
   const { pathname } = new URL(req.url);
-  switch (pathname) {
-    case "/ping":
-      return new Response(formatPing(deps.version), {
-        headers: { "Content-Type": "text/plain; charset=utf-8" },
-      });
-    case "/version":
-      return json({ current: deps.version, updateAvailable: false } satisfies HelperVersionResponse);
-    case "/open":
-      return (deps.onOpen ?? handleOpen)(req);
-    case "/compose-mail":
-      return (deps.onComposeMail ?? handleComposeMail)(req);
-    case "/check-update":
-      return handleCheckUpdate(deps);
-    default:
-      return textError(404, "not found");
-  }
+  const handler = ROUTES[pathname];
+  return handler ? handler(req, deps) : textError(404, "not found");
 }
 
 function handleCheckUpdate(deps: ServerDeps): Response {

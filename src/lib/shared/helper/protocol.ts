@@ -81,6 +81,46 @@ export interface HelperVersionResponse {
 }
 
 /**
+ * En köad (ännu ej synkad) dokument-upload i helperns durabla kö (ADR 0028 §3).
+ * Exponeras via `GET /status` så webbappen kan visa synk-status. Innehåller
+ * ALDRIG authHeader (känsligt) — bara det UI:t behöver.
+ */
+export interface HelperSyncEntry {
+  /** Stabilt id i kö-katalogen. */
+  id: string;
+  /** PUT-mål på servern (identifierar dokumentet). */
+  uploadUrl: string;
+  /** Användarsynligt filnamn. */
+  fileName: string;
+  /** När den först köades (ms sedan epoch). */
+  enqueuedAt: number;
+  /** Antal misslyckade upload-försök hittills. */
+  attempts: number;
+  /** Tidigast nästa försök (ms) — backoff. */
+  nextAttemptAt: number;
+  /** `pending` = väntar/retr:as; `conflict` = server gått förbi, kräver beslut. */
+  status: "pending" | "conflict";
+  /** Senaste felet (om något). */
+  lastError?: string;
+}
+
+/**
+ * Svar på `GET /status` — ögonblicksbild av helperns upload-kö (ADR 0028 §8).
+ * Webbappen pollar detta för att visa "väntar på synk / konflikt"-status så
+ * offline-sparningar aldrig är osynliga (motsatsen till KATS-HIIT).
+ */
+export interface HelperStatusResponse {
+  /** Antal poster som väntar/retr:as. */
+  pending: number;
+  /** Antal poster i versions-konflikt (kräver beslut). */
+  conflict: number;
+  /** Totalt antal poster i kön. */
+  total: number;
+  /** Posterna (utan authHeaders). */
+  entries: HelperSyncEntry[];
+}
+
+/**
  * Webbappens vy av helper-status: undefined = ej kontrollerat,
  * null = inte tillgänglig, string = installerad version.
  */

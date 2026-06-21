@@ -18,37 +18,21 @@
 import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
+import type { HelperStatusResponse, HelperSyncEntry } from "@/lib/shared/helper/protocol";
 import { log } from "./log.ts";
 
-/** En köad upload som väntar på att nå servern. */
-export interface QueueEntry {
-  /** Stabilt id (= filnamn-stam i kö-katalogen). */
-  id: string;
-  /** PUT-mål på servern. */
-  uploadUrl: string;
-  /** Användarsynligt filnamn (status-UI). */
-  fileName: string;
+/**
+ * En köad upload som väntar på att nå servern. Delar form med det publika
+ * {@link HelperSyncEntry} (status-API:t) + en intern `authHeader` som ALDRIG
+ * exponeras i snapshots.
+ */
+export interface QueueEntry extends HelperSyncEntry {
   /** Vidarebefordras orörd till upload (ersätts av device-token i steg 2). */
   authHeader?: string;
-  /** När den först köades (ms). */
-  enqueuedAt: number;
-  /** Antal misslyckade försök. */
-  attempts: number;
-  /** Tidigast nästa försök får ske (ms) — exponentiell backoff. */
-  nextAttemptAt: number;
-  /** `pending` = väntar/retr:as; `conflict` = server gått förbi, kräver beslut. */
-  status: "pending" | "conflict";
-  /** Senaste felet (för status-UI/loggning). */
-  lastError?: string;
 }
 
 /** Ögonblicksbild för status-UI (helper-meny + web-app-banner, steg 8). */
-export interface QueueSnapshot {
-  pending: number;
-  conflict: number;
-  total: number;
-  entries: ReadonlyArray<Omit<QueueEntry, "authHeader">>;
-}
+export type QueueSnapshot = HelperStatusResponse;
 
 /** Vad en dränerings-runda gjorde (för loggning/test). */
 export interface DrainResult {
