@@ -12,6 +12,7 @@ import {
   discoverOidc,
   exchangeCode,
   refreshTokens,
+  type FetchLike,
   type OidcEndpoints,
 } from "../src/auth/oidc.ts";
 import { generatePkce, randomState } from "../src/auth/pkce.ts";
@@ -70,17 +71,17 @@ describe("buildAuthorizeUrl", () => {
 
 describe("discoverOidc", () => {
   test("plockar authorization/token-endpoints", async () => {
-    const fetchFn = (async () => jsonResponse({ issuer: EP.issuer, authorization_endpoint: EP.authorizationEndpoint, token_endpoint: EP.tokenEndpoint })) as typeof fetch;
+    const fetchFn = (async () => jsonResponse({ issuer: EP.issuer, authorization_endpoint: EP.authorizationEndpoint, token_endpoint: EP.tokenEndpoint })) satisfies FetchLike;
     expect(await discoverOidc(EP.issuer, fetchFn)).toEqual(EP);
   });
 
   test("kastar vid icke-ok", async () => {
-    const fetchFn = (async () => new Response("no", { status: 404 })) as typeof fetch;
+    const fetchFn = (async () => new Response("no", { status: 404 })) satisfies FetchLike;
     await expect(discoverOidc(EP.issuer, fetchFn)).rejects.toThrow(/discovery HTTP 404/);
   });
 
   test("kastar vid saknade endpoints", async () => {
-    const fetchFn = (async () => jsonResponse({ issuer: EP.issuer })) as typeof fetch;
+    const fetchFn = (async () => jsonResponse({ issuer: EP.issuer })) satisfies FetchLike;
     await expect(discoverOidc(EP.issuer, fetchFn)).rejects.toThrow(/saknar/);
   });
 });
@@ -91,7 +92,7 @@ describe("exchangeCode + refreshTokens", () => {
     const fetchFn = (async (_url: string, init?: RequestInit) => {
       seenBody = String(init?.body);
       return jsonResponse({ access_token: "AT", refresh_token: "RT", expires_in: 300 });
-    }) as typeof fetch;
+    }) satisfies FetchLike;
     const t = await exchangeCode(EP, { clientId: "ava", code: "C", verifier: "V", redirectUri: "http://127.0.0.1/cb" }, fetchFn, () => 1_000);
     expect(t).toMatchObject({ accessToken: "AT", refreshToken: "RT", expiresAt: 1_000 + 300_000 });
     expect(seenBody).toContain("grant_type=authorization_code");
@@ -103,7 +104,7 @@ describe("exchangeCode + refreshTokens", () => {
     const fetchFn = (async (_url: string, init?: RequestInit) => {
       seenBody = String(init?.body);
       return jsonResponse({ access_token: "AT2", expires_in: 60 });
-    }) as typeof fetch;
+    }) satisfies FetchLike;
     const t = await refreshTokens(EP, { clientId: "ava", refreshToken: "RT" }, fetchFn, () => 0);
     expect(t.accessToken).toBe("AT2");
     expect(t.expiresAt).toBe(60_000);
@@ -111,12 +112,12 @@ describe("exchangeCode + refreshTokens", () => {
   });
 
   test("kastar vid token HTTP-fel", async () => {
-    const fetchFn = (async () => new Response("bad", { status: 400 })) as typeof fetch;
+    const fetchFn = (async () => new Response("bad", { status: 400 })) satisfies FetchLike;
     await expect(refreshTokens(EP, { clientId: "ava", refreshToken: "x" }, fetchFn)).rejects.toThrow(/token HTTP 400/);
   });
 
   test("kastar vid saknat access_token", async () => {
-    const fetchFn = (async () => jsonResponse({ refresh_token: "only" })) as typeof fetch;
+    const fetchFn = (async () => jsonResponse({ refresh_token: "only" })) satisfies FetchLike;
     await expect(exchangeCode(EP, { clientId: "ava", code: "C", verifier: "V", redirectUri: "u" }, fetchFn)).rejects.toThrow(/saknar access_token/);
   });
 });

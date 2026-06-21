@@ -22,7 +22,10 @@ export interface TokenSet {
   expiresAt: number;
 }
 
-type FetchFn = typeof fetch;
+/** Minimal fetch-form (global `fetch` + test-mocks är assignerbara) — undviker
+ *  cast mot den överlagrade `typeof fetch` i tester. */
+export type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
+type FetchFn = FetchLike;
 
 /** Hämta endpoints ur IdP:ns discovery-dokument. */
 export async function discoverOidc(issuer: string, fetchFn: FetchFn = fetch): Promise<OidcEndpoints> {
