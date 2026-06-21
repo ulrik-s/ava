@@ -2,7 +2,10 @@
 
 import { useState } from "react";
 import { DataTable, type Column } from "@/components/ui/data-table";
+import { useCapabilities } from "@/lib/client/capabilities/use-capabilities";
 import { EntityLink } from "@/lib/client/demo/entity-link";
+import { searchScope, searchScopeLabel, type SearchScope } from "@/lib/client/search/search-scope";
+import { useOnlineStatus } from "@/lib/client/sync/use-online-status";
 import { trpc } from "@/lib/client/trpc";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 
@@ -150,17 +153,84 @@ function SearchResults({ searchTerm, data }: { searchTerm: string; data: SearchD
   );
 }
 
+interface SearchFormProps {
+  query: string;
+  onQueryChange: (v: string) => void;
+  onSubmit: (e: React.FormEvent) => void;
+  scope: SearchScope;
+  isFetching: boolean;
+  docTypes: DocTypeCount[] | undefined;
+  resultsData: SearchData | undefined;
+  searchTerm: string;
+  selectedTypes: string[];
+  onToggleType: (type: string) => void;
+  onClearTypes: () => void;
+}
+
+function SearchForm(p: SearchFormProps) {
+  const offline = p.scope === "offline";
+  return (
+    <form onSubmit={p.onSubmit} className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
+      <p className="text-sm text-gray-500 mb-4">
+        Sök i innehållet i alla uppladdade dokument (PDF, Word, etc.).
+        Texten extraheras automatiskt vid uppladdning.{" "}
+        <span className="text-gray-400">
+          Använd <code className="font-mono text-xs bg-gray-100 px-1 rounded">*</code> som
+          wildcard, t.ex. <code className="font-mono text-xs bg-gray-100 px-1 rounded">stäm*ansökan</code>.
+        </span>
+      </p>
+      <p className={`text-xs mb-4 ${offline ? "text-amber-700" : "text-gray-500"}`}>{searchScopeLabel(p.scope)}</p>
+      <div className="flex flex-col sm:flex-row gap-3">
+        <input
+          type="text"
+          required
+          value={p.query}
+          onChange={(e) => p.onQueryChange(e.target.value)}
+          placeholder="Sök i dokument..."
+          disabled={offline}
+          className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm disabled:bg-gray-50 disabled:text-gray-400"
+        />
+        <button
+          type="submit"
+          disabled={p.isFetching || offline}
+          className="px-6 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 whitespace-nowrap"
+        >
+          {p.isFetching ? "Söker..." : "Sök"}
+        </button>
+      </div>
+
+      {p.docTypes && p.docTypes.length > 0 && (
+        <DocTypeFilter
+          types={p.docTypes}
+          data={p.resultsData}
+          searchTerm={p.searchTerm}
+          selectedTypes={p.selectedTypes}
+          onToggle={p.onToggleType}
+          onClear={p.onClearTypes}
+        />
+      )}
+    </form>
+  );
+}
+
 export default function DocumentSearchPage() {
   const [query, setQuery] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [searchedTypes, setSearchedTypes] = useState<string[]>([]);
 
+  // Kapabilitets-tierat sök-omfång (ADR 0028 §4c): server (online) / lokalt
+  // i cachen (demo) / offline-notis (server-first utan nät). Gate:as på
+  // kapabilitet + online — aldrig på `if (isDemo)` (ADR 0027).
+  const { sync } = useCapabilities();
+  const online = useOnlineStatus();
+  const scope = searchScope(sync, online);
+
   const docTypes = trpc.document.listDocumentTypes.useQuery();
 
   const results = trpc.document.search.useQuery(
     { query: searchTerm, documentTypes: searchedTypes.length > 0 ? searchedTypes : undefined },
-    { enabled: searchTerm.length > 0 }
+    { enabled: searchTerm.length > 0 && scope !== "offline" }
   );
 
   function handleSearch(e: React.FormEvent) {
@@ -177,44 +247,19 @@ export default function DocumentSearchPage() {
     <div>
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Dokumentsökning</h1>
 
-      <form onSubmit={handleSearch} className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
-        <p className="text-sm text-gray-500 mb-4">
-          Sök i innehållet i alla uppladdade dokument (PDF, Word, etc.).
-          Texten extraheras automatiskt vid uppladdning.{" "}
-          <span className="text-gray-400">
-            Använd <code className="font-mono text-xs bg-gray-100 px-1 rounded">*</code> som
-            wildcard, t.ex. <code className="font-mono text-xs bg-gray-100 px-1 rounded">stäm*ansökan</code>.
-          </span>
-        </p>
-        <div className="flex flex-col sm:flex-row gap-3">
-          <input
-            type="text"
-            required
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Sök i dokument..."
-            className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm"
-          />
-          <button
-            type="submit"
-            disabled={results.isFetching}
-            className="px-6 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 whitespace-nowrap"
-          >
-            {results.isFetching ? "Söker..." : "Sök"}
-          </button>
-        </div>
-
-        {docTypes.data && docTypes.data.length > 0 && (
-          <DocTypeFilter
-            types={docTypes.data}
-            data={results.data as SearchData | undefined}
-            searchTerm={searchTerm}
-            selectedTypes={selectedTypes}
-            onToggle={toggleType}
-            onClear={() => setSelectedTypes([])}
-          />
-        )}
-      </form>
+      <SearchForm
+        query={query}
+        onQueryChange={setQuery}
+        onSubmit={handleSearch}
+        scope={scope}
+        isFetching={results.isFetching}
+        docTypes={docTypes.data}
+        resultsData={results.data as SearchData | undefined}
+        searchTerm={searchTerm}
+        selectedTypes={selectedTypes}
+        onToggleType={toggleType}
+        onClearTypes={() => setSelectedTypes([])}
+      />
 
       {searchTerm && results.data && <SearchResults searchTerm={searchTerm} data={results.data as SearchData} />}
 
