@@ -81,6 +81,22 @@ export interface HelperVersionResponse {
 }
 
 /**
+ * `POST /content` — be helpern leverera dokument-bytes ur sitt durabla,
+ * content-adresserade lager (ADR 0028 §3/§5). Cache-hit servas direkt (även
+ * offline); miss laddas ner + cachas. Web-appen delegerar dokument-läsningar
+ * hit när helpern finns → en enda lokal dokument-auktoritet, ingen divergens
+ * mot extern-editor-öppningar.
+ */
+export interface HelperContentRequest {
+  /** Varifrån bytsen laddas (identifierar dokument+version) — även cache-nyckel. */
+  downloadUrl: string;
+  /** Vidarebefordras orörd till nedladdning vid cache-miss. */
+  authHeader?: string;
+  /** Användarsynligt filnamn (för helperns logg/cache-metadata). */
+  fileName?: string;
+}
+
+/**
  * En köad (ännu ej synkad) dokument-upload i helperns durabla kö (ADR 0028 §3).
  * Exponeras via `GET /status` så webbappen kan visa synk-status. Innehåller
  * ALDRIG authHeader (känsligt) — bara det UI:t behöver.

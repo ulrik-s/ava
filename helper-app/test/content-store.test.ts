@@ -185,7 +185,8 @@ describe("ContentStore.startEvictionLoop", () => {
     clock.set(10_000);
     const ctrl = new AbortController();
     store.startEvictionLoop(ctrl.signal, 5_000, 5); // ttl 5_000 → URL1 (0) vräks vid första tick
-    await new Promise((r) => setTimeout(r, 20));
+    // Poll tills vräkt (robust mot lastad CI-runner) i st.f. fast väntan.
+    for (let i = 0; i < 100 && (await store.has(URL1)); i++) await new Promise((r) => setTimeout(r, 10));
     ctrl.abort();
     expect(await store.has(URL1)).toBe(false);
   });
