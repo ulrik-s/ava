@@ -75,3 +75,6 @@ reports/ui-diagnose/
 
 # Office add-in build-artefakt (#72)
 office-addin/dist/
+
+# Lokal self-hosted dokument-content (bind-mount, #649)
+tooling/docker/.selfhosted-content/

@@ -20,6 +20,8 @@
  *     bun tooling/scripts/seed-demo-into-server.ts
  */
 
+import { mkdirSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { noopPorts } from "@/lib/server/adapters/noop-ports";
 import type { Principal } from "@/lib/server/auth/principal";
 import { buildContext } from "@/lib/server/build-context";
@@ -35,11 +37,16 @@ import { createIdTranslator, translateSeed } from "../demo-generator/id-translat
 import { populate } from "../demo-generator/populate";
 import { populateBilling } from "../demo-generator/populate-billing";
 import { populateBillingRuns } from "../demo-generator/populate-billing-runs";
+import { populateDocuments } from "../demo-generator/populate-documents";
 import { populateUnbilledTime } from "../demo-generator/populate-unbilled-time";
 import { buildSeed } from "./seed-data";
 
 const DB_URL = process.env.AVA_DATABASE_URL ?? "postgres://ava:ava@localhost:5433/ava_test";
 const ORG = process.env.AVA_ORGANIZATION_ID ?? "00000000-0000-0000-0000-000000000001";
+// Host-katalogen som är bind-mountad till serverns AVA_CONTENT_DIR (#649) —
+// dit skrivs dokument-bytes så serverns GitContentStore kan läsa dem. Saknas
+// den → dokument-metadata hoppas (bytes har ingenstans att ta vägen).
+const CONTENT_DIR = process.env.AVA_CONTENT_HOST_DIR;
 
 /** KC-realm:ens allowlistade login-emails (realm-ava.json). */
 const LOGIN_ADMIN_EMAIL = "admin@ava.test";
@@ -88,6 +95,29 @@ async function addTodayTimeEntries(repos: Repositories, timeEntries: Row[], ids:
   }
 }
 
+/**
+ * Seeda ärende-scopade seed-dokument (#649): uuid-id:n (translateSeed) + matterId
+ * → synkas via resolveOrg-override (#528). Bytes skrivs till den bind-mountade
+ * content-katalogen (AVA_CONTENT_HOST_DIR) som serverns GitContentStore läser →
+ * öppna/ladda ner funkar lokalt. Genererade faktura-/KR-/mall-dokument hoppas
+ * (icke-uuid-id:n `invdoc-/kr-/gendoc-` + faktura-scopade — uppföljning likt
+ * #647). No-op utan CONTENT_DIR (bytes har då ingenstans att ta vägen).
+ */
+async function seedDocuments(
+  caller: Parameters<typeof populateDocuments>[0],
+  seed: Parameters<typeof populateDocuments>[1],
+): Promise<number> {
+  if (!CONTENT_DIR) return 0;
+  const dir = CONTENT_DIR;
+  const sink = (storagePath: string, bytes: Uint8Array): number => {
+    const abs = join(dir, storagePath);
+    mkdirSync(dirname(abs), { recursive: true });
+    writeFileSync(abs, bytes);
+    return bytes.byteLength;
+  };
+  return populateDocuments(caller, seed, sink);
+}
+
 async function main(): Promise<void> {
   const { db, close } = createPostgresDb(DB_URL);
   const repos = buildDrizzleRepositories(db);
@@ -128,9 +158,11 @@ async function main(): Promise<void> {
     const billing = await populateBilling(caller, seed);
     const billingRuns = await populateBillingRuns(caller, seed);
     const unbilled = await populateUnbilledTime(caller, seed);
-    console.log("✓ demo-data seedad i server-first (org", ORG, "):", { ...core, billing, billingRuns, unbilled });
+
+    const documents = await seedDocuments(caller, seed);
+    console.log("✓ demo-data seedad i server-first (org", ORG, "):", { ...core, billing, billingRuns, unbilled, documents });
     console.log(`  login: ${LOGIN_LAWYER_EMAIL} + ${LOGIN_ADMIN_EMAIL} äger nu data (+ idag-tidpost)`);
-    console.log("  (dokument hoppas fortfarande — kräver content-store-porten)");
+    console.log(CONTENT_DIR ? `  dokument-bytes → ${CONTENT_DIR}` : "  (dokument hoppade — sätt AVA_CONTENT_HOST_DIR)");
   } finally {
     await close();
   }
