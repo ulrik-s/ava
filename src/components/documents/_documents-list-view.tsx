@@ -11,6 +11,7 @@
 import { useState } from "react";
 import { ActionMenu, type ActionMenuItem } from "@/components/ui/action-menu";
 import { DataTable, type Column } from "@/components/ui/data-table";
+import { openDocumentSmart } from "@/lib/client/firma/open-document-externally";
 import { trpc } from "@/lib/client/trpc";
 import type { DocumentRecord } from "./_document-row";
 import { formatFileSize } from "./_drag-helpers";
@@ -35,31 +36,6 @@ function folderPath(folderId: string | null, folders: FolderRecord[]): string {
     current = parentId ? folders.find((f) => f.id === parentId) : undefined;
   }
   return "/" + parts.join("/");
-}
-
-async function openDocumentSmart(doc: DocumentRecord, setModal: (m: ModalState) => void): Promise<void> {
-  // Klient-genererade dokument (kostnadsräkning m.fl.) öppnas som blob:-URL ur
-  // cachen (rehydreras från demo-slaben efter reload). Annars skulle demo-grenen
-  // nedan öppna en storagePath som 404:ar på GH Pages → app:en hamnar på
-  // dashboarden. (Träd-vyn gör redan detta via open-document.ts.)
-  const { hasGeneratedDoc, openGeneratedDoc } = await import("@/lib/client/demo/generated-doc-cache");
-  if (hasGeneratedDoc(doc.id)) { openGeneratedDoc(doc.id); return; }
-  const { shouldPreferExternalEdit, runExternalEdit, tryHelperOpen } = await import("@/lib/client/firma/open-document-externally");
-  if (shouldPreferExternalEdit(doc.fileName)) {
-    // Försök 1-klicks via AVA Helper först (funkar i alla browsers)
-    const handled = await tryHelperOpen({ id: doc.id, fileName: doc.fileName, storagePath: doc.storagePath });
-    if (handled) return;
-    // Fallback: FSA + ExternalEditModal (Chrome/Edge med vald mapp)
-    const { isFsaSupported, loadHandle } = await import("@/lib/client/fsa/handle-store");
-    if (isFsaSupported() && await loadHandle("repo-root")) {
-      setModal(await runExternalEdit({ id: doc.id, fileName: doc.fileName, storagePath: doc.storagePath }));
-      return;
-    }
-  }
-  // Fallback: öppna i browser-tab. Runtime-tier (#651): self-hosted via servern
-  // (cache-medveten), demo via GH-Pages-blobben — ej bygg-tids-NEXT_PUBLIC_DEMO_BUILD.
-  const { openMatterDocument } = await import("@/lib/client/firma/open-matter-document");
-  await openMatterDocument({ id: doc.id, storagePath: doc.storagePath ?? null, fileName: doc.fileName });
 }
 
 export function DocumentsListView({ matterId, documents, folders, onDelete, onReanalyze }: Props) {

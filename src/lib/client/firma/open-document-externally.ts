@@ -130,3 +130,34 @@ export async function runExternalEdit(doc: Doc): Promise<ModalState> {
 export function shouldPreferExternalEdit(fileName: string): boolean {
   return /\.(pdf|docx?|xlsx?|pptx?)$/i.test(fileName);
 }
+
+/**
+ * Smart primärklick-öppning av ett dokument. Ordningen är medvetet:
+ *   1. **AVA Helper** (1-klick, native-app: PDF Gear/Word/Preview) — funkar i
+ *      ALLA browsers och kräver INGEN FSA-mapp. Provas FÖRST.
+ *   2. **FSA** (Chrome/Edge med vald lokal mapp) → ExternalEditModal.
+ *   3. **Browser-tab** (self-hosted hämtar via servern, demo via GH-Pages-blob).
+ *
+ * Delad mellan träd-vyn (DocumentRow) och list-vyn (DocumentsListView) så de
+ * inte glider isär — tidigare gjorde de det: träd-vyn krävde FSA *innan* helpern
+ * ens försöktes, så ett klick på en .docx/.pdf laddade bara ner / öppnade
+ * browser-tab i stället för att öppna i native-appen.
+ */
+export async function openDocumentSmart(doc: Doc, onModal: (m: ModalState) => void): Promise<void> {
+  // Klient-genererade demo-dok (kostnadsräkning m.fl.) öppnas ur cachen — annars
+  // 404:ar deras storagePath på GH Pages → app:en hamnar på dashboarden.
+  const { hasGeneratedDoc, openGeneratedDoc } = await import("@/lib/client/demo/generated-doc-cache");
+  if (hasGeneratedDoc(doc.id)) { openGeneratedDoc(doc.id); return; }
+
+  if (shouldPreferExternalEdit(doc.fileName)) {
+    if (await tryHelperOpen(doc)) return; // 1) helpern
+    const { isFsaSupported, loadHandle } = await import("@/lib/client/fsa/handle-store");
+    if (isFsaSupported() && await loadHandle("repo-root")) {
+      onModal(await runExternalEdit(doc)); // 2) FSA
+      return;
+    }
+  }
+  // 3) browser-tab
+  const { openMatterDocument } = await import("@/lib/client/firma/open-matter-document");
+  await openMatterDocument({ id: doc.id, storagePath: doc.storagePath, fileName: doc.fileName });
+}
