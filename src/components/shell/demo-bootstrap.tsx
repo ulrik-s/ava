@@ -28,6 +28,7 @@ import { createDemoStore } from "@/lib/client/backend/create-demo-store";
 import { GitBackendRuntime } from "@/lib/client/backend/git-backend-runtime";
 import type { OidcLoginOutcome, OidcClaims } from "@/lib/client/backend/oidc-principal";
 import { StaticContentStore } from "@/lib/client/backend/static-content-store";
+import { CapabilitiesProvider } from "@/lib/client/capabilities/use-capabilities";
 import { DemoModeProvider } from "@/lib/client/demo/demo-mode-context";
 import { loadFirmaConfig, patchFirmaConfig, type FirmaConfig } from "@/lib/client/firma/firma-config";
 import { SyncProviderRoot } from "@/lib/client/sync/sync-context";
@@ -298,6 +299,7 @@ function AuthGatedDemoTree(props: TreeProps) {
     <DemoModeProvider readOnly={readOnly}>
       <trpc.Provider client={trpcClient} queryClient={queryClient}>
         <QueryClientProvider client={queryClient}>
+          <CapabilitiesProvider>
           <SyncProviderRoot token={firmaConfig.token}>
           <AnalyzeDispatcherRegistrar />
           <ExtractTextDispatcherRegistrar />
@@ -343,6 +345,7 @@ function AuthGatedDemoTree(props: TreeProps) {
             <AppShell>{children}</AppShell>
           </RenderErrorBoundary>
           </SyncProviderRoot>
+          </CapabilitiesProvider>
         </QueryClientProvider>
       </trpc.Provider>
     </DemoModeProvider>

@@ -27,8 +27,20 @@ import type { IPorts } from "@/lib/server/ports";
 import type { Repositories } from "@/lib/server/repositories/repositories";
 import type { SyncStore } from "@/lib/server/sync/sync-store";
 import type { Context } from "@/lib/server/trpc-core";
+import type { Capabilities } from "@/lib/shared/capabilities";
 import type { User } from "@/lib/shared/schemas/user";
 import { forwardedClaims, type ForwardedHeaderNames } from "./forwarded-claims";
+
+/**
+ * Serverns annonserade kapabiliteter (ADR 0027) — vad DENNA deploy faktiskt kan.
+ * sync/jobs/oidc är alltid på server-side; `llm` gate:as på att en LLM-endpoint
+ * är konfigurerad (annars döljer klienten AI-affordanser, lika konsekvent som
+ * demon); ledger/mailSync annonseras tillgängliga (per-byrå-koppling sker sen).
+ */
+export function serverCapabilities(): Capabilities {
+  const llm = Boolean(process.env.AVA_LLM_ENDPOINT ?? process.env.AVA_LLM_MODEL);
+  return { sync: true, jobs: true, oidc: true, ledger: true, mailSync: true, llm };
+}
 
 /**
  * Event-sink för server-first innan change-loggen byggts (ADR 0017/#408).
@@ -104,5 +116,6 @@ export async function createServerContext(req: Request, deps: ServerContextDeps)
     principal,
     repos: deps.repos,
     ...(deps.sync ? { sync: deps.sync } : {}),
+    capabilities: serverCapabilities(),
   });
 }
