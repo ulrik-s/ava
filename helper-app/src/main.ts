@@ -23,8 +23,10 @@ import { HELPER_HTTPS_PORT, HELPER_PORT } from "@/lib/shared/helper/protocol";
 
 import { installService, uninstallService, type InstallDeps } from "./install.ts";
 import { initLog, log } from "./log.ts";
+import { defaultOpenDeps, defaultWatchDeps, enqueueSavedFile, handleOpen, watchAndUpload, type OpenDeps } from "./open.ts";
 import { dataDir } from "./paths.ts";
 import { currentPlatform } from "./platform/runtime.ts";
+import { UploadQueue } from "./queue.ts";
 import { createHandler } from "./server.ts";
 import { loadOrCreateTls } from "./tls/certs.ts";
 import { installCaTrust, removeCaTrust } from "./tls/trust.ts";
@@ -132,6 +134,35 @@ function buildUpdateConfig(): UpdateConfig {
   };
 }
 
+/**
+ * `/open`-hanterare vars watch-loop ENQUEUE:ar varje save i den durabla
+ * kön i stället för att PUT:a direkt. Sparningen blir därmed durabel innan
+ * den når nätet (ADR 0028 §3) — kön dränerar autonomt och överlever omstart.
+ */
+export function queueBackedOnOpen(queue: UploadQueue): (req: Request) => Promise<Response> {
+  const deps: OpenDeps = {
+    ...defaultOpenDeps,
+    startWatch: (path, uploadUrl, authHeader, timeoutMs) =>
+      watchAndUpload(path, uploadUrl, authHeader, timeoutMs, {
+        ...defaultWatchDeps,
+        upload: (p, url, auth) => enqueueSavedFile(queue, p, url, auth),
+      }),
+  };
+  return (req) => handleOpen(req, deps);
+}
+
+/** Skapa + återställ upload-kön (om data-dir finns) och starta dränerings-loopen. */
+function startUploadQueue(signal: AbortSignal): UploadQueue | undefined {
+  const dir = dataDir();
+  if (dir === null) {
+    log("ingen data-dir → upload-kö inaktiverad (direkt-upload)");
+    return undefined;
+  }
+  const queue = new UploadQueue(join(dir, "queue"));
+  void queue.recover().then(() => queue.startDrainLoop(signal));
+  return queue;
+}
+
 function main(): void {
   if (process.argv.includes("--version")) {
     process.stdout.write(`${VERSION}\n`);
@@ -162,10 +193,12 @@ function main(): void {
   const abort = new AbortController();
   void runUpdateLoop(updateCfg, abort.signal);
 
+  const queue = startUploadQueue(abort.signal);
   const handler = createHandler({
     version: VERSION,
     extraOrigins: extraOrigins(),
     onCheckUpdate: () => { void checkOnce(updateCfg).catch((err) => log(`check-update: ${String(err)}`)); },
+    ...(queue ? { onOpen: queueBackedOnOpen(queue) } : {}),
   });
 
   const httpServer = Bun.serve({ port, hostname: "127.0.0.1", fetch: handler });

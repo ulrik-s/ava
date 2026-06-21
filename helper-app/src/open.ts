@@ -9,12 +9,13 @@
 
 import { mkdtemp, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 
 import { isSafeFileName, type HelperOpenRequest } from "@/lib/shared/helper/protocol";
 import { json, parseJsonBody, textError } from "./http.ts";
 import { log } from "./log.ts";
 import { openWithDefaultApp } from "./platform/open-app.ts";
+import type { UploadQueue } from "./queue.ts";
 
 const DEFAULT_WATCH_MINUTES = 60;
 const POLL_INTERVAL_MS = 2_000;
@@ -98,6 +99,22 @@ export async function uploadFile(path: string, uploadUrl: string, authHeader: st
   if (authHeader) headers.Authorization = authHeader;
   const resp = await fetch(uploadUrl, { method: "PUT", headers, body: Bun.file(path) });
   if (resp.status >= 400) throw new Error(`upload HTTP ${resp.status}`);
+}
+
+/**
+ * Offline-first save (ADR 0028 §3): läs de sparade bytsen och KÖA dem
+ * durabelt i stället för att PUT:a direkt. Bytsen ligger då säkert på disk
+ * och kön dränerar autonomt — en save kan aldrig tappas offline/vid krasch.
+ * Wiras in som watch-loopens `upload`-dep i `main` (queueBackedOnOpen).
+ */
+export async function enqueueSavedFile(
+  queue: UploadQueue,
+  path: string,
+  uploadUrl: string,
+  authHeader: string | undefined,
+): Promise<void> {
+  const bytes = await Bun.file(path).bytes();
+  await queue.enqueue({ uploadUrl, fileName: basename(path), bytes, ...(authHeader !== undefined ? { authHeader } : {}) });
 }
 
 /**
