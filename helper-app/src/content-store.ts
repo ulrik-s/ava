@@ -39,6 +39,23 @@ export interface ContentStoreDeps {
 
 export const defaultContentStoreDeps: ContentStoreDeps = { now: () => Date.now() };
 
+/** Standard-TTL för cachade dokument: oanvänt i 30 dagar → vräks (ADR 0028 §7). */
+export const DEFAULT_CACHE_TTL_DAYS = 30;
+const DAY_MS = 24 * 60 * 60_000;
+/** Hur ofta vräknings-varvet körs (en gång per dygn räcker för en dygns-TTL). */
+const DEFAULT_EVICTION_INTERVAL_MS = DAY_MS;
+
+/**
+ * Lös cache-TTL i ms ur ett (env-)värde. Konfigurerbart per enhet via
+ * `AVA_HELPER_CACHE_TTL_DAYS`; ogiltigt/saknat → {@link DEFAULT_CACHE_TTL_DAYS}.
+ * Ren funktion → testbar utan env.
+ */
+export function resolveCacheTtlMs(envValue: string | undefined, defaultDays = DEFAULT_CACHE_TTL_DAYS): number {
+  const n = Number(envValue);
+  const days = Number.isFinite(n) && n > 0 ? n : defaultDays;
+  return days * DAY_MS;
+}
+
 /** SHA-256 (hex) av bytes. Content-adress-nyckeln. */
 export function sha256Hex(bytes: Uint8Array): string {
   return createHash("sha256").update(bytes).digest("hex");
@@ -148,4 +165,22 @@ export class ContentStore {
     }
     return stale.length;
   }
+
+  /**
+   * Starta ett periodiskt vräknings-varv (default en gång/dygn) tills `signal`
+   * avbryts. Kör ett varv direkt vid start. Vräker poster oanvända > `ttlMs`.
+   */
+  startEvictionLoop(signal: AbortSignal, ttlMs: number, intervalMs = DEFAULT_EVICTION_INTERVAL_MS): void {
+    const tick = (): void => {
+      if (signal.aborted) return;
+      void this.evictUnusedOlderThan(ttlMs).catch((err) => log(`content eviction: ${msg(err)}`));
+    };
+    tick(); // ett varv direkt vid uppstart
+    const timer = setInterval(tick, intervalMs);
+    signal.addEventListener("abort", () => clearInterval(timer));
+  }
+}
+
+function msg(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
 }

@@ -21,7 +21,7 @@ import { join } from "node:path";
 
 import { HELPER_HTTPS_PORT, HELPER_PORT } from "@/lib/shared/helper/protocol";
 
-import { ContentStore } from "./content-store.ts";
+import { ContentStore, resolveCacheTtlMs } from "./content-store.ts";
 import { installService, uninstallService, type InstallDeps } from "./install.ts";
 import { initLog, log } from "./log.ts";
 import {
@@ -180,6 +180,7 @@ function startStores(signal: AbortSignal): Stores | undefined {
   const queue = new UploadQueue(join(dir, "queue"));
   void queue.recover().then(() => queue.startDrainLoop(signal));
   const content = new ContentStore(join(dir, "content"));
+  content.startEvictionLoop(signal, resolveCacheTtlMs(process.env.AVA_HELPER_CACHE_TTL_DAYS));
   return { queue, content };
 }
 

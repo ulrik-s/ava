@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 
-import { ContentStore, sha256Hex, type ContentStoreDeps } from "../src/content-store.ts";
+import { ContentStore, DEFAULT_CACHE_TTL_DAYS, resolveCacheTtlMs, sha256Hex, type ContentStoreDeps } from "../src/content-store.ts";
 
 const dirs: string[] = [];
 async function tmpDir(): Promise<string> {
@@ -156,6 +156,50 @@ describe("ContentStore.evictUnusedOlderThan (ADR 0028 §7)", () => {
     const store = new ContentStore(dir, clockDeps(0).deps);
     await store.store(URL1, bytes("x"), "a.pdf");
     expect(await store.evictUnusedOlderThan(1_000_000)).toBe(0);
+  });
+});
+
+describe("resolveCacheTtlMs", () => {
+  const DAY = 24 * 60 * 60_000;
+  test("default 30 dagar när env saknas/ogiltig", () => {
+    expect(resolveCacheTtlMs(undefined)).toBe(DEFAULT_CACHE_TTL_DAYS * DAY);
+    expect(resolveCacheTtlMs("")).toBe(DEFAULT_CACHE_TTL_DAYS * DAY);
+    expect(resolveCacheTtlMs("inte-ett-tal")).toBe(DEFAULT_CACHE_TTL_DAYS * DAY);
+    expect(resolveCacheTtlMs("0")).toBe(DEFAULT_CACHE_TTL_DAYS * DAY); // 0/negativt → default
+    expect(resolveCacheTtlMs("-5")).toBe(DEFAULT_CACHE_TTL_DAYS * DAY);
+  });
+  test("konfigurerbart antal dagar", () => {
+    expect(resolveCacheTtlMs("7")).toBe(7 * DAY);
+    expect(resolveCacheTtlMs("90")).toBe(90 * DAY);
+  });
+});
+
+describe("ContentStore.startEvictionLoop", () => {
+  let dir: string;
+  beforeEach(async () => { dir = await tmpDir(); });
+
+  test("vräker gamla poster direkt vid start + tills signalen avbryts", async () => {
+    const clock = clockDeps(0);
+    const store = new ContentStore(dir, clock.deps);
+    await store.store(URL1, bytes("gammal"), "a.pdf"); // lastUsedAt 0
+    clock.set(10_000);
+    const ctrl = new AbortController();
+    store.startEvictionLoop(ctrl.signal, 5_000, 5); // ttl 5_000 → URL1 (0) vräks vid första tick
+    await new Promise((r) => setTimeout(r, 20));
+    ctrl.abort();
+    expect(await store.has(URL1)).toBe(false);
+  });
+
+  test("avbruten signal innan tick → ingen vräkning", async () => {
+    const clock = clockDeps(0);
+    const store = new ContentStore(dir, clock.deps);
+    await store.store(URL1, bytes("x"), "a.pdf");
+    clock.set(10_000);
+    const ctrl = new AbortController();
+    ctrl.abort();
+    store.startEvictionLoop(ctrl.signal, 5_000, 5);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(await store.has(URL1)).toBe(true); // orörd
   });
 });
 
