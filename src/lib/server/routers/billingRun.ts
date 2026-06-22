@@ -17,6 +17,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { proposedAccontoOre } from "@/lib/shared/billing-proposal";
+import type { BillingRun } from "@/lib/shared/schemas/billing";
 import { billingRunRecipientSchema, type ExpenseKind } from "@/lib/shared/schemas/enums";
 import {
   matterIdSchema,
@@ -109,6 +110,27 @@ async function freezeWork(repos: Repositories, matterId: string, billingRunId: B
   await repos.expenses.freezeForMatter(matterId, billingRunId, now);
 }
 
+/**
+ * Koppla de DEBITERBARA frysta posterna till FINAL-fakturan (invoice_id) +
+ * registrera acconto-avdrag. Utan detta härleder slutfaktura-vyn `0.00` för
+ * arvode/utlägg (den summerar bara fakture-länkade poster) trots korrekt
+ * totalbelopp — frysning ensam räcker inte. Gör en billing-run-faktura
+ * identisk (för vy/ledger) med en legacy-skapad (#728). `work` är de poster
+ * som precis frystes; bara `billable` ingår i fakturabeloppet (jfr workValueOre).
+ */
+async function linkFinalInvoice(
+  repos: Repositories,
+  invoiceId: string,
+  work: UnfrozenWork,
+  deductedAccontoInvoiceIds: ReadonlyArray<string>,
+): Promise<void> {
+  await repos.timeEntries.flagBilled(work.timeEntries.filter((t) => t.billable).map((t) => t.id), invoiceId);
+  await repos.expenses.flagBilled(work.expenses.filter((e) => e.billable).map((e) => e.id), invoiceId);
+  for (const accontoInvoiceId of deductedAccontoInvoiceIds) {
+    await repos.accontoDeductions.create({ finalInvoiceId: asId<"InvoiceId">(invoiceId), accontoInvoiceId: asId<"InvoiceId">(accontoInvoiceId) });
+  }
+}
+
 async function assertMatterInOrg(repos: Repositories, matterId: string, orgId: string): Promise<void> {
   const m = await repos.matters.getByIdInOrg(matterId, orgId);
   if (!m) throw new TRPCError({ code: "NOT_FOUND", message: "Ärendet finns inte." });
@@ -193,7 +215,8 @@ export const billingRunRouter = router({
         await assertMatterInOrg(tx, input.matterId, ctx.orgId);
         const work = await fetchUnfrozenWork(tx, input.matterId);
         const value = workValueOre(work);
-        const deductionOre = await sumDeductions(tx, input.matterId, input.deductedBillingRunIds);
+        const deductedRuns = await fetchDeductedAccontoRuns(tx, input.matterId, input.deductedBillingRunIds);
+        const deductionOre = deductedRuns.reduce((sum, r) => sum + (r.amountOre ?? 0), 0);
         const finalAmount = Math.max(0, value - deductionOre);
         const invoice = await tx.invoices.create({
           matterId: input.matterId, amount: finalAmount,
@@ -208,6 +231,8 @@ export const billingRunRouter = router({
           periodTo: new Date(), notes: input.notes,
         });
         await freezeWork(tx, input.matterId, run.id as BillingRunId);
+        // Länka posterna + acconto-avdrag → slutfaktura-vyn visar rätt arvode/utlägg (#728).
+        await linkFinalInvoice(tx, invoice.id, work, accontoInvoiceIds(deductedRuns));
         await emit.invoiceCreated(ctx, invoice);
         return { run, invoice };
       });
@@ -266,15 +291,18 @@ export const billingRunRouter = router({
     }),
 });
 
-async function sumDeductions(
+/**
+ * Validera + hämta de avdragna ACCONTO-körningarna. Säkerhet (#60): de måste
+ * tillhöra SAMMA ärende och vara ACCONTO-körningar — annars kunde en FINAL dra
+ * av främmande/fel-typade billing-runs och förvanska beloppet. Returnerar
+ * körningarna (anroparen summerar `amountOre` + plockar deras `invoiceId`).
+ */
+async function fetchDeductedAccontoRuns(
   repos: Repositories,
   matterId: string,
   ids: ReadonlyArray<string>,
-): Promise<number> {
-  if (ids.length === 0) return 0;
-  // Säkerhet (#60): avdragsposterna måste tillhöra SAMMA ärende och vara
-  // ACCONTO-körningar — annars kunde en FINAL dra av främmande/fel-typade
-  // billing-runs och förvanska beloppet. Kasta om någon id inte matchar.
+): Promise<BillingRun[]> {
+  if (ids.length === 0) return [];
   const runs = await repos.billingRuns.listAccontoByIds(matterId, [...ids]);
   if (runs.length !== ids.length) {
     throw new TRPCError({
@@ -282,5 +310,10 @@ async function sumDeductions(
       message: "Någon avdragspost tillhör inte detta ärende eller är ingen ACCONTO-körning.",
     });
   }
-  return runs.reduce((sum, r) => sum + ((r as { amountOre: number }).amountOre ?? 0), 0);
+  return runs;
+}
+
+/** Acconto-fakturornas id ur avdragna körningar (för acconto_deductions-raderna). */
+function accontoInvoiceIds(runs: ReadonlyArray<BillingRun>): string[] {
+  return runs.map((r) => r.invoiceId).filter((id): id is NonNullable<typeof id> => id != null);
 }
