@@ -9,14 +9,14 @@ on:
     branches: [main]
     paths:
       - "helper-ui/**"
-      - "src/lib/shared/helper/**"
-      - "src/lib/shared/http/**"
+      - "src/lib/shared/**"
+      - "src/lib/server/routers/**" # helpern type-beror på AppRouter (ADR 0031)
       - ".github/workflows/helper-ui-ci.yml"
   pull_request:
     paths:
       - "helper-ui/**"
-      - "src/lib/shared/helper/**"
-      - "src/lib/shared/http/**"
+      - "src/lib/shared/**"
+      - "src/lib/server/routers/**" # helpern type-beror på AppRouter (ADR 0031)
       - ".github/workflows/helper-ui-ci.yml"
 
 jobs:
@@ -33,6 +33,13 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
+
+      # Root-deps krävs för att typkolla den tunna tRPC-klienten: `AppRouter`
+      # (type-only, ADR 0031) drar in serverns typ-graf (zod, jose, @trpc/server
+      # …) som bor i repo-rotens node_modules. tsc i helper-ui resolver uppåt dit.
+      - name: Install root deps
+        working-directory: ${{ github.workspace }}
+        run: bun install --frozen-lockfile
 
       - name: Install
         run: bun install --frozen-lockfile

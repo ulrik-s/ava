@@ -181,10 +181,23 @@ module.exports = {
       severity: "error",
       comment:
         "helper-ui får bara importera från src/lib/shared/ (delad, framework-" +
-        "agnostisk kärna) — aldrig client/ eller server/. Delad kod som helpern " +
-        "behöver hör hemma i shared/. (Se #85.)",
+        "agnostisk kärna) — aldrig client/. server/ får type-only-importeras " +
+        "(AppRouter), se nästa regel. (Se #85.)",
       from: { path: "^helper-ui/" },
-      to: { path: "^src/lib/(client|server)/" },
+      to: { path: "^src/lib/client/" },
+    },
+    {
+      // Helpern är en TUNN tRPC-over-HTTP-klient (ADR 0031), precis som Office-
+      // add-ins (ADR 0013). Den får referera backend-lagret ENBART via TYPER
+      // (AppRouter-kontraktet) — aldrig dra in körbar server-kod i bundlen.
+      // Speglar `addin-imports-server-by-type-only`.
+      name: "helper-ui-imports-server-by-type-only",
+      severity: "error",
+      comment:
+        "helper-ui får bara type-only-importera src/lib/server/ (tRPC-kontraktet " +
+        "AppRouter, ADR 0031) — aldrig värde-importera server-kod.",
+      from: { path: "^helper-ui/" },
+      to: { path: "^src/lib/server/", dependencyTypesNot: ["type-only"] },
     },
     {
       // Add-in-gräns (#72, ADR 0013): Outlook-add-in:en är en TUNN HTTP-klient.
