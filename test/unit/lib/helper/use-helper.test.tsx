@@ -13,7 +13,9 @@ import {
   fetchHelperStatus,
   fetchContentViaHelper,
   configureHelper,
+  docSyncStatusMap,
 } from "@/lib/client/helper/use-helper";
+import type { HelperStatusResponse, HelperSyncEntry } from "@/lib/shared/helper/protocol";
 
 const HTTPS = "https://localhost:48762";
 const HTTP = "http://127.0.0.1:48761";
@@ -218,5 +220,43 @@ describe("triggerHelperUpdateCheck", () => {
   it("sväljer fel tyst när helpern saknas", async () => {
     global.fetch = vi.fn().mockRejectedValue(new Error("net"));
     await expect(triggerHelperUpdateCheck()).resolves.toBeUndefined();
+  });
+});
+
+describe("docSyncStatusMap", () => {
+  function status(entries: Partial<HelperSyncEntry>[]): HelperStatusResponse {
+    const full = entries.map((e, i) => ({
+      id: `q${i}`, fileName: "f", enqueuedAt: 0, attempts: 0, nextAttemptAt: 0,
+      status: "pending" as const, ...e,
+    })) as HelperSyncEntry[];
+    return {
+      pending: full.filter((e) => e.status === "pending").length,
+      conflict: full.filter((e) => e.status === "conflict").length,
+      total: full.length,
+      entries: full,
+    };
+  }
+
+  it("null → tom karta", () => {
+    expect(docSyncStatusMap(null).size).toBe(0);
+  });
+
+  it("mappar document.id → status; hoppar över poster utan document (demo/PUT)", () => {
+    const m = docSyncStatusMap(status([
+      { document: { id: "a", trpcUrl: "x" }, status: "pending" },
+      { uploadUrl: "http://s/u", status: "pending" }, // demo → ingen doc-id → hoppas
+      { document: { id: "b", trpcUrl: "x" }, status: "conflict" },
+    ]));
+    expect(m.get("a")).toBe("pending");
+    expect(m.get("b")).toBe("conflict");
+    expect(m.size).toBe(2);
+  });
+
+  it("conflict prioriteras över pending för samma dokument", () => {
+    const m = docSyncStatusMap(status([
+      { document: { id: "a", trpcUrl: "x" }, status: "pending" },
+      { document: { id: "a", trpcUrl: "x" }, status: "conflict" },
+    ]));
+    expect(m.get("a")).toBe("conflict");
   });
 });

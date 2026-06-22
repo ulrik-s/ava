@@ -158,6 +158,24 @@ export async function fetchHelperStatus(): Promise<HelperStatusResponse | null> 
 }
 
 /**
+ * Per-dokument synk-status ur helperns kö (ADR 0031): mappar varje kö-posts
+ * `document.id` → `pending`/`conflict` så dokumentlistan kan markera "ändringar
+ * på ingång" på rätt rad. Lokal kö → funkar bäst när man redigerar på samma
+ * dator (juristen är ofta ensam i ärendet). `conflict` prioriteras. Demo-poster
+ * (PUT-URL utan `document`) hoppas över. Ren funktion → testbar.
+ */
+export function docSyncStatusMap(status: HelperStatusResponse | null): Map<string, "pending" | "conflict"> {
+  const map = new Map<string, "pending" | "conflict">();
+  if (!status) return map;
+  for (const entry of status.entries) {
+    const id = entry.document?.id;
+    if (id === undefined) continue;
+    if (entry.status === "conflict" || !map.has(id)) map.set(id, entry.status);
+  }
+  return map;
+}
+
+/**
  * Pollar helperns synk-status periodiskt (default var 5:e sekund) så
  * webbappen kan visa "väntar på synk / konflikt". null tills första svaret,
  * och om helpern saknas. Pollningen stannar när komponenten avmonteras.

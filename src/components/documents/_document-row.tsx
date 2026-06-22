@@ -8,6 +8,7 @@ import { loadFirmaConfig } from "@/lib/client/firma/firma-config";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { DocumentTags } from "./_document-tags";
 import { formatFileSize } from "./_drag-helpers";
+import { SyncStatusBadge, type SyncStatus } from "./_sync-badge";
 import { ExternalEditModal, type ModalState } from "./external-edit-modal";
 
 export interface DocumentRecord {
@@ -38,6 +39,8 @@ interface Props {
   /** Sätts till true under upload-fasen (FSA-write + register +
    *  tree-invalidate). Klick/öppna är disabled tills false. */
   isUploading?: boolean;
+  /** Helperns write-back-status för dokumentet (ADR 0031): "ändringar på ingång". */
+  syncStatus?: SyncStatus | undefined;
   onDragStart: (e: React.DragEvent) => void;
   onDragEnd: () => void;
   onReanalyze: () => void;
@@ -53,6 +56,7 @@ export function DocumentRow({
   isDragging,
   isAnalyzing,
   isUploading,
+  syncStatus,
   onDragStart,
   onDragEnd,
   onReanalyze,
@@ -101,6 +105,7 @@ export function DocumentRow({
                   <span className="animate-pulse">●</span> Lokal
                 </span>
               )}
+              <SyncStatusBadge status={syncStatus} />
             </div>
             <DocumentTags documentId={doc.id} matterId={doc.matterId} tags={doc.tags ?? []} />
           </div>
