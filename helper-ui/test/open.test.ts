@@ -17,11 +17,12 @@ interface Recorder {
   downloaded: string[]; // källnyckel (downloadUrl eller doc:<id>)
   opened: string[];
   watched: Array<{ path: string; target: UploadTarget; timeoutMs: number }>;
+  heartbeats: Array<{ documentId: string; timeoutMs: number }>;
   deps: OpenDeps;
 }
 
 function recorder(overrides: Partial<OpenDeps> = {}): Recorder {
-  const rec: Recorder = { sessionDir: "", downloaded: [], opened: [], watched: [], deps: {} as OpenDeps };
+  const rec: Recorder = { sessionDir: "", downloaded: [], opened: [], watched: [], heartbeats: [], deps: {} as OpenDeps };
   rec.deps = {
     // Returnerar bytes + basversion (ADR 0031/0033); obtainFile skriver filen.
     download: async (ref) => {
@@ -36,6 +37,8 @@ function recorder(overrides: Partial<OpenDeps> = {}): Recorder {
       return d;
     },
     startWatch: (path, target, _auth, timeoutMs) => { rec.watched.push({ path, target, timeoutMs }); },
+    // Heartbeat-default registrerar bara (anropas när VI äger leasen).
+    startLeaseHeartbeat: (document, _auth, timeoutMs) => { rec.heartbeats.push({ documentId: document.id, timeoutMs }); },
     ...overrides,
   };
   return rec;
@@ -125,6 +128,57 @@ describe("handleOpen", () => {
     const rec = recorder({ openApp: async () => { throw new Error("no app"); } });
     const res = await handleOpen(openReq({ downloadUrl: "http://x/f", fileName: "a.pdf" }), rec.deps);
     expect(res.status).toBe(500);
+  });
+});
+
+describe("lease (ADR 0033 §2/§4)", () => {
+  const docReq = { document: { id: "d7", trpcUrl: "http://s/api/trpc" }, fileName: "a.docx" };
+
+  test("fri lease (acquired) → redigerbart: watch + heartbeat startas", async () => {
+    const rec = recorder({ acquireLease: async () => ({ acquired: true, holderId: "u1", holderName: "Jag", stale: false }) });
+    const res = await handleOpen(openReq(docReq), rec.deps);
+    const body = (await res.json()) as { status: string; readOnly?: boolean };
+    expect(body.status).toBe("opened");
+    expect(body.readOnly).toBeUndefined();
+    expect(rec.watched).toHaveLength(1);
+    expect(rec.heartbeats).toEqual([{ documentId: "d7", timeoutMs: 60 * 60_000 }]);
+  });
+
+  test("leasat av annan → skrivskyddat: ingen watch, ingen heartbeat, hållare i svaret", async () => {
+    const rec = recorder({ acquireLease: async () => ({ acquired: false, holderId: "u2", holderName: "Anna", stale: false }) });
+    const res = await handleOpen(openReq(docReq), rec.deps);
+    const body = (await res.json()) as { status: string; readOnly?: boolean; leaseHolder?: string };
+    expect(body.status).toBe("read-only");
+    expect(body.readOnly).toBe(true);
+    expect(body.leaseHolder).toBe("Anna");
+    expect(rec.opened).toHaveLength(1); // öppnas ändå (för läsning)
+    expect(rec.watched).toHaveLength(0);
+    expect(rec.heartbeats).toHaveLength(0);
+  });
+
+  test("forceEdit + leasat av annan → lånar: redigerbart + watch men INGEN heartbeat", async () => {
+    const rec = recorder({ acquireLease: async () => ({ acquired: false, holderId: "u2", holderName: "Anna", stale: false }) });
+    const res = await handleOpen(openReq({ ...docReq, forceEdit: true }), rec.deps);
+    expect(((await res.json()) as { status: string }).status).toBe("opened");
+    expect(rec.watched).toHaveLength(1);
+    expect(rec.heartbeats).toHaveLength(0); // lånat → äger inte leasen
+  });
+
+  test("readOnly-flagga → skrivskyddat utan att ens ta leasen", async () => {
+    let acquireCalled = false;
+    const rec = recorder({ acquireLease: async () => { acquireCalled = true; return { acquired: true, holderId: "u1", holderName: "Jag", stale: false }; } });
+    const res = await handleOpen(openReq({ ...docReq, readOnly: true }), rec.deps);
+    expect(((await res.json()) as { status: string }).status).toBe("read-only");
+    expect(acquireCalled).toBe(false);
+    expect(rec.watched).toHaveLength(0);
+  });
+
+  test("ingen lease-dep wirad → redigerbart (bakåtkompatibelt)", async () => {
+    const rec = recorder(); // ingen acquireLease
+    const res = await handleOpen(openReq(docReq), rec.deps);
+    expect(((await res.json()) as { status: string }).status).toBe("opened");
+    expect(rec.watched).toHaveLength(1);
+    expect(rec.heartbeats).toHaveLength(0); // äger ingen lease → ingen heartbeat
   });
 });
 

@@ -133,3 +133,27 @@ export async function saveConflictCopyBytes(
   const copy = await client.document.saveConflictCopy.mutate({ documentId, contentBase64: bytesToBase64(bytes), label });
   return { id: copy.id, fileName: copy.fileName };
 }
+
+/** Utfall av {@link acquireLease}: fick vi leasen, och vem håller den (för UI). */
+export interface LeaseInfo {
+  acquired: boolean;
+  holderId: string;
+  holderName: string;
+  stale: boolean;
+}
+
+/** Ta leasen (ADR 0033 §2) — helpern tar den vid öppning för redigering. */
+export async function acquireLease(client: TRPCClient<AppRouter>, documentId: string): Promise<LeaseInfo> {
+  const r = await client.document.acquireLease.mutate({ documentId });
+  return { acquired: r.acquired, holderId: r.lease.holderId, holderName: r.lease.holderName, stale: r.lease.stale };
+}
+
+/** Heartbeat: förnya leasen. `false` = vi håller den inte längre (övertagen/utgången). */
+export async function renewLease(client: TRPCClient<AppRouter>, documentId: string): Promise<boolean> {
+  return (await client.document.renewLease.mutate({ documentId })).renewed;
+}
+
+/** Släpp leasen (vid stäng/watch-slut). */
+export async function releaseLease(client: TRPCClient<AppRouter>, documentId: string): Promise<void> {
+  await client.document.releaseLease.mutate({ documentId });
+}

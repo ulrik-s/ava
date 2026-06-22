@@ -142,8 +142,12 @@ gör att ingenting någonsin försvinner — man kan alltid backa.
    omstart löper ut alla leases = korrekt). Port `ILeaseStore` (server-first =
    `InMemoryLeaseStore`, demo = no-op). tRPC i document-routern, org-scopat. Själv-
    återtagande + ta-över ingår i store-logiken. *(#722)*
-4. **Helper:** ta/förnya/släpp lease vid öppna/stäng; själv-återtagande; öppna
-   skrivskyddat (ingen watch) när leasat av annan.
+4. ✅ **Helper:** tar leasen vid öppning (server-dok); fri/egen → redigerbart +
+   watch + **heartbeat** (renew 30s, släpp vid watch-slut). Leasat av annan →
+   **skrivskyddat** (ingen lease, ingen watch → oavsiktlig redigering laddas
+   aldrig upp); svaret bär hållarens namn. Flaggor: `readOnly` (medvetet
+   skrivskyddat), `forceEdit` (lånar — redigera utan att ta leasen). Tappad lease
+   mid-edit → slutar förnya, nästa save 409:ar → keep-both. *(#724)*
 5. **Web-UI:** "X redigerar" + "Ta över redigeringen" + "Öppna skrivskyddat"/
    "Öppna ändå"; konflikt-meddelande + länk till Word Jämför.
 

@@ -27,9 +27,17 @@ import { loginConfigFromEnv, runLogin, type LoginConfig } from "./auth/login.ts"
 import { handleConfig } from "./config-endpoint.ts";
 import { ContentStore, resolveCacheTtlMs } from "./content-store.ts";
 import { fetchAndCacheContent, handleContent } from "./content.ts";
-import { fetchSourceBytes, sourceCacheKey } from "./document-source.ts";
+import {
+  acquireLeaseViaTrpc,
+  fetchSourceBytes,
+  releaseLeaseViaTrpc,
+  renewLeaseViaTrpc,
+  sourceCacheKey,
+  type FetchSourceDeps,
+} from "./document-source.ts";
 import { envWithConfig, loadHelperConfig, saveHelperConfig } from "./helper-config.ts";
 import { installService, uninstallService, type InstallDeps } from "./install.ts";
+import { defaultLeaseTimers, startLeaseHeartbeat } from "./lease-session.ts";
 import { initLog, log } from "./log.ts";
 import {
   defaultOpenDeps,
@@ -162,6 +170,11 @@ export function queueBackedOnOpen(queue: UploadQueue, content: ContentStore, aut
   // Browserns authHeader först; annars helperns egen OIDC-token (autonom, ADR 0028 §2).
   const fallback = async (browserAuth: string | undefined): Promise<string | undefined> =>
     browserAuth ?? (authHeader ? await authHeader() : undefined);
+  // Lease-anrop måste bära samma färska token som download/upload (autonom).
+  const leaseDeps = async (browserAuth: string | undefined): Promise<FetchSourceDeps> => {
+    const auth = await fallback(browserAuth);
+    return auth !== undefined ? { authHeader: auth } : {};
+  };
   const deps: OpenDeps = {
     ...defaultOpenDeps,
     // Local-first (ADR 0032): osynkad lokal ändring i kön slår serverns version.
@@ -177,6 +190,17 @@ export function queueBackedOnOpen(queue: UploadQueue, content: ContentStore, aut
       }),
     persist: (cacheKey, bytes, fileName) => persistDownloaded(content, cacheKey, bytes, fileName),
     restore: (cacheKey, path) => restoreCached(content, cacheKey, path),
+    // Lease (ADR 0033 §2/§4): ta vid öppning, förnya/släpp med färsk token.
+    acquireLease: async (document, browserAuth) => acquireLeaseViaTrpc(document, await leaseDeps(browserAuth)),
+    startLeaseHeartbeat: (document, browserAuth, timeoutMs) =>
+      startLeaseHeartbeat(
+        {
+          renew: async () => renewLeaseViaTrpc(document, await leaseDeps(browserAuth)),
+          release: async () => releaseLeaseViaTrpc(document, await leaseDeps(browserAuth)),
+          ...defaultLeaseTimers,
+        },
+        timeoutMs,
+      ),
   };
   return (req) => handleOpen(req, deps);
 }

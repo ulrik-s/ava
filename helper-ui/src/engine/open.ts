@@ -11,10 +11,23 @@ import { mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 
-import { isSafeFileName, type HelperOpenRequest } from "@/lib/shared/helper/protocol";
+import { isSafeFileName, type HelperDocumentRef, type HelperOpenRequest } from "@/lib/shared/helper/protocol";
 import type { ContentStore } from "./content-store.ts";
-import { fetchSourceBytes, sourceCacheKey, toSourceRef, uploadViaTrpc, type SourceBytes, type SourceRef, type UploadTarget } from "./document-source.ts";
+import {
+  acquireLeaseViaTrpc,
+  fetchSourceBytes,
+  releaseLeaseViaTrpc,
+  renewLeaseViaTrpc,
+  sourceCacheKey,
+  toSourceRef,
+  uploadViaTrpc,
+  type LeaseInfo,
+  type SourceBytes,
+  type SourceRef,
+  type UploadTarget,
+} from "./document-source.ts";
 import { json, parseJsonBody, textError } from "./http.ts";
+import { defaultLeaseTimers, startLeaseHeartbeat } from "./lease-session.ts";
 import { log } from "./log.ts";
 import { openWithDefaultApp } from "./platform/open-app.ts";
 import type { UploadQueue } from "./queue.ts";
@@ -34,6 +47,10 @@ export interface OpenDeps {
   persist?: (cacheKey: string, bytes: Uint8Array, fileName: string) => Promise<void>;
   /** Återställ cachade bytes (under `cacheKey`) till `path` när nedladdning misslyckas (offline). Valfri. */
   restore?: (cacheKey: string, path: string) => Promise<boolean>;
+  /** Ta leasen för ett server-dokument (ADR 0033 §2). Saknas → redigera utan lease. Valfri. */
+  acquireLease?: (document: HelperDocumentRef, authHeader?: string) => Promise<LeaseInfo>;
+  /** Starta lease-heartbeat (förnya + släpp vid timeout) när vi äger leasen. Valfri. */
+  startLeaseHeartbeat?: (document: HelperDocumentRef, authHeader: string | undefined, timeoutMs: number) => void;
 }
 
 export const defaultOpenDeps: OpenDeps = {
@@ -41,6 +58,16 @@ export const defaultOpenDeps: OpenDeps = {
   openApp: openWithDefaultApp,
   makeSessionDir: () => mkdtemp(join(tmpdir(), "ava-helper-")),
   startWatch: watchAndUpload,
+  acquireLease: (document, authHeader) => acquireLeaseViaTrpc(document, authHeader !== undefined ? { authHeader } : {}),
+  startLeaseHeartbeat: (document, authHeader, timeoutMs) =>
+    startLeaseHeartbeat(
+      {
+        renew: () => renewLeaseViaTrpc(document, authHeader !== undefined ? { authHeader } : {}),
+        release: () => releaseLeaseViaTrpc(document, authHeader !== undefined ? { authHeader } : {}),
+        ...defaultLeaseTimers,
+      },
+      timeoutMs,
+    ),
 };
 
 export async function handleOpen(req: Request, deps: OpenDeps = defaultOpenDeps): Promise<Response> {
@@ -66,13 +93,63 @@ async function runOpen(body: HelperOpenRequest, deps: OpenDeps): Promise<Respons
   const sessionDir = await deps.makeSessionDir();
   const tmpFile = join(sessionDir, body.fileName);
 
+  // Lease-beslut FÖRE nedladdning (ADR 0033 §2): redigerbart, skrivskyddat
+  // (leasat av annan), eller lånat (forceEdit). Skrivskyddat → ingen write-back.
+  const lease = await resolveLease(body, deps);
+
   const obtained = await obtainFile(body, tmpFile, deps);
   if (obtained instanceof Response) return obtained;
   const openErr = await tryStep(() => deps.openApp(tmpFile), 500, "open failed");
   if (openErr) return openErr;
 
-  startWatchIfNeeded(body, tmpFile, deps, obtained.version);
+  if (!lease.editable) {
+    // Skrivskyddat: ingen watch, ingen lease → även oavsiktlig redigering laddas aldrig upp.
+    log(`öppnar skrivskyddat${lease.holderName ? ` (${lease.holderName} redigerar)` : ""}: ${body.fileName}`);
+    return json({ path: tmpFile, status: "read-only", readOnly: true, ...(lease.holderName ? { leaseHolder: lease.holderName } : {}) });
+  }
+
+  armEditing(body, tmpFile, deps, obtained.version, lease.ownLease);
   return json({ path: tmpFile, status: "opened" });
+}
+
+/** Arma write-back (watch) + lease-heartbeat (bara när VI äger leasen). */
+function armEditing(body: HelperOpenRequest, tmpFile: string, deps: OpenDeps, baseVersion: number | undefined, ownLease: boolean): void {
+  const timeoutMs = watchTimeoutMs(body);
+  startWatchIfNeeded(body, tmpFile, deps, baseVersion, timeoutMs);
+  // Heartbeat bara när VI äger leasen (ej lån/demo) så ett stale lås läker av sig självt.
+  if (ownLease && body.document && deps.startLeaseHeartbeat) {
+    deps.startLeaseHeartbeat(body.document, body.authHeader, timeoutMs);
+  }
+}
+
+/** Hur länge watch + lease-heartbeat lever (default 60 min). */
+function watchTimeoutMs(body: HelperOpenRequest): number {
+  const m = body.maxWatchMinutes;
+  return (m !== undefined && m > 0 ? m : DEFAULT_WATCH_MINUTES) * 60_000;
+}
+
+/** Vad lease-beslutet blev (ADR 0033 §2). */
+interface LeaseDecision {
+  /** Redigerbart (watch armas)? false = skrivskyddat. */
+  editable: boolean;
+  /** Äger VI leasen (→ heartbeat)? false vid lån/demo/ingen lease. */
+  ownLease: boolean;
+  /** Vem håller leasen, när skrivskyddat/lånat pga annans lease. */
+  holderName?: string;
+}
+
+/**
+ * Avgör läs/skriv (ADR 0033 §2). Lease gäller bara server-dokument; demo/statisk
+ * behåller gammalt beteende (redigerbart, watch styrs av write-back-mål).
+ */
+async function resolveLease(body: HelperOpenRequest, deps: OpenDeps): Promise<LeaseDecision> {
+  if (body.readOnly) return { editable: false, ownLease: false }; // medvetet "öppna skrivskyddat"
+  if (!body.document || !deps.acquireLease) return { editable: true, ownLease: false };
+  const lease = await deps.acquireLease(body.document, body.authHeader);
+  if (lease.acquired) return { editable: true, ownLease: true }; // fri/egen (själv-återtagande)
+  // Leasat av annan: "öppna ändå" lånar (redigera utan lease), annars skrivskyddat.
+  if (body.forceEdit) return { editable: true, ownLease: false, holderName: lease.holderName };
+  return { editable: false, ownLease: false, holderName: lease.holderName };
 }
 
 /** Filen är skaffad; `version` = serverns basversion (ADR 0033), om känd. */
@@ -141,7 +218,7 @@ async function tryStep(fn: () => Promise<void>, status: number, label: string): 
   }
 }
 
-function startWatchIfNeeded(body: HelperOpenRequest, tmpFile: string, deps: OpenDeps, baseVersion?: number): void {
+function startWatchIfNeeded(body: HelperOpenRequest, tmpFile: string, deps: OpenDeps, baseVersion: number | undefined, timeoutMs: number): void {
   // Write-back-mål: tRPC-dokument (server, ADR 0031) ELLER PUT-URL (demo). Server-
   // målet bär basversionen (ADR 0033 §1) som kön versionskollar uploaden mot.
   const target: UploadTarget | null = body.document
@@ -150,9 +227,7 @@ function startWatchIfNeeded(body: HelperOpenRequest, tmpFile: string, deps: Open
       ? { uploadUrl: body.uploadUrl }
       : null;
   if (!target) return;
-  const m = body.maxWatchMinutes;
-  const minutes = m !== undefined && m > 0 ? m : DEFAULT_WATCH_MINUTES;
-  deps.startWatch(tmpFile, target, body.authHeader, minutes * 60_000);
+  deps.startWatch(tmpFile, target, body.authHeader, timeoutMs);
 }
 
 function errMsg(err: unknown): string {
