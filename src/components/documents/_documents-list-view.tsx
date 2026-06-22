@@ -11,13 +11,13 @@
 import { useState } from "react";
 import { ActionMenu, type ActionMenuItem } from "@/components/ui/action-menu";
 import { DataTable, type Column } from "@/components/ui/data-table";
-import { openDocumentSmart } from "@/lib/client/firma/open-document-externally";
 import { trpc } from "@/lib/client/trpc";
 import type { DocumentRecord } from "./_document-row";
 import { formatFileSize } from "./_drag-helpers";
 import type { FolderRecord } from "./_folder-row";
 import { SyncStatusBadge, type SyncStatus } from "./_sync-badge";
 import { ExternalEditModal, type ModalState } from "./external-edit-modal";
+import { useLeaseAwareOpen } from "./use-lease-aware-open";
 
 interface Props {
   matterId: string;
@@ -45,12 +45,14 @@ function folderPath(folderId: string | null, folders: FolderRecord[]): string {
 
 export function DocumentsListView({ matterId, documents, folders, docSync = NO_SYNC, onDelete, onReanalyze }: Props) {
   const [modal, setModal] = useState<ModalState>({ kind: "closed" });
+  // Lease-medveten öppning (ADR 0033 §2) — delad med träd-vyn.
+  const { openDocument, leaseModal } = useLeaseAwareOpen();
 
   const columns: Column<DocumentRecord>[] = [
     { key: "fileName", label: "Filnamn", sortable: true, sortValue: (d) => d.fileName,
       render: (d) => (
         <span className="flex items-center gap-2 min-w-0">
-          <button type="button" onClick={() => void openDocumentSmart(d, setModal)}
+          <button type="button" onClick={() => void openDocument(d, setModal)}
             className="text-sm font-medium text-blue-600 hover:underline text-left"
             title="PDF/Word/Excel → öppnas i extern editor om du har valt en lokal mapp">
             {d.fileName}
@@ -77,7 +79,7 @@ export function DocumentsListView({ matterId, documents, folders, docSync = NO_S
     { key: "actions", label: "", sortable: false, align: "right", hideable: false,
       render: (d) => {
         const items: ActionMenuItem[] = [
-          { key: "external", label: "Editera externt", onSelect: () => void openDocumentSmart(d, setModal) },
+          { key: "external", label: "Editera externt", onSelect: () => void openDocument(d, setModal) },
           { key: "reanalyze", label: "Analysera igen", onSelect: () => onReanalyze(d.id) },
           {
             key: "delete",
@@ -97,6 +99,7 @@ export function DocumentsListView({ matterId, documents, folders, docSync = NO_S
   return (
     <div className="p-4">
       <ExternalEditModal state={modal} onClose={() => setModal({ kind: "closed" })} />
+      {leaseModal}
       <DataTable
         prefKey={`list.matter-documents.${matterId}`}
         columns={columns}

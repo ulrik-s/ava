@@ -17,7 +17,10 @@ vi.mock("@/lib/client/trpc", () => ({
   trpc: {
     useUtils: () => ({ document: { tree: { invalidate: vi.fn() } } }),
     organization: { getSettings: { useQuery: () => ({ data: { documentTags: [] } }) } },
-    document: { setTags: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) } },
+    document: {
+      setTags: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      takeoverLease: { useMutation: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }) },
+    },
   },
 }));
 

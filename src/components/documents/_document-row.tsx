@@ -10,6 +10,7 @@ import { DocumentTags } from "./_document-tags";
 import { formatFileSize } from "./_drag-helpers";
 import { SyncStatusBadge, type SyncStatus } from "./_sync-badge";
 import { ExternalEditModal, type ModalState } from "./external-edit-modal";
+import { useLeaseAwareOpen } from "./use-lease-aware-open";
 
 export interface DocumentRecord {
   id: string;
@@ -67,6 +68,8 @@ export function DocumentRow({
   // och DocumentActions (kebab-meny) kan trigga "Editera externt" mot
   // samma modal.
   const [modal, setModal] = useState<ModalState>({ kind: "closed" });
+  // Lease-medveten öppning (ADR 0033 §2): visar "X redigerar" + Ta över / Öppna ändå.
+  const { openDocument, leaseModal } = useLeaseAwareOpen();
   const triggerExternalEdit = async () => {
     // Försök först via AVA Helper (1-klicks-flow). Om helpern inte kör
     // faller vi tillbaka till befintlig ExternalEditModal (download via
@@ -79,12 +82,12 @@ export function DocumentRow({
   // Primärklick: AVA Helper (native-app) → FSA → browser-tab. Samma delade
   // logik som list-vyn (open-document-externally) så vyerna inte glider isär.
   const openPrimary = async () => {
-    const { openDocumentSmart } = await import("@/lib/client/firma/open-document-externally");
-    await openDocumentSmart({ id: doc.id, fileName: doc.fileName, storagePath: doc.storagePath }, setModal);
+    await openDocument({ id: doc.id, fileName: doc.fileName, storagePath: doc.storagePath }, setModal);
   };
   return (
     <Fragment>
       <ExternalEditModal state={modal} onClose={() => setModal({ kind: "closed" })} />
+      {leaseModal}
       <tr
         draggable={!isUploading}
         onDragStart={onDragStart}

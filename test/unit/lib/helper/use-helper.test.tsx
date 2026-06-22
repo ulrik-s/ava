@@ -93,10 +93,11 @@ describe("openViaHelper", () => {
   it("POST:ar /open på den upplösta basen (HTTPS)", async () => {
     const fetchMock = routeFetch([
       [`${HTTPS}/ping`, () => new Response("ava-helper v1\n", { status: 200 })],
-      [`${HTTPS}/open`, () => new Response("", { status: 200 })],
+      [`${HTTPS}/open`, () => new Response(JSON.stringify({ path: "/tmp/x.pdf", status: "opened" }), { status: 200 })],
     ]);
     global.fetch = fetchMock;
-    await openViaHelper({ fileName: "x.pdf", downloadUrl: "https://example.com/x" });
+    const resp = await openViaHelper({ fileName: "x.pdf", downloadUrl: "https://example.com/x" });
+    expect(resp).toMatchObject({ status: "opened" });
     const openCall = fetchMock.mock.calls.find(([u]: [string]) => String(u).endsWith("/open"))!;
     expect(openCall[0]).toBe(`${HTTPS}/open`);
     expect(openCall[1].method).toBe("POST");

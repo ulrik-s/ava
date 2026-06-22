@@ -66,6 +66,7 @@ vi.mock("@/lib/client/trpc", () => ({
       analyze: { useMutation: () => mutationStubs.analyze },
       register: { useMutation: () => mutationStubs.register },
       setTags: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      takeoverLease: { useMutation: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }) },
     },
     organization: { getSettings: { useQuery: () => ({ data: { documentTags: [] } }) } },
     prefs: {

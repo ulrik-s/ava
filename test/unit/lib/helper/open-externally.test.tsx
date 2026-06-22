@@ -29,28 +29,37 @@ describe("shouldPreferExternalEdit", () => {
 });
 
 describe("tryHelperOpen", () => {
-  it("returnerar false när /ping inte svarar", async () => {
+  it("returnerar null när /ping inte svarar (→ fallback)", async () => {
     global.fetch = vi.fn().mockRejectedValue(new Error("ECONNREFUSED"));
     const result = await tryHelperOpen({ id: "d1", fileName: "f.pdf", storagePath: "p" });
-    expect(result).toBe(false);
+    expect(result).toBeNull();
   });
 
-  it("returnerar true när helpern svarar OK på /ping och /open", async () => {
+  it("returnerar {kind:'done'} när helpern öppnade redigerbart", async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response("ava-helper v1.0.0\n", { status: 200 })) // /ping
-      .mockResolvedValueOnce(new Response("", { status: 200 })); // /open
+      .mockResolvedValueOnce(new Response(JSON.stringify({ path: "/tmp/f.pdf", status: "opened" }), { status: 200 })); // /open
     global.fetch = fetchMock;
     const result = await tryHelperOpen({ id: "d1", fileName: "f.pdf", storagePath: "documents/d1.pdf" });
-    expect(result).toBe(true);
+    expect(result).toEqual({ kind: "done" });
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it("returnerar false när helpern svarar OK på /ping men /open kastar", async () => {
+  it("returnerar {kind:'read-only', leaseHolder} när leasat av annan (ADR 0033 §2)", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response("ava-helper v1.0.0\n", { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ path: "/tmp/f.pdf", status: "read-only", readOnly: true, leaseHolder: "Anna" }), { status: 200 }));
+    global.fetch = fetchMock;
+    const result = await tryHelperOpen({ id: "d1", fileName: "f.pdf", storagePath: "p" });
+    expect(result).toEqual({ kind: "read-only", leaseHolder: "Anna" });
+  });
+
+  it("returnerar null när helpern svarar OK på /ping men /open kastar (→ fallback)", async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response("ava-helper v1.0.0\n", { status: 200 }))
       .mockResolvedValueOnce(new Response("error", { status: 500 }));
     global.fetch = fetchMock;
     const result = await tryHelperOpen({ id: "d1", fileName: "f.pdf", storagePath: "p" });
-    expect(result).toBe(false);
+    expect(result).toBeNull();
   });
 });

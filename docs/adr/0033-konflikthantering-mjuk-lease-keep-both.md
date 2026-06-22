@@ -1,6 +1,8 @@
 # ADR 0033 — Konflikthantering: förebygg via mjuk lease, lös via keep-both (ingen merge)
 
-- **Status:** Accepterad (2026-06-22) — *riktning spikad, ännu ej implementerad.*
+- **Status:** Accepterad och **implementerad** (2026-06-22) — alla fem steg landade
+  (#718 optimistisk version, #720 keep-both, #722 lease-store, #724 helper-lease,
+  #726 web-UI).
 - **Beslutsfattare:** Ulrik Sjölin
 - **Berör:** helper-ui (öppning/watch/kö), server-first (dokument-skrivning),
   web-appens dokument-UI, capability-tiers.
@@ -148,8 +150,11 @@ gör att ingenting någonsin försvinner — man kan alltid backa.
    aldrig upp); svaret bär hållarens namn. Flaggor: `readOnly` (medvetet
    skrivskyddat), `forceEdit` (lånar — redigera utan att ta leasen). Tappad lease
    mid-edit → slutar förnya, nästa save 409:ar → keep-both. *(#724)*
-5. **Web-UI:** "X redigerar" + "Ta över redigeringen" + "Öppna skrivskyddat"/
-   "Öppna ändå"; konflikt-meddelande + länk till Word Jämför.
+5. ✅ **Web-UI:** lease-medveten öppning (`useLeaseAwareOpen`, delad träd+list):
+   skrivskyddat utfall → `LeaseModal` "X redigerar" med **Behåll skrivskyddat** /
+   **Ta över redigeringen** (`takeoverLease` + öppna om) / **Öppna ändå** (lånar,
+   forceEdit). Konflikt-badgen säger på klarspråk att din version sparats separat
+   + pekar mot Word → Granska → Jämför. *(#726)*
 
 ## Öppna frågor
 
