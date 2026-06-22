@@ -36,6 +36,17 @@ interface Doc {
   storagePath: string;
 }
 
+/** Hur dokumentet ska öppnas (ADR 0033 §2). */
+export interface OpenOpts {
+  /** "Öppna ändå för redigering" — lånar trots annans lease. */
+  forceEdit?: boolean;
+  /** Medvetet "öppna skrivskyddat" (kebab-val). */
+  readOnly?: boolean;
+}
+
+/** Utfall av en öppning (ADR 0033 §2): klar, eller skrivskyddad pga annans lease. */
+export type OpenOutcome = { kind: "done" } | { kind: "read-only"; leaseHolder?: string };
+
 const DEFAULT_DEMO_REPO_FALLBACK = "ulrik-s/ava-demo";
 
 /**
@@ -51,22 +62,28 @@ const DEFAULT_DEMO_REPO_FALLBACK = "ulrik-s/ava-demo";
  * Web-appens jobb är bara att konstruera rätt URLs baserat på vilken
  * AVA-backend som körs (git-http eller REST). Helpern är tier-agnostisk.
  */
-export async function tryHelperOpen(doc: Doc): Promise<boolean> {
+export async function tryHelperOpen(doc: Doc, opts: OpenOpts = {}): Promise<OpenOutcome | null> {
   // openViaHelper löser transporten (https→http, ADR 0006) och kastar om helpern
-  // saknas → vi fångar och faller tillbaka. Källan väljs per tier (ADR 0031):
-  //   - server-tier: `document`-descriptor → helpern hämtar via tRPC
-  //     `document.downloadContent` med sin EGNA Bearer (typat, ingen REST-yta).
-  //   - demo: statisk GH-Pages-blob-URL (ingen server att tRPC:a mot).
-  // Write-back (uploadUrl) är ännu inte påkopplad i server-tier (ADR 0031 steg 3).
+  // saknas → vi fångar och returnerar null (→ fallback). Källan väljs per tier:
+  //   - server-tier: `document`-descriptor → helpern hämtar via tRPC + tar lease.
+  //   - demo: statisk GH-Pages-blob-URL (ingen server, ingen lease).
   const req: HelperOpenRequest = isDemoTier()
     ? { fileName: doc.fileName, downloadUrl: demoUrl(doc) }
-    : { fileName: doc.fileName, document: { id: doc.id, trpcUrl: helperTrpcUrl() } };
+    : {
+        fileName: doc.fileName,
+        document: { id: doc.id, trpcUrl: helperTrpcUrl() },
+        ...(opts.forceEdit ? { forceEdit: true } : {}),
+        ...(opts.readOnly ? { readOnly: true } : {}),
+      };
   try {
-    await openViaHelper(req);
-    return true;
+    const resp = await openViaHelper(req);
+    // Skrivskyddat (leasat av annan) → ytlägg hållaren så UI:t kan visa "X redigerar".
+    return resp.readOnly
+      ? { kind: "read-only", ...(resp.leaseHolder !== undefined ? { leaseHolder: resp.leaseHolder } : {}) }
+      : { kind: "done" };
   } catch (err) {
     console.warn("[helper] /open misslyckades, fallback:", err);
-    return false;
+    return null;
   }
 }
 
@@ -151,21 +168,23 @@ export function shouldPreferExternalEdit(fileName: string): boolean {
  * ens försöktes, så ett klick på en .docx/.pdf laddade bara ner / öppnade
  * browser-tab i stället för att öppna i native-appen.
  */
-export async function openDocumentSmart(doc: Doc, onModal: (m: ModalState) => void): Promise<void> {
+export async function openDocumentSmart(doc: Doc, onModal: (m: ModalState) => void, opts: OpenOpts = {}): Promise<OpenOutcome> {
   // Klient-genererade demo-dok (kostnadsräkning m.fl.) öppnas ur cachen — annars
   // 404:ar deras storagePath på GH Pages → app:en hamnar på dashboarden.
   const { hasGeneratedDoc, openGeneratedDoc } = await import("@/lib/client/demo/generated-doc-cache");
-  if (hasGeneratedDoc(doc.id)) { openGeneratedDoc(doc.id); return; }
+  if (hasGeneratedDoc(doc.id)) { openGeneratedDoc(doc.id); return { kind: "done" }; }
 
   if (shouldPreferExternalEdit(doc.fileName)) {
-    if (await tryHelperOpen(doc)) return; // 1) helpern
+    const outcome = await tryHelperOpen(doc, opts); // 1) helpern (öppnar + tar/visar lease)
+    if (outcome) return outcome;
     const { isFsaSupported, loadHandle } = await import("@/lib/client/fsa/handle-store");
     if (isFsaSupported() && await loadHandle("repo-root")) {
       onModal(await runExternalEdit(doc)); // 2) FSA
-      return;
+      return { kind: "done" };
     }
   }
   // 3) browser-tab
   const { openMatterDocument } = await import("@/lib/client/firma/open-matter-document");
   await openMatterDocument({ id: doc.id, storagePath: doc.storagePath, fileName: doc.fileName });
+  return { kind: "done" };
 }

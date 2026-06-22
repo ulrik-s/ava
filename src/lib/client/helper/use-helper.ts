@@ -26,6 +26,7 @@ import {
   type HelperConfigRequest,
   type HelperContentRequest,
   type HelperOpenRequest,
+  type HelperOpenResponse,
   type HelperStatus,
   type HelperStatusResponse,
 } from "@/lib/shared/helper/protocol";
@@ -125,7 +126,7 @@ async function helperFetch(path: string, init: RequestInit): Promise<Response | 
  * konstruerar absolute download/upload-URLs baserat på vilken backend
  * som körs (git-http eller REST).
  */
-export async function openViaHelper(input: HelperOpenRequest): Promise<void> {
+export async function openViaHelper(input: HelperOpenRequest): Promise<HelperOpenResponse> {
   const r = await helperFetch("/open", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -136,6 +137,8 @@ export async function openViaHelper(input: HelperOpenRequest): Promise<void> {
   if (!r.ok) {
     throw new Error(`helper /open: HTTP ${r.status} ${await r.text()}`);
   }
+  // Svaret bär läs/skriv-utfallet (ADR 0033 §2): status opened|read-only + leaseHolder.
+  return (await r.json()) as HelperOpenResponse;
 }
 
 /**

@@ -20,9 +20,13 @@ export function SyncStatusBadge({ status }: { status?: SyncStatus | undefined })
     return (
       <span
         className={`${BADGE} bg-red-100 text-red-800`}
-        title="Versionskonflikt — serverns version har gått förbi dina lokala ändringar. Öppna och spara igen."
+        title={
+          "Dokumentet ändrades av någon annan medan du redigerade. Din version har sparats " +
+          "SEPARAT som en \"(din ändring …)\"-kopia i listan — inget är borta. Öppna båda och " +
+          "kopiera över det du vill behålla (i Word: Granska → Jämför)."
+        }
       >
-        ⚠ Konflikt
+        ⚠ Konflikt — din version sparad separat
       </span>
     );
   }

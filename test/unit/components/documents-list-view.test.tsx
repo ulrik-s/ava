@@ -10,6 +10,7 @@ vi.mock("@/lib/client/trpc", () => ({
   trpc: {
     useUtils: () => ({ prefs: { get: { invalidate: vi.fn() } } }),
     user: { current: { useQuery: () => ({ data: { id: "u1", role: "LAWYER" } }) } },
+    document: { takeoverLease: { useMutation: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }) } },
     prefs: {
       get: { useQuery: () => ({ data: undefined, isLoading: false }) },
       save: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
