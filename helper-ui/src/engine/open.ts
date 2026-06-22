@@ -13,7 +13,7 @@ import { basename, join } from "node:path";
 
 import { isSafeFileName, type HelperOpenRequest } from "@/lib/shared/helper/protocol";
 import type { ContentStore } from "./content-store.ts";
-import { fetchSourceBytes, sourceCacheKey, toSourceRef, uploadViaTrpc, type SourceRef, type UploadTarget } from "./document-source.ts";
+import { fetchSourceBytes, sourceCacheKey, toSourceRef, uploadViaTrpc, type SourceBytes, type SourceRef, type UploadTarget } from "./document-source.ts";
 import { json, parseJsonBody, textError } from "./http.ts";
 import { log } from "./log.ts";
 import { openWithDefaultApp } from "./platform/open-app.ts";
@@ -25,8 +25,8 @@ const POLL_INTERVAL_MS = 2_000;
 export interface OpenDeps {
   /** Väntande lokal (osynkad) kopia, eller null (ADR 0032 local-first). Provas FÖRE download. */
   pendingBytes?: (ref: SourceRef) => Promise<Uint8Array | null>;
-  /** Hämta dokument-bytes för en källa (tRPC server-tier / statisk demo, ADR 0031). */
-  download: (ref: SourceRef, authHeader?: string) => Promise<Uint8Array>;
+  /** Hämta dokument-bytes + (server-tier) basversion för en källa (ADR 0031/0033). */
+  download: (ref: SourceRef, authHeader?: string) => Promise<SourceBytes>;
   openApp: (path: string) => Promise<void>;
   makeSessionDir: () => Promise<string>;
   startWatch: (path: string, target: UploadTarget, authHeader: string | undefined, timeoutMs: number) => void;
@@ -66,40 +66,47 @@ async function runOpen(body: HelperOpenRequest, deps: OpenDeps): Promise<Respons
   const sessionDir = await deps.makeSessionDir();
   const tmpFile = join(sessionDir, body.fileName);
 
-  const obtainErr = await obtainFile(body, tmpFile, deps);
-  if (obtainErr) return obtainErr;
+  const obtained = await obtainFile(body, tmpFile, deps);
+  if (obtained instanceof Response) return obtained;
   const openErr = await tryStep(() => deps.openApp(tmpFile), 500, "open failed");
   if (openErr) return openErr;
 
-  startWatchIfNeeded(body, tmpFile, deps);
+  startWatchIfNeeded(body, tmpFile, deps, obtained.version);
   return json({ path: tmpFile, status: "opened" });
+}
+
+/** Filen är skaffad; `version` = serverns basversion (ADR 0033), om känd. */
+interface Obtained {
+  version?: number;
 }
 
 /**
  * Skaffa filen till `tmpFile`: ladda ner och cacha (för offline-reopen), eller
  * — om nedladdning misslyckas (offline) — återställ en tidigare cachad kopia.
- * Returnerar en fel-Response om filen inte kan skaffas, annars null.
+ * Returnerar en fel-Response om filen inte kan skaffas, annars basversionen.
  */
-async function obtainFile(body: HelperOpenRequest, tmpFile: string, deps: OpenDeps): Promise<Response | null> {
+async function obtainFile(body: HelperOpenRequest, tmpFile: string, deps: OpenDeps): Promise<Response | Obtained> {
   const ref: SourceRef = toSourceRef(body);
   const key = sourceCacheKey(ref) ?? "";
   // Local-first (ADR 0032): en osynkad lokal ändring är auktoritativ tills den
-  // synkats → öppna den i st.f. att hämta serverns (ännu) gamla version.
+  // synkats → öppna den i st.f. att hämta serverns (ännu) gamla version. Basen
+  // hålls redan av kön (den väntande posten) → ingen download-version här.
   const local = deps.pendingBytes ? await deps.pendingBytes(ref) : null;
   if (local) {
     await writeFile(tmpFile, local);
     log(`local-first: öppnar osynkad lokal version av ${body.fileName}`);
-    return null;
+    return {};
   }
-  let bytes: Uint8Array;
+  let dl: SourceBytes;
   try {
-    bytes = await deps.download(ref, body.authHeader);
+    dl = await deps.download(ref, body.authHeader);
   } catch (err) {
-    return downloadFailureFallback(body, tmpFile, key, deps, err);
+    const fallback = await downloadFailureFallback(body, tmpFile, key, deps, err);
+    return fallback ?? {}; // null = återställd offline (ingen känd version)
   }
-  await writeFile(tmpFile, bytes);
-  await cacheBytes(deps, key, bytes, body.fileName);
-  return null;
+  await writeFile(tmpFile, dl.bytes);
+  await cacheBytes(deps, key, dl.bytes, body.fileName);
+  return dl.version !== undefined ? { version: dl.version } : {};
 }
 
 /** Nedladdning misslyckades → öppna cachad kopia om möjligt (offline), annars 502. */
@@ -134,10 +141,11 @@ async function tryStep(fn: () => Promise<void>, status: number, label: string): 
   }
 }
 
-function startWatchIfNeeded(body: HelperOpenRequest, tmpFile: string, deps: OpenDeps): void {
-  // Write-back-mål: tRPC-dokument (server, ADR 0031) ELLER PUT-URL (demo).
+function startWatchIfNeeded(body: HelperOpenRequest, tmpFile: string, deps: OpenDeps, baseVersion?: number): void {
+  // Write-back-mål: tRPC-dokument (server, ADR 0031) ELLER PUT-URL (demo). Server-
+  // målet bär basversionen (ADR 0033 §1) som kön versionskollar uploaden mot.
   const target: UploadTarget | null = body.document
-    ? { document: body.document }
+    ? { document: body.document, ...(baseVersion !== undefined ? { baseVersion } : {}) }
     : body.uploadUrl
       ? { uploadUrl: body.uploadUrl }
       : null;
@@ -166,7 +174,9 @@ export async function uploadFile(path: string, uploadUrl: string, authHeader: st
 export async function uploadSavedFile(path: string, target: UploadTarget, authHeader: string | undefined): Promise<void> {
   if (target.document) {
     const bytes = new Uint8Array(await readFile(path));
-    await uploadViaTrpc(target.document, bytes, authHeader !== undefined ? { authHeader } : {});
+    // Direkt-uppladdning (ingen durabel kö wirad) — versionskolla ändå (ADR 0033).
+    const result = await uploadViaTrpc(target.document, bytes, target.baseVersion, authHeader !== undefined ? { authHeader } : {});
+    if (result.status === "conflict") throw new Error("versions-konflikt (server gått förbi)");
     return;
   }
   if (!target.uploadUrl) throw new Error("inget upload-mål");
@@ -219,6 +229,7 @@ export async function enqueueSavedFile(
     fileName: basename(path),
     bytes,
     ...(authHeader !== undefined ? { authHeader } : {}),
+    ...(target.baseVersion !== undefined ? { baseVersion: target.baseVersion } : {}),
   });
 }
 

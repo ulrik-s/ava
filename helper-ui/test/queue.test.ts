@@ -12,6 +12,7 @@ import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import superjson from "superjson";
 
 import { backoffMs, defaultQueueDeps, UploadQueue, type QueueDeps } from "../src/engine/queue.ts";
+import type { UploadDocResult } from "../src/engine/trpc-client.ts";
 
 const dirs: string[] = [];
 async function tmpDir(): Promise<string> {
@@ -23,12 +24,13 @@ afterAll(async () => {
   await Promise.all(dirs.map((d) => rm(d, { recursive: true, force: true })));
 });
 
-interface UploadDocCall { document: { id: string; trpcUrl: string }; body: Uint8Array; auth?: string }
+interface UploadDocCall { document: { id: string; trpcUrl: string }; body: Uint8Array; auth?: string; baseVersion?: number }
 
 /** Injicerbara deps: räknande klocka + förutsägbara id:n + skript-styrd PUT + tRPC-upload. */
 function fakeDeps(
   putStatuses: number[] | (() => Promise<number>),
   uploadDocFails = false,
+  uploadDocConflicts = false,
 ): { deps: QueueDeps; puts: Array<{ url: string; body: Uint8Array; auth?: string }>; uploadDocs: UploadDocCall[]; tick: () => void } {
   let t = 1000;
   let n = 0;
@@ -39,9 +41,14 @@ function fakeDeps(
     if (typeof putStatuses === "function") return putStatuses();
     return putStatuses[Math.min(puts.length - 1, putStatuses.length - 1)] ?? 200;
   };
-  const uploadDoc = async (document: { id: string; trpcUrl: string }, body: Uint8Array, auth?: string): Promise<void> => {
-    uploadDocs.push({ document, body, ...(auth !== undefined ? { auth } : {}) });
+  const uploadDoc = async (
+    document: { id: string; trpcUrl: string }, body: Uint8Array, auth?: string, baseVersion?: number,
+  ): Promise<UploadDocResult> => {
+    uploadDocs.push({ document, body, ...(auth !== undefined ? { auth } : {}), ...(baseVersion !== undefined ? { baseVersion } : {}) });
     if (uploadDocFails) throw new Error("trpc boom");
+    if (uploadDocConflicts) return { status: "conflict" };
+    // Framskriven version = base + 1 (gör advancing-base testbar).
+    return { status: "ok", version: (baseVersion ?? 0) + 1 };
   };
   return {
     deps: { now: () => t, newId: () => `id-${++n}`, put, uploadDoc },
@@ -138,6 +145,50 @@ describe("UploadQueue.drainOnce", () => {
     expect(f.uploadDocs[0]).toMatchObject({ document: { id: "d1" }, auth: "Bearer t" });
     expect(new TextDecoder().decode(f.uploadDocs[0]!.body)).toBe("data");
     expect(q.snapshot().total).toBe(0);
+  });
+
+  test("bär baseVersion till uploadDoc + persisterar den på posten (ADR 0033 §1)", async () => {
+    const f = fakeDeps([200]);
+    const q = new UploadQueue(dir, f.deps);
+    await q.enqueue({ document: { id: "d1", trpcUrl: "http://s/api/trpc" }, fileName: "a.docx", bytes: bytes("v1"), baseVersion: 5 });
+    // Posten bär basversionen (durabelt) innan den dräneras.
+    expect(q.snapshot().entries[0]).toMatchObject({ baseVersion: 5 });
+    await q.drainOnce();
+    expect(f.uploadDocs[0]).toMatchObject({ document: { id: "d1" }, baseVersion: 5 });
+  });
+
+  test("framskriver basen från lyckad upload → andra save self-konflikt:ar inte", async () => {
+    const f = fakeDeps([200]);
+    const q = new UploadQueue(dir, f.deps);
+    const target = { document: { id: "d1", trpcUrl: "http://s/api/trpc" }, fileName: "a.docx" };
+    // Save 1: base 5 → server bekräftar v6 (fakeDeps: version = base+1).
+    await q.enqueue({ ...target, bytes: bytes("v1"), baseVersion: 5 });
+    await q.drainOnce();
+    // Save 2: watch-loopen känner inte till den nya versionen (skickar ingen base);
+    // kön ska ändå hävda den FRAMSKRIVNA basen (6), inte den ursprungliga seeden (5).
+    await q.enqueue({ ...target, bytes: bytes("v2") });
+    await q.drainOnce();
+    expect(f.uploadDocs.map((c) => c.baseVersion)).toEqual([5, 6]);
+  });
+
+  test("document-konflikt (409) → markerar conflict, behåller base för beslut", async () => {
+    const f = fakeDeps([200], false, true); // uploadDoc → conflict
+    const q = new UploadQueue(dir, f.deps);
+    await q.enqueue({ document: { id: "d1", trpcUrl: "http://s/api/trpc" }, fileName: "a.docx", bytes: bytes("min"), baseVersion: 3 });
+    expect((await q.drainOnce()).conflicted).toBe(1);
+    expect(q.snapshot()).toMatchObject({ pending: 0, conflict: 1 });
+    expect(q.snapshot().entries[0]).toMatchObject({ status: "conflict", baseVersion: 3 });
+  });
+
+  test("återställd post seedar om den framskrivande basen (omstart-durabilitet)", async () => {
+    const f = fakeDeps([200]);
+    const q1 = new UploadQueue(dir, f.deps);
+    await q1.enqueue({ document: { id: "d1", trpcUrl: "http://s/api/trpc" }, fileName: "a.docx", bytes: bytes("v1"), baseVersion: 9 });
+    // Simulera omstart: ny kö läser posten från disk.
+    const q2 = new UploadQueue(dir, f.deps);
+    await q2.recover();
+    await q2.drainOnce();
+    expect(f.uploadDocs[0]).toMatchObject({ baseVersion: 9 });
   });
 
   test("document-upload kastar → failed, behålls för retry", async () => {
@@ -315,12 +366,13 @@ describe("defaultQueueDeps", () => {
     const orig = globalThis.fetch;
     globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
       calls.push({ url: String(url), auth: new Headers(init?.headers).get("authorization") });
-      return new Response(JSON.stringify([{ result: { data: superjson.serialize({ id: "d1" }) } }]), {
+      return new Response(JSON.stringify([{ result: { data: superjson.serialize({ id: "d1", version: 4 }) } }]), {
         status: 200, headers: { "content-type": "application/json" },
       });
     }) as typeof fetch;
     try {
-      await defaultQueueDeps.uploadDoc({ id: "d1", trpcUrl: "http://s/api/trpc" }, bytes("x"), "Bearer t");
+      const result = await defaultQueueDeps.uploadDoc({ id: "d1", trpcUrl: "http://s/api/trpc" }, bytes("x"), "Bearer t", 3);
+      expect(result).toEqual({ status: "ok", version: 4 });
       expect(calls[0]!.url).toContain("/api/trpc");
       expect(calls[0]!.url).toContain("document.uploadContent");
       expect(calls[0]!.auth).toBe("Bearer t");

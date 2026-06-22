@@ -85,7 +85,7 @@ export async function fetchAndCacheContent(
   fileName: string,
 ): Promise<Uint8Array | null> {
   try {
-    const bytes = await fetchSourceBytes(ref, authHeader !== undefined ? { authHeader } : {});
+    const { bytes } = await fetchSourceBytes(ref, authHeader !== undefined ? { authHeader } : {});
     await store.store(cacheKey, bytes, fileName);
     return bytes;
   } catch (err) {

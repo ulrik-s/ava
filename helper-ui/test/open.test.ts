@@ -23,10 +23,10 @@ interface Recorder {
 function recorder(overrides: Partial<OpenDeps> = {}): Recorder {
   const rec: Recorder = { sessionDir: "", downloaded: [], opened: [], watched: [], deps: {} as OpenDeps };
   rec.deps = {
-    // Returnerar bytes (ADR 0031); obtainFile skriver filen.
+    // Returnerar bytes + basversion (ADR 0031/0033); obtainFile skriver filen.
     download: async (ref) => {
       rec.downloaded.push(ref.downloadUrl ?? `doc:${ref.document?.id ?? ""}`);
-      return new TextEncoder().encode("DL");
+      return { bytes: new TextEncoder().encode("DL"), ...(ref.document ? { version: 7 } : {}) };
     },
     openApp: async (path) => { rec.opened.push(path); },
     makeSessionDir: async () => {
@@ -76,6 +76,20 @@ describe("handleOpen", () => {
     expect(res.status).toBe(200);
     expect(rec.downloaded).toHaveLength(0); // download hoppades över
     expect(await readFile(join(rec.sessionDir, "a.docx"), "utf8")).toBe("LOKAL-EDIT");
+  });
+
+  test("document-källa → watch-målet bär nedladdningens basversion (ADR 0033 §1)", async () => {
+    const rec = recorder();
+    await handleOpen(openReq({ document: { id: "doc-7", trpcUrl: "http://s/api/trpc" }, fileName: "a.docx" }), rec.deps);
+    expect(rec.watched).toHaveLength(1);
+    expect(rec.watched[0]?.target).toMatchObject({ document: { id: "doc-7" }, baseVersion: 7 });
+  });
+
+  test("local-first lokal kopia → ingen download-version (kön äger basen)", async () => {
+    const rec = recorder({ pendingBytes: async () => new TextEncoder().encode("LOKAL") });
+    await handleOpen(openReq({ document: { id: "doc-7", trpcUrl: "http://s/api/trpc" }, fileName: "a.docx" }), rec.deps);
+    expect(rec.downloaded).toHaveLength(0); // hämtade aldrig (local-first)
+    expect(rec.watched[0]?.target.baseVersion).toBeUndefined();
   });
 
   test("startar watch när uploadUrl satt (default 60 min)", async () => {
@@ -193,10 +207,10 @@ describe("enqueueSavedFile", () => {
     await writeFile(filePath, "ändrat innehåll", "utf8");
 
     const queue = new UploadQueue(qdir);
-    await enqueueSavedFile(queue, filePath, { document: { id: "doc-7", trpcUrl: "http://s/api/trpc" } }, "Bearer tok");
+    await enqueueSavedFile(queue, filePath, { document: { id: "doc-7", trpcUrl: "http://s/api/trpc" }, baseVersion: 4 }, "Bearer tok");
 
     const snap = queue.snapshot();
     expect(snap.total).toBe(1);
-    expect(snap.entries[0]).toMatchObject({ document: { id: "doc-7" }, fileName: "avtal.docx", status: "pending" });
+    expect(snap.entries[0]).toMatchObject({ document: { id: "doc-7" }, fileName: "avtal.docx", status: "pending", baseVersion: 4 });
   });
 });

@@ -12,7 +12,7 @@
  * `src/lib/client/addin/`-factoryn (bakom client-gränsen), därav en egen.
  */
 
-import { createTRPCClient, httpBatchLink, type TRPCClient } from "@trpc/client";
+import { createTRPCClient, httpBatchLink, TRPCClientError, type TRPCClient } from "@trpc/client";
 import superjson from "superjson";
 
 import type { AppRouter } from "@/lib/server/routers/_app";
@@ -69,6 +69,8 @@ export interface DocumentBytes {
   bytes: Uint8Array;
   mimeType: string;
   fileName: string;
+  /** Dokumentets serverversion = basversion för nästa uploadContent (ADR 0033 §1). */
+  version: number;
 }
 
 /** Hämta dokument-bytes via den typade `document.downloadContent`-proceduren. */
@@ -77,14 +79,36 @@ export async function downloadDocumentBytes(
   documentId: string,
 ): Promise<DocumentBytes> {
   const res = await client.document.downloadContent.query({ documentId });
-  return { bytes: base64ToBytes(res.contentBase64), mimeType: res.mimeType, fileName: res.fileName };
+  return { bytes: base64ToBytes(res.contentBase64), mimeType: res.mimeType, fileName: res.fileName, version: res.version };
 }
 
-/** Skriv tillbaka dokument-bytes via den typade `document.uploadContent`-mutationen. */
+/**
+ * Utfall av en write-back (ADR 0033 §1): `ok` med den nya serverversionen
+ * (framskriver klientens basversion) eller `conflict` (servern gått förbi →
+ * keep-both, steg 2). Andra fel kastas vidare (nät/auth → backoff i kön).
+ */
+export type UploadDocResult = { status: "ok"; version: number } | { status: "conflict" };
+
+/**
+ * Skriv tillbaka dokument-bytes via den typade `document.uploadContent`-mutationen.
+ * `baseVersion` (om satt) → servern 409:ar vid drift; vi mappar 409 till
+ * `{status:"conflict"}` i st.f. att kasta, så kön kan markera posten conflict.
+ */
 export async function uploadDocumentBytes(
   client: TRPCClient<AppRouter>,
   documentId: string,
   bytes: Uint8Array,
-): Promise<void> {
-  await client.document.uploadContent.mutate({ documentId, contentBase64: bytesToBase64(bytes) });
+  baseVersion?: number,
+): Promise<UploadDocResult> {
+  try {
+    const updated = await client.document.uploadContent.mutate({
+      documentId,
+      contentBase64: bytesToBase64(bytes),
+      ...(baseVersion !== undefined ? { baseVersion } : {}),
+    });
+    return { status: "ok", version: updated.version };
+  } catch (err) {
+    if (err instanceof TRPCClientError && err.data?.code === "CONFLICT") return { status: "conflict" };
+    throw err;
+  }
 }

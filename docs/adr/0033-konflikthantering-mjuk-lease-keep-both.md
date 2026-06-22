@@ -121,10 +121,14 @@ gör att ingenting någonsin försvinner — man kan alltid backa.
   lease-store (med heartbeat/TTL/omtilldelning), och dokument-versionering som
   bär två grenar vid keep-both.
 
-## Genomförande (en PR per steg, ej påbörjat)
+## Genomförande (en PR per steg)
 
-1. **Optimistisk version** på `document.uploadContent` (base-version in → 409 vid
-   drift). Helpern bär basversionen från `downloadContent`.
+1. ✅ **Optimistisk version** på `document.uploadContent` (base-version in → 409 vid
+   drift). Helpern bär basversionen från `downloadContent` och **framskriver** den
+   från varje lyckad uploads svar (annars self-konflikt vid upprepade saves);
+   `baseVersion` persisteras durabelt på kö-posten. Anchor = `version` (metadata-
+   skrivningar går via `updateMetadata` som inte bumpar → inga falska 409). En äkta
+   konflikt markeras `conflict` i kön + ytläggs i synk-bannern. *(#718)*
 2. **Keep-both vid 409:** kö-posten i `conflict` materialiseras som en separat
    version/kopia + klarspråks-meddelande i UI (ersätter dagens "vägrar tyst").
 3. **Lease-store + endpoints** (acquire/renew/release/reclaim/takeover), heartbeat
