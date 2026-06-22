@@ -12,6 +12,7 @@ import {
   createDocumentClient,
   documentTrpcEndpoint,
   downloadDocumentBytes,
+  saveConflictCopyBytes,
   uploadDocumentBytes,
   type FetchLike,
 } from "../src/engine/trpc-client.ts";
@@ -95,5 +96,24 @@ describe("uploadDocumentBytes (ADR 0033 §1 — optimistisk version)", () => {
   test("annat fel (t.ex. INTERNAL_SERVER_ERROR) → kastar vidare (→ kö-backoff)", async () => {
     const client = clientWith(async () => batchError("INTERNAL_SERVER_ERROR", 500));
     await expect(uploadDocumentBytes(client, "doc-1", new TextEncoder().encode("x"), 3)).rejects.toThrow();
+  });
+});
+
+describe("saveConflictCopyBytes (ADR 0033 §4 — keep-both)", () => {
+  test("anropar document.saveConflictCopy och returnerar kopians id+namn", async () => {
+    let url = "";
+    let body = "";
+    const client = createDocumentClient({
+      trpcUrl: "http://h:8080/api/trpc", token: "t",
+      fetch: async (input, init) => {
+        url = String(input);
+        body = String(init?.body ?? "");
+        return batchOk({ id: "copy-1", fileName: "Avtal (din ändring 2026-06-22 14:32).docx" });
+      },
+    });
+    const copy = await saveConflictCopyBytes(client, "doc-1", new TextEncoder().encode("min"), "2026-06-22 14:32");
+    expect(copy).toEqual({ id: "copy-1", fileName: "Avtal (din ändring 2026-06-22 14:32).docx" });
+    expect(url).toContain("document.saveConflictCopy");
+    expect(body).toContain("\"label\"");
   });
 });

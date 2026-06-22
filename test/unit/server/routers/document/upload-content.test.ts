@@ -134,6 +134,33 @@ describe("document.uploadContent — optimistisk version (ADR 0033 §1)", () => 
   });
 });
 
+describe("document.saveConflictCopy (ADR 0033 §4 — keep-both)", () => {
+  it("skapar syskon-dokument i samma ärende, namnger det, rör inte originalet", async () => {
+    const { caller, blobs } = makeCaller();
+    const mine = new Uint8Array([4, 5, 6]);
+    const copy = await caller.saveConflictCopy({ documentId: "d1", contentBase64: bytesToBase64(mine), label: "2026-06-22 14:32" });
+
+    expect(copy.id).not.toBe("d1"); // nytt dokument
+    expect(copy.matterId).toBe("m1"); // samma ärende
+    expect(copy.fileName).toBe("avtal (din ändring 2026-06-22 14:32).pdf");
+    expect(copy.mimeType).toBe("application/pdf");
+    // Kopians bytes finns content-adresserat.
+    const dl = await caller.downloadContent({ documentId: copy.id });
+    expect(Array.from(Buffer.from(dl.contentBase64, "base64"))).toEqual([4, 5, 6]);
+    // Originalet är orört (pekar fortfarande på sin gamla path).
+    expect(blobs.has("documents/content/old")).toBe(false); // original-blob laddades aldrig upp
+    const orig = await caller.list({ matterId: "m1", folderId: null, page: 1, pageSize: 50 });
+    expect(orig.documents.find((d) => d.id === "d1")!.fileName).toBe("avtal.pdf"); // oförändrat namn
+  });
+
+  it("org-scope: original i annan org → NOT_FOUND", async () => {
+    const { caller } = makeCaller("org-b");
+    await expect(
+      caller.saveConflictCopy({ documentId: "d1", contentBase64: bytesToBase64(new Uint8Array([1])), label: "x" }),
+    ).rejects.toThrow();
+  });
+});
+
 describe("document.missingContent", () => {
   it("returnerar bara sökvägar servern saknar (byte-synk-dedup)", async () => {
     const { caller } = makeCaller();

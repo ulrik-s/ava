@@ -11,7 +11,7 @@ import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 
 import superjson from "superjson";
 
-import { backoffMs, defaultQueueDeps, UploadQueue, type QueueDeps } from "../src/engine/queue.ts";
+import { backoffMs, conflictLabel, defaultQueueDeps, UploadQueue, type QueueDeps } from "../src/engine/queue.ts";
 import type { UploadDocResult } from "../src/engine/trpc-client.ts";
 
 const dirs: string[] = [];
@@ -25,17 +25,26 @@ afterAll(async () => {
 });
 
 interface UploadDocCall { document: { id: string; trpcUrl: string }; body: Uint8Array; auth?: string; baseVersion?: number }
+interface ConflictCopyCall { document: { id: string; trpcUrl: string }; body: Uint8Array; label: string }
 
 /** Injicerbara deps: räknande klocka + förutsägbara id:n + skript-styrd PUT + tRPC-upload. */
 function fakeDeps(
   putStatuses: number[] | (() => Promise<number>),
   uploadDocFails = false,
   uploadDocConflicts = false,
-): { deps: QueueDeps; puts: Array<{ url: string; body: Uint8Array; auth?: string }>; uploadDocs: UploadDocCall[]; tick: () => void } {
+  saveCopyFails = false,
+): {
+  deps: QueueDeps;
+  puts: Array<{ url: string; body: Uint8Array; auth?: string }>;
+  uploadDocs: UploadDocCall[];
+  conflictCopies: ConflictCopyCall[];
+  tick: () => void;
+} {
   let t = 1000;
   let n = 0;
   const puts: Array<{ url: string; body: Uint8Array; auth?: string }> = [];
   const uploadDocs: UploadDocCall[] = [];
+  const conflictCopies: ConflictCopyCall[] = [];
   const put = async (url: string, body: Uint8Array, auth?: string): Promise<number> => {
     puts.push({ url, body, ...(auth !== undefined ? { auth } : {}) });
     if (typeof putStatuses === "function") return putStatuses();
@@ -50,10 +59,18 @@ function fakeDeps(
     // Framskriven version = base + 1 (gör advancing-base testbar).
     return { status: "ok", version: (baseVersion ?? 0) + 1 };
   };
+  const saveConflictCopy = async (
+    document: { id: string; trpcUrl: string }, body: Uint8Array, _auth: string | undefined, label: string,
+  ): Promise<{ id: string; fileName: string }> => {
+    if (saveCopyFails) throw new Error("offline");
+    conflictCopies.push({ document, body, label });
+    return { id: `copy-${document.id}`, fileName: `kopia (din ändring ${label})` };
+  };
   return {
-    deps: { now: () => t, newId: () => `id-${++n}`, put, uploadDoc },
+    deps: { now: () => t, newId: () => `id-${++n}`, put, uploadDoc, saveConflictCopy },
     puts,
     uploadDocs,
+    conflictCopies,
     tick: () => { t += 10 * 60_000; }, // hoppa förbi all backoff
   };
 }
@@ -61,6 +78,14 @@ function fakeDeps(
 function bytes(s: string): Uint8Array {
   return new TextEncoder().encode(s);
 }
+
+describe("conflictLabel", () => {
+  test("formaterar lokal tid som YYYY-MM-DD HH:mm (nollpaddat)", () => {
+    expect(conflictLabel(Date.parse("2026-06-22T14:32:09"))).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
+    // Nollpaddning av en-siffriga månad/dag/timme/minut.
+    expect(conflictLabel(Date.parse("2026-01-02T03:04:00"))).toBe("2026-01-02 03:04");
+  });
+});
 
 describe("UploadQueue.enqueue", () => {
   let dir: string;
@@ -171,13 +196,29 @@ describe("UploadQueue.drainOnce", () => {
     expect(f.uploadDocs.map((c) => c.baseVersion)).toEqual([5, 6]);
   });
 
-  test("document-konflikt (409) → markerar conflict, behåller base för beslut", async () => {
+  test("document-konflikt (409) → keep-both: materialiserar syskon-kopia + markerar conflict", async () => {
     const f = fakeDeps([200], false, true); // uploadDoc → conflict
     const q = new UploadQueue(dir, f.deps);
     await q.enqueue({ document: { id: "d1", trpcUrl: "http://s/api/trpc" }, fileName: "a.docx", bytes: bytes("min"), baseVersion: 3 });
     expect((await q.drainOnce()).conflicted).toBe(1);
     expect(q.snapshot()).toMatchObject({ pending: 0, conflict: 1 });
-    expect(q.snapshot().entries[0]).toMatchObject({ status: "conflict", baseVersion: 3 });
+    // Användarens bytes sparades som en separat kopia (inget förlorat).
+    expect(f.conflictCopies).toHaveLength(1);
+    expect(new TextDecoder().decode(f.conflictCopies[0]!.body)).toBe("min");
+    expect(q.snapshot().entries[0]).toMatchObject({
+      status: "conflict", baseVersion: 3, conflictCopy: { id: "copy-d1", fileName: expect.stringContaining("din ändring") },
+    });
+  });
+
+  test("keep-both materialisering misslyckas (offline) → failed, retr:as (bytsen säkra)", async () => {
+    const f = fakeDeps([200], false, true, true); // conflict + saveConflictCopy kastar
+    const q = new UploadQueue(dir, f.deps);
+    await q.enqueue({ document: { id: "d1", trpcUrl: "http://s/api/trpc" }, fileName: "a.docx", bytes: bytes("min"), baseVersion: 3 });
+    expect((await q.drainOnce()).failed).toBe(1);
+    const entry = q.snapshot().entries[0]!;
+    expect(entry.status).toBe("pending"); // kvar för retry
+    expect(entry.conflictCopy).toBeUndefined();
+    expect(entry.lastError).toContain("keep-both");
   });
 
   test("återställd post seedar om den framskrivande basen (omstart-durabilitet)", async () => {

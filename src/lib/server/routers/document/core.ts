@@ -5,11 +5,13 @@
 
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import { conflictCopyName } from "@/lib/shared/conflict-copy";
 import { base64ToBytes, bytesToBase64, contentStoragePath, sha256Hex } from "@/lib/shared/content-address";
 import { isJunkFileName } from "@/lib/shared/junk-files";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import type { Document } from "@/lib/shared/schemas/document";
 import { asId } from "@/lib/shared/schemas/ids";
+import { uuidv7 } from "@/lib/shared/uuid";
 import { orgProcedure } from "../../trpc";
 import { assertDocAccess } from "./shared";
 
@@ -217,6 +219,45 @@ export const coreProcedures = {
       if (!bytes) throw new TRPCError({ code: "NOT_FOUND", message: "Innehåll saknas på servern." });
       // `version` = basversion klienten bär in i uploadContent (ADR 0033 §1).
       return { contentBase64: bytesToBase64(bytes), mimeType: doc.mimeType, fileName: doc.fileName, version: doc.version };
+    }),
+
+  /**
+   * `saveConflictCopy` (ADR 0033 §4 — keep-both) — när uploadContent 409:at
+   * (server gått förbi) sparas användarens version som ett SYSKON-dokument
+   * bredvid originalet: inget skrivs över, inget förloras. Nytt dokument i samma
+   * ärende/mapp, namn `Original (din ändring <label>).ext`, pekar på de
+   * uppladdade bytsen (innehålls-adresserat). Returnerar kopian.
+   */
+  saveConflictCopy: orgProcedure
+    .input(z.object({
+      documentId: z.string(),
+      contentBase64: z.string(),
+      /** Lokal tidsstämpel-etikett för kopians namn (klienten kan lokal tid). */
+      label: z.string().min(1).max(40),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      await assertDocAccess(ctx, input.documentId);
+      const original = (await ctx.repos.documents.getById(input.documentId)) as Document | null;
+      if (!original) throw new TRPCError({ code: "NOT_FOUND" });
+      const bytes = base64ToBytes(input.contentBase64);
+      const storagePath = contentStoragePath(await sha256Hex(bytes));
+      await ctx.ports.content.write(storagePath, bytes);
+      const copy = await ctx.repos.documents.create(omitUndefined({
+        id: asId<"DocumentId">(uuidv7()),
+        matterId: asId<"MatterId">(original.matterId),
+        fileName: conflictCopyName(original.fileName, input.label),
+        mimeType: original.mimeType,
+        sizeBytes: bytes.byteLength,
+        storagePath,
+        folderId: original.folderId ?? null,
+        organizationId: ctx.orgId,
+        analysisStatus: "PENDING" as const,
+        uploadedById: asId<"UserId">(ctx.user.id),
+      }));
+      ctx.ports.documentAnalyzer.analyze(copy.id).catch((e: unknown) =>
+        console.error("classify after conflict-copy failed:", e),
+      );
+      return copy;
     }),
 
   /**

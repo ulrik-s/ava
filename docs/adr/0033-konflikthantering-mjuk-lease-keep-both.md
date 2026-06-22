@@ -129,8 +129,14 @@ gör att ingenting någonsin försvinner — man kan alltid backa.
    `baseVersion` persisteras durabelt på kö-posten. Anchor = `version` (metadata-
    skrivningar går via `updateMetadata` som inte bumpar → inga falska 409). En äkta
    konflikt markeras `conflict` i kön + ytläggs i synk-bannern. *(#718)*
-2. **Keep-both vid 409:** kö-posten i `conflict` materialiseras som en separat
-   version/kopia + klarspråks-meddelande i UI (ersätter dagens "vägrar tyst").
+2. ✅ **Keep-both vid 409:** användarens version materialiseras som ett **syskon-
+   dokument** (`document.saveConflictCopy` → nytt dok i samma ärende/mapp, namn
+   `Original (din ändring <label>).ext`, pekar på de uppladdade bytsen). Helpern
+   anropar det när kön får 409 och ytlägger `conflictCopy {id,fileName}` på posten.
+   Misslyckas materialiseringen (offline) retr:as hela vägen via backoff — bytsen
+   är durabelt köade tills kopian kan skapas. Syskonet syns direkt i dokument-
+   listan med självförklarande namn; klarspråks-banner + Word-Jämför-länk i steg 5.
+   *(#720)*
 3. **Lease-store + endpoints** (acquire/renew/release/reclaim/takeover), heartbeat
    + TTL. tRPC-procedurer.
 4. **Helper:** ta/förnya/släpp lease vid öppna/stäng; själv-återtagande; öppna
@@ -143,7 +149,9 @@ gör att ingenting någonsin försvinner — man kan alltid backa.
 - TTL/heartbeat-värden (förslag: heartbeat 30 s, lease-TTL 3–5 min, "stale" efter
   ~2 min) — finjusteras mot verkligt beteende.
 - Var leasen lagras (tunn server, ADR 0013/0016) + hur den exponeras tier-agnostiskt.
-- Keep-both som ny **dokument-version** vs **syskon-dokument** ("(din version …)").
+- ~~Keep-both som ny **dokument-version** vs **syskon-dokument**~~ → **beslutat:
+  syskon-dokument** (matchar Dropbox/iCloud-konfliktkopia, kräver ingen versions-
+  kedje-schema, mest idiotsäkert). Implementerat i steg 2 (#720).
 - Beror på att server-first har dokument-versionering som kan hålla två grenar.
 
 ## Relaterat

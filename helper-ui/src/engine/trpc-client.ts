@@ -112,3 +112,24 @@ export async function uploadDocumentBytes(
     throw err;
   }
 }
+
+/** En materialiserad keep-both-kopia (ADR 0033 §4): syskon-dokumentets id + namn. */
+export interface ConflictCopy {
+  id: string;
+  fileName: string;
+}
+
+/**
+ * Materialisera användarens version som ett syskon-dokument via
+ * `document.saveConflictCopy` (ADR 0033 §4) — anropas efter ett 409 så inget
+ * skrivs över. `label` = lokal tidsstämpel som blir del av kopians namn.
+ */
+export async function saveConflictCopyBytes(
+  client: TRPCClient<AppRouter>,
+  documentId: string,
+  bytes: Uint8Array,
+  label: string,
+): Promise<ConflictCopy> {
+  const copy = await client.document.saveConflictCopy.mutate({ documentId, contentBase64: bytesToBase64(bytes), label });
+  return { id: copy.id, fileName: copy.fileName };
+}
