@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterAll, describe, expect, test } from "bun:test";
 
 import { ContentStore } from "../src/engine/content-store.ts";
+import type { UploadTarget } from "../src/engine/document-source.ts";
 import { enqueueSavedFile, handleOpen, persistDownloaded, restoreCached, type OpenDeps } from "../src/engine/open.ts";
 import { UploadQueue } from "../src/engine/queue.ts";
 import { jsonRequest } from "./helpers.ts";
@@ -15,7 +16,7 @@ interface Recorder {
   sessionDir: string;
   downloaded: string[]; // källnyckel (downloadUrl eller doc:<id>)
   opened: string[];
-  watched: Array<{ path: string; uploadUrl: string; timeoutMs: number }>;
+  watched: Array<{ path: string; target: UploadTarget; timeoutMs: number }>;
   deps: OpenDeps;
 }
 
@@ -34,7 +35,7 @@ function recorder(overrides: Partial<OpenDeps> = {}): Recorder {
       rec.sessionDir = d;
       return d;
     },
-    startWatch: (path, uploadUrl, _auth, timeoutMs) => { rec.watched.push({ path, uploadUrl, timeoutMs }); },
+    startWatch: (path, target, _auth, timeoutMs) => { rec.watched.push({ path, target, timeoutMs }); },
     ...overrides,
   };
   return rec;
@@ -184,10 +185,10 @@ describe("enqueueSavedFile", () => {
     await writeFile(filePath, "ändrat innehåll", "utf8");
 
     const queue = new UploadQueue(qdir);
-    await enqueueSavedFile(queue, filePath, "http://s/api/documents/7/upload", "Bearer tok");
+    await enqueueSavedFile(queue, filePath, { document: { id: "doc-7", trpcUrl: "http://s/api/trpc" } }, "Bearer tok");
 
     const snap = queue.snapshot();
     expect(snap.total).toBe(1);
-    expect(snap.entries[0]).toMatchObject({ uploadUrl: "http://s/api/documents/7/upload", fileName: "avtal.docx", status: "pending" });
+    expect(snap.entries[0]).toMatchObject({ document: { id: "doc-7" }, fileName: "avtal.docx", status: "pending" });
   });
 });

@@ -16,7 +16,7 @@ import { createTRPCClient, httpBatchLink, type TRPCClient } from "@trpc/client";
 import superjson from "superjson";
 
 import type { AppRouter } from "@/lib/server/routers/_app";
-import { base64ToBytes } from "@/lib/shared/content-address";
+import { base64ToBytes, bytesToBase64 } from "@/lib/shared/content-address";
 
 /** tRPC-endpointens suffix på serverns origin (matchar DEFAULT_TRPC_ENDPOINT). */
 export const TRPC_PATH = "/api/trpc";
@@ -78,4 +78,13 @@ export async function downloadDocumentBytes(
 ): Promise<DocumentBytes> {
   const res = await client.document.downloadContent.query({ documentId });
   return { bytes: base64ToBytes(res.contentBase64), mimeType: res.mimeType, fileName: res.fileName };
+}
+
+/** Skriv tillbaka dokument-bytes via den typade `document.uploadContent`-mutationen. */
+export async function uploadDocumentBytes(
+  client: TRPCClient<AppRouter>,
+  documentId: string,
+  bytes: Uint8Array,
+): Promise<void> {
+  await client.document.uploadContent.mutate({ documentId, contentBase64: bytesToBase64(bytes) });
 }
