@@ -9,6 +9,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 
+import superjson from "superjson";
+
 import { backoffMs, defaultQueueDeps, UploadQueue, type QueueDeps } from "../src/engine/queue.ts";
 
 const dirs: string[] = [];
@@ -21,19 +23,30 @@ afterAll(async () => {
   await Promise.all(dirs.map((d) => rm(d, { recursive: true, force: true })));
 });
 
-/** Injicerbara deps: räknande klocka + förutsägbara id:n + skript-styrd PUT. */
-function fakeDeps(putStatuses: number[] | (() => Promise<number>)): { deps: QueueDeps; puts: Array<{ url: string; body: Uint8Array; auth?: string }>; tick: () => void } {
+interface UploadDocCall { document: { id: string; trpcUrl: string }; body: Uint8Array; auth?: string }
+
+/** Injicerbara deps: räknande klocka + förutsägbara id:n + skript-styrd PUT + tRPC-upload. */
+function fakeDeps(
+  putStatuses: number[] | (() => Promise<number>),
+  uploadDocFails = false,
+): { deps: QueueDeps; puts: Array<{ url: string; body: Uint8Array; auth?: string }>; uploadDocs: UploadDocCall[]; tick: () => void } {
   let t = 1000;
   let n = 0;
   const puts: Array<{ url: string; body: Uint8Array; auth?: string }> = [];
+  const uploadDocs: UploadDocCall[] = [];
   const put = async (url: string, body: Uint8Array, auth?: string): Promise<number> => {
     puts.push({ url, body, ...(auth !== undefined ? { auth } : {}) });
     if (typeof putStatuses === "function") return putStatuses();
     return putStatuses[Math.min(puts.length - 1, putStatuses.length - 1)] ?? 200;
   };
+  const uploadDoc = async (document: { id: string; trpcUrl: string }, body: Uint8Array, auth?: string): Promise<void> => {
+    uploadDocs.push({ document, body, ...(auth !== undefined ? { auth } : {}) });
+    if (uploadDocFails) throw new Error("trpc boom");
+  };
   return {
-    deps: { now: () => t, newId: () => `id-${++n}`, put },
+    deps: { now: () => t, newId: () => `id-${++n}`, put, uploadDoc },
     puts,
+    uploadDocs,
     tick: () => { t += 10 * 60_000; }, // hoppa förbi all backoff
   };
 }
@@ -92,6 +105,29 @@ describe("UploadQueue.drainOnce", () => {
     expect(new TextDecoder().decode(puts[0]!.body)).toBe("data");
     expect(q.snapshot().total).toBe(0);
     expect(await readdir(dir)).toEqual([]);
+  });
+
+  test("document-mål → uploadDoc (tRPC), raderar posten (ADR 0031 write-back)", async () => {
+    const f = fakeDeps([200]);
+    const q = new UploadQueue(dir, f.deps);
+    await q.enqueue({ document: { id: "d1", trpcUrl: "http://s/api/trpc" }, fileName: "a.docx", bytes: bytes("data"), authHeader: "Bearer t" });
+
+    const res = await q.drainOnce();
+    expect(res.uploaded).toBe(1);
+    expect(f.puts).toHaveLength(0); // tRPC, inte PUT
+    expect(f.uploadDocs[0]).toMatchObject({ document: { id: "d1" }, auth: "Bearer t" });
+    expect(new TextDecoder().decode(f.uploadDocs[0]!.body)).toBe("data");
+    expect(q.snapshot().total).toBe(0);
+  });
+
+  test("document-upload kastar → failed, behålls för retry", async () => {
+    const f = fakeDeps([200], true); // uploadDoc kastar
+    const q = new UploadQueue(dir, f.deps);
+    await q.enqueue({ document: { id: "d1", trpcUrl: "http://s/api/trpc" }, fileName: "a.docx", bytes: bytes("x") });
+    expect((await q.drainOnce()).failed).toBe(1);
+    const entry = q.snapshot().entries[0]!;
+    expect(entry.status).toBe("pending");
+    expect(entry.lastError).toContain("trpc boom");
   });
 
   test("409 → markerar conflict, slutar retr:a, skriver aldrig över", async () => {
@@ -252,5 +288,24 @@ describe("defaultQueueDeps", () => {
 
   test("newId ger unika id:n", () => {
     expect(defaultQueueDeps.newId()).not.toBe(defaultQueueDeps.newId());
+  });
+
+  test("uploadDoc gör en tRPC uploadContent-mutation med Bearer (mockad fetch)", async () => {
+    const calls: Array<{ url: string; auth: string | null }> = [];
+    const orig = globalThis.fetch;
+    globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+      calls.push({ url: String(url), auth: new Headers(init?.headers).get("authorization") });
+      return new Response(JSON.stringify([{ result: { data: superjson.serialize({ id: "d1" }) } }]), {
+        status: 200, headers: { "content-type": "application/json" },
+      });
+    }) as typeof fetch;
+    try {
+      await defaultQueueDeps.uploadDoc({ id: "d1", trpcUrl: "http://s/api/trpc" }, bytes("x"), "Bearer t");
+      expect(calls[0]!.url).toContain("/api/trpc");
+      expect(calls[0]!.url).toContain("document.uploadContent");
+      expect(calls[0]!.auth).toBe("Bearer t");
+    } finally {
+      globalThis.fetch = orig;
+    }
   });
 });

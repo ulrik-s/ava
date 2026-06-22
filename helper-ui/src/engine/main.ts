@@ -168,10 +168,10 @@ export function queueBackedOnOpen(queue: UploadQueue, content: ContentStore, aut
       const auth = await fallback(browserAuth);
       return fetchSourceBytes(ref, auth !== undefined ? { authHeader: auth } : {});
     },
-    startWatch: (path, uploadUrl, authHeaderArg, timeoutMs) =>
-      watchAndUpload(path, uploadUrl, authHeaderArg, timeoutMs, {
+    startWatch: (path, target, authHeaderArg, timeoutMs) =>
+      watchAndUpload(path, target, authHeaderArg, timeoutMs, {
         ...defaultWatchDeps,
-        upload: (p, url, auth) => enqueueSavedFile(queue, p, url, auth),
+        upload: (p, t, auth) => enqueueSavedFile(queue, p, t, auth),
       }),
     persist: (cacheKey, bytes, fileName) => persistDownloaded(content, cacheKey, bytes, fileName),
     restore: (cacheKey, path) => restoreCached(content, cacheKey, path),

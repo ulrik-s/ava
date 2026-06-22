@@ -141,8 +141,10 @@ export interface HelperContentRequest {
 export interface HelperSyncEntry {
   /** Stabilt id i kö-katalogen. */
   id: string;
-  /** PUT-mål på servern (identifierar dokumentet). */
-  uploadUrl: string;
+  /** Server-tier upload-mål: tRPC `document.uploadContent` (ADR 0031). */
+  document?: HelperDocumentRef;
+  /** Demo/legacy PUT-mål. Exakt en av `document`/`uploadUrl` anges. */
+  uploadUrl?: string;
   /** Användarsynligt filnamn. */
   fileName: string;
   /** När den först köades (ms sedan epoch). */

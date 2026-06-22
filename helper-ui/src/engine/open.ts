@@ -13,7 +13,7 @@ import { basename, join } from "node:path";
 
 import { isSafeFileName, type HelperOpenRequest } from "@/lib/shared/helper/protocol";
 import type { ContentStore } from "./content-store.ts";
-import { fetchSourceBytes, sourceCacheKey, toSourceRef, type SourceRef } from "./document-source.ts";
+import { fetchSourceBytes, sourceCacheKey, toSourceRef, uploadViaTrpc, type SourceRef, type UploadTarget } from "./document-source.ts";
 import { json, parseJsonBody, textError } from "./http.ts";
 import { log } from "./log.ts";
 import { openWithDefaultApp } from "./platform/open-app.ts";
@@ -27,7 +27,7 @@ export interface OpenDeps {
   download: (ref: SourceRef, authHeader?: string) => Promise<Uint8Array>;
   openApp: (path: string) => Promise<void>;
   makeSessionDir: () => Promise<string>;
-  startWatch: (path: string, uploadUrl: string, authHeader: string | undefined, timeoutMs: number) => void;
+  startWatch: (path: string, target: UploadTarget, authHeader: string | undefined, timeoutMs: number) => void;
   /** Cacha nedladdade bytes durabelt under `cacheKey` (offline-reopen, ADR 0028 §3). Valfri. */
   persist?: (cacheKey: string, bytes: Uint8Array, fileName: string) => Promise<void>;
   /** Återställ cachade bytes (under `cacheKey`) till `path` när nedladdning misslyckas (offline). Valfri. */
@@ -125,10 +125,16 @@ async function tryStep(fn: () => Promise<void>, status: number, label: string): 
 }
 
 function startWatchIfNeeded(body: HelperOpenRequest, tmpFile: string, deps: OpenDeps): void {
-  if (!body.uploadUrl) return;
+  // Write-back-mål: tRPC-dokument (server, ADR 0031) ELLER PUT-URL (demo).
+  const target: UploadTarget | null = body.document
+    ? { document: body.document }
+    : body.uploadUrl
+      ? { uploadUrl: body.uploadUrl }
+      : null;
+  if (!target) return;
   const m = body.maxWatchMinutes;
   const minutes = m !== undefined && m > 0 ? m : DEFAULT_WATCH_MINUTES;
-  deps.startWatch(tmpFile, body.uploadUrl, body.authHeader, minutes * 60_000);
+  deps.startWatch(tmpFile, target, body.authHeader, minutes * 60_000);
 }
 
 function errMsg(err: unknown): string {
@@ -140,6 +146,21 @@ export async function uploadFile(path: string, uploadUrl: string, authHeader: st
   if (authHeader) headers.Authorization = authHeader;
   const resp = await fetch(uploadUrl, { method: "PUT", headers, body: new Blob([new Uint8Array(await readFile(path))]) });
   if (resp.status >= 400) throw new Error(`upload HTTP ${resp.status}`);
+}
+
+/**
+ * Ladda upp en sparad fil till sitt mål (ADR 0031): server-tier via tRPC
+ * `document.uploadContent`, demo via PUT. Default-upload när ingen durabel kö
+ * är wirad (annars köas via `enqueueSavedFile`).
+ */
+export async function uploadSavedFile(path: string, target: UploadTarget, authHeader: string | undefined): Promise<void> {
+  if (target.document) {
+    const bytes = new Uint8Array(await readFile(path));
+    await uploadViaTrpc(target.document, bytes, authHeader !== undefined ? { authHeader } : {});
+    return;
+  }
+  if (!target.uploadUrl) throw new Error("inget upload-mål");
+  await uploadFile(path, target.uploadUrl, authHeader);
 }
 
 /**
@@ -178,11 +199,17 @@ export async function restoreCached(store: ContentStore, downloadUrl: string, pa
 export async function enqueueSavedFile(
   queue: UploadQueue,
   path: string,
-  uploadUrl: string,
+  target: UploadTarget,
   authHeader: string | undefined,
 ): Promise<void> {
   const bytes = new Uint8Array(await readFile(path));
-  await queue.enqueue({ uploadUrl, fileName: basename(path), bytes, ...(authHeader !== undefined ? { authHeader } : {}) });
+  await queue.enqueue({
+    ...(target.document ? { document: target.document } : {}),
+    ...(target.uploadUrl !== undefined ? { uploadUrl: target.uploadUrl } : {}),
+    fileName: basename(path),
+    bytes,
+    ...(authHeader !== undefined ? { authHeader } : {}),
+  });
 }
 
 /**
@@ -191,35 +218,35 @@ export async function enqueueSavedFile(
  */
 export interface WatchDeps {
   statMtime: (path: string) => Promise<number | null>;
-  upload: (path: string, uploadUrl: string, authHeader: string | undefined) => Promise<void>;
+  upload: (path: string, target: UploadTarget, authHeader: string | undefined) => Promise<void>;
   sleep: (ms: number) => Promise<void>;
   now: () => number;
 }
 
 export const defaultWatchDeps: WatchDeps = {
   statMtime,
-  upload: uploadFile,
+  upload: uploadSavedFile,
   sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   now: () => Date.now(),
 };
 
 /**
- * Pollar filens mtime och PUT:ar nya bytes vid varje save. Stänger efter
- * timeout utan aktivitet; varje save förlänger deadline.
+ * Pollar filens mtime och laddar upp nya bytes (tRPC/PUT) vid varje save.
+ * Stänger efter timeout utan aktivitet; varje save förlänger deadline.
  */
 export function watchAndUpload(
   path: string,
-  uploadUrl: string,
+  target: UploadTarget,
   authHeader: string | undefined,
   timeoutMs: number,
   deps: WatchDeps = defaultWatchDeps,
 ): void {
-  void runWatch(path, uploadUrl, authHeader, timeoutMs, deps);
+  void runWatch(path, target, authHeader, timeoutMs, deps);
 }
 
 export async function runWatch(
   path: string,
-  uploadUrl: string,
+  target: UploadTarget,
   authHeader: string | undefined,
   timeoutMs: number,
   deps: WatchDeps,
@@ -237,7 +264,7 @@ export async function runWatch(
     const mtime = await deps.statMtime(path);
     if (mtime === null || mtime <= lastMtime) continue;
     try {
-      await deps.upload(path, uploadUrl, authHeader);
+      await deps.upload(path, target, authHeader);
       log(`uploaded changes: ${path}`);
       lastMtime = mtime;
       deadline = deps.now() + timeoutMs; // aktivitet → förläng

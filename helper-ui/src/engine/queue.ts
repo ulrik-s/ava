@@ -18,7 +18,8 @@
 import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import type { HelperStatusResponse, HelperSyncEntry } from "@/lib/shared/helper/protocol";
+import type { HelperDocumentRef, HelperStatusResponse, HelperSyncEntry } from "@/lib/shared/helper/protocol";
+import { uploadTargetKey, uploadViaTrpc } from "./document-source.ts";
 import { log } from "./log.ts";
 
 /**
@@ -46,8 +47,10 @@ export interface DrainResult {
 export interface QueueDeps {
   now: () => number;
   newId: () => string;
-  /** PUT bytes → returnera HTTP-status (kastar bara vid nätfel). */
+  /** PUT bytes (demo/legacy) → returnera HTTP-status (kastar bara vid nätfel). */
   put: (url: string, body: Uint8Array, authHeader?: string) => Promise<number>;
+  /** Write-back via tRPC `document.uploadContent` (server-tier); kastar vid fel. */
+  uploadDoc: (document: HelperDocumentRef, body: Uint8Array, authHeader?: string) => Promise<void>;
 }
 
 export const defaultQueueDeps: QueueDeps = {
@@ -60,6 +63,8 @@ export const defaultQueueDeps: QueueDeps = {
     const resp = await fetch(url, { method: "PUT", headers, body: new Blob([new Uint8Array(body)]) });
     return resp.status;
   },
+  uploadDoc: (document, body, authHeader) =>
+    uploadViaTrpc(document, body, authHeader !== undefined ? { authHeader } : {}),
 };
 
 const BASE_BACKOFF_MS = 5_000;
@@ -75,10 +80,18 @@ export function backoffMs(attempts: number): number {
 type StoredEntry = QueueEntry;
 
 export interface EnqueueInput {
-  uploadUrl: string;
+  /** Server-tier tRPC-mål. Exakt en av `document`/`uploadUrl` anges. */
+  document?: HelperDocumentRef;
+  /** Demo/legacy PUT-mål. */
+  uploadUrl?: string;
   fileName: string;
   bytes: Uint8Array;
   authHeader?: string;
+}
+
+/** Stabil identitet för en post (dedup-nyckel): `doc:<id>` eller PUT-URL. */
+function entryKey(e: { document?: HelperDocumentRef; uploadUrl?: string }): string {
+  return uploadTargetKey(e) ?? "";
 }
 
 /**
@@ -127,7 +140,7 @@ export class UploadQueue {
       try {
         const entry = JSON.parse(await readFile(this.manifestPath(id), "utf8")) as StoredEntry;
         await readFile(this.contentPath(id)); // bytes måste finnas, annars släng manifestet
-        this.entries.set(entry.uploadUrl, entry);
+        this.entries.set(entryKey(entry), entry);
       } catch (err) {
         log(`queue: hoppar trasig post ${id}: ${msg(err)}`);
       }
@@ -142,14 +155,16 @@ export class UploadQueue {
    */
   async enqueue(input: EnqueueInput): Promise<QueueEntry> {
     await mkdir(this.dir, { recursive: true });
-    const existing = this.entries.get(input.uploadUrl);
+    const key = entryKey(input);
+    const existing = this.entries.get(key);
     const id = existing?.id ?? this.deps.newId();
     const now = this.deps.now();
     // Bytes först (durabilitet), sedan manifest — manifestets närvaro = giltig post.
     await writeFile(this.contentPath(id), input.bytes);
     const entry: QueueEntry = {
       id,
-      uploadUrl: input.uploadUrl,
+      ...(input.document ? { document: input.document } : {}),
+      ...(input.uploadUrl !== undefined ? { uploadUrl: input.uploadUrl } : {}),
       fileName: input.fileName,
       ...(input.authHeader !== undefined ? { authHeader: input.authHeader } : {}),
       enqueuedAt: existing?.enqueuedAt ?? now,
@@ -158,7 +173,7 @@ export class UploadQueue {
       status: "pending",
     };
     await writeFile(this.manifestPath(id), JSON.stringify(entry), "utf8");
-    this.entries.set(input.uploadUrl, entry);
+    this.entries.set(key, entry);
     log(`queue: köade ${input.fileName} (${this.pendingCount()} väntar)`);
     return entry;
   }
@@ -193,7 +208,13 @@ export class UploadQueue {
       const bytes = await readFile(this.contentPath(entry.id));
       // Egen authHeader (från browsern) först; annars helperns färska OIDC-token.
       const auth = entry.authHeader ?? (this.tokenProvider ? await this.tokenProvider() : undefined);
-      status = await this.deps.put(entry.uploadUrl, bytes, auth);
+      if (entry.document) {
+        // Server-tier: tRPC uploadContent (kastar vid fel → markFailed nedan).
+        await this.deps.uploadDoc(entry.document, bytes, auth);
+        status = 200;
+      } else {
+        status = await this.deps.put(entry.uploadUrl ?? "", bytes, auth);
+      }
     } catch (err) {
       await this.markFailed(entry, msg(err));
       res.failed++;
@@ -232,7 +253,7 @@ export class UploadQueue {
 
   /** Ta bort en post helt (klar eller manuellt löst). */
   async discard(entry: QueueEntry): Promise<void> {
-    this.entries.delete(entry.uploadUrl);
+    this.entries.delete(entryKey(entry));
     await rm(this.manifestPath(entry.id), { force: true });
     await rm(this.contentPath(entry.id), { force: true });
   }

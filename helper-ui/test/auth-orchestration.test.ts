@@ -151,7 +151,7 @@ describe("UploadQueue tokenProvider (autonom Bearer vid drain)", () => {
 
   test("post utan egen authHeader → använder färsk token vid upload", async () => {
     const puts: Array<string | undefined> = [];
-    const deps = { now: () => 1000, newId: () => "id1", put: async (_u: string, _b: Uint8Array, auth?: string) => { puts.push(auth); return 200; } };
+    const deps = { now: () => 1000, newId: () => "id1", put: async (_u: string, _b: Uint8Array, auth?: string) => { puts.push(auth); return 200; }, uploadDoc: async () => undefined };
     const q = new UploadQueue(await qdir(), deps, async () => "Bearer FRESH");
     await q.enqueue({ uploadUrl: "http://s/u/1", fileName: "a", bytes: new TextEncoder().encode("x") });
     await q.drainOnce();
@@ -161,7 +161,7 @@ describe("UploadQueue tokenProvider (autonom Bearer vid drain)", () => {
 
   test("post MED egen authHeader → den vinner över token-providern", async () => {
     const puts: Array<string | undefined> = [];
-    const deps = { now: () => 1000, newId: () => "id2", put: async (_u: string, _b: Uint8Array, auth?: string) => { puts.push(auth); return 200; } };
+    const deps = { now: () => 1000, newId: () => "id2", put: async (_u: string, _b: Uint8Array, auth?: string) => { puts.push(auth); return 200; }, uploadDoc: async () => undefined };
     const q = new UploadQueue(await qdir(), deps, async () => "Bearer FRESH");
     await q.enqueue({ uploadUrl: "http://s/u/2", fileName: "a", bytes: new TextEncoder().encode("x"), authHeader: "Bearer BROWSER" });
     await q.drainOnce();

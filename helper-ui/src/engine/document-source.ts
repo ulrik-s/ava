@@ -9,7 +9,7 @@
 
 import type { HelperDocumentRef } from "@/lib/shared/helper/protocol";
 
-import { createDocumentClient, downloadDocumentBytes, type FetchLike } from "./trpc-client.ts";
+import { createDocumentClient, downloadDocumentBytes, uploadDocumentBytes, type FetchLike } from "./trpc-client.ts";
 
 /** En dokument-källa: tRPC (`document`) ELLER statisk URL (`downloadUrl`). */
 export interface SourceRef {
@@ -68,4 +68,31 @@ async function fetchViaUrl(url: string, deps: FetchSourceDeps): Promise<Uint8Arr
   const resp = await fetchFn(url, { headers });
   if (resp.status >= 400) throw new Error(`HTTP ${resp.status}`);
   return new Uint8Array(await resp.arrayBuffer());
+}
+
+/** Ett upload-mål (write-back): tRPC-dokument (server) ELLER PUT-URL (demo). */
+export interface UploadTarget {
+  document?: HelperDocumentRef;
+  uploadUrl?: string;
+}
+
+/** Stabil kö-/cache-nyckel för ett upload-mål (matchar `sourceCacheKey`). */
+export function uploadTargetKey(t: UploadTarget): string | null {
+  if (t.document) return `doc:${t.document.id}`;
+  return t.uploadUrl ?? null;
+}
+
+/** Skriv tillbaka dokument-bytes via tRPC `document.uploadContent` (server-tier). */
+export async function uploadViaTrpc(
+  document: HelperDocumentRef,
+  bytes: Uint8Array,
+  deps: FetchSourceDeps = {},
+): Promise<void> {
+  const token = (deps.authHeader ?? "").replace(/^Bearer\s+/i, "");
+  const client = createDocumentClient({
+    trpcUrl: document.trpcUrl,
+    token,
+    ...(deps.fetch ? { fetch: deps.fetch } : {}),
+  });
+  await uploadDocumentBytes(client, document.id, bytes);
 }
