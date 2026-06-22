@@ -1,9 +1,10 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, test } from "bun:test";
 
-import { downloadTo, uploadFile } from "../src/engine/open.ts";
+import { fetchSourceBytes } from "../src/engine/document-source.ts";
+import { uploadFile } from "../src/engine/open.ts";
 import { expectRejection } from "./helpers.ts";
 
 const dirs: string[] = [];
@@ -17,13 +18,12 @@ async function tmpFile(name: string): Promise<string> {
   return join(dir, name);
 }
 
-describe("downloadTo (integration)", () => {
-  test("laddar ner body till fil", async () => {
+describe("fetchSourceBytes (statisk källa, integration)", () => {
+  test("hämtar bytes från downloadUrl", async () => {
     const server = Bun.serve({ port: 0, fetch: () => new Response("PDF-bytes") });
     try {
-      const path = await tmpFile("a.pdf");
-      await downloadTo(path, `http://127.0.0.1:${server.port}/f`);
-      expect(await readFile(path, "utf8")).toBe("PDF-bytes");
+      const got = await fetchSourceBytes({ downloadUrl: `http://127.0.0.1:${server.port}/f` });
+      expect(new TextDecoder().decode(got)).toBe("PDF-bytes");
     } finally {
       void server.stop(true);
     }
@@ -39,7 +39,7 @@ describe("downloadTo (integration)", () => {
       },
     });
     try {
-      await downloadTo(await tmpFile("b.txt"), `http://127.0.0.1:${server.port}/f`, "Bearer tok");
+      await fetchSourceBytes({ downloadUrl: `http://127.0.0.1:${server.port}/f` }, { authHeader: "Bearer tok" });
       expect(cap.auth).toBe("Bearer tok");
     } finally {
       void server.stop(true);
@@ -49,7 +49,7 @@ describe("downloadTo (integration)", () => {
   test("HTTP >= 400 → kastar", async () => {
     const server = Bun.serve({ port: 0, fetch: () => new Response("no", { status: 404 }) });
     try {
-      const err = await expectRejection(downloadTo(await tmpFile("c.txt"), `http://127.0.0.1:${server.port}/f`));
+      const err = await expectRejection(fetchSourceBytes({ downloadUrl: `http://127.0.0.1:${server.port}/f` }));
       expect(String(err)).toContain("HTTP 404");
     } finally {
       void server.stop(true);

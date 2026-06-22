@@ -13,6 +13,7 @@ import { basename, join } from "node:path";
 
 import { isSafeFileName, type HelperOpenRequest } from "@/lib/shared/helper/protocol";
 import type { ContentStore } from "./content-store.ts";
+import { fetchSourceBytes, sourceCacheKey, toSourceRef, type SourceRef } from "./document-source.ts";
 import { json, parseJsonBody, textError } from "./http.ts";
 import { log } from "./log.ts";
 import { openWithDefaultApp } from "./platform/open-app.ts";
@@ -22,18 +23,19 @@ const DEFAULT_WATCH_MINUTES = 60;
 const POLL_INTERVAL_MS = 2_000;
 
 export interface OpenDeps {
-  download: (path: string, url: string, authHeader?: string) => Promise<void>;
+  /** Hämta dokument-bytes för en källa (tRPC server-tier / statisk demo, ADR 0031). */
+  download: (ref: SourceRef, authHeader?: string) => Promise<Uint8Array>;
   openApp: (path: string) => Promise<void>;
   makeSessionDir: () => Promise<string>;
   startWatch: (path: string, uploadUrl: string, authHeader: string | undefined, timeoutMs: number) => void;
-  /** Cacha nedladdade bytes durabelt (offline-reopen, ADR 0028 §3). Valfri. */
-  persist?: (downloadUrl: string, path: string, fileName: string) => Promise<void>;
-  /** Återställ cachade bytes till `path` när nedladdning misslyckas (offline). Valfri. */
-  restore?: (downloadUrl: string, path: string) => Promise<boolean>;
+  /** Cacha nedladdade bytes durabelt under `cacheKey` (offline-reopen, ADR 0028 §3). Valfri. */
+  persist?: (cacheKey: string, bytes: Uint8Array, fileName: string) => Promise<void>;
+  /** Återställ cachade bytes (under `cacheKey`) till `path` när nedladdning misslyckas (offline). Valfri. */
+  restore?: (cacheKey: string, path: string) => Promise<boolean>;
 }
 
 export const defaultOpenDeps: OpenDeps = {
-  download: downloadTo,
+  download: (ref, authHeader) => fetchSourceBytes(ref, authHeader !== undefined ? { authHeader } : {}),
   openApp: openWithDefaultApp,
   makeSessionDir: () => mkdtemp(join(tmpdir(), "ava-helper-")),
   startWatch: watchAndUpload,
@@ -50,7 +52,9 @@ async function parseOpenRequest(req: Request): Promise<HelperOpenRequest | Respo
   if (req.method !== "POST") return textError(405, "method not allowed");
   const body = await parseJsonBody<HelperOpenRequest>(req);
   if (body === null) return textError(400, "invalid JSON");
-  if (!body.downloadUrl || !body.fileName) return textError(400, "downloadUrl and fileName required");
+  if ((!body.downloadUrl && !body.document) || !body.fileName) {
+    return textError(400, "source (document|downloadUrl) and fileName required");
+  }
   if (!isSafeFileName(body.fileName)) return textError(400, "invalid fileName");
   return body;
 }
@@ -75,23 +79,38 @@ async function runOpen(body: HelperOpenRequest, deps: OpenDeps): Promise<Respons
  * Returnerar en fel-Response om filen inte kan skaffas, annars null.
  */
 async function obtainFile(body: HelperOpenRequest, tmpFile: string, deps: OpenDeps): Promise<Response | null> {
+  const ref: SourceRef = toSourceRef(body);
+  const key = sourceCacheKey(ref) ?? "";
+  let bytes: Uint8Array;
   try {
-    await deps.download(tmpFile, body.downloadUrl, body.authHeader);
+    bytes = await deps.download(ref, body.authHeader);
   } catch (err) {
-    if (deps.restore && (await deps.restore(body.downloadUrl, tmpFile))) {
-      log(`offline: öppnar cachad kopia av ${body.fileName}`);
-      return null;
-    }
-    return textError(502, `download failed: ${errMsg(err)}`);
+    return downloadFailureFallback(body, tmpFile, key, deps, err);
   }
-  if (deps.persist) {
-    try {
-      await deps.persist(body.downloadUrl, tmpFile, body.fileName);
-    } catch (err) {
-      log(`content-cache misslyckades (${body.fileName}): ${errMsg(err)}`);
-    }
-  }
+  await writeFile(tmpFile, bytes);
+  await cacheBytes(deps, key, bytes, body.fileName);
   return null;
+}
+
+/** Nedladdning misslyckades → öppna cachad kopia om möjligt (offline), annars 502. */
+async function downloadFailureFallback(
+  body: HelperOpenRequest, tmpFile: string, key: string, deps: OpenDeps, err: unknown,
+): Promise<Response | null> {
+  if (deps.restore && key && (await deps.restore(key, tmpFile))) {
+    log(`offline: öppnar cachad kopia av ${body.fileName}`);
+    return null;
+  }
+  return textError(502, `download failed: ${errMsg(err)}`);
+}
+
+/** Cacha bytsen durabelt (best-effort; ett cache-fel får aldrig fälla öppningen). */
+async function cacheBytes(deps: OpenDeps, key: string, bytes: Uint8Array, fileName: string): Promise<void> {
+  if (!deps.persist || !key) return;
+  try {
+    await deps.persist(key, bytes, fileName);
+  } catch (err) {
+    log(`content-cache misslyckades (${fileName}): ${errMsg(err)}`);
+  }
 }
 
 /** Kör ett IO-steg; null vid framgång, annars en fel-Response. */
@@ -115,15 +134,6 @@ function errMsg(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-/** GET med valfri Authorization-header → skriv body till `path`. */
-export async function downloadTo(path: string, url: string, authHeader?: string): Promise<void> {
-  const headers: Record<string, string> = {};
-  if (authHeader) headers.Authorization = authHeader;
-  const resp = await fetch(url, { headers });
-  if (resp.status >= 400) throw new Error(`HTTP ${resp.status}`);
-  await writeFile(path, new Uint8Array(await resp.arrayBuffer()));
-}
-
 export async function uploadFile(path: string, uploadUrl: string, authHeader: string | undefined): Promise<void> {
   const headers: Record<string, string> = { "Content-Type": "application/octet-stream" };
   if (authHeader) headers.Authorization = authHeader;
@@ -138,12 +148,11 @@ export async function uploadFile(path: string, uploadUrl: string, authHeader: st
  */
 export async function persistDownloaded(
   store: ContentStore,
-  downloadUrl: string,
-  path: string,
+  cacheKey: string,
+  bytes: Uint8Array,
   fileName: string,
 ): Promise<void> {
-  const bytes = new Uint8Array(await readFile(path));
-  await store.store(downloadUrl, bytes, fileName);
+  await store.store(cacheKey, bytes, fileName);
 }
 
 /**

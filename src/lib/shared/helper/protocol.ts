@@ -31,17 +31,34 @@ export const HELPER_HTTPS_BASE = `https://localhost:${HELPER_HTTPS_PORT}`;
 export const HELPER_PING_PREFIX = "ava-helper";
 
 /**
- * `POST /open` — be helpern ladda ner en fil, öppna den i OS:ets
- * default-app och (om `uploadUrl` satt) synka tillbaka ändringar.
+ * Hur helpern hämtar dokument-bytes (ADR 0031). EXAKT en källa anges:
+ *   - `document` (server-tier): hämta via tRPC `document.downloadContent` mot
+ *     `trpcUrl`; helpern bär sin EGNA Bearer (OIDC). Typat kontrakt, ingen REST.
+ *   - `downloadUrl` (demo): statisk blob-URL (ingen server att tRPC:a mot).
+ * Web-appen väljer per tier; helpern grenar på vilket fält som finns.
+ */
+export interface HelperDocumentRef {
+  /** Dokumentets id (input till `document.downloadContent`/`uploadContent`). */
+  id: string;
+  /** Serverns tRPC-endpoint, t.ex. `http://localhost:8080/api/trpc`. */
+  trpcUrl: string;
+}
+
+/**
+ * `POST /open` — be helpern hämta en fil, öppna den i OS:ets default-app och
+ * (om write-back är på) synka tillbaka ändringar. Källan är `document` (tRPC,
+ * server-tier) ELLER `downloadUrl` (statisk, demo).
  */
 export interface HelperOpenRequest {
-  /** Varifrån fil-bytsen laddas ner. */
-  downloadUrl: string;
-  /** Vart ändrade bytes PUT:as efter save. Utelämnad → read-only. */
+  /** Server-tier: hämta via tRPC (ADR 0031). Utesluter `downloadUrl`. */
+  document?: HelperDocumentRef;
+  /** Demo/statisk: varifrån fil-bytsen laddas ner. Utesluter `document`. */
+  downloadUrl?: string;
+  /** Vart ändrade bytes PUT:as efter save (demo/statisk). Utelämnad → read-only. */
   uploadUrl?: string;
   /** Namnet användaren ser i editorn. */
   fileName: string;
-  /** Vidarebefordras orörd till download + upload. */
+  /** Vidarebefordras orörd till download + upload (statisk väg). */
   authHeader?: string;
   /** Hur länge helpern lyssnar på save-events. Default 60 min. */
   maxWatchMinutes?: number;
@@ -106,9 +123,11 @@ export interface HelperConfigRequest {
  * mot extern-editor-öppningar.
  */
 export interface HelperContentRequest {
-  /** Varifrån bytsen laddas (identifierar dokument+version) — även cache-nyckel. */
-  downloadUrl: string;
-  /** Vidarebefordras orörd till nedladdning vid cache-miss. */
+  /** Server-tier: hämta via tRPC (ADR 0031). Utesluter `downloadUrl`. */
+  document?: HelperDocumentRef;
+  /** Demo/statisk: varifrån bytsen laddas — även cache-nyckel. Utesluter `document`. */
+  downloadUrl?: string;
+  /** Vidarebefordras orörd till nedladdning vid cache-miss (statisk väg). */
   authHeader?: string;
   /** Användarsynligt filnamn (för helperns logg/cache-metadata). */
   fileName?: string;
