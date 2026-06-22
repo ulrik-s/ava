@@ -12,6 +12,7 @@ import type { Principal } from "@/lib/server/auth/principal";
 import { buildContext } from "@/lib/server/build-context";
 import { DemoDataStore } from "@/lib/server/data-store/DemoDataStore";
 import { appRouter } from "@/lib/server/routers/_app";
+import { asId } from "@/lib/shared/schemas/ids";
 
 const PRINCIPAL: Principal = {
   id: "u-1", email: "a@x", name: "Anna", role: "ADMIN", organizationId: "org-1",
@@ -114,7 +115,7 @@ describe("billingRun.createFinal", () => {
 
   it("länkar INTE icke-debiterbara poster (de ingår inte i fakturabeloppet)", async () => {
     const { ds, caller } = makeCaller({ workMinutes: 60 });
-    await ds.timeEntries.create({ data: { id: "te-nb", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date(), minutes: 30, description: "Intern", hourlyRate: 250000, billable: false } });
+    await ds.timeEntries.create({ data: { id: asId<"TimeEntryId">("te-nb"), organizationId: "org-1", userId: asId<"UserId">("u-1"), matterId: asId<"MatterId">("m-1"), date: new Date(), minutes: 30, description: "Intern", hourlyRate: 250000, billable: false } });
     const res = await caller.billingRun.createFinal({ matterId: "m-1", recipient: "KLIENT" });
     const nb = await ds.timeEntries.findFirst({ where: { id: "te-nb" } }) as { invoiceId?: string | null; frozenAt?: Date | null };
     expect(nb.invoiceId).toBeFalsy(); // ej fakturerad
