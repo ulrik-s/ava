@@ -16,7 +16,7 @@
  * `@/lib/shared/helper/protocol` (#78).
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   HELPER_BASE,
@@ -200,6 +200,76 @@ export function useHelperSyncStatus(intervalMs = 5_000): HelperStatusResponse | 
   }, [intervalMs]);
 
   return sync;
+}
+
+/** Per-dokument synk-tillstånd i UI:t: väntar på server / konflikt / nyss synkad. */
+export type DocSyncStatus = "pending" | "conflict" | "synced";
+
+/** Hur länge den gröna "Synkad"-bekräftelsen visas efter en lyckad upload. */
+export const SYNCED_TTL_MS = 60_000;
+
+/**
+ * Spårar synk-tillstånd över tid. Kön (helperns `/status`) rensar en post när
+ * den laddats upp, så "var pending → nu borta" = nyss synkad. Vi minns den
+ * tidpunkten per dokument för att kunna visa en transient "Synkad"-bekräftelse.
+ */
+export interface SyncTracker {
+  pending: Set<string>;
+  conflict: Set<string>;
+  /** documentId → tidpunkt (ms) då uppladdningen blev klar. */
+  syncedAt: Map<string, number>;
+}
+
+export function emptySyncTracker(): SyncTracker {
+  return { pending: new Set(), conflict: new Set(), syncedAt: new Map() };
+}
+
+/**
+ * Avancera spåraren med en ny `/status`-ögonblicksbild. Dokument som var
+ * `pending` och nu varken är pending eller conflict har laddats upp → stämpla
+ * `syncedAt = now`. Utgångna "synkad"-stämplar (> TTL) rensas. Ren funktion.
+ */
+export function advanceSyncTracker(prev: SyncTracker, status: HelperStatusResponse | null, now: number): SyncTracker {
+  const cur = docSyncStatusMap(status);
+  const pending = new Set<string>();
+  const conflict = new Set<string>();
+  for (const [id, s] of cur) (s === "conflict" ? conflict : pending).add(id);
+
+  const syncedAt = new Map(prev.syncedAt);
+  for (const id of prev.pending) {
+    if (!pending.has(id) && !conflict.has(id)) syncedAt.set(id, now);
+  }
+  for (const [id, ts] of syncedAt) if (now - ts > SYNCED_TTL_MS) syncedAt.delete(id);
+  return { pending, conflict, syncedAt };
+}
+
+/** Bygg per-dokument-badge-kartan ur spåraren. Pending/conflict slår "synkad". */
+export function syncBadgeMap(t: SyncTracker, now: number): Map<string, DocSyncStatus> {
+  const m = new Map<string, DocSyncStatus>();
+  for (const [id, ts] of t.syncedAt) if (now - ts <= SYNCED_TTL_MS) m.set(id, "synced");
+  for (const id of t.pending) m.set(id, "pending");
+  for (const id of t.conflict) m.set(id, "conflict");
+  return m;
+}
+
+/**
+ * Per-dokument synk-status för dokumentlistan (ADR 0031): `pending` (väntar på
+ * server), `conflict`, och en transient `synced`-bekräftelse ~1 min efter att en
+ * uppladdning blivit klar. Pollar helperns lokala kö var 5:e s (driver även
+ * utgången av "synkad"-stämplar). Tunn hook ovanpå de rena spår-funktionerna.
+ */
+export function useDocSyncStatus(intervalMs = 5_000): Map<string, DocSyncStatus> {
+  const status = useHelperSyncStatus(intervalMs);
+  const trackerRef = useRef<SyncTracker>(emptySyncTracker());
+  const [badges, setBadges] = useState<Map<string, DocSyncStatus>>(new Map());
+
+  useEffect(() => {
+    const now = Date.now();
+    trackerRef.current = advanceSyncTracker(trackerRef.current, status, now);
+    setBadges(syncBadgeMap(trackerRef.current, now));
+  }, [status]);
+
+  return badges;
 }
 
 /**

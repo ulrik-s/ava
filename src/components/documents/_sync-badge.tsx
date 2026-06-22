@@ -1,33 +1,44 @@
 /**
  * `SyncStatusBadge` — per-dokument-markering driven av AVA Helperns lokala
- * upload-kö (ADR 0031 §write-back). Visar "ändringar på ingång" medan en
- * sparning väntar på att synkas till servern (så användaren inte förvirras av
- * att återöppna och se det GAMLA innehållet), och "konflikt" vid 409.
- *
- * Funkar bäst i vanliga fallet: man redigerar på samma dator som helpern kör på
- * (juristen är ofta ensam i ärendet) → kön är lokal. Ren presentationskomponent.
+ * upload-kö (ADR 0031 §write-back). Tre tillstånd:
+ *   - `pending`  → "⟳ Väntar på server" (ändringar sparade lokalt, ej uppladdade)
+ *   - `synced`   → "✓ Synkad" (transient bekräftelse ~1 min efter lyckad upload)
+ *   - `conflict` → "⚠ Konflikt" (server gått förbi; 409)
+ * Synkade-i-vila-dokument får ingen badge (ren lista). Funkar bäst när helpern
+ * kör på samma dator (lokal kö). Ren presentationskomponent.
  */
 
-export type SyncStatus = "pending" | "conflict";
+import type { DocSyncStatus } from "@/lib/client/helper/use-helper";
+
+export type SyncStatus = DocSyncStatus;
+
+const BADGE = "inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded";
 
 export function SyncStatusBadge({ status }: { status?: SyncStatus | undefined }) {
   if (status === undefined) return null;
   if (status === "conflict") {
     return (
       <span
-        className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-red-100 text-red-800"
+        className={`${BADGE} bg-red-100 text-red-800`}
         title="Versionskonflikt — serverns version har gått förbi dina lokala ändringar. Öppna och spara igen."
       >
         ⚠ Konflikt
       </span>
     );
   }
+  if (status === "synced") {
+    return (
+      <span className={`${BADGE} bg-green-100 text-green-800`} title="Dina ändringar är synkade till servern.">
+        ✓ Synkad
+      </span>
+    );
+  }
   return (
     <span
-      className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-blue-100 text-blue-700"
-      title="Ändringar väntar på att synkas till servern (AVA Helper). Vänta tills det är klart innan du öppnar igen — annars ser du den gamla versionen."
+      className={`${BADGE} bg-amber-100 text-amber-800`}
+      title="Ändringar sparade lokalt och väntar på att synkas till servern (AVA Helper). Vänta tills det är klart innan du öppnar igen — annars ser du den gamla versionen."
     >
-      <span className="animate-pulse">⟳</span> Ändringar på ingång
+      <span className="animate-pulse">⟳</span> Väntar på server
     </span>
   );
 }

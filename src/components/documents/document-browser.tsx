@@ -2,7 +2,7 @@
 
 import type { inferRouterInputs } from "@trpc/server";
 import { useState, useRef, useCallback, useMemo } from "react";
-import { docSyncStatusMap, useHelperSyncStatus } from "@/lib/client/helper/use-helper";
+import { useDocSyncStatus } from "@/lib/client/helper/use-helper";
 import { trpc } from "@/lib/client/trpc";
 import type { AppRouter } from "@/lib/server/routers/_app";
 import { DocumentRow, type DocumentRecord } from "./_document-row";
@@ -56,10 +56,9 @@ export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
     [tree.data],
   );
 
-  // Per-dokument write-back-status ur AVA Helperns lokala kö (ADR 0031): markerar
-  // "ändringar på ingång" så man inte återöppnar och ser gamla innehållet.
-  const helperSync = useHelperSyncStatus();
-  const docSync = useMemo(() => docSyncStatusMap(helperSync), [helperSync]);
+  // Per-dokument write-back-status ur AVA Helperns lokala kö (ADR 0031): "väntar
+  // på server", transient "synkad"-bekräftelse, och "konflikt".
+  const docSync = useDocSyncStatus();
 
   const mutations = useDocumentMutations({
     matterId,
