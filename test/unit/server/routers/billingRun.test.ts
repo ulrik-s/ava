@@ -41,6 +41,8 @@ describe("billingRun.createAcconto", () => {
     expect(res.run.workValueOreAtRun).toBe(500000);
     expect(res.run.amountOre).toBe(100000);
     expect(res.invoice.invoiceType).toBe("ACCONTO");
+    expect(res.invoice.invoiceNumber).toMatch(/^F-\d{4}-\d+$/); // numreras (#730)
+    expect(res.invoice.ocrReference).toBeTruthy();
     // Rader är INTE frysta
     const te = await ds.timeEntries.findFirst({ where: { id: "te-1" } }) as { frozenAt?: Date | null };
     expect(te.frozenAt).toBeFalsy();
@@ -102,6 +104,20 @@ describe("billingRun.createFinal", () => {
     const te = await ds.timeEntries.findFirst({ where: { id: "te-1" } }) as { frozenAt?: Date | null; frozenByBillingRunId?: string | null };
     expect(te.frozenAt).toBeInstanceOf(Date);
     expect(te.frozenByBillingRunId).toBe(res.run.id);
+  });
+
+  it("tilldelar fakturanummer + OCR (klient) — ADR 0012 (#730)", async () => {
+    const { caller } = makeCaller({ workMinutes: 60 });
+    const res = await caller.billingRun.createFinal({ matterId: "m-1", recipient: "KLIENT" });
+    expect(res.invoice.invoiceNumber).toMatch(/^F-\d{4}-\d+$/);
+    expect(res.invoice.ocrReference).toBeTruthy();
+  });
+
+  it("DOMSTOL-mottagare → inget fakturanummer/OCR (ADR 0012)", async () => {
+    const { caller } = makeCaller({ workMinutes: 60 });
+    const res = await caller.billingRun.createFinal({ matterId: "m-1", recipient: "DOMSTOL" });
+    expect(res.invoice.invoiceNumber).toBeFalsy();
+    expect(res.invoice.ocrReference).toBeFalsy();
   });
 
   it("LÄNKAR de debiterbara posterna till fakturan (invoice_id) → vyn visar arvode/utlägg (#728)", async () => {

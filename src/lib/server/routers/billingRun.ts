@@ -17,8 +17,9 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { proposedAccontoOre } from "@/lib/shared/billing-proposal";
+import { ocrFromInvoiceNumber } from "@/lib/shared/ocr-reference";
 import type { BillingRun } from "@/lib/shared/schemas/billing";
-import { billingRunRecipientSchema, type ExpenseKind } from "@/lib/shared/schemas/enums";
+import { billingRunRecipientSchema, type BillingRunRecipient, type ExpenseKind } from "@/lib/shared/schemas/enums";
 import {
   matterIdSchema,
   billingRunIdSchema,
@@ -136,6 +137,22 @@ async function assertMatterInOrg(repos: Repositories, matterId: string, orgId: s
   if (!m) throw new TRPCError({ code: "NOT_FOUND", message: "Ärendet finns inte." });
 }
 
+/**
+ * Tilldela fakturanummer + OCR (ADR 0012) — klient-/försäkringsfakturor får
+ * `F-YYYY-NNNN` + härledd OCR; kostnadsräkningar till DOMSTOL får varken nummer
+ * eller OCR (domstolen betalar inte via OCR). Matchar legacy `invoice.createFinal`
+ * så en billing-run-faktura blir likvärdig. Tomt objekt → faktura utan nummer.
+ */
+async function invoiceNumbering(
+  repos: Repositories,
+  orgId: string,
+  recipient: BillingRunRecipient,
+): Promise<{ invoiceNumber: string; ocrReference: string | null } | Record<string, never>> {
+  if (recipient === "DOMSTOL") return {};
+  const invoiceNumber = await repos.invoices.nextInvoiceNumber(orgId);
+  return { invoiceNumber, ocrReference: ocrFromInvoiceNumber(invoiceNumber) };
+}
+
 export const billingRunRouter = router({
   list: orgProcedure
     .input(z.object({ matterId: matterIdSchema.optional() }))
@@ -189,6 +206,7 @@ export const billingRunRouter = router({
         const invoice = await tx.invoices.create({
           matterId: input.matterId, amount: input.amountOre,
           invoiceType: "ACCONTO", status: "DRAFT",
+          ...(await invoiceNumbering(tx, ctx.orgId, input.recipient)),
           invoiceDate: new Date(), notes: input.notes,
         });
         const run = await tx.billingRuns.create({
@@ -221,6 +239,7 @@ export const billingRunRouter = router({
         const invoice = await tx.invoices.create({
           matterId: input.matterId, amount: finalAmount,
           invoiceType: "FINAL", status: "DRAFT",
+          ...(await invoiceNumbering(tx, ctx.orgId, input.recipient)),
           invoiceDate: new Date(), notes: input.notes,
         });
         const run = await tx.billingRuns.create({
