@@ -2,6 +2,7 @@
 
 import type { inferRouterInputs } from "@trpc/server";
 import { useState, useRef, useCallback, useMemo } from "react";
+import { docSyncStatusMap, useHelperSyncStatus } from "@/lib/client/helper/use-helper";
 import { trpc } from "@/lib/client/trpc";
 import type { AppRouter } from "@/lib/server/routers/_app";
 import { DocumentRow, type DocumentRecord } from "./_document-row";
@@ -9,6 +10,7 @@ import { DocumentsListView } from "./_documents-list-view";
 import { type DragItem } from "./_drag-helpers";
 import { FolderRow, type FolderRecord } from "./_folder-row";
 import { NewFolderForm } from "./_new-folder-form";
+import type { SyncStatus } from "./_sync-badge";
 
 type ViewMode = "tree" | "list";
 const VIEW_MODE_KEY = "ava.documents.viewMode";
@@ -53,6 +55,11 @@ export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
     () => tree.data?.documents ?? [],
     [tree.data],
   );
+
+  // Per-dokument write-back-status ur AVA Helperns lokala kö (ADR 0031): markerar
+  // "ändringar på ingång" så man inte återöppnar och ser gamla innehållet.
+  const helperSync = useHelperSyncStatus();
+  const docSync = useMemo(() => docSyncStatusMap(helperSync), [helperSync]);
 
   const mutations = useDocumentMutations({
     matterId,
@@ -112,6 +119,7 @@ export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
           drag={drag}
           analyzingIds={analyzingIds}
           uploadingIds={upload.uploadingIds}
+          docSync={docSync}
           rename={{ renamingFolderId, renameValue, setRenameValue, setRenamingFolderId }}
           mutations={mutations}
         />
@@ -120,6 +128,7 @@ export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
           matterId={matterId}
           documents={documents}
           folders={folders}
+          docSync={docSync}
           onDelete={(id) => mutations.deleteDocument.mutate({ id })}
           onReanalyze={(id) => mutations.reanalyze.mutate({ documentId: id })}
         />
@@ -131,7 +140,7 @@ export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
 /** Träd-vyn: rekursiv mapp-/dokumentrendering med drag-and-drop + rename. */
 function DocumentTree({
   foldersByParent, docsByFolder, collapsedFolders, toggleFolder,
-  drag, analyzingIds, uploadingIds, rename, mutations,
+  drag, analyzingIds, uploadingIds, docSync, rename, mutations,
 }: {
   foldersByParent: Map<string | null, FolderRecord[]>;
   docsByFolder: Map<string | null, DocumentRecord[]>;
@@ -140,6 +149,7 @@ function DocumentTree({
   drag: DragApi;
   analyzingIds: Set<string>;
   uploadingIds: Set<string>;
+  docSync: Map<string, SyncStatus>;
   rename: RenameApi;
   mutations: ReturnType<typeof useDocumentMutations>;
 }) {
@@ -154,6 +164,7 @@ function DocumentTree({
       isDragging={dragItem?.id === doc.id}
       isAnalyzing={analyzingIds.has(doc.id)}
       isUploading={uploadingIds.has(doc.id)}
+      syncStatus={docSync.get(doc.id)}
       onDragStart={handleDragStart("document", doc.id)}
       onDragEnd={handleDragEnd}
       onReanalyze={() => mutations.reanalyze.mutate({ documentId: doc.id })}

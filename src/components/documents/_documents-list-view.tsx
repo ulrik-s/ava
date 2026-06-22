@@ -16,15 +16,20 @@ import { trpc } from "@/lib/client/trpc";
 import type { DocumentRecord } from "./_document-row";
 import { formatFileSize } from "./_drag-helpers";
 import type { FolderRecord } from "./_folder-row";
+import { SyncStatusBadge, type SyncStatus } from "./_sync-badge";
 import { ExternalEditModal, type ModalState } from "./external-edit-modal";
 
 interface Props {
   matterId: string;
   documents: DocumentRecord[];
   folders: FolderRecord[];
+  /** Per-dokument write-back-status ur AVA Helperns kö (ADR 0031). */
+  docSync?: Map<string, SyncStatus>;
   onDelete: (id: string) => void;
   onReanalyze: (id: string) => void;
 }
+
+const NO_SYNC: Map<string, SyncStatus> = new Map();
 
 function folderPath(folderId: string | null, folders: FolderRecord[]): string {
   if (!folderId) return "/";
@@ -38,17 +43,20 @@ function folderPath(folderId: string | null, folders: FolderRecord[]): string {
   return "/" + parts.join("/");
 }
 
-export function DocumentsListView({ matterId, documents, folders, onDelete, onReanalyze }: Props) {
+export function DocumentsListView({ matterId, documents, folders, docSync = NO_SYNC, onDelete, onReanalyze }: Props) {
   const [modal, setModal] = useState<ModalState>({ kind: "closed" });
 
   const columns: Column<DocumentRecord>[] = [
     { key: "fileName", label: "Filnamn", sortable: true, sortValue: (d) => d.fileName,
       render: (d) => (
-        <button type="button" onClick={() => void openDocumentSmart(d, setModal)}
-          className="text-sm font-medium text-blue-600 hover:underline text-left"
-          title="PDF/Word/Excel → öppnas i extern editor om du har valt en lokal mapp">
-          {d.fileName}
-        </button>
+        <span className="flex items-center gap-2 min-w-0">
+          <button type="button" onClick={() => void openDocumentSmart(d, setModal)}
+            className="text-sm font-medium text-blue-600 hover:underline text-left"
+            title="PDF/Word/Excel → öppnas i extern editor om du har valt en lokal mapp">
+            {d.fileName}
+          </button>
+          <SyncStatusBadge status={docSync.get(d.id)} />
+        </span>
       ),
     },
     { key: "documentType", label: "Typ", sortable: true,
