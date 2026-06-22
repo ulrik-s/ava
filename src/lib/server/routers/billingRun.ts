@@ -18,11 +18,13 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { proposedAccontoOre } from "@/lib/shared/billing-proposal";
 import { ocrFromInvoiceNumber } from "@/lib/shared/ocr-reference";
+import { omitUndefined } from "@/lib/shared/omit-undefined";
 import type { BillingRun } from "@/lib/shared/schemas/billing";
 import { billingRunRecipientSchema, type BillingRunRecipient, type ExpenseKind } from "@/lib/shared/schemas/enums";
 import {
   matterIdSchema,
   billingRunIdSchema,
+  invoiceIdSchema,
   asId,
   type BillingRunId,
 } from "@/lib/shared/schemas/ids";
@@ -201,6 +203,19 @@ async function invoiceNumbering(
   return { invoiceNumber, ocrReference: ocrFromInvoiceNumber(invoiceNumber) };
 }
 
+/**
+ * Valfritt klient-id + datum (paritet med legacy `invoice.createFinal` så demo-
+ * generatorn/fixtures kan styra dem). Default-invoiceDate = nu. Tomma → store
+ * genererar id / sätter dueDate null.
+ */
+function invoiceMeta(input: { id?: string | undefined; invoiceDate?: string | undefined; dueDate?: string | undefined }): Partial<{ id: ReturnType<typeof asId<"InvoiceId">>; invoiceDate: Date; dueDate: Date }> {
+  return omitUndefined({
+    id: input.id ? asId<"InvoiceId">(input.id) : undefined,
+    invoiceDate: input.invoiceDate ? new Date(input.invoiceDate) : new Date(),
+    dueDate: input.dueDate ? new Date(input.dueDate) : undefined,
+  });
+}
+
 export const billingRunRouter = router({
   list: orgProcedure
     .input(z.object({ matterId: matterIdSchema.optional() }))
@@ -240,6 +255,10 @@ export const billingRunRouter = router({
       recipient: billingRunRecipientSchema.default("KLIENT"),
       clientShareBips: z.number().int().min(0).max(10000),
       amountOre: z.number().int().nonnegative(),
+      // Valfri paritet med legacy (demo/fixtures): klient-id + datum.
+      id: invoiceIdSchema.optional(),
+      invoiceDate: z.string().optional(),
+      dueDate: z.string().optional(),
       notes: z.string().nullish(),
     }))
     .mutation(async ({ ctx, input }) => {
@@ -255,7 +274,7 @@ export const billingRunRouter = router({
           matterId: input.matterId, amount: input.amountOre,
           invoiceType: "ACCONTO", status: "DRAFT",
           ...(await invoiceNumbering(tx, ctx.orgId, input.recipient)),
-          invoiceDate: new Date(), notes: input.notes,
+          ...invoiceMeta(input), notes: input.notes,
         });
         const run = await tx.billingRuns.create({
           matterId: input.matterId, type: "ACCONTO", recipient: input.recipient,
@@ -277,6 +296,10 @@ export const billingRunRouter = router({
       // Per-post-val (#734): anges → fakturera/frys ENBART dessa; utelämnas → allt ofryst.
       timeEntryIds: z.array(z.string()).optional(),
       expenseIds: z.array(z.string()).optional(),
+      // Valfri paritet med legacy (demo/fixtures): klient-id + datum.
+      id: invoiceIdSchema.optional(),
+      invoiceDate: z.string().optional(),
+      dueDate: z.string().optional(),
       notes: z.string().nullish(),
     }))
     .mutation(async ({ ctx, input }) => {
@@ -291,7 +314,7 @@ export const billingRunRouter = router({
           matterId: input.matterId, amount: finalAmount,
           invoiceType: "FINAL", status: "DRAFT",
           ...(await invoiceNumbering(tx, ctx.orgId, input.recipient)),
-          invoiceDate: new Date(), notes: input.notes,
+          ...invoiceMeta(input), notes: input.notes,
         });
         const run = await tx.billingRuns.create({
           matterId: input.matterId, type: "FINAL", recipient: input.recipient,

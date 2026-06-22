@@ -1,15 +1,19 @@
 /**
- * `populateBilling` — driver fakturerings-FLÖDENA via tRPC (ADR-beslut "1a").
+ * `populateBilling` — ETT faktureringsflöde per ärende via BillingRun-modellen
+ * (#736-konsolidering). Tidigare kördes två parallella pass (legacy
+ * `invoice.createFinal` + `billingRun.*`) över samma ärenden → dubbla fakturor.
+ * Nu driver vi ENBART billing-run-mutationerna och lägger livscykeln
+ * (betalning/plan/kredit/avskrivning) ovanpå — en sammanhängande kedja per ärende.
  *
- * Istället för att skriva pre-bakade faktura-/betalnings-rader kör vi de
- * riktiga mutationerna (createAcconto → recordPayment → createFinal →
- * createPaymentPlan → createCredit). Fakturorna blir därför ORGANISKA:
- * belopp beräknas från de obetalda tids-/utläggsposterna, fakturanummer +
- * id:n auto-genereras. Det validerar faktureringsmotorn på riktigt.
+ * Dispatch per paymentMethod (realistiskt):
+ *   PRIVAT/null           → KLIENT-slutfaktura + varierad livscykel (betald,
+ *                           aktiv/slutförd/avbruten plan, kredit, avskrivning, draft)
+ *   RATTSSKYDD            → klient-aconto + slutfaktura till FÖRSÄKRING (betald)
+ *   RATTSHJALP            → klient-aconto + slutfaktura till RÄTTSHJÄLPSMYNDIGHET (betald)
+ *   OFFENTLIG_FORSVARARE  → kostnadsräkning till domstol (varannan dömd m. prutning)
+ *   (taxe-ärenden hoppas över — egen brottmålstaxa-väg)
  *
- * Scenariot speglar seedens dokumenterade variation (rikt läge): acconto-
- * avdrag, betalda finals, flera aktiva avbetalningsplaner med delbetalningar,
- * en slutförd plan, en avbruten plan och en kreditfaktura.
+ * Belopp/fakturanummer/OCR genereras organiskt av billing-run-routern (ADR 0012).
  */
 
 import { demoFinalInvoiceId, demoAccontoInvoiceId, demoCreditInvoiceId, demoPaymentPlanId } from "../scripts/demo-billing-ids";
@@ -27,14 +31,22 @@ export interface BillingResult {
   credits: number;
   reminders: number;
   writeOffs: number;
+  kostnadsrakningPending: number;
+  kostnadsrakningSent: number;
 }
 
 interface Ctx {
   c: AnyCaller;
   res: BillingResult;
-  time: Map<string, string[]>;
-  exp: Map<string, string[]>;
 }
+
+/** En skapad slutfaktura. `matterId` bärs med så plan-/kredit-id:n blir deterministiska (uuidv5 på matterId). */
+type FinalInv = { id: string; amount: number; matterId: string };
+
+const BILLING_RUN_RECIPIENT: Record<string, "KLIENT" | "FORSAKRING" | "RATTSHJALPSMYNDIGHET"> = {
+  RATTSSKYDD: "FORSAKRING",
+  RATTSHJALP: "RATTSHJALPSMYNDIGHET",
+};
 
 function arr(seed: SeedDataset, key: keyof SeedDataset): Row[] {
   return ((seed[key] as Row[] | undefined) ?? []);
@@ -46,44 +58,44 @@ function isoDaysAgo(n: number): string {
   return d.toISOString();
 }
 
-function groupIds(rows: Row[], key: string): Map<string, string[]> {
-  const map = new Map<string, string[]>();
-  for (const r of rows) {
-    const k = String(r[key]);
-    const list = map.get(k) ?? [];
-    list.push(String(r.id));
-    map.set(k, list);
-  }
-  return map;
+function hasWork(seed: SeedDataset, matterId: string): boolean {
+  const has = (key: keyof SeedDataset): boolean => arr(seed, key).some((r) => String(r.matterId) === matterId);
+  return has("timeEntries") || has("expenses");
 }
 
-function idsOf(ctx: Ctx, matterId: string): { timeEntryIds: string[]; expenseIds: string[] } {
-  return { timeEntryIds: ctx.time.get(matterId) ?? [], expenseIds: ctx.exp.get(matterId) ?? [] };
+/** Klient-aconto (rättsskydd/-hjälp) → returnerar billing-run-id för avdrag på slutfakturan. */
+async function acconto(ctx: Ctx, matterId: string, bips: number, amountOre: number, daysAgo: number): Promise<string> {
+  const { run, invoice } = await ctx.c.billingRun.createAcconto({
+    id: demoAccontoInvoiceId(matterId), matterId, recipient: "KLIENT",
+    clientShareBips: bips, amountOre,
+    invoiceDate: isoDaysAgo(daysAgo + 20), dueDate: isoDaysAgo(daysAgo - 10),
+    notes: "Aconto — klientens andel (självrisk/rättshjälpsavgift)",
+  });
+  ctx.res.invoices++;
+  await ctx.c.invoice.setStatus({ invoiceId: invoice.id, status: "SENT" });
+  return run.id;
 }
 
-/** createFinal från matterns obetalda poster + sätt SENT. Returnerar {id, amount}. */
-async function finalSent(ctx: Ctx, matterId: string, daysAgo: number, accontoInvoiceIds: string[] = []): Promise<{ id: string; amount: number }> {
-  const { timeEntryIds, expenseIds } = idsOf(ctx, matterId);
-  // createFinal returnerar { invoice, breakdown } — plocka ut fakturan.
-  const { invoice } = await ctx.c.invoice.createFinal({
-    id: demoFinalInvoiceId(matterId),
-    matterId, timeEntryIds, expenseIds, accontoInvoiceIds,
+/** Slutfaktura via billing-run → SENT. Returnerar {id, amount}. */
+async function finalSent(ctx: Ctx, matterId: string, recipient: string, deducted: string[], daysAgo: number): Promise<FinalInv> {
+  const { invoice } = await ctx.c.billingRun.createFinal({
+    id: demoFinalInvoiceId(matterId), matterId, recipient, deductedBillingRunIds: deducted,
     invoiceDate: isoDaysAgo(daysAgo), dueDate: isoDaysAgo(daysAgo - 30),
   });
   ctx.res.invoices++;
   await ctx.c.invoice.setStatus({ invoiceId: invoice.id, status: "SENT" });
-  return { id: invoice.id, amount: invoice.amount };
+  return { id: invoice.id, amount: invoice.amount, matterId };
 }
 
-async function scenarioPaid(ctx: Ctx, matterId: string | undefined, daysAgo: number): Promise<void> {
-  if (!matterId) return;
-  const inv = await finalSent(ctx, matterId, daysAgo);
-  if (inv.amount <= 0) return;
-  await ctx.c.invoice.recordPayment({ invoiceId: inv.id, amount: inv.amount, paidAt: isoDaysAgo(daysAgo - 20), note: "Full betalning" });
-  ctx.res.payments++;
+/** Slutfaktura som LÄMNAS draft (ej skickad). */
+async function finalDraft(ctx: Ctx, matterId: string, recipient: string, daysAgo: number): Promise<void> {
+  await ctx.c.billingRun.createFinal({
+    id: demoFinalInvoiceId(matterId), matterId, recipient, deductedBillingRunIds: [],
+    invoiceDate: isoDaysAgo(daysAgo),
+  });
+  ctx.res.invoices++;
 }
 
-/** Logga `months` DUE-påminnelser för de senaste månaderna (historik). */
 async function addReminders(ctx: Ctx, planId: string, months: number): Promise<void> {
   for (let m = months; m >= 1; m--) {
     const due = new Date();
@@ -94,12 +106,18 @@ async function addReminders(ctx: Ctx, planId: string, months: number): Promise<v
   }
 }
 
-async function scenarioActivePlan(ctx: Ctx, matterId: string | undefined, daysAgo: number, monthsPaid: number): Promise<void> {
-  if (!matterId) return;
-  const inv = await finalSent(ctx, matterId, daysAgo);
+// ─── Livscykel-scenarier (på en redan skapad+skickad slutfaktura) ──────────
+
+async function lcPaid(ctx: Ctx, inv: FinalInv, daysAgo: number): Promise<void> {
+  if (inv.amount <= 0) return;
+  await ctx.c.invoice.recordPayment({ invoiceId: inv.id, amount: inv.amount, paidAt: isoDaysAgo(daysAgo - 20), note: "Full betalning" });
+  ctx.res.payments++;
+}
+
+async function lcActivePlan(ctx: Ctx, inv: FinalInv, daysAgo: number, monthsPaid: number): Promise<void> {
   if (inv.amount < 5) return;
-  const monthly = Math.ceil(inv.amount / 5); // 5 delbetalningar → delbetalda planer förblir ACTIVE
-  const plan = await ctx.c.invoice.createPaymentPlan({ id: demoPaymentPlanId(matterId), invoiceId: inv.id, monthlyAmount: monthly, dayOfMonth: 15, startDate: isoDaysAgo(daysAgo - 5) });
+  const monthly = Math.ceil(inv.amount / 5);
+  const plan = await ctx.c.invoice.createPaymentPlan({ id: demoPaymentPlanId(inv.matterId), invoiceId: inv.id, monthlyAmount: monthly, dayOfMonth: 15, startDate: isoDaysAgo(daysAgo - 5) });
   ctx.res.paymentPlans++;
   await addReminders(ctx, plan.id, Math.min(2, monthsPaid + 1));
   for (let m = 0; m < monthsPaid; m++) {
@@ -108,92 +126,102 @@ async function scenarioActivePlan(ctx: Ctx, matterId: string | undefined, daysAg
   }
 }
 
-async function scenarioCompletedPlan(ctx: Ctx, matterId: string | undefined, daysAgo: number): Promise<void> {
-  if (!matterId) return;
-  const inv = await finalSent(ctx, matterId, daysAgo);
+async function lcCompletedPlan(ctx: Ctx, inv: FinalInv, daysAgo: number): Promise<void> {
   if (inv.amount <= 0) return;
-  const plan = await ctx.c.invoice.createPaymentPlan({ id: demoPaymentPlanId(matterId), invoiceId: inv.id, monthlyAmount: Math.ceil(inv.amount / 3), dayOfMonth: 1, startDate: isoDaysAgo(daysAgo - 5) });
+  const plan = await ctx.c.invoice.createPaymentPlan({ id: demoPaymentPlanId(inv.matterId), invoiceId: inv.id, monthlyAmount: Math.ceil(inv.amount / 3), dayOfMonth: 1, startDate: isoDaysAgo(daysAgo - 5) });
   ctx.res.paymentPlans++;
-  await addReminders(ctx, plan.id, 6); // hel historik för slutförd plan
-  // Full inbetalning → recordPayment auto-completar plan + sätter PAID.
+  await addReminders(ctx, plan.id, 6);
   await ctx.c.invoice.recordPayment({ invoiceId: inv.id, amount: inv.amount, paidAt: isoDaysAgo(daysAgo - 10), note: "Slutbetalning" });
   ctx.res.payments++;
 }
 
-async function scenarioCancelledPlan(ctx: Ctx, matterId: string | undefined, daysAgo: number): Promise<void> {
-  if (!matterId) return;
-  const inv = await finalSent(ctx, matterId, daysAgo);
+async function lcCancelledPlan(ctx: Ctx, inv: FinalInv, daysAgo: number): Promise<void> {
   if (inv.amount <= 0) return;
-  const plan = await ctx.c.invoice.createPaymentPlan({ id: demoPaymentPlanId(matterId), invoiceId: inv.id, monthlyAmount: Math.ceil(inv.amount / 6), dayOfMonth: 28, startDate: isoDaysAgo(daysAgo - 5), notes: "Avbruten på klientens begäran" });
+  const plan = await ctx.c.invoice.createPaymentPlan({ id: demoPaymentPlanId(inv.matterId), invoiceId: inv.id, monthlyAmount: Math.ceil(inv.amount / 6), dayOfMonth: 28, startDate: isoDaysAgo(daysAgo - 5), notes: "Avbruten på klientens begäran" });
   ctx.res.paymentPlans++;
   await ctx.c.invoice.cancelPaymentPlan({ planId: plan.id });
 }
 
-async function scenarioCredit(ctx: Ctx, matterId: string | undefined, daysAgo: number): Promise<void> {
-  if (!matterId) return;
-  const inv = await finalSent(ctx, matterId, daysAgo);
-  await ctx.c.invoice.createCredit({ id: demoCreditInvoiceId(matterId), invoiceId: inv.id, notes: "Kreditering — felaktig fakturering" });
-  ctx.res.invoices++; // kreditfakturan
+async function lcCredit(ctx: Ctx, inv: FinalInv, _daysAgo: number): Promise<void> {
+  await ctx.c.invoice.createCredit({ id: demoCreditInvoiceId(inv.matterId), invoiceId: inv.id, notes: "Kreditering — felaktig fakturering" });
+  ctx.res.invoices++;
   ctx.res.credits++;
 }
 
-async function scenarioAcconto(ctx: Ctx, matterId: string | undefined, daysAgo: number): Promise<void> {
-  if (!matterId) return;
-  const acconto = await ctx.c.invoice.createAcconto({ id: demoAccontoInvoiceId(matterId), matterId, amount: 50_000, invoiceDate: isoDaysAgo(daysAgo + 20), dueDate: isoDaysAgo(daysAgo - 10), notes: "Förskott" });
-  ctx.res.invoices++;
-  await ctx.c.invoice.setStatus({ invoiceId: acconto.id, status: "SENT" });
-  await finalSent(ctx, matterId, daysAgo, [acconto.id]); // final med acconto-avdrag
-}
-
-async function scenarioDraft(ctx: Ctx, matterId: string, daysAgo: number): Promise<void> {
-  const { timeEntryIds, expenseIds } = idsOf(ctx, matterId);
-  await ctx.c.invoice.createFinal({ id: demoFinalInvoiceId(matterId), matterId, timeEntryIds, expenseIds, accontoInvoiceIds: [], invoiceDate: isoDaysAgo(daysAgo) });
-  ctx.res.invoices++; // lämnas DRAFT
-}
-
-/** Delbetald faktura → konstaterad kundförlust på återstoden (ADR 0007). */
-async function scenarioWriteOff(ctx: Ctx, matterId: string | undefined, daysAgo: number): Promise<void> {
-  if (!matterId) return;
-  const inv = await finalSent(ctx, matterId, daysAgo);
+async function lcWriteOff(ctx: Ctx, inv: FinalInv, daysAgo: number): Promise<void> {
   const part = Math.floor(inv.amount / 4);
   if (part > 0) {
     await ctx.c.invoice.recordPayment({ invoiceId: inv.id, amount: part, paidAt: isoDaysAgo(daysAgo - 15), note: "Delbetalning" });
     ctx.res.payments++;
   }
-  // writeOff skriver av återstoden → daterad WriteOff-post + härledd BAD_DEBT.
   await ctx.c.invoice.writeOff({ invoiceId: inv.id, reason: "Klient försatt i konkurs", writtenOffAt: isoDaysAgo(daysAgo - 30) });
   ctx.res.writeOffs++;
+}
+
+/** PRIVAT-ärendets livscykel roteras så ~9 ärenden täcker alla tillstånd. */
+const PRIVATE_LIFECYCLES = [
+  (c: Ctx, inv: FinalInv, d: number) => lcPaid(c, inv, d),
+  (c: Ctx, inv: FinalInv, d: number) => lcActivePlan(c, inv, d, 2),
+  (c: Ctx, inv: FinalInv, d: number) => lcCompletedPlan(c, inv, d),
+  (c: Ctx, inv: FinalInv, d: number) => lcCancelledPlan(c, inv, d),
+  (c: Ctx, inv: FinalInv, d: number) => lcCredit(c, inv, d),
+  (c: Ctx, inv: FinalInv, d: number) => lcWriteOff(c, inv, d),
+  (c: Ctx, inv: FinalInv, d: number) => lcActivePlan(c, inv, d, 4),
+];
+
+async function runKostnadsrakning(ctx: Ctx, matterId: string, withVerdict: boolean): Promise<void> {
+  const kr = await ctx.c.billingRun.createKostnadsrakning({ matterId, notes: "Kostnadsräkning för offentligt försvarsuppdrag" });
+  if (withVerdict) {
+    await ctx.c.billingRun.setVerdict({ billingRunId: kr.run.id, prutningOre: -50_000 });
+    ctx.res.invoices++;
+    ctx.res.kostnadsrakningSent++;
+  } else {
+    ctx.res.kostnadsrakningPending++;
+  }
+}
+
+async function runClientBilling(ctx: Ctx, matterId: string, pm: string, clientIdx: number): Promise<void> {
+  const daysAgo = 30 + clientIdx * 6;
+  const deducted = (pm === "RATTSSKYDD" || pm === "RATTSHJALP")
+    ? [await acconto(ctx, matterId, pm === "RATTSHJALP" ? 3000 : 2000, pm === "RATTSHJALP" ? 150_000 : 200_000, daysAgo)]
+    : [];
+  const recipient = BILLING_RUN_RECIPIENT[pm] ?? "KLIENT";
+  // Försäkring/myndighet betalar i sin helhet; privatklienter får varierad livscykel.
+  if (recipient !== "KLIENT") {
+    const inv = await finalSent(ctx, matterId, recipient, deducted, daysAgo);
+    await lcPaid(ctx, inv, daysAgo);
+    return;
+  }
+  // Var sjunde privat-ärende lämnas som draft (visar "ej skickad").
+  if (clientIdx % 7 === 6) {
+    await finalDraft(ctx, matterId, recipient, 20);
+    return;
+  }
+  const inv = await finalSent(ctx, matterId, recipient, deducted, daysAgo);
+  await PRIVATE_LIFECYCLES[clientIdx % PRIVATE_LIFECYCLES.length]!(ctx, inv, daysAgo);
 }
 
 export async function populateBilling(caller: GeneratorCaller, seed: SeedDataset): Promise<BillingResult> {
   const ctx: Ctx = {
     c: caller as AnyCaller,
-    res: { invoices: 0, payments: 0, paymentPlans: 0, credits: 0, reminders: 0, writeOffs: 0 },
-    time: groupIds(arr(seed, "timeEntries"), "matterId"),
-    exp: groupIds(arr(seed, "expenses"), "matterId"),
+    res: { invoices: 0, payments: 0, paymentPlans: 0, credits: 0, reminders: 0, writeOffs: 0, kostnadsrakningPending: 0, kostnadsrakningSent: 0 },
   };
-  // Bara ärenden med fakturerbart arbete (annars amount = 0).
-  const billable = arr(seed, "matters")
-    .map((m) => String(m.id))
-    .filter((id) => ctx.time.has(id) || ctx.exp.has(id));
+  const active = arr(seed, "matters").filter((m) => m.status === "ACTIVE");
 
-  let i = 0;
-  const next = (): string | undefined => billable[i++];
-
-  await scenarioAcconto(ctx, next(), 75); // acconto-avdrag + SENT final
-  await scenarioPaid(ctx, next(), 60);
-  await scenarioPaid(ctx, next(), 50);
-  await scenarioPaid(ctx, next(), 40);
-  await scenarioActivePlan(ctx, next(), 30, 1); // aktiva planer i olika faser
-  await scenarioActivePlan(ctx, next(), 90, 3);
-  await scenarioActivePlan(ctx, next(), 120, 4);
-  await scenarioActivePlan(ctx, next(), 60, 2);
-  await scenarioActivePlan(ctx, next(), 45, 1);
-  await scenarioCompletedPlan(ctx, next(), 200);
-  await scenarioCancelledPlan(ctx, next(), 55);
-  await scenarioCredit(ctx, next(), 35);
-  await scenarioWriteOff(ctx, next(), 80); // konstaterad kundförlust (ADR 0007)
-  for (const id of billable.slice(i)) await scenarioDraft(ctx, id, 20); // resten → DRAFT
-
+  let clientIdx = 0;
+  let krIdx = 0;
+  for (const m of active) {
+    const pm = String(m.paymentMethod);
+    const matterId = String(m.id);
+    if (pm === "OFFENTLIG_FORSVARARE") {
+      if (m.isTaxeArende === true) continue; // taxe-ärenden: egen brottmålstaxa-väg
+      await runKostnadsrakning(ctx, matterId, krIdx % 2 === 0); // kostnadsräkning byggs på arbetet (0 ok)
+      krIdx++;
+      continue;
+    }
+    if (!hasWork(seed, matterId)) continue; // klientfaktura kräver fakturerbart arbete
+    await runClientBilling(ctx, matterId, pm, clientIdx);
+    clientIdx++;
+  }
   return ctx.res;
 }

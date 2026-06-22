@@ -20,7 +20,6 @@ import { createIdTranslator, translateSeed, type IdTranslator } from "./id-trans
 import { makeNodeGitWriteBack } from "./node-git-writeback";
 import { populate, type PopulateResult } from "./populate";
 import { populateBilling, type BillingResult } from "./populate-billing";
-import { populateBillingRuns, type BillingRunsResult } from "./populate-billing-runs";
 import { populateDocuments } from "./populate-documents";
 import { populateInvoiceDocs } from "./populate-invoice-docs";
 import { populateKostnadsrakningDocs } from "./populate-kostnadsrakning-docs";
@@ -33,7 +32,6 @@ export interface GenerateResult extends PopulateResult {
   invoiceDocs: number;
   kostnadsrakningDocs: number;
   billing: BillingResult;
-  billingRuns: BillingRunsResult;
   unbilledTimeEntries: number;
   /** Reverse-mappning UUID → slug. meta.json + URL-routing använder den. */
   translator: IdTranslator;
@@ -56,10 +54,9 @@ export async function generateInto(outDir: string, seedOpts: BuildSeedOpts = {})
   const target = createGitTarget({ principal, writeBack: makeNodeGitWriteBack(outDir) });
 
   const res = await populate(target.caller, seed);
+  // Ett faktureringsflöde per ärende via billing-run (#736) — acconto/slutfaktura/
+  // kostnadsräkning per paymentMethod + livscykel. Ersätter de tidigare två passen.
   const billing = await populateBilling(target.caller, seed); // efter time/expenses
-  // Nya BillingRun-modellen: aconto/slutfaktura/kostnadsräkning per paymentMethod.
-  // Körs efter populateBilling så vi inte konfliktar med legacy-flow:n.
-  const billingRuns = await populateBillingRuns(target.caller, seed);
   // Färsk upparbetad tid EFTER billing → entries med invoiceId=null.
   // Simulerar löpande arbete som inte hunnit faktureras ännu.
   const unbilledTimeEntries = await populateUnbilledTime(target.caller, seed);
@@ -76,5 +73,5 @@ export async function generateInto(outDir: string, seedOpts: BuildSeedOpts = {})
   // utan att kostnadsräkningen faktiskt finns (kohärent demo-state).
   const kostnadsrakningDocs = await populateKostnadsrakningDocs(target.caller, sink);
   await target.finalize();
-  return { ...res, documents, templateDocs, invoiceDocs, kostnadsrakningDocs, billing, billingRuns, unbilledTimeEntries, translator };
+  return { ...res, documents, templateDocs, invoiceDocs, kostnadsrakningDocs, billing, unbilledTimeEntries, translator };
 }

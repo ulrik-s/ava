@@ -9,7 +9,6 @@ import { describe, it, expect } from "vitest-compat";
 import { createGitTarget } from "../../tooling/demo-generator/backend-target";
 import { populate } from "../../tooling/demo-generator/populate";
 import { populateBilling } from "../../tooling/demo-generator/populate-billing";
-import { populateBillingRuns } from "../../tooling/demo-generator/populate-billing-runs";
 import { populateKostnadsrakningDocs } from "../../tooling/demo-generator/populate-kostnadsrakning-docs";
 import { buildSeed } from "../../tooling/scripts/seed-data";
 
@@ -31,7 +30,6 @@ describe("populateKostnadsrakningDocs", () => {
     const target = createGitTarget({ principal: ADMIN, writeBack: async () => {} });
     await populate(target.caller, seed);
     await populateBilling(target.caller, seed);
-    await populateBillingRuns(target.caller, seed);
 
     const n = await populateKostnadsrakningDocs(target.caller, (p, b) => { writes.push(p); return b.byteLength; });
 
@@ -48,7 +46,6 @@ describe("populateKostnadsrakningDocs", () => {
     const target = createGitTarget({ principal: ADMIN, writeBack: async () => {} });
     await populate(target.caller, seed);
     await populateBilling(target.caller, seed);
-    await populateBillingRuns(target.caller, seed);
     const c = target.caller as Any;
 
     // Precondition: Carlsson HAR en KOSTNADSRAKNING-run i PENDING_VERDICT…
