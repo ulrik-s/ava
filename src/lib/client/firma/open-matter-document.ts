@@ -31,11 +31,12 @@ export async function openMatterDocument(doc: OpenableDoc): Promise<void> {
     const { fetchContentViaHelper } = await import("@/lib/client/helper/use-helper");
     const client = createServerDownloadClient();
     const fileName = doc.fileName ?? doc.id;
+    const trpcUrl = new URL("/api/trpc", window.location.origin).toString();
     fetchBlob = async () => {
       // Föredra helpern (durabelt, offline-ok, samma lokala lager som extern-
       // editor-öppning) → annars server-vägen + IndexedDB-cache (ADR 0028 §5).
-      const downloadUrl = new URL(`/api/documents/${doc.id}/download`, window.location.origin).toString();
-      const viaHelper = await fetchContentViaHelper({ downloadUrl, fileName });
+      // Server-tier: helpern hämtar via tRPC document.downloadContent (ADR 0031).
+      const viaHelper = await fetchContentViaHelper({ document: { id: doc.id, trpcUrl }, fileName });
       if (viaHelper) return new Blob([viaHelper as BlobPart], { type: mimeFromName(fileName) });
       return loadDocumentBlob(client, { id: doc.id, storagePath: doc.storagePath ?? null, fileName });
     };

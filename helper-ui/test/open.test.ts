@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, test } from "bun:test";
@@ -8,24 +8,32 @@ import { enqueueSavedFile, handleOpen, persistDownloaded, restoreCached, type Op
 import { UploadQueue } from "../src/engine/queue.ts";
 import { jsonRequest } from "./helpers.ts";
 
+const sessionDirs: string[] = [];
+afterAll(async () => { await Promise.all(sessionDirs.map((d) => rm(d, { recursive: true, force: true }))); });
+
 interface Recorder {
-  downloaded: string[];
+  sessionDir: string;
+  downloaded: string[]; // källnyckel (downloadUrl eller doc:<id>)
   opened: string[];
   watched: Array<{ path: string; uploadUrl: string; timeoutMs: number }>;
   deps: OpenDeps;
 }
 
 function recorder(overrides: Partial<OpenDeps> = {}): Recorder {
-  const rec: Recorder = {
-    downloaded: [],
-    opened: [],
-    watched: [],
-    deps: {} as OpenDeps,
-  };
+  const rec: Recorder = { sessionDir: "", downloaded: [], opened: [], watched: [], deps: {} as OpenDeps };
   rec.deps = {
-    download: async (path) => { rec.downloaded.push(path); },
+    // Returnerar bytes (ADR 0031); obtainFile skriver filen.
+    download: async (ref) => {
+      rec.downloaded.push(ref.downloadUrl ?? `doc:${ref.document?.id ?? ""}`);
+      return new TextEncoder().encode("DL");
+    },
     openApp: async (path) => { rec.opened.push(path); },
-    makeSessionDir: async () => "/tmp/ava-session",
+    makeSessionDir: async () => {
+      const d = await mkdtemp(join(tmpdir(), "ava-open-"));
+      sessionDirs.push(d);
+      rec.sessionDir = d;
+      return d;
+    },
     startWatch: (path, uploadUrl, _auth, timeoutMs) => { rec.watched.push({ path, uploadUrl, timeoutMs }); },
     ...overrides,
   };
@@ -37,16 +45,28 @@ function openReq(body: unknown): Request {
 }
 
 describe("handleOpen", () => {
-  test("laddar ner + öppnar + svarar 200 med path", async () => {
+  test("hämtar + öppnar + svarar 200 med path (statisk källa)", async () => {
     const rec = recorder();
     const res = await handleOpen(openReq({ downloadUrl: "http://x/f", fileName: "a.pdf" }), rec.deps);
     expect(res.status).toBe(200);
     const body = (await res.json()) as { path: string; status: string };
     expect(body.status).toBe("opened");
-    expect(body.path).toBe("/tmp/ava-session/a.pdf");
-    expect(rec.downloaded).toEqual(["/tmp/ava-session/a.pdf"]);
-    expect(rec.opened).toEqual(["/tmp/ava-session/a.pdf"]);
+    expect(body.path).toBe(join(rec.sessionDir, "a.pdf"));
+    expect(rec.downloaded).toEqual(["http://x/f"]);
+    expect(rec.opened).toEqual([join(rec.sessionDir, "a.pdf")]);
     expect(rec.watched).toHaveLength(0);
+    // Filen skrevs till disk med de hämtade bytsen.
+    expect(await readFile(join(rec.sessionDir, "a.pdf"), "utf8")).toBe("DL");
+  });
+
+  test("document-källa (server-tier, tRPC) → download får ref.document", async () => {
+    const rec = recorder();
+    const res = await handleOpen(
+      openReq({ document: { id: "doc-7", trpcUrl: "http://s/api/trpc" }, fileName: "a.pdf" }),
+      rec.deps,
+    );
+    expect(res.status).toBe(200);
+    expect(rec.downloaded).toEqual(["doc:doc-7"]);
   });
 
   test("startar watch när uploadUrl satt (default 60 min)", async () => {
@@ -65,13 +85,13 @@ describe("handleOpen", () => {
     expect(rec.watched[0]?.timeoutMs).toBe(5 * 60_000);
   });
 
-  test("kräver downloadUrl + fileName", async () => {
+  test("kräver källa + fileName", async () => {
     const rec = recorder();
     const res = await handleOpen(openReq({ fileName: "a.pdf" }), rec.deps);
     expect(res.status).toBe(400);
   });
 
-  test("502 vid nedladdningsfel", async () => {
+  test("502 vid hämtningsfel", async () => {
     const rec = recorder({ download: async () => { throw new Error("HTTP 404"); } });
     const res = await handleOpen(openReq({ downloadUrl: "http://x/f", fileName: "a.pdf" }), rec.deps);
     expect(res.status).toBe(502);
@@ -86,27 +106,29 @@ describe("handleOpen", () => {
 });
 
 describe("offline content-cache (ADR 0028 §3)", () => {
-  test("cachar nedladdade bytes via persist", async () => {
-    const persisted: Array<{ url: string; path: string; fileName: string }> = [];
+  test("cachar hämtade bytes via persist (nyckel + bytes)", async () => {
+    const persisted: Array<{ cacheKey: string; fileName: string; content: string }> = [];
     const rec = recorder({
-      persist: async (url, path, fileName) => { persisted.push({ url, path, fileName }); },
+      persist: async (cacheKey, bytes, fileName) => {
+        persisted.push({ cacheKey, fileName, content: new TextDecoder().decode(bytes) });
+      },
     });
     const res = await handleOpen(openReq({ downloadUrl: "http://x/f", fileName: "a.pdf" }), rec.deps);
     expect(res.status).toBe(200);
-    expect(persisted).toEqual([{ url: "http://x/f", path: "/tmp/ava-session/a.pdf", fileName: "a.pdf" }]);
+    expect(persisted).toEqual([{ cacheKey: "http://x/f", fileName: "a.pdf", content: "DL" }]);
   });
 
-  test("nedladdning misslyckas men cache finns → öppnar cachad kopia (offline)", async () => {
+  test("hämtning misslyckas men cache finns → öppnar cachad kopia (offline)", async () => {
     const rec = recorder({
       download: async () => { throw new Error("offline"); },
       restore: async () => true,
     });
     const res = await handleOpen(openReq({ downloadUrl: "http://x/f", fileName: "a.pdf" }), rec.deps);
     expect(res.status).toBe(200);
-    expect(rec.opened).toEqual(["/tmp/ava-session/a.pdf"]); // öppnades trots download-fel
+    expect(rec.opened).toEqual([join(rec.sessionDir, "a.pdf")]); // öppnades trots hämtningsfel
   });
 
-  test("nedladdning misslyckas + ingen cache → 502", async () => {
+  test("hämtning misslyckas + ingen cache → 502", async () => {
     const rec = recorder({
       download: async () => { throw new Error("offline"); },
       restore: async () => false,
@@ -128,18 +150,16 @@ describe("persistDownloaded + restoreCached", () => {
   const dirs: string[] = [];
   afterAll(async () => { await Promise.all(dirs.map((d) => rm(d, { recursive: true, force: true }))); });
 
-  test("round-trip: persist en nedladdad fil, restore till ny path", async () => {
+  test("round-trip: persist hämtade bytes under nyckel, restore till ny path", async () => {
     const work = await mkdtemp(join(tmpdir(), "ava-dl-"));
     const cdir = await mkdtemp(join(tmpdir(), "ava-cs-"));
     dirs.push(work, cdir);
-    const dl = join(work, "doc.pdf");
-    await writeFile(dl, "nedladdat innehåll", "utf8");
 
     const store = new ContentStore(cdir);
-    await persistDownloaded(store, "http://s/d/1", dl, "doc.pdf");
+    await persistDownloaded(store, "doc:1", new TextEncoder().encode("nedladdat innehåll"), "doc.pdf");
 
     const out = join(work, "restored.pdf");
-    const ok = await restoreCached(store, "http://s/d/1", out);
+    const ok = await restoreCached(store, "doc:1", out);
     expect(ok).toBe(true);
     expect(await Bun.file(out).text()).toBe("nedladdat innehåll");
   });
@@ -148,7 +168,7 @@ describe("persistDownloaded + restoreCached", () => {
     const cdir = await mkdtemp(join(tmpdir(), "ava-cs-"));
     dirs.push(cdir);
     const store = new ContentStore(cdir);
-    expect(await restoreCached(store, "http://s/saknas", join(cdir, "x"))).toBe(false);
+    expect(await restoreCached(store, "doc:saknas", join(cdir, "x"))).toBe(false);
   });
 });
 

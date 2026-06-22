@@ -20,6 +20,7 @@
 
 import type { ModalState } from "@/components/documents/external-edit-modal";
 import { openViaHelper } from "@/lib/client/helper/use-helper";
+import type { HelperOpenRequest } from "@/lib/shared/helper/protocol";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 
 interface Doc {
@@ -44,27 +45,28 @@ const DEFAULT_DEMO_REPO_FALLBACK = "ulrik-s/ava-demo";
  * AVA-backend som körs (git-http eller REST). Helpern är tier-agnostisk.
  */
 export async function tryHelperOpen(doc: Doc): Promise<boolean> {
-  // openViaHelper löser transporten (https→http, ADR 0006) och kastar om
-  // helpern saknas → vi fångar och faller tillbaka. Beräkna download/upload-URLs. För git-tier serverar nginx (eller
-  // demo-build) filerna under storagePath. För Postgres-tier blir det
-  // /api/documents/<id>/download. Vi använder befintliga konstruktioner.
+  // openViaHelper löser transporten (https→http, ADR 0006) och kastar om helpern
+  // saknas → vi fångar och faller tillbaka. Källan väljs per tier (ADR 0031):
+  //   - server-tier: `document`-descriptor → helpern hämtar via tRPC
+  //     `document.downloadContent` med sin EGNA Bearer (typat, ingen REST-yta).
+  //   - demo: statisk GH-Pages-blob-URL (ingen server att tRPC:a mot).
+  // Write-back (uploadUrl) är ännu inte påkopplad i server-tier (ADR 0031 steg 3).
   const isDemo = process.env.NEXT_PUBLIC_DEMO_BUILD === "1";
-  const downloadUrl = isDemo ? demoUrl(doc) : `/api/documents/${doc.id}/download`;
-  // Skicka absolute URL — helpern kör utanför browser-sessionen och
-  // har ingen referens till "origin".
-  const absDownload = downloadUrl.startsWith("http") ? downloadUrl : new URL(downloadUrl, window.location.origin).toString();
-  const uploadUrl = isDemo ? undefined : new URL(`/api/documents/${doc.id}/upload`, window.location.origin).toString();
+  const req: HelperOpenRequest = isDemo
+    ? { fileName: doc.fileName, downloadUrl: demoUrl(doc) }
+    : { fileName: doc.fileName, document: { id: doc.id, trpcUrl: helperTrpcUrl() } };
   try {
-    await openViaHelper({
-      fileName: doc.fileName,
-      downloadUrl: absDownload,
-      ...omitUndefined({ uploadUrl }),
-    });
+    await openViaHelper(req);
     return true;
   } catch (err) {
     console.warn("[helper] /open misslyckades, fallback:", err);
     return false;
   }
+}
+
+/** Serverns tRPC-endpoint på nuvarande origin (helpern bär sin egna Bearer). */
+function helperTrpcUrl(): string {
+  return new URL("/api/trpc", window.location.origin).toString();
 }
 
 function demoUrl(doc: Doc): string {

@@ -32,7 +32,7 @@ describe("handleContent", () => {
     expect(res.status).toBe(405);
   });
 
-  test("kräver downloadUrl", async () => {
+  test("kräver källa (varken document eller downloadUrl)", async () => {
     const res = await handleContent(contentReq({ authHeader: "x" }), base);
     expect(res.status).toBe(400);
   });
@@ -49,11 +49,12 @@ describe("handleContent", () => {
     expect(fetched).toBe(false); // hit → ingen fetch
   });
 
-  test("cache-miss → laddar ner + servar bytsen", async () => {
+  test("cache-miss (statisk) → hämtar via downloadUrl-källan + servar bytsen", async () => {
     const res = await handleContent(contentReq({ downloadUrl: "http://s/d/1", authHeader: "Bearer t" }), {
       load: async () => null,
-      fetchAndCache: async (url, auth) => {
-        expect(url).toBe("http://s/d/1");
+      fetchAndCache: async (ref, cacheKey, auth) => {
+        expect(ref.downloadUrl).toBe("http://s/d/1");
+        expect(cacheKey).toBe("http://s/d/1"); // demo: nyckel = URL
         expect(auth).toBe("Bearer t");
         return bytes("nedladdat");
       },
@@ -62,7 +63,23 @@ describe("handleContent", () => {
     expect(await res.text()).toBe("nedladdat");
   });
 
-  test("miss + offline (nedladdning ger null) → 502", async () => {
+  test("document-källa (server-tier) → cache-nyckel doc:<id>, ref vidarebefordras", async () => {
+    let seenKey = "";
+    let seenId = "";
+    const res = await handleContent(contentReq({ document: { id: "abc", trpcUrl: "http://s/api/trpc" } }), {
+      load: async () => null,
+      fetchAndCache: async (ref, cacheKey) => {
+        seenKey = cacheKey;
+        seenId = ref.document?.id ?? "";
+        return bytes("trpc-bytes");
+      },
+    });
+    expect(res.status).toBe(200);
+    expect(seenKey).toBe("doc:abc");
+    expect(seenId).toBe("abc");
+  });
+
+  test("miss + offline (hämtning ger null) → 502", async () => {
     const res = await handleContent(contentReq({ downloadUrl: "http://s/d/1" }), base);
     expect(res.status).toBe(502);
   });
@@ -71,7 +88,7 @@ describe("handleContent", () => {
     let seenName = "";
     await handleContent(contentReq({ downloadUrl: "http://s/api/documents/9/download" }), {
       load: async () => null,
-      fetchAndCache: async (_url, _auth, fileName) => { seenName = fileName; return bytes("x"); },
+      fetchAndCache: async (_ref, _key, _auth, fileName) => { seenName = fileName; return bytes("x"); },
     });
     expect(seenName).toBe("download"); // sista segmentet
   });
@@ -112,7 +129,7 @@ describe("fetchAndCacheContent", () => {
       return new Response("hämtat", { status: 200 });
     });
     try {
-      const got = await fetchAndCacheContent(s, "http://s/d/1", "Bearer t", "a.pdf");
+      const got = await fetchAndCacheContent(s, { downloadUrl: "http://s/d/1" }, "http://s/d/1", "Bearer t", "a.pdf");
       expect(new TextDecoder().decode(got!)).toBe("hämtat");
       // cachat → en andra load (utan nät) ger samma bytes
       expect(new TextDecoder().decode((await s.load("http://s/d/1"))!)).toBe("hämtat");
@@ -123,7 +140,7 @@ describe("fetchAndCacheContent", () => {
     const s = await store();
     const restore = mockFetch(() => new Response("nope", { status: 404 }));
     try {
-      expect(await fetchAndCacheContent(s, "http://s/d/1", undefined, "a.pdf")).toBeNull();
+      expect(await fetchAndCacheContent(s, { downloadUrl: "http://s/d/1" }, "http://s/d/1", undefined, "a.pdf")).toBeNull();
       expect(await s.has("http://s/d/1")).toBe(false);
     } finally { restore(); }
   });
@@ -132,7 +149,7 @@ describe("fetchAndCacheContent", () => {
     const s = await store();
     const restore = mockFetch(() => { throw new Error("ECONNREFUSED"); });
     try {
-      expect(await fetchAndCacheContent(s, "http://s/d/1", undefined, "a.pdf")).toBeNull();
+      expect(await fetchAndCacheContent(s, { downloadUrl: "http://s/d/1" }, "http://s/d/1", undefined, "a.pdf")).toBeNull();
     } finally { restore(); }
   });
 });

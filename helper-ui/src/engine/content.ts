@@ -12,27 +12,35 @@
 
 import type { HelperContentRequest } from "@/lib/shared/helper/protocol";
 import type { ContentStore } from "./content-store.ts";
+import { fetchSourceBytes, sourceCacheKey, toSourceRef, type SourceRef } from "./document-source.ts";
 import { parseJsonBody, textError } from "./http.ts";
 import { log } from "./log.ts";
 
 export interface ContentDeps {
-  /** Hämta cachade bytes för download-URL:en, eller null. */
-  load: (downloadUrl: string) => Promise<Uint8Array | null>;
-  /** Ladda ner + cacha vid miss; null om nedladdning misslyckas (offline). */
-  fetchAndCache: (downloadUrl: string, authHeader: string | undefined, fileName: string) => Promise<Uint8Array | null>;
+  /** Hämta cachade bytes för `cacheKey`, eller null. */
+  load: (cacheKey: string) => Promise<Uint8Array | null>;
+  /** Hämta + cacha vid miss; null om hämtning misslyckas (offline). */
+  fetchAndCache: (ref: SourceRef, cacheKey: string, authHeader: string | undefined, fileName: string) => Promise<Uint8Array | null>;
 }
 
 export async function handleContent(req: Request, deps: ContentDeps): Promise<Response> {
   if (req.method !== "POST") return textError(405, "method not allowed");
   const body = await parseJsonBody<HelperContentRequest>(req);
-  if (!body?.downloadUrl) return textError(400, "downloadUrl required");
+  if (body === null) return textError(400, "invalid JSON");
+  const ref = toSourceRef(body);
+  const key = sourceCacheKey(ref);
+  if (!key) return textError(400, "source (document|downloadUrl) required");
 
-  const cached = await deps.load(body.downloadUrl);
+  const cached = await deps.load(key);
   if (cached) return bytesResponse(cached);
 
-  const fetched = await deps.fetchAndCache(body.downloadUrl, body.authHeader, body.fileName ?? fileNameFromUrl(body.downloadUrl));
-  if (fetched) return bytesResponse(fetched);
-  return textError(502, "content unavailable (offline, not cached)");
+  const fetched = await deps.fetchAndCache(ref, key, body.authHeader, contentFileName(body, ref));
+  return fetched ? bytesResponse(fetched) : textError(502, "content unavailable (offline, not cached)");
+}
+
+/** Användarsynligt filnamn: uttryckligt → annars härlett ur statisk URL → fallback. */
+function contentFileName(body: HelperContentRequest, ref: SourceRef): string {
+  return body.fileName ?? (ref.downloadUrl ? fileNameFromUrl(ref.downloadUrl) : "dokument");
 }
 
 function bytesResponse(bytes: Uint8Array): Response {
@@ -65,23 +73,17 @@ export function fileNameFromUrl(url: string): string {
  */
 export async function fetchAndCacheContent(
   store: ContentStore,
-  downloadUrl: string,
+  ref: SourceRef,
+  cacheKey: string,
   authHeader: string | undefined,
   fileName: string,
 ): Promise<Uint8Array | null> {
   try {
-    const headers: Record<string, string> = {};
-    if (authHeader) headers.Authorization = authHeader;
-    const resp = await fetch(downloadUrl, { headers });
-    if (resp.status >= 400) {
-      log(`content: nedladdning ${downloadUrl} → HTTP ${resp.status}`);
-      return null;
-    }
-    const bytes = new Uint8Array(await resp.arrayBuffer());
-    await store.store(downloadUrl, bytes, fileName);
+    const bytes = await fetchSourceBytes(ref, authHeader !== undefined ? { authHeader } : {});
+    await store.store(cacheKey, bytes, fileName);
     return bytes;
   } catch (err) {
-    log(`content: nedladdning misslyckades (${downloadUrl}): ${err instanceof Error ? err.message : String(err)}`);
+    log(`content: hämtning misslyckades (${cacheKey}): ${err instanceof Error ? err.message : String(err)}`);
     return null;
   }
 }

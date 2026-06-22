@@ -27,13 +27,13 @@ import { loginConfigFromEnv, runLogin, type LoginConfig } from "./auth/login.ts"
 import { handleConfig } from "./config-endpoint.ts";
 import { ContentStore, resolveCacheTtlMs } from "./content-store.ts";
 import { fetchAndCacheContent, handleContent } from "./content.ts";
+import { fetchSourceBytes } from "./document-source.ts";
 import { envWithConfig, loadHelperConfig, saveHelperConfig } from "./helper-config.ts";
 import { installService, uninstallService, type InstallDeps } from "./install.ts";
 import { initLog, log } from "./log.ts";
 import {
   defaultOpenDeps,
   defaultWatchDeps,
-  downloadTo,
   enqueueSavedFile,
   handleOpen,
   persistDownloaded,
@@ -164,14 +164,17 @@ export function queueBackedOnOpen(queue: UploadQueue, content: ContentStore, aut
     browserAuth ?? (authHeader ? await authHeader() : undefined);
   const deps: OpenDeps = {
     ...defaultOpenDeps,
-    download: async (path, url, browserAuth) => downloadTo(path, url, await fallback(browserAuth)),
+    download: async (ref, browserAuth) => {
+      const auth = await fallback(browserAuth);
+      return fetchSourceBytes(ref, auth !== undefined ? { authHeader: auth } : {});
+    },
     startWatch: (path, uploadUrl, authHeaderArg, timeoutMs) =>
       watchAndUpload(path, uploadUrl, authHeaderArg, timeoutMs, {
         ...defaultWatchDeps,
         upload: (p, url, auth) => enqueueSavedFile(queue, p, url, auth),
       }),
-    persist: (url, path, fileName) => persistDownloaded(content, url, path, fileName),
-    restore: (url, path) => restoreCached(content, url, path),
+    persist: (cacheKey, bytes, fileName) => persistDownloaded(content, cacheKey, bytes, fileName),
+    restore: (cacheKey, path) => restoreCached(content, cacheKey, path),
   };
   return (req) => handleOpen(req, deps);
 }
@@ -254,9 +257,9 @@ export function startEngine(opts: EngineOpts = {}): EngineHandle {
           onStatus: () => stores.queue.snapshot(),
           onContent: (req: Request) =>
             handleContent(req, {
-              load: (url) => stores.content.load(url),
-              fetchAndCache: async (url, auth, fileName) =>
-                fetchAndCacheContent(stores.content, url, auth ?? (authHeader ? await authHeader() : undefined), fileName),
+              load: (cacheKey) => stores.content.load(cacheKey),
+              fetchAndCache: async (ref, cacheKey, auth, fileName) =>
+                fetchAndCacheContent(stores.content, ref, cacheKey, auth ?? (authHeader ? await authHeader() : undefined), fileName),
             }),
         }
       : {}),
