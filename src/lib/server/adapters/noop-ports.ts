@@ -9,6 +9,7 @@ import type {
   ISearchIndex,
   IPaymentScanner,
   IContentStore,
+  ILeaseStore,
   IPorts,
 } from "../ports";
 
@@ -44,10 +45,29 @@ export const noopContentStore: IContentStore = {
   async exists() { return false; },
 };
 
+/**
+ * No-op lease-store: demo har ingen server → inga leases (ADR 0033 §Offline
+ * & tiers). `acquire` rapporterar alltid "fritt + din" så ev. stray-anrop är
+ * ofarliga; `get` ger null. Klienten anropar ändå aldrig dessa i demo
+ * (kapabilitets-gating, steg 4/5). Server-first ersätter med InMemoryLeaseStore.
+ */
+export const noopLeaseStore: ILeaseStore = {
+  acquire(documentId, holderId, holderName) {
+    return { acquired: true, lease: { documentId, holderId, holderName, acquiredAt: 0, lastHeartbeatAt: 0, stale: false } };
+  },
+  renew() { return true; },
+  release() { /* no-op */ },
+  takeover(documentId, holderId, holderName) {
+    return { documentId, holderId, holderName, acquiredAt: 0, lastHeartbeatAt: 0, stale: false };
+  },
+  get() { return null; },
+};
+
 export const noopPorts: IPorts = {
   email: noopEmail,
   documentAnalyzer: noopDocumentAnalyzer,
   searchIndex: noopSearchIndex,
   paymentScanner: noopPaymentScanner,
   content: noopContentStore,
+  lease: noopLeaseStore,
 };
