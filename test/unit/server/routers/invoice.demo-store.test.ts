@@ -84,46 +84,6 @@ describe("invoiceRouter mot riktig DemoDataStore", () => {
     expect(events).toHaveLength(0);
   });
 
-  it("createFinal: kopplar poster + skapar acconto-avdrag + persisterar allt", async () => {
-    const source: DemoSource = {
-      matters: [{ id: "m1", organizationId: "o1", matterNumber: "2026-0001", title: "T" }],
-      users: [{ id: "u1", hourlyRate: 150_000 }],
-      timeEntries: [{ id: "t1", matterId: "m1", minutes: 90, invoiceId: null, userId: "u1" }],
-      expenses: [{ id: "e1", matterId: "m1", amount: 50_000, billable: true, invoiceId: null }],
-      invoices: [{ id: "acc1", matterId: "m1", invoiceType: "ACCONTO", amount: 100_000, status: "PAID" }],
-      accontoDeductions: [],
-    };
-    const events: MutationEvent<Record<string, unknown>>[] = [];
-    const ds = new DemoDataStore(source, (e) => { events.push(e); });
-    const caller = invoiceRouter.createCaller({
-      user: { id: "u1", email: "a@b.c", name: "A", role: "LAWYER", organizationId: "o1" },
-      dataStore: ds,
-      repos: buildInMemoryRepositories(ds),
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any);
-
-    const res = await caller.createFinal({
-      matterId: "m1", timeEntryIds: ["t1"], expenseIds: ["e1"], accontoInvoiceIds: ["acc1"],
-    });
-
-    // 90min×150000/60 = 225000 + 50000 expense = 275000 brutto; − 100000 acconto = 175000 netto
-    expect(res.breakdown.grossAmount).toBe(275_000);
-    expect(res.breakdown.netAmount).toBe(175_000);
-    const finalId = (res.invoice as { id: string }).id;
-    // Poster kopplade i source
-    expect((source.timeEntries![0] as { invoiceId: string }).invoiceId).toBe(finalId);
-    expect((source.expenses![0] as { invoiceId: string }).invoiceId).toBe(finalId);
-    // Acconto-avdrag skapat
-    expect(source.accontoDeductions).toHaveLength(1);
-    expect((source.accontoDeductions![0] as { accontoInvoiceId: string }).accontoInvoiceId).toBe("acc1");
-    // Write-back för alla
-    const kinds = events.map((e) => `${e.entity}:${e.kind}`);
-    expect(kinds).toContain("invoice:create");
-    expect(kinds).toContain("timeEntry:update");
-    expect(kinds).toContain("expense:update");
-    expect(kinds).toContain("accontoDeduction:create");
-  });
-
   it("cancelPaymentPlan: nested where invoice.matter.organizationId fungerar i demo-store", async () => {
     const source: DemoSource = {
       matters: [{ id: "m1", organizationId: "o1" }],
