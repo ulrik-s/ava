@@ -7,8 +7,7 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { useLeaseAwareOpen } from "@/components/documents/use-lease-aware-open";
 
-type Outcome = { kind: "done" } | { kind: "read-only"; leaseHolder?: string };
-const openMock = vi.fn<(doc: unknown, onModal: unknown, opts?: unknown) => Promise<Outcome>>();
+const openMock = vi.fn();
 const takeoverMock = { mutateAsync: vi.fn().mockResolvedValue({}), isPending: false };
 
 vi.mock("@/lib/client/trpc", () => ({
