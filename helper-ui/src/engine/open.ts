@@ -23,6 +23,8 @@ const DEFAULT_WATCH_MINUTES = 60;
 const POLL_INTERVAL_MS = 2_000;
 
 export interface OpenDeps {
+  /** Väntande lokal (osynkad) kopia, eller null (ADR 0032 local-first). Provas FÖRE download. */
+  pendingBytes?: (ref: SourceRef) => Promise<Uint8Array | null>;
   /** Hämta dokument-bytes för en källa (tRPC server-tier / statisk demo, ADR 0031). */
   download: (ref: SourceRef, authHeader?: string) => Promise<Uint8Array>;
   openApp: (path: string) => Promise<void>;
@@ -81,6 +83,14 @@ async function runOpen(body: HelperOpenRequest, deps: OpenDeps): Promise<Respons
 async function obtainFile(body: HelperOpenRequest, tmpFile: string, deps: OpenDeps): Promise<Response | null> {
   const ref: SourceRef = toSourceRef(body);
   const key = sourceCacheKey(ref) ?? "";
+  // Local-first (ADR 0032): en osynkad lokal ändring är auktoritativ tills den
+  // synkats → öppna den i st.f. att hämta serverns (ännu) gamla version.
+  const local = deps.pendingBytes ? await deps.pendingBytes(ref) : null;
+  if (local) {
+    await writeFile(tmpFile, local);
+    log(`local-first: öppnar osynkad lokal version av ${body.fileName}`);
+    return null;
+  }
   let bytes: Uint8Array;
   try {
     bytes = await deps.download(ref, body.authHeader);

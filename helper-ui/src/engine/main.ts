@@ -27,7 +27,7 @@ import { loginConfigFromEnv, runLogin, type LoginConfig } from "./auth/login.ts"
 import { handleConfig } from "./config-endpoint.ts";
 import { ContentStore, resolveCacheTtlMs } from "./content-store.ts";
 import { fetchAndCacheContent, handleContent } from "./content.ts";
-import { fetchSourceBytes } from "./document-source.ts";
+import { fetchSourceBytes, sourceCacheKey } from "./document-source.ts";
 import { envWithConfig, loadHelperConfig, saveHelperConfig } from "./helper-config.ts";
 import { installService, uninstallService, type InstallDeps } from "./install.ts";
 import { initLog, log } from "./log.ts";
@@ -164,6 +164,8 @@ export function queueBackedOnOpen(queue: UploadQueue, content: ContentStore, aut
     browserAuth ?? (authHeader ? await authHeader() : undefined);
   const deps: OpenDeps = {
     ...defaultOpenDeps,
+    // Local-first (ADR 0032): osynkad lokal ändring i kön slår serverns version.
+    pendingBytes: (ref) => queue.peekByKey(sourceCacheKey(ref) ?? ""),
     download: async (ref, browserAuth) => {
       const auth = await fallback(browserAuth);
       return fetchSourceBytes(ref, auth !== undefined ? { authHeader: auth } : {});
@@ -257,6 +259,7 @@ export function startEngine(opts: EngineOpts = {}): EngineHandle {
           onStatus: () => stores.queue.snapshot(),
           onContent: (req: Request) =>
             handleContent(req, {
+              pending: (cacheKey) => stores.queue.peekByKey(cacheKey),
               load: (cacheKey) => stores.content.load(cacheKey),
               fetchAndCache: async (ref, cacheKey, auth, fileName) =>
                 fetchAndCacheContent(stores.content, ref, cacheKey, auth ?? (authHeader ? await authHeader() : undefined), fileName),

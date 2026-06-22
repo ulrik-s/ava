@@ -90,6 +90,26 @@ describe("UploadQueue.enqueue", () => {
   });
 });
 
+describe("UploadQueue.peekByKey (ADR 0032 local-first)", () => {
+  let dir: string;
+  beforeEach(async () => { dir = await tmpDir(); });
+
+  test("returnerar köade bytes för dokumentet (osynkad lokal ändring)", async () => {
+    const { deps } = fakeDeps([200]);
+    const q = new UploadQueue(dir, deps);
+    await q.enqueue({ document: { id: "d1", trpcUrl: "x" }, fileName: "a.docx", bytes: bytes("EDIT") });
+    const got = await q.peekByKey("doc:d1");
+    expect(got).not.toBeNull();
+    expect(new TextDecoder().decode(got!)).toBe("EDIT");
+  });
+
+  test("null när inget köat finns för nyckeln", async () => {
+    const { deps } = fakeDeps([200]);
+    const q = new UploadQueue(dir, deps);
+    expect(await q.peekByKey("doc:saknas")).toBeNull();
+  });
+});
+
 describe("UploadQueue.drainOnce", () => {
   let dir: string;
   beforeEach(async () => { dir = await tmpDir(); });
