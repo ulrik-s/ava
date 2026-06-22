@@ -79,6 +79,20 @@ describe("handleContent", () => {
     expect(seenId).toBe("abc");
   });
 
+  test("local-first: väntande lokal kopia servas, ingen load/fetch (ADR 0032)", async () => {
+    let loaded = false;
+    let fetched = false;
+    const res = await handleContent(contentReq({ document: { id: "d1", trpcUrl: "x" } }), {
+      pending: async () => bytes("LOKAL"),
+      load: async () => { loaded = true; return null; },
+      fetchAndCache: async () => { fetched = true; return null; },
+    });
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe("LOKAL");
+    expect(loaded).toBe(false);
+    expect(fetched).toBe(false);
+  });
+
   test("miss + offline (hämtning ger null) → 502", async () => {
     const res = await handleContent(contentReq({ downloadUrl: "http://s/d/1" }), base);
     expect(res.status).toBe(502);

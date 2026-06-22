@@ -251,6 +251,21 @@ export class UploadQueue {
     await writeFile(this.manifestPath(entry.id), JSON.stringify(entry), "utf8");
   }
 
+  /**
+   * De köade bytsen för ett dokument (väntande/osynkad lokal ändring), eller
+   * null om inget köat finns. Local-first läsning (ADR 0032): en osynkad ändring
+   * är auktoritativ tills den laddats upp.
+   */
+  async peekByKey(key: string): Promise<Uint8Array | null> {
+    const entry = this.entries.get(key);
+    if (entry === undefined) return null;
+    try {
+      return new Uint8Array(await readFile(this.contentPath(entry.id)));
+    } catch {
+      return null;
+    }
+  }
+
   /** Ta bort en post helt (klar eller manuellt löst). */
   async discard(entry: QueueEntry): Promise<void> {
     this.entries.delete(entryKey(entry));

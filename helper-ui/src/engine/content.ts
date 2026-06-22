@@ -17,6 +17,8 @@ import { parseJsonBody, textError } from "./http.ts";
 import { log } from "./log.ts";
 
 export interface ContentDeps {
+  /** Väntande osynkad lokal kopia (ADR 0032 local-first); provas FÖRE cache/server. */
+  pending?: (cacheKey: string) => Promise<Uint8Array | null>;
   /** Hämta cachade bytes för `cacheKey`, eller null. */
   load: (cacheKey: string) => Promise<Uint8Array | null>;
   /** Hämta + cacha vid miss; null om hämtning misslyckas (offline). */
@@ -30,6 +32,10 @@ export async function handleContent(req: Request, deps: ContentDeps): Promise<Re
   const ref = toSourceRef(body);
   const key = sourceCacheKey(ref);
   if (!key) return textError(400, "source (document|downloadUrl) required");
+
+  // Local-first (ADR 0032): osynkad lokal ändring är auktoritativ tills synkad.
+  const local = deps.pending ? await deps.pending(key) : null;
+  if (local) return bytesResponse(local);
 
   const cached = await deps.load(key);
   if (cached) return bytesResponse(cached);

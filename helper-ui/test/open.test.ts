@@ -70,6 +70,14 @@ describe("handleOpen", () => {
     expect(rec.downloaded).toEqual(["doc:doc-7"]);
   });
 
+  test("local-first: väntande lokal kopia öppnas, ingen download (ADR 0032)", async () => {
+    const rec = recorder({ pendingBytes: async () => new TextEncoder().encode("LOKAL-EDIT") });
+    const res = await handleOpen(openReq({ document: { id: "d1", trpcUrl: "x" }, fileName: "a.docx" }), rec.deps);
+    expect(res.status).toBe(200);
+    expect(rec.downloaded).toHaveLength(0); // download hoppades över
+    expect(await readFile(join(rec.sessionDir, "a.docx"), "utf8")).toBe("LOKAL-EDIT");
+  });
+
   test("startar watch när uploadUrl satt (default 60 min)", async () => {
     const rec = recorder();
     await handleOpen(openReq({ downloadUrl: "http://x/f", fileName: "a.pdf", uploadUrl: "http://x/u" }), rec.deps);
