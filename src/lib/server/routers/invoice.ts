@@ -15,21 +15,18 @@
 
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { computeFinalInvoiceBreakdown, isPaymentPlanSettled } from "@/lib/shared/invoice-calc";
+import { isPaymentPlanSettled } from "@/lib/shared/invoice-calc";
 import { canTransition, transitionErrorMessage } from "@/lib/shared/invoice-state-machine";
 import { ocrFromInvoiceNumber } from "@/lib/shared/ocr-reference";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { computeRadgivningsavgift } from "@/lib/shared/rattshjalp";
-import type { AccontoDeduction, Invoice, Payment, PaymentPlan, WriteOff } from "@/lib/shared/schemas/billing";
+import type { Invoice, Payment, PaymentPlan, WriteOff } from "@/lib/shared/schemas/billing";
 import type { InvoiceStatus } from "@/lib/shared/schemas/enums";
 import {
   asId,
   matterIdSchema,
   invoiceIdSchema,
   paymentPlanIdSchema,
-  type InvoiceId,
-  type TimeEntryId,
-  type ExpenseId,
 } from "@/lib/shared/schemas/ids";
 import type { Matter } from "@/lib/shared/schemas/matter";
 import { computeInvoiceLedger, deriveInvoiceStatus, invoicePartitionViolation } from "@/lib/shared/write-off-calc";
@@ -37,52 +34,6 @@ import { emit } from "../events/emit";
 import type { Repositories } from "../repositories/repositories";
 import { router, orgProcedure } from "../trpc";
 
-// ─── createFinal-hjälpare (validera + koppla poster) ──────────────
-
-/** Hämta valda obetalda tidsposter; kasta om någon redan fakturerats/ägs av annat ärende. */
-async function fetchUnbilledTimeEntries(repos: Repositories, matterId: string, ids: string[]) {
-  const rows = await repos.timeEntries.listUnbilled(matterId, ids);
-  if (rows.length !== ids.length) {
-    throw new TRPCError({ code: "BAD_REQUEST", message: "Några tidsposter är redan fakturerade eller tillhör annat ärende." });
-  }
-  return rows;
-}
-
-/** Hämta valda obetalda utlägg; kasta om någon redan fakturerats/ägs av annat ärende. */
-async function fetchUnbilledExpenses(repos: Repositories, matterId: string, ids: string[]) {
-  const rows = await repos.expenses.listUnbilled(matterId, ids);
-  if (rows.length !== ids.length) {
-    throw new TRPCError({ code: "BAD_REQUEST", message: "Några utlägg är redan fakturerade eller tillhör annat ärende." });
-  }
-  return rows;
-}
-
-/** Validera accontos: samma ärende, typ ACCONTO, ej redan avdragna på en FINAL. */
-async function fetchDeductibleAccontos(repos: Repositories, matterId: string, ids: string[]) {
-  const rows = await repos.invoices.listDeductibleAccontos(matterId, ids);
-  if (rows.length !== ids.length) {
-    throw new TRPCError({ code: "BAD_REQUEST", message: "Några acconto-fakturor är redan avdragna eller tillhör annat ärende." });
-  }
-  return rows;
-}
-
-/**
- * Koppla poster till fakturan + skapa acconto-avdrag via typade repo-anrop
- * (ej Prisma nested writes) så samma kod kör mot både Postgres och git-store:n.
- */
-async function linkBilledItems(
-  repos: Repositories,
-  invoiceId: InvoiceId,
-  timeEntries: ReadonlyArray<{ id: TimeEntryId }>,
-  expenses: ReadonlyArray<{ id: ExpenseId }>,
-  accontos: ReadonlyArray<{ id: InvoiceId }>,
-): Promise<void> {
-  await repos.timeEntries.flagBilled(timeEntries.map((t) => t.id), invoiceId);
-  await repos.expenses.flagBilled(expenses.map((e) => e.id), invoiceId);
-  for (const a of accontos) {
-    await repos.accontoDeductions.create({ finalInvoiceId: invoiceId, accontoInvoiceId: a.id } satisfies Partial<AccontoDeduction>);
-  }
-}
 
 // ─── writeOff-helpers (ADR 0007) — håller mutationen under complexity ≤ 8 ──
 
@@ -167,44 +118,6 @@ export const invoiceRouter = router({
     }),
 
   /** ACCONTO: advokaten anger belopp. Inga time entries/expenses kopplas. */
-  createAcconto: orgProcedure
-    .input(
-      z.object({
-        /** Valfritt klient-genererat id (demo-generator/fixtures) → annars genererar store:n. */
-        id: invoiceIdSchema.optional(),
-        matterId: matterIdSchema,
-        amount: z.number().int().min(1),
-        invoiceDate: z.string().optional(),
-        dueDate: z.string().optional(),
-        notes: z.string().optional(),
-      }),
-    )
-    // Migrerad till repository-sömmen (ADR 0020): org-scopad ärende-koll +
-    // typad nummergenerering + create (inget dynamiskt where/data-objekt).
-    .mutation(async ({ ctx, input }) => {
-      const matter = await ctx.repos.matters.getByIdInOrg(input.matterId, ctx.orgId);
-      if (!matter) throw new TRPCError({ code: "NOT_FOUND" });
-      const accontoNumber = await ctx.repos.invoices.nextInvoiceNumber(ctx.orgId);
-      const invoice = await ctx.repos.invoices.create(
-        omitUndefined({
-          id: input.id, // undefined → store genererar
-          matterId: input.matterId,
-          invoiceNumber: accontoNumber,
-          // Kundfaktura → Bankgiro-OCR (#182). Kostnadsräkningar (billingRun-
-          // flödet) och CREDIT får ingen OCR — betalas inte med OCR.
-          ocrReference: ocrFromInvoiceNumber(accontoNumber),
-          amount: input.amount,
-          invoiceType: "ACCONTO",
-          status: "DRAFT",
-          invoiceDate: input.invoiceDate ? new Date(input.invoiceDate) : new Date(),
-          dueDate: input.dueDate ? new Date(input.dueDate) : null,
-          notes: input.notes,
-        }) satisfies Partial<Invoice>,
-      );
-      await emit.invoiceCreated(ctx, invoice);
-      return invoice;
-    }),
-
   /**
    * RÅDGIVNING (#383, rättshjälp del A): registrera klientens betalda
    * rådgivningstimme (1 tim enligt rättshjälpstaxan) som en SEPARAT klient-
@@ -248,58 +161,6 @@ export const invoiceRouter = router({
    * fakturor. Allt går i en transaktion så time entries/expenses inte
    * "flaggas som fakturerade" halvvägs om något kraschar.
    */
-  createFinal: orgProcedure
-    .input(
-      z.object({
-        /** Valfritt klient-genererat id (demo-generator/fixtures) → annars genererar store:n. */
-        id: invoiceIdSchema.optional(),
-        matterId: matterIdSchema,
-        timeEntryIds: z.array(z.string()),
-        expenseIds: z.array(z.string()),
-        accontoInvoiceIds: z.array(z.string()).default([]),
-        invoiceDate: z.string().optional(),
-        dueDate: z.string().optional(),
-        notes: z.string().optional(),
-      }),
-    )
-    // Migrerad till repository-sömmen (ADR 0020). Typade list/flag-metoder +
-    // accontoDeductions-repo; beräkningen (computeFinalInvoiceBreakdown) i routern.
-    .mutation(async ({ ctx, input }) => {
-      const result = await ctx.repos.transaction(async (repos) => {
-        const matter = await repos.matters.getByIdInOrg(input.matterId, ctx.orgId);
-        if (!matter) throw new TRPCError({ code: "NOT_FOUND" });
-
-        const timeEntries = await fetchUnbilledTimeEntries(repos, input.matterId, input.timeEntryIds);
-        const expenses = await fetchUnbilledExpenses(repos, input.matterId, input.expenseIds);
-        const accontos = await fetchDeductibleAccontos(repos, input.matterId, input.accontoInvoiceIds);
-
-        const breakdown = computeFinalInvoiceBreakdown(
-          timeEntries.map((t) => ({ minutes: t.minutes, hourlyRate: t.user.hourlyRate ?? 0 })),
-          expenses.map((e) => ({ amount: e.amount, billable: e.billable })),
-          accontos.map((a) => ({ id: a.id, amount: a.amount })),
-        );
-
-        const finalNumber = await repos.invoices.nextInvoiceNumber(ctx.orgId);
-        const invoice = await repos.invoices.create(omitUndefined({
-          id: input.id, // undefined → store genererar
-          matterId: input.matterId,
-          invoiceNumber: finalNumber,
-          ocrReference: ocrFromInvoiceNumber(finalNumber), // kundfaktura → OCR (#182)
-          amount: breakdown.grossAmount,
-          invoiceType: "FINAL",
-          status: "DRAFT",
-          invoiceDate: input.invoiceDate ? new Date(input.invoiceDate) : new Date(),
-          dueDate: input.dueDate ? new Date(input.dueDate) : null,
-          notes: input.notes,
-        }) satisfies Partial<Invoice>);
-
-        await linkBilledItems(repos, invoice.id as InvoiceId, timeEntries, expenses, accontos);
-        return { invoice, breakdown };
-      });
-      await emit.invoiceCreated(ctx, result.invoice);
-      return result;
-    }),
-
   /**
    * CREDIT: krediterar en befintlig faktura. Skapar en ny faktura med
    * negativt belopp som pekar tillbaka på originalet, och sätter originalets

@@ -307,11 +307,12 @@ describe("Scenario: brottmål från förordnande till betald faktura", () => {
     expect(timeIds.length).toBe(5); // granska + möte + yttrande + fup + huf
     expect(expIds.length).toBe(2);  // kopiering + parkering
 
-    const result = await state.caller.invoice.createFinal({
+    const result = await state.caller.billingRun.createFinal({
       matterId: state.matterId!,
+      recipient: "KLIENT",
       timeEntryIds: timeIds,
       expenseIds: expIds,
-      accontoInvoiceIds: [],
+      deductedBillingRunIds: [],
       invoiceDate: D.tingsrattsdom.toISOString().slice(0, 10),
       notes: "Tingsrättsdom — Stockholms tingsrätt B 2026-1234",
     });

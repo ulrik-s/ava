@@ -265,11 +265,12 @@ describe("Scenario: komplext brottmål — offentlig försvarare men EJ taxemål
     // Total minutes 40*60 + 480 + 175 = 3055
     expect(times.totalMinutes).toBe(3055);
 
-    const r = await state.caller.invoice.createFinal({
+    const r = await state.caller.billingRun.createFinal({
       matterId: state.matterId!,
+      recipient: "RATTSHJALPSMYNDIGHET",
       timeEntryIds: times.entries.map((t) => t.id),
       expenseIds: exps.expenses.map((e) => e.id),
-      accontoInvoiceIds: [],
+      deductedBillingRunIds: [],
       invoiceDate: "2026-04-25",
       notes: "Domstolsverket — komplext brottmål, HUF > 225 min → timkostnadsnorm.",
     });
@@ -281,7 +282,9 @@ describe("Scenario: komplext brottmål — offentlig försvarare men EJ taxemål
       (s, t) => s + Math.round((t.minutes * TIMKOSTNADSNORM_FTAX_ORE_PER_H) / 60), 0,
     );
     expect(expectedTime).toBe(8_279_050);
-    expect(r.breakdown.grossAmount).toBe(expectedTime + 28_650);
+    // Inget acconto-avdrag → fakturabeloppet (netto) = brutto; run bär brutto-värdet.
+    expect(r.run.workValueOreAtRun).toBe(expectedTime + 28_650);
+    expect(r.invoice.amount).toBe(expectedTime + 28_650);
     state.invoiceId = r.invoice.id;
   });
 

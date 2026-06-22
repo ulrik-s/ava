@@ -148,9 +148,6 @@ vi.mock("@/components/matter/suggestions-panel", () => ({
 vi.mock("@/components/matter/events-panel", () => ({
   EventsPanel: () => <div data-testid="events" />,
 }));
-vi.mock("@/components/matter/invoices-section", () => ({
-  InvoicesSection: () => <div data-testid="invoices" />,
-}));
 vi.mock("@/components/matter/payment-method-card", () => ({
   PaymentMethodCard: ({ paymentMethod }: { paymentMethod: string }) => (
     <div data-testid="pmc">{paymentMethod}</div>
