@@ -19,9 +19,16 @@
  */
 
 import type { ModalState } from "@/components/documents/external-edit-modal";
+import { loadFirmaConfig } from "@/lib/client/firma/firma-config";
 import { openViaHelper } from "@/lib/client/helper/use-helper";
 import type { HelperOpenRequest } from "@/lib/shared/helper/protocol";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
+
+/** Runtime-tier-beslut (ej bygg-tids-NEXT_PUBLIC_DEMO_BUILD, som är sant även i
+ *  den lokala self-hosted-builden → länkade fel till GH Pages). Se #651. */
+function isDemoTier(): boolean {
+  return loadFirmaConfig().tier === "demo";
+}
 
 interface Doc {
   id: string;
@@ -51,8 +58,7 @@ export async function tryHelperOpen(doc: Doc): Promise<boolean> {
   //     `document.downloadContent` med sin EGNA Bearer (typat, ingen REST-yta).
   //   - demo: statisk GH-Pages-blob-URL (ingen server att tRPC:a mot).
   // Write-back (uploadUrl) är ännu inte påkopplad i server-tier (ADR 0031 steg 3).
-  const isDemo = process.env.NEXT_PUBLIC_DEMO_BUILD === "1";
-  const req: HelperOpenRequest = isDemo
+  const req: HelperOpenRequest = isDemoTier()
     ? { fileName: doc.fileName, downloadUrl: demoUrl(doc) }
     : { fileName: doc.fileName, document: { id: doc.id, trpcUrl: helperTrpcUrl() } };
   try {
@@ -80,7 +86,7 @@ export async function runExternalEdit(doc: Doc): Promise<ModalState> {
   const { openInFinder } = await import("@/lib/client/fsa/open-in-finder");
   const { getExternalEditTracker } = await import("@/lib/client/fsa/external-edit-tracker");
 
-  const fallbackBase = process.env.NEXT_PUBLIC_DEMO_BUILD === "1"
+  const fallbackBase = isDemoTier()
     ? (() => {
         const repo = process.env.NEXT_PUBLIC_DEMO_REPO || process.env.NEXT_PUBLIC_DEFAULT_DEMO_REPO || DEFAULT_DEMO_REPO_FALLBACK;
         const m = repo.match(/^([^/\s]+)\/([^/\s]+)$/);

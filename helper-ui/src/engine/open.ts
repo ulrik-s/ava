@@ -96,6 +96,7 @@ async function obtainFile(body: HelperOpenRequest, tmpFile: string, deps: OpenDe
 async function downloadFailureFallback(
   body: HelperOpenRequest, tmpFile: string, key: string, deps: OpenDeps, err: unknown,
 ): Promise<Response | null> {
+  log(`/open hämtning misslyckades (${body.fileName}, key=${key}): ${errMsg(err)}`);
   if (deps.restore && key && (await deps.restore(key, tmpFile))) {
     log(`offline: öppnar cachad kopia av ${body.fileName}`);
     return null;
