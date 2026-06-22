@@ -132,6 +132,54 @@ async function linkFinalInvoice(
   }
 }
 
+/**
+ * Vilket arbete ska slutfaktureras (#734)? Anges `timeEntryIds`/`expenseIds`
+ * fakturerar vi ENBART dem (per-post-val, validerade som ofakturerade i ärendet);
+ * utelämnas båda tar vi allt ofryst (modellens default). PRUTNING-utlägg utesluts
+ * (de länkas separat i kostnadsräknings-flödet).
+ */
+async function resolveFinalWork(
+  repos: Repositories,
+  matterId: string,
+  timeEntryIds: string[] | undefined,
+  expenseIds: string[] | undefined,
+): Promise<{ work: UnfrozenWork; selected: boolean }> {
+  if (timeEntryIds === undefined && expenseIds === undefined) {
+    return { work: await fetchUnfrozenWork(repos, matterId), selected: false };
+  }
+  const teIds = timeEntryIds ?? [];
+  const exIds = expenseIds ?? [];
+  const selTime = await repos.timeEntries.listUnbilled(matterId, teIds);
+  const selExp = await repos.expenses.listUnbilled(matterId, exIds);
+  if (selTime.length !== teIds.length || selExp.length !== exIds.length) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "Någon vald post är redan fakturerad eller tillhör annat ärende." });
+  }
+  return {
+    work: {
+      timeEntries: selTime.map((t) => ({ id: t.id, minutes: t.minutes, hourlyRate: t.user.hourlyRate ?? 0, billable: t.billable })),
+      expenses: selExp.filter((e) => e.kind !== "PRUTNING").map((e) => ({ id: e.id, amount: e.amount, billable: e.billable })),
+    },
+    selected: true,
+  };
+}
+
+/** Frys valda poster (per-post) eller hela ärendet (default). */
+async function freezeSelectedWork(
+  repos: Repositories,
+  matterId: string,
+  work: UnfrozenWork,
+  selected: boolean,
+  runId: BillingRunId,
+): Promise<void> {
+  if (!selected) {
+    await freezeWork(repos, matterId, runId);
+    return;
+  }
+  const now = new Date();
+  await repos.timeEntries.freezeByIds(work.timeEntries.map((t) => t.id), runId, now);
+  await repos.expenses.freezeByIds(work.expenses.map((e) => e.id), runId, now);
+}
+
 async function assertMatterInOrg(repos: Repositories, matterId: string, orgId: string): Promise<void> {
   const m = await repos.matters.getByIdInOrg(matterId, orgId);
   if (!m) throw new TRPCError({ code: "NOT_FOUND", message: "Ärendet finns inte." });
@@ -226,12 +274,15 @@ export const billingRunRouter = router({
       matterId: matterIdSchema,
       recipient: billingRunRecipientSchema,
       deductedBillingRunIds: z.array(billingRunIdSchema).default([]),
+      // Per-post-val (#734): anges → fakturera/frys ENBART dessa; utelämnas → allt ofryst.
+      timeEntryIds: z.array(z.string()).optional(),
+      expenseIds: z.array(z.string()).optional(),
       notes: z.string().nullish(),
     }))
     .mutation(async ({ ctx, input }) => {
       return ctx.repos.transaction(async (tx) => {
         await assertMatterInOrg(tx, input.matterId, ctx.orgId);
-        const work = await fetchUnfrozenWork(tx, input.matterId);
+        const { work, selected } = await resolveFinalWork(tx, input.matterId, input.timeEntryIds, input.expenseIds);
         const value = workValueOre(work);
         const deductedRuns = await fetchDeductedAccontoRuns(tx, input.matterId, input.deductedBillingRunIds);
         const deductionOre = deductedRuns.reduce((sum, r) => sum + (r.amountOre ?? 0), 0);
@@ -249,7 +300,7 @@ export const billingRunRouter = router({
           invoiceId: invoice.id, deductedBillingRunIds: input.deductedBillingRunIds,
           periodTo: new Date(), notes: input.notes,
         });
-        await freezeWork(tx, input.matterId, run.id as BillingRunId);
+        await freezeSelectedWork(tx, input.matterId, work, selected, run.id as BillingRunId);
         // Länka posterna + acconto-avdrag → slutfaktura-vyn visar rätt arvode/utlägg (#728).
         await linkFinalInvoice(tx, invoice.id, work, accontoInvoiceIds(deductedRuns));
         await emit.invoiceCreated(ctx, invoice);

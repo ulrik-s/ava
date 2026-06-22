@@ -139,6 +139,36 @@ describe("billingRun.createFinal", () => {
     expect(res.run.amountOre).toBe(250000); // bara debiterbar tid räknas
   });
 
+  it("per-post-val: fakturerar ENBART valda poster, lämnar resten ofryst (#734)", async () => {
+    const { ds, caller } = makeCaller({ workMinutes: 60, expenseOre: 5000 }); // te-1 (2500kr) + ex-1 (50kr)
+    await ds.timeEntries.create({ data: { id: asId<"TimeEntryId">("te-2"), organizationId: "org-1", userId: asId<"UserId">("u-1"), matterId: asId<"MatterId">("m-1"), date: new Date(), minutes: 60, description: "B", hourlyRate: 250000, billable: true } });
+    const res = await caller.billingRun.createFinal({ matterId: "m-1", recipient: "KLIENT", timeEntryIds: ["te-1"], expenseIds: [] });
+    expect(res.invoice.amount).toBe(250000); // bara te-1, inget utlägg
+    const t1 = await ds.timeEntries.findFirst({ where: { id: "te-1" } }) as { invoiceId?: string | null; frozenAt?: Date | null };
+    const t2 = await ds.timeEntries.findFirst({ where: { id: "te-2" } }) as { invoiceId?: string | null; frozenAt?: Date | null };
+    const e1 = await ds.expenses.findFirst({ where: { id: "ex-1" } }) as { frozenAt?: Date | null };
+    expect(t1.invoiceId).toBe(res.invoice.id);
+    expect(t1.frozenAt).toBeInstanceOf(Date);
+    expect(t2.invoiceId).toBeFalsy(); // ej vald → kvar ofryst för senare
+    expect(t2.frozenAt).toBeFalsy();
+    expect(e1.frozenAt).toBeFalsy(); // expenseIds=[] → utlägg ej med
+  });
+
+  it("per-post-val validerar id:n (okänt/fel-scopat → fel)", async () => {
+    const { caller } = makeCaller({ workMinutes: 60 });
+    await expect(caller.billingRun.createFinal({
+      matterId: "m-1", recipient: "KLIENT", timeEntryIds: ["finns-ej"], expenseIds: [],
+    })).rejects.toThrow(/redan fakturerad|annat ärende/);
+  });
+
+  it("utan per-post-val → fakturerar allt ofryst (default oförändrat)", async () => {
+    const { ds, caller } = makeCaller({ workMinutes: 60, expenseOre: 5000 });
+    const res = await caller.billingRun.createFinal({ matterId: "m-1", recipient: "KLIENT" });
+    expect(res.invoice.amount).toBe(250000 + 5000);
+    const t1 = await ds.timeEntries.findFirst({ where: { id: "te-1" } }) as { frozenAt?: Date | null };
+    expect(t1.frozenAt).toBeInstanceOf(Date);
+  });
+
   it("drar av tidigare ACCONTO-runs på slutbeloppet + skapar acconto_deduction-rad (#728)", async () => {
     const { ds, caller } = makeCaller({ workMinutes: 120 }); // 5000 kr värde
     const acc = await caller.billingRun.createAcconto({

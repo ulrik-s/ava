@@ -119,10 +119,10 @@ describe("BillingDialog — FINAL", () => {
 
   it("visar de ofakturerade posterna + upparbetat värde", () => {
     render(<BillingDialog matterId="m1" type="FINAL" existingAccontos={[]} meta={meta} onClose={() => {}} />);
-    expect(screen.getByText(/Ofakturerade poster \(2\)/)).toBeInTheDocument();
+    expect(screen.getByText(/Poster att fakturera \(2\/2 valda\)/)).toBeInTheDocument();
     expect(screen.getByText("Möte med klient")).toBeInTheDocument();
     expect(screen.getByText("Ansökningsavgift")).toBeInTheDocument();
-    expect(screen.getByText("Upparbetat värde")).toBeInTheDocument();
+    expect(screen.getByText("Valt värde")).toBeInTheDocument();
   });
 
   it("visar tomtext när inga ofakturerade poster finns", () => {
@@ -142,10 +142,26 @@ describe("BillingDialog — FINAL", () => {
 
   it("avmarkera ett aconto → utesluts ur avdragen", () => {
     render(<BillingDialog matterId="m1" type="FINAL" existingAccontos={accontos} meta={meta} onClose={() => {}} />);
-    const boxes = screen.getAllByRole("checkbox");
-    fireEvent.click(boxes[0]!); // avmarkera br-1
+    const boxes = screen.getAllByRole("checkbox"); // [post te-1, post ex-1, aconto br-1, aconto br-2]
+    fireEvent.click(boxes[2]!); // avmarkera br-1 (första aconto efter de 2 posterna)
     fireEvent.click(screen.getByRole("button", { name: "Skapa faktura" }));
     expect(finalMutate).toHaveBeenCalledWith(expect.objectContaining({ deductedBillingRunIds: ["br-2"] }));
+  });
+
+  it("per-post-val: avmarkera en post → bara valda id:n i payloaden (#734)", () => {
+    render(<BillingDialog matterId="m1" type="FINAL" existingAccontos={[]} meta={meta} onClose={() => {}} />);
+    const boxes = screen.getAllByRole("checkbox"); // [post te-1, post ex-1]
+    fireEvent.click(boxes[1]!); // avmarkera utlägget ex-1
+    fireEvent.click(screen.getByRole("button", { name: "Skapa faktura" }));
+    expect(finalMutate).toHaveBeenCalledWith(expect.objectContaining({ timeEntryIds: ["te-1"], expenseIds: [] }));
+  });
+
+  it("default (inga poster avmarkerade) → inga post-id:n i payloaden (allt faktureras)", () => {
+    render(<BillingDialog matterId="m1" type="FINAL" existingAccontos={[]} meta={meta} onClose={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: "Skapa faktura" }));
+    const call = finalMutate.mock.calls[0]![0] as Record<string, unknown>;
+    expect(call.timeEntryIds).toBeUndefined();
+    expect(call.expenseIds).toBeUndefined();
   });
 
   it("byt mottagare → skickas i payloaden", () => {

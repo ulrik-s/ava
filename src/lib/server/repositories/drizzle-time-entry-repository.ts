@@ -175,4 +175,11 @@ export class DrizzleTimeEntryRepository extends DrizzleRepository<TimeEntry> imp
       .set({ frozenAt: now, frozenByBillingRunId: asId<"BillingRunId">(billingRunId) })
       .where(and(eq(timeEntries.matterId, asId<"MatterId">(matterId)), isNull(timeEntries.frozenByBillingRunId)));
   }
+
+  async freezeByIds(ids: string[], billingRunId: string, now: Date): Promise<void> {
+    if (ids.length === 0) return;
+    await this.db.update(timeEntries)
+      .set({ frozenAt: now, frozenByBillingRunId: asId<"BillingRunId">(billingRunId) })
+      .where(and(inArray(timeEntries.id, ids.map((i) => asId<"TimeEntryId">(i))), isNull(timeEntries.frozenByBillingRunId)));
+  }
 }
