@@ -14,6 +14,10 @@ import {
   fetchContentViaHelper,
   configureHelper,
   docSyncStatusMap,
+  advanceSyncTracker,
+  syncBadgeMap,
+  emptySyncTracker,
+  SYNCED_TTL_MS,
 } from "@/lib/client/helper/use-helper";
 import type { HelperStatusResponse, HelperSyncEntry } from "@/lib/shared/helper/protocol";
 
@@ -258,5 +262,49 @@ describe("docSyncStatusMap", () => {
       { document: { id: "a", trpcUrl: "x" }, status: "conflict" },
     ]));
     expect(m.get("a")).toBe("conflict");
+  });
+});
+
+describe("advanceSyncTracker + syncBadgeMap (transient 'synkad')", () => {
+  function status(entries: Partial<HelperSyncEntry>[]): HelperStatusResponse {
+    const full = entries.map((e, i) => ({
+      id: `q${i}`, fileName: "f", enqueuedAt: 0, attempts: 0, nextAttemptAt: 0,
+      status: "pending" as const, ...e,
+    })) as HelperSyncEntry[];
+    return { pending: 0, conflict: 0, total: full.length, entries: full };
+  }
+  const docPending = (id: string) => ({ document: { id, trpcUrl: "x" }, status: "pending" as const });
+  const docConflict = (id: string) => ({ document: { id, trpcUrl: "x" }, status: "conflict" as const });
+
+  it("pending → borta = 'synced' (transient), pending/conflict speglas", () => {
+    let t = emptySyncTracker();
+    t = advanceSyncTracker(t, status([docPending("a"), docConflict("b")]), 1000);
+    expect(syncBadgeMap(t, 1000).get("a")).toBe("pending");
+    expect(syncBadgeMap(t, 1000).get("b")).toBe("conflict");
+
+    // 'a' laddas upp (försvinner ur kön) → synced; 'b' kvar i konflikt.
+    t = advanceSyncTracker(t, status([docConflict("b")]), 2000);
+    const m = syncBadgeMap(t, 2000);
+    expect(m.get("a")).toBe("synced");
+    expect(m.get("b")).toBe("conflict");
+  });
+
+  it("'synced' försvinner efter TTL", () => {
+    let t = emptySyncTracker();
+    t = advanceSyncTracker(t, status([docPending("a")]), 1000);
+    t = advanceSyncTracker(t, status([]), 2000); // a synkad vid 2000
+    expect(syncBadgeMap(t, 2000).get("a")).toBe("synced");
+    expect(syncBadgeMap(t, 2000 + SYNCED_TTL_MS + 1).has("a")).toBe(false); // utgången
+    // nästa advance rensar stämpeln helt
+    t = advanceSyncTracker(t, status([]), 2000 + SYNCED_TTL_MS + 1);
+    expect(t.syncedAt.has("a")).toBe(false);
+  });
+
+  it("pending som blir conflict räknas INTE som synced", () => {
+    let t = emptySyncTracker();
+    t = advanceSyncTracker(t, status([docPending("a")]), 1000);
+    t = advanceSyncTracker(t, status([docConflict("a")]), 2000);
+    expect(syncBadgeMap(t, 2000).get("a")).toBe("conflict");
+    expect(t.syncedAt.has("a")).toBe(false);
   });
 });
