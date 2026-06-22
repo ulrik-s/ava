@@ -130,6 +130,51 @@ export interface IContentStore {
 
 // ─── Aggregat ──────────────────────────────────────────────────────
 
+// ─── LeaseStore (ADR 0033 §2 — mjuk lease) ─────────────────────────
+
+/**
+ * En aktiv (eller nyss utgången) lease på ett dokument — den mjuka
+ * check-out:en som förebygger konflikter (ADR 0033 §2). `holderName`
+ * denormaliseras för UI:t ("Anna redigerar"). Tider i ms sedan epoch.
+ */
+export interface LeaseView {
+  documentId: string;
+  holderId: string;
+  holderName: string;
+  acquiredAt: number;
+  lastHeartbeatAt: number;
+  /** `now − lastHeartbeatAt ≥ stale-tröskeln` → "verkar inte redigera längre" (ta-över-bar). */
+  stale: boolean;
+}
+
+/** Utfall av {@link ILeaseStore.acquire}. */
+export interface AcquireLeaseResult {
+  /** Fick/håller anroparen leasen? `false` = någon ANNAN håller en levande lease. */
+  acquired: boolean;
+  /** Aktuell lease: anroparens (om `acquired`), annars den andra hållarens. */
+  lease: LeaseView;
+}
+
+/**
+ * Mjuk lease-store (ADR 0033 §2). In-memory på den tunna servern — leases
+ * är efemär online-koordinering, inte durabel domändata; en omstart =
+ * alla heartbeats slutar = alla leases löper ut (korrekt semantik).
+ */
+export interface ILeaseStore {
+  /** Ta leasen om fri/utgången/redan din (själv-återtagande); annars rapportera annan hållare. */
+  acquire(documentId: string, holderId: string, holderName: string): AcquireLeaseResult;
+  /** Heartbeat: förnya din lease. `false` = du håller den inte längre (utgången/övertagen). */
+  renew(documentId: string, holderId: string): boolean;
+  /** Släpp din lease (idempotent; no-op om du inte håller den). */
+  release(documentId: string, holderId: string): void;
+  /** Permanent omtilldelning till anroparen (ta-över ett stale/dött lås). */
+  takeover(documentId: string, holderId: string, holderName: string): LeaseView;
+  /** Aktuell lease, eller `null` om fri/utgången. */
+  get(documentId: string): LeaseView | null;
+}
+
+// ─── Aggregat ──────────────────────────────────────────────────────
+
 /**
  * Alla ports som tillhör en tRPC-`Context`. Routrar deklarerar bara
  * de ports de behöver via property-access; oanvända ports kostar
@@ -141,6 +186,7 @@ export interface IPorts {
   searchIndex: ISearchIndex;
   paymentScanner: IPaymentScanner;
   content: IContentStore;
+  lease: ILeaseStore;
 }
 
 // Buffer-typen exporteras så impl:erna kan importera utan Node:

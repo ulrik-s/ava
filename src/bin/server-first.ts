@@ -26,6 +26,7 @@ import { startJobRuntime, type JobRuntime } from "@/lib/server/jobs/job-worker-r
 import { QueueBackedDocumentAnalyzer } from "@/lib/server/jobs/queue-backed-document-analyzer";
 import { QueueBackedEmailSender } from "@/lib/server/jobs/queue-backed-email-sender";
 import { buildServerFirstJobHandlers, loadSmtpConfigFromEnv } from "@/lib/server/jobs/server-first-handlers";
+import { InMemoryLeaseStore } from "@/lib/server/lease/lease-store";
 import { loadLlmConfigFromEnv } from "@/lib/server/llm/ollama-classifier";
 import { serveFetchHandler } from "@/lib/shared/http/node-http-adapter";
 
@@ -65,6 +66,9 @@ function main(): void {
     // classify-document-jobb durabelt på pg-boss i st.f. noop.
     documentAnalyzer: new QueueBackedDocumentAnalyzer(() => jobRuntime?.boss ?? null, config.organizationId),
     ...(contentStore ? { content: contentStore } : {}),
+    // Mjuk lease (ADR 0033 §2): in-memory process-singleton — efemär koordinering,
+    // en omstart löper ut alla leases (korrekt). Ett enda objekt delas av alla requests.
+    lease: new InMemoryLeaseStore(),
   };
 
   const api = buildServerFirstApi({

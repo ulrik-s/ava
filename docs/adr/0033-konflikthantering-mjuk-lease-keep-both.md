@@ -137,8 +137,11 @@ gör att ingenting någonsin försvinner — man kan alltid backa.
    är durabelt köade tills kopian kan skapas. Syskonet syns direkt i dokument-
    listan med självförklarande namn; klarspråks-banner + Word-Jämför-länk i steg 5.
    *(#720)*
-3. **Lease-store + endpoints** (acquire/renew/release/reclaim/takeover), heartbeat
-   + TTL. tRPC-procedurer.
+3. ✅ **Lease-store + endpoints** (acquire/renew/release/takeover/get), heartbeat
+   + stale/expire-trösklar. In-memory på den tunna servern (efemär koordinering;
+   omstart löper ut alla leases = korrekt). Port `ILeaseStore` (server-first =
+   `InMemoryLeaseStore`, demo = no-op). tRPC i document-routern, org-scopat. Själv-
+   återtagande + ta-över ingår i store-logiken. *(#722)*
 4. **Helper:** ta/förnya/släpp lease vid öppna/stäng; själv-återtagande; öppna
    skrivskyddat (ingen watch) när leasat av annan.
 5. **Web-UI:** "X redigerar" + "Ta över redigeringen" + "Öppna skrivskyddat"/
@@ -146,9 +149,13 @@ gör att ingenting någonsin försvinner — man kan alltid backa.
 
 ## Öppna frågor
 
-- TTL/heartbeat-värden (förslag: heartbeat 30 s, lease-TTL 3–5 min, "stale" efter
-  ~2 min) — finjusteras mot verkligt beteende.
-- Var leasen lagras (tunn server, ADR 0013/0016) + hur den exponeras tier-agnostiskt.
+- TTL/heartbeat-värden — implementerat: heartbeat 30 s (klient, steg 4), stale
+  efter 2 min (`LEASE_STALE_MS`), expire efter 5 min (`LEASE_EXPIRE_MS`).
+  Finjusteras mot verkligt beteende.
+- ~~Var leasen lagras~~ → **beslutat: in-memory på den tunna servern** (efemär
+  koordinering; en omstart löper ut alla leases, vilket är korrekt). Exponeras
+  tier-agnostiskt som `ILeaseStore`-port (demo = no-op). Takhöjd: multi-instans-
+  server skulle kräva delad store (Redis/tabell) — byts då ut bakom porten. (#722)
 - ~~Keep-both som ny **dokument-version** vs **syskon-dokument**~~ → **beslutat:
   syskon-dokument** (matchar Dropbox/iCloud-konfliktkopia, kräver ingen versions-
   kedje-schema, mest idiotsäkert). Implementerat i steg 2 (#720).

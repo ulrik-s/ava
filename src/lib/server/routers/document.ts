@@ -10,12 +10,14 @@
  *   • folders      — mappar, flytt, breadcrumb
  *   • suggestions  — AI-kontaktförslag (accept/reject, grupp-accept, dedup)
  *   • events       — AI-extraherade kalenderhändelser
+ *   • lease        — mjuk lease (acquire/renew/release/takeover/get, ADR 0033 §2)
  */
 
 import { router } from "../trpc";
 import { coreProcedures } from "./document/core";
 import { eventProcedures } from "./document/events";
 import { folderProcedures } from "./document/folders";
+import { leaseProcedures } from "./document/lease";
 import { suggestionProcedures } from "./document/suggestions";
 
 export const documentRouter = router({
@@ -23,4 +25,5 @@ export const documentRouter = router({
   ...folderProcedures,
   ...suggestionProcedures,
   ...eventProcedures,
+  ...leaseProcedures,
 });
