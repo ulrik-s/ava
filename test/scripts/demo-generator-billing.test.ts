@@ -26,17 +26,21 @@ describe("populateBilling — driver fakturerings-flödena", () => {
     const billing = await populateBilling(target.caller, seed);
 
     expect(billing.invoices).toBeGreaterThan(10);
-    expect(billing.paymentPlans).toBeGreaterThanOrEqual(7);
+    // Ett flöde per ärende (#736): livscykel-planer körs bara på privatklienter
+    // (försäkring/myndighet betalar fullt, domstol = kostnadsräkning) → lägre
+    // volym men alla TYPER finns (aktiv + slutförd + avbruten).
+    expect(billing.paymentPlans).toBeGreaterThanOrEqual(3);
     expect(billing.payments).toBeGreaterThan(5);
-    expect(billing.credits).toBe(1);
+    expect(billing.credits).toBeGreaterThanOrEqual(1);
     expect(billing.reminders).toBeGreaterThan(0); // påminnelse-historik på planerna
+    expect(billing.kostnadsrakningPending).toBeGreaterThan(0); // domstols-KR väntar på dom
 
     const invoices: Inv[] = await (target.caller as Inv).invoice.list({});
     const byStatus = (s: string) => invoices.filter((i: Inv) => i.status === s).length;
     expect(byStatus("PAID")).toBeGreaterThan(0); // betalda finals + slutförd plan
     expect(byStatus("INSTALLMENT_PLAN")).toBeGreaterThan(0); // aktiva planer
     expect(byStatus("DRAFT")).toBeGreaterThan(0); // kvarvarande drafts
-    expect(byStatus("CANCELLED")).toBe(1); // krediterad originalfaktura
+    expect(byStatus("CANCELLED")).toBeGreaterThanOrEqual(1); // krediterad originalfaktura
     expect(invoices.some((i: Inv) => i.invoiceType === "ACCONTO")).toBe(true);
     expect(invoices.some((i: Inv) => i.invoiceType === "CREDIT")).toBe(true);
   });
@@ -48,7 +52,7 @@ describe("populateBilling — driver fakturerings-flödena", () => {
     await populateBilling(target.caller, seed);
     // Exakt queryn som listsidan kör — nested where-filter invoice.matter.organizationId.
     const plans = await (target.caller as Inv).paymentPlan.list({});
-    expect(plans.length).toBe(7); // 5 aktiva + 1 slutförd + 1 avbruten
+    expect(plans.length).toBeGreaterThanOrEqual(3); // ≥1 aktiv + 1 slutförd + 1 avbruten (#736: en-flöde)
     expect(plans.every((p: Inv) => p.invoice?.matter?.matterNumber)).toBe(true); // join hydrerad
   });
 

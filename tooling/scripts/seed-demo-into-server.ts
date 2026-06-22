@@ -36,7 +36,6 @@ import { uuidv7 } from "@/lib/shared/uuid";
 import { createIdTranslator, translateSeed } from "../demo-generator/id-translator";
 import { populate } from "../demo-generator/populate";
 import { populateBilling } from "../demo-generator/populate-billing";
-import { populateBillingRuns } from "../demo-generator/populate-billing-runs";
 import { populateDocuments } from "../demo-generator/populate-documents";
 import { populateUnbilledTime } from "../demo-generator/populate-unbilled-time";
 import { buildSeed } from "./seed-data";
@@ -149,18 +148,15 @@ async function main(): Promise<void> {
     const core = await populate(caller, seed);
     await addTodayTimeEntries(repos, seed.timeEntries as Row[], loginIds); // "idag"-tid för dashboarden
 
-    // Fakturering (#647): billing-id:na är nu deterministiska uuid:er
-    // (demo-billing-ids), så Postgres-uuid-kolumnerna accepterar dem.
-    // populateBilling = legacy-faktura-flöden; populateBillingRuns = nya
-    // BillingRun-modellen (aconto/slut/kostnadsräkning); unbilled = färsk
-    // upparbetad tid efter fakturering. Dokument hoppas fortfarande (kräver
-    // content-store-porten — nästa steg).
+    // Fakturering (#647/#736): billing-id:na är deterministiska uuid:er
+    // (demo-billing-ids). populateBilling driver nu ETT billing-run-flöde per
+    // ärende (aconto/slutfaktura/kostnadsräkning + livscykel); unbilled = färsk
+    // upparbetad tid efter fakturering.
     const billing = await populateBilling(caller, seed);
-    const billingRuns = await populateBillingRuns(caller, seed);
     const unbilled = await populateUnbilledTime(caller, seed);
 
     const documents = await seedDocuments(caller, seed);
-    console.log("✓ demo-data seedad i server-first (org", ORG, "):", { ...core, billing, billingRuns, unbilled, documents });
+    console.log("✓ demo-data seedad i server-first (org", ORG, "):", { ...core, billing, unbilled, documents });
     console.log(`  login: ${LOGIN_LAWYER_EMAIL} + ${LOGIN_ADMIN_EMAIL} äger nu data (+ idag-tidpost)`);
     console.log(CONTENT_DIR ? `  dokument-bytes → ${CONTENT_DIR}` : "  (dokument hoppade — sätt AVA_CONTENT_HOST_DIR)");
   } finally {
