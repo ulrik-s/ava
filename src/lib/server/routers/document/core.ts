@@ -164,9 +164,30 @@ export const coreProcedures = {
    * (analysen körs server-side via jobb-kön). Gamla bytes behålls (git-historik).
    */
   uploadContent: orgProcedure
-    .input(z.object({ documentId: z.string(), contentBase64: z.string() }))
+    .input(z.object({
+      documentId: z.string(),
+      contentBase64: z.string(),
+      /**
+       * Optimistisk version (ADR 0033 §1): versionen klienten redigerade från.
+       * Har servern gått förbi → 409, skriv ALDRIG över tyst. Utelämnad →
+       * ingen kontroll (bakåtkompatibelt; demo/FSA bär ingen basversion).
+       */
+      baseVersion: z.number().int().positive().optional(),
+    }))
     .mutation(async ({ ctx, input }) => {
       await assertDocAccess(ctx, input.documentId);
+      // 409 vid versions-drift: bara `version` flyttas av äkta innehållsskrivningar
+      // (uploadContent/markExternallyEdited); metadata/analys går via updateMetadata
+      // som inte bumpar → inga falska konflikter.
+      if (input.baseVersion !== undefined) {
+        const current = (await ctx.repos.documents.getById(input.documentId)) as Document | null;
+        if (current && current.version !== input.baseVersion) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: `Dokumentet ändrades av någon annan (server v${current.version}, du redigerade v${input.baseVersion}).`,
+          });
+        }
+      }
       const bytes = base64ToBytes(input.contentBase64);
       const storagePath = contentStoragePath(await sha256Hex(bytes));
       await ctx.ports.content.write(storagePath, bytes);
@@ -194,7 +215,8 @@ export const coreProcedures = {
       if (!doc) throw new TRPCError({ code: "NOT_FOUND" });
       const bytes = await ctx.ports.content.read(doc.storagePath);
       if (!bytes) throw new TRPCError({ code: "NOT_FOUND", message: "Innehåll saknas på servern." });
-      return { contentBase64: bytesToBase64(bytes), mimeType: doc.mimeType, fileName: doc.fileName };
+      // `version` = basversion klienten bär in i uploadContent (ADR 0033 §1).
+      return { contentBase64: bytesToBase64(bytes), mimeType: doc.mimeType, fileName: doc.fileName, version: doc.version };
     }),
 
   /**

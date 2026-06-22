@@ -93,6 +93,45 @@ describe("document.downloadContent", () => {
     // Inget uppladdat → storagePath "documents/content/old" finns ej i content-store.
     await expect(caller.downloadContent({ documentId: "d1" })).rejects.toThrow(/saknas/i);
   });
+
+  it("returnerar dokumentets version (basversion för uploadContent, ADR 0033 §1)", async () => {
+    const { caller } = makeCaller();
+    await caller.uploadContent({ documentId: "d1", contentBase64: bytesToBase64(new Uint8Array([1])) });
+    const dl = await caller.downloadContent({ documentId: "d1" });
+    expect(dl.version).toBe(2); // seed v1 → uploadContent bumpar → v2
+  });
+});
+
+describe("document.uploadContent — optimistisk version (ADR 0033 §1)", () => {
+  it("matchande baseVersion → skriver (ingen konflikt)", async () => {
+    const { caller, blobs } = makeCaller(); // seed version = 1
+    await caller.uploadContent({ documentId: "d1", contentBase64: bytesToBase64(new Uint8Array([5])), baseVersion: 1 });
+    const dl = await caller.downloadContent({ documentId: "d1" });
+    expect(Array.from(Buffer.from(dl.contentBase64, "base64"))).toEqual([5]);
+    expect(blobs.size).toBeGreaterThan(0);
+  });
+
+  it("stale baseVersion (server gått förbi) → 409 CONFLICT, skriver ALDRIG över", async () => {
+    const { caller, blobs } = makeCaller();
+    // Bumpar servern till v2.
+    await caller.uploadContent({ documentId: "d1", contentBase64: bytesToBase64(new Uint8Array([1])) });
+    const blobsAfterFirst = blobs.size;
+    // Andra klient redigerade från v1 → drift.
+    await expect(
+      caller.uploadContent({ documentId: "d1", contentBase64: bytesToBase64(new Uint8Array([2, 2])), baseVersion: 1 }),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+    expect(blobs.size).toBe(blobsAfterFirst); // ingen ny blob → inget överskrivet
+    // Serverns innehåll är fortfarande första uploadens bytes.
+    expect(Array.from(Buffer.from((await caller.downloadContent({ documentId: "d1" })).contentBase64, "base64"))).toEqual([1]);
+  });
+
+  it("ingen baseVersion → ingen kontroll (bakåtkompatibelt; demo/FSA)", async () => {
+    const { caller } = makeCaller();
+    await caller.uploadContent({ documentId: "d1", contentBase64: bytesToBase64(new Uint8Array([1])) }); // → v2
+    // Utan baseVersion accepteras skrivningen trots att v1 passerats.
+    await caller.uploadContent({ documentId: "d1", contentBase64: bytesToBase64(new Uint8Array([3, 3, 3])) });
+    expect(Array.from(Buffer.from((await caller.downloadContent({ documentId: "d1" })).contentBase64, "base64"))).toEqual([3, 3, 3]);
+  });
 });
 
 describe("document.missingContent", () => {

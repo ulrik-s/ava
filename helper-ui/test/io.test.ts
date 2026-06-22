@@ -22,8 +22,8 @@ describe("fetchSourceBytes (statisk källa, integration)", () => {
   test("hämtar bytes från downloadUrl", async () => {
     const server = Bun.serve({ port: 0, fetch: () => new Response("PDF-bytes") });
     try {
-      const got = await fetchSourceBytes({ downloadUrl: `http://127.0.0.1:${server.port}/f` });
-      expect(new TextDecoder().decode(got)).toBe("PDF-bytes");
+      const { bytes } = await fetchSourceBytes({ downloadUrl: `http://127.0.0.1:${server.port}/f` });
+      expect(new TextDecoder().decode(bytes)).toBe("PDF-bytes");
     } finally {
       void server.stop(true);
     }

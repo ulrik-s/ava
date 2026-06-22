@@ -155,6 +155,11 @@ export interface HelperSyncEntry {
   nextAttemptAt: number;
   /** `pending` = väntar/retr:as; `conflict` = server gått förbi, kräver beslut. */
   status: "pending" | "conflict";
+  /**
+   * Basversionen uploaden hävdar (ADR 0033 §1, server-tier). Persisteras så en
+   * post som återställs efter omstart fortfarande versionskollas korrekt.
+   */
+  baseVersion?: number;
   /** Senaste felet (om något). */
   lastError?: string;
 }
