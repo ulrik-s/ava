@@ -288,22 +288,30 @@ export const billingRunRouter = router({
           throw new TRPCError({ code: "BAD_REQUEST", message: "Bara KOSTNADSRAKNING i PENDING_VERDICT kan domsläggas." });
         }
         const finalAmount = Math.max(0, run.workValueOreAtRun + input.prutningOre);
+        let prutningExpenseId: string | undefined;
         if (input.prutningOre < 0) {
-          await tx.expenses.create({
+          const prutning = await tx.expenses.create({
             matterId: run.matterId, userId: asId<"UserId">(ctx.user.id), date: new Date(),
             amount: input.prutningOre, description: "Prutning enligt dom",
             billable: true, vatRate: 0, vatIncluded: false, kind: "PRUTNING",
           });
+          prutningExpenseId = prutning.id;
         }
+        // Debiterbara poster INNAN frysning (ex. PRUTNING, som länkas separat nedan).
+        const work = await fetchUnfrozenWork(tx, run.matterId);
         const invoice = await tx.invoices.create({
           matterId: run.matterId, amount: finalAmount,
-          invoiceType: "FINAL", status: "DRAFT",
+          invoiceType: "FINAL", status: "DRAFT", // DOMSTOL → inget nummer/OCR (ADR 0012)
           invoiceDate: new Date(),
         });
         await tx.billingRuns.update(run.id, {
           status: "SENT", invoiceId: invoice.id, amountOre: finalAmount, prutningOre: input.prutningOre,
         });
         await freezeWork(tx, run.matterId, run.id as BillingRunId);
+        // Länka poster + PRUTNING-utlägget → kostnadsräknings-vyn visar uppdelning
+        // och totalen (arvode + utlägg − prutning) reconciler mot beloppet (#732).
+        await linkFinalInvoice(tx, invoice.id, work, []);
+        if (prutningExpenseId) await tx.expenses.flagBilled([prutningExpenseId], invoice.id);
         await emit.invoiceCreated(ctx, invoice);
         return { run, invoice };
       });

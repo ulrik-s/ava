@@ -219,6 +219,28 @@ describe("billingRun.setVerdict", () => {
     expect(res.invoice.amount).toBe(400000); // 500 - 100
   });
 
+  it("LÄNKAR poster + PRUTNING till fakturan → vyn reconciler mot beloppet (#732)", async () => {
+    const { ds, caller } = makeCaller({ workMinutes: 120, expenseOre: 5000 }); // 5000 kr + 50 kr utlägg
+    const kr = await caller.billingRun.createKostnadsrakning({ matterId: "m-1" });
+    const res = await caller.billingRun.setVerdict({ billingRunId: kr.run.id, prutningOre: -30000 });
+    const te = await ds.timeEntries.findFirst({ where: { id: "te-1" } }) as { invoiceId?: string | null };
+    const ex = await ds.expenses.findFirst({ where: { id: "ex-1" } }) as { invoiceId?: string | null };
+    const prut = await ds.expenses.findFirst({ where: { matterId: "m-1", kind: "PRUTNING" } }) as { invoiceId?: string | null };
+    expect(te.invoiceId).toBe(res.invoice.id); // arvode länkad
+    expect(ex.invoiceId).toBe(res.invoice.id); // utlägg länkad
+    expect(prut.invoiceId).toBe(res.invoice.id); // PRUTNING länkad (reducerar totalen)
+    // Summa länkade poster = arvode 5000 + utlägg 50 − prutning 300 = invoice 4750 kr.
+    expect(res.invoice.amount).toBe(500000 + 5000 - 30000);
+  });
+
+  it("DOMSTOL-faktura får inget fakturanummer (ADR 0012)", async () => {
+    const { caller } = makeCaller({ workMinutes: 60 });
+    const kr = await caller.billingRun.createKostnadsrakning({ matterId: "m-1" });
+    const res = await caller.billingRun.setVerdict({ billingRunId: kr.run.id, prutningOre: 0 });
+    expect(res.invoice.invoiceNumber).toBeFalsy();
+    expect(res.invoice.ocrReference).toBeFalsy();
+  });
+
   it("kastar om billing-run inte är KOSTNADSRAKNING", async () => {
     const { caller } = makeCaller({ workMinutes: 60 });
     const acc = await caller.billingRun.createAcconto({
