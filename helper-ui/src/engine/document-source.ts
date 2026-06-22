@@ -10,14 +10,20 @@
 import type { HelperDocumentRef } from "@/lib/shared/helper/protocol";
 
 import {
+  acquireLease,
   createDocumentClient,
   downloadDocumentBytes,
+  releaseLease,
+  renewLease,
   saveConflictCopyBytes,
   uploadDocumentBytes,
   type ConflictCopy,
   type FetchLike,
+  type LeaseInfo,
   type UploadDocResult,
 } from "./trpc-client.ts";
+
+export type { LeaseInfo } from "./trpc-client.ts";
 
 /** En dokument-källa: tRPC (`document`) ELLER statisk URL (`downloadUrl`). */
 export interface SourceRef {
@@ -137,4 +143,28 @@ export async function saveConflictCopyViaTrpc(
     ...(deps.fetch ? { fetch: deps.fetch } : {}),
   });
   return saveConflictCopyBytes(client, document.id, bytes, label);
+}
+
+/** Bygg en tRPC-klient för ett dokument-ref (rå token ur "Bearer <token>"). */
+function clientFor(document: HelperDocumentRef, deps: FetchSourceDeps): ReturnType<typeof createDocumentClient> {
+  return createDocumentClient({
+    trpcUrl: document.trpcUrl,
+    token: (deps.authHeader ?? "").replace(/^Bearer\s+/i, ""),
+    ...(deps.fetch ? { fetch: deps.fetch } : {}),
+  });
+}
+
+/** Ta leasen (ADR 0033 §2) via tRPC — helpern tar den vid öppning för redigering. */
+export function acquireLeaseViaTrpc(document: HelperDocumentRef, deps: FetchSourceDeps = {}): Promise<LeaseInfo> {
+  return acquireLease(clientFor(document, deps), document.id);
+}
+
+/** Heartbeat: förnya leasen via tRPC (`false` = förlorad). */
+export function renewLeaseViaTrpc(document: HelperDocumentRef, deps: FetchSourceDeps = {}): Promise<boolean> {
+  return renewLease(clientFor(document, deps), document.id);
+}
+
+/** Släpp leasen via tRPC (vid watch-slut). */
+export function releaseLeaseViaTrpc(document: HelperDocumentRef, deps: FetchSourceDeps = {}): Promise<void> {
+  return releaseLease(clientFor(document, deps), document.id);
 }

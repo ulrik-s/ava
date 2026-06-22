@@ -62,12 +62,28 @@ export interface HelperOpenRequest {
   authHeader?: string;
   /** Hur länge helpern lyssnar på save-events. Default 60 min. */
   maxWatchMinutes?: number;
+  /**
+   * Medvetet skrivskyddat (ADR 0033 §2, "Öppna skrivskyddat"): ingen lease,
+   * ingen watch — även oavsiktlig redigering laddas aldrig upp. Server-tier.
+   */
+  readOnly?: boolean;
+  /**
+   * "Öppna ändå för redigering" (ADR 0033 §2): redigera trots att någon annan
+   * har leasen. LÅNAR (tar inte över leasen) → redigerbart + watch, men ingen
+   * egen lease/heartbeat. Nästa save kan 409:a → keep-both.
+   */
+  forceEdit?: boolean;
 }
 
 /** Svar på `POST /open`. */
 export interface HelperOpenResponse {
   path: string;
+  /** `opened` (redigerbart) eller `read-only` (leasat av annan / medvetet). */
   status: string;
+  /** Är dokumentet öppnat skrivskyddat? (ingen write-back armad). */
+  readOnly?: boolean;
+  /** Namnet på den som håller leasen, när det öppnades skrivskyddat pga lease. */
+  leaseHolder?: string;
 }
 
 /**
