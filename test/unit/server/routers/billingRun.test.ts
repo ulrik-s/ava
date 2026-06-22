@@ -12,6 +12,7 @@ import type { Principal } from "@/lib/server/auth/principal";
 import { buildContext } from "@/lib/server/build-context";
 import { DemoDataStore } from "@/lib/server/data-store/DemoDataStore";
 import { appRouter } from "@/lib/server/routers/_app";
+import { asId } from "@/lib/shared/schemas/ids";
 
 const PRINCIPAL: Principal = {
   id: "u-1", email: "a@x", name: "Anna", role: "ADMIN", organizationId: "org-1",
@@ -103,8 +104,27 @@ describe("billingRun.createFinal", () => {
     expect(te.frozenByBillingRunId).toBe(res.run.id);
   });
 
-  it("drar av tidigare ACCONTO-runs på slutbeloppet", async () => {
-    const { caller } = makeCaller({ workMinutes: 120 }); // 5000 kr värde
+  it("LÄNKAR de debiterbara posterna till fakturan (invoice_id) → vyn visar arvode/utlägg (#728)", async () => {
+    const { ds, caller } = makeCaller({ workMinutes: 60, expenseOre: 12500 });
+    const res = await caller.billingRun.createFinal({ matterId: "m-1", recipient: "KLIENT" });
+    const te = await ds.timeEntries.findFirst({ where: { id: "te-1" } }) as { invoiceId?: string | null };
+    const ex = await ds.expenses.findFirst({ where: { id: "ex-1" } }) as { invoiceId?: string | null };
+    expect(te.invoiceId).toBe(res.invoice.id); // FÖRR: null → arvode 0.00 i slutfaktura-vyn
+    expect(ex.invoiceId).toBe(res.invoice.id); // FÖRR: null → utlägg 0.00
+  });
+
+  it("länkar INTE icke-debiterbara poster (de ingår inte i fakturabeloppet)", async () => {
+    const { ds, caller } = makeCaller({ workMinutes: 60 });
+    await ds.timeEntries.create({ data: { id: asId<"TimeEntryId">("te-nb"), organizationId: "org-1", userId: asId<"UserId">("u-1"), matterId: asId<"MatterId">("m-1"), date: new Date(), minutes: 30, description: "Intern", hourlyRate: 250000, billable: false } });
+    const res = await caller.billingRun.createFinal({ matterId: "m-1", recipient: "KLIENT" });
+    const nb = await ds.timeEntries.findFirst({ where: { id: "te-nb" } }) as { invoiceId?: string | null; frozenAt?: Date | null };
+    expect(nb.invoiceId).toBeFalsy(); // ej fakturerad
+    expect(nb.frozenAt).toBeInstanceOf(Date); // men ändå fryst (med i körningen)
+    expect(res.run.amountOre).toBe(250000); // bara debiterbar tid räknas
+  });
+
+  it("drar av tidigare ACCONTO-runs på slutbeloppet + skapar acconto_deduction-rad (#728)", async () => {
+    const { ds, caller } = makeCaller({ workMinutes: 120 }); // 5000 kr värde
     const acc = await caller.billingRun.createAcconto({
       matterId: "m-1", clientShareBips: 2000, amountOre: 100000,
     });
@@ -115,6 +135,9 @@ describe("billingRun.createFinal", () => {
     // 500000 - 100000 = 400000
     expect(fin.run.amountOre).toBe(400000);
     expect(fin.run.deductedBillingRunIds).toEqual([acc.run.id]);
+    // Acconto-avdraget materialiseras så slutfaktura-vyns "att betala" stämmer.
+    const ded = await ds.accontoDeductions.findFirst({ where: { finalInvoiceId: fin.invoice.id } }) as { accontoInvoiceId?: string } | null;
+    expect(ded?.accontoInvoiceId).toBe(acc.invoice.id);
   });
 
   it("vägrar avdrag mot okänt/fel-scopat billing-run-id (#60)", async () => {
