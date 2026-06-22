@@ -98,6 +98,13 @@ export class DrizzleExpenseRepository extends DrizzleRepository<Expense> impleme
       .where(and(eq(expenses.matterId, asId<"MatterId">(matterId)), isNull(expenses.frozenByBillingRunId)));
   }
 
+  async freezeByIds(ids: string[], billingRunId: string, now: Date): Promise<void> {
+    if (ids.length === 0) return;
+    await this.db.update(expenses)
+      .set({ frozenAt: now, frozenByBillingRunId: asId<"BillingRunId">(billingRunId) })
+      .where(and(inArray(expenses.id, ids.map((i) => asId<"ExpenseId">(i))), isNull(expenses.frozenByBillingRunId)));
+  }
+
   async listForLawyerInPeriod(
     organizationId: string, userId: string, from: Date, to: Date,
   ): Promise<LawyerReportExpense[]> {

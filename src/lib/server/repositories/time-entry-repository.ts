@@ -79,6 +79,8 @@ export interface TimeEntryRepository extends Repository<TimeEntry> {
   listUnfrozenForMatter(matterId: string): Promise<TimeEntry[]>;
   /** Frys alla ofrysta tidsposter i ett ärende mot en billing-run (bulk). */
   freezeForMatter(matterId: string, billingRunId: string, now: Date): Promise<void>;
+  /** Frys ENBART de angivna (ofrysta) tidsposterna mot en billing-run — per-post-val. */
+  freezeByIds(ids: string[], billingRunId: string, now: Date): Promise<void>;
   /** En advokats tidsposter i en period (date asc), med ärende-ref (perLawyer-rapporten). */
   listForLawyerInPeriod(organizationId: string, userId: string, from: Date, to: Date): Promise<LawyerReportTimeEntry[]>;
   /** Alla debiterbara tidsposter i org:en (för fakturerat/AR-attribuering). */

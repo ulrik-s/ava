@@ -47,6 +47,8 @@ export interface ExpenseRepository extends Repository<Expense> {
   listUnfrozenForMatter(matterId: string): Promise<Expense[]>;
   /** Frys alla ofrysta utlägg i ett ärende mot en billing-run (bulk). */
   freezeForMatter(matterId: string, billingRunId: string, now: Date): Promise<void>;
+  /** Frys ENBART de angivna (ofrysta) utläggen mot en billing-run — per-post-val. */
+  freezeByIds(ids: string[], billingRunId: string, now: Date): Promise<void>;
   /** En advokats utlägg i en period (date asc), med ärende-ref (perLawyer-rapporten). */
   listForLawyerInPeriod(organizationId: string, userId: string, from: Date, to: Date): Promise<LawyerReportExpense[]>;
 }

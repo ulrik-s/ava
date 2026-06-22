@@ -10,7 +10,7 @@
  * Båda flödena skapar ett DRAFT-utkast OCH ett faktura-PDF-dokument i ärendets
  * dokumentlista (via `generateFakturaDoc`), redo för utskick.
  */
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Modal } from "@/components/ui/modal";
 import {
   generateFakturaDoc,
@@ -130,19 +130,25 @@ function FinalForm({ matterId, meta, accontos, onDone }: { matterId: string; met
   const proposal = trpc.billingRun.proposal.useQuery({ matterId });
   const [recipient, setRecipient] = useState<"KLIENT" | "FORSAKRING" | "RATTSHJALPSMYNDIGHET">("KLIENT");
   const [selected, setSelected] = useState<string[]>(accontos.map((a) => a.id));
+  // Per-post-val (#734): null = inte rört → fakturera allt (server-default). När
+  // användaren bockar ur en post går vi över till explicit lista.
+  const allPostKeys = useMemo(() => unbilledRows(proposal.data).map((p) => p.id), [proposal.data]);
+  const [posts, setPosts] = useState<string[] | null>(null);
+  const togglePost = (key: string, checked: boolean): void =>
+    setPosts((prev) => { const base = prev ?? allPostKeys; return checked ? [...base, key] : base.filter((k) => k !== key); });
   const makeDoc = useFakturaDoc(matterId, meta);
   const mut = trpc.billingRun.createFinal.useMutation({
     onSuccess: async (res) => { await makeDoc(res.invoice); onDone(); },
   });
   return (
     <form onSubmit={(e) => { e.preventDefault(); mut.mutate({
-      matterId, recipient, deductedBillingRunIds: selected,
+      matterId, recipient, deductedBillingRunIds: selected, ...splitSelectedPosts(posts),
     }); }} className="space-y-3">
       <p className="text-sm text-gray-600">
-        Faktura med full specifikation av tid och utlägg. Alla obetalda
-        tids- och utläggsrader fryses och tas med nedan.
+        Faktura med full specifikation av tid och utlägg. Bocka i exakt vilka
+        poster som ska med — ikryssade fryses och tas med på fakturan.
       </p>
-      <UnbilledPosts proposal={proposal.data} loading={proposal.isLoading} />
+      <UnbilledPosts proposal={proposal.data} loading={proposal.isLoading} selected={posts ?? allPostKeys} onToggle={togglePost} />
       <Field label="Mottagare">
         <select value={recipient} onChange={(e) => setRecipient(e.target.value as typeof recipient)}
           className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm">
@@ -177,26 +183,42 @@ interface ProposalData {
   expenses: Array<{ id: string; description: string; amount: number; billable: boolean }>;
 }
 
-function UnbilledPosts({ proposal, loading }: { proposal: ProposalData | undefined; loading: boolean }) {
+function UnbilledPosts(
+  { proposal, loading, selected, onToggle }:
+  { proposal: ProposalData | undefined; loading: boolean; selected: string[]; onToggle: (key: string, checked: boolean) => void },
+) {
   if (loading) return <p className="text-xs text-gray-500">Laddar ofakturerade poster…</p>;
   const posts = unbilledRows(proposal);
   if (posts.length === 0) return <p className="text-xs text-gray-500">Inga ofakturerade poster i ärendet.</p>;
+  const chosenOre = posts.filter((p) => selected.includes(p.id)).reduce((s, p) => s + p.valueOre, 0);
   return (
-    <Field label={`Ofakturerade poster (${posts.length}) — föreslås i fakturan`}>
+    <Field label={`Poster att fakturera (${selected.length}/${posts.length} valda)`}>
       <div className="space-y-1 max-h-40 overflow-y-auto rounded border border-gray-200 bg-gray-50 px-2 py-1.5">
         {posts.map((p) => (
-          <div key={p.id} className="flex items-center justify-between text-xs">
-            <span className="truncate text-gray-700">{p.label}</span>
+          <label key={p.id} className="flex items-center justify-between gap-2 text-xs cursor-pointer">
+            <span className="flex items-center gap-2 min-w-0">
+              <input type="checkbox" checked={selected.includes(p.id)} onChange={(e) => onToggle(p.id, e.target.checked)} />
+              <span className="truncate text-gray-700">{p.label}</span>
+            </span>
             <span className="font-mono text-gray-900">{formatCurrency(p.valueOre)}</span>
-          </div>
+          </label>
         ))}
         <div className="flex items-center justify-between border-t border-gray-300 pt-1 text-xs font-semibold">
-          <span>Upparbetat värde</span>
-          <span className="font-mono">{formatCurrency(proposal?.workValueOre ?? 0)}</span>
+          <span>Valt värde</span>
+          <span className="font-mono">{formatCurrency(chosenOre)}</span>
         </div>
       </div>
     </Field>
   );
+}
+
+/** Dela upp valda post-nycklar (`te-…`/`ex-…`) i id-listor för createFinal. `null` → utelämna (allt). */
+function splitSelectedPosts(posts: string[] | null): { timeEntryIds: string[]; expenseIds: string[] } | Record<string, never> {
+  if (posts === null) return {};
+  return {
+    timeEntryIds: posts.filter((k) => k.startsWith("te-")).map((k) => k.slice(3)),
+    expenseIds: posts.filter((k) => k.startsWith("ex-")).map((k) => k.slice(3)),
+  };
 }
 
 interface PostRow { id: string; label: string; valueOre: number }
