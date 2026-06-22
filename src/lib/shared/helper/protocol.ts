@@ -160,6 +160,12 @@ export interface HelperSyncEntry {
    * post som återställs efter omstart fortfarande versionskollas korrekt.
    */
   baseVersion?: number;
+  /**
+   * Keep-both-kopian (ADR 0033 §4): vid konflikt materialiseras användarens
+   * version som ett syskon-dokument — här id+namn så UI kan säga på klarspråk
+   * "din version sparades som <fileName>". Satt först när kopian skapats.
+   */
+  conflictCopy?: { id: string; fileName: string };
   /** Senaste felet (om något). */
   lastError?: string;
 }

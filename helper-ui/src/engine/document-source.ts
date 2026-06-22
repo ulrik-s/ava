@@ -9,7 +9,15 @@
 
 import type { HelperDocumentRef } from "@/lib/shared/helper/protocol";
 
-import { createDocumentClient, downloadDocumentBytes, uploadDocumentBytes, type FetchLike, type UploadDocResult } from "./trpc-client.ts";
+import {
+  createDocumentClient,
+  downloadDocumentBytes,
+  saveConflictCopyBytes,
+  uploadDocumentBytes,
+  type ConflictCopy,
+  type FetchLike,
+  type UploadDocResult,
+} from "./trpc-client.ts";
 
 /** En dokument-källa: tRPC (`document`) ELLER statisk URL (`downloadUrl`). */
 export interface SourceRef {
@@ -110,4 +118,23 @@ export async function uploadViaTrpc(
     ...(deps.fetch ? { fetch: deps.fetch } : {}),
   });
   return uploadDocumentBytes(client, document.id, bytes, baseVersion);
+}
+
+/**
+ * Materialisera en keep-both-kopia (ADR 0033 §4) via tRPC `saveConflictCopy`.
+ * `label` = lokal tidsstämpel (blir del av syskon-dokumentets namn server-side).
+ */
+export async function saveConflictCopyViaTrpc(
+  document: HelperDocumentRef,
+  bytes: Uint8Array,
+  label: string,
+  deps: FetchSourceDeps = {},
+): Promise<ConflictCopy> {
+  const token = (deps.authHeader ?? "").replace(/^Bearer\s+/i, "");
+  const client = createDocumentClient({
+    trpcUrl: document.trpcUrl,
+    token,
+    ...(deps.fetch ? { fetch: deps.fetch } : {}),
+  });
+  return saveConflictCopyBytes(client, document.id, bytes, label);
 }

@@ -19,9 +19,9 @@ import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import type { HelperDocumentRef, HelperStatusResponse, HelperSyncEntry } from "@/lib/shared/helper/protocol";
-import { uploadTargetKey, uploadViaTrpc } from "./document-source.ts";
+import { saveConflictCopyViaTrpc, uploadTargetKey, uploadViaTrpc } from "./document-source.ts";
 import { log } from "./log.ts";
-import type { UploadDocResult } from "./trpc-client.ts";
+import type { ConflictCopy, UploadDocResult } from "./trpc-client.ts";
 
 /**
  * En köad upload som väntar på att nå servern. Delar form med det publika
@@ -56,6 +56,11 @@ export interface QueueDeps {
    * (framskriver basen) eller `conflict`. Kastar bara vid nät/auth-fel.
    */
   uploadDoc: (document: HelperDocumentRef, body: Uint8Array, authHeader?: string, baseVersion?: number) => Promise<UploadDocResult>;
+  /**
+   * Materialisera keep-both-kopia (ADR 0033 §4) efter ett 409 — sparar
+   * användarens bytes som ett syskon-dokument. `label` = lokal tidsstämpel.
+   */
+  saveConflictCopy: (document: HelperDocumentRef, body: Uint8Array, authHeader: string | undefined, label: string) => Promise<ConflictCopy>;
 }
 
 export const defaultQueueDeps: QueueDeps = {
@@ -70,6 +75,8 @@ export const defaultQueueDeps: QueueDeps = {
   },
   uploadDoc: (document, body, authHeader, baseVersion) =>
     uploadViaTrpc(document, body, baseVersion, authHeader !== undefined ? { authHeader } : {}),
+  saveConflictCopy: (document, body, authHeader, label) =>
+    saveConflictCopyViaTrpc(document, body, label, authHeader !== undefined ? { authHeader } : {}),
 };
 
 const BASE_BACKOFF_MS = 5_000;
@@ -258,9 +265,7 @@ export class UploadQueue {
         // nät/auth-fel kastar → markFailed nedan.
         const result = await this.deps.uploadDoc(entry.document, bytes, auth, entry.baseVersion);
         if (result.status === "conflict") {
-          await this.markConflict(entry);
-          res.conflicted++;
-          log(`queue: KONFLIKT på ${entry.fileName} — server gått förbi, kräver beslut`);
+          await this.handleConflict(entry, bytes, auth, res);
           return;
         }
         // Framskriv basen så nästa save på samma dokument inte self-konflikt:ar.
@@ -284,6 +289,26 @@ export class UploadQueue {
       log(`queue: KONFLIKT på ${entry.fileName} — server gått förbi, kräver beslut`);
     } else {
       await this.markFailed(entry, `HTTP ${status}`);
+      res.failed++;
+    }
+  }
+
+  /**
+   * Keep-both (ADR 0033 §4): materialisera användarens bytes som ett syskon-
+   * dokument och ytlägg det på posten. Misslyckas materialiseringen (offline)
+   * → markera failed så HELA vägen (upload-409 → keep-both) retr:as via backoff;
+   * bytsen ligger durabelt kvar tills kopian kan skapas. Inget förloras.
+   */
+  private async handleConflict(entry: QueueEntry, bytes: Uint8Array, auth: string | undefined, res: DrainResult): Promise<void> {
+    if (!entry.document) return;
+    try {
+      const copy = await this.deps.saveConflictCopy(entry.document, bytes, auth, conflictLabel(this.deps.now()));
+      entry.conflictCopy = copy;
+      await this.markConflict(entry);
+      res.conflicted++;
+      log(`queue: KONFLIKT på ${entry.fileName} — sparade din version separat som "${copy.fileName}"`);
+    } catch (err) {
+      await this.markFailed(entry, `keep-both: ${msg(err)}`);
       res.failed++;
     }
   }
@@ -355,4 +380,11 @@ export class UploadQueue {
 
 function msg(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
+}
+
+/** Lokal tidsstämpel-etikett "YYYY-MM-DD HH:mm" för keep-both-kopians namn. */
+export function conflictLabel(ms: number): string {
+  const d = new Date(ms);
+  const pad = (n: number): string => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
