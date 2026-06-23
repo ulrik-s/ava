@@ -5,6 +5,9 @@
  */
 
 import { createHash } from "node:crypto";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -19,11 +22,14 @@ import { generatePkce, randomState } from "../src/engine/auth/pkce.ts";
 import { TokenManager } from "../src/engine/auth/token-manager.ts";
 import {
   clearArgs,
+  FileTokenStore,
   InMemoryTokenStore,
   KeychainTokenStore,
   loadArgs,
   parseStored,
   saveArgs,
+  selectTokenStore,
+  TOKEN_FILE_NAME,
   type CaptureRunner,
 } from "../src/engine/auth/token-store.ts";
 
@@ -225,5 +231,62 @@ describe("TokenManager", () => {
     await store.save({ accessToken: "AT", refreshToken: "RT", expiresAt: Date.now() + 3_600_000 });
     const m = new TokenManager(store, EP, "ava"); // inga deps → default now/refresh
     expect(await m.getAccessToken()).toBe("AT");
+  });
+});
+
+describe("FileTokenStore (headless/Linux, #742)", () => {
+  test("save → load round-trip (skapar saknad katalog)", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "ava-token-"));
+    try {
+      const path = join(dir, "nested", TOKEN_FILE_NAME);
+      const store = new FileTokenStore(path);
+      expect(await store.load()).toBeNull(); // saknad fil → ej parad
+      await store.save({ accessToken: "AT", refreshToken: "RT", expiresAt: 123 });
+      expect(JSON.parse(readFileSync(path, "utf8"))).toMatchObject({ accessToken: "AT", expiresAt: 123 });
+      expect(await store.load()).toMatchObject({ accessToken: "AT", refreshToken: "RT", expiresAt: 123 });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("clear tar bort filen (idempotent)", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "ava-token-"));
+    try {
+      const store = new FileTokenStore(join(dir, TOKEN_FILE_NAME));
+      await store.save({ accessToken: "AT", expiresAt: 1 });
+      await store.clear();
+      expect(await store.load()).toBeNull();
+      await store.clear(); // redan borta → kastar inte
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("trasig fil → null (ej parad)", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "ava-token-"));
+    try {
+      const path = join(dir, TOKEN_FILE_NAME);
+      const store = new FileTokenStore(path);
+      await store.save({ accessToken: "AT", expiresAt: 1 });
+      rmSync(path);
+      await Bun.write(path, "{ inte json"); // skriv skräp
+      expect(await store.load()).toBeNull();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("selectTokenStore", () => {
+  test("explicit AVA_HELPER_TOKEN_FILE → FileTokenStore (alla plattformar)", () => {
+    expect(selectTokenStore("darwin", "/data", { tokenFile: "/t.json" })).toBeInstanceOf(FileTokenStore);
+    expect(selectTokenStore("linux", null, { tokenFile: "/t.json" })).toBeInstanceOf(FileTokenStore);
+  });
+  test("macOS utan override → keychain", () => {
+    expect(selectTokenStore("darwin", "/data")).toBeInstanceOf(KeychainTokenStore);
+  });
+  test("Linux med data-katalog → fil; utan → in-memory", () => {
+    expect(selectTokenStore("linux", "/data")).toBeInstanceOf(FileTokenStore);
+    expect(selectTokenStore("linux", null)).toBeInstanceOf(InMemoryTokenStore);
   });
 });
