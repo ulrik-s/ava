@@ -6,6 +6,7 @@
 import { describe, it, expect, vi } from "vitest-compat";
 import { FsaIsoGitAdapter } from "@/lib/client/fsa/fs-adapter";
 import { uploadDocumentToFsa } from "@/lib/client/fsa/upload-document";
+import { asId } from "@/lib/shared/schemas/ids";
 
 
 interface MockFs {
@@ -24,7 +25,7 @@ describe("uploadDocumentToFsa", () => {
     const handle = {} as FileSystemDirectoryHandle;
     const file = new File(["%PDF-1.4 fake bytes"], "test.pdf", { type: "application/pdf" });
     const result = await uploadDocumentToFsa({
-      handle, matterId: "m1", file,
+      handle, matterId: asId<"MatterId">("m1"), file,
       generateId: () => "d-test-1",
     });
     expect(result).toEqual({
@@ -44,7 +45,7 @@ describe("uploadDocumentToFsa", () => {
     const handle = {} as FileSystemDirectoryHandle;
     const file = new File(["data"], "noext", { type: "application/octet-stream" });
     const result = await uploadDocumentToFsa({
-      handle, matterId: "m1", file,
+      handle, matterId: asId<"MatterId">("m1"), file,
       generateId: () => "d2",
     });
     expect(result.storagePath).toBe("documents/content/d2.bin");
@@ -54,7 +55,7 @@ describe("uploadDocumentToFsa", () => {
     const handle = {} as FileSystemDirectoryHandle;
     const file = new File(["data"], "Document.PDF", { type: "application/pdf" });
     const result = await uploadDocumentToFsa({
-      handle, matterId: "m1", file,
+      handle, matterId: asId<"MatterId">("m1"), file,
       generateId: () => "d3",
     });
     expect(result.storagePath).toBe("documents/content/d3.pdf");
@@ -64,7 +65,7 @@ describe("uploadDocumentToFsa", () => {
     const handle = {} as FileSystemDirectoryHandle;
     const file = new File(["data"], "x.dat", { type: "" });
     const result = await uploadDocumentToFsa({
-      handle, matterId: "m1", file,
+      handle, matterId: asId<"MatterId">("m1"), file,
       generateId: () => "d4",
     });
     expect(result.mimeType).toBe("application/octet-stream");

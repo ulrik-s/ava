@@ -13,15 +13,15 @@ import { z } from "zod";
 import { canTransition } from "@/lib/shared/invoice-state-machine";
 import { dispatchChannelSchema, dispatchStatusSchema, type DispatchStatus, type InvoiceDispatch } from "@/lib/shared/schemas/billing";
 import type { InvoiceStatus } from "@/lib/shared/schemas/enums";
-import { asId, invoiceDispatchIdSchema, invoiceIdSchema } from "@/lib/shared/schemas/ids";
+import { asId, type InvoiceId, invoiceDispatchIdSchema, invoiceIdSchema } from "@/lib/shared/schemas/ids";
 import type { Repositories } from "../repositories/repositories";
 import { router, orgProcedure } from "../trpc";
 
 type DispatchCtx = { repos: Repositories; orgId: string };
 
 /** Verifiera org-tillhörighet + returnera fakturans id/status (repository-sömmen, ADR 0020). */
-async function assertInvoiceInOrg(ctx: DispatchCtx, invoiceId: string): Promise<{ id: string; status: string }> {
-  const inv = await ctx.repos.invoices.getByIdInOrg(asId<"InvoiceId">(invoiceId), asId<"OrganizationId">(ctx.orgId));
+async function assertInvoiceInOrg(ctx: DispatchCtx, invoiceId: InvoiceId): Promise<{ id: InvoiceId; status: string }> {
+  const inv = await ctx.repos.invoices.getByIdInOrg(invoiceId, asId<"OrganizationId">(ctx.orgId));
   if (!inv) throw new TRPCError({ code: "NOT_FOUND", message: "Fakturan finns inte i organisationen." });
   return inv;
 }
@@ -30,9 +30,9 @@ async function assertInvoiceInOrg(ctx: DispatchCtx, invoiceId: string): Promise<
  * En köad/skickad faktura är inte längre ett utkast (#392). Flippa DRAFT → SENT
  * via tillståndsmaskinen (#350); redan utställd faktura lämnas oförändrad.
  */
-async function markSentIfDraft(ctx: DispatchCtx, inv: { id: string; status: string }): Promise<void> {
+async function markSentIfDraft(ctx: DispatchCtx, inv: { id: InvoiceId; status: string }): Promise<void> {
   if (inv.status !== "DRAFT" || !canTransition("DRAFT", "SENT")) return;
-  await ctx.repos.invoices.update(asId<"InvoiceId">(inv.id), { status: "SENT" satisfies InvoiceStatus });
+  await ctx.repos.invoices.update(inv.id, { status: "SENT" satisfies InvoiceStatus });
 }
 
 /** Tidsstämpelfältet som en statusövergång sätter (queued sätts vid skapande). */
@@ -53,7 +53,7 @@ export const invoiceDispatchRouter = router({
 
   /** Alla köade utskick i org:en — server-runtime-dispatch-workern (#180) plockar dessa. */
   listQueued: orgProcedure.query(({ ctx }) =>
-    ctx.repos.invoiceDispatches.listQueuedForOrg(ctx.orgId),
+    ctx.repos.invoiceDispatches.listQueuedForOrg(asId<"OrganizationId">(ctx.orgId)),
   ),
 
   queue: orgProcedure
@@ -66,7 +66,7 @@ export const invoiceDispatchRouter = router({
       const inv = await assertInvoiceInOrg(ctx, input.invoiceId);
       const now = new Date();
       const dispatch = await ctx.repos.invoiceDispatches.create({
-        invoiceId: asId<"InvoiceId">(input.invoiceId),
+        invoiceId: input.invoiceId,
         channel: input.channel,
         recipient: input.recipient,
         status: "queued",
@@ -97,7 +97,7 @@ export const invoiceDispatchRouter = router({
       const inv = await assertInvoiceInOrg(ctx, input.invoiceId);
       const now = new Date();
       const dispatch = await ctx.repos.invoiceDispatches.create({
-        invoiceId: asId<"InvoiceId">(input.invoiceId),
+        invoiceId: input.invoiceId,
         channel: input.channel,
         recipient: input.recipient,
         status: "sent",
@@ -121,7 +121,7 @@ export const invoiceDispatchRouter = router({
     .mutation(async ({ ctx, input }) => {
       const dispatch = await ctx.repos.invoiceDispatches.getById(input.dispatchId);
       if (!dispatch) throw new TRPCError({ code: "NOT_FOUND" });
-      await assertInvoiceInOrg(ctx, String(dispatch.invoiceId));
+      await assertInvoiceInOrg(ctx, dispatch.invoiceId);
 
       const tsField = STATUS_TIMESTAMP[input.status];
       return ctx.repos.invoiceDispatches.update(input.dispatchId, {

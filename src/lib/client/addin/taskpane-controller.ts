@@ -12,6 +12,7 @@
 
 import { createAddinClient } from "@/lib/client/addin/addin-client";
 import { saveIncomingMail, type MailSaverClient } from "@/lib/client/addin/save-incoming-mail";
+import type { MatterId } from "@/lib/shared/schemas/ids";
 
 // ─── Smal Office.js-yta (det subset task-panen faktiskt rör) ──────────
 
@@ -40,7 +41,7 @@ export interface OfficeLike {
   MailboxEnums: { RestVersion: { v2_0: string } };
 }
 
-export interface MatterHit { id: string; matterNumber: string; title: string }
+export interface MatterHit { id: MatterId; matterNumber: string; title: string }
 type StatusFn = (msg: string, cls?: string) => void;
 
 /** Smal klient-yta för ärende-söket (uppfylls av `createAddinClient(...)`s
@@ -49,7 +50,7 @@ export interface MatterSearchClient {
   matter: {
     list: {
       query: (input: { search?: string; pageSize?: number }) => Promise<{
-        matters: ReadonlyArray<{ id: string; matterNumber: string; title: string }>;
+        matters: ReadonlyArray<{ id: MatterId; matterNumber: string; title: string }>;
       }>;
     };
   };

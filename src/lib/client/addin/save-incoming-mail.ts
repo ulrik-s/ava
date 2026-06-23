@@ -12,6 +12,7 @@
 import type { inferRouterInputs } from "@trpc/server";
 import { fetchMessageEml, type GraphFetch } from "@/lib/client/graph/graph-mail";
 import type { AppRouter } from "@/lib/server/routers/_app";
+import type { MatterId } from "@/lib/shared/schemas/ids";
 
 type SaveIncomingInput = inferRouterInputs<AppRouter>["mail"]["saveIncoming"];
 
@@ -29,7 +30,7 @@ export interface SaveIncomingMailDeps {
   /** Meddelandets REST-id (konverterat från Office `itemId` av shell:en). */
   restId: string;
   /** Valt ärende. */
-  matterId: string;
+  matterId: MatterId;
   /** Mejlets ämne (ur Office `item.subject`). */
   subject: string;
   /** Mottaget-datum, ISO (ur Office `item.dateTimeCreated`). */

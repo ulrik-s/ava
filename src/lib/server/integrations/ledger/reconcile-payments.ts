@@ -15,11 +15,12 @@
  */
 
 import { normalizeRef } from "@/lib/shared/payments/match-payments";
+import type { InvoiceId } from "@/lib/shared/schemas/ids";
 import type { LedgerPayment } from "./port";
 
 /** Faktura-delmängd avprickningen behöver. */
 export interface ReconcileInvoice {
-  id: string;
+  id: InvoiceId;
   ocrReference: string | null;
   /** Referenser på redan bokförda betalningar (Payment.reference) — dubblettskydd. */
   paymentReferences: readonly string[];
@@ -27,7 +28,7 @@ export interface ReconcileInvoice {
 
 /** En avprickningsbar betalning (matchad mot en faktura). */
 export interface ReconciledPayment {
-  invoiceId: string;
+  invoiceId: InvoiceId;
   amountOre: number;
   /** Idempotens-referens (= LedgerPayment.externalId). */
   reference: string;
@@ -47,15 +48,15 @@ export interface ReconcileOutcome {
 }
 
 /** OCR-referens (normaliserad) → faktura-id. */
-function buildOcrIndex(invoices: readonly ReconcileInvoice[]): Map<string, string> {
-  const index = new Map<string, string>();
+function buildOcrIndex(invoices: readonly ReconcileInvoice[]): Map<string, InvoiceId> {
+  const index = new Map<string, InvoiceId>();
   for (const inv of invoices) {
     if (inv.ocrReference) index.set(normalizeRef(inv.ocrReference), inv.id);
   }
   return index;
 }
 
-function toReconciled(payment: LedgerPayment, invoiceId: string): ReconciledPayment {
+function toReconciled(payment: LedgerPayment, invoiceId: InvoiceId): ReconciledPayment {
   return {
     invoiceId,
     amountOre: payment.amount,

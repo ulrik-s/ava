@@ -13,7 +13,7 @@
  */
 
 import { z } from "zod";
-import { asId, documentFolderIdSchema, matterIdSchema } from "@/lib/shared/schemas/ids";
+import { asId, documentFolderIdSchema, type MatterId, matterIdSchema } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { emit, type EmitCtx } from "../events/emit";
 import type { Repositories } from "../repositories/repositories";
@@ -79,7 +79,7 @@ export const mailRouter = router({
       const fileName = emlFileName(input.subject);
       const docData = {
         id: asId<"DocumentId">(id),
-        matterId: asId<"MatterId">(input.matterId),
+        matterId: input.matterId,
         fileName,
         mimeType: "message/rfc822",
         sizeBytes: bytes.byteLength,
@@ -107,7 +107,7 @@ export const mailRouter = router({
 /** Bokför tidsposten som hör ihop med ett sparat mail (#72 funktion 1). */
 async function createMailTimeEntry(
   ctx: MailCtx,
-  matterId: string,
+  matterId: MatterId,
   receivedAt: string,
   subject: string,
   time: z.infer<typeof timeInput>,
@@ -116,7 +116,7 @@ async function createMailTimeEntry(
   const user = await ctx.repos.users.getByIdOrThrow(userId);
   const entryData = {
     userId,
-    matterId: asId<"MatterId">(matterId),
+    matterId,
     date: new Date(receivedAt),
     minutes: time.minutes,
     description: time.description ?? subject,

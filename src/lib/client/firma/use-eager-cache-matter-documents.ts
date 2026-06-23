@@ -11,9 +11,10 @@
 import { useEffect, useRef } from "react";
 import { useCapabilities } from "@/lib/client/capabilities/use-capabilities";
 import { trpc } from "@/lib/client/trpc";
+import type { MatterId } from "@/lib/shared/schemas/ids";
 import { prefetchMatterDocuments, type PrefetchableDoc } from "./prefetch-matter-documents";
 
-export function useEagerCacheMatterDocuments(matterId: string): void {
+export function useEagerCacheMatterDocuments(matterId: MatterId): void {
   const { sync } = useCapabilities();
   const tree = trpc.document.tree.useQuery({ matterId }, { enabled: sync });
   const started = useRef(false);
