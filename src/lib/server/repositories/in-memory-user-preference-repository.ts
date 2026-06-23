@@ -1,5 +1,6 @@
 /** In-memory `UserPreferenceRepository` (ADR 0020). */
 
+import type { OrganizationId, UserId } from "@/lib/shared/schemas/ids";
 import type { UserPreference } from "@/lib/shared/schemas/preference";
 import type { IDataStore } from "../data-store/IDataStore";
 import { InMemoryRepository } from "./in-memory-repository";
@@ -12,7 +13,7 @@ export class InMemoryUserPreferenceRepository extends InMemoryRepository<UserPre
     super(store.userPreferences, now ?? (() => new Date()));
   }
 
-  async getByUserKey(userId: string, organizationId: string, key: string): Promise<UserPreference | null> {
+  async getByUserKey(userId: UserId, organizationId: OrganizationId, key: string): Promise<UserPreference | null> {
     const row = (await this.delegate.findFirst({ where: { userId, organizationId, key } })) as UserPreference | null;
     return row && !(row as { deletedAt?: unknown }).deletedAt ? row : null;
   }

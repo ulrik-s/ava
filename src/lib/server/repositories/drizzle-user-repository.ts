@@ -4,6 +4,7 @@
  */
 
 import { and, asc, eq, isNull } from "drizzle-orm";
+import type { OrganizationId, UserId } from "@/lib/shared/schemas/ids";
 import type { User } from "@/lib/shared/schemas/user";
 import { users } from "../db/schema";
 import type { AppDb } from "../db/types";
@@ -15,7 +16,7 @@ export class DrizzleUserRepository extends DrizzleRepository<User> implements Us
     super(db, versionedTable(users), now);
   }
 
-  async getByIdInOrg(id: string, organizationId: string): Promise<User | null> {
+  async getByIdInOrg(id: UserId, organizationId: OrganizationId): Promise<User | null> {
     const rows = await this.db
       .select().from(users)
       .where(and(eq(users.id, id), eq(users.organizationId, organizationId), isNull(users.deletedAt)))
@@ -23,7 +24,7 @@ export class DrizzleUserRepository extends DrizzleRepository<User> implements Us
     return this.asRow(rows[0]);
   }
 
-  async listByOrg(organizationId: string): Promise<User[]> {
+  async listByOrg(organizationId: OrganizationId): Promise<User[]> {
     const rows = await this.db
       .select().from(users)
       .where(and(eq(users.organizationId, organizationId), isNull(users.deletedAt)))

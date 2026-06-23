@@ -121,7 +121,7 @@ export const calendarRouter = router({
    */
   listForUsers: protectedProcedure
     .input(z.object({
-      userIds: z.array(z.string()),
+      userIds: z.array(userIdSchema),
       from: z.date().optional(),
       to: z.date().optional(),
     }))

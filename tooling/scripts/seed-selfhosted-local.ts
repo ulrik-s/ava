@@ -28,7 +28,7 @@ import type { User } from "@/lib/shared/schemas/user";
 import { uuidv7 } from "@/lib/shared/uuid";
 
 const DB_URL = process.env.AVA_DATABASE_URL ?? "postgres://ava:ava@localhost:5433/ava_test";
-const ORG = process.env.AVA_ORGANIZATION_ID ?? "00000000-0000-0000-0000-000000000001";
+const ORG = asId<"OrganizationId">(process.env.AVA_ORGANIZATION_ID ?? "00000000-0000-0000-0000-000000000001");
 
 /** KC-realm:ens (realm-ava.json) allowlistade testanvändare. `outsider` seedas
  *  MEDVETET INTE → demonstrerar att autentiserad ≠ auktoriserad (nekas). */
@@ -44,8 +44,8 @@ async function main(): Promise<void> {
   const repos = buildDrizzleRepositories(db);
   enableChangeLogOnAll(repos, createDbChangeLogRecorder(db));
   try {
-    if (!(await repos.organizations.getById(asId<"OrganizationId">(ORG)))) {
-      await repos.organizations.create({ id: asId<"OrganizationId">(ORG), name: "Demobyrå AB" } satisfies Partial<Organization>);
+    if (!(await repos.organizations.getById(ORG))) {
+      await repos.organizations.create({ id: ORG, name: "Demobyrå AB" } satisfies Partial<Organization>);
     }
     // --demo (#633-uppf.): demo-seeden mappar sin admin + huvud-jurist till
     // KC-login-emailen (admin@/lawyer@ava.test) och ÄGER datan → skapa INTE
@@ -59,7 +59,7 @@ async function main(): Promise<void> {
       if (existing.has(u.email)) { console.log(`• ${u.email} finns redan`); continue; }
       await repos.users.create({
         id: asId<"UserId">(uuidv7()),
-        organizationId: asId<"OrganizationId">(ORG),
+        organizationId: ORG,
         email: u.email,
         name: u.name,
         role: u.role,

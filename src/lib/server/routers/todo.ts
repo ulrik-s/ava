@@ -12,6 +12,7 @@
 
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import { userIdSchema } from "@/lib/shared/schemas/ids";
 import { router, orgProcedure } from "../trpc";
 
 export interface TodoItem {
@@ -36,7 +37,7 @@ export const todoRouter = router({
       from: z.date(),
       to: z.date(),
       /** Default = anropande user; annars måste user:n vara i samma org. */
-      userId: z.string().optional(),
+      userId: userIdSchema.optional(),
     }))
     .query(async ({ ctx, input }) => {
       const userId = input.userId ?? ctx.user.id;

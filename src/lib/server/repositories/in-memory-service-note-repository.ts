@@ -3,6 +3,7 @@
  * bas-CRUD; list/ägar-vakt org-scopar via ärendet (samma relations-where som routern).
  */
 
+import type { MatterId, OrganizationId, ServiceNoteId } from "@/lib/shared/schemas/ids";
 import type { ServiceNote } from "@/lib/shared/schemas/service-note";
 import type { IDataStore } from "../data-store/IDataStore";
 import { InMemoryRepository } from "./in-memory-repository";
@@ -16,7 +17,7 @@ export class InMemoryServiceNoteRepository extends InMemoryRepository<ServiceNot
     super(store.serviceNotes, now ?? (() => new Date()));
   }
 
-  async listByMatter(matterId: string, organizationId: string): Promise<ServiceNoteRow[]> {
+  async listByMatter(matterId: MatterId, organizationId: OrganizationId): Promise<ServiceNoteRow[]> {
     return (await this.delegate.findMany({
       where: { matterId, matter: { organizationId } },
       orderBy: { createdAt: "desc" },
@@ -24,7 +25,7 @@ export class InMemoryServiceNoteRepository extends InMemoryRepository<ServiceNot
     })) as ServiceNoteRow[];
   }
 
-  async getByIdInOrg(id: string, organizationId: string): Promise<ServiceNote | null> {
+  async getByIdInOrg(id: ServiceNoteId, organizationId: OrganizationId): Promise<ServiceNote | null> {
     const row = (await this.delegate
       .findFirst({ where: { id, matter: { organizationId } } })) as ServiceNote | null;
     return row && !(row as { deletedAt?: unknown }).deletedAt ? row : null;

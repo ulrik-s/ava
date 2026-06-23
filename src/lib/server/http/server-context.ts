@@ -28,6 +28,7 @@ import type { Repositories } from "@/lib/server/repositories/repositories";
 import type { SyncStore } from "@/lib/server/sync/sync-store";
 import type { Context } from "@/lib/server/trpc-core";
 import type { Capabilities } from "@/lib/shared/capabilities";
+import { asId } from "@/lib/shared/schemas/ids";
 import type { User } from "@/lib/shared/schemas/user";
 import { bearerClaims, type BearerVerifyConfig } from "./bearer-claims";
 import { forwardedClaims, type ForwardedHeaderNames } from "./forwarded-claims";
@@ -118,7 +119,7 @@ export async function createServerContext(req: Request, deps: ServerContextDeps)
   const claims =
     forwardedClaims(req.headers, deps.headerNames) ??
     (deps.bearer ? await bearerClaims(req.headers, deps.bearer) : null);
-  const users = await deps.repos.users.listByOrg(deps.organizationId);
+  const users = await deps.repos.users.listByOrg(asId<"OrganizationId">(deps.organizationId));
   const principal = new OidcAuthProvider(claims, toAllowlist(users)).getPrincipal();
   return buildContext({
     eventLog: serverFirstEventLog,

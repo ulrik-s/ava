@@ -4,7 +4,7 @@
  */
 
 import { and, desc, eq, isNull } from "drizzle-orm";
-import { asId } from "@/lib/shared/schemas/ids";
+import type { MatterId, OrganizationId, ServiceNoteId } from "@/lib/shared/schemas/ids";
 import type { ServiceNote } from "@/lib/shared/schemas/service-note";
 import { matters, serviceNotes, users } from "../db/schema";
 import type { AppDb } from "../db/types";
@@ -16,14 +16,14 @@ export class DrizzleServiceNoteRepository extends DrizzleRepository<ServiceNote>
     super(db, versionedTable(serviceNotes), now);
   }
 
-  async listByMatter(matterId: string, organizationId: string): Promise<ServiceNoteRow[]> {
+  async listByMatter(matterId: MatterId, organizationId: OrganizationId): Promise<ServiceNoteRow[]> {
     const rows = await this.db
       .select({ note: serviceNotes, aId: users.id, aName: users.name }).from(serviceNotes)
       .innerJoin(matters, eq(serviceNotes.matterId, matters.id))
       .leftJoin(users, eq(serviceNotes.authorId, users.id))
       .where(and(
-        eq(serviceNotes.matterId, asId<"MatterId">(matterId)),
-        eq(matters.organizationId, asId<"OrganizationId">(organizationId)),
+        eq(serviceNotes.matterId, matterId),
+        eq(matters.organizationId, organizationId),
         isNull(serviceNotes.deletedAt),
       ))
       .orderBy(desc(serviceNotes.createdAt));
@@ -33,11 +33,11 @@ export class DrizzleServiceNoteRepository extends DrizzleRepository<ServiceNote>
     }));
   }
 
-  async getByIdInOrg(id: string, organizationId: string): Promise<ServiceNote | null> {
+  async getByIdInOrg(id: ServiceNoteId, organizationId: OrganizationId): Promise<ServiceNote | null> {
     const rows = await this.db
       .select({ note: serviceNotes }).from(serviceNotes)
       .innerJoin(matters, eq(serviceNotes.matterId, matters.id))
-      .where(and(eq(serviceNotes.id, asId<"ServiceNoteId">(id)), eq(matters.organizationId, asId<"OrganizationId">(organizationId)), isNull(serviceNotes.deletedAt)))
+      .where(and(eq(serviceNotes.id, id), eq(matters.organizationId, organizationId), isNull(serviceNotes.deletedAt)))
       .limit(1);
     return rows[0]?.note ?? null;
   }

@@ -3,6 +3,7 @@
  * org-scopar direkt på `organizationId`.
  */
 
+import type { OrganizationId, UserId } from "@/lib/shared/schemas/ids";
 import type { User } from "@/lib/shared/schemas/user";
 import type { IDataStore } from "../data-store/IDataStore";
 import { InMemoryRepository } from "./in-memory-repository";
@@ -16,12 +17,12 @@ export class InMemoryUserRepository extends InMemoryRepository<User> implements 
     super(store.users, now ?? (() => new Date()));
   }
 
-  async getByIdInOrg(id: string, organizationId: string): Promise<User | null> {
+  async getByIdInOrg(id: UserId, organizationId: OrganizationId): Promise<User | null> {
     const row = (await this.delegate.findFirst({ where: { id, organizationId } })) as User | null;
     return row && !(row as { deletedAt?: unknown }).deletedAt ? row : null;
   }
 
-  async listByOrg(organizationId: string): Promise<User[]> {
+  async listByOrg(organizationId: OrganizationId): Promise<User[]> {
     return (await this.delegate.findMany({ where: { organizationId }, orderBy: { name: "asc" } })) as User[];
   }
 }

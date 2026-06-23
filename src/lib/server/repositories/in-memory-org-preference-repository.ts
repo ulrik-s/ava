@@ -1,5 +1,6 @@
 /** In-memory `OrgPreferenceRepository` (ADR 0020). */
 
+import type { OrganizationId } from "@/lib/shared/schemas/ids";
 import type { OrgPreference } from "@/lib/shared/schemas/preference";
 import type { IDataStore } from "../data-store/IDataStore";
 import { InMemoryRepository } from "./in-memory-repository";
@@ -12,12 +13,12 @@ export class InMemoryOrgPreferenceRepository extends InMemoryRepository<OrgPrefe
     super(store.orgPreferences, now ?? (() => new Date()));
   }
 
-  async getByOrgKey(organizationId: string, key: string): Promise<OrgPreference | null> {
+  async getByOrgKey(organizationId: OrganizationId, key: string): Promise<OrgPreference | null> {
     const row = (await this.delegate.findFirst({ where: { organizationId, key } })) as OrgPreference | null;
     return row && !(row as { deletedAt?: unknown }).deletedAt ? row : null;
   }
 
-  async listByOrg(organizationId: string): Promise<OrgPreference[]> {
+  async listByOrg(organizationId: OrganizationId): Promise<OrgPreference[]> {
     return (await this.delegate.findMany({ where: { organizationId }, orderBy: { key: "asc" } })) as OrgPreference[];
   }
 }
