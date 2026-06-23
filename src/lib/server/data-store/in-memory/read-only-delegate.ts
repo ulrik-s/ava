@@ -193,8 +193,9 @@ export class ReadOnlyDelegate<T extends Record<string, unknown>> implements Dele
     let children = rc.collection().filter((c) => this.engine.matches(c, finalWhere));
 
     const subTree = subTreeFor(spec, mode);
-    if (subTree && rc.relations) {
-      children = children.map((c) => this.hydrateWith(c, rc.relations!, subTree, mode));
+    const relations = rc.relations;
+    if (subTree && relations) {
+      children = children.map((c) => this.hydrateWith(c, relations, subTree, mode));
     }
     children = applyTake(children, spec, mode);
     return rc.kind === "one" ? (children[0] ?? null) : children;
