@@ -5,6 +5,7 @@
  */
 
 import type { Contact } from "@/lib/shared/schemas/contact";
+import type { ContactId, OrganizationId } from "@/lib/shared/schemas/ids";
 import type { IDataStore } from "../data-store/IDataStore";
 import type {
   ContactFull, ContactListOptions, ContactListResult, ContactListRow, ContactRepository,
@@ -19,7 +20,7 @@ export class InMemoryContactRepository extends InMemoryRepository<Contact> imple
     super(store.contacts, now ?? (() => new Date()));
   }
 
-  async listForOrg(organizationId: string, opts: ContactListOptions): Promise<ContactListResult> {
+  async listForOrg(organizationId: OrganizationId, opts: ContactListOptions): Promise<ContactListResult> {
     const where = {
       organizationId,
       parentId: null,
@@ -48,7 +49,7 @@ export class InMemoryContactRepository extends InMemoryRepository<Contact> imple
     return { contacts, total };
   }
 
-  async getByIdFull(id: string, organizationId: string): Promise<ContactFull | null> {
+  async getByIdFull(id: ContactId, organizationId: OrganizationId): Promise<ContactFull | null> {
     const row = (await this.delegate.findFirst({
       where: { id, organizationId },
       include: {
@@ -63,11 +64,11 @@ export class InMemoryContactRepository extends InMemoryRepository<Contact> imple
     return row && !(row as { deletedAt?: unknown }).deletedAt ? row : null;
   }
 
-  async findByPersonalNumber(organizationId: string, personalNumber: string): Promise<Contact | null> {
+  async findByPersonalNumber(organizationId: OrganizationId, personalNumber: string): Promise<Contact | null> {
     return (await this.delegate.findFirst({ where: { personalNumber, organizationId } })) as Contact | null;
   }
 
-  async findByOrgNumber(organizationId: string, orgNumber: string): Promise<Contact | null> {
+  async findByOrgNumber(organizationId: OrganizationId, orgNumber: string): Promise<Contact | null> {
     return (await this.delegate.findFirst({ where: { orgNumber, organizationId } })) as Contact | null;
   }
 }

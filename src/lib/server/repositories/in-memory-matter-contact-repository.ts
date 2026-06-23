@@ -5,6 +5,7 @@
  */
 
 import type { Contact } from "@/lib/shared/schemas/contact";
+import type { ContactId, MatterContactId, MatterId, OrganizationId } from "@/lib/shared/schemas/ids";
 import type { MatterContact } from "@/lib/shared/schemas/matter";
 import type { IDataStore } from "../data-store/IDataStore";
 import { InMemoryRepository } from "./in-memory-repository";
@@ -30,7 +31,7 @@ export class InMemoryMatterContactRepository
     super(source.matterContacts, now ?? (() => new Date()));
   }
 
-  async findForConflict(organizationId: string, numberTerm?: string): Promise<ConflictContactRow[]> {
+  async findForConflict(organizationId: OrganizationId, numberTerm?: string): Promise<ConflictContactRow[]> {
     const where = numberTerm
       ? {
           matter: { organizationId },
@@ -47,7 +48,7 @@ export class InMemoryMatterContactRepository
     }));
   }
 
-  async getByIdInOrg(id: string, organizationId: string): Promise<MatterContact | null> {
+  async getByIdInOrg(id: MatterContactId, organizationId: OrganizationId): Promise<MatterContact | null> {
     const row = (await this.delegate.findFirst({
       where: { id, matter: { organizationId } },
     })) as (MatterContact & { deletedAt?: unknown }) | null;
@@ -61,11 +62,11 @@ export class InMemoryMatterContactRepository
     return row as MatterContactWithContact;
   }
 
-  async findLink(matterId: string, contactId: string, role: string): Promise<MatterContact | null> {
+  async findLink(matterId: MatterId, contactId: ContactId, role: string): Promise<MatterContact | null> {
     return (await this.delegate.findFirst({ where: { matterId, contactId, role } })) as MatterContact | null;
   }
 
-  async listContactsForMatter(matterId: string): Promise<Contact[]> {
+  async listContactsForMatter(matterId: MatterId): Promise<Contact[]> {
     const rows = (await this.delegate.findMany({
       where: { matterId }, include: { contact: true },
     })) as Array<{ contact: Contact }>;

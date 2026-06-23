@@ -7,7 +7,7 @@
 import { and, asc, desc, eq, ilike, inArray, isNull, like, or, sql } from "drizzle-orm";
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import type { Contact } from "@/lib/shared/schemas/contact";
-import { asId } from "@/lib/shared/schemas/ids";
+import type { ContactId, OrganizationId } from "@/lib/shared/schemas/ids";
 import { contacts, matterContacts, matters } from "../db/schema";
 import type { AppDb } from "../db/types";
 import type {
@@ -20,9 +20,9 @@ export class DrizzleContactRepository extends DrizzleRepository<Contact> impleme
     super(db, versionedTable(contacts), now);
   }
 
-  async listForOrg(organizationId: string, opts: ContactListOptions): Promise<ContactListResult> {
+  async listForOrg(organizationId: OrganizationId, opts: ContactListOptions): Promise<ContactListResult> {
     const where = and(
-      eq(contacts.organizationId, asId<"OrganizationId">(organizationId)),
+      eq(contacts.organizationId, organizationId),
       isNull(contacts.parentId), // bara topp-nivå
       isNull(contacts.deletedAt),
       opts.contactType ? eq(contacts.contactType, opts.contactType) : undefined,
@@ -66,15 +66,15 @@ export class DrizzleContactRepository extends DrizzleRepository<Contact> impleme
     return new Map(rows.map((r) => [String(r.key), Number(r.n)]));
   }
 
-  async getByIdFull(id: string, organizationId: string): Promise<ContactFull | null> {
+  async getByIdFull(id: ContactId, organizationId: OrganizationId): Promise<ContactFull | null> {
     const [c] = await this.db
       .select().from(contacts)
-      .where(and(eq(contacts.id, asId<"ContactId">(id)), eq(contacts.organizationId, asId<"OrganizationId">(organizationId)), isNull(contacts.deletedAt)))
+      .where(and(eq(contacts.id, id), eq(contacts.organizationId, organizationId), isNull(contacts.deletedAt)))
       .limit(1);
     if (!c) return null;
     const children = await this.db
       .select().from(contacts)
-      .where(and(eq(contacts.parentId, asId<"ContactId">(id)), isNull(contacts.deletedAt))).orderBy(asc(contacts.name));
+      .where(and(eq(contacts.parentId, id), isNull(contacts.deletedAt))).orderBy(asc(contacts.name));
     const parentId = c.parentId;
     const parentRows = parentId
       ? await this.db.select({ id: contacts.id, name: contacts.name }).from(contacts).where(eq(contacts.id, parentId)).limit(1)
@@ -86,7 +86,7 @@ export class DrizzleContactRepository extends DrizzleRepository<Contact> impleme
       })
       .from(matterContacts)
       .innerJoin(matters, eq(matterContacts.matterId, matters.id)) // matterId NOT NULL FK → matter finns alltid
-      .where(eq(matterContacts.contactId, asId<"ContactId">(id)))
+      .where(eq(matterContacts.contactId, id))
       .orderBy(desc(matterContacts.createdAt));
     return {
       ...c,
@@ -99,16 +99,16 @@ export class DrizzleContactRepository extends DrizzleRepository<Contact> impleme
     };
   }
 
-  async findByPersonalNumber(organizationId: string, personalNumber: string): Promise<Contact | null> {
+  async findByPersonalNumber(organizationId: OrganizationId, personalNumber: string): Promise<Contact | null> {
     const rows = await this.db.select().from(contacts)
-      .where(and(eq(contacts.organizationId, asId<"OrganizationId">(organizationId)), eq(contacts.personalNumber, personalNumber), isNull(contacts.deletedAt)))
+      .where(and(eq(contacts.organizationId, organizationId), eq(contacts.personalNumber, personalNumber), isNull(contacts.deletedAt)))
       .limit(1);
     return this.asRow(rows[0]);
   }
 
-  async findByOrgNumber(organizationId: string, orgNumber: string): Promise<Contact | null> {
+  async findByOrgNumber(organizationId: OrganizationId, orgNumber: string): Promise<Contact | null> {
     const rows = await this.db.select().from(contacts)
-      .where(and(eq(contacts.organizationId, asId<"OrganizationId">(organizationId)), eq(contacts.orgNumber, orgNumber), isNull(contacts.deletedAt)))
+      .where(and(eq(contacts.organizationId, organizationId), eq(contacts.orgNumber, orgNumber), isNull(contacts.deletedAt)))
       .limit(1);
     return this.asRow(rows[0]);
   }

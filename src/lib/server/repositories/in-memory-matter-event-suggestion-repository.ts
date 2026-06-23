@@ -4,6 +4,7 @@
  */
 
 import type { MatterEventSuggestion } from "@/lib/shared/schemas/document";
+import type { MatterEventSuggestionId, MatterId, OrganizationId } from "@/lib/shared/schemas/ids";
 import type { IDataStore } from "../data-store/IDataStore";
 import { InMemoryRepository } from "./in-memory-repository";
 import type {
@@ -19,7 +20,7 @@ export class InMemoryMatterEventSuggestionRepository
     super(store.matterEventSuggestions, now ?? (() => new Date()));
   }
 
-  async listForMatter(matterId: string, organizationId: string): Promise<MatterEventSuggestionRow[]> {
+  async listForMatter(matterId: MatterId, organizationId: OrganizationId): Promise<MatterEventSuggestionRow[]> {
     return (await this.delegate.findMany({
       where: {
         status: { not: "REJECTED" },
@@ -30,7 +31,7 @@ export class InMemoryMatterEventSuggestionRepository
     })) as MatterEventSuggestionRow[];
   }
 
-  async getByIdInOrg(id: string, organizationId: string): Promise<MatterEventSuggestion | null> {
+  async getByIdInOrg(id: MatterEventSuggestionId, organizationId: OrganizationId): Promise<MatterEventSuggestion | null> {
     const row = (await this.delegate.findFirst({
       where: { id, document: { matter: { organizationId } } },
     })) as (MatterEventSuggestion & { deletedAt?: unknown }) | null;

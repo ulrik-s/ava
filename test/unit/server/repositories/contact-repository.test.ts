@@ -11,13 +11,14 @@ import { contacts, matterContacts, matters } from "@/lib/server/db/schema";
 import { DrizzleContactRepository } from "@/lib/server/repositories/drizzle-contact-repository";
 import { InMemoryContactRepository } from "@/lib/server/repositories/in-memory-contact-repository";
 import { prebakeJoins } from "@/lib/shared/demo-source";
+import { asId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { createTestDb, type TestDbHandle } from "../db/pg-test-db";
 
 describe("ContactRepository — in-memory", () => {
   function seed() {
-    const c1 = uuidv7();
-    const child = uuidv7();
+    const c1 = asId<"ContactId">(uuidv7());
+    const child = asId<"ContactId">(uuidv7());
     const mId = uuidv7();
     // prebakeJoins speglar demo-runtime → nästlade relationer (matterLinks.matter)
     // resolvas, precis som i produktion.
@@ -36,24 +37,24 @@ describe("ContactRepository — in-memory", () => {
   it("listForOrg: topp-nivå + _count + sök", async () => {
     const { store, c1 } = seed();
     const repo = new InMemoryContactRepository(store);
-    const res = await repo.listForOrg("org-1", { page: 1, pageSize: 50 });
+    const res = await repo.listForOrg(asId<"OrganizationId">("org-1"), { page: 1, pageSize: 50 });
     expect(res.total).toBe(1); // child (parentId satt) exkluderad
     expect(res.contacts[0]!.id).toBe(c1);
     expect(res.contacts[0]!._count.children).toBe(1);
     expect(res.contacts[0]!._count.matterLinks).toBe(1);
-    expect((await repo.listForOrg("org-1", { search: "Anna", page: 1, pageSize: 50 })).total).toBe(1);
-    expect((await repo.listForOrg("org-1", { search: "Zzz", page: 1, pageSize: 50 })).total).toBe(0);
-    expect((await repo.listForOrg("org-2", { page: 1, pageSize: 50 })).total).toBe(0); // fel org
+    expect((await repo.listForOrg(asId<"OrganizationId">("org-1"), { search: "Anna", page: 1, pageSize: 50 })).total).toBe(1);
+    expect((await repo.listForOrg(asId<"OrganizationId">("org-1"), { search: "Zzz", page: 1, pageSize: 50 })).total).toBe(0);
+    expect((await repo.listForOrg(asId<"OrganizationId">("org-2"), { page: 1, pageSize: 50 })).total).toBe(0); // fel org
   });
 
   it("getByIdFull: barn + ärende-kopplingar, org-scopad", async () => {
     const { store, c1 } = seed();
     const repo = new InMemoryContactRepository(store);
-    const full = await repo.getByIdFull(c1, "org-1");
+    const full = await repo.getByIdFull(c1, asId<"OrganizationId">("org-1"));
     expect(full?.children).toHaveLength(1);
     expect(full?.matterLinks).toHaveLength(1);
     expect(full?.matterLinks[0]!.matter?.matterNumber).toBe("2026-1");
-    expect(await repo.getByIdFull(c1, "org-2")).toBeNull(); // fel org
+    expect(await repo.getByIdFull(c1, asId<"OrganizationId">("org-2"))).toBeNull(); // fel org
   });
 });
 
@@ -64,9 +65,9 @@ describe("ContactRepository — Drizzle (pglite)", () => {
 
   it("listForOrg + getByIdFull (subquery-_count, join-detalj)", async () => {
     const db = handle.db;
-    const org = uuidv7();
-    const c1 = uuidv7();
-    const child = uuidv7();
+    const org = asId<"OrganizationId">(uuidv7());
+    const c1 = asId<"ContactId">(uuidv7());
+    const child = asId<"ContactId">(uuidv7());
     const mId = uuidv7();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const v = (o: Record<string, unknown>) => ({ version: 1, ...o }) as any;
@@ -88,6 +89,6 @@ describe("ContactRepository — Drizzle (pglite)", () => {
     expect(full?.children).toHaveLength(1);
     expect(full?.matterLinks).toHaveLength(1);
     expect(full?.matterLinks[0]!.matter.matterNumber).toBe("2026-1");
-    expect(await repo.getByIdFull(c1, uuidv7())).toBeNull();
+    expect(await repo.getByIdFull(c1, asId<"OrganizationId">(uuidv7()))).toBeNull();
   });
 });

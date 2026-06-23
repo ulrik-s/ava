@@ -6,7 +6,7 @@
  */
 
 import { and, asc, desc, eq, ilike, inArray, isNull, or, sql } from "drizzle-orm";
-import { asId } from "@/lib/shared/schemas/ids";
+import type { ContactId, MatterId, OrganizationId, UserId } from "@/lib/shared/schemas/ids";
 import type { Matter } from "@/lib/shared/schemas/matter";
 import { contacts, documents, matterContacts, matters, timeEntries } from "../db/schema";
 import type { AppDb } from "../db/types";
@@ -20,25 +20,25 @@ export class DrizzleMatterRepository extends DrizzleRepository<Matter> implement
     super(db, versionedTable(matters), now);
   }
 
-  async getByIdInOrg(id: string, organizationId: string): Promise<Matter | null> {
+  async getByIdInOrg(id: MatterId, organizationId: OrganizationId): Promise<Matter | null> {
     const rows = await this.db
       .select().from(matters)
-      .where(and(eq(matters.id, asId<"MatterId">(id)), eq(matters.organizationId, asId<"OrganizationId">(organizationId)), isNull(matters.deletedAt)))
+      .where(and(eq(matters.id, id), eq(matters.organizationId, organizationId), isNull(matters.deletedAt)))
       .limit(1);
     return this.asRow(rows[0]);
   }
 
-  async listByOrg(organizationId: string): Promise<Matter[]> {
+  async listByOrg(organizationId: OrganizationId): Promise<Matter[]> {
     const rows = await this.db
       .select().from(matters)
-      .where(and(eq(matters.organizationId, asId<"OrganizationId">(organizationId)), isNull(matters.deletedAt)));
+      .where(and(eq(matters.organizationId, organizationId), isNull(matters.deletedAt)));
     return this.asRows(rows);
   }
 
-  private listWhere(organizationId: string, f: MatterListFilter) {
+  private listWhere(organizationId: OrganizationId, f: MatterListFilter) {
     const pat = f.search ? `%${f.search}%` : "";
     return and(
-      eq(matters.organizationId, asId<"OrganizationId">(organizationId)),
+      eq(matters.organizationId, organizationId),
       isNull(matters.deletedAt),
       f.status ? eq(matters.status, f.status) : undefined,
       f.employeeId
@@ -54,7 +54,7 @@ export class DrizzleMatterRepository extends DrizzleRepository<Matter> implement
     );
   }
 
-  async listForOrg(organizationId: string, filter: MatterListFilter): Promise<MatterListResult> {
+  async listForOrg(organizationId: OrganizationId, filter: MatterListFilter): Promise<MatterListResult> {
     const where = this.listWhere(organizationId, filter);
     const rows = await this.db.select().from(matters).where(where)
       .orderBy(desc(matters.createdAt))
@@ -74,7 +74,7 @@ export class DrizzleMatterRepository extends DrizzleRepository<Matter> implement
   }
 
   /** Grupperade relations-antal per ärende-id (documents/timeEntries/contacts). */
-  private async countsFor(ids: string[]): Promise<Map<string, { documents: number; timeEntries: number; contacts: number }>> {
+  private async countsFor(ids: MatterId[]): Promise<Map<string, { documents: number; timeEntries: number; contacts: number }>> {
     const out = new Map<string, { documents: number; timeEntries: number; contacts: number }>();
     if (ids.length === 0) return out;
     for (const id of ids) out.set(id, { documents: 0, timeEntries: 0, contacts: 0 });
@@ -83,11 +83,11 @@ export class DrizzleMatterRepository extends DrizzleRepository<Matter> implement
     };
     const [docs, tes, mcs] = await Promise.all([
       this.db.select({ id: documents.matterId, n: sql<number>`count(*)` }).from(documents)
-        .where(and(inArray(documents.matterId, ids.map((i) => asId<"MatterId">(i))), isNull(documents.deletedAt))).groupBy(documents.matterId),
+        .where(and(inArray(documents.matterId, ids), isNull(documents.deletedAt))).groupBy(documents.matterId),
       this.db.select({ id: timeEntries.matterId, n: sql<number>`count(*)` }).from(timeEntries)
-        .where(and(inArray(timeEntries.matterId, ids.map((i) => asId<"MatterId">(i))), isNull(timeEntries.deletedAt))).groupBy(timeEntries.matterId),
+        .where(and(inArray(timeEntries.matterId, ids), isNull(timeEntries.deletedAt))).groupBy(timeEntries.matterId),
       this.db.select({ id: matterContacts.matterId, n: sql<number>`count(*)` }).from(matterContacts)
-        .where(and(inArray(matterContacts.matterId, ids.map((i) => asId<"MatterId">(i))), isNull(matterContacts.deletedAt))).groupBy(matterContacts.matterId),
+        .where(and(inArray(matterContacts.matterId, ids), isNull(matterContacts.deletedAt))).groupBy(matterContacts.matterId),
     ]);
     apply(docs, "documents");
     apply(tes, "timeEntries");
@@ -96,29 +96,29 @@ export class DrizzleMatterRepository extends DrizzleRepository<Matter> implement
   }
 
   /** KLIENT-kontakt (id+namn) per ärende-id (första). */
-  private async klientFor(ids: string[]): Promise<Map<string, { id: string; name: string }>> {
-    const out = new Map<string, { id: string; name: string }>();
+  private async klientFor(ids: MatterId[]): Promise<Map<string, { id: ContactId; name: string }>> {
+    const out = new Map<string, { id: ContactId; name: string }>();
     if (ids.length === 0) return out;
     const rows = await this.db
       .select({ matterId: matterContacts.matterId, cId: contacts.id, cName: contacts.name })
       .from(matterContacts)
       .innerJoin(contacts, eq(matterContacts.contactId, contacts.id))
-      .where(and(inArray(matterContacts.matterId, ids.map((i) => asId<"MatterId">(i))), eq(matterContacts.role, "KLIENT")));
+      .where(and(inArray(matterContacts.matterId, ids), eq(matterContacts.role, "KLIENT")));
     for (const r of rows) {
-      const mid = r.matterId as string;
-      if (!out.has(mid)) out.set(mid, { id: r.cId as string, name: r.cName as string });
+      const mid = r.matterId;
+      if (!out.has(mid)) out.set(mid, { id: r.cId, name: r.cName });
     }
     return out;
   }
 
-  async getByIdWithContacts(id: string, organizationId: string): Promise<MatterDetailRow | null> {
+  async getByIdWithContacts(id: MatterId, organizationId: OrganizationId): Promise<MatterDetailRow | null> {
     const base = await this.getByIdInOrg(id, organizationId);
     if (!base) return null;
     const rows = await this.db
       .select({ mc: matterContacts, contact: contacts })
       .from(matterContacts)
       .innerJoin(contacts, eq(matterContacts.contactId, contacts.id))
-      .where(and(eq(matterContacts.matterId, asId<"MatterId">(id)), isNull(matterContacts.deletedAt)))
+      .where(and(eq(matterContacts.matterId, id), isNull(matterContacts.deletedAt)))
       .orderBy(asc(matterContacts.createdAt));
     const linkContacts = rows.map((r) => ({ ...r.mc, contact: r.contact }));
     const counts = (await this.countsFor([id])).get(id) ?? { documents: 0, timeEntries: 0, contacts: 0 };
@@ -129,20 +129,20 @@ export class DrizzleMatterRepository extends DrizzleRepository<Matter> implement
     };
   }
 
-  async listByResponsibleLawyer(organizationId: string, responsibleLawyerId: string): Promise<Matter[]> {
+  async listByResponsibleLawyer(organizationId: OrganizationId, responsibleLawyerId: UserId): Promise<Matter[]> {
     const rows = await this.db.select().from(matters)
       .where(and(
-        eq(matters.organizationId, asId<"OrganizationId">(organizationId)),
-        eq(matters.responsibleLawyerId, asId<"UserId">(responsibleLawyerId)),
+        eq(matters.organizationId, organizationId),
+        eq(matters.responsibleLawyerId, responsibleLawyerId),
         isNull(matters.deletedAt),
       ));
     return this.asRows(rows);
   }
 
-  async listByNumberPrefix(organizationId: string, prefix: string): Promise<Matter[]> {
+  async listByNumberPrefix(organizationId: OrganizationId, prefix: string): Promise<Matter[]> {
     const rows = await this.db.select().from(matters)
       .where(and(
-        eq(matters.organizationId, asId<"OrganizationId">(organizationId)),
+        eq(matters.organizationId, organizationId),
         ilike(matters.matterNumber, `${prefix}%`),
         isNull(matters.deletedAt),
       ));

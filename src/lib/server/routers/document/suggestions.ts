@@ -15,7 +15,7 @@ import {
 } from "@/lib/shared/contact-dedup";
 import type { DocumentAnalysisSuggestion } from "@/lib/shared/schemas/document";
 import { matterRoleSchema, contactTypeSchema, type SuggestionStatus } from "@/lib/shared/schemas/enums";
-import { asId, type ContactId } from "@/lib/shared/schemas/ids";
+import { asId, type ContactId, type OrganizationId } from "@/lib/shared/schemas/ids";
 import type { MatterContact } from "@/lib/shared/schemas/matter";
 import { groupSuggestions } from "@/lib/shared/suggestion-grouping";
 import type { Repositories } from "../../repositories/repositories";
@@ -24,7 +24,7 @@ import { orgProcedure } from "../../trpc";
 // ─── Helpers för acceptSuggestion ─────────────────────────────────────────
 
 // Migrerad till repository-sömmen (ADR 0020): all IO går via ctx.repos.
-type Ctx = { repos: Repositories; orgId: string };
+type Ctx = { repos: Repositories; orgId: OrganizationId };
 type SuggOverride = {
   name?: string | undefined;
   role?: string | undefined;
@@ -58,7 +58,7 @@ async function loadPendingSuggestion(ctx: Ctx, suggestionId: string): Promise<Su
 }
 
 async function resolveExistingContact(ctx: Ctx, contactId: string): Promise<ContactId> {
-  const existing = (await ctx.repos.contacts.getByIdFull(contactId, ctx.orgId)) as { id: ContactId } | null;
+  const existing = (await ctx.repos.contacts.getByIdFull(asId<"ContactId">(contactId), ctx.orgId)) as { id: ContactId } | null;
   if (!existing) throw new TRPCError({ code: "NOT_FOUND" });
   return existing.id;
 }
@@ -78,7 +78,7 @@ async function findContactByNumberOrName(
   if (on) {
     return (await ctx.repos.contacts.findByOrgNumber(ctx.orgId, on)) as ContactCandidate | null;
   }
-  const matterContacts = (await ctx.repos.matterContacts.listContactsForMatter(matterId)) as ContactCandidate[];
+  const matterContacts = (await ctx.repos.matterContacts.listContactsForMatter(asId<"MatterId">(matterId))) as ContactCandidate[];
   const dedup = findExistingContactForSuggestion(
     {
       name: o.name ?? sugg.name,
@@ -133,7 +133,7 @@ async function ensureMatterContactLink(
   role: string,
   notes: string | null,
 ): Promise<void> {
-  const existing = await ctx.repos.matterContacts.findLink(matterId, contactId, role);
+  const existing = await ctx.repos.matterContacts.findLink(asId<"MatterId">(matterId), asId<"ContactId">(contactId), role);
   if (!existing) {
     await ctx.repos.matterContacts.create({ matterId, contactId, role, notes } as Partial<MatterContact>);
   }
@@ -207,7 +207,7 @@ async function findGroupContact(
     return (await ctx.repos.contacts.findByOrgNumber(ctx.orgId, orgNumber)) as ContactCandidate | null;
   }
   // Namn-fallback scopad till ärendet (se contact-dedup.ts).
-  const matterContacts = (await ctx.repos.matterContacts.listContactsForMatter(matterId)) as ContactCandidate[];
+  const matterContacts = (await ctx.repos.matterContacts.listContactsForMatter(asId<"MatterId">(matterId))) as ContactCandidate[];
   const first = suggs[0];
   if (!first) return null;
   const dedup = findExistingContactForSuggestion(

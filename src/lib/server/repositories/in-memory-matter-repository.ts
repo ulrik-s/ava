@@ -3,6 +3,7 @@
  * och org-scopar direkt på `organizationId` (ärenden saknar relations-beroende).
  */
 
+import type { MatterId, OrganizationId, UserId } from "@/lib/shared/schemas/ids";
 import type { Matter } from "@/lib/shared/schemas/matter";
 import type { IDataStore } from "../data-store/IDataStore";
 import { InMemoryRepository } from "./in-memory-repository";
@@ -14,7 +15,7 @@ import type {
 export type MatterRepoSource = Pick<IDataStore, "matters">;
 
 /** Org-scopat where för listan (replikerar routerns Prisma-where). */
-function listWhere(organizationId: string, f: MatterListFilter): Record<string, unknown> {
+function listWhere(organizationId: OrganizationId, f: MatterListFilter): Record<string, unknown> {
   const ins = (s: string) => ({ contains: s, mode: "insensitive" as const });
   return {
     organizationId,
@@ -37,17 +38,17 @@ export class InMemoryMatterRepository extends InMemoryRepository<Matter> impleme
     super(store.matters, now ?? (() => new Date()));
   }
 
-  async getByIdInOrg(id: string, organizationId: string): Promise<Matter | null> {
+  async getByIdInOrg(id: MatterId, organizationId: OrganizationId): Promise<Matter | null> {
     const row = (await this.delegate.findFirst({ where: { id, organizationId } })) as Matter | null;
     return row && !(row as { deletedAt?: unknown }).deletedAt ? row : null;
   }
 
-  async listByOrg(organizationId: string): Promise<Matter[]> {
+  async listByOrg(organizationId: OrganizationId): Promise<Matter[]> {
     const rows = (await this.delegate.findMany({ where: { organizationId } })) as Matter[];
     return rows.filter((r) => !(r as { deletedAt?: unknown }).deletedAt);
   }
 
-  async listForOrg(organizationId: string, filter: MatterListFilter): Promise<MatterListResult> {
+  async listForOrg(organizationId: OrganizationId, filter: MatterListFilter): Promise<MatterListResult> {
     const where = listWhere(organizationId, filter);
     const [matters, total] = await Promise.all([
       this.delegate.findMany({
@@ -65,7 +66,7 @@ export class InMemoryMatterRepository extends InMemoryRepository<Matter> impleme
     return { matters, total };
   }
 
-  async getByIdWithContacts(id: string, organizationId: string): Promise<MatterDetailRow | null> {
+  async getByIdWithContacts(id: MatterId, organizationId: OrganizationId): Promise<MatterDetailRow | null> {
     const row = (await this.delegate.findFirst({
       where: { id, organizationId },
       include: {
@@ -76,11 +77,11 @@ export class InMemoryMatterRepository extends InMemoryRepository<Matter> impleme
     return row && !row.deletedAt ? row : null;
   }
 
-  async listByResponsibleLawyer(organizationId: string, responsibleLawyerId: string): Promise<Matter[]> {
+  async listByResponsibleLawyer(organizationId: OrganizationId, responsibleLawyerId: UserId): Promise<Matter[]> {
     return (await this.delegate.findMany({ where: { organizationId, responsibleLawyerId } })) as Matter[];
   }
 
-  async listByNumberPrefix(organizationId: string, prefix: string): Promise<Matter[]> {
+  async listByNumberPrefix(organizationId: OrganizationId, prefix: string): Promise<Matter[]> {
     return (await this.delegate.findMany({
       where: { organizationId, matterNumber: { startsWith: prefix } },
     })) as Matter[];

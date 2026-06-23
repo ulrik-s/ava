@@ -5,7 +5,7 @@
 
 import { and, asc, eq, isNull, ne } from "drizzle-orm";
 import type { MatterEventSuggestion } from "@/lib/shared/schemas/document";
-import { asId } from "@/lib/shared/schemas/ids";
+import type { MatterEventSuggestionId, MatterId, OrganizationId } from "@/lib/shared/schemas/ids";
 import { documents, matterEventSuggestions, matters } from "../db/schema";
 import type { AppDb } from "../db/types";
 import { DrizzleRepository, versionedTable } from "./drizzle-repository";
@@ -20,7 +20,7 @@ export class DrizzleMatterEventSuggestionRepository
     super(db, versionedTable(matterEventSuggestions), now);
   }
 
-  async listForMatter(matterId: string, organizationId: string): Promise<MatterEventSuggestionRow[]> {
+  async listForMatter(matterId: MatterId, organizationId: OrganizationId): Promise<MatterEventSuggestionRow[]> {
     const rows = await this.db
       .select({
         ev: matterEventSuggestions,
@@ -30,8 +30,8 @@ export class DrizzleMatterEventSuggestionRepository
       .innerJoin(documents, eq(matterEventSuggestions.documentId, documents.id))
       .innerJoin(matters, eq(documents.matterId, matters.id))
       .where(and(
-        eq(documents.matterId, asId<"MatterId">(matterId)),
-        eq(matters.organizationId, asId<"OrganizationId">(organizationId)),
+        eq(documents.matterId, matterId),
+        eq(matters.organizationId, organizationId),
         ne(matterEventSuggestions.status, "REJECTED"),
         isNull(matterEventSuggestions.deletedAt),
       ))
@@ -42,14 +42,14 @@ export class DrizzleMatterEventSuggestionRepository
     }));
   }
 
-  async getByIdInOrg(id: string, organizationId: string): Promise<MatterEventSuggestion | null> {
+  async getByIdInOrg(id: MatterEventSuggestionId, organizationId: OrganizationId): Promise<MatterEventSuggestion | null> {
     const rows = await this.db
       .select({ ev: matterEventSuggestions }).from(matterEventSuggestions)
       .innerJoin(documents, eq(matterEventSuggestions.documentId, documents.id))
       .innerJoin(matters, eq(documents.matterId, matters.id))
       .where(and(
-        eq(matterEventSuggestions.id, asId<"MatterEventSuggestionId">(id)),
-        eq(matters.organizationId, asId<"OrganizationId">(organizationId)),
+        eq(matterEventSuggestions.id, id),
+        eq(matters.organizationId, organizationId),
         isNull(matterEventSuggestions.deletedAt),
       ))
       .limit(1);

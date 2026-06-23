@@ -12,10 +12,11 @@ import { DrizzleMatterContactRepository } from "@/lib/server/repositories/drizzl
 import { InMemoryConflictCheckRepository } from "@/lib/server/repositories/in-memory-conflict-check-repository";
 import { InMemoryMatterContactRepository } from "@/lib/server/repositories/in-memory-matter-contact-repository";
 import { prebakeJoins } from "@/lib/shared/demo-source";
+import { asId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { createTestDb, type TestDbHandle } from "../db/pg-test-db";
 
-const ORG = "33333333-3333-7333-8333-333333333333";
+const ORG = asId<"OrganizationId">("33333333-3333-7333-8333-333333333333");
 
 describe("Conflict/MatterContact repos — in-memory", () => {
   it("findForConflict (nummer + alla) + listHistory", async () => {
@@ -64,7 +65,7 @@ describe("Conflict/MatterContact repos — Drizzle (pglite)", () => {
 
   it("findForConflict (nummer + alla) + listHistory", async () => {
     const db = handle.db;
-    const org = uuidv7();
+    const org = asId<"OrganizationId">(uuidv7());
     const mId = uuidv7();
     const cMot = uuidv7();
     const cKli = uuidv7();
@@ -97,15 +98,15 @@ describe("Conflict/MatterContact repos — Drizzle (pglite)", () => {
 // ─── MatterContactRepository: CRUD-/läs-metoderna (getByIdInOrg, findLink,
 //     listContactsForMatter, linkContact) — paritet in-memory + Drizzle. ───
 
-const ORG2 = "44444444-4444-7444-8444-444444444444";
-const OTHER_ORG = "55555555-5555-7555-8555-555555555555";
+const ORG2 = asId<"OrganizationId">("44444444-4444-7444-8444-444444444444");
+const OTHER_ORG = asId<"OrganizationId">("55555555-5555-7555-8555-555555555555");
 
 describe("MatterContactRepository — läs-/skriv-metoder (in-memory)", () => {
-  const mId = uuidv7();
-  const cKli = uuidv7();
-  const cMot = uuidv7();
-  const linkKli = uuidv7();
-  const linkMot = uuidv7();
+  const mId = asId<"MatterId">(uuidv7());
+  const cKli = asId<"ContactId">(uuidv7());
+  const cMot = asId<"ContactId">(uuidv7());
+  const linkKli = asId<"MatterContactId">(uuidv7());
+  const linkMot = asId<"MatterContactId">(uuidv7());
 
   function buildStore(): LocalStore {
     const source = prebakeJoins({
@@ -132,7 +133,7 @@ describe("MatterContactRepository — läs-/skriv-metoder (in-memory)", () => {
     const found = await mc.getByIdInOrg(linkKli, ORG2);
     expect(found?.id).toBe(linkKli);
     expect(await mc.getByIdInOrg(linkKli, OTHER_ORG)).toBeNull();
-    expect(await mc.getByIdInOrg(uuidv7(), ORG2)).toBeNull();
+    expect(await mc.getByIdInOrg(asId<"MatterContactId">(uuidv7()), ORG2)).toBeNull();
   });
 
   it("findLink: matchar (ärende, kontakt, roll); null vid annan roll", async () => {
@@ -151,7 +152,7 @@ describe("MatterContactRepository — läs-/skriv-metoder (in-memory)", () => {
   it("linkContact: skapar länk + går att slå upp via findLink", async () => {
     const store = buildStore();
     const mc = repo(store);
-    const cNew = uuidv7();
+    const cNew = asId<"ContactId">(uuidv7());
     // Lägg in kontakten så enrichment har något att joina mot.
     await store.contacts.create({ data: { id: cNew, organizationId: ORG2, name: "Vittne", contactType: "PERSON" } as never });
     const created = await mc.linkContact({ id: uuidv7(), matterId: mId, contactId: cNew, role: "VITTNE" } as never);
@@ -168,12 +169,12 @@ describe("MatterContactRepository — läs-/skriv-metoder (Drizzle/pglite)", () 
 
   it("getByIdInOrg / findLink / listContactsForMatter / linkContact", async () => {
     const db = handle.db;
-    const org = uuidv7();
-    const mId = uuidv7();
-    const cKli = uuidv7();
-    const cMot = uuidv7();
-    const linkKli = uuidv7();
-    const linkMot = uuidv7();
+    const org = asId<"OrganizationId">(uuidv7());
+    const mId = asId<"MatterId">(uuidv7());
+    const cKli = asId<"ContactId">(uuidv7());
+    const cMot = asId<"ContactId">(uuidv7());
+    const linkKli = asId<"MatterContactId">(uuidv7());
+    const linkMot = asId<"MatterContactId">(uuidv7());
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const v = (o: Record<string, unknown>) => ({ version: 1, ...o }) as any;
     await db.insert(matters).values(v({ id: mId, organizationId: org, matterNumber: "2026-9", title: "Y" }));
@@ -185,7 +186,7 @@ describe("MatterContactRepository — läs-/skriv-metoder (Drizzle/pglite)", () 
 
     // getByIdInOrg
     expect((await mc.getByIdInOrg(linkKli, org))?.id).toBe(linkKli);
-    expect(await mc.getByIdInOrg(linkKli, uuidv7())).toBeNull();
+    expect(await mc.getByIdInOrg(linkKli, asId<"OrganizationId">(uuidv7()))).toBeNull();
 
     // findLink
     expect((await mc.findLink(mId, cKli, "KLIENT"))?.id).toBe(linkKli);
@@ -196,7 +197,7 @@ describe("MatterContactRepository — läs-/skriv-metoder (Drizzle/pglite)", () 
     expect(list.map((c) => c.id).sort()).toEqual([cKli, cMot].sort());
 
     // linkContact — skapar länk + returnerar med kontakten joinad
-    const cNew = uuidv7();
+    const cNew = asId<"ContactId">(uuidv7());
     await db.insert(contacts).values(v({ id: cNew, organizationId: org, name: "Vittne", contactType: "PERSON" }));
     const created = await mc.linkContact({ id: uuidv7(), matterId: mId, contactId: cNew, role: "VITTNE" } as never);
     expect(created.contactId).toBe(cNew);

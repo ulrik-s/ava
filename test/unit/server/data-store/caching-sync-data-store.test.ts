@@ -10,6 +10,7 @@ import { InMemoryPersistence } from "@/lib/server/data-store/in-memory/local-sto
 import type { QueuedMutation } from "@/lib/server/data-store/in-memory/mutation-queue";
 import type { PullResult, PushResult, SyncTransport } from "@/lib/server/data-store/in-memory/sync-transport";
 import { InMemoryMatterRepository } from "@/lib/server/repositories/in-memory-matter-repository";
+import { asId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
 
 class FakeTransport implements SyncTransport {
@@ -124,7 +125,7 @@ describe("CachingSyncDataStore (#415)", () => {
       const ds = await CachingSyncDataStore.create({ transport, persistence: new InMemoryPersistence() });
       await ds.reconcile();
 
-      const detail = await new InMemoryMatterRepository(ds.store).getByIdWithContacts(mId, ORG);
+      const detail = await new InMemoryMatterRepository(ds.store).getByIdWithContacts(asId<"MatterId">(mId), asId<"OrganizationId">(ORG));
       expect(detail?.contacts).toHaveLength(1);
       expect(detail?.contacts[0]?.contact?.name).toBe("Anna Andersson");
     });

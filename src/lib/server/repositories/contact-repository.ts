@@ -7,6 +7,7 @@
 
 import type { Contact } from "@/lib/shared/schemas/contact";
 import type { ContactType, MatterRole, MatterStatus } from "@/lib/shared/schemas/enums";
+import type { ContactId, MatterContactId, MatterId, OrganizationId } from "@/lib/shared/schemas/ids";
 import type { Repository } from "./types";
 
 /** Kontakt + antal relationer (listvyns _count). */
@@ -16,19 +17,19 @@ export interface ContactListRow extends Contact {
 
 /** En ärende-koppling med ärendets sammanfattning (detaljvyns matterLinks). */
 export interface ContactMatterLink {
-  id: string;
-  matterId: string;
-  contactId: string;
+  id: MatterContactId;
+  matterId: MatterId;
+  contactId: ContactId;
   role: MatterRole;
   notes: string | null;
   /** Alltid satt — `matterId` är NOT NULL FK, så ärendet finns alltid. */
-  matter: { id: string; matterNumber: string; title: string; status: MatterStatus };
+  matter: { id: MatterId; matterNumber: string; title: string; status: MatterStatus };
 }
 
 /** Full kontakt-detalj (motsvarar `contact.getById`-routerns include). */
 export interface ContactFull extends Contact {
   children: Contact[];
-  parent: { id: string; name: string } | null;
+  parent: { id: ContactId; name: string } | null;
   matterLinks: ContactMatterLink[];
 }
 
@@ -47,11 +48,11 @@ export interface ContactListResult {
 
 export interface ContactRepository extends Repository<Contact> {
   /** Topp-nivå-kontakter (parentId null) i org:en, paginerat + sökbart, med _count. */
-  listForOrg(organizationId: string, opts: ContactListOptions): Promise<ContactListResult>;
+  listForOrg(organizationId: OrganizationId, opts: ContactListOptions): Promise<ContactListResult>;
   /** Full kontakt-detalj (barn/förälder/ärende-kopplingar), org-scopad. Null om saknas/raderad. */
-  getByIdFull(id: string, organizationId: string): Promise<ContactFull | null>;
+  getByIdFull(id: ContactId, organizationId: OrganizationId): Promise<ContactFull | null>;
   /** Kontakt med givet personnummer i org:en (dedup). Null om ingen. */
-  findByPersonalNumber(organizationId: string, personalNumber: string): Promise<Contact | null>;
+  findByPersonalNumber(organizationId: OrganizationId, personalNumber: string): Promise<Contact | null>;
   /** Kontakt med givet org-nummer i org:en (dedup). Null om ingen. */
-  findByOrgNumber(organizationId: string, orgNumber: string): Promise<Contact | null>;
+  findByOrgNumber(organizationId: OrganizationId, orgNumber: string): Promise<Contact | null>;
 }

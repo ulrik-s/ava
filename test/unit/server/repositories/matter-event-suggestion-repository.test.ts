@@ -10,16 +10,17 @@ import { documents, matterEventSuggestions, matters } from "@/lib/server/db/sche
 import { DrizzleMatterEventSuggestionRepository } from "@/lib/server/repositories/drizzle-matter-event-suggestion-repository";
 import { InMemoryMatterEventSuggestionRepository } from "@/lib/server/repositories/in-memory-matter-event-suggestion-repository";
 import { prebakeJoins } from "@/lib/shared/demo-source";
+import { asId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { createTestDb, type TestDbHandle } from "../db/pg-test-db";
 
-const ORG = "22222222-2222-7222-8222-222222222222";
+const ORG = asId<"OrganizationId">("22222222-2222-7222-8222-222222222222");
 
 describe("MatterEventSuggestionRepository — in-memory", () => {
   it("listForMatter (ej REJECTED, sorterad) + getByIdInOrg", async () => {
-    const mId = uuidv7();
+    const mId = asId<"MatterId">(uuidv7());
     const dId = uuidv7();
-    const e1 = uuidv7();
+    const e1 = asId<"MatterEventSuggestionId">(uuidv7());
     const source = prebakeJoins({
       matters: [{ id: mId, organizationId: ORG, matterNumber: "2026-1", title: "T" }],
       documents: [{ id: dId, matterId: mId, fileName: "s.pdf", title: "Stämning" }],
@@ -36,7 +37,7 @@ describe("MatterEventSuggestionRepository — in-memory", () => {
     expect(list.map((r) => r.title)).toEqual(["Tidig", "Sen"]);
     expect(list[0]!.document.fileName).toBe("s.pdf");
     expect(await repo.getByIdInOrg(e1, ORG)).toMatchObject({ id: e1 });
-    expect(await repo.getByIdInOrg(e1, uuidv7())).toBeNull();
+    expect(await repo.getByIdInOrg(e1, asId<"OrganizationId">(uuidv7()))).toBeNull();
   });
 });
 
@@ -47,10 +48,10 @@ describe("MatterEventSuggestionRepository — Drizzle (pglite)", () => {
 
   it("listForMatter + getByIdInOrg", async () => {
     const db = handle.db;
-    const org = uuidv7();
-    const mId = uuidv7();
+    const org = asId<"OrganizationId">(uuidv7());
+    const mId = asId<"MatterId">(uuidv7());
     const dId = uuidv7();
-    const e1 = uuidv7();
+    const e1 = asId<"MatterEventSuggestionId">(uuidv7());
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const v = (o: Record<string, unknown>) => ({ version: 1, ...o }) as any;
     await db.insert(matters).values(v({ id: mId, organizationId: org, matterNumber: "2026-1", title: "T" }));
@@ -64,6 +65,6 @@ describe("MatterEventSuggestionRepository — Drizzle (pglite)", () => {
     expect(list.map((r) => r.title)).toEqual(["Tidig", "Sen"]);
     expect(list[0]!.document.fileName).toBe("s.pdf");
     expect(await repo.getByIdInOrg(e1, org)).toMatchObject({ id: e1 });
-    expect(await repo.getByIdInOrg(e1, uuidv7())).toBeNull();
+    expect(await repo.getByIdInOrg(e1, asId<"OrganizationId">(uuidv7()))).toBeNull();
   });
 });

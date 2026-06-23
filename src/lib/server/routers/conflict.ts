@@ -40,7 +40,7 @@ function toResult(mc: ConflictRow): ConflictResult {
 
 /** Exakt delsträngsmatch på person-/org-nummer. */
 async function searchByNumber(ctx: ConflictCtx, term: string): Promise<ConflictResult[]> {
-  const rows = await ctx.repos.matterContacts.findForConflict(ctx.user.organizationId, term);
+  const rows = await ctx.repos.matterContacts.findForConflict(asId<"OrganizationId">(ctx.user.organizationId), term);
   return rows.map(toResult);
 }
 
@@ -51,7 +51,7 @@ async function searchByNumber(ctx: ConflictCtx, term: string): Promise<ConflictR
  */
 async function searchByName(ctx: ConflictCtx, term: string): Promise<ConflictResult[]> {
   const SIM_THRESHOLD = 0.4;
-  const rows = await ctx.repos.matterContacts.findForConflict(ctx.user.organizationId);
+  const rows = await ctx.repos.matterContacts.findForConflict(asId<"OrganizationId">(ctx.user.organizationId));
   return rows
     .map((row) => ({ row, score: similarity(row.contact.name, term) }))
     .filter((s) => s.score > SIM_THRESHOLD)

@@ -10,6 +10,7 @@ import { DrizzleExpectedReceivableRepository } from "@/lib/server/repositories/d
 import { DrizzleMatterRepository } from "@/lib/server/repositories/drizzle-matter-repository";
 import { InMemoryExpectedReceivableRepository } from "@/lib/server/repositories/in-memory-expected-receivable-repository";
 import { InMemoryMatterRepository } from "@/lib/server/repositories/in-memory-matter-repository";
+import { asId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { createTestDb, type TestDbHandle } from "../db/pg-test-db";
 
@@ -29,7 +30,7 @@ describe("ExpectedReceivableRepository — in-memory", () => {
     expect(await repo.listForOrg("org-1", { status: "PENDING" })).toHaveLength(1);
     expect(await repo.getByIdInOrg(r1, "org-1")).toMatchObject({ id: r1 });
     expect(await repo.getByIdInOrg(r1, "org-2")).toBeNull();
-    expect(await new InMemoryMatterRepository(store).listByOrg("org-1")).toHaveLength(1);
+    expect(await new InMemoryMatterRepository(store).listByOrg(asId<"OrganizationId">("org-1"))).toHaveLength(1);
   });
 });
 
@@ -53,6 +54,6 @@ describe("ExpectedReceivableRepository — Drizzle (pglite)", () => {
     expect(await repo.listForOrg(org, { status: "PENDING" })).toHaveLength(1);
     expect(await repo.getByIdInOrg(r1, org)).toMatchObject({ id: r1 });
     expect(await repo.getByIdInOrg(r1, uuidv7())).toBeNull();
-    expect(await new DrizzleMatterRepository(handle.db).listByOrg(org)).toHaveLength(1);
+    expect(await new DrizzleMatterRepository(handle.db).listByOrg(asId<"OrganizationId">(org))).toHaveLength(1);
   });
 });
