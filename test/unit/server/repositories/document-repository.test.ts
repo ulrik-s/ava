@@ -12,6 +12,7 @@ import { DrizzleDocumentRepository } from "@/lib/server/repositories/drizzle-doc
 import { InMemoryDocumentFolderRepository } from "@/lib/server/repositories/in-memory-document-folder-repository";
 import { InMemoryDocumentRepository } from "@/lib/server/repositories/in-memory-document-repository";
 import { prebakeJoins } from "@/lib/shared/demo-source";
+import { asId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { createTestDb, type TestDbHandle } from "../db/pg-test-db";
 
@@ -59,7 +60,7 @@ describe("DocumentRepository / DocumentFolderRepository — in-memory", () => {
     await docs.reassignFolder(root, null);
     expect((await docs.listInFolder(mId, root, 1, 50)).total).toBe(0);
     await folders.reassignParent(root, null);
-    expect((await folders.getById(sub))!.parentId).toBeNull();
+    expect((await folders.getById(asId<"DocumentFolderId">(sub)))!.parentId).toBeNull();
   });
 });
 
@@ -106,6 +107,6 @@ describe("DocumentRepository / DocumentFolderRepository — Drizzle (pglite)", (
     await docs.reassignFolder(root, null);
     expect((await docs.listInFolder(mId, root, 1, 50)).total).toBe(0);
     await folders.reassignParent(root, null);
-    expect((await folders.getById(sub))!.parentId).toBeNull();
+    expect((await folders.getById(asId<"DocumentFolderId">(sub)))!.parentId).toBeNull();
   });
 });

@@ -179,7 +179,7 @@ export class DrizzleInvoiceRepository extends DrizzleRepository<Invoice> impleme
   }
 
   async getByIdWithLedger(id: string): Promise<InvoiceWithLedger | null> {
-    const invoice = await this.getById(id);
+    const invoice = await this.getById(asId<"InvoiceId">(id));
     if (!invoice) return null;
     const pays = await this.db.select().from(payments).where(eq(payments.invoiceId, asId<"InvoiceId">(id)));
     const wos = await this.db.select().from(writeOffs).where(eq(writeOffs.invoiceId, asId<"InvoiceId">(id)));

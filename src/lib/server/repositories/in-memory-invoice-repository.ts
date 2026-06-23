@@ -5,6 +5,7 @@
  */
 
 import type { Invoice } from "@/lib/shared/schemas/billing";
+import { asId } from "@/lib/shared/schemas/ids";
 import type { IDataStore } from "../data-store/IDataStore";
 import { InMemoryRepository } from "./in-memory-repository";
 import {
@@ -67,7 +68,7 @@ export class InMemoryInvoiceRepository extends InMemoryRepository<Invoice> imple
   }
 
   async getByIdWithLedger(id: string): Promise<InvoiceWithLedger | null> {
-    const invoice = await this.getById(id);
+    const invoice = await this.getById(asId<"InvoiceId">(id));
     if (!invoice) return null;
     const payments = (await this.store.payments
       .findMany({ where: { invoiceId: id } })) as InvoiceWithLedger["payments"];

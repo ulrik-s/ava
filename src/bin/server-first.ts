@@ -29,6 +29,7 @@ import { buildServerFirstJobHandlers, loadSmtpConfigFromEnv } from "@/lib/server
 import { InMemoryLeaseStore } from "@/lib/server/lease/lease-store";
 import { loadLlmConfigFromEnv } from "@/lib/server/llm/ollama-classifier";
 import { serveFetchHandler } from "@/lib/shared/http/node-http-adapter";
+import { asId } from "@/lib/shared/schemas/ids";
 
 function log(msg: string): void {
   console.log(`[server-first] ${msg}`);
@@ -93,7 +94,7 @@ function main(): void {
     ...(contentStore ? { content: contentStore } : {}),
     ...(llm ? { llm } : {}),
     // #621 B2: LLM föreslår taggar ur byråns vokabulär (läses lazy per jobb).
-    vocabulary: async () => (await api.repos.organizations.getById(config.organizationId))?.documentTags ?? [],
+    vocabulary: async () => (await api.repos.organizations.getById(asId<"OrganizationId">(config.organizationId)))?.documentTags ?? [],
   });
   void startJobRuntime({ connectionString: config.databaseUrl, handlers })
     .then((rt) => { jobRuntime = rt; log(`jobb-kö startad (pg-boss; ${Object.keys(handlers).length} handlers)`); })

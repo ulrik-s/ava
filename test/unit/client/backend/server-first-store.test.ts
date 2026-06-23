@@ -16,6 +16,7 @@ import { createDbChangeLogRecorder, enableChangeLogOnAll } from "@/lib/server/re
 import { buildDrizzleRepositories } from "@/lib/server/repositories/drizzle-repositories";
 import type { Repositories } from "@/lib/server/repositories/repositories";
 import { DrizzleSyncStore } from "@/lib/server/sync/drizzle-sync-store";
+import { asId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { createTestDb, type TestDbHandle } from "../../server/db/pg-test-db";
 
@@ -71,6 +72,6 @@ describe("createServerFirstStore (#2b)", () => {
 
     await ds.reconcile();
     expect(ds.pendingCount()).toBe(0); // pushad + ack:ad
-    expect(await repos.matters.getById(m2)).toMatchObject({ id: m2, title: "Klient-ärende" }); // server fick den
+    expect(await repos.matters.getById(asId<"MatterId">(m2))).toMatchObject({ id: m2, title: "Klient-ärende" }); // server fick den
   });
 });

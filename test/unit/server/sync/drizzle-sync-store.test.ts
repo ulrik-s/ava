@@ -9,6 +9,7 @@ import { createDbChangeLogRecorder, enableChangeLogOnAll } from "@/lib/server/re
 import { buildDrizzleRepositories } from "@/lib/server/repositories/drizzle-repositories";
 import type { Repositories } from "@/lib/server/repositories/repositories";
 import { DrizzleSyncStore } from "@/lib/server/sync/drizzle-sync-store";
+import { asId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { createTestDb, type TestDbHandle } from "../db/pg-test-db";
 
@@ -74,7 +75,7 @@ describe("DrizzleSyncStore (#sync-bridge)", () => {
     expect(first.status).toBe("accepted");
     const again = await sync.push(ORG, mut("contact", "create", row));
     expect(again.status).toBe("accepted");
-    expect(await repos.contacts.getById(c1)).toMatchObject({ id: c1, name: "Köad kontakt" });
+    expect(await repos.contacts.getById(asId<"ContactId">(c1))).toMatchObject({ id: c1, name: "Köad kontakt" });
   });
 
   it("push update på surface-entitet med stale baseVersion → conflict", async () => {
@@ -92,7 +93,7 @@ describe("DrizzleSyncStore (#sync-bridge)", () => {
     await sync.push(ORG, mut("matter", "delete", { id: m2 }));
     const change = (await sync.pull(ORG, cursor)).changes.find((c) => c.row.id === m2);
     expect(change).toMatchObject({ entity: "matter", deleted: true });
-    expect(await repos.matters.getById(m2)).toBeNull();
+    expect(await repos.matters.getById(asId<"MatterId">(m2))).toBeNull();
   });
 
   // #528: document/documentFolder saknar org-kolumn → org härleds via ärendet

@@ -68,14 +68,14 @@ export class DrizzleRepository<Row extends RowBase> implements Repository<Row> {
     return raw as Row[];
   }
 
-  async getById(id: string): Promise<Row | null> {
+  async getById(id: Row["id"]): Promise<Row | null> {
     const rows = await this.db
       .select().from(this.table)
       .where(and(eq(this.table.id, id), isNull(this.table.deletedAt))).limit(1);
     return this.asRow(rows[0]);
   }
 
-  async getByIdOrThrow(id: string): Promise<Row> {
+  async getByIdOrThrow(id: Row["id"]): Promise<Row> {
     const row = await this.getById(id);
     if (!row) throw new Error(`Ingen rad med id ${id}`);
     return row;
@@ -92,7 +92,7 @@ export class DrizzleRepository<Row extends RowBase> implements Repository<Row> {
     return this.asRow(row) as Row;
   }
 
-  async update(id: string, patch: Partial<Row>): Promise<Row> {
+  async update(id: Row["id"], patch: Partial<Row>): Promise<Row> {
     const current = await this.getByIdOrThrow(id);
     const [row] = await this.db.update(this.table)
       .set({ ...patch, version: nextVersion(current), updatedAt: this.now() } as never)
@@ -102,7 +102,7 @@ export class DrizzleRepository<Row extends RowBase> implements Repository<Row> {
   }
 
   /** Metadata-skrivning utan version-bump (se `Repository.updateMetadata`). */
-  async updateMetadata(id: string, patch: Partial<Row>): Promise<Row> {
+  async updateMetadata(id: Row["id"], patch: Partial<Row>): Promise<Row> {
     await this.getByIdOrThrow(id);
     const [row] = await this.db.update(this.table)
       .set({ ...patch, updatedAt: this.now() } as never)
@@ -111,7 +111,7 @@ export class DrizzleRepository<Row extends RowBase> implements Repository<Row> {
     return this.asRow(row) as Row;
   }
 
-  async softDelete(id: string): Promise<Row> {
+  async softDelete(id: Row["id"]): Promise<Row> {
     const current = await this.getByIdOrThrow(id);
     const [row] = await this.db.update(this.table)
       .set({ deletedAt: this.now(), version: nextVersion(current) } as never)
@@ -121,7 +121,7 @@ export class DrizzleRepository<Row extends RowBase> implements Repository<Row> {
   }
 
   /** Hård delete — se `Repository.hardDelete` (medvetet ADR 0017-undantag). */
-  async hardDelete(id: string): Promise<void> {
+  async hardDelete(id: Row["id"]): Promise<void> {
     await this.db.delete(this.table).where(eq(this.table.id, id));
   }
 

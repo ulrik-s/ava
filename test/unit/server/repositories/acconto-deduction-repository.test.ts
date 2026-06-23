@@ -7,6 +7,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 import { DrizzleAccontoDeductionRepository } from "@/lib/server/repositories/drizzle-acconto-deduction-repository";
 import { InMemoryAccontoDeductionRepository } from "@/lib/server/repositories/in-memory-acconto-deduction-repository";
+import { asId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { createTestDb, type TestDbHandle } from "../db/pg-test-db";
 
@@ -17,7 +18,7 @@ describe("AccontoDeductionRepository — in-memory", () => {
     const id = uuidv7();
     const created = await repo.create({ id, finalInvoiceId: uuidv7(), accontoInvoiceId: uuidv7() } as never);
     expect((created as { version?: number }).version).toBe(1);
-    expect(await repo.getById(id)).toMatchObject({ id });
+    expect(await repo.getById(asId<"AccontoDeductionId">(id))).toMatchObject({ id });
   });
 });
 
@@ -31,6 +32,6 @@ describe("AccontoDeductionRepository — Drizzle (pglite)", () => {
     const id = uuidv7();
     const created = await repo.create({ id, finalInvoiceId: uuidv7(), accontoInvoiceId: uuidv7() } as never);
     expect((created as { version?: number }).version).toBe(1);
-    expect(await repo.getById(id)).toMatchObject({ id });
+    expect(await repo.getById(asId<"AccontoDeductionId">(id))).toMatchObject({ id });
   });
 });

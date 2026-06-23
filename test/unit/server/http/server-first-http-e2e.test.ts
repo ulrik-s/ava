@@ -26,6 +26,7 @@ import type { Repositories } from "@/lib/server/repositories/repositories";
 import type { AppRouter } from "@/lib/server/routers/_app";
 import { DrizzleSyncStore } from "@/lib/server/sync/drizzle-sync-store";
 import { serveFetchHandler } from "@/lib/shared/http/node-http-adapter";
+import { asId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { createTestDb, type TestDbHandle } from "../db/pg-test-db";
 
@@ -116,7 +117,7 @@ describe("server-first E2E över riktig HTTP-socket (#470)", () => {
       row: { id: c1, organizationId: ORG, name: "Wire-kontakt" }, enqueuedAt: 0,
     };
     expect((await transport.push(mutation)).status).toBe("accepted");
-    expect(await repos.contacts.getById(c1)).toMatchObject({ id: c1, name: "Wire-kontakt" });
+    expect(await repos.contacts.getById(asId<"ContactId">(c1))).toMatchObject({ id: c1, name: "Wire-kontakt" });
   });
 
   it("orgProcedure-grind: ingen forwarded identitet → klienten kastar", async () => {
