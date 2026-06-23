@@ -108,10 +108,10 @@ describe("Seed-data smoke — varje meny-sida körs mot riktig DemoDataStore", (
     const list = await trpc.matter.list({ page: 1, pageSize: 50 });
     const taxa = list.matters.filter((m: { isTaxeArende?: boolean }) => m.isTaxeArende === true);
     expect(taxa.length).toBeGreaterThan(0);
-    // Och minst ETT brottmål med offentlig försvarare som INTE är taxa
+    // Och minst ETT brottmål med offentligt uppdrag som INTE är taxa
     // (frångångstaxa-fall — bekräftar att flaggan är ortogonal mot paymentMethod)
     const nonTaxaOff = list.matters.filter((m: { paymentMethod?: string; isTaxeArende?: boolean }) =>
-      m.paymentMethod === "OFFENTLIG_FORSVARARE" && m.isTaxeArende !== true,
+      m.paymentMethod === "OFFENTLIGT_UPPDRAG" && m.isTaxeArende !== true,
     );
     expect(nonTaxaOff.length).toBeGreaterThan(0);
   });

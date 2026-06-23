@@ -17,6 +17,7 @@ import {
   type CreditRisk,
 } from "@/lib/client/labels";
 import { trpc } from "@/lib/client/trpc";
+import { paymentMethodSchema, type PaymentMethod } from "@/lib/shared/schemas/enums";
 
 const RISK_BADGE: Record<CreditRisk, string> = {
   LOW: "bg-green-50 text-green-700 border-green-200",
@@ -27,7 +28,7 @@ const RISK_BADGE: Record<CreditRisk, string> = {
 
 interface Props {
   matterId: string;
-  paymentMethod: string;
+  paymentMethod: PaymentMethod;
   paymentMethodNote: string | null;
   paymentMethodDecidedAt: Date | string | null;
 }
@@ -39,7 +40,7 @@ function PaymentMethodView({
   paymentMethodDecidedAt,
   onEdit,
 }: {
-  paymentMethod: string;
+  paymentMethod: PaymentMethod;
   paymentMethodNote: string | null;
   paymentMethodDecidedAt: Date | string | null;
   onEdit: () => void;
@@ -103,7 +104,7 @@ function PaymentMethodEditor({ matterId, initial, onDone }: { matterId: string; 
           <select
             id={methodId}
             value={method}
-            onChange={(e) => setMethod(e.target.value)}
+            onChange={(e) => setMethod(paymentMethodSchema.parse(e.target.value))}
             className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
           >
             {paymentMethodOptions.map((opt) => (

@@ -113,7 +113,7 @@ export type CreditRisk = "LOW" | "MEDIUM" | "HIGH" | "UNKNOWN";
 export function creditRiskFor(method: string): CreditRisk {
   switch (method) {
     case "RATTSHJALP":
-    case "OFFENTLIG_FORSVARARE":
+    case "OFFENTLIGT_UPPDRAG":
     case "RATTSSKYDD":
       return "LOW";       // staten eller försäkringsbolag betalar
     case "MIX":

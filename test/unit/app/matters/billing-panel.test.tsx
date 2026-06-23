@@ -187,8 +187,8 @@ describe("BillingPanel — pending verdict", () => {
 });
 
 describe("BillingPanel — Skapa-faktura-menyn (optionsFor)", () => {
-  it("KLIENT-default: bara 'Faktura till klient' → öppnar FINAL-dialogen", () => {
-    render(<BillingPanel matterId="m1" matter={{ ...baseMatter, paymentMethod: "KLIENT" }} />);
+  it("PRIVAT-default: bara 'Faktura till klient' → öppnar FINAL-dialogen", () => {
+    render(<BillingPanel matterId="m1" matter={{ ...baseMatter, paymentMethod: "PRIVAT" }} />);
     fireEvent.click(screen.getByRole("button", { name: "+ Skapa faktura" }));
     fireEvent.click(screen.getByRole("button", { name: "Faktura till klient" }));
     expect(screen.getByTestId("billing-dialog")).toHaveTextContent("FINAL");
@@ -201,8 +201,8 @@ describe("BillingPanel — Skapa-faktura-menyn (optionsFor)", () => {
     expect(screen.getByRole("button", { name: "Faktura till försäkring" })).toBeInTheDocument();
   });
 
-  it("OFFENTLIG_FORSVARARE: kostnadsräkning → öppnar KR-modalen", () => {
-    render(<BillingPanel matterId="m1" matter={{ ...baseMatter, paymentMethod: "OFFENTLIG_FORSVARARE" }} />);
+  it("OFFENTLIGT_UPPDRAG: kostnadsräkning → öppnar KR-modalen", () => {
+    render(<BillingPanel matterId="m1" matter={{ ...baseMatter, paymentMethod: "OFFENTLIGT_UPPDRAG" }} />);
     fireEvent.click(screen.getByRole("button", { name: "+ Skapa faktura" }));
     fireEvent.click(screen.getByRole("button", { name: "Kostnadsräkning till domstol" }));
     expect(screen.getByTestId("kr-modal")).toBeInTheDocument();
@@ -224,7 +224,7 @@ describe("BillingPanel — rådgivnings-banner (rättshjälp)", () => {
   });
 
   it("icke-rättshjälp → ingen rådgivnings-banner", () => {
-    render(<BillingPanel matterId="m1" matter={{ ...baseMatter, paymentMethod: "KLIENT" }} />);
+    render(<BillingPanel matterId="m1" matter={{ ...baseMatter, paymentMethod: "PRIVAT" }} />);
     expect(screen.queryByText(/Rådgivningstimme/)).not.toBeInTheDocument();
   });
 });

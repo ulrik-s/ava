@@ -10,7 +10,7 @@
  *                           aktiv/slutförd/avbruten plan, kredit, avskrivning, draft)
  *   RATTSSKYDD            → klient-aconto + slutfaktura till FÖRSÄKRING (betald)
  *   RATTSHJALP            → klient-aconto + slutfaktura till RÄTTSHJÄLPSMYNDIGHET (betald)
- *   OFFENTLIG_FORSVARARE  → kostnadsräkning till domstol (varannan dömd m. prutning)
+ *   OFFENTLIGT_UPPDRAG    → kostnadsräkning till domstol (varannan dömd m. prutning)
  *   (taxe-ärenden hoppas över — egen brottmålstaxa-väg)
  *
  * Belopp/fakturanummer/OCR genereras organiskt av billing-run-routern (ADR 0012).
@@ -213,7 +213,7 @@ export async function populateBilling(caller: GeneratorCaller, seed: SeedDataset
   for (const m of active) {
     const pm = String(m.paymentMethod);
     const matterId = String(m.id);
-    if (pm === "OFFENTLIG_FORSVARARE") {
+    if (pm === "OFFENTLIGT_UPPDRAG") {
       if (m.isTaxeArende === true) continue; // taxe-ärenden: egen brottmålstaxa-väg
       await runKostnadsrakning(ctx, matterId, krIdx % 2 === 0); // kostnadsräkning byggs på arbetet (0 ok)
       krIdx++;
