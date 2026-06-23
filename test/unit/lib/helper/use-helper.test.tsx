@@ -18,6 +18,7 @@ import {
   syncBadgeMap,
   emptySyncTracker,
   SYNCED_TTL_MS,
+  HELPER_BASE_OVERRIDE_KEY,
 } from "@/lib/client/helper/use-helper";
 import type { HelperStatusResponse, HelperSyncEntry } from "@/lib/shared/helper/protocol";
 
@@ -29,6 +30,7 @@ beforeEach(() => {
   vi.restoreAllMocks();
   global.fetch = originalFetch;
   resetHelperBaseCache();
+  localStorage.removeItem(HELPER_BASE_OVERRIDE_KEY);
 });
 
 /** fetch-mock som svarar per URL-fragment; okända URL:er rejectar. */
@@ -75,6 +77,17 @@ describe("useHelper / transport", () => {
     global.fetch = routeFetch([[`${HTTPS}/ping`, () => new Response("garbage", { status: 200 })]]);
     render(<Probe />);
     await waitFor(() => expect(screen.getByText("absent")).toBeInTheDocument());
+  });
+
+  it("per-flik-override (localStorage) pekar på en egen helper-bas (#742)", async () => {
+    const OTHER = "http://127.0.0.1:48771";
+    localStorage.setItem(HELPER_BASE_OVERRIDE_KEY, OTHER);
+    const fetchMock = routeFetch([[`${OTHER}/ping`, () => new Response("ava-helper v9\n", { status: 200 })]]);
+    global.fetch = fetchMock;
+    render(<Probe />);
+    await waitFor(() => expect(screen.getByText("v9")).toBeInTheDocument());
+    // Default-portarna (48761/48762) ska ALDRIG probas när en override finns.
+    expect(fetchMock.mock.calls.every(([u]: [string]) => String(u).startsWith(OTHER))).toBe(true);
   });
 
   it("negativ-cachar en miss → ingen probe-storm (#653)", async () => {
