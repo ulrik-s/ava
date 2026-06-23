@@ -161,7 +161,7 @@ export const matterRouter = router({
     .input(
       z.object({
         search: z.string().optional(),
-        status: z.enum(["ACTIVE", "CLOSED", "ARCHIVED"]).optional(),
+        status: matterStatusSchema.optional(),
         /** Filtrera till ärenden som medarbetaren har arbetat på (har tidsposter på). */
         employeeId: userIdSchema.optional(),
         page: z.number().min(1).default(1),
@@ -213,7 +213,7 @@ export const matterRouter = router({
         id: matterIdSchema,
         title: z.string().min(1).optional(),
         description: z.string().optional(),
-        status: z.enum(["ACTIVE", "CLOSED", "ARCHIVED"]).optional(),
+        status: matterStatusSchema.optional(),
         matterType: z.string().optional(),
         /** Byt ansvarig jurist (#174). Befintligt ärendenummer ändras EJ. */
         responsibleLawyerId: userIdSchema.nullable().optional(),

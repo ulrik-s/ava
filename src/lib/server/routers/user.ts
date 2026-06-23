@@ -1,5 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import { userRoleSchema } from "@/lib/shared/schemas/enums";
 import { userIdSchema, asId } from "@/lib/shared/schemas/ids";
 import { matterNumberPrefixSchema, type User } from "@/lib/shared/schemas/user";
 import { router, protectedProcedure } from "../trpc";
@@ -96,7 +97,7 @@ export const userRouter = router({
       email: z.string().email(),
       name: z.string().min(1),
       title: z.string().optional(),
-      role: z.enum(["ADMIN", "LAWYER", "ASSISTANT"]).default("LAWYER"),
+      role: userRoleSchema.default("LAWYER"),
       hourlyRate: z.number().nullable().optional(),
       mileageRate: z.number().nullable().optional(),
       /** Ärendenummer-prefix (#174) — juristens egen serie. */
@@ -131,7 +132,7 @@ export const userRouter = router({
       email: z.string().email().optional(),
       name: z.string().min(1).optional(),
       title: z.string().nullable().optional(),
-      role: z.enum(["ADMIN", "LAWYER", "ASSISTANT"]).optional(),
+      role: userRoleSchema.optional(),
       hourlyRate: z.number().nullable().optional(),
       mileageRate: z.number().nullable().optional(),
       /** Ärendenummer-prefix (#174); null rensar den. Byte fortsätter serien. */

@@ -11,6 +11,11 @@ import {
   userIdSchema,
 } from "./ids";
 
+/** Dokumentets AI-analys-status. Single source of truth så router-input
+ *  (document.upsert/metadata-write) och entiteten inte driftar isär. */
+export const documentAnalysisStatusSchema = z.enum(["PENDING", "RUNNING", "DONE", "ERROR"]);
+export type DocumentAnalysisStatus = z.infer<typeof documentAnalysisStatusSchema>;
+
 /**
  * DocumentFolder — hierarkisk mapp inom ett matter. `parentId` = null → root.
  * Lagras i `document-folders/<id>.json`.
@@ -49,7 +54,7 @@ export const documentSchema = z.object({
   tags: z.array(z.string()).default([]),
   summary: z.string().nullish(),
   analyzedAt: optionalDateLike,
-  analysisStatus: z.enum(["PENDING", "RUNNING", "DONE", "ERROR"]).nullish(),
+  analysisStatus: documentAnalysisStatusSchema.nullish(),
   analysisModel: z.string().nullish(),
   analysisError: z.string().nullish(),
 }).passthrough();

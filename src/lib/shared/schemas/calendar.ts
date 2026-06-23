@@ -30,6 +30,11 @@ export type CalendarEventKind = z.infer<typeof calendarEventKindSchema>;
 export const calendarEventVisibilitySchema = z.enum(["normal", "private"]);
 export type CalendarEventVisibility = z.infer<typeof calendarEventVisibilitySchema>;
 
+/** Outlook-speglingens status (för UI-banner). Single source of truth så
+ *  router-input + entitet inte driftar isär (medlems-ordning m.m.). */
+export const calendarMirrorStatusSchema = z.enum(["pending", "synced", "failed"]);
+export type CalendarMirrorStatus = z.infer<typeof calendarMirrorStatusSchema>;
+
 export const calendarEventSchema = z.object({
   ...baseFields,
   id: calendarEventIdSchema,
@@ -60,7 +65,7 @@ export const calendarEventSchema = z.object({
   /** Vilken Outlook-kalender (default = primär). */
   outlookCalendarId: z.string().nullish(),
   /** Senaste mirror-status (för UI-banner). */
-  mirrorStatus: z.enum(["pending", "synced", "failed"]).nullish(),
+  mirrorStatus: calendarMirrorStatusSchema.nullish(),
   mirrorError: z.string().nullish(),
   mirrorLastSyncedAt: optionalDateLike,
 }).passthrough();
