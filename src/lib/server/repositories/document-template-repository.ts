@@ -3,6 +3,7 @@
  * Org-scopas direkt. Bas-CRUD ärvs; list/detalj tar med skaparens namn.
  */
 
+import type { DocumentTemplateId, OrganizationId } from "@/lib/shared/schemas/ids";
 import type { DocumentTemplate } from "@/lib/shared/schemas/misc";
 import type { Repository } from "./types";
 
@@ -13,7 +14,7 @@ export interface DocumentTemplateRow extends DocumentTemplate {
 
 /** Listrad (smal projektion, utan content). */
 export interface DocumentTemplateListRow {
-  id: string;
+  id: DocumentTemplateId;
   name: string;
   description: string | null;
   category: string | null;
@@ -24,7 +25,7 @@ export interface DocumentTemplateListRow {
 
 export interface DocumentTemplateRepository extends Repository<DocumentTemplate> {
   /** Org:ens mallar (kategori asc, namn asc), smal projektion med skapar-namn. */
-  listForOrg(organizationId: string): Promise<DocumentTemplateListRow[]>;
+  listForOrg(organizationId: OrganizationId): Promise<DocumentTemplateListRow[]>;
   /** Mall by id, org-scopad, med skapare. Null om saknas/annan org/raderad. */
-  getByIdInOrg(id: string, organizationId: string): Promise<DocumentTemplateRow | null>;
+  getByIdInOrg(id: DocumentTemplateId, organizationId: OrganizationId): Promise<DocumentTemplateRow | null>;
 }

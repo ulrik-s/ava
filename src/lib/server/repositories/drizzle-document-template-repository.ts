@@ -4,7 +4,7 @@
  */
 
 import { and, asc, eq, isNull } from "drizzle-orm";
-import { asId } from "@/lib/shared/schemas/ids";
+import type { DocumentTemplateId, OrganizationId } from "@/lib/shared/schemas/ids";
 import type { DocumentTemplate } from "@/lib/shared/schemas/misc";
 import { documentTemplates, users } from "../db/schema";
 import type { AppDb } from "../db/types";
@@ -20,7 +20,7 @@ export class DrizzleDocumentTemplateRepository
     super(db, versionedTable(documentTemplates), now);
   }
 
-  async listForOrg(organizationId: string): Promise<DocumentTemplateListRow[]> {
+  async listForOrg(organizationId: OrganizationId): Promise<DocumentTemplateListRow[]> {
     const rows = await this.db
       .select({
         id: documentTemplates.id, name: documentTemplates.name,
@@ -30,7 +30,7 @@ export class DrizzleDocumentTemplateRepository
       })
       .from(documentTemplates)
       .leftJoin(users, eq(documentTemplates.createdById, users.id))
-      .where(and(eq(documentTemplates.organizationId, asId<"OrganizationId">(organizationId)), isNull(documentTemplates.deletedAt)))
+      .where(and(eq(documentTemplates.organizationId, organizationId), isNull(documentTemplates.deletedAt)))
       .orderBy(asc(documentTemplates.category), asc(documentTemplates.name));
     return rows.map((r): DocumentTemplateListRow => ({
       id: r.id, name: r.name,
@@ -40,11 +40,11 @@ export class DrizzleDocumentTemplateRepository
     }));
   }
 
-  async getByIdInOrg(id: string, organizationId: string): Promise<DocumentTemplateRow | null> {
+  async getByIdInOrg(id: DocumentTemplateId, organizationId: OrganizationId): Promise<DocumentTemplateRow | null> {
     const rows = await this.db
       .select({ tpl: documentTemplates, cbName: users.name }).from(documentTemplates)
       .leftJoin(users, eq(documentTemplates.createdById, users.id))
-      .where(and(eq(documentTemplates.id, asId<"DocumentTemplateId">(id)), eq(documentTemplates.organizationId, asId<"OrganizationId">(organizationId)), isNull(documentTemplates.deletedAt)))
+      .where(and(eq(documentTemplates.id, id), eq(documentTemplates.organizationId, organizationId), isNull(documentTemplates.deletedAt)))
       .limit(1);
     const row = rows[0];
     if (!row) return null;

@@ -16,15 +16,15 @@ import { asId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { createTestDb, type TestDbHandle } from "../db/pg-test-db";
 
-const ORG = "11111111-1111-7111-8111-111111111111";
+const ORG = asId<"OrganizationId">("11111111-1111-7111-8111-111111111111");
 
 describe("DocumentRepository / DocumentFolderRepository — in-memory", () => {
   it("list/getByIdInOrg/reassign + folder _count", async () => {
-    const mId = uuidv7();
-    const uId = uuidv7();
-    const root = uuidv7();
-    const sub = uuidv7();
-    const d1 = uuidv7();
+    const mId = asId<"MatterId">(uuidv7());
+    const uId = asId<"UserId">(uuidv7());
+    const root = asId<"DocumentFolderId">(uuidv7());
+    const sub = asId<"DocumentFolderId">(uuidv7());
+    const d1 = asId<"DocumentId">(uuidv7());
     const source = prebakeJoins({
       matters: [{ id: mId, organizationId: ORG, matterNumber: "2026-1", title: "T" }],
       users: [{ id: uId, name: "Anna" }],
@@ -47,7 +47,7 @@ describe("DocumentRepository / DocumentFolderRepository — in-memory", () => {
     expect(inRoot.total).toBe(1);
     expect(inRoot.documents[0]!.uploadedBy?.name).toBe("Anna");
     expect(await docs.getByIdInOrg(d1, ORG)).toMatchObject({ id: d1, matterId: mId });
-    expect(await docs.getByIdInOrg(d1, uuidv7())).toBeNull();
+    expect(await docs.getByIdInOrg(d1, asId<"OrganizationId">(uuidv7()))).toBeNull();
     expect((await docs.listByMatter(mId)).length).toBe(2);
     expect(await docs.listDocumentTypesForOrg(ORG)).toEqual([
       { type: "Avtal", count: 1 }, { type: "Faktura", count: 1 },
@@ -71,12 +71,12 @@ describe("DocumentRepository / DocumentFolderRepository — Drizzle (pglite)", (
 
   it("list/getByIdInOrg/reassign + folder _count", async () => {
     const db = handle.db;
-    const org = uuidv7();
-    const mId = uuidv7();
-    const uId = uuidv7();
-    const root = uuidv7();
-    const sub = uuidv7();
-    const d1 = uuidv7();
+    const org = asId<"OrganizationId">(uuidv7());
+    const mId = asId<"MatterId">(uuidv7());
+    const uId = asId<"UserId">(uuidv7());
+    const root = asId<"DocumentFolderId">(uuidv7());
+    const sub = asId<"DocumentFolderId">(uuidv7());
+    const d1 = asId<"DocumentId">(uuidv7());
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const v = (o: Record<string, unknown>) => ({ version: 1, ...o }) as any;
     await db.insert(matters).values(v({ id: mId, organizationId: org, matterNumber: "2026-1", title: "T" }));
@@ -94,7 +94,7 @@ describe("DocumentRepository / DocumentFolderRepository — Drizzle (pglite)", (
     expect(inRoot.total).toBe(1);
     expect(inRoot.documents[0]!.uploadedBy?.name).toBe("Anna");
     expect(await docs.getByIdInOrg(d1, org)).toMatchObject({ id: d1, matterId: mId });
-    expect(await docs.getByIdInOrg(d1, uuidv7())).toBeNull();
+    expect(await docs.getByIdInOrg(d1, asId<"OrganizationId">(uuidv7()))).toBeNull();
     expect((await docs.listByMatter(mId)).length).toBe(2);
     expect(await docs.listDocumentTypesForOrg(org)).toEqual([
       { type: "Avtal", count: 1 }, { type: "Faktura", count: 1 },

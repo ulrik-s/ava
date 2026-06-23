@@ -4,6 +4,9 @@
  */
 
 import type { DocumentAnalysisSuggestion } from "@/lib/shared/schemas/document";
+import type {
+  DocumentAnalysisSuggestionId, MatterId, OrganizationId,
+} from "@/lib/shared/schemas/ids";
 import type { IDataStore } from "../data-store/IDataStore";
 import type {
   DocumentSuggestionRepository, SuggestionListRow, SuggestionWithMatter,
@@ -19,14 +22,14 @@ export class InMemoryDocumentSuggestionRepository
     super(store.documentAnalysisSuggestions, now ?? (() => new Date()));
   }
 
-  async getByIdInOrg(id: string, organizationId: string): Promise<SuggestionWithMatter | null> {
+  async getByIdInOrg(id: DocumentAnalysisSuggestionId, organizationId: OrganizationId): Promise<SuggestionWithMatter | null> {
     return (await this.delegate.findFirst({
       where: { id, document: { matter: { organizationId } } },
       include: { document: { select: { matterId: true } } },
     })) as SuggestionWithMatter | null;
   }
 
-  async listPendingForMatter(matterId: string, organizationId: string, order: "asc" | "desc"): Promise<SuggestionListRow[]> {
+  async listPendingForMatter(matterId: MatterId, organizationId: OrganizationId, order: "asc" | "desc"): Promise<SuggestionListRow[]> {
     return (await this.delegate.findMany({
       where: { status: "PENDING", document: { matterId, matter: { organizationId } } },
       include: { document: { select: { id: true, fileName: true, title: true } } },
@@ -34,7 +37,7 @@ export class InMemoryDocumentSuggestionRepository
     })) as SuggestionListRow[];
   }
 
-  async listPendingByIds(ids: string[], organizationId: string): Promise<SuggestionWithMatter[]> {
+  async listPendingByIds(ids: DocumentAnalysisSuggestionId[], organizationId: OrganizationId): Promise<SuggestionWithMatter[]> {
     if (!ids.length) return [];
     return (await this.delegate.findMany({
       where: { id: { in: ids }, status: "PENDING", document: { matter: { organizationId } } },
@@ -42,15 +45,15 @@ export class InMemoryDocumentSuggestionRepository
     })) as SuggestionWithMatter[];
   }
 
-  async listByIdsInOrg(ids: string[], organizationId: string): Promise<Array<{ id: string }>> {
+  async listByIdsInOrg(ids: DocumentAnalysisSuggestionId[], organizationId: OrganizationId): Promise<Array<{ id: DocumentAnalysisSuggestionId }>> {
     if (!ids.length) return [];
     return (await this.delegate.findMany({
       where: { id: { in: ids }, document: { matter: { organizationId } } },
       select: { id: true },
-    })) as Array<{ id: string }>;
+    })) as Array<{ id: DocumentAnalysisSuggestionId }>;
   }
 
-  async updateManyByIds(ids: string[], patch: Partial<DocumentAnalysisSuggestion>): Promise<void> {
+  async updateManyByIds(ids: DocumentAnalysisSuggestionId[], patch: Partial<DocumentAnalysisSuggestion>): Promise<void> {
     if (!ids.length) return;
     await this.delegate.updateMany({ where: { id: { in: ids } }, data: patch });
   }

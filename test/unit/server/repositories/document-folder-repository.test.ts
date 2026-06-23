@@ -11,16 +11,18 @@ import { documentFolders, documents, matters, users } from "@/lib/server/db/sche
 import { DrizzleDocumentFolderRepository } from "@/lib/server/repositories/drizzle-document-folder-repository";
 import { InMemoryDocumentFolderRepository } from "@/lib/server/repositories/in-memory-document-folder-repository";
 import { prebakeJoins } from "@/lib/shared/demo-source";
+import { asId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { createTestDb, type TestDbHandle } from "../db/pg-test-db";
 
-const ORG = "66666666-6666-7666-8666-666666666666";
+const ORG = asId<"OrganizationId">("66666666-6666-7666-8666-666666666666");
 
 // Delat träd: matter med 2 rotmappar (A, B); A har 2 undermappar; 2 dok i A, 1 i A1.
 function tree() {
-  const mId = uuidv7();
-  const uId = uuidv7();
-  const fA = uuidv7(), fB = uuidv7(), fA1 = uuidv7(), fA2 = uuidv7();
+  const mId = asId<"MatterId">(uuidv7());
+  const uId = asId<"UserId">(uuidv7());
+  const fA = asId<"DocumentFolderId">(uuidv7()), fB = asId<"DocumentFolderId">(uuidv7()),
+    fA1 = asId<"DocumentFolderId">(uuidv7()), fA2 = asId<"DocumentFolderId">(uuidv7());
   const folders = [
     { id: fA, matterId: mId, name: "A Avtal", parentId: null },
     { id: fB, matterId: mId, name: "B Bilagor", parentId: null },

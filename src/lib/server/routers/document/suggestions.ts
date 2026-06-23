@@ -15,7 +15,10 @@ import {
 } from "@/lib/shared/contact-dedup";
 import type { DocumentAnalysisSuggestion } from "@/lib/shared/schemas/document";
 import { matterRoleSchema, contactTypeSchema, type SuggestionStatus } from "@/lib/shared/schemas/enums";
-import { asId, type ContactId, type OrganizationId } from "@/lib/shared/schemas/ids";
+import {
+  asId, documentAnalysisSuggestionIdSchema, matterIdSchema,
+  type ContactId, type DocumentAnalysisSuggestionId, type MatterId, type OrganizationId,
+} from "@/lib/shared/schemas/ids";
 import type { MatterContact } from "@/lib/shared/schemas/matter";
 import { groupSuggestions } from "@/lib/shared/suggestion-grouping";
 import type { Repositories } from "../../repositories/repositories";
@@ -35,7 +38,7 @@ type SuggOverride = {
   personalNumber?: string | null | undefined;
 };
 type Suggestion = {
-  id: string;
+  id: DocumentAnalysisSuggestionId;
   status: SuggestionStatus;
   role: string;
   name: string;
@@ -45,10 +48,10 @@ type Suggestion = {
   personalNumber: string | null;
   orgNumber: string | null;
   notes: string | null;
-  document: { matterId: string };
+  document: { matterId: MatterId };
 };
 
-async function loadPendingSuggestion(ctx: Ctx, suggestionId: string): Promise<Suggestion> {
+async function loadPendingSuggestion(ctx: Ctx, suggestionId: DocumentAnalysisSuggestionId): Promise<Suggestion> {
   const sugg = (await ctx.repos.documentAnalysisSuggestions.getByIdInOrg(suggestionId, ctx.orgId)) as Suggestion | null;
   if (!sugg) throw new TRPCError({ code: "NOT_FOUND" });
   if (sugg.status !== "PENDING") {
@@ -142,7 +145,7 @@ async function ensureMatterContactLink(
 // ─── Helpers för acceptSuggestionGroup ──────────────────────────────────
 
 /** Hämta + validera en grupp av förslag (existerar, pending, samma ärende). */
-async function loadPendingGroup(ctx: Ctx, suggestionIds: string[]): Promise<Suggestion[]> {
+async function loadPendingGroup(ctx: Ctx, suggestionIds: DocumentAnalysisSuggestionId[]): Promise<Suggestion[]> {
   const suggs = (await ctx.repos.documentAnalysisSuggestions.listPendingByIds(suggestionIds, ctx.orgId)) as Suggestion[];
 
   if (suggs.length === 0) throw new TRPCError({ code: "NOT_FOUND" });
@@ -243,7 +246,7 @@ async function linkGroupRoles(
 export const suggestionProcedures = {
   /** Platt lista över pending-förslag för ett ärende. */
   pendingSuggestions: orgProcedure
-    .input(z.object({ matterId: z.string() }))
+    .input(z.object({ matterId: matterIdSchema }))
     .query(({ ctx, input }) =>
       ctx.repos.documentAnalysisSuggestions.listPendingForMatter(input.matterId, ctx.orgId, "desc"),
     ),
@@ -253,7 +256,7 @@ export const suggestionProcedures = {
    * som förekommer i flera dokument/roller blir en rad i UI:t.
    */
   pendingSuggestionsGrouped: orgProcedure
-    .input(z.object({ matterId: z.string() }))
+    .input(z.object({ matterId: matterIdSchema }))
     .query(async ({ ctx, input }) => {
       const rows = await ctx.repos.documentAnalysisSuggestions.listPendingForMatter(input.matterId, ctx.orgId, "asc");
       return groupSuggestions(rows);
@@ -267,7 +270,7 @@ export const suggestionProcedures = {
   acceptSuggestion: orgProcedure
     .input(
       z.object({
-        suggestionId: z.string(),
+        suggestionId: documentAnalysisSuggestionIdSchema,
         /** Om satt — länka till denna kontakt istället för att skapa ny. */
         existingContactId: z.string().optional(),
         /** User-overrides innan accept. */
@@ -296,13 +299,13 @@ export const suggestionProcedures = {
 
       await ensureMatterContactLink(ctx, matterId, contactId, finalRole, sugg.notes);
       await ctx.repos.documentAnalysisSuggestions.update(
-        asId<"DocumentAnalysisSuggestionId">(sugg.id), { status: "ACCEPTED", acceptedContactId: contactId } as Partial<DocumentAnalysisSuggestion>,
+        sugg.id, { status: "ACCEPTED", acceptedContactId: contactId } as Partial<DocumentAnalysisSuggestion>,
       );
       return { contactId };
     }),
 
   rejectSuggestion: orgProcedure
-    .input(z.object({ suggestionId: z.string() }))
+    .input(z.object({ suggestionId: documentAnalysisSuggestionIdSchema }))
     .mutation(async ({ ctx, input }) => {
       const sugg = await ctx.repos.documentAnalysisSuggestions.getByIdInOrg(input.suggestionId, ctx.orgId);
       if (!sugg) throw new TRPCError({ code: "NOT_FOUND" });
@@ -319,7 +322,7 @@ export const suggestionProcedures = {
   acceptSuggestionGroup: orgProcedure
     .input(
       z.object({
-        suggestionIds: z.array(z.string()).min(1),
+        suggestionIds: z.array(documentAnalysisSuggestionIdSchema).min(1),
         /** Om satt — återanvänd befintlig kontakt istället för att skapa ny. */
         existingContactId: z.string().optional(),
       }),
@@ -344,7 +347,7 @@ export const suggestionProcedures = {
 
   /** Avvisa en hel grupp av förslag. */
   rejectSuggestionGroup: orgProcedure
-    .input(z.object({ suggestionIds: z.array(z.string()).min(1) }))
+    .input(z.object({ suggestionIds: z.array(documentAnalysisSuggestionIdSchema).min(1) }))
     .mutation(async ({ ctx, input }) => {
       const suggs = await ctx.repos.documentAnalysisSuggestions.listByIdsInOrg(input.suggestionIds, ctx.orgId);
       if (suggs.length === 0) throw new TRPCError({ code: "NOT_FOUND" });
