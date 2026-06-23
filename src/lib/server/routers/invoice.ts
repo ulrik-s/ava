@@ -21,7 +21,7 @@ import { ocrFromInvoiceNumber } from "@/lib/shared/ocr-reference";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { computeRadgivningsavgift } from "@/lib/shared/rattshjalp";
 import type { Invoice, Payment, PaymentPlan, WriteOff } from "@/lib/shared/schemas/billing";
-import type { InvoiceStatus } from "@/lib/shared/schemas/enums";
+import { invoiceStatusSchema, invoiceTypeSchema, type InvoiceStatus } from "@/lib/shared/schemas/enums";
 import {
   asId,
   matterIdSchema,
@@ -83,16 +83,6 @@ function resolveWriteOffAmount(outstanding: number, requested?: number): number 
   }
   return amount;
 }
-
-const invoiceTypeSchema = z.enum(["STANDARD", "ACCONTO", "FINAL"]);
-const invoiceStatusSchema = z.enum([
-  "DRAFT",
-  "SENT",
-  "PAID",
-  "CANCELLED",
-  "BAD_DEBT",
-  "INSTALLMENT_PLAN",
-]);
 
 export const invoiceRouter = router({
   list: orgProcedure
@@ -417,7 +407,7 @@ export const invoiceRouter = router({
     .input(
       z.object({
         invoiceId: invoiceIdSchema,
-        status: z.enum(["SENT", "CANCELLED", "BAD_DEBT"]),
+        status: invoiceStatusSchema.extract(["SENT", "CANCELLED", "BAD_DEBT"]),
       }),
     )
     .mutation(async ({ ctx, input }) => {

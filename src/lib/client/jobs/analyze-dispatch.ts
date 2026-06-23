@@ -10,14 +10,16 @@
  * vid mount. Workern kallar `dispatchAnalyze()`.
  */
 
+import type { DocumentAnalysisStatus } from "@/lib/shared/schemas/document";
+
 export interface AnalyzeArgs {
   documentId: string;
   kind: string;
   /** ISO-timestamp när analysen körde. UI:n förlitar sig på detta
    *  för att stänga "⏳ analyseras..."-state:n. */
   analyzedAt?: string;
-  /** "DONE" | "FAILED" — sätts av workern. UI:n inspekterar fältet. */
-  analysisStatus?: string;
+  /** Sätts av workern (i praktiken "DONE"). UI:n inspekterar fältet. */
+  analysisStatus?: DocumentAnalysisStatus;
   signal?: AbortSignal;
 }
 

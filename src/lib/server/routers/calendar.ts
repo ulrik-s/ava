@@ -13,7 +13,7 @@
  */
 
 import { z } from "zod";
-import { calendarEventKindSchema, calendarEventVisibilitySchema, type CalendarEvent } from "@/lib/shared/schemas";
+import { calendarEventKindSchema, calendarEventVisibilitySchema, calendarMirrorStatusSchema, type CalendarEvent } from "@/lib/shared/schemas";
 import {
   asId,
   calendarEventIdSchema,
@@ -210,7 +210,7 @@ export const calendarRouter = router({
       z.object({
         id: calendarEventIdSchema,
         outlookEventId: z.string().nullish(),
-        mirrorStatus: z.enum(["synced", "failed", "pending"]).nullable(),
+        mirrorStatus: calendarMirrorStatusSchema.nullable(),
         mirrorError: z.string().nullish(),
         mirrorLastSyncedAt: z.date().nullish(),
       }),

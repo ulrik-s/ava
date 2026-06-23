@@ -9,7 +9,7 @@ import { conflictCopyName } from "@/lib/shared/conflict-copy";
 import { base64ToBytes, bytesToBase64, contentStoragePath, sha256Hex } from "@/lib/shared/content-address";
 import { isJunkFileName } from "@/lib/shared/junk-files";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
-import type { Document } from "@/lib/shared/schemas/document";
+import { documentAnalysisStatusSchema, type Document } from "@/lib/shared/schemas/document";
 import { asId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { orgProcedure } from "../../trpc";
@@ -114,7 +114,7 @@ export const coreProcedures = {
       title: z.string().nullable().optional(),
       documentType: z.string().nullable().optional(),
       summary: z.string().nullable().optional(),
-      analysisStatus: z.enum(["PENDING", "RUNNING", "DONE", "ERROR"]).optional(),
+      analysisStatus: documentAnalysisStatusSchema.optional(),
       analyzedAt: z.string().optional(),
       createdAt: z.string().optional(),
       /** Koppla dokumentet till en faktura (t.ex. genererad faktura/underlag). */
@@ -287,7 +287,7 @@ export const coreProcedures = {
         documentType: z.string().nullable().optional(),
         summary: z.string().nullable().optional(),
         analyzedAt: z.union([z.string(), z.date()]).nullable().optional(),
-        analysisStatus: z.string().nullable().optional(),
+        analysisStatus: documentAnalysisStatusSchema.nullable().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -296,10 +296,7 @@ export const coreProcedures = {
       const data = {
         ...rest,
         ...omitUndefined({
-          analysisStatus:
-            analysisStatus === undefined
-              ? undefined
-              : (analysisStatus as "PENDING" | "RUNNING" | "DONE" | "ERROR" | null),
+          analysisStatus,
           analyzedAt:
             analyzedAt === undefined
               ? undefined
