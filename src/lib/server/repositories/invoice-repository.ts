@@ -14,6 +14,7 @@ import type {
   AccontoDeduction, Expense, Invoice, Payment, PaymentPlan, PaymentPlanReminder, TimeEntry, WriteOff,
 } from "@/lib/shared/schemas/billing";
 import type { Document } from "@/lib/shared/schemas/document";
+import type { InvoiceId, MatterId, OrganizationId } from "@/lib/shared/schemas/ids";
 import type { Matter } from "@/lib/shared/schemas/matter";
 import type { Repository } from "./types";
 
@@ -49,7 +50,7 @@ export interface InvoiceFull extends InvoiceWithRelations {
 
 /** Filter för `listForOrg` (alla optional → org-bred lista). */
 export interface InvoiceListFilter {
-  matterId?: string | undefined;
+  matterId?: MatterId | undefined;
   invoiceType?: Invoice["invoiceType"] | undefined;
   status?: Invoice["status"] | undefined;
 }
@@ -84,23 +85,23 @@ export function nextInvoiceNumberFrom(prefix: string, lastNumber: string | null 
 
 export interface InvoiceRepository extends Repository<Invoice> {
   /** Faktura by id, org-scopad via ärendet (null om saknas/annan org/raderad). */
-  getByIdInOrg(id: string, organizationId: string): Promise<Invoice | null>;
+  getByIdInOrg(id: InvoiceId, organizationId: OrganizationId): Promise<Invoice | null>;
   /** Full faktura-detalj (alla relationer inkl. aconto-avdrag/kredit), org-scopad. */
-  getByIdFull(id: string, organizationId: string): Promise<InvoiceFull | null>;
+  getByIdFull(id: InvoiceId, organizationId: OrganizationId): Promise<InvoiceFull | null>;
   /** Faktura med betalningar + avskrivningar (ledger). Null om saknas/raderad. */
-  getByIdWithLedger(id: string): Promise<InvoiceWithLedger | null>;
+  getByIdWithLedger(id: InvoiceId): Promise<InvoiceWithLedger | null>;
   /** Faktura + huvudrelationer (matter/payments/writeOffs/plan/tid/utlägg/dok), org-scopad. */
-  getByIdWithRelations(id: string, organizationId: string): Promise<InvoiceWithRelations | null>;
+  getByIdWithRelations(id: InvoiceId, organizationId: OrganizationId): Promise<InvoiceWithRelations | null>;
   /** Org-bred fakturalista (listvyns include), nyaste först, valfritt filtrerad. */
-  listForOrg(organizationId: string, filter?: InvoiceListFilter): Promise<InvoiceListRow[]>;
+  listForOrg(organizationId: OrganizationId, filter?: InvoiceListFilter): Promise<InvoiceListRow[]>;
   /** Nästa lediga fakturanummer (`F-YYYY-NNNN`) för org:en (året från repots klocka). */
-  nextInvoiceNumber(organizationId: string): Promise<string>;
+  nextInvoiceNumber(organizationId: OrganizationId): Promise<string>;
   /** Summa krediterat på en faktura: |belopp| av dess kreditnotor, org-scopat (öre). */
-  sumCreditNotesFor(invoiceId: string, organizationId: string): Promise<number>;
+  sumCreditNotesFor(invoiceId: InvoiceId, organizationId: OrganizationId): Promise<number>;
   /** Kreditnotan för en faktura (`creditedInvoiceId = id`) — null om ej krediterad. */
-  getCreditNoteFor(invoiceId: string): Promise<Invoice | null>;
+  getCreditNoteFor(invoiceId: InvoiceId): Promise<Invoice | null>;
   /** Valda ACCONTO-fakturor i ett ärende som ÄNNU INTE dragits av på en FINAL. Tom vid tomma ids. */
-  listDeductibleAccontos(matterId: string, ids: string[]): Promise<Invoice[]>;
+  listDeductibleAccontos(matterId: MatterId, ids: InvoiceId[]): Promise<Invoice[]>;
   /** Alla (icke-raderade) fakturor i ett ärende, nyaste först. */
-  listByMatter(matterId: string): Promise<Invoice[]>;
+  listByMatter(matterId: MatterId): Promise<Invoice[]>;
 }

@@ -6,7 +6,7 @@ import {
   type FrozenWorkInput,
 } from "@/lib/shared/billed-per-lawyer";
 import type { InvoiceStatus, PaymentMethod } from "@/lib/shared/schemas/enums";
-import { userIdSchema } from "@/lib/shared/schemas/ids";
+import { asId, userIdSchema } from "@/lib/shared/schemas/ids";
 import { router, protectedProcedure } from "../trpc";
 
 /**
@@ -381,7 +381,7 @@ export const reportsRouter = router({
 
       const [user, invoices, billingRuns, timeEntries] = await Promise.all([
         ctx.repos.users.getByIdInOrg(input.userId, org),
-        ctx.repos.invoices.listForOrg(org),
+        ctx.repos.invoices.listForOrg(asId<"OrganizationId">(org)),
         ctx.repos.billingRuns.listForOrg(org),
         ctx.repos.timeEntries.listBillableForOrg(org),
       ]);
@@ -442,7 +442,7 @@ export const reportsRouter = router({
       const toDate = new Date(input.to);
       toDate.setUTCHours(23, 59, 59, 999);
       const org = ctx.user.organizationId;
-      const invoices = await ctx.repos.invoices.listForOrg(org);
+      const invoices = await ctx.repos.invoices.listForOrg(asId<"OrganizationId">(org));
       const ids = (invoices as Array<{ id: string }>).map((i) => i.id);
       const [payments, writeOffs] = await Promise.all([
         ctx.repos.payments.listByInvoiceIds(ids),

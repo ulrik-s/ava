@@ -21,7 +21,7 @@ type DispatchCtx = { repos: Repositories; orgId: string };
 
 /** Verifiera org-tillhörighet + returnera fakturans id/status (repository-sömmen, ADR 0020). */
 async function assertInvoiceInOrg(ctx: DispatchCtx, invoiceId: string): Promise<{ id: string; status: string }> {
-  const inv = await ctx.repos.invoices.getByIdInOrg(invoiceId, ctx.orgId);
+  const inv = await ctx.repos.invoices.getByIdInOrg(asId<"InvoiceId">(invoiceId), asId<"OrganizationId">(ctx.orgId));
   if (!inv) throw new TRPCError({ code: "NOT_FOUND", message: "Fakturan finns inte i organisationen." });
   return inv;
 }

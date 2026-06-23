@@ -61,7 +61,7 @@ async function gatherInvoiceLedger(
   inv: { id: string; amount: number },
 ): Promise<{ paid: number; credited: number; writtenOff: number; ledger: ReturnType<typeof computeInvoiceLedger> }> {
   const paid = await repos.payments.sumByInvoice(inv.id);
-  const credited = await repos.invoices.sumCreditNotesFor(inv.id, orgId);
+  const credited = await repos.invoices.sumCreditNotesFor(asId<"InvoiceId">(inv.id), asId<"OrganizationId">(orgId));
   const writtenOff = await repos.writeOffs.sumByInvoice(inv.id);
   return { paid, credited, writtenOff, ledger: computeInvoiceLedger(inv.amount, paid, credited, writtenOff) };
 }

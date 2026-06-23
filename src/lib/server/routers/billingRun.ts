@@ -199,7 +199,7 @@ async function invoiceNumbering(
   recipient: BillingRunRecipient,
 ): Promise<{ invoiceNumber: string; ocrReference: string | null } | Record<string, never>> {
   if (recipient === "DOMSTOL") return {};
-  const invoiceNumber = await repos.invoices.nextInvoiceNumber(orgId);
+  const invoiceNumber = await repos.invoices.nextInvoiceNumber(asId<"OrganizationId">(orgId));
   return { invoiceNumber, ocrReference: ocrFromInvoiceNumber(invoiceNumber) };
 }
 
