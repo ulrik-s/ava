@@ -110,7 +110,7 @@ export default function InvoiceDetailClient({ id: paramId }: { id: string }) {
     <div className="space-y-6">
       <InvoiceHeader inv={inv} />
       <InvoiceSummaryCard inv={inv} ledger={ledger} s={s} />
-      <InvoiceSections inv={inv} ledger={ledger} onCancelPlan={() => s.cancelPlan.mutate({ planId: inv.paymentPlan!.id })} />
+      <InvoiceSections inv={inv} ledger={ledger} onCancelPlan={() => { if (inv.paymentPlan) s.cancelPlan.mutate({ planId: inv.paymentPlan.id }); }} />
       <InvoiceModals inv={inv} ledger={ledger} s={s} />
     </div>
   );

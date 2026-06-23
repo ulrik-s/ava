@@ -56,7 +56,8 @@ export class InMemoryQueryEngine<T extends Record<string, unknown>> {
    * Muterar inte inputen.
    */
   query(rows: readonly T[], opts: QueryOptions = {}): T[] {
-    let out = opts.where ? rows.filter((r) => this.matches(r, opts.where!)) : [...rows];
+    const where = opts.where;
+    let out = where ? rows.filter((r) => this.matches(r, where)) : [...rows];
     if (opts.orderBy) out = this.sort(out, opts.orderBy);
     if (opts.skip) out = out.slice(opts.skip);
     if (opts.take !== undefined) out = out.slice(0, opts.take);
@@ -64,8 +65,9 @@ export class InMemoryQueryEngine<T extends Record<string, unknown>> {
   }
 
   count(rows: readonly T[], opts: QueryOptions = {}): number {
-    if (!opts.where) return rows.length;
-    return rows.filter((r) => this.matches(r, opts.where!)).length;
+    const where = opts.where;
+    if (!where) return rows.length;
+    return rows.filter((r) => this.matches(r, where)).length;
   }
 
   findFirst(rows: readonly T[], opts: QueryOptions = {}): T | null {
@@ -193,7 +195,7 @@ export class InMemoryQueryEngine<T extends Record<string, unknown>> {
   // ─── OrderBy ──────────────────────────────────────────────────────
 
   private sort(rows: T[], orderBy: QueryOptions["orderBy"]): T[] {
-    const clauses = Array.isArray(orderBy) ? orderBy : [orderBy!];
+    const clauses = Array.isArray(orderBy) ? orderBy : orderBy ? [orderBy] : [];
     return [...rows].sort((a, b) => {
       for (const clause of clauses) {
         for (const [field, dir] of Object.entries(clause)) {
