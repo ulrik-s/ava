@@ -7,6 +7,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { TimeSection } from "@/app/matters/[id]/_time-section";
+import { asId } from "@/lib/shared/schemas/ids";
 
 const createMut = vi.fn();
 const updateMut = vi.fn();
@@ -57,7 +58,7 @@ function renderSection() {
   const client = new QueryClient();
   return render(
     <QueryClientProvider client={client}>
-      <TimeSection matterId="m-1" />
+      <TimeSection matterId={asId<"MatterId">("m-1")} />
     </QueryClientProvider>,
   );
 }

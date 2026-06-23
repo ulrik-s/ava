@@ -20,6 +20,7 @@ import {
 import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
 import { proposedAccontoOre } from "@/lib/shared/billing-proposal";
+import type { MatterId } from "@/lib/shared/schemas/ids";
 
 interface AccontoRow { id: string; amountOre: number; recipient: string }
 
@@ -32,7 +33,7 @@ export interface BillingMeta {
 }
 
 interface Props {
-  matterId: string;
+  matterId: MatterId;
   type: "ACCONTO" | "FINAL";
   existingAccontos: AccontoRow[];
   meta: BillingMeta;
@@ -54,7 +55,7 @@ function titleFor(type: string): string {
 }
 
 /** Återanvändbar doc-generator: lägg ett faktura-PDF-dokument i fil-listan. */
-function useFakturaDoc(matterId: string, meta: BillingMeta): (invoice: FakturaDocInvoice) => Promise<void> {
+function useFakturaDoc(matterId: MatterId, meta: BillingMeta): (invoice: FakturaDocInvoice) => Promise<void> {
   const register = trpc.document.register.useMutation();
   const utils = trpc.useUtils();
   const docMeta: FakturaDocMeta = {
@@ -70,7 +71,7 @@ function useFakturaDoc(matterId: string, meta: BillingMeta): (invoice: FakturaDo
   };
 }
 
-function AccontoForm({ matterId, meta, onDone }: { matterId: string; meta: BillingMeta; onDone: () => void }) {
+function AccontoForm({ matterId, meta, onDone }: { matterId: MatterId; meta: BillingMeta; onDone: () => void }) {
   const proposal = trpc.billingRun.proposal.useQuery({ matterId });
   const workValueOre = proposal.data?.workValueOre ?? 0;
   const priorOre = proposal.data?.priorAccontoSumOre ?? 0;
@@ -126,7 +127,7 @@ function Stat({ label, value, strong }: { label: string; value: number; strong?:
   );
 }
 
-function FinalForm({ matterId, meta, accontos, onDone }: { matterId: string; meta: BillingMeta; accontos: AccontoRow[]; onDone: () => void }) {
+function FinalForm({ matterId, meta, accontos, onDone }: { matterId: MatterId; meta: BillingMeta; accontos: AccontoRow[]; onDone: () => void }) {
   const proposal = trpc.billingRun.proposal.useQuery({ matterId });
   const [recipient, setRecipient] = useState<"KLIENT" | "FORSAKRING" | "RATTSHJALPSMYNDIGHET">("KLIENT");
   const [selected, setSelected] = useState<string[]>(accontos.map((a) => a.id));

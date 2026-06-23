@@ -7,6 +7,7 @@
  */
 
 import { trpc } from "@/lib/client/trpc";
+import type { InvoiceId } from "@/lib/shared/schemas/ids";
 
 const CHANNEL_LABEL: Record<string, string> = {
   email: "E-post",
@@ -41,7 +42,7 @@ interface DispatchRow {
   error?: string | null;
 }
 
-export function DispatchHistory({ invoiceId }: { invoiceId: string }) {
+export function DispatchHistory({ invoiceId }: { invoiceId: InvoiceId }) {
   const dispatches = trpc.invoiceDispatch.list.useQuery({ invoiceId });
   const rows = (dispatches.data ?? []) as DispatchRow[];
 

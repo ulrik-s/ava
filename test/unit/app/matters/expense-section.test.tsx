@@ -7,6 +7,7 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, beforeEach, vi } from "vitest-compat";
 import { ExpenseSection } from "@/app/matters/[id]/_expense-section";
+import { asId } from "@/lib/shared/schemas/ids";
 
 vi.mock("@/lib/client/demo/entity-link", () => ({
   EntityLink: ({ children }: { children: React.ReactNode }) => <a href="#">{children}</a>,
@@ -53,7 +54,7 @@ beforeEach(() => {
 
 describe("ExpenseSection", () => {
   it("renderar rubrik med total och utläggsraderna", () => {
-    render(<ExpenseSection matterId="m1" />);
+    render(<ExpenseSection matterId={asId<"MatterId">("m1")} />);
     expect(screen.getByText("Utlägg")).toBeInTheDocument();
     expect(screen.getByText(/totalt/)).toBeInTheDocument();
     expect(screen.getByText("Tågbiljett")).toBeInTheDocument();
@@ -61,12 +62,12 @@ describe("ExpenseSection", () => {
   });
 
   it("visar summa-footer", () => {
-    render(<ExpenseSection matterId="m1" />);
+    render(<ExpenseSection matterId={asId<"MatterId">("m1")} />);
     expect(screen.getByText("Summa")).toBeInTheDocument();
   });
 
   it("låser fakturerade utlägg (ingen ändra/ta-bort) men tillåter åtgärder på ej fakturerade", () => {
-    render(<ExpenseSection matterId="m1" />);
+    render(<ExpenseSection matterId={asId<"MatterId">("m1")} />);
     expect(screen.getByText("Låst (på faktura)")).toBeInTheDocument();
     // Endast det ofakturerade utlägget (e1) har Ändra/Ta bort.
     expect(screen.getByText("Ändra")).toBeInTheDocument();
@@ -75,21 +76,21 @@ describe("ExpenseSection", () => {
 
   it("Ta bort med confirm → delete.mutate med utläggets id", () => {
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
-    render(<ExpenseSection matterId="m1" />);
+    render(<ExpenseSection matterId={asId<"MatterId">("m1")} />);
     fireEvent.click(screen.getByText("Ta bort"));
     expect(deleteMutate).toHaveBeenCalledWith({ id: "e1" });
     confirmSpy.mockRestore();
   });
 
   it("'+ Nytt utlägg' öppnar skapa-modalen", () => {
-    render(<ExpenseSection matterId="m1" />);
+    render(<ExpenseSection matterId={asId<"MatterId">("m1")} />);
     fireEvent.click(screen.getByText("+ Nytt utlägg"));
     expect(screen.getByText("Nytt utlägg")).toBeInTheDocument();
     expect(screen.getByText("Debiterbar")).toBeInTheDocument();
   });
 
   it("fyller i skapa-formuläret + Spara → create.mutate med matterId + payload", () => {
-    render(<ExpenseSection matterId="m1" />);
+    render(<ExpenseSection matterId={asId<"MatterId">("m1")} />);
     fireEvent.click(screen.getByText("+ Nytt utlägg"));
     const dateInput = document.querySelector('input[type="date"]') as HTMLInputElement;
     fireEvent.change(dateInput, { target: { value: "2026-03-15" } });
@@ -104,7 +105,7 @@ describe("ExpenseSection", () => {
   });
 
   it("växlar moms-radio (Exkl moms) + momssats-select utan att krascha", () => {
-    render(<ExpenseSection matterId="m1" />);
+    render(<ExpenseSection matterId={asId<"MatterId">("m1")} />);
     fireEvent.click(screen.getByText("+ Nytt utlägg"));
     fireEvent.click(screen.getByRole("radio", { name: /Exkl moms/ }));
     fireEvent.change(screen.getByRole("combobox"), { target: { value: "1200" } });
@@ -113,7 +114,7 @@ describe("ExpenseSection", () => {
   });
 
   it("'Ändra' öppnar förifyllt edit-formulär → Spara ändring → update.mutate med id", () => {
-    render(<ExpenseSection matterId="m1" />);
+    render(<ExpenseSection matterId={asId<"MatterId">("m1")} />);
     fireEvent.click(screen.getByText("Ändra"));
     expect(screen.getByText("Ändra utlägg")).toBeInTheDocument();
     expect(screen.getByDisplayValue("Tågbiljett")).toBeInTheDocument(); // förifyllt ur e1
@@ -122,7 +123,7 @@ describe("ExpenseSection", () => {
   });
 
   it("Avbryt stänger skapa-modalen", () => {
-    render(<ExpenseSection matterId="m1" />);
+    render(<ExpenseSection matterId={asId<"MatterId">("m1")} />);
     fireEvent.click(screen.getByText("+ Nytt utlägg"));
     fireEvent.click(screen.getByText("Avbryt"));
     expect(screen.queryByText("Nytt utlägg")).not.toBeInTheDocument();

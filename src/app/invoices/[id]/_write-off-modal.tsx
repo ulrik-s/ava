@@ -6,14 +6,15 @@
  */
 
 import { useId, useState } from "react";
+import type { InvoiceId } from "@/lib/shared/schemas/ids";
 
 interface Props {
-  invoiceId: string;
+  invoiceId: InvoiceId;
   /** Utestående i öre — default-belopp för avskrivningen. */
   outstanding: number;
   isPending: boolean;
   error: string | null;
-  onSubmit: (data: { invoiceId: string; amount: number; reason?: string; writtenOffAt: string }) => void;
+  onSubmit: (data: { invoiceId: InvoiceId; amount: number; reason?: string; writtenOffAt: string }) => void;
   onClose: () => void;
 }
 

@@ -7,6 +7,7 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { VerdictDialog } from "@/app/matters/[id]/_verdict-dialog";
+import { asId } from "@/lib/shared/schemas/ids";
 
 let verdictOnSuccess: ((res: unknown) => Promise<void>) | undefined;
 const verdictMutate = vi.fn();
@@ -35,9 +36,9 @@ vi.mock("@/lib/client/kostnadsrakning/render-faktura-pdf", () => ({ renderFaktur
 vi.mock("@/lib/client/demo/persist-generated-doc", () => ({ persistGeneratedDoc }));
 
 const baseProps = {
-  billingRunId: "br-1",
+  billingRunId: asId<"BillingRunId">("br-1"),
   workValueOre: 500_000,
-  matterId: "m1",
+  matterId: asId<"MatterId">("m1"),
   matterNumber: "B-2026-1",
   matterTitle: "Brottmål",
   onClose: vi.fn(),

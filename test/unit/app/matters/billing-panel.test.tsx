@@ -11,6 +11,7 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { BillingPanel } from "@/app/matters/[id]/_billing-panel";
+import { asId } from "@/lib/shared/schemas/ids";
 
 interface BillingRunRow {
   id: string; type: string; status: string; recipient: string;
@@ -91,14 +92,14 @@ beforeEach(() => {
 
 describe("BillingPanel — översikt", () => {
   it("renderar rubrik och tomtext utan runs", () => {
-    render(<BillingPanel matterId="m1" matter={baseMatter} />);
+    render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={baseMatter} />);
     expect(screen.getByText("Fakturering")).toBeInTheDocument();
     expect(screen.getByText("Inga billing-runs ännu.")).toBeInTheDocument();
   });
 
   it("visar laddtext medan runs hämtas", () => {
     runsLoading = true;
-    render(<BillingPanel matterId="m1" matter={baseMatter} />);
+    render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={baseMatter} />);
     expect(screen.getByText("Laddar…")).toBeInTheDocument();
   });
 
@@ -110,7 +111,7 @@ describe("BillingPanel — översikt", () => {
         { id: "r3", type: "KOSTNADSRAKNING", status: "PENDING_VERDICT", recipient: "DOMSTOL", amountOre: 50_000, createdAt: "2026-03-01" },
       ],
     };
-    render(<BillingPanel matterId="m1" matter={baseMatter} />);
+    render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={baseMatter} />);
     // Aconto = 1000 kr, Fakturerat = 2500 kr, Väntar = 500 kr. Varje belopp
     // syns två gånger (summa-kort + run-rad); Intl använder no-break-space
     // → matcha tolerant via regex + getAllByText.
@@ -136,7 +137,7 @@ describe("BillingPanel — Upparbetat ofakturerat", () => {
         { id: "e2", description: "Ej deb", amount: 10_000, billable: false },
       ],
     };
-    render(<BillingPanel matterId="m1" matter={baseMatter} />);
+    render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={baseMatter} />);
     expect(screen.getByText("Upparbetat ofakturerat")).toBeInTheDocument();
     // Arvode 1200,00 (bara billable), Utlägg 900,00, Total 2100,00.
     expect(screen.getByText(/1\s*200,00/)).toBeInTheDocument();
@@ -145,7 +146,7 @@ describe("BillingPanel — Upparbetat ofakturerat", () => {
   });
 
   it("visar tomtext när inget ofakturerat finns", () => {
-    render(<BillingPanel matterId="m1" matter={baseMatter} />);
+    render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={baseMatter} />);
     expect(screen.getByText("Upparbetat ofakturerat")).toBeInTheDocument();
     expect(screen.getByText(/Inget ofakturerat/)).toBeInTheDocument();
   });
@@ -161,7 +162,7 @@ describe("BillingPanel — pending verdict", () => {
   });
 
   it("visar banner och öppnar verdict-dialogen", () => {
-    render(<BillingPanel matterId="m1" matter={baseMatter} />);
+    render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={baseMatter} />);
     expect(screen.getByText(/Kostnadsräkning väntar på dom/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Ange dom \+ prutning/ }));
     expect(screen.getByTestId("verdict-dialog")).toBeInTheDocument();
@@ -170,7 +171,7 @@ describe("BillingPanel — pending verdict", () => {
   it("öppnar KR-dokumentet ur blob-cachen när det finns", () => {
     documentListData = { documents: [{ id: "doc-1", fileName: "kostnadsrakning.docx", documentType: "Kostnadsräkning", createdAt: "2026-03-01" }] };
     hasDoc = true;
-    render(<BillingPanel matterId="m1" matter={baseMatter} />);
+    render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={baseMatter} />);
     fireEvent.click(screen.getByRole("button", { name: "kostnadsrakning.docx" }));
     expect(openGeneratedDocFn).toHaveBeenCalledWith("doc-1");
   });
@@ -179,7 +180,7 @@ describe("BillingPanel — pending verdict", () => {
     documentListData = { documents: [{ id: "doc-1", fileName: "kostnadsrakning.docx", documentType: "Kostnadsräkning", createdAt: "2026-03-01" }] };
     hasDoc = false;
     const alertSpy = vi.spyOn(globalThis, "alert").mockImplementation(() => {});
-    render(<BillingPanel matterId="m1" matter={baseMatter} />);
+    render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={baseMatter} />);
     fireEvent.click(screen.getByRole("button", { name: "kostnadsrakning.docx" }));
     expect(alertSpy).toHaveBeenCalled();
     alertSpy.mockRestore();
@@ -188,21 +189,21 @@ describe("BillingPanel — pending verdict", () => {
 
 describe("BillingPanel — Skapa-faktura-menyn (optionsFor)", () => {
   it("PRIVAT-default: bara 'Faktura till klient' → öppnar FINAL-dialogen", () => {
-    render(<BillingPanel matterId="m1" matter={{ ...baseMatter, paymentMethod: "PRIVAT" }} />);
+    render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={{ ...baseMatter, paymentMethod: "PRIVAT" }} />);
     fireEvent.click(screen.getByRole("button", { name: "+ Skapa faktura" }));
     fireEvent.click(screen.getByRole("button", { name: "Faktura till klient" }));
     expect(screen.getByTestId("billing-dialog")).toHaveTextContent("FINAL");
   });
 
   it("RATTSSKYDD: aconto + faktura till försäkring", () => {
-    render(<BillingPanel matterId="m1" matter={{ ...baseMatter, paymentMethod: "RATTSSKYDD" }} />);
+    render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={{ ...baseMatter, paymentMethod: "RATTSSKYDD" }} />);
     fireEvent.click(screen.getByRole("button", { name: "+ Skapa faktura" }));
     expect(screen.getByRole("button", { name: "Aconto till klient" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Faktura till försäkring" })).toBeInTheDocument();
   });
 
   it("OFFENTLIGT_UPPDRAG: kostnadsräkning → öppnar KR-modalen", () => {
-    render(<BillingPanel matterId="m1" matter={{ ...baseMatter, paymentMethod: "OFFENTLIGT_UPPDRAG" }} />);
+    render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={{ ...baseMatter, paymentMethod: "OFFENTLIGT_UPPDRAG" }} />);
     fireEvent.click(screen.getByRole("button", { name: "+ Skapa faktura" }));
     fireEvent.click(screen.getByRole("button", { name: "Kostnadsräkning till domstol" }));
     expect(screen.getByTestId("kr-modal")).toBeInTheDocument();
@@ -211,20 +212,20 @@ describe("BillingPanel — Skapa-faktura-menyn (optionsFor)", () => {
 
 describe("BillingPanel — rådgivnings-banner (rättshjälp)", () => {
   it("RATTSHJALP utan registrerad rådgivning → knappen registrerar", () => {
-    render(<BillingPanel matterId="m1" matter={{ ...baseMatter, paymentMethod: "RATTSHJALP" }} />);
+    render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={{ ...baseMatter, paymentMethod: "RATTSHJALP" }} />);
     expect(screen.getByText(/Rådgivningstimme \(rättshjälp\)/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Registrera betald" }));
     expect(radgivningMutate).toHaveBeenCalledWith(expect.objectContaining({ matterId: "m1" }));
   });
 
   it("RATTSHJALP med registrerad rådgivning → visar bock", () => {
-    render(<BillingPanel matterId="m1" matter={{ ...baseMatter, paymentMethod: "RATTSHJALP", radgivningBetaldAt: "2026-01-05" }} />);
+    render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={{ ...baseMatter, paymentMethod: "RATTSHJALP", radgivningBetaldAt: "2026-01-05" }} />);
     expect(screen.getByText(/Registrerad/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Registrera betald" })).not.toBeInTheDocument();
   });
 
   it("icke-rättshjälp → ingen rådgivnings-banner", () => {
-    render(<BillingPanel matterId="m1" matter={{ ...baseMatter, paymentMethod: "PRIVAT" }} />);
+    render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={{ ...baseMatter, paymentMethod: "PRIVAT" }} />);
     expect(screen.queryByText(/Rådgivningstimme/)).not.toBeInTheDocument();
   });
 });

@@ -10,6 +10,7 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, beforeEach, vi } from "vitest-compat";
 import { KostnadsrakningModal } from "@/app/matters/[id]/_kostnadsrakning-modal";
+import { asId } from "@/lib/shared/schemas/ids";
 
 vi.mock("@/lib/client/helper/use-helper", () => ({
   useHelper: () => ({ checked: true, version: null }),
@@ -34,7 +35,7 @@ vi.mock("@/lib/client/trpc", () => ({
 }));
 
 const baseProps = {
-  matterId: "m1",
+  matterId: asId<"MatterId">("m1"),
   matterNumber: "2026-0017",
   matterTitle: "Brottmål Davidsson",
   clientName: "Erik Davidsson",

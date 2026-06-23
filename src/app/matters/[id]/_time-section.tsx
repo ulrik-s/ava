@@ -5,9 +5,10 @@ import { DataTable, type Column } from "@/components/ui/data-table";
 import { Modal } from "@/components/ui/modal";
 import { trpc } from "@/lib/client/trpc";
 import { formatMinutes } from "@/lib/client/utils";
+import type { InvoiceId, MatterId, TimeEntryId } from "@/lib/shared/schemas/ids";
 
 interface Props {
-  matterId: string;
+  matterId: MatterId;
   isTaxeArende?: boolean;
 }
 
@@ -19,15 +20,15 @@ interface EditForm {
 }
 
 interface TimeEntryRow {
-  id: string;
+  id: TimeEntryId;
   date: Date | string;
   minutes: number;
   description: string | null;
   billable: boolean;
   hourlyRate?: number | null;
   user?: { name?: string | null } | null;
-  invoiceId?: string | null;
-  invoice?: { id: string; invoiceNumber?: string | null } | null;
+  invoiceId?: InvoiceId | null;
+  invoice?: { id: InvoiceId; invoiceNumber?: string | null } | null;
   createdAt?: Date | string | null;
   updatedAt?: Date | string | null;
 }
@@ -56,7 +57,7 @@ export function TimeSection({ matterId, isTaxeArende }: Props) {
   const utils = trpc.useUtils();
   const timeEntries = trpc.timeEntry.list.useQuery({ matterId });
   const [showCreate, setShowCreate] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<TimeEntryId | null>(null);
   const [editForm, setEditForm] = useState<EditForm | null>(null);
   const [createForm, setCreateForm] = useState<EditForm>(emptyForm);
 
@@ -90,7 +91,7 @@ export function TimeSection({ matterId, isTaxeArende }: Props) {
     updateTimeEntry.mutate({ id: editingId, ...editForm });
   }
 
-  function confirmDelete(id: string): void {
+  function confirmDelete(id: TimeEntryId): void {
     if (confirm("Ta bort tidregistreringen?")) deleteTimeEntry.mutate({ id });
   }
 

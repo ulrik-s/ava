@@ -8,12 +8,13 @@ import { labelForMatterRole } from "@/lib/client/labels";
 import { buildTemplateContext } from "@/lib/client/templates/build-template-context";
 import { trpc } from "@/lib/client/trpc";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
+import type { MatterId } from "@/lib/shared/schemas/ids";
 
 type Contact = { id: string; name: string; email?: string | null; phone?: string | null };
 type MatterContact = { id: string; role: string; contact: Contact };
 
 interface Props {
-  matterId: string;
+  matterId: MatterId;
   contacts: MatterContact[];
   onClose: () => void;
 }
@@ -21,7 +22,7 @@ interface Props {
 type Recipient = { name: string; email?: string | null; phone?: string | null };
 type GenMatter = { matterNumber: string; title: string; matterType?: string | null; contacts?: Array<{ role: string; contact: { name: string } }> };
 type GenOrg = { name: string; orgNumber?: string | null; address?: string | null; email?: string | null } | undefined;
-type RegisterDocInput = { id: string; matterId: string; fileName: string; mimeType: string; sizeBytes: number; storagePath: string };
+type RegisterDocInput = { id: string; matterId: MatterId; fileName: string; mimeType: string; sizeBytes: number; storagePath: string };
 
 interface GenerateArgs {
   templateId: string;
@@ -31,7 +32,7 @@ interface GenerateArgs {
   matter: GenMatter | undefined;
   org: GenOrg;
   contacts: MatterContact[];
-  matterId: string;
+  matterId: MatterId;
   registerDoc: (d: RegisterDocInput) => Promise<unknown>;
 }
 
@@ -49,7 +50,7 @@ function buildDocCtx(m: GenMatter, recipient: Recipient | null, org: GenOrg) {
 /** Rendera + öppna print-flik + skriv till FSA + registrera ETT dokument. */
 async function generateOneDoc(opts: {
   content: string; name: string; ctx: ReturnType<typeof buildTemplateContext>;
-  format: "pdf" | "docx"; recipient: Recipient | null; matterId: string;
+  format: "pdf" | "docx"; recipient: Recipient | null; matterId: MatterId;
   registerDoc: (d: RegisterDocInput) => Promise<unknown>;
 }): Promise<void> {
   const { content, name, ctx, format, recipient, matterId, registerDoc } = opts;

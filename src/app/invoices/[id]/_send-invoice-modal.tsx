@@ -17,9 +17,10 @@ import { useHelper, composeMailViaHelper } from "@/lib/client/helper/use-helper"
 import { renderFakturaPdf } from "@/lib/client/kostnadsrakning/render-faktura-pdf";
 import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
+import type { InvoiceId } from "@/lib/shared/schemas/ids";
 
 export interface SendInvoiceModalProps {
-  invoiceId: string;
+  invoiceId: InvoiceId;
   invoiceNumber?: string | null | undefined;
   amount: number;
   ocrReference?: string | null | undefined;

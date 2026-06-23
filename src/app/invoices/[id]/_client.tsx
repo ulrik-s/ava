@@ -15,6 +15,7 @@ import { formatCurrency } from "@/lib/client/utils";
 import type { AppRouter } from "@/lib/server/routers/_app";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { computeMatterSettlement, computeRadgivningsavgift, type MatterSettlement } from "@/lib/shared/rattshjalp";
+import { asId } from "@/lib/shared/schemas/ids";
 import { computeInvoiceLedger } from "@/lib/shared/write-off-calc";
 import { CreditModal } from "./_credit-modal";
 import { DispatchHistory } from "./_dispatch-history";
@@ -96,7 +97,7 @@ function invoiceLedger(inv: Inv): LedgerView {
 
 export default function InvoiceDetailClient({ id: paramId }: { id: string }) {
   // Static export: sentinel-shell för nya id:n → läs riktiga id:t ur URL:en.
-  const id = useRouteId() ?? paramId;
+  const id = asId<"InvoiceId">(useRouteId() ?? paramId);
   const invoice = trpc.invoice.getById.useQuery({ id });
   const s = useInvoiceDetail(id);
 

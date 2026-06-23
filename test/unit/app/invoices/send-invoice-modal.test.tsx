@@ -7,6 +7,7 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 
 import { SendInvoiceModal } from "@/app/invoices/[id]/_send-invoice-modal";
+import { asId } from "@/lib/shared/schemas/ids";
 
 const recordMutate = vi.fn();
 const queueMutate = vi.fn();
@@ -31,7 +32,7 @@ vi.mock("@/lib/client/download-text", () => ({ downloadBytes: (...a: unknown[]) 
 vi.mock("@/lib/client/kostnadsrakning/render-faktura-pdf", () => ({ renderFakturaPdf: (...a: unknown[]) => renderFakturaPdf(...a) }));
 
 const baseProps = {
-  invoiceId: "inv-1",
+  invoiceId: asId<"InvoiceId">("inv-1"),
   invoiceNumber: "F-2026-0001",
   amount: 12_500,
   ocrReference: "1234567894",

@@ -17,11 +17,12 @@ import { generateFakturaDoc } from "@/lib/client/kostnadsrakning/generate-faktur
 import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
+import type { BillingRunId, MatterId } from "@/lib/shared/schemas/ids";
 
 interface Props {
-  billingRunId: string;
+  billingRunId: BillingRunId;
   workValueOre: number;
-  matterId: string;
+  matterId: MatterId;
   matterNumber: string;
   matterTitle: string;
   clientName?: string;

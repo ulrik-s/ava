@@ -12,6 +12,7 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { GenerateModal } from "@/app/matters/[id]/_generate-modal";
+import { asId } from "@/lib/shared/schemas/ids";
 
 interface Tpl { id: string; name: string; category: string | null; content: string | null }
 let templatesData: Tpl[] | undefined;
@@ -63,7 +64,7 @@ beforeEach(() => {
 
 describe("GenerateModal — vyer", () => {
   it("renderar rubrik + väljare", () => {
-    render(<GenerateModal matterId="m1" contacts={contacts} onClose={() => {}} />);
+    render(<GenerateModal matterId={asId<"MatterId">("m1")} contacts={contacts} onClose={() => {}} />);
     expect(screen.getByText("Generera dokument")).toBeInTheDocument();
     expect(screen.getByText("Mall")).toBeInTheDocument();
     expect(screen.getByText(/Mottagare \(0\)/)).toBeInTheDocument();
@@ -72,19 +73,19 @@ describe("GenerateModal — vyer", () => {
 
   it("visar laddtext medan mallar hämtas", () => {
     templatesLoading = true;
-    render(<GenerateModal matterId="m1" contacts={contacts} onClose={() => {}} />);
+    render(<GenerateModal matterId={asId<"MatterId">("m1")} contacts={contacts} onClose={() => {}} />);
     expect(screen.getByText("Laddar mallar…")).toBeInTheDocument();
   });
 
   it("tom mall-lista → länk till att skapa mall", () => {
     templatesData = [];
-    render(<GenerateModal matterId="m1" contacts={contacts} onClose={() => {}} />);
+    render(<GenerateModal matterId={asId<"MatterId">("m1")} contacts={contacts} onClose={() => {}} />);
     expect(screen.getByText(/Inga mallar skapade/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Skapa en mall" })).toBeInTheDocument();
   });
 
   it("inga kontakter → tomtext i mottagar-pickern", () => {
-    render(<GenerateModal matterId="m1" contacts={[]} onClose={() => {}} />);
+    render(<GenerateModal matterId={asId<"MatterId">("m1")} contacts={[]} onClose={() => {}} />);
     expect(screen.getByText("Inga kontakter kopplade till ärendet.")).toBeInTheDocument();
   });
 });
@@ -92,7 +93,7 @@ describe("GenerateModal — vyer", () => {
 describe("GenerateModal — generering", () => {
   it("utan vald mottagare → ETT generellt dokument registreras + stänger", async () => {
     const onClose = vi.fn();
-    render(<GenerateModal matterId="m1" contacts={contacts} onClose={onClose} />);
+    render(<GenerateModal matterId={asId<"MatterId">("m1")} contacts={contacts} onClose={onClose} />);
     fireEvent.change(screen.getByRole("combobox"), { target: { value: "t1" } });
     fireEvent.click(screen.getByRole("button", { name: /Generera/ }));
     await waitFor(() => expect(registerMutateAsync).toHaveBeenCalledTimes(1));
@@ -103,7 +104,7 @@ describe("GenerateModal — generering", () => {
   });
 
   it("två valda mottagare → ETT dokument per mottagare", async () => {
-    render(<GenerateModal matterId="m1" contacts={contacts} onClose={() => {}} />);
+    render(<GenerateModal matterId={asId<"MatterId">("m1")} contacts={contacts} onClose={() => {}} />);
     fireEvent.change(screen.getByRole("combobox"), { target: { value: "t1" } });
     const boxes = screen.getAllByRole("checkbox");
     fireEvent.click(boxes[0]!);
@@ -114,7 +115,7 @@ describe("GenerateModal — generering", () => {
   });
 
   it("av/på-toggle av mottagare uppdaterar antalet", () => {
-    render(<GenerateModal matterId="m1" contacts={contacts} onClose={() => {}} />);
+    render(<GenerateModal matterId={asId<"MatterId">("m1")} contacts={contacts} onClose={() => {}} />);
     const boxes = screen.getAllByRole("checkbox");
     fireEvent.click(boxes[0]!);
     expect(screen.getByText(/Mottagare \(1\)/)).toBeInTheDocument();
@@ -124,7 +125,7 @@ describe("GenerateModal — generering", () => {
 
   it("mall utan innehåll → felmeddelande, stänger inte", async () => {
     const onClose = vi.fn();
-    render(<GenerateModal matterId="m1" contacts={contacts} onClose={onClose} />);
+    render(<GenerateModal matterId={asId<"MatterId">("m1")} contacts={contacts} onClose={onClose} />);
     fireEvent.change(screen.getByRole("combobox"), { target: { value: "t-empty" } });
     fireEvent.click(screen.getByRole("button", { name: /Generera/ }));
     await waitFor(() => expect(screen.getByText("Mallen saknar innehåll.")).toBeInTheDocument());
@@ -133,7 +134,7 @@ describe("GenerateModal — generering", () => {
   });
 
   it("format docx går att välja", () => {
-    render(<GenerateModal matterId="m1" contacts={contacts} onClose={() => {}} />);
+    render(<GenerateModal matterId={asId<"MatterId">("m1")} contacts={contacts} onClose={() => {}} />);
     const docx = screen.getByRole("radio", { name: /HTML-fil/ }) as HTMLInputElement;
     fireEvent.click(docx);
     expect(docx.checked).toBe(true);
