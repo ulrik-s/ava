@@ -5,21 +5,22 @@ import { DataTable, type Column } from "@/components/ui/data-table";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { labelForContactType, labelForMatterRole } from "@/lib/client/labels";
 import { trpc } from "@/lib/client/trpc";
+import type { ContactType, MatterRole } from "@/lib/shared/schemas/enums";
 
 interface ConflictRow {
   contactId: string;
   contactName: string;
-  contactType: string;
+  contactType: ContactType;
   personalNumber?: string | null;
   orgNumber?: string | null;
   matterId: string;
   matterNumber: string;
   matterTitle: string;
-  role: string;
+  role: MatterRole;
   klient?: string | null;
 }
 
-function rolePillClass(role: string): string {
+function rolePillClass(role: MatterRole): string {
   if (role === "KLIENT") return "bg-blue-50 text-blue-700";
   if (role === "MOTPART") return "bg-orange-50 text-orange-700";
   if (role === "MOTPARTSOMBUD") return "bg-orange-50 text-orange-600";

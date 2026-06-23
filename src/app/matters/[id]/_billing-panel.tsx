@@ -21,7 +21,7 @@ import { formatCurrency } from "@/lib/client/utils";
 import type { AppRouter } from "@/lib/server/routers/_app";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { computeRadgivningsavgift } from "@/lib/shared/rattshjalp";
-import { BILLING_RUN_TYPE_LABELS, BILLING_RUN_STATUS_LABELS, type PaymentMethod } from "@/lib/shared/schemas/enums";
+import { BILLING_RUN_TYPE_LABELS, BILLING_RUN_STATUS_LABELS, type BillingRunRecipient, type BillingRunStatus, type BillingRunType, type PaymentMethod } from "@/lib/shared/schemas/enums";
 import { BillingDialog, type BillingMeta } from "./_billing-dialog";
 import { KostnadsrakningModal } from "./_kostnadsrakning-modal";
 import { VerdictDialog } from "./_verdict-dialog";
@@ -45,9 +45,9 @@ interface Props {
 
 interface BillingRunRow {
   id: string;
-  type: string;
-  status: string;
-  recipient: string;
+  type: BillingRunType;
+  status: BillingRunStatus;
+  recipient: BillingRunRecipient;
   amountOre: number;
   createdAt: string | Date;
   invoiceId?: string | null;
