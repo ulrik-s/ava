@@ -11,17 +11,18 @@ import { documentAnalysisSuggestions, documents, matters } from "@/lib/server/db
 import { DrizzleDocumentSuggestionRepository } from "@/lib/server/repositories/drizzle-document-suggestion-repository";
 import { InMemoryDocumentSuggestionRepository } from "@/lib/server/repositories/in-memory-document-suggestion-repository";
 import { prebakeJoins } from "@/lib/shared/demo-source";
+import { asId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { createTestDb, type TestDbHandle } from "../db/pg-test-db";
 
-const ORG = "77777777-7777-7777-8777-777777777777";
+const ORG = asId<"OrganizationId">("77777777-7777-7777-8777-777777777777");
 
 describe("DocumentSuggestionRepository — in-memory", () => {
   it("getByIdInOrg/listPending*/listByIds/updateMany", async () => {
-    const mId = uuidv7();
-    const dId = uuidv7();
-    const s1 = uuidv7();
-    const s2 = uuidv7();
+    const mId = asId<"MatterId">(uuidv7());
+    const dId = asId<"DocumentId">(uuidv7());
+    const s1 = asId<"DocumentAnalysisSuggestionId">(uuidv7());
+    const s2 = asId<"DocumentAnalysisSuggestionId">(uuidv7());
     const source = prebakeJoins({
       matters: [{ id: mId, organizationId: ORG, matterNumber: "2026-1", title: "T" }],
       documents: [{ id: dId, matterId: mId, fileName: "f.pdf", title: "F" }],
@@ -34,7 +35,7 @@ describe("DocumentSuggestionRepository — in-memory", () => {
     const repo = new InMemoryDocumentSuggestionRepository(store);
 
     expect(await repo.getByIdInOrg(s1, ORG)).toMatchObject({ id: s1, document: { matterId: mId } });
-    expect(await repo.getByIdInOrg(s1, uuidv7())).toBeNull();
+    expect(await repo.getByIdInOrg(s1, asId<"OrganizationId">(uuidv7()))).toBeNull();
     expect((await repo.listPendingForMatter(mId, ORG, "asc")).map((s) => s.id)).toEqual([s1]);
     expect((await repo.listPendingByIds([s1, s2], ORG)).map((s) => s.id)).toEqual([s1]);
     expect((await repo.listByIdsInOrg([s1, s2], ORG)).length).toBe(2);
@@ -51,11 +52,11 @@ describe("DocumentSuggestionRepository — Drizzle (pglite)", () => {
 
   it("getByIdInOrg/listPending*/listByIds/updateMany", async () => {
     const db = handle.db;
-    const org = uuidv7();
-    const mId = uuidv7();
-    const dId = uuidv7();
-    const s1 = uuidv7();
-    const s2 = uuidv7();
+    const org = asId<"OrganizationId">(uuidv7());
+    const mId = asId<"MatterId">(uuidv7());
+    const dId = asId<"DocumentId">(uuidv7());
+    const s1 = asId<"DocumentAnalysisSuggestionId">(uuidv7());
+    const s2 = asId<"DocumentAnalysisSuggestionId">(uuidv7());
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const v = (o: Record<string, unknown>) => ({ version: 1, ...o }) as any;
     await db.insert(matters).values(v({ id: mId, organizationId: org, matterNumber: "2026-1", title: "T" }));
@@ -65,7 +66,7 @@ describe("DocumentSuggestionRepository — Drizzle (pglite)", () => {
     const repo = new DrizzleDocumentSuggestionRepository(db);
 
     expect(await repo.getByIdInOrg(s1, org)).toMatchObject({ id: s1, document: { matterId: mId } });
-    expect(await repo.getByIdInOrg(s1, uuidv7())).toBeNull();
+    expect(await repo.getByIdInOrg(s1, asId<"OrganizationId">(uuidv7()))).toBeNull();
     expect((await repo.listPendingForMatter(mId, org, "asc")).map((s) => s.id)).toEqual([s1]);
     expect((await repo.listPendingByIds([s1, s2], org)).map((s) => s.id)).toEqual([s1]);
     expect((await repo.listByIdsInOrg([s1, s2], org)).length).toBe(2);

@@ -4,6 +4,9 @@
  */
 
 import type { Document } from "@/lib/shared/schemas/document";
+import type {
+  DocumentFolderId, DocumentId, MatterId, OrganizationId,
+} from "@/lib/shared/schemas/ids";
 import type { IDataStore } from "../data-store/IDataStore";
 import type {
   DocumentAccessRow, DocumentListRow, DocumentRepository,
@@ -20,7 +23,7 @@ export class InMemoryDocumentRepository
   }
 
   async listInFolder(
-    matterId: string, folderId: string | null, page: number, pageSize: number,
+    matterId: MatterId, folderId: DocumentFolderId | null, page: number, pageSize: number,
   ): Promise<{ documents: DocumentListRow[]; total: number }> {
     const where = { matterId, folderId };
     const [documents, total] = await Promise.all([
@@ -36,7 +39,7 @@ export class InMemoryDocumentRepository
     return { documents, total };
   }
 
-  async listByMatter(matterId: string): Promise<DocumentListRow[]> {
+  async listByMatter(matterId: MatterId): Promise<DocumentListRow[]> {
     return (await this.delegate.findMany({
       where: { matterId },
       orderBy: { createdAt: "desc" },
@@ -44,7 +47,7 @@ export class InMemoryDocumentRepository
     })) as DocumentListRow[];
   }
 
-  async listDocumentTypesForOrg(organizationId: string): Promise<Array<{ type: string; count: number }>> {
+  async listDocumentTypesForOrg(organizationId: OrganizationId): Promise<Array<{ type: string; count: number }>> {
     const docs = (await this.delegate.findMany({
       where: { matter: { organizationId } },
     })) as Array<{ documentType?: string | null }>;
@@ -58,7 +61,7 @@ export class InMemoryDocumentRepository
       .sort((a, b) => a.type.localeCompare(b.type, "sv"));
   }
 
-  async getByIdInOrg(id: string, organizationId: string): Promise<DocumentAccessRow | null> {
+  async getByIdInOrg(id: DocumentId, organizationId: OrganizationId): Promise<DocumentAccessRow | null> {
     const row = (await this.delegate.findFirst({
       where: { id, matter: { organizationId } },
       select: { id: true, matterId: true, deletedAt: true },
@@ -66,7 +69,7 @@ export class InMemoryDocumentRepository
     return row && !row.deletedAt ? { id: row.id, matterId: row.matterId } : null;
   }
 
-  async reassignFolder(fromFolderId: string, toFolderId: string | null): Promise<void> {
+  async reassignFolder(fromFolderId: DocumentFolderId, toFolderId: DocumentFolderId | null): Promise<void> {
     await this.delegate.updateMany({
       where: { folderId: fromFolderId },
       data: { folderId: toFolderId } as Partial<Document>,

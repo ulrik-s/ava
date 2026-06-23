@@ -9,12 +9,13 @@ import { documentTemplates, users } from "@/lib/server/db/schema";
 import { DrizzleDocumentTemplateRepository } from "@/lib/server/repositories/drizzle-document-template-repository";
 import { InMemoryDocumentTemplateRepository } from "@/lib/server/repositories/in-memory-document-template-repository";
 import { prebakeJoins } from "@/lib/shared/demo-source";
+import { asId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { createTestDb, type TestDbHandle } from "../db/pg-test-db";
 
 describe("DocumentTemplateRepository — in-memory", () => {
   it("listForOrg + getByIdInOrg (med skapar-namn)", async () => {
-    const t1 = uuidv7();
+    const t1 = asId<"DocumentTemplateId">(uuidv7());
     const userId = uuidv7();
     const source = prebakeJoins({
       users: [{ id: userId, name: "Anna" }],
@@ -23,11 +24,11 @@ describe("DocumentTemplateRepository — in-memory", () => {
       ],
     } as DemoSource);
     const repo = new InMemoryDocumentTemplateRepository(new LocalStore(source, async () => {}));
-    const list = await repo.listForOrg("org-1");
+    const list = await repo.listForOrg(asId<"OrganizationId">("org-1"));
     expect(list).toHaveLength(1);
     expect(list[0]!.createdBy?.name).toBe("Anna");
-    expect(await repo.getByIdInOrg(t1, "org-1")).toMatchObject({ id: t1 });
-    expect(await repo.getByIdInOrg(t1, "org-2")).toBeNull();
+    expect(await repo.getByIdInOrg(t1, asId<"OrganizationId">("org-1"))).toMatchObject({ id: t1 });
+    expect(await repo.getByIdInOrg(t1, asId<"OrganizationId">("org-2"))).toBeNull();
   });
 });
 
@@ -38,9 +39,9 @@ describe("DocumentTemplateRepository — Drizzle (pglite)", () => {
 
   it("listForOrg (join skapare) + getByIdInOrg", async () => {
     const db = handle.db;
-    const org = uuidv7();
+    const org = asId<"OrganizationId">(uuidv7());
     const userId = uuidv7();
-    const t1 = uuidv7();
+    const t1 = asId<"DocumentTemplateId">(uuidv7());
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const v = (o: Record<string, unknown>) => ({ version: 1, ...o }) as any;
     await db.insert(users).values(v({ id: userId, organizationId: org, email: "a@x", name: "Anna" }));
@@ -50,6 +51,6 @@ describe("DocumentTemplateRepository — Drizzle (pglite)", () => {
     expect(list).toHaveLength(1);
     expect(list[0]!.createdBy?.name).toBe("Anna");
     expect(await repo.getByIdInOrg(t1, org)).toMatchObject({ id: t1 });
-    expect(await repo.getByIdInOrg(t1, uuidv7())).toBeNull();
+    expect(await repo.getByIdInOrg(t1, asId<"OrganizationId">(uuidv7()))).toBeNull();
   });
 });

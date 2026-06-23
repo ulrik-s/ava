@@ -11,10 +11,11 @@
  */
 
 import { z } from "zod";
+import { documentIdSchema } from "@/lib/shared/schemas/ids";
 import { orgProcedure } from "../../trpc";
 import { assertDocAccess } from "./shared";
 
-const docInput = z.object({ documentId: z.string() });
+const docInput = z.object({ documentId: documentIdSchema });
 
 export const leaseProcedures = {
   /** Ta leasen (fri/utgången/egen → din; annars `acquired:false` + annan hållare). */

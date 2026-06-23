@@ -2,6 +2,7 @@
  * In-memory `DocumentTemplateRepository` (ADR 0020) — browser/offline-impl.
  */
 
+import type { DocumentTemplateId, OrganizationId } from "@/lib/shared/schemas/ids";
 import type { DocumentTemplate } from "@/lib/shared/schemas/misc";
 import type { IDataStore } from "../data-store/IDataStore";
 import type {
@@ -18,7 +19,7 @@ export class InMemoryDocumentTemplateRepository
     super(source.documentTemplates, now ?? (() => new Date()));
   }
 
-  async listForOrg(organizationId: string): Promise<DocumentTemplateListRow[]> {
+  async listForOrg(organizationId: OrganizationId): Promise<DocumentTemplateListRow[]> {
     const rows = await this.source.documentTemplates.findMany({
       where: { organizationId },
       select: {
@@ -38,7 +39,7 @@ export class InMemoryDocumentTemplateRepository
     }));
   }
 
-  async getByIdInOrg(id: string, organizationId: string): Promise<DocumentTemplateRow | null> {
+  async getByIdInOrg(id: DocumentTemplateId, organizationId: OrganizationId): Promise<DocumentTemplateRow | null> {
     const row = (await this.delegate.findFirst({
       where: { id, organizationId },
       include: { createdBy: { select: { name: true } } },

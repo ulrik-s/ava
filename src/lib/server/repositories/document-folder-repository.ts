@@ -4,6 +4,7 @@
  */
 
 import type { DocumentFolder } from "@/lib/shared/schemas/document";
+import type { DocumentFolderId, MatterId } from "@/lib/shared/schemas/ids";
 import type { Repository } from "./types";
 
 /** Mapp + antal direkta dokument/undermappar (dokumentlistan). */
@@ -13,9 +14,9 @@ export interface DocumentFolderWithCounts extends DocumentFolder {
 
 export interface DocumentFolderRepository extends Repository<DocumentFolder> {
   /** Direkta undermappar i ett ärende/parent (namn asc) med `_count`. */
-  listInParent(matterId: string, parentId: string | null): Promise<DocumentFolderWithCounts[]>;
+  listInParent(matterId: MatterId, parentId: DocumentFolderId | null): Promise<DocumentFolderWithCounts[]>;
   /** Alla mappar i ett ärende (namn asc) — för trädvyn. */
-  listByMatter(matterId: string): Promise<DocumentFolder[]>;
+  listByMatter(matterId: MatterId): Promise<DocumentFolder[]>;
   /** Flytta alla direkta undermappar till en annan parent (vid radering). */
-  reassignParent(fromParentId: string, toParentId: string | null): Promise<void>;
+  reassignParent(fromParentId: DocumentFolderId, toParentId: DocumentFolderId | null): Promise<void>;
 }

@@ -5,6 +5,7 @@
  */
 
 import type { Document } from "@/lib/shared/schemas/document";
+import type { DocumentFolderId, DocumentId, MatterId, OrganizationId } from "@/lib/shared/schemas/ids";
 import type { Repository } from "./types";
 
 /** Dokument + uppladdare (listvyn). */
@@ -14,21 +15,21 @@ export interface DocumentListRow extends Document {
 
 /** Smal access-projektion (assertDocAccess). */
 export interface DocumentAccessRow {
-  id: string;
-  matterId: string;
+  id: DocumentId;
+  matterId: MatterId;
 }
 
 export interface DocumentRepository extends Repository<Document> {
   /** Paginerad lista i ett ärende/folder (createdAt desc) + total. */
   listInFolder(
-    matterId: string, folderId: string | null, page: number, pageSize: number,
+    matterId: MatterId, folderId: DocumentFolderId | null, page: number, pageSize: number,
   ): Promise<{ documents: DocumentListRow[]; total: number }>;
   /** Alla dokument i ett ärende (createdAt desc) — för trädvyn. */
-  listByMatter(matterId: string): Promise<DocumentListRow[]>;
+  listByMatter(matterId: MatterId): Promise<DocumentListRow[]>;
   /** Distinkta documentType-värden i org:en + antal per typ (namn-sorterat, sv). */
-  listDocumentTypesForOrg(organizationId: string): Promise<Array<{ type: string; count: number }>>;
+  listDocumentTypesForOrg(organizationId: OrganizationId): Promise<Array<{ type: string; count: number }>>;
   /** Dokument by id, org-scopat via ärendet. Null om saknas/annan org/raderat. */
-  getByIdInOrg(id: string, organizationId: string): Promise<DocumentAccessRow | null>;
+  getByIdInOrg(id: DocumentId, organizationId: OrganizationId): Promise<DocumentAccessRow | null>;
   /** Flytta alla dokument i en folder till en annan (vid folder-radering). */
-  reassignFolder(fromFolderId: string, toFolderId: string | null): Promise<void>;
+  reassignFolder(fromFolderId: DocumentFolderId, toFolderId: DocumentFolderId | null): Promise<void>;
 }

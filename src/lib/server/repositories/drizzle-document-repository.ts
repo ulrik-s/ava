@@ -5,7 +5,9 @@
 
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import type { Document } from "@/lib/shared/schemas/document";
-import { asId } from "@/lib/shared/schemas/ids";
+import type {
+  DocumentFolderId, DocumentId, MatterId, OrganizationId,
+} from "@/lib/shared/schemas/ids";
 import { documents, matters, users } from "../db/schema";
 import type { AppDb } from "../db/types";
 import type {
@@ -15,8 +17,8 @@ import { DrizzleRepository, versionedTable } from "./drizzle-repository";
 import { matterOrg } from "./matter-org";
 
 /** documents.folderId = X, eller IS NULL för rot. */
-function folderEq(folderId: string | null) {
-  return folderId === null ? isNull(documents.folderId) : eq(documents.folderId, asId<"DocumentFolderId">(folderId));
+function folderEq(folderId: DocumentFolderId | null) {
+  return folderId === null ? isNull(documents.folderId) : eq(documents.folderId, folderId);
 }
 
 function toListRow(r: { doc: typeof documents.$inferSelect; ubName: string | null }): DocumentListRow {
@@ -39,9 +41,9 @@ export class DrizzleDocumentRepository
   }
 
   async listInFolder(
-    matterId: string, folderId: string | null, page: number, pageSize: number,
+    matterId: MatterId, folderId: DocumentFolderId | null, page: number, pageSize: number,
   ): Promise<{ documents: DocumentListRow[]; total: number }> {
-    const where = and(eq(documents.matterId, asId<"MatterId">(matterId)), folderEq(folderId), isNull(documents.deletedAt));
+    const where = and(eq(documents.matterId, matterId), folderEq(folderId), isNull(documents.deletedAt));
     const rows = await this.db
       .select({ doc: documents, ubName: users.name }).from(documents)
       .leftJoin(users, eq(documents.uploadedById, users.id))
@@ -52,20 +54,20 @@ export class DrizzleDocumentRepository
     return { documents: rows.map(toListRow), total: Number(agg?.total ?? 0) };
   }
 
-  async listByMatter(matterId: string): Promise<DocumentListRow[]> {
+  async listByMatter(matterId: MatterId): Promise<DocumentListRow[]> {
     const rows = await this.db
       .select({ doc: documents, ubName: users.name }).from(documents)
       .leftJoin(users, eq(documents.uploadedById, users.id))
-      .where(and(eq(documents.matterId, asId<"MatterId">(matterId)), isNull(documents.deletedAt)))
+      .where(and(eq(documents.matterId, matterId), isNull(documents.deletedAt)))
       .orderBy(desc(documents.createdAt));
     return rows.map(toListRow);
   }
 
-  async listDocumentTypesForOrg(organizationId: string): Promise<Array<{ type: string; count: number }>> {
+  async listDocumentTypesForOrg(organizationId: OrganizationId): Promise<Array<{ type: string; count: number }>> {
     const rows = await this.db
       .select({ type: documents.documentType, count: sql<number>`count(*)` })
       .from(documents).innerJoin(matters, eq(documents.matterId, matters.id))
-      .where(and(eq(matters.organizationId, asId<"OrganizationId">(organizationId)), isNull(documents.deletedAt)))
+      .where(and(eq(matters.organizationId, organizationId), isNull(documents.deletedAt)))
       .groupBy(documents.documentType);
     return rows
       .filter((r): r is { type: string; count: number } => Boolean(r.type))
@@ -73,19 +75,19 @@ export class DrizzleDocumentRepository
       .sort((a, b) => a.type.localeCompare(b.type, "sv"));
   }
 
-  async getByIdInOrg(id: string, organizationId: string): Promise<DocumentAccessRow | null> {
+  async getByIdInOrg(id: DocumentId, organizationId: OrganizationId): Promise<DocumentAccessRow | null> {
     const rows = await this.db
       .select({ id: documents.id, matterId: documents.matterId }).from(documents)
       .innerJoin(matters, eq(documents.matterId, matters.id))
-      .where(and(eq(documents.id, asId<"DocumentId">(id)), eq(matters.organizationId, asId<"OrganizationId">(organizationId)), isNull(documents.deletedAt)))
+      .where(and(eq(documents.id, id), eq(matters.organizationId, organizationId), isNull(documents.deletedAt)))
       .limit(1);
     const row = rows[0];
     return row ? { id: row.id, matterId: row.matterId } : null;
   }
 
-  async reassignFolder(fromFolderId: string, toFolderId: string | null): Promise<void> {
+  async reassignFolder(fromFolderId: DocumentFolderId, toFolderId: DocumentFolderId | null): Promise<void> {
     await this.db.update(documents)
-      .set({ folderId: toFolderId === null ? null : asId<"DocumentFolderId">(toFolderId) })
-      .where(eq(documents.folderId, asId<"DocumentFolderId">(fromFolderId)));
+      .set({ folderId: toFolderId })
+      .where(eq(documents.folderId, fromFolderId));
   }
 }
