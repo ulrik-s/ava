@@ -2,14 +2,15 @@
 
 import { useId, useState } from "react";
 import { formatCurrency } from "@/lib/client/utils";
+import type { InvoiceId } from "@/lib/shared/schemas/ids";
 
 interface Props {
-  invoiceId: string;
+  invoiceId: InvoiceId;
   amount: number;
   hasActivePlan: boolean;
   isPending: boolean;
   error: string | null;
-  onSubmit: (data: { invoiceId: string; notes?: string }) => void;
+  onSubmit: (data: { invoiceId: InvoiceId; notes?: string }) => void;
   onClose: () => void;
 }
 

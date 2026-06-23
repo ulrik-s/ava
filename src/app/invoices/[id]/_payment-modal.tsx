@@ -1,12 +1,13 @@
 "use client";
 
 import { useId, useState } from "react";
+import type { InvoiceId } from "@/lib/shared/schemas/ids";
 
 interface Props {
-  invoiceId: string;
+  invoiceId: InvoiceId;
   isPending: boolean;
   error: string | null;
-  onSubmit: (data: { invoiceId: string; amount: number; paidAt: string; note?: string }) => void;
+  onSubmit: (data: { invoiceId: InvoiceId; amount: number; paidAt: string; note?: string }) => void;
   onClose: () => void;
 }
 

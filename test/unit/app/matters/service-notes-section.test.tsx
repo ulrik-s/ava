@@ -7,6 +7,7 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, beforeEach, vi } from "vitest-compat";
 import { ServiceNotesSection } from "@/app/matters/[id]/_service-notes-section";
+import { asId } from "@/lib/shared/schemas/ids";
 
 const listQuery = { data: [] as unknown[], isLoading: false };
 const createMutate = vi.fn();
@@ -53,7 +54,7 @@ beforeEach(() => {
 
 describe("ServiceNotesSection", () => {
   it("visar tomtillstånd när inga anteckningar finns", () => {
-    render(<ServiceNotesSection matterId="m1" />);
+    render(<ServiceNotesSection matterId={asId<"MatterId">("m1")} />);
     expect(screen.getByText("Tjänsteanteckningar")).toBeInTheDocument();
     expect(screen.getByText(/Inga tjänsteanteckningar ännu/)).toBeInTheDocument();
   });
@@ -63,14 +64,14 @@ describe("ServiceNotesSection", () => {
       { id: "a", date: "2026-06-10", time: "08:00", text: "Äldre", author: { name: "Anna" } },
       { id: "b", date: "2026-06-15", time: "14:00", text: "Nyare", author: { name: "Björn" } },
     ];
-    render(<ServiceNotesSection matterId="m1" />);
+    render(<ServiceNotesSection matterId={asId<"MatterId">("m1")} />);
     const texts = screen.getAllByText(/Äldre|Nyare/).map((e) => e.textContent);
     expect(texts).toEqual(["Nyare", "Äldre"]); // fallande på datum+tid
     expect(screen.getByText(/Björn/)).toBeInTheDocument();
   });
 
   it("'+ Ny anteckning' öppnar formuläret, Avbryt stänger det", () => {
-    render(<ServiceNotesSection matterId="m1" />);
+    render(<ServiceNotesSection matterId={asId<"MatterId">("m1")} />);
     fireEvent.click(screen.getByText("+ Ny anteckning"));
     expect(screen.getByPlaceholderText(/Vad hände/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Avbryt" }));
@@ -78,7 +79,7 @@ describe("ServiceNotesSection", () => {
   });
 
   it("submit skickar create med matterId + text och invaliderar listan vid success", () => {
-    render(<ServiceNotesSection matterId="m1" />);
+    render(<ServiceNotesSection matterId={asId<"MatterId">("m1")} />);
     fireEvent.click(screen.getByText("+ Ny anteckning"));
     fireEvent.change(screen.getByPlaceholderText(/Vad hände/), { target: { value: "Ringde klienten" } });
     fireEvent.click(screen.getByRole("button", { name: "Spara" }));
@@ -88,7 +89,7 @@ describe("ServiceNotesSection", () => {
   });
 
   it("submit utan text gör ingen mutation (required + trim-vakt)", () => {
-    render(<ServiceNotesSection matterId="m1" />);
+    render(<ServiceNotesSection matterId={asId<"MatterId">("m1")} />);
     fireEvent.click(screen.getByText("+ Ny anteckning"));
     const form = screen.getByPlaceholderText(/Vad hände/).closest("form")!;
     fireEvent.submit(form);
@@ -99,7 +100,7 @@ describe("ServiceNotesSection", () => {
     listQuery.data = [
       { id: "a", date: "2026-06-10", time: "08:00", text: "Gammal text", author: { name: "Anna" } },
     ];
-    render(<ServiceNotesSection matterId="m1" />);
+    render(<ServiceNotesSection matterId={asId<"MatterId">("m1")} />);
     fireEvent.click(screen.getByTitle("Redigera"));
     const textarea = screen.getByPlaceholderText(/Vad hände/) as HTMLTextAreaElement;
     expect(textarea.value).toBe("Gammal text"); // förifyllt
@@ -114,7 +115,7 @@ describe("ServiceNotesSection", () => {
       { id: "a", date: "2026-06-10", time: "08:00", text: "Text", author: { name: "Anna" } },
     ];
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
-    render(<ServiceNotesSection matterId="m1" />);
+    render(<ServiceNotesSection matterId={asId<"MatterId">("m1")} />);
     fireEvent.click(screen.getByTitle("Ta bort"));
     expect(deleteMutate).toHaveBeenCalledWith({ id: "a" });
     confirmSpy.mockRestore();
@@ -125,7 +126,7 @@ describe("ServiceNotesSection", () => {
       { id: "a", date: "2026-06-10", time: "08:00", text: "Text", author: { name: "Anna" } },
     ];
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
-    render(<ServiceNotesSection matterId="m1" />);
+    render(<ServiceNotesSection matterId={asId<"MatterId">("m1")} />);
     fireEvent.click(screen.getByTitle("Ta bort"));
     expect(deleteMutate).not.toHaveBeenCalled();
     confirmSpy.mockRestore();

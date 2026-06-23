@@ -6,10 +6,11 @@ import { Modal } from "@/components/ui/modal";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
+import type { ExpenseId, InvoiceId, MatterId } from "@/lib/shared/schemas/ids";
 import { splitVat, VAT_RATES, VAT_RATE_LABELS, type VatRate } from "@/lib/shared/vat";
 
 interface Props {
-  matterId: string;
+  matterId: MatterId;
   isTaxeArende?: boolean;
 }
 
@@ -23,7 +24,7 @@ interface ExpenseForm {
 }
 
 interface Expense {
-  id: string;
+  id: ExpenseId;
   date: Date | string;
   amount: number;
   description: string;
@@ -31,8 +32,8 @@ interface Expense {
   user?: { name: string };
   vatRate?: number;
   vatIncluded?: boolean;
-  invoiceId?: string | null;
-  invoice?: { id: string; invoiceNumber?: string | null } | null;
+  invoiceId?: InvoiceId | null;
+  invoice?: { id: InvoiceId; invoiceNumber?: string | null } | null;
 }
 
 function initialForm(): ExpenseForm {
@@ -98,7 +99,7 @@ function isInvoiced(e: Expense): boolean {
 
 /** Tabell-kolumnerna för utläggslistan. Redigera/ta-bort låsta för
  *  fakturerade utlägg (de sitter på en utställd faktura). */
-function expenseColumns({ onEdit, onDelete }: { onEdit: (e: Expense) => void; onDelete: (id: string) => void }): Column<Expense>[] {
+function expenseColumns({ onEdit, onDelete }: { onEdit: (e: Expense) => void; onDelete: (id: ExpenseId) => void }): Column<Expense>[] {
   return [
     { key: "date", label: "Datum", sortable: true, filterable: true, sortValue: (e) => new Date(e.date),
       filterValue: (e) => new Date(e.date).toLocaleDateString("sv-SE"),
@@ -157,7 +158,7 @@ export function ExpenseSection({ matterId, isTaxeArende }: Props) {
   const utils = trpc.useUtils();
   const expenses = trpc.expense.list.useQuery({ matterId });
   const [showCreate, setShowCreate] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<ExpenseId | null>(null);
   const [form, setForm] = useState<ExpenseForm>(initialForm);
 
   function resetClose(): void {

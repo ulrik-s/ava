@@ -22,6 +22,7 @@ import type { AppRouter } from "@/lib/server/routers/_app";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { computeRadgivningsavgift } from "@/lib/shared/rattshjalp";
 import { BILLING_RUN_TYPE_LABELS, BILLING_RUN_STATUS_LABELS, type BillingRunRecipient, type BillingRunStatus, type BillingRunType, type PaymentMethod } from "@/lib/shared/schemas/enums";
+import type { BillingRunId, InvoiceId, MatterId } from "@/lib/shared/schemas/ids";
 import { BillingDialog, type BillingMeta } from "./_billing-dialog";
 import { KostnadsrakningModal } from "./_kostnadsrakning-modal";
 import { VerdictDialog } from "./_verdict-dialog";
@@ -39,26 +40,26 @@ interface MatterContext {
 }
 
 interface Props {
-  matterId: string;
+  matterId: MatterId;
   matter: MatterContext;
 }
 
 interface BillingRunRow {
-  id: string;
+  id: BillingRunId;
   type: BillingRunType;
   status: BillingRunStatus;
   recipient: BillingRunRecipient;
   amountOre: number;
   createdAt: string | Date;
-  invoiceId?: string | null;
-  invoice?: { id: string; invoiceNumber?: string | null } | null;
+  invoiceId?: InvoiceId | null;
+  invoice?: { id: InvoiceId; invoiceNumber?: string | null } | null;
 }
 
 interface KrDocInfo { id: string; fileName: string }
 
 type DocumentListOutput = inferRouterOutputs<AppRouter>["document"]["list"];
 
-function findKrDocument(matterId: string, run: BillingRunRow): KrDocInfo | null {
+function findKrDocument(matterId: MatterId, run: BillingRunRow): KrDocInfo | null {
   const docs: DocumentListOutput | undefined = trpc.document.list.useQuery({ matterId, folderId: null, pageSize: 100 }).data;
   const list = docs?.documents ?? [];
   const kostn = list.filter((d) => d.documentType === "Kostnadsräkning");
@@ -90,7 +91,7 @@ function openKrDocument(doc: KrDocInfo): void {
   );
 }
 
-function PendingVerdictBanner({ matterId, run, onClick }: { matterId: string; run: BillingRunRow; onClick: () => void }) {
+function PendingVerdictBanner({ matterId, run, onClick }: { matterId: MatterId; run: BillingRunRow; onClick: () => void }) {
   const doc = findKrDocument(matterId, run);
   return (
     <div className="mx-6 my-3 rounded border border-amber-300 bg-amber-50 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -135,9 +136,9 @@ function courtOf(matter: MatterContext): string | undefined {
 }
 
 interface DialogsProps {
-  matterId: string; matter: MatterContext; rows: BillingRunRow[];
+  matterId: MatterId; matter: MatterContext; rows: BillingRunRow[];
   dialog: DialogState; setDialog: (s: DialogState) => void;
-  verdictRunId: string | null; setVerdictRunId: (id: string | null) => void;
+  verdictRunId: BillingRunId | null; setVerdictRunId: (id: BillingRunId | null) => void;
   onRefetch: () => void;
 }
 
@@ -170,7 +171,7 @@ function BillingDialogs({ matterId, matter, rows, dialog, setDialog, verdictRunI
 }
 
 interface KrTriggerProps {
-  matterId: string;
+  matterId: MatterId;
   matter: MatterContext;
   open: boolean;
   onClose: () => void;
@@ -198,7 +199,7 @@ function orgProps(org: { name?: string | null | undefined; orgNumber?: string | 
   return omitUndefined({ name, orgNumber, address });
 }
 
-function useKrModalData(matterId: string): KrModalData {
+function useKrModalData(matterId: MatterId): KrModalData {
   const me = trpc.user.current.useQuery().data;
   const org = orgProps(trpc.organization.getSettings.useQuery().data ?? undefined);
   const expenses = trpc.expense.list.useQuery({ matterId }).data?.expenses ?? [];
@@ -246,7 +247,7 @@ export function BillingPanel({ matterId, matter }: Props) {
   useMatterInvariants({ matterId, matterNumber: matter.matterNumber });
   const [dialog, setDialog] = useState<DialogState>("NONE");
   const [showKr, setShowKr] = useState(false);
-  const [verdictRunId, setVerdictRunId] = useState<string | null>(null);
+  const [verdictRunId, setVerdictRunId] = useState<BillingRunId | null>(null);
   const rows = (runs.data?.runs ?? []) as BillingRunRow[];
   const pending = findPendingVerdict(rows);
   const refetch = () => { void runs.refetch(); };
@@ -281,7 +282,7 @@ export function BillingPanel({ matterId, matter }: Props) {
 
 /** Rättshjälp (#383): registrera klientens betalda rådgivningstimme som en
  *  separat klientfaktura. Self-gating — null för icke-rättshjälpsärenden. */
-function RadgivningBanner({ matterId, matter, onRecorded }: { matterId: string; matter: MatterContext; onRecorded: () => void }) {
+function RadgivningBanner({ matterId, matter, onRecorded }: { matterId: MatterId; matter: MatterContext; onRecorded: () => void }) {
   const create = trpc.invoice.createRadgivning.useMutation({ onSuccess: onRecorded });
   if (matter.paymentMethod !== "RATTSHJALP") return null;
   const hasFTaxArg = omitUndefined({ hasFTax: matter.taxaHasFTax ?? undefined });
@@ -310,7 +311,7 @@ function RadgivningBanner({ matterId, matter, onRecorded }: { matterId: string; 
  * (exkl utlägg) + utlägg separat + totalt (inkl utlägg). Datan = billingRun.proposal
  * (ofrysta debiterbara poster). PRUTNING är redan exkluderad i proposal.
  */
-function UnbilledSummary({ matterId }: { matterId: string }) {
+function UnbilledSummary({ matterId }: { matterId: MatterId }) {
   const proposal = trpc.billingRun.proposal.useQuery({ matterId });
   const d = proposal.data;
   if (proposal.isLoading || !d) return null;

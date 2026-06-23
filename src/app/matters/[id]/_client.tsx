@@ -12,6 +12,7 @@ import { useRouteId } from "@/lib/client/demo/use-route-id";
 import { useEagerCacheMatterDocuments } from "@/lib/client/firma/use-eager-cache-matter-documents";
 import { trpc } from "@/lib/client/trpc";
 import type { MatterRole, MatterStatus, PaymentMethod } from "@/lib/shared/schemas/enums";
+import { asId } from "@/lib/shared/schemas/ids";
 import { BillingPanel } from "./_billing-panel";
 import { ContactsSection } from "./_contacts-section";
 import { ExpectedReceivablesSection } from "./_expected-receivables-section";
@@ -38,7 +39,7 @@ function isCourtMatter(m: { paymentMethod?: PaymentMethod | null; isTaxeArende?:
 export default function MatterDetailClient({ id: paramId }: { id: string }) {
   // Static export serverar en sentinel-shell för nya id:n → läs riktiga
   // id:t ur URL:en (faller tillbaka till build-time-param i server-mode).
-  const id = useRouteId() ?? paramId;
+  const id = asId<"MatterId">(useRouteId() ?? paramId);
   const matter = trpc.matter.getById.useQuery({ id });
   const [showGenerateModal, setShowGenerateModal] = useState(false);
   // ADR 0028 §4a: öppna ärende → eager-cacha dess dokument-bytes (offline).

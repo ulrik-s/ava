@@ -5,6 +5,7 @@ import { DataTable, type Column } from "@/components/ui/data-table";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { labelForMatterRole, matterRoleOptions, contactTypeOptions } from "@/lib/client/labels";
 import { trpc } from "@/lib/client/trpc";
+import type { MatterId } from "@/lib/shared/schemas/ids";
 
 type Contact = {
   id: string;
@@ -21,7 +22,7 @@ type MatterContact = {
 };
 
 interface Props {
-  matterId: string;
+  matterId: MatterId;
   contacts: MatterContact[];
 }
 
@@ -131,7 +132,7 @@ function ContactsList({
   contacts,
   onRemove,
 }: {
-  matterId: string;
+  matterId: MatterId;
   contacts: MatterContact[];
   onRemove: (matterContactId: string) => void;
 }) {
@@ -181,11 +182,11 @@ function ExistingContactForm({
   onSubmit,
   isPending,
 }: {
-  matterId: string;
+  matterId: MatterId;
   form: ExistingForm;
   setForm: (f: ExistingForm) => void;
   contacts: Array<{ id: string; name: string }>;
-  onSubmit: (data: ExistingForm & { matterId: string }) => void;
+  onSubmit: (data: ExistingForm & { matterId: MatterId }) => void;
   isPending: boolean;
 }) {
   return (
@@ -231,10 +232,10 @@ function NewContactForm({
   onSubmit,
   isPending,
 }: {
-  matterId: string;
+  matterId: MatterId;
   form: NewForm;
   setForm: (f: NewForm) => void;
-  onSubmit: (data: NewForm & { matterId: string }) => void;
+  onSubmit: (data: NewForm & { matterId: MatterId }) => void;
   isPending: boolean;
 }) {
   return (

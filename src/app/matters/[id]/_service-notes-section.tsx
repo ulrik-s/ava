@@ -9,9 +9,10 @@ import { NotebookPen, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { trpc } from "@/lib/client/trpc";
+import type { MatterId, ServiceNoteId } from "@/lib/shared/schemas/ids";
 
 interface ServiceNote {
-  id: string;
+  id: ServiceNoteId;
   date: string;
   time: string;
   text: string;
@@ -39,7 +40,7 @@ function authorName(n: ServiceNote): string {
 /** Kolumnerna för tjänsteanteckningstabellen — en rad per anteckning, alla
  *  sorterbara/filterbara precis som övriga AVA-tabeller (#367). Anteckning-
  *  kolumnen wrappar lång text + en actions-kolumn med redigera/ta-bort (#375). */
-function noteColumns(opts: { onEdit: (n: ServiceNote) => void; onDelete: (id: string) => void }): Column<ServiceNote>[] {
+function noteColumns(opts: { onEdit: (n: ServiceNote) => void; onDelete: (id: ServiceNoteId) => void }): Column<ServiceNote>[] {
   return [
     { key: "date", label: "Datum", sortable: true, filterable: true,
       sortValue: (n) => n.date, filterValue: (n) => n.date,
@@ -72,7 +73,7 @@ function initialValues(initial?: ServiceNote | null): { date: string; time: stri
   return { date: n.date, time: n.time, text: "" };
 }
 
-export function ServiceNotesSection({ matterId }: { matterId: string }) {
+export function ServiceNotesSection({ matterId }: { matterId: MatterId }) {
   const utils = trpc.useUtils();
   const notes = trpc.serviceNote.list.useQuery({ matterId });
   const [adding, setAdding] = useState(false);
@@ -126,7 +127,7 @@ export function ServiceNotesSection({ matterId }: { matterId: string }) {
 }
 
 function NoteForm({ matterId, initial, onDone, onCancel }: {
-  matterId: string; initial?: ServiceNote | null; onDone: () => void; onCancel: () => void;
+  matterId: MatterId; initial?: ServiceNote | null; onDone: () => void; onCancel: () => void;
 }) {
   const start = initialValues(initial);
   const [date, setDate] = useState(start.date);

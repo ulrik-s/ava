@@ -29,9 +29,10 @@ import type { AppRouter } from "@/lib/server/routers/_app";
 import type { TaxaLevel } from "@/lib/shared/brottmalstaxa";
 import { buildKostnadsrakningContext } from "@/lib/shared/kostnadsrakning";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
+import type { MatterId } from "@/lib/shared/schemas/ids";
 
 interface Props {
-  matterId: string;
+  matterId: MatterId;
   matterNumber: string;
   matterTitle: string;
   clientName: string;
@@ -84,7 +85,7 @@ interface RecordDocOpts {
     };
   };
   docId: string;
-  matterId: string;
+  matterId: MatterId;
   fileName: string;
   storagePath: string;
   bytes: Uint8Array;

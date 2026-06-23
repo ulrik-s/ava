@@ -6,6 +6,7 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, beforeEach, vi } from "vitest-compat";
 import { ContactsSection } from "@/app/matters/[id]/_contacts-section";
+import { asId } from "@/lib/shared/schemas/ids";
 
 vi.mock("@/lib/client/demo/entity-link", () => ({
   EntityLink: ({ children }: { children: React.ReactNode }) => <a href="#">{children}</a>,
@@ -48,26 +49,26 @@ beforeEach(() => vi.clearAllMocks());
 
 describe("ContactsSection", () => {
   it("visar rubrik med antal + kontaktraderna (namn, roll, nummer)", () => {
-    render(<ContactsSection matterId="m1" contacts={contacts} />);
+    render(<ContactsSection matterId={asId<"MatterId">("m1")} contacts={contacts} />);
     expect(screen.getByText("Kontakter (1)")).toBeInTheDocument();
     expect(screen.getByText("Klient Karlsson")).toBeInTheDocument();
     expect(screen.getByText("19800101-1234")).toBeInTheDocument();
   });
 
   it("tomt → tomtillstånd", () => {
-    render(<ContactsSection matterId="m1" contacts={[]} />);
+    render(<ContactsSection matterId={asId<"MatterId">("m1")} contacts={[]} />);
     expect(screen.getByText("Kontakter (0)")).toBeInTheDocument();
     expect(screen.getByText("Inga kontakter kopplade")).toBeInTheDocument();
   });
 
   it("'+ Lägg till' öppnar ny-kontakt-formuläret (default-läge)", () => {
-    render(<ContactsSection matterId="m1" contacts={[]} />);
+    render(<ContactsSection matterId={asId<"MatterId">("m1")} contacts={[]} />);
     fireEvent.click(screen.getByText("+ Lägg till"));
     expect(screen.getByPlaceholderText("Namn *")).toBeInTheDocument();
   });
 
   it("skapar ny kontakt → addNewContact.mutate med matterId + fält", () => {
-    render(<ContactsSection matterId="m1" contacts={[]} />);
+    render(<ContactsSection matterId={asId<"MatterId">("m1")} contacts={[]} />);
     fireEvent.click(screen.getByText("+ Lägg till"));
     fireEvent.change(screen.getByPlaceholderText("Namn *"), { target: { value: "Ny Person" } });
     fireEvent.click(screen.getByRole("button", { name: /Skapa & lägg till/ }));
@@ -75,7 +76,7 @@ describe("ContactsSection", () => {
   });
 
   it("växlar till befintlig kontakt och kopplar → addContact.mutate", () => {
-    render(<ContactsSection matterId="m1" contacts={[]} />);
+    render(<ContactsSection matterId={asId<"MatterId">("m1")} contacts={[]} />);
     fireEvent.click(screen.getByText("+ Lägg till"));
     fireEvent.click(screen.getByText("Befintlig kontakt"));
     // Första comboboxen i befintlig-formuläret = kontakt-väljaren.
@@ -85,13 +86,13 @@ describe("ContactsSection", () => {
   });
 
   it("Ta bort → removeContact.mutate med matterContactId", () => {
-    render(<ContactsSection matterId="m1" contacts={contacts} />);
+    render(<ContactsSection matterId={asId<"MatterId">("m1")} contacts={contacts} />);
     fireEvent.click(screen.getByText("Ta bort"));
     expect(removeContact).toHaveBeenCalledWith({ matterContactId: "mc1" });
   });
 
   it("ny ORGANISATION-kontakt: typ-byte → orgnummer-fältet + roll-select", () => {
-    render(<ContactsSection matterId="m1" contacts={[]} />);
+    render(<ContactsSection matterId={asId<"MatterId">("m1")} contacts={[]} />);
     fireEvent.click(screen.getByText("+ Lägg till"));
     fireEvent.change(screen.getByPlaceholderText("Namn *"), { target: { value: "Org AB" } });
     const [roleSel, typeSel] = screen.getAllByRole("combobox") as HTMLSelectElement[];
@@ -108,7 +109,7 @@ describe("ContactsSection", () => {
   });
 
   it("ny PERSON-kontakt: personnummer-fältet skrivs (PERSON-grenen)", () => {
-    render(<ContactsSection matterId="m1" contacts={[]} />);
+    render(<ContactsSection matterId={asId<"MatterId">("m1")} contacts={[]} />);
     fireEvent.click(screen.getByText("+ Lägg till"));
     fireEvent.change(screen.getByPlaceholderText("Namn *"), { target: { value: "Per Person" } });
     fireEvent.change(screen.getByPlaceholderText("Personnummer"), { target: { value: "19900101-1234" } });
@@ -119,7 +120,7 @@ describe("ContactsSection", () => {
   });
 
   it("befintlig-formuläret: roll-select exerceras + koppling", () => {
-    render(<ContactsSection matterId="m1" contacts={[]} />);
+    render(<ContactsSection matterId={asId<"MatterId">("m1")} contacts={[]} />);
     fireEvent.click(screen.getByText("+ Lägg till"));
     fireEvent.click(screen.getByText("Befintlig kontakt"));
     const [contactSel, roleSel] = screen.getAllByRole("combobox") as HTMLSelectElement[];

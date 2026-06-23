@@ -8,6 +8,7 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { BillingDialog } from "@/app/matters/[id]/_billing-dialog";
+import { asId } from "@/lib/shared/schemas/ids";
 
 const accontoMutate = vi.fn();
 const finalMutate = vi.fn();
@@ -64,7 +65,7 @@ beforeEach(() => {
 
 describe("BillingDialog — ACCONTO (#397 avdragsmedvetet förslag)", () => {
   it("förfyller beloppet enligt formeln: 20 % × 5000 kr − 0 = 1000 kr", () => {
-    render(<BillingDialog matterId="m1" type="ACCONTO" existingAccontos={[]} meta={meta} onClose={() => {}} />);
+    render(<BillingDialog matterId={asId<"MatterId">("m1")} type="ACCONTO" existingAccontos={[]} meta={meta} onClose={() => {}} />);
     expect(screen.getByText("Aconto till klient")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Skapa aconto-faktura" }));
     expect(accontoMutate).toHaveBeenCalledWith({
@@ -77,13 +78,13 @@ describe("BillingDialog — ACCONTO (#397 avdragsmedvetet förslag)", () => {
       workValueOre: 500_000, priorAccontoSumOre: 60_000, // 600 kr tidigare
       timeEntries: [], expenses: [],
     };
-    render(<BillingDialog matterId="m1" type="ACCONTO" existingAccontos={[]} meta={meta} onClose={() => {}} />);
+    render(<BillingDialog matterId={asId<"MatterId">("m1")} type="ACCONTO" existingAccontos={[]} meta={meta} onClose={() => {}} />);
     fireEvent.click(screen.getByRole("button", { name: "Skapa aconto-faktura" }));
     expect(accontoMutate).toHaveBeenCalledWith(expect.objectContaining({ amountOre: 40_000 }));
   });
 
   it("procent → bips + omräknat förslag: 30 % → 3000 bips, 1500 kr", () => {
-    render(<BillingDialog matterId="m1" type="ACCONTO" existingAccontos={[]} meta={meta} onClose={() => {}} />);
+    render(<BillingDialog matterId={asId<"MatterId">("m1")} type="ACCONTO" existingAccontos={[]} meta={meta} onClose={() => {}} />);
     const [percent] = screen.getAllByRole("spinbutton");
     fireEvent.change(percent!, { target: { value: "30" } });
     fireEvent.click(screen.getByRole("button", { name: "Skapa aconto-faktura" }));
@@ -91,7 +92,7 @@ describe("BillingDialog — ACCONTO (#397 avdragsmedvetet förslag)", () => {
   });
 
   it("manuell justering av beloppet vinner över förslaget", () => {
-    render(<BillingDialog matterId="m1" type="ACCONTO" existingAccontos={[]} meta={meta} onClose={() => {}} />);
+    render(<BillingDialog matterId={asId<"MatterId">("m1")} type="ACCONTO" existingAccontos={[]} meta={meta} onClose={() => {}} />);
     const spin = screen.getAllByRole("spinbutton");
     fireEvent.change(spin[1]!, { target: { value: "750" } }); // belopp-fältet
     fireEvent.click(screen.getByRole("button", { name: "Skapa aconto-faktura" }));
@@ -100,7 +101,7 @@ describe("BillingDialog — ACCONTO (#397 avdragsmedvetet förslag)", () => {
 
   it("onSuccess genererar ett faktura-dokument", async () => {
     const onClose = vi.fn();
-    render(<BillingDialog matterId="m1" type="ACCONTO" existingAccontos={[]} meta={meta} onClose={onClose} />);
+    render(<BillingDialog matterId={asId<"MatterId">("m1")} type="ACCONTO" existingAccontos={[]} meta={meta} onClose={onClose} />);
     await accontoOnSuccess!({ invoice: { id: "inv-1", amount: 100_000 } });
     expect(renderFakturaPdf).toHaveBeenCalled();
     expect(registerMutateAsync).toHaveBeenCalledWith(expect.objectContaining({
@@ -118,7 +119,7 @@ describe("BillingDialog — FINAL", () => {
   ];
 
   it("visar de ofakturerade posterna + upparbetat värde", () => {
-    render(<BillingDialog matterId="m1" type="FINAL" existingAccontos={[]} meta={meta} onClose={() => {}} />);
+    render(<BillingDialog matterId={asId<"MatterId">("m1")} type="FINAL" existingAccontos={[]} meta={meta} onClose={() => {}} />);
     expect(screen.getByText(/Poster att fakturera \(2\/2 valda\)/)).toBeInTheDocument();
     expect(screen.getByText("Möte med klient")).toBeInTheDocument();
     expect(screen.getByText("Ansökningsavgift")).toBeInTheDocument();
@@ -127,12 +128,12 @@ describe("BillingDialog — FINAL", () => {
 
   it("visar tomtext när inga ofakturerade poster finns", () => {
     proposalData = { workValueOre: 0, priorAccontoSumOre: 0, timeEntries: [], expenses: [] };
-    render(<BillingDialog matterId="m1" type="FINAL" existingAccontos={[]} meta={meta} onClose={() => {}} />);
+    render(<BillingDialog matterId={asId<"MatterId">("m1")} type="FINAL" existingAccontos={[]} meta={meta} onClose={() => {}} />);
     expect(screen.getByText(/Inga ofakturerade poster/)).toBeInTheDocument();
   });
 
   it("default: alla aconton förvalda, submit drar av dem alla", () => {
-    render(<BillingDialog matterId="m1" type="FINAL" existingAccontos={accontos} meta={meta} onClose={() => {}} />);
+    render(<BillingDialog matterId={asId<"MatterId">("m1")} type="FINAL" existingAccontos={accontos} meta={meta} onClose={() => {}} />);
     expect(screen.getByText("Faktura")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Skapa faktura" }));
     expect(finalMutate).toHaveBeenCalledWith({
@@ -141,7 +142,7 @@ describe("BillingDialog — FINAL", () => {
   });
 
   it("avmarkera ett aconto → utesluts ur avdragen", () => {
-    render(<BillingDialog matterId="m1" type="FINAL" existingAccontos={accontos} meta={meta} onClose={() => {}} />);
+    render(<BillingDialog matterId={asId<"MatterId">("m1")} type="FINAL" existingAccontos={accontos} meta={meta} onClose={() => {}} />);
     const boxes = screen.getAllByRole("checkbox"); // [post te-1, post ex-1, aconto br-1, aconto br-2]
     fireEvent.click(boxes[2]!); // avmarkera br-1 (första aconto efter de 2 posterna)
     fireEvent.click(screen.getByRole("button", { name: "Skapa faktura" }));
@@ -149,7 +150,7 @@ describe("BillingDialog — FINAL", () => {
   });
 
   it("per-post-val: avmarkera en post → bara valda id:n i payloaden (#734)", () => {
-    render(<BillingDialog matterId="m1" type="FINAL" existingAccontos={[]} meta={meta} onClose={() => {}} />);
+    render(<BillingDialog matterId={asId<"MatterId">("m1")} type="FINAL" existingAccontos={[]} meta={meta} onClose={() => {}} />);
     const boxes = screen.getAllByRole("checkbox"); // [post te-1, post ex-1]
     fireEvent.click(boxes[1]!); // avmarkera utlägget ex-1
     fireEvent.click(screen.getByRole("button", { name: "Skapa faktura" }));
@@ -157,7 +158,7 @@ describe("BillingDialog — FINAL", () => {
   });
 
   it("default (inga poster avmarkerade) → inga post-id:n i payloaden (allt faktureras)", () => {
-    render(<BillingDialog matterId="m1" type="FINAL" existingAccontos={[]} meta={meta} onClose={() => {}} />);
+    render(<BillingDialog matterId={asId<"MatterId">("m1")} type="FINAL" existingAccontos={[]} meta={meta} onClose={() => {}} />);
     fireEvent.click(screen.getByRole("button", { name: "Skapa faktura" }));
     const call = finalMutate.mock.calls[0]![0] as Record<string, unknown>;
     expect(call.timeEntryIds).toBeUndefined();
@@ -165,7 +166,7 @@ describe("BillingDialog — FINAL", () => {
   });
 
   it("byt mottagare → skickas i payloaden", () => {
-    render(<BillingDialog matterId="m1" type="FINAL" existingAccontos={[]} meta={meta} onClose={() => {}} />);
+    render(<BillingDialog matterId={asId<"MatterId">("m1")} type="FINAL" existingAccontos={[]} meta={meta} onClose={() => {}} />);
     fireEvent.change(screen.getByRole("combobox"), { target: { value: "FORSAKRING" } });
     fireEvent.click(screen.getByRole("button", { name: "Skapa faktura" }));
     expect(finalMutate).toHaveBeenCalledWith(expect.objectContaining({ recipient: "FORSAKRING" }));
@@ -173,7 +174,7 @@ describe("BillingDialog — FINAL", () => {
 
   it("onSuccess genererar ett faktura-dokument", async () => {
     const onClose = vi.fn();
-    render(<BillingDialog matterId="m1" type="FINAL" existingAccontos={[]} meta={meta} onClose={onClose} />);
+    render(<BillingDialog matterId={asId<"MatterId">("m1")} type="FINAL" existingAccontos={[]} meta={meta} onClose={onClose} />);
     await finalOnSuccess!({ invoice: { id: "inv-7", amount: 590_000 } });
     expect(registerMutateAsync).toHaveBeenCalledWith(expect.objectContaining({ id: "faktura-inv-7", invoiceId: "inv-7" }));
     await waitFor(() => expect(onClose).toHaveBeenCalled());
