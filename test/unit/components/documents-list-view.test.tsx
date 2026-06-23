@@ -106,4 +106,25 @@ describe("DocumentsListView", () => {
     );
     expect(screen.getByRole("button", { name: "stamning.pdf" })).toBeInTheDocument();
   });
+
+  // Keep-both end-state i UIt (#742, ADR 0033 §4): efter en konflikt finns
+  // BÅDE originalet och syskon-kopian i ärendet → juristen ser 2 filer, en
+  // tydligt namngiven som sin egen sparade version. Det är vad en användare
+  // ser i webb-appen efter att en av två redigerare fått "Konflikt".
+  it("visar både originalet och konflikt-syskonet (2 filer)", () => {
+    const original = baseDoc({ id: "d1", fileName: "minnesanteckning.txt", documentType: "Anteckning" });
+    const sibling = baseDoc({
+      id: "d2", fileName: "minnesanteckning (din ändring 2027-03-14 09:15).txt", documentType: "Anteckning",
+    });
+    render(
+      <DocumentsListView
+        matterId="m1" documents={[original, sibling]} folders={[]}
+        onDelete={() => {}} onReanalyze={() => {}}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "minnesanteckning.txt" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "minnesanteckning (din ändring 2027-03-14 09:15).txt" }),
+    ).toBeInTheDocument();
+  });
 });
