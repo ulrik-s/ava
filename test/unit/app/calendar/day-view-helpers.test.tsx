@@ -1,10 +1,11 @@
 import { describe, it, expect } from "vitest-compat";
 import { eventsForDate, layoutEventsForDay, dayBounds, type DayEvent } from "@/app/calendar/_day-view";
+import { asId } from "@/lib/shared/schemas/ids";
 
 function ev(partial: Partial<DayEvent>): DayEvent {
   return {
-    id: "x",
-    userId: "u1",
+    id: asId<"CalendarEventId">("x"),
+    userId: asId<"UserId">("u1"),
     title: "T",
     startAt: "2026-04-15T09:00:00Z",
     endAt: null,
@@ -18,9 +19,9 @@ describe("eventsForDate", () => {
   it("returnerar bara events vars startAt = given dag", () => {
     const out = eventsForDate(
       [
-        ev({ id: "a", startAt: new Date(2026, 3, 15, 9) }),
-        ev({ id: "b", startAt: new Date(2026, 3, 16, 9) }),
-        ev({ id: "c", startAt: new Date(2026, 3, 15, 23) }),
+        ev({ id: asId<"CalendarEventId">("a"), startAt: new Date(2026, 3, 15, 9) }),
+        ev({ id: asId<"CalendarEventId">("b"), startAt: new Date(2026, 3, 16, 9) }),
+        ev({ id: asId<"CalendarEventId">("c"), startAt: new Date(2026, 3, 15, 23) }),
       ],
       new Date(2026, 3, 15),
     );
@@ -48,8 +49,8 @@ describe("layoutEventsForDay", () => {
 
   it("två overlappande events → två kolumner med 50% var", () => {
     const out = layoutEventsForDay([
-      ev({ id: "a", startAt: new Date(2026, 3, 15, 10), endAt: new Date(2026, 3, 15, 11, 30) }),
-      ev({ id: "b", startAt: new Date(2026, 3, 15, 10, 30), endAt: new Date(2026, 3, 15, 12) }),
+      ev({ id: asId<"CalendarEventId">("a"), startAt: new Date(2026, 3, 15, 10), endAt: new Date(2026, 3, 15, 11, 30) }),
+      ev({ id: asId<"CalendarEventId">("b"), startAt: new Date(2026, 3, 15, 10, 30), endAt: new Date(2026, 3, 15, 12) }),
     ]);
     expect(out).toHaveLength(2);
     const a = out.find((x) => x.ev.id === "a")!;
@@ -61,9 +62,9 @@ describe("layoutEventsForDay", () => {
 
   it("tre sekventiella (icke-overlappande) events delar en kolumn", () => {
     const out = layoutEventsForDay([
-      ev({ id: "a", startAt: new Date(2026, 3, 15, 9), endAt: new Date(2026, 3, 15, 10) }),
-      ev({ id: "b", startAt: new Date(2026, 3, 15, 10), endAt: new Date(2026, 3, 15, 11) }),
-      ev({ id: "c", startAt: new Date(2026, 3, 15, 11), endAt: new Date(2026, 3, 15, 12) }),
+      ev({ id: asId<"CalendarEventId">("a"), startAt: new Date(2026, 3, 15, 9), endAt: new Date(2026, 3, 15, 10) }),
+      ev({ id: asId<"CalendarEventId">("b"), startAt: new Date(2026, 3, 15, 10), endAt: new Date(2026, 3, 15, 11) }),
+      ev({ id: asId<"CalendarEventId">("c"), startAt: new Date(2026, 3, 15, 11), endAt: new Date(2026, 3, 15, 12) }),
     ]);
     expect(out).toHaveLength(3);
     for (const o of out) expect(o.widthPct).toBe(100);

@@ -12,6 +12,7 @@ import { useState } from "react";
 import { ActionMenu, type ActionMenuItem } from "@/components/ui/action-menu";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { trpc } from "@/lib/client/trpc";
+import type { DocumentFolderId, MatterId } from "@/lib/shared/schemas/ids";
 import type { DocumentRecord } from "./_document-row";
 import { formatFileSize } from "./_drag-helpers";
 import type { FolderRecord } from "./_folder-row";
@@ -20,7 +21,7 @@ import { ExternalEditModal, type ModalState } from "./external-edit-modal";
 import { useLeaseAwareOpen } from "./use-lease-aware-open";
 
 interface Props {
-  matterId: string;
+  matterId: MatterId;
   documents: DocumentRecord[];
   folders: FolderRecord[];
   /** Per-dokument write-back-status ur AVA Helperns kö (ADR 0031). */
@@ -31,7 +32,7 @@ interface Props {
 
 const NO_SYNC: Map<string, SyncStatus> = new Map();
 
-function folderPath(folderId: string | null, folders: FolderRecord[]): string {
+function folderPath(folderId: DocumentFolderId | null, folders: FolderRecord[]): string {
   if (!folderId) return "/";
   const parts: string[] = [];
   let current: FolderRecord | undefined = folders.find((f) => f.id === folderId);

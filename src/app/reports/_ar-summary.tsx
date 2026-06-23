@@ -11,6 +11,7 @@ import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
 import type { AppRouter } from "@/lib/server/routers/_app";
+import { asId, type MatterId, type UserId } from "@/lib/shared/schemas/ids";
 
 function Row({ label, value, kind = "normal" }: { label: string; value: number; kind?: "normal" | "subtotal" | "result" | "sub" }) {
   const cls =
@@ -28,7 +29,7 @@ function Row({ label, value, kind = "normal" }: { label: string; value: number; 
 
 type ArData = NonNullable<inferRouterOutputs<AppRouter>["reports"]["arSummary"]>;
 
-export function ArSummarySection({ from, to, userId, lawyerName }: { from: string; to: string; userId?: string; lawyerName?: string }) {
+export function ArSummarySection({ from, to, userId, lawyerName }: { from: string; to: string; userId?: UserId; lawyerName?: string }) {
   const q = trpc.reports.arSummary.useQuery({ from, to, ...(userId ? { userId } : {}) });
   const suffix = userId && lawyerName ? ` — andel för ${lawyerName}` : "";
 
@@ -79,12 +80,14 @@ function ArSummaryBody({ data }: { data: ArData }) {
         </div>
       </div>
 
-      {data.rows.length > 0 && <ArInvoiceTable rows={data.rows} />}
+      {data.rows.length > 0 && (
+        <ArInvoiceTable rows={data.rows.map((r) => ({ ...r, matterId: asId<"MatterId">(r.matterId) }))} />
+      )}
     </>
   );
 }
 
-interface ArRow { id: string; invoiceNumber: string; invoiceDate: string; matterId: string; matterNumber: string; title: string; fakturerat: number; inbetalt: number; avskrivet: number; utestaende: number }
+interface ArRow { id: string; invoiceNumber: string; invoiceDate: string; matterId: MatterId; matterNumber: string; title: string; fakturerat: number; inbetalt: number; avskrivet: number; utestaende: number }
 
 function ArInvoiceTable({ rows }: { rows: readonly ArRow[] }) {
   return (

@@ -11,6 +11,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest-compat";
 import { EventDetailModal, type EventDetail } from "@/app/calendar/_event-detail-modal";
+import { asId } from "@/lib/shared/schemas/ids";
 
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
@@ -22,14 +23,14 @@ vi.mock("@/lib/client/trpc", () => ({
 }));
 
 const EV: EventDetail = {
-  id: "cal-1",
+  id: asId<"CalendarEventId">("cal-1"),
   title: "Klientmöte",
   startAt: new Date("2026-05-30T10:00:00Z"),
   endAt: new Date("2026-05-30T11:00:00Z"),
   allDay: false,
-  userId: "u-anna",
+  userId: asId<"UserId">("u-anna"),
   kind: "appointment",
-  matter: { id: "m-001", matterNumber: "2026-0001", title: "Vårdnadstvist" },
+  matter: { id: asId<"MatterId">("m-001"), matterNumber: "2026-0001", title: "Vårdnadstvist" },
 };
 
 describe("EventDetailModal — matter-länk", () => {

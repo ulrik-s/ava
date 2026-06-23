@@ -9,6 +9,7 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { DocumentBrowser } from "@/components/documents/document-browser";
+import { asId } from "@/lib/shared/schemas/ids";
 
 // Self-hosted-läget letar efter ett FSA-handle via IndexedDB; jsdom har inte
 // någon working copy uppsatt. Mock:a explicit så testen är deterministisk
@@ -126,13 +127,13 @@ const baseFolder = (overrides: Partial<Folder> = {}): Folder => ({
 
 describe("DocumentBrowser", () => {
   it("visar tomtillstånd när inga mappar/dokument finns", () => {
-    render(<DocumentBrowser matterId="m1" />);
+    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     expect(screen.getByText(/Inga dokument eller mappar/i)).toBeInTheDocument();
   });
 
   it("renderar dokumentnamn för loose root-fil", () => {
     treeQuery.data = { folders: [], documents: [baseDoc()] };
-    render(<DocumentBrowser matterId="m1" />);
+    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     expect(screen.getByText("test.pdf")).toBeInTheDocument();
   });
 
@@ -141,19 +142,19 @@ describe("DocumentBrowser", () => {
       folders: [],
       documents: [baseDoc({ title: "Stämningsansökan 2026-0001", documentType: "Stämning" })],
     };
-    render(<DocumentBrowser matterId="m1" />);
+    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     expect(screen.getByText("Stämningsansökan 2026-0001")).toBeInTheDocument();
     expect(screen.getByText("Stämning")).toBeInTheDocument();
   });
 
   it("renderar mappar i trädet", () => {
     treeQuery.data = { folders: [baseFolder()], documents: [] };
-    render(<DocumentBrowser matterId="m1" />);
+    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     expect(screen.getByText("Inlagor")).toBeInTheDocument();
   });
 
   it("öppnar Ny mapp-form vid klick", () => {
-    render(<DocumentBrowser matterId="m1" />);
+    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     fireEvent.click(screen.getByRole("button", { name: /\+ Ny mapp/i }));
     expect(screen.getByPlaceholderText(/Mappnamn/i)).toBeInTheDocument();
   });
@@ -163,7 +164,7 @@ describe("DocumentBrowser", () => {
       folders: [],
       documents: [baseDoc({ analysisError: "Tika fail" })],
     };
-    render(<DocumentBrowser matterId="m1" />);
+    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     expect(screen.getByText(/analys-fel/i)).toBeInTheDocument();
   });
 
@@ -173,20 +174,20 @@ describe("DocumentBrowser", () => {
       folders: [],
       documents: [baseDoc({ createdAt: recent })],
     };
-    render(<DocumentBrowser matterId="m1" />);
+    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     expect(screen.getByText(/analyseras/i)).toBeInTheDocument();
   });
 
   it("visar inte analyseras-badge för gamla, oanalyserade dokument", () => {
     const old = new Date("2025-01-01");
     treeQuery.data = { folders: [], documents: [baseDoc({ createdAt: old })] };
-    render(<DocumentBrowser matterId="m1" />);
+    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     expect(screen.queryByText(/analyseras/i)).not.toBeInTheDocument();
   });
 
   it("har Visa, Ladda ner, Analysera, Ta bort i kebab-menyn på varje fil", () => {
     treeQuery.data = { folders: [], documents: [baseDoc()] };
-    render(<DocumentBrowser matterId="m1" />);
+    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     fireEvent.click(screen.getByLabelText("Dokumentåtgärder"));
     expect(screen.getByText("Visa")).toBeInTheDocument();
     expect(screen.getByText("Ladda ner")).toBeInTheDocument();
@@ -199,7 +200,7 @@ describe("DocumentBrowser", () => {
     window.localStorage.setItem("ava.firma", JSON.stringify({ tier: "demo", repo: "u/r" }));
     try {
       treeQuery.data = { folders: [], documents: [baseDoc()] };
-      render(<DocumentBrowser matterId="m1" />);
+      render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
       fireEvent.click(screen.getByLabelText("Dokumentåtgärder"));
       expect(screen.getByText("Visa")).toBeInTheDocument(); // övriga finns kvar
       expect(screen.getByText("Ta bort")).toBeInTheDocument();
@@ -210,7 +211,7 @@ describe("DocumentBrowser", () => {
   });
 
   it("submittar Ny mapp-formuläret med mappnamn", () => {
-    render(<DocumentBrowser matterId="m1" />);
+    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     fireEvent.click(screen.getByRole("button", { name: /\+ Ny mapp/i }));
     const input = screen.getByPlaceholderText(/Mappnamn/i);
     fireEvent.change(input, { target: { value: "Avtal" } });
@@ -223,7 +224,7 @@ describe("DocumentBrowser", () => {
   });
 
   it("anropar inte createFolder när namnet är tomt/whitespace", () => {
-    render(<DocumentBrowser matterId="m1" />);
+    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     fireEvent.click(screen.getByRole("button", { name: /\+ Ny mapp/i }));
     const input = screen.getByPlaceholderText(/Mappnamn/i);
     // required-attributet stoppar tomt namn vid submit; men whitespace kan tas in
@@ -234,7 +235,7 @@ describe("DocumentBrowser", () => {
   });
 
   it("Avbryt stänger Ny mapp-formuläret", () => {
-    render(<DocumentBrowser matterId="m1" />);
+    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     fireEvent.click(screen.getByRole("button", { name: /\+ Ny mapp/i }));
     expect(screen.getByPlaceholderText(/Mappnamn/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Avbryt/i }));
@@ -246,7 +247,7 @@ describe("DocumentBrowser", () => {
       folders: [baseFolder()],
       documents: [baseDoc({ folderId: "f1", fileName: "barn.pdf" })],
     };
-    render(<DocumentBrowser matterId="m1" />);
+    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     expect(screen.getByText("barn.pdf")).toBeInTheDocument();
     // Klicka på mappnamnet (det är en knapp inom raden)
     fireEvent.click(screen.getByText("Inlagor"));
@@ -258,7 +259,7 @@ describe("DocumentBrowser", () => {
 
   it("klick på Byt namn aktiverar inline-rename-input", () => {
     treeQuery.data = { folders: [baseFolder()], documents: [] };
-    render(<DocumentBrowser matterId="m1" />);
+    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     fireEvent.click(screen.getByLabelText("Mappåtgärder"));
     fireEvent.click(screen.getByRole("menuitem", { name: /Byt namn/i }));
     // En input ska nu finnas (med mappnamnet förifyllt)
@@ -276,7 +277,7 @@ describe("DocumentBrowser", () => {
   it("Ta bort-mapp visar confirm — vid OK körs deleteFolder", () => {
     treeQuery.data = { folders: [baseFolder()], documents: [] };
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
-    render(<DocumentBrowser matterId="m1" />);
+    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     fireEvent.click(screen.getByLabelText("Mappåtgärder"));
     fireEvent.click(screen.getByRole("menuitem", { name: /^Ta bort$/i }));
     expect(confirmSpy).toHaveBeenCalled();
@@ -287,7 +288,7 @@ describe("DocumentBrowser", () => {
   it("Ta bort-mapp avbryts när confirm returnerar false", () => {
     treeQuery.data = { folders: [baseFolder()], documents: [] };
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
-    render(<DocumentBrowser matterId="m1" />);
+    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     fireEvent.click(screen.getByLabelText("Mappåtgärder"));
     fireEvent.click(screen.getByRole("menuitem", { name: /^Ta bort$/i }));
     expect(mutationStubs.deleteFolder.mutate).not.toHaveBeenCalled();
@@ -297,7 +298,7 @@ describe("DocumentBrowser", () => {
   it("Ta bort-dokument confirm + delete", () => {
     treeQuery.data = { folders: [], documents: [baseDoc()] };
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
-    render(<DocumentBrowser matterId="m1" />);
+    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     fireEvent.click(screen.getByLabelText("Dokumentåtgärder"));
     fireEvent.click(screen.getByRole("menuitem", { name: /^Ta bort$/i }));
     expect(mutationStubs.delete.mutate).toHaveBeenCalledWith({ id: "d1" });
@@ -306,7 +307,7 @@ describe("DocumentBrowser", () => {
 
   it("klick på Analysera triggar reanalyze-mutation", () => {
     treeQuery.data = { folders: [], documents: [baseDoc()] };
-    render(<DocumentBrowser matterId="m1" />);
+    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     fireEvent.click(screen.getByLabelText("Dokumentåtgärder"));
     fireEvent.click(screen.getByRole("menuitem", { name: /Analysera/i }));
     expect(mutationStubs.analyze.mutate).toHaveBeenCalledWith({ documentId: "d1" });
@@ -314,7 +315,7 @@ describe("DocumentBrowser", () => {
 
   it("dragstart + drop på mapp anropar moveDocument", () => {
     treeQuery.data = { folders: [baseFolder()], documents: [baseDoc()] };
-    render(<DocumentBrowser matterId="m1" />);
+    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     const docCell = screen.getByText("test.pdf").closest("tr")!;
     const folderCell = screen.getByText("Inlagor").closest("tr")!;
     const dataTransfer = {
@@ -340,7 +341,7 @@ describe("DocumentBrowser", () => {
       folders: [baseFolder(), baseFolder({ id: "f2", name: "Beslut" })],
       documents: [],
     };
-    render(<DocumentBrowser matterId="m1" />);
+    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     const f1 = screen.getByText("Inlagor").closest("tr")!;
     const f2 = screen.getByText("Beslut").closest("tr")!;
     const dataTransfer = {
@@ -366,7 +367,7 @@ describe("DocumentBrowser", () => {
       folders: [baseFolder()],
       documents: [baseDoc({ folderId: "f1" })],
     };
-    render(<DocumentBrowser matterId="m1" />);
+    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     const docRow = screen.getByText("test.pdf").closest("tr")!;
     const rootRow = screen.getByText("Rot").closest("tr")!;
     const dataTransfer = {
@@ -395,7 +396,7 @@ describe("DocumentBrowser", () => {
       ],
       documents: [baseDoc({ folderId: "c", fileName: "sub.pdf" })],
     };
-    render(<DocumentBrowser matterId="m1" />);
+    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     expect(screen.getByText("Parent")).toBeInTheDocument();
     expect(screen.getByText("Child")).toBeInTheDocument();
     expect(screen.getByText("sub.pdf")).toBeInTheDocument();
@@ -408,7 +409,7 @@ describe("DocumentBrowser", () => {
     treeQuery.data = { folders: [], documents: [baseDoc()] };
     const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
     try {
-      render(<DocumentBrowser matterId="m1" />);
+      render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
       fireEvent.click(screen.getByText("test.pdf"));
       await import("@testing-library/react").then(({ waitFor }) =>
         waitFor(() => expect(openSpy).toHaveBeenCalled(), { timeout: 2000 }),
@@ -429,7 +430,7 @@ describe("DocumentBrowser", () => {
         baseDoc({ id: "d-b", fileName: "small.pdf", sizeBytes: 500 }),
       ],
     };
-    render(<DocumentBrowser matterId="m1" />);
+    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     expect(screen.getByText(/5 KB/)).toBeInTheDocument();
     expect(screen.getByText(/4\.8 MB/)).toBeInTheDocument();
     expect(screen.getByText(/500 B/)).toBeInTheDocument();

@@ -13,21 +13,22 @@ import { Trash2, X, MapPin, Clock, User as UserIcon, Briefcase, Pencil, Calendar
 import type { UserColor } from "@/lib/client/calendar/user-colors";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
+import type { CalendarEventId, ContactId, MatterId, UserId } from "@/lib/shared/schemas/ids";
 
 export interface EventDetail {
-  id: string;
+  id: CalendarEventId;
   title: string;
   description?: string | null;
   location?: string | null;
   startAt: Date | string;
   endAt?: Date | string | null;
   allDay: boolean;
-  userId: string;
-  matterId?: string | null;
+  userId: UserId;
+  matterId?: MatterId | null;
   kind: "appointment" | "deadline";
-  matter?: { id: string; matterNumber: string; title: string } | null;
-  inviteeUserIds?: string[];
-  inviteeContactIds?: string[];
+  matter?: { id: MatterId; matterNumber: string; title: string } | null;
+  inviteeUserIds?: UserId[];
+  inviteeContactIds?: ContactId[];
 }
 
 interface NamedRef { id: string; name: string }

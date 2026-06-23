@@ -7,6 +7,7 @@ import { EntityLink } from "@/lib/client/demo/entity-link";
 import { periodFrom, periodTo } from "@/lib/client/time-filter";
 import { trpc } from "@/lib/client/trpc";
 import { formatMinutes } from "@/lib/client/utils";
+import { asId, type MatterId } from "@/lib/shared/schemas/ids";
 
 interface TimeRow {
   id: string;
@@ -75,7 +76,7 @@ function PeriodFilter({ from, to, onFrom, onTo, onClear }: PeriodFilterProps) {
 }
 
 interface TimeForm {
-  matterId: string;
+  matterId: MatterId;
   date: string;
   minutes: number;
   description: string;
@@ -164,7 +165,7 @@ export default function TimePage() {
 
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<TimeForm>({
-    matterId: "",
+    matterId: asId<"MatterId">(""),
     date: new Date().toISOString().split("T")[0]!,
     minutes: 30,
     description: "",
@@ -175,7 +176,7 @@ export default function TimePage() {
     onSuccess: () => {
       void utils.timeEntry.list.invalidate();
       setShowForm(false);
-      setForm({ matterId: "", date: new Date().toISOString().split("T")[0]!, minutes: 30, description: "", billable: true });
+      setForm({ matterId: asId<"MatterId">(""), date: new Date().toISOString().split("T")[0]!, minutes: 30, description: "", billable: true });
     },
   });
 

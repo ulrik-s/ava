@@ -3,12 +3,13 @@
 import { Pencil, Trash2 } from "lucide-react";
 import { Fragment, type ReactNode } from "react";
 import { ActionMenu, type ActionMenuItem } from "@/components/ui/action-menu";
+import type { DocumentFolderId, MatterId } from "@/lib/shared/schemas/ids";
 
 export interface FolderRecord {
-  id: string;
+  id: DocumentFolderId;
   name: string;
-  parentId?: string | null | undefined;
-  matterId: string;
+  parentId?: DocumentFolderId | null | undefined;
+  matterId: MatterId;
   createdAt: string | Date;
 }
 

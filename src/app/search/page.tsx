@@ -8,12 +8,13 @@ import { searchScope, searchScopeLabel, type SearchScope } from "@/lib/client/se
 import { useOnlineStatus } from "@/lib/client/sync/use-online-status";
 import { trpc } from "@/lib/client/trpc";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
+import type { DocumentId, MatterId } from "@/lib/shared/schemas/ids";
 
 interface SearchHit {
-  documentId: string;
+  documentId: DocumentId;
   fileName: string;
   storagePath?: string | null;
-  matterId: string;
+  matterId: MatterId;
   matterNumber: string;
   matterTitle: string;
   highlight: string;

@@ -20,6 +20,7 @@ import { EntityLink } from "@/lib/client/demo/entity-link";
 import { rangeForView, shiftAnchor, viewRangeLabel, groupByDay, type TodoView } from "@/lib/client/todo/todo-views";
 import { trpc } from "@/lib/client/trpc";
 import { deadlineColor, type DeadlineColor } from "@/lib/shared/deadline-color";
+import { asId, type MatterId, type UserId } from "@/lib/shared/schemas/ids";
 
 const TASK_STATUS_LABELS: Record<string, string> = { TODO: "Att göra", IN_PROGRESS: "Pågår", DONE: "Klar" };
 const TASK_PRIORITY_LABELS: Record<string, string> = { LOW: "Låg", MEDIUM: "Medium", HIGH: "Hög" };
@@ -55,7 +56,7 @@ interface TaskForm {
   description: string;
   priority: "LOW" | "MEDIUM" | "HIGH";
   dueAt: string; // ISO date or datetime-local
-  matterId: string;
+  matterId: MatterId;
 }
 
 function emptyForm(defaultDate: Date): TaskForm {
@@ -66,21 +67,21 @@ function emptyForm(defaultDate: Date): TaskForm {
     description: "",
     priority: "MEDIUM",
     dueAt: d.toISOString().slice(0, 16),
-    matterId: "",
+    matterId: asId<"MatterId">(""),
   };
 }
 
 type ModalState = { mode: "create" | "edit"; form: TaskForm } | null;
 
 /** Vem listan visar: vald kollega eller jag själv (+ om det är min egen lista). */
-function resolveViewer(userId: string, meId: string | undefined): { effectiveUserId: string | undefined; isOwn: boolean } {
+function resolveViewer(userId: UserId, meId: UserId | undefined): { effectiveUserId: UserId | undefined; isOwn: boolean } {
   return { effectiveUserId: userId || meId, isOwn: !userId || userId === meId };
 }
 
 export default function TodoClient() {
   const [day, setDay] = useState<Date>(() => startOfDay(new Date()));
   const [view, setView] = useState<TodoView>(() => readStoredView());
-  const [userId, setUserId] = useState<string>("");
+  const [userId, setUserId] = useState<UserId>(asId<"UserId">(""));
   const [modalState, setModalState] = useState<ModalState>(null);
 
   useEffect(() => {
@@ -90,7 +91,7 @@ export default function TodoClient() {
 
   const users = trpc.user.list.useQuery();
   const me = trpc.user.current.useQuery();
-  const meId = me.data?.id;
+  const meId = me.data?.id ? asId<"UserId">(me.data.id) : undefined;
   const { effectiveUserId, isOwn } = resolveViewer(userId, meId);
 
   const range = useMemo(() => rangeForView(view, day), [view, day]);
@@ -130,7 +131,7 @@ export default function TodoClient() {
   };
   const onEdit = (it: TodoRow): void => setModalState({
     mode: "edit",
-    form: { id: it.id, title: it.title, description: "", priority: "MEDIUM", dueAt: new Date(it.at).toISOString().slice(0, 16), matterId: it.matter?.id ?? "" },
+    form: { id: it.id, title: it.title, description: "", priority: "MEDIUM", dueAt: new Date(it.at).toISOString().slice(0, 16), matterId: asId<"MatterId">(it.matter?.id ?? "") },
   });
   const onDelete = (it: TodoRow): void => { if (confirm(`Ta bort "${it.title}"?`)) deleteTask.mutate({ id: it.id }); };
 
@@ -181,11 +182,11 @@ function TodoToolbar({ view, setView, day, setDay, periodLabel, isOwn, onNew }: 
 }
 
 /** "Visa för:"-väljaren (mig själv eller en kollega). */
-function TodoUserPicker({ userId, setUserId, users }: { userId: string; setUserId: (v: string) => void; users?: Array<{ id: string; name: string }> | undefined }) {
+function TodoUserPicker({ userId, setUserId, users }: { userId: UserId; setUserId: (v: UserId) => void; users?: Array<{ id: string; name: string }> | undefined }) {
   return (
     <div className="flex items-center gap-2 text-sm">
       <label className="text-gray-600">Visa för:</label>
-      <select value={userId} onChange={(e) => setUserId(e.target.value)} className="px-2 py-1 border rounded">
+      <select value={userId} onChange={(e) => setUserId(asId<"UserId">(e.target.value))} className="px-2 py-1 border rounded">
         <option value="">Mig själv</option>
         {(users ?? []).map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
       </select>
@@ -422,7 +423,7 @@ function TaskForm({ form, setForm, matters, onCancel, onSubmit, isPending, submi
       <div>
         <label className="block text-xs text-gray-500 mb-1">Ärende (valfritt)</label>
         <select value={form.matterId}
-          onChange={(e) => setForm({ ...form, matterId: e.target.value })}
+          onChange={(e) => setForm({ ...form, matterId: asId<"MatterId">(e.target.value) })}
           className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm">
           <option value="">— Inget ärende —</option>
           {matters.map((m) => (

@@ -17,6 +17,7 @@ import { buildUserColorMap, type UserColor } from "@/lib/client/calendar/user-co
 import { jobQueue } from "@/lib/client/jobs/job-queue";
 import { trpc } from "@/lib/client/trpc";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
+import { asId, type CalendarEventId, type ContactId, type MatterId, type UserId } from "@/lib/shared/schemas/ids";
 import { CalendarGrid, startOfDay } from "./_calendar-grid";
 import { DayView } from "./_day-view";
 import { EventDetailModal, type EventDetail } from "./_event-detail-modal";
@@ -39,7 +40,7 @@ interface EventForMirror {
 // tilldelningsbar till jobQueue.enqueue:s `Record<string, unknown>`-payload
 // utan cast.
 type MirrorArgs = {
-  eventId: string;
+  eventId: CalendarEventId;
   op: "upsert" | "delete";
   event?: EventForMirror;
   outlookEventId?: string | null;
@@ -68,7 +69,7 @@ function useCalendarState() {
   const [view, setView] = useState<ViewMode>("week");
   const currentUser = trpc.user.current.useQuery();
   const orgUsers = trpc.user.list.useQuery();
-  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+  const [selectedUserIds, setSelectedUserIds] = useState<UserId[]>([]);
   const [userSelInit, setUserSelInit] = useState(false);
 
   useEffect(() => {
@@ -98,7 +99,7 @@ function useCalendarState() {
     });
     if (resolved.length > 0) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setSelectedUserIds(resolved);
+      setSelectedUserIds(resolved.map((uid) => asId<"UserId">(uid)));
       setUserSelInit(true);
     }
   }, [currentUser.data?.id, orgUsers.data?.users, userSelInit]);
@@ -142,7 +143,7 @@ export default function CalendarPage() {
       <section className="mb-8 grid grid-cols-1 lg:grid-cols-[14rem_1fr] gap-4">
         <UserPicker
           selectedUserIds={selectedUserIds}
-          onChange={setSelectedUserIds}
+          onChange={(ids) => setSelectedUserIds(ids.map((id) => asId<"UserId">(id)))}
           enforceAtLeastOne
           userColors={userColors}
         />
@@ -194,7 +195,7 @@ function CalendarBody({ view, anchor, setAnchor, selectedUserIds, userNames, use
   view: ViewMode;
   anchor: Date | null;
   setAnchor: (d: Date) => void;
-  selectedUserIds: string[];
+  selectedUserIds: UserId[];
   userNames: Record<string, string>;
   userColors: Map<string, UserColor>;
   onSelectEvent: (ev: EventDetail) => void;
@@ -378,10 +379,10 @@ function emptyEventForm() {
     startAt: new Date().toISOString().slice(0, 16),
     endAt: "",
     location: "",
-    matterId: "",
+    matterId: asId<"MatterId">(""),
     mirrorToOutlook: false,
-    inviteeUserIds: [] as string[],
-    inviteeContactIds: [] as string[],
+    inviteeUserIds: [] as UserId[],
+    inviteeContactIds: [] as ContactId[],
   };
 }
 
@@ -394,7 +395,7 @@ function eventFormFromRow(i: EventRow) {
     startAt: toLocalInput(i.startAt),
     endAt: i.endAt ? toLocalInput(i.endAt) : "",
     location: i.location ?? "",
-    matterId: i.matterId ?? "",
+    matterId: i.matterId ?? asId<"MatterId">(""),
     mirrorToOutlook: i.mirrorToOutlook ?? false,
     inviteeUserIds: i.inviteeUserIds ?? [],
     inviteeContactIds: i.inviteeContactIds ?? [],
@@ -453,8 +454,8 @@ function useEventForm({ initial, onClose }: { initial?: EventRow | undefined; on
   const [location, setLocation] = useState(d.location);
   const [matterId, setMatterId] = useState(d.matterId);
   const [mirrorToOutlook, setMirrorToOutlook] = useState(d.mirrorToOutlook);
-  const [inviteeUserIds, setInviteeUserIds] = useState<string[]>(d.inviteeUserIds);
-  const [inviteeContactIds, setInviteeContactIds] = useState<string[]>(d.inviteeContactIds);
+  const [inviteeUserIds, setInviteeUserIds] = useState<UserId[]>(d.inviteeUserIds);
+  const [inviteeContactIds, setInviteeContactIds] = useState<ContactId[]>(d.inviteeContactIds);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -580,9 +581,9 @@ function NewEventForm({ onClose, initial }: { onClose: () => void; initial?: Eve
         users={f.userOptions}
         contacts={f.contactOptions}
         userIds={f.inviteeUserIds}
-        setUserIds={f.setInviteeUserIds}
+        setUserIds={(ids) => f.setInviteeUserIds(ids.map((id) => asId<"UserId">(id)))}
         contactIds={f.inviteeContactIds}
-        setContactIds={f.setInviteeContactIds}
+        setContactIds={(ids) => f.setInviteeContactIds(ids.map((id) => asId<"ContactId">(id)))}
       />
       <label className="flex items-center gap-2 text-xs text-gray-700">
         <input
@@ -663,17 +664,17 @@ function NewTaskForm({ onClose }: { onClose: () => void }) {
 // ─── Badges + helpers ─────────────────────────────────────────────────────
 
 interface EventRow {
-  id: string;
+  id: CalendarEventId;
   title: string;
   kind: "appointment" | "deadline";
   startAt: string | Date;
   endAt?: string | Date | null | undefined;
   allDay: boolean;
   location?: string | null | undefined;
-  matterId?: string | null | undefined;
-  matter?: { id: string; matterNumber: string; title: string } | null | undefined;
-  inviteeUserIds?: string[] | undefined;
-  inviteeContactIds?: string[] | undefined;
+  matterId?: MatterId | null | undefined;
+  matter?: { id: MatterId; matterNumber: string; title: string } | null | undefined;
+  inviteeUserIds?: UserId[] | undefined;
+  inviteeContactIds?: ContactId[] | undefined;
   mirrorToOutlook?: boolean | undefined;
   mirrorStatus?: "pending" | "synced" | "failed" | null | undefined;
   outlookEventId?: string | null | undefined;

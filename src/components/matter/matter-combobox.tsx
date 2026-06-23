@@ -19,17 +19,18 @@
  */
 
 import { useEffect, useId, useMemo, useState } from "react";
+import { asId, type MatterId } from "@/lib/shared/schemas/ids";
 
 export interface MatterOption {
-  id: string;
+  id: MatterId;
   matterNumber: string;
   title: string;
 }
 
 interface Props {
   matters: MatterOption[];
-  value: string;
-  onChange: (matterId: string) => void;
+  value: MatterId;
+  onChange: (matterId: MatterId) => void;
   required?: boolean;
   placeholder?: string;
   label?: string;
@@ -68,7 +69,7 @@ export function MatterCombobox({ matters, value, onChange, required, placeholder
     setText(v);
     const exactMatch = options.find((o) => labelFor(o) === v);
     if (exactMatch) onChange(exactMatch.id);
-    else if (v === "") onChange("");
+    else if (v === "") onChange(asId<"MatterId">(""));
     // Partiell match → låt onChange vara orörd så formuläret kvarstår i
     // "inget vald än"-läge tills användaren plockar en option.
   }

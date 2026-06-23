@@ -6,14 +6,15 @@ import { EntityLink } from "@/lib/client/demo/entity-link";
 import { labelForContactType, labelForMatterRole } from "@/lib/client/labels";
 import { trpc } from "@/lib/client/trpc";
 import type { ContactType, MatterRole } from "@/lib/shared/schemas/enums";
+import type { ContactId, MatterId } from "@/lib/shared/schemas/ids";
 
 interface ConflictRow {
-  contactId: string;
+  contactId: ContactId;
   contactName: string;
   contactType: ContactType;
   personalNumber?: string | null;
   orgNumber?: string | null;
-  matterId: string;
+  matterId: MatterId;
   matterNumber: string;
   matterTitle: string;
   role: MatterRole;

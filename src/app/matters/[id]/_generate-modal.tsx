@@ -8,7 +8,7 @@ import { labelForMatterRole } from "@/lib/client/labels";
 import { buildTemplateContext } from "@/lib/client/templates/build-template-context";
 import { trpc } from "@/lib/client/trpc";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
-import type { MatterId } from "@/lib/shared/schemas/ids";
+import { asId, type ContactId, type MatterId } from "@/lib/shared/schemas/ids";
 
 type Contact = { id: string; name: string; email?: string | null; phone?: string | null };
 type MatterContact = { id: string; role: string; contact: Contact };
@@ -27,7 +27,7 @@ type RegisterDocInput = { id: string; matterId: MatterId; fileName: string; mime
 interface GenerateArgs {
   templateId: string;
   format: "pdf" | "docx";
-  recipientIds: string[];
+  recipientIds: ContactId[];
   templates: Array<{ id: string; content?: string | null; name: string }> | undefined;
   matter: GenMatter | undefined;
   org: GenOrg;
@@ -90,7 +90,7 @@ async function runGenerate(a: GenerateArgs): Promise<void> {
   if (!tpl?.content) throw new Error("Mallen saknar innehåll.");
   if (!a.matter) throw new Error("Ärendedata kunde inte laddas.");
   const recipients: Array<Recipient | null> = a.recipientIds.length > 0
-    ? a.contacts.filter((mc) => a.recipientIds.includes(mc.contact.id)).map((mc) => mc.contact)
+    ? a.contacts.filter((mc) => a.recipientIds.includes(asId<"ContactId">(mc.contact.id))).map((mc) => mc.contact)
     : [null];
   for (const recipient of recipients) {
     const ctx = buildDocCtx(a.matter, recipient, a.org);
@@ -106,12 +106,12 @@ export function GenerateModal({ matterId, contacts, onClose }: Props) {
   const register = trpc.document.register.useMutation();
   const [generateTemplateId, setGenerateTemplateId] = useState("");
   const [generateFormat, setGenerateFormat] = useState<"pdf" | "docx">("pdf");
-  const [generateRecipientIds, setGenerateRecipientIds] = useState<string[]>([]);
+  const [generateRecipientIds, setGenerateRecipientIds] = useState<ContactId[]>([]);
   const [generating, setGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
   const generateTemplateFieldId = useId();
 
-  const toggleRecipient = (contactId: string) => {
+  const toggleRecipient = (contactId: ContactId) => {
     setGenerateRecipientIds((prev) =>
       prev.includes(contactId) ? prev.filter((x) => x !== contactId) : [...prev, contactId]
     );
@@ -238,8 +238,8 @@ function RecipientPicker({
   onToggle,
 }: {
   contacts: MatterContact[];
-  selectedIds: string[];
-  onToggle: (id: string) => void;
+  selectedIds: ContactId[];
+  onToggle: (id: ContactId) => void;
 }) {
   return (
     <div>
@@ -254,7 +254,7 @@ function RecipientPicker({
       ) : (
         <div className="max-h-40 overflow-y-auto border border-gray-200 rounded divide-y divide-gray-100">
           {contacts.map((mc) => {
-            const checked = selectedIds.includes(mc.contact.id);
+            const checked = selectedIds.includes(asId<"ContactId">(mc.contact.id));
             return (
               <label
                 key={mc.id}
@@ -263,7 +263,7 @@ function RecipientPicker({
                 <input
                   type="checkbox"
                   checked={checked}
-                  onChange={() => onToggle(mc.contact.id)}
+                  onChange={() => onToggle(asId<"ContactId">(mc.contact.id))}
                   className="accent-blue-600"
                 />
                 <span className="flex-1 truncate">{mc.contact.name}</span>

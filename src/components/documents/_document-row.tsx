@@ -6,6 +6,7 @@ import { ActionMenu, type ActionMenuItem } from "@/components/ui/action-menu";
 import { useCapabilities } from "@/lib/client/capabilities/use-capabilities";
 import { loadFirmaConfig } from "@/lib/client/firma/firma-config";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
+import type { DocumentId, DocumentFolderId, MatterId, UserId } from "@/lib/shared/schemas/ids";
 import { DocumentTags } from "./_document-tags";
 import { formatFileSize } from "./_drag-helpers";
 import { SyncStatusBadge, type SyncStatus } from "./_sync-badge";
@@ -13,15 +14,15 @@ import { ExternalEditModal, type ModalState } from "./external-edit-modal";
 import { useLeaseAwareOpen } from "./use-lease-aware-open";
 
 export interface DocumentRecord {
-  id: string;
+  id: DocumentId;
   fileName: string;
   mimeType: string;
   sizeBytes: number;
   storagePath: string;
   version: number;
-  matterId: string;
-  folderId?: string | null | undefined;
-  uploadedById: string;
+  matterId: MatterId;
+  folderId?: DocumentFolderId | null | undefined;
+  uploadedById: UserId;
   createdAt: string | Date;
   uploadedBy: { name: string | null } | null;
   title?: string | null | undefined;

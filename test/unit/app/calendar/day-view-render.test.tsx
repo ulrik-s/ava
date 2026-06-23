@@ -7,6 +7,7 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { DayView, type DayEvent } from "@/app/calendar/_day-view";
+import { asId } from "@/lib/shared/schemas/ids";
 
 const listQuery = { data: [] as DayEvent[], isLoading: false };
 vi.mock("@/lib/client/trpc", () => ({
@@ -17,7 +18,7 @@ const anchor = new Date(2026, 3, 15, 12, 0); // 15 april 2026, lokal
 const baseProps = {
   anchor,
   onAnchorChange: vi.fn(),
-  userIds: ["u1"] as const,
+  userIds: [asId<"UserId">("u1")] as const,
   userNames: { u1: "Anna" },
   onSelectEvent: vi.fn(),
 };
@@ -43,7 +44,7 @@ describe("DayView", () => {
 
   it("renderar ett timat event som block med titel + tid, klick → onSelectEvent", () => {
     listQuery.data = [{
-      id: "e1", userId: "u1", title: "Möte med klient",
+      id: asId<"CalendarEventId">("e1"), userId: asId<"UserId">("u1"), title: "Möte med klient",
       startAt: new Date(2026, 3, 15, 9, 0), endAt: new Date(2026, 3, 15, 10, 0),
       allDay: false, kind: "appointment",
     }];
@@ -56,7 +57,7 @@ describe("DayView", () => {
 
   it("frister/heldag hamnar i 'Heldag / Frister'-sektionen", () => {
     listQuery.data = [{
-      id: "d1", userId: "u1", title: "Svarsfrist", startAt: new Date(2026, 3, 15, 0, 0),
+      id: asId<"CalendarEventId">("d1"), userId: asId<"UserId">("u1"), title: "Svarsfrist", startAt: new Date(2026, 3, 15, 0, 0),
       endAt: null, allDay: false, kind: "deadline",
     }];
     render(<DayView {...baseProps} />);

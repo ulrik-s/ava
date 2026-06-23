@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import { trpc } from "@/lib/client/trpc";
+import type { MatterId } from "@/lib/shared/schemas/ids";
 import { SuggestionRow, type SuggestionGroup } from "./_suggestion-row";
 
 interface SuggestionsPanelProps {
-  matterId: string;
+  matterId: MatterId;
 }
 
 export function SuggestionsPanel({ matterId }: SuggestionsPanelProps) {

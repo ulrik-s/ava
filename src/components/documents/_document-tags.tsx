@@ -12,14 +12,15 @@
 
 import { useState } from "react";
 import { trpc } from "@/lib/client/trpc";
+import type { DocumentId, MatterId } from "@/lib/shared/schemas/ids";
 
 export function DocumentTags({
   documentId,
   matterId,
   tags,
 }: {
-  documentId: string;
-  matterId: string;
+  documentId: DocumentId;
+  matterId: MatterId;
   tags: readonly string[];
 }) {
   const utils = trpc.useUtils();

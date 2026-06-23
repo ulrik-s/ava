@@ -18,11 +18,12 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useMemo } from "react";
 import { colorForUserId, type UserColor } from "@/lib/client/calendar/user-colors";
 import { trpc } from "@/lib/client/trpc";
+import type { CalendarEventId, UserId } from "@/lib/shared/schemas/ids";
 import { startOfDay, sameDay, toKey } from "./_calendar-grid";
 
 export interface DayEvent {
-  id: string;
-  userId: string;
+  id: CalendarEventId;
+  userId: UserId;
   title: string;
   startAt: string | Date;
   endAt?: string | Date | null;
@@ -34,7 +35,7 @@ export interface DayEvent {
 interface DayViewProps {
   anchor: Date;
   onAnchorChange: (d: Date) => void;
-  userIds: readonly string[];
+  userIds: readonly UserId[];
   userNames: Readonly<Record<string, string>>;
   userColors?: Map<string, UserColor>;
   /** Klick på event → öppna detalj-modal i parent. */

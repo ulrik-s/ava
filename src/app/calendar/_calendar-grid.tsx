@@ -13,10 +13,11 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useMemo } from "react";
 import { colorForUserId, type UserColor } from "@/lib/client/calendar/user-colors";
 import { trpc } from "@/lib/client/trpc";
+import type { CalendarEventId, UserId } from "@/lib/shared/schemas/ids";
 
 export interface CalendarGridEvent {
-  id: string;
-  userId: string;
+  id: CalendarEventId;
+  userId: UserId;
   title: string;
   kind: "appointment" | "deadline";
   startAt: string | Date;
@@ -27,7 +28,7 @@ export interface CalendarGridEvent {
 interface CalendarGridProps {
   mode: "month" | "week";
   /** Vilka användares events att visa (multi-user). Tom array → tom vy. */
-  userIds: readonly string[];
+  userIds: readonly UserId[];
   /** Map userId → namn (för tooltip). */
   userNames: Readonly<Record<string, string>>;
   /** Stabil färgkarta från `buildUserColorMap` (unika färger). Optional fallback. */
