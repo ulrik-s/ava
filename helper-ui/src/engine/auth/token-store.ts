@@ -11,7 +11,10 @@
  */
 
 import { spawnSync } from "node:child_process";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 
+import type { Platform } from "../platform/runtime.ts";
 import type { TokenSet } from "./oidc.ts";
 
 const ACCOUNT = "ava-helper";
@@ -97,4 +100,51 @@ export class InMemoryTokenStore implements TokenStore {
     this.tokens = null;
     return Promise.resolve();
   }
+}
+
+/**
+ * Fil-backad token-store (headless/Linux). macOS-keychain finns inte på Linux,
+ * och en GUI-keychain passar ändå inte en headless-körning (CI, server-helper,
+ * #742). Tokens läggs då i en fil (0600) i data-katalogen. Känsligt men det är
+ * priset för headless utan keychain — på macOS föredras alltid keychain.
+ */
+export class FileTokenStore implements TokenStore {
+  constructor(private readonly path: string) {}
+  load(): Promise<TokenSet | null> {
+    try {
+      return Promise.resolve(parseStored(readFileSync(this.path, "utf8")));
+    } catch {
+      return Promise.resolve(null); // saknad/oläsbar fil → ej parad
+    }
+  }
+  save(tokens: TokenSet): Promise<void> {
+    mkdirSync(dirname(this.path), { recursive: true });
+    writeFileSync(this.path, JSON.stringify(tokens), { mode: 0o600 });
+    return Promise.resolve();
+  }
+  clear(): Promise<void> {
+    try { rmSync(this.path); } catch { /* redan borta */ }
+    return Promise.resolve();
+  }
+}
+
+/** Filnamn för fil-storen i data-katalogen. */
+export const TOKEN_FILE_NAME = "oidc-token.json";
+
+/**
+ * Välj token-store: explicit fil via `AVA_HELPER_TOKEN_FILE` (headless/test),
+ * annars keychain på macOS, annars en fil i data-katalogen (Linux/headless —
+ * keychain saknas). Utan data-katalog (`dir === null`) faller vi tillbaka på
+ * in-memory (ingen persistens, men auth fungerar inom processens livstid).
+ * Ren funktion (platform + dir + env in) → testbar utan riktig fs/keychain.
+ */
+export function selectTokenStore(
+  platform: Platform,
+  dir: string | null,
+  env: { tokenFile?: string | undefined } = {},
+): TokenStore {
+  if (env.tokenFile) return new FileTokenStore(env.tokenFile);
+  if (platform === "darwin") return new KeychainTokenStore();
+  if (dir !== null) return new FileTokenStore(join(dir, TOKEN_FILE_NAME));
+  return new InMemoryTokenStore();
 }

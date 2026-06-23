@@ -23,7 +23,8 @@ import { HELPER_HTTPS_PORT, HELPER_PORT } from "@/lib/shared/helper/protocol";
 import { serveFetchHandler } from "@/lib/shared/http/node-http-adapter";
 
 import { buildAuthHeaderProvider } from "./auth/auth-provider.ts";
-import { loginConfigFromEnv, runLogin, type LoginConfig } from "./auth/login.ts";
+import { defaultLoginDeps, loginConfigFromEnv, runLogin, type LoginConfig } from "./auth/login.ts";
+import { selectTokenStore } from "./auth/token-store.ts";
 import { handleConfig } from "./config-endpoint.ts";
 import { ContentStore, resolveCacheTtlMs } from "./content-store.ts";
 import { fetchAndCacheContent, handleContent } from "./content.ts";
@@ -267,7 +268,8 @@ export function startEngine(opts: EngineOpts = {}): EngineHandle {
 
   // Helperns egen OIDC-auth (om parad/konfigurerad) → autonom Bearer mot servern.
   const loginCfg = loginConfigFromEnv(helperEnvFor(dir));
-  const authHeader: AuthHeaderProvider | undefined = loginCfg ? buildAuthHeaderProvider(loginCfg) : undefined;
+  const tokenStore = selectTokenStore(currentPlatform(), dir, { tokenFile: process.env.AVA_HELPER_TOKEN_FILE });
+  const authHeader: AuthHeaderProvider | undefined = loginCfg ? buildAuthHeaderProvider(loginCfg, tokenStore) : undefined;
 
   const stores = startStores(dir, abort.signal, authHeader);
   const handler = createHandler({
@@ -336,7 +338,10 @@ async function handleLogin(): Promise<void> {
     return;
   }
   try {
-    await runLogin(cfg);
+    // Samma store-val som motorn (main vs login måste vara överens om var
+    // tokens bor — keychain på macOS, annars fil/headless).
+    const store = selectTokenStore(currentPlatform(), dataDir(), { tokenFile: process.env.AVA_HELPER_TOKEN_FILE });
+    await runLogin(cfg, { ...defaultLoginDeps(), store });
     process.stdout.write("Inloggning klar — helpern är parad.\n");
   } catch (err) {
     process.stderr.write(`Inloggning misslyckades: ${err instanceof Error ? err.message : String(err)}\n`);
