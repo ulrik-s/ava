@@ -35,7 +35,7 @@ async function assertContract(repo: InvoiceRepository): Promise<void> {
   expect(await repo.getById(asId<"InvoiceId">(invId))).toMatchObject({ id: invId, status: "DRAFT" });
   expect(await repo.getById(asId<"InvoiceId">(uuidv7()))).toBeNull();
 
-  expect((await repo.listByMatter(matterId)).map((i) => i.id)).toContain(invId);
+  expect((await repo.listByMatter(asId<"MatterId">(matterId))).map((i) => i.id)).toContain(invId);
 
   const updated = await repo.update(asId<"InvoiceId">(invId), { status: "SENT" });
   expect(updated.status).toBe("SENT");
@@ -43,7 +43,7 @@ async function assertContract(repo: InvoiceRepository): Promise<void> {
 
   await repo.softDelete(asId<"InvoiceId">(invId));
   expect(await repo.getById(asId<"InvoiceId">(invId))).toBeNull();
-  expect(await repo.listByMatter(matterId)).toHaveLength(0);
+  expect(await repo.listByMatter(asId<"MatterId">(matterId))).toHaveLength(0);
 }
 
 describe("InvoiceRepository — in-memory", () => {

@@ -32,7 +32,7 @@ describe("buildContext — repos-wiring", () => {
     const created = await ctx.repos.invoices.create(inv(id, matterId));
     expect(created.amount).toBe(1_000);
     expect(await ctx.repos.invoices.getById(asId<"InvoiceId">(id))).toMatchObject({ id });
-    expect((await ctx.repos.invoices.listByMatter(matterId)).map((i) => i.id)).toContain(id);
+    expect((await ctx.repos.invoices.listByMatter(asId<"MatterId">(matterId))).map((i) => i.id)).toContain(id);
   });
 
   it("ctx.repos.transaction rullar tillbaka vid fel (ärver store-snapshot)", async () => {
