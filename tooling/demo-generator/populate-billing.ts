@@ -16,6 +16,7 @@
  * Belopp/fakturanummer/OCR genereras organiskt av billing-run-routern (ADR 0012).
  */
 
+import type { BillingRunRecipient } from "@/lib/shared/schemas/enums";
 import { demoFinalInvoiceId, demoAccontoInvoiceId, demoCreditInvoiceId, demoPaymentPlanId } from "../scripts/demo-billing-ids";
 import type { SeedDataset } from "../scripts/seed-data";
 import type { GeneratorCaller } from "./backend-target";
@@ -43,7 +44,7 @@ interface Ctx {
 /** En skapad slutfaktura. `matterId` bärs med så plan-/kredit-id:n blir deterministiska (uuidv5 på matterId). */
 type FinalInv = { id: string; amount: number; matterId: string };
 
-const BILLING_RUN_RECIPIENT: Record<string, "KLIENT" | "FORSAKRING" | "RATTSHJALPSMYNDIGHET"> = {
+const BILLING_RUN_RECIPIENT: Record<string, BillingRunRecipient> = {
   RATTSSKYDD: "FORSAKRING",
   RATTSHJALP: "RATTSHJALPSMYNDIGHET",
 };
@@ -77,7 +78,7 @@ async function acconto(ctx: Ctx, matterId: string, bips: number, amountOre: numb
 }
 
 /** Slutfaktura via billing-run → SENT. Returnerar {id, amount}. */
-async function finalSent(ctx: Ctx, matterId: string, recipient: string, deducted: string[], daysAgo: number): Promise<FinalInv> {
+async function finalSent(ctx: Ctx, matterId: string, recipient: BillingRunRecipient, deducted: string[], daysAgo: number): Promise<FinalInv> {
   const { invoice } = await ctx.c.billingRun.createFinal({
     id: demoFinalInvoiceId(matterId), matterId, recipient, deductedBillingRunIds: deducted,
     invoiceDate: isoDaysAgo(daysAgo), dueDate: isoDaysAgo(daysAgo - 30),
@@ -88,7 +89,7 @@ async function finalSent(ctx: Ctx, matterId: string, recipient: string, deducted
 }
 
 /** Slutfaktura som LÄMNAS draft (ej skickad). */
-async function finalDraft(ctx: Ctx, matterId: string, recipient: string, daysAgo: number): Promise<void> {
+async function finalDraft(ctx: Ctx, matterId: string, recipient: BillingRunRecipient, daysAgo: number): Promise<void> {
   await ctx.c.billingRun.createFinal({
     id: demoFinalInvoiceId(matterId), matterId, recipient, deductedBillingRunIds: [],
     invoiceDate: isoDaysAgo(daysAgo),

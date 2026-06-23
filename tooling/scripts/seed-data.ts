@@ -15,7 +15,15 @@ import {
   KOSTNADSRAKNING_TEMPLATE_CATEGORY,
   KOSTNADSRAKNING_DEFAULT_HTML,
 } from "@/lib/shared/kostnadsrakning-template";
-import { ENTITY_REGISTRY } from "@/lib/shared/schemas";
+import {
+  ENTITY_REGISTRY,
+  type ContactType,
+  type InvoiceStatus,
+  type MatterStatus,
+  type PaymentMethod,
+  type PaymentPlanStatus,
+  type UserRole,
+} from "@/lib/shared/schemas";
 
 export const ORG_ID = "firma-ab";
 
@@ -53,7 +61,7 @@ function isoDate(daysFromNow: number, hour = 9): Date {
 }
 
 interface UserSeed {
-  id: string; email: string; name: string; role: "ADMIN" | "LAWYER" | "ASSISTANT";
+  id: string; email: string; name: string; role: UserRole;
   hourlyRate: number; title: string;
 }
 
@@ -72,7 +80,7 @@ export const USERS: UserSeed[] = buildUsers("current-user", "firma.local");
 
 interface ContactSeed {
   id: string; name: string;
-  contactType: "PERSON" | "COMPANY" | "COURT" | "AUTHORITY" | "INSURANCE_COMPANY" | "LAW_FIRM";
+  contactType: ContactType;
   personalNumber?: string; orgNumber?: string; email?: string; phone?: string;
 }
 
@@ -98,8 +106,8 @@ export const CONTACTS: ContactSeed[] = [
 
 interface MatterSeed {
   id: string; matterNumber: string; title: string;
-  status: "ACTIVE" | "CLOSED" | "ARCHIVED"; matterType: string;
-  paymentMethod: "PENDING" | "RATTSHJALP" | "RATTSSKYDD" | "OFFENTLIGT_UPPDRAG" | "PRIVAT" | "MIX";
+  status: MatterStatus; matterType: string;
+  paymentMethod: PaymentMethod;
   description: string;
   klientId: string; motpartId?: string; domstolId?: string;
   createdDaysAgo: number;
@@ -410,7 +418,7 @@ function buildExpenses(orgId: string, users: UserSeed[]): SeedDataset["expenses"
 function buildInvoices(orgId: string): SeedDataset["invoices"] {
   const out: SeedDataset["invoices"] = [];
   // invoices
-  const statuses: Array<"DRAFT" | "SENT" | "PAID" | "INSTALLMENT_PLAN"> = ["DRAFT", "SENT", "PAID", "INSTALLMENT_PLAN"];
+  const statuses: InvoiceStatus[] = ["DRAFT", "SENT", "PAID", "INSTALLMENT_PLAN"];
   for (let i = 0; i < 12; i++) {
     const matter = MATTERS[i % MATTERS.length];
     if (!matter) continue;
@@ -465,7 +473,7 @@ interface PlanBundle {
 // buildPaymentPlans patchar fakturornas status så det stämmer.
 interface PlanTarget {
   invoiceId: string;
-  status: "ACTIVE" | "COMPLETED" | "CANCELLED";
+  status: PaymentPlanStatus;
   monthlyAmount: number;
   dayOfMonth: number;
   startsDaysAgo: number;
@@ -503,7 +511,7 @@ function planReminders(p: PlanTarget, planId: string): SeedDataset["paymentPlanR
 }
 
 /** Invoice-status som matchar planens livscykel. */
-function invoiceStatusForPlan(planStatus: PlanTarget["status"]): string {
+function invoiceStatusForPlan(planStatus: PlanTarget["status"]): InvoiceStatus {
   if (planStatus === "ACTIVE") return "INSTALLMENT_PLAN";
   if (planStatus === "COMPLETED") return "PAID";
   return "SENT";

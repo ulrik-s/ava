@@ -13,6 +13,7 @@
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
+import type { UserRole } from "@/lib/shared/schemas/enums";
 import { CURRENT_SCHEMA_VERSION } from "../../src/lib/shared/schema-version";
 import { DEMO_META_PATH } from "../demo-config";
 import type { IdTranslator } from "../demo-generator/id-translator";
@@ -22,7 +23,7 @@ export interface DemoMetaUser {
   id: string;
   name: string;
   email: string;
-  role: "ADMIN" | "LAWYER" | "ASSISTANT";
+  role: UserRole;
   title?: string;
 }
 
@@ -56,7 +57,7 @@ export function buildDemoMeta(seed: SeedShape, translator: IdTranslator, now: Da
     id: translator.toUuid(String(u.id ?? "")),
     name: String(u.name ?? ""),
     email: String(u.email ?? ""),
-    role: u.role as "ADMIN" | "LAWYER" | "ASSISTANT",
+    role: u.role as UserRole,
     ...(u.title ? { title: String(u.title) } : {}),
   }));
   if (users.some((u) => !u.id || !u.name || !u.role)) {
