@@ -25,6 +25,15 @@ function courtCaseOf(m: unknown): string {
   return (m as { courtCaseNumber?: string | null }).courtCaseNumber ?? "";
 }
 
+/**
+ * Domstolsärende = domstolen betalar dig utan AVA-faktura (offentlig försvarare
+ * eller taxeärende). Styr om Domstolsbetalnings-panelen visas — i andra ärenden
+ * är den bara förvirrande.
+ */
+function isCourtMatter(m: { paymentMethod?: string | null; isTaxeArende?: boolean | null }): boolean {
+  return m.paymentMethod === "OFFENTLIG_FORSVARARE" || m.isTaxeArende === true;
+}
+
 export default function MatterDetailClient({ id: paramId }: { id: string }) {
   // Static export serverar en sentinel-shell för nya id:n → läs riktiga
   // id:t ur URL:en (faller tillbaka till build-time-param i server-mode).
@@ -68,7 +77,7 @@ export default function MatterDetailClient({ id: paramId }: { id: string }) {
         <ContactsSection matterId={id} contacts={m.contacts} />
         <DocumentBrowser matterId={id} />
         <BillingPanel matterId={id} matter={m} />
-        <ExpectedReceivablesSection matterId={id} courtCaseNumber={courtCaseOf(m)} />
+        <ExpectedReceivablesSection matterId={id} courtCaseNumber={courtCaseOf(m)} isCourtMatter={isCourtMatter(m)} />
         <TimeSection matterId={id} isTaxeArende={m.isTaxeArende} />
         <ExpenseSection matterId={id} isTaxeArende={m.isTaxeArende} />
         <ServiceNotesSection matterId={id} />
