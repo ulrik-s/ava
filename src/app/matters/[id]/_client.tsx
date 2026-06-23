@@ -11,7 +11,7 @@ import { EntityLink } from "@/lib/client/demo/entity-link";
 import { useRouteId } from "@/lib/client/demo/use-route-id";
 import { useEagerCacheMatterDocuments } from "@/lib/client/firma/use-eager-cache-matter-documents";
 import { trpc } from "@/lib/client/trpc";
-import type { PaymentMethod } from "@/lib/shared/schemas/enums";
+import type { MatterRole, MatterStatus, PaymentMethod } from "@/lib/shared/schemas/enums";
 import { BillingPanel } from "./_billing-panel";
 import { ContactsSection } from "./_contacts-section";
 import { ExpectedReceivablesSection } from "./_expected-receivables-section";
@@ -97,7 +97,7 @@ export default function MatterDetailClient({ id: paramId }: { id: string }) {
 
 type MatterContact = {
   id: string;
-  role: string;
+  role: MatterRole;
   contact: { id: string; name: string };
 };
 
@@ -108,7 +108,7 @@ interface HeaderProps {
     title: string;
     matterType?: string | null | undefined;
     description?: string | null | undefined;
-    status: string;
+    status: MatterStatus;
     isTaxeArende?: boolean | undefined;
   };
   klient: MatterContact[];
@@ -207,7 +207,7 @@ function MatterHeader({ matter: m, klient, onOpenGenerate }: HeaderProps) {
   );
 }
 
-function StatusBadge({ status }: { status: string }) {
+function StatusBadge({ status }: { status: MatterStatus }) {
   const cls = status === "ACTIVE"
     ? "bg-green-50 text-green-700"
     : status === "CLOSED"

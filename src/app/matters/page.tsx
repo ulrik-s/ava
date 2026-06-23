@@ -7,12 +7,13 @@ import { Pager } from "@/components/ui/pager";
 import { useIsReadOnly } from "@/lib/client/demo/demo-mode-context";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
+import type { MatterStatus } from "@/lib/shared/schemas/enums";
 
 interface MatterRow {
   id: string;
   matterNumber: string;
   title: string;
-  status: string;
+  status: MatterStatus;
   isTaxeArende?: boolean;
   contacts: Array<{ contact: { name: string } }>;
   _count: { contacts: number };
@@ -63,7 +64,7 @@ const matterColumns: Column<MatterRow>[] = [
     render: (m) => <span className="text-sm text-gray-500">{m._count.contacts}</span> },
 ];
 
-type StatusFilter = "ACTIVE" | "CLOSED" | "ARCHIVED" | "";
+type StatusFilter = MatterStatus | "";
 type NamedOption = { id: string; name: string };
 
 interface MatterForm {
