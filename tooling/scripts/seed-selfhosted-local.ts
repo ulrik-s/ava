@@ -21,6 +21,7 @@
 import { createPostgresDb } from "@/lib/server/db/client";
 import { createDbChangeLogRecorder, enableChangeLogOnAll } from "@/lib/server/repositories/change-log-recorder";
 import { buildDrizzleRepositories } from "@/lib/server/repositories/drizzle-repositories";
+import type { UserRole } from "@/lib/shared/schemas/enums";
 import { asId } from "@/lib/shared/schemas/ids";
 import type { Organization } from "@/lib/shared/schemas/organization";
 import type { User } from "@/lib/shared/schemas/user";
@@ -31,7 +32,7 @@ const ORG = process.env.AVA_ORGANIZATION_ID ?? "00000000-0000-0000-0000-00000000
 
 /** KC-realm:ens (realm-ava.json) allowlistade testanvändare. `outsider` seedas
  *  MEDVETET INTE → demonstrerar att autentiserad ≠ auktoriserad (nekas). */
-const USERS: ReadonlyArray<{ email: string; name: string; role: "LAWYER" | "ADMIN" }> = [
+const USERS: ReadonlyArray<{ email: string; name: string; role: UserRole }> = [
   { email: "lawyer@ava.test", name: "Lena Lawyer", role: "LAWYER" },
   { email: "admin@ava.test", name: "Alva Admin", role: "ADMIN" },
 ];
