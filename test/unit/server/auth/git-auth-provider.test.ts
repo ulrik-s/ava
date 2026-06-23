@@ -11,6 +11,7 @@
 import { describe, it, expect } from "vitest-compat";
 import { GitAuthProvider, TEST_PRINCIPAL } from "@/lib/server/auth/git-auth-provider";
 import type { AuthProvider, Principal } from "@/lib/server/auth/principal";
+import { asId } from "@/lib/shared/schemas/ids";
 
 describe("GitAuthProvider", () => {
   it("uppfyller AuthProvider-interfacet", () => {
@@ -27,8 +28,8 @@ describe("GitAuthProvider", () => {
 
   it("med config → överrider per fält, neutral för resten", () => {
     const p = new GitAuthProvider({
-      id: "current-user",
-      organizationId: "firma-ab",
+      id: asId<"UserId">("current-user"),
+      organizationId: asId<"OrganizationId">("firma-ab"),
       name: "Lokal användare",
       email: "user@firma.local",
     }).getPrincipal();
@@ -55,7 +56,7 @@ describe("GitAuthProvider", () => {
   });
 
   it("är ren — upprepade anrop ger samma resultat (ingen mutation)", () => {
-    const provider = new GitAuthProvider({ id: "u-bjorn" });
+    const provider = new GitAuthProvider({ id: asId<"UserId">("u-bjorn") });
     expect(provider.getPrincipal()).toEqual(provider.getPrincipal());
   });
 });

@@ -20,6 +20,8 @@
  *     allowlist-rader får `oidcSubject` satt.
  */
 
+import { userRoleSchema } from "@/lib/shared/schemas/enums";
+import { asId } from "@/lib/shared/schemas/ids";
 import type { AuthProvider, Principal } from "./principal";
 
 /** Claims oauth2-proxy/IdP:n levererar (#222 fyller dessa ur headers/userinfo). */
@@ -61,11 +63,11 @@ function bindingOk(user: AllowlistedUser, claims: OidcClaims): boolean {
 
 function toPrincipal(user: AllowlistedUser, claims: OidcClaims): Principal {
   return {
-    id: user.id,
+    id: asId<"UserId">(user.id),
     email: user.email,
     name: user.name || claims.name || user.email,
-    role: user.role,
-    organizationId: user.organizationId,
+    role: userRoleSchema.parse(user.role),
+    organizationId: asId<"OrganizationId">(user.organizationId),
   };
 }
 

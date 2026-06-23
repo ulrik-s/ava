@@ -12,12 +12,13 @@ import { buildContext } from "@/lib/server/build-context";
 import type { IDataStore } from "@/lib/server/data-store/IDataStore";
 import type { IPorts } from "@/lib/server/ports";
 import { DEMO_CAPABILITIES } from "@/lib/shared/capabilities";
+import { asId } from "@/lib/shared/schemas/ids";
 
 const fakeEvents = { marker: "events" };
 const fakeStore = { marker: "store", events: fakeEvents } as unknown as IDataStore;
 const fakePorts = { marker: "ports" } as unknown as IPorts;
 const principal: Principal = {
-  id: "u-anna", email: "a@b.se", name: "Anna", role: "ADMIN", organizationId: "org-1",
+  id: asId<"UserId">("u-anna"), email: "a@b.se", name: "Anna", role: "ADMIN", organizationId: asId<"OrganizationId">("org-1"),
 };
 
 describe("buildContext", () => {

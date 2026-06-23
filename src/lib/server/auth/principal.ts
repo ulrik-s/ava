@@ -10,13 +10,15 @@
  * (se `Context` i `trpc-core.ts`).
  */
 
+import type { UserRole } from "@/lib/shared/schemas/enums";
+import type { OrganizationId, UserId } from "@/lib/shared/schemas/ids";
+
 export interface Principal {
-  id: string;
+  id: UserId;
   email: string;
   name: string;
-  /** "ADMIN" | "LAWYER" | "ASSISTANT" — strängtypad här, enum i schemas. */
-  role: string;
-  organizationId: string;
+  role: UserRole;
+  organizationId: OrganizationId;
 }
 
 export interface AuthProvider {

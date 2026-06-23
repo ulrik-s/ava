@@ -39,6 +39,7 @@ import { GitAuthProvider } from "@/lib/server/auth/git-auth-provider";
 import type { IDataStore } from "@/lib/server/data-store/IDataStore";
 import type { CachingSyncDataStore } from "@/lib/server/data-store/in-memory/caching-sync-data-store";
 import { resolveGhPagesUrl } from "@/lib/shared/gh-pages-url";
+import { asId } from "@/lib/shared/schemas/ids";
 import { AppShell } from "./app-shell";
 import { AuthStatusBanner } from "./auth-status-banner";
 import { AutoSync } from "./auto-sync";
@@ -114,12 +115,12 @@ function createDemoTrpcClient(dataStore: IDataStore, firmaConfig: FirmaConfig) {
           // principal → guest-id (datakällan filtrerar bort user-bundna
           // queries tills login gjorts). Self-hosted-seed:en använder
           // "current-user" tills self-hosted-login är implementerad.
-          id: firmaConfig.principalId
-            || (firmaConfig.tier === "self-hosted" ? "current-user" : ""),
+          id: asId<"UserId">(firmaConfig.principalId
+            || (firmaConfig.tier === "self-hosted" ? "current-user" : "")),
           email: firmaConfig.authorEmail,
           name: firmaConfig.authorName,
           role: "ADMIN",
-          organizationId: firmaConfig.organizationId,
+          organizationId: asId<"OrganizationId">(firmaConfig.organizationId),
         }),
       }).createLink(),
     ],

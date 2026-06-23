@@ -4,13 +4,15 @@
  */
 
 import { describe, it, expect } from "vitest-compat";
+import { userRoleSchema } from "@/lib/shared/schemas/enums";
+import { asId } from "@/lib/shared/schemas/ids";
 import { createGitTarget } from "../../tooling/demo-generator/backend-target";
 import { populate } from "../../tooling/demo-generator/populate";
 import { populateTemplateDocs } from "../../tooling/demo-generator/populate-template-docs";
 import type { SeedDataset } from "../../tooling/scripts/seed-data";
 
 const now = new Date("2026-01-01T00:00:00Z");
-const ADMIN = { id: "gen", email: "gen@ava.local", name: "Generator", role: "ADMIN", organizationId: "org-test" };
+const ADMIN = { id: asId<"UserId">("gen"), email: "gen@ava.local", name: "Generator", role: userRoleSchema.parse("ADMIN"), organizationId: asId<"OrganizationId">("org-test") };
 
 const seed = {
   organizations: [{ id: "org-test", name: "Byrå AB", orgNumber: "556000-0000", createdAt: now, updatedAt: now }],

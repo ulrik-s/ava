@@ -9,9 +9,10 @@ import {
   DEFAULT_OFFLINE_GRACE_MS,
 } from "@/lib/server/auth/cached-session-auth-provider";
 import type { Principal } from "@/lib/server/auth/principal";
+import { asId } from "@/lib/shared/schemas/ids";
 
 const PRINCIPAL: Principal = {
-  id: "u-1", email: "anna@byra.se", name: "Anna", role: "LAWYER", organizationId: "org-1",
+  id: asId<"UserId">("u-1"), email: "anna@byra.se", name: "Anna", role: "LAWYER", organizationId: asId<"OrganizationId">("org-1"),
 };
 
 describe("CachedSessionAuthProvider", () => {

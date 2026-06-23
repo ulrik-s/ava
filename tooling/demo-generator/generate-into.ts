@@ -14,6 +14,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { Principal } from "@/lib/server/auth/principal";
+import { asId } from "@/lib/shared/schemas/ids";
 import { buildSeed, type BuildSeedOpts } from "../scripts/seed-data";
 import { createGitTarget } from "./backend-target";
 import { createIdTranslator, translateSeed, type IdTranslator } from "./id-translator";
@@ -48,8 +49,8 @@ export async function generateInto(outDir: string, seedOpts: BuildSeedOpts = {})
   const currentUserIdSlug = seedOpts.currentUserId ?? "current-user";
   const currentUserId = translator.toUuid(currentUserIdSlug);
   const principal: Principal = {
-    id: currentUserId, email: "generator@ava.local", name: "Demo Generator",
-    role: "ADMIN", organizationId: orgId,
+    id: asId<"UserId">(currentUserId), email: "generator@ava.local", name: "Demo Generator",
+    role: "ADMIN", organizationId: asId<"OrganizationId">(orgId),
   };
   const target = createGitTarget({ principal, writeBack: makeNodeGitWriteBack(outDir) });
 

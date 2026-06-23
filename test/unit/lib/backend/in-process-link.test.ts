@@ -17,6 +17,7 @@ import { GitAuthProvider } from "@/lib/server/auth/git-auth-provider";
 import { buildContext } from "@/lib/server/build-context";
 import { DemoDataStore } from "@/lib/server/data-store/DemoDataStore";
 import type { AppRouter } from "@/lib/server/routers/_app";
+import { asId } from "@/lib/shared/schemas/ids";
 
 const store = () => new DemoDataStore({
   matters: [{ id: "m1", title: "T", organizationId: "demo-firma-ab", status: "ACTIVE", matterNumber: "2025-0001", createdAt: new Date() }],
@@ -64,7 +65,7 @@ describe("inProcessLink — felvägar", () => {
     const runtime = new GitBackendRuntime({
       dataStore: ds,
       ports,
-      authProvider: new GitAuthProvider({ organizationId: "demo-firma-ab", id: "t" }),
+      authProvider: new GitAuthProvider({ organizationId: asId<"OrganizationId">("demo-firma-ab"), id: asId<"UserId">("t") }),
     });
     const client = rawClient(runtime) as unknown as {
       matter: { list: { query: (i: unknown) => Promise<{ matters: unknown[] }> } };

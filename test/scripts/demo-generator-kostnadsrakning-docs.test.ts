@@ -6,13 +6,15 @@
  */
 
 import { describe, it, expect } from "vitest-compat";
+import { userRoleSchema } from "@/lib/shared/schemas/enums";
+import { asId } from "@/lib/shared/schemas/ids";
 import { createGitTarget } from "../../tooling/demo-generator/backend-target";
 import { populate } from "../../tooling/demo-generator/populate";
 import { populateBilling } from "../../tooling/demo-generator/populate-billing";
 import { populateKostnadsrakningDocs } from "../../tooling/demo-generator/populate-kostnadsrakning-docs";
 import { buildSeed } from "../../tooling/scripts/seed-data";
 
-const ADMIN = { id: "gen", email: "g@a.se", name: "G", role: "ADMIN", organizationId: "firma-ab" };
+const ADMIN = { id: asId<"UserId">("gen"), email: "g@a.se", name: "G", role: userRoleSchema.parse("ADMIN"), organizationId: asId<"OrganizationId">("firma-ab") };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = any;
 

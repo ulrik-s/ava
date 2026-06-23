@@ -12,26 +12,27 @@
  * faktiska värden från `.ava/meta.json` + login-flow.
  */
 
+import { asId } from "@/lib/shared/schemas/ids";
 import type { AuthProvider, Principal } from "./principal";
 
 /** Test-fixture: explicit principal som tester ska passera till
  *  `new GitAuthProvider(TEST_PRINCIPAL)`. INTE för produktion. */
 export const TEST_PRINCIPAL: Principal = {
-  id: "00000000-0000-0000-0000-000000000001",
+  id: asId<"UserId">("00000000-0000-0000-0000-000000000001"),
   email: "test@ava.local",
   name: "Test User",
   role: "ADMIN",
-  organizationId: "00000000-0000-0000-0000-000000000000",
+  organizationId: asId<"OrganizationId">("00000000-0000-0000-0000-000000000000"),
 };
 
 /** Neutral fallback när varken config eller test-fixture ges. INGA demo-
  *  identifierare läcks via denna väg. */
 const NEUTRAL_PRINCIPAL: Principal = {
-  id: "",
+  id: asId<"UserId">(""),
   email: "",
   name: "",
   role: "ADMIN",
-  organizationId: "",
+  organizationId: asId<"OrganizationId">(""),
 };
 
 export type GitPrincipalConfig = Partial<Principal>;

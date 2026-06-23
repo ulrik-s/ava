@@ -3,6 +3,7 @@
  * utan invoiceId (= "upparbetad men inte fakturerad").
  */
 import { describe, it, expect } from "vitest-compat";
+import { asId } from "@/lib/shared/schemas/ids";
 import { createGitTarget } from "../../tooling/demo-generator/backend-target";
 import { translateSeed, createIdTranslator } from "../../tooling/demo-generator/id-translator";
 import { populateUnbilledTime } from "../../tooling/demo-generator/populate-unbilled-time";
@@ -14,7 +15,7 @@ async function runTarget() {
   const orgId = String(seed.organizations[0]?.id);
   const userId = String(seed.users[0]?.id);
   const target = createGitTarget({
-    principal: { id: userId, email: "g@a", name: "G", role: "ADMIN", organizationId: orgId },
+    principal: { id: asId<"UserId">(userId), email: "g@a", name: "G", role: "ADMIN", organizationId: asId<"OrganizationId">(orgId) },
     writeBack: async () => {},
   });
   return { target, seed };
