@@ -5,7 +5,7 @@ import { DataTable, type Column } from "@/components/ui/data-table";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { labelForMatterRole, matterRoleOptions, contactTypeOptions } from "@/lib/client/labels";
 import { trpc } from "@/lib/client/trpc";
-import type { MatterId } from "@/lib/shared/schemas/ids";
+import { asId, type ContactId, type MatterId } from "@/lib/shared/schemas/ids";
 
 type Contact = {
   id: string;
@@ -31,8 +31,8 @@ export function ContactsSection({ matterId, contacts }: Props) {
   const [showContactForm, setShowContactForm] = useState(false);
   const [addMode, setAddMode] = useState<"existing" | "new">("new");
 
-  const [existingContactForm, setExistingContactForm] = useState({
-    contactId: "",
+  const [existingContactForm, setExistingContactForm] = useState<ExistingForm>({
+    contactId: asId<"ContactId">(""),
     role: "MOTPART" as string,
     notes: "",
   });
@@ -53,7 +53,7 @@ export function ContactsSection({ matterId, contacts }: Props) {
   const addContact = trpc.matter.addContact.useMutation({
     onSuccess: () => {
       void utils.matter.getById.invalidate({ id: matterId });
-      setExistingContactForm({ contactId: "", role: "MOTPART", notes: "" });
+      setExistingContactForm({ contactId: asId<"ContactId">(""), role: "MOTPART", notes: "" });
     },
   });
 
@@ -172,7 +172,7 @@ function ContactsList({
   );
 }
 
-type ExistingForm = { contactId: string; role: string; notes: string };
+type ExistingForm = { contactId: ContactId; role: string; notes: string };
 
 function ExistingContactForm({
   matterId,
@@ -193,7 +193,7 @@ function ExistingContactForm({
     <form onSubmit={(e) => { e.preventDefault(); onSubmit({ matterId, ...form }); }}>
       <div className="grid grid-cols-2 gap-3">
         <select required value={form.contactId}
-          onChange={(e) => setForm({ ...form, contactId: e.target.value })}
+          onChange={(e) => setForm({ ...form, contactId: asId<"ContactId">(e.target.value) })}
           className="rounded border border-gray-300 px-3 py-1.5 text-sm">
           <option value="">Välj kontakt...</option>
           {contacts.map((c) => (

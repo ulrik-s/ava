@@ -5,6 +5,7 @@ import { useState, useRef, useCallback, useMemo } from "react";
 import { useDocSyncStatus } from "@/lib/client/helper/use-helper";
 import { trpc } from "@/lib/client/trpc";
 import type { AppRouter } from "@/lib/server/routers/_app";
+import { asId, type DocumentFolderId, type DocumentId, type MatterId } from "@/lib/shared/schemas/ids";
 import { DocumentRow, type DocumentRecord } from "./_document-row";
 import { DocumentsListView } from "./_documents-list-view";
 import { type DragItem } from "./_drag-helpers";
@@ -18,15 +19,15 @@ const VIEW_MODE_KEY = "ava.documents.viewMode";
 type RegisterInput = inferRouterInputs<AppRouter>["document"]["register"];
 
 interface DocumentBrowserProps {
-  matterId: string;
+  matterId: MatterId;
 }
 
 type DragApi = ReturnType<typeof useDragHandlers>;
 interface RenameApi {
-  renamingFolderId: string | null;
+  renamingFolderId: DocumentFolderId | null;
   renameValue: string;
   setRenameValue: (v: string) => void;
-  setRenamingFolderId: (v: string | null) => void;
+  setRenamingFolderId: (v: DocumentFolderId | null) => void;
 }
 
 export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
@@ -41,7 +42,7 @@ export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
   }
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set());
   const [showNewFolder, setShowNewFolder] = useState(false);
-  const [renamingFolderId, setRenamingFolderId] = useState<string | null>(null);
+  const [renamingFolderId, setRenamingFolderId] = useState<DocumentFolderId | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [analyzingIds, setAnalyzingIds] = useState<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -77,7 +78,7 @@ export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
     [documents, upload.pendingUploads]
   );
 
-  const toggleFolder = useCallback((folderId: string) => {
+  const toggleFolder = useCallback((folderId: DocumentFolderId) => {
     setCollapsedFolders((prev) => {
       const next = new Set(prev);
       if (next.has(folderId)) next.delete(folderId);
@@ -144,7 +145,7 @@ function DocumentTree({
   foldersByParent: Map<string | null, FolderRecord[]>;
   docsByFolder: Map<string | null, DocumentRecord[]>;
   collapsedFolders: Set<string>;
-  toggleFolder: (folderId: string) => void;
+  toggleFolder: (folderId: DocumentFolderId) => void;
   drag: DragApi;
   analyzingIds: Set<string>;
   uploadingIds: Set<string>;
@@ -253,7 +254,7 @@ interface UploadResult { id: string; fileName: string; mimeType: string; sizeByt
  * (#518) — generera id + läs bytes som laddas upp content-adresserat efter
  * register. `serverBytes` är null i FSA-fallet.
  */
-async function resolveUpload(file: File, matterId: string): Promise<{ result: UploadResult; serverBytes: Uint8Array | null }> {
+async function resolveUpload(file: File, matterId: MatterId): Promise<{ result: UploadResult; serverBytes: Uint8Array | null }> {
   const { isFsaSupported, loadHandle } = await import("@/lib/client/fsa/handle-store");
   const handle = isFsaSupported() ? await loadHandle("repo-root") : null;
   if (handle) {
@@ -276,7 +277,7 @@ async function resolveUpload(file: File, matterId: string): Promise<{ result: Up
  * tRPC-register, invalidate och bakgrundsjobb (klassificering + text-extraktion).
  */
 function useFileUpload({ matterId, mutations, fileInputRef }: {
-  matterId: string;
+  matterId: MatterId;
   mutations: ReturnType<typeof useDocumentMutations>;
   fileInputRef: React.RefObject<HTMLInputElement | null>;
 }) {
@@ -313,7 +314,7 @@ function useFileUpload({ matterId, mutations, fileInputRef }: {
       setUploadingIds((s) => {
         const next = new Set(s); next.delete(placeholderId); next.add(result.id); return next;
       });
-      setPendingUploads((p) => p.map((d) => (d.id === placeholderId ? { ...d, id: result.id } : d)));
+      setPendingUploads((p) => p.map((d) => (d.id === placeholderId ? { ...d, id: asId<"DocumentId">(result.id) } : d)));
 
       try {
         await mutations.createFromFsa({
@@ -526,9 +527,9 @@ function BrowserHeader({
  */
 function makePlaceholderDoc({
   id, file, matterId,
-}: { id: string; file: File; matterId: string }): DocumentRecord {
+}: { id: string; file: File; matterId: MatterId }): DocumentRecord {
   return {
-    id,
+    id: asId<"DocumentId">(id),
     fileName: file.name,
     mimeType: file.type || "application/octet-stream",
     sizeBytes: file.size,
@@ -536,7 +537,7 @@ function makePlaceholderDoc({
     version: 1,
     matterId,
     folderId: null,
-    uploadedById: "",
+    uploadedById: asId<"UserId">(""),
     createdAt: new Date().toISOString(),
     uploadedBy: { name: null },
     title: null,
@@ -564,10 +565,10 @@ function useDocumentMutations({
   setRenamingFolderId,
   setAnalyzingIds,
 }: {
-  matterId: string;
+  matterId: MatterId;
   documents: DocumentRecord[];
   setShowNewFolder: (v: boolean) => void;
-  setRenamingFolderId: (v: string | null) => void;
+  setRenamingFolderId: (v: DocumentFolderId | null) => void;
   setAnalyzingIds: React.Dispatch<React.SetStateAction<Set<string>>>;
 }) {
   const utils = trpc.useUtils();
@@ -595,7 +596,7 @@ function useDocumentMutations({
     },
     onSuccess: (_data, { documentId }) => {
       pollAnalysis({
-        documentId,
+        documentId: asId<"DocumentId">(documentId),
         matterId,
         documents,
         utils,
@@ -627,8 +628,8 @@ function pollAnalysis({
   utils,
   clearAnalyzing,
 }: {
-  documentId: string;
-  matterId: string;
+  documentId: DocumentId;
+  matterId: MatterId;
   documents: DocumentRecord[];
   utils: ReturnType<typeof trpc.useUtils>;
   clearAnalyzing: () => void;

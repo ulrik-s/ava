@@ -5,6 +5,7 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { SuggestionsPanel } from "@/components/matter/suggestions-panel";
+import { asId } from "@/lib/shared/schemas/ids";
 
 type Group = {
   key: string;
@@ -75,19 +76,19 @@ const baseGroup = (overrides: Partial<Group> = {}): Group => ({
 describe("SuggestionsPanel", () => {
   it("renderar inget vid isLoading", () => {
     groupsQuery.isLoading = true;
-    const { container } = render(<SuggestionsPanel matterId="m1" />);
+    const { container } = render(<SuggestionsPanel matterId={asId<"MatterId">("m1")} />);
     expect(container).toBeEmptyDOMElement();
   });
 
   it("renderar inget när inga förslag finns", () => {
     groupsQuery.data = [];
-    const { container } = render(<SuggestionsPanel matterId="m1" />);
+    const { container } = render(<SuggestionsPanel matterId={asId<"MatterId">("m1")} />);
     expect(container).toBeEmptyDOMElement();
   });
 
   it("renderar gruppnamn, roll och kontaktdata", () => {
     groupsQuery.data = [baseGroup()];
-    render(<SuggestionsPanel matterId="m1" />);
+    render(<SuggestionsPanel matterId={asId<"MatterId">("m1")} />);
     expect(screen.getByText("Anna Andersson")).toBeInTheDocument();
     expect(screen.getByText(/Klient/i)).toBeInTheDocument();
     expect(screen.getByText(/19800101-1234/)).toBeInTheDocument();
@@ -96,40 +97,40 @@ describe("SuggestionsPanel", () => {
 
   it("visar antal i headern matchande list.length", () => {
     groupsQuery.data = [baseGroup({ key: "a" }), baseGroup({ key: "b", name: "B" })];
-    render(<SuggestionsPanel matterId="m1" />);
+    render(<SuggestionsPanel matterId={asId<"MatterId">("m1")} />);
     expect(screen.getByText("(2)")).toBeInTheDocument();
   });
 
   it("visar källdokument-titel när det finns", () => {
     groupsQuery.data = [baseGroup()];
-    render(<SuggestionsPanel matterId="m1" />);
+    render(<SuggestionsPanel matterId={asId<"MatterId">("m1")} />);
     expect(screen.getByText(/Från: Stämning/)).toBeInTheDocument();
   });
 
   it("visar flera roller på samma kontakt (dedup-fall)", () => {
     groupsQuery.data = [baseGroup({ roles: ["KLIENT", "MOTPART"] })];
-    render(<SuggestionsPanel matterId="m1" />);
+    render(<SuggestionsPanel matterId={asId<"MatterId">("m1")} />);
     // Knapptexten reflekterar antal roller
     expect(screen.getByRole("button", { name: /Godkänn \(2 roller\)/ })).toBeInTheDocument();
   });
 
   it("klick på Godkänn anropar acceptGroup.mutate med suggestionIds", () => {
     groupsQuery.data = [baseGroup({ suggestionIds: ["s1", "s2"] })];
-    render(<SuggestionsPanel matterId="m1" />);
+    render(<SuggestionsPanel matterId={asId<"MatterId">("m1")} />);
     fireEvent.click(screen.getByRole("button", { name: /Godkänn/ }));
     expect(acceptMutate).toHaveBeenCalledWith({ suggestionIds: ["s1", "s2"] });
   });
 
   it("klick på Avvisa anropar rejectGroup.mutate", () => {
     groupsQuery.data = [baseGroup({ suggestionIds: ["s1"] })];
-    render(<SuggestionsPanel matterId="m1" />);
+    render(<SuggestionsPanel matterId={asId<"MatterId">("m1")} />);
     fireEvent.click(screen.getByRole("button", { name: /Avvisa/ }));
     expect(rejectMutate).toHaveBeenCalledWith({ suggestionIds: ["s1"] });
   });
 
   it("renderar notes som listpunkter", () => {
     groupsQuery.data = [baseGroup({ notes: ["Noterad i avtal", "Bekräftad via mail"] })];
-    render(<SuggestionsPanel matterId="m1" />);
+    render(<SuggestionsPanel matterId={asId<"MatterId">("m1")} />);
     expect(screen.getByText("Noterad i avtal")).toBeInTheDocument();
     expect(screen.getByText("Bekräftad via mail")).toBeInTheDocument();
   });
@@ -142,7 +143,7 @@ describe("SuggestionsPanel", () => {
         orgNumber: "556123-4567",
       }),
     ];
-    render(<SuggestionsPanel matterId="m1" />);
+    render(<SuggestionsPanel matterId={asId<"MatterId">("m1")} />);
     expect(screen.getByText(/Orgnr: 556123-4567/)).toBeInTheDocument();
   });
 });

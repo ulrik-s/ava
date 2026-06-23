@@ -11,6 +11,7 @@
 import { useId, useState } from "react";
 import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
+import type { MatterId } from "@/lib/shared/schemas/ids";
 
 interface Receivable {
   id: string;
@@ -27,7 +28,7 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 /** Inline-redigering av ärendets målnummer (domstolens referens). */
-function CourtCaseNumberField({ matterId, value }: { matterId: string; value: string }) {
+function CourtCaseNumberField({ matterId, value }: { matterId: MatterId; value: string }) {
   const id = useId();
   const [text, setText] = useState(value);
   const utils = trpc.useUtils();
@@ -51,7 +52,7 @@ function CourtCaseNumberField({ matterId, value }: { matterId: string; value: st
 }
 
 /** Formulär för att registrera en ny förväntad domstolsbetalning. */
-function AddReceivableForm({ matterId, onAdded }: { matterId: string; onAdded: () => void }) {
+function AddReceivableForm({ matterId, onAdded }: { matterId: MatterId; onAdded: () => void }) {
   const descId = useId();
   const amtId = useId();
   const [desc, setDesc] = useState("");
@@ -122,7 +123,7 @@ function ReceivableRow({ r, onChanged }: { r: Receivable; onChanged: () => void 
  * dig, så panelen är bara förvirrande och döljs. Säkerhetsnät: redan registrerade
  * fordringar visas alltid (annars går de inte att se/pricka av/avbryta).
  */
-export function ExpectedReceivablesSection({ matterId, courtCaseNumber, isCourtMatter }: { matterId: string; courtCaseNumber: string; isCourtMatter: boolean }) {
+export function ExpectedReceivablesSection({ matterId, courtCaseNumber, isCourtMatter }: { matterId: MatterId; courtCaseNumber: string; isCourtMatter: boolean }) {
   const list = trpc.expectedReceivable.list.useQuery({ matterId });
   const utils = trpc.useUtils();
   const refetch = () => void utils.expectedReceivable.list.invalidate({ matterId });

@@ -18,6 +18,7 @@ import {
 } from "@/lib/client/labels";
 import { trpc } from "@/lib/client/trpc";
 import { paymentMethodSchema, type PaymentMethod } from "@/lib/shared/schemas/enums";
+import type { MatterId } from "@/lib/shared/schemas/ids";
 
 const RISK_BADGE: Record<CreditRisk, string> = {
   LOW: "bg-green-50 text-green-700 border-green-200",
@@ -27,7 +28,7 @@ const RISK_BADGE: Record<CreditRisk, string> = {
 };
 
 interface Props {
-  matterId: string;
+  matterId: MatterId;
   paymentMethod: PaymentMethod;
   paymentMethodNote: string | null;
   paymentMethodDecidedAt: Date | string | null;
@@ -77,7 +78,7 @@ function PaymentMethodView({
 }
 
 /** Redigeringsformulär: äger sitt formulär-state + spar-mutationen. */
-function PaymentMethodEditor({ matterId, initial, onDone }: { matterId: string; initial: Props; onDone: () => void }) {
+function PaymentMethodEditor({ matterId, initial, onDone }: { matterId: MatterId; initial: Props; onDone: () => void }) {
   const [method, setMethod] = useState(initial.paymentMethod);
   const [note, setNote] = useState(initial.paymentMethodNote ?? "");
   const [decidedAt, setDecidedAt] = useState(

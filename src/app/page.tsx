@@ -16,6 +16,7 @@ import { Modal } from "@/components/ui/modal";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
 import { formatMinutes } from "@/lib/client/utils";
+import { asId, type UserId } from "@/lib/shared/schemas/ids";
 
 function todayYmd(): string {
   const d = new Date();
@@ -115,8 +116,8 @@ function TodoCard({ ymd }: { ymd: string }) {
         </h2>
         <Link href="/todo" className="text-sm text-blue-600 hover:underline">Öppna alla →</Link>
       </div>
-      <TodoList todo={todo} ymd={ymd} onSelect={setSelected} />
-      <TodoDetailModal selected={selected} meId={me.data?.id ?? null} onClose={() => setSelected(null)} onToggle={toggleDone} />
+      <TodoList todo={todo as TodoQueryLike} ymd={ymd} onSelect={setSelected} />
+      <TodoDetailModal selected={selected} meId={me.data?.id ? asId<"UserId">(me.data.id) : null} onClose={() => setSelected(null)} onToggle={toggleDone} />
     </div>
   );
 }
@@ -141,7 +142,7 @@ function TodoList({ todo, ymd, onSelect }: { todo: TodoQueryLike; ymd: string; o
 /** Detalj-modalen för en vald todo-rad. */
 function TodoDetailModal({ selected, meId, onClose, onToggle }: {
   selected: TodoItem | null;
-  meId: string | null;
+  meId: UserId | null;
   onClose: () => void;
   onToggle: (item: TodoItem) => void;
 }) {
@@ -171,7 +172,7 @@ interface TodoItem {
   kind: string | null;
   location: string | null;
   description?: string | null;
-  userId: string;
+  userId: UserId;
   matter: { id: string; matterNumber: string; title: string } | null;
 }
 

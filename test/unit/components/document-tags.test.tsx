@@ -6,6 +6,7 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { DocumentTags } from "@/components/documents/_document-tags";
+import { asId } from "@/lib/shared/schemas/ids";
 
 const setTagsMutate = vi.fn();
 const treeInvalidate = vi.fn();
@@ -26,13 +27,13 @@ beforeEach(() => {
 
 describe("DocumentTags", () => {
   it("renderar nuvarande etiketter som chips", () => {
-    render(<DocumentTags documentId="d1" matterId="m1" tags={["Sekretess"]} />);
+    render(<DocumentTags documentId={asId<"DocumentId">("d1")} matterId={asId<"MatterId">("m1")} tags={["Sekretess"]} />);
     expect(screen.getByText("Sekretess")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "+ etikett" })).toBeInTheDocument();
   });
 
   it("'+ etikett'-menyn visar bara taggar som inte redan är satta", () => {
-    render(<DocumentTags documentId="d1" matterId="m1" tags={["Sekretess"]} />);
+    render(<DocumentTags documentId={asId<"DocumentId">("d1")} matterId={asId<"MatterId">("m1")} tags={["Sekretess"]} />);
     fireEvent.click(screen.getByRole("button", { name: "+ etikett" }));
     expect(screen.getByRole("button", { name: "Brådskande" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Original" })).toBeInTheDocument();
@@ -41,21 +42,21 @@ describe("DocumentTags", () => {
   });
 
   it("lägga till en etikett anropar setTags med den tillagda", () => {
-    render(<DocumentTags documentId="d1" matterId="m1" tags={["Sekretess"]} />);
+    render(<DocumentTags documentId={asId<"DocumentId">("d1")} matterId={asId<"MatterId">("m1")} tags={["Sekretess"]} />);
     fireEvent.click(screen.getByRole("button", { name: "+ etikett" }));
     fireEvent.click(screen.getByRole("button", { name: "Brådskande" }));
     expect(setTagsMutate).toHaveBeenCalledWith({ documentId: "d1", tags: ["Sekretess", "Brådskande"] });
   });
 
   it("ta bort en etikett anropar setTags utan den", () => {
-    render(<DocumentTags documentId="d1" matterId="m1" tags={["Sekretess", "Original"]} />);
+    render(<DocumentTags documentId={asId<"DocumentId">("d1")} matterId={asId<"MatterId">("m1")} tags={["Sekretess", "Original"]} />);
     fireEvent.click(screen.getByRole("button", { name: "Ta bort etiketten Sekretess" }));
     expect(setTagsMutate).toHaveBeenCalledWith({ documentId: "d1", tags: ["Original"] });
   });
 
   it("inga etiketter + tom vokabulär → renderar inget", () => {
     vocabulary = [];
-    const { container } = render(<DocumentTags documentId="d1" matterId="m1" tags={[]} />);
+    const { container } = render(<DocumentTags documentId={asId<"DocumentId">("d1")} matterId={asId<"MatterId">("m1")} tags={[]} />);
     expect(container).toBeEmptyDOMElement();
   });
 });

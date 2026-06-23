@@ -5,6 +5,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest-compat";
 import { DocumentsListView } from "@/components/documents/_documents-list-view";
+import { asId } from "@/lib/shared/schemas/ids";
 
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
@@ -43,13 +44,19 @@ const baseDoc = (overrides: any = {}) => ({
 });
 
 const baseFolder = (id: string, name: string, parentId: string | null = null) =>
-  ({ id, name, parentId, matterId: "m1", createdAt: new Date() });
+  ({
+    id: asId<"DocumentFolderId">(id),
+    name,
+    parentId: parentId === null ? null : asId<"DocumentFolderId">(parentId),
+    matterId: asId<"MatterId">("m1"),
+    createdAt: new Date(),
+  });
 
 describe("DocumentsListView", () => {
   it("renderar tomt-state när inga docs", () => {
     render(
       <DocumentsListView
-        matterId="m1" documents={[]} folders={[]}
+        matterId={asId<"MatterId">("m1")} documents={[]} folders={[]}
         onDelete={() => {}} onReanalyze={() => {}}
       />,
     );
@@ -61,7 +68,7 @@ describe("DocumentsListView", () => {
     const doc = baseDoc({ folderId: "f1" });
     render(
       <DocumentsListView
-        matterId="m1" documents={[doc]} folders={[folder]}
+        matterId={asId<"MatterId">("m1")} documents={[doc]} folders={[folder]}
         onDelete={() => {}} onReanalyze={() => {}}
       />,
     );
@@ -76,7 +83,7 @@ describe("DocumentsListView", () => {
     const doc = baseDoc({ folderId: "f2" });
     render(
       <DocumentsListView
-        matterId="m1" documents={[doc]} folders={[f1, f2]}
+        matterId={asId<"MatterId">("m1")} documents={[doc]} folders={[f1, f2]}
         onDelete={() => {}} onReanalyze={() => {}}
       />,
     );
@@ -88,7 +95,7 @@ describe("DocumentsListView", () => {
     const doc = baseDoc({ uploadedBy: undefined } as any);
     render(
       <DocumentsListView
-        matterId="m1" documents={[doc]} folders={[]}
+        matterId={asId<"MatterId">("m1")} documents={[doc]} folders={[]}
         onDelete={() => {}} onReanalyze={() => {}}
       />,
     );
@@ -100,7 +107,7 @@ describe("DocumentsListView", () => {
     const doc = baseDoc();
     render(
       <DocumentsListView
-        matterId="m1" documents={[doc]} folders={[]}
+        matterId={asId<"MatterId">("m1")} documents={[doc]} folders={[]}
         onDelete={() => {}} onReanalyze={() => {}}
       />,
     );
@@ -118,7 +125,7 @@ describe("DocumentsListView", () => {
     });
     render(
       <DocumentsListView
-        matterId="m1" documents={[original, sibling]} folders={[]}
+        matterId={asId<"MatterId">("m1")} documents={[original, sibling]} folders={[]}
         onDelete={() => {}} onReanalyze={() => {}}
       />,
     );

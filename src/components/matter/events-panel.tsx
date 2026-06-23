@@ -3,9 +3,10 @@
 import type { inferRouterOutputs } from "@trpc/server";
 import { trpc } from "@/lib/client/trpc";
 import type { AppRouter } from "@/lib/server/routers/_app";
+import type { MatterId } from "@/lib/shared/schemas/ids";
 
 interface EventsPanelProps {
-  matterId: string;
+  matterId: MatterId;
 }
 
 type MatterEvent = inferRouterOutputs<AppRouter>["document"]["events"][number];

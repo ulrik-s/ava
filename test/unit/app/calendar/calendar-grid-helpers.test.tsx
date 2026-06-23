@@ -17,6 +17,7 @@ import {
   getISOWeek,
   bucketEventsByDay,
 } from "@/app/calendar/_calendar-grid";
+import { asId } from "@/lib/shared/schemas/ids";
 
 describe("startOfDay / sameDay / toKey", () => {
   it("startOfDay nollar tiden", () => {
@@ -125,9 +126,9 @@ describe("bucketEventsByDay", () => {
   it("placerar event på rätt dag och sorterar inom dagen", () => {
     const buckets = bucketEventsByDay(
       [
-        { id: "b", userId: "u1", title: "Sen", kind: "appointment", startAt: "2026-01-15T15:00:00Z", allDay: false },
-        { id: "a", userId: "u1", title: "Tidig", kind: "appointment", startAt: "2026-01-15T09:00:00Z", allDay: false },
-        { id: "c", userId: "u2", title: "Frist", kind: "deadline", startAt: "2026-01-22T00:00:00Z", allDay: true },
+        { id: asId<"CalendarEventId">("b"), userId: asId<"UserId">("u1"), title: "Sen", kind: "appointment", startAt: "2026-01-15T15:00:00Z", allDay: false },
+        { id: asId<"CalendarEventId">("a"), userId: asId<"UserId">("u1"), title: "Tidig", kind: "appointment", startAt: "2026-01-15T09:00:00Z", allDay: false },
+        { id: asId<"CalendarEventId">("c"), userId: asId<"UserId">("u2"), title: "Frist", kind: "deadline", startAt: "2026-01-22T00:00:00Z", allDay: true },
       ],
       days,
     );
@@ -138,7 +139,7 @@ describe("bucketEventsByDay", () => {
 
   it("event utanför grid-fönstret hamnar i ingen bucket", () => {
     const buckets = bucketEventsByDay(
-      [{ id: "z", userId: "u1", title: "Långt bort", kind: "appointment", startAt: "2027-05-01T00:00:00Z", allDay: false }],
+      [{ id: asId<"CalendarEventId">("z"), userId: asId<"UserId">("u1"), title: "Långt bort", kind: "appointment", startAt: "2027-05-01T00:00:00Z", allDay: false }],
       days,
     );
     for (const arr of buckets.values()) expect(arr.find((e) => e.id === "z")).toBeUndefined();

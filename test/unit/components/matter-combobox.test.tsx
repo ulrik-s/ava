@@ -12,17 +12,18 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest-compat";
 import { MatterCombobox, type MatterOption } from "@/components/matter/matter-combobox";
+import { asId } from "@/lib/shared/schemas/ids";
 
 const MATTERS: MatterOption[] = [
-  { id: "m-001", matterNumber: "2026-0001", title: "Vårdnadstvist Andersson" },
-  { id: "m-002", matterNumber: "2026-0002", title: "Bostadsrätt Bergman" },
-  { id: "m-016", matterNumber: "2026-0016", title: "Brottmål RH" },
+  { id: asId<"MatterId">("m-001"), matterNumber: "2026-0001", title: "Vårdnadstvist Andersson" },
+  { id: asId<"MatterId">("m-002"), matterNumber: "2026-0002", title: "Bostadsrätt Bergman" },
+  { id: asId<"MatterId">("m-016"), matterNumber: "2026-0016", title: "Brottmål RH" },
 ];
 
 describe("MatterCombobox", () => {
   it("input visar texten användaren skriver", () => {
     const onChange = vi.fn();
-    render(<MatterCombobox matters={MATTERS} value="" onChange={onChange} label="Ärende" />);
+    render(<MatterCombobox matters={MATTERS} value={asId<"MatterId">("")} onChange={onChange} label="Ärende" />);
     const input = screen.getByLabelText("Ärende") as HTMLInputElement;
     fireEvent.change(input, { target: { value: "2026" } });
     expect(input.value).toBe("2026");
@@ -30,7 +31,7 @@ describe("MatterCombobox", () => {
 
   it("ropar onChange med matching id när exakt vald sträng skrivs", () => {
     const onChange = vi.fn();
-    render(<MatterCombobox matters={MATTERS} value="" onChange={onChange} label="Ärende" />);
+    render(<MatterCombobox matters={MATTERS} value={asId<"MatterId">("")} onChange={onChange} label="Ärende" />);
     const input = screen.getByLabelText("Ärende") as HTMLInputElement;
     fireEvent.change(input, { target: { value: "2026-0001 — Vårdnadstvist Andersson" } });
     expect(onChange).toHaveBeenCalledWith("m-001");
@@ -38,7 +39,7 @@ describe("MatterCombobox", () => {
 
   it("ropar onChange('') när input töms", () => {
     const onChange = vi.fn();
-    render(<MatterCombobox matters={MATTERS} value="m-001" onChange={onChange} label="Ärende" />);
+    render(<MatterCombobox matters={MATTERS} value={asId<"MatterId">("m-001")} onChange={onChange} label="Ärende" />);
     const input = screen.getByLabelText("Ärende") as HTMLInputElement;
     fireEvent.change(input, { target: { value: "" } });
     expect(onChange).toHaveBeenLastCalledWith("");
@@ -46,7 +47,7 @@ describe("MatterCombobox", () => {
 
   it("ropar INTE onChange medan användaren bara skriver fritt (delvis match)", () => {
     const onChange = vi.fn();
-    render(<MatterCombobox matters={MATTERS} value="" onChange={onChange} label="Ärende" />);
+    render(<MatterCombobox matters={MATTERS} value={asId<"MatterId">("")} onChange={onChange} label="Ärende" />);
     const input = screen.getByLabelText("Ärende") as HTMLInputElement;
     fireEvent.change(input, { target: { value: "vårdn" } });
     // Ingen full match → onChange ska inte hetta något matter-id
@@ -54,14 +55,14 @@ describe("MatterCombobox", () => {
   });
 
   it("visar valt matter-namn i input när value-prop sätts utifrån", () => {
-    const { rerender } = render(<MatterCombobox matters={MATTERS} value="" onChange={vi.fn()} label="Ärende" />);
-    rerender(<MatterCombobox matters={MATTERS} value="m-016" onChange={vi.fn()} label="Ärende" />);
+    const { rerender } = render(<MatterCombobox matters={MATTERS} value={asId<"MatterId">("")} onChange={vi.fn()} label="Ärende" />);
+    rerender(<MatterCombobox matters={MATTERS} value={asId<"MatterId">("m-016")} onChange={vi.fn()} label="Ärende" />);
     const input = screen.getByLabelText("Ärende") as HTMLInputElement;
     expect(input.value).toBe("2026-0016 — Brottmål RH");
   });
 
   it("renderar alla matter-options i datalist", () => {
-    const { container } = render(<MatterCombobox matters={MATTERS} value="" onChange={vi.fn()} label="Ärende" />);
+    const { container } = render(<MatterCombobox matters={MATTERS} value={asId<"MatterId">("")} onChange={vi.fn()} label="Ärende" />);
     const options = container.querySelectorAll("datalist option");
     expect(options.length).toBe(3);
     expect(options[0]!.getAttribute("value")).toBe("2026-0001 — Vårdnadstvist Andersson");

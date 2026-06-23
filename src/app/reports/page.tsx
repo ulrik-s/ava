@@ -10,6 +10,7 @@ import { formatMinutes, formatCurrency } from "@/lib/client/utils";
 import type { AppRouter } from "@/lib/server/routers/_app";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import type { PaymentMethod } from "@/lib/shared/schemas/enums";
+import { asId, type UserId } from "@/lib/shared/schemas/ids";
 import { ArSummarySection } from "./_ar-summary";
 
 const RISK_BADGE_CLASSES: Record<CreditRisk, string> = {
@@ -31,21 +32,21 @@ function PaymentBadge({ method }: { method: PaymentMethod }) {
   );
 }
 
-type UserList = { users: Array<{ id: string; name: string }> } | undefined;
+type UserList = { users: Array<{ id: UserId; name: string }> } | undefined;
 
 /** Förvald advokat = explicit vald, annars första i listan. Derivat istället
  *  för effekt + setState (undviker kaskaderenderingar). */
-function resolveUserId(explicit: string, users: UserList): string {
-  return explicit || users?.users[0]?.id || "";
+function resolveUserId(explicit: UserId, users: UserList): UserId {
+  return explicit || users?.users[0]?.id || asId<"UserId">("");
 }
 
 /** Namnet på vald advokat (för AR-summary-rubriken). */
-function lawyerNameFor(users: UserList, userId: string): string | undefined {
+function lawyerNameFor(users: UserList, userId: UserId): string | undefined {
   return users?.users.find((u) => u.id === userId)?.name;
 }
 
 /** Hämta Excel-exporten och trigga en nedladdning i browsern. */
-async function exportExcel(from: string, to: string, userId: string): Promise<void> {
+async function exportExcel(from: string, to: string, userId: UserId): Promise<void> {
   const params = new URLSearchParams({ from, to });
   if (userId) params.set("userIds", userId);
   const res = await fetch(`/api/reports/excel?${params}`);
@@ -61,12 +62,12 @@ async function exportExcel(from: string, to: string, userId: string): Promise<vo
 interface FilterBarProps {
   from: string;
   to: string;
-  userId: string;
+  userId: UserId;
   users: UserList;
   canExport: boolean;
   onFrom: (v: string) => void;
   onTo: (v: string) => void;
-  onUser: (v: string) => void;
+  onUser: (v: UserId) => void;
   onExport: () => void;
 }
 
@@ -89,7 +90,7 @@ function ReportsFilterBar({ from, to, userId, users, canExport, onFrom, onTo, on
         </div>
         <div className="flex-1">
           <label htmlFor={lawyerId} className="block text-sm text-gray-500 mb-1">Advokat</label>
-          <select id={lawyerId} value={userId} onChange={(e) => onUser(e.target.value)}
+          <select id={lawyerId} value={userId} onChange={(e) => onUser(asId<"UserId">(e.target.value))}
             className="w-full sm:w-64 rounded-lg border border-gray-300 px-3 py-2 text-sm">
             {!users && <option value="">Laddar...</option>}
             {users?.users.map((u) => (
@@ -114,7 +115,7 @@ export default function ReportsPage() {
 
   const [from, setFrom] = useState(firstOfYear);
   const [to, setTo] = useState(today);
-  const [explicitUserId, setExplicitUserId] = useState<string>("");
+  const [explicitUserId, setExplicitUserId] = useState<UserId>(asId<"UserId">(""));
 
   const users = trpc.user.list.useQuery({});
   const userId = resolveUserId(explicitUserId, users.data);

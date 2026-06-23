@@ -8,6 +8,7 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { PaymentMethodCard } from "@/components/matter/payment-method-card";
+import { asId } from "@/lib/shared/schemas/ids";
 
 const updateMutate = vi.fn();
 
@@ -30,7 +31,7 @@ describe("PaymentMethodCard", () => {
   it("visar 'Rättshjälp' med låg kreditrisk-badge", () => {
     render(
       <PaymentMethodCard
-        matterId="m1"
+        matterId={asId<"MatterId">("m1")}
         paymentMethod="RATTSHJALP"
         paymentMethodNote="Diarienr RH-2026-0217"
         paymentMethodDecidedAt={new Date("2026-03-02")}
@@ -44,7 +45,7 @@ describe("PaymentMethodCard", () => {
   it("visar 'Privat betalning' med hög kreditrisk-badge", () => {
     render(
       <PaymentMethodCard
-        matterId="m1"
+        matterId={asId<"MatterId">("m1")}
         paymentMethod="PRIVAT"
         paymentMethodNote={null}
         paymentMethodDecidedAt={null}
@@ -57,7 +58,7 @@ describe("PaymentMethodCard", () => {
   it("visar 'Ej fastställt' med okänd kreditrisk när paymentMethod=PENDING", () => {
     render(
       <PaymentMethodCard
-        matterId="m1"
+        matterId={asId<"MatterId">("m1")}
         paymentMethod="PENDING"
         paymentMethodNote={null}
         paymentMethodDecidedAt={null}
@@ -70,7 +71,7 @@ describe("PaymentMethodCard", () => {
   it("visar Ändra-knappen för redigering", () => {
     render(
       <PaymentMethodCard
-        matterId="m1"
+        matterId={asId<"MatterId">("m1")}
         paymentMethod="RATTSSKYDD"
         paymentMethodNote="Trygg-Hansa"
         paymentMethodDecidedAt={null}
@@ -82,7 +83,7 @@ describe("PaymentMethodCard", () => {
   it("klick på Ändra öppnar redigeringsformuläret", () => {
     render(
       <PaymentMethodCard
-        matterId="m1"
+        matterId={asId<"MatterId">("m1")}
         paymentMethod="RATTSHJALP"
         paymentMethodNote={null}
         paymentMethodDecidedAt={null}
@@ -96,7 +97,7 @@ describe("PaymentMethodCard", () => {
   it("Avbryt stänger redigeringsformuläret", () => {
     render(
       <PaymentMethodCard
-        matterId="m1"
+        matterId={asId<"MatterId">("m1")}
         paymentMethod="RATTSHJALP"
         paymentMethodNote={null}
         paymentMethodDecidedAt={null}
@@ -110,7 +111,7 @@ describe("PaymentMethodCard", () => {
   it("byter betalningssätt och submittar", () => {
     render(
       <PaymentMethodCard
-        matterId="m1"
+        matterId={asId<"MatterId">("m1")}
         paymentMethod="RATTSHJALP"
         paymentMethodNote={null}
         paymentMethodDecidedAt={null}
@@ -134,7 +135,7 @@ describe("PaymentMethodCard", () => {
   it("visar beslutsdatum när satt", () => {
     render(
       <PaymentMethodCard
-        matterId="m1"
+        matterId={asId<"MatterId">("m1")}
         paymentMethod="RATTSHJALP"
         paymentMethodNote={null}
         paymentMethodDecidedAt={new Date("2026-04-15")}
