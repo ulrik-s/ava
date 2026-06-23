@@ -5,6 +5,7 @@
  */
 
 import type { TimeEntry } from "@/lib/shared/schemas/billing";
+import type { BillingRunId, InvoiceId, MatterId, OrganizationId, TimeEntryId, UserId } from "@/lib/shared/schemas/ids";
 import type { IDataStore } from "../data-store/IDataStore";
 import { InMemoryRepository } from "./in-memory-repository";
 import type {
@@ -25,7 +26,7 @@ export class InMemoryTimeEntryRepository extends InMemoryRepository<TimeEntry> i
     super(store.timeEntries, now ?? (() => new Date()));
   }
 
-  async listForOrg(organizationId: string, opts: TimeEntryListFilter): Promise<TimeEntryListResult> {
+  async listForOrg(organizationId: OrganizationId, opts: TimeEntryListFilter): Promise<TimeEntryListResult> {
     const where = {
       matter: { organizationId },
       ...(opts.matterId ? { matterId: opts.matterId } : {}),
@@ -50,12 +51,12 @@ export class InMemoryTimeEntryRepository extends InMemoryRepository<TimeEntry> i
     return { entries, total, totalMinutes: (agg as { _sum?: { minutes?: number } })._sum?.minutes ?? 0 };
   }
 
-  async getByIdInOrg(id: string, organizationId: string): Promise<TimeEntry | null> {
+  async getByIdInOrg(id: TimeEntryId, organizationId: OrganizationId): Promise<TimeEntry | null> {
     const row = (await this.delegate.findFirst({ where: { id, matter: { organizationId } } })) as TimeEntry | null;
     return row && !(row as { deletedAt?: unknown }).deletedAt ? row : null;
   }
 
-  async listForReport(organizationId: string, filter: TimeEntryReportFilter): Promise<TimeEntryReportRow[]> {
+  async listForReport(organizationId: OrganizationId, filter: TimeEntryReportFilter): Promise<TimeEntryReportRow[]> {
     const userFilter = filter.userIds && filter.userIds.length > 0
       ? { userId: { in: filter.userIds } }
       : filter.userId
@@ -85,7 +86,7 @@ export class InMemoryTimeEntryRepository extends InMemoryRepository<TimeEntry> i
     })) as TimeEntryReportRow[];
   }
 
-  async listUnbilled(matterId: string, ids: string[]): Promise<UnbilledTimeEntry[]> {
+  async listUnbilled(matterId: MatterId, ids: TimeEntryId[]): Promise<UnbilledTimeEntry[]> {
     if (!ids.length) return [];
     return (await this.delegate.findMany({
       where: { id: { in: ids }, matterId, invoiceId: null },
@@ -93,25 +94,25 @@ export class InMemoryTimeEntryRepository extends InMemoryRepository<TimeEntry> i
     })) as UnbilledTimeEntry[];
   }
 
-  async flagBilled(ids: string[], invoiceId: string): Promise<void> {
+  async flagBilled(ids: TimeEntryId[], invoiceId: InvoiceId): Promise<void> {
     if (!ids.length) return;
     await this.delegate.updateMany({ where: { id: { in: ids } }, data: { invoiceId } as Partial<TimeEntry> });
   }
 
-  async listUnfrozenForMatter(matterId: string): Promise<TimeEntry[]> {
+  async listUnfrozenForMatter(matterId: MatterId): Promise<TimeEntry[]> {
     return (await this.delegate.findMany({
       where: { matterId, frozenByBillingRunId: null }, orderBy: { date: "asc" },
     })) as TimeEntry[];
   }
 
-  async freezeForMatter(matterId: string, billingRunId: string, now: Date): Promise<void> {
+  async freezeForMatter(matterId: MatterId, billingRunId: BillingRunId, now: Date): Promise<void> {
     await this.delegate.updateMany({
       where: { matterId, frozenByBillingRunId: null },
       data: { frozenAt: now, frozenByBillingRunId: billingRunId } as Partial<TimeEntry>,
     });
   }
 
-  async freezeByIds(ids: string[], billingRunId: string, now: Date): Promise<void> {
+  async freezeByIds(ids: TimeEntryId[], billingRunId: BillingRunId, now: Date): Promise<void> {
     if (!ids.length) return;
     await this.delegate.updateMany({
       where: { id: { in: ids }, frozenByBillingRunId: null },
@@ -120,7 +121,7 @@ export class InMemoryTimeEntryRepository extends InMemoryRepository<TimeEntry> i
   }
 
   async listForLawyerInPeriod(
-    organizationId: string, userId: string, from: Date, to: Date,
+    organizationId: OrganizationId, userId: UserId, from: Date, to: Date,
   ): Promise<LawyerReportTimeEntry[]> {
     return (await this.delegate.findMany({
       where: { matter: { organizationId }, userId, date: { gte: from, lte: to } },
@@ -129,7 +130,7 @@ export class InMemoryTimeEntryRepository extends InMemoryRepository<TimeEntry> i
     })) as LawyerReportTimeEntry[];
   }
 
-  async listBillableForOrg(organizationId: string): Promise<TimeEntry[]> {
+  async listBillableForOrg(organizationId: OrganizationId): Promise<TimeEntry[]> {
     return (await this.delegate.findMany({
       where: { matter: { organizationId }, billable: true },
     })) as TimeEntry[];

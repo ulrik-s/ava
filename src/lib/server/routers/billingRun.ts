@@ -25,18 +25,23 @@ import {
   matterIdSchema,
   billingRunIdSchema,
   invoiceIdSchema,
+  timeEntryIdSchema,
+  expenseIdSchema,
   asId,
   type BillingRunId,
+  type ExpenseId,
+  type InvoiceId,
   type MatterId,
   type OrganizationId,
+  type TimeEntryId,
 } from "@/lib/shared/schemas/ids";
 import { emit } from "../events/emit";
 import type { Repositories } from "../repositories/repositories";
 import { router, orgProcedure } from "../trpc";
 
 interface UnfrozenWork {
-  timeEntries: Array<{ id: string; minutes: number; hourlyRate: number; billable: boolean }>;
-  expenses: Array<{ id: string; amount: number; billable: boolean }>;
+  timeEntries: Array<{ id: TimeEntryId; minutes: number; hourlyRate: number; billable: boolean }>;
+  expenses: Array<{ id: ExpenseId; amount: number; billable: boolean }>;
 }
 
 /** En itemiserad rad i fakturaförslaget (#397) — tidspost med beräknat värde. */
@@ -69,7 +74,7 @@ function timeEntryValueOre(minutes: number, hourlyRate: number): number {
   return Math.round((minutes / 60) * hourlyRate);
 }
 
-async function fetchUnfrozenWork(repos: Repositories, matterId: string): Promise<UnfrozenWork> {
+async function fetchUnfrozenWork(repos: Repositories, matterId: MatterId): Promise<UnfrozenWork> {
   const te = await repos.timeEntries.listUnfrozenForMatter(matterId);
   const ex = await repos.expenses.listUnfrozenForMatter(matterId);
   return { timeEntries: te, expenses: ex.filter((e) => e.kind !== "PRUTNING") };
@@ -104,12 +109,12 @@ function buildProposal(
 }
 
 /** Summan av tidigare utställda ACCONTO-fakturors belopp för ett ärende (#397). */
-async function sumPriorAccontos(repos: Repositories, matterId: string): Promise<number> {
+async function sumPriorAccontos(repos: Repositories, matterId: MatterId): Promise<number> {
   const runs = (await repos.billingRuns.listAccontoSent(matterId)) as ReadonlyArray<{ amountOre?: number }>;
   return runs.reduce((sum, r) => sum + (r.amountOre ?? 0), 0);
 }
 
-async function freezeWork(repos: Repositories, matterId: string, billingRunId: BillingRunId): Promise<void> {
+async function freezeWork(repos: Repositories, matterId: MatterId, billingRunId: BillingRunId): Promise<void> {
   const now = new Date();
   await repos.timeEntries.freezeForMatter(matterId, billingRunId, now);
   await repos.expenses.freezeForMatter(matterId, billingRunId, now);
@@ -125,14 +130,14 @@ async function freezeWork(repos: Repositories, matterId: string, billingRunId: B
  */
 async function linkFinalInvoice(
   repos: Repositories,
-  invoiceId: string,
+  invoiceId: InvoiceId,
   work: UnfrozenWork,
-  deductedAccontoInvoiceIds: ReadonlyArray<string>,
+  deductedAccontoInvoiceIds: ReadonlyArray<InvoiceId>,
 ): Promise<void> {
   await repos.timeEntries.flagBilled(work.timeEntries.filter((t) => t.billable).map((t) => t.id), invoiceId);
   await repos.expenses.flagBilled(work.expenses.filter((e) => e.billable).map((e) => e.id), invoiceId);
   for (const accontoInvoiceId of deductedAccontoInvoiceIds) {
-    await repos.accontoDeductions.create({ finalInvoiceId: asId<"InvoiceId">(invoiceId), accontoInvoiceId: asId<"InvoiceId">(accontoInvoiceId) });
+    await repos.accontoDeductions.create({ finalInvoiceId: invoiceId, accontoInvoiceId });
   }
 }
 
@@ -144,9 +149,9 @@ async function linkFinalInvoice(
  */
 async function resolveFinalWork(
   repos: Repositories,
-  matterId: string,
-  timeEntryIds: string[] | undefined,
-  expenseIds: string[] | undefined,
+  matterId: MatterId,
+  timeEntryIds: TimeEntryId[] | undefined,
+  expenseIds: ExpenseId[] | undefined,
 ): Promise<{ work: UnfrozenWork; selected: boolean }> {
   if (timeEntryIds === undefined && expenseIds === undefined) {
     return { work: await fetchUnfrozenWork(repos, matterId), selected: false };
@@ -170,7 +175,7 @@ async function resolveFinalWork(
 /** Frys valda poster (per-post) eller hela ärendet (default). */
 async function freezeSelectedWork(
   repos: Repositories,
-  matterId: string,
+  matterId: MatterId,
   work: UnfrozenWork,
   selected: boolean,
   runId: BillingRunId,
@@ -197,11 +202,11 @@ async function assertMatterInOrg(repos: Repositories, matterId: MatterId, orgId:
  */
 async function invoiceNumbering(
   repos: Repositories,
-  orgId: string,
+  orgId: OrganizationId,
   recipient: BillingRunRecipient,
 ): Promise<{ invoiceNumber: string; ocrReference: string | null } | Record<string, never>> {
   if (recipient === "DOMSTOL") return {};
-  const invoiceNumber = await repos.invoices.nextInvoiceNumber(asId<"OrganizationId">(orgId));
+  const invoiceNumber = await repos.invoices.nextInvoiceNumber(orgId);
   return { invoiceNumber, ocrReference: ocrFromInvoiceNumber(invoiceNumber) };
 }
 
@@ -296,8 +301,8 @@ export const billingRunRouter = router({
       recipient: billingRunRecipientSchema,
       deductedBillingRunIds: z.array(billingRunIdSchema).default([]),
       // Per-post-val (#734): anges → fakturera/frys ENBART dessa; utelämnas → allt ofryst.
-      timeEntryIds: z.array(z.string()).optional(),
-      expenseIds: z.array(z.string()).optional(),
+      timeEntryIds: z.array(timeEntryIdSchema).optional(),
+      expenseIds: z.array(expenseIdSchema).optional(),
       // Valfri paritet med legacy (demo/fixtures): klient-id + datum.
       id: invoiceIdSchema.optional(),
       invoiceDate: z.string().optional(),
@@ -325,7 +330,7 @@ export const billingRunRouter = router({
           invoiceId: invoice.id, deductedBillingRunIds: input.deductedBillingRunIds,
           periodTo: new Date(), notes: input.notes,
         });
-        await freezeSelectedWork(tx, input.matterId, work, selected, run.id as BillingRunId);
+        await freezeSelectedWork(tx, input.matterId, work, selected, run.id);
         // Länka posterna + acconto-avdrag → slutfaktura-vyn visar rätt arvode/utlägg (#728).
         await linkFinalInvoice(tx, invoice.id, work, accontoInvoiceIds(deductedRuns));
         await emit.invoiceCreated(ctx, invoice);
@@ -364,10 +369,10 @@ export const billingRunRouter = router({
           throw new TRPCError({ code: "BAD_REQUEST", message: "Bara KOSTNADSRAKNING i PENDING_VERDICT kan domsläggas." });
         }
         const finalAmount = Math.max(0, run.workValueOreAtRun + input.prutningOre);
-        let prutningExpenseId: string | undefined;
+        let prutningExpenseId: ExpenseId | undefined;
         if (input.prutningOre < 0) {
           const prutning = await tx.expenses.create({
-            matterId: run.matterId, userId: asId<"UserId">(ctx.user.id), date: new Date(),
+            matterId: run.matterId, userId: ctx.user.id, date: new Date(),
             amount: input.prutningOre, description: "Prutning enligt dom",
             billable: true, vatRate: 0, vatIncluded: false, kind: "PRUTNING",
           });
@@ -383,7 +388,7 @@ export const billingRunRouter = router({
         await tx.billingRuns.update(run.id, {
           status: "SENT", invoiceId: invoice.id, amountOre: finalAmount, prutningOre: input.prutningOre,
         });
-        await freezeWork(tx, run.matterId, run.id as BillingRunId);
+        await freezeWork(tx, run.matterId, run.id);
         // Länka poster + PRUTNING-utlägget → kostnadsräknings-vyn visar uppdelning
         // och totalen (arvode + utlägg − prutning) reconciler mot beloppet (#732).
         await linkFinalInvoice(tx, invoice.id, work, []);
@@ -402,8 +407,8 @@ export const billingRunRouter = router({
  */
 async function fetchDeductedAccontoRuns(
   repos: Repositories,
-  matterId: string,
-  ids: ReadonlyArray<string>,
+  matterId: MatterId,
+  ids: ReadonlyArray<BillingRunId>,
 ): Promise<BillingRun[]> {
   if (ids.length === 0) return [];
   const runs = await repos.billingRuns.listAccontoByIds(matterId, [...ids]);
@@ -417,6 +422,6 @@ async function fetchDeductedAccontoRuns(
 }
 
 /** Acconto-fakturornas id ur avdragna körningar (för acconto_deductions-raderna). */
-function accontoInvoiceIds(runs: ReadonlyArray<BillingRun>): string[] {
+function accontoInvoiceIds(runs: ReadonlyArray<BillingRun>): InvoiceId[] {
   return runs.map((r) => r.invoiceId).filter((id): id is NonNullable<typeof id> => id != null);
 }

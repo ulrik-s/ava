@@ -6,7 +6,7 @@ import {
   type FrozenWorkInput,
 } from "@/lib/shared/billed-per-lawyer";
 import type { InvoiceStatus, PaymentMethod } from "@/lib/shared/schemas/enums";
-import { asId, userIdSchema } from "@/lib/shared/schemas/ids";
+import { asId, userIdSchema, type InvoiceId } from "@/lib/shared/schemas/ids";
 import { router, protectedProcedure } from "../trpc";
 
 /**
@@ -387,7 +387,7 @@ export const reportsRouter = router({
       ]);
       // Avskrivningar org-scopas via fakturornas id:n (tidigare global findMany).
       const writeOffs = await ctx.repos.writeOffs.listByInvoiceIds(
-        (invoices as Array<{ id: string }>).map((i) => i.id),
+        (invoices as Array<{ id: InvoiceId }>).map((i) => i.id),
       );
 
       if (!user) return null;
@@ -443,7 +443,7 @@ export const reportsRouter = router({
       toDate.setUTCHours(23, 59, 59, 999);
       const org = ctx.user.organizationId;
       const invoices = await ctx.repos.invoices.listForOrg(asId<"OrganizationId">(org));
-      const ids = (invoices as Array<{ id: string }>).map((i) => i.id);
+      const ids = (invoices as Array<{ id: InvoiceId }>).map((i) => i.id);
       const [payments, writeOffs] = await Promise.all([
         ctx.repos.payments.listByInvoiceIds(ids),
         ctx.repos.writeOffs.listByInvoiceIds(ids),

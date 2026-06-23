@@ -4,16 +4,17 @@
  */
 
 import type { ExpectedReceivable, ExpectedReceivableStatus } from "@/lib/shared/schemas/billing";
+import type { ExpectedReceivableId, MatterId, OrganizationId } from "@/lib/shared/schemas/ids";
 import type { Repository } from "./types";
 
 export interface ExpectedReceivableListFilter {
-  matterId?: string | undefined;
+  matterId?: MatterId | undefined;
   status?: ExpectedReceivableStatus | undefined;
 }
 
 export interface ExpectedReceivableRepository extends Repository<ExpectedReceivable> {
   /** Org:ens fordringar (nyaste först), valfritt filtrerade på ärende/status. */
-  listForOrg(organizationId: string, filter?: ExpectedReceivableListFilter): Promise<ExpectedReceivable[]>;
+  listForOrg(organizationId: OrganizationId, filter?: ExpectedReceivableListFilter): Promise<ExpectedReceivable[]>;
   /** Fordran by id, org-scopad (null om saknas/annan org/raderad). */
-  getByIdInOrg(id: string, organizationId: string): Promise<ExpectedReceivable | null>;
+  getByIdInOrg(id: ExpectedReceivableId, organizationId: OrganizationId): Promise<ExpectedReceivable | null>;
 }

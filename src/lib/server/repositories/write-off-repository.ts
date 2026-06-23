@@ -5,11 +5,12 @@
  */
 
 import type { WriteOff } from "@/lib/shared/schemas/billing";
+import type { InvoiceId } from "@/lib/shared/schemas/ids";
 import type { Repository } from "./types";
 
 export interface WriteOffRepository extends Repository<WriteOff> {
   /** Summa av alla (icke-raderade) avskrivningar på en faktura (öre). */
-  sumByInvoice(invoiceId: string): Promise<number>;
+  sumByInvoice(invoiceId: InvoiceId): Promise<number>;
   /** Avskrivningar för en uppsättning fakturor (rapporter). Tom lista vid tomma ids. */
-  listByInvoiceIds(invoiceIds: string[]): Promise<WriteOff[]>;
+  listByInvoiceIds(invoiceIds: InvoiceId[]): Promise<WriteOff[]>;
 }

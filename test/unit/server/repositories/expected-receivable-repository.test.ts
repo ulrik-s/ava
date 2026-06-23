@@ -26,10 +26,10 @@ describe("ExpectedReceivableRepository — in-memory", () => {
       ],
     }, async () => {});
     const repo = new InMemoryExpectedReceivableRepository(store);
-    expect(await repo.listForOrg("org-1")).toHaveLength(2);
-    expect(await repo.listForOrg("org-1", { status: "PENDING" })).toHaveLength(1);
-    expect(await repo.getByIdInOrg(r1, "org-1")).toMatchObject({ id: r1 });
-    expect(await repo.getByIdInOrg(r1, "org-2")).toBeNull();
+    expect(await repo.listForOrg(asId<"OrganizationId">("org-1"))).toHaveLength(2);
+    expect(await repo.listForOrg(asId<"OrganizationId">("org-1"), { status: "PENDING" })).toHaveLength(1);
+    expect(await repo.getByIdInOrg(asId<"ExpectedReceivableId">(r1), asId<"OrganizationId">("org-1"))).toMatchObject({ id: r1 });
+    expect(await repo.getByIdInOrg(asId<"ExpectedReceivableId">(r1), asId<"OrganizationId">("org-2"))).toBeNull();
     expect(await new InMemoryMatterRepository(store).listByOrg(asId<"OrganizationId">("org-1"))).toHaveLength(1);
   });
 });
@@ -50,10 +50,10 @@ describe("ExpectedReceivableRepository — Drizzle (pglite)", () => {
     await db.insert(expectedReceivables).values(v({ id: r1, organizationId: org, matterId: mId, description: "A", expectedAmount: 100, status: "PENDING", recordedById: uuidv7() }));
     await db.insert(expectedReceivables).values(v({ id: uuidv7(), organizationId: org, matterId: mId, description: "B", expectedAmount: 50, status: "SETTLED", recordedById: uuidv7() }));
     const repo = new DrizzleExpectedReceivableRepository(handle.db);
-    expect(await repo.listForOrg(org)).toHaveLength(2);
-    expect(await repo.listForOrg(org, { status: "PENDING" })).toHaveLength(1);
-    expect(await repo.getByIdInOrg(r1, org)).toMatchObject({ id: r1 });
-    expect(await repo.getByIdInOrg(r1, uuidv7())).toBeNull();
+    expect(await repo.listForOrg(asId<"OrganizationId">(org))).toHaveLength(2);
+    expect(await repo.listForOrg(asId<"OrganizationId">(org), { status: "PENDING" })).toHaveLength(1);
+    expect(await repo.getByIdInOrg(asId<"ExpectedReceivableId">(r1), asId<"OrganizationId">(org))).toMatchObject({ id: r1 });
+    expect(await repo.getByIdInOrg(asId<"ExpectedReceivableId">(r1), asId<"OrganizationId">(uuidv7()))).toBeNull();
     expect(await new DrizzleMatterRepository(handle.db).listByOrg(asId<"OrganizationId">(org))).toHaveLength(1);
   });
 });

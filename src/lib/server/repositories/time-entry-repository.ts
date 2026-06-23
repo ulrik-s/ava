@@ -6,6 +6,7 @@
 
 import type { TimeEntry } from "@/lib/shared/schemas/billing";
 import type { PaymentMethod } from "@/lib/shared/schemas/enums";
+import type { BillingRunId, InvoiceId, MatterId, OrganizationId, TimeEntryId, UserId } from "@/lib/shared/schemas/ids";
 import type { Repository } from "./types";
 
 /** Tidspost + juristens timtaxa (det fakturaberäkningen behöver). */
@@ -15,14 +16,14 @@ export interface UnbilledTimeEntry extends TimeEntry {
 
 /** Tidspost + relationer för listvyn. matter alltid satt (matterId NOT NULL FK). */
 export interface TimeEntryListRow extends TimeEntry {
-  user: { id: string; name: string } | null;
-  matter: { id: string; matterNumber: string; title: string };
-  invoice: { id: string; invoiceNumber: string | null } | null;
+  user: { id: UserId; name: string } | null;
+  matter: { id: MatterId; matterNumber: string; title: string };
+  invoice: { id: InvoiceId; invoiceNumber: string | null } | null;
 }
 
 export interface TimeEntryListFilter {
-  matterId?: string | undefined;
-  userId?: string | undefined;
+  matterId?: MatterId | undefined;
+  userId?: UserId | undefined;
   from?: Date | undefined;
   to?: Date | undefined;
   page: number;
@@ -37,21 +38,21 @@ export interface TimeEntryListResult {
 
 /** Tidspost för tidsrapporten — med jurist + ärende inkl. klient-kontakten (KLIENT). */
 export interface TimeEntryReportRow extends TimeEntry {
-  user: { id: string; name: string };
-  matter: { id: string; matterNumber: string; title: string; contacts: Array<{ contact: { name: string } }> } | null;
+  user: { id: UserId; name: string };
+  matter: { id: MatterId; matterNumber: string; title: string; contacts: Array<{ contact: { name: string } }> } | null;
 }
 
 export interface TimeEntryReportFilter {
   from: Date;
   to: Date;
-  userId?: string | undefined;
-  userIds?: string[] | undefined;
-  matterId?: string | undefined;
+  userId?: UserId | undefined;
+  userIds?: UserId[] | undefined;
+  matterId?: MatterId | undefined;
 }
 
 /** Ärende-projektionen advokatrapporten (reports.perLawyer) läser. */
 export interface ReportMatterRef {
-  id: string;
+  id: MatterId;
   matterNumber: string;
   title: string;
   paymentMethod: PaymentMethod;
@@ -67,23 +68,23 @@ export interface LawyerReportTimeEntry extends TimeEntry {
 
 export interface TimeEntryRepository extends Repository<TimeEntry> {
   /** Org-scopad paginerad lista (datum desc) + total + summa minuter. */
-  listForOrg(organizationId: string, filter: TimeEntryListFilter): Promise<TimeEntryListResult>;
+  listForOrg(organizationId: OrganizationId, filter: TimeEntryListFilter): Promise<TimeEntryListResult>;
   /** Tidspost by id, org-scopad via ärendet (null om saknas/annan org/raderad). */
-  getByIdInOrg(id: string, organizationId: string): Promise<TimeEntry | null>;
+  getByIdInOrg(id: TimeEntryId, organizationId: OrganizationId): Promise<TimeEntry | null>;
   /** Tidsrapport-rader (jurist + ärende + KLIENT-kontakt), org-scopat, userId asc / date asc. */
-  listForReport(organizationId: string, filter: TimeEntryReportFilter): Promise<TimeEntryReportRow[]>;
+  listForReport(organizationId: OrganizationId, filter: TimeEntryReportFilter): Promise<TimeEntryReportRow[]>;
   /** Valda ofakturerade tidsposter i ett ärende (med user.hourlyRate). Tom lista vid tomma ids. */
-  listUnbilled(matterId: string, ids: string[]): Promise<UnbilledTimeEntry[]>;
+  listUnbilled(matterId: MatterId, ids: TimeEntryId[]): Promise<UnbilledTimeEntry[]>;
   /** Koppla tidsposter till en faktura (sätter invoiceId). No-op vid tomma ids. */
-  flagBilled(ids: string[], invoiceId: string): Promise<void>;
+  flagBilled(ids: TimeEntryId[], invoiceId: InvoiceId): Promise<void>;
   /** Ofrysta tidsposter i ett ärende (date asc) — underlag för billing-run. */
-  listUnfrozenForMatter(matterId: string): Promise<TimeEntry[]>;
+  listUnfrozenForMatter(matterId: MatterId): Promise<TimeEntry[]>;
   /** Frys alla ofrysta tidsposter i ett ärende mot en billing-run (bulk). */
-  freezeForMatter(matterId: string, billingRunId: string, now: Date): Promise<void>;
+  freezeForMatter(matterId: MatterId, billingRunId: BillingRunId, now: Date): Promise<void>;
   /** Frys ENBART de angivna (ofrysta) tidsposterna mot en billing-run — per-post-val. */
-  freezeByIds(ids: string[], billingRunId: string, now: Date): Promise<void>;
+  freezeByIds(ids: TimeEntryId[], billingRunId: BillingRunId, now: Date): Promise<void>;
   /** En advokats tidsposter i en period (date asc), med ärende-ref (perLawyer-rapporten). */
-  listForLawyerInPeriod(organizationId: string, userId: string, from: Date, to: Date): Promise<LawyerReportTimeEntry[]>;
+  listForLawyerInPeriod(organizationId: OrganizationId, userId: UserId, from: Date, to: Date): Promise<LawyerReportTimeEntry[]>;
   /** Alla debiterbara tidsposter i org:en (för fakturerat/AR-attribuering). */
-  listBillableForOrg(organizationId: string): Promise<TimeEntry[]>;
+  listBillableForOrg(organizationId: OrganizationId): Promise<TimeEntry[]>;
 }

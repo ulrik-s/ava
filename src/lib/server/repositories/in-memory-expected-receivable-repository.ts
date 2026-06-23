@@ -3,6 +3,7 @@
  */
 
 import type { ExpectedReceivable } from "@/lib/shared/schemas/billing";
+import type { ExpectedReceivableId, OrganizationId } from "@/lib/shared/schemas/ids";
 import type { IDataStore } from "../data-store/IDataStore";
 import type { ExpectedReceivableListFilter, ExpectedReceivableRepository } from "./expected-receivable-repository";
 import { InMemoryRepository } from "./in-memory-repository";
@@ -16,7 +17,7 @@ export class InMemoryExpectedReceivableRepository
     super(store.expectedReceivables, now ?? (() => new Date()));
   }
 
-  async listForOrg(organizationId: string, filter?: ExpectedReceivableListFilter): Promise<ExpectedReceivable[]> {
+  async listForOrg(organizationId: OrganizationId, filter?: ExpectedReceivableListFilter): Promise<ExpectedReceivable[]> {
     return (await this.delegate.findMany({
       where: {
         organizationId,
@@ -27,7 +28,7 @@ export class InMemoryExpectedReceivableRepository
     })) as ExpectedReceivable[];
   }
 
-  async getByIdInOrg(id: string, organizationId: string): Promise<ExpectedReceivable | null> {
+  async getByIdInOrg(id: ExpectedReceivableId, organizationId: OrganizationId): Promise<ExpectedReceivable | null> {
     const row = (await this.delegate.findFirst({ where: { id, organizationId } })) as ExpectedReceivable | null;
     return row && !(row as { deletedAt?: unknown }).deletedAt ? row : null;
   }

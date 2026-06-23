@@ -61,15 +61,15 @@ describe("PaymentPlanRepository — in-memory", () => {
       paymentPlans: [plan({ id: planId, invoiceId })],
     }, async () => {});
     const repo = new InMemoryPaymentPlanRepository(store);
-    expect(await repo.getByIdInOrg(planId, "org-1")).toMatchObject({ id: planId });
-    expect(await repo.getByIdInOrg(planId, "org-2")).toBeNull(); // fel org
+    expect(await repo.getByIdInOrg(asId<"PaymentPlanId">(planId), asId<"OrganizationId">("org-1"))).toMatchObject({ id: planId });
+    expect(await repo.getByIdInOrg(asId<"PaymentPlanId">(planId), asId<"OrganizationId">("org-2"))).toBeNull(); // fel org
   });
 
   it("getByInvoiceId hämtar planen för en faktura", async () => {
     const store = new LocalStore({ paymentPlans: [plan({ id: planId, invoiceId })] }, async () => {});
     const repo = new InMemoryPaymentPlanRepository(store);
-    expect(await repo.getByInvoiceId(invoiceId)).toMatchObject({ id: planId });
-    expect(await repo.getByInvoiceId(uuidv7())).toBeNull(); // ingen plan
+    expect(await repo.getByInvoiceId(asId<"InvoiceId">(invoiceId))).toMatchObject({ id: planId });
+    expect(await repo.getByInvoiceId(asId<"InvoiceId">(uuidv7()))).toBeNull(); // ingen plan
   });
 
   it("listForOrg/getByIdWithDetails/listActiveForScan joinar faktura+KLIENT+påminnelser", async () => {
@@ -86,16 +86,16 @@ describe("PaymentPlanRepository — in-memory", () => {
     }, async () => {});
     const repo = new InMemoryPaymentPlanRepository(store);
 
-    const list = await repo.listForOrg("org-1");
+    const list = await repo.listForOrg(asId<"OrganizationId">("org-1"));
     expect(list).toHaveLength(1);
     expect(list[0]!.invoice?.matter?.contacts[0]?.contact.name).toBe("Klient AB");
     expect(list[0]!.invoice?.payments[0]?.amount).toBe(200);
-    expect(await repo.listForOrg("org-2")).toHaveLength(0);
+    expect(await repo.listForOrg(asId<"OrganizationId">("org-2"))).toHaveLength(0);
 
-    const detail = await repo.getByIdWithDetails(planId, "org-1");
+    const detail = await repo.getByIdWithDetails(asId<"PaymentPlanId">(planId), asId<"OrganizationId">("org-1"));
     expect(detail?.reminders[0]?.dueMonth).toBe("2026-06");
 
-    const scan = await repo.listActiveForScan("org-1");
+    const scan = await repo.listActiveForScan(asId<"OrganizationId">("org-1"));
     expect(scan).toHaveLength(1);
     expect(scan[0]!.invoice?.matter?.contacts[0]?.contact.email).toBe("k@x.se");
     expect(scan[0]!.reminders).toHaveLength(1);
@@ -124,8 +124,8 @@ describe("PaymentPlanRepository — Drizzle (pglite)", () => {
     await db.insert(paymentPlans).values(v({ id: pId, invoiceId: invId, monthlyAmount: 100, dayOfMonth: 15, startDate: new Date(), status: "ACTIVE" }));
 
     const repo = new DrizzlePaymentPlanRepository(handle.db);
-    expect(await repo.getByIdInOrg(pId, org)).toMatchObject({ id: pId });
-    expect(await repo.getByIdInOrg(pId, uuidv7())).toBeNull(); // fel org
+    expect(await repo.getByIdInOrg(asId<"PaymentPlanId">(pId), asId<"OrganizationId">(org))).toMatchObject({ id: pId });
+    expect(await repo.getByIdInOrg(asId<"PaymentPlanId">(pId), asId<"OrganizationId">(uuidv7()))).toBeNull(); // fel org
   });
 
   it("getByInvoiceId hämtar planen för en faktura", async () => {
@@ -136,8 +136,8 @@ describe("PaymentPlanRepository — Drizzle (pglite)", () => {
     const v = (o: Record<string, unknown>) => ({ version: 1, ...o }) as any;
     await db.insert(paymentPlans).values(v({ id: pId, invoiceId: invId, monthlyAmount: 100, dayOfMonth: 15, startDate: new Date(), status: "ACTIVE" }));
     const repo = new DrizzlePaymentPlanRepository(handle.db);
-    expect(await repo.getByInvoiceId(invId)).toMatchObject({ id: pId });
-    expect(await repo.getByInvoiceId(uuidv7())).toBeNull(); // ingen plan
+    expect(await repo.getByInvoiceId(asId<"InvoiceId">(invId))).toMatchObject({ id: pId });
+    expect(await repo.getByInvoiceId(asId<"InvoiceId">(uuidv7()))).toBeNull(); // ingen plan
   });
 
   it("listForOrg/getByIdWithDetails/listActiveForScan joinar faktura+KLIENT+påminnelser", async () => {
@@ -158,16 +158,16 @@ describe("PaymentPlanRepository — Drizzle (pglite)", () => {
     await db.insert(paymentPlanReminders).values(v({ id: uuidv7(), planId: pId, dueMonth: "2026-06", type: "DUE", sentAt: new Date() }));
     const repo = new DrizzlePaymentPlanRepository(handle.db);
 
-    const list = await repo.listForOrg(org);
+    const list = await repo.listForOrg(asId<"OrganizationId">(org));
     expect(list).toHaveLength(1);
     expect(list[0]!.invoice?.matter?.contacts[0]?.contact.name).toBe("Klient AB");
     expect(list[0]!.invoice?.payments[0]?.amount).toBe(200);
-    expect(await repo.listForOrg(uuidv7())).toHaveLength(0);
+    expect(await repo.listForOrg(asId<"OrganizationId">(uuidv7()))).toHaveLength(0);
 
-    const detail = await repo.getByIdWithDetails(pId, org);
+    const detail = await repo.getByIdWithDetails(asId<"PaymentPlanId">(pId), asId<"OrganizationId">(org));
     expect(detail?.reminders[0]?.dueMonth).toBe("2026-06");
 
-    const scan = await repo.listActiveForScan(org);
+    const scan = await repo.listActiveForScan(asId<"OrganizationId">(org));
     expect(scan).toHaveLength(1);
     expect(scan[0]!.invoice?.matter?.contacts[0]?.contact.email).toBe("k@x.se");
     expect(scan[0]!.reminders).toHaveLength(1);

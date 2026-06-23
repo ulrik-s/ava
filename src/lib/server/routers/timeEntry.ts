@@ -117,7 +117,7 @@ export const timeEntryRouter = router({
         from: z.string(),
         to: z.string(),
         userId: userIdSchema.optional(),
-        userIds: z.array(z.string()).optional(),
+        userIds: z.array(userIdSchema).optional(),
         matterId: matterIdSchema.optional(),
       })
     )

@@ -17,6 +17,7 @@ import { InMemoryPaymentRepository } from "@/lib/server/repositories/in-memory-p
 import { InMemoryTimeEntryRepository } from "@/lib/server/repositories/in-memory-time-entry-repository";
 import { InMemoryWriteOffRepository } from "@/lib/server/repositories/in-memory-write-off-repository";
 import { prebakeJoins } from "@/lib/shared/demo-source";
+import { asId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { createTestDb, type TestDbHandle } from "../db/pg-test-db";
 
@@ -55,15 +56,15 @@ describe("Report-läsningar — in-memory", () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const wo = new InMemoryWriteOffRepository(store as any);
 
-    const lawyerTime = await te.listForLawyerInPeriod(ORG, uId, FROM, TO);
+    const lawyerTime = await te.listForLawyerInPeriod(asId<"OrganizationId">(ORG), asId<"UserId">(uId), FROM, TO);
     expect(lawyerTime).toHaveLength(2); // jan-posten utanför perioden
     expect(lawyerTime[0]!.matter?.paymentMethod).toBe("RATTSHJALP");
     expect(lawyerTime[0]!.matter?.contacts[0]?.contact.name).toBe("Klient AB");
-    expect((await te.listBillableForOrg(ORG)).length).toBe(2); // 2 billable totalt
-    expect(await ex.listForLawyerInPeriod(ORG, uId, FROM, TO)).toHaveLength(1);
-    expect((await pay.listByInvoiceIds([invId]))[0]!.amount).toBe(200);
+    expect((await te.listBillableForOrg(asId<"OrganizationId">(ORG))).length).toBe(2); // 2 billable totalt
+    expect(await ex.listForLawyerInPeriod(asId<"OrganizationId">(ORG), asId<"UserId">(uId), FROM, TO)).toHaveLength(1);
+    expect((await pay.listByInvoiceIds([asId<"InvoiceId">(invId)]))[0]!.amount).toBe(200);
     expect(await pay.listByInvoiceIds([])).toHaveLength(0);
-    expect((await wo.listByInvoiceIds([invId]))[0]!.amount).toBe(100);
+    expect((await wo.listByInvoiceIds([asId<"InvoiceId">(invId)]))[0]!.amount).toBe(100);
   });
 });
 
@@ -97,14 +98,14 @@ describe("Report-läsningar — Drizzle (pglite)", () => {
     const pay = new DrizzlePaymentRepository(db);
     const wo = new DrizzleWriteOffRepository(db);
 
-    const lawyerTime = await te.listForLawyerInPeriod(org, uId, FROM, TO);
+    const lawyerTime = await te.listForLawyerInPeriod(asId<"OrganizationId">(org), asId<"UserId">(uId), FROM, TO);
     expect(lawyerTime).toHaveLength(2);
     expect(lawyerTime[0]!.matter?.paymentMethod).toBe("RATTSHJALP");
     expect(lawyerTime[0]!.matter?.contacts[0]?.contact.name).toBe("Klient AB");
-    expect((await te.listBillableForOrg(org)).length).toBe(2);
-    expect(await ex.listForLawyerInPeriod(org, uId, FROM, TO)).toHaveLength(1);
-    expect((await pay.listByInvoiceIds([invId]))[0]!.amount).toBe(200);
+    expect((await te.listBillableForOrg(asId<"OrganizationId">(org))).length).toBe(2);
+    expect(await ex.listForLawyerInPeriod(asId<"OrganizationId">(org), asId<"UserId">(uId), FROM, TO)).toHaveLength(1);
+    expect((await pay.listByInvoiceIds([asId<"InvoiceId">(invId)]))[0]!.amount).toBe(200);
     expect(await pay.listByInvoiceIds([])).toHaveLength(0);
-    expect((await wo.listByInvoiceIds([invId]))[0]!.amount).toBe(100);
+    expect((await wo.listByInvoiceIds([asId<"InvoiceId">(invId)]))[0]!.amount).toBe(100);
   });
 });

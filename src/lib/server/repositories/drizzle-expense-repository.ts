@@ -8,7 +8,7 @@
 
 import { and, asc, desc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
 import type { Expense } from "@/lib/shared/schemas/billing";
-import { asId } from "@/lib/shared/schemas/ids";
+import { asId, type BillingRunId, type ExpenseId, type InvoiceId, type MatterId, type OrganizationId, type UserId } from "@/lib/shared/schemas/ids";
 import { expenses, invoices, matters, users } from "../db/schema";
 import type { AppDb } from "../db/types";
 import { DrizzleRepository, versionedTable } from "./drizzle-repository";
@@ -27,10 +27,10 @@ export class DrizzleExpenseRepository extends DrizzleRepository<Expense> impleme
     return matterOrg(this.db, (row as { matterId?: string }).matterId);
   }
 
-  async listForOrg(organizationId: string, opts: ExpenseListOptions): Promise<ExpenseListResult> {
+  async listForOrg(organizationId: OrganizationId, opts: ExpenseListOptions): Promise<ExpenseListResult> {
     const where = and(
-      eq(matters.organizationId, asId<"OrganizationId">(organizationId)),
-      opts.matterId ? eq(expenses.matterId, asId<"MatterId">(opts.matterId)) : undefined,
+      eq(matters.organizationId, organizationId),
+      opts.matterId ? eq(expenses.matterId, opts.matterId) : undefined,
     );
     const rows = await this.db
       .select({
@@ -52,7 +52,7 @@ export class DrizzleExpenseRepository extends DrizzleRepository<Expense> impleme
     return {
       expenses: rows.map((r): ExpenseListRow => ({
         ...r.exp,
-        user: r.uId ? { id: r.uId, name: r.uName ?? "" } : null,
+        user: r.uId ? { id: asId<"UserId">(r.uId), name: r.uName ?? "" } : null,
         matter: r.mId ? { id: r.mId, matterNumber: r.mNum ?? "", title: r.mTitle ?? "" } : null,
         invoice: r.invId ? { id: r.invId, invoiceNumber: r.invNum } : null,
       })),
@@ -61,52 +61,52 @@ export class DrizzleExpenseRepository extends DrizzleRepository<Expense> impleme
     };
   }
 
-  async getByIdInOrg(id: string, organizationId: string): Promise<Expense | null> {
+  async getByIdInOrg(id: ExpenseId, organizationId: OrganizationId): Promise<Expense | null> {
     const rows = await this.db
       .select({ exp: expenses }).from(expenses)
       .innerJoin(matters, eq(expenses.matterId, matters.id))
-      .where(and(eq(expenses.id, asId<"ExpenseId">(id)), eq(matters.organizationId, asId<"OrganizationId">(organizationId)), isNull(expenses.deletedAt)))
+      .where(and(eq(expenses.id, id), eq(matters.organizationId, organizationId), isNull(expenses.deletedAt)))
       .limit(1);
     return rows[0]?.exp ?? null;
   }
 
-  async listUnbilled(matterId: string, ids: string[]): Promise<Expense[]> {
+  async listUnbilled(matterId: MatterId, ids: ExpenseId[]): Promise<Expense[]> {
     if (!ids.length) return [];
     const rows = await this.db
       .select().from(expenses)
-      .where(and(inArray(expenses.id, ids.map((i) => asId<"ExpenseId">(i))), eq(expenses.matterId, asId<"MatterId">(matterId)), isNull(expenses.invoiceId)));
+      .where(and(inArray(expenses.id, ids), eq(expenses.matterId, matterId), isNull(expenses.invoiceId)));
     return rows;
   }
 
-  async flagBilled(ids: string[], invoiceId: string): Promise<void> {
+  async flagBilled(ids: ExpenseId[], invoiceId: InvoiceId): Promise<void> {
     if (!ids.length) return;
-    await this.db.update(expenses).set({ invoiceId: asId<"InvoiceId">(invoiceId) })
-      .where(inArray(expenses.id, ids.map((i) => asId<"ExpenseId">(i))));
+    await this.db.update(expenses).set({ invoiceId })
+      .where(inArray(expenses.id, ids));
   }
 
-  async listUnfrozenForMatter(matterId: string): Promise<Expense[]> {
+  async listUnfrozenForMatter(matterId: MatterId): Promise<Expense[]> {
     const rows = await this.db
       .select().from(expenses)
-      .where(and(eq(expenses.matterId, asId<"MatterId">(matterId)), isNull(expenses.frozenByBillingRunId), isNull(expenses.deletedAt)))
+      .where(and(eq(expenses.matterId, matterId), isNull(expenses.frozenByBillingRunId), isNull(expenses.deletedAt)))
       .orderBy(asc(expenses.date));
     return rows;
   }
 
-  async freezeForMatter(matterId: string, billingRunId: string, now: Date): Promise<void> {
+  async freezeForMatter(matterId: MatterId, billingRunId: BillingRunId, now: Date): Promise<void> {
     await this.db.update(expenses)
-      .set({ frozenAt: now, frozenByBillingRunId: asId<"BillingRunId">(billingRunId) })
-      .where(and(eq(expenses.matterId, asId<"MatterId">(matterId)), isNull(expenses.frozenByBillingRunId)));
+      .set({ frozenAt: now, frozenByBillingRunId: billingRunId })
+      .where(and(eq(expenses.matterId, matterId), isNull(expenses.frozenByBillingRunId)));
   }
 
-  async freezeByIds(ids: string[], billingRunId: string, now: Date): Promise<void> {
+  async freezeByIds(ids: ExpenseId[], billingRunId: BillingRunId, now: Date): Promise<void> {
     if (ids.length === 0) return;
     await this.db.update(expenses)
-      .set({ frozenAt: now, frozenByBillingRunId: asId<"BillingRunId">(billingRunId) })
-      .where(and(inArray(expenses.id, ids.map((i) => asId<"ExpenseId">(i))), isNull(expenses.frozenByBillingRunId)));
+      .set({ frozenAt: now, frozenByBillingRunId: billingRunId })
+      .where(and(inArray(expenses.id, ids), isNull(expenses.frozenByBillingRunId)));
   }
 
   async listForLawyerInPeriod(
-    organizationId: string, userId: string, from: Date, to: Date,
+    organizationId: OrganizationId, userId: UserId, from: Date, to: Date,
   ): Promise<LawyerReportExpense[]> {
     const klient = sql<string | null>`(select c.name from matter_contacts mc join contacts c on mc.contact_id = c.id where mc.matter_id = ${matters.id} and mc.role = 'KLIENT' limit 1)`;
     const rows = await this.db
@@ -119,7 +119,7 @@ export class DrizzleExpenseRepository extends DrizzleRepository<Expense> impleme
       .from(expenses)
       .innerJoin(matters, eq(expenses.matterId, matters.id))
       .where(and(
-        eq(matters.organizationId, asId<"OrganizationId">(organizationId)), eq(expenses.userId, asId<"UserId">(userId)),
+        eq(matters.organizationId, organizationId), eq(expenses.userId, userId),
         gte(expenses.date, from), lte(expenses.date, to), isNull(expenses.deletedAt),
       ))
       .orderBy(asc(expenses.date));

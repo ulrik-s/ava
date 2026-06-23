@@ -17,12 +17,12 @@ import { z } from "zod";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import type { ExpectedReceivable } from "@/lib/shared/schemas/billing";
 import { expectedReceivableStatusSchema } from "@/lib/shared/schemas/billing";
-import { asId, expectedReceivableIdSchema, matterIdSchema } from "@/lib/shared/schemas/ids";
+import { expectedReceivableIdSchema, matterIdSchema, type ExpectedReceivableId, type OrganizationId } from "@/lib/shared/schemas/ids";
 import type { Repositories } from "../repositories/repositories";
 import { router, orgProcedure } from "../trpc";
 
 /** Hämta en fordran och verifiera org-tillhörighet (repository-sömmen, ADR 0020). */
-async function assertInOrg(repos: Repositories, orgId: string, id: string): Promise<ExpectedReceivable> {
+async function assertInOrg(repos: Repositories, orgId: OrganizationId, id: ExpectedReceivableId): Promise<ExpectedReceivable> {
   const row = await repos.expectedReceivables.getByIdInOrg(id, orgId);
   if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Fordran finns inte i organisationen." });
   return row;
@@ -74,12 +74,12 @@ export const expectedReceivableRouter = router({
 
       const now = new Date();
       return ctx.repos.expectedReceivables.create({
-        matterId: asId<"MatterId">(input.matterId),
+        matterId: input.matterId,
         description: input.description,
         expectedAmount: input.expectedAmount,
         status: "PENDING",
-        organizationId: asId<"OrganizationId">(ctx.orgId),
-        recordedById: asId<"UserId">(ctx.user.id),
+        organizationId: ctx.orgId,
+        recordedById: ctx.user.id,
         createdAt: now,
         updatedAt: now,
       } satisfies Partial<ExpectedReceivable>);

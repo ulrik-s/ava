@@ -8,6 +8,7 @@ import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 import { contacts, matterContacts, matters, timeEntries, users } from "@/lib/server/db/schema";
 import { DrizzleTimeEntryRepository } from "@/lib/server/repositories/drizzle-time-entry-repository";
 import { InMemoryTimeEntryRepository } from "@/lib/server/repositories/in-memory-time-entry-repository";
+import { asId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { createTestDb, type TestDbHandle } from "../db/pg-test-db";
 
@@ -27,13 +28,13 @@ describe("TimeEntryRepository — in-memory", () => {
     }, async () => {});
     const repo = new InMemoryTimeEntryRepository(store);
 
-    const unbilled = await repo.listUnbilled(matterId, [t1, t2]);
+    const unbilled = await repo.listUnbilled(asId<"MatterId">(matterId), [asId<"TimeEntryId">(t1), asId<"TimeEntryId">(t2)]);
     expect(unbilled).toHaveLength(2);
     expect(unbilled[0]!.user.hourlyRate).toBe(150_000);
-    expect(await repo.listUnbilled(matterId, [])).toEqual([]);
+    expect(await repo.listUnbilled(asId<"MatterId">(matterId), [])).toEqual([]);
 
-    await repo.flagBilled([t1], uuidv7());
-    expect(await repo.listUnbilled(matterId, [t1, t2])).toHaveLength(1); // t1 nu fakturerad
+    await repo.flagBilled([asId<"TimeEntryId">(t1)], asId<"InvoiceId">(uuidv7()));
+    expect(await repo.listUnbilled(asId<"MatterId">(matterId), [asId<"TimeEntryId">(t1), asId<"TimeEntryId">(t2)])).toHaveLength(1); // t1 nu fakturerad
   });
 });
 
@@ -57,12 +58,12 @@ describe("TimeEntryRepository — Drizzle (pglite)", () => {
     await db.insert(timeEntries).values(v({ id: t2, userId, matterId: mId, date: new Date(), minutes: 30, description: "y", hourlyRate: 1000 }));
     const repo = new DrizzleTimeEntryRepository(handle.db);
 
-    const unbilled = await repo.listUnbilled(mId, [t1, t2]);
+    const unbilled = await repo.listUnbilled(asId<"MatterId">(mId), [asId<"TimeEntryId">(t1), asId<"TimeEntryId">(t2)]);
     expect(unbilled).toHaveLength(2);
     expect(unbilled[0]!.user.hourlyRate).toBe(150_000);
 
-    await repo.flagBilled([t1], uuidv7());
-    expect(await repo.listUnbilled(mId, [t1, t2])).toHaveLength(1);
+    await repo.flagBilled([asId<"TimeEntryId">(t1)], asId<"InvoiceId">(uuidv7()));
+    expect(await repo.listUnbilled(asId<"MatterId">(mId), [asId<"TimeEntryId">(t1), asId<"TimeEntryId">(t2)])).toHaveLength(1);
   });
 });
 
@@ -98,21 +99,21 @@ describe("TimeEntryRepository — frysning/perLawyer/billable (in-memory)", () =
     const repo = new InMemoryTimeEntryRepository(store);
 
     // listUnfrozenForMatter: alla ofrysta (oavsett billable), date asc; ej den frusna.
-    expect((await repo.listUnfrozenForMatter(f.mId)).map((t) => t.id))
+    expect((await repo.listUnfrozenForMatter(asId<"MatterId">(f.mId))).map((t) => t.id))
       .toEqual([f.teOutside, f.teEarly, f.teNonBill, f.teLate]);
 
     // listForLawyerInPeriod: juni → exkl maj, date asc, med KLIENT-namn.
-    const period = await repo.listForLawyerInPeriod(ORG, f.uId, new Date("2026-06-01"), new Date("2026-06-30"));
+    const period = await repo.listForLawyerInPeriod(asId<"OrganizationId">(ORG), asId<"UserId">(f.uId), new Date("2026-06-01"), new Date("2026-06-30"));
     expect(period.map((t) => t.id)).toEqual([f.teEarly, f.teNonBill, f.teFrozen, f.teLate]);
     expect(period[0]!.matter?.contacts[0]?.contact.name).toBe("Klient AB");
 
     // listBillableForOrg: bara billable i org (ej teNonBill).
-    expect((await repo.listBillableForOrg(ORG)).map((t) => t.id).sort())
+    expect((await repo.listBillableForOrg(asId<"OrganizationId">(ORG))).map((t) => t.id).sort())
       .toEqual([f.teEarly, f.teLate, f.teFrozen, f.teOutside].sort());
 
     // freezeForMatter: fryser alla ofrysta → inga ofrysta kvar.
-    await repo.freezeForMatter(f.mId, uuidv7(), new Date("2026-06-30"));
-    expect(await repo.listUnfrozenForMatter(f.mId)).toHaveLength(0);
+    await repo.freezeForMatter(asId<"MatterId">(f.mId), asId<"BillingRunId">(uuidv7()), new Date("2026-06-30"));
+    expect(await repo.listUnfrozenForMatter(asId<"MatterId">(f.mId))).toHaveLength(0);
   });
 });
 
@@ -134,17 +135,17 @@ describe("TimeEntryRepository — frysning/perLawyer/billable (Drizzle/pglite)",
     for (const r of f.rows) await db.insert(timeEntries).values(v({ ...r, organizationId: org, hourlyRate: 1000 }));
     const repo = new DrizzleTimeEntryRepository(db);
 
-    expect((await repo.listUnfrozenForMatter(f.mId)).map((t) => t.id))
+    expect((await repo.listUnfrozenForMatter(asId<"MatterId">(f.mId))).map((t) => t.id))
       .toEqual([f.teOutside, f.teEarly, f.teNonBill, f.teLate]);
 
-    const period = await repo.listForLawyerInPeriod(org, f.uId, new Date("2026-06-01"), new Date("2026-06-30"));
+    const period = await repo.listForLawyerInPeriod(asId<"OrganizationId">(org), asId<"UserId">(f.uId), new Date("2026-06-01"), new Date("2026-06-30"));
     expect(period.map((t) => t.id)).toEqual([f.teEarly, f.teNonBill, f.teFrozen, f.teLate]);
     expect(period[0]!.matter?.contacts[0]?.contact.name).toBe("Klient AB");
 
-    expect((await repo.listBillableForOrg(org)).map((t) => t.id).sort())
+    expect((await repo.listBillableForOrg(asId<"OrganizationId">(org))).map((t) => t.id).sort())
       .toEqual([f.teEarly, f.teLate, f.teFrozen, f.teOutside].sort());
 
-    await repo.freezeForMatter(f.mId, uuidv7(), new Date("2026-06-30"));
-    expect(await repo.listUnfrozenForMatter(f.mId)).toHaveLength(0);
+    await repo.freezeForMatter(asId<"MatterId">(f.mId), asId<"BillingRunId">(uuidv7()), new Date("2026-06-30"));
+    expect(await repo.listUnfrozenForMatter(asId<"MatterId">(f.mId))).toHaveLength(0);
   });
 });

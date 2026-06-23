@@ -5,6 +5,7 @@
  */
 
 import type { Expense } from "@/lib/shared/schemas/billing";
+import type { BillingRunId, ExpenseId, InvoiceId, MatterId, OrganizationId, UserId } from "@/lib/shared/schemas/ids";
 import type { ReportMatterRef } from "./time-entry-repository";
 import type { Repository } from "./types";
 
@@ -15,14 +16,14 @@ export interface LawyerReportExpense extends Expense {
 
 /** Utlägg + listvyns relationer (motsvarar `expense.list`-routerns include). */
 export interface ExpenseListRow extends Expense {
-  user: { id: string; name: string } | null;
-  matter: { id: string; matterNumber: string; title: string } | null;
-  invoice: { id: string; invoiceNumber: string | null } | null;
+  user: { id: UserId; name: string } | null;
+  matter: { id: MatterId; matterNumber: string; title: string } | null;
+  invoice: { id: InvoiceId; invoiceNumber: string | null } | null;
 }
 
 /** Filter/paginering för `listForOrg`. */
 export interface ExpenseListOptions {
-  matterId?: string | undefined;
+  matterId?: MatterId | undefined;
   page: number;
   pageSize: number;
 }
@@ -36,19 +37,19 @@ export interface ExpenseListResult {
 
 export interface ExpenseRepository extends Repository<Expense> {
   /** Org-scopad, paginerad utläggslista (nyaste först) + total + summa belopp. */
-  listForOrg(organizationId: string, opts: ExpenseListOptions): Promise<ExpenseListResult>;
+  listForOrg(organizationId: OrganizationId, opts: ExpenseListOptions): Promise<ExpenseListResult>;
   /** Utlägg by id, org-scopat via ärendet (null om saknas/annan org/raderat). */
-  getByIdInOrg(id: string, organizationId: string): Promise<Expense | null>;
+  getByIdInOrg(id: ExpenseId, organizationId: OrganizationId): Promise<Expense | null>;
   /** Valda ofakturerade utlägg i ett ärende. Tom lista vid tomma ids. */
-  listUnbilled(matterId: string, ids: string[]): Promise<Expense[]>;
+  listUnbilled(matterId: MatterId, ids: ExpenseId[]): Promise<Expense[]>;
   /** Koppla utlägg till en faktura (sätter invoiceId). No-op vid tomma ids. */
-  flagBilled(ids: string[], invoiceId: string): Promise<void>;
+  flagBilled(ids: ExpenseId[], invoiceId: InvoiceId): Promise<void>;
   /** Ofrysta utlägg i ett ärende (date asc) — underlag för billing-run. */
-  listUnfrozenForMatter(matterId: string): Promise<Expense[]>;
+  listUnfrozenForMatter(matterId: MatterId): Promise<Expense[]>;
   /** Frys alla ofrysta utlägg i ett ärende mot en billing-run (bulk). */
-  freezeForMatter(matterId: string, billingRunId: string, now: Date): Promise<void>;
+  freezeForMatter(matterId: MatterId, billingRunId: BillingRunId, now: Date): Promise<void>;
   /** Frys ENBART de angivna (ofrysta) utläggen mot en billing-run — per-post-val. */
-  freezeByIds(ids: string[], billingRunId: string, now: Date): Promise<void>;
+  freezeByIds(ids: ExpenseId[], billingRunId: BillingRunId, now: Date): Promise<void>;
   /** En advokats utlägg i en period (date asc), med ärende-ref (perLawyer-rapporten). */
-  listForLawyerInPeriod(organizationId: string, userId: string, from: Date, to: Date): Promise<LawyerReportExpense[]>;
+  listForLawyerInPeriod(organizationId: OrganizationId, userId: UserId, from: Date, to: Date): Promise<LawyerReportExpense[]>;
 }

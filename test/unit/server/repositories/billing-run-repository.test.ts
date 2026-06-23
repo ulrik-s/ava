@@ -10,6 +10,7 @@ import { billingRuns, invoices, matters } from "@/lib/server/db/schema";
 import { DrizzleBillingRunRepository } from "@/lib/server/repositories/drizzle-billing-run-repository";
 import { InMemoryBillingRunRepository } from "@/lib/server/repositories/in-memory-billing-run-repository";
 import { prebakeJoins } from "@/lib/shared/demo-source";
+import { asId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { createTestDb, type TestDbHandle } from "../db/pg-test-db";
 
@@ -36,20 +37,20 @@ describe("BillingRunRepository — in-memory", () => {
     } as DemoSource);
     const repo = new InMemoryBillingRunRepository(new LocalStore(source, async () => {}));
 
-    const list = await repo.listForOrg(ORG);
+    const list = await repo.listForOrg(asId<"OrganizationId">(ORG));
     expect(list).toHaveLength(2);
     expect(list.find((r) => r.id === r1)!.invoice?.invoiceNumber).toBe("F-1");
-    expect(await repo.listForOrg(ORG, mId)).toHaveLength(2);
-    expect(await repo.listForOrg(uuidv7())).toHaveLength(0);
+    expect(await repo.listForOrg(asId<"OrganizationId">(ORG), asId<"MatterId">(mId))).toHaveLength(2);
+    expect(await repo.listForOrg(asId<"OrganizationId">(uuidv7()))).toHaveLength(0);
 
-    const detail = await repo.getByIdInOrg(r1, ORG);
+    const detail = await repo.getByIdInOrg(asId<"BillingRunId">(r1), asId<"OrganizationId">(ORG));
     expect(detail?.matter?.paymentMethod).toBe("RATTSSKYDD");
     expect(detail?.invoice?.amount).toBe(500);
-    expect(await repo.getByIdInOrg(r1, uuidv7())).toBeNull();
+    expect(await repo.getByIdInOrg(asId<"BillingRunId">(r1), asId<"OrganizationId">(uuidv7()))).toBeNull();
 
-    expect((await repo.listAccontoSent(mId)).map((r) => r.id)).toEqual([r1]);
-    expect((await repo.listAccontoByIds(mId, [r1, r2])).map((r) => r.id)).toEqual([r1]); // r2 = FINAL filtreras
-    expect(await repo.listAccontoByIds(mId, [])).toHaveLength(0);
+    expect((await repo.listAccontoSent(asId<"MatterId">(mId))).map((r) => r.id)).toEqual([r1]);
+    expect((await repo.listAccontoByIds(asId<"MatterId">(mId), [asId<"BillingRunId">(r1), asId<"BillingRunId">(r2)])).map((r) => r.id)).toEqual([r1]); // r2 = FINAL filtreras
+    expect(await repo.listAccontoByIds(asId<"MatterId">(mId), [])).toHaveLength(0);
   });
 });
 
@@ -73,19 +74,19 @@ describe("BillingRunRepository — Drizzle (pglite)", () => {
     await db.insert(billingRuns).values(v(run({ id: r2, matterId: mId, invoiceId: null, type: "FINAL", status: "SENT" })));
     const repo = new DrizzleBillingRunRepository(db);
 
-    const list = await repo.listForOrg(org);
+    const list = await repo.listForOrg(asId<"OrganizationId">(org));
     expect(list).toHaveLength(2);
     expect(list.find((r) => r.id === r1)!.invoice?.invoiceNumber).toBe("F-1");
-    expect(await repo.listForOrg(org, mId)).toHaveLength(2);
-    expect(await repo.listForOrg(uuidv7())).toHaveLength(0);
+    expect(await repo.listForOrg(asId<"OrganizationId">(org), asId<"MatterId">(mId))).toHaveLength(2);
+    expect(await repo.listForOrg(asId<"OrganizationId">(uuidv7()))).toHaveLength(0);
 
-    const detail = await repo.getByIdInOrg(r1, org);
+    const detail = await repo.getByIdInOrg(asId<"BillingRunId">(r1), asId<"OrganizationId">(org));
     expect(detail?.matter?.paymentMethod).toBe("RATTSSKYDD");
     expect(detail?.invoice?.amount).toBe(500);
-    expect(await repo.getByIdInOrg(r1, uuidv7())).toBeNull();
+    expect(await repo.getByIdInOrg(asId<"BillingRunId">(r1), asId<"OrganizationId">(uuidv7()))).toBeNull();
 
-    expect((await repo.listAccontoSent(mId)).map((r) => r.id)).toEqual([r1]);
-    expect((await repo.listAccontoByIds(mId, [r1, r2])).map((r) => r.id)).toEqual([r1]);
-    expect(await repo.listAccontoByIds(mId, [])).toHaveLength(0);
+    expect((await repo.listAccontoSent(asId<"MatterId">(mId))).map((r) => r.id)).toEqual([r1]);
+    expect((await repo.listAccontoByIds(asId<"MatterId">(mId), [asId<"BillingRunId">(r1), asId<"BillingRunId">(r2)])).map((r) => r.id)).toEqual([r1]);
+    expect(await repo.listAccontoByIds(asId<"MatterId">(mId), [])).toHaveLength(0);
   });
 });
