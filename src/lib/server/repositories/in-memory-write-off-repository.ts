@@ -4,6 +4,7 @@
  */
 
 import type { WriteOff } from "@/lib/shared/schemas/billing";
+import type { InvoiceId } from "@/lib/shared/schemas/ids";
 import type { IDataStore } from "../data-store/IDataStore";
 import { InMemoryRepository } from "./in-memory-repository";
 import type { WriteOffRepository } from "./write-off-repository";
@@ -16,14 +17,14 @@ export class InMemoryWriteOffRepository extends InMemoryRepository<WriteOff> imp
     super(source.writeOffs, now ?? (() => new Date()));
   }
 
-  async sumByInvoice(invoiceId: string): Promise<number> {
+  async sumByInvoice(invoiceId: InvoiceId): Promise<number> {
     const rows = await this.source.writeOffs.findMany({ where: { invoiceId } });
     return rows
       .filter((r) => !(r as { deletedAt?: unknown }).deletedAt)
       .reduce((s, w) => s + w.amount, 0);
   }
 
-  async listByInvoiceIds(invoiceIds: string[]): Promise<WriteOff[]> {
+  async listByInvoiceIds(invoiceIds: InvoiceId[]): Promise<WriteOff[]> {
     if (!invoiceIds.length) return [];
     return this.source.writeOffs.findMany({ where: { invoiceId: { in: invoiceIds } } });
   }

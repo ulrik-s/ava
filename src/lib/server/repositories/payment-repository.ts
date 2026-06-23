@@ -5,11 +5,12 @@
  */
 
 import type { Payment } from "@/lib/shared/schemas/billing";
+import type { InvoiceId } from "@/lib/shared/schemas/ids";
 import type { Repository } from "./types";
 
 export interface PaymentRepository extends Repository<Payment> {
   /** Summa av alla (icke-raderade) betalningar på en faktura (öre). */
-  sumByInvoice(invoiceId: string): Promise<number>;
+  sumByInvoice(invoiceId: InvoiceId): Promise<number>;
   /** Betalningar för en uppsättning fakturor (rapporter). Tom lista vid tomma ids. */
-  listByInvoiceIds(invoiceIds: string[]): Promise<Payment[]>;
+  listByInvoiceIds(invoiceIds: InvoiceId[]): Promise<Payment[]>;
 }

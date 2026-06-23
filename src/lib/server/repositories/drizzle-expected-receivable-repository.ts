@@ -4,6 +4,7 @@
 
 import { and, desc, eq, isNull } from "drizzle-orm";
 import type { ExpectedReceivable } from "@/lib/shared/schemas/billing";
+import type { ExpectedReceivableId, OrganizationId } from "@/lib/shared/schemas/ids";
 import { expectedReceivables } from "../db/schema";
 import type { AppDb } from "../db/types";
 import { DrizzleRepository, versionedTable } from "./drizzle-repository";
@@ -16,7 +17,7 @@ export class DrizzleExpectedReceivableRepository
     super(db, versionedTable(expectedReceivables), now);
   }
 
-  async listForOrg(organizationId: string, filter?: ExpectedReceivableListFilter): Promise<ExpectedReceivable[]> {
+  async listForOrg(organizationId: OrganizationId, filter?: ExpectedReceivableListFilter): Promise<ExpectedReceivable[]> {
     const rows = await this.db
       .select().from(expectedReceivables)
       .where(and(
@@ -29,7 +30,7 @@ export class DrizzleExpectedReceivableRepository
     return this.asRows(rows);
   }
 
-  async getByIdInOrg(id: string, organizationId: string): Promise<ExpectedReceivable | null> {
+  async getByIdInOrg(id: ExpectedReceivableId, organizationId: OrganizationId): Promise<ExpectedReceivable | null> {
     const rows = await this.db
       .select().from(expectedReceivables)
       .where(and(eq(expectedReceivables.id, id), eq(expectedReceivables.organizationId, organizationId), isNull(expectedReceivables.deletedAt)))

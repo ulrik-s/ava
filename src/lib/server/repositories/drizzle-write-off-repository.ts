@@ -5,7 +5,7 @@
 
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { WriteOff } from "@/lib/shared/schemas/billing";
-import { asId } from "@/lib/shared/schemas/ids";
+import type { InvoiceId } from "@/lib/shared/schemas/ids";
 import { writeOffs } from "../db/schema";
 import type { AppDb } from "../db/types";
 import { DrizzleRepository, versionedTable } from "./drizzle-repository";
@@ -22,18 +22,18 @@ export class DrizzleWriteOffRepository extends DrizzleRepository<WriteOff> imple
     return invoiceOrg(this.db, (row as { invoiceId?: string }).invoiceId);
   }
 
-  async sumByInvoice(invoiceId: string): Promise<number> {
+  async sumByInvoice(invoiceId: InvoiceId): Promise<number> {
     const rows = await this.db
       .select({ total: sql<number>`coalesce(sum(${writeOffs.amount}), 0)` }).from(writeOffs)
-      .where(and(eq(writeOffs.invoiceId, asId<"InvoiceId">(invoiceId)), isNull(writeOffs.deletedAt)));
+      .where(and(eq(writeOffs.invoiceId, invoiceId), isNull(writeOffs.deletedAt)));
     return Number(rows[0]?.total ?? 0);
   }
 
-  async listByInvoiceIds(invoiceIds: string[]): Promise<WriteOff[]> {
+  async listByInvoiceIds(invoiceIds: InvoiceId[]): Promise<WriteOff[]> {
     if (!invoiceIds.length) return [];
     const rows = await this.db
       .select().from(writeOffs)
-      .where(and(inArray(writeOffs.invoiceId, invoiceIds.map((id) => asId<"InvoiceId">(id))), isNull(writeOffs.deletedAt)));
+      .where(and(inArray(writeOffs.invoiceId, invoiceIds), isNull(writeOffs.deletedAt)));
     return rows;
   }
 }

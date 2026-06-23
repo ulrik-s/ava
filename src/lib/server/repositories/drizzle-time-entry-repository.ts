@@ -11,7 +11,7 @@
 
 import { and, asc, desc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
 import type { TimeEntry } from "@/lib/shared/schemas/billing";
-import { asId } from "@/lib/shared/schemas/ids";
+import { asId, type BillingRunId, type InvoiceId, type MatterId, type OrganizationId, type TimeEntryId, type UserId } from "@/lib/shared/schemas/ids";
 import { matters, timeEntries, users } from "../db/schema";
 import type { AppDb } from "../db/types";
 import { DrizzleRepository, versionedTable } from "./drizzle-repository";
@@ -22,12 +22,12 @@ import type {
 } from "./time-entry-repository";
 
 /** Org-scopat where för `listForOrg` (utbruten för komplexitet ≤8). */
-function listWhere(organizationId: string, opts: TimeEntryListFilter) {
+function listWhere(organizationId: OrganizationId, opts: TimeEntryListFilter) {
   return and(
-    eq(matters.organizationId, asId<"OrganizationId">(organizationId)),
+    eq(matters.organizationId, organizationId),
     isNull(timeEntries.deletedAt),
-    opts.matterId ? eq(timeEntries.matterId, asId<"MatterId">(opts.matterId)) : undefined,
-    opts.userId ? eq(timeEntries.userId, asId<"UserId">(opts.userId)) : undefined,
+    opts.matterId ? eq(timeEntries.matterId, opts.matterId) : undefined,
+    opts.userId ? eq(timeEntries.userId, opts.userId) : undefined,
     opts.from ? gte(timeEntries.date, opts.from) : undefined,
     opts.to ? lte(timeEntries.date, opts.to) : undefined,
   );
@@ -43,7 +43,7 @@ export class DrizzleTimeEntryRepository extends DrizzleRepository<TimeEntry> imp
     return matterOrg(this.db, (row as { matterId?: string }).matterId);
   }
 
-  async listForOrg(organizationId: string, opts: TimeEntryListFilter): Promise<TimeEntryListResult> {
+  async listForOrg(organizationId: OrganizationId, opts: TimeEntryListFilter): Promise<TimeEntryListResult> {
     const where = listWhere(organizationId, opts);
     const base = this.db.select({
       te: timeEntries,
@@ -59,7 +59,7 @@ export class DrizzleTimeEntryRepository extends DrizzleRepository<TimeEntry> imp
     return {
       entries: rows.map((r): TimeEntryListRow => ({
         ...r.te,
-        user: r.uId ? { id: r.uId, name: r.uName ?? "" } : null,
+        user: r.uId ? { id: asId<"UserId">(r.uId), name: r.uName ?? "" } : null,
         matter: { id: r.mId, matterNumber: r.mNum, title: r.mTitle },
         invoice: null,
       })),
@@ -68,16 +68,16 @@ export class DrizzleTimeEntryRepository extends DrizzleRepository<TimeEntry> imp
     };
   }
 
-  async getByIdInOrg(id: string, organizationId: string): Promise<TimeEntry | null> {
+  async getByIdInOrg(id: TimeEntryId, organizationId: OrganizationId): Promise<TimeEntry | null> {
     const rows = await this.db
       .select({ te: timeEntries }).from(timeEntries)
       .innerJoin(matters, eq(timeEntries.matterId, matters.id))
-      .where(and(eq(timeEntries.id, asId<"TimeEntryId">(id)), eq(matters.organizationId, asId<"OrganizationId">(organizationId)), isNull(timeEntries.deletedAt)))
+      .where(and(eq(timeEntries.id, id), eq(matters.organizationId, organizationId), isNull(timeEntries.deletedAt)))
       .limit(1);
     return rows[0]?.te ?? null;
   }
 
-  async listForReport(organizationId: string, filter: TimeEntryReportFilter): Promise<TimeEntryReportRow[]> {
+  async listForReport(organizationId: OrganizationId, filter: TimeEntryReportFilter): Promise<TimeEntryReportRow[]> {
     const klient = sql<string | null>`(select c.name from matter_contacts mc join contacts c on mc.contact_id = c.id where mc.matter_id = ${matters.id} and mc.role = 'KLIENT' limit 1)`;
     const rows = await this.db
       .select({
@@ -88,19 +88,19 @@ export class DrizzleTimeEntryRepository extends DrizzleRepository<TimeEntry> imp
       .innerJoin(matters, eq(timeEntries.matterId, matters.id))
       .leftJoin(users, eq(timeEntries.userId, users.id))
       .where(and(
-        eq(matters.organizationId, asId<"OrganizationId">(organizationId)),
+        eq(matters.organizationId, organizationId),
         isNull(timeEntries.deletedAt),
         gte(timeEntries.date, filter.from),
         lte(timeEntries.date, filter.to),
-        filter.matterId ? eq(timeEntries.matterId, asId<"MatterId">(filter.matterId)) : undefined,
+        filter.matterId ? eq(timeEntries.matterId, filter.matterId) : undefined,
         filter.userIds && filter.userIds.length > 0
-          ? inArray(timeEntries.userId, filter.userIds.map((u) => asId<"UserId">(u)))
-          : filter.userId ? eq(timeEntries.userId, asId<"UserId">(filter.userId)) : undefined,
+          ? inArray(timeEntries.userId, filter.userIds)
+          : filter.userId ? eq(timeEntries.userId, filter.userId) : undefined,
       ))
       .orderBy(asc(timeEntries.userId), asc(timeEntries.date));
     return rows.map((r): TimeEntryReportRow => ({
       ...r.te,
-      user: { id: r.uId ?? "", name: r.uName ?? "" },
+      user: { id: asId<"UserId">(r.uId ?? ""), name: r.uName ?? "" },
       matter: {
         id: r.mId, matterNumber: r.mNum, title: r.mTitle,
         contacts: r.klient ? [{ contact: { name: r.klient } }] : [],
@@ -108,33 +108,33 @@ export class DrizzleTimeEntryRepository extends DrizzleRepository<TimeEntry> imp
     }));
   }
 
-  async listUnbilled(matterId: string, ids: string[]): Promise<UnbilledTimeEntry[]> {
+  async listUnbilled(matterId: MatterId, ids: TimeEntryId[]): Promise<UnbilledTimeEntry[]> {
     if (!ids.length) return [];
     const rows = await this.db
       .select({ te: timeEntries, hourlyRate: users.hourlyRate }).from(timeEntries)
       .innerJoin(users, eq(timeEntries.userId, users.id))
-      .where(and(inArray(timeEntries.id, ids.map((i) => asId<"TimeEntryId">(i))), eq(timeEntries.matterId, asId<"MatterId">(matterId)), isNull(timeEntries.invoiceId)));
+      .where(and(inArray(timeEntries.id, ids), eq(timeEntries.matterId, matterId), isNull(timeEntries.invoiceId)));
     return rows.map((r): UnbilledTimeEntry => ({
       ...r.te, user: { hourlyRate: r.hourlyRate },
     }));
   }
 
-  async flagBilled(ids: string[], invoiceId: string): Promise<void> {
+  async flagBilled(ids: TimeEntryId[], invoiceId: InvoiceId): Promise<void> {
     if (!ids.length) return;
-    await this.db.update(timeEntries).set({ invoiceId: asId<"InvoiceId">(invoiceId) })
-      .where(inArray(timeEntries.id, ids.map((i) => asId<"TimeEntryId">(i))));
+    await this.db.update(timeEntries).set({ invoiceId })
+      .where(inArray(timeEntries.id, ids));
   }
 
-  async listUnfrozenForMatter(matterId: string): Promise<TimeEntry[]> {
+  async listUnfrozenForMatter(matterId: MatterId): Promise<TimeEntry[]> {
     const rows = await this.db
       .select().from(timeEntries)
-      .where(and(eq(timeEntries.matterId, asId<"MatterId">(matterId)), isNull(timeEntries.frozenByBillingRunId), isNull(timeEntries.deletedAt)))
+      .where(and(eq(timeEntries.matterId, matterId), isNull(timeEntries.frozenByBillingRunId), isNull(timeEntries.deletedAt)))
       .orderBy(asc(timeEntries.date));
     return rows;
   }
 
   async listForLawyerInPeriod(
-    organizationId: string, userId: string, from: Date, to: Date,
+    organizationId: OrganizationId, userId: UserId, from: Date, to: Date,
   ): Promise<LawyerReportTimeEntry[]> {
     const klient = sql<string | null>`(select c.name from matter_contacts mc join contacts c on mc.contact_id = c.id where mc.matter_id = ${matters.id} and mc.role = 'KLIENT' limit 1)`;
     const rows = await this.db
@@ -147,7 +147,7 @@ export class DrizzleTimeEntryRepository extends DrizzleRepository<TimeEntry> imp
       .from(timeEntries)
       .innerJoin(matters, eq(timeEntries.matterId, matters.id))
       .where(and(
-        eq(matters.organizationId, asId<"OrganizationId">(organizationId)), eq(timeEntries.userId, asId<"UserId">(userId)),
+        eq(matters.organizationId, organizationId), eq(timeEntries.userId, userId),
         gte(timeEntries.date, from), lte(timeEntries.date, to), isNull(timeEntries.deletedAt),
       ))
       .orderBy(asc(timeEntries.date));
@@ -162,24 +162,24 @@ export class DrizzleTimeEntryRepository extends DrizzleRepository<TimeEntry> imp
     }));
   }
 
-  async listBillableForOrg(organizationId: string): Promise<TimeEntry[]> {
+  async listBillableForOrg(organizationId: OrganizationId): Promise<TimeEntry[]> {
     const rows = await this.db
       .select({ te: timeEntries }).from(timeEntries)
       .innerJoin(matters, eq(timeEntries.matterId, matters.id))
-      .where(and(eq(matters.organizationId, asId<"OrganizationId">(organizationId)), eq(timeEntries.billable, true), isNull(timeEntries.deletedAt)));
+      .where(and(eq(matters.organizationId, organizationId), eq(timeEntries.billable, true), isNull(timeEntries.deletedAt)));
     return rows.map((r) => r.te);
   }
 
-  async freezeForMatter(matterId: string, billingRunId: string, now: Date): Promise<void> {
+  async freezeForMatter(matterId: MatterId, billingRunId: BillingRunId, now: Date): Promise<void> {
     await this.db.update(timeEntries)
-      .set({ frozenAt: now, frozenByBillingRunId: asId<"BillingRunId">(billingRunId) })
-      .where(and(eq(timeEntries.matterId, asId<"MatterId">(matterId)), isNull(timeEntries.frozenByBillingRunId)));
+      .set({ frozenAt: now, frozenByBillingRunId: billingRunId })
+      .where(and(eq(timeEntries.matterId, matterId), isNull(timeEntries.frozenByBillingRunId)));
   }
 
-  async freezeByIds(ids: string[], billingRunId: string, now: Date): Promise<void> {
+  async freezeByIds(ids: TimeEntryId[], billingRunId: BillingRunId, now: Date): Promise<void> {
     if (ids.length === 0) return;
     await this.db.update(timeEntries)
-      .set({ frozenAt: now, frozenByBillingRunId: asId<"BillingRunId">(billingRunId) })
-      .where(and(inArray(timeEntries.id, ids.map((i) => asId<"TimeEntryId">(i))), isNull(timeEntries.frozenByBillingRunId)));
+      .set({ frozenAt: now, frozenByBillingRunId: billingRunId })
+      .where(and(inArray(timeEntries.id, ids), isNull(timeEntries.frozenByBillingRunId)));
   }
 }

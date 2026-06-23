@@ -10,6 +10,7 @@ import { contacts, matterContacts, matters, timeEntries, users } from "@/lib/ser
 import { DrizzleTimeEntryRepository } from "@/lib/server/repositories/drizzle-time-entry-repository";
 import { InMemoryTimeEntryRepository } from "@/lib/server/repositories/in-memory-time-entry-repository";
 import { prebakeJoins } from "@/lib/shared/demo-source";
+import { asId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { createTestDb, type TestDbHandle } from "../db/pg-test-db";
 
@@ -31,14 +32,14 @@ describe("TimeEntryRepository list/report — in-memory", () => {
     } as DemoSource);
     const repo = new InMemoryTimeEntryRepository(new LocalStore(source, async () => {}));
 
-    const list = await repo.listForOrg("org-1", { page: 1, pageSize: 50 });
+    const list = await repo.listForOrg(asId<"OrganizationId">("org-1"), { page: 1, pageSize: 50 });
     expect(list.total).toBe(2);
     expect(list.totalMinutes).toBe(90);
     expect(list.entries[0]!.matter.matterNumber).toBe("2026-1");
-    expect(await repo.getByIdInOrg(t1, "org-1")).toMatchObject({ id: t1 });
-    expect(await repo.getByIdInOrg(t1, "org-2")).toBeNull();
+    expect(await repo.getByIdInOrg(asId<"TimeEntryId">(t1), asId<"OrganizationId">("org-1"))).toMatchObject({ id: t1 });
+    expect(await repo.getByIdInOrg(asId<"TimeEntryId">(t1), asId<"OrganizationId">("org-2"))).toBeNull();
 
-    const report = await repo.listForReport("org-1", { from: new Date("2026-06-01"), to: new Date("2026-06-30") });
+    const report = await repo.listForReport(asId<"OrganizationId">("org-1"), { from: new Date("2026-06-01"), to: new Date("2026-06-30") });
     expect(report).toHaveLength(2);
     expect(report[0]!.matter?.contacts[0]?.contact.name).toBe("Klient AB");
   });
@@ -66,14 +67,14 @@ describe("TimeEntryRepository list/report — Drizzle (pglite)", () => {
     await db.insert(timeEntries).values(v({ id: uuidv7(), userId, matterId: mId, minutes: 30, description: "b", hourlyRate: 1000, date: new Date("2026-06-03") }));
     const repo = new DrizzleTimeEntryRepository(handle.db);
 
-    const list = await repo.listForOrg(org, { page: 1, pageSize: 50 });
+    const list = await repo.listForOrg(asId<"OrganizationId">(org), { page: 1, pageSize: 50 });
     expect(list.total).toBe(2);
     expect(list.totalMinutes).toBe(90);
     expect(list.entries[0]!.matter.matterNumber).toBe("2026-1");
-    expect(await repo.getByIdInOrg(t1, org)).toMatchObject({ id: t1 });
-    expect(await repo.getByIdInOrg(t1, uuidv7())).toBeNull();
+    expect(await repo.getByIdInOrg(asId<"TimeEntryId">(t1), asId<"OrganizationId">(org))).toMatchObject({ id: t1 });
+    expect(await repo.getByIdInOrg(asId<"TimeEntryId">(t1), asId<"OrganizationId">(uuidv7()))).toBeNull();
 
-    const report = await repo.listForReport(org, { from: new Date("2026-06-01"), to: new Date("2026-06-30") });
+    const report = await repo.listForReport(asId<"OrganizationId">(org), { from: new Date("2026-06-01"), to: new Date("2026-06-30") });
     expect(report).toHaveLength(2);
     expect(report[0]!.matter?.contacts[0]?.contact.name).toBe("Klient AB");
   });

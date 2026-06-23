@@ -4,6 +4,7 @@
  */
 
 import type { Payment } from "@/lib/shared/schemas/billing";
+import type { InvoiceId } from "@/lib/shared/schemas/ids";
 import type { IDataStore } from "../data-store/IDataStore";
 import { InMemoryRepository } from "./in-memory-repository";
 import type { PaymentRepository } from "./payment-repository";
@@ -16,14 +17,14 @@ export class InMemoryPaymentRepository extends InMemoryRepository<Payment> imple
     super(source.payments, now ?? (() => new Date()));
   }
 
-  async sumByInvoice(invoiceId: string): Promise<number> {
+  async sumByInvoice(invoiceId: InvoiceId): Promise<number> {
     const rows = await this.source.payments.findMany({ where: { invoiceId } });
     return rows
       .filter((r) => !(r as { deletedAt?: unknown }).deletedAt)
       .reduce((s, p) => s + p.amount, 0);
   }
 
-  async listByInvoiceIds(invoiceIds: string[]): Promise<Payment[]> {
+  async listByInvoiceIds(invoiceIds: InvoiceId[]): Promise<Payment[]> {
     if (!invoiceIds.length) return [];
     return this.source.payments.findMany({ where: { invoiceId: { in: invoiceIds } } });
   }

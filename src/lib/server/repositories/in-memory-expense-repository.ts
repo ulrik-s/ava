@@ -4,6 +4,7 @@
  */
 
 import type { Expense } from "@/lib/shared/schemas/billing";
+import type { BillingRunId, ExpenseId, InvoiceId, MatterId, OrganizationId, UserId } from "@/lib/shared/schemas/ids";
 import type { IDataStore } from "../data-store/IDataStore";
 import type {
   ExpenseListOptions, ExpenseListResult, ExpenseListRow, ExpenseRepository, LawyerReportExpense,
@@ -18,7 +19,7 @@ export class InMemoryExpenseRepository extends InMemoryRepository<Expense> imple
     super(store.expenses, now ?? (() => new Date()));
   }
 
-  async listForOrg(organizationId: string, opts: ExpenseListOptions): Promise<ExpenseListResult> {
+  async listForOrg(organizationId: OrganizationId, opts: ExpenseListOptions): Promise<ExpenseListResult> {
     const where = {
       matter: { organizationId },
       ...(opts.matterId ? { matterId: opts.matterId } : {}),
@@ -41,38 +42,38 @@ export class InMemoryExpenseRepository extends InMemoryRepository<Expense> imple
     return { expenses, total, totalAmount: (agg as { _sum?: { amount?: number } })._sum?.amount ?? 0 };
   }
 
-  async getByIdInOrg(id: string, organizationId: string): Promise<Expense | null> {
+  async getByIdInOrg(id: ExpenseId, organizationId: OrganizationId): Promise<Expense | null> {
     const row = (await this.delegate
       .findFirst({ where: { id, matter: { organizationId } } })) as Expense | null;
     return row && !(row as { deletedAt?: unknown }).deletedAt ? row : null;
   }
 
-  async listUnbilled(matterId: string, ids: string[]): Promise<Expense[]> {
+  async listUnbilled(matterId: MatterId, ids: ExpenseId[]): Promise<Expense[]> {
     if (!ids.length) return [];
     return (await this.delegate.findMany({
       where: { id: { in: ids }, matterId, invoiceId: null },
     })) as Expense[];
   }
 
-  async flagBilled(ids: string[], invoiceId: string): Promise<void> {
+  async flagBilled(ids: ExpenseId[], invoiceId: InvoiceId): Promise<void> {
     if (!ids.length) return;
     await this.delegate.updateMany({ where: { id: { in: ids } }, data: { invoiceId } as Partial<Expense> });
   }
 
-  async listUnfrozenForMatter(matterId: string): Promise<Expense[]> {
+  async listUnfrozenForMatter(matterId: MatterId): Promise<Expense[]> {
     return (await this.delegate.findMany({
       where: { matterId, frozenByBillingRunId: null }, orderBy: { date: "asc" },
     })) as Expense[];
   }
 
-  async freezeForMatter(matterId: string, billingRunId: string, now: Date): Promise<void> {
+  async freezeForMatter(matterId: MatterId, billingRunId: BillingRunId, now: Date): Promise<void> {
     await this.delegate.updateMany({
       where: { matterId, frozenByBillingRunId: null },
       data: { frozenAt: now, frozenByBillingRunId: billingRunId } as Partial<Expense>,
     });
   }
 
-  async freezeByIds(ids: string[], billingRunId: string, now: Date): Promise<void> {
+  async freezeByIds(ids: ExpenseId[], billingRunId: BillingRunId, now: Date): Promise<void> {
     if (!ids.length) return;
     await this.delegate.updateMany({
       where: { id: { in: ids }, frozenByBillingRunId: null },
@@ -81,7 +82,7 @@ export class InMemoryExpenseRepository extends InMemoryRepository<Expense> imple
   }
 
   async listForLawyerInPeriod(
-    organizationId: string, userId: string, from: Date, to: Date,
+    organizationId: OrganizationId, userId: UserId, from: Date, to: Date,
   ): Promise<LawyerReportExpense[]> {
     return (await this.delegate.findMany({
       where: { matter: { organizationId }, userId, date: { gte: from, lte: to } },

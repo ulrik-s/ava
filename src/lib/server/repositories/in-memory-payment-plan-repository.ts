@@ -7,6 +7,7 @@
 
 import type { PaymentPlan } from "@/lib/shared/schemas/billing";
 import type { PaymentPlanStatus } from "@/lib/shared/schemas/enums";
+import type { InvoiceId, OrganizationId, PaymentPlanId } from "@/lib/shared/schemas/ids";
 import type { IDataStore } from "../data-store/IDataStore";
 import { InMemoryRepository } from "./in-memory-repository";
 import type {
@@ -42,18 +43,18 @@ export class InMemoryPaymentPlanRepository extends InMemoryRepository<PaymentPla
     super(store.paymentPlans, now ?? (() => new Date()));
   }
 
-  async getByIdInOrg(planId: string, organizationId: string): Promise<PaymentPlan | null> {
+  async getByIdInOrg(planId: PaymentPlanId, organizationId: OrganizationId): Promise<PaymentPlan | null> {
     const row = (await this.delegate
       .findFirst({ where: { id: planId, invoice: { matter: { organizationId } } } })) as PaymentPlan | null;
     return row && !(row as { deletedAt?: unknown }).deletedAt ? row : null;
   }
 
-  async getByInvoiceId(invoiceId: string): Promise<PaymentPlan | null> {
+  async getByInvoiceId(invoiceId: InvoiceId): Promise<PaymentPlan | null> {
     const row = (await this.delegate.findFirst({ where: { invoiceId } })) as PaymentPlan | null;
     return row && !(row as { deletedAt?: unknown }).deletedAt ? row : null;
   }
 
-  async listForOrg(organizationId: string, status?: PaymentPlanStatus): Promise<JoinedPaymentPlan[]> {
+  async listForOrg(organizationId: OrganizationId, status?: PaymentPlanStatus): Promise<JoinedPaymentPlan[]> {
     return (await this.delegate.findMany({
       where: { ...(status ? { status } : {}), invoice: { matter: { organizationId } } },
       orderBy: { createdAt: "desc" },
@@ -61,7 +62,7 @@ export class InMemoryPaymentPlanRepository extends InMemoryRepository<PaymentPla
     })) as JoinedPaymentPlan[];
   }
 
-  async getByIdWithDetails(id: string, organizationId: string): Promise<JoinedPaymentPlanWithReminders | null> {
+  async getByIdWithDetails(id: PaymentPlanId, organizationId: OrganizationId): Promise<JoinedPaymentPlanWithReminders | null> {
     const row = (await this.delegate.findFirst({
       where: { id, invoice: { matter: { organizationId } } },
       include: {
@@ -72,7 +73,7 @@ export class InMemoryPaymentPlanRepository extends InMemoryRepository<PaymentPla
     return row && !row.deletedAt ? row : null;
   }
 
-  async listActiveForScan(organizationId: string): Promise<JoinedPaymentPlanWithReminders[]> {
+  async listActiveForScan(organizationId: OrganizationId): Promise<JoinedPaymentPlanWithReminders[]> {
     return (await this.delegate.findMany({
       where: { status: "ACTIVE", invoice: { matter: { organizationId } } },
       include: {

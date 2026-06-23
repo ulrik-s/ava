@@ -8,6 +8,7 @@ import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 import { contacts, expenses, matterContacts, matters, users } from "@/lib/server/db/schema";
 import { DrizzleExpenseRepository } from "@/lib/server/repositories/drizzle-expense-repository";
 import { InMemoryExpenseRepository } from "@/lib/server/repositories/in-memory-expense-repository";
+import { asId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { createTestDb, type TestDbHandle } from "../db/pg-test-db";
 
@@ -25,11 +26,11 @@ describe("ExpenseRepository — in-memory", () => {
     }, async () => {});
     const repo = new InMemoryExpenseRepository(store);
 
-    expect(await repo.listUnbilled(matterId, [e1, e2])).toHaveLength(2);
-    expect(await repo.listUnbilled(matterId, [])).toEqual([]);
+    expect(await repo.listUnbilled(asId<"MatterId">(matterId), [asId<"ExpenseId">(e1), asId<"ExpenseId">(e2)])).toHaveLength(2);
+    expect(await repo.listUnbilled(asId<"MatterId">(matterId), [])).toEqual([]);
 
-    await repo.flagBilled([e1], uuidv7());
-    expect(await repo.listUnbilled(matterId, [e1, e2])).toHaveLength(1); // e1 nu fakturerad
+    await repo.flagBilled([asId<"ExpenseId">(e1)], asId<"InvoiceId">(uuidv7()));
+    expect(await repo.listUnbilled(asId<"MatterId">(matterId), [asId<"ExpenseId">(e1), asId<"ExpenseId">(e2)])).toHaveLength(1); // e1 nu fakturerad
   });
 
   it("listForOrg paginerar, summerar och inkluderar relationer", async () => {
@@ -44,12 +45,12 @@ describe("ExpenseRepository — in-memory", () => {
       ],
     }, async () => {});
     const repo = new InMemoryExpenseRepository(store);
-    const res = await repo.listForOrg("org-1", { page: 1, pageSize: 50 });
+    const res = await repo.listForOrg(asId<"OrganizationId">("org-1"), { page: 1, pageSize: 50 });
     expect(res.total).toBe(2);
     expect(res.totalAmount).toBe(80_000);
     expect(res.expenses[0]!.matter?.matterNumber).toBe("2026-1");
     expect(res.expenses[0]!.user?.name).toBe("Anna");
-    expect((await repo.listForOrg("org-2", { page: 1, pageSize: 50 })).total).toBe(0); // fel org
+    expect((await repo.listForOrg(asId<"OrganizationId">("org-2"), { page: 1, pageSize: 50 })).total).toBe(0); // fel org
   });
 
   it("getByIdInOrg org-scopar via ärendet", async () => {
@@ -60,8 +61,8 @@ describe("ExpenseRepository — in-memory", () => {
       expenses: [{ id: eId, matterId: mId, amount: 1, date: new Date(), description: "x" }],
     }, async () => {});
     const repo = new InMemoryExpenseRepository(store);
-    expect(await repo.getByIdInOrg(eId, "org-1")).toMatchObject({ id: eId });
-    expect(await repo.getByIdInOrg(eId, "org-2")).toBeNull(); // fel org
+    expect(await repo.getByIdInOrg(asId<"ExpenseId">(eId), asId<"OrganizationId">("org-1"))).toMatchObject({ id: eId });
+    expect(await repo.getByIdInOrg(asId<"ExpenseId">(eId), asId<"OrganizationId">("org-2"))).toBeNull(); // fel org
   });
 });
 
@@ -85,9 +86,9 @@ describe("ExpenseRepository — Drizzle (pglite)", () => {
     await db.insert(expenses).values(v({ id: e2, userId, matterId: mId, date: new Date(), amount: 30_000, description: "y" }));
     const repo = new DrizzleExpenseRepository(handle.db);
 
-    expect(await repo.listUnbilled(mId, [e1, e2])).toHaveLength(2);
-    await repo.flagBilled([e1], uuidv7());
-    expect(await repo.listUnbilled(mId, [e1, e2])).toHaveLength(1);
+    expect(await repo.listUnbilled(asId<"MatterId">(mId), [asId<"ExpenseId">(e1), asId<"ExpenseId">(e2)])).toHaveLength(2);
+    await repo.flagBilled([asId<"ExpenseId">(e1)], asId<"InvoiceId">(uuidv7()));
+    expect(await repo.listUnbilled(asId<"MatterId">(mId), [asId<"ExpenseId">(e1), asId<"ExpenseId">(e2)])).toHaveLength(1);
   });
 
   it("listForOrg joinar relationer + summerar i SQL", async () => {
@@ -102,7 +103,7 @@ describe("ExpenseRepository — Drizzle (pglite)", () => {
     await db.insert(expenses).values(v({ id: uuidv7(), userId, matterId: mId, date: new Date("2026-06-02"), amount: 50_000, description: "a" }));
     await db.insert(expenses).values(v({ id: uuidv7(), userId, matterId: mId, date: new Date("2026-06-01"), amount: 30_000, description: "b" }));
     const repo = new DrizzleExpenseRepository(handle.db);
-    const res = await repo.listForOrg(org, { page: 1, pageSize: 50 });
+    const res = await repo.listForOrg(asId<"OrganizationId">(org), { page: 1, pageSize: 50 });
     expect(res.total).toBe(2);
     expect(res.totalAmount).toBe(80_000);
     expect(res.expenses[0]!.matter?.matterNumber).toBe("2026-1");
@@ -122,8 +123,8 @@ describe("ExpenseRepository — Drizzle (pglite)", () => {
     await db.insert(users).values(v({ id: userId, organizationId: org, email: "a@x", name: "Anna" }));
     await db.insert(expenses).values(v({ id: eId, userId, matterId: mId, date: new Date(), amount: 1, description: "x" }));
     const repo = new DrizzleExpenseRepository(handle.db);
-    expect(await repo.getByIdInOrg(eId, org)).toMatchObject({ id: eId });
-    expect(await repo.getByIdInOrg(eId, uuidv7())).toBeNull();
+    expect(await repo.getByIdInOrg(asId<"ExpenseId">(eId), asId<"OrganizationId">(org))).toMatchObject({ id: eId });
+    expect(await repo.getByIdInOrg(asId<"ExpenseId">(eId), asId<"OrganizationId">(uuidv7()))).toBeNull();
   });
 });
 
@@ -150,15 +151,15 @@ describe("ExpenseRepository — frysning + perLawyer-period (in-memory)", () => 
     const repo = new InMemoryExpenseRepository(store);
 
     // listUnfrozenForMatter: bara de ofrysta, date asc (ej den frusna)
-    const unfrozen = await repo.listUnfrozenForMatter(mId);
+    const unfrozen = await repo.listUnfrozenForMatter(asId<"MatterId">(mId));
     expect(unfrozen.map((e) => e.id)).toEqual([eOutside, eEarly, eLate]); // 2026-05-01 < 06-01 < 06-10
 
     // freezeForMatter: fryser alla ofrysta → inga ofrysta kvar
-    await repo.freezeForMatter(mId, uuidv7(), new Date("2026-06-30"));
-    expect(await repo.listUnfrozenForMatter(mId)).toHaveLength(0);
+    await repo.freezeForMatter(asId<"MatterId">(mId), asId<"BillingRunId">(uuidv7()), new Date("2026-06-30"));
+    expect(await repo.listUnfrozenForMatter(asId<"MatterId">(mId))).toHaveLength(0);
 
     // listForLawyerInPeriod: juni-perioden, date asc, med KLIENT-namn på ärendet
-    const rows = await repo.listForLawyerInPeriod("org-1", uId, new Date("2026-06-01"), new Date("2026-06-30"));
+    const rows = await repo.listForLawyerInPeriod(asId<"OrganizationId">("org-1"), asId<"UserId">(uId), new Date("2026-06-01"), new Date("2026-06-30"));
     expect(rows.map((e) => e.id)).toEqual([eEarly, eFrozen, eLate]); // eOutside (maj) exkluderas
     expect(rows[0]!.matter?.contacts[0]?.contact.name).toBe("Klient AB");
   });
@@ -189,14 +190,14 @@ describe("ExpenseRepository — frysning + perLawyer-period (Drizzle/pglite)", (
     const repo = new DrizzleExpenseRepository(db);
 
     // listUnfrozenForMatter: ofrysta (eLate/eEarly/eOutside), date asc
-    expect((await repo.listUnfrozenForMatter(mId)).map((e) => e.id)).toEqual([eOutside, eEarly, eLate]);
+    expect((await repo.listUnfrozenForMatter(asId<"MatterId">(mId))).map((e) => e.id)).toEqual([eOutside, eEarly, eLate]);
 
     // freezeForMatter: fryser alla ofrysta i ärendet
-    await repo.freezeForMatter(mId, uuidv7(), new Date("2026-06-30"));
-    expect(await repo.listUnfrozenForMatter(mId)).toHaveLength(0);
+    await repo.freezeForMatter(asId<"MatterId">(mId), asId<"BillingRunId">(uuidv7()), new Date("2026-06-30"));
+    expect(await repo.listUnfrozenForMatter(asId<"MatterId">(mId))).toHaveLength(0);
 
     // listForLawyerInPeriod: juni → eEarly/eFrozen/eLate (date asc), KLIENT-namn joinas
-    const rows = await repo.listForLawyerInPeriod(org, uId, new Date("2026-06-01"), new Date("2026-06-30"));
+    const rows = await repo.listForLawyerInPeriod(asId<"OrganizationId">(org), asId<"UserId">(uId), new Date("2026-06-01"), new Date("2026-06-30"));
     expect(rows.map((e) => e.id)).toEqual([eEarly, eFrozen, eLate]);
     expect(rows[0]!.matter?.contacts[0]?.contact.name).toBe("Klient AB");
     expect(rows[0]!.matter?.paymentMethod).toBe("PRIVAT");
