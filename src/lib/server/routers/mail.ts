@@ -13,7 +13,7 @@
  */
 
 import { z } from "zod";
-import { asId, matterIdSchema } from "@/lib/shared/schemas/ids";
+import { asId, documentFolderIdSchema, matterIdSchema } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { emit, type EmitCtx } from "../events/emit";
 import type { Repositories } from "../repositories/repositories";
@@ -57,11 +57,11 @@ export const mailRouter = router({
         emlBase64: z.string().min(1),
         subject: z.string(),
         receivedAt: z.string(), // ISO
-        folderId: z.string().nullable().optional(),
+        folderId: documentFolderIdSchema.nullable().optional(),
         time: timeInput.optional(),
         /** Klient-genererat id (annars uuidv7). Begränsat till filnamns-säkra
          *  tecken — path:en byggs av det (defense-in-depth mot traversal). */
-        documentId: z.string().regex(/^[A-Za-z0-9_-]+$/).optional(),
+        documentId: z.string().regex(/^[A-Za-z0-9_-]+$/).brand<"DocumentId">().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -84,7 +84,7 @@ export const mailRouter = router({
         mimeType: "message/rfc822",
         sizeBytes: bytes.byteLength,
         storagePath,
-        folderId: input.folderId ? asId<"DocumentFolderId">(input.folderId) : null,
+        folderId: input.folderId ?? null,
         organizationId: ctx.orgId,
         analysisStatus: "PENDING" as const,
         uploadedById: asId<"UserId">(ctx.user.id),
