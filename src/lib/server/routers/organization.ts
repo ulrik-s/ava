@@ -2,7 +2,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { ledgerAccountMapSchema } from "@/lib/shared/accounting/account-map";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
-import { organizationIdSchema, asId } from "@/lib/shared/schemas/ids";
+import { officeIdSchema, organizationIdSchema, asId } from "@/lib/shared/schemas/ids";
 import type { Office, Organization } from "@/lib/shared/schemas/organization";
 import { router, protectedProcedure } from "../trpc";
 
@@ -36,7 +36,7 @@ export const organizationRouter = router({
 
   // Migrerad till repository-sömmen (ADR 0020). Org är rot-entiteten (scope:n).
   getSettings: protectedProcedure.query(async ({ ctx }) => {
-    const org = await ctx.repos.organizations.getById(ctx.user.organizationId);
+    const org = await ctx.repos.organizations.getById(asId<"OrganizationId">(ctx.user.organizationId));
     if (!org) throw new TRPCError({ code: "NOT_FOUND" });
     return toOrgSettings(org);
   }),
@@ -63,7 +63,7 @@ export const organizationRouter = router({
       if (patch.documentTags) {
         patch.documentTags = [...new Set(patch.documentTags.map((t) => t.trim()).filter(Boolean))];
       }
-      return ctx.repos.organizations.update(ctx.user.organizationId, patch satisfies Partial<Organization>);
+      return ctx.repos.organizations.update(asId<"OrganizationId">(ctx.user.organizationId), patch satisfies Partial<Organization>);
     }),
 
   /**
@@ -116,7 +116,7 @@ export const organizationRouter = router({
   updateOffice: protectedProcedure
     .input(
       z.object({
-        id: organizationIdSchema,
+        id: officeIdSchema,
         name: z.string().min(1).optional(),
         address: z.string().optional(),
         phone: z.string().optional(),
@@ -134,7 +134,7 @@ export const organizationRouter = router({
     }),
 
   deleteOffice: protectedProcedure
-    .input(z.object({ id: organizationIdSchema }))
+    .input(z.object({ id: officeIdSchema }))
     .mutation(async ({ ctx, input }) => {
       const office = await ctx.repos.offices.getByIdInOrg(input.id, ctx.user.organizationId);
       if (!office) throw new TRPCError({ code: "NOT_FOUND" });

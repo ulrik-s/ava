@@ -17,6 +17,7 @@ import { buildDrizzleRepositories } from "@/lib/server/repositories/drizzle-repo
 import type { Repositories } from "@/lib/server/repositories/repositories";
 import type { AppRouter } from "@/lib/server/routers/_app";
 import { DrizzleSyncStore } from "@/lib/server/sync/drizzle-sync-store";
+import { asId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { createTestDb, type TestDbHandle } from "../../server/db/pg-test-db";
 
@@ -79,6 +80,6 @@ describe("TrpcSyncTransport (#sync-bridge, end-to-end)", () => {
     };
     const res = await transport.push(mutation);
     expect(res.status).toBe("accepted");
-    expect(await repos.contacts.getById(c1)).toMatchObject({ id: c1, name: "E2E-kontakt" });
+    expect(await repos.contacts.getById(asId<"ContactId">(c1))).toMatchObject({ id: c1, name: "E2E-kontakt" });
   });
 });

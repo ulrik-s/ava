@@ -296,7 +296,7 @@ export const suggestionProcedures = {
 
       await ensureMatterContactLink(ctx, matterId, contactId, finalRole, sugg.notes);
       await ctx.repos.documentAnalysisSuggestions.update(
-        sugg.id, { status: "ACCEPTED", acceptedContactId: contactId } as Partial<DocumentAnalysisSuggestion>,
+        asId<"DocumentAnalysisSuggestionId">(sugg.id), { status: "ACCEPTED", acceptedContactId: contactId } as Partial<DocumentAnalysisSuggestion>,
       );
       return { contactId };
     }),

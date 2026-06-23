@@ -13,6 +13,7 @@ import {
 import { DrizzleInvoiceRepository } from "@/lib/server/repositories/drizzle-invoice-repository";
 import { InMemoryInvoiceRepository } from "@/lib/server/repositories/in-memory-invoice-repository";
 import type { InvoiceRepository } from "@/lib/server/repositories/invoice-repository";
+import { asId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { createTestDb, type TestDbHandle } from "../db/pg-test-db";
 
@@ -31,17 +32,17 @@ async function assertContract(repo: InvoiceRepository): Promise<void> {
   expect(created.amount).toBe(100_000);
   expect((created as { version?: number }).version).toBe(1);
 
-  expect(await repo.getById(invId)).toMatchObject({ id: invId, status: "DRAFT" });
-  expect(await repo.getById(uuidv7())).toBeNull();
+  expect(await repo.getById(asId<"InvoiceId">(invId))).toMatchObject({ id: invId, status: "DRAFT" });
+  expect(await repo.getById(asId<"InvoiceId">(uuidv7()))).toBeNull();
 
   expect((await repo.listByMatter(matterId)).map((i) => i.id)).toContain(invId);
 
-  const updated = await repo.update(invId, { status: "SENT" });
+  const updated = await repo.update(asId<"InvoiceId">(invId), { status: "SENT" });
   expect(updated.status).toBe("SENT");
   expect((updated as { version?: number }).version).toBe(2);
 
-  await repo.softDelete(invId);
-  expect(await repo.getById(invId)).toBeNull();
+  await repo.softDelete(asId<"InvoiceId">(invId));
+  expect(await repo.getById(asId<"InvoiceId">(invId))).toBeNull();
   expect(await repo.listByMatter(matterId)).toHaveLength(0);
 }
 

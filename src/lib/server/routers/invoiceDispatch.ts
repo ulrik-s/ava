@@ -32,7 +32,7 @@ async function assertInvoiceInOrg(ctx: DispatchCtx, invoiceId: string): Promise<
  */
 async function markSentIfDraft(ctx: DispatchCtx, inv: { id: string; status: string }): Promise<void> {
   if (inv.status !== "DRAFT" || !canTransition("DRAFT", "SENT")) return;
-  await ctx.repos.invoices.update(inv.id, { status: "SENT" satisfies InvoiceStatus });
+  await ctx.repos.invoices.update(asId<"InvoiceId">(inv.id), { status: "SENT" satisfies InvoiceStatus });
 }
 
 /** Tidsstämpelfältet som en statusövergång sätter (queued sätts vid skapande). */

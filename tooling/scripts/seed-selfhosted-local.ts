@@ -44,7 +44,7 @@ async function main(): Promise<void> {
   const repos = buildDrizzleRepositories(db);
   enableChangeLogOnAll(repos, createDbChangeLogRecorder(db));
   try {
-    if (!(await repos.organizations.getById(ORG))) {
+    if (!(await repos.organizations.getById(asId<"OrganizationId">(ORG)))) {
       await repos.organizations.create({ id: asId<"OrganizationId">(ORG), name: "Demobyrå AB" } satisfies Partial<Organization>);
     }
     // --demo (#633-uppf.): demo-seeden mappar sin admin + huvud-jurist till

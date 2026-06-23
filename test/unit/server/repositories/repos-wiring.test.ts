@@ -9,6 +9,7 @@ import { describe, it, expect } from "vitest-compat";
 import { noopPorts } from "@/lib/server/adapters/noop-ports";
 import { buildContext } from "@/lib/server/build-context";
 import { DemoDataStore } from "@/lib/server/data-store/DemoDataStore";
+import { asId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -30,7 +31,7 @@ describe("buildContext — repos-wiring", () => {
     expect(ctx.repos).toBeDefined();
     const created = await ctx.repos.invoices.create(inv(id, matterId));
     expect(created.amount).toBe(1_000);
-    expect(await ctx.repos.invoices.getById(id)).toMatchObject({ id });
+    expect(await ctx.repos.invoices.getById(asId<"InvoiceId">(id))).toMatchObject({ id });
     expect((await ctx.repos.invoices.listByMatter(matterId)).map((i) => i.id)).toContain(id);
   });
 
@@ -43,7 +44,7 @@ describe("buildContext — repos-wiring", () => {
         throw new Error("boom");
       }),
     ).rejects.toThrow("boom");
-    expect(await ctx.repos.invoices.getById(id)).toBeNull(); // rullades tillbaka
+    expect(await ctx.repos.invoices.getById(asId<"InvoiceId">(id))).toBeNull(); // rullades tillbaka
   });
 
   it("ctx.repos.transaction commit:ar vid framgång", async () => {
@@ -52,6 +53,6 @@ describe("buildContext — repos-wiring", () => {
     await ctx.repos.transaction(async (tx) => {
       await tx.invoices.create(inv(id, uuidv7()));
     });
-    expect(await ctx.repos.invoices.getById(id)).toMatchObject({ id });
+    expect(await ctx.repos.invoices.getById(asId<"InvoiceId">(id))).toMatchObject({ id });
   });
 });

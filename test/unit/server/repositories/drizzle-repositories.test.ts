@@ -6,6 +6,7 @@
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
 import { buildDrizzleRepositories } from "@/lib/server/repositories/drizzle-repositories";
+import { asId } from "@/lib/shared/schemas/ids";
 import type { Organization } from "@/lib/shared/schemas/organization";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { createTestDb, type TestDbHandle } from "../db/pg-test-db";
@@ -39,7 +40,7 @@ describe("buildDrizzleRepositories — kontrakt (pglite)", () => {
     const id = uuidv7();
     const created = await repos.organizations.create(org(id, "Aggregat AB"));
     expect((created as { version?: number }).version).toBe(1);
-    expect(await repos.organizations.getById(id)).toMatchObject({ id, name: "Aggregat AB" });
+    expect(await repos.organizations.getById(asId<"OrganizationId">(id))).toMatchObject({ id, name: "Aggregat AB" });
   });
 
   it("create utan id → genererar ett uuid (server-genererad create, #630)", async () => {
@@ -50,14 +51,14 @@ describe("buildDrizzleRepositories — kontrakt (pglite)", () => {
     const created = await repos.contacts.create({ organizationId: orgId, name: "Utan id", contactType: "PERSON" } as never);
     const id = (created as { id?: string }).id;
     expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
-    expect(await repos.contacts.getById(id!)).toMatchObject({ name: "Utan id" });
+    expect(await repos.contacts.getById(asId<"ContactId">(id!))).toMatchObject({ name: "Utan id" });
   });
 
   it("transaction committar vid success", async () => {
     const repos = buildDrizzleRepositories(handle.db);
     const id = uuidv7();
     await repos.transaction(async (tx) => { await tx.organizations.create(org(id)); });
-    expect(await repos.organizations.getById(id)).toMatchObject({ id });
+    expect(await repos.organizations.getById(asId<"OrganizationId">(id))).toMatchObject({ id });
   });
 
   it("transaction rullar tillbaka vid kast (inget delvis committat)", async () => {
@@ -69,7 +70,7 @@ describe("buildDrizzleRepositories — kontrakt (pglite)", () => {
         throw new Error("boom");
       }),
     ).rejects.toThrow("boom");
-    expect(await repos.organizations.getById(id)).toBeNull();
+    expect(await repos.organizations.getById(asId<"OrganizationId">(id))).toBeNull();
   });
 
   it("nästlad transaction är reentrant (delar samma tx → committar tillsammans)", async () => {
@@ -80,7 +81,7 @@ describe("buildDrizzleRepositories — kontrakt (pglite)", () => {
       await tx.organizations.create(org(a, "Yttre"));
       await tx.transaction(async (inner) => { await inner.organizations.create(org(b, "Inre")); });
     });
-    expect(await repos.organizations.getById(a)).toMatchObject({ id: a });
-    expect(await repos.organizations.getById(b)).toMatchObject({ id: b });
+    expect(await repos.organizations.getById(asId<"OrganizationId">(a))).toMatchObject({ id: a });
+    expect(await repos.organizations.getById(asId<"OrganizationId">(b))).toMatchObject({ id: b });
   });
 });

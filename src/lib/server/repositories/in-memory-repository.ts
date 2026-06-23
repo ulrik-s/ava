@@ -19,12 +19,12 @@ export class InMemoryRepository<Row extends RowBase> implements Repository<Row> 
   ) {}
 
   /** Hämta icke-mjukraderad rad (frånvarande `deletedAt` = ej raderad). */
-  async getById(id: string): Promise<Row | null> {
+  async getById(id: Row["id"]): Promise<Row | null> {
     const row = (await this.delegate.findFirst({ where: { id } })) as Row | null;
     return row && !row.deletedAt ? row : null;
   }
 
-  async getByIdOrThrow(id: string): Promise<Row> {
+  async getByIdOrThrow(id: Row["id"]): Promise<Row> {
     const row = await this.getById(id);
     if (!row) throw new Error(`Ingen rad med id ${id}`);
     return row;
@@ -34,27 +34,27 @@ export class InMemoryRepository<Row extends RowBase> implements Repository<Row> 
     return (await this.delegate.create({ data: { version: 1, ...data } as Partial<Row> })) as Row;
   }
 
-  async update(id: string, patch: Partial<Row>): Promise<Row> {
+  async update(id: Row["id"], patch: Partial<Row>): Promise<Row> {
     const current = await this.getByIdOrThrow(id);
     const data = { ...patch, version: (current.version ?? 1) + 1, updatedAt: this.now() } as Partial<Row>;
     return (await this.delegate.update({ where: { id }, data })) as Row;
   }
 
   /** Metadata-skrivning utan version-bump (se `Repository.updateMetadata`). */
-  async updateMetadata(id: string, patch: Partial<Row>): Promise<Row> {
+  async updateMetadata(id: Row["id"], patch: Partial<Row>): Promise<Row> {
     await this.getByIdOrThrow(id);
     const data = { ...patch, updatedAt: this.now() } as Partial<Row>;
     return (await this.delegate.update({ where: { id }, data })) as Row;
   }
 
-  async softDelete(id: string): Promise<Row> {
+  async softDelete(id: Row["id"]): Promise<Row> {
     const current = await this.getByIdOrThrow(id);
     const data = { deletedAt: this.now(), version: (current.version ?? 1) + 1 } as Partial<Row>;
     return (await this.delegate.update({ where: { id }, data })) as Row;
   }
 
   /** Hård delete — se `Repository.hardDelete` (medvetet ADR 0017-undantag). */
-  async hardDelete(id: string): Promise<void> {
+  async hardDelete(id: Row["id"]): Promise<void> {
     await this.delegate.delete({ where: { id } });
   }
 }

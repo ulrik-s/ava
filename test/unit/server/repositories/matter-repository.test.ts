@@ -10,6 +10,7 @@ import { matters } from "@/lib/server/db/schema";
 import { DrizzleMatterRepository } from "@/lib/server/repositories/drizzle-matter-repository";
 import { InMemoryMatterRepository } from "@/lib/server/repositories/in-memory-matter-repository";
 import type { MatterRepository } from "@/lib/server/repositories/matter-repository";
+import { asId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { createTestDb, type TestDbHandle } from "../db/pg-test-db";
 
@@ -25,15 +26,15 @@ async function assertContract(repo: MatterRepository): Promise<void> {
   expect(created.matterNumber).toBe("2026-0001");
   expect((created as { version?: number }).version).toBe(1);
 
-  expect(await repo.getById(matterId)).toMatchObject({ id: matterId });
-  expect(await repo.getById(uuidv7())).toBeNull();
+  expect(await repo.getById(asId<"MatterId">(matterId))).toMatchObject({ id: matterId });
+  expect(await repo.getById(asId<"MatterId">(uuidv7()))).toBeNull();
 
-  const updated = await repo.update(matterId, { title: "Ny titel" });
+  const updated = await repo.update(asId<"MatterId">(matterId), { title: "Ny titel" });
   expect(updated.title).toBe("Ny titel");
   expect((updated as { version?: number }).version).toBe(2);
 
-  await repo.softDelete(matterId);
-  expect(await repo.getById(matterId)).toBeNull();
+  await repo.softDelete(asId<"MatterId">(matterId));
+  expect(await repo.getById(asId<"MatterId">(matterId))).toBeNull();
 }
 
 describe("MatterRepository — in-memory", () => {
@@ -63,10 +64,10 @@ describe("MatterRepository — Drizzle (pglite)", () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const created = await repo.create({ id, organizationId: org, matterNumber: "2026-9", title: "T" } as any);
     expect((created as { version?: number }).version).toBe(1);
-    const updated = await repo.update(id, { title: "Ny" });
+    const updated = await repo.update(asId<"MatterId">(id), { title: "Ny" });
     expect((updated as { version?: number }).version).toBe(2);
-    await repo.softDelete(id);
-    expect(await repo.getById(id)).toBeNull();
+    await repo.softDelete(asId<"MatterId">(id));
+    expect(await repo.getById(asId<"MatterId">(id))).toBeNull();
   });
 
   it("getByIdInOrg org-scopar direkt på organizationId", async () => {

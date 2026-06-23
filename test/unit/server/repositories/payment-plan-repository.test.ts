@@ -10,6 +10,7 @@ import { contacts, invoices, matterContacts, matters, paymentPlanReminders, paym
 import { DrizzlePaymentPlanRepository } from "@/lib/server/repositories/drizzle-payment-plan-repository";
 import { InMemoryPaymentPlanRepository } from "@/lib/server/repositories/in-memory-payment-plan-repository";
 import type { PaymentPlanRepository } from "@/lib/server/repositories/payment-plan-repository";
+import { asId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { createTestDb, type TestDbHandle } from "../db/pg-test-db";
 
@@ -28,22 +29,22 @@ async function assertContract(repo: PaymentPlanRepository): Promise<void> {
   expect(created.status).toBe("ACTIVE");
   expect((created as { version?: number }).version).toBe(1);
 
-  expect(await repo.getById(planId)).toMatchObject({ id: planId });
-  expect(await repo.getById(uuidv7())).toBeNull();
+  expect(await repo.getById(asId<"PaymentPlanId">(planId))).toMatchObject({ id: planId });
+  expect(await repo.getById(asId<"PaymentPlanId">(uuidv7()))).toBeNull();
 
-  const updated = await repo.update(planId, { status: "CANCELLED" });
+  const updated = await repo.update(asId<"PaymentPlanId">(planId), { status: "CANCELLED" });
   expect(updated.status).toBe("CANCELLED");
   expect((updated as { version?: number }).version).toBe(2);
 
-  await repo.softDelete(planId);
-  expect(await repo.getById(planId)).toBeNull();
+  await repo.softDelete(asId<"PaymentPlanId">(planId));
+  expect(await repo.getById(asId<"PaymentPlanId">(planId))).toBeNull();
 
   // hardDelete (ADR 0017-undantag, används av createPaymentPlan): raden försvinner helt.
   const hardId = uuidv7();
   await repo.create(plan({ id: hardId }));
-  expect(await repo.getById(hardId)).toMatchObject({ id: hardId });
-  await repo.hardDelete(hardId);
-  expect(await repo.getById(hardId)).toBeNull();
+  expect(await repo.getById(asId<"PaymentPlanId">(hardId))).toMatchObject({ id: hardId });
+  await repo.hardDelete(asId<"PaymentPlanId">(hardId));
+  expect(await repo.getById(asId<"PaymentPlanId">(hardId))).toBeNull();
 }
 
 describe("PaymentPlanRepository — in-memory", () => {

@@ -9,9 +9,14 @@
  * Entitets-repositories + Drizzle-impl följer per-entitet (fan-out).
  */
 
-/** Minsta form en repository-rad har (reconcile-konventioner, ADR 0017/0019). */
-export interface RowBase {
-  id: string;
+/**
+ * Minsta form en repository-rad har (reconcile-konventioner, ADR 0017/0019).
+ * Generisk över id-brandet (`Id`) så bas-CRUD branda hela vägen ner: en entitet
+ * med `id: MatterId` ger `Repository<Matter>` brandade `getById(id: MatterId)` osv.
+ * — ingen naken `string` i id-vägen ([[feedback-minimize-raw-string]]).
+ */
+export interface RowBase<Id extends string = string> {
+  id: Id;
   version?: number;
   createdAt?: Date | string;
   updatedAt?: Date | string;
@@ -21,13 +26,13 @@ export interface RowBase {
 /**
  * Bas-CRUD som varje entitets-repository ärver. Entiteter LÄGGER TILL egna
  * typade metoder (t.ex. `invoices.getByIdWithLedger`, `matters.listByOrg`) —
- * inga dynamiska arg-objekt.
+ * inga dynamiska arg-objekt. `Id` härleds ur radens brandade `id`.
  */
-export interface Repository<Row extends RowBase> {
-  getById(id: string): Promise<Row | null>;
-  getByIdOrThrow(id: string): Promise<Row>;
+export interface Repository<Row extends RowBase, Id extends string = Row["id"]> {
+  getById(id: Id): Promise<Row | null>;
+  getByIdOrThrow(id: Id): Promise<Row>;
   create(data: Partial<Row>): Promise<Row>;
-  update(id: string, patch: Partial<Row>): Promise<Row>;
+  update(id: Id, patch: Partial<Row>): Promise<Row>;
   /**
    * Uppdatera metadata UTAN att bumpa `version`. `version` är radens
    * INNEHÅLLS-version (för dokument: ADR 0023) — den bumpas BARA av faktiska
@@ -36,14 +41,14 @@ export interface Repository<Row extends RowBase> {
    * INTE och får därför inte bumpa versionen. `updatedAt` uppdateras dock
    * fortfarande (radens senaste skrivning), och ändringen delta-synkas som vanligt.
    */
-  updateMetadata(id: string, patch: Partial<Row>): Promise<Row>;
+  updateMetadata(id: Id, patch: Partial<Row>): Promise<Row>;
   /** Mjuk delete (sätter `deletedAt`, bumpar `version`) — tombstone, ADR 0017. */
-  softDelete(id: string): Promise<Row>;
+  softDelete(id: Id): Promise<Row>;
   /**
    * Hård delete (tar bort raden helt). MEDVETEN ADR 0017-undantag: en hård
    * delete kan inte reconcile:as/replikeras (raden bara försvinner). Använd
    * BARA där en unik-constraint kräver det (t.ex. PaymentPlan.invoiceId @unique
    * när en gammal CANCELLED-plan måste ge plats åt en ny). Default = softDelete.
    */
-  hardDelete(id: string): Promise<void>;
+  hardDelete(id: Id): Promise<void>;
 }

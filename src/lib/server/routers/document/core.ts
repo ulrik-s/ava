@@ -10,7 +10,7 @@ import { base64ToBytes, bytesToBase64, contentStoragePath, sha256Hex } from "@/l
 import { isJunkFileName } from "@/lib/shared/junk-files";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { documentAnalysisStatusSchema, type Document } from "@/lib/shared/schemas/document";
-import { asId } from "@/lib/shared/schemas/ids";
+import { asId, documentFolderIdSchema, documentIdSchema, invoiceIdSchema, matterIdSchema, userIdSchema } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { orgProcedure } from "../../trpc";
 import { assertDocAccess } from "./shared";
@@ -20,8 +20,8 @@ export const coreProcedures = {
   list: orgProcedure
     .input(
       z.object({
-        matterId: z.string(),
-        folderId: z.string().nullable().default(null),
+        matterId: matterIdSchema,
+        folderId: documentFolderIdSchema.nullable().default(null),
         page: z.number().min(1).default(1),
         pageSize: z.number().min(1).max(100).default(50),
       }),
@@ -37,7 +37,7 @@ export const coreProcedures = {
 
   /** Komplett träd (alla mappar + dokument) för ett ärende i en query. */
   tree: orgProcedure
-    .input(z.object({ matterId: z.string() }))
+    .input(z.object({ matterId: matterIdSchema }))
     .query(async ({ ctx, input }) => {
       const [folders, documents] = await Promise.all([
         ctx.repos.documentFolders.listByMatter(input.matterId),
@@ -83,7 +83,7 @@ export const coreProcedures = {
     .query(({ ctx }) => ctx.repos.documents.listDocumentTypesForOrg(ctx.orgId)),
 
   delete: orgProcedure
-    .input(z.object({ id: z.string() }))
+    .input(z.object({ id: documentIdSchema }))
     .mutation(async ({ ctx, input }) => {
       const doc = await assertDocAccess(ctx, input.id);
       await ctx.repos.documents.hardDelete(input.id);
@@ -100,16 +100,16 @@ export const coreProcedures = {
    */
   register: orgProcedure
     .input(z.object({
-      id: z.string(),
-      matterId: z.string(),
+      id: documentIdSchema,
+      matterId: matterIdSchema,
       fileName: z.string(),
       mimeType: z.string(),
       sizeBytes: z.number(),
       storagePath: z.string(),
-      folderId: z.string().nullable().optional(),
+      folderId: documentFolderIdSchema.nullable().optional(),
       // Valfri AI-analys-metadata + setup-fält (demo-generator/fixtures,
       // ADR 0003). I appens upload-flöde sätts analysen async av `analyze`.
-      uploadedById: z.string().optional(),
+      uploadedById: userIdSchema.optional(),
       version: z.number().int().positive().optional(),
       title: z.string().nullable().optional(),
       documentType: z.string().nullable().optional(),
@@ -118,7 +118,7 @@ export const coreProcedures = {
       analyzedAt: z.string().optional(),
       createdAt: z.string().optional(),
       /** Koppla dokumentet till en faktura (t.ex. genererad faktura/underlag). */
-      invoiceId: z.string().nullable().optional(),
+      invoiceId: invoiceIdSchema.nullable().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       // Verifiera matter:n tillhör org:n
@@ -148,7 +148,7 @@ export const coreProcedures = {
 
   /** Kör (eller kör om) AI-analys på ett dokument. Returnerar omedelbart. */
   analyze: orgProcedure
-    .input(z.object({ documentId: z.string() }))
+    .input(z.object({ documentId: documentIdSchema }))
     .mutation(async ({ ctx, input }) => {
       await assertDocAccess(ctx, input.documentId);
       // Fire-and-forget — användaren får svar direkt; UI pollar för resultat.
@@ -167,7 +167,7 @@ export const coreProcedures = {
    */
   uploadContent: orgProcedure
     .input(z.object({
-      documentId: z.string(),
+      documentId: documentIdSchema,
       contentBase64: z.string(),
       /**
        * Optimistisk version (ADR 0033 §1): versionen klienten redigerade från.
@@ -210,7 +210,7 @@ export const coreProcedures = {
    * resultatet innehålls-adresserat (immutabelt → cacha för evigt).
    */
   downloadContent: orgProcedure
-    .input(z.object({ documentId: z.string() }))
+    .input(z.object({ documentId: documentIdSchema }))
     .query(async ({ ctx, input }) => {
       await assertDocAccess(ctx, input.documentId);
       const doc = (await ctx.repos.documents.getById(input.documentId)) as Document | null;
@@ -230,7 +230,7 @@ export const coreProcedures = {
    */
   saveConflictCopy: orgProcedure
     .input(z.object({
-      documentId: z.string(),
+      documentId: documentIdSchema,
       contentBase64: z.string(),
       /** Lokal tidsstämpel-etikett för kopians namn (klienten kan lokal tid). */
       label: z.string().min(1).max(40),
@@ -282,7 +282,7 @@ export const coreProcedures = {
   updateMetadata: orgProcedure
     .input(
       z.object({
-        documentId: z.string(),
+        documentId: documentIdSchema,
         title: z.string().nullable().optional(),
         documentType: z.string().nullable().optional(),
         summary: z.string().nullable().optional(),
@@ -317,7 +317,7 @@ export const coreProcedures = {
    * konsekvent. Etiketter är metadata → bumpar INTE versionen (#619).
    */
   setTags: orgProcedure
-    .input(z.object({ documentId: z.string(), tags: z.array(z.string()) }))
+    .input(z.object({ documentId: documentIdSchema, tags: z.array(z.string()) }))
     .mutation(async ({ ctx, input }) => {
       await assertDocAccess(ctx, input.documentId);
       const org = await ctx.repos.organizations.getById(ctx.orgId);
@@ -341,7 +341,7 @@ export const coreProcedures = {
   markExternallyEdited: orgProcedure
     .input(
       z.object({
-        id: z.string(),
+        id: documentIdSchema,
         saves: z.number().int().min(1),
         sessionStartedAt: z.union([z.string(), z.date()]),
         sizeBytes: z.number().int().min(0).optional(),

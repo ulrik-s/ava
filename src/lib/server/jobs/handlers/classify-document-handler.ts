@@ -13,12 +13,13 @@
 import { z } from "zod";
 import { type DocumentKind, guessFromFilename } from "@/lib/shared/document-kind";
 import type { Document } from "@/lib/shared/schemas/document";
+import { documentIdSchema, organizationIdSchema } from "@/lib/shared/schemas/ids";
 import type { DocumentRepository } from "../../repositories/document-repository";
 import type { JobHandler } from "../job-worker-runtime";
 
 const classifyJobSchema = z.object({
-  documentId: z.string(),
-  organizationId: z.string().optional(),
+  documentId: documentIdSchema,
+  organizationId: organizationIdSchema.optional(),
 });
 
 /** Dokument-fälten klassificeraren behöver (filnamn + var bytes ligger). */

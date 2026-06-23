@@ -9,6 +9,7 @@ import { paymentPlanReminders } from "@/lib/server/db/schema";
 import { DrizzlePaymentPlanReminderRepository } from "@/lib/server/repositories/drizzle-payment-plan-reminder-repository";
 import { InMemoryPaymentPlanReminderRepository } from "@/lib/server/repositories/in-memory-payment-plan-reminder-repository";
 import type { PaymentPlanReminderRepository } from "@/lib/server/repositories/payment-plan-reminder-repository";
+import { asId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { createTestDb, type TestDbHandle } from "../db/pg-test-db";
 
@@ -20,7 +21,7 @@ async function assertContract(repo: PaymentPlanReminderRepository): Promise<void
   } as any);
   expect(created.dueMonth).toBe("2026-06");
   expect((created as { version?: number }).version).toBe(1);
-  expect(await repo.getById(id)).toMatchObject({ id, type: "DUE" });
+  expect(await repo.getById(asId<"PaymentPlanReminderId">(id))).toMatchObject({ id, type: "DUE" });
 }
 
 describe("PaymentPlanReminderRepository — in-memory", () => {

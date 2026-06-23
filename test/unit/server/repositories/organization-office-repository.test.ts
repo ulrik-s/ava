@@ -9,6 +9,7 @@ import { DrizzleOfficeRepository } from "@/lib/server/repositories/drizzle-offic
 import { DrizzleOrganizationRepository } from "@/lib/server/repositories/drizzle-organization-repository";
 import { InMemoryOfficeRepository } from "@/lib/server/repositories/in-memory-office-repository";
 import { InMemoryOrganizationRepository } from "@/lib/server/repositories/in-memory-organization-repository";
+import { asId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { createTestDb, type TestDbHandle } from "../db/pg-test-db";
 
@@ -25,7 +26,7 @@ describe("Organization/Office — in-memory", () => {
       ],
     }, async () => {});
     const orgRepo = new InMemoryOrganizationRepository(store);
-    expect(await orgRepo.getById(org)).toMatchObject({ id: org });
+    expect(await orgRepo.getById(asId<"OrganizationId">(org))).toMatchObject({ id: org });
     const offRepo = new InMemoryOfficeRepository(store);
     const list = await offRepo.listByOrg(org);
     // In-memory query-engine sorterar inte boolean isMain desc (routern litar på
@@ -54,7 +55,7 @@ describe("Organization/Office — Drizzle (pglite)", () => {
     await db.insert(offices).values(v({ id: main, organizationId: org, name: "Sthlm", isMain: true }));
     await db.insert(offices).values(v({ id: branch, organizationId: org, name: "Gbg", isMain: false }));
     const offRepo = new DrizzleOfficeRepository(handle.db);
-    expect(await new DrizzleOrganizationRepository(handle.db).getById(org)).toMatchObject({ id: org });
+    expect(await new DrizzleOrganizationRepository(handle.db).getById(asId<"OrganizationId">(org))).toMatchObject({ id: org });
     expect((await offRepo.listByOrg(org)).map((o) => o.id)).toEqual([main, branch]);
     expect(await offRepo.getByIdInOrg(branch, org)).toMatchObject({ id: branch });
     expect(await offRepo.getByIdInOrg(branch, uuidv7())).toBeNull();
