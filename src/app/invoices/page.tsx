@@ -5,6 +5,7 @@ import { DataTable, type Column } from "@/components/ui/data-table";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
+import type { InvoiceStatus, InvoiceType } from "@/lib/shared/schemas/enums";
 import { SieExportButton } from "./_sie-export-button";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -21,7 +22,7 @@ const TYPE_LABELS: Record<string, string> = {
   FINAL: "Slutfaktura",
 };
 
-function statusBadgeClass(status: string): string {
+function statusBadgeClass(status: InvoiceStatus): string {
   switch (status) {
     case "PAID": return "bg-green-100 text-green-700";
     case "SENT": return "bg-amber-100 text-amber-700";
@@ -36,8 +37,8 @@ interface InvoiceRow {
   id: string;
   invoiceNumber?: string | null;
   invoiceDate: string | Date;
-  invoiceType: string;
-  status: string;
+  invoiceType: InvoiceType;
+  status: InvoiceStatus;
   amount: number;
   matter: { id: string; matterNumber: string; title: string };
 }
