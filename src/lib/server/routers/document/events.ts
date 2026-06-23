@@ -9,30 +9,30 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import type { MatterEventSuggestion } from "@/lib/shared/schemas/document";
-import { asId } from "@/lib/shared/schemas/ids";
+import { matterEventSuggestionIdSchema, matterIdSchema } from "@/lib/shared/schemas/ids";
 import { orgProcedure } from "../../trpc";
 
 export const eventProcedures = {
   /** Lista icke-avvisade händelser för ett ärende, sorterat kronologiskt. */
   events: orgProcedure
-    .input(z.object({ matterId: z.string() }))
+    .input(z.object({ matterId: matterIdSchema }))
     .query(({ ctx, input }) =>
-      ctx.repos.matterEventSuggestions.listForMatter(asId<"MatterId">(input.matterId), ctx.orgId),
+      ctx.repos.matterEventSuggestions.listForMatter(input.matterId, ctx.orgId),
     ),
 
   rejectEvent: orgProcedure
-    .input(z.object({ eventId: z.string() }))
+    .input(z.object({ eventId: matterEventSuggestionIdSchema }))
     .mutation(async ({ ctx, input }) => {
-      const ev = await ctx.repos.matterEventSuggestions.getByIdInOrg(asId<"MatterEventSuggestionId">(input.eventId), ctx.orgId);
+      const ev = await ctx.repos.matterEventSuggestions.getByIdInOrg(input.eventId, ctx.orgId);
       if (!ev) throw new TRPCError({ code: "NOT_FOUND" });
       return ctx.repos.matterEventSuggestions.update(ev.id, { status: "REJECTED" } as Partial<MatterEventSuggestion>);
     }),
 
   /** Markera händelsen som tillagd i kalender (UI-indikator). */
   markEventAdded: orgProcedure
-    .input(z.object({ eventId: z.string() }))
+    .input(z.object({ eventId: matterEventSuggestionIdSchema }))
     .mutation(async ({ ctx, input }) => {
-      const ev = await ctx.repos.matterEventSuggestions.getByIdInOrg(asId<"MatterEventSuggestionId">(input.eventId), ctx.orgId);
+      const ev = await ctx.repos.matterEventSuggestions.getByIdInOrg(input.eventId, ctx.orgId);
       if (!ev) throw new TRPCError({ code: "NOT_FOUND" });
       return ctx.repos.matterEventSuggestions.update(ev.id, { status: "ACCEPTED" } as Partial<MatterEventSuggestion>);
     }),
