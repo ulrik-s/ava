@@ -17,7 +17,7 @@ import { z } from "zod";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import type { ExpectedReceivable } from "@/lib/shared/schemas/billing";
 import { expectedReceivableStatusSchema } from "@/lib/shared/schemas/billing";
-import { expectedReceivableIdSchema, matterIdSchema, type ExpectedReceivableId, type OrganizationId } from "@/lib/shared/schemas/ids";
+import { expectedReceivableIdSchema, matterIdSchema, type ExpectedReceivableId, type MatterId, type OrganizationId } from "@/lib/shared/schemas/ids";
 import type { Repositories } from "../repositories/repositories";
 import { router, orgProcedure } from "../trpc";
 
@@ -43,9 +43,9 @@ export const expectedReceivableRouter = router({
    */
   candidates: orgProcedure.query(async ({ ctx }) => {
     const rows = (await ctx.repos.expectedReceivables.listForOrg(ctx.orgId, { status: "PENDING" })) as
-      Array<{ id: string; matterId: string; description: string; expectedAmount: number }>;
+      Array<{ id: ExpectedReceivableId; matterId: MatterId; description: string; expectedAmount: number }>;
     const matters = (await ctx.repos.matters.listByOrg(ctx.orgId)) as
-      Array<{ id: string; matterNumber?: string | null; courtCaseNumber?: string | null }>;
+      Array<{ id: MatterId; matterNumber?: string | null; courtCaseNumber?: string | null }>;
     const byId = new Map(matters.map((m) => [String(m.id), m]));
     return rows.map((r) => {
       const m = byId.get(String(r.matterId));

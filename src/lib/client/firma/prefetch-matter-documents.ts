@@ -12,15 +12,17 @@
  * gratis, så ett återbesök på ärendet laddar inte om något.
  */
 
+import type { DocumentId } from "@/lib/shared/schemas/ids";
+
 export interface PrefetchableDoc {
-  id: string;
+  id: DocumentId;
   storagePath?: string | null;
   fileName?: string;
 }
 
 export async function prefetchMatterDocuments(
   docs: ReadonlyArray<PrefetchableDoc>,
-  loadBlob: (doc: { id: string; storagePath: string | null; fileName: string }) => Promise<Blob | null>,
+  loadBlob: (doc: { id: DocumentId; storagePath: string | null; fileName: string }) => Promise<Blob | null>,
   concurrency = 3,
 ): Promise<number> {
   let next = 0;

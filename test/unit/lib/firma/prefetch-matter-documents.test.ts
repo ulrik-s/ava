@@ -4,11 +4,12 @@
 
 import { describe, it, expect, vi } from "vitest-compat";
 import { prefetchMatterDocuments } from "@/lib/client/firma/prefetch-matter-documents";
+import { asId } from "@/lib/shared/schemas/ids";
 
 const docs = [
-  { id: "1", storagePath: "documents/content/a", fileName: "a.pdf" },
-  { id: "2", storagePath: null, fileName: "b.docx" },
-  { id: "3" },
+  { id: asId<"DocumentId">("1"), storagePath: "documents/content/a", fileName: "a.pdf" },
+  { id: asId<"DocumentId">("2"), storagePath: null, fileName: "b.docx" },
+  { id: asId<"DocumentId">("3") },
 ];
 
 describe("prefetchMatterDocuments", () => {
@@ -44,7 +45,7 @@ describe("prefetchMatterDocuments", () => {
   it("respekterar concurrency-taket (aldrig fler samtidiga än gränsen)", async () => {
     let active = 0;
     let peak = 0;
-    const many = Array.from({ length: 10 }, (_v, i) => ({ id: String(i) }));
+    const many = Array.from({ length: 10 }, (_v, i) => ({ id: asId<"DocumentId">(String(i)) }));
     await prefetchMatterDocuments(many, async () => {
       active++;
       peak = Math.max(peak, active);

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest-compat";
 import type { LedgerPayment } from "@/lib/server/integrations/ledger/port";
 import { reconcileLedgerPayments, type ReconcileInvoice } from "@/lib/server/integrations/ledger/reconcile-payments";
+import { asId } from "@/lib/shared/schemas/ids";
 
 const pay = (over: Partial<LedgerPayment> = {}): LedgerPayment => ({
   externalId: "tx-1",
@@ -10,7 +11,7 @@ const pay = (over: Partial<LedgerPayment> = {}): LedgerPayment => ({
 });
 
 const inv = (over: Partial<ReconcileInvoice> = {}): ReconcileInvoice => ({
-  id: "inv-1",
+  id: asId<"InvoiceId">("inv-1"),
   ocrReference: "2026004206",
   paymentReferences: [],
   ...over,

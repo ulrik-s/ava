@@ -6,8 +6,10 @@
  * samma pattern som analyze-dispatch.
  */
 
+import type { DocumentId } from "@/lib/shared/schemas/ids";
+
 export interface ExtractTextArgs {
-  documentId: string;
+  documentId: DocumentId;
   text: string;
   signal?: AbortSignal;
 }

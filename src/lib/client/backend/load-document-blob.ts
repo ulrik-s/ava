@@ -8,13 +8,14 @@
  */
 
 import { base64ToBytes } from "@/lib/shared/content-address";
+import type { DocumentId } from "@/lib/shared/schemas/ids";
 import { DocumentContentCache } from "./content-cache";
 
 /** tRPC-ytan primitiven behöver (strukturell → ingen hård klient-typ-koppling). */
 export interface DownloadClient {
   document: {
     downloadContent: {
-      query: (input: { documentId: string }) => Promise<{ contentBase64: string; mimeType: string }>;
+      query: (input: { documentId: DocumentId }) => Promise<{ contentBase64: string; mimeType: string }>;
     };
   };
 }
@@ -32,13 +33,13 @@ export function mimeFromName(fileName: string): string {
 }
 
 /** Cache-nyckel ur storagePath (sista segmentet = sha, content-adresserat). */
-function cacheKey(doc: { id: string; storagePath?: string | null }): string {
+function cacheKey(doc: { id: DocumentId; storagePath?: string | null }): string {
   return doc.storagePath?.split("/").pop() ?? doc.id;
 }
 
 export async function loadDocumentBlob(
   client: DownloadClient,
-  doc: { id: string; storagePath?: string | null; fileName: string },
+  doc: { id: DocumentId; storagePath?: string | null; fileName: string },
   cache: DocumentContentCache = new DocumentContentCache(),
 ): Promise<Blob | null> {
   const key = cacheKey(doc);

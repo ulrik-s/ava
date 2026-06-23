@@ -6,12 +6,13 @@
 import type { PgBoss } from "pg-boss";
 import { describe, expect, it, vi } from "vitest-compat";
 import { QueueBackedDocumentAnalyzer } from "@/lib/server/jobs/queue-backed-document-analyzer";
+import { asId } from "@/lib/shared/schemas/ids";
 
 describe("QueueBackedDocumentAnalyzer", () => {
   it("enqueue:ar classify-document med documentId + organizationId + singletonKey (idempotens)", async () => {
     const send = vi.fn(async () => "job-1");
     const analyzer = new QueueBackedDocumentAnalyzer(() => ({ send } as unknown as PgBoss), "org-1");
-    await analyzer.analyze("doc-9");
+    await analyzer.analyze(asId<"DocumentId">("doc-9"));
     // singletonKey = documentId → som mest ett väntande classify-jobb per dokument (#504).
     expect(send).toHaveBeenCalledWith(
       "classify-document",
@@ -22,6 +23,6 @@ describe("QueueBackedDocumentAnalyzer", () => {
 
   it("kastar tydligt när boss saknas (kön ej redo)", async () => {
     const analyzer = new QueueBackedDocumentAnalyzer(() => null, "org-1");
-    await expect(analyzer.analyze("doc-9")).rejects.toThrow(/jobb-kön är inte redo/);
+    await expect(analyzer.analyze(asId<"DocumentId">("doc-9"))).rejects.toThrow(/jobb-kön är inte redo/);
   });
 });

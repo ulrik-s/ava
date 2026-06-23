@@ -11,6 +11,7 @@ import {
   searchMatters, getRestToken, mailContext, persistCreds, runSave, renderResults, bootstrap,
   type OfficeLike, type MatterHit,
 } from "@/lib/client/addin/taskpane-controller";
+import { asId } from "@/lib/shared/schemas/ids";
 
 const saveIncomingMailMock = vi.fn(async () => ({ ok: true }));
 vi.mock("@/lib/client/addin/save-incoming-mail", () => ({
@@ -54,7 +55,7 @@ function makeOffice(o: OfficeOverrides = {}): { office: OfficeLike; set: ReturnT
   return { office, set, saveAsync };
 }
 
-const matter: MatterHit = { id: "m1", matterNumber: "2026-0007", title: "Tvist" };
+const matter: MatterHit = { id: asId<"MatterId">("m1"), matterNumber: "2026-0007", title: "Tvist" };
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -155,7 +156,7 @@ describe("renderResults", () => {
   it("renderar klickbara rader; klick markerar + rapporterar valet", () => {
     const box = document.createElement("div");
     const picked: MatterHit[] = [];
-    renderResults(box, [matter, { id: "m2", matterNumber: "2026-9", title: "B" }], (m) => picked.push(m));
+    renderResults(box, [matter, { id: asId<"MatterId">("m2"), matterNumber: "2026-9", title: "B" }], (m) => picked.push(m));
     const rows = box.querySelectorAll(".matter");
     expect(rows).toHaveLength(2);
     expect(rows[0]!.textContent).toBe("2026-0007 — Tvist");

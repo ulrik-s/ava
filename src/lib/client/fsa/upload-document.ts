@@ -13,6 +13,7 @@
  * tRPC-anrop. Caller wirar in:nytt-document genom mutation efteråt.
  */
 
+import type { MatterId } from "@/lib/shared/schemas/ids";
 import { FsaIsoGitAdapter } from "./fs-adapter";
 
 export interface UploadResult {
@@ -25,7 +26,7 @@ export interface UploadResult {
 
 export interface UploadOptions {
   handle: FileSystemDirectoryHandle;
-  matterId: string;
+  matterId: MatterId;
   file: File;
   /** Optional id-generator (för deterministiska tester). */
   generateId?: () => string;

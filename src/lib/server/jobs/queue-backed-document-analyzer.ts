@@ -12,6 +12,7 @@
 
 import type { PgBoss } from "pg-boss";
 import type { IDocumentAnalyzer } from "@/lib/server/ports";
+import type { DocumentId } from "@/lib/shared/schemas/ids";
 import { JOB_QUEUES } from "./job-queue";
 
 export class QueueBackedDocumentAnalyzer implements IDocumentAnalyzer {
@@ -20,7 +21,7 @@ export class QueueBackedDocumentAnalyzer implements IDocumentAnalyzer {
     private readonly organizationId: string,
   ) {}
 
-  async analyze(documentId: string): Promise<void> {
+  async analyze(documentId: DocumentId): Promise<void> {
     const boss = this.getBoss();
     if (!boss) throw new Error("jobb-kön är inte redo — dokumentet kunde inte köas för klassificering");
     // Idempotens (#504, ADR 0024): `singletonKey = documentId` → som mest ETT

@@ -10,16 +10,17 @@
  */
 
 import { omitUndefined } from "@/lib/shared/omit-undefined";
+import type { DocumentId } from "@/lib/shared/schemas/ids";
 import { jobQueue } from "./job-queue";
 
 interface ClassifyPayload extends Record<string, unknown> {
-  documentId: string;
+  documentId: DocumentId;
   fileName: string;
   storagePath?: string;
 }
 
 interface ExtractTextPayload extends Record<string, unknown> {
-  documentId: string;
+  documentId: DocumentId;
   fileName: string;
   storagePath: string;
   mimeType?: string;

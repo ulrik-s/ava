@@ -10,6 +10,7 @@ import { invoiceDispatches, invoices, matters } from "@/lib/server/db/schema";
 import { DrizzleInvoiceDispatchRepository } from "@/lib/server/repositories/drizzle-invoice-dispatch-repository";
 import { InMemoryInvoiceDispatchRepository } from "@/lib/server/repositories/in-memory-invoice-dispatch-repository";
 import { prebakeJoins } from "@/lib/shared/demo-source";
+import { asId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { createTestDb, type TestDbHandle } from "../db/pg-test-db";
 
@@ -27,11 +28,11 @@ describe("InvoiceDispatchRepository — in-memory", () => {
       ],
     } as DemoSource);
     const repo = new InMemoryInvoiceDispatchRepository(new LocalStore(source, async () => {}));
-    expect(await repo.listByInvoice(invId)).toHaveLength(2);
-    const queued = await repo.listQueuedForOrg("org-1");
+    expect(await repo.listByInvoice(asId<"InvoiceId">(invId))).toHaveLength(2);
+    const queued = await repo.listQueuedForOrg(asId<"OrganizationId">("org-1"));
     expect(queued).toHaveLength(1);
     expect(queued[0]!.invoice?.invoiceNumber).toBe("F-1");
-    expect(await repo.listQueuedForOrg("org-2")).toHaveLength(0);
+    expect(await repo.listQueuedForOrg(asId<"OrganizationId">("org-2"))).toHaveLength(0);
   });
 });
 
@@ -53,10 +54,10 @@ describe("InvoiceDispatchRepository — Drizzle (pglite)", () => {
     await db.insert(invoiceDispatches).values(v({ id: d1, invoiceId: invId, channel: "email", recipient: "a@x", status: "queued", queuedAt: new Date(), recordedById: uuidv7() }));
     await db.insert(invoiceDispatches).values(v({ id: uuidv7(), invoiceId: invId, channel: "email", recipient: "b@x", status: "sent", queuedAt: new Date(), recordedById: uuidv7() }));
     const repo = new DrizzleInvoiceDispatchRepository(handle.db);
-    expect(await repo.listByInvoice(invId)).toHaveLength(2);
-    const queued = await repo.listQueuedForOrg(org);
+    expect(await repo.listByInvoice(asId<"InvoiceId">(invId))).toHaveLength(2);
+    const queued = await repo.listQueuedForOrg(asId<"OrganizationId">(org));
     expect(queued).toHaveLength(1);
     expect(queued[0]!.invoice?.invoiceNumber).toBe("F-1");
-    expect(await repo.listQueuedForOrg(uuidv7())).toHaveLength(0);
+    expect(await repo.listQueuedForOrg(asId<"OrganizationId">(uuidv7()))).toHaveLength(0);
   });
 });

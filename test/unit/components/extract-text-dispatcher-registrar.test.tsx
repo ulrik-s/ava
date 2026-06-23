@@ -7,6 +7,7 @@ import { render } from "@testing-library/react";
 import { describe, it, expect, afterEach } from "vitest-compat";
 import { ExtractTextDispatcherRegistrar } from "@/components/documents/extract-text-dispatcher-registrar";
 import { dispatchExtractText, setExtractTextDispatcher } from "@/lib/client/jobs/extract-text-dispatch";
+import { asId } from "@/lib/shared/schemas/ids";
 
 afterEach(() => setExtractTextDispatcher(null));
 
@@ -17,12 +18,12 @@ describe("ExtractTextDispatcherRegistrar", () => {
     window.addEventListener("ava:document-text-extracted", listener);
 
     const { unmount } = render(<ExtractTextDispatcherRegistrar />);
-    await dispatchExtractText({ documentId: "d1", text: "hej världen" });
+    await dispatchExtractText({ documentId: asId<"DocumentId">("d1"), text: "hej världen" });
     expect(events).toHaveLength(1);
     expect(events[0]!.detail).toEqual({ documentId: "d1", text: "hej världen" });
 
     unmount();
-    await expect(dispatchExtractText({ documentId: "d2", text: "x" }))
+    await expect(dispatchExtractText({ documentId: asId<"DocumentId">("d2"), text: "x" }))
       .rejects.toThrow(/Ingen extract-text-dispatcher/);
 
     window.removeEventListener("ava:document-text-extracted", listener);

@@ -13,6 +13,7 @@
 import type { inferRouterInputs } from "@trpc/server";
 import type { AppRouter } from "@/lib/server/routers/_app";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
+import { asId, type InvoiceId, type MatterId } from "@/lib/shared/schemas/ids";
 
 type RouterInputs = inferRouterInputs<AppRouter>;
 type RegisterInput = RouterInputs["document"]["register"];
@@ -37,7 +38,7 @@ export interface FakturaDocMeta {
 }
 
 export interface FakturaDocInvoice {
-  id: string;
+  id: InvoiceId;
   amount: number;
   invoiceNumber?: string | null | undefined;
   ocrReference?: string | null | undefined;
@@ -46,7 +47,7 @@ export interface FakturaDocInvoice {
 
 export interface GenerateFakturaDocArgs {
   invoice: FakturaDocInvoice;
-  matterId: string;
+  matterId: MatterId;
   meta: FakturaDocMeta;
   register: RegisterMut;
   utils: DocUtils;
@@ -72,7 +73,7 @@ export async function generateFakturaDoc(args: GenerateFakturaDocArgs): Promise<
   const fileName = `Faktura ${meta.matterNumber} ${new Date().toISOString().slice(0, 10)}.pdf`;
   const storagePath = `documents/content/${docId}.pdf`;
   await register.mutateAsync({
-    id: docId, matterId, fileName, mimeType: "application/pdf",
+    id: asId<"DocumentId">(docId), matterId, fileName, mimeType: "application/pdf",
     sizeBytes: bytes.byteLength, storagePath, documentType: "Faktura",
     invoiceId: invoice.id, analysisStatus: "DONE",
   });

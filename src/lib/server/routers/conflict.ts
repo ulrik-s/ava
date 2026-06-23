@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { similarity } from "@/lib/shared/fuzzy-similarity";
-import { asId } from "@/lib/shared/schemas/ids";
+import { asId, type ContactId, type MatterId } from "@/lib/shared/schemas/ids";
 import type { ConflictContactRow } from "../repositories/matter-contact-repository";
 import type { Repositories } from "../repositories/repositories";
 import { router, protectedProcedure } from "../trpc";
@@ -8,12 +8,12 @@ import { router, protectedProcedure } from "../trpc";
 type ConflictCtx = { repos: Repositories; user: { id: string; organizationId: string } };
 
 interface ConflictResult {
-  contactId: string;
+  contactId: ContactId;
   contactName: string;
   contactType: string;
   personalNumber: string | null;
   orgNumber: string | null;
-  matterId: string;
+  matterId: MatterId;
   matterNumber: string;
   matterTitle: string;
   role: string;

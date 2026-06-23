@@ -6,6 +6,7 @@
 import { describe, it, expect, vi } from "vitest-compat";
 import { saveIncomingMail, type MailSaverClient } from "@/lib/client/addin/save-incoming-mail";
 import type { GraphFetch } from "@/lib/client/graph/graph-mail";
+import { asId } from "@/lib/shared/schemas/ids";
 
 const RAW = "Subject: Hej\r\n\r\nKropp";
 const graphOk: GraphFetch = vi.fn(async () => new Response(new TextEncoder().encode(RAW), { status: 200 }));
@@ -21,7 +22,7 @@ describe("saveIncomingMail", () => {
     const { client, mutate } = mockClient();
     await saveIncomingMail({
       client, graphToken: "gtok", restId: "id1",
-      matterId: "m1", subject: "Hej", receivedAt: "2026-06-14T08:00:00Z", fetch: graphOk,
+      matterId: asId<"MatterId">("m1"), subject: "Hej", receivedAt: "2026-06-14T08:00:00Z", fetch: graphOk,
     });
     expect(mutate).toHaveBeenCalledWith({
       matterId: "m1",
@@ -34,7 +35,7 @@ describe("saveIncomingMail", () => {
   it("skickar med time + folderId när de anges", async () => {
     const { client, mutate } = mockClient();
     await saveIncomingMail({
-      client, graphToken: "g", restId: "id1", matterId: "m1", subject: "S",
+      client, graphToken: "g", restId: "id1", matterId: asId<"MatterId">("m1"), subject: "S",
       receivedAt: "2026-06-14T08:00:00Z", time: { minutes: 15, description: "Läsning" },
       folderId: "f1", fetch: graphOk,
     });
@@ -47,7 +48,7 @@ describe("saveIncomingMail", () => {
     const { client, mutate } = mockClient();
     const fail: GraphFetch = vi.fn(async () => new Response("no", { status: 403 }));
     await expect(saveIncomingMail({
-      client, graphToken: "g", restId: "id1", matterId: "m1", subject: "S",
+      client, graphToken: "g", restId: "id1", matterId: asId<"MatterId">("m1"), subject: "S",
       receivedAt: "2026-06-14T08:00:00Z", fetch: fail,
     })).rejects.toThrow(/\$value.*403/);
     expect(mutate).not.toHaveBeenCalled();

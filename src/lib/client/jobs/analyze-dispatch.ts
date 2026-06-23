@@ -11,9 +11,10 @@
  */
 
 import type { DocumentAnalysisStatus } from "@/lib/shared/schemas/document";
+import type { DocumentId } from "@/lib/shared/schemas/ids";
 
 export interface AnalyzeArgs {
-  documentId: string;
+  documentId: DocumentId;
   kind: string;
   /** ISO-timestamp när analysen körde. UI:n förlitar sig på detta
    *  för att stänga "⏳ analyseras..."-state:n. */

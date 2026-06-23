@@ -12,6 +12,7 @@
 
 import { describe, it, expect } from "vitest-compat";
 import { uploadDocumentToFsa } from "@/lib/client/fsa/upload-document";
+import { asId } from "@/lib/shared/schemas/ids";
 import { makeFakeFsa } from "../../../helpers/fake-fsa";
 
 describe("Document upload — integration mot fake FSA", () => {
@@ -22,7 +23,7 @@ describe("Document upload — integration mot fake FSA", () => {
 
     const result = await uploadDocumentToFsa({
       handle: fsa.root,
-      matterId: "m1",
+      matterId: asId<"MatterId">("m1"),
       file,
       generateId: () => "d-1",
     });

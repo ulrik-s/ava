@@ -8,11 +8,12 @@ import { IDBFactory } from "fake-indexeddb";
 import { beforeEach, describe, expect, it, vi } from "vitest-compat";
 import { DocumentContentCache } from "@/lib/client/backend/content-cache";
 import { loadDocumentBlob } from "@/lib/client/backend/load-document-blob";
+import { asId } from "@/lib/shared/schemas/ids";
 
 let cache: DocumentContentCache;
 beforeEach(() => { cache = new DocumentContentCache(new IDBFactory()); });
 
-const doc = { id: "d1", storagePath: "documents/content/sha-abc", fileName: "avtal.pdf" };
+const doc = { id: asId<"DocumentId">("d1"), storagePath: "documents/content/sha-abc", fileName: "avtal.pdf" };
 
 function clientReturning(contentBase64: string, mimeType = "application/pdf") {
   return { document: { downloadContent: { query: vi.fn(async () => ({ contentBase64, mimeType })) } } };

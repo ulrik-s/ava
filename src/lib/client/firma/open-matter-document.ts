@@ -39,7 +39,7 @@ export async function openMatterDocument(doc: OpenableDoc): Promise<void> {
       // Server-tier: helpern hämtar via tRPC document.downloadContent (ADR 0031).
       const viaHelper = await fetchContentViaHelper({ document: { id: asId<"DocumentId">(doc.id), trpcUrl }, fileName });
       if (viaHelper) return new Blob([viaHelper as BlobPart], { type: mimeFromName(fileName) });
-      return loadDocumentBlob(client, { id: doc.id, storagePath: doc.storagePath ?? null, fileName });
+      return loadDocumentBlob(client, { id: asId<"DocumentId">(doc.id), storagePath: doc.storagePath ?? null, fileName });
     };
   }
 

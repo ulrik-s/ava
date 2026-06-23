@@ -5,7 +5,7 @@
 
 import { and, asc, desc, eq, isNull } from "drizzle-orm";
 import type { InvoiceDispatch } from "@/lib/shared/schemas/billing";
-import { asId, type InvoiceId } from "@/lib/shared/schemas/ids";
+import type { InvoiceId, OrganizationId } from "@/lib/shared/schemas/ids";
 import { invoiceDispatches, invoices, matters } from "../db/schema";
 import type { AppDb } from "../db/types";
 import { DrizzleRepository, versionedTable } from "./drizzle-repository";
@@ -24,15 +24,15 @@ export class DrizzleInvoiceDispatchRepository
     super(db, versionedTable(invoiceDispatches), now);
   }
 
-  async listByInvoice(invoiceId: string): Promise<InvoiceDispatch[]> {
+  async listByInvoice(invoiceId: InvoiceId): Promise<InvoiceDispatch[]> {
     const rows = await this.db
       .select().from(invoiceDispatches)
-      .where(and(eq(invoiceDispatches.invoiceId, asId<"InvoiceId">(invoiceId)), isNull(invoiceDispatches.deletedAt)))
+      .where(and(eq(invoiceDispatches.invoiceId, invoiceId), isNull(invoiceDispatches.deletedAt)))
       .orderBy(desc(invoiceDispatches.queuedAt));
     return rows;
   }
 
-  async listQueuedForOrg(organizationId: string): Promise<InvoiceDispatchQueuedRow[]> {
+  async listQueuedForOrg(organizationId: OrganizationId): Promise<InvoiceDispatchQueuedRow[]> {
     const rows = await this.db
       .select({
         d: invoiceDispatches,
@@ -44,7 +44,7 @@ export class DrizzleInvoiceDispatchRepository
       .innerJoin(matters, eq(invoices.matterId, matters.id))
       .where(and(
         eq(invoiceDispatches.status, "queued"),
-        eq(matters.organizationId, asId<"OrganizationId">(organizationId)),
+        eq(matters.organizationId, organizationId),
         isNull(invoiceDispatches.deletedAt),
       ))
       .orderBy(asc(invoiceDispatches.queuedAt));
