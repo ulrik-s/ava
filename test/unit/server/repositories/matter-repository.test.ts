@@ -14,7 +14,7 @@ import { asId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { createTestDb, type TestDbHandle } from "../db/pg-test-db";
 
-const matterId = uuidv7();
+const matterId = asId<"MatterId">(uuidv7());
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const matter = (o: Record<string, unknown> = {}): any => ({
@@ -46,8 +46,8 @@ describe("MatterRepository — in-memory", () => {
   it("getByIdInOrg org-scopar direkt på organizationId", async () => {
     const store = new LocalStore({ matters: [matter({ id: matterId, organizationId: "org-1" })] }, async () => {});
     const repo = new InMemoryMatterRepository(store);
-    expect(await repo.getByIdInOrg(matterId, "org-1")).toMatchObject({ id: matterId });
-    expect(await repo.getByIdInOrg(matterId, "org-2")).toBeNull(); // fel org
+    expect(await repo.getByIdInOrg(matterId, asId<"OrganizationId">("org-1"))).toMatchObject({ id: matterId });
+    expect(await repo.getByIdInOrg(matterId, asId<"OrganizationId">("org-2"))).toBeNull(); // fel org
   });
 });
 
@@ -72,12 +72,12 @@ describe("MatterRepository — Drizzle (pglite)", () => {
 
   it("getByIdInOrg org-scopar direkt på organizationId", async () => {
     const db = handle.db;
-    const org = uuidv7();
-    const id = uuidv7();
+    const org = asId<"OrganizationId">(uuidv7());
+    const id = asId<"MatterId">(uuidv7());
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await db.insert(matters).values({ id, organizationId: org, matterNumber: "2026-2", title: "T", version: 1 } as any);
     const repo = new DrizzleMatterRepository(handle.db);
     expect(await repo.getByIdInOrg(id, org)).toMatchObject({ id });
-    expect(await repo.getByIdInOrg(id, uuidv7())).toBeNull(); // fel org
+    expect(await repo.getByIdInOrg(id, asId<"OrganizationId">(uuidv7()))).toBeNull(); // fel org
   });
 });

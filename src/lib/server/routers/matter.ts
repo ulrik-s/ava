@@ -14,13 +14,14 @@ import {
   asId,
   type MatterId,
   type ContactId,
+  type OrganizationId,
 } from "@/lib/shared/schemas/ids";
 import type { Matter, MatterContact } from "@/lib/shared/schemas/matter";
 import { emit } from "../events/emit";
 import type { Repositories } from "../repositories/repositories";
 import { router, orgProcedure, TRPCError } from "../trpc";
 
-type MatterCtx = { repos: Repositories; orgId: string };
+type MatterCtx = { repos: Repositories; orgId: OrganizationId };
 
 /**
  * Hjälpare: hämta matter och verifiera att den tillhör anropande org.
@@ -104,7 +105,7 @@ async function nextMatterNumber(ctx: MatterCtx, responsibleLawyerId?: string): P
   const prefix = responsibleLawyerId ? await lawyerPrefix(ctx, responsibleLawyerId) : "";
 
   const ownMatters = responsibleLawyerId
-    ? await ctx.repos.matters.listByResponsibleLawyer(ctx.orgId, responsibleLawyerId)
+    ? await ctx.repos.matters.listByResponsibleLawyer(ctx.orgId, asId<"UserId">(responsibleLawyerId))
     : [];
   const prefixMatters = await ctx.repos.matters.listByNumberPrefix(ctx.orgId, `${prefix}${year}-`);
 

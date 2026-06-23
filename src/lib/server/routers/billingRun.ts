@@ -27,6 +27,8 @@ import {
   invoiceIdSchema,
   asId,
   type BillingRunId,
+  type MatterId,
+  type OrganizationId,
 } from "@/lib/shared/schemas/ids";
 import { emit } from "../events/emit";
 import type { Repositories } from "../repositories/repositories";
@@ -182,7 +184,7 @@ async function freezeSelectedWork(
   await repos.expenses.freezeByIds(work.expenses.map((e) => e.id), runId, now);
 }
 
-async function assertMatterInOrg(repos: Repositories, matterId: string, orgId: string): Promise<void> {
+async function assertMatterInOrg(repos: Repositories, matterId: MatterId, orgId: OrganizationId): Promise<void> {
   const m = await repos.matters.getByIdInOrg(matterId, orgId);
   if (!m) throw new TRPCError({ code: "NOT_FOUND", message: "Ärendet finns inte." });
 }
