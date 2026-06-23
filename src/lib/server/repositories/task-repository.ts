@@ -6,22 +6,23 @@
  */
 
 import type { Task, TaskStatus } from "@/lib/shared/schemas/calendar";
+import type { MatterId, OrganizationId, TaskId, UserId } from "@/lib/shared/schemas/ids";
 import type { Repository } from "./types";
 
 /** Task + ärende-subsetet listvyn visar. */
 export interface TaskListRow extends Task {
-  matter: { id: string; matterNumber: string; title: string } | null;
+  matter: { id: MatterId; matterNumber: string; title: string } | null;
 }
 
 /** Filter för `listForUser`. */
 export interface TaskListFilter {
   status?: TaskStatus | undefined;
-  matterId?: string | undefined;
+  matterId?: MatterId | undefined;
 }
 
 export interface TaskRepository extends Repository<Task> {
   /** Användarens uppgifter i org:en (dueAt asc), med ärende-subset. */
-  listForUser(userId: string, organizationId: string, filter: TaskListFilter): Promise<TaskListRow[]>;
+  listForUser(userId: UserId, organizationId: OrganizationId, filter: TaskListFilter): Promise<TaskListRow[]>;
   /** Uppgift by id, ägar-scopad (id + userId + org). Null om saknas/ej ägd/raderad. */
-  getOwned(id: string, userId: string, organizationId: string): Promise<Task | null>;
+  getOwned(id: TaskId, userId: UserId, organizationId: OrganizationId): Promise<Task | null>;
 }

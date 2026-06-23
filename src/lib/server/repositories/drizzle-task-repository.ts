@@ -5,7 +5,7 @@
 
 import { and, asc, eq, isNull } from "drizzle-orm";
 import type { Task } from "@/lib/shared/schemas/calendar";
-import { asId } from "@/lib/shared/schemas/ids";
+import type { OrganizationId, TaskId, UserId } from "@/lib/shared/schemas/ids";
 import { matters, tasks } from "../db/schema";
 import type { AppDb } from "../db/types";
 import { DrizzleRepository, versionedTable } from "./drizzle-repository";
@@ -16,7 +16,7 @@ export class DrizzleTaskRepository extends DrizzleRepository<Task> implements Ta
     super(db, versionedTable(tasks), now);
   }
 
-  async listForUser(userId: string, organizationId: string, filter: TaskListFilter): Promise<TaskListRow[]> {
+  async listForUser(userId: UserId, organizationId: OrganizationId, filter: TaskListFilter): Promise<TaskListRow[]> {
     const rows = await this.db
       .select({
         t: tasks,
@@ -25,11 +25,11 @@ export class DrizzleTaskRepository extends DrizzleRepository<Task> implements Ta
       .from(tasks)
       .leftJoin(matters, eq(tasks.matterId, matters.id))
       .where(and(
-        eq(tasks.userId, asId<"UserId">(userId)),
-        eq(tasks.organizationId, asId<"OrganizationId">(organizationId)),
+        eq(tasks.userId, userId),
+        eq(tasks.organizationId, organizationId),
         isNull(tasks.deletedAt),
         filter.status ? eq(tasks.status, filter.status) : undefined,
-        filter.matterId ? eq(tasks.matterId, asId<"MatterId">(filter.matterId)) : undefined,
+        filter.matterId ? eq(tasks.matterId, filter.matterId) : undefined,
       ))
       .orderBy(asc(tasks.dueAt));
     return rows.map((r): TaskListRow => ({
@@ -38,12 +38,12 @@ export class DrizzleTaskRepository extends DrizzleRepository<Task> implements Ta
     }));
   }
 
-  async getOwned(id: string, userId: string, organizationId: string): Promise<Task | null> {
+  async getOwned(id: TaskId, userId: UserId, organizationId: OrganizationId): Promise<Task | null> {
     const rows = await this.db
       .select().from(tasks)
       .where(and(
-        eq(tasks.id, asId<"TaskId">(id)), eq(tasks.userId, asId<"UserId">(userId)),
-        eq(tasks.organizationId, asId<"OrganizationId">(organizationId)), isNull(tasks.deletedAt),
+        eq(tasks.id, id), eq(tasks.userId, userId),
+        eq(tasks.organizationId, organizationId), isNull(tasks.deletedAt),
       )).limit(1);
     return rows[0] ?? null;
   }

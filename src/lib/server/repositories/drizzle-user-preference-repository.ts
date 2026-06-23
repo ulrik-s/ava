@@ -1,7 +1,7 @@
 /** Drizzle `UserPreferenceRepository` (ADR 0020). */
 
 import { and, eq, isNull } from "drizzle-orm";
-import { asId } from "@/lib/shared/schemas/ids";
+import type { OrganizationId, UserId } from "@/lib/shared/schemas/ids";
 import type { UserPreference } from "@/lib/shared/schemas/preference";
 import { userPreferences } from "../db/schema";
 import type { AppDb } from "../db/types";
@@ -13,10 +13,10 @@ export class DrizzleUserPreferenceRepository extends DrizzleRepository<UserPrefe
     super(db, versionedTable(userPreferences), now);
   }
 
-  async getByUserKey(userId: string, organizationId: string, key: string): Promise<UserPreference | null> {
+  async getByUserKey(userId: UserId, organizationId: OrganizationId, key: string): Promise<UserPreference | null> {
     const rows = await this.db
       .select().from(userPreferences)
-      .where(and(eq(userPreferences.userId, asId<"UserId">(userId)), eq(userPreferences.organizationId, asId<"OrganizationId">(organizationId)), eq(userPreferences.key, key), isNull(userPreferences.deletedAt)))
+      .where(and(eq(userPreferences.userId, userId), eq(userPreferences.organizationId, organizationId), eq(userPreferences.key, key), isNull(userPreferences.deletedAt)))
       .limit(1);
     return rows[0] ?? null;
   }

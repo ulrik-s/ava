@@ -41,7 +41,7 @@ import { populateUnbilledTime } from "../demo-generator/populate-unbilled-time";
 import { buildSeed } from "./seed-data";
 
 const DB_URL = process.env.AVA_DATABASE_URL ?? "postgres://ava:ava@localhost:5433/ava_test";
-const ORG = process.env.AVA_ORGANIZATION_ID ?? "00000000-0000-0000-0000-000000000001";
+const ORG = asId<"OrganizationId">(process.env.AVA_ORGANIZATION_ID ?? "00000000-0000-0000-0000-000000000001");
 // Host-katalogen som är bind-mountad till serverns AVA_CONTENT_DIR (#649) —
 // dit skrivs dokument-bytes så serverns GitContentStore kan läsa dem. Saknas
 // den → dokument-metadata hoppas (bytes har ingenstans att ta vägen).
@@ -82,7 +82,7 @@ async function addTodayTimeEntries(repos: Repositories, timeEntries: Row[], ids:
     if (!matterId) continue;
     await repos.timeEntries.create({
       id: asId<"TimeEntryId">(uuidv7()),
-      organizationId: asId<"OrganizationId">(ORG),
+      organizationId: ORG,
       userId: asId<"UserId">(userId),
       matterId: asId<"MatterId">(matterId),
       date: new Date(),
@@ -130,7 +130,7 @@ async function main(): Promise<void> {
       email: admin?.email ?? "generator@ava.local",
       name: admin?.name ?? "Demo Generator",
       role: "ADMIN",
-      organizationId: asId<"OrganizationId">(ORG),
+      organizationId: ORG,
     };
     const ctx = buildContext({ repos, eventLog: serverFirstEventLog, ports: noopPorts, principal });
     const caller = appRouter.createCaller(ctx as never) as ReturnType<typeof appRouter.createCaller>;

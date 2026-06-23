@@ -15,6 +15,7 @@ import {
   type MatterId,
   type ContactId,
   type OrganizationId,
+  type UserId,
 } from "@/lib/shared/schemas/ids";
 import type { Matter, MatterContact } from "@/lib/shared/schemas/matter";
 import { emit } from "../events/emit";
@@ -79,7 +80,7 @@ function maxSeq(matters: ReadonlyArray<{ matterNumber: string }>, year: number):
 }
 
 /** Den ansvariga juristens prefix (tom om okänd/ej i org:en/ingen prefix satt). */
-async function lawyerPrefix(ctx: MatterCtx, userId: string): Promise<string> {
+async function lawyerPrefix(ctx: MatterCtx, userId: UserId): Promise<string> {
   const u = (await ctx.repos.users.getByIdInOrg(userId, ctx.orgId)) as
     | { matterNumberPrefix?: string | null }
     | null;
@@ -102,7 +103,7 @@ async function lawyerPrefix(ctx: MatterCtx, userId: string): Promise<string> {
  */
 async function nextMatterNumber(ctx: MatterCtx, responsibleLawyerId?: string): Promise<string> {
   const year = new Date().getFullYear();
-  const prefix = responsibleLawyerId ? await lawyerPrefix(ctx, responsibleLawyerId) : "";
+  const prefix = responsibleLawyerId ? await lawyerPrefix(ctx, asId<"UserId">(responsibleLawyerId)) : "";
 
   const ownMatters = responsibleLawyerId
     ? await ctx.repos.matters.listByResponsibleLawyer(ctx.orgId, asId<"UserId">(responsibleLawyerId))

@@ -6,22 +6,23 @@
  */
 
 import type { CalendarEvent } from "@/lib/shared/schemas/calendar";
+import type { CalendarEventId, MatterId, OrganizationId, UserId } from "@/lib/shared/schemas/ids";
 import type { Repository } from "./types";
 
 /** Händelse + ärende-subsetet vyerna visar. */
 export interface CalendarEventRow extends CalendarEvent {
-  matter: { id: string; matterNumber: string; title: string } | null;
+  matter: { id: MatterId; matterNumber: string; title: string } | null;
 }
 
 export interface CalendarEventRepository extends Repository<CalendarEvent> {
   /** Den aktiva användarens händelser (startAt asc), med ärende-subset. */
-  listForUser(userId: string, organizationId: string): Promise<CalendarEventRow[]>;
+  listForUser(userId: UserId, organizationId: OrganizationId): Promise<CalendarEventRow[]>;
   /** Flera användares händelser (multi-user-vy), org-scopat, med ärende-subset. */
-  listForUsers(userIds: string[], organizationId: string): Promise<CalendarEventRow[]>;
+  listForUsers(userIds: UserId[], organizationId: OrganizationId): Promise<CalendarEventRow[]>;
   /** Alla händelser för ett ärende, kronologiskt (utan ärende-subset). */
-  listForMatter(matterId: string, organizationId: string): Promise<CalendarEvent[]>;
+  listForMatter(matterId: MatterId, organizationId: OrganizationId): Promise<CalendarEvent[]>;
   /** Händelse by id, ägar-scopad (id + userId + org). Null om saknas/ej ägd/raderad. */
-  getOwned(id: string, userId: string, organizationId: string): Promise<CalendarEvent | null>;
+  getOwned(id: CalendarEventId, userId: UserId, organizationId: OrganizationId): Promise<CalendarEvent | null>;
   /** Som `getOwned` men med ärende-subset (detaljvyn). */
-  getOwnedWithMatter(id: string, userId: string, organizationId: string): Promise<CalendarEventRow | null>;
+  getOwnedWithMatter(id: CalendarEventId, userId: UserId, organizationId: OrganizationId): Promise<CalendarEventRow | null>;
 }

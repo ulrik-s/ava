@@ -26,7 +26,7 @@ import type {
   AccontoDeductionId, BillingRunId, CalendarEventId, ConflictCheckId, ContactId,
   DocumentAnalysisSuggestionId, DocumentFolderId, DocumentId,
   DocumentTemplateId, ExpenseId, InvoiceDispatchId, InvoiceId, MatterContactId, MatterEventSuggestionId,
-  MatterId, OrganizationId, OrgPreferenceId, PaymentId, PaymentPlanId, PaymentPlanReminderId,
+  MatterId, OfficeId, OrganizationId, OrgPreferenceId, PaymentId, PaymentPlanId, PaymentPlanReminderId,
   ServiceNoteId, TaskId, TimeEntryId, UserId, UserPreferenceId, WriteOffId,
 } from "@/lib/shared/schemas/ids";
 import { baseColumns, boolDefault, orgScopedColumns } from "./columns";
@@ -36,6 +36,7 @@ const ore = (name: string) => bigint(name, { mode: "number" });
 
 export const organizations = pgTable("organizations", {
   ...baseColumns,
+  id: uuid("id").primaryKey().$type<OrganizationId>(),
   name: text("name").notNull(),
   orgNumber: text("org_number"),
   address: text("address"),
@@ -52,6 +53,8 @@ export const organizations = pgTable("organizations", {
 
 export const offices = pgTable("offices", {
   ...orgScopedColumns,
+  id: uuid("id").primaryKey().$type<OfficeId>(),
+  organizationId: uuid("organization_id").notNull().$type<OrganizationId>(),
   name: text("name").notNull(),
   address: text("address"),
   phone: text("phone"),
@@ -61,6 +64,8 @@ export const offices = pgTable("offices", {
 
 export const users = pgTable("users", {
   ...orgScopedColumns,
+  id: uuid("id").primaryKey().$type<UserId>(),
+  organizationId: uuid("organization_id").notNull().$type<OrganizationId>(),
   email: text("email").notNull(),
   name: text("name").notNull(),
   title: text("title"),

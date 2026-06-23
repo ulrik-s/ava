@@ -9,24 +9,26 @@ import { DrizzleOrgPreferenceRepository } from "@/lib/server/repositories/drizzl
 import { DrizzleUserPreferenceRepository } from "@/lib/server/repositories/drizzle-user-preference-repository";
 import { InMemoryOrgPreferenceRepository } from "@/lib/server/repositories/in-memory-org-preference-repository";
 import { InMemoryUserPreferenceRepository } from "@/lib/server/repositories/in-memory-user-preference-repository";
+import { asId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { createTestDb, type TestDbHandle } from "../db/pg-test-db";
 
 describe("Preference repos — in-memory", () => {
   it("getByUserKey + getByOrgKey + listByOrg", async () => {
-    const userId = uuidv7();
+    const userId = asId<"UserId">(uuidv7());
+    const org = asId<"OrganizationId">("org-1");
     const up = uuidv7();
     const op = uuidv7();
     const store = new LocalStore({
-      userPreferences: [{ id: up, userId, organizationId: "org-1", key: "list.contacts", prefs: { sort: "name" } }],
-      orgPreferences: [{ id: op, organizationId: "org-1", key: "list.contacts", prefs: { sort: "createdAt" } }],
+      userPreferences: [{ id: up, userId, organizationId: org, key: "list.contacts", prefs: { sort: "name" } }],
+      orgPreferences: [{ id: op, organizationId: org, key: "list.contacts", prefs: { sort: "createdAt" } }],
     }, async () => {});
     const uRepo = new InMemoryUserPreferenceRepository(store);
     const oRepo = new InMemoryOrgPreferenceRepository(store);
-    expect((await uRepo.getByUserKey(userId, "org-1", "list.contacts"))?.id).toBe(up);
-    expect(await uRepo.getByUserKey(userId, "org-1", "list.x")).toBeNull();
-    expect((await oRepo.getByOrgKey("org-1", "list.contacts"))?.id).toBe(op);
-    expect(await oRepo.listByOrg("org-1")).toHaveLength(1);
+    expect((await uRepo.getByUserKey(userId, org, "list.contacts"))?.id).toBe(up);
+    expect(await uRepo.getByUserKey(userId, org, "list.x")).toBeNull();
+    expect((await oRepo.getByOrgKey(org, "list.contacts"))?.id).toBe(op);
+    expect(await oRepo.listByOrg(org)).toHaveLength(1);
   });
 });
 
@@ -37,8 +39,8 @@ describe("Preference repos — Drizzle (pglite)", () => {
 
   it("getByUserKey + getByOrgKey + listByOrg", async () => {
     const db = handle.db;
-    const org = uuidv7();
-    const userId = uuidv7();
+    const org = asId<"OrganizationId">(uuidv7());
+    const userId = asId<"UserId">(uuidv7());
     const up = uuidv7();
     const op = uuidv7();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

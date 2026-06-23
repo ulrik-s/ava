@@ -4,6 +4,7 @@
  */
 
 import type { CalendarEvent } from "@/lib/shared/schemas/calendar";
+import type { CalendarEventId, MatterId, OrganizationId, UserId } from "@/lib/shared/schemas/ids";
 import type { IDataStore } from "../data-store/IDataStore";
 import type { CalendarEventRepository, CalendarEventRow } from "./calendar-event-repository";
 import { InMemoryRepository } from "./in-memory-repository";
@@ -18,7 +19,7 @@ export class InMemoryCalendarEventRepository extends InMemoryRepository<Calendar
     super(store.calendarEvents, now ?? (() => new Date()));
   }
 
-  async listForUser(userId: string, organizationId: string): Promise<CalendarEventRow[]> {
+  async listForUser(userId: UserId, organizationId: OrganizationId): Promise<CalendarEventRow[]> {
     return (await this.delegate.findMany({
       where: { userId, organizationId },
       orderBy: { startAt: "asc" },
@@ -26,7 +27,7 @@ export class InMemoryCalendarEventRepository extends InMemoryRepository<Calendar
     })) as CalendarEventRow[];
   }
 
-  async listForUsers(userIds: string[], organizationId: string): Promise<CalendarEventRow[]> {
+  async listForUsers(userIds: UserId[], organizationId: OrganizationId): Promise<CalendarEventRow[]> {
     return (await this.delegate.findMany({
       where: { organizationId, userId: { in: userIds } },
       orderBy: { startAt: "asc" },
@@ -34,19 +35,19 @@ export class InMemoryCalendarEventRepository extends InMemoryRepository<Calendar
     })) as CalendarEventRow[];
   }
 
-  async listForMatter(matterId: string, organizationId: string): Promise<CalendarEvent[]> {
+  async listForMatter(matterId: MatterId, organizationId: OrganizationId): Promise<CalendarEvent[]> {
     return (await this.delegate.findMany({
       where: { matterId, organizationId },
       orderBy: { startAt: "asc" },
     })) as CalendarEvent[];
   }
 
-  async getOwned(id: string, userId: string, organizationId: string): Promise<CalendarEvent | null> {
+  async getOwned(id: CalendarEventId, userId: UserId, organizationId: OrganizationId): Promise<CalendarEvent | null> {
     const row = (await this.delegate.findFirst({ where: { id, userId, organizationId } })) as CalendarEvent | null;
     return row && !(row as { deletedAt?: unknown }).deletedAt ? row : null;
   }
 
-  async getOwnedWithMatter(id: string, userId: string, organizationId: string): Promise<CalendarEventRow | null> {
+  async getOwnedWithMatter(id: CalendarEventId, userId: UserId, organizationId: OrganizationId): Promise<CalendarEventRow | null> {
     const row = (await this.delegate.findFirst({
       where: { id, userId, organizationId },
       include: MATTER_INCLUDE,

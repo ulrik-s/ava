@@ -4,6 +4,7 @@
  */
 
 import type { Task } from "@/lib/shared/schemas/calendar";
+import type { OrganizationId, TaskId, UserId } from "@/lib/shared/schemas/ids";
 import type { IDataStore } from "../data-store/IDataStore";
 import { InMemoryRepository } from "./in-memory-repository";
 import type { TaskListFilter, TaskListRow, TaskRepository } from "./task-repository";
@@ -16,7 +17,7 @@ export class InMemoryTaskRepository extends InMemoryRepository<Task> implements 
     super(store.tasks, now ?? (() => new Date()));
   }
 
-  async listForUser(userId: string, organizationId: string, filter: TaskListFilter): Promise<TaskListRow[]> {
+  async listForUser(userId: UserId, organizationId: OrganizationId, filter: TaskListFilter): Promise<TaskListRow[]> {
     return (await this.delegate.findMany({
       where: {
         userId,
@@ -29,7 +30,7 @@ export class InMemoryTaskRepository extends InMemoryRepository<Task> implements 
     })) as TaskListRow[];
   }
 
-  async getOwned(id: string, userId: string, organizationId: string): Promise<Task | null> {
+  async getOwned(id: TaskId, userId: UserId, organizationId: OrganizationId): Promise<Task | null> {
     const row = (await this.delegate.findFirst({ where: { id, userId, organizationId } })) as Task | null;
     return row && !(row as { deletedAt?: unknown }).deletedAt ? row : null;
   }
