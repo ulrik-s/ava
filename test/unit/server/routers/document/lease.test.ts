@@ -11,6 +11,7 @@ import { InMemoryLeaseStore } from "@/lib/server/lease/lease-store";
 import { buildInMemoryRepositories } from "@/lib/server/repositories/in-memory-repositories";
 import { documentRouter } from "@/lib/server/routers/document";
 import { prebakeJoins } from "@/lib/shared/demo-source";
+import { asId } from "@/lib/shared/schemas/ids";
 
 const ORG = "org-a";
 
@@ -76,6 +77,6 @@ describe("document lease-procedurer", () => {
     await expect(
       caller(source, lease, { id: "x", name: "X" }, "org-b").acquireLease({ documentId: "d1" }),
     ).rejects.toThrow();
-    expect(lease.get("d1")).toBeNull();
+    expect(lease.get(asId<"DocumentId">("d1"))).toBeNull();
   });
 });

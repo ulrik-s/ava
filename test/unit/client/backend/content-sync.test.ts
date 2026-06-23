@@ -9,6 +9,9 @@ import { describe, expect, it, vi } from "vitest-compat";
 import { DocumentContentCache } from "@/lib/client/backend/content-cache";
 import { runContentSync, syncDocumentContent } from "@/lib/client/backend/content-sync";
 import { base64ToBytes, contentStoragePath, sha256Hex } from "@/lib/shared/content-address";
+import { asId, type DocumentId } from "@/lib/shared/schemas/ids";
+
+const docId = (s: string) => asId<"DocumentId">(s);
 
 describe("runContentSync", () => {
   it("tom pending → no-op", async () => {
@@ -22,8 +25,8 @@ describe("runContentSync", () => {
 
   it("laddar bara upp sha:n servern saknar (dedup) + markUploaded för alla", async () => {
     const pending = [
-      { documentId: "d1", sha: "aaa" },
-      { documentId: "d2", sha: "bbb" }, // servern har redan denna
+      { documentId: docId("d1"), sha: "aaa" },
+      { documentId: docId("d2"), sha: "bbb" }, // servern har redan denna
     ];
     const upload = vi.fn(async () => {});
     const markUploaded = vi.fn(async () => {});
@@ -44,7 +47,7 @@ describe("runContentSync", () => {
     const upload = vi.fn(async () => {});
     const markUploaded = vi.fn(async () => {});
     const out = await runContentSync({
-      pending: async () => [{ documentId: "d1", sha: "ccc" }],
+      pending: async () => [{ documentId: docId("d1"), sha: "ccc" }],
       missing: async () => [contentStoragePath("ccc")],
       getBytes: async () => null,
       upload,
@@ -61,13 +64,13 @@ describe("syncDocumentContent (wirad mot tRPC + cache)", () => {
     const cache = new DocumentContentCache(new IDBFactory());
     const bytes = new Uint8Array([5, 6, 7]);
     const sha = await sha256Hex(bytes);
-    await cache.cache("d1", sha, bytes);
+    await cache.cache(docId("d1"), sha, bytes);
 
-    const uploads: Array<{ documentId: string; contentBase64: string }> = [];
+    const uploads: Array<{ documentId: DocumentId; contentBase64: string }> = [];
     const client = {
       document: {
         missingContent: { query: async (i: { storagePaths: string[] }) => ({ missing: i.storagePaths }) },
-        uploadContent: { mutate: async (i: { documentId: string; contentBase64: string }) => { uploads.push(i); } },
+        uploadContent: { mutate: async (i: { documentId: DocumentId; contentBase64: string }) => { uploads.push(i); } },
       },
     };
 
@@ -81,7 +84,7 @@ describe("syncDocumentContent (wirad mot tRPC + cache)", () => {
 
   it("servern har redan blobben → ingen upload, pending rensas", async () => {
     const cache = new DocumentContentCache(new IDBFactory());
-    await cache.cache("d2", await sha256Hex(new Uint8Array([1])), new Uint8Array([1]));
+    await cache.cache(docId("d2"), await sha256Hex(new Uint8Array([1])), new Uint8Array([1]));
     const uploads: unknown[] = [];
     const client = {
       document: {

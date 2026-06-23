@@ -11,12 +11,13 @@
  * filskrivning).
  */
 
+import type { ContactId, MatterId } from "@/lib/shared/schemas/ids";
 import { labelForMatterRole } from "./labels";
 
 // template-context modulen är borttagen (Prisma-dependent). En kontakts
 // data i template-rendering är en sub-set av Contact-schemat.
 export interface RecipientContactData {
-  id?: string;
+  id?: ContactId;
   name: string;
   email: string | null;
   phone: string | null;
@@ -29,12 +30,12 @@ export interface RecipientContactData {
 }
 
 export interface ResolvedRecipient {
-  contactId: string;
+  contactId: ContactId;
   data: RecipientContactData;
 }
 
 export interface MatterContactLink {
-  contactId: string;
+  contactId: ContactId;
   role: string;
   notes: string | null;
   contact: {
@@ -48,7 +49,7 @@ export interface MatterContactLink {
 }
 
 export class RecipientNotLinkedError extends Error {
-  constructor(public readonly recipientId: string, public readonly matterId: string) {
+  constructor(public readonly recipientId: ContactId, public readonly matterId: MatterId) {
     super(`Recipient ${recipientId} is not linked to matter ${matterId}`);
     this.name = "RecipientNotLinkedError";
   }
@@ -63,14 +64,14 @@ export class RecipientNotLinkedError extends Error {
  * - Dubbletter i `recipientIds` bevaras som separata poster (kallaren väljer).
  */
 export function resolveRecipients(
-  recipientIds: string[],
+  recipientIds: ContactId[],
   links: MatterContactLink[],
-  matterId: string,
+  matterId: MatterId,
 ): ResolvedRecipient[] {
   // Om samma kontakt råkar ha flera MatterContact-länkar (t.ex. två roller)
   // tar vi första träffen — template-context har bara ett recipient-fält per
   // dokument, och första länken är typiskt den primära rollen.
-  const byId = new Map<string, MatterContactLink>();
+  const byId = new Map<ContactId, MatterContactLink>();
   for (const l of links) {
     if (!byId.has(l.contactId)) byId.set(l.contactId, l);
   }

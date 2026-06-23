@@ -6,8 +6,10 @@
 import { describe, it, expect } from "vitest-compat";
 import type { WorkingSetMatter } from "@/lib/client/working-set/working-set";
 import { WorkingSetCache } from "@/lib/client/working-set/working-set-cache";
+import { asId } from "@/lib/shared/schemas/ids";
 
 const ME = "u-1";
+const mId = (s: string) => asId<"MatterId">(s);
 
 function fakes() {
   const loaded: string[] = [];
@@ -42,7 +44,7 @@ describe("WorkingSetCache (#418)", () => {
     const cache = new WorkingSetCache({ budget: 3, loadMatter: f.loadMatter, evictMatter: f.evictMatter });
     await cache.prefetch({ userId: ME, matters, recentMatterIds: ["r1", "r2"] });
     // Öppna "extra" (utanför set) → hämtas, och äldsta icke-pinnade (r1) vräks.
-    await cache.openMatter("extra");
+    await cache.openMatter(mId("extra"));
     expect(f.loaded).toContain("extra");
     expect(f.evicted).toEqual(["r1"]); // mine pinnad, r1 äldst icke-pinnad
     expect(cache.size()).toBe(3);
@@ -50,12 +52,12 @@ describe("WorkingSetCache (#418)", () => {
 
   it("vräker aldrig ett ärende med icke-uppspelad mutation (pending)", async () => {
     const f = fakes();
-    const pending = new Set(["r1"]);
+    const pending = new Set([mId("r1")]);
     const cache = new WorkingSetCache({
       budget: 3, loadMatter: f.loadMatter, evictMatter: f.evictMatter, pendingMatterIds: () => pending,
     });
     await cache.prefetch({ userId: ME, matters, recentMatterIds: ["r1", "r2"] });
-    await cache.openMatter("extra");
+    await cache.openMatter(mId("extra"));
     expect(f.evicted).toEqual(["r2"]); // r1 pending → skyddad, r2 vräks istället
   });
 
@@ -64,7 +66,7 @@ describe("WorkingSetCache (#418)", () => {
     const cache = new WorkingSetCache({ budget: 5, loadMatter: f.loadMatter, evictMatter: f.evictMatter });
     await cache.prefetch({ userId: ME, matters, recentMatterIds: ["r1"] });
     const before = f.loaded.length;
-    await cache.openMatter("mine");
+    await cache.openMatter(mId("mine"));
     expect(f.loaded.length).toBe(before); // redan i cachen
   });
 });

@@ -6,7 +6,7 @@ import {
   type FrozenWorkInput,
 } from "@/lib/shared/billed-per-lawyer";
 import type { InvoiceStatus, PaymentMethod } from "@/lib/shared/schemas/enums";
-import { asId, userIdSchema, type InvoiceId, type UserId } from "@/lib/shared/schemas/ids";
+import { asId, userIdSchema, type BillingRunId, type InvoiceId, type MatterId, type UserId } from "@/lib/shared/schemas/ids";
 import { router, protectedProcedure } from "../trpc";
 
 /**
@@ -71,8 +71,8 @@ function coerceDate(v: unknown): Date {
 }
 
 interface RawTimeEntry {
-  userId: string; minutes: number; hourlyRate: number;
-  invoiceId: string | null | undefined; frozenByBillingRunId: string | null | undefined;
+  userId: UserId; minutes: number; hourlyRate: number;
+  invoiceId: InvoiceId | null | undefined; frozenByBillingRunId: BillingRunId | null | undefined;
 }
 interface RawInvoice { id: string; amount: number; status: InvoiceStatus; invoiceDate: unknown; updatedAt: unknown }
 
@@ -145,8 +145,8 @@ function previousCalendarMonth(periodStart: Date): { from: Date; to: Date } {
 // ─── Router ──────────────────────────────────────────────────────────
 
 /** Per-faktura-rader för Kundfordrings-tabellen (slår ihop "Fakturerat"-tabellen). */
-interface ArRowMeta { invoiceNumber: string; invoiceDate: string; matterId: string; matterNumber: string; title: string }
-const EMPTY_AR_META: ArRowMeta = { invoiceNumber: "", invoiceDate: "", matterId: "", matterNumber: "", title: "" };
+interface ArRowMeta { invoiceNumber: string; invoiceDate: string; matterId: MatterId; matterNumber: string; title: string }
+const EMPTY_AR_META: ArRowMeta = { invoiceNumber: "", invoiceDate: "", matterId: asId<"MatterId">(""), matterNumber: "", title: "" };
 
 /** Förresolva faktura-metadata (nummer + datum + ärende) per id — håller rad-mappningen trivial. */
 function arMetaById(invoices: Record<string, unknown>[]): Map<string, ArRowMeta> {
@@ -156,7 +156,7 @@ function arMetaById(invoices: Record<string, unknown>[]): Map<string, ArRowMeta>
     m.set(String(inv.id ?? ""), {
       invoiceNumber: inv.invoiceNumber ?? "",
       invoiceDate: coerceDate(inv.invoiceDate).toISOString(),
-      matterId: mt.id ?? "",
+      matterId: asId<"MatterId">(mt.id ?? ""),
       matterNumber: mt.matterNumber ?? "",
       title: mt.title ?? "",
     });
@@ -176,7 +176,7 @@ function arRowsFrom(scoped: { invoices: Record<string, unknown>[]; payments: Rec
 
 /** Den delmängd av matter-selecten delrapporterna läser. */
 interface ReportMatterRef {
-  id: string;
+  id: MatterId;
   matterNumber: string;
   title: string;
   paymentMethod: PaymentMethod;
@@ -186,22 +186,22 @@ interface ReportMatterRef {
 }
 interface ReportTimeEntry {
   date: Date; minutes: number; billable: boolean; hourlyRate: number;
-  invoiceId?: string | null | undefined; matter?: ReportMatterRef | null | undefined;
+  invoiceId?: InvoiceId | null | undefined; matter?: ReportMatterRef | null | undefined;
 }
 interface ReportExpense {
   date: Date; amount: number; billable: boolean;
-  invoiceId?: string | null | undefined; matter?: ReportMatterRef | null | undefined;
+  invoiceId?: InvoiceId | null | undefined; matter?: ReportMatterRef | null | undefined;
 }
 
 interface MatterAgg {
-  matterId: string; matterNumber: string; title: string; client: string | null;
+  matterId: MatterId; matterNumber: string; title: string; client: string | null;
   paymentMethod: PaymentMethod; paymentMethodNote: string | null; paymentMethodDecidedAt: Date | null;
   totalMinutes: number; billableMinutes: number;
   workValueOre: number; // tid × timpris (öre)
   expenseOre: number;   // utlägg totalt (öre, bara billable)
 }
 interface UnbilledRow {
-  matterId: string; matterNumber: string; title: string; client: string | null;
+  matterId: MatterId; matterNumber: string; title: string; client: string | null;
   paymentMethod: PaymentMethod; timeOre: number; expenseOre: number; total: number;
 }
 
