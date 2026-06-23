@@ -115,11 +115,19 @@ function ReceivableRow({ r, onChanged }: { r: Receivable; onChanged: () => void 
   );
 }
 
-export function ExpectedReceivablesSection({ matterId, courtCaseNumber }: { matterId: string; courtCaseNumber: string }) {
+/**
+ * Panelen är bara relevant i ärenden där DOMSTOLEN betalar dig utan AVA-faktura
+ * (förordnat: offentlig försvarare / taxeärende). I andra ärenden — privat
+ * betalning, rättsskydd, vanlig tvist mot privat klient — betalar inte domstolen
+ * dig, så panelen är bara förvirrande och döljs. Säkerhetsnät: redan registrerade
+ * fordringar visas alltid (annars går de inte att se/pricka av/avbryta).
+ */
+export function ExpectedReceivablesSection({ matterId, courtCaseNumber, isCourtMatter }: { matterId: string; courtCaseNumber: string; isCourtMatter: boolean }) {
   const list = trpc.expectedReceivable.list.useQuery({ matterId });
   const utils = trpc.useUtils();
   const refetch = () => void utils.expectedReceivable.list.invalidate({ matterId });
   const rows = (list.data ?? []) as Receivable[];
+  if (!isCourtMatter && rows.length === 0) return null;
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-6">
       <h2 className="font-semibold text-gray-900 mb-1">Domstolsbetalningar (utan faktura)</h2>
