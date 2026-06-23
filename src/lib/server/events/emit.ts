@@ -10,6 +10,7 @@
  * men vi har minst en upstream-rad i Postgres-loggen om felet.
  */
 
+import type { MatterStatus } from "@/lib/shared/schemas/enums";
 import type { IDataStore } from "../data-store/IDataStore";
 import type { EventType, EmitInput } from "./schema";
 
@@ -60,7 +61,7 @@ export const emit = {
   matterUpdated: (ctx: EmitCtx, matterId: string, patch: Record<string, unknown>) =>
     emitUser(ctx, "matter.updated", { patch }, matterId),
 
-  matterStatusChanged: (ctx: EmitCtx, matterId: string, from: string, to: string) =>
+  matterStatusChanged: (ctx: EmitCtx, matterId: string, from: MatterStatus, to: MatterStatus) =>
     emitUser(ctx, "matter.status_changed", { from, to }, matterId),
 
   matterArchived: (ctx: EmitCtx, matterId: string) =>

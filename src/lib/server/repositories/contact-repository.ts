@@ -6,7 +6,7 @@
  */
 
 import type { Contact } from "@/lib/shared/schemas/contact";
-import type { ContactType } from "@/lib/shared/schemas/enums";
+import type { ContactType, MatterRole, MatterStatus } from "@/lib/shared/schemas/enums";
 import type { Repository } from "./types";
 
 /** Kontakt + antal relationer (listvyns _count). */
@@ -19,10 +19,10 @@ export interface ContactMatterLink {
   id: string;
   matterId: string;
   contactId: string;
-  role: string;
+  role: MatterRole;
   notes: string | null;
   /** Alltid satt — `matterId` är NOT NULL FK, så ärendet finns alltid. */
-  matter: { id: string; matterNumber: string; title: string; status: string };
+  matter: { id: string; matterNumber: string; title: string; status: MatterStatus };
 }
 
 /** Full kontakt-detalj (motsvarar `contact.getById`-routerns include). */

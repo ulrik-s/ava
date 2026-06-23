@@ -72,7 +72,7 @@ describe("avaRuleSchema", () => {
 
   it("känner igen alla 9 step-typer", () => {
     const steps = [
-      { do: "emit", eventType: "x", payload: {} },
+      { do: "emit", eventType: "matter.created", payload: {} },
       { do: "email.send", template: "x", to: "a@b" },
       { do: "matter.update", matterId: "m", patch: {} },
       { do: "audit.log", message: "x" },

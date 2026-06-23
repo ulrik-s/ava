@@ -57,12 +57,12 @@ describe("executeRule — grundflöde", () => {
 describe("executeRule — steg-typer", () => {
   it("emit: emittar event med templatead payload", async () => {
     const { ctx, emit } = makeCtx(
-      [{ do: "emit", eventType: "custom.thing", payload: { who: "{{payload.name}}" } }] as RuleStep[],
+      [{ do: "emit", eventType: "matter.created", payload: { who: "{{payload.name}}" } }] as RuleStep[],
       { payload: { name: "Anna" } },
     );
     await executeRule(ctx);
     const emitted = emit.mock.calls.map((c: unknown[]) => c[0] as { type: string; payload?: Record<string, unknown> });
-    const custom = emitted.find((e: { type: string; payload?: Record<string, unknown> }) => e.type === "custom.thing");
+    const custom = emitted.find((e: { type: string; payload?: Record<string, unknown> }) => e.type === "matter.created");
     expect(custom?.payload).toEqual({ who: "Anna" });
   });
 

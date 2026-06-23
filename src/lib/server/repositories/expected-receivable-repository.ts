@@ -3,12 +3,12 @@
  * domstolsbetalningar (#173). Org-scopas direkt. Bas-CRUD ärvs.
  */
 
-import type { ExpectedReceivable } from "@/lib/shared/schemas/billing";
+import type { ExpectedReceivable, ExpectedReceivableStatus } from "@/lib/shared/schemas/billing";
 import type { Repository } from "./types";
 
 export interface ExpectedReceivableListFilter {
   matterId?: string | undefined;
-  status?: string | undefined;
+  status?: ExpectedReceivableStatus | undefined;
 }
 
 export interface ExpectedReceivableRepository extends Repository<ExpectedReceivable> {

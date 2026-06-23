@@ -5,6 +5,7 @@
  */
 
 import type { Contact } from "@/lib/shared/schemas/contact";
+import type { ContactType, MatterRole } from "@/lib/shared/schemas/enums";
 import type { MatterContact } from "@/lib/shared/schemas/matter";
 import type { Repository } from "./types";
 
@@ -15,9 +16,9 @@ export interface MatterContactWithContact extends MatterContact {
 
 /** Jävskontroll-rad: länk + kontakt + ärende (med KLIENT-namn). */
 export interface ConflictContactRow {
-  role: string;
+  role: MatterRole;
   contact: {
-    id: string; name: string; contactType: string;
+    id: string; name: string; contactType: ContactType;
     personalNumber: string | null; orgNumber: string | null;
   };
   matter: {
@@ -38,6 +39,7 @@ export interface MatterContactRepository extends Repository<MatterContact> {
   /** Skapa en länk och returnera den med kontakten (matter.addContact/addNewContact). */
   linkContact(data: Partial<MatterContact>): Promise<MatterContactWithContact>;
   /** Befintlig länk (ärende, kontakt, roll) — för idempotent koppling. Null om ingen. */
+  // role förblir `string` tills suggestions-flödets roll-typ tightas (A3, #750)
   findLink(matterId: string, contactId: string, role: string): Promise<MatterContact | null>;
   /** Kontakterna kopplade till ett ärende (dedup-underlag i förslags-flödet). */
   listContactsForMatter(matterId: string): Promise<Contact[]>;

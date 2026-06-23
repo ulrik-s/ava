@@ -13,14 +13,14 @@
 
 import { relations } from "drizzle-orm";
 import { bigint, bigserial, index, integer, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
-import type { DispatchChannel, DispatchStatus } from "@/lib/shared/schemas/billing";
+import type { DispatchChannel, DispatchStatus, ExpectedReceivableStatus } from "@/lib/shared/schemas/billing";
 import type {
   CalendarEventKind, CalendarEventVisibility, TaskPriority, TaskStatus,
 } from "@/lib/shared/schemas/calendar";
 import type {
   BillingRunRecipient, BillingRunStatus, BillingRunType, ContactType, ExpenseKind, InvoiceStatus,
   InvoiceType, MatterRole, MatterStatus, PaymentMethod, PaymentPlanStatus, ReminderType,
-  SuggestionStatus,
+  SuggestionStatus, UserRole,
 } from "@/lib/shared/schemas/enums";
 import type {
   AccontoDeductionId, BillingRunId, CalendarEventId, ConflictCheckId, ContactId,
@@ -64,7 +64,7 @@ export const users = pgTable("users", {
   email: text("email").notNull(),
   name: text("name").notNull(),
   title: text("title"),
-  role: text("role").notNull().default("LAWYER"),
+  role: text("role").notNull().default("LAWYER").$type<UserRole>(),
   matterNumberPrefix: text("matter_number_prefix"),
   hourlyRate: integer("hourly_rate"),
   mileageRate: integer("mileage_rate"),
@@ -281,7 +281,7 @@ export const expectedReceivables = pgTable("expected_receivables", {
   matterId: uuid("matter_id").notNull(),
   description: text("description").notNull(),
   expectedAmount: ore("expected_amount").notNull(),
-  status: text("status").notNull().default("PENDING"),
+  status: text("status").notNull().default("PENDING").$type<ExpectedReceivableStatus>(),
   settledAmount: ore("settled_amount"),
   settledAt: timestamp("settled_at", { withTimezone: true }),
   paymentReference: text("payment_reference"),

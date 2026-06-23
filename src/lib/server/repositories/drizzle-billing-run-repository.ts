@@ -43,7 +43,7 @@ export class DrizzleBillingRunRepository
       .orderBy(desc(billingRuns.createdAt));
     return rows.map((r): BillingRunListRow => ({
       ...r.run,
-      invoice: r.invId ? { id: r.invId, invoiceNumber: r.invNum, status: r.invStatus as string } : null,
+      invoice: r.invId && r.invStatus ? { id: r.invId, invoiceNumber: r.invNum, status: r.invStatus } : null,
     }));
   }
 
@@ -63,8 +63,8 @@ export class DrizzleBillingRunRepository
     if (!r) return null;
     return {
       ...r.run,
-      invoice: r.invId
-        ? { id: r.invId, invoiceNumber: r.invNum, status: r.invStatus as string, amount: Number(r.invAmount ?? 0) }
+      invoice: r.invId && r.invStatus
+        ? { id: r.invId, invoiceNumber: r.invNum, status: r.invStatus, amount: Number(r.invAmount ?? 0) }
         : null,
       matter: r.mId
         ? { id: r.mId, matterNumber: r.mNum, title: r.mTitle, paymentMethod: r.mPay ?? null }

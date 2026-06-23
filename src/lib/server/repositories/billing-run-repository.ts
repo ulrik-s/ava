@@ -6,17 +6,18 @@
  */
 
 import type { BillingRun } from "@/lib/shared/schemas/billing";
+import type { InvoiceStatus, PaymentMethod } from "@/lib/shared/schemas/enums";
 import type { Repository } from "./types";
 
 /** Billing-run + faktura (listvyn). */
 export interface BillingRunListRow extends BillingRun {
-  invoice: { id: string; invoiceNumber: string | null; status: string } | null;
+  invoice: { id: string; invoiceNumber: string | null; status: InvoiceStatus } | null;
 }
 
 /** Billing-run + faktura + ärende (detaljvyn). */
 export interface BillingRunDetailRow extends BillingRun {
-  invoice: { id: string; invoiceNumber: string | null; status: string; amount: number } | null;
-  matter: { id: string; matterNumber: string; title: string; paymentMethod: string | null } | null;
+  invoice: { id: string; invoiceNumber: string | null; status: InvoiceStatus; amount: number } | null;
+  matter: { id: string; matterNumber: string; title: string; paymentMethod: PaymentMethod | null } | null;
 }
 
 export interface BillingRunRepository extends Repository<BillingRun> {

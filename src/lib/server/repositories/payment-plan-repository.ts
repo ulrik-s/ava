@@ -9,6 +9,7 @@
  */
 
 import type { Invoice, Payment, PaymentPlan, PaymentPlanReminder, WriteOff } from "@/lib/shared/schemas/billing";
+import type { PaymentPlanStatus } from "@/lib/shared/schemas/enums";
 import type { Matter } from "@/lib/shared/schemas/matter";
 import type { Repository } from "./types";
 
@@ -40,7 +41,7 @@ export interface PaymentPlanRepository extends Repository<PaymentPlan> {
   /** Plan för en faktura (invoiceId är unik på planen) — null om ingen/raderad. */
   getByInvoiceId(invoiceId: string): Promise<PaymentPlan | null>;
   /** Org:ens planer (createdAt desc), valfritt status-filtrerade, joinade. */
-  listForOrg(organizationId: string, status?: string): Promise<JoinedPaymentPlan[]>;
+  listForOrg(organizationId: string, status?: PaymentPlanStatus): Promise<JoinedPaymentPlan[]>;
   /** En plan med full join + påminnelse-historik, org-scopad. Null om saknas. */
   getByIdWithDetails(id: string, organizationId: string): Promise<JoinedPaymentPlanWithReminders | null>;
   /** Aktiva planer i org:en (join + påminnelser) för påminnelse-skannern. */
