@@ -37,6 +37,28 @@ export type { HelperStatus, HelperStatusResponse };
 const PROBE_ORDER = [HELPER_HTTPS_BASE, HELPER_BASE] as const;
 let cachedBase: string | undefined;
 
+/** localStorage-nyckel för per-flik helper-bas-override (se `probeBases`). */
+export const HELPER_BASE_OVERRIDE_KEY = "ava.helperBase";
+
+/**
+ * Probe-ordning. En per-flik-override (localStorage `ava.helperBase`, t.ex.
+ * `http://127.0.0.1:48771`) låter flera flikar/sessioner peka på VAR SIN
+ * helper-instans. Utan den probar alla flikar den hårdkodade default-porten →
+ * samma helper = samma identitet, vilket gör t.ex. ett 2-användares konflikt-
+ * e2e omöjligt (#742). Saknas override: HTTPS först (Safari), sedan HTTP.
+ */
+function probeBases(): readonly string[] {
+  try {
+    if (typeof localStorage !== "undefined") {
+      const override = localStorage.getItem(HELPER_BASE_OVERRIDE_KEY);
+      if (override) return [override];
+    }
+  } catch {
+    // localStorage kan kasta i sandbox/privacy-läge — falla tillbaka på default.
+  }
+  return PROBE_ORDER;
+}
+
 /**
  * Skydd mot probe-storm (#653): en MISS cachas inte (helpern kan startas
  * senare), men utan broms kan en anropare i en render-loop fyra av tusentals
@@ -67,7 +89,7 @@ async function probeHelper(now: () => number = Date.now): Promise<{ base: string
   if (inFlight) return inFlight; // dedup: dela pågående probe
   if (cachedBase === undefined && now() - lastMissAt < MISS_TTL_MS) return null; // negativ-cache
   inFlight = (async () => {
-    const bases = cachedBase !== undefined ? [cachedBase] : PROBE_ORDER;
+    const bases = cachedBase !== undefined ? [cachedBase] : probeBases();
     for (const base of bases) {
       const text = await pingText(base);
       if (text !== null) {
