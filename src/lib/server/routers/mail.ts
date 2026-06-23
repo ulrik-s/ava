@@ -93,7 +93,7 @@ export const mailRouter = router({
         createdAt: new Date(input.receivedAt),
       };
       const doc = await ctx.repos.documents.create(docData);
-      await emit.documentUploaded(ctx, { id, fileName, matterId: input.matterId });
+      await emit.documentUploaded(ctx, { id: docData.id, fileName, matterId: docData.matterId });
 
       // 4. Valfri tidspost kopplad till mailet.
       const timeEntry = input.time

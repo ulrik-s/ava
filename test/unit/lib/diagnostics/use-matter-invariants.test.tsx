@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 
 import { issueStore } from "@/lib/client/diagnostics";
 import { useMatterInvariants } from "@/lib/client/diagnostics/use-matter-invariants";
+import { asId } from "@/lib/shared/schemas/ids";
 
 // Mockbara query-resultat — styrs per test via dessa variabler.
 let runsResult: { data?: { runs: unknown[] } } = {};
@@ -26,14 +27,14 @@ beforeEach(() => {
 
 describe("useMatterInvariants", () => {
   it("rapporterar inget innan datat laddats", () => {
-    renderHook(() => useMatterInvariants({ matterId: "m-1", matterNumber: "2026-1" }));
+    renderHook(() => useMatterInvariants({ matterId: asId<"MatterId">("m-1"), matterNumber: "2026-1" }));
     expect(issueStore.count()).toBe(0);
   });
 
   it("rapporterar KR_PENDING_NO_DOC när KR-dokument saknas", () => {
     runsResult = { data: { runs: [pendingKr] } };
     docsResult = { data: { documents: [] } };
-    renderHook(() => useMatterInvariants({ matterId: "m-1", matterNumber: "2026-1" }));
+    renderHook(() => useMatterInvariants({ matterId: asId<"MatterId">("m-1"), matterNumber: "2026-1" }));
     expect(issueStore.count()).toBe(1);
     expect(issueStore.list()[0]!.code).toBe("KR_PENDING_NO_DOC");
   });
@@ -41,7 +42,7 @@ describe("useMatterInvariants", () => {
   it("rapporterar inget när KR-dokument finns", () => {
     runsResult = { data: { runs: [pendingKr] } };
     docsResult = { data: { documents: [{ documentType: "Kostnadsräkning" }] } };
-    renderHook(() => useMatterInvariants({ matterId: "m-1" }));
+    renderHook(() => useMatterInvariants({ matterId: asId<"MatterId">("m-1") }));
     expect(issueStore.count()).toBe(0);
   });
 });

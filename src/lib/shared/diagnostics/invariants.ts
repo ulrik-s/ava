@@ -13,6 +13,7 @@
  */
 
 import { KOSTNADSRAKNING_DOCUMENT_TYPE } from "@/lib/shared/schemas/document";
+import type { BillingRunId, MatterId } from "@/lib/shared/schemas/ids";
 
 /** Maskinläsbar kod per invariant — stabil, används för dedup + filtrering. */
 export type InvariantCode = "KR_PENDING_NO_DOC";
@@ -29,7 +30,7 @@ export interface InvariantViolation {
 
 /** Minimal vy av en BillingRun som invarianten behöver. */
 export interface BillingRunView {
-  id: string;
+  id: BillingRunId;
   type: string;
   status: string;
 }
@@ -40,7 +41,7 @@ export interface DocumentView {
 }
 
 export interface MatterInvariantInput {
-  matterId: string;
+  matterId: MatterId;
   /** Ärendenummer för läsbara meddelanden (valfritt). */
   matterNumber?: string;
   billingRuns: ReadonlyArray<BillingRunView>;

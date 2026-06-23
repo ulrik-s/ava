@@ -20,10 +20,11 @@
  * finns bland fakturornas betalningar flaggas som dubbletter och bokas inte.
  */
 
+import type { InvoiceId } from "@/lib/shared/schemas/ids";
 import type { CamtTransaction } from "./camt-parse";
 
 export interface InvoiceCandidate {
-  id: string;
+  id: InvoiceId;
   invoiceNumber: string | null;
   ocrReference: string | null;
   /** Fakturabelopp i öre (visning/rimlighetskoll — inte matchningsnyckel). */
@@ -34,7 +35,7 @@ export interface InvoiceCandidate {
 
 /** En bokningsbar betalning (en transaktion kan ge flera vid delbelopp). */
 export interface BookablePayment {
-  invoiceId: string;
+  invoiceId: InvoiceId;
   amountOre: number;
   /** Deterministisk referens för idempotens (txRef eller txRef#n). */
   reference: string;
@@ -46,7 +47,7 @@ export interface UnmatchedTransaction {
   tx: CamtTransaction;
   reason: "ingen-träff" | "tvetydig" | "dubblett" | "debet";
   /** Vid "tvetydig": de fakturor som träffades. */
-  candidateInvoiceIds?: string[];
+  candidateInvoiceIds?: InvoiceId[];
 }
 
 export interface MatchOutcome {
@@ -59,7 +60,7 @@ export function normalizeRef(raw: string): string {
   return raw.toUpperCase().replace(/[^A-Z0-9]/g, "");
 }
 
-type RefIndex = Map<string, { invoiceId: string; matchedBy: "ocr" | "invoiceNumber" }>;
+type RefIndex = Map<string, { invoiceId: InvoiceId; matchedBy: "ocr" | "invoiceNumber" }>;
 
 /** Index: normaliserad nyckel → faktura. OCR + fakturanr (med och utan F-prefix). */
 function buildRefIndex(invoices: readonly InvoiceCandidate[]): RefIndex {
@@ -78,7 +79,7 @@ function buildRefIndex(invoices: readonly InvoiceCandidate[]): RefIndex {
 }
 
 /** Slå upp en rå referens i indexet (normaliserad + siffervariant). */
-function lookup(index: RefIndex, raw: string): { invoiceId: string; matchedBy: "ocr" | "invoiceNumber" } | null {
+function lookup(index: RefIndex, raw: string): { invoiceId: InvoiceId; matchedBy: "ocr" | "invoiceNumber" } | null {
   const norm = normalizeRef(raw);
   if (norm === "") return null;
   const hit = index.get(norm) ?? index.get(norm.replace(/\D/g, ""));
@@ -92,7 +93,7 @@ function freeTextTokens(texts: readonly string[]): string[] {
 
 interface StructuredOutcome {
   payments?: BookablePayment[];
-  ambiguousInvoiceIds?: string[];
+  ambiguousInvoiceIds?: InvoiceId[];
 }
 
 /** Matcha en transaktions strukturerade referenser → bokningsbara delposter. */
@@ -132,15 +133,15 @@ function matchStructured(tx: CamtTransaction, index: RefIndex): StructuredOutcom
 }
 
 /** Matcha fri text: exakt EN unik faktura-träff krävs, annars null/tvetydig. */
-function matchFreeText(tx: CamtTransaction, index: RefIndex): { single?: BookablePayment; ambiguous?: string[] } {
-  const hits = new Map<string, "ocr" | "invoiceNumber">();
+function matchFreeText(tx: CamtTransaction, index: RefIndex): { single?: BookablePayment; ambiguous?: InvoiceId[] } {
+  const hits = new Map<InvoiceId, "ocr" | "invoiceNumber">();
   for (const token of freeTextTokens(tx.freeTexts)) {
     const hit = lookup(index, token);
     if (hit) hits.set(hit.invoiceId, hit.matchedBy);
   }
   if (hits.size === 0) return {};
   if (hits.size > 1) return { ambiguous: [...hits.keys()] };
-  const [invoiceId] = [...hits.keys()] as [string];
+  const [invoiceId] = [...hits.keys()] as [InvoiceId];
   return { single: { invoiceId, amountOre: tx.amountOre, reference: tx.reference, matchedBy: "freetext", tx } };
 }
 

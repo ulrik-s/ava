@@ -23,18 +23,20 @@
  * per månad) → `remaining > 0` är grinden, enligt produktbeslut i #23.
  */
 
+import type { MatterId, PaymentPlanId } from "@/lib/shared/schemas/ids";
+
 export type ReminderKind = "DUE" | "OVERDUE";
 
 /** En aktiv plan med allt kärnan behöver för beslut + payload. */
 export interface PlanForScan {
-  planId: string;
+  planId: PaymentPlanId;
   status: string;
   monthlyAmount: number; // öre/månad
   dayOfMonth: number; // 1–28
   startDate: Date;
   invoiceTotalOre: number; // fakturans totalbelopp
   paidOre: number; // summa registrerade betalningar
-  matterId: string;
+  matterId: MatterId;
   matterNumber: string;
   matterTitle: string;
   recipientEmail: string;
@@ -43,15 +45,15 @@ export interface PlanForScan {
 
 /** Redan loggad påminnelse (idempotens-nyckel). */
 export interface LoggedReminder {
-  planId: string;
+  planId: PaymentPlanId;
   dueMonth: string; // "YYYY-MM"
   type: ReminderKind;
 }
 
 /** En påminnelse som ska skickas: loggas + emittas av anroparen. */
 export interface PlannedReminder {
-  planId: string;
-  matterId: string;
+  planId: PaymentPlanId;
+  matterId: MatterId;
   dueMonth: string; // "YYYY-MM"
   type: ReminderKind;
   eventType: "payment.due" | "payment.overdue";

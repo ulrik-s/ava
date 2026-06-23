@@ -26,7 +26,7 @@ export class DrizzlePaymentPlanRepository extends DrizzleRepository<PaymentPlan>
 
   /** payment_plans saknar org-kolumn → härled via fakturan→ärendet (#647). */
   protected override resolveOrg(row: unknown): Promise<string | undefined> {
-    return invoiceOrg(this.db, (row as { invoiceId?: string }).invoiceId);
+    return invoiceOrg(this.db, (row as { invoiceId?: InvoiceId }).invoiceId);
   }
 
   async getByIdInOrg(planId: PaymentPlanId, organizationId: OrganizationId): Promise<PaymentPlan | null> {

@@ -60,8 +60,8 @@ async function loadPendingSuggestion(ctx: Ctx, suggestionId: DocumentAnalysisSug
   return sugg;
 }
 
-async function resolveExistingContact(ctx: Ctx, contactId: string): Promise<ContactId> {
-  const existing = (await ctx.repos.contacts.getByIdFull(asId<"ContactId">(contactId), ctx.orgId)) as { id: ContactId } | null;
+async function resolveExistingContact(ctx: Ctx, contactId: ContactId): Promise<ContactId> {
+  const existing = (await ctx.repos.contacts.getByIdFull(contactId, ctx.orgId)) as { id: ContactId } | null;
   if (!existing) throw new TRPCError({ code: "NOT_FOUND" });
   return existing.id;
 }
@@ -71,7 +71,7 @@ async function findContactByNumberOrName(
   ctx: Ctx,
   sugg: Suggestion,
   o: SuggOverride,
-  matterId: string,
+  matterId: MatterId,
 ): Promise<ContactCandidate | null> {
   const pn = o.personalNumber ?? sugg.personalNumber;
   const on = o.orgNumber ?? sugg.orgNumber;
@@ -81,7 +81,7 @@ async function findContactByNumberOrName(
   if (on) {
     return (await ctx.repos.contacts.findByOrgNumber(ctx.orgId, on)) as ContactCandidate | null;
   }
-  const matterContacts = (await ctx.repos.matterContacts.listContactsForMatter(asId<"MatterId">(matterId))) as ContactCandidate[];
+  const matterContacts = (await ctx.repos.matterContacts.listContactsForMatter(matterId)) as ContactCandidate[];
   const dedup = findExistingContactForSuggestion(
     {
       name: o.name ?? sugg.name,
@@ -119,7 +119,7 @@ async function resolveOrCreateContact(
   ctx: Ctx,
   sugg: Suggestion,
   o: SuggOverride,
-  matterId: string,
+  matterId: MatterId,
 ): Promise<ContactId> {
   const existing = await findContactByNumberOrName(ctx, sugg, o, matterId);
   if (existing) return asId<"ContactId">(existing.id);
@@ -131,12 +131,12 @@ async function resolveOrCreateContact(
 
 async function ensureMatterContactLink(
   ctx: Ctx,
-  matterId: string,
-  contactId: string,
+  matterId: MatterId,
+  contactId: ContactId,
   role: string,
   notes: string | null,
 ): Promise<void> {
-  const existing = await ctx.repos.matterContacts.findLink(asId<"MatterId">(matterId), asId<"ContactId">(contactId), role);
+  const existing = await ctx.repos.matterContacts.findLink(matterId, contactId, role);
   if (!existing) {
     await ctx.repos.matterContacts.create({ matterId, contactId, role, notes } as Partial<MatterContact>);
   }
@@ -176,7 +176,7 @@ function pickFirstFromGroup<K extends keyof Suggestion>(
 async function resolveOrCreateGroupContact(
   ctx: Ctx,
   suggs: Suggestion[],
-  matterId: string,
+  matterId: MatterId,
 ): Promise<ContactId> {
   const first = suggs[0];
   if (!first) throw new TRPCError({ code: "NOT_FOUND" });
@@ -199,7 +199,7 @@ async function resolveOrCreateGroupContact(
 async function findGroupContact(
   ctx: Ctx,
   suggs: Suggestion[],
-  matterId: string,
+  matterId: MatterId,
   personalNumber: string | null,
   orgNumber: string | null,
 ): Promise<ContactCandidate | null> {
@@ -210,7 +210,7 @@ async function findGroupContact(
     return (await ctx.repos.contacts.findByOrgNumber(ctx.orgId, orgNumber)) as ContactCandidate | null;
   }
   // Namn-fallback scopad till ärendet (se contact-dedup.ts).
-  const matterContacts = (await ctx.repos.matterContacts.listContactsForMatter(asId<"MatterId">(matterId))) as ContactCandidate[];
+  const matterContacts = (await ctx.repos.matterContacts.listContactsForMatter(matterId)) as ContactCandidate[];
   const first = suggs[0];
   if (!first) return null;
   const dedup = findExistingContactForSuggestion(
@@ -230,8 +230,8 @@ async function findGroupContact(
 async function linkGroupRoles(
   ctx: Ctx,
   suggs: Suggestion[],
-  matterId: string,
-  contactId: string,
+  matterId: MatterId,
+  contactId: ContactId,
 ): Promise<string[]> {
   const distinctRoles = Array.from(new Set(suggs.map((s) => s.role)));
   for (const role of distinctRoles) {
@@ -294,7 +294,7 @@ export const suggestionProcedures = {
       const finalRole = o.role ?? sugg.role;
 
       const contactId = input.existingContactId
-        ? await resolveExistingContact(ctx, input.existingContactId)
+        ? await resolveExistingContact(ctx, asId<"ContactId">(input.existingContactId))
         : await resolveOrCreateContact(ctx, sugg, o, matterId);
 
       await ensureMatterContactLink(ctx, matterId, contactId, finalRole, sugg.notes);
@@ -334,7 +334,7 @@ export const suggestionProcedures = {
       const matterId = first.document.matterId;
 
       const contactId = input.existingContactId
-        ? await resolveExistingContact(ctx, input.existingContactId)
+        ? await resolveExistingContact(ctx, asId<"ContactId">(input.existingContactId))
         : await resolveOrCreateGroupContact(ctx, suggs, matterId);
 
       const distinctRoles = await linkGroupRoles(ctx, suggs, matterId, contactId);

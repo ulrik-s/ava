@@ -22,7 +22,7 @@ import {
   type PlanForScan,
 } from "@/lib/shared/payment-reminders";
 import { paymentPlanStatusSchema, reminderTypeSchema, type Invoice, type PaymentPlan } from "@/lib/shared/schemas";
-import { asId, paymentPlanIdSchema, paymentPlanReminderIdSchema } from "@/lib/shared/schemas/ids";
+import { asId, paymentPlanIdSchema, paymentPlanReminderIdSchema, type MatterId } from "@/lib/shared/schemas/ids";
 import { emit } from "../events/emit";
 import type {
   JoinedPaymentPlan, JoinedPaymentPlanWithReminders,
@@ -45,8 +45,8 @@ function resolveRecipient(matter: PlanMatter | null): { email: string; name: str
 }
 
 /** Ärende-fälten scannern behöver (tomma om ärendet saknas). */
-function scanMatterFields(m: PlanMatter | null): { matterId: string; matterNumber: string; matterTitle: string } {
-  return { matterId: m?.id ?? "", matterNumber: m?.matterNumber ?? "", matterTitle: m?.title ?? "" };
+function scanMatterFields(m: PlanMatter | null): { matterId: MatterId; matterNumber: string; matterTitle: string } {
+  return { matterId: m?.id ?? asId<"MatterId">(""), matterNumber: m?.matterNumber ?? "", matterTitle: m?.title ?? "" };
 }
 
 function toPlanForScan(p: JoinedPlan): PlanForScan {

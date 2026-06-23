@@ -3,6 +3,7 @@
  */
 
 import type { PaymentPlanReminder } from "@/lib/shared/schemas/billing";
+import type { PaymentPlanId } from "@/lib/shared/schemas/ids";
 import { paymentPlanReminders } from "../db/schema";
 import type { AppDb } from "../db/types";
 import { DrizzleRepository, versionedTable } from "./drizzle-repository";
@@ -18,6 +19,6 @@ export class DrizzlePaymentPlanReminderRepository
 
   /** påminnelser saknar org-kolumn → härled via planen→fakturan→ärendet (#647). */
   protected override resolveOrg(row: unknown): Promise<string | undefined> {
-    return planOrg(this.db, (row as { planId?: string }).planId);
+    return planOrg(this.db, (row as { planId?: PaymentPlanId }).planId);
   }
 }

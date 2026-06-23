@@ -18,11 +18,12 @@
  * redan avprickade `paymentReference` → dubbletter filtreras.
  */
 
+import type { ExpectedReceivableId } from "@/lib/shared/schemas/ids";
 import type { CamtTransaction } from "./camt-parse";
 import { normalizeRef } from "./match-payments";
 
 export interface ReceivableCandidate {
-  id: string;
+  id: ExpectedReceivableId;
   /** Ärendenummer (AVA/KATS) — t.ex. "1154602" eller "F-2026-0001". */
   matterNumber: string | null;
   /** Domstolens målnummer — t.ex. "3288-26" (Matter.courtCaseNumber, #173). */
@@ -34,7 +35,7 @@ export interface ReceivableCandidate {
 }
 
 export interface ReceivableSuggestion {
-  receivableId: string;
+  receivableId: ExpectedReceivableId;
   /** Faktiskt utbetalt belopp (öre) — delbeloppet om split, annars tx-beloppet. */
   amountOre: number;
   /** Deterministisk referens (txRef / txRef#n) för idempotent settle. */
@@ -48,7 +49,7 @@ export interface ReceivableReviewItem {
   tx: CamtTransaction;
   matchedText: string;
   reason: "tvetydig" | "ingen-träff";
-  candidateReceivableIds?: string[];
+  candidateReceivableIds?: ExpectedReceivableId[];
 }
 
 export interface ReceivableMatchOutcome {
