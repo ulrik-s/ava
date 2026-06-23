@@ -13,15 +13,16 @@ import {
   normalizeRef,
   type InvoiceCandidate,
 } from "@/lib/shared/payments/match-payments";
+import { asId } from "@/lib/shared/schemas/ids";
 
 const OCR_1 = buildOcrReference("20260001");
 const OCR_2 = buildOcrReference("20260002");
 
 const INVOICES: InvoiceCandidate[] = [
-  { id: "inv-1", invoiceNumber: "F-2026-0001", ocrReference: OCR_1, amount: 100_000, paymentReferences: [] },
-  { id: "inv-2", invoiceNumber: "F-2026-0002", ocrReference: OCR_2, amount: 50_000, paymentReferences: [] },
+  { id: asId<"InvoiceId">("inv-1"), invoiceNumber: "F-2026-0001", ocrReference: OCR_1, amount: 100_000, paymentReferences: [] },
+  { id: asId<"InvoiceId">("inv-2"), invoiceNumber: "F-2026-0002", ocrReference: OCR_2, amount: 50_000, paymentReferences: [] },
   // Kostnadsräkning till domstol: varken OCR eller fakturanummer (#173).
-  { id: "inv-court", invoiceNumber: null, ocrReference: null, amount: 75_000, paymentReferences: [] },
+  { id: asId<"InvoiceId">("inv-court"), invoiceNumber: null, ocrReference: null, amount: 75_000, paymentReferences: [] },
 ];
 
 function tx(over: Partial<CamtTransaction>): CamtTransaction {

@@ -4,13 +4,14 @@
  */
 import { describe, it, expect } from "vitest-compat";
 import { computeDueReminders, type PlanForScan, type LoggedReminder } from "@/lib/shared/payment-reminders";
+import { asId } from "@/lib/shared/schemas/ids";
 
 function plan(over: Partial<PlanForScan> = {}): PlanForScan {
   return {
-    planId: "pp-1", status: "ACTIVE", monthlyAmount: 50000, dayOfMonth: 10,
+    planId: asId<"PaymentPlanId">("pp-1"), status: "ACTIVE", monthlyAmount: 50000, dayOfMonth: 10,
     startDate: new Date("2026-01-15T00:00:00Z"),
     invoiceTotalOre: 600000, paidOre: 0,
-    matterId: "m-1", matterNumber: "2026-0001", matterTitle: "Tvist",
+    matterId: asId<"MatterId">("m-1"), matterNumber: "2026-0001", matterTitle: "Tvist",
     recipientEmail: "klient@example.se", recipientName: "Klient AB",
     ...over,
   };
@@ -37,7 +38,7 @@ describe("computeDueReminders — DUE", () => {
   });
 
   it("idempotens: redan loggad DUE → ingen ny", () => {
-    const logged: LoggedReminder[] = [{ planId: "pp-1", dueMonth: "2026-03", type: "DUE" }];
+    const logged: LoggedReminder[] = [{ planId: asId<"PaymentPlanId">("pp-1"), dueMonth: "2026-03", type: "DUE" }];
     expect(computeDueReminders([thisMonth()], new Date("2026-03-10T09:00:00Z"), logged)).toHaveLength(0);
   });
 });
@@ -59,7 +60,7 @@ describe("computeDueReminders — OVERDUE", () => {
   });
 
   it("loggad OVERDUE för föreg. månad → faller igenom till DUE", () => {
-    const logged: LoggedReminder[] = [{ planId: "pp-1", dueMonth: "2026-02", type: "OVERDUE" }];
+    const logged: LoggedReminder[] = [{ planId: asId<"PaymentPlanId">("pp-1"), dueMonth: "2026-02", type: "OVERDUE" }];
     const out = computeDueReminders([plan()], new Date("2026-03-10T09:00:00Z"), logged);
     expect(out[0]!.type).toBe("DUE");
     expect(out[0]!.dueMonth).toBe("2026-03");
@@ -75,7 +76,7 @@ describe("computeDueReminders — grindar", () => {
     expect(computeDueReminders([plan({ status: "COMPLETED" })], new Date("2026-03-10T09:00:00Z"), NONE)).toHaveLength(0);
   });
   it("remaining beräknas som total − betalt", () => {
-    const out = computeDueReminders([plan({ paidOre: 100000 })], new Date("2026-03-10T09:00:00Z"), [{ planId: "pp-1", dueMonth: "2026-02", type: "OVERDUE" }]);
+    const out = computeDueReminders([plan({ paidOre: 100000 })], new Date("2026-03-10T09:00:00Z"), [{ planId: asId<"PaymentPlanId">("pp-1"), dueMonth: "2026-02", type: "OVERDUE" }]);
     expect(out[0]!.payload.remainingAmount).toBe(500000);
   });
 });

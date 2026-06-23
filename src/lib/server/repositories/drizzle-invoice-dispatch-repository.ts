@@ -5,7 +5,7 @@
 
 import { and, asc, desc, eq, isNull } from "drizzle-orm";
 import type { InvoiceDispatch } from "@/lib/shared/schemas/billing";
-import { asId } from "@/lib/shared/schemas/ids";
+import { asId, type InvoiceId } from "@/lib/shared/schemas/ids";
 import { invoiceDispatches, invoices, matters } from "../db/schema";
 import type { AppDb } from "../db/types";
 import { DrizzleRepository, versionedTable } from "./drizzle-repository";
@@ -17,7 +17,7 @@ export class DrizzleInvoiceDispatchRepository
   implements InvoiceDispatchRepository {
   /** invoice_dispatches saknar org-kolumn → härled via fakturan→ärendet (#647). */
   protected override resolveOrg(row: unknown): Promise<string | undefined> {
-    return invoiceOrg(this.db, (row as { invoiceId?: string }).invoiceId);
+    return invoiceOrg(this.db, (row as { invoiceId?: InvoiceId }).invoiceId);
   }
 
   constructor(db: AppDb, now: () => Date = () => new Date()) {

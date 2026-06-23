@@ -23,7 +23,7 @@ export class DrizzleBillingRunRepository
 
   /** billing_runs saknar org-kolumn → härled via ärendet (#647). */
   protected override resolveOrg(row: unknown): Promise<string | undefined> {
-    return matterOrg(this.db, (row as { matterId?: string }).matterId);
+    return matterOrg(this.db, (row as { matterId?: MatterId }).matterId);
   }
 
   async listForOrg(organizationId: OrganizationId, matterId?: MatterId): Promise<BillingRunListRow[]> {

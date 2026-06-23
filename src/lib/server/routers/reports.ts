@@ -6,7 +6,7 @@ import {
   type FrozenWorkInput,
 } from "@/lib/shared/billed-per-lawyer";
 import type { InvoiceStatus, PaymentMethod } from "@/lib/shared/schemas/enums";
-import { asId, userIdSchema, type InvoiceId } from "@/lib/shared/schemas/ids";
+import { asId, userIdSchema, type InvoiceId, type UserId } from "@/lib/shared/schemas/ids";
 import { router, protectedProcedure } from "../trpc";
 
 /**
@@ -86,13 +86,17 @@ function buildFrozenWork(
   for (const te of timeEntries) {
     const invoiceId = te.invoiceId ?? (te.frozenByBillingRunId ? runToInvoice.get(te.frozenByBillingRunId) : undefined);
     if (!invoiceId) continue;
-    out.push({ invoiceId, userId: te.userId, workOre: Math.round((te.minutes / 60) * te.hourlyRate) });
+    out.push({
+      invoiceId: asId<"InvoiceId">(invoiceId),
+      userId: asId<"UserId">(te.userId),
+      workOre: Math.round((te.minutes / 60) * te.hourlyRate),
+    });
   }
   return out;
 }
 
 /** invoiceId → advokatens andel (userWork/totalWork ∈ [0,1]) ur frysta tidsposter. */
-function lawyerShareRatios(frozenWork: FrozenWorkInput[], userId: string): Map<string, number> {
+function lawyerShareRatios(frozenWork: FrozenWorkInput[], userId: UserId): Map<string, number> {
   const total = new Map<string, number>();
   const user = new Map<string, number>();
   for (const fw of frozenWork) {
@@ -118,7 +122,7 @@ function writtenOffDates(writeOffs: Array<{ invoiceId?: string; writtenOffAt?: u
 
 function toInvoiceInputs(invoices: RawInvoice[], writtenOff: Map<string, Date>): BilledInvoiceInput[] {
   return invoices.map((i) => ({
-    id: i.id,
+    id: asId<"InvoiceId">(i.id),
     amountOre: i.amount,
     invoiceDate: coerceDate(i.invoiceDate),
     status: i.status,

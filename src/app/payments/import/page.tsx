@@ -26,6 +26,7 @@ import {
   type ReceivableCandidate,
   type ReceivableSuggestion,
 } from "@/lib/shared/payments/match-receivables";
+import { asId } from "@/lib/shared/schemas/ids";
 
 interface InvoiceRowData {
   id: string;
@@ -37,7 +38,7 @@ interface InvoiceRowData {
 
 function toCandidates(rows: readonly InvoiceRowData[]): InvoiceCandidate[] {
   return rows.map((r) => ({
-    id: r.id,
+    id: asId<"InvoiceId">(r.id),
     invoiceNumber: r.invoiceNumber ?? null,
     ocrReference: r.ocrReference ?? null,
     amount: r.amount,
@@ -90,7 +91,9 @@ export default function PaymentImportPage() {
   // #175: matcha domstolsbetalningar (fri text) mot förväntade fordringar.
   const receivableSuggestions = useMemo((): ReceivableSuggestion[] => {
     if (!parsed.file || !receivables.data) return [];
-    const cands: ReceivableCandidate[] = (receivables.data as Array<Omit<ReceivableCandidate, "settledReferences">>).map((c) => ({ ...c, settledReferences: [] }));
+    const cands: ReceivableCandidate[] = (receivables.data as Array<Omit<ReceivableCandidate, "id" | "settledReferences"> & { id: string }>).map(
+      (c) => ({ ...c, id: asId<"ExpectedReceivableId">(c.id), settledReferences: [] }),
+    );
     return matchReceivables(parsed.file.transactions, cands).suggestions;
   }, [parsed.file, receivables.data]);
 

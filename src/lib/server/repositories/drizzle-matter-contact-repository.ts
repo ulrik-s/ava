@@ -26,7 +26,7 @@ export class DrizzleMatterContactRepository
 
   /** matter_contacts saknar org-kolumn → härled via ärendet (#528/#632) så change_log/pull funkar. */
   protected override resolveOrg(row: unknown): Promise<string | undefined> {
-    return matterOrg(this.db, (row as { matterId?: string }).matterId);
+    return matterOrg(this.db, (row as { matterId?: MatterId }).matterId);
   }
 
   async findForConflict(organizationId: OrganizationId, numberTerm?: string): Promise<ConflictContactRow[]> {

@@ -11,12 +11,20 @@ import {
   matchReceivables,
   type ReceivableCandidate,
 } from "@/lib/shared/payments/match-receivables";
+import { asId } from "@/lib/shared/schemas/ids";
 
 const FIXTURES = resolve(__dirname, "../../../fixtures/camt-seb");
 const readDomstol = () => parseCamtXml(readFileSync(resolve(FIXTURES, "camt.053_domstolsverket.xml"), "utf8"));
 
-function cand(over: Partial<ReceivableCandidate> & { id: string }): ReceivableCandidate {
-  return { matterNumber: null, courtCaseNumber: null, expectedAmount: 0, settledReferences: [], ...over };
+function cand(over: Omit<Partial<ReceivableCandidate>, "id"> & { id: string }): ReceivableCandidate {
+  return {
+    matterNumber: null,
+    courtCaseNumber: null,
+    expectedAmount: 0,
+    settledReferences: [],
+    ...over,
+    id: asId<"ExpectedReceivableId">(over.id),
+  };
 }
 
 describe("matchReceivables — Domstolsverket-fixtur (#175)", () => {
@@ -28,7 +36,7 @@ describe("matchReceivables — Domstolsverket-fixtur (#175)", () => {
       cand({ id: "er-1", courtCaseNumber: "3288-26", expectedAmount: 8000_00 }),
     ]);
     expect(out.suggestions).toHaveLength(1);
-    expect(out.suggestions[0]!.receivableId).toBe("er-1");
+    expect(out.suggestions[0]!.receivableId).toBe(asId<"ExpectedReceivableId">("er-1"));
     expect(out.suggestions[0]!.matchedBy).toBe("courtCaseNumber");
     expect(out.suggestions[0]!.amountOre).toBe(7246_00); // delbeloppet, ej hela tx
   });
@@ -48,8 +56,8 @@ describe("matchReceivables — Domstolsverket-fixtur (#175)", () => {
       cand({ id: "b", courtCaseNumber: "5799-25" }), // "5291 5799-25 PARTNER MA" → 73143.00
     ]);
     const ids = out.suggestions.map((s) => s.receivableId).sort();
-    expect(ids).toEqual(["a", "b"]);
-    expect(out.suggestions.find((s) => s.receivableId === "b")!.amountOre).toBe(73143_00);
+    expect(ids).toEqual([asId<"ExpectedReceivableId">("a"), asId<"ExpectedReceivableId">("b")]);
+    expect(out.suggestions.find((s) => s.receivableId === asId<"ExpectedReceivableId">("b"))!.amountOre).toBe(73143_00);
   });
 
   it("redan avprickad referens (dubblett) ger inget förslag", () => {
@@ -86,7 +94,10 @@ describe("matchReceivables — syntetiska fall", () => {
     ]);
     expect(out.suggestions).toHaveLength(0);
     expect(out.review[0]!.reason).toBe("tvetydig");
-    expect(out.review[0]!.candidateReceivableIds!.sort()).toEqual(["x", "y"]);
+    expect(out.review[0]!.candidateReceivableIds!.sort()).toEqual([
+      asId<"ExpectedReceivableId">("x"),
+      asId<"ExpectedReceivableId">("y"),
+    ]);
   });
 
   it("DEBIT-transaktion ignoreras (bara inbetalningar)", () => {

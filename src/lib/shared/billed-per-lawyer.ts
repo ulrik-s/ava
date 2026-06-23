@@ -18,11 +18,13 @@
  * Ren och ramverks-agnostisk → enhetstestbar isolerat. Alla belopp i öre.
  */
 
+import type { InvoiceId, UserId } from "@/lib/shared/schemas/ids";
+
 /** Utfärdade statusar som räknas som "gått ut" (fakturan har lämnat huset). */
 const ISSUED_STATUSES: ReadonlySet<string> = new Set(["SENT", "PAID", "BAD_DEBT", "INSTALLMENT_PLAN"]);
 
 export interface BilledInvoiceInput {
-  id: string;
+  id: InvoiceId;
   amountOre: number;
   invoiceDate: Date;
   status: string;
@@ -32,8 +34,8 @@ export interface BilledInvoiceInput {
 
 /** Frozen arbetsvärde per (faktura, advokat). Råposter aggregeras internt. */
 export interface FrozenWorkInput {
-  invoiceId: string;
-  userId: string;
+  invoiceId: InvoiceId;
+  userId: UserId;
   workOre: number;
 }
 
@@ -43,7 +45,7 @@ export interface DateRange {
 }
 
 export interface BilledInvoiceRow {
-  id: string;
+  id: InvoiceId;
   invoiceDate: Date;
   amountOre: number;
   /** Advokatens proportionella andel av fakturans belopp. */
@@ -84,7 +86,7 @@ function indexWork(frozenWork: FrozenWorkInput[]): Map<string, { total: number; 
 /** Advokatens proportionella andel av en fakturas belopp (öre, avrundat). */
 function lawyerShareOre(
   invoice: BilledInvoiceInput,
-  userId: string,
+  userId: UserId,
   work: Map<string, { total: number; perUser: Map<string, number> }>,
 ): number {
   const entry = work.get(invoice.id);
@@ -95,7 +97,7 @@ function lawyerShareOre(
 }
 
 export interface BilledPerLawyerOpts {
-  userId: string;
+  userId: UserId;
   invoices: BilledInvoiceInput[];
   frozenWork: FrozenWorkInput[];
   /** Rapportperioden. */

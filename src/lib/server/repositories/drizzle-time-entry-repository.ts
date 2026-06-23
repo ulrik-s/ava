@@ -40,7 +40,7 @@ export class DrizzleTimeEntryRepository extends DrizzleRepository<TimeEntry> imp
 
   /** time_entries saknar org-kolumn → härled via ärendet (#528/#632) så change_log/pull funkar. */
   protected override resolveOrg(row: unknown): Promise<string | undefined> {
-    return matterOrg(this.db, (row as { matterId?: string }).matterId);
+    return matterOrg(this.db, (row as { matterId?: MatterId }).matterId);
   }
 
   async listForOrg(organizationId: OrganizationId, opts: TimeEntryListFilter): Promise<TimeEntryListResult> {
