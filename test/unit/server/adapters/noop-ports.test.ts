@@ -14,6 +14,7 @@ import {
   noopContentStore,
   noopPorts,
 } from "@/lib/server/adapters/noop-ports";
+import { asId } from "@/lib/shared/schemas/ids";
 
 describe("noop-ports", () => {
   it("noopEmail.send är en tyst no-op", async () => {
@@ -23,7 +24,7 @@ describe("noop-ports", () => {
   });
 
   it("noopDocumentAnalyzer.analyze är en tyst no-op", async () => {
-    await expect(noopDocumentAnalyzer.analyze("doc-1")).resolves.toBeUndefined();
+    await expect(noopDocumentAnalyzer.analyze(asId<"DocumentId">("doc-1"))).resolves.toBeUndefined();
   });
 
   it("noopSearchIndex.search returnerar tomt men välformat svar", async () => {

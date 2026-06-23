@@ -8,17 +8,18 @@ import { beforeEach, describe, expect, it } from "vitest-compat";
 import { DocumentContentCache } from "@/lib/client/backend/content-cache";
 import { saveDocumentContent } from "@/lib/client/backend/save-document-content";
 import { base64ToBytes, sha256Hex } from "@/lib/shared/content-address";
+import { asId, type DocumentId } from "@/lib/shared/schemas/ids";
 
 let cache: DocumentContentCache;
 beforeEach(() => { cache = new DocumentContentCache(new IDBFactory()); });
 
 describe("saveDocumentContent", () => {
   it("cachar bytes (pending) + laddar upp via uploadContent (base64)", async () => {
-    const uploads: Array<{ documentId: string; contentBase64: string }> = [];
-    const client = { document: { uploadContent: { mutate: async (i: { documentId: string; contentBase64: string }) => { uploads.push(i); } } } };
+    const uploads: Array<{ documentId: DocumentId; contentBase64: string }> = [];
+    const client = { document: { uploadContent: { mutate: async (i: { documentId: DocumentId; contentBase64: string }) => { uploads.push(i); } } } };
     const bytes = new Uint8Array([1, 2, 3, 4]);
 
-    const sha = await saveDocumentContent(client, "doc-1", bytes, cache);
+    const sha = await saveDocumentContent(client, asId<"DocumentId">("doc-1"), bytes, cache);
 
     expect(sha).toBe(await sha256Hex(bytes));
     // Pending → byte-synken laddar upp vid reconnect (offline-säkert).

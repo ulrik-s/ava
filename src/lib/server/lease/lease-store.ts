@@ -18,6 +18,7 @@
  * `now` injiceras → deterministiska tester utan riktig tid.
  */
 
+import type { DocumentId, UserId } from "@/lib/shared/schemas/ids";
 import type { AcquireLeaseResult, ILeaseStore, LeaseView } from "../ports";
 
 export const LEASE_STALE_MS = 2 * 60_000;
@@ -31,7 +32,7 @@ export class InMemoryLeaseStore implements ILeaseStore {
 
   constructor(private readonly now: () => number = () => Date.now()) {}
 
-  acquire(documentId: string, holderId: string, holderName: string): AcquireLeaseResult {
+  acquire(documentId: DocumentId, holderId: UserId, holderName: string): AcquireLeaseResult {
     const current = this.live(documentId);
     // Fri, utgången, eller redan din (själv-återtagande) → ta/förnya leasen.
     if (!current || current.holderId === holderId) {
@@ -49,31 +50,31 @@ export class InMemoryLeaseStore implements ILeaseStore {
     return { acquired: false, lease: this.view(current) };
   }
 
-  renew(documentId: string, holderId: string): boolean {
+  renew(documentId: DocumentId, holderId: UserId): boolean {
     const current = this.live(documentId);
     if (!current || current.holderId !== holderId) return false;
     current.lastHeartbeatAt = this.now();
     return true;
   }
 
-  release(documentId: string, holderId: string): void {
+  release(documentId: DocumentId, holderId: UserId): void {
     const current = this.leases.get(documentId);
     if (current && current.holderId === holderId) this.leases.delete(documentId);
   }
 
-  takeover(documentId: string, holderId: string, holderName: string): LeaseView {
+  takeover(documentId: DocumentId, holderId: UserId, holderName: string): LeaseView {
     const lease: StoredLease = { documentId, holderId, holderName, acquiredAt: this.now(), lastHeartbeatAt: this.now() };
     this.leases.set(documentId, lease);
     return this.view(lease);
   }
 
-  get(documentId: string): LeaseView | null {
+  get(documentId: DocumentId): LeaseView | null {
     const current = this.live(documentId);
     return current ? this.view(current) : null;
   }
 
   /** Aktuell lease om den inte löpt ut; rensar och returnerar null annars. */
-  private live(documentId: string): StoredLease | null {
+  private live(documentId: DocumentId): StoredLease | null {
     const lease = this.leases.get(documentId);
     if (!lease) return null;
     if (this.now() - lease.lastHeartbeatAt >= LEASE_EXPIRE_MS) {

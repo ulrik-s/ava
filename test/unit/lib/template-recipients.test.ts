@@ -5,8 +5,12 @@ import {
   RecipientNotLinkedError,
   type MatterContactLink,
 } from "@/lib/client/template-recipients";
+import { asId, type ContactId } from "@/lib/shared/schemas/ids";
 
-function link(overrides: Partial<MatterContactLink> & { contactId: string }): MatterContactLink {
+const cId = (s: string) => asId<"ContactId">(s);
+const mId = (s: string) => asId<"MatterId">(s);
+
+function link(overrides: Partial<MatterContactLink> & { contactId: ContactId }): MatterContactLink {
   return {
     contactId: overrides.contactId,
     role: overrides.role ?? "KLIENT",
@@ -26,20 +30,20 @@ function link(overrides: Partial<MatterContactLink> & { contactId: string }): Ma
 
 describe("resolveRecipients", () => {
   it("returnerar tom lista när inga recipientIds anges", () => {
-    const links = [link({ contactId: "c1" })];
-    expect(resolveRecipients([], links, "m1")).toEqual([]);
+    const links = [link({ contactId: cId("c1") })];
+    expect(resolveRecipients([], links, mId("m1"))).toEqual([]);
   });
 
   it("mappar contact-id till full mottagardata med roll-label", () => {
     const links = [
       link({
-        contactId: "c1",
+        contactId: cId("c1"),
         role: "KLIENT",
         notes: "Huvudkontakt",
         contact: { name: "Anna", email: "a@b.se", phone: null, address: "Gatan 1", personalNumber: null, orgNumber: null },
       }),
     ];
-    const result = resolveRecipients(["c1"], links, "m1");
+    const result = resolveRecipients([cId("c1")], links, mId("m1"));
     expect(result).toEqual([
       {
         contactId: "c1",
@@ -59,32 +63,32 @@ describe("resolveRecipients", () => {
   });
 
   it("faller tillbaka på rå roll-sträng om ingen label finns", () => {
-    const links = [link({ contactId: "c1", role: "UNKNOWN_ROLE" })];
-    const result = resolveRecipients(["c1"], links, "m1");
+    const links = [link({ contactId: cId("c1"), role: "UNKNOWN_ROLE" })];
+    const result = resolveRecipients([cId("c1")], links, mId("m1"));
     expect(result[0]!.data.roleLabel).toBe("UNKNOWN_ROLE");
   });
 
   it("bevarar ordningen från recipientIds (inte från links)", () => {
     const links = [
-      link({ contactId: "c1", contact: { name: "Anna", email: null, phone: null, address: null, personalNumber: null, orgNumber: null } }),
-      link({ contactId: "c2", contact: { name: "Bo", email: null, phone: null, address: null, personalNumber: null, orgNumber: null } }),
-      link({ contactId: "c3", contact: { name: "Cecilia", email: null, phone: null, address: null, personalNumber: null, orgNumber: null } }),
+      link({ contactId: cId("c1"), contact: { name: "Anna", email: null, phone: null, address: null, personalNumber: null, orgNumber: null } }),
+      link({ contactId: cId("c2"), contact: { name: "Bo", email: null, phone: null, address: null, personalNumber: null, orgNumber: null } }),
+      link({ contactId: cId("c3"), contact: { name: "Cecilia", email: null, phone: null, address: null, personalNumber: null, orgNumber: null } }),
     ];
 
     // Begär i omvänd ordning
-    const result = resolveRecipients(["c3", "c1", "c2"], links, "m1");
+    const result = resolveRecipients([cId("c3"), cId("c1"), cId("c2")], links, mId("m1"));
     expect(result.map((r) => r.data.name)).toEqual(["Cecilia", "Anna", "Bo"]);
   });
 
   it("kastar RecipientNotLinkedError när ID saknas i ärendet", () => {
-    const links = [link({ contactId: "c1" })];
-    expect(() => resolveRecipients(["c1", "c999"], links, "m42")).toThrow(RecipientNotLinkedError);
+    const links = [link({ contactId: cId("c1") })];
+    expect(() => resolveRecipients([cId("c1"), cId("c999")], links, mId("m42"))).toThrow(RecipientNotLinkedError);
   });
 
   it("felet innehåller matter-id och recipient-id", () => {
-    const links = [link({ contactId: "c1" })];
+    const links = [link({ contactId: cId("c1") })];
     try {
-      resolveRecipients(["c999"], links, "m42");
+      resolveRecipients([cId("c999")], links, mId("m42"));
       throw new Error("Should have thrown");
     } catch (e) {
       expect(e).toBeInstanceOf(RecipientNotLinkedError);
@@ -97,8 +101,8 @@ describe("resolveRecipients", () => {
   });
 
   it("tillåter dubbletter i recipientIds (genererar två dokument för samma person)", () => {
-    const links = [link({ contactId: "c1" })];
-    const result = resolveRecipients(["c1", "c1"], links, "m1");
+    const links = [link({ contactId: cId("c1") })];
+    const result = resolveRecipients([cId("c1"), cId("c1")], links, mId("m1"));
     expect(result).toHaveLength(2);
     expect(result[0]!.contactId).toBe("c1");
     expect(result[1]!.contactId).toBe("c1");
@@ -108,10 +112,10 @@ describe("resolveRecipients", () => {
     // Ovanligt fall: samma kontakt med två roller i samma ärende. Vi tar bara
     // första länken vi ser — template-context har redan en flat kontakts-lista.
     const links = [
-      link({ contactId: "c1", role: "KLIENT" }),
-      link({ contactId: "c1", role: "VITTNE" }),
+      link({ contactId: cId("c1"), role: "KLIENT" }),
+      link({ contactId: cId("c1"), role: "VITTNE" }),
     ];
-    const result = resolveRecipients(["c1"], links, "m1");
+    const result = resolveRecipients([cId("c1")], links, mId("m1"));
     expect(result).toHaveLength(1);
     expect(result[0]!.data.role).toBe("KLIENT");
   });

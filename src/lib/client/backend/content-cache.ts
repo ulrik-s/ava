@@ -14,6 +14,7 @@
  */
 
 import { IdbKv } from "@/lib/server/data-store/in-memory/idb-kv";
+import { asId, type DocumentId } from "@/lib/shared/schemas/ids";
 
 const DB_NAME = "ava-doc-content";
 const STORE = "kv";
@@ -30,7 +31,7 @@ export class DocumentContentCache {
   }
 
   /** Cacha bytes (by sha) + markera dokumentet som väntande på upload. */
-  async cache(documentId: string, sha: string, bytes: Uint8Array): Promise<void> {
+  async cache(documentId: DocumentId, sha: string, bytes: Uint8Array): Promise<void> {
     await this.kv.put(blobKey(sha), bytes);
     const pending = (await this.kv.get<PendingMap>(PENDING_KEY)) ?? {};
     pending[documentId] = sha; // coalesce: senaste sha per dokument
@@ -49,13 +50,13 @@ export class DocumentContentCache {
   }
 
   /** Dokument som väntar på byte-upload ({documentId, sha}). */
-  async pendingUploads(): Promise<Array<{ documentId: string; sha: string }>> {
+  async pendingUploads(): Promise<Array<{ documentId: DocumentId; sha: string }>> {
     const pending = (await this.kv.get<PendingMap>(PENDING_KEY)) ?? {};
-    return Object.entries(pending).map(([documentId, sha]) => ({ documentId, sha }));
+    return Object.entries(pending).map(([documentId, sha]) => ({ documentId: asId<"DocumentId">(documentId), sha }));
   }
 
   /** Ta bort dokumentet ur pending-manifestet (blobben behålls i läs-cachen). */
-  async markUploaded(documentId: string): Promise<void> {
+  async markUploaded(documentId: DocumentId): Promise<void> {
     const pending = (await this.kv.get<PendingMap>(PENDING_KEY)) ?? {};
     delete pending[documentId];
     await this.kv.put(PENDING_KEY, pending);

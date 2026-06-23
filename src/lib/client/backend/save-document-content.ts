@@ -11,18 +11,19 @@
  */
 
 import { bytesToBase64, sha256Hex } from "@/lib/shared/content-address";
+import type { DocumentId } from "@/lib/shared/schemas/ids";
 import { DocumentContentCache } from "./content-cache";
 
 /** tRPC-ytan primitiven behöver (strukturell). */
 export interface UploadClient {
   document: {
-    uploadContent: { mutate: (input: { documentId: string; contentBase64: string }) => Promise<unknown> };
+    uploadContent: { mutate: (input: { documentId: DocumentId; contentBase64: string }) => Promise<unknown> };
   };
 }
 
 export async function saveDocumentContent(
   client: UploadClient,
-  documentId: string,
+  documentId: DocumentId,
   bytes: Uint8Array,
   cache: DocumentContentCache = new DocumentContentCache(),
 ): Promise<string> {

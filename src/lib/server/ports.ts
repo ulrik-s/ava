@@ -5,6 +5,7 @@
  */
 
 import type { Buffer } from "node:buffer";
+import type { DocumentId, UserId } from "@/lib/shared/schemas/ids";
 
 // ─── EmailSender ───────────────────────────────────────────────────
 
@@ -35,7 +36,7 @@ export interface IDocumentAnalyzer {
    * job-kö. Returnerar void; eventuella suggestions postas via
    * dataStore.documentAnalysisSuggestions.
    */
-  analyze(documentId: string): Promise<void>;
+  analyze(documentId: DocumentId): Promise<void>;
 }
 
 // ─── SearchIndex ───────────────────────────────────────────────────
@@ -138,8 +139,8 @@ export interface IContentStore {
  * denormaliseras för UI:t ("Anna redigerar"). Tider i ms sedan epoch.
  */
 export interface LeaseView {
-  documentId: string;
-  holderId: string;
+  documentId: DocumentId;
+  holderId: UserId;
   holderName: string;
   acquiredAt: number;
   lastHeartbeatAt: number;
@@ -162,15 +163,15 @@ export interface AcquireLeaseResult {
  */
 export interface ILeaseStore {
   /** Ta leasen om fri/utgången/redan din (själv-återtagande); annars rapportera annan hållare. */
-  acquire(documentId: string, holderId: string, holderName: string): AcquireLeaseResult;
+  acquire(documentId: DocumentId, holderId: UserId, holderName: string): AcquireLeaseResult;
   /** Heartbeat: förnya din lease. `false` = du håller den inte längre (utgången/övertagen). */
-  renew(documentId: string, holderId: string): boolean;
+  renew(documentId: DocumentId, holderId: UserId): boolean;
   /** Släpp din lease (idempotent; no-op om du inte håller den). */
-  release(documentId: string, holderId: string): void;
+  release(documentId: DocumentId, holderId: UserId): void;
   /** Permanent omtilldelning till anroparen (ta-över ett stale/dött lås). */
-  takeover(documentId: string, holderId: string, holderName: string): LeaseView;
+  takeover(documentId: DocumentId, holderId: UserId, holderName: string): LeaseView;
   /** Aktuell lease, eller `null` om fri/utgången. */
-  get(documentId: string): LeaseView | null;
+  get(documentId: DocumentId): LeaseView | null;
 }
 
 // ─── Aggregat ──────────────────────────────────────────────────────

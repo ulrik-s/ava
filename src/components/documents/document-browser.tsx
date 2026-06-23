@@ -329,7 +329,7 @@ function useFileUpload({ matterId, mutations, fileInputRef }: {
         // registrerats → repekar storagePath + triggar server-klassificering.
         if (serverBytes) {
           const { saveDocumentContent } = await import("@/lib/client/backend/save-document-content");
-          await saveDocumentContent(utils.client, result.id, serverBytes);
+          await saveDocumentContent(utils.client, asId<"DocumentId">(result.id), serverBytes);
         }
       } finally {
         await utils.document.tree.invalidate({ matterId });

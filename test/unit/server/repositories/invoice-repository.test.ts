@@ -58,7 +58,7 @@ describe("InvoiceRepository — in-memory", () => {
       payments: [{ id: uuidv7(), invoiceId: invId, amount: 5_000 }],
       writeOffs: [{ id: uuidv7(), invoiceId: invId, amount: 1_000 }],
     }, async () => {});
-    const ledger = await new InMemoryInvoiceRepository(store).getByIdWithLedger(invId);
+    const ledger = await new InMemoryInvoiceRepository(store).getByIdWithLedger(asId<"InvoiceId">(invId));
     expect(ledger?.payments).toHaveLength(1);
     expect(ledger?.writeOffs).toHaveLength(1);
     expect(ledger?.payments[0]!.amount).toBe(5_000);
@@ -71,8 +71,8 @@ describe("InvoiceRepository — in-memory", () => {
       payments: [], writeOffs: [],
     }, async () => {});
     const repo = new InMemoryInvoiceRepository(store);
-    expect(await repo.getByIdInOrg(invId, "org-1")).toMatchObject({ id: invId });
-    expect(await repo.getByIdInOrg(invId, "org-2")).toBeNull(); // fel org
+    expect(await repo.getByIdInOrg(asId<"InvoiceId">(invId), asId<"OrganizationId">("org-1"))).toMatchObject({ id: invId });
+    expect(await repo.getByIdInOrg(asId<"InvoiceId">(invId), asId<"OrganizationId">("org-2"))).toBeNull(); // fel org
   });
 
   it("getByIdWithRelations hämtar huvudrelationerna", async () => {
@@ -91,7 +91,7 @@ describe("InvoiceRepository — in-memory", () => {
       documents: [{ id: uuidv7(), invoiceId: invId, matterId, fileName: "f.pdf" }],
     }, async () => {});
     const repo = new InMemoryInvoiceRepository(store);
-    const full = await repo.getByIdWithRelations(invId, "org-1");
+    const full = await repo.getByIdWithRelations(asId<"InvoiceId">(invId), asId<"OrganizationId">("org-1"));
     expect(full?.matter?.matterNumber).toBe("2026-1");
     expect(full?.payments).toHaveLength(1);
     expect(full?.payments[0]?.recordedBy?.name).toBe("Anna");
@@ -100,7 +100,7 @@ describe("InvoiceRepository — in-memory", () => {
     expect(full?.timeEntries).toHaveLength(1);
     expect(full?.expenses).toHaveLength(1);
     expect(full?.documents).toHaveLength(1);
-    expect(await repo.getByIdWithRelations(invId, "org-2")).toBeNull(); // fel org
+    expect(await repo.getByIdWithRelations(asId<"InvoiceId">(invId), asId<"OrganizationId">("org-2"))).toBeNull(); // fel org
   });
 
   it("getByIdFull tar med aconto-avdrag + kreditnota (self-refs)", async () => {
@@ -114,7 +114,7 @@ describe("InvoiceRepository — in-memory", () => {
       accontoDeductions: [{ id: uuidv7(), finalInvoiceId: invId, accontoInvoiceId: accontoId }],
       payments: [], writeOffs: [],
     }, async () => {});
-    const full = await new InMemoryInvoiceRepository(store).getByIdFull(invId, "org-1");
+    const full = await new InMemoryInvoiceRepository(store).getByIdFull(asId<"InvoiceId">(invId), asId<"OrganizationId">("org-1"));
     expect(full?.accontoDeductions).toHaveLength(1);
     expect((full?.accontoDeductions[0]?.accontoInvoice as { id?: string } | null)?.id).toBe(accontoId);
   });
@@ -138,14 +138,14 @@ describe("InvoiceRepository — in-memory", () => {
       paymentPlans: [], writeOffs: [],
     }, async () => {});
     const repo = new InMemoryInvoiceRepository(store);
-    const all = await repo.listForOrg("org-1");
+    const all = await repo.listForOrg(asId<"OrganizationId">("org-1"));
     expect(all.map((i) => i.id).sort()).toEqual([invId, accontoId].sort()); // org-2-fakturan exkluderad
     const final = all.find((i) => i.id === invId)!;
     expect(final.matter.matterNumber).toBe("2026-1");
     expect(final.payments).toHaveLength(1);
     expect((final.accontoDeductions[0]?.accontoInvoice as { id?: string } | null)?.id).toBe(accontoId);
-    expect((await repo.listForOrg("org-1", { status: "PAID" })).map((i) => i.id)).toEqual([accontoId]);
-    expect((await repo.listForOrg("org-1", { invoiceType: "FINAL" })).map((i) => i.id)).toEqual([invId]);
+    expect((await repo.listForOrg(asId<"OrganizationId">("org-1"), { status: "PAID" })).map((i) => i.id)).toEqual([accontoId]);
+    expect((await repo.listForOrg(asId<"OrganizationId">("org-1"), { invoiceType: "FINAL" })).map((i) => i.id)).toEqual([invId]);
   });
 
   it("nextInvoiceNumber ökar sekvensen per org/år", async () => {
@@ -159,8 +159,8 @@ describe("InvoiceRepository — in-memory", () => {
       payments: [], writeOffs: [],
     }, async () => {});
     const repo = new InMemoryInvoiceRepository(store, () => new Date("2026-06-01T00:00:00.000Z"));
-    expect(await repo.nextInvoiceNumber("org-1")).toBe("F-2026-0003");
-    expect(await repo.nextInvoiceNumber("org-2")).toBe("F-2026-0001"); // tom org → 0001
+    expect(await repo.nextInvoiceNumber(asId<"OrganizationId">("org-1"))).toBe("F-2026-0003");
+    expect(await repo.nextInvoiceNumber(asId<"OrganizationId">("org-2"))).toBe("F-2026-0001"); // tom org → 0001
   });
 
   it("sumCreditNotesFor summerar |belopp| av kreditnotor, org-scopat", async () => {
@@ -176,9 +176,9 @@ describe("InvoiceRepository — in-memory", () => {
       payments: [], writeOffs: [],
     }, async () => {});
     const repo = new InMemoryInvoiceRepository(store);
-    expect(await repo.sumCreditNotesFor(finalId, "org-1")).toBe(50_000); // |−40000| + |−10000|
-    expect(await repo.sumCreditNotesFor(finalId, "org-2")).toBe(0); // fel org
-    expect(await repo.sumCreditNotesFor(uuidv7(), "org-1")).toBe(0); // inga kreditnotor
+    expect(await repo.sumCreditNotesFor(asId<"InvoiceId">(finalId), asId<"OrganizationId">("org-1"))).toBe(50_000); // |−40000| + |−10000|
+    expect(await repo.sumCreditNotesFor(asId<"InvoiceId">(finalId), asId<"OrganizationId">("org-2"))).toBe(0); // fel org
+    expect(await repo.sumCreditNotesFor(asId<"InvoiceId">(uuidv7()), asId<"OrganizationId">("org-1"))).toBe(0); // inga kreditnotor
   });
 
   it("getCreditNoteFor hittar kreditnotan för en faktura", async () => {
@@ -194,8 +194,8 @@ describe("InvoiceRepository — in-memory", () => {
       payments: [], writeOffs: [],
     }, async () => {});
     const repo = new InMemoryInvoiceRepository(store);
-    expect((await repo.getCreditNoteFor(origId))?.id).toBe(creditId);
-    expect(await repo.getCreditNoteFor(uuidv7())).toBeNull(); // ej krediterad
+    expect((await repo.getCreditNoteFor(asId<"InvoiceId">(origId)))?.id).toBe(creditId);
+    expect(await repo.getCreditNoteFor(asId<"InvoiceId">(uuidv7()))).toBeNull(); // ej krediterad
   });
 
   it("listDeductibleAccontos: ACCONTO i ärendet som ej redan avdragits", async () => {
@@ -214,8 +214,8 @@ describe("InvoiceRepository — in-memory", () => {
       payments: [], writeOffs: [],
     }, async () => {});
     const repo = new InMemoryInvoiceRepository(store);
-    expect((await repo.listDeductibleAccontos(mId, [acc1, acc2])).map((a) => a.id)).toEqual([acc1]); // acc2 utesluten
-    expect(await repo.listDeductibleAccontos(mId, [])).toEqual([]);
+    expect((await repo.listDeductibleAccontos(asId<"MatterId">(mId), [acc1, acc2].map((i) => asId<"InvoiceId">(i)))).map((a) => a.id)).toEqual([acc1]); // acc2 utesluten
+    expect(await repo.listDeductibleAccontos(asId<"MatterId">(mId), [])).toEqual([]);
   });
 });
 
@@ -237,7 +237,7 @@ describe("InvoiceRepository — Drizzle (pglite)", () => {
       id: uuidv7(), invoiceId: id, amount: 7_500, paidAt: new Date(), recordedById: uuidv7(), version: 1,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
-    const ledger = await new DrizzleInvoiceRepository(handle.db).getByIdWithLedger(id);
+    const ledger = await new DrizzleInvoiceRepository(handle.db).getByIdWithLedger(asId<"InvoiceId">(id));
     expect(ledger?.payments).toHaveLength(1);
     expect(ledger?.payments[0]!.amount).toBe(7_500);
   });
@@ -252,8 +252,8 @@ describe("InvoiceRepository — Drizzle (pglite)", () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await db.insert(invoices).values(inv({ id, matterId: mId }) as any);
     const repo = new DrizzleInvoiceRepository(handle.db);
-    expect(await repo.getByIdInOrg(id, org)).toMatchObject({ id });
-    expect(await repo.getByIdInOrg(id, uuidv7())).toBeNull();
+    expect(await repo.getByIdInOrg(asId<"InvoiceId">(id), asId<"OrganizationId">(org))).toMatchObject({ id });
+    expect(await repo.getByIdInOrg(asId<"InvoiceId">(id), asId<"OrganizationId">(uuidv7()))).toBeNull();
   });
 
   it("getByIdWithRelations hämtar huvudrelationerna (with-query)", async () => {
@@ -277,7 +277,7 @@ describe("InvoiceRepository — Drizzle (pglite)", () => {
     await db.insert(documents).values(v({ id: uuidv7(), matterId: mId, invoiceId: id, fileName: "f.pdf", mimeType: "application/pdf", sizeBytes: 1, storagePath: "p", uploadedById: userId }));
 
     const repo = new DrizzleInvoiceRepository(handle.db);
-    const full = await repo.getByIdWithRelations(id, org);
+    const full = await repo.getByIdWithRelations(asId<"InvoiceId">(id), asId<"OrganizationId">(org));
     expect(full?.matter?.matterNumber).toBe("2026-1");
     expect(full?.payments).toHaveLength(1);
     expect(full?.payments[0]?.recordedBy?.name).toBe("Anna");
@@ -286,7 +286,7 @@ describe("InvoiceRepository — Drizzle (pglite)", () => {
     expect(full?.timeEntries).toHaveLength(1);
     expect(full?.expenses).toHaveLength(1);
     expect(full?.documents).toHaveLength(1);
-    expect(await repo.getByIdWithRelations(id, uuidv7())).toBeNull(); // fel org
+    expect(await repo.getByIdWithRelations(asId<"InvoiceId">(id), asId<"OrganizationId">(uuidv7()))).toBeNull(); // fel org
   });
 
   it("getByIdFull: self-refs via sekundär-queries (aconto-avdrag + kreditnota)", async () => {
@@ -304,7 +304,7 @@ describe("InvoiceRepository — Drizzle (pglite)", () => {
     await db.insert(invoices).values(inv({ id: creditId, matterId: mId, invoiceType: "CREDIT", creditedInvoiceId: finalId }) as never);
     await db.insert(accontoDeductions).values(v({ id: uuidv7(), finalInvoiceId: finalId, accontoInvoiceId: accontoId }));
 
-    const full = await new DrizzleInvoiceRepository(handle.db).getByIdFull(finalId, org);
+    const full = await new DrizzleInvoiceRepository(handle.db).getByIdFull(asId<"InvoiceId">(finalId), asId<"OrganizationId">(org));
     expect(full?.accontoDeductions).toHaveLength(1);
     expect(full?.accontoDeductions[0]?.accontoInvoice?.id).toBe(accontoId);
     expect(full?.creditNote?.id).toBe(creditId);
@@ -330,13 +330,13 @@ describe("InvoiceRepository — Drizzle (pglite)", () => {
     await db.insert(payments).values(v({ id: uuidv7(), invoiceId: finalId, amount: 400, paidAt: new Date(), recordedById: uuidv7() }));
 
     const repo = new DrizzleInvoiceRepository(handle.db);
-    const all = await repo.listForOrg(org);
+    const all = await repo.listForOrg(asId<"OrganizationId">(org));
     expect(all.map((i) => i.id).sort()).toEqual([finalId, accontoId].sort()); // annan org exkluderad
     const final = all.find((i) => i.id === finalId)!;
     expect(final.matter.matterNumber).toBe("2026-1");
     expect(final.payments).toHaveLength(1);
     expect(final.accontoDeductions[0]?.accontoInvoice?.id).toBe(accontoId);
-    expect((await repo.listForOrg(org, { status: "PAID" })).map((i) => i.id)).toEqual([accontoId]);
+    expect((await repo.listForOrg(asId<"OrganizationId">(org), { status: "PAID" })).map((i) => i.id)).toEqual([accontoId]);
   });
 
   it("nextInvoiceNumber ökar sekvensen per org/år (join mot matters)", async () => {
@@ -349,8 +349,8 @@ describe("InvoiceRepository — Drizzle (pglite)", () => {
     await db.insert(invoices).values(inv({ id: uuidv7(), matterId: mId, invoiceNumber: "F-2026-0001" }) as never);
     await db.insert(invoices).values(inv({ id: uuidv7(), matterId: mId, invoiceNumber: "F-2026-0002" }) as never);
     const repo = new DrizzleInvoiceRepository(handle.db, () => new Date("2026-06-01T00:00:00.000Z"));
-    expect(await repo.nextInvoiceNumber(org)).toBe("F-2026-0003");
-    expect(await repo.nextInvoiceNumber(uuidv7())).toBe("F-2026-0001"); // tom org → 0001
+    expect(await repo.nextInvoiceNumber(asId<"OrganizationId">(org))).toBe("F-2026-0003");
+    expect(await repo.nextInvoiceNumber(asId<"OrganizationId">(uuidv7()))).toBe("F-2026-0001"); // tom org → 0001
   });
 
   it("sumCreditNotesFor summerar |belopp| av kreditnotor (join mot matters)", async () => {
@@ -366,8 +366,8 @@ describe("InvoiceRepository — Drizzle (pglite)", () => {
     await db.insert(invoices).values(inv({ id: uuidv7(), matterId: mId, invoiceType: "CREDIT", amount: -10_000, creditedInvoiceId: finalId }) as never);
 
     const repo = new DrizzleInvoiceRepository(handle.db);
-    expect(await repo.sumCreditNotesFor(finalId, org)).toBe(50_000);
-    expect(await repo.sumCreditNotesFor(finalId, uuidv7())).toBe(0); // fel org
+    expect(await repo.sumCreditNotesFor(asId<"InvoiceId">(finalId), asId<"OrganizationId">(org))).toBe(50_000);
+    expect(await repo.sumCreditNotesFor(asId<"InvoiceId">(finalId), asId<"OrganizationId">(uuidv7()))).toBe(0); // fel org
   });
 
   it("getCreditNoteFor hittar kreditnotan (creditedInvoiceId)", async () => {
@@ -381,8 +381,8 @@ describe("InvoiceRepository — Drizzle (pglite)", () => {
     await db.insert(invoices).values(inv({ id: origId, matterId: mId, invoiceType: "STANDARD" }) as never);
     await db.insert(invoices).values(inv({ id: creditId, matterId: mId, invoiceType: "CREDIT", amount: -100, creditedInvoiceId: origId }) as never);
     const repo = new DrizzleInvoiceRepository(handle.db);
-    expect((await repo.getCreditNoteFor(origId))?.id).toBe(creditId);
-    expect(await repo.getCreditNoteFor(uuidv7())).toBeNull();
+    expect((await repo.getCreditNoteFor(asId<"InvoiceId">(origId)))?.id).toBe(creditId);
+    expect(await repo.getCreditNoteFor(asId<"InvoiceId">(uuidv7()))).toBeNull();
   });
 
   it("listDeductibleAccontos: ACCONTO ej redan avdragna (left-join)", async () => {
@@ -399,6 +399,6 @@ describe("InvoiceRepository — Drizzle (pglite)", () => {
     await db.insert(invoices).values(inv({ id: finalId, matterId: mId, invoiceType: "FINAL" }) as never);
     await db.insert(accontoDeductions).values(v({ id: uuidv7(), finalInvoiceId: finalId, accontoInvoiceId: acc2 }));
     const repo = new DrizzleInvoiceRepository(handle.db);
-    expect((await repo.listDeductibleAccontos(mId, [acc1, acc2])).map((a) => a.id)).toEqual([acc1]);
+    expect((await repo.listDeductibleAccontos(asId<"MatterId">(mId), [acc1, acc2].map((i) => asId<"InvoiceId">(i)))).map((a) => a.id)).toEqual([acc1]);
   });
 });

@@ -13,19 +13,20 @@
  */
 
 import { bytesToBase64, contentStoragePath } from "@/lib/shared/content-address";
+import type { DocumentId } from "@/lib/shared/schemas/ids";
 import { DocumentContentCache } from "./content-cache";
 
 export interface ContentSyncDeps {
   /** Väntande {documentId, sha}. */
-  pending: () => Promise<Array<{ documentId: string; sha: string }>>;
+  pending: () => Promise<Array<{ documentId: DocumentId; sha: string }>>;
   /** Vilka av dessa storagePaths saknar servern? */
   missing: (storagePaths: string[]) => Promise<string[]>;
   /** Cachade bytes för en sha (null = borta → hoppa). */
   getBytes: (sha: string) => Promise<Uint8Array | null>;
   /** Ladda upp bytes för ett dokument. */
-  upload: (documentId: string, bytes: Uint8Array) => Promise<void>;
+  upload: (documentId: DocumentId, bytes: Uint8Array) => Promise<void>;
   /** Markera dokumentet som synkat (ta ur pending). */
-  markUploaded: (documentId: string) => Promise<void>;
+  markUploaded: (documentId: DocumentId) => Promise<void>;
 }
 
 /** Ladda upp saknade blobbar. Returnerar sha:n som faktiskt laddades upp. */
@@ -49,7 +50,7 @@ export async function runContentSync(deps: ContentSyncDeps): Promise<string[]> {
 export interface ContentSyncClient {
   document: {
     missingContent: { query: (input: { storagePaths: string[] }) => Promise<{ missing: string[] }> };
-    uploadContent: { mutate: (input: { documentId: string; contentBase64: string }) => Promise<unknown> };
+    uploadContent: { mutate: (input: { documentId: DocumentId; contentBase64: string }) => Promise<unknown> };
   };
 }
 
