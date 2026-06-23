@@ -5,6 +5,7 @@
  */
 
 import type { TimeEntry } from "@/lib/shared/schemas/billing";
+import type { PaymentMethod } from "@/lib/shared/schemas/enums";
 import type { Repository } from "./types";
 
 /** Tidspost + juristens timtaxa (det fakturaberäkningen behöver). */
@@ -53,7 +54,7 @@ export interface ReportMatterRef {
   id: string;
   matterNumber: string;
   title: string;
-  paymentMethod: string;
+  paymentMethod: PaymentMethod;
   paymentMethodNote: string | null;
   paymentMethodDecidedAt: Date | null;
   contacts: Array<{ contact: { name: string } }>;

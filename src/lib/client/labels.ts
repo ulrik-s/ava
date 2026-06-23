@@ -100,8 +100,8 @@ export const paymentMethodOptions: ReadonlyArray<PaymentMethodOption> = paymentM
   (value) => ({ value, label: PAYMENT_METHOD_LABELS[value] }),
 );
 
-export function labelForPaymentMethod(v: string): string {
-  return (PAYMENT_METHOD_LABELS as Record<string, string>)[v] ?? v;
+export function labelForPaymentMethod(v: PaymentMethod): string {
+  return PAYMENT_METHOD_LABELS[v];
 }
 
 /**
@@ -110,7 +110,7 @@ export function labelForPaymentMethod(v: string): string {
  */
 export type CreditRisk = "LOW" | "MEDIUM" | "HIGH" | "UNKNOWN";
 
-export function creditRiskFor(method: string): CreditRisk {
+export function creditRiskFor(method: PaymentMethod): CreditRisk {
   switch (method) {
     case "RATTSHJALP":
     case "OFFENTLIGT_UPPDRAG":

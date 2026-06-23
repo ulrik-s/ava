@@ -5,6 +5,7 @@ import {
   type BilledInvoiceInput,
   type FrozenWorkInput,
 } from "@/lib/shared/billed-per-lawyer";
+import type { InvoiceStatus, PaymentMethod } from "@/lib/shared/schemas/enums";
 import { userIdSchema } from "@/lib/shared/schemas/ids";
 import { router, protectedProcedure } from "../trpc";
 
@@ -73,7 +74,7 @@ interface RawTimeEntry {
   userId: string; minutes: number; hourlyRate: number;
   invoiceId: string | null | undefined; frozenByBillingRunId: string | null | undefined;
 }
-interface RawInvoice { id: string; amount: number; status: string; invoiceDate: unknown; updatedAt: unknown }
+interface RawInvoice { id: string; amount: number; status: InvoiceStatus; invoiceDate: unknown; updatedAt: unknown }
 
 /** Karta frozen tidsposter → arbetsvärde per (faktura, advokat). En post knyts
  *  till sin faktura via direkt `invoiceId` (legacy) eller via BillingRun. */
@@ -174,7 +175,7 @@ interface ReportMatterRef {
   id: string;
   matterNumber: string;
   title: string;
-  paymentMethod: string;
+  paymentMethod: PaymentMethod;
   paymentMethodNote: string | null;
   paymentMethodDecidedAt: Date | null;
   contacts: { contact: { name: string } }[];
@@ -190,14 +191,14 @@ interface ReportExpense {
 
 interface MatterAgg {
   matterId: string; matterNumber: string; title: string; client: string | null;
-  paymentMethod: string; paymentMethodNote: string | null; paymentMethodDecidedAt: Date | null;
+  paymentMethod: PaymentMethod; paymentMethodNote: string | null; paymentMethodDecidedAt: Date | null;
   totalMinutes: number; billableMinutes: number;
   workValueOre: number; // tid × timpris (öre)
   expenseOre: number;   // utlägg totalt (öre, bara billable)
 }
 interface UnbilledRow {
   matterId: string; matterNumber: string; title: string; client: string | null;
-  paymentMethod: string; timeOre: number; expenseOre: number; total: number;
+  paymentMethod: PaymentMethod; timeOre: number; expenseOre: number; total: number;
 }
 
 /** hourlyRate ÄR REDAN ÖRE (öre/h) → (min/60) × öre/h = öre. */

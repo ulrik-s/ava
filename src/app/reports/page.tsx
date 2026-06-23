@@ -9,6 +9,7 @@ import { trpc } from "@/lib/client/trpc";
 import { formatMinutes, formatCurrency } from "@/lib/client/utils";
 import type { AppRouter } from "@/lib/server/routers/_app";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
+import type { PaymentMethod } from "@/lib/shared/schemas/enums";
 import { ArSummarySection } from "./_ar-summary";
 
 const RISK_BADGE_CLASSES: Record<CreditRisk, string> = {
@@ -18,7 +19,7 @@ const RISK_BADGE_CLASSES: Record<CreditRisk, string> = {
   UNKNOWN: "bg-gray-100 text-gray-600 border-gray-200",
 };
 
-function PaymentBadge({ method }: { method: string }) {
+function PaymentBadge({ method }: { method: PaymentMethod }) {
   const risk = creditRiskFor(method);
   return (
     <div className="inline-flex flex-col gap-0.5 items-start">
