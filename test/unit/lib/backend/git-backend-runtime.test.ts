@@ -13,6 +13,7 @@ import { GitBackendRuntime } from "@/lib/client/backend/git-backend-runtime";
 import { GitAuthProvider } from "@/lib/server/auth/git-auth-provider";
 import { DemoDataStore } from "@/lib/server/data-store/DemoDataStore";
 import type { AppRouter } from "@/lib/server/routers/_app";
+import { asId } from "@/lib/shared/schemas/ids";
 
 const matters = [
   { id: "m1", title: "Demo Avtal", organizationId: "demo-firma-ab", status: "ACTIVE", matterNumber: "2025-0001", createdAt: new Date("2025-01-01") },
@@ -32,7 +33,7 @@ function buildClient(runtime: GitBackendRuntime) {
   };
 }
 
-const seedOrgPrincipal = new GitAuthProvider({ organizationId: "demo-firma-ab", id: "test-user" });
+const seedOrgPrincipal = new GitAuthProvider({ organizationId: asId<"OrganizationId">("demo-firma-ab"), id: asId<"UserId">("test-user") });
 
 describe("GitBackendRuntime", () => {
   it("query går igenom appRouter till DemoDataStore (explicit principal scopar demo-firma-ab)", async () => {
@@ -50,7 +51,7 @@ describe("GitBackendRuntime", () => {
   it("injicerad AuthProvider styr org-scoping → fel org ger 0 träffar", async () => {
     const runtime = new GitBackendRuntime({
       dataStore: new DemoDataStore({ matters, contacts }),
-      authProvider: new GitAuthProvider({ organizationId: "annan-org" }),
+      authProvider: new GitAuthProvider({ organizationId: asId<"OrganizationId">("annan-org") }),
     });
     const result = await buildClient(runtime).matter.list.query({});
     expect(result.matters).toHaveLength(0);

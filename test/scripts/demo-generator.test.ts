@@ -10,6 +10,8 @@ import { mkdtempSync, readFileSync, existsSync, rmSync } from "node:fs";
 import os from "node:os";
 import { join } from "node:path";
 import { describe, it, expect } from "vitest-compat";
+import { userRoleSchema } from "@/lib/shared/schemas/enums";
+import { asId } from "@/lib/shared/schemas/ids";
 import { createGitTarget, createPostgresTarget } from "../../tooling/demo-generator/backend-target";
 import { makeNodeGitWriteBack } from "../../tooling/demo-generator/node-git-writeback";
 import { populate } from "../../tooling/demo-generator/populate";
@@ -30,7 +32,7 @@ const tinySeed = {
   conflictChecks: [{ id: "cc-test", searchTerm: "Klient", searchType: "name", results: [], checkedById: "u-test", createdAt: now }],
 } as unknown as SeedDataset;
 
-const ADMIN = { id: "gen", email: "gen@ava.local", name: "Generator", role: "ADMIN", organizationId: "org-test" };
+const ADMIN = { id: asId<"UserId">("gen"), email: "gen@ava.local", name: "Generator", role: userRoleSchema.parse("ADMIN"), organizationId: asId<"OrganizationId">("org-test") };
 
 describe("demo-generator — populate (org/users/contacts via tRPC)", () => {
   it("skapar entiteterna via create-mutationerna med klient-genererade id:n", async () => {

@@ -15,7 +15,7 @@ import { appRouter } from "@/lib/server/routers/_app";
 import { asId } from "@/lib/shared/schemas/ids";
 
 const PRINCIPAL: Principal = {
-  id: "u-1", email: "a@x", name: "Anna", role: "ADMIN", organizationId: "org-1",
+  id: asId<"UserId">("u-1"), email: "a@x", name: "Anna", role: "ADMIN", organizationId: asId<"OrganizationId">("org-1"),
 };
 
 function makeCaller(opts?: { workMinutes?: number; expenseOre?: number }) {

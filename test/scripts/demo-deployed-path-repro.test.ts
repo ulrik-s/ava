@@ -7,6 +7,8 @@
 
 import { describe, it, expect } from "vitest-compat";
 import { prebakeJoins } from "@/lib/shared/demo-source";
+import { userRoleSchema } from "@/lib/shared/schemas/enums";
+import { asId } from "@/lib/shared/schemas/ids";
 import { noopPorts } from "../../src/lib/server/adapters/noop-ports";
 import { buildContext } from "../../src/lib/server/build-context";
 import { DemoDataStore, type DemoSource } from "../../src/lib/server/data-store/DemoDataStore";
@@ -27,7 +29,7 @@ const ENTITY_TO_KEY: Record<string, string> = {
   calendarEvent: "calendarEvents", task: "tasks", conflictCheck: "conflictChecks",
 };
 
-const ADMIN = { id: "u-anna", email: "a@a.se", name: "A", role: "ADMIN", organizationId: "firma-ab" };
+const ADMIN = { id: asId<"UserId">("u-anna"), email: "a@a.se", name: "A", role: userRoleSchema.parse("ADMIN"), organizationId: asId<"OrganizationId">("firma-ab") };
 
 describe("deployed-path repro (prebakeJoins + ny store)", () => {
   it("org-scopade list-queries returnerar data", async () => {

@@ -8,10 +8,11 @@ import type { Principal } from "@/lib/server/auth/principal";
 import {
   sha256Hex, parseBearerToken, StaticPatVerifier, patRecord, type PatRecord,
 } from "@/lib/server/http/pat";
+import { asId } from "@/lib/shared/schemas/ids";
 
 const PRINCIPAL: Principal = {
-  id: "p-1", email: "advokat@byra.se", name: "Ada Advokat",
-  role: "LAWYER", organizationId: "org-1",
+  id: asId<"UserId">("p-1"), email: "advokat@byra.se", name: "Ada Advokat",
+  role: "LAWYER", organizationId: asId<"OrganizationId">("org-1"),
 };
 
 describe("sha256Hex", () => {
@@ -58,7 +59,7 @@ describe("StaticPatVerifier", () => {
     expect(verifier.verify("")).toBeNull();
   });
   it("väljer rätt principal bland flera poster", () => {
-    const other: Principal = { ...PRINCIPAL, id: "p-2", email: "b@b.se" };
+    const other: Principal = { ...PRINCIPAL, id: asId<"UserId">("p-2"), email: "b@b.se" };
     const multi = new StaticPatVerifier([
       patRecord("token-a", PRINCIPAL),
       patRecord("token-b", other),

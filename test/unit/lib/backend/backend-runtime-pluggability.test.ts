@@ -20,6 +20,7 @@ import { GitBackendRuntime } from "@/lib/client/backend/git-backend-runtime";
 import { GitAuthProvider } from "@/lib/server/auth/git-auth-provider";
 import { DemoDataStore } from "@/lib/server/data-store/DemoDataStore";
 import type { AppRouter } from "@/lib/server/routers/_app";
+import { asId } from "@/lib/shared/schemas/ids";
 
 /**
  * En fejk-backend som INTE rör git/DemoDataStore alls — den simulerar en
@@ -66,7 +67,7 @@ describe("BackendRuntime — pluggbarhet (kloss-socket)", () => {
         dataStore: new DemoDataStore({
           matters: [{ id: "m1", title: "T", organizationId: "demo-firma-ab", status: "ACTIVE", matterNumber: "2025-0001", createdAt: new Date() }],
         }),
-        authProvider: new GitAuthProvider({ organizationId: "demo-firma-ab", id: "t" }),
+        authProvider: new GitAuthProvider({ organizationId: asId<"OrganizationId">("demo-firma-ab"), id: asId<"UserId">("t") }),
       }),
       new FakeServerBackendRuntime({ matters: [{ id: "srv-1" }], total: 1 }),
     ];

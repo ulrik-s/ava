@@ -11,6 +11,7 @@ import { buildContext } from "@/lib/server/build-context";
 import { DemoDataStore } from "@/lib/server/data-store/DemoDataStore";
 import type { DemoSource } from "@/lib/server/data-store/DemoDataStore";
 import { appRouter } from "@/lib/server/routers/_app";
+import { asId } from "@/lib/shared/schemas/ids";
 
 const ORG = "org-a";
 const YEAR = new Date().getFullYear();
@@ -24,7 +25,7 @@ function makeCaller(seed: Partial<DemoSource> = {}, orgId = ORG, userId = "user-
     matterContacts: [],
     ...seed,
   } as DemoSource, async () => { /* writable */ });
-  const principal: Principal = { id: userId, email: "a@b.com", name: "Test", role: "LAWYER", organizationId: orgId };
+  const principal: Principal = { id: asId<"UserId">(userId), email: "a@b.com", name: "Test", role: "LAWYER", organizationId: asId<"OrganizationId">(orgId) };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const caller = appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal }) as any);
   return { ds, caller: caller.matter };
