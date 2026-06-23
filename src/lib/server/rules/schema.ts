@@ -11,7 +11,7 @@
  */
 
 import { z } from "zod";
-import { eventTypeSchema } from "../events/schema";
+import { eventTypeSchema, type EventType } from "../events/schema";
 
 // ─── JsonLogic predikat — minimal Zod-validering ─────────────────────
 //
@@ -79,7 +79,7 @@ const valueRefSchema = z.union([z.string(), z.number(), z.boolean(), z.null(), z
 
 interface BaseStep { do: string; }
 
-interface EmitStep extends BaseStep { do: "emit"; eventType: string; payload: Record<string, unknown>; }
+interface EmitStep extends BaseStep { do: "emit"; eventType: EventType; payload: Record<string, unknown>; }
 interface EmailSendStep extends BaseStep { do: "email.send"; template: string; to: string; vars?: Record<string, unknown> | undefined; idempotencyKey?: string | undefined; }
 interface MatterUpdateStep extends BaseStep { do: "matter.update"; matterId: string; patch: Record<string, unknown>; }
 interface AuditLogStep extends BaseStep { do: "audit.log"; message: string; }
@@ -101,7 +101,7 @@ export type RuleStep =
   | TaskCreateStep;
 
 // Zod-scheman per step. `if` och `for-each` är rekursiva.
-const emitStepSchema = z.object({ do: z.literal("emit"), eventType: z.string(), payload: z.record(z.string(), z.unknown()) });
+const emitStepSchema = z.object({ do: z.literal("emit"), eventType: eventTypeSchema, payload: z.record(z.string(), z.unknown()) });
 const emailSendStepSchema = z.object({ do: z.literal("email.send"), template: z.string(), to: z.string(), vars: z.record(z.string(), z.unknown()).optional(), idempotencyKey: z.string().optional() });
 const matterUpdateStepSchema = z.object({ do: z.literal("matter.update"), matterId: z.string(), patch: z.record(z.string(), z.unknown()) });
 const auditLogStepSchema = z.object({ do: z.literal("audit.log"), message: z.string() });

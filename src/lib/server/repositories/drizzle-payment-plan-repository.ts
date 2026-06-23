@@ -50,7 +50,7 @@ export class DrizzlePaymentPlanRepository extends DrizzleRepository<PaymentPlan>
   }
 
   /** Plan-id:n i org:en (via faktura→ärende), valfritt status-filtrerade. */
-  private async planIdsInOrg(organizationId: string, status?: string): Promise<string[]> {
+  private async planIdsInOrg(organizationId: string, status?: PaymentPlanStatus): Promise<string[]> {
     const rows = await this.db
       .select({ id: paymentPlans.id }).from(paymentPlans)
       .innerJoin(invoices, eq(paymentPlans.invoiceId, invoices.id))
@@ -100,7 +100,7 @@ export class DrizzlePaymentPlanRepository extends DrizzleRepository<PaymentPlan>
     return out;
   }
 
-  async listForOrg(organizationId: string, status?: string): Promise<JoinedPaymentPlan[]> {
+  async listForOrg(organizationId: string, status?: PaymentPlanStatus): Promise<JoinedPaymentPlan[]> {
     return this.fetchJoined(await this.planIdsInOrg(organizationId, status));
   }
 

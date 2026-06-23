@@ -6,6 +6,7 @@
  */
 
 import type { PaymentPlan } from "@/lib/shared/schemas/billing";
+import type { PaymentPlanStatus } from "@/lib/shared/schemas/enums";
 import type { IDataStore } from "../data-store/IDataStore";
 import { InMemoryRepository } from "./in-memory-repository";
 import type {
@@ -52,7 +53,7 @@ export class InMemoryPaymentPlanRepository extends InMemoryRepository<PaymentPla
     return row && !(row as { deletedAt?: unknown }).deletedAt ? row : null;
   }
 
-  async listForOrg(organizationId: string, status?: string): Promise<JoinedPaymentPlan[]> {
+  async listForOrg(organizationId: string, status?: PaymentPlanStatus): Promise<JoinedPaymentPlan[]> {
     return (await this.delegate.findMany({
       where: { ...(status ? { status } : {}), invoice: { matter: { organizationId } } },
       orderBy: { createdAt: "desc" },

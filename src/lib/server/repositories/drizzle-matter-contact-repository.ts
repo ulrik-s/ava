@@ -49,9 +49,9 @@ export class DrizzleMatterContactRepository
       .innerJoin(matters, eq(matterContacts.matterId, matters.id))
       .where(and(eq(matters.organizationId, asId<"OrganizationId">(organizationId)), isNull(matterContacts.deletedAt), numberFilter));
     return rows.map((r) => ({
-      role: r.role as string,
+      role: r.role,
       contact: {
-        id: r.cId as string, name: r.cName as string, contactType: r.cType as string,
+        id: r.cId as string, name: r.cName as string, contactType: r.cType,
         personalNumber: (r.cPnr as string | null) ?? null, orgNumber: (r.cOrg as string | null) ?? null,
       },
       matter: {
