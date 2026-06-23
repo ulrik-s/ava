@@ -40,7 +40,7 @@ export const PAYMENT_METHOD_LABELS = {
   PENDING: "Ej fastställt",
   RATTSHJALP: "Rättshjälp",
   RATTSSKYDD: "Rättsskydd",
-  OFFENTLIG_FORSVARARE: "Offentlig försvarare",
+  OFFENTLIGT_UPPDRAG: "Offentligt uppdrag",
   PRIVAT: "Privat betalning",
   MIX: "Kombinerad",
 } as const satisfies Record<string, string>;

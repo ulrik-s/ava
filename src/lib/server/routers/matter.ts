@@ -219,9 +219,7 @@ export const matterRouter = router({
         responsibleLawyerId: userIdSchema.nullable().optional(),
         /** Domstolens målnummer (#173) — för avprickning av domstolsbetalningar. */
         courtCaseNumber: z.string().nullable().optional(),
-        paymentMethod: z
-          .enum(["PENDING", "RATTSHJALP", "RATTSSKYDD", "OFFENTLIG_FORSVARARE", "PRIVAT", "MIX"])
-          .optional(),
+        paymentMethod: paymentMethodSchema.optional(),
         paymentMethodNote: z.string().nullable().optional(),
         paymentMethodDecidedAt: z.string().nullable().optional(),
         isTaxeArende: z.boolean().optional(),

@@ -11,6 +11,7 @@ import { EntityLink } from "@/lib/client/demo/entity-link";
 import { useRouteId } from "@/lib/client/demo/use-route-id";
 import { useEagerCacheMatterDocuments } from "@/lib/client/firma/use-eager-cache-matter-documents";
 import { trpc } from "@/lib/client/trpc";
+import type { PaymentMethod } from "@/lib/shared/schemas/enums";
 import { BillingPanel } from "./_billing-panel";
 import { ContactsSection } from "./_contacts-section";
 import { ExpectedReceivablesSection } from "./_expected-receivables-section";
@@ -26,12 +27,12 @@ function courtCaseOf(m: unknown): string {
 }
 
 /**
- * Domstolsärende = domstolen betalar dig utan AVA-faktura (offentlig försvarare
+ * Domstolsärende = domstolen betalar dig utan AVA-faktura (offentligt uppdrag
  * eller taxeärende). Styr om Domstolsbetalnings-panelen visas — i andra ärenden
  * är den bara förvirrande.
  */
-function isCourtMatter(m: { paymentMethod?: string | null; isTaxeArende?: boolean | null }): boolean {
-  return m.paymentMethod === "OFFENTLIG_FORSVARARE" || m.isTaxeArende === true;
+function isCourtMatter(m: { paymentMethod?: PaymentMethod | null; isTaxeArende?: boolean | null }): boolean {
+  return m.paymentMethod === "OFFENTLIGT_UPPDRAG" || m.isTaxeArende === true;
 }
 
 export default function MatterDetailClient({ id: paramId }: { id: string }) {

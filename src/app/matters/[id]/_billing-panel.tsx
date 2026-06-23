@@ -21,7 +21,7 @@ import { formatCurrency } from "@/lib/client/utils";
 import type { AppRouter } from "@/lib/server/routers/_app";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { computeRadgivningsavgift } from "@/lib/shared/rattshjalp";
-import { BILLING_RUN_TYPE_LABELS, BILLING_RUN_STATUS_LABELS } from "@/lib/shared/schemas/enums";
+import { BILLING_RUN_TYPE_LABELS, BILLING_RUN_STATUS_LABELS, type PaymentMethod } from "@/lib/shared/schemas/enums";
 import { BillingDialog, type BillingMeta } from "./_billing-dialog";
 import { KostnadsrakningModal } from "./_kostnadsrakning-modal";
 import { VerdictDialog } from "./_verdict-dialog";
@@ -33,7 +33,7 @@ interface MatterContext {
   taxaHasFTax?: boolean | null | undefined;
   taxaHufStart?: string | Date | null | undefined;
   isTaxeArende?: boolean | null | undefined;
-  paymentMethod?: string | null | undefined;
+  paymentMethod?: PaymentMethod | null | undefined;
   radgivningBetaldAt?: string | Date | null | undefined;
   contacts?: ReadonlyArray<{ role: string; contact?: { name?: string | null | undefined; email?: string | null | undefined } | null | undefined }> | undefined;
 }
@@ -258,7 +258,7 @@ export function BillingPanel({ matterId, matter }: Props) {
     <div className="bg-white rounded-lg border border-gray-200 lg:col-span-2">
       <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
         <h2 className="font-semibold text-gray-900">Fakturering</h2>
-        <BillingActions paymentMethod={matter.paymentMethod ?? ""} onPick={onPick} />
+        <BillingActions paymentMethod={matter.paymentMethod ?? undefined} onPick={onPick} />
       </div>
       <SummaryCards totals={computeTotals(rows)} />
       <UnbilledSummary matterId={matterId} />
@@ -365,7 +365,7 @@ function Card({ label, value, dim }: { label: string; value: number; dim?: boole
   );
 }
 
-function BillingActions({ paymentMethod, onPick }: { paymentMethod: string; onPick: (t: ActionPick) => void }) {
+function BillingActions({ paymentMethod, onPick }: { paymentMethod: PaymentMethod | undefined; onPick: (t: ActionPick) => void }) {
   const [open, setOpen] = useState(false);
   const options = optionsFor(paymentMethod);
   return (
@@ -391,14 +391,14 @@ function BillingActions({ paymentMethod, onPick }: { paymentMethod: string; onPi
   );
 }
 
-function optionsFor(pm: string): Array<{ type: ActionPick; label: string }> {
+function optionsFor(pm: PaymentMethod | undefined): Array<{ type: ActionPick; label: string }> {
   if (pm === "RATTSSKYDD" || pm === "RATTSHJALP") {
     return [
       { type: "ACCONTO", label: "Aconto till klient" },
       { type: "FINAL", label: pm === "RATTSSKYDD" ? "Faktura till försäkring" : "Faktura till myndighet" },
     ];
   }
-  if (pm === "OFFENTLIG_FORSVARARE") {
+  if (pm === "OFFENTLIGT_UPPDRAG") {
     return [{ type: "KOSTNADSRAKNING", label: "Kostnadsräkning till domstol" }];
   }
   return [{ type: "FINAL", label: "Faktura till klient" }];
