@@ -21,6 +21,7 @@ import {
   HELPER_BASE_OVERRIDE_KEY,
 } from "@/lib/client/helper/use-helper";
 import type { HelperStatusResponse, HelperSyncEntry } from "@/lib/shared/helper/protocol";
+import { asId } from "@/lib/shared/schemas/ids";
 
 const HTTPS = "https://localhost:48762";
 const HTTP = "http://127.0.0.1:48761";
@@ -261,9 +262,9 @@ describe("docSyncStatusMap", () => {
 
   it("mappar document.id → status; hoppar över poster utan document (demo/PUT)", () => {
     const m = docSyncStatusMap(status([
-      { document: { id: "a", trpcUrl: "x" }, status: "pending" },
+      { document: { id: asId<"DocumentId">("a"), trpcUrl: "x" }, status: "pending" },
       { uploadUrl: "http://s/u", status: "pending" }, // demo → ingen doc-id → hoppas
-      { document: { id: "b", trpcUrl: "x" }, status: "conflict" },
+      { document: { id: asId<"DocumentId">("b"), trpcUrl: "x" }, status: "conflict" },
     ]));
     expect(m.get("a")).toBe("pending");
     expect(m.get("b")).toBe("conflict");
@@ -272,8 +273,8 @@ describe("docSyncStatusMap", () => {
 
   it("conflict prioriteras över pending för samma dokument", () => {
     const m = docSyncStatusMap(status([
-      { document: { id: "a", trpcUrl: "x" }, status: "pending" },
-      { document: { id: "a", trpcUrl: "x" }, status: "conflict" },
+      { document: { id: asId<"DocumentId">("a"), trpcUrl: "x" }, status: "pending" },
+      { document: { id: asId<"DocumentId">("a"), trpcUrl: "x" }, status: "conflict" },
     ]));
     expect(m.get("a")).toBe("conflict");
   });
@@ -287,8 +288,8 @@ describe("advanceSyncTracker + syncBadgeMap (transient 'synkad')", () => {
     })) as HelperSyncEntry[];
     return { pending: 0, conflict: 0, total: full.length, entries: full };
   }
-  const docPending = (id: string) => ({ document: { id, trpcUrl: "x" }, status: "pending" as const });
-  const docConflict = (id: string) => ({ document: { id, trpcUrl: "x" }, status: "conflict" as const });
+  const docPending = (id: string) => ({ document: { id: asId<"DocumentId">(id), trpcUrl: "x" }, status: "pending" as const });
+  const docConflict = (id: string) => ({ document: { id: asId<"DocumentId">(id), trpcUrl: "x" }, status: "conflict" as const });
 
   it("pending → borta = 'synced' (transient), pending/conflict speglas", () => {
     let t = emptySyncTracker();

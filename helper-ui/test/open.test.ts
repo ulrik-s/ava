@@ -3,6 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, test } from "bun:test";
 
+import { asId } from "@/lib/shared/schemas/ids";
+
 import { ContentStore } from "../src/engine/content-store.ts";
 import type { UploadTarget } from "../src/engine/document-source.ts";
 import { enqueueSavedFile, handleOpen, persistDownloaded, restoreCached, type OpenDeps } from "../src/engine/open.ts";
@@ -261,7 +263,7 @@ describe("enqueueSavedFile", () => {
     await writeFile(filePath, "ändrat innehåll", "utf8");
 
     const queue = new UploadQueue(qdir);
-    await enqueueSavedFile(queue, filePath, { document: { id: "doc-7", trpcUrl: "http://s/api/trpc" }, baseVersion: 4 }, "Bearer tok");
+    await enqueueSavedFile(queue, filePath, { document: { id: asId<"DocumentId">("doc-7"), trpcUrl: "http://s/api/trpc" }, baseVersion: 4 }, "Bearer tok");
 
     const snap = queue.snapshot();
     expect(snap.total).toBe(1);

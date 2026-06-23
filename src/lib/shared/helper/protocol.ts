@@ -11,6 +11,8 @@
  * kod-/arkitektur-regler, så helpern kan dela typer rakt av (#78).
  */
 
+import type { DocumentId } from "@/lib/shared/schemas/ids";
+
 /** Porten helpern lyssnar på (127.0.0.1). Aldrig extern. */
 export const HELPER_PORT = 48761;
 
@@ -39,7 +41,7 @@ export const HELPER_PING_PREFIX = "ava-helper";
  */
 export interface HelperDocumentRef {
   /** Dokumentets id (input till `document.downloadContent`/`uploadContent`). */
-  id: string;
+  id: DocumentId;
   /** Serverns tRPC-endpoint, t.ex. `http://localhost:8080/api/trpc`. */
   trpcUrl: string;
 }
@@ -181,7 +183,7 @@ export interface HelperSyncEntry {
    * version som ett syskon-dokument — här id+namn så UI kan säga på klarspråk
    * "din version sparades som <fileName>". Satt först när kopian skapats.
    */
-  conflictCopy?: { id: string; fileName: string };
+  conflictCopy?: { id: DocumentId; fileName: string };
   /** Senaste felet (om något). */
   lastError?: string;
 }

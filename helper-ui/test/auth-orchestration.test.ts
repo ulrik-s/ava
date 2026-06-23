@@ -9,6 +9,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
 
+import { asId } from "@/lib/shared/schemas/ids";
+
 import { buildAuthHeaderProvider } from "../src/engine/auth/auth-provider.ts";
 import { parseCallback, waitForCallback } from "../src/engine/auth/callback-server.ts";
 import { loginConfigFromEnv, runLogin, type LoginDeps } from "../src/engine/auth/login.ts";
@@ -151,7 +153,7 @@ describe("UploadQueue tokenProvider (autonom Bearer vid drain)", () => {
 
   test("post utan egen authHeader → använder färsk token vid upload", async () => {
     const puts: Array<string | undefined> = [];
-    const deps = { now: () => 1000, newId: () => "id1", put: async (_u: string, _b: Uint8Array, auth?: string) => { puts.push(auth); return 200; }, uploadDoc: async () => ({ status: "ok" as const, version: 1 }), saveConflictCopy: async () => ({ id: "c", fileName: "k" }) };
+    const deps = { now: () => 1000, newId: () => "id1", put: async (_u: string, _b: Uint8Array, auth?: string) => { puts.push(auth); return 200; }, uploadDoc: async () => ({ status: "ok" as const, version: 1 }), saveConflictCopy: async () => ({ id: asId<"DocumentId">("c"), fileName: "k" }) };
     const q = new UploadQueue(await qdir(), deps, async () => "Bearer FRESH");
     await q.enqueue({ uploadUrl: "http://s/u/1", fileName: "a", bytes: new TextEncoder().encode("x") });
     await q.drainOnce();
@@ -161,7 +163,7 @@ describe("UploadQueue tokenProvider (autonom Bearer vid drain)", () => {
 
   test("post MED egen authHeader → den vinner över token-providern", async () => {
     const puts: Array<string | undefined> = [];
-    const deps = { now: () => 1000, newId: () => "id2", put: async (_u: string, _b: Uint8Array, auth?: string) => { puts.push(auth); return 200; }, uploadDoc: async () => ({ status: "ok" as const, version: 1 }), saveConflictCopy: async () => ({ id: "c", fileName: "k" }) };
+    const deps = { now: () => 1000, newId: () => "id2", put: async (_u: string, _b: Uint8Array, auth?: string) => { puts.push(auth); return 200; }, uploadDoc: async () => ({ status: "ok" as const, version: 1 }), saveConflictCopy: async () => ({ id: asId<"DocumentId">("c"), fileName: "k" }) };
     const q = new UploadQueue(await qdir(), deps, async () => "Bearer FRESH");
     await q.enqueue({ uploadUrl: "http://s/u/2", fileName: "a", bytes: new TextEncoder().encode("x"), authHeader: "Bearer BROWSER" });
     await q.drainOnce();

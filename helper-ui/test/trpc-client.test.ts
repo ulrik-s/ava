@@ -8,6 +8,8 @@
 import { describe, expect, test } from "bun:test";
 import superjson from "superjson";
 
+import { asId } from "@/lib/shared/schemas/ids";
+
 import {
   createDocumentClient,
   documentTrpcEndpoint,
@@ -112,7 +114,7 @@ describe("saveConflictCopyBytes (ADR 0033 §4 — keep-both)", () => {
       },
     });
     const copy = await saveConflictCopyBytes(client, "doc-1", new TextEncoder().encode("min"), "2026-06-22 14:32");
-    expect(copy).toEqual({ id: "copy-1", fileName: "Avtal (din ändring 2026-06-22 14:32).docx" });
+    expect(copy).toEqual({ id: asId<"DocumentId">("copy-1"), fileName: "Avtal (din ändring 2026-06-22 14:32).docx" });
     expect(url).toContain("document.saveConflictCopy");
     expect(body).toContain("\"label\"");
   });

@@ -23,6 +23,7 @@ import { loadFirmaConfig } from "@/lib/client/firma/firma-config";
 import { openViaHelper } from "@/lib/client/helper/use-helper";
 import type { HelperOpenRequest } from "@/lib/shared/helper/protocol";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
+import { asId } from "@/lib/shared/schemas/ids";
 
 /** Runtime-tier-beslut (ej bygg-tids-NEXT_PUBLIC_DEMO_BUILD, som är sant även i
  *  den lokala self-hosted-builden → länkade fel till GH Pages). Se #651. */
@@ -71,7 +72,7 @@ export async function tryHelperOpen(doc: Doc, opts: OpenOpts = {}): Promise<Open
     ? { fileName: doc.fileName, downloadUrl: demoUrl(doc) }
     : {
         fileName: doc.fileName,
-        document: { id: doc.id, trpcUrl: helperTrpcUrl() },
+        document: { id: asId<"DocumentId">(doc.id), trpcUrl: helperTrpcUrl() },
         ...(opts.forceEdit ? { forceEdit: true } : {}),
         ...(opts.readOnly ? { readOnly: true } : {}),
       };

@@ -17,6 +17,7 @@ import superjson from "superjson";
 
 import type { AppRouter } from "@/lib/server/routers/_app";
 import { base64ToBytes, bytesToBase64 } from "@/lib/shared/content-address";
+import type { DocumentId } from "@/lib/shared/schemas/ids";
 
 /** tRPC-endpointens suffix på serverns origin (matchar DEFAULT_TRPC_ENDPOINT). */
 export const TRPC_PATH = "/api/trpc";
@@ -115,7 +116,7 @@ export async function uploadDocumentBytes(
 
 /** En materialiserad keep-both-kopia (ADR 0033 §4): syskon-dokumentets id + namn. */
 export interface ConflictCopy {
-  id: string;
+  id: DocumentId;
   fileName: string;
 }
 

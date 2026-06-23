@@ -11,6 +11,8 @@ import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 
 import superjson from "superjson";
 
+import { asId, type DocumentId } from "@/lib/shared/schemas/ids";
+
 import { backoffMs, conflictLabel, defaultQueueDeps, UploadQueue, type QueueDeps } from "../src/engine/queue.ts";
 import type { UploadDocResult } from "../src/engine/trpc-client.ts";
 
@@ -61,10 +63,10 @@ function fakeDeps(
   };
   const saveConflictCopy = async (
     document: { id: string; trpcUrl: string }, body: Uint8Array, _auth: string | undefined, label: string,
-  ): Promise<{ id: string; fileName: string }> => {
+  ): Promise<{ id: DocumentId; fileName: string }> => {
     if (saveCopyFails) throw new Error("offline");
     conflictCopies.push({ document, body, label });
-    return { id: `copy-${document.id}`, fileName: `kopia (din ändring ${label})` };
+    return { id: asId<"DocumentId">(`copy-${document.id}`), fileName: `kopia (din ändring ${label})` };
   };
   return {
     deps: { now: () => t, newId: () => `id-${++n}`, put, uploadDoc, saveConflictCopy },
@@ -129,7 +131,7 @@ describe("UploadQueue.peekByKey (ADR 0032 local-first)", () => {
   test("returnerar köade bytes för dokumentet (osynkad lokal ändring)", async () => {
     const { deps } = fakeDeps([200]);
     const q = new UploadQueue(dir, deps);
-    await q.enqueue({ document: { id: "d1", trpcUrl: "x" }, fileName: "a.docx", bytes: bytes("EDIT") });
+    await q.enqueue({ document: { id: asId<"DocumentId">("d1"), trpcUrl: "x" }, fileName: "a.docx", bytes: bytes("EDIT") });
     const got = await q.peekByKey("doc:d1");
     expect(got).not.toBeNull();
     expect(new TextDecoder().decode(got!)).toBe("EDIT");
@@ -162,7 +164,7 @@ describe("UploadQueue.drainOnce", () => {
   test("document-mål → uploadDoc (tRPC), raderar posten (ADR 0031 write-back)", async () => {
     const f = fakeDeps([200]);
     const q = new UploadQueue(dir, f.deps);
-    await q.enqueue({ document: { id: "d1", trpcUrl: "http://s/api/trpc" }, fileName: "a.docx", bytes: bytes("data"), authHeader: "Bearer t" });
+    await q.enqueue({ document: { id: asId<"DocumentId">("d1"), trpcUrl: "http://s/api/trpc" }, fileName: "a.docx", bytes: bytes("data"), authHeader: "Bearer t" });
 
     const res = await q.drainOnce();
     expect(res.uploaded).toBe(1);
@@ -175,7 +177,7 @@ describe("UploadQueue.drainOnce", () => {
   test("bär baseVersion till uploadDoc + persisterar den på posten (ADR 0033 §1)", async () => {
     const f = fakeDeps([200]);
     const q = new UploadQueue(dir, f.deps);
-    await q.enqueue({ document: { id: "d1", trpcUrl: "http://s/api/trpc" }, fileName: "a.docx", bytes: bytes("v1"), baseVersion: 5 });
+    await q.enqueue({ document: { id: asId<"DocumentId">("d1"), trpcUrl: "http://s/api/trpc" }, fileName: "a.docx", bytes: bytes("v1"), baseVersion: 5 });
     // Posten bär basversionen (durabelt) innan den dräneras.
     expect(q.snapshot().entries[0]).toMatchObject({ baseVersion: 5 });
     await q.drainOnce();
@@ -185,7 +187,7 @@ describe("UploadQueue.drainOnce", () => {
   test("framskriver basen från lyckad upload → andra save self-konflikt:ar inte", async () => {
     const f = fakeDeps([200]);
     const q = new UploadQueue(dir, f.deps);
-    const target = { document: { id: "d1", trpcUrl: "http://s/api/trpc" }, fileName: "a.docx" };
+    const target = { document: { id: asId<"DocumentId">("d1"), trpcUrl: "http://s/api/trpc" }, fileName: "a.docx" };
     // Save 1: base 5 → server bekräftar v6 (fakeDeps: version = base+1).
     await q.enqueue({ ...target, bytes: bytes("v1"), baseVersion: 5 });
     await q.drainOnce();
@@ -199,7 +201,7 @@ describe("UploadQueue.drainOnce", () => {
   test("document-konflikt (409) → keep-both: materialiserar syskon-kopia + markerar conflict", async () => {
     const f = fakeDeps([200], false, true); // uploadDoc → conflict
     const q = new UploadQueue(dir, f.deps);
-    await q.enqueue({ document: { id: "d1", trpcUrl: "http://s/api/trpc" }, fileName: "a.docx", bytes: bytes("min"), baseVersion: 3 });
+    await q.enqueue({ document: { id: asId<"DocumentId">("d1"), trpcUrl: "http://s/api/trpc" }, fileName: "a.docx", bytes: bytes("min"), baseVersion: 3 });
     expect((await q.drainOnce()).conflicted).toBe(1);
     expect(q.snapshot()).toMatchObject({ pending: 0, conflict: 1 });
     // Användarens bytes sparades som en separat kopia (inget förlorat).
@@ -213,7 +215,7 @@ describe("UploadQueue.drainOnce", () => {
   test("keep-both materialisering misslyckas (offline) → failed, retr:as (bytsen säkra)", async () => {
     const f = fakeDeps([200], false, true, true); // conflict + saveConflictCopy kastar
     const q = new UploadQueue(dir, f.deps);
-    await q.enqueue({ document: { id: "d1", trpcUrl: "http://s/api/trpc" }, fileName: "a.docx", bytes: bytes("min"), baseVersion: 3 });
+    await q.enqueue({ document: { id: asId<"DocumentId">("d1"), trpcUrl: "http://s/api/trpc" }, fileName: "a.docx", bytes: bytes("min"), baseVersion: 3 });
     expect((await q.drainOnce()).failed).toBe(1);
     const entry = q.snapshot().entries[0]!;
     expect(entry.status).toBe("pending"); // kvar för retry
@@ -224,7 +226,7 @@ describe("UploadQueue.drainOnce", () => {
   test("återställd post seedar om den framskrivande basen (omstart-durabilitet)", async () => {
     const f = fakeDeps([200]);
     const q1 = new UploadQueue(dir, f.deps);
-    await q1.enqueue({ document: { id: "d1", trpcUrl: "http://s/api/trpc" }, fileName: "a.docx", bytes: bytes("v1"), baseVersion: 9 });
+    await q1.enqueue({ document: { id: asId<"DocumentId">("d1"), trpcUrl: "http://s/api/trpc" }, fileName: "a.docx", bytes: bytes("v1"), baseVersion: 9 });
     // Simulera omstart: ny kö läser posten från disk.
     const q2 = new UploadQueue(dir, f.deps);
     await q2.recover();
@@ -235,7 +237,7 @@ describe("UploadQueue.drainOnce", () => {
   test("document-upload kastar → failed, behålls för retry", async () => {
     const f = fakeDeps([200], true); // uploadDoc kastar
     const q = new UploadQueue(dir, f.deps);
-    await q.enqueue({ document: { id: "d1", trpcUrl: "http://s/api/trpc" }, fileName: "a.docx", bytes: bytes("x") });
+    await q.enqueue({ document: { id: asId<"DocumentId">("d1"), trpcUrl: "http://s/api/trpc" }, fileName: "a.docx", bytes: bytes("x") });
     expect((await q.drainOnce()).failed).toBe(1);
     const entry = q.snapshot().entries[0]!;
     expect(entry.status).toBe("pending");
@@ -412,7 +414,7 @@ describe("defaultQueueDeps", () => {
       });
     }) as typeof fetch;
     try {
-      const result = await defaultQueueDeps.uploadDoc({ id: "d1", trpcUrl: "http://s/api/trpc" }, bytes("x"), "Bearer t", 3);
+      const result = await defaultQueueDeps.uploadDoc({ id: asId<"DocumentId">("d1"), trpcUrl: "http://s/api/trpc" }, bytes("x"), "Bearer t", 3);
       expect(result).toEqual({ status: "ok", version: 4 });
       expect(calls[0]!.url).toContain("/api/trpc");
       expect(calls[0]!.url).toContain("document.uploadContent");
