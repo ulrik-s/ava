@@ -261,6 +261,7 @@ export function BillingPanel({ matterId, matter }: Props) {
         <BillingActions paymentMethod={matter.paymentMethod ?? ""} onPick={onPick} />
       </div>
       <SummaryCards totals={computeTotals(rows)} />
+      <UnbilledSummary matterId={matterId} />
       <RadgivningBanner matterId={matterId} matter={matter} onRecorded={refetch} />
       {pending && <PendingVerdictBanner matterId={matterId} run={pending} onClick={() => setVerdictRunId(pending.id)} />}
       <RunsList rows={rows} loading={runs.isLoading} />
@@ -298,6 +299,38 @@ function RadgivningBanner({ matterId, matter, onRecorded }: { matterId: string; 
           className="text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 whitespace-nowrap">
           {create.isPending ? "Registrerar…" : "Registrera betald"}
         </button>
+      )}
+    </div>
+  );
+}
+
+/**
+ * "Upparbetat ofakturerat" (#740) — debiterbart arbete som ännu inte frysts/
+ * fakturerats, så juristen lätt ser om något behöver faktureras. Visar arvode
+ * (exkl utlägg) + utlägg separat + totalt (inkl utlägg). Datan = billingRun.proposal
+ * (ofrysta debiterbara poster). PRUTNING är redan exkluderad i proposal.
+ */
+function UnbilledSummary({ matterId }: { matterId: string }) {
+  const proposal = trpc.billingRun.proposal.useQuery({ matterId });
+  const d = proposal.data;
+  if (proposal.isLoading || !d) return null;
+  const arvodeOre = d.timeEntries.filter((t) => t.billable).reduce((s, t) => s + t.valueOre, 0);
+  const utlaggOre = d.expenses.filter((e) => e.billable).reduce((s, e) => s + e.amount, 0);
+  const totalOre = arvodeOre + utlaggOre;
+  const has = totalOre > 0;
+  return (
+    <div className={`mx-6 mb-4 rounded-lg border px-4 py-3 ${has ? "border-blue-200 bg-blue-50" : "border-gray-200 bg-gray-50"}`}>
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] uppercase tracking-wide text-gray-500">Upparbetat ofakturerat</span>
+        <span className="font-mono font-semibold text-sm text-gray-900">{formatCurrency(totalOre)}</span>
+      </div>
+      {has ? (
+        <div className="mt-1 flex flex-wrap gap-x-5 gap-y-1 text-xs text-gray-600">
+          <span>Arvode (exkl utlägg): <span className="font-mono text-gray-800">{formatCurrency(arvodeOre)}</span></span>
+          <span>Utlägg: <span className="font-mono text-gray-800">{formatCurrency(utlaggOre)}</span></span>
+        </div>
+      ) : (
+        <div className="mt-1 text-xs text-gray-500">Inget ofakturerat — allt debiterbart arbete är fakturerat.</div>
       )}
     </div>
   );

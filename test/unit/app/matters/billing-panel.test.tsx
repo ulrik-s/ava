@@ -20,6 +20,8 @@ interface BillingRunRow {
 
 let runsData: { runs: BillingRunRow[] } = { runs: [] };
 let runsLoading = false;
+interface ProposalData { workValueOre: number; priorAccontoSumOre: number; timeEntries: Array<{ id: string; description: string; minutes: number; hourlyRate: number; billable: boolean; valueOre: number }>; expenses: Array<{ id: string; description: string; amount: number; billable: boolean }> }
+let proposalData: ProposalData = { workValueOre: 0, priorAccontoSumOre: 0, timeEntries: [], expenses: [] };
 const refetch = vi.fn();
 const radgivningMutate = vi.fn();
 const krMutate = vi.fn();
@@ -31,6 +33,7 @@ vi.mock("@/lib/client/trpc", () => ({
   trpc: {
     billingRun: {
       list: { useQuery: () => ({ data: runsData, isLoading: runsLoading, refetch }) },
+      proposal: { useQuery: () => ({ data: proposalData, isLoading: false }) },
       createKostnadsrakning: { useMutation: () => ({ mutate: krMutate, isPending: false }) },
     },
     organization: {
@@ -82,6 +85,7 @@ beforeEach(() => {
   runsData = { runs: [] };
   runsLoading = false;
   documentListData = { documents: [] };
+  proposalData = { workValueOre: 0, priorAccontoSumOre: 0, timeEntries: [], expenses: [] };
   hasDoc = false;
 });
 
@@ -115,6 +119,35 @@ describe("BillingPanel — översikt", () => {
     expect(screen.getByText("Aconto fakturerat")).toBeInTheDocument();
     // Faktura-länk för run med invoiceId (EntityLink-stub)
     expect(screen.getByText("F-1")).toBeInTheDocument();
+  });
+});
+
+describe("BillingPanel — Upparbetat ofakturerat", () => {
+  it("visar arvode/utlägg/total när det finns ofakturerat debiterbart arbete", () => {
+    proposalData = {
+      workValueOre: 120_000,
+      priorAccontoSumOre: 0,
+      timeEntries: [
+        { id: "t1", description: "Arbete", minutes: 60, hourlyRate: 1200, billable: true, valueOre: 120_000 },
+        { id: "t2", description: "Ej deb", minutes: 30, hourlyRate: 1200, billable: false, valueOre: 60_000 },
+      ],
+      expenses: [
+        { id: "e1", description: "Ansökningsavgift", amount: 90_000, billable: true },
+        { id: "e2", description: "Ej deb", amount: 10_000, billable: false },
+      ],
+    };
+    render(<BillingPanel matterId="m1" matter={baseMatter} />);
+    expect(screen.getByText("Upparbetat ofakturerat")).toBeInTheDocument();
+    // Arvode 1200,00 (bara billable), Utlägg 900,00, Total 2100,00.
+    expect(screen.getByText(/1\s*200,00/)).toBeInTheDocument();
+    expect(screen.getByText(/900,00/)).toBeInTheDocument();
+    expect(screen.getByText(/2\s*100,00/)).toBeInTheDocument();
+  });
+
+  it("visar tomtext när inget ofakturerat finns", () => {
+    render(<BillingPanel matterId="m1" matter={baseMatter} />);
+    expect(screen.getByText("Upparbetat ofakturerat")).toBeInTheDocument();
+    expect(screen.getByText(/Inget ofakturerat/)).toBeInTheDocument();
   });
 });
 
