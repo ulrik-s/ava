@@ -37,7 +37,11 @@ MATTER_ID="019ef800-0000-7000-8000-000000000742"
 
 cleanup() {
   "${COMPOSE[@]}" down -v --remove-orphans >/dev/null 2>&1 || true
-  rm -rf "$AVA_CONTENT_HOST_DIR"
+  # Content-dir:en fylls av server-first-containern (root) → host-rm kan nekas.
+  # Försök som vanlig användare, annars sudo (CI-runner), annars strunta i det.
+  rm -rf "$AVA_CONTENT_HOST_DIR" 2>/dev/null \
+    || sudo rm -rf "$AVA_CONTENT_HOST_DIR" 2>/dev/null \
+    || true
 }
 trap cleanup EXIT
 
