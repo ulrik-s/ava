@@ -92,7 +92,7 @@ describe("BillingDialog — ACCONTO (#397 avdragsmedvetet förslag)", () => {
 
   it("procent → bips + omräknat förslag: 30 % → 3000 bips, 1500 kr", () => {
     render(<BillingDialog matterId={asId<"MatterId">("m1")} type="ACCONTO" existingAccontos={[]} meta={meta} onClose={() => {}} />);
-    const [percent] = screen.getAllByRole("spinbutton");
+    const [percent] = screen.getAllByRole("textbox"); // [%-andel, belopp]
     fireEvent.change(percent!, { target: { value: "30" } });
     fireEvent.click(screen.getByRole("button", { name: "Skapa aconto-faktura" }));
     expect(accontoMutate).toHaveBeenCalledWith(expect.objectContaining({ clientShareBips: 3000, amountOre: 150_000 }));
@@ -100,10 +100,32 @@ describe("BillingDialog — ACCONTO (#397 avdragsmedvetet förslag)", () => {
 
   it("manuell justering av beloppet vinner över förslaget", () => {
     render(<BillingDialog matterId={asId<"MatterId">("m1")} type="ACCONTO" existingAccontos={[]} meta={meta} onClose={() => {}} />);
-    const spin = screen.getAllByRole("spinbutton");
-    fireEvent.change(spin[1]!, { target: { value: "750" } }); // belopp-fältet
+    const boxes = screen.getAllByRole("textbox"); // [%-andel, belopp]
+    fireEvent.change(boxes[1]!, { target: { value: "750" } }); // belopp-fältet
     fireEvent.click(screen.getByRole("button", { name: "Skapa aconto-faktura" }));
     expect(accontoMutate).toHaveBeenCalledWith(expect.objectContaining({ amountOre: 75_000 }));
+  });
+
+  it("belopps-fältet är ett text-fält utan spinner-pilar (#778)", () => {
+    render(<BillingDialog matterId={asId<"MatterId">("m1")} type="ACCONTO" existingAccontos={[]} meta={meta} onClose={() => {}} />);
+    // Inga number-spinners alls (type=number ger role 'spinbutton').
+    expect(screen.queryAllByRole("spinbutton")).toHaveLength(0);
+    const boxes = screen.getAllByRole("textbox") as HTMLInputElement[];
+    expect(boxes[1]!.getAttribute("inputmode")).toBe("decimal");
+  });
+
+  it("tomt belopp när inget förslag finns: rutan är tom från början (#778)", () => {
+    proposalData = { workValueOre: 0, priorAccontoSumOre: 0, timeEntries: [], expenses: [] };
+    render(<BillingDialog matterId={asId<"MatterId">("m1")} type="ACCONTO" existingAccontos={[]} meta={meta} onClose={() => {}} />);
+    const boxes = screen.getAllByRole("textbox") as HTMLInputElement[];
+    expect(boxes[1]!.value).toBe(""); // belopp tomt, inte "0"
+  });
+
+  it("visar moms-uppdelning för det inkl-moms-belopp som anges (#778)", () => {
+    render(<BillingDialog matterId={asId<"MatterId">("m1")} type="ACCONTO" existingAccontos={[]} meta={meta} onClose={() => {}} />);
+    // Förslag 1000 kr inkl moms → moms 200 kr, exkl 800 kr.
+    expect(screen.getByText(/Varav moms \(25 %\):/)).toBeInTheDocument();
+    expect(screen.getByText(/exkl\. moms:/)).toBeInTheDocument();
   });
 
   it("onSuccess genererar ett faktura-dokument", async () => {
