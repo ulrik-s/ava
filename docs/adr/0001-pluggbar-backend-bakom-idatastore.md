@@ -1,6 +1,6 @@
 # ADR 0001 — Pluggbar backend bakom `IDataStore`/tRPC: Git (local-first) ⟷ Postgres (server)
 
-- **Status:** Reviderad av [ADR 0016](0016-server-first-med-offline-first-klient.md) (2026-06-16) — dual-backend-modellen ersatt av server-first (Postgres + tRPC) med offline-first klient. Git-vägen (Backend A) pensioneras **stegvis** (issues #420/#421) och är fortfarande den aktiva backenden (server-runtime per [ADR 0005](0005-server-som-git-peer.md) + demo) tills server-spinen (#410/#411/#415) landat.
+- **Status:** Accepterad (senare reviderad av [ADR 0016](0016-server-first-med-offline-first-klient.md) 2026-06-16 — dual-backend-modellen ersatt av server-first (Postgres + tRPC) med offline-first klient; git-vägen (Backend A) pensioneras **stegvis** via #420/#421).
 - **Datum:** 2026-05-27
 - **Beslutsfattare:** Ulrik Sjölin
 - **Berör:** datalager, tRPC-routrar, deploy-modeller, framtida ACL
