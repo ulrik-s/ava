@@ -12,6 +12,8 @@
  * det är vad advokaten skriver in.
  */
 import { useState } from "react";
+import { VatBreakdown } from "@/components/billing/vat-breakdown";
+import { DecimalInput } from "@/components/ui/decimal-input";
 import { Modal } from "@/components/ui/modal";
 import { generateFakturaDoc } from "@/lib/client/kostnadsrakning/generate-faktura-doc";
 import { trpc } from "@/lib/client/trpc";
@@ -31,9 +33,20 @@ interface Props {
   onClose: () => void;
 }
 
+/** Härleder belopp/prutning/vakt. Utbrutet ur VerdictDialog så komponenten
+ *  håller sig under komplexitetsgränsen (#199). */
+function verdictAmounts(workValueOre: number, awardedKr: number | null) {
+  const proposedKr = workValueOre > 0 ? workValueOre / 100 : null;
+  const fieldKr = awardedKr ?? proposedKr;
+  const awardedOre = Math.max(0, Math.round((fieldKr ?? 0) * 100));
+  return { fieldKr, awardedOre, prutningOre: awardedOre - workValueOre, tooHigh: awardedOre > workValueOre };
+}
+
 export function VerdictDialog(props: Props) {
   const { billingRunId, workValueOre, onClose } = props;
-  const [awardedKr, setAwardedKr] = useState(workValueOre / 100);
+  // null → följ det föreslagna beloppet (förifyllt); tomt fält tillåts (#778).
+  const [awardedKr, setAwardedKr] = useState<number | null>(null);
+  const { fieldKr, awardedOre, prutningOre, tooHigh } = verdictAmounts(workValueOre, awardedKr);
   const register = trpc.document.register.useMutation();
   const utils = trpc.useUtils();
   const mut = trpc.billingRun.setVerdict.useMutation({
@@ -57,10 +70,6 @@ export function VerdictDialog(props: Props) {
       onClose();
     },
   });
-  const awardedOre = Math.max(0, Math.round(awardedKr * 100));
-  const prutningOre = awardedOre - workValueOre; // ≤ 0
-  const tooHigh = awardedOre > workValueOre;
-
   return (
     <Modal open title="Ange dom" onClose={onClose} widthClass="max-w-md">
       <form onSubmit={(e) => { e.preventDefault(); if (!tooHigh) mut.mutate({ billingRunId, prutningOre }); }}
@@ -71,10 +80,10 @@ export function VerdictDialog(props: Props) {
         </p>
         <Pair label="Föreslaget belopp" value={formatCurrency(workValueOre)} />
         <div>
-          <label className="block text-xs text-gray-500 mb-1">Dömt belopp (kr)</label>
-          <input type="number" min={0} step={1} value={awardedKr}
-            onChange={(e) => setAwardedKr(parseFloat(e.target.value) || 0)}
+          <label className="block text-xs text-gray-500 mb-1">Dömt belopp (kr) — inkl. moms</label>
+          <DecimalInput value={fieldKr} onChange={setAwardedKr} placeholder="Skriv in belopp"
             className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm" />
+          {!tooHigh && <VatBreakdown inclOre={awardedOre} />}
           {tooHigh && (
             <p className="mt-1 text-xs text-red-600">
               Dömt belopp kan inte överstiga föreslaget — kontrollera siffran från domen.

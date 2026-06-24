@@ -50,14 +50,14 @@ describe("VerdictDialog", () => {
   it("visar föreslaget belopp och initierar dömt = föreslaget (ingen prutning)", () => {
     render(<VerdictDialog {...baseProps} />);
     expect(screen.getByText("Föreslaget belopp")).toBeInTheDocument();
-    const input = screen.getByRole("spinbutton") as HTMLInputElement;
+    const input = screen.getByRole("textbox") as HTMLInputElement;
     expect(input.value).toBe("5000"); // 500 000 öre / 100
     expect(screen.queryByText("Prutning")).not.toBeInTheDocument();
   });
 
   it("dömt < föreslaget → visar prutning och submit skickar negativ prutningOre", () => {
     render(<VerdictDialog {...baseProps} />);
-    fireEvent.change(screen.getByRole("spinbutton"), { target: { value: "4000" } }); // 400 000 öre
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "4000" } }); // 400 000 öre
     expect(screen.getByText("Prutning")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Skapa faktura" }));
     expect(verdictMutate).toHaveBeenCalledWith({ billingRunId: "br-1", prutningOre: -100_000 });
@@ -65,7 +65,7 @@ describe("VerdictDialog", () => {
 
   it("dömt > föreslaget → fel-text, submit disabled, ingen mutation", () => {
     render(<VerdictDialog {...baseProps} />);
-    fireEvent.change(screen.getByRole("spinbutton"), { target: { value: "6000" } });
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "6000" } });
     expect(screen.getByText(/kan inte överstiga föreslaget/)).toBeInTheDocument();
     const submit = screen.getByRole("button", { name: "Skapa faktura" }) as HTMLButtonElement;
     expect(submit.disabled).toBe(true);

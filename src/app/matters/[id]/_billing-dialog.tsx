@@ -11,6 +11,8 @@
  * dokumentlista (via `generateFakturaDoc`), redo för utskick.
  */
 import { useMemo, useState } from "react";
+import { VatBreakdown } from "@/components/billing/vat-breakdown";
+import { DecimalInput } from "@/components/ui/decimal-input";
 import { Modal } from "@/components/ui/modal";
 import {
   generateFakturaDoc,
@@ -73,6 +75,16 @@ function useFakturaDoc(matterId: MatterId, meta: BillingMeta): (invoice: Faktura
   };
 }
 
+/** Härleder förslag + det belopp som ska visas/skickas. Utbrutet ur
+ *  AccontoForm så formuläret håller sig under komplexitetsgränsen (#199). */
+function accontoAmounts(workValueOre: number, clientShareBips: number, priorOre: number, amountKr: number | null) {
+  const suggestedOre = proposedAccontoOre(workValueOre, clientShareBips, priorOre);
+  // Förifyllt förslag (#778) — visa det i fältet, men tomt om inget att föreslå.
+  const suggestionKr = suggestedOre > 0 ? suggestedOre / 100 : null;
+  const fieldKr = amountKr ?? suggestionKr;
+  return { suggestedOre, fieldKr, effectiveOre: Math.round((fieldKr ?? 0) * 100) };
+}
+
 function AccontoForm({ matterId, meta, onDone }: { matterId: MatterId; meta: BillingMeta; onDone: () => void }) {
   const proposal = trpc.billingRun.proposal.useQuery({ matterId });
   const workValueOre = proposal.data?.workValueOre ?? 0;
@@ -81,14 +93,13 @@ function AccontoForm({ matterId, meta, onDone }: { matterId: MatterId; meta: Bil
   const [clientShareBips, setBips] = useState(meta.clientShareBips ?? 2000);
   const [amountKr, setAmountKr] = useState<number | null>(null); // null → följ förslaget
   const makeDoc = useFakturaDoc(matterId, meta);
-  const suggestedOre = proposedAccontoOre(workValueOre, clientShareBips, priorOre);
-  const effectiveKr = amountKr ?? suggestedOre / 100;
+  const { suggestedOre, fieldKr, effectiveOre } = accontoAmounts(workValueOre, clientShareBips, priorOre, amountKr);
   const mut = trpc.billingRun.createAcconto.useMutation({
     onSuccess: async (res) => { await makeDoc(res.invoice); onDone(); },
   });
   return (
     <form onSubmit={(e) => { e.preventDefault(); mut.mutate({
-      matterId, clientShareBips, amountOre: Math.round(effectiveKr * 100), recipient: "KLIENT",
+      matterId, clientShareBips, amountOre: effectiveOre, recipient: "KLIENT",
     }); }} className="space-y-3">
       <p className="text-sm text-gray-600">
         Acconto baseras på klientens självrisk-/avgifts-procentsats × upparbetat värde,
@@ -96,14 +107,14 @@ function AccontoForm({ matterId, meta, onDone }: { matterId: MatterId; meta: Bil
       </p>
       <ProposalSummary workValueOre={workValueOre} priorOre={priorOre} suggestedOre={suggestedOre} />
       <Field label="Klientens andel (procent)">
-        <input type="number" min={0} max={100} step={1} value={clientShareBips / 100}
-          onChange={(e) => setBips(Math.round((parseFloat(e.target.value) || 0) * 100))}
+        <DecimalInput value={clientShareBips / 100} min={0}
+          onChange={(v) => setBips(Math.round((v ?? 0) * 100))}
           className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm" />
       </Field>
-      <Field label="Belopp (kr)">
-        <input type="number" min={0} step={1} value={effectiveKr}
-          onChange={(e) => setAmountKr(parseFloat(e.target.value) || 0)}
+      <Field label="Belopp (kr) — inkl. moms">
+        <DecimalInput value={fieldKr} onChange={setAmountKr} placeholder="Skriv in belopp"
           className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm" />
+        <VatBreakdown inclOre={effectiveOre} />
       </Field>
       {mut.error && <p className="text-sm text-red-700">{mut.error.message}</p>}
       <SubmitRow onDone={onDone} pending={mut.isPending} label="Skapa aconto-faktura" />
@@ -113,10 +124,13 @@ function AccontoForm({ matterId, meta, onDone }: { matterId: MatterId; meta: Bil
 
 function ProposalSummary({ workValueOre, priorOre, suggestedOre }: { workValueOre: number; priorOre: number; suggestedOre: number }) {
   return (
-    <div className="grid grid-cols-3 gap-2 rounded border border-gray-200 bg-gray-50 px-3 py-2 text-center">
-      <Stat label="Upparbetat" value={workValueOre} />
-      <Stat label="Tidigare aconton" value={priorOre} />
-      <Stat label="Förslag" value={suggestedOre} strong />
+    <div className="rounded border border-gray-200 bg-gray-50 px-3 py-2">
+      <div className="grid grid-cols-3 gap-2 text-center">
+        <Stat label="Upparbetat" value={workValueOre} />
+        <Stat label="Tidigare aconton" value={priorOre} />
+        <Stat label="Förslag" value={suggestedOre} strong />
+      </div>
+      <p className="mt-1 text-center text-[10px] uppercase tracking-wide text-gray-400">Belopp exkl. moms</p>
     </div>
   );
 }
