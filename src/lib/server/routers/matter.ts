@@ -224,6 +224,7 @@ export const matterRouter = router({
         paymentMethod: paymentMethodSchema.optional(),
         paymentMethodNote: z.string().nullable().optional(),
         paymentMethodDecidedAt: z.string().nullable().optional(),
+        clientShareBips: z.number().int().min(0).max(10000).nullable().optional(),
         isTaxeArende: z.boolean().optional(),
         taxaLevel: z.number().int().min(1).max(4).nullable().optional(),
         taxaHuvudforhandlingMin: z.number().int().nonnegative().nullable().optional(),

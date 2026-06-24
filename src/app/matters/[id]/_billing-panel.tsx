@@ -35,6 +35,7 @@ interface MatterContext {
   taxaHufStart?: string | Date | null | undefined;
   isTaxeArende?: boolean | null | undefined;
   paymentMethod?: PaymentMethod | null | undefined;
+  clientShareBips?: number | null | undefined;
   radgivningBetaldAt?: string | Date | null | undefined;
   contacts?: ReadonlyArray<{ role: string; contact?: { name?: string | null | undefined; email?: string | null | undefined } | null | undefined }> | undefined;
 }
@@ -146,7 +147,7 @@ function useBillingMeta(matter: MatterContext): BillingMeta {
   const org = orgProps(trpc.organization.getSettings.useQuery().data ?? undefined);
   return {
     matterNumber: matter.matterNumber, matterTitle: matter.title,
-    ...omitUndefined({ clientName: clientOf(matter) || undefined, organizationName: org.name, organizationOrgNumber: org.orgNumber }),
+    ...omitUndefined({ clientName: clientOf(matter) || undefined, organizationName: org.name, organizationOrgNumber: org.orgNumber, clientShareBips: matter.clientShareBips ?? undefined }),
   };
 }
 
