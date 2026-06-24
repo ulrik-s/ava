@@ -1,6 +1,7 @@
 /**
  * Komponenttest för PaymentMethodCard. Verifierar att rätt label + kreditrisk
- * renderas för varje paymentMethod-värde, plus att en notering syns när satt.
+ * renderas för varje paymentMethod-värde, plus att en notering syns när satt
+ * och att klientens %-andel visas/redigeras vid rättshjälp/rättsskydd (#778).
  *
  * Vi mockar trpc-hooken så testet inte behöver en riktig server.
  */
@@ -35,6 +36,7 @@ describe("PaymentMethodCard", () => {
         paymentMethod="RATTSHJALP"
         paymentMethodNote="Diarienr RH-2026-0217"
         paymentMethodDecidedAt={new Date("2026-03-02")}
+        clientShareBips={null}
       />,
     );
     expect(screen.getByText("Rättshjälp")).toBeInTheDocument();
@@ -49,6 +51,7 @@ describe("PaymentMethodCard", () => {
         paymentMethod="PRIVAT"
         paymentMethodNote={null}
         paymentMethodDecidedAt={null}
+        clientShareBips={null}
       />,
     );
     expect(screen.getByText("Privat betalning")).toBeInTheDocument();
@@ -62,6 +65,7 @@ describe("PaymentMethodCard", () => {
         paymentMethod="PENDING"
         paymentMethodNote={null}
         paymentMethodDecidedAt={null}
+        clientShareBips={null}
       />,
     );
     expect(screen.getByText("Ej fastställt")).toBeInTheDocument();
@@ -75,6 +79,7 @@ describe("PaymentMethodCard", () => {
         paymentMethod="RATTSSKYDD"
         paymentMethodNote="Trygg-Hansa"
         paymentMethodDecidedAt={null}
+        clientShareBips={null}
       />,
     );
     expect(screen.getByRole("button", { name: /Ändra/i })).toBeInTheDocument();
@@ -87,6 +92,7 @@ describe("PaymentMethodCard", () => {
         paymentMethod="RATTSHJALP"
         paymentMethodNote={null}
         paymentMethodDecidedAt={null}
+        clientShareBips={null}
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: /Ändra/i }));
@@ -101,6 +107,7 @@ describe("PaymentMethodCard", () => {
         paymentMethod="RATTSHJALP"
         paymentMethodNote={null}
         paymentMethodDecidedAt={null}
+        clientShareBips={null}
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: /Ändra/i }));
@@ -115,6 +122,7 @@ describe("PaymentMethodCard", () => {
         paymentMethod="RATTSHJALP"
         paymentMethodNote={null}
         paymentMethodDecidedAt={null}
+        clientShareBips={null}
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: /Ändra/i }));
@@ -139,8 +147,74 @@ describe("PaymentMethodCard", () => {
         paymentMethod="RATTSHJALP"
         paymentMethodNote={null}
         paymentMethodDecidedAt={new Date("2026-04-15")}
+        clientShareBips={null}
       />,
     );
     expect(screen.getByText(/Beslut mottaget/)).toBeInTheDocument();
+  });
+
+  it("visar klientens andel som procent vid rättsskydd (#778)", () => {
+    render(
+      <PaymentMethodCard
+        matterId={asId<"MatterId">("m1")}
+        paymentMethod="RATTSSKYDD"
+        paymentMethodNote={null}
+        paymentMethodDecidedAt={null}
+        clientShareBips={2500}
+      />,
+    );
+    expect(screen.getByText(/Klientens andel: 25 %/)).toBeInTheDocument();
+  });
+
+  it("visar 'ej satt' när andelen saknas men metoden använder %-sats (#778)", () => {
+    render(
+      <PaymentMethodCard
+        matterId={asId<"MatterId">("m1")}
+        paymentMethod="RATTSHJALP"
+        paymentMethodNote={null}
+        paymentMethodDecidedAt={null}
+        clientShareBips={null}
+      />,
+    );
+    expect(screen.getByText(/Klientens andel: ej satt/)).toBeInTheDocument();
+  });
+
+  it("redigerar och sparar klientens %-andel som bips (#778)", () => {
+    render(
+      <PaymentMethodCard
+        matterId={asId<"MatterId">("m1")}
+        paymentMethod="RATTSSKYDD"
+        paymentMethodNote={null}
+        paymentMethodDecidedAt={null}
+        clientShareBips={2000}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Ändra/i }));
+    const shareInput = screen.getByPlaceholderText(/t\.ex\. 25/i) as HTMLInputElement;
+    expect(shareInput.value).toBe("20");
+    fireEvent.change(shareInput, { target: { value: "30" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Spara$/i }));
+    expect(updateMutate).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "m1", clientShareBips: 3000 }),
+    );
+  });
+
+  it("tomt andels-fält sparas som null (#778)", () => {
+    render(
+      <PaymentMethodCard
+        matterId={asId<"MatterId">("m1")}
+        paymentMethod="RATTSSKYDD"
+        paymentMethodNote={null}
+        paymentMethodDecidedAt={null}
+        clientShareBips={2000}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Ändra/i }));
+    const shareInput = screen.getByPlaceholderText(/t\.ex\. 25/i) as HTMLInputElement;
+    fireEvent.change(shareInput, { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Spara$/i }));
+    expect(updateMutate).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "m1", clientShareBips: null }),
+    );
   });
 });

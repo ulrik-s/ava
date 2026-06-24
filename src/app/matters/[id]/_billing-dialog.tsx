@@ -30,6 +30,8 @@ export interface BillingMeta {
   clientName?: string;
   organizationName?: string;
   organizationOrgNumber?: string;
+  /** Klientens andel i bips (2500 = 25 %); förifyller acconto-förslaget (#778). */
+  clientShareBips?: number | null;
 }
 
 interface Props {
@@ -75,7 +77,8 @@ function AccontoForm({ matterId, meta, onDone }: { matterId: MatterId; meta: Bil
   const proposal = trpc.billingRun.proposal.useQuery({ matterId });
   const workValueOre = proposal.data?.workValueOre ?? 0;
   const priorOre = proposal.data?.priorAccontoSumOre ?? 0;
-  const [clientShareBips, setBips] = useState(2000); // 20% default
+  // Förifyll med ärendets %-sats (#778); 20 % som fallback om ej satt.
+  const [clientShareBips, setBips] = useState(meta.clientShareBips ?? 2000);
   const [amountKr, setAmountKr] = useState<number | null>(null); // null → följ förslaget
   const makeDoc = useFakturaDoc(matterId, meta);
   const suggestedOre = proposedAccontoOre(workValueOre, clientShareBips, priorOre);

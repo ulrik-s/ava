@@ -32,6 +32,13 @@ interface Props {
   paymentMethod: PaymentMethod;
   paymentMethodNote: string | null;
   paymentMethodDecidedAt: Date | string | null;
+  /** Klientens andel i bips (2500 = 25 %); null = ej satt (#778). */
+  clientShareBips: number | null;
+}
+
+/** Betalningssätt där klienten betalar en %-sats → visa/redigera andelen. */
+function usesClientShare(method: PaymentMethod): boolean {
+  return method === "RATTSSKYDD" || method === "RATTSHJALP";
 }
 
 /** Läsvy: nuvarande betalningssätt + kreditrisk-badge + ev. notering/datum. */
@@ -39,16 +46,19 @@ function PaymentMethodView({
   paymentMethod,
   paymentMethodNote,
   paymentMethodDecidedAt,
+  clientShareBips,
   onEdit,
 }: {
   paymentMethod: PaymentMethod;
   paymentMethodNote: string | null;
   paymentMethodDecidedAt: Date | string | null;
+  clientShareBips: number | null;
   onEdit: () => void;
 }) {
   const risk = creditRiskFor(paymentMethod);
   const badgeClass = RISK_BADGE[risk];
   const label = PAYMENT_METHOD_LABELS[paymentMethod as keyof typeof PAYMENT_METHOD_LABELS] ?? paymentMethod;
+  const showShare = usesClientShare(paymentMethod);
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-4">
       <div className="flex items-start justify-between gap-3">
@@ -61,6 +71,11 @@ function PaymentMethodView({
             <span className={`text-xs rounded-full px-2 py-0.5 border ${badgeClass}`}>
               Kreditrisk: {CREDIT_RISK_LABELS[risk]}
             </span>
+            {showShare && (
+              <span className="text-xs rounded-full px-2 py-0.5 border border-blue-200 bg-blue-50 text-blue-700">
+                Klientens andel: {clientShareBips != null ? `${clientShareBips / 100} %` : "ej satt"}
+              </span>
+            )}
           </div>
           {paymentMethodNote && <p className="text-sm text-gray-600 mt-1">{paymentMethodNote}</p>}
           {paymentMethodDecidedAt && (
@@ -77,6 +92,29 @@ function PaymentMethodView({
   );
 }
 
+/** %-andels-fältet (självrisk/avgift). Utbrutet så editorn håller sig ≤100 rader. */
+function ClientShareField({ id, value, onChange }: { id: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <div>
+      <label htmlFor={id} className="block text-xs font-medium mb-1">
+        Klientens andel att betala (%)
+      </label>
+      <input
+        id={id}
+        type="text"
+        inputMode="decimal"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="t.ex. 25"
+        className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
+      />
+      <p className="mt-1 text-[11px] text-gray-400">
+        Självrisk/avgift av upparbetat värde. Kan ändras under ärendets gång (t.ex. vid ändrad inkomst).
+      </p>
+    </div>
+  );
+}
+
 /** Redigeringsformulär: äger sitt formulär-state + spar-mutationen. */
 function PaymentMethodEditor({ matterId, initial, onDone }: { matterId: MatterId; initial: Props; onDone: () => void }) {
   const [method, setMethod] = useState(initial.paymentMethod);
@@ -84,9 +122,12 @@ function PaymentMethodEditor({ matterId, initial, onDone }: { matterId: MatterId
   const [decidedAt, setDecidedAt] = useState(
     initial.paymentMethodDecidedAt ? new Date(initial.paymentMethodDecidedAt).toISOString().slice(0, 10) : "",
   );
+  // %-sats redigeras i procent (bips/100); tomt fält → null. Tillåt komma-decimal.
+  const [sharePct, setSharePct] = useState(initial.clientShareBips != null ? String(initial.clientShareBips / 100) : "");
   const methodId = useId();
   const decidedAtId = useId();
   const noteId = useId();
+  const shareId = useId();
 
   const utils = trpc.useUtils();
   const update = trpc.matter.update.useMutation({
@@ -113,6 +154,9 @@ function PaymentMethodEditor({ matterId, initial, onDone }: { matterId: MatterId
             ))}
           </select>
         </div>
+        {usesClientShare(method) && (
+          <ClientShareField id={shareId} value={sharePct} onChange={setSharePct} />
+        )}
         <div>
           <label htmlFor={decidedAtId} className="block text-xs font-medium mb-1">
             Beslutsdatum (om rättshjälp/rättsskydd beviljats)
@@ -150,6 +194,7 @@ function PaymentMethodEditor({ matterId, initial, onDone }: { matterId: MatterId
                 paymentMethod: method as Parameters<typeof update.mutate>[0]["paymentMethod"],
                 paymentMethodNote: note || null,
                 paymentMethodDecidedAt: decidedAt || null,
+                clientShareBips: clientShareFromPct(sharePct),
               })
             }
             className="px-4 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
@@ -172,7 +217,17 @@ export function PaymentMethodCard(props: Props) {
       paymentMethod={props.paymentMethod}
       paymentMethodNote={props.paymentMethodNote}
       paymentMethodDecidedAt={props.paymentMethodDecidedAt}
+      clientShareBips={props.clientShareBips}
       onEdit={() => setEditing(true)}
     />
   );
+}
+
+/** Procent-textfält → bips (null om tomt/ogiltigt). Tillåter komma-decimal. */
+function clientShareFromPct(pct: string): number | null {
+  const trimmed = pct.trim().replace(",", ".");
+  if (trimmed === "") return null;
+  const n = Number.parseFloat(trimmed);
+  if (!Number.isFinite(n) || n < 0 || n > 100) return null;
+  return Math.round(n * 100);
 }

@@ -116,6 +116,8 @@ export const matters = pgTable("matters", {
   taxaHasFTax: boolDefault("taxa_has_f_tax", false),
   taxaHufStart: timestamp("taxa_huf_start", { withTimezone: true }),
   radgivningBetaldAt: timestamp("radgivning_betald_at", { withTimezone: true }),
+  /** Klientens andel (självrisk/avgift) i bips — rättsskydd/rättshjälp (#778). */
+  clientShareBips: integer("client_share_bips"),
 }, (t) => [index("matters_org_idx").on(t.organizationId)]);
 
 /**

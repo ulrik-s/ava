@@ -32,6 +32,12 @@ export const matterSchema = z.object({
   paymentMethodNote: z.string().nullish(),
   paymentMethodDecidedAt: optionalDateLike,
   /**
+   * Klientens andel (självrisk/avgift) i basis points (2500 = 25 %) — relevant
+   * för rättsskydd/rättshjälp där klienten betalar en %-sats av upparbetat
+   * värde. Driver acconto-förslaget; kan ändras under ärendets gång (#778).
+   */
+  clientShareBips: z.number().int().min(0).max(10000).nullish(),
+  /**
    * `isTaxeArende` — ärendet ersätts enligt Domstolsverkets fastställda
    * taxa (schablon) istället för löpande timdebitering.
    *

@@ -65,12 +65,7 @@ export default function MatterDetailClient({ id: paramId }: { id: string }) {
       />
 
       <div className="mb-6">
-        <PaymentMethodCard
-          matterId={id}
-          paymentMethod={m.paymentMethod}
-          paymentMethodNote={m.paymentMethodNote ?? null}
-          paymentMethodDecidedAt={m.paymentMethodDecidedAt ?? null}
-        />
+        <MatterPaymentMethod matterId={id} matter={m} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -93,6 +88,28 @@ export default function MatterDetailClient({ id: paramId }: { id: string }) {
         />
       )}
     </div>
+  );
+}
+
+/** Adapter: samlar nullish-coalescing för betalkortet så MatterDetailClient
+ *  håller sig under komplexitetsgränsen (#199). */
+function MatterPaymentMethod({ matterId, matter }: {
+  matterId: ReturnType<typeof asId<"MatterId">>;
+  matter: {
+    paymentMethod: PaymentMethod;
+    paymentMethodNote?: string | null | undefined;
+    paymentMethodDecidedAt?: Date | string | null | undefined;
+    clientShareBips?: number | null | undefined;
+  };
+}) {
+  return (
+    <PaymentMethodCard
+      matterId={matterId}
+      paymentMethod={matter.paymentMethod}
+      paymentMethodNote={matter.paymentMethodNote ?? null}
+      paymentMethodDecidedAt={matter.paymentMethodDecidedAt ?? null}
+      clientShareBips={matter.clientShareBips ?? null}
+    />
   );
 }
 

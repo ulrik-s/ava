@@ -73,6 +73,13 @@ describe("BillingDialog — ACCONTO (#397 avdragsmedvetet förslag)", () => {
     });
   });
 
+  it("förifyller med ärendets %-sats istället för 20 %: 25 % × 5000 = 1250 kr (#778)", () => {
+    const metaWithShare = { ...meta, clientShareBips: 2500 };
+    render(<BillingDialog matterId={asId<"MatterId">("m1")} type="ACCONTO" existingAccontos={[]} meta={metaWithShare} onClose={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: "Skapa aconto-faktura" }));
+    expect(accontoMutate).toHaveBeenCalledWith(expect.objectContaining({ clientShareBips: 2500, amountOre: 125_000 }));
+  });
+
   it("drar av tidigare aconton i förslaget: 20 % × 5000 − 600 = 400 kr", () => {
     proposalData = {
       workValueOre: 500_000, priorAccontoSumOre: 60_000, // 600 kr tidigare
