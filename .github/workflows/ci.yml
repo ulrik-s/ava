@@ -277,3 +277,36 @@ jobs:
         with:
           name: playwright-demo-report
           path: reports/playwright-demo/
+
+  # ───────────────── Keep-both-konflikt-E2E (UI-driven) ─────────────────
+  # Verklighetstroget 2-användar-konflikt-test (#742) mot den FULLA self-hosted-
+  # stacken (server-first tRPC + oauth2-proxy + Keycloak). conflict-e2e.sh
+  # provocerar en RIKTIG dokument-konflikt över helperns nätväg (Keycloak-Bearer
+  # → oauth2-proxy → server-first), och Playwright loggar in via Keycloak-
+  # formuläret + bekräftar i UIt att ärendet har 2 filer (original + keep-both-
+  # syskon). Regressionsskydd för ADR 0033 keep-both end-to-end mot deployad
+  # artefakt. (Kör på PR; INTE required check — ingen branch-protection-ändring.)
+  conflict-e2e:
+    name: Keep-both konflikt-E2E
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    timeout-minutes: 25
+    env:
+      CI: "true"
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bun run e2e:install
+      - run: bun run e2e:conflict
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-conflict-report
+          path: reports/playwright-conflict/
