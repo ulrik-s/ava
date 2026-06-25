@@ -7,11 +7,11 @@
 
 import type { inferRouterOutputs } from "@trpc/server";
 import { useState } from "react";
+import { Money } from "@/components/ui/money";
 import type { DownloadClient } from "@/lib/client/backend/load-document-blob";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { useRouteId } from "@/lib/client/demo/use-route-id";
 import { trpc } from "@/lib/client/trpc";
-import { formatCurrency } from "@/lib/client/utils";
 import type { AppRouter } from "@/lib/server/routers/_app";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { computeMatterSettlement, computeRadgivningsavgift, type MatterSettlement } from "@/lib/shared/rattshjalp";
@@ -213,7 +213,7 @@ function WriteOffsCard({ writeOffs }: { writeOffs: ReadonlyArray<{ amount: numbe
                 {w.writtenOffAt ? new Date(w.writtenOffAt).toLocaleDateString("sv-SE") : "—"}
               </td>
               <td className="py-1.5 text-gray-700">{w.reason ?? "Avskriven"}</td>
-              <td className="py-1.5 text-right font-mono text-red-700">−{formatCurrency(w.amount)}</td>
+              <td className="py-1.5 text-right text-red-700">−<Money ore={w.amount} basis="gross" className="font-mono text-red-700" /></td>
             </tr>
           ))}
         </tbody>
@@ -271,19 +271,19 @@ function SummaryGrid({
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
       <div><p className="text-xs text-gray-500">Status</p><p className="font-medium">{STATUS_LABELS[inv.status] ?? inv.status}</p></div>
-      <div><p className="text-xs text-gray-500">Belopp (brutto)</p><p className="font-mono">{formatCurrency(inv.amount)}</p></div>
+      <div><p className="text-xs text-gray-500">Belopp (brutto)</p><p><Money ore={inv.amount} basis="gross" className="font-mono" /></p></div>
       {inv.invoiceType === "FINAL" && (
         <>
-          <div><p className="text-xs text-gray-500">Accontoavdrag</p><p className="font-mono">−{formatCurrency(accontoDeductionTotal)}</p></div>
-          <div><p className="text-xs text-gray-500">Netto att betala</p><p className="font-mono font-semibold">{formatCurrency(netAmount)}</p></div>
+          <div><p className="text-xs text-gray-500">Accontoavdrag</p><p>−<Money ore={accontoDeductionTotal} basis="gross" className="font-mono" /></p></div>
+          <div><p className="text-xs text-gray-500">Netto att betala</p><p><Money ore={netAmount} basis="gross" className="font-mono font-semibold" /></p></div>
         </>
       )}
       {inv.dueDate && <div><p className="text-xs text-gray-500">Förfallodatum</p><p>{new Date(inv.dueDate).toLocaleDateString("sv-SE")}</p></div>}
-      <div><p className="text-xs text-gray-500">Betalat totalt</p><p className="font-mono">{formatCurrency(paidSum)}</p></div>
+      <div><p className="text-xs text-gray-500">Betalat totalt</p><p><Money ore={paidSum} basis="gross" className="font-mono" /></p></div>
       {writtenOffSum > 0 && (
-        <div><p className="text-xs text-gray-500">Avskrivet</p><p className="font-mono text-red-700">−{formatCurrency(writtenOffSum)}</p></div>
+        <div><p className="text-xs text-gray-500">Avskrivet</p><p className="text-red-700">−<Money ore={writtenOffSum} basis="gross" className="font-mono text-red-700" /></p></div>
       )}
-      <div><p className="text-xs text-gray-500">Utestående</p><p className="font-mono font-semibold">{formatCurrency(outstanding)}</p></div>
+      <div><p className="text-xs text-gray-500">Utestående</p><p><Money ore={outstanding} basis="gross" className="font-mono font-semibold" /></p></div>
     </div>
   );
 }
@@ -300,7 +300,7 @@ function CreditBanners({ inv }: { inv: Inv }) {
             <EntityLink route="invoices" id={creditNote.id} className="underline">
               Kreditfaktura {new Date(creditNote.invoiceDate).toLocaleDateString("sv-SE")}
             </EntityLink>
-            {" "}— belopp {formatCurrency(creditNote.amount)}
+            {" "}— belopp <Money ore={creditNote.amount} basis="gross" />
           </p>
         </div>
       )}
@@ -312,7 +312,7 @@ function CreditBanners({ inv }: { inv: Inv }) {
             <EntityLink route="invoices" id={creditedInvoice.id} className="underline">
               faktura från {new Date(creditedInvoice.invoiceDate).toLocaleDateString("sv-SE")}
             </EntityLink>
-            {" "}(ursprungligt belopp {formatCurrency(creditedInvoice.amount)})
+            {" "}(ursprungligt belopp <Money ore={creditedInvoice.amount} basis="gross" />)
           </p>
         </div>
       )}
@@ -333,7 +333,7 @@ function PaymentPlanCard({
         <div>
           <h2 className="font-semibold text-indigo-900">Avbetalningsplan</h2>
           <p className="text-sm text-gray-600 mt-1">
-            {formatCurrency(plan.monthlyAmount)}/månad • dag {plan.dayOfMonth} • från {new Date(plan.startDate).toLocaleDateString("sv-SE")}
+            <Money ore={plan.monthlyAmount} basis="gross" />/månad • dag {plan.dayOfMonth} • från {new Date(plan.startDate).toLocaleDateString("sv-SE")}
           </p>
           <p className="text-xs text-gray-500 mt-1">Status: {plan.status}</p>
           {plan.notes && <p className="text-xs text-gray-500 mt-1">{plan.notes}</p>}
@@ -422,7 +422,7 @@ function SettlementSummaryCard({ settlement }: { settlement: MatterSettlement })
         {settlementRows(settlement).map((r) => (
           <div key={r.label} className="flex items-center justify-between py-1.5">
             <dt className={r.strong ? "text-sm font-semibold text-gray-900" : "text-sm text-gray-600"}>{r.label}</dt>
-            <dd className={`text-sm font-mono ${r.strong ? "font-semibold text-gray-900" : "text-gray-700"}`}>{formatCurrency(r.ore)}</dd>
+            <dd className={`text-sm ${r.strong ? "font-semibold text-gray-900" : "text-gray-700"}`}><Money ore={r.ore} basis="gross" className="font-mono" /></dd>
           </div>
         ))}
       </dl>
@@ -506,8 +506,8 @@ function SpecificationCard({ timeEntries, expenses }: { timeEntries: SpecTimeRow
                   <td className="py-1.5 whitespace-nowrap">{new Date(t.date).toLocaleDateString("sv-SE")}</td>
                   <td className="py-1.5">{t.description}</td>
                   <td className="py-1.5 text-right whitespace-nowrap">{(t.minutes / 60).toFixed(1)} h</td>
-                  <td className="py-1.5 text-right font-mono">{formatCurrency(t.hourlyRate ?? 0)}</td>
-                  <td className="py-1.5 text-right font-mono">{formatCurrency(lineFor(t))}</td>
+                  <td className="py-1.5 text-right"><Money ore={t.hourlyRate ?? 0} basis="gross" className="font-mono" /></td>
+                  <td className="py-1.5 text-right"><Money ore={lineFor(t)} basis="gross" className="font-mono" /></td>
                 </tr>
               ))}
             </tbody>
@@ -523,7 +523,7 @@ function SpecificationCard({ timeEntries, expenses }: { timeEntries: SpecTimeRow
                 <tr key={e.id}>
                   <td className="py-1.5 whitespace-nowrap">{new Date(e.date).toLocaleDateString("sv-SE")}</td>
                   <td className="py-1.5">{e.description}</td>
-                  <td className="py-1.5 text-right font-mono">{formatCurrency(e.amount)}</td>
+                  <td className="py-1.5 text-right"><Money ore={e.amount} basis="gross" className="font-mono" /></td>
                 </tr>
               ))}
             </tbody>
@@ -532,7 +532,7 @@ function SpecificationCard({ timeEntries, expenses }: { timeEntries: SpecTimeRow
       )}
       <div className="border-t pt-2 flex justify-between text-sm font-semibold">
         <span>Summa underlag</span>
-        <span className="font-mono">{formatCurrency(timeTotal + expenseTotal)}</span>
+        <Money ore={timeTotal + expenseTotal} basis="gross" className="font-mono" />
       </div>
     </div>
   );
@@ -551,7 +551,7 @@ function AccontoDeductions({ deductions }: { deductions: AccontoDeductionRow[] }
                   Acconto {new Date(d.accontoInvoice.invoiceDate).toLocaleDateString("sv-SE")}
                 </EntityLink>
               </td>
-              <td className="py-2 text-right font-mono">−{formatCurrency(d.accontoInvoice.amount)}</td>
+              <td className="py-2 text-right">−<Money ore={d.accontoInvoice.amount} basis="gross" className="font-mono" /></td>
             </tr>
           ))}
         </tbody>

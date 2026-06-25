@@ -2,10 +2,10 @@
 
 import { ArrowLeft, Ban, Wallet } from "lucide-react";
 import Link from "next/link";
+import { Money } from "@/components/ui/money";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { useRouteId } from "@/lib/client/demo/use-route-id";
 import { trpc } from "@/lib/client/trpc";
-import { formatCurrency } from "@/lib/client/utils";
 import { computeInvoiceLedger } from "@/lib/shared/write-off-calc";
 
 const STATUS_LABEL: Record<string, string> = {
@@ -105,7 +105,7 @@ function PlanSummaryCard({ p, onCancel, cancelling }: { p: PlanDetail; onCancel:
     <div className="bg-white border border-gray-200 rounded-lg p-5 mb-6">
       <dl className="grid grid-cols-2 gap-y-3 text-sm">
         <dt className="text-gray-500">Månadsbelopp</dt>
-        <dd className="font-mono text-gray-900">{formatCurrency(p.monthlyAmount)}</dd>
+        <dd className="font-mono text-gray-900"><Money ore={p.monthlyAmount} basis="gross" /></dd>
         <dt className="text-gray-500">Förfaller</dt>
         <dd className="text-gray-900">Den {p.dayOfMonth}:e varje månad</dd>
         <dt className="text-gray-500">Startdatum</dt>
@@ -120,7 +120,7 @@ function PlanSummaryCard({ p, onCancel, cancelling }: { p: PlanDetail; onCancel:
             <span>—</span>
           )}
           {" · "}
-          <span className="font-mono">{p.invoice ? formatCurrency(p.invoice.amount) : ""}</span>
+          <span className="font-mono">{p.invoice ? <Money ore={p.invoice.amount} basis="gross" /> : ""}</span>
         </dd>
         {p.notes && (
           <>
@@ -167,7 +167,7 @@ function PaymentsSection({ invoice }: { invoice: PlanDetail["invoice"] }) {
                   {new Date(pay.paidAt).toLocaleDateString("sv-SE")}
                   {pay.note && <span className="ml-2 text-xs text-gray-500">{pay.note}</span>}
                 </span>
-                <span className="font-mono text-gray-900">{formatCurrency(pay.amount)}</span>
+                <Money ore={pay.amount} basis="gross" className="font-mono text-gray-900" />
               </li>
             ))}
           </ul>
@@ -175,11 +175,13 @@ function PaymentsSection({ invoice }: { invoice: PlanDetail["invoice"] }) {
             <span>{payments.length} st inbetalningar</span>
             <span>
               Totalt betalt:{" "}
-              <span className="font-mono text-gray-900">
-                {formatCurrency(payments.reduce((s, x) => s + x.amount, 0))}
-              </span>
+              <Money
+                ore={payments.reduce((s, x) => s + x.amount, 0)}
+                basis="gross"
+                className="font-mono text-gray-900"
+              />
               {" av "}
-              <span className="font-mono">{invoice ? formatCurrency(invoice.amount) : ""}</span>
+              <span className="font-mono">{invoice ? <Money ore={invoice.amount} basis="gross" /> : ""}</span>
             </span>
           </div>
           {invoice && <OutstandingRow invoice={invoice} payments={payments} />}
@@ -197,7 +199,7 @@ function OutstandingRow({ invoice, payments }: { invoice: PlanInvoice; payments:
   return (
     <div className="mt-1 text-xs flex justify-end gap-1">
       <span className="text-gray-500">Utestående:</span>
-      <span className="font-mono font-semibold text-gray-900">{formatCurrency(outstanding)}</span>
+      <Money ore={outstanding} basis="gross" className="font-mono font-semibold text-gray-900" />
     </div>
   );
 }

@@ -16,6 +16,7 @@ import { ExternalEditRegistrar } from "@/components/documents/external-edit-regi
 import { trpc } from "@/lib/client/trpc";
 import { DemoModeBanner } from "./demo-mode-banner";
 import { Sidebar } from "./sidebar";
+import { VatModeIndicator } from "./vat-mode-indicator";
 
 /**
  * Routes som ska renderas utan sidebar (deras egen layout tar över).
@@ -36,6 +37,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <ExternalEditRegistrar />
       <DemoModeBanner />
       <ExternalEditIndicator />
+      <VatModeIndicator />
       <div className="flex flex-1 min-h-0">
         <Sidebar userName={current.data?.name ?? null} />
         <main className="flex-1 overflow-y-auto pt-16 lg:pt-0 p-4 sm:p-6 lg:p-8 min-w-0">

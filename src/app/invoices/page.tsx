@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { DataTable, type Column } from "@/components/ui/data-table";
+import { Money } from "@/components/ui/money";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
-import { formatCurrency } from "@/lib/client/utils";
 import type { InvoiceStatus, InvoiceType } from "@/lib/shared/schemas/enums";
 import { SieExportButton } from "./_sie-export-button";
 
@@ -78,8 +78,8 @@ const invoiceColumns: Column<InvoiceRow>[] = [
     ),
   },
   { key: "amount", label: "Belopp", sortable: true, align: "right", sortValue: (i) => i.amount,
-    summary: (rows) => <span className="font-mono">{formatCurrency(rows.reduce((s, r) => s + r.amount, 0))}</span>,
-    render: (i) => <span className="font-mono">{formatCurrency(i.amount)}</span> },
+    summary: (rows) => <Money ore={rows.reduce((s, r) => s + r.amount, 0)} basis="gross" className="font-mono" />,
+    render: (i) => <Money ore={i.amount} basis="gross" className="font-mono" /> },
 ];
 
 export default function InvoicesPage() {
