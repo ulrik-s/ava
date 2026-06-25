@@ -13,6 +13,7 @@
  */
 import type { inferRouterOutputs } from "@trpc/server";
 import { useState } from "react";
+import { Money } from "@/components/ui/money";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { hasGeneratedDoc, openGeneratedDoc } from "@/lib/client/demo/generated-doc-cache";
 import { useMatterInvariants } from "@/lib/client/diagnostics/use-matter-invariants";
@@ -98,7 +99,7 @@ function PendingVerdictBanner({ matterId, run, onClick }: { matterId: MatterId; 
     <div className="mx-6 my-3 rounded border border-amber-300 bg-amber-50 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
       <div className="text-sm text-amber-900 space-y-1">
         <div>
-          <strong>Kostnadsräkning väntar på dom</strong> — <span className="font-mono font-semibold">{formatCurrency(run.amountOre)}</span> föreslaget belopp
+          <strong>Kostnadsräkning väntar på dom</strong> — <Money ore={run.amountOre} basis="gross" className="font-mono font-semibold" /> föreslaget belopp
         </div>
         {doc && (
           <div className="text-xs text-amber-800">
@@ -362,7 +363,7 @@ function Card({ label, value, dim }: { label: string; value: number; dim?: boole
   return (
     <div className={`rounded-lg border ${dim ? "border-amber-200 bg-amber-50" : "border-gray-200 bg-gray-50"} px-3 py-2`}>
       <div className="text-[10px] uppercase text-gray-500">{label}</div>
-      <div className="font-mono font-semibold text-sm">{formatCurrency(value)}</div>
+      <Money ore={value} basis="gross" className="font-mono font-semibold text-sm" />
     </div>
   );
 }
@@ -421,7 +422,7 @@ function RunsList({ rows, loading }: { rows: BillingRunRow[]; loading: boolean }
               <td className="py-2 text-sm">{BILLING_RUN_TYPE_LABELS[r.type as keyof typeof BILLING_RUN_TYPE_LABELS] ?? r.type}</td>
               <td className="text-sm text-gray-600">{r.recipient}</td>
               <td className="text-sm">{BILLING_RUN_STATUS_LABELS[r.status as keyof typeof BILLING_RUN_STATUS_LABELS] ?? r.status}</td>
-              <td className="text-right text-sm font-mono">{formatCurrency(r.amountOre)}</td>
+              <td className="text-right text-sm font-mono"><Money ore={r.amountOre} basis="gross" /></td>
               <td className="text-right">
                 {r.invoiceId && (
                   // EntityLink (inte Next-Link) — runtime-skapade UUIDs finns

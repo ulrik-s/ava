@@ -9,9 +9,9 @@ import { Wallet, Search, BellRing } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { DataTable, type Column } from "@/components/ui/data-table";
+import { Money } from "@/components/ui/money";
 import { shellPath } from "@/lib/client/demo/entity-href";
 import { trpc } from "@/lib/client/trpc";
-import { formatCurrency } from "@/lib/client/utils";
 import { computeInvoiceLedger } from "@/lib/shared/write-off-calc";
 
 type Status = "ACTIVE" | "COMPLETED" | "CANCELLED";
@@ -91,16 +91,16 @@ const planColumns: Column<PlanRow>[] = [
   },
   { key: "monthlyAmount", label: "Per månad", sortable: true, align: "right",
     sortValue: (p) => p.monthlyAmount,
-    render: (p) => <span className="font-mono text-sm">{formatCurrency(p.monthlyAmount)}</span> },
+    render: (p) => <Money ore={p.monthlyAmount} basis="gross" className="font-mono text-sm" /> },
   { key: "paid", label: "Inbetalt", sortable: true, align: "right",
     sortValue: (p) => paidOf(p),
-    render: (p) => <span className="font-mono text-sm">{formatCurrency(paidOf(p))}</span> },
+    render: (p) => <Money ore={paidOf(p)} basis="gross" className="font-mono text-sm" /> },
   { key: "total", label: "Totalt", sortable: true, align: "right",
     sortValue: (p) => totalOf(p),
-    render: (p) => <span className="font-mono text-sm">{formatCurrency(totalOf(p))}</span> },
+    render: (p) => <Money ore={totalOf(p)} basis="gross" className="font-mono text-sm" /> },
   { key: "outstanding", label: "Utestående", sortable: true, align: "right",
     sortValue: (p) => outstandingOf(p),
-    render: (p) => <span className="font-mono text-sm">{formatCurrency(outstandingOf(p))}</span> },
+    render: (p) => <Money ore={outstandingOf(p)} basis="gross" className="font-mono text-sm" /> },
   { key: "pct", label: "Andel", sortable: true, align: "right",
     sortValue: (p) => totalOf(p) > 0 ? paidOf(p) / totalOf(p) : 0,
     render: (p) => {

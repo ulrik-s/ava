@@ -9,8 +9,8 @@
  */
 
 import { useId, useState } from "react";
+import { Money } from "@/components/ui/money";
 import { trpc } from "@/lib/client/trpc";
-import { formatCurrency } from "@/lib/client/utils";
 import type { MatterId } from "@/lib/shared/schemas/ids";
 
 interface Receivable {
@@ -92,9 +92,9 @@ function ReceivableRow({ r, onChanged }: { r: Receivable; onChanged: () => void 
         <span className="text-xs rounded-full bg-gray-100 text-gray-600 px-2 py-0.5">{STATUS_LABEL[r.status] ?? r.status}</span>
       </div>
       <div className="text-xs text-gray-500 mt-0.5">
-        Begärt: <span className="font-mono">{formatCurrency(r.expectedAmount)}</span>
+        Begärt: <Money ore={r.expectedAmount} basis="gross" className="font-mono" />
         {r.status === "SETTLED" && r.settledAmount != null && (
-          <> · Mottaget: <span className="font-mono text-green-700">{formatCurrency(r.settledAmount)}</span></>
+          <> · Mottaget: <Money ore={r.settledAmount} basis="gross" className="font-mono text-green-700" /></>
         )}
       </div>
       {r.status === "PENDING" && (

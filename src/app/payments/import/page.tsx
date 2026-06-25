@@ -11,9 +11,9 @@
  */
 
 import { useMemo, useState } from "react";
+import { Money } from "@/components/ui/money";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
-import { formatCurrency } from "@/lib/client/utils";
 import { parseCamtXml, type CamtFile } from "@/lib/shared/payments/camt-parse";
 import {
   matchTransactions,
@@ -179,7 +179,7 @@ function ReceivableSuggestions({
             <tr key={s.reference}>
               <td className="py-2">{labels[s.receivableId] ?? s.receivableId}</td>
               <td className="py-2 text-xs text-gray-500 font-mono">{s.matchedText}</td>
-              <td className="py-2 text-right font-mono">{formatCurrency(s.amountOre)}</td>
+              <td className="py-2 text-right font-mono"><Money ore={s.amountOre} basis="gross" /></td>
               <td className="py-2 text-right">
                 <button
                   onClick={() => onSettle(s)}
@@ -251,7 +251,7 @@ function ImportPreview({ outcome, labels, busy, onBook }: { outcome: MatchOutcom
         )}
         {outcome.bookable.length > 0 && (
           <div className="mt-4 flex items-center justify-between">
-            <span className="text-sm text-gray-600">Summa: <span className="font-mono font-medium">{formatCurrency(sum)}</span></span>
+            <span className="text-sm text-gray-600">Summa: <Money ore={sum} basis="gross" className="font-mono font-medium" /></span>
             <button
               type="button"
               disabled={busy}
@@ -274,7 +274,7 @@ function ImportPreview({ outcome, labels, busy, onBook }: { outcome: MatchOutcom
                   <span className="ml-2 text-xs text-gray-400">{u.tx.freeTexts.join(" · ") || u.tx.structuredRefs.map((r) => r.ref).join(" · ")}</span>
                 </span>
                 <span className="flex items-center gap-3">
-                  <span className="font-mono">{formatCurrency(u.tx.amountOre)}</span>
+                  <Money ore={u.tx.amountOre} basis="gross" className="font-mono" />
                   <span className="text-xs rounded-full px-2 py-0.5 bg-amber-100 text-amber-700">{REASON_LABEL[u.reason] ?? u.reason}</span>
                 </span>
               </li>
@@ -299,7 +299,7 @@ function BookableRow({ b, label }: { b: BookablePayment; label: string }) {
       </td>
       <td className="py-1.5 text-gray-600">{b.tx.debtorName ?? "—"}</td>
       <td className="py-1.5 font-mono text-xs text-gray-500">{b.tx.valueDate ?? "—"}</td>
-      <td className="py-1.5 text-right font-mono">{formatCurrency(b.amountOre)}</td>
+      <td className="py-1.5 text-right font-mono"><Money ore={b.amountOre} basis="gross" /></td>
     </tr>
   );
 }

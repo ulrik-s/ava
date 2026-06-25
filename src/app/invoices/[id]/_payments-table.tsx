@@ -1,6 +1,6 @@
 "use client";
 
-import { formatCurrency } from "@/lib/client/utils";
+import { Money } from "@/components/ui/money";
 
 interface Payment {
   id: string;
@@ -37,12 +37,12 @@ export function PaymentsTable({ payments, paidSum }: Props) {
                 <td className="py-2">{new Date(p.paidAt).toLocaleDateString("sv-SE")}</td>
                 <td className="py-2 text-gray-600">{p.recordedBy?.name ?? "—"}</td>
                 <td className="py-2 text-gray-600">{p.note ?? "—"}</td>
-                <td className="py-2 text-right font-mono">{formatCurrency(p.amount)}</td>
+                <td className="py-2 text-right"><Money ore={p.amount} basis="gross" className="font-mono" /></td>
               </tr>
             ))}
             <tr className="font-medium">
               <td colSpan={3} className="pt-3">Totalt betalat</td>
-              <td className="pt-3 text-right font-mono">{formatCurrency(paidSum)}</td>
+              <td className="pt-3 text-right"><Money ore={paidSum} basis="gross" className="font-mono" /></td>
             </tr>
           </tbody>
         </table>
