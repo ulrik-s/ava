@@ -379,8 +379,9 @@ function buildTimeEntries(orgId: string, users: UserSeed[]): SeedDataset["timeEn
 function buildExpenses(orgId: string, users: UserSeed[]): SeedDataset["expenses"] {
   const out: SeedDataset["expenses"] = [];
   // expenses
-  // Moms-modellen följer Skatteverket: persontransporter + restaurang 12 %,
-  // myndighetsavgifter 0 %, övrigt 25 %. Kvitto-beloppet är inkl moms.
+  // Moms-modellen följer Skatteverket: persontransporter 6 %, restaurang 12 %,
+  // myndighetsavgifter 0 %, övrigt 25 %. `amount` nedan är kvitto-beloppet inkl
+  // moms — lagras dock NETTO (exkl moms) per #782; AVA lägger på momsen.
   const cats: Array<{ amount: number; description: string; vatRate: number }> = [
     { amount: 12500, description: "Domstolsavgift", vatRate: 0 },         // momsfritt
     { amount: 4500, description: "Tåg Stockholm-Göteborg", vatRate: 600 }, // 6 % persontransport
@@ -401,12 +402,14 @@ function buildExpenses(orgId: string, users: UserSeed[]): SeedDataset["expenses"
       const cat = cats[exSeq % cats.length];
       if (!user || !cat) continue;
       const daysAgo = (exSeq * 3) + 2;
+      // Lagra netto: härled exkl-moms ur kvittots inkl-belopp (#782).
+      const netAmount = cat.vatRate === 0 ? cat.amount : Math.round((cat.amount * 10000) / (10000 + cat.vatRate));
       out.push({
         id: `ex-${String(exSeq).padStart(3, "0")}`,
         organizationId: orgId,
         userId: user.id, matterId: matter.id, date: isoDate(-daysAgo, 12),
-        amount: cat.amount, description: cat.description,
-        vatRate: cat.vatRate, vatIncluded: true,
+        amount: netAmount, description: cat.description,
+        vatRate: cat.vatRate, vatIncluded: false,
         billable: true, invoiceId: null,
         createdAt: isoDate(-daysAgo, 12), updatedAt: isoDate(-daysAgo, 12),
       });

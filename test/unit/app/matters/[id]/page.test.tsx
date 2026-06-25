@@ -367,7 +367,7 @@ describe("MatterDetailPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /^Spara$/i }));
     expect(stubs.createExpense.mutate).toHaveBeenCalled();
     const arg = stubs.createExpense.mutate.mock.calls[0]![0];
-    expect(arg.amount).toBe(18750); // 150 kr exkl. @ 25 % → lagras brutto 187,50 kr (#781)
+    expect(arg.amount).toBe(15000); // 150 kr exkl. → lagras netto 150 kr (#782)
     expect(arg.description).toBe("Domstolsavgift");
   });
 

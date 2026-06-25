@@ -178,7 +178,8 @@ export const expenses = pgTable("expenses", {
   billable: boolDefault("billable", true),
   invoiceId: uuid("invoice_id").$type<InvoiceId>(),
   vatRate: integer("vat_rate").notNull().default(2500),
-  vatIncluded: boolDefault("vat_included", true),
+  // Utlägg lagras netto (exkl moms) — AVA lägger på momsen (#782).
+  vatIncluded: boolDefault("vat_included", false),
   kind: text("kind").notNull().default("EXPENSE").$type<ExpenseKind>(),
   frozenAt: timestamp("frozen_at", { withTimezone: true }),
   frozenByBillingRunId: uuid("frozen_by_billing_run_id").$type<BillingRunId>(),

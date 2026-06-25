@@ -10,6 +10,7 @@
  */
 
 import { Temporal } from "@js-temporal/polyfill";
+import { splitVat } from "./vat";
 
 export interface TimeEntryForInvoice {
   minutes: number;
@@ -17,8 +18,12 @@ export interface TimeEntryForInvoice {
 }
 
 export interface ExpenseForInvoice {
-  amount: number; // öre
+  amount: number; // öre (netto om vatIncluded=false, annars brutto)
   billable: boolean;
+  /** Moms-sats i bips. Default 25 %. */
+  vatRate?: number;
+  /** Är `amount` redan inkl moms? Default true (bakåtkompat; netto-rader sätter false). */
+  vatIncluded?: boolean;
 }
 
 export interface AccontoForDeduction {
@@ -72,8 +77,8 @@ export function computeFinalInvoiceBreakdown(
   );
   const expenseTotal = expenses
     .filter((e) => e.billable)
-    .reduce((sum, e) => sum + e.amount, 0);
-  // Arvodet (timmar × timpris) är exkl. moms → lägg på 25 % (#782); utlägg är brutto.
+    .reduce((sum, e) => sum + splitVat({ amount: e.amount, vatRate: e.vatRate ?? 2500, vatIncluded: e.vatIncluded ?? true }).inclVat, 0);
+  // Arvodet (timmar × timpris) är exkl. moms → lägg på 25 % (#782); utlägg är brutto (inkl moms).
   const arvodeInclVat = arvodeInclVatOre(timeTotal);
   const arvodeVatOre = arvodeInclVat - timeTotal;
   const grossAmount = arvodeInclVat + expenseTotal;

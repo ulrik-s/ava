@@ -18,6 +18,7 @@ import { arvodeInclVatOre } from "@/lib/shared/invoice-calc";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { computeMatterSettlement, computeRadgivningsavgift, type MatterSettlement } from "@/lib/shared/rattshjalp";
 import { asId } from "@/lib/shared/schemas/ids";
+import { splitVat } from "@/lib/shared/vat";
 import { computeInvoiceLedger } from "@/lib/shared/write-off-calc";
 import { CreditModal } from "./_credit-modal";
 import { DispatchHistory } from "./_dispatch-history";
@@ -484,8 +485,11 @@ function InvoiceDocumentsCard({ documents }: { documents: InvoiceDocRow[] }) {
 function SpecificationCard({ timeEntries, expenses }: { timeEntries: SpecTimeRow[]; expenses: SpecExpenseRow[] }) {
   if (timeEntries.length === 0 && expenses.length === 0) return null;
   const lineFor = (t: SpecTimeRow) => Math.round((t.minutes / 60) * (t.hourlyRate ?? 0));
+  // Utlägg lagras netto (#782) → räkna fram brutto (inkl moms) för det fakturerade.
+  const expenseInclOf = (e: SpecExpenseRow) =>
+    splitVat({ amount: e.amount, vatRate: e.vatRate ?? 2500, vatIncluded: e.vatIncluded ?? false }).inclVat;
   const timeTotal = timeEntries.reduce((s, t) => s + lineFor(t), 0);
-  const expenseTotal = expenses.reduce((s, e) => s + e.amount, 0);
+  const expenseTotal = expenses.reduce((s, e) => s + expenseInclOf(e), 0);
   // Arvode lagras exkl. moms; alla fakturor lägger på 25 % moms på arvodet (#782).
   const arvodeMomsOre = arvodeInclVatOre(timeTotal) - timeTotal;
   const summaUnderlag = arvodeInclVatOre(timeTotal) + expenseTotal;
@@ -532,7 +536,7 @@ function SpecificationCard({ timeEntries, expenses }: { timeEntries: SpecTimeRow
                 <tr key={e.id}>
                   <td className="py-1.5 whitespace-nowrap">{new Date(e.date).toLocaleDateString("sv-SE")}</td>
                   <td className="py-1.5">{e.description}</td>
-                  <td className="py-1.5 text-right"><Money ore={e.amount} basis="gross" className="font-mono" /></td>
+                  <td className="py-1.5 text-right"><Money ore={expenseInclOf(e)} basis="gross" className="font-mono" /></td>
                 </tr>
               ))}
             </tbody>
