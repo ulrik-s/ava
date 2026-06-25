@@ -56,9 +56,9 @@ describe("invoicesToSie", () => {
     expect(sie).toContain("   #TRANS 1510 {} -125.00");
   });
 
-  it("DEFAULT_BAS_ACCOUNT_MAP täcker alla fyra roller", () => {
+  it("DEFAULT_BAS_ACCOUNT_MAP täcker alla roller inkl. per-sats moms (#790)", () => {
     expect(Object.keys(DEFAULT_BAS_ACCOUNT_MAP).sort()).toEqual(
-      ["intaktArvode", "intaktUtlagg", "kundfordran", "momsUtgaende"].sort(),
+      ["intaktArvode", "intaktUtlagg", "kundfordran", "momsUtgaende", "momsUtgaende06", "momsUtgaende12"].sort(),
     );
   });
 });

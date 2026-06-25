@@ -47,6 +47,26 @@ describe("buildSemanticVoucher", () => {
     expect(sum(v.rows, "debit")).toBe(10_600);
   });
 
+  it("per-sats breakdown (#790): moms bokförs per sats + intäkt delas arvode/utlägg", () => {
+    // Arvode 10 000 + 25 % = 2500 moms; utlägg 1000 @ 6 % = 60 moms.
+    const v = buildSemanticVoucher({
+      amount: 13_560,
+      vatBreakdown: [
+        { kind: "arvode", vatRate: 2500, netOre: 10_000, vatOre: 2_500 },
+        { kind: "utlagg", vatRate: 600, netOre: 1_000, vatOre: 60 },
+      ],
+      invoiceDate: "2026-05-25",
+      invoiceNumber: "F-2026-0060",
+    });
+    expect(byRole(v.rows, "kundfordran")).toEqual({ role: "kundfordran", debit: 13_560, credit: 0 });
+    expect(byRole(v.rows, "intaktArvode")).toEqual({ role: "intaktArvode", debit: 0, credit: 10_000 });
+    expect(byRole(v.rows, "intaktUtlagg")).toEqual({ role: "intaktUtlagg", debit: 0, credit: 1_000 });
+    expect(byRole(v.rows, "momsUtgaende")).toEqual({ role: "momsUtgaende", debit: 0, credit: 2_500 });
+    expect(byRole(v.rows, "momsUtgaende06")).toEqual({ role: "momsUtgaende06", debit: 0, credit: 60 });
+    expect(sum(v.rows, "debit")).toBe(sum(v.rows, "credit"));
+    expect(sum(v.rows, "debit")).toBe(13_560);
+  });
+
   it("vatOre = 0 (momsfritt) → ingen moms-rad, balanserat", () => {
     const v = buildSemanticVoucher({ amount: 12_500, vatOre: 0, invoiceDate: "2026-05-25" });
     expect(v.rows.find((r) => r.role === "momsUtgaende")).toBeUndefined();

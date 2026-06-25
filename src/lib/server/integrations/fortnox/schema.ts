@@ -86,6 +86,9 @@ export const fortnoxKontoMappningSchema = z.object({
   intaktArvode: z.string().min(1),
   /** Utgående moms 25 % (kredit), t.ex. 2611. */
   momsUtgaende: z.string().min(1),
+  /** Utgående moms 12 % resp. 6 % (kredit) — vidarefakturerade utlägg (#790), valfria. */
+  momsUtgaende12: z.string().min(1).optional(),
+  momsUtgaende06: z.string().min(1).optional(),
   /** Intäktskonto för vidarefakturerade utlägg (kredit), valfritt. */
   intaktUtlagg: z.string().min(1).optional(),
 });
@@ -108,6 +111,8 @@ export function fortnoxMappingFromLedgerMap(
     kundfordran: map.kundfordran.number,
     intaktArvode: map.intaktArvode.number,
     momsUtgaende: map.momsUtgaende.number,
+    ...(map.momsUtgaende12 ? { momsUtgaende12: map.momsUtgaende12.number } : {}),
+    ...(map.momsUtgaende06 ? { momsUtgaende06: map.momsUtgaende06.number } : {}),
     ...(map.intaktUtlagg ? { intaktUtlagg: map.intaktUtlagg.number } : {}),
   });
 }

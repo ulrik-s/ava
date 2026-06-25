@@ -16,6 +16,7 @@
  */
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import type { VatBreakdownLine } from "@/lib/shared/accounting/semantic-voucher";
 import { proposedAccontoOre } from "@/lib/shared/billing-proposal";
 import { arvodeInclVatOre } from "@/lib/shared/invoice-calc";
 import { ocrFromInvoiceNumber } from "@/lib/shared/ocr-reference";
@@ -124,6 +125,27 @@ function invoiceVatOre(work: UnfrozenWork): number {
   const arvodeVat = arvodeInclVatOre(arvodeNet) - arvodeNet;
   const expenseVat = work.expenses.filter((e) => e.billable).reduce((sum, e) => sum + expenseSplit(e).vat, 0);
   return arvodeVat + expenseVat;
+}
+
+/** Fakturans moms-uppdelning per sats (#790): en arvode-rad (25 %) + en utläggs-
+ *  rad per förekommande momssats. Driver per-sats bokföring i verifikat/SIE. */
+function invoiceVatBreakdown(work: UnfrozenWork): VatBreakdownLine[] {
+  const lines: VatBreakdownLine[] = [];
+  const arvodeNet = arvodeNetOre(work);
+  if (arvodeNet > 0) {
+    lines.push({ kind: "arvode", vatRate: DEFAULT_VAT_RATE, netOre: arvodeNet, vatOre: arvodeInclVatOre(arvodeNet) - arvodeNet });
+  }
+  const byRate = new Map<number, { netOre: number; vatOre: number }>();
+  for (const e of work.expenses.filter((x) => x.billable)) {
+    const rate = e.vatRate ?? DEFAULT_VAT_RATE;
+    const s = expenseSplit(e);
+    const acc = byRate.get(rate) ?? { netOre: 0, vatOre: 0 };
+    byRate.set(rate, { netOre: acc.netOre + s.exclVat, vatOre: acc.vatOre + s.vat });
+  }
+  for (const [vatRate, { netOre, vatOre }] of byRate) {
+    lines.push({ kind: "utlagg", vatRate, netOre, vatOre });
+  }
+  return lines;
 }
 
 /** Bygg ett itemiserat fakturaförslag ur ofrysta tids-/utläggsrader (#397). */
@@ -314,9 +336,11 @@ export const billingRunRouter = router({
         const priorAccontoSumOre = await sumPriorAccontos(tx, input.matterId);
         const proposedOre = proposedAccontoOre(value, input.clientShareBips, priorAccontoSumOre);
         // Acconto är ett brutto-förskott på arvode (25 % moms ingår, #782).
-        const accontoVatOre = input.amountOre - splitVat({ amount: input.amountOre, vatRate: DEFAULT_VAT_RATE, vatIncluded: true }).exclVat;
+        const accontoNetOre = splitVat({ amount: input.amountOre, vatRate: DEFAULT_VAT_RATE, vatIncluded: true }).exclVat;
+        const accontoVatOre = input.amountOre - accontoNetOre;
         const invoice = await tx.invoices.create({
           matterId: input.matterId, amount: input.amountOre, vatOre: accontoVatOre,
+          vatBreakdown: [{ kind: "arvode", vatRate: DEFAULT_VAT_RATE, netOre: accontoNetOre, vatOre: accontoVatOre }],
           invoiceType: "ACCONTO", status: "DRAFT",
           ...(await invoiceNumbering(tx, ctx.orgId, input.recipient)),
           ...invoiceMeta(input), notes: input.notes,
@@ -358,6 +382,7 @@ export const billingRunRouter = router({
         const finalAmount = Math.max(0, grossValue - deductionOre);
         const invoice = await tx.invoices.create({
           matterId: input.matterId, amount: finalAmount, vatOre: invoiceVatOre(work),
+          vatBreakdown: invoiceVatBreakdown(work),
           invoiceType: "FINAL", status: "DRAFT",
           ...(await invoiceNumbering(tx, ctx.orgId, input.recipient)),
           ...invoiceMeta(input), notes: input.notes,
