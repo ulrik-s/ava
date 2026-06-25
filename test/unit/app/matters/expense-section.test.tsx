@@ -96,18 +96,20 @@ describe("ExpenseSection", () => {
     fireEvent.change(dateInput, { target: { value: "2026-03-15" } });
     fireEvent.change(screen.getByPlaceholderText("0,00"), { target: { value: "150" } });
     fireEvent.change(screen.getByPlaceholderText("Beskrivning *"), { target: { value: "Parkering" } });
-    // VatPreview-grenen (amount>0) renderar moms-uppdelningen.
-    expect(screen.getByText(/Ex:.*M:.*In:/)).toBeInTheDocument();
+    // VatPreview-grenen (amount>0) renderar moms-uppdelningen (exkl-inmatning).
+    expect(screen.getByText(/Exkl:.*moms:.*inkl:/)).toBeInTheDocument();
     fireEvent.click(screen.getByText("Spara"));
+    // Inmatat exkl. 150 kr @ 25 % → lagras brutto 187,50 kr (#781).
     expect(createMutate).toHaveBeenCalledWith(
-      expect.objectContaining({ matterId: "m1", description: "Parkering" }),
+      expect.objectContaining({ matterId: "m1", description: "Parkering", amount: 18750, vatRate: 2500, vatIncluded: true }),
     );
   });
 
-  it("växlar moms-radio (Exkl moms) + momssats-select utan att krascha", () => {
+  it("byter momssats-select + Debiterbar utan att krascha (ingen incl/excl-toggel längre)", () => {
     render(<ExpenseSection matterId={asId<"MatterId">("m1")} />);
     fireEvent.click(screen.getByText("+ Nytt utlägg"));
-    fireEvent.click(screen.getByRole("radio", { name: /Exkl moms/ }));
+    // Incl/excl-radions är borttagen — inmatning är alltid exkl. moms (#781).
+    expect(screen.queryByRole("radio")).not.toBeInTheDocument();
     fireEvent.change(screen.getByRole("combobox"), { target: { value: "1200" } });
     fireEvent.click(screen.getByRole("checkbox")); // Debiterbar av
     expect(screen.getByText("Spara")).toBeInTheDocument();

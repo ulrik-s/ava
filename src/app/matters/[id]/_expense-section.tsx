@@ -16,11 +16,11 @@ interface Props {
 
 interface ExpenseForm {
   date: string;
+  /** Belopp i kr EXKL. moms — advokaten matar in exkl., AVA lägger på momsen (#781). */
   amount: number;
   description: string;
   billable: boolean;
   vatRate: VatRate;
-  vatIncluded: boolean;
 }
 
 interface Expense {
@@ -43,18 +43,18 @@ function initialForm(): ExpenseForm {
     description: "",
     billable: true,
     vatRate: 2500,
-    vatIncluded: true,
   };
 }
 
 function toForm(e: Expense): ExpenseForm {
+  // Visa beloppet EXKL. moms i formuläret oavsett hur det lagrats.
+  const exclOre = splitVat({ amount: e.amount, vatRate: e.vatRate ?? 2500, vatIncluded: e.vatIncluded ?? true }).exclVat;
   return {
     date: new Date(e.date).toISOString().split("T")[0]!,
-    amount: e.amount / 100,
+    amount: exclOre / 100,
     description: e.description,
     billable: e.billable,
     vatRate: (e.vatRate ?? 2500) as VatRate,
-    vatIncluded: e.vatIncluded ?? true,
   };
 }
 
@@ -66,13 +66,18 @@ function payloadOf(f: ExpenseForm): {
   vatRate: VatRate;
   vatIncluded: boolean;
 } {
+  // Advokaten matar in exkl. moms; AVA lägger på momsen. Lagring hålls
+  // tillsvidare som brutto (vatIncluded=true) så billing/verifikat är
+  // oförändrade — lagringen flippas till netto i #782.
+  const netOre = Math.round(f.amount * 100);
+  const grossOre = splitVat({ amount: netOre, vatRate: f.vatRate, vatIncluded: false }).inclVat;
   return {
     date: f.date,
-    amount: Math.round(f.amount * 100),
+    amount: grossOre,
     description: f.description,
     billable: f.billable,
     vatRate: f.vatRate,
-    vatIncluded: f.vatIncluded,
+    vatIncluded: true,
   };
 }
 
@@ -251,7 +256,7 @@ function ExpenseForm({ form, setForm, submitLabel, isPending, isTaxeArende, onSu
             className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm" />
         </div>
         <div>
-          <label className="block text-xs text-gray-500 mb-1">Belopp (SEK) *</label>
+          <label className="block text-xs text-gray-500 mb-1">Belopp (SEK, exkl. moms) *</label>
           <input type="number" required min={0} step="0.01" value={form.amount || ""}
             onChange={(e) => setForm({ ...form, amount: parseFloat(e.target.value) || 0 })}
             placeholder="0,00"
@@ -265,26 +270,18 @@ function ExpenseForm({ form, setForm, submitLabel, isPending, isTaxeArende, onSu
           onChange={(e) => setForm({ ...form, description: e.target.value })}
           className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm" />
       </div>
-      <div className="grid grid-cols-2 gap-3 items-center">
+      <div>
+        <label className="block text-xs text-gray-500 mb-1">Momssats</label>
         <select value={form.vatRate}
           onChange={(e) => setForm({ ...form, vatRate: Number(e.target.value) as VatRate })}
-          className="rounded border border-gray-300 px-3 py-1.5 text-sm">
+          className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm">
           {VAT_RATES.map((r) => <option key={r} value={r}>Moms: {VAT_RATE_LABELS[r]}</option>)}
         </select>
-        <div className="flex items-center gap-3">
-          <label className="flex items-center gap-2 text-sm">
-            <input type="radio" name="vatIncl" checked={form.vatIncluded}
-              onChange={() => setForm({ ...form, vatIncluded: true })} />
-            Inkl moms
-          </label>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="radio" name="vatIncl" checked={!form.vatIncluded}
-              onChange={() => setForm({ ...form, vatIncluded: false })} />
-            Exkl moms
-          </label>
-        </div>
+        <p className="mt-1 text-[11px] text-gray-400">
+          Ange beloppet exkl. moms — AVA lägger på momsen. Default 25 %; välj 0 % för momsfritt (t.ex. domstolsavgift).
+        </p>
       </div>
-      <VatPreview amount={form.amount} vatRate={form.vatRate} vatIncluded={form.vatIncluded} />
+      <VatPreview amount={form.amount} vatRate={form.vatRate} />
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" checked={form.billable}
           onChange={(e) => setForm({ ...form, billable: e.target.checked })} />
@@ -304,12 +301,13 @@ function ExpenseForm({ form, setForm, submitLabel, isPending, isTaxeArende, onSu
   );
 }
 
-function VatPreview({ amount, vatRate, vatIncluded }: { amount: number; vatRate: number; vatIncluded: boolean }) {
+function VatPreview({ amount, vatRate }: { amount: number; vatRate: number }) {
   if (!amount) return <span className="text-xs text-gray-400">Förhandsvisning</span>;
-  const r = splitVat({ amount: Math.round(amount * 100), vatRate, vatIncluded });
+  // Inmatat belopp är exkl. moms → räkna fram moms + inkl.
+  const r = splitVat({ amount: Math.round(amount * 100), vatRate, vatIncluded: false });
   return (
     <span className="text-xs text-gray-600 font-mono">
-      Ex: {formatCurrency(r.exclVat)} · M: {formatCurrency(r.vat)} · In: {formatCurrency(r.inclVat)}
+      Exkl: {formatCurrency(r.exclVat)} · moms: {formatCurrency(r.vat)} · inkl: {formatCurrency(r.inclVat)}
     </span>
   );
 }
