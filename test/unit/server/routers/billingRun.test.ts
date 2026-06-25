@@ -100,7 +100,7 @@ describe("billingRun.createFinal", () => {
       matterId: "m-1", recipient: "KLIENT",
     });
     expect(res.run.type).toBe("FINAL");
-    expect(res.run.amountOre).toBe(250000 + 12500); // 1h × 2500 + 125 = 2625 kr
+    expect(res.run.amountOre).toBe(312500 + 12500); // 1h × 2500 + 25 % moms + 125 utlägg (#782)
     const te = await ds.timeEntries.findFirst({ where: { id: "te-1" } }) as { frozenAt?: Date | null; frozenByBillingRunId?: string | null };
     expect(te.frozenAt).toBeInstanceOf(Date);
     expect(te.frozenByBillingRunId).toBe(res.run.id);
@@ -136,14 +136,14 @@ describe("billingRun.createFinal", () => {
     const nb = await ds.timeEntries.findFirst({ where: { id: "te-nb" } }) as { invoiceId?: string | null; frozenAt?: Date | null };
     expect(nb.invoiceId).toBeFalsy(); // ej fakturerad
     expect(nb.frozenAt).toBeInstanceOf(Date); // men ändå fryst (med i körningen)
-    expect(res.run.amountOre).toBe(250000); // bara debiterbar tid räknas
+    expect(res.run.amountOre).toBe(312500); // bara debiterbar tid räknas (arvode inkl 25 % moms, #782)
   });
 
   it("per-post-val: fakturerar ENBART valda poster, lämnar resten ofryst (#734)", async () => {
     const { ds, caller } = makeCaller({ workMinutes: 60, expenseOre: 5000 }); // te-1 (2500kr) + ex-1 (50kr)
     await ds.timeEntries.create({ data: { id: asId<"TimeEntryId">("te-2"), organizationId: "org-1", userId: asId<"UserId">("u-1"), matterId: asId<"MatterId">("m-1"), date: new Date(), minutes: 60, description: "B", hourlyRate: 250000, billable: true } });
     const res = await caller.billingRun.createFinal({ matterId: "m-1", recipient: "KLIENT", timeEntryIds: ["te-1"], expenseIds: [] });
-    expect(res.invoice.amount).toBe(250000); // bara te-1, inget utlägg
+    expect(res.invoice.amount).toBe(312500); // bara te-1 (arvode inkl 25 % moms), inget utlägg
     const t1 = await ds.timeEntries.findFirst({ where: { id: "te-1" } }) as { invoiceId?: string | null; frozenAt?: Date | null };
     const t2 = await ds.timeEntries.findFirst({ where: { id: "te-2" } }) as { invoiceId?: string | null; frozenAt?: Date | null };
     const e1 = await ds.expenses.findFirst({ where: { id: "ex-1" } }) as { frozenAt?: Date | null };
@@ -164,7 +164,7 @@ describe("billingRun.createFinal", () => {
   it("utan per-post-val → fakturerar allt ofryst (default oförändrat)", async () => {
     const { ds, caller } = makeCaller({ workMinutes: 60, expenseOre: 5000 });
     const res = await caller.billingRun.createFinal({ matterId: "m-1", recipient: "KLIENT" });
-    expect(res.invoice.amount).toBe(250000 + 5000);
+    expect(res.invoice.amount).toBe(312500 + 5000); // arvode inkl 25 % moms + utlägg (#782)
     const t1 = await ds.timeEntries.findFirst({ where: { id: "te-1" } }) as { frozenAt?: Date | null };
     expect(t1.frozenAt).toBeInstanceOf(Date);
   });
@@ -178,8 +178,8 @@ describe("billingRun.createFinal", () => {
       matterId: "m-1", recipient: "FORSAKRING",
       deductedBillingRunIds: [acc.run.id],
     });
-    // 500000 - 100000 = 400000
-    expect(fin.run.amountOre).toBe(400000);
+    // arvode 5000 kr + 25 % moms = 625000 öre, − acconto 100000 = 525000 (#782)
+    expect(fin.run.amountOre).toBe(525000);
     expect(fin.run.deductedBillingRunIds).toEqual([acc.run.id]);
     // Acconto-avdraget materialiseras så slutfaktura-vyns "att betala" stämmer.
     const ded = await ds.accontoDeductions.findFirst({ where: { finalInvoiceId: fin.invoice.id } }) as { accontoInvoiceId?: string } | null;
@@ -202,7 +202,7 @@ describe("billingRun.createKostnadsrakning", () => {
     expect(res.run.type).toBe("KOSTNADSRAKNING");
     expect(res.run.status).toBe("PENDING_VERDICT");
     expect(res.run.invoiceId).toBeFalsy();
-    expect(res.run.workValueOreAtRun).toBe(750000); // 3h × 2500 kr
+    expect(res.run.workValueOreAtRun).toBe(937500); // 3h × 2500 kr + 25 % moms (#782)
   });
 
   it("fryser INTE rader (väntar tills setVerdict)", async () => {
@@ -246,7 +246,7 @@ describe("billingRun.setVerdict", () => {
     const res = await caller.billingRun.setVerdict({
       billingRunId: kr.run.id, prutningOre: -100000,
     });
-    expect(res.invoice.amount).toBe(400000); // 500 - 100
+    expect(res.invoice.amount).toBe(525000); // arvode 5000 kr + moms = 625000, − prutning 1000 = 525000 (#782)
   });
 
   it("LÄNKAR poster + PRUTNING till fakturan → vyn reconciler mot beloppet (#732)", async () => {
@@ -259,8 +259,8 @@ describe("billingRun.setVerdict", () => {
     expect(te.invoiceId).toBe(res.invoice.id); // arvode länkad
     expect(ex.invoiceId).toBe(res.invoice.id); // utlägg länkad
     expect(prut.invoiceId).toBe(res.invoice.id); // PRUTNING länkad (reducerar totalen)
-    // Summa länkade poster = arvode 5000 + utlägg 50 − prutning 300 = invoice 4750 kr.
-    expect(res.invoice.amount).toBe(500000 + 5000 - 30000);
+    // Arvode 5000 kr + 25 % moms = 625000, + utlägg 50 kr − prutning 300 kr (#782).
+    expect(res.invoice.amount).toBe(625000 + 5000 - 30000);
   });
 
   it("DOMSTOL-faktura får inget fakturanummer (ADR 0012)", async () => {
