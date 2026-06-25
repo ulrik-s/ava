@@ -40,6 +40,8 @@ export interface FakturaDocMeta {
 export interface FakturaDocInvoice {
   id: InvoiceId;
   amount: number;
+  /** Momsbelopp (öre) i `amount`, exakt per sats (#782). Saknas → 25 %-split. */
+  vatOre?: number | null | undefined;
   invoiceNumber?: string | null | undefined;
   ocrReference?: string | null | undefined;
   invoiceDate?: string | Date | null | undefined;

@@ -32,6 +32,27 @@ describe("buildSemanticVoucher", () => {
     expect(sum(v.rows, "debit")).toBe(12_500);
   });
 
+  it("använder exakt vatOre när den finns (per-sats, #782) i st.f. 25 %-split", () => {
+    // Blandad faktura: brutto 10 600 öre med EXAKT moms 600 (t.ex. 6 %-utlägg)
+    // — 25 %-split skulle felaktigt ge 2120 moms.
+    const v = buildSemanticVoucher({
+      amount: 10_600,
+      vatOre: 600,
+      invoiceDate: "2026-05-25",
+      invoiceNumber: "F-2026-0050",
+    });
+    expect(byRole(v.rows, "momsUtgaende")).toEqual({ role: "momsUtgaende", debit: 0, credit: 600 });
+    expect(byRole(v.rows, "intaktArvode")).toEqual({ role: "intaktArvode", debit: 0, credit: 10_000 });
+    expect(sum(v.rows, "debit")).toBe(sum(v.rows, "credit"));
+    expect(sum(v.rows, "debit")).toBe(10_600);
+  });
+
+  it("vatOre = 0 (momsfritt) → ingen moms-rad, balanserat", () => {
+    const v = buildSemanticVoucher({ amount: 12_500, vatOre: 0, invoiceDate: "2026-05-25" });
+    expect(v.rows.find((r) => r.role === "momsUtgaende")).toBeUndefined();
+    expect(byRole(v.rows, "intaktArvode").credit).toBe(12_500);
+  });
+
   it("kreditfaktura (negativt belopp) vänder debet/kredit men håller balans", () => {
     const v = buildSemanticVoucher({
       amount: -12_500,

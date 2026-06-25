@@ -104,6 +104,10 @@ export const invoiceSchema = z.object({
   id: invoiceIdSchema,
   matterId: matterIdSchema,
   amount: z.number().int(),
+  /** Momsbeloppet (öre) i `amount`, exakt beräknat per momssats vid skapande
+   *  (#782). `amount` är brutto ("att betala"); netto = amount − vatOre. Nullish
+   *  på äldre fakturor → bokföring/PDF faller tillbaka på 25 %-split. */
+  vatOre: z.number().int().nullish(),
   status: invoiceStatusSchema.default("DRAFT"),
   invoiceType: invoiceTypeSchema.default("STANDARD"),
   /** Per-byrå löpande fakturanummer (F-YYYY-NNNN), genereras vid skapande.
