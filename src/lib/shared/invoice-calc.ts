@@ -26,9 +26,22 @@ export interface AccontoForDeduction {
   amount: number; // öre
 }
 
+/**
+ * Moms på arvode i basis points. Alla fakturor lägger på 25 % moms på arvodet
+ * oavsett mottagare (#782) — timpriset anges exkl. moms.
+ */
+export const ARVODE_VAT_BIPS = 2500;
+
+/** Arvode netto (exkl. moms, öre) → inkl. moms (öre). Deterministisk rundning. */
+export function arvodeInclVatOre(arvodeNetOre: number): number {
+  return arvodeNetOre + Math.round((arvodeNetOre * ARVODE_VAT_BIPS) / 10000);
+}
+
 export interface FinalInvoiceBreakdown {
-  /** Brutto: alla debiterbara timmar + utlägg före accontoavdrag. */
+  /** Brutto: arvode inkl. 25 % moms + debiterbara utlägg, före accontoavdrag (#782). */
   grossAmount: number;
+  /** Arvodets moms (öre) — del av grossAmount. */
+  arvodeVatOre: number;
   /** Summan av alla accontoavdrag (positivt tal). */
   accontoDeductionTotal: number;
   /** Nettot som klienten faktiskt ska betala: grossAmount − accontoDeductionTotal. */
@@ -60,7 +73,10 @@ export function computeFinalInvoiceBreakdown(
   const expenseTotal = expenses
     .filter((e) => e.billable)
     .reduce((sum, e) => sum + e.amount, 0);
-  const grossAmount = timeTotal + expenseTotal;
+  // Arvodet (timmar × timpris) är exkl. moms → lägg på 25 % (#782); utlägg är brutto.
+  const arvodeInclVat = arvodeInclVatOre(timeTotal);
+  const arvodeVatOre = arvodeInclVat - timeTotal;
+  const grossAmount = arvodeInclVat + expenseTotal;
 
   const deductions = accontos.map((a) => ({
     accontoInvoiceId: a.id,
@@ -75,7 +91,7 @@ export function computeFinalInvoiceBreakdown(
     );
   }
 
-  return { grossAmount, accontoDeductionTotal, netAmount, deductions };
+  return { grossAmount, arvodeVatOre, accontoDeductionTotal, netAmount, deductions };
 }
 
 /**

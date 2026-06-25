@@ -12,7 +12,9 @@ import type { DownloadClient } from "@/lib/client/backend/load-document-blob";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { useRouteId } from "@/lib/client/demo/use-route-id";
 import { trpc } from "@/lib/client/trpc";
+import { formatCurrency } from "@/lib/client/utils";
 import type { AppRouter } from "@/lib/server/routers/_app";
+import { arvodeInclVatOre } from "@/lib/shared/invoice-calc";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { computeMatterSettlement, computeRadgivningsavgift, type MatterSettlement } from "@/lib/shared/rattshjalp";
 import { asId } from "@/lib/shared/schemas/ids";
@@ -484,6 +486,9 @@ function SpecificationCard({ timeEntries, expenses }: { timeEntries: SpecTimeRow
   const lineFor = (t: SpecTimeRow) => Math.round((t.minutes / 60) * (t.hourlyRate ?? 0));
   const timeTotal = timeEntries.reduce((s, t) => s + lineFor(t), 0);
   const expenseTotal = expenses.reduce((s, e) => s + e.amount, 0);
+  // Arvode lagras exkl. moms; alla fakturor lägger på 25 % moms på arvodet (#782).
+  const arvodeMomsOre = arvodeInclVatOre(timeTotal) - timeTotal;
+  const summaUnderlag = arvodeInclVatOre(timeTotal) + expenseTotal;
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-6">
       <h2 className="font-semibold mb-3">Underlag (specifikation)</h2>
@@ -506,12 +511,16 @@ function SpecificationCard({ timeEntries, expenses }: { timeEntries: SpecTimeRow
                   <td className="py-1.5 whitespace-nowrap">{new Date(t.date).toLocaleDateString("sv-SE")}</td>
                   <td className="py-1.5">{t.description}</td>
                   <td className="py-1.5 text-right whitespace-nowrap">{(t.minutes / 60).toFixed(1)} h</td>
-                  <td className="py-1.5 text-right"><Money ore={t.hourlyRate ?? 0} basis="gross" className="font-mono" /></td>
-                  <td className="py-1.5 text-right"><Money ore={lineFor(t)} basis="gross" className="font-mono" /></td>
+                  <td className="py-1.5 text-right"><Money ore={t.hourlyRate ?? 0} basis="net" className="font-mono" /></td>
+                  <td className="py-1.5 text-right"><Money ore={lineFor(t)} basis="net" className="font-mono" /></td>
                 </tr>
               ))}
             </tbody>
           </table>
+          <div className="flex justify-between text-xs text-gray-500 mt-1">
+            <span>Moms på arvodet (25 %)</span>
+            <span className="font-mono">{formatCurrency(arvodeMomsOre)}</span>
+          </div>
         </div>
       )}
       {expenses.length > 0 && (
@@ -532,7 +541,7 @@ function SpecificationCard({ timeEntries, expenses }: { timeEntries: SpecTimeRow
       )}
       <div className="border-t pt-2 flex justify-between text-sm font-semibold">
         <span>Summa underlag</span>
-        <Money ore={timeTotal + expenseTotal} basis="gross" className="font-mono" />
+        <Money ore={summaUnderlag} basis="gross" className="font-mono" />
       </div>
     </div>
   );

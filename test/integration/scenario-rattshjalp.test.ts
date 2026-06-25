@@ -34,6 +34,7 @@ import {
   TAXA_MAX_MINUTES,
 } from "@/lib/shared/brottmalstaxa";
 import { prebakeJoins } from "@/lib/shared/demo-source";
+import { arvodeInclVatOre } from "@/lib/shared/invoice-calc";
 
 const ORG_ID = "firma-ab";
 const ADMIN_USER = {
@@ -282,9 +283,11 @@ describe("Scenario: komplext brottmål — offentlig försvarare men EJ taxemål
       (s, t) => s + Math.round((t.minutes * TIMKOSTNADSNORM_FTAX_ORE_PER_H) / 60), 0,
     );
     expect(expectedTime).toBe(8_279_050);
+    // Alla fakturor lägger på 25 % moms på arvodet (#782); utlägg 28 650 öre brutto.
     // Inget acconto-avdrag → fakturabeloppet (netto) = brutto; run bär brutto-värdet.
-    expect(r.run.workValueOreAtRun).toBe(expectedTime + 28_650);
-    expect(r.invoice.amount).toBe(expectedTime + 28_650);
+    const expectedGross = arvodeInclVatOre(expectedTime) + 28_650;
+    expect(r.run.workValueOreAtRun).toBe(expectedGross);
+    expect(r.invoice.amount).toBe(expectedGross);
     state.invoiceId = r.invoice.id;
   });
 

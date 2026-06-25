@@ -7,14 +7,15 @@ import {
 } from "@/lib/shared/invoice-calc";
 
 describe("computeFinalInvoiceBreakdown", () => {
-  it("räknar time × rate / 60 per post", () => {
+  it("räknar time × rate / 60 per post + 25 % moms på arvodet (#782)", () => {
     const r = computeFinalInvoiceBreakdown(
-      [{ minutes: 90, hourlyRate: 150_000 }], // 1,5 tim × 1500 kr = 2250 kr
+      [{ minutes: 90, hourlyRate: 150_000 }], // 1,5 tim × 1500 kr = 2250 kr exkl
       [],
       [],
     );
-    expect(r.grossAmount).toBe(225_000);
-    expect(r.netAmount).toBe(225_000);
+    expect(r.grossAmount).toBe(281_250); // 2250 kr + 25 % moms
+    expect(r.arvodeVatOre).toBe(56_250);
+    expect(r.netAmount).toBe(281_250);
   });
 
   it("utelämnar icke-debiterbara utlägg", () => {
@@ -38,9 +39,10 @@ describe("computeFinalInvoiceBreakdown", () => {
         { id: "acc2", amount: 300_000 }, // 3000 kr
       ],
     );
-    expect(r.grossAmount).toBe(1_500_000);
+    expect(r.grossAmount).toBe(1_875_000); // 15 000 kr + 25 % moms
+    expect(r.arvodeVatOre).toBe(375_000);
     expect(r.accontoDeductionTotal).toBe(800_000);
-    expect(r.netAmount).toBe(700_000);
+    expect(r.netAmount).toBe(1_075_000);
     expect(r.deductions).toHaveLength(2);
   });
 
@@ -58,6 +60,7 @@ describe("computeFinalInvoiceBreakdown", () => {
     const r = computeFinalInvoiceBreakdown([], [], []);
     expect(r).toEqual({
       grossAmount: 0,
+      arvodeVatOre: 0,
       accontoDeductionTotal: 0,
       netAmount: 0,
       deductions: [],

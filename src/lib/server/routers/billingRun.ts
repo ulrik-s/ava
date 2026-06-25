@@ -17,6 +17,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { proposedAccontoOre } from "@/lib/shared/billing-proposal";
+import { arvodeInclVatOre } from "@/lib/shared/invoice-calc";
 import { ocrFromInvoiceNumber } from "@/lib/shared/ocr-reference";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import type { BillingRun } from "@/lib/shared/schemas/billing";
@@ -80,14 +81,30 @@ async function fetchUnfrozenWork(repos: Repositories, matterId: MatterId): Promi
   return { timeEntries: te, expenses: ex.filter((e) => e.kind !== "PRUTNING") };
 }
 
-function workValueOre(work: UnfrozenWork): number {
-  const time = work.timeEntries
+/** Arvode netto (exkl. moms) — summa av debiterbara tidsposter. */
+function arvodeNetOre(work: UnfrozenWork): number {
+  return work.timeEntries
     .filter((t) => t.billable)
     .reduce((sum, t) => sum + timeEntryValueOre(t.minutes, t.hourlyRate), 0);
-  const exp = work.expenses
+}
+
+/** Debiterbara utlägg (brutto idag — netto-lagring kommer i senare #782-steg). */
+function expenseGrossOre(work: UnfrozenWork): number {
+  return work.expenses
     .filter((e) => e.billable)
     .reduce((sum, e) => sum + e.amount, 0);
-  return time + exp;
+}
+
+/** Nettovärde på arbetet: arvode (exkl moms) + utlägg. Bas för acconto-förslag
+ *  och "upparbetat ofakturerat" — INTE fakturabeloppet (se invoiceGrossOre). */
+function workValueOre(work: UnfrozenWork): number {
+  return arvodeNetOre(work) + expenseGrossOre(work);
+}
+
+/** Fakturans bruttobelopp: arvode + 25 % moms + utlägg. Alla fakturor lägger
+ *  på moms på arvodet oavsett mottagare (#782). */
+function invoiceGrossOre(work: UnfrozenWork): number {
+  return arvodeInclVatOre(arvodeNetOre(work)) + expenseGrossOre(work);
 }
 
 /** Bygg ett itemiserat fakturaförslag ur ofrysta tids-/utläggsrader (#397). */
@@ -313,10 +330,11 @@ export const billingRunRouter = router({
       return ctx.repos.transaction(async (tx) => {
         await assertMatterInOrg(tx, input.matterId, ctx.orgId);
         const { work, selected } = await resolveFinalWork(tx, input.matterId, input.timeEntryIds, input.expenseIds);
-        const value = workValueOre(work);
+        // Brutto = arvode inkl. 25 % moms + utlägg (#782).
+        const grossValue = invoiceGrossOre(work);
         const deductedRuns = await fetchDeductedAccontoRuns(tx, input.matterId, input.deductedBillingRunIds);
         const deductionOre = deductedRuns.reduce((sum, r) => sum + (r.amountOre ?? 0), 0);
-        const finalAmount = Math.max(0, value - deductionOre);
+        const finalAmount = Math.max(0, grossValue - deductionOre);
         const invoice = await tx.invoices.create({
           matterId: input.matterId, amount: finalAmount,
           invoiceType: "FINAL", status: "DRAFT",
@@ -325,8 +343,8 @@ export const billingRunRouter = router({
         });
         const run = await tx.billingRuns.create({
           matterId: input.matterId, type: "FINAL", recipient: input.recipient,
-          status: "SENT", workValueOreAtRun: value,
-          proposedAmountOre: value, amountOre: finalAmount,
+          status: "SENT", workValueOreAtRun: grossValue,
+          proposedAmountOre: grossValue, amountOre: finalAmount,
           invoiceId: invoice.id, deductedBillingRunIds: input.deductedBillingRunIds,
           periodTo: new Date(), notes: input.notes,
         });
@@ -344,11 +362,12 @@ export const billingRunRouter = router({
       return ctx.repos.transaction(async (tx) => {
         await assertMatterInOrg(tx, input.matterId, ctx.orgId);
         const work = await fetchUnfrozenWork(tx, input.matterId);
-        const value = workValueOre(work);
+        // Brutto = arvode inkl. 25 % moms + utlägg (#782) — matchar kostnadsräkningens PDF.
+        const grossValue = invoiceGrossOre(work);
         const run = await tx.billingRuns.create({
           matterId: input.matterId, type: "KOSTNADSRAKNING", recipient: "DOMSTOL",
-          status: "PENDING_VERDICT", workValueOreAtRun: value,
-          proposedAmountOre: value, amountOre: value,
+          status: "PENDING_VERDICT", workValueOreAtRun: grossValue,
+          proposedAmountOre: grossValue, amountOre: grossValue,
           invoiceId: null, deductedBillingRunIds: [],
           periodTo: new Date(), notes: input.notes,
         });

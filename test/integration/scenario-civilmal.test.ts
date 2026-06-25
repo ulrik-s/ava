@@ -320,9 +320,10 @@ describe("Scenario: civilmål (bostadsrättstvist) på löpande räkning", () =>
       exps.expenses.map((e) => ({ amount: e.amount, billable: e.billable })),
       [{ id: state.accontoInvoiceId!, amount: 1_500_000 }],
     );
-    expect(breakdown.grossAmount).toBe(3_687_500 + 56_250); // 3 743 750 öre
+    // Arvode 36 875 kr + 25 % moms = 46 093,75 kr + utlägg 562,50 kr = 46 656,25 kr (#782).
+    expect(breakdown.grossAmount).toBe(4_609_375 + 56_250); // 4 665 625 öre
     expect(breakdown.accontoDeductionTotal).toBe(1_500_000);
-    expect(breakdown.netAmount).toBe(3_743_750 - 1_500_000); // 2 243 750 öre = 22 437,50 kr
+    expect(breakdown.netAmount).toBe(4_665_625 - 1_500_000); // 3 165 625 öre = 31 656,25 kr
 
     // Skapa slutfaktura via billing-run (acconto-körningen dras av).
     const result = await state.caller.billingRun.createFinal({
@@ -354,7 +355,7 @@ describe("Scenario: civilmål (bostadsrättstvist) på löpande räkning", () =>
     const inv = await state.caller.invoice.getById({ id: state.finalInvoiceId! });
     // billing-run: invoice.amount är redan NETTO (acconto avräknat) → klienten
     // betalar hela beloppet och fakturan blir PAID (inget separat avdrag i ledgern).
-    expect(inv.amount).toBe(2_243_750);
+    expect(inv.amount).toBe(3_165_625);
 
     const pay = await state.caller.invoice.recordPayment({
       invoiceId: state.finalInvoiceId!,
@@ -362,8 +363,8 @@ describe("Scenario: civilmål (bostadsrättstvist) på löpande räkning", () =>
       paidAt: D.slutPayment.toISOString(),
       note: "Bankgiro — slutbetalning (netto efter acconto-avräkning)",
     });
-    expect(pay.payment.amount).toBe(2_243_750);
-    expect(pay.paidSum).toBe(2_243_750);
+    expect(pay.payment.amount).toBe(3_165_625);
+    expect(pay.paidSum).toBe(3_165_625);
     expect(pay.settled).toBe(true);
 
     const after = await state.caller.invoice.getById({ id: state.finalInvoiceId! });
@@ -380,12 +381,12 @@ describe("Scenario: civilmål (bostadsrättstvist) på löpande räkning", () =>
     const acconto = invoices.find((i) => i.invoiceType === "ACCONTO");
     const final = invoices.find((i) => i.invoiceType === "FINAL");
     expect(acconto?.amount).toBe(1_500_000);
-    // billing-run: FINAL-beloppet är NETTO (brutto 3 743 750 − acconto 1 500 000).
-    expect(final?.amount).toBe(2_243_750);
+    // billing-run: FINAL-beloppet är NETTO (brutto 4 665 625 − acconto 1 500 000).
+    expect(final?.amount).toBe(3_165_625);
 
-    // Total fakturerat klient = acconto (15 000) + netto-slutfaktura (22 437,50)
-    // = 37 437,50 kr = brutto-arbetet. Ingen dubbelräkning.
+    // Total fakturerat klient = acconto (15 000) + netto-slutfaktura (31 656,25)
+    // = 46 656,25 kr = brutto-arbetet (arvode inkl moms + utlägg). Ingen dubbelräkning.
     const totalBilled = (acconto!.amount) + (final!.amount);
-    expect(totalBilled).toBe(3_743_750);
+    expect(totalBilled).toBe(4_665_625);
   });
 });
