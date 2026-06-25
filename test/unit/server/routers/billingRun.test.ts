@@ -106,6 +106,12 @@ describe("billingRun.createFinal", () => {
     expect(te.frozenByBillingRunId).toBe(res.run.id);
   });
 
+  it("sätter invoice.vatOre = arvodets moms exakt (per sats, #782)", async () => {
+    const { caller } = makeCaller({ workMinutes: 60 }); // arvode 2500 kr netto
+    const res = await caller.billingRun.createFinal({ matterId: "m-1", recipient: "KLIENT" });
+    expect(res.invoice.vatOre).toBe(62500); // 25 % på 250000 öre
+  });
+
   it("tilldelar fakturanummer + OCR (klient) — ADR 0012 (#730)", async () => {
     const { caller } = makeCaller({ workMinutes: 60 });
     const res = await caller.billingRun.createFinal({ matterId: "m-1", recipient: "KLIENT" });

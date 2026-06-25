@@ -47,6 +47,8 @@ export interface SemanticVoucher {
 export interface SemanticVoucherInput {
   /** Brutto i öre (negativt = kreditfaktura). */
   amount: number;
+  /** Exakt momsbelopp i öre (per sats, #782). Saknas på äldre fakturor → 25 %-split. */
+  vatOre?: number | null;
   invoiceDate: Date | string;
   invoiceNumber?: string | null;
 }
@@ -57,16 +59,20 @@ function semanticRow(role: VoucherRole, ore: number, debit: boolean): SemanticVo
 
 /**
  * Bygg ett semantiskt verifikat ur en kundfaktura. Ren funktion, noll I/O.
- * Endast en VAT-sats i taget (default 25 %); flersats-/utläggs-uppdelning
- * läggs till när fakturarader kopplas in (uppföljning på #233).
+ *
+ * Momsen tas exakt från `invoice.vatOre` när den finns (beräknad per sats vid
+ * skapande, #782) — annars faller vi tillbaka på en `vatRate`-split av bruttot
+ * (äldre fakturor / fixtures). Balans garanteras: moms = brutto − netto.
  */
 export function buildSemanticVoucher(
   invoice: SemanticVoucherInput,
   vatRate: VatRate = 2500,
 ): SemanticVoucher {
   const bruttoOre = Math.abs(invoice.amount);
-  const { exclVat } = splitVat({ amount: bruttoOre, vatRate, vatIncluded: true });
-  const momsOre = bruttoOre - exclVat; // balans-säker rest
+  const momsOre = invoice.vatOre != null
+    ? Math.min(Math.abs(invoice.vatOre), bruttoOre)
+    : bruttoOre - splitVat({ amount: bruttoOre, vatRate, vatIncluded: true }).exclVat;
+  const exclVat = bruttoOre - momsOre; // balans-säker rest
   const kundfordranIsDebit = invoice.amount >= 0; // kreditfaktura vänder
 
   const rows = [

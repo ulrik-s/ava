@@ -117,6 +117,15 @@ function invoiceGrossOre(work: UnfrozenWork): number {
   return arvodeInclVatOre(arvodeNetOre(work)) + expenseGrossOre(work);
 }
 
+/** Fakturans exakta momsbelopp (öre) per sats: arvodets moms (25 %) +
+ *  varje utläggs moms (dess sats). Lagras på fakturan för korrekt bokföring (#782). */
+function invoiceVatOre(work: UnfrozenWork): number {
+  const arvodeNet = arvodeNetOre(work);
+  const arvodeVat = arvodeInclVatOre(arvodeNet) - arvodeNet;
+  const expenseVat = work.expenses.filter((e) => e.billable).reduce((sum, e) => sum + expenseSplit(e).vat, 0);
+  return arvodeVat + expenseVat;
+}
+
 /** Bygg ett itemiserat fakturaförslag ur ofrysta tids-/utläggsrader (#397). */
 function buildProposal(
   te: ReadonlyArray<{ id: string; description?: string | null; minutes: number; hourlyRate: number; billable: boolean }>,
@@ -304,8 +313,10 @@ export const billingRunRouter = router({
         // belopp = %-sats × upparbetat − Σ tidigare aconto-fakturor.
         const priorAccontoSumOre = await sumPriorAccontos(tx, input.matterId);
         const proposedOre = proposedAccontoOre(value, input.clientShareBips, priorAccontoSumOre);
+        // Acconto är ett brutto-förskott på arvode (25 % moms ingår, #782).
+        const accontoVatOre = input.amountOre - splitVat({ amount: input.amountOre, vatRate: DEFAULT_VAT_RATE, vatIncluded: true }).exclVat;
         const invoice = await tx.invoices.create({
-          matterId: input.matterId, amount: input.amountOre,
+          matterId: input.matterId, amount: input.amountOre, vatOre: accontoVatOre,
           invoiceType: "ACCONTO", status: "DRAFT",
           ...(await invoiceNumbering(tx, ctx.orgId, input.recipient)),
           ...invoiceMeta(input), notes: input.notes,
@@ -346,7 +357,7 @@ export const billingRunRouter = router({
         const deductionOre = deductedRuns.reduce((sum, r) => sum + (r.amountOre ?? 0), 0);
         const finalAmount = Math.max(0, grossValue - deductionOre);
         const invoice = await tx.invoices.create({
-          matterId: input.matterId, amount: finalAmount,
+          matterId: input.matterId, amount: finalAmount, vatOre: invoiceVatOre(work),
           invoiceType: "FINAL", status: "DRAFT",
           ...(await invoiceNumbering(tx, ctx.orgId, input.recipient)),
           ...invoiceMeta(input), notes: input.notes,

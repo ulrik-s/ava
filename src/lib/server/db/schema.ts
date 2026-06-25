@@ -190,6 +190,8 @@ export const invoices = pgTable("invoices", {
   id: uuid("id").primaryKey().$type<InvoiceId>(),
   matterId: uuid("matter_id").notNull().$type<MatterId>(),
   amount: ore("amount").notNull(),
+  // Momsbeloppet i `amount`, exakt per sats vid skapande (#782); netto = amount − vatOre.
+  vatOre: integer("vat_ore"),
   status: text("status").notNull().default("DRAFT").$type<InvoiceStatus>(),
   invoiceType: text("invoice_type").notNull().default("STANDARD").$type<InvoiceType>(),
   invoiceNumber: text("invoice_number"),
