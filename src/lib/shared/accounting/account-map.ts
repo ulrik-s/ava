@@ -26,7 +26,12 @@ export const ledgerAccountMapSchema = z.object({
   voucherSeries: z.string().min(1),
   kundfordran: ledgerAccountSchema,
   intaktArvode: ledgerAccountSchema,
+  /** Utgående moms 25 %. */
   momsUtgaende: ledgerAccountSchema,
+  /** Utgående moms 12 % resp. 6 % — bara byråer som vidarefakturerar utlägg med
+   *  reducerad moms behöver dem (#790); valfria. */
+  momsUtgaende12: ledgerAccountSchema.optional(),
+  momsUtgaende06: ledgerAccountSchema.optional(),
   intaktUtlagg: ledgerAccountSchema.optional(),
 });
 export type LedgerAccountMap = z.infer<typeof ledgerAccountMapSchema>;
@@ -37,6 +42,8 @@ export const DEFAULT_LEDGER_ACCOUNT_MAP: LedgerAccountMap = {
   kundfordran: { number: "1510", name: "Kundfordringar" },
   intaktArvode: { number: "3041", name: "Advokatarvoden" },
   momsUtgaende: { number: "2611", name: "Utgående moms 25 %" },
+  momsUtgaende12: { number: "2621", name: "Utgående moms 12 %" },
+  momsUtgaende06: { number: "2631", name: "Utgående moms 6 %" },
   intaktUtlagg: { number: "3590", name: "Övriga sidointäkter" },
 };
 
@@ -46,6 +53,8 @@ export function toSieAccountMap(map: LedgerAccountMap): SieAccountMap {
     kundfordran: map.kundfordran,
     intaktArvode: map.intaktArvode,
     momsUtgaende: map.momsUtgaende,
+    ...(map.momsUtgaende12 ? { momsUtgaende12: map.momsUtgaende12 } : {}),
+    ...(map.momsUtgaende06 ? { momsUtgaende06: map.momsUtgaende06 } : {}),
     ...(map.intaktUtlagg ? { intaktUtlagg: map.intaktUtlagg } : {}),
   };
 }

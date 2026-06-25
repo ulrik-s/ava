@@ -108,6 +108,14 @@ export const invoiceSchema = z.object({
    *  (#782). `amount` är brutto ("att betala"); netto = amount − vatOre. Nullish
    *  på äldre fakturor → bokföring/PDF faller tillbaka på 25 %-split. */
   vatOre: z.number().int().nullish(),
+  /** Moms-uppdelning per sats (#790) — driver per-sats bokföring i verifikat/SIE.
+   *  En rad per {kind: arvode/utlägg, sats, netto, moms}. Nullish → enkel-rad. */
+  vatBreakdown: z.array(z.object({
+    kind: z.enum(["arvode", "utlagg"]),
+    vatRate: z.number().int().nonnegative().max(10000),
+    netOre: z.number().int(),
+    vatOre: z.number().int(),
+  })).nullish(),
   status: invoiceStatusSchema.default("DRAFT"),
   invoiceType: invoiceTypeSchema.default("STANDARD"),
   /** Per-byrå löpande fakturanummer (F-YYYY-NNNN), genereras vid skapande.

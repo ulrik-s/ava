@@ -33,17 +33,18 @@ function oreToSek(ore: number): number {
 
 /** Roll → Fortnox-kontonummer via byråns mappning. Kastar om rollen är omappad. */
 function accountForRole(role: VoucherRole, mapping: FortnoxKontoMappning): string {
-  switch (role) {
-    case "kundfordran":
-      return mapping.kundfordran;
-    case "intaktArvode":
-      return mapping.intaktArvode;
-    case "momsUtgaende":
-      return mapping.momsUtgaende;
-    case "intaktUtlagg":
-      if (!mapping.intaktUtlagg) throw new Error("Rollen 'intaktUtlagg' saknar kontomappning");
-      return mapping.intaktUtlagg;
-  }
+  // Roll→konto-uppslag; de valfria rollerna (utlägg/reducerad moms) är undefined
+  // om byrån inte mappat dem → completeness-gate kastar.
+  const account: string | undefined = {
+    kundfordran: mapping.kundfordran,
+    intaktArvode: mapping.intaktArvode,
+    momsUtgaende: mapping.momsUtgaende,
+    momsUtgaende12: mapping.momsUtgaende12,
+    momsUtgaende06: mapping.momsUtgaende06,
+    intaktUtlagg: mapping.intaktUtlagg,
+  }[role];
+  if (!account) throw new Error(`Rollen '${role}' saknar kontomappning`);
+  return account;
 }
 
 function renderRow(row: SemanticVoucherRow, mapping: FortnoxKontoMappning): FortnoxVoucherRow {

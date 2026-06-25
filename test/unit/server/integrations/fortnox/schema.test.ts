@@ -9,6 +9,8 @@ describe("fortnoxMappingFromLedgerMap", () => {
       kundfordran: "1510",
       intaktArvode: "3041",
       momsUtgaende: "2611",
+      momsUtgaende12: "2621",
+      momsUtgaende06: "2631",
       intaktUtlagg: "3590",
     });
   });
