@@ -36,13 +36,14 @@ import {
   type OrganizationId,
   type TimeEntryId,
 } from "@/lib/shared/schemas/ids";
+import { splitVat, DEFAULT_VAT_RATE } from "@/lib/shared/vat";
 import { emit } from "../events/emit";
 import type { Repositories } from "../repositories/repositories";
 import { router, orgProcedure } from "../trpc";
 
 interface UnfrozenWork {
   timeEntries: Array<{ id: TimeEntryId; minutes: number; hourlyRate: number; billable: boolean }>;
-  expenses: Array<{ id: ExpenseId; amount: number; billable: boolean }>;
+  expenses: Array<{ id: ExpenseId; amount: number; billable: boolean; vatRate?: number | null; vatIncluded?: boolean | null }>;
 }
 
 /** En itemiserad rad i fakturaförslaget (#397) — tidspost med beräknat värde. */
@@ -88,17 +89,26 @@ function arvodeNetOre(work: UnfrozenWork): number {
     .reduce((sum, t) => sum + timeEntryValueOre(t.minutes, t.hourlyRate), 0);
 }
 
-/** Debiterbara utlägg (brutto idag — netto-lagring kommer i senare #782-steg). */
-function expenseGrossOre(work: UnfrozenWork): number {
-  return work.expenses
-    .filter((e) => e.billable)
-    .reduce((sum, e) => sum + e.amount, 0);
+/** Ett utläggs moms-split (#782). Utlägg lagras netto (vatIncluded=false); äldre
+ *  brutto-rader (vatIncluded=true) hanteras via flaggan så bruttot bevaras. */
+function expenseSplit(e: { amount: number; vatRate?: number | null; vatIncluded?: boolean | null }) {
+  return splitVat({ amount: e.amount, vatRate: e.vatRate ?? DEFAULT_VAT_RATE, vatIncluded: e.vatIncluded ?? false });
 }
 
-/** Nettovärde på arbetet: arvode (exkl moms) + utlägg. Bas för acconto-förslag
- *  och "upparbetat ofakturerat" — INTE fakturabeloppet (se invoiceGrossOre). */
+/** Debiterbara utlägg, netto (exkl. moms). */
+function expenseNetOre(work: UnfrozenWork): number {
+  return work.expenses.filter((e) => e.billable).reduce((sum, e) => sum + expenseSplit(e).exclVat, 0);
+}
+
+/** Debiterbara utlägg, brutto (inkl. moms) — det klienten/domstolen betalar. */
+function expenseGrossOre(work: UnfrozenWork): number {
+  return work.expenses.filter((e) => e.billable).reduce((sum, e) => sum + expenseSplit(e).inclVat, 0);
+}
+
+/** Nettovärde på arbetet: arvode (exkl moms) + utlägg (exkl moms). Bas för
+ *  acconto-förslag och "upparbetat ofakturerat" — INTE fakturabeloppet (se invoiceGrossOre). */
 function workValueOre(work: UnfrozenWork): number {
-  return arvodeNetOre(work) + expenseGrossOre(work);
+  return arvodeNetOre(work) + expenseNetOre(work);
 }
 
 /** Fakturans bruttobelopp: arvode + 25 % moms + utlägg. Alla fakturor lägger
@@ -183,7 +193,7 @@ async function resolveFinalWork(
   return {
     work: {
       timeEntries: selTime.map((t) => ({ id: t.id, minutes: t.minutes, hourlyRate: t.user.hourlyRate ?? 0, billable: t.billable })),
-      expenses: selExp.filter((e) => e.kind !== "PRUTNING").map((e) => ({ id: e.id, amount: e.amount, billable: e.billable })),
+      expenses: selExp.filter((e) => e.kind !== "PRUTNING").map((e) => ({ id: e.id, amount: e.amount, billable: e.billable, vatRate: e.vatRate, vatIncluded: e.vatIncluded })),
     },
     selected: true,
   };

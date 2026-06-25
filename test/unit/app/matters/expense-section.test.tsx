@@ -99,9 +99,9 @@ describe("ExpenseSection", () => {
     // VatPreview-grenen (amount>0) renderar moms-uppdelningen (exkl-inmatning).
     expect(screen.getByText(/Exkl:.*moms:.*inkl:/)).toBeInTheDocument();
     fireEvent.click(screen.getByText("Spara"));
-    // Inmatat exkl. 150 kr @ 25 % → lagras brutto 187,50 kr (#781).
+    // Inmatat exkl. 150 kr → lagras NETTO 150 kr, vatIncluded=false (#782).
     expect(createMutate).toHaveBeenCalledWith(
-      expect.objectContaining({ matterId: "m1", description: "Parkering", amount: 18750, vatRate: 2500, vatIncluded: true }),
+      expect.objectContaining({ matterId: "m1", description: "Parkering", amount: 15000, vatRate: 2500, vatIncluded: false }),
     );
   });
 

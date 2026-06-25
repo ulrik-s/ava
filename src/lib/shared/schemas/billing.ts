@@ -58,17 +58,16 @@ export type TimeEntry = z.infer<typeof timeEntrySchema>;
 /**
  * Expense (Utlägg) — `amount` i öre. Lagras i `expenses/<id>.json`.
  *
- * Moms-modellen:
- *   - `amount` är beloppet som står på kvittot (i öre)
+ * Moms-modellen (#782 — allt lagras exkl. moms):
+ *   - `amount` är beloppet EXKL moms (i öre); AVA lägger på momsen
  *   - `vatRate` i basis points: 0/600/1200/2500 (= 0/6/12/25 %)
- *   - `vatIncluded=true` → `amount` inkluderar redan moms (vanligaste fallet)
- *   - `vatIncluded=false` → `amount` är exkl moms, moms läggs ovanpå
+ *   - `vatIncluded=false` (default) → `amount` är netto, moms läggs ovanpå
+ *   - `vatIncluded=true` → `amount` inkluderar redan moms (äldre rader)
  *
  * `splitVat({amount, vatRate, vatIncluded})` returnerar `{exclVat, vat, inclVat}`
  * deterministiskt. Se `src/shared/vat.ts`.
  *
- * Backwards-compat: gamla rader utan vatRate/vatIncluded ska tolkas som
- * 25 % inkl moms (default-fallet för svenska kvitton). zod-defaults gör jobbet.
+ * Äldre brutto-rader migreras till netto (migration 0006).
  */
 export const expenseSchema = z.object({
   ...baseFields,
@@ -83,8 +82,8 @@ export const expenseSchema = z.object({
   invoiceId: invoiceIdSchema.nullish(),
   /** Moms-sats i basis points (0/600/1200/2500). Default 25 %. */
   vatRate: z.number().int().nonnegative().max(10000).default(2500),
-  /** Är `amount` redan inkl moms? Default true (kvitto-fall). */
-  vatIncluded: z.boolean().default(true),
+  /** Är `amount` redan inkl moms? Default false — utlägg lagras netto (#782). */
+  vatIncluded: z.boolean().default(false),
   /** Skiljer vanligt utlägg (EXPENSE) från PRUTNING (domstols-justering).
    *  PRUTNING har negativt amount, vatRate=0, vatIncluded=false. Default
    *  EXPENSE för bakåtkompatibilitet med befintliga rader. */

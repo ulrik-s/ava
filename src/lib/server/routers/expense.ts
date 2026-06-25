@@ -44,8 +44,8 @@ export const expenseRouter = router({
         billable: z.boolean().default(true),
         /** Moms-sats i basis points (0/600/1200/2500). Default 25 %. */
         vatRate: z.number().int().nonnegative().max(10000).default(2500),
-        /** True om `amount` är inkl moms (kvitto-fall). Default true. */
-        vatIncluded: z.boolean().default(true),
+        /** True om `amount` är inkl moms. Default false — utlägg lagras netto (#782). */
+        vatIncluded: z.boolean().default(false),
         // Valfria setup-fält (demo-generator/fixtures, ADR 0003).
         id: expenseIdSchema.optional(),
         userId: userIdSchema.optional(),

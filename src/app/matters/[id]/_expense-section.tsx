@@ -66,18 +66,15 @@ function payloadOf(f: ExpenseForm): {
   vatRate: VatRate;
   vatIncluded: boolean;
 } {
-  // Advokaten matar in exkl. moms; AVA lägger på momsen. Lagring hålls
-  // tillsvidare som brutto (vatIncluded=true) så billing/verifikat är
-  // oförändrade — lagringen flippas till netto i #782.
-  const netOre = Math.round(f.amount * 100);
-  const grossOre = splitVat({ amount: netOre, vatRate: f.vatRate, vatIncluded: false }).inclVat;
+  // Advokaten matar in exkl. moms; utlägg lagras netto (#782) och AVA lägger
+  // på momsen vid fakturering.
   return {
     date: f.date,
-    amount: grossOre,
+    amount: Math.round(f.amount * 100),
     description: f.description,
     billable: f.billable,
     vatRate: f.vatRate,
-    vatIncluded: true,
+    vatIncluded: false,
   };
 }
 
