@@ -79,3 +79,31 @@ describe("TimeEntryRepository list/report — Drizzle (pglite)", () => {
     expect(report[0]!.matter?.contacts[0]?.contact.name).toBe("Klient AB");
   });
 });
+
+describe("TimeEntryRepository coverageUsageForMatter(s) — täcknings-tak (#793)", () => {
+  it("in-memory: summerar debiterbara minuter + arvode-värde, batchat per ärende", async () => {
+    const mA = uuidv7(), mB = uuidv7(), userId = uuidv7();
+    const source = prebakeJoins({
+      matters: [
+        { id: mA, organizationId: "org-1", matterNumber: "2026-1", title: "A" },
+        { id: mB, organizationId: "org-1", matterNumber: "2026-2", title: "B" },
+      ],
+      users: [{ id: userId, name: "Anna", hourlyRate: 250000 }],
+      timeEntries: [
+        // mA: 90 min @ 2500 kr/h = 375000 öre (debiterbar) + 60 min ej debiterbar (räknas ej)
+        { id: uuidv7(), userId, matterId: mA, minutes: 90, hourlyRate: 250000, billable: true, date: new Date("2026-06-02") },
+        { id: uuidv7(), userId, matterId: mA, minutes: 60, hourlyRate: 250000, billable: false, date: new Date("2026-06-03") },
+        // mB: 120 min @ 2500 = 500000 öre
+        { id: uuidv7(), userId, matterId: mB, minutes: 120, hourlyRate: 250000, billable: true, date: new Date("2026-06-04") },
+      ],
+    } as DemoSource);
+    const repo = new InMemoryTimeEntryRepository(new LocalStore(source, async () => {}));
+
+    const single = await repo.coverageUsageForMatter(asId<"MatterId">(mA));
+    expect(single).toEqual({ billableMinutes: 90, billableValueOre: 375000 });
+
+    const batch = await repo.coverageUsageForMatters([asId<"MatterId">(mA), asId<"MatterId">(mB)]);
+    expect(batch[mA]).toEqual({ billableMinutes: 90, billableValueOre: 375000 });
+    expect(batch[mB]).toEqual({ billableMinutes: 120, billableValueOre: 500000 });
+  });
+});

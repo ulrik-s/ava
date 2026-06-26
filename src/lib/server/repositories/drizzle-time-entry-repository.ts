@@ -147,6 +147,22 @@ export class DrizzleTimeEntryRepository extends DrizzleRepository<TimeEntry> imp
     return { billableMinutes, billableValueOre };
   }
 
+  async coverageUsageForMatters(matterIds: MatterId[]): Promise<Record<string, { billableMinutes: number; billableValueOre: number }>> {
+    const out: Record<string, { billableMinutes: number; billableValueOre: number }> = {};
+    if (matterIds.length === 0) return out;
+    const rows = await this.db
+      .select({ matterId: timeEntries.matterId, minutes: timeEntries.minutes, hourlyRate: timeEntries.hourlyRate })
+      .from(timeEntries)
+      .where(and(inArray(timeEntries.matterId, matterIds), eq(timeEntries.billable, true), isNull(timeEntries.deletedAt)));
+    for (const r of rows) {
+      const acc = out[r.matterId] ?? { billableMinutes: 0, billableValueOre: 0 };
+      acc.billableMinutes += r.minutes;
+      acc.billableValueOre += Math.round((r.minutes / 60) * (r.hourlyRate ?? 0));
+      out[r.matterId] = acc;
+    }
+    return out;
+  }
+
   async listForLawyerInPeriod(
     organizationId: OrganizationId, userId: UserId, from: Date, to: Date,
   ): Promise<LawyerReportTimeEntry[]> {

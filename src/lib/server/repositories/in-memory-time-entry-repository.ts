@@ -117,6 +117,21 @@ export class InMemoryTimeEntryRepository extends InMemoryRepository<TimeEntry> i
     return { billableMinutes, billableValueOre };
   }
 
+  async coverageUsageForMatters(matterIds: MatterId[]): Promise<Record<string, { billableMinutes: number; billableValueOre: number }>> {
+    const out: Record<string, { billableMinutes: number; billableValueOre: number }> = {};
+    if (matterIds.length === 0) return out;
+    const wanted = new Set<string>(matterIds);
+    const rows = (await this.delegate.findMany({})) as TimeEntry[];
+    for (const t of rows) {
+      if (!t.billable || !wanted.has(t.matterId)) continue;
+      const acc = out[t.matterId] ?? { billableMinutes: 0, billableValueOre: 0 };
+      acc.billableMinutes += t.minutes;
+      acc.billableValueOre += Math.round((t.minutes / 60) * (t.hourlyRate ?? 0));
+      out[t.matterId] = acc;
+    }
+    return out;
+  }
+
   async freezeForMatter(matterId: MatterId, billingRunId: BillingRunId, now: Date): Promise<void> {
     await this.delegate.updateMany({
       where: { matterId, frozenByBillingRunId: null },
