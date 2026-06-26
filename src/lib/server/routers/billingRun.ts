@@ -18,6 +18,8 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import type { VatBreakdownLine } from "@/lib/shared/accounting/semantic-voucher";
 import { proposedAccontoOre } from "@/lib/shared/billing-proposal";
+import { TIMKOSTNADSNORM_FTAX_ORE_PER_H, TIMKOSTNADSNORM_NO_FTAX_ORE_PER_H } from "@/lib/shared/brottmalstaxa";
+import { computeCoverageSplit } from "@/lib/shared/coverage-billing";
 import { arvodeInclVatOre } from "@/lib/shared/invoice-calc";
 import { ocrFromInvoiceNumber } from "@/lib/shared/ocr-reference";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
@@ -36,6 +38,7 @@ import {
   type MatterId,
   type OrganizationId,
   type TimeEntryId,
+  type UserId,
 } from "@/lib/shared/schemas/ids";
 import { splitVat, DEFAULT_VAT_RATE } from "@/lib/shared/vat";
 import { emit } from "../events/emit";
@@ -146,6 +149,24 @@ function invoiceVatBreakdown(work: UnfrozenWork): VatBreakdownLine[] {
     lines.push({ kind: "utlagg", vatRate, netOre, vatOre });
   }
   return lines;
+}
+
+/**
+ * Det DÅ GÄLLANDE timarvodet (öre/tim) som arbetet ska värderas om på vid
+ * fakturering (#800): rättshjälp → timkostnadsnormen (F-skatt-variant);
+ * rättsskydd m.fl. → ansvariga juristens AKTUELLA timtaxa (ej snapshot).
+ */
+async function currentArvodeRateOre(
+  repos: Repositories,
+  orgId: OrganizationId,
+  matter: { paymentMethod: string; taxaHasFTax?: boolean | null | undefined; responsibleLawyerId?: UserId | null | undefined },
+): Promise<number> {
+  if (matter.paymentMethod === "RATTSHJALP") {
+    return matter.taxaHasFTax === false ? TIMKOSTNADSNORM_NO_FTAX_ORE_PER_H : TIMKOSTNADSNORM_FTAX_ORE_PER_H;
+  }
+  if (!matter.responsibleLawyerId) return 0;
+  const lawyer = await repos.users.getByIdInOrg(matter.responsibleLawyerId, orgId);
+  return lawyer?.hourlyRate ?? 0;
 }
 
 /** Bygg ett itemiserat fakturaförslag ur ofrysta tids-/utläggsrader (#397). */
@@ -419,6 +440,36 @@ export const billingRunRouter = router({
         });
         return { run };
       });
+    }),
+
+  /**
+   * Prutnings-/självrisk-fördelning (#800): värderar om arbetet på DET DÅ
+   * GÄLLANDE timarvodet (rättshjälp = timkostnadsnorm; rättsskydd = ansvariga
+   * juristens aktuella timtaxa) och delar upp i klient/betalare/byrå-förlust.
+   * Read-only — driver UIt; faktiska fakturorna skapas i settlement-flödet.
+   */
+  coverageSplit: orgProcedure
+    .input(z.object({
+      matterId: matterIdSchema,
+      /** Rättshjälp: domens beviljade belopp (öre). */
+      awardedOre: z.number().int().nonnegative().optional(),
+      /** Rättsskydd: försäkringsbolagets prutning (öre, ur brevet). */
+      insurerPrutningOre: z.number().int().nonnegative().optional(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const matter = await ctx.repos.matters.getByIdInOrg(input.matterId, ctx.orgId);
+      if (!matter) throw new TRPCError({ code: "NOT_FOUND", message: "Ärendet finns inte." });
+      const { billableMinutes } = await ctx.repos.timeEntries.coverageUsageForMatter(input.matterId);
+      const currentRateOre = await currentArvodeRateOre(ctx.repos, ctx.orgId, matter);
+      const totalOre = Math.round((billableMinutes / 60) * currentRateOre);
+      const split = computeCoverageSplit({
+        method: matter.paymentMethod,
+        totalOre,
+        clientShareBips: matter.clientShareBips ?? 0,
+        ...(input.awardedOre != null ? { awardedOre: input.awardedOre } : {}),
+        ...(input.insurerPrutningOre != null ? { insurerPrutningOre: input.insurerPrutningOre } : {}),
+      });
+      return { ...split, totalOre, currentRateOre, billableMinutes };
     }),
 
   setVerdict: orgProcedure
