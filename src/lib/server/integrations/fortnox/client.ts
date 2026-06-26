@@ -8,6 +8,7 @@
 
 import { refreshTokens, type FetchFn } from "./oauth";
 import {
+  fortnoxInboxResponseSchema,
   fortnoxVoucherResponseSchema,
   type FortnoxConfig,
   type FortnoxVoucher,
@@ -71,17 +72,50 @@ export class FortnoxClient {
     });
   }
 
+  /** POST med 401→forcerad-refresh-och-omförsök. `doPost` bygger requesten per token. */
+  private async withRetry(doPost: (token: string) => Promise<Response>, what: string): Promise<Response> {
+    let res = await doPost(await this.accessToken());
+    if (res.status === 401) res = await doPost(await this.forceRefresh());
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      throw new Error(`Fortnox ${what} ${res.status}: ${detail.slice(0, 300)}`);
+    }
+    return res;
+  }
+
   /** Skapa ett verifikat. Returnerar serie + nummer (för idempotens/spårning). */
   async createVoucher(voucher: FortnoxVoucher): Promise<FortnoxVoucherResponse> {
     const body = { Voucher: toWireVoucher(voucher) };
-    let res = await this.apiPost("/3/vouchers", await this.accessToken(), body);
-    if (res.status === 401) {
-      res = await this.apiPost("/3/vouchers", await this.forceRefresh(), body);
-    }
-    if (!res.ok) {
-      const detail = await res.text().catch(() => "");
-      throw new Error(`Fortnox voucher-fel ${res.status}: ${detail.slice(0, 300)}`);
-    }
+    const res = await this.withRetry((t) => this.apiPost("/3/vouchers", t, body), "voucher-fel");
     return fortnoxVoucherResponseSchema.parse(await res.json());
+  }
+
+  /**
+   * Ladda upp en fil (faktura-PDF) till Fortnox inbox → returnerar fil-id (#785).
+   * Multipart/form-data: vi sätter INTE Content-Type själva så fetch lägger
+   * boundary:n. Wire-detaljer (fältnamn "file", svarsnästling) bekräftas mot
+   * sandbox; isolerat här för enkel justering.
+   */
+  async uploadInboxFile(fileName: string, bytes: Uint8Array, contentType?: string): Promise<string> {
+    const url = new URL("/3/inbox", this.config.apiBase).toString();
+    const type = contentType ?? "application/pdf";
+    const doPost = (token: string): Promise<Response> => {
+      const form = new FormData();
+      // Uint8Array.from → färsk ArrayBuffer-backad vy (undviker SharedArrayBuffer-
+      // ovissheten i BlobPart-typen utan cast).
+      form.append("file", new Blob([Uint8Array.from(bytes)], { type }), fileName);
+      return this.fetchFn(url, { method: "POST", headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, body: form });
+    };
+    const res = await this.withRetry(doPost, "fil-uppladdning");
+    return fortnoxInboxResponseSchema.parse(await res.json()).File.Id;
+  }
+
+  /**
+   * Koppla en uppladdad fil till ett verifikat (#785). Lagkrav: originalet
+   * (fakturan) ska arkiveras tillsammans med verifikatet.
+   */
+  async connectFileToVoucher(fileId: string, voucherSeries: string, voucherNumber: string): Promise<void> {
+    const body = { VoucherFileConnection: { FileId: fileId, VoucherSeries: voucherSeries, VoucherNumber: voucherNumber } };
+    await this.withRetry((t) => this.apiPost("/3/voucherfileconnections", t, body), "fil-koppling");
   }
 }

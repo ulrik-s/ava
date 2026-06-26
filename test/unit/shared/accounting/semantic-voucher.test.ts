@@ -47,6 +47,11 @@ describe("buildSemanticVoucher", () => {
     expect(sum(v.rows, "debit")).toBe(10_600);
   });
 
+  it("titeln innehåller AVA-ärendenumret när det finns (#785)", () => {
+    const v = buildSemanticVoucher({ amount: 12_500, invoiceDate: "2026-05-25", invoiceNumber: "F-2026-0042", matterNumber: "AA2026-0001" });
+    expect(v.description).toBe("Ärende AA2026-0001 · Faktura F-2026-0042");
+  });
+
   it("per-sats breakdown (#790): moms bokförs per sats + intäkt delas arvode/utlägg", () => {
     // Arvode 10 000 + 25 % = 2500 moms; utlägg 1000 @ 6 % = 60 moms.
     const v = buildSemanticVoucher({

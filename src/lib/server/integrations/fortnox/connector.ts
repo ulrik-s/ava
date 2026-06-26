@@ -17,6 +17,7 @@ import type { SemanticVoucher } from "@/lib/shared/accounting/semantic-voucher";
 import type {
   LedgerCapabilities,
   LedgerConnector,
+  LedgerPushContext,
   PushVoucherResult,
 } from "../ledger/port";
 import type { FortnoxClient } from "./client";
@@ -24,7 +25,7 @@ import type { FortnoxKontoMappning } from "./schema";
 import { renderFortnoxVoucher } from "./voucher";
 
 export interface FortnoxConnectorDeps {
-  client: Pick<FortnoxClient, "createVoucher">;
+  client: Pick<FortnoxClient, "createVoucher" | "uploadInboxFile" | "connectFileToVoucher">;
   /** Byråns roll→konto-mappning (#217), läst ur firma.git. */
   mapping: FortnoxKontoMappning;
 }
@@ -45,9 +46,16 @@ export class FortnoxLedgerConnector implements LedgerConnector {
     return FORTNOX_CAPABILITIES;
   }
 
-  async pushVoucher(voucher: SemanticVoucher): Promise<PushVoucherResult> {
+  async pushVoucher(voucher: SemanticVoucher, ctx?: LedgerPushContext): Promise<PushVoucherResult> {
     const fortnoxVoucher = renderFortnoxVoucher(voucher, this.deps.mapping);
     const resp = await this.deps.client.createVoucher(fortnoxVoucher);
-    return { externalId: `${resp.Voucher.VoucherSeries}/${resp.Voucher.VoucherNumber}` };
+    const series = resp.Voucher.VoucherSeries;
+    const number = String(resp.Voucher.VoucherNumber);
+    // Bifoga faktura-PDF:en till konteringen (#785) — lagkrav att originalet arkiveras.
+    if (ctx?.attachment) {
+      const fileId = await this.deps.client.uploadInboxFile(ctx.attachment.fileName, ctx.attachment.bytes, ctx.attachment.contentType);
+      await this.deps.client.connectFileToVoucher(fileId, series, number);
+    }
+    return { externalId: `${series}/${number}` };
   }
 }

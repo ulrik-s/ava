@@ -148,3 +148,11 @@ export const fortnoxVoucherResponseSchema = z.object({
   }),
 });
 export type FortnoxVoucherResponse = z.infer<typeof fortnoxVoucherResponseSchema>;
+
+// ─── Filbilaga (#785) ───────────────────────────────────────────────────────
+
+/** Svar från `POST /3/inbox` (fil-uppladdning) — vi behöver fil-id:t (GUID). */
+export const fortnoxInboxResponseSchema = z.object({
+  File: z.object({ Id: z.string().min(1) }).passthrough(),
+});
+export type FortnoxInboxResponse = z.infer<typeof fortnoxInboxResponseSchema>;

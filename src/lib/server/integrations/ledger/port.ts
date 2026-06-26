@@ -42,10 +42,20 @@ export interface LedgerCapabilities {
 
 // ─── Utbound DTO:er (byggs internt) ─────────────────────────────────────────
 
+/** En bilaga att arkivera med verifikatet (t.ex. faktura-PDF, #785). */
+export interface LedgerAttachment {
+  fileName: string;
+  bytes: Uint8Array;
+  /** MIME-typ; default application/pdf hos connectorn. */
+  contentType?: string;
+}
+
 /** Kontext för en verifikat-push (idempotens-nyckel + spårning). */
 export interface LedgerPushContext {
   /** Idempotens-nyckel (t.ex. billingRunId) — connectorn får ej dubbel-bokföra. */
   idempotencyKey: string;
+  /** Bilaga att koppla till verifikatet (faktura-PDF) om connectorn stöder det (#785). */
+  attachment?: LedgerAttachment;
 }
 
 /** Resultat av en verifikat-push — det vi behöver för idempotens/spårning. */

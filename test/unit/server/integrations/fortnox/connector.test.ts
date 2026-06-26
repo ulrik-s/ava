@@ -14,13 +14,22 @@ const MAPPING: FortnoxKontoMappning = {
 
 function makeClient() {
   const calls: FortnoxVoucher[] = [];
-  const client: Pick<FortnoxClient, "createVoucher"> = {
+  const uploads: Array<{ fileName: string; size: number }> = [];
+  const connections: Array<{ fileId: string; series: string; number: string }> = [];
+  const client: Pick<FortnoxClient, "createVoucher" | "uploadInboxFile" | "connectFileToVoucher"> = {
     createVoucher: async (v: FortnoxVoucher): Promise<FortnoxVoucherResponse> => {
       calls.push(v);
       return { Voucher: { VoucherSeries: v.VoucherSeries, VoucherNumber: 7 } };
     },
+    uploadInboxFile: async (fileName: string, bytes: Uint8Array): Promise<string> => {
+      uploads.push({ fileName, size: bytes.length });
+      return "file-guid-1";
+    },
+    connectFileToVoucher: async (fileId: string, series: string, number: string): Promise<void> => {
+      connections.push({ fileId, series, number });
+    },
   };
-  return { client, calls };
+  return { client, calls, uploads, connections };
 }
 
 const semantic: SemanticVoucher = {
@@ -62,5 +71,28 @@ describe("FortnoxLedgerConnector", () => {
     expect(byAcct(1510)).toMatchObject({ Debit: 125, Credit: 0 });
     expect(byAcct(3041)).toMatchObject({ Debit: 0, Credit: 100 });
     expect(byAcct(2611)).toMatchObject({ Debit: 0, Credit: 25 });
+  });
+
+  it("bifogar faktura-PDF till konteringen när attachment finns (#785)", async () => {
+    const { client, uploads, connections } = makeClient();
+    const connector = new FortnoxLedgerConnector({ client, mapping: MAPPING });
+
+    const res = await connector.pushVoucher(semantic, {
+      idempotencyKey: "br-1",
+      attachment: { fileName: "Faktura AA2026-0001.pdf", bytes: new Uint8Array([1, 2, 3, 4]) },
+    });
+
+    expect(res).toEqual({ externalId: "A/7" });
+    expect(uploads).toEqual([{ fileName: "Faktura AA2026-0001.pdf", size: 4 }]);
+    // Filen kopplas till det skapade verifikatet (serie/nummer från svaret).
+    expect(connections).toEqual([{ fileId: "file-guid-1", series: "A", number: "7" }]);
+  });
+
+  it("utan attachment laddas ingen fil upp", async () => {
+    const { client, uploads, connections } = makeClient();
+    const connector = new FortnoxLedgerConnector({ client, mapping: MAPPING });
+    await connector.pushVoucher(semantic, { idempotencyKey: "br-1" });
+    expect(uploads).toHaveLength(0);
+    expect(connections).toHaveLength(0);
   });
 });

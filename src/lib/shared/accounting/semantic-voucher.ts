@@ -82,6 +82,8 @@ export interface SemanticVoucherInput {
   vatBreakdown?: VatBreakdownLine[] | null;
   invoiceDate: Date | string;
   invoiceNumber?: string | null;
+  /** AVA-ärendenummer — skrivs i verifikatets titel/beskrivning (#785). */
+  matterNumber?: string | null;
 }
 
 function semanticRow(role: VoucherRole, ore: number, debit: boolean): SemanticVoucherRow {
@@ -127,9 +129,15 @@ export function buildSemanticVoucher(
 
   return {
     date: invoice.invoiceDate,
-    description: invoice.invoiceNumber ? `Faktura ${invoice.invoiceNumber}` : "Kundfaktura (AVA)",
+    description: voucherDescription(invoice),
     rows,
   };
+}
+
+/** Verifikatets titel: AVA-ärendenumret först (#785), sedan ev. fakturanummer. */
+function voucherDescription(invoice: SemanticVoucherInput): string {
+  const faktura = invoice.invoiceNumber ? `Faktura ${invoice.invoiceNumber}` : "Kundfaktura (AVA)";
+  return invoice.matterNumber ? `Ärende ${invoice.matterNumber} · ${faktura}` : faktura;
 }
 
 /** Enkel-rads-verifikat (äldre fakturor/fixtures): moms ur vatOre, annars split. */

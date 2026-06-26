@@ -111,3 +111,37 @@ describe("FortnoxClient.createVoucher", () => {
     await expect(client.createVoucher(VOUCHER)).rejects.toThrow(/inga tokens/);
   });
 });
+
+describe("FortnoxClient fil-bilaga (#785)", () => {
+  it("uploadInboxFile → POST /3/inbox (multipart) och returnerar fil-id", async () => {
+    let url = ""; let auth = ""; let isForm = false;
+    const fetchFn = (async (u: string | URL | Request, init?: RequestInit) => {
+      url = String(u);
+      const headers = (init?.headers ?? {}) as Record<string, string>;
+      auth = headers.Authorization ?? "";
+      isForm = typeof FormData !== "undefined" && init?.body instanceof FormData;
+      return new Response(JSON.stringify({ File: { Id: "guid-9" } }), { status: 200, headers: { "content-type": "application/json" } });
+    }) as typeof globalThis.fetch;
+    const client = new FortnoxClient(config, new InMemoryFortnoxTokenStore(fresh()), fetchFn);
+
+    const id = await client.uploadInboxFile("Faktura.pdf", new Uint8Array([1, 2, 3]));
+    expect(id).toBe("guid-9");
+    expect(url).toBe("https://api.test/3/inbox");
+    expect(auth).toBe("Bearer at-fresh");
+    expect(isForm).toBe(true);
+  });
+
+  it("connectFileToVoucher → POST /3/voucherfileconnections med FileId/serie/nummer", async () => {
+    let url = ""; let body: unknown;
+    const fetchFn = (async (u: string | URL | Request, init?: RequestInit) => {
+      url = String(u);
+      body = typeof init?.body === "string" ? JSON.parse(init.body) : undefined;
+      return new Response(JSON.stringify({}), { status: 200, headers: { "content-type": "application/json" } });
+    }) as typeof globalThis.fetch;
+    const client = new FortnoxClient(config, new InMemoryFortnoxTokenStore(fresh()), fetchFn);
+
+    await client.connectFileToVoucher("guid-9", "A", "7");
+    expect(url).toBe("https://api.test/3/voucherfileconnections");
+    expect(body).toEqual({ VoucherFileConnection: { FileId: "guid-9", VoucherSeries: "A", VoucherNumber: "7" } });
+  });
+});
