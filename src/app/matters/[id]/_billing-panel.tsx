@@ -246,6 +246,7 @@ function KostnadsrakningTrigger({ matterId, matter, open, onClose, onRecorded }:
 
 export function BillingPanel({ matterId, matter }: Props) {
   const runs = trpc.billingRun.list.useQuery({ matterId });
+  const utils = trpc.useUtils();
   // Självupptäck inkonsistenser (t.ex. KR väntar på dom utan KR-dokument).
   useMatterInvariants({ matterId, matterNumber: matter.matterNumber });
   const [dialog, setDialog] = useState<DialogState>("NONE");
@@ -254,7 +255,16 @@ export function BillingPanel({ matterId, matter }: Props) {
   const [verdictRunId, setVerdictRunId] = useState<BillingRunId | null>(null);
   const rows = (runs.data?.runs ?? []) as BillingRunRow[];
   const pending = findPendingVerdict(rows);
-  const refetch = () => { void runs.refetch(); };
+  // Efter en fakturering ändras både körningarna OCH vad som är ofryst/ofakturerat
+  // — invalidera "Upparbetat ofakturerat" (proposal) + fakturalistan, annars visar
+  // panelen stale belopp tills sidan laddas om.
+  const refetch = () => {
+    void runs.refetch();
+    void utils.billingRun.proposal.invalidate({ matterId });
+    void utils.invoice.list.invalidate();
+    void utils.timeEntry.list.invalidate({ matterId });
+    void utils.expense.list.invalidate({ matterId });
+  };
   const onPick = (t: ActionPick) => {
     if (t === "KOSTNADSRAKNING") setShowKr(true);
     else if (t === "SETTLE") setShowSettle(true);
