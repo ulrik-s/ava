@@ -87,12 +87,12 @@ export function UserForm({
           </p>
         </FormField>
         <FormField id={hourlyRateId} label="Timtaxa (kr/h)">
-          <input id={hourlyRateId} type="number" value={form.hourlyRate}
+          <input id={hourlyRateId} type="text" inputMode="decimal" value={form.hourlyRate}
             onChange={(e) => setForm({ ...form, hourlyRate: e.target.value })}
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
         </FormField>
         <FormField id={mileageRateId} label="Milersättning (kr/km)">
-          <input id={mileageRateId} type="number" step="0.01" value={form.mileageRate}
+          <input id={mileageRateId} type="text" inputMode="decimal" value={form.mileageRate}
             onChange={(e) => setForm({ ...form, mileageRate: e.target.value })}
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
         </FormField>

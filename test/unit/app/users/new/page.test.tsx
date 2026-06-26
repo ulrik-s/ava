@@ -101,7 +101,7 @@ describe("NewUserPage", () => {
 
   it("ändrar timtaxa och milersättning", () => {
     const { container } = render(<NewUserPage />);
-    const numberInputs = container.querySelectorAll('input[type="number"]');
+    const numberInputs = container.querySelectorAll('input[inputmode="decimal"]');
     fireEvent.change(numberInputs[0]!, { target: { value: "3500" } });
     fireEvent.change(numberInputs[1]!, { target: { value: "3.50" } });
     fireEvent.change(container.querySelectorAll("input")[0]!, { target: { value: "X" } });

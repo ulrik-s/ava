@@ -254,7 +254,7 @@ function ExpenseForm({ form, setForm, submitLabel, isPending, isTaxeArende, onSu
         </div>
         <div>
           <label className="block text-xs text-gray-500 mb-1">Belopp (SEK, exkl. moms) *</label>
-          <input type="number" required min={0} step="0.01" value={form.amount || ""}
+          <input type="text" inputMode="decimal" required value={form.amount || ""}
             onChange={(e) => setForm({ ...form, amount: parseFloat(e.target.value) || 0 })}
             placeholder="0,00"
             className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm" />

@@ -27,7 +27,7 @@ export function PaymentModal({ invoiceId, isPending, error, onSubmit, onClose }:
         <div className="space-y-3">
           <div>
             <label htmlFor={paymentAmountId} className="block text-xs font-medium mb-1">Belopp (kr)</label>
-            <input id={paymentAmountId} type="number" min={1} value={paymentAmountSek} onChange={(e) => setPaymentAmountSek(e.target.value)} className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm" />
+            <input id={paymentAmountId} type="text" inputMode="decimal" value={paymentAmountSek} onChange={(e) => setPaymentAmountSek(e.target.value)} className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm" />
           </div>
           <div>
             <label htmlFor={paymentDateId} className="block text-xs font-medium mb-1">Betalningsdatum</label>

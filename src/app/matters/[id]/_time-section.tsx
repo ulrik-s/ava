@@ -219,7 +219,7 @@ function TimeForm({ form, setForm, submitLabel, isPending, isTaxeArende, onSubmi
         </div>
         <div>
           <label className="block text-xs text-gray-500 mb-1">Tid (minuter) *</label>
-          <input type="number" required min={1} value={form.minutes}
+          <input type="text" inputMode="numeric" required value={form.minutes}
             onChange={(e) => setForm({ ...form, minutes: parseInt(e.target.value) || 0 })}
             className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm" />
         </div>
