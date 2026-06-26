@@ -155,4 +155,3 @@ export type FortnoxVoucherResponse = z.infer<typeof fortnoxVoucherResponseSchema
 export const fortnoxInboxResponseSchema = z.object({
   File: z.object({ Id: z.string().min(1) }).passthrough(),
 });
-export type FortnoxInboxResponse = z.infer<typeof fortnoxInboxResponseSchema>;
