@@ -118,6 +118,9 @@ export const matters = pgTable("matters", {
   radgivningBetaldAt: timestamp("radgivning_betald_at", { withTimezone: true }),
   /** Klientens andel (självrisk/avgift) i bips — rättsskydd/rättshjälp (#778). */
   clientShareBips: integer("client_share_bips"),
+  /** Rättsskyddets maxbelopp (öre) resp. rättshjälpens timtak — täcknings-tak (#793). */
+  rattsskyddMaxOre: integer("rattsskydd_max_ore"),
+  rattshjalpMaxTimmar: integer("rattshjalp_max_timmar"),
 }, (t) => [index("matters_org_idx").on(t.organizationId)]);
 
 /**

@@ -38,6 +38,17 @@ export const matterSchema = z.object({
    */
   clientShareBips: z.number().int().min(0).max(10000).nullish(),
   /**
+   * Rättsskyddets maxbelopp i öre (försäkringens tak, ur beslutet). När
+   * upparbetat arvode-värde närmar sig (≥90 %) taket flaggas ärendet (#793).
+   * Null = ej satt.
+   */
+  rattsskyddMaxOre: z.number().int().nonnegative().nullish(),
+  /**
+   * Rättshjälpens timtak (rättshjälpslagen: 100 tim, kan utökas). Null = ej satt;
+   * UI defaultar 100 för rättshjälpsärenden. Vid ≥90 % flaggas ärendet (#793).
+   */
+  rattshjalpMaxTimmar: z.number().int().positive().nullish(),
+  /**
    * `isTaxeArende` — ärendet ersätts enligt Domstolsverkets fastställda
    * taxa (schablon) istället för löpande timdebitering.
    *

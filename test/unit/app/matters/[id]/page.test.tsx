@@ -51,6 +51,7 @@ vi.mock("@/lib/client/trpc", () => ({
       addNewContact: { useMutation: () => stubs.addNewContact },
       removeContact: { useMutation: () => stubs.removeContact },
       update: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      coverageUsage: { useQuery: () => ({ data: { billableMinutes: 0, billableValueOre: 0 }, isLoading: false }) },
     },
     timeEntry: {
       list: { useQuery: () => timeQuery },

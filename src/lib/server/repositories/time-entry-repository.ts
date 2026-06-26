@@ -36,6 +36,14 @@ export interface TimeEntryListResult {
   totalMinutes: number;
 }
 
+/** Upparbetat (debiterbart) i ett ärende — underlag för täcknings-tak (#793). */
+export interface CoverageUsage {
+  /** Summa debiterbara minuter (rättshjälpens 100-tim-tak). */
+  billableMinutes: number;
+  /** Summa debiterbart arvode-värde i öre, exkl moms (rättsskyddets belopps-tak). */
+  billableValueOre: number;
+}
+
 /** Tidspost för tidsrapporten — med jurist + ärende inkl. klient-kontakten (KLIENT). */
 export interface TimeEntryReportRow extends TimeEntry {
   user: { id: UserId; name: string };
@@ -79,6 +87,8 @@ export interface TimeEntryRepository extends Repository<TimeEntry> {
   flagBilled(ids: TimeEntryId[], invoiceId: InvoiceId): Promise<void>;
   /** Ofrysta tidsposter i ett ärende (date asc) — underlag för billing-run. */
   listUnfrozenForMatter(matterId: MatterId): Promise<TimeEntry[]>;
+  /** Summa debiterbara minuter + arvode-värde (öre) i ett ärende — täcknings-tak (#793). */
+  coverageUsageForMatter(matterId: MatterId): Promise<CoverageUsage>;
   /** Frys alla ofrysta tidsposter i ett ärende mot en billing-run (bulk). */
   freezeForMatter(matterId: MatterId, billingRunId: BillingRunId, now: Date): Promise<void>;
   /** Frys ENBART de angivna (ofrysta) tidsposterna mot en billing-run — per-post-val. */

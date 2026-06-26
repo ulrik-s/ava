@@ -225,6 +225,8 @@ export const matterRouter = router({
         paymentMethodNote: z.string().nullable().optional(),
         paymentMethodDecidedAt: z.string().nullable().optional(),
         clientShareBips: z.number().int().min(0).max(10000).nullable().optional(),
+        rattsskyddMaxOre: z.number().int().nonnegative().nullable().optional(),
+        rattshjalpMaxTimmar: z.number().int().positive().nullable().optional(),
         isTaxeArende: z.boolean().optional(),
         taxaLevel: z.number().int().min(1).max(4).nullable().optional(),
         taxaHuvudforhandlingMin: z.number().int().nonnegative().nullable().optional(),
@@ -251,6 +253,14 @@ export const matterRouter = router({
         if (input.status === "ARCHIVED") await emit.matterArchived(ctx, id);
       }
       return updated;
+    }),
+
+  /** Upparbetat (debiterbart) i ärendet — driver täcknings-takets varningsbadge (#793). */
+  coverageUsage: orgProcedure
+    .input(z.object({ matterId: matterIdSchema }))
+    .query(async ({ ctx, input }) => {
+      await assertMatterInOrg(ctx, input.matterId);
+      return ctx.repos.timeEntries.coverageUsageForMatter(input.matterId);
     }),
 
   addContact: orgProcedure
