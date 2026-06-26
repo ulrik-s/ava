@@ -180,7 +180,11 @@ export const matterRouter = router({
         page: input.page,
         pageSize: input.pageSize,
       });
-      return { matters, total, pages: Math.ceil(total / input.pageSize) };
+      // Täcknings-tak-kolumn (#793): bifoga upparbetat (debiterbart) per ärende
+      // batchat, så listan kan visa/sortera/filtrera mot rättshjälps-/rättsskyddstaket.
+      const usage = await ctx.repos.timeEntries.coverageUsageForMatters(matters.map((m) => asId<"MatterId">(m.id)));
+      const withUsage = matters.map((m) => ({ ...m, coverageUsage: usage[m.id] ?? { billableMinutes: 0, billableValueOre: 0 } }));
+      return { matters: withUsage, total, pages: Math.ceil(total / input.pageSize) };
     }),
 
   getById: orgProcedure

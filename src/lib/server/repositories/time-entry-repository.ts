@@ -89,6 +89,9 @@ export interface TimeEntryRepository extends Repository<TimeEntry> {
   listUnfrozenForMatter(matterId: MatterId): Promise<TimeEntry[]>;
   /** Summa debiterbara minuter + arvode-värde (öre) i ett ärende — täcknings-tak (#793). */
   coverageUsageForMatter(matterId: MatterId): Promise<CoverageUsage>;
+  /** Som ovan men batchat för flera ärenden (täcknings-kolumn i listan, #793).
+   *  Keyas på matterId; ärenden utan poster utelämnas (→ 0 hos anroparen). */
+  coverageUsageForMatters(matterIds: MatterId[]): Promise<Record<string, CoverageUsage>>;
   /** Frys alla ofrysta tidsposter i ett ärende mot en billing-run (bulk). */
   freezeForMatter(matterId: MatterId, billingRunId: BillingRunId, now: Date): Promise<void>;
   /** Frys ENBART de angivna (ofrysta) tidsposterna mot en billing-run — per-post-val. */

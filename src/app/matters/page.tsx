@@ -7,7 +7,8 @@ import { Pager } from "@/components/ui/pager";
 import { useIsReadOnly } from "@/lib/client/demo/demo-mode-context";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
-import type { MatterStatus } from "@/lib/shared/schemas/enums";
+import { coverageStatus } from "@/lib/shared/coverage-cap";
+import type { MatterStatus, PaymentMethod } from "@/lib/shared/schemas/enums";
 
 interface MatterRow {
   id: string;
@@ -15,8 +16,49 @@ interface MatterRow {
   title: string;
   status: MatterStatus;
   isTaxeArende?: boolean;
+  paymentMethod?: PaymentMethod | null;
+  rattsskyddMaxOre?: number | null;
+  rattshjalpMaxTimmar?: number | null;
+  coverageUsage?: { billableMinutes: number; billableValueOre: number };
   contacts: Array<{ contact: { name: string } }>;
   _count: { contacts: number };
+}
+
+/** Takstatus för ett listrad-ärende (rättshjälp/-skydd), eller null (#793). */
+function rowCoverage(m: MatterRow) {
+  return coverageStatus({
+    method: m.paymentMethod,
+    rattsskyddMaxOre: m.rattsskyddMaxOre ?? null,
+    rattshjalpMaxTimmar: m.rattshjalpMaxTimmar ?? null,
+    billableMinutes: m.coverageUsage?.billableMinutes ?? 0,
+    billableValueOre: m.coverageUsage?.billableValueOre ?? 0,
+  });
+}
+
+/** Filtrerbar/grupperbar etikett för täcknings-kolumnen. */
+function coverageLabel(m: MatterRow): string {
+  const s = rowCoverage(m);
+  if (!s) return "—";
+  if (s.overCap) return "Över tak";
+  if (s.nearCap) return "Närmar sig tak";
+  return "Inom tak";
+}
+
+/** Badge för täcknings-kolumnen: färgad procent + ⚠ vid ≥ 90 %. */
+function CoverageCell({ m }: { m: MatterRow }) {
+  const s = rowCoverage(m);
+  if (!s) return <span className="text-sm text-gray-400">—</span>;
+  const pct = Math.round(s.ratio * 100);
+  const cls = s.overCap
+    ? "bg-red-50 text-red-700 border-red-200"
+    : s.nearCap
+    ? "bg-amber-50 text-amber-800 border-amber-200"
+    : "bg-gray-50 text-gray-600 border-gray-200";
+  return (
+    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs border ${cls}`} title={coverageLabel(m)}>
+      {s.nearCap ? "⚠ " : ""}{pct} %
+    </span>
+  );
 }
 
 function statusLabel(s: string): string {
@@ -62,6 +104,11 @@ const matterColumns: Column<MatterRow>[] = [
   },
   { key: "contactCount", label: "Kontakter", sortable: true, align: "right", sortValue: (m) => m._count.contacts,
     render: (m) => <span className="text-sm text-gray-500">{m._count.contacts}</span> },
+  { key: "coverage", label: "Täckning (tak)", sortable: true, filterable: true, groupable: true,
+    // Sortera ej-tillämpliga sist (negativ kvot); filtrera/gruppera på etiketten.
+    sortValue: (m) => { const s = rowCoverage(m); return s ? s.ratio : -1; },
+    filterValue: coverageLabel, groupValue: coverageLabel,
+    render: (m) => <CoverageCell m={m} /> },
 ];
 
 type StatusFilter = MatterStatus | "";
