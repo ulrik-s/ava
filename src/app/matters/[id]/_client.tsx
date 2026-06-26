@@ -4,6 +4,7 @@ import { FileDown } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { DocumentBrowser } from "@/components/documents/document-browser";
+import { CoverageCapWarning } from "@/components/matter/coverage-cap-warning";
 import { EventsPanel } from "@/components/matter/events-panel";
 import { PaymentMethodCard } from "@/components/matter/payment-method-card";
 import { SuggestionsPanel } from "@/components/matter/suggestions-panel";
@@ -100,16 +101,30 @@ function MatterPaymentMethod({ matterId, matter }: {
     paymentMethodNote?: string | null | undefined;
     paymentMethodDecidedAt?: Date | string | null | undefined;
     clientShareBips?: number | null | undefined;
+    rattsskyddMaxOre?: number | null | undefined;
+    rattshjalpMaxTimmar?: number | null | undefined;
   };
 }) {
+  const rattsskyddMaxOre = matter.rattsskyddMaxOre ?? null;
+  const rattshjalpMaxTimmar = matter.rattshjalpMaxTimmar ?? null;
   return (
-    <PaymentMethodCard
-      matterId={matterId}
-      paymentMethod={matter.paymentMethod}
-      paymentMethodNote={matter.paymentMethodNote ?? null}
-      paymentMethodDecidedAt={matter.paymentMethodDecidedAt ?? null}
-      clientShareBips={matter.clientShareBips ?? null}
-    />
+    <>
+      <CoverageCapWarning
+        matterId={matterId}
+        paymentMethod={matter.paymentMethod}
+        rattsskyddMaxOre={rattsskyddMaxOre}
+        rattshjalpMaxTimmar={rattshjalpMaxTimmar}
+      />
+      <PaymentMethodCard
+        matterId={matterId}
+        paymentMethod={matter.paymentMethod}
+        paymentMethodNote={matter.paymentMethodNote ?? null}
+        paymentMethodDecidedAt={matter.paymentMethodDecidedAt ?? null}
+        clientShareBips={matter.clientShareBips ?? null}
+        rattsskyddMaxOre={rattsskyddMaxOre}
+        rattshjalpMaxTimmar={rattshjalpMaxTimmar}
+      />
+    </>
   );
 }
 

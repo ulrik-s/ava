@@ -34,6 +34,10 @@ interface Props {
   paymentMethodDecidedAt: Date | string | null;
   /** Klientens andel i bips (2500 = 25 %); null = ej satt (#778). */
   clientShareBips: number | null;
+  /** Rättsskyddets maxbelopp i öre; null = ej satt (#793). */
+  rattsskyddMaxOre: number | null;
+  /** Rättshjälpens timtak; null → 100 tim (#793). */
+  rattshjalpMaxTimmar: number | null;
 }
 
 /** Betalningssätt där klienten betalar en %-sats → visa/redigera andelen. */
@@ -42,23 +46,35 @@ function usesClientShare(method: PaymentMethod): boolean {
 }
 
 /** Läsvy: nuvarande betalningssätt + kreditrisk-badge + ev. notering/datum. */
+/** Tak-text för läsvyn: belopp (rättsskydd) eller timmar (rättshjälp). */
+function capLabel(method: PaymentMethod, rattsskyddMaxOre: number | null, rattshjalpMaxTimmar: number | null): string | null {
+  if (method === "RATTSSKYDD") return rattsskyddMaxOre != null ? `Tak: ${rattsskyddMaxOre / 100} kr` : "Tak: ej satt";
+  if (method === "RATTSHJALP") return `Tak: ${rattshjalpMaxTimmar ?? 100} tim`;
+  return null;
+}
+
 function PaymentMethodView({
   paymentMethod,
   paymentMethodNote,
   paymentMethodDecidedAt,
   clientShareBips,
+  rattsskyddMaxOre,
+  rattshjalpMaxTimmar,
   onEdit,
 }: {
   paymentMethod: PaymentMethod;
   paymentMethodNote: string | null;
   paymentMethodDecidedAt: Date | string | null;
   clientShareBips: number | null;
+  rattsskyddMaxOre: number | null;
+  rattshjalpMaxTimmar: number | null;
   onEdit: () => void;
 }) {
   const risk = creditRiskFor(paymentMethod);
   const badgeClass = RISK_BADGE[risk];
   const label = PAYMENT_METHOD_LABELS[paymentMethod as keyof typeof PAYMENT_METHOD_LABELS] ?? paymentMethod;
   const showShare = usesClientShare(paymentMethod);
+  const cap = showShare ? capLabel(paymentMethod, rattsskyddMaxOre, rattshjalpMaxTimmar) : null;
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-4">
       <div className="flex items-start justify-between gap-3">
@@ -76,6 +92,11 @@ function PaymentMethodView({
                 Klientens andel: {clientShareBips != null ? `${clientShareBips / 100} %` : "ej satt"}
               </span>
             )}
+            {cap && (
+              <span className="text-xs rounded-full px-2 py-0.5 border border-blue-200 bg-blue-50 text-blue-700">
+                {cap}
+              </span>
+            )}
           </div>
           {paymentMethodNote && <p className="text-sm text-gray-600 mt-1">{paymentMethodNote}</p>}
           {paymentMethodDecidedAt && (
@@ -90,6 +111,42 @@ function PaymentMethodView({
       </div>
     </div>
   );
+}
+
+/** Tak-fältet: rättsskyddets maxbelopp (kr) eller rättshjälpens timtak. */
+function CoverageCapField({ method, value, onChange }: { method: PaymentMethod; value: string; onChange: (v: string) => void }) {
+  const isAmount = method === "RATTSSKYDD";
+  return (
+    <div>
+      <label className="block text-xs font-medium mb-1">
+        {isAmount ? "Försäkringens maxbelopp (kr)" : "Rättshjälpens tak (timmar)"}
+      </label>
+      <input
+        type="text"
+        inputMode="decimal"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={isAmount ? "t.ex. 75000" : "100"}
+        className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
+      />
+      <p className="mt-1 text-[11px] text-gray-400">
+        {isAmount
+          ? "Taket ur försäkringsbeslutet. Ärendet varnar vid 90 % av upparbetat värde."
+          : "Rättshjälpslagen: 100 tim (höj vid beviljad utökad rättshjälp). Varnar vid 90 %."}
+      </p>
+    </div>
+  );
+}
+
+/** Visar rätt tak-fält för valt betalningssätt (utbrutet → editor-komplexitet ≤8). */
+function CoverageCapFields({ method, rsMaxKr, setRsMaxKr, rhMaxTim, setRhMaxTim }: {
+  method: PaymentMethod;
+  rsMaxKr: string; setRsMaxKr: (v: string) => void;
+  rhMaxTim: string; setRhMaxTim: (v: string) => void;
+}) {
+  if (method === "RATTSSKYDD") return <CoverageCapField method={method} value={rsMaxKr} onChange={setRsMaxKr} />;
+  if (method === "RATTSHJALP") return <CoverageCapField method={method} value={rhMaxTim} onChange={setRhMaxTim} />;
+  return null;
 }
 
 /** %-andels-fältet (självrisk/avgift). Utbrutet så editorn håller sig ≤100 rader. */
@@ -124,6 +181,9 @@ function PaymentMethodEditor({ matterId, initial, onDone }: { matterId: MatterId
   );
   // %-sats redigeras i procent (bips/100); tomt fält → null. Tillåt komma-decimal.
   const [sharePct, setSharePct] = useState(initial.clientShareBips != null ? String(initial.clientShareBips / 100) : "");
+  // Tak: rättsskydd i kr (öre/100), rättshjälp i timmar. Tomt fält → null.
+  const [rsMaxKr, setRsMaxKr] = useState(initial.rattsskyddMaxOre != null ? String(initial.rattsskyddMaxOre / 100) : "");
+  const [rhMaxTim, setRhMaxTim] = useState(initial.rattshjalpMaxTimmar != null ? String(initial.rattshjalpMaxTimmar) : "");
   const methodId = useId();
   const decidedAtId = useId();
   const noteId = useId();
@@ -157,6 +217,7 @@ function PaymentMethodEditor({ matterId, initial, onDone }: { matterId: MatterId
         {usesClientShare(method) && (
           <ClientShareField id={shareId} value={sharePct} onChange={setSharePct} />
         )}
+        <CoverageCapFields method={method} rsMaxKr={rsMaxKr} setRsMaxKr={setRsMaxKr} rhMaxTim={rhMaxTim} setRhMaxTim={setRhMaxTim} />
         <div>
           <label htmlFor={decidedAtId} className="block text-xs font-medium mb-1">
             Beslutsdatum (om rättshjälp/rättsskydd beviljats)
@@ -195,6 +256,8 @@ function PaymentMethodEditor({ matterId, initial, onDone }: { matterId: MatterId
                 paymentMethodNote: note || null,
                 paymentMethodDecidedAt: decidedAt || null,
                 clientShareBips: clientShareFromPct(sharePct),
+                rattsskyddMaxOre: oreFromKr(rsMaxKr),
+                rattshjalpMaxTimmar: positiveIntOrNull(rhMaxTim),
               })
             }
             className="px-4 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
@@ -218,6 +281,8 @@ export function PaymentMethodCard(props: Props) {
       paymentMethodNote={props.paymentMethodNote}
       paymentMethodDecidedAt={props.paymentMethodDecidedAt}
       clientShareBips={props.clientShareBips}
+      rattsskyddMaxOre={props.rattsskyddMaxOre}
+      rattshjalpMaxTimmar={props.rattshjalpMaxTimmar}
       onEdit={() => setEditing(true)}
     />
   );
@@ -230,4 +295,22 @@ function clientShareFromPct(pct: string): number | null {
   const n = Number.parseFloat(trimmed);
   if (!Number.isFinite(n) || n < 0 || n > 100) return null;
   return Math.round(n * 100);
+}
+
+/** Kr-textfält → öre (null om tomt/ogiltigt/negativt). Tillåter komma-decimal. */
+function oreFromKr(kr: string): number | null {
+  const trimmed = kr.trim().replace(/\s/g, "").replace(",", ".");
+  if (trimmed === "") return null;
+  const n = Number.parseFloat(trimmed);
+  if (!Number.isFinite(n) || n < 0) return null;
+  return Math.round(n * 100);
+}
+
+/** Heltals-textfält → positivt heltal (null om tomt/ogiltigt/≤0). */
+function positiveIntOrNull(s: string): number | null {
+  const trimmed = s.trim().replace(",", ".");
+  if (trimmed === "") return null;
+  const n = Number.parseFloat(trimmed);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return Math.round(n);
 }

@@ -37,6 +37,8 @@ describe("PaymentMethodCard", () => {
         paymentMethodNote="Diarienr RH-2026-0217"
         paymentMethodDecidedAt={new Date("2026-03-02")}
         clientShareBips={null}
+        rattsskyddMaxOre={null}
+        rattshjalpMaxTimmar={null}
       />,
     );
     expect(screen.getByText("Rättshjälp")).toBeInTheDocument();
@@ -52,6 +54,8 @@ describe("PaymentMethodCard", () => {
         paymentMethodNote={null}
         paymentMethodDecidedAt={null}
         clientShareBips={null}
+        rattsskyddMaxOre={null}
+        rattshjalpMaxTimmar={null}
       />,
     );
     expect(screen.getByText("Privat betalning")).toBeInTheDocument();
@@ -66,6 +70,8 @@ describe("PaymentMethodCard", () => {
         paymentMethodNote={null}
         paymentMethodDecidedAt={null}
         clientShareBips={null}
+        rattsskyddMaxOre={null}
+        rattshjalpMaxTimmar={null}
       />,
     );
     expect(screen.getByText("Ej fastställt")).toBeInTheDocument();
@@ -80,6 +86,8 @@ describe("PaymentMethodCard", () => {
         paymentMethodNote="Trygg-Hansa"
         paymentMethodDecidedAt={null}
         clientShareBips={null}
+        rattsskyddMaxOre={null}
+        rattshjalpMaxTimmar={null}
       />,
     );
     expect(screen.getByRole("button", { name: /Ändra/i })).toBeInTheDocument();
@@ -93,6 +101,8 @@ describe("PaymentMethodCard", () => {
         paymentMethodNote={null}
         paymentMethodDecidedAt={null}
         clientShareBips={null}
+        rattsskyddMaxOre={null}
+        rattshjalpMaxTimmar={null}
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: /Ändra/i }));
@@ -108,6 +118,8 @@ describe("PaymentMethodCard", () => {
         paymentMethodNote={null}
         paymentMethodDecidedAt={null}
         clientShareBips={null}
+        rattsskyddMaxOre={null}
+        rattshjalpMaxTimmar={null}
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: /Ändra/i }));
@@ -123,6 +135,8 @@ describe("PaymentMethodCard", () => {
         paymentMethodNote={null}
         paymentMethodDecidedAt={null}
         clientShareBips={null}
+        rattsskyddMaxOre={null}
+        rattshjalpMaxTimmar={null}
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: /Ändra/i }));
@@ -148,6 +162,8 @@ describe("PaymentMethodCard", () => {
         paymentMethodNote={null}
         paymentMethodDecidedAt={new Date("2026-04-15")}
         clientShareBips={null}
+        rattsskyddMaxOre={null}
+        rattshjalpMaxTimmar={null}
       />,
     );
     expect(screen.getByText(/Beslut mottaget/)).toBeInTheDocument();
@@ -161,6 +177,8 @@ describe("PaymentMethodCard", () => {
         paymentMethodNote={null}
         paymentMethodDecidedAt={null}
         clientShareBips={2500}
+        rattsskyddMaxOre={null}
+        rattshjalpMaxTimmar={null}
       />,
     );
     expect(screen.getByText(/Klientens andel: 25 %/)).toBeInTheDocument();
@@ -174,6 +192,8 @@ describe("PaymentMethodCard", () => {
         paymentMethodNote={null}
         paymentMethodDecidedAt={null}
         clientShareBips={null}
+        rattsskyddMaxOre={null}
+        rattshjalpMaxTimmar={null}
       />,
     );
     expect(screen.getByText(/Klientens andel: ej satt/)).toBeInTheDocument();
@@ -187,6 +207,8 @@ describe("PaymentMethodCard", () => {
         paymentMethodNote={null}
         paymentMethodDecidedAt={null}
         clientShareBips={2000}
+        rattsskyddMaxOre={null}
+        rattshjalpMaxTimmar={null}
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: /Ändra/i }));
@@ -207,6 +229,8 @@ describe("PaymentMethodCard", () => {
         paymentMethodNote={null}
         paymentMethodDecidedAt={null}
         clientShareBips={2000}
+        rattsskyddMaxOre={null}
+        rattshjalpMaxTimmar={null}
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: /Ändra/i }));
