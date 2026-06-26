@@ -30,8 +30,16 @@ let documentListData: { documents: Array<Record<string, unknown>> } = { document
 let hasDoc = false;
 const openGeneratedDocFn = vi.fn();
 
+const invalidate = vi.fn();
+
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
+    useUtils: () => ({
+      billingRun: { proposal: { invalidate } },
+      invoice: { list: { invalidate } },
+      timeEntry: { list: { invalidate } },
+      expense: { list: { invalidate } },
+    }),
     billingRun: {
       list: { useQuery: () => ({ data: runsData, isLoading: runsLoading, refetch }) },
       proposal: { useQuery: () => ({ data: proposalData, isLoading: false }) },
