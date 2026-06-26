@@ -297,3 +297,37 @@ describe("billingRun.list / byId", () => {
     expect(runs[0]!.type).toBe("ACCONTO");
   });
 });
+
+describe("billingRun.coverageSplit — prutning/självrisk på aktuellt timarvode (#800)", () => {
+  function caller(matterExtra: Record<string, unknown>, currentRate: number) {
+    const ds = new DemoDataStore({
+      organizations: [{ id: "org-1", name: "X" }],
+      matters: [{ id: "m-1", organizationId: "org-1", matterNumber: "2026-0001", title: "T", status: "ACTIVE", responsibleLawyerId: "u-1", ...matterExtra, createdAt: new Date() }],
+      // Juristens AKTUELLA timtaxa = currentRate (skiljer sig från tidspostens snapshot 200000).
+      users: [{ id: "u-1", organizationId: "org-1", email: "a@x", name: "Anna", role: "ADMIN", hourlyRate: currentRate }],
+      timeEntries: [{ id: "te-1", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date(), minutes: 120, description: "M", hourlyRate: 200000, billable: true }],
+    }, async () => {});
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: PRINCIPAL }) as any);
+  }
+
+  it("rättsskydd: värderar på juristens AKTUELLA timtaxa (ej snapshot) + klient tar prutningen", async () => {
+    // 2 tim × aktuell 3000 kr/h = 6000 kr total (INTE snapshot 2000 kr/h = 4000).
+    const c = caller({ paymentMethod: "RATTSSKYDD", clientShareBips: 2000 }, 300000);
+    const r = await c.billingRun.coverageSplit({ matterId: "m-1", insurerPrutningOre: 50000 });
+    expect(r.totalOre).toBe(600000); // 2h × 3000 kr (aktuell taxa)
+    expect(r.clientOre).toBe(120000 + 50000); // självrisk 20 % (120000) + prutning 50000
+    expect(r.payerOre).toBe(600000 - 170000);
+    expect(r.firmLossOre).toBe(0);
+  });
+
+  it("rättshjälp: värderar på timkostnadsnormen; dom-prutning → byrå-förlust + klient på reducerat", async () => {
+    // 2 tim × 1626 kr = 325 200 öre total; dom 300 000 → förlust 25 200; klient 20 % × 300 000.
+    const c = caller({ paymentMethod: "RATTSHJALP", clientShareBips: 2000, taxaHasFTax: true }, 999999);
+    const r = await c.billingRun.coverageSplit({ matterId: "m-1", awardedOre: 300000 });
+    expect(r.totalOre).toBe(325200);
+    expect(r.firmLossOre).toBe(25200);
+    expect(r.clientOre).toBe(60000);
+    expect(r.payerOre).toBe(240000);
+  });
+});
