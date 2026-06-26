@@ -120,7 +120,6 @@ interface MatterForm {
   matterType: string;
   klientId: string;
   responsibleLawyerId: string;
-  courtCaseNumber: string;
   isTaxeArende: boolean;
 }
 
@@ -154,7 +153,6 @@ function NewMatterForm({ form, setForm, contactsData, employeesData, onSubmit, i
   const matterTypeId = useId();
   const descriptionId = useId();
   const responsibleId = useId();
-  const courtCaseId = useId();
   return (
     <form onSubmit={onSubmit} className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
       <h2 className="font-semibold text-gray-900 mb-4">Nytt ärende</h2>
@@ -194,14 +192,6 @@ function NewMatterForm({ form, setForm, contactsData, employeesData, onSubmit, i
             ))}
           </select>
           <p className="mt-1 text-xs text-gray-500">Styr ärendenummerserien (juristens prefix).</p>
-        </div>
-        <div>
-          <label htmlFor={courtCaseId} className="block text-sm font-medium text-gray-700 mb-1">Domstolens målnummer</label>
-          <input id={courtCaseId} type="text" value={form.courtCaseNumber}
-            onChange={(e) => setForm({ ...form, courtCaseNumber: e.target.value })}
-            placeholder="t.ex. B 1234-26 (valfritt)"
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono" />
-          <p className="mt-1 text-xs text-gray-500">Matchningsnyckel för domstolsbetalningar (#173).</p>
         </div>
         <div className="md:col-span-2">
           <label htmlFor={descriptionId} className="block text-sm font-medium text-gray-700 mb-1">Beskrivning</label>
@@ -305,7 +295,6 @@ function MattersContent() {
     matterType: "",
     klientId: "",
     responsibleLawyerId: "",
-    courtCaseNumber: "",
     isTaxeArende: false,
   });
 
@@ -317,7 +306,6 @@ function MattersContent() {
       matterType: form.matterType || undefined,
       klientId: form.klientId || undefined,
       responsibleLawyerId: form.responsibleLawyerId || undefined,
-      courtCaseNumber: form.courtCaseNumber || undefined,
       isTaxeArende: form.isTaxeArende || undefined,
     });
   }
