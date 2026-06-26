@@ -331,3 +331,37 @@ describe("billingRun.coverageSplit — prutning/självrisk på aktuellt timarvod
     expect(r.payerOre).toBe(240000);
   });
 });
+
+describe("billingRun.settleCoverage — bokför prutnings-uppdelningen (#801)", () => {
+  function caller(matterExtra: Record<string, unknown>, currentRate: number) {
+    const ds = new DemoDataStore({
+      organizations: [{ id: "org-1", name: "X" }],
+      matters: [{ id: "m-1", organizationId: "org-1", matterNumber: "2026-0001", title: "T", status: "ACTIVE", responsibleLawyerId: "u-1", ...matterExtra, createdAt: new Date() }],
+      users: [{ id: "u-1", organizationId: "org-1", email: "a@x", name: "Anna", role: "ADMIN", hourlyRate: currentRate }],
+      timeEntries: [{ id: "te-1", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date(), minutes: 120, description: "M", hourlyRate: 200000, billable: true }],
+    }, async () => {});
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return { ds, caller: appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: PRINCIPAL }) as any) };
+  }
+
+  it("rättsskydd: klient = (självrisk + prutning) inkl moms; försäkring = resten; ingen byrå-förlust", async () => {
+    const { caller: c } = caller({ paymentMethod: "RATTSSKYDD", clientShareBips: 2000 }, 300000);
+    const res = await c.billingRun.settleCoverage({ matterId: "m-1", payerRecipient: "FORSAKRING", insurerPrutningOre: 50000 });
+    // total 600000; klient netto 170000 → ×1.25 = 212500; försäkring netto 430000 → 537500.
+    expect(res.split).toMatchObject({ clientOre: 170000, payerOre: 430000, firmLossOre: 0 });
+    expect(res.clientInvoice.amount).toBe(212500);
+    expect(res.payerInvoice.amount).toBe(537500);
+  });
+
+  it("rättshjälp: timkostnadsnorm; dom prutar → byrå-förlust bokas (icke-debiterbar PRUTNING), klient på reducerat", async () => {
+    const { ds, caller: c } = caller({ paymentMethod: "RATTSHJALP", clientShareBips: 2000, taxaHasFTax: true }, 999999);
+    const res = await c.billingRun.settleCoverage({ matterId: "m-1", payerRecipient: "RATTSHJALPSMYNDIGHET", awardedOre: 300000 });
+    // total 325200; dom 300000 → förlust 25200; klient 60000 → 75000; stat 240000 → 300000.
+    expect(res.split).toMatchObject({ clientOre: 60000, payerOre: 240000, firmLossOre: 25200 });
+    expect(res.clientInvoice.amount).toBe(75000);
+    expect(res.payerInvoice.amount).toBe(300000);
+    const prutning = await ds.expenses.findFirst({ where: { matterId: "m-1", kind: "PRUTNING" } }) as { amount: number; billable: boolean };
+    expect(prutning.amount).toBe(-25200);
+    expect(prutning.billable).toBe(false);
+  });
+});
