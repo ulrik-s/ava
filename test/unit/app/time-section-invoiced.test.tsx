@@ -90,7 +90,7 @@ describe("TimeSection — registrera/ändra/ta-bort-flöden", () => {
     expect(screen.getByText("Registrera tid")).toBeInTheDocument();
     const dateInput = document.querySelector('input[type="date"]') as HTMLInputElement;
     fireEvent.change(dateInput, { target: { value: "2026-05-20" } });
-    fireEvent.change(document.querySelector('input[type="number"]') as HTMLInputElement, { target: { value: "45" } });
+    fireEvent.change(document.querySelector('input[inputmode="numeric"]') as HTMLInputElement, { target: { value: "45" } });
     fireEvent.change(screen.getByPlaceholderText("Beskrivning *"), { target: { value: "Telefonsamtal" } });
     fireEvent.click(screen.getByText("Spara"));
     expect(createMut).toHaveBeenCalledWith(

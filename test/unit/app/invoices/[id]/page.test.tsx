@@ -193,8 +193,7 @@ describe("InvoiceDetailPage", () => {
     fireEvent.click(
       await waitFor(() => screen.getByRole("button", { name: /Registrera betalning/i })),
     );
-    const numbers = screen.getAllByRole("spinbutton") as HTMLInputElement[];
-    fireEvent.change(numbers[0]!, { target: { value: "5000" } });
+    fireEvent.change(screen.getByLabelText("Belopp (kr)"), { target: { value: "5000" } });
     const sparaBtns = screen.getAllByRole("button", { name: /^Spara$/i });
     fireEvent.click(sparaBtns[sparaBtns.length - 1]!);
     expect(stubs.recordPayment.mutate).toHaveBeenCalled();
@@ -219,8 +218,7 @@ describe("InvoiceDetailPage", () => {
     fireEvent.click(
       await waitFor(() => screen.getByRole("button", { name: /Skapa avbetalningsplan/i })),
     );
-    const numberInputs = screen.getAllByRole("spinbutton") as HTMLInputElement[];
-    fireEvent.change(numberInputs[0]!, { target: { value: "1000" } });
+    fireEvent.change(screen.getByLabelText("Månadsbelopp (kr)"), { target: { value: "1000" } });
     fireEvent.click(screen.getByRole("button", { name: /Skapa plan/i }));
     expect(stubs.createPaymentPlan.mutate).toHaveBeenCalled();
     expect(stubs.createPaymentPlan.mutate.mock.calls[0]![0]).toMatchObject({

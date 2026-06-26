@@ -68,7 +68,7 @@ function AddReceivableForm({ matterId, onAdded }: { matterId: MatterId; onAdded:
         placeholder="Kostnadsräkning t.ex. Svea HovR mål B 1234-26"
         className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
       <div className="flex gap-2">
-        <input value={kr} onChange={(e) => setKr(e.target.value)} type="number" aria-labelledby={amtId}
+        <input value={kr} onChange={(e) => setKr(e.target.value)} type="text" inputMode="decimal" aria-labelledby={amtId}
           placeholder="Begärt belopp (kr)"
           className="flex-1 rounded border border-gray-300 px-2 py-1.5 text-sm" />
         <button onClick={submit} disabled={create.isPending || !desc || !kr}
@@ -99,7 +99,7 @@ function ReceivableRow({ r, onChanged }: { r: Receivable; onChanged: () => void 
       </div>
       {r.status === "PENDING" && (
         <div className="flex gap-2 mt-1.5">
-          <input value={kr} onChange={(e) => setKr(e.target.value)} type="number" placeholder="Utbetalt (kr)"
+          <input value={kr} onChange={(e) => setKr(e.target.value)} type="text" inputMode="decimal" placeholder="Utbetalt (kr)"
             className="w-32 rounded border border-gray-300 px-2 py-1 text-sm" />
           <button onClick={() => settle.mutate({ id: r.id, settledAmount: Math.round(Number(kr) * 100) })}
             disabled={settle.isPending || !kr}

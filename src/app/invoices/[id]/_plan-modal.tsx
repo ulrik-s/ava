@@ -35,11 +35,11 @@ export function PlanModal({ invoiceId, isPending, error, onSubmit, onClose }: Pr
         <div className="space-y-3">
           <div>
             <label htmlFor={planMonthlyId} className="block text-xs font-medium mb-1">Månadsbelopp (kr)</label>
-            <input id={planMonthlyId} type="number" min={1} value={planMonthlySek} onChange={(e) => setPlanMonthlySek(e.target.value)} className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm" />
+            <input id={planMonthlyId} type="text" inputMode="decimal" value={planMonthlySek} onChange={(e) => setPlanMonthlySek(e.target.value)} className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm" />
           </div>
           <div>
             <label htmlFor={planDayOfMonthId} className="block text-xs font-medium mb-1">Förfallodag i månaden (1-28)</label>
-            <input id={planDayOfMonthId} type="number" min={1} max={28} value={planDayOfMonth} onChange={(e) => setPlanDayOfMonth(e.target.value)} className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm" />
+            <input id={planDayOfMonthId} type="text" inputMode="numeric" value={planDayOfMonth} onChange={(e) => setPlanDayOfMonth(e.target.value)} className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm" />
           </div>
           <div>
             <label htmlFor={planStartId} className="block text-xs font-medium mb-1">Startdatum</label>

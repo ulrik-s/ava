@@ -38,7 +38,7 @@ export function WriteOffModal({ invoiceId, outstanding, isPending, error, onSubm
         <div className="space-y-3">
           <div>
             <label htmlFor={amountId} className="block text-xs font-medium mb-1">Belopp att skriva av (kr)</label>
-            <input id={amountId} type="number" min={1} value={amountSek} onChange={(e) => setAmountSek(e.target.value)} className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm" />
+            <input id={amountId} type="text" inputMode="decimal" value={amountSek} onChange={(e) => setAmountSek(e.target.value)} className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm" />
           </div>
           <div>
             <label htmlFor={reasonId} className="block text-xs font-medium mb-1">Anledning</label>

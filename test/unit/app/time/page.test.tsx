@@ -98,7 +98,7 @@ describe("TimePage", () => {
     // ("<nr> — <titel>") → komponenten anropar onChange(matterId).
     const matterInput = screen.getByRole("combobox") as HTMLInputElement;
     fireEvent.change(matterInput, { target: { value: "2026-0001 — Test" } });
-    const desc = screen.getAllByRole("textbox")[0] as HTMLInputElement;
+    const desc = screen.getByLabelText(/Beskrivning/i) as HTMLInputElement;
     fireEvent.change(desc, { target: { value: "Klientmöte" } });
     fireEvent.click(screen.getByRole("button", { name: /^Spara$/i }));
     expect(createMutate).toHaveBeenCalled();
@@ -117,10 +117,11 @@ describe("TimePage", () => {
     expect(checkbox.checked).toBe(false);
   });
 
-  it("ändrar minuter via number-input", () => {
+  it("ändrar minuter via text-input (utan spinner, #798)", () => {
     render(<TimePage />);
     fireEvent.click(screen.getByRole("button", { name: /\+ Registrera tid/i }));
-    const numberInput = screen.getByRole("spinbutton") as HTMLInputElement;
+    expect(screen.queryByRole("spinbutton")).not.toBeInTheDocument();
+    const numberInput = screen.getByLabelText(/minuter/i) as HTMLInputElement;
     fireEvent.change(numberInput, { target: { value: "120" } });
     expect(numberInput.value).toBe("120");
   });
