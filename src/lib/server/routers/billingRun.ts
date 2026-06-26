@@ -19,7 +19,7 @@ import { z } from "zod";
 import type { VatBreakdownLine } from "@/lib/shared/accounting/semantic-voucher";
 import { proposedAccontoOre } from "@/lib/shared/billing-proposal";
 import { TIMKOSTNADSNORM_FTAX_ORE_PER_H, TIMKOSTNADSNORM_NO_FTAX_ORE_PER_H } from "@/lib/shared/brottmalstaxa";
-import { computeCoverageSplit } from "@/lib/shared/coverage-billing";
+import { computeCoverageSplit, type CoverageSplit } from "@/lib/shared/coverage-billing";
 import { arvodeInclVatOre } from "@/lib/shared/invoice-calc";
 import { ocrFromInvoiceNumber } from "@/lib/shared/ocr-reference";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
@@ -130,14 +130,14 @@ function invoiceVatOre(work: UnfrozenWork): number {
   return arvodeVat + expenseVat;
 }
 
-/** Fakturans moms-uppdelning per sats (#790): en arvode-rad (25 %) + en utläggs-
- *  rad per förekommande momssats. Driver per-sats bokföring i verifikat/SIE. */
-function invoiceVatBreakdown(work: UnfrozenWork): VatBreakdownLine[] {
-  const lines: VatBreakdownLine[] = [];
-  const arvodeNet = arvodeNetOre(work);
-  if (arvodeNet > 0) {
-    lines.push({ kind: "arvode", vatRate: DEFAULT_VAT_RATE, netOre: arvodeNet, vatOre: arvodeInclVatOre(arvodeNet) - arvodeNet });
-  }
+/** En arvode-breakdown-rad (25 % moms) ur ett netto-arvode; null om 0. */
+function arvodeLine(arvodeNet: number): VatBreakdownLine | null {
+  if (arvodeNet <= 0) return null;
+  return { kind: "arvode", vatRate: DEFAULT_VAT_RATE, netOre: arvodeNet, vatOre: arvodeInclVatOre(arvodeNet) - arvodeNet };
+}
+
+/** Utläggens moms-uppdelning, en rad per förekommande momssats. */
+function expenseBreakdownLines(work: UnfrozenWork): VatBreakdownLine[] {
   const byRate = new Map<number, { netOre: number; vatOre: number }>();
   for (const e of work.expenses.filter((x) => x.billable)) {
     const rate = e.vatRate ?? DEFAULT_VAT_RATE;
@@ -145,10 +145,24 @@ function invoiceVatBreakdown(work: UnfrozenWork): VatBreakdownLine[] {
     const acc = byRate.get(rate) ?? { netOre: 0, vatOre: 0 };
     byRate.set(rate, { netOre: acc.netOre + s.exclVat, vatOre: acc.vatOre + s.vat });
   }
-  for (const [vatRate, { netOre, vatOre }] of byRate) {
-    lines.push({ kind: "utlagg", vatRate, netOre, vatOre });
-  }
-  return lines;
+  return [...byRate].map(([vatRate, v]) => ({ kind: "utlagg" as const, vatRate, netOre: v.netOre, vatOre: v.vatOre }));
+}
+
+/** Fakturans moms-uppdelning per sats (#790): en arvode-rad (25 %) + en utläggs-
+ *  rad per förekommande momssats. Driver per-sats bokföring i verifikat/SIE. */
+function invoiceVatBreakdown(work: UnfrozenWork): VatBreakdownLine[] {
+  const arvode = arvodeLine(arvodeNetOre(work));
+  return [...(arvode ? [arvode] : []), ...expenseBreakdownLines(work)];
+}
+
+/** Summa moms (öre) ur en breakdown. */
+function vatOreOf(lines: VatBreakdownLine[]): number {
+  return lines.reduce((s, l) => s + l.vatOre, 0);
+}
+
+/** Brutto (öre) ur en breakdown: netto + moms. */
+function grossOreOf(lines: VatBreakdownLine[]): number {
+  return lines.reduce((s, l) => s + l.netOre + l.vatOre, 0);
 }
 
 /**
@@ -167,6 +181,18 @@ async function currentArvodeRateOre(
   if (!matter.responsibleLawyerId) return 0;
   const lawyer = await repos.users.getByIdInOrg(matter.responsibleLawyerId, orgId);
   return lawyer?.hourlyRate ?? 0;
+}
+
+/** Faktura-rader (moms-breakdown) för klient- resp. betalar-fakturan ur en
+ *  prutnings-/självrisk-uppdelning (#801). Klient = sin arvode-del; betalare =
+ *  sin arvode-del + utläggen. */
+function coverageInvoiceLines(split: CoverageSplit, work: UnfrozenWork): { clientLines: VatBreakdownLine[]; payerLines: VatBreakdownLine[] } {
+  const clientArvode = arvodeLine(split.clientOre);
+  const payerArvode = arvodeLine(split.payerOre);
+  return {
+    clientLines: clientArvode ? [clientArvode] : [],
+    payerLines: [...(payerArvode ? [payerArvode] : []), ...expenseBreakdownLines(work)],
+  };
 }
 
 /** Bygg ett itemiserat fakturaförslag ur ofrysta tids-/utläggsrader (#397). */
@@ -511,6 +537,80 @@ export const billingRunRouter = router({
         if (prutningExpenseId) await tx.expenses.flagBilled([prutningExpenseId], invoice.id);
         await emit.invoiceCreated(ctx, invoice);
         return { run, invoice };
+      });
+    }),
+
+  /**
+   * Settlement (#800/#801) för rättsskydd & rättshjälp: betalaren har svarat
+   * (försäkringsbrev med prutning / dom med beviljat belopp). Arbetet värderas
+   * om på AKTUELLT timarvode, delas upp via `computeCoverageSplit`, och bokas:
+   *   - KLIENT-faktura (självrisk + ev. prutning, minus tidigare aconton)
+   *   - BETALAR-faktura (försäkring/stat) + utlägg
+   *   - byrå-förlust (rättshjälp) som icke-debiterbar PRUTNING-post
+   * Allt arbete fryses. Moms enligt #782 (arvode 25 %, utlägg per sats).
+   */
+  settleCoverage: orgProcedure
+    .input(z.object({
+      matterId: matterIdSchema,
+      payerRecipient: billingRunRecipientSchema,
+      awardedOre: z.number().int().nonnegative().optional(),
+      insurerPrutningOre: z.number().int().nonnegative().optional(),
+      deductedBillingRunIds: z.array(billingRunIdSchema).default([]),
+      notes: z.string().nullish(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      return ctx.repos.transaction(async (tx) => {
+        const matter = await tx.matters.getByIdInOrg(input.matterId, ctx.orgId);
+        if (!matter) throw new TRPCError({ code: "NOT_FOUND", message: "Ärendet finns inte." });
+        if (matter.paymentMethod !== "RATTSSKYDD" && matter.paymentMethod !== "RATTSHJALP") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Settlement gäller bara rättsskydd/rättshjälp." });
+        }
+        const work = await fetchUnfrozenWork(tx, input.matterId);
+        const billableMinutes = work.timeEntries.filter((t) => t.billable).reduce((s, t) => s + t.minutes, 0);
+        const rateOre = await currentArvodeRateOre(tx, ctx.orgId, matter);
+        const totalArvodeNet = Math.round((billableMinutes / 60) * rateOre);
+        const split = computeCoverageSplit({
+          method: matter.paymentMethod, totalOre: totalArvodeNet, clientShareBips: matter.clientShareBips ?? 0,
+          awardedOre: input.awardedOre ?? null, insurerPrutningOre: input.insurerPrutningOre ?? null,
+        });
+        const { clientLines, payerLines } = coverageInvoiceLines(split, work);
+
+        // Klient: självrisk (+ ev. prutning), moms 25 %, minus tidigare aconton.
+        const clientGross = grossOreOf(clientLines);
+        const deductedRuns = await fetchDeductedAccontoRuns(tx, input.matterId, input.deductedBillingRunIds);
+        const deductionOre = deductedRuns.reduce((s, r) => s + (r.amountOre ?? 0), 0);
+        const clientAmount = Math.max(0, clientGross - deductionOre);
+        const payerGross = grossOreOf(payerLines);
+
+        const clientInvoice = await tx.invoices.create({
+          matterId: input.matterId, amount: clientAmount, vatOre: vatOreOf(clientLines), vatBreakdown: clientLines,
+          invoiceType: "FINAL", status: "DRAFT", ...(await invoiceNumbering(tx, ctx.orgId, "KLIENT")), invoiceDate: new Date(), notes: input.notes,
+        });
+        const payerInvoice = await tx.invoices.create({
+          matterId: input.matterId, amount: payerGross, vatOre: vatOreOf(payerLines), vatBreakdown: payerLines,
+          invoiceType: "FINAL", status: "DRAFT", ...(await invoiceNumbering(tx, ctx.orgId, input.payerRecipient)), invoiceDate: new Date(), notes: input.notes,
+        });
+        if (split.firmLossOre > 0) {
+          await tx.expenses.create({
+            matterId: input.matterId, userId: ctx.user.id, date: new Date(),
+            amount: -split.firmLossOre, description: "Prutning — byrån bär (rättshjälp)",
+            billable: false, vatRate: 0, vatIncluded: false, kind: "PRUTNING",
+          });
+        }
+        const clientRun = await tx.billingRuns.create({
+          matterId: input.matterId, type: "FINAL", recipient: "KLIENT", status: "SENT",
+          workValueOreAtRun: clientGross, proposedAmountOre: clientGross, amountOre: clientAmount,
+          invoiceId: clientInvoice.id, deductedBillingRunIds: input.deductedBillingRunIds, periodTo: new Date(), notes: input.notes,
+        });
+        const payerRun = await tx.billingRuns.create({
+          matterId: input.matterId, type: "FINAL", recipient: input.payerRecipient, status: "SENT",
+          workValueOreAtRun: payerGross, proposedAmountOre: payerGross, amountOre: payerGross,
+          invoiceId: payerInvoice.id, deductedBillingRunIds: [], periodTo: new Date(), notes: input.notes,
+        });
+        await freezeWork(tx, input.matterId, payerRun.id);
+        await emit.invoiceCreated(ctx, clientInvoice);
+        await emit.invoiceCreated(ctx, payerInvoice);
+        return { split, clientInvoice, payerInvoice, clientRun, payerRun };
       });
     }),
 });

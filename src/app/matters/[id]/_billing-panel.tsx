@@ -26,6 +26,7 @@ import { BILLING_RUN_TYPE_LABELS, BILLING_RUN_STATUS_LABELS, type BillingRunReci
 import type { BillingRunId, InvoiceId, MatterId } from "@/lib/shared/schemas/ids";
 import { BillingDialog, type BillingMeta } from "./_billing-dialog";
 import { KostnadsrakningModal } from "./_kostnadsrakning-modal";
+import { SettlementDialog } from "./_settlement-dialog";
 import { VerdictDialog } from "./_verdict-dialog";
 
 interface MatterContext {
@@ -123,7 +124,7 @@ function PendingVerdictBanner({ matterId, run, onClick }: { matterId: MatterId; 
 }
 
 type DialogState = "NONE" | "ACCONTO" | "FINAL";
-type ActionPick = "ACCONTO" | "FINAL" | "KOSTNADSRAKNING";
+type ActionPick = "ACCONTO" | "FINAL" | "KOSTNADSRAKNING" | "SETTLE";
 
 function findPendingVerdict(rows: BillingRunRow[]): BillingRunRow | undefined {
   return rows.find((r) => r.type === "KOSTNADSRAKNING" && r.status === "PENDING_VERDICT");
@@ -249,12 +250,14 @@ export function BillingPanel({ matterId, matter }: Props) {
   useMatterInvariants({ matterId, matterNumber: matter.matterNumber });
   const [dialog, setDialog] = useState<DialogState>("NONE");
   const [showKr, setShowKr] = useState(false);
+  const [showSettle, setShowSettle] = useState(false);
   const [verdictRunId, setVerdictRunId] = useState<BillingRunId | null>(null);
   const rows = (runs.data?.runs ?? []) as BillingRunRow[];
   const pending = findPendingVerdict(rows);
   const refetch = () => { void runs.refetch(); };
   const onPick = (t: ActionPick) => {
     if (t === "KOSTNADSRAKNING") setShowKr(true);
+    else if (t === "SETTLE") setShowSettle(true);
     else setDialog(t);
   };
   return (
@@ -278,6 +281,10 @@ export function BillingPanel({ matterId, matter }: Props) {
         onClose={() => setShowKr(false)}
         onRecorded={refetch}
       />
+      {showSettle && matter.paymentMethod && (
+        <SettlementDialog matterId={matterId} paymentMethod={matter.paymentMethod}
+          onClose={() => { setShowSettle(false); refetch(); }} />
+      )}
     </div>
   );
 }
@@ -399,6 +406,7 @@ function optionsFor(pm: PaymentMethod | undefined): Array<{ type: ActionPick; la
     return [
       { type: "ACCONTO", label: "Aconto till klient" },
       { type: "FINAL", label: pm === "RATTSSKYDD" ? "Faktura till försäkring" : "Faktura till myndighet" },
+      { type: "SETTLE", label: pm === "RATTSSKYDD" ? "Slutreglera (försäkringsbesked)" : "Slutreglera (dom)" },
     ];
   }
   if (pm === "OFFENTLIGT_UPPDRAG") {
