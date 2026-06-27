@@ -49,6 +49,17 @@ export const matterSchema = z.object({
    */
   rattshjalpMaxTimmar: z.number().int().positive().nullish(),
   /**
+   * Rättsskydd: det datum försäkringsbolaget fastställer att TVIST uppkom (ur
+   * beslutet). Arbete före detta datum täcks ALDRIG → klienten betalar 100 %
+   * fram till dess; därefter gäller självrisksandelen (#810). Null = ej satt.
+   */
+  tvistUppkomDatum: optionalDateLike,
+  /**
+   * Rättsskydd: datum för försäkringsbolagets POSITIVA beslut (ur beslutet).
+   * Arbete före beslutet är retroaktivt och täcks med högst 6 h (#810). Null = ej satt.
+   */
+  rattsskyddBeslutDatum: optionalDateLike,
+  /**
    * `isTaxeArende` — ärendet ersätts enligt Domstolsverkets fastställda
    * taxa (schablon) istället för löpande timdebitering.
    *

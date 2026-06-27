@@ -19,7 +19,7 @@ import { z } from "zod";
 import type { VatBreakdownLine } from "@/lib/shared/accounting/semantic-voucher";
 import { proposedAccontoOre } from "@/lib/shared/billing-proposal";
 import { TIMKOSTNADSNORM_FTAX_ORE_PER_H, TIMKOSTNADSNORM_NO_FTAX_ORE_PER_H } from "@/lib/shared/brottmalstaxa";
-import { computeCoverageSplit, type CoverageSplit } from "@/lib/shared/coverage-billing";
+import { computeCoverageSplit, partitionRattsskyddMinutes, type CoverageSplit } from "@/lib/shared/coverage-billing";
 import { arvodeInclVatOre } from "@/lib/shared/invoice-calc";
 import { ocrFromInvoiceNumber } from "@/lib/shared/ocr-reference";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
@@ -48,7 +48,7 @@ import type { Repositories } from "../repositories/repositories";
 import { router, orgProcedure } from "../trpc";
 
 interface UnfrozenWork {
-  timeEntries: Array<{ id: TimeEntryId; minutes: number; hourlyRate: number; billable: boolean }>;
+  timeEntries: Array<{ id: TimeEntryId; minutes: number; hourlyRate: number; billable: boolean; date: Date | string }>;
   expenses: Array<{ id: ExpenseId; amount: number; billable: boolean; vatRate?: number | null; vatIncluded?: boolean | null }>;
 }
 
@@ -90,6 +90,32 @@ function timeEntryValueOre(minutes: number, hourlyRate: number): number {
  */
 function coverageBaseMinutes(method: PaymentMethod, billableMinutes: number): number {
   return method === "RATTSHJALP" ? Math.max(0, billableMinutes - RADGIVNING_MINUTES) : billableMinutes;
+}
+
+/** Matter-fält som styr rättsskyddets tidsuppdelning + tak. */
+interface RattsskyddMatter {
+  paymentMethod: PaymentMethod;
+  tvistUppkomDatum?: Date | string | null | undefined;
+  rattsskyddBeslutDatum?: Date | string | null | undefined;
+  rattsskyddMaxOre?: number | null | undefined;
+}
+
+/**
+ * Rättsskydds-tillägg till computeCoverageSplit (#810): tidsuppdelar arbetet
+ * (täckt del efter tvist/retro-tak) → `coveredOre`, samt försäkringens tak →
+ * `capOre`. Tom för andra betalningssätt (då gäller standard-splitten).
+ */
+function rattsskyddCoverage(
+  matter: RattsskyddMatter,
+  entries: ReadonlyArray<{ date: Date | string; minutes: number; billable: boolean }>,
+  rateOre: number,
+): { coveredOre?: number; capOre?: number } {
+  if (matter.paymentMethod !== "RATTSSKYDD") return {};
+  const p = partitionRattsskyddMinutes(entries, matter.tvistUppkomDatum ?? null, matter.rattsskyddBeslutDatum ?? null);
+  return omitUndefined({
+    coveredOre: Math.round((p.coveredMinutes / 60) * rateOre),
+    capOre: matter.rattsskyddMaxOre ?? undefined,
+  });
 }
 
 async function fetchUnfrozenWork(repos: Repositories, matterId: MatterId): Promise<UnfrozenWork> {
@@ -338,7 +364,7 @@ async function resolveFinalWork(
   }
   return {
     work: {
-      timeEntries: selTime.map((t) => ({ id: t.id, minutes: t.minutes, hourlyRate: t.user.hourlyRate ?? 0, billable: t.billable })),
+      timeEntries: selTime.map((t) => ({ id: t.id, minutes: t.minutes, hourlyRate: t.user.hourlyRate ?? 0, billable: t.billable, date: t.date })),
       expenses: selExp.filter((e) => e.kind !== "PRUTNING").map((e) => ({ id: e.id, amount: e.amount, billable: e.billable, vatRate: e.vatRate, vatIncluded: e.vatIncluded })),
     },
     selected: true,
@@ -558,6 +584,7 @@ export const billingRunRouter = router({
       const matter = await ctx.repos.matters.getByIdInOrg(input.matterId, ctx.orgId);
       if (!matter) throw new TRPCError({ code: "NOT_FOUND", message: "Ärendet finns inte." });
       const { billableMinutes } = await ctx.repos.timeEntries.coverageUsageForMatter(input.matterId);
+      const entries = await ctx.repos.timeEntries.listUnfrozenForMatter(input.matterId);
       const currentRateOre = await currentArvodeRateOre(ctx.repos, ctx.orgId, matter);
       const baseMinutes = coverageBaseMinutes(matter.paymentMethod, billableMinutes);
       const totalOre = Math.round((baseMinutes / 60) * currentRateOre);
@@ -567,6 +594,7 @@ export const billingRunRouter = router({
         clientShareBips: matter.clientShareBips ?? 0,
         ...(input.awardedOre != null ? { awardedOre: input.awardedOre } : {}),
         ...(input.insurerPrutningOre != null ? { insurerPrutningOre: input.insurerPrutningOre } : {}),
+        ...rattsskyddCoverage(matter, entries, currentRateOre),
       });
       return { ...split, totalOre, currentRateOre, billableMinutes };
     }),
@@ -647,6 +675,7 @@ export const billingRunRouter = router({
         const split = computeCoverageSplit({
           method: matter.paymentMethod, totalOre: totalArvodeNet, clientShareBips: matter.clientShareBips ?? 0,
           awardedOre: input.awardedOre ?? null, insurerPrutningOre: input.insurerPrutningOre ?? null,
+          ...rattsskyddCoverage(matter, work.timeEntries, rateOre),
         });
         const { clientLines, payerLines } = coverageInvoiceLines(split, work);
 

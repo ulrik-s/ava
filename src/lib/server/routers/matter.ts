@@ -119,6 +119,13 @@ function toDateOrNull(v: string | null | undefined): Date | null | undefined {
   return v ? new Date(v) : null;
 }
 
+/** Sätter ett datumfält (sträng → Date | null) på update-datat, men bara om
+ *  det skickades med (undefined = rör ej). Håller update-mutationen ≤8. */
+function applyOptionalDate(data: Record<string, unknown>, key: string, value: string | null | undefined): void {
+  const d = toDateOrNull(value);
+  if (d !== undefined) data[key] = d;
+}
+
 function buildMatterData(
   orgId: string,
   matterNumber: string,
@@ -231,6 +238,9 @@ export const matterRouter = router({
         clientShareBips: z.number().int().min(0).max(10000).nullable().optional(),
         rattsskyddMaxOre: z.number().int().nonnegative().nullable().optional(),
         rattshjalpMaxTimmar: z.number().int().positive().nullable().optional(),
+        /** Rättsskydd (#810): tvistdatum + bolagets beslutsdatum, ur beslutet. */
+        tvistUppkomDatum: z.string().nullable().optional(),
+        rattsskyddBeslutDatum: z.string().nullable().optional(),
         isTaxeArende: z.boolean().optional(),
         taxaLevel: z.number().int().min(1).max(4).nullable().optional(),
         taxaHuvudforhandlingMin: z.number().int().nonnegative().nullable().optional(),
@@ -240,16 +250,13 @@ export const matterRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const before = await assertMatterInOrg(ctx, asId<"MatterId">(input.id));
-      const { id, paymentMethodDecidedAt, taxaHufStart, ...rest } = input;
+      const { id, paymentMethodDecidedAt, taxaHufStart, tvistUppkomDatum, rattsskyddBeslutDatum, ...rest } = input;
       const data: Record<string, unknown> = { ...rest };
-      if (paymentMethodDecidedAt !== undefined) {
-        data.paymentMethodDecidedAt = paymentMethodDecidedAt
-          ? new Date(paymentMethodDecidedAt)
-          : null;
-      }
-      if (taxaHufStart !== undefined) {
-        data.taxaHufStart = taxaHufStart ? new Date(taxaHufStart) : null;
-      }
+      // Datumsträngar (yyyy-mm-dd) → Date | null; lämna orörda om utelämnade.
+      applyOptionalDate(data, "paymentMethodDecidedAt", paymentMethodDecidedAt);
+      applyOptionalDate(data, "taxaHufStart", taxaHufStart);
+      applyOptionalDate(data, "tvistUppkomDatum", tvistUppkomDatum);
+      applyOptionalDate(data, "rattsskyddBeslutDatum", rattsskyddBeslutDatum);
       const updated = await ctx.repos.matters.update(id, data satisfies Partial<Matter>);
       await emit.matterUpdated(ctx, id, data);
       if (input.status && input.status !== before.status) {

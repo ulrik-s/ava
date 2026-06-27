@@ -121,6 +121,9 @@ export const matters = pgTable("matters", {
   /** Rättsskyddets maxbelopp (öre) resp. rättshjälpens timtak — täcknings-tak (#793). */
   rattsskyddMaxOre: integer("rattsskydd_max_ore"),
   rattshjalpMaxTimmar: integer("rattshjalp_max_timmar"),
+  /** Rättsskydd (#810): tvistdatum (arbete före = ej täckt) + bolagets beslutsdatum (retro ≤6h). */
+  tvistUppkomDatum: timestamp("tvist_uppkom_datum", { withTimezone: true }),
+  rattsskyddBeslutDatum: timestamp("rattsskydd_beslut_datum", { withTimezone: true }),
 }, (t) => [index("matters_org_idx").on(t.organizationId)]);
 
 /**
