@@ -216,6 +216,17 @@ describe("BillingPanel — Skapa-faktura-menyn (optionsFor)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Kostnadsräkning till domstol" }));
     expect(screen.getByTestId("kr-modal")).toBeInTheDocument();
   });
+
+  it("RATTSHJALP: kostnadsräkning till domstol (ej direktfaktura) — öppnar rättshjälps-dialogen", () => {
+    render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={{ ...baseMatter, paymentMethod: "RATTSHJALP" }} />);
+    fireEvent.click(screen.getByRole("button", { name: "+ Skapa faktura" }));
+    // Domstolen får en kostnadsräkning — INTE "Faktura till myndighet" (#806).
+    expect(screen.queryByRole("button", { name: /Faktura till myndighet/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Kostnadsräkning till domstol" }));
+    // Rättshjälps-dialogen (egen, ej brottmåls-KR-modalen) bekräftar inskicket.
+    expect(screen.getByRole("button", { name: "Skicka kostnadsräkning" })).toBeInTheDocument();
+    expect(screen.queryByTestId("kr-modal")).not.toBeInTheDocument();
+  });
 });
 
 describe("BillingPanel — rådgivnings-banner (rättshjälp)", () => {

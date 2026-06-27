@@ -87,6 +87,9 @@ export interface TimeEntryRepository extends Repository<TimeEntry> {
   flagBilled(ids: TimeEntryId[], invoiceId: InvoiceId): Promise<void>;
   /** Ofrysta tidsposter i ett ärende (date asc) — underlag för billing-run. */
   listUnfrozenForMatter(matterId: MatterId): Promise<TimeEntry[]>;
+  /** Tidsposter frysta mot en specifik billing-run (date asc) — underlag för
+   *  dom/slutreglering av en kostnadsräkning, vars rader frystes vid inskick. */
+  listByBillingRun(billingRunId: BillingRunId): Promise<TimeEntry[]>;
   /** Summa debiterbara minuter + arvode-värde (öre) i ett ärende — täcknings-tak (#793). */
   coverageUsageForMatter(matterId: MatterId): Promise<CoverageUsage>;
   /** Som ovan men batchat för flera ärenden (täcknings-kolumn i listan, #793).
