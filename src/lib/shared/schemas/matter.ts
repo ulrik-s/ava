@@ -60,6 +60,12 @@ export const matterSchema = z.object({
    */
   rattsskyddBeslutDatum: optionalDateLike,
   /**
+   * Rättsskydd: datum då försäkringen NEKADE rättsskydd (#811). Satt → nästa steg
+   * är att ansöka om rättshjälp (om klientens ekonomiska underlag ≤ 6 § rättshjälps-
+   * lagen). Null = ej nekat.
+   */
+  rattsskyddNekadAt: optionalDateLike,
+  /**
    * `isTaxeArende` — ärendet ersätts enligt Domstolsverkets fastställda
    * taxa (schablon) istället för löpande timdebitering.
    *

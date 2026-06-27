@@ -124,6 +124,8 @@ export const matters = pgTable("matters", {
   /** Rättsskydd (#810): tvistdatum (arbete före = ej täckt) + bolagets beslutsdatum (retro ≤6h). */
   tvistUppkomDatum: timestamp("tvist_uppkom_datum", { withTimezone: true }),
   rattsskyddBeslutDatum: timestamp("rattsskydd_beslut_datum", { withTimezone: true }),
+  /** Rättsskydd (#811): datum då rättsskydd nekades → föreslå rättshjälp. */
+  rattsskyddNekadAt: timestamp("rattsskydd_nekad_at", { withTimezone: true }),
 }, (t) => [index("matters_org_idx").on(t.organizationId)]);
 
 /**

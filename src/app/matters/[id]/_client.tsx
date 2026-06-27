@@ -7,6 +7,7 @@ import { DocumentBrowser } from "@/components/documents/document-browser";
 import { CoverageCapWarning } from "@/components/matter/coverage-cap-warning";
 import { EventsPanel } from "@/components/matter/events-panel";
 import { PaymentMethodCard } from "@/components/matter/payment-method-card";
+import { RattsskyddNekadBanner } from "@/components/matter/rattsskydd-nekad-banner";
 import { SuggestionsPanel } from "@/components/matter/suggestions-panel";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { useRouteId } from "@/lib/client/demo/use-route-id";
@@ -105,6 +106,7 @@ function MatterPaymentMethod({ matterId, matter }: {
     rattshjalpMaxTimmar?: number | null | undefined;
     tvistUppkomDatum?: Date | string | null | undefined;
     rattsskyddBeslutDatum?: Date | string | null | undefined;
+    rattsskyddNekadAt?: Date | string | null | undefined;
   };
 }) {
   const rattsskyddMaxOre = matter.rattsskyddMaxOre ?? null;
@@ -117,6 +119,11 @@ function MatterPaymentMethod({ matterId, matter }: {
         rattsskyddMaxOre={rattsskyddMaxOre}
         rattshjalpMaxTimmar={rattshjalpMaxTimmar}
       />
+      <RattsskyddNekadBanner
+        matterId={matterId}
+        paymentMethod={matter.paymentMethod}
+        rattsskyddNekadAt={matter.rattsskyddNekadAt}
+      />
       <PaymentMethodCard
         matterId={matterId}
         paymentMethod={matter.paymentMethod}
@@ -125,8 +132,9 @@ function MatterPaymentMethod({ matterId, matter }: {
         clientShareBips={matter.clientShareBips ?? null}
         rattsskyddMaxOre={rattsskyddMaxOre}
         rattshjalpMaxTimmar={rattshjalpMaxTimmar}
-        tvistUppkomDatum={matter.tvistUppkomDatum ?? null}
-        rattsskyddBeslutDatum={matter.rattsskyddBeslutDatum ?? null}
+        tvistUppkomDatum={matter.tvistUppkomDatum}
+        rattsskyddBeslutDatum={matter.rattsskyddBeslutDatum}
+        rattsskyddNekadAt={matter.rattsskyddNekadAt}
       />
     </>
   );
