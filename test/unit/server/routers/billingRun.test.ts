@@ -211,11 +211,12 @@ describe("billingRun.createKostnadsrakning", () => {
     expect(res.run.workValueOreAtRun).toBe(937500); // 3h × 2500 kr + 25 % moms (#782)
   });
 
-  it("fryser INTE rader (väntar tills setVerdict)", async () => {
+  it("fryser raderna vid inskick mot körningen (#806 — lämnar 'upparbetat ofakturerat')", async () => {
     const { ds, caller } = makeCaller({ workMinutes: 60 });
-    await caller.billingRun.createKostnadsrakning({ matterId: "m-1" });
-    const te = await ds.timeEntries.findFirst({ where: { id: "te-1" } }) as { frozenAt?: Date | null };
-    expect(te.frozenAt).toBeFalsy();
+    const res = await caller.billingRun.createKostnadsrakning({ matterId: "m-1" });
+    const te = await ds.timeEntries.findFirst({ where: { id: "te-1" } }) as { frozenAt?: Date | null; frozenByBillingRunId?: string | null };
+    expect(te.frozenAt).toBeTruthy();
+    expect(te.frozenByBillingRunId).toBe(res.run.id);
   });
 });
 
@@ -363,5 +364,22 @@ describe("billingRun.settleCoverage — bokför prutnings-uppdelningen (#801)", 
     const prutning = await ds.expenses.findFirst({ where: { matterId: "m-1", kind: "PRUTNING" } }) as { amount: number; billable: boolean };
     expect(prutning.amount).toBe(-25200);
     expect(prutning.billable).toBe(false);
+  });
+
+  it("rättshjälp via kostnadsräkning (#806): läser de frysta raderna och KONSUMERAR den väntande körningen (ingen dubbelräkning)", async () => {
+    const { ds, caller: c } = caller({ paymentMethod: "RATTSHJALP", clientShareBips: 2000, taxaHasFTax: true }, 999999);
+    const kr = await c.billingRun.createKostnadsrakning({ matterId: "m-1" });
+    expect(kr.run.status).toBe("PENDING_VERDICT");
+    const res = await c.billingRun.settleCoverage({ matterId: "m-1", payerRecipient: "RATTSHJALPSMYNDIGHET", awardedOre: 300000 });
+    // Samma split som utan KR — arbetet är fryst mot körningen och läses via den.
+    expect(res.split).toMatchObject({ clientOre: 60000, payerOre: 240000, firmLossOre: 25200 });
+    expect(res.clientInvoice.amount).toBe(75000);
+    expect(res.payerInvoice.amount).toBe(300000);
+    // Den väntande kostnadsräkningen blir betalar-körningen (→ SENT, faktura länkad)
+    // i stället för en ny FINAL → "Väntar på dom" släcks utan dubbelräkning.
+    expect(res.payerRun.id).toBe(kr.run.id);
+    const consumed = await ds.billingRuns.findFirst({ where: { id: kr.run.id } }) as { status: string; invoiceId: string };
+    expect(consumed.status).toBe("SENT");
+    expect(consumed.invoiceId).toBe(res.payerInvoice.id);
   });
 });

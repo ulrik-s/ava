@@ -92,6 +92,13 @@ export class DrizzleExpenseRepository extends DrizzleRepository<Expense> impleme
     return rows;
   }
 
+  async listByBillingRun(billingRunId: BillingRunId): Promise<Expense[]> {
+    return await this.db
+      .select().from(expenses)
+      .where(and(eq(expenses.frozenByBillingRunId, billingRunId), isNull(expenses.deletedAt)))
+      .orderBy(asc(expenses.date));
+  }
+
   async freezeForMatter(matterId: MatterId, billingRunId: BillingRunId, now: Date): Promise<void> {
     await this.db.update(expenses)
       .set({ frozenAt: now, frozenByBillingRunId: billingRunId })

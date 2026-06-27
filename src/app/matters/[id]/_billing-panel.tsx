@@ -13,6 +13,7 @@
  */
 import type { inferRouterOutputs } from "@trpc/server";
 import { useState } from "react";
+import { Modal } from "@/components/ui/modal";
 import { Money } from "@/components/ui/money";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { hasGeneratedDoc, openGeneratedDoc } from "@/lib/client/demo/generated-doc-cache";
@@ -218,6 +219,15 @@ function useKrModalData(matterId: MatterId): KrModalData {
   }) as KrModalData;
 }
 
+/** Väljer rätt kostnadsräknings-dialog: rättshjälp får en enkel inskicks-
+ *  bekräftelse (timkostnadsnorm), övriga (offentligt uppdrag) brottmåls-modalen. */
+function KostnadsrakningEntry({ matterId, matter, open, onClose, onRecorded }: KrTriggerProps) {
+  if (matter.paymentMethod === "RATTSHJALP") {
+    return open ? <RattshjalpKrDialog matterId={matterId} onClose={onClose} onRecorded={onRecorded} /> : null;
+  }
+  return <KostnadsrakningTrigger matterId={matterId} matter={matter} open={open} onClose={onClose} onRecorded={onRecorded} />;
+}
+
 function KostnadsrakningTrigger({ matterId, matter, open, onClose, onRecorded }: KrTriggerProps) {
   const data = useKrModalData(matterId);
   const createKr = trpc.billingRun.createKostnadsrakning.useMutation();
@@ -279,13 +289,14 @@ export function BillingPanel({ matterId, matter }: Props) {
       <SummaryCards totals={computeTotals(rows)} />
       <UnbilledSummary matterId={matterId} />
       <RadgivningBanner matterId={matterId} matter={matter} onRecorded={refetch} />
-      {pending && <PendingVerdictBanner matterId={matterId} run={pending} onClick={() => setVerdictRunId(pending.id)} />}
+      {pending && <PendingVerdictBanner matterId={matterId} run={pending}
+        onClick={() => matter.paymentMethod === "RATTSHJALP" ? setShowSettle(true) : setVerdictRunId(pending.id)} />}
       <RunsList rows={rows} loading={runs.isLoading} />
       <BillingDialogs matterId={matterId} matter={matter} rows={rows}
         dialog={dialog} setDialog={setDialog}
         verdictRunId={verdictRunId} setVerdictRunId={setVerdictRunId}
         onRefetch={refetch} />
-      <KostnadsrakningTrigger
+      <KostnadsrakningEntry
         matterId={matterId} matter={matter}
         open={showKr}
         onClose={() => setShowKr(false)}
@@ -356,6 +367,45 @@ function UnbilledSummary({ matterId }: { matterId: MatterId }) {
   );
 }
 
+/**
+ * Rättshjälpens kostnadsräkning till domstol (#806) — enkel bekräftelse (arbetet
+ * värderas på timkostnadsnormen vid domen, inte brottmålstaxan). Skickar in
+ * kostnadsräkningen, vilket fryser det upparbetade direkt; domen slutregleras
+ * separat (klientens självrisk, statens del, ev. byrå-förlust).
+ */
+function RattshjalpKrDialog({ matterId, onClose, onRecorded }: { matterId: MatterId; onClose: () => void; onRecorded: () => void }) {
+  const proposal = trpc.billingRun.proposal.useQuery({ matterId });
+  const create = trpc.billingRun.createKostnadsrakning.useMutation({
+    onSuccess: () => { onRecorded(); onClose(); },
+  });
+  const d = proposal.data;
+  const arvodeOre = d ? d.timeEntries.filter((t) => t.billable).reduce((s, t) => s + t.valueOre, 0) : 0;
+  const utlaggOre = d ? d.expenses.filter((e) => e.billable).reduce((s, e) => s + e.amount, 0) : 0;
+  return (
+    <Modal open title="Kostnadsräkning till domstol" onClose={onClose} widthClass="max-w-md">
+      <div className="space-y-3">
+        <p className="text-sm text-gray-600">
+          Kostnadsräkningen skickas till domstolen för bedömning — den är ingen faktura
+          ännu och kan prutas. Det upparbetade fryses nu; vid domen slutreglerar du
+          (klientens självrisk, statens del och ev. byrå-förlust).
+        </p>
+        <div className="rounded border border-gray-200 bg-gray-50 px-3 py-2 space-y-1 text-sm">
+          <div className="flex justify-between text-gray-700"><span>Arvode (exkl moms)</span><span className="font-mono">{formatCurrency(arvodeOre)}</span></div>
+          <div className="flex justify-between text-gray-700"><span>Utlägg</span><span className="font-mono">{formatCurrency(utlaggOre)}</span></div>
+        </div>
+        {create.error && <p className="text-sm text-red-700">{create.error.message}</p>}
+        <div className="flex justify-end gap-2 pt-2">
+          <button type="button" onClick={onClose} className="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50">Avbryt</button>
+          <button type="button" disabled={create.isPending} onClick={() => create.mutate({ matterId })}
+            className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50">
+            {create.isPending ? "Skickar…" : "Skicka kostnadsräkning"}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 function computeTotals(rows: BillingRunRow[]) {
   let acconto = 0, finalSent = 0, pending = 0;
   for (const r of rows) {
@@ -413,9 +463,14 @@ function BillingActions({ paymentMethod, onPick }: { paymentMethod: PaymentMetho
 
 function optionsFor(pm: PaymentMethod | undefined): Array<{ type: ActionPick; label: string }> {
   if (pm === "RATTSSKYDD" || pm === "RATTSHJALP") {
+    // Rättsskydd faktureras direkt till försäkringen; rättshjälp skickas som
+    // kostnadsräkning till domstolen (bedöms, kan prutas) — ingen faktura ännu (#806).
+    const payerOption = pm === "RATTSSKYDD"
+      ? ({ type: "FINAL", label: "Faktura till försäkring" } as const)
+      : ({ type: "KOSTNADSRAKNING", label: "Kostnadsräkning till domstol" } as const);
     return [
       { type: "ACCONTO", label: "Aconto till klient" },
-      { type: "FINAL", label: pm === "RATTSSKYDD" ? "Faktura till försäkring" : "Faktura till myndighet" },
+      payerOption,
       { type: "SETTLE", label: pm === "RATTSSKYDD" ? "Slutreglera (försäkringsbesked)" : "Slutreglera (dom)" },
     ];
   }

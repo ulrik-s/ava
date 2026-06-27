@@ -42,6 +42,7 @@ import {
 } from "@/lib/shared/schemas/ids";
 import { splitVat, DEFAULT_VAT_RATE } from "@/lib/shared/vat";
 import { emit } from "../events/emit";
+import type { BillingRunListRow } from "../repositories/billing-run-repository";
 import type { Repositories } from "../repositories/repositories";
 import { router, orgProcedure } from "../trpc";
 
@@ -84,6 +85,62 @@ async function fetchUnfrozenWork(repos: Repositories, matterId: MatterId): Promi
   const te = await repos.timeEntries.listUnfrozenForMatter(matterId);
   const ex = await repos.expenses.listUnfrozenForMatter(matterId);
   return { timeEntries: te, expenses: ex.filter((e) => e.kind !== "PRUTNING") };
+}
+
+/** Det arbete en kostnadsräkning frös vid inskick (#806) — underlag för dom/
+ *  slutreglering. PRUTNING-rader (skapas vid domen) länkas separat. */
+async function fetchWorkByRun(repos: Repositories, billingRunId: BillingRunId): Promise<UnfrozenWork> {
+  const te = await repos.timeEntries.listByBillingRun(billingRunId);
+  const ex = await repos.expenses.listByBillingRun(billingRunId);
+  return { timeEntries: te, expenses: ex.filter((e) => e.kind !== "PRUTNING") };
+}
+
+/**
+ * Underlag för slutreglering (#806): väntar en kostnadsräkning på dom använder
+ * vi dess frysta rader (rättshjälp), annars allt ofryst (rättsskydd har ingen
+ * kostnadsräkning). Returnerar även körningen så den kan konsumeras vid domen.
+ */
+async function resolveSettlementWork(
+  repos: Repositories, orgId: OrganizationId, matterId: MatterId,
+): Promise<{ work: UnfrozenWork; krRun: BillingRunListRow | undefined }> {
+  const runs = await repos.billingRuns.listForOrg(orgId, matterId);
+  const krRun = runs.find((r) => r.type === "KOSTNADSRAKNING" && r.status === "PENDING_VERDICT");
+  const work = krRun ? await fetchWorkByRun(repos, krRun.id) : await fetchUnfrozenWork(repos, matterId);
+  return { work, krRun };
+}
+
+/** Bokar byråns prutningsförlust (rättshjälp) som icke-debiterbart PRUTNING-utlägg. */
+async function bookFirmLoss(repos: Repositories, userId: UserId, matterId: MatterId, firmLossOre: number): Promise<void> {
+  if (firmLossOre <= 0) return;
+  await repos.expenses.create({
+    matterId, userId, date: new Date(),
+    amount: -firmLossOre, description: "Prutning — byrån bär (rättshjälp)",
+    billable: false, vatRate: 0, vatIncluded: false, kind: "PRUTNING",
+  });
+}
+
+interface PayerRunInput {
+  matterId: MatterId; payerRecipient: BillingRunRecipient; payerInvoiceId: InvoiceId;
+  payerGross: number; notes: string | null | undefined; krRun: BillingRunListRow | undefined;
+}
+
+/** Betalar-körningen vid slutreglering (#806): konsumerar en väntande kostnads-
+ *  räkning (→ SENT, faktura länkad — arbetet redan fryst mot den), annars en ny
+ *  FINAL + frysning av det ofrysta arbetet (rättsskydd). */
+async function bookPayerRun(repos: Repositories, p: PayerRunInput): Promise<BillingRun> {
+  if (p.krRun) {
+    return repos.billingRuns.update(p.krRun.id, {
+      status: "SENT", invoiceId: p.payerInvoiceId,
+      amountOre: p.payerGross, proposedAmountOre: p.payerGross, workValueOreAtRun: p.payerGross,
+    });
+  }
+  const run = await repos.billingRuns.create({
+    matterId: p.matterId, type: "FINAL", recipient: p.payerRecipient, status: "SENT",
+    workValueOreAtRun: p.payerGross, proposedAmountOre: p.payerGross, amountOre: p.payerGross,
+    invoiceId: p.payerInvoiceId, deductedBillingRunIds: [], periodTo: new Date(), notes: p.notes,
+  });
+  await freezeWork(repos, p.matterId, run.id);
+  return run;
 }
 
 /** Arvode netto (exkl. moms) — summa av debiterbara tidsposter. */
@@ -464,6 +521,10 @@ export const billingRunRouter = router({
           invoiceId: null, deductedBillingRunIds: [],
           periodTo: new Date(), notes: input.notes,
         });
+        // Kostnadsräkningen ÄR inskicket — frys arbetet direkt (#806) så det
+        // lämnar "Upparbetat ofakturerat". Dom/slutreglering läser raderna via
+        // körningen (fetchWorkByRun), inte som ofryst.
+        await freezeWork(tx, input.matterId, run.id);
         return { run };
       });
     }),
@@ -520,8 +581,9 @@ export const billingRunRouter = router({
           });
           prutningExpenseId = prutning.id;
         }
-        // Debiterbara poster INNAN frysning (ex. PRUTNING, som länkas separat nedan).
-        const work = await fetchUnfrozenWork(tx, run.matterId);
+        // Posterna frystes redan vid kostnadsräkningens inskick (#806) → läs dem
+        // via körningen. PRUTNING (nyss skapad) länkas separat nedan.
+        const work = await fetchWorkByRun(tx, run.id);
         const invoice = await tx.invoices.create({
           matterId: run.matterId, amount: finalAmount,
           invoiceType: "FINAL", status: "DRAFT", // DOMSTOL → inget nummer/OCR (ADR 0012)
@@ -565,7 +627,7 @@ export const billingRunRouter = router({
         if (matter.paymentMethod !== "RATTSSKYDD" && matter.paymentMethod !== "RATTSHJALP") {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Settlement gäller bara rättsskydd/rättshjälp." });
         }
-        const work = await fetchUnfrozenWork(tx, input.matterId);
+        const { work, krRun } = await resolveSettlementWork(tx, ctx.orgId, input.matterId);
         const billableMinutes = work.timeEntries.filter((t) => t.billable).reduce((s, t) => s + t.minutes, 0);
         const rateOre = await currentArvodeRateOre(tx, ctx.orgId, matter);
         const totalArvodeNet = Math.round((billableMinutes / 60) * rateOre);
@@ -590,24 +652,16 @@ export const billingRunRouter = router({
           matterId: input.matterId, amount: payerGross, vatOre: vatOreOf(payerLines), vatBreakdown: payerLines,
           invoiceType: "FINAL", status: "DRAFT", ...(await invoiceNumbering(tx, ctx.orgId, input.payerRecipient)), invoiceDate: new Date(), notes: input.notes,
         });
-        if (split.firmLossOre > 0) {
-          await tx.expenses.create({
-            matterId: input.matterId, userId: ctx.user.id, date: new Date(),
-            amount: -split.firmLossOre, description: "Prutning — byrån bär (rättshjälp)",
-            billable: false, vatRate: 0, vatIncluded: false, kind: "PRUTNING",
-          });
-        }
+        await bookFirmLoss(tx, ctx.user.id, input.matterId, split.firmLossOre);
         const clientRun = await tx.billingRuns.create({
           matterId: input.matterId, type: "FINAL", recipient: "KLIENT", status: "SENT",
           workValueOreAtRun: clientGross, proposedAmountOre: clientGross, amountOre: clientAmount,
           invoiceId: clientInvoice.id, deductedBillingRunIds: input.deductedBillingRunIds, periodTo: new Date(), notes: input.notes,
         });
-        const payerRun = await tx.billingRuns.create({
-          matterId: input.matterId, type: "FINAL", recipient: input.payerRecipient, status: "SENT",
-          workValueOreAtRun: payerGross, proposedAmountOre: payerGross, amountOre: payerGross,
-          invoiceId: payerInvoice.id, deductedBillingRunIds: [], periodTo: new Date(), notes: input.notes,
+        const payerRun = await bookPayerRun(tx, {
+          matterId: input.matterId, payerRecipient: input.payerRecipient, payerInvoiceId: payerInvoice.id,
+          payerGross, notes: input.notes, krRun,
         });
-        await freezeWork(tx, input.matterId, payerRun.id);
         await emit.invoiceCreated(ctx, clientInvoice);
         await emit.invoiceCreated(ctx, payerInvoice);
         return { split, clientInvoice, payerInvoice, clientRun, payerRun };
