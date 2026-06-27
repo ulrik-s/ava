@@ -39,8 +39,10 @@ interface Props {
   /** Rättshjälpens timtak; null → 100 tim (#793). */
   rattshjalpMaxTimmar: number | null;
   /** Rättsskydd: tvistdatum (arbete före = ej täckt) + bolagets beslutsdatum (#810). */
-  tvistUppkomDatum?: Date | string | null;
-  rattsskyddBeslutDatum?: Date | string | null;
+  tvistUppkomDatum?: Date | string | null | undefined;
+  rattsskyddBeslutDatum?: Date | string | null | undefined;
+  /** Rättsskydd: datum då rättsskydd nekades (#811). */
+  rattsskyddNekadAt?: Date | string | null | undefined;
 }
 
 /** ISO-datum (yyyy-mm-dd) ur ett valfritt datumfält, tomt om saknas. */
@@ -159,10 +161,11 @@ function CoverageCapFields({ method, rsMaxKr, setRsMaxKr, rhMaxTim, setRhMaxTim 
 
 /** Rättsskyddets datum ur bolagets beslut (#810): tvistdatum (arbete före = ej
  *  täckt) + beslutsdatum (retroaktivt täcks ≤6 h). Endast för rättsskydd. */
-function RattsskyddDates({ method, tvist, setTvist, beslut, setBeslut }: {
+function RattsskyddDates({ method, tvist, setTvist, beslut, setBeslut, nekad, setNekad }: {
   method: PaymentMethod;
   tvist: string; setTvist: (v: string) => void;
   beslut: string; setBeslut: (v: string) => void;
+  nekad: string; setNekad: (v: string) => void;
 }) {
   if (method !== "RATTSSKYDD") return null;
   return (
@@ -173,6 +176,10 @@ function RattsskyddDates({ method, tvist, setTvist, beslut, setBeslut }: {
       </label>
       <label className="block text-xs font-medium">Försäkringens beslut (datum)
         <input type="date" value={beslut} onChange={(e) => setBeslut(e.target.value)}
+          className="mt-1 w-full border border-gray-300 rounded px-2 py-1.5 text-sm" />
+      </label>
+      <label className="block text-xs font-medium col-span-2">Rättsskydd nekat (datum)
+        <input type="date" value={nekad} onChange={(e) => setNekad(e.target.value)}
           className="mt-1 w-full border border-gray-300 rounded px-2 py-1.5 text-sm" />
       </label>
     </div>
@@ -216,6 +223,7 @@ function PaymentMethodEditor({ matterId, initial, onDone }: { matterId: MatterId
   const [rhMaxTim, setRhMaxTim] = useState(initial.rattshjalpMaxTimmar != null ? String(initial.rattshjalpMaxTimmar) : "");
   const [tvist, setTvist] = useState(isoDate(initial.tvistUppkomDatum));
   const [beslut, setBeslut] = useState(isoDate(initial.rattsskyddBeslutDatum));
+  const [nekad, setNekad] = useState(isoDate(initial.rattsskyddNekadAt));
   const methodId = useId();
   const decidedAtId = useId();
   const noteId = useId();
@@ -250,7 +258,7 @@ function PaymentMethodEditor({ matterId, initial, onDone }: { matterId: MatterId
           <ClientShareField id={shareId} value={sharePct} onChange={setSharePct} />
         )}
         <CoverageCapFields method={method} rsMaxKr={rsMaxKr} setRsMaxKr={setRsMaxKr} rhMaxTim={rhMaxTim} setRhMaxTim={setRhMaxTim} />
-        <RattsskyddDates method={method} tvist={tvist} setTvist={setTvist} beslut={beslut} setBeslut={setBeslut} />
+        <RattsskyddDates method={method} tvist={tvist} setTvist={setTvist} beslut={beslut} setBeslut={setBeslut} nekad={nekad} setNekad={setNekad} />
         <div>
           <label htmlFor={decidedAtId} className="block text-xs font-medium mb-1">
             Beslutsdatum (om rättshjälp/rättsskydd beviljats)
@@ -293,6 +301,7 @@ function PaymentMethodEditor({ matterId, initial, onDone }: { matterId: MatterId
                 rattshjalpMaxTimmar: positiveIntOrNull(rhMaxTim),
                 tvistUppkomDatum: tvist || null,
                 rattsskyddBeslutDatum: beslut || null,
+                rattsskyddNekadAt: nekad || null,
               })
             }
             className="px-4 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"

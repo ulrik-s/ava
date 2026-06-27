@@ -241,6 +241,8 @@ export const matterRouter = router({
         /** Rättsskydd (#810): tvistdatum + bolagets beslutsdatum, ur beslutet. */
         tvistUppkomDatum: z.string().nullable().optional(),
         rattsskyddBeslutDatum: z.string().nullable().optional(),
+        /** Rättsskydd (#811): datum då rättsskydd nekades. */
+        rattsskyddNekadAt: z.string().nullable().optional(),
         isTaxeArende: z.boolean().optional(),
         taxaLevel: z.number().int().min(1).max(4).nullable().optional(),
         taxaHuvudforhandlingMin: z.number().int().nonnegative().nullable().optional(),
@@ -250,13 +252,14 @@ export const matterRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const before = await assertMatterInOrg(ctx, asId<"MatterId">(input.id));
-      const { id, paymentMethodDecidedAt, taxaHufStart, tvistUppkomDatum, rattsskyddBeslutDatum, ...rest } = input;
+      const { id, paymentMethodDecidedAt, taxaHufStart, tvistUppkomDatum, rattsskyddBeslutDatum, rattsskyddNekadAt, ...rest } = input;
       const data: Record<string, unknown> = { ...rest };
       // Datumsträngar (yyyy-mm-dd) → Date | null; lämna orörda om utelämnade.
       applyOptionalDate(data, "paymentMethodDecidedAt", paymentMethodDecidedAt);
       applyOptionalDate(data, "taxaHufStart", taxaHufStart);
       applyOptionalDate(data, "tvistUppkomDatum", tvistUppkomDatum);
       applyOptionalDate(data, "rattsskyddBeslutDatum", rattsskyddBeslutDatum);
+      applyOptionalDate(data, "rattsskyddNekadAt", rattsskyddNekadAt);
       const updated = await ctx.repos.matters.update(id, data satisfies Partial<Matter>);
       await emit.matterUpdated(ctx, id, data);
       if (input.status && input.status !== before.status) {
