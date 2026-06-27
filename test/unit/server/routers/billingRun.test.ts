@@ -300,13 +300,13 @@ describe("billingRun.list / byId", () => {
 });
 
 describe("billingRun.coverageSplit — prutning/självrisk på aktuellt timarvode (#800)", () => {
-  function caller(matterExtra: Record<string, unknown>, currentRate: number) {
+  function caller(matterExtra: Record<string, unknown>, currentRate: number, minutes = 120) {
     const ds = new DemoDataStore({
       organizations: [{ id: "org-1", name: "X" }],
       matters: [{ id: "m-1", organizationId: "org-1", matterNumber: "2026-0001", title: "T", status: "ACTIVE", responsibleLawyerId: "u-1", ...matterExtra, createdAt: new Date() }],
       // Juristens AKTUELLA timtaxa = currentRate (skiljer sig från tidspostens snapshot 200000).
       users: [{ id: "u-1", organizationId: "org-1", email: "a@x", name: "Anna", role: "ADMIN", hourlyRate: currentRate }],
-      timeEntries: [{ id: "te-1", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date(), minutes: 120, description: "M", hourlyRate: 200000, billable: true }],
+      timeEntries: [{ id: "te-1", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date(), minutes, description: "M", hourlyRate: 200000, billable: true }],
     }, async () => {});
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: PRINCIPAL }) as any);
@@ -323,23 +323,31 @@ describe("billingRun.coverageSplit — prutning/självrisk på aktuellt timarvod
   });
 
   it("rättshjälp: värderar på timkostnadsnormen; dom-prutning → byrå-förlust + klient på reducerat", async () => {
-    // 2 tim × 1626 kr = 325 200 öre total; dom 300 000 → förlust 25 200; klient 20 % × 300 000.
-    const c = caller({ paymentMethod: "RATTSHJALP", clientShareBips: 2000, taxaHasFTax: true }, 999999);
+    // 3 tim loggat, varav 1 tim rådgivning (exkl, #809) → 2 effektiva tim × 1626 kr =
+    // 325 200 öre bas; dom 300 000 → förlust 25 200; klient 20 % × 300 000.
+    const c = caller({ paymentMethod: "RATTSHJALP", clientShareBips: 2000, taxaHasFTax: true }, 999999, 180);
     const r = await c.billingRun.coverageSplit({ matterId: "m-1", awardedOre: 300000 });
     expect(r.totalOre).toBe(325200);
     expect(r.firmLossOre).toBe(25200);
     expect(r.clientOre).toBe(60000);
     expect(r.payerOre).toBe(240000);
   });
+
+  it("rättshjälp: rådgivningstimmen exkluderas ur avgiftsbasen (#809)", async () => {
+    // 2 tim loggat, 1 tim rådgivning exkl → bas = 1 effektiv tim × 1626 kr = 162 600.
+    const c = caller({ paymentMethod: "RATTSHJALP", clientShareBips: 2000, taxaHasFTax: true }, 999999, 120);
+    const r = await c.billingRun.coverageSplit({ matterId: "m-1" });
+    expect(r.totalOre).toBe(162600);
+  });
 });
 
 describe("billingRun.settleCoverage — bokför prutnings-uppdelningen (#801)", () => {
-  function caller(matterExtra: Record<string, unknown>, currentRate: number) {
+  function caller(matterExtra: Record<string, unknown>, currentRate: number, minutes = 120) {
     const ds = new DemoDataStore({
       organizations: [{ id: "org-1", name: "X" }],
       matters: [{ id: "m-1", organizationId: "org-1", matterNumber: "2026-0001", title: "T", status: "ACTIVE", responsibleLawyerId: "u-1", ...matterExtra, createdAt: new Date() }],
       users: [{ id: "u-1", organizationId: "org-1", email: "a@x", name: "Anna", role: "ADMIN", hourlyRate: currentRate }],
-      timeEntries: [{ id: "te-1", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date(), minutes: 120, description: "M", hourlyRate: 200000, billable: true }],
+      timeEntries: [{ id: "te-1", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date(), minutes, description: "M", hourlyRate: 200000, billable: true }],
     }, async () => {});
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return { ds, caller: appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: PRINCIPAL }) as any) };
@@ -355,7 +363,8 @@ describe("billingRun.settleCoverage — bokför prutnings-uppdelningen (#801)", 
   });
 
   it("rättshjälp: timkostnadsnorm; dom prutar → byrå-förlust bokas (icke-debiterbar PRUTNING), klient på reducerat", async () => {
-    const { ds, caller: c } = caller({ paymentMethod: "RATTSHJALP", clientShareBips: 2000, taxaHasFTax: true }, 999999);
+    // 3 tim loggat − 1 tim rådgivning (#809) = 2 effektiva tim → bas 325 200.
+    const { ds, caller: c } = caller({ paymentMethod: "RATTSHJALP", clientShareBips: 2000, taxaHasFTax: true }, 999999, 180);
     const res = await c.billingRun.settleCoverage({ matterId: "m-1", payerRecipient: "RATTSHJALPSMYNDIGHET", awardedOre: 300000 });
     // total 325200; dom 300000 → förlust 25200; klient 60000 → 75000; stat 240000 → 300000.
     expect(res.split).toMatchObject({ clientOre: 60000, payerOre: 240000, firmLossOre: 25200 });
@@ -367,7 +376,7 @@ describe("billingRun.settleCoverage — bokför prutnings-uppdelningen (#801)", 
   });
 
   it("rättshjälp via kostnadsräkning (#806): läser de frysta raderna och KONSUMERAR den väntande körningen (ingen dubbelräkning)", async () => {
-    const { ds, caller: c } = caller({ paymentMethod: "RATTSHJALP", clientShareBips: 2000, taxaHasFTax: true }, 999999);
+    const { ds, caller: c } = caller({ paymentMethod: "RATTSHJALP", clientShareBips: 2000, taxaHasFTax: true }, 999999, 180);
     const kr = await c.billingRun.createKostnadsrakning({ matterId: "m-1" });
     expect(kr.run.status).toBe("PENDING_VERDICT");
     const res = await c.billingRun.settleCoverage({ matterId: "m-1", payerRecipient: "RATTSHJALPSMYNDIGHET", awardedOre: 300000 });

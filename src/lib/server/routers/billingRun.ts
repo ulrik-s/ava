@@ -23,8 +23,9 @@ import { computeCoverageSplit, type CoverageSplit } from "@/lib/shared/coverage-
 import { arvodeInclVatOre } from "@/lib/shared/invoice-calc";
 import { ocrFromInvoiceNumber } from "@/lib/shared/ocr-reference";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
+import { RADGIVNING_MINUTES } from "@/lib/shared/rattshjalp";
 import type { BillingRun } from "@/lib/shared/schemas/billing";
-import { billingRunRecipientSchema, type BillingRunRecipient, type ExpenseKind } from "@/lib/shared/schemas/enums";
+import { billingRunRecipientSchema, type BillingRunRecipient, type ExpenseKind, type PaymentMethod } from "@/lib/shared/schemas/enums";
 import {
   matterIdSchema,
   billingRunIdSchema,
@@ -79,6 +80,16 @@ interface BillingProposal {
 /** Värdet på en (debiterbar) tidspost i öre — speglar workValueOre:s ton. */
 function timeEntryValueOre(minutes: number, hourlyRate: number): number {
   return Math.round((minutes / 60) * hourlyRate);
+}
+
+/**
+ * Minuter som rättshjälpsavgiften/coverage-splitten baseras på (#809): rättshjälp
+ * exkluderar rådgivningstimmen — ärendets första timme loggas som vanlig tidspost
+ * men faktureras klienten separat (rådgivningsavgiften) och ingår INTE i avgifts-
+ * basen. Övriga betalningssätt: oförändrat.
+ */
+function coverageBaseMinutes(method: PaymentMethod, billableMinutes: number): number {
+  return method === "RATTSHJALP" ? Math.max(0, billableMinutes - RADGIVNING_MINUTES) : billableMinutes;
 }
 
 async function fetchUnfrozenWork(repos: Repositories, matterId: MatterId): Promise<UnfrozenWork> {
@@ -548,7 +559,8 @@ export const billingRunRouter = router({
       if (!matter) throw new TRPCError({ code: "NOT_FOUND", message: "Ärendet finns inte." });
       const { billableMinutes } = await ctx.repos.timeEntries.coverageUsageForMatter(input.matterId);
       const currentRateOre = await currentArvodeRateOre(ctx.repos, ctx.orgId, matter);
-      const totalOre = Math.round((billableMinutes / 60) * currentRateOre);
+      const baseMinutes = coverageBaseMinutes(matter.paymentMethod, billableMinutes);
+      const totalOre = Math.round((baseMinutes / 60) * currentRateOre);
       const split = computeCoverageSplit({
         method: matter.paymentMethod,
         totalOre,
@@ -630,7 +642,8 @@ export const billingRunRouter = router({
         const { work, krRun } = await resolveSettlementWork(tx, ctx.orgId, input.matterId);
         const billableMinutes = work.timeEntries.filter((t) => t.billable).reduce((s, t) => s + t.minutes, 0);
         const rateOre = await currentArvodeRateOre(tx, ctx.orgId, matter);
-        const totalArvodeNet = Math.round((billableMinutes / 60) * rateOre);
+        const baseMinutes = coverageBaseMinutes(matter.paymentMethod, billableMinutes);
+        const totalArvodeNet = Math.round((baseMinutes / 60) * rateOre);
         const split = computeCoverageSplit({
           method: matter.paymentMethod, totalOre: totalArvodeNet, clientShareBips: matter.clientShareBips ?? 0,
           awardedOre: input.awardedOre ?? null, insurerPrutningOre: input.insurerPrutningOre ?? null,
