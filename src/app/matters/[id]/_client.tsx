@@ -103,6 +103,8 @@ function MatterPaymentMethod({ matterId, matter }: {
     clientShareBips?: number | null | undefined;
     rattsskyddMaxOre?: number | null | undefined;
     rattshjalpMaxTimmar?: number | null | undefined;
+    tvistUppkomDatum?: Date | string | null | undefined;
+    rattsskyddBeslutDatum?: Date | string | null | undefined;
   };
 }) {
   const rattsskyddMaxOre = matter.rattsskyddMaxOre ?? null;
@@ -123,6 +125,8 @@ function MatterPaymentMethod({ matterId, matter }: {
         clientShareBips={matter.clientShareBips ?? null}
         rattsskyddMaxOre={rattsskyddMaxOre}
         rattshjalpMaxTimmar={rattshjalpMaxTimmar}
+        tvistUppkomDatum={matter.tvistUppkomDatum ?? null}
+        rattsskyddBeslutDatum={matter.rattsskyddBeslutDatum ?? null}
       />
     </>
   );

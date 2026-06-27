@@ -391,4 +391,29 @@ describe("billingRun.settleCoverage — bokför prutnings-uppdelningen (#801)", 
     expect(consumed.status).toBe("SENT");
     expect(consumed.invoiceId).toBe(res.payerInvoice.id);
   });
+
+  it("rättsskydd tidsuppdelat (#810): arbete före tvist → klient 100 %, retro+efter beslut täckt", async () => {
+    const ds = new DemoDataStore({
+      organizations: [{ id: "org-1", name: "X" }],
+      matters: [{
+        id: "m-1", organizationId: "org-1", matterNumber: "2026-0001", title: "T", status: "ACTIVE",
+        responsibleLawyerId: "u-1", paymentMethod: "RATTSSKYDD", clientShareBips: 2000,
+        tvistUppkomDatum: new Date("2026-03-01"), rattsskyddBeslutDatum: new Date("2026-04-01"), createdAt: new Date(),
+      }],
+      users: [{ id: "u-1", organizationId: "org-1", email: "a@x", name: "Anna", role: "ADMIN", hourlyRate: 300000 }],
+      timeEntries: [
+        { id: "te-pre", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date("2026-02-01"), minutes: 120, description: "före tvist", hourlyRate: 200000, billable: true },
+        { id: "te-retro", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date("2026-03-15"), minutes: 120, description: "retroaktivt", hourlyRate: 200000, billable: true },
+        { id: "te-post", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date("2026-04-15"), minutes: 120, description: "efter beslut", hourlyRate: 200000, billable: true },
+      ],
+    }, async () => {});
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const c = appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: PRINCIPAL }) as any);
+    const res = await c.billingRun.settleCoverage({ matterId: "m-1", payerRecipient: "FORSAKRING" });
+    // 6 tim × 3000 = 1 800 000 total; täckt 4 tim (retro 2 + efter 2) = 1 200 000.
+    // självrisk 20 % × 1 200 000 = 240 000; otäckt (2 tim före tvist) = 600 000.
+    expect(res.split).toMatchObject({ clientOre: 840_000, payerOre: 960_000, firmLossOre: 0 });
+    expect(res.clientInvoice.amount).toBe(1_050_000); // 840 000 × 1,25 moms
+    expect(res.payerInvoice.amount).toBe(1_200_000); // 960 000 × 1,25 moms
+  });
 });
