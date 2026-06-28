@@ -17,6 +17,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import type { VatBreakdownLine } from "@/lib/shared/accounting/semantic-voucher";
+import { assertBillingTransition, type BillingActionType } from "@/lib/shared/billing-flow";
 import { proposedAccontoOre } from "@/lib/shared/billing-proposal";
 import { TIMKOSTNADSNORM_FTAX_ORE_PER_H, TIMKOSTNADSNORM_NO_FTAX_ORE_PER_H } from "@/lib/shared/brottmalstaxa";
 import { computeCoverageSplit, partitionRattsskyddMinutes, type CoverageSplit } from "@/lib/shared/coverage-billing";
@@ -388,9 +389,22 @@ async function freezeSelectedWork(
   await repos.expenses.freezeByIds(work.expenses.map((e) => e.id), runId, now);
 }
 
-async function assertMatterInOrg(repos: Repositories, matterId: MatterId, orgId: OrganizationId): Promise<void> {
-  const m = await repos.matters.getByIdInOrg(matterId, orgId);
-  if (!m) throw new TRPCError({ code: "NOT_FOUND", message: "Ärendet finns inte." });
+/**
+ * Flödes-guard (#816 fas 3): säkerställer att ärendet finns OCH att `action` är
+ * laglig i ärendets nuvarande fas enligt billing-flow-modellen (samma sanningskälla
+ * som UI:t). Hård enforcement för ALLA betalningssätt — skyddar mot stale klienter
+ * / direkt-API som tar ett otillåtet steg (t.ex. slutreglera ett PRIVAT-ärende
+ * eller fakturera ett nekat rättsskydd).
+ */
+async function assertFlowAction(repos: Repositories, orgId: OrganizationId, matterId: MatterId, action: BillingActionType): Promise<void> {
+  const matter = await repos.matters.getByIdInOrg(matterId, orgId);
+  if (!matter) throw new TRPCError({ code: "NOT_FOUND", message: "Ärendet finns inte." });
+  const runs = await repos.billingRuns.listForOrg(orgId, matterId);
+  try {
+    assertBillingTransition({ paymentMethod: matter.paymentMethod, rattsskyddNekadAt: matter.rattsskyddNekadAt }, runs, action);
+  } catch (e) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: e instanceof Error ? e.message : "Otillåten faktureringsåtgärd." });
+  }
 }
 
 /**
@@ -469,7 +483,7 @@ export const billingRunRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       return ctx.repos.transaction(async (tx) => {
-        await assertMatterInOrg(tx, input.matterId, ctx.orgId);
+        await assertFlowAction(tx, ctx.orgId, input.matterId, "ACCONTO");
         const work = await fetchUnfrozenWork(tx, input.matterId);
         const value = workValueOre(work);
         // #397: dra av tidigare aconton i det FÖRESLAGNA beloppet —
@@ -514,7 +528,7 @@ export const billingRunRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       return ctx.repos.transaction(async (tx) => {
-        await assertMatterInOrg(tx, input.matterId, ctx.orgId);
+        await assertFlowAction(tx, ctx.orgId, input.matterId, "FINAL");
         const { work, selected } = await resolveFinalWork(tx, input.matterId, input.timeEntryIds, input.expenseIds);
         // Brutto = arvode inkl. 25 % moms + utlägg (#782).
         const grossValue = invoiceGrossOre(work);
@@ -547,7 +561,7 @@ export const billingRunRouter = router({
     .input(z.object({ matterId: matterIdSchema, notes: z.string().nullish() }))
     .mutation(async ({ ctx, input }) => {
       return ctx.repos.transaction(async (tx) => {
-        await assertMatterInOrg(tx, input.matterId, ctx.orgId);
+        await assertFlowAction(tx, ctx.orgId, input.matterId, "KOSTNADSRAKNING");
         const work = await fetchUnfrozenWork(tx, input.matterId);
         // Brutto = arvode inkl. 25 % moms + utlägg (#782) — matchar kostnadsräkningens PDF.
         const grossValue = invoiceGrossOre(work);
@@ -662,6 +676,7 @@ export const billingRunRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       return ctx.repos.transaction(async (tx) => {
+        await assertFlowAction(tx, ctx.orgId, input.matterId, "SETTLE");
         const matter = await tx.matters.getByIdInOrg(input.matterId, ctx.orgId);
         if (!matter) throw new TRPCError({ code: "NOT_FOUND", message: "Ärendet finns inte." });
         if (matter.paymentMethod !== "RATTSSKYDD" && matter.paymentMethod !== "RATTSHJALP") {
