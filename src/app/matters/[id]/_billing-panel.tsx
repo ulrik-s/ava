@@ -21,7 +21,7 @@ import { useMatterInvariants } from "@/lib/client/diagnostics/use-matter-invaria
 import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
 import type { AppRouter } from "@/lib/server/routers/_app";
-import { availableActions, pendingBannerFor, type BillingAction, type FlowMatter } from "@/lib/shared/billing-flow";
+import { availableActions, currentPhase, pendingBannerFor, type BillingAction, type BillingPhase, type FlowMatter } from "@/lib/shared/billing-flow";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { computeRadgivningsavgift } from "@/lib/shared/rattshjalp";
 import { BILLING_RUN_TYPE_LABELS, BILLING_RUN_STATUS_LABELS, type BillingRunRecipient, type BillingRunStatus, type BillingRunType, type PaymentMethod } from "@/lib/shared/schemas/enums";
@@ -291,7 +291,8 @@ export function BillingPanel({ matterId, matter }: Props) {
     <div className="bg-white rounded-lg border border-gray-200 lg:col-span-2">
       <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
         <h2 className="font-semibold text-gray-900">Fakturering</h2>
-        <BillingActions actions={actions} onPick={onPick} />
+        <BillingHeaderActions actions={actions} onPick={onPick}
+          hint={noActionsHint(currentPhase(flowMatter, rows), flowMatter.paymentMethod)} />
       </div>
       <BillingSummary matterId={matterId} />
       <RadgivningBanner matterId={matterId} matter={matter} onRecorded={refetch} />
@@ -414,6 +415,21 @@ function Card({ label, value, dim, basis = "gross" }: { label: string; value: nu
       <Money ore={value} basis={basis} className="font-mono font-semibold text-sm" />
     </div>
   );
+}
+
+/** Header-zonen: skapa-faktura-menyn när det finns åtgärder, annars en förklaring. */
+function BillingHeaderActions({ actions, onPick, hint }: { actions: readonly BillingAction[]; onPick: (a: BillingAction) => void; hint: string }) {
+  if (actions.length > 0) return <BillingActions actions={actions} onPick={onPick} />;
+  return <span className="text-xs text-gray-500">{hint}</span>;
+}
+
+/** Förklarar varför inga faktureringsåtgärder erbjuds i nuvarande fas (#824) —
+ *  annars försvinner knappen tyst och användaren tror fakturering saknas. */
+function noActionsHint(phase: BillingPhase, pm: PaymentMethod): string {
+  if (pm === "PENDING") return "Välj betalningssätt för att fakturera";
+  if (phase === "SLUTREGLERAD") return "Ärendet är slutreglerat";
+  if (phase === "NEKAD") return "Rättsskydd nekat — se förslag nedan";
+  return "Inga faktureringsåtgärder i nuvarande läge";
 }
 
 /** Skapa-faktura-menyn — alternativen kommer från flödesmodellen (#816); panelen
