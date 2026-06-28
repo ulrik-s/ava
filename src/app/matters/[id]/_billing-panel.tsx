@@ -228,8 +228,16 @@ function useBillingMeta(matter: MatterContext): BillingMeta {
   };
 }
 
+/** KR:ns föreslagna + dömda belopp till verdict-dialogen (faller tillbaka på
+ *  föreslaget när dömt ännu saknas) — utbrutet så BillingDialogs håller sig ≤8. */
+function verdictAmounts(pending: BillingRunRow | undefined): { workValueOre: number; awardedOre: number } {
+  const workValueOre = pending?.amountOre ?? 0;
+  return { workValueOre, awardedOre: pending?.awardedOre ?? workValueOre };
+}
+
 function BillingDialogs({ matterId, matter, rows, dialog, setDialog, verdictRunId, setVerdictRunId, onRefetch }: DialogsProps) {
   const pending = findPendingVerdict(rows);
+  const amounts = verdictAmounts(pending);
   const meta = useBillingMeta(matter);
   return (
     <>
@@ -239,7 +247,8 @@ function BillingDialogs({ matterId, matter, rows, dialog, setDialog, verdictRunI
           onClose={() => { setDialog("NONE"); onRefetch(); }} />
       )}
       {verdictRunId && (
-        <VerdictDialog billingRunId={verdictRunId} workValueOre={pending?.amountOre ?? 0}
+        <VerdictDialog billingRunId={verdictRunId} workValueOre={amounts.workValueOre}
+          awardedOre={amounts.awardedOre}
           matterId={matterId} matterNumber={matter.matterNumber} matterTitle={matter.title}
           clientName={clientOf(matter)}
           onClose={() => { setVerdictRunId(null); onRefetch(); }} />

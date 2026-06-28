@@ -221,26 +221,27 @@ describe("billingRun.createKostnadsrakning", () => {
 });
 
 describe("billingRun.setVerdict", () => {
-  it("transitionar PENDING_VERDICT → SENT, skapar Invoice + fryser rader", async () => {
+  // #828: fakturan skapas EFTER domstolens beslut — prutningen registreras på
+  // KR:n (recordKostnadsrakningBeslut) och läses sedan ur körningen, inte som input.
+  it("transitionar BESLUTAD → SENT, skapar Invoice + fryser rader", async () => {
     const { ds, caller } = makeCaller({ workMinutes: 60, paymentMethod: "OFFENTLIGT_UPPDRAG" }); // 2500 kr
     const kr = await caller.billingRun.createKostnadsrakning({ matterId: "m-1" });
-    const res = await caller.billingRun.setVerdict({
-      billingRunId: kr.run.id, prutningOre: 0,
-    });
+    await caller.billingRun.recordKostnadsrakningBeslut({ billingRunId: kr.run.id, awardedOre: 312500 });
+    const res = await caller.billingRun.setVerdict({ billingRunId: kr.run.id });
     expect(res.run.id).toBe(kr.run.id);
-    const updated = await ds.billingRuns.findFirst({ where: { id: kr.run.id } }) as { status: string; invoiceId: string };
+    const updated = await ds.billingRuns.findFirst({ where: { id: kr.run.id } }) as { status: string; invoiceId: string; kostnadsrakningStatus: string };
     expect(updated.status).toBe("SENT");
+    expect(updated.kostnadsrakningStatus).toBe("FAKTURERAD");
     expect(updated.invoiceId).toBe(res.invoice.id);
     const te = await ds.timeEntries.findFirst({ where: { id: "te-1" } }) as { frozenByBillingRunId?: string | null };
     expect(te.frozenByBillingRunId).toBe(kr.run.id);
   });
 
-  it("skapar Expense(kind=PRUTNING) när prutning angiven", async () => {
+  it("skapar Expense(kind=PRUTNING) när prutning registrerats på beslutet", async () => {
     const { ds, caller } = makeCaller({ workMinutes: 60, paymentMethod: "OFFENTLIGT_UPPDRAG" });
     const kr = await caller.billingRun.createKostnadsrakning({ matterId: "m-1" });
-    await caller.billingRun.setVerdict({
-      billingRunId: kr.run.id, prutningOre: -50000,
-    });
+    await caller.billingRun.recordKostnadsrakningBeslut({ billingRunId: kr.run.id, awardedOre: 262500, prutningOre: -50000 });
+    await caller.billingRun.setVerdict({ billingRunId: kr.run.id });
     const prutning = await ds.expenses.findFirst({ where: { matterId: "m-1", kind: "PRUTNING" } }) as { amount: number; description: string };
     expect(prutning).toBeTruthy();
     expect(prutning.amount).toBe(-50000);
@@ -250,16 +251,16 @@ describe("billingRun.setVerdict", () => {
   it("invoice-beloppet är workValue + prutning (prutning negativ)", async () => {
     const { caller } = makeCaller({ workMinutes: 120, paymentMethod: "OFFENTLIGT_UPPDRAG" }); // 5000 kr
     const kr = await caller.billingRun.createKostnadsrakning({ matterId: "m-1" });
-    const res = await caller.billingRun.setVerdict({
-      billingRunId: kr.run.id, prutningOre: -100000,
-    });
+    await caller.billingRun.recordKostnadsrakningBeslut({ billingRunId: kr.run.id, awardedOre: 525000, prutningOre: -100000 });
+    const res = await caller.billingRun.setVerdict({ billingRunId: kr.run.id });
     expect(res.invoice.amount).toBe(525000); // arvode 5000 kr + moms = 625000, − prutning 1000 = 525000 (#782)
   });
 
   it("LÄNKAR poster + PRUTNING till fakturan → vyn reconciler mot beloppet (#732)", async () => {
     const { ds, caller } = makeCaller({ workMinutes: 120, expenseOre: 5000, paymentMethod: "OFFENTLIGT_UPPDRAG" }); // 5000 kr + 50 kr utlägg
     const kr = await caller.billingRun.createKostnadsrakning({ matterId: "m-1" });
-    const res = await caller.billingRun.setVerdict({ billingRunId: kr.run.id, prutningOre: -30000 });
+    await caller.billingRun.recordKostnadsrakningBeslut({ billingRunId: kr.run.id, awardedOre: 595000, prutningOre: -30000 });
+    const res = await caller.billingRun.setVerdict({ billingRunId: kr.run.id });
     const te = await ds.timeEntries.findFirst({ where: { id: "te-1" } }) as { invoiceId?: string | null };
     const ex = await ds.expenses.findFirst({ where: { id: "ex-1" } }) as { invoiceId?: string | null };
     const prut = await ds.expenses.findFirst({ where: { matterId: "m-1", kind: "PRUTNING" } }) as { invoiceId?: string | null };
@@ -273,9 +274,16 @@ describe("billingRun.setVerdict", () => {
   it("DOMSTOL-faktura får inget fakturanummer (ADR 0012)", async () => {
     const { caller } = makeCaller({ workMinutes: 60, paymentMethod: "OFFENTLIGT_UPPDRAG" });
     const kr = await caller.billingRun.createKostnadsrakning({ matterId: "m-1" });
-    const res = await caller.billingRun.setVerdict({ billingRunId: kr.run.id, prutningOre: 0 });
+    await caller.billingRun.recordKostnadsrakningBeslut({ billingRunId: kr.run.id, awardedOre: 312500 });
+    const res = await caller.billingRun.setVerdict({ billingRunId: kr.run.id });
     expect(res.invoice.invoiceNumber).toBeFalsy();
     expect(res.invoice.ocrReference).toBeFalsy();
+  });
+
+  it("kastar om fakturan skapas innan beslutet registrerats (INSKICKAD)", async () => {
+    const { caller } = makeCaller({ workMinutes: 60, paymentMethod: "OFFENTLIGT_UPPDRAG" });
+    const kr = await caller.billingRun.createKostnadsrakning({ matterId: "m-1" });
+    await expect(caller.billingRun.setVerdict({ billingRunId: kr.run.id })).rejects.toThrow(/beslut/i);
   });
 
   it("kastar om billing-run inte är KOSTNADSRAKNING", async () => {
@@ -284,8 +292,8 @@ describe("billingRun.setVerdict", () => {
       matterId: "m-1", clientShareBips: 2000, amountOre: 50000,
     });
     await expect(caller.billingRun.setVerdict({
-      billingRunId: acc.run.id, prutningOre: 0,
-    })).rejects.toThrow(/KOSTNADSRAKNING/);
+      billingRunId: acc.run.id,
+    })).rejects.toThrow(/kostnadsräkning/i);
   });
 });
 

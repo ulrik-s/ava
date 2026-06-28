@@ -1,19 +1,15 @@
 "use client";
 
 /**
- * `VerdictDialog` — andra steget för OFFENTLIG_FÖRSVARARE-flowet.
+ * `VerdictDialog` — sista steget för OFFENTLIG_FÖRSVARARE/offentligt uppdrag.
  *
- * Kostnadsräkningen ligger i PENDING_VERDICT efter att advokaten skickat
- * den. Här anger advokaten det belopp som domen beviljade. Systemet
- * räknar baklänges till prutningen (= dömt − föreslaget) och skapar
- * Invoice + ev. Expense(kind=PRUTNING) + fryser raderna.
- *
- * Domen anger det FAKTISKA beloppet, inte hur mycket som prutats — så
- * det är vad advokaten skriver in.
+ * Domstolens beslut (dömt belopp + ev. prutning) registreras redan på
+ * kostnadsräkningen (RecordBeslutDialog) → KR:n är BESLUTAD. Här bekräftar
+ * advokaten bara att fakturan ska skapas; servern läser prutningen ur KR:ns
+ * beslut (`setVerdict` tar inget belopp som input) och skapar Invoice +
+ * ev. Expense(kind=PRUTNING) + fryser raderna.
  */
-import { useState } from "react";
 import { VatBreakdown } from "@/components/billing/vat-breakdown";
-import { DecimalInput } from "@/components/ui/decimal-input";
 import { Modal } from "@/components/ui/modal";
 import { generateFakturaDoc } from "@/lib/client/kostnadsrakning/generate-faktura-doc";
 import { trpc } from "@/lib/client/trpc";
@@ -24,6 +20,7 @@ import type { BillingRunId, MatterId } from "@/lib/shared/schemas/ids";
 interface Props {
   billingRunId: BillingRunId;
   workValueOre: number;
+  awardedOre: number;
   matterId: MatterId;
   matterNumber: string;
   matterTitle: string;
@@ -33,20 +30,9 @@ interface Props {
   onClose: () => void;
 }
 
-/** Härleder belopp/prutning/vakt. Utbrutet ur VerdictDialog så komponenten
- *  håller sig under komplexitetsgränsen (#199). */
-function verdictAmounts(workValueOre: number, awardedKr: number | null) {
-  const proposedKr = workValueOre > 0 ? workValueOre / 100 : null;
-  const fieldKr = awardedKr ?? proposedKr;
-  const awardedOre = Math.max(0, Math.round((fieldKr ?? 0) * 100));
-  return { fieldKr, awardedOre, prutningOre: awardedOre - workValueOre, tooHigh: awardedOre > workValueOre };
-}
-
 export function VerdictDialog(props: Props) {
-  const { billingRunId, workValueOre, onClose } = props;
-  // null → följ det föreslagna beloppet (förifyllt); tomt fält tillåts (#778).
-  const [awardedKr, setAwardedKr] = useState<number | null>(null);
-  const { fieldKr, awardedOre, prutningOre, tooHigh } = verdictAmounts(workValueOre, awardedKr);
+  const { billingRunId, workValueOre, awardedOre, onClose } = props;
+  const prutningOre = awardedOre - workValueOre;
   const register = trpc.document.register.useMutation();
   const utils = trpc.useUtils();
   const mut = trpc.billingRun.setVerdict.useMutation({
@@ -71,33 +57,24 @@ export function VerdictDialog(props: Props) {
     },
   });
   return (
-    <Modal open title="Ange dom" onClose={onClose} widthClass="max-w-md">
-      <form onSubmit={(e) => { e.preventDefault(); if (!tooHigh) mut.mutate({ billingRunId, prutningOre }); }}
+    <Modal open title="Skapa faktura från beslut" onClose={onClose} widthClass="max-w-md">
+      <form onSubmit={(e) => { e.preventDefault(); mut.mutate({ billingRunId }); }}
         className="space-y-3">
         <p className="text-sm text-gray-600">
-          Skriv in det belopp som domen beviljade. Är det lägre än det
-          föreslagna räknas mellanskillnaden automatiskt som prutning.
+          Domstolens beslut är registrerat på kostnadsräkningen. Fakturan skapas
+          på det dömda beloppet — ev. prutning bokförs automatiskt.
         </p>
         <Pair label="Föreslaget belopp" value={formatCurrency(workValueOre)} />
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">Dömt belopp (kr) — inkl. moms</label>
-          <DecimalInput value={fieldKr} onChange={setAwardedKr} placeholder="Skriv in belopp"
-            className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm" />
-          {!tooHigh && <VatBreakdown inclOre={awardedOre} />}
-          {tooHigh && (
-            <p className="mt-1 text-xs text-red-600">
-              Dömt belopp kan inte överstiga föreslaget — kontrollera siffran från domen.
-            </p>
-          )}
-        </div>
-        {prutningOre < 0 && !tooHigh && (
+        <Pair label="Dömt belopp — inkl. moms" value={formatCurrency(awardedOre)} />
+        <VatBreakdown inclOre={awardedOre} />
+        {prutningOre < 0 && (
           <Pair label="Prutning" value={formatCurrency(prutningOre)} dim />
         )}
         {mut.error && <p className="text-sm text-red-700">{mut.error.message}</p>}
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" onClick={onClose}
             className="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50">Avbryt</button>
-          <button type="submit" disabled={mut.isPending || tooHigh}
+          <button type="submit" disabled={mut.isPending}
             className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50">
             {mut.isPending ? "Sparar…" : "Skapa faktura"}
           </button>

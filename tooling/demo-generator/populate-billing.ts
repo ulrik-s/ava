@@ -173,7 +173,12 @@ const PRIVATE_LIFECYCLES = [
 async function runKostnadsrakning(ctx: Ctx, matterId: string, withVerdict: boolean): Promise<void> {
   const kr = await ctx.c.billingRun.createKostnadsrakning({ matterId, notes: "Kostnadsräkning för offentligt försvarsuppdrag" });
   if (withVerdict) {
-    await ctx.c.billingRun.setVerdict({ billingRunId: kr.run.id, prutningOre: -50_000 });
+    // Domstolens beslut registreras på KR:n (prutning −500 kr) → BESLUTAD,
+    // sedan skapas fakturan (prutningen läses ur beslutet, inte som input).
+    await ctx.c.billingRun.recordKostnadsrakningBeslut({
+      billingRunId: kr.run.id, awardedOre: Math.max(0, kr.run.workValueOreAtRun - 50_000), prutningOre: -50_000,
+    });
+    await ctx.c.billingRun.setVerdict({ billingRunId: kr.run.id });
     ctx.res.invoices++;
     ctx.res.kostnadsrakningSent++;
   } else {

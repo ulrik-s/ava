@@ -684,23 +684,22 @@ export const billingRunRouter = router({
     }),
 
   setVerdict: orgProcedure
-    .input(z.object({
-      billingRunId: billingRunIdSchema,
-      prutningOre: z.number().int().nonpositive(),
-    }))
+    .input(z.object({ billingRunId: billingRunIdSchema }))
     .mutation(async ({ ctx, input }) => {
       return ctx.repos.transaction(async (tx) => {
-        const run = await tx.billingRuns.getByIdInOrg(input.billingRunId, ctx.orgId);
-        if (!run) throw new TRPCError({ code: "NOT_FOUND", message: "Faktureringshändelsen finns inte." });
-        if (run.type !== "KOSTNADSRAKNING" || run.status !== "PENDING_VERDICT") {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "Bara KOSTNADSRAKNING i PENDING_VERDICT kan domsläggas." });
+        const run = await assertKostnadsrakning(tx, input.billingRunId, ctx.orgId);
+        // Faktura skapas EFTER beslutet (#828): KR:n måste vara BESLUTAD; prutningen
+        // läses från KR:ns registrerade beslut, inte som input.
+        if (run.kostnadsrakningStatus !== "BESLUTAD") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Registrera domstolens beslut innan du skapar fakturan." });
         }
-        const finalAmount = Math.max(0, run.workValueOreAtRun + input.prutningOre);
+        const prutningOre = run.prutningOre ?? 0;
+        const finalAmount = Math.max(0, run.workValueOreAtRun + prutningOre);
         let prutningExpenseId: ExpenseId | undefined;
-        if (input.prutningOre < 0) {
+        if (prutningOre < 0) {
           const prutning = await tx.expenses.create({
             matterId: run.matterId, userId: ctx.user.id, date: new Date(),
-            amount: input.prutningOre, description: "Prutning enligt dom",
+            amount: prutningOre, description: "Prutning enligt dom",
             billable: true, vatRate: 0, vatIncluded: false, kind: "PRUTNING",
           });
           prutningExpenseId = prutning.id;
@@ -713,10 +712,10 @@ export const billingRunRouter = router({
           invoiceType: "FINAL", status: "DRAFT", // DOMSTOL → inget nummer/OCR (ADR 0012)
           invoiceDate: new Date(),
         });
+        const next = applyKrTransition(krStateOf(run), "SKAPA_FAKTURA");
         await tx.billingRuns.update(run.id, {
-          status: "SENT", invoiceId: invoice.id, amountOre: finalAmount, prutningOre: input.prutningOre,
-          // KR-livscykeln klar (#828) → kortet visar inte längre stale "Registrera beslut".
-          kostnadsrakningStatus: "FAKTURERAD",
+          status: "SENT", invoiceId: invoice.id, amountOre: finalAmount,
+          kostnadsrakningStatus: next.status, beslutSlutgiltigt: next.slutgiltigt,
         });
         await freezeWork(tx, run.matterId, run.id);
         // Länka poster + PRUTNING-utlägget → kostnadsräknings-vyn visar uppdelning
