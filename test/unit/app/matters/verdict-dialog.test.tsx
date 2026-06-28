@@ -1,7 +1,8 @@
 /**
- * Tester för VerdictDialog (#27 coverage) — OFFENTLIG_FÖRSVARARE-flowets
- * steg 2: ange dömt belopp → prutning räknas baklänges, vakt mot för högt
- * belopp, och onSuccess genererar ett faktura-dokument.
+ * Tester för VerdictDialog (#27/#828 coverage) — offentligt uppdrags sista steg:
+ * domstolens beslut är redan registrerat på KR:n, så dialogen bekräftar bara att
+ * fakturan ska skapas (inget belopp matas in), visar prutning och genererar ett
+ * faktura-dokument onSuccess.
  */
 
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
@@ -38,6 +39,7 @@ vi.mock("@/lib/client/demo/persist-generated-doc", () => ({ persistGeneratedDoc 
 const baseProps = {
   billingRunId: asId<"BillingRunId">("br-1"),
   workValueOre: 500_000,
+  awardedOre: 400_000,
   matterId: asId<"MatterId">("m1"),
   matterNumber: "B-2026-1",
   matterTitle: "Brottmål",
@@ -47,30 +49,22 @@ const baseProps = {
 beforeEach(() => { vi.clearAllMocks(); verdictOnSuccess = undefined; });
 
 describe("VerdictDialog", () => {
-  it("visar föreslaget belopp och initierar dömt = föreslaget (ingen prutning)", () => {
+  it("visar föreslaget + dömt belopp och prutningen (dömt < föreslaget)", () => {
     render(<VerdictDialog {...baseProps} />);
     expect(screen.getByText("Föreslaget belopp")).toBeInTheDocument();
-    const input = screen.getByRole("textbox") as HTMLInputElement;
-    expect(input.value).toBe("5000"); // 500 000 öre / 100
+    expect(screen.getByText("Dömt belopp — inkl. moms")).toBeInTheDocument();
+    expect(screen.getByText("Prutning")).toBeInTheDocument();
+  });
+
+  it("ingen prutning visas när dömt = föreslaget", () => {
+    render(<VerdictDialog {...baseProps} awardedOre={500_000} />);
     expect(screen.queryByText("Prutning")).not.toBeInTheDocument();
   });
 
-  it("dömt < föreslaget → visar prutning och submit skickar negativ prutningOre", () => {
+  it("submit skapar fakturan utan belopp-input (prutning läses ur KR:ns beslut)", () => {
     render(<VerdictDialog {...baseProps} />);
-    fireEvent.change(screen.getByRole("textbox"), { target: { value: "4000" } }); // 400 000 öre
-    expect(screen.getByText("Prutning")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Skapa faktura" }));
-    expect(verdictMutate).toHaveBeenCalledWith({ billingRunId: "br-1", prutningOre: -100_000 });
-  });
-
-  it("dömt > föreslaget → fel-text, submit disabled, ingen mutation", () => {
-    render(<VerdictDialog {...baseProps} />);
-    fireEvent.change(screen.getByRole("textbox"), { target: { value: "6000" } });
-    expect(screen.getByText(/kan inte överstiga föreslaget/)).toBeInTheDocument();
-    const submit = screen.getByRole("button", { name: "Skapa faktura" }) as HTMLButtonElement;
-    expect(submit.disabled).toBe(true);
-    fireEvent.submit(submit.closest("form")!);
-    expect(verdictMutate).not.toHaveBeenCalled();
+    expect(verdictMutate).toHaveBeenCalledWith({ billingRunId: "br-1" });
   });
 
   it("onSuccess genererar faktura-dokument + registrerar det + stänger", async () => {
