@@ -183,25 +183,22 @@ async function runKostnadsrakning(ctx: Ctx, matterId: string, withVerdict: boole
 
 /**
  * Rättshjälp följer KR-livscykeln (#828): aconto → kostnadsräkning till domstol
- * (fryser arbetet) → registrera domstolens beslut → slutreglering (faktura) som
- * skapar klient- + stat-faktura. Kostnadsräkningen förblir distinkt (markeras
- * FAKTURERAD) — ingen direkt slutfaktura till myndigheten.
+ * (fryser arbetet) → registrera domstolens beslut → faktura/överklagan i UI:t.
+ * Demon lämnar ärendena i olika lägen (`INSKICKAD` = väntar på beslut, `BESLUTAD`
+ * = beslut registrerat, redo att faktureras/överklagas) så hela KR-kortet kan
+ * testas — fakturasteget görs av användaren.
  */
-async function runRattshjalpBilling(ctx: Ctx, matterId: string, daysAgo: number): Promise<void> {
-  const accontoRun = await acconto(ctx, matterId, 3000, 150_000, daysAgo);
+async function runRattshjalpBilling(ctx: Ctx, matterId: string, daysAgo: number, stage: "INSKICKAD" | "BESLUTAD"): Promise<void> {
+  await acconto(ctx, matterId, 3000, 150_000, daysAgo);
   const kr = await ctx.c.billingRun.createKostnadsrakning({ matterId, notes: "Kostnadsräkning till domstol (rättshjälp)" });
-  ctx.res.kostnadsrakningSent++;
+  ctx.res.kostnadsrakningPending++;
+  if (stage === "INSKICKAD") return; // väntar på domstolens beslut
   // Domstolens beslut (dömt belopp = hela det yrkade i demon, ingen prutning).
   await ctx.c.billingRun.recordKostnadsrakningBeslut({ billingRunId: kr.run.id, awardedOre: kr.run.workValueOreAtRun });
-  const res = await ctx.c.billingRun.settleCoverage({ matterId, payerRecipient: "RATTSHJALPSMYNDIGHET", deductedBillingRunIds: [accontoRun] });
-  ctx.res.invoices += 2; // klient- + stat-faktura
-  await ctx.c.invoice.setStatus({ invoiceId: res.clientInvoice.id, status: "SENT" });
-  await ctx.c.invoice.setStatus({ invoiceId: res.payerInvoice.id, status: "SENT" });
 }
 
 async function runClientBilling(ctx: Ctx, matterId: string, pm: string, clientIdx: number): Promise<void> {
   const daysAgo = 30 + clientIdx * 6;
-  if (pm === "RATTSHJALP") { await runRattshjalpBilling(ctx, matterId, daysAgo); return; }
   const deducted = pm === "RATTSSKYDD"
     ? [await acconto(ctx, matterId, 2000, 200_000, daysAgo)]
     : [];
@@ -230,6 +227,7 @@ export async function populateBilling(caller: GeneratorCaller, seed: SeedDataset
 
   let clientIdx = 0;
   let krIdx = 0;
+  let rhIdx = 0;
   for (const m of active) {
     const pm = String(m.paymentMethod);
     const matterId = String(m.id);
@@ -240,6 +238,13 @@ export async function populateBilling(caller: GeneratorCaller, seed: SeedDataset
       continue;
     }
     if (!hasWork(seed, matterId)) continue; // klientfaktura kräver fakturerbart arbete
+    if (pm === "RATTSHJALP") {
+      // Visa KR-kortets båda actionabla lägen: första ärendet väntar på beslut,
+      // nästa har beslut registrerat (redo att faktureras/överklagas).
+      await runRattshjalpBilling(ctx, matterId, 30 + rhIdx * 6, rhIdx % 2 === 0 ? "INSKICKAD" : "BESLUTAD");
+      rhIdx++;
+      continue;
+    }
     await runClientBilling(ctx, matterId, pm, clientIdx);
     clientIdx++;
   }

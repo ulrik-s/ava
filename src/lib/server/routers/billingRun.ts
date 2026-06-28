@@ -715,6 +715,8 @@ export const billingRunRouter = router({
         });
         await tx.billingRuns.update(run.id, {
           status: "SENT", invoiceId: invoice.id, amountOre: finalAmount, prutningOre: input.prutningOre,
+          // KR-livscykeln klar (#828) → kortet visar inte längre stale "Registrera beslut".
+          kostnadsrakningStatus: "FAKTURERAD",
         });
         await freezeWork(tx, run.matterId, run.id);
         // Länka poster + PRUTNING-utlägget → kostnadsräknings-vyn visar uppdelning
