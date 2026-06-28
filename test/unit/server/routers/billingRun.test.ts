@@ -289,6 +289,46 @@ describe("billingRun.setVerdict", () => {
   });
 });
 
+describe("billingRun — KR-livscykel (#828): beslut + överklagan", () => {
+  const kr = async () => {
+    const { caller } = makeCaller({ workMinutes: 60, paymentMethod: "OFFENTLIGT_UPPDRAG" });
+    const created = await caller.billingRun.createKostnadsrakning({ matterId: "m-1" });
+    return { caller, runId: created.run.id, created };
+  };
+
+  it("createKostnadsrakning startar i INSKICKAD", async () => {
+    const { created } = await kr();
+    expect((created.run as { kostnadsrakningStatus?: string }).kostnadsrakningStatus).toBe("INSKICKAD");
+  });
+
+  it("recordKostnadsrakningBeslut: INSKICKAD → BESLUTAD + sparar dömt belopp/prutning", async () => {
+    const { caller, runId } = await kr();
+    const res = await caller.billingRun.recordKostnadsrakningBeslut({ billingRunId: runId, awardedOre: 200000, prutningOre: -50000 });
+    const r = res.run as { kostnadsrakningStatus: string; awardedOre: number; beslutSlutgiltigt: boolean };
+    expect(r.kostnadsrakningStatus).toBe("BESLUTAD");
+    expect(r.awardedOre).toBe(200000);
+    expect(r.beslutSlutgiltigt).toBe(false);
+  });
+
+  it("överklagan → hovrättsbeslut (slutgiltigt), ingen dubbel-överklagan", async () => {
+    const { caller, runId } = await kr();
+    await caller.billingRun.recordKostnadsrakningBeslut({ billingRunId: runId, awardedOre: 200000 });
+    const appealed = await caller.billingRun.appealKostnadsrakning({ billingRunId: runId });
+    expect((appealed.run as { kostnadsrakningStatus: string }).kostnadsrakningStatus).toBe("OVERKLAGAD");
+    const hovr = await caller.billingRun.recordKostnadsrakningBeslut({ billingRunId: runId, awardedOre: 250000 });
+    const r = hovr.run as { kostnadsrakningStatus: string; beslutSlutgiltigt: boolean; awardedOre: number };
+    expect(r.kostnadsrakningStatus).toBe("BESLUTAD");
+    expect(r.beslutSlutgiltigt).toBe(true);
+    expect(r.awardedOre).toBe(250000);
+    await expect(caller.billingRun.appealKostnadsrakning({ billingRunId: runId })).rejects.toThrow(/inte tillåten/);
+  });
+
+  it("överklagan innan beslut är otillåten", async () => {
+    const { caller, runId } = await kr();
+    await expect(caller.billingRun.appealKostnadsrakning({ billingRunId: runId })).rejects.toThrow(/inte tillåten/);
+  });
+});
+
 describe("billingRun — flödes-guard (#816 fas 3)", () => {
   it("avvisar kostnadsräkning på ett RÄTTSSKYDD-ärende (otillåten övergång)", async () => {
     const { caller } = makeCaller({ workMinutes: 60, paymentMethod: "RATTSSKYDD" });
