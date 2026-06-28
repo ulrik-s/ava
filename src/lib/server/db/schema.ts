@@ -12,7 +12,8 @@
  */
 
 import { relations } from "drizzle-orm";
-import { bigint, bigserial, index, integer, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { bigint, bigserial, boolean, index, integer, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import type { KostnadsrakningStatus } from "@/lib/shared/kostnadsrakning-flow";
 import type { DispatchChannel, DispatchStatus, ExpectedReceivableStatus } from "@/lib/shared/schemas/billing";
 import type {
   CalendarEventKind, CalendarEventVisibility, TaskPriority, TaskStatus,
@@ -289,6 +290,10 @@ export const billingRuns = pgTable("billing_runs", {
   proposedAmountOre: ore("proposed_amount_ore").notNull(),
   amountOre: ore("amount_ore").notNull(),
   prutningOre: ore("prutning_ore"),
+  /** KR-livscykel (#828): status + dömt belopp + slutgiltigt (efter hovrätten). */
+  kostnadsrakningStatus: text("kostnadsrakning_status").$type<KostnadsrakningStatus>(),
+  awardedOre: ore("awarded_ore"),
+  beslutSlutgiltigt: boolean("beslut_slutgiltigt").notNull().default(false),
   invoiceId: uuid("invoice_id").$type<InvoiceId>(),
   deductedBillingRunIds: jsonb("deducted_billing_run_ids").notNull().default([]).$type<BillingRunId[]>(),
   periodFrom: timestamp("period_from", { withTimezone: true }),
