@@ -211,6 +211,12 @@ describe("BillingPanel — Skapa-faktura-menyn (flödesmodellen)", () => {
     expect(screen.getByTestId("kr-modal")).toBeInTheDocument();
   });
 
+  it("PENDING: ingen knapp men en förklaring (#824)", () => {
+    render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={{ ...baseMatter, paymentMethod: "PENDING" }} />);
+    expect(screen.queryByRole("button", { name: "+ Skapa faktura" })).not.toBeInTheDocument();
+    expect(screen.getByText(/Välj betalningssätt för att fakturera/)).toBeInTheDocument();
+  });
+
   it("RATTSHJALP: kostnadsräkning till domstol (ej direktfaktura) — öppnar rättshjälps-dialogen", () => {
     render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={{ ...baseMatter, paymentMethod: "RATTSHJALP" }} />);
     fireEvent.click(screen.getByRole("button", { name: "+ Skapa faktura" }));
