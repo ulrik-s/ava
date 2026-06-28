@@ -16,7 +16,11 @@
  * Speglar mönstret i {@link file://./invoice-state-machine.ts}.
  */
 
-export type KostnadsrakningStatus = "INSKICKAD" | "BESLUTAD" | "OVERKLAGAD" | "FAKTURERAD";
+import { z } from "zod";
+
+/** KR-statusarna som zod-enum (en sanningskälla, används av billing-schemat). */
+export const kostnadsrakningStatusSchema = z.enum(["INSKICKAD", "BESLUTAD", "OVERKLAGAD", "FAKTURERAD"]);
+export type KostnadsrakningStatus = z.infer<typeof kostnadsrakningStatusSchema>;
 
 export type KostnadsrakningAction =
   | "REGISTRERA_BESLUT"

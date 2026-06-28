@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { kostnadsrakningStatusSchema } from "../kostnadsrakning-flow";
 import { baseFields, orgScopedFields, dateLike, optionalDateLike } from "./common";
 import {
   billingRunRecipientSchema,
@@ -294,6 +295,14 @@ export const billingRunSchema = z.object({
   /** För KOSTNADSRAKNING: advokatens prutning-belopp (negativt). Sätts
    *  när dom kommit. Driver Expense(kind=PRUTNING) som skapas vid SENT. */
   prutningOre: z.number().int().nullish(),
+  /** KOSTNADSRAKNING:ens egen livscykel (#828): INSKICKAD→BESLUTAD→FAKTURERAD
+   *  + överklagan-grenen. Null för icke-KR-körningar. */
+  kostnadsrakningStatus: kostnadsrakningStatusSchema.nullish(),
+  /** Domstolens beslutade (dömda) belopp i öre — registreras vid beslutet,
+   *  uppdateras av hovrättens beslut vid överklagan (#828). */
+  awardedOre: z.number().int().nullish(),
+  /** Sant efter hovrättens beslut → kostnadsräkningen får ej överklagas igen. */
+  beslutSlutgiltigt: z.boolean().default(false),
   /** Resulterande Invoice — null tills status=SENT. */
   invoiceId: invoiceIdSchema.nullish(),
   /** För FINAL: lista av ACCONTO-runs som dras av. */
