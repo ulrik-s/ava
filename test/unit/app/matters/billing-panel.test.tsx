@@ -55,7 +55,11 @@ vi.mock("@/lib/client/trpc", () => ({
     },
     user: { current: { useQuery: () => ({ data: { name: "Adv. Anna", email: "anna@byra.se" } }) } },
     expense: { list: { useQuery: () => ({ data: { expenses: [] } }) } },
-    document: { list: { useQuery: () => ({ data: documentListData }) } },
+    timeEntry: { list: { useQuery: () => ({ data: { entries: [] } }) } },
+    document: {
+      list: { useQuery: () => ({ data: documentListData }) },
+      register: { useMutation: () => ({ mutateAsync: vi.fn(async () => {}) }) },
+    },
     invoice: {
       list: { useQuery: () => ({ data: invoiceListData }) },
       createRadgivning: {
