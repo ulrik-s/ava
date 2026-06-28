@@ -286,8 +286,7 @@ export function BillingPanel({ matterId, matter }: Props) {
         <h2 className="font-semibold text-gray-900">Fakturering</h2>
         <BillingActions paymentMethod={matter.paymentMethod ?? undefined} onPick={onPick} />
       </div>
-      <SummaryCards totals={computeTotals(rows)} />
-      <UnbilledSummary matterId={matterId} />
+      <BillingSummary matterId={matterId} />
       <RadgivningBanner matterId={matterId} matter={matter} onRecorded={refetch} />
       {pending && <PendingVerdictBanner matterId={matterId} run={pending}
         onClick={() => matter.paymentMethod === "RATTSHJALP" ? setShowSettle(true) : setVerdictRunId(pending.id)} />}
@@ -336,33 +335,28 @@ function RadgivningBanner({ matterId, matter, onRecorded }: { matterId: MatterId
 }
 
 /**
- * "Upparbetat ofakturerat" (#740) — debiterbart arbete som ännu inte frysts/
- * fakturerats, så juristen lätt ser om något behöver faktureras. Visar arvode
- * (exkl utlägg) + utlägg separat + totalt (inkl utlägg). Datan = billingRun.proposal
- * (ofrysta debiterbara poster). PRUTNING är redan exkluderad i proposal.
+ * Fakturapanelens summa-vy (#819) — exakt tre tal användaren bryr sig om:
+ *   - Upparbetat ofakturerat: debiterbart arbete (arvode netto + utlägg netto)
+ *     som ännu inte frysts/fakturerats (billingRun.proposal, PRUTNING exkl).
+ *   - Fakturerat: Σ utställda fakturors belopp (status ≠ DRAFT/CANCELLED).
+ *   - Betalt: Σ registrerade betalningar på ärendets fakturor.
  */
-function UnbilledSummary({ matterId }: { matterId: MatterId }) {
+function BillingSummary({ matterId }: { matterId: MatterId }) {
   const proposal = trpc.billingRun.proposal.useQuery({ matterId });
+  const invoices = trpc.invoice.list.useQuery({ matterId });
   const d = proposal.data;
-  if (proposal.isLoading || !d) return null;
-  const arvodeOre = d.timeEntries.filter((t) => t.billable).reduce((s, t) => s + t.valueOre, 0);
-  const utlaggOre = d.expenses.filter((e) => e.billable).reduce((s, e) => s + e.amount, 0);
-  const totalOre = arvodeOre + utlaggOre;
-  const has = totalOre > 0;
+  const unbilledOre = d
+    ? d.timeEntries.filter((t) => t.billable).reduce((s, t) => s + t.valueOre, 0)
+      + d.expenses.filter((e) => e.billable).reduce((s, e) => s + e.amount, 0)
+    : 0;
+  const list = invoices.data ?? [];
+  const fakturerat = list.filter((i) => i.status !== "DRAFT" && i.status !== "CANCELLED").reduce((s, i) => s + i.amount, 0);
+  const betalt = list.reduce((s, i) => s + (i.payments ?? []).reduce((p, pm) => p + pm.amount, 0), 0);
   return (
-    <div className={`mx-6 mb-4 rounded-lg border px-4 py-3 ${has ? "border-blue-200 bg-blue-50" : "border-gray-200 bg-gray-50"}`}>
-      <div className="flex items-center justify-between">
-        <span className="text-[10px] uppercase tracking-wide text-gray-500">Upparbetat ofakturerat</span>
-        <span className="font-mono font-semibold text-sm text-gray-900">{formatCurrency(totalOre)}</span>
-      </div>
-      {has ? (
-        <div className="mt-1 flex flex-wrap gap-x-5 gap-y-1 text-xs text-gray-600">
-          <span>Arvode (exkl utlägg): <span className="font-mono text-gray-800">{formatCurrency(arvodeOre)}</span></span>
-          <span>Utlägg: <span className="font-mono text-gray-800">{formatCurrency(utlaggOre)}</span></span>
-        </div>
-      ) : (
-        <div className="mt-1 text-xs text-gray-500">Inget ofakturerat — allt debiterbart arbete är fakturerat.</div>
-      )}
+    <div className="grid grid-cols-3 gap-3 px-6 py-4">
+      <Card label="Upparbetat ofakturerat" value={unbilledOre} basis="net" />
+      <Card label="Fakturerat" value={fakturerat} />
+      <Card label="Betalt" value={betalt} />
     </div>
   );
 }
@@ -406,31 +400,11 @@ function RattshjalpKrDialog({ matterId, onClose, onRecorded }: { matterId: Matte
   );
 }
 
-function computeTotals(rows: BillingRunRow[]) {
-  let acconto = 0, finalSent = 0, pending = 0;
-  for (const r of rows) {
-    if (r.type === "ACCONTO" && r.status === "SENT") acconto += r.amountOre;
-    if ((r.type === "FINAL" || r.type === "KOSTNADSRAKNING") && r.status === "SENT") finalSent += r.amountOre;
-    if (r.status === "PENDING_VERDICT") pending += r.amountOre;
-  }
-  return { acconto, finalSent, pending };
-}
-
-function SummaryCards({ totals }: { totals: { acconto: number; finalSent: number; pending: number } }) {
-  return (
-    <div className="grid grid-cols-3 gap-3 px-6 py-4">
-      <Card label="Aconto fakturerat" value={totals.acconto} />
-      <Card label="Fakturerat" value={totals.finalSent} />
-      <Card label="Väntar på dom" value={totals.pending} dim />
-    </div>
-  );
-}
-
-function Card({ label, value, dim }: { label: string; value: number; dim?: boolean }) {
+function Card({ label, value, dim, basis = "gross" }: { label: string; value: number; dim?: boolean; basis?: "net" | "gross" }) {
   return (
     <div className={`rounded-lg border ${dim ? "border-amber-200 bg-amber-50" : "border-gray-200 bg-gray-50"} px-3 py-2`}>
       <div className="text-[10px] uppercase text-gray-500">{label}</div>
-      <Money ore={value} basis="gross" className="font-mono font-semibold text-sm" />
+      <Money ore={value} basis={basis} className="font-mono font-semibold text-sm" />
     </div>
   );
 }
