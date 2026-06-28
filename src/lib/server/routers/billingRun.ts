@@ -22,6 +22,7 @@ import { proposedAccontoOre } from "@/lib/shared/billing-proposal";
 import { TIMKOSTNADSNORM_FTAX_ORE_PER_H, TIMKOSTNADSNORM_NO_FTAX_ORE_PER_H } from "@/lib/shared/brottmalstaxa";
 import { computeCoverageSplit, partitionRattsskyddMinutes, type CoverageSplit } from "@/lib/shared/coverage-billing";
 import { arvodeInclVatOre } from "@/lib/shared/invoice-calc";
+import { applyKrAction, type KostnadsrakningAction, type KostnadsrakningState, type KostnadsrakningStatus } from "@/lib/shared/kostnadsrakning-flow";
 import { ocrFromInvoiceNumber } from "@/lib/shared/ocr-reference";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { RADGIVNING_MINUTES } from "@/lib/shared/rattshjalp";
@@ -44,7 +45,7 @@ import {
 } from "@/lib/shared/schemas/ids";
 import { splitVat, DEFAULT_VAT_RATE } from "@/lib/shared/vat";
 import { emit } from "../events/emit";
-import type { BillingRunListRow } from "../repositories/billing-run-repository";
+import type { BillingRunDetailRow, BillingRunListRow } from "../repositories/billing-run-repository";
 import type { Repositories } from "../repositories/repositories";
 import { router, orgProcedure } from "../trpc";
 
@@ -389,6 +390,28 @@ async function freezeSelectedWork(
   await repos.expenses.freezeByIds(work.expenses.map((e) => e.id), runId, now);
 }
 
+/** KR-tillstånd ur en körning (#828); saknad status → INSKICKAD (äldre KR). */
+function krStateOf(run: { kostnadsrakningStatus?: KostnadsrakningStatus | null | undefined; beslutSlutgiltigt?: boolean | null | undefined }): KostnadsrakningState {
+  return { status: run.kostnadsrakningStatus ?? "INSKICKAD", slutgiltigt: run.beslutSlutgiltigt ?? false };
+}
+
+/** Hämta en KOSTNADSRAKNING-körning org-scopat; kastar om saknad/fel typ. */
+async function assertKostnadsrakning(repos: Repositories, billingRunId: BillingRunId, orgId: OrganizationId): Promise<BillingRunDetailRow> {
+  const run = await repos.billingRuns.getByIdInOrg(billingRunId, orgId);
+  if (!run) throw new TRPCError({ code: "NOT_FOUND", message: "Kostnadsräkningen finns inte." });
+  if (run.type !== "KOSTNADSRAKNING") throw new TRPCError({ code: "BAD_REQUEST", message: "Åtgärden gäller bara kostnadsräkningar." });
+  return run;
+}
+
+/** Applicera en KR-övergång; översätt otillåten övergång till TRPCError. */
+function applyKrTransition(state: KostnadsrakningState, action: KostnadsrakningAction): KostnadsrakningState {
+  try {
+    return applyKrAction(state, action);
+  } catch (e) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: e instanceof Error ? e.message : "Otillåten kostnadsräknings-övergång." });
+  }
+}
+
 /**
  * Flödes-guard (#816 fas 3): säkerställer att ärendet finns OCH att `action` är
  * laglig i ärendets nuvarande fas enligt billing-flow-modellen (samma sanningskälla
@@ -567,7 +590,7 @@ export const billingRunRouter = router({
         const grossValue = invoiceGrossOre(work);
         const run = await tx.billingRuns.create({
           matterId: input.matterId, type: "KOSTNADSRAKNING", recipient: "DOMSTOL",
-          status: "PENDING_VERDICT", workValueOreAtRun: grossValue,
+          status: "PENDING_VERDICT", kostnadsrakningStatus: "INSKICKAD", workValueOreAtRun: grossValue,
           proposedAmountOre: grossValue, amountOre: grossValue,
           invoiceId: null, deductedBillingRunIds: [],
           periodTo: new Date(), notes: input.notes,
@@ -577,6 +600,47 @@ export const billingRunRouter = router({
         // körningen (fetchWorkByRun), inte som ofryst.
         await freezeWork(tx, input.matterId, run.id);
         return { run };
+      });
+    }),
+
+  /**
+   * Registrera domstolens beslut PÅ kostnadsräkningen (#828): dömt belopp +
+   * ev. prutning. INSKICKAD → BESLUTAD (tingsrätten); ÖVERKLAGAD → BESLUTAD
+   * slutgiltigt (hovrätten). Skapar INGEN faktura — det är ett separat steg.
+   */
+  recordKostnadsrakningBeslut: orgProcedure
+    .input(z.object({
+      billingRunId: billingRunIdSchema,
+      awardedOre: z.number().int().nonnegative(),
+      prutningOre: z.number().int().nonpositive().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      return ctx.repos.transaction(async (tx) => {
+        const run = await assertKostnadsrakning(tx, input.billingRunId, ctx.orgId);
+        const state = krStateOf(run);
+        const action: KostnadsrakningAction = state.status === "OVERKLAGAD" ? "REGISTRERA_HOVRATT_BESLUT" : "REGISTRERA_BESLUT";
+        const next = applyKrTransition(state, action);
+        const updated = await tx.billingRuns.update(run.id, {
+          kostnadsrakningStatus: next.status, beslutSlutgiltigt: next.slutgiltigt,
+          awardedOre: input.awardedOre, prutningOre: input.prutningOre ?? null,
+        });
+        return { run: updated };
+      });
+    }),
+
+  /**
+   * Överklaga prutningen på en kostnadsräkning (#828): BESLUTAD → ÖVERKLAGAD.
+   * Inlagan (Word) bifogas som dokument (steg 4). Ingen ny KR — hovrättens beslut
+   * registreras sedan på SAMMA körning via recordKostnadsrakningBeslut.
+   */
+  appealKostnadsrakning: orgProcedure
+    .input(z.object({ billingRunId: billingRunIdSchema }))
+    .mutation(async ({ ctx, input }) => {
+      return ctx.repos.transaction(async (tx) => {
+        const run = await assertKostnadsrakning(tx, input.billingRunId, ctx.orgId);
+        const next = applyKrTransition(krStateOf(run), "OVERKLAGA");
+        const updated = await tx.billingRuns.update(run.id, { kostnadsrakningStatus: next.status, beslutSlutgiltigt: next.slutgiltigt });
+        return { run: updated };
       });
     }),
 
