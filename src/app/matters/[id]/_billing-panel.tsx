@@ -339,7 +339,6 @@ export function BillingPanel({ matterId, matter }: Props) {
   const [verdictRunId, setVerdictRunId] = useState<BillingRunId | null>(null);
   const [beslutRunId, setBeslutRunId] = useState<BillingRunId | null>(null);
   const rows = (runs.data?.runs ?? []) as BillingRunRow[];
-  const pending = findPendingVerdict(rows);
   // Aktiv kostnadsräkning (#828): KR vars livscykel inte är klar (≠ FAKTURERAD).
   const activeKr = rows.find((r) => r.type === "KOSTNADSRAKNING" && !!r.kostnadsrakningStatus && r.kostnadsrakningStatus !== "FAKTURERAD");
   // Flödesmodellen (#816) styr menyn + dom-bannern: fasen härleds ur runs+matter
