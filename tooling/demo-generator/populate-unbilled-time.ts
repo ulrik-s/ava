@@ -56,7 +56,12 @@ async function createFreshEntry(
 export async function populateUnbilledTime(caller: GeneratorCaller, seed: SeedDataset): Promise<number> {
   const c = caller as AnyCaller;
   const users = (seed.users ?? []) as Row[];
-  const activeMatters = ((seed.matters ?? []) as Row[]).filter((m) => m.status === "ACTIVE");
+  // Bara PRIVAT/MIX: de är alltid i ARBETE-fasen (fakturerbara), så färsk
+  // ofakturerad tid alltid kan faktureras via panelen. Täckningsflöden
+  // (rättsskydd/rättshjälp/offentligt) blir slutreglerade av populateBilling →
+  // att lägga ofakturerat där ger "upparbetat men ingen skapa-faktura-knapp" (#824).
+  const billable = (m: Row): boolean => m.paymentMethod === "PRIVAT" || m.paymentMethod === "MIX";
+  const activeMatters = ((seed.matters ?? []) as Row[]).filter((m) => m.status === "ACTIVE" && billable(m));
   if (users.length === 0 || activeMatters.length === 0) return 0;
 
   let count = 0;

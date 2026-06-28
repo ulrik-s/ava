@@ -22,7 +22,7 @@ async function runTarget() {
 }
 
 describe("populateUnbilledTime", () => {
-  it("skapar 2-3 entries per aktivt ärende (alla utan invoiceId)", async () => {
+  it("skapar 2-3 entries per fakturerbart (PRIVAT/MIX) aktivt ärende, alla utan invoiceId", async () => {
     const { target, seed } = await runTarget();
     // Populera org+users+contacts+matters först så timeEntry.create hittar dem
     await target.caller.organization.create({ id: String(seed.organizations[0]!.id), name: "X" });
@@ -39,10 +39,12 @@ describe("populateUnbilledTime", () => {
       });
     }
     const count = await populateUnbilledTime(target.caller, seed);
-    const activeMatters = seed.matters.filter((m) => m.status === "ACTIVE");
+    // Bara PRIVAT/MIX (alltid fakturerbara) får färsk ofakturerad tid (#824).
+    const billableActive = seed.matters.filter((m) => m.status === "ACTIVE" && (m.paymentMethod === "PRIVAT" || m.paymentMethod === "MIX"));
+    expect(billableActive.length).toBeGreaterThan(0);
     // 2 + (mi%2) entries per matter → mellan 2*N och 3*N
-    expect(count).toBeGreaterThanOrEqual(2 * activeMatters.length);
-    expect(count).toBeLessThanOrEqual(3 * activeMatters.length);
+    expect(count).toBeGreaterThanOrEqual(2 * billableActive.length);
+    expect(count).toBeLessThanOrEqual(3 * billableActive.length);
   });
 
   it("returnerar 0 om inga aktiva ärenden finns", async () => {

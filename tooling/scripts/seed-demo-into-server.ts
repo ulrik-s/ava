@@ -74,11 +74,16 @@ function remapLoginUsers(users: Row[]): { adminId: string | undefined; lawyerId:
  * dagsvy ("Idag") blir annars tom. Tasks/kalender landar redan på idag via
  * seedens offset-logik, så bara tid behöver kompletteras.
  */
-async function addTodayTimeEntries(repos: Repositories, timeEntries: Row[], ids: { adminId: string | undefined; lawyerId: string | undefined }): Promise<void> {
+async function addTodayTimeEntries(repos: Repositories, timeEntries: Row[], matters: Row[], ids: { adminId: string | undefined; lawyerId: string | undefined }): Promise<void> {
   const tes = timeEntries;
+  // Föredra ett PRIVAT-ärende: det är alltid i ARBETE-fasen (fakturerbart), så
+  // "idag"-tiden blir inte ofakturerat arbete på ett redan slutreglerat ärende
+  // (#824-uppf.) — annars syns upparbetat men ingen skapa-faktura-knapp.
+  const pmById = new Map(matters.map((m) => [String(m.id), String(m.paymentMethod)]));
   for (const userId of [ids.lawyerId, ids.adminId]) {
     if (!userId) continue;
-    const matterId = (tes.find((t) => t.userId === userId)?.matterId) as string | undefined;
+    const worked = tes.filter((t) => t.userId === userId).map((t) => String(t.matterId));
+    const matterId = worked.find((id) => pmById.get(id) === "PRIVAT") ?? worked[0];
     if (!matterId) continue;
     await repos.timeEntries.create({
       id: asId<"TimeEntryId">(uuidv7()),
@@ -146,7 +151,7 @@ async function main(): Promise<void> {
     // Kärnentiteter (org/users/contacts/matters/matter-contacts/tid/utlägg/
     // kalender/uppgifter/mallar/jävskontroller).
     const core = await populate(caller, seed);
-    await addTodayTimeEntries(repos, seed.timeEntries as Row[], loginIds); // "idag"-tid för dashboarden
+    await addTodayTimeEntries(repos, seed.timeEntries as Row[], seed.matters as Row[], loginIds); // "idag"-tid för dashboarden
 
     // Fakturering (#647/#736): billing-id:na är deterministiska uuid:er
     // (demo-billing-ids). populateBilling driver nu ETT billing-run-flöde per
