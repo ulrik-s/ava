@@ -21,6 +21,7 @@ import { useMatterInvariants } from "@/lib/client/diagnostics/use-matter-invaria
 import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
 import type { AppRouter } from "@/lib/server/routers/_app";
+import { availableActions, pendingBannerFor, type BillingAction, type FlowMatter } from "@/lib/shared/billing-flow";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { computeRadgivningsavgift } from "@/lib/shared/rattshjalp";
 import { BILLING_RUN_TYPE_LABELS, BILLING_RUN_STATUS_LABELS, type BillingRunRecipient, type BillingRunStatus, type BillingRunType, type PaymentMethod } from "@/lib/shared/schemas/enums";
@@ -40,6 +41,7 @@ interface MatterContext {
   paymentMethod?: PaymentMethod | null | undefined;
   clientShareBips?: number | null | undefined;
   radgivningBetaldAt?: string | Date | null | undefined;
+  rattsskyddNekadAt?: string | Date | null | undefined;
   contacts?: ReadonlyArray<{ role: string; contact?: { name?: string | null | undefined; email?: string | null | undefined } | null | undefined }> | undefined;
 }
 
@@ -125,7 +127,6 @@ function PendingVerdictBanner({ matterId, run, onClick }: { matterId: MatterId; 
 }
 
 type DialogState = "NONE" | "ACCONTO" | "FINAL";
-type ActionPick = "ACCONTO" | "FINAL" | "KOSTNADSRAKNING" | "SETTLE";
 
 function findPendingVerdict(rows: BillingRunRow[]): BillingRunRow | undefined {
   return rows.find((r) => r.type === "KOSTNADSRAKNING" && r.status === "PENDING_VERDICT");
@@ -265,6 +266,11 @@ export function BillingPanel({ matterId, matter }: Props) {
   const [verdictRunId, setVerdictRunId] = useState<BillingRunId | null>(null);
   const rows = (runs.data?.runs ?? []) as BillingRunRow[];
   const pending = findPendingVerdict(rows);
+  // Flödesmodellen (#816) styr menyn + dom-bannern: fasen härleds ur runs+matter
+  // och avgör vilka actions som erbjuds och vad domsknappen öppnar.
+  const flowMatter: FlowMatter = { paymentMethod: matter.paymentMethod ?? "PENDING", rattsskyddNekadAt: matter.rattsskyddNekadAt };
+  const actions = availableActions(flowMatter, rows);
+  const banner = pendingBannerFor(flowMatter, rows);
   // Efter en fakturering ändras både körningarna OCH vad som är ofryst/ofakturerat
   // — invalidera "Upparbetat ofakturerat" (proposal) + fakturalistan, annars visar
   // panelen stale belopp tills sidan laddas om.
@@ -275,21 +281,22 @@ export function BillingPanel({ matterId, matter }: Props) {
     void utils.timeEntry.list.invalidate({ matterId });
     void utils.expense.list.invalidate({ matterId });
   };
-  const onPick = (t: ActionPick) => {
-    if (t === "KOSTNADSRAKNING") setShowKr(true);
-    else if (t === "SETTLE") setShowSettle(true);
-    else setDialog(t);
+  // Routa action → dialog via descriptorns `dialog`-fält (panelen är "dum").
+  const onPick = (a: BillingAction) => {
+    if (a.dialog === "kostnadsrakning") setShowKr(true);
+    else if (a.dialog === "settlement") setShowSettle(true);
+    else setDialog(a.type as DialogState);
   };
   return (
     <div className="bg-white rounded-lg border border-gray-200 lg:col-span-2">
       <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
         <h2 className="font-semibold text-gray-900">Fakturering</h2>
-        <BillingActions paymentMethod={matter.paymentMethod ?? undefined} onPick={onPick} />
+        <BillingActions actions={actions} onPick={onPick} />
       </div>
       <BillingSummary matterId={matterId} />
       <RadgivningBanner matterId={matterId} matter={matter} onRecorded={refetch} />
-      {pending && <PendingVerdictBanner matterId={matterId} run={pending}
-        onClick={() => matter.paymentMethod === "RATTSHJALP" ? setShowSettle(true) : setVerdictRunId(pending.id)} />}
+      {pending && banner && <PendingVerdictBanner matterId={matterId} run={pending}
+        onClick={() => banner.dialog === "settlement" ? setShowSettle(true) : setVerdictRunId(pending.id)} />}
       <RunsList rows={rows} loading={runs.isLoading} />
       <BillingDialogs matterId={matterId} matter={matter} rows={rows}
         dialog={dialog} setDialog={setDialog}
@@ -409,9 +416,11 @@ function Card({ label, value, dim, basis = "gross" }: { label: string; value: nu
   );
 }
 
-function BillingActions({ paymentMethod, onPick }: { paymentMethod: PaymentMethod | undefined; onPick: (t: ActionPick) => void }) {
+/** Skapa-faktura-menyn — alternativen kommer från flödesmodellen (#816); panelen
+ *  väljer inte längre per betalningssätt själv. Inga actions i fasen → ingen knapp. */
+function BillingActions({ actions, onPick }: { actions: readonly BillingAction[]; onPick: (a: BillingAction) => void }) {
   const [open, setOpen] = useState(false);
-  const options = optionsFor(paymentMethod);
+  if (actions.length === 0) return null;
   return (
     <div className="relative">
       <button onClick={() => setOpen((v) => !v)} className="text-sm bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700">
@@ -421,11 +430,11 @@ function BillingActions({ paymentMethod, onPick }: { paymentMethod: PaymentMetho
         <>
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
           <div className="absolute right-0 top-full mt-1 z-40 bg-white border border-gray-200 rounded shadow-lg p-1 min-w-[14rem]">
-            {options.map((o) => (
-              <button key={o.type}
-                onClick={() => { onPick(o.type); setOpen(false); }}
+            {actions.map((a) => (
+              <button key={a.type}
+                onClick={() => { onPick(a); setOpen(false); }}
                 className="block w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 rounded">
-                {o.label}
+                {a.label}
               </button>
             ))}
           </div>
@@ -433,25 +442,6 @@ function BillingActions({ paymentMethod, onPick }: { paymentMethod: PaymentMetho
       )}
     </div>
   );
-}
-
-function optionsFor(pm: PaymentMethod | undefined): Array<{ type: ActionPick; label: string }> {
-  if (pm === "RATTSSKYDD" || pm === "RATTSHJALP") {
-    // Rättsskydd faktureras direkt till försäkringen; rättshjälp skickas som
-    // kostnadsräkning till domstolen (bedöms, kan prutas) — ingen faktura ännu (#806).
-    const payerOption = pm === "RATTSSKYDD"
-      ? ({ type: "FINAL", label: "Faktura till försäkring" } as const)
-      : ({ type: "KOSTNADSRAKNING", label: "Kostnadsräkning till domstol" } as const);
-    return [
-      { type: "ACCONTO", label: "Aconto till klient" },
-      payerOption,
-      { type: "SETTLE", label: pm === "RATTSSKYDD" ? "Slutreglera (försäkringsbesked)" : "Slutreglera (dom)" },
-    ];
-  }
-  if (pm === "OFFENTLIGT_UPPDRAG") {
-    return [{ type: "KOSTNADSRAKNING", label: "Kostnadsräkning till domstol" }];
-  }
-  return [{ type: "FINAL", label: "Faktura till klient" }];
 }
 
 function RunsList({ rows, loading }: { rows: BillingRunRow[]; loading: boolean }) {

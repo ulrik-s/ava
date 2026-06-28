@@ -160,8 +160,11 @@ describe("BillingPanel — pending verdict", () => {
     };
   });
 
+  // Dom-bannern kräver ett flöde med VANTAR_DOM-fas; offentligt uppdrag → verdict.
+  const verdictMatter = { ...baseMatter, paymentMethod: "OFFENTLIGT_UPPDRAG" as const };
+
   it("visar banner och öppnar verdict-dialogen", () => {
-    render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={baseMatter} />);
+    render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={verdictMatter} />);
     expect(screen.getByText(/Kostnadsräkning väntar på dom/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Ange dom \+ prutning/ }));
     expect(screen.getByTestId("verdict-dialog")).toBeInTheDocument();
@@ -170,7 +173,7 @@ describe("BillingPanel — pending verdict", () => {
   it("öppnar KR-dokumentet ur blob-cachen när det finns", () => {
     documentListData = { documents: [{ id: "doc-1", fileName: "kostnadsrakning.docx", documentType: "Kostnadsräkning", createdAt: "2026-03-01" }] };
     hasDoc = true;
-    render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={baseMatter} />);
+    render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={verdictMatter} />);
     fireEvent.click(screen.getByRole("button", { name: "kostnadsrakning.docx" }));
     expect(openGeneratedDocFn).toHaveBeenCalledWith("doc-1");
   });
@@ -179,14 +182,14 @@ describe("BillingPanel — pending verdict", () => {
     documentListData = { documents: [{ id: "doc-1", fileName: "kostnadsrakning.docx", documentType: "Kostnadsräkning", createdAt: "2026-03-01" }] };
     hasDoc = false;
     const alertSpy = vi.spyOn(globalThis, "alert").mockImplementation(() => {});
-    render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={baseMatter} />);
+    render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={verdictMatter} />);
     fireEvent.click(screen.getByRole("button", { name: "kostnadsrakning.docx" }));
     expect(alertSpy).toHaveBeenCalled();
     alertSpy.mockRestore();
   });
 });
 
-describe("BillingPanel — Skapa-faktura-menyn (optionsFor)", () => {
+describe("BillingPanel — Skapa-faktura-menyn (flödesmodellen)", () => {
   it("PRIVAT-default: bara 'Faktura till klient' → öppnar FINAL-dialogen", () => {
     render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={{ ...baseMatter, paymentMethod: "PRIVAT" }} />);
     fireEvent.click(screen.getByRole("button", { name: "+ Skapa faktura" }));
