@@ -92,6 +92,8 @@ vi.mock("@/lib/client/trpc", () => ({
       createFinal: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       createKostnadsrakning: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       setVerdict: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      appealKostnadsrakning: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      recordKostnadsrakningBeslut: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
     invoice: {
       // #819: BillingPanel → BillingSummary summerar Fakturerat/Betalt ur list.

@@ -13,6 +13,7 @@
  */
 import type { inferRouterOutputs } from "@trpc/server";
 import { useState } from "react";
+import { DecimalInput } from "@/components/ui/decimal-input";
 import { Modal } from "@/components/ui/modal";
 import { Money } from "@/components/ui/money";
 import { EntityLink } from "@/lib/client/demo/entity-link";
@@ -21,7 +22,8 @@ import { useMatterInvariants } from "@/lib/client/diagnostics/use-matter-invaria
 import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
 import type { AppRouter } from "@/lib/server/routers/_app";
-import { availableActions, currentPhase, pendingBannerFor, type BillingAction, type BillingPhase, type FlowMatter } from "@/lib/shared/billing-flow";
+import { availableActions, currentPhase, type BillingAction, type BillingPhase, type FlowMatter } from "@/lib/shared/billing-flow";
+import { availableKrActions, KOSTNADSRAKNING_STATUS_LABELS, type KostnadsrakningState, type KostnadsrakningStatus } from "@/lib/shared/kostnadsrakning-flow";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { computeRadgivningsavgift } from "@/lib/shared/rattshjalp";
 import { BILLING_RUN_TYPE_LABELS, BILLING_RUN_STATUS_LABELS, type BillingRunRecipient, type BillingRunStatus, type BillingRunType, type PaymentMethod } from "@/lib/shared/schemas/enums";
@@ -59,6 +61,9 @@ interface BillingRunRow {
   createdAt: string | Date;
   invoiceId?: InvoiceId | null;
   invoice?: { id: InvoiceId; invoiceNumber?: string | null } | null;
+  kostnadsrakningStatus?: KostnadsrakningStatus | null;
+  awardedOre?: number | null;
+  beslutSlutgiltigt?: boolean | null;
 }
 
 interface KrDocInfo { id: string; fileName: string }
@@ -97,32 +102,100 @@ function openKrDocument(doc: KrDocInfo): void {
   );
 }
 
-function PendingVerdictBanner({ matterId, run, onClick }: { matterId: MatterId; run: BillingRunRow; onClick: () => void }) {
+/** Etikett för KR:ns nästa beslut-knapp (tingsrätt först, sen hovrätt). */
+function beslutButtonLabel(state: KostnadsrakningState): string {
+  return state.status === "OVERKLAGAD" ? "Registrera hovrättens beslut" : "Registrera beslut";
+}
+
+interface KrCardProps {
+  matterId: MatterId; run: BillingRunRow;
+  onRegistreraBeslut: () => void; onOverklaga: () => void; onSkapaFaktura: () => void;
+}
+
+/**
+ * Kostnadsräknings-kort (#828) — visar KR:ns livscykel-status + dömt belopp +
+ * dokument, och de tillåtna nästa-stegen (registrera beslut → skapa faktura /
+ * överklaga → registrera hovrättens beslut). Ersätter den gamla dom-bannern.
+ */
+function KostnadsrakningCard({ matterId, run, onRegistreraBeslut, onOverklaga, onSkapaFaktura }: KrCardProps) {
   const doc = findKrDocument(matterId, run);
+  const state: KostnadsrakningState = { status: run.kostnadsrakningStatus ?? "INSKICKAD", slutgiltigt: run.beslutSlutgiltigt ?? false };
   return (
     <div className="mx-6 my-3 rounded border border-amber-300 bg-amber-50 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
       <div className="text-sm text-amber-900 space-y-1">
         <div>
-          <strong>Kostnadsräkning väntar på dom</strong> — <Money ore={run.amountOre} basis="gross" className="font-mono font-semibold" /> föreslaget belopp
+          <strong>Kostnadsräkning</strong> — {KOSTNADSRAKNING_STATUS_LABELS[state.status]}
+          {run.awardedOre != null && state.status !== "INSKICKAD" && (
+            <> · Dömt belopp: <Money ore={run.awardedOre} basis="net" className="font-mono font-semibold" /></>
+          )}
         </div>
         {doc && (
           <div className="text-xs text-amber-800">
             Dokument:{" "}
-            <button
-              type="button"
-              onClick={() => openKrDocument(doc)}
-              className="underline hover:text-amber-900 text-amber-900 cursor-pointer"
-            >
-              {doc.fileName}
-            </button>
+            <button type="button" onClick={() => openKrDocument(doc)}
+              className="underline hover:text-amber-900 text-amber-900 cursor-pointer">{doc.fileName}</button>
           </div>
         )}
       </div>
-      <button onClick={onClick}
-        className="text-xs px-3 py-1 bg-amber-600 text-white rounded hover:bg-amber-700 whitespace-nowrap">
-        Ange dom + prutning
-      </button>
+      <KrCardButtons state={state} onRegistreraBeslut={onRegistreraBeslut} onOverklaga={onOverklaga} onSkapaFaktura={onSkapaFaktura} />
     </div>
+  );
+}
+
+/** KR-kortets nästa-stegs-knappar — vilka som visas styrs av availableKrActions. */
+function KrCardButtons({ state, onRegistreraBeslut, onOverklaga, onSkapaFaktura }: {
+  state: KostnadsrakningState; onRegistreraBeslut: () => void; onOverklaga: () => void; onSkapaFaktura: () => void;
+}) {
+  const acts = availableKrActions(state);
+  const canBeslut = acts.includes("REGISTRERA_BESLUT") || acts.includes("REGISTRERA_HOVRATT_BESLUT");
+  return (
+    <div className="flex gap-2 whitespace-nowrap">
+      {canBeslut && <button onClick={onRegistreraBeslut} className="text-xs px-3 py-1 bg-amber-600 text-white rounded hover:bg-amber-700">{beslutButtonLabel(state)}</button>}
+      {acts.includes("SKAPA_FAKTURA") && <button onClick={onSkapaFaktura} className="text-xs px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700">Skapa faktura</button>}
+      {acts.includes("OVERKLAGA") && <button onClick={onOverklaga} className="text-xs px-3 py-1 border border-amber-600 text-amber-800 rounded hover:bg-amber-100">Överklaga prutning</button>}
+    </div>
+  );
+}
+
+/**
+ * Registrera domstolens beslut (#828): dömt belopp (kr) + ev. prutning (kr).
+ * Används för både tingsrättens första beslut och hovrättens (slutgiltiga) —
+ * servern väljer rätt övergång ur KR:ns nuvarande status.
+ */
+function RecordBeslutDialog({ billingRunId, onClose, onDone }: { billingRunId: BillingRunId; onClose: () => void; onDone: () => void }) {
+  const [awardedKr, setAwardedKr] = useState<number | null>(null);
+  const [prutningKr, setPrutningKr] = useState<number | null>(null);
+  const record = trpc.billingRun.recordKostnadsrakningBeslut.useMutation({
+    onSuccess: () => { onDone(); onClose(); },
+  });
+  const submit = (): void => {
+    record.mutate({
+      billingRunId,
+      awardedOre: Math.round((awardedKr ?? 0) * 100),
+      ...(prutningKr != null ? { prutningOre: -Math.abs(Math.round(prutningKr * 100)) } : {}),
+    });
+  };
+  return (
+    <Modal open title="Registrera domstolens beslut" onClose={onClose} widthClass="max-w-md">
+      <form onSubmit={(e) => { e.preventDefault(); submit(); }} className="space-y-3">
+        <p className="text-sm text-gray-600">Ange det belopp domstolen dömde (och ev. prutning). Fakturan skapas i ett separat steg.</p>
+        <label className="block text-xs font-medium">Dömt belopp (kr)
+          <DecimalInput value={awardedKr} onChange={setAwardedKr} placeholder="Skriv in belopp"
+            className="mt-1 w-full rounded border border-gray-300 px-3 py-1.5 text-sm" />
+        </label>
+        <label className="block text-xs font-medium">Prutning (kr, valfritt)
+          <DecimalInput value={prutningKr} onChange={setPrutningKr} placeholder="0"
+            className="mt-1 w-full rounded border border-gray-300 px-3 py-1.5 text-sm" />
+        </label>
+        {record.error && <p className="text-sm text-red-700">{record.error.message}</p>}
+        <div className="flex justify-end gap-2 pt-2">
+          <button type="button" onClick={onClose} className="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50">Avbryt</button>
+          <button type="submit" disabled={record.isPending} className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50">
+            {record.isPending ? "Sparar…" : "Spara beslut"}
+          </button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 
@@ -264,13 +337,15 @@ export function BillingPanel({ matterId, matter }: Props) {
   const [showKr, setShowKr] = useState(false);
   const [showSettle, setShowSettle] = useState(false);
   const [verdictRunId, setVerdictRunId] = useState<BillingRunId | null>(null);
+  const [beslutRunId, setBeslutRunId] = useState<BillingRunId | null>(null);
   const rows = (runs.data?.runs ?? []) as BillingRunRow[];
   const pending = findPendingVerdict(rows);
+  // Aktiv kostnadsräkning (#828): KR vars livscykel inte är klar (≠ FAKTURERAD).
+  const activeKr = rows.find((r) => r.type === "KOSTNADSRAKNING" && !!r.kostnadsrakningStatus && r.kostnadsrakningStatus !== "FAKTURERAD");
   // Flödesmodellen (#816) styr menyn + dom-bannern: fasen härleds ur runs+matter
   // och avgör vilka actions som erbjuds och vad domsknappen öppnar.
   const flowMatter: FlowMatter = { paymentMethod: matter.paymentMethod ?? "PENDING", rattsskyddNekadAt: matter.rattsskyddNekadAt };
   const actions = availableActions(flowMatter, rows);
-  const banner = pendingBannerFor(flowMatter, rows);
   // Efter en fakturering ändras både körningarna OCH vad som är ofryst/ofakturerat
   // — invalidera "Upparbetat ofakturerat" (proposal) + fakturalistan, annars visar
   // panelen stale belopp tills sidan laddas om.
@@ -281,6 +356,7 @@ export function BillingPanel({ matterId, matter }: Props) {
     void utils.timeEntry.list.invalidate({ matterId });
     void utils.expense.list.invalidate({ matterId });
   };
+  const appeal = trpc.billingRun.appealKostnadsrakning.useMutation({ onSuccess: refetch });
   // Routa action → dialog via descriptorns `dialog`-fält (panelen är "dum").
   const onPick = (a: BillingAction) => {
     if (a.dialog === "kostnadsrakning") setShowKr(true);
@@ -296,8 +372,11 @@ export function BillingPanel({ matterId, matter }: Props) {
       </div>
       <BillingSummary matterId={matterId} />
       <RadgivningBanner matterId={matterId} matter={matter} onRecorded={refetch} />
-      {pending && banner && <PendingVerdictBanner matterId={matterId} run={pending}
-        onClick={() => banner.dialog === "settlement" ? setShowSettle(true) : setVerdictRunId(pending.id)} />}
+      {activeKr && <KostnadsrakningCard matterId={matterId} run={activeKr}
+        onRegistreraBeslut={() => setBeslutRunId(activeKr.id)}
+        onOverklaga={() => appeal.mutate({ billingRunId: activeKr.id })}
+        onSkapaFaktura={() => matter.paymentMethod === "RATTSHJALP" ? setShowSettle(true) : setVerdictRunId(activeKr.id)} />}
+      {beslutRunId && <RecordBeslutDialog billingRunId={beslutRunId} onClose={() => setBeslutRunId(null)} onDone={refetch} />}
       <RunsList rows={rows} loading={runs.isLoading} />
       <BillingDialogs matterId={matterId} matter={matter} rows={rows}
         dialog={dialog} setDialog={setDialog}

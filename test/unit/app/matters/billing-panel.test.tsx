@@ -17,6 +17,7 @@ interface BillingRunRow {
   id: string; type: string; status: string; recipient: string;
   amountOre: number; createdAt: string | Date;
   invoiceId?: string | null; invoice?: { id: string; invoiceNumber?: string | null } | null;
+  kostnadsrakningStatus?: string | null; awardedOre?: number | null; beslutSlutgiltigt?: boolean | null;
 }
 
 let runsData: { runs: BillingRunRow[] } = { runs: [] };
@@ -46,6 +47,8 @@ vi.mock("@/lib/client/trpc", () => ({
       list: { useQuery: () => ({ data: runsData, isLoading: runsLoading, refetch }) },
       proposal: { useQuery: () => ({ data: proposalData, isLoading: false }) },
       createKostnadsrakning: { useMutation: () => ({ mutate: krMutate, isPending: false }) },
+      appealKostnadsrakning: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      recordKostnadsrakningBeslut: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
     organization: {
       getSettings: { useQuery: () => ({ data: { name: "Byrå AB", orgNumber: "556677-8899", address: "Storgatan 1" } }) },
@@ -151,23 +154,30 @@ describe("BillingPanel — summa-vy (#819: bara tre tal)", () => {
   });
 });
 
-describe("BillingPanel — pending verdict", () => {
+describe("BillingPanel — kostnadsräknings-kort (#828)", () => {
   beforeEach(() => {
     runsData = {
       runs: [
-        { id: "r3", type: "KOSTNADSRAKNING", status: "PENDING_VERDICT", recipient: "DOMSTOL", amountOre: 50_000, createdAt: "2026-03-01" },
+        { id: "r3", type: "KOSTNADSRAKNING", status: "PENDING_VERDICT", kostnadsrakningStatus: "INSKICKAD", recipient: "DOMSTOL", amountOre: 50_000, createdAt: "2026-03-01" },
       ],
     };
   });
 
-  // Dom-bannern kräver ett flöde med VANTAR_DOM-fas; offentligt uppdrag → verdict.
   const verdictMatter = { ...baseMatter, paymentMethod: "OFFENTLIGT_UPPDRAG" as const };
 
-  it("visar banner och öppnar verdict-dialogen", () => {
+  it("visar KR-kortet med status + 'Registrera beslut' → öppnar beslut-dialogen", () => {
     render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={verdictMatter} />);
-    expect(screen.getByText(/Kostnadsräkning väntar på dom/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /Ange dom \+ prutning/ }));
-    expect(screen.getByTestId("verdict-dialog")).toBeInTheDocument();
+    expect(screen.getByText(/Inskickad — väntar på beslut/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Registrera beslut" }));
+    expect(screen.getByText(/Registrera domstolens beslut/)).toBeInTheDocument();
+  });
+
+  it("BESLUTAD KR visar 'Skapa faktura' + 'Överklaga prutning'", () => {
+    runsData = { runs: [{ id: "r3", type: "KOSTNADSRAKNING", status: "PENDING_VERDICT", kostnadsrakningStatus: "BESLUTAD", recipient: "DOMSTOL", amountOre: 50_000, awardedOre: 40_000, createdAt: "2026-03-01" }] };
+    render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={verdictMatter} />);
+    expect(screen.getByText(/Beslutad/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Skapa faktura" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Överklaga prutning" })).toBeInTheDocument();
   });
 
   it("öppnar KR-dokumentet ur blob-cachen när det finns", () => {

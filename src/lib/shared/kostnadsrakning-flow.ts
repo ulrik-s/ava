@@ -35,8 +35,12 @@ export interface KostnadsrakningState {
   slutgiltigt: boolean;
 }
 
-// Status-/action-etiketter (UI) introduceras i UI-steget (epic #828, steg 5) när
-// de har en konsument — knip-ratchet tillåter inga oanvända exports.
+export const KOSTNADSRAKNING_STATUS_LABELS: Record<KostnadsrakningStatus, string> = {
+  INSKICKAD: "Inskickad — väntar på beslut",
+  BESLUTAD: "Beslutad",
+  OVERKLAGAD: "Överklagad — väntar på hovrätten",
+  FAKTURERAD: "Fakturerad",
+};
 
 /** Lagliga åtgärder i ett givet KR-tillstånd (state-maskinens kanter). */
 export function availableKrActions(state: KostnadsrakningState): readonly KostnadsrakningAction[] {
