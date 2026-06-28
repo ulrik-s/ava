@@ -427,17 +427,17 @@ function RadgivningBanner({ matterId, matter, onRecorded }: { matterId: MatterId
   const fired = useRef(false);
   const isRattshjalp = matter.paymentMethod === "RATTSHJALP";
   const registered = !!matter.radgivningBetaldAt;
-  const hasFTaxArg = omitUndefined({ hasFTax: matter.taxaHasFTax ?? undefined });
   useEffect(() => {
     // Auto-skapa en gång när den saknas (#839): rådgivningstimmen är obligatorisk
-    // i rättshjälp, så användaren ska inte behöva trycka på en knapp.
+    // i rättshjälp, så användaren ska inte behöva trycka på en knapp. Alltid
+    // F-skatt-normen (alla advokater har F-skatt) → ingen hasFTax skickas.
     if (!isRattshjalp || registered || fired.current || create.isPending) return;
     fired.current = true;
-    create.mutate({ matterId, ...hasFTaxArg });
+    create.mutate({ matterId });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isRattshjalp, registered, matterId]);
   if (!isRattshjalp) return null;
-  const avgift = computeRadgivningsavgift(hasFTaxArg);
+  const avgift = computeRadgivningsavgift();
   return (
     <div className="mx-6 mb-4 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 flex items-center justify-between gap-3">
       <div className="text-xs text-blue-900">

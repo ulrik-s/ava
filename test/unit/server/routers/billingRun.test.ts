@@ -218,6 +218,15 @@ describe("billingRun.createKostnadsrakning", () => {
     expect(te.frozenAt).toBeTruthy();
     expect(te.frozenByBillingRunId).toBe(res.run.id);
   });
+
+  it("rättshjälp värderas på timkostnadsnormen (F-skatt) minus rådgivningstimmen (#839)", async () => {
+    // 120 min billable, INTE byråns 2500 kr/h: rättshjälp → timkostnadsnorm 1626 kr/h.
+    // Rådgivningstimmen (60 min) exkluderas → 60 min kvar = 1 h × 162600 = 162600 netto,
+    // + 25 % moms = 203250 brutto (inga utlägg). Byråns privata taxa ignoreras.
+    const { caller } = makeCaller({ workMinutes: 120, paymentMethod: "RATTSHJALP" });
+    const res = await caller.billingRun.createKostnadsrakning({ matterId: "m-1" });
+    expect(res.run.workValueOreAtRun).toBe(203250);
+  });
 });
 
 describe("billingRun.setVerdict", () => {

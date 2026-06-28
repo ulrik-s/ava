@@ -8,7 +8,7 @@
  * dialogerna stubbas (de har egna tester) så panelens egen logik isoleras.
  */
 
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { BillingPanel } from "@/app/matters/[id]/_billing-panel";
 import { asId } from "@/lib/shared/schemas/ids";
@@ -80,6 +80,8 @@ vi.mock("@/lib/client/demo/generated-doc-cache", () => ({
   hasGeneratedDoc: () => hasDoc,
   openGeneratedDoc: (id: string) => openGeneratedDocFn(id),
 }));
+const openDocumentFn = vi.fn(async () => "opened-blob" as const);
+vi.mock("@/lib/client/firma/open-document", () => ({ openDocument: openDocumentFn }));
 vi.mock("@/app/matters/[id]/_billing-dialog", () => ({
   BillingDialog: ({ type }: { type: string }) => <div data-testid="billing-dialog">{type}</div>,
 }));
@@ -192,13 +194,14 @@ describe("BillingPanel — kostnadsräknings-kort (#828)", () => {
     expect(openGeneratedDocFn).toHaveBeenCalledWith("doc-1");
   });
 
-  it("seedat/server-dokument (ej i blob-cachen) → går server-vägen, inte blob-cachen (#839)", () => {
+  it("seedat/server-dokument (ej i blob-cachen) → går server-vägen, inte blob-cachen (#839)", async () => {
     documentListData = { documents: [{ id: "doc-1", fileName: "kostnadsrakning.docx", documentType: "Kostnadsräkning", storagePath: "documents/content/doc-1.html", createdAt: "2026-03-01" }] };
     hasDoc = false;
     render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={verdictMatter} />);
     fireEvent.click(screen.getByRole("button", { name: "kostnadsrakning.docx" }));
-    // Faller inte tillbaka på blob-cachen → öppnas via openDocument/downloadContent.
+    // Faller inte tillbaka på blob-cachen → öppnas via openDocument (downloadContent).
     expect(openGeneratedDocFn).not.toHaveBeenCalled();
+    await waitFor(() => expect(openDocumentFn).toHaveBeenCalled());
   });
 });
 

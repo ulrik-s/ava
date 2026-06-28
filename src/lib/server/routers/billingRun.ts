@@ -19,7 +19,7 @@ import { z } from "zod";
 import type { VatBreakdownLine } from "@/lib/shared/accounting/semantic-voucher";
 import { assertBillingTransition, type BillingActionType } from "@/lib/shared/billing-flow";
 import { proposedAccontoOre } from "@/lib/shared/billing-proposal";
-import { TIMKOSTNADSNORM_FTAX_ORE_PER_H, TIMKOSTNADSNORM_NO_FTAX_ORE_PER_H } from "@/lib/shared/brottmalstaxa";
+import { TIMKOSTNADSNORM_FTAX_ORE_PER_H } from "@/lib/shared/brottmalstaxa";
 import { computeCoverageSplit, partitionRattsskyddMinutes, type CoverageSplit } from "@/lib/shared/coverage-billing";
 import { arvodeInclVatOre } from "@/lib/shared/invoice-calc";
 import { applyKrAction, type KostnadsrakningAction, type KostnadsrakningState, type KostnadsrakningStatus } from "@/lib/shared/kostnadsrakning-flow";
@@ -223,6 +223,19 @@ function invoiceGrossOre(work: UnfrozenWork): number {
   return arvodeInclVatOre(arvodeNetOre(work)) + expenseGrossOre(work);
 }
 
+/**
+ * Rättshjälpens KR-anspråk till domstol, brutto (#839): arbetet värderas på
+ * TIMKOSTNADSNORMEN (inte byråns privata timtaxor — staten ersätter bara normen)
+ * och rådgivningstimmen exkluderas (faktureras klienten separat). Utlägg ersätts
+ * brutto. Speglar settlement-revärderingen (currentArvodeRateOre × coverageBaseMinutes).
+ */
+function rattshjalpKrGrossOre(work: UnfrozenWork, rateOrePerH: number): number {
+  const billableMin = work.timeEntries.filter((t) => t.billable).reduce((s, t) => s + t.minutes, 0);
+  const claimMin = coverageBaseMinutes("RATTSHJALP", billableMin);
+  const arvodeNet = Math.round((claimMin / 60) * rateOrePerH);
+  return arvodeInclVatOre(arvodeNet) + expenseGrossOre(work);
+}
+
 /** Fakturans exakta momsbelopp (öre) per sats: arvodets moms (25 %) +
  *  varje utläggs moms (dess sats). Lagras på fakturan för korrekt bokföring (#782). */
 function invoiceVatOre(work: UnfrozenWork): number {
@@ -278,7 +291,9 @@ async function currentArvodeRateOre(
   matter: { paymentMethod: string; taxaHasFTax?: boolean | null | undefined; responsibleLawyerId?: UserId | null | undefined },
 ): Promise<number> {
   if (matter.paymentMethod === "RATTSHJALP") {
-    return matter.taxaHasFTax === false ? TIMKOSTNADSNORM_NO_FTAX_ORE_PER_H : TIMKOSTNADSNORM_FTAX_ORE_PER_H;
+    // Alla advokater har F-skatt (#839) → alltid F-skatt-normen, oberoende av
+    // matter.taxaHasFTax (ett brottmåls-taxefält som är meningslöst här).
+    return TIMKOSTNADSNORM_FTAX_ORE_PER_H;
   }
   if (!matter.responsibleLawyerId) return 0;
   const lawyer = await repos.users.getByIdInOrg(matter.responsibleLawyerId, orgId);
@@ -592,8 +607,14 @@ export const billingRunRouter = router({
       return ctx.repos.transaction(async (tx) => {
         await assertFlowAction(tx, ctx.orgId, input.matterId, "KOSTNADSRAKNING");
         const work = await fetchUnfrozenWork(tx, input.matterId);
-        // Brutto = arvode inkl. 25 % moms + utlägg (#782) — matchar kostnadsräkningens PDF.
-        const grossValue = invoiceGrossOre(work);
+        const matter = await tx.matters.getByIdInOrg(input.matterId, ctx.orgId);
+        if (!matter) throw new TRPCError({ code: "NOT_FOUND", message: "Ärendet finns inte." });
+        // Rättshjälp värderas på timkostnadsnormen (#839) — staten ersätter inte
+        // byråns privata timtaxa. Övriga (offentligt uppdrag/taxa): arvode inkl moms
+        // + utlägg som tidigare. Brutto matchar kostnadsräkningens PDF (#782).
+        const grossValue = matter.paymentMethod === "RATTSHJALP"
+          ? rattshjalpKrGrossOre(work, await currentArvodeRateOre(tx, ctx.orgId, matter))
+          : invoiceGrossOre(work);
         const run = await tx.billingRuns.create({
           matterId: input.matterId, type: "KOSTNADSRAKNING", recipient: "DOMSTOL",
           status: "PENDING_VERDICT", kostnadsrakningStatus: "INSKICKAD", workValueOreAtRun: grossValue,
