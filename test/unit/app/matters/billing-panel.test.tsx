@@ -1,7 +1,7 @@
 /**
  * Tester för `BillingPanel` (#27) — översikts-/action-panelen per ärende.
  *
- * Täcker de rena hjälparna (computeTotals, optionsFor, findPendingVerdict,
+ * Täcker summa-vyn (#819), optionsFor, findPendingVerdict,
  * clientOf/courtOf) via render + de villkorade vyerna: summa-kort, runs-lista,
  * pending-verdict-banner, rådgivnings-banner (rättshjälp) och "+ Skapa
  * faktura"-menyn vars alternativ beror på matter:s paymentMethod. Barn-
@@ -23,6 +23,8 @@ let runsData: { runs: BillingRunRow[] } = { runs: [] };
 let runsLoading = false;
 interface ProposalData { workValueOre: number; priorAccontoSumOre: number; timeEntries: Array<{ id: string; description: string; minutes: number; hourlyRate: number; billable: boolean; valueOre: number }>; expenses: Array<{ id: string; description: string; amount: number; billable: boolean }> }
 let proposalData: ProposalData = { workValueOre: 0, priorAccontoSumOre: 0, timeEntries: [], expenses: [] };
+interface InvoiceRow { id: string; amount: number; status: string; payments: Array<{ amount: number }> }
+let invoiceListData: InvoiceRow[] = [];
 const refetch = vi.fn();
 const radgivningMutate = vi.fn();
 const krMutate = vi.fn();
@@ -52,6 +54,7 @@ vi.mock("@/lib/client/trpc", () => ({
     expense: { list: { useQuery: () => ({ data: { expenses: [] } }) } },
     document: { list: { useQuery: () => ({ data: documentListData }) } },
     invoice: {
+      list: { useQuery: () => ({ data: invoiceListData }) },
       createRadgivning: {
         useMutation: (opts?: { onSuccess?: () => void }) => {
           void opts;
@@ -95,6 +98,7 @@ beforeEach(() => {
   runsLoading = false;
   documentListData = { documents: [] };
   proposalData = { workValueOre: 0, priorAccontoSumOre: 0, timeEntries: [], expenses: [] };
+  invoiceListData = [];
   hasDoc = false;
 });
 
@@ -111,52 +115,39 @@ describe("BillingPanel — översikt", () => {
     expect(screen.getByText("Laddar…")).toBeInTheDocument();
   });
 
-  it("summerar acconto/fakturerat/väntar-på-dom korrekt (computeTotals)", () => {
+  it("faktura-länk för run med invoiceId (EntityLink-stub)", () => {
     runsData = {
       runs: [
         { id: "r1", type: "ACCONTO", status: "SENT", recipient: "KLIENT", amountOre: 100_000, createdAt: "2026-01-01", invoiceId: "inv-1", invoice: { id: "inv-1", invoiceNumber: "F-1" } },
-        { id: "r2", type: "FINAL", status: "SENT", recipient: "KLIENT", amountOre: 250_000, createdAt: "2026-02-01" },
-        { id: "r3", type: "KOSTNADSRAKNING", status: "PENDING_VERDICT", recipient: "DOMSTOL", amountOre: 50_000, createdAt: "2026-03-01" },
       ],
     };
     render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={baseMatter} />);
-    // Aconto = 1000 kr, Fakturerat = 2500 kr, Väntar = 500 kr. Varje belopp
-    // syns två gånger (summa-kort + run-rad); Intl använder no-break-space
-    // → matcha tolerant via regex + getAllByText.
-    expect(screen.getAllByText(/1\s*000,00/).length).toBeGreaterThanOrEqual(2);
-    expect(screen.getAllByText(/2\s*500,00/).length).toBeGreaterThanOrEqual(2);
-    expect(screen.getByText("Aconto fakturerat")).toBeInTheDocument();
-    // Faktura-länk för run med invoiceId (EntityLink-stub)
     expect(screen.getByText("F-1")).toBeInTheDocument();
   });
 });
 
-describe("BillingPanel — Upparbetat ofakturerat", () => {
-  it("visar arvode/utlägg/total när det finns ofakturerat debiterbart arbete", () => {
-    proposalData = {
-      workValueOre: 120_000,
-      priorAccontoSumOre: 0,
-      timeEntries: [
-        { id: "t1", description: "Arbete", minutes: 60, hourlyRate: 1200, billable: true, valueOre: 120_000 },
-        { id: "t2", description: "Ej deb", minutes: 30, hourlyRate: 1200, billable: false, valueOre: 60_000 },
-      ],
-      expenses: [
-        { id: "e1", description: "Ansökningsavgift", amount: 90_000, billable: true },
-        { id: "e2", description: "Ej deb", amount: 10_000, billable: false },
-      ],
-    };
+describe("BillingPanel — summa-vy (#819: bara tre tal)", () => {
+  it("visar Upparbetat ofakturerat / Fakturerat / Betalt — inte de gamla korten", () => {
     render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={baseMatter} />);
     expect(screen.getByText("Upparbetat ofakturerat")).toBeInTheDocument();
-    // Arvode 1200,00 (bara billable), Utlägg 900,00, Total 2100,00.
-    expect(screen.getByText(/1\s*200,00/)).toBeInTheDocument();
-    expect(screen.getByText(/900,00/)).toBeInTheDocument();
-    expect(screen.getByText(/2\s*100,00/)).toBeInTheDocument();
+    expect(screen.getByText("Fakturerat")).toBeInTheDocument();
+    expect(screen.getByText("Betalt")).toBeInTheDocument();
+    expect(screen.queryByText("Aconto fakturerat")).not.toBeInTheDocument();
+    expect(screen.queryByText("Väntar på dom")).not.toBeInTheDocument();
   });
 
-  it("visar tomtext när inget ofakturerat finns", () => {
+  it("Fakturerat = Σ utställda fakturor (ej DRAFT/CANCELLED); Betalt = Σ betalningar", () => {
+    invoiceListData = [
+      { id: "i1", amount: 250_000, status: "SENT", payments: [{ amount: 100_000 }] },
+      { id: "i2", amount: 50_000, status: "PAID", payments: [{ amount: 50_000 }] },
+      { id: "i3", amount: 999_000, status: "DRAFT", payments: [] },
+      { id: "i4", amount: 888_000, status: "CANCELLED", payments: [] },
+    ];
     render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={baseMatter} />);
-    expect(screen.getByText("Upparbetat ofakturerat")).toBeInTheDocument();
-    expect(screen.getByText(/Inget ofakturerat/)).toBeInTheDocument();
+    // Fakturerat = 250000 + 50000 = 300000 → "3 000,00"; Betalt = 150000 → "1 500,00".
+    // (Brutto-basis + default inkl-läge visar lagrat belopp.)
+    expect(screen.getByText(/3\s*000,00/)).toBeInTheDocument();
+    expect(screen.getByText(/1\s*500,00/)).toBeInTheDocument();
   });
 });
 

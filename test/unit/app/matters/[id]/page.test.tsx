@@ -94,6 +94,8 @@ vi.mock("@/lib/client/trpc", () => ({
       setVerdict: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
     invoice: {
+      // #819: BillingPanel → BillingSummary summerar Fakturerat/Betalt ur list.
+      list: { useQuery: () => ({ data: [] }) },
       // #383: BillingPanel → RadgivningBanner använder createRadgivning.
       createRadgivning: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
