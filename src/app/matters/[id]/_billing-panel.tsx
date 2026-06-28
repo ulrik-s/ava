@@ -12,10 +12,11 @@
  * öppnar verdict-dialogen (sätter prutning + skapar faktura).
  */
 import type { inferRouterOutputs } from "@trpc/server";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { DecimalInput } from "@/components/ui/decimal-input";
 import { Modal } from "@/components/ui/modal";
 import { Money } from "@/components/ui/money";
+import type { DownloadClient } from "@/lib/client/backend/load-document-blob";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { hasGeneratedDoc, openGeneratedDoc } from "@/lib/client/demo/generated-doc-cache";
 import { useMatterInvariants } from "@/lib/client/diagnostics/use-matter-invariants";
@@ -28,7 +29,7 @@ import { availableKrActions, KOSTNADSRAKNING_STATUS_LABELS, type Kostnadsrakning
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { computeRadgivningsavgift } from "@/lib/shared/rattshjalp";
 import { BILLING_RUN_TYPE_LABELS, BILLING_RUN_STATUS_LABELS, type BillingRunRecipient, type BillingRunStatus, type BillingRunType, type PaymentMethod } from "@/lib/shared/schemas/enums";
-import type { BillingRunId, InvoiceId, MatterId } from "@/lib/shared/schemas/ids";
+import type { BillingRunId, DocumentId, InvoiceId, MatterId } from "@/lib/shared/schemas/ids";
 import { BillingDialog, type BillingMeta } from "./_billing-dialog";
 import { KostnadsrakningModal } from "./_kostnadsrakning-modal";
 import { SettlementDialog } from "./_settlement-dialog";
@@ -67,7 +68,7 @@ interface BillingRunRow {
   beslutSlutgiltigt?: boolean | null;
 }
 
-interface KrDocInfo { id: string; fileName: string }
+interface KrDocInfo { id: DocumentId; fileName: string; storagePath: string | null }
 
 type DocumentListOutput = inferRouterOutputs<AppRouter>["document"]["list"];
 
@@ -85,22 +86,32 @@ function findKrDocument(matterId: MatterId, run: BillingRunRow): KrDocInfo | nul
     const bt = b.createdAt ? new Date(b.createdAt).getTime() : 0;
     return Math.abs(at - runTs) - Math.abs(bt - runTs);
   });
-  return sorted[0] ? { id: sorted[0].id, fileName: sorted[0].fileName } : null;
+  const d = sorted[0];
+  return d ? { id: d.id, fileName: d.fileName, storagePath: d.storagePath ?? null } : null;
 }
 
-function openKrDocument(doc: KrDocInfo): void {
-  // I demo-mode (GH Pages) finns ingen statisk fil för dokument som
-  // genererats client-side — blob-cachen håller bytes:erna i minnet.
-  // Self-hosted/server-mode skulle istället peka mot /api/documents/:id.
-  if (hasGeneratedDoc(doc.id)) {
-    openGeneratedDoc(doc.id);
-    return;
-  }
-  // Fallback: ingen blob (page reload sedan generering) — visa hint.
-  alert(
-    `Dokumentet "${doc.fileName}" är inte längre i minnet (efter sid-reload).\n` +
-    `Skapa en ny kostnadsräkning eller använd helper-app:n för att spara filen.`,
-  );
+/**
+ * Öppna KR-dokumentet. Genererat-i-fliken → blob-cachen (öppna direkt).
+ * Annars (seedat/server-hostat) → samma väg som faktura-dokumenten:
+ * `openDocument` hämtar bytes från servern (`downloadContent`) eller GH Pages.
+ */
+async function openKrDoc(doc: KrDocInfo, client: DownloadClient): Promise<void> {
+  if (hasGeneratedDoc(doc.id)) { openGeneratedDoc(doc.id); return; }
+  const { openDocument } = await import("@/lib/client/firma/open-document");
+  const { loadHandle } = await import("@/lib/client/fsa/handle-store");
+  const { readFromFsa } = await import("@/lib/client/fsa/read-from-fsa");
+  const { loadDocumentBlob } = await import("@/lib/client/backend/load-document-blob");
+  await openDocument({
+    doc: { id: doc.id, ...(doc.storagePath != null ? { storagePath: doc.storagePath } : {}), fileName: doc.fileName },
+    isDemo: process.env.NEXT_PUBLIC_DEMO_BUILD === "1",
+    ...omitUndefined({ demoRepo: process.env.NEXT_PUBLIC_DEFAULT_DEMO_REPO }),
+    loadHandle: () => loadHandle("repo-root"),
+    readFromHandle: readFromFsa,
+    // Server-first (#518/#839): hämta bytes från servern (+ klient-cache).
+    fetchBlob: () => loadDocumentBlob(client, { id: doc.id, storagePath: doc.storagePath, fileName: doc.fileName }),
+    openUrl: (u) => window.open(u, "_blank", "noopener,noreferrer"),
+    notifyError: (m) => alert(m),
+  });
 }
 
 /** Etikett för KR:ns nästa beslut-knapp (tingsrätt först, sen hovrätt). */
@@ -120,6 +131,7 @@ interface KrCardProps {
  */
 function KostnadsrakningCard({ matterId, run, onRegistreraBeslut, onOverklaga, onSkapaFaktura }: KrCardProps) {
   const doc = findKrDocument(matterId, run);
+  const utils = trpc.useUtils();
   const state: KostnadsrakningState = { status: run.kostnadsrakningStatus ?? "INSKICKAD", slutgiltigt: run.beslutSlutgiltigt ?? false };
   return (
     <div className="mx-6 my-3 rounded border border-amber-300 bg-amber-50 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -127,13 +139,15 @@ function KostnadsrakningCard({ matterId, run, onRegistreraBeslut, onOverklaga, o
         <div>
           <strong>Kostnadsräkning</strong> — {KOSTNADSRAKNING_STATUS_LABELS[state.status]}
           {run.awardedOre != null && state.status !== "INSKICKAD" && (
-            <> · Dömt belopp: <Money ore={run.awardedOre} basis="net" className="font-mono font-semibold" /></>
+            // awardedOre lagras brutto (= workValueOreAtRun, inkl moms) → basis="gross"
+            // så Dömt belopp och "Upparbetat" visas på samma momsbasis (#839).
+            <> · Dömt belopp: <Money ore={run.awardedOre} basis="gross" className="font-mono font-semibold" /></>
           )}
         </div>
         {doc && (
           <div className="text-xs text-amber-800">
             Dokument:{" "}
-            <button type="button" onClick={() => openKrDocument(doc)}
+            <button type="button" onClick={() => void openKrDoc(doc, utils.client)}
               className="underline hover:text-amber-900 text-amber-900 cursor-pointer">{doc.fileName}</button>
           </div>
         )}
@@ -405,12 +419,24 @@ export function BillingPanel({ matterId, matter }: Props) {
   );
 }
 
-/** Rättshjälp (#383): registrera klientens betalda rådgivningstimme som en
- *  separat klientfaktura. Self-gating — null för icke-rättshjälpsärenden. */
+/** Rättshjälp (#383/#839): klientens rådgivningstimme (ärendets första timme)
+ *  debiteras ALLTID klienten → skapas automatiskt som en separat klientfaktura
+ *  när den saknas. Self-gating — null för icke-rättshjälpsärenden. */
 function RadgivningBanner({ matterId, matter, onRecorded }: { matterId: MatterId; matter: MatterContext; onRecorded: () => void }) {
   const create = trpc.invoice.createRadgivning.useMutation({ onSuccess: onRecorded });
-  if (matter.paymentMethod !== "RATTSHJALP") return null;
+  const fired = useRef(false);
+  const isRattshjalp = matter.paymentMethod === "RATTSHJALP";
+  const registered = !!matter.radgivningBetaldAt;
   const hasFTaxArg = omitUndefined({ hasFTax: matter.taxaHasFTax ?? undefined });
+  useEffect(() => {
+    // Auto-skapa en gång när den saknas (#839): rådgivningstimmen är obligatorisk
+    // i rättshjälp, så användaren ska inte behöva trycka på en knapp.
+    if (!isRattshjalp || registered || fired.current || create.isPending) return;
+    fired.current = true;
+    create.mutate({ matterId, ...hasFTaxArg });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isRattshjalp, registered, matterId]);
+  if (!isRattshjalp) return null;
   const avgift = computeRadgivningsavgift(hasFTaxArg);
   return (
     <div className="mx-6 mb-4 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 flex items-center justify-between gap-3">
@@ -418,13 +444,10 @@ function RadgivningBanner({ matterId, matter, onRecorded }: { matterId: MatterId
         <strong>Rådgivningstimme (rättshjälp)</strong> — klientens 1 tim enligt rättshjälpstaxan,{" "}
         <span className="font-mono">{formatCurrency(avgift.beloppExclVatOre)}</span> exkl moms, faktureras separat till klienten.
       </div>
-      {matter.radgivningBetaldAt ? (
-        <span className="text-xs text-green-700 whitespace-nowrap">✓ Registrerad</span>
+      {registered ? (
+        <span className="text-xs text-green-700 whitespace-nowrap">✓ Fakturerad</span>
       ) : (
-        <button type="button" onClick={() => create.mutate({ matterId, ...hasFTaxArg })} disabled={create.isPending}
-          className="text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 whitespace-nowrap">
-          {create.isPending ? "Registrerar…" : "Registrera betald"}
-        </button>
+        <span className="text-xs text-blue-700 whitespace-nowrap">{create.error ? "Kunde inte skapas" : "Skapas automatiskt…"}</span>
       )}
     </div>
   );
