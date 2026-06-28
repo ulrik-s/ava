@@ -37,6 +37,7 @@ import { createIdTranslator, translateSeed } from "../demo-generator/id-translat
 import { populate } from "../demo-generator/populate";
 import { populateBilling } from "../demo-generator/populate-billing";
 import { populateDocuments } from "../demo-generator/populate-documents";
+import { populateKostnadsrakningDocs } from "../demo-generator/populate-kostnadsrakning-docs";
 import { populateUnbilledTime } from "../demo-generator/populate-unbilled-time";
 import { buildSeed } from "./seed-data";
 
@@ -107,18 +108,32 @@ async function addTodayTimeEntries(repos: Repositories, timeEntries: Row[], matt
  * (icke-uuid-id:n `invdoc-/kr-/gendoc-` + faktura-scopade — uppföljning likt
  * #647). No-op utan CONTENT_DIR (bytes har då ingenstans att ta vägen).
  */
-async function seedDocuments(
-  caller: Parameters<typeof populateDocuments>[0],
-  seed: Parameters<typeof populateDocuments>[1],
-): Promise<number> {
-  if (!CONTENT_DIR) return 0;
+/** Bytes-sink mot den bind-mountade content-katalogen (#649), eller null när
+ *  ingen CONTENT_DIR är satt (då har bytes ingenstans att ta vägen). */
+function contentSink(): ((storagePath: string, bytes: Uint8Array) => number) | null {
+  if (!CONTENT_DIR) return null;
   const dir = CONTENT_DIR;
-  const sink = (storagePath: string, bytes: Uint8Array): number => {
+  return (storagePath: string, bytes: Uint8Array): number => {
     const abs = join(dir, storagePath);
     mkdirSync(dirname(abs), { recursive: true });
     writeFileSync(abs, bytes);
     return bytes.byteLength;
   };
+}
+
+/** KR-dokument per KOSTNADSRAKNING-run (#828) — speglar build:demo så panelens
+ *  doc-länk finns på förseedade KR-körningar (annars saknar de dokument lokalt). */
+async function seedKostnadsrakningDocs(caller: Parameters<typeof populateKostnadsrakningDocs>[0]): Promise<number> {
+  // Postgres documents.id är uuid → generera uuid (default `krdoc-<id>` är ej uuid).
+  return populateKostnadsrakningDocs(caller, contentSink() ?? undefined, () => uuidv7());
+}
+
+async function seedDocuments(
+  caller: Parameters<typeof populateDocuments>[0],
+  seed: Parameters<typeof populateDocuments>[1],
+): Promise<number> {
+  const sink = contentSink();
+  if (!sink) return 0;
   return populateDocuments(caller, seed, sink);
 }
 
@@ -161,7 +176,8 @@ async function main(): Promise<void> {
     const unbilled = await populateUnbilledTime(caller, seed);
 
     const documents = await seedDocuments(caller, seed);
-    console.log("✓ demo-data seedad i server-first (org", ORG, "):", { ...core, billing, unbilled, documents });
+    const kostnadsrakningDocs = await seedKostnadsrakningDocs(caller);
+    console.log("✓ demo-data seedad i server-first (org", ORG, "):", { ...core, billing, unbilled, documents, kostnadsrakningDocs });
     console.log(`  login: ${LOGIN_LAWYER_EMAIL} + ${LOGIN_ADMIN_EMAIL} äger nu data (+ idag-tidpost)`);
     console.log(CONTENT_DIR ? `  dokument-bytes → ${CONTENT_DIR}` : "  (dokument hoppade — sätt AVA_CONTENT_HOST_DIR)");
   } finally {
