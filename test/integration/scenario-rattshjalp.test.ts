@@ -109,6 +109,9 @@ describe("Scenario: komplext brottmål — offentlig försvarare men EJ taxemål
       isTaxeArende: true,
     });
     state.matterId = matter.id;
+    // Offentligt uppdrag (offentlig försvarare) — domstolen ersätter; flödet
+    // tillåter FINAL (#816). Sätts explicit så fakturerings-guarden passerar.
+    await state.caller.matter.update({ id: matter.id, paymentMethod: "OFFENTLIGT_UPPDRAG" });
     await state.caller.matter.addContact({
       matterId: matter.id, contactId: state.domstolId!, role: "DOMSTOL",
     });

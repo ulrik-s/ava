@@ -1,7 +1,8 @@
 # ADR 0034 — Deklarativa faktureringsflöden per ärendetyp (state-maskin)
 
-- **Status:** Accepterad (2026-06-28). Fas 1–2 **implementerade** (#818 modell,
-  #821 UI); fas 3 (hård API-enforcement) **uppskjuten** — se beslut nedan.
+- **Status:** Accepterad och **implementerad** (2026-06-28): fas 1 (modell, #818),
+  fas 2 (UI, #821), fas 4 (denna ADR, #822) och fas 3 (hård API-enforcement +
+  reconciliering av demo-generatorn/scenarierna).
 - **Beslutsfattare:** Ulrik Sjölin
 - **Berör:** fakturapanelen (`_billing-panel.tsx`), billingRun-routern,
   betalningssätts-kortet.
@@ -55,23 +56,26 @@ En **enda deklarativ sanningskälla**: `src/lib/shared/billing-flow.ts`.
    styrningen användaren möter.
 2. **Ren guard (fas 1):** `canBillingTransition`/`assertBillingTransition` finns
    som ren, testad funktion (server/klient/tester delar den).
-3. **Hård API-enforcement i mutationerna (fas 3): UPPSKJUTEN.** Att låta
-   `createFinal`/`createAcconto`/`createKostnadsrakning`/`settleCoverage` avvisa
-   actions som inte matchar flödet visade sig **bryta demo-generatorn och
-   `build:demo`** (USP: demon måste fungera): generatorn + scenariotester driver
-   faktureringen **mekaniskt** över betalningssätt (t.ex. PRIVAT med aconto+final,
-   brottmål som fakturerar ett `PENDING`-ärende), i ordningar som de nuvarande
-   descriptorerna inte tillåter. Eftersom flödena dessutom fortfarande ändras vore
-   en hård spärr för stel. Hård enforcement införs först när (a) demo-generatorn
-   följer flödena, eller (b) vi medvetet väljer att bara hård-spärra
-   täckningsflödena (rättsskydd/rättshjälp), där ordningen är domänkritisk.
+3. **Hård API-enforcement i mutationerna (fas 3): IMPLEMENTERAD.**
+   `createAcconto`/`createFinal`/`createKostnadsrakning`/`settleCoverage` kör
+   `assertFlowAction` som avvisar (BAD_REQUEST) en action som inte är laglig i
+   ärendets nuvarande fas — för ALLA betalningssätt. Ett första försök bröt
+   demo-generatorn + `build:demo` (USP) eftersom generatorn/scenariotester drev
+   faktureringen mekaniskt i ordningar descriptorerna inte tillät. Det löstes genom
+   att **reconciliera modellen mot verkligt bruk** i stället för att backa spärren:
+   - PRIVAT/MIX vidgades till **aconto + slutfaktura** (löpande räkning).
+   - OFFENTLIGT_UPPDRAG vidgades till **kostnadsräkning + klient-FINAL**
+     (återbetalningsskyldighet enligt domen).
+   - Demo-generatorns rättshjälp-väg gör nu **aconto → kostnadsräkning →
+     slutreglering** (ej en otillåten direkt-FINAL till myndigheten).
+   - Brottmåls-/rättshjälps-scenarierna sätter `paymentMethod=OFFENTLIGT_UPPDRAG`.
 
 ## Konsekvenser
 
 - **+** En plats att ändra när ett flöde ändras; UI + (framtida) guard delar den.
 - **+** Faserna är härledda → ingen migration, ingen osynk mot verkligheten.
 - **+** Inte för flexibelt: ändlig enum, ingen runtime-config.
-- **−** UI och hård API-spärr kan tillfälligt divergera (API:t är friare än menyn)
-  tills fas 3 landar — medvetet, för att inte bryta demon.
-- **−** Descriptorn måste hållas i synk med verkligt bruk (demo-generatorn är i
-  praktiken ett andra "API-användare" vars flöden inte alltid matchar).
+- **−** Descriptorn måste hållas i synk med verkligt bruk — demo-generatorn +
+  scenariotester är i praktiken ett andra "API-användare", och en hård spärr
+  bryter dem direkt om descriptorn är fel/för snäv (vilket är poängen: spärren
+  tvingar fram att modellen är korrekt, men varje ny övergång måste läggas till).

@@ -53,11 +53,15 @@ export interface BillingFlow {
 
 const aconto = (): BillingAction => ({ type: "ACCONTO", label: "Aconto till klient", toPhase: "ARBETE", recipient: "KLIENT", dialog: "billing" });
 
-/** PRIVAT/MIX: löpande FINAL till klienten, ingen besluts-/domslivscykel. */
+/** PRIVAT/MIX: löpande räkning till klienten — à-conto under arbetets gång +
+ *  slutfaktura. Ingen besluts-/domslivscykel (stannar i ARBETE). */
 const PRIVAT_FLOW: BillingFlow = {
   initialPhase: "ARBETE",
   actionsByPhase: {
-    ARBETE: [{ type: "FINAL", label: "Faktura till klient", toPhase: "ARBETE", recipient: "KLIENT", dialog: "billing" }],
+    ARBETE: [
+      aconto(),
+      { type: "FINAL", label: "Faktura till klient", toPhase: "ARBETE", recipient: "KLIENT", dialog: "billing" },
+    ],
   },
 };
 
@@ -97,13 +101,17 @@ export const BILLING_FLOWS: Record<PaymentMethod, BillingFlow> = {
     pendingBanner: { phase: "VANTAR_DOM", dialog: "settlement", label: "Slutreglera (dom)" },
   },
   // Offentligt uppdrag: kostnadsräkning till domstol → dom (prutning) via verdict.
+  // Klienten kan dessutom faktureras (återbetalningsskyldighet enligt domen).
   OFFENTLIGT_UPPDRAG: {
     initialPhase: "ARBETE",
     actionsByPhase: {
       ARBETE: [
         { type: "KOSTNADSRAKNING", label: "Kostnadsräkning till domstol", toPhase: "VANTAR_DOM", recipient: "DOMSTOL", dialog: "kostnadsrakning" },
+        { type: "FINAL", label: "Faktura till klient (återbetalning)", toPhase: "ARBETE", recipient: "KLIENT", dialog: "billing" },
       ],
-      VANTAR_DOM: [],
+      VANTAR_DOM: [
+        { type: "FINAL", label: "Faktura till klient (återbetalning)", toPhase: "VANTAR_DOM", recipient: "KLIENT", dialog: "billing" },
+      ],
       SLUTREGLERAD: [],
     },
     pendingBanner: { phase: "VANTAR_DOM", dialog: "verdict", label: "Ange dom + prutning" },

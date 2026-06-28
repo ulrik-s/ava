@@ -181,10 +181,27 @@ async function runKostnadsrakning(ctx: Ctx, matterId: string, withVerdict: boole
   }
 }
 
+/**
+ * Rättshjälp följer flödesmodellen (#816): aconto till klient → kostnadsräkning
+ * till domstol (fryser arbetet) → slutreglering (dom) som skapar klient- +
+ * stat-faktura och konsumerar kostnadsräkningen. INGEN direkt slutfaktura till
+ * myndigheten (det vore en otillåten övergång).
+ */
+async function runRattshjalpBilling(ctx: Ctx, matterId: string, daysAgo: number): Promise<void> {
+  const accontoRun = await acconto(ctx, matterId, 3000, 150_000, daysAgo);
+  await ctx.c.billingRun.createKostnadsrakning({ matterId, notes: "Kostnadsräkning till domstol (rättshjälp)" });
+  ctx.res.kostnadsrakningSent++;
+  const res = await ctx.c.billingRun.settleCoverage({ matterId, payerRecipient: "RATTSHJALPSMYNDIGHET", deductedBillingRunIds: [accontoRun] });
+  ctx.res.invoices += 2; // klient- + stat-faktura
+  await ctx.c.invoice.setStatus({ invoiceId: res.clientInvoice.id, status: "SENT" });
+  await ctx.c.invoice.setStatus({ invoiceId: res.payerInvoice.id, status: "SENT" });
+}
+
 async function runClientBilling(ctx: Ctx, matterId: string, pm: string, clientIdx: number): Promise<void> {
   const daysAgo = 30 + clientIdx * 6;
-  const deducted = (pm === "RATTSSKYDD" || pm === "RATTSHJALP")
-    ? [await acconto(ctx, matterId, pm === "RATTSHJALP" ? 3000 : 2000, pm === "RATTSHJALP" ? 150_000 : 200_000, daysAgo)]
+  if (pm === "RATTSHJALP") { await runRattshjalpBilling(ctx, matterId, daysAgo); return; }
+  const deducted = pm === "RATTSSKYDD"
+    ? [await acconto(ctx, matterId, 2000, 200_000, daysAgo)]
     : [];
   const recipient = BILLING_RUN_RECIPIENT[pm] ?? "KLIENT";
   // Försäkring/myndighet betalar i sin helhet; privatklienter får varierad livscykel.

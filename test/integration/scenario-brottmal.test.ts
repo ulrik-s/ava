@@ -141,9 +141,11 @@ describe("Scenario: brottmål från förordnande till betald faktura", () => {
     expect(matter.isTaxeArende).toBe(true);
     state.matterId = matter.id;
 
-    // Uppdatera taxa-fälten (level, F-skatt) på matter
+    // Uppdatera taxa-fälten (level, F-skatt) + betalningssätt (offentligt uppdrag;
+    // klienten kan faktureras återbetalning → FINAL tillåts av flödet, #816).
     const upd = await state.caller.matter.update({
       id: matter.id,
+      paymentMethod: "OFFENTLIGT_UPPDRAG",
       taxaLevel: 1,
       taxaHasFTax: true,
     });

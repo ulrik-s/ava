@@ -18,10 +18,10 @@ const PRINCIPAL: Principal = {
   id: asId<"UserId">("u-1"), email: "a@x", name: "Anna", role: "ADMIN", organizationId: asId<"OrganizationId">("org-1"),
 };
 
-function makeCaller(opts?: { workMinutes?: number; expenseOre?: number }) {
+function makeCaller(opts?: { workMinutes?: number; expenseOre?: number; paymentMethod?: string }) {
   const ds = new DemoDataStore({
     organizations: [{ id: "org-1", name: "X" }],
-    matters: [{ id: "m-1", organizationId: "org-1", matterNumber: "2026-0001", title: "Test", status: "ACTIVE", paymentMethod: "RATTSSKYDD", createdAt: new Date() }],
+    matters: [{ id: "m-1", organizationId: "org-1", matterNumber: "2026-0001", title: "Test", status: "ACTIVE", paymentMethod: opts?.paymentMethod ?? "RATTSSKYDD", createdAt: new Date() }],
     users: [{ id: "u-1", organizationId: "org-1", email: "a@x", name: "Anna", role: "ADMIN", hourlyRate: 250000 }],
     timeEntries: [{ id: "te-1", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date(), minutes: opts?.workMinutes ?? 120, description: "Möte", hourlyRate: 250000, billable: true }],
     expenses: opts?.expenseOre != null ? [{ id: "ex-1", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date(), amount: opts.expenseOre, description: "Avgift", billable: true, vatRate: 0, vatIncluded: false, kind: "EXPENSE" }] : [],
@@ -203,7 +203,7 @@ describe("billingRun.createFinal", () => {
 
 describe("billingRun.createKostnadsrakning", () => {
   it("skapar BillingRun i PENDING_VERDICT utan Invoice", async () => {
-    const { caller } = makeCaller({ workMinutes: 180 });
+    const { caller } = makeCaller({ workMinutes: 180, paymentMethod: "OFFENTLIGT_UPPDRAG" });
     const res = await caller.billingRun.createKostnadsrakning({ matterId: "m-1" });
     expect(res.run.type).toBe("KOSTNADSRAKNING");
     expect(res.run.status).toBe("PENDING_VERDICT");
@@ -212,7 +212,7 @@ describe("billingRun.createKostnadsrakning", () => {
   });
 
   it("fryser raderna vid inskick mot körningen (#806 — lämnar 'upparbetat ofakturerat')", async () => {
-    const { ds, caller } = makeCaller({ workMinutes: 60 });
+    const { ds, caller } = makeCaller({ workMinutes: 60, paymentMethod: "OFFENTLIGT_UPPDRAG" });
     const res = await caller.billingRun.createKostnadsrakning({ matterId: "m-1" });
     const te = await ds.timeEntries.findFirst({ where: { id: "te-1" } }) as { frozenAt?: Date | null; frozenByBillingRunId?: string | null };
     expect(te.frozenAt).toBeTruthy();
@@ -222,7 +222,7 @@ describe("billingRun.createKostnadsrakning", () => {
 
 describe("billingRun.setVerdict", () => {
   it("transitionar PENDING_VERDICT → SENT, skapar Invoice + fryser rader", async () => {
-    const { ds, caller } = makeCaller({ workMinutes: 60 }); // 2500 kr
+    const { ds, caller } = makeCaller({ workMinutes: 60, paymentMethod: "OFFENTLIGT_UPPDRAG" }); // 2500 kr
     const kr = await caller.billingRun.createKostnadsrakning({ matterId: "m-1" });
     const res = await caller.billingRun.setVerdict({
       billingRunId: kr.run.id, prutningOre: 0,
@@ -236,7 +236,7 @@ describe("billingRun.setVerdict", () => {
   });
 
   it("skapar Expense(kind=PRUTNING) när prutning angiven", async () => {
-    const { ds, caller } = makeCaller({ workMinutes: 60 });
+    const { ds, caller } = makeCaller({ workMinutes: 60, paymentMethod: "OFFENTLIGT_UPPDRAG" });
     const kr = await caller.billingRun.createKostnadsrakning({ matterId: "m-1" });
     await caller.billingRun.setVerdict({
       billingRunId: kr.run.id, prutningOre: -50000,
@@ -248,7 +248,7 @@ describe("billingRun.setVerdict", () => {
   });
 
   it("invoice-beloppet är workValue + prutning (prutning negativ)", async () => {
-    const { caller } = makeCaller({ workMinutes: 120 }); // 5000 kr
+    const { caller } = makeCaller({ workMinutes: 120, paymentMethod: "OFFENTLIGT_UPPDRAG" }); // 5000 kr
     const kr = await caller.billingRun.createKostnadsrakning({ matterId: "m-1" });
     const res = await caller.billingRun.setVerdict({
       billingRunId: kr.run.id, prutningOre: -100000,
@@ -257,7 +257,7 @@ describe("billingRun.setVerdict", () => {
   });
 
   it("LÄNKAR poster + PRUTNING till fakturan → vyn reconciler mot beloppet (#732)", async () => {
-    const { ds, caller } = makeCaller({ workMinutes: 120, expenseOre: 5000 }); // 5000 kr + 50 kr utlägg
+    const { ds, caller } = makeCaller({ workMinutes: 120, expenseOre: 5000, paymentMethod: "OFFENTLIGT_UPPDRAG" }); // 5000 kr + 50 kr utlägg
     const kr = await caller.billingRun.createKostnadsrakning({ matterId: "m-1" });
     const res = await caller.billingRun.setVerdict({ billingRunId: kr.run.id, prutningOre: -30000 });
     const te = await ds.timeEntries.findFirst({ where: { id: "te-1" } }) as { invoiceId?: string | null };
@@ -271,7 +271,7 @@ describe("billingRun.setVerdict", () => {
   });
 
   it("DOMSTOL-faktura får inget fakturanummer (ADR 0012)", async () => {
-    const { caller } = makeCaller({ workMinutes: 60 });
+    const { caller } = makeCaller({ workMinutes: 60, paymentMethod: "OFFENTLIGT_UPPDRAG" });
     const kr = await caller.billingRun.createKostnadsrakning({ matterId: "m-1" });
     const res = await caller.billingRun.setVerdict({ billingRunId: kr.run.id, prutningOre: 0 });
     expect(res.invoice.invoiceNumber).toBeFalsy();
@@ -286,6 +286,25 @@ describe("billingRun.setVerdict", () => {
     await expect(caller.billingRun.setVerdict({
       billingRunId: acc.run.id, prutningOre: 0,
     })).rejects.toThrow(/KOSTNADSRAKNING/);
+  });
+});
+
+describe("billingRun — flödes-guard (#816 fas 3)", () => {
+  it("avvisar kostnadsräkning på ett RÄTTSSKYDD-ärende (otillåten övergång)", async () => {
+    const { caller } = makeCaller({ workMinutes: 60, paymentMethod: "RATTSSKYDD" });
+    await expect(caller.billingRun.createKostnadsrakning({ matterId: "m-1" })).rejects.toThrow(/inte tillåten/);
+  });
+
+  it("avvisar slutreglering på ett PRIVAT-ärende (SETTLE saknas i flödet)", async () => {
+    const { caller } = makeCaller({ workMinutes: 60, paymentMethod: "PRIVAT" });
+    await expect(caller.billingRun.settleCoverage({ matterId: "m-1", payerRecipient: "KLIENT" })).rejects.toThrow(/inte tillåten/);
+  });
+
+  it("tillåter aconto + slutfaktura på ett PRIVAT-ärende (löpande räkning)", async () => {
+    const { caller } = makeCaller({ workMinutes: 60, paymentMethod: "PRIVAT" });
+    await caller.billingRun.createAcconto({ matterId: "m-1", clientShareBips: 0, amountOre: 50000 });
+    const res = await caller.billingRun.createFinal({ matterId: "m-1", recipient: "KLIENT" });
+    expect(res.run.type).toBe("FINAL");
   });
 });
 
