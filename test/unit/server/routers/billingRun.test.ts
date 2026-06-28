@@ -434,21 +434,24 @@ describe("billingRun.settleCoverage — bokför prutnings-uppdelningen (#801)", 
     expect(prutning.billable).toBe(false);
   });
 
-  it("rättshjälp via kostnadsräkning (#806): läser de frysta raderna och KONSUMERAR den väntande körningen (ingen dubbelräkning)", async () => {
+  it("rättshjälp via KR (#828): kräver registrerat beslut; domsbeloppet läses från KR:n; KR konsumeras EJ utan markeras FAKTURERAD", async () => {
     const { ds, caller: c } = caller({ paymentMethod: "RATTSHJALP", clientShareBips: 2000, taxaHasFTax: true }, 999999, 180);
     const kr = await c.billingRun.createKostnadsrakning({ matterId: "m-1" });
-    expect(kr.run.status).toBe("PENDING_VERDICT");
-    const res = await c.billingRun.settleCoverage({ matterId: "m-1", payerRecipient: "RATTSHJALPSMYNDIGHET", awardedOre: 300000 });
-    // Samma split som utan KR — arbetet är fryst mot körningen och läses via den.
+    // Faktura före beslut är otillåtet.
+    await expect(c.billingRun.settleCoverage({ matterId: "m-1", payerRecipient: "RATTSHJALPSMYNDIGHET" }))
+      .rejects.toThrow(/Registrera domstolens beslut/);
+    // Registrera domstolens beslut PÅ KR:n (dömt 300 000), sedan fakturera.
+    await c.billingRun.recordKostnadsrakningBeslut({ billingRunId: kr.run.id, awardedOre: 300000 });
+    const res = await c.billingRun.settleCoverage({ matterId: "m-1", payerRecipient: "RATTSHJALPSMYNDIGHET" });
+    // Domsbeloppet (300 000) tas från KR:n → samma split.
     expect(res.split).toMatchObject({ clientOre: 60000, payerOre: 240000, firmLossOre: 25200 });
     expect(res.clientInvoice.amount).toBe(75000);
     expect(res.payerInvoice.amount).toBe(300000);
-    // Den väntande kostnadsräkningen blir betalar-körningen (→ SENT, faktura länkad)
-    // i stället för en ny FINAL → "Väntar på dom" släcks utan dubbelräkning.
-    expect(res.payerRun.id).toBe(kr.run.id);
-    const consumed = await ds.billingRuns.findFirst({ where: { id: kr.run.id } }) as { status: string; invoiceId: string };
-    expect(consumed.status).toBe("SENT");
-    expect(consumed.invoiceId).toBe(res.payerInvoice.id);
+    // Betalar-körningen är en EGEN FINAL (ej KR:n) → KR:n förblir distinkt.
+    expect(res.payerRun.id).not.toBe(kr.run.id);
+    const krAfter = await ds.billingRuns.findFirst({ where: { id: kr.run.id } }) as { kostnadsrakningStatus: string; invoiceId: string | null };
+    expect(krAfter.kostnadsrakningStatus).toBe("FAKTURERAD");
+    expect(krAfter.invoiceId).toBeFalsy(); // KR länkar aldrig till en slutfaktura
   });
 
   it("rättsskydd tidsuppdelat (#810): arbete före tvist → klient 100 %, retro+efter beslut täckt", async () => {
