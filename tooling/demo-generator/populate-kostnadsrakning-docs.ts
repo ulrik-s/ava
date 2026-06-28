@@ -51,7 +51,11 @@ Datum: ${date.toLocaleDateString("sv-SE")}</p>
 </body></html>`;
 }
 
-export async function populateKostnadsrakningDocs(caller: GeneratorCaller, sink?: BinarySink): Promise<number> {
+/** Dokument-id för en KR-run. Default = läsbar `krdoc-<runId>` (in-memory demo +
+ *  GH Pages). Server-first (Postgres uuid-kolumn) skickar in en uuid-generator. */
+export type KrDocIdFn = (runId: string) => string;
+
+export async function populateKostnadsrakningDocs(caller: GeneratorCaller, sink?: BinarySink, idFor?: KrDocIdFn): Promise<number> {
   const c = caller as Any;
   const { runs } = await c.billingRun.list({});
   let count = 0;
@@ -59,7 +63,7 @@ export async function populateKostnadsrakningDocs(caller: GeneratorCaller, sink?
     if (summary.type !== "KOSTNADSRAKNING") continue;
     const run = await c.billingRun.byId({ id: summary.id });
     const html = renderKrHtml(run);
-    const id = `krdoc-${run.id}`;
+    const id = idFor ? idFor(run.id) : `krdoc-${run.id}`;
     const storagePath = `documents/content/${id}.html`;
     const bytes = new TextEncoder().encode(html);
     const size = sink ? sink(storagePath, bytes) : bytes.byteLength;
