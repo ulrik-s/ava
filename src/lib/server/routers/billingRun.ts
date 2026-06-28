@@ -163,23 +163,29 @@ interface PayerRunInput {
   payerGross: number; notes: string | null | undefined; krRun: BillingRunListRow | undefined;
 }
 
-/** Betalar-körningen vid slutreglering (#806): konsumerar en väntande kostnads-
- *  räkning (→ SENT, faktura länkad — arbetet redan fryst mot den), annars en ny
- *  FINAL + frysning av det ofrysta arbetet (rättsskydd). */
+/** Betalar-körningen vid slutreglering (#828): ALLTID en egen FINAL — kostnads-
+ *  räkningen konsumeras inte längre in i fakturan (KR:n förblir distinkt med sitt
+ *  dokument/beslut). Finns ingen KR (rättsskydd) fryses det ofrysta arbetet nu;
+ *  finns en KR är arbetet redan fryst mot den. */
 async function bookPayerRun(repos: Repositories, p: PayerRunInput): Promise<BillingRun> {
-  if (p.krRun) {
-    return repos.billingRuns.update(p.krRun.id, {
-      status: "SENT", invoiceId: p.payerInvoiceId,
-      amountOre: p.payerGross, proposedAmountOre: p.payerGross, workValueOreAtRun: p.payerGross,
-    });
-  }
   const run = await repos.billingRuns.create({
     matterId: p.matterId, type: "FINAL", recipient: p.payerRecipient, status: "SENT",
     workValueOreAtRun: p.payerGross, proposedAmountOre: p.payerGross, amountOre: p.payerGross,
     invoiceId: p.payerInvoiceId, deductedBillingRunIds: [], periodTo: new Date(), notes: p.notes,
   });
-  await freezeWork(repos, p.matterId, run.id);
+  if (!p.krRun) await freezeWork(repos, p.matterId, run.id);
   return run;
+}
+
+/** Domsbeloppet för slutregleringen (#828): finns en kostnadsräkning måste den
+ *  vara BESLUTAD (beslutet registrerat) och beloppet läses därifrån; annars
+ *  (rättsskydd, ingen KR) används det inmatade beloppet. */
+function resolveAwardedOre(krRun: BillingRunListRow | undefined, inputAwardedOre: number | undefined): number | null {
+  if (!krRun) return inputAwardedOre ?? null;
+  if (krRun.kostnadsrakningStatus !== "BESLUTAD") {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "Registrera domstolens beslut innan du skapar fakturan." });
+  }
+  return krRun.awardedOre ?? null;
 }
 
 /** Arvode netto (exkl. moms) — summa av debiterbara tidsposter. */
@@ -747,13 +753,16 @@ export const billingRunRouter = router({
           throw new TRPCError({ code: "BAD_REQUEST", message: "Settlement gäller bara rättsskydd/rättshjälp." });
         }
         const { work, krRun } = await resolveSettlementWork(tx, ctx.orgId, input.matterId);
+        // Finns en kostnadsräkning måste den vara BESLUTAD först — fakturan skapas
+        // EFTER domstolens beslut (#828). Domsbeloppet läses då från KR:n, inte input.
+        const awardedOre = resolveAwardedOre(krRun, input.awardedOre);
         const billableMinutes = work.timeEntries.filter((t) => t.billable).reduce((s, t) => s + t.minutes, 0);
         const rateOre = await currentArvodeRateOre(tx, ctx.orgId, matter);
         const baseMinutes = coverageBaseMinutes(matter.paymentMethod, billableMinutes);
         const totalArvodeNet = Math.round((baseMinutes / 60) * rateOre);
         const split = computeCoverageSplit({
           method: matter.paymentMethod, totalOre: totalArvodeNet, clientShareBips: matter.clientShareBips ?? 0,
-          awardedOre: input.awardedOre ?? null, insurerPrutningOre: input.insurerPrutningOre ?? null,
+          awardedOre, insurerPrutningOre: input.insurerPrutningOre ?? null,
           ...rattsskyddCoverage(matter, work.timeEntries, rateOre),
         });
         const { clientLines, payerLines } = coverageInvoiceLines(split, work);
@@ -783,6 +792,12 @@ export const billingRunRouter = router({
           matterId: input.matterId, payerRecipient: input.payerRecipient, payerInvoiceId: payerInvoice.id,
           payerGross, notes: input.notes, krRun,
         });
+        // KR:n förblir en distinkt kostnadsräkning (med sitt dokument/beslut) —
+        // konsumeras EJ in i fakturan; markeras FAKTURERAD (#828).
+        if (krRun) {
+          const next = applyKrTransition(krStateOf(krRun), "SKAPA_FAKTURA");
+          await tx.billingRuns.update(krRun.id, { status: "SENT", kostnadsrakningStatus: next.status, beslutSlutgiltigt: next.slutgiltigt });
+        }
         await emit.invoiceCreated(ctx, clientInvoice);
         await emit.invoiceCreated(ctx, payerInvoice);
         return { split, clientInvoice, payerInvoice, clientRun, payerRun };

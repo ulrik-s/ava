@@ -182,15 +182,17 @@ async function runKostnadsrakning(ctx: Ctx, matterId: string, withVerdict: boole
 }
 
 /**
- * Rättshjälp följer flödesmodellen (#816): aconto till klient → kostnadsräkning
- * till domstol (fryser arbetet) → slutreglering (dom) som skapar klient- +
- * stat-faktura och konsumerar kostnadsräkningen. INGEN direkt slutfaktura till
- * myndigheten (det vore en otillåten övergång).
+ * Rättshjälp följer KR-livscykeln (#828): aconto → kostnadsräkning till domstol
+ * (fryser arbetet) → registrera domstolens beslut → slutreglering (faktura) som
+ * skapar klient- + stat-faktura. Kostnadsräkningen förblir distinkt (markeras
+ * FAKTURERAD) — ingen direkt slutfaktura till myndigheten.
  */
 async function runRattshjalpBilling(ctx: Ctx, matterId: string, daysAgo: number): Promise<void> {
   const accontoRun = await acconto(ctx, matterId, 3000, 150_000, daysAgo);
-  await ctx.c.billingRun.createKostnadsrakning({ matterId, notes: "Kostnadsräkning till domstol (rättshjälp)" });
+  const kr = await ctx.c.billingRun.createKostnadsrakning({ matterId, notes: "Kostnadsräkning till domstol (rättshjälp)" });
   ctx.res.kostnadsrakningSent++;
+  // Domstolens beslut (dömt belopp = hela det yrkade i demon, ingen prutning).
+  await ctx.c.billingRun.recordKostnadsrakningBeslut({ billingRunId: kr.run.id, awardedOre: kr.run.workValueOreAtRun });
   const res = await ctx.c.billingRun.settleCoverage({ matterId, payerRecipient: "RATTSHJALPSMYNDIGHET", deductedBillingRunIds: [accontoRun] });
   ctx.res.invoices += 2; // klient- + stat-faktura
   await ctx.c.invoice.setStatus({ invoiceId: res.clientInvoice.id, status: "SENT" });
