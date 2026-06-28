@@ -194,6 +194,10 @@ async function runKostnadsrakning(ctx: Ctx, matterId: string, withVerdict: boole
  * testas — fakturasteget görs av användaren.
  */
 async function runRattshjalpBilling(ctx: Ctx, matterId: string, daysAgo: number, stage: "INSKICKAD" | "BESLUTAD"): Promise<void> {
+  // Rådgivningstimmen (ärendets första timme) debiteras alltid klienten i
+  // rättshjälp (#839) — separat klientfaktura, oberoende av domstolens KR.
+  await ctx.c.invoice.createRadgivning({ matterId });
+  ctx.res.invoices++;
   await acconto(ctx, matterId, 3000, 150_000, daysAgo);
   const kr = await ctx.c.billingRun.createKostnadsrakning({ matterId, notes: "Kostnadsräkning till domstol (rättshjälp)" });
   ctx.res.kostnadsrakningPending++;

@@ -192,14 +192,13 @@ describe("BillingPanel — kostnadsräknings-kort (#828)", () => {
     expect(openGeneratedDocFn).toHaveBeenCalledWith("doc-1");
   });
 
-  it("varnar när KR-dokumentet inte längre är i minnet", () => {
-    documentListData = { documents: [{ id: "doc-1", fileName: "kostnadsrakning.docx", documentType: "Kostnadsräkning", createdAt: "2026-03-01" }] };
+  it("seedat/server-dokument (ej i blob-cachen) → går server-vägen, inte blob-cachen (#839)", () => {
+    documentListData = { documents: [{ id: "doc-1", fileName: "kostnadsrakning.docx", documentType: "Kostnadsräkning", storagePath: "documents/content/doc-1.html", createdAt: "2026-03-01" }] };
     hasDoc = false;
-    const alertSpy = vi.spyOn(globalThis, "alert").mockImplementation(() => {});
     render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={verdictMatter} />);
     fireEvent.click(screen.getByRole("button", { name: "kostnadsrakning.docx" }));
-    expect(alertSpy).toHaveBeenCalled();
-    alertSpy.mockRestore();
+    // Faller inte tillbaka på blob-cachen → öppnas via openDocument/downloadContent.
+    expect(openGeneratedDocFn).not.toHaveBeenCalled();
   });
 });
 
@@ -244,17 +243,18 @@ describe("BillingPanel — Skapa-faktura-menyn (flödesmodellen)", () => {
 });
 
 describe("BillingPanel — rådgivnings-banner (rättshjälp)", () => {
-  it("RATTSHJALP utan registrerad rådgivning → knappen registrerar", () => {
+  it("RATTSHJALP utan registrerad rådgivning → auto-skapar (#839)", () => {
     render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={{ ...baseMatter, paymentMethod: "RATTSHJALP" }} />);
     expect(screen.getByText(/Rådgivningstimme \(rättshjälp\)/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Registrera betald" }));
+    // Ingen manuell knapp längre — fakturan skapas automatiskt via useEffect.
+    expect(screen.queryByRole("button", { name: "Registrera betald" })).not.toBeInTheDocument();
     expect(radgivningMutate).toHaveBeenCalledWith(expect.objectContaining({ matterId: "m1" }));
   });
 
-  it("RATTSHJALP med registrerad rådgivning → visar bock", () => {
+  it("RATTSHJALP med registrerad rådgivning → visar bock, auto-skapar inte", () => {
     render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={{ ...baseMatter, paymentMethod: "RATTSHJALP", radgivningBetaldAt: "2026-01-05" }} />);
-    expect(screen.getByText(/Registrerad/)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Registrera betald" })).not.toBeInTheDocument();
+    expect(screen.getByText(/Fakturerad/)).toBeInTheDocument();
+    expect(radgivningMutate).not.toHaveBeenCalled();
   });
 
   it("icke-rättshjälp → ingen rådgivnings-banner", () => {
