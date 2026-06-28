@@ -19,6 +19,7 @@ import { Money } from "@/components/ui/money";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { hasGeneratedDoc, openGeneratedDoc } from "@/lib/client/demo/generated-doc-cache";
 import { useMatterInvariants } from "@/lib/client/diagnostics/use-matter-invariants";
+import { generateKrDoc } from "@/lib/client/kostnadsrakning/generate-kr-doc";
 import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
 import type { AppRouter } from "@/lib/server/routers/_app";
@@ -306,7 +307,7 @@ function useKrModalData(matterId: MatterId): KrModalData {
  *  bekräftelse (timkostnadsnorm), övriga (offentligt uppdrag) brottmåls-modalen. */
 function KostnadsrakningEntry({ matterId, matter, open, onClose, onRecorded }: KrTriggerProps) {
   if (matter.paymentMethod === "RATTSHJALP") {
-    return open ? <RattshjalpKrDialog matterId={matterId} onClose={onClose} onRecorded={onRecorded} /> : null;
+    return open ? <RattshjalpKrDialog matterId={matterId} matter={matter} onClose={onClose} onRecorded={onRecorded} /> : null;
   }
   return <KostnadsrakningTrigger matterId={matterId} matter={matter} open={open} onClose={onClose} onRecorded={onRecorded} />;
 }
@@ -462,11 +463,42 @@ function BillingSummary({ matterId }: { matterId: MatterId }) {
  * kostnadsräkningen, vilket fryser det upparbetade direkt; domen slutregleras
  * separat (klientens självrisk, statens del, ev. byrå-förlust).
  */
-function RattshjalpKrDialog({ matterId, onClose, onRecorded }: { matterId: MatterId; onClose: () => void; onRecorded: () => void }) {
+/** Samlar rättshjälps-KR:ns data + skapar billing-run:en OCH ett KR-dokument
+ *  (#828 steg 4). Utbrutet ur dialogen så den håller sig under complexity 8. */
+function useRattshjalpKr(matterId: MatterId, matter: MatterContext, onClose: () => void, onRecorded: () => void) {
   const proposal = trpc.billingRun.proposal.useQuery({ matterId });
+  const krData = useKrModalData(matterId);
+  const timeEntries = trpc.timeEntry.list.useQuery({ matterId, pageSize: 100 });
+  const register = trpc.document.register.useMutation();
+  const utils = trpc.useUtils();
   const create = trpc.billingRun.createKostnadsrakning.useMutation({
-    onSuccess: () => { onRecorded(); onClose(); },
+    onSuccess: async () => {
+      // KR-dokumentet är en presentation av det inskickade — misslyckas det
+      // ska billing-run:en ändå stå kvar (best-effort), så fånga felet.
+      try {
+        await generateKrDoc({
+          matterId, register, utils,
+          meta: {
+            matterNumber: matter.matterNumber, matterTitle: matter.title, defenderName: krData.defenderName,
+            ...omitUndefined({
+              clientName: clientOf(matter) || undefined, courtName: courtOf(matter),
+              defenderEmail: krData.defenderEmail, organizationName: krData.organizationName,
+              organizationOrgNumber: krData.organizationOrgNumber, organizationAddress: krData.organizationAddress,
+              radgivningPaid: matter.radgivningBetaldAt ? true : undefined,
+            }),
+          },
+          expenses: krData.expenses,
+          timeEntries: (timeEntries.data?.entries ?? []) as ReadonlyArray<{ id: string; date: string | Date; description: string; minutes: number; billable?: boolean }>,
+        });
+      } catch (e) { console.warn("[rättshjälp-kr] dokument misslyckades:", e); }
+      onRecorded(); onClose();
+    },
   });
+  return { proposal, create };
+}
+
+function RattshjalpKrDialog({ matterId, matter, onClose, onRecorded }: { matterId: MatterId; matter: MatterContext; onClose: () => void; onRecorded: () => void }) {
+  const { proposal, create } = useRattshjalpKr(matterId, matter, onClose, onRecorded);
   const d = proposal.data;
   const arvodeOre = d ? d.timeEntries.filter((t) => t.billable).reduce((s, t) => s + t.valueOre, 0) : 0;
   const utlaggOre = d ? d.expenses.filter((e) => e.billable).reduce((s, e) => s + e.amount, 0) : 0;
