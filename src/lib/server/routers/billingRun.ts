@@ -688,8 +688,11 @@ export const billingRunRouter = router({
     .query(async ({ ctx, input }) => {
       const matter = await ctx.repos.matters.getByIdInOrg(input.matterId, ctx.orgId);
       if (!matter) throw new TRPCError({ code: "NOT_FOUND", message: "Ärendet finns inte." });
-      const { billableMinutes } = await ctx.repos.timeEntries.coverageUsageForMatter(input.matterId);
-      const work = await fetchUnfrozenWork(ctx.repos, input.matterId);
+      // Använd SAMMA arbets-källa som settleCoverage (resolveSettlementWork): finns
+      // en kostnadsräkning är raderna FRYSTA mot den → fetchUnfrozenWork ger 0 (#849).
+      // Då matchar förhandsvisningen exakt det som bokas (arvode + utlägg).
+      const { work } = await resolveSettlementWork(ctx.repos, ctx.orgId, input.matterId);
+      const billableMinutes = work.timeEntries.filter((t) => t.billable).reduce((s, t) => s + t.minutes, 0);
       const currentRateOre = await currentArvodeRateOre(ctx.repos, ctx.orgId, matter);
       const baseMinutes = coverageBaseMinutes(matter.paymentMethod, billableMinutes);
       const totalOre = Math.round((baseMinutes / 60) * currentRateOre);

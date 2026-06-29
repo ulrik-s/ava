@@ -430,6 +430,16 @@ describe("billingRun.coverageSplit — prutning/självrisk på aktuellt timarvod
     expect(r.totalOre).toBe(600000); // arvode 2h × 3000 kr
     expect(r.expensesOre).toBe(90000); // utlägg netto — med i förhandsvisningen
   });
+
+  it("KR inskickad (rader frysta) → utläggen räknas ändå (Carlsson-regression, #849)", async () => {
+    // Speglar Umgängestvist Carlsson: kostnadsräkningen fryser tid + utlägg.
+    // coverageSplit måste läsa de FRYSTA raderna (resolveSettlementWork), annars
+    // blir utläggen 0 i slutreglera-dialogen.
+    const { caller } = makeCaller({ workMinutes: 120, expenseOre: 90000, paymentMethod: "RATTSHJALP" });
+    await caller.billingRun.createKostnadsrakning({ matterId: "m-1" }); // fryser tid + utlägg
+    const r = await caller.billingRun.coverageSplit({ matterId: "m-1" });
+    expect(r.expensesOre).toBe(90000); // frysta utlägg syns fortfarande
+  });
 });
 
 describe("billingRun.settleCoverage — bokför prutnings-uppdelningen (#801)", () => {
