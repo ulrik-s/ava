@@ -415,6 +415,21 @@ describe("billingRun.coverageSplit — prutning/självrisk på aktuellt timarvod
     const r = await c.billingRun.coverageSplit({ matterId: "m-1" });
     expect(r.totalOre).toBe(162600);
   });
+
+  it("returnerar utlägg (netto) separat så de syns i settlement-dialogen (#849)", async () => {
+    const ds = new DemoDataStore({
+      organizations: [{ id: "org-1", name: "X" }],
+      matters: [{ id: "m-1", organizationId: "org-1", matterNumber: "2026-0001", title: "T", status: "ACTIVE", responsibleLawyerId: "u-1", paymentMethod: "RATTSSKYDD", clientShareBips: 2000, createdAt: new Date() }],
+      users: [{ id: "u-1", organizationId: "org-1", email: "a@x", name: "Anna", role: "ADMIN", hourlyRate: 300000 }],
+      timeEntries: [{ id: "te-1", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date(), minutes: 120, description: "M", hourlyRate: 200000, billable: true }],
+      expenses: [{ id: "ex-1", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date(), amount: 90000, description: "Ansökningsavgift", billable: true, vatRate: 0, vatIncluded: false, kind: "EXPENSE" }],
+    }, async () => {});
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const c = appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: PRINCIPAL }) as any);
+    const r = await c.billingRun.coverageSplit({ matterId: "m-1" });
+    expect(r.totalOre).toBe(600000); // arvode 2h × 3000 kr
+    expect(r.expensesOre).toBe(90000); // utlägg netto — med i förhandsvisningen
+  });
 });
 
 describe("billingRun.settleCoverage — bokför prutnings-uppdelningen (#801)", () => {
