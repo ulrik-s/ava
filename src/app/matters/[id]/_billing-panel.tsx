@@ -20,6 +20,7 @@ import type { DownloadClient } from "@/lib/client/backend/load-document-blob";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { hasGeneratedDoc, openGeneratedDoc } from "@/lib/client/demo/generated-doc-cache";
 import { useMatterInvariants } from "@/lib/client/diagnostics/use-matter-invariants";
+import { isDemoTier } from "@/lib/client/firma/firma-config";
 import { generateKrDoc } from "@/lib/client/kostnadsrakning/generate-kr-doc";
 import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
@@ -105,7 +106,9 @@ async function openKrDoc(doc: KrDocInfo, client: DownloadClient): Promise<void> 
   const { loadDocumentBlob } = await import("@/lib/client/backend/load-document-blob");
   await openDocument({
     doc: { id: doc.id, ...(doc.storagePath != null ? { storagePath: doc.storagePath } : {}), fileName: doc.fileName },
-    isDemo: process.env.NEXT_PUBLIC_DEMO_BUILD === "1",
+    // RUNTIME-tier, inte NEXT_PUBLIC_DEMO_BUILD (sant även i lokala self-hosted-
+    // builden → länkade dokument till GH Pages = 404). #844.
+    isDemo: isDemoTier(),
     ...omitUndefined({ demoRepo: process.env.NEXT_PUBLIC_DEFAULT_DEMO_REPO }),
     loadHandle: () => loadHandle("repo-root"),
     readFromHandle: readFromFsa,

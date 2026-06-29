@@ -146,6 +146,16 @@ export function loadFirmaConfig(): FirmaConfig {
   }
 }
 
+/**
+ * RUNTIME demo-beslut för dokument-/länk-vägval (#651/#844). Använd detta — INTE
+ * bygg-tids `NEXT_PUBLIC_DEMO_BUILD`, som är `1` även i den lokala self-hosted-
+ * builden (out/ byggs av build:demo) och då felaktigt länkar dokument till GH
+ * Pages → 404. Tiern avgörs av firma-config (hostname-default + /settings).
+ */
+export function isDemoTier(): boolean {
+  return loadFirmaConfig().tier === "demo";
+}
+
 export function saveFirmaConfig(cfg: FirmaConfig): void {
   if (typeof window === "undefined") return;
   localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg));
