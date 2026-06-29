@@ -14,8 +14,8 @@
 import { useState } from "react";
 import { DecimalInput } from "@/components/ui/decimal-input";
 import { Modal } from "@/components/ui/modal";
+import { Money } from "@/components/ui/money";
 import { trpc } from "@/lib/client/trpc";
-import { formatCurrency } from "@/lib/client/utils";
 import type { PaymentMethod } from "@/lib/shared/schemas/enums";
 import type { MatterId } from "@/lib/shared/schemas/ids";
 
@@ -33,12 +33,14 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 function Row({ label, ore, dim }: { label: string; ore: number; dim?: boolean }) {
   return (
     <div className={`flex justify-between text-sm ${dim ? "text-amber-700" : "text-gray-700"}`}>
-      <span>{label}</span><span className="font-mono">{formatCurrency(ore)}</span>
+      {/* Beloppen lagras netto (exkl moms); <Money basis="net"> visar dem på samma
+          momsbasis som resten av panelen och följer den globala incl/excl-växlingen (#841). */}
+      <span>{label}</span><Money ore={ore} basis="net" className="font-mono" />
     </div>
   );
 }
 
-/** Förhandsvisning av uppdelningen (netto, exkl moms). */
+/** Förhandsvisning av uppdelningen — följer den globala momsväxlingen (#841). */
 function SplitPreview({ data, payerLabel }: { data: SplitData; payerLabel: string }) {
   return (
     <div className="rounded border border-gray-200 bg-gray-50 px-3 py-2 space-y-1">
@@ -46,7 +48,7 @@ function SplitPreview({ data, payerLabel }: { data: SplitData; payerLabel: strin
       <Row label="Klientens del" ore={data.clientOre} />
       <Row label={payerLabel} ore={data.payerOre} />
       {data.firmLossOre > 0 && <Row label="Byrån bär (prutning)" ore={data.firmLossOre} dim />}
-      <p className="text-[11px] text-gray-400 pt-1">Belopp exkl. moms — moms läggs på fakturorna.</p>
+      <p className="text-[11px] text-gray-400 pt-1">Klicka på ett belopp för att växla inkl./exkl. moms.</p>
     </div>
   );
 }
