@@ -183,3 +183,13 @@ echo "[build-demo] Klar. Output: $ROOT/out/"
 echo "  • App: $(find "$ROOT/out" -name '*.html' | wc -l | tr -d ' ') HTML-filer"
 echo "  • Data: $(grep -c '"' "$ROOT/out/manifest.json" 2>/dev/null || echo 0) entiteter i manifest"
 echo "  • Binärer: $(find "$ROOT/out/documents/content" -type f 2>/dev/null | wc -l | tr -d ' ') PDF/DOCX"
+
+# Auto-heal den lokala self-hosted-stacken (#847): `next build` återskapar out/
+# med ett NYTT inode → Docker Desktops bind-mount (../../out) blir då inaktuell
+# tills containern startas om, och appen 404:ar efter login. Om web-containern
+# kör (bara lokalt; i CI finns den inte → no-op) startar vi om den så mounten
+# pekar på den nybyggda out/ igen. Idempotent + icke-fatal.
+if command -v docker >/dev/null 2>&1 && docker ps --format '{{.Names}}' 2>/dev/null | grep -q '^ava-selfhosted-local-web-1$'; then
+  echo "[build-demo] Startar om lokala web-containern (bind-mount-refresh efter out/-ombygge)…"
+  docker compose -p ava-selfhosted-local -f "$ROOT/tooling/docker/docker-compose.selfhosted-local.yml" restart web >/dev/null 2>&1 || true
+fi
