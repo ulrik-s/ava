@@ -696,9 +696,12 @@ export const billingRunRouter = router({
       const currentRateOre = await currentArvodeRateOre(ctx.repos, ctx.orgId, matter);
       const baseMinutes = coverageBaseMinutes(matter.paymentMethod, billableMinutes);
       const totalOre = Math.round((baseMinutes / 60) * currentRateOre);
-      // Utlägg (netto) bokas på betalaren i settlement-flödet (coverageInvoiceLines)
-      // → måste med i förhandsvisningen (#849), annars syns bara timarvodet.
-      const expensesOre = expenseNetOre(work);
+      // Utlägg bokas på betalaren i settlement-flödet (coverageInvoiceLines) →
+      // måste med i förhandsvisningen (#849). Både netto OCH brutto returneras:
+      // utläggen har BLANDADE momssatser (6/12/25 %), så bruttot kan inte räknas
+      // ur nettot med en platt sats — då blir totalen fel (#850).
+      const expensesNetOre = expenseNetOre(work);
+      const expensesGrossOre = expenseGrossOre(work);
       const split = computeCoverageSplit({
         method: matter.paymentMethod,
         totalOre,
@@ -707,7 +710,7 @@ export const billingRunRouter = router({
         ...(input.insurerPrutningOre != null ? { insurerPrutningOre: input.insurerPrutningOre } : {}),
         ...rattsskyddCoverage(matter, work.timeEntries, currentRateOre),
       });
-      return { ...split, totalOre, expensesOre, currentRateOre, billableMinutes };
+      return { ...split, totalOre, expensesNetOre, expensesGrossOre, currentRateOre, billableMinutes };
     }),
 
   setVerdict: orgProcedure

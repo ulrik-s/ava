@@ -416,19 +416,26 @@ describe("billingRun.coverageSplit — prutning/självrisk på aktuellt timarvod
     expect(r.totalOre).toBe(162600);
   });
 
-  it("returnerar utlägg (netto) separat så de syns i settlement-dialogen (#849)", async () => {
+  it("returnerar utläggens netto OCH brutto exakt vid BLANDADE momssatser (#849/#850)", async () => {
+    // Speglar Carlsson: 7920+22400 @25 % + 1745 @6 %. Netto 32065; brutto =
+    // 9900+28000+1850 = 39750 (≠ 32065×1.25=40081 → platt sats vore fel).
     const ds = new DemoDataStore({
       organizations: [{ id: "org-1", name: "X" }],
       matters: [{ id: "m-1", organizationId: "org-1", matterNumber: "2026-0001", title: "T", status: "ACTIVE", responsibleLawyerId: "u-1", paymentMethod: "RATTSSKYDD", clientShareBips: 2000, createdAt: new Date() }],
       users: [{ id: "u-1", organizationId: "org-1", email: "a@x", name: "Anna", role: "ADMIN", hourlyRate: 300000 }],
       timeEntries: [{ id: "te-1", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date(), minutes: 120, description: "M", hourlyRate: 200000, billable: true }],
-      expenses: [{ id: "ex-1", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date(), amount: 90000, description: "Ansökningsavgift", billable: true, vatRate: 0, vatIncluded: false, kind: "EXPENSE" }],
+      expenses: [
+        { id: "ex-1", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date(), amount: 7920, description: "Kopiering", billable: true, vatRate: 2500, vatIncluded: false, kind: "EXPENSE" },
+        { id: "ex-2", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date(), amount: 22400, description: "Översättning", billable: true, vatRate: 2500, vatIncluded: false, kind: "EXPENSE" },
+        { id: "ex-3", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date(), amount: 1745, description: "Taxi", billable: true, vatRate: 600, vatIncluded: false, kind: "EXPENSE" },
+      ],
     }, async () => {});
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const c = appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: PRINCIPAL }) as any);
     const r = await c.billingRun.coverageSplit({ matterId: "m-1" });
     expect(r.totalOre).toBe(600000); // arvode 2h × 3000 kr
-    expect(r.expensesOre).toBe(90000); // utlägg netto — med i förhandsvisningen
+    expect(r.expensesNetOre).toBe(32065);
+    expect(r.expensesGrossOre).toBe(39750); // exakt per sats — INTE 40081 (platt 25 %)
   });
 
   it("KR inskickad (rader frysta) → utläggen räknas ändå (Carlsson-regression, #849)", async () => {
@@ -438,7 +445,7 @@ describe("billingRun.coverageSplit — prutning/självrisk på aktuellt timarvod
     const { caller } = makeCaller({ workMinutes: 120, expenseOre: 90000, paymentMethod: "RATTSHJALP" });
     await caller.billingRun.createKostnadsrakning({ matterId: "m-1" }); // fryser tid + utlägg
     const r = await caller.billingRun.coverageSplit({ matterId: "m-1" });
-    expect(r.expensesOre).toBe(90000); // frysta utlägg syns fortfarande
+    expect(r.expensesNetOre).toBe(90000); // frysta utlägg syns fortfarande
   });
 });
 
