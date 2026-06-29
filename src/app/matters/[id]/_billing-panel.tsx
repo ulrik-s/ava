@@ -21,6 +21,7 @@ import { EntityLink } from "@/lib/client/demo/entity-link";
 import { hasGeneratedDoc, openGeneratedDoc } from "@/lib/client/demo/generated-doc-cache";
 import { useMatterInvariants } from "@/lib/client/diagnostics/use-matter-invariants";
 import { isDemoTier } from "@/lib/client/firma/firma-config";
+import { generateFakturaDoc } from "@/lib/client/kostnadsrakning/generate-faktura-doc";
 import { generateKrDoc } from "@/lib/client/kostnadsrakning/generate-kr-doc";
 import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
@@ -428,13 +429,25 @@ export function BillingPanel({ matterId, matter }: Props) {
  *  debiteras ALLTID klienten → skapas automatiskt som en separat klientfaktura
  *  när den saknas. Self-gating — null för icke-rättshjälpsärenden. */
 function RadgivningBanner({ matterId, matter, onRecorded }: { matterId: MatterId; matter: MatterContext; onRecorded: () => void }) {
-  const create = trpc.invoice.createRadgivning.useMutation({ onSuccess: onRecorded });
+  const register = trpc.document.register.useMutation();
+  const utils = trpc.useUtils();
+  const meta = useBillingMeta(matter);
   const fired = useRef(false);
   const isRattshjalp = matter.paymentMethod === "RATTSHJALP";
   const registered = !!matter.radgivningBetaldAt;
   // Rådgivnings-fakturan är den enda STANDARD-fakturan på ärendet → hämta den
   // för status + länk (den skapas som utkast, inte "fakturerad" automatiskt).
   const radgivningInv = trpc.invoice.list.useQuery({ matterId, invoiceType: "STANDARD" }).data?.[0];
+  const create = trpc.invoice.createRadgivning.useMutation({
+    onSuccess: async (res) => {
+      // Stäng luckan (#845): ingen faktura utan dokument — generera faktura-PDF:en
+      // direkt (samma väg som övriga klientfakturor) så den syns + går att öppna.
+      try {
+        await generateFakturaDoc({ invoice: (res as { invoice: Parameters<typeof generateFakturaDoc>[0]["invoice"] }).invoice, matterId, meta, register, utils });
+      } catch (e) { console.warn("[rådgivning] fakturadokument misslyckades:", e); }
+      onRecorded();
+    },
+  });
   useEffect(() => {
     // Auto-skapa en gång när den saknas (#839): rådgivningstimmen är obligatorisk
     // i rättshjälp, så användaren ska inte behöva trycka på en knapp. Alltid
