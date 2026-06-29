@@ -203,6 +203,16 @@ describe("BillingPanel — kostnadsräknings-kort (#828)", () => {
     expect(openGeneratedDocFn).not.toHaveBeenCalled();
     await waitFor(() => expect(openDocumentFn).toHaveBeenCalled());
   });
+
+  it("KOSTNADSRAKNING-raden i runs-listan länkar till KR-dokumentet (#843)", async () => {
+    // FAKTURERAD → inget aktivt KR-kort; länken ska finnas på själva raden.
+    runsData = { runs: [{ id: "r9", type: "KOSTNADSRAKNING", status: "SENT", kostnadsrakningStatus: "FAKTURERAD", recipient: "DOMSTOL", amountOre: 50_000, createdAt: "2026-03-01" }] };
+    documentListData = { documents: [{ id: "doc-9", fileName: "kostnadsrakning.docx", documentType: "Kostnadsräkning", storagePath: "documents/content/doc-9.html", createdAt: "2026-03-01" }] };
+    hasDoc = false;
+    render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={verdictMatter} />);
+    fireEvent.click(screen.getByRole("button", { name: "Kostnadsräkning" }));
+    await waitFor(() => expect(openDocumentFn).toHaveBeenCalled());
+  });
 });
 
 describe("BillingPanel — Skapa-faktura-menyn (flödesmodellen)", () => {

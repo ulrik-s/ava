@@ -72,14 +72,11 @@ interface KrDocInfo { id: DocumentId; fileName: string; storagePath: string | nu
 
 type DocumentListOutput = inferRouterOutputs<AppRouter>["document"]["list"];
 
-function findKrDocument(matterId: MatterId, run: BillingRunRow): KrDocInfo | null {
-  const docs: DocumentListOutput | undefined = trpc.document.list.useQuery({ matterId, folderId: null, pageSize: 100 }).data;
-  const list = docs?.documents ?? [];
+/** Väljer KR-dokumentet närmast en körning i tid (pure — ingen hook, så den kan
+ *  anropas per rad i listan). Vanligtvis 1 KR-dokument per ärende i MVP. */
+function pickKrDoc(list: DocumentListOutput["documents"], run: BillingRunRow): KrDocInfo | null {
   const kostn = list.filter((d) => d.documentType === "Kostnadsräkning");
   if (kostn.length === 0) return null;
-  // Senaste KR-dokumentet skapat innan/samtidigt med billing-run:n —
-  // räcker för MVP (vanligtvis 1 pending KR per matter). Vid framtida
-  // refactor: lagra documentId direkt på BillingRun-row.
   const runTs = new Date(run.createdAt).getTime();
   const sorted = [...kostn].sort((a, b) => {
     const at = a.createdAt ? new Date(a.createdAt).getTime() : 0;
@@ -88,6 +85,11 @@ function findKrDocument(matterId: MatterId, run: BillingRunRow): KrDocInfo | nul
   });
   const d = sorted[0];
   return d ? { id: d.id, fileName: d.fileName, storagePath: d.storagePath ?? null } : null;
+}
+
+function findKrDocument(matterId: MatterId, run: BillingRunRow): KrDocInfo | null {
+  const docs: DocumentListOutput | undefined = trpc.document.list.useQuery({ matterId, folderId: null, pageSize: 100 }).data;
+  return pickKrDoc(docs?.documents ?? [], run);
 }
 
 /**
@@ -400,7 +402,7 @@ export function BillingPanel({ matterId, matter }: Props) {
         onOverklaga={() => appeal.mutate({ billingRunId: activeKr.id })}
         onSkapaFaktura={() => matter.paymentMethod === "RATTSHJALP" ? setShowSettle(true) : setVerdictRunId(activeKr.id)} />}
       {beslutRunId && <RecordBeslutDialog billingRunId={beslutRunId} onClose={() => setBeslutRunId(null)} onDone={refetch} />}
-      <RunsList rows={rows} loading={runs.isLoading} />
+      <RunsList matterId={matterId} rows={rows} loading={runs.isLoading} />
       <BillingDialogs matterId={matterId} matter={matter} rows={rows}
         dialog={dialog} setDialog={setDialog}
         verdictRunId={verdictRunId} setVerdictRunId={setVerdictRunId}
@@ -620,7 +622,11 @@ function BillingActions({ actions, onPick }: { actions: readonly BillingAction[]
   );
 }
 
-function RunsList({ rows, loading }: { rows: BillingRunRow[]; loading: boolean }) {
+function RunsList({ matterId, rows, loading }: { matterId: MatterId; rows: BillingRunRow[]; loading: boolean }) {
+  // Dokumentlistan hämtas en gång → KOSTNADSRAKNING-raden kan länka till sitt
+  // KR-dokument (#843). utils.client krävs för openKrDoc:s server-hämtning.
+  const docs = trpc.document.list.useQuery({ matterId, folderId: null, pageSize: 100 }).data?.documents ?? [];
+  const utils = trpc.useUtils();
   if (loading) return <p className="px-6 py-3 text-sm text-gray-500">Laddar…</p>;
   if (rows.length === 0) return <p className="px-6 py-3 text-sm text-gray-500">Inga billing-runs ännu.</p>;
   return (
@@ -630,13 +636,19 @@ function RunsList({ rows, loading }: { rows: BillingRunRow[]; loading: boolean }
           <tr><th className="text-left py-1">Typ</th><th className="text-left">Mottagare</th><th className="text-left">Status</th><th className="text-right">Belopp</th><th></th></tr>
         </thead>
         <tbody className="divide-y divide-gray-100">
-          {rows.map((r) => (
+          {rows.map((r) => {
+            const krDoc = r.type === "KOSTNADSRAKNING" ? pickKrDoc(docs, r) : null;
+            return (
             <tr key={r.id}>
               <td className="py-2 text-sm">{BILLING_RUN_TYPE_LABELS[r.type as keyof typeof BILLING_RUN_TYPE_LABELS] ?? r.type}</td>
               <td className="text-sm text-gray-600">{r.recipient}</td>
               <td className="text-sm">{BILLING_RUN_STATUS_LABELS[r.status as keyof typeof BILLING_RUN_STATUS_LABELS] ?? r.status}</td>
               <td className="text-right text-sm font-mono"><Money ore={r.amountOre} basis="gross" /></td>
-              <td className="text-right">
+              <td className="text-right space-x-2 whitespace-nowrap">
+                {krDoc && (
+                  <button type="button" onClick={() => void openKrDoc(krDoc, utils.client)}
+                    className="text-xs text-blue-600 hover:underline">Kostnadsräkning</button>
+                )}
                 {r.invoiceId && (
                   // EntityLink (inte Next-Link) — runtime-skapade UUIDs finns
                   // inte i generateStaticParams. Nuvarande 404.html är en
@@ -650,7 +662,8 @@ function RunsList({ rows, loading }: { rows: BillingRunRow[]; loading: boolean }
                 )}
               </td>
             </tr>
-          ))}
+            );
+          })}
         </tbody>
       </table>
     </div>

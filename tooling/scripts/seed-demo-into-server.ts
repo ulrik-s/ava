@@ -37,6 +37,7 @@ import { createIdTranslator, translateSeed } from "../demo-generator/id-translat
 import { populate } from "../demo-generator/populate";
 import { populateBilling } from "../demo-generator/populate-billing";
 import { populateDocuments } from "../demo-generator/populate-documents";
+import { populateInvoiceDocs } from "../demo-generator/populate-invoice-docs";
 import { populateKostnadsrakningDocs } from "../demo-generator/populate-kostnadsrakning-docs";
 import { populateUnbilledTime } from "../demo-generator/populate-unbilled-time";
 import { buildSeed } from "./seed-data";
@@ -128,6 +129,12 @@ async function seedKostnadsrakningDocs(caller: Parameters<typeof populateKostnad
   return populateKostnadsrakningDocs(caller, contentSink() ?? undefined, () => uuidv7());
 }
 
+/** Faktura-dokument per slutfaktura + rådgivningsfaktura (#843) → de syns i
+ *  ärendets dokumentlista lokalt. uuid-id (default `invdoc-<id>` är ej uuid). */
+async function seedInvoiceDocs(caller: Parameters<typeof populateInvoiceDocs>[0]): Promise<number> {
+  return populateInvoiceDocs(caller, contentSink() ?? undefined, () => uuidv7());
+}
+
 async function seedDocuments(
   caller: Parameters<typeof populateDocuments>[0],
   seed: Parameters<typeof populateDocuments>[1],
@@ -177,7 +184,8 @@ async function main(): Promise<void> {
 
     const documents = await seedDocuments(caller, seed);
     const kostnadsrakningDocs = await seedKostnadsrakningDocs(caller);
-    console.log("✓ demo-data seedad i server-first (org", ORG, "):", { ...core, billing, unbilled, documents, kostnadsrakningDocs });
+    const invoiceDocs = await seedInvoiceDocs(caller);
+    console.log("✓ demo-data seedad i server-first (org", ORG, "):", { ...core, billing, unbilled, documents, kostnadsrakningDocs, invoiceDocs });
     console.log(`  login: ${LOGIN_LAWYER_EMAIL} + ${LOGIN_ADMIN_EMAIL} äger nu data (+ idag-tidpost)`);
     console.log(CONTENT_DIR ? `  dokument-bytes → ${CONTENT_DIR}` : "  (dokument hoppade — sätt AVA_CONTENT_HOST_DIR)");
   } finally {

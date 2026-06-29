@@ -48,15 +48,23 @@ Datum: ${new Date(inv.invoiceDate).toLocaleDateString("sv-SE")}</p>
 </table></body></html>`;
 }
 
-export async function populateInvoiceDocs(caller: GeneratorCaller, sink?: BinarySink): Promise<number> {
+/** Dokument-id för en faktura. Default = läsbar `invdoc-<id>` (in-memory demo +
+ *  GH Pages). Server-first (Postgres uuid-kolumn) skickar in en uuid-generator. */
+export type InvoiceDocIdFn = (invoiceId: string) => string;
+
+/** Fakturatyper som får ett genererat dokument: slutfakturor + rådgivnings-
+ *  fakturan (STANDARD) så den syns i ärendets dokumentlista (#843). */
+const DOC_INVOICE_TYPES = new Set(["FINAL", "STANDARD"]);
+
+export async function populateInvoiceDocs(caller: GeneratorCaller, sink?: BinarySink, idFor?: InvoiceDocIdFn): Promise<number> {
   const c = caller as Any;
   const invoices: Any[] = await c.invoice.list({});
   let count = 0;
   for (const summary of invoices) {
-    if (summary.invoiceType !== "FINAL") continue;
+    if (!DOC_INVOICE_TYPES.has(summary.invoiceType)) continue;
     const inv = await c.invoice.getById({ id: summary.id });
     const html = renderInvoiceHtml(inv);
-    const id = `invdoc-${inv.id}`;
+    const id = idFor ? idFor(inv.id) : `invdoc-${inv.id}`;
     const storagePath = `documents/content/${id}.html`;
     const bytes = new TextEncoder().encode(html);
     const size = sink ? sink(storagePath, bytes) : bytes.byteLength;
