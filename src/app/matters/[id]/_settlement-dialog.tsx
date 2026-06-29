@@ -24,6 +24,8 @@ interface SplitData {
   payerOre: number;
   firmLossOre: number;
   totalOre: number;
+  /** Utlägg (netto) — bokas på betalaren tillsammans med dess arvodesdel (#849). */
+  expensesOre: number;
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -45,8 +47,10 @@ function SplitPreview({ data, payerLabel }: { data: SplitData; payerLabel: strin
   return (
     <div className="rounded border border-gray-200 bg-gray-50 px-3 py-2 space-y-1">
       <Row label="Upparbetat (aktuellt timarvode)" ore={data.totalOre} />
+      {data.expensesOre > 0 && <Row label="Utlägg" ore={data.expensesOre} />}
       <Row label="Klientens del" ore={data.clientOre} />
-      <Row label={payerLabel} ore={data.payerOre} />
+      {/* Betalaren står för sin arvodesdel + utläggen (coverageInvoiceLines, #849). */}
+      <Row label={payerLabel} ore={data.payerOre + data.expensesOre} />
       {data.firmLossOre > 0 && <Row label="Byrån bär (prutning)" ore={data.firmLossOre} dim />}
       <p className="text-[11px] text-gray-400 pt-1">Klicka på ett belopp för att växla inkl./exkl. moms.</p>
     </div>

@@ -689,19 +689,22 @@ export const billingRunRouter = router({
       const matter = await ctx.repos.matters.getByIdInOrg(input.matterId, ctx.orgId);
       if (!matter) throw new TRPCError({ code: "NOT_FOUND", message: "Ärendet finns inte." });
       const { billableMinutes } = await ctx.repos.timeEntries.coverageUsageForMatter(input.matterId);
-      const entries = await ctx.repos.timeEntries.listUnfrozenForMatter(input.matterId);
+      const work = await fetchUnfrozenWork(ctx.repos, input.matterId);
       const currentRateOre = await currentArvodeRateOre(ctx.repos, ctx.orgId, matter);
       const baseMinutes = coverageBaseMinutes(matter.paymentMethod, billableMinutes);
       const totalOre = Math.round((baseMinutes / 60) * currentRateOre);
+      // Utlägg (netto) bokas på betalaren i settlement-flödet (coverageInvoiceLines)
+      // → måste med i förhandsvisningen (#849), annars syns bara timarvodet.
+      const expensesOre = expenseNetOre(work);
       const split = computeCoverageSplit({
         method: matter.paymentMethod,
         totalOre,
         clientShareBips: matter.clientShareBips ?? 0,
         ...(input.awardedOre != null ? { awardedOre: input.awardedOre } : {}),
         ...(input.insurerPrutningOre != null ? { insurerPrutningOre: input.insurerPrutningOre } : {}),
-        ...rattsskyddCoverage(matter, entries, currentRateOre),
+        ...rattsskyddCoverage(matter, work.timeEntries, currentRateOre),
       });
-      return { ...split, totalOre, currentRateOre, billableMinutes };
+      return { ...split, totalOre, expensesOre, currentRateOre, billableMinutes };
     }),
 
   setVerdict: orgProcedure
