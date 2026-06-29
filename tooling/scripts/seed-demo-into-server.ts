@@ -29,18 +29,19 @@ import { createPostgresDb } from "@/lib/server/db/client";
 import { serverFirstEventLog } from "@/lib/server/http/server-context";
 import { createDbChangeLogRecorder, enableChangeLogOnAll } from "@/lib/server/repositories/change-log-recorder";
 import { buildDrizzleRepositories } from "@/lib/server/repositories/drizzle-repositories";
-import type { Repositories } from "@/lib/server/repositories/repositories";
 import { appRouter } from "@/lib/server/routers/_app";
 import { asId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
+import type { GeneratorCaller } from "../demo-generator/backend-target";
+import { createHttpCaller, mintToken } from "../demo-generator/http-target";
 import { createIdTranslator, translateSeed } from "../demo-generator/id-translator";
-import { populate } from "../demo-generator/populate";
+import { bootstrapOrgUsers, populate } from "../demo-generator/populate";
 import { populateBilling } from "../demo-generator/populate-billing";
 import { populateDocuments } from "../demo-generator/populate-documents";
 import { populateInvoiceDocs } from "../demo-generator/populate-invoice-docs";
 import { populateKostnadsrakningDocs } from "../demo-generator/populate-kostnadsrakning-docs";
 import { populateUnbilledTime } from "../demo-generator/populate-unbilled-time";
-import { buildSeed } from "./seed-data";
+import { buildSeed, type SeedDataset } from "./seed-data";
 
 const DB_URL = process.env.AVA_DATABASE_URL ?? "postgres://ava:ava@localhost:5433/ava_test";
 const ORG = asId<"OrganizationId">(process.env.AVA_ORGANIZATION_ID ?? "00000000-0000-0000-0000-000000000001");
@@ -48,6 +49,14 @@ const ORG = asId<"OrganizationId">(process.env.AVA_ORGANIZATION_ID ?? "00000000-
 // dit skrivs dokument-bytes så serverns GitContentStore kan läsa dem. Saknas
 // den → dokument-metadata hoppas (bytes har ingenstans att ta vägen).
 const CONTENT_DIR = process.env.AVA_CONTENT_HOST_DIR;
+
+/** HTTP-läge (#846): driv den BULK-seedade datan via serverns riktiga
+ *  /api/trpc (transport + oauth2-proxy + Bearer-JWT-auth + routrar), inte bara
+ *  in-process. Org+users bootstrappas ändå in-process (OIDC/assertAdmin). */
+const VIA_HTTP = process.env.AVA_SEED_VIA_HTTP === "1";
+const WEB_ORIGIN = process.env.AVA_WEB_ORIGIN ?? "http://localhost:8080";
+const KC_BASE = process.env.OIDC_KC_HOSTNAME ?? "http://localhost:8089";
+const OIDC_CLIENT_SECRET = process.env.AVA_OIDC_CLIENT_SECRET ?? "ava-test-secret";
 
 /** KC-realm:ens allowlistade login-emails (realm-ava.json). */
 const LOGIN_ADMIN_EMAIL = "admin@ava.test";
@@ -76,7 +85,9 @@ function remapLoginUsers(users: Row[]): { adminId: string | undefined; lawyerId:
  * dagsvy ("Idag") blir annars tom. Tasks/kalender landar redan på idag via
  * seedens offset-logik, så bara tid behöver kompletteras.
  */
-async function addTodayTimeEntries(repos: Repositories, timeEntries: Row[], matters: Row[], ids: { adminId: string | undefined; lawyerId: string | undefined }): Promise<void> {
+async function addTodayTimeEntries(caller: GeneratorCaller, timeEntries: Row[], matters: Row[], ids: { adminId: string | undefined; lawyerId: string | undefined }): Promise<void> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const c = caller as any;
   const tes = timeEntries;
   // Föredra ett PRIVAT-ärende: det är alltid i ARBETE-fasen (fakturerbart), så
   // "idag"-tiden blir inte ofakturerat arbete på ett redan slutreglerat ärende
@@ -87,17 +98,11 @@ async function addTodayTimeEntries(repos: Repositories, timeEntries: Row[], matt
     const worked = tes.filter((t) => t.userId === userId).map((t) => String(t.matterId));
     const matterId = worked.find((id) => pmById.get(id) === "PRIVAT") ?? worked[0];
     if (!matterId) continue;
-    await repos.timeEntries.create({
-      id: asId<"TimeEntryId">(uuidv7()),
-      organizationId: ORG,
-      userId: asId<"UserId">(userId),
-      matterId: asId<"MatterId">(matterId),
-      date: new Date(),
-      minutes: 60,
-      description: "Löpande arbete (idag)",
-      billable: true,
-      hourlyRate: 220_000,
-    } as never);
+    // Via tRPC-API:t (#846) → funkar oavsett in-process/HTTP-caller.
+    await c.timeEntry.create({
+      id: uuidv7(), userId, matterId, date: new Date().toISOString(),
+      minutes: 60, description: "Löpande arbete (idag)", billable: true, hourlyRate: 220_000,
+    });
   }
 }
 
@@ -144,48 +149,66 @@ async function seedDocuments(
   return populateDocuments(caller, seed, sink);
 }
 
+type LoginIds = { adminId: string | undefined; lawyerId: string | undefined };
+
+/** Allt utom org+users (#846) — körs antingen in-process eller via HTTP-caller.
+ *  `skipOrgUsers` styr om populate hoppar org/users (HTTP: bootstrappade separat). */
+async function runRest(caller: GeneratorCaller, seed: SeedDataset, loginIds: LoginIds, skipOrgUsers: boolean): Promise<Record<string, unknown>> {
+  const core = await populate(caller, seed, { skipOrgUsers });
+  await addTodayTimeEntries(caller, seed.timeEntries as Row[], seed.matters as Row[], loginIds); // "idag"-tid för dashboarden
+  // Fakturering (#647/#736): ETT billing-run-flöde per ärende; unbilled = färsk
+  // upparbetad tid efter fakturering.
+  const billing = await populateBilling(caller, seed);
+  const unbilled = await populateUnbilledTime(caller, seed);
+  const documents = await seedDocuments(caller, seed);
+  const kostnadsrakningDocs = await seedKostnadsrakningDocs(caller);
+  const invoiceDocs = await seedInvoiceDocs(caller);
+  return { ...core, billing, unbilled, documents, kostnadsrakningDocs, invoiceDocs };
+}
+
+/** HTTP-läget (#846): org+users bootstrappas in-process (OIDC/assertAdmin kräver
+ *  att admin finns), sedan körs resten via serverns /api/trpc som admin@ava.test. */
+async function seedViaHttp(inProcess: GeneratorCaller, seed: SeedDataset, loginIds: LoginIds): Promise<Record<string, unknown>> {
+  const boot = await bootstrapOrgUsers(inProcess, seed);
+  const token = await mintToken({ kcBaseUrl: KC_BASE, realm: "ava", clientId: "ava", clientSecret: OIDC_CLIENT_SECRET, username: "admin", password: "admin" });
+  const httpCaller = createHttpCaller({ trpcUrl: `${WEB_ORIGIN}/api/trpc`, token });
+  const rest = await runRest(httpCaller, seed, loginIds, true);
+  console.log("  (bulk-data seedad via HTTP-API:t — transport + oauth2-proxy/Bearer + routrar)");
+  return { ...rest, organizations: boot.organizations, users: boot.users };
+}
+
+/** In-process ADMIN-principal (org-scopad mot ORG): återanvänd en allowlistad
+ *  admin om en finns, annars en generator-identitet. */
+function seedPrincipal(admin: { id: Principal["id"]; email: string; name: string } | undefined): Principal {
+  return {
+    id: admin?.id ?? asId<"UserId">("00000000-0000-0000-0000-0000000000a1"),
+    email: admin?.email ?? "generator@ava.local",
+    name: admin?.name ?? "Demo Generator",
+    role: "ADMIN",
+    organizationId: ORG,
+  };
+}
+
 async function main(): Promise<void> {
   const { db, close } = createPostgresDb(DB_URL);
   const repos = buildDrizzleRepositories(db);
   enableChangeLogOnAll(repos, createDbChangeLogRecorder(db)); // → allt pull-bart
   try {
-    // ADMIN-principal i serverns org. Återanvänd den allowlistade admin-användaren
-    // (seed-selfhosted-local) om den finns, annars en generator-identitet.
+    // Alltid byggd: fallback (in-process-läge) OCH HTTP-lägets org/user-bootstrap.
     const admin = (await repos.users.listByOrg(ORG)).find((u) => u.role === "ADMIN");
-    const principal: Principal = {
-      id: admin?.id ?? asId<"UserId">("00000000-0000-0000-0000-0000000000a1"),
-      email: admin?.email ?? "generator@ava.local",
-      name: admin?.name ?? "Demo Generator",
-      role: "ADMIN",
-      organizationId: ORG,
-    };
+    const principal = seedPrincipal(admin);
     const ctx = buildContext({ repos, eventLog: serverFirstEventLog, ports: noopPorts, principal });
-    const caller = appRouter.createCaller(ctx as never) as ReturnType<typeof appRouter.createCaller>;
+    const inProcess = appRouter.createCaller(ctx as never) as GeneratorCaller;
 
-    // Slug-seed → UUID:er (samma som demo-generatorn/prod, ADR 0003). Org-/user-
-    // raderna skapas också, men create-mutationerna org-scopar mot PRINCIPALENS
-    // org (ORG), så allt hamnar i serverns org oavsett seedens org-fält.
+    // Slug-seed → UUID:er (ADR 0003) + mappa admin/huvud-jurist till KC-login-emailen.
     const seed = translateSeed(buildSeed({}), createIdTranslator());
-
-    // Mappa demons admin + huvud-jurist till KC-login-emailen → login äger data.
     const loginIds = remapLoginUsers(seed.users as Row[]);
 
-    // Kärnentiteter (org/users/contacts/matters/matter-contacts/tid/utlägg/
-    // kalender/uppgifter/mallar/jävskontroller).
-    const core = await populate(caller, seed);
-    await addTodayTimeEntries(repos, seed.timeEntries as Row[], seed.matters as Row[], loginIds); // "idag"-tid för dashboarden
+    const result = VIA_HTTP
+      ? await seedViaHttp(inProcess, seed, loginIds)
+      : await runRest(inProcess, seed, loginIds, false);
 
-    // Fakturering (#647/#736): billing-id:na är deterministiska uuid:er
-    // (demo-billing-ids). populateBilling driver nu ETT billing-run-flöde per
-    // ärende (aconto/slutfaktura/kostnadsräkning + livscykel); unbilled = färsk
-    // upparbetad tid efter fakturering.
-    const billing = await populateBilling(caller, seed);
-    const unbilled = await populateUnbilledTime(caller, seed);
-
-    const documents = await seedDocuments(caller, seed);
-    const kostnadsrakningDocs = await seedKostnadsrakningDocs(caller);
-    const invoiceDocs = await seedInvoiceDocs(caller);
-    console.log("✓ demo-data seedad i server-first (org", ORG, "):", { ...core, billing, unbilled, documents, kostnadsrakningDocs, invoiceDocs });
+    console.log("✓ demo-data seedad i server-first (org", ORG, "):", result);
     console.log(`  login: ${LOGIN_LAWYER_EMAIL} + ${LOGIN_ADMIN_EMAIL} äger nu data (+ idag-tidpost)`);
     console.log(CONTENT_DIR ? `  dokument-bytes → ${CONTENT_DIR}` : "  (dokument hoppade — sätt AVA_CONTENT_HOST_DIR)");
   } finally {

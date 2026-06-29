@@ -55,8 +55,11 @@ if [[ "${1:-}" == "--demo" ]]; then
   # fylls för den inloggade). Separata allowlist-users skulle bli dubbletter.
   echo "▸ [5/6] Seedar org (login-users kommer från demodatan)…"
   SEED_ORG_ONLY=1 AVA_DATABASE_URL="$DB_URL" AVA_ORGANIZATION_ID="$AVA_ORGANIZATION_ID" bun tooling/scripts/seed-selfhosted-local.ts
-  echo "▸ [5b] Fyller byrån med demodata (ärenden/kontakter/tid/uppgifter…)…"
-  AVA_DATABASE_URL="$DB_URL" AVA_ORGANIZATION_ID="$AVA_ORGANIZATION_ID" bun tooling/scripts/seed-demo-into-server.ts
+  # Bulk-datan seedas via serverns HTTP-API (#846) — testar transport + oauth2-
+  # proxy/Bearer + routrar, inte bara in-process. Override: AVA_SEED_VIA_HTTP=0.
+  echo "▸ [5b] Fyller byrån med demodata via HTTP-API:t (ärenden/kontakter/tid/uppgifter…)…"
+  AVA_SEED_VIA_HTTP="${AVA_SEED_VIA_HTTP:-1}" OIDC_KC_HOSTNAME="$OIDC_KC_HOSTNAME" AVA_WEB_ORIGIN="http://localhost:${AVA_WEB_PORT}" \
+    AVA_DATABASE_URL="$DB_URL" AVA_ORGANIZATION_ID="$AVA_ORGANIZATION_ID" bun tooling/scripts/seed-demo-into-server.ts
 else
   echo "▸ [5/6] Seedar org + allowlistade användare…"
   AVA_DATABASE_URL="$DB_URL" AVA_ORGANIZATION_ID="$AVA_ORGANIZATION_ID" bun tooling/scripts/seed-selfhosted-local.ts

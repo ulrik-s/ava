@@ -141,7 +141,28 @@ async function runConflictChecks(c: AnyCaller, rows: Row[]): Promise<void> {
   }
 }
 
-export async function populate(caller: GeneratorCaller, seed: SeedDataset): Promise<PopulateResult> {
+export interface PopulateOptions {
+  /** Hoppa över org + users (de bootstrappas separat). HTTP-seedningen (#846)
+   *  kräver att admin-användaren redan finns (OIDC + assertAdmin), så org/users
+   *  skapas in-process först; resten körs via HTTP-API:t. */
+  skipOrgUsers?: boolean;
+}
+
+/**
+ * Skapa BARA org + users (#846) — bootstrappen HTTP-seedningen kör in-process
+ * innan den växlar till HTTP-API:t (admin-användaren måste finnas för att en
+ * OIDC-token ska resolva + `user.create` är assertAdmin-gated). Returnerar antal.
+ */
+export async function bootstrapOrgUsers(caller: GeneratorCaller, seed: SeedDataset): Promise<{ organizations: number; users: number }> {
+  const c = caller as AnyCaller;
+  const organizations = pick(seed, "organizations");
+  const users = pick(seed, "users");
+  await createOrganizations(c, organizations);
+  await createUsers(c, users);
+  return { organizations: organizations.length, users: users.length };
+}
+
+export async function populate(caller: GeneratorCaller, seed: SeedDataset, opts: PopulateOptions = {}): Promise<PopulateResult> {
   const c = caller as AnyCaller;
   const organizations = pick(seed, "organizations");
   const users = pick(seed, "users");
@@ -155,8 +176,10 @@ export async function populate(caller: GeneratorCaller, seed: SeedDataset): Prom
   const documentTemplates = pick(seed, "documentTemplates");
   const conflictChecks = pick(seed, "conflictChecks");
 
-  await createOrganizations(c, organizations); // rot — måste finnas före org-scopat
-  await createUsers(c, users); // kräver ADMIN-principal (generatorns principal)
+  if (!opts.skipOrgUsers) {
+    await createOrganizations(c, organizations); // rot — måste finnas före org-scopat
+    await createUsers(c, users); // kräver ADMIN-principal (generatorns principal)
+  }
   await createContacts(c, contacts);
   await createMatters(c, matters); // före matter-contacts + allt matterId-refererande
   await createMatterContacts(c, matterContacts);
