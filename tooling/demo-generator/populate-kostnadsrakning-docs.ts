@@ -17,6 +17,7 @@
  * sätter i prod, så `findKrDocument` i billing-panelen hittar den).
  */
 
+import { radgivningTextRad } from "@/lib/shared/rattshjalp";
 import type { GeneratorCaller } from "./backend-target";
 import type { BinarySink } from "./populate-documents";
 
@@ -35,6 +36,11 @@ function renderKrHtml(run: Any): string {
   const matter = run.matter ?? {};
   const amountOre = run.proposedAmountOre ?? run.amountOre ?? 0;
   const date = run.createdAt ? new Date(run.createdAt) : new Date();
+  // Rättshjälp (#383/#848): rådgivningstimmen redovisas som textrad (utan belopp)
+  // — mötet ägt rum men timmen ingår inte i KR-totalen (faktureras klienten separat).
+  const radgivningRad = matter.paymentMethod === "RATTSHJALP"
+    ? `<p style="color:#555;font-size:13px;margin-top:1rem">${escapeHtml(radgivningTextRad())}</p>`
+    : "";
   return `<!DOCTYPE html><html lang="sv"><head><meta charset="utf-8"><title>Kostnadsräkning ${escapeHtml(matter.matterNumber)}</title></head>
 <body style="font-family:system-ui,sans-serif;max-width:720px;margin:2rem auto;color:#111">
 <h1 style="margin-bottom:0">Kostnadsräkning</h1>
@@ -43,10 +49,11 @@ Ställd till: Domstol<br>
 Datum: ${date.toLocaleDateString("sv-SE")}</p>
 <table cellpadding="6" cellspacing="0" style="border-collapse:collapse;width:100%;font-size:14px">
 <tbody>
-<tr><td>Begärt belopp (offentligt försvar)</td><td style="text-align:right">${fmtKr(amountOre)}</td></tr>
+<tr><td>Begärt belopp</td><td style="text-align:right">${fmtKr(amountOre)}</td></tr>
 </tbody>
 <tfoot><tr style="border-top:2px solid #333"><td style="font-weight:bold">Summa att fastställa av rätten</td><td style="text-align:right;font-weight:bold">${fmtKr(amountOre)}</td></tr></tfoot>
 </table>
+${radgivningRad}
 <p style="color:#777;font-size:13px;margin-top:1.5rem">Kostnadsräkningen är inlämnad och väntar på rättens prövning (dom).</p>
 </body></html>`;
 }
