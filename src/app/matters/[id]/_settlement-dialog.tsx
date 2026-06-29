@@ -14,8 +14,10 @@
 import { useState } from "react";
 import { DecimalInput } from "@/components/ui/decimal-input";
 import { Modal } from "@/components/ui/modal";
-import { Money } from "@/components/ui/money";
 import { trpc } from "@/lib/client/trpc";
+import { formatCurrency } from "@/lib/client/utils";
+import { useVatDisplay } from "@/lib/client/vat/vat-display-context";
+import { arvodeInclVatOre } from "@/lib/shared/invoice-calc";
 import type { PaymentMethod } from "@/lib/shared/schemas/enums";
 import type { MatterId } from "@/lib/shared/schemas/ids";
 
@@ -24,34 +26,43 @@ interface SplitData {
   payerOre: number;
   firmLossOre: number;
   totalOre: number;
-  /** Utlägg (netto) — bokas på betalaren tillsammans med dess arvodesdel (#849). */
-  expensesOre: number;
+  /** Utlägg netto + brutto — separat eftersom utlägg har BLANDADE momssatser och
+   *  bruttot inte kan räknas ur nettot med en platt 25 %-sats (#850). */
+  expensesNetOre: number;
+  expensesGrossOre: number;
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return <div><label className="block text-xs text-gray-500 mb-1">{label}</label>{children}</div>;
 }
 
-function Row({ label, ore, dim }: { label: string; ore: number; dim?: boolean }) {
+/** Rad som visar EXAKT netto/brutto (ej platt sats) och följer den globala
+ *  incl/excl-växlingen (#841/#850) — krävs då utlägg kan ha olika momssatser. */
+function Row({ label, netOre, grossOre, dim }: { label: string; netOre: number; grossOre: number; dim?: boolean }) {
+  const { mode, toggle } = useVatDisplay();
+  const shown = mode === "incl" ? grossOre : netOre;
   return (
     <div className={`flex justify-between text-sm ${dim ? "text-amber-700" : "text-gray-700"}`}>
-      {/* Beloppen lagras netto (exkl moms); <Money basis="net"> visar dem på samma
-          momsbasis som resten av panelen och följer den globala incl/excl-växlingen (#841). */}
-      <span>{label}</span><Money ore={ore} basis="net" className="font-mono" />
+      <span>{label}</span>
+      <button type="button" onClick={toggle} title={`Visar ${mode === "incl" ? "inkl." : "exkl."} moms — klicka för att växla`}
+        className="font-mono underline decoration-dotted decoration-gray-300 underline-offset-2 hover:decoration-gray-500">
+        {formatCurrency(shown)}
+      </button>
     </div>
   );
 }
 
-/** Förhandsvisning av uppdelningen — följer den globala momsväxlingen (#841). */
+/** Förhandsvisning av uppdelningen — följer den globala momsväxlingen (#841).
+ *  Arvodesrader har enhetlig 25 % (arvodeInclVatOre); utläggen exakt brutto (#850). */
 function SplitPreview({ data, payerLabel }: { data: SplitData; payerLabel: string }) {
   return (
     <div className="rounded border border-gray-200 bg-gray-50 px-3 py-2 space-y-1">
-      <Row label="Upparbetat (aktuellt timarvode)" ore={data.totalOre} />
-      {data.expensesOre > 0 && <Row label="Utlägg" ore={data.expensesOre} />}
-      <Row label="Klientens del" ore={data.clientOre} />
+      <Row label="Upparbetat (aktuellt timarvode)" netOre={data.totalOre} grossOre={arvodeInclVatOre(data.totalOre)} />
+      {data.expensesNetOre > 0 && <Row label="Utlägg" netOre={data.expensesNetOre} grossOre={data.expensesGrossOre} />}
+      <Row label="Klientens del" netOre={data.clientOre} grossOre={arvodeInclVatOre(data.clientOre)} />
       {/* Betalaren står för sin arvodesdel + utläggen (coverageInvoiceLines, #849). */}
-      <Row label={payerLabel} ore={data.payerOre + data.expensesOre} />
-      {data.firmLossOre > 0 && <Row label="Byrån bär (prutning)" ore={data.firmLossOre} dim />}
+      <Row label={payerLabel} netOre={data.payerOre + data.expensesNetOre} grossOre={arvodeInclVatOre(data.payerOre) + data.expensesGrossOre} />
+      {data.firmLossOre > 0 && <Row label="Byrån bär (prutning)" netOre={data.firmLossOre} grossOre={arvodeInclVatOre(data.firmLossOre)} dim />}
       <p className="text-[11px] text-gray-400 pt-1">Klicka på ett belopp för att växla inkl./exkl. moms.</p>
     </div>
   );
