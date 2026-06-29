@@ -24,7 +24,7 @@ let runsData: { runs: BillingRunRow[] } = { runs: [] };
 let runsLoading = false;
 interface ProposalData { workValueOre: number; priorAccontoSumOre: number; timeEntries: Array<{ id: string; description: string; minutes: number; hourlyRate: number; billable: boolean; valueOre: number }>; expenses: Array<{ id: string; description: string; amount: number; billable: boolean }> }
 let proposalData: ProposalData = { workValueOre: 0, priorAccontoSumOre: 0, timeEntries: [], expenses: [] };
-interface InvoiceRow { id: string; amount: number; status: string; payments: Array<{ amount: number }> }
+interface InvoiceRow { id: string; amount: number; status: string; payments: Array<{ amount: number }>; invoiceNumber?: string }
 let invoiceListData: InvoiceRow[] = [];
 const refetch = vi.fn();
 const radgivningMutate = vi.fn();
@@ -254,9 +254,12 @@ describe("BillingPanel — rådgivnings-banner (rättshjälp)", () => {
     expect(radgivningMutate).toHaveBeenCalledWith(expect.objectContaining({ matterId: "m1" }));
   });
 
-  it("RATTSHJALP med registrerad rådgivning → visar bock, auto-skapar inte", () => {
+  it("RATTSHJALP med registrerad rådgivning → länk till fakturan + status, auto-skapar inte (#841)", () => {
+    invoiceListData = [{ id: "inv-rad", invoiceNumber: "F-2026-0012", status: "DRAFT", amount: 162600, payments: [] }];
     render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={{ ...baseMatter, paymentMethod: "RATTSHJALP", radgivningBetaldAt: "2026-01-05" }} />);
-    expect(screen.getByText(/Fakturerad/)).toBeInTheDocument();
+    // Inte "Fakturerad" — fakturan är ett utkast; visa numret + faktisk status + länk.
+    expect(screen.getByText("F-2026-0012")).toBeInTheDocument();
+    expect(screen.getByText(/Utkast/)).toBeInTheDocument();
     expect(radgivningMutate).not.toHaveBeenCalled();
   });
 
