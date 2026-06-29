@@ -19,17 +19,11 @@
  */
 
 import type { ModalState } from "@/components/documents/external-edit-modal";
-import { loadFirmaConfig } from "@/lib/client/firma/firma-config";
+import { isDemoTier } from "@/lib/client/firma/firma-config";
 import { openViaHelper } from "@/lib/client/helper/use-helper";
 import type { HelperOpenRequest } from "@/lib/shared/helper/protocol";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { asId } from "@/lib/shared/schemas/ids";
-
-/** Runtime-tier-beslut (ej bygg-tids-NEXT_PUBLIC_DEMO_BUILD, som är sant även i
- *  den lokala self-hosted-builden → länkade fel till GH Pages). Se #651. */
-function isDemoTier(): boolean {
-  return loadFirmaConfig().tier === "demo";
-}
 
 interface Doc {
   id: string;
