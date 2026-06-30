@@ -43,6 +43,12 @@ const mockPrisma = {
   invoiceAccontoDeduction: {
     create: vi.fn(),
   },
+  billingRun: {
+    create: vi.fn(),
+    findMany: vi.fn(),
+    findFirst: vi.fn(),
+    update: vi.fn(),
+  },
   payment: {
     findMany: vi.fn(),
     create: vi.fn(),
@@ -98,20 +104,26 @@ describe("invoice.createRadgivning", () => {
   beforeEach(() => {
     mockPrisma.invoice.findFirst.mockResolvedValue(null); // nextInvoiceNumber → seq 1
     mockPrisma.invoice.create.mockImplementation(async (a: { data: Record<string, unknown> }) => ({ id: "rad-1", ...a.data }));
+    mockPrisma.billingRun.create.mockImplementation(async (a: { data: Record<string, unknown> }) => ({ id: "run-1", ...a.data }));
     mockPrisma.matter.update.mockResolvedValue({});
   });
 
-  it("skapar en separat STANDARD-klientfaktura för rådgivningstimmen + märker ärendet", async () => {
+  it("skapar ett ACCONTO (DRAFT) + billing-run för rådgivningstimmen + märker ärendet (#851)", async () => {
     mockPrisma.matter.findFirst.mockResolvedValue({ id: "m1", organizationId: "org-a", radgivningBetaldAt: null });
 
     const res = await makeCaller().createRadgivning({ matterId: "m1" });
 
-    // 1 tim × timkostnadsnorm (F-skatt default) = 162 600 öre.
+    // 1 tim × timkostnadsnorm (F-skatt default) = 162 600 netto; brutto = 203 250 (inkl 25 %).
     expect(res.beloppExclVatOre).toBe(162_600);
     const data = mockPrisma.invoice.create.mock.calls[0]![0].data;
-    expect(data.invoiceType).toBe("STANDARD");
-    expect(data.amount).toBe(162_600);
-    expect(data.status).toBe("DRAFT");
+    expect(data.invoiceType).toBe("ACCONTO");
+    expect(data.amount).toBe(203_250); // brutto (inkl moms) — som ett aconto
+    expect(data.status).toBe("DRAFT"); // DRAFT → dras ALDRIG av (additivt)
+    // Billing-run så det syns i ärendets faktura-lista.
+    const run = mockPrisma.billingRun.create.mock.calls[0]![0].data;
+    expect(run.type).toBe("ACCONTO");
+    expect(run.recipient).toBe("KLIENT");
+    expect(run.status).toBe("DRAFT");
     // Ärendet märks som registrerat.
     expect(mockPrisma.matter.update).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: "m1" }, data: expect.objectContaining({ radgivningBetaldAt: expect.any(Date) }) }),
