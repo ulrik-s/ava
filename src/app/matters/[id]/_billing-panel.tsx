@@ -30,7 +30,7 @@ import { availableActions, currentPhase, type BillingAction, type BillingPhase, 
 import { availableKrActions, KOSTNADSRAKNING_STATUS_LABELS, type KostnadsrakningState, type KostnadsrakningStatus } from "@/lib/shared/kostnadsrakning-flow";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { computeRadgivningsavgift } from "@/lib/shared/rattshjalp";
-import { BILLING_RUN_TYPE_LABELS, BILLING_RUN_STATUS_LABELS, type BillingRunRecipient, type BillingRunStatus, type BillingRunType, type PaymentMethod } from "@/lib/shared/schemas/enums";
+import { BILLING_RUN_TYPE_LABELS, BILLING_RUN_STATUS_LABELS, INVOICE_STATUS_LABELS, type BillingRunRecipient, type BillingRunStatus, type BillingRunType, type PaymentMethod } from "@/lib/shared/schemas/enums";
 import type { BillingRunId, DocumentId, InvoiceId, MatterId } from "@/lib/shared/schemas/ids";
 import { BillingDialog, type BillingMeta } from "./_billing-dialog";
 import { KostnadsrakningModal } from "./_kostnadsrakning-modal";
@@ -68,6 +68,15 @@ interface BillingRunRow {
   kostnadsrakningStatus?: KostnadsrakningStatus | null;
   awardedOre?: number | null;
   beslutSlutgiltigt?: boolean | null;
+}
+
+/** Fristående klientfaktura (utan billing-run) som visas i faktura-listan (#853). */
+interface StandaloneInvoiceRow { id: InvoiceId; invoiceNumber?: string | null; status: string; amount: number }
+
+/** Fakturor som INTE är kopplade till en billing-run (t.ex. rådgivningstimmen). */
+function standaloneInvoices(invoices: StandaloneInvoiceRow[] | undefined, rows: BillingRunRow[]): StandaloneInvoiceRow[] {
+  const runInvoiceIds = new Set(rows.map((r) => String(r.invoiceId)).filter((id) => id !== "null" && id !== "undefined"));
+  return (invoices ?? []).filter((i) => !runInvoiceIds.has(String(i.id)));
 }
 
 interface KrDocInfo { id: DocumentId; fileName: string; storagePath: string | null }
@@ -369,6 +378,9 @@ export function BillingPanel({ matterId, matter }: Props) {
   const [verdictRunId, setVerdictRunId] = useState<BillingRunId | null>(null);
   const [beslutRunId, setBeslutRunId] = useState<BillingRunId | null>(null);
   const rows = (runs.data?.runs ?? []) as BillingRunRow[];
+  // Fristående klientfakturor (#853) — t.ex. rådgivningstimmen (STANDARD, ingen
+  // billing-run). Visas i faktura-listan utöver billing-runs.
+  const standalone = standaloneInvoices(trpc.invoice.list.useQuery({ matterId }).data as StandaloneInvoiceRow[] | undefined, rows);
   // Aktiv kostnadsräkning (#828): KR vars livscykel inte är klar (≠ FAKTURERAD).
   const activeKr = rows.find((r) => r.type === "KOSTNADSRAKNING" && !!r.kostnadsrakningStatus && r.kostnadsrakningStatus !== "FAKTURERAD");
   // Flödesmodellen (#816) styr menyn + dom-bannern: fasen härleds ur runs+matter
@@ -406,7 +418,7 @@ export function BillingPanel({ matterId, matter }: Props) {
         onOverklaga={() => appeal.mutate({ billingRunId: activeKr.id })}
         onSkapaFaktura={() => matter.paymentMethod === "RATTSHJALP" ? setShowSettle(true) : setVerdictRunId(activeKr.id)} />}
       {beslutRunId && <RecordBeslutDialog billingRunId={beslutRunId} onClose={() => setBeslutRunId(null)} onDone={refetch} />}
-      <RunsList matterId={matterId} rows={rows} loading={runs.isLoading} />
+      <RunsList matterId={matterId} rows={rows} standalone={standalone} loading={runs.isLoading} />
       <BillingDialogs matterId={matterId} matter={matter} rows={rows}
         dialog={dialog} setDialog={setDialog}
         verdictRunId={verdictRunId} setVerdictRunId={setVerdictRunId}
@@ -619,13 +631,13 @@ function BillingActions({ actions, onPick }: { actions: readonly BillingAction[]
   );
 }
 
-function RunsList({ matterId, rows, loading }: { matterId: MatterId; rows: BillingRunRow[]; loading: boolean }) {
+function RunsList({ matterId, rows, standalone, loading }: { matterId: MatterId; rows: BillingRunRow[]; standalone: StandaloneInvoiceRow[]; loading: boolean }) {
   // Dokumentlistan hämtas en gång → KOSTNADSRAKNING-raden kan länka till sitt
   // KR-dokument (#843). utils.client krävs för openKrDoc:s server-hämtning.
   const docs = trpc.document.list.useQuery({ matterId, folderId: null, pageSize: 100 }).data?.documents ?? [];
   const utils = trpc.useUtils();
   if (loading) return <p className="px-6 py-3 text-sm text-gray-500">Laddar…</p>;
-  if (rows.length === 0) return <p className="px-6 py-3 text-sm text-gray-500">Inga billing-runs ännu.</p>;
+  if (rows.length === 0 && standalone.length === 0) return <p className="px-6 py-3 text-sm text-gray-500">Inga fakturor ännu.</p>;
   return (
     <div className="px-6 py-2">
       <table className="min-w-full text-sm">
@@ -661,6 +673,20 @@ function RunsList({ matterId, rows, loading }: { matterId: MatterId; rows: Billi
             </tr>
             );
           })}
+          {/* Fristående klientfakturor utan billing-run (#853), t.ex. rådgivningstimmen. */}
+          {standalone.map((inv) => (
+            <tr key={inv.id}>
+              <td className="py-2 text-sm">Faktura</td>
+              <td className="text-sm text-gray-600">KLIENT</td>
+              <td className="text-sm">{INVOICE_STATUS_LABELS[inv.status as keyof typeof INVOICE_STATUS_LABELS] ?? inv.status}</td>
+              <td className="text-right text-sm font-mono"><Money ore={inv.amount} basis="gross" /></td>
+              <td className="text-right whitespace-nowrap">
+                <EntityLink route="invoices" id={inv.id} className="text-xs text-blue-600 hover:underline">
+                  {inv.invoiceNumber ?? "Faktura"}
+                </EntityLink>
+              </td>
+            </tr>
+          ))}
         </tbody>
       </table>
     </div>

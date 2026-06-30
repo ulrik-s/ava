@@ -115,7 +115,7 @@ describe("BillingPanel — översikt", () => {
   it("renderar rubrik och tomtext utan runs", () => {
     render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={baseMatter} />);
     expect(screen.getByText("Fakturering")).toBeInTheDocument();
-    expect(screen.getByText("Inga billing-runs ännu.")).toBeInTheDocument();
+    expect(screen.getByText("Inga fakturor ännu.")).toBeInTheDocument();
   });
 
   it("visar laddtext medan runs hämtas", () => {
@@ -132,6 +132,14 @@ describe("BillingPanel — översikt", () => {
     };
     render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={baseMatter} />);
     expect(screen.getByText("F-1")).toBeInTheDocument();
+  });
+
+  it("fristående klientfaktura (rådgivning, ingen run) visas i faktura-listan (#853)", () => {
+    runsData = { runs: [] };
+    invoiceListData = [{ id: "inv-rad", invoiceNumber: "F-2026-0012", status: "SENT", amount: 203_250, payments: [] }];
+    render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={baseMatter} />);
+    expect(screen.getByText("F-2026-0012")).toBeInTheDocument(); // länk i listan
+    expect(screen.getByText(/Skickad/)).toBeInTheDocument(); // status-etikett
   });
 });
 
