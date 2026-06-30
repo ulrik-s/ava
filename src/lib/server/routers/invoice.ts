@@ -123,8 +123,7 @@ export const invoiceRouter = router({
    */
   createRadgivning: orgProcedure
     .input(z.object({ matterId: matterIdSchema, hasFTax: z.boolean().optional() }))
-    // Migrerad till repository-sömmen (ADR 0020): matters + invoices + billing-runs
-    // via typade repos i transaktionen.
+    // Migrerad till repository-sömmen (ADR 0020): matters + invoices via typade repos.
     .mutation(({ ctx, input }) =>
       ctx.repos.transaction(async (repos) => {
         const matter = await repos.matters.getByIdInOrg(input.matterId, ctx.orgId);
@@ -132,24 +131,22 @@ export const invoiceRouter = router({
         if ((matter as { radgivningBetaldAt?: unknown }).radgivningBetaldAt) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Rådgivningstimmen är redan registrerad för detta ärende." });
         }
+        // Rådgivningstimmen är en RIKTIG klientfaktura (STANDARD), inte ett aconto
+        // (#853): ärendets första händelse, betalas direkt av klienten → skapas
+        // SKICKAD. Brutto (inkl moms) som alla klientfakturor. Dras ALDRIG av.
         const netOre = computeRadgivningsavgift({ ...omitUndefined({ hasFTax: input.hasFTax }) }).beloppExclVatOre;
         const grossOre = arvodeInclVatOre(netOre);
         const vatOre = grossOre - netOre;
         const invoiceNumber = await repos.invoices.nextInvoiceNumber(ctx.orgId);
-        const notes = "Rådgivningstimme enligt rättshjälpstaxan (1 tim).";
         const invoice = await repos.invoices.create({
           matterId: input.matterId, invoiceNumber, ocrReference: ocrFromInvoiceNumber(invoiceNumber),
           amount: grossOre, vatOre, vatBreakdown: [{ kind: "arvode", vatRate: 2500, netOre, vatOre }],
-          invoiceType: "ACCONTO", status: "DRAFT", invoiceDate: new Date(), dueDate: null, notes,
+          invoiceType: "STANDARD", status: "SENT", invoiceDate: new Date(), dueDate: null,
+          notes: "Rådgivningstimme enligt rättshjälpstaxan (1 tim).",
         } satisfies Partial<Invoice>);
-        const run = await repos.billingRuns.create({
-          matterId: input.matterId, type: "ACCONTO", recipient: "KLIENT", status: "DRAFT",
-          workValueOreAtRun: grossOre, proposedAmountOre: grossOre, amountOre: grossOre,
-          invoiceId: invoice.id, deductedBillingRunIds: [], periodTo: new Date(), notes,
-        });
         await repos.matters.update(input.matterId, { radgivningBetaldAt: new Date() } satisfies Partial<Matter>);
         await emit.invoiceCreated(ctx, invoice);
-        return { invoice, run, beloppExclVatOre: netOre };
+        return { invoice, beloppExclVatOre: netOre };
       }),
     ),
 
