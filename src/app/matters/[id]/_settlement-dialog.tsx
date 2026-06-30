@@ -11,12 +11,15 @@
  * Skapar klient- + betalar-faktura och bokar ev. byrå-förlust.
  */
 
+import type { inferRouterOutputs } from "@trpc/server";
 import { useState } from "react";
 import { DecimalInput } from "@/components/ui/decimal-input";
 import { Modal } from "@/components/ui/modal";
+import { generateFakturaFromTemplate, type DocUtils, type FakturaDocMeta, type RegisterMut } from "@/lib/client/kostnadsrakning/generate-faktura-doc";
 import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
 import { useVatDisplay } from "@/lib/client/vat/vat-display-context";
+import type { AppRouter } from "@/lib/server/routers/_app";
 import { arvodeInclVatOre } from "@/lib/shared/invoice-calc";
 import type { PaymentMethod } from "@/lib/shared/schemas/enums";
 import type { MatterId } from "@/lib/shared/schemas/ids";
@@ -68,6 +71,34 @@ function SplitPreview({ data, payerLabel }: { data: SplitData; payerLabel: strin
   );
 }
 
+type SettleResult = inferRouterOutputs<AppRouter>["billingRun"]["settleCoverage"];
+type MatterDetail = inferRouterOutputs<AppRouter>["matter"]["getById"];
+type OrgSettings = inferRouterOutputs<AppRouter>["organization"]["getSettings"];
+
+/** Generera faktura-dokument (template-motorn) för klient- + betalar-fakturan
+ *  efter slutreglering (#852). Utbrutet så dialogen håller sig ≤8 i komplexitet. */
+function settlementMeta(matter: MatterDetail | undefined, org: OrgSettings | undefined): FakturaDocMeta {
+  const meta: FakturaDocMeta = { matterNumber: "", matterTitle: "" };
+  if (matter) { meta.matterNumber = matter.matterNumber; meta.matterTitle = matter.title; }
+  if (org?.name) meta.organizationName = org.name;
+  if (org?.orgNumber) meta.organizationOrgNumber = org.orgNumber;
+  return meta;
+}
+
+function clientNameOf(matter: MatterDetail | undefined): string {
+  return matter?.contacts?.find((c) => c.role === "KLIENT")?.contact?.name ?? "Klient";
+}
+
+async function generateSettlementDocs(res: SettleResult, opts: {
+  matterId: MatterId; matter: MatterDetail | undefined; org: OrgSettings | undefined;
+  payerLabel: string; register: RegisterMut; utils: DocUtils;
+}): Promise<void> {
+  const { matterId, matter, org, payerLabel, register, utils } = opts;
+  const meta = settlementMeta(matter, org);
+  await generateFakturaFromTemplate({ invoice: res.clientInvoice, matterId, recipient: clientNameOf(matter), meta, register, utils });
+  await generateFakturaFromTemplate({ invoice: res.payerInvoice, matterId, recipient: payerLabel, meta, register, utils });
+}
+
 /** Härleder alla metod-beroende texter/argument (håller komponenten ≤8). */
 function settlementConfig(isRattshjalp: boolean, matterId: MatterId, ore: number | undefined) {
   const payerRecipient = isRattshjalp ? ("RATTSHJALPSMYNDIGHET" as const) : ("FORSAKRING" as const);
@@ -89,8 +120,16 @@ export function SettlementDialog({ matterId, paymentMethod, onClose }: { matterI
   const cfg = settlementConfig(paymentMethod === "RATTSHJALP", matterId, ore);
   const split = trpc.billingRun.coverageSplit.useQuery(cfg.splitArg);
   const utils = trpc.useUtils();
+  const matterQ = trpc.matter.getById.useQuery({ id: matterId });
+  const orgQ = trpc.organization.getSettings.useQuery();
+  const register = trpc.document.register.useMutation();
   const settle = trpc.billingRun.settleCoverage.useMutation({
-    onSuccess: () => {
+    onSuccess: async (res) => {
+      // Generera faktura-DOKUMENT (via template-motorn, #852) för båda fakturorna
+      // → syns i fil-listan + länkas från faktura-objektet. Best-effort.
+      try {
+        await generateSettlementDocs(res, { matterId, matter: matterQ.data, org: orgQ.data, payerLabel: cfg.payerLabel, register, utils });
+      } catch (e) { console.warn("[settlement] fakturadokument misslyckades:", e); }
       void utils.billingRun.list.invalidate({ matterId });
       void utils.invoice.list.invalidate();
       onClose();
