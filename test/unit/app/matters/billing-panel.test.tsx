@@ -26,6 +26,7 @@ interface ProposalData { workValueOre: number; priorAccontoSumOre: number; timeE
 let proposalData: ProposalData = { workValueOre: 0, priorAccontoSumOre: 0, timeEntries: [], expenses: [] };
 interface InvoiceRow { id: string; amount: number; status: string; payments: Array<{ amount: number }>; invoiceNumber?: string }
 let invoiceListData: InvoiceRow[] = [];
+let coverageSplitData: { clientOre: number } | undefined = undefined;
 const refetch = vi.fn();
 const radgivningMutate = vi.fn();
 const krMutate = vi.fn();
@@ -49,6 +50,7 @@ vi.mock("@/lib/client/trpc", () => ({
       createKostnadsrakning: { useMutation: () => ({ mutate: krMutate, isPending: false }) },
       appealKostnadsrakning: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       recordKostnadsrakningBeslut: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      coverageSplit: { useQuery: () => ({ data: coverageSplitData }) },
     },
     organization: {
       getSettings: { useQuery: () => ({ data: { name: "Byrå AB", orgNumber: "556677-8899", address: "Storgatan 1" } }) },
@@ -108,6 +110,7 @@ beforeEach(() => {
   documentListData = { documents: [] };
   proposalData = { workValueOre: 0, priorAccontoSumOre: 0, timeEntries: [], expenses: [] };
   invoiceListData = [];
+  coverageSplitData = undefined;
   hasDoc = false;
 });
 
@@ -276,8 +279,20 @@ describe("BillingPanel — rådgivnings-banner (rättshjälp)", () => {
     // Rådgivningen är nu ett ACCONTO som syns i faktura-listan (RunsList), inte
     // en länk i banderollen.
     render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={{ ...baseMatter, paymentMethod: "RATTSHJALP", radgivningBetaldAt: "2026-01-05" }} />);
-    expect(screen.getByText(/Registrerad/)).toBeInTheDocument();
+    expect(screen.getByText(/Fakturerad/)).toBeInTheDocument();
     expect(radgivningMutate).not.toHaveBeenCalled();
+  });
+
+  it("självrisk-aconto-hint visas när självrisken nått tröskeln (#854)", () => {
+    coverageSplitData = { clientOre: 160_000 }; // > 150 000 (tröskel)
+    render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={{ ...baseMatter, paymentMethod: "RATTSHJALP", radgivningBetaldAt: "2026-01-05" }} />);
+    expect(screen.getByText(/Klientens självrisk har nått/)).toBeInTheDocument();
+  });
+
+  it("ingen hint under tröskeln", () => {
+    coverageSplitData = { clientOre: 100_000 }; // < 150 000
+    render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={{ ...baseMatter, paymentMethod: "RATTSHJALP", radgivningBetaldAt: "2026-01-05" }} />);
+    expect(screen.queryByText(/Klientens självrisk har nått/)).not.toBeInTheDocument();
   });
 
   it("icke-rättshjälp → ingen rådgivnings-banner", () => {

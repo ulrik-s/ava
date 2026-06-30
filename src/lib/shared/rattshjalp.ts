@@ -19,6 +19,14 @@ import { computeTimkostnadsnorm } from "@/lib/shared/brottmalstaxa";
 /** Rådgivning enligt rättshjälpslagen = 1 timme. */
 export const RADGIVNING_MINUTES = 60;
 
+/**
+ * Tröskel (öre) för klientens självrisk innan ett självrisk-aconto skickas (#854):
+ * när den ackumulerade självrisken nått hit flaggar panelen att det är dags att
+ * skicka ett aconto till klienten. Default 1500 kr.
+ * ponytail: konstant nu; flytta till byrå-inställning om byråer vill olika tröskel.
+ */
+export const SJALVRISK_ACCONTO_THRESHOLD_ORE = 150_000;
+
 export interface Radgivningsavgift {
   /** Antal minuter (alltid 60 — en rådgivningstimme). */
   minutes: number;
