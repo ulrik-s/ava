@@ -30,7 +30,7 @@ import { availableActions, currentPhase, type BillingAction, type BillingPhase, 
 import { availableKrActions, KOSTNADSRAKNING_STATUS_LABELS, type KostnadsrakningState, type KostnadsrakningStatus } from "@/lib/shared/kostnadsrakning-flow";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { computeRadgivningsavgift } from "@/lib/shared/rattshjalp";
-import { BILLING_RUN_TYPE_LABELS, BILLING_RUN_STATUS_LABELS, INVOICE_STATUS_LABELS, type BillingRunRecipient, type BillingRunStatus, type BillingRunType, type InvoiceStatus, type PaymentMethod } from "@/lib/shared/schemas/enums";
+import { BILLING_RUN_TYPE_LABELS, BILLING_RUN_STATUS_LABELS, type BillingRunRecipient, type BillingRunStatus, type BillingRunType, type PaymentMethod } from "@/lib/shared/schemas/enums";
 import type { BillingRunId, DocumentId, InvoiceId, MatterId } from "@/lib/shared/schemas/ids";
 import { BillingDialog, type BillingMeta } from "./_billing-dialog";
 import { KostnadsrakningModal } from "./_kostnadsrakning-modal";
@@ -435,9 +435,6 @@ function RadgivningBanner({ matterId, matter, onRecorded }: { matterId: MatterId
   const fired = useRef(false);
   const isRattshjalp = matter.paymentMethod === "RATTSHJALP";
   const registered = !!matter.radgivningBetaldAt;
-  // Rådgivnings-fakturan är den enda STANDARD-fakturan på ärendet → hämta den
-  // för status + länk (den skapas som utkast, inte "fakturerad" automatiskt).
-  const radgivningInv = trpc.invoice.list.useQuery({ matterId, invoiceType: "STANDARD" }).data?.[0];
   const create = trpc.invoice.createRadgivning.useMutation({
     onSuccess: async (res) => {
       // Stäng luckan (#845): ingen faktura utan dokument — generera faktura-PDF:en
@@ -465,28 +462,12 @@ function RadgivningBanner({ matterId, matter, onRecorded }: { matterId: MatterId
         <strong>Rådgivningstimme (rättshjälp)</strong> — klientens 1 tim enligt rättshjälpstaxan,{" "}
         <span className="font-mono">{formatCurrency(avgift.beloppExclVatOre)}</span> exkl moms, faktureras separat till klienten.
       </div>
-      <RadgivningStatus invoice={radgivningInv} pending={create.isPending} failed={!!create.error} />
+      {/* Rådgivningen är nu ett ACCONTO som syns i faktura-listan nedan (#851). */}
+      <span className="text-xs whitespace-nowrap text-blue-700">
+        {registered ? "✓ Registrerad (se aconto nedan)" : create.error ? "Kunde inte skapas" : "Skapas automatiskt…"}
+      </span>
     </div>
   );
-}
-
-/** Rådgivnings-fakturans status + länk (#841). Skapas som utkast → visa rätt
- *  status (inte "fakturerad") och länka till fakturan så den går att granska/skicka. */
-function RadgivningStatus({ invoice, pending, failed }: {
-  invoice?: { id: InvoiceId; invoiceNumber?: string | null | undefined; status: InvoiceStatus } | undefined;
-  pending: boolean; failed: boolean;
-}) {
-  if (invoice) {
-    return (
-      <span className="text-xs whitespace-nowrap">
-        <EntityLink route="invoices" id={invoice.id} className="text-blue-700 hover:underline">
-          {invoice.invoiceNumber ?? "Faktura"}
-        </EntityLink>{" "}
-        <span className="text-gray-500">({INVOICE_STATUS_LABELS[invoice.status]})</span>
-      </span>
-    );
-  }
-  return <span className="text-xs text-blue-700 whitespace-nowrap">{failed ? "Kunde inte skapas" : pending ? "Skapas…" : "Skapas automatiskt…"}</span>;
 }
 
 /**

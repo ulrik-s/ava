@@ -15,7 +15,7 @@
 
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { isPaymentPlanSettled } from "@/lib/shared/invoice-calc";
+import { arvodeInclVatOre, isPaymentPlanSettled } from "@/lib/shared/invoice-calc";
 import { canTransition, transitionErrorMessage } from "@/lib/shared/invoice-state-machine";
 import { ocrFromInvoiceNumber } from "@/lib/shared/ocr-reference";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
@@ -111,17 +111,20 @@ export const invoiceRouter = router({
 
   /** ACCONTO: advokaten anger belopp. Inga time entries/expenses kopplas. */
   /**
-   * RÅDGIVNING (#383, rättshjälp del A): registrera klientens betalda
-   * rådgivningstimme (1 tim enligt rättshjälpstaxan) som en SEPARAT klient-
-   * faktura (STANDARD mot KLIENT) + märk ärendet (`radgivningBetaldAt`) så
-   * domstolens kostnadsräkning visar text-raden. Timmen ingår ALDRIG i
-   * domstolens kostnadsräkning som debiterbar post. Idempotent: avvisar om
-   * redan registrerad.
+   * RÅDGIVNING (#383/#851, rättshjälp del A): klientens betalda rådgivningstimme
+   * (1 tim enligt rättshjälpstaxan) som en ACCONTO-klientfaktura + billing-run så
+   * den syns i ärendets faktura-lista. Märker `radgivningBetaldAt` så domstolens
+   * kostnadsräkning visar text-raden; timmen ingår ALDRIG i KR-totalen.
+   *
+   * Hålls i DRAFT MED FLIT: rådgivningstimmen är en ADDITIV klientkostnad utöver
+   * självrisken och ska ALDRIG dras av på en slutfaktura. Aconto-deduktionerna
+   * kräver status SENT (`listAccontoSent` / panelens deduktions-val), så ett
+   * DRAFT-aconto exkluderas automatiskt. Idempotent: avvisar om redan registrerad.
    */
   createRadgivning: orgProcedure
     .input(z.object({ matterId: matterIdSchema, hasFTax: z.boolean().optional() }))
-    // Migrerad till repository-sömmen (ADR 0020): matters + invoices via typade
-    // repos i transaktionen (rör inga ännu omigrerade entiteter).
+    // Migrerad till repository-sömmen (ADR 0020): matters + invoices + billing-runs
+    // via typade repos i transaktionen.
     .mutation(({ ctx, input }) =>
       ctx.repos.transaction(async (repos) => {
         const matter = await repos.matters.getByIdInOrg(input.matterId, ctx.orgId);
@@ -129,22 +132,24 @@ export const invoiceRouter = router({
         if ((matter as { radgivningBetaldAt?: unknown }).radgivningBetaldAt) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Rådgivningstimmen är redan registrerad för detta ärende." });
         }
-        const avgift = computeRadgivningsavgift({ ...omitUndefined({ hasFTax: input.hasFTax }) });
+        const netOre = computeRadgivningsavgift({ ...omitUndefined({ hasFTax: input.hasFTax }) }).beloppExclVatOre;
+        const grossOre = arvodeInclVatOre(netOre);
+        const vatOre = grossOre - netOre;
         const invoiceNumber = await repos.invoices.nextInvoiceNumber(ctx.orgId);
+        const notes = "Rådgivningstimme enligt rättshjälpstaxan (1 tim).";
         const invoice = await repos.invoices.create({
-          matterId: input.matterId,
-          invoiceNumber,
-          ocrReference: ocrFromInvoiceNumber(invoiceNumber),
-          amount: avgift.beloppExclVatOre,
-          invoiceType: "STANDARD",
-          status: "DRAFT",
-          invoiceDate: new Date(),
-          dueDate: null,
-          notes: "Rådgivningstimme enligt rättshjälpstaxan (1 tim).",
+          matterId: input.matterId, invoiceNumber, ocrReference: ocrFromInvoiceNumber(invoiceNumber),
+          amount: grossOre, vatOre, vatBreakdown: [{ kind: "arvode", vatRate: 2500, netOre, vatOre }],
+          invoiceType: "ACCONTO", status: "DRAFT", invoiceDate: new Date(), dueDate: null, notes,
         } satisfies Partial<Invoice>);
+        const run = await repos.billingRuns.create({
+          matterId: input.matterId, type: "ACCONTO", recipient: "KLIENT", status: "DRAFT",
+          workValueOreAtRun: grossOre, proposedAmountOre: grossOre, amountOre: grossOre,
+          invoiceId: invoice.id, deductedBillingRunIds: [], periodTo: new Date(), notes,
+        });
         await repos.matters.update(input.matterId, { radgivningBetaldAt: new Date() } satisfies Partial<Matter>);
         await emit.invoiceCreated(ctx, invoice);
-        return { invoice, beloppExclVatOre: avgift.beloppExclVatOre };
+        return { invoice, run, beloppExclVatOre: netOre };
       }),
     ),
 

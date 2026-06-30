@@ -264,12 +264,11 @@ describe("BillingPanel — rådgivnings-banner (rättshjälp)", () => {
     expect(radgivningMutate).toHaveBeenCalledWith(expect.objectContaining({ matterId: "m1" }));
   });
 
-  it("RATTSHJALP med registrerad rådgivning → länk till fakturan + status, auto-skapar inte (#841)", () => {
-    invoiceListData = [{ id: "inv-rad", invoiceNumber: "F-2026-0012", status: "DRAFT", amount: 162600, payments: [] }];
+  it("RATTSHJALP med registrerad rådgivning → visar registrerad, auto-skapar inte (#851)", () => {
+    // Rådgivningen är nu ett ACCONTO som syns i faktura-listan (RunsList), inte
+    // en länk i banderollen.
     render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={{ ...baseMatter, paymentMethod: "RATTSHJALP", radgivningBetaldAt: "2026-01-05" }} />);
-    // Inte "Fakturerad" — fakturan är ett utkast; visa numret + faktisk status + länk.
-    expect(screen.getByText("F-2026-0012")).toBeInTheDocument();
-    expect(screen.getByText(/Utkast/)).toBeInTheDocument();
+    expect(screen.getByText(/Registrerad/)).toBeInTheDocument();
     expect(radgivningMutate).not.toHaveBeenCalled();
   });
 

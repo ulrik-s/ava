@@ -52,16 +52,20 @@ Datum: ${new Date(inv.invoiceDate).toLocaleDateString("sv-SE")}</p>
  *  GH Pages). Server-first (Postgres uuid-kolumn) skickar in en uuid-generator. */
 export type InvoiceDocIdFn = (invoiceId: string) => string;
 
-/** Fakturatyper som får ett genererat dokument: slutfakturor + rådgivnings-
- *  fakturan (STANDARD) så den syns i ärendets dokumentlista (#843). */
-const DOC_INVOICE_TYPES = new Set(["FINAL", "STANDARD"]);
+/** Får ett genererat dokument: slutfakturor (FINAL) + rådgivnings-fakturan, som
+ *  nu är ett ACCONTO (#851) men ska synas i dokumentlistan (#843). Övriga aconton
+ *  (självrisk) genererar inte dokument. */
+function shouldGenerateDoc(summary: Any): boolean {
+  if (summary.invoiceType === "FINAL") return true;
+  return String(summary.notes ?? "").startsWith("Rådgivningstimme");
+}
 
 export async function populateInvoiceDocs(caller: GeneratorCaller, sink?: BinarySink, idFor?: InvoiceDocIdFn): Promise<number> {
   const c = caller as Any;
   const invoices: Any[] = await c.invoice.list({});
   let count = 0;
   for (const summary of invoices) {
-    if (!DOC_INVOICE_TYPES.has(summary.invoiceType)) continue;
+    if (!shouldGenerateDoc(summary)) continue;
     const inv = await c.invoice.getById({ id: summary.id });
     const html = renderInvoiceHtml(inv);
     const id = idFor ? idFor(inv.id) : `invdoc-${inv.id}`;
