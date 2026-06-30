@@ -29,7 +29,7 @@ import type { AppRouter } from "@/lib/server/routers/_app";
 import { availableActions, currentPhase, type BillingAction, type BillingPhase, type FlowMatter } from "@/lib/shared/billing-flow";
 import { availableKrActions, KOSTNADSRAKNING_STATUS_LABELS, type KostnadsrakningState, type KostnadsrakningStatus } from "@/lib/shared/kostnadsrakning-flow";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
-import { computeRadgivningsavgift } from "@/lib/shared/rattshjalp";
+import { computeRadgivningsavgift, SJALVRISK_ACCONTO_THRESHOLD_ORE } from "@/lib/shared/rattshjalp";
 import { BILLING_RUN_TYPE_LABELS, BILLING_RUN_STATUS_LABELS, INVOICE_STATUS_LABELS, type BillingRunRecipient, type BillingRunStatus, type BillingRunType, type PaymentMethod } from "@/lib/shared/schemas/enums";
 import type { BillingRunId, DocumentId, InvoiceId, MatterId } from "@/lib/shared/schemas/ids";
 import { BillingDialog, type BillingMeta } from "./_billing-dialog";
@@ -413,6 +413,7 @@ export function BillingPanel({ matterId, matter }: Props) {
       </div>
       <BillingSummary matterId={matterId} />
       <RadgivningBanner matterId={matterId} matter={matter} onRecorded={refetch} />
+      <SjalvriskAccontoHint matterId={matterId} matter={matter} rows={rows} />
       {activeKr && <KostnadsrakningCard matterId={matterId} run={activeKr}
         onRegistreraBeslut={() => setBeslutRunId(activeKr.id)}
         onOverklaga={() => appeal.mutate({ billingRunId: activeKr.id })}
@@ -474,10 +475,31 @@ function RadgivningBanner({ matterId, matter, onRecorded }: { matterId: MatterId
         <strong>Rådgivningstimme (rättshjälp)</strong> — klientens 1 tim enligt rättshjälpstaxan,{" "}
         <span className="font-mono">{formatCurrency(avgift.beloppExclVatOre)}</span> exkl moms, faktureras separat till klienten.
       </div>
-      {/* Rådgivningen är nu ett ACCONTO som syns i faktura-listan nedan (#851). */}
+      {/* Rådgivningen är en riktig faktura som syns i faktura-listan nedan (#853). */}
       <span className="text-xs whitespace-nowrap text-blue-700">
-        {registered ? "✓ Registrerad (se aconto nedan)" : create.error ? "Kunde inte skapas" : "Skapas automatiskt…"}
+        {registered ? "✓ Fakturerad (se faktura nedan)" : create.error ? "Kunde inte skapas" : "Skapas automatiskt…"}
       </span>
+    </div>
+  );
+}
+
+/**
+ * Självrisk-aconto-hint (#854): när klientens ackumulerade självrisk (rättshjälp)
+ * nått tröskeln flaggar vi att det är dags att skicka ett aconto. Acontot skapas
+ * via "+ Skapa faktura → Aconto till klient" (finns redan). Self-gating.
+ */
+function SjalvriskAccontoHint({ matterId, matter, rows }: { matterId: MatterId; matter: MatterContext; rows: BillingRunRow[] }) {
+  const isRattshjalp = matter.paymentMethod === "RATTSHJALP";
+  const split = trpc.billingRun.coverageSplit.useQuery({ matterId }, { enabled: isRattshjalp }).data;
+  if (!isRattshjalp || !split) return null;
+  const hasSjalvriskAconto = rows.some((r) => r.type === "ACCONTO" && r.recipient === "KLIENT");
+  if (hasSjalvriskAconto || split.clientOre < SJALVRISK_ACCONTO_THRESHOLD_ORE) return null;
+  return (
+    <div className="mx-6 mb-4 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+      Klientens självrisk har nått{" "}
+      <span className="font-mono font-semibold">{formatCurrency(split.clientOre)}</span>{" "}
+      (tröskel {formatCurrency(SJALVRISK_ACCONTO_THRESHOLD_ORE)}) — dags att skicka ett självrisk-aconto via
+      {" "}<strong>+ Skapa faktura → Aconto till klient</strong>.
     </div>
   );
 }

@@ -195,10 +195,9 @@ async function runKostnadsrakning(ctx: Ctx, matterId: string, withVerdict: boole
  */
 async function runRattshjalpBilling(ctx: Ctx, matterId: string, daysAgo: number, stage: "INSKICKAD" | "BESLUTAD"): Promise<void> {
   // Rådgivningstimmen (ärendets FÖRSTA händelse) är en riktig STANDARD-klient-
-  // faktura som skapas SKICKAD och betalas direkt (#853) — separat från KR:n.
-  const radg = await ctx.c.invoice.createRadgivning({ matterId });
-  await ctx.c.invoice.recordPayment({ invoiceId: radg.invoice.id, amount: radg.invoice.amount, paidAt: isoDaysAgo(daysAgo + 25), note: "Betald av klient" });
-  ctx.res.invoices++; ctx.res.payments++;
+  // faktura som skapas SKICKAD (#853) — separat från KR:n.
+  await ctx.c.invoice.createRadgivning({ matterId });
+  ctx.res.invoices++;
   await acconto(ctx, matterId, 3000, 150_000, daysAgo);
   const kr = await ctx.c.billingRun.createKostnadsrakning({ matterId, notes: "Kostnadsräkning till domstol (rättshjälp)" });
   ctx.res.kostnadsrakningPending++;
