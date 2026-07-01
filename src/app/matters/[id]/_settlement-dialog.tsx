@@ -15,7 +15,7 @@ import type { inferRouterOutputs } from "@trpc/server";
 import { useState } from "react";
 import { DecimalInput } from "@/components/ui/decimal-input";
 import { Modal } from "@/components/ui/modal";
-import { generateFakturaFromTemplate, type DocUtils, type FakturaDocMeta, type InvoiceSpecification, type RegisterMut } from "@/lib/client/kostnadsrakning/generate-faktura-doc";
+import { generateFakturaFromTemplate, type BreakdownRow, type DocUtils, type FakturaBreakdown, type FakturaDocMeta, type InvoiceSpecification, type RegisterMut } from "@/lib/client/kostnadsrakning/generate-faktura-doc";
 import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
 import { useVatDisplay } from "@/lib/client/vat/vat-display-context";
@@ -89,18 +89,45 @@ function clientNameOf(matter: MatterDetail | undefined): string {
   return matter?.contacts?.find((c) => c.role === "KLIENT")?.contact?.name ?? "Klient";
 }
 
+type Breakdown = SettleResult["breakdown"];
+
+const svd = (d: string | Date | null | undefined): string => (d ? new Date(d).toLocaleDateString("sv-SE") : "");
+
+/** Betalar-fakturans (domstol/försäkring) nedbrytning (#858): tids-/utläggsraderna
+ *  kommer ur `spec`; här bara AVDRAGEN — självrisk/rådgivning/prutning (belopps-
+ *  påverkande) + aconton som info-rader (avräknas på klientfakturan, ej här). */
+function payerBreakdown(b: Breakdown, payerLabel: string): FakturaBreakdown {
+  const rows: BreakdownRow[] = [{ label: "Klientens självrisk", amountOre: b.sjalvriskGrossOre, kind: "deduct" }];
+  if (b.radgivningGrossOre > 0) rows.push({ label: "Rådgivning (faktureras klienten)", amountOre: b.radgivningGrossOre, kind: "deduct" });
+  if (b.prutningGrossOre > 0) rows.push({ label: "Prutning (byrån bär)", amountOre: b.prutningGrossOre, kind: "deduct" });
+  for (const d of b.deductedAccontos) rows.push({ label: `Betalt via aconto — faktura ${d.invoiceNumber}${d.date ? ` (${svd(d.date)})` : ""}`, amountOre: d.amountOre, kind: "info" });
+  return { rows, totalLabel: `${payerLabel} — att betala (inkl moms)`, totalOre: b.payerPayableOre };
+}
+
+/** Klientfakturans nedbrytning (#858): självrisk-uträkningen + de avdragna
+ *  (betalda) aconton, som avräknas här → att betala. */
+function clientBreakdown(b: Breakdown, isRattshjalp: boolean): FakturaBreakdown {
+  const share = (b.clientShareBips / 100).toLocaleString("sv-SE", { maximumFractionDigits: 2 });
+  const label = isRattshjalp
+    ? `Självrisk (${share} % av upparbetat arvode ${formatCurrency(b.arvodeBaseNetOre)}, inkl moms)`
+    : "Klientens del / självrisk (inkl moms)";
+  const rows: BreakdownRow[] = [{ label, amountOre: b.sjalvriskGrossOre, kind: "add" }];
+  for (const d of b.deductedAccontos) rows.push({ label: `Avgår aconto — faktura ${d.invoiceNumber}${d.date ? ` (${svd(d.date)})` : ""}`, amountOre: d.amountOre, kind: "deduct" });
+  return { rows, totalLabel: "Att betala (inkl moms)", totalOre: b.clientPayableOre };
+}
+
 async function generateSettlementDocs(res: SettleResult, opts: {
   matterId: MatterId; matter: MatterDetail | undefined; org: OrgSettings | undefined;
-  payerLabel: string; register: RegisterMut; utils: DocUtils;
+  payerLabel: string; isRattshjalp: boolean; register: RegisterMut; utils: DocUtils;
   fetchSpec: (invoiceId: InvoiceId) => Promise<InvoiceSpecification>;
 }): Promise<void> {
-  const { matterId, matter, org, payerLabel, register, utils, fetchSpec } = opts;
+  const { matterId, matter, org, payerLabel, isRattshjalp, register, utils, fetchSpec } = opts;
   const meta = settlementMeta(matter, org);
-  // Fakturaspecifikation per faktura (#856): betalar-fakturan bär tids-/utläggs-
-  // raderna, klientfakturan de avdragna aconton.
-  const [clientSpec, payerSpec] = await Promise.all([fetchSpec(res.clientInvoice.id), fetchSpec(res.payerInvoice.id)]);
-  await generateFakturaFromTemplate({ invoice: res.clientInvoice, matterId, recipient: clientNameOf(matter), meta, register, utils, spec: clientSpec });
-  await generateFakturaFromTemplate({ invoice: res.payerInvoice, matterId, recipient: payerLabel, meta, register, utils, spec: payerSpec });
+  // Betalar-fakturan: tids-/utläggsspec (#856) + itemiserad nedbrytning (#858).
+  const payerSpec = await fetchSpec(res.payerInvoice.id);
+  await generateFakturaFromTemplate({ invoice: res.payerInvoice, matterId, recipient: payerLabel, meta, register, utils, spec: payerSpec, breakdown: payerBreakdown(res.breakdown, payerLabel) });
+  // Klientfakturan: självrisk-uträkning + aconto-avdrag (ingen tidslista).
+  await generateFakturaFromTemplate({ invoice: res.clientInvoice, matterId, recipient: clientNameOf(matter), meta, register, utils, breakdown: clientBreakdown(res.breakdown, isRattshjalp) });
 }
 
 /** Härleder alla metod-beroende texter/argument (håller komponenten ≤8). */
@@ -134,7 +161,8 @@ export function SettlementDialog({ matterId, paymentMethod, onClose }: { matterI
       // → syns i fil-listan + länkas från faktura-objektet. Best-effort.
       try {
         await generateSettlementDocs(res, {
-          matterId, matter: matterQ.data, org: orgQ.data, payerLabel: cfg.payerLabel, register, utils,
+          matterId, matter: matterQ.data, org: orgQ.data, payerLabel: cfg.payerLabel,
+          isRattshjalp: paymentMethod === "RATTSHJALP", register, utils,
           fetchSpec: (invoiceId) => utils.billingRun.invoiceSpecification.fetch({ matterId, invoiceId }),
         });
       } catch (e) { console.warn("[settlement] fakturadokument misslyckades:", e); }

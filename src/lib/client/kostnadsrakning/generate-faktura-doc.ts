@@ -18,6 +18,11 @@ import { asId, type InvoiceId, type MatterId } from "@/lib/shared/schemas/ids";
 type RouterInputs = inferRouterInputs<AppRouter>;
 /** Fakturaspecifikationen (#856) — router-outputen, återanvänd så typerna följs åt. */
 export type InvoiceSpecification = inferRouterOutputs<AppRouter>["billingRun"]["invoiceSpecification"];
+
+/** En rad i den itemiserade summeringen (#858): `add` = delbelopp, `deduct` =
+ *  avgår (−), `info` = spårbarhets-rad utan beloppspåverkan (visas parentes). */
+export interface BreakdownRow { label: string; amountOre: number; kind: "add" | "deduct" | "info" }
+export interface FakturaBreakdown { rows: BreakdownRow[]; totalLabel: string; totalOre: number }
 type RegisterInput = RouterInputs["document"]["register"];
 type TreeFilter = RouterInputs["document"]["tree"];
 type ListFilter = RouterInputs["document"]["list"];
@@ -85,14 +90,20 @@ const FAKTURA_TEMPLATE = `<!DOCTYPE html><html lang="sv"><head><meta charset="ut
 <tr><td>Moms</td><td style="text-align:right">{{vat}}</td></tr>
 {{/if}}
 <tr style="border-top:1px solid #ccc"><td>Delsumma (inkl moms)</td><td style="text-align:right">{{gross}}</td></tr>
+{{/if}}
+{{#if useBreakdown}}
+{{#each breakdownRows}}<tr style="{{this.style}}"><td>{{this.label}}</td><td style="text-align:right;{{this.style}}">{{this.amount}}</td></tr>{{/each}}
+{{else}}
+{{#if useSpec}}
 {{#each deductions}}<tr style="color:#b45309"><td>Avgår aconto — faktura {{this.invoiceNumber}}{{#if this.date}} ({{this.date}}){{/if}}</td><td style="text-align:right">−{{this.amount}}</td></tr>{{/each}}
 {{#if hasAdjustment}}<tr style="color:#555"><td>{{adjustmentLabel}}</td><td style="text-align:right">{{adjustment}}</td></tr>{{/if}}
 {{else}}
 <tr><td>Netto (exkl moms)</td><td style="text-align:right">{{net}}</td></tr>
 <tr><td>Moms</td><td style="text-align:right">{{vat}}</td></tr>
 {{/if}}
+{{/if}}
 </tbody>
-<tfoot><tr style="border-top:2px solid #333"><td style="font-weight:bold">Att betala (inkl moms)</td><td style="text-align:right;font-weight:bold">{{total}}</td></tr></tfoot>
+<tfoot><tr style="border-top:2px solid #333"><td style="font-weight:bold">{{totalLabel}}</td><td style="text-align:right;font-weight:bold">{{total}}</td></tr></tfoot>
 </table>
 {{#if organizationName}}<p style="color:#777;font-size:13px;margin-top:1.5rem">{{organizationName}}{{#if organizationOrgNumber}} · {{organizationOrgNumber}}{{/if}}</p>{{/if}}
 </body></html>`;
@@ -107,6 +118,10 @@ export interface GenerateFakturaFromTemplateArgs {
   /** Fakturaspecifikationen (#856) — tider/utlägg/avdragna aconton. Utelämnas
    *  för rena aconto-fakturor → mallen faller tillbaka på netto/moms/summa. */
   spec?: InvoiceSpecification | null | undefined;
+  /** Itemiserad summering (#858) — självförklarande nedbrytning (självrisk,
+   *  rådgivning, prutning, aconton). När satt renderas den i stället för spec-
+   *  summeringen. Tids-/utläggstabellerna kommer fortsatt ur `spec`. */
+  breakdown?: FakturaBreakdown | null | undefined;
 }
 
 /**
@@ -140,29 +155,64 @@ function specContext(spec: InvoiceSpecification | null | undefined, fc: (ore: nu
   };
 }
 
-/** Handlebars-kontext för faktura-mallen (utbruten → håller generatorn ≤8). */
-function fakturaTemplateContext(
-  invoice: FakturaDocInvoice, recipient: string, meta: FakturaDocMeta,
-  formatCurrency: (ore: number) => string, spec?: InvoiceSpecification | null,
-): Record<string, unknown> {
+/** Itemiserad summering (#858) → mall-rader. `deduct`=−, `info`=(parentes), färgad. */
+function breakdownContext(breakdown: FakturaBreakdown | null | undefined, fc: (ore: number) => string): Record<string, unknown> {
+  if (!breakdown) return { useBreakdown: false };
+  return {
+    useBreakdown: true,
+    breakdownRows: breakdown.rows.map((r) => ({
+      label: r.label,
+      amount: r.kind === "deduct" ? `−${fc(r.amountOre)}` : r.kind === "info" ? `(${fc(r.amountOre)})` : fc(r.amountOre),
+      style: r.kind === "deduct" ? "color:#b45309" : r.kind === "info" ? "color:#9ca3af" : "",
+    })),
+  };
+}
+
+/** Belopps-kontexten (netto/moms/summa) — `total` följer breakdown om satt. */
+function amountContext(a: FakturaTemplateArgs, fc: (ore: number) => string): Record<string, unknown> {
+  const { invoice, breakdown } = a;
   const vatOre = invoice.vatOre ?? 0;
-  const date = (invoice.invoiceDate ? new Date(invoice.invoiceDate) : new Date()).toLocaleDateString("sv-SE");
+  return {
+    net: fc(invoice.amount - vatOre), vat: fc(vatOre),
+    total: fc(breakdown ? breakdown.totalOre : invoice.amount),
+    totalLabel: breakdown?.totalLabel ?? "Att betala (inkl moms)",
+  };
+}
+
+/** Faktura-huvudets kontext (nr/datum/mottagare/org + belopp). Utbruten → håller
+ *  `fakturaTemplateContext` under param- och komplexitetsgränsen. */
+function headerContext(a: FakturaTemplateArgs, fc: (ore: number) => string): Record<string, unknown> {
+  const { invoice, recipient, meta } = a;
   return {
     invoiceNumber: invoice.invoiceNumber ?? "—",
     ocr: invoice.ocrReference ?? "",
-    date, matterNumber: meta.matterNumber, matterTitle: meta.matterTitle, recipient,
-    net: formatCurrency(invoice.amount - vatOre), vat: formatCurrency(vatOre), total: formatCurrency(invoice.amount),
+    date: (invoice.invoiceDate ? new Date(invoice.invoiceDate) : new Date()).toLocaleDateString("sv-SE"),
+    matterNumber: meta.matterNumber, matterTitle: meta.matterTitle, recipient,
     organizationName: meta.organizationName ?? "", organizationOrgNumber: meta.organizationOrgNumber ?? "",
-    ...specContext(spec, formatCurrency),
+    ...amountContext(a, fc),
+  };
+}
+
+interface FakturaTemplateArgs {
+  invoice: FakturaDocInvoice; recipient: string; meta: FakturaDocMeta;
+  spec?: InvoiceSpecification | null | undefined; breakdown?: FakturaBreakdown | null | undefined;
+}
+
+/** Handlebars-kontext för faktura-mallen (utbruten → håller generatorn ≤8). */
+function fakturaTemplateContext(a: FakturaTemplateArgs, formatCurrency: (ore: number) => string): Record<string, unknown> {
+  return {
+    ...headerContext(a, formatCurrency),
+    ...specContext(a.spec, formatCurrency),
+    ...breakdownContext(a.breakdown, formatCurrency),
   };
 }
 
 export async function generateFakturaFromTemplate(args: GenerateFakturaFromTemplateArgs): Promise<void> {
-  const { invoice, matterId, recipient, meta, register, utils, spec } = args;
+  const { invoice, matterId, recipient, meta, register, utils, spec, breakdown } = args;
   const { renderHandlebars } = await import("@/lib/client/kostnadsrakning/render-handlebars");
   const { persistGeneratedDoc } = await import("@/lib/client/demo/persist-generated-doc");
   const { formatCurrency } = await import("@/lib/client/utils");
-  const html = renderHandlebars(FAKTURA_TEMPLATE, fakturaTemplateContext(invoice, recipient, meta, formatCurrency, spec));
+  const html = renderHandlebars(FAKTURA_TEMPLATE, fakturaTemplateContext({ invoice, recipient, meta, spec, breakdown }, formatCurrency));
   const bytes = new TextEncoder().encode(html);
   const docId = `faktura-${invoice.id}`;
   const fileName = `Faktura ${invoice.invoiceNumber ?? meta.matterNumber} ${new Date().toISOString().slice(0, 10)}.html`;
