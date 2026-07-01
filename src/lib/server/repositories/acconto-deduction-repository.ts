@@ -6,6 +6,10 @@
  */
 
 import type { AccontoDeduction } from "@/lib/shared/schemas/billing";
+import type { InvoiceId } from "@/lib/shared/schemas/ids";
 import type { Repository } from "./types";
 
-export type AccontoDeductionRepository = Repository<AccontoDeduction>;
+export interface AccontoDeductionRepository extends Repository<AccontoDeduction> {
+  /** Alla acconto-avdrag som en slutfaktura drar av (fakturaspecifikationen, #856). */
+  listByFinalInvoice(finalInvoiceId: InvoiceId): Promise<AccontoDeduction[]>;
+}

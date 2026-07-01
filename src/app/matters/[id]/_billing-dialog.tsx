@@ -16,6 +16,7 @@ import { DecimalInput } from "@/components/ui/decimal-input";
 import { Modal } from "@/components/ui/modal";
 import {
   generateFakturaDoc,
+  generateFakturaFromTemplate,
   type FakturaDocInvoice,
   type FakturaDocMeta,
 } from "@/lib/client/kostnadsrakning/generate-faktura-doc";
@@ -58,19 +59,43 @@ function titleFor(type: string): string {
   return "Faktura";
 }
 
-/** Återanvändbar doc-generator: lägg ett faktura-PDF-dokument i fil-listan. */
-function useFakturaDoc(matterId: MatterId, meta: BillingMeta): (invoice: FakturaDocInvoice) => Promise<void> {
-  const register = trpc.document.register.useMutation();
-  const utils = trpc.useUtils();
-  const docMeta: FakturaDocMeta = {
+function docMetaFrom(meta: BillingMeta): FakturaDocMeta {
+  return {
     matterNumber: meta.matterNumber, matterTitle: meta.matterTitle,
     ...(meta.clientName ? { clientName: meta.clientName } : {}),
     ...(meta.organizationName ? { organizationName: meta.organizationName } : {}),
     ...(meta.organizationOrgNumber ? { organizationOrgNumber: meta.organizationOrgNumber } : {}),
   };
+}
+
+function recipientLabel(recipient: string, clientName?: string): string {
+  if (recipient === "KLIENT") return clientName ?? "Klient";
+  if (recipient === "FORSAKRING") return "Försäkringsbolag";
+  return "Rättshjälpsmyndigheten";
+}
+
+/** Aconto-doc (PDF via pdf-lib, ingen spec — en ren aconto specificeras inte). */
+function useFakturaDoc(matterId: MatterId, meta: BillingMeta): (invoice: FakturaDocInvoice) => Promise<void> {
+  const register = trpc.document.register.useMutation();
+  const utils = trpc.useUtils();
+  const docMeta = docMetaFrom(meta);
   return async (invoice: FakturaDocInvoice) => {
     try {
       await generateFakturaDoc({ invoice, matterId, meta: docMeta, register, utils });
+    } catch (e) { console.warn("[billing] faktura-dokument misslyckades:", e); }
+  };
+}
+
+/** Slutfaktura-doc (template-motorn + fullständig spec, #856): tider/utlägg +
+ *  avdragna aconto-fakturor hämtas från `invoiceSpecification` och renderas. */
+function useFinalFakturaDoc(matterId: MatterId, meta: BillingMeta): (invoice: FakturaDocInvoice, recipient: string) => Promise<void> {
+  const register = trpc.document.register.useMutation();
+  const utils = trpc.useUtils();
+  const docMeta = docMetaFrom(meta);
+  return async (invoice: FakturaDocInvoice, recipient: string) => {
+    try {
+      const spec = await utils.billingRun.invoiceSpecification.fetch({ matterId, invoiceId: invoice.id });
+      await generateFakturaFromTemplate({ invoice, matterId, recipient, meta: docMeta, register, utils, spec });
     } catch (e) { console.warn("[billing] faktura-dokument misslyckades:", e); }
   };
 }
@@ -154,9 +179,9 @@ function FinalForm({ matterId, meta, accontos, onDone }: { matterId: MatterId; m
   const [posts, setPosts] = useState<string[] | null>(null);
   const togglePost = (key: string, checked: boolean): void =>
     setPosts((prev) => { const base = prev ?? allPostKeys; return checked ? [...base, key] : base.filter((k) => k !== key); });
-  const makeDoc = useFakturaDoc(matterId, meta);
+  const makeDoc = useFinalFakturaDoc(matterId, meta);
   const mut = trpc.billingRun.createFinal.useMutation({
-    onSuccess: async (res) => { await makeDoc(res.invoice); onDone(); },
+    onSuccess: async (res) => { await makeDoc(res.invoice, recipientLabel(recipient, meta.clientName)); onDone(); },
   });
   return (
     <form onSubmit={(e) => { e.preventDefault(); mut.mutate({

@@ -40,4 +40,34 @@ describe("generateFakturaFromTemplate", () => {
     expect(html).toContain("Staten");      // mottagare
     expect(html).toContain("Vårdnadstvist");
   });
+
+  it("renderar fullständig specifikation (tider, utlägg, avdragna aconton) — #856", async () => {
+    await generateFakturaFromTemplate({
+      invoice: { id: asId<"InvoiceId">("inv-1"), amount: 373_750, vatOre: 93_750, invoiceNumber: "F-2026-0001", invoiceDate: "2026-06-30" },
+      matterId: asId<"MatterId">("m1"),
+      recipient: "Klient AB",
+      meta: { matterNumber: "Ä-1", matterTitle: "Tvist" },
+      register: { mutateAsync: registerMutateAsync },
+      utils,
+      spec: {
+        timeLines: [{ date: "2026-05-02", description: "Genomgång av handlingar", minutes: 90, amountOre: 375_000 }],
+        expenseLines: [{ date: "2026-05-03", description: "Ansökningsavgift", netOre: 5_000, grossOre: 5_000 }],
+        totalMinutes: 90,
+        arvodeNetOre: 375_000, arvodeVatOre: 93_750,
+        expensesNetOre: 5_000, expensesVatOre: 0,
+        grossOre: 473_750,
+        deductions: [{ invoiceNumber: "F-2026-0000", date: "2026-04-01", amountOre: 100_000 }],
+        deductionOre: 100_000,
+        adjustmentOre: 0,
+        payableOre: 373_750,
+      },
+    });
+    const html = new TextDecoder().decode(persistGeneratedDoc.mock.calls[0]![0].bytes as Uint8Array);
+    expect(html).toContain("Tidsspecifikation");
+    expect(html).toContain("Genomgång av handlingar");
+    expect(html).toContain("Utläggsspecifikation");
+    expect(html).toContain("Ansökningsavgift");
+    expect(html).toContain("Avgår aconto");
+    expect(html).toContain("F-2026-0000"); // avdragen aconto-faktura listad i specifikationen
+  });
 });
