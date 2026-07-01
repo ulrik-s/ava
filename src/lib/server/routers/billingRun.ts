@@ -442,6 +442,55 @@ async function fetchSpecDeductions(repos: Repositories, orgId: OrganizationId, f
 }
 
 /**
+ * Slutregleringens itemiserade nedbrytning (#858) — så BÅDE domstols- och
+ * klientfakturan blir självförklarande. Rena display-siffror (brutto, öre); ÄNDRAR
+ * inga belopp (klient = självrisk − aconton, domstol = statens andel, oförändrat):
+ *   - domstolsfakturan bryter ned "Nedsättning" i självrisk/rådgivning/prutning,
+ *   - klientfakturan visar självrisk-uträkningen (andel × upparbetat),
+ *   - avdragna aconton listas (avräknas EN gång, på klientfakturan; info på domstol).
+ */
+export interface SettlementBreakdown {
+  clientShareBips: number;
+  arvodeBaseNetOre: number;      // bas-arvode (exkl rådgivning) — "andel × X"
+  fullArvodeGrossOre: number;    // allt debiterbart arvode (inkl rådgivning), brutto — domstolens delsumma
+  expensesGrossOre: number;      // utlägg brutto — domstol
+  sjalvriskGrossOre: number;     // klientens självrisk brutto
+  radgivningGrossOre: number;    // rådgivning brutto (0 utom rättshjälp)
+  prutningGrossOre: number;      // byrå-förlust/prutning brutto
+  payerPayableOre: number;       // domstolen att betala
+  clientPayableOre: number;      // klienten att betala (självrisk − aconton)
+  deductedAccontos: SpecDeduction[];
+}
+
+async function buildSettlementBreakdown(repos: Repositories, orgId: OrganizationId, a: {
+  clientShareBips: number; billableMinutes: number; rateOre: number; totalArvodeNet: number;
+  split: CoverageSplit; work: UnfrozenWork; payerGross: number; clientPayable: number;
+  deductedRuns: ReadonlyArray<{ invoiceId?: InvoiceId | null | undefined }>;
+}): Promise<SettlementBreakdown> {
+  const fullArvodeNet = Math.round((a.billableMinutes / 60) * a.rateOre);
+  const radgivningNet = Math.max(0, fullArvodeNet - a.totalArvodeNet);
+  const expensesGrossOre = grossOreOf(expenseBreakdownLines(a.work));
+  const deductedAccontos: SpecDeduction[] = [];
+  for (const r of a.deductedRuns) {
+    if (!r.invoiceId) continue;
+    const inv = await repos.invoices.getByIdInOrg(r.invoiceId, orgId);
+    if (inv) deductedAccontos.push({ invoiceNumber: inv.invoiceNumber ?? "—", date: inv.invoiceDate ?? null, amountOre: inv.amount });
+  }
+  return {
+    clientShareBips: a.clientShareBips,
+    arvodeBaseNetOre: a.totalArvodeNet,
+    fullArvodeGrossOre: arvodeInclVatOre(fullArvodeNet),
+    expensesGrossOre,
+    sjalvriskGrossOre: arvodeInclVatOre(a.split.clientOre),
+    radgivningGrossOre: arvodeInclVatOre(radgivningNet),
+    prutningGrossOre: arvodeInclVatOre(a.split.firmLossOre),
+    payerPayableOre: a.payerGross,
+    clientPayableOre: a.clientPayable,
+    deductedAccontos,
+  };
+}
+
+/**
  * Koppla de DEBITERBARA frysta posterna till FINAL-fakturan (invoice_id) +
  * registrera acconto-avdrag. Utan detta härleder slutfaktura-vyn `0.00` för
  * arvode/utlägg (den summerar bara fakture-länkade poster) trots korrekt
@@ -961,7 +1010,11 @@ export const billingRunRouter = router({
         }
         await emit.invoiceCreated(ctx, clientInvoice);
         await emit.invoiceCreated(ctx, payerInvoice);
-        return { split, clientInvoice, payerInvoice, clientRun, payerRun };
+        const breakdown = await buildSettlementBreakdown(tx, ctx.orgId, {
+          clientShareBips: matter.clientShareBips ?? 0, billableMinutes, rateOre, totalArvodeNet,
+          split, work, payerGross, clientPayable: clientAmount, deductedRuns,
+        });
+        return { split, clientInvoice, payerInvoice, clientRun, payerRun, breakdown };
       });
     }),
 });

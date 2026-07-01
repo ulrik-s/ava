@@ -70,4 +70,30 @@ describe("generateFakturaFromTemplate", () => {
     expect(html).toContain("Avgår aconto");
     expect(html).toContain("F-2026-0000"); // avdragen aconto-faktura listad i specifikationen
   });
+
+  it("renderar itemiserad nedbrytning (självrisk/rådgivning/prutning + aconto-info) — #858", async () => {
+    await generateFakturaFromTemplate({
+      invoice: { id: asId<"InvoiceId">("inv-d"), amount: 325_200, vatOre: 65_040, invoiceNumber: "F-2026-0002", invoiceDate: "2026-06-30" },
+      matterId: asId<"MatterId">("m1"),
+      recipient: "Domstolen",
+      meta: { matterNumber: "Ä-1", matterTitle: "Tvist" },
+      register: { mutateAsync: registerMutateAsync },
+      utils,
+      breakdown: {
+        rows: [
+          { label: "Klientens självrisk", amountOre: 81_300, kind: "deduct" },
+          { label: "Rådgivning (faktureras klienten)", amountOre: 203_250, kind: "deduct" },
+          { label: "Betalt via aconto — faktura F-2026-0001 (2026-04-01)", amountOre: 50_000, kind: "info" },
+        ],
+        totalLabel: "Domstolen betalar — att betala (inkl moms)",
+        totalOre: 325_200,
+      },
+    });
+    const html = new TextDecoder().decode(persistGeneratedDoc.mock.calls[0]![0].bytes as Uint8Array);
+    expect(html).toContain("Klientens självrisk");
+    expect(html).toContain("Rådgivning (faktureras klienten)");
+    expect(html).toContain("Betalt via aconto — faktura F-2026-0001");
+    expect(html).toContain("Domstolen betalar — att betala");
+    expect(html).not.toContain("Nedsättning"); // lumpen ersatt av itemiserade rader
+  });
 });

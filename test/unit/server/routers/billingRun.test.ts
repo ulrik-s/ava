@@ -493,6 +493,25 @@ describe("billingRun.settleCoverage — bokför prutnings-uppdelningen (#801)", 
     expect(res.payerRun.recipient).toBe("DOMSTOL"); // slutfaktura till domstol
   });
 
+  it("returnerar itemiserad nedbrytning som reconcilar mot båda beloppen (#858)", async () => {
+    const { caller: c } = caller({ paymentMethod: "RATTSHJALP", clientShareBips: 2000, taxaHasFTax: true }, 999999, 180);
+    await c.billingRun.createAcconto({ matterId: "m-1", clientShareBips: 2000, amountOre: 50000 });
+    const res = await c.billingRun.settleCoverage({ matterId: "m-1", payerRecipient: "DOMSTOL" });
+    const b = res.breakdown;
+    // 3 tim × 162 600 = 487 800 net arvode; bas (2 tim) 325 200; rådgivning 162 600.
+    expect(b.arvodeBaseNetOre).toBe(325_200);
+    expect(b.fullArvodeGrossOre).toBe(609_750);   // 487 800 × 1,25
+    expect(b.sjalvriskGrossOre).toBe(81_300);     // 65 040 × 1,25
+    expect(b.radgivningGrossOre).toBe(203_250);   // 162 600 × 1,25
+    expect(b.prutningGrossOre).toBe(0);
+    expect(b.deductedAccontos).toHaveLength(1);
+    expect(b.deductedAccontos[0]!.amountOre).toBe(50_000);
+    // Domstol: full arvode − självrisk − rådgivning − prutning = domstolens belopp.
+    expect(b.fullArvodeGrossOre + b.expensesGrossOre - b.sjalvriskGrossOre - b.radgivningGrossOre - b.prutningGrossOre).toBe(b.payerPayableOre);
+    // Klient: självrisk − avräknade aconton = klientens belopp.
+    expect(b.sjalvriskGrossOre - b.deductedAccontos.reduce((s, d) => s + d.amountOre, 0)).toBe(b.clientPayableOre);
+  });
+
   it("rättshjälp via KR (#828): kräver registrerat beslut; domsbeloppet läses från KR:n; KR konsumeras EJ utan markeras FAKTURERAD", async () => {
     const { ds, caller: c } = caller({ paymentMethod: "RATTSHJALP", clientShareBips: 2000, taxaHasFTax: true }, 999999, 180);
     const kr = await c.billingRun.createKostnadsrakning({ matterId: "m-1" });
