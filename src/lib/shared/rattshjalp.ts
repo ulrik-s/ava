@@ -50,8 +50,8 @@ export function computeRadgivningsavgift(opts: { hasFTax?: boolean } = {}): Radg
  * kostnadsräkning (#383): transparens, inget belopp domstolen ska betala.
  */
 export function radgivningTextRad(): string {
-  return "Klienten har betalat en rådgivningstimme (1 tim) enligt rättshjälpstaxan separat. " +
-    "Ingår ej i denna kostnadsräkning.";
+  return "Rådgivningstimme (1 tim) fakturerad och betald av klienten separat enligt " +
+    "rättshjälpstaxan — ingår ej i denna kostnadsräkning.";
 }
 
 export interface MatterSettlementInput {

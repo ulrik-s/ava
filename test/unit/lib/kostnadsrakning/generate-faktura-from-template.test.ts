@@ -81,8 +81,8 @@ describe("generateFakturaFromTemplate", () => {
       utils,
       breakdown: {
         rows: [
+          { label: "Arvode (timkostnadsnorm)", amountOre: 406_500, kind: "add" },
           { label: "Klientens självrisk", amountOre: 81_300, kind: "deduct" },
-          { label: "Rådgivning (faktureras klienten)", amountOre: 203_250, kind: "deduct" },
           { label: "Betalt via aconto — faktura F-2026-0001 (2026-04-01)", amountOre: 50_000, kind: "info" },
         ],
         totalLabel: "Domstolen betalar — att betala (inkl moms)",
@@ -90,10 +90,11 @@ describe("generateFakturaFromTemplate", () => {
       },
     });
     const html = new TextDecoder().decode(persistGeneratedDoc.mock.calls[0]![0].bytes as Uint8Array);
+    expect(html).toContain("Arvode (timkostnadsnorm)");
     expect(html).toContain("Klientens självrisk");
-    expect(html).toContain("Rådgivning (faktureras klienten)");
     expect(html).toContain("Betalt via aconto — faktura F-2026-0001");
     expect(html).toContain("Domstolen betalar — att betala");
     expect(html).not.toContain("Nedsättning"); // lumpen ersatt av itemiserade rader
+    expect(html).not.toContain("Rådgivning"); // rådgivningstimmen syns ALDRIG på domstols-fakturan (#860)
   });
 });
