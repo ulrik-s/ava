@@ -451,11 +451,10 @@ async function fetchSpecDeductions(repos: Repositories, orgId: OrganizationId, f
  */
 export interface SettlementBreakdown {
   clientShareBips: number;
-  arvodeBaseNetOre: number;      // bas-arvode (exkl rådgivning) — "andel × X"
-  fullArvodeGrossOre: number;    // allt debiterbart arvode (inkl rådgivning), brutto — domstolens delsumma
+  arvodeBaseNetOre: number;      // bas-arvode (exkl rådgivning), netto — "andel × X"
+  baseArvodeGrossOre: number;    // bas-arvode (exkl rådgivning), brutto — domstolens arvode-rad
   expensesGrossOre: number;      // utlägg brutto — domstol
   sjalvriskGrossOre: number;     // klientens självrisk brutto
-  radgivningGrossOre: number;    // rådgivning brutto (0 utom rättshjälp)
   prutningGrossOre: number;      // byrå-förlust/prutning brutto
   payerPayableOre: number;       // domstolen att betala
   clientPayableOre: number;      // klienten att betala (självrisk − aconton)
@@ -463,12 +462,11 @@ export interface SettlementBreakdown {
 }
 
 async function buildSettlementBreakdown(repos: Repositories, orgId: OrganizationId, a: {
-  clientShareBips: number; billableMinutes: number; rateOre: number; totalArvodeNet: number;
-  split: CoverageSplit; work: UnfrozenWork; payerGross: number; clientPayable: number;
-  deductedRuns: ReadonlyArray<{ invoiceId?: InvoiceId | null | undefined }>;
+  clientShareBips: number; totalArvodeNet: number; split: CoverageSplit; work: UnfrozenWork;
+  payerGross: number; clientPayable: number; deductedRuns: ReadonlyArray<{ invoiceId?: InvoiceId | null | undefined }>;
 }): Promise<SettlementBreakdown> {
-  const fullArvodeNet = Math.round((a.billableMinutes / 60) * a.rateOre);
-  const radgivningNet = Math.max(0, fullArvodeNet - a.totalArvodeNet);
+  // Rådgivningstimmen ingår ALDRIG i domstolens arvode (#860) — arvodet värderas
+  // på bas-minuterna (exkl rådgivning). Rådgivningen syns bara i kostnadsräkningen.
   const expensesGrossOre = grossOreOf(expenseBreakdownLines(a.work));
   const deductedAccontos: SpecDeduction[] = [];
   for (const r of a.deductedRuns) {
@@ -479,10 +477,9 @@ async function buildSettlementBreakdown(repos: Repositories, orgId: Organization
   return {
     clientShareBips: a.clientShareBips,
     arvodeBaseNetOre: a.totalArvodeNet,
-    fullArvodeGrossOre: arvodeInclVatOre(fullArvodeNet),
+    baseArvodeGrossOre: arvodeInclVatOre(a.totalArvodeNet),
     expensesGrossOre,
     sjalvriskGrossOre: arvodeInclVatOre(a.split.clientOre),
-    radgivningGrossOre: arvodeInclVatOre(radgivningNet),
     prutningGrossOre: arvodeInclVatOre(a.split.firmLossOre),
     payerPayableOre: a.payerGross,
     clientPayableOre: a.clientPayable,
@@ -1011,7 +1008,7 @@ export const billingRunRouter = router({
         await emit.invoiceCreated(ctx, clientInvoice);
         await emit.invoiceCreated(ctx, payerInvoice);
         const breakdown = await buildSettlementBreakdown(tx, ctx.orgId, {
-          clientShareBips: matter.clientShareBips ?? 0, billableMinutes, rateOre, totalArvodeNet,
+          clientShareBips: matter.clientShareBips ?? 0, totalArvodeNet,
           split, work, payerGross, clientPayable: clientAmount, deductedRuns,
         });
         return { split, clientInvoice, payerInvoice, clientRun, payerRun, breakdown };

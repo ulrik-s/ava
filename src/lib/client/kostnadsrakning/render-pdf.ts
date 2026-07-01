@@ -147,6 +147,13 @@ export async function renderKostnadsrakningPdf(input: RenderInput): Promise<Uint
   page.drawText(String(c.totalInclFormatted), { x: MARGIN + 350, y, size: 12, font: bold });
   y -= 28;
 
+  // Rådgivningstimme-notis (#860): visas ENDAST här (ej på domstols-fakturan),
+  // som en textrad utan belopp — klienten har betalat den separat.
+  if (typeof c.radgivningNotice === "string" && c.radgivningNotice) {
+    page.drawText(c.radgivningNotice, { x: MARGIN, y, size: 9, font, color: rgb(0.3, 0.3, 0.3) });
+    y -= 20;
+  }
+
   // Sidfot
   const footerParts = [
     input.meta.defenderName,
