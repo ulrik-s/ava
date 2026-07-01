@@ -799,8 +799,12 @@ export const billingRunRouter = router({
         const { clientLines, payerLines } = coverageInvoiceLines(split, work);
 
         // Klient: självrisk (+ ev. prutning), moms 25 %, minus tidigare aconton.
+        // Auto-dra av ALLA skickade klient-aconton (#856): de har redan betalats,
+        // så slutfakturan reduceras med dem (utöver ev. explicit valda).
+        const sentAccontoIds = (await tx.billingRuns.listAccontoSent(input.matterId)).map((r) => r.id);
+        const deductIds = [...new Set([...input.deductedBillingRunIds, ...sentAccontoIds])];
         const clientGross = grossOreOf(clientLines);
-        const deductedRuns = await fetchDeductedAccontoRuns(tx, input.matterId, input.deductedBillingRunIds);
+        const deductedRuns = await fetchDeductedAccontoRuns(tx, input.matterId, deductIds);
         const deductionOre = deductedRuns.reduce((s, r) => s + (r.amountOre ?? 0), 0);
         const clientAmount = Math.max(0, clientGross - deductionOre);
         const payerGross = grossOreOf(payerLines);
@@ -817,7 +821,7 @@ export const billingRunRouter = router({
         const clientRun = await tx.billingRuns.create({
           matterId: input.matterId, type: "FINAL", recipient: "KLIENT", status: "SENT",
           workValueOreAtRun: clientGross, proposedAmountOre: clientGross, amountOre: clientAmount,
-          invoiceId: clientInvoice.id, deductedBillingRunIds: input.deductedBillingRunIds, periodTo: new Date(), notes: input.notes,
+          invoiceId: clientInvoice.id, deductedBillingRunIds: deductIds, periodTo: new Date(), notes: input.notes,
         });
         const payerRun = await bookPayerRun(tx, {
           matterId: input.matterId, payerRecipient: input.payerRecipient, payerInvoiceId: payerInvoice.id,

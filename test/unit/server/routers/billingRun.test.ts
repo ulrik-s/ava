@@ -483,6 +483,16 @@ describe("billingRun.settleCoverage — bokför prutnings-uppdelningen (#801)", 
     expect(prutning.billable).toBe(false);
   });
 
+  it("rättshjälp: skickade klient-aconton dras AUTO av från klientfakturan; betalare = DOMSTOL (#856)", async () => {
+    const { caller: c } = caller({ paymentMethod: "RATTSHJALP", clientShareBips: 2000, taxaHasFTax: true }, 999999, 180);
+    const ac = await c.billingRun.createAcconto({ matterId: "m-1", clientShareBips: 2000, amountOre: 50000 }); // SENT aconto
+    const res = await c.billingRun.settleCoverage({ matterId: "m-1", payerRecipient: "DOMSTOL" });
+    // Klientens självrisk 20 % × 325 200 = 65 040 netto → ×1,25 = 81 300; minus aconto 50 000 = 31 300.
+    expect(res.clientInvoice.amount).toBe(31_300);
+    expect(res.clientRun.deductedBillingRunIds).toContain(ac.run.id); // auto-avdraget
+    expect(res.payerRun.recipient).toBe("DOMSTOL"); // slutfaktura till domstol
+  });
+
   it("rättshjälp via KR (#828): kräver registrerat beslut; domsbeloppet läses från KR:n; KR konsumeras EJ utan markeras FAKTURERAD", async () => {
     const { ds, caller: c } = caller({ paymentMethod: "RATTSHJALP", clientShareBips: 2000, taxaHasFTax: true }, 999999, 180);
     const kr = await c.billingRun.createKostnadsrakning({ matterId: "m-1" });
