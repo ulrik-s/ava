@@ -101,11 +101,12 @@ async function generateSettlementDocs(res: SettleResult, opts: {
 
 /** Härleder alla metod-beroende texter/argument (håller komponenten ≤8). */
 function settlementConfig(isRattshjalp: boolean, matterId: MatterId, ore: number | undefined) {
-  const payerRecipient = isRattshjalp ? ("RATTSHJALPSMYNDIGHET" as const) : ("FORSAKRING" as const);
+  // Rättshjälp: slutfakturan går till DOMSTOL (#856), inte rättshjälpsmyndigheten.
+  const payerRecipient = isRattshjalp ? ("DOMSTOL" as const) : ("FORSAKRING" as const);
   return {
     payerRecipient,
     fieldLabel: isRattshjalp ? "Dömt belopp (kr)" : "Försäkringens prutning (kr)",
-    payerLabel: isRattshjalp ? "Staten betalar" : "Försäkringen betalar",
+    payerLabel: isRattshjalp ? "Domstolen betalar" : "Försäkringen betalar",
     help: isRattshjalp
       ? "Ange beloppet domen beviljade. Byrån bär eventuell prutning; klientens självrisk räknas på det beviljade beloppet."
       : "Ange försäkringsbolagets prutning ur beskedet. Klienten tar mellanskillnaden (självrisk + prutning).",

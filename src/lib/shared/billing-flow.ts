@@ -91,10 +91,10 @@ export const BILLING_FLOWS: Record<PaymentMethod, BillingFlow> = {
       ARBETE: [
         aconto(),
         { type: "KOSTNADSRAKNING", label: "Kostnadsräkning till domstol", toPhase: "VANTAR_DOM", recipient: "DOMSTOL", dialog: "kostnadsrakning" },
-        { type: "SETTLE", label: "Slutreglera (dom)", toPhase: "SLUTREGLERAD", recipient: "RATTSHJALPSMYNDIGHET", dialog: "settlement" },
+        { type: "SETTLE", label: "Slutreglera (dom)", toPhase: "SLUTREGLERAD", recipient: "DOMSTOL", dialog: "settlement" },
       ],
       VANTAR_DOM: [
-        { type: "SETTLE", label: "Slutreglera (dom)", toPhase: "SLUTREGLERAD", recipient: "RATTSHJALPSMYNDIGHET", dialog: "settlement" },
+        { type: "SETTLE", label: "Slutreglera (dom)", toPhase: "SLUTREGLERAD", recipient: "DOMSTOL", dialog: "settlement" },
       ],
       SLUTREGLERAD: [],
     },
