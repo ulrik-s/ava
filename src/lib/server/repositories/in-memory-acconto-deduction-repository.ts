@@ -4,6 +4,7 @@
  */
 
 import type { AccontoDeduction } from "@/lib/shared/schemas/billing";
+import type { InvoiceId } from "@/lib/shared/schemas/ids";
 import type { IDataStore } from "../data-store/IDataStore";
 import type { AccontoDeductionRepository } from "./acconto-deduction-repository";
 import { InMemoryRepository } from "./in-memory-repository";
@@ -16,5 +17,9 @@ export class InMemoryAccontoDeductionRepository
   implements AccontoDeductionRepository {
   constructor(store: AccontoDeductionRepoSource, now?: () => Date) {
     super(store.accontoDeductions, now ?? (() => new Date()));
+  }
+
+  async listByFinalInvoice(finalInvoiceId: InvoiceId): Promise<AccontoDeduction[]> {
+    return (await this.delegate.findMany({ where: { finalInvoiceId } })) as AccontoDeduction[];
   }
 }

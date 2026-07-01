@@ -342,6 +342,105 @@ async function freezeWork(repos: Repositories, matterId: MatterId, billingRunId:
   await repos.expenses.freezeForMatter(matterId, billingRunId, now);
 }
 
+// ── Fakturaspecifikation (#856) ─────────────────────────────────────────────
+
+/** En rad i fakturans tidsspecifikation (belopp = timmar × gällande timarvode). */
+interface SpecTimeLine { date: Date | string; description: string; minutes: number; amountOre: number; }
+/** En rad i utläggsspecifikationen (netto + brutto, exakt per momssats). */
+interface SpecExpenseLine { date: Date | string; description: string; netOre: number; grossOre: number; }
+/** En avdragen (tidigare betald) aconto-faktura. */
+interface SpecDeduction { invoiceNumber: string; date: Date | string | null; amountOre: number; }
+
+/**
+ * Fakturans fullständiga specifikation (#856): itemiserade tider + utlägg,
+ * avdragna aconto-fakturor och summering. `payableOre` = fakturans FAKTISKA
+ * belopp; `adjustmentOre` fångar ev. differens (rättshjälps-/rättsskyddssplit,
+ * prutning) mellan brutto−avdrag och det som faktureras — visas på en egen rad.
+ */
+interface InvoiceSpecification {
+  timeLines: SpecTimeLine[];
+  expenseLines: SpecExpenseLine[];
+  totalMinutes: number;
+  arvodeNetOre: number; arvodeVatOre: number;
+  expensesNetOre: number; expensesVatOre: number;
+  grossOre: number;
+  deductions: SpecDeduction[];
+  deductionOre: number;
+  adjustmentOre: number;
+  payableOre: number;
+}
+
+function specTimeLines(
+  method: PaymentMethod, normRateOre: number,
+  entries: ReadonlyArray<{ date: Date | string; description: string; minutes: number; hourlyRate: number; billable: boolean }>,
+): SpecTimeLine[] {
+  return entries.filter((t) => t.billable).map((t) => ({
+    date: t.date, description: t.description, minutes: t.minutes,
+    // Rättshjälp värderas enhetligt på timkostnadsnormen (#839); övriga per post-taxa.
+    amountOre: timeEntryValueOre(t.minutes, method === "RATTSHJALP" ? normRateOre : t.hourlyRate),
+  }));
+}
+
+function specExpenseLines(
+  expenses: ReadonlyArray<{ date: Date | string; description: string; amount: number; billable: boolean; vatRate?: number | null; vatIncluded?: boolean | null }>,
+): SpecExpenseLine[] {
+  return expenses.filter((e) => e.billable).map((e) => {
+    const s = expenseSplit(e);
+    return { date: e.date, description: e.description, netOre: s.exclVat, grossOre: s.exclVat + s.vat };
+  });
+}
+
+function buildInvoiceSpecification(a: {
+  timeLines: SpecTimeLine[]; expenseLines: SpecExpenseLine[]; deductions: SpecDeduction[]; payableOre: number;
+}): InvoiceSpecification {
+  const arvodeNetOre = a.timeLines.reduce((s, l) => s + l.amountOre, 0);
+  const arvodeVatOre = arvodeInclVatOre(arvodeNetOre) - arvodeNetOre;
+  const expensesNetOre = a.expenseLines.reduce((s, l) => s + l.netOre, 0);
+  const expensesVatOre = a.expenseLines.reduce((s, l) => s + (l.grossOre - l.netOre), 0);
+  const deductionOre = a.deductions.reduce((s, d) => s + d.amountOre, 0);
+  // Brutto före avdrag. Har fakturan itemiserat arbete → summan av raderna.
+  // Saknas rader (t.ex. klientens självrisk-faktura, vars arbete ligger på
+  // betalar-fakturan) → härled ur det fakturerade + avdragen, så avdragen kan
+  // visas transparent (belopp − aconton = att betala) utan negativ justering.
+  const hasLines = a.timeLines.length > 0 || a.expenseLines.length > 0;
+  const grossOre = hasLines ? arvodeNetOre + arvodeVatOre + expensesNetOre + expensesVatOre : a.payableOre + deductionOre;
+  return {
+    timeLines: a.timeLines, expenseLines: a.expenseLines,
+    totalMinutes: a.timeLines.reduce((s, l) => s + l.minutes, 0),
+    arvodeNetOre, arvodeVatOre, expensesNetOre, expensesVatOre, grossOre,
+    deductions: a.deductions, deductionOre,
+    adjustmentOre: a.payableOre - (grossOre - deductionOre),
+    payableOre: a.payableOre,
+  };
+}
+
+/**
+ * Länka slutregleringens arbete + aconto-avdrag till fakturorna (#856): arbetet
+ * (arvode+utlägg) bärs av betalar-fakturan, aconto-avdragen registreras på
+ * klientfakturan → fakturaspecifikationen kan hämtas per faktura och slutfaktura-
+ * vyn slutar visa 0.00. Utbrutet så settleCoverage-handlern håller sig ≤8.
+ */
+async function linkSettlementInvoices(repos: Repositories, a: {
+  work: UnfrozenWork; payerInvoiceId: InvoiceId; clientInvoiceId: InvoiceId; deductedRuns: ReadonlyArray<{ invoiceId?: InvoiceId | null | undefined }>;
+}): Promise<void> {
+  await repos.timeEntries.flagBilled(a.work.timeEntries.filter((t) => t.billable).map((t) => t.id), a.payerInvoiceId);
+  await repos.expenses.flagBilled(a.work.expenses.filter((e) => e.billable).map((e) => e.id), a.payerInvoiceId);
+  for (const r of a.deductedRuns) {
+    if (r.invoiceId) await repos.accontoDeductions.create({ finalInvoiceId: a.clientInvoiceId, accontoInvoiceId: r.invoiceId });
+  }
+}
+
+/** Hämta + montera avdragna aconto-fakturor för en slutfaktura (#856). */
+async function fetchSpecDeductions(repos: Repositories, orgId: OrganizationId, finalInvoiceId: InvoiceId): Promise<SpecDeduction[]> {
+  const links = await repos.accontoDeductions.listByFinalInvoice(finalInvoiceId);
+  const out: SpecDeduction[] = [];
+  for (const link of links) {
+    const inv = await repos.invoices.getByIdInOrg(link.accontoInvoiceId, orgId);
+    if (inv) out.push({ invoiceNumber: inv.invoiceNumber ?? "—", date: inv.invoiceDate ?? null, amountOre: inv.amount });
+  }
+  return out;
+}
+
 /**
  * Koppla de DEBITERBARA frysta posterna till FINAL-fakturan (invoice_id) +
  * registrera acconto-avdrag. Utan detta härleder slutfaktura-vyn `0.00` för
@@ -511,6 +610,32 @@ export const billingRunRouter = router({
       const ex = await ctx.repos.expenses.listUnfrozenForMatter(input.matterId);
       const priorAccontoSumOre = await sumPriorAccontos(ctx.repos, input.matterId);
       return buildProposal(te, ex, priorAccontoSumOre);
+    }),
+
+  /**
+   * Fakturaspecifikation (#856): itemiserade tids-/utläggsrader KOPPLADE till
+   * fakturan (via `invoiceId`) + avdragna aconto-fakturor + summering. Driver
+   * faktura-DOKUMENTET (mallen). En ren aconto-faktura utan länkat arbete får
+   * tomma rader (aconton specificeras inte).
+   */
+  invoiceSpecification: orgProcedure
+    .input(z.object({ matterId: matterIdSchema, invoiceId: invoiceIdSchema }))
+    .query(async ({ ctx, input }): Promise<InvoiceSpecification> => {
+      const invoice = await ctx.repos.invoices.getByIdInOrg(input.invoiceId, ctx.orgId);
+      if (!invoice) throw new TRPCError({ code: "NOT_FOUND", message: "Fakturan finns inte." });
+      const matter = await ctx.repos.matters.getByIdInOrg(input.matterId, ctx.orgId);
+      if (!matter) throw new TRPCError({ code: "NOT_FOUND", message: "Ärendet finns inte." });
+      const rateOre = await currentArvodeRateOre(ctx.repos, ctx.orgId, matter);
+      const [te, ex, deductions] = await Promise.all([
+        ctx.repos.timeEntries.listByInvoice(input.invoiceId),
+        ctx.repos.expenses.listByInvoice(input.invoiceId),
+        fetchSpecDeductions(ctx.repos, ctx.orgId, input.invoiceId),
+      ]);
+      return buildInvoiceSpecification({
+        timeLines: specTimeLines(matter.paymentMethod, rateOre, te),
+        expenseLines: specExpenseLines(ex),
+        deductions, payableOre: invoice.amount,
+      });
     }),
 
   createAcconto: orgProcedure
@@ -827,6 +952,7 @@ export const billingRunRouter = router({
           matterId: input.matterId, payerRecipient: input.payerRecipient, payerInvoiceId: payerInvoice.id,
           payerGross, notes: input.notes, krRun,
         });
+        await linkSettlementInvoices(tx, { work, payerInvoiceId: payerInvoice.id, clientInvoiceId: clientInvoice.id, deductedRuns });
         // KR:n förblir en distinkt kostnadsräkning (med sitt dokument/beslut) —
         // konsumeras EJ in i fakturan; markeras FAKTURERAD (#828).
         if (krRun) {

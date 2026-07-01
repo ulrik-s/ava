@@ -99,6 +99,13 @@ export class DrizzleExpenseRepository extends DrizzleRepository<Expense> impleme
       .orderBy(asc(expenses.date));
   }
 
+  async listByInvoice(invoiceId: InvoiceId): Promise<Expense[]> {
+    return await this.db
+      .select().from(expenses)
+      .where(and(eq(expenses.invoiceId, invoiceId), isNull(expenses.deletedAt)))
+      .orderBy(asc(expenses.date));
+  }
+
   async freezeForMatter(matterId: MatterId, billingRunId: BillingRunId, now: Date): Promise<void> {
     await this.db.update(expenses)
       .set({ frozenAt: now, frozenByBillingRunId: billingRunId })

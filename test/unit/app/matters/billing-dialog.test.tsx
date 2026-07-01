@@ -28,7 +28,13 @@ let proposalLoading = false;
 
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
-    useUtils: () => ({ document: { tree: { invalidate: vi.fn(), refetch: vi.fn() }, list: { invalidate: vi.fn() } } }),
+    useUtils: () => ({
+      document: { tree: { invalidate: vi.fn(), refetch: vi.fn() }, list: { invalidate: vi.fn() } },
+      billingRun: { invoiceSpecification: { fetch: vi.fn(async () => ({
+        timeLines: [], expenseLines: [], totalMinutes: 0, arvodeNetOre: 0, arvodeVatOre: 0,
+        expensesNetOre: 0, expensesVatOre: 0, grossOre: 0, deductions: [], deductionOre: 0, adjustmentOre: 0, payableOre: 0,
+      })) } },
+    }),
     document: { register: { useMutation: () => ({ mutateAsync: registerMutateAsync }) } },
     billingRun: {
       proposal: { useQuery: () => ({ data: proposalData, isLoading: proposalLoading }) },

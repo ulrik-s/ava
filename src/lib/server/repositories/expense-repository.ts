@@ -44,6 +44,8 @@ export interface ExpenseRepository extends Repository<Expense> {
   listUnbilled(matterId: MatterId, ids: ExpenseId[]): Promise<Expense[]>;
   /** Koppla utlägg till en faktura (sätter invoiceId). No-op vid tomma ids. */
   flagBilled(ids: ExpenseId[], invoiceId: InvoiceId): Promise<void>;
+  /** Utlägg kopplade till en faktura (date asc) — fakturaspecifikationen (#856). */
+  listByInvoice(invoiceId: InvoiceId): Promise<Expense[]>;
   /** Ofrysta utlägg i ett ärende (date asc) — underlag för billing-run. */
   listUnfrozenForMatter(matterId: MatterId): Promise<Expense[]>;
   /** Utlägg frysta mot en specifik billing-run (date asc) — dom/slutreglering

@@ -15,14 +15,14 @@ import type { inferRouterOutputs } from "@trpc/server";
 import { useState } from "react";
 import { DecimalInput } from "@/components/ui/decimal-input";
 import { Modal } from "@/components/ui/modal";
-import { generateFakturaFromTemplate, type DocUtils, type FakturaDocMeta, type RegisterMut } from "@/lib/client/kostnadsrakning/generate-faktura-doc";
+import { generateFakturaFromTemplate, type DocUtils, type FakturaDocMeta, type InvoiceSpecification, type RegisterMut } from "@/lib/client/kostnadsrakning/generate-faktura-doc";
 import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
 import { useVatDisplay } from "@/lib/client/vat/vat-display-context";
 import type { AppRouter } from "@/lib/server/routers/_app";
 import { arvodeInclVatOre } from "@/lib/shared/invoice-calc";
 import type { PaymentMethod } from "@/lib/shared/schemas/enums";
-import type { MatterId } from "@/lib/shared/schemas/ids";
+import type { InvoiceId, MatterId } from "@/lib/shared/schemas/ids";
 
 interface SplitData {
   clientOre: number;
@@ -92,11 +92,15 @@ function clientNameOf(matter: MatterDetail | undefined): string {
 async function generateSettlementDocs(res: SettleResult, opts: {
   matterId: MatterId; matter: MatterDetail | undefined; org: OrgSettings | undefined;
   payerLabel: string; register: RegisterMut; utils: DocUtils;
+  fetchSpec: (invoiceId: InvoiceId) => Promise<InvoiceSpecification>;
 }): Promise<void> {
-  const { matterId, matter, org, payerLabel, register, utils } = opts;
+  const { matterId, matter, org, payerLabel, register, utils, fetchSpec } = opts;
   const meta = settlementMeta(matter, org);
-  await generateFakturaFromTemplate({ invoice: res.clientInvoice, matterId, recipient: clientNameOf(matter), meta, register, utils });
-  await generateFakturaFromTemplate({ invoice: res.payerInvoice, matterId, recipient: payerLabel, meta, register, utils });
+  // Fakturaspecifikation per faktura (#856): betalar-fakturan bär tids-/utläggs-
+  // raderna, klientfakturan de avdragna aconton.
+  const [clientSpec, payerSpec] = await Promise.all([fetchSpec(res.clientInvoice.id), fetchSpec(res.payerInvoice.id)]);
+  await generateFakturaFromTemplate({ invoice: res.clientInvoice, matterId, recipient: clientNameOf(matter), meta, register, utils, spec: clientSpec });
+  await generateFakturaFromTemplate({ invoice: res.payerInvoice, matterId, recipient: payerLabel, meta, register, utils, spec: payerSpec });
 }
 
 /** Härleder alla metod-beroende texter/argument (håller komponenten ≤8). */
@@ -129,7 +133,10 @@ export function SettlementDialog({ matterId, paymentMethod, onClose }: { matterI
       // Generera faktura-DOKUMENT (via template-motorn, #852) för båda fakturorna
       // → syns i fil-listan + länkas från faktura-objektet. Best-effort.
       try {
-        await generateSettlementDocs(res, { matterId, matter: matterQ.data, org: orgQ.data, payerLabel: cfg.payerLabel, register, utils });
+        await generateSettlementDocs(res, {
+          matterId, matter: matterQ.data, org: orgQ.data, payerLabel: cfg.payerLabel, register, utils,
+          fetchSpec: (invoiceId) => utils.billingRun.invoiceSpecification.fetch({ matterId, invoiceId }),
+        });
       } catch (e) { console.warn("[settlement] fakturadokument misslyckades:", e); }
       void utils.billingRun.list.invalidate({ matterId });
       void utils.invoice.list.invalidate();

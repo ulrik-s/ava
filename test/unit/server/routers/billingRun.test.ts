@@ -538,3 +538,47 @@ describe("billingRun.settleCoverage — bokför prutnings-uppdelningen (#801)", 
     expect(res.payerInvoice.amount).toBe(1_200_000); // 960 000 × 1,25 moms
   });
 });
+
+describe("billingRun.invoiceSpecification (#856)", () => {
+  it("slutfaktura (PRIVAT): itemiserade tider (per-post-taxa) + utlägg + avdragna aconton", async () => {
+    const { caller } = makeCaller({ paymentMethod: "PRIVAT", workMinutes: 120, expenseOre: 5000 });
+    const acc = await caller.billingRun.createAcconto({ matterId: "m-1", clientShareBips: 2000, amountOre: 100000 });
+    const fin = await caller.billingRun.createFinal({ matterId: "m-1", recipient: "KLIENT", deductedBillingRunIds: [acc.run.id] });
+    const spec = await caller.billingRun.invoiceSpecification({ matterId: "m-1", invoiceId: fin.invoice.id });
+    expect(spec.timeLines).toHaveLength(1);
+    expect(spec.timeLines[0]!.minutes).toBe(120);
+    expect(spec.timeLines[0]!.amountOre).toBe(500000); // 2 tim × 2500 kr (postens hourlyRate)
+    expect(spec.expenseLines).toHaveLength(1);
+    expect(spec.expenseLines[0]!.netOre).toBe(5000);
+    expect(spec.arvodeNetOre).toBe(500000);
+    expect(spec.arvodeVatOre).toBe(125000); // 25 %
+    expect(spec.grossOre).toBe(630000); // 625000 arvode inkl moms + 5000 utlägg
+    expect(spec.deductions).toHaveLength(1);
+    expect(spec.deductions[0]!.amountOre).toBe(100000);
+    expect(spec.deductionOre).toBe(100000);
+    expect(spec.adjustmentOre).toBe(0); // brutto − avdrag == fakturerat
+    expect(spec.payableOre).toBe(530000); // 630000 − 100000
+  });
+
+  it("rättshjälp settlement: betalar-fakturan bär tidsraderna (timkostnadsnorm), klientfakturan aconto-avdraget", async () => {
+    const ds = new DemoDataStore({
+      organizations: [{ id: "org-1", name: "X" }],
+      matters: [{ id: "m-1", organizationId: "org-1", matterNumber: "2026-0001", title: "T", status: "ACTIVE", responsibleLawyerId: "u-1", paymentMethod: "RATTSHJALP", clientShareBips: 2000, taxaHasFTax: true, createdAt: new Date() }],
+      users: [{ id: "u-1", organizationId: "org-1", email: "a@x", name: "Anna", role: "ADMIN", hourlyRate: 999999 }],
+      timeEntries: [{ id: "te-1", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date(), minutes: 180, description: "M", hourlyRate: 200000, billable: true }],
+    }, async () => {});
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const c = appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: PRINCIPAL }) as any);
+    await c.billingRun.createAcconto({ matterId: "m-1", clientShareBips: 2000, amountOre: 50000 }); // SENT-aconto som auto-dras av
+    const res = await c.billingRun.settleCoverage({ matterId: "m-1", payerRecipient: "DOMSTOL" });
+    // Betalar-fakturan (domstol) har tidsraden värderad på timkostnadsnormen (162 600/tim × 3 tim).
+    const payerSpec = await c.billingRun.invoiceSpecification({ matterId: "m-1", invoiceId: res.payerInvoice.id });
+    expect(payerSpec.timeLines).toHaveLength(1);
+    expect(payerSpec.timeLines[0]!.amountOre).toBe(487800); // 180 min / 60 × 162600
+    // Klientfakturan listar den avdragna (betalda) aconton.
+    const clientSpec = await c.billingRun.invoiceSpecification({ matterId: "m-1", invoiceId: res.clientInvoice.id });
+    expect(clientSpec.deductions).toHaveLength(1);
+    expect(clientSpec.deductions[0]!.amountOre).toBe(50000);
+    expect(clientSpec.timeLines).toHaveLength(0); // arbetet ligger på betalar-fakturan
+  });
+});
