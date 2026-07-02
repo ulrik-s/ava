@@ -134,6 +134,25 @@ function timkostnadsnormResult(totalArbetsMinutes: number, hasFTax: boolean): Ta
   };
 }
 
+/**
+ * Ta bort de FÖRSTA `carveMinutes` (kronologiskt) ur listan (#868) — rådgivnings-
+ * timmen är ärendets första timme, faktureras klienten separat och ligger utanför
+ * domstolens kostnadsräkning. Hela poster utelämnas tills kvoten är uppfylld; en
+ * post som delvis överlappar krymps med resterande minuter.
+ */
+function carveEarliestMinutes(entries: readonly TimeEntryInput[], carveMinutes: number): TimeEntryInput[] {
+  const sorted = [...entries].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  let left = carveMinutes;
+  const out: TimeEntryInput[] = [];
+  for (const t of sorted) {
+    if (left <= 0) { out.push(t); continue; }
+    if (t.minutes <= left) { left -= t.minutes; continue; } // hela posten är rådgivning → utelämna
+    out.push({ ...t, minutes: t.minutes - left }); // delvis → krymp
+    left = 0;
+  }
+  return out;
+}
+
 /** Arvode-beräkning: taxa-ärende → brottmålstaxa, annars timkostnadsnorm. */
 function resolveTaxa(
   input: BuildInput,
@@ -240,8 +259,14 @@ export function buildKostnadsrakningContext(input: BuildInput): KostnadsrakningR
   const huvudforhandlingMinutes = diffMinutes(start, end);
 
   // Tidsregistreringar — bara billable räknas (samma princip som utlägg).
-  // Visas alltid i specifikationen oavsett taxa-läge.
-  const billableTimeEntries = (input.timeEntries ?? []).filter((t) => t.billable !== false);
+  // Rådgivningstimmen (ärendets FÖRSTA timme) faktureras klienten separat och
+  // ligger HELT utanför kostnadsräkningen till domstolen (#868): den carvas bort
+  // ur BÅDE tidsspecifikationen och arvodes-underlaget — annars ser det ut som att
+  // domstolen debiteras för samma timme (dubbel-debitering). Notisen förklarar den.
+  const allBillable = (input.timeEntries ?? []).filter((t) => t.billable !== false);
+  const billableTimeEntries = input.matter.radgivningPaid
+    ? carveEarliestMinutes(allBillable, RADGIVNING_MINUTES)
+    : allBillable;
   const timeLines: TimeLine[] = billableTimeEntries.map((t) => ({
     id: t.id, date: toIsoDate(t.date), description: t.description, minutes: t.minutes,
   }));
@@ -249,11 +274,7 @@ export function buildKostnadsrakningContext(input: BuildInput): KostnadsrakningR
   const totalArbetsMinutes = billableArbetsMinutes + huvudforhandlingMinutes;
 
   const level: TaxaLevel = input.taxaLevel ?? 1;
-  // Rådgivningstimmen faktureras klienten separat → ingår EJ i statens arvode
-  // (#860/#863) och dras därför av från arvodes-underlaget (matchar notisen).
-  const radgivningAvdrag = input.matter.radgivningPaid ? RADGIVNING_MINUTES : 0;
-  const arvodeArbetsMinutes = Math.max(0, totalArbetsMinutes - radgivningAvdrag);
-  const taxa = resolveTaxa(input, huvudforhandlingMinutes, arvodeArbetsMinutes, level);
+  const taxa = resolveTaxa(input, huvudforhandlingMinutes, totalArbetsMinutes, level);
 
   // Bara billable utlägg ska faktureras — non-billable är firmans egen kostnad.
   const expenses = input.expenses.filter((e) => e.billable !== false);

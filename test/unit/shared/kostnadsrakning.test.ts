@@ -267,13 +267,30 @@ describe("buildKostnadsrakningContext — rådgivningstimme (#383)", () => {
     };
     const without = buildKostnadsrakningContext(input);
     const withR = buildKostnadsrakningContext({ ...input, matter: { ...input.matter, radgivningPaid: true } });
-    // 120 min × timkostnadsnorm (F-skatt 1 626 kr/h) = 325 200; med rådgivning avgår
-    // 60 min → 60 min × norm = 162 600.
+    // 120 min × timkostnadsnorm (F-skatt 1 626 kr/h) = 325 200; med rådgivning carvas
+    // första 60 min bort → 60 min × norm = 162 600.
     expect(without.arvodeExclVat).toBe(325_200);
     expect(withR.arvodeExclVat).toBe(162_600);
     expect(withR.templateContext.isTimkostnadsnorm).toBe(true);
-    // Tidsspecifikationen visar ändå ALLT arbete (transparens); bara arvodet reduceras.
+    // Rådgivningstimmen ligger UTANFÖR KR:n (#868): carvas ur både arvode OCH
+    // tidsspec → summa arbetstid = 60 min (ej 120), ingen dubbel-debitering.
+    expect(withR.billableArbetsMinutes).toBe(60);
+  });
+
+  it("carvar hela rådgivnings-posten ur tidsspecen när den är exakt 1 tim (#868)", () => {
+    const input = {
+      ...baseInput,
+      isTaxeArende: false,
+      hufStart: new Date("2026-05-25T09:00:00"), hufEnd: new Date("2026-05-25T09:00:00"),
+      timeEntries: [
+        { id: "radg", date: "2026-05-10", description: "Första möte med klient i ärendet", minutes: 60, billable: true },
+        { id: "arb", date: "2026-05-20", description: "Inlaga", minutes: 90, billable: true },
+      ],
+    };
+    const withR = buildKostnadsrakningContext({ ...input, matter: { ...input.matter, radgivningPaid: true } });
+    // Rådgivnings-posten (60 min, tidigast) utelämnas HELT → bara arbetsposten kvar.
     expect(withR.timeLines).toHaveLength(1);
-    expect(withR.billableArbetsMinutes).toBe(120);
+    expect(withR.timeLines[0]!.description).toBe("Inlaga");
+    expect(withR.billableArbetsMinutes).toBe(90);
   });
 });
