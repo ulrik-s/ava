@@ -37,4 +37,19 @@ describe("populateInvoiceDocs", () => {
     expect(inv.documents[0].invoiceId).toBe(final.id);
     expect(String(inv.documents[0].fileName)).toContain("Faktura");
   });
+
+  it("rådgivnings-fakturan är tydligt märkt + specificerad, ej tom (#870)", async () => {
+    const seed = buildSeed();
+    const htmls: string[] = [];
+    const target = createGitTarget({ principal: ADMIN, writeBack: async () => {} });
+    await populate(target.caller, seed);
+    await populateBilling(target.caller, seed);
+    await populateInvoiceDocs(target.caller, (_p, b) => { htmls.push(new TextDecoder().decode(b)); return b.byteLength; });
+    const radg = htmls.find((h) => h.includes("Rådgivningsfaktura"));
+    expect(radg, "en rådgivningsfaktura-doc ska genereras").toBeDefined();
+    // Specifikationen är inte tom längre — raden ur notes framgår, med belopp.
+    expect(radg).toContain("Rådgivningstimme enligt rättshjälpstaxan");
+    // Klargör (spegel av KR-notisen) att timmen INTE ligger i domstolens KR.
+    expect(radg).toContain("ingår INTE i kostnadsräkningen till domstolen");
+  });
 });
