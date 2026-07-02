@@ -257,4 +257,23 @@ describe("buildKostnadsrakningContext — rådgivningstimme (#383)", () => {
     expect(withR.templateContext.arvodeInclVat).toBe(without.templateContext.arvodeInclVat);
     expect(withR.templateContext.totalInclVat).toBe(without.templateContext.totalInclVat);
   });
+
+  it("icke-taxa (rättshjälp) + radgivningPaid → arvodet exkluderar rådgivningstimmen (#863)", () => {
+    const input = {
+      ...baseInput,
+      isTaxeArende: false,
+      hufStart: new Date("2026-05-25T09:00:00"), hufEnd: new Date("2026-05-25T09:00:00"), // ingen HUF
+      timeEntries: [{ id: "t1", date: "2026-05-20", description: "Möte", minutes: 120, billable: true }],
+    };
+    const without = buildKostnadsrakningContext(input);
+    const withR = buildKostnadsrakningContext({ ...input, matter: { ...input.matter, radgivningPaid: true } });
+    // 120 min × timkostnadsnorm (F-skatt 1 626 kr/h) = 325 200; med rådgivning avgår
+    // 60 min → 60 min × norm = 162 600.
+    expect(without.arvodeExclVat).toBe(325_200);
+    expect(withR.arvodeExclVat).toBe(162_600);
+    expect(withR.templateContext.isTimkostnadsnorm).toBe(true);
+    // Tidsspecifikationen visar ändå ALLT arbete (transparens); bara arvodet reduceras.
+    expect(withR.timeLines).toHaveLength(1);
+    expect(withR.billableArbetsMinutes).toBe(120);
+  });
 });

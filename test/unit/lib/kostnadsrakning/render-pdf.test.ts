@@ -49,4 +49,28 @@ describe("renderKostnadsrakningPdf", () => {
     });
     expect(pdfHeader(bytes)).toBe("%PDF");
   });
+
+  it("renderar rättshjälps-KR med tidsspecifikation + rådgivningsnotis (#863)", async () => {
+    const result = buildKostnadsrakningContext({
+      matter: { matterNumber: "2026-0010", title: "Umgängestvist Carlsson", clientName: "Cecilia Carlsson", radgivningPaid: true },
+      defender: { name: "Anna Advokat" },
+      isTaxeArende: false,
+      hufStart: new Date("2026-06-30T09:00:00Z"), hufEnd: new Date("2026-06-30T09:00:00Z"), // ingen HUF
+      taxaLevel: 1, hasFTax: true,
+      timeEntries: [
+        { id: "t1", date: "2026-06-18", description: "Första möte med klient i ärendet", minutes: 60, billable: true },
+        { id: "t2", date: "2026-06-24", description: "Upprättande av inlaga till tingsrätten", minutes: 90, billable: true },
+      ],
+      expenses: [{ id: "x1", date: new Date("2026-06-25T00:00:00Z"), description: "Ansökningsavgift", amount: 90000, vatRate: 0, vatIncluded: false }],
+    });
+    // Kontext: tidsspec finns, arvodet exkluderar rådgivningstimmen, notis satt.
+    expect(result.timeLines).toHaveLength(2);
+    expect((result.templateContext.radgivningNotice as string | null)).toMatch(/rådgivningstimme/i);
+    const bytes = await renderKostnadsrakningPdf({
+      result,
+      meta: { matterNumber: "2026-0010", matterTitle: "Umgängestvist Carlsson", clientName: "Cecilia Carlsson", courtName: "Stockholms tingsrätt", defenderName: "Anna Advokat" },
+    });
+    expect(pdfHeader(bytes)).toBe("%PDF");
+    expect(bytes.byteLength).toBeGreaterThan(800);
+  });
 });

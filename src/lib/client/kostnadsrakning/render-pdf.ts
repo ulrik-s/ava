@@ -49,6 +49,13 @@ interface ExpenseRow {
   inclVatFormatted: string;
 }
 
+/** En formaterad tidsrad i templateContext.timeLines (#863). */
+interface TimeRow {
+  date: string;
+  description: string;
+  minutesFormatted: string;
+}
+
 export interface RenderInput {
   result: KostnadsrakningResult;
   meta: {
@@ -102,44 +109,27 @@ export async function renderKostnadsrakningPdf(input: RenderInput): Promise<Uint
   page.drawLine({ start: { x: MARGIN, y }, end: { x: PAGE_W - MARGIN, y }, thickness: 0.5, color: rgb(0.7, 0.7, 0.7) });
   y -= 18;
 
-  // Huvudförhandling
-  page.drawText("Huvudförhandling", { x: MARGIN, y, size: 11, font: bold });
-  y -= 14;
-  page.drawText(
-    `Start: ${String(c.hufStart)}   Slut: ${String(c.hufEnd)}   (${String(c.huvudforhandlingFormatted)})`,
-    { x: MARGIN, y, size: 10, font },
-  );
-  y -= 22;
+  const ctx: PdfCtx = { page, font, bold, marginX: MARGIN, pageW: PAGE_W, lineColor: rgb(0.7, 0.7, 0.7) };
 
-  // Arvode
-  page.drawText(`Arvode (DVFS 2025:6, nivå ${String(c.taxaLevel)})`, {
-    x: MARGIN, y, size: 11, font: bold,
-  });
-  y -= 14;
-  if (c.taxaApplies) {
-    drawRow(page, y, font, "Brottmålstaxa", String(c.arvodeExclFormatted));
+  // Tidsspecifikation (per-post) — #863
+  y = drawTimeSection(ctx, c, y);
+
+  // Huvudförhandling — bara om det finns någon (brottmål; rättshjälp har ingen).
+  if (typeof c.huvudforhandlingMinutes === "number" && c.huvudforhandlingMinutes > 0) {
+    page.drawText("Huvudförhandling", { x: MARGIN, y, size: 11, font: bold });
     y -= 14;
-    drawRow(page, y, font, "+ Moms 25 %", String(c.arvodeMomsFormatted));
-    y -= 14;
-    drawRow(page, y, bold, "Arvode inkl moms", String(c.arvodeInclFormatted));
-    y -= 22;
-  } else {
-    page.drawText(`Förhandlingstiden överstiger taxans maxgräns (3 tim 45 min).`, {
-      x: MARGIN, y, size: 9, font, color: rgb(0.7, 0.3, 0),
-    });
-    y -= 12;
-    page.drawText(`Ersättning enligt timkostnadsnormen 1 626 kr/h ex moms (DVFS 2025:6 § 8).`, {
-      x: MARGIN, y, size: 9, font, color: rgb(0.7, 0.3, 0),
-    });
+    page.drawText(
+      `Start: ${String(c.hufStart)}   Slut: ${String(c.hufEnd)}   (${String(c.huvudforhandlingFormatted)})`,
+      { x: MARGIN, y, size: 10, font },
+    );
     y -= 22;
   }
 
+  // Arvode — alltid med belopp (timkostnadsnorm för rättshjälp, annars brottmålstaxa).
+  y = drawArvodeSection(ctx, c, y);
+
   // Utlägg (tabell + summa) — egen sektion för att hålla komplexiteten nere.
-  y = drawExpenseSection(
-    { page, font, bold, marginX: MARGIN, pageW: PAGE_W, lineColor: rgb(0.7, 0.7, 0.7) },
-    c,
-    y,
-  );
+  y = drawExpenseSection(ctx, c, y);
 
   // TOTAL
   page.drawLine({ start: { x: MARGIN, y: y + 8 }, end: { x: PAGE_W - MARGIN, y: y + 8 }, thickness: 1, color: rgb(0, 0, 0) });
@@ -208,6 +198,56 @@ function drawExpenseSection(ctx: PdfCtx, c: Record<string, unknown>, startY: num
   page.drawText(s.exclVatFormatted, { x: ctx.marginX + 290, y, size: 10, font: bold });
   page.drawText(s.vatFormatted, { x: ctx.marginX + 370, y, size: 10, font: bold });
   page.drawText(s.inclVatFormatted, { x: ctx.marginX + 440, y, size: 10, font: bold });
+  y -= 22;
+  return y;
+}
+
+/** Rita arvode-sektionen (rubrik + ev. norm-not + belopp) (#863). Returnerar ny y. */
+function drawArvodeSection(ctx: PdfCtx, c: Record<string, unknown>, startY: number): number {
+  const { page, font, bold, marginX } = ctx;
+  let y = startY;
+  const norm = c.isTimkostnadsnorm === true;
+  page.drawText(norm ? "Arvode (timkostnadsnormen)" : `Arvode (DVFS 2025:6, nivå ${String(c.taxaLevel)})`, { x: marginX, y, size: 11, font: bold });
+  y -= 14;
+  const note = ((c.taxaNotes as string[] | undefined) ?? [])[0];
+  if (note) {
+    page.drawText(note, { x: marginX, y, size: 8, font, color: ctx.lineColor });
+    y -= 13;
+  }
+  drawRow(page, y, font, norm ? "Arvode exkl moms" : "Brottmålstaxa", String(c.arvodeExclFormatted));
+  y -= 14;
+  drawRow(page, y, font, "+ Moms 25 %", String(c.arvodeMomsFormatted));
+  y -= 14;
+  drawRow(page, y, bold, "Arvode inkl moms", String(c.arvodeInclFormatted));
+  return y - 22;
+}
+
+/** Rita tidsspecifikations-tabell (datum · åtgärd · tid) + summa arbetstid (#863).
+ *  Returnerar ny y-position. No-op om inga tidsrader. */
+function drawTimeSection(ctx: PdfCtx, c: Record<string, unknown>, startY: number): number {
+  const lines = (c.timeLines as TimeRow[] | undefined) ?? [];
+  let y = startY;
+  if (lines.length === 0) return y;
+  const { page, font, bold } = ctx;
+  page.drawText("Tidsspecifikation", { x: ctx.marginX, y, size: 11, font: bold });
+  y -= 14;
+  page.drawText("Datum", { x: ctx.marginX, y, size: 9, font: bold });
+  page.drawText("Åtgärd", { x: ctx.marginX + 80, y, size: 9, font: bold });
+  page.drawText("Tid", { x: ctx.marginX + 450, y, size: 9, font: bold });
+  y -= 14;
+  for (const l of lines) {
+    page.drawText(l.date, { x: ctx.marginX, y, size: 9, font });
+    const desc = l.description.length > 58 ? l.description.slice(0, 56) + "…" : l.description;
+    page.drawText(desc, { x: ctx.marginX + 80, y, size: 9, font });
+    page.drawText(l.minutesFormatted, { x: ctx.marginX + 450, y, size: 9, font });
+    y -= 12;
+    if (y < 120) break; // safety — single-page
+  }
+  y -= 6;
+  page.drawLine({ start: { x: ctx.marginX, y }, end: { x: ctx.pageW - ctx.marginX, y }, thickness: 0.5, color: ctx.lineColor });
+  y -= 14;
+  page.drawText("Summa arbetstid", { x: ctx.marginX, y, size: 10, font: bold });
+  page.drawText(String(c.billableArbetsFormatted), { x: ctx.marginX + 450, y, size: 10, font: bold });
   y -= 22;
   return y;
 }
