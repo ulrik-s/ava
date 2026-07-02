@@ -116,6 +116,10 @@ interface MatterSeed {
   taxaLevel?: 1 | 2 | 3 | 4;
   taxaHuvudforhandlingMin?: number;
   taxaHasFTax?: boolean;
+  /** Klientens självrisk-/kostnadsandel i bips (4000 = 40 %). */
+  clientShareBips?: number;
+  /** Rättshjälpens timtak (rättshjälpslagen: 100 tim). */
+  rattshjalpMaxTimmar?: number;
 }
 
 export const MATTERS: MatterSeed[] = [
@@ -128,7 +132,7 @@ export const MATTERS: MatterSeed[] = [
   { id: "m-007-bodelning", matterNumber: "2026-0007", title: "Bodelning Bergman", status: "ACTIVE", matterType: "Familjerätt", paymentMethod: "PRIVAT", description: "Bodelning efter äktenskapsskillnad.", klientId: "c-bergman", motpartId: "c-andersson", createdDaysAgo: 30 },
   { id: "m-008-skattetvist", matterNumber: "2026-0008", title: "Skattetvist Tand & Trä AB", status: "ACTIVE", matterType: "Skatterätt", paymentMethod: "PRIVAT", description: "Överklagan av Skatteverkets omprövningsbeslut.", klientId: "c-aktiebolaget-tand", motpartId: "c-skatteverket", createdDaysAgo: 25 },
   { id: "m-009-konsumenttvist", matterNumber: "2026-0009", title: "Konsumenttvist Ek mot byggfirma", status: "CLOSED", matterType: "Konsumenträtt", paymentMethod: "RATTSSKYDD", description: "Felaktigt utförd badrumsrenovering.", klientId: "c-ek", motpartId: "c-byggfirma", createdDaysAgo: 220 },
-  { id: "m-010-vardnad-2", matterNumber: "2026-0010", title: "Umgängestvist Carlsson", status: "ACTIVE", matterType: "Familjerätt", paymentMethod: "RATTSHJALP", description: "Umgänge med boförälder efter separation.", klientId: "c-carlsson", motpartId: "c-davidsson", domstolId: "c-tingsratten-sthlm", createdDaysAgo: 15 },
+  { id: "m-010-vardnad-2", matterNumber: "2026-0010", title: "Umgängestvist Carlsson", status: "ACTIVE", matterType: "Familjerätt", paymentMethod: "RATTSHJALP", description: "Umgänge med boförälder efter separation.", klientId: "c-carlsson", motpartId: "c-davidsson", domstolId: "c-tingsratten-sthlm", createdDaysAgo: 15, clientShareBips: 4000, rattshjalpMaxTimmar: 100 },
   { id: "m-011-overklagan", matterNumber: "2026-0011", title: "Överklagan Bergman", status: "ACTIVE", matterType: "Förvaltningsrätt", paymentMethod: "PRIVAT", description: "Överklagan av beslut från Migrationsverket.", klientId: "c-bergman", motpartId: "c-skatteverket", createdDaysAgo: 8 },
   { id: "m-012-skadestand-tha", matterNumber: "2026-0012", title: "Skadestånd Trygg-Hansa", status: "ACTIVE", matterType: "Skadestånd", paymentMethod: "RATTSSKYDD", description: "Inbrottsskada och tvist om självrisk.", klientId: "c-gustafsson", motpartId: "c-trygg-hansa", createdDaysAgo: 5 },
   { id: "m-013-hyra", matterNumber: "2025-0013", title: "Hyresvärdstvist Falk", status: "ARCHIVED", matterType: "Hyresrätt", paymentMethod: "PRIVAT", description: "Avhysning pga obetalda hyror — avgjort 2025.", klientId: "c-falk", createdDaysAgo: 400 },
@@ -207,6 +211,8 @@ export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
       taxaLevel: m.taxaLevel ?? null,
       taxaHuvudforhandlingMin: m.taxaHuvudforhandlingMin ?? null,
       taxaHasFTax: m.taxaHasFTax ?? null,
+      clientShareBips: m.clientShareBips ?? null,
+      rattshjalpMaxTimmar: m.rattshjalpMaxTimmar ?? null,
       createdAt: isoDate(-m.createdDaysAgo),
       updatedAt: isoDate(-Math.max(1, m.createdDaysAgo - 7)),
     })),

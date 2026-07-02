@@ -79,7 +79,7 @@ async function createContacts(c: AnyCaller, rows: Row[]): Promise<void> {
 async function createMatters(c: AnyCaller, rows: Row[]): Promise<void> {
   for (const m of rows) {
     await c.matter.create(
-      defined({ id: m.id, matterNumber: m.matterNumber, title: m.title, description: m.description, matterType: m.matterType, status: m.status, paymentMethod: m.paymentMethod, paymentMethodNote: m.paymentMethodNote, paymentMethodDecidedAt: isoOrUndef(m.paymentMethodDecidedAt), isTaxeArende: m.isTaxeArende, taxaLevel: m.taxaLevel, taxaHuvudforhandlingMin: m.taxaHuvudforhandlingMin, taxaHasFTax: m.taxaHasFTax, createdAt: isoOrUndef(m.createdAt) }),
+      defined({ id: m.id, matterNumber: m.matterNumber, title: m.title, description: m.description, matterType: m.matterType, status: m.status, paymentMethod: m.paymentMethod, paymentMethodNote: m.paymentMethodNote, paymentMethodDecidedAt: isoOrUndef(m.paymentMethodDecidedAt), isTaxeArende: m.isTaxeArende, taxaLevel: m.taxaLevel, taxaHuvudforhandlingMin: m.taxaHuvudforhandlingMin, taxaHasFTax: m.taxaHasFTax, clientShareBips: m.clientShareBips, rattshjalpMaxTimmar: m.rattshjalpMaxTimmar, createdAt: isoOrUndef(m.createdAt) }),
     );
   }
 }

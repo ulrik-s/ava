@@ -126,6 +126,14 @@ describe("matter.create", () => {
     expect((await caller.create({ title: "T" })).matterNumber).toBe(`${YEAR}-0043`);
   });
 
+  it("persisterar clientShareBips + rattshjalpMaxTimmar vid skapande (#872)", async () => {
+    const { caller } = makeCaller();
+    const created = await caller.create({ title: "Rättshjälp", paymentMethod: "RATTSHJALP", clientShareBips: 4000, rattshjalpMaxTimmar: 100 });
+    const fetched = await caller.getById({ id: created.id });
+    expect(fetched.clientShareBips).toBe(4000);
+    expect(fetched.rattshjalpMaxTimmar).toBe(100);
+  });
+
   it("prefixar med ansvarig jurists prefix (#174)", async () => {
     const { caller } = makeCaller({
       users: [{ id: "user-1", organizationId: ORG, email: "a@b.com", name: "T", role: "LAWYER", matterNumberPrefix: "AA" }],
