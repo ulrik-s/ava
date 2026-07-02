@@ -31,21 +31,41 @@ function expenseRow(e: Any): string {
   return `<tr><td>${new Date(e.date).toLocaleDateString("sv-SE")}</td><td>${escapeHtml(e.description)} (utlägg)</td><td></td><td></td><td style="text-align:right">${fmtKr(e.amount)}</td></tr>`;
 }
 
+/** Är detta rådgivnings-fakturan (klientens separata rådgivningstimme)? */
+function isRadgivning(inv: Any): boolean {
+  return String(inv.notes ?? "").startsWith("Rådgivningstimme");
+}
+
 function renderInvoiceHtml(inv: Any): string {
-  const rows = [
+  const itemized = [
     ...(inv.timeEntries ?? []).map(timeRow),
     ...(inv.expenses ?? []).map(expenseRow),
-  ].join("");
-  return `<!DOCTYPE html><html lang="sv"><head><meta charset="utf-8"><title>Faktura ${escapeHtml(inv.matter.matterNumber)}</title></head>
+  ];
+  // Fakturor utan länkade tids-/utläggsposter (t.ex. rådgivnings-fakturan) fick en
+  // TOM specifikation → oklart vad beloppet avser (#870). Fall tillbaka på en rad
+  // ur `notes` så det alltid framgår vad som faktureras.
+  const fallback = itemized.length === 0
+    ? `<tr><td>${new Date(inv.invoiceDate).toLocaleDateString("sv-SE")}</td><td>${escapeHtml(inv.notes ?? "Arvode")}</td><td></td><td></td><td style="text-align:right">${fmtKr(inv.amount)}</td></tr>`
+    : "";
+  const rows = itemized.join("") || fallback;
+  const radgivning = isRadgivning(inv);
+  const heading = radgivning ? "Rådgivningsfaktura" : "Faktura";
+  // Spegel av KR-notisen, sett från klientens sida: klargör att detta är den
+  // separata rådgivningsdebiteringen och att den INTE ligger i domstolens KR.
+  const radgivningNote = radgivning
+    ? `<p style="color:#555;font-size:13px;margin-top:1rem">Rådgivningstimmen (1 tim enligt rättshjälpstaxan) faktureras klienten separat och ingår INTE i kostnadsräkningen till domstolen.</p>`
+    : "";
+  return `<!DOCTYPE html><html lang="sv"><head><meta charset="utf-8"><title>${heading} ${escapeHtml(inv.matter.matterNumber)}</title></head>
 <body style="font-family:system-ui,sans-serif;max-width:720px;margin:2rem auto;color:#111">
-<h1 style="margin-bottom:0">Faktura</h1>
+<h1 style="margin-bottom:0">${heading}</h1>
 <p style="color:#555">Ärende ${escapeHtml(inv.matter.matterNumber)} — ${escapeHtml(inv.matter.title)}<br>
 Datum: ${new Date(inv.invoiceDate).toLocaleDateString("sv-SE")}</p>
 <table cellpadding="6" cellspacing="0" style="border-collapse:collapse;width:100%;font-size:14px">
 <thead><tr style="border-bottom:2px solid #333;text-align:left"><th>Datum</th><th>Beskrivning</th><th style="text-align:right">Tid</th><th style="text-align:right">Timpris</th><th style="text-align:right">Belopp</th></tr></thead>
 <tbody>${rows}</tbody>
 <tfoot><tr style="border-top:2px solid #333"><td colspan="4" style="text-align:right;font-weight:bold">Summa</td><td style="text-align:right;font-weight:bold">${fmtKr(inv.amount)}</td></tr></tfoot>
-</table></body></html>`;
+</table>
+${radgivningNote}</body></html>`;
 }
 
 /** Dokument-id för en faktura. Default = läsbar `invdoc-<id>` (in-memory demo +
@@ -72,11 +92,14 @@ export async function populateInvoiceDocs(caller: GeneratorCaller, sink?: Binary
     const storagePath = `documents/content/${id}.html`;
     const bytes = new TextEncoder().encode(html);
     const size = sink ? sink(storagePath, bytes) : bytes.byteLength;
+    // Rådgivnings-fakturan märks tydligt i fil-listan så den inte förväxlas med
+    // slutfakturan/kostnadsräkningen (#870).
+    const label = isRadgivning(inv) ? "Rådgivningsfaktura" : "Faktura";
     await c.document.register({
       id, matterId: inv.matter.id, invoiceId: inv.id,
-      fileName: `Faktura ${inv.matter.matterNumber}.html`,
+      fileName: `${label} ${inv.matter.matterNumber}.html`,
       mimeType: "text/html; charset=utf-8", sizeBytes: size, storagePath,
-      title: `Faktura — ${inv.matter.matterNumber}`,
+      title: `${label} — ${inv.matter.matterNumber}`,
       documentType: "Faktura", analysisStatus: "DONE",
       createdAt: inv.invoiceDate ? new Date(inv.invoiceDate).toISOString() : undefined,
     });
