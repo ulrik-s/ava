@@ -356,6 +356,9 @@ function buildTimeEntries(orgId: string, users: UserSeed[]): SeedDataset["timeEn
   const activeMatters = MATTERS.filter((m) => m.status === "ACTIVE");
   let teSeq = 0;
   activeMatters.forEach((matter, mi) => {
+    // Umgängestvist Carlsson har en dedikerad, kronologiskt koherent tidslogg
+    // (rådgivningstimmen först) — se nedan (#862).
+    if (matter.id === "m-010-vardnad-2") return;
     const count = 4 + (mi % 3); // 4,5,6,4,5,6…
     for (let j = 0; j < count; j++) {
       teSeq++;
@@ -373,7 +376,36 @@ function buildTimeEntries(orgId: string, users: UserSeed[]): SeedDataset["timeEn
       });
     }
   });
+  appendVardnad2TimeEntries(out, orgId, users);
   return out;
+}
+
+/**
+ * Dedikerad tidslogg för "Umgängestvist Carlsson" (m-010, rättshjälp) (#862):
+ * rådgivningstimmen ("Första möte med klient i ärendet") ligger KRONOLOGISKT
+ * FÖRST (ärendets första händelse), följt av några arbetsposter — totalt ~5,75 tim
+ * så ärendet får ett rimligt antal timmar. Ärendet skapades för 15 dagar sedan.
+ */
+function appendVardnad2TimeEntries(out: SeedDataset["timeEntries"], orgId: string, users: UserSeed[]): void {
+  const lawyer = users.find((u) => u.role === "LAWYER") ?? users[0];
+  if (!lawyer) return;
+  const rows: Array<{ daysAgo: number; minutes: number; description: string }> = [
+    { daysAgo: 14, minutes: 60, description: "Första möte med klient i ärendet" }, // rådgivningstimmen — FÖRST
+    { daysAgo: 11, minutes: 60, description: "Genomgång av handlingar och underlag" },
+    { daysAgo: 8, minutes: 90, description: "Upprättande av inlaga till tingsrätten" },
+    { daysAgo: 4, minutes: 75, description: "Telefonkontakt med motpartens ombud" },
+    { daysAgo: 2, minutes: 60, description: "Förberedelse inför sammanträde" },
+  ];
+  rows.forEach((r, i) => {
+    out.push({
+      id: `te-m010-${i + 1}`,
+      organizationId: orgId,
+      userId: lawyer.id, matterId: "m-010-vardnad-2", date: isoDate(-r.daysAgo, 9),
+      minutes: r.minutes, description: r.description,
+      hourlyRate: lawyer.hourlyRate, billable: true,
+      invoiceId: null, createdAt: isoDate(-r.daysAgo, 9), updatedAt: isoDate(-r.daysAgo, 9),
+    });
+  });
 }
 
 function buildExpenses(orgId: string, users: UserSeed[]): SeedDataset["expenses"] {
