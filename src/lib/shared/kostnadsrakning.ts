@@ -18,7 +18,7 @@
  */
 
 import { computeBrottmalstaxa, computeTimkostnadsnorm, type TaxaLevel, type TaxaResult } from "./brottmalstaxa";
-import { radgivningTextRad } from "./rattshjalp";
+import { RADGIVNING_MINUTES, radgivningTextRad } from "./rattshjalp";
 import { splitVat } from "./vat";
 
 export interface ExpenseInput {
@@ -195,6 +195,9 @@ function buildKrTemplateContext(a: KrTemplateArgs): Record<string, unknown> {
     huvudforhandlingFormatted: formatMinutes(a.huvudforhandlingMinutes),
     taxaLevel: a.level,
     taxaApplies: a.taxa.kind === "taxa-applies",
+    // Rättshjälp/övrigt värderas på timkostnadsnormen (ej brottmålstaxan) — styr
+    // rubrik/etiketter i dokumentet (#863).
+    isTimkostnadsnorm: !(a.input.isTaxeArende ?? true),
     taxaIntervalLabel: a.taxa.intervalLabel,
     taxaNotes: a.taxa.notes,
     arvodeExclVat: a.arvodeExclVat,
@@ -246,7 +249,11 @@ export function buildKostnadsrakningContext(input: BuildInput): KostnadsrakningR
   const totalArbetsMinutes = billableArbetsMinutes + huvudforhandlingMinutes;
 
   const level: TaxaLevel = input.taxaLevel ?? 1;
-  const taxa = resolveTaxa(input, huvudforhandlingMinutes, totalArbetsMinutes, level);
+  // Rådgivningstimmen faktureras klienten separat → ingår EJ i statens arvode
+  // (#860/#863) och dras därför av från arvodes-underlaget (matchar notisen).
+  const radgivningAvdrag = input.matter.radgivningPaid ? RADGIVNING_MINUTES : 0;
+  const arvodeArbetsMinutes = Math.max(0, totalArbetsMinutes - radgivningAvdrag);
+  const taxa = resolveTaxa(input, huvudforhandlingMinutes, arvodeArbetsMinutes, level);
 
   // Bara billable utlägg ska faktureras — non-billable är firmans egen kostnad.
   const expenses = input.expenses.filter((e) => e.billable !== false);
