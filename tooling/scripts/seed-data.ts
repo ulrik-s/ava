@@ -67,11 +67,13 @@ interface UserSeed {
 
 function buildUsers(currentUserId: string, emailDomain: string): UserSeed[] {
   return [
-    { id: currentUserId, email: `user@${emailDomain}`, name: "Anna Advokat", role: "ADMIN", hourlyRate: 250_000, title: "Senior partner" },
-    { id: "u-bjorn", email: `bjorn@${emailDomain}`, name: "Björn Bauer", role: "LAWYER", hourlyRate: 220_000, title: "Advokat" },
-    { id: "u-cecilia", email: `cecilia@${emailDomain}`, name: "Cecilia Carlsson", role: "LAWYER", hourlyRate: 220_000, title: "Advokat" },
+    // Alla advokater debiterar timkostnadsnormen 1 626 kr/h (162 600 öre). David
+    // är biträdande jurist (ej advokat) och behåller sin lägre taxa.
+    { id: currentUserId, email: `user@${emailDomain}`, name: "Anna Advokat", role: "ADMIN", hourlyRate: 162_600, title: "Senior partner" },
+    { id: "u-bjorn", email: `bjorn@${emailDomain}`, name: "Björn Bauer", role: "LAWYER", hourlyRate: 162_600, title: "Advokat" },
+    { id: "u-cecilia", email: `cecilia@${emailDomain}`, name: "Cecilia Carlsson", role: "LAWYER", hourlyRate: 162_600, title: "Advokat" },
     { id: "u-david", email: `david@${emailDomain}`, name: "David Dahl", role: "ASSISTANT", hourlyRate: 90_000, title: "Biträdande jurist" },
-    { id: "u-eva", email: `eva@${emailDomain}`, name: "Eva Eklund", role: "LAWYER", hourlyRate: 200_000, title: "Advokat" },
+    { id: "u-eva", email: `eva@${emailDomain}`, name: "Eva Eklund", role: "LAWYER", hourlyRate: 162_600, title: "Advokat" },
   ];
 }
 
