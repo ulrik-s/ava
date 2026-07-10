@@ -15,15 +15,15 @@ import type { inferRouterOutputs } from "@trpc/server";
 import { useState } from "react";
 import { DecimalInput } from "@/components/ui/decimal-input";
 import { Modal } from "@/components/ui/modal";
-import { generateFakturaFromTemplate, type BreakdownRow, type DocUtils, type FakturaBreakdown, type FakturaDocMeta, type InvoiceSpecification, type RegisterMut } from "@/lib/client/kostnadsrakning/generate-faktura-doc";
+import { generateFakturaFromTemplate, type DocUtils, type FakturaDocMeta, type InvoiceSpecification, type RegisterMut } from "@/lib/client/kostnadsrakning/generate-faktura-doc";
 import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
 import { useVatDisplay } from "@/lib/client/vat/vat-display-context";
 import type { AppRouter } from "@/lib/server/routers/_app";
 import { arvodeInclVatOre } from "@/lib/shared/invoice-calc";
-import { radgivningTextRad } from "@/lib/shared/rattshjalp";
 import type { PaymentMethod } from "@/lib/shared/schemas/enums";
 import type { MatterId } from "@/lib/shared/schemas/ids";
+import type { SettlementView } from "@/lib/shared/settlement-view";
 
 interface SplitData {
   clientOre: number;
@@ -90,66 +90,35 @@ function clientNameOf(matter: MatterDetail | undefined): string {
   return matter?.contacts?.find((c) => c.role === "KLIENT")?.contact?.name ?? "Klient";
 }
 
-type Breakdown = SettleResult["breakdown"];
+type FakturaViewArgs = Pick<Parameters<typeof generateFakturaFromTemplate>[0], "spec" | "breakdown">;
 
-const svd = (d: string | Date | null | undefined): string => (d ? new Date(d).toLocaleDateString("sv-SE") : "");
-
-/** Betalar-fakturans (domstol/försäkring) nedbrytning (#858/#860): arvode (på
- *  BAS-minuter, exkl rådgivning) + utlägg − självrisk − prutning + aconton som
- *  info-rader (avräknas på klientfakturan, ej här). Rådgivningstimmen syns ALDRIG
- *  här — bara i kostnadsräkningen (#860). */
-function payerBreakdown(b: Breakdown, payerLabel: string): FakturaBreakdown {
-  const rows: BreakdownRow[] = [{ label: "Arvode (timkostnadsnorm)", amountOre: b.baseArvodeGrossOre, kind: "add" }];
-  if (b.expensesGrossOre > 0) rows.push({ label: "Utlägg", amountOre: b.expensesGrossOre, kind: "add" });
-  rows.push({ label: "Klientens självrisk", amountOre: b.sjalvriskGrossOre, kind: "deduct" });
-  if (b.prutningGrossOre > 0) rows.push({ label: "Prutning (byrån bär)", amountOre: b.prutningGrossOre, kind: "deduct" });
-  // Rådgivningstimmen omnämns (#876): klienten har betalat den separat → beloppet
-  // visas som info (parentes, grå) så det syns att det INTE ingår i domstolens total.
-  if (b.radgivningGrossOre > 0) rows.push({ label: radgivningTextRad("faktura"), amountOre: b.radgivningGrossOre, kind: "info" });
-  for (const d of b.deductedAccontos) rows.push({ label: `Betalt via aconto — faktura ${d.invoiceNumber}${d.date ? ` (${svd(d.date)})` : ""}`, amountOre: d.amountOre, kind: "info" });
-  return { rows, totalLabel: `${payerLabel} — att betala (inkl moms)`, totalOre: b.payerPayableOre };
-}
-
-/** Klientfakturans nedbrytning (#858): självrisk-uträkningen + de avdragna
- *  (betalda) aconton, som avräknas här → att betala. */
-function clientBreakdown(b: Breakdown, isRattshjalp: boolean): FakturaBreakdown {
-  const share = (b.clientShareBips / 100).toLocaleString("sv-SE", { maximumFractionDigits: 2 });
-  const rows: BreakdownRow[] = [];
-  // Moms-trappa (#876): visa netto → andel → moms → inkl, så momsen syns EXAKT en
-  // gång och basen inte felmärks som "inkl moms" (upparbetat arvode ÄR exkl moms).
-  if (isRattshjalp) {
-    rows.push({ label: "Upparbetat arvode (exkl moms)", amountOre: b.arvodeBaseNetOre, kind: "add" });
-    rows.push({ label: `Klientens självrisk ${share} % (exkl moms)`, amountOre: b.sjalvriskNetOre, kind: "add" });
-    rows.push({ label: "Moms 25 %", amountOre: b.sjalvriskGrossOre - b.sjalvriskNetOre, kind: "add" });
-  }
-  rows.push({ label: isRattshjalp ? "Självrisk (inkl moms)" : "Klientens del / självrisk (inkl moms)", amountOre: b.sjalvriskGrossOre, kind: "add" });
-  for (const d of b.deductedAccontos) rows.push({ label: `Avgår aconto — faktura ${d.invoiceNumber}${d.date ? ` (${svd(d.date)})` : ""}`, amountOre: d.amountOre, kind: "deduct" });
-  return { rows, totalLabel: "Att betala (inkl moms)", totalOre: b.clientPayableOre };
-}
-
-/** Klientfakturans tidsspec (#876) → mall-spec. Bara tids-TABELLEN renderas (spec-
- *  summeringen undertrycks när `breakdown` finns); moms/summa ligger i trappan. */
-function clientSpec(b: Breakdown): InvoiceSpecification {
-  return {
-    timeLines: b.clientArvodeLines,
-    expenseLines: [],
-    totalMinutes: b.clientArvodeLines.reduce((s, l) => s + l.minutes, 0),
-    arvodeNetOre: b.arvodeBaseNetOre, arvodeVatOre: 0,
-    expensesNetOre: 0, expensesVatOre: 0,
-    grossOre: 0, deductions: [], deductionOre: 0, adjustmentOre: 0, payableOre: 0,
-  };
+/** Persisterad slutregleringsvy (#876) → faktura-mallens argument. Servern äger nu
+ *  raderna (buildClientView/buildPayerView) och sparar dem på fakturan → EN källa
+ *  för både dokumentet och Slutfaktura-sidan. `timeLines` ger tidsspec-tabellen;
+ *  `rows` ger beloppstrappan (spec-summeringen undertrycks när breakdown finns). */
+function viewToFakturaArgs(view: SettlementView | null | undefined): FakturaViewArgs {
+  if (!view) return {};
+  const spec: InvoiceSpecification | null = view.timeLines.length
+    ? {
+        timeLines: view.timeLines, expenseLines: [],
+        totalMinutes: view.timeLines.reduce((s, l) => s + l.minutes, 0),
+        arvodeNetOre: 0, arvodeVatOre: 0, expensesNetOre: 0, expensesVatOre: 0,
+        grossOre: 0, deductions: [], deductionOre: 0, adjustmentOre: 0, payableOre: 0,
+      }
+    : null;
+  return { spec, breakdown: { rows: view.rows, totalLabel: view.totalLabel, totalOre: view.totalOre } };
 }
 
 async function generateSettlementDocs(res: SettleResult, opts: {
   matterId: MatterId; matter: MatterDetail | undefined; org: OrgSettings | undefined;
-  payerLabel: string; isRattshjalp: boolean; register: RegisterMut; utils: DocUtils;
+  payerLabel: string; register: RegisterMut; utils: DocUtils;
 }): Promise<void> {
-  const { matterId, matter, org, payerLabel, isRattshjalp, register, utils } = opts;
+  const { matterId, matter, org, payerLabel, register, utils } = opts;
   const meta = settlementMeta(matter, org);
-  // Båda fakturorna renderas ur den itemiserade nedbrytningen (#858/#860) — inga
-  // per-rad-tidslistor här (de + rådgivningsnotisen bor i kostnadsräkningen).
-  await generateFakturaFromTemplate({ invoice: res.payerInvoice, matterId, recipient: payerLabel, meta, register, utils, breakdown: payerBreakdown(res.breakdown, payerLabel) });
-  await generateFakturaFromTemplate({ invoice: res.clientInvoice, matterId, recipient: clientNameOf(matter), meta, register, utils, spec: clientSpec(res.breakdown), breakdown: clientBreakdown(res.breakdown, isRattshjalp) });
+  // Båda fakturorna renderas ur den PERSISTERADE vyn (#876) — exakt samma rader som
+  // Slutfaktura-sidan visar, så dokument och detaljsida aldrig glider isär.
+  await generateFakturaFromTemplate({ invoice: res.payerInvoice, matterId, recipient: payerLabel, meta, register, utils, ...viewToFakturaArgs(res.payerInvoice.settlementBreakdown) });
+  await generateFakturaFromTemplate({ invoice: res.clientInvoice, matterId, recipient: clientNameOf(matter), meta, register, utils, ...viewToFakturaArgs(res.clientInvoice.settlementBreakdown) });
 }
 
 /** Härleder alla metod-beroende texter/argument (håller komponenten ≤8). */
@@ -183,8 +152,7 @@ export function SettlementDialog({ matterId, paymentMethod, onClose }: { matterI
       // → syns i fil-listan + länkas från faktura-objektet. Best-effort.
       try {
         await generateSettlementDocs(res, {
-          matterId, matter: matterQ.data, org: orgQ.data, payerLabel: cfg.payerLabel,
-          isRattshjalp: paymentMethod === "RATTSHJALP", register, utils,
+          matterId, matter: matterQ.data, org: orgQ.data, payerLabel: cfg.payerLabel, register, utils,
         });
       } catch (e) { console.warn("[settlement] fakturadokument misslyckades:", e); }
       void utils.billingRun.list.invalidate({ matterId });

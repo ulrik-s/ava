@@ -519,6 +519,18 @@ describe("billingRun.settleCoverage — bokför prutnings-uppdelningen (#801)", 
     expect(b.clientArvodeLines).toHaveLength(1);
     expect(b.clientArvodeLines[0]!.minutes).toBe(120);            // 180 − 60 rådgivning
     expect(b.clientArvodeLines.reduce((s, l) => s + l.amountOre, 0)).toBe(b.arvodeBaseNetOre);
+
+    // #876 — persisterad vy på BÅDA fakturorna = EN källa för dokument + Slutfaktura-sida.
+    const cv = res.clientInvoice.settlementBreakdown!;
+    expect(cv.totalOre).toBe(b.clientPayableOre);
+    expect(cv.timeLines).toHaveLength(1);
+    expect(cv.timeLines[0]!.amountOre).toBe(325_200);             // tidsspec-tabellen på klientfakturan
+    expect(cv.rows.find((r) => r.label === "Moms 25 %")?.amountOre).toBe(16_260);
+    expect(cv.rows.some((r) => r.kind === "deduct" && r.label.startsWith("Avgår aconto"))).toBe(true);
+    const pv = res.payerInvoice.settlementBreakdown!;
+    expect(pv.totalOre).toBe(b.payerPayableOre);
+    expect(pv.timeLines).toHaveLength(0);                         // domstolsfakturan itemiserar ej (bor i KR:n)
+    expect(pv.rows.some((r) => r.kind === "info" && r.label.includes("Rådgivningstimme"))).toBe(true);
   });
 
   it("rättshjälp via KR (#828): kräver registrerat beslut; domsbeloppet läses från KR:n; KR konsumeras EJ utan markeras FAKTURERAD", async () => {

@@ -30,6 +30,7 @@ import type {
   MatterId, OfficeId, OrganizationId, OrgPreferenceId, PaymentId, PaymentPlanId, PaymentPlanReminderId,
   ServiceNoteId, TaskId, TimeEntryId, UserId, UserPreferenceId, WriteOffId,
 } from "@/lib/shared/schemas/ids";
+import type { SettlementView } from "@/lib/shared/settlement-view";
 import { baseColumns, boolDefault, orgScopedColumns } from "./columns";
 
 /** Monetärt öre-belopp (bigint → ingen int4-overflow för stora fakturor). */
@@ -203,6 +204,8 @@ export const invoices = pgTable("invoices", {
   vatOre: integer("vat_ore"),
   // Moms-uppdelning per sats (#790) — driver per-sats bokföring i verifikat/SIE.
   vatBreakdown: jsonb("vat_breakdown").$type<Array<{ kind: "arvode" | "utlagg"; vatRate: number; netOre: number; vatOre: number }>>(),
+  // Persisterad slutregleringsvy (#876) — EN källa för faktura-dokument + Slutfaktura-sida.
+  settlementBreakdown: jsonb("settlement_breakdown").$type<SettlementView>(),
   status: text("status").notNull().default("DRAFT").$type<InvoiceStatus>(),
   invoiceType: text("invoice_type").notNull().default("STANDARD").$type<InvoiceType>(),
   invoiceNumber: text("invoice_number"),

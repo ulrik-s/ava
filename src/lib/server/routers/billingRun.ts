@@ -26,7 +26,7 @@ import { carveEarliestMinutes } from "@/lib/shared/kostnadsrakning";
 import { applyKrAction, type KostnadsrakningAction, type KostnadsrakningState, type KostnadsrakningStatus } from "@/lib/shared/kostnadsrakning-flow";
 import { ocrFromInvoiceNumber } from "@/lib/shared/ocr-reference";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
-import { RADGIVNING_MINUTES } from "@/lib/shared/rattshjalp";
+import { RADGIVNING_MINUTES, radgivningTextRad } from "@/lib/shared/rattshjalp";
 import type { BillingRun } from "@/lib/shared/schemas/billing";
 import { billingRunRecipientSchema, type BillingRunRecipient, type ExpenseKind, type PaymentMethod } from "@/lib/shared/schemas/enums";
 import {
@@ -44,6 +44,7 @@ import {
   type TimeEntryId,
   type UserId,
 } from "@/lib/shared/schemas/ids";
+import type { SettlementRow, SettlementView, SettlementViewLine } from "@/lib/shared/settlement-view";
 import { splitVat, DEFAULT_VAT_RATE } from "@/lib/shared/vat";
 import { emit } from "../events/emit";
 import type { BillingRunDetailRow, BillingRunListRow } from "../repositories/billing-run-repository";
@@ -515,6 +516,55 @@ async function buildSettlementBreakdown(repos: Repositories, orgId: Organization
     clientArvodeLines: buildClientArvodeLines(a.method, a.rateOre, a.work, a.totalArvodeNet),
     deductedAccontos,
   };
+}
+
+const svd = (d: Date | string | null | undefined): string => (d ? new Date(d).toLocaleDateString("sv-SE") : "");
+const toViewLine = (l: SpecTimeLine): SettlementViewLine => ({
+  date: new Date(l.date).toISOString().slice(0, 10), description: l.description, minutes: l.minutes, amountOre: l.amountOre,
+});
+
+/**
+ * Persisterad slutregleringsvy (#876) — EN källa för både faktura-dokumentet och
+ * Slutfaktura-sidan. Byggdes tidigare i `_settlement-dialog.tsx`; flyttad hit så
+ * servern äger raderna och sparar dem på fakturan (`settlementBreakdown`).
+ *
+ * KLIENT (självrisk): tidsspec + moms-trappa (netto → andel → moms → inkl) så
+ * momsen redovisas exakt en gång och basen inte felmärks som "inkl moms" (#876).
+ */
+function buildClientView(b: SettlementBreakdown, isRattshjalp: boolean): SettlementView {
+  const share = (b.clientShareBips / 100).toLocaleString("sv-SE", { maximumFractionDigits: 2 });
+  const rows: SettlementRow[] = [];
+  if (isRattshjalp) {
+    rows.push({ label: "Upparbetat arvode (exkl moms)", amountOre: b.arvodeBaseNetOre, kind: "add" });
+    rows.push({ label: `Klientens självrisk ${share} % (exkl moms)`, amountOre: b.sjalvriskNetOre, kind: "add" });
+    rows.push({ label: "Moms 25 %", amountOre: b.sjalvriskGrossOre - b.sjalvriskNetOre, kind: "add" });
+  }
+  rows.push({ label: isRattshjalp ? "Självrisk (inkl moms)" : "Klientens del / självrisk (inkl moms)", amountOre: b.sjalvriskGrossOre, kind: "add" });
+  for (const d of b.deductedAccontos) rows.push({ label: `Avgår aconto — faktura ${d.invoiceNumber}${d.date ? ` (${svd(d.date)})` : ""}`, amountOre: d.amountOre, kind: "deduct" });
+  return { timeLines: b.clientArvodeLines.map(toViewLine), rows, totalLabel: "Att betala (inkl moms)", totalOre: b.clientPayableOre };
+}
+
+/**
+ * BETALARE (domstol/försäkring): arvode (bas, exkl rådgivning) + utlägg − självrisk
+ * − prutning + aconto-info. Rådgivningstimmen omnämns som info-rad (klienten har
+ * betalat den separat) men ligger UTANFÖR totalen (#876). Ingen tidsspec-tabell —
+ * itemiseringen bor i kostnadsräkningen till domstolen.
+ */
+function buildPayerView(b: SettlementBreakdown, payerLabel: string): SettlementView {
+  const rows: SettlementRow[] = [{ label: "Arvode (timkostnadsnorm)", amountOre: b.baseArvodeGrossOre, kind: "add" }];
+  if (b.expensesGrossOre > 0) rows.push({ label: "Utlägg", amountOre: b.expensesGrossOre, kind: "add" });
+  rows.push({ label: "Klientens självrisk", amountOre: b.sjalvriskGrossOre, kind: "deduct" });
+  if (b.prutningGrossOre > 0) rows.push({ label: "Prutning (byrån bär)", amountOre: b.prutningGrossOre, kind: "deduct" });
+  if (b.radgivningGrossOre > 0) rows.push({ label: radgivningTextRad("faktura"), amountOre: b.radgivningGrossOre, kind: "info" });
+  for (const d of b.deductedAccontos) rows.push({ label: `Betalt via aconto — faktura ${d.invoiceNumber}${d.date ? ` (${svd(d.date)})` : ""}`, amountOre: d.amountOre, kind: "info" });
+  return { timeLines: [], rows, totalLabel: `${payerLabel} — att betala (inkl moms)`, totalOre: b.payerPayableOre };
+}
+
+/** Klient- + betalar-vy ur nedbrytningen (#876) — betalar-etiketten följer metoden. */
+function buildSettlementViews(b: SettlementBreakdown, method: PaymentMethod): { clientView: SettlementView; payerView: SettlementView } {
+  const isRattshjalp = method === "RATTSHJALP";
+  const payerLabel = isRattshjalp ? "Domstolen betalar" : "Försäkringen betalar";
+  return { clientView: buildClientView(b, isRattshjalp), payerView: buildPayerView(b, payerLabel) };
 }
 
 /**
@@ -1010,12 +1060,23 @@ export const billingRunRouter = router({
         const clientAmount = Math.max(0, clientGross - deductionOre);
         const payerGross = grossOreOf(payerLines);
 
+        // Bygg slutregleringsvyerna FÖRE fakturorna (#876) så de kan persisteras på
+        // respektive faktura → EN källa för både dokumentet och Slutfaktura-sidan.
+        const breakdown = await buildSettlementBreakdown(tx, ctx.orgId, {
+          clientShareBips: matter.clientShareBips ?? 0, totalArvodeNet,
+          split, work, payerGross, clientPayable: clientAmount,
+          method: matter.paymentMethod, rateOre, deductedRuns,
+        });
+        const { clientView, payerView } = buildSettlementViews(breakdown, matter.paymentMethod);
+
         const clientInvoice = await tx.invoices.create({
           matterId: input.matterId, amount: clientAmount, vatOre: vatOreOf(clientLines), vatBreakdown: clientLines,
+          settlementBreakdown: clientView,
           invoiceType: "FINAL", status: "DRAFT", ...(await invoiceNumbering(tx, ctx.orgId, "KLIENT")), invoiceDate: new Date(), notes: input.notes,
         });
         const payerInvoice = await tx.invoices.create({
           matterId: input.matterId, amount: payerGross, vatOre: vatOreOf(payerLines), vatBreakdown: payerLines,
+          settlementBreakdown: payerView,
           invoiceType: "FINAL", status: "DRAFT", ...(await invoiceNumbering(tx, ctx.orgId, input.payerRecipient)), invoiceDate: new Date(), notes: input.notes,
         });
         await bookFirmLoss(tx, ctx.user.id, input.matterId, split.firmLossOre);
@@ -1037,11 +1098,6 @@ export const billingRunRouter = router({
         }
         await emit.invoiceCreated(ctx, clientInvoice);
         await emit.invoiceCreated(ctx, payerInvoice);
-        const breakdown = await buildSettlementBreakdown(tx, ctx.orgId, {
-          clientShareBips: matter.clientShareBips ?? 0, totalArvodeNet,
-          split, work, payerGross, clientPayable: clientAmount,
-          method: matter.paymentMethod, rateOre, deductedRuns,
-        });
         return { split, clientInvoice, payerInvoice, clientRun, payerRun, breakdown };
       });
     }),
