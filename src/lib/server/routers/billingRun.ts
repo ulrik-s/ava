@@ -22,6 +22,7 @@ import { proposedAccontoOre } from "@/lib/shared/billing-proposal";
 import { TIMKOSTNADSNORM_FTAX_ORE_PER_H } from "@/lib/shared/brottmalstaxa";
 import { computeCoverageSplit, partitionRattsskyddMinutes, type CoverageSplit } from "@/lib/shared/coverage-billing";
 import { arvodeInclVatOre } from "@/lib/shared/invoice-calc";
+import { carveEarliestMinutes } from "@/lib/shared/kostnadsrakning";
 import { applyKrAction, type KostnadsrakningAction, type KostnadsrakningState, type KostnadsrakningStatus } from "@/lib/shared/kostnadsrakning-flow";
 import { ocrFromInvoiceNumber } from "@/lib/shared/ocr-reference";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
@@ -50,7 +51,7 @@ import type { Repositories } from "../repositories/repositories";
 import { router, orgProcedure } from "../trpc";
 
 interface UnfrozenWork {
-  timeEntries: Array<{ id: TimeEntryId; minutes: number; hourlyRate: number; billable: boolean; date: Date | string }>;
+  timeEntries: Array<{ id: TimeEntryId; minutes: number; hourlyRate: number; billable: boolean; date: Date | string; description: string }>;
   expenses: Array<{ id: ExpenseId; amount: number; billable: boolean; vatRate?: number | null; vatIncluded?: boolean | null }>;
 }
 
@@ -454,16 +455,40 @@ export interface SettlementBreakdown {
   arvodeBaseNetOre: number;      // bas-arvode (exkl rådgivning), netto — "andel × X"
   baseArvodeGrossOre: number;    // bas-arvode (exkl rådgivning), brutto — domstolens arvode-rad
   expensesGrossOre: number;      // utlägg brutto — domstol
+  sjalvriskNetOre: number;       // klientens självrisk NETTO (andel × arvodeBaseNet) — moms-trappan (#876)
   sjalvriskGrossOre: number;     // klientens självrisk brutto
   prutningGrossOre: number;      // byrå-förlust/prutning brutto
+  radgivningGrossOre: number;    // klient-betald rådgivningstimme brutto — omnämns på domstolsfakturan, ej i totalen (#876)
   payerPayableOre: number;       // domstolen att betala
   clientPayableOre: number;      // klienten att betala (självrisk − aconton)
+  // Klientens självrisk-faktura specificeras med den arbetade tiden (#876). Raderna
+  // är carvade (rättshjälp: rådgivningstimmen bort) + avstämda så summan = arvodeBaseNetOre.
+  clientArvodeLines: SpecTimeLine[];
   deductedAccontos: SpecDeduction[];
+}
+
+/** Klientfakturans tidsspec (#876): arbetad tid, rådgivningstimmen carvad bort
+ *  (rättshjälp), värderad på samma rate som arvodesbasen och AVSTÄMD så radernas
+ *  summa exakt = `totalArvodeNet` (per-rad-avrundning läggs på sista raden). */
+function buildClientArvodeLines(
+  method: PaymentMethod, rateOre: number, work: UnfrozenWork, totalArvodeNet: number,
+): SpecTimeLine[] {
+  const billable = work.timeEntries.filter((t) => t.billable);
+  const entries = method === "RATTSHJALP" ? carveEarliestMinutes(billable, RADGIVNING_MINUTES) : billable;
+  const lines: SpecTimeLine[] = entries.map((t) => ({
+    date: t.date, description: t.description, minutes: t.minutes,
+    amountOre: timeEntryValueOre(t.minutes, rateOre),
+  }));
+  const sum = lines.reduce((s, l) => s + l.amountOre, 0);
+  const last = lines[lines.length - 1];
+  if (last && sum !== totalArvodeNet) last.amountOre += totalArvodeNet - sum; // avstämning (öre)
+  return lines;
 }
 
 async function buildSettlementBreakdown(repos: Repositories, orgId: OrganizationId, a: {
   clientShareBips: number; totalArvodeNet: number; split: CoverageSplit; work: UnfrozenWork;
-  payerGross: number; clientPayable: number; deductedRuns: ReadonlyArray<{ invoiceId?: InvoiceId | null | undefined }>;
+  payerGross: number; clientPayable: number; method: PaymentMethod; rateOre: number;
+  deductedRuns: ReadonlyArray<{ invoiceId?: InvoiceId | null | undefined }>;
 }): Promise<SettlementBreakdown> {
   // Rådgivningstimmen ingår ALDRIG i domstolens arvode (#860) — arvodet värderas
   // på bas-minuterna (exkl rådgivning). Rådgivningen syns bara i kostnadsräkningen.
@@ -479,10 +504,15 @@ async function buildSettlementBreakdown(repos: Repositories, orgId: Organization
     arvodeBaseNetOre: a.totalArvodeNet,
     baseArvodeGrossOre: arvodeInclVatOre(a.totalArvodeNet),
     expensesGrossOre,
+    sjalvriskNetOre: a.split.clientOre,
     sjalvriskGrossOre: arvodeInclVatOre(a.split.clientOre),
     prutningGrossOre: arvodeInclVatOre(a.split.firmLossOre),
+    // Rådgivningstimmen (1 h) betalas av klienten separat; värdet = en timme på samma
+    // norm som arvodesbasen (jfr coverageBaseMinutes −60). 0 för icke-rättshjälp.
+    radgivningGrossOre: a.method === "RATTSHJALP" ? arvodeInclVatOre(a.rateOre) : 0,
     payerPayableOre: a.payerGross,
     clientPayableOre: a.clientPayable,
+    clientArvodeLines: buildClientArvodeLines(a.method, a.rateOre, a.work, a.totalArvodeNet),
     deductedAccontos,
   };
 }
@@ -532,7 +562,7 @@ async function resolveFinalWork(
   }
   return {
     work: {
-      timeEntries: selTime.map((t) => ({ id: t.id, minutes: t.minutes, hourlyRate: t.user.hourlyRate ?? 0, billable: t.billable, date: t.date })),
+      timeEntries: selTime.map((t) => ({ id: t.id, minutes: t.minutes, hourlyRate: t.user.hourlyRate ?? 0, billable: t.billable, date: t.date, description: t.description })),
       expenses: selExp.filter((e) => e.kind !== "PRUTNING").map((e) => ({ id: e.id, amount: e.amount, billable: e.billable, vatRate: e.vatRate, vatIncluded: e.vatIncluded })),
     },
     selected: true,
@@ -1009,7 +1039,8 @@ export const billingRunRouter = router({
         await emit.invoiceCreated(ctx, payerInvoice);
         const breakdown = await buildSettlementBreakdown(tx, ctx.orgId, {
           clientShareBips: matter.clientShareBips ?? 0, totalArvodeNet,
-          split, work, payerGross, clientPayable: clientAmount, deductedRuns,
+          split, work, payerGross, clientPayable: clientAmount,
+          method: matter.paymentMethod, rateOre, deductedRuns,
         });
         return { split, clientInvoice, payerInvoice, clientRun, payerRun, breakdown };
       });

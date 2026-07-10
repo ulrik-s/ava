@@ -15,12 +15,13 @@ import type { inferRouterOutputs } from "@trpc/server";
 import { useState } from "react";
 import { DecimalInput } from "@/components/ui/decimal-input";
 import { Modal } from "@/components/ui/modal";
-import { generateFakturaFromTemplate, type BreakdownRow, type DocUtils, type FakturaBreakdown, type FakturaDocMeta, type RegisterMut } from "@/lib/client/kostnadsrakning/generate-faktura-doc";
+import { generateFakturaFromTemplate, type BreakdownRow, type DocUtils, type FakturaBreakdown, type FakturaDocMeta, type InvoiceSpecification, type RegisterMut } from "@/lib/client/kostnadsrakning/generate-faktura-doc";
 import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
 import { useVatDisplay } from "@/lib/client/vat/vat-display-context";
 import type { AppRouter } from "@/lib/server/routers/_app";
 import { arvodeInclVatOre } from "@/lib/shared/invoice-calc";
+import { radgivningTextRad } from "@/lib/shared/rattshjalp";
 import type { PaymentMethod } from "@/lib/shared/schemas/enums";
 import type { MatterId } from "@/lib/shared/schemas/ids";
 
@@ -102,6 +103,9 @@ function payerBreakdown(b: Breakdown, payerLabel: string): FakturaBreakdown {
   if (b.expensesGrossOre > 0) rows.push({ label: "Utlägg", amountOre: b.expensesGrossOre, kind: "add" });
   rows.push({ label: "Klientens självrisk", amountOre: b.sjalvriskGrossOre, kind: "deduct" });
   if (b.prutningGrossOre > 0) rows.push({ label: "Prutning (byrån bär)", amountOre: b.prutningGrossOre, kind: "deduct" });
+  // Rådgivningstimmen omnämns (#876): klienten har betalat den separat → beloppet
+  // visas som info (parentes, grå) så det syns att det INTE ingår i domstolens total.
+  if (b.radgivningGrossOre > 0) rows.push({ label: radgivningTextRad("faktura"), amountOre: b.radgivningGrossOre, kind: "info" });
   for (const d of b.deductedAccontos) rows.push({ label: `Betalt via aconto — faktura ${d.invoiceNumber}${d.date ? ` (${svd(d.date)})` : ""}`, amountOre: d.amountOre, kind: "info" });
   return { rows, totalLabel: `${payerLabel} — att betala (inkl moms)`, totalOre: b.payerPayableOre };
 }
@@ -110,12 +114,30 @@ function payerBreakdown(b: Breakdown, payerLabel: string): FakturaBreakdown {
  *  (betalda) aconton, som avräknas här → att betala. */
 function clientBreakdown(b: Breakdown, isRattshjalp: boolean): FakturaBreakdown {
   const share = (b.clientShareBips / 100).toLocaleString("sv-SE", { maximumFractionDigits: 2 });
-  const label = isRattshjalp
-    ? `Självrisk (${share} % av upparbetat arvode ${formatCurrency(b.arvodeBaseNetOre)}, inkl moms)`
-    : "Klientens del / självrisk (inkl moms)";
-  const rows: BreakdownRow[] = [{ label, amountOre: b.sjalvriskGrossOre, kind: "add" }];
+  const rows: BreakdownRow[] = [];
+  // Moms-trappa (#876): visa netto → andel → moms → inkl, så momsen syns EXAKT en
+  // gång och basen inte felmärks som "inkl moms" (upparbetat arvode ÄR exkl moms).
+  if (isRattshjalp) {
+    rows.push({ label: "Upparbetat arvode (exkl moms)", amountOre: b.arvodeBaseNetOre, kind: "add" });
+    rows.push({ label: `Klientens självrisk ${share} % (exkl moms)`, amountOre: b.sjalvriskNetOre, kind: "add" });
+    rows.push({ label: "Moms 25 %", amountOre: b.sjalvriskGrossOre - b.sjalvriskNetOre, kind: "add" });
+  }
+  rows.push({ label: isRattshjalp ? "Självrisk (inkl moms)" : "Klientens del / självrisk (inkl moms)", amountOre: b.sjalvriskGrossOre, kind: "add" });
   for (const d of b.deductedAccontos) rows.push({ label: `Avgår aconto — faktura ${d.invoiceNumber}${d.date ? ` (${svd(d.date)})` : ""}`, amountOre: d.amountOre, kind: "deduct" });
   return { rows, totalLabel: "Att betala (inkl moms)", totalOre: b.clientPayableOre };
+}
+
+/** Klientfakturans tidsspec (#876) → mall-spec. Bara tids-TABELLEN renderas (spec-
+ *  summeringen undertrycks när `breakdown` finns); moms/summa ligger i trappan. */
+function clientSpec(b: Breakdown): InvoiceSpecification {
+  return {
+    timeLines: b.clientArvodeLines,
+    expenseLines: [],
+    totalMinutes: b.clientArvodeLines.reduce((s, l) => s + l.minutes, 0),
+    arvodeNetOre: b.arvodeBaseNetOre, arvodeVatOre: 0,
+    expensesNetOre: 0, expensesVatOre: 0,
+    grossOre: 0, deductions: [], deductionOre: 0, adjustmentOre: 0, payableOre: 0,
+  };
 }
 
 async function generateSettlementDocs(res: SettleResult, opts: {
@@ -127,7 +149,7 @@ async function generateSettlementDocs(res: SettleResult, opts: {
   // Båda fakturorna renderas ur den itemiserade nedbrytningen (#858/#860) — inga
   // per-rad-tidslistor här (de + rådgivningsnotisen bor i kostnadsräkningen).
   await generateFakturaFromTemplate({ invoice: res.payerInvoice, matterId, recipient: payerLabel, meta, register, utils, breakdown: payerBreakdown(res.breakdown, payerLabel) });
-  await generateFakturaFromTemplate({ invoice: res.clientInvoice, matterId, recipient: clientNameOf(matter), meta, register, utils, breakdown: clientBreakdown(res.breakdown, isRattshjalp) });
+  await generateFakturaFromTemplate({ invoice: res.clientInvoice, matterId, recipient: clientNameOf(matter), meta, register, utils, spec: clientSpec(res.breakdown), breakdown: clientBreakdown(res.breakdown, isRattshjalp) });
 }
 
 /** Härleder alla metod-beroende texter/argument (håller komponenten ≤8). */

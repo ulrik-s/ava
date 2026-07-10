@@ -509,6 +509,16 @@ describe("billingRun.settleCoverage — bokför prutnings-uppdelningen (#801)", 
     expect(b.baseArvodeGrossOre + b.expensesGrossOre - b.sjalvriskGrossOre - b.prutningGrossOre).toBe(b.payerPayableOre);
     // Klient: självrisk − avräknade aconton = klientens belopp.
     expect(b.sjalvriskGrossOre - b.deductedAccontos.reduce((s, d) => s + d.amountOre, 0)).toBe(b.clientPayableOre);
+    // #876 — moms-trappan: självrisk NETTO + moms EN gång = brutto (ingen dubbelmoms).
+    expect(b.sjalvriskNetOre).toBe(65_040);                       // 20 % × 325 200 netto
+    expect(b.sjalvriskGrossOre - b.sjalvriskNetOre).toBe(16_260); // moms 25 %, redovisad exakt en gång
+    // #876 — rådgivningstimmen omnämns på domstolsfakturan (1 h × norm 162 600 × 1,25) men
+    // ligger UTANFÖR domstolens total (bekräftas av reconcile-raden ovan som ej rör den).
+    expect(b.radgivningGrossOre).toBe(203_250);
+    // #876 — klientens självrisk-spec: rådgivningstimmen carvad bort, summan == arvodesbasen.
+    expect(b.clientArvodeLines).toHaveLength(1);
+    expect(b.clientArvodeLines[0]!.minutes).toBe(120);            // 180 − 60 rådgivning
+    expect(b.clientArvodeLines.reduce((s, l) => s + l.amountOre, 0)).toBe(b.arvodeBaseNetOre);
   });
 
   it("rättshjälp via KR (#828): kräver registrerat beslut; domsbeloppet läses från KR:n; KR konsumeras EJ utan markeras FAKTURERAD", async () => {
@@ -554,6 +564,7 @@ describe("billingRun.settleCoverage — bokför prutnings-uppdelningen (#801)", 
     expect(res.split).toMatchObject({ clientOre: 840_000, payerOre: 960_000, firmLossOre: 0 });
     expect(res.clientInvoice.amount).toBe(1_050_000); // 840 000 × 1,25 moms
     expect(res.payerInvoice.amount).toBe(1_200_000); // 960 000 × 1,25 moms
+    expect(res.breakdown.radgivningGrossOre).toBe(0); // #876 — rådgivning gäller bara rättshjälp
   });
 });
 
