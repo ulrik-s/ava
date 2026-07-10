@@ -529,7 +529,11 @@ describe("billingRun.settleCoverage — bokför prutnings-uppdelningen (#801)", 
     expect(cv.rows.some((r) => r.kind === "deduct" && r.label.startsWith("Avgår aconto"))).toBe(true);
     const pv = res.payerInvoice.settlementBreakdown!;
     expect(pv.totalOre).toBe(b.payerPayableOre);
-    expect(pv.timeLines).toHaveLength(0);                         // domstolsfakturan itemiserar ej (bor i KR:n)
+    // #876 — domstolsfakturan har SAMMA upplägg som klienten: tidsspec + andel-trappa.
+    expect(pv.timeLines).toHaveLength(1);
+    expect(pv.timeLines[0]!.amountOre).toBe(325_200);
+    expect(pv.rows.find((r) => r.label.includes("andel av arvodet"))?.amountOre).toBe(260_160); // 325 200 − 65 040 självrisk
+    expect(pv.rows.find((r) => r.label === "Moms 25 %")?.amountOre).toBe(65_040);               // moms på domstolens andel
     expect(pv.rows.some((r) => r.kind === "info" && r.label.includes("Rådgivningstimme"))).toBe(true);
   });
 

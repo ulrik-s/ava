@@ -458,7 +458,9 @@ export interface SettlementBreakdown {
   expensesGrossOre: number;      // utlägg brutto — domstol
   sjalvriskNetOre: number;       // klientens självrisk NETTO (andel × arvodeBaseNet) — moms-trappan (#876)
   sjalvriskGrossOre: number;     // klientens självrisk brutto
+  firmLossNetOre: number;        // byrå-förlust/prutning NETTO — domstolens trappa (#876)
   prutningGrossOre: number;      // byrå-förlust/prutning brutto
+  payerArvodeNetOre: number;     // domstolens/försäkringens andel av arvodet NETTO — trappan (#876)
   radgivningGrossOre: number;    // klient-betald rådgivningstimme brutto — omnämns på domstolsfakturan, ej i totalen (#876)
   payerPayableOre: number;       // domstolen att betala
   clientPayableOre: number;      // klienten att betala (självrisk − aconton)
@@ -507,7 +509,9 @@ async function buildSettlementBreakdown(repos: Repositories, orgId: Organization
     expensesGrossOre,
     sjalvriskNetOre: a.split.clientOre,
     sjalvriskGrossOre: arvodeInclVatOre(a.split.clientOre),
+    firmLossNetOre: a.split.firmLossOre,
     prutningGrossOre: arvodeInclVatOre(a.split.firmLossOre),
+    payerArvodeNetOre: a.split.payerOre,
     // Rådgivningstimmen (1 h) betalas av klienten separat; värdet = en timme på samma
     // norm som arvodesbasen (jfr coverageBaseMinutes −60). 0 för icke-rättshjälp.
     radgivningGrossOre: a.method === "RATTSHJALP" ? arvodeInclVatOre(a.rateOre) : 0,
@@ -545,26 +549,33 @@ function buildClientView(b: SettlementBreakdown, isRattshjalp: boolean): Settlem
 }
 
 /**
- * BETALARE (domstol/försäkring): arvode (bas, exkl rådgivning) + utlägg − självrisk
- * − prutning + aconto-info. Rådgivningstimmen omnämns som info-rad (klienten har
- * betalat den separat) men ligger UTANFÖR totalen (#876). Ingen tidsspec-tabell —
- * itemiseringen bor i kostnadsräkningen till domstolen.
+ * BETALARE (domstol/försäkring): SAMMA upplägg som klientfakturan (#876) — tidsspec
+ * + moms-trappa, fast med betalarens ANDEL. Bas-arvode − klientens självrisk −
+ * ev. prutning = betalarens andel (netto) → moms → inkl + utlägg. Rådgivningstimmen
+ * omnämns som info-rad men ligger UTANFÖR totalen.
  */
-function buildPayerView(b: SettlementBreakdown, payerLabel: string): SettlementView {
-  const rows: SettlementRow[] = [{ label: "Arvode (timkostnadsnorm)", amountOre: b.baseArvodeGrossOre, kind: "add" }];
-  if (b.expensesGrossOre > 0) rows.push({ label: "Utlägg", amountOre: b.expensesGrossOre, kind: "add" });
-  rows.push({ label: "Klientens självrisk", amountOre: b.sjalvriskGrossOre, kind: "deduct" });
-  if (b.prutningGrossOre > 0) rows.push({ label: "Prutning (byrån bär)", amountOre: b.prutningGrossOre, kind: "deduct" });
+function buildPayerView(b: SettlementBreakdown, payerLabel: string, payerNoun: string): SettlementView {
+  const payerArvodeGross = arvodeInclVatOre(b.payerArvodeNetOre);
+  const rows: SettlementRow[] = [
+    { label: "Upparbetat arvode (exkl moms)", amountOre: b.arvodeBaseNetOre, kind: "add" },
+    { label: "Avgår klientens självrisk (exkl moms)", amountOre: b.sjalvriskNetOre, kind: "deduct" },
+  ];
+  if (b.firmLossNetOre > 0) rows.push({ label: "Avgår prutning (byrån bär) (exkl moms)", amountOre: b.firmLossNetOre, kind: "deduct" });
+  rows.push({ label: `${payerNoun} andel av arvodet (exkl moms)`, amountOre: b.payerArvodeNetOre, kind: "add" });
+  rows.push({ label: "Moms 25 %", amountOre: payerArvodeGross - b.payerArvodeNetOre, kind: "add" });
+  rows.push({ label: `${payerNoun} arvode (inkl moms)`, amountOre: payerArvodeGross, kind: "add" });
+  if (b.expensesGrossOre > 0) rows.push({ label: "Utlägg (inkl moms)", amountOre: b.expensesGrossOre, kind: "add" });
   if (b.radgivningGrossOre > 0) rows.push({ label: radgivningTextRad("faktura"), amountOre: b.radgivningGrossOre, kind: "info" });
   for (const d of b.deductedAccontos) rows.push({ label: `Betalt via aconto — faktura ${d.invoiceNumber}${d.date ? ` (${svd(d.date)})` : ""}`, amountOre: d.amountOre, kind: "info" });
-  return { timeLines: [], rows, totalLabel: `${payerLabel} — att betala (inkl moms)`, totalOre: b.payerPayableOre };
+  return { timeLines: b.clientArvodeLines.map(toViewLine), rows, totalLabel: `${payerLabel} — att betala (inkl moms)`, totalOre: b.payerPayableOre };
 }
 
-/** Klient- + betalar-vy ur nedbrytningen (#876) — betalar-etiketten följer metoden. */
+/** Klient- + betalar-vy ur nedbrytningen (#876) — etiketterna följer metoden. */
 function buildSettlementViews(b: SettlementBreakdown, method: PaymentMethod): { clientView: SettlementView; payerView: SettlementView } {
   const isRattshjalp = method === "RATTSHJALP";
   const payerLabel = isRattshjalp ? "Domstolen betalar" : "Försäkringen betalar";
-  return { clientView: buildClientView(b, isRattshjalp), payerView: buildPayerView(b, payerLabel) };
+  const payerNoun = isRattshjalp ? "Domstolens" : "Försäkringens";
+  return { clientView: buildClientView(b, isRattshjalp), payerView: buildPayerView(b, payerLabel, payerNoun) };
 }
 
 /**
