@@ -281,7 +281,9 @@ export async function populateBilling(caller: GeneratorCaller, seed: SeedDataset
       continue;
     }
     if (!hasWork(seed, matterId)) continue; // klientfaktura kräver fakturerbart arbete
-    if (matterId === "m-020-rattshjalp-varierande") {
+    // OBS: `matterId` är det ÖVERSATTA UUID:t (translateSeed), inte slug:en — matcha
+    // därför på `matterNumber` (ett affärsfält som INTE översätts).
+    if (String(m.matterNumber) === "2026-0020") {
       // Dedikerat flöde (#878): varierande avgift → settlement → kreditfaktura.
       await runRattshjalpVaryingRate(ctx, matterId);
       continue;
