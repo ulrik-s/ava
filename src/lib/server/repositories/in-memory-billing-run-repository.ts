@@ -24,7 +24,7 @@ export class InMemoryBillingRunRepository
     return (await this.delegate.findMany({
       where: { ...(matterId ? { matterId } : {}), matter: { organizationId } },
       orderBy: { createdAt: "desc" },
-      include: { invoice: { select: { id: true, invoiceNumber: true, status: true } } },
+      include: { invoice: { select: { id: true, invoiceNumber: true, status: true, invoiceDate: true } } },
     })) as BillingRunListRow[];
   }
 

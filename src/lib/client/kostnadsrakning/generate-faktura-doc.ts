@@ -83,7 +83,7 @@ const FAKTURA_TEMPLATE = `<!DOCTYPE html><html lang="sv"><head><meta charset="ut
 </table>{{/if}}
 <table cellpadding="6" cellspacing="0" style="border-collapse:collapse;width:100%;font-size:14px;margin-top:1.5rem">
 <tbody>
-{{#if useSpec}}
+{{#if showSpecTotals}}
 {{#if hasSpec}}
 <tr><td>Arvode{{#if hoursTotal}} ({{hoursTotal}} tim){{/if}} (exkl moms)</td><td style="text-align:right">{{arvodeNet}}</td></tr>
 {{#if hasExpenses}}<tr><td>Utlägg (exkl moms)</td><td style="text-align:right">{{expensesNet}}</td></tr>{{/if}}
@@ -204,6 +204,10 @@ function fakturaTemplateContext(a: FakturaTemplateArgs, formatCurrency: (ore: nu
     ...headerContext(a, formatCurrency),
     ...specContext(a.spec, formatCurrency),
     ...breakdownContext(a.breakdown, formatCurrency),
+    // Spec-summeringen (arvode/moms/delsumma) visas bara när spec körs UTAN breakdown
+    // (#876) — annars äger breakdown-trappan beloppen och summeringen skulle dubbleras.
+    // Tids-/utläggstabellerna renderas oberoende (på timeLines/expenseLines-längd).
+    showSpecTotals: !!a.spec && !a.breakdown,
   };
 }
 

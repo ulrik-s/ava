@@ -140,10 +140,13 @@ function timkostnadsnormResult(totalArbetsMinutes: number, hasFTax: boolean): Ta
  * domstolens kostnadsräkning. Hela poster utelämnas tills kvoten är uppfylld; en
  * post som delvis överlappar krymps med resterande minuter.
  */
-function carveEarliestMinutes(entries: readonly TimeEntryInput[], carveMinutes: number): TimeEntryInput[] {
+export function carveEarliestMinutes<T extends { date: Date | string; minutes: number }>(
+  entries: readonly T[],
+  carveMinutes: number,
+): T[] {
   const sorted = [...entries].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   let left = carveMinutes;
-  const out: TimeEntryInput[] = [];
+  const out: T[] = [];
   for (const t of sorted) {
     if (left <= 0) { out.push(t); continue; }
     if (t.minutes <= left) { left -= t.minutes; continue; } // hela posten är rådgivning → utelämna

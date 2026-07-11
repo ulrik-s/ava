@@ -145,6 +145,12 @@ export const MATTERS: MatterSeed[] = [
   { id: "m-016-brottmal-rh", matterNumber: "2026-0016", title: "Brottmål — rattfylleri Falk", status: "ACTIVE", matterType: "Brottmål", paymentMethod: "OFFENTLIGT_UPPDRAG", description: "Förordnad offentlig försvarare vid Stockholms tingsrätt.", klientId: "c-falk", domstolId: "c-tingsratten-sthlm", createdDaysAgo: 18, isTaxeArende: true, taxaLevel: 1, taxaHuvudforhandlingMin: 95, taxaHasFTax: true },
   { id: "m-017-brottmal-omf", matterNumber: "2026-0017", title: "Brottmål — omfattande utredning Davidsson", status: "ACTIVE", matterType: "Brottmål", paymentMethod: "OFFENTLIGT_UPPDRAG", description: "Frångångstaxa pga väsentligt mer arbete (komplex bevisning).", klientId: "c-davidsson", domstolId: "c-hovratten-svea", createdDaysAgo: 35, isTaxeArende: false },
   { id: "m-018-brottmal-ekobrott", matterNumber: "2026-0018", title: "Brottmål — ekobrott Carlsson", status: "ACTIVE", matterType: "Brottmål", paymentMethod: "OFFENTLIGT_UPPDRAG", description: "Misstanke om grovt bokföringsbrott. Omfattande material — kostnadsräkning skickas till domstol istället för enligt taxa.", klientId: "c-carlsson", domstolId: "c-tingsratten-sthlm", createdDaysAgo: 28, isTaxeArende: false },
+  // Rättshjälp med TIDSVARIERANDE avgift (#878): klienten var arbetslös (5 %), fick
+  // jobb (75 %) och blev arbetslös igen (5 %). Aconton ställdes ut vid de löpande
+  // satserna; rättshjälpsmyndighetens SLUTLIGA helhetsbeslut blev 5 % → klienten
+  // överfakturerades (särskilt via 75 %-acontot) → kreditfaktura. clientShareBips =
+  // det slutliga helhetsbeslutet (5 %). Egen tidslogg (nedan) → deterministiskt arvode.
+  { id: "m-020-rattshjalp-varierande", matterNumber: "2026-0020", title: "Vårdnadstvist — varierande rättshjälp Falk", status: "ACTIVE", matterType: "Familjerätt", paymentMethod: "RATTSHJALP", description: "Rättshjälp med varierande avgift (arbetslös 5 % → anställd 75 % → arbetslös 5 %). Myndighetens slutliga beslut: 5 % för hela ärendet.", klientId: "c-falk", motpartId: "c-bergman", domstolId: "c-tingsratten-sthlm", createdDaysAgo: 120, clientShareBips: 500, rattshjalpMaxTimmar: 100 },
 ];
 
 // ASSIGN_USERS härleds inuti buildSeed() från de aktuella users — så ifall
@@ -364,9 +370,9 @@ function buildTimeEntries(orgId: string, users: UserSeed[]): SeedDataset["timeEn
   const activeMatters = MATTERS.filter((m) => m.status === "ACTIVE");
   let teSeq = 0;
   activeMatters.forEach((matter, mi) => {
-    // Umgängestvist Carlsson har en dedikerad, kronologiskt koherent tidslogg
-    // (rådgivningstimmen först) — se nedan (#862).
-    if (matter.id === "m-010-vardnad-2") return;
+    // Umgängestvist Carlsson (m-010) + varierande-rättshjälp (m-020) har dedikerade,
+    // kronologiskt koherenta tidsloggar (rådgivningstimmen först) — se nedan (#862/#878).
+    if (matter.id === "m-010-vardnad-2" || matter.id === "m-020-rattshjalp-varierande") return;
     const count = 4 + (mi % 3); // 4,5,6,4,5,6…
     for (let j = 0; j < count; j++) {
       teSeq++;
@@ -385,7 +391,38 @@ function buildTimeEntries(orgId: string, users: UserSeed[]): SeedDataset["timeEn
     }
   });
   appendVardnad2TimeEntries(out, orgId, users);
+  appendVaryingRattshjalpTimeEntries(out, orgId, users);
   return out;
+}
+
+/**
+ * Dedikerad tidslogg för "Vårdnadstvist — varierande rättshjälp" (m-020) (#878):
+ * rådgivningstimmen först, sedan arbete spritt över ~120 dagar så aconton hinner
+ * ställas ut vid olika rättshjälpsavgifts-satser (arbetslös/anställd/arbetslös).
+ * Totalt 10,5 tim (−1 tim rådgivning = 9,5 tim debiterbart arvode).
+ */
+function appendVaryingRattshjalpTimeEntries(out: SeedDataset["timeEntries"], orgId: string, users: UserSeed[]): void {
+  const lawyer = users.find((u) => u.role === "LAWYER") ?? users[0];
+  if (!lawyer) return;
+  const rows: Array<{ daysAgo: number; minutes: number; description: string }> = [
+    { daysAgo: 118, minutes: 60, description: "Första möte med klient i ärendet" }, // rådgivningstimmen — FÖRST
+    { daysAgo: 100, minutes: 90, description: "Genomgång av handlingar (klient arbetslös, 5 % avgift)" },
+    { daysAgo: 70, minutes: 120, description: "Förhandlingsförberedelse och inlaga" },
+    { daysAgo: 55, minutes: 90, description: "Klientmöte (klient fått anställning, 75 % avgift)" },
+    { daysAgo: 40, minutes: 120, description: "Sammanträde i tingsrätten" },
+    { daysAgo: 20, minutes: 90, description: "Uppföljning och korrespondens (klient åter arbetslös, 5 %)" },
+    { daysAgo: 8, minutes: 60, description: "Slutförberedelse inför avgörande" },
+  ];
+  rows.forEach((r, i) => {
+    out.push({
+      id: `te-m020-${i + 1}`,
+      organizationId: orgId,
+      userId: lawyer.id, matterId: "m-020-rattshjalp-varierande", date: isoDate(-r.daysAgo, 9),
+      minutes: r.minutes, description: r.description,
+      hourlyRate: lawyer.hourlyRate, billable: true,
+      invoiceId: null, createdAt: isoDate(-r.daysAgo, 9), updatedAt: isoDate(-r.daysAgo, 9),
+    });
+  });
 }
 
 /**

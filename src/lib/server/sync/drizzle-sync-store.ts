@@ -53,6 +53,12 @@ function rowId(m: QueuedMutation): string {
   return typeof m.row.id === "string" ? m.row.id : "";
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** Alla server-tabeller är uuid-nycklade (#879). Ett icke-uuid rowId (t.ex. ett
+ *  lokalt genererat nanoid) kan aldrig lagras → `getById` skulle kasta 22P02 och
+ *  abortera hela reconcile-batchen. */
+function isUuidRowId(id: string): boolean { return UUID_RE.test(id); }
+
 function versionOf(row: Row | null): number {
   return row && typeof row.version === "number" ? row.version : 1;
 }
@@ -105,6 +111,10 @@ export class DrizzleSyncStore implements SyncStore {
   async push(_organizationId: string, m: QueuedMutation): Promise<PushResult> {
     const repo = this.repoFor(m.entity);
     if (!repo) return { status: "conflict", reason: `okänd entitet: ${m.entity}` };
+    // Ogiltigt (icke-uuid) rowId (#879): kan aldrig lagras i de uuid-nycklade
+    // tabellerna — skippa som "accepted" så klienten ackar och slutar retry:a
+    // (annars kastar getById 22P02 och aborterar hela reconcile-batchen → hänget).
+    if (!isUuidRowId(rowId(m))) return { status: "accepted", row: m.row };
     if (m.kind === "delete") return this.applyDelete(repo, m);
     if (m.kind === "create") return this.applyCreate(repo, m);
     return this.applyUpdate(repo, m);

@@ -117,6 +117,24 @@ export const invoiceSchema = z.object({
     netOre: z.number().int(),
     vatOre: z.number().int(),
   })).nullish(),
+  /** Persisterad slutregleringsvy (#876) — EN källa för både faktura-dokumentet
+   *  och Slutfaktura-sidan (`/invoices/[id]`). Sätts vid settleCoverage på klient-/
+   *  betalar-fakturan; null på övriga fakturor. Matchar `SettlementView`. */
+  settlementBreakdown: z.object({
+    timeLines: z.array(z.object({
+      date: z.string(),
+      description: z.string(),
+      minutes: z.number().int(),
+      amountOre: z.number().int(),
+    })),
+    rows: z.array(z.object({
+      label: z.string(),
+      amountOre: z.number().int(),
+      kind: z.enum(["add", "deduct", "info"]),
+    })),
+    totalLabel: z.string(),
+    totalOre: z.number().int(),
+  }).nullish(),
   status: invoiceStatusSchema.default("DRAFT"),
   invoiceType: invoiceTypeSchema.default("STANDARD"),
   /** Per-byrå löpande fakturanummer (F-YYYY-NNNN), genereras vid skapande.

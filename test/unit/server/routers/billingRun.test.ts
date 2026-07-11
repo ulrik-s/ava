@@ -509,6 +509,78 @@ describe("billingRun.settleCoverage — bokför prutnings-uppdelningen (#801)", 
     expect(b.baseArvodeGrossOre + b.expensesGrossOre - b.sjalvriskGrossOre - b.prutningGrossOre).toBe(b.payerPayableOre);
     // Klient: självrisk − avräknade aconton = klientens belopp.
     expect(b.sjalvriskGrossOre - b.deductedAccontos.reduce((s, d) => s + d.amountOre, 0)).toBe(b.clientPayableOre);
+    // #876 — moms-trappan: självrisk NETTO + moms EN gång = brutto (ingen dubbelmoms).
+    expect(b.sjalvriskNetOre).toBe(65_040);                       // 20 % × 325 200 netto
+    expect(b.sjalvriskGrossOre - b.sjalvriskNetOre).toBe(16_260); // moms 25 %, redovisad exakt en gång
+    // #876 — rådgivningstimmen omnämns på domstolsfakturan (1 h × norm 162 600 × 1,25) men
+    // ligger UTANFÖR domstolens total (bekräftas av reconcile-raden ovan som ej rör den).
+    expect(b.radgivningGrossOre).toBe(203_250);
+    // #876 — klientens självrisk-spec: rådgivningstimmen carvad bort, summan == arvodesbasen.
+    expect(b.clientArvodeLines).toHaveLength(1);
+    expect(b.clientArvodeLines[0]!.minutes).toBe(120);            // 180 − 60 rådgivning
+    expect(b.clientArvodeLines.reduce((s, l) => s + l.amountOre, 0)).toBe(b.arvodeBaseNetOre);
+
+    // #876 — persisterad vy på BÅDA fakturorna = EN källa för dokument + Slutfaktura-sida.
+    const cv = res.clientInvoice.settlementBreakdown!;
+    expect(cv.totalOre).toBe(b.clientPayableOre);
+    expect(cv.timeLines).toHaveLength(1);
+    expect(cv.timeLines[0]!.amountOre).toBe(325_200);             // tidsspec-tabellen på klientfakturan
+    expect(cv.rows.find((r) => r.label === "Moms 25 %")?.amountOre).toBe(16_260);
+    expect(cv.rows.some((r) => r.kind === "deduct" && r.label.startsWith("Avgår aconto"))).toBe(true);
+    const pv = res.payerInvoice.settlementBreakdown!;
+    expect(pv.totalOre).toBe(b.payerPayableOre);
+    // #876 — domstolsfakturan har SAMMA upplägg som klienten: tidsspec + andel-trappa.
+    expect(pv.timeLines).toHaveLength(1);
+    expect(pv.timeLines[0]!.amountOre).toBe(325_200);
+    expect(pv.rows.find((r) => r.label.includes("andel av arvodet"))?.amountOre).toBe(260_160); // 325 200 − 65 040 självrisk
+    expect(pv.rows.find((r) => r.label === "Moms 25 %")?.amountOre).toBe(65_040);               // moms på domstolens andel
+    expect(pv.rows.some((r) => r.kind === "info" && r.label.includes("Rådgivningstimme"))).toBe(true);
+  });
+
+  it("rättshjälp (#878): utlägg delas per andel; klientens del heter 'rättshjälpsavgift'", async () => {
+    const ds = new DemoDataStore({
+      organizations: [{ id: "org-1", name: "X" }],
+      matters: [{ id: "m-1", organizationId: "org-1", matterNumber: "2026-0001", title: "T", status: "ACTIVE", responsibleLawyerId: "u-1", paymentMethod: "RATTSHJALP", clientShareBips: 2000, taxaHasFTax: true, createdAt: new Date() }],
+      users: [{ id: "u-1", organizationId: "org-1", email: "a@x", name: "Anna", role: "ADMIN", hourlyRate: 999999 }],
+      timeEntries: [{ id: "te-1", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date(), minutes: 180, description: "M", hourlyRate: 200000, billable: true }],
+      expenses: [{ id: "ex-1", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date(), amount: 10000, description: "Ansökningsavgift", billable: true, vatRate: 2500, vatIncluded: false }],
+    }, async () => {});
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const c = appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: PRINCIPAL }) as any);
+    const res = await c.billingRun.settleCoverage({ matterId: "m-1", payerRecipient: "DOMSTOL" });
+    // Klienten (20 %) bär 20 % av utlägget: net 2 000 + moms 500 = 2 500 brutto; domstolen resten (10 000).
+    expect(res.clientInvoice.amount).toBe(83_800);   // rättshjälpsavgift 81 300 + utläggsandel 2 500
+    expect(res.payerInvoice.amount).toBe(335_200);   // domstolens arvode 325 200 + utläggsandel 10 000
+    const cv = res.clientInvoice.settlementBreakdown!;
+    expect(cv.rows.some((r) => r.label.includes("rättshjälpsavgift"))).toBe(true);        // #878 — EJ "självrisk"
+    expect(cv.rows.some((r) => r.label.toLowerCase().includes("självrisk"))).toBe(false);
+    expect(cv.rows.find((r) => r.label.includes("Utlägg (klientens andel"))?.amountOre).toBe(2_500);
+    const pv = res.payerInvoice.settlementBreakdown!;
+    expect(pv.rows.some((r) => r.label.includes("Avgår klientens rättshjälpsavgift"))).toBe(true);
+    expect(pv.rows.find((r) => r.label.includes("Utlägg"))?.amountOre).toBe(10_000);
+  });
+
+  it("rättshjälp (#878): aconton > slutlig rättshjälpsavgift → KREDITfaktura till klienten", async () => {
+    // Slutlig helhetssats 5 % (myndighetsbeslut), men klienten har betalat ett aconto
+    // på 50 000 (utställt vid en högre period-sats) → överfakturerat → kredit.
+    const { caller: c } = caller({ paymentMethod: "RATTSHJALP", clientShareBips: 500, taxaHasFTax: true }, 999999, 180);
+    await c.billingRun.createAcconto({ matterId: "m-1", clientShareBips: 7500, amountOre: 50_000 }); // SENT-aconto
+    const res = await c.billingRun.settleCoverage({ matterId: "m-1", payerRecipient: "DOMSTOL" });
+    // Slutlig andel: 5 % × 325 200 = 16 260 net → 20 325 brutto. Betalt 50 000 → kredit 29 675.
+    // #878: EN klientfaktura (blir CREDIT vid överbetalning) — INGEN 0.00-slutfaktura.
+    expect(res.clientInvoice.invoiceType).toBe("CREDIT");
+    expect(res.clientInvoice.amount).toBe(-29_675);      // negativ = kreditering
+    expect(res.creditInvoice).toBe(res.clientInvoice);   // krediten ÄR klientfakturan
+    expect(res.clientInvoice.settlementBreakdown!.totalOre).toBe(29_675);
+  });
+
+  it("rättshjälp: aconton < slutlig rättshjälpsavgift → INGEN kreditfaktura", async () => {
+    const { caller: c } = caller({ paymentMethod: "RATTSHJALP", clientShareBips: 2000, taxaHasFTax: true }, 999999, 180);
+    await c.billingRun.createAcconto({ matterId: "m-1", clientShareBips: 2000, amountOre: 10_000 });
+    const res = await c.billingRun.settleCoverage({ matterId: "m-1", payerRecipient: "DOMSTOL" });
+    expect(res.creditInvoice).toBeNull();               // 20 % × 325 200 = 65 040 > 10 000 aconto
+    expect(res.clientInvoice.invoiceType).toBe("FINAL");
+    expect(res.clientInvoice.amount).toBeGreaterThan(0);
   });
 
   it("rättshjälp via KR (#828): kräver registrerat beslut; domsbeloppet läses från KR:n; KR konsumeras EJ utan markeras FAKTURERAD", async () => {
@@ -554,6 +626,7 @@ describe("billingRun.settleCoverage — bokför prutnings-uppdelningen (#801)", 
     expect(res.split).toMatchObject({ clientOre: 840_000, payerOre: 960_000, firmLossOre: 0 });
     expect(res.clientInvoice.amount).toBe(1_050_000); // 840 000 × 1,25 moms
     expect(res.payerInvoice.amount).toBe(1_200_000); // 960 000 × 1,25 moms
+    expect(res.breakdown.radgivningGrossOre).toBe(0); // #876 — rådgivning gäller bara rättshjälp
   });
 });
 

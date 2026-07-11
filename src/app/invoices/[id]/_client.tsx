@@ -19,6 +19,7 @@ import { arvodeInclVatOre } from "@/lib/shared/invoice-calc";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { computeMatterSettlement, computeRadgivningsavgift, type MatterSettlement } from "@/lib/shared/rattshjalp";
 import { asId } from "@/lib/shared/schemas/ids";
+import type { SettlementView } from "@/lib/shared/settlement-view";
 import { splitVat } from "@/lib/shared/vat";
 import { computeInvoiceLedger } from "@/lib/shared/write-off-calc";
 import { CreditModal } from "./_credit-modal";
@@ -150,7 +151,7 @@ function InvoiceSummaryCard({ inv, ledger, s }: { inv: Inv; ledger: LedgerView; 
 function InvoiceSections({ inv, ledger, onCancelPlan }: { inv: Inv; ledger: LedgerView; onCancelPlan: () => void }) {
   return (
     <>
-      <SpecificationCard timeEntries={inv.timeEntries ?? []} expenses={inv.expenses ?? []} />
+      <PrimarySpecCard inv={inv} />
       <InvoiceDocumentsCard documents={inv.documents ?? []} />
       <CreditBanners inv={inv} />
       {inv.paymentPlan && <PaymentPlanCard plan={inv.paymentPlan} onCancel={onCancelPlan} />}
@@ -159,6 +160,61 @@ function InvoiceSections({ inv, ledger, onCancelPlan }: { inv: Inv; ledger: Ledg
       <DispatchHistory invoiceId={inv.id} />
       {ledger.writeOffs.length > 0 && <WriteOffsCard writeOffs={ledger.writeOffs} />}
     </>
+  );
+}
+
+/** Primär specifikation: slutregleringsfakturor (#876) visar den PERSISTERADE vyn
+ *  (identisk med faktura-dokumentet), övriga fakturor den vanliga tids-/utläggsspecen. */
+function PrimarySpecCard({ inv }: { inv: Inv }) {
+  if (inv.settlementBreakdown) return <SettlementBreakdownCard view={inv.settlementBreakdown} />;
+  return <SpecificationCard timeEntries={inv.timeEntries ?? []} expenses={inv.expenses ?? []} />;
+}
+
+/** Slutregleringens persisterade vy (#876): tidsspec-tabell + beloppstrappa + total,
+ *  renderad ur `settlementBreakdown` så den är IDENTISK med faktura-dokumentet. */
+function SettlementBreakdownCard({ view }: { view: SettlementView }) {
+  const hours = (m: number) => (m / 60).toLocaleString("sv-SE", { maximumFractionDigits: 2 });
+  return (
+    <div className="bg-white rounded-lg border border-gray-200 p-6">
+      <h2 className="font-semibold text-gray-900 mb-1">Specifikation</h2>
+      <p className="text-sm text-gray-500 mb-4">Samma underlag och belopp som faktura-dokumentet.</p>
+      {view.timeLines.length > 0 && (
+        <table className="min-w-full text-sm mb-4">
+          <thead>
+            <tr className="text-left text-xs text-gray-500">
+              <th className="py-1 font-normal">Datum</th>
+              <th className="py-1 font-normal">Beskrivning</th>
+              <th className="py-1 font-normal text-right">Tid</th>
+              <th className="py-1 font-normal text-right">Belopp</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {view.timeLines.map((l, i) => (
+              <tr key={i}>
+                <td className="py-1.5 whitespace-nowrap">{new Date(l.date).toLocaleDateString("sv-SE")}</td>
+                <td className="py-1.5">{l.description}</td>
+                <td className="py-1.5 text-right whitespace-nowrap">{hours(l.minutes)} h</td>
+                <td className="py-1.5 text-right font-mono whitespace-nowrap">{formatCurrency(l.amountOre)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      <dl className="divide-y divide-gray-100">
+        {view.rows.map((r, i) => (
+          <div key={i} className="flex items-center justify-between py-1.5">
+            <dt className={`text-sm ${r.kind === "info" ? "text-gray-400" : "text-gray-600"}`}>{r.label}</dt>
+            <dd className={`text-sm font-mono ${r.kind === "deduct" ? "text-amber-700" : r.kind === "info" ? "text-gray-400" : "text-gray-700"}`}>
+              {r.kind === "deduct" ? "−" : r.kind === "info" ? "(" : ""}{formatCurrency(r.amountOre)}{r.kind === "info" ? ")" : ""}
+            </dd>
+          </div>
+        ))}
+        <div className="flex items-center justify-between border-t border-gray-300 mt-1 pt-2">
+          <dt className="text-sm font-semibold text-gray-900">{view.totalLabel}</dt>
+          <dd className="text-sm font-mono font-semibold text-gray-900">{formatCurrency(view.totalOre)}</dd>
+        </div>
+      </dl>
+    </div>
   );
 }
 
@@ -407,7 +463,8 @@ function settlementRows(s: MatterSettlement): Array<{ label: string; ore: number
 
 /** FINAL-fakturans extra sektioner: accontoavdrag + ärende-sammanställning (#349). */
 function FinalInvoiceExtras({ inv, ledger }: { inv: Inv; ledger: LedgerView }) {
-  if (inv.invoiceType !== "FINAL") return null;
+  // Slutregleringsfakturor (#876) visar redan allt i SettlementBreakdownCard.
+  if (inv.invoiceType !== "FINAL" || inv.settlementBreakdown) return null;
   return (
     <>
       {ledger.accontoDeductions.length > 0 && <AccontoDeductions deductions={ledger.accontoDeductions} />}

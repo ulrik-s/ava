@@ -97,4 +97,41 @@ describe("generateFakturaFromTemplate", () => {
     expect(html).not.toContain("Nedsättning"); // lumpen ersatt av itemiserade rader
     expect(html).not.toContain("Rådgivning"); // rådgivningstimmen syns ALDRIG på domstols-fakturan (#860)
   });
+
+  it("klientens självrisk-faktura (#876): tidsspec-TABELL + moms-trappa, spec-summeringen undertryckt", async () => {
+    await generateFakturaFromTemplate({
+      invoice: { id: asId<"InvoiceId">("inv-s"), amount: 31_300, vatOre: 16_260, invoiceNumber: "F-2026-0019", invoiceDate: "2026-07-10" },
+      matterId: asId<"MatterId">("m1"),
+      recipient: "Cecilia Carlsson",
+      meta: { matterNumber: "2026-0010", matterTitle: "Umgängestvist Carlsson" },
+      register: { mutateAsync: registerMutateAsync },
+      utils,
+      // Tidsspec ger TABELLEN (bug #1); breakdown ger moms-trappan (bug #3).
+      spec: {
+        timeLines: [{ date: "2026-03-02", description: "Genomgång av handlingar", minutes: 120, amountOre: 325_200 }],
+        expenseLines: [], totalMinutes: 120,
+        arvodeNetOre: 325_200, arvodeVatOre: 0, expensesNetOre: 0, expensesVatOre: 0,
+        grossOre: 0, deductions: [], deductionOre: 0, adjustmentOre: 0, payableOre: 0,
+      },
+      breakdown: {
+        rows: [
+          { label: "Upparbetat arvode (exkl moms)", amountOre: 325_200, kind: "add" },
+          { label: "Klientens självrisk 20 % (exkl moms)", amountOre: 65_040, kind: "add" },
+          { label: "Moms 25 %", amountOre: 16_260, kind: "add" },
+          { label: "Självrisk (inkl moms)", amountOre: 81_300, kind: "add" },
+          { label: "Avgår aconto — faktura F-2026-0013 (2026-05-15)", amountOre: 50_000, kind: "deduct" },
+        ],
+        totalLabel: "Att betala (inkl moms)", totalOre: 31_300,
+      },
+    });
+    const html = new TextDecoder().decode(persistGeneratedDoc.mock.calls[0]![0].bytes as Uint8Array);
+    expect(html).toContain("Tidsspecifikation");               // #1 — underlaget syns
+    expect(html).toContain("Genomgång av handlingar");
+    expect(html).toContain("Upparbetat arvode (exkl moms)");    // #3 — basen märkt EXKL moms
+    expect(html).toContain("Moms 25 %");                        // momsen redovisad …
+    expect(html).toContain("Självrisk (inkl moms)");
+    expect(html).toContain("Avgår aconto — faktura F-2026-0013");
+    // … men spec-summeringen undertrycks när breakdown finns → ingen dubbel moms/summa.
+    expect(html).not.toContain("Delsumma (inkl moms)");
+  });
 });

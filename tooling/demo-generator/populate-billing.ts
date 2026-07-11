@@ -206,6 +206,40 @@ async function runRattshjalpBilling(ctx: Ctx, matterId: string, daysAgo: number,
   await ctx.c.billingRun.recordKostnadsrakningBeslut({ billingRunId: kr.run.id, awardedOre: kr.run.workValueOreAtRun });
 }
 
+/** Aconto med ORGANISKT id (#878) — så flera aconton kan ställas ut på SAMMA ärende
+ *  (den delade `acconto`-helpern har ett enda deterministiskt id per ärende). */
+async function accontoVarying(ctx: Ctx, matterId: string, bips: number, amountOre: number, daysAgo: number): Promise<void> {
+  const { invoice } = await ctx.c.billingRun.createAcconto({
+    matterId, recipient: "KLIENT", clientShareBips: bips, amountOre,
+    invoiceDate: isoDaysAgo(daysAgo + 20), dueDate: isoDaysAgo(daysAgo - 10),
+    notes: `Aconto — rättshjälpsavgift ${bips / 100} % (löpande sats)`,
+  });
+  ctx.res.invoices++;
+  await ctx.c.invoice.setStatus({ invoiceId: invoice.id, status: "SENT" });
+}
+
+/**
+ * Rättshjälp med TIDSVARIERANDE avgift → kreditfaktura (#878). Hela förfarandet:
+ * rådgivning → 3 aconton vid löpande satser (5 % / 75 % / 5 %) → kostnadsräkning till
+ * domstol → myndighetens SLUTLIGA helhetsbeslut (5 %) via settlement → klienten har
+ * överfakturerats (särskilt 75 %-acontot) → `settleCoverage` skapar en KREDITfaktura.
+ */
+async function runRattshjalpVaryingRate(ctx: Ctx, matterId: string): Promise<void> {
+  await ctx.c.invoice.createRadgivning({ matterId });
+  ctx.res.invoices++;
+  await accontoVarying(ctx, matterId, 500, 30_000, 105);   // period 1: arbetslös, 5 %
+  await accontoVarying(ctx, matterId, 7500, 600_000, 55);  // period 2: anställd, 75 % (överfakturerar)
+  await accontoVarying(ctx, matterId, 500, 30_000, 20);    // period 3: åter arbetslös, 5 %
+  const kr = await ctx.c.billingRun.createKostnadsrakning({ matterId, notes: "Kostnadsräkning till domstol (rättshjälp, varierande avgift)" });
+  ctx.res.kostnadsrakningPending++;
+  // Myndighetens slutliga helhetsbeslut = 5 % (matterns clientShareBips); domstolen
+  // fastställer totalbeloppet (hela det yrkade i demon, ingen prutning).
+  await ctx.c.billingRun.recordKostnadsrakningBeslut({ billingRunId: kr.run.id, awardedOre: kr.run.workValueOreAtRun });
+  const res = await ctx.c.billingRun.settleCoverage({ matterId, payerRecipient: "DOMSTOL" });
+  ctx.res.invoices += 2; // klientfaktura (FINAL/CREDIT) + domstols-faktura
+  if (res.creditInvoice) ctx.res.credits++; // klientfakturan blev en CREDIT (överfakturerad)
+}
+
 async function runClientBilling(ctx: Ctx, matterId: string, pm: string, clientIdx: number): Promise<void> {
   const daysAgo = 30 + clientIdx * 6;
   const deducted = pm === "RATTSSKYDD"
@@ -247,6 +281,13 @@ export async function populateBilling(caller: GeneratorCaller, seed: SeedDataset
       continue;
     }
     if (!hasWork(seed, matterId)) continue; // klientfaktura kräver fakturerbart arbete
+    // OBS: `matterId` är det ÖVERSATTA UUID:t (translateSeed), inte slug:en — matcha
+    // därför på `matterNumber` (ett affärsfält som INTE översätts).
+    if (String(m.matterNumber) === "2026-0020") {
+      // Dedikerat flöde (#878): varierande avgift → settlement → kreditfaktura.
+      await runRattshjalpVaryingRate(ctx, matterId);
+      continue;
+    }
     if (pm === "RATTSHJALP") {
       // Visa KR-kortets båda actionabla lägen: första ärendet väntar på beslut,
       // nästa har beslut registrerat (redo att faktureras/överklagas).

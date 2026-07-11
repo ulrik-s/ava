@@ -63,15 +63,17 @@ interface BillingRunRow {
   recipient: BillingRunRecipient;
   amountOre: number;
   createdAt: string | Date;
+  /** Aconto-satsen (bips) som gällde när acontot ställdes ut (#878) — visas i listan. */
+  clientShareBips?: number | null;
   invoiceId?: InvoiceId | null;
-  invoice?: { id: InvoiceId; invoiceNumber?: string | null } | null;
+  invoice?: { id: InvoiceId; invoiceNumber?: string | null; invoiceDate?: string | Date | null } | null;
   kostnadsrakningStatus?: KostnadsrakningStatus | null;
   awardedOre?: number | null;
   beslutSlutgiltigt?: boolean | null;
 }
 
 /** Fristående klientfaktura (utan billing-run) som visas i faktura-listan (#853). */
-interface StandaloneInvoiceRow { id: InvoiceId; invoiceNumber?: string | null; status: string; amount: number }
+interface StandaloneInvoiceRow { id: InvoiceId; invoiceNumber?: string | null; status: string; amount: number; invoiceDate?: string | Date | null }
 
 /** Fakturor som INTE är kopplade till en billing-run (t.ex. rådgivningstimmen). */
 function standaloneInvoices(invoices: StandaloneInvoiceRow[] | undefined, rows: BillingRunRow[]): StandaloneInvoiceRow[] {
@@ -419,6 +421,7 @@ export function BillingPanel({ matterId, matter }: Props) {
         onOverklaga={() => appeal.mutate({ billingRunId: activeKr.id })}
         onSkapaFaktura={() => matter.paymentMethod === "RATTSHJALP" ? setShowSettle(true) : setVerdictRunId(activeKr.id)} />}
       {beslutRunId && <RecordBeslutDialog billingRunId={beslutRunId} onClose={() => setBeslutRunId(null)} onDone={refetch} />}
+      <RattshjalpRateSchedule matter={matter} rows={rows} />
       <RunsList matterId={matterId} rows={rows} standalone={standalone} loading={runs.isLoading} />
       <BillingDialogs matterId={matterId} matter={matter} rows={rows}
         dialog={dialog} setDialog={setDialog}
@@ -653,62 +656,121 @@ function BillingActions({ actions, onPick }: { actions: readonly BillingAction[]
   );
 }
 
+const svDate = (d: string | Date | null | undefined): string => (d ? new Date(d).toLocaleDateString("sv-SE") : "—");
+/** Radens kronologiska datum: fakturadatum (backdaterat i demon) före createdAt (#878). */
+const runDateOf = (r: BillingRunRow): string | Date => r.invoice?.invoiceDate ?? r.createdAt;
+
+/** Åtgärds-cellen: KR-dokument-länk + faktura-länk. Utbruten → RunRow ≤8. */
+function RunActions({ r, docs, client }: { r: BillingRunRow; docs: DocumentListOutput["documents"]; client: DownloadClient }) {
+  const krDoc = r.type === "KOSTNADSRAKNING" ? pickKrDoc(docs, r) : null;
+  return (
+    <td className="text-right space-x-2 whitespace-nowrap">
+      {krDoc && (
+        <button type="button" onClick={() => void openKrDoc(krDoc, client)}
+          className="text-xs text-blue-600 hover:underline">Kostnadsräkning</button>
+      )}
+      {/* EntityLink (hård nav) — runtime-skapade UUID:n finns ej i generateStaticParams;
+          __shell__-shimen/nginx try_files resolvar dem (se [[entity-link]]). */}
+      {r.invoiceId && (
+        <EntityLink route="invoices" id={r.invoiceId} className="text-xs text-blue-600 hover:underline">
+          {r.invoice?.invoiceNumber ?? "Faktura"}
+        </EntityLink>
+      )}
+    </td>
+  );
+}
+
+/** En billing-run-rad. Aconto visar sin sats (#878) så den varierande rättshjälps-
+ *  avgiften syns per period; KR-raden länkar till sitt dokument. */
+function RunRow({ r, docs, client }: { r: BillingRunRow; docs: DocumentListOutput["documents"]; client: DownloadClient }) {
+  const typeLabel = BILLING_RUN_TYPE_LABELS[r.type as keyof typeof BILLING_RUN_TYPE_LABELS] ?? r.type;
+  const rate = r.type === "ACCONTO" && r.clientShareBips != null ? ` (${r.clientShareBips / 100} %)` : "";
+  return (
+    <tr>
+      <td className="py-2 text-sm whitespace-nowrap text-gray-600">{svDate(runDateOf(r))}</td>
+      <td className="text-sm">{typeLabel}{rate}</td>
+      <td className="text-sm text-gray-600">{r.recipient}</td>
+      <td className="text-sm">{BILLING_RUN_STATUS_LABELS[r.status as keyof typeof BILLING_RUN_STATUS_LABELS] ?? r.status}</td>
+      <td className="text-right text-sm font-mono"><Money ore={r.amountOre} basis="gross" /></td>
+      <RunActions r={r} docs={docs} client={client} />
+    </tr>
+  );
+}
+
+/** Fristående klientfaktura utan billing-run (#853), t.ex. rådgivningstimmen. */
+function StandaloneRow({ inv }: { inv: StandaloneInvoiceRow }) {
+  return (
+    <tr>
+      <td className="py-2 text-sm whitespace-nowrap text-gray-600">{svDate(inv.invoiceDate)}</td>
+      <td className="text-sm">Faktura</td>
+      <td className="text-sm text-gray-600">KLIENT</td>
+      <td className="text-sm">{INVOICE_STATUS_LABELS[inv.status as keyof typeof INVOICE_STATUS_LABELS] ?? inv.status}</td>
+      <td className="text-right text-sm font-mono"><Money ore={inv.amount} basis="gross" /></td>
+      <td className="text-right whitespace-nowrap">
+        <EntityLink route="invoices" id={inv.id} className="text-xs text-blue-600 hover:underline">
+          {inv.invoiceNumber ?? "Faktura"}
+        </EntityLink>
+      </td>
+    </tr>
+  );
+}
+
+/** Rättshjälpsavgiften ÖVER TID (#878): satsen varierar (arbetslös/anställd) och
+ *  ställs ut per aconto vid den då gällande satsen. Härleds ur ACCONTO-körningarna
+ *  (sats + fakturadatum) — varje sats gäller från sitt datum till nästa acontos;
+ *  matterns clientShareBips = myndighetens slutliga helhetsbeslut för hela ärendet. */
+function RattshjalpRateSchedule({ matter, rows }: { matter: MatterContext; rows: BillingRunRow[] }) {
+  if (matter.paymentMethod !== "RATTSHJALP") return null;
+  const accontos = rows
+    .filter((r) => r.type === "ACCONTO" && r.clientShareBips != null)
+    .map((r) => ({ bips: r.clientShareBips as number, date: runDateOf(r) }))
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  if (accontos.length === 0) return null;
+  return (
+    <div className="px-6 py-3 border-t border-gray-100">
+      <h3 className="text-sm font-semibold text-gray-900 mb-2">Rättshjälpsavgift över tid</h3>
+      <table className="min-w-full text-sm">
+        <thead className="text-xs text-gray-500"><tr><th className="text-left py-1">Från</th><th className="text-left">Till</th><th className="text-right">Avgift</th></tr></thead>
+        <tbody className="divide-y divide-gray-100">
+          {accontos.map((a, i) => (
+            <tr key={i}>
+              <td className="py-1.5 whitespace-nowrap text-gray-600">{svDate(a.date)}</td>
+              <td className="whitespace-nowrap text-gray-600">{i + 1 < accontos.length ? svDate(accontos[i + 1]!.date) : "pågående"}</td>
+              <td className="text-right font-mono">{a.bips / 100} %</td>
+            </tr>
+          ))}
+          {matter.clientShareBips != null && (
+            <tr className="border-t border-gray-300">
+              <td className="py-1.5 font-medium text-gray-900" colSpan={2}>Slutligt myndighetsbeslut (hela ärendet)</td>
+              <td className="text-right font-mono font-semibold">{matter.clientShareBips / 100} %</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function RunsList({ matterId, rows, standalone, loading }: { matterId: MatterId; rows: BillingRunRow[]; standalone: StandaloneInvoiceRow[]; loading: boolean }) {
-  // Dokumentlistan hämtas en gång → KOSTNADSRAKNING-raden kan länka till sitt
-  // KR-dokument (#843). utils.client krävs för openKrDoc:s server-hämtning.
+  // Dokumentlistan hämtas en gång → KOSTNADSRAKNING-raden kan länka till sitt KR-dokument (#843).
   const docs = trpc.document.list.useQuery({ matterId, folderId: null, pageSize: 100 }).data?.documents ?? [];
   const utils = trpc.useUtils();
   if (loading) return <p className="px-6 py-3 text-sm text-gray-500">Laddar…</p>;
   if (rows.length === 0 && standalone.length === 0) return <p className="px-6 py-3 text-sm text-gray-500">Inga fakturor ännu.</p>;
+  // Slå ihop billing-runs + fristående fakturor och sortera KRONOLOGISKT på fakturadatum
+  // (#878) — annars blandas createdAt-ordning med en påklistrad standalone-grupp.
+  const items = [
+    ...rows.map((r) => ({ key: r.id, date: runDateOf(r), node: <RunRow key={r.id} r={r} docs={docs} client={utils.client} /> })),
+    ...standalone.map((inv) => ({ key: inv.id, date: inv.invoiceDate ?? 0, node: <StandaloneRow key={inv.id} inv={inv} /> })),
+  ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   return (
-    <div className="px-6 py-2">
+    <div className="px-6 py-2 overflow-x-auto">
       <table className="min-w-full text-sm">
         <thead className="text-xs text-gray-500">
-          <tr><th className="text-left py-1">Typ</th><th className="text-left">Mottagare</th><th className="text-left">Status</th><th className="text-right">Belopp</th><th></th></tr>
+          <tr><th className="text-left py-1">Datum</th><th className="text-left">Typ</th><th className="text-left">Mottagare</th><th className="text-left">Status</th><th className="text-right">Belopp</th><th></th></tr>
         </thead>
         <tbody className="divide-y divide-gray-100">
-          {rows.map((r) => {
-            const krDoc = r.type === "KOSTNADSRAKNING" ? pickKrDoc(docs, r) : null;
-            return (
-            <tr key={r.id}>
-              <td className="py-2 text-sm">{BILLING_RUN_TYPE_LABELS[r.type as keyof typeof BILLING_RUN_TYPE_LABELS] ?? r.type}</td>
-              <td className="text-sm text-gray-600">{r.recipient}</td>
-              <td className="text-sm">{BILLING_RUN_STATUS_LABELS[r.status as keyof typeof BILLING_RUN_STATUS_LABELS] ?? r.status}</td>
-              <td className="text-right text-sm font-mono"><Money ore={r.amountOre} basis="gross" /></td>
-              <td className="text-right space-x-2 whitespace-nowrap">
-                {krDoc && (
-                  <button type="button" onClick={() => void openKrDoc(krDoc, utils.client)}
-                    className="text-xs text-blue-600 hover:underline">Kostnadsräkning</button>
-                )}
-                {r.invoiceId && (
-                  // EntityLink (inte Next-Link) — runtime-skapade UUIDs finns
-                  // inte i generateStaticParams. Nuvarande 404.html är en
-                  // __shell__ routing-shim (se [[entity-link]]); EntityLink gör
-                  // en hård navigering så shim/nginx try_files kan resolva
-                  // runtime-skapade faktura-id:n.
-                  <EntityLink route="invoices" id={r.invoiceId}
-                    className="text-xs text-blue-600 hover:underline">
-                    {r.invoice?.invoiceNumber ?? "Faktura"}
-                  </EntityLink>
-                )}
-              </td>
-            </tr>
-            );
-          })}
-          {/* Fristående klientfakturor utan billing-run (#853), t.ex. rådgivningstimmen. */}
-          {standalone.map((inv) => (
-            <tr key={inv.id}>
-              <td className="py-2 text-sm">Faktura</td>
-              <td className="text-sm text-gray-600">KLIENT</td>
-              <td className="text-sm">{INVOICE_STATUS_LABELS[inv.status as keyof typeof INVOICE_STATUS_LABELS] ?? inv.status}</td>
-              <td className="text-right text-sm font-mono"><Money ore={inv.amount} basis="gross" /></td>
-              <td className="text-right whitespace-nowrap">
-                <EntityLink route="invoices" id={inv.id} className="text-xs text-blue-600 hover:underline">
-                  {inv.invoiceNumber ?? "Faktura"}
-                </EntityLink>
-              </td>
-            </tr>
-          ))}
+          {items.map((it) => it.node)}
         </tbody>
       </table>
     </div>
