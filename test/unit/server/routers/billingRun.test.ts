@@ -567,11 +567,11 @@ describe("billingRun.settleCoverage — bokför prutnings-uppdelningen (#801)", 
     await c.billingRun.createAcconto({ matterId: "m-1", clientShareBips: 7500, amountOre: 50_000 }); // SENT-aconto
     const res = await c.billingRun.settleCoverage({ matterId: "m-1", payerRecipient: "DOMSTOL" });
     // Slutlig andel: 5 % × 325 200 = 16 260 net → 20 325 brutto. Betalt 50 000 → kredit 29 675.
-    expect(res.clientInvoice.amount).toBe(0);            // slutfakturan klampad
-    expect(res.creditInvoice).not.toBeNull();
-    expect(res.creditInvoice!.amount).toBe(-29_675);    // negativ = kreditering
-    expect(res.creditInvoice!.invoiceType).toBe("CREDIT");
-    expect(res.creditInvoice!.settlementBreakdown!.totalOre).toBe(29_675);
+    // #878: EN klientfaktura (blir CREDIT vid överbetalning) — INGEN 0.00-slutfaktura.
+    expect(res.clientInvoice.invoiceType).toBe("CREDIT");
+    expect(res.clientInvoice.amount).toBe(-29_675);      // negativ = kreditering
+    expect(res.creditInvoice).toBe(res.clientInvoice);   // krediten ÄR klientfakturan
+    expect(res.clientInvoice.settlementBreakdown!.totalOre).toBe(29_675);
   });
 
   it("rättshjälp: aconton < slutlig rättshjälpsavgift → INGEN kreditfaktura", async () => {
@@ -579,6 +579,7 @@ describe("billingRun.settleCoverage — bokför prutnings-uppdelningen (#801)", 
     await c.billingRun.createAcconto({ matterId: "m-1", clientShareBips: 2000, amountOre: 10_000 });
     const res = await c.billingRun.settleCoverage({ matterId: "m-1", payerRecipient: "DOMSTOL" });
     expect(res.creditInvoice).toBeNull();               // 20 % × 325 200 = 65 040 > 10 000 aconto
+    expect(res.clientInvoice.invoiceType).toBe("FINAL");
     expect(res.clientInvoice.amount).toBeGreaterThan(0);
   });
 

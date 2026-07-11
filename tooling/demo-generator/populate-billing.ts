@@ -236,8 +236,8 @@ async function runRattshjalpVaryingRate(ctx: Ctx, matterId: string): Promise<voi
   // fastställer totalbeloppet (hela det yrkade i demon, ingen prutning).
   await ctx.c.billingRun.recordKostnadsrakningBeslut({ billingRunId: kr.run.id, awardedOre: kr.run.workValueOreAtRun });
   const res = await ctx.c.billingRun.settleCoverage({ matterId, payerRecipient: "DOMSTOL" });
-  ctx.res.invoices += res.creditInvoice ? 3 : 2; // klient-final + domstols-final (+ ev. kredit)
-  if (res.creditInvoice) ctx.res.credits++;
+  ctx.res.invoices += 2; // klientfaktura (FINAL/CREDIT) + domstols-faktura
+  if (res.creditInvoice) ctx.res.credits++; // klientfakturan blev en CREDIT (överfakturerad)
 }
 
 async function runClientBilling(ctx: Ctx, matterId: string, pm: string, clientIdx: number): Promise<void> {

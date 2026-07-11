@@ -624,25 +624,39 @@ function buildCreditView(deductionOre: number, clientGrossOre: number, overpaidO
   };
 }
 
-/** Skapa KREDITfaktura vid överfakturering (#878): har klienten via aconton betalat
- *  mer än sin slutliga andel krediteras mellanskillnaden. null om ingen överbetalning.
- *  Utbrutet så settleCoverage-handlern håller sig ≤8 i komplexitet. */
-async function createOverpaymentCredit(repos: Repositories, ctx: EmitCtx, orgId: OrganizationId, a: {
-  matterId: MatterId; deductionOre: number; clientGrossOre: number; method: PaymentMethod;
-}): Promise<Invoice | null> {
-  const overpaidOre = Math.max(0, a.deductionOre - a.clientGrossOre);
-  if (overpaidOre <= 0) return null;
+/**
+ * Klientens slutfaktura vid slutreglering (#878): EN faktura, aldrig en 0.00-rad.
+ * Nettot = klientens slutliga andel − betalda aconton:
+ *   - > 0 → FINAL (klienten är skyldig resten),
+ *   - < 0 → CREDIT (överfakturerad via aconton → mellanskillnaden krediteras),
+ *   - = 0 → FINAL 0 (exakt avräknad; ovanligt).
+ * Utbrutet så settleCoverage-handlern håller sig ≤8 i komplexitet.
+ */
+async function createClientSettlementInvoice(repos: Repositories, ctx: EmitCtx, orgId: OrganizationId, a: {
+  matterId: MatterId; clientGrossOre: number; deductionOre: number;
+  clientLines: VatBreakdownLine[]; clientView: SettlementView; method: PaymentMethod; notes: string | null | undefined;
+}): Promise<{ invoice: Invoice; creditInvoice: Invoice | null }> {
+  const clientNet = a.clientGrossOre - a.deductionOre; // kan vara negativt (överbetald)
+  const isCredit = clientNet < 0;
   const feeTerm = a.method === "RATTSHJALP" ? "rättshjälpsavgift" : "självrisk";
-  const credit = await repos.invoices.create({
-    // Moms = 25 %-andelen av det överbetalda bruttot (arvode = dominerande komponenten).
-    matterId: a.matterId, amount: -overpaidOre, vatOre: -Math.round(overpaidOre - overpaidOre / 1.25),
-    settlementBreakdown: buildCreditView(a.deductionOre, a.clientGrossOre, overpaidOre, feeTerm),
-    invoiceType: "CREDIT", status: "SENT", ...(await invoiceNumbering(repos, orgId, "KLIENT")),
-    invoiceDate: new Date(),
-    notes: `Rättshjälps-överfakturering: betalda aconton (${(a.deductionOre / 100).toLocaleString("sv-SE")} kr) översteg slutlig ${feeTerm} — mellanskillnaden krediteras klienten.`,
-  });
-  await emit.invoiceCreated(ctx, credit);
-  return credit;
+  const overpaidOre = -clientNet;
+  const base = { matterId: a.matterId, amount: clientNet, ...(await invoiceNumbering(repos, orgId, "KLIENT")), invoiceDate: new Date() };
+  const payload = isCredit
+    ? {
+        ...base,
+        // Kredit-moms = 25 %-andelen av det överbetalda bruttot (arvode dominerar).
+        vatOre: -Math.round(overpaidOre - overpaidOre / 1.25),
+        settlementBreakdown: buildCreditView(a.deductionOre, a.clientGrossOre, overpaidOre, feeTerm),
+        invoiceType: "CREDIT" as const, status: "SENT" as const,
+        notes: `Rättshjälps-överfakturering: betalda aconton (${(a.deductionOre / 100).toLocaleString("sv-SE")} kr) översteg slutlig ${feeTerm} — mellanskillnaden krediteras klienten.`,
+      }
+    : {
+        ...base, vatOre: vatOreOf(a.clientLines), vatBreakdown: a.clientLines,
+        settlementBreakdown: a.clientView, invoiceType: "FINAL" as const, status: "DRAFT" as const, notes: a.notes,
+      };
+  const invoice = await repos.invoices.create(payload);
+  await emit.invoiceCreated(ctx, invoice);
+  return { invoice, creditInvoice: isCredit ? invoice : null };
 }
 
 /**
@@ -1147,10 +1161,10 @@ export const billingRunRouter = router({
         });
         const { clientView, payerView } = buildSettlementViews(breakdown, matter.paymentMethod);
 
-        const clientInvoice = await tx.invoices.create({
-          matterId: input.matterId, amount: clientAmount, vatOre: vatOreOf(clientLines), vatBreakdown: clientLines,
-          settlementBreakdown: clientView,
-          invoiceType: "FINAL", status: "DRAFT", ...(await invoiceNumbering(tx, ctx.orgId, "KLIENT")), invoiceDate: new Date(), notes: input.notes,
+        // Klientfakturan: EN faktura (FINAL om skyldig, CREDIT om överbetald) — aldrig 0.00 (#878).
+        const { invoice: clientInvoice, creditInvoice } = await createClientSettlementInvoice(tx, ctx, ctx.orgId, {
+          matterId: input.matterId, clientGrossOre: clientGross, deductionOre, clientLines, clientView,
+          method: matter.paymentMethod, notes: input.notes,
         });
         const payerInvoice = await tx.invoices.create({
           matterId: input.matterId, amount: payerGross, vatOre: vatOreOf(payerLines), vatBreakdown: payerLines,
@@ -1160,7 +1174,7 @@ export const billingRunRouter = router({
         await bookFirmLoss(tx, ctx.user.id, input.matterId, split.firmLossOre);
         const clientRun = await tx.billingRuns.create({
           matterId: input.matterId, type: "FINAL", recipient: "KLIENT", status: "SENT",
-          workValueOreAtRun: clientGross, proposedAmountOre: clientGross, amountOre: clientAmount,
+          workValueOreAtRun: clientGross, proposedAmountOre: clientGross, amountOre: clientInvoice.amount,
           invoiceId: clientInvoice.id, deductedBillingRunIds: deductIds, periodTo: new Date(), notes: input.notes,
         });
         const payerRun = await bookPayerRun(tx, {
@@ -1174,15 +1188,8 @@ export const billingRunRouter = router({
           const next = applyKrTransition(krStateOf(krRun), "SKAPA_FAKTURA");
           await tx.billingRuns.update(krRun.id, { status: "SENT", kostnadsrakningStatus: next.status, beslutSlutgiltigt: next.slutgiltigt });
         }
-        await emit.invoiceCreated(ctx, clientInvoice);
-        await emit.invoiceCreated(ctx, payerInvoice);
-
-        // Överfakturering (#878): har klienten via aconton betalat MER än sin slutliga
-        // andel (myndighetens helhetsbeslut < de löpande aconto-satserna) krediteras
-        // mellanskillnaden. Slutfakturan är 0 (klampat ovan) + en KREDITfaktura.
-        const creditInvoice = await createOverpaymentCredit(tx, ctx, ctx.orgId, {
-          matterId: input.matterId, deductionOre, clientGrossOre: clientGross, method: matter.paymentMethod,
-        });
+        await emit.invoiceCreated(ctx, payerInvoice); // klientfakturan emittas i helpern
+        // `creditInvoice` = klientfakturan när den blev en CREDIT (överfakturerad), annars null.
         return { split, clientInvoice, payerInvoice, creditInvoice, clientRun, payerRun, breakdown };
       });
     }),

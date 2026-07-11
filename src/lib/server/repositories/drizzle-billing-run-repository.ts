@@ -30,7 +30,7 @@ export class DrizzleBillingRunRepository
     const rows = await this.db
       .select({
         run: billingRuns,
-        invId: invoices.id, invNum: invoices.invoiceNumber, invStatus: invoices.status,
+        invId: invoices.id, invNum: invoices.invoiceNumber, invStatus: invoices.status, invDate: invoices.invoiceDate,
       })
       .from(billingRuns)
       .innerJoin(matters, eq(billingRuns.matterId, matters.id))
@@ -43,7 +43,7 @@ export class DrizzleBillingRunRepository
       .orderBy(desc(billingRuns.createdAt));
     return rows.map((r): BillingRunListRow => ({
       ...r.run,
-      invoice: r.invId && r.invStatus ? { id: r.invId, invoiceNumber: r.invNum, status: r.invStatus } : null,
+      invoice: r.invId && r.invStatus ? { id: r.invId, invoiceNumber: r.invNum, status: r.invStatus, invoiceDate: r.invDate } : null,
     }));
   }
 

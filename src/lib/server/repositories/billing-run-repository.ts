@@ -12,7 +12,7 @@ import type { Repository } from "./types";
 
 /** Billing-run + faktura (listvyn). */
 export interface BillingRunListRow extends BillingRun {
-  invoice: { id: InvoiceId; invoiceNumber: string | null; status: InvoiceStatus } | null;
+  invoice: { id: InvoiceId; invoiceNumber: string | null; status: InvoiceStatus; invoiceDate: Date | string | null } | null;
 }
 
 /** Billing-run + faktura + ärende (detaljvyn). */
