@@ -421,6 +421,7 @@ export function BillingPanel({ matterId, matter }: Props) {
         onOverklaga={() => appeal.mutate({ billingRunId: activeKr.id })}
         onSkapaFaktura={() => matter.paymentMethod === "RATTSHJALP" ? setShowSettle(true) : setVerdictRunId(activeKr.id)} />}
       {beslutRunId && <RecordBeslutDialog billingRunId={beslutRunId} onClose={() => setBeslutRunId(null)} onDone={refetch} />}
+      <RattshjalpRateSchedule matter={matter} rows={rows} />
       <RunsList matterId={matterId} rows={rows} standalone={standalone} loading={runs.isLoading} />
       <BillingDialogs matterId={matterId} matter={matter} rows={rows}
         dialog={dialog} setDialog={setDialog}
@@ -711,6 +712,42 @@ function StandaloneRow({ inv }: { inv: StandaloneInvoiceRow }) {
         </EntityLink>
       </td>
     </tr>
+  );
+}
+
+/** Rättshjälpsavgiften ÖVER TID (#878): satsen varierar (arbetslös/anställd) och
+ *  ställs ut per aconto vid den då gällande satsen. Härleds ur ACCONTO-körningarna
+ *  (sats + fakturadatum) — varje sats gäller från sitt datum till nästa acontos;
+ *  matterns clientShareBips = myndighetens slutliga helhetsbeslut för hela ärendet. */
+function RattshjalpRateSchedule({ matter, rows }: { matter: MatterContext; rows: BillingRunRow[] }) {
+  if (matter.paymentMethod !== "RATTSHJALP") return null;
+  const accontos = rows
+    .filter((r) => r.type === "ACCONTO" && r.clientShareBips != null)
+    .map((r) => ({ bips: r.clientShareBips as number, date: runDateOf(r) }))
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  if (accontos.length === 0) return null;
+  return (
+    <div className="px-6 py-3 border-t border-gray-100">
+      <h3 className="text-sm font-semibold text-gray-900 mb-2">Rättshjälpsavgift över tid</h3>
+      <table className="min-w-full text-sm">
+        <thead className="text-xs text-gray-500"><tr><th className="text-left py-1">Från</th><th className="text-left">Till</th><th className="text-right">Avgift</th></tr></thead>
+        <tbody className="divide-y divide-gray-100">
+          {accontos.map((a, i) => (
+            <tr key={i}>
+              <td className="py-1.5 whitespace-nowrap text-gray-600">{svDate(a.date)}</td>
+              <td className="whitespace-nowrap text-gray-600">{i + 1 < accontos.length ? svDate(accontos[i + 1]!.date) : "pågående"}</td>
+              <td className="text-right font-mono">{a.bips / 100} %</td>
+            </tr>
+          ))}
+          {matter.clientShareBips != null && (
+            <tr className="border-t border-gray-300">
+              <td className="py-1.5 font-medium text-gray-900" colSpan={2}>Slutligt myndighetsbeslut (hela ärendet)</td>
+              <td className="text-right font-mono font-semibold">{matter.clientShareBips / 100} %</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
   );
 }
 

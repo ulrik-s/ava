@@ -883,6 +883,15 @@ export const billingRunRouter = router({
         const invoice = await tx.invoices.create({
           matterId: input.matterId, amount: input.amountOre, vatOre: accontoVatOre,
           vatBreakdown: [{ kind: "arvode", vatRate: DEFAULT_VAT_RATE, netOre: accontoNetOre, vatOre: accontoVatOre }],
+          // Nedbrytning så aconto-detaljsidan inte blir tom (#878): klientens andel + moms.
+          settlementBreakdown: {
+            timeLines: [],
+            rows: [
+              { label: `Klientens andel ${input.clientShareBips / 100} % av upparbetat arbete (exkl moms)`, amountOre: accontoNetOre, kind: "add" },
+              { label: "Moms 25 %", amountOre: accontoVatOre, kind: "add" },
+            ],
+            totalLabel: "Att betala (inkl moms)", totalOre: input.amountOre,
+          },
           invoiceType: "ACCONTO", status: "DRAFT",
           ...(await invoiceNumbering(tx, ctx.orgId, input.recipient)),
           ...invoiceMeta(input), notes: input.notes,
