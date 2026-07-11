@@ -52,4 +52,20 @@ describe("populateInvoiceDocs", () => {
     // Klargör (spegel av KR-notisen) att timmen INTE ligger i domstolens KR.
     expect(radg).toContain("ingår INTE i kostnadsräkningen till domstolen");
   });
+
+  it("settlement-/kredit-/aconto-fakturor får doc ur den persisterade nedbrytningen (#878)", async () => {
+    const seed = buildSeed();
+    const htmls: string[] = [];
+    const target = createGitTarget({ principal: ADMIN, writeBack: async () => {} });
+    await populate(target.caller, seed);
+    await populateBilling(target.caller, seed);
+    await populateInvoiceDocs(target.caller, (_p, b) => { htmls.push(new TextDecoder().decode(b)); return b.byteLength; });
+    // Kreditfakturan (varierande rättshjälp, m-020) renderar kredit-trappan — inte en tom vy.
+    const credit = htmls.find((h) => h.includes("Kreditfaktura") && h.includes("Kreditering till klienten"));
+    expect(credit, "en kreditfaktura-doc ska genereras ur settlementBreakdown").toBeDefined();
+    expect(credit).toContain("Betalda aconton");
+    // Aconto-fakturan renderar sin andels-nedbrytning.
+    const acconto = htmls.find((h) => h.includes("Aconto-faktura") && h.includes("Klientens andel"));
+    expect(acconto, "aconto-doc ska visa andels-nedbrytningen").toBeDefined();
+  });
 });
