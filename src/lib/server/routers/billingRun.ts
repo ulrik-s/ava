@@ -27,7 +27,7 @@ import { applyKrAction, type KostnadsrakningAction, type KostnadsrakningState, t
 import { ocrFromInvoiceNumber } from "@/lib/shared/ocr-reference";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { RADGIVNING_MINUTES, radgivningTextRad } from "@/lib/shared/rattshjalp";
-import type { BillingRun } from "@/lib/shared/schemas/billing";
+import type { BillingRun, Invoice } from "@/lib/shared/schemas/billing";
 import { billingRunRecipientSchema, type BillingRunRecipient, type ExpenseKind, type PaymentMethod } from "@/lib/shared/schemas/enums";
 import {
   matterIdSchema,
@@ -46,7 +46,7 @@ import {
 } from "@/lib/shared/schemas/ids";
 import type { SettlementRow, SettlementView, SettlementViewLine } from "@/lib/shared/settlement-view";
 import { splitVat, DEFAULT_VAT_RATE } from "@/lib/shared/vat";
-import { emit } from "../events/emit";
+import { emit, type EmitCtx } from "../events/emit";
 import type { BillingRunDetailRow, BillingRunListRow } from "../repositories/billing-run-repository";
 import type { Repositories } from "../repositories/repositories";
 import { router, orgProcedure } from "../trpc";
@@ -302,15 +302,34 @@ async function currentArvodeRateOre(
   return lawyer?.hourlyRate ?? 0;
 }
 
+/** Dela utläggs-raderna mellan klient och betalare med SAMMA andel som arvodet
+ *  (#878): klientens andel = clientOre/effectiveTotal. Betalaren får resten (så
+ *  öre-avrundning aldrig tappas). Per momssats-rad delas netto + moms var för sig. */
+function apportionExpenseLines(lines: VatBreakdownLine[], split: CoverageSplit): { clientLines: VatBreakdownLine[]; payerLines: VatBreakdownLine[] } {
+  const denom = split.effectiveTotalOre;
+  const clientLines: VatBreakdownLine[] = [];
+  const payerLines: VatBreakdownLine[] = [];
+  for (const l of lines) {
+    const clientNet = denom > 0 ? Math.round((l.netOre * split.clientOre) / denom) : 0;
+    const clientVat = denom > 0 ? Math.round((l.vatOre * split.clientOre) / denom) : 0;
+    if (clientNet + clientVat > 0) clientLines.push({ ...l, netOre: clientNet, vatOre: clientVat });
+    const payerNet = l.netOre - clientNet;
+    const payerVat = l.vatOre - clientVat;
+    if (payerNet + payerVat > 0) payerLines.push({ ...l, netOre: payerNet, vatOre: payerVat });
+  }
+  return { clientLines, payerLines };
+}
+
 /** Faktura-rader (moms-breakdown) för klient- resp. betalar-fakturan ur en
- *  prutnings-/självrisk-uppdelning (#801). Klient = sin arvode-del; betalare =
- *  sin arvode-del + utläggen. */
+ *  prutnings-/rättshjälpsavgifts-uppdelning (#801). Både arvode OCH utlägg delas
+ *  per samma klient/betalar-andel (#878). */
 function coverageInvoiceLines(split: CoverageSplit, work: UnfrozenWork): { clientLines: VatBreakdownLine[]; payerLines: VatBreakdownLine[] } {
   const clientArvode = arvodeLine(split.clientOre);
   const payerArvode = arvodeLine(split.payerOre);
+  const exp = apportionExpenseLines(expenseBreakdownLines(work), split);
   return {
-    clientLines: clientArvode ? [clientArvode] : [],
-    payerLines: [...(payerArvode ? [payerArvode] : []), ...expenseBreakdownLines(work)],
+    clientLines: [...(clientArvode ? [clientArvode] : []), ...exp.clientLines],
+    payerLines: [...(payerArvode ? [payerArvode] : []), ...exp.payerLines],
   };
 }
 
@@ -455,7 +474,8 @@ export interface SettlementBreakdown {
   clientShareBips: number;
   arvodeBaseNetOre: number;      // bas-arvode (exkl rådgivning), netto — "andel × X"
   baseArvodeGrossOre: number;    // bas-arvode (exkl rådgivning), brutto — domstolens arvode-rad
-  expensesGrossOre: number;      // utlägg brutto — domstol
+  expensesGrossOre: number;      // utlägg brutto — BETALARENS andel (#878)
+  clientExpensesGrossOre: number; // utlägg brutto — KLIENTENS andel (#878)
   sjalvriskNetOre: number;       // klientens självrisk NETTO (andel × arvodeBaseNet) — moms-trappan (#876)
   sjalvriskGrossOre: number;     // klientens självrisk brutto
   firmLossNetOre: number;        // byrå-förlust/prutning NETTO — domstolens trappa (#876)
@@ -495,7 +515,10 @@ async function buildSettlementBreakdown(repos: Repositories, orgId: Organization
 }): Promise<SettlementBreakdown> {
   // Rådgivningstimmen ingår ALDRIG i domstolens arvode (#860) — arvodet värderas
   // på bas-minuterna (exkl rådgivning). Rådgivningen syns bara i kostnadsräkningen.
-  const expensesGrossOre = grossOreOf(expenseBreakdownLines(a.work));
+  // Utlägg delas per samma andel som arvodet (#878): klientens del + betalarens del.
+  const exp = apportionExpenseLines(expenseBreakdownLines(a.work), a.split);
+  const clientExpensesGrossOre = grossOreOf(exp.clientLines);
+  const payerExpensesGrossOre = grossOreOf(exp.payerLines);
   const deductedAccontos: SpecDeduction[] = [];
   for (const r of a.deductedRuns) {
     if (!r.invoiceId) continue;
@@ -506,7 +529,8 @@ async function buildSettlementBreakdown(repos: Repositories, orgId: Organization
     clientShareBips: a.clientShareBips,
     arvodeBaseNetOre: a.totalArvodeNet,
     baseArvodeGrossOre: arvodeInclVatOre(a.totalArvodeNet),
-    expensesGrossOre,
+    expensesGrossOre: payerExpensesGrossOre,
+    clientExpensesGrossOre,
     sjalvriskNetOre: a.split.clientOre,
     sjalvriskGrossOre: arvodeInclVatOre(a.split.clientOre),
     firmLossNetOre: a.split.firmLossOre,
@@ -532,50 +556,93 @@ const toViewLine = (l: SpecTimeLine): SettlementViewLine => ({
  * Slutfaktura-sidan. Byggdes tidigare i `_settlement-dialog.tsx`; flyttad hit så
  * servern äger raderna och sparar dem på fakturan (`settlementBreakdown`).
  *
- * KLIENT (självrisk): tidsspec + moms-trappa (netto → andel → moms → inkl) så
- * momsen redovisas exakt en gång och basen inte felmärks som "inkl moms" (#876).
+ * KLIENT (rättshjälpsavgift/självrisk): tidsspec + moms-trappa (netto → andel →
+ * moms → inkl) + klientens utläggsandel (#878). `feeTerm` = "rättshjälpsavgift"
+ * (rättshjälp) eller "självrisk" (rättsskydd).
  */
-function buildClientView(b: SettlementBreakdown, isRattshjalp: boolean): SettlementView {
+function buildClientView(b: SettlementBreakdown, isRattshjalp: boolean, feeTerm: string): SettlementView {
   const share = (b.clientShareBips / 100).toLocaleString("sv-SE", { maximumFractionDigits: 2 });
+  const feeCap = feeTerm.charAt(0).toUpperCase() + feeTerm.slice(1);
   const rows: SettlementRow[] = [];
   if (isRattshjalp) {
     rows.push({ label: "Upparbetat arvode (exkl moms)", amountOre: b.arvodeBaseNetOre, kind: "add" });
-    rows.push({ label: `Klientens självrisk ${share} % (exkl moms)`, amountOre: b.sjalvriskNetOre, kind: "add" });
+    rows.push({ label: `Klientens ${feeTerm} ${share} % (exkl moms)`, amountOre: b.sjalvriskNetOre, kind: "add" });
     rows.push({ label: "Moms 25 %", amountOre: b.sjalvriskGrossOre - b.sjalvriskNetOre, kind: "add" });
+    rows.push({ label: `${feeCap} (inkl moms)`, amountOre: b.sjalvriskGrossOre, kind: "add" });
+  } else {
+    rows.push({ label: "Klientens del / självrisk (inkl moms)", amountOre: b.sjalvriskGrossOre, kind: "add" });
   }
-  rows.push({ label: isRattshjalp ? "Självrisk (inkl moms)" : "Klientens del / självrisk (inkl moms)", amountOre: b.sjalvriskGrossOre, kind: "add" });
+  if (b.clientExpensesGrossOre > 0) rows.push({ label: "Utlägg (klientens andel, inkl moms)", amountOre: b.clientExpensesGrossOre, kind: "add" });
   for (const d of b.deductedAccontos) rows.push({ label: `Avgår aconto — faktura ${d.invoiceNumber}${d.date ? ` (${svd(d.date)})` : ""}`, amountOre: d.amountOre, kind: "deduct" });
   return { timeLines: b.clientArvodeLines.map(toViewLine), rows, totalLabel: "Att betala (inkl moms)", totalOre: b.clientPayableOre };
 }
 
 /**
  * BETALARE (domstol/försäkring): SAMMA upplägg som klientfakturan (#876) — tidsspec
- * + moms-trappa, fast med betalarens ANDEL. Bas-arvode − klientens självrisk −
- * ev. prutning = betalarens andel (netto) → moms → inkl + utlägg. Rådgivningstimmen
- * omnämns som info-rad men ligger UTANFÖR totalen.
+ * + moms-trappa, fast med betalarens ANDEL. Bas-arvode − klientens rättshjälpsavgift
+ * − ev. prutning = betalarens andel (netto) → moms → inkl + betalarens utläggsandel
+ * (#878). Rådgivningstimmen omnämns som info-rad men ligger UTANFÖR totalen.
  */
-function buildPayerView(b: SettlementBreakdown, payerLabel: string, payerNoun: string): SettlementView {
+function buildPayerView(b: SettlementBreakdown, payerLabel: string, payerNoun: string, feeTerm: string): SettlementView {
   const payerArvodeGross = arvodeInclVatOre(b.payerArvodeNetOre);
   const rows: SettlementRow[] = [
     { label: "Upparbetat arvode (exkl moms)", amountOre: b.arvodeBaseNetOre, kind: "add" },
-    { label: "Avgår klientens självrisk (exkl moms)", amountOre: b.sjalvriskNetOre, kind: "deduct" },
+    { label: `Avgår klientens ${feeTerm} (exkl moms)`, amountOre: b.sjalvriskNetOre, kind: "deduct" },
   ];
   if (b.firmLossNetOre > 0) rows.push({ label: "Avgår prutning (byrån bär) (exkl moms)", amountOre: b.firmLossNetOre, kind: "deduct" });
   rows.push({ label: `${payerNoun} andel av arvodet (exkl moms)`, amountOre: b.payerArvodeNetOre, kind: "add" });
   rows.push({ label: "Moms 25 %", amountOre: payerArvodeGross - b.payerArvodeNetOre, kind: "add" });
   rows.push({ label: `${payerNoun} arvode (inkl moms)`, amountOre: payerArvodeGross, kind: "add" });
-  if (b.expensesGrossOre > 0) rows.push({ label: "Utlägg (inkl moms)", amountOre: b.expensesGrossOre, kind: "add" });
+  if (b.expensesGrossOre > 0) rows.push({ label: `Utlägg (${payerNoun.toLowerCase()} andel, inkl moms)`, amountOre: b.expensesGrossOre, kind: "add" });
   if (b.radgivningGrossOre > 0) rows.push({ label: radgivningTextRad("faktura"), amountOre: b.radgivningGrossOre, kind: "info" });
   for (const d of b.deductedAccontos) rows.push({ label: `Betalt via aconto — faktura ${d.invoiceNumber}${d.date ? ` (${svd(d.date)})` : ""}`, amountOre: d.amountOre, kind: "info" });
   return { timeLines: b.clientArvodeLines.map(toViewLine), rows, totalLabel: `${payerLabel} — att betala (inkl moms)`, totalOre: b.payerPayableOre };
 }
 
-/** Klient- + betalar-vy ur nedbrytningen (#876) — etiketterna följer metoden. */
+/** Klient- + betalar-vy ur nedbrytningen (#876) — etiketterna följer metoden.
+ *  Rättshjälp: klientens del = "rättshjälpsavgift"; rättsskydd: "självrisk" (#878). */
 function buildSettlementViews(b: SettlementBreakdown, method: PaymentMethod): { clientView: SettlementView; payerView: SettlementView } {
   const isRattshjalp = method === "RATTSHJALP";
   const payerLabel = isRattshjalp ? "Domstolen betalar" : "Försäkringen betalar";
   const payerNoun = isRattshjalp ? "Domstolens" : "Försäkringens";
-  return { clientView: buildClientView(b, isRattshjalp), payerView: buildPayerView(b, payerLabel, payerNoun) };
+  const feeTerm = isRattshjalp ? "rättshjälpsavgift" : "självrisk";
+  return { clientView: buildClientView(b, isRattshjalp, feeTerm), payerView: buildPayerView(b, payerLabel, payerNoun, feeTerm) };
+}
+
+/** Kreditvy (#878): klienten har via aconton betalat mer än sin slutliga andel
+ *  (myndighetens helhetsbeslut < de löpande aconto-satserna) → mellanskillnaden
+ *  krediteras. Betalda aconton − slutlig andel = kreditering. */
+function buildCreditView(deductionOre: number, clientGrossOre: number, overpaidOre: number, feeTerm: string): SettlementView {
+  return {
+    timeLines: [],
+    rows: [
+      { label: "Betalda aconton (inkl moms)", amountOre: deductionOre, kind: "add" },
+      { label: `Avgår slutlig ${feeTerm} (inkl moms)`, amountOre: clientGrossOre, kind: "deduct" },
+    ],
+    totalLabel: "Kreditering till klienten (inkl moms)",
+    totalOre: overpaidOre,
+  };
+}
+
+/** Skapa KREDITfaktura vid överfakturering (#878): har klienten via aconton betalat
+ *  mer än sin slutliga andel krediteras mellanskillnaden. null om ingen överbetalning.
+ *  Utbrutet så settleCoverage-handlern håller sig ≤8 i komplexitet. */
+async function createOverpaymentCredit(repos: Repositories, ctx: EmitCtx, orgId: OrganizationId, a: {
+  matterId: MatterId; deductionOre: number; clientGrossOre: number; method: PaymentMethod;
+}): Promise<Invoice | null> {
+  const overpaidOre = Math.max(0, a.deductionOre - a.clientGrossOre);
+  if (overpaidOre <= 0) return null;
+  const feeTerm = a.method === "RATTSHJALP" ? "rättshjälpsavgift" : "självrisk";
+  const credit = await repos.invoices.create({
+    // Moms = 25 %-andelen av det överbetalda bruttot (arvode = dominerande komponenten).
+    matterId: a.matterId, amount: -overpaidOre, vatOre: -Math.round(overpaidOre - overpaidOre / 1.25),
+    settlementBreakdown: buildCreditView(a.deductionOre, a.clientGrossOre, overpaidOre, feeTerm),
+    invoiceType: "CREDIT", status: "SENT", ...(await invoiceNumbering(repos, orgId, "KLIENT")),
+    invoiceDate: new Date(),
+    notes: `Rättshjälps-överfakturering: betalda aconton (${(a.deductionOre / 100).toLocaleString("sv-SE")} kr) översteg slutlig ${feeTerm} — mellanskillnaden krediteras klienten.`,
+  });
+  await emit.invoiceCreated(ctx, credit);
+  return credit;
 }
 
 /**
@@ -1109,7 +1176,14 @@ export const billingRunRouter = router({
         }
         await emit.invoiceCreated(ctx, clientInvoice);
         await emit.invoiceCreated(ctx, payerInvoice);
-        return { split, clientInvoice, payerInvoice, clientRun, payerRun, breakdown };
+
+        // Överfakturering (#878): har klienten via aconton betalat MER än sin slutliga
+        // andel (myndighetens helhetsbeslut < de löpande aconto-satserna) krediteras
+        // mellanskillnaden. Slutfakturan är 0 (klampat ovan) + en KREDITfaktura.
+        const creditInvoice = await createOverpaymentCredit(tx, ctx, ctx.orgId, {
+          matterId: input.matterId, deductionOre, clientGrossOre: clientGross, method: matter.paymentMethod,
+        });
+        return { split, clientInvoice, payerInvoice, creditInvoice, clientRun, payerRun, breakdown };
       });
     }),
 });

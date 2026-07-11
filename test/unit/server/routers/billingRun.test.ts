@@ -537,6 +537,51 @@ describe("billingRun.settleCoverage — bokför prutnings-uppdelningen (#801)", 
     expect(pv.rows.some((r) => r.kind === "info" && r.label.includes("Rådgivningstimme"))).toBe(true);
   });
 
+  it("rättshjälp (#878): utlägg delas per andel; klientens del heter 'rättshjälpsavgift'", async () => {
+    const ds = new DemoDataStore({
+      organizations: [{ id: "org-1", name: "X" }],
+      matters: [{ id: "m-1", organizationId: "org-1", matterNumber: "2026-0001", title: "T", status: "ACTIVE", responsibleLawyerId: "u-1", paymentMethod: "RATTSHJALP", clientShareBips: 2000, taxaHasFTax: true, createdAt: new Date() }],
+      users: [{ id: "u-1", organizationId: "org-1", email: "a@x", name: "Anna", role: "ADMIN", hourlyRate: 999999 }],
+      timeEntries: [{ id: "te-1", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date(), minutes: 180, description: "M", hourlyRate: 200000, billable: true }],
+      expenses: [{ id: "ex-1", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date(), amount: 10000, description: "Ansökningsavgift", billable: true, vatRate: 2500, vatIncluded: false }],
+    }, async () => {});
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const c = appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: PRINCIPAL }) as any);
+    const res = await c.billingRun.settleCoverage({ matterId: "m-1", payerRecipient: "DOMSTOL" });
+    // Klienten (20 %) bär 20 % av utlägget: net 2 000 + moms 500 = 2 500 brutto; domstolen resten (10 000).
+    expect(res.clientInvoice.amount).toBe(83_800);   // rättshjälpsavgift 81 300 + utläggsandel 2 500
+    expect(res.payerInvoice.amount).toBe(335_200);   // domstolens arvode 325 200 + utläggsandel 10 000
+    const cv = res.clientInvoice.settlementBreakdown!;
+    expect(cv.rows.some((r) => r.label.includes("rättshjälpsavgift"))).toBe(true);        // #878 — EJ "självrisk"
+    expect(cv.rows.some((r) => r.label.toLowerCase().includes("självrisk"))).toBe(false);
+    expect(cv.rows.find((r) => r.label.includes("Utlägg (klientens andel"))?.amountOre).toBe(2_500);
+    const pv = res.payerInvoice.settlementBreakdown!;
+    expect(pv.rows.some((r) => r.label.includes("Avgår klientens rättshjälpsavgift"))).toBe(true);
+    expect(pv.rows.find((r) => r.label.includes("Utlägg"))?.amountOre).toBe(10_000);
+  });
+
+  it("rättshjälp (#878): aconton > slutlig rättshjälpsavgift → KREDITfaktura till klienten", async () => {
+    // Slutlig helhetssats 5 % (myndighetsbeslut), men klienten har betalat ett aconto
+    // på 50 000 (utställt vid en högre period-sats) → överfakturerat → kredit.
+    const { caller: c } = caller({ paymentMethod: "RATTSHJALP", clientShareBips: 500, taxaHasFTax: true }, 999999, 180);
+    await c.billingRun.createAcconto({ matterId: "m-1", clientShareBips: 7500, amountOre: 50_000 }); // SENT-aconto
+    const res = await c.billingRun.settleCoverage({ matterId: "m-1", payerRecipient: "DOMSTOL" });
+    // Slutlig andel: 5 % × 325 200 = 16 260 net → 20 325 brutto. Betalt 50 000 → kredit 29 675.
+    expect(res.clientInvoice.amount).toBe(0);            // slutfakturan klampad
+    expect(res.creditInvoice).not.toBeNull();
+    expect(res.creditInvoice!.amount).toBe(-29_675);    // negativ = kreditering
+    expect(res.creditInvoice!.invoiceType).toBe("CREDIT");
+    expect(res.creditInvoice!.settlementBreakdown!.totalOre).toBe(29_675);
+  });
+
+  it("rättshjälp: aconton < slutlig rättshjälpsavgift → INGEN kreditfaktura", async () => {
+    const { caller: c } = caller({ paymentMethod: "RATTSHJALP", clientShareBips: 2000, taxaHasFTax: true }, 999999, 180);
+    await c.billingRun.createAcconto({ matterId: "m-1", clientShareBips: 2000, amountOre: 10_000 });
+    const res = await c.billingRun.settleCoverage({ matterId: "m-1", payerRecipient: "DOMSTOL" });
+    expect(res.creditInvoice).toBeNull();               // 20 % × 325 200 = 65 040 > 10 000 aconto
+    expect(res.clientInvoice.amount).toBeGreaterThan(0);
+  });
+
   it("rättshjälp via KR (#828): kräver registrerat beslut; domsbeloppet läses från KR:n; KR konsumeras EJ utan markeras FAKTURERAD", async () => {
     const { ds, caller: c } = caller({ paymentMethod: "RATTSHJALP", clientShareBips: 2000, taxaHasFTax: true }, 999999, 180);
     const kr = await c.billingRun.createKostnadsrakning({ matterId: "m-1" });
