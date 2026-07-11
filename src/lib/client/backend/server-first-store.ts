@@ -62,7 +62,15 @@ export async function createServerFirstStore(deps: ServerFirstStoreDeps = {}): P
     queuePersistence: deps.queuePersistence ?? new IndexedDbMutationQueuePersistence(),
   });
   if (!deps.skipInitialReconcile) {
-    await cachingSync.reconcile();
+    // Best-effort (#879): reconcile kör pull→apply→replay, så pullad data är redan
+    // hydrerad i in-memory-storen innan en ev. replay-throw. Ett sync-fel (t.ex. en
+    // köad mutation med ogiltigt id) får ALDRIG ta ned bootstrappen (offline-first,
+    // ADR 0016) — annars fastnar appen på "AVA loading". Kön retrias vid nästa reconcile.
+    try {
+      await cachingSync.reconcile();
+    } catch (e) {
+      console.warn("[server-first] initial reconcile misslyckades (best-effort, storen kommer ändå upp):", e);
+    }
     // Byte-synk (#518, ADR 0023): ladda upp dokument-blobbar servern saknar.
     // Best-effort — får aldrig ta ned bootstrappen (tom pending → no-op).
     const { syncDocumentContent } = await import("./content-sync");
