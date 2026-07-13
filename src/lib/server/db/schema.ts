@@ -340,6 +340,8 @@ export const documents = pgTable("documents", {
   uploadedById: uuid("uploaded_by_id").notNull().$type<UserId>(),
   title: text("title"),
   documentType: text("document_type"),
+  /** Riktning (#880): INKOMMANDE / UTGAENDE — null där det saknar mening. */
+  direction: text("direction").$type<"INKOMMANDE" | "UTGAENDE">(),
   /** Fria etiketter ur byråns vokabulär (#621) — komplement till documentType.
    *  Sätts av LLM (förslag) + användare; skrivs via updateMetadata (ingen
    *  version-bump, #619). */

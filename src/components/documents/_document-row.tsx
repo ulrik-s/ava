@@ -27,6 +27,7 @@ export interface DocumentRecord {
   uploadedBy: { name: string | null } | null;
   title?: string | null | undefined;
   documentType?: string | null | undefined;
+  direction?: "INKOMMANDE" | "UTGAENDE" | null | undefined;
   tags?: readonly string[] | undefined;
   summary?: string | null | undefined;
   analyzedAt?: string | Date | null | undefined;
@@ -272,11 +273,24 @@ interface NameButtonProps {
   onOpen: () => void;
 }
 
+/** Riktnings-badge (#880): inkommande (blå) / utgående (grön). Null → inget. */
+function DirectionBadge({ direction }: { direction?: "INKOMMANDE" | "UTGAENDE" | null | undefined }) {
+  if (!direction) return null;
+  const incoming = direction === "INKOMMANDE";
+  return (
+    <span className={`inline-block rounded-full px-1.5 py-0.5 text-[10px] font-medium flex-shrink-0 ${incoming ? "bg-sky-50 text-sky-700" : "bg-emerald-50 text-emerald-700"}`}
+      title={incoming ? "Inkommande dokument" : "Utgående dokument"}>
+      {incoming ? "↓ Ink." : "↑ Utg."}
+    </span>
+  );
+}
+
 /** Meta-raden under filnamnet (typ-badge, filnamn, analys-status). Utbruten
  *  ur DocumentNameButton — alla villkorade `&&`-render-grenar bor här. */
 function DocumentNameMeta({ doc, isAnalyzing, isWaitingAnalysis }: { doc: DocumentRecord; isAnalyzing: boolean; isWaitingAnalysis: boolean }) {
   return (
     <span className="flex items-center gap-1.5 text-xs text-gray-500 font-normal min-w-0">
+      <DirectionBadge direction={doc.direction} />
       {doc.documentType && (
         <span className="inline-block rounded-full bg-purple-50 text-purple-700 px-1.5 py-0.5 text-[10px] font-medium flex-shrink-0">
           {doc.documentType}
