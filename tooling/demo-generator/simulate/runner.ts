@@ -80,8 +80,16 @@ async function hDoc(ctx: RunCtx, m: SimMatter, e: Any, iso: string, st: SimState
   ctx.res.documents++;
 }
 
-async function hRadgivning(ctx: RunCtx, m: SimMatter, _e: Any, _iso: string): Promise<void> {
-  await ctx.c.invoice.createRadgivning({ matterId: m.id });
+async function hRadgivning(ctx: RunCtx, m: SimMatter, _e: Any, iso: string): Promise<void> {
+  // Rådgivningstimmen (#880): en debiterbar tidspost — så settlementens coverageBaseMinutes
+  // −60 stämmer — MEN utanför aconto-basen (rör INTE accruedNetOre; allt EFTER rådgivningen
+  // går på aconto). Faktureras separat SAMMA DAG som mötet.
+  await ctx.c.timeEntry.create({
+    matterId: m.id, date: iso, minutes: 60, description: "Rådgivning — första möte med klient",
+    billable: true, userId: m.lawyerId, hourlyRate: m.arvodeRateOre, createdAt: iso,
+  });
+  ctx.res.timeEntries++;
+  await ctx.c.invoice.createRadgivning({ matterId: m.id, invoiceDate: iso });
   ctx.res.invoices++;
 }
 

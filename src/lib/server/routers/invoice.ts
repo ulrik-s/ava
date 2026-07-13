@@ -122,7 +122,7 @@ export const invoiceRouter = router({
    * DRAFT-aconto exkluderas automatiskt. Idempotent: avvisar om redan registrerad.
    */
   createRadgivning: orgProcedure
-    .input(z.object({ matterId: matterIdSchema, hasFTax: z.boolean().optional() }))
+    .input(z.object({ matterId: matterIdSchema, hasFTax: z.boolean().optional(), invoiceDate: z.string().optional() }))
     // Migrerad till repository-sömmen (ADR 0020): matters + invoices via typade repos.
     .mutation(({ ctx, input }) =>
       ctx.repos.transaction(async (repos) => {
@@ -138,13 +138,15 @@ export const invoiceRouter = router({
         const grossOre = arvodeInclVatOre(netOre);
         const vatOre = grossOre - netOre;
         const invoiceNumber = await repos.invoices.nextInvoiceNumber(ctx.orgId);
+        // Datum = mötesdagen om angivet (#880: rådgivning faktureras samma dag som mötet), annars idag.
+        const when = input.invoiceDate ? new Date(input.invoiceDate) : new Date();
         const invoice = await repos.invoices.create({
           matterId: input.matterId, invoiceNumber, ocrReference: ocrFromInvoiceNumber(invoiceNumber),
           amount: grossOre, vatOre, vatBreakdown: [{ kind: "arvode", vatRate: 2500, netOre, vatOre }],
-          invoiceType: "STANDARD", status: "SENT", invoiceDate: new Date(), dueDate: null,
+          invoiceType: "STANDARD", status: "SENT", invoiceDate: when, dueDate: null,
           notes: "Rådgivningstimme enligt rättshjälpstaxan (1 tim).",
         } satisfies Partial<Invoice>);
-        await repos.matters.update(input.matterId, { radgivningBetaldAt: new Date() } satisfies Partial<Matter>);
+        await repos.matters.update(input.matterId, { radgivningBetaldAt: when } satisfies Partial<Matter>);
         await emit.invoiceCreated(ctx, invoice);
         return { invoice, beloppExclVatOre: netOre };
       }),

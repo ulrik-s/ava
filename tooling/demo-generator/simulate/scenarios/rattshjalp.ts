@@ -11,8 +11,9 @@ import type { Parties, SimEvent } from "../events";
 export function buildRattshjalpScenario(parties: Parties): SimEvent[] {
   const ev: SimEvent[] = [
     { kind: "note", dayOffset: 0, text: "Klientbesök — första möte i ärendet. Rådgivning enligt rättshjälpstaxan." },
-    { kind: "time", dayOffset: 0, minutes: 60, description: "Första möte med klient (rådgivning)" },
-    { kind: "radgivning", dayOffset: 1 },
+    // Rådgivningstimmen skapas + faktureras SAMMA DAG som mötet (#880); allt arbete EFTER
+    // detta går på aconto. (hRadgivning skapar tidsposten + rådgivningsfakturan.)
+    { kind: "radgivning", dayOffset: 0 },
     { kind: "doc", dayOffset: 1, template: "fullmakt" },
   ];
   if (parties.motpart) ev.push({ kind: "party", dayOffset: 2, contactId: parties.motpart, role: "MOTPART" });

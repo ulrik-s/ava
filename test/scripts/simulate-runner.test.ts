@@ -60,6 +60,11 @@ describe("runScenario (#880)", () => {
     const firstAcc = calls.findIndex((x) => x.method === "billingRun.createAcconto");
     expect(radIdx).toBeGreaterThanOrEqual(0);
     expect(radIdx).toBeLessThan(firstAcc);
+    // #880: rådgivningen faktureras SAMMA DAG (invoiceDate satt) + som egen tidspost.
+    const rad = calls[radIdx]!;
+    expect(rad.args.invoiceDate).toBeTruthy();
+    const radTime = calls.find((x) => x.method === "timeEntry.create" && String(x.args.description).includes("Rådgivning"));
+    expect(radTime?.args.date).toBe(rad.args.invoiceDate); // samma dag som mötet
 
     // Tre aconton vid varierande satser (5/75/5 %), belopp härlett ur upparbetat.
     const accontos = calls.filter((x) => x.method === "billingRun.createAcconto");
