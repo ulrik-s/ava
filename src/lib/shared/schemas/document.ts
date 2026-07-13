@@ -16,6 +16,10 @@ import {
 export const documentAnalysisStatusSchema = z.enum(["PENDING", "RUNNING", "DONE", "ERROR"]);
 export type DocumentAnalysisStatus = z.infer<typeof documentAnalysisStatusSchema>;
 
+/** Dokumentets riktning (#880): inkommande (från motpart/domstol) vs utgående (byrån skickar). */
+export const documentDirectionSchema = z.enum(["INKOMMANDE", "UTGAENDE"]);
+export type DocumentDirection = z.infer<typeof documentDirectionSchema>;
+
 /**
  * DocumentFolder — hierarkisk mapp inom ett matter. `parentId` = null → root.
  * Lagras i `document-folders/<id>.json`.
@@ -49,6 +53,10 @@ export const documentSchema = z.object({
   // AI-genererad metadata (fylls async efter upload)
   title: z.string().nullish(),
   documentType: z.string().nullish(),
+  /** Riktning (#880): inkommande (t.ex. svaromål från motpartsombud, dom) vs
+   *  utgående (inlaga, brev byrån skickar). Nullish på dok där det saknar mening
+   *  (genererade fakturor/underlag). */
+  direction: documentDirectionSchema.nullish(),
   /** Etiketter ur byråns vokabulär (#621) — flera per dokument, satta av
    *  LLM (förslag) + användare. Komplement till `documentType`. */
   tags: z.array(z.string()).default([]),
