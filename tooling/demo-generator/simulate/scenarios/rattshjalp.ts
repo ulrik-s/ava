@@ -6,13 +6,7 @@
  * → beslut → slutreglering (→ kreditfaktura vid överfakturering, jfr #878).
  */
 
-import type { SimEvent } from "../events";
-
-export interface Parties {
-  motpart?: string | undefined;
-  motpartsombud?: string | undefined;
-  domstol?: string | undefined;
-}
+import type { Parties, SimEvent } from "../events";
 
 export function buildRattshjalpScenario(parties: Parties): SimEvent[] {
   const ev: SimEvent[] = [

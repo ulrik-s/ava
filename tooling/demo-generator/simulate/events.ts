@@ -25,6 +25,8 @@ export type SimEvent =
   | { kind: "kostnadsrakning"; dayOffset: number }
   /** Domstolens beslut på KR:n — recordKostnadsrakningBeslut. */
   | { kind: "beslut"; dayOffset: number }
+  /** Skapa domstolsfakturan EFTER beslut (offentligt uppdrag) — setVerdict. */
+  | { kind: "verdict"; dayOffset: number }
   /** Slutreglering (rättshjälp/-skydd) — settleCoverage (→ klient FINAL/CREDIT + betalare). */
   | { kind: "settle"; dayOffset: number; payerRecipient: string }
   /** Vanlig slutfaktura (privat/offentligt) — createFinal + SENT. */
@@ -45,4 +47,11 @@ export interface SimMatter {
   /** Arvode-sats (öre/tim) som ackumulerat arbete värderas på — driver aconto-belopp
    *  (rättshjälp: timkostnadsnormen; annars ansvarig jurists timtaxa). */
   arvodeRateOre: number;
+}
+
+/** Motparter/instans att länka in via `party`-events (översatta UUID:n). */
+export interface Parties {
+  motpart?: string | undefined;
+  motpartsombud?: string | undefined;
+  domstol?: string | undefined;
 }

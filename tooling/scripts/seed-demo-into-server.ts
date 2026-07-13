@@ -36,11 +36,10 @@ import type { GeneratorCaller } from "../demo-generator/backend-target";
 import { createHttpCaller, mintToken } from "../demo-generator/http-target";
 import { createIdTranslator, translateSeed } from "../demo-generator/id-translator";
 import { bootstrapOrgUsers, populate } from "../demo-generator/populate";
-import { populateBilling } from "../demo-generator/populate-billing";
-import { populateDocuments } from "../demo-generator/populate-documents";
 import { populateInvoiceDocs } from "../demo-generator/populate-invoice-docs";
 import { populateKostnadsrakningDocs } from "../demo-generator/populate-kostnadsrakning-docs";
-import { populateUnbilledTime } from "../demo-generator/populate-unbilled-time";
+import { runSimulation } from "../demo-generator/simulate/orchestrate";
+import type { RunCtx } from "../demo-generator/simulate/runner";
 import { buildSeed, type SeedDataset } from "./seed-data";
 
 const DB_URL = process.env.AVA_DATABASE_URL ?? "postgres://ava:ava@localhost:5433/ava_test";
@@ -140,30 +139,27 @@ async function seedInvoiceDocs(caller: Parameters<typeof populateInvoiceDocs>[0]
   return populateInvoiceDocs(caller, contentSink() ?? undefined, () => uuidv7());
 }
 
-async function seedDocuments(
-  caller: Parameters<typeof populateDocuments>[0],
-  seed: Parameters<typeof populateDocuments>[1],
-): Promise<number> {
-  const sink = contentSink();
-  if (!sink) return 0;
-  return populateDocuments(caller, seed, sink);
-}
-
 type LoginIds = { adminId: string | undefined; lawyerId: string | undefined };
 
 /** Allt utom org+users (#846) — körs antingen in-process eller via HTTP-caller.
  *  `skipOrgUsers` styr om populate hoppar org/users (HTTP: bootstrappade separat). */
 async function runRest(caller: GeneratorCaller, seed: SeedDataset, loginIds: LoginIds, skipOrgUsers: boolean): Promise<Record<string, unknown>> {
-  const core = await populate(caller, seed, { skipOrgUsers });
+  // Kärnentiteter (ACTIVE-ärenden) — tid/utlägg/kontakter/dokument skapas kronologiskt
+  // av simuleringen (#880), inte ur seedens statiska rader.
+  const coreSeed = {
+    ...seed,
+    matters: (seed.matters as Row[]).map((m) => ({ ...m, status: "ACTIVE" })),
+    timeEntries: [], expenses: [], matterContacts: [], documents: [], serviceNotes: [],
+  } as SeedDataset;
+  const core = await populate(caller, coreSeed, { skipOrgUsers });
+  // Kronologisk simulering — SAMMA motor som GH Pages-demon; doc-bytes → content-katalogen.
+  const sink = contentSink();
+  const ctx: RunCtx = { c: caller, res: { invoices: 0, documents: 0, timeEntries: 0, notes: 0, credits: 0 }, ...(sink ? { sink } : {}) };
+  await runSimulation(ctx, seed);
   await addTodayTimeEntries(caller, seed.timeEntries as Row[], seed.matters as Row[], loginIds); // "idag"-tid för dashboarden
-  // Fakturering (#647/#736): ETT billing-run-flöde per ärende; unbilled = färsk
-  // upparbetad tid efter fakturering.
-  const billing = await populateBilling(caller, seed);
-  const unbilled = await populateUnbilledTime(caller, seed);
-  const documents = await seedDocuments(caller, seed);
   const kostnadsrakningDocs = await seedKostnadsrakningDocs(caller);
   const invoiceDocs = await seedInvoiceDocs(caller);
-  return { ...core, billing, unbilled, documents, kostnadsrakningDocs, invoiceDocs };
+  return { ...core, sim: ctx.res, kostnadsrakningDocs, invoiceDocs };
 }
 
 /** HTTP-läget (#846): org+users bootstrappas in-process (OIDC/assertAdmin kräver

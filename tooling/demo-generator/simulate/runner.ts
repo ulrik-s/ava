@@ -108,6 +108,12 @@ async function hBeslut(ctx: RunCtx, _m: SimMatter, _e: Any, _iso: string, st: Si
   await ctx.c.billingRun.recordKostnadsrakningBeslut({ billingRunId: st.krRunId, awardedOre: st.krWorkValueOre });
 }
 
+async function hVerdict(ctx: RunCtx, _m: SimMatter, _e: Any, _iso: string, st: SimState): Promise<void> {
+  if (!st.krRunId) return;
+  await ctx.c.billingRun.setVerdict({ billingRunId: st.krRunId });
+  ctx.res.invoices++;
+}
+
 async function hSettle(ctx: RunCtx, m: SimMatter, e: Any, _iso: string): Promise<void> {
   const res = await ctx.c.billingRun.settleCoverage({ matterId: m.id, payerRecipient: e.payerRecipient });
   ctx.res.invoices += 2;
@@ -129,7 +135,7 @@ async function hPayment(ctx: RunCtx, _m: SimMatter, _e: Any, iso: string, st: Si
 /** kind → handler. Håller runnern platt (undviker en stor switch = hög komplexitet). */
 const HANDLERS: Record<SimEvent["kind"], (ctx: RunCtx, m: SimMatter, e: Any, iso: string, st: SimState) => Promise<void>> = {
   party: hParty, time: hTime, note: hNote, expense: hExpense, doc: hDoc, radgivning: hRadgivning,
-  acconto: hAcconto, kostnadsrakning: hKostnadsrakning, beslut: hBeslut, settle: hSettle, final: hFinal, payment: hPayment,
+  acconto: hAcconto, kostnadsrakning: hKostnadsrakning, beslut: hBeslut, verdict: hVerdict, settle: hSettle, final: hFinal, payment: hPayment,
 };
 
 /** Spela upp ett ärendes scenario kronologiskt. */
