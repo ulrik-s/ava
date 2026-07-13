@@ -13,6 +13,7 @@ export function buildRattsskyddScenario(parties: Parties): SimEvent[] {
     { kind: "time", dayOffset: 0, minutes: 60, description: "Inledande genomgång och rättsskyddsansökan" },
     { kind: "doc", dayOffset: 1, template: "fullmakt" },
   ];
+  if (parties.klient) ev.push({ kind: "party", dayOffset: 0, contactId: parties.klient, role: "KLIENT" });
   if (parties.motpart) ev.push({ kind: "party", dayOffset: 2, contactId: parties.motpart, role: "MOTPART" });
   if (parties.motpartsombud) ev.push({ kind: "party", dayOffset: 2, contactId: parties.motpartsombud, role: "MOTPARTSOMBUD" });
   if (parties.domstol) ev.push({ kind: "party", dayOffset: 2, contactId: parties.domstol, role: "DOMSTOL" });

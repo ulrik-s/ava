@@ -19,11 +19,15 @@ export function buildRattshjalpScenario(parties: Parties): SimEvent[] {
     { kind: "radgivning", dayOffset: 0 },
     { kind: "doc", dayOffset: 1, template: "fullmakt" },
   ];
+  if (parties.klient) ev.push({ kind: "party", dayOffset: 0, contactId: parties.klient, role: "KLIENT" });
   if (parties.motpart) ev.push({ kind: "party", dayOffset: 2, contactId: parties.motpart, role: "MOTPART" });
   if (parties.motpartsombud) ev.push({ kind: "party", dayOffset: 2, contactId: parties.motpartsombud, role: "MOTPARTSOMBUD" });
   if (parties.domstol) ev.push({ kind: "party", dayOffset: 2, contactId: parties.domstol, role: "DOMSTOL" });
 
   ev.push(
+    // Utlägg i ärendet (ersätts av domstolen via kostnadsräkningen).
+    { kind: "expense", dayOffset: 8, amountOre: 90_000, description: "Ansökningsavgift tingsrätten" },
+    { kind: "expense", dayOffset: 60, amountOre: 42_000, description: "Reskostnad till sammanträde" },
     // Period 1 (arbetslös, 5 %) — löpande arbete tills klientens andel når tröskeln (→ aconto).
     { kind: "time", dayOffset: 6, minutes: 240, description: "Genomgång av handlingar och underlag" },
     { kind: "doc", dayOffset: 7, template: "brevTillOmbud" },

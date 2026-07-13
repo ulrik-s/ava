@@ -12,8 +12,10 @@ export function buildOffentligtScenario(parties: Parties): SimEvent[] {
     { kind: "note", dayOffset: 0, text: "Förordnad som offentlig försvarare." },
     { kind: "time", dayOffset: 1, minutes: 120, description: "Genomgång av förundersökningsprotokoll" },
   ];
+  if (parties.klient) ev.push({ kind: "party", dayOffset: 0, contactId: parties.klient, role: "KLIENT" });
   if (parties.domstol) ev.push({ kind: "party", dayOffset: 2, contactId: parties.domstol, role: "DOMSTOL" });
   ev.push(
+    { kind: "expense", dayOffset: 6, amountOre: 38_000, description: "Reskostnad häktesbesök" },
     { kind: "doc", dayOffset: 4, template: "brevTillOmbud" },
     { kind: "time", dayOffset: 12, minutes: 180, description: "Klientmöte + förberedelse inför huvudförhandling" },
     { kind: "time", dayOffset: 20, minutes: 120, description: "Huvudförhandling i tingsrätten" },

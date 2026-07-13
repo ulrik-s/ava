@@ -12,6 +12,7 @@ export function buildPrivatScenario(parties: Parties, index: number): SimEvent[]
     { kind: "time", dayOffset: 0, minutes: 90, description: "Inledande rådgivning och uppdragsbekräftelse" },
     { kind: "doc", dayOffset: 1, template: "fullmakt" },
   ];
+  if (parties.klient) ev.push({ kind: "party", dayOffset: 0, contactId: parties.klient, role: "KLIENT" });
   if (parties.motpart) ev.push({ kind: "party", dayOffset: 2, contactId: parties.motpart, role: "MOTPART" });
   if (parties.motpartsombud) ev.push({ kind: "party", dayOffset: 2, contactId: parties.motpartsombud, role: "MOTPARTSOMBUD" });
   if (parties.domstol) ev.push({ kind: "party", dayOffset: 3, contactId: parties.domstol, role: "DOMSTOL" });

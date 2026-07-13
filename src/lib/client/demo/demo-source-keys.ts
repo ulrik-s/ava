@@ -37,6 +37,7 @@ const MATCHERS: Matcher[] = [
   { key: "accontoDeductions", owns: (p) => p.startsWith("acconto-deductions/") },
   { key: "expectedReceivables", owns: (p) => p.startsWith("expected-receivables/") },
   { key: "tasks", owns: (p) => p.startsWith("tasks/") },
+  { key: "serviceNotes", owns: (p) => p.startsWith("service-notes/") },
   { key: "conflictChecks", owns: (p) => p.startsWith("conflict-checks/") },
   { key: "documentTemplates", owns: (p) => p.startsWith(".ava/templates/") },
   { key: "organizations", owns: (p) => p.startsWith(".ava/organizations/") },

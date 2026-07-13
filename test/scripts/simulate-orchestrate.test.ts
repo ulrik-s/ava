@@ -51,5 +51,15 @@ describe("runSimulation (#880 integration)", () => {
     const te = await c.timeEntry.list({ matterId: rh.id, pageSize: 100 });
     const teRows = te.timeEntries ?? te.items ?? te.entries ?? (Array.isArray(te) ? te : []);
     expect(teRows.length).toBeGreaterThan(2);
+
+    // Regression: ärendet ska ha kontakter (inkl KLIENT), tjänsteanteckningar och
+    // utlägg — simuleringen återskapar dem kronologiskt (annars tomma i demon).
+    const full = await c.matter.getById({ id: rh.id });
+    const contactRows = full.contacts ?? full.matterContacts ?? [];
+    expect(contactRows.some((x: Any) => x.role === "KLIENT")).toBe(true);
+    const notes = await c.serviceNote.list({ matterId: rh.id });
+    expect((notes.serviceNotes ?? notes).length).toBeGreaterThan(0);
+    const exp = await c.expense.list({ matterId: rh.id, pageSize: 100 });
+    expect((exp.expenses ?? exp.items ?? exp).length).toBeGreaterThan(0);
   });
 });

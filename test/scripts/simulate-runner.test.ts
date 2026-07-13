@@ -48,8 +48,12 @@ describe("runScenario (#880)", () => {
   it("spelar upp rättshjälps-scenariot kronologiskt med härledda aconto-belopp", async () => {
     const { c, calls } = recordingCaller();
     const ctx: RunCtx = { c, res: { invoices: 0, documents: 0, timeEntries: 0, notes: 0, credits: 0 } };
-    const events = buildRattshjalpScenario({ motpart: "c-mot", motpartsombud: "c-omb", domstol: "c-dom" });
+    const events = buildRattshjalpScenario({ klient: "c-klient", motpart: "c-mot", motpartsombud: "c-omb", domstol: "c-dom" });
     await runScenario(ctx, MATTER, events);
+
+    // Klienten länkas som KLIENT-kontakt (#886-följd: klient saknades tidigare).
+    const klientLink = calls.find((x) => x.method === "matter.addContact" && x.args.role === "KLIENT");
+    expect(klientLink?.args.contactId).toBe("c-klient");
 
     // Kronologi: varje mutations datum-arg (date/invoiceDate/createdAt) är icke-avtagande.
     const dates = calls.map((x) => x.args.date ?? x.args.invoiceDate ?? x.args.createdAt).filter(Boolean).map((d: string) => new Date(d).getTime());
