@@ -55,7 +55,7 @@ function pick(seed: SeedDataset, key: keyof SeedDataset): Row[] {
 async function createOrganizations(c: AnyCaller, rows: Row[]): Promise<void> {
   for (const o of rows) {
     await c.organization.create(
-      defined({ id: o.id, name: o.name, orgNumber: o.orgNumber, address: o.address, phone: o.phone, email: o.email, bankgiro: o.bankgiro }),
+      defined({ id: o.id, name: o.name, orgNumber: o.orgNumber, address: o.address, phone: o.phone, email: o.email, bankgiro: o.bankgiro, accontoThresholdOre: o.accontoThresholdOre }),
     );
   }
 }

@@ -190,6 +190,7 @@ export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
       id: orgId, name: organizationName, orgNumber: "556999-9999",
       email: `kontor@${emailDomain}`, phone: "08-100 100",
       address: "Storgatan 1, 111 11 Stockholm",
+      accontoThresholdOre: 150_000, // 1500 kr — gränsbelopp för aconto-utskick (#885)
       createdAt: isoDate(-365), updatedAt: isoDate(-30),
     }],
     offices: [{

@@ -6,6 +6,7 @@
  */
 
 import { arvodeInclVatOre } from "@/lib/shared/invoice-calc";
+import { SJALVRISK_ACCONTO_THRESHOLD_ORE } from "@/lib/shared/rattshjalp";
 import type { SettlementViewLine } from "@/lib/shared/settlement-view";
 import { AVA_NAMESPACE, uuidv5 } from "@/lib/shared/uuid-derive";
 import type { BinarySink } from "../populate-documents";
@@ -19,12 +20,15 @@ type Any = any;
 export interface RunCtx {
   c: Any; // GeneratorCaller (tRPC) — samma lösa typ som övriga demo-generator-moduler
   sink?: BinarySink;
+  /** Gränsbelopp (öre) för tröskelstyrd aconto-utskick (#885); default = konstanten. */
+  accontoThresholdOre?: number;
   res: { invoices: number; documents: number; timeEntries: number; notes: number; credits: number };
 }
 
 interface SimState {
   accruedNetOre: number;      // ackumulerat debiterbart arvode (netto)
   billedNetOre: number;       // arvode-netto som redan täckts av aconton
+  currentRateBips: number;    // klientens självrisk-sats just nu (#885, driver tröskel-aconto)
   periodLines: SettlementViewLine[]; // debiterbara tidsposter sedan förra acontot (#880)
   krRunId: string | null;
   krWorkValueOre: number;
@@ -48,6 +52,7 @@ async function hTime(ctx: RunCtx, m: SimMatter, e: Any, iso: string, st: SimStat
     const amountOre = Math.round((e.minutes / 60) * m.arvodeRateOre);
     st.accruedNetOre += amountOre;
     st.periodLines.push({ date: iso.slice(0, 10), description: e.description, minutes: e.minutes, amountOre });
+    await maybeAcconto(ctx, m, iso, st); // #885: skicka aconto när klientens andel nått tröskeln
   }
 }
 
@@ -93,13 +98,13 @@ async function hRadgivning(ctx: RunCtx, m: SimMatter, _e: Any, iso: string): Pro
   ctx.res.invoices++;
 }
 
-async function hAcconto(ctx: RunCtx, m: SimMatter, e: Any, iso: string, st: SimState): Promise<void> {
-  // Klientens andel av NYTT arbete sedan förra acontot, vid periodens sats (#880).
-  // (Varje period fakturas för sig → varierande satser syns; slutregleringen jämkar
-  // mot myndighetens helhetsbeslut och ger ev. kredit vid överfakturering, #878.)
+/** Skicka ett aconto på klientens andel av NYTT arbete sedan förra acontot, vid `bips`.
+ *  (Varje period faktureras för sig → varierande satser syns; slutregleringen jämkar
+ *  mot myndighetens helhetsbeslut och ger ev. kredit vid överfakturering, #878.) */
+async function sendAcconto(ctx: RunCtx, m: SimMatter, iso: string, st: SimState, bips: number): Promise<void> {
   const newWorkNet = st.accruedNetOre - st.billedNetOre;
   if (newWorkNet <= 0) return;
-  const clientNet = Math.round((e.clientShareBips / 10000) * newWorkNet);
+  const clientNet = Math.round((bips / 10000) * newWorkNet);
   const amountOre = arvodeInclVatOre(clientNet);
   if (amountOre <= 0) return;
   // Spec (#880): periodens arbete → klientens andel → moms, så klienten ser vad hen
@@ -108,19 +113,40 @@ async function hAcconto(ctx: RunCtx, m: SimMatter, e: Any, iso: string, st: SimS
     timeLines: st.periodLines,
     rows: [
       { label: "Upparbetat arbete i perioden (exkl moms)", amountOre: newWorkNet, kind: "add" as const },
-      { label: `Klientens andel ${e.clientShareBips / 100} % (exkl moms)`, amountOre: clientNet, kind: "add" as const },
+      { label: `Klientens andel ${bips / 100} % (exkl moms)`, amountOre: clientNet, kind: "add" as const },
       { label: "Moms 25 %", amountOre: amountOre - clientNet, kind: "add" as const },
     ],
     totalLabel: "Att betala (inkl moms)", totalOre: amountOre,
   };
   const { invoice } = await ctx.c.billingRun.createAcconto({
-    matterId: m.id, recipient: "KLIENT", clientShareBips: e.clientShareBips, amountOre,
-    invoiceDate: iso, notes: `Aconto — klientens andel ${e.clientShareBips / 100} % (löpande)`, settlementBreakdown,
+    matterId: m.id, recipient: "KLIENT", clientShareBips: bips, amountOre,
+    invoiceDate: iso, notes: `Aconto — klientens andel ${bips / 100} % (löpande)`, settlementBreakdown,
   });
   await ctx.c.invoice.setStatus({ invoiceId: invoice.id, status: "SENT" });
   st.billedNetOre = st.accruedNetOre;
   st.periodLines = [];
   ctx.res.invoices++;
+}
+
+/** FAST aconto (rättsskydd-självrisk) — skickas oavsett tröskel vid scenariots dag. */
+async function hAcconto(ctx: RunCtx, m: SimMatter, e: Any, iso: string, st: SimState): Promise<void> {
+  await sendAcconto(ctx, m, iso, st, e.clientShareBips);
+}
+
+/** Byt klientens självrisk-sats (#885). */
+async function hRateChange(_ctx: RunCtx, _m: SimMatter, e: Any, _iso: string, st: SimState): Promise<void> {
+  st.currentRateBips = e.clientShareBips;
+}
+
+/** Tröskelstyrt aconto (#885, rättshjälp): skicka FÖRST när klientens ackumulerade
+ *  o-fakturerade andel (vid aktuell sats) nått byråns gränsbelopp. */
+async function maybeAcconto(ctx: RunCtx, m: SimMatter, iso: string, st: SimState): Promise<void> {
+  if (m.paymentMethod !== "RATTSHJALP") return;
+  const newWorkNet = st.accruedNetOre - st.billedNetOre;
+  const clientNet = Math.round((st.currentRateBips / 10000) * newWorkNet);
+  const threshold = ctx.accontoThresholdOre ?? SJALVRISK_ACCONTO_THRESHOLD_ORE;
+  if (clientNet < threshold) return;
+  await sendAcconto(ctx, m, iso, st, st.currentRateBips);
 }
 
 async function hKostnadsrakning(ctx: RunCtx, m: SimMatter, _e: Any, _iso: string, st: SimState): Promise<void> {
@@ -161,12 +187,12 @@ async function hPayment(ctx: RunCtx, _m: SimMatter, _e: Any, iso: string, st: Si
 /** kind → handler. Håller runnern platt (undviker en stor switch = hög komplexitet). */
 const HANDLERS: Record<SimEvent["kind"], (ctx: RunCtx, m: SimMatter, e: Any, iso: string, st: SimState) => Promise<void>> = {
   party: hParty, time: hTime, note: hNote, expense: hExpense, doc: hDoc, radgivning: hRadgivning,
-  acconto: hAcconto, kostnadsrakning: hKostnadsrakning, beslut: hBeslut, verdict: hVerdict, settle: hSettle, final: hFinal, payment: hPayment,
+  acconto: hAcconto, rateChange: hRateChange, kostnadsrakning: hKostnadsrakning, beslut: hBeslut, verdict: hVerdict, settle: hSettle, final: hFinal, payment: hPayment,
 };
 
 /** Spela upp ett ärendes scenario kronologiskt. */
 export async function runScenario(ctx: RunCtx, matter: SimMatter, events: SimEvent[]): Promise<void> {
-  const st: SimState = { accruedNetOre: 0, billedNetOre: 0, periodLines: [], krRunId: null, krWorkValueOre: 0, lastFinal: null, docSeq: 0 };
+  const st: SimState = { accruedNetOre: 0, billedNetOre: 0, currentRateBips: matter.clientShareBips ?? 0, periodLines: [], krRunId: null, krWorkValueOre: 0, lastFinal: null, docSeq: 0 };
   const sorted = [...events].sort((a, b) => a.dayOffset - b.dayOffset);
   for (const e of sorted) {
     const iso = eventIso(matter.startDaysAgo, e.dayOffset, 9 + (e.dayOffset % 6));

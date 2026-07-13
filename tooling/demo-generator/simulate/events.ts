@@ -19,8 +19,12 @@ export type SimEvent =
   | { kind: "doc"; dayOffset: number; template: string }
   /** Rådgivningstimmen faktureras — invoice.createRadgivning. */
   | { kind: "radgivning"; dayOffset: number }
-  /** Aconto på klientens andel vid `clientShareBips` (belopp härlett) — createAcconto. */
+  /** Aconto på klientens andel vid `clientShareBips` (belopp härlett) — createAcconto.
+   *  FAST aconto (rättsskydd-självrisk); rättshjälp använder `rateChange` + tröskel. */
   | { kind: "acconto"; dayOffset: number; clientShareBips: number }
+  /** Ändra klientens självrisk-sats (bips) från denna dag (#885). Rättshjälp: satsen
+   *  varierar över tid; aconto skickas när klientens ackumulerade andel når tröskeln. */
+  | { kind: "rateChange"; dayOffset: number; clientShareBips: number }
   /** Kostnadsräkning till domstol — createKostnadsrakning. */
   | { kind: "kostnadsrakning"; dayOffset: number }
   /** Domstolens beslut på KR:n — recordKostnadsrakningBeslut. */
