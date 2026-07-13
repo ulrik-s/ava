@@ -65,6 +65,9 @@ describe("runScenario (#880)", () => {
     const accontos = calls.filter((x) => x.method === "billingRun.createAcconto");
     expect(accontos.map((a) => a.args.clientShareBips)).toEqual([500, 7500, 500]);
     expect(accontos.every((a) => a.args.amountOre > 0)).toBe(true);
+    // #880: varje aconto bär tidsspecen för det upparbetade arbetet (klienten ser vad hen betalar för).
+    expect(accontos.every((a) => (a.args.settlementBreakdown?.timeLines?.length ?? 0) > 0)).toBe(true);
+    expect(accontos.every((a) => a.args.settlementBreakdown.rows.some((r: Any) => r.label.includes("Upparbetat arbete")))).toBe(true);
 
     // Inkommande svaromål registreras med direction INKOMMANDE.
     const svaromal = calls.find((x) => x.method === "document.register" && x.args.documentType === "Svaromål");

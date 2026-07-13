@@ -27,7 +27,7 @@ import { applyKrAction, type KostnadsrakningAction, type KostnadsrakningState, t
 import { ocrFromInvoiceNumber } from "@/lib/shared/ocr-reference";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { RADGIVNING_MINUTES, radgivningTextRad } from "@/lib/shared/rattshjalp";
-import type { BillingRun, Invoice } from "@/lib/shared/schemas/billing";
+import { settlementBreakdownSchema, type BillingRun, type Invoice } from "@/lib/shared/schemas/billing";
 import { billingRunRecipientSchema, type BillingRunRecipient, type ExpenseKind, type PaymentMethod } from "@/lib/shared/schemas/enums";
 import {
   matterIdSchema,
@@ -867,6 +867,9 @@ export const billingRunRouter = router({
       invoiceDate: z.string().optional(),
       dueDate: z.string().optional(),
       notes: z.string().nullish(),
+      /** Valfri nedbrytning (#880) — simuleringen skickar det upparbetade arbetet
+       *  (tidsspec) så klienten ser vad acontot avser. Utelämnas → default nedan. */
+      settlementBreakdown: settlementBreakdownSchema.nullish(),
     }))
     .mutation(async ({ ctx, input }) => {
       return ctx.repos.transaction(async (tx) => {
@@ -883,8 +886,9 @@ export const billingRunRouter = router({
         const invoice = await tx.invoices.create({
           matterId: input.matterId, amount: input.amountOre, vatOre: accontoVatOre,
           vatBreakdown: [{ kind: "arvode", vatRate: DEFAULT_VAT_RATE, netOre: accontoNetOre, vatOre: accontoVatOre }],
-          // Nedbrytning så aconto-detaljsidan inte blir tom (#878): klientens andel + moms.
-          settlementBreakdown: {
+          // Nedbrytning (#878/#880): anroparen (simuleringen) skickar en spec med det
+          // upparbetade arbetet så klienten ser vad acontot avser; annars en enkel default.
+          settlementBreakdown: input.settlementBreakdown ?? {
             timeLines: [],
             rows: [
               { label: `Klientens andel ${input.clientShareBips / 100} % av upparbetat arbete (exkl moms)`, amountOre: accontoNetOre, kind: "add" },
