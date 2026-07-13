@@ -6,6 +6,7 @@
  */
 
 import { arvodeInclVatOre } from "@/lib/shared/invoice-calc";
+import type { SettlementViewLine } from "@/lib/shared/settlement-view";
 import { AVA_NAMESPACE, uuidv5 } from "@/lib/shared/uuid-derive";
 import type { BinarySink } from "../populate-documents";
 import { eventIso, eventTime } from "./clock";
@@ -24,6 +25,7 @@ export interface RunCtx {
 interface SimState {
   accruedNetOre: number;      // ackumulerat debiterbart arvode (netto)
   billedNetOre: number;       // arvode-netto som redan täckts av aconton
+  periodLines: SettlementViewLine[]; // debiterbara tidsposter sedan förra acontot (#880)
   krRunId: string | null;
   krWorkValueOre: number;
   lastFinal: { id: string; amount: number } | null;
@@ -42,7 +44,11 @@ async function hTime(ctx: RunCtx, m: SimMatter, e: Any, iso: string, st: SimStat
     billable: isBillable(e), userId: m.lawyerId, hourlyRate: m.arvodeRateOre, createdAt: iso,
   });
   ctx.res.timeEntries++;
-  if (isBillable(e)) st.accruedNetOre += Math.round((e.minutes / 60) * m.arvodeRateOre);
+  if (isBillable(e)) {
+    const amountOre = Math.round((e.minutes / 60) * m.arvodeRateOre);
+    st.accruedNetOre += amountOre;
+    st.periodLines.push({ date: iso.slice(0, 10), description: e.description, minutes: e.minutes, amountOre });
+  }
 }
 
 async function hNote(ctx: RunCtx, m: SimMatter, e: Any, iso: string): Promise<void> {
@@ -88,12 +94,24 @@ async function hAcconto(ctx: RunCtx, m: SimMatter, e: Any, iso: string, st: SimS
   const clientNet = Math.round((e.clientShareBips / 10000) * newWorkNet);
   const amountOre = arvodeInclVatOre(clientNet);
   if (amountOre <= 0) return;
+  // Spec (#880): periodens arbete → klientens andel → moms, så klienten ser vad hen
+  // betalar för. timeLines listar tidsposterna som utgör det upparbetade arbetet.
+  const settlementBreakdown = {
+    timeLines: st.periodLines,
+    rows: [
+      { label: "Upparbetat arbete i perioden (exkl moms)", amountOre: newWorkNet, kind: "add" as const },
+      { label: `Klientens andel ${e.clientShareBips / 100} % (exkl moms)`, amountOre: clientNet, kind: "add" as const },
+      { label: "Moms 25 %", amountOre: amountOre - clientNet, kind: "add" as const },
+    ],
+    totalLabel: "Att betala (inkl moms)", totalOre: amountOre,
+  };
   const { invoice } = await ctx.c.billingRun.createAcconto({
     matterId: m.id, recipient: "KLIENT", clientShareBips: e.clientShareBips, amountOre,
-    invoiceDate: iso, notes: `Aconto — klientens andel ${e.clientShareBips / 100} % (löpande)`,
+    invoiceDate: iso, notes: `Aconto — klientens andel ${e.clientShareBips / 100} % (löpande)`, settlementBreakdown,
   });
   await ctx.c.invoice.setStatus({ invoiceId: invoice.id, status: "SENT" });
   st.billedNetOre = st.accruedNetOre;
+  st.periodLines = [];
   ctx.res.invoices++;
 }
 
@@ -140,7 +158,7 @@ const HANDLERS: Record<SimEvent["kind"], (ctx: RunCtx, m: SimMatter, e: Any, iso
 
 /** Spela upp ett ärendes scenario kronologiskt. */
 export async function runScenario(ctx: RunCtx, matter: SimMatter, events: SimEvent[]): Promise<void> {
-  const st: SimState = { accruedNetOre: 0, billedNetOre: 0, krRunId: null, krWorkValueOre: 0, lastFinal: null, docSeq: 0 };
+  const st: SimState = { accruedNetOre: 0, billedNetOre: 0, periodLines: [], krRunId: null, krWorkValueOre: 0, lastFinal: null, docSeq: 0 };
   const sorted = [...events].sort((a, b) => a.dayOffset - b.dayOffset);
   for (const e of sorted) {
     const iso = eventIso(matter.startDaysAgo, e.dayOffset, 9 + (e.dayOffset % 6));

@@ -96,6 +96,25 @@ export const expenseSchema = z.object({
 
 export type Expense = z.infer<typeof expenseSchema>;
 
+/** Persisterad nedbrytningsvy på en faktura (#876/#880) — matchar `SettlementView`.
+ *  Tidsspec-tabell (arbetad tid) + rader (trappa) + total. Delas av slutreglering
+ *  OCH aconto (aconton visar det upparbetade arbetet klienten betalar för). */
+export const settlementBreakdownSchema = z.object({
+  timeLines: z.array(z.object({
+    date: z.string(),
+    description: z.string(),
+    minutes: z.number().int(),
+    amountOre: z.number().int(),
+  })),
+  rows: z.array(z.object({
+    label: z.string(),
+    amountOre: z.number().int(),
+    kind: z.enum(["add", "deduct", "info"]),
+  })),
+  totalLabel: z.string(),
+  totalOre: z.number().int(),
+});
+
 /**
  * Invoice — `amount` i öre (brutto för FINAL, negativt för CREDIT).
  * Lagras i `invoices/<id>.json`.
@@ -120,21 +139,7 @@ export const invoiceSchema = z.object({
   /** Persisterad slutregleringsvy (#876) — EN källa för både faktura-dokumentet
    *  och Slutfaktura-sidan (`/invoices/[id]`). Sätts vid settleCoverage på klient-/
    *  betalar-fakturan; null på övriga fakturor. Matchar `SettlementView`. */
-  settlementBreakdown: z.object({
-    timeLines: z.array(z.object({
-      date: z.string(),
-      description: z.string(),
-      minutes: z.number().int(),
-      amountOre: z.number().int(),
-    })),
-    rows: z.array(z.object({
-      label: z.string(),
-      amountOre: z.number().int(),
-      kind: z.enum(["add", "deduct", "info"]),
-    })),
-    totalLabel: z.string(),
-    totalOre: z.number().int(),
-  }).nullish(),
+  settlementBreakdown: settlementBreakdownSchema.nullish(),
   status: invoiceStatusSchema.default("DRAFT"),
   invoiceType: invoiceTypeSchema.default("STANDARD"),
   /** Per-byrå löpande fakturanummer (F-YYYY-NNNN), genereras vid skapande.
