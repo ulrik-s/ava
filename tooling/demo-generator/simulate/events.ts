@@ -53,8 +53,10 @@ export interface SimMatter {
   arvodeRateOre: number;
 }
 
-/** Motparter/instans att länka in via `party`-events (översatta UUID:n). */
+/** Parter att länka in via `party`-events (översatta UUID:n) — ur seedens
+ *  matterContacts, så klient/motpart/ombud/domstol får riktiga kontakter. */
 export interface Parties {
+  klient?: string | undefined;
   motpart?: string | undefined;
   motpartsombud?: string | undefined;
   domstol?: string | undefined;

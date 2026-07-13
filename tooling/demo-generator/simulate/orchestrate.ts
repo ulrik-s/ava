@@ -9,7 +9,6 @@
  */
 
 import { TIMKOSTNADSNORM_FTAX_ORE_PER_H } from "@/lib/shared/brottmalstaxa";
-import { AVA_NAMESPACE, uuidv5 } from "@/lib/shared/uuid-derive";
 import type { Parties, SimMatter } from "./events";
 import type { RunCtx } from "./runner";
 import { runScenario } from "./runner";
@@ -19,7 +18,6 @@ import { buildScenario } from "./scenarios";
 type Any = any;
 
 const MS_DAY = 86_400_000;
-const OMBUD_SLUG = "c-advokatbyran-nord";
 const DEFAULT_RATE_ORE = 250_000;
 
 function daysSince(iso: unknown): number {
@@ -36,23 +34,24 @@ function deriveSim(m: Any, lawyerId: string, rateOre: number): SimMatter {
   };
 }
 
-function deriveParties(m: Any, ombudId: string): Parties {
-  const hasMotpart = Boolean(m.motpartId);
-  return {
-    motpart: hasMotpart ? String(m.motpartId) : undefined,
-    motpartsombud: hasMotpart ? ombudId : undefined,
-    domstol: m.domstolId ? String(m.domstolId) : undefined,
+/** Parter ur seedens matterContacts (klient/motpart/ombud/domstol) → party-events. */
+function deriveParties(matterId: string, seedContacts: Any[]): Parties {
+  const mine = seedContacts.filter((c) => String(c.matterId) === matterId);
+  const byRole = (role: string): string | undefined => {
+    const hit = mine.find((c) => String(c.role) === role);
+    return hit ? String(hit.contactId) : undefined;
   };
+  return { klient: byRole("KLIENT"), motpart: byRole("MOTPART"), motpartsombud: byRole("MOTPARTSOMBUD"), domstol: byRole("DOMSTOL") };
 }
 
 /** Kör ett ärendes scenario + stäng det om seedens status inte är ACTIVE. */
-async function simulateMatter(ctx: RunCtx, m: Any, users: { id: string; rateOre: number }[], ombudId: string, index: number): Promise<void> {
+async function simulateMatter(ctx: RunCtx, m: Any, users: { id: string; rateOre: number }[], seedContacts: Any[], index: number): Promise<void> {
   // Seed-ärenden saknar responsibleLawyerId → välj ansvarig jurist deterministiskt ur
   // användarlistan (som gamla buildTimeEntries: round-robin per ärende-index).
   const u = users[index % Math.max(1, users.length)];
   if (!u) return;
   const sim = deriveSim(m, u.id, u.rateOre);
-  await runScenario(ctx, sim, buildScenario(sim, deriveParties(m, ombudId), index));
+  await runScenario(ctx, sim, buildScenario(sim, deriveParties(String(m.id), seedContacts), index));
   if (String(m.status) !== "ACTIVE") await ctx.c.matter.update({ id: sim.id, status: String(m.status) });
 }
 
@@ -64,12 +63,11 @@ export async function runSimulation(ctx: RunCtx, seed: Any): Promise<void> {
   const users: { id: string; rateOre: number }[] = (seed.users ?? [])
     .filter((u: Any) => typeof u.id === "string")
     .map((u: Any) => ({ id: String(u.id), rateOre: Number(u.hourlyRate ?? 0) || 0 }));
-  // Motpartsombudet är hårdkopplat till c-advokatbyran-nord (jfr buildMatterContacts);
-  // samma uuid som translateSeed ger (uuidv5(slug)).
-  const ombudId = uuidv5(OMBUD_SLUG, AVA_NAMESPACE);
+  // Parterna länkas kronologiskt ur seedens matterContacts (klient/motpart/ombud/domstol).
+  const seedContacts: Any[] = seed.matterContacts ?? [];
   let index = 0;
   for (const m of seed.matters ?? []) {
-    await simulateMatter(ctx, m, users, ombudId, index);
+    await simulateMatter(ctx, m, users, seedContacts, index);
     index++;
   }
 }
