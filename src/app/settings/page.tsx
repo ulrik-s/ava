@@ -229,17 +229,26 @@ interface OrgForm {
   phone: string;
   email: string;
   bankgiro: string;
+  /** Aconto-gränsbelopp i KRONOR (öre/100) — sparas som öre (#885). */
+  accontoThresholdKr: string;
 }
 
 type NullableStr = string | null | undefined;
 /** Settings-data → form (null/undefined → ""). Egen helper håller
  *  useOrgSettings under complexity@8 (annars 6× `??`). */
-function toOrgForm(d: { name?: NullableStr; orgNumber?: NullableStr; address?: NullableStr; phone?: NullableStr; email?: NullableStr; bankgiro?: NullableStr }): OrgForm {
+function toOrgForm(d: { name?: NullableStr; orgNumber?: NullableStr; address?: NullableStr; phone?: NullableStr; email?: NullableStr; bankgiro?: NullableStr; accontoThresholdOre?: number | null }): OrgForm {
   const s = (v: NullableStr): string => v ?? "";
   return {
     name: s(d.name), orgNumber: s(d.orgNumber), address: s(d.address),
     phone: s(d.phone), email: s(d.email), bankgiro: s(d.bankgiro),
+    accontoThresholdKr: d.accontoThresholdOre != null ? String(d.accontoThresholdOre / 100) : "",
   };
+}
+
+/** Kronor-sträng → öre (heltal), eller undefined om tomt/ogiltigt (#885). */
+function krToOre(kr: string): number | undefined {
+  const n = Number.parseFloat(kr.replace(",", "."));
+  return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) : undefined;
 }
 
 /** Byrå-inställningar: query + auto-save (debounce 800ms) + form-state.
@@ -247,7 +256,7 @@ function toOrgForm(d: { name?: NullableStr; orgNumber?: NullableStr; address?: N
 function useOrgSettings() {
   const settings = trpc.organization.getSettings.useQuery();
   const utils = trpc.useUtils();
-  const [form, setForm] = useState<OrgForm>({ name: "", orgNumber: "", address: "", phone: "", email: "", bankgiro: "" });
+  const [form, setForm] = useState<OrgForm>({ name: "", orgNumber: "", address: "", phone: "", email: "", bankgiro: "", accontoThresholdKr: "" });
   const [formReady, setFormReady] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -271,6 +280,7 @@ function useOrgSettings() {
         name: form.name || undefined, orgNumber: form.orgNumber || undefined,
         address: form.address || undefined, phone: form.phone || undefined,
         email: form.email || undefined, bankgiro: form.bankgiro || undefined,
+        accontoThresholdOre: krToOre(form.accontoThresholdKr),
       });
     }, 800);
     return () => clearTimeout(id);
@@ -411,6 +421,7 @@ function OrgFieldsForm({ form, setForm, isPending, saved, error }: OrgFieldsProp
   const phoneId = useId();
   const emailId = useId();
   const bankgiroId = useId();
+  const thresholdId = useId();
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
       <h3 className="font-semibold text-gray-900 mb-4">Kontaktuppgifter</h3>
@@ -452,11 +463,20 @@ function OrgFieldsForm({ form, setForm, isPending, saved, error }: OrgFieldsProp
           </div>
         </div>
 
-        <div>
-          <label htmlFor={bankgiroId} className="block text-xs font-medium text-gray-700 mb-1">Bankgiro</label>
-          <input id={bankgiroId} type="text" value={form.bankgiro} placeholder="123-4567"
-            onChange={(e) => setForm({ ...form, bankgiro: e.target.value })}
-            className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label htmlFor={bankgiroId} className="block text-xs font-medium text-gray-700 mb-1">Bankgiro</label>
+            <input id={bankgiroId} type="text" value={form.bankgiro} placeholder="123-4567"
+              onChange={(e) => setForm({ ...form, bankgiro: e.target.value })}
+              className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+          </div>
+          <div>
+            <label htmlFor={thresholdId} className="block text-xs font-medium text-gray-700 mb-1">Gränsbelopp aconto (kr)</label>
+            <input id={thresholdId} type="number" min={0} step={100} value={form.accontoThresholdKr} placeholder="1500"
+              onChange={(e) => setForm({ ...form, accontoThresholdKr: e.target.value })}
+              className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+            <p className="text-[11px] text-gray-500 mt-1">Aconto skickas när klientens självrisk nått detta belopp.</p>
+          </div>
         </div>
       </div>
 

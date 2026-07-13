@@ -28,6 +28,8 @@ function toOrgSettings(org: Organization) {
     ...nullableOrgFields(org),
     /** Byråns vokabulär av giltiga dokument-etiketter (#621). */
     documentTags: org.documentTags ?? [],
+    /** Gränsbelopp (öre) för aconto-utskick (#885). */
+    accontoThresholdOre: org.accontoThresholdOre ?? null,
   };
 }
 
@@ -55,6 +57,8 @@ export const organizationRouter = router({
         /** Byråns vokabulär av giltiga dokument-etiketter (#621). Hela listan
          *  ersätts (set-semantik); dedupas + tomma rensas. */
         documentTags: z.array(z.string()).optional(),
+        /** Gränsbelopp (öre) för aconto-utskick (#885). */
+        accontoThresholdOre: z.number().int().nonnegative().optional(),
       })
     )
     .mutation(({ ctx, input }) => {
@@ -82,6 +86,7 @@ export const organizationRouter = router({
         phone: z.string().optional(),
         email: z.string().optional(),
         bankgiro: z.string().optional(),
+        accontoThresholdOre: z.number().int().nonnegative().optional(),
       })
     )
     .mutation(({ ctx, input }) =>

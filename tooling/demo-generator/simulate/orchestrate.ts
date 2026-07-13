@@ -58,6 +58,9 @@ async function simulateMatter(ctx: RunCtx, m: Any, users: { id: string; rateOre:
 
 /** Spela upp alla ärendens scenarier. `seed` = den ÖVERSATTA seeden (UUID-id). */
 export async function runSimulation(ctx: RunCtx, seed: Any): Promise<void> {
+  // Byråns aconto-gränsbelopp (#885) driver tröskelstyrda aconton i runnern.
+  const orgThreshold = seed.organizations?.[0]?.accontoThresholdOre;
+  if (typeof orgThreshold === "number") ctx.accontoThresholdOre = orgThreshold;
   const users: { id: string; rateOre: number }[] = (seed.users ?? [])
     .filter((u: Any) => typeof u.id === "string")
     .map((u: Any) => ({ id: String(u.id), rateOre: Number(u.hourlyRate ?? 0) || 0 }));

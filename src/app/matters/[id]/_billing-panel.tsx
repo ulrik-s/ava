@@ -494,14 +494,17 @@ function RadgivningBanner({ matterId, matter, onRecorded }: { matterId: MatterId
 function SjalvriskAccontoHint({ matterId, matter, rows }: { matterId: MatterId; matter: MatterContext; rows: BillingRunRow[] }) {
   const isRattshjalp = matter.paymentMethod === "RATTSHJALP";
   const split = trpc.billingRun.coverageSplit.useQuery({ matterId }, { enabled: isRattshjalp }).data;
+  // Gränsbeloppet är en byrå-inställning (#885); faller tillbaka på default-konstanten.
+  const orgThreshold = trpc.organization.getSettings.useQuery(undefined, { enabled: isRattshjalp }).data?.accontoThresholdOre;
+  const threshold = orgThreshold ?? SJALVRISK_ACCONTO_THRESHOLD_ORE;
   if (!isRattshjalp || !split) return null;
   const hasSjalvriskAconto = rows.some((r) => r.type === "ACCONTO" && r.recipient === "KLIENT");
-  if (hasSjalvriskAconto || split.clientOre < SJALVRISK_ACCONTO_THRESHOLD_ORE) return null;
+  if (hasSjalvriskAconto || split.clientOre < threshold) return null;
   return (
     <div className="mx-6 mb-4 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
       Klientens självrisk har nått{" "}
       <span className="font-mono font-semibold">{formatCurrency(split.clientOre)}</span>{" "}
-      (tröskel {formatCurrency(SJALVRISK_ACCONTO_THRESHOLD_ORE)}) — dags att skicka ett självrisk-aconto via
+      (tröskel {formatCurrency(threshold)}) — dags att skicka ett självrisk-aconto via
       {" "}<strong>+ Skapa faktura → Aconto till klient</strong>.
     </div>
   );

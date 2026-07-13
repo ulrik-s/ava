@@ -70,6 +70,11 @@ describe("runScenario (#880)", () => {
     const accontos = calls.filter((x) => x.method === "billingRun.createAcconto");
     expect(accontos.map((a) => a.args.clientShareBips)).toEqual([500, 7500, 500]);
     expect(accontos.every((a) => a.args.amountOre > 0)).toBe(true);
+    // #885: aconto skickas FÖRST när klientens ackumulerade andel nått tröskeln
+    // (default 150000 öre) — varje acontos klient-andel-rad ligger på/över den.
+    const clientNet = (a: Any): number =>
+      a.args.settlementBreakdown.rows.find((r: Any) => r.label.includes("Klientens andel"))?.amountOre ?? 0;
+    expect(accontos.every((a) => clientNet(a) >= 150_000)).toBe(true);
     // #880: varje aconto bär tidsspecen för det upparbetade arbetet (klienten ser vad hen betalar för).
     expect(accontos.every((a) => (a.args.settlementBreakdown?.timeLines?.length ?? 0) > 0)).toBe(true);
     expect(accontos.every((a) => a.args.settlementBreakdown.rows.some((r: Any) => r.label.includes("Upparbetat arbete")))).toBe(true);
@@ -86,5 +91,17 @@ describe("runScenario (#880)", () => {
     expect(calls.some((x) => x.method === "billingRun.recordKostnadsrakningBeslut")).toBe(true);
     expect(calls.some((x) => x.method === "billingRun.settleCoverage")).toBe(true);
     expect(ctx.res.credits).toBe(1);
+  });
+
+  it("skickar INGA aconton om byråns gränsbelopp ligger över det upparbetade (#885)", async () => {
+    const { c, calls } = recordingCaller();
+    // Gränsbelopp långt över klientens totala andel → tröskeln nås aldrig.
+    const ctx: RunCtx = { c, accontoThresholdOre: 50_000_000, res: { invoices: 0, documents: 0, timeEntries: 0, notes: 0, credits: 0 } };
+    const events = buildRattshjalpScenario({ motpart: "c-mot", motpartsombud: "c-omb", domstol: "c-dom" });
+    await runScenario(ctx, MATTER, events);
+    expect(calls.filter((x) => x.method === "billingRun.createAcconto")).toHaveLength(0);
+    // Rådgivning + kostnadsräkning + slutreglering körs fortfarande.
+    expect(calls.some((x) => x.method === "invoice.createRadgivning")).toBe(true);
+    expect(calls.some((x) => x.method === "billingRun.settleCoverage")).toBe(true);
   });
 });

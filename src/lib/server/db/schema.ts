@@ -51,6 +51,9 @@ export const organizations = pgTable("organizations", {
   /** Byråns vokabulär av giltiga dokument-etiketter (#621). Dokument får bara
    *  bära taggar ur denna lista; hanteras i org-inställningarna. */
   documentTags: jsonb("document_tags").notNull().default([]).$type<string[]>(),
+  /** Gränsbelopp (öre) för klientens ackumulerade självrisk innan ett aconto
+   *  skickas (#885). NULL = använd default (SJALVRISK_ACCONTO_THRESHOLD_ORE). */
+  accontoThresholdOre: integer("acconto_threshold_ore"),
 });
 
 export const offices = pgTable("offices", {
