@@ -60,10 +60,12 @@ describe("populateInvoiceDocs", () => {
     await populate(target.caller, seed);
     await populateBilling(target.caller, seed);
     await populateInvoiceDocs(target.caller, (_p, b) => { htmls.push(new TextDecoder().decode(b)); return b.byteLength; });
-    // Kreditfakturan (varierande rättshjälp, m-020) renderar kredit-trappan — inte en tom vy.
+    // Kreditfakturan (varierande rättshjälp, m-020) renderar FULLA specifikationen
+    // (#895): upparbetat arvode + avdragna aconton → kredit-netto, inte en tom vy.
     const credit = htmls.find((h) => h.includes("Kreditfaktura") && h.includes("Kreditering till klienten"));
     expect(credit, "en kreditfaktura-doc ska genereras ur settlementBreakdown").toBeDefined();
-    expect(credit).toContain("Betalda aconton");
+    expect(credit).toContain("Upparbetat arvode");
+    expect(credit).toContain("Avgår aconto");
     // Aconto-fakturan renderar sin andels-nedbrytning.
     const acconto = htmls.find((h) => h.includes("Aconto-faktura") && h.includes("Klientens andel"));
     expect(acconto, "aconto-doc ska visa andels-nedbrytningen").toBeDefined();
