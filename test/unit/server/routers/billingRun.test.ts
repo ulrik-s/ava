@@ -588,7 +588,13 @@ describe("billingRun.settleCoverage — bokför prutnings-uppdelningen (#801)", 
     expect(res.clientInvoice.invoiceType).toBe("CREDIT");
     expect(res.clientInvoice.amount).toBe(-29_675);      // negativ = kreditering
     expect(res.creditInvoice).toBe(res.clientInvoice);   // krediten ÄR klientfakturan
-    expect(res.clientInvoice.settlementBreakdown!.totalOre).toBe(29_675);
+    // #895: kreditfakturan visar FULLA specifikationen (tidsspec + avdragna aconton) →
+    // netto = kredit (negativt), inte den gamla minimala 2-rads-vyn.
+    const bd = res.clientInvoice.settlementBreakdown!;
+    expect(bd.totalOre).toBe(-29_675);
+    expect(bd.totalLabel).toMatch(/Kreditering/i);
+    expect(bd.timeLines.length).toBeGreaterThan(0);
+    expect(bd.rows.some((r) => /Avgår aconto/i.test(r.label))).toBe(true);
   });
 
   it("rättshjälp: aconton < slutlig rättshjälpsavgift → INGEN kreditfaktura", async () => {

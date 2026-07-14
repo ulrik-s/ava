@@ -634,19 +634,12 @@ function buildSettlementViews(b: SettlementBreakdown, method: PaymentMethod): { 
   return { clientView: buildClientView(b, isRattshjalp, feeTerm), payerView: buildPayerView(b, payerLabel, payerNoun, feeTerm) };
 }
 
-/** Kreditvy (#878): klienten har via aconton betalat mer än sin slutliga andel
- *  (myndighetens helhetsbeslut < de löpande aconto-satserna) → mellanskillnaden
- *  krediteras. Betalda aconton − slutlig andel = kreditering. */
-function buildCreditView(deductionOre: number, clientGrossOre: number, overpaidOre: number, feeTerm: string): SettlementView {
-  return {
-    timeLines: [],
-    rows: [
-      { label: "Betalda aconton (inkl moms)", amountOre: deductionOre, kind: "add" },
-      { label: `Avgår slutlig ${feeTerm} (inkl moms)`, amountOre: clientGrossOre, kind: "deduct" },
-    ],
-    totalLabel: "Kreditering till klienten (inkl moms)",
-    totalOre: overpaidOre,
-  };
+/** Kreditvy (#895): SAMMA fulla specifikation som klientens slutfaktura (tidsspec
+ *  med á-pris + rättshjälpsavgift-trappan + avdragna aconton, jfr domstolsvyn) — men
+ *  eftersom betalda aconton översteg klientens slutliga andel blir nettot NEGATIVT →
+ *  en kreditering. Återanvänder `clientView` och byter bara total-etikett + belopp. */
+function buildCreditView(clientView: SettlementView, creditNetOre: number): SettlementView {
+  return { ...clientView, totalLabel: "Kreditering till klienten (inkl moms)", totalOre: creditNetOre };
 }
 
 /**
@@ -671,7 +664,8 @@ async function createClientSettlementInvoice(repos: Repositories, ctx: EmitCtx, 
         ...base,
         // Kredit-moms = 25 %-andelen av det överbetalda bruttot (arvode dominerar).
         vatOre: -Math.round(overpaidOre - overpaidOre / 1.25),
-        settlementBreakdown: buildCreditView(a.deductionOre, a.clientGrossOre, overpaidOre, feeTerm),
+        // #895: full spec (tidsspec + rättshjälpsavgift + avdragna aconton) → kredit-netto.
+        settlementBreakdown: buildCreditView(a.clientView, clientNet),
         invoiceType: "CREDIT" as const, status: "SENT" as const,
         notes: `Rättshjälps-överfakturering: betalda aconton (${(a.deductionOre / 100).toLocaleString("sv-SE")} kr) översteg slutlig ${feeTerm} — mellanskillnaden krediteras klienten.`,
       }
