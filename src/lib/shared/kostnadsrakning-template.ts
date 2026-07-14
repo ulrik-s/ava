@@ -211,30 +211,27 @@ export const KOSTNADSRAKNING_ICKE_TAXA_DEFAULT_HTML = `<!DOCTYPE html>
     <tr>
       <th>Datum</th>
       <th>Beskrivning</th>
-      <th class="num">Tid</th>
+      <th class="num">Á-pris</th>
+      <th class="num">Antal</th>
+      <th class="num">Totalt (exkl moms)</th>
     </tr>
   </thead>
   <tbody>
     {{#each timeLines}}
     <tr>
       <td>{{date}}</td>
-      <td>{{description}}</td>
-      <td class="num">{{minutesFormatted}}</td>
+      <td>{{description}}{{#if isTidsspillan}} (tidsspillan){{/if}}</td>
+      <td class="num">{{rateFormatted}}</td>
+      <td class="num">{{hoursFormatted}}</td>
+      <td class="num">{{amountFormatted}}</td>
     </tr>
     {{/each}}
   </tbody>
   <tfoot>
     <tr>
-      <td colspan="2">Summa registrerad tid</td>
-      <td class="num">{{billableArbetsFormatted}}</td>
-    </tr>
-    <tr>
-      <td colspan="2">+ Huvudförhandling</td>
-      <td class="num">{{huvudforhandlingFormatted}}</td>
-    </tr>
-    <tr>
-      <td colspan="2"><strong>Total arbetstid</strong></td>
-      <td class="num"><strong>{{totalArbetsFormatted}}</strong></td>
+      <td colspan="3"><strong>Summa arbetstid</strong></td>
+      <td class="num"><strong>{{billableArbetsFormatted}}</strong></td>
+      <td class="num"><strong>{{arvodeExclFormatted}}</strong></td>
     </tr>
   </tfoot>
 </table>
@@ -242,11 +239,12 @@ export const KOSTNADSRAKNING_ICKE_TAXA_DEFAULT_HTML = `<!DOCTYPE html>
 
 <h2>Arvode — Timkostnadsnorm (icke-taxa)</h2>
 <div class="note">
-  Brottmålstaxan är inte tillämplig — ersättning enligt timkostnadsnorm
-  × faktiskt nedlagd tid (DVFS 2025:6 § 8 + RB 21:10).
+  Brottmålstaxan är inte tillämplig — ersättning enligt timkostnadsnorm för
+  arbete och tidsspillan-norm för tidsspillan (DVFS 2025:6 § 8 + RB 21:10).
+  Á-pris per rad ovan; olika taxor summeras inte till en gemensam timkostnad.
 </div>
 <div class="totalsRow">
-  <span>Arbetstid <strong>{{totalArbetsFormatted}}</strong> × timkostnadsnorm (1 626 kr/h)</span>
+  <span>Arvode exkl moms (enligt tidsspecifikationen)</span>
   <span class="num">{{arvodeExclFormatted}}</span>
 </div>
 <div class="totalsRow">

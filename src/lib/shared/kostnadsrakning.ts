@@ -17,7 +17,7 @@
  *   - `templateContext` — Handlebars-context (matchar default-mallen)
  */
 
-import { computeBrottmalstaxa, computeTimkostnadsnorm, type TaxaLevel, type TaxaResult } from "./brottmalstaxa";
+import { computeBrottmalstaxa, computeTimkostnadsnorm, TIMKOSTNADSNORM_NO_FTAX_ORE_PER_H, timkostnadsnormFtaxForDate, tidsspillanFtaxForDate, type TaxaLevel, type TaxaResult } from "./brottmalstaxa";
 import { RADGIVNING_MINUTES, radgivningTextRad } from "./rattshjalp";
 import { splitVat } from "./vat";
 
@@ -79,6 +79,8 @@ export interface TimeEntryInput {
   description: string;
   minutes: number;
   billable?: boolean;
+  /** ARBETE (default) eller TIDSSPILLAN — värderas på tidsspillan-normen (#891). */
+  kind?: "ARBETE" | "TIDSSPILLAN" | null;
 }
 
 export interface ExpenseLine {
@@ -96,6 +98,13 @@ export interface TimeLine {
   date: string;
   description: string;
   minutes: number;
+  /** Á-pris (öre/tim) raden värderas på (#891): arbete = timkostnadsnormen,
+   *  tidsspillan = tidsspillan-normen. 0 för taxa-ärenden (beloppet styrs av taxan). */
+  rateOrePerH: number;
+  /** Radens belopp exkl moms (öre) = minutes/60 × rateOrePerH. 0 för taxa-ärenden. */
+  amountOre: number;
+  /** TIDSSPILLAN → visas som tidsspillan-rad; annars arbete. */
+  isTidsspillan: boolean;
 }
 
 export interface KostnadsrakningResult {
@@ -130,7 +139,7 @@ function timkostnadsnormResult(totalArbetsMinutes: number, hasFTax: boolean): Ta
     intervalLabel: "Timkostnadsnorm",
     ersattningExclVat: tk.total,
     gransvardeExclVat: 0,
-    notes: [`Icke-taxa-ärende — timkostnadsnorm ${tk.rateOrePerH / 100} kr/h × ${(totalArbetsMinutes / 60).toFixed(2)} h (HUF + tidsregistreringar)`],
+    notes: ["Icke-taxa-ärende — ersättning enligt timkostnadsnorm (arbete) resp. tidsspillan-norm; á-pris per rad i tidsspecifikationen."],
   };
 }
 
@@ -248,12 +257,41 @@ function buildKrTemplateContext(a: KrTemplateArgs): Record<string, unknown> {
     timeLines: a.timeLines.map((t) => ({
       ...t,
       minutesFormatted: formatMinutes(t.minutes),
+      // Per rad (#891): antal (h), á-pris (kr/h) och totalt (kr). Tomt á-pris/totalt
+      // för taxa-ärenden (rateOrePerH = 0) → mallen visar bara tiden.
+      hoursFormatted: formatHoursDecimal(t.minutes),
+      rateFormatted: t.rateOrePerH > 0 ? `${formatOreAsKr(t.rateOrePerH)}/h` : "",
+      amountFormatted: t.rateOrePerH > 0 ? formatOreAsKr(t.amountOre) : "",
     })),
     billableArbetsMinutes: a.billableArbetsMinutes,
     billableArbetsFormatted: formatMinutes(a.billableArbetsMinutes),
     totalArbetsMinutes: a.totalArbetsMinutes,
     totalArbetsFormatted: formatMinutes(a.totalArbetsMinutes),
   };
+}
+
+/**
+ * Värdera tidsraderna per kategori (#891): icke-taxa → arbete på timkostnadsnormen
+ * och tidsspillan på tidsspillan-normen (vid KR-datumet `hufEnd`, retroaktivt), så
+ * olika taxor aldrig summeras till en gemensam timkostnad. Taxa-ärenden → rateOrePerH
+ * = 0 (raderna är informativa; beloppet styrs av taxan). Utbruten så
+ * `buildKostnadsrakningContext` håller komplexitet ≤ 8 (#199).
+ */
+function valuateTimeLines(entries: readonly TimeEntryInput[], input: BuildInput): { timeLines: TimeLine[]; arvodeNorm: number } {
+  const isTaxe = input.isTaxeArende ?? true;
+  const hasFTax = input.hasFTax ?? true;
+  const valDate = new Date(input.hufEnd);
+  const arvodeNorm = hasFTax ? timkostnadsnormFtaxForDate(valDate) : TIMKOSTNADSNORM_NO_FTAX_ORE_PER_H;
+  const tidsNorm = hasFTax ? tidsspillanFtaxForDate(valDate) : TIMKOSTNADSNORM_NO_FTAX_ORE_PER_H;
+  const timeLines = entries.map((t): TimeLine => {
+    const isTids = t.kind === "TIDSSPILLAN";
+    const rateOrePerH = isTaxe ? 0 : (isTids ? tidsNorm : arvodeNorm);
+    return {
+      id: t.id, date: toIsoDate(t.date), description: t.description, minutes: t.minutes,
+      rateOrePerH, amountOre: Math.round((t.minutes / 60) * rateOrePerH), isTidsspillan: isTids,
+    };
+  });
+  return { timeLines, arvodeNorm };
 }
 
 export function buildKostnadsrakningContext(input: BuildInput): KostnadsrakningResult {
@@ -270,9 +308,7 @@ export function buildKostnadsrakningContext(input: BuildInput): KostnadsrakningR
   const billableTimeEntries = input.matter.radgivningPaid
     ? carveEarliestMinutes(allBillable, RADGIVNING_MINUTES)
     : allBillable;
-  const timeLines: TimeLine[] = billableTimeEntries.map((t) => ({
-    id: t.id, date: toIsoDate(t.date), description: t.description, minutes: t.minutes,
-  }));
+  const { timeLines, arvodeNorm } = valuateTimeLines(billableTimeEntries, input);
   const billableArbetsMinutes = billableTimeEntries.reduce((s, t) => s + t.minutes, 0);
   const totalArbetsMinutes = billableArbetsMinutes + huvudforhandlingMinutes;
 
@@ -304,7 +340,13 @@ export function buildKostnadsrakningContext(input: BuildInput): KostnadsrakningR
     { exclVat: 0, vat: 0, inclVat: 0 },
   );
 
-  const arvodeExclVat = taxa.kind === "taxa-applies" ? taxa.ersattningExclVat : 0;
+  // Icke-taxa: arvodet = Σ per-rad-belopp (arbete + tidsspillan på sina normer) +
+  // ev. huvudförhandling (arbete-norm). Taxa-ärenden: taxans fasta belopp (#891).
+  const icketaxaArvode = timeLines.reduce((s, l) => s + l.amountOre, 0)
+    + Math.round((huvudforhandlingMinutes / 60) * arvodeNorm);
+  const arvodeExclVat = (input.isTaxeArende ?? true)
+    ? (taxa.kind === "taxa-applies" ? taxa.ersattningExclVat : 0)
+    : icketaxaArvode;
   const arvodeMoms = Math.round(arvodeExclVat * 0.25);
   const arvodeInclVat = arvodeExclVat + arvodeMoms;
   const totalInclVat = arvodeInclVat + expenseSummary.inclVat;
@@ -350,6 +392,11 @@ function toIsoDateTime(d: Date): string {
 
 function pad(n: number): string {
   return String(n).padStart(2, "0");
+}
+
+/** Minuter → decimaltimmar, "4,00 h" (antal-kolumnen i tidsspecifikationen, #891). */
+export function formatHoursDecimal(m: number): string {
+  return `${new Intl.NumberFormat("sv-SE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(m / 60)} h`;
 }
 
 export function formatMinutes(m: number): string {

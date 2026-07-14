@@ -228,7 +228,7 @@ describe("Scenario: civilmål (bostadsrättstvist) på löpande räkning", () =>
   });
 
   // ─── 7. ACCONTO-faktura skickas ──────────────────────────────────
-  it("7. Acconto-faktura — 15 000 kr", async () => {
+  it("7. Aconto-faktura — 15 000 kr", async () => {
     const result = await state.caller.billingRun.createAcconto({
       matterId: state.matterId!,
       recipient: "KLIENT",

@@ -174,6 +174,11 @@ function PrimarySpecCard({ inv }: { inv: Inv }) {
  *  renderad ur `settlementBreakdown` så den är IDENTISK med faktura-dokumentet. */
 function SettlementBreakdownCard({ view }: { view: SettlementView }) {
   const hours = (m: number) => (m / 60).toLocaleString("sv-SE", { maximumFractionDigits: 2 });
+  // Á-pris (#891): härlett per rad (belopp/timmar) — arbete och tidsspillan har olika
+  // taxor, så per-rad-priset visas i stället för en gemensam timkostnad.
+  const aPrisOre = (l: SettlementView["timeLines"][number]) => (l.minutes > 0 ? Math.round(l.amountOre / (l.minutes / 60)) : 0);
+  const totalMinutes = view.timeLines.reduce((s, l) => s + l.minutes, 0);
+  const totalAmount = view.timeLines.reduce((s, l) => s + l.amountOre, 0);
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-6">
       <h2 className="font-semibold text-gray-900 mb-1">Specifikation</h2>
@@ -184,8 +189,9 @@ function SettlementBreakdownCard({ view }: { view: SettlementView }) {
             <tr className="text-left text-xs text-gray-500">
               <th className="py-1 font-normal">Datum</th>
               <th className="py-1 font-normal">Beskrivning</th>
-              <th className="py-1 font-normal text-right">Tid</th>
-              <th className="py-1 font-normal text-right">Belopp</th>
+              <th className="py-1 font-normal text-right">Á-pris</th>
+              <th className="py-1 font-normal text-right">Antal</th>
+              <th className="py-1 font-normal text-right">Totalt</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -193,11 +199,20 @@ function SettlementBreakdownCard({ view }: { view: SettlementView }) {
               <tr key={i}>
                 <td className="py-1.5 whitespace-nowrap">{new Date(l.date).toLocaleDateString("sv-SE")}</td>
                 <td className="py-1.5">{l.description}</td>
+                <td className="py-1.5 text-right font-mono whitespace-nowrap">{formatCurrency(aPrisOre(l))}/h</td>
                 <td className="py-1.5 text-right whitespace-nowrap">{hours(l.minutes)} h</td>
                 <td className="py-1.5 text-right font-mono whitespace-nowrap">{formatCurrency(l.amountOre)}</td>
               </tr>
             ))}
           </tbody>
+          <tfoot>
+            <tr className="border-t border-gray-200 font-medium">
+              <td className="py-1.5" colSpan={2}>Summa</td>
+              <td></td>
+              <td className="py-1.5 text-right whitespace-nowrap">{hours(totalMinutes)} h</td>
+              <td className="py-1.5 text-right font-mono whitespace-nowrap">{formatCurrency(totalAmount)}</td>
+            </tr>
+          </tfoot>
         </table>
       )}
       <dl className="divide-y divide-gray-100">
@@ -294,7 +309,7 @@ const creditNoteOf = (inv: Inv): CreditRefView => inv.creditNote ?? null;
 const creditedInvoiceOf = (inv: Inv): CreditRefView => inv.creditedInvoice ?? null;
 
 function InvoiceHeader({ inv }: { inv: Inv }) {
-  const heading = inv.invoiceType === "ACCONTO" ? "Acconto-faktura"
+  const heading = inv.invoiceType === "ACCONTO" ? "Aconto-faktura"
     : inv.invoiceType === "FINAL" ? "Slutfaktura"
     : inv.invoiceType === "CREDIT" ? "Kreditfaktura"
     : "Faktura";
@@ -334,7 +349,7 @@ function SummaryGrid({
       <div><p className="text-xs text-gray-500">Belopp (brutto)</p><p><Money ore={inv.amount} basis="gross" className="font-mono" /></p></div>
       {inv.invoiceType === "FINAL" && (
         <>
-          <div><p className="text-xs text-gray-500">Accontoavdrag</p><p>−<Money ore={accontoDeductionTotal} basis="gross" className="font-mono" /></p></div>
+          <div><p className="text-xs text-gray-500">Acontoavdrag</p><p>−<Money ore={accontoDeductionTotal} basis="gross" className="font-mono" /></p></div>
           <div><p className="text-xs text-gray-500">Netto att betala</p><p><Money ore={netAmount} basis="gross" className="font-mono font-semibold" /></p></div>
         </>
       )}
@@ -451,7 +466,7 @@ function settlementRows(s: MatterSettlement): Array<{ label: string; ore: number
   ];
   if (s.prutningOre !== 0) rows.push({ label: "Prutning (domstol)", ore: s.prutningOre });
   rows.push({ label: "Brutto", ore: s.bruttoOre, strong: true });
-  if (s.accontoPaidOre !== 0) rows.push({ label: "Avgår betalda acconton", ore: -s.accontoPaidOre });
+  if (s.accontoPaidOre !== 0) rows.push({ label: "Avgår betalda aconton", ore: -s.accontoPaidOre });
   rows.push({ label: "Slutfaktura", ore: s.slutfakturaOre, strong: true });
   if (s.paymentsOre !== 0) rows.push({ label: "Avgår inbetalt", ore: -s.paymentsOre });
   if (s.radgivningOre !== 0) {
@@ -614,14 +629,14 @@ function SpecificationCard({ timeEntries, expenses }: { timeEntries: SpecTimeRow
 function AccontoDeductions({ deductions }: { deductions: AccontoDeductionRow[] }) {
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-6">
-      <h2 className="font-semibold mb-3">Accontoavdrag</h2>
+      <h2 className="font-semibold mb-3">Acontoavdrag</h2>
       <table className="min-w-full text-sm">
         <tbody className="divide-y divide-gray-100">
           {deductions.map((d: AccontoDeductionRow) => d.accontoInvoice && (
             <tr key={d.id}>
               <td className="py-2">
                 <EntityLink route="invoices" id={d.accontoInvoice.id} className="text-blue-600 hover:underline">
-                  Acconto {new Date(d.accontoInvoice.invoiceDate).toLocaleDateString("sv-SE")}
+                  Aconto {new Date(d.accontoInvoice.invoiceDate).toLocaleDateString("sv-SE")}
                 </EntityLink>
               </td>
               <td className="py-2 text-right">−<Money ore={d.accontoInvoice.amount} basis="gross" className="font-mono" /></td>
