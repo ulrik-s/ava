@@ -177,9 +177,11 @@ describe("buildKostnadsrakningContext — icke-taxa-ärende (timkostnadsnorm)", 
     expect(r.arvodeInclVat).toBe(829938);
   });
 
-  it("noten beskriver timkostnadsnorm-beräkningen", () => {
+  it("noten beskriver timkostnadsnorm-beräkningen (á-pris per rad, #891)", () => {
     expect(r.taxa.notes.join(" ")).toMatch(/Icke-taxa/i);
-    expect(r.taxa.notes.join(" ")).toMatch(/1626 kr\/h/);
+    expect(r.taxa.notes.join(" ")).toMatch(/timkostnadsnorm/i);
+    // Á-pris ligger per rad (arbete/tidsspillan olika taxor) — inte en enda kr/h i noten.
+    expect((r.templateContext.timeLines as Array<{ rateOrePerH: number }>).every((l) => l.rateOrePerH === 162_600)).toBe(true);
   });
 
   it("icke-taxa utan F-skatt → lägre timkostnadsnorm (1 237 kr\/h)", () => {
@@ -189,9 +191,9 @@ describe("buildKostnadsrakningContext — icke-taxa-ärende (timkostnadsnorm)", 
       hasFTax: false,
       timeEntries: [{ id: "t1", date: "2026-05-20", description: "Arbete", minutes: 60, billable: true }],
     });
-    // 60 + 95 = 155 min × 1237 kr/h
+    // 60 + 95 = 155 min × 1237 kr/h — per-rad-normen (arbete) är no-FTax-normen (#891).
     expect(noFtax.arvodeExclVat).toBe(Math.round((155 * 123700) / 60));
-    expect(noFtax.taxa.notes.join(" ")).toMatch(/1237 kr\/h/);
+    expect((noFtax.templateContext.timeLines as Array<{ rateOrePerH: number }>)[0]!.rateOrePerH).toBe(123_700);
   });
 });
 
