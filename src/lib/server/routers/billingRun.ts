@@ -48,6 +48,7 @@ import type { SettlementRow, SettlementView, SettlementViewLine } from "@/lib/sh
 import { splitVat, DEFAULT_VAT_RATE } from "@/lib/shared/vat";
 import { emit, type EmitCtx } from "../events/emit";
 import type { BillingRunDetailRow, BillingRunListRow } from "../repositories/billing-run-repository";
+import { nextInvoiceNumberFrom } from "../repositories/invoice-repository";
 import type { Repositories } from "../repositories/repositories";
 import { router, orgProcedure } from "../trpc";
 
@@ -769,19 +770,30 @@ async function assertFlowAction(repos: Repositories, orgId: OrganizationId, matt
 }
 
 /**
- * Tilldela fakturanummer + OCR (ADR 0012) — klient-/försäkringsfakturor får
- * `F-YYYY-NNNN` + härledd OCR; kostnadsräkningar till DOMSTOL får varken nummer
- * eller OCR (domstolen betalar inte via OCR). Matchar legacy `invoice.createFinal`
- * så en billing-run-faktura blir likvärdig. Tomt objekt → faktura utan nummer.
+ * Tilldela fakturanummer + OCR (ADR 0012). Alla fakturor får `F-YYYY-NNNN`
+ * (#889 — så domstolsfakturan syns i samma format som övriga i listan), MEN
+ * domstolsfakturor får ingen OCR: domstolen betalar på beslut, inte via OCR.
  */
 async function invoiceNumbering(
   repos: Repositories,
   orgId: OrganizationId,
   recipient: BillingRunRecipient,
-): Promise<{ invoiceNumber: string; ocrReference: string | null } | Record<string, never>> {
-  if (recipient === "DOMSTOL") return {};
+): Promise<{ invoiceNumber: string; ocrReference: string | null }> {
   const invoiceNumber = await repos.invoices.nextInvoiceNumber(orgId);
-  return { invoiceNumber, ocrReference: ocrFromInvoiceNumber(invoiceNumber) };
+  return { invoiceNumber, ocrReference: recipient === "DOMSTOL" ? null : ocrFromInvoiceNumber(invoiceNumber) };
+}
+
+/** Nästa kostnadsräknings-referens `KR-YYYY-NNNN` (#889) — firmagemensam sekvens
+ *  per år, härledd ur befintliga KR-körningars referens. */
+async function nextKrReference(repos: Repositories, orgId: OrganizationId): Promise<string> {
+  const prefix = `KR-${new Date().getFullYear()}-`;
+  const runs = await repos.billingRuns.listForOrg(orgId);
+  const last = runs
+    .map((r) => (r as { reference?: string | null }).reference)
+    .filter((ref): ref is string => !!ref && ref.startsWith(prefix))
+    .sort()
+    .pop();
+  return nextInvoiceNumberFrom(prefix, last);
 }
 
 /**
@@ -974,6 +986,7 @@ export const billingRunRouter = router({
         const run = await tx.billingRuns.create({
           matterId: input.matterId, type: "KOSTNADSRAKNING", recipient: "DOMSTOL",
           status: "PENDING_VERDICT", kostnadsrakningStatus: "INSKICKAD", workValueOreAtRun: grossValue,
+          reference: await nextKrReference(tx, ctx.orgId),
           proposedAmountOre: grossValue, amountOre: grossValue,
           invoiceId: null, deductedBillingRunIds: [],
           periodTo: new Date(), notes: input.notes,
@@ -1095,7 +1108,9 @@ export const billingRunRouter = router({
         const work = await fetchWorkByRun(tx, run.id);
         const invoice = await tx.invoices.create({
           matterId: run.matterId, amount: finalAmount,
-          invoiceType: "FINAL", status: "DRAFT", // DOMSTOL → inget nummer/OCR (ADR 0012)
+          invoiceType: "FINAL", status: "DRAFT",
+          // DOMSTOL → F-nummer (samma format som övriga, #889) men ingen OCR.
+          ...(await invoiceNumbering(tx, ctx.orgId, "DOMSTOL")),
           invoiceDate: new Date(),
         });
         const next = applyKrTransition(krStateOf(run), "SKAPA_FAKTURA");

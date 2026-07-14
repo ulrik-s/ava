@@ -119,10 +119,10 @@ describe("billingRun.createFinal", () => {
     expect(res.invoice.ocrReference).toBeTruthy();
   });
 
-  it("DOMSTOL-mottagare → inget fakturanummer/OCR (ADR 0012)", async () => {
+  it("DOMSTOL-mottagare → fakturanummer men INGEN OCR (#889: samma format som övriga, men domstolen betalar på beslut)", async () => {
     const { caller } = makeCaller({ workMinutes: 60 });
     const res = await caller.billingRun.createFinal({ matterId: "m-1", recipient: "DOMSTOL" });
-    expect(res.invoice.invoiceNumber).toBeFalsy();
+    expect(res.invoice.invoiceNumber).toMatch(/^F-\d{4}-\d+$/);
     expect(res.invoice.ocrReference).toBeFalsy();
   });
 
@@ -211,6 +211,12 @@ describe("billingRun.createKostnadsrakning", () => {
     expect(res.run.workValueOreAtRun).toBe(937500); // 3h × 2500 kr + 25 % moms (#782)
   });
 
+  it("tilldelar en KR-referens KR-YYYY-NNNN (#889 — samma format som fakturornas F-nummer)", async () => {
+    const { caller } = makeCaller({ workMinutes: 180, paymentMethod: "OFFENTLIGT_UPPDRAG" });
+    const res = await caller.billingRun.createKostnadsrakning({ matterId: "m-1" });
+    expect((res.run as { reference?: string }).reference).toMatch(/^KR-\d{4}-\d{4}$/);
+  });
+
   it("fryser raderna vid inskick mot körningen (#806 — lämnar 'upparbetat ofakturerat')", async () => {
     const { ds, caller } = makeCaller({ workMinutes: 60, paymentMethod: "OFFENTLIGT_UPPDRAG" });
     const res = await caller.billingRun.createKostnadsrakning({ matterId: "m-1" });
@@ -280,12 +286,12 @@ describe("billingRun.setVerdict", () => {
     expect(res.invoice.amount).toBe(625000 + 5000 - 30000);
   });
 
-  it("DOMSTOL-faktura får inget fakturanummer (ADR 0012)", async () => {
+  it("DOMSTOL-faktura får F-nummer men ingen OCR (#889 — samma format som övriga)", async () => {
     const { caller } = makeCaller({ workMinutes: 60, paymentMethod: "OFFENTLIGT_UPPDRAG" });
     const kr = await caller.billingRun.createKostnadsrakning({ matterId: "m-1" });
     await caller.billingRun.recordKostnadsrakningBeslut({ billingRunId: kr.run.id, awardedOre: 312500 });
     const res = await caller.billingRun.setVerdict({ billingRunId: kr.run.id });
-    expect(res.invoice.invoiceNumber).toBeFalsy();
+    expect(res.invoice.invoiceNumber).toMatch(/^F-\d{4}-\d+$/);
     expect(res.invoice.ocrReference).toBeFalsy();
   });
 

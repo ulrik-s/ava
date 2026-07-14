@@ -321,6 +321,9 @@ export const billingRunSchema = z.object({
   /** KOSTNADSRAKNING:ens egen livscykel (#828): INSKICKAD→BESLUTAD→FAKTURERAD
    *  + överklagan-grenen. Null för icke-KR-körningar. */
   kostnadsrakningStatus: kostnadsrakningStatusSchema.nullish(),
+  /** KOSTNADSRAKNING:ens referensnummer `KR-YYYY-NNNN` (#889) — visas i
+   *  faktureringslistan i samma format som fakturornas F-nummer. */
+  reference: z.string().nullish(),
   /** Domstolens beslutade (dömda) belopp i öre — registreras vid beslutet,
    *  uppdateras av hovrättens beslut vid överklagan (#828). */
   awardedOre: z.number().int().nullish(),
