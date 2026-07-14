@@ -61,5 +61,17 @@ describe("runSimulation (#880 integration)", () => {
     expect((notes.serviceNotes ?? notes).length).toBeGreaterThan(0);
     const exp = await c.expense.list({ matterId: rh.id, pageSize: 100 });
     expect((exp.expenses ?? exp.items ?? exp).length).toBeGreaterThan(0);
+
+    // #891: 2026-0020 spänner över ett årsskifte, innehåller tidsspillan och
+    // slutregleras retroaktivt på nya normen (klient- + domstolsfaktura).
+    const teAll = await c.timeEntry.list({ matterId: rh.id, pageSize: 100 });
+    const teRows2 = teAll.timeEntries ?? teAll.items ?? teAll.entries ?? (Array.isArray(teAll) ? teAll : []);
+    const years = new Set(teRows2.map((t: Any) => new Date(t.date).getFullYear()));
+    expect(years.size).toBeGreaterThan(1); // korsar årsgränsen
+    expect(teRows2.some((t: Any) => t.kind === "TIDSSPILLAN")).toBe(true);
+    const settlementRuns = (await c.billingRun.list({ matterId: rh.id })).runs as Any[];
+    const recips = new Set(settlementRuns.filter((r) => r.type === "FINAL").map((r) => r.recipient));
+    expect(recips.has("KLIENT")).toBe(true);
+    expect(recips.has("DOMSTOL")).toBe(true);
   });
 });

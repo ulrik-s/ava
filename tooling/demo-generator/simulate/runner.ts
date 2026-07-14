@@ -5,6 +5,7 @@
  * arbete (aconto) härleds här ur `state`; dokumentbytes skrivs via `BinarySink`.
  */
 
+import { timkostnadsnormFtaxForDate, tidsspillanFtaxForDate } from "@/lib/shared/brottmalstaxa";
 import { arvodeInclVatOre } from "@/lib/shared/invoice-calc";
 import { SJALVRISK_ACCONTO_THRESHOLD_ORE } from "@/lib/shared/rattshjalp";
 import type { SettlementViewLine } from "@/lib/shared/settlement-view";
@@ -42,14 +43,25 @@ async function hParty(ctx: RunCtx, m: SimMatter, e: Any, iso: string): Promise<v
   await ctx.c.matter.addContact({ matterId: m.id, contactId: e.contactId, role: e.role, createdAt: iso });
 }
 
+/** Timarvodet (öre/tim) en tidspost värderas på i simuleringen. Rättshjälp: den
+ *  norm som gällde postens DATUM (#891) — arbete på timkostnadsnormen, tidsspillan
+ *  på tidsspillan-normen → 2025-poster får 2025-taxan, 2026-poster 2026-taxan, så
+ *  aconton speglar tidpunkten och slutregleringens retroaktiva höjning syns. */
+function simTimeRateOre(m: SimMatter, e: Any, iso: string): number {
+  if (m.paymentMethod !== "RATTSHJALP") return m.arvodeRateOre;
+  return e.entryKind === "TIDSSPILLAN" ? tidsspillanFtaxForDate(iso) : timkostnadsnormFtaxForDate(iso);
+}
+
 async function hTime(ctx: RunCtx, m: SimMatter, e: Any, iso: string, st: SimState): Promise<void> {
+  const rateOre = simTimeRateOre(m, e, iso);
   await ctx.c.timeEntry.create({
     matterId: m.id, date: iso, minutes: e.minutes, description: e.description,
-    billable: isBillable(e), userId: m.lawyerId, hourlyRate: m.arvodeRateOre, createdAt: iso,
+    billable: isBillable(e), userId: m.lawyerId, hourlyRate: rateOre,
+    ...(e.entryKind ? { kind: e.entryKind } : {}), createdAt: iso,
   });
   ctx.res.timeEntries++;
   if (isBillable(e)) {
-    const amountOre = Math.round((e.minutes / 60) * m.arvodeRateOre);
+    const amountOre = Math.round((e.minutes / 60) * rateOre);
     st.accruedNetOre += amountOre;
     st.periodLines.push({ date: iso.slice(0, 10), description: e.description, minutes: e.minutes, amountOre });
     await maybeAcconto(ctx, m, iso, st); // #885: skicka aconto när klientens andel nått tröskeln
@@ -91,7 +103,7 @@ async function hRadgivning(ctx: RunCtx, m: SimMatter, _e: Any, iso: string): Pro
   // går på aconto). Faktureras separat SAMMA DAG som mötet.
   await ctx.c.timeEntry.create({
     matterId: m.id, date: iso, minutes: 60, description: "Rådgivning — första möte med klient",
-    billable: true, userId: m.lawyerId, hourlyRate: m.arvodeRateOre, createdAt: iso,
+    billable: true, userId: m.lawyerId, hourlyRate: simTimeRateOre(m, {}, iso), createdAt: iso,
   });
   ctx.res.timeEntries++;
   await ctx.c.invoice.createRadgivning({ matterId: m.id, invoiceDate: iso });

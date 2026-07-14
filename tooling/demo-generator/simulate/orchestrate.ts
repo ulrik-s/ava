@@ -28,7 +28,9 @@ function daysSince(iso: unknown): number {
 function deriveSim(m: Any, lawyerId: string, rateOre: number): SimMatter {
   const isRh = String(m.paymentMethod) === "RATTSHJALP";
   return {
-    id: String(m.id), paymentMethod: String(m.paymentMethod), clientShareBips: m.clientShareBips ?? null,
+    id: String(m.id),
+    ...(m.matterNumber ? { matterNumber: String(m.matterNumber) } : {}),
+    paymentMethod: String(m.paymentMethod), clientShareBips: m.clientShareBips ?? null,
     lawyerId, startDaysAgo: daysSince(m.createdAt),
     arvodeRateOre: isRh ? TIMKOSTNADSNORM_FTAX_ORE_PER_H : (rateOre || DEFAULT_RATE_ORE),
   };

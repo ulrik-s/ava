@@ -44,8 +44,46 @@ export const NO_FTAX_FACTOR_DENOMINATOR = 1626;
  *
  * Belopp i öre per timme, exkl moms.
  */
-export const TIMKOSTNADSNORM_FTAX_ORE_PER_H = 162_600; // 1 626 kr/h
+export const TIMKOSTNADSNORM_FTAX_ORE_PER_H = 162_600; // 1 626 kr/h (senaste = 2026)
 export const TIMKOSTNADSNORM_NO_FTAX_ORE_PER_H = 123_700; // 1 237 kr/h
+
+/**
+ * Timkostnadsnormen (F-skatt) per år, öre/tim exkl moms (#891). Domstolsverket
+ * fastställer den årligen; ett ärende som sträcker sig över ett årsskifte får en
+ * RETROAKTIV HÖJNING → hela ärendet värderas om på det år normen gäller när
+ * slutregleringen sker (se `timkostnadsnormFtaxForDate`).
+ */
+const TIMKOSTNADSNORM_FTAX_BY_YEAR: Readonly<Record<number, number>> = {
+  2025: 160_200, // 1 602 kr/h
+  2026: 162_600, // 1 626 kr/h
+};
+
+/**
+ * Tidsspillan-ersättning (F-skatt) per år, öre/tim exkl moms (#891). Egen, lägre
+ * norm än arvodet. OBS: 2026-värdet (1 472 kr) är en uppskattning (+1,5 % från
+ * 2025) — verifiera mot Domstolsverkets föreskrift och justera vid behov.
+ */
+const TIDSSPILLAN_FTAX_BY_YEAR: Readonly<Record<number, number>> = {
+  2025: 145_000, // 1 450 kr/h
+  2026: 147_200, // 1 472 kr/h (uppskattat — verifiera)
+};
+
+/** Året ur ett datum (ISO-sträng eller Date). Ogiltigt → senaste kända året. */
+function yearOf(date: Date | string): number {
+  const y = new Date(date).getFullYear();
+  return Number.isFinite(y) ? y : 2026;
+}
+
+/** Timkostnadsnormen (F-skatt) som gäller ett givet datum (#891). Okänt år →
+ *  senaste kända normen (den retroaktiva höjningen landar alltid på senaste). */
+export function timkostnadsnormFtaxForDate(date: Date | string): number {
+  return TIMKOSTNADSNORM_FTAX_BY_YEAR[yearOf(date)] ?? TIMKOSTNADSNORM_FTAX_ORE_PER_H;
+}
+
+/** Tidsspillan-normen (F-skatt) som gäller ett givet datum (#891). */
+export function tidsspillanFtaxForDate(date: Date | string): number {
+  return TIDSSPILLAN_FTAX_BY_YEAR[yearOf(date)] ?? TIDSSPILLAN_FTAX_BY_YEAR[2026] ?? TIMKOSTNADSNORM_FTAX_ORE_PER_H;
+}
 
 /**
  * Beräkna ersättning enligt timkostnadsnorm × tid (öre, exkl moms).

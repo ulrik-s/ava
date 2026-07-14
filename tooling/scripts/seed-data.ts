@@ -150,7 +150,7 @@ export const MATTERS: MatterSeed[] = [
   // satserna; rättshjälpsmyndighetens SLUTLIGA helhetsbeslut blev 5 % → klienten
   // överfakturerades (särskilt via 75 %-acontot) → kreditfaktura. clientShareBips =
   // det slutliga helhetsbeslutet (5 %). Egen tidslogg (nedan) → deterministiskt arvode.
-  { id: "m-020-rattshjalp-varierande", matterNumber: "2026-0020", title: "Vårdnadstvist — varierande rättshjälp Falk", status: "ACTIVE", matterType: "Familjerätt", paymentMethod: "RATTSHJALP", description: "Rättshjälp med varierande avgift (arbetslös 5 % → anställd 75 % → arbetslös 5 %). Myndighetens slutliga beslut: 5 % för hela ärendet.", klientId: "c-falk", motpartId: "c-bergman", domstolId: "c-tingsratten-sthlm", createdDaysAgo: 120, clientShareBips: 500, rattshjalpMaxTimmar: 100 },
+  { id: "m-020-rattshjalp-varierande", matterNumber: "2026-0020", title: "Vårdnadstvist — varierande rättshjälp Falk", status: "ACTIVE", matterType: "Familjerätt", paymentMethod: "RATTSHJALP", description: "Rättshjälp över ett årsskifte (start nov 2025, norm 1 602 kr → 2026 norm 1 626 kr) med varierande avgift (arbetslös 5 % → anställd 75 % → arbetslös 5 %) och tidsspillan. Vid slutregleringen räknas HELA ärendet om på 2026 års norm (retroaktiv höjning) — skillnaden regleras på slutfakturorna till klient + domstol. Myndighetens slutliga avgift: 5 %.", klientId: "c-falk", motpartId: "c-bergman", domstolId: "c-tingsratten-sthlm", createdDaysAgo: 255, clientShareBips: 500, rattshjalpMaxTimmar: 100 },
 ];
 
 // ASSIGN_USERS härleds inuti buildSeed() från de aktuella users — så ifall
