@@ -18,7 +18,7 @@ const STATUS_LABELS: Record<string, string> = {
 };
 const TYPE_LABELS: Record<string, string> = {
   STANDARD: "Faktura",
-  ACCONTO: "Acconto",
+  ACCONTO: "Aconto",
   FINAL: "Slutfaktura",
 };
 

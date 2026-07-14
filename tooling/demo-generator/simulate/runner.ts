@@ -182,6 +182,11 @@ async function hSettle(ctx: RunCtx, m: SimMatter, e: Any, _iso: string): Promise
   const res = await ctx.c.billingRun.settleCoverage({ matterId: m.id, payerRecipient: e.payerRecipient });
   ctx.res.invoices += 2;
   if (res.creditInvoice) ctx.res.credits++;
+  // Slutfakturorna (klient + domstol) är utställda i demon → SENT, annars räknas de
+  // inte i "Fakturerat" (t.ex. domstolens slutfaktura blev kvar som DRAFT).
+  for (const inv of [res.clientInvoice, res.payerInvoice]) {
+    if (inv && inv.status !== "SENT") await ctx.c.invoice.setStatus({ invoiceId: inv.id, status: "SENT" });
+  }
 }
 
 async function hFinal(ctx: RunCtx, m: SimMatter, e: Any, iso: string, st: SimState): Promise<void> {

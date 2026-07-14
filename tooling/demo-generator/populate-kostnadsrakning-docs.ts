@@ -28,16 +28,28 @@ function escapeHtml(s: unknown): string {
   return String(s ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c] ?? c));
 }
 
-/** Tidsspecifikations-tabell (datum · åtgärd · tid + summa). Tom om inga rader. */
+/** Tidsspecifikations-tabell. Icke-taxa (#891): datum · åtgärd · á-pris · antal ·
+ *  totalt (arbete resp. tidsspillan på sin taxa) + summa (timmar + belopp, INGET
+ *  á-pris på summaraden). Taxa-ärenden: datum · åtgärd · tid (beloppet styrs av taxan). */
 function timeSpecHtml(tc: Any): string {
   const lines = (tc.timeLines as Any[]) ?? [];
   if (lines.length === 0) return "";
-  const rows = lines.map((l) => `<tr><td>${escapeHtml(l.date)}</td><td>${escapeHtml(l.description)}</td><td style="text-align:right">${escapeHtml(l.minutesFormatted)}</td></tr>`).join("");
+  const num = "text-align:right";
+  if (!tc.isTimkostnadsnorm) {
+    const rows = lines.map((l) => `<tr><td>${escapeHtml(l.date)}</td><td>${escapeHtml(l.description)}</td><td style="${num}">${escapeHtml(l.minutesFormatted)}</td></tr>`).join("");
+    return `<h2 style="font-size:15px;margin-top:1.5rem;margin-bottom:.25rem">Tidsspecifikation</h2>
+<table cellpadding="5" cellspacing="0" style="border-collapse:collapse;width:100%;font-size:13px">
+<thead><tr style="border-bottom:1px solid #ccc;text-align:left"><th>Datum</th><th>Åtgärd</th><th style="${num}">Tid</th></tr></thead>
+<tbody>${rows}</tbody>
+<tfoot><tr style="border-top:1px solid #ccc"><td colspan="2" style="font-weight:bold">Summa arbetstid</td><td style="${num};font-weight:bold">${escapeHtml(tc.billableArbetsFormatted)}</td></tr></tfoot>
+</table>`;
+  }
+  const rows = lines.map((l) => `<tr><td>${escapeHtml(l.date)}</td><td>${escapeHtml(l.description)}${l.isTidsspillan ? " <span style=\"color:#888\">(tidsspillan)</span>" : ""}</td><td style="${num}">${escapeHtml(l.rateFormatted)}</td><td style="${num}">${escapeHtml(l.hoursFormatted)}</td><td style="${num}">${escapeHtml(l.amountFormatted)}</td></tr>`).join("");
   return `<h2 style="font-size:15px;margin-top:1.5rem;margin-bottom:.25rem">Tidsspecifikation</h2>
 <table cellpadding="5" cellspacing="0" style="border-collapse:collapse;width:100%;font-size:13px">
-<thead><tr style="border-bottom:1px solid #ccc;text-align:left"><th>Datum</th><th>Åtgärd</th><th style="text-align:right">Tid</th></tr></thead>
+<thead><tr style="border-bottom:1px solid #ccc;text-align:left"><th>Datum</th><th>Åtgärd</th><th style="${num}">Á-pris</th><th style="${num}">Antal</th><th style="${num}">Totalt (exkl moms)</th></tr></thead>
 <tbody>${rows}</tbody>
-<tfoot><tr style="border-top:1px solid #ccc"><td colspan="2" style="font-weight:bold">Summa arbetstid</td><td style="text-align:right;font-weight:bold">${escapeHtml(tc.billableArbetsFormatted)}</td></tr></tfoot>
+<tfoot><tr style="border-top:1px solid #ccc"><td colspan="2" style="font-weight:bold">Summa</td><td></td><td style="${num};font-weight:bold">${escapeHtml(tc.billableArbetsFormatted)}</td><td style="${num};font-weight:bold">${escapeHtml(tc.arvodeExclFormatted)}</td></tr></tfoot>
 </table>`;
 }
 

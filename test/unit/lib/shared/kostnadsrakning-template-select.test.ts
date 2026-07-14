@@ -40,10 +40,11 @@ describe("defaultTemplateFor", () => {
 });
 
 describe("icke-taxa-template ska visa tidsspecifikationen", () => {
-  it("innehåller timeLines-loop + summering med Total arbetstid", () => {
+  it("innehåller timeLines-loop + per-rad á-pris/antal/totalt + summering (#891)", () => {
     expect(KOSTNADSRAKNING_ICKE_TAXA_DEFAULT_HTML).toMatch(/{{#each timeLines}}/);
-    expect(KOSTNADSRAKNING_ICKE_TAXA_DEFAULT_HTML).toMatch(/Total arbetstid/);
-    expect(KOSTNADSRAKNING_ICKE_TAXA_DEFAULT_HTML).toMatch(/totalArbetsFormatted/);
+    expect(KOSTNADSRAKNING_ICKE_TAXA_DEFAULT_HTML).toMatch(/Summa arbetstid/);
+    expect(KOSTNADSRAKNING_ICKE_TAXA_DEFAULT_HTML).toMatch(/rateFormatted/);
+    expect(KOSTNADSRAKNING_ICKE_TAXA_DEFAULT_HTML).toMatch(/amountFormatted/);
   });
   it("innehåller INTE taxaIntervalLabel (det är taxa-only)", () => {
     expect(KOSTNADSRAKNING_ICKE_TAXA_DEFAULT_HTML).not.toMatch(/taxaIntervalLabel/);

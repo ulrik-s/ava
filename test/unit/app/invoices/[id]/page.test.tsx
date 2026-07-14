@@ -125,7 +125,7 @@ describe("InvoiceDetailPage", () => {
     invoiceQuery.data = { ...baseInvoice, invoiceType: "ACCONTO" };
     renderPage();
     await waitFor(() =>
-      expect(screen.getByRole("heading", { name: /Acconto-faktura/i })).toBeInTheDocument(),
+      expect(screen.getByRole("heading", { name: /Aconto-faktura/i })).toBeInTheDocument(),
     );
   });
 
@@ -348,9 +348,9 @@ describe("InvoiceDetailPage", () => {
     };
     renderPage();
     await waitFor(() =>
-      expect(screen.getByRole("heading", { name: /Accontoavdrag/i })).toBeInTheDocument(),
+      expect(screen.getByRole("heading", { name: /Acontoavdrag/i })).toBeInTheDocument(),
     );
-    expect(screen.getByText(/Acconto 2026-03-01/)).toBeInTheDocument();
+    expect(screen.getByText(/Aconto 2026-03-01/)).toBeInTheDocument();
   });
 
   it("renderar PAID-status utan Registrera betalning-knapp", async () => {

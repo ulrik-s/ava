@@ -79,7 +79,7 @@ describe("InvoicesPage", () => {
     ];
     render(<InvoicesPage />);
     expect(screen.getByText("Faktura")).toBeInTheDocument();
-    expect(screen.getByText("Acconto")).toBeInTheDocument();
+    expect(screen.getByText("Aconto")).toBeInTheDocument();
     expect(screen.getByText("Betald")).toBeInTheDocument();
     expect(screen.getByText("Skickad")).toBeInTheDocument();
     expect(screen.getByText(/2026-0001 — Bodelning/)).toBeInTheDocument();

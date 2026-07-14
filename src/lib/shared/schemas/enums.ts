@@ -62,7 +62,7 @@ export type InvoiceStatus = z.infer<typeof invoiceStatusSchema>;
 
 export const INVOICE_TYPE_LABELS = {
   STANDARD: "Standard",
-  ACCONTO: "Acconto",
+  ACCONTO: "Aconto",
   FINAL: "Slutfaktura",
   CREDIT: "Kreditfaktura",
 } as const satisfies Record<string, string>;
