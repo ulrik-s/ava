@@ -298,6 +298,8 @@ export const billingRuns = pgTable("billing_runs", {
   prutningOre: ore("prutning_ore"),
   /** KR-livscykel (#828): status + dömt belopp + slutgiltigt (efter hovrätten). */
   kostnadsrakningStatus: text("kostnadsrakning_status").$type<KostnadsrakningStatus>(),
+  /** KR-referensnummer `KR-YYYY-NNNN` (#889). Null för icke-KR-körningar. */
+  reference: text("reference"),
   awardedOre: ore("awarded_ore"),
   beslutSlutgiltigt: boolean("beslut_slutgiltigt").notNull().default(false),
   invoiceId: uuid("invoice_id").$type<InvoiceId>(),

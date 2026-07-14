@@ -67,6 +67,8 @@ interface BillingRunRow {
   clientShareBips?: number | null;
   invoiceId?: InvoiceId | null;
   invoice?: { id: InvoiceId; invoiceNumber?: string | null; invoiceDate?: string | Date | null } | null;
+  /** KR-referens `KR-YYYY-NNNN` (#889) — visas i ref-kolumnen för kostnadsräkningen. */
+  reference?: string | null;
   kostnadsrakningStatus?: KostnadsrakningStatus | null;
   awardedOre?: number | null;
   beslutSlutgiltigt?: boolean | null;
@@ -666,12 +668,15 @@ const runDateOf = (r: BillingRunRow): string | Date => r.invoice?.invoiceDate ??
 /** Åtgärds-cellen: KR-dokument-länk + faktura-länk. Utbruten → RunRow ≤8. */
 function RunActions({ r, docs, client }: { r: BillingRunRow; docs: DocumentListOutput["documents"]; client: DownloadClient }) {
   const krDoc = r.type === "KOSTNADSRAKNING" ? pickKrDoc(docs, r) : null;
+  // KR:ns referens `KR-YYYY-NNNN` (#889) i samma format som fakturornas F-nummer;
+  // länken öppnar KR-dokumentet (faller tillbaka på etikett om referens saknas).
+  const krLabel = r.reference ?? "Kostnadsräkning";
   return (
     <td className="text-right space-x-2 whitespace-nowrap">
-      {krDoc && (
-        <button type="button" onClick={() => void openKrDoc(krDoc, client)}
-          className="text-xs text-blue-600 hover:underline">Kostnadsräkning</button>
-      )}
+      {r.type === "KOSTNADSRAKNING" && (krDoc
+        ? <button type="button" onClick={() => void openKrDoc(krDoc, client)}
+            className="text-xs text-blue-600 hover:underline">{krLabel}</button>
+        : <span className="text-xs text-gray-500">{krLabel}</span>)}
       {/* EntityLink (hård nav) — runtime-skapade UUID:n finns ej i generateStaticParams;
           __shell__-shimen/nginx try_files resolvar dem (se [[entity-link]]). */}
       {r.invoiceId && (
