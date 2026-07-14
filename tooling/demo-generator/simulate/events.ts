@@ -9,8 +9,9 @@ import type { MatterRole } from "@/lib/shared/schemas/enums";
 export type SimEvent =
   /** Länka en part (motpart/ombud/domstol) till ärendet — matter.addContact. */
   | { kind: "party"; dayOffset: number; contactId: string; role: MatterRole }
-  /** Debiterbar (eller ej) tidspost — timeEntry.create. */
-  | { kind: "time"; dayOffset: number; minutes: number; description: string; billable?: boolean }
+  /** Debiterbar (eller ej) tidspost — timeEntry.create. `entryKind` = ARBETE (default)
+   *  eller TIDSSPILLAN (#891, egen norm vid rättshjälps-slutreglering). */
+  | { kind: "time"; dayOffset: number; minutes: number; description: string; billable?: boolean; entryKind?: "ARBETE" | "TIDSSPILLAN" }
   /** Tjänsteanteckning (händelselogg) — serviceNote.create. */
   | { kind: "note"; dayOffset: number; text: string }
   /** Utlägg — expense.create. */
@@ -42,6 +43,8 @@ export type SimEvent =
 export interface SimMatter {
   /** Översatt (UUID) ärende-id. */
   id: string;
+  /** Ärendenummer (t.ex. "2026-0020") — dispatchern väljer scenariovariant på det. */
+  matterNumber?: string;
   paymentMethod: string;
   clientShareBips?: number | null;
   /** Ansvarig jurist (userId) — sätts som tidsposternas användare. */

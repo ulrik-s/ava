@@ -174,6 +174,8 @@ export const timeEntries = pgTable("time_entries", {
   minutes: integer("minutes").notNull(),
   description: text("description").notNull(),
   hourlyRate: integer("hourly_rate").notNull(),
+  /** ARBETE (default) eller TIDSSPILLAN (#891) — styr slutregleringens norm. */
+  kind: text("kind").$type<"ARBETE" | "TIDSSPILLAN">(),
   billable: boolDefault("billable", true),
   invoiceId: uuid("invoice_id").$type<InvoiceId>(),
   frozenAt: timestamp("frozen_at", { withTimezone: true }),

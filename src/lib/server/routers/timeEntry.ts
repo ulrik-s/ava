@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
-import type { TimeEntry } from "@/lib/shared/schemas/billing";
+import { timeEntryKindSchema, type TimeEntry } from "@/lib/shared/schemas/billing";
 import {
   asId,
   matterIdSchema,
@@ -45,6 +45,8 @@ export const timeEntryRouter = router({
         minutes: z.number().min(1),
         description: z.string().min(1),
         billable: z.boolean().default(true),
+        /** ARBETE (default) eller TIDSSPILLAN (#891). */
+        kind: timeEntryKindSchema.optional(),
         // Valfria setup-fält (demo-generator/fixtures, ADR 0003).
         id: timeEntryIdSchema.optional(),
         userId: userIdSchema.optional(),
@@ -66,6 +68,7 @@ export const timeEntryRouter = router({
         minutes: input.minutes,
         description: input.description,
         hourlyRate: input.hourlyRate ?? user.hourlyRate ?? 0,
+        ...(input.kind ? { kind: input.kind } : {}),
         billable: input.billable,
         invoiceId: input.invoiceId ?? null,
         ...(input.createdAt ? { createdAt: new Date(input.createdAt) } : {}),

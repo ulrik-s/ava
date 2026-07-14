@@ -18,12 +18,15 @@ const PRINCIPAL: Principal = {
   id: asId<"UserId">("u-1"), email: "a@x", name: "Anna", role: "ADMIN", organizationId: asId<"OrganizationId">("org-1"),
 };
 
-function makeCaller(opts?: { workMinutes?: number; expenseOre?: number; paymentMethod?: string }) {
+function makeCaller(opts?: { workMinutes?: number; expenseOre?: number; paymentMethod?: string; tidsspillanMin?: number }) {
+  const tids = opts?.tidsspillanMin != null
+    ? [{ id: "te-2", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date(), minutes: opts.tidsspillanMin, description: "Restid", hourlyRate: 250000, billable: true, kind: "TIDSSPILLAN" as const }]
+    : [];
   const ds = new DemoDataStore({
     organizations: [{ id: "org-1", name: "X" }],
     matters: [{ id: "m-1", organizationId: "org-1", matterNumber: "2026-0001", title: "Test", status: "ACTIVE", paymentMethod: opts?.paymentMethod ?? "RATTSSKYDD", createdAt: new Date() }],
     users: [{ id: "u-1", organizationId: "org-1", email: "a@x", name: "Anna", role: "ADMIN", hourlyRate: 250000 }],
-    timeEntries: [{ id: "te-1", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date(), minutes: opts?.workMinutes ?? 120, description: "Möte", hourlyRate: 250000, billable: true }],
+    timeEntries: [{ id: "te-1", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date(), minutes: opts?.workMinutes ?? 120, description: "Möte", hourlyRate: 250000, billable: true }, ...tids],
     expenses: opts?.expenseOre != null ? [{ id: "ex-1", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date(), amount: opts.expenseOre, description: "Avgift", billable: true, vatRate: 0, vatIncluded: false, kind: "EXPENSE" }] : [],
   }, async () => { /* writable: noop write-back */ });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -223,6 +226,14 @@ describe("billingRun.createKostnadsrakning", () => {
     const te = await ds.timeEntries.findFirst({ where: { id: "te-1" } }) as { frozenAt?: Date | null; frozenByBillingRunId?: string | null };
     expect(te.frozenAt).toBeTruthy();
     expect(te.frozenByBillingRunId).toBe(res.run.id);
+  });
+
+  it("tidsspillan värderas på tidsspillan-normen, arbete på timkostnadsnormen (#891)", async () => {
+    // 120 min arbete (−60 rådgivning = 60 kvar) på 1 626 kr + 60 min tidsspillan på 1 472 kr.
+    // netto: 60/60×162600 + 60/60×147200 = 309800; brutto ×1.25 = 387250.
+    const { caller } = makeCaller({ workMinutes: 120, tidsspillanMin: 60, paymentMethod: "RATTSHJALP" });
+    const res = await caller.billingRun.createKostnadsrakning({ matterId: "m-1" });
+    expect(res.run.workValueOreAtRun).toBe(387250);
   });
 
   it("rättshjälp värderas på timkostnadsnormen (F-skatt) minus rådgivningstimmen (#839)", async () => {

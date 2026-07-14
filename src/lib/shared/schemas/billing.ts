@@ -27,6 +27,11 @@ import {
   userIdSchema,
 } from "./ids";
 
+/** Tidspostens kategori (#891): vanligt arbete vs tidsspillan (restid/väntetid),
+ *  som ersätts på en egen, lägre norm i statligt betalda ärenden. */
+export const timeEntryKindSchema = z.enum(["ARBETE", "TIDSSPILLAN"]);
+export type TimeEntryKind = z.infer<typeof timeEntryKindSchema>;
+
 /**
  * TimeEntry — tidsregistrering på ärende. Lagras i `time-entries/<id>.json`.
  * `minutes` är heltal; `hourlyRate` är öre per timme.
@@ -41,6 +46,9 @@ export const timeEntrySchema = z.object({
   description: z.string(),
   /** öre per timme — snapshotad vid registrering så historik inte påverkas av taxan-byten. */
   hourlyRate: z.number().int().nonnegative(),
+  /** Arbete (null/undefined = ARBETE) eller TIDSSPILLAN — styr vilken norm
+   *  slutregleringen värderar minuterna på för rättshjälp (#891). */
+  kind: timeEntryKindSchema.nullish(),
   billable: z.boolean().default(true),
   /** @deprecated Använd `frozenByBillingRunId`. invoiceId behålls för
    *  bakåt­kompatibilitet med befintlig demo/billing — nya flöden ska

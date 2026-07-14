@@ -19,7 +19,7 @@ import { z } from "zod";
 import type { VatBreakdownLine } from "@/lib/shared/accounting/semantic-voucher";
 import { assertBillingTransition, type BillingActionType } from "@/lib/shared/billing-flow";
 import { proposedAccontoOre } from "@/lib/shared/billing-proposal";
-import { TIMKOSTNADSNORM_FTAX_ORE_PER_H } from "@/lib/shared/brottmalstaxa";
+import { TIMKOSTNADSNORM_FTAX_ORE_PER_H, timkostnadsnormFtaxForDate, tidsspillanFtaxForDate } from "@/lib/shared/brottmalstaxa";
 import { computeCoverageSplit, partitionRattsskyddMinutes, type CoverageSplit } from "@/lib/shared/coverage-billing";
 import { arvodeInclVatOre } from "@/lib/shared/invoice-calc";
 import { carveEarliestMinutes } from "@/lib/shared/kostnadsrakning";
@@ -53,7 +53,7 @@ import type { Repositories } from "../repositories/repositories";
 import { router, orgProcedure } from "../trpc";
 
 interface UnfrozenWork {
-  timeEntries: Array<{ id: TimeEntryId; minutes: number; hourlyRate: number; billable: boolean; date: Date | string; description: string }>;
+  timeEntries: Array<{ id: TimeEntryId; minutes: number; hourlyRate: number; billable: boolean; date: Date | string; description: string; kind?: "ARBETE" | "TIDSSPILLAN" | null | undefined }>;
   expenses: Array<{ id: ExpenseId; amount: number; billable: boolean; vatRate?: number | null; vatIncluded?: boolean | null }>;
 }
 
@@ -226,17 +226,37 @@ function invoiceGrossOre(work: UnfrozenWork): number {
   return arvodeInclVatOre(arvodeNetOre(work)) + expenseGrossOre(work);
 }
 
+/** Timarvodet (öre/tim) för en tidspost vid slutreglering (#891): rättshjälp
+ *  värderas retroaktivt på SLUTREGLERINGSÅRETS norm — arbete på timkostnadsnormen,
+ *  tidsspillan på den (lägre) tidsspillan-normen. */
+function rattshjalpEntryRateOre(kind: "ARBETE" | "TIDSSPILLAN" | null | undefined, settleDate: Date | string): number {
+  return kind === "TIDSSPILLAN" ? tidsspillanFtaxForDate(settleDate) : timkostnadsnormFtaxForDate(settleDate);
+}
+
 /**
- * Rättshjälpens KR-anspråk till domstol, brutto (#839): arbetet värderas på
- * TIMKOSTNADSNORMEN (inte byråns privata timtaxor — staten ersätter bara normen)
- * och rådgivningstimmen exkluderas (faktureras klienten separat). Utlägg ersätts
- * brutto. Speglar settlement-revärderingen (currentArvodeRateOre × coverageBaseMinutes).
+ * Slutregleringens arvode-netto (#891). RÄTTSHJÄLP: räkna om HELA ärendet på
+ * SLUTREGLERINGSÅRETS normer — den retroaktiva höjningen över ett årsskifte (arbete
+ * 2025 värderas på 2026 års norm). Arbete värderas på timkostnadsnormen (minus
+ * rådgivningstimmen), tidsspillan på tidsspillan-normen. Övriga metoder: platt
+ * `flatRateOre` × alla debiterbara minuter (oförändrat).
  */
-function rattshjalpKrGrossOre(work: UnfrozenWork, rateOrePerH: number): number {
-  const billableMin = work.timeEntries.filter((t) => t.billable).reduce((s, t) => s + t.minutes, 0);
-  const claimMin = coverageBaseMinutes("RATTSHJALP", billableMin);
-  const arvodeNet = Math.round((claimMin / 60) * rateOrePerH);
-  return arvodeInclVatOre(arvodeNet) + expenseGrossOre(work);
+function settlementArvodeNet(method: PaymentMethod, work: UnfrozenWork, settleDate: Date | string, flatRateOre: number): number {
+  const billable = work.timeEntries.filter((t) => t.billable);
+  const billableMin = billable.reduce((s, t) => s + t.minutes, 0);
+  if (method !== "RATTSHJALP") return Math.round((billableMin / 60) * flatRateOre);
+  const tidsMin = billable.filter((t) => t.kind === "TIDSSPILLAN").reduce((s, t) => s + t.minutes, 0);
+  const arbeteMin = coverageBaseMinutes("RATTSHJALP", billableMin - tidsMin); // − rådgivningstimmen
+  return Math.round((arbeteMin / 60) * timkostnadsnormFtaxForDate(settleDate))
+    + Math.round((tidsMin / 60) * tidsspillanFtaxForDate(settleDate));
+}
+
+/**
+ * Rättshjälpens KR-anspråk till domstol, brutto (#839/#891): arbetet värderas på
+ * TIMKOSTNADSNORMEN (staten ersätter bara normen, ej byråns taxa), tidsspillan på
+ * tidsspillan-normen, rådgivningstimmen exkluderas. Utlägg ersätts brutto.
+ */
+function rattshjalpKrGrossOre(work: UnfrozenWork, settleDate: Date | string): number {
+  return arvodeInclVatOre(settlementArvodeNet("RATTSHJALP", work, settleDate, 0)) + expenseGrossOre(work);
 }
 
 /** Fakturans exakta momsbelopp (öre) per sats: arvodets moms (25 %) +
@@ -495,13 +515,17 @@ export interface SettlementBreakdown {
  *  (rättshjälp), värderad på samma rate som arvodesbasen och AVSTÄMD så radernas
  *  summa exakt = `totalArvodeNet` (per-rad-avrundning läggs på sista raden). */
 function buildClientArvodeLines(
-  method: PaymentMethod, rateOre: number, work: UnfrozenWork, totalArvodeNet: number,
+  method: PaymentMethod, rateOre: number, work: UnfrozenWork, totalArvodeNet: number, settleDate: Date | string,
 ): SpecTimeLine[] {
   const billable = work.timeEntries.filter((t) => t.billable);
   const entries = method === "RATTSHJALP" ? carveEarliestMinutes(billable, RADGIVNING_MINUTES) : billable;
+  // #891: rättshjälp värderar varje rad på slutregleringsårets norm per kategori
+  // (arbete vs tidsspillan); övriga metoder → den platta raten.
+  const lineRate = (kind: "ARBETE" | "TIDSSPILLAN" | null | undefined): number =>
+    method === "RATTSHJALP" ? rattshjalpEntryRateOre(kind, settleDate) : rateOre;
   const lines: SpecTimeLine[] = entries.map((t) => ({
     date: t.date, description: t.description, minutes: t.minutes,
-    amountOre: timeEntryValueOre(t.minutes, rateOre),
+    amountOre: timeEntryValueOre(t.minutes, lineRate(t.kind)),
   }));
   const sum = lines.reduce((s, l) => s + l.amountOre, 0);
   const last = lines[lines.length - 1];
@@ -511,7 +535,7 @@ function buildClientArvodeLines(
 
 async function buildSettlementBreakdown(repos: Repositories, orgId: OrganizationId, a: {
   clientShareBips: number; totalArvodeNet: number; split: CoverageSplit; work: UnfrozenWork;
-  payerGross: number; clientPayable: number; method: PaymentMethod; rateOre: number;
+  payerGross: number; clientPayable: number; method: PaymentMethod; rateOre: number; settleDate: Date | string;
   deductedRuns: ReadonlyArray<{ invoiceId?: InvoiceId | null | undefined }>;
 }): Promise<SettlementBreakdown> {
   // Rådgivningstimmen ingår ALDRIG i domstolens arvode (#860) — arvodet värderas
@@ -542,7 +566,7 @@ async function buildSettlementBreakdown(repos: Repositories, orgId: Organization
     radgivningGrossOre: a.method === "RATTSHJALP" ? arvodeInclVatOre(a.rateOre) : 0,
     payerPayableOre: a.payerGross,
     clientPayableOre: a.clientPayable,
-    clientArvodeLines: buildClientArvodeLines(a.method, a.rateOre, a.work, a.totalArvodeNet),
+    clientArvodeLines: buildClientArvodeLines(a.method, a.rateOre, a.work, a.totalArvodeNet, a.settleDate),
     deductedAccontos,
   };
 }
@@ -981,7 +1005,7 @@ export const billingRunRouter = router({
         // byråns privata timtaxa. Övriga (offentligt uppdrag/taxa): arvode inkl moms
         // + utlägg som tidigare. Brutto matchar kostnadsräkningens PDF (#782).
         const grossValue = matter.paymentMethod === "RATTSHJALP"
-          ? rattshjalpKrGrossOre(work, await currentArvodeRateOre(tx, ctx.orgId, matter))
+          ? rattshjalpKrGrossOre(work, new Date()) // #891: retroaktiv norm per slutregleringsdatum
           : invoiceGrossOre(work);
         const run = await tx.billingRuns.create({
           matterId: input.matterId, type: "KOSTNADSRAKNING", recipient: "DOMSTOL",
@@ -1158,10 +1182,11 @@ export const billingRunRouter = router({
         // Finns en kostnadsräkning måste den vara BESLUTAD först — fakturan skapas
         // EFTER domstolens beslut (#828). Domsbeloppet läses då från KR:n, inte input.
         const awardedOre = resolveAwardedOre(krRun, input.awardedOre);
-        const billableMinutes = work.timeEntries.filter((t) => t.billable).reduce((s, t) => s + t.minutes, 0);
         const rateOre = await currentArvodeRateOre(tx, ctx.orgId, matter);
-        const baseMinutes = coverageBaseMinutes(matter.paymentMethod, billableMinutes);
-        const totalArvodeNet = Math.round((baseMinutes / 60) * rateOre);
+        // #891: rättshjälp räknas om på slutregleringsårets normer (retroaktiv höjning
+        // över årsskifte + tidsspillan på egen norm); övriga metoder → platt rate.
+        const settleDate = new Date();
+        const totalArvodeNet = settlementArvodeNet(matter.paymentMethod, work, settleDate, rateOre);
         const split = computeCoverageSplit({
           method: matter.paymentMethod, totalOre: totalArvodeNet, clientShareBips: matter.clientShareBips ?? 0,
           awardedOre, insurerPrutningOre: input.insurerPrutningOre ?? null,
@@ -1185,7 +1210,7 @@ export const billingRunRouter = router({
         const breakdown = await buildSettlementBreakdown(tx, ctx.orgId, {
           clientShareBips: matter.clientShareBips ?? 0, totalArvodeNet,
           split, work, payerGross, clientPayable: clientAmount,
-          method: matter.paymentMethod, rateOre, deductedRuns,
+          method: matter.paymentMethod, rateOre, settleDate, deductedRuns,
         });
         const { clientView, payerView } = buildSettlementViews(breakdown, matter.paymentMethod);
 
