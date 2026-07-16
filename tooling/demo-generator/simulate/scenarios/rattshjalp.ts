@@ -1,10 +1,10 @@
 /**
  * Scenariomall för RÄTTSHJÄLP (#880/#885) — kronologisk narrativ med VARIERANDE
- * självrisk-avgift (arbetslös 5 % → anställd 75 % → arbetslös 5 %). Aconto skickas
+ * självrisk-avgift (arbetslös 5 % → anställd 40 % → arbetslös 5 %). Aconto skickas
  * INTE på skriptade dagar utan TRÖSKELSTYRT (#885): runnern ackumulerar klientens
  * andel vid aktuell sats och fyr ett aconto FÖRST när den nått byråns gränsbelopp
  * (default 1500 kr). Satsbyten sker via `rateChange`; arbetsvolymen per period är
- * tilltagen så var period hinner passera tröskeln → de tre aconton (5/75/5 %) syns.
+ * tilltagen så var period hinner passera tröskeln → de tre aconton (5/40/5 %) syns.
  * Avslutas med kostnadsräkning → beslut → slutreglering (→ kredit vid överfakturering).
  */
 
@@ -38,11 +38,11 @@ export function buildRattshjalpScenario(parties: Parties): SimEvent[] {
     { kind: "doc", dayOffset: 23, template: "inlaga" },
     { kind: "time", dayOffset: 30, minutes: 240, description: "Korrespondens med motpartsombud" },
     { kind: "time", dayOffset: 38, minutes: 240, description: "Fördjupad rättsutredning" }, // → aconto #1 (5 %)
-    { kind: "note", dayOffset: 45, text: "Klienten har fått anställning — rättshjälpsavgiften höjs till 75 %." },
-    // Period 2 (anställd, 75 %) — en insats räcker för att passera tröskeln (överfakturerar
+    { kind: "note", dayOffset: 45, text: "Klienten har fått anställning — rättshjälpsavgiften höjs till 40 %." },
+    // Period 2 (anställd, 40 %) — en insats räcker för att passera tröskeln (överfakturerar
     // mot slutligt beslut → kredit vid slutreglering).
-    { kind: "rateChange", dayOffset: 45, clientShareBips: 7500 },
-    { kind: "time", dayOffset: 50, minutes: 150, description: "Sammanträde i tingsrätten" }, // → aconto #2 (75 %)
+    { kind: "rateChange", dayOffset: 45, clientShareBips: 4000 },
+    { kind: "time", dayOffset: 50, minutes: 150, description: "Sammanträde i tingsrätten" }, // → aconto #2 (40 %)
     { kind: "note", dayOffset: 85, text: "Klienten åter arbetslös — avgiften tillbaka till 5 %." },
     // Period 3 (arbetslös, 5 %) — löpande arbete tills tröskeln nås igen.
     { kind: "rateChange", dayOffset: 85, clientShareBips: 500 },

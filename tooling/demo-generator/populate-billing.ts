@@ -220,15 +220,15 @@ async function accontoVarying(ctx: Ctx, matterId: string, bips: number, amountOr
 
 /**
  * Rättshjälp med TIDSVARIERANDE avgift → kreditfaktura (#878). Hela förfarandet:
- * rådgivning → 3 aconton vid löpande satser (5 % / 75 % / 5 %) → kostnadsräkning till
+ * rådgivning → 3 aconton vid löpande satser (5 % / 40 % / 5 %) → kostnadsräkning till
  * domstol → myndighetens SLUTLIGA helhetsbeslut (5 %) via settlement → klienten har
- * överfakturerats (särskilt 75 %-acontot) → `settleCoverage` skapar en KREDITfaktura.
+ * överfakturerats (särskilt 40 %-acontot) → `settleCoverage` skapar en KREDITfaktura.
  */
 async function runRattshjalpVaryingRate(ctx: Ctx, matterId: string): Promise<void> {
   await ctx.c.invoice.createRadgivning({ matterId });
   ctx.res.invoices++;
   await accontoVarying(ctx, matterId, 500, 30_000, 105);   // period 1: arbetslös, 5 %
-  await accontoVarying(ctx, matterId, 7500, 600_000, 55);  // period 2: anställd, 75 % (överfakturerar)
+  await accontoVarying(ctx, matterId, 4000, 600_000, 55);  // period 2: anställd, 40 % (överfakturerar)
   await accontoVarying(ctx, matterId, 500, 30_000, 20);    // period 3: åter arbetslös, 5 %
   const kr = await ctx.c.billingRun.createKostnadsrakning({ matterId, notes: "Kostnadsräkning till domstol (rättshjälp, varierande avgift)" });
   ctx.res.kostnadsrakningPending++;

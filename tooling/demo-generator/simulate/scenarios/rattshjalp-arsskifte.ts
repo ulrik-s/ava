@@ -6,7 +6,7 @@
  * (även 2025-timmarna), och skillnaden mot de aconton som ställdes ut på 2025-taxan
  * regleras på slutfakturorna till klient + domstol.
  *
- * Behåller den varierande rättshjälpsavgiften (arbetslös 5 % → anställd 75 % →
+ * Behåller den varierande rättshjälpsavgiften (arbetslös 5 % → anställd 40 % →
  * arbetslös 5 %, `rateChange`) OCH innehåller tidsspillan (egen, lägre norm).
  * Dag 0 ≈ nov 2025; årsgränsen (31 dec 2025) infaller runt dag 60.
  */
@@ -38,10 +38,10 @@ export function buildRattshjalpArsskifteScenario(parties: Parties): SimEvent[] {
     { kind: "time", dayOffset: 45, minutes: 240, description: "Korrespondens med motpartsombud" },
     { kind: "time", dayOffset: 55, minutes: 240, description: "Fördjupad rättsutredning" }, // → aconto #1 (5 %, 2025-taxa)
     // ── Årsskifte passeras (~dag 60) → 2026 års normer gäller nya poster ──
-    { kind: "note", dayOffset: 75, text: "Klienten har fått anställning — rättshjälpsavgiften höjs till 75 % (jan 2026)." },
-    { kind: "rateChange", dayOffset: 75, clientShareBips: 7500 },
-    // ── Period 2: anställd 75 %, 2026 (norm 1 626) ──
-    { kind: "time", dayOffset: 85, minutes: 150, description: "Sammanträde i tingsrätten" }, // → aconto #2 (75 %, 2026-taxa)
+    { kind: "note", dayOffset: 75, text: "Klienten har fått anställning — rättshjälpsavgiften höjs till 40 % (jan 2026)." },
+    { kind: "rateChange", dayOffset: 75, clientShareBips: 4000 },
+    // ── Period 2: anställd 40 %, 2026 (norm 1 626) ──
+    { kind: "time", dayOffset: 85, minutes: 150, description: "Sammanträde i tingsrätten" }, // → aconto #2 (40 %, 2026-taxa)
     { kind: "note", dayOffset: 150, text: "Klienten åter arbetslös — avgiften tillbaka till 5 %." },
     { kind: "rateChange", dayOffset: 150, clientShareBips: 500 },
     // ── Period 3: arbetslös 5 %, 2026 ──

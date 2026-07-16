@@ -146,11 +146,11 @@ export const MATTERS: MatterSeed[] = [
   { id: "m-017-brottmal-omf", matterNumber: "2026-0017", title: "Brottmål — omfattande utredning Davidsson", status: "ACTIVE", matterType: "Brottmål", paymentMethod: "OFFENTLIGT_UPPDRAG", description: "Frångångstaxa pga väsentligt mer arbete (komplex bevisning).", klientId: "c-davidsson", domstolId: "c-hovratten-svea", createdDaysAgo: 35, isTaxeArende: false },
   { id: "m-018-brottmal-ekobrott", matterNumber: "2026-0018", title: "Brottmål — ekobrott Carlsson", status: "ACTIVE", matterType: "Brottmål", paymentMethod: "OFFENTLIGT_UPPDRAG", description: "Misstanke om grovt bokföringsbrott. Omfattande material — kostnadsräkning skickas till domstol istället för enligt taxa.", klientId: "c-carlsson", domstolId: "c-tingsratten-sthlm", createdDaysAgo: 28, isTaxeArende: false },
   // Rättshjälp med TIDSVARIERANDE avgift (#878): klienten var arbetslös (5 %), fick
-  // jobb (75 %) och blev arbetslös igen (5 %). Aconton ställdes ut vid de löpande
+  // jobb (40 %) och blev arbetslös igen (5 %). Aconton ställdes ut vid de löpande
   // satserna; rättshjälpsmyndighetens SLUTLIGA helhetsbeslut blev 5 % → klienten
-  // överfakturerades (särskilt via 75 %-acontot) → kreditfaktura. clientShareBips =
+  // överfakturerades (särskilt via 40 %-acontot) → kreditfaktura. clientShareBips =
   // det slutliga helhetsbeslutet (5 %). Egen tidslogg (nedan) → deterministiskt arvode.
-  { id: "m-020-rattshjalp-varierande", matterNumber: "2026-0020", title: "Vårdnadstvist — varierande rättshjälp Falk", status: "ACTIVE", matterType: "Familjerätt", paymentMethod: "RATTSHJALP", description: "Rättshjälp över ett årsskifte (start nov 2025, norm 1 602 kr → 2026 norm 1 626 kr) med varierande avgift (arbetslös 5 % → anställd 75 % → arbetslös 5 %) och tidsspillan. Vid slutregleringen räknas HELA ärendet om på 2026 års norm (retroaktiv höjning) — skillnaden regleras på slutfakturorna till klient + domstol. Myndighetens slutliga avgift: 5 %.", klientId: "c-falk", motpartId: "c-bergman", domstolId: "c-tingsratten-sthlm", createdDaysAgo: 255, clientShareBips: 500, rattshjalpMaxTimmar: 100 },
+  { id: "m-020-rattshjalp-varierande", matterNumber: "2026-0020", title: "Vårdnadstvist — varierande rättshjälp Falk", status: "ACTIVE", matterType: "Familjerätt", paymentMethod: "RATTSHJALP", description: "Rättshjälp över ett årsskifte (start nov 2025, norm 1 602 kr → 2026 norm 1 626 kr) med varierande avgift (arbetslös 5 % → anställd 40 % → arbetslös 5 %) och tidsspillan. Vid slutregleringen räknas HELA ärendet om på 2026 års norm (retroaktiv höjning) — skillnaden regleras på slutfakturorna till klient + domstol. Myndighetens slutliga avgift: 5 %.", klientId: "c-falk", motpartId: "c-bergman", domstolId: "c-tingsratten-sthlm", createdDaysAgo: 255, clientShareBips: 500, rattshjalpMaxTimmar: 100 },
 ];
 
 // ASSIGN_USERS härleds inuti buildSeed() från de aktuella users — så ifall
@@ -409,7 +409,7 @@ function appendVaryingRattshjalpTimeEntries(out: SeedDataset["timeEntries"], org
     { daysAgo: 118, minutes: 60, description: "Första möte med klient i ärendet" }, // rådgivningstimmen — FÖRST
     { daysAgo: 100, minutes: 90, description: "Genomgång av handlingar (klient arbetslös, 5 % avgift)" },
     { daysAgo: 70, minutes: 120, description: "Förhandlingsförberedelse och inlaga" },
-    { daysAgo: 55, minutes: 90, description: "Klientmöte (klient fått anställning, 75 % avgift)" },
+    { daysAgo: 55, minutes: 90, description: "Klientmöte (klient fått anställning, 40 % avgift)" },
     { daysAgo: 40, minutes: 120, description: "Sammanträde i tingsrätten" },
     { daysAgo: 20, minutes: 90, description: "Uppföljning och korrespondens (klient åter arbetslös, 5 %)" },
     { daysAgo: 8, minutes: 60, description: "Slutförberedelse inför avgörande" },

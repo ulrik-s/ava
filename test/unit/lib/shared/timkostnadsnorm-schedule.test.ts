@@ -5,6 +5,7 @@
 
 import { describe, it, expect } from "vitest-compat";
 import { timkostnadsnormFtaxForDate, tidsspillanFtaxForDate } from "@/lib/shared/brottmalstaxa";
+import { computeRadgivningsavgift } from "@/lib/shared/rattshjalp";
 
 describe("timkostnadsnorm per år (#891)", () => {
   it("timkostnadsnormen följer året (2025 = 1 602 kr, 2026 = 1 626 kr)", () => {
@@ -19,5 +20,11 @@ describe("timkostnadsnorm per år (#891)", () => {
 
   it("okänt/framtida år faller tillbaka på senaste kända normen", () => {
     expect(timkostnadsnormFtaxForDate("2030-01-01")).toBe(162_600);
+  });
+
+  it("rådgivningsavgiften värderas på mötesdagens norm (#897)", () => {
+    // Möte nov 2025 → 2025 års norm (1 602 kr), inte innevarande års (1 626 kr).
+    expect(computeRadgivningsavgift({ date: "2025-11-03" }).beloppExclVatOre).toBe(160_200);
+    expect(computeRadgivningsavgift({ date: "2026-03-01" }).beloppExclVatOre).toBe(162_600);
   });
 });
