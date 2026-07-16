@@ -70,9 +70,9 @@ describe("runScenario (#880)", () => {
     const radTime = calls.find((x) => x.method === "timeEntry.create" && String(x.args.description).includes("Rådgivning"));
     expect(radTime?.args.date).toBe(rad.args.invoiceDate); // samma dag som mötet
 
-    // Tre aconton vid varierande satser (5/75/5 %), belopp härlett ur upparbetat.
+    // Tre aconton vid varierande satser (5/40/5 %), belopp härlett ur upparbetat.
     const accontos = calls.filter((x) => x.method === "billingRun.createAcconto");
-    expect(accontos.map((a) => a.args.clientShareBips)).toEqual([500, 7500, 500]);
+    expect(accontos.map((a) => a.args.clientShareBips)).toEqual([500, 4000, 500]);
     expect(accontos.every((a) => a.args.amountOre > 0)).toBe(true);
     // #885: aconto skickas FÖRST när klientens ackumulerade andel nått tröskeln
     // (default 150000 öre) — varje acontos klient-andel-rad ligger på/över den.

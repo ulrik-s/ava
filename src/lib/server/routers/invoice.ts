@@ -134,12 +134,13 @@ export const invoiceRouter = router({
         // Rådgivningstimmen är en RIKTIG klientfaktura (STANDARD), inte ett aconto
         // (#853): ärendets första händelse, betalas direkt av klienten → skapas
         // SKICKAD. Brutto (inkl moms) som alla klientfakturor. Dras ALDRIG av.
-        const netOre = computeRadgivningsavgift({ ...omitUndefined({ hasFTax: input.hasFTax }) }).beloppExclVatOre;
+        // Datum = mötesdagen om angivet (#880: rådgivning faktureras samma dag som mötet), annars idag.
+        const when = input.invoiceDate ? new Date(input.invoiceDate) : new Date();
+        // Norm efter mötesdagen (#897): rådgivning i nov 2025 → 2025 års timkostnadsnorm.
+        const netOre = computeRadgivningsavgift({ ...omitUndefined({ hasFTax: input.hasFTax }), date: when }).beloppExclVatOre;
         const grossOre = arvodeInclVatOre(netOre);
         const vatOre = grossOre - netOre;
         const invoiceNumber = await repos.invoices.nextInvoiceNumber(ctx.orgId);
-        // Datum = mötesdagen om angivet (#880: rådgivning faktureras samma dag som mötet), annars idag.
-        const when = input.invoiceDate ? new Date(input.invoiceDate) : new Date();
         const invoice = await repos.invoices.create({
           matterId: input.matterId, invoiceNumber, ocrReference: ocrFromInvoiceNumber(invoiceNumber),
           amount: grossOre, vatOre, vatBreakdown: [{ kind: "arvode", vatRate: 2500, netOre, vatOre }],

@@ -14,7 +14,7 @@
  * {@link computeTimkostnadsnorm} här i stället för en egen hårdkodad sats.
  */
 
-import { computeTimkostnadsnorm } from "@/lib/shared/brottmalstaxa";
+import { computeTimkostnadsnorm, timkostnadsnormFtaxForDate } from "@/lib/shared/brottmalstaxa";
 
 /** Rådgivning enligt rättshjälpslagen = 1 timme. */
 export const RADGIVNING_MINUTES = 60;
@@ -40,9 +40,14 @@ export interface Radgivningsavgift {
  * Rådgivningsavgiften för den klient-betalda rådgivningstimmen: 1 h enligt
  * timkostnadsnormen (F-skatt-justerad om advokaten saknar F-skatt).
  */
-export function computeRadgivningsavgift(opts: { hasFTax?: boolean } = {}): Radgivningsavgift {
-  const norm = computeTimkostnadsnorm({ arbetsMinutes: RADGIVNING_MINUTES, ...opts });
-  return { minutes: RADGIVNING_MINUTES, rateOrePerH: norm.rateOrePerH, beloppExclVatOre: norm.arbete };
+export function computeRadgivningsavgift(opts: { hasFTax?: boolean; date?: Date | string } = {}): Radgivningsavgift {
+  const hasFTax = opts.hasFTax ?? true;
+  // Rådgivningstimmen värderas på den timkostnadsnorm som gällde MÖTESDAGEN (#897):
+  // ett möte i nov 2025 debiteras 2025 års norm (1 602 kr), inte innevarande års.
+  const rateOrePerH = opts.date && hasFTax
+    ? timkostnadsnormFtaxForDate(opts.date)
+    : computeTimkostnadsnorm({ arbetsMinutes: RADGIVNING_MINUTES, hasFTax }).rateOrePerH;
+  return { minutes: RADGIVNING_MINUTES, rateOrePerH, beloppExclVatOre: Math.round((RADGIVNING_MINUTES / 60) * rateOrePerH) };
 }
 
 /**
