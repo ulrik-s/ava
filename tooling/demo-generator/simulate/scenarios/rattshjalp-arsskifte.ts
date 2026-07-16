@@ -26,6 +26,12 @@ export function buildRattshjalpArsskifteScenario(parties: Parties): SimEvent[] {
   if (parties.domstol) ev.push({ kind: "party", dayOffset: 2, contactId: parties.domstol, role: "DOMSTOL" });
 
   ev.push(
+    // Normalflödet: klienten söker FÖRST rättsskydd hos försäkringsbolaget; först
+    // vid avslag (här: tvist anses ej uppkommen) drivs ärendet med rättshjälp (#899).
+    { kind: "doc", dayOffset: 2, template: "rattsskyddsansokan" },
+    { kind: "note", dayOffset: 2, text: "Ansökan om rättsskydd inskickad till försäkringsbolaget." },
+    { kind: "doc", dayOffset: 9, template: "rattsskyddAvslag" },
+    { kind: "note", dayOffset: 9, text: "Avslag på rättsskydd — tvist anses ännu inte ha uppkommit. Ärendet drivs vidare med rättshjälp." },
     { kind: "expense", dayOffset: 8, amountOre: 90_000, description: "Ansökningsavgift tingsrätten" },
     // ── Period 1: arbetslös 5 %, HELA i 2025 (norm 1 602 / tidsspillan 1 450) ──
     { kind: "time", dayOffset: 6, minutes: 240, description: "Genomgång av handlingar och underlag" },

@@ -27,6 +27,19 @@ describe("computeCoverageSplit — rättsskydd (försäkring prutar)", () => {
     expect(r.clientOre).toBe(10_000_000);
     expect(r.payerOre).toBe(0);
   });
+
+  it("golv-självrisk (#899): 'lägst 1 800 kr' slår in när 20 % är lägre", () => {
+    // Arvode 6 504 kr → 20 % = 1 300,80 kr < 1 800 kr → självrisk = 1 800 kr (golvet).
+    const r = computeCoverageSplit({ method: "RATTSSKYDD", totalOre: 650_400, clientShareBips: 2000, minSjalvriskOre: 180_000 });
+    expect(r.clientOre).toBe(180_000);          // golvet 1 800 kr
+    expect(r.payerOre).toBe(650_400 - 180_000); // försäkringen resten
+  });
+
+  it("golv-självrisk påverkar inte när 20 % redan överstiger golvet", () => {
+    // Arvode 100 000 kr → 20 % = 20 000 kr > 1 800 kr → självrisk = 20 000 kr.
+    const r = computeCoverageSplit({ method: "RATTSSKYDD", totalOre: 10_000_000, clientShareBips: 2000, minSjalvriskOre: 180_000 });
+    expect(r.clientOre).toBe(2_000_000);
+  });
 });
 
 describe("computeCoverageSplit — rättshjälp (domstol prutar)", () => {

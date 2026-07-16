@@ -125,6 +125,8 @@ export const matters = pgTable("matters", {
   clientShareBips: integer("client_share_bips"),
   /** Rättsskyddets maxbelopp (öre) resp. rättshjälpens timtak — täcknings-tak (#793). */
   rattsskyddMaxOre: integer("rattsskydd_max_ore"),
+  /** Rättsskyddets lägsta självrisk (öre) — "dock lägst 1 800 kr" (#899). */
+  rattsskyddSjalvriskMinOre: integer("rattsskydd_sjalvrisk_min_ore"),
   rattshjalpMaxTimmar: integer("rattshjalp_max_timmar"),
   /** Rättsskydd (#810): tvistdatum (arbete före = ej täckt) + bolagets beslutsdatum (retro ≤6h). */
   tvistUppkomDatum: timestamp("tvist_uppkom_datum", { withTimezone: true }),

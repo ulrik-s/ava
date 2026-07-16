@@ -49,4 +49,16 @@ export const DOC_TEMPLATES: Record<string, DocTemplate> = {
     documentType: "Beslut", direction: "INKOMMANDE",
     title: "Beslut om rättshjälp", summary: "Rättshjälpsmyndighetens beslut om rättshjälpsavgiftens procentsats för ärendet.",
   },
+  rattsskyddsansokan: {
+    documentType: "Ansökan", direction: "UTGAENDE",
+    title: "Ansökan om rättsskydd", summary: "Begäran till försäkringsbolaget om att rättsskyddet i hemförsäkringen ska tas i anspråk för tvisten.",
+  },
+  rattsskyddAvslag: {
+    documentType: "Beslut", direction: "INKOMMANDE",
+    title: "Avslag på rättsskydd", summary: "Försäkringsbolaget avslår rättsskydd — tvist anses ännu inte ha uppkommit. Ärendet drivs istället med rättshjälp.",
+  },
+  rattsskyddBeslutPositivt: {
+    documentType: "Beslut", direction: "INKOMMANDE",
+    title: "Beslut om rättsskydd", summary: "Försäkringsbolaget beviljar rättsskydd: ersätter högst 100 timmar arvode till eget ombud. Från ersättningen avräknas självrisk 20 %, dock lägst 1 800 kr.",
+  },
 };

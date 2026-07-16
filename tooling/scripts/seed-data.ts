@@ -122,6 +122,9 @@ interface MatterSeed {
   clientShareBips?: number;
   /** Rättshjälpens timtak (rättshjälpslagen: 100 tim). */
   rattshjalpMaxTimmar?: number;
+  /** Rättsskyddets tak (öre) + lägsta självrisk (öre) ur försäkringsbeslutet (#899). */
+  rattsskyddMaxOre?: number;
+  rattsskyddSjalvriskMinOre?: number;
 }
 
 export const MATTERS: MatterSeed[] = [
@@ -150,6 +153,10 @@ export const MATTERS: MatterSeed[] = [
   // satserna; rättshjälpsmyndighetens SLUTLIGA helhetsbeslut blev 5 % → klienten
   // överfakturerades (särskilt via 40 %-acontot) → kreditfaktura. clientShareBips =
   // det slutliga helhetsbeslutet (5 %). Egen tidslogg (nedan) → deterministiskt arvode.
+  // 2026-0021 (#899): klienten söker FÖRST rättsskydd som BEVILJAS (positivt besked:
+  // högst 100 tim arvode, självrisk 20 % dock lägst 1 800 kr). Slutregleras mot
+  // försäkringen; självrisks-golvet (1 800 kr) slår in eftersom arbetet är litet.
+  { id: "m-021-rattsskydd-positivt", matterNumber: "2026-0021", title: "Fastighetstvist — rättsskydd beviljat Gustafsson", status: "ACTIVE", matterType: "Fastighetsrätt", paymentMethod: "RATTSSKYDD", description: "Klienten ansökte om rättsskydd som beviljades: försäkringen ersätter högst 100 tim arvode till eget ombud, från ersättningen avräknas självrisk 20 %, dock lägst 1 800 kr. Slutregleras mot försäkringsbolaget — klienten betalar självrisken (golvet 1 800 kr).", klientId: "c-gustafsson", motpartId: "c-brf-eken", domstolId: "c-tingsratten-sthlm", createdDaysAgo: 70, clientShareBips: 2000, rattsskyddMaxOre: 16_260_000, rattsskyddSjalvriskMinOre: 180_000 },
   { id: "m-020-rattshjalp-varierande", matterNumber: "2026-0020", title: "Vårdnadstvist — varierande rättshjälp Falk", status: "ACTIVE", matterType: "Familjerätt", paymentMethod: "RATTSHJALP", description: "Rättshjälp över ett årsskifte (start nov 2025, norm 1 602 kr → 2026 norm 1 626 kr) med varierande avgift (arbetslös 5 % → anställd 40 % → arbetslös 5 %) och tidsspillan. Vid slutregleringen räknas HELA ärendet om på 2026 års norm (retroaktiv höjning) — skillnaden regleras på slutfakturorna till klient + domstol. Myndighetens slutliga avgift: 5 %.", klientId: "c-falk", motpartId: "c-bergman", domstolId: "c-tingsratten-sthlm", createdDaysAgo: 255, clientShareBips: 500, rattshjalpMaxTimmar: 100 },
 ];
 
@@ -175,6 +182,27 @@ export interface SeedDataset {
   paymentPlans: Record<string, unknown>[];
   paymentPlanReminders: Record<string, unknown>[];
   serviceNotes: Record<string, unknown>[];
+}
+
+/** Nullbara matter-fält som defaultar till null i seed-raden. */
+const MATTER_NULLABLE_FIELDS: readonly (keyof MatterSeed)[] = [
+  "taxaLevel", "taxaHuvudforhandlingMin", "taxaHasFTax", "clientShareBips",
+  "rattshjalpMaxTimmar", "rattsskyddMaxOre", "rattsskyddSjalvriskMinOre",
+];
+
+/** MATTERS-mall → matter-rad. Nullbara fält via loop (håller komplexitet ≤8, #199). */
+function toMatterRow(m: MatterSeed, orgId: string): Record<string, unknown> {
+  const row: Record<string, unknown> = {
+    id: m.id, organizationId: orgId, matterNumber: m.matterNumber, title: m.title,
+    description: m.description, status: m.status, matterType: m.matterType,
+    paymentMethod: m.paymentMethod, paymentMethodNote: null,
+    paymentMethodDecidedAt: isoDate(-m.createdDaysAgo + 5),
+    isTaxeArende: m.isTaxeArende ?? false,
+    createdAt: isoDate(-m.createdDaysAgo),
+    updatedAt: isoDate(-Math.max(1, m.createdDaysAgo - 7)),
+  };
+  for (const f of MATTER_NULLABLE_FIELDS) row[f] = m[f] ?? null;
+  return row;
 }
 
 export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
@@ -211,20 +239,7 @@ export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
       address: null, notes: null,
       createdAt: isoDate(-180), updatedAt: isoDate(-30),
     })),
-    matters: MATTERS.map((m) => ({
-      id: m.id, organizationId: orgId, matterNumber: m.matterNumber, title: m.title,
-      description: m.description, status: m.status, matterType: m.matterType,
-      paymentMethod: m.paymentMethod, paymentMethodNote: null,
-      paymentMethodDecidedAt: isoDate(-m.createdDaysAgo + 5),
-      isTaxeArende: m.isTaxeArende ?? false,
-      taxaLevel: m.taxaLevel ?? null,
-      taxaHuvudforhandlingMin: m.taxaHuvudforhandlingMin ?? null,
-      taxaHasFTax: m.taxaHasFTax ?? null,
-      clientShareBips: m.clientShareBips ?? null,
-      rattshjalpMaxTimmar: m.rattshjalpMaxTimmar ?? null,
-      createdAt: isoDate(-m.createdDaysAgo),
-      updatedAt: isoDate(-Math.max(1, m.createdDaysAgo - 7)),
-    })),
+    matters: MATTERS.map((m) => toMatterRow(m, orgId)),
     matterContacts: [],
     documents: [],
     timeEntries: [],

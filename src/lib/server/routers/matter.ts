@@ -59,6 +59,9 @@ const matterCreateInput = z.object({
   clientShareBips: z.number().int().min(0).max(10000).nullable().optional(),
   /** Rättshjälpens timtak (rättshjälpslagen: 100 tim). */
   rattshjalpMaxTimmar: z.number().int().positive().nullable().optional(),
+  /** Rättsskyddets tak (öre) + lägsta självrisk (öre) — ur försäkringsbeslutet (#899). */
+  rattsskyddMaxOre: z.number().int().nonnegative().nullable().optional(),
+  rattsskyddSjalvriskMinOre: z.number().int().nonnegative().nullable().optional(),
   /** Ansvarig advokat/biträdande jurist (#174) — styr ärendenummerserien. */
   responsibleLawyerId: userIdSchema.optional(),
   /** Domstolens målnummer (#173) — matchningsnyckel för domstolsbetalningar. */
@@ -149,6 +152,8 @@ function buildMatterData(
     taxaHasFTax: input.taxaHasFTax,
     clientShareBips: input.clientShareBips,
     rattshjalpMaxTimmar: input.rattshjalpMaxTimmar,
+    rattsskyddMaxOre: input.rattsskyddMaxOre,
+    rattsskyddSjalvriskMinOre: input.rattsskyddSjalvriskMinOre,
     createdAt: input.createdAt ? new Date(input.createdAt) : undefined,
   };
   const data: Record<string, unknown> = {
