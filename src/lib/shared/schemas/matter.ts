@@ -44,6 +44,12 @@ export const matterSchema = z.object({
    */
   rattsskyddMaxOre: z.number().int().nonnegative().nullish(),
   /**
+   * Rättsskydd: lägsta självrisk i öre (#899). Försäkringsbeslutet anger ofta
+   * "självrisk 20 %, dock lägst 1 800 kr" → klientens självrisk = max(detta belopp,
+   * andel% × täckt arvode). Null = ingen golv-självrisk.
+   */
+  rattsskyddSjalvriskMinOre: z.number().int().nonnegative().nullish(),
+  /**
    * Rättshjälpens timtak (rättshjälpslagen: 100 tim, kan utökas). Null = ej satt;
    * UI defaultar 100 för rättshjälpsärenden. Vid ≥90 % flaggas ärendet (#793).
    */

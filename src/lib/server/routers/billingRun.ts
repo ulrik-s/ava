@@ -103,6 +103,7 @@ interface RattsskyddMatter {
   tvistUppkomDatum?: Date | string | null | undefined;
   rattsskyddBeslutDatum?: Date | string | null | undefined;
   rattsskyddMaxOre?: number | null | undefined;
+  rattsskyddSjalvriskMinOre?: number | null | undefined;
 }
 
 /**
@@ -120,6 +121,7 @@ function rattsskyddCoverage(
   return omitUndefined({
     coveredOre: Math.round((p.coveredMinutes / 60) * rateOre),
     capOre: matter.rattsskyddMaxOre ?? undefined,
+    minSjalvriskOre: matter.rattsskyddSjalvriskMinOre ?? undefined,
   });
 }
 

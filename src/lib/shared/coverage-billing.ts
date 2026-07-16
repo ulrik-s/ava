@@ -43,6 +43,9 @@ export interface CoverageSplitInput {
   /** Rättsskydd: försäkringens maxbelopp (öre, ur beslutet). Försäkringen betalar
    *  högst detta; överskott → klienten. Saknas → inget tak. */
   capOre?: number | null;
+  /** Rättsskydd: lägsta självrisk (öre) — "dock lägst 1 800 kr" (#899). Klientens
+   *  självrisk = max(detta, andel% × täckt). Saknas → 0. */
+  minSjalvriskOre?: number | null;
 }
 
 export interface CoverageSplit {
@@ -82,7 +85,9 @@ export function computeCoverageSplit(input: CoverageSplitInput): CoverageSplit {
  */
 function rattsskyddSplit(total: number, input: CoverageSplitInput): CoverageSplit {
   const covered = Math.max(0, Math.min(input.coveredOre ?? total, total));
-  const sjalvrisk = shareOf(covered, input.clientShareBips);
+  // Självrisk = andel% × täckt, dock LÄGST beslutets golv-belopp (#899), men aldrig
+  // mer än den täckta delen (annars skulle försäkringen betala negativt).
+  const sjalvrisk = Math.min(covered, Math.max(input.minSjalvriskOre ?? 0, shareOf(covered, input.clientShareBips)));
   const prutning = Math.max(0, input.insurerPrutningOre ?? 0);
   const insurerRaw = Math.max(0, covered - sjalvrisk - prutning);
   const overCap = input.capOre != null ? Math.max(0, insurerRaw - input.capOre) : 0;

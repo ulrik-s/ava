@@ -8,6 +8,7 @@ import { buildPrivatScenario } from "./privat";
 import { buildRattshjalpScenario } from "./rattshjalp";
 import { buildRattshjalpArsskifteScenario } from "./rattshjalp-arsskifte";
 import { buildRattsskyddScenario } from "./rattsskydd";
+import { buildRattsskyddPositivtScenario } from "./rattsskydd-positivt";
 
 export function buildScenario(matter: SimMatter, parties: Parties, index: number): SimEvent[] {
   switch (matter.paymentMethod) {
@@ -15,7 +16,10 @@ export function buildScenario(matter: SimMatter, parties: Parties, index: number
     case "RATTSHJALP": return matter.matterNumber === "2026-0020"
       ? buildRattshjalpArsskifteScenario(parties)
       : buildRattshjalpScenario(parties);
-    case "RATTSSKYDD": return buildRattsskyddScenario(parties);
+    // 2026-0021 = positivt rättsskyddsbesked (100 tim, självrisk 20 % lägst 1 800 kr, #899).
+    case "RATTSSKYDD": return matter.matterNumber === "2026-0021"
+      ? buildRattsskyddPositivtScenario(parties)
+      : buildRattsskyddScenario(parties);
     case "OFFENTLIGT_UPPDRAG": return buildOffentligtScenario(parties);
     default: return buildPrivatScenario(parties, index);
   }
