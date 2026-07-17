@@ -153,10 +153,11 @@ export const MATTERS: MatterSeed[] = [
   // satserna; rättshjälpsmyndighetens SLUTLIGA helhetsbeslut blev 5 % → klienten
   // överfakturerades (särskilt via 40 %-acontot) → kreditfaktura. clientShareBips =
   // det slutliga helhetsbeslutet (5 %). Egen tidslogg (nedan) → deterministiskt arvode.
-  // 2026-0021 (#899): klienten söker FÖRST rättsskydd som BEVILJAS (positivt besked:
-  // högst 100 tim arvode, självrisk 20 % dock lägst 1 800 kr). Slutregleras mot
-  // försäkringen; självrisks-golvet (1 800 kr) slår in eftersom arbetet är litet.
-  { id: "m-021-rattsskydd-positivt", matterNumber: "2026-0021", title: "Fastighetstvist — rättsskydd beviljat Gustafsson", status: "ACTIVE", matterType: "Fastighetsrätt", paymentMethod: "RATTSSKYDD", description: "Klienten ansökte om rättsskydd som beviljades: försäkringen ersätter högst 100 tim arvode till eget ombud, från ersättningen avräknas självrisk 20 %, dock lägst 1 800 kr. Slutregleras mot försäkringsbolaget — klienten betalar självrisken (golvet 1 800 kr).", klientId: "c-gustafsson", motpartId: "c-brf-eken", domstolId: "c-tingsratten-sthlm", createdDaysAgo: 70, clientShareBips: 2000, rattsskyddMaxOre: 16_260_000, rattsskyddSjalvriskMinOre: 180_000 },
+  // 2026-0021 (#899/#903): SPEGLAR Fredrik Falks vårdnadstvist (2026-0020) men här
+  // BEVILJAR försäkringen rättsskydd (i st.f. rättshjälps-vägen efter avslag). Positivt
+  // besked: högst 100 tim arvode, självrisk 20 % dock lägst 1 800 kr → försäkringen tar
+  // merparten, klienten bara självrisken (golvet 1 800 kr slår in vid litet arbete).
+  { id: "m-021-rattsskydd-positivt", matterNumber: "2026-0021", title: "Vårdnadstvist — rättsskydd beviljat Falk", status: "ACTIVE", matterType: "Familjerätt", paymentMethod: "RATTSSKYDD", description: "Speglar Fredrik Falks vårdnadstvist (jfr 2026-0020, rättshjälp) men här BEVILJAR försäkringen rättsskydd: ersätter högst 100 tim arvode till eget ombud, från ersättningen avräknas självrisk 20 %, dock lägst 1 800 kr. Slutregleras mot försäkringsbolaget — försäkringen tar merparten av kostnaden, klienten bara självrisken.", klientId: "c-falk", motpartId: "c-bergman", domstolId: "c-tingsratten-sthlm", createdDaysAgo: 70, clientShareBips: 2000, rattsskyddMaxOre: 16_260_000, rattsskyddSjalvriskMinOre: 180_000 },
   { id: "m-020-rattshjalp-varierande", matterNumber: "2026-0020", title: "Vårdnadstvist — varierande rättshjälp Falk", status: "ACTIVE", matterType: "Familjerätt", paymentMethod: "RATTSHJALP", description: "Rättshjälp över ett årsskifte (start nov 2025, norm 1 586 kr → 2026 norm 1 626 kr) med varierande avgift (arbetslös 5 % → anställd 40 % → arbetslös 5 %) och tidsspillan. Vid slutregleringen räknas HELA ärendet om på 2026 års norm (retroaktiv höjning) — skillnaden regleras på slutfakturorna till klient + domstol. Myndighetens slutliga avgift: 5 %.", klientId: "c-falk", motpartId: "c-bergman", domstolId: "c-tingsratten-sthlm", createdDaysAgo: 255, clientShareBips: 500, rattshjalpMaxTimmar: 100 },
 ];
 
