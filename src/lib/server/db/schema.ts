@@ -351,6 +351,8 @@ export const documents = pgTable("documents", {
   documentType: text("document_type"),
   /** Riktning (#880): INKOMMANDE / UTGAENDE — null där det saknar mening. */
   direction: text("direction").$type<"INKOMMANDE" | "UTGAENDE">(),
+  /** Motpart/mottagare (#901) — driver "dok skickade till domstol"-filtret. */
+  recipient: text("recipient").$type<"DOMSTOL" | "MOTPART" | "KLIENT" | "FORSAKRING" | "MYNDIGHET" | "OVRIGT">(),
   /** Fria etiketter ur byråns vokabulär (#621) — komplement till documentType.
    *  Sätts av LLM (förslag) + användare; skrivs via updateMetadata (ingen
    *  version-bump, #619). */

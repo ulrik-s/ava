@@ -9,7 +9,7 @@ import { conflictCopyName } from "@/lib/shared/conflict-copy";
 import { base64ToBytes, bytesToBase64, contentStoragePath, sha256Hex } from "@/lib/shared/content-address";
 import { isJunkFileName } from "@/lib/shared/junk-files";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
-import { documentAnalysisStatusSchema, documentDirectionSchema, type Document } from "@/lib/shared/schemas/document";
+import { documentAnalysisStatusSchema, documentDirectionSchema, documentRecipientSchema, type Document } from "@/lib/shared/schemas/document";
 import { asId, documentFolderIdSchema, documentIdSchema, invoiceIdSchema, matterIdSchema, userIdSchema } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { orgProcedure } from "../../trpc";
@@ -114,6 +114,7 @@ export const coreProcedures = {
       title: z.string().nullable().optional(),
       documentType: z.string().nullable().optional(),
       direction: documentDirectionSchema.nullable().optional(),
+      recipient: documentRecipientSchema.nullable().optional(),
       summary: z.string().nullable().optional(),
       analysisStatus: documentAnalysisStatusSchema.optional(),
       analyzedAt: z.string().optional(),
@@ -140,6 +141,7 @@ export const coreProcedures = {
         title: input.title,
         documentType: input.documentType,
         direction: input.direction,
+        recipient: input.recipient,
         summary: input.summary,
         analyzedAt: input.analyzedAt ? new Date(input.analyzedAt) : undefined,
         createdAt: input.createdAt ? new Date(input.createdAt) : undefined,

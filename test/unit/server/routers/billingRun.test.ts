@@ -229,11 +229,11 @@ describe("billingRun.createKostnadsrakning", () => {
   });
 
   it("tidsspillan värderas på tidsspillan-normen, arbete på timkostnadsnormen (#891)", async () => {
-    // 120 min arbete (−60 rådgivning = 60 kvar) på 1 626 kr + 60 min tidsspillan på 1 472 kr.
-    // netto: 60/60×162600 + 60/60×147200 = 309800; brutto ×1.25 = 387250.
+    // 120 min arbete (−60 rådgivning = 60 kvar) på 1 626 kr + 60 min tidsspillan på 1 487 kr.
+    // netto: 60/60×162600 + 60/60×148700 = 311300; brutto ×1.25 = 389125.
     const { caller } = makeCaller({ workMinutes: 120, tidsspillanMin: 60, paymentMethod: "RATTSHJALP" });
     const res = await caller.billingRun.createKostnadsrakning({ matterId: "m-1" });
-    expect(res.run.workValueOreAtRun).toBe(387250);
+    expect(res.run.workValueOreAtRun).toBe(389125);
   });
 
   it("rättshjälp värderas på timkostnadsnormen (F-skatt) minus rådgivningstimmen (#839)", async () => {

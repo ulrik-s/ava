@@ -1,6 +1,6 @@
 /**
  * Scenariovariant för RÄTTSHJÄLP som spänner över ett ÅRSSKIFTE (#891, ärende
- * 2026-0020). Ärendet börjar i november 2025 (timkostnadsnorm 1 602 kr, tidsspillan
+ * 2026-0020). Ärendet börjar i november 2025 (timkostnadsnorm 1 586 kr, tidsspillan
  * 1 450 kr) och sträcker sig fram till nu (2026, norm 1 626 kr). Vid slutregleringen
  * får ärendet en RETROAKTIV HÖJNING: HELA ärendet räknas om på 2026 års normer
  * (även 2025-timmarna), och skillnaden mot de aconton som ställdes ut på 2025-taxan
@@ -15,7 +15,7 @@ import type { Parties, SimEvent } from "../events";
 
 export function buildRattshjalpArsskifteScenario(parties: Parties): SimEvent[] {
   const ev: SimEvent[] = [
-    { kind: "note", dayOffset: 0, text: "Klientbesök nov 2025 — första möte. Rådgivning enligt rättshjälpstaxan (2025 års norm 1 602 kr)." },
+    { kind: "note", dayOffset: 0, text: "Klientbesök nov 2025 — första möte. Rådgivning enligt rättshjälpstaxan (2025 års norm 1 586 kr)." },
     { kind: "rateChange", dayOffset: 0, clientShareBips: 500 }, // klient arbetslös → 5 %
     { kind: "radgivning", dayOffset: 0 },
     { kind: "doc", dayOffset: 1, template: "fullmakt" },
@@ -32,8 +32,11 @@ export function buildRattshjalpArsskifteScenario(parties: Parties): SimEvent[] {
     { kind: "note", dayOffset: 2, text: "Ansökan om rättsskydd inskickad till försäkringsbolaget." },
     { kind: "doc", dayOffset: 9, template: "rattsskyddAvslag" },
     { kind: "note", dayOffset: 9, text: "Avslag på rättsskydd — tvist anses ännu inte ha uppkommit. Ärendet drivs vidare med rättshjälp." },
+    // Rättshjälp beviljas med 5 % avgift (arbetslös). Myndighetens beslut som dokument (#901).
+    { kind: "doc", dayOffset: 10, template: "beslutRattshjalpAvgift5" },
+    { kind: "note", dayOffset: 10, text: "Rättshjälp beviljad — rättshjälpsavgift 5 %." },
     { kind: "expense", dayOffset: 8, amountOre: 90_000, description: "Ansökningsavgift tingsrätten" },
-    // ── Period 1: arbetslös 5 %, HELA i 2025 (norm 1 602 / tidsspillan 1 450) ──
+    // ── Period 1: arbetslös 5 %, HELA i 2025 (norm 1 586 / tidsspillan 1 450) ──
     { kind: "time", dayOffset: 6, minutes: 240, description: "Genomgång av handlingar och underlag" },
     { kind: "doc", dayOffset: 14, template: "svaromal" },
     { kind: "note", dayOffset: 14, text: "Svaromål inkommet från motpartsombudet." },
@@ -46,10 +49,12 @@ export function buildRattshjalpArsskifteScenario(parties: Parties): SimEvent[] {
     // ── Årsskifte passeras (~dag 60) → 2026 års normer gäller nya poster ──
     { kind: "note", dayOffset: 75, text: "Klienten har fått anställning — rättshjälpsavgiften höjs till 40 % (jan 2026)." },
     { kind: "rateChange", dayOffset: 75, clientShareBips: 4000 },
+    { kind: "doc", dayOffset: 76, template: "beslutRattshjalpAvgift40" },
     // ── Period 2: anställd 40 %, 2026 (norm 1 626) ──
     { kind: "time", dayOffset: 85, minutes: 150, description: "Sammanträde i tingsrätten" }, // → aconto #2 (40 %, 2026-taxa)
     { kind: "note", dayOffset: 150, text: "Klienten åter arbetslös — avgiften tillbaka till 5 %." },
     { kind: "rateChange", dayOffset: 150, clientShareBips: 500 },
+    { kind: "doc", dayOffset: 151, template: "beslutRattshjalpAvgift5" },
     // ── Period 3: arbetslös 5 %, 2026 ──
     { kind: "time", dayOffset: 160, minutes: 240, description: "Uppföljning efter sammanträde" },
     { kind: "time", dayOffset: 175, minutes: 120, description: "Restid — möte med klient och socialtjänst", entryKind: "TIDSSPILLAN" },
