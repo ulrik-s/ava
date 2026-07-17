@@ -487,6 +487,22 @@ describe("billingRun.settleCoverage — bokför prutnings-uppdelningen (#801)", 
     expect(res.payerInvoice.amount).toBe(537500);
   });
 
+  it("rättsskydd flöde B (#905): prutning EFTERÅT → kredit till försäkring + påfyllnadsfaktura till klient", async () => {
+    const { caller: c } = caller({ paymentMethod: "RATTSSKYDD", clientShareBips: 2000 }, 300000);
+    await c.billingRun.settleCoverage({ matterId: "m-1", payerRecipient: "FORSAKRING" }); // ingen prutning uppfront
+    const res = await c.billingRun.recordInsurerPruning({ matterId: "m-1", prunedNetOre: 100_000 });
+    // 100 000 netto → 125 000 brutto: kredit till försäkring (negativ) + klientfaktura (positiv).
+    expect(res.insurerCredit.invoiceType).toBe("CREDIT");
+    expect(res.insurerCredit.amount).toBe(-125_000);
+    expect(res.clientInvoice.invoiceType).toBe("FINAL");
+    expect(res.clientInvoice.amount).toBe(125_000);
+  });
+
+  it("recordInsurerPruning kräver en försäkringsfaktura först (annars BAD_REQUEST)", async () => {
+    const { caller: c } = caller({ paymentMethod: "RATTSSKYDD", clientShareBips: 2000 }, 300000);
+    await expect(c.billingRun.recordInsurerPruning({ matterId: "m-1", prunedNetOre: 100_000 })).rejects.toThrow(/försäkringsfaktura/i);
+  });
+
   it("rättshjälp: timkostnadsnorm; dom prutar → byrå-förlust bokas (icke-debiterbar PRUTNING), klient på reducerat", async () => {
     // 3 tim loggat − 1 tim rådgivning (#809) = 2 effektiva tim → bas 325 200.
     const { ds, caller: c } = caller({ paymentMethod: "RATTSHJALP", clientShareBips: 2000, taxaHasFTax: true }, 999999, 180);

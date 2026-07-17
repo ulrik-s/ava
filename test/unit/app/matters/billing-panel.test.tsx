@@ -50,6 +50,7 @@ vi.mock("@/lib/client/trpc", () => ({
       createKostnadsrakning: { useMutation: () => ({ mutate: krMutate, isPending: false }) },
       appealKostnadsrakning: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       recordKostnadsrakningBeslut: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      recordInsurerPruning: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       coverageSplit: { useQuery: () => ({ data: coverageSplitData }) },
     },
     organization: {
