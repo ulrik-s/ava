@@ -24,9 +24,9 @@ describe("kostnadsräkning per kategori (#891)", () => {
     const arbete = lines.find((l) => !l.isTidsspillan)!;
     const tids = lines.find((l) => l.isTidsspillan)!;
     expect(arbete.rateOrePerH).toBe(162_600); // 1 626 kr/h
-    expect(tids.rateOrePerH).toBe(147_200);   // 1 472 kr/h (egen, lägre norm)
+    expect(tids.rateOrePerH).toBe(148_700);   // 1 487 kr/h (egen, lägre norm)
     // Arvodet = summan av raderna, INTE 2h × 1626.
-    expect(res.arvodeExclVat).toBe(162_600 + 147_200);
+    expect(res.arvodeExclVat).toBe(162_600 + 148_700);
     expect(res.arvodeExclVat).not.toBe(2 * 162_600);
   });
 

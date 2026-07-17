@@ -54,18 +54,17 @@ export const TIMKOSTNADSNORM_NO_FTAX_ORE_PER_H = 123_700; // 1 237 kr/h
  * slutregleringen sker (se `timkostnadsnormFtaxForDate`).
  */
 const TIMKOSTNADSNORM_FTAX_BY_YEAR: Readonly<Record<number, number>> = {
-  2025: 160_200, // 1 602 kr/h
-  2026: 162_600, // 1 626 kr/h
+  2025: 158_600, // 1 586 kr/h (DVFS 2024:14)
+  2026: 162_600, // 1 626 kr/h (DVFS 2025:6, +40 kr)
 };
 
 /**
- * Tidsspillan-ersättning (F-skatt) per år, öre/tim exkl moms (#891). Egen, lägre
- * norm än arvodet. OBS: 2026-värdet (1 472 kr) är en uppskattning (+1,5 % från
- * 2025) — verifiera mot Domstolsverkets föreskrift och justera vid behov.
+ * Tidsspillan-ersättning (F-skatt) per år, öre/tim exkl moms (#891/#901). Egen, lägre
+ * norm än arvodet — Domstolsverkets tidsspillan-föreskrift, vardag 08–18 (dagtid).
  */
 const TIDSSPILLAN_FTAX_BY_YEAR: Readonly<Record<number, number>> = {
-  2025: 145_000, // 1 450 kr/h
-  2026: 147_200, // 1 472 kr/h (uppskattat — verifiera)
+  2025: 145_000, // 1 450 kr/h (DVFS 2024:15)
+  2026: 148_700, // 1 487 kr/h (DVFS 2025:4)
 };
 
 /** Året ur ett datum (ISO-sträng eller Date). Ogiltigt → senaste kända året. */

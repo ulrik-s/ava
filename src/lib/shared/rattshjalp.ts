@@ -43,7 +43,7 @@ export interface Radgivningsavgift {
 export function computeRadgivningsavgift(opts: { hasFTax?: boolean; date?: Date | string } = {}): Radgivningsavgift {
   const hasFTax = opts.hasFTax ?? true;
   // Rådgivningstimmen värderas på den timkostnadsnorm som gällde MÖTESDAGEN (#897):
-  // ett möte i nov 2025 debiteras 2025 års norm (1 602 kr), inte innevarande års.
+  // ett möte i nov 2025 debiteras 2025 års norm (1 586 kr), inte innevarande års.
   const rateOrePerH = opts.date && hasFTax
     ? timkostnadsnormFtaxForDate(opts.date)
     : computeTimkostnadsnorm({ arbetsMinutes: RADGIVNING_MINUTES, hasFTax }).rateOrePerH;

@@ -6,7 +6,7 @@ import { useDocSyncStatus } from "@/lib/client/helper/use-helper";
 import { trpc } from "@/lib/client/trpc";
 import type { AppRouter } from "@/lib/server/routers/_app";
 import { asId, type DocumentFolderId, type DocumentId, type MatterId } from "@/lib/shared/schemas/ids";
-import { DocumentRow, type DocumentRecord } from "./_document-row";
+import { DocumentRow, DOCUMENT_RECIPIENT_LABELS, type DocumentRecord } from "./_document-row";
 import { DocumentsListView } from "./_documents-list-view";
 import { type DragItem } from "./_drag-helpers";
 import { FolderRow, type FolderRecord } from "./_folder-row";
@@ -56,6 +56,9 @@ export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
     () => tree.data?.documents ?? [],
     [tree.data],
   );
+  // Filter på riktning + mottagare (#901) — t.ex. "utgående till domstol". Påverkar
+  // bara VISNINGEN; mutations/lookups använder hela `documents`.
+  const { dirFilter, recipientFilter, setDirFilter, setRecipientFilter, visibleDocuments } = useDocumentFilter(documents);
 
   // Per-dokument write-back-status ur AVA Helperns lokala kö (ADR 0031): "väntar
   // på server", transient "synkad"-bekräftelse, och "konflikt".
@@ -74,8 +77,8 @@ export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
   const foldersByParent = useMemo(() => groupBy(folders, (f) => f.parentId ?? null), [folders]);
   // Optimistiska rader läggs i root-foldern (de saknar ännu folderId).
   const docsByFolder = useMemo(
-    () => groupBy([...documents, ...upload.pendingUploads], (d) => d.folderId ?? null),
-    [documents, upload.pendingUploads]
+    () => groupBy([...visibleDocuments, ...upload.pendingUploads], (d) => d.folderId ?? null),
+    [visibleDocuments, upload.pendingUploads]
   );
 
   const toggleFolder = useCallback((folderId: DocumentFolderId) => {
@@ -96,6 +99,12 @@ export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
         onUpload={(e) => { void upload.handleFileUpload(e); }}
         viewMode={viewMode}
         onChangeViewMode={changeViewMode}
+      />
+
+      <DocumentFilterBar
+        dir={dirFilter} recipient={recipientFilter}
+        onDir={setDirFilter} onRecipient={setRecipientFilter}
+        shownCount={visibleDocuments.length} totalCount={documents.length}
       />
 
       {upload.uploadError && (
@@ -126,13 +135,56 @@ export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
       ) : (
         <DocumentsListView
           matterId={matterId}
-          documents={documents}
+          documents={visibleDocuments}
           folders={folders}
           docSync={docSync}
           onDelete={(id) => mutations.deleteDocument.mutate({ id })}
           onReanalyze={(id) => mutations.reanalyze.mutate({ documentId: id })}
         />
       )}
+    </div>
+  );
+}
+
+/** Dokumentfilter-state (#901): riktning + mottagare, samt den filtrerade vyn.
+ *  Egen hook så DocumentBrowser håller sig under max-lines-per-function. */
+function useDocumentFilter(documents: DocumentRecord[]) {
+  const [dirFilter, setDirFilter] = useState<"" | "INKOMMANDE" | "UTGAENDE">("");
+  const [recipientFilter, setRecipientFilter] = useState<string>("");
+  const visibleDocuments = useMemo<DocumentRecord[]>(
+    () => documents.filter((d) =>
+      (!dirFilter || d.direction === dirFilter) && (!recipientFilter || d.recipient === recipientFilter)),
+    [documents, dirFilter, recipientFilter],
+  );
+  return { dirFilter, recipientFilter, setDirFilter, setRecipientFilter, visibleDocuments };
+}
+
+/** Filterrad (#901): riktning + mottagare, så användaren enkelt ser t.ex. vilka
+ *  dokument som skickats till domstol. Rensa-knapp + "X av Y" när filter är aktivt. */
+function DocumentFilterBar({ dir, recipient, onDir, onRecipient, shownCount, totalCount }: {
+  dir: "" | "INKOMMANDE" | "UTGAENDE";
+  recipient: string;
+  onDir: (v: "" | "INKOMMANDE" | "UTGAENDE") => void;
+  onRecipient: (v: string) => void;
+  shownCount: number;
+  totalCount: number;
+}) {
+  const active = dir !== "" || recipient !== "";
+  const selectCls = "border border-gray-300 rounded px-1.5 py-0.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-500";
+  return (
+    <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-100 text-xs flex-wrap">
+      <span className="text-gray-500">Filter:</span>
+      <select aria-label="Riktning" value={dir} onChange={(e) => onDir(e.target.value as "" | "INKOMMANDE" | "UTGAENDE")} className={selectCls}>
+        <option value="">Alla riktningar</option>
+        <option value="UTGAENDE">Utgående (skickat)</option>
+        <option value="INKOMMANDE">Inkommande</option>
+      </select>
+      <select aria-label="Mottagare" value={recipient} onChange={(e) => onRecipient(e.target.value)} className={selectCls}>
+        <option value="">Alla mottagare</option>
+        {Object.entries(DOCUMENT_RECIPIENT_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+      </select>
+      {active && <button type="button" onClick={() => { onDir(""); onRecipient(""); }} className="text-blue-600 hover:underline">Rensa</button>}
+      {active && <span className="text-gray-400 ml-auto">{shownCount} av {totalCount}</span>}
     </div>
   );
 }

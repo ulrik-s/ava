@@ -28,6 +28,7 @@ export interface DocumentRecord {
   title?: string | null | undefined;
   documentType?: string | null | undefined;
   direction?: "INKOMMANDE" | "UTGAENDE" | null | undefined;
+  recipient?: "DOMSTOL" | "MOTPART" | "KLIENT" | "FORSAKRING" | "MYNDIGHET" | "OVRIGT" | null | undefined;
   tags?: readonly string[] | undefined;
   summary?: string | null | undefined;
   analyzedAt?: string | Date | null | undefined;
@@ -285,12 +286,31 @@ function DirectionBadge({ direction }: { direction?: "INKOMMANDE" | "UTGAENDE" |
   );
 }
 
+/** Mänskliga etiketter för dokumentets motpart/mottagare (#901). */
+export const DOCUMENT_RECIPIENT_LABELS: Record<string, string> = {
+  DOMSTOL: "Domstol", MOTPART: "Motpart", KLIENT: "Klient",
+  FORSAKRING: "Försäkring", MYNDIGHET: "Myndighet", OVRIGT: "Övrigt",
+};
+
+/** Mottagar-badge (#901): "till/från Domstol". Null → inget. */
+function RecipientBadge({ recipient, direction }: { recipient?: DocumentRecord["recipient"]; direction?: DocumentRecord["direction"] }) {
+  if (!recipient) return null;
+  const label = DOCUMENT_RECIPIENT_LABELS[recipient] ?? recipient;
+  const prep = direction === "INKOMMANDE" ? "från" : "till";
+  return (
+    <span className="inline-block rounded-full bg-gray-100 text-gray-600 px-1.5 py-0.5 text-[10px] font-medium flex-shrink-0" title={`${prep} ${label}`}>
+      {prep} {label}
+    </span>
+  );
+}
+
 /** Meta-raden under filnamnet (typ-badge, filnamn, analys-status). Utbruten
  *  ur DocumentNameButton — alla villkorade `&&`-render-grenar bor här. */
 function DocumentNameMeta({ doc, isAnalyzing, isWaitingAnalysis }: { doc: DocumentRecord; isAnalyzing: boolean; isWaitingAnalysis: boolean }) {
   return (
     <span className="flex items-center gap-1.5 text-xs text-gray-500 font-normal min-w-0">
       <DirectionBadge direction={doc.direction} />
+      <RecipientBadge recipient={doc.recipient} direction={doc.direction} />
       {doc.documentType && (
         <span className="inline-block rounded-full bg-purple-50 text-purple-700 px-1.5 py-0.5 text-[10px] font-medium flex-shrink-0">
           {doc.documentType}

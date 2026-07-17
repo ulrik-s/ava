@@ -20,6 +20,11 @@ export type DocumentAnalysisStatus = z.infer<typeof documentAnalysisStatusSchema
 export const documentDirectionSchema = z.enum(["INKOMMANDE", "UTGAENDE"]);
 export type DocumentDirection = z.infer<typeof documentDirectionSchema>;
 
+/** Motpart/instans dokumentet utväxlats med (#901) — mottagare för utgående,
+ *  avsändare för inkommande. Driver "visa dok skickade till domstol"-filtret. */
+export const documentRecipientSchema = z.enum(["DOMSTOL", "MOTPART", "KLIENT", "FORSAKRING", "MYNDIGHET", "OVRIGT"]);
+export type DocumentRecipient = z.infer<typeof documentRecipientSchema>;
+
 /**
  * DocumentFolder — hierarkisk mapp inom ett matter. `parentId` = null → root.
  * Lagras i `document-folders/<id>.json`.
@@ -57,6 +62,9 @@ export const documentSchema = z.object({
    *  utgående (inlaga, brev byrån skickar). Nullish på dok där det saknar mening
    *  (genererade fakturor/underlag). */
   direction: documentDirectionSchema.nullish(),
+  /** Motpart/mottagare (#901): DOMSTOL/MOTPART/KLIENT/FORSAKRING/MYNDIGHET/OVRIGT.
+   *  Tillsammans med `direction` driver den filtret "dok skickade till domstol". */
+  recipient: documentRecipientSchema.nullish(),
   /** Etiketter ur byråns vokabulär (#621) — flera per dokument, satta av
    *  LLM (förslag) + användare. Komplement till `documentType`. */
   tags: z.array(z.string()).default([]),

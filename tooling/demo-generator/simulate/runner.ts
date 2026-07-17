@@ -91,7 +91,7 @@ async function hDoc(ctx: RunCtx, m: SimMatter, e: Any, iso: string, st: SimState
   const size = ctx.sink ? ctx.sink(storagePath, bytes) : bytes.byteLength;
   await ctx.c.document.register({
     id, matterId: m.id, fileName, mimeType: "application/pdf", sizeBytes: size, storagePath,
-    documentType: t.documentType, direction: t.direction, title: t.title, summary: t.summary,
+    documentType: t.documentType, direction: t.direction, recipient: t.recipient, title: t.title, summary: t.summary,
     analysisStatus: "DONE", createdAt: iso,
   });
   ctx.res.documents++;

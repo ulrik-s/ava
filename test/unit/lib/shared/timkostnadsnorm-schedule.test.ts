@@ -8,8 +8,8 @@ import { timkostnadsnormFtaxForDate, tidsspillanFtaxForDate } from "@/lib/shared
 import { computeRadgivningsavgift } from "@/lib/shared/rattshjalp";
 
 describe("timkostnadsnorm per år (#891)", () => {
-  it("timkostnadsnormen följer året (2025 = 1 602 kr, 2026 = 1 626 kr)", () => {
-    expect(timkostnadsnormFtaxForDate("2025-11-15")).toBe(160_200);
+  it("timkostnadsnormen följer året (2025 = 1 586 kr, 2026 = 1 626 kr)", () => {
+    expect(timkostnadsnormFtaxForDate("2025-11-15")).toBe(158_600);
     expect(timkostnadsnormFtaxForDate("2026-03-01")).toBe(162_600);
   });
 
@@ -23,8 +23,8 @@ describe("timkostnadsnorm per år (#891)", () => {
   });
 
   it("rådgivningsavgiften värderas på mötesdagens norm (#897)", () => {
-    // Möte nov 2025 → 2025 års norm (1 602 kr), inte innevarande års (1 626 kr).
-    expect(computeRadgivningsavgift({ date: "2025-11-03" }).beloppExclVatOre).toBe(160_200);
+    // Möte nov 2025 → 2025 års norm (1 586 kr), inte innevarande års (1 626 kr).
+    expect(computeRadgivningsavgift({ date: "2025-11-03" }).beloppExclVatOre).toBe(158_600);
     expect(computeRadgivningsavgift({ date: "2026-03-01" }).beloppExclVatOre).toBe(162_600);
   });
 });

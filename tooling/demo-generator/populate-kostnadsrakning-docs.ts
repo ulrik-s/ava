@@ -143,6 +143,8 @@ export async function populateKostnadsrakningDocs(caller: GeneratorCaller, sink?
       mimeType: "text/html; charset=utf-8", sizeBytes: size, storagePath,
       title: `Kostnadsräkning — ${run.matter.matterNumber}`,
       documentType: "Kostnadsräkning", analysisStatus: "DONE",
+      // Kostnadsräkningen skickas till domstolen (#901) → syns i "skickat till domstol"-filtret.
+      direction: "UTGAENDE", recipient: "DOMSTOL",
       createdAt: run.createdAt ? new Date(run.createdAt).toISOString() : undefined,
     });
     count++;

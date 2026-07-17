@@ -137,6 +137,20 @@ describe("DocumentBrowser", () => {
     expect(screen.getByText("test.pdf")).toBeInTheDocument();
   });
 
+  it("filtrerar på riktning + mottagare — 'utgående till domstol' (#901)", () => {
+    treeQuery.data = { folders: [], documents: [
+      baseDoc({ id: "d1", fileName: "kostnadsrakning.pdf", direction: "UTGAENDE", recipient: "DOMSTOL" }),
+      baseDoc({ id: "d2", fileName: "svaromal.pdf", direction: "INKOMMANDE", recipient: "MOTPART" }),
+    ] };
+    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    expect(screen.getByText("kostnadsrakning.pdf")).toBeInTheDocument();
+    expect(screen.getByText("svaromal.pdf")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Riktning"), { target: { value: "UTGAENDE" } });
+    fireEvent.change(screen.getByLabelText("Mottagare"), { target: { value: "DOMSTOL" } });
+    expect(screen.getByText("kostnadsrakning.pdf")).toBeInTheDocument();
+    expect(screen.queryByText("svaromal.pdf")).not.toBeInTheDocument();
+  });
+
   it("visar AI-extraherad titel istället för filnamn när satt", () => {
     treeQuery.data = {
       folders: [],
