@@ -1242,6 +1242,70 @@ export const billingRunRouter = router({
         return { split, clientInvoice, payerInvoice, creditInvoice, clientRun, payerRun, breakdown };
       });
     }),
+
+  /**
+   * Registrera försäkringsbolagets PRUTNING efter slutregleringen (#905, rättsskydd,
+   * flöde B): försäkringen ersätter mindre än fakturerat. Prutningen bärs av KLIENTEN.
+   * Två fakturor (aldrig en delad): (1) en KREDIT till försäkringen på det prutade
+   * beloppet (deras nettofordran sänks till det de faktiskt betalar), (2) en påfyllnads-
+   * faktura till klienten på samma belopp. Byrån blir hel. Kräver en befintlig
+   * FORSAKRING-slutregleringsfaktura.
+   */
+  recordInsurerPruning: orgProcedure
+    .input(z.object({
+      matterId: matterIdSchema,
+      /** Prutat arvode NETTO (öre) — den del försäkringen inte ersätter. */
+      prunedNetOre: z.number().int().positive(),
+      notes: z.string().nullish(),
+    }))
+    .mutation(({ ctx, input }) =>
+      ctx.repos.transaction(async (tx) => {
+        const runs = await tx.billingRuns.listForOrg(ctx.orgId, input.matterId);
+        const payerRun = runs.find((r) => r.type === "FINAL" && r.recipient === "FORSAKRING" && r.invoiceId);
+        if (!payerRun?.invoiceId) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Ingen försäkringsfaktura att pruta på — slutreglera mot försäkringen först." });
+        }
+        const prunedGross = arvodeInclVatOre(input.prunedNetOre);
+        const prunedVat = prunedGross - input.prunedNetOre;
+        const arvodeVatLine = [{ kind: "arvode" as const, vatRate: DEFAULT_VAT_RATE, netOre: input.prunedNetOre, vatOre: prunedVat }];
+        // (1) Kreditera försäkringen den prutade delen (negativ faktura, länkad till originalet).
+        const insurerCredit = await tx.invoices.create({
+          matterId: input.matterId, amount: -prunedGross, vatOre: -prunedVat,
+          vatBreakdown: arvodeVatLine.map((l) => ({ ...l, netOre: -l.netOre, vatOre: -l.vatOre })),
+          invoiceType: "CREDIT", status: "SENT", creditedInvoiceId: payerRun.invoiceId,
+          ...(await invoiceNumbering(tx, ctx.orgId, "FORSAKRING")), invoiceDate: new Date(),
+          notes: "Försäkringens prutning — kreditering av den del försäkringen inte ersätter.",
+        });
+        // (2) Fakturera klienten samma belopp (klienten bär prutningen).
+        const clientView: SettlementView = {
+          timeLines: [],
+          rows: [
+            { label: "Försäkringens prutning (exkl moms)", amountOre: input.prunedNetOre, kind: "add" },
+            { label: "Moms 25 %", amountOre: prunedVat, kind: "add" },
+          ],
+          totalLabel: "Att betala (inkl moms)", totalOre: prunedGross,
+        };
+        const clientInvoice = await tx.invoices.create({
+          matterId: input.matterId, amount: prunedGross, vatOre: prunedVat, vatBreakdown: arvodeVatLine,
+          invoiceType: "FINAL", status: "SENT", settlementBreakdown: clientView,
+          ...(await invoiceNumbering(tx, ctx.orgId, "KLIENT")), invoiceDate: new Date(),
+          notes: input.notes ?? "Försäkringens prutning — bärs av klienten (rättsskydd).",
+        });
+        await tx.billingRuns.create({
+          matterId: input.matterId, type: "CREDIT", recipient: "FORSAKRING", status: "SENT",
+          workValueOreAtRun: prunedGross, proposedAmountOre: -prunedGross, amountOre: -prunedGross,
+          invoiceId: insurerCredit.id, deductedBillingRunIds: [], periodTo: new Date(),
+        });
+        await tx.billingRuns.create({
+          matterId: input.matterId, type: "FINAL", recipient: "KLIENT", status: "SENT",
+          workValueOreAtRun: prunedGross, proposedAmountOre: prunedGross, amountOre: prunedGross,
+          invoiceId: clientInvoice.id, deductedBillingRunIds: [], periodTo: new Date(),
+        });
+        await emit.invoiceCreated(ctx, insurerCredit);
+        await emit.invoiceCreated(ctx, clientInvoice);
+        return { insurerCredit, clientInvoice };
+      }),
+    ),
 });
 
 /**

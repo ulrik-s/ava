@@ -418,6 +418,7 @@ export function BillingPanel({ matterId, matter }: Props) {
       <BillingSummary matterId={matterId} />
       <RadgivningBanner matterId={matterId} matter={matter} onRecorded={refetch} />
       <SjalvriskAccontoHint matterId={matterId} matter={matter} rows={rows} />
+      <InsurerPruningBanner matterId={matterId} matter={matter} rows={rows} onRecorded={refetch} />
       {activeKr && <KostnadsrakningCard matterId={matterId} run={activeKr}
         onRegistreraBeslut={() => setBeslutRunId(activeKr.id)}
         onOverklaga={() => appeal.mutate({ billingRunId: activeKr.id })}
@@ -508,6 +509,38 @@ function SjalvriskAccontoHint({ matterId, matter, rows }: { matterId: MatterId; 
       <span className="font-mono font-semibold">{formatCurrency(split.clientOre)}</span>{" "}
       (tröskel {formatCurrency(threshold)}) — dags att skicka ett självrisk-aconto via
       {" "}<strong>+ Skapa faktura → Aconto till klient</strong>.
+    </div>
+  );
+}
+
+/**
+ * Försäkrings-prutnings-banner (#905, rättsskydd flöde B): efter slutregleringen mot
+ * försäkringen kan bolaget PRUTA på arvodet. Byrån registrerar det prutade beloppet →
+ * kredit till försäkringen + påfyllnadsfaktura till klienten. Visas bara när det finns
+ * en FORSAKRING-slutfaktura och ingen prutning redan registrerats.
+ */
+function InsurerPruningBanner({ matterId, matter, rows, onRecorded }: { matterId: MatterId; matter: MatterContext; rows: BillingRunRow[]; onRecorded: () => void }) {
+  const [krStr, setKrStr] = useState("");
+  const record = trpc.billingRun.recordInsurerPruning.useMutation({ onSuccess: onRecorded });
+  const hasPayerFinal = rows.some((r) => r.type === "FINAL" && r.recipient === "FORSAKRING");
+  const alreadyPruned = rows.some((r) => r.type === "CREDIT" && r.recipient === "FORSAKRING");
+  if (matter.paymentMethod !== "RATTSSKYDD" || !hasPayerFinal || alreadyPruned) return null;
+  const netOre = Math.round(Number.parseFloat(krStr.replace(",", ".")) * 100);
+  const valid = Number.isFinite(netOre) && netOre > 0;
+  return (
+    <div className="mx-6 mb-4 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+      <div className="mb-1.5">Har försäkringsbolaget <strong>prutat</strong> på fakturan? Registrera det prutade arvodet (exkl moms) — mellanskillnaden krediteras försäkringen och faktureras klienten.</div>
+      <div className="flex items-center gap-2">
+        <input type="number" min={0} step={100} value={krStr} placeholder="Prutat belopp (kr, exkl moms)"
+          onChange={(e) => setKrStr(e.target.value)}
+          className="border border-amber-300 rounded px-2 py-1 w-56 focus:outline-none focus:ring-1 focus:ring-amber-500" />
+        <button type="button" disabled={!valid || record.isPending}
+          onClick={() => record.mutate({ matterId, prunedNetOre: netOre })}
+          className="rounded bg-amber-600 text-white px-2 py-1 font-medium disabled:opacity-50">
+          {record.isPending ? "Registrerar…" : "Registrera prutning"}
+        </button>
+        {record.error && <span className="text-red-600">{record.error.message}</span>}
+      </div>
     </div>
   );
 }

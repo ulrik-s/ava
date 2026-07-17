@@ -35,6 +35,10 @@ export function buildRattsskyddPositivtScenario(parties: Parties): SimEvent[] {
     // Slutreglering mot försäkringen: klienten betalar självrisken (golvet 1 800 kr),
     // försäkringen resten. Klienten har inte betalat aconto → självrisken blir slutfakturan.
     { kind: "settle", dayOffset: 45, payerRecipient: "FORSAKRING" },
+    // Flöde B (#905): försäkringen PRUTAR efteråt (ersätter 1 000 kr mindre) → kredit till
+    // försäkringen + påfyllnadsfaktura till klienten på prutade beloppet.
+    { kind: "note", dayOffset: 60, text: "Försäkringsbolaget prutar på arvodet — ersätter 1 000 kr mindre. Mellanskillnaden faktureras klienten." },
+    { kind: "insurerPruning", dayOffset: 60, prunedNetOre: 100_000 },
   );
   return ev;
 }
