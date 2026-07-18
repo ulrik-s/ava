@@ -654,13 +654,13 @@ function buildCreditView(clientView: SettlementView, creditNetOre: number): Sett
  */
 async function createClientSettlementInvoice(repos: Repositories, ctx: EmitCtx, orgId: OrganizationId, a: {
   matterId: MatterId; clientGrossOre: number; deductionOre: number;
-  clientLines: VatBreakdownLine[]; clientView: SettlementView; method: PaymentMethod; notes: string | null | undefined;
+  clientLines: VatBreakdownLine[]; clientView: SettlementView; method: PaymentMethod; invoiceDate?: Date | string; notes: string | null | undefined;
 }): Promise<{ invoice: Invoice; creditInvoice: Invoice | null }> {
   const clientNet = a.clientGrossOre - a.deductionOre; // kan vara negativt (överbetald)
   const isCredit = clientNet < 0;
   const feeTerm = a.method === "RATTSHJALP" ? "rättshjälpsavgift" : "självrisk";
   const overpaidOre = -clientNet;
-  const base = { matterId: a.matterId, amount: clientNet, ...(await invoiceNumbering(repos, orgId, "KLIENT")), invoiceDate: new Date() };
+  const base = { matterId: a.matterId, amount: clientNet, ...(await invoiceNumbering(repos, orgId, "KLIENT")), invoiceDate: a.invoiceDate ? new Date(a.invoiceDate) : new Date() };
   const payload = isCredit
     ? {
         ...base,
@@ -801,6 +801,12 @@ async function invoiceNumbering(
 ): Promise<{ invoiceNumber: string; ocrReference: string | null }> {
   const invoiceNumber = await repos.invoices.nextInvoiceNumber(orgId);
   return { invoiceNumber, ocrReference: recipient === "DOMSTOL" ? null : ocrFromInvoiceNumber(invoiceNumber) };
+}
+
+/** ISO-datum → Date, annars nu (#907) — utbruten så settleCoverage/pruning-handlarna
+ *  håller sig ≤8 i komplexitet. */
+function toDateOrNow(iso: string | undefined): Date {
+  return iso ? new Date(iso) : new Date();
 }
 
 /** Nästa kostnadsräknings-referens `KR-YYYY-NNNN` (#889) — firmagemensam sekvens
@@ -1164,6 +1170,8 @@ export const billingRunRouter = router({
       awardedOre: z.number().int().nonnegative().optional(),
       insurerPrutningOre: z.number().int().nonnegative().optional(),
       deductedBillingRunIds: z.array(billingRunIdSchema).default([]),
+      /** Fakturadatum (demo/fixtures) — annars idag. Även slutregleringsårets norm (#907). */
+      invoiceDate: z.string().optional(),
       notes: z.string().nullish(),
     }))
     .mutation(async ({ ctx, input }) => {
@@ -1181,7 +1189,7 @@ export const billingRunRouter = router({
         const rateOre = await currentArvodeRateOre(tx, ctx.orgId, matter);
         // #891: rättshjälp räknas om på slutregleringsårets normer (retroaktiv höjning
         // över årsskifte + tidsspillan på egen norm); övriga metoder → platt rate.
-        const settleDate = new Date();
+        const settleDate = toDateOrNow(input.invoiceDate);
         const totalArvodeNet = settlementArvodeNet(matter.paymentMethod, work, settleDate, rateOre);
         const split = computeCoverageSplit({
           method: matter.paymentMethod, totalOre: totalArvodeNet, clientShareBips: matter.clientShareBips ?? 0,
@@ -1213,12 +1221,12 @@ export const billingRunRouter = router({
         // Klientfakturan: EN faktura (FINAL om skyldig, CREDIT om överbetald) — aldrig 0.00 (#878).
         const { invoice: clientInvoice, creditInvoice } = await createClientSettlementInvoice(tx, ctx, ctx.orgId, {
           matterId: input.matterId, clientGrossOre: clientGross, deductionOre, clientLines, clientView,
-          method: matter.paymentMethod, notes: input.notes,
+          method: matter.paymentMethod, invoiceDate: settleDate, notes: input.notes,
         });
         const payerInvoice = await tx.invoices.create({
           matterId: input.matterId, amount: payerGross, vatOre: vatOreOf(payerLines), vatBreakdown: payerLines,
           settlementBreakdown: payerView,
-          invoiceType: "FINAL", status: "DRAFT", ...(await invoiceNumbering(tx, ctx.orgId, input.payerRecipient)), invoiceDate: new Date(), notes: input.notes,
+          invoiceType: "FINAL", status: "DRAFT", ...(await invoiceNumbering(tx, ctx.orgId, input.payerRecipient)), invoiceDate: settleDate, notes: input.notes,
         });
         await bookFirmLoss(tx, ctx.user.id, input.matterId, split.firmLossOre);
         const clientRun = await tx.billingRuns.create({
@@ -1256,10 +1264,13 @@ export const billingRunRouter = router({
       matterId: matterIdSchema,
       /** Prutat arvode NETTO (öre) — den del försäkringen inte ersätter. */
       prunedNetOre: z.number().int().positive(),
+      /** Fakturadatum (demo/fixtures) — annars idag. */
+      invoiceDate: z.string().optional(),
       notes: z.string().nullish(),
     }))
     .mutation(({ ctx, input }) =>
       ctx.repos.transaction(async (tx) => {
+        const when = toDateOrNow(input.invoiceDate);
         const runs = await tx.billingRuns.listForOrg(ctx.orgId, input.matterId);
         const payerRun = runs.find((r) => r.type === "FINAL" && r.recipient === "FORSAKRING" && r.invoiceId);
         if (!payerRun?.invoiceId) {
@@ -1273,7 +1284,7 @@ export const billingRunRouter = router({
           matterId: input.matterId, amount: -prunedGross, vatOre: -prunedVat,
           vatBreakdown: arvodeVatLine.map((l) => ({ ...l, netOre: -l.netOre, vatOre: -l.vatOre })),
           invoiceType: "CREDIT", status: "SENT", creditedInvoiceId: payerRun.invoiceId,
-          ...(await invoiceNumbering(tx, ctx.orgId, "FORSAKRING")), invoiceDate: new Date(),
+          ...(await invoiceNumbering(tx, ctx.orgId, "FORSAKRING")), invoiceDate: when,
           notes: "Försäkringens prutning — kreditering av den del försäkringen inte ersätter.",
         });
         // (2) Fakturera klienten samma belopp (klienten bär prutningen).
@@ -1288,7 +1299,7 @@ export const billingRunRouter = router({
         const clientInvoice = await tx.invoices.create({
           matterId: input.matterId, amount: prunedGross, vatOre: prunedVat, vatBreakdown: arvodeVatLine,
           invoiceType: "FINAL", status: "SENT", settlementBreakdown: clientView,
-          ...(await invoiceNumbering(tx, ctx.orgId, "KLIENT")), invoiceDate: new Date(),
+          ...(await invoiceNumbering(tx, ctx.orgId, "KLIENT")), invoiceDate: when,
           notes: input.notes ?? "Försäkringens prutning — bärs av klienten (rättsskydd).",
         });
         await tx.billingRuns.create({
