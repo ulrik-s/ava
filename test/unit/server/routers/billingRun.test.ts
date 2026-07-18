@@ -503,6 +503,13 @@ describe("billingRun.settleCoverage — bokför prutnings-uppdelningen (#801)", 
     await expect(c.billingRun.recordInsurerPruning({ matterId: "m-1", prunedNetOre: 100_000 })).rejects.toThrow(/försäkringsfaktura/i);
   });
 
+  it("slutregleringens fakturor dateras på invoiceDate (#907) — inte alltid idag", async () => {
+    const { caller: c } = caller({ paymentMethod: "RATTSSKYDD", clientShareBips: 2000 }, 300000);
+    const res = await c.billingRun.settleCoverage({ matterId: "m-1", payerRecipient: "FORSAKRING", invoiceDate: "2026-03-10" });
+    expect(new Date(res.payerInvoice.invoiceDate).toISOString().slice(0, 10)).toBe("2026-03-10");
+    expect(new Date(res.clientInvoice.invoiceDate).toISOString().slice(0, 10)).toBe("2026-03-10");
+  });
+
   it("rättshjälp: timkostnadsnorm; dom prutar → byrå-förlust bokas (icke-debiterbar PRUTNING), klient på reducerat", async () => {
     // 3 tim loggat − 1 tim rådgivning (#809) = 2 effektiva tim → bas 325 200.
     const { ds, caller: c } = caller({ paymentMethod: "RATTSHJALP", clientShareBips: 2000, taxaHasFTax: true }, 999999, 180);

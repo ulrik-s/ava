@@ -178,8 +178,8 @@ async function hVerdict(ctx: RunCtx, _m: SimMatter, _e: Any, _iso: string, st: S
   ctx.res.invoices++;
 }
 
-async function hSettle(ctx: RunCtx, m: SimMatter, e: Any, _iso: string): Promise<void> {
-  const res = await ctx.c.billingRun.settleCoverage({ matterId: m.id, payerRecipient: e.payerRecipient });
+async function hSettle(ctx: RunCtx, m: SimMatter, e: Any, iso: string): Promise<void> {
+  const res = await ctx.c.billingRun.settleCoverage({ matterId: m.id, payerRecipient: e.payerRecipient, invoiceDate: iso });
   ctx.res.invoices += 2;
   if (res.creditInvoice) ctx.res.credits++;
   // Slutfakturorna (klient + domstol) är utställda i demon → SENT, annars räknas de
@@ -189,10 +189,10 @@ async function hSettle(ctx: RunCtx, m: SimMatter, e: Any, _iso: string): Promise
   }
 }
 
-async function hInsurerPruning(ctx: RunCtx, m: SimMatter, e: Any, _iso: string): Promise<void> {
+async function hInsurerPruning(ctx: RunCtx, m: SimMatter, e: Any, iso: string): Promise<void> {
   // Försäkringen prutar EFTER slutregleringen (#905) → kredit till försäkringen +
   // påfyllnadsfaktura till klienten på prutade beloppet.
-  await ctx.c.billingRun.recordInsurerPruning({ matterId: m.id, prunedNetOre: e.prunedNetOre });
+  await ctx.c.billingRun.recordInsurerPruning({ matterId: m.id, prunedNetOre: e.prunedNetOre, invoiceDate: iso });
   ctx.res.invoices += 2;
 }
 
