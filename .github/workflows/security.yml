@@ -1,12 +1,15 @@
 name: Security
 
-# Säkerhetsscanning (#909): statisk analys (CodeQL/SAST) + granskning av nya
-# beroenden på PR. Kompletterar Dependabot (som bumpar) med SAST + license-/
-# sårbarhetsgrind på det som faktiskt introduceras i en PR.
+# Säkerhetsscanning (#909): statisk analys (CodeQL/SAST) på push/PR/veckoschema.
+# Kompletterar Dependabot (som bumpar) med SAST på koden.
 #
 # OBS: kräver att "CodeQL default setup" är AVSTÄNGT i repo-inställningarna
-# (annars krockar detta advanced-workflow med default-setupen). dependency-
-# review kräver ett publikt repo eller GitHub Advanced Security.
+# (annars krockar detta advanced-workflow med default-setupen).
+#
+# `dependency-review` (license-/CVE-grind på nya deps i en PR) är MEDVETET
+# borttaget tills repo:ts Dependency graph är aktiverad (Settings → Security →
+# "Dependency graph") — utan den svarar action:en hårt fel ("Dependency review
+# is not supported on this repository"). Återinförs i #915.
 
 on:
   push:
@@ -43,19 +46,3 @@ jobs:
         uses: github/codeql-action/analyze@v3
         with:
           category: "/language:javascript-typescript"
-
-  # ── Dependency review (bara PR) ────────────────────────────────────────────
-  dependency-review:
-    name: Dependency review
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v6
-      - name: Granska nya/ändrade beroenden
-        uses: actions/dependency-review-action@v4
-        with:
-          # Fäll PR om ett nytt beroende har en känd sårbarhet (moderate+).
-          fail-on-severity: moderate
-          # Blockera kopvänstriga/okända licenser som inte passar MIT-projektet.
-          deny-licenses: GPL-2.0, GPL-3.0, AGPL-3.0

@@ -48,7 +48,7 @@ lever som JSON i ett git-repo (se [`architecture.md`](./architecture.md)).
 | Bundle-size-budget | gzip-summa av klient-chunks + ratchet (körs i `demo-build`) | `tooling/scripts/check-bundle-size.ts` |
 | Arkitektur (SOLID/lager) | dependency-cruiser | `tooling/config/dependency-cruiser.cjs` |
 | Död kod / oanvända exports | knip | `tooling/config/knip.json` |
-| Säkerhet (SAST + deps) | CodeQL + `dependency-review` | `.github/workflows/security.yml` |
+| Säkerhet (SAST) | CodeQL (JS/TS) — `dependency-review` väntar på Dependency graph (#915) | `.github/workflows/security.yml` |
 | Beroende-uppdateringar | Dependabot (npm + github-actions) | `.github/dependabot.yml` |
 | Pre-commit | husky + lint-staged | `.husky/pre-commit`, `package.json` |
 | CI | GitHub Actions (DRY toolchain-composite) | `.github/workflows/`, `.github/actions/bun-setup/` |
@@ -266,7 +266,8 @@ Jobben laddar upp sina rapporter som artefakter (coverage, jscpd, playwright-rep
 
 Övriga workflows: **`deploy-demo.yml`** (GH Pages på push till `main`),
 **`helper-ui-ci.yml`** (Electron-helperns logik + motor), **`security.yml`**
-(CodeQL/SAST + `dependency-review` på PR, veckovis schema) och **`release.yml`**
+(CodeQL/SAST på push/PR + veckovis schema; `dependency-review` väntar på att
+Dependency graph aktiveras, #915) och **`release.yml`**
 (tag-triggad paket-release). Beroenden hålls uppdaterade av
 [`.github/dependabot.yml`](../.github/dependabot.yml) (npm root + helper-ui +
 github-actions).
