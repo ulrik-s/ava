@@ -39,7 +39,7 @@ jobs:
     if: github.event_name == 'pull_request'
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0 # commitlint behöver hela historiken för --from..--to
       - uses: ./.github/actions/bun-setup
@@ -51,7 +51,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/bun-setup
       - run: bun run typecheck
       # Ratchet med ventil (#41): struktur-reglerna (max-lines/-depth/-params/
@@ -84,7 +84,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/bun-setup
       # bun test --isolate (#92) + coverage-ratchet (rader/funktioner).
       - run: bun run test:cov
@@ -105,7 +105,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/bun-setup
       - name: Start Postgres (docker compose)
         run: docker compose -f tooling/docker/docker-compose.test.yml up -d --wait --wait-timeout 90
@@ -127,7 +127,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/bun-setup
       - name: Bygg server-first-binär
         run: bun run server-first:build
@@ -182,7 +182,7 @@ jobs:
     env:
       CI: "true"
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/bun-setup
       - run: bun run e2e:install
       - run: bun run e2e:oidc
@@ -205,7 +205,7 @@ jobs:
     if: github.event_name == 'pull_request'
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/bun-setup
       - run: bun run build:demo
       # Bundle-size-ratchet (#14/#909): återanvänder out/ från build:demo ovan.
@@ -229,7 +229,7 @@ jobs:
     if: github.event_name == 'pull_request'
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/bun-setup
       - run: bun run build:demo
       - run: bun run e2e:install
@@ -266,7 +266,7 @@ jobs:
     env:
       CI: "true"
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/bun-setup
       - run: bun run e2e:install
       - run: bun run e2e:conflict
