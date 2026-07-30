@@ -15,6 +15,8 @@
     "demo:serve": "bash tooling/scripts/demo-serve.sh",
     "demo:serve:fast": "SKIP_BUILD=1 bash tooling/scripts/demo-serve.sh",
     "seed:local": "bun tooling/scripts/seed-firma-local.ts",
+    "ava": "bun tooling/ava-cli/ava.ts",
+    "ava:mcp": "bun tooling/ava-cli/ava-mcp.ts",
     "server-first": "bun src/bin/server-first.ts",
     "server-first:build": "bun tooling/scripts/build-server-first.ts",
     "install:server": "bun tooling/scripts/install-server.ts",
