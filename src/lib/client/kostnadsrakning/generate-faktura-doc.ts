@@ -64,24 +64,20 @@ export interface GenerateFakturaDocArgs {
 
 /** Inbyggd faktura-mall (Handlebars) — används av template-motorn (#852) när
  *  ingen byrå-mall finns. HTML → öppningsbar + skrivbar. */
-const FAKTURA_TEMPLATE = `<!DOCTYPE html><html lang="sv"><head><meta charset="utf-8"><title>Faktura {{invoiceNumber}}</title></head>
+const FAKTURA_TEMPLATE = `<!DOCTYPE html><html lang="sv"><head><meta charset="utf-8"><title>Faktura {{invoiceNumber}}</title>
+<style>@media print{.page-break{page-break-before:always}}.page-break{border:0;border-top:1px dashed #ccc;margin:2rem 0}</style></head>
 <body style="font-family:system-ui,sans-serif;max-width:720px;margin:2rem auto;color:#111">
 <h1 style="margin-bottom:0">Faktura</h1>
 <p style="color:#555">Fakturanr: {{invoiceNumber}}{{#if ocr}} · OCR: {{ocr}}{{/if}}<br>Datum: {{date}}</p>
 <p style="color:#555">Ärende {{matterNumber}} — {{matterTitle}}<br>Mottagare: {{recipient}}</p>
-{{#if timeLines.length}}
-<h2 style="font-size:15px;margin-top:1.5rem;margin-bottom:.25rem">Tidsspecifikation</h2>
-<table cellpadding="5" cellspacing="0" style="border-collapse:collapse;width:100%;font-size:13px">
-<thead><tr style="border-bottom:1px solid #ccc;text-align:left"><th>Datum</th><th>Beskrivning</th><th style="text-align:right">Tim</th><th style="text-align:right">Belopp</th></tr></thead>
-<tbody>{{#each timeLines}}<tr><td>{{this.date}}</td><td>{{this.description}}</td><td style="text-align:right">{{this.hours}}</td><td style="text-align:right">{{this.amount}}</td></tr>{{/each}}</tbody>
+
+<h2 style="font-size:16px;margin-top:1.5rem;margin-bottom:.5rem">Sammanfattning</h2>
+{{#if arvodeSections.length}}
+<table cellpadding="6" cellspacing="0" style="border-collapse:collapse;width:100%;font-size:14px;margin-bottom:1rem">
+<thead><tr style="border-bottom:1px solid #ccc;text-align:left"><th>Timtaxa</th><th style="text-align:right">Tim</th><th style="text-align:right">Belopp (exkl moms)</th></tr></thead>
+<tbody>{{#each arvodeSections}}<tr><td>{{this.rateLabel}}</td><td style="text-align:right">{{this.hours}}</td><td style="text-align:right">{{this.amount}}</td></tr>{{/each}}</tbody>
 </table>{{/if}}
-{{#if expenseLines.length}}
-<h2 style="font-size:15px;margin-top:1.5rem;margin-bottom:.25rem">Utläggsspecifikation</h2>
-<table cellpadding="5" cellspacing="0" style="border-collapse:collapse;width:100%;font-size:13px">
-<thead><tr style="border-bottom:1px solid #ccc;text-align:left"><th>Datum</th><th>Beskrivning</th><th style="text-align:right">Netto</th><th style="text-align:right">Brutto</th></tr></thead>
-<tbody>{{#each expenseLines}}<tr><td>{{this.date}}</td><td>{{this.description}}</td><td style="text-align:right">{{this.net}}</td><td style="text-align:right">{{this.gross}}</td></tr>{{/each}}</tbody>
-</table>{{/if}}
-<table cellpadding="6" cellspacing="0" style="border-collapse:collapse;width:100%;font-size:14px;margin-top:1.5rem">
+<table cellpadding="6" cellspacing="0" style="border-collapse:collapse;width:100%;font-size:14px">
 <tbody>
 {{#if showSpecTotals}}
 {{#if hasSpec}}
@@ -105,6 +101,23 @@ const FAKTURA_TEMPLATE = `<!DOCTYPE html><html lang="sv"><head><meta charset="ut
 </tbody>
 <tfoot><tr style="border-top:2px solid #333"><td style="font-weight:bold">{{totalLabel}}</td><td style="text-align:right;font-weight:bold">{{total}}</td></tr></tfoot>
 </table>
+{{#if hasSpec}}
+<hr class="page-break">
+<h2 style="font-size:16px;margin-bottom:.25rem">Specifikation</h2>
+<p style="color:#777;font-size:12px;margin-top:0">Underlag till beloppen i sammanfattningen ovan.</p>
+{{#if timeLines.length}}
+<h3 style="font-size:14px;margin-top:1rem;margin-bottom:.25rem">Tidsspecifikation</h3>
+<table cellpadding="5" cellspacing="0" style="border-collapse:collapse;width:100%;font-size:13px">
+<thead><tr style="border-bottom:1px solid #ccc;text-align:left"><th>Datum</th><th>Beskrivning</th><th style="text-align:right">Tim</th><th style="text-align:right">Belopp</th></tr></thead>
+<tbody>{{#each timeLines}}<tr><td>{{this.date}}</td><td>{{this.description}}</td><td style="text-align:right">{{this.hours}}</td><td style="text-align:right">{{this.amount}}</td></tr>{{/each}}</tbody>
+</table>{{/if}}
+{{#if expenseLines.length}}
+<h3 style="font-size:14px;margin-top:1.5rem;margin-bottom:.25rem">Utläggsspecifikation</h3>
+<table cellpadding="5" cellspacing="0" style="border-collapse:collapse;width:100%;font-size:13px">
+<thead><tr style="border-bottom:1px solid #ccc;text-align:left"><th>Datum</th><th>Beskrivning</th><th style="text-align:right">Netto</th><th style="text-align:right">Brutto</th></tr></thead>
+<tbody>{{#each expenseLines}}<tr><td>{{this.date}}</td><td>{{this.description}}</td><td style="text-align:right">{{this.net}}</td><td style="text-align:right">{{this.gross}}</td></tr>{{/each}}</tbody>
+</table>{{/if}}
+{{/if}}
 {{#if organizationName}}<p style="color:#777;font-size:13px;margin-top:1.5rem">{{organizationName}}{{#if organizationOrgNumber}} · {{organizationOrgNumber}}{{/if}}</p>{{/if}}
 </body></html>`;
 
@@ -155,6 +168,25 @@ function specContext(spec: InvoiceSpecification | null | undefined, fc: (ore: nu
   };
 }
 
+/**
+ * Arvode-sektioner per timtaxa (#925) för sammanfattningen: grupperar spec:ens
+ * tidsrader på den HÄRLEDDA taxan (amountOre / timmar — rättshjälp=norm/tidsspillan,
+ * övrigt=post-taxa) → en rad per unik taxa (fallande). Ren + testbar.
+ */
+function arvodeSectionsContext(spec: InvoiceSpecification | null | undefined, fc: (ore: number) => string): Record<string, unknown> {
+  if (!spec || spec.timeLines.length === 0) return { arvodeSections: [] };
+  const groups = new Map<number, { minutes: number; amountOre: number }>();
+  for (const l of spec.timeLines) {
+    const rate = l.minutes > 0 ? Math.round((l.amountOre * 60) / l.minutes) : 0;
+    const g = groups.get(rate) ?? { minutes: 0, amountOre: 0 };
+    groups.set(rate, { minutes: g.minutes + l.minutes, amountOre: g.amountOre + l.amountOre });
+  }
+  const arvodeSections = [...groups.entries()]
+    .sort((a, b) => b[0] - a[0])
+    .map(([rate, g]) => ({ rateLabel: `${fc(rate)}/tim`, hours: svHours(g.minutes), amount: fc(g.amountOre) }));
+  return { arvodeSections };
+}
+
 /** Itemiserad summering (#858) → mall-rader. `deduct`=−, `info`=(parentes), färgad. */
 function breakdownContext(breakdown: FakturaBreakdown | null | undefined, fc: (ore: number) => string): Record<string, unknown> {
   if (!breakdown) return { useBreakdown: false };
@@ -203,6 +235,7 @@ function fakturaTemplateContext(a: FakturaTemplateArgs, formatCurrency: (ore: nu
   return {
     ...headerContext(a, formatCurrency),
     ...specContext(a.spec, formatCurrency),
+    ...arvodeSectionsContext(a.spec, formatCurrency),
     ...breakdownContext(a.breakdown, formatCurrency),
     // Spec-summeringen (arvode/moms/delsumma) visas bara när spec körs UTAN breakdown
     // (#876) — annars äger breakdown-trappan beloppen och summeringen skulle dubbleras.
