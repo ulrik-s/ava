@@ -18,8 +18,9 @@ on:
       - "v*"
   workflow_dispatch: {}
 
+# Least-privilege (#909): default läs; bara release-jobbet får skriva (release).
 permissions:
-  contents: write # skapa release + ladda upp artefakter
+  contents: read
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
@@ -31,13 +32,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 24
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-      - run: bun install --frozen-lockfile
+      # DRY toolchain (Node 24 + pinnad Bun + cachead frozen install), #909.
+      - uses: ./.github/actions/bun-setup
       - name: Build demo (app + seeded data)
         env:
           DEMO_BUILD: "1"
@@ -63,6 +59,8 @@ jobs:
     needs: [web]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # skapa release + ladda upp artefakter
     steps:
       - uses: actions/download-artifact@v4
         with:

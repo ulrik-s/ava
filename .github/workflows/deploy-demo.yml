@@ -26,22 +26,12 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Setup Node
-        uses: actions/setup-node@v6
-        with:
-          node-version: 24
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
+      # DRY toolchain (Node 24 + pinnad Bun + cachead frozen install), #909.
+      - uses: ./.github/actions/bun-setup
 
       - name: Setup Pages
         id: pages
         uses: actions/configure-pages@v5
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
 
       # Bygger appen som statisk export OCH seedar demo-data direkt i out/.
       # build-demo.sh kör:

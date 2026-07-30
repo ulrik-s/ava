@@ -1,0 +1,3 @@
+# Issue-first-flöde (AGENTS.md): allt arbete börjar från en issue. Tomma issues
+# är avstängda för att styra in på en mall.
+blank_issues_enabled: false

@@ -1,0 +1,36 @@
+name: Bun setup
+description: >-
+  DRY toolchain-setup för alla jobb — Node 24 + pinnad Bun + cachead, frozen
+  install. Single source of truth för bun-versionen (byt här, gäller alla
+  workflows). Kör efter actions/checkout. Se #909.
+
+inputs:
+  install:
+    description: Kör `bun install --frozen-lockfile` (sätt "false" för jobb som installerar själva).
+    required: false
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v6
+      with:
+        node-version: 24
+    - uses: oven-sh/setup-bun@v2
+      with:
+        # Pinnad (ej `latest`) → reproducerbara byggen; matchar bun-types i
+        # package.json. Bumpas medvetet. SHA-pinning av actions: #910.
+        bun-version: 1.3.14
+    # setup-bun cachar INTE beroenden själv → cacha bun:s globala install-cache
+    # (nycklad på bun.lock). ~9 jobb installerar annars om allt varje körning.
+    - name: Cache bun install-cache
+      uses: actions/cache@v4
+      with:
+        path: ~/.bun/install/cache
+        key: bun-cache-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+        restore-keys: |
+          bun-cache-${{ runner.os }}-
+    - name: Install dependencies (frozen)
+      if: inputs.install == 'true'
+      shell: bash
+      run: bun install --frozen-lockfile

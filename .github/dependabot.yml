@@ -1,0 +1,48 @@
+# Dependabot (#909) — automatiska säkerhets-/versions-PR:er.
+#
+# `bun` läser package.json via Dependabots `npm`-ekosystem (samma manifest).
+# Grupperade minor/patch → färre PR:er; major hålls separata (kan vara
+# breaking, ska granskas var för sig). Alla PR:er går genom samma gröna CI
+# som allt annat (AGENTS.md: issue → PR → merge). SHA-pinning av actions: #910.
+version: 2
+updates:
+  # ── App-beroenden (repo-roten) ────────────────────────────────────────────
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
+    groups:
+      npm-minor-patch:
+        update-types: ["minor", "patch"]
+
+  # ── Helper-UI (Electron, ADR 0030) ────────────────────────────────────────
+  - package-ecosystem: npm
+    directory: "/helper-ui"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
+    groups:
+      helper-npm-minor-patch:
+        update-types: ["minor", "patch"]
+
+  # ── GitHub Actions (workflows + composite actions) ────────────────────────
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci"
+    groups:
+      actions-all:
+        patterns: ["*"]
