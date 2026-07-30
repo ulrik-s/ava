@@ -12,12 +12,18 @@ on:
       - "src/lib/shared/**"
       - "src/lib/server/routers/**" # helpern type-beror på AppRouter (ADR 0031)
       - ".github/workflows/helper-ui-ci.yml"
+      - ".github/actions/bun-setup/**" # delad toolchain-setup (#909)
   pull_request:
     paths:
       - "helper-ui/**"
       - "src/lib/shared/**"
       - "src/lib/server/routers/**" # helpern type-beror på AppRouter (ADR 0031)
       - ".github/workflows/helper-ui-ci.yml"
+      - ".github/actions/bun-setup/**" # delad toolchain-setup (#909)
+
+# Least-privilege (#909): jobbet läser bara koden.
+permissions:
+  contents: read
 
 jobs:
   build-test:
@@ -29,19 +35,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
+      # DRY toolchain (Node 24 + pinnad Bun + cachead frozen install), #909.
+      # Composite-stegen kör i repo-roten (ärver inte job-defaultens
+      # working-directory) → installerar ROOT-deps, vilket krävs för att typkolla
+      # den tunna tRPC-klienten: `AppRouter` (type-only, ADR 0031) drar in
+      # serverns typ-graf (zod, jose, @trpc/server …) från repo-rotens
+      # node_modules; tsc i helper-ui resolver uppåt dit.
+      - uses: ./.github/actions/bun-setup
 
-      # Root-deps krävs för att typkolla den tunna tRPC-klienten: `AppRouter`
-      # (type-only, ADR 0031) drar in serverns typ-graf (zod, jose, @trpc/server
-      # …) som bor i repo-rotens node_modules. tsc i helper-ui resolver uppåt dit.
-      - name: Install root deps
-        working-directory: ${{ github.workspace }}
-        run: bun install --frozen-lockfile
-
-      - name: Install
+      - name: Install (helper-ui)
         run: bun install --frozen-lockfile
 
       - name: Typecheck
