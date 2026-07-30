@@ -6,6 +6,7 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { generateFakturaFromTemplate } from "@/lib/client/kostnadsrakning/generate-faktura-doc";
+import { formatCurrency } from "@/lib/client/utils";
 import { asId } from "@/lib/shared/schemas/ids";
 
 const persistGeneratedDoc = vi.fn(async () => {});
@@ -96,6 +97,40 @@ describe("generateFakturaFromTemplate", () => {
     expect(html).toContain("Domstolen betalar — att betala");
     expect(html).not.toContain("Nedsättning"); // lumpen ersatt av itemiserade rader
     expect(html).not.toContain("Rådgivning"); // rådgivningstimmen syns ALDRIG på domstols-fakturan (#860)
+  });
+
+  it("sammanfattning först (arvode per timtaxa + split), specifikationen efter (#925)", async () => {
+    await generateFakturaFromTemplate({
+      invoice: { id: asId<"InvoiceId">("inv-s1"), amount: 565_000, vatOre: 113_000, invoiceNumber: "F-2026-0055", invoiceDate: "2026-06-30" },
+      matterId: asId<"MatterId">("m1"),
+      recipient: "Staten",
+      meta: { matterNumber: "2026-0020", matterTitle: "Vårdnadstvist Falk" },
+      register: { mutateAsync: registerMutateAsync },
+      utils,
+      spec: {
+        timeLines: [
+          { date: "2026-02-01", description: "Arbete på timkostnadsnormen", minutes: 60, amountOre: 162_600 },
+          { date: "2026-02-02", description: "Mer arbete, samma norm", minutes: 120, amountOre: 325_200 },
+          { date: "2026-02-03", description: "Restid och väntetid", minutes: 120, amountOre: 290_000 },
+        ],
+        expenseLines: [],
+        totalMinutes: 300,
+        arvodeNetOre: 777_800, arvodeVatOre: 194_450,
+        expensesNetOre: 0, expensesVatOre: 0,
+        grossOre: 972_250,
+        deductions: [], deductionOre: 0, adjustmentOre: 0, payableOre: 565_000,
+      },
+    });
+    const html = new TextDecoder().decode(persistGeneratedDoc.mock.calls[0]![0].bytes as Uint8Array);
+    // Två unika timtaxor → två sektioner (1 626 kr/tim och 1 450 kr/tim tidsspillan).
+    expect(html).toContain("Sammanfattning");
+    expect(html).toContain("Timtaxa");
+    expect(html).toContain(`${formatCurrency(162_600)}/tim`); // 162 600 öre/tim (norm)
+    expect(html).toContain(`${formatCurrency(145_000)}/tim`); // 290 000 öre / 2 tim = 145 000 öre/tim (tidsspillan)
+    // Sammanfattningen står FÖRE specifikationen; specen har sidbrytning.
+    expect(html.indexOf("Sammanfattning")).toBeLessThan(html.indexOf("Specifikation"));
+    expect(html.indexOf("Sammanfattning")).toBeLessThan(html.indexOf("Tidsspecifikation"));
+    expect(html).toContain('class="page-break"');
   });
 
   it("klientens självrisk-faktura (#876): tidsspec-TABELL + moms-trappa, spec-summeringen undertryckt", async () => {
