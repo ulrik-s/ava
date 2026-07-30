@@ -21,25 +21,30 @@ export type Parsed =
 export const USAGE = `ava — CLI över AVA:s tRPC-API (auto-härlett ur appRouter)
 
 Användning:
-  ava describe [prefix]            Lista procedurer (+ JSON-schema för input)
-  ava <router.procedur> [flaggor]  Anropa en procedur, skriv resultatet som JSON
+  ava describe [prefix]              Lista procedurer (+ JSON-schema för input)
+  ava <router> <procedur> [flaggor]  Anropa en procedur (path via "." ELLER mellanslag)
 
 Flaggor:
-  --input <json>   Input som JSON (default {}). Bin stödjer även @fil och -.
-  --local          In-process mot seedad store (default; ingen server/auth)
-  --remote         Mot server-first över HTTP (AVA_SERVER_URL + AVA_TOKEN)
-  --help           Visa den här hjälpen
+  --input <json>     Hela input som JSON (default {}). Bin stödjer även @fil och -.
+  --<fält> <värde>   Sätt ett input-fält (JSON-koerceras: 1→tal, true→bool,
+                     '["a"]'→array; annars sträng). Slås ihop ovanpå --input.
+  --local            In-process mot seedad store (default; ingen server/auth)
+  --remote           Mot server-first över HTTP (AVA_SERVER_URL + AVA_TOKEN)
+  --help             Visa den här hjälpen
 
 Exempel:
   ava describe invoice
-  ava invoice.list --input '{"status":"SENT"}'
-  ava contacts.getById --input '{"id":"c-1"}'
-  ava --remote invoice.createRadgivning --input '{"matterId":"m-1"}'`;
+  ava invoice list --status SENT              # ≡ invoice.list --input '{"status":"SENT"}'
+  ava contacts getById --id c-1
+  ava contacts.list --page 1 --pageSize 20
+  ava --remote invoice createRadgivning --matterId m-1`;
 
 interface Flags {
   input: string | null;
   mode: Mode;
   help: boolean;
+  /** Godtyckliga --<fält> <värde> som slås ihop till input-objektet. */
+  fields: Record<string, unknown>;
 }
 
 /**
@@ -79,17 +84,48 @@ function matchFlag(a: string, next: string | undefined, flags: Flags): number | 
   return null;
 }
 
-/** Dela argv i positionella + flaggor. `--k v` och `--k=v` stöds. */
+/** JSON-koercera ett flagg-värde: "1"→1, "true"→true, '["a"]'→array; annars sträng. */
+function coerce(v: string): unknown {
+  try {
+    return JSON.parse(v);
+  } catch {
+    return v;
+  }
+}
+
+/**
+ * Hantera en godtycklig `--<fält>`-flagga (ej känd flagga) → skriv in i `fields`.
+ * `--k=v`, `--k v` (v ej en flagga) eller `--k` (→ boolean true). Returnerar
+ * antal extra argv-tokens som konsumerats.
+ */
+function addField(a: string, next: string | undefined, fields: Record<string, unknown>): number {
+  const eq = a.indexOf("=");
+  if (eq > 2) {
+    fields[a.slice(2, eq)] = coerce(a.slice(eq + 1));
+    return 0;
+  }
+  const key = a.slice(2);
+  if (next !== undefined && !next.startsWith("-")) {
+    fields[key] = coerce(next);
+    return 1;
+  }
+  fields[key] = true;
+  return 0;
+}
+
+/** Dela argv i positionella + flaggor. Kända flaggor först, annars --<fält>-input. */
 function splitArgs(argv: readonly string[]): { positionals: string[]; flags: Flags } {
   const positionals: string[] = [];
-  const flags: Flags = { input: null, mode: "local", help: false };
+  const flags: Flags = { input: null, mode: "local", help: false, fields: {} };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]!;
     const consumed = matchFlag(a, argv[i + 1], flags);
-    if (consumed === null) {
-      if (!a.startsWith("-")) positionals.push(a);
-    } else {
+    if (consumed !== null) {
       i += consumed;
+    } else if (a.startsWith("--")) {
+      i += addField(a, argv[i + 1], flags.fields);
+    } else {
+      positionals.push(a);
     }
   }
   return { positionals, flags };
@@ -105,15 +141,30 @@ function parseInput(raw: string | null): { ok: true; value: unknown } | { ok: fa
   }
 }
 
+/** Slå ihop --<fält>-flaggor ovanpå --input (som måste vara ett objekt då). */
+function mergeInput(
+  base: unknown,
+  fields: Record<string, unknown>,
+): { ok: true; value: unknown } | { ok: false; message: string } {
+  if (Object.keys(fields).length === 0) return { ok: true, value: base };
+  if (base === null || typeof base !== "object" || Array.isArray(base)) {
+    return { ok: false, message: "--<fält>-flaggor kan bara kombineras med ett objekt-input" };
+  }
+  return { ok: true, value: { ...base, ...fields } };
+}
+
 /** Ren parsning av `ava`-argv → diskriminerad union. */
 export function parseArgs(argv: readonly string[]): Parsed {
   const { positionals, flags } = splitArgs(argv);
   if (flags.help || positionals.length === 0) return { kind: "help" };
   const [cmd, ...rest] = positionals;
-  if (cmd === "describe") return { kind: "describe", prefix: rest[0] ?? null };
+  // Path via "." eller mellanslag: `contacts getById` ≡ `contacts.getById`.
+  if (cmd === "describe") return { kind: "describe", prefix: rest.length > 0 ? rest.join(".") : null };
   const parsed = parseInput(flags.input);
   if (!parsed.ok) return { kind: "error", message: parsed.message };
-  return { kind: "call", path: cmd!, input: parsed.value, mode: flags.mode };
+  const merged = mergeInput(parsed.value, flags.fields);
+  if (!merged.ok) return { kind: "error", message: merged.message };
+  return { kind: "call", path: positionals.join("."), input: merged.value, mode: flags.mode };
 }
 
 export interface RunDeps {

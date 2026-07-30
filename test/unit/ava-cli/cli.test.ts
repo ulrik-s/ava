@@ -56,6 +56,45 @@ describe("parseArgs", () => {
   });
 });
 
+describe("parseArgs — ergonomi (#913)", () => {
+  it("space-separerad path ≡ punktseparerad", () => {
+    expect(parseArgs(["invoice", "list"])).toEqual({ kind: "call", path: "invoice.list", input: {}, mode: "local" });
+    expect(parseArgs(["contacts", "getById", "--id", "c-1"])).toEqual({
+      kind: "call", path: "contacts.getById", input: { id: "c-1" }, mode: "local",
+    });
+  });
+
+  it("--<fält>-flaggor med JSON-koercering", () => {
+    expect(parseArgs(["contacts.list", "--page", "1", "--active", "true", "--q", "Ada"])).toEqual({
+      kind: "call", path: "contacts.list", input: { page: 1, active: true, q: "Ada" }, mode: "local",
+    });
+  });
+
+  it("--fält=värde och bar --fält (→ true)", () => {
+    expect(parseArgs(["x.y", "--id=c-1", "--dryRun"])).toEqual({
+      kind: "call", path: "x.y", input: { id: "c-1", dryRun: true }, mode: "local",
+    });
+  });
+
+  it("array-koercering via JSON", () => {
+    expect((parseArgs(["x.y", "--ids", '["a","b"]']) as { input: unknown }).input).toEqual({ ids: ["a", "b"] });
+  });
+
+  it("--<fält> slås ihop ovanpå --input", () => {
+    expect(parseArgs(["invoice.list", "--input", '{"a":1}', "--status", "SENT"])).toEqual({
+      kind: "call", path: "invoice.list", input: { a: 1, status: "SENT" }, mode: "local",
+    });
+  });
+
+  it("--<fält> + icke-objekt-input → error", () => {
+    expect(parseArgs(["x.y", "--input", "[1,2]", "--k", "v"]).kind).toBe("error");
+  });
+
+  it("describe med space-separerat prefix", () => {
+    expect(parseArgs(["describe", "invoice", "list"])).toEqual({ kind: "describe", prefix: "invoice.list" });
+  });
+});
+
 describe("runParsed", () => {
   it("help skriver USAGE", async () => {
     const { deps } = fakeDeps();
