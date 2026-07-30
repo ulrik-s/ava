@@ -1,0 +1,48 @@
+name: Security
+
+# Säkerhetsscanning (#909): statisk analys (CodeQL/SAST) på push/PR/veckoschema.
+# Kompletterar Dependabot (som bumpar) med SAST på koden.
+#
+# OBS: kräver att "CodeQL default setup" är AVSTÄNGT i repo-inställningarna
+# (annars krockar detta advanced-workflow med default-setupen).
+#
+# `dependency-review` (license-/CVE-grind på nya deps i en PR) är MEDVETET
+# borttaget tills repo:ts Dependency graph är aktiverad (Settings → Security →
+# "Dependency graph") — utan den svarar action:en hårt fel ("Dependency review
+# is not supported on this repository"). Återinförs i #915.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 3 * * 1" # måndag 03:00 UTC — fångar nya CVE:er i orörd kod
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── CodeQL (SAST) ──────────────────────────────────────────────────────────
+  codeql:
+    name: CodeQL (JS/TS)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      security-events: write # ladda upp SARIF till Security-fliken
+    steps:
+      - uses: actions/checkout@v6
+      - name: Initiera CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+          build-mode: none # ren JS/TS → ingen kompilering behövs
+          queries: security-and-quality
+      - name: Analysera
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:javascript-typescript"

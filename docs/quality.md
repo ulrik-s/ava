@@ -40,16 +40,18 @@ lever som JSON i ett git-repo (se [`architecture.md`](./architecture.md)).
 |---|---|---|
 | Statisk typkontroll | TypeScript `tsc --noEmit` | `tsconfig.json` |
 | Lint + komplexitet | ESLint + `complexity` / `max-depth` / `max-params` | `tooling/config/eslint.config.mjs` |
-| Enhetstester | `bun test --isolate` | `bunfig.toml`, `test/unit/`, `test/integration/`, `test/scripts/` |
+| Enhetstester | `bun test` (2 pass, `run-tests.ts`) | `bunfig.toml`, `test/unit/`, `test/integration/`, `test/scripts/` |
 | Komponenttester (DOM) | `bun test` + happy-dom + Testing Library | `test/setup/happy-dom-register.ts`, `test/setup/preload.ts` |
-| E2E-tester | Playwright (Chromium) | `tooling/config/playwright.config.ts`, `test/e2e/` |
+| E2E-tester | Playwright (Chromium) — OIDC-login, demo-smoke, keep-both-konflikt | `tooling/config/playwright*.config.ts`, `test/e2e/` |
 | Kodtäckning | `bun test --coverage` (lcov) + ratchet-skript | `tooling/scripts/run-tests.ts` (`--coverage`) |
 | Duplikatdetektering (DRY) | jscpd | `tooling/config/jscpd.json` |
-| Bundle-size-budget | gzip-summa av klient-chunks + ratchet-skript | `tooling/scripts/check-bundle-size.ts` |
+| Bundle-size-budget | gzip-summa av klient-chunks + ratchet (körs i `demo-build`) | `tooling/scripts/check-bundle-size.ts` |
 | Arkitektur (SOLID/lager) | dependency-cruiser | `tooling/config/dependency-cruiser.cjs` |
 | Död kod / oanvända exports | knip | `tooling/config/knip.json` |
+| Säkerhet (SAST) | CodeQL (JS/TS) — `dependency-review` väntar på Dependency graph (#915) | `.github/workflows/security.yml` |
+| Beroende-uppdateringar | Dependabot (npm + github-actions) | `.github/dependabot.yml` |
 | Pre-commit | husky + lint-staged | `.husky/pre-commit`, `package.json` |
-| CI | GitHub Actions | `.github/workflows/ci.yml` |
+| CI | GitHub Actions (DRY toolchain-composite) | `.github/workflows/`, `.github/actions/bun-setup/` |
 
 ## Mått och tröskelvärden
 
@@ -71,14 +73,18 @@ funktioner per-fil-max av FNF/FNH) → eliminerar `--parallel`-flaken.
 > isolering men under-rapporterar coverage något (bun aggregerar löst över
 > workers) — deterministiskt, så golvet är giltigt.
 
-Aktuell baslinje (~2334 tester över 258 filer; ratchet, strax under faktisk):
+Ratchet-golvet lever i [`tooling/scripts/run-tests.ts`](../tooling/scripts/run-tests.ts)
+(`LINE_FLOOR` / `FUNC_FLOOR`) — flyttas BARA uppåt. Aktuell baslinje (ratchet,
+strax under faktisk):
 
-| Mått | Golv (`check-coverage.ts`) | Faktisk (lcov, src/, --parallel) |
+| Mått | Golv (`run-tests.ts`) | Faktisk (lcov, src/, --parallel) |
 |---|---|---|
-| Lines | 76 % | ~78.0 % |
-| Functions | 77 % | ~78.3 % |
+| Lines | 90.0 % | ~90.7 % |
+| Functions | 85.9 % | ~87.5 % |
 
-Coverage-rapporten skrivs till `coverage/` (lcov).
+Coverage-rapporten skrivs till `coverage/` (lcov). `helper-ui` har en egen
+coverage-ratchet i [`helper-ui/bunfig.toml`](../helper-ui/bunfig.toml)
+(`coverageThreshold`, line 0.90 / function 0.85).
 
 ### Komplexitet (`bun run lint`)
 
@@ -217,7 +223,7 @@ bun run test:fast         # bara unit + komponenttester (~18s)
 bun run quality:fast      # typecheck + lint + test:fast
 
 # Hela testsviten — startar docker compose, kör allt inkl. E2E
-bun run test:full
+bun run test:all
 
 # Full kvalitetscheck som CI kör
 bun run quality           # typecheck + lint + coverage + duplicates + deps + knip
@@ -226,8 +232,8 @@ bun run quality           # typecheck + lint + coverage + duplicates + deps + kn
 bun run quality:report    # coverage + jscpd + dep-graph
 
 # Specifika verktyg
-bun run test:cov          # tester + coverage-rapport (HTML i coverage/)
-bun run test:ui           # interaktiv vitest-UI
+bun run test:cov          # tester + coverage-rapport (lcov i coverage/)
+bun run size              # bundle-size-budget (kräver bun run build:demo först)
 bun run e2e               # Playwright headless
 bun run e2e:ui            # interaktiv Playwright
 bun run duplicates        # jscpd, rapport i reports/jscpd/html/
@@ -238,14 +244,37 @@ bun run knip              # oanvända filer/exporter
 
 ## Pipeline (CI)
 
-`.github/workflows/ci.yml` definierar fyra parallella jobb (Node 24):
+Toolchain-setupen (Node 24 + **pinnad** Bun + cachead `--frozen-lockfile`) är
+DRY:ad till composite-actionen
+[`.github/actions/bun-setup`](../.github/actions/bun-setup/action.yml) — byt
+bun-versionen där, gäller alla workflows. `ci.yml` har `concurrency`
+(cancel-in-progress) + least-privilege `permissions: contents: read`.
+
+`.github/workflows/ci.yml` definierar (Node 24):
 
 1. **Commit messages** — commitlint mot Conventional Commits (endast på PR).
-2. **Static analysis** — typecheck, lint (`--max-warnings 0`), depcruise, knip, jscpd. Inga tjänster.
-3. **Unit / komponent / integration** — vitest med coverage mot in-memory `DemoDataStore`. Inga externa tjänster (git-first → ingen Postgres).
-4. **E2E (git round-trip)** — Playwright Chromium mot docker-stacken (web + git-http-backend); startar docker, hämtar bootstrappad admin-PAT, pushar från browsern.
+2. **Static analysis** — typecheck, lint (`--max-warnings 0`), `lint:complexity-strict`, depcruise, knip, jscpd. Inga tjänster.
+3. **Unit / komponent / integration** — `bun test` (två pass, se ovan) med coverage-ratchet mot in-memory `DemoDataStore`.
+4. **Repository (Postgres)** — Drizzle-repo-sviten mot RIKTIG Postgres i docker (fångar driver-/SQL-skillnader).
+5. **Server-first (deploy E2E)** — bygger server-first-binären, kör som docker-container mot Postgres, synkar push/pull + dokument-pipeline över HTTP.
+6. **E2E (OIDC login)** — browser-inloggning mot Keycloak via oauth2-proxy (Playwright).
+7. **Demo build** *(PR)* — statisk GH Pages-export + **bundle-size-ratchet** (`bun run size`).
+8. **Demo E2E (browser-smoke)** *(PR)* — serverar `out/` och verifierar att demon LADDAR (inte bara bygger).
+9. **Keep-both konflikt-E2E** *(PR)* — 2-användar-konflikt mot full self-hosted-stack.
 
 Jobben laddar upp sina rapporter som artefakter (coverage, jscpd, playwright-report).
+
+Övriga workflows: **`deploy-demo.yml`** (GH Pages på push till `main`),
+**`helper-ui-ci.yml`** (Electron-helperns logik + motor), **`security.yml`**
+(CodeQL/SAST på push/PR + veckovis schema; `dependency-review` väntar på att
+Dependency graph aktiveras, #915) och **`release.yml`**
+(tag-triggad paket-release). Beroenden hålls uppdaterade av
+[`.github/dependabot.yml`](../.github/dependabot.yml) (npm root + helper-ui +
+github-actions).
+
+> **Not:** jobb 7–9 är i dag INTE required checks (ingen branch-protection-
+> ändring gjord). `demo-build` skyddar en tyst felmod → kandidat för required
+> check ([#911](https://github.com/ulrik-s/ava/issues/911)).
 
 ## Pre-commit
 
@@ -258,11 +287,15 @@ Tunga checks (vitest, jscpd, depcruise) körs inte i pre-commit — de kör i CI
 
 ## När tröskelvärden behöver höjas
 
-Lägg PR som höjer värdet i `vitest.config.ts` → `coverage.thresholds`. Stegvis höjning är poängen — varje testnoll-PR ska minst hålla nuvarande nivå.
+Höj `LINE_FLOOR` / `FUNC_FLOOR` i
+[`tooling/scripts/run-tests.ts`](../tooling/scripts/run-tests.ts) (coverage),
+`BUDGET_KB` i [`check-bundle-size.ts`](../tooling/scripts/check-bundle-size.ts)
+(bundle) resp. `coverageThreshold` i `helper-ui/bunfig.toml`. Stegvis höjning är
+poängen — varje test-PR ska minst hålla nuvarande nivå. Gater tightnar bara.
 
 ## Referenser
 
-- [Vitest coverage](https://vitest.dev/guide/coverage.html)
+- [bun test](https://bun.sh/docs/cli/test) / [bun coverage](https://bun.sh/docs/test/coverage)
 - [Testing Library](https://testing-library.com/docs/react-testing-library/intro/)
 - [Playwright](https://playwright.dev/)
 - [jscpd](https://github.com/kucherenko/jscpd)
