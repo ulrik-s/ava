@@ -1,0 +1,61 @@
+name: Security
+
+# Säkerhetsscanning (#909): statisk analys (CodeQL/SAST) + granskning av nya
+# beroenden på PR. Kompletterar Dependabot (som bumpar) med SAST + license-/
+# sårbarhetsgrind på det som faktiskt introduceras i en PR.
+#
+# OBS: kräver att "CodeQL default setup" är AVSTÄNGT i repo-inställningarna
+# (annars krockar detta advanced-workflow med default-setupen). dependency-
+# review kräver ett publikt repo eller GitHub Advanced Security.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 3 * * 1" # måndag 03:00 UTC — fångar nya CVE:er i orörd kod
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── CodeQL (SAST) ──────────────────────────────────────────────────────────
+  codeql:
+    name: CodeQL (JS/TS)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      security-events: write # ladda upp SARIF till Security-fliken
+    steps:
+      - uses: actions/checkout@v6
+      - name: Initiera CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+          build-mode: none # ren JS/TS → ingen kompilering behövs
+          queries: security-and-quality
+      - name: Analysera
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:javascript-typescript"
+
+  # ── Dependency review (bara PR) ────────────────────────────────────────────
+  dependency-review:
+    name: Dependency review
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - name: Granska nya/ändrade beroenden
+        uses: actions/dependency-review-action@v4
+        with:
+          # Fäll PR om ett nytt beroende har en känd sårbarhet (moderate+).
+          fail-on-severity: moderate
+          # Blockera kopvänstriga/okända licenser som inte passar MIT-projektet.
+          deny-licenses: GPL-2.0, GPL-3.0, AGPL-3.0
