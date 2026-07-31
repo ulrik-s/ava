@@ -76,17 +76,11 @@ const FAKTURA_TEMPLATE = `<!DOCTYPE html><html lang="sv"><head><meta charset="ut
 <table cellpadding="6" cellspacing="0" style="border-collapse:collapse;width:100%;font-size:14px;margin-bottom:1rem">
 <thead><tr style="border-bottom:1px solid #ccc;text-align:left"><th>Timtaxa</th><th style="text-align:right">Tim</th><th style="text-align:right">Belopp (exkl moms)</th></tr></thead>
 <tbody>{{#each arvodeSections}}<tr><td>{{this.rateLabel}}</td><td style="text-align:right">{{this.hours}}</td><td style="text-align:right">{{this.amount}}</td></tr>{{/each}}</tbody>
+<tfoot><tr style="border-top:1px solid #ccc"><td style="font-weight:bold">Summa (inkl moms)</td><td></td><td style="text-align:right;font-weight:bold">{{arvodeSumma}}</td></tr></tfoot>
 </table>{{/if}}
+{{#if hasSplit}}<h3 style="font-size:14px;margin-top:1rem;margin-bottom:.25rem">Uppdelning klient / betalare</h3>{{/if}}
 <table cellpadding="6" cellspacing="0" style="border-collapse:collapse;width:100%;font-size:14px">
 <tbody>
-{{#if showSpecTotals}}
-{{#if hasSpec}}
-<tr><td>Arvode{{#if hoursTotal}} ({{hoursTotal}} tim){{/if}} (exkl moms)</td><td style="text-align:right">{{arvodeNet}}</td></tr>
-{{#if hasExpenses}}<tr><td>Utlägg (exkl moms)</td><td style="text-align:right">{{expensesNet}}</td></tr>{{/if}}
-<tr><td>Moms</td><td style="text-align:right">{{vat}}</td></tr>
-{{/if}}
-<tr style="border-top:1px solid #ccc"><td>Delsumma (inkl moms)</td><td style="text-align:right">{{gross}}</td></tr>
-{{/if}}
 {{#if useBreakdown}}
 {{#each breakdownRows}}<tr style="{{this.style}}"><td>{{this.label}}</td><td style="text-align:right;{{this.style}}">{{this.amount}}</td></tr>{{/each}}
 {{else}}
@@ -173,18 +167,37 @@ function specContext(spec: InvoiceSpecification | null | undefined, fc: (ore: nu
  * tidsrader på den HÄRLEDDA taxan (amountOre / timmar — rättshjälp=norm/tidsspillan,
  * övrigt=post-taxa) → en rad per unik taxa (fallande). Ren + testbar.
  */
-function arvodeSectionsContext(spec: InvoiceSpecification | null | undefined, fc: (ore: number) => string): Record<string, unknown> {
-  if (!spec || spec.timeLines.length === 0) return { arvodeSections: [] };
+interface SummarySection { rateLabel: string; hours: string; amount: string }
+
+/** Gruppera arvodet på den härledda timtaxan → en rad per unik taxa (fallande). */
+function arvodeRateRows(spec: InvoiceSpecification, fc: (ore: number) => string): SummarySection[] {
   const groups = new Map<number, { minutes: number; amountOre: number }>();
   for (const l of spec.timeLines) {
     const rate = l.minutes > 0 ? Math.round((l.amountOre * 60) / l.minutes) : 0;
     const g = groups.get(rate) ?? { minutes: 0, amountOre: 0 };
     groups.set(rate, { minutes: g.minutes + l.minutes, amountOre: g.amountOre + l.amountOre });
   }
-  const arvodeSections = [...groups.entries()]
+  return [...groups.entries()]
     .sort((a, b) => b[0] - a[0])
     .map(([rate, g]) => ({ rateLabel: `${fc(rate)}/tim`, hours: svHours(g.minutes), amount: fc(g.amountOre) }));
-  return { arvodeSections };
+}
+
+/**
+ * Sammanfattningens sektionstabell (#925): en rad per timtaxa (arvode exkl moms),
+ * följt av utlägg exkl moms + utlägg inkl moms, och en summa (allt inkl moms).
+ * Utlägg-raderna är avsiktligt informativa (både exkl och inkl) — summan är det
+ * faktiska bruttot (arvode inkl moms + utlägg inkl moms). Ren + testbar.
+ */
+function arvodeSectionsContext(spec: InvoiceSpecification | null | undefined, fc: (ore: number) => string): Record<string, unknown> {
+  if (!spec || spec.timeLines.length === 0) return { arvodeSections: [] };
+  const sections = arvodeRateRows(spec, fc);
+  const hasExpenses = spec.expensesNetOre > 0 || spec.expensesVatOre > 0;
+  if (hasExpenses) {
+    sections.push({ rateLabel: "Utlägg exkl moms", hours: "", amount: fc(spec.expensesNetOre) });
+    sections.push({ rateLabel: "Utlägg inkl moms", hours: "", amount: fc(spec.expensesNetOre + spec.expensesVatOre) });
+  }
+  const summaOre = spec.arvodeNetOre + spec.arvodeVatOre + spec.expensesNetOre + spec.expensesVatOre;
+  return { arvodeSections: sections, arvodeSumma: fc(summaOre) };
 }
 
 /** Itemiserad summering (#858) → mall-rader. `deduct`=−, `info`=(parentes), färgad. */
@@ -237,10 +250,10 @@ function fakturaTemplateContext(a: FakturaTemplateArgs, formatCurrency: (ore: nu
     ...specContext(a.spec, formatCurrency),
     ...arvodeSectionsContext(a.spec, formatCurrency),
     ...breakdownContext(a.breakdown, formatCurrency),
-    // Spec-summeringen (arvode/moms/delsumma) visas bara när spec körs UTAN breakdown
-    // (#876) — annars äger breakdown-trappan beloppen och summeringen skulle dubbleras.
-    // Tids-/utläggstabellerna renderas oberoende (på timeLines/expenseLines-längd).
-    showSpecTotals: !!a.spec && !a.breakdown,
+    // "Uppdelning klient / betalare"-rubriken (#925) visas bara när det finns en
+    // faktisk split: en breakdown (självrisk/aconto/rättshjälpsavgift) ELLER
+    // spec-avdrag/justering. Total-tabellen renderas alltid (bär tfoot-totalen).
+    hasSplit: !!a.breakdown || (!!a.spec && (a.spec.deductions.length > 0 || a.spec.adjustmentOre !== 0)),
   };
 }
 
