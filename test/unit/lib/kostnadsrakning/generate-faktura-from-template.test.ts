@@ -127,11 +127,18 @@ describe("generateFakturaFromTemplate", () => {
     expect(html).toContain("Timtaxa");
     expect(html).toContain(`${formatCurrency(162_600)}/tim`); // norm
     expect(html).toContain(`${formatCurrency(145_000)}/tim`); // 290 000 / 2 tim = tidsspillan
-    // + en rad utlägg exkl moms och en rad utlägg inkl moms, sedan en summa.
+    // Ordning i utläggsdelen: utlägg exkl moms → moms → utlägg inkl moms → summa.
     expect(html).toContain("Utlägg exkl moms");
+    expect(html).toContain("<td>Moms</td>");
     expect(html).toContain("Utlägg inkl moms");
     expect(html).toContain("Summa (inkl moms)");
-    expect(html).toContain(formatCurrency(1_062_250)); // arvode inkl moms + utlägg inkl moms
+    const iExkl = html.indexOf("Utlägg exkl moms");
+    const iMoms = html.indexOf("<td>Moms</td>");
+    const iInkl = html.indexOf("Utlägg inkl moms");
+    expect(iExkl).toBeLessThan(iMoms);
+    expect(iMoms).toBeLessThan(iInkl);
+    expect(html).toContain(formatCurrency(194_450)); // momsraden = arvodeVat + expensesVat
+    expect(html).toContain(formatCurrency(1_062_250)); // summa = arvode inkl moms + utlägg inkl moms
     // Sammanfattningen står FÖRE specifikationen; specen har sidbrytning.
     expect(html.indexOf("Sammanfattning")).toBeLessThan(html.indexOf("Specifikation"));
     expect(html.indexOf("Sammanfattning")).toBeLessThan(html.indexOf("Tidsspecifikation"));

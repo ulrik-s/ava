@@ -192,8 +192,14 @@ function arvodeSectionsContext(spec: InvoiceSpecification | null | undefined, fc
   if (!spec || spec.timeLines.length === 0) return { arvodeSections: [] };
   const sections = arvodeRateRows(spec, fc);
   const hasExpenses = spec.expensesNetOre > 0 || spec.expensesVatOre > 0;
+  // Ordning (#925): momsfritt utlägg → momsraden (total moms) → utlägg inkl moms
+  // → summa (allt inkl moms). Momsraden är fakturans hela moms (arvode + utlägg),
+  // så arvode-raderna (exkl moms) + utlägg exkl + moms = summan.
   if (hasExpenses) {
     sections.push({ rateLabel: "Utlägg exkl moms", hours: "", amount: fc(spec.expensesNetOre) });
+  }
+  sections.push({ rateLabel: "Moms", hours: "", amount: fc(spec.arvodeVatOre + spec.expensesVatOre) });
+  if (hasExpenses) {
     sections.push({ rateLabel: "Utlägg inkl moms", hours: "", amount: fc(spec.expensesNetOre + spec.expensesVatOre) });
   }
   const summaOre = spec.arvodeNetOre + spec.arvodeVatOre + spec.expensesNetOre + spec.expensesVatOre;
