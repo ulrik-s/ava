@@ -20,7 +20,7 @@ import type { VatBreakdownLine } from "@/lib/shared/accounting/semantic-voucher"
 import { assertBillingTransition, type BillingActionType } from "@/lib/shared/billing-flow";
 import { proposedAccontoOre } from "@/lib/shared/billing-proposal";
 import { TIMKOSTNADSNORM_FTAX_ORE_PER_H, timkostnadsnormFtaxForDate, tidsspillanFtaxForDate } from "@/lib/shared/brottmalstaxa";
-import { computeCoverageSplit, partitionRattsskyddMinutes, type CoverageSplit } from "@/lib/shared/coverage-billing";
+import { computeCoverageSplit, partitionRattsskyddMinutes, type CoverageSplit, type RattsskyddClientParts } from "@/lib/shared/coverage-billing";
 import { arvodeInclVatOre } from "@/lib/shared/invoice-calc";
 import { carveEarliestMinutes } from "@/lib/shared/kostnadsrakning";
 import { applyKrAction, type KostnadsrakningAction, type KostnadsrakningState, type KostnadsrakningStatus } from "@/lib/shared/kostnadsrakning-flow";
@@ -115,7 +115,9 @@ function rattsskyddCoverage(
   matter: RattsskyddMatter,
   entries: ReadonlyArray<{ date: Date | string; minutes: number; billable: boolean }>,
   rateOre: number,
-): { coveredOre?: number; capOre?: number } {
+  // `minSjalvriskOre` returneras också (självrisk-golvet, #899) — utan den i typen
+  // trodde TS att den aldrig skickas till computeCoverageSplit, trots att den gör det.
+): { coveredOre?: number; capOre?: number; minSjalvriskOre?: number } {
   if (matter.paymentMethod !== "RATTSSKYDD") return {};
   const p = partitionRattsskyddMinutes(entries, matter.tvistUppkomDatum ?? null, matter.rattsskyddBeslutDatum ?? null);
   return omitUndefined({
@@ -511,6 +513,9 @@ export interface SettlementBreakdown {
   // är carvade (rättshjälp: rådgivningstimmen bort) + avstämda så summan = arvodeBaseNetOre.
   clientArvodeLines: SpecTimeLine[];
   deductedAccontos: SpecDeduction[];
+  /** Rättsskydd: varför klientens del blev som den blev (#935) — otäckt arbete,
+   *  självrisk, bolagets prutning, belopp över taket. Utelämnad för övriga metoder. */
+  clientParts?: RattsskyddClientParts;
 }
 
 /** Klientfakturans tidsspec (#876): arbetad tid, rådgivningstimmen carvad bort
@@ -570,6 +575,7 @@ async function buildSettlementBreakdown(repos: Repositories, orgId: Organization
     clientPayableOre: a.clientPayable,
     clientArvodeLines: buildClientArvodeLines(a.method, a.rateOre, a.work, a.totalArvodeNet, a.settleDate),
     deductedAccontos,
+    ...(a.split.clientParts ? { clientParts: a.split.clientParts } : {}),
   };
 }
 
@@ -587,18 +593,39 @@ const toViewLine = (l: SpecTimeLine): SettlementViewLine => ({
  * moms → inkl) + klientens utläggsandel (#878). `feeTerm` = "rättshjälpsavgift"
  * (rättshjälp) eller "självrisk" (rättsskydd).
  */
+/**
+ * Rättsskyddets fyra klient-poster → rader (#935), i den ordning de uppstår:
+ * otäckt arbete → självrisk på täckt del → bolagets prutning → över taket.
+ * Nollposter utelämnas. Summan = klientens netto (invariant, testad i
+ * `coverage-billing.test.ts`).
+ */
+function rattsskyddClientRows(p: RattsskyddClientParts, share: string): SettlementRow[] {
+  const rows: SettlementRow[] = [];
+  if (p.uncoveredOre > 0) rows.push({ label: "Arbete utanför försäkringens täckning — klienten betalar 100 % (exkl moms)", amountOre: p.uncoveredOre, kind: "add" });
+  if (p.sjalvriskOre > 0) rows.push({ label: `Självrisk ${share} % av täckt arbete (exkl moms)`, amountOre: p.sjalvriskOre, kind: "add" });
+  if (p.prutningOre > 0) rows.push({ label: "Försäkringens prutning — klienten bär (exkl moms)", amountOre: p.prutningOre, kind: "add" });
+  if (p.overCapOre > 0) rows.push({ label: "Belopp över försäkringens maxbelopp (exkl moms)", amountOre: p.overCapOre, kind: "add" });
+  return rows;
+}
+
 function buildClientView(b: SettlementBreakdown, isRattshjalp: boolean, feeTerm: string): SettlementView {
   const share = (b.clientShareBips / 100).toLocaleString("sv-SE", { maximumFractionDigits: 2 });
   const feeCap = feeTerm.charAt(0).toUpperCase() + feeTerm.slice(1);
-  const rows: SettlementRow[] = [];
-  if (isRattshjalp) {
-    rows.push({ label: "Upparbetat arvode (exkl moms)", amountOre: b.arvodeBaseNetOre, kind: "add" });
-    rows.push({ label: `Klientens ${feeTerm} ${share} % (exkl moms)`, amountOre: b.sjalvriskNetOre, kind: "add" });
-    rows.push({ label: "Moms 25 %", amountOre: b.sjalvriskGrossOre - b.sjalvriskNetOre, kind: "add" });
-    rows.push({ label: `${feeCap} (inkl moms)`, amountOre: b.sjalvriskGrossOre, kind: "add" });
+  const rows: SettlementRow[] = [
+    { label: "Upparbetat arvode (exkl moms)", amountOre: b.arvodeBaseNetOre, kind: "add" },
+  ];
+  // Rättsskydd (#935): klientens del är summan av FYRA poster — särredovisa dem i
+  // stället för ett lumpet belopp, så klienten ser varför den ska betala. Rättshjälp
+  // har bara avgiftsandelen (prutningen bärs av byrån, inte klienten).
+  if (!isRattshjalp && b.clientParts) {
+    rows.push(...rattsskyddClientRows(b.clientParts, share));
   } else {
-    rows.push({ label: "Klientens del / självrisk (inkl moms)", amountOre: b.sjalvriskGrossOre, kind: "add" });
+    rows.push({ label: `Klientens ${feeTerm} ${share} % (exkl moms)`, amountOre: b.sjalvriskNetOre, kind: "add" });
   }
+  // Samma moms-trappa för BÅDA metoderna (#935) — rättsskydd fick förr bara en enda
+  // inkl-moms-rad, vilket gjorde klientfakturorna asymmetriska och svårlästa.
+  rows.push({ label: "Moms 25 %", amountOre: b.sjalvriskGrossOre - b.sjalvriskNetOre, kind: "add" });
+  rows.push({ label: `${feeCap} (inkl moms)`, amountOre: b.sjalvriskGrossOre, kind: "add" });
   if (b.clientExpensesGrossOre > 0) rows.push({ label: "Utlägg (klientens andel, inkl moms)", amountOre: b.clientExpensesGrossOre, kind: "add" });
   for (const d of b.deductedAccontos) rows.push({ label: `Avgår aconto — faktura ${d.invoiceNumber}${d.date ? ` (${svd(d.date)})` : ""}`, amountOre: d.amountOre, kind: "deduct" });
   return { timeLines: b.clientArvodeLines.map(toViewLine), rows, totalLabel: "Att betala (inkl moms)", totalOre: b.clientPayableOre };

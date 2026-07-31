@@ -48,6 +48,24 @@ export interface CoverageSplitInput {
   minSjalvriskOre?: number | null;
 }
 
+/**
+ * Rättsskydd: VARFÖR klientens del blev som den blev (#935). Klientens andel är
+ * inte bara "självrisken" — den är summan av fyra poster. Delarna returneras här
+ * så klientfakturan kan itemisera dem i stället för att visa ett lumpet belopp.
+ *
+ * Invariant: `uncoveredOre + sjalvriskOre + prutningOre + overCapOre === clientOre`.
+ */
+export interface RattsskyddClientParts {
+  /** Otäckt arbete: före tvistdatum + retroaktivt utöver 6 h — klienten betalar 100 %. */
+  uncoveredOre: number;
+  /** Självrisk på den TÄCKTA delen (andel%, golv-justerad). */
+  sjalvriskOre: number;
+  /** Försäkringsbolagets prutning — klienten bär den (byrån blir hel). */
+  prutningOre: number;
+  /** Belopp över försäkringens maxbelopp — faller på klienten. */
+  overCapOre: number;
+}
+
 export interface CoverageSplit {
   /** Vad klienten ska betala (netto, öre). */
   clientOre: number;
@@ -57,6 +75,8 @@ export interface CoverageSplit {
   firmLossOre: number;
   /** Den faktiska total som fördelas (efter ev. rättshjälps-reduktion). */
   effectiveTotalOre: number;
+  /** Rättsskydd: nedbrytning av `clientOre`. Utelämnad för andra betalningssätt. */
+  clientParts?: RattsskyddClientParts;
 }
 
 function shareOf(ore: number, bips: number): number {
@@ -92,7 +112,21 @@ function rattsskyddSplit(total: number, input: CoverageSplitInput): CoverageSpli
   const insurerRaw = Math.max(0, covered - sjalvrisk - prutning);
   const overCap = input.capOre != null ? Math.max(0, insurerRaw - input.capOre) : 0;
   const payerOre = insurerRaw - overCap;
-  return { clientOre: total - payerOre, payerOre, firmLossOre: 0, effectiveTotalOre: total };
+  const clientOre = total - payerOre;
+  // Delarna av klientens andel (#935). `prutning`/`sjalvrisk` klampas till det som
+  // faktiskt bars av den täckta delen (insurerRaw kan ha nollats), så summan alltid
+  // stämmer med clientOre — resten hamnar i `uncoveredOre`.
+  const carried = Math.min(covered, sjalvrisk + prutning);
+  const sjalvriskPart = Math.min(carried, sjalvrisk);
+  return {
+    clientOre, payerOre, firmLossOre: 0, effectiveTotalOre: total,
+    clientParts: {
+      uncoveredOre: clientOre - carried - overCap,
+      sjalvriskOre: sjalvriskPart,
+      prutningOre: carried - sjalvriskPart,
+      overCapOre: overCap,
+    },
+  };
 }
 
 /** Rättsskyddets retroaktiva tak: arbete före det positiva beslutet får ingå

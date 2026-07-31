@@ -10,7 +10,9 @@ describe("computeCoverageSplit — rättsskydd (försäkring prutar)", () => {
   it("utan prutning: klient = självrisk, försäkring = resten, byrå hel", () => {
     // Total 100 000 kr, självrisk 20 % = 20 000 → försäkring 80 000.
     const r = computeCoverageSplit({ method: "RATTSSKYDD", totalOre: 10_000_000, clientShareBips: 2000, insurerPrutningOre: 0 });
-    expect(r).toEqual({ clientOre: 2_000_000, payerOre: 8_000_000, firmLossOre: 0, effectiveTotalOre: 10_000_000 });
+    // toMatchObject: beloppen är kontraktet — rättsskydd bär numera även en
+    // additiv `clientParts`-nedbrytning (#935) som testas separat.
+    expect(r).toMatchObject({ clientOre: 2_000_000, payerOre: 8_000_000, firmLossOre: 0, effectiveTotalOre: 10_000_000 });
   });
 
   it("med prutning: klienten tar mellanskillnaden (självrisk + prutning), byrå hel", () => {
@@ -95,7 +97,7 @@ describe("computeCoverageSplit — rättsskydd med täckt del + tak (#810)", () 
 
   it("bakåtkompatibelt: utan coveredOre/capOre = allt täckt (gamla beteendet)", () => {
     const r = computeCoverageSplit({ method: "RATTSSKYDD", totalOre: 1_000_000, clientShareBips: 2000 });
-    expect(r).toEqual({ clientOre: 200_000, payerOre: 800_000, firmLossOre: 0, effectiveTotalOre: 1_000_000 });
+    expect(r).toMatchObject({ clientOre: 200_000, payerOre: 800_000, firmLossOre: 0, effectiveTotalOre: 1_000_000 });
   });
 });
 
@@ -129,5 +131,63 @@ describe("partitionRattsskyddMinutes — tidsuppdelning (#810)", () => {
     // retro = 120 + 300 + 180 = 600 → kapas 360, överskott 240; efter beslut 240.
     expect(p.retroExcessMinutes).toBe(240);
     expect(p.coveredMinutes).toBe(360 + 240);
+  });
+});
+
+describe("rättsskydd: nedbrytning av klientens andel (#935)", () => {
+  const base = { method: "RATTSSKYDD" as const, totalOre: 1_000_000, clientShareBips: 2000 };
+
+  /** Invarianten som gör itemiseringen trovärdig på fakturan. */
+  const expectPartsSumToClient = (s: ReturnType<typeof computeCoverageSplit>): void => {
+    const p = s.clientParts!;
+    expect(p.uncoveredOre + p.sjalvriskOre + p.prutningOre + p.overCapOre).toBe(s.clientOre);
+  };
+
+  it("allt täckt: bara självrisk (20 %)", () => {
+    const s = computeCoverageSplit(base);
+    expect(s.clientParts).toEqual({ uncoveredOre: 0, sjalvriskOre: 200_000, prutningOre: 0, overCapOre: 0 });
+    expectPartsSumToClient(s);
+  });
+
+  it("otäckt arbete särredovisas — klienten betalar 100 % av det", () => {
+    const s = computeCoverageSplit({ ...base, coveredOre: 600_000 });
+    expect(s.clientParts?.uncoveredOre).toBe(400_000);   // 1 000 000 − 600 000
+    expect(s.clientParts?.sjalvriskOre).toBe(120_000);   // 20 % av täckt
+    expectPartsSumToClient(s);
+  });
+
+  it("försäkringens prutning hamnar på egen rad", () => {
+    const s = computeCoverageSplit({ ...base, insurerPrutningOre: 50_000 });
+    expect(s.clientParts?.prutningOre).toBe(50_000);
+    expect(s.clientParts?.sjalvriskOre).toBe(200_000);
+    expectPartsSumToClient(s);
+  });
+
+  it("belopp över taket särredovisas", () => {
+    const s = computeCoverageSplit({ ...base, capOre: 500_000 });
+    // Försäkringen skulle betalat 800 000, taket 500 000 → 300 000 över taket.
+    expect(s.clientParts?.overCapOre).toBe(300_000);
+    expect(s.payerOre).toBe(500_000);
+    expectPartsSumToClient(s);
+  });
+
+  it("golv-självrisk (dock lägst) speglas i nedbrytningen", () => {
+    const s = computeCoverageSplit({ ...base, minSjalvriskOre: 300_000 });
+    expect(s.clientParts?.sjalvriskOre).toBe(300_000); // golvet slår andel% (200 000)
+    expectPartsSumToClient(s);
+  });
+
+  it("allt otäckt: självrisk/prutning kan inte överstiga täckt del", () => {
+    const s = computeCoverageSplit({ ...base, coveredOre: 0, insurerPrutningOre: 50_000 });
+    expect(s.payerOre).toBe(0);
+    expect(s.clientOre).toBe(1_000_000);
+    expect(s.clientParts).toEqual({ uncoveredOre: 1_000_000, sjalvriskOre: 0, prutningOre: 0, overCapOre: 0 });
+    expectPartsSumToClient(s);
+  });
+
+  it("rättshjälp har ingen sådan nedbrytning (byrån bär prutningen)", () => {
+    const s = computeCoverageSplit({ method: "RATTSHJALP", totalOre: 1_000_000, clientShareBips: 500, awardedOre: 800_000 });
+    expect(s.clientParts).toBeUndefined();
+    expect(s.firmLossOre).toBe(200_000);
   });
 });
