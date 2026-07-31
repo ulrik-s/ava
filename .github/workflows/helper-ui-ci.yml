@@ -33,7 +33,7 @@ jobs:
         working-directory: helper-ui
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       # DRY toolchain (Node 24 + pinnad Bun + cachead frozen install), #909.
       # Composite-stegen kör i repo-roten (ärver inte job-defaultens
