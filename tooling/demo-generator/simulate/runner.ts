@@ -167,9 +167,21 @@ async function hKostnadsrakning(ctx: RunCtx, m: SimMatter, _e: Any, _iso: string
   st.krWorkValueOre = run.workValueOreAtRun ?? 0;
 }
 
-async function hBeslut(ctx: RunCtx, _m: SimMatter, _e: Any, _iso: string, st: SimState): Promise<void> {
+async function hBeslut(ctx: RunCtx, _m: SimMatter, e: Any, _iso: string, st: SimState): Promise<void> {
   if (!st.krRunId) return;
-  await ctx.c.billingRun.recordKostnadsrakningBeslut({ billingRunId: st.krRunId, awardedOre: st.krWorkValueOre });
+  // Domstolen kan PRUTA (#936): `reducedByBips` sätter ned det beviljade beloppet mot
+  // det yrkade. Vid rättshjälp bär BYRÅN mellanskillnaden (får ej tas av klienten) —
+  // settleCoverage bokar den som en PRUTNING-post via bookFirmLoss.
+  //
+  // Nedsättningen räknas på det ackumulerade NETTO-arvodet, inte på KR:ns
+  // `workValueOreAtRun`: den senare är BRUTTO (inkl moms + utlägg), medan
+  // `computeCoverageSplit` jämför `awardedOre` mot netto-arvodet och klampar till
+  // totalen. En procentsats på bruttot skulle därför ofta inte bita alls.
+  const bips = Number(e.reducedByBips ?? 0);
+  const awardedOre = bips > 0
+    ? Math.round((st.accruedNetOre * (10000 - bips)) / 10000)
+    : st.krWorkValueOre;
+  await ctx.c.billingRun.recordKostnadsrakningBeslut({ billingRunId: st.krRunId, awardedOre });
 }
 
 async function hVerdict(ctx: RunCtx, _m: SimMatter, _e: Any, _iso: string, st: SimState): Promise<void> {

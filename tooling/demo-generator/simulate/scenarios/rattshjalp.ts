@@ -10,7 +10,17 @@
 
 import type { Parties, SimEvent } from "../events";
 
-export function buildRattshjalpScenario(parties: Parties): SimEvent[] {
+export interface RattshjalpScenarioOpts {
+  /**
+   * Domstolens prutning i bips (1500 = 15 % nedsättning av det yrkade arvodet), #936.
+   * Vid rättshjälp bär BYRÅN nedsättningen — klientens rättshjälpsavgift räknas om på
+   * det nedsatta beloppet och mellanskillnaden bokas som en PRUTNING-post. Utan värde
+   * beviljar domstolen hela beloppet.
+   */
+  courtPrutningBips?: number;
+}
+
+export function buildRattshjalpScenario(parties: Parties, opts: RattshjalpScenarioOpts = {}): SimEvent[] {
   const ev: SimEvent[] = [
     { kind: "note", dayOffset: 0, text: "Klientbesök — första möte i ärendet. Rådgivning enligt rättshjälpstaxan." },
     { kind: "rateChange", dayOffset: 0, clientShareBips: 500 }, // klient arbetslös → 5 %
@@ -54,7 +64,12 @@ export function buildRattshjalpScenario(parties: Parties): SimEvent[] {
     // Kostnadsräkning → myndighetens/domstolens beslut → slutreglering.
     { kind: "kostnadsrakning", dayOffset: 105 },
     { kind: "doc", dayOffset: 106, template: "beslutRattshjalp" },
-    { kind: "beslut", dayOffset: 107 },
+    ...(opts.courtPrutningBips
+      ? [
+        { kind: "note" as const, dayOffset: 107, text: `Domstolen satte ned det yrkade arvodet med ${opts.courtPrutningBips / 100} % — nedsättningen bärs av byrån, klientens rättshjälpsavgift räknas om på det beviljade beloppet.` },
+        { kind: "beslut" as const, dayOffset: 107, reducedByBips: opts.courtPrutningBips },
+      ]
+      : [{ kind: "beslut" as const, dayOffset: 107 }]),
     { kind: "settle", dayOffset: 110, payerRecipient: "DOMSTOL" },
   );
   return ev;

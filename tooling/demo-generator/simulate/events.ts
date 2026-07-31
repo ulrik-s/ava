@@ -28,8 +28,13 @@ export type SimEvent =
   | { kind: "rateChange"; dayOffset: number; clientShareBips: number }
   /** Kostnadsräkning till domstol — createKostnadsrakning. */
   | { kind: "kostnadsrakning"; dayOffset: number }
-  /** Domstolens beslut på KR:n — recordKostnadsrakningBeslut. */
-  | { kind: "beslut"; dayOffset: number }
+  /**
+   * Domstolens beslut på KR:n — recordKostnadsrakningBeslut. Utan `reducedByBips`
+   * beviljas hela det yrkade beloppet. Med `reducedByBips` PRUTAR domstolen (1500 =
+   * 15 % nedsättning): rättshjälpens prutning bärs av BYRÅN — klientens avgift räknas
+   * om på det nedsatta beloppet och mellanskillnaden bokas som en förlust (#936).
+   */
+  | { kind: "beslut"; dayOffset: number; reducedByBips?: number }
   /** Skapa domstolsfakturan EFTER beslut (offentligt uppdrag) — setVerdict. */
   | { kind: "verdict"; dayOffset: number }
   /** Slutreglering (rättshjälp/-skydd) — settleCoverage (→ klient FINAL/CREDIT + betalare). */
