@@ -10,6 +10,7 @@
  * får två sourcer of truth.
  */
 
+import { TIMKOSTNADSNORM_FTAX_ORE_PER_H } from "@/lib/shared/brottmalstaxa";
 import {
   KOSTNADSRAKNING_TEMPLATE_NAME,
   KOSTNADSRAKNING_TEMPLATE_CATEGORY,
@@ -26,6 +27,13 @@ import {
 } from "@/lib/shared/schemas";
 
 export const ORG_ID = "firma-ab";
+
+/**
+ * Rättshjälpstaxan (timkostnadsnormen, F-skatt) — den taxa byråns jurister
+ * debiterar i seed-datan. Alias för `TIMKOSTNADSNORM_FTAX_ORE_PER_H` så
+ * seed-datan har EN referens att följa när normen räknas upp per år.
+ */
+const RATTSHJALPSTAXA_ORE_PER_H = TIMKOSTNADSNORM_FTAX_ORE_PER_H;
 
 /**
  * Options för `buildSeed()`. Default = docker-firma:n (`firma-ab` + current-user).
@@ -67,13 +75,15 @@ interface UserSeed {
 
 function buildUsers(currentUserId: string, emailDomain: string): UserSeed[] {
   return [
-    // Alla advokater debiterar timkostnadsnormen 1 626 kr/h (162 600 öre). David
-    // är biträdande jurist (ej advokat) och behåller sin lägre taxa.
-    { id: currentUserId, email: `user@${emailDomain}`, name: "Anna Advokat", role: "ADMIN", hourlyRate: 162_600, title: "Senior partner" },
-    { id: "u-bjorn", email: `bjorn@${emailDomain}`, name: "Björn Bauer", role: "LAWYER", hourlyRate: 162_600, title: "Advokat" },
-    { id: "u-cecilia", email: `cecilia@${emailDomain}`, name: "Cecilia Carlsson", role: "LAWYER", hourlyRate: 162_600, title: "Advokat" },
-    { id: "u-david", email: `david@${emailDomain}`, name: "David Dahl", role: "ASSISTANT", hourlyRate: 90_000, title: "Biträdande jurist" },
-    { id: "u-eva", email: `eva@${emailDomain}`, name: "Eva Eklund", role: "LAWYER", hourlyRate: 162_600, title: "Advokat" },
+    // ALLA debiterar rättshjälpstaxan (timkostnadsnormen, F-skatt) — även David
+    // som är biträdande jurist. Taxan läses ur `TIMKOSTNADSNORM_FTAX_ORE_PER_H`
+    // (single source of truth i brottmalstaxa.ts) så seed-datan följer med när
+    // normen räknas upp; inga hårdkodade ören här.
+    { id: currentUserId, email: `user@${emailDomain}`, name: "Anna Advokat", role: "ADMIN", hourlyRate: RATTSHJALPSTAXA_ORE_PER_H, title: "Senior partner" },
+    { id: "u-bjorn", email: `bjorn@${emailDomain}`, name: "Björn Bauer", role: "LAWYER", hourlyRate: RATTSHJALPSTAXA_ORE_PER_H, title: "Advokat" },
+    { id: "u-cecilia", email: `cecilia@${emailDomain}`, name: "Cecilia Carlsson", role: "LAWYER", hourlyRate: RATTSHJALPSTAXA_ORE_PER_H, title: "Advokat" },
+    { id: "u-david", email: `david@${emailDomain}`, name: "David Dahl", role: "ASSISTANT", hourlyRate: RATTSHJALPSTAXA_ORE_PER_H, title: "Biträdande jurist" },
+    { id: "u-eva", email: `eva@${emailDomain}`, name: "Eva Eklund", role: "LAWYER", hourlyRate: RATTSHJALPSTAXA_ORE_PER_H, title: "Advokat" },
   ];
 }
 
