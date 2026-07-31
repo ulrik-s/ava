@@ -24,14 +24,14 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       # DRY toolchain (Node 24 + pinnad Bun + cachead frozen install), #909.
       - uses: ./.github/actions/bun-setup
 
       - name: Setup Pages
         id: pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
 
       # Bygger appen som statisk export OCH seedar demo-data direkt i out/.
       # build-demo.sh kör:
@@ -90,7 +90,7 @@ jobs:
           echo "✓ Sanity check OK — $docs dokumentfiler, manifest finns, route-HTML:er finns."
 
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: ./out
 
@@ -103,4 +103,4 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
