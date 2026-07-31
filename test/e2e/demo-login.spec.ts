@@ -17,14 +17,22 @@ test("färsk besökare (ingen principal) → /login renderar inloggningen, fastn
 
   // Färsk demo-besökare: tier=demo, INGEN principalId (deterministiskt oavsett
   // build-defaults). Detta är exakt vad en ny besökare på live-demon har.
-  await context.addInitScript(() => {
+  //
+  // `repo` sätts till testets EGEN baseURL (#932): `resolveGhPagesUrl` returnerar
+  // en full URL som-är, så datan (`.ava/meta.json` m.m.) hämtas från samma origin
+  // som sidan serveras från. Förr stod här "ulrik-s/ava", vilket fick den lokalt
+  // serverade `out/` att ändå hämta data från LIVE-demon → jobbet var inte
+  // hermetiskt och blev rött när live-demon var nere (#933), med ett missvisande
+  // fel (saknad "Logga in"-knapp, eftersom formuläret väntar på användarlistan).
+  // Mot live-demon (default baseURL) är beteendet oförändrat.
+  await context.addInitScript((repo) => {
     try {
       localStorage.setItem("ava.firma", JSON.stringify({
-        tier: "demo", repo: "ulrik-s/ava", token: "",
+        tier: "demo", repo, token: "",
         principalId: "", organizationId: "", authorName: "", authorEmail: "",
       }));
     } catch { /* ignore */ }
-  });
+  }, base.replace(/\/+$/, ""));
 
   await page.goto(`${base}/`, { waitUntil: "domcontentloaded" });
 
