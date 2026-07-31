@@ -70,4 +70,29 @@ describe("populateInvoiceDocs", () => {
     const acconto = htmls.find((h) => h.includes("Aconto-faktura") && h.includes("Klientens andel"));
     expect(acconto, "aconto-doc ska visa andels-nedbrytningen").toBeDefined();
   });
+
+  it("ALLA fakturor har sammanställning först och specifikation efter (#937)", async () => {
+    const seed = buildSeed();
+    const htmls: string[] = [];
+    const target = createGitTarget({ principal: ADMIN, writeBack: async () => {} });
+    await populate(target.caller, seed);
+    await populateBilling(target.caller, seed);
+    await populateInvoiceDocs(target.caller, (_p, b) => { htmls.push(new TextDecoder().decode(b)); return b.byteLength; });
+    expect(htmls.length).toBeGreaterThan(0);
+    for (const html of htmls) {
+      // Demon renderas med APPENS mall — inga obrutna Handlebars-tokens, och
+      // varje faktura inleds med sammanställningen (den gamla demo-egna
+      // renderarens "Underlag (arbetad tid)" finns inte längre).
+      expect(html).not.toMatch(/\{\{/);
+      expect(html).toContain("Sammanställning");
+      expect(html).not.toContain("Underlag (arbetad tid)");
+      // Finns ett underlag ska det ligga EFTER sammanställningen, bakom sidbrytning.
+      if (html.includes(">Specifikation<")) {
+        expect(html.indexOf("Sammanställning")).toBeLessThan(html.indexOf(">Specifikation<"));
+        expect(html.indexOf('class="page-break"')).toBeLessThan(html.indexOf(">Specifikation<"));
+      }
+      // Mottagaren är alltid namngiven (klient eller betalare), aldrig tom.
+      expect(html).toMatch(/Mottagare: \S/);
+    }
+  });
 });

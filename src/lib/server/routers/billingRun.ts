@@ -22,6 +22,10 @@ import { proposedAccontoOre } from "@/lib/shared/billing-proposal";
 import { TIMKOSTNADSNORM_FTAX_ORE_PER_H, timkostnadsnormFtaxForDate, tidsspillanFtaxForDate } from "@/lib/shared/brottmalstaxa";
 import { computeCoverageSplit, partitionRattsskyddMinutes, type CoverageSplit, type RattsskyddClientParts } from "@/lib/shared/coverage-billing";
 import { arvodeInclVatOre } from "@/lib/shared/invoice-calc";
+import {
+  buildInvoiceSpecification,
+  type InvoiceSpecification, type SpecDeduction, type SpecExpenseLine, type SpecTimeLine,
+} from "@/lib/shared/invoice-specification";
 import { carveEarliestMinutes } from "@/lib/shared/kostnadsrakning";
 import { applyKrAction, type KostnadsrakningAction, type KostnadsrakningState, type KostnadsrakningStatus } from "@/lib/shared/kostnadsrakning-flow";
 import { ocrFromInvoiceNumber } from "@/lib/shared/ocr-reference";
@@ -389,32 +393,8 @@ async function freezeWork(repos: Repositories, matterId: MatterId, billingRunId:
 }
 
 // ── Fakturaspecifikation (#856) ─────────────────────────────────────────────
-
-/** En rad i fakturans tidsspecifikation (belopp = timmar × gällande timarvode). */
-interface SpecTimeLine { date: Date | string; description: string; minutes: number; amountOre: number; }
-/** En rad i utläggsspecifikationen (netto + brutto, exakt per momssats). */
-interface SpecExpenseLine { date: Date | string; description: string; netOre: number; grossOre: number; }
-/** En avdragen (tidigare betald) aconto-faktura. */
-interface SpecDeduction { invoiceNumber: string; date: Date | string | null; amountOre: number; }
-
-/**
- * Fakturans fullständiga specifikation (#856): itemiserade tider + utlägg,
- * avdragna aconto-fakturor och summering. `payableOre` = fakturans FAKTISKA
- * belopp; `adjustmentOre` fångar ev. differens (rättshjälps-/rättsskyddssplit,
- * prutning) mellan brutto−avdrag och det som faktureras — visas på en egen rad.
- */
-interface InvoiceSpecification {
-  timeLines: SpecTimeLine[];
-  expenseLines: SpecExpenseLine[];
-  totalMinutes: number;
-  arvodeNetOre: number; arvodeVatOre: number;
-  expensesNetOre: number; expensesVatOre: number;
-  grossOre: number;
-  deductions: SpecDeduction[];
-  deductionOre: number;
-  adjustmentOre: number;
-  payableOre: number;
-}
+// Modell + summerings-builder bor i `@/lib/shared/invoice-specification` (#937)
+// så faktura-mallen och demo-generatorn kan bygga samma shape (DRY).
 
 function specTimeLines(
   method: PaymentMethod, normRateOre: number,
@@ -434,30 +414,6 @@ function specExpenseLines(
     const s = expenseSplit(e);
     return { date: e.date, description: e.description, netOre: s.exclVat, grossOre: s.exclVat + s.vat };
   });
-}
-
-function buildInvoiceSpecification(a: {
-  timeLines: SpecTimeLine[]; expenseLines: SpecExpenseLine[]; deductions: SpecDeduction[]; payableOre: number;
-}): InvoiceSpecification {
-  const arvodeNetOre = a.timeLines.reduce((s, l) => s + l.amountOre, 0);
-  const arvodeVatOre = arvodeInclVatOre(arvodeNetOre) - arvodeNetOre;
-  const expensesNetOre = a.expenseLines.reduce((s, l) => s + l.netOre, 0);
-  const expensesVatOre = a.expenseLines.reduce((s, l) => s + (l.grossOre - l.netOre), 0);
-  const deductionOre = a.deductions.reduce((s, d) => s + d.amountOre, 0);
-  // Brutto före avdrag. Har fakturan itemiserat arbete → summan av raderna.
-  // Saknas rader (t.ex. klientens självrisk-faktura, vars arbete ligger på
-  // betalar-fakturan) → härled ur det fakturerade + avdragen, så avdragen kan
-  // visas transparent (belopp − aconton = att betala) utan negativ justering.
-  const hasLines = a.timeLines.length > 0 || a.expenseLines.length > 0;
-  const grossOre = hasLines ? arvodeNetOre + arvodeVatOre + expensesNetOre + expensesVatOre : a.payableOre + deductionOre;
-  return {
-    timeLines: a.timeLines, expenseLines: a.expenseLines,
-    totalMinutes: a.timeLines.reduce((s, l) => s + l.minutes, 0),
-    arvodeNetOre, arvodeVatOre, expensesNetOre, expensesVatOre, grossOre,
-    deductions: a.deductions, deductionOre,
-    adjustmentOre: a.payableOre - (grossOre - deductionOre),
-    payableOre: a.payableOre,
-  };
 }
 
 /**

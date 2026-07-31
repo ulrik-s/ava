@@ -3,9 +3,12 @@
 /**
  * `renderFakturaPdf` — bygger en enkel faktura-PDF client-side via pdf-lib.
  *
- * Används när en faktura skapas (t.ex. ur en kostnadsräknings dom) för att
- * lägga ett faktura-DOKUMENT i ärendets fil-lista, parallellt med Invoice-
- * entiteten. Layouten är medvetet enkel — beloppet kommer från domen/underlaget.
+ * Används BARA som bilaga vid manuellt fakturautskick (#179). Faktura-DOKUMENTEN
+ * i ärendets fil-lista renderas sedan #937 av den delade mallen
+ * (`faktura-template.ts`) → sammanställning + specifikation.
+ *
+ * TODO(#938): den här bilagan saknar det upplägget — kräver att vy-modellen
+ * bryts ut ur mallen och att tabell-layout/sidbrytning implementeras i pdf-lib.
  */
 
 import { formatCurrency } from "@/lib/client/utils";

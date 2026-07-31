@@ -10,7 +10,7 @@
  * timkostnadsnorm × billable tid. Ingen huvudförhandling (hufStart = hufEnd).
  *
  * Använder `document.register` (inga events → ingen read-only-trap) precis som
- * `generateFakturaDoc`, så det funkar i både demo- och git/server-backend.
+ * `generateFakturaFromTemplate`, så det funkar i både demo- och git/server-backend.
  */
 
 import { omitUndefined } from "@/lib/shared/omit-undefined";

@@ -11,10 +11,12 @@
  */
 import { VatBreakdown } from "@/components/billing/vat-breakdown";
 import { Modal } from "@/components/ui/modal";
-import { generateFakturaDoc } from "@/lib/client/kostnadsrakning/generate-faktura-doc";
+import type { FakturaDocInvoice } from "@/lib/client/kostnadsrakning/faktura-template";
+import { generateFakturaFromTemplate } from "@/lib/client/kostnadsrakning/generate-faktura-doc";
 import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
+import { BILLING_RUN_RECIPIENT_LABELS } from "@/lib/shared/schemas/enums";
 import type { BillingRunId, MatterId } from "@/lib/shared/schemas/ids";
 
 interface Props {
@@ -37,11 +39,15 @@ export function VerdictDialog(props: Props) {
   const utils = trpc.useUtils();
   const mut = trpc.billingRun.setVerdict.useMutation({
     onSuccess: async (res) => {
-      // Lägg ett faktura-dokument i fil-listan ur den skapade fakturan.
+      // Lägg ett faktura-dokument i fil-listan ur den skapade fakturan — via den
+      // delade mallen (#937), så domstolsfakturan får sammanställning + specifikation.
       try {
-        await generateFakturaDoc({
-          invoice: (res as { invoice: Parameters<typeof generateFakturaDoc>[0]["invoice"] }).invoice,
+        const invoice = (res as { invoice: FakturaDocInvoice }).invoice;
+        const spec = await utils.billingRun.invoiceSpecification.fetch({ matterId: props.matterId, invoiceId: invoice.id });
+        await generateFakturaFromTemplate({
+          invoice,
           matterId: props.matterId,
+          recipient: BILLING_RUN_RECIPIENT_LABELS.RATTSHJALPSMYNDIGHET,
           meta: {
             matterNumber: props.matterNumber, matterTitle: props.matterTitle,
             ...omitUndefined({
@@ -50,7 +56,7 @@ export function VerdictDialog(props: Props) {
               organizationOrgNumber: props.organizationOrgNumber,
             }),
           },
-          register, utils,
+          register, utils, spec,
         });
       } catch (e) { console.warn("[verdict] faktura-dokument misslyckades:", e); }
       onClose();

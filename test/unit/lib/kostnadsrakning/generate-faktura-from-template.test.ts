@@ -99,7 +99,7 @@ describe("generateFakturaFromTemplate", () => {
     expect(html).not.toContain("Rådgivning"); // rådgivningstimmen syns ALDRIG på domstols-fakturan (#860)
   });
 
-  it("sammanfattning: sektion per timtaxa + utlägg exkl/inkl + summa, spec efter (#925)", async () => {
+  it("sammanställning: sektion per timtaxa + utlägg exkl/inkl + summa, spec efter (#925)", async () => {
     await generateFakturaFromTemplate({
       invoice: { id: asId<"InvoiceId">("inv-s1"), amount: 1_071_500, vatOre: 196_300, invoiceNumber: "F-2026-0055", invoiceDate: "2026-06-30" },
       matterId: asId<"MatterId">("m1"),
@@ -125,7 +125,7 @@ describe("generateFakturaFromTemplate", () => {
     const html = new TextDecoder().decode(persistGeneratedDoc.mock.calls[0]![0].bytes as Uint8Array);
     // En sektion per unik timtaxa (norm 1 626 kr/tim + tidsspillan 1 450 kr/tim),
     // varje rad med BENÄMNING + timtaxa i egna kolumner.
-    expect(html).toContain("Sammanfattning");
+    expect(html).toContain("Sammanställning");
     expect(html).toContain("Benämning");
     expect(html).toContain("Timtaxa");
     expect(html).toContain(`${formatCurrency(162_600)}/tim`); // timkostnadsnorm 2026
@@ -145,9 +145,9 @@ describe("generateFakturaFromTemplate", () => {
     expect(iMoms).toBeLessThan(iInkl);
     expect(html).toContain(formatCurrency(196_300)); // momsraden = arvodeVat + expensesVat
     expect(html).toContain(formatCurrency(1_071_500)); // summa = arvode inkl moms + utlägg inkl moms
-    // Sammanfattningen står FÖRE specifikationen; specen har sidbrytning.
-    expect(html.indexOf("Sammanfattning")).toBeLessThan(html.indexOf("Specifikation"));
-    expect(html.indexOf("Sammanfattning")).toBeLessThan(html.indexOf("Tidsspecifikation"));
+    // Sammanställningen står FÖRE specifikationen; specen har sidbrytning.
+    expect(html.indexOf("Sammanställning")).toBeLessThan(html.indexOf("Specifikation"));
+    expect(html.indexOf("Sammanställning")).toBeLessThan(html.indexOf("Tidsspecifikation"));
     expect(html).toContain('class="page-break"');
   });
 

@@ -1,29 +1,22 @@
 "use client";
 
 /**
- * `generateFakturaDoc` (#397) — generera ett faktura-DOKUMENT (PDF) ur en nyss
- * skapad Invoice-entitet och lägg det i ärendets fil-lista, parallellt med
- * Invoice-objektet. `document.register` emittar inga events (ingen read-only-
- * trap), så detta funkar i både demo- och git-backend.
+ * `generateFakturaFromTemplate` (#397/#852) — generera ett faktura-DOKUMENT ur en
+ * nyss skapad Invoice-entitet och lägg det i ärendets fil-lista, parallellt med
+ * Invoice-objektet. `document.register` emittar inga events (ingen read-only-trap),
+ * så detta funkar i både demo- och git-backend.
  *
- * Bröts ut ur `_verdict-dialog.tsx` så aconto-/slutfaktura-flödet i
- * `_billing-dialog.tsx` kan dela exakt samma kod (DRY).
+ * HTML:en kommer ur den DELADE mallen (`faktura-template.ts`, #937) — samma
+ * renderare som demo-generatorn använder, så varje faktura i systemet har
+ * sammanställning på första sidan och specifikation därefter.
  */
 
-import type { inferRouterInputs, inferRouterOutputs } from "@trpc/server";
+import type { inferRouterInputs } from "@trpc/server";
 import type { AppRouter } from "@/lib/server/routers/_app";
-import { tidsspillanFtaxForDate, timkostnadsnormFtaxForDate } from "@/lib/shared/brottmalstaxa";
-import { omitUndefined } from "@/lib/shared/omit-undefined";
-import { asId, type InvoiceId, type MatterId } from "@/lib/shared/schemas/ids";
+import { asId, type MatterId } from "@/lib/shared/schemas/ids";
+import type { FakturaBreakdown, FakturaDocInvoice, FakturaDocMeta, InvoiceSpecification } from "./faktura-template";
 
 type RouterInputs = inferRouterInputs<AppRouter>;
-/** Fakturaspecifikationen (#856) — router-outputen, återanvänd så typerna följs åt. */
-export type InvoiceSpecification = inferRouterOutputs<AppRouter>["billingRun"]["invoiceSpecification"];
-
-/** En rad i den itemiserade summeringen (#858): `add` = delbelopp, `deduct` =
- *  avgår (−), `info` = spårbarhets-rad utan beloppspåverkan (visas parentes). */
-export interface BreakdownRow { label: string; amountOre: number; kind: "add" | "deduct" | "info" }
-export interface FakturaBreakdown { rows: BreakdownRow[]; totalLabel: string; totalOre: number }
 type RegisterInput = RouterInputs["document"]["register"];
 type TreeFilter = RouterInputs["document"]["tree"];
 type ListFilter = RouterInputs["document"]["list"];
@@ -36,86 +29,6 @@ export type DocUtils = {
   };
 };
 
-export interface FakturaDocMeta {
-  matterNumber: string;
-  matterTitle: string;
-  clientName?: string;
-  recipient?: string;
-  organizationName?: string;
-  organizationOrgNumber?: string;
-}
-
-export interface FakturaDocInvoice {
-  id: InvoiceId;
-  amount: number;
-  /** Momsbelopp (öre) i `amount`, exakt per sats (#782). Saknas → 25 %-split. */
-  vatOre?: number | null | undefined;
-  invoiceNumber?: string | null | undefined;
-  ocrReference?: string | null | undefined;
-  invoiceDate?: string | Date | null | undefined;
-}
-
-export interface GenerateFakturaDocArgs {
-  invoice: FakturaDocInvoice;
-  matterId: MatterId;
-  meta: FakturaDocMeta;
-  register: RegisterMut;
-  utils: DocUtils;
-}
-
-/** Inbyggd faktura-mall (Handlebars) — används av template-motorn (#852) när
- *  ingen byrå-mall finns. HTML → öppningsbar + skrivbar. */
-const FAKTURA_TEMPLATE = `<!DOCTYPE html><html lang="sv"><head><meta charset="utf-8"><title>Faktura {{invoiceNumber}}</title>
-<style>@media print{.page-break{page-break-before:always}}.page-break{border:0;border-top:1px dashed #ccc;margin:2rem 0}</style></head>
-<body style="font-family:system-ui,sans-serif;max-width:720px;margin:2rem auto;color:#111">
-<h1 style="margin-bottom:0">Faktura</h1>
-<p style="color:#555">Fakturanr: {{invoiceNumber}}{{#if ocr}} · OCR: {{ocr}}{{/if}}<br>Datum: {{date}}</p>
-<p style="color:#555">Ärende {{matterNumber}} — {{matterTitle}}<br>Mottagare: {{recipient}}</p>
-
-<h2 style="font-size:16px;margin-top:1.5rem;margin-bottom:.5rem">Sammanfattning</h2>
-{{#if arvodeSections.length}}
-<table cellpadding="6" cellspacing="0" style="border-collapse:collapse;width:100%;font-size:14px;margin-bottom:1rem">
-<thead><tr style="border-bottom:1px solid #ccc;text-align:left"><th>Benämning</th><th style="text-align:right">Timtaxa</th><th style="text-align:right">Tim</th><th style="text-align:right">Belopp</th></tr></thead>
-<tbody>{{#each arvodeSections}}<tr><td>{{this.label}}</td><td style="text-align:right">{{this.rateLabel}}</td><td style="text-align:right">{{this.hours}}</td><td style="text-align:right">{{this.amount}}</td></tr>{{/each}}</tbody>
-<tfoot><tr style="border-top:1px solid #ccc"><td style="font-weight:bold">Summa (inkl moms)</td><td></td><td></td><td style="text-align:right;font-weight:bold">{{arvodeSumma}}</td></tr></tfoot>
-</table>{{/if}}
-{{#if hasSplit}}<h3 style="font-size:14px;margin-top:1rem;margin-bottom:.25rem">Uppdelning klient / betalare</h3>{{/if}}
-<table cellpadding="6" cellspacing="0" style="border-collapse:collapse;width:100%;font-size:14px">
-<tbody>
-{{#if useBreakdown}}
-{{#each breakdownRows}}<tr style="{{this.style}}"><td>{{this.label}}</td><td style="text-align:right;{{this.style}}">{{this.amount}}</td></tr>{{/each}}
-{{else}}
-{{#if useSpec}}
-{{#each deductions}}<tr style="color:#b45309"><td>Avgår aconto — faktura {{this.invoiceNumber}}{{#if this.date}} ({{this.date}}){{/if}}</td><td style="text-align:right">−{{this.amount}}</td></tr>{{/each}}
-{{#if hasAdjustment}}<tr style="color:#555"><td>{{adjustmentLabel}}</td><td style="text-align:right">{{adjustment}}</td></tr>{{/if}}
-{{else}}
-<tr><td>Netto (exkl moms)</td><td style="text-align:right">{{net}}</td></tr>
-<tr><td>Moms</td><td style="text-align:right">{{vat}}</td></tr>
-{{/if}}
-{{/if}}
-</tbody>
-<tfoot><tr style="border-top:2px solid #333"><td style="font-weight:bold">{{totalLabel}}</td><td style="text-align:right;font-weight:bold">{{total}}</td></tr></tfoot>
-</table>
-{{#if hasSpec}}
-<hr class="page-break">
-<h2 style="font-size:16px;margin-bottom:.25rem">Specifikation</h2>
-<p style="color:#777;font-size:12px;margin-top:0">Underlag till beloppen i sammanfattningen ovan.</p>
-{{#if timeLines.length}}
-<h3 style="font-size:14px;margin-top:1rem;margin-bottom:.25rem">Tidsspecifikation</h3>
-<table cellpadding="5" cellspacing="0" style="border-collapse:collapse;width:100%;font-size:13px">
-<thead><tr style="border-bottom:1px solid #ccc;text-align:left"><th>Datum</th><th>Beskrivning</th><th style="text-align:right">Tim</th><th style="text-align:right">Belopp</th></tr></thead>
-<tbody>{{#each timeLines}}<tr><td>{{this.date}}</td><td>{{this.description}}</td><td style="text-align:right">{{this.hours}}</td><td style="text-align:right">{{this.amount}}</td></tr>{{/each}}</tbody>
-</table>{{/if}}
-{{#if expenseLines.length}}
-<h3 style="font-size:14px;margin-top:1.5rem;margin-bottom:.25rem">Utläggsspecifikation</h3>
-<table cellpadding="5" cellspacing="0" style="border-collapse:collapse;width:100%;font-size:13px">
-<thead><tr style="border-bottom:1px solid #ccc;text-align:left"><th>Datum</th><th>Beskrivning</th><th style="text-align:right">Netto</th><th style="text-align:right">Brutto</th></tr></thead>
-<tbody>{{#each expenseLines}}<tr><td>{{this.date}}</td><td>{{this.description}}</td><td style="text-align:right">{{this.net}}</td><td style="text-align:right">{{this.gross}}</td></tr>{{/each}}</tbody>
-</table>{{/if}}
-{{/if}}
-{{#if organizationName}}<p style="color:#777;font-size:13px;margin-top:1.5rem">{{organizationName}}{{#if organizationOrgNumber}} · {{organizationOrgNumber}}{{/if}}</p>{{/if}}
-</body></html>`;
-
 export interface GenerateFakturaFromTemplateArgs {
   invoice: FakturaDocInvoice;
   matterId: MatterId;
@@ -124,170 +37,26 @@ export interface GenerateFakturaFromTemplateArgs {
   register: RegisterMut;
   utils: DocUtils;
   /** Fakturaspecifikationen (#856) — tider/utlägg/avdragna aconton. Utelämnas
-   *  för rena aconto-fakturor → mallen faller tillbaka på netto/moms/summa. */
+   *  för rena aconto-fakturor → sammanställningen faller tillbaka på `notes`. */
   spec?: InvoiceSpecification | null | undefined;
   /** Itemiserad summering (#858) — självförklarande nedbrytning (självrisk,
-   *  rådgivning, prutning, aconton). När satt renderas den i stället för spec-
-   *  summeringen. Tids-/utläggstabellerna kommer fortsatt ur `spec`. */
+   *  rådgivning, prutning, aconton). När satt renderas den som uppdelningen
+   *  mellan klient och betalare i stället för spec-summeringen. */
   breakdown?: FakturaBreakdown | null | undefined;
 }
 
 /**
- * Generera ett faktura-DOKUMENT via TEMPLATE-MOTORN (#852): renderar
- * `FAKTURA_TEMPLATE` med Handlebars mot fakturans kontext → HTML, registrerar
- * (documentType=Faktura, invoiceId) och persisterar bytes:erna. Används av
- * slutreglerings-flödet så klient-/betalar-fakturorna får dokument i fil-listan
- * + länk på faktura-objektet. `document.register` emittar inga events (ingen
- * read-only-trap), funkar i demo + server.
+ * Generera ett faktura-DOKUMENT via TEMPLATE-MOTORN (#852/#937): renderar den
+ * delade faktura-mallen mot fakturans kontext → HTML, registrerar
+ * (documentType=Faktura, invoiceId) och persisterar bytes:erna. Används av ALLA
+ * fakturaflöden (aconto, rådgivning, slutreglering, dom) så klient-/betalar-
+ * fakturorna får dokument i fil-listan + länk på faktura-objektet.
  */
-const svDate = (d: Date | string | null | undefined): string => (d ? new Date(d).toLocaleDateString("sv-SE") : "");
-const svHours = (minutes: number): string => (minutes / 60).toLocaleString("sv-SE", { maximumFractionDigits: 2 });
-
-/** Spec-delen av kontexten (tider/utlägg/avdrag + summering, #856). Tom när
- *  ingen spec finns → mallen (`useSpec`=false) faller tillbaka på netto/moms. */
-function specContext(spec: InvoiceSpecification | null | undefined, fc: (ore: number) => string): Record<string, unknown> {
-  if (!spec) return { useSpec: false };
-  const vat = spec.arvodeVatOre + spec.expensesVatOre;
-  return {
-    useSpec: true,
-    hasSpec: spec.timeLines.length > 0 || spec.expenseLines.length > 0,
-    hasExpenses: spec.expenseLines.length > 0,
-    hoursTotal: spec.totalMinutes > 0 ? svHours(spec.totalMinutes) : "",
-    timeLines: spec.timeLines.map((l) => ({ date: svDate(l.date), description: l.description, hours: svHours(l.minutes), amount: fc(l.amountOre) })),
-    expenseLines: spec.expenseLines.map((l) => ({ date: svDate(l.date), description: l.description, net: fc(l.netOre), gross: fc(l.grossOre) })),
-    deductions: spec.deductions.map((d) => ({ invoiceNumber: d.invoiceNumber, date: svDate(d.date), amount: fc(d.amountOre) })),
-    arvodeNet: fc(spec.arvodeNetOre), expensesNet: fc(spec.expensesNetOre), vat: fc(vat), gross: fc(spec.grossOre),
-    hasAdjustment: spec.adjustmentOre !== 0,
-    adjustmentLabel: spec.adjustmentOre < 0 ? "Nedsättning" : "Justering",
-    adjustment: fc(spec.adjustmentOre),
-  };
-}
-
-/**
- * Arvode-sektioner per timtaxa (#925) för sammanfattningen: grupperar spec:ens
- * tidsrader på den HÄRLEDDA taxan (amountOre / timmar — rättshjälp=norm/tidsspillan,
- * övrigt=post-taxa) → en rad per unik taxa (fallande). Ren + testbar.
- */
-interface SummarySection { label: string; rateLabel: string; hours: string; amount: string }
-
-/**
- * Benämning för en taxegrupp (#925): rättshjälpsärenden värderar arbete på
- * timkostnadsnormen och restid/väntetid på den lägre tidsspillan-normen — känns
- * igen genom att jämföra taxan mot ÅRETS normer (posten bär sitt datum, så
- * ärenden över ett årsskifte får rätt benämning per period). Övriga ärenden
- * debiterar byråns timtaxa → "Arvode".
- */
-function rateGroupLabel(rateOre: number, date: Date | string): string {
-  if (rateOre === tidsspillanFtaxForDate(date)) return "Tidsspillan";
-  if (rateOre === timkostnadsnormFtaxForDate(date)) return "Arvode (timkostnadsnorm)";
-  return "Arvode";
-}
-
-/** Gruppera arvodet på den härledda timtaxan → en rad per unik taxa (fallande). */
-function arvodeRateRows(spec: InvoiceSpecification, fc: (ore: number) => string): SummarySection[] {
-  const groups = new Map<number, { minutes: number; amountOre: number; date: Date | string }>();
-  for (const l of spec.timeLines) {
-    const rate = l.minutes > 0 ? Math.round((l.amountOre * 60) / l.minutes) : 0;
-    const g = groups.get(rate) ?? { minutes: 0, amountOre: 0, date: l.date };
-    groups.set(rate, { minutes: g.minutes + l.minutes, amountOre: g.amountOre + l.amountOre, date: g.date });
-  }
-  return [...groups.entries()]
-    .sort((a, b) => b[0] - a[0])
-    .map(([rate, g]) => ({
-      label: rateGroupLabel(rate, g.date),
-      rateLabel: `${fc(rate)}/tim`,
-      hours: svHours(g.minutes),
-      amount: fc(g.amountOre),
-    }));
-}
-
-/**
- * Sammanfattningens sektionstabell (#925): en rad per timtaxa (arvode exkl moms),
- * följt av utlägg exkl moms + utlägg inkl moms, och en summa (allt inkl moms).
- * Utlägg-raderna är avsiktligt informativa (både exkl och inkl) — summan är det
- * faktiska bruttot (arvode inkl moms + utlägg inkl moms). Ren + testbar.
- */
-function arvodeSectionsContext(spec: InvoiceSpecification | null | undefined, fc: (ore: number) => string): Record<string, unknown> {
-  if (!spec || spec.timeLines.length === 0) return { arvodeSections: [] };
-  const sections = arvodeRateRows(spec, fc);
-  const hasExpenses = spec.expensesNetOre > 0 || spec.expensesVatOre > 0;
-  // Ordning (#925): momsfritt utlägg → momsraden (total moms) → utlägg inkl moms
-  // → summa (allt inkl moms). Momsraden är fakturans hela moms (arvode + utlägg),
-  // så arvode-raderna (exkl moms) + utlägg exkl + moms = summan.
-  if (hasExpenses) {
-    sections.push({ label: "Utlägg exkl moms", rateLabel: "", hours: "", amount: fc(spec.expensesNetOre) });
-  }
-  sections.push({ label: "Moms", rateLabel: "", hours: "", amount: fc(spec.arvodeVatOre + spec.expensesVatOre) });
-  if (hasExpenses) {
-    sections.push({ label: "Utlägg inkl moms", rateLabel: "", hours: "", amount: fc(spec.expensesNetOre + spec.expensesVatOre) });
-  }
-  const summaOre = spec.arvodeNetOre + spec.arvodeVatOre + spec.expensesNetOre + spec.expensesVatOre;
-  return { arvodeSections: sections, arvodeSumma: fc(summaOre) };
-}
-
-/** Itemiserad summering (#858) → mall-rader. `deduct`=−, `info`=(parentes), färgad. */
-function breakdownContext(breakdown: FakturaBreakdown | null | undefined, fc: (ore: number) => string): Record<string, unknown> {
-  if (!breakdown) return { useBreakdown: false };
-  return {
-    useBreakdown: true,
-    breakdownRows: breakdown.rows.map((r) => ({
-      label: r.label,
-      amount: r.kind === "deduct" ? `−${fc(r.amountOre)}` : r.kind === "info" ? `(${fc(r.amountOre)})` : fc(r.amountOre),
-      style: r.kind === "deduct" ? "color:#b45309" : r.kind === "info" ? "color:#9ca3af" : "",
-    })),
-  };
-}
-
-/** Belopps-kontexten (netto/moms/summa) — `total` följer breakdown om satt. */
-function amountContext(a: FakturaTemplateArgs, fc: (ore: number) => string): Record<string, unknown> {
-  const { invoice, breakdown } = a;
-  const vatOre = invoice.vatOre ?? 0;
-  return {
-    net: fc(invoice.amount - vatOre), vat: fc(vatOre),
-    total: fc(breakdown ? breakdown.totalOre : invoice.amount),
-    totalLabel: breakdown?.totalLabel ?? "Att betala (inkl moms)",
-  };
-}
-
-/** Faktura-huvudets kontext (nr/datum/mottagare/org + belopp). Utbruten → håller
- *  `fakturaTemplateContext` under param- och komplexitetsgränsen. */
-function headerContext(a: FakturaTemplateArgs, fc: (ore: number) => string): Record<string, unknown> {
-  const { invoice, recipient, meta } = a;
-  return {
-    invoiceNumber: invoice.invoiceNumber ?? "—",
-    ocr: invoice.ocrReference ?? "",
-    date: (invoice.invoiceDate ? new Date(invoice.invoiceDate) : new Date()).toLocaleDateString("sv-SE"),
-    matterNumber: meta.matterNumber, matterTitle: meta.matterTitle, recipient,
-    organizationName: meta.organizationName ?? "", organizationOrgNumber: meta.organizationOrgNumber ?? "",
-    ...amountContext(a, fc),
-  };
-}
-
-interface FakturaTemplateArgs {
-  invoice: FakturaDocInvoice; recipient: string; meta: FakturaDocMeta;
-  spec?: InvoiceSpecification | null | undefined; breakdown?: FakturaBreakdown | null | undefined;
-}
-
-/** Handlebars-kontext för faktura-mallen (utbruten → håller generatorn ≤8). */
-function fakturaTemplateContext(a: FakturaTemplateArgs, formatCurrency: (ore: number) => string): Record<string, unknown> {
-  return {
-    ...headerContext(a, formatCurrency),
-    ...specContext(a.spec, formatCurrency),
-    ...arvodeSectionsContext(a.spec, formatCurrency),
-    ...breakdownContext(a.breakdown, formatCurrency),
-    // "Uppdelning klient / betalare"-rubriken (#925) visas bara när det finns en
-    // faktisk split: en breakdown (självrisk/aconto/rättshjälpsavgift) ELLER
-    // spec-avdrag/justering. Total-tabellen renderas alltid (bär tfoot-totalen).
-    hasSplit: !!a.breakdown || (!!a.spec && (a.spec.deductions.length > 0 || a.spec.adjustmentOre !== 0)),
-  };
-}
-
 export async function generateFakturaFromTemplate(args: GenerateFakturaFromTemplateArgs): Promise<void> {
   const { invoice, matterId, recipient, meta, register, utils, spec, breakdown } = args;
-  const { renderHandlebars } = await import("@/lib/client/kostnadsrakning/render-handlebars");
+  const { renderFakturaHtml } = await import("./faktura-template");
   const { persistGeneratedDoc } = await import("@/lib/client/demo/persist-generated-doc");
-  const { formatCurrency } = await import("@/lib/client/utils");
-  const html = renderHandlebars(FAKTURA_TEMPLATE, fakturaTemplateContext({ invoice, recipient, meta, spec, breakdown }, formatCurrency));
+  const html = renderFakturaHtml({ invoice, recipient, meta, spec, breakdown });
   const bytes = new TextEncoder().encode(html);
   const docId = `faktura-${invoice.id}`;
   const fileName = `Faktura ${invoice.invoiceNumber ?? meta.matterNumber} ${new Date().toISOString().slice(0, 10)}.html`;
@@ -297,38 +66,6 @@ export async function generateFakturaFromTemplate(args: GenerateFakturaFromTempl
     sizeBytes: bytes.byteLength, storagePath, documentType: "Faktura", invoiceId: invoice.id, analysisStatus: "DONE",
   });
   await persistGeneratedDoc({ id: docId, storagePath, fileName, mimeType: "text/html; charset=utf-8", bytes });
-  try {
-    await utils.document.tree.invalidate({ matterId });
-    await utils.document.tree.refetch({ matterId });
-    await utils.document.list.invalidate();
-  } catch { /* best-effort */ }
-}
-
-export async function generateFakturaDoc(args: GenerateFakturaDocArgs): Promise<void> {
-  const { invoice, matterId, meta, register, utils } = args;
-  const { renderFakturaPdf } = await import("@/lib/client/kostnadsrakning/render-faktura-pdf");
-  const { persistGeneratedDoc } = await import("@/lib/client/demo/persist-generated-doc");
-  const bytes = await renderFakturaPdf({
-    invoice,
-    meta: {
-      matterNumber: meta.matterNumber, matterTitle: meta.matterTitle,
-      ...omitUndefined({
-        clientName: meta.clientName,
-        recipient: meta.recipient,
-        organizationName: meta.organizationName,
-        organizationOrgNumber: meta.organizationOrgNumber,
-      }),
-    },
-  });
-  const docId = `faktura-${invoice.id}`;
-  const fileName = `Faktura ${meta.matterNumber} ${new Date().toISOString().slice(0, 10)}.pdf`;
-  const storagePath = `documents/content/${docId}.pdf`;
-  await register.mutateAsync({
-    id: asId<"DocumentId">(docId), matterId, fileName, mimeType: "application/pdf",
-    sizeBytes: bytes.byteLength, storagePath, documentType: "Faktura",
-    invoiceId: invoice.id, analysisStatus: "DONE",
-  });
-  await persistGeneratedDoc({ id: docId, storagePath, fileName, mimeType: "application/pdf", bytes });
   try {
     await utils.document.tree.invalidate({ matterId });
     await utils.document.tree.refetch({ matterId });

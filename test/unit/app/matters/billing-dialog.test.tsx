@@ -15,7 +15,6 @@ const finalMutate = vi.fn();
 let accontoOnSuccess: ((res: unknown) => Promise<void>) | undefined;
 let finalOnSuccess: ((res: unknown) => Promise<void>) | undefined;
 const registerMutateAsync = vi.fn(async () => {});
-const renderFakturaPdf = vi.fn(async () => new Uint8Array([1, 2, 3]));
 const persistGeneratedDoc = vi.fn(async () => {});
 
 let proposalData: unknown = {
@@ -53,7 +52,6 @@ vi.mock("@/lib/client/trpc", () => ({
     },
   },
 }));
-vi.mock("@/lib/client/kostnadsrakning/render-faktura-pdf", () => ({ renderFakturaPdf }));
 vi.mock("@/lib/client/demo/persist-generated-doc", () => ({ persistGeneratedDoc }));
 
 const meta = { matterNumber: "2026-0001", matterTitle: "Tvist", clientName: "Anna Andersson" };
@@ -137,8 +135,14 @@ describe("BillingDialog — ACCONTO (#397 avdragsmedvetet förslag)", () => {
   it("onSuccess genererar ett faktura-dokument", async () => {
     const onClose = vi.fn();
     render(<BillingDialog matterId={asId<"MatterId">("m1")} type="ACCONTO" existingAccontos={[]} meta={meta} onClose={onClose} />);
-    await accontoOnSuccess!({ invoice: { id: "inv-1", amount: 100_000 } });
-    expect(renderFakturaPdf).toHaveBeenCalled();
+    await accontoOnSuccess!({ invoice: { id: "inv-1", amount: 100_000, invoiceType: "ACCONTO", notes: "Aconto — klientens andel" } });
+    // Aconton renderas nu via den DELADE mallen (#937): sammanställning med
+    // notes-raden (fakturan har inga länkade tidsposter) i st.f. en egen PDF.
+    const html = new TextDecoder().decode(persistGeneratedDoc.mock.calls[0]![0].bytes as Uint8Array);
+    expect(html).toContain("Aconto-faktura");
+    expect(html).toContain("Sammanställning");
+    expect(html).toContain("Aconto — klientens andel");
+    expect(html).toContain("Anna Andersson"); // mottagare = klienten
     expect(registerMutateAsync).toHaveBeenCalledWith(expect.objectContaining({
       id: "faktura-inv-1", matterId: "m1", invoiceId: "inv-1", documentType: "Faktura",
     }));

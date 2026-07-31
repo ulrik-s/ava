@@ -7,19 +7,15 @@
  *   FINAL   — recipient-val + lista av aconton att dra av, och en förhands-
  *             lista över de ofakturerade poster som kommer med i fakturan.
  *
- * Båda flödena skapar ett DRAFT-utkast OCH ett faktura-PDF-dokument i ärendets
- * dokumentlista (via `generateFakturaDoc`), redo för utskick.
+ * Båda flödena skapar ett DRAFT-utkast OCH ett faktura-dokument i ärendets
+ * dokumentlista (via `generateFakturaFromTemplate`), redo för utskick.
  */
 import { useMemo, useState } from "react";
 import { VatBreakdown } from "@/components/billing/vat-breakdown";
 import { DecimalInput } from "@/components/ui/decimal-input";
 import { Modal } from "@/components/ui/modal";
-import {
-  generateFakturaDoc,
-  generateFakturaFromTemplate,
-  type FakturaDocInvoice,
-  type FakturaDocMeta,
-} from "@/lib/client/kostnadsrakning/generate-faktura-doc";
+import type { FakturaDocInvoice, FakturaDocMeta } from "@/lib/client/kostnadsrakning/faktura-template";
+import { generateFakturaFromTemplate } from "@/lib/client/kostnadsrakning/generate-faktura-doc";
 import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
 import { proposedAccontoOre } from "@/lib/shared/billing-proposal";
@@ -74,21 +70,13 @@ function recipientLabel(recipient: string, clientName?: string): string {
   return "Rättshjälpsmyndigheten";
 }
 
-/** Aconto-doc (PDF via pdf-lib, ingen spec — en ren aconto specificeras inte). */
-function useFakturaDoc(matterId: MatterId, meta: BillingMeta): (invoice: FakturaDocInvoice) => Promise<void> {
-  const register = trpc.document.register.useMutation();
-  const utils = trpc.useUtils();
-  const docMeta = docMetaFrom(meta);
-  return async (invoice: FakturaDocInvoice) => {
-    try {
-      await generateFakturaDoc({ invoice, matterId, meta: docMeta, register, utils });
-    } catch (e) { console.warn("[billing] faktura-dokument misslyckades:", e); }
-  };
-}
-
-/** Slutfaktura-doc (template-motorn + fullständig spec, #856): tider/utlägg +
- *  avdragna aconto-fakturor hämtas från `invoiceSpecification` och renderas. */
-function useFinalFakturaDoc(matterId: MatterId, meta: BillingMeta): (invoice: FakturaDocInvoice, recipient: string) => Promise<void> {
+/**
+ * Faktura-doc via den delade mallen (#937): sammanställning på första sidan +
+ * specifikation därefter, för BÅDE aconto och slutfaktura. Tider/utlägg och
+ * avdragna aconto-fakturor hämtas ur `invoiceSpecification` — en ren aconto har
+ * inga länkade rader och faller då tillbaka på fakturans `notes`-rad (#870).
+ */
+function useFakturaDoc(matterId: MatterId, meta: BillingMeta): (invoice: FakturaDocInvoice, recipient: string) => Promise<void> {
   const register = trpc.document.register.useMutation();
   const utils = trpc.useUtils();
   const docMeta = docMetaFrom(meta);
@@ -120,7 +108,7 @@ function AccontoForm({ matterId, meta, onDone }: { matterId: MatterId; meta: Bil
   const makeDoc = useFakturaDoc(matterId, meta);
   const { suggestedOre, fieldKr, effectiveOre } = accontoAmounts(workValueOre, clientShareBips, priorOre, amountKr);
   const mut = trpc.billingRun.createAcconto.useMutation({
-    onSuccess: async (res) => { await makeDoc(res.invoice); onDone(); },
+    onSuccess: async (res) => { await makeDoc(res.invoice, recipientLabel("KLIENT", meta.clientName)); onDone(); },
   });
   return (
     <form onSubmit={(e) => { e.preventDefault(); mut.mutate({
@@ -179,7 +167,7 @@ function FinalForm({ matterId, meta, accontos, onDone }: { matterId: MatterId; m
   const [posts, setPosts] = useState<string[] | null>(null);
   const togglePost = (key: string, checked: boolean): void =>
     setPosts((prev) => { const base = prev ?? allPostKeys; return checked ? [...base, key] : base.filter((k) => k !== key); });
-  const makeDoc = useFinalFakturaDoc(matterId, meta);
+  const makeDoc = useFakturaDoc(matterId, meta);
   const mut = trpc.billingRun.createFinal.useMutation({
     onSuccess: async (res) => { await makeDoc(res.invoice, recipientLabel(recipient, meta.clientName)); onDone(); },
   });
