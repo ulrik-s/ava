@@ -13,7 +13,7 @@ import { asId } from "@/lib/shared/schemas/ids";
 let verdictOnSuccess: ((res: unknown) => Promise<void>) | undefined;
 const verdictMutate = vi.fn();
 const registerMutateAsync = vi.fn(async () => {});
-const renderFakturaPdf = vi.fn(async () => new Uint8Array([1, 2, 3]));
+const specFetch = vi.fn(async () => null);
 const persistGeneratedDoc = vi.fn(async () => {});
 const treeInvalidate = vi.fn(async () => {});
 const treeRefetch = vi.fn(async () => {});
@@ -21,7 +21,10 @@ const listInvalidate = vi.fn(async () => {});
 
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
-    useUtils: () => ({ document: { tree: { invalidate: treeInvalidate, refetch: treeRefetch }, list: { invalidate: listInvalidate } } }),
+    useUtils: () => ({
+      document: { tree: { invalidate: treeInvalidate, refetch: treeRefetch }, list: { invalidate: listInvalidate } },
+      billingRun: { invoiceSpecification: { fetch: specFetch } },
+    }),
     document: { register: { useMutation: () => ({ mutateAsync: registerMutateAsync }) } },
     billingRun: {
       setVerdict: {
@@ -33,7 +36,6 @@ vi.mock("@/lib/client/trpc", () => ({
     },
   },
 }));
-vi.mock("@/lib/client/kostnadsrakning/render-faktura-pdf", () => ({ renderFakturaPdf }));
 vi.mock("@/lib/client/demo/persist-generated-doc", () => ({ persistGeneratedDoc }));
 
 const baseProps = {
@@ -72,7 +74,12 @@ describe("VerdictDialog", () => {
     render(<VerdictDialog {...baseProps} onClose={onClose} />);
     expect(verdictOnSuccess).toBeDefined();
     await verdictOnSuccess!({ invoice: { id: "inv-9", amount: 400_000, invoiceNumber: "2026-9" } });
-    expect(renderFakturaPdf).toHaveBeenCalled();
+    // Fakturan renderas via den DELADE mallen (#937) → HTML med sammanställning
+    // + specifikation, inte längre en egen PDF-renderare.
+    const bytes = persistGeneratedDoc.mock.calls[0]![0].bytes as Uint8Array;
+    const html = new TextDecoder().decode(bytes);
+    expect(html).toContain("Sammanställning");
+    expect(html).toContain("Rättshjälpsmyndighet/domstol");
     expect(registerMutateAsync).toHaveBeenCalledWith(expect.objectContaining({
       id: "faktura-inv-9", matterId: "m1", invoiceId: "inv-9", documentType: "Faktura",
     }));

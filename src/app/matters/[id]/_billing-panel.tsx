@@ -21,7 +21,8 @@ import { EntityLink } from "@/lib/client/demo/entity-link";
 import { hasGeneratedDoc, openGeneratedDoc } from "@/lib/client/demo/generated-doc-cache";
 import { useMatterInvariants } from "@/lib/client/diagnostics/use-matter-invariants";
 import { isDemoTier } from "@/lib/client/firma/firma-config";
-import { generateFakturaDoc } from "@/lib/client/kostnadsrakning/generate-faktura-doc";
+import type { FakturaDocInvoice } from "@/lib/client/kostnadsrakning/faktura-template";
+import { generateFakturaFromTemplate } from "@/lib/client/kostnadsrakning/generate-faktura-doc";
 import { generateKrDoc } from "@/lib/client/kostnadsrakning/generate-kr-doc";
 import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
@@ -30,7 +31,7 @@ import { availableActions, currentPhase, type BillingAction, type BillingPhase, 
 import { availableKrActions, KOSTNADSRAKNING_STATUS_LABELS, type KostnadsrakningState, type KostnadsrakningStatus } from "@/lib/shared/kostnadsrakning-flow";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { computeRadgivningsavgift, SJALVRISK_ACCONTO_THRESHOLD_ORE } from "@/lib/shared/rattshjalp";
-import { BILLING_RUN_TYPE_LABELS, BILLING_RUN_STATUS_LABELS, INVOICE_STATUS_LABELS, type BillingRunRecipient, type BillingRunStatus, type BillingRunType, type PaymentMethod } from "@/lib/shared/schemas/enums";
+import { BILLING_RUN_RECIPIENT_LABELS, BILLING_RUN_TYPE_LABELS, BILLING_RUN_STATUS_LABELS, INVOICE_STATUS_LABELS, type BillingRunRecipient, type BillingRunStatus, type BillingRunType, type PaymentMethod } from "@/lib/shared/schemas/enums";
 import type { BillingRunId, DocumentId, InvoiceId, MatterId } from "@/lib/shared/schemas/ids";
 import { BillingDialog, type BillingMeta } from "./_billing-dialog";
 import { KostnadsrakningModal } from "./_kostnadsrakning-modal";
@@ -456,10 +457,15 @@ function RadgivningBanner({ matterId, matter, onRecorded }: { matterId: MatterId
   const registered = !!matter.radgivningBetaldAt;
   const create = trpc.invoice.createRadgivning.useMutation({
     onSuccess: async (res) => {
-      // Stäng luckan (#845): ingen faktura utan dokument — generera faktura-PDF:en
-      // direkt (samma väg som övriga klientfakturor) så den syns + går att öppna.
+      // Stäng luckan (#845): ingen faktura utan dokument — generera fakturan direkt
+      // (samma delade mall som övriga klientfakturor, #937) så den syns + går att öppna.
       try {
-        await generateFakturaDoc({ invoice: (res as { invoice: Parameters<typeof generateFakturaDoc>[0]["invoice"] }).invoice, matterId, meta, register, utils });
+        const invoice = (res as { invoice: FakturaDocInvoice }).invoice;
+        const spec = await utils.billingRun.invoiceSpecification.fetch({ matterId, invoiceId: invoice.id });
+        await generateFakturaFromTemplate({
+          invoice, matterId, recipient: meta.clientName ?? BILLING_RUN_RECIPIENT_LABELS.KLIENT,
+          meta, register, utils, spec,
+        });
       } catch (e) { console.warn("[rådgivning] fakturadokument misslyckades:", e); }
       onRecorded();
     },
