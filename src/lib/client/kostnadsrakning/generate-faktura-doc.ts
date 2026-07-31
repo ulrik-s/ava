@@ -12,6 +12,7 @@
 
 import type { inferRouterInputs, inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "@/lib/server/routers/_app";
+import { tidsspillanFtaxForDate, timkostnadsnormFtaxForDate } from "@/lib/shared/brottmalstaxa";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { asId, type InvoiceId, type MatterId } from "@/lib/shared/schemas/ids";
 
@@ -74,9 +75,9 @@ const FAKTURA_TEMPLATE = `<!DOCTYPE html><html lang="sv"><head><meta charset="ut
 <h2 style="font-size:16px;margin-top:1.5rem;margin-bottom:.5rem">Sammanfattning</h2>
 {{#if arvodeSections.length}}
 <table cellpadding="6" cellspacing="0" style="border-collapse:collapse;width:100%;font-size:14px;margin-bottom:1rem">
-<thead><tr style="border-bottom:1px solid #ccc;text-align:left"><th>Timtaxa</th><th style="text-align:right">Tim</th><th style="text-align:right">Belopp (exkl moms)</th></tr></thead>
-<tbody>{{#each arvodeSections}}<tr><td>{{this.rateLabel}}</td><td style="text-align:right">{{this.hours}}</td><td style="text-align:right">{{this.amount}}</td></tr>{{/each}}</tbody>
-<tfoot><tr style="border-top:1px solid #ccc"><td style="font-weight:bold">Summa (inkl moms)</td><td></td><td style="text-align:right;font-weight:bold">{{arvodeSumma}}</td></tr></tfoot>
+<thead><tr style="border-bottom:1px solid #ccc;text-align:left"><th>Benämning</th><th style="text-align:right">Timtaxa</th><th style="text-align:right">Tim</th><th style="text-align:right">Belopp</th></tr></thead>
+<tbody>{{#each arvodeSections}}<tr><td>{{this.label}}</td><td style="text-align:right">{{this.rateLabel}}</td><td style="text-align:right">{{this.hours}}</td><td style="text-align:right">{{this.amount}}</td></tr>{{/each}}</tbody>
+<tfoot><tr style="border-top:1px solid #ccc"><td style="font-weight:bold">Summa (inkl moms)</td><td></td><td></td><td style="text-align:right;font-weight:bold">{{arvodeSumma}}</td></tr></tfoot>
 </table>{{/if}}
 {{#if hasSplit}}<h3 style="font-size:14px;margin-top:1rem;margin-bottom:.25rem">Uppdelning klient / betalare</h3>{{/if}}
 <table cellpadding="6" cellspacing="0" style="border-collapse:collapse;width:100%;font-size:14px">
@@ -167,19 +168,37 @@ function specContext(spec: InvoiceSpecification | null | undefined, fc: (ore: nu
  * tidsrader på den HÄRLEDDA taxan (amountOre / timmar — rättshjälp=norm/tidsspillan,
  * övrigt=post-taxa) → en rad per unik taxa (fallande). Ren + testbar.
  */
-interface SummarySection { rateLabel: string; hours: string; amount: string }
+interface SummarySection { label: string; rateLabel: string; hours: string; amount: string }
+
+/**
+ * Benämning för en taxegrupp (#925): rättshjälpsärenden värderar arbete på
+ * timkostnadsnormen och restid/väntetid på den lägre tidsspillan-normen — känns
+ * igen genom att jämföra taxan mot ÅRETS normer (posten bär sitt datum, så
+ * ärenden över ett årsskifte får rätt benämning per period). Övriga ärenden
+ * debiterar byråns timtaxa → "Arvode".
+ */
+function rateGroupLabel(rateOre: number, date: Date | string): string {
+  if (rateOre === tidsspillanFtaxForDate(date)) return "Tidsspillan";
+  if (rateOre === timkostnadsnormFtaxForDate(date)) return "Arvode (timkostnadsnorm)";
+  return "Arvode";
+}
 
 /** Gruppera arvodet på den härledda timtaxan → en rad per unik taxa (fallande). */
 function arvodeRateRows(spec: InvoiceSpecification, fc: (ore: number) => string): SummarySection[] {
-  const groups = new Map<number, { minutes: number; amountOre: number }>();
+  const groups = new Map<number, { minutes: number; amountOre: number; date: Date | string }>();
   for (const l of spec.timeLines) {
     const rate = l.minutes > 0 ? Math.round((l.amountOre * 60) / l.minutes) : 0;
-    const g = groups.get(rate) ?? { minutes: 0, amountOre: 0 };
-    groups.set(rate, { minutes: g.minutes + l.minutes, amountOre: g.amountOre + l.amountOre });
+    const g = groups.get(rate) ?? { minutes: 0, amountOre: 0, date: l.date };
+    groups.set(rate, { minutes: g.minutes + l.minutes, amountOre: g.amountOre + l.amountOre, date: g.date });
   }
   return [...groups.entries()]
     .sort((a, b) => b[0] - a[0])
-    .map(([rate, g]) => ({ rateLabel: `${fc(rate)}/tim`, hours: svHours(g.minutes), amount: fc(g.amountOre) }));
+    .map(([rate, g]) => ({
+      label: rateGroupLabel(rate, g.date),
+      rateLabel: `${fc(rate)}/tim`,
+      hours: svHours(g.minutes),
+      amount: fc(g.amountOre),
+    }));
 }
 
 /**
@@ -196,11 +215,11 @@ function arvodeSectionsContext(spec: InvoiceSpecification | null | undefined, fc
   // → summa (allt inkl moms). Momsraden är fakturans hela moms (arvode + utlägg),
   // så arvode-raderna (exkl moms) + utlägg exkl + moms = summan.
   if (hasExpenses) {
-    sections.push({ rateLabel: "Utlägg exkl moms", hours: "", amount: fc(spec.expensesNetOre) });
+    sections.push({ label: "Utlägg exkl moms", rateLabel: "", hours: "", amount: fc(spec.expensesNetOre) });
   }
-  sections.push({ rateLabel: "Moms", hours: "", amount: fc(spec.arvodeVatOre + spec.expensesVatOre) });
+  sections.push({ label: "Moms", rateLabel: "", hours: "", amount: fc(spec.arvodeVatOre + spec.expensesVatOre) });
   if (hasExpenses) {
-    sections.push({ rateLabel: "Utlägg inkl moms", hours: "", amount: fc(spec.expensesNetOre + spec.expensesVatOre) });
+    sections.push({ label: "Utlägg inkl moms", rateLabel: "", hours: "", amount: fc(spec.expensesNetOre + spec.expensesVatOre) });
   }
   const summaOre = spec.arvodeNetOre + spec.arvodeVatOre + spec.expensesNetOre + spec.expensesVatOre;
   return { arvodeSections: sections, arvodeSumma: fc(summaOre) };

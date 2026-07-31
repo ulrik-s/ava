@@ -101,7 +101,7 @@ describe("generateFakturaFromTemplate", () => {
 
   it("sammanfattning: sektion per timtaxa + utlägg exkl/inkl + summa, spec efter (#925)", async () => {
     await generateFakturaFromTemplate({
-      invoice: { id: asId<"InvoiceId">("inv-s1"), amount: 1_062_250, vatOre: 194_450, invoiceNumber: "F-2026-0055", invoiceDate: "2026-06-30" },
+      invoice: { id: asId<"InvoiceId">("inv-s1"), amount: 1_071_500, vatOre: 196_300, invoiceNumber: "F-2026-0055", invoiceDate: "2026-06-30" },
       matterId: asId<"MatterId">("m1"),
       recipient: "Staten",
       meta: { matterNumber: "2026-0020", matterTitle: "Vårdnadstvist Falk" },
@@ -109,24 +109,30 @@ describe("generateFakturaFromTemplate", () => {
       utils,
       spec: {
         timeLines: [
+          // 2026: timkostnadsnorm 1 626 kr/tim, tidsspillan 1 487 kr/tim.
           { date: "2026-02-01", description: "Arbete på timkostnadsnormen", minutes: 60, amountOre: 162_600 },
           { date: "2026-02-02", description: "Mer arbete, samma norm", minutes: 120, amountOre: 325_200 },
-          { date: "2026-02-03", description: "Restid och väntetid", minutes: 120, amountOre: 290_000 },
+          { date: "2026-02-03", description: "Restid och väntetid", minutes: 120, amountOre: 297_400 },
         ],
         expenseLines: [{ date: "2026-01-20", description: "Ansökningsavgift", netOre: 90_000, grossOre: 90_000 }],
         totalMinutes: 300,
-        arvodeNetOre: 777_800, arvodeVatOre: 194_450,
+        arvodeNetOre: 785_200, arvodeVatOre: 196_300,
         expensesNetOre: 90_000, expensesVatOre: 0,
-        grossOre: 1_062_250,
-        deductions: [], deductionOre: 0, adjustmentOre: 0, payableOre: 1_062_250,
+        grossOre: 1_071_500,
+        deductions: [], deductionOre: 0, adjustmentOre: 0, payableOre: 1_071_500,
       },
     });
     const html = new TextDecoder().decode(persistGeneratedDoc.mock.calls[0]![0].bytes as Uint8Array);
-    // En sektion per unik timtaxa (norm 1 626 kr/tim + tidsspillan 1 450 kr/tim).
+    // En sektion per unik timtaxa (norm 1 626 kr/tim + tidsspillan 1 450 kr/tim),
+    // varje rad med BENÄMNING + timtaxa i egna kolumner.
     expect(html).toContain("Sammanfattning");
+    expect(html).toContain("Benämning");
     expect(html).toContain("Timtaxa");
-    expect(html).toContain(`${formatCurrency(162_600)}/tim`); // norm
-    expect(html).toContain(`${formatCurrency(145_000)}/tim`); // 290 000 / 2 tim = tidsspillan
+    expect(html).toContain(`${formatCurrency(162_600)}/tim`); // timkostnadsnorm 2026
+    expect(html).toContain(`${formatCurrency(148_700)}/tim`); // tidsspillan 2026 (297 400 / 2 tim)
+    // Benämningarna härleds ur taxan mot årets normer.
+    expect(html).toContain("Arvode (timkostnadsnorm)");
+    expect(html).toContain("Tidsspillan");
     // Ordning i utläggsdelen: utlägg exkl moms → moms → utlägg inkl moms → summa.
     expect(html).toContain("Utlägg exkl moms");
     expect(html).toContain("<td>Moms</td>");
@@ -137,8 +143,8 @@ describe("generateFakturaFromTemplate", () => {
     const iInkl = html.indexOf("Utlägg inkl moms");
     expect(iExkl).toBeLessThan(iMoms);
     expect(iMoms).toBeLessThan(iInkl);
-    expect(html).toContain(formatCurrency(194_450)); // momsraden = arvodeVat + expensesVat
-    expect(html).toContain(formatCurrency(1_062_250)); // summa = arvode inkl moms + utlägg inkl moms
+    expect(html).toContain(formatCurrency(196_300)); // momsraden = arvodeVat + expensesVat
+    expect(html).toContain(formatCurrency(1_071_500)); // summa = arvode inkl moms + utlägg inkl moms
     // Sammanfattningen står FÖRE specifikationen; specen har sidbrytning.
     expect(html.indexOf("Sammanfattning")).toBeLessThan(html.indexOf("Specifikation"));
     expect(html.indexOf("Sammanfattning")).toBeLessThan(html.indexOf("Tidsspecifikation"));
