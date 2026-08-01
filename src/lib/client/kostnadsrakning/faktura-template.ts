@@ -1,5 +1,5 @@
 /**
- * Faktura-mallen — EN renderare för ALLA fakturor (#937).
+ * Faktura-mallen — EN källa för ALLA fakturor (#937/#938).
  *
  * Upplägget är detsamma oavsett fakturatyp och betalningssätt:
  *   sida 1  Sammanställning — en rad per timtaxa (benämning + timtaxa + tim +
@@ -8,10 +8,10 @@
  *   sida 2+ Specifikation — tidsspecifikation + utläggsspecifikation, dvs
  *           underlaget till beloppen på sida 1.
  *
- * Bröts ut ur `generate-faktura-doc.ts` (#937) så BÅDE appen (fakturadokumentet
- * som skapas vid aconto/slutreglering/dom) och demo-generatorn renderar exakt
- * samma HTML — tidigare fanns tre parallella renderare och bara denna hade
- * upplägget ovan. Ren modul: in → argument, ut → HTML-sträng (inga sidoeffekter).
+ * `buildFakturaView` är den TYPADE vy-modellen (#938): färdigformaterade rader,
+ * inga öre kvar. Både HTML-mallen (`renderFakturaHtml`) och PDF-bilagan
+ * (`renderFakturaPdf`) läser den, så etiketter och belopp kan inte glida isär
+ * mellan det dokument som arkiveras och det som mejlas.
  *
  * KOSTNADSRÄKNINGEN till domstol har en EGEN mall (`buildKostnadsrakningContext`)
  * — den är en myndighetsblankett, inte en faktura, och berörs inte här.
@@ -78,6 +78,48 @@ export interface FakturaTemplateArgs {
   breakdown?: FakturaBreakdown | null | undefined;
 }
 
+// ── Vy-modellen (#938) ──────────────────────────────────────────────────────
+
+/** En rad i sammanställningen: taxegrupp, utlägg eller moms. Tomma sträng-fält
+ *  betyder "ingen kolumn-uppgift" (utlägg har ingen timtaxa). */
+export interface FakturaSummaryRow { label: string; rateLabel: string; hours: string; amount: string }
+
+/**
+ * En rad i uppdelningen klient/betalare. `style` är en CSS-färg för HTML;
+ * `muted` säger åt PDF:en att tona ned raden. `amount` bär redan sin dekoration
+ * (−avdrag, (parentes) för info-rader) så båda renderarna skriver den rakt av.
+ */
+export interface FakturaSplitRow { label: string; amount: string; style: string; muted: boolean }
+
+export interface FakturaTimeRow { date: string; description: string; hours: string; amount: string }
+export interface FakturaExpenseRow { date: string; description: string; net: string; gross: string }
+
+/** Färdigformaterad faktura — allt en renderare behöver, inga öre kvar. */
+export interface FakturaView {
+  heading: string;
+  invoiceNumber: string;
+  ocr: string;
+  date: string;
+  matterNumber: string;
+  matterTitle: string;
+  recipient: string;
+  organizationName: string;
+  organizationOrgNumber: string;
+  /** Rådgivningsnotisen (#870) — tom sträng när den inte gäller. */
+  footnote: string;
+  summary: FakturaSummaryRow[];
+  summaryTotal: string;
+  /** Visa rubriken "Uppdelning klient / betalare" (bara vid faktisk split). */
+  hasSplit: boolean;
+  splitRows: FakturaSplitRow[];
+  totalLabel: string;
+  total: string;
+  /** Finns underlag att specificera → egen sida efter sammanställningen. */
+  hasSpec: boolean;
+  timeLines: FakturaTimeRow[];
+  expenseLines: FakturaExpenseRow[];
+}
+
 /** Inbyggd faktura-mall (Handlebars) — används av template-motorn (#852) när
  *  ingen byrå-mall finns. HTML → öppningsbar + skrivbar. */
 const FAKTURA_TEMPLATE = `<!DOCTYPE html><html lang="sv"><head><meta charset="utf-8"><title>{{heading}} {{invoiceNumber}}</title>
@@ -88,27 +130,15 @@ const FAKTURA_TEMPLATE = `<!DOCTYPE html><html lang="sv"><head><meta charset="ut
 <p style="color:#555">Ärende {{matterNumber}} — {{matterTitle}}<br>Mottagare: {{recipient}}</p>
 
 <h2 style="font-size:16px;margin-top:1.5rem;margin-bottom:.5rem">Sammanställning</h2>
-{{#if arvodeSections.length}}
+{{#if summary.length}}
 <table cellpadding="6" cellspacing="0" style="border-collapse:collapse;width:100%;font-size:14px;margin-bottom:1rem">
 <thead><tr style="border-bottom:1px solid #ccc;text-align:left"><th>Benämning</th><th style="text-align:right">Timtaxa</th><th style="text-align:right">Tim</th><th style="text-align:right">Belopp</th></tr></thead>
-<tbody>{{#each arvodeSections}}<tr><td>{{this.label}}</td><td style="text-align:right">{{this.rateLabel}}</td><td style="text-align:right">{{this.hours}}</td><td style="text-align:right">{{this.amount}}</td></tr>{{/each}}</tbody>
-<tfoot><tr style="border-top:1px solid #ccc"><td style="font-weight:bold">Summa (inkl moms)</td><td></td><td></td><td style="text-align:right;font-weight:bold">{{arvodeSumma}}</td></tr></tfoot>
+<tbody>{{#each summary}}<tr><td>{{this.label}}</td><td style="text-align:right">{{this.rateLabel}}</td><td style="text-align:right">{{this.hours}}</td><td style="text-align:right">{{this.amount}}</td></tr>{{/each}}</tbody>
+<tfoot><tr style="border-top:1px solid #ccc"><td style="font-weight:bold">Summa (inkl moms)</td><td></td><td></td><td style="text-align:right;font-weight:bold">{{summaryTotal}}</td></tr></tfoot>
 </table>{{/if}}
 {{#if hasSplit}}<h3 style="font-size:14px;margin-top:1rem;margin-bottom:.25rem">Uppdelning klient / betalare</h3>{{/if}}
 <table cellpadding="6" cellspacing="0" style="border-collapse:collapse;width:100%;font-size:14px">
-<tbody>
-{{#if useBreakdown}}
-{{#each breakdownRows}}<tr style="{{this.style}}"><td>{{this.label}}</td><td style="text-align:right;{{this.style}}">{{this.amount}}</td></tr>{{/each}}
-{{else}}
-{{#if useSpec}}
-{{#each deductions}}<tr style="color:#b45309"><td>Avgår aconto — faktura {{this.invoiceNumber}}{{#if this.date}} ({{this.date}}){{/if}}</td><td style="text-align:right">−{{this.amount}}</td></tr>{{/each}}
-{{#if hasAdjustment}}<tr style="color:#555"><td>{{adjustmentLabel}}</td><td style="text-align:right">{{adjustment}}</td></tr>{{/if}}
-{{else}}
-<tr><td>Netto (exkl moms)</td><td style="text-align:right">{{net}}</td></tr>
-<tr><td>Moms</td><td style="text-align:right">{{vat}}</td></tr>
-{{/if}}
-{{/if}}
-</tbody>
+<tbody>{{#each splitRows}}<tr style="{{this.style}}"><td>{{this.label}}</td><td style="text-align:right;{{this.style}}">{{this.amount}}</td></tr>{{/each}}</tbody>
 <tfoot><tr style="border-top:2px solid #333"><td style="font-weight:bold">{{totalLabel}}</td><td style="text-align:right;font-weight:bold">{{total}}</td></tr></tfoot>
 </table>
 {{#if footnote}}<p style="color:#555;font-size:13px;margin-top:1rem">{{footnote}}</p>{{/if}}
@@ -184,33 +214,6 @@ function specFromCarriedWork(carried: CarriedWork, spec: InvoiceSpecification | 
   });
 }
 
-/** Spec-delen av kontexten (tider/utlägg/avdrag + summering, #856). Tom när
- *  ingen spec finns → mallen (`useSpec`=false) faller tillbaka på netto/moms. */
-function specContext(spec: InvoiceSpecification | null, fc: Fc): Record<string, unknown> {
-  if (!spec) return { useSpec: false };
-  const vat = spec.arvodeVatOre + spec.expensesVatOre;
-  return {
-    useSpec: true,
-    hasSpec: spec.timeLines.length > 0 || spec.expenseLines.length > 0,
-    hasExpenses: spec.expenseLines.length > 0,
-    hoursTotal: spec.totalMinutes > 0 ? svHours(spec.totalMinutes) : "",
-    timeLines: spec.timeLines.map((l) => ({ date: svDate(l.date), description: l.description, hours: svHours(l.minutes), amount: fc(l.amountOre) })),
-    expenseLines: spec.expenseLines.map((l) => ({ date: svDate(l.date), description: l.description, net: fc(l.netOre), gross: fc(l.grossOre) })),
-    deductions: spec.deductions.map((d) => ({ invoiceNumber: d.invoiceNumber, date: svDate(d.date), amount: fc(d.amountOre) })),
-    arvodeNet: fc(spec.arvodeNetOre), expensesNet: fc(spec.expensesNetOre), vat: fc(vat), gross: fc(spec.grossOre),
-    hasAdjustment: spec.adjustmentOre !== 0,
-    adjustmentLabel: spec.adjustmentOre < 0 ? "Nedsättning" : "Justering",
-    adjustment: fc(spec.adjustmentOre),
-  };
-}
-
-/**
- * Arvode-sektioner per timtaxa (#925) för sammanställningen: grupperar spec:ens
- * tidsrader på den HÄRLEDDA taxan (amountOre / timmar — rättshjälp=norm/tidsspillan,
- * övrigt=post-taxa) → en rad per unik taxa (fallande). Ren + testbar.
- */
-interface SummarySection { label: string; rateLabel: string; hours: string; amount: string }
-
 /**
  * Benämning för en taxegrupp (#925): rättshjälpsärenden värderar arbete på
  * timkostnadsnormen och restid/väntetid på den lägre tidsspillan-normen — känns
@@ -225,7 +228,7 @@ function rateGroupLabel(rateOre: number, date: Date | string): string {
 }
 
 /** Gruppera arvodet på den härledda timtaxan → en rad per unik taxa (fallande). */
-function arvodeRateRows(spec: InvoiceSpecification, fc: Fc): SummarySection[] {
+function arvodeRateRows(spec: InvoiceSpecification, fc: Fc): FakturaSummaryRow[] {
   const groups = new Map<number, { minutes: number; amountOre: number; date: Date | string }>();
   for (const l of spec.timeLines) {
     const rate = l.minutes > 0 ? Math.round((l.amountOre * 60) / l.minutes) : 0;
@@ -243,86 +246,117 @@ function arvodeRateRows(spec: InvoiceSpecification, fc: Fc): SummarySection[] {
 }
 
 /**
- * Sammanställningens sektionstabell (#925): en rad per timtaxa (arvode exkl moms),
- * följt av utlägg exkl moms + utlägg inkl moms, och en summa (allt inkl moms).
- * Utlägg-raderna är avsiktligt informativa (både exkl och inkl) — summan är det
- * faktiska bruttot (arvode inkl moms + utlägg inkl moms). Ren + testbar.
+ * Sammanställningens rader (#925): en rad per timtaxa (arvode exkl moms), följt
+ * av utlägg exkl moms → moms → utlägg inkl moms. Summan är det faktiska bruttot
+ * (arvode inkl moms + utlägg inkl moms). Ren + testbar.
  */
-function arvodeSectionsContext(a: FakturaTemplateArgs, spec: InvoiceSpecification | null, fc: Fc): Record<string, unknown> {
+function summarySection(a: FakturaTemplateArgs, spec: InvoiceSpecification | null, fc: Fc): { summary: FakturaSummaryRow[]; summaryTotal: string } {
   if (!spec || spec.timeLines.length === 0) {
     // Fakturor helt utan itemiserat arbete (rådgivningstimmen, rena aconton) får
     // ändå en sammanställningsrad ur `notes` (#870) → beloppet är aldrig oförklarat.
     const label = a.invoice.notes?.trim() || "Arvode";
-    return { arvodeSections: [{ label, rateLabel: "", hours: "", amount: fc(a.invoice.amount) }], arvodeSumma: fc(a.invoice.amount) };
+    return { summary: [{ label, rateLabel: "", hours: "", amount: fc(a.invoice.amount) }], summaryTotal: fc(a.invoice.amount) };
   }
-  const sections = arvodeRateRows(spec, fc);
+  const summary = arvodeRateRows(spec, fc);
   const hasExpenses = spec.expensesNetOre > 0 || spec.expensesVatOre > 0;
   // Ordning (#925): momsfritt utlägg → momsraden (total moms) → utlägg inkl moms
   // → summa (allt inkl moms). Momsraden är fakturans hela moms (arvode + utlägg),
   // så arvode-raderna (exkl moms) + utlägg exkl + moms = summan.
-  if (hasExpenses) {
-    sections.push({ label: "Utlägg exkl moms", rateLabel: "", hours: "", amount: fc(spec.expensesNetOre) });
-  }
-  sections.push({ label: "Moms", rateLabel: "", hours: "", amount: fc(spec.arvodeVatOre + spec.expensesVatOre) });
-  if (hasExpenses) {
-    sections.push({ label: "Utlägg inkl moms", rateLabel: "", hours: "", amount: fc(spec.expensesNetOre + spec.expensesVatOre) });
-  }
+  if (hasExpenses) summary.push({ label: "Utlägg exkl moms", rateLabel: "", hours: "", amount: fc(spec.expensesNetOre) });
+  summary.push({ label: "Moms", rateLabel: "", hours: "", amount: fc(spec.arvodeVatOre + spec.expensesVatOre) });
+  if (hasExpenses) summary.push({ label: "Utlägg inkl moms", rateLabel: "", hours: "", amount: fc(spec.expensesNetOre + spec.expensesVatOre) });
   const summaOre = spec.arvodeNetOre + spec.arvodeVatOre + spec.expensesNetOre + spec.expensesVatOre;
-  return { arvodeSections: sections, arvodeSumma: fc(summaOre) };
+  return { summary, summaryTotal: fc(summaOre) };
 }
 
-/** Itemiserad summering (#858) → mall-rader. `deduct`=−, `info`=(parentes), färgad. */
-function breakdownContext(breakdown: FakturaBreakdown | null | undefined, fc: Fc): Record<string, unknown> {
-  if (!breakdown) return { useBreakdown: false };
+/** Itemiserad summering (#858) → uppdelningsrader. `deduct`=−, `info`=(parentes). */
+function breakdownSplitRows(breakdown: FakturaBreakdown, fc: Fc): FakturaSplitRow[] {
+  return breakdown.rows.map((r) => ({
+    label: r.label,
+    amount: r.kind === "deduct" ? `−${fc(r.amountOre)}` : r.kind === "info" ? `(${fc(r.amountOre)})` : fc(r.amountOre),
+    style: r.kind === "deduct" ? "color:#b45309" : r.kind === "info" ? "color:#9ca3af" : "",
+    muted: r.kind !== "add",
+  }));
+}
+
+/** Spec-summeringen (#856) → uppdelningsrader: avdragna aconton + ev. justering. */
+function specSplitRows(spec: InvoiceSpecification, fc: Fc): FakturaSplitRow[] {
+  const rows: FakturaSplitRow[] = spec.deductions.map((d) => ({
+    label: `Avgår aconto — faktura ${d.invoiceNumber}${d.date ? ` (${svDate(d.date)})` : ""}`,
+    amount: `−${fc(d.amountOre)}`,
+    style: "color:#b45309",
+    muted: true,
+  }));
+  if (spec.adjustmentOre !== 0) {
+    rows.push({
+      label: spec.adjustmentOre < 0 ? "Nedsättning" : "Justering",
+      amount: fc(spec.adjustmentOre), style: "color:#555", muted: true,
+    });
+  }
+  return rows;
+}
+
+/**
+ * Uppdelningen klient/betalare — EN lista oavsett källa (#938). Prioritet:
+ * itemiserad nedbrytning (#858) → spec-summeringen (#856) → netto/moms ur
+ * fakturan. Att vecka ihop grenarna här är det som gör att PDF:en och HTML:en
+ * kan dela renderingslogik.
+ */
+function splitRowsFor(a: FakturaTemplateArgs, spec: InvoiceSpecification | null, fc: Fc): FakturaSplitRow[] {
+  if (a.breakdown) return breakdownSplitRows(a.breakdown, fc);
+  if (spec) return specSplitRows(spec, fc);
+  const vatOre = a.invoice.vatOre ?? 0;
+  return [
+    { label: "Netto (exkl moms)", amount: fc(a.invoice.amount - vatOre), style: "", muted: false },
+    { label: "Moms", amount: fc(vatOre), style: "", muted: false },
+  ];
+}
+
+/** Specifikationens tabeller (tider + utlägg) ur den upplösta specifikationen. */
+function specTables(spec: InvoiceSpecification | null, fc: Fc): Pick<FakturaView, "hasSpec" | "timeLines" | "expenseLines"> {
+  if (!spec) return { hasSpec: false, timeLines: [], expenseLines: [] };
   return {
-    useBreakdown: true,
-    breakdownRows: breakdown.rows.map((r) => ({
-      label: r.label,
-      amount: r.kind === "deduct" ? `−${fc(r.amountOre)}` : r.kind === "info" ? `(${fc(r.amountOre)})` : fc(r.amountOre),
-      style: r.kind === "deduct" ? "color:#b45309" : r.kind === "info" ? "color:#9ca3af" : "",
-    })),
+    hasSpec: spec.timeLines.length > 0 || spec.expenseLines.length > 0,
+    timeLines: spec.timeLines.map((l) => ({ date: svDate(l.date), description: l.description, hours: svHours(l.minutes), amount: fc(l.amountOre) })),
+    expenseLines: spec.expenseLines.map((l) => ({ date: svDate(l.date), description: l.description, net: fc(l.netOre), gross: fc(l.grossOre) })),
   };
 }
 
-/** Belopps-kontexten (netto/moms/summa) — `total` följer breakdown om satt. */
-function amountContext(a: FakturaTemplateArgs, fc: Fc): Record<string, unknown> {
-  const { invoice, breakdown } = a;
-  const vatOre = invoice.vatOre ?? 0;
-  return {
-    net: fc(invoice.amount - vatOre), vat: fc(vatOre),
-    total: fc(breakdown ? breakdown.totalOre : invoice.amount),
-    totalLabel: breakdown?.totalLabel ?? "Att betala (inkl moms)",
-  };
-}
-
-/** Faktura-huvudets kontext (rubrik/nr/datum/mottagare/org + belopp). Utbruten →
- *  håller `fakturaTemplateContext` under param- och komplexitetsgränsen. */
-function headerContext(a: FakturaTemplateArgs, fc: Fc): Record<string, unknown> {
-  const { invoice, recipient, meta } = a;
+/** Faktura-huvudets fält (rubrik/nr/datum/mottagare/org). Utbrutet → håller
+ *  `buildFakturaView` under param- och komplexitetsgränsen. */
+function headerFields(a: FakturaTemplateArgs): Pick<FakturaView, "heading" | "footnote" | "invoiceNumber" | "ocr" | "date" | "matterNumber" | "matterTitle" | "recipient" | "organizationName" | "organizationOrgNumber"> {
+  const { invoice, meta } = a;
   return {
     heading: fakturaHeading(invoice),
     footnote: footnoteFor(invoice),
     invoiceNumber: invoice.invoiceNumber ?? "—",
     ocr: invoice.ocrReference ?? "",
     date: (invoice.invoiceDate ? new Date(invoice.invoiceDate) : new Date()).toLocaleDateString("sv-SE"),
-    matterNumber: meta.matterNumber, matterTitle: meta.matterTitle, recipient,
-    organizationName: meta.organizationName ?? "", organizationOrgNumber: meta.organizationOrgNumber ?? "",
-    ...amountContext(a, fc),
+    matterNumber: meta.matterNumber,
+    matterTitle: meta.matterTitle,
+    recipient: a.recipient,
+    organizationName: meta.organizationName ?? "",
+    organizationOrgNumber: meta.organizationOrgNumber ?? "",
   };
 }
 
-/** Handlebars-kontext för faktura-mallen (utbruten → håller generatorn ≤8). */
-export function fakturaTemplateContext(a: FakturaTemplateArgs, fc: Fc): Record<string, unknown> {
+/**
+ * Bygg den färdigformaterade vy-modellen (#938) — enda stället där öre blir
+ * text. HTML-mallen och PDF-bilagan renderar samma `FakturaView`.
+ */
+export function buildFakturaView(a: FakturaTemplateArgs, fc: Fc = formatCurrency): FakturaView {
   const spec = resolveSpec(a);
   return {
-    ...headerContext(a, fc),
-    ...specContext(spec, fc),
-    ...arvodeSectionsContext(a, spec, fc),
-    ...breakdownContext(a.breakdown, fc),
+    ...headerFields(a),
+    ...summarySection(a, spec, fc),
     // "Uppdelning klient / betalare"-rubriken (#925) visas bara när det finns en
     // faktisk split: en breakdown (självrisk/aconto/rättshjälpsavgift) ELLER
-    // spec-avdrag/justering. Total-tabellen renderas alltid (bär tfoot-totalen).
+    // spec-avdrag/justering. Total-raden renderas alltid.
     hasSplit: !!a.breakdown || (!!spec && (spec.deductions.length > 0 || spec.adjustmentOre !== 0)),
+    splitRows: splitRowsFor(a, spec, fc),
+    totalLabel: a.breakdown?.totalLabel ?? "Att betala (inkl moms)",
+    total: fc(a.breakdown ? a.breakdown.totalOre : a.invoice.amount),
+    ...specTables(spec, fc),
   };
 }
 
@@ -331,5 +365,5 @@ export function fakturaTemplateContext(a: FakturaTemplateArgs, fc: Fc): Record<s
  * Enda vägen till faktura-HTML i hela kodbasen (appen + demo-generatorn, #937).
  */
 export function renderFakturaHtml(args: FakturaTemplateArgs): string {
-  return renderHandlebars(FAKTURA_TEMPLATE, fakturaTemplateContext(args, formatCurrency));
+  return renderHandlebars(FAKTURA_TEMPLATE, { ...buildFakturaView(args, formatCurrency) });
 }

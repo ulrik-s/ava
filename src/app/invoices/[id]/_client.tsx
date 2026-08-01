@@ -28,7 +28,7 @@ import { InvoiceActions } from "./_invoice-actions";
 import { PaymentModal } from "./_payment-modal";
 import { PaymentsTable } from "./_payments-table";
 import { PlanModal } from "./_plan-modal";
-import { SendInvoiceModal } from "./_send-invoice-modal";
+import { SendInvoiceModal, type SendInvoiceModalProps } from "./_send-invoice-modal";
 import { WriteOffModal } from "./_write-off-modal";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -257,10 +257,15 @@ function InvoiceModals({ inv, ledger, s }: { inv: Inv; ledger: LedgerView; s: In
       {s.show.send && (
         <SendInvoiceModal
           invoiceId={inv.id}
+          matterId={inv.matter.id}
           invoiceNumber={(inv as { invoiceNumber?: string | null }).invoiceNumber}
           amount={inv.amount}
+          vatOre={(inv as { vatOre?: number | null }).vatOre}
           ocrReference={(inv as { ocrReference?: string | null }).ocrReference}
           invoiceDate={inv.invoiceDate}
+          invoiceType={inv.invoiceType}
+          notes={inv.notes}
+          settlementBreakdown={(inv as { settlementBreakdown?: SendInvoiceModalProps["settlementBreakdown"] }).settlementBreakdown}
           matterNumber={inv.matter.matterNumber}
           matterTitle={inv.matter.title}
           onRecorded={() => {

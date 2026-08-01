@@ -14,17 +14,25 @@ import { useState } from "react";
 import { bytesToBase64 } from "@/lib/client/bytes-base64";
 import { downloadBytes } from "@/lib/client/download-text";
 import { useHelper, composeMailViaHelper } from "@/lib/client/helper/use-helper";
-import { renderFakturaPdf } from "@/lib/client/kostnadsrakning/render-faktura-pdf";
+import type { FakturaBreakdown, InvoiceSpecification } from "@/lib/client/kostnadsrakning/faktura-template";
 import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
-import type { InvoiceId } from "@/lib/shared/schemas/ids";
+import type { InvoiceId, MatterId } from "@/lib/shared/schemas/ids";
 
 export interface SendInvoiceModalProps {
   invoiceId: InvoiceId;
+  /** Behövs för att hämta fakturaspecifikationen till bilagan (#938). */
+  matterId: MatterId;
   invoiceNumber?: string | null | undefined;
   amount: number;
+  /** Momsbelopp (öre) — utan spec/nedbrytning blir det netto/moms-raderna. */
+  vatOre?: number | null | undefined;
   ocrReference?: string | null | undefined;
   invoiceDate?: string | Date | null | undefined;
+  invoiceType?: string | null | undefined;
+  notes?: string | null | undefined;
+  /** Persisterad nedbrytning (#878) → uppdelningen klient/betalare i bilagan. */
+  settlementBreakdown?: FakturaBreakdown | null | undefined;
   matterNumber: string;
   matterTitle: string;
   onClose: () => void;
@@ -45,16 +53,35 @@ function pdfFileName(p: SendInvoiceModalProps): string {
   return `Faktura ${p.invoiceNumber ?? p.matterNumber}.pdf`;
 }
 
-async function buildPdf(p: SendInvoiceModalProps, recipient: string): Promise<Uint8Array> {
-  return renderFakturaPdf({
+/** Fakturaspecifikationen (#856) — tomt vid fel, bilagan faller då tillbaka på
+ *  netto/moms-raderna i st.f. att utskicket stoppas. */
+type SpecFetcher = (a: { matterId: MatterId; invoiceId: InvoiceId }) => Promise<InvoiceSpecification>;
+
+async function fetchSpec(fetcher: SpecFetcher, p: SendInvoiceModalProps): Promise<InvoiceSpecification | null> {
+  try {
+    return await fetcher({ matterId: p.matterId, invoiceId: p.invoiceId });
+  } catch { return null; }
+}
+
+/**
+ * Bilagan renderas ur SAMMA vy-modell som det arkiverade fakturadokumentet
+ * (#938) → sammanställning på sida 1, specifikation därefter.
+ */
+async function buildPdf(p: SendInvoiceModalProps, recipient: string, fetcher: SpecFetcher): Promise<Uint8Array> {
+  const { buildFakturaView } = await import("@/lib/client/kostnadsrakning/faktura-template");
+  const { renderFakturaPdf } = await import("@/lib/client/kostnadsrakning/render-faktura-pdf");
+  const spec = await fetchSpec(fetcher, p);
+  const view = buildFakturaView({
     invoice: {
-      amount: p.amount,
-      invoiceNumber: p.invoiceNumber ?? null,
-      ocrReference: p.ocrReference ?? null,
-      invoiceDate: p.invoiceDate ?? null,
+      id: p.invoiceId, amount: p.amount, vatOre: p.vatOre,
+      invoiceNumber: p.invoiceNumber, ocrReference: p.ocrReference, invoiceDate: p.invoiceDate,
+      invoiceType: p.invoiceType, notes: p.notes,
     },
-    meta: { matterNumber: p.matterNumber, matterTitle: p.matterTitle, ...(recipient ? { recipient } : {}) },
+    recipient: recipient || p.matterTitle,
+    meta: { matterNumber: p.matterNumber, matterTitle: p.matterTitle },
+    spec, breakdown: p.settlementBreakdown,
   });
+  return renderFakturaPdf(view);
 }
 
 interface SendInvoiceState {
@@ -80,6 +107,8 @@ function useSendInvoice(props: SendInvoiceModalProps): SendInvoiceState {
   const [note, setNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const helper = useHelper();
+  const utils = trpc.useUtils();
+  const fetchSpecification: SpecFetcher = (a) => utils.billingRun.invoiceSpecification.fetch(a);
 
   const record = trpc.invoiceDispatch.recordManual.useMutation({
     onSuccess: () => { props.onRecorded(); props.onClose(); },
@@ -112,7 +141,7 @@ function useSendInvoice(props: SendInvoiceModalProps): SendInvoiceState {
   };
 
   const onEmail = () => void run(async () => {
-    const bytes = await buildPdf(props, recipient);
+    const bytes = await buildPdf(props, recipient, fetchSpecification);
     const opened = Boolean(helper.version) && await composeMailViaHelper({
       ...(recipient ? { to: recipient } : {}),
       fileName: pdfFileName(props),
@@ -127,7 +156,7 @@ function useSendInvoice(props: SendInvoiceModalProps): SendInvoiceState {
   });
 
   const onDownload = () => void run(async () => {
-    const bytes = await buildPdf(props, recipient);
+    const bytes = await buildPdf(props, recipient, fetchSpecification);
     downloadBytes(pdfFileName(props), new Uint8Array(bytes), "application/pdf");
     return "PDF:en laddades ner.";
   });
