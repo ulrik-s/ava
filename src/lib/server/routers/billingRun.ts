@@ -263,10 +263,6 @@ function settlementArvodeNet(method: PaymentMethod, work: UnfrozenWork, settleDa
  * TIMKOSTNADSNORMEN (staten ersätter bara normen, ej byråns taxa), tidsspillan på
  * tidsspillan-normen, rådgivningstimmen exkluderas. Utlägg ersätts brutto.
  */
-function rattshjalpKrGrossOre(work: UnfrozenWork, settleDate: Date | string): number {
-  return arvodeInclVatOre(settlementArvodeNet("RATTSHJALP", work, settleDate, 0)) + expenseGrossOre(work);
-}
-
 /** Fakturans exakta momsbelopp (öre) per sats: arvodets moms (25 %) +
  *  varje utläggs moms (dess sats). Lagras på fakturan för korrekt bokföring (#782). */
 function invoiceVatOre(work: UnfrozenWork): number {
@@ -357,13 +353,19 @@ function apportionExpenseLines(lines: VatBreakdownLine[], split: CoverageSplit):
 /** Faktura-rader (moms-breakdown) för klient- resp. betalar-fakturan ur en
  *  prutnings-/rättshjälpsavgifts-uppdelning (#801). Både arvode OCH utlägg delas
  *  per samma klient/betalar-andel (#878). */
-function coverageInvoiceLines(split: CoverageSplit, expenseLines: VatBreakdownLine[]): { clientLines: VatBreakdownLine[]; payerLines: VatBreakdownLine[] } {
+function coverageInvoiceLines(split: CoverageSplit, expenseLines: VatBreakdownLine[], courtPayer: boolean): {
+  clientLines: VatBreakdownLine[]; payerLines: VatBreakdownLine[];
+  clientExpenseLines: VatBreakdownLine[]; payerExpenseLines: VatBreakdownLine[];
+} {
   const clientArvode = arvodeLine(split.clientOre);
   const payerArvode = arvodeLine(split.payerOre);
   const exp = apportionExpenseLines(expenseLines, split);
+  // Betalaren är domstolen → dess utläggsandel debiteras 25 % oavsett ursprungssats (#945).
+  const payerExpenseLines = courtPayer ? courtExpenseLines(exp.payerLines) : exp.payerLines;
   return {
     clientLines: [...(clientArvode ? [clientArvode] : []), ...exp.clientLines],
-    payerLines: [...(payerArvode ? [payerArvode] : []), ...exp.payerLines],
+    payerLines: [...(payerArvode ? [payerArvode] : []), ...payerExpenseLines],
+    clientExpenseLines: exp.clientLines, payerExpenseLines,
   };
 }
 
@@ -414,6 +416,35 @@ function resolveAward(method: PaymentMethod, totalArvodeNet: number, work: Unfro
     // Byrån bär nedsättningen på utläggen också — arvodesdelen bärs via split.firmLossOre.
     expenseLossNetOre: netOreOf(rawExpenseLines) - netOreOf(expenseLines),
   };
+}
+
+/** Betalare som är domstol/rättshjälpsmyndighet (#945) — utlägg debiteras 25 %. */
+function isCourtRecipient(recipient: BillingRunRecipient): boolean {
+  return recipient === "DOMSTOL" || recipient === "RATTSHJALPSMYNDIGHET";
+}
+
+/** Moms (öre) på ett nettobelopp vid standardsatsen. */
+function vatOnNet(netOre: number): number {
+  return Math.round((netOre * DEFAULT_VAT_RATE) / 10000);
+}
+
+/**
+ * Utlägg mot DOMSTOL (#945): ett vidarefakturerat utlägg ingår i byråns egen
+ * skattepliktiga omsättning, så domstolen debiteras 25 % moms på utläggens NETTO
+ * oavsett vilken sats byrån själv betalade (domstolsavgift 0 %, tåg/taxi 6 %,
+ * restaurang 12 %). Alla utlägg kollapsar därför till EN 25 %-rad.
+ * Klientens och försäkringens fakturor behåller utläggens riktiga satser.
+ */
+function courtExpenseLines(lines: VatBreakdownLine[]): VatBreakdownLine[] {
+  const netOre = netOreOf(lines);
+  if (netOre === 0) return [];
+  return [{ kind: "utlagg", vatRate: DEFAULT_VAT_RATE, netOre, vatOre: vatOnNet(netOre) }];
+}
+
+/** Kostnadsräkningens yrkade brutto — den går ALLTID till domstol, så utläggen
+ *  värderas med 25 % moms (#945). `arvodeNet` skiljer sig per betalningssätt. */
+function krGrossOre(work: UnfrozenWork, arvodeNet: number): number {
+  return arvodeInclVatOre(arvodeNet) + grossOreOf(courtExpenseLines(expenseBreakdownLines(work)));
 }
 
 /** Bygg ett itemiserat fakturaförslag ur ofrysta tids-/utläggsrader (#397). */
@@ -562,17 +593,18 @@ async function buildSettlementBreakdown(repos: Repositories, orgId: Organization
   clientShareBips: number; totalArvodeNet: number; split: CoverageSplit; work: UnfrozenWork;
   payerGross: number; clientPayable: number; method: PaymentMethod; rateOre: number; settleDate: Date | string;
   deductedRuns: ReadonlyArray<{ invoiceId?: InvoiceId | null | undefined }>;
-  /** Utläggsrader EFTER domstolens nedsättning (#943) — samma rader som fakturorna. */
-  expenseLines: VatBreakdownLine[];
+  /** Utläggsrader per part EFTER nedsättning (#943) och ev. 25 %-omrating mot
+   *  domstol (#945) — exakt de rader fakturorna bär. */
+  clientExpenseLines: VatBreakdownLine[];
+  payerExpenseLines: VatBreakdownLine[];
   /** Nedsättningens utläggsdel (netto) — byrån bär den, jfr split.firmLossOre. */
   expenseLossNetOre: number;
 }): Promise<SettlementBreakdown> {
   // Rådgivningstimmen ingår ALDRIG i domstolens arvode (#860) — arvodet värderas
   // på bas-minuterna (exkl rådgivning). Rådgivningen syns bara i kostnadsräkningen.
   // Utlägg delas per samma andel som arvodet (#878): klientens del + betalarens del.
-  const exp = apportionExpenseLines(a.expenseLines, a.split);
-  const clientExpensesGrossOre = grossOreOf(exp.clientLines);
-  const payerExpensesGrossOre = grossOreOf(exp.payerLines);
+  const clientExpensesGrossOre = grossOreOf(a.clientExpenseLines);
+  const payerExpensesGrossOre = grossOreOf(a.payerExpenseLines);
   const deductedAccontos: SpecDeduction[] = [];
   for (const r of a.deductedRuns) {
     if (!r.invoiceId) continue;
@@ -1079,9 +1111,10 @@ export const billingRunRouter = router({
         // Rättshjälp värderas på timkostnadsnormen (#839) — staten ersätter inte
         // byråns privata timtaxa. Övriga (offentligt uppdrag/taxa): arvode inkl moms
         // + utlägg som tidigare. Brutto matchar kostnadsräkningens PDF (#782).
-        const grossValue = matter.paymentMethod === "RATTSHJALP"
-          ? rattshjalpKrGrossOre(work, new Date()) // #891: retroaktiv norm per slutregleringsdatum
-          : invoiceGrossOre(work);
+        const krArvodeNet = matter.paymentMethod === "RATTSHJALP"
+          ? settlementArvodeNet("RATTSHJALP", work, new Date(), 0) // #891: retroaktiv norm
+          : arvodeNetOre(work);
+        const grossValue = krGrossOre(work, krArvodeNet);
         const run = await tx.billingRuns.create({
           matterId: input.matterId, type: "KOSTNADSRAKNING", recipient: "DOMSTOL",
           status: "PENDING_VERDICT", kostnadsrakningStatus: "INSKICKAD", workValueOreAtRun: grossValue,
@@ -1278,7 +1311,10 @@ export const billingRunRouter = router({
           insurerPrutningOre: input.insurerPrutningOre ?? null,
           ...rattsskyddCoverage(matter, work.timeEntries, rateOre),
         });
-        const { clientLines, payerLines } = coverageInvoiceLines(split, expenseLines);
+        // #945: går betalarfakturan till domstol debiteras utläggen 25 % oavsett sats.
+        const courtPayer = isCourtRecipient(input.payerRecipient);
+        const { clientLines, payerLines, clientExpenseLines, payerExpenseLines } =
+          coverageInvoiceLines(split, expenseLines, courtPayer);
 
         // Klient: självrisk (+ ev. prutning), moms 25 %, minus tidigare aconton.
         // Auto-dra av ALLA skickade klient-aconton (#856): de har redan betalats,
@@ -1297,7 +1333,7 @@ export const billingRunRouter = router({
           clientShareBips: matter.clientShareBips ?? 0, totalArvodeNet,
           split, work, payerGross, clientPayable: clientAmount,
           method: matter.paymentMethod, rateOre, settleDate, deductedRuns,
-          expenseLines, expenseLossNetOre,
+          clientExpenseLines, payerExpenseLines, expenseLossNetOre,
         });
         const { clientView, payerView } = buildSettlementViews(breakdown, matter.paymentMethod);
 
