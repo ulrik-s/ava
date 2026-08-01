@@ -68,9 +68,10 @@ describe("renderFakturaHtml — sammanställning + specifikation (#937)", () => 
     });
     expect(html).toContain("Tidsspecifikation");
     expect(html).toContain("Restid till sammanträde");
-    // Sammanställningen grupperar på härledd taxa → norm + tidsspillan i 2026.
-    expect(html).toContain("Arvode (timkostnadsnorm)");
-    expect(html).toContain("Tidsspillan");
+    // Äldre rader saknar arvodeskategori (#953) → tidsspillan-normerna räddas ur
+    // taxan, resten benämns arvode. Här: 1 626 = arvode, 1 487 = tidsspillan dagtid.
+    expect(html).toContain("<td>Arvode</td>");
+    expect(html).toContain("Tidsspillan — vardag 08–18");
     expect(html).toContain(`${formatCurrency(148_700)}/tim`);
     // Uppdelningen (klient/betalare) och fakturans faktiska belopp bevaras.
     expect(html).toContain("Klientens självrisk 20 % (exkl moms)");
@@ -98,6 +99,50 @@ describe("renderFakturaHtml — sammanställning + specifikation (#937)", () => 
     expect(html).toContain(formatCurrency(203_250 - 40_650));
     expect(html).toContain("Att betala (inkl moms)");
     expect(html).not.toContain("{{");
+  });
+
+  it("sammanställningen BENÄMNER varje arvodeskategori — inte 'Arvode' fyra gånger (#953)", () => {
+    // Efter en retroaktiv taxehöjning bär raden slutregleringsårets taxa men sitt
+    // eget datum, så benämningen KAN inte gissas ur beloppet — kategorin måste följa
+    // med. Alla fyra kategorierna, var och en på sin 2026-norm.
+    const html = renderFakturaHtml({
+      invoice: invoice(), recipient: "Domstol (kostnadsräkning)", meta: META,
+      spec: spec({
+        timeLines: [
+          { date: "2025-11-25", description: "Genomgång av handlingar", minutes: 240, amountOre: 650_400, kind: "ARBETE" },
+          { date: "2025-12-29", description: "Jourärende under helg", minutes: 120, amountOre: 651_200, kind: "ARBETE_OBEKVAM_TID" },
+          { date: "2025-12-17", description: "Restid till sammanträde", minutes: 180, amountOre: 446_100, kind: "TIDSSPILLAN" },
+          { date: "2026-05-16", description: "Hemresa efter kvällssammanträde", minutes: 90, amountOre: 146_250, kind: "TIDSSPILLAN_OVRIG_TID" },
+        ],
+        totalMinutes: 630, arvodeNetOre: 1_893_950, arvodeVatOre: 473_488, grossOre: 2_367_438, payableOre: 2_367_438,
+      }),
+    });
+    expect(html).toContain("<td>Arvode</td>");
+    expect(html).toContain("Arvode — obekväm tid (helg/kväll/natt)");
+    expect(html).toContain("Tidsspillan — vardag 08–18");
+    expect(html).toContain("Tidsspillan — annan tid");
+    // Varje kategori får sin egen taxa-rad, ingen sammanslagning.
+    expect(html).toContain(`${formatCurrency(325_600)}/tim`);
+    expect(html).toContain(`${formatCurrency(97_500)}/tim`);
+    // Ordningen är kategori-ordningen (arvode först, tidsspillan sist), inte taxan —
+    // annars hamnar helgtaxan (högst) överst.
+    expect(html.indexOf("<td>Arvode</td>")).toBeLessThan(html.indexOf("Tidsspillan — vardag"));
+    expect(html.indexOf("Tidsspillan — vardag")).toBeLessThan(html.indexOf("Tidsspillan — annan"));
+  });
+
+  it("samma kategori på TVÅ taxor (byråns egen taxa ändrad) ger en rad per taxa", () => {
+    const html = renderFakturaHtml({
+      invoice: invoice(), recipient: "Klient AB", meta: META,
+      spec: spec({
+        timeLines: [
+          { date: "2026-01-10", description: "Arbete före höjning", minutes: 60, amountOre: 250_000, kind: "ARBETE" },
+          { date: "2026-06-10", description: "Arbete efter höjning", minutes: 60, amountOre: 280_000, kind: "ARBETE" },
+        ],
+        totalMinutes: 120, arvodeNetOre: 530_000, arvodeVatOre: 132_500, grossOre: 662_500, payableOre: 662_500,
+      }),
+    });
+    expect(html).toContain(`${formatCurrency(250_000)}/tim`);
+    expect(html).toContain(`${formatCurrency(280_000)}/tim`);
   });
 
   it("organisationsuppgifter renderas i foten när de finns", () => {

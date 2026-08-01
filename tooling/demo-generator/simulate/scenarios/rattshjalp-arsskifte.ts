@@ -35,13 +35,21 @@ export function buildRattshjalpArsskifteScenario(parties: Parties): SimEvent[] {
     // Rättshjälp beviljas med 5 % avgift (arbetslös). Myndighetens beslut som dokument (#901).
     { kind: "doc", dayOffset: 10, template: "beslutRattshjalpAvgift5" },
     { kind: "note", dayOffset: 10, text: "Rättshjälp beviljad — rättshjälpsavgift 5 %." },
-    { kind: "expense", dayOffset: 8, amountOre: 90_000, description: "Ansökningsavgift tingsrätten" },
+    // Utlägg med OLIKA momssatser (#953) så sammanställningens utläggsrader visar
+    // både netto och brutto per sats — ansökningsavgiften är momsfri.
+    { kind: "expense", dayOffset: 8, amountOre: 90_000, description: "Ansökningsavgift tingsrätten", vatRate: 0 },
     // ── Period 1: arbetslös 5 %, HELA i 2025 (norm 1 586 / tidsspillan 1 450) ──
     { kind: "time", dayOffset: 6, minutes: 240, description: "Genomgång av handlingar och underlag" },
     { kind: "doc", dayOffset: 14, template: "svaromal" },
     { kind: "note", dayOffset: 14, text: "Svaromål inkommet från motpartsombudet." },
     { kind: "time", dayOffset: 16, minutes: 240, description: "Analys av svaromål och förhandlingsförberedelse" },
+    { kind: "expense", dayOffset: 27, amountOre: 42_000, description: "Tågresa till sammanträde i Göteborg", vatRate: 600 },
+    { kind: "expense", dayOffset: 27, amountOre: 78_000, description: "Hotellnatt före sammanträdet", vatRate: 1200 },
     { kind: "time", dayOffset: 28, minutes: 180, description: "Restid och väntetid — sammanträde i Göteborg", entryKind: "TIDSSPILLAN" },
+    // Helgtaxan är ovanlig men ingår i rättshjälpen (DVFS 2025:7 § 1) — akut
+    // umgängesfråga via socialjouren en lördag.
+    { kind: "note", dayOffset: 40, text: "Socialjouren larmar om akut umgängesfråga — kontakt och yttrande under lördagen." },
+    { kind: "time", dayOffset: 40, minutes: 120, description: "Jourärende under helg — akut umgängesfråga via socialjouren", entryKind: "ARBETE_OBEKVAM_TID" },
     { kind: "time", dayOffset: 35, minutes: 240, description: "Utkast till inlaga och yttrande" },
     { kind: "doc", dayOffset: 36, template: "inlaga" },
     { kind: "time", dayOffset: 45, minutes: 240, description: "Korrespondens med motpartsombud" },
@@ -58,6 +66,8 @@ export function buildRattshjalpArsskifteScenario(parties: Parties): SimEvent[] {
     // ── Period 3: arbetslös 5 %, 2026 ──
     { kind: "time", dayOffset: 160, minutes: 240, description: "Uppföljning efter sammanträde" },
     { kind: "time", dayOffset: 175, minutes: 120, description: "Restid — möte med klient och socialtjänst", entryKind: "TIDSSPILLAN" },
+    { kind: "time", dayOffset: 178, minutes: 90, description: "Hemresa efter kvällssammanträde", entryKind: "TIDSSPILLAN_OVRIG_TID" },
+    { kind: "expense", dayOffset: 180, amountOre: 25_000, description: "Kopiering och porto", vatRate: 2500 },
     { kind: "time", dayOffset: 185, minutes: 240, description: "Komplettering och inlaga" },
     { kind: "time", dayOffset: 200, minutes: 240, description: "Korrespondens och bevisgenomgång" },
     { kind: "time", dayOffset: 215, minutes: 240, description: "Förberedelse inför slutförhandling" },

@@ -4,14 +4,15 @@
  * beror på ackumulerat arbete (aconto, slutreglering) HÄRLEDS i runnern, inte här.
  */
 
-import type { MatterRole } from "@/lib/shared/schemas/enums";
+import type { MatterRole, TimeEntryKind } from "@/lib/shared/schemas/enums";
 
 export type SimEvent =
   /** Länka en part (motpart/ombud/domstol) till ärendet — matter.addContact. */
   | { kind: "party"; dayOffset: number; contactId: string; role: MatterRole }
-  /** Debiterbar (eller ej) tidspost — timeEntry.create. `entryKind` = ARBETE (default)
-   *  eller TIDSSPILLAN (#891, egen norm vid rättshjälps-slutreglering). */
-  | { kind: "time"; dayOffset: number; minutes: number; description: string; billable?: boolean; entryKind?: "ARBETE" | "TIDSSPILLAN" }
+  /** Debiterbar (eller ej) tidspost — timeEntry.create. `entryKind` = arvodeskategori
+   *  (default ARBETE); varje kategori har en egen årsnorm vid slutregleringen av
+   *  rättshjälp/rättsskydd (#950/#953). */
+  | { kind: "time"; dayOffset: number; minutes: number; description: string; billable?: boolean; entryKind?: TimeEntryKind }
   /** Tjänsteanteckning (händelselogg) — serviceNote.create. */
   | { kind: "note"; dayOffset: number; text: string }
   /** Utlägg — expense.create. */

@@ -47,6 +47,30 @@ export const PAYMENT_METHOD_LABELS = {
 export const paymentMethodSchema = enumFromLabels(PAYMENT_METHOD_LABELS);
 export type PaymentMethod = z.infer<typeof paymentMethodSchema>;
 
+// ─── Arvodeskategori (per tidspost) ───────────────────────────────────────
+
+/**
+ * Arvodeskategori per tidspost (#950/#953). Varje kategori har en EGEN årsnorm
+ * hos Domstolsverket, och slutregleringen värderar posten på kategorins norm för
+ * SLUTREGLERINGSÅRET — så en taxehöjning slår igenom retroaktivt (#891).
+ * Kategorierna gäller både rättshjälp och rättsskydd; helgtaxorna är ovanliga
+ * men ingår (DVFS-föreskrifterna i `brottmalstaxa.ts` är källan till beloppen).
+ *
+ *   ARBETE                — timkostnadsnormen (DVFS 2025:6 § 8)
+ *   ARBETE_OBEKVAM_TID    — helgförhandling / polisförhör utom kontorstid
+ *                           (DVFS 2025:7 § 1, 2025:8 § 1)
+ *   TIDSSPILLAN           — vardag 08–18 (DVFS 2025:4 § 4)
+ *   TIDSSPILLAN_OVRIG_TID — all annan tid, lägre norm (DVFS 2025:4 § 4)
+ */
+export const TIME_ENTRY_KIND_LABELS = {
+  ARBETE: "Arvode",
+  ARBETE_OBEKVAM_TID: "Arvode — obekväm tid (helg/kväll/natt)",
+  TIDSSPILLAN: "Tidsspillan — vardag 08–18",
+  TIDSSPILLAN_OVRIG_TID: "Tidsspillan — annan tid",
+} as const satisfies Record<string, string>;
+export const timeEntryKindSchema = enumFromLabels(TIME_ENTRY_KIND_LABELS);
+export type TimeEntryKind = z.infer<typeof timeEntryKindSchema>;
+
 // ─── Invoice status + type ────────────────────────────────────────────────
 
 export const INVOICE_STATUS_LABELS = {

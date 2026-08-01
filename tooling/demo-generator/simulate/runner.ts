@@ -5,7 +5,7 @@
  * arbete (aconto) härleds här ur `state`; dokumentbytes skrivs via `BinarySink`.
  */
 
-import { timkostnadsnormFtaxForDate, tidsspillanFtaxForDate } from "@/lib/shared/brottmalstaxa";
+import { coverageEntryRateOre } from "@/lib/shared/brottmalstaxa";
 import { arvodeInclVatOre } from "@/lib/shared/invoice-calc";
 import { SJALVRISK_ACCONTO_THRESHOLD_ORE } from "@/lib/shared/rattshjalp";
 import type { SettlementViewLine } from "@/lib/shared/settlement-view";
@@ -43,13 +43,13 @@ async function hParty(ctx: RunCtx, m: SimMatter, e: Any, iso: string): Promise<v
   await ctx.c.matter.addContact({ matterId: m.id, contactId: e.contactId, role: e.role, createdAt: iso });
 }
 
-/** Timarvodet (öre/tim) en tidspost värderas på i simuleringen. Rättshjälp: den
- *  norm som gällde postens DATUM (#891) — arbete på timkostnadsnormen, tidsspillan
- *  på tidsspillan-normen → 2025-poster får 2025-taxan, 2026-poster 2026-taxan, så
- *  aconton speglar tidpunkten och slutregleringens retroaktiva höjning syns. */
+/** Timarvodet (öre/tim) en tidspost värderas på i simuleringen. Täckningsärenden
+ *  (rättshjälp OCH rättsskydd, #953) värderas på KATEGORINS norm för postens eget
+ *  DATUM → 2025-poster får 2025-taxan, 2026-poster 2026-taxan, så aconton speglar
+ *  tidpunkten och slutregleringens retroaktiva höjning blir synlig som en skillnad. */
 function simTimeRateOre(m: SimMatter, e: Any, iso: string): number {
-  if (m.paymentMethod !== "RATTSHJALP") return m.arvodeRateOre;
-  return e.entryKind === "TIDSSPILLAN" ? tidsspillanFtaxForDate(iso) : timkostnadsnormFtaxForDate(iso);
+  if (m.paymentMethod !== "RATTSHJALP" && m.paymentMethod !== "RATTSSKYDD") return m.arvodeRateOre;
+  return coverageEntryRateOre(e.entryKind, iso);
 }
 
 async function hTime(ctx: RunCtx, m: SimMatter, e: Any, iso: string, st: SimState): Promise<void> {
@@ -63,7 +63,7 @@ async function hTime(ctx: RunCtx, m: SimMatter, e: Any, iso: string, st: SimStat
   if (isBillable(e)) {
     const amountOre = Math.round((e.minutes / 60) * rateOre);
     st.accruedNetOre += amountOre;
-    st.periodLines.push({ date: iso.slice(0, 10), description: e.description, minutes: e.minutes, amountOre });
+    st.periodLines.push({ date: iso.slice(0, 10), description: e.description, minutes: e.minutes, amountOre, kind: e.entryKind });
     await maybeAcconto(ctx, m, iso, st); // #885: skicka aconto när klientens andel nått tröskeln
   }
 }

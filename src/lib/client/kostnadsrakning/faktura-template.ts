@@ -18,8 +18,9 @@
  */
 
 import { formatCurrency } from "@/lib/client/utils";
-import { tidsspillanFtaxForDate, timkostnadsnormFtaxForDate } from "@/lib/shared/brottmalstaxa";
+import { tidsspillanFtaxForDate, tidsspillanOvrigFtaxForDate } from "@/lib/shared/brottmalstaxa";
 import { buildInvoiceSpecification, type InvoiceSpecification } from "@/lib/shared/invoice-specification";
+import { TIME_ENTRY_KIND_LABELS, type TimeEntryKind } from "@/lib/shared/schemas/enums";
 import type { InvoiceId } from "@/lib/shared/schemas/ids";
 import { renderHandlebars } from "./render-handlebars";
 
@@ -40,7 +41,7 @@ export interface FakturaBreakdown {
   rows: BreakdownRow[];
   totalLabel: string;
   totalOre: number;
-  timeLines?: ReadonlyArray<{ date: string | Date; description: string; minutes: number; amountOre: number }> | undefined;
+  timeLines?: ReadonlyArray<{ date: string | Date; description: string; minutes: number; amountOre: number; kind?: TimeEntryKind | null | undefined }> | undefined;
 }
 
 export interface FakturaDocMeta {
@@ -207,7 +208,7 @@ function resolveSpec(a: FakturaTemplateArgs): InvoiceSpecification | null {
 /** Bygg specifikationen ur nedbrytningens arbete, med spec:ens utlägg/avdrag kvar. */
 function specFromCarriedWork(carried: CarriedWork, spec: InvoiceSpecification | null | undefined, payableOre: number): InvoiceSpecification {
   return buildInvoiceSpecification({
-    timeLines: carried.map((l) => ({ date: l.date, description: l.description, minutes: l.minutes, amountOre: l.amountOre })),
+    timeLines: carried.map((l) => ({ date: l.date, description: l.description, minutes: l.minutes, amountOre: l.amountOre, kind: l.kind })),
     expenseLines: spec?.expenseLines ?? [],
     deductions: spec?.deductions ?? [],
     payableOre,
@@ -215,35 +216,49 @@ function specFromCarriedWork(carried: CarriedWork, spec: InvoiceSpecification | 
 }
 
 /**
- * Benämning för en taxegrupp (#925): rättshjälpsärenden värderar arbete på
- * timkostnadsnormen och restid/väntetid på den lägre tidsspillan-normen — känns
- * igen genom att jämföra taxan mot ÅRETS normer (posten bär sitt datum, så
- * ärenden över ett årsskifte får rätt benämning per period). Övriga ärenden
- * debiterar byråns timtaxa → "Arvode".
+ * Benämning för en taxegrupp (#925/#953). Bär raden sin ARVODESKATEGORI används
+ * den — det är den enda uppgift som faktiskt avgör vilken norm posten ersätts på.
+ * Att gissa ur timtaxan räcker inte: efter en retroaktiv höjning värderas posten
+ * på slutregleringsårets norm men bär sitt eget datum, och två tidsspillan-normer
+ * kan inte skiljas från arvodet på beloppet.
+ *
+ * Äldre fakturor (persisterade före #953) saknar kategorin. För dem räddas de två
+ * tidsspillan-normerna ur taxan — resten är arvode.
  */
-function rateGroupLabel(rateOre: number, date: Date | string): string {
-  if (rateOre === tidsspillanFtaxForDate(date)) return "Tidsspillan";
-  if (rateOre === timkostnadsnormFtaxForDate(date)) return "Arvode (timkostnadsnorm)";
-  return "Arvode";
+function rateGroupLabel(kind: TimeEntryKind | null | undefined, rateOre: number, date: Date | string): string {
+  if (kind) return TIME_ENTRY_KIND_LABELS[kind];
+  if (rateOre === tidsspillanFtaxForDate(date)) return TIME_ENTRY_KIND_LABELS.TIDSSPILLAN;
+  if (rateOre === tidsspillanOvrigFtaxForDate(date)) return TIME_ENTRY_KIND_LABELS.TIDSSPILLAN_OVRIG_TID;
+  return TIME_ENTRY_KIND_LABELS.ARBETE;
 }
 
-/** Gruppera arvodet på den härledda timtaxan → en rad per unik taxa (fallande). */
+interface RateGroup { minutes: number; amountOre: number; date: Date | string; kind: TimeEntryKind | null | undefined; rateOre: number }
+
+/**
+ * Gruppera arvodet per KATEGORI + timtaxa → en rad per unik kombination. Taxan
+ * ingår i nyckeln så ärenden som debiterar byråns egen taxa (privat) fortfarande
+ * får en rad per taxa när den ändrats under ärendet.
+ */
 function arvodeRateRows(spec: InvoiceSpecification, fc: Fc): FakturaSummaryRow[] {
-  const groups = new Map<number, { minutes: number; amountOre: number; date: Date | string }>();
+  const groups = new Map<string, RateGroup>();
   for (const l of spec.timeLines) {
-    const rate = l.minutes > 0 ? Math.round((l.amountOre * 60) / l.minutes) : 0;
-    const g = groups.get(rate) ?? { minutes: 0, amountOre: 0, date: l.date };
-    groups.set(rate, { minutes: g.minutes + l.minutes, amountOre: g.amountOre + l.amountOre, date: g.date });
+    const rateOre = l.minutes > 0 ? Math.round((l.amountOre * 60) / l.minutes) : 0;
+    const key = `${l.kind ?? ""}|${rateOre}`;
+    const g = groups.get(key) ?? { minutes: 0, amountOre: 0, date: l.date, kind: l.kind, rateOre };
+    groups.set(key, { ...g, minutes: g.minutes + l.minutes, amountOre: g.amountOre + l.amountOre });
   }
-  return [...groups.entries()]
-    .sort((a, b) => b[0] - a[0])
-    .map(([rate, g]) => ({
-      label: rateGroupLabel(rate, g.date),
-      rateLabel: `${fc(rate)}/tim`,
+  return [...groups.values()]
+    .sort((a, b) => KIND_ORDER.indexOf(a.kind ?? "ARBETE") - KIND_ORDER.indexOf(b.kind ?? "ARBETE") || b.rateOre - a.rateOre)
+    .map((g) => ({
+      label: rateGroupLabel(g.kind, g.rateOre, g.date),
+      rateLabel: `${fc(g.rateOre)}/tim`,
       hours: svHours(g.minutes),
       amount: fc(g.amountOre),
     }));
 }
+
+/** Kategori-ordning i sammanställningen: arbete först, tidsspillan sist. */
+const KIND_ORDER = Object.keys(TIME_ENTRY_KIND_LABELS) as TimeEntryKind[];
 
 /**
  * Sammanställningens rader (#925): en rad per timtaxa (arvode exkl moms), följt

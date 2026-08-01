@@ -130,9 +130,10 @@ describe("generateFakturaFromTemplate", () => {
     expect(html).toContain("Timtaxa");
     expect(html).toContain(`${formatCurrency(162_600)}/tim`); // timkostnadsnorm 2026
     expect(html).toContain(`${formatCurrency(148_700)}/tim`); // tidsspillan 2026 (297 400 / 2 tim)
-    // Benämningarna härleds ur taxan mot årets normer.
-    expect(html).toContain("Arvode (timkostnadsnorm)");
-    expect(html).toContain("Tidsspillan");
+    // Utan arvodeskategori på raden (äldre faktura) räddas tidsspillan-normerna ur
+    // taxan; resten benämns arvode (#953).
+    expect(html).toContain("<td>Arvode</td>");
+    expect(html).toContain("Tidsspillan — vardag 08–18");
     // Ordning i utläggsdelen: utlägg exkl moms → moms → utlägg inkl moms → summa.
     expect(html).toContain("Utlägg exkl moms");
     expect(html).toContain("<td>Moms</td>");

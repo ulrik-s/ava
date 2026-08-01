@@ -794,3 +794,86 @@ describe("billingRun.invoiceSpecification (#856)", () => {
     expect(clientSpec.timeLines).toHaveLength(0); // arbetet ligger på betalar-fakturan
   });
 });
+
+/**
+ * "Vi behöver fakturor med alla typer av arvode så att man kan se en komplett
+ * sammanställning som sedan prutas" (#953). Gäller BÅDA regimerna: rättshjälp
+ * (domstolen prutar, byrån bär) och rättsskydd (bolaget prutar, klienten bär).
+ * Sammanställningens taxerader måste summera EXAKT till slutregleringens bas —
+ * annars går fakturan inte att stämma av mot underlaget.
+ */
+describe("slutreglering med ALLA arvodeskategorier (#953)", () => {
+  // 2026 års normer (DVFS 2025:4/6/7): arbete 1 626, obekväm 3 256,
+  // tidsspillan dagtid 1 487, tidsspillan annan tid 975 kr/tim.
+  const ALLA_KATEGORIER = [
+    { id: "te-1", minutes: 240, description: "Genomgång av handlingar", kind: undefined, expectOre: 650_400 },
+    { id: "te-2", minutes: 120, description: "Jourärende under helg", kind: "ARBETE_OBEKVAM_TID", expectOre: 651_200 },
+    { id: "te-3", minutes: 180, description: "Restid till sammanträde", kind: "TIDSSPILLAN", expectOre: 446_100 },
+    { id: "te-4", minutes: 90, description: "Hemresa efter kvällssammanträde", kind: "TIDSSPILLAN_OVRIG_TID", expectOre: 146_250 },
+  ] as const;
+
+  function coverageCaller(paymentMethod: "RATTSHJALP" | "RATTSSKYDD") {
+    const ds = new DemoDataStore({
+      organizations: [{ id: "org-1", name: "X" }],
+      matters: [{ id: "m-1", organizationId: "org-1", matterNumber: "2026-0001", title: "T", status: "ACTIVE", responsibleLawyerId: "u-1", paymentMethod, clientShareBips: 2000, taxaHasFTax: true, createdAt: new Date("2026-05-01") }],
+      users: [{ id: "u-1", organizationId: "org-1", email: "a@x", name: "Anna", role: "ADMIN", hourlyRate: 999_999 }],
+      timeEntries: ALLA_KATEGORIER.map((t) => ({
+        id: t.id, organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date("2026-05-02"),
+        minutes: t.minutes, description: t.description, hourlyRate: 200_000, billable: true,
+        ...(t.kind ? { kind: t.kind } : {}),
+      })),
+      // Utlägg med olika momssatser → sammanställningen visar netto + brutto per sats.
+      expenses: [
+        { id: "ex-1", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date("2026-05-02"), amount: 90_000, description: "Ansökningsavgift", billable: true, vatRate: 0, vatIncluded: false, kind: "EXPENSE" },
+        { id: "ex-2", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date("2026-05-03"), amount: 42_000, description: "Tågresa", billable: true, vatRate: 600, vatIncluded: false, kind: "EXPENSE" },
+        { id: "ex-3", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date("2026-05-04"), amount: 25_000, description: "Kopiering", billable: true, vatRate: 2500, vatIncluded: false, kind: "EXPENSE" },
+      ],
+    }, async () => {});
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: PRINCIPAL }) as any);
+  }
+
+  it.each(["RATTSHJALP", "RATTSSKYDD"] as const)(
+    "%s: varje kategori får SIN årsnorm och raderna summerar till fakturans arvode",
+    async (method) => {
+      const c = coverageCaller(method);
+      const payer = method === "RATTSHJALP" ? "DOMSTOL" : "FORSAKRING";
+      const res = await c.billingRun.settleCoverage({ matterId: "m-1", payerRecipient: payer, invoiceDate: "2026-05-20" });
+      const spec = await c.billingRun.invoiceSpecification({ matterId: "m-1", invoiceId: res.payerInvoice.id });
+
+      // Alla fyra kategorierna är med, var och en på sin egen norm.
+      expect(spec.timeLines).toHaveLength(4);
+      for (const t of ALLA_KATEGORIER) {
+        const line = spec.timeLines.find((l) => l.description === t.description);
+        expect(line, t.description).toBeDefined();
+        expect(line!.amountOre, t.description).toBe(t.expectOre);
+      }
+      // Utläggen bär sina egna satser i specifikationen (momsen mot domstol
+      // flattas först på FAKTURAN, #945 — specifikationen visar underlaget).
+      expect(spec.expenseLines.map((l) => l.netOre).sort((a, b) => a - b)).toEqual([25_000, 42_000, 90_000]);
+
+      // Sammanställningen ska gå att stämma av: taxeraderna summerar till
+      // slutregleringens bas. Enda tillåtna differensen är rådgivningstimmen, som
+      // rättshjälpen carvar ur basen men fortfarande specificerar (#860).
+      const radSumma = spec.timeLines.reduce((s, l) => s + l.amountOre, 0);
+      expect(radSumma).toBe(650_400 + 651_200 + 446_100 + 146_250);
+      expect(res.breakdown.arvodeBaseNetOre).toBe(radSumma - res.breakdown.radgivningNetOre);
+      if (method === "RATTSSKYDD") expect(res.breakdown.radgivningNetOre).toBe(0); // ingen carve
+      else expect(res.breakdown.radgivningNetOre).toBe(162_600); // 1 tim på 2026 års norm
+    },
+  );
+
+  it("rättshjälp: prutningen räknas på HELA underlaget — alla kategorier + utlägg", async () => {
+    const c = coverageCaller("RATTSHJALP");
+    const kr = await c.billingRun.createKostnadsrakning({ matterId: "m-1" });
+    // Domstolen sätter ned till 80 % av det yrkade (arvode + utlägg, inkl moms).
+    const awardedOre = Math.round(kr.run.workValueOreAtRun * 0.8);
+    await c.billingRun.recordKostnadsrakningBeslut({ billingRunId: kr.run.id, awardedOre });
+    const res = await c.billingRun.settleCoverage({ matterId: "m-1", payerRecipient: "DOMSTOL", invoiceDate: "2026-05-20" });
+    // Nedsättningen bärs av byrån (rättshjälp) och syns som en förlust — inte
+    // som ett tystnande av prutningen (#943).
+    expect(res.split.firmLossOre).toBeGreaterThan(0);
+    // Klientens avgift räknas på det NEDSATTA beloppet, inte på det yrkade.
+    expect(res.split.clientOre).toBeLessThan(Math.round(1_893_950 * 0.2));
+  });
+});

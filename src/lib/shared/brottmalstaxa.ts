@@ -27,6 +27,8 @@
  * Vid F-skatt-saknad: belopp × 1237/1626 (timkostnadsnorm utan/med F-skatt).
  */
 
+import type { TimeEntryKind } from "./schemas/enums";
+
 export type TaxaLevel = 1 | 2 | 3 | 4;
 
 /** Maxgräns för när taxan tillämpas (= 3 tim 45 min). */
@@ -140,6 +142,25 @@ export function arbeteObekvamFtaxForDate(date: Date | string): number {
 /** Advokatberedskapens garantiersättning per DAG (F-skatt) ett givet datum (#950). */
 export function advokatberedskapFtaxForDate(date: Date | string): number {
   return ADVOKATBEREDSKAP_FTAX_BY_YEAR[yearOf(date)] ?? ADVOKATBEREDSKAP_FTAX_BY_YEAR[2026] ?? 0;
+}
+
+/**
+ * Normen (öre/tim) en tidspost i ett TÄCKNINGSÄRENDE (rättshjälp/rättsskydd)
+ * ersätts på ett givet datum (#950/#953). Varje arvodeskategori har sin egen
+ * årsnorm; anropas med SLUTREGLERINGSDATUMET vid slutreglering (retroaktiv
+ * höjning) och med postens eget datum när den registreras.
+ *
+ * Delad av slutregleringen (`billingRun`) och demo-simuleringen så att
+ * tidsposternas snapshot-taxa och slutregleringens omvärdering aldrig glider
+ * ifrån varandra.
+ */
+export function coverageEntryRateOre(kind: TimeEntryKind | null | undefined, date: Date | string): number {
+  switch (kind) {
+    case "TIDSSPILLAN": return tidsspillanFtaxForDate(date);
+    case "TIDSSPILLAN_OVRIG_TID": return tidsspillanOvrigFtaxForDate(date);
+    case "ARBETE_OBEKVAM_TID": return arbeteObekvamFtaxForDate(date);
+    default: return timkostnadsnormFtaxForDate(date);
+  }
 }
 
 /** Kvoten utan F-skatt för ett givet datum (#950) — årsberoende. */

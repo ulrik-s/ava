@@ -3,13 +3,18 @@
 import { useState } from "react";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { Modal } from "@/components/ui/modal";
+import { TIME_ENTRY_KIND_SHORT } from "@/lib/client/labels";
 import { trpc } from "@/lib/client/trpc";
 import { formatMinutes } from "@/lib/client/utils";
+import { TIME_ENTRY_KIND_LABELS, type PaymentMethod, type TimeEntryKind } from "@/lib/shared/schemas/enums";
 import type { InvoiceId, MatterId, TimeEntryId } from "@/lib/shared/schemas/ids";
 
 interface Props {
   matterId: MatterId;
   isTaxeArende?: boolean;
+  /** Styr kategori-hjälptexten: rättshjälp/rättsskydd ersätts på Domstolsverkets
+   *  normer per kategori, inte på byråns timpris (#953). */
+  paymentMethod?: PaymentMethod | undefined;
 }
 
 interface EditForm {
@@ -17,6 +22,17 @@ interface EditForm {
   minutes: number;
   description: string;
   billable: boolean;
+  kind: TimeEntryKind;
+}
+
+/** Kategorierna i dropdown-ordning — härledd ur labels-kartan (single source). */
+const KIND_OPTIONS = Object.entries(TIME_ENTRY_KIND_LABELS) as Array<[TimeEntryKind, string]>;
+
+/** Ärenden där kategorin styr vilken ÅRSNORM slutregleringen värderar posten på. */
+const COVERAGE_METHODS = new Set<PaymentMethod>(["RATTSHJALP", "RATTSSKYDD"]);
+
+function isCoverageMethod(method: PaymentMethod | undefined): boolean {
+  return method !== undefined && COVERAGE_METHODS.has(method);
 }
 
 interface TimeEntryRow {
@@ -25,6 +41,7 @@ interface TimeEntryRow {
   minutes: number;
   description: string | null;
   billable: boolean;
+  kind?: TimeEntryKind | null;
   hourlyRate?: number | null;
   user?: { name?: string | null } | null;
   invoiceId?: InvoiceId | null;
@@ -45,15 +62,17 @@ function toEditForm(entry: TimeEntryRow): EditForm {
     minutes: entry.minutes,
     description: entry.description ?? "",
     billable: entry.billable,
+    kind: entry.kind ?? "ARBETE",
   };
 }
 
 function emptyForm(): EditForm {
-  return { date: new Date().toISOString().split("T")[0]!, minutes: 30, description: "", billable: true };
+  return { date: new Date().toISOString().split("T")[0]!, minutes: 30, description: "", billable: true, kind: "ARBETE" };
 }
 
 // eslint-disable-next-line max-lines-per-function -- TODO: refactor (struktur är tabular: kolumndefs + 2 modaler)
-export function TimeSection({ matterId, isTaxeArende }: Props) {
+export function TimeSection({ matterId, isTaxeArende, paymentMethod }: Props) {
+  const isCoverage = isCoverageMethod(paymentMethod);
   const utils = trpc.useUtils();
   const timeEntries = trpc.timeEntry.list.useQuery({ matterId });
   const [showCreate, setShowCreate] = useState(false);
@@ -105,6 +124,10 @@ export function TimeSection({ matterId, isTaxeArende }: Props) {
       render: (e) => <span className="text-sm text-gray-900">{formatMinutes(e.minutes)}</span> },
     { key: "description", label: "Beskrivning", sortable: true, sortValue: (e) => e.description ?? "",
       render: (e) => <span className="text-sm text-gray-700">{e.description}</span> },
+    // Kategorin styr vilken av Domstolsverkets normer posten värderas på vid
+    // slutreglering (#950/#953) — den påverkar beloppet och hör därför i default-vyn.
+    { key: "kind", label: "Kategori", sortable: true, sortValue: (e) => e.kind ?? "ARBETE",
+      render: (e) => <span className="text-sm text-gray-700">{TIME_ENTRY_KIND_SHORT[e.kind ?? "ARBETE"]}</span> },
     { key: "billable", label: "Deb.", sortable: true, sortValue: (e) => (e.billable ? 1 : 0),
       render: (e) => <span className="text-sm">{e.billable ? "Ja" : "Nej"}</span> },
     // Notera: kolumnerna "Fakturerad" + "Faktura" finns INTE här. Rättshjälp/
@@ -167,6 +190,7 @@ export function TimeSection({ matterId, isTaxeArende }: Props) {
           submitLabel={createTimeEntry.isPending ? "Sparar..." : "Spara"}
           isPending={createTimeEntry.isPending}
           isTaxeArende={isTaxeArende}
+          isCoverage={isCoverage}
           onSubmit={() => createTimeEntry.mutate({ ...createForm, matterId })}
           onCancel={() => setShowCreate(false)}
         />
@@ -180,6 +204,7 @@ export function TimeSection({ matterId, isTaxeArende }: Props) {
             submitLabel={updateTimeEntry.isPending ? "Sparar..." : "Spara"}
             isPending={updateTimeEntry.isPending}
             isTaxeArende={isTaxeArende}
+            isCoverage={isCoverage}
             onSubmit={saveEdit}
             onCancel={() => { setEditingId(null); setEditForm(null); }}
           />
@@ -195,11 +220,12 @@ interface FormProps {
   submitLabel: string;
   isPending: boolean;
   isTaxeArende?: boolean | undefined;
+  isCoverage?: boolean | undefined;
   onSubmit: () => void;
   onCancel: () => void;
 }
 
-function TimeForm({ form, setForm, submitLabel, isPending, isTaxeArende, onSubmit, onCancel }: FormProps) {
+function TimeForm({ form, setForm, submitLabel, isPending, isTaxeArende, isCoverage, onSubmit, onCancel }: FormProps) {
   return (
     <form onSubmit={(e) => { e.preventDefault(); onSubmit(); }}>
       {isTaxeArende && (
@@ -229,6 +255,21 @@ function TimeForm({ form, setForm, submitLabel, isPending, isTaxeArende, onSubmi
             placeholder="Beskrivning *"
             onChange={(e) => setForm({ ...form, description: e.target.value })}
             className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm" />
+        </div>
+        <div className="col-span-2">
+          <label htmlFor="time-kind" className="block text-xs text-gray-500 mb-1">Arvodeskategori *</label>
+          <select id="time-kind" value={form.kind}
+            onChange={(e) => setForm({ ...form, kind: e.target.value as TimeEntryKind })}
+            className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm">
+            {KIND_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </select>
+          {isCoverage && (
+            <p className="mt-1 text-xs text-gray-500">
+              Kategorin avgör vilken av Domstolsverkets normer posten ersätts på.
+              Hela ärendet räknas om på slutregleringsårets normer, så en taxehöjning
+              slår igenom retroaktivt.
+            </p>
+          )}
         </div>
       </div>
       <div className="mt-3 flex items-center gap-4">
