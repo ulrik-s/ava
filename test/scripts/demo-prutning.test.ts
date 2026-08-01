@@ -69,9 +69,10 @@ describe("prutning i demo-scenarierna (#936)", () => {
     // (85 % resp. 70 % av samma nettoarbete).
     expect(a30?.awardedOre).toBeLessThan(a15!.awardedOre);
     expect(a15!.awardedOre / a30!.awardedOre).toBeCloseTo(85 / 70, 2);
-    // Beloppet härleds ur NETTO-arvodet, inte ur KR:ns brutto-värde (5 000 000 i
-    // stubben) — annars skulle computeCoverageSplit klampa bort nedsättningen.
-    expect(a15?.awardedOre).not.toBe(5_000_000);
+    // Beloppet härleds ur KR:ns YRKADE belopp (arvode + utlägg inkl moms) — precis
+    // som en riktig domstol prutar. 85 % av stubbens 5 000 000 (#943).
+    expect(a15?.awardedOre).toBe(4_250_000);
+    expect(a30?.awardedOre).toBe(3_500_000);
   });
 
   it("2026-0010 väljs som rättshjälps-prutningsärende, 2026-0020 lämnas orört", async () => {

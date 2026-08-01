@@ -306,6 +306,11 @@ function vatOreOf(lines: VatBreakdownLine[]): number {
   return lines.reduce((s, l) => s + l.vatOre, 0);
 }
 
+/** Netto (öre) ur en breakdown. */
+function netOreOf(lines: VatBreakdownLine[]): number {
+  return lines.reduce((s, l) => s + l.netOre, 0);
+}
+
 /** Brutto (öre) ur en breakdown: netto + moms. */
 function grossOreOf(lines: VatBreakdownLine[]): number {
   return lines.reduce((s, l) => s + l.netOre + l.vatOre, 0);
@@ -352,13 +357,62 @@ function apportionExpenseLines(lines: VatBreakdownLine[], split: CoverageSplit):
 /** Faktura-rader (moms-breakdown) för klient- resp. betalar-fakturan ur en
  *  prutnings-/rättshjälpsavgifts-uppdelning (#801). Både arvode OCH utlägg delas
  *  per samma klient/betalar-andel (#878). */
-function coverageInvoiceLines(split: CoverageSplit, work: UnfrozenWork): { clientLines: VatBreakdownLine[]; payerLines: VatBreakdownLine[] } {
+function coverageInvoiceLines(split: CoverageSplit, expenseLines: VatBreakdownLine[]): { clientLines: VatBreakdownLine[]; payerLines: VatBreakdownLine[] } {
   const clientArvode = arvodeLine(split.clientOre);
   const payerArvode = arvodeLine(split.payerOre);
-  const exp = apportionExpenseLines(expenseBreakdownLines(work), split);
+  const exp = apportionExpenseLines(expenseLines, split);
   return {
     clientLines: [...(clientArvode ? [clientArvode] : []), ...exp.clientLines],
     payerLines: [...(payerArvode ? [payerArvode] : []), ...exp.payerLines],
+  };
+}
+
+/**
+ * Skala moms-rader proportionellt (#943). Domstolens nedsättning träffar hela
+ * anspråket — arvode OCH utlägg — så varje rad skalas med samma faktor och
+ * behåller sin momssats. Utan detta bokas nedsättningen som om utläggen vore
+ * oberörda, och per-sats-bokföringen (#790) blir fel.
+ */
+function scaleVatLines(lines: VatBreakdownLine[], factor: number): VatBreakdownLine[] {
+  if (factor >= 1) return lines;
+  return lines.map((l) => ({ ...l, netOre: Math.round(l.netOre * factor), vatOre: Math.round(l.vatOre * factor) }));
+}
+
+/**
+ * Domstolens nedsättning som andel av det YRKADE beloppet (#943). Kostnads-
+ * räkningen yrkar arvode + utlägg INKL moms och beslutet avser den summan, så
+ * jämförelsen måste ske brutto mot brutto. Tidigare mättes det beviljade
+ * bruttobeloppet mot arvodet NETTO, vilket fick `Math.min` att klampa bort hela
+ * nedsättningen. Utan beslut (null) → faktor 1, dvs ingen nedsättning.
+ */
+function awardFactor(awardedOre: number | null, claimGrossOre: number): number {
+  if (awardedOre == null || claimGrossOre <= 0) return 1;
+  return Math.min(1, Math.max(0, awardedOre / claimGrossOre));
+}
+
+/**
+ * Domstolens nedsättning applicerad på HELA anspråket (#943): kostnadsräkningen
+ * yrkar arvode + utlägg inkl moms, och beslutet avser den summan. Skala därför
+ * både arvodet och varje utläggsrad med samma faktor, och returnera arvodesdelen
+ * i NETTO så `computeCoverageSplit` (som räknar på nettoarvode) får rätt bas.
+ * Rättsskydd rör inte den här vägen — där är bolagets prutning en egen händelse
+ * som klienten bär (`recordInsurerPruning`).
+ */
+function resolveAward(method: PaymentMethod, totalArvodeNet: number, work: UnfrozenWork, awardedOre: number | null): {
+  awardedArvodeNetOre: number | null; expenseLines: VatBreakdownLine[]; expenseLossNetOre: number;
+} {
+  const rawExpenseLines = expenseBreakdownLines(work);
+  if (method !== "RATTSHJALP") {
+    return { awardedArvodeNetOre: awardedOre, expenseLines: rawExpenseLines, expenseLossNetOre: 0 };
+  }
+  const claimGrossOre = arvodeInclVatOre(totalArvodeNet) + grossOreOf(rawExpenseLines);
+  const factor = awardFactor(awardedOre, claimGrossOre);
+  const expenseLines = scaleVatLines(rawExpenseLines, factor);
+  return {
+    awardedArvodeNetOre: Math.round(totalArvodeNet * factor),
+    expenseLines,
+    // Byrån bär nedsättningen på utläggen också — arvodesdelen bärs via split.firmLossOre.
+    expenseLossNetOre: netOreOf(rawExpenseLines) - netOreOf(expenseLines),
   };
 }
 
@@ -508,11 +562,15 @@ async function buildSettlementBreakdown(repos: Repositories, orgId: Organization
   clientShareBips: number; totalArvodeNet: number; split: CoverageSplit; work: UnfrozenWork;
   payerGross: number; clientPayable: number; method: PaymentMethod; rateOre: number; settleDate: Date | string;
   deductedRuns: ReadonlyArray<{ invoiceId?: InvoiceId | null | undefined }>;
+  /** Utläggsrader EFTER domstolens nedsättning (#943) — samma rader som fakturorna. */
+  expenseLines: VatBreakdownLine[];
+  /** Nedsättningens utläggsdel (netto) — byrån bär den, jfr split.firmLossOre. */
+  expenseLossNetOre: number;
 }): Promise<SettlementBreakdown> {
   // Rådgivningstimmen ingår ALDRIG i domstolens arvode (#860) — arvodet värderas
   // på bas-minuterna (exkl rådgivning). Rådgivningen syns bara i kostnadsräkningen.
   // Utlägg delas per samma andel som arvodet (#878): klientens del + betalarens del.
-  const exp = apportionExpenseLines(expenseBreakdownLines(a.work), a.split);
+  const exp = apportionExpenseLines(a.expenseLines, a.split);
   const clientExpensesGrossOre = grossOreOf(exp.clientLines);
   const payerExpensesGrossOre = grossOreOf(exp.payerLines);
   const deductedAccontos: SpecDeduction[] = [];
@@ -636,7 +694,7 @@ function buildPayerView(b: SettlementBreakdown, payerLabel: string, payerNoun: s
   rows.push({ label: `${payerNoun} andel av arvodet (exkl moms)`, amountOre: b.payerArvodeNetOre, kind: "add" });
   rows.push({ label: "Moms 25 %", amountOre: payerArvodeGross - b.payerArvodeNetOre, kind: "add" });
   rows.push({ label: `${payerNoun} arvode (inkl moms)`, amountOre: payerArvodeGross, kind: "add" });
-  if (b.expensesGrossOre > 0) rows.push({ label: `Utlägg (${payerNoun.toLowerCase()} andel, inkl moms)`, amountOre: b.expensesGrossOre, kind: "add" });
+  if (b.expensesGrossOre > 0) rows.push({ label: `Utlägg (${payerNoun.toLowerCase()} andel${b.firmLossNetOre > 0 ? " efter nedsättning" : ""}, inkl moms)`, amountOre: b.expensesGrossOre, kind: "add" });
   for (const d of b.deductedAccontos) rows.push({ label: `Betalt via aconto — faktura ${d.invoiceNumber}${d.date ? ` (${svd(d.date)})` : ""}`, amountOre: d.amountOre, kind: "info" });
   return { timeLines: b.clientArvodeLines.map(toViewLine), rows, totalLabel: `${payerLabel} — att betala (inkl moms)`, totalOre: b.payerPayableOre };
 }
@@ -1206,12 +1264,21 @@ export const billingRunRouter = router({
         // över årsskifte + tidsspillan på egen norm); övriga metoder → platt rate.
         const settleDate = toDateOrNow(input.invoiceDate);
         const totalArvodeNet = settlementArvodeNet(matter.paymentMethod, work, settleDate, rateOre);
+        // Domstolens beslut avser det kostnadsräkningen YRKADE: arvode + utlägg,
+        // inkl moms (#943). Härled nedsättningen som en andel av hela anspråket och
+        // skala BÅDE arvodet och utläggsraderna med den — annars klampas nedsättningen
+        // bort (beviljat brutto > arvode netto) och byrån fakturerar som om domstolen
+        // beviljat allt. Rättsskydd rör inte den här vägen: där är bolagets prutning en
+        // egen händelse som klienten bär (`recordInsurerPruning`).
+        const award = resolveAward(matter.paymentMethod, totalArvodeNet, work, awardedOre);
+        const { expenseLines, expenseLossNetOre } = award;
         const split = computeCoverageSplit({
           method: matter.paymentMethod, totalOre: totalArvodeNet, clientShareBips: matter.clientShareBips ?? 0,
-          awardedOre, insurerPrutningOre: input.insurerPrutningOre ?? null,
+          awardedOre: award.awardedArvodeNetOre,
+          insurerPrutningOre: input.insurerPrutningOre ?? null,
           ...rattsskyddCoverage(matter, work.timeEntries, rateOre),
         });
-        const { clientLines, payerLines } = coverageInvoiceLines(split, work);
+        const { clientLines, payerLines } = coverageInvoiceLines(split, expenseLines);
 
         // Klient: självrisk (+ ev. prutning), moms 25 %, minus tidigare aconton.
         // Auto-dra av ALLA skickade klient-aconton (#856): de har redan betalats,
@@ -1230,6 +1297,7 @@ export const billingRunRouter = router({
           clientShareBips: matter.clientShareBips ?? 0, totalArvodeNet,
           split, work, payerGross, clientPayable: clientAmount,
           method: matter.paymentMethod, rateOre, settleDate, deductedRuns,
+          expenseLines, expenseLossNetOre,
         });
         const { clientView, payerView } = buildSettlementViews(breakdown, matter.paymentMethod);
 
@@ -1243,7 +1311,7 @@ export const billingRunRouter = router({
           settlementBreakdown: payerView,
           invoiceType: "FINAL", status: "DRAFT", ...(await invoiceNumbering(tx, ctx.orgId, input.payerRecipient)), invoiceDate: settleDate, notes: input.notes,
         });
-        await bookFirmLoss(tx, ctx.user.id, input.matterId, split.firmLossOre);
+        await bookFirmLoss(tx, ctx.user.id, input.matterId, split.firmLossOre + expenseLossNetOre);
         const clientRun = await tx.billingRuns.create({
           matterId: input.matterId, type: "FINAL", recipient: "KLIENT", status: "SENT",
           workValueOreAtRun: clientGross, proposedAmountOre: clientGross, amountOre: clientInvoice.amount,

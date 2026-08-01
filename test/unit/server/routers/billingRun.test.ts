@@ -514,12 +514,16 @@ describe("billingRun.settleCoverage — bokför prutnings-uppdelningen (#801)", 
     // 3 tim loggat − 1 tim rådgivning (#809) = 2 effektiva tim → bas 325 200.
     const { ds, caller: c } = caller({ paymentMethod: "RATTSHJALP", clientShareBips: 2000, taxaHasFTax: true }, 999999, 180);
     const res = await c.billingRun.settleCoverage({ matterId: "m-1", payerRecipient: "RATTSHJALPSMYNDIGHET", awardedOre: 300000 });
-    // total 325200; dom 300000 → förlust 25200; klient 60000 → 75000; stat 240000 → 300000.
-    expect(res.split).toMatchObject({ clientOre: 60000, payerOre: 240000, firmLossOre: 25200 });
-    expect(res.clientInvoice.amount).toBe(75000);
-    expect(res.payerInvoice.amount).toBe(300000);
+    // #943: domsbeloppet är BRUTTO (det KR:n yrkade, inkl moms) — inte nettoarvode.
+    // Yrkat 325 200 netto = 406 500 brutto; dom 300 000 brutto → beviljat netto 240 000,
+    // byrån bär 85 200. Klient 20 % av 240 000 = 48 000 netto → 60 000 brutto; staten
+    // 192 000 → 240 000 brutto. Summa fakturerat = 300 000 = EXAKT det domstolen dömde.
+    expect(res.split).toMatchObject({ clientOre: 48000, payerOre: 192000, firmLossOre: 85200 });
+    expect(res.clientInvoice.amount).toBe(60000);
+    expect(res.payerInvoice.amount).toBe(240000);
+    expect(res.clientInvoice.amount + res.payerInvoice.amount).toBe(300000); // aldrig mer än domen
     const prutning = await ds.expenses.findFirst({ where: { matterId: "m-1", kind: "PRUTNING" } }) as { amount: number; billable: boolean };
-    expect(prutning.amount).toBe(-25200);
+    expect(prutning.amount).toBe(-85200);
     expect(prutning.billable).toBe(false);
   });
 
@@ -651,10 +655,11 @@ describe("billingRun.settleCoverage — bokför prutnings-uppdelningen (#801)", 
     // Registrera domstolens beslut PÅ KR:n (dömt 300 000), sedan fakturera.
     await c.billingRun.recordKostnadsrakningBeslut({ billingRunId: kr.run.id, awardedOre: 300000 });
     const res = await c.billingRun.settleCoverage({ matterId: "m-1", payerRecipient: "RATTSHJALPSMYNDIGHET" });
-    // Domsbeloppet (300 000) tas från KR:n → samma split.
-    expect(res.split).toMatchObject({ clientOre: 60000, payerOre: 240000, firmLossOre: 25200 });
-    expect(res.clientInvoice.amount).toBe(75000);
-    expect(res.payerInvoice.amount).toBe(300000);
+    // Domsbeloppet (300 000, brutto) tas från KR:n → samma split som ovan (#943).
+    expect(res.split).toMatchObject({ clientOre: 48000, payerOre: 192000, firmLossOre: 85200 });
+    expect(res.clientInvoice.amount).toBe(60000);
+    expect(res.payerInvoice.amount).toBe(240000);
+    expect(res.clientInvoice.amount + res.payerInvoice.amount).toBe(300000);
     // Betalar-körningen är en EGEN FINAL (ej KR:n) → KR:n förblir distinkt.
     expect(res.payerRun.id).not.toBe(kr.run.id);
     const krAfter = await ds.billingRuns.findFirst({ where: { id: kr.run.id } }) as { kostnadsrakningStatus: string; invoiceId: string | null };
