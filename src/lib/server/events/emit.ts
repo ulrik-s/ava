@@ -103,6 +103,11 @@ export const emit = {
   invoiceWrittenOff: (ctx: EmitCtx, invoiceId: InvoiceId, matterId: MatterId, amount: number) =>
     emitUser(ctx, "invoice.written_off", { invoiceId, amount }, matterId),
 
+  /** Beloppet på en BEFINTLIG faktura ändrades (#952) — t.ex. rättsskyddets prutning
+   *  som omfördelas mellan klientens två fakturor utan att någon ny faktura skapas. */
+  invoiceAdjusted: (ctx: EmitCtx, inv: { id: InvoiceId; matterId: MatterId; amount: number }, reason: string) =>
+    emitUser(ctx, "invoice.adjusted", { invoiceId: inv.id, amount: inv.amount, reason }, inv.matterId),
+
   // ── time-entry ─────────────────────────────────────────────────
   timeEntryAdded: (ctx: EmitCtx, entry: { id: TimeEntryId; matterId: MatterId; minutes: number }) =>
     emitUser(ctx, "time-entry.added", { entryId: entry.id, minutes: entry.minutes }, entry.matterId),

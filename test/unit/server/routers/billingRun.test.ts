@@ -535,15 +535,64 @@ describe("billingRun.settleCoverage — bokför prutnings-uppdelningen (#801)", 
     expect(res.payerInvoice.amount).toBe(262_700);
   });
 
-  it("rättsskydd flöde B (#905): prutning EFTERÅT → kredit till försäkring + påfyllnadsfaktura till klient", async () => {
+  /**
+   * Rättsskydd flöde B (#905/#952): fakturan GÅR till försäkringsbolaget men är
+   * STÄLLD TILL KLIENTEN — det gick aldrig ut någon faktura *till* bolaget, så det
+   * finns inget att kreditera dem. Klienten har två fakturor och bolagets prutning
+   * ändrar bara fördelningen mellan dem. Totalen är oförändrad.
+   */
+  it("prutning EFTERÅT omfördelar mellan klientens två fakturor — INGEN kreditfaktura", async () => {
     const { caller: c } = caller({ paymentMethod: "RATTSSKYDD", clientShareBips: 2000 }, 300000);
-    await c.billingRun.settleCoverage({ matterId: "m-1", payerRecipient: "FORSAKRING" }); // ingen prutning uppfront
+    const settled = await c.billingRun.settleCoverage({ matterId: "m-1", payerRecipient: "FORSAKRING" }); // ingen prutning uppfront
+    const before = settled.payerInvoice.amount + settled.clientInvoice.amount;
+
     const res = await c.billingRun.recordInsurerPruning({ matterId: "m-1", prunedNetOre: 100_000 });
-    // 100 000 netto → 125 000 brutto: kredit till försäkring (negativ) + klientfaktura (positiv).
-    expect(res.insurerCredit.invoiceType).toBe("CREDIT");
-    expect(res.insurerCredit.amount).toBe(-125_000);
-    expect(res.clientInvoice.invoiceType).toBe("FINAL");
-    expect(res.clientInvoice.amount).toBe(125_000);
+    // 100 000 netto → 125 000 brutto flyttas FRÅN försäkringsfakturan TILL klientens.
+    expect(res.prunedGross).toBe(125_000);
+    expect(res.payerInvoice.amount).toBe(settled.payerInvoice.amount - 125_000);
+    expect(res.clientInvoice.amount).toBe(settled.clientInvoice.amount + 125_000);
+    // Totalen (byråns fordran) är oförändrad — byrån blir hel.
+    expect(res.payerInvoice.amount + res.clientInvoice.amount).toBe(before);
+    // Momsen följer beloppet, så fakturan aldrig visar moms som inte hör till den.
+    expect(res.payerInvoice.vatOre).toBe((settled.payerInvoice.vatOre ?? 0) - 25_000);
+    expect(res.clientInvoice.vatOre).toBe((settled.clientInvoice.vatOre ?? 0) + 25_000);
+    // Ingen ny faktura, och absolut ingen CREDIT mot försäkringsbolaget.
+    const invoices = await c.invoice.list({ matterId: "m-1" });
+    expect(invoices.filter((i) => i.invoiceType === "CREDIT")).toHaveLength(0);
+    expect(res.payerInvoice.id).toBe(settled.payerInvoice.id); // samma faktura, uppdaterad
+    expect(res.clientInvoice.id).toBe(settled.clientInvoice.id);
+  });
+
+  it("prutningen märks på betalar-körningen så den inte kan registreras i blindo två gånger", async () => {
+    const { caller: c } = caller({ paymentMethod: "RATTSSKYDD", clientShareBips: 2000 }, 300000);
+    await c.billingRun.settleCoverage({ matterId: "m-1", payerRecipient: "FORSAKRING" });
+    await c.billingRun.recordInsurerPruning({ matterId: "m-1", prunedNetOre: 100_000 });
+    const { runs } = await c.billingRun.list({ matterId: "m-1" });
+    const payerRun = runs.find((r) => r.type === "FINAL" && r.recipient === "FORSAKRING");
+    expect(payerRun?.prutningOre).toBe(-100_000);
+    // Inga CREDIT-körningar mot försäkringsbolaget (det gamla spåret, #952).
+    expect(runs.filter((r) => r.type === "CREDIT" && r.recipient === "FORSAKRING")).toHaveLength(0);
+  });
+
+  it("nedbrytningsvyerna förklarar omfördelningen på BÅDA fakturorna", async () => {
+    const { caller: c } = caller({ paymentMethod: "RATTSSKYDD", clientShareBips: 2000 }, 300000);
+    await c.billingRun.settleCoverage({ matterId: "m-1", payerRecipient: "FORSAKRING" });
+    const res = await c.billingRun.recordInsurerPruning({ matterId: "m-1", prunedNetOre: 100_000 });
+    const labels = (inv: { settlementBreakdown?: { rows: Array<{ label: string }> } | null | undefined }): string[] =>
+      (inv.settlementBreakdown?.rows ?? []).map((r) => r.label);
+    expect(labels(res.payerInvoice).join(" | ")).toMatch(/Avgår försäkringens prutning/);
+    expect(labels(res.clientInvoice).join(" | ")).toMatch(/bärs av klienten/);
+    // Totalen i vyn följer fakturans faktiska belopp.
+    expect(res.payerInvoice.settlementBreakdown?.totalOre).toBe(res.payerInvoice.amount);
+    expect(res.clientInvoice.settlementBreakdown?.totalOre).toBe(res.clientInvoice.amount);
+  });
+
+  it("en prutning större än försäkringsfakturan avvisas (annars blir beloppet negativt)", async () => {
+    const { caller: c } = caller({ paymentMethod: "RATTSSKYDD", clientShareBips: 2000 }, 300000);
+    const settled = await c.billingRun.settleCoverage({ matterId: "m-1", payerRecipient: "FORSAKRING" });
+    const forStort = Math.round(settled.payerInvoice.amount / 1.25) + 100_000;
+    await expect(c.billingRun.recordInsurerPruning({ matterId: "m-1", prunedNetOre: forStort }))
+      .rejects.toThrow(/större än försäkringsfakturan/i);
   });
 
   it("recordInsurerPruning kräver en försäkringsfaktura först (annars BAD_REQUEST)", async () => {
