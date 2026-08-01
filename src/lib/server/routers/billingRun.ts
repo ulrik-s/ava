@@ -19,7 +19,10 @@ import { z } from "zod";
 import type { VatBreakdownLine } from "@/lib/shared/accounting/semantic-voucher";
 import { assertBillingTransition, type BillingActionType } from "@/lib/shared/billing-flow";
 import { proposedAccontoOre } from "@/lib/shared/billing-proposal";
-import { TIMKOSTNADSNORM_FTAX_ORE_PER_H, timkostnadsnormFtaxForDate, tidsspillanFtaxForDate } from "@/lib/shared/brottmalstaxa";
+import {
+  TIMKOSTNADSNORM_FTAX_ORE_PER_H, timkostnadsnormFtaxForDate, tidsspillanFtaxForDate,
+  tidsspillanOvrigFtaxForDate, arbeteObekvamFtaxForDate,
+} from "@/lib/shared/brottmalstaxa";
 import { computeCoverageSplit, partitionRattsskyddMinutes, type CoverageSplit, type RattsskyddClientParts } from "@/lib/shared/coverage-billing";
 import { arvodeInclVatOre } from "@/lib/shared/invoice-calc";
 import {
@@ -31,7 +34,7 @@ import { applyKrAction, type KostnadsrakningAction, type KostnadsrakningState, t
 import { ocrFromInvoiceNumber } from "@/lib/shared/ocr-reference";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { RADGIVNING_MINUTES } from "@/lib/shared/rattshjalp";
-import { settlementBreakdownSchema, type BillingRun, type Invoice } from "@/lib/shared/schemas/billing";
+import { settlementBreakdownSchema, type BillingRun, type Invoice, type TimeEntryKind } from "@/lib/shared/schemas/billing";
 import { billingRunRecipientSchema, type BillingRunRecipient, type ExpenseKind, type PaymentMethod } from "@/lib/shared/schemas/enums";
 import {
   matterIdSchema,
@@ -57,7 +60,7 @@ import type { Repositories } from "../repositories/repositories";
 import { router, orgProcedure } from "../trpc";
 
 interface UnfrozenWork {
-  timeEntries: Array<{ id: TimeEntryId; minutes: number; hourlyRate: number; billable: boolean; date: Date | string; description: string; kind?: "ARBETE" | "TIDSSPILLAN" | null | undefined }>;
+  timeEntries: Array<{ id: TimeEntryId; minutes: number; hourlyRate: number; billable: boolean; date: Date | string; description: string; kind?: TimeEntryKind | null | undefined }>;
   expenses: Array<{ id: ExpenseId; amount: number; billable: boolean; vatRate?: number | null; vatIncluded?: boolean | null }>;
 }
 
@@ -115,17 +118,40 @@ interface RattsskyddMatter {
  * (täckt del efter tvist/retro-tak) → `coveredOre`, samt försäkringens tak →
  * `capOre`. Tom för andra betalningssätt (då gäller standard-splitten).
  */
+/**
+ * Värdet (netto) av den TÄCKTA delen (#950). Minuterna kommer ur den kronologiska
+ * partitioneringen, men värdet måste räknas på posternas KATEGORINORMER — samma
+ * valuta som `settlementArvodeNet` — annars jämförs äpplen med päron. Fördelar de
+ * täckta minuterna över posterna i ordning (äldsta först).
+ */
+function coveredValueOre(
+  entries: ReadonlyArray<{ minutes: number; billable: boolean; kind?: TimeEntryKind | null | undefined }>,
+  coveredMinutes: number, settleDate: Date | string,
+): number {
+  let left = coveredMinutes;
+  let value = 0;
+  for (const t of entries.filter((e) => e.billable)) {
+    if (left <= 0) break;
+    const take = Math.min(left, t.minutes);
+    value += timeEntryValueOre(take, rattshjalpEntryRateOre(t.kind, settleDate));
+    left -= take;
+  }
+  return value;
+}
+
 function rattsskyddCoverage(
   matter: RattsskyddMatter,
-  entries: ReadonlyArray<{ date: Date | string; minutes: number; billable: boolean }>,
-  rateOre: number,
+  entries: ReadonlyArray<{ date: Date | string; minutes: number; billable: boolean; kind?: TimeEntryKind | null | undefined }>,
+  settleDate: Date | string,
   // `minSjalvriskOre` returneras också (självrisk-golvet, #899) — utan den i typen
   // trodde TS att den aldrig skickas till computeCoverageSplit, trots att den gör det.
 ): { coveredOre?: number; capOre?: number; minSjalvriskOre?: number } {
   if (matter.paymentMethod !== "RATTSSKYDD") return {};
   const p = partitionRattsskyddMinutes(entries, matter.tvistUppkomDatum ?? null, matter.rattsskyddBeslutDatum ?? null);
   return omitUndefined({
-    coveredOre: Math.round((p.coveredMinutes / 60) * rateOre),
+    // MÅSTE värderas på samma sätt som arvodesbasen (#950), annars jämförs täckt
+    // arbete mot en bas i en annan taxa och otäckt/självrisk blir fel.
+    coveredOre: coveredValueOre(entries, p.coveredMinutes, settleDate),
     capOre: matter.rattsskyddMaxOre ?? undefined,
     minSjalvriskOre: matter.rattsskyddSjalvriskMinOre ?? undefined,
   });
@@ -237,8 +263,13 @@ function invoiceGrossOre(work: UnfrozenWork): number {
 /** Timarvodet (öre/tim) för en tidspost vid slutreglering (#891): rättshjälp
  *  värderas retroaktivt på SLUTREGLERINGSÅRETS norm — arbete på timkostnadsnormen,
  *  tidsspillan på den (lägre) tidsspillan-normen. */
-function rattshjalpEntryRateOre(kind: "ARBETE" | "TIDSSPILLAN" | null | undefined, settleDate: Date | string): number {
-  return kind === "TIDSSPILLAN" ? tidsspillanFtaxForDate(settleDate) : timkostnadsnormFtaxForDate(settleDate);
+function rattshjalpEntryRateOre(kind: TimeEntryKind | null | undefined, settleDate: Date | string): number {
+  switch (kind) {
+    case "TIDSSPILLAN": return tidsspillanFtaxForDate(settleDate);
+    case "TIDSSPILLAN_OVRIG_TID": return tidsspillanOvrigFtaxForDate(settleDate);
+    case "ARBETE_OBEKVAM_TID": return arbeteObekvamFtaxForDate(settleDate);
+    default: return timkostnadsnormFtaxForDate(settleDate);
+  }
 }
 
 /**
@@ -248,14 +279,38 @@ function rattshjalpEntryRateOre(kind: "ARBETE" | "TIDSSPILLAN" | null | undefine
  * rådgivningstimmen), tidsspillan på tidsspillan-normen. Övriga metoder: platt
  * `flatRateOre` × alla debiterbara minuter (oförändrat).
  */
-function settlementArvodeNet(method: PaymentMethod, work: UnfrozenWork, settleDate: Date | string, flatRateOre: number): number {
+function settlementArvodeNet(method: PaymentMethod, work: UnfrozenWork, settleDate: Date | string): number {
   const billable = work.timeEntries.filter((t) => t.billable);
-  const billableMin = billable.reduce((s, t) => s + t.minutes, 0);
-  if (method !== "RATTSHJALP") return Math.round((billableMin / 60) * flatRateOre);
-  const tidsMin = billable.filter((t) => t.kind === "TIDSSPILLAN").reduce((s, t) => s + t.minutes, 0);
-  const arbeteMin = coverageBaseMinutes("RATTSHJALP", billableMin - tidsMin); // − rådgivningstimmen
-  return Math.round((arbeteMin / 60) * timkostnadsnormFtaxForDate(settleDate))
-    + Math.round((tidsMin / 60) * tidsspillanFtaxForDate(settleDate));
+  // Varje post värderas på SIN KATEGORIS norm för slutregleringsåret (#949/#950).
+  // Tidigare plattade icke-rättshjälp ut allt till ansvarig jurists timtaxa, vilket
+  // gjorde att sammanställningens taxerader inte summerade till fakturabeloppet.
+  // Alla ärenden använder Domstolsverkets nivåer, så logiken är gemensam.
+  // PRIVAT/offentligt debiterar byråns egen taxa (ligger på posten) — bara
+  // täckningsärenden ersätts enligt Domstolsverkets nivåer (#950).
+  if (method !== "RATTSHJALP" && method !== "RATTSSKYDD") return arvodeNetOre(work);
+  const byKind = minutesByKind(billable);
+  // Rådgivningstimmen carvas ur ARBETE (rättshjälp) — den faktureras klienten separat.
+  byKind.set("ARBETE", coverageBaseMinutes(method, byKind.get("ARBETE") ?? 0));
+  return sumKindValueOre(byKind, settleDate);
+}
+
+/** Debiterbara minuter grupperade per arvodeskategori (#950). */
+function minutesByKind(
+  billable: ReadonlyArray<{ minutes: number; kind?: TimeEntryKind | null | undefined }>,
+): Map<TimeEntryKind, number> {
+  const byKind = new Map<TimeEntryKind, number>();
+  for (const t of billable) {
+    const kind = t.kind ?? "ARBETE";
+    byKind.set(kind, (byKind.get(kind) ?? 0) + t.minutes);
+  }
+  return byKind;
+}
+
+/** Summera kategoriernas minuter på respektive årsnorm (#950). */
+function sumKindValueOre(byKind: ReadonlyMap<TimeEntryKind, number>, settleDate: Date | string): number {
+  let net = 0;
+  for (const [kind, minutes] of byKind) net += timeEntryValueOre(minutes, rattshjalpEntryRateOre(kind, settleDate));
+  return net;
 }
 
 /**
@@ -483,14 +538,30 @@ async function freezeWork(repos: Repositories, matterId: MatterId, billingRunId:
 // så faktura-mallen och demo-generatorn kan bygga samma shape (DRY).
 
 function specTimeLines(
-  method: PaymentMethod, normRateOre: number,
-  entries: ReadonlyArray<{ date: Date | string; description: string; minutes: number; hourlyRate: number; billable: boolean }>,
+  method: PaymentMethod,
+  entries: ReadonlyArray<{ date: Date | string; description: string; minutes: number; hourlyRate: number; billable: boolean; kind?: TimeEntryKind | null | undefined }>,
+  settleDate: Date | string,
 ): SpecTimeLine[] {
   return entries.filter((t) => t.billable).map((t) => ({
     date: t.date, description: t.description, minutes: t.minutes,
-    // Rättshjälp värderas enhetligt på timkostnadsnormen (#839); övriga per post-taxa.
-    amountOre: timeEntryValueOre(t.minutes, method === "RATTSHJALP" ? normRateOre : t.hourlyRate),
+    amountOre: timeEntryValueOre(t.minutes, specLineRateOre(method, t, settleDate)),
   }));
+}
+
+/**
+ * Taxan en spec-rad värderas på (#950). TÄCKNINGSÄRENDEN (rättshjälp/rättsskydd)
+ * ersätts enligt Domstolsverkets nivåer, så varje post värderas på SIN KATEGORIS
+ * norm för slutregleringsåret — samma regel som slutregleringen, vilket gör att
+ * sammanställningens taxerader alltid summerar till fakturabeloppet.
+ *
+ * PRIVAT/offentligt uppdrag debiterar byråns EGEN taxa, som ligger på posten —
+ * en privatklient ska inte faktureras statens norm.
+ */
+function specLineRateOre(
+  method: PaymentMethod, entry: { hourlyRate: number; kind?: TimeEntryKind | null | undefined }, settleDate: Date | string,
+): number {
+  const coverage = method === "RATTSHJALP" || method === "RATTSSKYDD";
+  return coverage ? rattshjalpEntryRateOre(entry.kind, settleDate) : entry.hourlyRate;
 }
 
 function specExpenseLines(
@@ -576,13 +647,11 @@ function buildClientArvodeLines(
 ): SpecTimeLine[] {
   const billable = work.timeEntries.filter((t) => t.billable);
   const entries = method === "RATTSHJALP" ? carveEarliestMinutes(billable, RADGIVNING_MINUTES) : billable;
-  // #891: rättshjälp värderar varje rad på slutregleringsårets norm per kategori
-  // (arbete vs tidsspillan); övriga metoder → den platta raten.
-  const lineRate = (kind: "ARBETE" | "TIDSSPILLAN" | null | undefined): number =>
-    method === "RATTSHJALP" ? rattshjalpEntryRateOre(kind, settleDate) : rateOre;
+  // #891/#950: varje rad värderas på sin KATEGORIS norm för slutregleringsåret —
+  // för alla betalningssätt, så raderna summerar till `totalArvodeNet`.
   const lines: SpecTimeLine[] = entries.map((t) => ({
     date: t.date, description: t.description, minutes: t.minutes,
-    amountOre: timeEntryValueOre(t.minutes, lineRate(t.kind)),
+    amountOre: timeEntryValueOre(t.minutes, rattshjalpEntryRateOre(t.kind, settleDate)),
   }));
   const sum = lines.reduce((s, l) => s + l.amountOre, 0);
   const last = lines[lines.length - 1];
@@ -1040,14 +1109,15 @@ export const billingRunRouter = router({
       if (!invoice) throw new TRPCError({ code: "NOT_FOUND", message: "Fakturan finns inte." });
       const matter = await ctx.repos.matters.getByIdInOrg(input.matterId, ctx.orgId);
       if (!matter) throw new TRPCError({ code: "NOT_FOUND", message: "Ärendet finns inte." });
-      const rateOre = await currentArvodeRateOre(ctx.repos, ctx.orgId, matter);
+      // Taxan hämtas inte längre ur juristen: varje post värderas på sin kategoris
+      // norm för fakturans år (#950), samma regel som slutregleringen använder.
       const [te, ex, deductions] = await Promise.all([
         ctx.repos.timeEntries.listByInvoice(input.invoiceId),
         ctx.repos.expenses.listByInvoice(input.invoiceId),
         fetchSpecDeductions(ctx.repos, ctx.orgId, input.invoiceId),
       ]);
       return buildInvoiceSpecification({
-        timeLines: specTimeLines(matter.paymentMethod, rateOre, te),
+        timeLines: specTimeLines(matter.paymentMethod, te, invoice.invoiceDate ?? new Date()),
         expenseLines: specExpenseLines(ex),
         deductions, payableOre: invoice.amount,
       });
@@ -1166,7 +1236,7 @@ export const billingRunRouter = router({
         // byråns privata timtaxa. Övriga (offentligt uppdrag/taxa): arvode inkl moms
         // + utlägg som tidigare. Brutto matchar kostnadsräkningens PDF (#782).
         const krArvodeNet = matter.paymentMethod === "RATTSHJALP"
-          ? settlementArvodeNet("RATTSHJALP", work, new Date(), 0) // #891: retroaktiv norm
+          ? settlementArvodeNet("RATTSHJALP", work, new Date()) // #891: retroaktiv norm
           : arvodeNetOre(work);
         const grossValue = krGrossOre(work, krArvodeNet);
         const run = await tx.billingRuns.create({
@@ -1249,8 +1319,9 @@ export const billingRunRouter = router({
       const { work } = await resolveSettlementWork(ctx.repos, ctx.orgId, input.matterId);
       const billableMinutes = work.timeEntries.filter((t) => t.billable).reduce((s, t) => s + t.minutes, 0);
       const currentRateOre = await currentArvodeRateOre(ctx.repos, ctx.orgId, matter);
-      const baseMinutes = coverageBaseMinutes(matter.paymentMethod, billableMinutes);
-      const totalOre = Math.round((baseMinutes / 60) * currentRateOre);
+      // Förhandsvisningen måste räkna EXAKT som slutregleringen (#950) — annars
+      // visar dialogen ett annat belopp än den faktura som sedan skapas.
+      const totalOre = settlementArvodeNet(matter.paymentMethod, work, new Date());
       // Utlägg bokas på betalaren i settlement-flödet (coverageInvoiceLines) →
       // måste med i förhandsvisningen (#849). Både netto OCH brutto returneras:
       // utläggen har BLANDADE momssatser (6/12/25 %), så bruttot kan inte räknas
@@ -1263,7 +1334,7 @@ export const billingRunRouter = router({
         clientShareBips: matter.clientShareBips ?? 0,
         ...(input.awardedOre != null ? { awardedOre: input.awardedOre } : {}),
         ...(input.insurerPrutningOre != null ? { insurerPrutningOre: input.insurerPrutningOre } : {}),
-        ...rattsskyddCoverage(matter, work.timeEntries, currentRateOre),
+        ...rattsskyddCoverage(matter, work.timeEntries, new Date()),
       });
       return { ...split, totalOre, expensesNetOre, expensesGrossOre, currentRateOre, billableMinutes };
     }),
@@ -1350,7 +1421,7 @@ export const billingRunRouter = router({
         // #891: rättshjälp räknas om på slutregleringsårets normer (retroaktiv höjning
         // över årsskifte + tidsspillan på egen norm); övriga metoder → platt rate.
         const settleDate = toDateOrNow(input.invoiceDate);
-        const totalArvodeNet = settlementArvodeNet(matter.paymentMethod, work, settleDate, rateOre);
+        const totalArvodeNet = settlementArvodeNet(matter.paymentMethod, work, settleDate);
         // Domstolens beslut avser det kostnadsräkningen YRKADE: arvode + utlägg,
         // inkl moms (#943). Härled nedsättningen som en andel av hela anspråket och
         // skala BÅDE arvodet och utläggsraderna med den — annars klampas nedsättningen
@@ -1363,7 +1434,7 @@ export const billingRunRouter = router({
           method: matter.paymentMethod, totalOre: totalArvodeNet, clientShareBips: matter.clientShareBips ?? 0,
           awardedOre: award.awardedArvodeNetOre,
           insurerPrutningOre: input.insurerPrutningOre ?? null,
-          ...rattsskyddCoverage(matter, work.timeEntries, rateOre),
+          ...rattsskyddCoverage(matter, work.timeEntries, settleDate),
         });
         // #945: går betalarfakturan till domstol debiteras utläggen 25 % oavsett sats.
         const courtPayer = isCourtRecipient(input.payerRecipient);

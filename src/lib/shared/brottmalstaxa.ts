@@ -63,8 +63,51 @@ const TIMKOSTNADSNORM_FTAX_BY_YEAR: Readonly<Record<number, number>> = {
  * norm än arvodet — Domstolsverkets tidsspillan-föreskrift, vardag 08–18 (dagtid).
  */
 const TIDSSPILLAN_FTAX_BY_YEAR: Readonly<Record<number, number>> = {
-  2025: 145_000, // 1 450 kr/h (DVFS 2024:15)
-  2026: 148_700, // 1 487 kr/h (DVFS 2025:4)
+  2025: 145_000, // 1 450 kr/h (DVFS 2024:15 § 4)
+  2026: 148_700, // 1 487 kr/h (DVFS 2025:4 § 4)
+};
+
+/**
+ * Tidsspillan ANNAN TID (F-skatt), öre/tim exkl moms (#950) — all tid utanför
+ * vardag 08–18. Egen, lägre norm än dagtaxan (DVFS 2025:4 § 4).
+ *
+ * OBS: vid helgförhandling och polisförhör utom kontorstid ersätts tidsspillan
+ * ändå med DAGTAXAN, även mellan 22.00 och 07.00 (DVFS 2025:7 § 1, 2025:8 § 3).
+ */
+const TIDSSPILLAN_OVRIG_FTAX_BY_YEAR: Readonly<Record<number, number>> = {
+  2025: 95_100,  //   951 kr/h (DVFS 2024:15 § 4)
+  2026: 97_500,  //   975 kr/h (DVFS 2025:4 § 4)
+};
+
+/**
+ * Arbete på OBEKVÄM TID (F-skatt), öre/tim exkl moms (#950): häktningsförhandling
+ * under helg (DVFS 2025:7 § 1) och polisförhör utanför ordinarie kontorstid
+ * (DVFS 2025:8 § 1) — söndag, allmän helgdag, lördag, midsommar-/jul-/nyårsafton,
+ * samt vardagar 00–07 och 18–24. Samma belopp i båda föreskrifterna.
+ */
+const ARBETE_OBEKVAM_FTAX_BY_YEAR: Readonly<Record<number, number>> = {
+  2025: 317_500, // 3 175 kr/h (DVFS 2024:18 § 1, 2024:19 § 1)
+  2026: 325_600, // 3 256 kr/h (DVFS 2025:7 § 1, 2025:8 § 1)
+};
+
+/**
+ * Advokatberedskap — garantiersättning per DAG (ej per timme), öre exkl moms
+ * (DVFS 2024:20 / 2025:7). Utgår INTE för dag då arvode enligt helg- eller
+ * polisförhörsföreskriften utgår.
+ */
+const ADVOKATBEREDSKAP_FTAX_BY_YEAR: Readonly<Record<number, number>> = {
+  2025: 248_700, // 2 487 kr/dag
+  2026: 255_000, // 2 550 kr/dag
+};
+
+/**
+ * Kvoten för biträde UTAN F-skatt är ÅRSBEROENDE (#950): timkostnadsnormen utan
+ * F-skatt delat med den med F-skatt, för samma år. Tidigare hårdkodades 2026-
+ * kvoten för alla år, vilket gav fel belopp på 2025-arbete.
+ */
+const NO_FTAX_QUOTIENT_BY_YEAR: Readonly<Record<number, { num: number; den: number }>> = {
+  2025: { num: 1207, den: 1586 },
+  2026: { num: 1237, den: 1626 },
 };
 
 /** Året ur ett datum (ISO-sträng eller Date). Ogiltigt → senaste kända året. */
@@ -82,6 +125,33 @@ export function timkostnadsnormFtaxForDate(date: Date | string): number {
 /** Tidsspillan-normen (F-skatt) som gäller ett givet datum (#891). */
 export function tidsspillanFtaxForDate(date: Date | string): number {
   return TIDSSPILLAN_FTAX_BY_YEAR[yearOf(date)] ?? TIDSSPILLAN_FTAX_BY_YEAR[2026] ?? TIMKOSTNADSNORM_FTAX_ORE_PER_H;
+}
+
+/** Tidsspillan ANNAN TID (F-skatt) som gäller ett givet datum (#950). */
+export function tidsspillanOvrigFtaxForDate(date: Date | string): number {
+  return TIDSSPILLAN_OVRIG_FTAX_BY_YEAR[yearOf(date)] ?? TIDSSPILLAN_OVRIG_FTAX_BY_YEAR[2026] ?? 0;
+}
+
+/** Arvode för arbete på OBEKVÄM TID (F-skatt) ett givet datum (#950). */
+export function arbeteObekvamFtaxForDate(date: Date | string): number {
+  return ARBETE_OBEKVAM_FTAX_BY_YEAR[yearOf(date)] ?? ARBETE_OBEKVAM_FTAX_BY_YEAR[2026] ?? 0;
+}
+
+/** Advokatberedskapens garantiersättning per DAG (F-skatt) ett givet datum (#950). */
+export function advokatberedskapFtaxForDate(date: Date | string): number {
+  return ADVOKATBEREDSKAP_FTAX_BY_YEAR[yearOf(date)] ?? ADVOKATBEREDSKAP_FTAX_BY_YEAR[2026] ?? 0;
+}
+
+/** Kvoten utan F-skatt för ett givet datum (#950) — årsberoende. */
+function noFTaxQuotientForDate(date: Date | string): { num: number; den: number } {
+  return NO_FTAX_QUOTIENT_BY_YEAR[yearOf(date)]
+    ?? { num: NO_FTAX_FACTOR_NUMERATOR, den: NO_FTAX_FACTOR_DENOMINATOR };
+}
+
+/** Justera ett belopp för biträde utan F-skatt med det ÅRETS kvot (#950). */
+export function applyNoFTaxFactorForDate(ersattningOre: number, date: Date | string): number {
+  const q = noFTaxQuotientForDate(date);
+  return Math.round((ersattningOre * q.num) / q.den);
 }
 
 /**
