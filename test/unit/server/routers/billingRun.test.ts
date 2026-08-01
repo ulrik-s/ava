@@ -574,7 +574,20 @@ describe("billingRun.settleCoverage — bokför prutnings-uppdelningen (#801)", 
     expect(pv.timeLines[0]!.amountOre).toBe(325_200);
     expect(pv.rows.find((r) => r.label.includes("andel av arvodet"))?.amountOre).toBe(260_160); // 325 200 − 65 040 självrisk
     expect(pv.rows.find((r) => r.label === "Moms 25 %")?.amountOre).toBe(65_040);               // moms på domstolens andel
-    expect(pv.rows.some((r) => r.kind === "info" && r.label.includes("Rådgivningstimme"))).toBe(true);
+    // #941 — trappan ska läsas uppifrån och ned i den ordning beräkningen sker:
+    // rådgivningstimmen av FÖRST, sedan prutningen, och först därefter klientens
+    // andel (som räknas på det som återstår). Rådgivningen är ett EXPLICIT avdrag,
+    // inte längre en info-rad längst ned.
+    const labels = pv.rows.map((r) => r.label);
+    const iRadgivning = labels.findIndex((l) => l.toLowerCase().includes("rådgivningstimme"));
+    const iAvgift = labels.findIndex((l) => l.includes("Avgår klientens"));
+    expect(iRadgivning).toBeGreaterThan(-1);
+    expect(pv.rows[iRadgivning]!.kind).toBe("deduct");
+    expect(iRadgivning).toBeLessThan(iAvgift);
+    expect(labels[0]).toBe("Upparbetat arvode (exkl moms)");
+    // Upparbetat inkluderar rådgivningstimmen; underlaget är det som återstår.
+    expect(pv.rows[0]!.amountOre).toBe(b.arvodeBaseNetOre + b.radgivningNetOre);
+    expect(labels).toContain("Underlag för kostnadsräkning (exkl moms)");
   });
 
   it("rättshjälp (#878): utlägg delas per andel; klientens del heter 'rättshjälpsavgift'", async () => {
