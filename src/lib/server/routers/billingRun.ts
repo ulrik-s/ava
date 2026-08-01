@@ -30,7 +30,7 @@ import { carveEarliestMinutes } from "@/lib/shared/kostnadsrakning";
 import { applyKrAction, type KostnadsrakningAction, type KostnadsrakningState, type KostnadsrakningStatus } from "@/lib/shared/kostnadsrakning-flow";
 import { ocrFromInvoiceNumber } from "@/lib/shared/ocr-reference";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
-import { RADGIVNING_MINUTES, radgivningTextRad } from "@/lib/shared/rattshjalp";
+import { RADGIVNING_MINUTES } from "@/lib/shared/rattshjalp";
 import { settlementBreakdownSchema, type BillingRun, type Invoice } from "@/lib/shared/schemas/billing";
 import { billingRunRecipientSchema, type BillingRunRecipient, type ExpenseKind, type PaymentMethod } from "@/lib/shared/schemas/enums";
 import {
@@ -463,6 +463,7 @@ export interface SettlementBreakdown {
   prutningGrossOre: number;      // byrå-förlust/prutning brutto
   payerArvodeNetOre: number;     // domstolens/försäkringens andel av arvodet NETTO — trappan (#876)
   radgivningGrossOre: number;    // klient-betald rådgivningstimme brutto — omnämns på domstolsfakturan, ej i totalen (#876)
+  radgivningNetOre: number;      // samma timme NETTO — första avdraget i arvodestrappan (#941)
   payerPayableOre: number;       // domstolen att betala
   clientPayableOre: number;      // klienten att betala (självrisk − aconton)
   // Klientens självrisk-faktura specificeras med den arbetade tiden (#876). Raderna
@@ -496,6 +497,13 @@ function buildClientArvodeLines(
   return lines;
 }
 
+/** Rådgivningstimmen (1 h) betalas av klienten separat; värdet = en timme på samma
+ *  norm som arvodesbasen (jfr coverageBaseMinutes −60). 0 för icke-rättshjälp. */
+function radgivningOre(method: PaymentMethod, rateOre: number): { radgivningGrossOre: number; radgivningNetOre: number } {
+  if (method !== "RATTSHJALP") return { radgivningGrossOre: 0, radgivningNetOre: 0 };
+  return { radgivningGrossOre: arvodeInclVatOre(rateOre), radgivningNetOre: rateOre };
+}
+
 async function buildSettlementBreakdown(repos: Repositories, orgId: OrganizationId, a: {
   clientShareBips: number; totalArvodeNet: number; split: CoverageSplit; work: UnfrozenWork;
   payerGross: number; clientPayable: number; method: PaymentMethod; rateOre: number; settleDate: Date | string;
@@ -524,9 +532,7 @@ async function buildSettlementBreakdown(repos: Repositories, orgId: Organization
     firmLossNetOre: a.split.firmLossOre,
     prutningGrossOre: arvodeInclVatOre(a.split.firmLossOre),
     payerArvodeNetOre: a.split.payerOre,
-    // Rådgivningstimmen (1 h) betalas av klienten separat; värdet = en timme på samma
-    // norm som arvodesbasen (jfr coverageBaseMinutes −60). 0 för icke-rättshjälp.
-    radgivningGrossOre: a.method === "RATTSHJALP" ? arvodeInclVatOre(a.rateOre) : 0,
+    ...radgivningOre(a.method, a.rateOre),
     payerPayableOre: a.payerGross,
     clientPayableOre: a.clientPayable,
     clientArvodeLines: buildClientArvodeLines(a.method, a.rateOre, a.work, a.totalArvodeNet, a.settleDate),
@@ -564,19 +570,49 @@ function rattsskyddClientRows(p: RattsskyddClientParts, share: string): Settleme
   return rows;
 }
 
-function buildClientView(b: SettlementBreakdown, isRattshjalp: boolean, feeTerm: string): SettlementView {
-  const share = (b.clientShareBips / 100).toLocaleString("sv-SE", { maximumFractionDigits: 2 });
-  const feeCap = feeTerm.charAt(0).toUpperCase() + feeTerm.slice(1);
+const shareLabel = (bips: number): string => (bips / 100).toLocaleString("sv-SE", { maximumFractionDigits: 2 });
+
+/**
+ * Arvodestrappan ned till det BEVILJADE beloppet (#941) — samma på klientens och
+ * betalarens faktura, och i den ordning beräkningen faktiskt sker:
+ *   1. rådgivningstimmen av FÖRST (klienten har redan betalat den separat),
+ *   2. därefter domstolens prutning (byrån bär den),
+ *   3. först då är basen för klientens rättshjälpsavgift klar.
+ * Mellanstegen renderas bara när de har ett belopp, så rättsskydd (ingen
+ * rådgivning, ingen byrå-buren prutning) får samma enda rad som tidigare.
+ */
+function arvodeLadderRows(b: SettlementBreakdown, payerNoun: string): SettlementRow[] {
   const rows: SettlementRow[] = [
-    { label: "Upparbetat arvode (exkl moms)", amountOre: b.arvodeBaseNetOre, kind: "add" },
+    { label: "Upparbetat arvode (exkl moms)", amountOre: b.arvodeBaseNetOre + b.radgivningNetOre, kind: "add" },
   ];
+  if (b.radgivningNetOre > 0) {
+    rows.push({ label: "Avgår rådgivningstimme (1 tim) — betald av klienten separat (exkl moms)", amountOre: b.radgivningNetOre, kind: "deduct" });
+    rows.push({ label: "Underlag för kostnadsräkning (exkl moms)", amountOre: b.arvodeBaseNetOre, kind: "add" });
+  }
+  if (b.firmLossNetOre > 0) {
+    rows.push({ label: `Avgår ${payerNoun.toLowerCase()} prutning — byrån bär (exkl moms)`, amountOre: b.firmLossNetOre, kind: "deduct" });
+    rows.push({ label: "Beviljat arvode (exkl moms)", amountOre: b.arvodeBaseNetOre - b.firmLossNetOre, kind: "add" });
+  }
+  return rows;
+}
+
+/** Klientens andel räknas på det BEVILJADE beloppet när domstolen prutat (#941)
+ *  — säg det i etiketten, annars går procenten inte att stämma av mot raden ovan. */
+function feeBaseSuffix(b: SettlementBreakdown): string {
+  return b.firmLossNetOre > 0 ? " av beviljat arvode" : "";
+}
+
+function buildClientView(b: SettlementBreakdown, isRattshjalp: boolean, feeTerm: string): SettlementView {
+  const share = shareLabel(b.clientShareBips);
+  const feeCap = feeTerm.charAt(0).toUpperCase() + feeTerm.slice(1);
+  const rows: SettlementRow[] = arvodeLadderRows(b, isRattshjalp ? "Domstolens" : "Försäkringens");
   // Rättsskydd (#935): klientens del är summan av FYRA poster — särredovisa dem i
   // stället för ett lumpet belopp, så klienten ser varför den ska betala. Rättshjälp
   // har bara avgiftsandelen (prutningen bärs av byrån, inte klienten).
   if (!isRattshjalp && b.clientParts) {
     rows.push(...rattsskyddClientRows(b.clientParts, share));
   } else {
-    rows.push({ label: `Klientens ${feeTerm} ${share} % (exkl moms)`, amountOre: b.sjalvriskNetOre, kind: "add" });
+    rows.push({ label: `Klientens ${feeTerm} ${share} %${feeBaseSuffix(b)} (exkl moms)`, amountOre: b.sjalvriskNetOre, kind: "add" });
   }
   // Samma moms-trappa för BÅDA metoderna (#935) — rättsskydd fick förr bara en enda
   // inkl-moms-rad, vilket gjorde klientfakturorna asymmetriska och svårlästa.
@@ -595,16 +631,12 @@ function buildClientView(b: SettlementBreakdown, isRattshjalp: boolean, feeTerm:
  */
 function buildPayerView(b: SettlementBreakdown, payerLabel: string, payerNoun: string, feeTerm: string): SettlementView {
   const payerArvodeGross = arvodeInclVatOre(b.payerArvodeNetOre);
-  const rows: SettlementRow[] = [
-    { label: "Upparbetat arvode (exkl moms)", amountOre: b.arvodeBaseNetOre, kind: "add" },
-    { label: `Avgår klientens ${feeTerm} (exkl moms)`, amountOre: b.sjalvriskNetOre, kind: "deduct" },
-  ];
-  if (b.firmLossNetOre > 0) rows.push({ label: "Avgår prutning (byrån bär) (exkl moms)", amountOre: b.firmLossNetOre, kind: "deduct" });
+  const rows: SettlementRow[] = arvodeLadderRows(b, payerNoun);
+  rows.push({ label: `Avgår klientens ${feeTerm} ${shareLabel(b.clientShareBips)} %${feeBaseSuffix(b)} (exkl moms)`, amountOre: b.sjalvriskNetOre, kind: "deduct" });
   rows.push({ label: `${payerNoun} andel av arvodet (exkl moms)`, amountOre: b.payerArvodeNetOre, kind: "add" });
   rows.push({ label: "Moms 25 %", amountOre: payerArvodeGross - b.payerArvodeNetOre, kind: "add" });
   rows.push({ label: `${payerNoun} arvode (inkl moms)`, amountOre: payerArvodeGross, kind: "add" });
   if (b.expensesGrossOre > 0) rows.push({ label: `Utlägg (${payerNoun.toLowerCase()} andel, inkl moms)`, amountOre: b.expensesGrossOre, kind: "add" });
-  if (b.radgivningGrossOre > 0) rows.push({ label: radgivningTextRad("faktura"), amountOre: b.radgivningGrossOre, kind: "info" });
   for (const d of b.deductedAccontos) rows.push({ label: `Betalt via aconto — faktura ${d.invoiceNumber}${d.date ? ` (${svd(d.date)})` : ""}`, amountOre: d.amountOre, kind: "info" });
   return { timeLines: b.clientArvodeLines.map(toViewLine), rows, totalLabel: `${payerLabel} — att betala (inkl moms)`, totalOre: b.payerPayableOre };
 }
