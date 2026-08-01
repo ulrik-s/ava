@@ -408,13 +408,14 @@ describe("billingRun.coverageSplit — prutning/självrisk på aktuellt timarvod
     return appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: PRINCIPAL }) as any);
   }
 
-  it("rättsskydd: värderar på juristens AKTUELLA timtaxa (ej snapshot) + klient tar prutningen", async () => {
-    // 2 tim × aktuell 3000 kr/h = 6000 kr total (INTE snapshot 2000 kr/h = 4000).
+  it("rättsskydd: värderar på timkostnadsnormen (#950) + klient tar prutningen", async () => {
+    // #950: rättsskydd ersätts enligt Domstolsverkets nivåer, inte byråns egen taxa
+    // — 2 tim × 1 626 kr = 325 200 öre (juristens 3 000 kr/h används inte längre).
     const c = caller({ paymentMethod: "RATTSSKYDD", clientShareBips: 2000 }, 300000);
     const r = await c.billingRun.coverageSplit({ matterId: "m-1", insurerPrutningOre: 50000 });
-    expect(r.totalOre).toBe(600000); // 2h × 3000 kr (aktuell taxa)
-    expect(r.clientOre).toBe(120000 + 50000); // självrisk 20 % (120000) + prutning 50000
-    expect(r.payerOre).toBe(600000 - 170000);
+    expect(r.totalOre).toBe(325_200);
+    expect(r.clientOre).toBe(65_040 + 50000); // självrisk 20 % (65 040) + prutning 50 000
+    expect(r.payerOre).toBe(325_200 - 115_040);
     expect(r.firmLossOre).toBe(0);
   });
 
@@ -453,7 +454,7 @@ describe("billingRun.coverageSplit — prutning/självrisk på aktuellt timarvod
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const c = appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: PRINCIPAL }) as any);
     const r = await c.billingRun.coverageSplit({ matterId: "m-1" });
-    expect(r.totalOre).toBe(600000); // arvode 2h × 3000 kr
+    expect(r.totalOre).toBe(325_200); // #950: arvode 2h × timkostnadsnormen 1 626 kr
     expect(r.expensesNetOre).toBe(32065);
     expect(r.expensesGrossOre).toBe(39750); // exakt per sats — INTE 40081 (platt 25 %)
   });
@@ -527,10 +528,11 @@ describe("billingRun.settleCoverage — bokför prutnings-uppdelningen (#801)", 
   it("rättsskydd: klient = (självrisk + prutning) inkl moms; försäkring = resten; ingen byrå-förlust", async () => {
     const { caller: c } = caller({ paymentMethod: "RATTSSKYDD", clientShareBips: 2000 }, 300000);
     const res = await c.billingRun.settleCoverage({ matterId: "m-1", payerRecipient: "FORSAKRING", insurerPrutningOre: 50000 });
-    // total 600000; klient netto 170000 → ×1.25 = 212500; försäkring netto 430000 → 537500.
-    expect(res.split).toMatchObject({ clientOre: 170000, payerOre: 430000, firmLossOre: 0 });
-    expect(res.clientInvoice.amount).toBe(212500);
-    expect(res.payerInvoice.amount).toBe(537500);
+    // #950: bas 2 tim × 1 626 = 325 200. Klient = självrisk 20 % (65 040) + prutning
+    // 50 000 = 115 040 → ×1,25 = 143 800; försäkring 210 160 → 262 700.
+    expect(res.split).toMatchObject({ clientOre: 115_040, payerOre: 210_160, firmLossOre: 0 });
+    expect(res.clientInvoice.amount).toBe(143_800);
+    expect(res.payerInvoice.amount).toBe(262_700);
   });
 
   it("rättsskydd flöde B (#905): prutning EFTERÅT → kredit till försäkring + påfyllnadsfaktura till klient", async () => {
@@ -739,11 +741,12 @@ describe("billingRun.settleCoverage — bokför prutnings-uppdelningen (#801)", 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const c = appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: PRINCIPAL }) as any);
     const res = await c.billingRun.settleCoverage({ matterId: "m-1", payerRecipient: "FORSAKRING" });
-    // 6 tim × 3000 = 1 800 000 total; täckt 4 tim (retro 2 + efter 2) = 1 200 000.
-    // självrisk 20 % × 1 200 000 = 240 000; otäckt (2 tim före tvist) = 600 000.
-    expect(res.split).toMatchObject({ clientOre: 840_000, payerOre: 960_000, firmLossOre: 0 });
-    expect(res.clientInvoice.amount).toBe(1_050_000); // 840 000 × 1,25 moms
-    expect(res.payerInvoice.amount).toBe(1_200_000); // 960 000 × 1,25 moms
+    // #950: allt värderas på timkostnadsnormen. 6 tim × 1 626 = 975 600 total;
+    // täckt 4 tim (retro 2 + efter 2) = 650 400; otäckt (2 tim före tvist) = 325 200.
+    // Självrisk 20 % × 650 400 = 130 080 → klient 455 280, försäkring 520 320.
+    expect(res.split).toMatchObject({ clientOre: 455_280, payerOre: 520_320, firmLossOre: 0 });
+    expect(res.clientInvoice.amount).toBe(569_100); // 455 280 × 1,25 moms
+    expect(res.payerInvoice.amount).toBe(650_400); // 520 320 × 1,25 moms
     expect(res.breakdown.radgivningGrossOre).toBe(0); // #876 — rådgivning gäller bara rättshjälp
   });
 });

@@ -29,7 +29,19 @@ import {
 
 /** Tidspostens kategori (#891): vanligt arbete vs tidsspillan (restid/väntetid),
  *  som ersätts på en egen, lägre norm i statligt betalda ärenden. */
-export const timeEntryKindSchema = z.enum(["ARBETE", "TIDSSPILLAN"]);
+/**
+ * Arvodeskategori per tidspost (#950). Varje kategori har en EGEN årsnorm hos
+ * Domstolsverket, och slutregleringen värderar posten på kategorins norm för
+ * slutregleringsåret — så retroaktiva höjningar slår igenom (#891).
+ *   ARBETE                — timkostnadsnormen (DVFS 2025:6 § 8)
+ *   ARBETE_OBEKVAM_TID    — helgförhandling / polisförhör utom kontorstid
+ *                           (DVFS 2025:7 § 1, 2025:8 § 1)
+ *   TIDSSPILLAN           — vardag 08–18 (DVFS 2025:4 § 4)
+ *   TIDSSPILLAN_OVRIG_TID — all annan tid, lägre norm (DVFS 2025:4 § 4)
+ */
+export const timeEntryKindSchema = z.enum([
+  "ARBETE", "ARBETE_OBEKVAM_TID", "TIDSSPILLAN", "TIDSSPILLAN_OVRIG_TID",
+]);
 export type TimeEntryKind = z.infer<typeof timeEntryKindSchema>;
 
 /**
