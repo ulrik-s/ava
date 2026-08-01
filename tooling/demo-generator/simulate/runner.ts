@@ -170,16 +170,17 @@ async function hKostnadsrakning(ctx: RunCtx, m: SimMatter, _e: Any, _iso: string
 async function hBeslut(ctx: RunCtx, _m: SimMatter, e: Any, _iso: string, st: SimState): Promise<void> {
   if (!st.krRunId) return;
   // Domstolen kan PRUTA (#936): `reducedByBips` sätter ned det beviljade beloppet mot
-  // det yrkade. Vid rättshjälp bär BYRÅN mellanskillnaden (får ej tas av klienten) —
+  // det YRKADE. Vid rättshjälp bär BYRÅN mellanskillnaden (får ej tas av klienten) —
   // settleCoverage bokar den som en PRUTNING-post via bookFirmLoss.
   //
-  // Nedsättningen räknas på det ackumulerade NETTO-arvodet, inte på KR:ns
-  // `workValueOreAtRun`: den senare är BRUTTO (inkl moms + utlägg), medan
-  // `computeCoverageSplit` jämför `awardedOre` mot netto-arvodet och klampar till
-  // totalen. En procentsats på bruttot skulle därför ofta inte bita alls.
+  // Nedsättningen räknas på KR:ns yrkade belopp (`workValueOreAtRun`) — arvode +
+  // utlägg inkl moms — precis som en riktig domstol gör. Tidigare räknades den på
+  // netto-arvodet för att kringgå #943 (motorn jämförde det beviljade bruttot mot
+  // netto-arvodet och klampade bort nedsättningen). Den buggen är fixad, så demon
+  // går nu samma väg som appen.
   const bips = Number(e.reducedByBips ?? 0);
   const awardedOre = bips > 0
-    ? Math.round((st.accruedNetOre * (10000 - bips)) / 10000)
+    ? Math.round((st.krWorkValueOre * (10000 - bips)) / 10000)
     : st.krWorkValueOre;
   await ctx.c.billingRun.recordKostnadsrakningBeslut({ billingRunId: st.krRunId, awardedOre });
 }
