@@ -7,9 +7,16 @@
  */
 
 import { arvodeInclVatOre } from "./invoice-calc";
+import type { TimeEntryKind } from "./schemas/enums";
 
 /** En rad i fakturans tidsspecifikation (belopp = timmar × gällande timarvode). */
-export interface SpecTimeLine { date: Date | string; description: string; minutes: number; amountOre: number }
+export interface SpecTimeLine {
+  date: Date | string; description: string; minutes: number; amountOre: number;
+  /** Arvodeskategori (#953) — sammanställningen grupperar och BENÄMNER raderna på
+   *  den. Utan kategorin måste benämningen gissas ur timtaxan, vilket ger "Arvode"
+   *  även för tidsspillan. Saknas på äldre/carried rader → gissning som förr. */
+  kind?: TimeEntryKind | null | undefined;
+}
 /** En rad i utläggsspecifikationen (netto + brutto, exakt per momssats). */
 export interface SpecExpenseLine { date: Date | string; description: string; netOre: number; grossOre: number }
 /** En avdragen (tidigare betald) aconto-faktura. */

@@ -19,7 +19,7 @@
 
 import { computeBrottmalstaxa, computeTimkostnadsnorm, TIMKOSTNADSNORM_NO_FTAX_ORE_PER_H, timkostnadsnormFtaxForDate, tidsspillanFtaxForDate, type TaxaLevel, type TaxaResult } from "./brottmalstaxa";
 import { RADGIVNING_MINUTES, radgivningTextRad } from "./rattshjalp";
-import type { TimeEntryKind } from "./schemas/billing";
+import type { TimeEntryKind } from "./schemas/enums";
 import { splitVat } from "./vat";
 
 export interface ExpenseInput {

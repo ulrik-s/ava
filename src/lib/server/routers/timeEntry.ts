@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
-import { timeEntryKindSchema, type TimeEntry } from "@/lib/shared/schemas/billing";
+import { type TimeEntry } from "@/lib/shared/schemas/billing";
+import { timeEntryKindSchema } from "@/lib/shared/schemas/enums";
 import {
   asId,
   matterIdSchema,
@@ -85,6 +86,9 @@ export const timeEntryRouter = router({
         minutes: z.number().min(1).optional(),
         description: z.string().min(1).optional(),
         billable: z.boolean().optional(),
+        /** Arvodeskategori (#953) — styr vilken årsnorm slutregleringen värderar
+         *  posten på. Rättbar i efterhand: kategorin missas lätt vid inmatning. */
+        kind: timeEntryKindSchema.optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -92,11 +96,12 @@ export const timeEntryRouter = router({
       // INNAN update. NOT_FOUND vid mismatch.
       const owned = await ctx.repos.timeEntries.getByIdInOrg(input.id, ctx.orgId);
       if (!owned) throw new TRPCError({ code: "NOT_FOUND" });
-      const { id, date, minutes, description, billable } = input;
+      const { id, date, minutes, description, billable, kind } = input;
       const updated = await ctx.repos.timeEntries.update(id, omitUndefined({
         minutes,
         description,
         billable,
+        kind,
         ...(date ? { date: new Date(date) } : {}),
       }) satisfies Partial<TimeEntry>);
       await emit.timeEntryUpdated(ctx, { id: updated.id, matterId: updated.matterId });

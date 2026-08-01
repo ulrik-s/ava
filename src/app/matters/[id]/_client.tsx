@@ -77,7 +77,7 @@ export default function MatterDetailClient({ id: paramId }: { id: string }) {
         <DocumentBrowser matterId={id} />
         <BillingPanel matterId={id} matter={m} />
         <ExpectedReceivablesSection matterId={id} courtCaseNumber={courtCaseOf(m)} isCourtMatter={isCourtMatter(m)} />
-        <TimeSection matterId={id} isTaxeArende={m.isTaxeArende} />
+        <TimeSection matterId={id} isTaxeArende={m.isTaxeArende} paymentMethod={m.paymentMethod} />
         <ExpenseSection matterId={id} isTaxeArende={m.isTaxeArende} />
         <ServiceNotesSection matterId={id} />
       </div>

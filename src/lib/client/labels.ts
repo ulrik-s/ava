@@ -28,6 +28,7 @@ import {
   PAYMENT_METHOD_LABELS,
   paymentMethodSchema,
   type PaymentMethod,
+  type TimeEntryKind,
 } from "@/lib/shared/schemas/enums";
 
 // MatterRole/ContactType/PaymentMethod — labels + schema + typ bor i
@@ -125,6 +126,18 @@ export function creditRiskFor(method: PaymentMethod): CreditRisk {
       return "UNKNOWN";
   }
 }
+
+/**
+ * KORT arvodeskategori-etikett för tabellceller (#953). Den fullständiga
+ * (`TIME_ENTRY_KIND_LABELS` i shared/schemas/enums.ts) är formulerad för en
+ * dropdown och blir för bred i en kolumn som upprepas på varje rad.
+ */
+export const TIME_ENTRY_KIND_SHORT: Record<TimeEntryKind, string> = {
+  ARBETE: "Arbete",
+  ARBETE_OBEKVAM_TID: "Obekväm tid",
+  TIDSSPILLAN: "Tidsspillan",
+  TIDSSPILLAN_OVRIG_TID: "Tidsspillan annan tid",
+};
 
 export const CREDIT_RISK_LABELS: Record<CreditRisk, string> = {
   LOW: "Låg",

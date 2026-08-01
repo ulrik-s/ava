@@ -19,10 +19,7 @@ import { z } from "zod";
 import type { VatBreakdownLine } from "@/lib/shared/accounting/semantic-voucher";
 import { assertBillingTransition, type BillingActionType } from "@/lib/shared/billing-flow";
 import { proposedAccontoOre } from "@/lib/shared/billing-proposal";
-import {
-  TIMKOSTNADSNORM_FTAX_ORE_PER_H, timkostnadsnormFtaxForDate, tidsspillanFtaxForDate,
-  tidsspillanOvrigFtaxForDate, arbeteObekvamFtaxForDate,
-} from "@/lib/shared/brottmalstaxa";
+import { TIMKOSTNADSNORM_FTAX_ORE_PER_H, coverageEntryRateOre } from "@/lib/shared/brottmalstaxa";
 import { computeCoverageSplit, partitionRattsskyddMinutes, type CoverageSplit, type RattsskyddClientParts } from "@/lib/shared/coverage-billing";
 import { arvodeInclVatOre } from "@/lib/shared/invoice-calc";
 import {
@@ -34,8 +31,8 @@ import { applyKrAction, type KostnadsrakningAction, type KostnadsrakningState, t
 import { ocrFromInvoiceNumber } from "@/lib/shared/ocr-reference";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { RADGIVNING_MINUTES } from "@/lib/shared/rattshjalp";
-import { settlementBreakdownSchema, type BillingRun, type Invoice, type TimeEntryKind } from "@/lib/shared/schemas/billing";
-import { billingRunRecipientSchema, type BillingRunRecipient, type ExpenseKind, type PaymentMethod } from "@/lib/shared/schemas/enums";
+import { settlementBreakdownSchema, type BillingRun, type Invoice } from "@/lib/shared/schemas/billing";
+import { billingRunRecipientSchema, type BillingRunRecipient, type ExpenseKind, type PaymentMethod, type TimeEntryKind } from "@/lib/shared/schemas/enums";
 import {
   matterIdSchema,
   billingRunIdSchema,
@@ -133,7 +130,7 @@ function coveredValueOre(
   for (const t of entries.filter((e) => e.billable)) {
     if (left <= 0) break;
     const take = Math.min(left, t.minutes);
-    value += timeEntryValueOre(take, rattshjalpEntryRateOre(t.kind, settleDate));
+    value += timeEntryValueOre(take, coverageEntryRateOre(t.kind, settleDate));
     left -= take;
   }
   return value;
@@ -260,18 +257,6 @@ function invoiceGrossOre(work: UnfrozenWork): number {
   return arvodeInclVatOre(arvodeNetOre(work)) + expenseGrossOre(work);
 }
 
-/** Timarvodet (öre/tim) för en tidspost vid slutreglering (#891): rättshjälp
- *  värderas retroaktivt på SLUTREGLERINGSÅRETS norm — arbete på timkostnadsnormen,
- *  tidsspillan på den (lägre) tidsspillan-normen. */
-function rattshjalpEntryRateOre(kind: TimeEntryKind | null | undefined, settleDate: Date | string): number {
-  switch (kind) {
-    case "TIDSSPILLAN": return tidsspillanFtaxForDate(settleDate);
-    case "TIDSSPILLAN_OVRIG_TID": return tidsspillanOvrigFtaxForDate(settleDate);
-    case "ARBETE_OBEKVAM_TID": return arbeteObekvamFtaxForDate(settleDate);
-    default: return timkostnadsnormFtaxForDate(settleDate);
-  }
-}
-
 /**
  * Slutregleringens arvode-netto (#891). RÄTTSHJÄLP: räkna om HELA ärendet på
  * SLUTREGLERINGSÅRETS normer — den retroaktiva höjningen över ett årsskifte (arbete
@@ -309,7 +294,7 @@ function minutesByKind(
 /** Summera kategoriernas minuter på respektive årsnorm (#950). */
 function sumKindValueOre(byKind: ReadonlyMap<TimeEntryKind, number>, settleDate: Date | string): number {
   let net = 0;
-  for (const [kind, minutes] of byKind) net += timeEntryValueOre(minutes, rattshjalpEntryRateOre(kind, settleDate));
+  for (const [kind, minutes] of byKind) net += timeEntryValueOre(minutes, coverageEntryRateOre(kind, settleDate));
   return net;
 }
 
@@ -543,7 +528,7 @@ function specTimeLines(
   settleDate: Date | string,
 ): SpecTimeLine[] {
   return entries.filter((t) => t.billable).map((t) => ({
-    date: t.date, description: t.description, minutes: t.minutes,
+    date: t.date, description: t.description, minutes: t.minutes, kind: t.kind,
     amountOre: timeEntryValueOre(t.minutes, specLineRateOre(method, t, settleDate)),
   }));
 }
@@ -561,7 +546,7 @@ function specLineRateOre(
   method: PaymentMethod, entry: { hourlyRate: number; kind?: TimeEntryKind | null | undefined }, settleDate: Date | string,
 ): number {
   const coverage = method === "RATTSHJALP" || method === "RATTSSKYDD";
-  return coverage ? rattshjalpEntryRateOre(entry.kind, settleDate) : entry.hourlyRate;
+  return coverage ? coverageEntryRateOre(entry.kind, settleDate) : entry.hourlyRate;
 }
 
 function specExpenseLines(
@@ -650,8 +635,8 @@ function buildClientArvodeLines(
   // #891/#950: varje rad värderas på sin KATEGORIS norm för slutregleringsåret —
   // för alla betalningssätt, så raderna summerar till `totalArvodeNet`.
   const lines: SpecTimeLine[] = entries.map((t) => ({
-    date: t.date, description: t.description, minutes: t.minutes,
-    amountOre: timeEntryValueOre(t.minutes, rattshjalpEntryRateOre(t.kind, settleDate)),
+    date: t.date, description: t.description, minutes: t.minutes, kind: t.kind,
+    amountOre: timeEntryValueOre(t.minutes, coverageEntryRateOre(t.kind, settleDate)),
   }));
   const sum = lines.reduce((s, l) => s + l.amountOre, 0);
   const last = lines[lines.length - 1];
@@ -718,7 +703,8 @@ async function buildSettlementBreakdown(repos: Repositories, orgId: Organization
 
 const svd = (d: Date | string | null | undefined): string => (d ? new Date(d).toLocaleDateString("sv-SE") : "");
 const toViewLine = (l: SpecTimeLine): SettlementViewLine => ({
-  date: new Date(l.date).toISOString().slice(0, 10), description: l.description, minutes: l.minutes, amountOre: l.amountOre,
+  date: new Date(l.date).toISOString().slice(0, 10), description: l.description, minutes: l.minutes,
+  amountOre: l.amountOre, kind: l.kind,
 });
 
 /**

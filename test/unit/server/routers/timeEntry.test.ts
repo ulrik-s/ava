@@ -143,6 +143,52 @@ describe("timeEntry.update", () => {
   });
 });
 
+/**
+ * Arvodeskategorin (#953) styr vilken av Domstolsverkets årsnormer
+ * slutregleringen värderar posten på. `create` har tagit emot den sedan #891,
+ * men `update` gjorde det inte — en post som registrerats i fel kategori (restid
+ * som arbete) kunde alltså aldrig rättas, och beloppet blev fel.
+ */
+describe("timeEntry — arvodeskategori (#953)", () => {
+  it("create sparar kategorin; utan kategori sätts inget fält (= ARBETE)", async () => {
+    mockPrisma.user.findFirst.mockResolvedValue({ hourlyRate: 3000 });
+    mockPrisma.timeEntry.create.mockResolvedValue({});
+    await makeCaller().create({
+      matterId: "m1", date: "2026-03-07", minutes: 60,
+      description: "Jourärende under helg", kind: "ARBETE_OBEKVAM_TID",
+    });
+    expect(mockPrisma.timeEntry.create.mock.calls[0]![0].data.kind).toBe("ARBETE_OBEKVAM_TID");
+
+    mockPrisma.timeEntry.create.mockClear();
+    await makeCaller().create({ matterId: "m1", date: "2026-03-08", minutes: 60, description: "Genomgång" });
+    expect(mockPrisma.timeEntry.create.mock.calls[0]![0].data.kind).toBeUndefined();
+  });
+
+  it("update rättar kategorin i efterhand (restid registrerad som arbete)", async () => {
+    mockPrisma.timeEntry.update.mockResolvedValue({});
+    await makeCaller().update({ id: "t1", kind: "TIDSSPILLAN" });
+    const data = mockPrisma.timeEntry.update.mock.calls[0]![0].data;
+    expect(data.kind).toBe("TIDSSPILLAN");
+    // Bara kategorin ändras — övriga fält lämnas orörda.
+    expect(data.minutes).toBeUndefined();
+    expect(data.description).toBeUndefined();
+  });
+
+  it("update utan kind rör INTE en redan satt kategori", async () => {
+    mockPrisma.timeEntry.update.mockResolvedValue({});
+    await makeCaller().update({ id: "t1", minutes: 120 });
+    expect(mockPrisma.timeEntry.update.mock.calls[0]![0].data.kind).toBeUndefined();
+  });
+
+  it("okänd kategori avvisas av schemat — inget skrivs", async () => {
+    await expect(makeCaller().update({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- avsiktligt ogiltigt värde
+      id: "t1", kind: "HELGARVODE" as any,
+    })).rejects.toThrow();
+    expect(mockPrisma.timeEntry.update).not.toHaveBeenCalled();
+  });
+});
+
 describe("timeEntry.delete", () => {
   it("tar bort entry", async () => {
     mockPrisma.timeEntry.delete.mockResolvedValue({});

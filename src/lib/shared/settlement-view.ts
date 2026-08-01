@@ -6,6 +6,8 @@
  * jsonb). Rena display-siffror i öre — ändrar inga belopp.
  */
 
+import type { TimeEntryKind } from "./schemas/enums";
+
 /** `add` = delbelopp/steg i trappan, `deduct` = avgår (−), `info` = spårbarhets-
  *  rad utan beloppspåverkan (visas i parentes/grått, t.ex. rådgivnings-omnämnandet). */
 export type SettlementRowKind = "add" | "deduct" | "info";
@@ -22,6 +24,9 @@ export interface SettlementViewLine {
   description: string;
   minutes: number;
   amountOre: number;
+  /** Arvodeskategori (#953) — sammanställningen benämner taxeraderna på den, så
+   *  klientens faktura skiljer arbete från tidsspillan. Saknas på äldre vyer. */
+  kind?: TimeEntryKind | null | undefined;
 }
 
 export interface SettlementView {

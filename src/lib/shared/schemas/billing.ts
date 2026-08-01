@@ -10,6 +10,7 @@ import {
   invoiceTypeSchema,
   paymentPlanStatusSchema,
   reminderTypeSchema,
+  timeEntryKindSchema,
 } from "./enums";
 import {
   timeEntryIdSchema,
@@ -26,23 +27,6 @@ import {
   matterIdSchema,
   userIdSchema,
 } from "./ids";
-
-/** Tidspostens kategori (#891): vanligt arbete vs tidsspillan (restid/väntetid),
- *  som ersätts på en egen, lägre norm i statligt betalda ärenden. */
-/**
- * Arvodeskategori per tidspost (#950). Varje kategori har en EGEN årsnorm hos
- * Domstolsverket, och slutregleringen värderar posten på kategorins norm för
- * slutregleringsåret — så retroaktiva höjningar slår igenom (#891).
- *   ARBETE                — timkostnadsnormen (DVFS 2025:6 § 8)
- *   ARBETE_OBEKVAM_TID    — helgförhandling / polisförhör utom kontorstid
- *                           (DVFS 2025:7 § 1, 2025:8 § 1)
- *   TIDSSPILLAN           — vardag 08–18 (DVFS 2025:4 § 4)
- *   TIDSSPILLAN_OVRIG_TID — all annan tid, lägre norm (DVFS 2025:4 § 4)
- */
-export const timeEntryKindSchema = z.enum([
-  "ARBETE", "ARBETE_OBEKVAM_TID", "TIDSSPILLAN", "TIDSSPILLAN_OVRIG_TID",
-]);
-export type TimeEntryKind = z.infer<typeof timeEntryKindSchema>;
 
 /**
  * TimeEntry — tidsregistrering på ärende. Lagras i `time-entries/<id>.json`.
@@ -125,6 +109,9 @@ export const settlementBreakdownSchema = z.object({
     description: z.string(),
     minutes: z.number().int(),
     amountOre: z.number().int(),
+    /** Arvodeskategori (#953) — sammanställningen på klientens faktura benämner
+     *  raderna på den (arbete/obekväm tid/tidsspillan). Saknas på äldre fakturor. */
+    kind: timeEntryKindSchema.nullish(),
   })),
   rows: z.array(z.object({
     label: z.string(),
