@@ -40,8 +40,9 @@ export type SimEvent =
   | { kind: "verdict"; dayOffset: number }
   /** Slutreglering (rättshjälp/-skydd) — settleCoverage (→ klient FINAL/CREDIT + betalare). */
   | { kind: "settle"; dayOffset: number; payerRecipient: string }
-  /** Försäkringens prutning EFTER slutreglering (#905, rättsskydd flöde B) — kredit till
-   *  försäkringen + påfyllnadsfaktura till klienten på `prunedNetOre` (netto). */
+  /** Försäkringens prutning EFTER slutreglering (#905/#952, rättsskydd flöde B) —
+   *  `prunedNetOre` (netto) omfördelas från försäkringsfakturan till klientfakturan.
+   *  Inga nya fakturor: fakturan är ställd till klienten, så bolaget krediteras inte. */
   | { kind: "insurerPruning"; dayOffset: number; prunedNetOre: number }
   /** Vanlig slutfaktura (privat/offentligt) — createFinal + SENT. */
   | { kind: "final"; dayOffset: number; recipient: string }

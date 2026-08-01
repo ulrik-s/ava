@@ -8,7 +8,8 @@
  *      några i 2026 (olika datum).
  *   3. Slutreglering mot försäkringen → försäkringsfaktura (deras andel) + klientens
  *      slutliga självrisk (minus betalda aconton).
- *   4. Försäkringen PRUTAR efteråt → klienten bär mellanskillnaden (#905, flöde B).
+ *   4. Försäkringen PRUTAR efteråt → beloppet omfördelas från försäkringsfakturan
+ *      till klientfakturan; klienten bär mellanskillnaden (#905/#952, flöde B).
  *
  * SKILLNAD mot rättshjälp: prutningen bärs av KLIENTEN (inte byrån). Arvodet
  * värderas på samma rättshjälpstaxenivåer som rättshjälpen (#950/#953) — alla fyra
@@ -61,7 +62,7 @@ export function buildRattsskyddPositivtScenario(parties: Parties): SimEvent[] {
     // ── Slutreglering mot försäkringen: försäkringsfaktura + klientens slutliga självrisk ──
     { kind: "settle", dayOffset: 230, payerRecipient: "FORSAKRING" },
     // ── Flöde B (#905): försäkringen PRUTAR → klienten bär mellanskillnaden ──
-    { kind: "note", dayOffset: 245, text: "Försäkringsbolaget prutar på arvodet — ersätter 3 000 kr mindre. Mellanskillnaden faktureras klienten." },
+    { kind: "note", dayOffset: 245, text: "Försäkringsbolaget prutar på arvodet — ersätter 3 000 kr mindre. Beloppet flyttas till klientens faktura (ingen kreditfaktura till bolaget)." },
     { kind: "insurerPruning", dayOffset: 245, prunedNetOre: 300_000 },
   );
   return ev;

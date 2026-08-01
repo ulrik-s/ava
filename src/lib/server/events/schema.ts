@@ -41,6 +41,8 @@ export const EVENT_TYPES = [
   "invoice.payment_received",
   "invoice.overdue",
   "invoice.written_off",
+  /** Fakturans belopp omfördelades (rättsskyddets prutning, #952) — ingen ny faktura. */
+  "invoice.adjusted",
   // payment-plan (avbetalningsplaner) — driver av påminnelser
   "payment.due",
   "payment.overdue",

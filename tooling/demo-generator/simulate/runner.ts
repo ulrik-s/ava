@@ -203,10 +203,9 @@ async function hSettle(ctx: RunCtx, m: SimMatter, e: Any, iso: string): Promise<
 }
 
 async function hInsurerPruning(ctx: RunCtx, m: SimMatter, e: Any, iso: string): Promise<void> {
-  // Försäkringen prutar EFTER slutregleringen (#905) → kredit till försäkringen +
-  // påfyllnadsfaktura till klienten på prutade beloppet.
+  // Försäkringen prutar EFTER slutregleringen (#905/#952): beloppet OMFÖRDELAS mellan
+  // klientens två fakturor — inga nya fakturor skapas, så räknaren rörs inte.
   await ctx.c.billingRun.recordInsurerPruning({ matterId: m.id, prunedNetOre: e.prunedNetOre, invoiceDate: iso });
-  ctx.res.invoices += 2;
 }
 
 async function hFinal(ctx: RunCtx, m: SimMatter, e: Any, iso: string, st: SimState): Promise<void> {

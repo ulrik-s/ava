@@ -73,6 +73,9 @@ interface BillingRunRow {
   kostnadsrakningStatus?: KostnadsrakningStatus | null;
   awardedOre?: number | null;
   beslutSlutgiltigt?: boolean | null;
+  /** Registrerad prutning (negativt, netto). På rättsskyddets FORSAKRING-körning
+   *  betyder den att bolagets prutning omfördelats till klientfakturan (#952). */
+  prutningOre?: number | null;
 }
 
 /** Fristående klientfaktura (utan billing-run) som visas i faktura-listan (#853). */
@@ -520,22 +523,26 @@ function SjalvriskAccontoHint({ matterId, matter, rows }: { matterId: MatterId; 
 }
 
 /**
- * Försäkrings-prutnings-banner (#905, rättsskydd flöde B): efter slutregleringen mot
- * försäkringen kan bolaget PRUTA på arvodet. Byrån registrerar det prutade beloppet →
- * kredit till försäkringen + påfyllnadsfaktura till klienten. Visas bara när det finns
- * en FORSAKRING-slutfaktura och ingen prutning redan registrerats.
+ * Försäkrings-prutnings-banner (#905/#952, rättsskydd flöde B): efter slutregleringen
+ * mot försäkringen kan bolaget PRUTA på arvodet. Byrån registrerar det prutade beloppet
+ * → beloppet OMFÖRDELAS mellan klientens två fakturor (försäkringsfakturan ned,
+ * klientfakturan upp). Ingen kreditfaktura till bolaget: fakturan är ställd till
+ * klienten, så det gick aldrig ut någon faktura *till* bolaget att kreditera.
+ *
+ * Visas bara när det finns en FORSAKRING-slutfaktura och ingen prutning redan
+ * registrerats (`prutningOre` på betalar-körningen).
  */
 function InsurerPruningBanner({ matterId, matter, rows, onRecorded }: { matterId: MatterId; matter: MatterContext; rows: BillingRunRow[]; onRecorded: () => void }) {
   const [krStr, setKrStr] = useState("");
   const record = trpc.billingRun.recordInsurerPruning.useMutation({ onSuccess: onRecorded });
   const hasPayerFinal = rows.some((r) => r.type === "FINAL" && r.recipient === "FORSAKRING");
-  const alreadyPruned = rows.some((r) => r.type === "CREDIT" && r.recipient === "FORSAKRING");
+  const alreadyPruned = rows.some((r) => r.recipient === "FORSAKRING" && r.prutningOre != null);
   if (matter.paymentMethod !== "RATTSSKYDD" || !hasPayerFinal || alreadyPruned) return null;
   const netOre = Math.round(Number.parseFloat(krStr.replace(",", ".")) * 100);
   const valid = Number.isFinite(netOre) && netOre > 0;
   return (
     <div className="mx-6 mb-4 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-      <div className="mb-1.5">Har försäkringsbolaget <strong>prutat</strong> på fakturan? Registrera det prutade arvodet (exkl moms) — mellanskillnaden krediteras försäkringen och faktureras klienten.</div>
+      <div className="mb-1.5">Har försäkringsbolaget <strong>prutat</strong> på fakturan? Registrera det prutade arvodet (exkl moms) — beloppet flyttas från försäkringsfakturan till klientens faktura. Totalen är oförändrad och ingen kreditfaktura skickas till bolaget (fakturan är ställd till klienten).</div>
       <div className="flex items-center gap-2">
         <input type="number" min={0} step={100} value={krStr} placeholder="Prutat belopp (kr, exkl moms)"
           onChange={(e) => setKrStr(e.target.value)}
