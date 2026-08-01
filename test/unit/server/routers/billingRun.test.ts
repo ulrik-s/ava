@@ -294,7 +294,10 @@ describe("billingRun.setVerdict", () => {
     expect(ex.invoiceId).toBe(res.invoice.id); // utlägg länkad
     expect(prut.invoiceId).toBe(res.invoice.id); // PRUTNING länkad (reducerar totalen)
     // Arvode 5000 kr + 25 % moms = 625000, + utlägg 50 kr − prutning 300 kr (#782).
-    expect(res.invoice.amount).toBe(625000 + 5000 - 30000);
+    // #945: fakturan går till DOMSTOL → utlägget debiteras 25 % moms (6250) fastän
+    // posten själv är momsfri. Prutningen är en justering av totalen, inte ett utlägg,
+    // och momsas därför inte.
+    expect(res.invoice.amount).toBe(625000 + 6250 - 30000);
   });
 
   it("DOMSTOL-faktura får F-nummer men ingen OCR (#889 — samma format som övriga)", async () => {
@@ -463,6 +466,49 @@ describe("billingRun.coverageSplit — prutning/självrisk på aktuellt timarvod
     await caller.billingRun.createKostnadsrakning({ matterId: "m-1" }); // fryser tid + utlägg
     const r = await caller.billingRun.coverageSplit({ matterId: "m-1" });
     expect(r.expensesNetOre).toBe(90000); // frysta utlägg syns fortfarande
+  });
+});
+
+describe("moms mot DOMSTOL är alltid 25 % (#945)", () => {
+  /** Rättshjälpsärende med ETT momsfritt utlägg (900 kr) och ETT på 6 % (400 kr). */
+  function courtCaller() {
+    const ds = new DemoDataStore({
+      organizations: [{ id: "org-1", name: "X" }],
+      matters: [{ id: "m-1", organizationId: "org-1", matterNumber: "2026-0001", title: "T", status: "ACTIVE",
+        responsibleLawyerId: "u-1", paymentMethod: "RATTSHJALP", clientShareBips: 4000, taxaHasFTax: true, createdAt: new Date() }],
+      users: [{ id: "u-1", organizationId: "org-1", email: "a@x", name: "Anna", role: "ADMIN", hourlyRate: 250000 }],
+      timeEntries: [{ id: "te-1", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date(), minutes: 660, description: "Arbete", hourlyRate: 162600, billable: true }],
+      expenses: [
+        { id: "ex-1", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date(), amount: 90000, description: "Domstolsavgift", billable: true, vatRate: 0, vatIncluded: false, kind: "EXPENSE" },
+        { id: "ex-2", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date(), amount: 40000, description: "Tåg", billable: true, vatRate: 600, vatIncluded: false, kind: "EXPENSE" },
+      ],
+    }, async () => { /* writable */ });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: PRINCIPAL }) as any);
+  }
+
+  it("kostnadsräkningen yrkar 25 % på utläggens netto, inte posternas egna satser", async () => {
+    const c = courtCaller();
+    const kr = await c.billingRun.createKostnadsrakning({ matterId: "m-1" });
+    // Utlägg netto 1 300 kr → 1 625 kr mot domstol (25 %), inte 1 324 kr (0 % + 6 %).
+    const arvodeGross = 10 * 162600 * 1.25; // 10 tim (11 − 1 rådgivning) på timkostnadsnormen
+    expect(kr.run.workValueOreAtRun).toBe(Math.round(arvodeGross) + 162500);
+  });
+
+  it("domstolsfakturan får EN 25 %-utläggsrad; klientfakturan behåller 0 % och 6 %", async () => {
+    const c = courtCaller();
+    const kr = await c.billingRun.createKostnadsrakning({ matterId: "m-1" });
+    await c.billingRun.recordKostnadsrakningBeslut({ billingRunId: kr.run.id, awardedOre: kr.run.workValueOreAtRun });
+    const res = await c.billingRun.settleCoverage({ matterId: "m-1", payerRecipient: "DOMSTOL" });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const lines = (l: any): Array<{ vatRate: number; netOre: number; vatOre: number }> => l.vatBreakdown;
+    const payerUtlagg = lines(res.payerInvoice).filter((l) => (l as { kind?: string }).kind === "utlagg");
+    expect(payerUtlagg).toHaveLength(1);
+    expect(payerUtlagg[0]!.vatRate).toBe(2500);
+    expect(payerUtlagg[0]!.vatOre).toBe(Math.round(payerUtlagg[0]!.netOre * 0.25));
+    // Klienten är ingen domstol → posternas riktiga satser bevaras.
+    const clientRates = lines(res.clientInvoice).filter((l) => (l as { kind?: string }).kind === "utlagg").map((l) => l.vatRate).sort((a, b) => a - b);
+    expect(clientRates).toEqual([0, 600]);
   });
 });
 
