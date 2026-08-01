@@ -622,7 +622,8 @@ describe("billingRun.settleCoverage — bokför prutnings-uppdelningen (#801)", 
     // #876 — domstolsfakturan har SAMMA upplägg som klienten: tidsspec + andel-trappa.
     expect(pv.timeLines).toHaveLength(1);
     expect(pv.timeLines[0]!.amountOre).toBe(325_200);
-    expect(pv.rows.find((r) => r.label.includes("andel av arvodet"))?.amountOre).toBe(260_160); // 325 200 − 65 040 självrisk
+    // #947: andelen omfattar arvode + utlägg; utan utlägg i fixturen = 325 200 − 65 040.
+    expect(pv.rows.find((r) => r.label.includes("andel (exkl moms)"))?.amountOre).toBe(260_160);
     expect(pv.rows.find((r) => r.label === "Moms 25 %")?.amountOre).toBe(65_040);               // moms på domstolens andel
     // #941 — trappan ska läsas uppifrån och ned i den ordning beräkningen sker:
     // rådgivningstimmen av FÖRST, sedan prutningen, och först därefter klientens
@@ -637,7 +638,11 @@ describe("billingRun.settleCoverage — bokför prutnings-uppdelningen (#801)", 
     expect(labels[0]).toBe("Upparbetat arvode (exkl moms)");
     // Upparbetat inkluderar rådgivningstimmen; underlaget är det som återstår.
     expect(pv.rows[0]!.amountOre).toBe(b.arvodeBaseNetOre + b.radgivningNetOre);
-    expect(labels).toContain("Underlag för kostnadsräkning (exkl moms)");
+    // #947: trappan stämmer rad för rad — bas − rådgivning − prutning = beviljat.
+    const amountOf = (needle: string): number => pv.rows.find((r) => r.label.includes(needle))?.amountOre ?? 0;
+    expect(amountOf("Beviljat belopp")).toBe(
+      pv.rows[0]!.amountOre + amountOf("Utlägg (exkl moms)") - amountOf("rådgivningstimme") - amountOf("prutning"),
+    );
   });
 
   it("rättshjälp (#878): utlägg delas per andel; klientens del heter 'rättshjälpsavgift'", async () => {
@@ -657,7 +662,10 @@ describe("billingRun.settleCoverage — bokför prutnings-uppdelningen (#801)", 
     const cv = res.clientInvoice.settlementBreakdown!;
     expect(cv.rows.some((r) => r.label.includes("rättshjälpsavgift"))).toBe(true);        // #878 — EJ "självrisk"
     expect(cv.rows.some((r) => r.label.toLowerCase().includes("självrisk"))).toBe(false);
-    expect(cv.rows.find((r) => r.label.includes("Utlägg (klientens andel"))?.amountOre).toBe(2_500);
+    // #947: utläggen ligger i BASEN och i andelen, inte som en lös rad längst ned.
+    // Klientens andel = 20 % av arvodet (65 040) + 20 % av utläggen (2 000 netto).
+    expect(cv.rows.find((r) => r.label.includes("rättshjälpsavgift"))?.amountOre).toBe(65_040 + 2_000);
+    expect(cv.rows.find((r) => r.label === "Utlägg (exkl moms)")?.amountOre).toBe(10_000);
     const pv = res.payerInvoice.settlementBreakdown!;
     expect(pv.rows.some((r) => r.label.includes("Avgår klientens rättshjälpsavgift"))).toBe(true);
     expect(pv.rows.find((r) => r.label.includes("Utlägg"))?.amountOre).toBe(10_000);
