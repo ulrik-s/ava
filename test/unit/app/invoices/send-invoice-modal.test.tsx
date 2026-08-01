@@ -14,10 +14,13 @@ const queueMutate = vi.fn();
 const composeMail = vi.fn(async () => true);
 const downloadBytes = vi.fn();
 const renderFakturaPdf = vi.fn(async () => new Uint8Array([1, 2, 3]));
+const specFetch = vi.fn(async () => null);
 let helperVersion: string | undefined | null = "helper-v1.0.0";
 
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
+    // Bilagan hämtar fakturaspecifikationen (#938) via utils.
+    useUtils: () => ({ billingRun: { invoiceSpecification: { fetch: specFetch } } }),
     invoiceDispatch: {
       recordManual: { useMutation: (opts: { onSuccess?: () => void }) => ({ mutate: (...a: unknown[]) => { recordMutate(...a); opts.onSuccess?.(); }, isPending: false, error: null }) },
       queue: { useMutation: (opts: { onSuccess?: () => void }) => ({ mutate: (...a: unknown[]) => { queueMutate(...a); opts.onSuccess?.(); }, isPending: false, error: null }) },
@@ -33,6 +36,7 @@ vi.mock("@/lib/client/kostnadsrakning/render-faktura-pdf", () => ({ renderFaktur
 
 const baseProps = {
   invoiceId: asId<"InvoiceId">("inv-1"),
+  matterId: asId<"MatterId">("m-1"),
   invoiceNumber: "F-2026-0001",
   amount: 12_500,
   ocrReference: "1234567894",
