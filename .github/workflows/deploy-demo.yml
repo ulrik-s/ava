@@ -96,7 +96,7 @@ jobs:
       # hämta användare. Bumpa INTE utan att verifiera att dolda filer följer med
       # (post-deploy-kontrollen nedan fäller numera i så fall).
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: ./out
 
@@ -110,7 +110,7 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         # v4 hör till samma beprövade par som upload-pages-artifact@v3 (#933).
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
 
       # Post-deploy-grind (#933): verifiera mot den LEVANDE sajten att de DOLDA
       # filerna faktiskt serveras. Bygg-sanity-checken ovan tittar bara i `out/`
