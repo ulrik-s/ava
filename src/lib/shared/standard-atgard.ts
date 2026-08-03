@@ -82,6 +82,45 @@ function appliesToMethod(a: StandardAtgard, paymentMethod: PaymentMethod | null 
 }
 
 /**
+ * Ärendets läge, för att avgöra VILKA standardåtgärder som är relevanta att
+ * föreslå just nu (#958). Rena fakta om ärendet — ingen I/O, ingen tRPC.
+ */
+export interface StandardAtgardContext {
+  /** Har ärendet några registrerade tidsposter? Nej → uppdraget är nyss påbörjat. */
+  hasTimeEntries: boolean;
+  /** Är domen/beslutet registrerat? Då hör de avslutande åtgärderna hemma nu. */
+  verdictRegistered: boolean;
+  /** Är ärendet stängt? Täcker avslut UTAN kostnadsräkning (rättsskydd, privat). */
+  matterClosed: boolean;
+  /** Är ärendet slutreglerat? Då är arbetet FRYST och en ny tidspost når aldrig
+   *  fakturan — att föreslå en åtgärd som inte kan faktureras vore vilseledande. */
+  settled: boolean;
+  /** Standardåtgärder som redan registrerats i ärendet (`standardAtgardId`). */
+  registeredIds: ReadonlySet<string>;
+}
+
+/**
+ * Standardåtgärder att FÖRESLÅ för ärendet just nu (#958) — de som hör till
+ * ärendets skede och ännu inte är registrerade.
+ *
+ * `ANY`-åtgärder föreslås aldrig: de gäller när som helst och skulle ligga kvar
+ * som en permanent uppmaning. De finns i väljaren i tidsformuläret i stället.
+ */
+export function suggestedStandardAtgarder(
+  list: readonly StandardAtgard[] | null | undefined,
+  paymentMethod: PaymentMethod | null | undefined,
+  ctx: StandardAtgardContext,
+): StandardAtgard[] {
+  if (ctx.settled) return [];
+  const stages: StandardAtgardStage[] = [];
+  if (!ctx.hasTimeEntries) stages.push("OPENING");
+  if (ctx.verdictRegistered || ctx.matterClosed) stages.push("CLOSING");
+  return stages
+    .flatMap((stage) => applicableStandardAtgarder(list, paymentMethod, stage))
+    .filter((a) => !ctx.registeredIds.has(a.id));
+}
+
+/**
  * Normalisera en inkommande lista (admin sparar hela listan): trimma texter,
  * släng poster utan beskrivning, och dedupa på `id` — sista vinner, så en
  * redigerad post ersätter sin tidigare version i stället för att dubbleras.

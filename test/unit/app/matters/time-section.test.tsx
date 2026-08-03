@@ -32,6 +32,9 @@ const orgSettingsQuery = {
   } as unknown,
   isLoading: false,
 };
+// Ärendets billing-runs styr förslagen (#958): KOSTNADSRAKNING med awardedOre =
+// dom registrerad; FINAL = slutreglerat (arbetet fryst).
+const billingRunQuery = { data: { runs: [] as Array<Record<string, unknown>> }, isLoading: false };
 const createMutate = vi.fn();
 const updateMutate = vi.fn();
 const noopMut = () => ({ mutate: vi.fn(), isPending: false });
@@ -54,6 +57,7 @@ vi.mock("@/lib/client/trpc", () => ({
     },
     user: { current: { useQuery: () => ({ data: { id: "u1", role: "LAWYER" } }) } },
     organization: { getSettings: { useQuery: () => orgSettingsQuery } },
+    billingRun: { list: { useQuery: () => billingRunQuery } },
   },
 }));
 
@@ -61,6 +65,7 @@ const matterId = asId<"MatterId">("m1");
 
 beforeEach(() => {
   vi.clearAllMocks();
+  billingRunQuery.data.runs = [];
 });
 
 describe("TimeSection — arvodeskategori (#953)", () => {
@@ -166,5 +171,66 @@ describe("TimeSection — standardåtgärder (#956)", () => {
     expect(screen.getByPlaceholderText("Beskrivning *")).toHaveValue("Inledande åtgärder och genomgång av handlingar");
     fireEvent.click(screen.getByText("Spara"));
     expect(createMutate).toHaveBeenCalledWith(expect.objectContaining({ standardAtgardId: "" }));
+  });
+});
+
+/**
+ * Förslagsraden (#958): påminn om standardåtgärderna vid rätt tidpunkt, och
+ * FÖRIFYLL formuläret i stället för att spara. Datumet måste vara handläggarens
+ * val — det styr vilken årsnorm posten värderas på (#951/#954).
+ */
+describe("TimeSection — förslag om standardåtgärder (#958)", () => {
+  it("pågående ärende med registrerat arbete → ingen förslagsrad", () => {
+    render(<TimeSection matterId={matterId} paymentMethod="RATTSHJALP" matterStatus="ACTIVE" />);
+    expect(screen.queryByText(/standardåtgärder.*som inte är registrerade/i)).not.toBeInTheDocument();
+  });
+
+  it("registrerad dom → avslutande åtgärd föreslås med sin tid", () => {
+    billingRunQuery.data.runs = [{ type: "KOSTNADSRAKNING", awardedOre: 500_000 }];
+    render(<TimeSection matterId={matterId} paymentMethod="RATTSHJALP" matterStatus="ACTIVE" />);
+    expect(screen.getByText(/som inte är registrerade/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Avslutande åtgärder inklusive mottagande av dom/ })).toBeInTheDocument();
+  });
+
+  it("klicket FÖRIFYLLER formuläret — inget sparas", () => {
+    billingRunQuery.data.runs = [{ type: "KOSTNADSRAKNING", awardedOre: 500_000 }];
+    render(<TimeSection matterId={matterId} paymentMethod="RATTSHJALP" matterStatus="ACTIVE" />);
+    fireEvent.click(screen.getByRole("button", { name: /Avslutande åtgärder inklusive mottagande av dom/ }));
+
+    // Formuläret öppnas ifyllt med byråns huvudregel …
+    expect(screen.getByPlaceholderText("Beskrivning *")).toHaveValue("Avslutande åtgärder inklusive mottagande av dom och kontakt med huvudman");
+    expect(screen.getByLabelText("Tid (minuter) *")).toHaveValue("45");
+    expect(screen.getByLabelText("Standardåtgärd")).toHaveValue("avslutande-atgarder");
+    // … men INGET är sparat förrän användaren godkänner.
+    expect(createMutate).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByText("Spara"));
+    expect(createMutate).toHaveBeenCalledWith(expect.objectContaining({
+      standardAtgardId: "avslutande-atgarder", minutes: 45,
+    }));
+  });
+
+  it("redan registrerad åtgärd föreslås inte igen — härleds ur ärendets tidsposter", () => {
+    billingRunQuery.data.runs = [{ type: "KOSTNADSRAKNING", awardedOre: 500_000 }];
+    const entries = (timeQuery.data as { entries: Array<Record<string, unknown>> }).entries;
+    entries.push({
+      id: "t4", date: "2026-07-01", minutes: 45, description: "Avslutande åtgärder …",
+      billable: true, user: { name: "Anna" }, hourlyRate: 162_600, standardAtgardId: "avslutande-atgarder",
+    });
+    try {
+      render(<TimeSection matterId={matterId} paymentMethod="RATTSHJALP" matterStatus="ACTIVE" />);
+      expect(screen.queryByText(/som inte är registrerade/i)).not.toBeInTheDocument();
+    } finally {
+      entries.pop();
+    }
+  });
+
+  it("slutreglerat ärende → inga förslag (arbetet är fryst)", () => {
+    billingRunQuery.data.runs = [
+      { type: "KOSTNADSRAKNING", awardedOre: 500_000 },
+      { type: "FINAL", awardedOre: null },
+    ];
+    render(<TimeSection matterId={matterId} paymentMethod="RATTSHJALP" matterStatus="CLOSED" />);
+    expect(screen.queryByText(/som inte är registrerade/i)).not.toBeInTheDocument();
   });
 });

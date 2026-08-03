@@ -6,7 +6,8 @@
  */
 import { describe, it, expect } from "vitest-compat";
 import {
-  applicableStandardAtgarder, normalizeStandardAtgarder, type StandardAtgard,
+  applicableStandardAtgarder, normalizeStandardAtgarder, suggestedStandardAtgarder,
+  type StandardAtgard, type StandardAtgardContext,
 } from "@/lib/shared/standard-atgard";
 
 const atgard = (over: Partial<StandardAtgard> & { id: string }): StandardAtgard => ({
@@ -84,5 +85,72 @@ describe("normalizeStandardAtgarder", () => {
     ]);
     expect(out).toHaveLength(1);
     expect(out[0]!.minutes).toBe(45);
+  });
+});
+
+/**
+ * Vilka åtgärder som FÖRESLÅS (#958). Poängen är att just de här åtgärderna glöms:
+ * "Avslutande åtgärder inklusive mottagande av dom" registreras i praktiken när
+ * ärendet redan känns färdigt. Förslaget måste därför komma vid rätt tidpunkt —
+ * och sluta komma när det inte längre är meningsfullt.
+ */
+describe("suggestedStandardAtgarder", () => {
+  const LIST = [
+    atgard({ id: "start", stage: "OPENING", description: "Inledande åtgärder" }),
+    atgard({ id: "slut", stage: "CLOSING", description: "Avslutande åtgärder" }),
+    atgard({ id: "lopande", stage: "ANY", description: "Löpande åtgärd" }),
+  ];
+  const ctx = (over: Partial<StandardAtgardContext> = {}): StandardAtgardContext => ({
+    hasTimeEntries: true, verdictRegistered: false, matterClosed: false, settled: false,
+    registeredIds: new Set(), ...over,
+  });
+
+  it("nytt ärende utan tidsposter → inledande åtgärder föreslås", () => {
+    const out = suggestedStandardAtgarder(LIST, "RATTSHJALP", ctx({ hasTimeEntries: false }));
+    expect(out.map((a) => a.id)).toEqual(["start"]);
+  });
+
+  it("registrerad dom → avslutande åtgärder föreslås", () => {
+    const out = suggestedStandardAtgarder(LIST, "RATTSHJALP", ctx({ verdictRegistered: true }));
+    expect(out.map((a) => a.id)).toEqual(["slut"]);
+  });
+
+  it("stängt ärende → avslutande åtgärder även UTAN kostnadsräkning (rättsskydd/privat)", () => {
+    const out = suggestedStandardAtgarder(LIST, "RATTSSKYDD", ctx({ matterClosed: true }));
+    expect(out.map((a) => a.id)).toEqual(["slut"]);
+  });
+
+  it("pågående ärende mitt i arbetet → inga förslag (ingen permanent uppmaning)", () => {
+    expect(suggestedStandardAtgarder(LIST, "PRIVAT", ctx())).toEqual([]);
+  });
+
+  it("ANY-åtgärder föreslås ALDRIG — de skulle ligga kvar för alltid", () => {
+    const out = suggestedStandardAtgarder(LIST, "PRIVAT", ctx({ hasTimeEntries: false, verdictRegistered: true }));
+    expect(out.map((a) => a.id)).toEqual(["start", "slut"]);
+    expect(out.map((a) => a.id)).not.toContain("lopande");
+  });
+
+  it("redan registrerad åtgärd föreslås inte igen", () => {
+    const out = suggestedStandardAtgarder(LIST, "RATTSHJALP",
+      ctx({ verdictRegistered: true, registeredIds: new Set(["slut"]) }));
+    expect(out).toEqual([]);
+  });
+
+  it("slutreglerat ärende ger INGA förslag — arbetet är fryst och når inte fakturan", () => {
+    // Utan den här spärren skulle vi föreslå en åtgärd som inte kan faktureras.
+    const out = suggestedStandardAtgarder(LIST, "RATTSHJALP",
+      ctx({ verdictRegistered: true, matterClosed: true, hasTimeEntries: false, settled: true }));
+    expect(out).toEqual([]);
+  });
+
+  it("betalningssätts-begränsning gäller även i förslagen", () => {
+    const list = [atgard({ id: "bara-rh", stage: "CLOSING", paymentMethods: ["RATTSHJALP"] })];
+    expect(suggestedStandardAtgarder(list, "RATTSHJALP", ctx({ verdictRegistered: true })).map((a) => a.id)).toEqual(["bara-rh"]);
+    expect(suggestedStandardAtgarder(list, "PRIVAT", ctx({ verdictRegistered: true }))).toEqual([]);
+  });
+
+  it("byrå utan standardåtgärder får inga förslag", () => {
+    expect(suggestedStandardAtgarder([], "RATTSHJALP", ctx({ hasTimeEntries: false }))).toEqual([]);
+    expect(suggestedStandardAtgarder(undefined, "RATTSHJALP", ctx({ hasTimeEntries: false }))).toEqual([]);
   });
 });
