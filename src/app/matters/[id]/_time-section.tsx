@@ -6,9 +6,10 @@ import { Modal } from "@/components/ui/modal";
 import { TIME_ENTRY_KIND_SHORT } from "@/lib/client/labels";
 import { trpc } from "@/lib/client/trpc";
 import { formatMinutes } from "@/lib/client/utils";
-import { TIME_ENTRY_KIND_LABELS, type PaymentMethod, type TimeEntryKind } from "@/lib/shared/schemas/enums";
+import { TIME_ENTRY_KIND_LABELS, type MatterStatus, type PaymentMethod, type TimeEntryKind } from "@/lib/shared/schemas/enums";
 import type { InvoiceId, MatterId, TimeEntryId } from "@/lib/shared/schemas/ids";
 import { applicableStandardAtgarder, type StandardAtgard } from "@/lib/shared/standard-atgard";
+import { StandardAtgardSuggestions } from "./_standard-atgard-suggestions";
 
 interface Props {
   matterId: MatterId;
@@ -16,6 +17,9 @@ interface Props {
   /** Styr kategori-hjälptexten: rättshjälp/rättsskydd ersätts på Domstolsverkets
    *  normer per kategori, inte på byråns timpris (#953). */
   paymentMethod?: PaymentMethod | undefined;
+  /** Driver förslagen om avslutande standardåtgärder (#958) — ett stängt ärende
+   *  är i sitt avslutningsskede även utan kostnadsräkning. */
+  matterStatus?: MatterStatus | undefined;
 }
 
 interface EditForm {
@@ -101,11 +105,14 @@ function applyStandardAtgard(form: EditForm, atgard: StandardAtgard | undefined)
 }
 
 // eslint-disable-next-line max-lines-per-function -- TODO: refactor (struktur är tabular: kolumndefs + 2 modaler)
-export function TimeSection({ matterId, isTaxeArende, paymentMethod }: Props) {
+export function TimeSection({ matterId, isTaxeArende, paymentMethod, matterStatus }: Props) {
   const isCoverage = isCoverageMethod(paymentMethod);
   const atgarder = useStandardAtgarder(paymentMethod);
   const utils = trpc.useUtils();
   const timeEntries = trpc.timeEntry.list.useQuery({ matterId });
+  // EN källa för både tabellen och förslagsraden (#958) — annars kunde de visa
+  // olika bild av vilka standardåtgärder som redan är registrerade.
+  const rows = (timeEntries.data?.entries ?? []) as TimeEntryRow[];
   const [showCreate, setShowCreate] = useState(false);
   const [editingId, setEditingId] = useState<TimeEntryId | null>(null);
   const [editForm, setEditForm] = useState<EditForm | null>(null);
@@ -143,6 +150,13 @@ export function TimeSection({ matterId, isTaxeArende, paymentMethod }: Props) {
 
   function confirmDelete(id: TimeEntryId): void {
     if (confirm("Ta bort tidregistreringen?")) deleteTimeEntry.mutate({ id });
+  }
+
+  /** Föreslagen standardåtgärd (#958) → öppna formuläret FÖRIFYLLT. Sparar inget:
+   *  datumet är handläggarens val och styr postens årsnorm. */
+  function pickStandardAtgard(atgard: StandardAtgard): void {
+    setCreateForm(applyStandardAtgard(emptyForm(), atgard));
+    setShowCreate(true);
   }
 
   const columns: Column<TimeEntryRow>[] = [
@@ -204,11 +218,19 @@ export function TimeSection({ matterId, isTaxeArende, paymentMethod }: Props) {
         </button>
       </div>
 
+      <StandardAtgardSuggestions
+        matterId={matterId}
+        paymentMethod={paymentMethod}
+        matterStatus={matterStatus}
+        entries={rows}
+        onPick={pickStandardAtgard}
+      />
+
       <div className="p-4">
         <DataTable
           prefKey={`list.matter-time.${matterId}`}
           columns={columns}
-          data={(timeEntries.data?.entries ?? []) as TimeEntryRow[]}
+          data={rows}
           rowKey={(e) => e.id}
           emptyMessage="Inga tidsposter."
         />

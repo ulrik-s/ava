@@ -25,6 +25,8 @@ vi.mock("@/lib/client/trpc", () => {
       // Byråns standardåtgärder (#956) — TimeSection läser dem för väljaren.
       // Tom lista → ingen väljare renderas, vilket den här filens tester inte rör.
       organization: { getSettings: { useQuery: () => ({ data: { standardAtgarder: [] }, isLoading: false }) } },
+      // Ärendets billing-runs driver förslagsraden (#958). Tom lista → inga förslag.
+      billingRun: { list: { useQuery: () => ({ data: { runs: [] }, isLoading: false }) } },
       prefs: {
         get: { useQuery: () => ({ data: null }) },
         save: { useMutation: () => noopMut },
