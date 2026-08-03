@@ -8,6 +8,7 @@ import { trpc } from "@/lib/client/trpc";
 import { formatMinutes } from "@/lib/client/utils";
 import { TIME_ENTRY_KIND_LABELS, type PaymentMethod, type TimeEntryKind } from "@/lib/shared/schemas/enums";
 import type { InvoiceId, MatterId, TimeEntryId } from "@/lib/shared/schemas/ids";
+import { applicableStandardAtgarder, type StandardAtgard } from "@/lib/shared/standard-atgard";
 
 interface Props {
   matterId: MatterId;
@@ -23,6 +24,8 @@ interface EditForm {
   description: string;
   billable: boolean;
   kind: TimeEntryKind;
+  /** Byråns standardåtgärd posten kommer ur (#956). "" = fritext. */
+  standardAtgardId: string;
 }
 
 /** Kategorierna i dropdown-ordning — härledd ur labels-kartan (single source). */
@@ -35,6 +38,13 @@ function isCoverageMethod(method: PaymentMethod | undefined): boolean {
   return method !== undefined && COVERAGE_METHODS.has(method);
 }
 
+/** Byråns standardåtgärder (#956) som gäller ärendet — org-inställning, samma
+ *  lista för alla på byrån. Tom lista döljer väljaren helt. */
+function useStandardAtgarder(paymentMethod: PaymentMethod | undefined): StandardAtgard[] {
+  const settings = trpc.organization.getSettings.useQuery();
+  return applicableStandardAtgarder(settings.data?.standardAtgarder, paymentMethod);
+}
+
 interface TimeEntryRow {
   id: TimeEntryId;
   date: Date | string;
@@ -42,6 +52,7 @@ interface TimeEntryRow {
   description: string | null;
   billable: boolean;
   kind?: TimeEntryKind | null;
+  standardAtgardId?: string | null;
   hourlyRate?: number | null;
   user?: { name?: string | null } | null;
   invoiceId?: InvoiceId | null;
@@ -63,16 +74,36 @@ function toEditForm(entry: TimeEntryRow): EditForm {
     description: entry.description ?? "",
     billable: entry.billable,
     kind: entry.kind ?? "ARBETE",
+    standardAtgardId: entry.standardAtgardId ?? "",
   };
 }
 
 function emptyForm(): EditForm {
-  return { date: new Date().toISOString().split("T")[0]!, minutes: 30, description: "", billable: true, kind: "ARBETE" };
+  return { date: new Date().toISOString().split("T")[0]!, minutes: 30, description: "", billable: true, kind: "ARBETE", standardAtgardId: "" };
+}
+
+/**
+ * Fyll formuläret ur en av byråns standardåtgärder (#956): beskrivning, tid och
+ * kategori sätts till byråns huvudregel — allt förblir redigerbart, för avsteg
+ * måste vara lätt att göra. Tomt val nollar kopplingen men behåller texten, så
+ * man kan utgå från en standard och skriva om den.
+ */
+function applyStandardAtgard(form: EditForm, atgard: StandardAtgard | undefined): EditForm {
+  if (!atgard) return { ...form, standardAtgardId: "" };
+  return {
+    ...form,
+    standardAtgardId: atgard.id,
+    description: atgard.description,
+    minutes: atgard.minutes,
+    kind: atgard.kind,
+    billable: atgard.billable,
+  };
 }
 
 // eslint-disable-next-line max-lines-per-function -- TODO: refactor (struktur är tabular: kolumndefs + 2 modaler)
 export function TimeSection({ matterId, isTaxeArende, paymentMethod }: Props) {
   const isCoverage = isCoverageMethod(paymentMethod);
+  const atgarder = useStandardAtgarder(paymentMethod);
   const utils = trpc.useUtils();
   const timeEntries = trpc.timeEntry.list.useQuery({ matterId });
   const [showCreate, setShowCreate] = useState(false);
@@ -191,6 +222,7 @@ export function TimeSection({ matterId, isTaxeArende, paymentMethod }: Props) {
           isPending={createTimeEntry.isPending}
           isTaxeArende={isTaxeArende}
           isCoverage={isCoverage}
+          atgarder={atgarder}
           onSubmit={() => createTimeEntry.mutate({ ...createForm, matterId })}
           onCancel={() => setShowCreate(false)}
         />
@@ -205,6 +237,7 @@ export function TimeSection({ matterId, isTaxeArende, paymentMethod }: Props) {
             isPending={updateTimeEntry.isPending}
             isTaxeArende={isTaxeArende}
             isCoverage={isCoverage}
+            atgarder={atgarder}
             onSubmit={saveEdit}
             onCancel={() => { setEditingId(null); setEditForm(null); }}
           />
@@ -221,11 +254,12 @@ interface FormProps {
   isPending: boolean;
   isTaxeArende?: boolean | undefined;
   isCoverage?: boolean | undefined;
+  atgarder: StandardAtgard[];
   onSubmit: () => void;
   onCancel: () => void;
 }
 
-function TimeForm({ form, setForm, submitLabel, isPending, isTaxeArende, isCoverage, onSubmit, onCancel }: FormProps) {
+function TimeForm({ form, setForm, submitLabel, isPending, isTaxeArende, isCoverage, atgarder, onSubmit, onCancel }: FormProps) {
   return (
     <form onSubmit={(e) => { e.preventDefault(); onSubmit(); }}>
       {isTaxeArende && (
@@ -236,22 +270,39 @@ function TimeForm({ form, setForm, submitLabel, isPending, isTaxeArende, isCover
           om &quot;avsevärt mer arbete än normalt&quot; krävts.
         </div>
       )}
+      {atgarder.length > 0 && (
+        <div className="mb-3">
+          <label htmlFor="time-standard" className="block text-xs text-gray-500 mb-1">Standardåtgärd</label>
+          <select id="time-standard" value={form.standardAtgardId}
+            onChange={(e) => setForm(applyStandardAtgard(form, atgarder.find((a) => a.id === e.target.value)))}
+            className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm">
+            <option value="">— egen beskrivning —</option>
+            {atgarder.map((a) => (
+              <option key={a.id} value={a.id}>{a.description} ({formatMinutes(a.minutes)})</option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-gray-500">
+            Byråns standardåtgärder fyller beskrivning och tid. Tiden är en
+            huvudregel — justera den om ärendet krävde mer eller mindre.
+          </p>
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-xs text-gray-500 mb-1">Datum *</label>
-          <input type="date" required value={form.date}
+          <label htmlFor="time-date" className="block text-xs text-gray-500 mb-1">Datum *</label>
+          <input id="time-date" type="date" required value={form.date}
             onChange={(e) => setForm({ ...form, date: e.target.value })}
             className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm" />
         </div>
         <div>
-          <label className="block text-xs text-gray-500 mb-1">Tid (minuter) *</label>
-          <input type="text" inputMode="numeric" required value={form.minutes}
+          <label htmlFor="time-minutes" className="block text-xs text-gray-500 mb-1">Tid (minuter) *</label>
+          <input id="time-minutes" type="text" inputMode="numeric" required value={form.minutes}
             onChange={(e) => setForm({ ...form, minutes: parseInt(e.target.value) || 0 })}
             className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm" />
         </div>
         <div className="col-span-2">
-          <label className="block text-xs text-gray-500 mb-1">Beskrivning *</label>
-          <input type="text" required value={form.description}
+          <label htmlFor="time-description" className="block text-xs text-gray-500 mb-1">Beskrivning *</label>
+          <input id="time-description" type="text" required value={form.description}
             placeholder="Beskrivning *"
             onChange={(e) => setForm({ ...form, description: e.target.value })}
             className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm" />

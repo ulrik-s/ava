@@ -31,6 +31,7 @@ import type {
   ServiceNoteId, TaskId, TimeEntryId, UserId, UserPreferenceId, WriteOffId,
 } from "@/lib/shared/schemas/ids";
 import type { SettlementView } from "@/lib/shared/settlement-view";
+import type { StandardAtgard } from "@/lib/shared/standard-atgard";
 import { baseColumns, boolDefault, orgScopedColumns } from "./columns";
 
 /** Monetärt öre-belopp (bigint → ingen int4-overflow för stora fakturor). */
@@ -54,6 +55,8 @@ export const organizations = pgTable("organizations", {
   /** Gränsbelopp (öre) för klientens ackumulerade självrisk innan ett aconto
    *  skickas (#885). NULL = använd default (SJALVRISK_ACCONTO_THRESHOLD_ORE). */
   accontoThresholdOre: integer("acconto_threshold_ore"),
+  /** Byråns standardåtgärder (#956) — samma beskrivning + tidsåtgång för alla. */
+  standardAtgarder: jsonb("standard_atgarder").notNull().default([]).$type<StandardAtgard[]>(),
 });
 
 export const offices = pgTable("offices", {
@@ -178,6 +181,9 @@ export const timeEntries = pgTable("time_entries", {
   hourlyRate: integer("hourly_rate").notNull(),
   /** ARBETE (default) eller TIDSSPILLAN (#891) — styr slutregleringens norm. */
   kind: text("kind").$type<"ARBETE" | "ARBETE_OBEKVAM_TID" | "TIDSSPILLAN" | "TIDSSPILLAN_OVRIG_TID">(),
+  /** Byråns standardåtgärd posten registrerades ur (#956) — spårbarhet: går att
+   *  se vilka poster som kommer ur en standard och om tiden justerats. */
+  standardAtgardId: text("standard_atgard_id"),
   billable: boolDefault("billable", true),
   invoiceId: uuid("invoice_id").$type<InvoiceId>(),
   frozenAt: timestamp("frozen_at", { withTimezone: true }),

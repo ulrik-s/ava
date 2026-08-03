@@ -48,6 +48,8 @@ export const timeEntryRouter = router({
         billable: z.boolean().default(true),
         /** ARBETE (default) eller TIDSSPILLAN (#891). */
         kind: timeEntryKindSchema.optional(),
+        /** Byråns standardåtgärd posten registrerades ur (#956) — spårbarhet. */
+        standardAtgardId: z.string().optional(),
         // Valfria setup-fält (demo-generator/fixtures, ADR 0003).
         id: timeEntryIdSchema.optional(),
         userId: userIdSchema.optional(),
@@ -69,7 +71,8 @@ export const timeEntryRouter = router({
         minutes: input.minutes,
         description: input.description,
         hourlyRate: input.hourlyRate ?? user.hourlyRate ?? 0,
-        ...(input.kind ? { kind: input.kind } : {}),
+        kind: input.kind,
+        standardAtgardId: input.standardAtgardId,
         billable: input.billable,
         invoiceId: input.invoiceId ?? null,
         ...(input.createdAt ? { createdAt: new Date(input.createdAt) } : {}),
@@ -89,6 +92,8 @@ export const timeEntryRouter = router({
         /** Arvodeskategori (#953) — styr vilken årsnorm slutregleringen värderar
          *  posten på. Rättbar i efterhand: kategorin missas lätt vid inmatning. */
         kind: timeEntryKindSchema.optional(),
+        /** Byråns standardåtgärd (#956). Sätts när posten byter till/från en standard. */
+        standardAtgardId: z.string().nullable().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -96,12 +101,13 @@ export const timeEntryRouter = router({
       // INNAN update. NOT_FOUND vid mismatch.
       const owned = await ctx.repos.timeEntries.getByIdInOrg(input.id, ctx.orgId);
       if (!owned) throw new TRPCError({ code: "NOT_FOUND" });
-      const { id, date, minutes, description, billable, kind } = input;
+      const { id, date, minutes, description, billable, kind, standardAtgardId } = input;
       const updated = await ctx.repos.timeEntries.update(id, omitUndefined({
         minutes,
         description,
         billable,
         kind,
+        standardAtgardId,
         ...(date ? { date: new Date(date) } : {}),
       }) satisfies Partial<TimeEntry>);
       await emit.timeEntryUpdated(ctx, { id: updated.id, matterId: updated.matterId });

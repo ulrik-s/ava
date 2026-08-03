@@ -11,6 +11,7 @@ import { LedgerAccountsSection } from "@/components/settings/ledger-accounts-sec
 import { OrgDefaultsSection } from "@/components/settings/org-defaults-section";
 import { trpc } from "@/lib/client/trpc";
 import { DocumentTagsSection } from "./_document-tags-section";
+import { StandardAtgarderSection } from "./_standard-atgarder-section";
 
 // Zod vid parsegränsen (#187): logo-API:ts svar valideras.
 const logoResponseSchema = z.object({ logoUrl: z.string().nullable() });
@@ -571,6 +572,10 @@ export default function SettingsPage() {
       {/* 7. Dokument-etiketter */}
       <SectionHeader num={7} title="Dokument-etiketter (admin)" subtitle="Vokabulär av giltiga etiketter som dokument kan taggas med — av AI:n och handläggarna." />
       <DocumentTagsSection />
+
+      {/* 8. Standardåtgärder */}
+      <SectionHeader num={8} title="Standardåtgärder (admin)" subtitle="Åtgärder som förekommer i varje ärende — samma beskrivning och tidsåtgång för alla på byrån." />
+      <StandardAtgarderSection />
     </div>
   );
 }
