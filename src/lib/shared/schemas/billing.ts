@@ -45,6 +45,8 @@ export const timeEntrySchema = z.object({
   /** Arbete (null/undefined = ARBETE) eller TIDSSPILLAN — styr vilken norm
    *  slutregleringen värderar minuterna på för rättshjälp (#891). */
   kind: timeEntryKindSchema.nullish(),
+  /** Byråns standardåtgärd posten registrerades ur (#956). Null = fritext-post. */
+  standardAtgardId: z.string().nullish(),
   billable: z.boolean().default(true),
   /** @deprecated Använd `frozenByBillingRunId`. invoiceId behålls för
    *  bakåt­kompatibilitet med befintlig demo/billing — nya flöden ska

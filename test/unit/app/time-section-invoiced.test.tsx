@@ -22,6 +22,9 @@ vi.mock("@/lib/client/trpc", () => {
         prefs: { get: { invalidate: vi.fn() }, listOrgDefaults: { invalidate: vi.fn() } },
       }),
       user: { current: { useQuery: () => ({ data: { id: "u-1", role: "LAWYER" } }) } },
+      // Byråns standardåtgärder (#956) — TimeSection läser dem för väljaren.
+      // Tom lista → ingen väljare renderas, vilket den här filens tester inte rör.
+      organization: { getSettings: { useQuery: () => ({ data: { standardAtgarder: [] }, isLoading: false }) } },
       prefs: {
         get: { useQuery: () => ({ data: null }) },
         save: { useMutation: () => noopMut },

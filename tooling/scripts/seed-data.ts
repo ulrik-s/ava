@@ -230,6 +230,20 @@ export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
       email: `kontor@${emailDomain}`, phone: "08-100 100",
       address: "Storgatan 1, 111 11 Stockholm",
       accontoThresholdOre: 150_000, // 1500 kr — gränsbelopp för aconto-utskick (#885)
+      // Byråns standardåtgärder (#956): samma beskrivning + tidsåtgång för alla.
+      // Tiden är en huvudregel — handläggaren justerar per ärende vid behov.
+      standardAtgarder: [
+        {
+          id: "inledande-atgarder", stage: "OPENING", minutes: 30, kind: "ARBETE",
+          description: "Inledande åtgärder och genomgång av handlingar",
+          paymentMethods: [], billable: true, active: true,
+        },
+        {
+          id: "avslutande-atgarder", stage: "CLOSING", minutes: 45, kind: "ARBETE",
+          description: "Avslutande åtgärder inklusive mottagande av dom och kontakt med huvudman",
+          paymentMethods: [], billable: true, active: true,
+        },
+      ],
       createdAt: isoDate(-365), updatedAt: isoDate(-30),
     }],
     offices: [{

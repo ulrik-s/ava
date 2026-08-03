@@ -4,6 +4,7 @@ import { ledgerAccountMapSchema } from "@/lib/shared/accounting/account-map";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { officeIdSchema, organizationIdSchema, asId } from "@/lib/shared/schemas/ids";
 import type { Office, Organization } from "@/lib/shared/schemas/organization";
+import { normalizeStandardAtgarder, standardAtgardSchema } from "@/lib/shared/standard-atgard";
 import { router, protectedProcedure } from "../trpc";
 
 /** Nullbara org-fält (nullish → null). Utbruten så komplexiteten (många `??`)
@@ -30,6 +31,8 @@ function toOrgSettings(org: Organization) {
     documentTags: org.documentTags ?? [],
     /** Gränsbelopp (öre) för aconto-utskick (#885). */
     accontoThresholdOre: org.accontoThresholdOre ?? null,
+    /** Byråns standardåtgärder (#956) — samma beskrivning + tid för alla. */
+    standardAtgarder: org.standardAtgarder ?? [],
   };
 }
 
@@ -59,6 +62,9 @@ export const organizationRouter = router({
         documentTags: z.array(z.string()).optional(),
         /** Gränsbelopp (öre) för aconto-utskick (#885). */
         accontoThresholdOre: z.number().int().nonnegative().optional(),
+        /** Byråns standardåtgärder (#956). HELA listan ersätts — admin redigerar
+         *  den som en enhet, så en borttagen post försvinner. */
+        standardAtgarder: z.array(standardAtgardSchema).optional(),
       })
     )
     .mutation(({ ctx, input }) => {
@@ -67,6 +73,7 @@ export const organizationRouter = router({
       if (patch.documentTags) {
         patch.documentTags = [...new Set(patch.documentTags.map((t) => t.trim()).filter(Boolean))];
       }
+      if (patch.standardAtgarder) patch.standardAtgarder = normalizeStandardAtgarder(patch.standardAtgarder);
       return ctx.repos.organizations.update(asId<"OrganizationId">(ctx.user.organizationId), patch satisfies Partial<Organization>);
     }),
 
@@ -87,10 +94,14 @@ export const organizationRouter = router({
         email: z.string().optional(),
         bankgiro: z.string().optional(),
         accontoThresholdOre: z.number().int().nonnegative().optional(),
+        /** Byråns standardåtgärder (#956) — setup-/seed-väg (ADR 0003). */
+        standardAtgarder: z.array(standardAtgardSchema).optional(),
       })
     )
     .mutation(({ ctx, input }) =>
-      ctx.repos.organizations.create(input satisfies Partial<Organization>),
+      // omitUndefined: `exactOptionalPropertyTypes` tillåter inte explicit
+      // undefined på fält med default (standardAtgarder).
+      ctx.repos.organizations.create(omitUndefined(input) satisfies Partial<Organization>),
     ),
 
   // ── Offices ─────────────────────────────────────────────────────

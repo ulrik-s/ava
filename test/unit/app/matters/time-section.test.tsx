@@ -21,6 +21,17 @@ const timeQuery = {
   } as unknown,
   isLoading: false,
 };
+// Byråns standardåtgärder (#956) — org-inställning, samma lista för alla.
+const orgSettingsQuery = {
+  data: {
+    standardAtgarder: [
+      { id: "inledande-atgarder", description: "Inledande åtgärder och genomgång av handlingar", minutes: 30, kind: "ARBETE", stage: "OPENING", paymentMethods: [], billable: true, active: true },
+      { id: "avslutande-atgarder", description: "Avslutande åtgärder inklusive mottagande av dom och kontakt med huvudman", minutes: 45, kind: "ARBETE", stage: "CLOSING", paymentMethods: [], billable: true, active: true },
+      { id: "avstalld", description: "Avställd åtgärd", minutes: 15, kind: "ARBETE", stage: "ANY", paymentMethods: [], billable: true, active: false },
+    ],
+  } as unknown,
+  isLoading: false,
+};
 const createMutate = vi.fn();
 const updateMutate = vi.fn();
 const noopMut = () => ({ mutate: vi.fn(), isPending: false });
@@ -42,6 +53,7 @@ vi.mock("@/lib/client/trpc", () => ({
       clearOrgDefault: { useMutation: noopMut },
     },
     user: { current: { useQuery: () => ({ data: { id: "u1", role: "LAWYER" } }) } },
+    organization: { getSettings: { useQuery: () => orgSettingsQuery } },
   },
 }));
 
@@ -94,5 +106,65 @@ describe("TimeSection — arvodeskategori (#953)", () => {
     render(<TimeSection matterId={matterId} paymentMethod="RATTSSKYDD" />);
     fireEvent.click(screen.getByText("+ Registrera tid"));
     expect(screen.getByText(/slutregleringsårets normer/)).toBeInTheDocument();
+  });
+});
+
+/**
+ * Byråns standardåtgärder (#956): en standard ska fylla beskrivning OCH tid, så
+ * alla på byrån redovisar samma åtgärd likadant — men båda ska förbli
+ * redigerbara, för "som huvudregel" betyder att avsteg måste vara möjligt.
+ */
+describe("TimeSection — standardåtgärder (#956)", () => {
+  it("väljaren listar byråns AKTIVA åtgärder med tiden synlig", () => {
+    render(<TimeSection matterId={matterId} />);
+    fireEvent.click(screen.getByText("+ Registrera tid"));
+    const select = screen.getByLabelText("Standardåtgärd") as HTMLSelectElement;
+    const labels = Array.from(select.options).map((o) => o.textContent);
+    expect(labels[0]).toBe("— egen beskrivning —"); // fritext är default
+    // Tiden formateras med appens `formatMinutes` (0:30), samma som i tidslistan.
+    expect(labels).toContain("Inledande åtgärder och genomgång av handlingar (0:30)");
+    expect(labels).toContain("Avslutande åtgärder inklusive mottagande av dom och kontakt med huvudman (0:45)");
+    // Avställda åtgärder föreslås inte.
+    expect(labels.some((l) => l?.includes("Avställd"))).toBe(false);
+  });
+
+  it("val av åtgärd fyller beskrivning + tid och skickar standardAtgardId", () => {
+    render(<TimeSection matterId={matterId} />);
+    fireEvent.click(screen.getByText("+ Registrera tid"));
+    fireEvent.change(screen.getByLabelText("Standardåtgärd"), { target: { value: "avslutande-atgarder" } });
+
+    expect(screen.getByPlaceholderText("Beskrivning *")).toHaveValue("Avslutande åtgärder inklusive mottagande av dom och kontakt med huvudman");
+    expect(screen.getByLabelText("Tid (minuter) *")).toHaveValue("45");
+
+    fireEvent.click(screen.getByText("Spara"));
+    expect(createMutate).toHaveBeenCalledWith(expect.objectContaining({
+      matterId, standardAtgardId: "avslutande-atgarder", minutes: 45,
+      description: "Avslutande åtgärder inklusive mottagande av dom och kontakt med huvudman",
+    }));
+  });
+
+  it("tiden är en HUVUDREGEL — den går att justera efter att åtgärden valts", () => {
+    render(<TimeSection matterId={matterId} />);
+    fireEvent.click(screen.getByText("+ Registrera tid"));
+    fireEvent.change(screen.getByLabelText("Standardåtgärd"), { target: { value: "inledande-atgarder" } });
+    fireEvent.change(screen.getByLabelText("Tid (minuter) *"), { target: { value: "75" } });
+
+    fireEvent.click(screen.getByText("Spara"));
+    // Kopplingen behålls så byrån kan se att tiden avvikit från huvudregeln.
+    expect(createMutate).toHaveBeenCalledWith(expect.objectContaining({
+      standardAtgardId: "inledande-atgarder", minutes: 75,
+    }));
+  });
+
+  it("tillbaka till fritext nollar kopplingen men behåller texten", () => {
+    render(<TimeSection matterId={matterId} />);
+    fireEvent.click(screen.getByText("+ Registrera tid"));
+    const select = screen.getByLabelText("Standardåtgärd");
+    fireEvent.change(select, { target: { value: "inledande-atgarder" } });
+    fireEvent.change(select, { target: { value: "" } });
+
+    expect(screen.getByPlaceholderText("Beskrivning *")).toHaveValue("Inledande åtgärder och genomgång av handlingar");
+    fireEvent.click(screen.getByText("Spara"));
+    expect(createMutate).toHaveBeenCalledWith(expect.objectContaining({ standardAtgardId: "" }));
   });
 });

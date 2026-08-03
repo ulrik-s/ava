@@ -325,4 +325,43 @@ describe("organization.updateSettings", () => {
       expect.objectContaining({ where: { id: "org-a" }, data: expect.objectContaining({ bankgiro: "999-8888" }) }),
     );
   });
+
+  /**
+   * Standardåtgärder (#956) — byråkonfiguration som ska vara identisk för alla.
+   * Listan sparas som en enhet och normaliseras server-side, så en dubblett eller
+   * en post med bara blanksteg inte hamnar i byråns lista.
+   */
+  it("normaliserar standardåtgärderna: trimmar, slänger tomma, dedupar på id", async () => {
+    mockPrisma.organization.findFirst.mockResolvedValue({ id: "org-a" });
+    mockPrisma.organization.update.mockResolvedValue({ id: "org-a", name: "Advokat AB" });
+
+    const atgard = (over: Record<string, unknown>) => ({
+      id: "x", description: "Åtgärd", minutes: 30, kind: "ARBETE" as const,
+      stage: "ANY" as const, paymentMethods: [], billable: true, active: true, ...over,
+    });
+    await makeCaller("org-a").updateSettings({
+      standardAtgarder: [
+        atgard({ id: "inledande", description: "  Inledande åtgärder  ", minutes: 30 }),
+        atgard({ id: "tom", description: "   " }),
+        atgard({ id: "inledande", description: "Inledande åtgärder", minutes: 45 }),
+      ],
+    });
+
+    const data = mockPrisma.organization.update.mock.calls[0]![0].data as {
+      standardAtgarder: Array<{ id: string; description: string; minutes: number }>;
+    };
+    expect(data.standardAtgarder).toHaveLength(1);
+    expect(data.standardAtgarder[0]).toMatchObject({ id: "inledande", description: "Inledande åtgärder", minutes: 45 });
+  });
+
+  it("avvisar en standardåtgärd med ogiltig tid (0 eller negativ)", async () => {
+    mockPrisma.organization.findFirst.mockResolvedValue({ id: "org-a" });
+    await expect(makeCaller("org-a").updateSettings({
+      standardAtgarder: [{
+        id: "noll", description: "Åtgärd utan tid", minutes: 0, kind: "ARBETE",
+        stage: "ANY", paymentMethods: [], billable: true, active: true,
+      }],
+    })).rejects.toThrow();
+    expect(mockPrisma.organization.update).not.toHaveBeenCalled();
+  });
 });

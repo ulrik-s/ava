@@ -170,7 +170,11 @@ describe("SettingsPage", () => {
   it("visar fetcher-fel från updateSettings", () => {
     updateSettingsState.error = { message: "Något fel" };
     render(<SettingsPage />);
-    expect(screen.getByText(/Något fel/i)).toBeInTheDocument();
+    // getAllByText: mocken delar ut SAMMA mutation-state till varje
+    // `useMutation`-anrop, så alla sektioner som lyssnar på updateSettings visar
+    // felet samtidigt. I drift har de separata instanser och bara den som
+    // faktiskt misslyckades visar sitt fel.
+    expect(screen.getAllByText(/Något fel/i).length).toBeGreaterThan(0);
   });
 
   it("uppdaterar byråns namn-input och auto-sparar med nytt värde", async () => {
