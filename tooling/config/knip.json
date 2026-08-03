@@ -36,7 +36,8 @@
   "ignoreBinaries": [
     "dot",
     "tooling/scripts/generate-demo-manifest.ts",
-    "build.ts"
+    "build.ts",
+    "gh"
   ],
   "commitlint": {
     "config": ["tooling/config/commitlint.config.mjs"]
