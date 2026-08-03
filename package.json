@@ -103,7 +103,7 @@
     "@isomorphic-git/cors-proxy": "^3.0.1",
     "@playwright/test": "^1.60.0",
     "@tailwindcss/postcss": "^4",
-    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/jest-dom": "^7.0.0",
     "@testing-library/react": "^16.3.2",
     "@types/json-logic-js": "^2.0.8",
     "@types/node": "^26.1.2",
