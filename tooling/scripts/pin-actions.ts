@@ -19,8 +19,9 @@
  *     bun run pin:actions --check    # fäll om något är opinnat (CI-läge)
  *     bun run pin:actions --dry-run  # visa vad som skulle ändras
  *
- * Kräver `gh` inloggad (`gh auth status`). Slår upp taggar via
- * `gh api repos/<owner>/<repo>/commits/<ref>`, alltså inget extra beroende.
+ * Uppslaget görs via `gh api repos/<owner>/<repo>/commits/<ref>` när GitHub CLI
+ * finns inloggad, annars via `git ls-remote` — vilket fungerar överallt där git
+ * når github.com (t.ex. bakom en git-proxy där GitHub-API:et är blockerat).
  */
 
 import { spawnSync } from "node:child_process";
@@ -121,6 +122,25 @@ export function applyPins(text: string, resolved: ReadonlyMap<string, string>): 
   }).join("\n");
 }
 
+/**
+ * Plocka commit-SHA:n ur `git ls-remote`-utdata för en tagg.
+ *
+ * En ANNOTERAD tagg är ett eget objekt: `refs/tags/v3` pekar på tagg-objektet
+ * och `refs/tags/v3^{}` på commiten. Vi måste ta den PEELADE raden — annars
+ * pinnas actionen till ett tagg-objekt, vilket inte är en commit.
+ * En lightweight-tagg saknar `^{}`-rad och pekar direkt på commiten.
+ */
+export function shaFromLsRemote(stdout: string, tag: string): string | null {
+  let plain: string | null = null;
+  for (const line of stdout.split("\n")) {
+    const [sha, ref] = line.split(/\s+/);
+    if (!sha || !ref || !isSha(sha)) continue;
+    if (ref === `refs/tags/${tag}^{}`) return sha; // peelad commit vinner alltid
+    if (ref === `refs/tags/${tag}`) plain = sha;
+  }
+  return plain;
+}
+
 /** Referenser som ännu inte är SHA-pinnade — `--check` fäller på dessa. */
 export function unpinned(refs: readonly ActionRef[]): ActionRef[] {
   return refs.filter((r) => !isSha(r.ref));
@@ -151,26 +171,49 @@ async function yamlFilesIn(dir: string): Promise<string[]> {
   return out;
 }
 
+const GH_PROBE_URL = "https://github.com/actions/checkout";
+
+/** Finns GitHub CLI inloggad? Styr vilken uppslagsväg som används. */
+function hasGh(): boolean {
+  return spawnSync("gh", ["auth", "status"], { encoding: "utf8" }).status === 0;
+}
+
+/** Kan git nå github.com? Fallbacken när `gh` saknas. */
+function hasGitRemoteAccess(): boolean {
+  return spawnSync("git", ["ls-remote", GH_PROBE_URL, "HEAD"], { encoding: "utf8" }).status === 0;
+}
+
 /**
- * `gh` måste finnas OCH vara inloggad innan vi rör en enda fil. Utan den
- * kontrollen blir felet "Executable not found in $PATH" mitt i körningen, vilket
- * inte säger vad man ska göra.
+ * NÅGON uppslagsväg måste finnas innan vi rör en enda fil, annars blir felet
+ * obegripligt mitt i körningen.
  */
-function assertGh(): void {
-  const res = spawnSync("gh", ["auth", "status"], { encoding: "utf8" });
-  if (res.status === 0) return;
+function assertLookupAvailable(useGh: boolean): void {
+  if (useGh || hasGitRemoteAccess()) return;
   throw new Error(
-    "kräver GitHub CLI inloggad. Installera `gh` och kör `gh auth login`.\n"
-    + "  (Uppslaget görs mot api.github.com — kör skriptet lokalt, inte i en sandlåda utan nätåtkomst.)",
+    "hittade ingen väg att slå upp taggar.\n"
+    + "  Antingen `gh` inloggad (`gh auth login`) eller git-åtkomst till github.com krävs.",
   );
 }
 
-/** Slå upp en tagg → commit-SHA via `gh`. Null när uppslaget misslyckas — ett
- *  enskilt fallerat uppslag får inte fälla hela körningen. */
-function resolveSha(repo: string, tag: string): string | null {
+/** Slå upp en tagg → commit-SHA. Null när uppslaget misslyckas — ett enskilt
+ *  fallerat uppslag får inte fälla hela körningen. */
+function resolveSha(repo: string, tag: string, useGh: boolean): string | null {
+  return useGh ? shaViaGh(repo, tag) : shaViaGit(repo, tag);
+}
+
+function shaViaGh(repo: string, tag: string): string | null {
   const res = spawnSync("gh", ["api", `repos/${repo}/commits/${tag}`, "--jq", ".sha"], { encoding: "utf8" });
   const sha = (res.stdout ?? "").trim();
   return res.status === 0 && isSha(sha) ? sha : null;
+}
+
+function shaViaGit(repo: string, tag: string): string | null {
+  const res = spawnSync(
+    "git", ["ls-remote", "--tags", `https://github.com/${repo}`, tag, `${tag}^{}`],
+    { encoding: "utf8" },
+  );
+  if (res.status !== 0) return null;
+  return shaFromLsRemote(res.stdout ?? "", tag);
 }
 
 /** Alla unika `repo@tagg`-par att slå upp, i stabil ordning. */
@@ -203,12 +246,12 @@ async function runCheck(files: readonly string[]): Promise<void> {
 }
 
 /** Slå upp alla taggar en gång och returnera `repo@tagg` → SHA. */
-async function resolveAll(files: readonly string[]): Promise<Map<string, string>> {
+async function resolveAll(files: readonly string[], useGh: boolean): Promise<Map<string, string>> {
   const refs: ActionRef[] = [];
   for (const file of files) refs.push(...actionRefsIn(await readFile(file, "utf8")));
   const resolved = new Map<string, string>();
   for (const { repo, tag } of lookupTargets(refs)) {
-    const sha = resolveSha(repo, tag);
+    const sha = resolveSha(repo, tag, useGh);
     if (sha) resolved.set(`${repo}@${tag}`, sha);
     else process.stderr.write(`pin:actions: kunde inte slå upp ${repo}@${tag} — lämnas orörd\n`);
   }
@@ -226,8 +269,10 @@ async function main(): Promise<void> {
   }
   if (opts.check) return runCheck(files);
 
-  assertGh();
-  const resolved = await resolveAll(files);
+  const useGh = hasGh();
+  assertLookupAvailable(useGh);
+  process.stdout.write(`pin:actions: slår upp taggar via ${useGh ? "gh api" : "git ls-remote"}\n`);
+  const resolved = await resolveAll(files, useGh);
   let changed = 0;
   for (const file of files) {
     const before = await readFile(file, "utf8");
