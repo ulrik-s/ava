@@ -6,10 +6,10 @@ name: Security
 # OBS: kräver att "CodeQL default setup" är AVSTÄNGT i repo-inställningarna
 # (annars krockar detta advanced-workflow med default-setupen).
 #
-# `dependency-review` (license-/CVE-grind på nya deps i en PR) är MEDVETET
-# borttaget tills repo:ts Dependency graph är aktiverad (Settings → Security →
-# "Dependency graph") — utan den svarar action:en hårt fel ("Dependency review
-# is not supported on this repository"). Återinförs i #915.
+# `dependency-review` (license-/CVE-grind på nya deps i en PR) kräver att repo:ts
+# Dependency graph är aktiverad (Settings → Security → "Dependency graph") —
+# utan den svarar action:en hårt fel ("Dependency review is not supported on this
+# repository"). Den är påslagen sedan #915.
 
 on:
   push:
@@ -46,3 +46,23 @@ jobs:
         uses: github/codeql-action/analyze@d1ba80a13dd99fba24a470575428917156a28b43 # v4
         with:
           category: "/language:javascript-typescript"
+
+  # ── Dependency review (license-/CVE-grind på nya beroenden i en PR) ────────
+  # Bara på PR: action:en jämför basens beroendegraf med PR:ens och fäller på
+  # nya sårbarheter eller förbjudna licenser. Kräver Dependency graph (#915).
+  dependency-review:
+    name: Dependency review
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Granska nya beroenden
+        uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4
+        with:
+          fail-on-severity: moderate
+          # Copyleft-licenser som inte är förenliga med en sluten byrå-produkt.
+          deny-licenses: GPL-2.0, GPL-3.0, AGPL-3.0
