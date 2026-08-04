@@ -1,0 +1,115 @@
+name: Dependabot lockfile
+
+# Dependabot-PR:er är annars ALLTID röda (#929), av två oberoende skäl:
+#
+#  1. Dependabot uppdaterar `package.json` men inte `bun.lock`. Eftersom
+#     `bun install --frozen-lockfile` körs FÖRST i varje jobb (bun-setup) fäller
+#     det hela matrisen — även "Commit messages", som aldrig når commitlint.
+#     Gäller båda lockfilerna: roten och `helper-ui/`.
+#  2. Dependabot skriver ibland versalt "Bump", vilket fäller commitlints
+#     `subject-case`.
+#
+# Den här workflowen åtgärdar båda på PR:en, utan att mjuka upp någon grind:
+# `--frozen-lockfile` står kvar i CI och commitlint är fortsatt skarp.
+#
+# ── Varför `pull_request_target` ───────────────────────────────────────────────
+# Workflow-körningar som TRIGGAS AV Dependabot får en LÄS-token, oavsett repo-
+# inställning. `pull_request`/`push` kan därför inte committa. `pull_request_target`
+# kör i basens kontext och får en skrivbar token.
+#
+# Det är samtidigt en känd säkerhetsfälla: vi checkar ut PR-huvudet, alltså kod
+# vi inte granskat, i ett jobb som HAR skrivrättighet. Motmedlen:
+#
+#   • `--ignore-scripts` — ett uppdaterat beroende får ALDRIG köra sina
+#     lifecycle-skript här. Det är den enda vägen ett illasinnat paket skulle
+#     kunna nå token:en, och lockfilen blir densamma utan dem.
+#   • Vi kör inget annat ur checkouten — ingen build, inga tester, inga skript
+#     ur `package.json`.
+#   • `github.actor == 'dependabot[bot]'` — gäller bara Dependabots egna PR:er.
+#   • Commiten VÄGRAS om något annat än lockfilerna ändrats.
+#   • Skrivrättigheten ligger bara på det här jobbet, inte på workflowen.
+
+on:
+  pull_request_target:
+    paths:
+      - "package.json"
+      - "helper-ui/package.json"
+      - ".github/workflows/**"
+      - ".github/actions/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependabot-lockfile-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    name: Synka lockfiler + commit-subject
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # committa tillbaka till PR-branchen — enda skrivrättigheten
+    steps:
+      - name: Checka ut PR-huvudet
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          # Vi amendar den enda commiten → behöver dess förälder.
+          fetch-depth: 2
+
+      - uses: ./.github/actions/bun-setup
+        with:
+          install: "false" # frozen install skulle fälla här — det är hela poängen
+
+      - name: Regenerera lockfilerna
+        # --ignore-scripts: kör ALDRIG uppdaterade beroendens lifecycle-skript i
+        # ett jobb med skrivtoken. Lockfilen blir identisk utan dem.
+        run: |
+          bun install --ignore-scripts
+          if [ -f helper-ui/package.json ]; then
+            (cd helper-ui && bun install --ignore-scripts)
+          fi
+
+      - name: Vägra om något annat än lockfilerna ändrats
+        run: |
+          changed=$(git diff --name-only)
+          echo "Ändrade filer:"; echo "${changed:-(inga)}"
+          unexpected=$(echo "$changed" | grep -vE '^(bun\.lock|helper-ui/bun\.lock)?$' || true)
+          if [ -n "$unexpected" ]; then
+            echo "::error::bun install ändrade mer än lockfilerna — committar inget:"
+            echo "$unexpected"
+            exit 1
+          fi
+
+      - name: Committa lockfiler + normaliserat subject
+        env:
+          GH_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+          subject=$(git log -1 --pretty=%s)
+          normalized=$(bun tooling/scripts/normalize-commit-subject.ts "$subject")
+          lock_changed=$(git diff --name-only -- bun.lock helper-ui/bun.lock)
+
+          if [ -z "$lock_changed" ] && [ "$subject" = "$normalized" ]; then
+            echo "Inget att göra: lockfilerna är i synk och subject:et är redan giltigt."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Lägg till EXAKT de lockfiler som ändrats. `git add` med en sökväg som
+          # inte finns (helper-ui kan saknas) fäller annars steget — och ett
+          # svalt fel här ger en commit UTAN lockfilen, vilket i sin tur bryter
+          # no-op-vägen nedan och gör att workflowen force-pushar i en loop.
+          git diff --name-only -z -- bun.lock helper-ui/bun.lock | xargs -0 -r git add --
+
+          # Amend + force-push: Dependabots PR har EN commit, och vi vill inte
+          # lägga en städ-commit ovanpå varje bump. Dependabot slutar rebasa en
+          # branch som ändrats av någon annan — `@dependabot rebase` återskapar.
+          body=$(git log -1 --pretty=%b)
+          printf '%s\n\n%s' "$normalized" "$body" | git commit --amend -F -
+          git push --force-with-lease origin "HEAD:$GH_HEAD_REF"
+          echo "Pushade: subject='$normalized', lockfiler='${lock_changed:-oförändrade}'"
