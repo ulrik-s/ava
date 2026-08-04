@@ -188,6 +188,18 @@ describe("shaFromLsRemote", () => {
     expect(shaFromLsRemote(out, "v4")).toBeNull();
   });
 
+  it("BRANCH-ref löses också — en del actions publicerar majorn som branch", () => {
+    // actions/dependency-review-action@v4 är en branch, ingen tagg. `gh api
+    // repos/x/commits/v4` löser den, så git-vägen måste göra det också.
+    const out = `${SHA}\trefs/heads/v4\n`;
+    expect(shaFromLsRemote(out, "v4")).toBe(SHA);
+  });
+
+  it("tagg vinner över branch med samma namn — taggen är den avsedda utgåvan", () => {
+    const out = [`${SHA2}\trefs/heads/v4`, `${SHA}\trefs/tags/v4`, ""].join("\n");
+    expect(shaFromLsRemote(out, "v4")).toBe(SHA);
+  });
+
   it("tom eller skräpig utdata ger null i stället för en gissning", () => {
     expect(shaFromLsRemote("", "v7")).toBeNull();
     expect(shaFromLsRemote("fatal: repository not found\n", "v7")).toBeNull();

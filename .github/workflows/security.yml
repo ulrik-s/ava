@@ -6,10 +6,13 @@ name: Security
 # OBS: kräver att "CodeQL default setup" är AVSTÄNGT i repo-inställningarna
 # (annars krockar detta advanced-workflow med default-setupen).
 #
-# `dependency-review` (license-/CVE-grind på nya deps i en PR) är MEDVETET
-# borttaget tills repo:ts Dependency graph är aktiverad (Settings → Security →
-# "Dependency graph") — utan den svarar action:en hårt fel ("Dependency review
-# is not supported on this repository"). Återinförs i #915.
+# `dependency-review` (GitHubs license-/CVE-grind på nya deps i en PR) är INTE
+# möjlig här: API:et kräver GitHub Advanced Security på privata repon, och svarar
+# annars "Dependency review is not supported on this repository" även med
+# Dependency graph påslagen (verifierat i #915/PR #964).
+#
+# `bun audit` ger CVE-täckningen utan GHAS och mot samma beroendeträd som vi
+# faktiskt installerar. Licensgrinden (GPL/AGPL) saknar substitut — se #915.
 
 on:
   push:
@@ -46,3 +49,23 @@ jobs:
         uses: github/codeql-action/analyze@d1ba80a13dd99fba24a470575428917156a28b43 # v4
         with:
           category: "/language:javascript-typescript"
+
+  # ── Sårbara beroenden (CVE-grind) ─────────────────────────────────────────
+  # `bun audit` mot samma beroendeträd CI installerar. RATCHET (docs/quality.md):
+  # nivån ligger strax under dagens siffra och dras BARA åt.
+  #
+  # 2026-08-04: 18 kända sårbarheter (14 high, 4 moderate, 0 critical) → nivån
+  # `critical` är grön i dag och fäller på varje NY critical. Att arbeta ner de
+  # 18 och sedan skärpa till `high` → `moderate` spåras i #966.
+  audit:
+    name: Sårbara beroenden (bun audit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/bun-setup
+      - name: bun audit
+        run: bun audit --audit-level=critical
+      - name: Full rapport (informativ, fäller inte)
+        if: always()
+        run: bun audit || true

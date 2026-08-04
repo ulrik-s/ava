@@ -123,22 +123,30 @@ export function applyPins(text: string, resolved: ReadonlyMap<string, string>): 
 }
 
 /**
- * Plocka commit-SHA:n ur `git ls-remote`-utdata för en tagg.
+ * Plocka commit-SHA:n ur `git ls-remote`-utdata för en ref.
  *
- * En ANNOTERAD tagg är ett eget objekt: `refs/tags/v3` pekar på tagg-objektet
- * och `refs/tags/v3^{}` på commiten. Vi måste ta den PEELADE raden — annars
- * pinnas actionen till ett tagg-objekt, vilket inte är en commit.
- * En lightweight-tagg saknar `^{}`-rad och pekar direkt på commiten.
+ * Tre fall, i prioritetsordning:
+ *
+ *  1. `refs/tags/<ref>^{}` — en ANNOTERAD tagg är ett eget objekt, där
+ *     `refs/tags/v3` pekar på tagg-objektet och `^{}` på commiten. Tas inte den
+ *     peelade raden pinnas actionen till ett tagg-objekt, inte en commit.
+ *  2. `refs/tags/<ref>` — lightweight-tagg, pekar direkt på commiten.
+ *  3. `refs/heads/<ref>` — en del actions publicerar sin major som en BRANCH i
+ *     stället för en tagg (`actions/dependency-review-action@v4`). `gh api
+ *     repos/x/commits/<ref>` löser båda, så git-vägen måste också göra det.
  */
-export function shaFromLsRemote(stdout: string, tag: string): string | null {
-  let plain: string | null = null;
+export function shaFromLsRemote(stdout: string, ref: string): string | null {
+  const byName = new Map<string, string>();
   for (const line of stdout.split("\n")) {
-    const [sha, ref] = line.split(/\s+/);
-    if (!sha || !ref || !isSha(sha)) continue;
-    if (ref === `refs/tags/${tag}^{}`) return sha; // peelad commit vinner alltid
-    if (ref === `refs/tags/${tag}`) plain = sha;
+    const [sha, name] = line.split(/\s+/);
+    if (sha && name && isSha(sha)) byName.set(name, sha);
   }
-  return plain;
+  // Prioritet: peelad tagg (commiten) → lightweight-tagg → branch-huvud.
+  // En tagg går före en branch med samma namn: taggen är den avsedda utgåvan.
+  return byName.get(`refs/tags/${ref}^{}`)
+    ?? byName.get(`refs/tags/${ref}`)
+    ?? byName.get(`refs/heads/${ref}`)
+    ?? null;
 }
 
 /** Referenser som ännu inte är SHA-pinnade — `--check` fäller på dessa. */
@@ -208,8 +216,9 @@ function shaViaGh(repo: string, tag: string): string | null {
 }
 
 function shaViaGit(repo: string, tag: string): string | null {
+  // --tags OCH --heads: majorversionen kan publiceras som antingen.
   const res = spawnSync(
-    "git", ["ls-remote", "--tags", `https://github.com/${repo}`, tag, `${tag}^{}`],
+    "git", ["ls-remote", "--tags", "--heads", `https://github.com/${repo}`, tag, `${tag}^{}`],
     { encoding: "utf8" },
   );
   if (res.status !== 0) return null;
