@@ -9,7 +9,7 @@
  */
 import { describe, it, expect } from "vitest-compat";
 import {
-  actionRefsIn, applyPins, isSha, lookupTag, parseUsesLine, unpinned,
+  actionRefsIn, applyPins, isSha, lookupTag, parseUsesLine, shaFromLsRemote, unpinned,
 } from "../../tooling/scripts/pin-actions";
 
 const SHA = "08c6903cd8c0fde910a37f88322edcfb5dd907a8";
@@ -157,5 +157,40 @@ describe("unpinned", () => {
       `      - uses: actions/cache@${SHA} # v4`,
     ].join("\n"));
     expect(unpinned(refs).map((r) => r.ref)).toEqual(["v7"]);
+  });
+});
+
+/**
+ * `git ls-remote`-vägen (fallback när `gh` saknas, t.ex. bakom en git-proxy där
+ * GitHub-API:et är blockerat). Den kritiska detaljen är PEELINGEN: en annoterad
+ * tagg är ett eget objekt, och pinnas actionen till tagg-objektets SHA i stället
+ * för commitens blir referensen fel. Två av repots actions har annoterade taggar
+ * (softprops/action-gh-release, github/codeql-action), så det är inte hypotetiskt.
+ */
+describe("shaFromLsRemote", () => {
+  it("lightweight-tagg → commiten direkt (ingen ^{}-rad finns)", () => {
+    const out = `${SHA}\trefs/tags/v7\n`;
+    expect(shaFromLsRemote(out, "v7")).toBe(SHA);
+  });
+
+  it("ANNOTERAD tagg → den PEELADE commiten, inte tagg-objektet", () => {
+    const out = [`${SHA}\trefs/tags/v3`, `${SHA2}\trefs/tags/v3^{}`, ""].join("\n");
+    expect(shaFromLsRemote(out, "v3")).toBe(SHA2);
+  });
+
+  it("peelad rad vinner även när den kommer FÖRST i utdatan", () => {
+    const out = [`${SHA2}\trefs/tags/v3^{}`, `${SHA}\trefs/tags/v3`, ""].join("\n");
+    expect(shaFromLsRemote(out, "v3")).toBe(SHA2);
+  });
+
+  it("matchar exakt tagg — v4 plockar inte v4.1 eller v40", () => {
+    const out = [`${SHA}\trefs/tags/v4.1`, `${SHA2}\trefs/tags/v40`, ""].join("\n");
+    expect(shaFromLsRemote(out, "v4")).toBeNull();
+  });
+
+  it("tom eller skräpig utdata ger null i stället för en gissning", () => {
+    expect(shaFromLsRemote("", "v7")).toBeNull();
+    expect(shaFromLsRemote("fatal: repository not found\n", "v7")).toBeNull();
+    expect(shaFromLsRemote("nothex\trefs/tags/v7\n", "v7")).toBeNull();
   });
 });

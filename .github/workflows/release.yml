@@ -31,7 +31,7 @@ jobs:
     name: Build web demo
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       # DRY toolchain (Node 24 + pinnad Bun + cachead frozen install), #909.
       - uses: ./.github/actions/bun-setup
       - name: Build demo (app + seeded data)
@@ -43,7 +43,7 @@ jobs:
         run: |
           cd out
           zip -r "../ava-web-demo_${{ github.ref_name }}.zip" .
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: web-demo
           path: ava-web-demo_*.zip
@@ -62,11 +62,11 @@ jobs:
     permissions:
       contents: write # skapa release + ladda upp artefakter
     steps:
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           path: artifacts
       - name: Publish release
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3
         with:
           generate_release_notes: true
           fail_on_unmatched_files: true
