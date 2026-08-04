@@ -24,14 +24,14 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       # DRY toolchain (Node 24 + pinnad Bun + cachead frozen install), #909.
       - uses: ./.github/actions/bun-setup
 
       - name: Setup Pages
         id: pages
-        uses: actions/configure-pages@v6
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6
 
       # Bygger appen som statisk export OCH seedar demo-data direkt i out/.
       # build-demo.sh kör:
@@ -96,7 +96,7 @@ jobs:
       # hämta användare. Bumpa INTE utan att verifiera att dolda filer följer med
       # (post-deploy-kontrollen nedan fäller numera i så fall).
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
         with:
           path: ./out
 
@@ -110,7 +110,7 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         # v4 hör till samma beprövade par som upload-pages-artifact@v3 (#933).
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4
 
       # Post-deploy-grind (#933): verifiera mot den LEVANDE sajten att de DOLDA
       # filerna faktiskt serveras. Bygg-sanity-checken ovan tittar bara i `out/`
