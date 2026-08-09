@@ -25,6 +25,7 @@ import {
   type PaymentPlanStatus,
   type UserRole,
 } from "@/lib/shared/schemas";
+import { buildSimpleDocx } from "./docx";
 
 export const ORG_ID = "firma-ab";
 
@@ -938,24 +939,11 @@ export async function generateDocumentBytes(doc: {
     return pdf.save();
   }
 
-  // DOCX via html-to-docx. Paketet skeppar inga typings (otypat 3rd-party,
-  // endast build-time). Vi typar destruktureringen explicit (ingen `any`, ingen
-  // cast) och låter ETT smalt @ts-expect-error svälja TS7016 på importen — en
-  // ambient `declare module` skuggas under moduleResolution:bundler och en
-  // tsconfig-`paths` skulle bryta runtime-resolven (bun följer paths).
-  type HtmlToDocx = (
-    html: string,
-    headerHtml?: string | null,
-    options?: { table?: { row?: { cantSplit?: boolean } } } & Record<string, unknown>,
-  ) => Promise<Buffer>;
-  // @ts-expect-error — html-to-docx saknar .d.ts; default-exporten är callable.
-  const { default: htmlToDocx }: { default: HtmlToDocx } = await import("html-to-docx");
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeXml(title)}</title></head>` +
-    `<body><h1>${escapeXml(title)}</h1><h2>${escapeXml(heading)}</h2><p>${escapeXml(body)}</p></body></html>`;
-  const buf = await htmlToDocx(html, undefined, { table: { row: { cantSplit: true } } });
-  // html-to-docx returnerar Buffer i Node. Buffer extends Uint8Array men
-  // TS-typerna är inte 1:1 — kopiera bytes över en ny Uint8Array.
-  return Uint8Array.from(buf);
+  // DOCX via egen minimal skrivare (#970). Ersatte `html-to-docx`, som drog in
+  // ~13 transitiva paket för att rendera tre element — däribland `image-size`
+  // med två high-CVE:er utan fix uppströms. Vår enda DOCX-väg är den här fasta
+  // mallen: inga bilder, ingen användar-HTML, så beroendet bar bara risk.
+  return buildSimpleDocx({ title, heading, body });
 }
 
 function wrapText(text: string, maxChars: number): string[] {
@@ -972,15 +960,6 @@ function wrapText(text: string, maxChars: number): string[] {
   }
   if (cur) lines.push(cur);
   return lines;
-}
-
-function escapeXml(s: string): string {
-  return s.replace(/[<>&"']/g, (c) => (
-    c === "<" ? "&lt;" :
-    c === ">" ? "&gt;" :
-    c === "&" ? "&amp;" :
-    c === '"' ? "&quot;" : "&apos;"
-  ));
 }
 
 /**
