@@ -52,11 +52,15 @@ jobs:
 
   # ── Sårbara beroenden (CVE-grind) ─────────────────────────────────────────
   # `bun audit` mot samma beroendeträd CI installerar. RATCHET (docs/quality.md):
-  # nivån ligger strax under dagens siffra och dras BARA åt.
+  # nivån dras BARA åt.
   #
-  # 2026-08-04: 18 kända sårbarheter (14 high, 4 moderate, 0 critical) → nivån
-  # `critical` är grön i dag och fäller på varje NY critical. Att arbeta ner de
-  # 18 och sedan skärpa till `high` → `moderate` spåras i #966.
+  # 2026-08-09 (#966): nivån skärptes `critical` → `moderate` sedan 27 av 30
+  # kända sårbarheter arbetats bort via `overrides` i package.json. Grinden fäller
+  # nu på varje ny moderate, high eller critical — i BÅDA arbetsytorna.
+  #
+  # Undantagen nedan är namngivna per advisory, inte en uppmjukad nivå. Var och en
+  # kräver en rad med skäl; utan skäl ska raden bort och sårbarheten åtgärdas.
+  # `helper-ui` har INGA undantag och gatas därför på `low`.
   audit:
     name: Sårbara beroenden (bun audit)
     runs-on: ubuntu-latest
@@ -64,8 +68,33 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/bun-setup
-      - name: bun audit
-        run: bun audit --audit-level=critical
+
+      # image-size (2× high): html-to-docx › image-size. INGEN fixad version
+      #   finns — senaste publicerade (2.0.2) ligger själv i advisory-intervallet
+      #   `<=2.0.2`, och html-to-docx@1.8.0 (senaste) kräver ^1.0.0. Går bara att
+      #   bli av med genom att byta ut html-to-docx → #970.
+      # esbuild (moderate): esbuild@0.18.20 låst av det AVSOMNADE
+      #   @esbuild-kit/core-utils (`~0.18.20`) via drizzle-kit, vars senaste
+      #   version fortfarande drar in det. Advisoryn gäller esbuilds
+      #   UTVECKLINGSSERVER, som vi aldrig startar; paketet är dessutom devDep.
+      - name: bun audit (roten)
+        run: |
+          bun audit --audit-level=moderate \
+            --ignore GHSA-w3rx-r6r6-pgpr \
+            --ignore GHSA-5p2g-fcmc-qvqq \
+            --ignore GHSA-67mh-4wv8-2f99
+
+      # helper-ui har egen lockfil och låg helt UTANFÖR grinden fram till #966 —
+      # den innehöll då 27 sårbarheter, varav en critical (node-tar). Nu ren.
+      - name: Installera helper-ui (frozen)
+        run: bun install --frozen-lockfile
+        working-directory: helper-ui
+      - name: bun audit (helper-ui)
+        run: bun audit --audit-level=low
+        working-directory: helper-ui
+
       - name: Full rapport (informativ, fäller inte)
         if: always()
-        run: bun audit || true
+        run: |
+          echo "── roten ──";     bun audit || true
+          echo "── helper-ui ──"; (cd helper-ui && bun audit) || true

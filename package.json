@@ -87,7 +87,7 @@
     "mammoth": "^1.12.0",
     "next": "16.2.12",
     "nodemailer": "^9.0.3",
-    "pdfjs-dist": "^6.0.227",
+    "pdfjs-dist": "^6.2.108",
     "pg-boss": "^12.19.1",
     "postgres": "^3.4.9",
     "react": "19.2.8",
@@ -132,6 +132,17 @@
   "trustedDependencies": [
     "unrs-resolver"
   ],
+  "//overrides": "CVE-tvingade versioner på TRANSITIVA beroenden (#966). Varje rad har en advisory bakom sig och det direkta beroendet kan inte bumpas dit själv. Ta bort en rad så fort uppströms hunnit ikapp — bun audit i Security-workflowen visar om den fortfarande behövs.",
+  "overrides": {
+    "brace-expansion": "^5.0.9",
+    "fast-uri": "^3.1.5",
+    "hono": "^4.13.1",
+    "js-yaml": "^4.3.1",
+    "nanoid": "^3.3.18",
+    "postcss": "^8.5.26",
+    "sharp": "^0.35.3",
+    "shell-quote": "^1.10.0"
+  },
   "patchedDependencies": {
     "lint-staged@17.0.7": "patches/lint-staged@17.0.7.patch"
   }
