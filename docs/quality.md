@@ -48,7 +48,8 @@ lever som JSON i ett git-repo (se [`architecture.md`](./architecture.md)).
 | Bundle-size-budget | gzip-summa av klient-chunks + ratchet (körs i `demo-build`) | `tooling/scripts/check-bundle-size.ts` |
 | Arkitektur (SOLID/lager) | dependency-cruiser | `tooling/config/dependency-cruiser.cjs` |
 | Död kod / oanvända exports | knip | `tooling/config/knip.json` |
-| Säkerhet (SAST) | CodeQL (JS/TS) — `dependency-review` väntar på Dependency graph (#915) | `.github/workflows/security.yml` |
+| Säkerhet (SAST) | CodeQL (JS/TS) — `dependency-review` kräver GHAS, ej möjlig (#915) | `.github/workflows/security.yml` |
+| Sårbara beroenden (CVE) | `bun audit` + ratchet — roten `moderate`, `helper-ui` `low` | `.github/workflows/security.yml`, `overrides` i båda `package.json` |
 | Beroende-uppdateringar | Dependabot (npm + github-actions) | `.github/dependabot.yml` |
 | Pre-commit | husky + lint-staged | `.husky/pre-commit`, `package.json` |
 | CI | GitHub Actions (DRY toolchain-composite) | `.github/workflows/`, `.github/actions/bun-setup/` |
@@ -175,6 +176,30 @@ strax över dagens siffra. Höj `BUDGET_KB` BARA när en ökning är medveten �
 lazy-loada annars tunga libs. CI kör `bun run size` direkt efter `build:demo`
 (återanvänder samma `out/`, ingen extra build).
 
+### Sårbara beroenden (`bun audit`)
+
+`security.yml` kör `bun audit` mot **båda** arbetsytorna — roten och
+`helper-ui`, som har egen lockfil. Nivån är en **ratchet**:
+
+| Arbetsyta | `--audit-level` | Undantag |
+|---|---|---|
+| roten | `moderate` | 3 namngivna advisories (se nedan) |
+| `helper-ui` | `low` | inga |
+
+Transitiva sårbarheter åtgärdas med **`overrides` i `package.json`**, inte genom
+att sänka nivån. Varje override är en rad med en advisory bakom sig och ska tas
+bort så snart det direkta beroendet självt pekar på en fixad version — `bun
+audit` säger till om den fortfarande behövs. Bun stöder **inte** nästlade
+overrides, så en override gäller hela trädet; när två major-linjer av samma
+paket är installerade tvingas båda till samma version, och det valet ska
+motiveras i kommentaren.
+
+Undantag skrivs som `--ignore <GHSA-id>` med ett skäl i workflowen — aldrig som
+en sänkt nivå. Ett undantag är legitimt bara när **ingen fixad version finns
+uppströms** eller när advisoryn bevisligen inte gäller vår användning. De tre
+nuvarande (två `image-size` utan fix alls, en `esbuild` som rör en dev-server vi
+aldrig startar) är dokumenterade i `security.yml`.
+
 ### Arkitektur (`bun run deps:check`)
 
 Hårda regler (severity `error`):
@@ -266,8 +291,9 @@ Jobben laddar upp sina rapporter som artefakter (coverage, jscpd, playwright-rep
 
 Övriga workflows: **`deploy-demo.yml`** (GH Pages på push till `main`),
 **`helper-ui-ci.yml`** (Electron-helperns logik + motor), **`security.yml`**
-(CodeQL/SAST på push/PR + veckovis schema; `dependency-review` väntar på att
-Dependency graph aktiveras, #915) och **`release.yml`**
+(CodeQL/SAST + `bun audit`-grinden på push/PR + veckovis schema;
+`dependency-review` kräver GitHub Advanced Security och är därför inte möjlig,
+#915) och **`release.yml`**
 (tag-triggad paket-release). Beroenden hålls uppdaterade av
 [`.github/dependabot.yml`](../.github/dependabot.yml) (npm root + helper-ui +
 github-actions).
