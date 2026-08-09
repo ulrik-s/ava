@@ -176,6 +176,25 @@ strax över dagens siffra. Höj `BUDGET_KB` BARA när en ökning är medveten �
 lazy-loada annars tunga libs. CI kör `bun run size` direkt efter `build:demo`
 (återanvänder samma `out/`, ingen extra build).
 
+### Demo-E2E är hermetiskt (#932)
+
+Demo-specarna (`demo-login`, `demo-invoice-document`, `demo-smoke`,
+`kebab-verify`, `matters-employee-filter`) kör mot en **lokalt serverad `out/`**
+som `playwright-demo.config.ts` startar själv. Live-demon nås bara på uttrycklig
+begäran (`AVA_DEMO_BASE_URL=https://…`).
+
+Att bara peka Playwright mot localhost räckte inte: appen HÄRLEDDE sin datakälla
+ur repo-strängen (`ulrik-s/ava` → `https://ulrik-s.github.io/ava`), så en lokalt
+serverad demo navigerade lokalt men hämtade data över nätet. Numera avgör
+`demoDataBaseUrl` basen utifrån var appen faktiskt kör.
+
+Vakten i [`test/e2e/_demo-test.ts`](../test/e2e/_demo-test.ts) gör antagandet
+testbart: **varje HTTP-förfrågan utanför testets egen origin blockeras och fäller
+testet**, med hela listan i felmeddelandet. Enda undantaget är AVA Helper-proben
+på loopback (`127.0.0.1:48761` / `localhost:48762`). Lägg nya demo-specar under
+`playwright-demo.config.ts` och importera `test` från `_demo-test` — inte från
+`@playwright/test`.
+
 ### Sårbara beroenden (`bun audit`)
 
 `security.yml` kör `bun audit` mot **båda** arbetsytorna — roten och
@@ -284,7 +303,7 @@ bun-versionen där, gäller alla workflows. `ci.yml` har `concurrency`
 5. **Server-first (deploy E2E)** — bygger server-first-binären, kör som docker-container mot Postgres, synkar push/pull + dokument-pipeline över HTTP.
 6. **E2E (OIDC login)** — browser-inloggning mot Keycloak via oauth2-proxy (Playwright).
 7. **Demo build** *(PR)* — statisk GH Pages-export + **bundle-size-ratchet** (`bun run size`).
-8. **Demo E2E (browser-smoke)** *(PR)* — serverar `out/` och verifierar att demon LADDAR (inte bara bygger).
+8. **Demo E2E (browser-smoke)** *(PR)* — serverar `out/` och verifierar att demon LADDAR (inte bara bygger). Hermetiskt: specarna blockerar varje förfrågan utanför sin egen origin (#932), så jobbet kan inte längre bli rött för att GH Pages ligger nere.
 9. **Keep-both konflikt-E2E** *(PR)* — 2-användar-konflikt mot full self-hosted-stack.
 
 Jobben laddar upp sina rapporter som artefakter (coverage, jscpd, playwright-report).

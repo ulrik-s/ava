@@ -6,23 +6,16 @@
  * hela stacken: user.list fyller dropdown:en + valet filtrerar listan
  * (matter.list där timeEntries.some.userId).
  *
- * Kör mot live GH Pages (default) eller lokalt demo-bygge:
- *   AVA_DEMO_BASE_URL=http://localhost:8099/ava npx playwright test matters-employee-filter
+ * Kör mot lokalt serverad `out/` (default) eller mot live GH Pages:
+ *   AVA_DEMO_BASE_URL=https://ulrik-s.github.io/ava npx playwright test matters-employee-filter
  */
 
-import { test, expect } from "@playwright/test";
-
-const BASE = process.env.AVA_DEMO_BASE_URL ?? "https://ulrik-s.github.io/ava";
-const isLocal = /localhost|127\.0\.0\.1/.test(BASE);
+import { DEMO_BASE_URL as BASE, seedDemoLogin, test, expect } from "./_demo-test";
 
 test.beforeEach(async ({ page }) => {
-  if (!isLocal) return;
-  await page.addInitScript((origin) => {
-    localStorage.setItem("ava.firma", JSON.stringify({
-      tier: "demo", repo: origin, token: "",
-      organizationId: "demo-firma-ab", authorName: "AVA Demo", authorEmail: "demo@ava.local",
-    }));
-  }, BASE);
+  // localhost defaultar till self-hosted (→ 401) → tvinga demo. `repo: ""` ger
+  // same-origin både lokalt och mot live (#932).
+  await seedDemoLogin(page, BASE);
 });
 
 test("medarbetar-dropdown fylls och filtrerar ärendelistan", async ({ page }) => {

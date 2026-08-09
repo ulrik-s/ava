@@ -19,6 +19,7 @@
  */
 
 import type { ModalState } from "@/components/documents/external-edit-modal";
+import { demoDataBaseUrl } from "@/lib/client/demo/demo-data-base";
 import { isDemoTier } from "@/lib/client/firma/firma-config";
 import { openViaHelper } from "@/lib/client/helper/use-helper";
 import type { HelperOpenRequest } from "@/lib/shared/helper/protocol";
@@ -87,24 +88,26 @@ function helperTrpcUrl(): string {
   return new URL("/api/trpc", window.location.origin).toString();
 }
 
+/**
+ * Bas-URL för demons dokument. Delad med `openDocument` via `demoDataBaseUrl`
+ * (#932) — här stod förr en tredje kopia av github.io-konstruktionen, som
+ * skickade helpern ut mot LIVE-demon även när `out/` serverades lokalt.
+ */
+function demoBase(): string {
+  return demoDataBaseUrl(
+    process.env.NEXT_PUBLIC_DEMO_REPO || process.env.NEXT_PUBLIC_DEFAULT_DEMO_REPO || DEFAULT_DEMO_REPO_FALLBACK,
+  );
+}
+
 function demoUrl(doc: Doc): string {
-  const repo = process.env.NEXT_PUBLIC_DEMO_REPO || process.env.NEXT_PUBLIC_DEFAULT_DEMO_REPO || DEFAULT_DEMO_REPO_FALLBACK;
-  const m = repo.match(/^([^/\s]+)\/([^/\s]+)$/);
-  const base = m ? `https://${m[1]}.github.io/${m[2]}` : repo.replace(/\/+$/, "");
-  return `${base}/${doc.storagePath}`;
+  return `${demoBase()}/${doc.storagePath}`;
 }
 
 export async function runExternalEdit(doc: Doc): Promise<ModalState> {
   const { openInFinder } = await import("@/lib/client/fsa/open-in-finder");
   const { getExternalEditTracker } = await import("@/lib/client/fsa/external-edit-tracker");
 
-  const fallbackBase = isDemoTier()
-    ? (() => {
-        const repo = process.env.NEXT_PUBLIC_DEMO_REPO || process.env.NEXT_PUBLIC_DEFAULT_DEMO_REPO || DEFAULT_DEMO_REPO_FALLBACK;
-        const m = repo.match(/^([^/\s]+)\/([^/\s]+)$/);
-        return m ? `https://${m[1]}.github.io/${m[2]}` : repo;
-      })()
-    : undefined;
+  const fallbackBase = isDemoTier() ? demoBase() : undefined;
 
   const r = await openInFinder(doc.storagePath, omitUndefined({ downloadFallbackBase: fallbackBase }));
   if (r.kind === "unsupported") {

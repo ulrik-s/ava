@@ -75,6 +75,23 @@ describe("firma-config", () => {
       expect(cfg.repo).toBe("http://localhost:8080/git/firma.git");
     });
 
+    it("lagrad tier=demo på LOCALHOST ärver demo-repot — inte git-URL:en (#932)", () => {
+      // Regressionsvakt: förr styrde HOSTNAMNET fallbacken, så en demo-config
+      // med tomt repo fick `http://localhost:8080/git/firma.git`. Demo-laddarna
+      // hämtade då `.ava/meta.json` därifrån — en URL utan mening i demo-läge,
+      // vilket bl.a. gjorde en lokalt serverad `out/` omöjlig att smoke-testa.
+      localStorage.setItem(KEY, JSON.stringify({ tier: "demo", repo: "" }));
+      const cfg = loadFirmaConfig();
+      expect(cfg.tier).toBe("demo");
+      expect(cfg.repo).toBe("ulrik-s/ava-demo");
+    });
+
+    it("lagrad tier=self-hosted på en PUBLIK domän ärver git-defaulten", () => {
+      // Spegelvänt fall — tiern, inte hosten, ska avgöra vilken default som ärvs.
+      localStorage.setItem(KEY, JSON.stringify({ tier: "self-hosted", repo: "" }));
+      expect(loadFirmaConfig().repo).toBe("http://localhost:8080/git/firma.git");
+    });
+
     it("ignorerar korrupt JSON och returnerar host-default", () => {
       localStorage.setItem(KEY, "{kaos");
       const cfg = loadFirmaConfig();

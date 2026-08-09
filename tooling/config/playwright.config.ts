@@ -13,10 +13,10 @@ const projectRoot = path.resolve(__dirname, "..", "..");
  */
 export default defineConfig({
   testDir: path.join(projectRoot, "test/e2e"),
-  // demo-invoice-document.spec.ts körs mot den deployade demon via
-  // playwright-demo.config.ts (ingen dev-server) — uteslut den här så
-  // `bun run e2e` inte kör den mot :3000. (demo-smoke.spec.ts lämnas orörd.)
-  testIgnore: /demo-invoice-document\.spec\.ts$/,
+  // Demo-specarna kräver en serverad `out/` och körs via
+  // playwright-demo.config.ts, som startar `serve-demo-static.ts` själv.
+  // Uteslut dem här så `bun run e2e` inte kör dem mot dev-servern på :3000.
+  testIgnore: /(demo-invoice-document|demo-login|demo-smoke|kebab-verify|matters-employee-filter)\.spec\.ts$/,
   timeout: 30_000,
   expect: { timeout: 5_000 },
   fullyParallel: false, // delar DB; håll det sekventiellt tills tester är isolerade

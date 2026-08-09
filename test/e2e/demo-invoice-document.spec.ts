@@ -11,11 +11,17 @@
  * React #418 på köpet. Testet failar om man navigeras till /matters eller om
  * #418 dyker upp.
  *
- * Kör mot live-demon (default) eller en lokalt serverad out/:
- *   bun run e2e:demo
- *   AVA_DEMO_BASE_URL=http://localhost:8080/ava bun run e2e:demo
+ * Kör mot en lokalt serverad `out/` (default — configen startar servern) eller
+ * mot den deployade demon:
+ *   bun run build:demo && bun run e2e:demo
+ *   AVA_DEMO_BASE_URL=https://ulrik-s.github.io/ava bun run e2e:demo
+ *
+ * `test` kommer från `_demo-test` → varje förfrågan utanför testets egen origin
+ * blockeras och fäller testet (#932).
  */
-import { test, expect, type ConsoleMessage } from "@playwright/test";
+import { type ConsoleMessage } from "@playwright/test";
+
+import { DEMO_BASE_URL, seedDemoConfig, test, expect } from "./_demo-test";
 
 // Seed-identiteter (ur .ava/meta.json). "Logga in som Anna" = seedad config.
 const ANNA = "e1c7d494-c148-5998-b717-df386937d5a1";
@@ -23,18 +29,13 @@ const ORG = "83f68f9a-5f27-5199-b54b-e4b2fa380e14";
 const MATTER = "92d63776-c955-54dc-8430-3573bed7829b"; // Brottmål — ekobrott Carlsson
 
 test("fakturadokument öppnas i ny flik — dirigeras INTE in i ärendet (+ ingen #418)", async ({ page, context, baseURL }) => {
-  const base = baseURL ?? "https://ulrik-s.github.io/ava";
+  const base = (baseURL ?? DEMO_BASE_URL).replace(/\/+$/, "");
 
   // "Logga in som Anna Advokat" — seeda demo-config (samma som /login skriver).
-  await context.addInitScript(([anna, org]) => {
-    try {
-      localStorage.setItem("ava.firma", JSON.stringify({
-        tier: "demo", repo: "ulrik-s/ava", token: "",
-        principalId: anna, organizationId: org,
-        authorName: "Anna Advokat", authorEmail: "user@ava.demo",
-      }));
-    } catch { /* ignore */ }
-  }, [ANNA, ORG]);
+  await seedDemoConfig(context, {
+    principalId: ANNA, organizationId: ORG,
+    authorName: "Anna Advokat", authorEmail: "user@ava.demo",
+  });
 
   const hydrationErrors: string[] = [];
   page.on("console", (m: ConsoleMessage) => {
@@ -69,15 +70,20 @@ test("fakturadokument öppnas i ny flik — dirigeras INTE in i ärendet (+ inge
   const survivedNav = await page.evaluate(() => (window as unknown as { __avaSpa?: string }).__avaSpa);
   expect(survivedNav, "navigering till fakturan ska vara soft (ingen sidomladdning)").toBe("alive");
 
-  // Fakturadokument-panelen: dokumentnamnet "Faktura ….pdf". Lokalisera via TEXT
+  // Fakturadokument-panelen: dokumentnamnet "Faktura ….html". Lokalisera via TEXT
   // så det fångar både den BUGGIGA varianten (en <a>-länk till /matters) och den
   // FIXADE (en <button> som öppnar dokumentet).
-  const docEl = page.getByText(/Faktura .*\.pdf/i).first();
+  //
+  // Filändelsen är `.html` sedan #937/#939 (en enda fakturarenderare). Att testet
+  // fortfarande letade efter `.pdf` MÄRKTES INTE, eftersom det kördes mot den
+  // DEPLOYADE demon — där låg en äldre build vars fakturor var PDF:er. Grönt mot
+  // gammal data, fel mot koden i repot: precis det #932 handlar om.
+  const docEl = page.getByText(/Faktura .*\.html/i).first();
   await expect(docEl).toBeVisible({ timeout: 15_000 });
 
   const urlBeforeClick = page.url();
 
-  // Klick ska öppna PDF:en i NY FLIK (popup) — inte navigera huvudsidan in i
+  // Klick ska öppna dokumentet i NY FLIK (popup) — inte navigera huvudsidan in i
   // ärendet. (Buggen: namnet var en länk till /matters → hård-nav dit.)
   const popupPromise = context.waitForEvent("page", { timeout: 8000 }).catch(() => null);
   await docEl.click();
@@ -87,7 +93,7 @@ test("fakturadokument öppnas i ny flik — dirigeras INTE in i ärendet (+ inge
   // 1) Huvudsidan ska INTE ha navigerat in i ärendet.
   expect(page.url(), "huvudsidan ska stanna på fakturasidan, inte gå till /matters").not.toMatch(/\/matters\//);
   expect(page.url()).toBe(urlBeforeClick);
-  // 2) En ny flik (PDF) ska ha öppnats.
+  // 2) En ny flik (dokumentet) ska ha öppnats.
   expect(popup, "dokumentet ska öppnas i en ny flik").not.toBeNull();
   // 3) Ingen hydrerings-#418.
   expect(hydrationErrors, `React #418 / hydrerings-fel: ${hydrationErrors.join(" | ")}`).toEqual([]);
