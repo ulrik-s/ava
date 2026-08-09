@@ -223,6 +223,12 @@ jobs:
   # inte på platshållaren). Det tyngre faktura-flödet (demo-invoice-document)
   # körs i `test:all` lokalt — här hålls CI-gaten snabb + hermetisk. (Kör på PR;
   # INTE required check — ingen branch-protection-ändring.)
+  #
+  # "Hermetisk" var länge bara ett påstående (#932): `out/` serverades lokalt,
+  # men APPEN hämtade sin data från live-demon på GH Pages, så jobbet blev rött
+  # när Pages låg nere — med ett fel som såg ut som en UI-regression. Nu härleds
+  # datakällan ur var appen kör (`demoDataBaseUrl`), och specarna blockerar +
+  # rapporterar varje förfrågan utanför den egna originen.
   demo-e2e:
     name: Demo E2E (browser-smoke)
     runs-on: ubuntu-latest
@@ -233,16 +239,13 @@ jobs:
       - uses: ./.github/actions/bun-setup
       - run: bun run build:demo
       - run: bun run e2e:install
-      - name: Servera out/ + kör demo render-smoke
-        run: |
-          bun tooling/scripts/serve-demo-static.ts &
-          for i in $(seq 1 30); do
-            curl -sf http://localhost:8799/ava/login/ >/dev/null && break
-            sleep 1
-          done
-          AVA_DEMO_BASE_URL=http://localhost:8799/ava \
-            npx playwright test test/e2e/demo-login.spec.ts \
-            --config tooling/config/playwright-demo.config.ts
+      - name: Demo render-smoke mot lokalt serverad out/
+        # Ingen `AVA_DEMO_BASE_URL` och ingen egen server-start längre (#932):
+        # playwright-demo.config.ts defaultar till localhost och startar
+        # `serve-demo-static.ts` själv (`webServer`), så den lokala körningen och
+        # CI gör exakt samma sak. Specarna bär dessutom en hermeticitets-vakt —
+        # varje förfrågan utanför den egna originen fäller testet.
+        run: npx playwright test test/e2e/demo-login.spec.ts --config tooling/config/playwright-demo.config.ts
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7

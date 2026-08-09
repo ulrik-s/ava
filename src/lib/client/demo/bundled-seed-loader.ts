@@ -13,7 +13,8 @@
  */
 
 import { type DemoSource, prebakeJoins } from "@/lib/shared/demo-source";
-import { resolveGhPagesUrl } from "@/lib/shared/gh-pages-url";
+
+import { demoDataBaseUrl } from "./demo-data-base";
 
 export const DEMO_SEED_FILE = "demo-seed.json";
 
@@ -27,7 +28,7 @@ export interface BundledSeedLoaderOpts {
 /** Ladda den bundlade `demo-seed.json` → `DemoSource`. */
 export async function loadBundledSeed(repo: string, opts: BundledSeedLoaderOpts = {}): Promise<DemoSource> {
   const fetchFn = opts.fetchFn ?? globalThis.fetch.bind(globalThis);
-  const baseUrl = opts.baseUrl ?? resolveGhPagesUrl(repo);
+  const baseUrl = opts.baseUrl ?? demoDataBaseUrl(repo);
   const url = `${baseUrl}/${DEMO_SEED_FILE}`;
   const res = await fetchFn(url, { method: "GET", cache: "no-store" });
   if (!res.ok) {

@@ -1,18 +1,27 @@
 /**
- * Smoke-tester mot demo-bygget på GitHub Pages. Verifierar att alla
- * sidor i sidopanelen returnerar 200 + renderar utan render-fel,
- * istället för att 404:a eller krascha.
+ * Smoke-tester mot demo-bygget: alla sidor i sidopanelen ska svara 200 och
+ * rendera utan render-fel, i stället för att 404:a eller krascha.
  *
- * Kör mot live-demon (read-only check): `npx playwright test
- * test/e2e/demo-smoke.spec.ts`
+ * Kör mot en lokalt serverad `out/` (default):
+ *   bun run build:demo
+ *   bun tooling/scripts/serve-demo-static.ts &
+ *   npx playwright test test/e2e/demo-smoke.spec.ts
  *
- * För lokal kör först `bash scripts/build-demo.sh && cd out &&
- * python3 -m http.server 8765`, sen sätt BASE_URL=http://localhost:8765/ava
+ * …eller mot live-demon (read-only check), på uttrycklig begäran:
+ *   AVA_DEMO_BASE_URL=https://ulrik-s.github.io/ava npx playwright test test/e2e/demo-smoke.spec.ts
+ *
+ * Defaultet pekade förr på live-demon (#932): en "lokal" körning testade i
+ * själva verket det som redan låg publicerat, inte branchen man satt på.
  */
 
-import { test, expect } from "@playwright/test";
+import { DEMO_BASE_URL as BASE, seedDemoLogin, test, expect } from "./_demo-test";
 
-const BASE = process.env.AVA_DEMO_BASE_URL ?? "https://ulrik-s.github.io/ava";
+test.beforeEach(async ({ page }) => {
+  // Tvinga demo-tier (localhost defaultar self-hosted → 401) OCH logga in:
+  // sidorna bakom auth dirigerar annars till /login, och specen hade bara
+  // verifierat inloggningsskärmen om och om igen.
+  await seedDemoLogin(page, BASE);
+});
 
 const ROUTES = [
   { path: "/", expectText: /Startsida|AVA/i },

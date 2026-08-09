@@ -100,10 +100,13 @@ describe("getRepoPermissions", () => {
 });
 
 describe("detectAuthMode", () => {
-  it("ingen token + publika repo → anonymous", async () => {
-    fetchMock.mockResolvedValueOnce(ok({ name: "ava-demo" })); // GET repo
+  it("ingen token + GitHub-repo → anonymous UTAN nätverksanrop (#932)", async () => {
+    // Förr gjordes ett `GET /repos/:owner/:repo` här vars svar kastades bort
+    // (båda grenarna gav "anonymous"). Att räkna anropen är hela poängen: en
+    // ren `expect(m).toBe("anonymous")` passerade lika glatt med anropet kvar.
     const m: AuthMode = await detectAuthMode({ token: "", repoUrl: "ulrik-s/ava-demo" });
     expect(m).toBe("anonymous");
+    expect(fetchMock).not.toHaveBeenCalled();
   });
   it("token + push → identified-write", async () => {
     fetchMock.mockResolvedValueOnce(ok({ login: "anna", id: 1 })); // GET user

@@ -21,10 +21,10 @@
  */
 
 import { type DemoSource, prebakeJoins } from "@/lib/shared/demo-source";
-import { resolveGhPagesUrl } from "@/lib/shared/gh-pages-url";
 import { schemaVersionFromMetaJson } from "@/lib/shared/meta-json";
 import { assertRepoSchemaCompatible } from "@/lib/shared/schema-version";
 import { DEMO_META_PATH } from "../../../../tooling/demo-config";
+import { demoDataBaseUrl } from "./demo-data-base";
 import { pathToSourceKey } from "./demo-source-keys";
 
 export interface DemoSeedLoaderOpts {
@@ -219,7 +219,7 @@ function resolveOpts(repo: string, opts: DemoSeedLoaderOpts): ResolvedOpts {
   const maxRetries = opts.maxRetries ?? 4;
   const sleepFn = opts.sleepFn ?? defaultSleep;
   return {
-    baseUrl: opts.baseUrl ?? resolveGhPagesUrl(repo),
+    baseUrl: opts.baseUrl ?? demoDataBaseUrl(repo),
     concurrency: opts.concurrency ?? 12,
     maxRetries,
     retryFetch: makeRetryFetch(fetchFn, maxRetries, sleepFn),

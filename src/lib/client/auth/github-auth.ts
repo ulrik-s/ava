@@ -154,11 +154,13 @@ export async function detectAuthMode(args: DetectArgs): Promise<AuthMode> {
   const parsed = parseRepoUrl(args.repoUrl);
   if (!parsed) return detectSelfHostedMode(args.repoUrl, args.token);
 
-  if (!args.token) {
-    // Anonymt + GitHub-repo: bekräfta att det är publikt (kan läsas).
-    const perms = await getRepoPermissions("", parsed.owner, parsed.repo);
-    return perms?.canRead ? "anonymous" : "anonymous";
-  }
+  // Anonymt + GitHub-repo → alltid "anonymous". Här låg förr ett
+  // `getRepoPermissions("", …)`-anrop mot api.github.com vars resultat kastades
+  // bort: BÅDA grenarna i ternären returnerade "anonymous". Anropet kostade
+  // varje demo-besökare en onödig, oautentiserad GitHub-request (60/h per IP,
+  // och avslöjar vilket repo besökaren tittar på) — och gjorde demo-e2e:t
+  // nätverksberoende (#932). Returvärdet är oförändrat.
+  if (!args.token) return "anonymous";
 
   return detectGithubAuthedMode(args.token, parsed.owner, parsed.repo);
 }

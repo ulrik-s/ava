@@ -13,6 +13,8 @@
  *   3. Annars: visa felmeddelande (filsystemet saknas, dokumentet finns ej).
  */
 
+import { demoDataBaseUrl } from "@/lib/client/demo/demo-data-base";
+
 export interface OpenDocumentDeps {
   doc: { id: string; storagePath?: string | null; fileName?: string };
   /** Demo-flagga från env. Bygg-tid: NEXT_PUBLIC_DEMO_BUILD === "1". */
@@ -55,10 +57,11 @@ export async function openDocument(deps: OpenDocumentDeps): Promise<"opened-gh-p
   }
 
   if (isDemo) {
-    const repo = demoRepo ?? "ulrik-s/ava-demo";
-    const m = repo.match(/^([^/\s]+)\/([^/\s]+)$/);
-    const base = m ? `https://${m[1]}.github.io/${m[2]}` : repo.replace(/\/+$/, "");
-    openUrl(`${base}/${storagePath}`);
+    // Datan (och därmed dokumenten) ligger bredvid appen — `demoDataBaseUrl`
+    // ger same-origin när så är fallet. Här stod förr en egen kopia av
+    // github.io-konstruktionen, vilket öppnade dokument mot LIVE-demon även när
+    // man körde en lokalt serverad `out/` (#932).
+    openUrl(`${demoDataBaseUrl(demoRepo ?? "")}/${storagePath}`);
     return "opened-gh-pages";
   }
 

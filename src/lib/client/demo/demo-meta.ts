@@ -9,9 +9,10 @@
  */
 import { z } from "zod";
 
-import { resolveGhPagesUrl } from "@/lib/shared/gh-pages-url";
 import { assertRepoSchemaCompatible } from "@/lib/shared/schema-version";
+
 import { DEMO_META_PATH } from "../../../../tooling/demo-config";
+import { demoDataBaseUrl } from "./demo-data-base";
 
 // Zod vid parsegränsen (#187): meta.json är extern nätverksdata — valideras
 // strikt här i stället för handrullade typeof-helpers. Felmeddelandena är
@@ -43,8 +44,7 @@ let cache: { url: string; data: DemoMeta } | null = null;
 
 /** Bygg URL till meta.json från firma-config:s repo (samma origin som datan). */
 export function demoMetaUrl(repo: string): string {
-  const base = resolveGhPagesUrl(repo).replace(/\/+$/, "");
-  return `${base}/${DEMO_META_PATH}`;
+  return `${demoDataBaseUrl(repo)}/${DEMO_META_PATH}`;
 }
 
 export async function loadDemoMeta(

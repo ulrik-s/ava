@@ -11,25 +11,20 @@
  *   2. Auto-table-layout lät namn-kolumnen växa → tabellen överflödade
  *      containern (fixat med table-fixed + break-words + kolumn-döljning).
  *
- * Kör mot live GH Pages (default) eller lokalt demo-bygge:
- *   AVA_DEMO_BASE_URL=http://localhost:8099/ava npx playwright test kebab-verify
- * Mot localhost måste demo-läge tvingas (localhost defaultar self-hosted).
+ * Kör mot lokalt serverad `out/` (default) eller mot live GH Pages:
+ *   bun run build:demo && bun tooling/scripts/serve-demo-static.ts &
+ *   npx playwright test kebab-verify --config tooling/config/playwright-demo.config.ts
+ *   AVA_DEMO_BASE_URL=https://ulrik-s.github.io/ava npx playwright test kebab-verify
  */
 
-import { test, expect, type Page } from "@playwright/test";
+import { type Page } from "@playwright/test";
 
-const BASE = process.env.AVA_DEMO_BASE_URL ?? "https://ulrik-s.github.io/ava";
-const isLocal = /localhost|127\.0\.0\.1/.test(BASE);
+import { DEMO_BASE_URL as BASE, seedDemoLogin, test, expect } from "./_demo-test";
 
 test.beforeEach(async ({ page }) => {
-  if (!isLocal) return;
-  // localhost defaultar till self-hosted (→ 401). Tvinga demo mot samma-origin.
-  await page.addInitScript((origin) => {
-    localStorage.setItem("ava.firma", JSON.stringify({
-      tier: "demo", repo: origin, token: "",
-      organizationId: "demo-firma-ab", authorName: "AVA Demo", authorEmail: "demo@ava.local",
-    }));
-  }, BASE);
+  // localhost defaultar till self-hosted (→ 401) → tvinga demo. Seedas även mot
+  // live: `repo: ""` ger same-origin i båda lägena, så vägen är densamma.
+  await seedDemoLogin(page, BASE);
 });
 
 async function gotoMatter(page: Page) {

@@ -30,6 +30,7 @@ import { GitBackendRuntime } from "@/lib/client/backend/git-backend-runtime";
 import type { OidcLoginOutcome, OidcClaims } from "@/lib/client/backend/oidc-principal";
 import { StaticContentStore } from "@/lib/client/backend/static-content-store";
 import { CapabilitiesProvider } from "@/lib/client/capabilities/use-capabilities";
+import { demoDataBaseUrl } from "@/lib/client/demo/demo-data-base";
 import { DemoModeProvider } from "@/lib/client/demo/demo-mode-context";
 import { loadFirmaConfig, patchFirmaConfig, type FirmaConfig } from "@/lib/client/firma/firma-config";
 import { SyncProviderRoot } from "@/lib/client/sync/sync-context";
@@ -38,7 +39,6 @@ import { buildGitPorts } from "@/lib/server/adapters/git-ports";
 import { GitAuthProvider } from "@/lib/server/auth/git-auth-provider";
 import type { IDataStore } from "@/lib/server/data-store/IDataStore";
 import type { CachingSyncDataStore } from "@/lib/server/data-store/in-memory/caching-sync-data-store";
-import { resolveGhPagesUrl } from "@/lib/shared/gh-pages-url";
 import { asId } from "@/lib/shared/schemas/ids";
 import { AppShell } from "./app-shell";
 import { AuthStatusBanner } from "./auth-status-banner";
@@ -103,7 +103,7 @@ function createDemoTrpcClient(dataStore: IDataStore, firmaConfig: FirmaConfig) {
   // `read → null` → seed-dokument gick aldrig att öppna).
   const ports = {
     ...buildGitPorts(dataStore),
-    content: new StaticContentStore(resolveGhPagesUrl(firmaConfig.repo)),
+    content: new StaticContentStore(demoDataBaseUrl(firmaConfig.repo)),
   };
   return trpc.createClient({
     links: [
@@ -144,8 +144,7 @@ interface BootstrapArgs {
 async function preloadDocs(firmaConfig: FirmaConfig, store: CachingSyncDataStore): Promise<void> {
   try {
     const { preloadDocumentContents } = await import("@/lib/client/demo/document-content-cache");
-    const { resolveGhPagesUrl } = await import("@/lib/shared/gh-pages-url");
-    const baseUrl = resolveGhPagesUrl(firmaConfig.repo);
+    const baseUrl = demoDataBaseUrl(firmaConfig.repo);
     const source = store.store.currentSource as { documents?: Array<{ id: string; fileName?: string; storagePath?: string; mimeType?: string }> };
     await preloadDocumentContents(source.documents ?? [], baseUrl);
   } catch (e) {

@@ -61,7 +61,7 @@ const STORAGE_KEY = "ava.firma";
  *   - Saknas variabeln → fall tillbaka på publika referensdemon
  *     `ulrik-s/ava-demo` för utvecklare som bygger lokalt utan att seeda.
  */
-const DEMO_REPO = process.env.NEXT_PUBLIC_DEMO_REPO || "ulrik-s/ava-demo";
+export const DEMO_REPO = process.env.NEXT_PUBLIC_DEMO_REPO || "ulrik-s/ava-demo";
 
 const DEMO_DEFAULT: FirmaConfig = {
   tier: "demo",
@@ -130,19 +130,34 @@ const storedFirmaConfigSchema = z.object({
   corsProxy: z.string().optional(),
 }).passthrough();
 
+/**
+ * Default som hör ihop med en LAGRAD tier — inte med hostnamnet.
+ *
+ * Skillnaden är inte akademisk (#932): på localhost ger `defaultConfigForHost`
+ * self-hosted, så en lagrad `tier: "demo"` med tomt `repo` ärvde den
+ * SJÄLVHOSTADE git-URL:en. Demo-laddarna försökte då hämta `.ava/meta.json`
+ * från `http://localhost:8080/git/firma.git/…` — en URL som varken finns eller
+ * betyder något i demo-läge. Tiern måste avgöra vilket repo som är default.
+ */
+function defaultForTier(tier: FirmaTier): FirmaConfig {
+  return tier === "demo" ? DEMO_DEFAULT : SELF_HOSTED_LOCALHOST_DEFAULT;
+}
+
 export function loadFirmaConfig(): FirmaConfig {
   if (typeof window === "undefined") return DEMO_DEFAULT;
-  const fallback = defaultConfigForHost(window.location.hostname);
+  const hostDefault = defaultConfigForHost(window.location.hostname);
   try {
     const parsed = loadFromStorage(STORAGE_KEY, storedFirmaConfigSchema, {});
+    // Lagrad tier vinner över hostens gissning; utan lagrad tier gäller hosten.
+    const fallback = parsed.tier ? defaultForTier(parsed.tier) : hostDefault;
     return {
       ...fallback,
       ...omitUndefined(parsed),
-      // Tomt repo → fall tillbaka till hostens default
+      // Tomt repo → fall tillbaka till den valda tierns default
       repo: parsed.repo || fallback.repo,
     };
   } catch {
-    return fallback;
+    return hostDefault;
   }
 }
 
