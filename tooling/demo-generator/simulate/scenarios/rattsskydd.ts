@@ -20,7 +20,7 @@ export function buildRattsskyddScenario(parties: Parties): SimEvent[] {
   ev.push(
     { kind: "doc", dayOffset: 5, template: "brevTillOmbud" },
     { kind: "time", dayOffset: 12, minutes: 120, description: "Skriftväxling och förhandlingsförberedelse" },
-    { kind: "expense", dayOffset: 14, amountOre: 90_000, description: "Ansökningsavgift tingsrätten" },
+    { kind: "expense", dayOffset: 14, amountOre: 90_000, description: "Ansökningsavgift tingsrätten", vatRate: 0, passThrough: true },
     { kind: "doc", dayOffset: 18, template: "brevFranOmbud" },
     { kind: "acconto", dayOffset: 30, clientShareBips: 2000 }, // 20 % självrisk
     { kind: "time", dayOffset: 45, minutes: 90, description: "Sammanträde och uppföljning" },

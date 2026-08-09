@@ -273,13 +273,18 @@ function summarySection(a: FakturaTemplateArgs, spec: InvoiceSpecification | nul
     return { summary: [{ label, rateLabel: "", hours: "", amount: fc(a.invoice.amount) }], summaryTotal: fc(a.invoice.amount) };
   }
   const summary = arvodeRateRows(spec, fc);
-  const hasExpenses = spec.expensesNetOre > 0 || spec.expensesVatOre > 0;
-  // Ordning (#925): momsfritt utlägg → momsraden (total moms) → utlägg inkl moms
+  // Ordning (#925): utlägg exkl moms → momsraden (total moms) → utlägg inkl moms
   // → summa (allt inkl moms). Momsraden är fakturans hela moms (arvode + utlägg),
   // så arvode-raderna (exkl moms) + utlägg exkl + moms = summan.
-  if (hasExpenses) summary.push({ label: "Utlägg exkl moms", rateLabel: "", hours: "", amount: fc(spec.expensesNetOre) });
+  //
+  // Äkta utlägg (#975) redovisas som EGEN rad: de är vidarefakturerade utan moms
+  // och ingår därför inte i momsunderlaget. Klienten ska kunna se skillnaden.
+  const passThroughOre = spec.expenseLines.filter((l) => l.passThrough).reduce((s, l) => s + l.grossOre, 0);
+  const chargedNetOre = spec.expensesNetOre - passThroughOre;
+  if (chargedNetOre > 0) summary.push({ label: "Utlägg exkl moms", rateLabel: "", hours: "", amount: fc(chargedNetOre) });
   summary.push({ label: "Moms", rateLabel: "", hours: "", amount: fc(spec.arvodeVatOre + spec.expensesVatOre) });
-  if (hasExpenses) summary.push({ label: "Utlägg inkl moms", rateLabel: "", hours: "", amount: fc(spec.expensesNetOre + spec.expensesVatOre) });
+  if (chargedNetOre > 0) summary.push({ label: "Utlägg inkl moms", rateLabel: "", hours: "", amount: fc(chargedNetOre + spec.expensesVatOre) });
+  if (passThroughOre > 0) summary.push({ label: "Äkta utlägg (utan moms)", rateLabel: "", hours: "", amount: fc(passThroughOre) });
   const summaOre = spec.arvodeNetOre + spec.arvodeVatOre + spec.expensesNetOre + spec.expensesVatOre;
   return { summary, summaryTotal: fc(summaOre) };
 }

@@ -42,10 +42,13 @@ export const expenseRouter = router({
         amount: z.number().min(1),
         description: z.string().min(1),
         billable: z.boolean().default(true),
-        /** Moms-sats i basis points (0/600/1200/2500). Default 25 %. */
+        /** Satsen BYRÅN betalade, i basis points (0/600/1200/2500). Default 25 %.
+         *  Räknas av innan utlägget debiteras vidare med 25 % (#975). */
         vatRate: z.number().int().nonnegative().max(10000).default(2500),
         /** True om `amount` är inkl moms. Default false — utlägg lagras netto (#782). */
         vatIncluded: z.boolean().default(false),
+        /** Äkta utlägg — faktura ställd till klienten → utan moms (#975). */
+        passThrough: z.boolean().default(false),
         // Valfria setup-fält (demo-generator/fixtures, ADR 0003).
         id: expenseIdSchema.optional(),
         userId: userIdSchema.optional(),
@@ -64,6 +67,7 @@ export const expenseRouter = router({
         billable: input.billable,
         vatRate: input.vatRate,
         vatIncluded: input.vatIncluded,
+        passThrough: input.passThrough,
         invoiceId: input.invoiceId ?? null,
         ...(input.createdAt ? { createdAt: new Date(input.createdAt) } : {}),
       }) satisfies Partial<Expense>);
@@ -79,6 +83,7 @@ export const expenseRouter = router({
         billable: z.boolean().optional(),
         vatRate: z.number().int().nonnegative().max(10000).optional(),
         vatIncluded: z.boolean().optional(),
+        passThrough: z.boolean().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -86,13 +91,14 @@ export const expenseRouter = router({
       // `list`) INNAN update. NOT_FOUND vid mismatch — läcker inte existens.
       const owned = await ctx.repos.expenses.getByIdInOrg(input.id, ctx.orgId);
       if (!owned) throw new TRPCError({ code: "NOT_FOUND" });
-      const { id, date, amount, description, billable, vatRate, vatIncluded } = input;
+      const { id, date, amount, description, billable, vatRate, vatIncluded, passThrough } = input;
       return ctx.repos.expenses.update(id, omitUndefined({
         amount,
         description,
         billable,
         vatRate,
         vatIncluded,
+        passThrough,
         ...(date ? { date: new Date(date) } : {}),
       }) satisfies Partial<Expense>);
     }),

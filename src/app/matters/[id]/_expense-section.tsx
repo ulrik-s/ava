@@ -6,6 +6,7 @@ import { Modal } from "@/components/ui/modal";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
+import { chargedVatOre, expenseNetOre } from "@/lib/shared/expense-vat";
 import type { ExpenseId, InvoiceId, MatterId } from "@/lib/shared/schemas/ids";
 import { splitVat, VAT_RATES, VAT_RATE_LABELS, type VatRate } from "@/lib/shared/vat";
 
@@ -20,7 +21,10 @@ interface ExpenseForm {
   amount: number;
   description: string;
   billable: boolean;
+  /** Satsen BYRÅN betalade — styr avräkningen, inte vad klienten debiteras (#975). */
   vatRate: VatRate;
+  /** Äkta utlägg: faktura ställd till klienten → vidarefaktureras utan moms. */
+  passThrough: boolean;
 }
 
 interface Expense {
@@ -32,6 +36,7 @@ interface Expense {
   user?: { name: string };
   vatRate?: number;
   vatIncluded?: boolean;
+  passThrough?: boolean;
   invoiceId?: InvoiceId | null;
   invoice?: { id: InvoiceId; invoiceNumber?: string | null } | null;
 }
@@ -43,6 +48,7 @@ function initialForm(): ExpenseForm {
     description: "",
     billable: true,
     vatRate: 2500,
+    passThrough: false,
   };
 }
 
@@ -55,6 +61,7 @@ function toForm(e: Expense): ExpenseForm {
     description: e.description,
     billable: e.billable,
     vatRate: (e.vatRate ?? 2500) as VatRate,
+    passThrough: e.passThrough ?? false,
   };
 }
 
@@ -65,6 +72,7 @@ function payloadOf(f: ExpenseForm): {
   billable: boolean;
   vatRate: VatRate;
   vatIncluded: boolean;
+  passThrough: boolean;
 } {
   // Advokaten matar in exkl. moms; utlägg lagras netto (#782) och AVA lägger
   // på momsen vid fakturering.
@@ -75,22 +83,29 @@ function payloadOf(f: ExpenseForm): {
     billable: f.billable,
     vatRate: f.vatRate,
     vatIncluded: false,
+    passThrough: f.passThrough,
   };
 }
 
 function computeTotals(expenses: Expense[]): { exclVat: number; vat: number; inclVat: number } {
   return expenses.reduce(
     (acc, e) => {
-      const r = splitVat({ amount: e.amount, vatRate: e.vatRate ?? 2500, vatIncluded: e.vatIncluded ?? true });
+      const r = vatOf(e);
       return { exclVat: acc.exclVat + r.exclVat, vat: acc.vat + r.vat, inclVat: acc.inclVat + r.inclVat };
     },
     { exclVat: 0, vat: 0, inclVat: 0 },
   );
 }
 
- 
-function vatOf(e: Expense) {
-  return splitVat({ amount: e.amount, vatRate: e.vatRate ?? 2500, vatIncluded: e.vatIncluded ?? true });
+/**
+ * Vad utlägget DEBITERAS med (#975) — inte vad byrån betalade. Listan visade förr
+ * byråns egen sats, vilket gjorde att summan i tabellen inte gick ihop med
+ * fakturan. Äkta utlägg vidarefaktureras utan moms.
+ */
+function vatOf(e: Expense): { exclVat: number; vat: number; inclVat: number } {
+  const exclVat = expenseNetOre({ amount: e.amount, vatRate: e.vatRate ?? 2500, vatIncluded: e.vatIncluded ?? true, passThrough: e.passThrough ?? false });
+  const vat = e.passThrough ? 0 : chargedVatOre(exclVat);
+  return { exclVat, vat, inclVat: exclVat + vat };
 }
 function invoiceLabel(e: Expense): string {
   return e.invoice?.invoiceNumber ?? (e.invoiceId ? "(faktura)" : "Ej fakturerad");
@@ -275,10 +290,23 @@ function ExpenseForm({ form, setForm, submitLabel, isPending, isTaxeArende, onSu
           {VAT_RATES.map((r) => <option key={r} value={r}>Moms: {VAT_RATE_LABELS[r]}</option>)}
         </select>
         <p className="mt-1 text-[11px] text-gray-400">
-          Ange beloppet exkl. moms — AVA lägger på momsen. Default 25 %; välj 0 % för momsfritt (t.ex. domstolsavgift).
+          Satsen <strong>du betalade</strong> — den räknas av innan utlägget debiteras vidare
+          med 25 % (NJA 2005 s. 606). Ange beloppet exkl. moms.
         </p>
       </div>
-      <VatPreview amount={form.amount} vatRate={form.vatRate} />
+      <VatPreview amount={form.amount} vatRate={form.vatRate} passThrough={form.passThrough} />
+      <label className="flex items-start gap-2 text-sm">
+        <input type="checkbox" checked={form.passThrough} className="mt-0.5"
+          onChange={(e) => setForm({ ...form, passThrough: e.target.checked })} />
+        <span>
+          Äkta utlägg
+          <span className="block text-[11px] text-gray-400">
+            Fakturan är ställd till klienten och du har bara förmedlat betalningen.
+            Vidarefaktureras då utan moms. Annars är utlägget ett kostnadselement i
+            uppdraget och bär 25 %.
+          </span>
+        </span>
+      </label>
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" checked={form.billable}
           onChange={(e) => setForm({ ...form, billable: e.target.checked })} />
@@ -298,13 +326,19 @@ function ExpenseForm({ form, setForm, submitLabel, isPending, isTaxeArende, onSu
   );
 }
 
-function VatPreview({ amount, vatRate }: { amount: number; vatRate: number }) {
+/**
+ * Vad KLIENTEN kommer att debiteras (#975) — inte vad byrån betalade. Ett utlägg
+ * med 6 % ingående moms debiteras vidare med 25 % på nettot, så förhandsvisningen
+ * måste visa den satsen; annars ser juristen ett belopp som inte hamnar på fakturan.
+ */
+function VatPreview({ amount, vatRate, passThrough }: { amount: number; vatRate: number; passThrough: boolean }) {
   if (!amount) return <span className="text-xs text-gray-400">Förhandsvisning</span>;
-  // Inmatat belopp är exkl. moms → räkna fram moms + inkl.
-  const r = splitVat({ amount: Math.round(amount * 100), vatRate, vatIncluded: false });
+  const netOre = expenseNetOre({ amount: Math.round(amount * 100), vatRate, vatIncluded: false, passThrough });
+  const vatOre = passThrough ? 0 : chargedVatOre(netOre);
   return (
     <span className="text-xs text-gray-600 font-mono">
-      Exkl: {formatCurrency(r.exclVat)} · moms: {formatCurrency(r.vat)} · inkl: {formatCurrency(r.inclVat)}
+      Debiteras: {formatCurrency(netOre)} · moms {passThrough ? "0 %" : "25 %"}: {formatCurrency(vatOre)}
+      {" · inkl: "}{formatCurrency(netOre + vatOre)}
     </span>
   );
 }

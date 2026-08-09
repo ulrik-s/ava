@@ -16,7 +16,7 @@ export type SimEvent =
   /** Tjänsteanteckning (händelselogg) — serviceNote.create. */
   | { kind: "note"; dayOffset: number; text: string }
   /** Utlägg — expense.create. */
-  | { kind: "expense"; dayOffset: number; amountOre: number; description: string; vatRate?: number }
+  | { kind: "expense"; dayOffset: number; amountOre: number; description: string; vatRate?: number; passThrough?: boolean }
   /** Dokument (in/ut) ur DOC_TEMPLATES — document.register + bytes via sink. */
   | { kind: "doc"; dayOffset: number; template: string }
   /** Rådgivningstimmen faktureras — invoice.createRadgivning. */

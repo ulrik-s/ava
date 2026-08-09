@@ -36,7 +36,7 @@ export function buildRattsskyddPositivtScenario(parties: Parties): SimEvent[] {
     { kind: "note", dayOffset: 10, text: "Rättsskydd beviljat: högst 100 tim arvode, självrisk 20 % dock lägst 1 800 kr." },
     // Utlägg med olika momssatser (#953) — sammanställningen visar utläggen både
     // exkl och inkl moms per sats. Ansökningsavgiften är momsfri.
-    { kind: "expense", dayOffset: 14, amountOre: 90_000, description: "Ansökningsavgift tingsrätten", vatRate: 0 },
+    { kind: "expense", dayOffset: 14, amountOre: 90_000, description: "Ansökningsavgift tingsrätten", vatRate: 0, passThrough: true },
     // ── Löpande arbete 2025 → aconto på självrisken (klienten) ──
     { kind: "time", dayOffset: 15, minutes: 240, description: "Skriftväxling och kravbrev till motpart" },
     { kind: "doc", dayOffset: 18, template: "brevTillOmbud" },

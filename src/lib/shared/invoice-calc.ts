@@ -10,7 +10,7 @@
  */
 
 import { Temporal } from "@js-temporal/polyfill";
-import { splitVat } from "./vat";
+import { chargedExpenseLines } from "./expense-vat";
 
 export interface TimeEntryForInvoice {
   minutes: number;
@@ -20,10 +20,15 @@ export interface TimeEntryForInvoice {
 export interface ExpenseForInvoice {
   amount: number; // öre (netto om vatIncluded=false, annars brutto)
   billable: boolean;
-  /** Moms-sats i bips. Default 25 %. */
+  /** Satsen BYRÅN betalade, i bips. Default 25 %. Räknas av innan utlägget
+   *  debiteras vidare med 25 % (#975). */
   vatRate?: number;
-  /** Är `amount` redan inkl moms? Default true (bakåtkompat; netto-rader sätter false). */
+  /** Är `amount` redan inkl moms? Default FALSE — utlägg lagras netto sedan #782.
+   *  (Defaulten var `true` innan #975; anropare som utelämnar fältet fick då ett
+   *  netto som var 20 % för lågt.) */
   vatIncluded?: boolean;
+  /** Äkta utlägg — vidarefaktureras utan moms (#975). */
+  passThrough?: boolean;
 }
 
 export interface AccontoForDeduction {
@@ -75,10 +80,13 @@ export function computeFinalInvoiceBreakdown(
     (sum, t) => sum + Math.round((t.minutes * t.hourlyRate) / 60),
     0,
   );
-  const expenseTotal = expenses
-    .filter((e) => e.billable)
-    .reduce((sum, e) => sum + splitVat({ amount: e.amount, vatRate: e.vatRate ?? 2500, vatIncluded: e.vatIncluded ?? true }).inclVat, 0);
-  // Arvodet (timmar × timpris) är exkl. moms → lägg på 25 % (#782); utlägg är brutto (inkl moms).
+  // Utläggen debiteras vidare med 25 % på nettot enligt NJA 2005 s. 606 (#975) —
+  // byråns egen sats räknas av först. Äkta utlägg går utan moms. Delad regel med
+  // faktureringen (`chargedExpenseLines`); två uträkningar av samma sak var just
+  // vad som gjorde att den här helpern kunde glida isär från fakturan.
+  const expenseTotal = chargedExpenseLines(expenses.filter((e) => e.billable))
+    .reduce((sum, l) => sum + l.netOre + l.vatOre, 0);
+  // Arvodet (timmar × timpris) är exkl. moms → lägg på 25 % (#782).
   const arvodeInclVat = arvodeInclVatOre(timeTotal);
   const arvodeVatOre = arvodeInclVat - timeTotal;
   const grossAmount = arvodeInclVat + expenseTotal;
