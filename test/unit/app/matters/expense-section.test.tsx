@@ -96,12 +96,13 @@ describe("ExpenseSection", () => {
     fireEvent.change(dateInput, { target: { value: "2026-03-15" } });
     fireEvent.change(screen.getByPlaceholderText("0,00"), { target: { value: "150" } });
     fireEvent.change(screen.getByPlaceholderText("Beskrivning *"), { target: { value: "Parkering" } });
-    // VatPreview-grenen (amount>0) renderar moms-uppdelningen (exkl-inmatning).
-    expect(screen.getByText(/Exkl:.*moms:.*inkl:/)).toBeInTheDocument();
+    // VatPreview visar vad KLIENTEN debiteras (#975), inte vad byrån betalade.
+    expect(screen.getByText(/Debiteras:.*moms 25 %:.*inkl:/)).toBeInTheDocument();
     fireEvent.click(screen.getByText("Spara"));
     // Inmatat exkl. 150 kr → lagras NETTO 150 kr, vatIncluded=false (#782).
+    // passThrough=false: utlägget är ett kostnadselement tills motsatsen sägs (#975).
     expect(createMutate).toHaveBeenCalledWith(
-      expect.objectContaining({ matterId: "m1", description: "Parkering", amount: 15000, vatRate: 2500, vatIncluded: false }),
+      expect.objectContaining({ matterId: "m1", description: "Parkering", amount: 15000, vatRate: 2500, vatIncluded: false, passThrough: false }),
     );
   });
 
@@ -111,8 +112,24 @@ describe("ExpenseSection", () => {
     // Incl/excl-radions är borttagen — inmatning är alltid exkl. moms (#781).
     expect(screen.queryByRole("radio")).not.toBeInTheDocument();
     fireEvent.change(screen.getByRole("combobox"), { target: { value: "1200" } });
-    fireEvent.click(screen.getByRole("checkbox")); // Debiterbar av
+    // Två kryssrutor sedan #975: "Äkta utlägg" och "Debiterbar".
+    const boxes = screen.getAllByRole("checkbox");
+    expect(boxes).toHaveLength(2);
+    fireEvent.click(boxes[1]!); // Debiterbar av
     expect(screen.getByText("Spara")).toBeInTheDocument();
+  });
+
+  it("'Äkta utlägg' → passThrough=true och momsen faller bort (#975)", () => {
+    render(<ExpenseSection matterId={asId<"MatterId">("m1")} />);
+    fireEvent.click(screen.getByText("+ Nytt utlägg"));
+    fireEvent.change(screen.getByPlaceholderText("0,00"), { target: { value: "900" } });
+    fireEvent.change(screen.getByPlaceholderText("Beskrivning *"), { target: { value: "Ansökningsavgift" } });
+    // Default: kostnadselement → 25 % läggs på.
+    expect(screen.getByText(/moms 25 %/)).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("checkbox")[0]!); // Äkta utlägg på
+    expect(screen.getByText(/moms 0 %/)).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Spara"));
+    expect(createMutate).toHaveBeenCalledWith(expect.objectContaining({ passThrough: true }));
   });
 
   it("'Ändra' öppnar förifyllt edit-formulär → Spara ändring → update.mutate med id", () => {

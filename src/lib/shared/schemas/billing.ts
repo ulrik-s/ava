@@ -87,10 +87,21 @@ export const expenseSchema = z.object({
   billable: z.boolean().default(true),
   /** @deprecated Se motsvarande not på timeEntry.invoiceId. */
   invoiceId: invoiceIdSchema.nullish(),
-  /** Moms-sats i basis points (0/600/1200/2500). Default 25 %. */
+  /** Momssatsen BYRÅN BETALADE, i basis points (0/600/1200/2500). Default 25 %.
+   *  Styr hur mycket ingående moms som räknas av innan utlägget debiteras vidare
+   *  med 25 % (#975) — den är alltså inte satsen klienten ser på fakturan. */
   vatRate: z.number().int().nonnegative().max(10000).default(2500),
   /** Är `amount` redan inkl moms? Default false — utlägg lagras netto (#782). */
   vatIncluded: z.boolean().default(false),
+  /**
+   * ÄKTA UTLÄGG (#975): fakturan är ställd direkt till klienten och byrån har
+   * bara förmedlat betalningen → vidarefaktureras UTAN moms.
+   *
+   * Default `false`, med flit: enligt NJA 2005 s. 606 är huvudregeln att ett
+   * utlägg är ett kostnadselement i biträdets tjänst och ska bära 25 % moms.
+   * Äkta utlägg är undantaget och kräver att någon aktivt intygar det.
+   */
+  passThrough: z.boolean().default(false),
   /** Skiljer vanligt utlägg (EXPENSE) från PRUTNING (domstols-justering).
    *  PRUTNING har negativt amount, vatRate=0, vatIncluded=false. Default
    *  EXPENSE för bakåtkompatibilitet med befintliga rader. */

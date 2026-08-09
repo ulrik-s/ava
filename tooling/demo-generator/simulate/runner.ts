@@ -76,7 +76,7 @@ async function hNote(ctx: RunCtx, m: SimMatter, e: Any, iso: string): Promise<vo
 async function hExpense(ctx: RunCtx, m: SimMatter, e: Any, iso: string): Promise<void> {
   await ctx.c.expense.create({
     matterId: m.id, date: iso, amount: e.amountOre, description: e.description,
-    billable: true, vatRate: e.vatRate ?? 2500, vatIncluded: false, userId: m.lawyerId, createdAt: iso,
+    billable: true, vatRate: e.vatRate ?? 2500, vatIncluded: false, passThrough: e.passThrough ?? false, userId: m.lawyerId, createdAt: iso,
   });
 }
 

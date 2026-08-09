@@ -22,6 +22,7 @@ import { assertBillingTransition, type BillingActionType } from "@/lib/shared/bi
 import { proposedAccontoOre } from "@/lib/shared/billing-proposal";
 import { TIMKOSTNADSNORM_FTAX_ORE_PER_H, coverageEntryRateOre } from "@/lib/shared/brottmalstaxa";
 import { computeCoverageSplit, partitionRattsskyddMinutes, type CoverageSplit, type RattsskyddClientParts } from "@/lib/shared/coverage-billing";
+import { chargedExpenseLines } from "@/lib/shared/expense-vat";
 import { arvodeInclVatOre } from "@/lib/shared/invoice-calc";
 import {
   buildInvoiceSpecification,
@@ -230,20 +231,17 @@ function arvodeNetOre(work: UnfrozenWork): number {
     .reduce((sum, t) => sum + timeEntryValueOre(t.minutes, t.hourlyRate), 0);
 }
 
-/** Ett utläggs moms-split (#782). Utlägg lagras netto (vatIncluded=false); äldre
- *  brutto-rader (vatIncluded=true) hanteras via flaggan så bruttot bevaras. */
-function expenseSplit(e: { amount: number; vatRate?: number | null; vatIncluded?: boolean | null }) {
-  return splitVat({ amount: e.amount, vatRate: e.vatRate ?? DEFAULT_VAT_RATE, vatIncluded: e.vatIncluded ?? false });
-}
 
 /** Debiterbara utlägg, netto (exkl. moms). */
 function expenseNetOre(work: UnfrozenWork): number {
-  return work.expenses.filter((e) => e.billable).reduce((sum, e) => sum + expenseSplit(e).exclVat, 0);
+  return netOreOf(expenseBreakdownLines(work));
 }
 
-/** Debiterbara utlägg, brutto (inkl. moms) — det klienten/domstolen betalar. */
+/** Debiterbara utlägg, brutto — det klienten/domstolen betalar. Härleds ur de
+ *  DEBITERADE raderna (25 % enligt NJA 2005 s. 606, #975), inte ur de satser
+ *  byrån själv betalade. */
 function expenseGrossOre(work: UnfrozenWork): number {
-  return work.expenses.filter((e) => e.billable).reduce((sum, e) => sum + expenseSplit(e).inclVat, 0);
+  return grossOreOf(expenseBreakdownLines(work));
 }
 
 /** Nettovärde på arbetet: arvode (exkl moms) + utlägg (exkl moms). Bas för
@@ -310,16 +308,10 @@ function arvodeLine(arvodeNet: number): VatBreakdownLine | null {
   return { kind: "arvode", vatRate: DEFAULT_VAT_RATE, netOre: arvodeNet, vatOre: arvodeInclVatOre(arvodeNet) - arvodeNet };
 }
 
-/** Utläggens moms-uppdelning, en rad per förekommande momssats. */
+/** Utläggens moms-uppdelning: en 25 %-rad (kostnadselement) + en 0 %-rad (äkta
+ *  utlägg), enligt NJA 2005 s. 606 (#975). Gäller ALLA betalare. */
 function expenseBreakdownLines(work: UnfrozenWork): VatBreakdownLine[] {
-  const byRate = new Map<number, { netOre: number; vatOre: number }>();
-  for (const e of work.expenses.filter((x) => x.billable)) {
-    const rate = e.vatRate ?? DEFAULT_VAT_RATE;
-    const s = expenseSplit(e);
-    const acc = byRate.get(rate) ?? { netOre: 0, vatOre: 0 };
-    byRate.set(rate, { netOre: acc.netOre + s.exclVat, vatOre: acc.vatOre + s.vat });
-  }
-  return [...byRate].map(([vatRate, v]) => ({ kind: "utlagg" as const, vatRate, netOre: v.netOre, vatOre: v.vatOre }));
+  return chargedExpenseLines(work.expenses.filter((x) => x.billable));
 }
 
 /** Fakturans moms-uppdelning per sats (#790): en arvode-rad (25 %) + en utläggs-
@@ -385,19 +377,21 @@ function apportionExpenseLines(lines: VatBreakdownLine[], split: CoverageSplit):
 /** Faktura-rader (moms-breakdown) för klient- resp. betalar-fakturan ur en
  *  prutnings-/rättshjälpsavgifts-uppdelning (#801). Både arvode OCH utlägg delas
  *  per samma klient/betalar-andel (#878). */
-function coverageInvoiceLines(split: CoverageSplit, expenseLines: VatBreakdownLine[], courtPayer: boolean): {
+function coverageInvoiceLines(split: CoverageSplit, expenseLines: VatBreakdownLine[]): {
   clientLines: VatBreakdownLine[]; payerLines: VatBreakdownLine[];
   clientExpenseLines: VatBreakdownLine[]; payerExpenseLines: VatBreakdownLine[];
 } {
   const clientArvode = arvodeLine(split.clientOre);
   const payerArvode = arvodeLine(split.payerOre);
+  // Raderna bär redan de DEBITERADE satserna (#975) — 25 % på kostnadselement,
+  // 0 % på äkta utlägg — så andelarna ärver dem. Förr räknades betalarens andel
+  // om till 25 % bara när betalaren var domstol (#945); regeln följer biträdets
+  // omsättning, inte mottagaren, så det specialfallet är borta.
   const exp = apportionExpenseLines(expenseLines, split);
-  // Betalaren är domstolen → dess utläggsandel debiteras 25 % oavsett ursprungssats (#945).
-  const payerExpenseLines = courtPayer ? courtExpenseLines(exp.payerLines) : exp.payerLines;
   return {
     clientLines: [...(clientArvode ? [clientArvode] : []), ...exp.clientLines],
-    payerLines: [...(payerArvode ? [payerArvode] : []), ...payerExpenseLines],
-    clientExpenseLines: exp.clientLines, payerExpenseLines,
+    payerLines: [...(payerArvode ? [payerArvode] : []), ...exp.payerLines],
+    clientExpenseLines: exp.clientLines, payerExpenseLines: exp.payerLines,
   };
 }
 
@@ -451,33 +445,15 @@ function resolveAward(method: PaymentMethod, totalArvodeNet: number, work: Unfro
   };
 }
 
-/** Betalare som är domstol/rättshjälpsmyndighet (#945) — utlägg debiteras 25 %. */
-function isCourtRecipient(recipient: BillingRunRecipient): boolean {
-  return recipient === "DOMSTOL" || recipient === "RATTSHJALPSMYNDIGHET";
-}
-
 /** Moms (öre) på ett nettobelopp vid standardsatsen. */
 function vatOnNet(netOre: number): number {
   return Math.round((netOre * DEFAULT_VAT_RATE) / 10000);
 }
 
-/**
- * Utlägg mot DOMSTOL (#945): ett vidarefakturerat utlägg ingår i byråns egen
- * skattepliktiga omsättning, så domstolen debiteras 25 % moms på utläggens NETTO
- * oavsett vilken sats byrån själv betalade (domstolsavgift 0 %, tåg/taxi 6 %,
- * restaurang 12 %). Alla utlägg kollapsar därför till EN 25 %-rad.
- * Klientens och försäkringens fakturor behåller utläggens riktiga satser.
- */
-function courtExpenseLines(lines: VatBreakdownLine[]): VatBreakdownLine[] {
-  const netOre = netOreOf(lines);
-  if (netOre === 0) return [];
-  return [{ kind: "utlagg", vatRate: DEFAULT_VAT_RATE, netOre, vatOre: vatOnNet(netOre) }];
-}
-
 /** Kostnadsräkningens yrkade brutto — den går ALLTID till domstol, så utläggen
  *  värderas med 25 % moms (#945). `arvodeNet` skiljer sig per betalningssätt. */
 function krGrossOre(work: UnfrozenWork, arvodeNet: number): number {
-  return arvodeInclVatOre(arvodeNet) + grossOreOf(courtExpenseLines(expenseBreakdownLines(work)));
+  return arvodeInclVatOre(arvodeNet) + grossOreOf(expenseBreakdownLines(work));
 }
 
 /** Bygg ett itemiserat fakturaförslag ur ofrysta tids-/utläggsrader (#397). */
@@ -542,11 +518,18 @@ function specLineRateOre(
 }
 
 function specExpenseLines(
-  expenses: ReadonlyArray<{ date: Date | string; description: string; amount: number; billable: boolean; vatRate?: number | null; vatIncluded?: boolean | null }>,
+  expenses: ReadonlyArray<{ date: Date | string; description: string; amount: number; billable: boolean; vatRate?: number | null; vatIncluded?: boolean | null; passThrough?: boolean | null }>,
 ): SpecExpenseLine[] {
+  // Bruttot är det DEBITERADE (25 % enligt NJA 2005 s. 606, #975), inte satsen
+  // byrån betalade — annars stämmer inte specifikationen med fakturabeloppet.
   return expenses.filter((e) => e.billable).map((e) => {
-    const s = expenseSplit(e);
-    return { date: e.date, description: e.description, netOre: s.exclVat, grossOre: s.exclVat + s.vat };
+    const [line] = chargedExpenseLines([e]);
+    const netOre = line?.netOre ?? 0;
+    return {
+      date: e.date, description: e.description,
+      netOre, grossOre: netOre + (line?.vatOre ?? 0),
+      passThrough: e.passThrough === true,
+    };
   });
 }
 
@@ -1465,10 +1448,8 @@ export const billingRunRouter = router({
           insurerPrutningOre: input.insurerPrutningOre ?? null,
           ...rattsskyddCoverage(matter, work.timeEntries, settleDate),
         });
-        // #945: går betalarfakturan till domstol debiteras utläggen 25 % oavsett sats.
-        const courtPayer = isCourtRecipient(input.payerRecipient);
         const { clientLines, payerLines, clientExpenseLines, payerExpenseLines } =
-          coverageInvoiceLines(split, expenseLines, courtPayer);
+          coverageInvoiceLines(split, expenseLines);
 
         // Klient: självrisk (+ ev. prutning), moms 25 %, minus tidigare aconton.
         // Auto-dra av ALLA skickade klient-aconton (#856): de har redan betalats,

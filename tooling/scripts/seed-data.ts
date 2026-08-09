@@ -497,11 +497,16 @@ function appendVardnad2TimeEntries(out: SeedDataset["timeEntries"], orgId: strin
 function buildExpenses(orgId: string, users: UserSeed[]): SeedDataset["expenses"] {
   const out: SeedDataset["expenses"] = [];
   // expenses
-  // Moms-modellen följer Skatteverket: persontransporter 6 %, restaurang 12 %,
-  // myndighetsavgifter 0 %, övrigt 25 %. `amount` nedan är kvitto-beloppet inkl
-  // moms — lagras dock NETTO (exkl moms) per #782; AVA lägger på momsen.
-  const cats: Array<{ amount: number; description: string; vatRate: number }> = [
-    { amount: 12500, description: "Domstolsavgift", vatRate: 0 },         // momsfritt
+  // `vatRate` är satsen BYRÅN BETALADE (persontransport 6 %, restaurang 12 %,
+  // myndighetsavgift 0 %, övrigt 25 %). Den räknas av innan utlägget debiteras
+  // vidare med 25 % enligt NJA 2005 s. 606 (#975) — den är alltså inte satsen
+  // klienten ser. `amount` är kvitto-beloppet inkl moms; lagras NETTO per #782.
+  //
+  // `passThrough` markerar ÄKTA utlägg: fakturan ställd till klienten, byrån har
+  // bara förmedlat betalningen → vidarefaktureras utan moms. Domstolsavgiften är
+  // det typiska fallet; allt annat här är omkostnader i byråns egen verksamhet.
+  const cats: Array<{ amount: number; description: string; vatRate: number; passThrough?: boolean }> = [
+    { amount: 12500, description: "Domstolsavgift", vatRate: 0, passThrough: true }, // äkta utlägg
     { amount: 4500, description: "Tåg Stockholm-Göteborg", vatRate: 600 }, // 6 % persontransport
     { amount: 1850, description: "Taxi domstol", vatRate: 600 },           // 6 %
     { amount: 28000, description: "Översättningskostnad", vatRate: 2500 }, // 25 %
@@ -527,7 +532,7 @@ function buildExpenses(orgId: string, users: UserSeed[]): SeedDataset["expenses"
         organizationId: orgId,
         userId: user.id, matterId: matter.id, date: isoDate(-daysAgo, 12),
         amount: netAmount, description: cat.description,
-        vatRate: cat.vatRate, vatIncluded: false,
+        vatRate: cat.vatRate, vatIncluded: false, passThrough: cat.passThrough ?? false,
         billable: true, invoiceId: null,
         createdAt: isoDate(-daysAgo, 12), updatedAt: isoDate(-daysAgo, 12),
       });

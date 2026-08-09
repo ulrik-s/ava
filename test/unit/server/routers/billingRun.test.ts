@@ -103,7 +103,9 @@ describe("billingRun.createFinal", () => {
       matterId: "m-1", recipient: "KLIENT",
     });
     expect(res.run.type).toBe("FINAL");
-    expect(res.run.amountOre).toBe(312500 + 12500); // 1h × 2500 + 25 % moms + 125 utlägg (#782)
+    // #975: utlägget (125 kr, momsfritt för byrån) är ett kostnadselement i
+    // tjänsten och debiteras vidare med 25 % — 125 × 1,25 = 156,25.
+    expect(res.run.amountOre).toBe(312500 + 15625); // 1h × 2500 inkl moms + utlägg inkl 25 %
     const te = await ds.timeEntries.findFirst({ where: { id: "te-1" } }) as { frozenAt?: Date | null; frozenByBillingRunId?: string | null };
     expect(te.frozenAt).toBeInstanceOf(Date);
     expect(te.frozenByBillingRunId).toBe(res.run.id);
@@ -173,7 +175,7 @@ describe("billingRun.createFinal", () => {
   it("utan per-post-val → fakturerar allt ofryst (default oförändrat)", async () => {
     const { ds, caller } = makeCaller({ workMinutes: 60, expenseOre: 5000 });
     const res = await caller.billingRun.createFinal({ matterId: "m-1", recipient: "KLIENT" });
-    expect(res.invoice.amount).toBe(312500 + 5000); // arvode inkl 25 % moms + utlägg (#782)
+    expect(res.invoice.amount).toBe(312500 + 6250); // arvode inkl moms + utlägg inkl 25 % (#975)
     const t1 = await ds.timeEntries.findFirst({ where: { id: "te-1" } }) as { frozenAt?: Date | null };
     expect(t1.frozenAt).toBeInstanceOf(Date);
   });
@@ -456,7 +458,9 @@ describe("billingRun.coverageSplit — prutning/självrisk på aktuellt timarvod
     const r = await c.billingRun.coverageSplit({ matterId: "m-1" });
     expect(r.totalOre).toBe(325_200); // #950: arvode 2h × timkostnadsnormen 1 626 kr
     expect(r.expensesNetOre).toBe(32065);
-    expect(r.expensesGrossOre).toBe(39750); // exakt per sats — INTE 40081 (platt 25 %)
+    // #975 (NJA 2005 s. 606): utläggen debiteras 25 % på NETTOT oavsett vilken
+    // sats byrån betalade. Förr räknades de per byråns egen sats → 39 750.
+    expect(r.expensesGrossOre).toBe(40081); // 32 065 × 1,25
   });
 
   it("KR inskickad (rader frysta) → utläggen räknas ändå (Carlsson-regression, #849)", async () => {
@@ -496,20 +500,26 @@ describe("moms mot DOMSTOL är alltid 25 % (#945)", () => {
     expect(kr.run.workValueOreAtRun).toBe(Math.round(arvodeGross) + 162500);
   });
 
-  it("domstolsfakturan får EN 25 %-utläggsrad; klientfakturan behåller 0 % och 6 %", async () => {
+  it("BÅDA fakturorna får EN 25 %-utläggsrad — regeln följer biträdet, inte betalaren (#975)", async () => {
+    // NJA 2005 s. 606: utlägg är kostnadselement i biträdets tjänst och bär 25 %
+    // oavsett vem som betalar. Förr gällde det bara mot domstol (#945) och
+    // klientfakturan behöll posternas egna satser ([0, 600]) — vilket gav för
+    // lite utgående moms på varje klient- och försäkringsfaktura.
     const c = courtCaller();
     const kr = await c.billingRun.createKostnadsrakning({ matterId: "m-1" });
     await c.billingRun.recordKostnadsrakningBeslut({ billingRunId: kr.run.id, awardedOre: kr.run.workValueOreAtRun });
     const res = await c.billingRun.settleCoverage({ matterId: "m-1", payerRecipient: "DOMSTOL" });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const lines = (l: any): Array<{ vatRate: number; netOre: number; vatOre: number }> => l.vatBreakdown;
-    const payerUtlagg = lines(res.payerInvoice).filter((l) => (l as { kind?: string }).kind === "utlagg");
-    expect(payerUtlagg).toHaveLength(1);
-    expect(payerUtlagg[0]!.vatRate).toBe(2500);
-    expect(payerUtlagg[0]!.vatOre).toBe(Math.round(payerUtlagg[0]!.netOre * 0.25));
-    // Klienten är ingen domstol → posternas riktiga satser bevaras.
-    const clientRates = lines(res.clientInvoice).filter((l) => (l as { kind?: string }).kind === "utlagg").map((l) => l.vatRate).sort((a, b) => a - b);
-    expect(clientRates).toEqual([0, 600]);
+    const utlagg = (inv: unknown): Array<{ vatRate: number; netOre: number; vatOre: number }> =>
+      lines(inv).filter((l) => (l as { kind?: string }).kind === "utlagg");
+
+    for (const [who, inv] of [["domstolen", res.payerInvoice], ["klienten", res.clientInvoice]] as const) {
+      const rows = utlagg(inv);
+      expect(rows, `${who}: en enda utläggsrad`).toHaveLength(1);
+      expect(rows[0]!.vatRate, `${who}: 25 %`).toBe(2500);
+      expect(rows[0]!.vatOre, `${who}: moms på nettot`).toBe(Math.round(rows[0]!.netOre * 0.25));
+    }
   });
 });
 
@@ -851,12 +861,13 @@ describe("billingRun.invoiceSpecification (#856)", () => {
     expect(spec.expenseLines[0]!.netOre).toBe(5000);
     expect(spec.arvodeNetOre).toBe(500000);
     expect(spec.arvodeVatOre).toBe(125000); // 25 %
-    expect(spec.grossOre).toBe(630000); // 625000 arvode inkl moms + 5000 utlägg
+    // #975: utlägget (50 kr, momsfritt för byrån) debiteras vidare med 25 % → 62,50.
+    expect(spec.grossOre).toBe(631250); // 625 000 arvode inkl moms + 6 250 utlägg inkl 25 %
     expect(spec.deductions).toHaveLength(1);
     expect(spec.deductions[0]!.amountOre).toBe(100000);
     expect(spec.deductionOre).toBe(100000);
     expect(spec.adjustmentOre).toBe(0); // brutto − avdrag == fakturerat
-    expect(spec.payableOre).toBe(530000); // 630000 − 100000
+    expect(spec.payableOre).toBe(531250); // 631 250 − 100 000
   });
 
   it("rättshjälp settlement: betalar-fakturan bär tidsraderna (timkostnadsnorm), klientfakturan aconto-avdraget", async () => {

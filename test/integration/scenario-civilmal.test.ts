@@ -317,13 +317,20 @@ describe("Scenario: civilmål (bostadsrättstvist) på löpande räkning", () =>
     // Verifiera pure-helpern (samma som routern använder)
     const breakdown = computeFinalInvoiceBreakdown(
       times.entries.map((t) => ({ minutes: t.minutes, hourlyRate: HOURLY_RATE })),
-      exps.expenses.map((e) => ({ amount: e.amount, billable: e.billable })),
+      // #975: momsfälten MÅSTE med — utan dem antar helpern 25 %/netto och
+      // räknar fram ett annat underlag än routern, vilket dolde att de två
+      // vägarna hade glidit isär.
+      exps.expenses.map((e) => ({ amount: e.amount, billable: e.billable, vatRate: e.vatRate, vatIncluded: e.vatIncluded, passThrough: e.passThrough })),
       [{ id: state.accontoInvoiceId!, amount: 1_500_000 }],
     );
-    // Arvode 36 875 kr + 25 % moms = 46 093,75 kr + utlägg 562,50 kr = 46 656,25 kr (#782).
-    expect(breakdown.grossAmount).toBe(4_609_375 + 56_250); // 4 665 625 öre
+    // Arvode 36 875 kr + 25 % moms = 46 093,75 kr.
+    // Utlägget (562,50 kr inkl 6 % moms) är ett kostnadselement i uppdraget:
+    // byråns 6 % räknas av → 530,66 kr netto, som debiteras vidare med 25 %
+    // → 663,33 kr (NJA 2005 s. 606, #975). Förr vidarefakturerades det med
+    // byråns egen sats, dvs. 562,50 kr, vilket gav 100,83 kr för lite moms.
+    expect(breakdown.grossAmount).toBe(4_609_375 + 66_333); // 4 675 708 öre
     expect(breakdown.accontoDeductionTotal).toBe(1_500_000);
-    expect(breakdown.netAmount).toBe(4_665_625 - 1_500_000); // 3 165 625 öre = 31 656,25 kr
+    expect(breakdown.netAmount).toBe(4_675_708 - 1_500_000); // 3 175 708 öre
 
     // Skapa slutfaktura via billing-run (acconto-körningen dras av).
     const result = await state.caller.billingRun.createFinal({
@@ -355,7 +362,7 @@ describe("Scenario: civilmål (bostadsrättstvist) på löpande räkning", () =>
     const inv = await state.caller.invoice.getById({ id: state.finalInvoiceId! });
     // billing-run: invoice.amount är redan NETTO (acconto avräknat) → klienten
     // betalar hela beloppet och fakturan blir PAID (inget separat avdrag i ledgern).
-    expect(inv.amount).toBe(3_165_625);
+    expect(inv.amount).toBe(3_175_708);
 
     const pay = await state.caller.invoice.recordPayment({
       invoiceId: state.finalInvoiceId!,
@@ -363,8 +370,8 @@ describe("Scenario: civilmål (bostadsrättstvist) på löpande räkning", () =>
       paidAt: D.slutPayment.toISOString(),
       note: "Bankgiro — slutbetalning (netto efter acconto-avräkning)",
     });
-    expect(pay.payment.amount).toBe(3_165_625);
-    expect(pay.paidSum).toBe(3_165_625);
+    expect(pay.payment.amount).toBe(3_175_708);
+    expect(pay.paidSum).toBe(3_175_708);
     expect(pay.settled).toBe(true);
 
     const after = await state.caller.invoice.getById({ id: state.finalInvoiceId! });
@@ -381,12 +388,13 @@ describe("Scenario: civilmål (bostadsrättstvist) på löpande räkning", () =>
     const acconto = invoices.find((i) => i.invoiceType === "ACCONTO");
     const final = invoices.find((i) => i.invoiceType === "FINAL");
     expect(acconto?.amount).toBe(1_500_000);
-    // billing-run: FINAL-beloppet är NETTO (brutto 4 665 625 − acconto 1 500 000).
-    expect(final?.amount).toBe(3_165_625);
+    // billing-run: FINAL-beloppet är NETTO (brutto 4 675 708 − acconto 1 500 000).
+    expect(final?.amount).toBe(3_175_708);
 
-    // Total fakturerat klient = acconto (15 000) + netto-slutfaktura (31 656,25)
-    // = 46 656,25 kr = brutto-arbetet (arvode inkl moms + utlägg). Ingen dubbelräkning.
+    // Total fakturerat klient = acconto (15 000) + netto-slutfaktura (31 757,08)
+    // = 46 757,08 kr = brutto-arbetet (arvode inkl moms + utlägg inkl 25 %).
+    // Ingen dubbelräkning.
     const totalBilled = (acconto!.amount) + (final!.amount);
-    expect(totalBilled).toBe(4_665_625);
+    expect(totalBilled).toBe(4_675_708);
   });
 });

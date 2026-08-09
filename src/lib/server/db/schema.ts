@@ -200,9 +200,13 @@ export const expenses = pgTable("expenses", {
   description: text("description").notNull(),
   billable: boolDefault("billable", true),
   invoiceId: uuid("invoice_id").$type<InvoiceId>(),
+  // Satsen BYRÅN betalade — styr hur mycket ingående moms som räknas av innan
+  // utlägget debiteras vidare med 25 % (#975).
   vatRate: integer("vat_rate").notNull().default(2500),
   // Utlägg lagras netto (exkl moms) — AVA lägger på momsen (#782).
   vatIncluded: boolDefault("vat_included", false),
+  // Äkta utlägg (#975): faktura ställd till klienten → vidarefaktureras utan moms.
+  passThrough: boolDefault("pass_through", false),
   kind: text("kind").notNull().default("EXPENSE").$type<ExpenseKind>(),
   frozenAt: timestamp("frozen_at", { withTimezone: true }),
   frozenByBillingRunId: uuid("frozen_by_billing_run_id").$type<BillingRunId>(),

@@ -37,7 +37,7 @@ export function buildRattshjalpArsskifteScenario(parties: Parties): SimEvent[] {
     { kind: "note", dayOffset: 10, text: "Rättshjälp beviljad — rättshjälpsavgift 5 %." },
     // Utlägg med OLIKA momssatser (#953) så sammanställningens utläggsrader visar
     // både netto och brutto per sats — ansökningsavgiften är momsfri.
-    { kind: "expense", dayOffset: 8, amountOre: 90_000, description: "Ansökningsavgift tingsrätten", vatRate: 0 },
+    { kind: "expense", dayOffset: 8, amountOre: 90_000, description: "Ansökningsavgift tingsrätten", vatRate: 0, passThrough: true },
     // ── Period 1: arbetslös 5 %, HELA i 2025 (norm 1 586 / tidsspillan 1 450) ──
     { kind: "time", dayOffset: 6, minutes: 240, description: "Genomgång av handlingar och underlag" },
     { kind: "doc", dayOffset: 14, template: "svaromal" },

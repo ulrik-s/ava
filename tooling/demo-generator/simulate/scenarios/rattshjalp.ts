@@ -36,7 +36,7 @@ export function buildRattshjalpScenario(parties: Parties, opts: RattshjalpScenar
 
   ev.push(
     // Utlägg i ärendet (ersätts av domstolen via kostnadsräkningen).
-    { kind: "expense", dayOffset: 8, amountOre: 90_000, description: "Ansökningsavgift tingsrätten" },
+    { kind: "expense", dayOffset: 8, amountOre: 90_000, description: "Ansökningsavgift tingsrätten", vatRate: 0, passThrough: true },
     { kind: "expense", dayOffset: 60, amountOre: 42_000, description: "Reskostnad till sammanträde" },
     // Period 1 (arbetslös, 5 %) — löpande arbete tills klientens andel når tröskeln (→ aconto).
     { kind: "time", dayOffset: 6, minutes: 240, description: "Genomgång av handlingar och underlag" },

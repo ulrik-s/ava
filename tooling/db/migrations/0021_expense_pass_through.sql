@@ -1,0 +1,13 @@
+-- #975: äkta utlägg (NJA 2005 s. 606).
+--
+-- Huvudregeln är att ett utlägg är ett KOSTNADSELEMENT i biträdets tjänst och
+-- ska bära 25 % moms när det debiteras vidare — oavsett vilken sats byrån själv
+-- betalade, och oavsett om betalaren är domstol, försäkring eller klient.
+--
+-- Undantaget är ÄKTA utlägg, där fakturan är ställd direkt till klienten och
+-- byrån bara förmedlat betalningen. De vidarefaktureras utan moms.
+--
+-- DEFAULT false med flit: undantaget ska sägas ut aktivt. Befintliga rader
+-- ändrar därmed inte betydelse — men de ändrar BELOPP, eftersom 6/12/0 %-utlägg
+-- nu debiteras 25 % på nettot. Det är själva rättelsen.
+ALTER TABLE expenses ADD COLUMN IF NOT EXISTS pass_through boolean NOT NULL DEFAULT false;
