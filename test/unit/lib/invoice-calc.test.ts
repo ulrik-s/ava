@@ -27,7 +27,12 @@ describe("computeFinalInvoiceBreakdown", () => {
       ],
       [],
     );
-    expect(r.grossAmount).toBe(50_000);
+    // #975: det debiterbara utlägget (500 kr netto) är ett kostnadselement i
+    // uppdraget och debiteras vidare med 25 % → 625 kr. Det icke-debiterbara
+    // utelämnas, vilket är vad testet vaktar. Förr gav helpern 50 000 rakt av,
+    // eftersom `vatIncluded` defaultade till `true` — en kvarleva från före #782,
+    // då utlägg lagrades brutto.
+    expect(r.grossAmount).toBe(62_500);
   });
 
   it("drar av accontos från brutto", () => {
