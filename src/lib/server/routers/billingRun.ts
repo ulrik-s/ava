@@ -16,7 +16,7 @@
  */
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { accontoCreditAmounts, accontoSplit, deductAcconto } from "@/lib/shared/acconto-vat";
+import { accontoCreditAmounts, accontoCreditLines, accontoSplit, deductAcconto } from "@/lib/shared/acconto-vat";
 import type { VatBreakdownLine } from "@/lib/shared/accounting/semantic-voucher";
 import { assertBillingTransition, type BillingActionType } from "@/lib/shared/billing-flow";
 import { proposedAccontoOre } from "@/lib/shared/billing-proposal";
@@ -872,16 +872,17 @@ function buildCreditView(clientView: SettlementView, creditNetOre: number): Sett
  * Utbrutet så settleCoverage-handlern håller sig ≤8 i komplexitet.
  */
 /**
- * Kreditfakturans momsbelopp (#968), negativt som resten av krediten.
- *
- * INGEN `vatBreakdown` sätts: `buildPerRateRows` räknar brutto ur raderna och
- * filtrerar bort icke-positiva belopp, så negativa rader skulle tappas. Krediten
- * går därför via enkelrads-verifikatet, som hanterar tecknet via `amount < 0`.
- * En per-sats-kreditering kräver att verifikatbyggaren först lär sig negativa
- * rader — egen issue, inte en tyst halvmesyr här.
+ * Kreditfakturans moms + uppdelning (#977). Uppdelningen bärs med TECKEN, så
+ * verifikatet kan bokföra arvode, utlägg och varje momskonto för sig — en
+ * kreditnota ska spegla originalet post för post, inte klumpas till ett netto.
  */
-function creditVatOre(clientLines: VatBreakdownLine[], deductionOre: number): number {
-  return -accontoCreditAmounts(clientLines, deductionOre).vatOre;
+function creditPayload(clientLines: VatBreakdownLine[], deductionOre: number): {
+  vatOre: number; vatBreakdown: VatBreakdownLine[];
+} {
+  return {
+    vatOre: -accontoCreditAmounts(clientLines, deductionOre).vatOre,
+    vatBreakdown: accontoCreditLines(clientLines, deductionOre),
+  };
 }
 
 async function createClientSettlementInvoice(repos: Repositories, ctx: EmitCtx, orgId: OrganizationId, a: {
@@ -902,7 +903,7 @@ async function createClientSettlementInvoice(repos: Repositories, ctx: EmitCtx, 
         // intäkt och moms minus fakturans faktiska (#968). Förr räknades 25 % på
         // mellanskillnaden rakt av, vilket blir fel så snart fakturan bär utlägg
         // med andra satser — acontot är alltid 25 %.
-        vatOre: creditVatOre(a.clientLines, a.deductionOre),
+        ...creditPayload(a.clientLines, a.deductionOre),
         // #895: full spec (tidsspec + rättshjälpsavgift + avdragna aconton) → kredit-netto.
         settlementBreakdown: buildCreditView(a.clientView, clientNet),
         invoiceType: "CREDIT" as const, status: "SENT" as const,

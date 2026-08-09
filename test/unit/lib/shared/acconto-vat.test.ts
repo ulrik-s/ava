@@ -9,7 +9,7 @@
  */
 import { describe, it, expect } from "vitest-compat";
 
-import { accontoCreditAmounts, accontoSplit, deductAcconto } from "@/lib/shared/acconto-vat";
+import { accontoCreditAmounts, accontoCreditLines, accontoSplit, deductAcconto } from "@/lib/shared/acconto-vat";
 import type { VatBreakdownLine } from "@/lib/shared/accounting/semantic-voucher";
 
 const arvode = (netOre: number): VatBreakdownLine => ({ kind: "arvode", vatRate: 2500, netOre, vatOre: Math.round(netOre * 0.25) });
@@ -142,5 +142,35 @@ describe("accontoCreditAmounts", () => {
     expect(c).toEqual({ netOre: 6_000, vatOre: 4_000 });
     expect(c.netOre + c.vatOre).toBe(20_000 - 10_000);
     // Den gamla formeln (25 % av 10 000) hade gett 2 000 kr moms — 2 000 för lite.
+  });
+});
+
+describe("accontoCreditLines", () => {
+  it("summerar till kreditbeloppet — annars balanserar inte verifikatet", () => {
+    const lines = [arvode(400_000)];
+    const credit = accontoCreditLines(lines, 900_000);
+    const amounts = accontoCreditAmounts(lines, 900_000);
+    expect(gross(credit)).toBe(-(amounts.netOre + amounts.vatOre));
+  });
+
+  it("behåller fakturans rader och lägger acontot med OMVÄNT tecken", () => {
+    // Det är den enda formen som kan uttrycka att arvodesintäkten minskar
+    // samtidigt som utläggsintäkten ökar (#977).
+    const lines = [arvode(400_000), utlagg(80_000, 2500)];
+    expect(accontoCreditLines(lines, 900_000)).toEqual([
+      ...lines,
+      { kind: "arvode", vatRate: 2500, netOre: -720_000, vatOre: -180_000 },
+    ]);
+  });
+
+  it("äkta utlägg (0 %) förblir momsfritt i krediteringen", () => {
+    const credit = accontoCreditLines([utlagg(90_000, 0)], 100_000);
+    expect(credit[0]).toEqual({ kind: "utlagg", vatRate: 0, netOre: 90_000, vatOre: 0 });
+    expect(credit[1]).toEqual({ kind: "arvode", vatRate: 2500, netOre: -80_000, vatOre: -20_000 });
+  });
+
+  it("utan aconton är krediteringen noll — inget att vända", () => {
+    const credit = accontoCreditLines([arvode(400_000)], 0);
+    expect(gross(credit)).toBe(gross([arvode(400_000)]));
   });
 });
