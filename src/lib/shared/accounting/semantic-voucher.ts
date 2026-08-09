@@ -90,10 +90,30 @@ function semanticRow(role: VoucherRole, ore: number, debit: boolean): SemanticVo
   return { role, debit: debit ? ore : 0, credit: debit ? 0 : ore };
 }
 
-/** Per-sats-verifikat (#790): intäkt delas arvode/utlägg, moms per momskonto.
- *  Balans följer av att brutto = Σnetto + Σmoms ur samma breakdown.
- *  `kundfordranDebit` = positiv faktura (kreditfaktura vänder debet/kredit). */
-function buildPerRateRows(breakdown: VatBreakdownLine[], kundfordranDebit: boolean): SemanticVoucherRow[] {
+/**
+ * Rad där BELOPPETS TECKEN avgör sidan (#977): positivt belopp hamnar på rollens
+ * naturliga sida, negativt på den motsatta.
+ *
+ * Det är vad som gör kreditfakturor till samma kod som debetfakturor. Förr
+ * vändes HELA verifikatet med en global flagga, vilket bara fungerar när alla
+ * poster går åt samma håll. En kreditering av en slutfaktura gör inte det: den
+ * kan samtidigt MINSKA arvodesintäkten (acontot vänds) och ÖKA utläggsintäkten
+ * (utlägget fanns inte i acontot). Med ett globalt tecken går den nyansen
+ * förlorad och beloppen klumpas ihop på fel konton.
+ */
+function signedRow(role: VoucherRole, ore: number, naturalDebit: boolean): SemanticVoucherRow {
+  const onDebit = ore >= 0 ? naturalDebit : !naturalDebit;
+  return semanticRow(role, Math.abs(ore), onDebit);
+}
+
+/**
+ * Per-sats-verifikat (#790): intäkt delas arvode/utlägg, moms per momskonto.
+ * Balans följer av att brutto = Σnetto + Σmoms ur samma breakdown.
+ *
+ * Hanterar NEGATIVA rader (#977) — en kreditfaktura bär sin uppdelning med
+ * omvända tecken, precis som en kreditnota ska spegla originalet post för post.
+ */
+function buildPerRateRows(breakdown: VatBreakdownLine[]): SemanticVoucherRow[] {
   const arvodeNet = breakdown.filter((l) => l.kind === "arvode").reduce((s, l) => s + l.netOre, 0);
   const utlaggNet = breakdown.filter((l) => l.kind === "utlagg").reduce((s, l) => s + l.netOre, 0);
   const momsByRole = new Map<VoucherRole, number>();
@@ -103,11 +123,11 @@ function buildPerRateRows(breakdown: VatBreakdownLine[], kundfordranDebit: boole
   }
   const brutto = arvodeNet + utlaggNet + breakdown.reduce((s, l) => s + l.vatOre, 0);
   const rows = [
-    semanticRow("kundfordran", brutto, kundfordranDebit),
-    semanticRow("intaktArvode", arvodeNet, !kundfordranDebit),
-    semanticRow("intaktUtlagg", utlaggNet, !kundfordranDebit),
+    semanticRow("kundfordran", Math.abs(brutto), brutto >= 0),
+    signedRow("intaktArvode", arvodeNet, false),
+    signedRow("intaktUtlagg", utlaggNet, false),
   ];
-  for (const [role, ore] of momsByRole) rows.push(semanticRow(role, ore, !kundfordranDebit));
+  for (const [role, ore] of momsByRole) rows.push(signedRow(role, ore, false));
   return rows.filter((r) => r.debit > 0 || r.credit > 0);
 }
 
@@ -122,10 +142,11 @@ export function buildSemanticVoucher(
   invoice: SemanticVoucherInput,
   vatRate: VatRate = 2500,
 ): SemanticVoucher {
-  const kundfordranDebit = invoice.amount >= 0; // kreditfaktura vänder debet/kredit
+  // Per-sats-vägen läser tecknet ur RADERNA (#977); enkelrads-vägen har bara
+  // `amount` att gå på och behöver därför fortfarande den globala flaggan.
   const rows = invoice.vatBreakdown && invoice.vatBreakdown.length > 0
-    ? buildPerRateRows(invoice.vatBreakdown, kundfordranDebit)
-    : buildSingleRateRows(invoice, vatRate, kundfordranDebit);
+    ? buildPerRateRows(invoice.vatBreakdown)
+    : buildSingleRateRows(invoice, vatRate, invoice.amount >= 0);
 
   return {
     date: invoice.invoiceDate,
@@ -140,7 +161,16 @@ function voucherDescription(invoice: SemanticVoucherInput): string {
   return invoice.matterNumber ? `Ärende ${invoice.matterNumber} · ${faktura}` : faktura;
 }
 
-/** Enkel-rads-verifikat (äldre fakturor/fixtures): moms ur vatOre, annars split. */
+/**
+ * Enkel-rads-verifikat för fakturor UTAN uppdelning: äldre rader från före #782
+ * och testfixturer. Momsen tas ur `vatOre` när den finns, annars ur en split.
+ *
+ * `Math.min` nedan är en fallback för INKONSISTENT ÄLDRE DATA — den klipper
+ * momsen så verifikatet åtminstone balanserar. Den får inte tolkas som en
+ * generell garanti: fram till #977 gick kreditfakturor den här vägen, och då
+ * kunde klippningen tyst svälja en riktig momsvändning. Krediter bär numera en
+ * egen uppdelning och tar per-sats-vägen.
+ */
 function buildSingleRateRows(invoice: SemanticVoucherInput, vatRate: VatRate, kundfordranDebit: boolean): SemanticVoucherRow[] {
   const bruttoOre = Math.abs(invoice.amount);
   const momsOre = invoice.vatOre != null

@@ -676,6 +676,57 @@ describe("invoice.createCredit", () => {
     );
   });
 
+  it("kreditnotan speglar originalets moms + uppdelning post för post (#977)", async () => {
+    // En kreditnota ska träffa SAMMA konton och satser som fakturan den avser.
+    // Förr bar den bara ett negativt belopp, så verifikatet gissade fram en
+    // 25 %-split av bruttot — fel för varje faktura med utlägg eller flera satser.
+    mockPrisma.invoice.findFirst.mockImplementation((args?: { where?: Record<string, unknown> }) =>
+      args?.where?.creditedInvoiceId || args?.where?.invoiceNumber
+        ? null
+        : {
+            id: "inv-1", matterId: "m1", invoiceType: "STANDARD", status: "SENT",
+            amount: 11_800, vatOre: 1_800,
+            vatBreakdown: [
+              { kind: "arvode", vatRate: 2500, netOre: 4_000, vatOre: 1_000 },
+              { kind: "utlagg", vatRate: 1200, netOre: 5_000, vatOre: 600 },
+              { kind: "utlagg", vatRate: 600, netOre: 1_000, vatOre: 200 },
+            ],
+          });
+    mockPrisma.invoice.create.mockResolvedValue({ id: "credit-1" });
+    mockPrisma.invoice.update.mockResolvedValue({});
+
+    await makeCaller().createCredit({ invoiceId: "inv-1" });
+
+    expect(mockPrisma.invoice.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          amount: -11_800,
+          vatOre: -1_800,
+          vatBreakdown: [
+            { kind: "arvode", vatRate: 2500, netOre: -4_000, vatOre: -1_000 },
+            { kind: "utlagg", vatRate: 1200, netOre: -5_000, vatOre: -600 },
+            { kind: "utlagg", vatRate: 600, netOre: -1_000, vatOre: -200 },
+          ],
+        }),
+      }),
+    );
+  });
+
+  it("original utan uppdelning (rader från före #782) speglas utan att uppfinna en", async () => {
+    mockPrisma.invoice.findFirst.mockImplementation((args?: { where?: Record<string, unknown> }) =>
+      args?.where?.creditedInvoiceId || args?.where?.invoiceNumber
+        ? null
+        : { id: "inv-1", matterId: "m1", invoiceType: "STANDARD", status: "SENT", amount: 1000 });
+    mockPrisma.invoice.create.mockResolvedValue({ id: "credit-1" });
+    mockPrisma.invoice.update.mockResolvedValue({});
+
+    await makeCaller().createCredit({ invoiceId: "inv-1" });
+
+    const data = mockPrisma.invoice.create.mock.calls[0]![0].data as Record<string, unknown>;
+    expect(data.vatBreakdown).toBeUndefined();
+    expect(data.vatOre).toBeUndefined();
+  });
+
   it("avbryter aktiv avbetalningsplan när originalet krediteras", async () => {
     mockPrisma.invoice.findFirst.mockImplementation((args?: { where?: Record<string, unknown> }) =>
       args?.where?.creditedInvoiceId || args?.where?.invoiceNumber

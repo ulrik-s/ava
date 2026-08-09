@@ -125,3 +125,28 @@ export function accontoCreditAmounts(
   const acconto = accontoSplit(deductionGrossOre);
   return { netOre: acconto.netOre - sumNet(lines), vatOre: acconto.vatOre - sumVat(lines) };
 }
+
+/**
+ * Kreditfakturans momsuppdelning (#977) — med TECKEN, så verifikatet kan bokföra
+ * varje konto för sig.
+ *
+ * Krediteringen är skillnaden mellan två dokumentuppsättningar: acontona (som
+ * bokförde arvode + 25 % moms) och slutfakturans rader (som är vad klienten
+ * faktiskt skulle ha betalat). Uppdelningen är därför slutfakturans rader
+ * PLUS acontot med omvänt tecken.
+ *
+ * Poängen är att posterna kan gå åt OLIKA håll samtidigt: arvodesintäkten ska
+ * minska (acontot vänds) medan utläggsintäkten ska öka (utlägget fanns inte i
+ * acontot). Ett enda nettobelopp kan inte uttrycka det, och den gamla vägen
+ * klumpade därför hela intäktsvändningen på arvodeskontot.
+ */
+export function accontoCreditLines(
+  lines: readonly VatBreakdownLine[],
+  deductionGrossOre: number,
+): VatBreakdownLine[] {
+  const { netOre, vatOre } = accontoSplit(deductionGrossOre);
+  return [
+    ...lines,
+    { kind: "arvode", vatRate: ACCONTO_VAT_RATE, netOre: -netOre, vatOre: -vatOre },
+  ];
+}

@@ -37,6 +37,24 @@ import type { Repositories } from "../repositories/repositories";
 import { router, orgProcedure } from "../trpc";
 
 
+/**
+ * Kreditnotans moms + uppdelning: originalets, med omvända tecken (#977).
+ *
+ * En kreditnota ska spegla den faktura den avser post för post — samma konton,
+ * samma momssatser, motsatt riktning. Saknar originalet uppdelning (rader från
+ * före #782) speglar vi bara `vatOre`; då får verifikatet falla tillbaka på
+ * enkelrads-vägen precis som originalet gjorde.
+ */
+function mirroredCreditAmounts(original: Pick<Invoice, "vatOre" | "vatBreakdown">): Partial<Invoice> {
+  const lines = original.vatBreakdown ?? [];
+  return omitUndefined({
+    vatOre: original.vatOre == null ? undefined : -original.vatOre,
+    vatBreakdown: lines.length === 0
+      ? undefined
+      : lines.map((l) => ({ ...l, netOre: -l.netOre, vatOre: -l.vatOre })),
+  });
+}
+
 // ─── writeOff-helpers (ADR 0007) — håller mutationen under complexity ≤ 8 ──
 
 /** Avvisa avskrivning av en faktura som inte är utställd. Returnerar den smala fakturan. */
@@ -210,6 +228,11 @@ export const invoiceRouter = router({
           matterId: original.matterId,
           invoiceNumber: await repos.invoices.nextInvoiceNumber(ctx.orgId),
           amount: -original.amount,
+          // Kreditnotan speglar originalet POST FÖR POST (#977): samma konton och
+          // momssatser, omvända tecken. Förr bar den bara ett negativt belopp, så
+          // verifikatet fick gissa fram en 25 %-split av bruttot — fel för varje
+          // faktura med utlägg, äkta utlägg eller flera satser.
+          ...mirroredCreditAmounts(original),
           invoiceType: "CREDIT",
           status: "SENT", // kreditfaktura är "färdig" direkt
           invoiceDate: new Date(),

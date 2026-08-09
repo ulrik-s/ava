@@ -90,6 +90,72 @@ describe("buildSemanticVoucher", () => {
     expect(sum(v.rows, "debit")).toBe(sum(v.rows, "credit"));
   });
 
+  it("kreditnota med uppdelning: poster kan gå åt OLIKA håll samtidigt (#977)", () => {
+    // En slutfaktura krediteras för att acontona (9 000 brutto = 7 200 arvode
+    // + 1 800 moms) översteg klientens andel (4 000 arvode + 1 000 moms + 800
+    // utlägg + 200 moms). Arvodesintäkten ska MINSKA med 3 200 medan
+    // utläggsintäkten ska ÖKA med 800 — utlägget fanns inte i acontot.
+    //
+    // Förr vändes hela verifikatet med en global flagga, så nettot (−2 400)
+    // klumpades på arvodeskontot och `intaktUtlagg` rördes aldrig.
+    const v = buildSemanticVoucher({
+      amount: -3_000,
+      vatOre: -600,
+      vatBreakdown: [
+        { kind: "arvode", vatRate: 2500, netOre: 4_000, vatOre: 1_000 },
+        { kind: "utlagg", vatRate: 2500, netOre: 800, vatOre: 200 },
+        { kind: "arvode", vatRate: 2500, netOre: -7_200, vatOre: -1_800 },
+      ],
+      invoiceDate: "2026-05-25",
+    });
+    expect(byRole(v.rows, "kundfordran")).toEqual({ role: "kundfordran", debit: 0, credit: 3_000 });
+    expect(byRole(v.rows, "intaktArvode")).toEqual({ role: "intaktArvode", debit: 3_200, credit: 0 });
+    expect(byRole(v.rows, "intaktUtlagg")).toEqual({ role: "intaktUtlagg", debit: 0, credit: 800 });
+    expect(byRole(v.rows, "momsUtgaende")).toEqual({ role: "momsUtgaende", debit: 600, credit: 0 });
+    expect(sum(v.rows, "debit")).toBe(sum(v.rows, "credit"));
+  });
+
+  it("negativ uppdelning per sats: varje momskonto vänds för sig (#977)", () => {
+    // Ren spegling av en faktura med tre satser — kreditnotan ska träffa
+    // 2611/2621/2631 var för sig, inte klumpa allt på 25 %-kontot.
+    const v = buildSemanticVoucher({
+      amount: -11_800,
+      vatOre: -1_800,
+      vatBreakdown: [
+        { kind: "arvode", vatRate: 2500, netOre: -4_000, vatOre: -1_000 },
+        { kind: "utlagg", vatRate: 1200, netOre: -5_000, vatOre: -600 },
+        { kind: "utlagg", vatRate: 600, netOre: -1_000, vatOre: -200 },
+      ],
+      invoiceDate: "2026-05-25",
+    });
+    expect(byRole(v.rows, "momsUtgaende")).toEqual({ role: "momsUtgaende", debit: 1_000, credit: 0 });
+    expect(byRole(v.rows, "momsUtgaende12")).toEqual({ role: "momsUtgaende12", debit: 600, credit: 0 });
+    expect(byRole(v.rows, "momsUtgaende06")).toEqual({ role: "momsUtgaende06", debit: 200, credit: 0 });
+    expect(byRole(v.rows, "intaktUtlagg")).toEqual({ role: "intaktUtlagg", debit: 6_000, credit: 0 });
+    expect(sum(v.rows, "debit")).toBe(sum(v.rows, "credit"));
+  });
+
+  it("gränsfall: momsvändningen är STÖRRE än kreditbeloppet (#977)", () => {
+    // Klientandelen är ett momsfritt äkta utlägg (900) medan acontot bar 25 %
+    // (800 + 200). Krediten blir bara 100 kr, men 200 kr moms ska vändas och
+    // utläggsintäkten öka med 900. Enkelrads-vägens `Math.min`-klippning gav
+    // förr 100 kr moms och ingen intäktsrad alls.
+    const v = buildSemanticVoucher({
+      amount: -100,
+      vatOre: -200,
+      vatBreakdown: [
+        { kind: "utlagg", vatRate: 0, netOre: 900, vatOre: 0 },
+        { kind: "arvode", vatRate: 2500, netOre: -800, vatOre: -200 },
+      ],
+      invoiceDate: "2026-05-25",
+    });
+    expect(byRole(v.rows, "momsUtgaende")).toEqual({ role: "momsUtgaende", debit: 200, credit: 0 });
+    expect(byRole(v.rows, "intaktUtlagg")).toEqual({ role: "intaktUtlagg", debit: 0, credit: 900 });
+    expect(byRole(v.rows, "intaktArvode")).toEqual({ role: "intaktArvode", debit: 800, credit: 0 });
+    expect(byRole(v.rows, "kundfordran")).toEqual({ role: "kundfordran", debit: 0, credit: 100 });
+    expect(sum(v.rows, "debit")).toBe(sum(v.rows, "credit"));
+  });
+
   it("0 % moms: moms-raden släpps (2 rader kvar, fortf. balanserat)", () => {
     const v = buildSemanticVoucher({ amount: 10_000, invoiceDate: "2026-01-01" }, 0);
     expect(v.rows).toHaveLength(2);
