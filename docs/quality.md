@@ -49,7 +49,7 @@ lever som JSON i ett git-repo (se [`architecture.md`](./architecture.md)).
 | Arkitektur (SOLID/lager) | dependency-cruiser | `tooling/config/dependency-cruiser.cjs` |
 | Död kod / oanvända exports | knip | `tooling/config/knip.json` |
 | Säkerhet (SAST) | CodeQL (JS/TS) — `dependency-review` kräver GHAS, ej möjlig (#915) | `.github/workflows/security.yml` |
-| Sårbara beroenden (CVE) | `bun audit` + ratchet — roten `moderate`, `helper-ui` `low` | `.github/workflows/security.yml`, `overrides` i båda `package.json` |
+| Sårbara beroenden (CVE) | `bun audit` + ratchet — `low` i båda arbetsytorna | `.github/workflows/security.yml`, `overrides` i båda `package.json` |
 | Beroende-uppdateringar | Dependabot (npm + github-actions) | `.github/dependabot.yml` |
 | Pre-commit | husky + lint-staged | `.husky/pre-commit`, `package.json` |
 | CI | GitHub Actions (DRY toolchain-composite) | `.github/workflows/`, `.github/actions/bun-setup/` |
@@ -202,7 +202,7 @@ på loopback (`127.0.0.1:48761` / `localhost:48762`). Lägg nya demo-specar unde
 
 | Arbetsyta | `--audit-level` | Undantag |
 |---|---|---|
-| roten | `moderate` | 3 namngivna advisories (se nedan) |
+| roten | `low` | 1 namngiven advisory (se nedan) |
 | `helper-ui` | `low` | inga |
 
 Transitiva sårbarheter åtgärdas med **`overrides` i `package.json`**, inte genom
@@ -215,9 +215,15 @@ motiveras i kommentaren.
 
 Undantag skrivs som `--ignore <GHSA-id>` med ett skäl i workflowen — aldrig som
 en sänkt nivå. Ett undantag är legitimt bara när **ingen fixad version finns
-uppströms** eller när advisoryn bevisligen inte gäller vår användning. De tre
-nuvarande (två `image-size` utan fix alls, en `esbuild` som rör en dev-server vi
-aldrig startar) är dokumenterade i `security.yml`.
+uppströms** eller när advisoryn bevisligen inte gäller vår användning. Det enda
+nuvarande — `esbuild`, vars advisory rör en dev-server vi aldrig startar — är
+dokumenterat i `security.yml`.
+
+Går undantaget inte att motivera är svaret att ta bort BEROENDET. `html-to-docx`
+drog in ~13 transitiva paket — bl.a. `lodash`, `virtual-dom` och `image-size` med
+två high-CVE:er utan fix uppströms — för att rendera tre HTML-element i
+seed-datat. Det ersattes av `tooling/scripts/docx.ts`, ~120 rader OOXML (#970).
+Att äga lite kod är ibland billigare än att äga en beroendekedja.
 
 ### Arkitektur (`bun run deps:check`)
 
