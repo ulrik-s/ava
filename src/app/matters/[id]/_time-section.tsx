@@ -35,6 +35,24 @@ interface EditForm {
 /** Kategorierna i dropdown-ordning — härledd ur labels-kartan (single source). */
 const KIND_OPTIONS = Object.entries(TIME_ENTRY_KIND_LABELS) as Array<[TimeEntryKind, string]>;
 
+/**
+ * Föreskriftens tillämpningsregler, visade VID kategorivalet (#969).
+ *
+ * DVFS 2025:4 avgränsar när tidsspillan över huvud taget ersätts. De
+ * avgränsningarna är bedömningar bara juristen kan göra — AVA vet varken
+ * klockslag, om du övernattat eller om du ätit — så reglerna hör hemma där valet
+ * görs, inte som en kontroll efteråt.
+ *
+ * Alternativet, start- och sluttid på VARJE tidspost, hade kostat vid varje
+ * registrering i systemet för att fånga något ovanligt som domstolen dessutom
+ * stryker om det blir fel.
+ */
+const KIND_GUIDANCE: Partial<Record<TimeEntryKind, string>> = {
+  TIDSSPILLAN: "Dagtaxan gäller vardag 08.00–18.00. Ersättning lämnas bara för tid mellan 07.00 och 22.00, och normal måltidspaus är inte tidsspillan (DVFS 2025:4 §§ 2–4).",
+  TIDSSPILLAN_OVRIG_TID: "All tidsspillan utanför vardag 08.00–18.00 — men bara inom 07.00–22.00; tid mellan 22.00 och 07.00 ersätts inte alls. Vid övernattning på annan ort än tjänstestället ersätts 18.00–22.00 endast om den avser restid (DVFS 2025:4 §§ 2, 4).",
+  ARBETE_OBEKVAM_TID: "Häktningsförhandling under helg (DVFS 2025:7) eller polisförhör utanför ordinarie kontorstid (DVFS 2025:8). Tidsspillan i samband med sådana ersätts med DAGTAXAN, även 22.00–07.00.",
+};
+
 /** Ärenden där kategorin styr vilken ÅRSNORM slutregleringen värderar posten på. */
 const COVERAGE_METHODS = new Set<PaymentMethod>(["RATTSHJALP", "RATTSSKYDD"]);
 
@@ -337,11 +355,16 @@ function TimeForm({ form, setForm, submitLabel, isPending, isTaxeArende, isCover
             {KIND_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select>
           {isCoverage && (
-            <p className="mt-1 text-xs text-gray-500">
-              Kategorin avgör vilken av Domstolsverkets normer posten ersätts på.
-              Hela ärendet räknas om på slutregleringsårets normer, så en taxehöjning
-              slår igenom retroaktivt.
-            </p>
+            <>
+              <p className="mt-1 text-xs text-gray-500">
+                Kategorin avgör vilken av Domstolsverkets normer posten ersätts på.
+                Hela ärendet räknas om på slutregleringsårets normer, så en taxehöjning
+                slår igenom retroaktivt.
+              </p>
+              {KIND_GUIDANCE[form.kind] !== undefined && (
+                <p className="mt-1 text-xs text-amber-700">{KIND_GUIDANCE[form.kind]}</p>
+              )}
+            </>
           )}
         </div>
       </div>

@@ -115,6 +115,53 @@ describe("TimeSection — arvodeskategori (#953)", () => {
 });
 
 /**
+ * Föreskriftens tillämpningsregler vid kategorivalet (#969). AVA kan inte AVGÖRA
+ * om en post faller inom 07–22 eller om pausen var en måltidspaus — bara juristen
+ * vet det. Därför visas regeln VID valet; testet vaktar att den syns för rätt
+ * kategori, inte att någon kontroll körs.
+ */
+describe("TimeSection — DVFS-hjälptext vid kategorivalet (#969)", () => {
+  function openForm(paymentMethod: "PRIVAT" | "RATTSHJALP"): void {
+    render(<TimeSection matterId={matterId} paymentMethod={paymentMethod} />);
+    fireEvent.click(screen.getByText("+ Registrera tid"));
+  }
+
+  it("Arbete har ingen tillämpningsregel att visa", () => {
+    openForm("RATTSHJALP");
+    expect(screen.queryByText(/07\.00/)).not.toBeInTheDocument();
+  });
+
+  it("Tidsspillan visar 07–22-fönstret och måltidspausen", () => {
+    openForm("RATTSHJALP");
+    fireEvent.change(screen.getByLabelText("Arvodeskategori *"), { target: { value: "TIDSSPILLAN" } });
+    const text = screen.getByText(/måltidspaus/);
+    expect(text).toHaveTextContent("mellan 07.00 och 22.00");
+    expect(text).toHaveTextContent("DVFS 2025:4 §§ 2–4");
+  });
+
+  it("Tidsspillan annan tid visar övernattningsregeln — den gäller just 18–22", () => {
+    openForm("RATTSHJALP");
+    fireEvent.change(screen.getByLabelText("Arvodeskategori *"), { target: { value: "TIDSSPILLAN_OVRIG_TID" } });
+    const text = screen.getByText(/övernattning/);
+    expect(text).toHaveTextContent("18.00–22.00 endast om den avser restid");
+    // Natten är inte "lägre taxa" utan INGEN ersättning — lätt att tro fel.
+    expect(text).toHaveTextContent("22.00 och 07.00 ersätts inte alls");
+  });
+
+  it("Obekväm tid pekar på att TIDSSPILLAN då ersätts med dagtaxan", () => {
+    openForm("RATTSHJALP");
+    fireEvent.change(screen.getByLabelText("Arvodeskategori *"), { target: { value: "ARBETE_OBEKVAM_TID" } });
+    expect(screen.getByText(/Häktningsförhandling/)).toHaveTextContent("ersätts med DAGTAXAN");
+  });
+
+  it("privatärenden får ingen hjälptext — normerna styr inte deras arvode", () => {
+    openForm("PRIVAT");
+    fireEvent.change(screen.getByLabelText("Arvodeskategori *"), { target: { value: "TIDSSPILLAN" } });
+    expect(screen.queryByText(/måltidspaus/)).not.toBeInTheDocument();
+  });
+});
+
+/**
  * Byråns standardåtgärder (#956): en standard ska fylla beskrivning OCH tid, så
  * alla på byrån redovisar samma åtgärd likadant — men båda ska förbli
  * redigerbara, för "som huvudregel" betyder att avsteg måste vara möjligt.
