@@ -634,6 +634,32 @@ describe("billingRun.settleCoverage — bokför prutnings-uppdelningen (#801)", 
     expect(res.payerRun.recipient).toBe("DOMSTOL"); // slutfaktura till domstol
   });
 
+  it("aconto + slutfaktura bokför moms och intäkt EN gång tillsammans (#968)", async () => {
+    // Modell A: acontot är en delfakturering av utfört arbete och bokför sin egen
+    // intäkt + moms när det skickas. Slutfakturan får därför bara bära resten.
+    //
+    // Före fixen drogs acontot från slutfakturans `amount` men inte från dess
+    // `vatBreakdown`, så acontots moms och intäkt bokfördes två gånger — och
+    // eftersom verifikatet härleder bruttot ur raderna (semantic-voucher) drog
+    // det med sig kundfordran också.
+    const { caller: c } = caller({ paymentMethod: "RATTSHJALP", clientShareBips: 2000, taxaHasFTax: true }, 999999, 180);
+    const ac = await c.billingRun.createAcconto({ matterId: "m-1", clientShareBips: 2000, amountOre: 50_000 });
+    const res = await c.billingRun.settleCoverage({ matterId: "m-1", payerRecipient: "DOMSTOL" });
+
+    const accontoInvoice = ac.invoice;
+    const sumVat = (accontoInvoice.vatOre ?? 0) + (res.clientInvoice.vatOre ?? 0);
+    const sumGross = accontoInvoice.amount + res.clientInvoice.amount;
+    // Klientens faktiska andel: självrisk 81 300 brutto = 65 040 netto + 16 260 moms.
+    expect(sumGross).toBe(81_300);
+    expect(sumVat).toBe(16_260);
+
+    // …och slutfakturans egna rader måste summera till dess belopp, annars
+    // spricker verifikatet (brutto = Σnetto + Σmoms ur samma breakdown).
+    const lines = res.clientInvoice.vatBreakdown ?? [];
+    expect(lines.reduce((s, l) => s + l.netOre + l.vatOre, 0)).toBe(res.clientInvoice.amount);
+    expect(lines.reduce((s, l) => s + l.vatOre, 0)).toBe(res.clientInvoice.vatOre);
+  });
+
   it("returnerar itemiserad nedbrytning som reconcilar mot båda beloppen (#858)", async () => {
     const { caller: c } = caller({ paymentMethod: "RATTSHJALP", clientShareBips: 2000, taxaHasFTax: true }, 999999, 180);
     await c.billingRun.createAcconto({ matterId: "m-1", clientShareBips: 2000, amountOre: 50000 });
@@ -666,8 +692,20 @@ describe("billingRun.settleCoverage — bokför prutnings-uppdelningen (#801)", 
     expect(cv.totalOre).toBe(b.clientPayableOre);
     expect(cv.timeLines).toHaveLength(1);
     expect(cv.timeLines[0]!.amountOre).toBe(325_200);             // tidsspec-tabellen på klientfakturan
-    expect(cv.rows.find((r) => r.label === "Moms 25 %")?.amountOre).toBe(16_260);
-    expect(cv.rows.some((r) => r.kind === "deduct" && r.label.startsWith("Avgår aconto"))).toBe(true);
+    // #968 (modell A): acontot (50 000 brutto = 40 000 netto + 10 000 moms) har
+    // REDAN fakturerat sin egen moms. Klientfakturan visar därför bara momsen på
+    // det som återstår — 16 260 − 10 000 = 6 260 — och acontot dras av NETTO,
+    // före momsraden. Förr stod hela 16 260 här, vilket var momsen på ett belopp
+    // klienten aldrig skulle betala i sin helhet.
+    expect(cv.rows.find((r) => r.label === "Moms 25 %")).toBeUndefined();
+    expect(cv.rows.find((r) => r.label === "Moms på återstående belopp")?.amountOre).toBe(6_260);
+    const accontoRow = cv.rows.find((r) => r.kind === "deduct" && r.label.startsWith("Avgår aconto"));
+    expect(accontoRow?.amountOre).toBe(40_000);          // netto, inte 50 000 brutto
+    expect(accontoRow?.label).toContain("exkl moms");
+    // Fakturans egen moms måste stämma med dokumentet — det var att de INTE gjorde
+    // det som gjorde felet osynligt i #968.
+    expect(res.clientInvoice.vatOre).toBe(6_260);
+    expect(res.clientInvoice.amount).toBe(31_300);       // 25 040 netto + 6 260 moms
     const pv = res.payerInvoice.settlementBreakdown!;
     expect(pv.totalOre).toBe(b.payerPayableOre);
     // #876 — domstolsfakturan har SAMMA upplägg som klienten: tidsspec + andel-trappa.

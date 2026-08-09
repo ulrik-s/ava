@@ -16,6 +16,7 @@
  */
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import { accontoCreditAmounts, accontoSplit, deductAcconto } from "@/lib/shared/acconto-vat";
 import type { VatBreakdownLine } from "@/lib/shared/accounting/semantic-voucher";
 import { assertBillingTransition, type BillingActionType } from "@/lib/shared/billing-flow";
 import { proposedAccontoOre } from "@/lib/shared/billing-proposal";
@@ -303,15 +304,6 @@ function sumKindValueOre(byKind: ReadonlyMap<TimeEntryKind, number>, settleDate:
  * TIMKOSTNADSNORMEN (staten ersätter bara normen, ej byråns taxa), tidsspillan på
  * tidsspillan-normen, rådgivningstimmen exkluderas. Utlägg ersätts brutto.
  */
-/** Fakturans exakta momsbelopp (öre) per sats: arvodets moms (25 %) +
- *  varje utläggs moms (dess sats). Lagras på fakturan för korrekt bokföring (#782). */
-function invoiceVatOre(work: UnfrozenWork): number {
-  const arvodeNet = arvodeNetOre(work);
-  const arvodeVat = arvodeInclVatOre(arvodeNet) - arvodeNet;
-  const expenseVat = work.expenses.filter((e) => e.billable).reduce((sum, e) => sum + expenseSplit(e).vat, 0);
-  return arvodeVat + expenseVat;
-}
-
 /** En arvode-breakdown-rad (25 % moms) ur ett netto-arvode; null om 0. */
 function arvodeLine(arvodeNet: number): VatBreakdownLine | null {
   if (arvodeNet <= 0) return null;
@@ -796,6 +788,39 @@ function vatLabel(netOre: number, vatOre: number): string {
   return netOre > 0 && vatOre === vatOnNet(netOre) ? "Moms 25 %" : "Moms";
 }
 
+/**
+ * Momsraden på klientfakturan, med ev. aconto-avdrag (#968).
+ *
+ * UTAN aconton: oförändrad ordning — moms, sedan inkl-moms-raden.
+ *
+ * MED aconton: avdragen läggs NETTO och FÖRE momsraden, som då bara visar momsen
+ * på det som återstår. Acontofakturorna har redan fakturerat sin egen moms;
+ * dokumentet får inte redovisa den en gång till. Förr låg avdragen brutto EFTER
+ * momsraden, så fakturan visade momsen på hela självrisken — 3 704,61 kr på ett
+ * belopp om 9 273,31 kr. Inkl-moms-raden utgår i det läget: den skulle peka på en
+ * summa som ingen ska betala.
+ */
+function clientVatRows(b: SettlementBreakdown, feeCap: string): SettlementRow[] {
+  const netOre = b.sjalvriskNetOre + b.clientExpensesNetOre;
+  const fullVatOre = b.sjalvriskGrossOre - b.sjalvriskNetOre + b.clientExpensesVatOre;
+  if (b.deductedAccontos.length === 0) {
+    return [
+      { label: vatLabel(netOre, fullVatOre), amountOre: fullVatOre, kind: "add" },
+      { label: `${feeCap} inkl utlägg (inkl moms)`, amountOre: b.sjalvriskGrossOre + b.clientExpensesGrossOre, kind: "add" },
+    ];
+  }
+  const rows: SettlementRow[] = [];
+  let restVatOre = fullVatOre;
+  for (const d of b.deductedAccontos) {
+    const { netOre: accNet, vatOre: accVat } = accontoSplit(d.amountOre);
+    restVatOre -= accVat;
+    const when = d.date ? ` (${svd(d.date)})` : "";
+    rows.push({ label: `Avgår aconto — faktura ${d.invoiceNumber}${when}, exkl moms`, amountOre: accNet, kind: "deduct" });
+  }
+  rows.push({ label: "Moms på återstående belopp", amountOre: restVatOre, kind: "add" });
+  return rows;
+}
+
 function buildClientView(b: SettlementBreakdown, isRattshjalp: boolean, feeTerm: string): SettlementView {
   const share = shareLabel(b.clientShareBips);
   const feeCap = feeTerm.charAt(0).toUpperCase() + feeTerm.slice(1);
@@ -812,10 +837,7 @@ function buildClientView(b: SettlementBreakdown, isRattshjalp: boolean, feeTerm:
   }
   // Samma moms-trappa för BÅDA metoderna (#935) — rättsskydd fick förr bara en enda
   // inkl-moms-rad, vilket gjorde klientfakturorna asymmetriska och svårlästa.
-  const clientVatOre = b.sjalvriskGrossOre - b.sjalvriskNetOre + b.clientExpensesVatOre;
-  rows.push({ label: vatLabel(b.sjalvriskNetOre + b.clientExpensesNetOre, clientVatOre), amountOre: clientVatOre, kind: "add" });
-  rows.push({ label: `${feeCap} inkl utlägg (inkl moms)`, amountOre: b.sjalvriskGrossOre + b.clientExpensesGrossOre, kind: "add" });
-  for (const d of b.deductedAccontos) rows.push({ label: `Avgår aconto — faktura ${d.invoiceNumber}${d.date ? ` (${svd(d.date)})` : ""}`, amountOre: d.amountOre, kind: "deduct" });
+  rows.push(...clientVatRows(b, feeCap));
   return { timeLines: b.clientArvodeLines.map(toViewLine), rows, totalLabel: "Att betala (inkl moms)", totalOre: b.clientPayableOre };
 }
 
@@ -866,6 +888,19 @@ function buildCreditView(clientView: SettlementView, creditNetOre: number): Sett
  *   - = 0 → FINAL 0 (exakt avräknad; ovanligt).
  * Utbrutet så settleCoverage-handlern håller sig ≤8 i komplexitet.
  */
+/**
+ * Kreditfakturans momsbelopp (#968), negativt som resten av krediten.
+ *
+ * INGEN `vatBreakdown` sätts: `buildPerRateRows` räknar brutto ur raderna och
+ * filtrerar bort icke-positiva belopp, så negativa rader skulle tappas. Krediten
+ * går därför via enkelrads-verifikatet, som hanterar tecknet via `amount < 0`.
+ * En per-sats-kreditering kräver att verifikatbyggaren först lär sig negativa
+ * rader — egen issue, inte en tyst halvmesyr här.
+ */
+function creditVatOre(clientLines: VatBreakdownLine[], deductionOre: number): number {
+  return -accontoCreditAmounts(clientLines, deductionOre).vatOre;
+}
+
 async function createClientSettlementInvoice(repos: Repositories, ctx: EmitCtx, orgId: OrganizationId, a: {
   matterId: MatterId; clientGrossOre: number; deductionOre: number;
   clientLines: VatBreakdownLine[]; clientView: SettlementView; method: PaymentMethod; invoiceDate?: Date | string; notes: string | null | undefined;
@@ -873,20 +908,25 @@ async function createClientSettlementInvoice(repos: Repositories, ctx: EmitCtx, 
   const clientNet = a.clientGrossOre - a.deductionOre; // kan vara negativt (överbetald)
   const isCredit = clientNet < 0;
   const feeTerm = a.method === "RATTSHJALP" ? "rättshjälpsavgift" : "självrisk";
-  const overpaidOre = -clientNet;
   const base = { matterId: a.matterId, amount: clientNet, ...(await invoiceNumbering(repos, orgId, "KLIENT")), invoiceDate: a.invoiceDate ? new Date(a.invoiceDate) : new Date() };
+  // #968 (modell A): acontona har redan bokfört sin intäkt och sin moms, så
+  // slutfakturan bär bara det som ÅTERSTÅR — annars bokförs acontot två gånger.
+  const rest = deductAcconto(a.clientLines, a.deductionOre);
   const payload = isCredit
     ? {
         ...base,
-        // Kredit-moms = 25 %-andelen av det överbetalda bruttot (arvode dominerar).
-        vatOre: -Math.round(overpaidOre - overpaidOre / 1.25),
+        // Krediteringen vänder exakt det som blev för mycket bokfört: acontonas
+        // intäkt och moms minus fakturans faktiska (#968). Förr räknades 25 % på
+        // mellanskillnaden rakt av, vilket blir fel så snart fakturan bär utlägg
+        // med andra satser — acontot är alltid 25 %.
+        vatOre: creditVatOre(a.clientLines, a.deductionOre),
         // #895: full spec (tidsspec + rättshjälpsavgift + avdragna aconton) → kredit-netto.
         settlementBreakdown: buildCreditView(a.clientView, clientNet),
         invoiceType: "CREDIT" as const, status: "SENT" as const,
         notes: `Rättshjälps-överfakturering: betalda aconton (${(a.deductionOre / 100).toLocaleString("sv-SE")} kr) översteg slutlig ${feeTerm} — mellanskillnaden krediteras klienten.`,
       }
     : {
-        ...base, vatOre: vatOreOf(a.clientLines), vatBreakdown: a.clientLines,
+        ...base, vatOre: vatOreOf(rest.lines), vatBreakdown: rest.lines,
         settlementBreakdown: a.clientView, invoiceType: "FINAL" as const, status: "DRAFT" as const, notes: a.notes,
       };
   const invoice = await repos.invoices.create(payload);
@@ -1188,9 +1228,12 @@ export const billingRunRouter = router({
         const deductedRuns = await fetchDeductedAccontoRuns(tx, input.matterId, input.deductedBillingRunIds);
         const deductionOre = deductedRuns.reduce((sum, r) => sum + (r.amountOre ?? 0), 0);
         const finalAmount = Math.max(0, grossValue - deductionOre);
+        // #968 (modell A): acontona har REDAN bokfört sin intäkt och sin moms.
+        // Slutfakturan bär bara resten — annars bokförs acontot två gånger.
+        const rest = deductAcconto(invoiceVatBreakdown(work), deductionOre);
         const invoice = await tx.invoices.create({
-          matterId: input.matterId, amount: finalAmount, vatOre: invoiceVatOre(work),
-          vatBreakdown: invoiceVatBreakdown(work),
+          matterId: input.matterId, amount: finalAmount, vatOre: vatOreOf(rest.lines),
+          vatBreakdown: rest.lines,
           invoiceType: "FINAL", status: "DRAFT",
           ...(await invoiceNumbering(tx, ctx.orgId, input.recipient)),
           ...invoiceMeta(input), notes: input.notes,
