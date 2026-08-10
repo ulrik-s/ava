@@ -45,6 +45,11 @@ const MATCHERS: Matcher[] = [
   // fakturan stod tom oavsett hur många fakturor som skickats.
   { key: "documentFolders", owns: (p) => p.startsWith("document-folders/") },
   { key: "invoiceDispatches", owns: (p) => p.startsWith("invoice-dispatches/") },
+  // #988: kontakt- och händelseförslagen fick en producent (extraktion ur
+  // dokumenttexten) och kan därmed hydreras — panelerna var tomma i alla tier
+  // så länge ingenting skapade raderna.
+  { key: "documentAnalysisSuggestions", owns: (p) => p.startsWith("document-analysis-suggestions/") },
+  { key: "matterEventSuggestions", owns: (p) => p.startsWith("matter-event-suggestions/") },
   { key: "billingRuns", owns: (p) => p.startsWith("billing-runs/") },
   { key: "accontoDeductions", owns: (p) => p.startsWith("acconto-deductions/") },
   { key: "expectedReceivables", owns: (p) => p.startsWith("expected-receivables/") },

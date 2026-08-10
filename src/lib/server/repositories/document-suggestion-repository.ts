@@ -22,6 +22,9 @@ export interface SuggestionListRow extends DocumentAnalysisSuggestion {
 export interface DocumentSuggestionRepository extends Repository<DocumentAnalysisSuggestion> {
   /** Förslag by id, org-scopat via dokument→ärende (med matterId). Null om saknas/annan org. */
   getByIdInOrg(id: DocumentAnalysisSuggestionId, organizationId: OrganizationId): Promise<SuggestionWithMatter | null>;
+  /** ALLA förslag på ett dokument, oavsett status (#988). Dedup vid omanalys
+   *  måste se även AVFÄRDADE förslag — annars återuppstår de vid varje körning. */
+  listForDocument(documentId: DocumentId): Promise<DocumentAnalysisSuggestion[]>;
   /** Pending-förslag för ett ärende (dokument-include), sorterade createdAt. */
   listPendingForMatter(matterId: MatterId, organizationId: OrganizationId, order: "asc" | "desc"): Promise<SuggestionListRow[]>;
   /** Pending-förslag med givna id:n, org-scopat (grupp-accept). */

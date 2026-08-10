@@ -36,6 +36,9 @@ describe("pathToSourceKey", () => {
     // #985: utan dessa låg varje dokument i roten och utskickshistoriken var tom.
     expect(pathToSourceKey("document-folders/f1.json")).toBe("documentFolders");
     expect(pathToSourceKey("invoice-dispatches/d1.json")).toBe("invoiceDispatches");
+    // #988: förslagen fick en producent → de hydreras nu också.
+    expect(pathToSourceKey("document-analysis-suggestions/s1.json")).toBe("documentAnalysisSuggestions");
+    expect(pathToSourceKey("matter-event-suggestions/e1.json")).toBe("matterEventSuggestions");
     expect(pathToSourceKey(".ava/templates/t1.json")).toBe("documentTemplates");
     expect(pathToSourceKey(".ava/organizations/o1.json")).toBe("organizations");
     expect(pathToSourceKey(".ava/user-preferences/up1.json")).toBe("userPreferences");
@@ -64,19 +67,12 @@ describe("pathToSourceKey täcker ENTITY_REGISTRY", () => {
    * Entiteter som INTE hydreras i demon. Listan är en ratchet: den ska krympa,
    * aldrig växa, och varje rad kräver ett skäl.
    *
-   * De två som är kvar (#985) har INGEN producent någonstans i kodbasen —
-   * varken ett jobb eller en mutation skapar dem. `IDocumentAnalyzer.analyze`
-   * lovar att "eventuella suggestions postas via
-   * dataStore.documentAnalysisSuggestions", men ingen implementation gör det:
-   * classify-pipelinen skriver bara `document.updateMetadata`. Följden är att
-   * `SuggestionsPanel` och `EventsPanel` står tomma i ALLA tier, inte bara i
-   * demon. Att koppla på en matcher här hade varit meningslöst, och att seeda
-   * rader hade betytt data som appen själv aldrig kan producera. Gapet är
-   * uppströms — se #988.
+   * TOM sedan #988 — de två sista fick en producent (extraktion ur
+   * dokumenttexten) och kan därmed hydreras. Lägg inte till en rad här utan att
+   * samtidigt skriva VARFÖR entiteten inte ska synas i demon; "ingen har hunnit"
+   * är inget skäl, det var precis så write-offs tappades i #982.
    */
-  const NOT_YET_HYDRATED = new Set([
-    "documentAnalysisSuggestion", "matterEventSuggestion",
-  ]);
+  const NOT_YET_HYDRATED = new Set<string>();
 
   it("varje registrerad entitets gitPrefix mappar till sin sourceKey", () => {
     const gaps: string[] = [];

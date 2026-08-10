@@ -12,6 +12,7 @@ import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { documentAnalysisStatusSchema, documentDirectionSchema, documentRecipientSchema, type Document } from "@/lib/shared/schemas/document";
 import { asId, documentFolderIdSchema, documentIdSchema, invoiceIdSchema, matterIdSchema, userIdSchema } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
+import { writeSuggestionsFromText } from "../../documents/suggest-from-text";
 import { orgProcedure } from "../../trpc";
 import { assertDocAccess } from "./shared";
 
@@ -160,6 +161,26 @@ export const coreProcedures = {
         console.error("analyze failed:", e),
       );
       return { ok: true };
+    }),
+
+  /**
+   * Skapa kontakt- och händelseförslag ur ett dokuments TEXT (#988).
+   *
+   * Sömmen som saknades: `SuggestionsPanel` och `EventsPanel` fanns fullt
+   * utbyggda, men ingenting skapade raderna — panelerna stod tomma i alla tier.
+   * Anroparen skickar texten (klienten har den i sin content-cache, seedningen
+   * har den när dokumentet genereras), extraktionen är ren och deterministisk
+   * (`@/lib/shared/document-extraction`), och skrivningen är idempotent.
+   *
+   * Texten skickas in i stället för att läsas här: var den finns skiljer sig
+   * mellan tier (OPFS/FSA i self-hosted, seed-filer i demon, content-store i
+   * server-first), och den skillnaden hör inte hemma i routern.
+   */
+  suggestFromText: orgProcedure
+    .input(z.object({ documentId: documentIdSchema, text: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      await assertDocAccess(ctx, input.documentId);
+      return await writeSuggestionsFromText(ctx.repos, input.documentId, input.text);
     }),
 
   /**
