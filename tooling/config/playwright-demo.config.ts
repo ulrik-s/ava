@@ -26,14 +26,11 @@ export default defineConfig({
   // Specar som behöver en serverad `out/` hör hemma här — inte i
   // playwright.config.ts, som startar `next dev` på :3000 (#932).
   //
-  // `demo-smoke` och `kebab-verify` är UTELÄMNADE med flit: de hårdkodar seed-id:n
-  // i det gamla formatet (`m-001-vardnad`, `m-016-brottmal-rh`, `inv-001`) som
-  // seeden slutade producera för länge sedan — den kör UUID:er nu. Att ingen
-  // märkt det är samma sjuka som #932: specarna låg i ingens config och kördes
-  // för hand mot live-demon. De pekar numera på den lokala servern och bär
-  // hermeticitets-vakten, så den som lagar dem börjar från rätt utgångsläge; att
-  // ta in dem här innan dess vore bara att göra `e2e:demo` rött. Se #972.
-  testMatch: /(demo-invoice-document|demo-login|matters-employee-filter)\.spec\.ts$/,
+  // Alla demo-specar körs numera (#972). `demo-smoke` och `kebab-verify` låg
+  // utanför tills de slutat hårdkoda seed-id:n; de slår upp sina fixtures i
+  // `demo-seed.json` via `fetchDemoSeed`. Lägg inte till en spec här som pekar
+  // på ett id den inte slagit upp — det var precis så de tystnade förra gången.
+  testMatch: /(demo-invoice-document|demo-login|demo-smoke|kebab-verify|matters-employee-filter)\.spec\.ts$/,
   timeout: 90_000,
   expect: { timeout: 15_000 },
   fullyParallel: false,
