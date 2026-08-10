@@ -63,6 +63,10 @@ export async function generateKrDoc(args: GenerateKrDocArgs): Promise<void> {
     ...omitUndefined({ courtName: meta.courtName }),
     // Ingen huvudförhandling i rättshjälps-KR:n — arvodet kommer ur tidsposterna.
     hufStart: now, hufEnd: now,
+    // Yrkandet framställs när räkningen skapas (#980). Explicit trots att det är
+    // samma `now` som ovan: de två datumen betyder olika saker och ska inte
+    // följa med varandra om HUF-fälten någon gång får riktiga värden här.
+    yrkandeDate: now,
     isTaxeArende: false,
     expenses,
     timeEntries,
