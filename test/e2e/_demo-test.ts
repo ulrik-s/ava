@@ -84,6 +84,64 @@ export async function seedDemoLogin(page: Page, baseUrl: string = DEMO_BASE_URL)
   });
 }
 
+// ── Seed-uppslagning (#972) ───────────────────────────────────────────────
+
+/**
+ * Den del av demons `demo-seed.json` som e2e:t behöver för att hitta sina
+ * fixtures. Samma fil appen själv hydrerar ur, så det testet slår upp är per
+ * definition det användaren ser.
+ *
+ * Bakgrund: specarna navigerade till `m-001-vardnad`, `inv-001` och liknande
+ * slugs. Seeden översätter numera allt till UUID:n (`translateSeed`), så de
+ * sidorna finns inte — och eftersom specarna låg utanför alla configar (#932)
+ * märktes det aldrig. Att slå upp id:t i stället för att hårdkoda det är samma
+ * mönster som `seedDemoLogin` redan använder för användaren: ett hårdkodat id
+ * TYSTNAR till "sidan renderar inte" nästa gång seeden ändras, medan en
+ * uppslagning som inte hittar något säger vad som saknas.
+ */
+export interface DemoSeed {
+  matters: Array<{ id: string; title: string }>;
+  contacts: Array<{ id: string; name: string }>;
+  invoices: Array<{ id: string; matterId: string }>;
+  documents: Array<{ id: string; matterId: string; title: string }>;
+  timeEntries: Array<{ id: string; matterId: string; description: string }>;
+  expenses: Array<{ id: string; matterId: string; description: string }>;
+}
+
+/** Grupper som bär `matterId` — det e2e:t kan kräva att ett ärende har. */
+export type MatterScopedKey = "documents" | "timeEntries" | "expenses" | "invoices";
+
+/** Hämta demons egen seed ur den serverade `out/`. */
+export async function fetchDemoSeed(page: Page, baseUrl: string = DEMO_BASE_URL): Promise<DemoSeed> {
+  const url = `${baseUrl}/demo-seed.json`;
+  const res = await page.request.get(url);
+  if (!res.ok()) {
+    throw new Error(`kunde inte läsa ${url}: HTTP ${res.status()} — är out/ byggd och serverad?`);
+  }
+  return await res.json() as DemoSeed;
+}
+
+/**
+ * Id:t för det första ärendet (id-sorterat → stabilt mellan körningar) som har
+ * rader i ALLA angivna grupper. Kravet skrivs ut i felmeddelandet, så en spec
+ * som tappar sin fixture säger vad seeden slutade producera i stället för att
+ * fälla på en tom sida.
+ */
+export function matterIdWith(seed: DemoSeed, ...required: MatterScopedKey[]): string {
+  const has = (key: MatterScopedKey, id: string): boolean => seed[key].some((r) => r.matterId === id);
+  const hit = seed.matters.map((m) => m.id).sort()
+    .find((id) => required.every((key) => has(key, id)));
+  if (hit === undefined) throw new Error(`seeden saknar ärende med ${required.join(" + ")}`);
+  return hit;
+}
+
+/** Seed-raderna som hör till ett ärende — det sidan ska visa. */
+export function rowsForMatter<K extends MatterScopedKey>(
+  seed: DemoSeed, key: K, matterId: string,
+): DemoSeed[K] {
+  return seed[key].filter((r) => r.matterId === matterId) as DemoSeed[K];
+}
+
 /** Icke-HTTP (`data:`, `blob:`, `about:`) är inte nätverk — släpp igenom. */
 function isNetworkUrl(url: string): boolean {
   return /^https?:\/\//i.test(url);

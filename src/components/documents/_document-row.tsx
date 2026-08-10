@@ -335,7 +335,12 @@ function DocumentNameButton({ doc, isAnalyzing, disabled, onOpen }: NameButtonPr
       type="button"
       onClick={() => { if (!disabled) onOpen(); }}
       disabled={disabled}
-      className="flex items-start gap-2 text-blue-600 hover:underline text-left disabled:opacity-50 disabled:cursor-not-allowed disabled:no-underline"
+      // `w-full min-w-0`: en `display:flex`-knapp är shrink-to-fit och växer
+      // annars till sitt max-content — 390 px i en 103 px-cell, alltså
+      // horisontell scroll på mobil trots table-fixed. `break-words` på
+      // text-spanen nedan hjälper inte så länge själva flex-containern är för
+      // bred; den måste först få krympa. Mätt i #972.
+      className="flex w-full min-w-0 items-start gap-2 text-blue-600 hover:underline text-left disabled:opacity-50 disabled:cursor-not-allowed disabled:no-underline"
       title={disabled ? "Laddar upp — vänta tills filen är registrerad" : (doc.summary || "Öppna i extern app (PDFGear för PDF)")}
     >
       <span className="text-lg leading-tight flex-shrink-0">📄</span>

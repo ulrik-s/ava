@@ -19,16 +19,36 @@
 
 import { type Page } from "@playwright/test";
 
-import { DEMO_BASE_URL as BASE, seedDemoLogin, test, expect } from "./_demo-test";
+import { DEMO_BASE_URL as BASE, fetchDemoSeed, matterIdWith, seedDemoLogin, test, expect } from "./_demo-test";
+
+/** `DocumentBrowser` läser vyläget härifrån — måste sättas FÖRE första render. */
+const VIEW_MODE_KEY = "ava.documents.viewMode";
 
 test.beforeEach(async ({ page }) => {
   // localhost defaultar till self-hosted (→ 401) → tvinga demo. Seedas även mot
   // live: `repo: ""` ger same-origin i båda lägena, så vägen är densamma.
   await seedDemoLogin(page, BASE);
+  // TRÄD-vyn, inte listvyn. Det är trädets tabell som bär fixarna specen
+  // granskar (`table-fixed` i document-browser.tsx, `hidden sm:table-cell` i
+  // _document-row/_folder-row) och dess kebab som har hela action-uppsättningen.
+  // Default är numera listvyn, som renderar den generiska `DataTable` med en
+  // annan, kortare meny och utan kolumn-döljning — specen mätte alltså fel
+  // tabell, vilket ingen såg eftersom den låg utanför alla configar (#932).
+  // Listvyns egna brister är EGEN sak: #983.
+  await page.addInitScript(([key, mode]) => {
+    try { localStorage.setItem(key!, mode!); } catch { /* privat läge */ }
+  }, [VIEW_MODE_KEY, "tree"]);
 });
 
+/**
+ * Ett ärende som FAKTISKT har dokument — annars finns ingen kebab att öppna och
+ * testet fäller på en tom tabell i stället för på menyn det granskar. Id:t slås
+ * upp i seeden (#972); det hårdkodade `m-001-vardnad` slutade existera när
+ * seeden gick över till UUID:n.
+ */
 async function gotoMatter(page: Page) {
-  await page.goto(`${BASE}/matters/m-001-vardnad/`);
+  const seed = await fetchDemoSeed(page, BASE);
+  await page.goto(`${BASE}/matters/${matterIdWith(seed, "documents")}/`);
   await page.getByLabel("Dokumentåtgärder").first().waitFor({ timeout: 25_000 });
   await page.waitForTimeout(1500); // demo-bootstrap invalidateQueries settle
 }
@@ -39,9 +59,14 @@ test("dokumentrad: kebab-meny öppnas med alla actions + Escape stänger", async
 
   const menu = page.getByRole("menu", { name: "Dokumentåtgärder" });
   await expect(menu).toBeVisible();
-  for (const label of ["Öppna i webbläsaren", "Editera externt", "Visa", "Ladda ner", "Analysera", "Ta bort"]) {
+  for (const label of ["Öppna i webbläsaren", "Editera externt", "Visa", "Ladda ner", "Ta bort"]) {
     await expect(menu.getByText(new RegExp(label))).toBeVisible();
   }
+  // "Analysera (AI)" ska INTE finnas här. ADR 0027: LLM-analys är en
+  // server-förmåga, och demon har ingen server — affordansen ska då döljas, inte
+  // visas och fela. Specen krävde tvärtom att den fanns, vilket bara gick att
+  // tro så länge den aldrig kördes (#932/#972).
+  await expect(menu.getByText(/Analysera/)).toHaveCount(0);
 
   await page.keyboard.press("Escape");
   await expect(menu).toBeHidden();

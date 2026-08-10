@@ -43,9 +43,13 @@ const server = createServer((req, res) => {
     const url = decodeURIComponent((req.url ?? "/").split("?")[0]!);
     const rel = url.startsWith("/ava") ? url.slice(4) : url; // strip GH-Pages-prefixet
     // Fil → annars 404.html (SPA-fallback, precis som GH Pages).
-    const file = (await resolveFile(join(ROOT, rel))) ?? (await resolveFile(join(ROOT, "404.html")));
+    const hit = await resolveFile(join(ROOT, rel));
+    const file = hit ?? (await resolveFile(join(ROOT, "404.html")));
     if (!file) { res.writeHead(404).end("not found"); return; }
-    res.writeHead(200, { "content-type": MIME[extname(file)] ?? "application/octet-stream" });
+    // STATUSEN speglas också, inte bara kroppen (#972): GH Pages svarar 404 på
+    // fallbacken. Servern svarade förr 200 oavsett, vilket gjorde varje
+    // assertion om shim-vägen meningslös lokalt och sann bara mot live.
+    res.writeHead(hit ? 200 : 404, { "content-type": MIME[extname(file)] ?? "application/octet-stream" });
     res.end(await readFile(file));
   })();
 });

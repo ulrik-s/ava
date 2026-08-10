@@ -14,7 +14,9 @@
  * själva verket det som redan låg publicerat, inte branchen man satt på.
  */
 
-import { DEMO_BASE_URL as BASE, seedDemoLogin, test, expect } from "./_demo-test";
+import {
+  DEMO_BASE_URL as BASE, fetchDemoSeed, matterIdWith, rowsForMatter, seedDemoLogin, test, expect,
+} from "./_demo-test";
 
 test.beforeEach(async ({ page }) => {
   // Tvinga demo-tier (localhost defaultar self-hosted → 401) OCH logga in:
@@ -70,43 +72,62 @@ test("dokumentmallar visas (data laddas från .ava/templates/)", async ({ page }
   await expect(page.getByRole("cell", { name: "Kostnadsräkning till rätten", exact: true })).toBeVisible({ timeout: 15_000 });
 });
 
-test("ärendelistan visar seed-data (Brottmål m-016)", async ({ page }) => {
+test("ärendelistan visar seedens egna ärenden", async ({ page }) => {
+  const seed = await fetchDemoSeed(page, BASE);
   await page.goto(`${BASE}/matters/`);
-  await expect(page.getByText(/Brottm/, { exact: false }).first()).toBeVisible({ timeout: 15_000 });
+  // Titeln kommer ur seeden, inte ur en hårdkodad sträng: listan ska visa det
+  // datat demon faktiskt bär, vad seeden än döpt ärendena till.
+  const title = seed.matters[0]?.title ?? "";
+  await expect(page.getByText(title, { exact: false }).first()).toBeVisible({ timeout: 15_000 });
 });
 
-test("kontaktlistan visar seed-data (Andersson)", async ({ page }) => {
+test("kontaktlistan visar seedens egna kontakter", async ({ page }) => {
+  const seed = await fetchDemoSeed(page, BASE);
   await page.goto(`${BASE}/contacts/`);
-  await expect(page.getByText("Andersson", { exact: false }).first()).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText(seed.contacts[0]?.name ?? "", { exact: false }).first())
+    .toBeVisible({ timeout: 15_000 });
 });
 
-test("klick på matter öppnar detalj-sidan utan loop", async ({ page }) => {
+test("matter-detalj öppnas på sitt eget id utan loop", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (err) => errors.push(`pageerror: ${err.message}`));
 
-  await page.goto(`${BASE}/matters/m-016-brottmal-rh/`);
-  await expect(page.locator("body")).toContainText(/Brottm|m-016/i, { timeout: 15_000 });
+  const seed = await fetchDemoSeed(page, BASE);
+  const matter = seed.matters[0];
+  if (!matter) throw new Error("seeden saknar ärenden");
 
-  // Vänta lite och försäkra oss om att vi inte loop:ar till en redirect-sida
+  await page.goto(`${BASE}/matters/${matter.id}/`);
+  await expect(page.locator("body")).toContainText(matter.title, { timeout: 15_000 });
+
+  // Vänta lite och försäkra oss om att vi inte loop:ar till en redirect-sida.
+  // Seed-ärenden ÄR pre-renderade (`demoStaticParams("matters/active")`), så
+  // URL:en ska stå kvar — ingen __shell__-omskrivning här.
   await page.waitForTimeout(1500);
-  expect(page.url(), "URL ska innehålla matter-id:t").toMatch(/m-016-brottmal-rh/);
+  expect(page.url(), "URL ska behålla ärendets id").toContain(matter.id);
   expect(errors, "inga script-errors").toEqual([]);
 });
 
-test("avbetalningsplaner-sidan listar seed-planerna", async ({ page }) => {
+test("avbetalningsplaner-sidan renderar", async ({ page }) => {
+  // Sidan hade förr en assertion om `pp-`-länkar. Demons simulering (#880)
+  // producerar inga avbetalningsplaner alls längre — se #982 — så ett test som
+  // kräver planrader skulle påstå något om data som inte finns. Kvar är att
+  // sidan renderar sitt tomläge utan att krascha.
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`));
   await page.goto(`${BASE}/payment-plans/`);
-  // Listan visar ärendenr (2026-XXXX) + klient-namn. Verifiera att åtminstone
-  // en avbetalningsplan-länk syns (pp-001..pp-007 i seed).
-  await expect(page.locator('a[href*="/payment-plans/pp-"]').first()).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator("body")).toContainText(/Avbetalningsplaner/i, { timeout: 15_000 });
+  expect(errors, "inga script-errors").toEqual([]);
 });
 
 test("kontakt-detalj kraschar inte (c.children kan vara undefined)", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push("pageerror: " + e.message.slice(0, 250)));
 
-  // Testa flera olika kontakter med olika "shape"
-  for (const id of ["c-andersson", "c-byggfirma", "c-folksam", "c-skatteverket"]) {
-    await page.goto(`${BASE}/contacts/${id}/`);
+  // Flera kontakter — buggen satt i olika "shape" på seed-raderna, så det är
+  // bredden som är poängen, inte vilka fyra kontakter det råkar vara.
+  const seed = await fetchDemoSeed(page, BASE);
+  for (const contact of seed.contacts.slice(0, 4)) {
+    await page.goto(`${BASE}/contacts/${contact.id}/`);
     await page.waitForFunction(() => !document.body.innerText.includes("Laddar data"), { timeout: 30_000 });
     await page.waitForTimeout(1000);
   }
@@ -115,12 +136,22 @@ test("kontakt-detalj kraschar inte (c.children kan vara undefined)", async ({ pa
   expect(errors.filter((e) => e.includes("TypeError")), "inga TypeErrors").toEqual([]);
 });
 
-test("faktura-detalj öppnas utan loop (inv-001 + inv-005)", async ({ page }) => {
-  for (const id of ["inv-001", "inv-005"]) {
-    const response = await page.goto(`${BASE}/invoices/${id}/`, { waitUntil: "domcontentloaded" });
-    expect(response?.status(), `inv-${id} ska vara pre-renderad (200), inte SPA-fallback (404)`).toBe(200);
+test("faktura-detalj öppnas via __shell__-shimmen, utan loop", async ({ page }) => {
+  // Fakturor pre-renderas INTE per id (`static-params.ts` returnerar bara
+  // sentinellen): id:na skapas av demo-generatorn vid körning och kan inte
+  // enumereras vid build. Vägen dit är shimmen — okänd URL → 404.html →
+  // `/invoices/__shell__/#orig=…` → `useRouteId`. Testet fällde förr på
+  // `status === 200`, vilket krävde motsatsen till den arkitekturen.
+  const seed = await fetchDemoSeed(page, BASE);
+  for (const invoice of seed.invoices.slice(0, 2)) {
+    await page.goto(`${BASE}/invoices/${invoice.id}/`, { waitUntil: "domcontentloaded" });
     await page.waitForFunction(() => !document.body.innerText.includes("Laddar data"), { timeout: 30_000 });
-    expect(page.url(), "ingen redirect-loop").toContain(`/invoices/${id}`);
+    // Shimmen bär det riktiga id:t i hash:en; appen ska ha plockat upp det och
+    // renderat fakturan i stället för att fastna på sentinellen.
+    await expect(page.locator("body"), "fakturan ska ha laddats, inte 'kunde inte ladda'")
+      .not.toContainText(/kunde inte ladda/i);
+    expect(decodeURIComponent(page.url()), "id:t ska följa med genom shimmen")
+      .toContain(invoice.id);
   }
 });
 
@@ -128,35 +159,49 @@ test("matter-detalj visar seed-tider (regressionsskydd för org-id-bugen)", asyn
   const errors: string[] = [];
   page.on("console", (m) => { if (m.type() === "error" && m.text().includes("hydratisera")) errors.push(m.text()); });
 
-  await page.goto(`${BASE}/matters/m-001-vardnad/`);
+  const seed = await fetchDemoSeed(page, BASE);
+  const matterId = matterIdWith(seed, "timeEntries");
+  await page.goto(`${BASE}/matters/${matterId}/`);
   await page.waitForFunction(() => !document.body.innerText.includes("Laddar data"), { timeout: 30_000 });
 
-  // Tidregistrering-sektionens innehåll: seed har te-001 "Genomgång av handlingar"
-  await expect(page.getByText(/Genomgång av handlingar/)).toBeVisible({ timeout: 15_000 });
+  // Tidregistrerings-sektionen ska visa ärendets EGEN tidspost ur seeden.
+  const entry = rowsForMatter(seed, "timeEntries", matterId)[0];
+  await expect(page.getByText(entry?.description ?? "").first()).toBeVisible({ timeout: 15_000 });
 
   // Inga hydration-warnings i console
   expect(errors, "ProjectionHydrator får inte kasta ZodError för seed-data").toEqual([]);
 });
 
 test("matter-detalj visar tabell-rader för fakturor/utlägg/tider", async ({ page }) => {
-  await page.goto(`${BASE}/matters/m-001-vardnad/`);
+  const seed = await fetchDemoSeed(page, BASE);
+  const matterId = matterIdWith(seed, "timeEntries", "expenses");
+  await page.goto(`${BASE}/matters/${matterId}/`);
   await page.waitForFunction(() => !document.body.innerText.includes("Laddar data"), { timeout: 30_000 });
 
-  const body = await page.locator("body").textContent();
-  // Utlägg-summary syns (seed: Domstolsavgift, Parkeringsavgift)
-  expect(body, "Utlägg ska visas på matter-detalj").toMatch(/Domstolsavgift|Parkeringsavgift/);
-  // Tid-rad: HH:MM-format ("0:30" från te-001)
-  expect(body, "Tid-rader ska visas").toMatch(/\d+:\d{2}/);
+  // RETRY-matchers, inte ett `textContent()`-ögonblick: `waitForFunction` ovan
+  // väntar på "Laddar data", men appens första platshållare är "Laddar…" — en
+  // ögonblicksbild kan alltså tas medan sidan fortfarande bootar. `useInnerText`
+  // håller dessutom Next:s `__next_f`-script utanför matchningen, så en
+  // NaN-sträng i script-payloaden inte kan fälla (eller rädda) testet.
+  const body = page.locator("body");
+  const opts = { useInnerText: true, timeout: 15_000 } as const;
+  // Utlägget kommer ur seeden — samma rad som ska stå i tabellen.
+  const expense = rowsForMatter(seed, "expenses", matterId)[0];
+  await expect(body, "Utlägg ska visas på matter-detalj").toContainText(expense?.description ?? "", opts);
+  // Tid-rad: HH:MM-format
+  await expect(body, "Tid-rader ska visas").toContainText(/\d+:\d{2}/, opts);
   // Inga "NaN kr" eller "Invalid Date" från brutna fält
-  expect(body, "Inga NaN-belopp").not.toMatch(/NaN kr|Invalid Date/);
+  await expect(body, "Inga NaN-belopp").not.toContainText(/NaN kr|Invalid Date/, opts);
 });
 
 test("matter-detalj visar seed-dokument", async ({ page }) => {
-  await page.goto(`${BASE}/matters/m-001-vardnad/`);
+  const seed = await fetchDemoSeed(page, BASE);
+  const matterId = matterIdWith(seed, "documents");
+  await page.goto(`${BASE}/matters/${matterId}/`);
   await page.waitForFunction(() => !document.body.innerText.includes("Laddar data"), { timeout: 30_000 });
 
-  // Dokument från seed (Stämningsansökan / Förlikningsförslag etc.)
-  await expect(page.getByText(/\.pdf|\.docx/i).first()).toBeVisible({ timeout: 15_000 });
+  const doc = rowsForMatter(seed, "documents", matterId)[0];
+  await expect(page.getByText(doc?.title ?? "").first()).toBeVisible({ timeout: 15_000 });
 });
 
 test("SPA-fallback redirectar till app-shellen vid 404", async ({ page }) => {

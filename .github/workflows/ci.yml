@@ -245,7 +245,19 @@ jobs:
         # `serve-demo-static.ts` själv (`webServer`), så den lokala körningen och
         # CI gör exakt samma sak. Specarna bär dessutom en hermeticitets-vakt —
         # varje förfrågan utanför den egna originen fäller testet.
-        run: npx playwright test test/e2e/demo-login.spec.ts --config tooling/config/playwright-demo.config.ts
+        #
+        # `demo-smoke` + `kebab-verify` kom till i #972. De är billiga
+        # render-smokes (~1 min tillsammans) och slår upp sina fixtures ur
+        # seeden i stället för att hårdkoda id:n — det var just för att de låg
+        # utanför CI som de kunde ruttna i tysthet. Det TYNGRE faktura-flödet
+        # (demo-invoice-document) hålls fortfarande utanför; det körs i
+        # `test:all` lokalt.
+        run: >
+          npx playwright test
+          test/e2e/demo-login.spec.ts
+          test/e2e/demo-smoke.spec.ts
+          test/e2e/kebab-verify.spec.ts
+          --config tooling/config/playwright-demo.config.ts
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
