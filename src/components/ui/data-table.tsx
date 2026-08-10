@@ -24,13 +24,13 @@ import { trpc } from "@/lib/client/trpc";
 import type { SortDir, Column, DataTablePrefs, RowGroup } from "./data-table-logic";
 import {
   isFilterable, isGroupable, mergePrefs, sortRows, filterRows, groupRows,
-  isColumnHidden, visibleColumns, hasOverrides, hasSummary, buildSummaryContent,
+  isColumnHidden, visibleColumns, hasOverrides, hasSummary, buildSummaryContent, hideBelowClass,
 } from "./data-table-logic";
 
 export type { SortDir, Column, DataTablePrefs, RowGroup } from "./data-table-logic";
 export {
   isFilterable, isGroupable, mergePrefs, sortRows, filterRows, groupRows,
-  isColumnHidden, visibleColumns, hasOverrides, hasSummary, buildSummaryContent,
+  isColumnHidden, visibleColumns, hasOverrides, hasSummary, buildSummaryContent, hideBelowClass,
 } from "./data-table-logic";
 
 type FooterFn<T> = (rows: T[]) => Partial<Record<string, React.ReactNode>>;
@@ -54,7 +54,8 @@ function widthOf<T>(col: Column<T>, prefs: DataTablePrefs): number | undefined {
 /** Cell-klass för data-rader: wrappande kolumner bryter text över flera rader,
  *  övriga håller `nowrap` (default). */
 function cellClass<T>(col: Column<T>): string {
-  return `px-3 py-2 ${col.wrap ? "whitespace-normal break-words" : "whitespace-nowrap"}`;
+  const wrap = col.wrap ? "whitespace-normal break-words" : "whitespace-nowrap";
+  return `px-3 py-2 ${wrap} ${hideBelowClass(col)}`.trimEnd();
 }
 
 export function DataTable<T>({ prefKey, columns, data, rowKey, onRowClick, emptyMessage, footer }: Props<T>) {
@@ -366,7 +367,8 @@ function GroupSummaryRow<T>({ vCols, prefs, content }: { vCols: Column<T>[]; pre
   return (
     <tr className="bg-gray-100 border-t border-gray-300 text-xs font-semibold text-gray-800">
       {vCols.map((c) => (
-        <td key={c.key} style={{ width: widthOf(c, prefs), textAlign: c.align ?? "left" }} className="px-3 py-1.5 whitespace-nowrap">
+        <td key={c.key} style={{ width: widthOf(c, prefs), textAlign: c.align ?? "left" }}
+          className={`px-3 py-1.5 whitespace-nowrap ${hideBelowClass(c)}`.trimEnd()}>
           {content[c.key] ?? ""}
         </td>
       ))}
@@ -415,7 +417,7 @@ function FooterRow<T>({ vCols, prefs, content }: FooterProps<T>) {
       <tr className="bg-gray-50 border-t-2 border-gray-200 font-semibold">
         {vCols.map((c) => (
           <td key={c.key} style={{ width: widthOf(c, prefs), textAlign: c.align ?? "left" }}
-            className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">
+            className={`px-3 py-2 whitespace-nowrap text-sm text-gray-900 ${hideBelowClass(c)}`.trimEnd()}>
             {content[c.key] ?? ""}
           </td>
         ))}
@@ -512,7 +514,7 @@ function HeaderCell<T>({ col, prefs, width, actions }: HeaderCellProps<T>) {
   return (
     <th
       style={{ width, textAlign: col.align ?? "left" }}
-      className="relative px-3 py-2 text-xs font-semibold text-gray-700 select-none"
+      className={`relative px-3 py-2 text-xs font-semibold text-gray-700 select-none ${hideBelowClass(col)}`.trimEnd()}
       draggable
       onDragStart={(e) => e.dataTransfer.setData("text/x-col", col.key)}
       onDragOver={(e) => e.preventDefault()}

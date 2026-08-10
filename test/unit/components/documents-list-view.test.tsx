@@ -2,7 +2,7 @@
  * DocumentsListView — flat-vy för dokument med folder-path-kolumn.
  */
 
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest-compat";
 import { DocumentsListView } from "@/components/documents/_documents-list-view";
 import { asId } from "@/lib/shared/schemas/ids";
@@ -133,5 +133,74 @@ describe("DocumentsListView", () => {
     expect(
       screen.getByRole("button", { name: "minnesanteckning (din ändring 2027-03-14 09:15).txt" }),
     ).toBeInTheDocument();
+  });
+});
+
+/**
+ * #983: listvyn byggde en EGEN, kortare kebab-meny. Samma dokument på samma
+ * sida gav alltså olika möjligheter beroende på vilken vy man råkade stå i —
+ * Öppna, Visa och Ladda ner fanns bara i trädet. Båda vyerna renderar nu
+ * `DocumentActions`, och testerna nedan vaktar att de inte glider isär igen.
+ */
+describe("DocumentsListView — kebab-menyn (#983)", () => {
+  function renderRow() {
+    render(
+      <DocumentsListView
+        matterId={asId<"MatterId">("m1")} documents={[baseDoc()]} folders={[]}
+        onDelete={() => {}} onReanalyze={() => {}}
+      />,
+    );
+    fireEvent.click(screen.getByLabelText("Dokumentåtgärder"));
+    return screen.getByRole("menu", { name: "Dokumentåtgärder" });
+  }
+
+  it("erbjuder hela dokumentuppsättningen, inte bara redigera/analysera/ta bort", () => {
+    const menu = renderRow();
+    for (const label of ["Öppna i webbläsaren", "Editera externt", "Visa", "Ladda ner", "Ta bort"]) {
+      expect(menu.textContent, `${label} saknas i listvyns meny`).toContain(label);
+    }
+  });
+
+  it("Ta bort kräver bekräftelse och anropar onDelete med dokumentets id", () => {
+    const onDelete = vi.fn();
+    const confirmSpy = vi.spyOn(globalThis, "confirm").mockReturnValue(true);
+    try {
+      render(
+        <DocumentsListView
+          matterId={asId<"MatterId">("m1")} documents={[baseDoc()]} folders={[]}
+          onDelete={onDelete} onReanalyze={() => {}}
+        />,
+      );
+      fireEvent.click(screen.getByLabelText("Dokumentåtgärder"));
+      fireEvent.click(screen.getByText("Ta bort"));
+      expect(confirmSpy).toHaveBeenCalled();
+      expect(onDelete).toHaveBeenCalledWith("d1");
+    } finally {
+      confirmSpy.mockRestore();
+    }
+  });
+});
+
+/**
+ * Mobil-bredd (#983). Listvyn visade sex kolumner även på 390 px och överflödade
+ * med 456 px, medan träd-vyn dolde sina sekundära kolumner. jsdom räknar inte
+ * layout, så testet granskar KLASSERNA — själva överflödet mäts i e2e:t.
+ */
+describe("DocumentsListView — kolumner på små skärmar (#983)", () => {
+  it("sekundära kolumner bär responsiv döljning; filnamnet gör det inte", () => {
+    render(
+      <DocumentsListView
+        matterId={asId<"MatterId">("m1")} documents={[baseDoc()]} folders={[]}
+        onDelete={() => {}} onReanalyze={() => {}}
+      />,
+    );
+    const headerFor = (label: string): HTMLElement =>
+      screen.getByText(new RegExp(`^${label}`)).closest("th")!;
+
+    // Filnamnet är det enda som alltid måste synas — det får inte döljas.
+    expect(headerFor("Filnamn").className).not.toContain("hidden");
+    for (const label of ["Typ", "Datum", "Storlek", "Mapp", "Uppladdad av"]) {
+      expect(headerFor(label).className, `${label} ska döljas på små skärmar`).toContain("hidden");
+    }
   });
 });
