@@ -156,6 +156,11 @@ type HelperState = ReturnType<typeof useHelper>;
 function useKostnadsrakningModal(props: Props) {
   const [hufStart, setHufStart] = useState<string>(() => defaultStart(props.initialHufStart));
   const [hufEnd, setHufEnd] = useState<string>(() => toDatetimeLocalValue(new Date()));
+  // Yrkandedatumet (#980): när räkningen framställs — det är det som avgör vilket
+  // års normer arbetet värderas på, inte när förhandlingen slutade. Låst när
+  // modalen öppnas så att beloppen inte kryper medan man skriver, och skilt från
+  // `hufEnd` som är ett riktigt klockslag i rättssalen.
+  const [yrkandeDate] = useState<Date>(() => new Date());
   const [isTaxe, setIsTaxe] = useState<boolean>(props.initialIsTaxe ?? true);
   const [level, setLevel] = useState<TaxaLevel>(props.initialLevel ?? 1);
   // F-skatt antas alltid — alla advokater har F-skatt. Tidigare radio borttagen.
@@ -196,12 +201,13 @@ function useKostnadsrakningModal(props: Props) {
     ...omitUndefined({ courtName: props.courtName }),
     hufStart: new Date(hufStart),
     hufEnd: new Date(hufEnd),
+    yrkandeDate,
     taxaLevel: level,
     hasFTax,
     isTaxeArende: isTaxe,
     expenses: props.expenses,
     timeEntries: ((timeEntries.data?.entries ?? []) as Array<{ id: string; date: string | Date; description: string; minutes: number; billable: boolean }>),
-  }), [hufStart, hufEnd, level, isTaxe, hasFTax, props, timeEntries.data]);
+  }), [hufStart, hufEnd, yrkandeDate, level, isTaxe, hasFTax, props, timeEntries.data]);
 
   useEffect(() => {
     const h = (e: KeyboardEvent) => { if (e.key === "Escape") props.onClose(); };

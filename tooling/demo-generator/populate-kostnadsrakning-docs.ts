@@ -113,6 +113,10 @@ async function krContextFor(c: Any, run: Any): Promise<Any> {
     matter: { matterNumber: matter.matterNumber, title: matter.title, clientName: matter.clientName ?? undefined, radgivningPaid: matter.paymentMethod === "RATTSHJALP" },
     defender: { name: matter.responsibleLawyerName ?? "Ansvarig jurist" },
     hufStart: date, hufEnd: date, // ingen huvudförhandling i dessa KR:er
+    // Yrkandet framställdes när KR-runnen skapades (#980) — det styr både
+    // normvalet och räkningens datum i dokumentet. Explicit, så det inte råkar
+    // följa med hufEnd om de fälten någon gång får riktiga förhandlingstider.
+    yrkandeDate: date,
     isTaxeArende: false, hasFTax: true,
     timeEntries: (te.entries ?? []) as Any,
     expenses: (ex.expenses ?? []) as Any,

@@ -59,6 +59,22 @@ export interface BuildInput {
   hufStart: Date | string;
   /** ISO-string eller Date — HUF slutade (just nu i rättssalen). */
   hufEnd: Date | string;
+  /**
+   * När YRKANDET framställs (#980) — datumet som avgör vilket års normer
+   * arbetet värderas på. Default: nu.
+   *
+   * Övergångsbestämmelserna knyter an till inlämningen, inte till arbetet eller
+   * förhandlingen: "Äldre föreskrifter gäller fortfarande i fråga om yrkande om
+   * ersättning … som framställs före den 1 januari 2026" (DVFS 2025:4 p. 3;
+   * samma lydelse i 2025:6 och 2025:10). Det är därför en taxehöjning slår
+   * igenom retroaktivt på gammalt arbete.
+   *
+   * Värderades tidigare på `hufEnd`. Skillnaden syns bara över ett årsskifte —
+   * huvudförhandling i december, räkning i januari — men då blev hela räkningen
+   * värderad på fjolårets normer, medan slutregleringen (`billingRun.ts`, som
+   * använder fakturadatumet) räknade på det nya året. Samma ärende, två belopp.
+   */
+  yrkandeDate?: Date | string;
   /** Brottmålstaxa-nivå (1-4). Default 1. Används bara när isTaxeArende=true. */
   taxaLevel?: TaxaLevel;
   /** F-skatt-flagga (DVFS 11 §). Default true. */
@@ -193,6 +209,8 @@ interface KrTemplateArgs {
   input: BuildInput;
   start: Date;
   end: Date;
+  /** Datumet räkningen framställs på — styr både headern och normvalet (#980). */
+  yrkandeDate: Date;
   huvudforhandlingMinutes: number;
   level: TaxaLevel;
   taxa: TaxaResult;
@@ -210,7 +228,9 @@ interface KrTemplateArgs {
 /** Bygg Handlebars-context (matchar default-mallen). Ren assemblering. */
 function buildKrTemplateContext(a: KrTemplateArgs): Record<string, unknown> {
   return {
-    today: toIsoDate(new Date()),
+    // Räkningens datum = yrkandedatumet (#980), inte "nu": headern och beloppen
+    // ska alltid tala om samma dag.
+    today: toIsoDate(a.yrkandeDate),
     matterNumber: a.input.matter.matterNumber,
     matterTitle: a.input.matter.title,
     clientName: a.input.matter.clientName ?? "",
@@ -272,16 +292,26 @@ function buildKrTemplateContext(a: KrTemplateArgs): Record<string, unknown> {
 }
 
 /**
+ * Datumet som avgör vilket års normer räkningen värderas på (#980) — och som
+ * skrivs som räkningens "Datum" i dokumentet. EN härledning, så headern och
+ * beloppen aldrig kan hamna på olika år.
+ */
+function yrkandeDateOf(input: BuildInput): Date {
+  return input.yrkandeDate === undefined ? new Date() : new Date(input.yrkandeDate);
+}
+
+/**
  * Värdera tidsraderna per kategori (#891): icke-taxa → arbete på timkostnadsnormen
- * och tidsspillan på tidsspillan-normen (vid KR-datumet `hufEnd`, retroaktivt), så
+ * och tidsspillan på tidsspillan-normen (vid YRKANDEDATUMET, retroaktivt — #980), så
  * olika taxor aldrig summeras till en gemensam timkostnad. Taxa-ärenden → rateOrePerH
  * = 0 (raderna är informativa; beloppet styrs av taxan). Utbruten så
  * `buildKostnadsrakningContext` håller komplexitet ≤ 8 (#199).
  */
-function valuateTimeLines(entries: readonly TimeEntryInput[], input: BuildInput): { timeLines: TimeLine[]; arvodeNorm: number } {
+function valuateTimeLines(
+  entries: readonly TimeEntryInput[], input: BuildInput, valDate: Date,
+): { timeLines: TimeLine[]; arvodeNorm: number } {
   const isTaxe = input.isTaxeArende ?? true;
   const hasFTax = input.hasFTax ?? true;
-  const valDate = new Date(input.hufEnd);
   const arvodeNorm = hasFTax ? timkostnadsnormFtaxForDate(valDate) : TIMKOSTNADSNORM_NO_FTAX_ORE_PER_H;
   const tidsNorm = hasFTax ? tidsspillanFtaxForDate(valDate) : TIMKOSTNADSNORM_NO_FTAX_ORE_PER_H;
   const timeLines = entries.map((t): TimeLine => {
@@ -309,7 +339,8 @@ export function buildKostnadsrakningContext(input: BuildInput): KostnadsrakningR
   const billableTimeEntries = input.matter.radgivningPaid
     ? carveEarliestMinutes(allBillable, RADGIVNING_MINUTES)
     : allBillable;
-  const { timeLines, arvodeNorm } = valuateTimeLines(billableTimeEntries, input);
+  const yrkandeDate = yrkandeDateOf(input);
+  const { timeLines, arvodeNorm } = valuateTimeLines(billableTimeEntries, input, yrkandeDate);
   const billableArbetsMinutes = billableTimeEntries.reduce((s, t) => s + t.minutes, 0);
   const totalArbetsMinutes = billableArbetsMinutes + huvudforhandlingMinutes;
 
@@ -353,7 +384,7 @@ export function buildKostnadsrakningContext(input: BuildInput): KostnadsrakningR
   const totalInclVat = arvodeInclVat + expenseSummary.inclVat;
 
   const templateContext = buildKrTemplateContext({
-    input, start, end, huvudforhandlingMinutes, level, taxa,
+    input, start, end, yrkandeDate, huvudforhandlingMinutes, level, taxa,
     arvodeExclVat, arvodeMoms, arvodeInclVat, totalInclVat,
     expenseLines, expenseSummary, timeLines, billableArbetsMinutes, totalArbetsMinutes,
   });
