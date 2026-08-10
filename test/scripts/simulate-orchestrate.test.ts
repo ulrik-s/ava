@@ -42,8 +42,10 @@ describe("runSimulation (#880 integration)", () => {
     const matters = mres.matters ?? mres.items ?? mres;
     const rh = matters.find((m: Any) => m.paymentMethod === "RATTSHJALP" && m.matterNumber === "2026-0020");
     expect(rh, "varierande-rättshjälp-ärendet finns").toBeTruthy();
-    const docs = await c.document.list({ matterId: rh.id, folderId: null, pageSize: 100 });
-    const list = docs.documents ?? docs;
+    // `document.tree`, inte `document.list({folderId: null})`: sedan #985 filas
+    // varje dokument i en mapp, så ROT-listningen är tom. Trädet är dessutom vad
+    // UI:t faktiskt läser — båda dokumentvyerna bygger på `tree.data`.
+    const list = (await c.document.tree({ matterId: rh.id })).documents as Any[];
     expect(list.some((d: Any) => d.direction === "INKOMMANDE")).toBe(true);
     expect(list.some((d: Any) => d.direction === "UTGAENDE")).toBe(true);
 
@@ -110,5 +112,45 @@ describe("runSimulation (#880 integration)", () => {
     expect(invoices.some((i) => i.status === "BAD_DEBT"), "avskriven faktura").toBe(true);
     // …och en plan-faktura står som INSTALLMENT_PLAN, inte som vanlig SENT.
     expect(invoices.some((i) => i.status === "INSTALLMENT_PLAN"), "faktura med plan").toBe(true);
+  });
+
+  /**
+   * #985: dokumentmappar och utskickshistorik. Loadern saknade matchers för
+   * båda, men bakom det låg att simuleringen aldrig skapade dem — varje dokument
+   * låg i roten och fakturans utskickshistorik var tom. Testet påstår om DEMONS
+   * DATA att strukturen finns, inte om scenariomallen.
+   */
+  it("dokument filas i mappar (inkl. nästlade) och skickade fakturor får utskickshistorik", async () => {
+    const seed = translateSeed(buildSeed(), createIdTranslator()) as Any;
+    const orgId = String(seed.organizations[0].id);
+    const admin = { id: asId<"UserId">("gen"), email: "g@a.se", name: "G", role: userRoleSchema.parse("ADMIN"), organizationId: asId<"OrganizationId">(orgId) };
+    const target = createGitTarget({ principal: admin, writeBack: async () => {} });
+    const coreSeed = { ...seed, matters: seed.matters.map((m: Any) => ({ ...m, status: "ACTIVE" })), timeEntries: [], expenses: [], matterContacts: [], documents: [], serviceNotes: [] };
+    await populate(target.caller, coreSeed);
+
+    const ctx: RunCtx = { c: target.caller, res: emptyRunResult() };
+    await runSimulation(ctx, seed);
+
+    const c = target.caller as Any;
+    expect(ctx.res.folders, "mappar skapade").toBeGreaterThan(0);
+    expect(ctx.res.dispatches, "utskick registrerade").toBeGreaterThan(0);
+
+    // Ett ärende med domstolsdokument ska ha Domstol/ med Domar under sig, och
+    // inga dokument kvar i roten.
+    const matters = (await c.matter.list({})).matters as Any[];
+    const withCourt = matters.find((m: Any) => String(m.paymentMethod) === "OFFENTLIGT_UPPDRAG") ?? matters[0];
+    const tree = await c.document.tree({ matterId: withCourt.id });
+    const folders = tree.folders as Array<{ id: string; name: string; parentId: string | null }>;
+    expect(folders.length, "ärendet har mappar").toBeGreaterThan(0);
+    const nested = folders.find((f) => f.parentId !== null);
+    expect(nested, "minst en nästlad mapp — annars ser trädet ut som en platt lista").toBeTruthy();
+    expect(folders.some((f) => f.id === nested?.parentId), "den nästlade mappens förälder finns").toBe(true);
+
+    // Varje dokument har en mapp — och rot-listningen är följaktligen tom.
+    const all = tree.documents as Array<{ folderId: string | null }>;
+    expect(all.length, "ärendet har dokument").toBeGreaterThan(0);
+    expect(all.every((d) => d.folderId !== null), "inget dokument ligger kvar i roten").toBe(true);
+    const rootListing = await c.document.list({ matterId: withCourt.id, folderId: null, pageSize: 100 });
+    expect((rootListing.documents ?? rootListing).length, "rot-mappen är tom").toBe(0);
   });
 });

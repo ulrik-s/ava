@@ -20,8 +20,10 @@ type Any = any;
 
 const CARLSSON_MATTER = "m-018-brottmal-ekobrott";
 
+/** `document.tree`, inte rot-listningen: KR-dokumenten filas i
+ *  Domstol/Kostnadsräkningar sedan #985, och trädet är dessutom vad UI:t läser. */
 async function krDocsFor(caller: Any, matterId: string): Promise<Any[]> {
-  const { documents } = await caller.document.list({ matterId, folderId: null, pageSize: 100 });
+  const { documents } = await caller.document.tree({ matterId });
   return (documents as Any[]).filter((d) => d.documentType === "Kostnadsräkning");
 }
 

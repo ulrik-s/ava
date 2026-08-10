@@ -19,6 +19,7 @@
 
 import { buildKostnadsrakningContext } from "@/lib/shared/kostnadsrakning";
 import type { GeneratorCaller } from "./backend-target";
+import { ensureFolderPath, KOSTNADSRAKNING_FOLDER, type FolderCache } from "./folder-filing";
 import type { BinarySink } from "./populate-documents";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -126,6 +127,8 @@ export type KrDocIdFn = (runId: string) => string;
 export async function populateKostnadsrakningDocs(caller: GeneratorCaller, sink?: BinarySink, idFor?: KrDocIdFn): Promise<number> {
   const c = caller as Any;
   const { runs } = await c.billingRun.list({});
+  // Kostnadsräkningen går till domstolen men får en egen hylla där (#985).
+  const folders: FolderCache = new Map();
   let count = 0;
   for (const summary of runs as Any[]) {
     if (summary.type !== "KOSTNADSRAKNING") continue;
@@ -136,8 +139,9 @@ export async function populateKostnadsrakningDocs(caller: GeneratorCaller, sink?
     const storagePath = `documents/content/${id}.html`;
     const bytes = new TextEncoder().encode(html);
     const size = sink ? sink(storagePath, bytes) : bytes.byteLength;
+    const folderId = await ensureFolderPath(c, String(run.matter.id), KOSTNADSRAKNING_FOLDER, folders);
     await c.document.register({
-      id, matterId: run.matter.id,
+      id, matterId: run.matter.id, folderId,
       invoiceId: run.invoiceId ?? undefined,
       fileName: `Kostnadsräkning ${run.matter.matterNumber}.html`,
       mimeType: "text/html; charset=utf-8", sizeBytes: size, storagePath,

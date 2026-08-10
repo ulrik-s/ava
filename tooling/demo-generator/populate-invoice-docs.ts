@@ -13,6 +13,7 @@
 import { fakturaHeading, renderFakturaHtml, type FakturaBreakdown } from "@/lib/client/kostnadsrakning/faktura-template";
 import { BILLING_RUN_RECIPIENT_LABELS } from "@/lib/shared/schemas/enums";
 import type { GeneratorCaller } from "./backend-target";
+import { ensureFolderPath, INVOICE_FOLDER, type FolderCache } from "./folder-filing";
 import type { BinarySink } from "./populate-documents";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -95,6 +96,9 @@ export async function populateInvoiceDocs(caller: GeneratorCaller, sink?: Binary
   const c = caller as Any;
   const invoices: Any[] = await c.invoice.list({});
   const lookups = await loadLookups(c);
+  // Fakturadokumenten filas som allt annat (#985) — utan mapp hade 46 av demons
+  // 121 dokument legat kvar i roten och trädet sett halvsorterat ut.
+  const folders: FolderCache = new Map();
   let count = 0;
   for (const summary of invoices) {
     if (!shouldGenerateDoc(summary)) continue;
@@ -107,8 +111,9 @@ export async function populateInvoiceDocs(caller: GeneratorCaller, sink?: Binary
     // Tydlig etikett per fakturatyp så den inte förväxlas i fil-listan (#870/#878)
     // — samma rubrik som mallen sätter i dokumentet.
     const label = fakturaHeading(inv);
+    const folderId = await ensureFolderPath(c, String(inv.matter.id), INVOICE_FOLDER, folders);
     await c.document.register({
-      id, matterId: inv.matter.id, invoiceId: inv.id,
+      id, matterId: inv.matter.id, invoiceId: inv.id, folderId,
       fileName: `${label} ${inv.matter.matterNumber}.html`,
       mimeType: "text/html; charset=utf-8", sizeBytes: size, storagePath,
       title: `${label} — ${inv.matter.matterNumber}`,

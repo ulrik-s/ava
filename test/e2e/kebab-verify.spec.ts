@@ -59,6 +59,22 @@ async function tableOverflow(page: Page): Promise<number | null> {
   });
 }
 
+/**
+ * Kebab-knappen, centrerad i vyn innan den klickas.
+ *
+ * Utan centreringen ligger första dokumentraden precis vid nederkanten sedan
+ * dokumenten filats i mappar (#985) — mapp-raderna tar plats — och Playwrights
+ * implicita scroll-then-click svälde då FÖRSTA klicket: menyn öppnades först på
+ * andra försöket. `scrollIntoViewIfNeeded` räcker inte, den lämnar elementet
+ * kvar vid kanten. Artefakt av hur testet klickar, inte av appen: en användare
+ * scrollar och klickar sedan på en knapp som står stilla.
+ */
+async function clickKebab(page: Page): Promise<void> {
+  const btn = page.getByLabel("Dokumentåtgärder").first();
+  await btn.evaluate((el) => { el.scrollIntoView({ block: "center" }); });
+  await btn.click();
+}
+
 // Båda vyerna granskas, och med SAMMA krav (#983). Listvyn är default och var
 // otäckt fram till dess: den byggde en egen, kortare kebab och saknade
 // kolumn-döljning, så den överflödade med 456 px på en 390 px-skärm.
@@ -66,7 +82,7 @@ for (const mode of ["tree", "list"] as const) {
   test(`dokumentrad (${mode}-vy): kebab-meny öppnas med alla actions + Escape stänger`, async ({ page }) => {
     await useViewMode(page, mode);
     await gotoMatter(page);
-    await page.getByLabel("Dokumentåtgärder").first().click();
+    await clickKebab(page);
 
     const menu = page.getByRole("menu", { name: "Dokumentåtgärder" });
     await expect(menu).toBeVisible();

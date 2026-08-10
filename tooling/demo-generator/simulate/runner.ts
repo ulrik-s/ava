@@ -11,10 +11,11 @@ import { SJALVRISK_ACCONTO_THRESHOLD_ORE } from "@/lib/shared/rattshjalp";
 import type { SettlementViewLine } from "@/lib/shared/settlement-view";
 import { AVA_NAMESPACE, uuidv5 } from "@/lib/shared/uuid-derive";
 import { demoPaymentPlanId } from "../../scripts/demo-billing-ids";
+import { ensureFolderPath } from "../folder-filing";
 import type { BinarySink } from "../populate-documents";
 import { eventIso, eventTime } from "./clock";
 import type { SimEvent, SimMatter } from "./events";
-import { DOC_TEMPLATES } from "./fake-content";
+import { DOC_TEMPLATES, FOLDER_BY_RECIPIENT } from "./fake-content";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = any;
@@ -24,14 +25,14 @@ export interface RunCtx {
   sink?: BinarySink;
   /** Gränsbelopp (öre) för tröskelstyrd aconto-utskick (#885); default = konstanten. */
   accontoThresholdOre?: number;
-  res: { invoices: number; documents: number; timeEntries: number; notes: number; credits: number; paymentPlans: number; reminders: number; writeOffs: number };
+  res: { invoices: number; documents: number; timeEntries: number; notes: number; credits: number; paymentPlans: number; reminders: number; writeOffs: number; folders: number; dispatches: number };
 }
 
 /** Nollställda räknare. Factory i stället för ett objekt-literal per anropsplats:
  *  räknarna växer med simuleringens täckning (#982 lade till tre), och literalen
  *  fanns då på sex ställen — två i verktygen, fyra i testerna. */
 export function emptyRunResult(): RunCtx["res"] {
-  return { invoices: 0, documents: 0, timeEntries: 0, notes: 0, credits: 0, paymentPlans: 0, reminders: 0, writeOffs: 0 };
+  return { invoices: 0, documents: 0, timeEntries: 0, notes: 0, credits: 0, paymentPlans: 0, reminders: 0, writeOffs: 0, folders: 0, dispatches: 0 };
 }
 
 interface SimState {
@@ -43,6 +44,8 @@ interface SimState {
   krWorkValueOre: number;
   lastFinal: { id: string; amount: number } | null;
   docSeq: number;
+  /** Skapade mappar per ärende: sökväg ("Domstol" / "Domstol/Domar") → id (#985). */
+  folders: Map<string, string>;
 }
 
 const isBillable = (e: { billable?: boolean }): boolean => e.billable !== false;
@@ -88,6 +91,14 @@ async function hExpense(ctx: RunCtx, m: SimMatter, e: Any, iso: string): Promise
   });
 }
 
+/** Mappen dokumentet filas i (#985) — skapas vid första behovet, räknas en gång. */
+async function folderFor(ctx: RunCtx, m: SimMatter, path: string[], st: SimState): Promise<string | null> {
+  const before = st.folders.size;
+  const id = await ensureFolderPath(ctx.c, m.id, path, st.folders);
+  ctx.res.folders += st.folders.size - before;
+  return id;
+}
+
 async function hDoc(ctx: RunCtx, m: SimMatter, e: Any, iso: string, st: SimState): Promise<void> {
   const t = DOC_TEMPLATES[e.template];
   if (!t) return;
@@ -97,8 +108,12 @@ async function hDoc(ctx: RunCtx, m: SimMatter, e: Any, iso: string, st: SimState
   const { generateDocumentBytes } = await import("../../scripts/seed-data");
   const bytes = await generateDocumentBytes({ id, title: t.title, fileName, documentType: t.documentType, summary: t.summary, mimeType: "application/pdf", storagePath });
   const size = ctx.sink ? ctx.sink(storagePath, bytes) : bytes.byteLength;
+  // Filas efter mottagare (#985) — demon hade tidigare allt i roten, så
+  // träd-vyns mapphantering gick varken att se eller prova.
+  const folderPath = [FOLDER_BY_RECIPIENT[t.recipient], ...(t.subFolder ? [t.subFolder] : [])];
+  const folderId = await folderFor(ctx, m, folderPath, st);
   await ctx.c.document.register({
-    id, matterId: m.id, fileName, mimeType: "application/pdf", sizeBytes: size, storagePath,
+    id, matterId: m.id, fileName, mimeType: "application/pdf", sizeBytes: size, storagePath, folderId,
     documentType: t.documentType, direction: t.direction, recipient: t.recipient, title: t.title, summary: t.summary,
     analysisStatus: "DONE", createdAt: iso,
   });
@@ -216,11 +231,25 @@ async function hInsurerPruning(ctx: RunCtx, m: SimMatter, e: Any, iso: string): 
   await ctx.c.billingRun.recordInsurerPruning({ matterId: m.id, prunedNetOre: e.prunedNetOre, invoiceDate: iso });
 }
 
+/**
+ * Utskickshistorik (#985): en faktura som satts till SENT har i verkligheten
+ * lämnat byrån på något sätt. `recordManual` — inte `queue` — eftersom demon
+ * inte har någon dispatch-worker som skulle plocka upp en köad rad och "skicka"
+ * den igen. Utan klientens e-post hoppas steget över; en påhittad adress i
+ * demodatat vore sämre än en tom historik.
+ */
+async function recordDispatch(ctx: RunCtx, m: SimMatter, invoiceId: string, recipient: string): Promise<void> {
+  if (recipient !== "KLIENT" || !m.clientEmail) return;
+  await ctx.c.invoiceDispatch.recordManual({ invoiceId, channel: "email", recipient: m.clientEmail });
+  ctx.res.dispatches++;
+}
+
 async function hFinal(ctx: RunCtx, m: SimMatter, e: Any, iso: string, st: SimState): Promise<void> {
   const { invoice } = await ctx.c.billingRun.createFinal({ matterId: m.id, recipient: e.recipient, deductedBillingRunIds: [], invoiceDate: iso });
   await ctx.c.invoice.setStatus({ invoiceId: invoice.id, status: "SENT" });
   st.lastFinal = { id: invoice.id, amount: invoice.amount };
   ctx.res.invoices++;
+  await recordDispatch(ctx, m, invoice.id, String(e.recipient));
 }
 
 async function hPayment(ctx: RunCtx, _m: SimMatter, _e: Any, iso: string, st: SimState): Promise<void> {
@@ -323,7 +352,7 @@ const HANDLERS: Record<SimEvent["kind"], (ctx: RunCtx, m: SimMatter, e: Any, iso
 
 /** Spela upp ett ärendes scenario kronologiskt. */
 export async function runScenario(ctx: RunCtx, matter: SimMatter, events: SimEvent[]): Promise<void> {
-  const st: SimState = { accruedNetOre: 0, billedNetOre: 0, currentRateBips: matter.clientShareBips ?? 0, periodLines: [], krRunId: null, krWorkValueOre: 0, lastFinal: null, docSeq: 0 };
+  const st: SimState = { accruedNetOre: 0, billedNetOre: 0, currentRateBips: matter.clientShareBips ?? 0, periodLines: [], krRunId: null, krWorkValueOre: 0, lastFinal: null, docSeq: 0, folders: new Map() };
   const sorted = [...events].sort((a, b) => a.dayOffset - b.dayOffset);
   for (const e of sorted) {
     const iso = eventIso(matter.startDaysAgo, e.dayOffset, 9 + (e.dayOffset % 6));

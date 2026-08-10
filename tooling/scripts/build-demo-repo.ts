@@ -93,6 +93,7 @@ async function main(): Promise<void> {
   // Räknas ut för att gapet i #982 ska SYNAS i loggen. Att demon tappade sina
   // avbetalningsplaner upptäcktes först av ett e2e-test, för inget steg sa något.
   console.log(`  • fakturalivscykler: ${result.sim.paymentPlans} avbetalningsplaner (${result.sim.reminders} påminnelser), ${result.sim.writeOffs} kundförluster`);
+  console.log(`  • ${result.sim.folders} dokumentmappar, ${result.sim.dispatches} fakturautskick`);
   console.log(`  • ${result.calendarEvents} kalender-events, ${result.tasks} tasks`);
   console.log("");
   console.log("Nästa steg (om du vill pusha till ulrik-s/ava-demo):");
