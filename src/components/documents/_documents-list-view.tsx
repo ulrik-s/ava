@@ -9,11 +9,10 @@
  */
 
 import { useState } from "react";
-import { ActionMenu, type ActionMenuItem } from "@/components/ui/action-menu";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { trpc } from "@/lib/client/trpc";
 import type { DocumentFolderId, MatterId } from "@/lib/shared/schemas/ids";
-import type { DocumentRecord } from "./_document-row";
+import { DocumentActions, type DocumentRecord } from "./_document-row";
 import { formatFileSize } from "./_drag-helpers";
 import type { FolderRecord } from "./_folder-row";
 import { SyncStatusBadge, type SyncStatus } from "./_sync-badge";
@@ -50,11 +49,15 @@ export function DocumentsListView({ matterId, documents, folders, docSync = NO_S
   const { openDocument, leaseModal } = useLeaseAwareOpen();
 
   const columns: Column<DocumentRecord>[] = [
-    { key: "fileName", label: "Filnamn", sortable: true, sortValue: (d) => d.fileName,
+    // `wrap`: filnamnet är det enda som ALLTID visas, så det måste få bryta
+    // rader i stället för att tvinga fram horisontell scroll. `min-w-0` på både
+    // flex-containern och knappen — en flex-container är shrink-to-fit och
+    // växer annars till sitt max-content, vilket `break-words` inte hjälper mot.
+    { key: "fileName", label: "Filnamn", sortable: true, wrap: true, sortValue: (d) => d.fileName,
       render: (d) => (
         <span className="flex items-center gap-2 min-w-0">
           <button type="button" onClick={() => void openDocument(d, setModal)}
-            className="text-sm font-medium text-blue-600 hover:underline text-left"
+            className="min-w-0 break-words text-sm font-medium text-blue-600 hover:underline text-left"
             title="PDF/Word/Excel → öppnas i extern editor om du har valt en lokal mapp">
             {d.fileName}
           </button>
@@ -62,35 +65,38 @@ export function DocumentsListView({ matterId, documents, folders, docSync = NO_S
         </span>
       ),
     },
-    { key: "documentType", label: "Typ", sortable: true,
+    // `hideBelow` (#983): listvyn visade sex kolumner även på 390 px och
+    // överflödade med 456 px. Träd-vyn dolde sina sekundära kolumner < sm hela
+    // tiden; nu gör listvyn det också. Kolumnerna finns kvar i sortering,
+    // filtrering och kolumnmenyn — bara `display` växlar.
+    { key: "documentType", label: "Typ", sortable: true, hideBelow: "sm",
       sortValue: (d) => d.documentType ?? "",
       render: (d) => <span className="text-sm text-gray-500">{d.documentType ?? "—"}</span> },
-    { key: "folder", label: "Mapp", sortable: true,
+    { key: "folder", label: "Mapp", sortable: true, hideBelow: "lg",
       sortValue: (d) => folderPath(d.folderId ?? null, folders),
       render: (d) => <span className="text-sm text-gray-500 font-mono">{folderPath(d.folderId ?? null, folders)}</span> },
-    { key: "uploadedBy", label: "Uppladdad av", sortable: true,
+    { key: "uploadedBy", label: "Uppladdad av", sortable: true, hideBelow: "lg",
       sortValue: (d) => d.uploadedBy?.name ?? "",
       render: (d) => <span className="text-sm text-gray-500">{d.uploadedBy?.name ?? "—"}</span> },
-    { key: "createdAt", label: "Datum", sortable: true,
+    { key: "createdAt", label: "Datum", sortable: true, hideBelow: "sm",
       sortValue: (d) => new Date(d.createdAt),
       render: (d) => <span className="text-sm text-gray-500">{new Date(d.createdAt).toLocaleDateString("sv-SE")}</span> },
-    { key: "sizeBytes", label: "Storlek", sortable: true, align: "right",
+    { key: "sizeBytes", label: "Storlek", sortable: true, align: "right", hideBelow: "md",
       sortValue: (d) => d.sizeBytes,
       render: (d) => <span className="text-sm font-mono text-gray-500">{formatFileSize(d.sizeBytes)}</span> },
     { key: "actions", label: "", sortable: false, align: "right", hideable: false,
-      render: (d) => {
-        const items: ActionMenuItem[] = [
-          { key: "external", label: "Editera externt", onSelect: () => void openDocument(d, setModal) },
-          { key: "reanalyze", label: "Analysera igen", onSelect: () => onReanalyze(d.id) },
-          {
-            key: "delete",
-            label: "Ta bort",
-            danger: true,
-            onSelect: () => { if (confirm(`Ta bort "${d.fileName}"?`)) onDelete(d.id); },
-          },
-        ];
-        return <ActionMenu items={items} label="Dokumentåtgärder" />;
-      },
+      // Samma meny som träd-vyn (#983) — se `DocumentActions`. `reanalyzePending`
+      // är false här: listvyn har ingen egen mutation-status att spegla, och en
+      // felaktigt disabled rad vore värre än en knapp som kan tryckas två gånger.
+      render: (d) => (
+        <DocumentActions
+          doc={d}
+          onExternalEdit={() => openDocument(d, setModal)}
+          onReanalyze={() => onReanalyze(d.id)}
+          onDelete={() => { if (confirm(`Ta bort "${d.fileName}"?`)) onDelete(d.id); }}
+          reanalyzePending={false}
+        />
+      ),
     },
   ];
 

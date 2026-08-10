@@ -221,7 +221,14 @@ function buildActionItems(o: ActionItemsOpts): ActionMenuItem[] {
   ];
 }
 
-function DocumentActions({
+/**
+ * Dokumentets kebab-meny. EXPORTERAD sedan #983: listvyn byggde tidigare en
+ * egen, kortare meny (Editera externt / Analysera igen / Ta bort) och tappade
+ * därmed Öppna, Visa och Ladda ner så fort användaren växlade vy — samma
+ * dokument, samma sida, olika möjligheter. Nu äger den här komponenten
+ * uppsättningen, så de två vyerna inte kan glida isär igen.
+ */
+export function DocumentActions({
   doc,
   disabled,
   onReanalyze,

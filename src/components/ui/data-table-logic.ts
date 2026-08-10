@@ -31,6 +31,19 @@ export interface Column<T> {
   /** Låt cellens innehåll wrappa över flera rader (annars `nowrap`). Använd
    *  för fri-text-kolumner (t.ex. tjänsteanteckningar) som annars trunkeras. */
   wrap?: boolean;
+  /**
+   * Dölj kolumnen under angiven brytpunkt (#983). RENT visuellt — kolumnen
+   * finns kvar i prefs, sortering och summering; bara `display` växlar.
+   *
+   * Skiljer sig från `defaultHidden`, som gäller ALLA skärmar tills användaren
+   * ber om kolumnen. Det här handlar om att en bred tabell annars tvingar fram
+   * horisontell scroll på mobil: träd-vyns dokumenttabell löste det med
+   * `hidden sm:table-cell` direkt i markupen, medan alla `DataTable`-tabeller
+   * saknade motsvarighet.
+   *
+   * Utelämnad → kolumnen visas på alla skärmar (oförändrat beteende).
+   */
+  hideBelow?: "sm" | "md" | "lg";
   hideable?: boolean;
   /** Kolumnen finns i katalogen men är inte visad förrän användaren explicit
    *  väljer "+ Visa kolumn → <denna>". Använd för fält som är intressanta
@@ -153,6 +166,23 @@ export function isColumnHidden<T>(col: Column<T>, prefs: DataTablePrefs): boolea
   const override = (prefs.columns ?? []).find((c) => c.key === col.key);
   if (override?.hidden !== undefined) return override.hidden;
   return Boolean(col.defaultHidden);
+}
+
+/**
+ * Tailwind-klasser för `hideBelow` (#983). Statiska strängar, inte
+ * interpolerade — Tailwind scannar källkoden och genererar bara klasser den
+ * SER, så `` `hidden ${bp}:table-cell` `` hade gett en klass som inte finns i
+ * bundlen och en kolumn som aldrig kom tillbaka på stora skärmar.
+ */
+const HIDE_BELOW_CLASS = {
+  sm: "hidden sm:table-cell",
+  md: "hidden md:table-cell",
+  lg: "hidden lg:table-cell",
+} as const satisfies Record<NonNullable<Column<unknown>["hideBelow"]>, string>;
+
+/** Responsiv döljningsklass för en kolumn — tom sträng när `hideBelow` saknas. */
+export function hideBelowClass<T>(col: Column<T>): string {
+  return col.hideBelow ? HIDE_BELOW_CLASS[col.hideBelow] : "";
 }
 
 export function visibleColumns<T>(columns: Column<T>[], prefs: DataTablePrefs): Column<T>[] {

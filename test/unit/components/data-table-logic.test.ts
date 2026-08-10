@@ -18,6 +18,7 @@ import {
   hasOverrides,
   hasSummary,
   buildSummaryContent,
+  hideBelowClass,
 } from "@/components/ui/data-table-logic";
 
 interface Row { name: string; n: number; when: Date | null; type: string }
@@ -142,5 +143,27 @@ describe("summary", () => {
     expect(hasSummary(sumCols)).toBe(true);
     expect(hasSummary(cols)).toBe(false);
     expect(buildSummaryContent(sumCols, rows)).toEqual({ n: 6 });
+  });
+});
+
+/**
+ * `hideBelow` (#983) — responsiv kolumndöljning. Klasserna måste vara STATISKA
+ * strängar: Tailwind genererar bara det den ser i källkoden, så en interpolerad
+ * `` `hidden ${bp}:table-cell` `` hade gett en klass som saknas i bundlen — och
+ * en kolumn som försvinner på mobil utan att komma tillbaka på desktop.
+ */
+describe("hideBelowClass", () => {
+  const col = (hideBelow?: Column<Row>["hideBelow"]): Column<Row> =>
+    ({ key: "k", label: "K", render: () => "", ...(hideBelow ? { hideBelow } : {}) });
+
+  it("utelämnad → tom sträng (kolumnen syns på alla skärmar)", () => {
+    expect(hideBelowClass(col())).toBe("");
+  });
+
+  it("varje brytpunkt ger sin döljning OCH sin återställning", () => {
+    // Båda halvorna behövs: utan `<bp>:table-cell` blir kolumnen borta överallt.
+    expect(hideBelowClass(col("sm"))).toBe("hidden sm:table-cell");
+    expect(hideBelowClass(col("md"))).toBe("hidden md:table-cell");
+    expect(hideBelowClass(col("lg"))).toBe("hidden lg:table-cell");
   });
 });

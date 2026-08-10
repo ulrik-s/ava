@@ -28,17 +28,14 @@ test.beforeEach(async ({ page }) => {
   // localhost defaultar till self-hosted (→ 401) → tvinga demo. Seedas även mot
   // live: `repo: ""` ger same-origin i båda lägena, så vägen är densamma.
   await seedDemoLogin(page, BASE);
-  // TRÄD-vyn, inte listvyn. Det är trädets tabell som bär fixarna specen
-  // granskar (`table-fixed` i document-browser.tsx, `hidden sm:table-cell` i
-  // _document-row/_folder-row) och dess kebab som har hela action-uppsättningen.
-  // Default är numera listvyn, som renderar den generiska `DataTable` med en
-  // annan, kortare meny och utan kolumn-döljning — specen mätte alltså fel
-  // tabell, vilket ingen såg eftersom den låg utanför alla configar (#932).
-  // Listvyns egna brister är EGEN sak: #983.
-  await page.addInitScript(([key, mode]) => {
-    try { localStorage.setItem(key!, mode!); } catch { /* privat läge */ }
-  }, [VIEW_MODE_KEY, "tree"]);
 });
+
+/** Sätt vyläget FÖRE första render — `DocumentBrowser` läser det i sin initState. */
+async function useViewMode(page: Page, mode: "tree" | "list"): Promise<void> {
+  await page.addInitScript(([key, m]) => {
+    try { localStorage.setItem(key!, m!); } catch { /* privat läge */ }
+  }, [VIEW_MODE_KEY, mode]);
+}
 
 /**
  * Ett ärende som FAKTISKT har dokument — annars finns ingen kebab att öppna och
@@ -53,34 +50,58 @@ async function gotoMatter(page: Page) {
   await page.waitForTimeout(1500); // demo-bootstrap invalidateQueries settle
 }
 
-test("dokumentrad: kebab-meny öppnas med alla actions + Escape stänger", async ({ page }) => {
-  await gotoMatter(page);
-  await page.getByLabel("Dokumentåtgärder").first().click();
-
-  const menu = page.getByRole("menu", { name: "Dokumentåtgärder" });
-  await expect(menu).toBeVisible();
-  for (const label of ["Öppna i webbläsaren", "Editera externt", "Visa", "Ladda ner", "Ta bort"]) {
-    await expect(menu.getByText(new RegExp(label))).toBeVisible();
-  }
-  // "Analysera (AI)" ska INTE finnas här. ADR 0027: LLM-analys är en
-  // server-förmåga, och demon har ingen server — affordansen ska då döljas, inte
-  // visas och fela. Specen krävde tvärtom att den fanns, vilket bara gick att
-  // tro så länge den aldrig kördes (#932/#972).
-  await expect(menu.getByText(/Analysera/)).toHaveCount(0);
-
-  await page.keyboard.press("Escape");
-  await expect(menu).toBeHidden();
-});
-
-test("dokumenttabellen scrollar inte horisontellt på mobil (390px)", async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 800 });
-  await gotoMatter(page);
-
-  const overflow = await page.evaluate(() => {
+/** Överflödet i dokumenttabellens scroll-wrapper — 0 betyder "ingen scroll". */
+async function tableOverflow(page: Page): Promise<number | null> {
+  return await page.evaluate(() => {
     const kebab = document.querySelector('[aria-label="Dokumentåtgärder"]');
     const wrap = kebab?.closest("div.overflow-x-auto") as HTMLElement | null;
     return wrap ? wrap.scrollWidth - wrap.clientWidth : null;
   });
-  expect(overflow, "dok-tabellens overflow-wrapper hittades").not.toBeNull();
-  expect(overflow!, "ingen horisontell scroll i dokumenttabellen på mobil").toBeLessThanOrEqual(2);
+}
+
+// Båda vyerna granskas, och med SAMMA krav (#983). Listvyn är default och var
+// otäckt fram till dess: den byggde en egen, kortare kebab och saknade
+// kolumn-döljning, så den överflödade med 456 px på en 390 px-skärm.
+for (const mode of ["tree", "list"] as const) {
+  test(`dokumentrad (${mode}-vy): kebab-meny öppnas med alla actions + Escape stänger`, async ({ page }) => {
+    await useViewMode(page, mode);
+    await gotoMatter(page);
+    await page.getByLabel("Dokumentåtgärder").first().click();
+
+    const menu = page.getByRole("menu", { name: "Dokumentåtgärder" });
+    await expect(menu).toBeVisible();
+    for (const label of ["Öppna i webbläsaren", "Editera externt", "Visa", "Ladda ner", "Ta bort"]) {
+      await expect(menu.getByText(new RegExp(label))).toBeVisible();
+    }
+    // "Analysera (AI)" ska INTE finnas här. ADR 0027: LLM-analys är en
+    // server-förmåga, och demon har ingen server — affordansen ska då döljas, inte
+    // visas och fela. Specen krävde tvärtom att den fanns, vilket bara gick att
+    // tro så länge den aldrig kördes (#932/#972).
+    await expect(menu.getByText(/Analysera/)).toHaveCount(0);
+
+    await page.keyboard.press("Escape");
+    await expect(menu).toBeHidden();
+  });
+
+  test(`dokumenttabellen (${mode}-vy) scrollar inte horisontellt på mobil (390px)`, async ({ page }) => {
+    await useViewMode(page, mode);
+    await page.setViewportSize({ width: 390, height: 800 });
+    await gotoMatter(page);
+
+    const overflow = await tableOverflow(page);
+    expect(overflow, "dok-tabellens overflow-wrapper hittades").not.toBeNull();
+    expect(overflow!, "ingen horisontell scroll i dokumenttabellen på mobil").toBeLessThanOrEqual(2);
+  });
+}
+
+test("listvyns dolda kolumner kommer tillbaka på desktop", async ({ page }) => {
+  // Halva `hideBelow`-kontraktet är att kolumnen ÅTERKOMMER. En trasig klass
+  // (t.ex. interpolerad så Tailwind aldrig genererat den) hade gett en tabell
+  // som ser smal och fin ut på mobil och sedan saknar kolumner överallt.
+  await useViewMode(page, "list");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await gotoMatter(page);
+  for (const label of ["Typ", "Mapp", "Uppladdad av", "Datum", "Storlek"]) {
+    await expect(page.getByRole("columnheader", { name: new RegExp(label) }).first()).toBeVisible();
+  }
 });
