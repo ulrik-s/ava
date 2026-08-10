@@ -7,7 +7,7 @@
 
 import { describe, it, expect } from "vitest-compat";
 import type { SimMatter } from "../../tooling/demo-generator/simulate/events";
-import { runScenario, type RunCtx } from "../../tooling/demo-generator/simulate/runner";
+import { emptyRunResult, runScenario, type RunCtx } from "../../tooling/demo-generator/simulate/runner";
 import { buildScenario } from "../../tooling/demo-generator/simulate/scenarios";
 import { buildRattshjalpScenario } from "../../tooling/demo-generator/simulate/scenarios/rattshjalp";
 
@@ -50,7 +50,7 @@ const rhMatter = (nr: string): SimMatter => ({
 
 async function beslutArgs(events: Any[], matter: SimMatter): Promise<Any> {
   const { c, calls } = recordingCaller();
-  const ctx: RunCtx = { c, res: { invoices: 0, documents: 0, timeEntries: 0, notes: 0, credits: 0 } };
+  const ctx: RunCtx = { c, res: emptyRunResult() };
   await runScenario(ctx, matter, events);
   return calls.find((x) => x.method === "billingRun.recordKostnadsrakningBeslut")?.args;
 }

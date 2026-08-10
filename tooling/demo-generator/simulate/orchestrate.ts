@@ -46,14 +46,31 @@ function deriveParties(matterId: string, seedContacts: Any[]): Parties {
   return { klient: byRole("KLIENT"), motpart: byRole("MOTPART"), motpartsombud: byRole("MOTPARTSOMBUD"), domstol: byRole("DOMSTOL") };
 }
 
-/** Kör ett ärendes scenario + stäng det om seedens status inte är ACTIVE. */
-async function simulateMatter(ctx: RunCtx, m: Any, users: { id: string; rateOre: number }[], seedContacts: Any[], index: number): Promise<void> {
+/**
+ * Kör ett ärendes scenario + stäng det om seedens status inte är ACTIVE.
+ *
+ * Två index, med olika jobb: `index` är ärendets globala ordning (styr vilken
+ * jurist som blir ansvarig), `variantIndex` räknar ärenden PER betalningssätt
+ * och väljer scenariovariant. Skillnaden spelar roll sedan #982: privatärendenas
+ * livscykel-cykel är sex lång, och med det globala indexet hade urvalet berott på
+ * hur många rättshjälps- och rättsskyddsärenden som råkade ligga före i seeden.
+ */
+interface MatterSlot {
+  /** Ärendets globala ordning i seeden — round-robin för ansvarig jurist. */
+  index: number;
+  /** Löpnummer inom betalningssättet — scenariovariant. */
+  variantIndex: number;
+}
+
+async function simulateMatter(
+  ctx: RunCtx, m: Any, users: { id: string; rateOre: number }[], seedContacts: Any[], slot: MatterSlot,
+): Promise<void> {
   // Seed-ärenden saknar responsibleLawyerId → välj ansvarig jurist deterministiskt ur
   // användarlistan (som gamla buildTimeEntries: round-robin per ärende-index).
-  const u = users[index % Math.max(1, users.length)];
+  const u = users[slot.index % Math.max(1, users.length)];
   if (!u) return;
   const sim = deriveSim(m, u.id, u.rateOre);
-  await runScenario(ctx, sim, buildScenario(sim, deriveParties(String(m.id), seedContacts), index));
+  await runScenario(ctx, sim, buildScenario(sim, deriveParties(String(m.id), seedContacts), slot.variantIndex));
   if (String(m.status) !== "ACTIVE") await ctx.c.matter.update({ id: sim.id, status: String(m.status) });
 }
 
@@ -68,8 +85,19 @@ export async function runSimulation(ctx: RunCtx, seed: Any): Promise<void> {
   // Parterna länkas kronologiskt ur seedens matterContacts (klient/motpart/ombud/domstol).
   const seedContacts: Any[] = seed.matterContacts ?? [];
   let index = 0;
+  const variants = new Map<string, number>();
   for (const m of seed.matters ?? []) {
-    await simulateMatter(ctx, m, users, seedContacts, index);
+    await simulateMatter(ctx, m, users, seedContacts, {
+      index, variantIndex: nextVariant(variants, String(m.paymentMethod)),
+    });
     index++;
   }
+}
+
+/** Löpnummer per betalningssätt — scenariovariantens index. Egen funktion så
+ *  `runSimulation` håller sig under komplexitetstaket (8). */
+function nextVariant(counters: Map<string, number>, key: string): number {
+  const n = counters.get(key) ?? 0;
+  counters.set(key, n + 1);
+  return n;
 }

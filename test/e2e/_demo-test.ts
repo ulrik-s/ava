@@ -106,6 +106,7 @@ export interface DemoSeed {
   documents: Array<{ id: string; matterId: string; title: string }>;
   timeEntries: Array<{ id: string; matterId: string; description: string }>;
   expenses: Array<{ id: string; matterId: string; description: string }>;
+  paymentPlans: Array<{ id: string; invoiceId: string; status: string }>;
 }
 
 /** Grupper som bär `matterId` — det e2e:t kan kräva att ett ärende har. */

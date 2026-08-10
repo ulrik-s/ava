@@ -107,15 +107,22 @@ test("matter-detalj öppnas på sitt eget id utan loop", async ({ page }) => {
   expect(errors, "inga script-errors").toEqual([]);
 });
 
-test("avbetalningsplaner-sidan renderar", async ({ page }) => {
-  // Sidan hade förr en assertion om `pp-`-länkar. Demons simulering (#880)
-  // producerar inga avbetalningsplaner alls längre — se #982 — så ett test som
-  // kräver planrader skulle påstå något om data som inte finns. Kvar är att
-  // sidan renderar sitt tomläge utan att krascha.
+test("avbetalningsplaner-sidan listar seedens aktiva planer", async ({ page }) => {
+  // Sidan var tom mellan #880 och #982: simuleringen ersatte populate-billing men
+  // tog inte över dess faktura-livscykler. Assertionen går på ÄRENDETS titel via
+  // planens faktura — så testet fäller om kedjan plan → faktura → ärende brister,
+  // inte bara om tabellen råkar ha rader.
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`));
+  const seed = await fetchDemoSeed(page, BASE);
+  const active = seed.paymentPlans.find((p) => p.status === "ACTIVE");
+  if (!active) throw new Error("seeden saknar aktiv avbetalningsplan — se #982");
+  const matterId = seed.invoices.find((i) => i.id === active.invoiceId)?.matterId;
+  const title = seed.matters.find((m) => m.id === matterId)?.title ?? "";
+
   await page.goto(`${BASE}/payment-plans/`);
-  await expect(page.locator("body")).toContainText(/Avbetalningsplaner/i, { timeout: 15_000 });
+  // Sidan öppnar på fliken Aktiva, så den aktiva planens ärende ska synas direkt.
+  await expect(page.locator("body")).toContainText(title, { timeout: 15_000 });
   expect(errors, "inga script-errors").toEqual([]);
 });
 

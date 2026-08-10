@@ -23,7 +23,7 @@ import { populate, type PopulateResult } from "./populate";
 import { populateInvoiceDocs } from "./populate-invoice-docs";
 import { populateKostnadsrakningDocs } from "./populate-kostnadsrakning-docs";
 import { runSimulation } from "./simulate/orchestrate";
-import type { RunCtx } from "./simulate/runner";
+import { emptyRunResult, type RunCtx } from "./simulate/runner";
 
 export interface GenerateResult extends PopulateResult {
   /** Narrativa dokument (in/ut) skapade av simuleringen. */
@@ -71,7 +71,7 @@ export async function generateInto(outDir: string, seedOpts: BuildSeedOpts = {})
   };
   // Kronologisk simulering per ärende (#880): parter → rådgivning → arbete/dokument
   // (in/ut) → aconton → kostnadsräkning/slutreglering, i tidsordning.
-  const ctx: RunCtx = { c: target.caller, sink, res: { invoices: 0, documents: 0, timeEntries: 0, notes: 0, credits: 0 } };
+  const ctx: RunCtx = { c: target.caller, sink, res: emptyRunResult() };
   await runSimulation(ctx, seed);
 
   // Faktura-/KR-HTML-dokument som EFTER-pass (läser skapade fakturor/runs; renderar

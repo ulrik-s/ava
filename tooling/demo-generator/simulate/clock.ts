@@ -10,10 +10,14 @@
 /** ISO-datum för ett event: ärendestart (startDaysAgo sedan) + dayOffset dagar. */
 export function eventIso(startDaysAgo: number, dayOffset: number, hour = 10): string {
   const daysAgo = Math.max(0, startDaysAgo - dayOffset);
-  const d = new Date();
+  const now = new Date();
+  const d = new Date(now);
   d.setHours(hour, 0, 0, 0);
   d.setDate(d.getDate() - daysAgo);
-  return d.toISOString();
+  // Dag-klampningen ovan räcker inte: `hour` sätts EFTERÅT, så ett event i ett
+  // färskt ärende landade på "idag kl 11" även när bygget kördes kl 06 — en
+  // betalning eller avskrivning daterad i framtiden. Klampa hela tidpunkten.
+  return (d > now ? now : d).toISOString();
 }
 
 /** Klockslag (HH:MM) för en tjänsteanteckning, härlett ur timmen. */

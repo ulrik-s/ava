@@ -33,6 +33,13 @@ const MATCHERS: Matcher[] = [
   { key: "paymentPlans", owns: (p) => p.startsWith("payment-plans/") },
   { key: "payments", owns: (p) => p.startsWith("payments/") },
   { key: "paymentPlanReminders", owns: (p) => p.startsWith("payment-plan-reminders/") },
+  // `write-offs/` saknade matcher fram till #982, så VARJE avskrivning tappades
+  // tyst av demon. Att det inte syntes beror på migrate-on-read (ADR 0007):
+  // `synthesizeBadDebtWriteOffs` byggde en ERSÄTTNINGSPOST ur fakturans
+  // BAD_DEBT-status, med gissat datum (`updatedAt`) och reason "Migrerad …".
+  // Ledgern summerade alltså rätt belopp av fel skäl, och den riktiga postens
+  // datum och orsak nådde aldrig fram.
+  { key: "writeOffs", owns: (p) => p.startsWith("write-offs/") },
   { key: "billingRuns", owns: (p) => p.startsWith("billing-runs/") },
   { key: "accontoDeductions", owns: (p) => p.startsWith("acconto-deductions/") },
   { key: "expectedReceivables", owns: (p) => p.startsWith("expected-receivables/") },
