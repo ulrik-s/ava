@@ -47,7 +47,27 @@ export type SimEvent =
   /** Vanlig slutfaktura (privat/offentligt) — createFinal + SENT. */
   | { kind: "final"; dayOffset: number; recipient: string }
   /** Betala den senast skapade slutfakturan — invoice.recordPayment. */
-  | { kind: "payment"; dayOffset: number };
+  | { kind: "payment"; dayOffset: number }
+  /**
+   * Avbetalningsplan på den senast skapade slutfakturan (#982) —
+   * `invoice.createPaymentPlan`. Månadsbeloppet HÄRLEDS ur fakturan
+   * (`amount / installments`), som i appens eget flöde.
+   *
+   * Planens sluttillstånd följer av vad som händer efteråt, inte av en flagga:
+   *   • `paidInstallments < installments` → planen förblir ACTIVE
+   *   • `paidInstallments >= installments` → sista betalningen stänger fakturan,
+   *     och routern sätter planen till COMPLETED
+   *   • `cancel` → CANCELLED, och fakturan går tillbaka till SENT
+   *
+   * `reminders` skickar N månatliga DUE-påminnelser bakåt i tiden.
+   */
+  | { kind: "paymentPlan"; dayOffset: number; installments: number; paidInstallments: number; dayOfMonth?: number; reminders?: number; cancel?: boolean; notes?: string }
+  /**
+   * Konstaterad kundförlust på den senaste slutfakturan (ADR 0007) —
+   * `invoice.writeOff`. `partialBips` betalar först en del (2500 = 25 %); resten
+   * skrivs av, vilket stänger fakturan som BAD_DEBT.
+   */
+  | { kind: "writeOff"; dayOffset: number; partialBips?: number; reason?: string };
 
 /** Det runnern behöver veta om ärendet för att spela upp dess scenario. */
 export interface SimMatter {

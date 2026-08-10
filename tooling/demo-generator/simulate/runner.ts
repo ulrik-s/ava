@@ -10,6 +10,7 @@ import { arvodeInclVatOre } from "@/lib/shared/invoice-calc";
 import { SJALVRISK_ACCONTO_THRESHOLD_ORE } from "@/lib/shared/rattshjalp";
 import type { SettlementViewLine } from "@/lib/shared/settlement-view";
 import { AVA_NAMESPACE, uuidv5 } from "@/lib/shared/uuid-derive";
+import { demoPaymentPlanId } from "../../scripts/demo-billing-ids";
 import type { BinarySink } from "../populate-documents";
 import { eventIso, eventTime } from "./clock";
 import type { SimEvent, SimMatter } from "./events";
@@ -23,7 +24,14 @@ export interface RunCtx {
   sink?: BinarySink;
   /** Gränsbelopp (öre) för tröskelstyrd aconto-utskick (#885); default = konstanten. */
   accontoThresholdOre?: number;
-  res: { invoices: number; documents: number; timeEntries: number; notes: number; credits: number };
+  res: { invoices: number; documents: number; timeEntries: number; notes: number; credits: number; paymentPlans: number; reminders: number; writeOffs: number };
+}
+
+/** Nollställda räknare. Factory i stället för ett objekt-literal per anropsplats:
+ *  räknarna växer med simuleringens täckning (#982 lade till tre), och literalen
+ *  fanns då på sex ställen — två i verktygen, fyra i testerna. */
+export function emptyRunResult(): RunCtx["res"] {
+  return { invoices: 0, documents: 0, timeEntries: 0, notes: 0, credits: 0, paymentPlans: 0, reminders: 0, writeOffs: 0 };
 }
 
 interface SimState {
@@ -220,10 +228,97 @@ async function hPayment(ctx: RunCtx, _m: SimMatter, _e: Any, iso: string, st: Si
   await ctx.c.invoice.recordPayment({ invoiceId: st.lastFinal.id, amount: st.lastFinal.amount, paidAt: iso, note: "Full betalning" });
 }
 
+/** `iso` förskjuten `n` månader (negativt = bakåt), aldrig senare än nu — en
+ *  betalning daterad i framtiden vore inte demodata utan en bugg. */
+function shiftMonths(iso: string, n: number): Date {
+  const d = new Date(iso);
+  d.setMonth(d.getMonth() + n);
+  const now = new Date();
+  return d > now ? now : d;
+}
+
+/** Månad `n` bakåt från `iso` som "YYYY-MM" — påminnelsernas `dueMonth`. */
+function monthsBack(iso: string, n: number): string {
+  const d = shiftMonths(iso, -n);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+/** En avbetalningsplans inbetalningar: vad, hur mycket, hur många, från när. */
+interface InstallmentRun { invoiceId: string; monthly: number; total: number; count: number; iso: string }
+
+/** Månadsvisa delbetalningar. Sista posten kapas till ÅTERSTODEN — annars
+ *  översumerar den fakturan och routerns partitionsvakt (ADR 0007) avvisar den. */
+async function payInstallments(ctx: RunCtx, run: InstallmentRun): Promise<void> {
+  let paid = 0;
+  for (let m = 0; m < run.count; m++) {
+    const amount = Math.min(run.monthly, run.total - paid);
+    if (amount <= 0) return;
+    await ctx.c.invoice.recordPayment({
+      invoiceId: run.invoiceId, amount,
+      paidAt: shiftMonths(run.iso, m + 1).toISOString(), note: `Avbetalning ${m + 1}`,
+    });
+    paid += amount;
+  }
+}
+
+/** N månatliga DUE-påminnelser bakåt från `iso`. */
+async function sendPlanReminders(ctx: RunCtx, planId: string, iso: string, count: number): Promise<void> {
+  for (let n = count; n >= 1; n--) {
+    await ctx.c.paymentPlan.recordReminder({ planId, dueMonth: monthsBack(iso, n), type: "DUE" });
+    ctx.res.reminders++;
+  }
+}
+
+interface PlanArgs {
+  installments: number; paidInstallments: number; dayOfMonth: number;
+  reminders: number; cancel: boolean; notes?: string;
+}
+
+/** Eventets fält med defaults. Egen funktion för att hålla `hPaymentPlan` under
+ *  komplexitetstaket (8) — varje default räknas som en gren. */
+function planArgs(e: Any): PlanArgs {
+  const { installments = 3, paidInstallments = 0, dayOfMonth = 15, reminders = 0, cancel = false, notes } = e as Partial<PlanArgs>;
+  return { installments, paidInstallments, dayOfMonth, reminders, cancel, ...(notes === undefined ? {} : { notes }) };
+}
+
+/** Avbetalningsplan (#982) på den senaste slutfakturan. */
+async function hPaymentPlan(ctx: RunCtx, m: SimMatter, e: Any, iso: string, st: SimState): Promise<void> {
+  const inv = st.lastFinal;
+  if (!inv || inv.amount <= 0) return;
+  const { installments, paidInstallments, dayOfMonth, reminders, cancel, notes } = planArgs(e);
+  const monthly = Math.ceil(inv.amount / Math.max(1, installments));
+  const plan = await ctx.c.invoice.createPaymentPlan({
+    id: demoPaymentPlanId(m.id), invoiceId: inv.id, monthlyAmount: monthly,
+    dayOfMonth, startDate: iso, ...(notes === undefined ? {} : { notes }),
+  });
+  ctx.res.paymentPlans++;
+  await sendPlanReminders(ctx, plan.id, iso, reminders);
+  await payInstallments(ctx, { invoiceId: inv.id, monthly, total: inv.amount, count: paidInstallments, iso });
+  // Avbryt EFTER betalningarna: en avbruten plan lämnar fakturan som SENT igen,
+  // och de inbetalningar som hann göras ligger kvar — precis som i verkligheten.
+  if (cancel) await ctx.c.invoice.cancelPaymentPlan({ planId: plan.id });
+}
+
+/** Konstaterad kundförlust (ADR 0007) på den senaste slutfakturan (#982). */
+async function hWriteOff(ctx: RunCtx, _m: SimMatter, e: Any, iso: string, st: SimState): Promise<void> {
+  const inv = st.lastFinal;
+  if (!inv || inv.amount <= 0) return;
+  const bips = Number(e.partialBips ?? 0);
+  if (bips > 0) {
+    const part = Math.floor((inv.amount * bips) / 10000);
+    if (part > 0) await ctx.c.invoice.recordPayment({ invoiceId: inv.id, amount: part, paidAt: iso, note: "Delbetalning" });
+  }
+  // Utan `amount` skrivs hela ÅTERSTODEN av — routern räknar ut den ur ledgern,
+  // så simuleringen slipper spegla den matematiken.
+  await ctx.c.invoice.writeOff({ invoiceId: inv.id, reason: String(e.reason ?? "Klient försatt i konkurs"), writtenOffAt: iso });
+  ctx.res.writeOffs++;
+}
+
 /** kind → handler. Håller runnern platt (undviker en stor switch = hög komplexitet). */
 const HANDLERS: Record<SimEvent["kind"], (ctx: RunCtx, m: SimMatter, e: Any, iso: string, st: SimState) => Promise<void>> = {
   party: hParty, time: hTime, note: hNote, expense: hExpense, doc: hDoc, radgivning: hRadgivning,
   acconto: hAcconto, rateChange: hRateChange, kostnadsrakning: hKostnadsrakning, beslut: hBeslut, verdict: hVerdict, settle: hSettle, insurerPruning: hInsurerPruning, final: hFinal, payment: hPayment,
+  paymentPlan: hPaymentPlan, writeOff: hWriteOff,
 };
 
 /** Spela upp ett ärendes scenario kronologiskt. */

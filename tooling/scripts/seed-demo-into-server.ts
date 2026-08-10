@@ -39,7 +39,7 @@ import { bootstrapOrgUsers, populate } from "../demo-generator/populate";
 import { populateInvoiceDocs } from "../demo-generator/populate-invoice-docs";
 import { populateKostnadsrakningDocs } from "../demo-generator/populate-kostnadsrakning-docs";
 import { runSimulation } from "../demo-generator/simulate/orchestrate";
-import type { RunCtx } from "../demo-generator/simulate/runner";
+import { emptyRunResult, type RunCtx } from "../demo-generator/simulate/runner";
 import { buildSeed, type SeedDataset } from "./seed-data";
 
 const DB_URL = process.env.AVA_DATABASE_URL ?? "postgres://ava:ava@localhost:5433/ava_test";
@@ -154,7 +154,7 @@ async function runRest(caller: GeneratorCaller, seed: SeedDataset, loginIds: Log
   const core = await populate(caller, coreSeed, { skipOrgUsers });
   // Kronologisk simulering — SAMMA motor som GH Pages-demon; doc-bytes → content-katalogen.
   const sink = contentSink();
-  const ctx: RunCtx = { c: caller, res: { invoices: 0, documents: 0, timeEntries: 0, notes: 0, credits: 0 }, ...(sink ? { sink } : {}) };
+  const ctx: RunCtx = { c: caller, res: emptyRunResult(), ...(sink ? { sink } : {}) };
   await runSimulation(ctx, seed);
   await addTodayTimeEntries(caller, seed.timeEntries as Row[], seed.matters as Row[], loginIds); // "idag"-tid för dashboarden
   const kostnadsrakningDocs = await seedKostnadsrakningDocs(caller);

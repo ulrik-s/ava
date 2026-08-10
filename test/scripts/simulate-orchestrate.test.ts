@@ -12,7 +12,7 @@ import { createGitTarget } from "../../tooling/demo-generator/backend-target";
 import { createIdTranslator, translateSeed } from "../../tooling/demo-generator/id-translator";
 import { populate } from "../../tooling/demo-generator/populate";
 import { runSimulation } from "../../tooling/demo-generator/simulate/orchestrate";
-import type { RunCtx } from "../../tooling/demo-generator/simulate/runner";
+import { emptyRunResult, type RunCtx } from "../../tooling/demo-generator/simulate/runner";
 import { buildSeed } from "../../tooling/scripts/seed-data";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -27,7 +27,7 @@ describe("runSimulation (#880 integration)", () => {
     const coreSeed = { ...seed, matters: seed.matters.map((m: Any) => ({ ...m, status: "ACTIVE" })), timeEntries: [], expenses: [], matterContacts: [], documents: [], serviceNotes: [] };
     await populate(target.caller, coreSeed);
 
-    const ctx: RunCtx = { c: target.caller, res: { invoices: 0, documents: 0, timeEntries: 0, notes: 0, credits: 0 } };
+    const ctx: RunCtx = { c: target.caller, res: emptyRunResult() };
     await runSimulation(ctx, seed);
 
     // Simuleringen skapade faktiskt saker (fångar "0 av allt"-regressionen).
@@ -73,5 +73,42 @@ describe("runSimulation (#880 integration)", () => {
     const recips = new Set(settlementRuns.filter((r) => r.type === "FINAL").map((r) => r.recipient));
     expect(recips.has("KLIENT")).toBe(true);
     expect(recips.has("DOMSTOL")).toBe(true);
+  });
+
+  /**
+   * #982: simuleringen ersatte `populate-billing.ts` men tog inte över dess
+   * faktura-livscykler, så demon hade noll avbetalningsplaner och noll
+   * avskrivningar. Det upptäcktes först av ett e2e-test — inget steg sa något.
+   * Testet nedan är den saknade grinden: det påstår om DEMONS DATA, inte om
+   * scenariomallen, att varje tillstånd faktiskt uppstår.
+   */
+  it("privatärendenas livscykler ger planer i alla tre tillstånd + en kundförlust", async () => {
+    const seed = translateSeed(buildSeed(), createIdTranslator()) as Any;
+    const orgId = String(seed.organizations[0].id);
+    const admin = { id: asId<"UserId">("gen"), email: "g@a.se", name: "G", role: userRoleSchema.parse("ADMIN"), organizationId: asId<"OrganizationId">(orgId) };
+    const target = createGitTarget({ principal: admin, writeBack: async () => {} });
+    const coreSeed = { ...seed, matters: seed.matters.map((m: Any) => ({ ...m, status: "ACTIVE" })), timeEntries: [], expenses: [], matterContacts: [], documents: [], serviceNotes: [] };
+    await populate(target.caller, coreSeed);
+
+    const ctx: RunCtx = { c: target.caller, res: emptyRunResult() };
+    await runSimulation(ctx, seed);
+
+    const c = target.caller as Any;
+    const plans = await c.paymentPlan.list({});
+    const statuses = new Set((plans as Any[]).map((p) => p.status));
+    // Cykeln i `privat.ts` är sex lång och seeden har fler privatärenden än så,
+    // så alla tre tillstånden ska förekomma. Slår detta fel har antingen cykeln
+    // ändrats eller antalet privatärenden fallit under sex.
+    expect(statuses.has("ACTIVE"), "aktiv plan").toBe(true);
+    expect(statuses.has("COMPLETED"), "slutförd plan").toBe(true);
+    expect(statuses.has("CANCELLED"), "avbruten plan").toBe(true);
+    expect(ctx.res.reminders, "påminnelser skickade").toBeGreaterThan(0);
+
+    // Kundförlusten stänger sin faktura som BAD_DEBT (ADR 0007).
+    expect(ctx.res.writeOffs).toBeGreaterThan(0);
+    const invoices = await c.invoice.list({}) as Any[];
+    expect(invoices.some((i) => i.status === "BAD_DEBT"), "avskriven faktura").toBe(true);
+    // …och en plan-faktura står som INSTALLMENT_PLAN, inte som vanlig SENT.
+    expect(invoices.some((i) => i.status === "INSTALLMENT_PLAN"), "faktura med plan").toBe(true);
   });
 });

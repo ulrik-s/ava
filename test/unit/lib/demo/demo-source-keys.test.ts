@@ -5,6 +5,7 @@
 
 import { describe, it, expect } from "vitest-compat";
 import { pathToSourceKey } from "@/lib/client/demo/demo-source-keys";
+import { ENTITY_REGISTRY } from "@/lib/shared/schemas";
 
 describe("pathToSourceKey", () => {
   it("mappar kärnentiteter till sina plural-nycklar", () => {
@@ -29,6 +30,9 @@ describe("pathToSourceKey", () => {
     expect(pathToSourceKey("calendar/e1.json")).toBe("calendarEvents");
     expect(pathToSourceKey("payment-plans/p1.json")).toBe("paymentPlans");
     expect(pathToSourceKey("payment-plan-reminders/r1.json")).toBe("paymentPlanReminders");
+    // #982: saknades helt → varje avskrivning tappades tyst av demon, och
+    // migrate-on-read (ADR 0007) täckte över det med en gissad ersättningspost.
+    expect(pathToSourceKey("write-offs/w1.json")).toBe("writeOffs");
     expect(pathToSourceKey(".ava/templates/t1.json")).toBe("documentTemplates");
     expect(pathToSourceKey(".ava/organizations/o1.json")).toBe("organizations");
     expect(pathToSourceKey(".ava/user-preferences/up1.json")).toBe("userPreferences");
@@ -39,5 +43,46 @@ describe("pathToSourceKey", () => {
     expect(pathToSourceKey(".ava/meta.json")).toBeNull();
     expect(pathToSourceKey("manifest.json")).toBeNull();
     expect(pathToSourceKey("README.md")).toBeNull();
+  });
+});
+
+/**
+ * Strukturell grind (#982). Listan ovan räknar upp entiteter en och en, och
+ * missar därför den entitet ingen kom ihåg att lägga till — precis vad som hände
+ * `write-offs/`: filerna skrevs, hamnade i manifestet, och släpptes sedan tyst av
+ * loadern. Ingenting sa ifrån, eftersom migrate-on-read syntetiserade en
+ * ersättningspost som fick ledgern att summera rätt.
+ *
+ * Testet nedan härleder i stället kravet ur `ENTITY_REGISTRY`, som redan bär
+ * både `gitPrefix` och `sourceKey`. Ny entitet utan matcher → rött.
+ */
+describe("pathToSourceKey täcker ENTITY_REGISTRY", () => {
+  /**
+   * Entiteter som medvetet INTE hydreras i demon ännu. Var och en är ett känt
+   * glapp av samma sort som write-offs, inte ett designbeslut — de tas in när
+   * någon avgör vad de ska visa (#985). Att de står här och inte i tystnad är
+   * hela poängen: listan måste krympa, aldrig växa.
+   */
+  const NOT_YET_HYDRATED = new Set([
+    "documentFolder", "documentAnalysisSuggestion", "matterEventSuggestion", "invoiceDispatch",
+  ]);
+
+  it("varje registrerad entitets gitPrefix mappar till sin sourceKey", () => {
+    const gaps: string[] = [];
+    for (const [name, entry] of Object.entries(ENTITY_REGISTRY)) {
+      if (NOT_YET_HYDRATED.has(name)) continue;
+      const got = pathToSourceKey(`${entry.gitPrefix}/x.json`);
+      if (got !== entry.sourceKey) gaps.push(`${name}: ${entry.gitPrefix}/ → ${got} (väntat ${entry.sourceKey})`);
+    }
+    expect(gaps, "entiteter vars filer loadern skulle släppa tyst").toEqual([]);
+  });
+
+  it("undantagslistan innehåller bara entiteter som faktiskt finns", () => {
+    // Skydd mot att en rad blir kvar efter att entiteten tagits in eller bytt namn.
+    for (const name of NOT_YET_HYDRATED) {
+      const entry = ENTITY_REGISTRY[name as keyof typeof ENTITY_REGISTRY] as { gitPrefix: string } | undefined;
+      expect(entry, `${name} finns i registret`).toBeDefined();
+      expect(pathToSourceKey(`${entry?.gitPrefix ?? "saknas"}/x.json`)).toBeNull();
+    }
   });
 });
