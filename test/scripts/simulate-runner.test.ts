@@ -21,8 +21,9 @@ function recordingCaller() {
     if (method === "billingRun.createKostnadsrakning") return { run: { id: "kr", workValueOreAtRun: 1_544_700 } };
     if (method === "billingRun.createFinal") return { invoice: { id: "fin", amount: 100_000 } };
     if (method === "invoice.createPaymentPlan") return { id: "plan-1" };
-    // −1: raden är redan pushad ovan, så id:na blir 0-baserade i anropsordning.
     if (method === "document.tree") return { folders: [], documents: [] };
+    if (method === "document.suggestFromText") return { parties: 0, events: 0 };
+    // −1: raden är redan pushad ovan, så id:na blir 0-baserade i anropsordning.
     if (method === "document.createFolder") return { id: `folder-${calls.filter((c) => c.method === "document.createFolder").length - 1}` };
     if (method === "billingRun.settleCoverage") return { creditInvoice: { id: "cred", amount: -50_000 }, clientInvoice: {}, payerInvoice: {} };
     return {};
@@ -32,7 +33,7 @@ function recordingCaller() {
     timeEntry: { create: rec("timeEntry.create") },
     serviceNote: { create: rec("serviceNote.create") },
     expense: { create: rec("expense.create") },
-    document: { register: rec("document.register"), createFolder: rec("document.createFolder"), tree: rec("document.tree") },
+    document: { register: rec("document.register"), createFolder: rec("document.createFolder"), tree: rec("document.tree"), suggestFromText: rec("document.suggestFromText") },
     invoiceDispatch: { recordManual: rec("invoiceDispatch.recordManual") },
     invoice: {
       createRadgivning: rec("invoice.createRadgivning"), setStatus: rec("invoice.setStatus"),

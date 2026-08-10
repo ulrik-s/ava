@@ -153,4 +153,36 @@ describe("runSimulation (#880 integration)", () => {
     const rootListing = await c.document.list({ matterId: withCourt.id, folderId: null, pageSize: 100 });
     expect((rootListing.documents ?? rootListing).length, "rot-mappen är tom").toBe(0);
   });
+
+  /**
+   * #988: `SuggestionsPanel` och `EventsPanel` stod tomma i ALLA tier eftersom
+   * ingenting skapade raderna. Nu extraherar seedningen parter och kallelser ur
+   * dokumentens text. Testet påstår om DEMONS DATA att panelerna har något att
+   * visa — och att förslagen går att koppla till ett ärende, vilket är vad
+   * panelerna frågar efter.
+   */
+  it("dokumenttext ger kontakt- och händelseförslag som panelerna kan visa", async () => {
+    const seed = translateSeed(buildSeed(), createIdTranslator()) as Any;
+    const orgId = String(seed.organizations[0].id);
+    const admin = { id: asId<"UserId">("gen"), email: "g@a.se", name: "G", role: userRoleSchema.parse("ADMIN"), organizationId: asId<"OrganizationId">(orgId) };
+    const target = createGitTarget({ principal: admin, writeBack: async () => {} });
+    const coreSeed = { ...seed, matters: seed.matters.map((m: Any) => ({ ...m, status: "ACTIVE" })), timeEntries: [], expenses: [], matterContacts: [], documents: [], serviceNotes: [] };
+    await populate(target.caller, coreSeed);
+
+    const ctx: RunCtx = { c: target.caller, res: emptyRunResult() };
+    await runSimulation(ctx, seed);
+
+    expect(ctx.res.partySuggestions, "kontaktförslag skapade").toBeGreaterThan(0);
+    expect(ctx.res.eventSuggestions, "händelseförslag skapade").toBeGreaterThan(0);
+
+    // Panelerna läser per ÄRENDE — hittar de inget där spelar det ingen roll
+    // hur många rader som skapats.
+    const c = target.caller as Any;
+    const matters = (await c.matter.list({})).matters as Any[];
+    const groups = await Promise.all(matters.map((m: Any) => c.document.pendingSuggestionsGrouped({ matterId: m.id })));
+    expect(groups.some((g: Any) => (g.groups ?? g).length > 0), "något ärende har kontaktförslag").toBe(true);
+
+    const events = await Promise.all(matters.map((m: Any) => c.document.events({ matterId: m.id })));
+    expect(events.some((e: Any) => (e.events ?? e).length > 0), "något ärende har händelseförslag").toBe(true);
+  });
 });

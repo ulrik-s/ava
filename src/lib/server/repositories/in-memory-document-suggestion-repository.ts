@@ -5,7 +5,7 @@
 
 import type { DocumentAnalysisSuggestion } from "@/lib/shared/schemas/document";
 import type {
-  DocumentAnalysisSuggestionId, MatterId, OrganizationId,
+  DocumentAnalysisSuggestionId, DocumentId, MatterId, OrganizationId,
 } from "@/lib/shared/schemas/ids";
 import type { IDataStore } from "../data-store/IDataStore";
 import type {
@@ -27,6 +27,10 @@ export class InMemoryDocumentSuggestionRepository
       where: { id, document: { matter: { organizationId } } },
       include: { document: { select: { matterId: true } } },
     })) as SuggestionWithMatter | null;
+  }
+
+  async listForDocument(documentId: DocumentId): Promise<DocumentAnalysisSuggestion[]> {
+    return (await this.delegate.findMany({ where: { documentId } })) as DocumentAnalysisSuggestion[];
   }
 
   async listPendingForMatter(matterId: MatterId, organizationId: OrganizationId, order: "asc" | "desc"): Promise<SuggestionListRow[]> {

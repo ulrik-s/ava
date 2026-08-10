@@ -21,6 +21,16 @@ export interface DocTemplate {
    * en platt mappstruktur hade sett ut som att funktionen saknas.
    */
   subFolder?: string;
+  /**
+   * Dokumentets BRÖDTEXT (#988), när den behöver se ut som en riktig handling.
+   * `summary` är metadata i en mening; `body` är det som faktiskt står i filen
+   * och det extraktionen läser.
+   *
+   * Bara handlingar som bär parter eller kallelser har en — resten klarar sig
+   * med sin summary. Poängen är inte att fylla demon med text, utan att
+   * `SuggestionsPanel` och `EventsPanel` ska ha något att visa.
+   */
+  body?: string;
 }
 
 /**
@@ -47,6 +57,18 @@ export const DOC_TEMPLATES: Record<string, DocTemplate> = {
   stamningsansokan: {
     documentType: "Stämningsansökan", direction: "UTGAENDE", recipient: "DOMSTOL",
     title: "Stämningsansökan", summary: "Ansökan om stämning ges in till tingsrätten med yrkanden och grunder.",
+    // Partsblocket är det extraktionen (#988) läser: rollord + namn + person-
+    // respektive organisationsnummer, precis som i en riktig ansökan.
+    body: [
+      "STÄMNINGSANSÖKAN",
+      "Kärande: Anna Andersson 850312-4567",
+      "Ombud: Advokat Erik Lundqvist",
+      "Svarande: Byggfirma Stenhammar AB 556677-8899",
+      "Motpartens ombud: Advokat Sofia Grip",
+      "",
+      "Käranden yrkar att tingsrätten förpliktar svaranden att utge skadestånd.",
+      "Muntlig förberedelse har satts ut till 2026-09-15 kl. 09.30.",
+    ].join("\n"),
   },
   inlaga: {
     documentType: "Inlaga", direction: "UTGAENDE", recipient: "DOMSTOL",
@@ -59,6 +81,14 @@ export const DOC_TEMPLATES: Record<string, DocTemplate> = {
   svaromal: {
     documentType: "Svaromål", direction: "INKOMMANDE", recipient: "MOTPART",
     title: "Svaromål från motpartsombud", summary: "Motparten bestrider käromålet och åberopar egen bevisning.",
+    body: [
+      "SVAROMÅL",
+      "Svarande: Byggfirma Stenhammar AB 556677-8899",
+      "Motpartens ombud: Advokat Sofia Grip",
+      "Vittne: Karl Nilsson 720801-1234",
+      "",
+      "Svaranden bestrider käromålet i dess helhet och åberopar egen bevisning.",
+    ].join("\n"),
   },
   brevFranOmbud: {
     documentType: "Korrespondens", direction: "INKOMMANDE", recipient: "MOTPART",
@@ -68,6 +98,15 @@ export const DOC_TEMPLATES: Record<string, DocTemplate> = {
     documentType: "Dom", direction: "INKOMMANDE", recipient: "DOMSTOL",
     title: "Dom från tingsrätten", summary: "Tingsrätten meddelar dom i målet. Se domslut och domskäl.",
     subFolder: "Domar",
+    body: [
+      "DOM",
+      "Huvudförhandling hölls den 12 maj 2026 kl. 09.00.",
+      "Kärande: Anna Andersson 850312-4567",
+      "Svarande: Byggfirma Stenhammar AB 556677-8899",
+      "",
+      "Tingsrätten förpliktar svaranden att utge skadestånd till käranden.",
+      "Frist för överklagande: senast den 2026-06-02.",
+    ].join("\n"),
   },
   beslutRattshjalp: {
     documentType: "Beslut", direction: "INKOMMANDE", recipient: "MYNDIGHET",

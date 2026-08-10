@@ -25,14 +25,14 @@ export interface RunCtx {
   sink?: BinarySink;
   /** Gränsbelopp (öre) för tröskelstyrd aconto-utskick (#885); default = konstanten. */
   accontoThresholdOre?: number;
-  res: { invoices: number; documents: number; timeEntries: number; notes: number; credits: number; paymentPlans: number; reminders: number; writeOffs: number; folders: number; dispatches: number };
+  res: { invoices: number; documents: number; timeEntries: number; notes: number; credits: number; paymentPlans: number; reminders: number; writeOffs: number; folders: number; dispatches: number; partySuggestions: number; eventSuggestions: number };
 }
 
 /** Nollställda räknare. Factory i stället för ett objekt-literal per anropsplats:
  *  räknarna växer med simuleringens täckning (#982 lade till tre), och literalen
  *  fanns då på sex ställen — två i verktygen, fyra i testerna. */
 export function emptyRunResult(): RunCtx["res"] {
-  return { invoices: 0, documents: 0, timeEntries: 0, notes: 0, credits: 0, paymentPlans: 0, reminders: 0, writeOffs: 0, folders: 0, dispatches: 0 };
+  return { invoices: 0, documents: 0, timeEntries: 0, notes: 0, credits: 0, paymentPlans: 0, reminders: 0, writeOffs: 0, folders: 0, dispatches: 0, partySuggestions: 0, eventSuggestions: 0 };
 }
 
 interface SimState {
@@ -106,7 +106,11 @@ async function hDoc(ctx: RunCtx, m: SimMatter, e: Any, iso: string, st: SimState
   const storagePath = `documents/content/${id}.pdf`;
   const fileName = `${t.title}.pdf`;
   const { generateDocumentBytes } = await import("../../scripts/seed-data");
-  const bytes = await generateDocumentBytes({ id, title: t.title, fileName, documentType: t.documentType, summary: t.summary, mimeType: "application/pdf", storagePath });
+  // `body` när mallen har en (#988) — det är den texten extraktionen läser, och
+  // den ska stå i FILEN också, annars visar demon förslag som inte går att
+  // härleda ur dokumentet man öppnar.
+  const text = t.body ?? t.summary;
+  const bytes = await generateDocumentBytes({ id, title: t.title, fileName, documentType: t.documentType, summary: text, mimeType: "application/pdf", storagePath });
   const size = ctx.sink ? ctx.sink(storagePath, bytes) : bytes.byteLength;
   // Filas efter mottagare (#985) — demon hade tidigare allt i roten, så
   // träd-vyns mapphantering gick varken att se eller prova.
@@ -118,6 +122,13 @@ async function hDoc(ctx: RunCtx, m: SimMatter, e: Any, iso: string, st: SimState
     analysisStatus: "DONE", createdAt: iso,
   });
   ctx.res.documents++;
+  // Kontakt- och händelseförslag ur texten (#988). Bara mallar med `body` bär
+  // parter/kallelser; för övriga är det en no-op och kostar ett anrop.
+  if (t.body !== undefined) {
+    const res = await ctx.c.document.suggestFromText({ documentId: id, text: t.body }) as { parties: number; events: number };
+    ctx.res.partySuggestions += res.parties;
+    ctx.res.eventSuggestions += res.events;
+  }
 }
 
 async function hRadgivning(ctx: RunCtx, m: SimMatter, _e: Any, iso: string): Promise<void> {

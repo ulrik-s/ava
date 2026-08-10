@@ -6,7 +6,7 @@
 import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
 import type { DocumentAnalysisSuggestion } from "@/lib/shared/schemas/document";
 import type {
-  DocumentAnalysisSuggestionId, MatterId, OrganizationId,
+  DocumentAnalysisSuggestionId, DocumentId, MatterId, OrganizationId,
 } from "@/lib/shared/schemas/ids";
 import { documentAnalysisSuggestions, documents, matters } from "../db/schema";
 import type { AppDb } from "../db/types";
@@ -33,6 +33,11 @@ export class DrizzleDocumentSuggestionRepository
       .limit(1);
     const r = rows[0];
     return r ? ({ ...r.s, document: { matterId: r.matterId } }) : null;
+  }
+
+  async listForDocument(documentId: DocumentId): Promise<DocumentAnalysisSuggestion[]> {
+    return await this.db.select().from(S)
+      .where(and(eq(S.documentId, documentId), isNull(S.deletedAt))) as DocumentAnalysisSuggestion[];
   }
 
   async listPendingForMatter(matterId: MatterId, organizationId: OrganizationId, order: "asc" | "desc"): Promise<SuggestionListRow[]> {

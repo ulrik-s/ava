@@ -5,7 +5,7 @@
 
 import { and, asc, eq, isNull, ne } from "drizzle-orm";
 import type { MatterEventSuggestion } from "@/lib/shared/schemas/document";
-import type { MatterEventSuggestionId, MatterId, OrganizationId } from "@/lib/shared/schemas/ids";
+import type { DocumentId, MatterEventSuggestionId, MatterId, OrganizationId } from "@/lib/shared/schemas/ids";
 import { documents, matterEventSuggestions, matters } from "../db/schema";
 import type { AppDb } from "../db/types";
 import { DrizzleRepository, versionedTable } from "./drizzle-repository";
@@ -18,6 +18,14 @@ export class DrizzleMatterEventSuggestionRepository
   implements MatterEventSuggestionRepository {
   constructor(db: AppDb, now: () => Date = () => new Date()) {
     super(db, versionedTable(matterEventSuggestions), now);
+  }
+
+  async listForDocument(documentId: DocumentId): Promise<MatterEventSuggestion[]> {
+    return await this.db.select().from(matterEventSuggestions)
+      .where(and(
+        eq(matterEventSuggestions.documentId, documentId),
+        isNull(matterEventSuggestions.deletedAt),
+      )) as MatterEventSuggestion[];
   }
 
   async listForMatter(matterId: MatterId, organizationId: OrganizationId): Promise<MatterEventSuggestionRow[]> {

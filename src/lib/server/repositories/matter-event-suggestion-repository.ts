@@ -13,6 +13,8 @@ export interface MatterEventSuggestionRow extends MatterEventSuggestion {
 }
 
 export interface MatterEventSuggestionRepository extends Repository<MatterEventSuggestion> {
+  /** ALLA händelseförslag på ett dokument, oavsett status (#988) — dedup vid omanalys. */
+  listForDocument(documentId: DocumentId): Promise<MatterEventSuggestion[]>;
   /** Icke-avvisade händelser för ett ärende (startAt asc), org-scopat via dokumentet. */
   listForMatter(matterId: MatterId, organizationId: OrganizationId): Promise<MatterEventSuggestionRow[]>;
   /** Händelse by id, org-scopad via dokument→ärende. Null om saknas/annan org/raderad. */
