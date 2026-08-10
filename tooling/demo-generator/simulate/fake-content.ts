@@ -15,7 +15,28 @@ export interface DocTemplate {
   /** Titel/filnamnsbas. `{m}` ersätts med ärende-titel av anroparen om önskat. */
   title: string;
   summary: string;
+  /**
+   * Undermapp inom mottagarens mapp (#985). Utelämnad → dokumentet läggs direkt
+   * i mottagarmappen. Finns för att demon ska visa att träd-vyn kan NÄSTLA —
+   * en platt mappstruktur hade sett ut som att funktionen saknas.
+   */
+  subFolder?: string;
 }
+
+/**
+ * Mottagare → mapp (#985). Byrån filar efter vem dokumentet gick till eller kom
+ * från; det är den indelning träd-vyns drag-and-drop är gjord för. Demon hade
+ * inga mappar alls — varje dokument låg i roten, så mapphanteringen gick varken
+ * att se eller prova.
+ */
+export const FOLDER_BY_RECIPIENT: Record<DocumentRecipient, string> = {
+  KLIENT: "Klient",
+  DOMSTOL: "Domstol",
+  MOTPART: "Korrespondens",
+  MYNDIGHET: "Myndighetsbeslut",
+  FORSAKRING: "Försäkring",
+  OVRIGT: "Övrigt",
+};
 
 /** Fördefinierade dokument-mallar (nyckel → mall). Utökas per scenariobehov. */
 export const DOC_TEMPLATES: Record<string, DocTemplate> = {
@@ -46,6 +67,7 @@ export const DOC_TEMPLATES: Record<string, DocTemplate> = {
   dom: {
     documentType: "Dom", direction: "INKOMMANDE", recipient: "DOMSTOL",
     title: "Dom från tingsrätten", summary: "Tingsrätten meddelar dom i målet. Se domslut och domskäl.",
+    subFolder: "Domar",
   },
   beslutRattshjalp: {
     documentType: "Beslut", direction: "INKOMMANDE", recipient: "MYNDIGHET",

@@ -40,6 +40,11 @@ const MATCHERS: Matcher[] = [
   // Ledgern summerade alltså rätt belopp av fel skäl, och den riktiga postens
   // datum och orsak nådde aldrig fram.
   { key: "writeOffs", owns: (p) => p.startsWith("write-offs/") },
+  // #985: samma sorts glapp som write-offs. Mapparna gjorde träd-vyns hela
+  // poäng osynlig i demon (allt låg i roten), och utskickshistoriken på
+  // fakturan stod tom oavsett hur många fakturor som skickats.
+  { key: "documentFolders", owns: (p) => p.startsWith("document-folders/") },
+  { key: "invoiceDispatches", owns: (p) => p.startsWith("invoice-dispatches/") },
   { key: "billingRuns", owns: (p) => p.startsWith("billing-runs/") },
   { key: "accontoDeductions", owns: (p) => p.startsWith("acconto-deductions/") },
   { key: "expectedReceivables", owns: (p) => p.startsWith("expected-receivables/") },

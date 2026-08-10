@@ -84,6 +84,10 @@ export interface SimMatter {
   /** Arvode-sats (öre/tim) som ackumulerat arbete värderas på — driver aconto-belopp
    *  (rättshjälp: timkostnadsnormen; annars ansvarig jurists timtaxa). */
   arvodeRateOre: number;
+  /** Klientens e-post ur seedens kontakter (#985) — mottagare för fakturans
+   *  utskickshistorik. Saknas den registreras inget utskick, hellre det än en
+   *  påhittad adress i demodatat. */
+  clientEmail?: string | undefined;
 }
 
 /** Parter att länka in via `party`-events (översatta UUID:n) — ur seedens

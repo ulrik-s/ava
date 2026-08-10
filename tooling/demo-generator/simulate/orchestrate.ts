@@ -25,7 +25,7 @@ function daysSince(iso: unknown): number {
   return Number.isFinite(t) ? Math.max(0, Math.round((Date.now() - t) / MS_DAY)) : 30;
 }
 
-function deriveSim(m: Any, lawyerId: string, rateOre: number): SimMatter {
+function deriveSim(m: Any, lawyerId: string, rateOre: number, clientEmail: string | undefined): SimMatter {
   const isRh = String(m.paymentMethod) === "RATTSHJALP";
   return {
     id: String(m.id),
@@ -33,7 +33,16 @@ function deriveSim(m: Any, lawyerId: string, rateOre: number): SimMatter {
     paymentMethod: String(m.paymentMethod), clientShareBips: m.clientShareBips ?? null,
     lawyerId, startDaysAgo: daysSince(m.createdAt),
     arvodeRateOre: isRh ? TIMKOSTNADSNORM_FTAX_ORE_PER_H : (rateOre || DEFAULT_RATE_ORE),
+    clientEmail,
   };
+}
+
+/** Klientens e-post ur seedens kontakter (#985) — mottagare i utskickshistoriken. */
+function clientEmailOf(parties: Parties, contacts: Any[]): string | undefined {
+  if (!parties.klient) return undefined;
+  const hit = contacts.find((c) => String(c.id) === parties.klient);
+  const email = hit?.email;
+  return typeof email === "string" && email.length > 0 ? email : undefined;
 }
 
 /** Parter ur seedens matterContacts (klient/motpart/ombud/domstol) → party-events. */
@@ -62,15 +71,32 @@ interface MatterSlot {
   variantIndex: number;
 }
 
-async function simulateMatter(
-  ctx: RunCtx, m: Any, users: { id: string; rateOre: number }[], seedContacts: Any[], slot: MatterSlot,
-): Promise<void> {
+/** Seedens uppslagstabeller. Ett objekt i st.f. tre parametrar — `simulateMatter`
+ *  ligger annars över parameter-taket (5), och listorna hör ihop. */
+interface SeedLookup {
+  users: { id: string; rateOre: number }[];
+  /** matterContacts — vilka kontakter som är knutna till ärendet, med roll. */
+  matterContacts: Any[];
+  /** contacts — kontakternas egna fält (e-post till utskickshistoriken, #985). */
+  contacts: Any[];
+}
+
+/** Plocka ut uppslagstabellerna ur den översatta seeden. */
+function buildLookup(seed: Any): SeedLookup {
+  const users = (seed.users ?? [])
+    .filter((u: Any) => typeof u.id === "string")
+    .map((u: Any) => ({ id: String(u.id), rateOre: Number(u.hourlyRate ?? 0) || 0 }));
+  return { users, matterContacts: seed.matterContacts ?? [], contacts: seed.contacts ?? [] };
+}
+
+async function simulateMatter(ctx: RunCtx, m: Any, seed: SeedLookup, slot: MatterSlot): Promise<void> {
   // Seed-ärenden saknar responsibleLawyerId → välj ansvarig jurist deterministiskt ur
   // användarlistan (som gamla buildTimeEntries: round-robin per ärende-index).
-  const u = users[slot.index % Math.max(1, users.length)];
+  const u = seed.users[slot.index % Math.max(1, seed.users.length)];
   if (!u) return;
-  const sim = deriveSim(m, u.id, u.rateOre);
-  await runScenario(ctx, sim, buildScenario(sim, deriveParties(String(m.id), seedContacts), slot.variantIndex));
+  const parties = deriveParties(String(m.id), seed.matterContacts);
+  const sim = deriveSim(m, u.id, u.rateOre, clientEmailOf(parties, seed.contacts));
+  await runScenario(ctx, sim, buildScenario(sim, parties, slot.variantIndex));
   if (String(m.status) !== "ACTIVE") await ctx.c.matter.update({ id: sim.id, status: String(m.status) });
 }
 
@@ -79,15 +105,12 @@ export async function runSimulation(ctx: RunCtx, seed: Any): Promise<void> {
   // Byråns aconto-gränsbelopp (#885) driver tröskelstyrda aconton i runnern.
   const orgThreshold = seed.organizations?.[0]?.accontoThresholdOre;
   if (typeof orgThreshold === "number") ctx.accontoThresholdOre = orgThreshold;
-  const users: { id: string; rateOre: number }[] = (seed.users ?? [])
-    .filter((u: Any) => typeof u.id === "string")
-    .map((u: Any) => ({ id: String(u.id), rateOre: Number(u.hourlyRate ?? 0) || 0 }));
   // Parterna länkas kronologiskt ur seedens matterContacts (klient/motpart/ombud/domstol).
-  const seedContacts: Any[] = seed.matterContacts ?? [];
+  const lookup = buildLookup(seed);
   let index = 0;
   const variants = new Map<string, number>();
   for (const m of seed.matters ?? []) {
-    await simulateMatter(ctx, m, users, seedContacts, {
+    await simulateMatter(ctx, m, lookup, {
       index, variantIndex: nextVariant(variants, String(m.paymentMethod)),
     });
     index++;

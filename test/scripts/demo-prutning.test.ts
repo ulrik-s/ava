@@ -23,6 +23,8 @@ function recordingCaller(): { c: Any; calls: Array<{ method: string; args: Any }
     if (method === "billingRun.createKostnadsrakning") return { run: { id: "kr", workValueOreAtRun: 5_000_000 } };
     if (method === "billingRun.createFinal") return { invoice: { id: "fin", amount: 100_000 } };
     if (method === "billingRun.settleCoverage") return { clientInvoice: {}, payerInvoice: {} };
+    if (method === "document.tree") return { folders: [], documents: [] };
+    if (method === "document.createFolder") return { id: `folder-${calls.length}` };
     return {};
   };
   const c = {
@@ -30,7 +32,7 @@ function recordingCaller(): { c: Any; calls: Array<{ method: string; args: Any }
     timeEntry: { create: rec("timeEntry.create") },
     serviceNote: { create: rec("serviceNote.create") },
     expense: { create: rec("expense.create") },
-    document: { register: rec("document.register") },
+    document: { register: rec("document.register"), createFolder: rec("document.createFolder"), tree: rec("document.tree") },
     invoice: { createRadgivning: rec("invoice.createRadgivning"), setStatus: rec("invoice.setStatus"), recordPayment: rec("invoice.recordPayment") },
     billingRun: {
       createAcconto: rec("billingRun.createAcconto"), createKostnadsrakning: rec("billingRun.createKostnadsrakning"),

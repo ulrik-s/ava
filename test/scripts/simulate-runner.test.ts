@@ -21,6 +21,9 @@ function recordingCaller() {
     if (method === "billingRun.createKostnadsrakning") return { run: { id: "kr", workValueOreAtRun: 1_544_700 } };
     if (method === "billingRun.createFinal") return { invoice: { id: "fin", amount: 100_000 } };
     if (method === "invoice.createPaymentPlan") return { id: "plan-1" };
+    // −1: raden är redan pushad ovan, så id:na blir 0-baserade i anropsordning.
+    if (method === "document.tree") return { folders: [], documents: [] };
+    if (method === "document.createFolder") return { id: `folder-${calls.filter((c) => c.method === "document.createFolder").length - 1}` };
     if (method === "billingRun.settleCoverage") return { creditInvoice: { id: "cred", amount: -50_000 }, clientInvoice: {}, payerInvoice: {} };
     return {};
   };
@@ -29,7 +32,8 @@ function recordingCaller() {
     timeEntry: { create: rec("timeEntry.create") },
     serviceNote: { create: rec("serviceNote.create") },
     expense: { create: rec("expense.create") },
-    document: { register: rec("document.register") },
+    document: { register: rec("document.register"), createFolder: rec("document.createFolder"), tree: rec("document.tree") },
+    invoiceDispatch: { recordManual: rec("invoiceDispatch.recordManual") },
     invoice: {
       createRadgivning: rec("invoice.createRadgivning"), setStatus: rec("invoice.setStatus"),
       recordPayment: rec("invoice.recordPayment"), createPaymentPlan: rec("invoice.createPaymentPlan"),
@@ -191,5 +195,75 @@ describe("fakturans livscykler i simuleringen (#982)", () => {
     expect(calls).toHaveLength(0);
     expect(ctx.res.paymentPlans).toBe(0);
     expect(ctx.res.writeOffs).toBe(0);
+  });
+});
+
+/**
+ * Dokumentmappar och utskickshistorik (#985). Båda entiteterna tappades tyst av
+ * demons loader, men bakom den bristen låg en till: simuleringen skapade dem
+ * aldrig. Varje dokument låg i roten — träd-vyns mapphantering gick varken att
+ * se eller prova — och fakturans utskickshistorik var tom oavsett hur många
+ * fakturor som skickats.
+ */
+describe("mappar + utskick i simuleringen (#985)", () => {
+  const PRIVAT: SimMatter = {
+    id: "m-p", paymentMethod: "PRIVAT", lawyerId: "u-1", startDaysAgo: 300,
+    arvodeRateOre: 250_000, clientEmail: "klient@example.se",
+  };
+
+  async function run(events: Any[], matter: SimMatter = PRIVAT) {
+    const { c, calls } = recordingCaller();
+    const ctx: RunCtx = { c, res: emptyRunResult() };
+    await runScenario(ctx, matter, events);
+    return { calls, ctx };
+  }
+
+  it("dokument filas i mottagarens mapp — och mappen skapas EN gång", async () => {
+    const { calls, ctx } = await run([
+      { kind: "doc", dayOffset: 0, template: "stamningsansokan" }, // DOMSTOL
+      { kind: "doc", dayOffset: 1, template: "inlaga" },           // DOMSTOL igen
+      { kind: "doc", dayOffset: 2, template: "brevTillOmbud" },    // MOTPART
+    ]);
+
+    const folders = calls.filter((x) => x.method === "document.createFolder");
+    // Två domstolsdokument → EN "Domstol"-mapp, inte två.
+    expect(folders.map((f) => f.args.name)).toEqual(["Domstol", "Korrespondens"]);
+    expect(ctx.res.folders).toBe(2);
+
+    const regs = calls.filter((x) => x.method === "document.register");
+    expect(regs[0]!.args.folderId).toBe(regs[1]!.args.folderId); // samma mapp
+    expect(regs[2]!.args.folderId).not.toBe(regs[0]!.args.folderId);
+    expect(regs.every((r) => r.args.folderId !== null)).toBe(true);
+  });
+
+  it("nästlade mappar skapas uppifrån och ned, med rätt förälder", async () => {
+    // `dom` har subFolder "Domar" → Domstol/Domar. Utan nästling hade demon
+    // sett ut som att träd-vyn bara klarar en nivå.
+    const { calls } = await run([{ kind: "doc", dayOffset: 0, template: "dom" }]);
+    const folders = calls.filter((x) => x.method === "document.createFolder");
+    expect(folders.map((f) => f.args.name)).toEqual(["Domstol", "Domar"]);
+    expect(folders[0]!.args.parentId).toBeNull();
+    expect(folders[1]!.args.parentId).toBe("folder-0"); // barnet pekar på föräldern
+  });
+
+  it("slutfaktura till klienten registreras som utskick till klientens e-post", async () => {
+    const { calls, ctx } = await run([{ kind: "final", dayOffset: 0, recipient: "KLIENT" }]);
+    const dispatch = calls.find((x) => x.method === "invoiceDispatch.recordManual");
+    expect(dispatch?.args).toMatchObject({ invoiceId: "fin", channel: "email", recipient: "klient@example.se" });
+    expect(ctx.res.dispatches).toBe(1);
+  });
+
+  it("utan klient-e-post registreras inget utskick — hellre tomt än påhittat", async () => {
+    const { calls, ctx } = await run(
+      [{ kind: "final", dayOffset: 0, recipient: "KLIENT" }],
+      { ...PRIVAT, clientEmail: undefined },
+    );
+    expect(calls.filter((x) => x.method === "invoiceDispatch.recordManual")).toHaveLength(0);
+    expect(ctx.res.dispatches).toBe(0);
+  });
+
+  it("fakturor till DOMSTOL får inget klient-utskick", async () => {
+    const { calls } = await run([{ kind: "final", dayOffset: 0, recipient: "DOMSTOL" }]);
+    expect(calls.filter((x) => x.method === "invoiceDispatch.recordManual")).toHaveLength(0);
   });
 });

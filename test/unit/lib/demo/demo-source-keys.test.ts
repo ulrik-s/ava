@@ -33,6 +33,9 @@ describe("pathToSourceKey", () => {
     // #982: saknades helt → varje avskrivning tappades tyst av demon, och
     // migrate-on-read (ADR 0007) täckte över det med en gissad ersättningspost.
     expect(pathToSourceKey("write-offs/w1.json")).toBe("writeOffs");
+    // #985: utan dessa låg varje dokument i roten och utskickshistoriken var tom.
+    expect(pathToSourceKey("document-folders/f1.json")).toBe("documentFolders");
+    expect(pathToSourceKey("invoice-dispatches/d1.json")).toBe("invoiceDispatches");
     expect(pathToSourceKey(".ava/templates/t1.json")).toBe("documentTemplates");
     expect(pathToSourceKey(".ava/organizations/o1.json")).toBe("organizations");
     expect(pathToSourceKey(".ava/user-preferences/up1.json")).toBe("userPreferences");
@@ -58,13 +61,21 @@ describe("pathToSourceKey", () => {
  */
 describe("pathToSourceKey täcker ENTITY_REGISTRY", () => {
   /**
-   * Entiteter som medvetet INTE hydreras i demon ännu. Var och en är ett känt
-   * glapp av samma sort som write-offs, inte ett designbeslut — de tas in när
-   * någon avgör vad de ska visa (#985). Att de står här och inte i tystnad är
-   * hela poängen: listan måste krympa, aldrig växa.
+   * Entiteter som INTE hydreras i demon. Listan är en ratchet: den ska krympa,
+   * aldrig växa, och varje rad kräver ett skäl.
+   *
+   * De två som är kvar (#985) har INGEN producent någonstans i kodbasen —
+   * varken ett jobb eller en mutation skapar dem. `IDocumentAnalyzer.analyze`
+   * lovar att "eventuella suggestions postas via
+   * dataStore.documentAnalysisSuggestions", men ingen implementation gör det:
+   * classify-pipelinen skriver bara `document.updateMetadata`. Följden är att
+   * `SuggestionsPanel` och `EventsPanel` står tomma i ALLA tier, inte bara i
+   * demon. Att koppla på en matcher här hade varit meningslöst, och att seeda
+   * rader hade betytt data som appen själv aldrig kan producera. Gapet är
+   * uppströms — se #988.
    */
   const NOT_YET_HYDRATED = new Set([
-    "documentFolder", "documentAnalysisSuggestion", "matterEventSuggestion", "invoiceDispatch",
+    "documentAnalysisSuggestion", "matterEventSuggestion",
   ]);
 
   it("varje registrerad entitets gitPrefix mappar till sin sourceKey", () => {
