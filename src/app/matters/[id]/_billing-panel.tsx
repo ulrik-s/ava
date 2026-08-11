@@ -8,8 +8,11 @@
  * "+ Skapa faktura"-knapp som öppnar rätt dialog beroende på matter:s
  * paymentMethod.
  *
- * KOSTNADSRAKNING i PENDING_VERDICT-state får en "Ange dom"-knapp som
- * öppnar verdict-dialogen (sätter prutning + skapar faktura).
+ * En kostnadsräkning som väntar på dom avvecklas i TVÅ steg via KR-kortet
+ * (`kostnadsrakning-flow.ts`): "Registrera beslut" (dömt belopp + ev. prutning)
+ * → "Skapa faktura", som öppnar verdict-dialogen (offentligt uppdrag) eller
+ * slutregleringen (rättshjälp). Servern läser prutningen ur beslutet; det finns
+ * ingen ett-stegs-knapp som gör båda (#996).
  */
 import type { inferRouterOutputs } from "@trpc/server";
 import { useEffect, useRef, useState } from "react";

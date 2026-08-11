@@ -2,9 +2,8 @@
  * E2E (demo): exakt det rapporterade flödet, helt automatiserat.
  *
  *   Logga in som "Anna Advokat" → Ärenden → "Brottmål — ekobrott Carlsson"
- *   → "Ange dom + prutning" → "Skapa faktura" → klicka "Faktura"-länken i
- *   kostnadsräkningsraden → på fakturasidan, klicka dokumentnamnet
- *   "Faktura ….pdf" i Fakturadokument-panelen.
+ *   → klicka "Faktura"-länken i kostnadsräkningsraden → på fakturasidan,
+ *   klicka dokumentnamnet "Faktura ….pdf" i Fakturadokument-panelen.
  *
  * Förväntat: PDF:en öppnas i en SEPARAT FLIK. Buggen var att man istället
  * dirigerades in i ärendet (dokumentnamnet länkade till /matters) — ofta med
@@ -47,14 +46,12 @@ test("fakturadokument öppnas i ny flik — dirigeras INTE in i ärendet (+ inge
   await page.goto(`${base}/matters/${MATTER}/`, { waitUntil: "load" });
   await expect(page.getByRole("heading", { name: /ekobrott Carlsson/i })).toBeVisible({ timeout: 30_000 });
 
-  // "Ange dom + prutning" → "Skapa faktura" (om kostnadsräkningen väntar på dom).
-  const verdictBtn = page.getByRole("button", { name: /Ange dom \+ prutning/i });
-  if (await verdictBtn.count()) {
-    await verdictBtn.first().click();
-    await page.getByRole("button", { name: /^Skapa faktura$/ }).click();
-    // Fakturan + fakturadokumentet genereras + persisteras.
-    await page.waitForTimeout(6000);
-  }
+  // Ärendets kostnadsräkning är redan avgjord och fakturerad i seeden, så
+  // fakturan finns när sidan öppnas. Vägen dit — "Registrera beslut" → "Skapa
+  // faktura" — körs skarpt i `demo-kostnadsrakning-verdict.spec.ts` på det
+  // ärende som väntar på dom. (Här stod förr en gren som letade efter en knapp
+  // "Ange dom + prutning". Den etiketten renderades aldrig av något, så grenen
+  // hoppades tyst över vid varje körning — se #996.)
 
   // No-reload-markör: överlever en SPA-övergång men nollas vid sidomladdning.
   await page.evaluate(() => { (window as unknown as { __avaSpa?: string }).__avaSpa = "alive"; });

@@ -1,9 +1,14 @@
 /**
  * Faktureringsflöden per ärendetyp (#816/#817) — EN deklarativ sanningskälla för
  * vad som får faktureras NÄR, per `paymentMethod`. Driver både UI-panelen
- * (tillgängliga actions + dom-banner + vilken dialog en knapp öppnar) och
- * server-guards (att en action är laglig i ärendets nuvarande fas). Ren logik,
- * inga I/O — delas av server, klient och tester.
+ * (tillgängliga actions + vilken dialog en knapp öppnar) och server-guards (att
+ * en action är laglig i ärendets nuvarande fas). Ren logik, inga I/O — delas av
+ * server, klient och tester.
+ *
+ * Vad som händer EFTER att kostnadsräkningen skickats in — beslut, överklagande,
+ * faktura — modelleras per KR-körning i {@link file://./kostnadsrakning-flow.ts}
+ * och renderas av panelens KR-kort. Den här filen slutar vid fasen: flödet vet
+ * att ärendet VÄNTAR på dom, inte hur väntan avvecklas (#996).
  *
  * Designval (2026-06): **härledd fas** (stateless, ur billing-runs + matter —
  * ingen kolumn, ingen osynk), **in-kod-descriptors** (ändlig enum av flöden,
@@ -37,18 +42,10 @@ export interface BillingAction {
   dialog: BillingDialog;
 }
 
-/** "Väntar på dom"-bannern: när ärendet är i `phase`, vad domsknappen öppnar. */
-export interface PendingBanner {
-  phase: BillingPhase;
-  dialog: Extract<BillingDialog, "settlement" | "verdict">;
-  label: string;
-}
-
 export interface BillingFlow {
   initialPhase: BillingPhase;
   /** Lagliga actions per fas. Nycklarna = de faser flödet äger. */
   actionsByPhase: Partial<Record<BillingPhase, readonly BillingAction[]>>;
-  pendingBanner?: PendingBanner;
 }
 
 const aconto = (): BillingAction => ({ type: "ACCONTO", label: "Aconto till klient", toPhase: "ARBETE", recipient: "KLIENT", dialog: "billing" });
@@ -98,7 +95,6 @@ export const BILLING_FLOWS: Record<PaymentMethod, BillingFlow> = {
       ],
       SLUTREGLERAD: [],
     },
-    pendingBanner: { phase: "VANTAR_DOM", dialog: "settlement", label: "Slutreglera (dom)" },
   },
   // Offentligt uppdrag: kostnadsräkning till domstol → dom (prutning) via verdict.
   // Klienten kan dessutom faktureras (återbetalningsskyldighet enligt domen).
@@ -114,7 +110,6 @@ export const BILLING_FLOWS: Record<PaymentMethod, BillingFlow> = {
       ],
       SLUTREGLERAD: [],
     },
-    pendingBanner: { phase: "VANTAR_DOM", dialog: "verdict", label: "Ange dom + prutning" },
   },
 };
 
@@ -161,13 +156,6 @@ export function currentPhase(matter: FlowMatter, runs: ReadonlyArray<FlowRun>): 
 export function availableActions(matter: FlowMatter, runs: ReadonlyArray<FlowRun>): readonly BillingAction[] {
   const flow = BILLING_FLOWS[matter.paymentMethod];
   return flow.actionsByPhase[currentPhase(matter, runs)] ?? [];
-}
-
-/** Dom-bannern för ärendet, om flödet har en och ärendet är i dess fas. */
-export function pendingBannerFor(matter: FlowMatter, runs: ReadonlyArray<FlowRun>): PendingBanner | null {
-  const flow = BILLING_FLOWS[matter.paymentMethod];
-  if (flow.pendingBanner && currentPhase(matter, runs) === flow.pendingBanner.phase) return flow.pendingBanner;
-  return null;
 }
 
 /** Är `action` laglig i `phase` för flödet? (server-guard, fas 3.) */
