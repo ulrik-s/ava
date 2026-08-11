@@ -93,6 +93,10 @@ function main(): void {
     // läses bytes → text extraheras (PDF/DOCX) → ollama klassificerar.
     ...(contentStore ? { content: contentStore } : {}),
     ...(llm ? { llm } : {}),
+    // #988: klassificeringsjobbet skriver också kontakt-/händelseförslag ur
+    // dokumentets text. Deterministisk extraktion → kräver ingen LLM, bara
+    // content-store:n ovan.
+    suggestions: api.repos,
     // #621 B2: LLM föreslår taggar ur byråns vokabulär (läses lazy per jobb).
     vocabulary: async () => (await api.repos.organizations.getById(asId<"OrganizationId">(config.organizationId)))?.documentTags ?? [],
   });

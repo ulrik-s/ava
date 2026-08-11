@@ -7,6 +7,7 @@
  * regelmotor-handlers slotas in här i takt med att deras config/triggers byggs.
  */
 
+import { type SuggestionRepos, writeSuggestionsFromText } from "@/lib/server/documents/suggest-from-text";
 import { createSmtpSender, type SmtpConfig } from "@/lib/server/integrations/email/smtp-sender";
 import { createOllamaClassifier, createOllamaTagSuggester, type LlmConfig } from "@/lib/server/llm/ollama-classifier";
 import type { IContentStore } from "@/lib/server/ports";
@@ -25,9 +26,44 @@ export interface JobHandlerConfig {
    *  (läs bytes → extrahera text → ollama); annars filnamns-heuristik. */
   content?: IContentStore;
   llm?: LlmConfig;
+  /**
+   * Repositories för kontakt-/händelseförslag (#988). Satt + content →
+   * klassificeringsjobbet skriver också förslag ur dokumentets text. Utan
+   * content finns ingen text att läsa server-side → steget hoppas över.
+   */
+  suggestions?: SuggestionRepos;
   /** Byråns etikett-vokabulär (#621 B2). Satt + content + llm → LLM föreslår
    *  taggar ur listan vid klassificeringen. Lazy så den läses per jobb. */
   vocabulary?: () => Promise<readonly string[]>;
+}
+
+/**
+ * Läs dokumentets bytes ur content-store:n och extrahera text (PDF/DOCX/text).
+ * Tom sträng när bytes saknas — anroparen faller tillbaka på filnamnet.
+ * Delad av LLM-klassificeringen och förslagsskrivningen (#988).
+ */
+function textReader(content: IContentStore): (doc: ClassifiableDoc) => Promise<string> {
+  return async (doc) => {
+    const bytes = await content.read(doc.storagePath);
+    return bytes ? await extractText({ bytes, mimeType: doc.mimeType, fileName: doc.fileName }) : "";
+  };
+}
+
+/**
+ * Bygg `suggestFromText` för dokumentjobbet (#988): läs texten och skriv
+ * kontakt-/händelseförslagen. Kräver content-store (texten) + repositories
+ * (skrivningen) — men INTE en LLM: extraktionen är deterministisk, så
+ * server-first ger förslag även utan ollama.
+ */
+function buildSuggest(cfg: JobHandlerConfig): Pick<ClassifyDocumentDeps, "suggestFromText"> {
+  const { content, suggestions } = cfg;
+  if (!content || !suggestions) return {};
+  const textOf = textReader(content);
+  return {
+    suggestFromText: async (documentId, doc) => {
+      await writeSuggestionsFromText(suggestions, documentId, await textOf(doc));
+    },
+  };
 }
 
 /**
@@ -38,14 +74,10 @@ export interface JobHandlerConfig {
  */
 function buildClassify(cfg: JobHandlerConfig): Pick<ClassifyDocumentDeps, "classify" | "suggestTags" | "model"> {
   if (!cfg.content || !cfg.llm) return {};
-  const content = cfg.content;
   const ollama = createOllamaClassifier(cfg.llm);
   const tagger = createOllamaTagSuggester(cfg.llm);
   const { vocabulary } = cfg;
-  const textOf = async (doc: ClassifiableDoc): Promise<string> => {
-    const bytes = await content.read(doc.storagePath);
-    return bytes ? await extractText({ bytes, mimeType: doc.mimeType, fileName: doc.fileName }) : "";
-  };
+  const textOf = textReader(cfg.content);
   return {
     model: `ollama:${cfg.llm.model}`,
     classify: async (doc: ClassifiableDoc) => ollama(await textOf(doc), doc.fileName),
@@ -65,6 +97,7 @@ export function buildServerFirstJobHandlers(cfg: JobHandlerConfig): JobHandlers 
     handlers[JOB_QUEUES.classifyDocument] = createClassifyDocumentHandler({
       documents: cfg.documents,
       ...buildClassify(cfg),
+      ...buildSuggest(cfg),
     });
   }
   return handlers;

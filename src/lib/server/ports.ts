@@ -31,10 +31,21 @@ export interface IEmailSender {
 
 export interface IDocumentAnalyzer {
   /**
-   * Schemalägg analys av ett dokument. Implementation kan vara
-   * synkron eller asynkron — i prod körs det i bakgrunden via en
-   * job-kö. Returnerar void; eventuella suggestions postas via
-   * dataStore.documentAnalysisSuggestions.
+   * Schemalägg analys av ett dokument. Implementation kan vara synkron eller
+   * asynkron — i prod körs det i bakgrunden via en job-kö. Returnerar void;
+   * resultatet skrivs av jobbet, inte av anroparen.
+   *
+   * Vad analysen skriver beror på vad implementationen kommer åt (#988):
+   *   - **alltid** dokumentets metadata (`documentType`, `analysisStatus`, …)
+   *     via `document.updateMetadata`;
+   *   - **dessutom** kontakt- och händelseförslag när den kan läsa dokumentets
+   *     TEXT — server-first-jobbet läser bytes ur content-store:n och kallar
+   *     `writeSuggestionsFromText`. Klient-tier:erna (demo/self-hosted) har
+   *     inga bytes server-side; där kommer texten ur `extract-text`-jobbet i
+   *     browsern, som anropar `document.suggestFromText` direkt.
+   *
+   * Porten lovade tidigare att förslagen alltid postades här. Det stämde inte
+   * för någon implementation — se #988.
    */
   analyze(documentId: DocumentId): Promise<void>;
 }
