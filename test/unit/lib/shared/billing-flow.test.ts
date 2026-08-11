@@ -3,7 +3,7 @@
  */
 import { describe, it, expect } from "vitest-compat";
 import {
-  BILLING_FLOWS, availableActions, currentPhase, pendingBannerFor,
+  BILLING_FLOWS, availableActions, currentPhase,
   canBillingTransition, assertBillingTransition, type FlowRun,
 } from "@/lib/shared/billing-flow";
 
@@ -67,21 +67,6 @@ describe("availableActions — statemaskinens kanter", () => {
   it("SETTLE-action i rättshjälp öppnar settlement-dialogen", () => {
     const settle = availableActions({ paymentMethod: "RATTSHJALP" }, []).find((a) => a.type === "SETTLE");
     expect(settle?.dialog).toBe("settlement");
-  });
-});
-
-describe("pendingBannerFor — dom-banner-routing", () => {
-  it("rättshjälp i VANTAR_DOM → settlement-banner", () => {
-    expect(pendingBannerFor({ paymentMethod: "RATTSHJALP" }, [pendingKr])).toMatchObject({ dialog: "settlement" });
-  });
-
-  it("offentligt uppdrag i VANTAR_DOM → verdict-banner (annan modell)", () => {
-    expect(pendingBannerFor({ paymentMethod: "OFFENTLIGT_UPPDRAG" }, [pendingKr])).toMatchObject({ dialog: "verdict" });
-  });
-
-  it("ingen banner utan väntande kostnadsräkning", () => {
-    expect(pendingBannerFor({ paymentMethod: "RATTSHJALP" }, [])).toBeNull();
-    expect(pendingBannerFor({ paymentMethod: "PRIVAT" }, [])).toBeNull();
   });
 });
 

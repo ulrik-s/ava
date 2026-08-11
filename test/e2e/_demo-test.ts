@@ -107,6 +107,19 @@ export interface DemoSeed {
   timeEntries: Array<{ id: string; matterId: string; description: string }>;
   expenses: Array<{ id: string; matterId: string; description: string }>;
   paymentPlans: Array<{ id: string; invoiceId: string; status: string }>;
+  billingRuns: Array<{ id: string; matterId: string; type: string; status: string }>;
+}
+
+/**
+ * Ärendet vars kostnadsräkning väntar på domstolens beslut (#996). Slås upp i
+ * datan i stället för att hårdkodas: VILKET brottmål som står kvar i väntan
+ * bestäms av scenariodispatchern (#882), och flyttas den dit hör ändringen
+ * hemma där — inte i en spec.
+ */
+export function matterAwaitingVerdict(seed: DemoSeed): string {
+  const hit = seed.billingRuns.find((r) => r.type === "KOSTNADSRAKNING" && r.status === "PENDING_VERDICT");
+  if (!hit) throw new Error("seeden saknar kostnadsräkning i PENDING_VERDICT — demons väntetillstånd är borta igen (#882)");
+  return hit.matterId;
 }
 
 /** Grupper som bär `matterId` — det e2e:t kan kräva att ett ärende har. */
