@@ -51,7 +51,7 @@ function recordingCaller() {
 }
 
 const MATTER: SimMatter = {
-  id: "m-1", paymentMethod: "RATTSHJALP", clientShareBips: 500, lawyerId: "u-1",
+  id: "m-1", paymentMethod: "RATTSHJALP", status: "ACTIVE", clientShareBips: 500, lawyerId: "u-1",
   startDaysAgo: 120, arvodeRateOre: 162_600,
 };
 
@@ -128,7 +128,7 @@ describe("runScenario (#880)", () => {
  * och kundförlusten var för sig, mot inspelningsstubben.
  */
 describe("fakturans livscykler i simuleringen (#982)", () => {
-  const PRIVAT: SimMatter = { id: "m-p", paymentMethod: "PRIVAT", lawyerId: "u-1", startDaysAgo: 300, arvodeRateOre: 250_000 };
+  const PRIVAT: SimMatter = { id: "m-p", paymentMethod: "PRIVAT", status: "ACTIVE", lawyerId: "u-1", startDaysAgo: 300, arvodeRateOre: 250_000 };
 
   /** Kör bara `final` + de livscykel-event testet gäller. */
   async function run(events: Any[]) {
@@ -208,7 +208,7 @@ describe("fakturans livscykler i simuleringen (#982)", () => {
  */
 describe("mappar + utskick i simuleringen (#985)", () => {
   const PRIVAT: SimMatter = {
-    id: "m-p", paymentMethod: "PRIVAT", lawyerId: "u-1", startDaysAgo: 300,
+    id: "m-p", paymentMethod: "PRIVAT", status: "ACTIVE", lawyerId: "u-1", startDaysAgo: 300,
     arvodeRateOre: 250_000, clientEmail: "klient@example.se",
   };
 

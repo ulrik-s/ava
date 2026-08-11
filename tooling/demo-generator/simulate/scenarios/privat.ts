@@ -9,6 +9,7 @@
  * `computeInvoiceLedger` räknar med båda.
  */
 
+import type { MatterRole } from "@/lib/shared/schemas/enums";
 import type { Parties, SimEvent } from "../events";
 
 /**
@@ -32,16 +33,53 @@ const LIFECYCLES: ReadonlyArray<(day: number) => SimEvent[]> = [
   (d) => [{ kind: "writeOff", dayOffset: d, partialBips: 2500 }],
 ];
 
-export function buildPrivatScenario(parties: Parties, index: number): SimEvent[] {
+/**
+ * Upparbetat men ofakturerat arbete (#824) — arbete som tillkommit EFTER
+ * senaste faktureringen och som ännu inte fakturerats.
+ *
+ * Låg förr i `populate-unbilled-time.ts`, som slutade kallas när den
+ * kronologiska simuleringen tog över (#880/#882). Ingen märkte det, för
+ * ingenting kraschar: fakturapanelen visade bara "Upparbetat ofakturerat:
+ * 0 kr" på vartenda ärende i demon, och det fanns aldrig något att skapa
+ * faktura ur — samma sorts tysta förlust som avbetalningsplanerna i #982.
+ *
+ * Dagarna ligger efter slutfakturan (30) och dess livscykel (44). `eventIso`
+ * klampar mot i dag, så posterna landar färska även i unga ärenden.
+ */
+const FRESH_UNBILLED: ReadonlyArray<{ dayOffset: number; minutes: number; description: string }> = [
+  { dayOffset: 50, minutes: 45, description: "Klientmöte (uppdatering)" },
+  { dayOffset: 55, minutes: 90, description: "Granskning inkommande material" },
+];
+
+/** När varje part länkas in — roll → dag. Ett par per roll seeden faktiskt har. */
+const PARTY_DAYS: ReadonlyArray<{ key: keyof Parties; role: MatterRole; dayOffset: number }> = [
+  { key: "klient", role: "KLIENT", dayOffset: 0 },
+  { key: "motpart", role: "MOTPART", dayOffset: 2 },
+  { key: "motpartsombud", role: "MOTPARTSOMBUD", dayOffset: 2 },
+  { key: "domstol", role: "DOMSTOL", dayOffset: 3 },
+];
+
+/** Parts-events för de roller ärendet har. Datadrivet i st.f. fyra `if`-rader —
+ *  scenariot ligger annars över komplexitetstaket (8). */
+function partyEvents(parties: Parties): SimEvent[] {
+  return PARTY_DAYS.flatMap(({ key, role, dayOffset }) => {
+    const contactId = parties[key];
+    return contactId ? [{ kind: "party" as const, dayOffset, contactId, role }] : [];
+  });
+}
+
+/**
+ * `active` = ärendet är öppet i seeden. Bara då läggs ofakturerat arbete på:
+ * upparbetad tid på ett avslutat ärende vore inte demodata utan en bugg —
+ * det finns ingen väg att fakturera den.
+ */
+export function buildPrivatScenario(parties: Parties, index: number, active = false): SimEvent[] {
   const ev: SimEvent[] = [
     { kind: "note", dayOffset: 0, text: "Nytt uppdrag — inledande klientmöte och uppdragsbekräftelse." },
     { kind: "time", dayOffset: 0, minutes: 90, description: "Inledande rådgivning och uppdragsbekräftelse" },
     { kind: "doc", dayOffset: 1, template: "fullmakt" },
   ];
-  if (parties.klient) ev.push({ kind: "party", dayOffset: 0, contactId: parties.klient, role: "KLIENT" });
-  if (parties.motpart) ev.push({ kind: "party", dayOffset: 2, contactId: parties.motpart, role: "MOTPART" });
-  if (parties.motpartsombud) ev.push({ kind: "party", dayOffset: 2, contactId: parties.motpartsombud, role: "MOTPARTSOMBUD" });
-  if (parties.domstol) ev.push({ kind: "party", dayOffset: 3, contactId: parties.domstol, role: "DOMSTOL" });
+  ev.push(...partyEvents(parties));
   ev.push(
     { kind: "doc", dayOffset: 4, template: parties.domstol ? "stamningsansokan" : "brevTillOmbud" },
     { kind: "time", dayOffset: 10, minutes: 120, description: "Utredning och skriftväxling" },
@@ -51,5 +89,6 @@ export function buildPrivatScenario(parties: Parties, index: number): SimEvent[]
     { kind: "final", dayOffset: 30, recipient: "KLIENT" },
   );
   ev.push(...(LIFECYCLES[index % LIFECYCLES.length] ?? LIFECYCLES[0]!)(44));
+  if (active) ev.push(...FRESH_UNBILLED.map((w) => ({ kind: "time" as const, ...w })));
   return ev;
 }

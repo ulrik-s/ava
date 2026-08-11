@@ -4,8 +4,10 @@
  * och spelas upp kronologiskt via `runScenario`. Ärenden som ska vara avslutade körs
  * som ACTIVE under scenariot (annars blockerar flödes-guarden) och stängs på slutet.
  *
- * Ersätter de gamla kategori-passen (populateBilling/populateUnbilledTime + seedens
- * statiska tid/utlägg/kontakter/dokument).
+ * Ersatte de gamla kategori-passen (`populate-billing.ts`,
+ * `populate-unbilled-time.ts`, `populate-documents.ts` + seedens statiska
+ * tid/utlägg/kontakter/dokument). De modulerna är borta sedan #882; det de
+ * gjorde bor i scenariomallarna.
  */
 
 import { TIMKOSTNADSNORM_FTAX_ORE_PER_H } from "@/lib/shared/brottmalstaxa";
@@ -30,7 +32,8 @@ function deriveSim(m: Any, lawyerId: string, rateOre: number, clientEmail: strin
   return {
     id: String(m.id),
     ...(m.matterNumber ? { matterNumber: String(m.matterNumber) } : {}),
-    paymentMethod: String(m.paymentMethod), clientShareBips: m.clientShareBips ?? null,
+    paymentMethod: String(m.paymentMethod), status: String(m.status ?? "ACTIVE"),
+    clientShareBips: m.clientShareBips ?? null,
     lawyerId, startDaysAgo: daysSince(m.createdAt),
     arvodeRateOre: isRh ? TIMKOSTNADSNORM_FTAX_ORE_PER_H : (rateOre || DEFAULT_RATE_ORE),
     clientEmail,
@@ -97,7 +100,7 @@ async function simulateMatter(ctx: RunCtx, m: Any, seed: SeedLookup, slot: Matte
   const parties = deriveParties(String(m.id), seed.matterContacts);
   const sim = deriveSim(m, u.id, u.rateOre, clientEmailOf(parties, seed.contacts));
   await runScenario(ctx, sim, buildScenario(sim, parties, slot.variantIndex));
-  if (String(m.status) !== "ACTIVE") await ctx.c.matter.update({ id: sim.id, status: String(m.status) });
+  if (sim.status !== "ACTIVE") await ctx.c.matter.update({ id: sim.id, status: sim.status });
 }
 
 /** Spela upp alla ärendens scenarier. `seed` = den ÖVERSATTA seeden (UUID-id). */

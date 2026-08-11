@@ -14,9 +14,8 @@ import { buildContext } from "../../src/lib/server/build-context";
 import { DemoDataStore, type DemoSource } from "../../src/lib/server/data-store/DemoDataStore";
 import { appRouter } from "../../src/lib/server/routers/_app";
 import { createGitTarget } from "../../tooling/demo-generator/backend-target";
-import { populate } from "../../tooling/demo-generator/populate";
-import { populateBilling } from "../../tooling/demo-generator/populate-billing";
 import { buildSeed } from "../../tooling/scripts/seed-data";
+import { runDemoSeed } from "./_demo-seed";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = any;
@@ -45,8 +44,9 @@ describe("deployed-path repro (prebakeJoins + ny store)", () => {
         (stores[k] ??= new Map()).set(String(e.row.id), e.row);
       },
     });
-    await populate(target.caller, seed);
-    await populateBilling(target.caller, seed);
+    // Samma steg som `generateInto`: kärnentiteter + den kronologiska simuleringen,
+    // som skapar tid, fakturor och avbetalningsplaner.
+    await runDemoSeed(target.caller, seed);
 
     // Samla raderna per entitet (som den deployade hydreringen gör sedan #420:
     // `loadDemoSeed` JSON-parsar filerna och bygger en DemoSource direkt, utan

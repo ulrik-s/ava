@@ -76,6 +76,13 @@ export interface SimMatter {
   /** Ärendenummer (t.ex. "2026-0020") — dispatchern väljer scenariovariant på det. */
   matterNumber?: string;
   paymentMethod: string;
+  /**
+   * Ärendets sluttillstånd ur seeden (ACTIVE/CLOSED/ARCHIVED). Scenariot körs
+   * alltid som ACTIVE (annars blockerar flödes-guarden) och ärendet stängs
+   * efteråt — men vissa händelser hör bara hemma i ett ÖPPET ärende, t.ex.
+   * ofakturerat arbete efter senaste faktureringen.
+   */
+  status: string;
   clientShareBips?: number | null;
   /** Ansvarig jurist (userId) — sätts som tidsposternas användare. */
   lawyerId: string;

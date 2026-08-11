@@ -3,22 +3,22 @@
  *
  * Bakgrund: i `output: "export"` (GH-Pages-demon) pre-renderas dynamiska
  * rutter bara för id:n som `generateStaticParams` listar — och de listas
- * via `buildSeed → seedToFiles`. När populate-billing skapade INVOICES med
+ * via `buildSeed → seedToFiles`. När seedningen skapade INVOICES med
  * organiska (slumpmässiga) id:n hamnade /invoices/<organic> utanför
  * pre-render-listan → klicka i listan → 404 → SPA-fallback-loop / dashboard.
  *
  * Lösning: ge billing-mutationerna valfritt `id`. Generatorn använder
  * deterministiska id:n per ärende. `demoStaticParams` enumererar samma id:n
- * (över-set: 3 möjliga faktura-id + 1 plan-id per ärende; populate-billing
- * skapar bara en delmängd, oanvända blir tomma men harmlöst pre-renderade).
+ * (över-set: 3 möjliga faktura-id + 1 plan-id per ärende; seedningen skapar
+ * bara en delmängd, oanvända blir tomma men harmlöst pre-renderade).
  *
- * Delas mellan `populate-billing.ts` (skapar) och `static-params.ts`
- * (enumererar) så de inte kan komma ur synk.
+ * Delas mellan simuleringen (`simulate/runner.ts`, som skapar) och
+ * `static-params.ts` (som enumererar) så de inte kan komma ur synk.
  *
  * #647/ADR 0027: id:na är nu deterministiska UUID:er (uuidv5) i st.f.
  * `inv-<id>-final`-strängar — så faktureringen kan seedas i Postgres
  * server-first (uuid-kolumner avvisar strängarna) UTAN att tappa
- * determinismen: static-params enumererar SAMMA uuid:er som populate-billing
+ * determinismen: static-params enumererar SAMMA uuid:er som seedningen
  * skapar (båda kallar dessa funktioner). `__shell__`-sentinellen fångar ändå
  * okända id:n. Speglar id-translatorns uuidv5(slug, AVA_NAMESPACE).
  */
@@ -32,7 +32,7 @@ export function demoPaymentPlanId(matterId: string): string { return uuidv5(`pay
 
 type MatterLike = { id?: unknown };
 
-/** Alla möjliga faktura-id:n (över-set; populate-billing skapar en delmängd). */
+/** Alla möjliga faktura-id:n (över-set; seedningen skapar en delmängd). */
 export function allDemoBillingInvoiceIds(matters: ReadonlyArray<MatterLike>): string[] {
   const out: string[] = [];
   for (const m of matters) {

@@ -16,6 +16,14 @@ import type { WriteBackEvent } from "./node-git-writeback";
 
 export type GeneratorCaller = ReturnType<typeof appRouter.createCaller>;
 
+/**
+ * Skriver en binärfil till backendens storage och returnerar faktisk storlek.
+ * Metadatan går alltid genom tRPC (samma kontrakt för git/Postgres), men var
+ * BYTSEN hamnar är backend-specifikt: git → `documents/content/…` i out-dir:n,
+ * Postgres → object storage. Utelämnad sink → bara metadata (tester).
+ */
+export type BinarySink = (storagePath: string, bytes: Uint8Array) => number;
+
 export interface BackendTarget {
   /** tRPC-caller bunden till backendens context (principal = ADMIN). */
   readonly caller: GeneratorCaller;

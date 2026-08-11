@@ -2,23 +2,20 @@
  * Kostnadsräkning-dokument: ett genererat KOSTNADSRÄKNING-dokument per
  * KOSTNADSRAKNING-billing-run, så att ett ärende aldrig visar
  * "Kostnadsräkning väntar på dom" utan att kostnadsräkningen faktiskt finns
- * (regression: brottmål ekobrott Carlsson — PENDING_VERDICT utan dokument).
+ * (regressionen upptäcktes på brottmålet ekobrott Carlsson).
  */
 
 import { describe, it, expect } from "vitest-compat";
 import { userRoleSchema } from "@/lib/shared/schemas/enums";
 import { asId } from "@/lib/shared/schemas/ids";
 import { createGitTarget } from "../../tooling/demo-generator/backend-target";
-import { populate } from "../../tooling/demo-generator/populate";
-import { populateBilling } from "../../tooling/demo-generator/populate-billing";
 import { populateKostnadsrakningDocs } from "../../tooling/demo-generator/populate-kostnadsrakning-docs";
 import { buildSeed } from "../../tooling/scripts/seed-data";
+import { runDemoSeed } from "./_demo-seed";
 
 const ADMIN = { id: asId<"UserId">("gen"), email: "g@a.se", name: "G", role: userRoleSchema.parse("ADMIN"), organizationId: asId<"OrganizationId">("firma-ab") };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = any;
-
-const CARLSSON_MATTER = "m-018-brottmal-ekobrott";
 
 /** `document.tree`, inte rot-listningen: KR-dokumenten filas i
  *  Domstol/Kostnadsräkningar sedan #985, och trädet är dessutom vad UI:t läser. */
@@ -32,8 +29,7 @@ describe("populateKostnadsrakningDocs", () => {
     const seed = buildSeed();
     const writes: string[] = [];
     const target = createGitTarget({ principal: ADMIN, writeBack: async () => {} });
-    await populate(target.caller, seed);
-    await populateBilling(target.caller, seed);
+    await runDemoSeed(target.caller, seed);
 
     const n = await populateKostnadsrakningDocs(target.caller, (p, b) => { writes.push(p); return b.byteLength; });
 
@@ -45,24 +41,25 @@ describe("populateKostnadsrakningDocs", () => {
     expect(writes.every((p) => p.startsWith("documents/content/krdoc-") && p.endsWith(".html"))).toBe(true);
   });
 
-  it("Carlsson-ärendet (PENDING_VERDICT) får en kostnadsräkning → 'väntar på dom' är inte längre orphan", async () => {
+  it("ärendet som väntar på dom får en kostnadsräkning → 'väntar på dom' är inte längre orphan", async () => {
     const seed = buildSeed();
     const target = createGitTarget({ principal: ADMIN, writeBack: async () => {} });
-    await populate(target.caller, seed);
-    await populateBilling(target.caller, seed);
+    await runDemoSeed(target.caller, seed);
     const c = target.caller as Any;
 
-    // Precondition: Carlsson HAR en KOSTNADSRAKNING-run i PENDING_VERDICT…
-    const { runs } = await c.billingRun.list({ matterId: CARLSSON_MATTER });
+    // Ärendet hämtas ur DATAN i st.f. ett hårdkodat seed-id (#972): VILKET brottmål
+    // som står kvar i väntan bestäms av scenariodispatchern, inte av det här testet.
+    const { runs } = await c.billingRun.list({});
     const pending = (runs as Any[]).find((r) => r.type === "KOSTNADSRAKNING" && r.status === "PENDING_VERDICT");
-    expect(pending, "Carlsson ska ha en kostnadsräkning som väntar på dom").toBeDefined();
+    expect(pending, "demon ska ha en kostnadsräkning som väntar på dom").toBeDefined();
+    const matterId = String(pending.matterId);
 
-    // …men INNAN steget finns inget kostnadsräknings-dokument (buggen).
-    expect(await krDocsFor(c, CARLSSON_MATTER)).toHaveLength(0);
+    // INNAN steget finns inget kostnadsräknings-dokument (buggen).
+    expect(await krDocsFor(c, matterId)).toHaveLength(0);
 
     // Efter steget finns dokumentet → billing-panelens findKrDocument hittar det.
     await populateKostnadsrakningDocs(c);
-    const docs = await krDocsFor(c, CARLSSON_MATTER);
+    const docs = await krDocsFor(c, matterId);
     expect(docs).toHaveLength(1);
     expect(String(docs[0].fileName)).toContain("Kostnadsräkning");
   });
@@ -70,8 +67,7 @@ describe("populateKostnadsrakningDocs", () => {
   it("KR-dokumentet innehåller en FULL specifikation (tidsspec + arvode + total) (#864)", async () => {
     const seed = buildSeed();
     const target = createGitTarget({ principal: ADMIN, writeBack: async () => {} });
-    await populate(target.caller, seed);
-    await populateBilling(target.caller, seed);
+    await runDemoSeed(target.caller, seed);
     const htmls: string[] = [];
     await populateKostnadsrakningDocs(target.caller, (_p, b) => { htmls.push(new TextDecoder().decode(b)); return b.byteLength; });
     // Minst en KR har en tidsspecifikation + summering (ej längre "ospecificerad").

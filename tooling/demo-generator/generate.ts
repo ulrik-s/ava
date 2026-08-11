@@ -8,10 +8,10 @@
  * Git-läget producerar ett pushbart repo. Postgres-läget är en stub tills
  * PostgresStore finns (ADR 0001 Fas 3).
  *
- * STATUS: populate täcker org → users → contacts → matters → matter-contacts
- * → time/expenses → calendar → tasks → templates → conflict-checks, och
- * populateBilling driver fakturerings-flödena (ADR-beslut 1a). Kvarstår:
- * dokument (metadata via API + binärinnehåll), se task-TODO.
+ * STATUS: `populate` skapar kärnentiteterna (org → users → contacts → matters
+ * → calendar → tasks → templates → conflict-checks); allt ärendearbete —
+ * tid, utlägg, parter, dokument, fakturor och deras livscykler — byggs
+ * kronologiskt av `runSimulation` (#880). Se `generate-into.ts`.
  */
 
 import { execFileSync } from "node:child_process";

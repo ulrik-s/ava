@@ -18,9 +18,8 @@
  */
 
 import { buildKostnadsrakningContext } from "@/lib/shared/kostnadsrakning";
-import type { GeneratorCaller } from "./backend-target";
+import type { BinarySink, GeneratorCaller } from "./backend-target";
 import { ensureFolderPath, KOSTNADSRAKNING_FOLDER, type FolderCache } from "./folder-filing";
-import type { BinarySink } from "./populate-documents";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = any;

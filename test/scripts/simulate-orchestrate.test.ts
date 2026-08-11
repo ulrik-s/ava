@@ -10,34 +10,38 @@ import { userRoleSchema } from "@/lib/shared/schemas/enums";
 import { asId } from "@/lib/shared/schemas/ids";
 import { createGitTarget } from "../../tooling/demo-generator/backend-target";
 import { createIdTranslator, translateSeed } from "../../tooling/demo-generator/id-translator";
-import { populate } from "../../tooling/demo-generator/populate";
-import { runSimulation } from "../../tooling/demo-generator/simulate/orchestrate";
-import { emptyRunResult, type RunCtx } from "../../tooling/demo-generator/simulate/runner";
+import type { RunCtx } from "../../tooling/demo-generator/simulate/runner";
 import { buildSeed } from "../../tooling/scripts/seed-data";
+import { runDemoSeed } from "./_demo-seed";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = any;
 
+/**
+ * Kör hela seedningen mot ett in-memory git-target — samma steg som
+ * `generateInto`: populate(kärnentiteter) + runSimulation. Ett anrop i st.f.
+ * sex identiska rader per test, så påståendena syns i stället för riggen.
+ */
+async function simulateDemo(): Promise<{ c: Any; res: RunCtx["res"] }> {
+  const seed = translateSeed(buildSeed(), createIdTranslator()) as Any;
+  const orgId = String(seed.organizations[0].id);
+  const admin = { id: asId<"UserId">("gen"), email: "g@a.se", name: "G", role: userRoleSchema.parse("ADMIN"), organizationId: asId<"OrganizationId">(orgId) };
+  const target = createGitTarget({ principal: admin, writeBack: async () => {} });
+  const res = await runDemoSeed(target.caller, seed);
+  return { c: target.caller as Any, res };
+}
+
 describe("runSimulation (#880 integration)", () => {
   it("seedar kronologiskt per ärende: tid, in/ut-dokument, fakturor + kredit", async () => {
-    const seed = translateSeed(buildSeed(), createIdTranslator()) as Any;
-    const orgId = String(seed.organizations[0].id);
-    const admin = { id: asId<"UserId">("gen"), email: "g@a.se", name: "G", role: userRoleSchema.parse("ADMIN"), organizationId: asId<"OrganizationId">(orgId) };
-    const target = createGitTarget({ principal: admin, writeBack: async () => {} });
-    const coreSeed = { ...seed, matters: seed.matters.map((m: Any) => ({ ...m, status: "ACTIVE" })), timeEntries: [], expenses: [], matterContacts: [], documents: [], serviceNotes: [] };
-    await populate(target.caller, coreSeed);
-
-    const ctx: RunCtx = { c: target.caller, res: emptyRunResult() };
-    await runSimulation(ctx, seed);
+    const { c, res: simRes } = await simulateDemo();
 
     // Simuleringen skapade faktiskt saker (fångar "0 av allt"-regressionen).
-    expect(ctx.res.timeEntries).toBeGreaterThan(10);
-    expect(ctx.res.invoices).toBeGreaterThan(5);
-    expect(ctx.res.documents).toBeGreaterThan(5);
-    expect(ctx.res.credits).toBeGreaterThanOrEqual(1); // rättshjälp varierande → överfakturerad → kredit
+    expect(simRes.timeEntries).toBeGreaterThan(10);
+    expect(simRes.invoices).toBeGreaterThan(5);
+    expect(simRes.documents).toBeGreaterThan(5);
+    expect(simRes.credits).toBeGreaterThanOrEqual(1); // rättshjälp varierande → överfakturerad → kredit
 
     // Något dokument är INKOMMANDE (inkommande dok skapas per scenario).
-    const c = target.caller as Any;
     const mres = await c.matter.list({});
     const matters = mres.matters ?? mres.items ?? mres;
     const rh = matters.find((m: Any) => m.paymentMethod === "RATTSHJALP" && m.matterNumber === "2026-0020");
@@ -85,17 +89,8 @@ describe("runSimulation (#880 integration)", () => {
    * scenariomallen, att varje tillstånd faktiskt uppstår.
    */
   it("privatärendenas livscykler ger planer i alla tre tillstånd + en kundförlust", async () => {
-    const seed = translateSeed(buildSeed(), createIdTranslator()) as Any;
-    const orgId = String(seed.organizations[0].id);
-    const admin = { id: asId<"UserId">("gen"), email: "g@a.se", name: "G", role: userRoleSchema.parse("ADMIN"), organizationId: asId<"OrganizationId">(orgId) };
-    const target = createGitTarget({ principal: admin, writeBack: async () => {} });
-    const coreSeed = { ...seed, matters: seed.matters.map((m: Any) => ({ ...m, status: "ACTIVE" })), timeEntries: [], expenses: [], matterContacts: [], documents: [], serviceNotes: [] };
-    await populate(target.caller, coreSeed);
+    const { c, res: simRes } = await simulateDemo();
 
-    const ctx: RunCtx = { c: target.caller, res: emptyRunResult() };
-    await runSimulation(ctx, seed);
-
-    const c = target.caller as Any;
     const plans = await c.paymentPlan.list({});
     const statuses = new Set((plans as Any[]).map((p) => p.status));
     // Cykeln i `privat.ts` är sex lång och seeden har fler privatärenden än så,
@@ -104,10 +99,10 @@ describe("runSimulation (#880 integration)", () => {
     expect(statuses.has("ACTIVE"), "aktiv plan").toBe(true);
     expect(statuses.has("COMPLETED"), "slutförd plan").toBe(true);
     expect(statuses.has("CANCELLED"), "avbruten plan").toBe(true);
-    expect(ctx.res.reminders, "påminnelser skickade").toBeGreaterThan(0);
+    expect(simRes.reminders, "påminnelser skickade").toBeGreaterThan(0);
 
     // Kundförlusten stänger sin faktura som BAD_DEBT (ADR 0007).
-    expect(ctx.res.writeOffs).toBeGreaterThan(0);
+    expect(simRes.writeOffs).toBeGreaterThan(0);
     const invoices = await c.invoice.list({}) as Any[];
     expect(invoices.some((i) => i.status === "BAD_DEBT"), "avskriven faktura").toBe(true);
     // …och en plan-faktura står som INSTALLMENT_PLAN, inte som vanlig SENT.
@@ -121,19 +116,10 @@ describe("runSimulation (#880 integration)", () => {
    * DATA att strukturen finns, inte om scenariomallen.
    */
   it("dokument filas i mappar (inkl. nästlade) och skickade fakturor får utskickshistorik", async () => {
-    const seed = translateSeed(buildSeed(), createIdTranslator()) as Any;
-    const orgId = String(seed.organizations[0].id);
-    const admin = { id: asId<"UserId">("gen"), email: "g@a.se", name: "G", role: userRoleSchema.parse("ADMIN"), organizationId: asId<"OrganizationId">(orgId) };
-    const target = createGitTarget({ principal: admin, writeBack: async () => {} });
-    const coreSeed = { ...seed, matters: seed.matters.map((m: Any) => ({ ...m, status: "ACTIVE" })), timeEntries: [], expenses: [], matterContacts: [], documents: [], serviceNotes: [] };
-    await populate(target.caller, coreSeed);
+    const { c, res: simRes } = await simulateDemo();
 
-    const ctx: RunCtx = { c: target.caller, res: emptyRunResult() };
-    await runSimulation(ctx, seed);
-
-    const c = target.caller as Any;
-    expect(ctx.res.folders, "mappar skapade").toBeGreaterThan(0);
-    expect(ctx.res.dispatches, "utskick registrerade").toBeGreaterThan(0);
+    expect(simRes.folders, "mappar skapade").toBeGreaterThan(0);
+    expect(simRes.dispatches, "utskick registrerade").toBeGreaterThan(0);
 
     // Ett ärende med domstolsdokument ska ha Domstol/ med Domar under sig, och
     // inga dokument kvar i roten.
@@ -162,27 +148,67 @@ describe("runSimulation (#880 integration)", () => {
    * panelerna frågar efter.
    */
   it("dokumenttext ger kontakt- och händelseförslag som panelerna kan visa", async () => {
-    const seed = translateSeed(buildSeed(), createIdTranslator()) as Any;
-    const orgId = String(seed.organizations[0].id);
-    const admin = { id: asId<"UserId">("gen"), email: "g@a.se", name: "G", role: userRoleSchema.parse("ADMIN"), organizationId: asId<"OrganizationId">(orgId) };
-    const target = createGitTarget({ principal: admin, writeBack: async () => {} });
-    const coreSeed = { ...seed, matters: seed.matters.map((m: Any) => ({ ...m, status: "ACTIVE" })), timeEntries: [], expenses: [], matterContacts: [], documents: [], serviceNotes: [] };
-    await populate(target.caller, coreSeed);
+    const { c, res: simRes } = await simulateDemo();
 
-    const ctx: RunCtx = { c: target.caller, res: emptyRunResult() };
-    await runSimulation(ctx, seed);
-
-    expect(ctx.res.partySuggestions, "kontaktförslag skapade").toBeGreaterThan(0);
-    expect(ctx.res.eventSuggestions, "händelseförslag skapade").toBeGreaterThan(0);
+    expect(simRes.partySuggestions, "kontaktförslag skapade").toBeGreaterThan(0);
+    expect(simRes.eventSuggestions, "händelseförslag skapade").toBeGreaterThan(0);
 
     // Panelerna läser per ÄRENDE — hittar de inget där spelar det ingen roll
     // hur många rader som skapats.
-    const c = target.caller as Any;
     const matters = (await c.matter.list({})).matters as Any[];
     const groups = await Promise.all(matters.map((m: Any) => c.document.pendingSuggestionsGrouped({ matterId: m.id })));
     expect(groups.some((g: Any) => (g.groups ?? g).length > 0), "något ärende har kontaktförslag").toBe(true);
 
     const events = await Promise.all(matters.map((m: Any) => c.document.events({ matterId: m.id })));
     expect(events.some((e: Any) => (e.events ?? e).length > 0), "något ärende har händelseförslag").toBe(true);
+  });
+
+  /**
+   * #824/#882: upparbetat men ofakturerat arbete. `populate-unbilled-time.ts`
+   * skapade det förr; simuleringen tog aldrig över, och ingen märkte något —
+   * fakturapanelen visade bara "Upparbetat ofakturerat: 0 kr" på vartenda
+   * ärende och fakturaförslaget hade inget att räkna på.
+   *
+   * Testet frågar via `billingRun.proposal`, samma väg som panelen, och
+   * påstår om DEMONS DATA — inte om scenariomallen.
+   */
+  it("öppna privatärenden har upparbetat ofakturerat arbete, avslutade har inte", async () => {
+    const { c } = await simulateDemo();
+    const matters = (await c.matter.list({})).matters as Any[];
+    const privat = matters.filter((m: Any) => m.paymentMethod === "PRIVAT" || m.paymentMethod === "MIX");
+
+    const unbilledOre = async (m: Any): Promise<number> => {
+      const p = await c.billingRun.proposal({ matterId: m.id });
+      return (p.timeEntries as Any[]).filter((t) => t.billable).reduce((s: number, t: Any) => s + t.valueOre, 0);
+    };
+
+    const open = privat.filter((m: Any) => m.status === "ACTIVE");
+    expect(open.length, "seeden har öppna privatärenden").toBeGreaterThan(0);
+    const openOre = await Promise.all(open.map(unbilledOre));
+    expect(openOre.every((v) => v > 0), "varje öppet privatärende har ofakturerat arbete").toBe(true);
+
+    // Motsatsen är lika viktig: ofakturerat arbete på ett avslutat ärende går
+    // inte att fakturera — det vore inte demodata utan en bugg.
+    const closed = privat.filter((m: Any) => m.status !== "ACTIVE");
+    expect(closed.length, "seeden har avslutade privatärenden").toBeGreaterThan(0);
+    const closedOre = await Promise.all(closed.map(unbilledOre));
+    expect(closedOre.every((v) => v === 0), "avslutade privatärenden har inget ofakturerat").toBe(true);
+  });
+
+  /**
+   * #882: kostnadsräkning som väntar på dom. Varje offentligt uppdrag fick förr
+   * beslut och domstolsfaktura samma vecka, så fakturapanelens väntetillstånd
+   * (mellan inlämnad KR och domstolens beslut) fanns inte i demon — trots att
+   * panelen har en egen vy för det, och trots att seedens beskrivning av 2026-0018
+   * säger att KR:n går till domstol.
+   */
+  it("ett offentligt uppdrag står kvar med kostnadsräkning som väntar på dom", async () => {
+    const { c } = await simulateDemo();
+    const runs = (await c.billingRun.list({})).runs as Any[];
+    const kr = runs.filter((r) => r.type === "KOSTNADSRAKNING");
+    expect(kr.length, "demon har kostnadsräkningar").toBeGreaterThan(0);
+    expect(kr.some((r) => r.status === "PENDING_VERDICT"), "en KR väntar på dom").toBe(true);
+    // …och de övriga har fått sitt beslut, så båda tillstånden syns.
+    expect(kr.some((r) => r.status !== "PENDING_VERDICT"), "en KR är avgjord").toBe(true);
   });
 });
