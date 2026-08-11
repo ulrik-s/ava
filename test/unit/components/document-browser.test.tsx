@@ -6,7 +6,7 @@
  * etc.
  */
 
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { DocumentBrowser } from "@/components/documents/document-browser";
 import { asId } from "@/lib/shared/schemas/ids";
@@ -32,7 +32,16 @@ const treeQuery = {
   isLoading: false,
 };
 
+/** Vanilla-klienten uppladdningen använder (uploadContent + suggestFromText). */
+const clientMock = {
+  document: {
+    uploadContent: { mutate: vi.fn(async () => ({})) },
+    suggestFromText: { mutate: vi.fn(async () => ({ parties: 1, events: 0 })) },
+  },
+};
+
 const utilsMock = {
+  client: clientMock,
   document: {
     tree: { invalidate: vi.fn(), fetch: vi.fn().mockResolvedValue({ folders: [], documents: [] }) },
     pendingSuggestionsGrouped: { invalidate: vi.fn() },
@@ -41,6 +50,25 @@ const utilsMock = {
   matter: { getById: { invalidate: vi.fn() } },
   prefs: { get: { invalidate: vi.fn() } },
 };
+
+/**
+ * "Analysera (AI)" ska köa text-extraktion (#988) — utan texten kan inga
+ * kontakt-/händelseförslag uppstå. Själva köandet testas i
+ * `enqueue-text-extraction.test.ts`; här testas att browsern hittar rätt
+ * dokument och skickar det vidare.
+ */
+const enqueueTextExtraction = vi.fn(async () => {});
+vi.mock("@/lib/client/jobs/enqueue-text-extraction", () => ({ enqueueTextExtraction }));
+
+// Byte-uppladdningen cachar innehållet i IndexedDB, som saknas i jsdom.
+// Uppladdningens senare steg (jobb + förslag) är det som testas här.
+vi.mock("@/lib/client/backend/save-document-content", () => ({
+  saveDocumentContent: vi.fn(async () => "sha"),
+}));
+
+/** Mutationens options fångas så `mutate` kan köra `onMutate` som React Query gör. */
+interface AnalyzeOptions { onMutate?: (vars: { documentId: string }) => void }
+let analyzeOptions: AnalyzeOptions = {};
 
 const mutationStubs = {
   createFolder: { mutate: vi.fn(), isPending: false },
@@ -64,7 +92,7 @@ vi.mock("@/lib/client/trpc", () => ({
       moveDocument: { useMutation: () => mutationStubs.moveDocument },
       moveFolder: { useMutation: () => mutationStubs.moveFolder },
       delete: { useMutation: () => mutationStubs.delete },
-      analyze: { useMutation: () => mutationStubs.analyze },
+      analyze: { useMutation: (opts?: AnalyzeOptions) => { analyzeOptions = opts ?? {}; return mutationStubs.analyze; } },
       register: { useMutation: () => mutationStubs.register },
       setTags: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       takeoverLease: { useMutation: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }) },
@@ -93,7 +121,8 @@ beforeEach(() => {
   mutationStubs.moveDocument.mutate = vi.fn();
   mutationStubs.moveFolder.mutate = vi.fn();
   mutationStubs.delete.mutate = vi.fn();
-  mutationStubs.analyze.mutate = vi.fn();
+  // Som React Query: `mutate` kör mutationens `onMutate` innan anropet.
+  mutationStubs.analyze.mutate = vi.fn((vars: { documentId: string }) => analyzeOptions.onMutate?.(vars));
 });
 
 const baseDoc = (overrides: Partial<Doc> = {}): Doc => ({
@@ -325,6 +354,39 @@ describe("DocumentBrowser", () => {
     fireEvent.click(screen.getByLabelText("Dokumentåtgärder"));
     fireEvent.click(screen.getByRole("menuitem", { name: /Analysera/i }));
     expect(mutationStubs.analyze.mutate).toHaveBeenCalledWith({ documentId: "d1" });
+  });
+
+  it("uppladdning utan working copy skickar textens innehåll till suggestFromText (#988)", async () => {
+    // Utan FSA-handle (mockad till null överst) skrivs filen aldrig till
+    // klientens disk — extract-text-jobbet kan alltså aldrig läsa den igen.
+    // Bytes:en finns bara i den här uppladdningen; missas de blir panelerna
+    // permanent tomma i demon.
+    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    const file = new File(["Kärande: Anna Andersson 850312-4567"], "stamning.txt", { type: "text/plain" });
+    const input = document.querySelector("input[type=file]")!;
+    Object.defineProperty(input, "files", { value: [file], configurable: true });
+    fireEvent.change(input);
+
+    await waitFor(() => expect(clientMock.document.suggestFromText.mutate).toHaveBeenCalled());
+    expect(clientMock.document.suggestFromText.mutate.mock.calls[0]![0]).toMatchObject({
+      text: "Kärande: Anna Andersson 850312-4567",
+    });
+    // Den vanliga vägen (working copy finns) köas oavsett — jobbet är no-op
+    // utan handle, och tar över så fort en mapp är vald.
+    expect(enqueueTextExtraction).toHaveBeenCalled();
+  });
+
+  it("Analysera köar också text-extraktion → kontakt-/händelseförslag (#988)", () => {
+    // Analyze-porten köar bara klassificeringen och känner varken filnamn
+    // eller sökväg. Utan det här steget analyseras dokumentet om utan att
+    // panelerna någonsin fylls.
+    treeQuery.data = { folders: [], documents: [baseDoc({ storagePath: "documents/content/a.pdf" })] };
+    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    fireEvent.click(screen.getByLabelText("Dokumentåtgärder"));
+    fireEvent.click(screen.getByRole("menuitem", { name: /Analysera/i }));
+    expect(enqueueTextExtraction).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "d1", fileName: "test.pdf", mimeType: "application/pdf", storagePath: "documents/content/a.pdf" }),
+    );
   });
 
   it("dragstart + drop på mapp anropar moveDocument", () => {

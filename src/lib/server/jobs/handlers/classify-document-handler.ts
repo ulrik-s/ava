@@ -6,14 +6,19 @@
  * deterministisk, ingen LLM, ingen modell-nedladdning. Fas 3 injicerar en
  * LLM-backad `classify` (server-LLM via ollama) med samma signatur.
  *
- * Idempotent: kör om → samma kategori skrivs igen (ofarligt). Saknat dokument
- * (raderat innan jobbet kördes) → tyst no-op.
+ * Med en injicerad `suggestFromText` (#988) skriver jobbet dessutom kontakt-
+ * och händelseförslag ur dokumentets text — det är server-first-tier:ns väg in
+ * i `SuggestionsPanel`/`EventsPanel`.
+ *
+ * Idempotent: kör om → samma kategori skrivs igen (ofarligt), och
+ * förslagsskrivningen dedupar på sitt håll. Saknat dokument (raderat innan
+ * jobbet kördes) → tyst no-op.
  */
 
 import { z } from "zod";
 import { type DocumentKind, guessFromFilename } from "@/lib/shared/document-kind";
 import type { Document } from "@/lib/shared/schemas/document";
-import { documentIdSchema, organizationIdSchema } from "@/lib/shared/schemas/ids";
+import { type DocumentId, documentIdSchema, organizationIdSchema } from "@/lib/shared/schemas/ids";
 import type { DocumentRepository } from "../../repositories/document-repository";
 import type { JobHandler } from "../job-worker-runtime";
 
@@ -41,6 +46,15 @@ export interface ClassifyDocumentDeps {
    * taggar så manuellt satta taggar ALDRIG skrivs över. Saknas → taggar rörs ej.
    */
   suggestTags?: (doc: ClassifiableDoc) => Promise<string[]>;
+  /**
+   * Skapa kontakt- och händelseförslag ur dokumentets TEXT (#988). Körs EFTER
+   * metadata-skrivningen: misslyckas extraktionen får klassificeringen ändå
+   * behålla sitt resultat (jobbet är idempotent och kan köras om).
+   *
+   * Saknas → hoppas över. Så är det i klient-tier:erna, där bytes:en aldrig
+   * når servern och texten i stället kommer ur browserns `extract-text`-jobb.
+   */
+  suggestFromText?: (documentId: DocumentId, doc: ClassifiableDoc) => Promise<void>;
   /** Modell-etikett som sparas i `analysisModel`. */
   model?: string;
   /** Injicerbar nu-tid för deterministiska tester. */
@@ -70,5 +84,6 @@ export function createClassifyDocumentHandler(deps: ClassifyDocumentDeps): JobHa
       analysisStatus: "DONE",
       analysisModel: model,
     });
+    await deps.suggestFromText?.(documentId, fields);
   };
 }

@@ -2,7 +2,9 @@
 
 import type { inferRouterInputs } from "@trpc/server";
 import { useState, useRef, useCallback, useMemo } from "react";
+import type { SuggestClient } from "@/lib/client/backend/suggest-from-bytes";
 import { useDocSyncStatus } from "@/lib/client/helper/use-helper";
+import { enqueueTextExtraction } from "@/lib/client/jobs/enqueue-text-extraction";
 import { trpc } from "@/lib/client/trpc";
 import type { AppRouter } from "@/lib/server/routers/_app";
 import { asId, type DocumentFolderId, type DocumentId, type MatterId } from "@/lib/shared/schemas/ids";
@@ -325,6 +327,21 @@ async function resolveUpload(file: File, matterId: MatterId): Promise<{ result: 
 }
 
 /**
+ * Best-effort-förslag ur just uppladdade bytes (#988). Uppladdningen är redan
+ * klar när det här körs — ett fel här loggas, det kastas aldrig vidare.
+ */
+async function suggestFromUpload(client: SuggestClient, doc: UploadResult, bytes: Uint8Array): Promise<void> {
+  try {
+    const { suggestFromBytes } = await import("@/lib/client/backend/suggest-from-bytes");
+    await suggestFromBytes(client, asId<"DocumentId">(doc.id), {
+      bytes, mimeType: doc.mimeType, fileName: doc.fileName,
+    });
+  } catch (err) {
+    console.warn("[suggest-from-text] misslyckades:", err);
+  }
+}
+
+/**
  * Uppladdnings-state + handler: optimistiska placeholder-rader, FSA-write,
  * tRPC-register, invalidate och bakgrundsjobb (klassificering + text-extraktion).
  */
@@ -398,12 +415,12 @@ function useFileUpload({ matterId, mutations, fileInputRef }: {
         fileName: result.fileName,
         storagePath: result.storagePath,
       });
-      jobQueue.enqueue("extract-text", `Extraherar text ur ${result.fileName}`, {
-        documentId: result.id,
-        fileName: result.fileName,
-        storagePath: result.storagePath,
-        mimeType: result.mimeType,
-      });
+      await enqueueTextExtraction(result);
+      // Utan working copy (demon, server-first i browsern) kan extract-text-
+      // jobbet aldrig läsa filen igen — bytes:en finns bara här. Extrahera nu
+      // så kontakt-/händelseförslagen uppstår även där (#988). Best-effort:
+      // uppladdningen är redan klar och får inte falla på det här.
+      if (serverBytes) void suggestFromUpload(utils.client, result, serverBytes);
     } catch (err) {
       removePlaceholder();
       const msg = err instanceof Error ? err.message : String(err);
@@ -645,6 +662,10 @@ function useDocumentMutations({
   const reanalyze = trpc.document.analyze.useMutation({
     onMutate: ({ documentId }) => {
       setAnalyzingIds((prev) => new Set(prev).add(documentId));
+      // "Analysera (AI)" ska ge samma resultat som en uppladdning — inklusive
+      // kontakt-/händelseförslag (#988). Porten köar bara klassificeringen, så
+      // text-extraktionen köas här där dokumentets filnamn och sökväg finns.
+      void enqueueTextExtraction(documents.find((d) => d.id === documentId));
     },
     onSuccess: (_data, { documentId }) => {
       pollAnalysis({
