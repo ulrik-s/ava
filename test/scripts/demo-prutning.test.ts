@@ -47,7 +47,7 @@ function recordingCaller(): { c: Any; calls: Array<{ method: string; args: Any }
 
 const PARTIES = { klient: "c-k", motpart: "c-m", motpartsombud: "c-o", domstol: "c-d" };
 const rhMatter = (nr: string): SimMatter => ({
-  id: `m-${nr}`, matterNumber: nr, paymentMethod: "RATTSHJALP", clientShareBips: 4000,
+  id: `m-${nr}`, matterNumber: nr, paymentMethod: "RATTSHJALP", status: "ACTIVE", clientShareBips: 4000,
   lawyerId: "u-1", startDaysAgo: 200, arvodeRateOre: 162_600,
 });
 
@@ -90,7 +90,7 @@ describe("prutning i demo-scenarierna (#936)", () => {
 
   it("rättsskydd 2026-0021 prutas av försäkringen → klienten bär (insurerPruning)", async () => {
     const events = buildScenario(
-      { id: "m-21", matterNumber: "2026-0021", paymentMethod: "RATTSSKYDD", clientShareBips: 2000, lawyerId: "u-1", startDaysAgo: 200, arvodeRateOre: 162_600 },
+      { id: "m-21", matterNumber: "2026-0021", paymentMethod: "RATTSSKYDD", status: "ACTIVE", clientShareBips: 2000, lawyerId: "u-1", startDaysAgo: 200, arvodeRateOre: 162_600 },
       PARTIES, 0,
     );
     const pruning = events.find((e) => e.kind === "insurerPruning") as Any;

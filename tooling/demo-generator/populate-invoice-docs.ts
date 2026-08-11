@@ -12,9 +12,8 @@
 
 import { fakturaHeading, renderFakturaHtml, type FakturaBreakdown } from "@/lib/client/kostnadsrakning/faktura-template";
 import { BILLING_RUN_RECIPIENT_LABELS } from "@/lib/shared/schemas/enums";
-import type { GeneratorCaller } from "./backend-target";
+import type { BinarySink, GeneratorCaller } from "./backend-target";
 import { ensureFolderPath, INVOICE_FOLDER, type FolderCache } from "./folder-filing";
-import type { BinarySink } from "./populate-documents";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = any;

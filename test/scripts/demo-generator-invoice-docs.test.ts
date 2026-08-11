@@ -7,10 +7,9 @@ import { describe, it, expect } from "vitest-compat";
 import { userRoleSchema } from "@/lib/shared/schemas/enums";
 import { asId } from "@/lib/shared/schemas/ids";
 import { createGitTarget } from "../../tooling/demo-generator/backend-target";
-import { populate } from "../../tooling/demo-generator/populate";
-import { populateBilling } from "../../tooling/demo-generator/populate-billing";
 import { populateInvoiceDocs } from "../../tooling/demo-generator/populate-invoice-docs";
 import { buildSeed } from "../../tooling/scripts/seed-data";
+import { runDemoSeed } from "./_demo-seed";
 
 const ADMIN = { id: asId<"UserId">("gen"), email: "g@a.se", name: "G", role: userRoleSchema.parse("ADMIN"), organizationId: asId<"OrganizationId">("firma-ab") };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -21,8 +20,7 @@ describe("populateInvoiceDocs", () => {
     const seed = buildSeed();
     const writes: string[] = [];
     const target = createGitTarget({ principal: ADMIN, writeBack: async () => {} });
-    await populate(target.caller, seed);
-    await populateBilling(target.caller, seed);
+    await runDemoSeed(target.caller, seed);
 
     const n = await populateInvoiceDocs(target.caller, (p, b) => { writes.push(p); return b.byteLength; });
     expect(n).toBeGreaterThan(0);
@@ -42,8 +40,7 @@ describe("populateInvoiceDocs", () => {
     const seed = buildSeed();
     const htmls: string[] = [];
     const target = createGitTarget({ principal: ADMIN, writeBack: async () => {} });
-    await populate(target.caller, seed);
-    await populateBilling(target.caller, seed);
+    await runDemoSeed(target.caller, seed);
     await populateInvoiceDocs(target.caller, (_p, b) => { htmls.push(new TextDecoder().decode(b)); return b.byteLength; });
     const radg = htmls.find((h) => h.includes("Rådgivningsfaktura"));
     expect(radg, "en rådgivningsfaktura-doc ska genereras").toBeDefined();
@@ -57,8 +54,7 @@ describe("populateInvoiceDocs", () => {
     const seed = buildSeed();
     const htmls: string[] = [];
     const target = createGitTarget({ principal: ADMIN, writeBack: async () => {} });
-    await populate(target.caller, seed);
-    await populateBilling(target.caller, seed);
+    await runDemoSeed(target.caller, seed);
     await populateInvoiceDocs(target.caller, (_p, b) => { htmls.push(new TextDecoder().decode(b)); return b.byteLength; });
     // Kreditfakturan (varierande rättshjälp, m-020) renderar FULLA specifikationen
     // (#895): upparbetat arvode + avdragna aconton → kredit-netto, inte en tom vy.
@@ -75,8 +71,7 @@ describe("populateInvoiceDocs", () => {
     const seed = buildSeed();
     const htmls: string[] = [];
     const target = createGitTarget({ principal: ADMIN, writeBack: async () => {} });
-    await populate(target.caller, seed);
-    await populateBilling(target.caller, seed);
+    await runDemoSeed(target.caller, seed);
     await populateInvoiceDocs(target.caller, (_p, b) => { htmls.push(new TextDecoder().decode(b)); return b.byteLength; });
     expect(htmls.length).toBeGreaterThan(0);
     for (const html of htmls) {

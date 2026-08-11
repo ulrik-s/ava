@@ -5,10 +5,11 @@
  *   • build-demo-repo.ts   (GH-Pages-demon → skriver ovanpå out/)
  *   • seed-firma-local.ts  (docker self-hosted-repo + push)
  *
- * Kör populate (entiteter) → populateBilling (faktureringsflöden) →
- * populateDocuments (metadata + binärfiler). Skriver JSON via samma writeBack
- * som appens self-hosted (`makeNodeGitWriteBack`) och binärer via en sink mot
- * `outDir`. Anroparen sköter katalog-/git-hanteringen (rm/purge/commit/push).
+ * Kör populate (kärnentiteter) → runSimulation (den kronologiska seedningen,
+ * #880: arbete, dokument, fakturor och deras livscykler) → faktura-/KR-dokument
+ * som efterpass. Skriver JSON via samma writeBack som appens self-hosted
+ * (`makeNodeGitWriteBack`) och binärer via en sink mot `outDir`. Anroparen
+ * sköter katalog-/git-hanteringen (rm/purge/commit/push).
  */
 
 import { mkdirSync, writeFileSync } from "node:fs";

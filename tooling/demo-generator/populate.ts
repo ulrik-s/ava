@@ -7,8 +7,11 @@
  *
  * Täcker org → users → contacts → matters → matter-contacts → time-entries
  * → expenses → calendar → tasks → document-templates → conflict-checks.
- * Fakturering drivs via FLÖDENA i `populate-billing.ts` (ADR-beslut 1a).
- * Kvarstår: dokument (metadata + binärinnehåll).
+ *
+ * OBS: `generateInto` skickar in en seed där tid, utlägg, motpartskontakter,
+ * dokument och tjänsteanteckningar är TOMMA — de skapas kronologiskt av
+ * simuleringen (#880), inte härifrån. Funktionen kan fortfarande skriva dem
+ * (tester gör det), men demons väg går via `runSimulation`.
  */
 
 import type { SeedDataset } from "../scripts/seed-data";

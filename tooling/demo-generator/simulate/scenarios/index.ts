@@ -24,7 +24,14 @@ export function buildScenario(matter: SimMatter, parties: Parties, index: number
     case "RATTSSKYDD": return matter.matterNumber === "2026-0021"
       ? buildRattsskyddPositivtScenario(parties)
       : buildRattsskyddScenario(parties);
-    case "OFFENTLIGT_UPPDRAG": return buildOffentligtScenario(parties);
-    default: return buildPrivatScenario(parties, index);
+    // 2026-0017 (omfattande utredning Davidsson, hovrätten) stannar efter
+    // kostnadsräkningen: demon behöver ETT ärende i "väntar på dom" för att
+    // fakturapanelens väntetillstånd ska synas alls (#882). De övriga två får sitt
+    // beslut, så båda sidor av flödet finns. Just 0017 och inte 0018 — Carlsson-
+    // ärendet är det `demo-invoice-document.spec.ts` kör hela kedjan KR → beslut →
+    // faktura → fakturadokument på.
+    case "OFFENTLIGT_UPPDRAG":
+      return buildOffentligtScenario(parties, { awaitVerdict: matter.matterNumber === "2026-0017" });
+    default: return buildPrivatScenario(parties, index, matter.status === "ACTIVE");
   }
 }
