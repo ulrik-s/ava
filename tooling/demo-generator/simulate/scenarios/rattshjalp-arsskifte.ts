@@ -11,6 +11,7 @@
  * Dag 0 ≈ nov 2025; årsgränsen (31 dec 2025) infaller runt dag 60.
  */
 
+import { partyEvents, STANDARD_PARTY_DAYS } from "../events";
 import type { Parties, SimEvent } from "../events";
 
 export function buildRattshjalpArsskifteScenario(parties: Parties): SimEvent[] {
@@ -20,10 +21,7 @@ export function buildRattshjalpArsskifteScenario(parties: Parties): SimEvent[] {
     { kind: "radgivning", dayOffset: 0 },
     { kind: "doc", dayOffset: 1, template: "fullmakt" },
   ];
-  if (parties.klient) ev.push({ kind: "party", dayOffset: 0, contactId: parties.klient, role: "KLIENT" });
-  if (parties.motpart) ev.push({ kind: "party", dayOffset: 2, contactId: parties.motpart, role: "MOTPART" });
-  if (parties.motpartsombud) ev.push({ kind: "party", dayOffset: 2, contactId: parties.motpartsombud, role: "MOTPARTSOMBUD" });
-  if (parties.domstol) ev.push({ kind: "party", dayOffset: 2, contactId: parties.domstol, role: "DOMSTOL" });
+  ev.push(...partyEvents(parties, STANDARD_PARTY_DAYS));
 
   ev.push(
     // Normalflödet: klienten söker FÖRST rättsskydd hos försäkringsbolaget; först

@@ -5,6 +5,7 @@
  * gäller domstol/rättshjälp).
  */
 
+import { partyEvents, STANDARD_PARTY_DAYS } from "../events";
 import type { Parties, SimEvent } from "../events";
 
 export function buildRattsskyddScenario(parties: Parties): SimEvent[] {
@@ -13,10 +14,7 @@ export function buildRattsskyddScenario(parties: Parties): SimEvent[] {
     { kind: "time", dayOffset: 0, minutes: 60, description: "Inledande genomgång och rättsskyddsansökan" },
     { kind: "doc", dayOffset: 1, template: "fullmakt" },
   ];
-  if (parties.klient) ev.push({ kind: "party", dayOffset: 0, contactId: parties.klient, role: "KLIENT" });
-  if (parties.motpart) ev.push({ kind: "party", dayOffset: 2, contactId: parties.motpart, role: "MOTPART" });
-  if (parties.motpartsombud) ev.push({ kind: "party", dayOffset: 2, contactId: parties.motpartsombud, role: "MOTPARTSOMBUD" });
-  if (parties.domstol) ev.push({ kind: "party", dayOffset: 2, contactId: parties.domstol, role: "DOMSTOL" });
+  ev.push(...partyEvents(parties, STANDARD_PARTY_DAYS));
   ev.push(
     { kind: "doc", dayOffset: 5, template: "brevTillOmbud" },
     { kind: "time", dayOffset: 12, minutes: 120, description: "Skriftväxling och förhandlingsförberedelse" },

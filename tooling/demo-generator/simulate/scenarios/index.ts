@@ -3,12 +3,35 @@
  */
 
 import type { Parties, SimEvent, SimMatter } from "../events";
-import { buildOffentligtScenario } from "./offentligt";
+import { buildOffentligtScenario, type OffentligtOpts } from "./offentligt";
 import { buildPrivatScenario } from "./privat";
 import { buildRattshjalpScenario } from "./rattshjalp";
 import { buildRattshjalpArsskifteScenario } from "./rattshjalp-arsskifte";
 import { buildRattsskyddScenario } from "./rattsskydd";
 import { buildRattsskyddPositivtScenario } from "./rattsskydd-positivt";
+
+/**
+ * Var varje brottmål vilar i kostnadsräkningens livscykel (#828 steg 6). Ett
+ * ärende per tillstånd, så demon visar alla fyra samtidigt i st.f. att bara
+ * kunna nås genom att klicka sig framåt:
+ *
+ * - **2026-0017** INSKICKAD — väntar på dom (#882). `demo-kostnadsrakning-
+ *   verdict.spec.ts` kör beslut → faktura härifrån, uppslaget ur seeden.
+ * - **2026-0016** BESLUTAD — beslutat men ofakturerat, med en prutning att
+ *   antingen acceptera (Skapa faktura) eller överklaga.
+ * - **2026-0019** ÖVERKLAGAD — prutningen överklagad, väntar på hovrätten.
+ * - **2026-0018** FAKTURERAD — hela kedjan gången; det ärende
+ *   `demo-invoice-document.spec.ts` hämtar sitt fakturadokument ur.
+ */
+const OFFENTLIGT_STOPS: Record<string, OffentligtOpts> = {
+  "2026-0016": { stopAfter: "beslut", reducedByBips: 1000 },
+  "2026-0017": { stopAfter: "kostnadsrakning" },
+  "2026-0019": { stopAfter: "overklaga", reducedByBips: 2500 },
+};
+
+function offentligtOpts(matterNumber: string | undefined): OffentligtOpts {
+  return (matterNumber && OFFENTLIGT_STOPS[matterNumber]) || {};
+}
 
 export function buildScenario(matter: SimMatter, parties: Parties, index: number): SimEvent[] {
   switch (matter.paymentMethod) {
@@ -24,14 +47,8 @@ export function buildScenario(matter: SimMatter, parties: Parties, index: number
     case "RATTSSKYDD": return matter.matterNumber === "2026-0021"
       ? buildRattsskyddPositivtScenario(parties)
       : buildRattsskyddScenario(parties);
-    // 2026-0017 (omfattande utredning Davidsson, hovrätten) stannar efter
-    // kostnadsräkningen: demon behöver ETT ärende i "väntar på dom" för att
-    // fakturapanelens väntetillstånd ska synas alls (#882). De övriga två får sitt
-    // beslut, så båda sidor av flödet finns. Just 0017 och inte 0018 — Carlsson-
-    // ärendet är det `demo-invoice-document.spec.ts` kör hela kedjan KR → beslut →
-    // faktura → fakturadokument på.
     case "OFFENTLIGT_UPPDRAG":
-      return buildOffentligtScenario(parties, { awaitVerdict: matter.matterNumber === "2026-0017" });
+      return buildOffentligtScenario(parties, offentligtOpts(matter.matterNumber));
     default: return buildPrivatScenario(parties, index, matter.status === "ACTIVE");
   }
 }

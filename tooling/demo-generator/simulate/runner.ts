@@ -216,7 +216,19 @@ async function hBeslut(ctx: RunCtx, _m: SimMatter, e: Any, _iso: string, st: Sim
   const awardedOre = bips > 0
     ? Math.round((st.krWorkValueOre * (10000 - bips)) / 10000)
     : st.krWorkValueOre;
-  await ctx.c.billingRun.recordKostnadsrakningBeslut({ billingRunId: st.krRunId, awardedOre });
+  // Nedsättningen registreras också SOM prutning på körningen (#828) — det är
+  // det fältet KR-kortet visar, och det appens egen beslutsdialog skickar.
+  // Utan det syntes en prutad kostnadsräkning som obeskuren i panelen.
+  await ctx.c.billingRun.recordKostnadsrakningBeslut({
+    billingRunId: st.krRunId, awardedOre,
+    ...(bips > 0 ? { prutningOre: awardedOre - st.krWorkValueOre } : {}),
+  });
+}
+
+/** Överklaga prutningen (#828): BESLUTAD → ÖVERKLAGAD på samma körning. */
+async function hOverklaga(ctx: RunCtx, _m: SimMatter, _e: Any, _iso: string, st: SimState): Promise<void> {
+  if (!st.krRunId) return;
+  await ctx.c.billingRun.appealKostnadsrakning({ billingRunId: st.krRunId });
 }
 
 async function hVerdict(ctx: RunCtx, _m: SimMatter, _e: Any, _iso: string, st: SimState): Promise<void> {
@@ -357,7 +369,7 @@ async function hWriteOff(ctx: RunCtx, _m: SimMatter, e: Any, iso: string, st: Si
 /** kind → handler. Håller runnern platt (undviker en stor switch = hög komplexitet). */
 const HANDLERS: Record<SimEvent["kind"], (ctx: RunCtx, m: SimMatter, e: Any, iso: string, st: SimState) => Promise<void>> = {
   party: hParty, time: hTime, note: hNote, expense: hExpense, doc: hDoc, radgivning: hRadgivning,
-  acconto: hAcconto, rateChange: hRateChange, kostnadsrakning: hKostnadsrakning, beslut: hBeslut, verdict: hVerdict, settle: hSettle, insurerPruning: hInsurerPruning, final: hFinal, payment: hPayment,
+  acconto: hAcconto, rateChange: hRateChange, kostnadsrakning: hKostnadsrakning, beslut: hBeslut, overklaga: hOverklaga, verdict: hVerdict, settle: hSettle, insurerPruning: hInsurerPruning, final: hFinal, payment: hPayment,
   paymentPlan: hPaymentPlan, writeOff: hWriteOff,
 };
 
