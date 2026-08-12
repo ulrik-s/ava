@@ -121,23 +121,27 @@ describe("runSimulation (#880 integration)", () => {
     expect(simRes.folders, "mappar skapade").toBeGreaterThan(0);
     expect(simRes.dispatches, "utskick registrerade").toBeGreaterThan(0);
 
-    // Ett ärende med domstolsdokument ska ha Domstol/ med Domar under sig, och
-    // inga dokument kvar i roten.
+    // Trädet ska vara NÄSTLAT någonstans i demon (t.ex. Domstol/Domar) — annars
+    // ser mapphanteringen ut som en platt lista. Ärendet letas fram i stället för
+    // att pekas ut: vilka handlingar ett enskilt ärende får beror på var i sin
+    // livscykel det vilar (#828 steg 6), och det hör hemma i scenariot.
     const matters = (await c.matter.list({})).matters as Any[];
-    const withCourt = matters.find((m: Any) => String(m.paymentMethod) === "OFFENTLIGT_UPPDRAG") ?? matters[0];
-    const tree = await c.document.tree({ matterId: withCourt.id });
-    const folders = tree.folders as Array<{ id: string; name: string; parentId: string | null }>;
-    expect(folders.length, "ärendet har mappar").toBeGreaterThan(0);
-    const nested = folders.find((f) => f.parentId !== null);
-    expect(nested, "minst en nästlad mapp — annars ser trädet ut som en platt lista").toBeTruthy();
-    expect(folders.some((f) => f.id === nested?.parentId), "den nästlade mappens förälder finns").toBe(true);
+    const trees = await Promise.all(matters.map(async (m: Any) => ({
+      matterId: String(m.id), tree: await c.document.tree({ matterId: m.id }),
+    })));
+    type Folder = { id: string; name: string; parentId: string | null };
+    const nestedHit = trees
+      .map((t) => ({ ...t, folders: t.tree.folders as Folder[] }))
+      .find((t) => t.folders.some((f) => f.parentId !== null));
+    expect(nestedHit, "något ärende har en nästlad mapp").toBeTruthy();
+    const nested = nestedHit!.folders.find((f) => f.parentId !== null)!;
+    expect(nestedHit!.folders.some((f) => f.id === nested.parentId), "den nästlade mappens förälder finns").toBe(true);
 
-    // Varje dokument har en mapp — och rot-listningen är följaktligen tom.
-    const all = tree.documents as Array<{ folderId: string | null }>;
-    expect(all.length, "ärendet har dokument").toBeGreaterThan(0);
-    expect(all.every((d) => d.folderId !== null), "inget dokument ligger kvar i roten").toBe(true);
-    const rootListing = await c.document.list({ matterId: withCourt.id, folderId: null, pageSize: 100 });
-    expect((rootListing.documents ?? rootListing).length, "rot-mappen är tom").toBe(0);
+    // Och INGET dokument ligger kvar i roten — i något ärende.
+    const loose = trees.flatMap((t) => (t.tree.documents as Array<{ folderId: string | null }>)
+      .filter((d) => d.folderId === null));
+    expect(trees.some((t) => (t.tree.documents as unknown[]).length > 0), "demon har dokument").toBe(true);
+    expect(loose, "inget dokument ligger kvar i roten").toHaveLength(0);
   });
 
   /**
@@ -210,5 +214,30 @@ describe("runSimulation (#880 integration)", () => {
     expect(kr.some((r) => r.status === "PENDING_VERDICT"), "en KR väntar på dom").toBe(true);
     // …och de övriga har fått sitt beslut, så båda tillstånden syns.
     expect(kr.some((r) => r.status !== "PENDING_VERDICT"), "en KR är avgjord").toBe(true);
+  });
+
+  /**
+   * #828 steg 6: demodata i ALLA lägen. Kostnadsräkningens state-maskin har fyra
+   * statusar, och panelen har en egen vy per status — men demon visade bara två
+   * (inskickad och fakturerad). Överklagandespåret fanns bara i koden: varken
+   * "Överklaga prutning" eller "Registrera hovrättens beslut" gick att se.
+   *
+   * Testet påstår om DEMONS DATA att varje status finns som ett VILANDE
+   * tillstånd. Att kunna klicka sig fram till dem räcker inte — då syns de
+   * först efter att man ändrat data som ändå inte sparas.
+   */
+  it("kostnadsräkningens alla fyra statusar finns i demon samtidigt", async () => {
+    const { c } = await simulateDemo();
+    const runs = (await c.billingRun.list({})).runs as Any[];
+    const kr = runs.filter((r) => r.type === "KOSTNADSRAKNING");
+    const statuses = new Set(kr.map((r) => r.kostnadsrakningStatus));
+    for (const s of ["INSKICKAD", "BESLUTAD", "OVERKLAGAD", "FAKTURERAD"]) {
+      expect(statuses.has(s), `KR-status ${s} saknas i demon`).toBe(true);
+    }
+    // Den beslutade ska bära domstolens prutning — annars går det inte att se
+    // VARFÖR man skulle överklaga, och prutningen är hela poängen med spåret.
+    const beslutad = kr.find((r) => r.kostnadsrakningStatus === "BESLUTAD");
+    expect(beslutad?.prutningOre, "beslutet bär en registrerad prutning").toBeLessThan(0);
+    expect(beslutad?.awardedOre, "…och ett dömt belopp").toBeGreaterThan(0);
   });
 });

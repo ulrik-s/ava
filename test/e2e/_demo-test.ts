@@ -107,18 +107,21 @@ export interface DemoSeed {
   timeEntries: Array<{ id: string; matterId: string; description: string }>;
   expenses: Array<{ id: string; matterId: string; description: string }>;
   paymentPlans: Array<{ id: string; invoiceId: string; status: string }>;
-  billingRuns: Array<{ id: string; matterId: string; type: string; status: string }>;
+  billingRuns: Array<{ id: string; matterId: string; type: string; status: string; kostnadsrakningStatus?: string }>;
 }
 
+/** Kostnadsräkningens livscykel-status (#828). */
+export type KrStatus = "INSKICKAD" | "BESLUTAD" | "OVERKLAGAD" | "FAKTURERAD";
+
 /**
- * Ärendet vars kostnadsräkning väntar på domstolens beslut (#996). Slås upp i
- * datan i stället för att hårdkodas: VILKET brottmål som står kvar i väntan
- * bestäms av scenariodispatchern (#882), och flyttas den dit hör ändringen
- * hemma där — inte i en spec.
+ * Ärendet vars kostnadsräkning står i `status` (#996/#828). Slås upp i datan i
+ * stället för att hårdkodas: VILKET brottmål som vilar i vilket läge bestäms av
+ * scenariodispatchern (#882), och flyttas det hör ändringen hemma där — inte i
+ * en spec. Saknas läget är det demodatan som tappat det, och felet säger så.
  */
-export function matterAwaitingVerdict(seed: DemoSeed): string {
-  const hit = seed.billingRuns.find((r) => r.type === "KOSTNADSRAKNING" && r.status === "PENDING_VERDICT");
-  if (!hit) throw new Error("seeden saknar kostnadsräkning i PENDING_VERDICT — demons väntetillstånd är borta igen (#882)");
+export function matterWithKrStatus(seed: DemoSeed, status: KrStatus): string {
+  const hit = seed.billingRuns.find((r) => r.type === "KOSTNADSRAKNING" && r.kostnadsrakningStatus === status);
+  if (!hit) throw new Error(`seeden saknar kostnadsräkning i ${status} — demons livscykel-lägen är ofullständiga (#828 steg 6)`);
   return hit.matterId;
 }
 

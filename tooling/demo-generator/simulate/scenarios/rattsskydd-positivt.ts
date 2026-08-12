@@ -17,6 +17,7 @@
  * 2025-timmarna räknas om på 2026 års normer vid slutregleringen.
  */
 
+import { partyEvents, STANDARD_PARTY_DAYS } from "../events";
 import type { Parties, SimEvent } from "../events";
 
 export function buildRattsskyddPositivtScenario(parties: Parties): SimEvent[] {
@@ -27,10 +28,7 @@ export function buildRattsskyddPositivtScenario(parties: Parties): SimEvent[] {
     { kind: "doc", dayOffset: 2, template: "rattsskyddsansokan" },
     { kind: "note", dayOffset: 2, text: "Ansökan om rättsskydd inskickad till försäkringsbolaget." },
   ];
-  if (parties.klient) ev.push({ kind: "party", dayOffset: 0, contactId: parties.klient, role: "KLIENT" });
-  if (parties.motpart) ev.push({ kind: "party", dayOffset: 2, contactId: parties.motpart, role: "MOTPART" });
-  if (parties.motpartsombud) ev.push({ kind: "party", dayOffset: 2, contactId: parties.motpartsombud, role: "MOTPARTSOMBUD" });
-  if (parties.domstol) ev.push({ kind: "party", dayOffset: 2, contactId: parties.domstol, role: "DOMSTOL" });
+  ev.push(...partyEvents(parties, STANDARD_PARTY_DAYS));
   ev.push(
     { kind: "doc", dayOffset: 10, template: "rattsskyddBeslutPositivt" },
     { kind: "note", dayOffset: 10, text: "Rättsskydd beviljat: högst 100 tim arvode, självrisk 20 % dock lägst 1 800 kr." },

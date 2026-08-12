@@ -36,6 +36,12 @@ export type SimEvent =
    * om på det nedsatta beloppet och mellanskillnaden bokas som en förlust (#936).
    */
   | { kind: "beslut"; dayOffset: number; reducedByBips?: number }
+  /**
+   * Överklaga domstolens prutning (#828) — `appealKostnadsrakning`. BESLUTAD →
+   * ÖVERKLAGAD; hovrättens beslut registreras sedan på SAMMA körning med ett
+   * nytt `beslut`-event (servern väljer övergången ur KR:ns status).
+   */
+  | { kind: "overklaga"; dayOffset: number }
   /** Skapa domstolsfakturan EFTER beslut (offentligt uppdrag) — setVerdict. */
   | { kind: "verdict"; dayOffset: number }
   /** Slutreglering (rättshjälp/-skydd) — settleCoverage (→ klient FINAL/CREDIT + betalare). */
@@ -96,6 +102,28 @@ export interface SimMatter {
    *  påhittad adress i demodatat. */
   clientEmail?: string | undefined;
 }
+
+/** Rollen varje part länkas in med. Fast mappning — scenariot väljer bara DAGEN. */
+const PARTY_ROLE = {
+  klient: "KLIENT", motpart: "MOTPART", motpartsombud: "MOTPARTSOMBUD", domstol: "DOMSTOL",
+} as const satisfies Record<keyof Parties, MatterRole>;
+
+/**
+ * `party`-events för de roller ärendet faktiskt har, på de dagar scenariot
+ * anger. Fanns förr som fyra identiska `if`-rader i fem scenariofiler — och
+ * kostade dessutom komplexitetsbudget i varje.
+ */
+export function partyEvents(parties: Parties, days: Partial<Record<keyof Parties, number>>): SimEvent[] {
+  return Object.entries(days).flatMap(([key, dayOffset]) => {
+    const contactId = parties[key as keyof Parties];
+    return contactId === undefined
+      ? []
+      : [{ kind: "party" as const, dayOffset, contactId, role: PARTY_ROLE[key as keyof Parties] }];
+  });
+}
+
+/** Vanligaste upplägget: klienten dag 0, övriga när ärendet tagit form. */
+export const STANDARD_PARTY_DAYS = { klient: 0, motpart: 2, motpartsombud: 2, domstol: 2 } as const;
 
 /** Parter att länka in via `party`-events (översatta UUID:n) — ur seedens
  *  matterContacts, så klient/motpart/ombud/domstol får riktiga kontakter. */

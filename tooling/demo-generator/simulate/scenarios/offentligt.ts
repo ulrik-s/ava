@@ -3,21 +3,36 @@
  * förundersökning → klientmöte + huvudförhandling → kostnadsräkning till domstol →
  * domstolens beslut → domstolsfaktura (setVerdict). Taxa vs frångång styrs av
  * matterns fält; flödet (KR → beslut → verdict) är detsamma.
+ *
+ * Kostnadsräkningens livscykel (#828) har fyra tillstånd, och demon ska visa dem
+ * alla SAMTIDIGT — annars går de bara att nå genom att själv klicka sig framåt,
+ * och panelens vyer för dem syns aldrig i en färsk demo. Därför `stopAfter`:
+ * varje brottmål vilar på sin punkt i kedjan.
  */
 
+import { partyEvents } from "../events";
 import type { Parties, SimEvent } from "../events";
 
+/**
+ * Var scenariot ska STANNA — vilket KR-tillstånd ärendet vilar i (#828 steg 6).
+ *
+ * | värde | KR-status | vad panelen visar |
+ * |---|---|---|
+ * | `kostnadsrakning` | INSKICKAD | "Väntar på dom" + "Registrera beslut" |
+ * | `beslut` | BESLUTAD | "Skapa faktura" + "Överklaga prutning" |
+ * | `overklaga` | ÖVERKLAGAD | "Registrera hovrättens beslut" |
+ * | *(utelämnad)* | FAKTURERAD | domstolsfakturan med sitt dokument |
+ */
+export type OffentligtStop = "kostnadsrakning" | "beslut" | "overklaga";
+
 export interface OffentligtOpts {
+  stopAfter?: OffentligtStop;
   /**
-   * Stanna EFTER kostnadsräkningen: ingen `beslut`, ingen `verdict`. Ärendet
-   * blir kvar i "kostnadsräkning väntar på dom" — fakturapanelens tillstånd
-   * mellan inlämnad KR och domstolens beslut (#882).
-   *
-   * Utan detta får varje offentligt uppdrag beslut samma vecka och demon visar
-   * aldrig väntetillståndet, trots att panelen har en egen vy för det. Det låg
-   * förr i `populate-billing.ts`; simuleringen tog aldrig över det.
+   * Domstolens nedsättning av det yrkade beloppet (bips). Registreras som
+   * prutning PÅ kostnadsräkningen — det är den som gör ett överklagande
+   * begripligt: man överklagar prutningen, inte beslutet i stort.
    */
-  awaitVerdict?: boolean;
+  reducedByBips?: number;
 }
 
 export function buildOffentligtScenario(parties: Parties, opts: OffentligtOpts = {}): SimEvent[] {
@@ -25,8 +40,7 @@ export function buildOffentligtScenario(parties: Parties, opts: OffentligtOpts =
     { kind: "note", dayOffset: 0, text: "Förordnad som offentlig försvarare." },
     { kind: "time", dayOffset: 1, minutes: 120, description: "Genomgång av förundersökningsprotokoll" },
   ];
-  if (parties.klient) ev.push({ kind: "party", dayOffset: 0, contactId: parties.klient, role: "KLIENT" });
-  if (parties.domstol) ev.push({ kind: "party", dayOffset: 2, contactId: parties.domstol, role: "DOMSTOL" });
+  ev.push(...partyEvents(parties, { klient: 0, domstol: 2 }));
   ev.push(
     { kind: "expense", dayOffset: 6, amountOre: 38_000, description: "Reskostnad häktesbesök" },
     { kind: "doc", dayOffset: 4, template: "brevTillOmbud" },
@@ -34,9 +48,27 @@ export function buildOffentligtScenario(parties: Parties, opts: OffentligtOpts =
     { kind: "time", dayOffset: 20, minutes: 120, description: "Huvudförhandling i tingsrätten" },
     { kind: "kostnadsrakning", dayOffset: 22 },
   );
-  if (opts.awaitVerdict) return ev;
+  if (opts.stopAfter === "kostnadsrakning") return ev;
+
+  ev.push({
+    kind: "beslut", dayOffset: 30,
+    ...(opts.reducedByBips ? { reducedByBips: opts.reducedByBips } : {}),
+  });
+  // Nedsättningen kommer med ett beslut i akten — annars visar panelen en
+  // prutning som ingen handling förklarar.
+  if (opts.reducedByBips) ev.push({ kind: "doc", dayOffset: 30, template: "arvodesbeslut" });
+  if (opts.stopAfter === "beslut") return ev;
+
+  if (opts.stopAfter === "overklaga") {
+    ev.push(
+      { kind: "note", dayOffset: 33, text: "Tingsrättens nedsättning av arvodet överklagas till hovrätten." },
+      { kind: "doc", dayOffset: 33, template: "overklagandeInlaga" },
+      { kind: "overklaga", dayOffset: 33 },
+    );
+    return ev;
+  }
+
   ev.push(
-    { kind: "beslut", dayOffset: 30 },
     { kind: "doc", dayOffset: 31, template: "dom" },
     { kind: "verdict", dayOffset: 32 },
   );

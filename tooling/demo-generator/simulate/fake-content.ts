@@ -108,6 +108,21 @@ export const DOC_TEMPLATES: Record<string, DocTemplate> = {
       "Frist för överklagande: senast den 2026-06-02.",
     ].join("\n"),
   },
+  // Kostnadsräkningens överklagandespår (#828 steg 6). Utan de här två ligger
+  // ett ärende i BESLUTAD/ÖVERKLAGAD utan en enda handling som förklarar varför —
+  // panelen visar en prutning och en pågående överklagan, akten är tom.
+  arvodesbeslut: {
+    documentType: "Beslut", direction: "INKOMMANDE", recipient: "DOMSTOL",
+    title: "Beslut om ersättning till offentlig försvarare",
+    summary: "Tingsrätten sätter ned det yrkade arvodet. Beslutet får överklagas särskilt.",
+    subFolder: "Beslut",
+  },
+  overklagandeInlaga: {
+    documentType: "Inlaga", direction: "UTGAENDE", recipient: "DOMSTOL",
+    title: "Överklagande av arvodesbeslut",
+    summary: "Överklagande till hovrätten av tingsrättens nedsättning av arvodet, med begäran om full ersättning.",
+    subFolder: "Överklaganden",
+  },
   beslutRattshjalp: {
     documentType: "Beslut", direction: "INKOMMANDE", recipient: "MYNDIGHET",
     title: "Beslut om rättshjälp", summary: "Rättshjälpsmyndighetens beslut om rättshjälpsavgiftens procentsats för ärendet.",

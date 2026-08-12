@@ -159,6 +159,11 @@ export const MATTERS: MatterSeed[] = [
   { id: "m-016-brottmal-rh", matterNumber: "2026-0016", title: "Brottmål — rattfylleri Falk", status: "ACTIVE", matterType: "Brottmål", paymentMethod: "OFFENTLIGT_UPPDRAG", description: "Förordnad offentlig försvarare vid Stockholms tingsrätt.", klientId: "c-falk", domstolId: "c-tingsratten-sthlm", createdDaysAgo: 18, isTaxeArende: true, taxaLevel: 1, taxaHuvudforhandlingMin: 95, taxaHasFTax: true },
   { id: "m-017-brottmal-omf", matterNumber: "2026-0017", title: "Brottmål — omfattande utredning Davidsson", status: "ACTIVE", matterType: "Brottmål", paymentMethod: "OFFENTLIGT_UPPDRAG", description: "Frångångstaxa pga väsentligt mer arbete (komplex bevisning).", klientId: "c-davidsson", domstolId: "c-hovratten-svea", createdDaysAgo: 35, isTaxeArende: false },
   { id: "m-018-brottmal-ekobrott", matterNumber: "2026-0018", title: "Brottmål — ekobrott Carlsson", status: "ACTIVE", matterType: "Brottmål", paymentMethod: "OFFENTLIGT_UPPDRAG", description: "Misstanke om grovt bokföringsbrott. Omfattande material — kostnadsräkning skickas till domstol istället för enligt taxa.", klientId: "c-carlsson", domstolId: "c-tingsratten-sthlm", createdDaysAgo: 28, isTaxeArende: false },
+  // Överklagandespåret (#828 steg 6): tingsrätten satte ned arvodet, nedsättningen
+  // är överklagad och ärendet väntar på hovrätten. Utan ett ärende som VILAR i det
+  // läget syns varken ÖVERKLAGAD-statusen eller knappen "Registrera hovrättens
+  // beslut" i demon — trots att hela state-maskinen finns i koden.
+  { id: "m-019-brottmal-overklagad", matterNumber: "2026-0019", title: "Brottmål — nedsatt arvode Bergman", status: "ACTIVE", matterType: "Brottmål", paymentMethod: "OFFENTLIGT_UPPDRAG", description: "Tingsrätten satte ned det yrkade arvodet med 25 %. Nedsättningen är överklagad till hovrätten.", klientId: "c-bergman", domstolId: "c-hovratten-svea", createdDaysAgo: 60, isTaxeArende: false },
   // Rättshjälp med TIDSVARIERANDE avgift (#878): klienten var arbetslös (5 %), fick
   // jobb (40 %) och blev arbetslös igen (5 %). Aconton ställdes ut vid de löpande
   // satserna; rättshjälpsmyndighetens SLUTLIGA helhetsbeslut blev 5 % → klienten

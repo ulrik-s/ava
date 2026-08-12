@@ -18,7 +18,7 @@
  * av scenariodispatchern (#882), inte av den här filen.
  */
 
-import { DEMO_BASE_URL, fetchDemoSeed, matterAwaitingVerdict, seedDemoLogin, test, expect } from "./_demo-test";
+import { DEMO_BASE_URL, fetchDemoSeed, matterWithKrStatus, seedDemoLogin, test, expect } from "./_demo-test";
 
 /** Belopp domstolen dömer ut respektive prutar, i kronor. */
 const AWARDED_KR = 12_000;
@@ -29,7 +29,7 @@ test("kostnadsräkning som väntar på dom: registrera beslut → skapa faktura"
   await seedDemoLogin(page, base);
 
   const seed = await fetchDemoSeed(page, base);
-  const matterId = matterAwaitingVerdict(seed);
+  const matterId = matterWithKrStatus(seed, "INSKICKAD");
 
   await page.goto(`${base}/matters/${matterId}/`, { waitUntil: "load" });
   // KR-kortet visar väntetillståndet — det som saknades i demon före #882.
@@ -70,4 +70,36 @@ test("kostnadsräkning som väntar på dom: registrera beslut → skapa faktura"
     expect(await invoiceLinks.count()).toBeGreaterThan(invoicesBefore);
   }).toPass({ timeout: 20_000 });
   await expect(page.getByText(/Väntar på dom/i)).toHaveCount(0);
+});
+
+/**
+ * Överklagandespåret (#828 steg 6). Ärendet vilar i ÖVERKLAGAD, så knappen
+ * "Registrera hovrättens beslut" — den enda vägen till ett SLUTGILTIGT beslut —
+ * går att köra. Före det här fanns spåret bara i koden: ingen KR i demon lämnade
+ * någonsin BESLUTAD, så varken överklagandet eller hovrättsbeslutet syntes.
+ */
+test("överklagad kostnadsräkning: hovrättens beslut är slutgiltigt", async ({ page, baseURL }) => {
+  const base = (baseURL ?? DEMO_BASE_URL).replace(/\/+$/, "");
+  await seedDemoLogin(page, base);
+
+  const seed = await fetchDemoSeed(page, base);
+  const matterId = matterWithKrStatus(seed, "OVERKLAGAD");
+
+  await page.goto(`${base}/matters/${matterId}/`, { waitUntil: "load" });
+  // Ett överklagande är inte avgjort: varken fakturering eller ett nytt
+  // överklagande ska erbjudas medan hovrätten har målet.
+  await expect(page.getByRole("button", { name: /^Registrera hovrättens beslut$/ })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("button", { name: /^Skapa faktura$/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Överklaga prutning$/ })).toHaveCount(0);
+
+  await page.getByRole("button", { name: /^Registrera hovrättens beslut$/ }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel(/Dömt belopp/i).fill(String(AWARDED_KR));
+  await dialog.getByRole("button", { name: /^Spara beslut$/ }).click();
+  await expect(dialog).toBeHidden({ timeout: 15_000 });
+
+  // Hovrättens beslut är slutgiltigt: fakturering öppnas, och det finns inget
+  // mer att överklaga.
+  await expect(page.getByRole("button", { name: /^Skapa faktura$/ })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("button", { name: /^Överklaga prutning$/ })).toHaveCount(0);
 });
