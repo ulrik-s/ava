@@ -20,7 +20,7 @@ ava/
 │   ├── integration/     # seed-smoke + cross-router-tester
 │   ├── setup/           # bun:test-preloads (happy-dom + jest-dom + cleanup)
 │   ├── bun-compat.ts    # vitest→bun:test-shim (vi-API)
-│   └── e2e/             # Playwright (round-trip mot docker)
+│   └── e2e/             # Playwright (demo-svit, OIDC-login, keep-both)
 ├── tooling/
 │   ├── config/          # eslint, playwright, knip, jscpd, dependency-cruiser
 │   ├── docker/          # docker-compose, nginx, web-image, optional auth-server
@@ -48,7 +48,7 @@ lever som JSON i ett git-repo (se [`architecture.md`](./architecture.md)).
 | Bundle-size-budget | gzip-summa av klient-chunks + ratchet (körs i `demo-build`) | `tooling/scripts/check-bundle-size.ts` |
 | Arkitektur (SOLID/lager) | dependency-cruiser | `tooling/config/dependency-cruiser.cjs` |
 | Död kod / oanvända exports | knip | `tooling/config/knip.json` |
-| Säkerhet (SAST) | CodeQL (JS/TS) — `dependency-review` kräver GHAS, ej möjlig (#915) | `.github/workflows/security.yml` |
+| Säkerhet (SAST) | CodeQL (JS/TS). `dependency-review` saknas fortfarande — se noten nedan | `.github/workflows/security.yml` |
 | Sårbara beroenden (CVE) | `bun audit` + ratchet — `low` i båda arbetsytorna | `.github/workflows/security.yml`, `overrides` i båda `package.json` |
 | Beroende-uppdateringar | Dependabot (npm + github-actions) | `.github/dependabot.yml` |
 | Pre-commit | husky + lint-staged | `.husky/pre-commit`, `package.json` |
@@ -316,9 +316,8 @@ Jobben laddar upp sina rapporter som artefakter (coverage, jscpd, playwright-rep
 
 Övriga workflows: **`deploy-demo.yml`** (GH Pages på push till `main`),
 **`helper-ui-ci.yml`** (Electron-helperns logik + motor), **`security.yml`**
-(CodeQL/SAST + `bun audit`-grinden på push/PR + veckovis schema;
-`dependency-review` kräver GitHub Advanced Security och är därför inte möjlig,
-#915) och **`release.yml`**
+(CodeQL/SAST + `bun audit`-grinden på push/PR + veckovis schema) och
+**`release.yml`**
 (tag-triggad paket-release). Beroenden hålls uppdaterade av
 [`.github/dependabot.yml`](../.github/dependabot.yml) (npm root + helper-ui +
 github-actions).
@@ -327,6 +326,13 @@ github-actions).
 > ändring gjord). `demo-build` skyddar en tyst felmod → kandidat för required
 > check ([#911](https://github.com/ulrik-s/ava/issues/911)).
 
+> **Not:** `dependency-review` togs bort ur `security.yml` (PR #912) när den föll
+> på att repo:ts Dependency graph var av. [#915](https://github.com/ulrik-s/ava/issues/915)
+> skulle slå på grafen och återinföra jobbet — issuen är stängd, men **jobbet är
+> inte tillbaka**. Repo:t är numera publikt, så GHAS-blockeraren gäller inte
+> längre; det som återstår är att lägga tillbaka jobbet (SHA-pinnat som övriga
+> actions) och se att det kör grönt.
+
 ## Pre-commit
 
 `husky` + `lint-staged` kör endast på filer som faktiskt ändrats:
@@ -334,7 +340,7 @@ github-actions).
 - `eslint --fix` på alla `.ts`/`.tsx`
 - `tsc --noEmit` (snabb även på stora repos)
 
-Tunga checks (vitest, jscpd, depcruise) körs inte i pre-commit — de kör i CI istället.
+Tunga checks (`bun test`, jscpd, depcruise) körs inte i pre-commit — de kör i CI istället.
 
 ## När tröskelvärden behöver höjas
 

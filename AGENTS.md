@@ -31,14 +31,21 @@ The loop for every change:
    - `bun run quality:fast` — typecheck + type-aware lint + `test:fast`.
    - `bun run build:demo` — the GH Pages static export. **It fails silently in
      CI/Pages otherwise**, so always run it for app changes.
-   - `bun run round-trip` — for changes touching the git push/pull e2e path.
-5. **Open a PR** to `main`. CI runs four required checks that must be green
-   before merge: **Static analysis** (typecheck + ESLint + knip + dep-cruiser
-   + jscpd), **Unit / komponent / integration** (`bun test --parallel` + coverage floor),
-   **E2E (git round-trip)**, and **Commit messages** (commitlint).
+   - `bun run e2e:demo` — the browser suite against the built `out/`. Run it for
+     UI changes and for anything that moves demo-data.
+   - `bun run e2e:conflict` / `bun run e2e:oidc` — only when you touch the
+     conflict (keep-both) or login paths; both need docker up.
+5. **Open a PR** to `main`. CI runs the full matrix and every check must be green
+   before merge: **Commit messages** (commitlint), **Static analysis** (typecheck
+   + ESLint + knip + dep-cruiser + jscpd), **Unit / komponent / integration**
+   (`bun test --parallel` + coverage floor), **Repository (Postgres)**,
+   **Demo build** (static export + bundle-size ratchet), **Demo E2E**,
+   **Server-first (deploy E2E)**, **Keep-both konflikt-E2E**, **E2E (OIDC login)**,
+   **CodeQL** and **bun audit**.
 6. **Self-merge.** No approval is required (solo project, 0 required reviews),
-   but the PR itself is mandatory — merge your own PR once all four checks are
-   green. `gh pr merge --squash` works.
+   but the PR itself is mandatory — merge your own PR once CI is green.
+   `gh pr merge --squash` works. A check that fails on infrastructure (a runner
+   that disappears mid-job) is re-run, never merged past.
 
 `.github/CODEOWNERS` marks the architecture-critical paths (`tooling/config/`,
 `src/lib/shared/schemas/`, `.github/`) — review them with extra care.
@@ -67,9 +74,9 @@ overview. Then [`docs/auth.md`](docs/auth.md) for the self-hosted auth model.
   browser pushes to `http://localhost:8080/git/firma.git` with no CORS proxy.
 - **`rm -rf out` breaks the docker bind-mount** → restart with:
   `docker compose -f tooling/docker/docker-compose.yml restart web`.
-- Run the browser round-trip e2e with `bun run round-trip` (needs docker up +
-  `out/` built). Unit tests: `bun run test` (`bun test --parallel`, ~2334
-  tester). Per-fil-isolering krävs (annars läcker `mock.module`/stubbar
+- Run the browser e2e with `bun run e2e:demo` (needs `out/` built; the config
+  serves it itself — no docker required). Unit tests: `bun run test`
+  (`bun test --parallel`, ~2334 tester). Per-fil-isolering krävs (annars läcker `mock.module`/stubbar
   mellan filer); `--parallel` ger det via en worker-pool (`--isolate`
   kraschar på CI-linux, epoll). Se [[docs/quality.md]] + #92.
 
