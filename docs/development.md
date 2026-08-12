@@ -87,7 +87,7 @@ bun run typecheck           # tsc --noEmit
 bun run lint                # eslint (flat config)
 bun run deps:check          # dependency-cruiser (lagergränser)
 bun run knip                # död kod / oanvända deps
-bun run round-trip          # E2E mot docker (kräver docker upp)
+bun run e2e:demo            # Playwright mot byggd out/ (configen serverar den)
 ```
 
 Se [`quality.md`](./quality.md) för verktyg och tröskelvärden, och
