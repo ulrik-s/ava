@@ -28,8 +28,8 @@ const createInput = z.object({
   title: z.string().min(1),
   description: z.string().nullish(),
   location: z.string().nullish(),
-  startAt: z.date(),
-  endAt: z.date().nullish(),
+  startAt: z.coerce.date(),
+  endAt: z.coerce.date().nullish(),
   allDay: z.boolean().default(false),
   matterId: matterIdSchema.nullish(),
   visibility: calendarEventVisibilitySchema.default("normal"),
@@ -41,7 +41,7 @@ const createInput = z.object({
   // Valfria setup-fält (demo-generator/fixtures, ADR 0003).
   id: calendarEventIdSchema.optional(),
   userId: userIdSchema.optional(),
-  createdAt: z.date().nullish(),
+  createdAt: z.coerce.date().nullish(),
 });
 
 // OBS: separat schema utan `.default()` — annars fyller Zod i defaults för
@@ -53,8 +53,8 @@ const updateInput = z.object({
   title: z.string().min(1).optional(),
   description: z.string().nullish(),
   location: z.string().nullish(),
-  startAt: z.date().optional(),
-  endAt: z.date().nullish(),
+  startAt: z.coerce.date().optional(),
+  endAt: z.coerce.date().nullish(),
   allDay: z.boolean().optional(),
   matterId: matterIdSchema.nullish(),
   visibility: calendarEventVisibilitySchema.optional(),
@@ -92,8 +92,8 @@ export const calendarRouter = router({
   list: protectedProcedure
     .input(
       z.object({
-        from: z.date().optional(),
-        to: z.date().optional(),
+        from: z.coerce.date().optional(),
+        to: z.coerce.date().optional(),
       }).optional(),
     )
     .query(async ({ ctx, input }) => {
@@ -122,8 +122,8 @@ export const calendarRouter = router({
   listForUsers: protectedProcedure
     .input(z.object({
       userIds: z.array(userIdSchema),
-      from: z.date().optional(),
-      to: z.date().optional(),
+      from: z.coerce.date().optional(),
+      to: z.coerce.date().optional(),
     }))
     .query(async ({ ctx, input }) => {
       if (input.userIds.length === 0) return [];
@@ -212,7 +212,7 @@ export const calendarRouter = router({
         outlookEventId: z.string().nullish(),
         mirrorStatus: calendarMirrorStatusSchema.nullable(),
         mirrorError: z.string().nullish(),
-        mirrorLastSyncedAt: z.date().nullish(),
+        mirrorLastSyncedAt: z.coerce.date().nullish(),
       }),
     )
     .mutation(async ({ ctx, input }) => {

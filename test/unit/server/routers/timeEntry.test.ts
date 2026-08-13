@@ -65,8 +65,10 @@ describe("timeEntry.list", () => {
     const to = new Date("2026-12-31");
     await makeCaller().list({ from, to });
     const w = mockPrisma.timeEntry.findMany.mock.calls[0]![0].where;
-    expect(w.date.gte).toBe(from);
-    expect(w.date.lte).toBe(to);
+    // Värde, inte referens: `z.coerce.date()` (#1010) klonar inkommande Date
+    // — filtret ska vara SAMMA TIDPUNKT, inte samma objekt.
+    expect(w.date.gte).toEqual(from);
+    expect(w.date.lte).toEqual(to);
   });
 
   it("returnerar totalMinutes från aggregate", async () => {

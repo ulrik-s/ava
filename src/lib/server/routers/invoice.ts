@@ -19,6 +19,7 @@ import { arvodeInclVatOre, isPaymentPlanSettled } from "@/lib/shared/invoice-cal
 import { canTransition, transitionErrorMessage } from "@/lib/shared/invoice-state-machine";
 import { ocrFromInvoiceNumber } from "@/lib/shared/ocr-reference";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
+import { pageSlice } from "@/lib/shared/paginate";
 import { computeRadgivningsavgift } from "@/lib/shared/rattshjalp";
 import type { Invoice, Payment, PaymentPlan, WriteOff } from "@/lib/shared/schemas/billing";
 import { invoiceStatusSchema, invoiceTypeSchema, type InvoiceStatus } from "@/lib/shared/schemas/enums";
@@ -111,11 +112,14 @@ export const invoiceRouter = router({
         matterId: matterIdSchema.optional(),
         invoiceType: invoiceTypeSchema.optional(),
         status: invoiceStatusSchema.optional(),
+        // Frivillig sidning (#1011): utelämnad pageSize = hela listan, som förut.
+        page: z.number().min(1).optional(),
+        pageSize: z.number().min(1).max(100).optional(),
       }),
     )
     // Migrerad till repository-sömmen (ADR 0020). listForOrg org-scopar +
     // hämtar listvyns include (matter-subset, plan, betalningar, aconto-avdrag).
-    .query(({ ctx, input }) => ctx.repos.invoices.listForOrg(ctx.orgId, input)),
+    .query(async ({ ctx, input }) => pageSlice(await ctx.repos.invoices.listForOrg(ctx.orgId, input), input)),
 
   getById: orgProcedure
     .input(z.object({ id: invoiceIdSchema }))

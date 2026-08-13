@@ -47,6 +47,19 @@ function lastZodInput(inputs: unknown): z.ZodType | null {
 }
 
 /**
+ * Datumfält → `{ type: "string", format: "date-time" }` (#1010).
+ *
+ * zod kan inte själv uttrycka `date` i JSON Schema; utan denna override blev
+ * fältet ett otypat `{}` — modellen såg ett fält utan typ, format eller
+ * ledtråd. Routrarnas datum-inputs är `z.coerce.date()`, så en ISO-sträng är
+ * exakt vad en JSON-klient SKA skicka: override:n annonserar den formen.
+ */
+function overrideDateFields(ctx: { zodSchema: unknown; jsonSchema: Record<string, unknown> }): void {
+  const def = (ctx.zodSchema as { _zod?: { def?: { type?: string } } })._zod?.def;
+  if (def?.type === "date") Object.assign(ctx.jsonSchema, { type: "string", format: "date-time" });
+}
+
+/**
  * zod → JSON-schema.
  *
  * `unrepresentable: "any"` är inte kosmetika (#1008): default:en är `"throw"`,
@@ -55,15 +68,13 @@ function lastZodInput(inputs: unknown): z.ZodType | null {
  * drabbade 13 procedurer, bl.a. `timeEntry.list` (vars `matterId`/`from`/`to`/
  * `page`/`pageSize` blev osynliga → modellen kunde bara begära ALLT) och
  * `calendar.create`/`task.create`, som såg ut att inte ta några argument alls.
- * Med `"any"` blir date-fältet ett otypat `{}` och resten av objektet överlever.
- *
- * Att date-fälten dessutom inte GÅR att fylla i över JSON (`z.date()` avvisar
- * strängar) är en egen brist — se #1010.
+ * `"any"` låter resten av objektet överleva; `overrideDateFields` ger sedan
+ * date-fälten en riktig typ (#1010).
  */
 function toJsonSchema(schema: z.ZodType | null): unknown {
   if (!schema) return null;
   try {
-    return z.toJSONSchema(schema, { io: "input", unrepresentable: "any" });
+    return z.toJSONSchema(schema, { io: "input", unrepresentable: "any", override: overrideDateFields });
   } catch {
     return null;
   }
