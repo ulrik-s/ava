@@ -296,3 +296,40 @@ describe("buildKostnadsrakningContext — rådgivningstimme (#383)", () => {
     expect(withR.billableArbetsMinutes).toBe(90);
   });
 });
+
+/**
+ * Brottmålstaxans årgång i kostnadsräkningen (#1004).
+ *
+ * Taxebeloppet ska väljas på YRKANDEDATUMET, precis som timkostnadsnormen redan
+ * gjorde (#980) — övergångsbestämmelserna knyter ersättningen till när räkningen
+ * framställs, inte till när förhandlingen hölls. Testet räknar samma förhandling
+ * två gånger, med yrkandedatum på var sin sida om ett årsskifte.
+ */
+describe("buildKostnadsrakningContext — taxans årgång (#1004)", () => {
+  /** Huvudförhandling i december 2025: 95 min, nivå 1. Bara yrkandedatumet skiljer. */
+  const decemberHuf = {
+    ...baseInput,
+    hufStart: new Date("2025-12-15T09:00:00"),
+    hufEnd: new Date("2025-12-15T10:35:00"),
+    timeEntries: [],
+  };
+
+  it("yrkande före årsskiftet → 2025 års taxa (5 495 kr)", () => {
+    const r = buildKostnadsrakningContext({ ...decemberHuf, yrkandeDate: "2025-12-20" });
+    expect(r.taxa.kind).toBe("taxa-applies");
+    expect(r.arvodeExclVat).toBe(549_500);
+  });
+
+  it("yrkande efter årsskiftet → 2026 års taxa (5 635 kr), samma förhandling", () => {
+    const r = buildKostnadsrakningContext({ ...decemberHuf, yrkandeDate: "2026-01-10" });
+    expect(r.arvodeExclVat).toBe(563_500);
+  });
+
+  it("momsen räknas på årets belopp, inte på ett fastfruset", () => {
+    const r2025 = buildKostnadsrakningContext({ ...decemberHuf, yrkandeDate: "2025-12-20" });
+    const r2026 = buildKostnadsrakningContext({ ...decemberHuf, yrkandeDate: "2026-01-10" });
+    expect(r2025.arvodeMoms).toBe(Math.round(549_500 * 0.25));
+    expect(r2026.arvodeMoms).toBe(Math.round(563_500 * 0.25));
+    expect(r2026.totalInclVat).toBeGreaterThan(r2025.totalInclVat);
+  });
+});

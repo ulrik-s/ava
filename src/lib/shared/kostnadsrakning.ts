@@ -195,8 +195,11 @@ function resolveTaxa(
   level: TaxaLevel,
 ): TaxaResult {
   const isTaxe = input.isTaxeArende ?? true;
+  // Yrkandedatumet väljer taxans ÅRGÅNG (#1004), på samma sätt som det väljer
+  // timkostnadsnormens år (#980) — övergångsbestämmelserna knyter ersättningen
+  // till när räkningen framställs.
   return isTaxe
-    ? computeBrottmalstaxa({ huvudforhandlingMinutes, level, hasFTax: input.hasFTax ?? true })
+    ? computeBrottmalstaxa({ huvudforhandlingMinutes, level, hasFTax: input.hasFTax ?? true, yrkandeDate: yrkandeDateOf(input) })
     : timkostnadsnormResult(totalArbetsMinutes, input.hasFTax ?? true);
 }
 
