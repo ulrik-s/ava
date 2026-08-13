@@ -25,6 +25,7 @@ import { describe, it, expect } from "vitest-compat";
 import { createLocalCaller } from "../../tooling/ava-cli/caller";
 import { listProcedures } from "../../tooling/ava-cli/introspect";
 import { buildAvaMcpServer, MCP_SERVER_NAME, toolName } from "../../tooling/ava-cli/mcp";
+import { MCP_DEFAULT_PAGE_SIZE } from "../../tooling/ava-cli/tool-descriptions";
 
 type Era = "modern" | "legacy";
 
@@ -157,6 +158,71 @@ describe.each<Era>(["legacy", "modern"])("ava-mcp över %s-epoken", (era) => {
     const { client, close } = await connect(era);
     try {
       await expect(client.callTool({ name: "finns__inte", arguments: {} })).rejects.toThrow();
+    } finally {
+      await close();
+    }
+  });
+});
+
+/**
+ * Utdatabudget (#1008) — en RATCHET i samma anda som bundle-size.
+ *
+ * MCP-klienter kapar verktygssvar (Claude Code varnar över 10 000 tokens och
+ * kapar vid 25 000). Ett kapat svar är värre än ett kort: JSON:en huggs av mitt
+ * i och modellen läser en halv sanning. Före #1008 låg `timeEntry.list` på
+ * 61,7 KB — på demo-seedens 130 tidsposter.
+ *
+ * Golvet är satt strax över dagens värsta (`invoice.list`, 43 758 tecken) och
+ * ska BARA flyttas nedåt. De värsta kvarvarande är de listor som saknar
+ * paginering helt (`invoice.list`, `paymentPlan.list`, `task.list`) — se #1011.
+ */
+const OUTPUT_BUDGET_CHARS = 45_000;
+
+describe("verktygens utdatabudget", () => {
+  it("inget verktyg som går att anropa utan argument spränger budgeten", async () => {
+    const { client, close } = await connect("legacy");
+    try {
+      // Procedurer med obligatorisk input kan inte anropas blint — de mäts inte
+      // här. Antalet asserteras så urvalet inte kan krympa tyst.
+      const callable = listProcedures().filter((p) => {
+        const schema = p.inputSchema as { required?: string[] } | null;
+        return p.type === "query" && (schema === null || (schema.required ?? []).length === 0);
+      });
+      expect(callable.length).toBeGreaterThanOrEqual(22);
+
+      const oversized: string[] = [];
+      for (const p of callable) {
+        const res = await client.callTool({ name: toolName(p.path), arguments: {} });
+        const size = textOf(res).length;
+        if (size > OUTPUT_BUDGET_CHARS) oversized.push(`${p.path}: ${size}`);
+      }
+      expect(oversized, `över budget (${OUTPUT_BUDGET_CHARS} tecken): ${oversized.join(", ")}`).toEqual([]);
+    } finally {
+      await close();
+    }
+  }, 60_000);
+
+  it("paginerade verktyg får MCP-ytans sidstorlek, inte zods egen", async () => {
+    // `timeEntry.list` har pageSize-default 50 i zod → 61,7 KB. MCP-ytan
+    // begränsar till 10 rader när modellen inte sagt något.
+    const { client, close } = await connect("legacy");
+    try {
+      const res = await client.callTool({ name: "timeEntry__list", arguments: {} });
+      const data = JSON.parse(textOf(res)) as { entries: unknown[]; total: number };
+      expect(data.entries).toHaveLength(MCP_DEFAULT_PAGE_SIZE);
+      // Totalen ska fortfarande berätta hur mycket som finns — annars vet
+      // modellen inte att den bara sett en sida.
+      expect(data.total).toBeGreaterThan(MCP_DEFAULT_PAGE_SIZE);
+    } finally {
+      await close();
+    }
+  });
+
+  it("modellen kan begära fler rader själv", async () => {
+    const { client, close } = await connect("legacy");
+    try {
+      const res = await client.callTool({ name: "timeEntry__list", arguments: { pageSize: 30 } });
+      expect((JSON.parse(textOf(res)) as { entries: unknown[] }).entries).toHaveLength(30);
     } finally {
       await close();
     }

@@ -46,11 +46,24 @@ function lastZodInput(inputs: unknown): z.ZodType | null {
   return last instanceof z.ZodType ? last : null;
 }
 
-/** zod → JSON-schema; fail-soft till `null` för scheman zod inte kan serialisera. */
+/**
+ * zod → JSON-schema.
+ *
+ * `unrepresentable: "any"` är inte kosmetika (#1008): default:en är `"throw"`,
+ * och zod vägrar serialisera `z.date()`. Ett enda date-fält fällde alltså HELA
+ * schemat till `null` — och MCP annonserade verktyget som parameterlöst. Det
+ * drabbade 13 procedurer, bl.a. `timeEntry.list` (vars `matterId`/`from`/`to`/
+ * `page`/`pageSize` blev osynliga → modellen kunde bara begära ALLT) och
+ * `calendar.create`/`task.create`, som såg ut att inte ta några argument alls.
+ * Med `"any"` blir date-fältet ett otypat `{}` och resten av objektet överlever.
+ *
+ * Att date-fälten dessutom inte GÅR att fylla i över JSON (`z.date()` avvisar
+ * strängar) är en egen brist — se #1010.
+ */
 function toJsonSchema(schema: z.ZodType | null): unknown {
   if (!schema) return null;
   try {
-    return z.toJSONSchema(schema, { io: "input" });
+    return z.toJSONSchema(schema, { io: "input", unrepresentable: "any" });
   } catch {
     return null;
   }
