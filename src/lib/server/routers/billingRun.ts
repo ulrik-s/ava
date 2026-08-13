@@ -20,7 +20,7 @@ import { accontoCreditAmounts, accontoCreditLines, accontoSplit, deductAcconto }
 import type { VatBreakdownLine } from "@/lib/shared/accounting/semantic-voucher";
 import { assertBillingTransition, type BillingActionType } from "@/lib/shared/billing-flow";
 import { proposedAccontoOre } from "@/lib/shared/billing-proposal";
-import { TIMKOSTNADSNORM_FTAX_ORE_PER_H, coverageEntryRateOre } from "@/lib/shared/brottmalstaxa";
+import { TIMKOSTNADSNORM_FTAX_ORE_PER_H, coverageEntryRateOre, coverageEntryValueOre, isPerDayKind, payableCoverageEntries } from "@/lib/shared/brottmalstaxa";
 import { computeCoverageSplit, partitionRattsskyddMinutes, type CoverageSplit, type RattsskyddClientParts } from "@/lib/shared/coverage-billing";
 import { chargedExpenseLines } from "@/lib/shared/expense-vat";
 import { arvodeInclVatOre } from "@/lib/shared/invoice-calc";
@@ -91,6 +91,20 @@ interface BillingProposal {
 /** Värdet på en (debiterbar) tidspost i öre — speglar workValueOre:s ton. */
 function timeEntryValueOre(minutes: number, hourlyRate: number): number {
   return Math.round((minutes / 60) * hourlyRate);
+}
+
+/** Postens värde när det är postens EGEN taxa som gäller (privat/offentligt
+ *  uppdrag, fakturaförslaget) — i motsats till täckningsärendenas årsnormer.
+ *
+ *  Per-dygns-kategorier (#950) värderas ändå på Domstolsverkets dagbelopp för
+ *  postens datum: advokatberedskapens garantiersättning är en föreskriven norm
+ *  (DVFS 2025:9 § 1), inte byråns timtaxa. Utan undantaget blir de noll —
+ *  `minuter × taxa` med noll minuter — och försvinner tyst ur både
+ *  kostnadsräkningen och "Upparbetat ofakturerat". */
+function entryOwnValueOre(
+  t: { minutes: number; hourlyRate: number; date: Date | string; kind?: TimeEntryKind | null | undefined },
+): number {
+  return isPerDayKind(t.kind) ? coverageEntryValueOre(t, t.date) : timeEntryValueOre(t.minutes, t.hourlyRate);
 }
 
 /**
@@ -226,9 +240,8 @@ function resolveAwardedOre(krRun: BillingRunListRow | undefined, inputAwardedOre
 
 /** Arvode netto (exkl. moms) — summa av debiterbara tidsposter. */
 function arvodeNetOre(work: UnfrozenWork): number {
-  return work.timeEntries
-    .filter((t) => t.billable)
-    .reduce((sum, t) => sum + timeEntryValueOre(t.minutes, t.hourlyRate), 0);
+  return payableCoverageEntries(work.timeEntries.filter((t) => t.billable))
+    .reduce((sum, t) => sum + entryOwnValueOre(t), 0);
 }
 
 
@@ -272,10 +285,13 @@ function settlementArvodeNet(method: PaymentMethod, work: UnfrozenWork, settleDa
   // PRIVAT/offentligt debiterar byråns egen taxa (ligger på posten) — bara
   // täckningsärenden ersätts enligt Domstolsverkets nivåer (#950).
   if (method !== "RATTSHJALP" && method !== "RATTSSKYDD") return arvodeNetOre(work);
-  const byKind = minutesByKind(billable);
+  // DVFS 2025:9 § 2 (#950): beredskapsdagar som "förbrukats" av en helgförhandling
+  // eller ett polisförhör samma dag ersätts inte — arbetet betalas i stället.
+  const payable = payableCoverageEntries(billable);
+  const byKind = minutesByKind(payable);
   // Rådgivningstimmen carvas ur ARBETE (rättshjälp) — den faktureras klienten separat.
   byKind.set("ARBETE", coverageBaseMinutes(method, byKind.get("ARBETE") ?? 0));
-  return sumKindValueOre(byKind, settleDate);
+  return sumKindValueOre(byKind, settleDate) + perDayValueOre(payable, settleDate);
 }
 
 /** Debiterbara minuter grupperade per arvodeskategori (#950). */
@@ -285,9 +301,23 @@ function minutesByKind(
   const byKind = new Map<TimeEntryKind, number>();
   for (const t of billable) {
     const kind = t.kind ?? "ARBETE";
+    // Per-dygns-kategorier har inga minuter att gruppera (#950) — de värderas
+    // av `perDayValueOre` och ska inte belasta timbaserade tak eller carve-outs.
+    if (isPerDayKind(kind)) continue;
     byKind.set(kind, (byKind.get(kind) ?? 0) + t.minutes);
   }
   return byKind;
+}
+
+/** Summan av per-dygns-posternas garantiersättning på slutregleringsårets
+ *  belopp (#950). Anroparen har redan filtrerat bort dagar som § 2 tar. */
+function perDayValueOre(
+  entries: ReadonlyArray<{ date: Date | string; minutes: number; kind?: TimeEntryKind | null | undefined }>,
+  settleDate: Date | string,
+): number {
+  return entries
+    .filter((e) => isPerDayKind(e.kind))
+    .reduce((sum, e) => sum + coverageEntryValueOre(e, settleDate), 0);
 }
 
 /** Summera kategoriernas minuter på respektive årsnorm (#950). */
@@ -458,13 +488,15 @@ function krGrossOre(work: UnfrozenWork, arvodeNet: number): number {
 
 /** Bygg ett itemiserat fakturaförslag ur ofrysta tids-/utläggsrader (#397). */
 function buildProposal(
-  te: ReadonlyArray<{ id: string; description?: string | null; minutes: number; hourlyRate: number; billable: boolean }>,
+  te: ReadonlyArray<{ id: string; description?: string | null; minutes: number; hourlyRate: number; billable: boolean; date: Date | string; kind?: TimeEntryKind | null | undefined }>,
   ex: ReadonlyArray<{ id: string; description?: string | null; amount: number; billable: boolean; kind?: ExpenseKind }>,
   priorAccontoSumOre: number,
 ): BillingProposal {
-  const timeEntries: ProposalTimeEntry[] = te.map((t) => ({
+  // § 2-filtret först (#950): en beredskapsdag som förbrukats av helgförhandling
+  // ska inte ens synas som fakturerbar rad.
+  const timeEntries: ProposalTimeEntry[] = payableCoverageEntries(te).map((t) => ({
     id: t.id, description: t.description ?? "", minutes: t.minutes, hourlyRate: t.hourlyRate,
-    billable: t.billable, valueOre: timeEntryValueOre(t.minutes, t.hourlyRate),
+    billable: t.billable, valueOre: entryOwnValueOre(t),
   }));
   const expenses: ProposalExpense[] = ex
     .filter((e) => e.kind !== "PRUTNING")
@@ -605,13 +637,14 @@ export interface SettlementBreakdown {
 function buildClientArvodeLines(
   method: PaymentMethod, rateOre: number, work: UnfrozenWork, totalArvodeNet: number, settleDate: Date | string,
 ): SpecTimeLine[] {
-  const billable = work.timeEntries.filter((t) => t.billable);
+  const billable = payableCoverageEntries(work.timeEntries.filter((t) => t.billable));
   const entries = method === "RATTSHJALP" ? carveEarliestMinutes(billable, RADGIVNING_MINUTES) : billable;
   // #891/#950: varje rad värderas på sin KATEGORIS norm för slutregleringsåret —
-  // för alla betalningssätt, så raderna summerar till `totalArvodeNet`.
+  // för alla betalningssätt, så raderna summerar till `totalArvodeNet`. Per-dygns-
+  // kategorier (advokatberedskap) får sitt dagbelopp, inte minuter × norm.
   const lines: SpecTimeLine[] = entries.map((t) => ({
     date: t.date, description: t.description, minutes: t.minutes, kind: t.kind,
-    amountOre: timeEntryValueOre(t.minutes, coverageEntryRateOre(t.kind, settleDate)),
+    amountOre: coverageEntryValueOre(t, settleDate),
   }));
   const sum = lines.reduce((s, l) => s + l.amountOre, 0);
   const last = lines[lines.length - 1];

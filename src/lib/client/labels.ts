@@ -137,6 +137,7 @@ export const TIME_ENTRY_KIND_SHORT: Record<TimeEntryKind, string> = {
   ARBETE_OBEKVAM_TID: "Obekväm tid",
   TIDSSPILLAN: "Tidsspillan",
   TIDSSPILLAN_OVRIG_TID: "Tidsspillan annan tid",
+  ADVOKATBEREDSKAP: "Beredskap (dag)",
 };
 
 export const CREDIT_RISK_LABELS: Record<CreditRisk, string> = {

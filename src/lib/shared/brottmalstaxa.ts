@@ -93,13 +93,21 @@ const ARBETE_OBEKVAM_FTAX_BY_YEAR: Readonly<Record<number, number>> = {
 };
 
 /**
- * Advokatberedskap — garantiersättning per DAG (ej per timme), öre exkl moms
- * (DVFS 2024:20 / 2025:7). Utgår INTE för dag då arvode enligt helg- eller
- * polisförhörsföreskriften utgår.
+ * Advokatberedskap — garantiersättning per DAG (ej per timme), öre exkl moms.
+ *
+ * Tingsrätten får tillerkänna den som åtagit sig att vid behov delta i
+ * häktningsförhandling under *söndag, annan allmän helgdag, lördag,
+ * midsommarafton, julafton eller nyårsafton* ersättning "för varje dag som
+ * beredskapen upprätthålls" (DVFS 2024:20 § 1 resp. DVFS 2025:9 § 1).
+ *
+ * § 2 i samma föreskrifter: garantiersättning utgår INTE för dag när biträdet
+ * är berättigat ersättning för arbete på grund av att en helgförhandling
+ * (DVFS 2025:7) eller ett polisförhör utanför ordinarie kontorstid
+ * (DVFS 2025:8) ägt rum — se {@link payableCoverageEntries}.
  */
 const ADVOKATBEREDSKAP_FTAX_BY_YEAR: Readonly<Record<number, number>> = {
-  2025: 248_700, // 2 487 kr/dag
-  2026: 255_000, // 2 550 kr/dag
+  2025: 248_700, // 2 487 kr/dag (DVFS 2024:20 § 1)
+  2026: 255_000, // 2 550 kr/dag (DVFS 2025:9 § 1)
 };
 
 /**
@@ -142,6 +150,72 @@ export function arbeteObekvamFtaxForDate(date: Date | string): number {
 /** Advokatberedskapens garantiersättning per DAG (F-skatt) ett givet datum (#950). */
 export function advokatberedskapFtaxForDate(date: Date | string): number {
   return ADVOKATBEREDSKAP_FTAX_BY_YEAR[yearOf(date)] ?? ADVOKATBEREDSKAP_FTAX_BY_YEAR[2026] ?? 0;
+}
+
+/**
+ * Ersätts kategorin per DAG i stället för per timme (#950)? Advokatberedskapens
+ * garantiersättning utgår "för varje dag som beredskapen upprätthålls"
+ * (DVFS 2025:9 § 1) — den har ingen timnorm, och en post är ett dygn.
+ *
+ * Egen predikat-funktion i st.f. en jämförelse på anropsplatsen: varje ställe
+ * som värderar tid måste veta skillnaden, och en bortglömd plats blir ett
+ * belopp som tyst räknas som noll (minuter × ingen norm).
+ */
+export function isPerDayKind(kind: TimeEntryKind | null | undefined): boolean {
+  return kind === "ADVOKATBEREDSKAP";
+}
+
+/** Det en tidspost behöver bära för att kunna värderas. */
+export interface CoverageEntryLike {
+  date: Date | string;
+  minutes: number;
+  kind?: TimeEntryKind | null | undefined;
+  /** Utelämnad → debiterbar (posterna som når hit är oftast redan filtrerade). */
+  billable?: boolean | undefined;
+}
+
+/**
+ * Värdet (öre, netto) av EN post i ett täckningsärende, på normerna som gäller
+ * `date` — postens eget datum när den registreras, slutregleringsdatumet när
+ * arbetet värderas om retroaktivt (#891).
+ *
+ * Den ENDA vägen att värdera en tidspost: per-dygns-kategorier har ingen
+ * timnorm, så `minuter × norm` ger noll för dem.
+ */
+export function coverageEntryValueOre(entry: CoverageEntryLike, date: Date | string): number {
+  if (isPerDayKind(entry.kind)) return advokatberedskapFtaxForDate(date);
+  return Math.round((entry.minutes / 60) * coverageEntryRateOre(entry.kind, date));
+}
+
+/** Dagnyckel (YYYY-MM-DD) — jämförelsen i § 2 gäller DAG, inte tidpunkt. */
+function dayKey(date: Date | string): string {
+  const d = new Date(date);
+  return Number.isNaN(d.getTime()) ? String(date) : (d.toISOString().split("T")[0] ?? "");
+}
+
+/**
+ * Posterna som faktiskt ersätts (#950, DVFS 2025:9 § 2).
+ *
+ * Garantiersättning för advokatberedskap utgår inte för en dag då biträdet är
+ * berättigat ersättning för ARBETE till följd av att en helgförhandling eller
+ * ett polisförhör utanför ordinarie kontorstid ägt rum — i AVA:s modell en
+ * debiterbar `ARBETE_OBEKVAM_TID`-post samma dag. Beredskapen ersätter att man
+ * stått till förfogande; blev man faktiskt inkallad betalas arbetet i stället.
+ *
+ * Icke-debiterbart arbete räknas inte: då är biträdet inte "berättigat
+ * ersättning", och garantin står kvar.
+ *
+ * Övriga poster passerar orörda, så funktionen kan läggas först i varje
+ * värderingsväg utan att förändra något annat.
+ */
+export function payableCoverageEntries<T extends CoverageEntryLike>(entries: readonly T[]): T[] {
+  const workedDays = new Set(
+    entries
+      .filter((e) => e.kind === "ARBETE_OBEKVAM_TID" && e.billable !== false)
+      .map((e) => dayKey(e.date)),
+  );
+  if (workedDays.size === 0) return [...entries];
+  return entries.filter((e) => !isPerDayKind(e.kind) || !workedDays.has(dayKey(e.date)));
 }
 
 /**

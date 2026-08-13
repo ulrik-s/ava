@@ -217,6 +217,59 @@ describe("runSimulation (#880 integration)", () => {
   });
 
   /**
+   * #950: advokatberedskapens garantiersättning. Kategorin ersätts per DYGN och
+   * bär noll minuter, så varje väg som räknar `minuter × taxa` ger tyst noll —
+   * demon är därför den bästa grinden mot att den försvinner igen. Här påstås
+   * dessutom att BÅDA utfallen finns i datan: en beredskapsdag som ersätts, och
+   * en som förbrukats av en helgförhandling (DVFS 2025:9 § 2).
+   */
+  it("brottmålen har beredskapsdygn — både ersatta och förbrukade", async () => {
+    const { c } = await simulateDemo();
+    const matters = (await c.matter.list({})).matters as Any[];
+    const brottmal = matters.filter((m: Any) => m.paymentMethod === "OFFENTLIGT_UPPDRAG");
+    expect(brottmal.length, "seeden har brottmål").toBeGreaterThan(0);
+
+    const entries = (await Promise.all(brottmal.map(async (m: Any) => {
+      const res = await c.timeEntry.list({ matterId: m.id, pageSize: 100 });
+      return (res.entries ?? res.timeEntries ?? []) as Any[];
+    }))).flat();
+
+    const beredskap = entries.filter((t: Any) => t.kind === "ADVOKATBEREDSKAP");
+    expect(beredskap.length, "beredskapsdygn finns").toBeGreaterThan(0);
+    expect(beredskap.every((t: Any) => t.minutes === 0), "beredskap bär noll minuter").toBe(true);
+
+    // Minst ett dygn krockar med en helgförhandling → § 2 slår till någonstans.
+    const day = (d: unknown) => new Date(String(d)).toISOString().slice(0, 10);
+    const obekvamDays = new Set(entries.filter((t: Any) => t.kind === "ARBETE_OBEKVAM_TID").map((t: Any) => day(t.date)));
+    expect(beredskap.some((t: Any) => obekvamDays.has(day(t.date))), "en beredskapsdag är förbrukad av helgförhandling").toBe(true);
+    expect(beredskap.some((t: Any) => !obekvamDays.has(day(t.date))), "en beredskapsdag ersätts").toBe(true);
+  });
+
+  /**
+   * #950 steg 4: ett ärende ska visa HELA kategoribredden tillsammans med en
+   * prutning och utlägg med olika momssatser — annars går sammanställningens
+   * taxerader inte att granska mot verkligheten någonstans i demon.
+   */
+  it("ett brottmål använder alla arvodeskategorier + flera momssatser", async () => {
+    const { c } = await simulateDemo();
+    const matters = (await c.matter.list({})).matters as Any[];
+
+    const spreads = await Promise.all(matters.map(async (m: Any) => {
+      const te = await c.timeEntry.list({ matterId: m.id, pageSize: 100 });
+      const ex = await c.expense.list({ matterId: m.id, pageSize: 100 });
+      return {
+        kinds: new Set(((te.entries ?? te.timeEntries ?? []) as Any[]).map((t: Any) => t.kind ?? "ARBETE")),
+        vatRates: new Set(((ex.expenses ?? ex.items ?? ex) as Any[]).map((e: Any) => e.vatRate)),
+      };
+    }));
+
+    const ALL_KINDS = ["ARBETE", "ARBETE_OBEKVAM_TID", "TIDSSPILLAN", "TIDSSPILLAN_OVRIG_TID", "ADVOKATBEREDSKAP"];
+    const full = spreads.find((s) => ALL_KINDS.every((k) => s.kinds.has(k)));
+    expect(full, `inget ärende har alla kategorier: ${ALL_KINDS.join(", ")}`).toBeTruthy();
+    expect(full!.vatRates.size, "…och mer än en momssats bland utläggen").toBeGreaterThan(1);
+  });
+
+  /**
    * #828 steg 6: demodata i ALLA lägen. Kostnadsräkningens state-maskin har fyra
    * statusar, och panelen har en egen vy per status — men demon visade bara två
    * (inskickad och fakturerad). Överklagandespåret fanns bara i koden: varken

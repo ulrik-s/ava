@@ -17,7 +17,7 @@
  *   - `templateContext` — Handlebars-context (matchar default-mallen)
  */
 
-import { computeBrottmalstaxa, computeTimkostnadsnorm, TIMKOSTNADSNORM_NO_FTAX_ORE_PER_H, timkostnadsnormFtaxForDate, tidsspillanFtaxForDate, type TaxaLevel, type TaxaResult } from "./brottmalstaxa";
+import { applyNoFTaxFactorForDate, computeBrottmalstaxa, computeTimkostnadsnorm, coverageEntryRateOre, coverageEntryValueOre, isPerDayKind, payableCoverageEntries, timkostnadsnormFtaxForDate, type TaxaLevel, type TaxaResult } from "./brottmalstaxa";
 import { RADGIVNING_MINUTES, radgivningTextRad } from "./rattshjalp";
 import type { TimeEntryKind } from "./schemas/enums";
 import { splitVat } from "./vat";
@@ -165,6 +165,11 @@ function timkostnadsnormResult(totalArbetsMinutes: number, hasFTax: boolean): Ta
  * timmen är ärendets första timme, faktureras klienten separat och ligger utanför
  * domstolens kostnadsräkning. Hela poster utelämnas tills kvoten är uppfylld; en
  * post som delvis överlappar krymps med resterande minuter.
+ *
+ * Poster UTAN minuter passerar orörda (#950): en post som inte är arbetad tid —
+ * advokatberedskapens garantiersättning per dygn — kan inte vara en del av
+ * ärendets första timme. Utan undantaget hade `0 <= left` svalt hela posten och
+ * ersättningen försvunnit tyst, utan att ens konsumera en minut av kvoten.
  */
 export function carveEarliestMinutes<T extends { date: Date | string; minutes: number }>(
   entries: readonly T[],
@@ -174,7 +179,7 @@ export function carveEarliestMinutes<T extends { date: Date | string; minutes: n
   let left = carveMinutes;
   const out: T[] = [];
   for (const t of sorted) {
-    if (left <= 0) { out.push(t); continue; }
+    if (left <= 0 || t.minutes === 0) { out.push(t); continue; }
     if (t.minutes <= left) { left -= t.minutes; continue; } // hela posten är rådgivning → utelämna
     out.push({ ...t, minutes: t.minutes - left }); // delvis → krymp
     left = 0;
@@ -312,17 +317,33 @@ function valuateTimeLines(
 ): { timeLines: TimeLine[]; arvodeNorm: number } {
   const isTaxe = input.isTaxeArende ?? true;
   const hasFTax = input.hasFTax ?? true;
-  const arvodeNorm = hasFTax ? timkostnadsnormFtaxForDate(valDate) : TIMKOSTNADSNORM_NO_FTAX_ORE_PER_H;
-  const tidsNorm = hasFTax ? tidsspillanFtaxForDate(valDate) : TIMKOSTNADSNORM_NO_FTAX_ORE_PER_H;
-  const timeLines = entries.map((t): TimeLine => {
-    const isTids = t.kind === "TIDSSPILLAN";
-    const rateOrePerH = isTaxe ? 0 : (isTids ? tidsNorm : arvodeNorm);
-    return {
-      id: t.id, date: toIsoDate(t.date), description: t.description, minutes: t.minutes,
-      rateOrePerH, amountOre: Math.round((t.minutes / 60) * rateOrePerH), isTidsspillan: isTids,
-    };
-  });
+  const forFTax = (ore: number): number => (hasFTax ? ore : applyNoFTaxFactorForDate(ore, valDate));
+  const arvodeNorm = forFTax(timkostnadsnormFtaxForDate(valDate));
+  const timeLines = entries.map((t): TimeLine => valuateTimeLine(t, { isTaxe, valDate, forFTax }));
   return { timeLines, arvodeNorm };
+}
+
+/**
+ * En rad i tidsspecifikationen. Kategorin styr normen (#950/#953): arbete,
+ * obekväm tid och de två tidsspillan-nivåerna har var sin årsnorm, och
+ * advokatberedskapen ersätts per DAG — den har ingen timnorm alls, så `á-pris`
+ * står tomt (0) och beloppet är dagbeloppet.
+ *
+ * Taxa-ärenden: alla rader är informativa (0), beloppet styrs av brottmålstaxan.
+ * Det gäller även beredskapen — den ligger utanför taxans arvode och yrkas för
+ * sig; se noten i `buildKostnadsrakningContext`.
+ */
+function valuateTimeLine(
+  t: TimeEntryInput,
+  ctx: { isTaxe: boolean; valDate: Date; forFTax: (ore: number) => number },
+): TimeLine {
+  const perDay = isPerDayKind(t.kind);
+  const rateOrePerH = ctx.isTaxe || perDay ? 0 : ctx.forFTax(coverageEntryRateOre(t.kind, ctx.valDate));
+  const amountOre = ctx.isTaxe ? 0 : ctx.forFTax(coverageEntryValueOre(t, ctx.valDate));
+  return {
+    id: t.id, date: toIsoDate(t.date), description: t.description, minutes: t.minutes,
+    rateOrePerH, amountOre, isTidsspillan: t.kind === "TIDSSPILLAN" || t.kind === "TIDSSPILLAN_OVRIG_TID",
+  };
 }
 
 export function buildKostnadsrakningContext(input: BuildInput): KostnadsrakningResult {
@@ -335,7 +356,9 @@ export function buildKostnadsrakningContext(input: BuildInput): KostnadsrakningR
   // ligger HELT utanför kostnadsräkningen till domstolen (#868): den carvas bort
   // ur BÅDE tidsspecifikationen och arvodes-underlaget — annars ser det ut som att
   // domstolen debiteras för samma timme (dubbel-debitering). Notisen förklarar den.
-  const allBillable = (input.timeEntries ?? []).filter((t) => t.billable !== false);
+  // DVFS 2025:9 § 2 (#950): beredskapsdagar som förbrukats av en helgförhandling
+  // eller ett polisförhör samma dag yrkas inte — arbetet yrkas i stället.
+  const allBillable = payableCoverageEntries((input.timeEntries ?? []).filter((t) => t.billable !== false));
   const billableTimeEntries = input.matter.radgivningPaid
     ? carveEarliestMinutes(allBillable, RADGIVNING_MINUTES)
     : allBillable;
