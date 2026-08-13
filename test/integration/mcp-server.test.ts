@@ -26,6 +26,7 @@ import { createLocalCaller } from "../../tooling/ava-cli/caller";
 import { listProcedures } from "../../tooling/ava-cli/introspect";
 import { buildAvaMcpServer, MCP_SERVER_NAME, toolName } from "../../tooling/ava-cli/mcp";
 import { MCP_DEFAULT_PAGE_SIZE } from "../../tooling/ava-cli/tool-descriptions";
+import { outputDescribedPaths } from "../../tooling/ava-cli/tool-outputs";
 
 type Era = "modern" | "legacy";
 
@@ -165,6 +166,128 @@ describe.each<Era>(["legacy", "modern"])("ava-mcp över %s-epoken", (era) => {
 });
 
 /**
+ * Datumfält över JSON (#1010). Före `z.coerce.date()` avvisade dessa
+ * procedurer varje ISO-sträng — `calendar.create` och `task.create` gick
+ * bokstavligen inte att använda från en JSON-klient, och `timeEntry.list`
+ * kunde inte begränsas till en period.
+ */
+describe("datum över MCP (#1010)", () => {
+  it("calendar.create tar ISO-strängar och skapar händelsen", async () => {
+    const { client, close } = await connect("legacy");
+    try {
+      const created = await client.callTool({
+        name: "calendar__create",
+        arguments: { title: "Huvudförhandling", startAt: "2026-09-01T09:00:00.000Z", endAt: "2026-09-01T11:00:00.000Z" },
+      });
+      expect(created.isError, textOf(created)).toBeFalsy();
+      const ev = JSON.parse(textOf(created)) as { id: string; startAt: string };
+      expect(new Date(ev.startAt).toISOString()).toBe("2026-09-01T09:00:00.000Z");
+      // Skrivningen är verklig: händelsen syns i listan.
+      const listed = await client.callTool({ name: "calendar__list", arguments: {} });
+      expect(textOf(listed)).toContain(ev.id);
+    } finally {
+      await close();
+    }
+  });
+
+  it("task.create tar en ISO-förfallodag", async () => {
+    const { client, close } = await connect("legacy");
+    try {
+      const created = await client.callTool({
+        name: "task__create",
+        arguments: { title: "Överklaga prutningen", dueAt: "2026-09-15T12:00:00.000Z" },
+      });
+      expect(created.isError, textOf(created)).toBeFalsy();
+      expect(new Date((JSON.parse(textOf(created)) as { dueAt: string }).dueAt).getUTCDate()).toBe(15);
+    } finally {
+      await close();
+    }
+  });
+
+  it("timeEntry.list kan begränsas till en period med ISO-strängar", async () => {
+    const { client, close } = await connect("legacy");
+    try {
+      const all = JSON.parse(textOf(await client.callTool({ name: "timeEntry__list", arguments: { pageSize: 100 } }))) as { total: number };
+      const none = JSON.parse(textOf(await client.callTool({
+        name: "timeEntry__list",
+        arguments: { from: "1990-01-01T00:00:00.000Z", to: "1990-12-31T00:00:00.000Z" },
+      }))) as { total: number };
+      expect(none.total).toBe(0);
+      expect(all.total).toBeGreaterThan(0);
+    } finally {
+      await close();
+    }
+  });
+});
+
+/**
+ * Svarskontrakt (#1012). Verktyg med kontrakt annonserar `outputSchema` och
+ * svarar med BÅDE `structuredContent` och text-`content` — SDK:n lämnar annars
+ * `content` tom när `outputSchema` finns, och en klient som bara läser text
+ * ser då ingenting. SDK:n validerar dessutom `structuredContent` mot schemat
+ * vid varje anrop, så kontraktet är en levande grind, inte dokumentation.
+ */
+describe("svarskontrakt (#1012)", () => {
+  it("läse-ytan annonserar outputSchema, resten inte", async () => {
+    const { client, close } = await connect("legacy");
+    try {
+      const { tools } = await client.listTools();
+      const byName = new Map(tools.map((t) => [t.name, t]));
+      for (const path of outputDescribedPaths()) {
+        expect(byName.get(toolName(path))?.outputSchema?.type, path).toBe("object");
+      }
+      expect(byName.get("billingRun__list")?.outputSchema).toBeUndefined();
+    } finally {
+      await close();
+    }
+  });
+
+  it("svaret bär både structuredContent och samma data som text", async () => {
+    const { client, close } = await connect("legacy");
+    try {
+      const res = await client.callTool({ name: "matter__list", arguments: {} });
+      expect(res.isError, textOf(res)).toBeFalsy();
+      const structured = res.structuredContent as { matters: { id: string }[]; total: number };
+      expect(structured.matters.length).toBeGreaterThan(0);
+      // Texten är samma data — klienter som bara läser content förlorar inget.
+      expect(JSON.parse(textOf(res))).toEqual(structured);
+    } finally {
+      await close();
+    }
+  });
+});
+
+/**
+ * Sidning av de tidigare osidade listorna (#1011). Frivillig i routern —
+ * utelämnad pageSize är dagens beteende, så UI:t påverkas inte — men MCP-ytan
+ * skickar alltid sin snåla default.
+ */
+describe("sidning av listor utan egen paginering (#1011)", () => {
+  it("invoice.list får MCP-defaulten i stället för hela listan", async () => {
+    const { client, close } = await connect("legacy");
+    try {
+      const rows = JSON.parse(textOf(await client.callTool({ name: "invoice__list", arguments: {} }))) as unknown[];
+      expect(rows).toHaveLength(MCP_DEFAULT_PAGE_SIZE);
+      const page2 = JSON.parse(textOf(await client.callTool({ name: "invoice__list", arguments: { page: 2, pageSize: 3 } }))) as { id: string }[];
+      expect(page2).toHaveLength(3);
+      expect(page2[0]!.id).not.toBe((rows as { id: string }[])[0]!.id);
+    } finally {
+      await close();
+    }
+  });
+
+  it("task.list sidas på samma sätt", async () => {
+    const { client, close } = await connect("legacy");
+    try {
+      const rows = JSON.parse(textOf(await client.callTool({ name: "task__list", arguments: {} }))) as unknown[];
+      expect(rows.length).toBeLessThanOrEqual(MCP_DEFAULT_PAGE_SIZE);
+    } finally {
+      await close();
+    }
+  });
+});
+
+/**
  * Utdatabudget (#1008) — en RATCHET i samma anda som bundle-size.
  *
  * MCP-klienter kapar verktygssvar (Claude Code varnar över 10 000 tokens och
@@ -172,11 +295,12 @@ describe.each<Era>(["legacy", "modern"])("ava-mcp över %s-epoken", (era) => {
  * i och modellen läser en halv sanning. Före #1008 låg `timeEntry.list` på
  * 61,7 KB — på demo-seedens 130 tidsposter.
  *
- * Golvet är satt strax över dagens värsta (`invoice.list`, 43 758 tecken) och
- * ska BARA flyttas nedåt. De värsta kvarvarande är de listor som saknar
- * paginering helt (`invoice.list`, `paymentPlan.list`, `task.list`) — se #1011.
+ * Golvet flyttas BARA nedåt: 45 000 → 38 000 när #1011 gav de sista listorna
+ * sidning (`invoice.list` 43,8 → 37,2 KB). Kvarvarande värsting är
+ * `invoice.list` — 10 rader à ~1 KB, join-feta rader. Nästa sänkning kräver
+ * fältprojektion (#1014), inte mer sidning.
  */
-const OUTPUT_BUDGET_CHARS = 45_000;
+const OUTPUT_BUDGET_CHARS = 38_000;
 
 describe("verktygens utdatabudget", () => {
   it("inget verktyg som går att anropa utan argument spränger budgeten", async () => {

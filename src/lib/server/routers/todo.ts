@@ -34,8 +34,8 @@ export interface TodoItem {
 export const todoRouter = router({
   list: orgProcedure
     .input(z.object({
-      from: z.date(),
-      to: z.date(),
+      from: z.coerce.date(),
+      to: z.coerce.date(),
       /** Default = anropande user; annars måste user:n vara i samma org. */
       userId: userIdSchema.optional(),
     }))

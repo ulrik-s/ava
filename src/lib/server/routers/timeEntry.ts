@@ -45,8 +45,8 @@ export const timeEntryRouter = router({
       z.object({
         matterId: matterIdSchema.optional(),
         userId: userIdSchema.optional(),
-        from: z.date().optional(),
-        to: z.date().optional(),
+        from: z.coerce.date().optional(),
+        to: z.coerce.date().optional(),
         page: z.number().min(1).default(1),
         pageSize: z.number().min(1).max(100).default(50),
       })

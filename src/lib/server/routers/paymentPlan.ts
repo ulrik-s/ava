@@ -17,6 +17,7 @@
  */
 
 import { z } from "zod";
+import { pageSlice } from "@/lib/shared/paginate";
 import {
   computeDueReminders,
   type PlanForScan,
@@ -84,15 +85,18 @@ export const paymentPlanRouter = router({
       z.object({
         status: paymentPlanStatusSchema.optional(),
         search: z.string().optional(),
+        // Frivillig sidning (#1011): utelämnad pageSize = hela listan, som förut.
+        page: z.number().min(1).optional(),
+        pageSize: z.number().min(1).max(100).optional(),
       }).optional(),
     )
     // Migrerad till repository-sömmen (ADR 0020): listForOrg kapslar in
     // org-scoping + den joinade faktura/ärende/KLIENT/betalnings-formen.
     .query(async ({ ctx, input }) => {
       const plans = await ctx.repos.paymentPlans.listForOrg(ctx.orgId, input?.status);
-      if (!input?.search) return plans;
-      const needle = input.search.toLowerCase();
-      return plans.filter((p) => planHaystack(p).includes(needle));
+      const needle = input?.search?.toLowerCase();
+      // Sidningen sist — sök först, annars sidas bort träffar.
+      return pageSlice(needle ? plans.filter((p) => planHaystack(p).includes(needle)) : plans, input);
     }),
 
   getById: orgProcedure

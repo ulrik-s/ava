@@ -17,6 +17,7 @@ import { fromJsonSchema, McpServer, type CallToolResult, type JsonSchemaType, ty
 import type { AvaCaller } from "./caller";
 import type { ProcedureInfo, ProcedureType } from "./introspect";
 import { toolDescription, withPageSizeDefault } from "./tool-descriptions";
+import { toolOutputJsonSchema } from "./tool-outputs";
 
 export const MCP_SERVER_NAME = "ava";
 export const MCP_SERVER_VERSION = "0.2.0";
@@ -52,6 +53,7 @@ export function toolAnnotations(type: ProcedureType): ToolAnnotations {
 
 export interface McpToolResult {
   content: { type: "text"; text: string }[];
+  structuredContent?: Record<string, unknown>;
   isError?: boolean;
 }
 
@@ -60,11 +62,33 @@ export interface McpToolResult {
  * callern. Fel returneras som `isError`-content (MCP-konvention), inte som ett
  * protokoll-fel — spec:en är uttrycklig om att valideringsfel ska nå modellen
  * som verktygsfel så den kan rätta sig själv.
+ *
+ * Verktyg med svarskontrakt (#1012) fyller BÅDE `structuredContent` (samma
+ * data, JSON-serialiserad så `Date` blir ISO-sträng) och text-`content` — SDK:n
+ * lämnar annars `content` tom när `outputSchema` finns, och en klient som bara
+ * läser text ser då ingenting.
  */
-export async function executeToolCall(name: string, args: unknown, caller: AvaCaller): Promise<McpToolResult> {
+/** Bygg verktygssvaret ur callerns data (utbruten: complexity ≤ 8). */
+function toolResult(data: unknown, structured: boolean): McpToolResult {
+  const text = JSON.stringify(data ?? null, null, 2);
+  const result: McpToolResult = { content: [{ type: "text", text }] };
+  if (structured && data !== null && typeof data === "object" && !Array.isArray(data)) {
+    // JSON-rundresan är serialiseringen: Date → ISO-sträng, undefined faller
+    // bort — exakt det annonserade kontraktets form.
+    result.structuredContent = JSON.parse(text) as Record<string, unknown>;
+  }
+  return result;
+}
+
+export async function executeToolCall(
+  name: string,
+  args: unknown,
+  caller: AvaCaller,
+  opts: { structured?: boolean } = {},
+): Promise<McpToolResult> {
   try {
     const data = await caller.invoke(pathFromTool(name), args ?? {});
-    return { content: [{ type: "text", text: JSON.stringify(data ?? null, null, 2) }] };
+    return toolResult(data, opts.structured === true);
   } catch (err) {
     return { content: [{ type: "text", text: err instanceof Error ? err.message : String(err) }], isError: true };
   }
@@ -80,15 +104,17 @@ export function buildAvaMcpServer(procs: readonly ProcedureInfo[], caller: AvaCa
   const server = new McpServer({ name: MCP_SERVER_NAME, version: MCP_SERVER_VERSION }, { capabilities: { tools: {} } });
   for (const p of procs) {
     const name = toolName(p.path);
+    const outputSchema = toolOutputJsonSchema(p.path);
     server.registerTool(
       name,
       {
         description: toolDescription(p),
         inputSchema: fromJsonSchema(toolInputSchema(p.inputSchema)),
+        ...(outputSchema ? { outputSchema: fromJsonSchema(outputSchema as JsonSchemaType) } : {}),
         annotations: toolAnnotations(p.type),
       },
       (args: unknown): Promise<CallToolResult> =>
-        executeToolCall(name, withPageSizeDefault(p.inputSchema, args), caller) as Promise<CallToolResult>,
+        executeToolCall(name, withPageSizeDefault(p.inputSchema, args), caller, { structured: outputSchema !== null }) as Promise<CallToolResult>,
     );
   }
   return server;

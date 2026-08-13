@@ -9,6 +9,7 @@
 
 import { z } from "zod";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
+import { pageSlice } from "@/lib/shared/paginate";
 import { taskPrioritySchema, taskStatusSchema, type Task } from "@/lib/shared/schemas";
 import { asId, taskIdSchema, matterIdSchema, userIdSchema } from "@/lib/shared/schemas/ids";
 import { router, protectedProcedure, TRPCError } from "../trpc";
@@ -17,14 +18,14 @@ const createInput = z.object({
   title: z.string().min(1),
   description: z.string().nullish(),
   priority: taskPrioritySchema.default("MEDIUM"),
-  dueAt: z.date().nullish(),
+  dueAt: z.coerce.date().nullish(),
   matterId: matterIdSchema.nullish(),
   // Valfria setup-fält (demo-generator/fixtures, ADR 0003).
   id: taskIdSchema.optional(),
   userId: userIdSchema.optional(),
   status: taskStatusSchema.optional(),
-  completedAt: z.date().nullish(),
-  createdAt: z.date().nullish(),
+  completedAt: z.coerce.date().nullish(),
+  createdAt: z.coerce.date().nullish(),
 });
 
 const updateInput = createInput.partial().extend({
@@ -38,14 +39,20 @@ export const taskRouter = router({
       z.object({
         status: taskStatusSchema.optional(),
         matterId: matterIdSchema.optional(),
+        // Frivillig sidning (#1011): utelämnad pageSize = hela listan, som förut.
+        page: z.number().min(1).optional(),
+        pageSize: z.number().min(1).max(100).optional(),
       }).optional(),
     )
     // Migrerad till repository-sömmen (ADR 0020): ägar-/org-scopad listForUser.
-    .query(({ ctx, input }) =>
-      ctx.repos.tasks.listForUser(ctx.user.id, ctx.user.organizationId, {
-        status: input?.status,
-        matterId: input?.matterId,
-      }),
+    .query(async ({ ctx, input }) =>
+      pageSlice(
+        await ctx.repos.tasks.listForUser(ctx.user.id, ctx.user.organizationId, {
+          status: input?.status,
+          matterId: input?.matterId,
+        }),
+        input,
+      ),
     ),
 
   create: protectedProcedure
