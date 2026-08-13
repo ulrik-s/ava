@@ -2,13 +2,23 @@
  * `brottmalstaxa` — Domstolsverkets föreskrifter om brottmålstaxa för
  * offentlig försvarare i tingsrätt och hovrätt.
  *
- * Bygger på **DVFS 2025:6** (gäller fr.o.m. 2026-01-01). Tabellen
- * är fastställd av Domstolsverket och uppdateras årligen — vid byte
- * av år: byt ut `BROTTMALSTAXA_TABLE` mot nya beloppen.
+ * Tabellerna är fastställda av Domstolsverket och ersätts årligen av en NY
+ * föreskrift. Ett år raderar inte det föregående (#1004): varje årgång ligger
+ * kvar i `BROTTMALSTAXA_TABLE_BY_YEAR` och väljs på YRKANDEDATUMET, eftersom
+ * övergångsbestämmelserna knyter ersättningen dit:
  *
- * Källa:
- *   https://www.domstol.se/globalassets/filer/gemensamt-innehall/for-
- *   professionella-aktorer/dvfs/2025/dvfs_2025-6.pdf
+ *   "Äldre föreskrifter gäller fortfarande i fråga om yrkande om ersättning
+ *    till offentlig försvarare som framställs före den 1 januari 2026."
+ *    (DVFS 2025:6 p. 3 — samma lydelse i 2024:17)
+ *
+ * En kostnadsräkning som lämnas in efter ett årsskifte ska alltså värderas på
+ * det nya årets taxa, och en äldre räkning måste gå att räkna om i efterhand.
+ *
+ * Källor (avlästa ur föreskrifternas bilagor, inte ur minnet):
+ *   2025: https://www.domstol.se/globalassets/filer/gemensamt-innehall/for-
+ *         professionella-aktorer/dvfs/2024/dvfs_2024-17.pdf
+ *   2026: https://www.domstol.se/globalassets/filer/gemensamt-innehall/for-
+ *         professionella-aktorer/dvfs/2025/dvfs_2025-6.pdf
  *
  * Tillämpning:
  *   - En tilltalad + en offentlig försvarare
@@ -287,12 +297,50 @@ interface TaxaRow {
 }
 
 /**
- * DVFS 2025:6 Bilaga. Belopp i öre (kr × 100). Källans tabell:
+ * DVFS 2024:17 Bilaga — gäller yrkanden som framställs under 2025. Belopp i öre
+ * (kr × 100); gränsvärdena står inom parentes i källan.
+ */
+const BROTTMALSTAXA_TABLE_2025: readonly TaxaRow[] = [
+  { fromMin:   0, toMin:  14, label: "0-14 min",
+    ersattning: [273900, 408100, 533400, 667600], gransvarde: [411500, 612300, 800300, 985100] },
+  { fromMin:  15, toMin:  29, label: "15-29 min",
+    ersattning: [290600, 424800, 550100, 684300], gransvarde: [435600, 636500, 824500, 1000200] },
+  { fromMin:  30, toMin:  44, label: "30-44 min",
+    ersattning: [342200, 476400, 601700, 735900], gransvarde: [514000, 714400, 919100, 1051700] },
+  { fromMin:  45, toMin:  59, label: "45-59 min",
+    ersattning: [394800, 529000, 654300, 788500], gransvarde: [591400, 791800, 970600, 1104900] },
+  { fromMin:  60, toMin:  74, label: "1 tim - 1 tim 14 min",
+    ersattning: [446900, 581100, 706400, 840600], gransvarde: [668700, 870700, 1022700, 1155900] },
+  { fromMin:  75, toMin:  89, label: "1 tim 15 min - 1 tim 29 min",
+    ersattning: [497900, 632100, 757400, 891600], gransvarde: [747200, 949700, 1074800, 1209100] },
+  { fromMin:  90, toMin: 104, label: "1 tim 30 min - 1 tim 44 min",
+    ersattning: [549500, 683700, 809000, 943200], gransvarde: [825100, 1000200, 1125900, 1259600] },
+  { fromMin: 105, toMin: 119, label: "1 tim 45 min - 1 tim 59 min",
+    ersattning: [601100, 735300, 860600, 994800], gransvarde: [919100, 1051700, 1178500, 1311200] },
+  { fromMin: 120, toMin: 134, label: "2 tim - 2 tim 14 min",
+    ersattning: [653700, 787900, 913200, 1047400], gransvarde: [970600, 1104900, 1229500, 1364300] },
+  { fromMin: 135, toMin: 149, label: "2 tim 15 min - 2 tim 29 min",
+    ersattning: [704700, 838900, 964200, 1098400], gransvarde: [1022700, 1155900, 1281600, 1415400] },
+  { fromMin: 150, toMin: 164, label: "2 tim 30 min - 2 tim 44 min",
+    ersattning: [757400, 891600, 1016900, 1151100], gransvarde: [1074800, 1209100, 1333700, 1467500] },
+  { fromMin: 165, toMin: 179, label: "2 tim 45 min - 2 tim 59 min",
+    ersattning: [809500, 943700, 1069000, 1203200], gransvarde: [1126400, 1260100, 1385300, 1519000] },
+  { fromMin: 180, toMin: 194, label: "3 tim - 3 tim 14 min",
+    ersattning: [860500, 994700, 1120000, 1254200], gransvarde: [1179000, 1311700, 1438500, 1571700] },
+  { fromMin: 195, toMin: 209, label: "3 tim 15 min - 3 tim 29 min",
+    ersattning: [913100, 1047300, 1172600, 1306800], gransvarde: [1229500, 1364300, 1489000, 1622700] },
+  { fromMin: 210, toMin: 225, label: "3 tim 30 min - 3 tim 45 min",
+    ersattning: [964200, 1098400, 1223700, 1357900], gransvarde: [1281600, 1415400, 1541100, 1674800] },
+];
+
+/**
+ * DVFS 2025:6 Bilaga — gäller yrkanden som framställs från 2026-01-01. Källans
+ * tabell:
  *
  *   Förhandlingstid | Nivå 1 | Nivå 2 | Nivå 3 | Nivå 4
  *   (gränsvärden inom parentes nedanför nivåbeloppen i källan)
  */
-export const BROTTMALSTAXA_TABLE: readonly TaxaRow[] = [
+const BROTTMALSTAXA_TABLE_2026: readonly TaxaRow[] = [
   { fromMin:   0, toMin:  14, label: "0-14 min",
     ersattning: [280900, 418500, 547000, 684600], gransvarde: [421900, 627900, 820700, 1010200] },
   { fromMin:  15, toMin:  29, label: "15-29 min",
@@ -325,13 +373,39 @@ export const BROTTMALSTAXA_TABLE: readonly TaxaRow[] = [
     ersattning: [988700, 1126300, 1254800, 1392400], gransvarde: [1314300, 1451400, 1580300, 1717500] },
 ];
 
+/** Brottmålstaxans årgångar. Nytt år → lägg till en rad; ta ALDRIG bort en. */
+export const BROTTMALSTAXA_TABLE_BY_YEAR: Readonly<Record<number, readonly TaxaRow[]>> = {
+  2025: BROTTMALSTAXA_TABLE_2025,
+  2026: BROTTMALSTAXA_TABLE_2026,
+};
+
+/** Senast kända årgången — fallback när yrkandedatumet saknas eller ligger
+ *  bortom tabellen (samma konvention som timkostnadsnormen, #891). */
+export const BROTTMALSTAXA_TABLE: readonly TaxaRow[] = BROTTMALSTAXA_TABLE_2026;
+
+/** Taxetabellen som gäller för ett yrkande framställt `date` (#1004). */
+export function brottmalstaxaTableForDate(date: Date | string | undefined): readonly TaxaRow[] {
+  if (date === undefined) return BROTTMALSTAXA_TABLE;
+  return BROTTMALSTAXA_TABLE_BY_YEAR[yearOf(date)] ?? BROTTMALSTAXA_TABLE;
+}
+
 export interface ComputeOpts {
   /** Sammanlagd förhandlingstid (minuter) — räknas från målets påropas. */
   huvudforhandlingMinutes: number;
   /** Ersättningsnivå (1-4). Se nivåförklaringarna i fil-toppen. */
   level: TaxaLevel;
-  /** Default true. False → multiplicera med 1237/1626. */
+  /** Default true. False → multiplicera med årets kvot (1207/1586 för 2025,
+   *  1237/1626 för 2026). */
   hasFTax?: boolean;
+  /**
+   * När yrkandet framställs (#1004) — avgör vilken ÅRGÅNG av taxan som gäller,
+   * och vilken F-skatte-kvot som tillämpas. Utelämnad → senast kända året.
+   *
+   * Samma parameternamn och samma regel som `kostnadsrakning.ts` (#980):
+   * övergångsbestämmelserna knyter ersättningen till inlämningen, inte till
+   * förhandlingen.
+   */
+  yrkandeDate?: Date | string;
 }
 
 export type TaxaResultKind = "taxa-applies" | "exceeds-max" | "invalid-input";
@@ -382,8 +456,8 @@ function validateTaxaInput(huf: number, level: number): TaxaResult | null {
 }
 
 /** Slå upp taxa-rad + ersättning/gränsvärde för nivån (defensiva not-found-fall). */
-function findTaxaCell(huf: number, level: TaxaLevel): CellResult {
-  const row = BROTTMALSTAXA_TABLE.find((r) => huf >= r.fromMin && huf <= r.toMin);
+function findTaxaCell(huf: number, level: TaxaLevel, table: readonly TaxaRow[]): CellResult {
+  const row = table.find((r) => huf >= r.fromMin && huf <= r.toMin);
   if (!row) return { ok: false, note: "Hittade inget matchande intervall i tabellen." };
   const idx = level - 1;
   const e = row.ersattning[idx];
@@ -392,14 +466,21 @@ function findTaxaCell(huf: number, level: TaxaLevel): CellResult {
   return { ok: true, row, e, g };
 }
 
-/** F-skatt-justering: oförändrat belopp med F-skatt, annars nedjusterat. */
-function adjustForFTax(value: number, hasFTax: boolean): number {
-  return hasFTax ? value : applyNoFTaxFactor(value);
+/** F-skatt-justering: oförändrat belopp med F-skatt, annars nedjusterat med
+ *  YRKANDEÅRETS kvot (#1004) — den står i samma föreskrift som taxan. */
+function adjustForFTax(value: number, hasFTax: boolean, date: Date | string | undefined): number {
+  if (hasFTax) return value;
+  return date === undefined ? applyNoFTaxFactor(value) : applyNoFTaxFactorForDate(value, date);
 }
 
-function buildNotes(hasFTax: boolean, huf: number, row: TaxaRow): string[] {
+function buildNotes(hasFTax: boolean, huf: number, row: TaxaRow, date: Date | string | undefined): string[] {
   const notes: string[] = [];
-  if (!hasFTax) notes.push("Justerat för advokat utan F-skatt (× 1237/1626).");
+  if (!hasFTax) {
+    const q = date === undefined
+      ? { num: NO_FTAX_FACTOR_NUMERATOR, den: NO_FTAX_FACTOR_DENOMINATOR }
+      : noFTaxQuotientForDate(date);
+    notes.push(`Justerat för advokat utan F-skatt (× ${q.num}/${q.den}).`);
+  }
   notes.push("Belopp exkl moms. För advokat med F-skatt lägger Domstolsverket 25 % moms ovanpå.");
   if (huf > row.toMin - 5) {
     notes.push("Nära intervallets övre gräns — verifiera faktiskt avslutsklockslag.");
@@ -414,7 +495,7 @@ export function computeBrottmalstaxa(opts: ComputeOpts): TaxaResult {
   const invalid = validateTaxaInput(huf, level);
   if (invalid) return invalid;
 
-  const cell = findTaxaCell(huf, level);
+  const cell = findTaxaCell(huf, level, brottmalstaxaTableForDate(opts.yrkandeDate));
   if (!cell.ok) {
     return {
       kind: "invalid-input", intervalLabel: "", level,
@@ -427,9 +508,9 @@ export function computeBrottmalstaxa(opts: ComputeOpts): TaxaResult {
     kind: "taxa-applies",
     intervalLabel: cell.row.label,
     level,
-    ersattningExclVat: adjustForFTax(cell.e, hasFTax),
-    gransvardeExclVat: adjustForFTax(cell.g, hasFTax),
-    notes: buildNotes(hasFTax, huf, cell.row),
+    ersattningExclVat: adjustForFTax(cell.e, hasFTax, opts.yrkandeDate),
+    gransvardeExclVat: adjustForFTax(cell.g, hasFTax, opts.yrkandeDate),
+    notes: buildNotes(hasFTax, huf, cell.row, opts.yrkandeDate),
   };
 }
 
