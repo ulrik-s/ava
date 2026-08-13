@@ -322,9 +322,18 @@ Jobben laddar upp sina rapporter som artefakter (coverage, jscpd, playwright-rep
 [`.github/dependabot.yml`](../.github/dependabot.yml) (npm root + helper-ui +
 github-actions).
 
-> **Not:** jobb 7–9 är i dag INTE required checks (ingen branch-protection-
-> ändring gjord). `demo-build` skyddar en tyst felmod → kandidat för required
-> check ([#911](https://github.com/ulrik-s/ava/issues/911)).
+**Required checks på `main`** (branch protection, [#911](https://github.com/ulrik-s/ava/issues/911)):
+Commit messages · Static analysis · Unit / komponent / integration ·
+Server-first (deploy E2E) · **Demo build** · **Demo E2E (browser-smoke)**.
+
+De två sista befordrades i #911: `demo-build` skyddar en *tyst* felmod (den
+statiska exporten fallerar utan att något annat jobb märker det — #550/#552 slank
+igenom just därför) och `demo-e2e` bevisar att demon LADDAR, inte bara bygger.
+
+> **Not:** övriga jobb (`Repository (Postgres)`, `E2E (OIDC login)`,
+> `Keep-both konflikt-E2E`, CodeQL, `bun audit`) kör på varje PR men är inte
+> required. De ska ändå vara gröna före merge (AGENTS.md) — skillnaden är bara
+> att GitHub inte blockerar merge-knappen på dem.
 
 > **Not:** `dependency-review` togs bort ur `security.yml` (PR #912) när den föll
 > på att repo:ts Dependency graph var av. [#915](https://github.com/ulrik-s/ava/issues/915)

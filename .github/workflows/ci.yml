@@ -197,8 +197,8 @@ jobs:
   # `bun run build:demo` (static export → out/) misslyckas TYST i CI/Pages om
   # något bryter den statiska exporten. Round-trip-jobbet som förr körde
   # build:demo togs bort i #422 → ingen PR-grind kvar för att demon BYGGER.
-  # Det här jobbet återinför grinden (kör på PR; INTE required check — ingen
-  # branch-protection-ändring). Speglar `bun run build:demo` lokalt. (#420)
+  # Det här jobbet återinför grinden (kör på PR; **required check** sedan #911).
+  # Speglar `bun run build:demo` lokalt. (#420)
   demo-build:
     name: Demo build
     runs-on: ubuntu-latest
@@ -222,7 +222,7 @@ jobs:
   # en deterministisk render-smoke (färsk besökare → /login renderar, fastnar
   # inte på platshållaren). Det tyngre faktura-flödet (demo-invoice-document)
   # körs i `test:all` lokalt — här hålls CI-gaten snabb + hermetisk. (Kör på PR;
-  # INTE required check — ingen branch-protection-ändring.)
+  # **required check** sedan #911.)
   #
   # "Hermetisk" var länge bara ett påstående (#932): `out/` serverades lokalt,
   # men APPEN hämtade sin data från live-demon på GH Pages, så jobbet blev rött
@@ -272,7 +272,8 @@ jobs:
   # → oauth2-proxy → server-first), och Playwright loggar in via Keycloak-
   # formuläret + bekräftar i UIt att ärendet har 2 filer (original + keep-both-
   # syskon). Regressionsskydd för ADR 0033 keep-both end-to-end mot deployad
-  # artefakt. (Kör på PR; INTE required check — ingen branch-protection-ändring.)
+  # artefakt. (Kör på PR; INTE required check — kräver docker-stacken och är
+  # långsammare än de andra; #911 befordrade demo-build + demo-e2e, inte den här.)
   conflict-e2e:
     name: Keep-both konflikt-E2E
     runs-on: ubuntu-latest
