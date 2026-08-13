@@ -1,17 +1,13 @@
 /**
- * MCP-byggblock (protokollet ägs av @modelcontextprotocol/sdk i bin:en).
- * Fejkar callern → verifierar verktygsmappning + exekvering utan server.
+ * MCP-byggblock (protokollet ägs av @modelcontextprotocol/server v2 i bin:en).
+ * Fejkar callern → verifierar namnkodning, schema-normalisering, annotations
+ * och exekvering utan server. Själva protokollytan testas i
+ * `test/integration/mcp-server.test.ts` (båda epokerna).
  */
 
 import { describe, it, expect } from "vitest-compat";
 import type { AvaCaller } from "../../../tooling/ava-cli/caller";
-import type { ProcedureInfo } from "../../../tooling/ava-cli/introspect";
-import { executeToolCall, listTools, pathFromTool, toolName } from "../../../tooling/ava-cli/mcp";
-
-const PROCS: ProcedureInfo[] = [
-  { path: "invoice.list", type: "query", inputSchema: { type: "object", properties: { status: { type: "string" } } } },
-  { path: "contacts.getById", type: "query", inputSchema: null },
-];
+import { executeToolCall, pathFromTool, toolAnnotations, toolInputSchema, toolName } from "../../../tooling/ava-cli/mcp";
 
 function fakeCaller(overrides: Partial<AvaCaller> = {}): AvaCaller {
   return {
@@ -28,19 +24,24 @@ describe("toolName/pathFromTool", () => {
   });
 });
 
-describe("listTools", () => {
-  it("mappar procedurer → verktyg (behåller objekt-schema)", () => {
-    const tools = listTools(PROCS);
-    expect(tools[0]).toEqual({
-      name: "invoice__list",
-      description: "query invoice.list",
-      inputSchema: { type: "object", properties: { status: { type: "string" } } },
-    });
+describe("toolInputSchema", () => {
+  it("behåller ett objekt-schema orört", () => {
+    const schema = { type: "object", properties: { status: { type: "string" } } };
+    expect(toolInputSchema(schema)).toEqual(schema);
   });
 
   it("null/icke-objekt-schema → tomt objekt-schema (MCP kräver objekt)", () => {
-    const tools = listTools(PROCS);
-    expect(tools[1]?.inputSchema).toEqual({ type: "object" });
+    // De 21 procedurer som saknar `.input()` helt hamnar här.
+    expect(toolInputSchema(null)).toEqual({ type: "object" });
+    expect(toolInputSchema({ type: "string" })).toEqual({ type: "object" });
+  });
+});
+
+describe("toolAnnotations", () => {
+  it("query → läsande, mutation → muterande", () => {
+    // Utan dem kan en AI inte skilja `matter.list` från `invoice.void`.
+    expect(toolAnnotations("query")).toEqual({ readOnlyHint: true, destructiveHint: false });
+    expect(toolAnnotations("mutation")).toEqual({ readOnlyHint: false, destructiveHint: true });
   });
 });
 
