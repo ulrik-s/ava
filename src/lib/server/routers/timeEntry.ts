@@ -1,7 +1,8 @@
 import { z } from "zod";
+import { advokatberedskapFtaxForDate, isPerDayKind } from "@/lib/shared/brottmalstaxa";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { type TimeEntry } from "@/lib/shared/schemas/billing";
-import { timeEntryKindSchema } from "@/lib/shared/schemas/enums";
+import { timeEntryKindSchema, type TimeEntryKind } from "@/lib/shared/schemas/enums";
 import {
   asId,
   matterIdSchema,
@@ -11,6 +12,32 @@ import {
 } from "@/lib/shared/schemas/ids";
 import { emit } from "../events/emit";
 import { router, protectedProcedure, orgProcedure, TRPCError } from "../trpc";
+
+/** Vad `minutes`-regeln behöver veta om posten. */
+interface EntryShape {
+  minutes?: number | undefined;
+  kind?: TimeEntryKind | null | undefined;
+  date?: string | undefined;
+}
+
+/**
+ * Noll minuter är bara meningsfullt för per-dygns-kategorier (#950). Zod kan
+ * inte uttrycka beroendet mellan två fält lika läsbart som en guard, och
+ * felmeddelandet ska säga VILKEN kategori som gäller — inte bara "≥ 1".
+ */
+function assertMinutes(input: EntryShape): void {
+  if ((input.minutes ?? 0) > 0 || isPerDayKind(input.kind)) return;
+  throw new TRPCError({
+    code: "BAD_REQUEST",
+    message: "Tidsposten måste ha minst en minut. Noll minuter används bara för advokatberedskap, som ersätts per dag.",
+  });
+}
+
+/** Postens á-pris: dagbeloppet för beredskap, annars användarens timtaxa. */
+function rateForEntry(input: EntryShape & { hourlyRate?: number | undefined }, userRate: number): number {
+  if (isPerDayKind(input.kind)) return advokatberedskapFtaxForDate(input.date ?? new Date());
+  return input.hourlyRate ?? userRate;
+}
 
 export const timeEntryRouter = router({
   list: protectedProcedure
@@ -43,10 +70,16 @@ export const timeEntryRouter = router({
       z.object({
         matterId: matterIdSchema,
         date: z.string(), // ISO date string YYYY-MM-DD
-        minutes: z.number().min(1),
+        /**
+         * Arbetad tid i minuter. Noll är tillåtet BARA för per-dygns-kategorier
+         * (advokatberedskap, #950) — beredskap är inte arbetad tid, och att
+         * hitta på minuter för den hade förorenat varje timbaserad summa:
+         * upparbetat, rättsskyddets timtak, rapporterna.
+         */
+        minutes: z.number().min(0),
         description: z.string().min(1),
         billable: z.boolean().default(true),
-        /** ARBETE (default) eller TIDSSPILLAN (#891). */
+        /** ARBETE (default), TIDSSPILLAN (#891) eller ADVOKATBEREDSKAP (#950). */
         kind: timeEntryKindSchema.optional(),
         /** Byråns standardåtgärd posten registrerades ur (#956) — spårbarhet. */
         standardAtgardId: z.string().optional(),
@@ -59,6 +92,7 @@ export const timeEntryRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      assertMinutes(input);
       const userId = input.userId ?? asId<"UserId">(ctx.user.id);
       const user = await ctx.repos.users.getById(userId);
       if (!user) throw new TRPCError({ code: "NOT_FOUND", message: "Användare finns inte." });
@@ -70,7 +104,9 @@ export const timeEntryRouter = router({
         date: new Date(input.date),
         minutes: input.minutes,
         description: input.description,
-        hourlyRate: input.hourlyRate ?? user.hourlyRate ?? 0,
+        // Per-dygns-kategorier har ingen timtaxa; posten bär DAGBELOPPET så den
+        // råa raden är läsbar. Värderingen läser ändå alltid årstabellen (#950).
+        hourlyRate: rateForEntry(input, user.hourlyRate ?? 0),
         kind: input.kind,
         standardAtgardId: input.standardAtgardId,
         billable: input.billable,

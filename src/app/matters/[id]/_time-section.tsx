@@ -6,6 +6,7 @@ import { Modal } from "@/components/ui/modal";
 import { TIME_ENTRY_KIND_SHORT } from "@/lib/client/labels";
 import { trpc } from "@/lib/client/trpc";
 import { formatMinutes } from "@/lib/client/utils";
+import { isPerDayKind } from "@/lib/shared/brottmalstaxa";
 import { TIME_ENTRY_KIND_LABELS, type MatterStatus, type PaymentMethod, type TimeEntryKind } from "@/lib/shared/schemas/enums";
 import type { InvoiceId, MatterId, TimeEntryId } from "@/lib/shared/schemas/ids";
 import { applicableStandardAtgarder, type StandardAtgard } from "@/lib/shared/standard-atgard";
@@ -51,7 +52,17 @@ const KIND_GUIDANCE: Partial<Record<TimeEntryKind, string>> = {
   TIDSSPILLAN: "Dagtaxan gäller vardag 08.00–18.00. Ersättning lämnas bara för tid mellan 07.00 och 22.00, och normal måltidspaus är inte tidsspillan (DVFS 2025:4 §§ 2–4).",
   TIDSSPILLAN_OVRIG_TID: "All tidsspillan utanför vardag 08.00–18.00 — men bara inom 07.00–22.00; tid mellan 22.00 och 07.00 ersätts inte alls. Vid övernattning på annan ort än tjänstestället ersätts 18.00–22.00 endast om den avser restid (DVFS 2025:4 §§ 2, 4).",
   ARBETE_OBEKVAM_TID: "Häktningsförhandling under helg (DVFS 2025:7) eller polisförhör utanför ordinarie kontorstid (DVFS 2025:8). Tidsspillan i samband med sådana ersätts med DAGTAXAN, även 22.00–07.00.",
+  ADVOKATBEREDSKAP: "Garantiersättning PER DAG för beredskap vid tingsrätten under helg (DVFS 2025:9 § 1) — ingen tid registreras. Blir du inkallad registrerar du arbetet som obekväm tid i stället: garantin utgår inte för dag då sådant arvode utgår (§ 2).",
 };
+
+/**
+ * Byt kategori på formuläret. Per-dygns-kategorier nollar minuterna (#950):
+ * beredskap är inte arbetad tid, och en kvarglömd halvtimme från förra posten
+ * hade följt med in i varje timbaserad summa.
+ */
+function withKind<T extends { kind: TimeEntryKind; minutes: number }>(form: T, kind: TimeEntryKind): T {
+  return { ...form, kind, minutes: isPerDayKind(kind) ? 0 : form.minutes };
+}
 
 /** Ärenden där kategorin styr vilken ÅRSNORM slutregleringen värderar posten på. */
 const COVERAGE_METHODS = new Set<PaymentMethod>(["RATTSHJALP", "RATTSSKYDD"]);
@@ -184,7 +195,11 @@ export function TimeSection({ matterId, isTaxeArende, paymentMethod, matterStatu
       render: (e) => <span className="text-sm text-gray-900">{e.user?.name ?? "—"}</span> },
     { key: "minutes", label: "Tid", sortable: true, align: "right", sortValue: (e) => e.minutes,
       summary: (rows) => <span className="font-mono">{formatMinutes(rows.reduce((sum, r) => sum + r.minutes, 0))}</span>,
-      render: (e) => <span className="text-sm text-gray-900">{formatMinutes(e.minutes)}</span> },
+      render: (e) => (
+        <span className="text-sm text-gray-900">
+          {isPerDayKind(e.kind) ? "1 dygn" : formatMinutes(e.minutes)}
+        </span>
+      ) },
     { key: "description", label: "Beskrivning", sortable: true, sortValue: (e) => e.description ?? "",
       render: (e) => <span className="text-sm text-gray-700">{e.description}</span> },
     // Kategorin styr vilken av Domstolsverkets normer posten värderas på vid
@@ -335,10 +350,20 @@ function TimeForm({ form, setForm, submitLabel, isPending, isTaxeArende, isCover
             className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm" />
         </div>
         <div>
-          <label htmlFor="time-minutes" className="block text-xs text-gray-500 mb-1">Tid (minuter) *</label>
-          <input id="time-minutes" type="text" inputMode="numeric" required value={form.minutes}
-            onChange={(e) => setForm({ ...form, minutes: parseInt(e.target.value) || 0 })}
-            className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm" />
+          <label htmlFor="time-minutes" className="block text-xs text-gray-500 mb-1">
+            {isPerDayKind(form.kind) ? "Omfattning" : "Tid (minuter) *"}
+          </label>
+          {isPerDayKind(form.kind) ? (
+            // Beredskap ersätts per dygn (#950) — det finns ingen tid att mata in,
+            // och ett tomt minutfält hade sett ut som att något saknades.
+            <p id="time-minutes" className="rounded border border-gray-200 bg-gray-50 px-3 py-1.5 text-sm text-gray-600">
+              1 dygns beredskap
+            </p>
+          ) : (
+            <input id="time-minutes" type="text" inputMode="numeric" required value={form.minutes}
+              onChange={(e) => setForm({ ...form, minutes: parseInt(e.target.value) || 0 })}
+              className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm" />
+          )}
         </div>
         <div className="col-span-2">
           <label htmlFor="time-description" className="block text-xs text-gray-500 mb-1">Beskrivning *</label>
@@ -350,7 +375,7 @@ function TimeForm({ form, setForm, submitLabel, isPending, isTaxeArende, isCover
         <div className="col-span-2">
           <label htmlFor="time-kind" className="block text-xs text-gray-500 mb-1">Arvodeskategori *</label>
           <select id="time-kind" value={form.kind}
-            onChange={(e) => setForm({ ...form, kind: e.target.value as TimeEntryKind })}
+            onChange={(e) => setForm(withKind(form, e.target.value as TimeEntryKind))}
             className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm">
             {KIND_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select>

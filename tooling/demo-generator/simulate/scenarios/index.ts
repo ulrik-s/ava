@@ -26,7 +26,7 @@ import { buildRattsskyddPositivtScenario } from "./rattsskydd-positivt";
 const OFFENTLIGT_STOPS: Record<string, OffentligtOpts> = {
   "2026-0016": { stopAfter: "beslut", reducedByBips: 1000 },
   "2026-0017": { stopAfter: "kostnadsrakning" },
-  "2026-0019": { stopAfter: "overklaga", reducedByBips: 2500 },
+  "2026-0019": { stopAfter: "overklaga", reducedByBips: 2500, allCategories: true },
 };
 
 function offentligtOpts(matterNumber: string | undefined): OffentligtOpts {
