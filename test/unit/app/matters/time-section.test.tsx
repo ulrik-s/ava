@@ -78,19 +78,42 @@ describe("TimeSection — arvodeskategori (#953)", () => {
     expect(screen.getByText("Arbete")).toBeInTheDocument();
   });
 
-  it("formuläret erbjuder alla fyra kategorierna och skickar den valda", () => {
+  it("formuläret erbjuder alla arvodeskategorier och skickar den valda", () => {
     render(<TimeSection matterId={matterId} />);
     fireEvent.click(screen.getByText("+ Registrera tid"));
     const select = screen.getByLabelText("Arvodeskategori *");
     expect(select).toHaveValue("ARBETE"); // default
     const values = Array.from((select as HTMLSelectElement).options).map((o) => o.value);
-    expect(values).toEqual(["ARBETE", "ARBETE_OBEKVAM_TID", "TIDSSPILLAN", "TIDSSPILLAN_OVRIG_TID"]);
+    expect(values).toEqual([
+      "ARBETE", "ARBETE_OBEKVAM_TID", "TIDSSPILLAN", "TIDSSPILLAN_OVRIG_TID", "ADVOKATBEREDSKAP",
+    ]);
 
     fireEvent.change(select, { target: { value: "TIDSSPILLAN_OVRIG_TID" } });
     fireEvent.change(screen.getByPlaceholderText("Beskrivning *"), { target: { value: "Hemresa efter kvällssammanträde" } });
     fireEvent.click(screen.getByText("Spara"));
     expect(createMutate).toHaveBeenCalledWith(expect.objectContaining({
       matterId, kind: "TIDSSPILLAN_OVRIG_TID", description: "Hemresa efter kvällssammanträde",
+    }));
+  });
+
+  /**
+   * Advokatberedskap ersätts per dygn (#950): det finns ingen tid att mata in,
+   * och minuterna måste nollas när kategorin väljs — annars följer förra
+   * postens halvtimme med in i varje timbaserad summa.
+   */
+  it("beredskap byter ut minutfältet mot ett dygn och skickar noll minuter", () => {
+    render(<TimeSection matterId={matterId} />);
+    fireEvent.click(screen.getByText("+ Registrera tid"));
+    expect(screen.getByLabelText("Tid (minuter) *")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Arvodeskategori *"), { target: { value: "ADVOKATBEREDSKAP" } });
+    expect(screen.queryByLabelText("Tid (minuter) *")).not.toBeInTheDocument();
+    expect(screen.getByText("1 dygns beredskap")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText("Beskrivning *"), { target: { value: "Helgjour tingsrätten" } });
+    fireEvent.click(screen.getByText("Spara"));
+    expect(createMutate).toHaveBeenCalledWith(expect.objectContaining({
+      matterId, kind: "ADVOKATBEREDSKAP", minutes: 0,
     }));
   });
 
