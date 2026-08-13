@@ -16,6 +16,7 @@
 import { fromJsonSchema, McpServer, type CallToolResult, type JsonSchemaType, type ToolAnnotations } from "@modelcontextprotocol/server";
 import type { AvaCaller } from "./caller";
 import type { ProcedureInfo, ProcedureType } from "./introspect";
+import { toolDescription, withPageSizeDefault } from "./tool-descriptions";
 
 export const MCP_SERVER_NAME = "ava";
 export const MCP_SERVER_VERSION = "0.2.0";
@@ -82,11 +83,12 @@ export function buildAvaMcpServer(procs: readonly ProcedureInfo[], caller: AvaCa
     server.registerTool(
       name,
       {
-        description: `${p.type} ${p.path}`,
+        description: toolDescription(p),
         inputSchema: fromJsonSchema(toolInputSchema(p.inputSchema)),
         annotations: toolAnnotations(p.type),
       },
-      (args: unknown): Promise<CallToolResult> => executeToolCall(name, args, caller) as Promise<CallToolResult>,
+      (args: unknown): Promise<CallToolResult> =>
+        executeToolCall(name, withPageSizeDefault(p.inputSchema, args), caller) as Promise<CallToolResult>,
     );
   }
   return server;
