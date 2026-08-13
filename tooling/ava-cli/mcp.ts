@@ -1,26 +1,24 @@
 /**
- * `mcp` — rena byggblock för MCP-servern (Model Context Protocol).
+ * `mcp` — MCP-serverns yta över `appRouter` (Model Context Protocol).
  *
- * Exponerar hela `appRouter`-ytan som MCP-verktyg. Själva protokollet
- * (initialize/tools.list/tools.call, JSON-RPC-ramning över stdio) ägs av den
- * officiella `@modelcontextprotocol/sdk` i bin:en `ava-mcp.ts`; här bor bara
- * den rena, testbara mappningen procedur → verktyg + verktygsexekvering via
- * samma `AvaCaller` som CLI:t. Noll duplicerad affärslogik.
+ * Protokollet ägs av `@modelcontextprotocol/server` (SDK v2, spec-revision
+ * **2026-07-28**); här bor bara mappningen procedur → verktyg och exekveringen
+ * via samma `AvaCaller` som CLI:t. Noll duplicerad affärslogik.
+ *
+ * Epoker (spec:ens egna ord): **modern** = 2026-07-28+, där varje request bär
+ * sin version i `_meta` och `server/discover` ersätter handskakningen;
+ * **legacy** = 2025-11-25 och äldre, med `initialize`. Bin:en (`ava-mcp.ts`)
+ * serverar BÅDA ur samma factory — en legacy-klient mot en modern-only-server
+ * misslyckas enligt spec:ens kompatibilitetsmatris, och har ingen
+ * fall-forward. Verktygen definieras alltså en gång, oberoende av epok.
  */
 
+import { fromJsonSchema, McpServer, type CallToolResult, type JsonSchemaType, type ToolAnnotations } from "@modelcontextprotocol/server";
 import type { AvaCaller } from "./caller";
-import type { ProcedureInfo } from "./introspect";
+import type { ProcedureInfo, ProcedureType } from "./introspect";
 
-export interface McpTool {
-  name: string;
-  description: string;
-  inputSchema: Record<string, unknown>;
-}
-
-export interface McpToolResult {
-  content: { type: "text"; text: string }[];
-  isError?: boolean;
-}
+export const MCP_SERVER_NAME = "ava";
+export const MCP_SERVER_VERSION = "0.2.0";
 
 /** MCP-verktygsnamn tillåter inte `.` → koda path som `router__proc`. */
 export function toolName(path: string): string {
@@ -30,27 +28,37 @@ export function pathFromTool(name: string): string {
   return name.replace(/__/g, ".");
 }
 
-/** MCP kräver ett objekt-inputSchema; icke-objekt/null → tomt objekt-schema. */
-function toolInputSchema(schema: unknown): Record<string, unknown> {
+/**
+ * MCP kräver ett objekt-inputSchema. Alla 151 procedurer har objekt-input;
+ * de 21 som saknar `.input()` helt får ett tomt objekt-schema.
+ */
+export function toolInputSchema(schema: unknown): JsonSchemaType {
   if (schema !== null && typeof schema === "object" && (schema as { type?: unknown }).type === "object") {
-    return schema as Record<string, unknown>;
+    return schema as JsonSchemaType;
   }
   return { type: "object" };
 }
 
-/** Hela procedur-ytan som MCP-verktygsdefinitioner. */
-export function listTools(procs: readonly ProcedureInfo[]): McpTool[] {
-  return procs.map((p) => ({
-    name: toolName(p.path),
-    description: `${p.type} ${p.path}`,
-    inputSchema: toolInputSchema(p.inputSchema),
-  }));
+/**
+ * Annotations ur procedurtypen. En AI som ser vilka verktyg som muterar kan
+ * bete sig försiktigare — utan dem är `matter.list` och `invoice.void`
+ * omöjliga att skilja åt före anropet.
+ */
+export function toolAnnotations(type: ProcedureType): ToolAnnotations {
+  const readOnly = type === "query";
+  return { readOnlyHint: readOnly, destructiveHint: !readOnly };
+}
+
+export interface McpToolResult {
+  content: { type: "text"; text: string }[];
+  isError?: boolean;
 }
 
 /**
  * Exekvera ett verktygsanrop: mappa tillbaka verktygsnamn → path och kör via
  * callern. Fel returneras som `isError`-content (MCP-konvention), inte som ett
- * protokoll-fel — så klienten (Claude) ser felmeddelandet.
+ * protokoll-fel — spec:en är uttrycklig om att valideringsfel ska nå modellen
+ * som verktygsfel så den kan rätta sig själv.
  */
 export async function executeToolCall(name: string, args: unknown, caller: AvaCaller): Promise<McpToolResult> {
   try {
@@ -59,4 +67,27 @@ export async function executeToolCall(name: string, args: unknown, caller: AvaCa
   } catch (err) {
     return { content: [{ type: "text", text: err instanceof Error ? err.message : String(err) }], isError: true };
   }
+}
+
+/**
+ * Hela `appRouter`-ytan som en registrerad `McpServer`. Ren fabrik (ingen I/O,
+ * ingen transport) → testbar över `InMemoryTransport` utan att spawna en
+ * process, och återanvändbar av `serveStdio`-factoryn som bygger EN instans
+ * per uppkoppling.
+ */
+export function buildAvaMcpServer(procs: readonly ProcedureInfo[], caller: AvaCaller): McpServer {
+  const server = new McpServer({ name: MCP_SERVER_NAME, version: MCP_SERVER_VERSION }, { capabilities: { tools: {} } });
+  for (const p of procs) {
+    const name = toolName(p.path);
+    server.registerTool(
+      name,
+      {
+        description: `${p.type} ${p.path}`,
+        inputSchema: fromJsonSchema(toolInputSchema(p.inputSchema)),
+        annotations: toolAnnotations(p.type),
+      },
+      (args: unknown): Promise<CallToolResult> => executeToolCall(name, args, caller) as Promise<CallToolResult>,
+    );
+  }
+  return server;
 }
