@@ -25,7 +25,7 @@ describe("svarskontraktens register", () => {
     // Scope-beslutet i #1012: listor + getById + user.current med OBJEKT-svar.
     // Krymper listan har någon tagit bort ett kontrakt — det ska synas här.
     expect([...outputDescribedPaths()].sort()).toEqual([
-      "contacts.list", "matter.getById", "matter.list", "timeEntry.list", "user.current", "user.list",
+      "contacts.list", "matter.getById", "matter.list", "reports.firmOverview", "timeEntry.list", "user.current", "user.list",
     ]);
   });
 
