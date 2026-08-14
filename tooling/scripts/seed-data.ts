@@ -199,6 +199,10 @@ export interface SeedDataset {
   paymentPlans: Record<string, unknown>[];
   paymentPlanReminders: Record<string, unknown>[];
   serviceNotes: Record<string, unknown>[];
+  /** Faktureringskörningar — kostnadsräkningarnas livscykel (#828, #1021). */
+  billingRuns: Record<string, unknown>[];
+  /** Utskickshistorik per utställd faktura (#1021). */
+  invoiceDispatches: Record<string, unknown>[];
 }
 
 /** Nullbara matter-fält som defaultar till null i seed-raden. */
@@ -284,6 +288,8 @@ export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
     paymentPlans: [],
     paymentPlanReminders: [],
     serviceNotes: [],
+    billingRuns: [],
+    invoiceDispatches: [],
   };
 
   out.matterContacts = buildMatterContacts(orgId);
@@ -304,6 +310,12 @@ export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
   // Efter plan-bygget: statusarna är slutgiltiga, så fryst-länkningen ser
   // fakturornas verkliga tillstånd.
   linkFrozenWork(out.timeEntries, out.invoices);
+
+  // Tidslinjen knyts ihop sist (#1021): `paidAt` härleds ur den betalning som
+  // fullbordar täckningen, och utskicken dateras ur fakturornas utställning.
+  stampPaidAt(out.invoices, out.payments);
+  out.billingRuns = buildBillingRuns(orgId);
+  out.invoiceDispatches = buildInvoiceDispatches(out.invoices, currentUserId);
 
   out.calendarEvents = buildCalendarEvents(orgId, ASSIGN_USERS);
   out.tasks = buildTasks(orgId, ASSIGN_USERS);
@@ -679,6 +691,70 @@ function planReminders(p: PlanTarget, planId: string): SeedDataset["paymentPlanR
   return out;
 }
 
+/**
+ * Avbetalningens k:te datum: `months` månader efter planstarten, snappat till
+ * planens `dayOfMonth` och klämt inom [planstart, igår] (#1021) — en betalning
+ * får varken ligga före sin plan eller i framtiden.
+ */
+function installmentDate(planStart: Date, months: number, dayOfMonth: number): Date {
+  const d = new Date(planStart);
+  d.setMonth(d.getMonth() + months);
+  d.setDate(dayOfMonth);
+  d.setHours(9, 0, 0, 0);
+  const latest = isoDate(-1);
+  if (d.getTime() < planStart.getTime()) return new Date(planStart);
+  return d.getTime() > latest.getTime() ? latest : d;
+}
+
+/**
+ * Backa fakturans datum så den föregår sin avbetalningsplan (#1021).
+ *
+ * Fakturorna dateras på index och planerna på `startsDaysAgo` — två serier som
+ * aldrig möttes, så en plan kunde skapas tio månader innan sin faktura fanns.
+ * Fakturan ställs nu ut en vecka före planstarten (planen förhandlas efter att
+ * kravet gått ut) med 30 dagars förfallotid.
+ */
+function backdateInvoiceBeforePlan(inv: Record<string, unknown>, planStart: Date): void {
+  const issued = new Date(planStart);
+  issued.setDate(issued.getDate() - 7);
+  const due = new Date(issued);
+  due.setDate(due.getDate() + 30);
+  inv.issuedAt = issued;
+  inv.invoiceDate = issued;
+  inv.dueAt = due;
+  inv.dueDate = due;
+  inv.createdAt = issued;
+  inv.updatedAt = issued;
+}
+
+/** Datumfält → Date (seed-rader bär Date, projektionen ISO-strängar). */
+function asDate(v: unknown): Date {
+  return v instanceof Date ? v : new Date(String(v));
+}
+
+/**
+ * Sätt `paidAt` på varje PAID-faktura ur den betalning som fullbordar
+ * täckningen (#1021). Statusen sattes förut utan datum, så en fullbetald
+ * faktura saknade realiseringstidpunkt och föll ur åldersanalysen (ADR 0007).
+ */
+function stampPaidAt(invoices: SeedDataset["invoices"], payments: SeedDataset["payments"]): void {
+  for (const inv of invoices) {
+    if (inv.status !== "PAID") continue;
+    const total = Number(inv.amountInclVat ?? inv.amount ?? 0);
+    const rows = payments
+      .filter((p) => p.invoiceId === inv.id)
+      .sort((a, b) => asDate(a.paidAt).getTime() - asDate(b.paidAt).getTime());
+    let covered = 0;
+    for (const r of rows) {
+      covered += Number(r.amount ?? 0);
+      if (covered >= total) {
+        inv.paidAt = r.paidAt;
+        break;
+      }
+    }
+  }
+}
+
 /** Invoice-status som matchar planens livscykel. */
 function invoiceStatusForPlan(planStatus: PlanTarget["status"]): InvoiceStatus {
   if (planStatus === "ACTIVE") return "INSTALLMENT_PLAN";
@@ -721,19 +797,23 @@ function buildPaymentPlans({ currentUserId, invoices }: {
     const p = PLAN_TARGETS[i];
     if (!p) continue;
     const planId = `pp-${String(i + 1).padStart(3, "0")}`;
+    const planStart = isoDate(-p.startsDaysAgo);
     paymentPlans.push({
       id: planId, invoiceId: p.invoiceId, monthlyAmount: p.monthlyAmount,
-      dayOfMonth: p.dayOfMonth, startDate: isoDate(-p.startsDaysAgo), status: p.status,
+      dayOfMonth: p.dayOfMonth, startDate: planStart, status: p.status,
       notes: p.status === "CANCELLED" ? "Avbruten på klientens begäran" : null,
       createdAt: isoDate(-p.startsDaysAgo - 1), updatedAt: isoDate(-1),
     });
     paymentPlanReminders.push(...planReminders(p, planId));
 
-    // Patcha invoice-statusen så den matchar planen.
+    // Patcha invoice-statusen OCH datumen så den matchar planen (#1021).
     const inv = invoices.find((x) => (x as { id: string }).id === p.invoiceId) as Record<string, unknown> | undefined;
-    if (inv) inv.status = invoiceStatusForPlan(p.status);
+    if (inv) {
+      inv.status = invoiceStatusForPlan(p.status);
+      backdateInvoiceBeforePlan(inv, planStart);
+    }
 
-    const rows = planPaymentRows(p, inv, paymentSeq, currentUserId);
+    const rows = planPaymentRows(p, inv, planStart, paymentSeq, currentUserId);
     payments.push(...rows);
     paymentSeq += rows.length;
   }
@@ -745,33 +825,139 @@ function buildPaymentPlans({ currentUserId, invoices }: {
 /** Payment-rader för en plan: en per "inkommen" månad + (för COMPLETED) en
  *  slutbetalning som täcker resten av fakturan (#350: PAID ⇒ ledger-koherent). */
 function planPaymentRows(
-  p: PlanTarget, inv: Record<string, unknown> | undefined, startSeq: number, currentUserId: string,
+  p: PlanTarget, inv: Record<string, unknown> | undefined, planStart: Date, startSeq: number, currentUserId: string,
 ): SeedDataset["payments"] {
   const rows: SeedDataset["payments"] = [];
   let seq = startSeq;
-  for (let m = p.paymentsMade; m >= 1; m--) {
-    const due = new Date();
-    due.setMonth(due.getMonth() - m + 1);
-    due.setDate(p.dayOfMonth);
+  // Betalning k ligger k−1 månader efter planstarten — kronologiskt, och
+  // numrerad i samma riktning (#1021: numreringen gick förut baklänges).
+  for (let k = 1; k <= p.paymentsMade; k++) {
+    const paidAt = installmentDate(planStart, k - 1, p.dayOfMonth);
     seq++;
     rows.push({
       id: `pay-${String(seq).padStart(3, "0")}`,
-      invoiceId: p.invoiceId, amount: p.monthlyAmount, paidAt: due,
-      note: `Månadsbetalning ${m} av planen`, recordedById: currentUserId, createdAt: due,
+      invoiceId: p.invoiceId, amount: p.monthlyAmount, paidAt,
+      note: `Månadsbetalning ${k} av planen`, recordedById: currentUserId, createdAt: paidAt,
     });
   }
   const remainder = inv ? Number(inv.amountInclVat ?? inv.amount ?? 0) - p.paymentsMade * p.monthlyAmount : 0;
   if (p.status === "COMPLETED" && remainder > 0) {
-    const due = new Date();
-    due.setDate(p.dayOfMonth);
+    const paidAt = installmentDate(planStart, p.paymentsMade, p.dayOfMonth);
     seq++;
     rows.push({
       id: `pay-${String(seq).padStart(3, "0")}`,
-      invoiceId: p.invoiceId, amount: remainder, paidAt: due,
-      note: "Slutbetalning (planen fullföljd)", recordedById: currentUserId, createdAt: due,
+      invoiceId: p.invoiceId, amount: remainder, paidAt,
+      note: "Slutbetalning (planen fullföljd)", recordedById: currentUserId, createdAt: paidAt,
     });
   }
   return rows;
+}
+
+/**
+ * Kostnadsräkningarnas livscykel för de offentliga uppdragen (#828, #1021).
+ *
+ * Sandlådan hade NOLL faktureringskörningar, så KR-panelen var tom och
+ * 2026-0019:s beskrivning — "tingsrätten satte ned arvodet 25 %, nedsättningen
+ * är överklagad" — hade ingen data bakom sig. Nu vilar de fyra brottmålen på
+ * var sin punkt i kedjan, precis som demo-generatorns rikare data gör (#828
+ * steg 6): inskickad, beslutad, överklagad.
+ *
+ * Beloppen speglar ärendets upparbetade arbete; prutningen är negativ per
+ * schemat och `awardedOre` är det domstolen faktiskt dömde ut.
+ */
+interface BillingRunSeed {
+  id: string;
+  matterId: string;
+  reference: string;
+  workValueOre: number;
+  kostnadsrakningStatus: "INSKICKAD" | "BESLUTAD" | "OVERKLAGAD";
+  daysAgo: number;
+  /** Domstolens nedsättning i bips — 0 = ingen prutning. */
+  prutningBips?: number;
+}
+
+const BILLING_RUN_SEEDS: readonly BillingRunSeed[] = [
+  // Väntar på tingsrättens beslut.
+  { id: "br-016", matterId: "m-016-brottmal-rh", reference: "KR-2026-0016", workValueOre: 731_700, kostnadsrakningStatus: "INSKICKAD", daysAgo: 9 },
+  { id: "br-017", matterId: "m-017-brottmal-omf", reference: "KR-2026-0017", workValueOre: 731_700, kostnadsrakningStatus: "INSKICKAD", daysAgo: 21 },
+  // Beslutad med en mindre nedsättning som byrån accepterat.
+  { id: "br-018", matterId: "m-018-brottmal-ekobrott", reference: "KR-2026-0018", workValueOre: 934_950, kostnadsrakningStatus: "BESLUTAD", daysAgo: 14, prutningBips: 1000 },
+  // Ärendets egen berättelse: 25 % nedsättning, överklagad till hovrätten.
+  { id: "br-019", matterId: "m-019-brottmal-overklagad", reference: "KR-2026-0019", workValueOre: 731_700, kostnadsrakningStatus: "OVERKLAGAD", daysAgo: 45, prutningBips: 2500 },
+];
+
+function buildBillingRuns(orgId: string): SeedDataset["billingRuns"] {
+  return BILLING_RUN_SEEDS.map((r) => {
+    const prutning = Math.round((r.workValueOre * (r.prutningBips ?? 0)) / 10_000);
+    const decided = r.kostnadsrakningStatus !== "INSKICKAD";
+    return {
+      id: r.id,
+      organizationId: orgId,
+      matterId: r.matterId,
+      type: "KOSTNADSRAKNING",
+      recipient: "DOMSTOL",
+      // Ingen faktura förrän kostnadsräkningen är FAKTURERAD — alla fyra
+      // vilar före den punkten, så körningen väntar fortfarande på dom.
+      status: "PENDING_VERDICT",
+      workValueOreAtRun: r.workValueOre,
+      clientShareBips: null,
+      proposedAmountOre: r.workValueOre,
+      amountOre: r.workValueOre,
+      prutningOre: decided && prutning > 0 ? -prutning : null,
+      kostnadsrakningStatus: r.kostnadsrakningStatus,
+      reference: r.reference,
+      awardedOre: decided ? r.workValueOre - prutning : null,
+      // Hovrätten har inte sagt sitt än — överklagandet är öppet.
+      beslutSlutgiltigt: false,
+      invoiceId: null,
+      deductedBillingRunIds: [],
+      periodFrom: null,
+      periodTo: isoDate(-r.daysAgo),
+      notes: null,
+      createdAt: isoDate(-r.daysAgo),
+      updatedAt: isoDate(-Math.max(1, r.daysAgo - 5)),
+    };
+  });
+}
+
+/** Fakturastatusar som betyder att fakturan har gått ut till mottagaren. */
+const ISSUED_INVOICE_STATUSES = new Set(["SENT", "PAID", "INSTALLMENT_PLAN"]);
+
+/**
+ * Utskickshistorik per utställd faktura (#1021).
+ *
+ * Utan den går "aldrig skickad" inte att skilja från "skickad men obetald" —
+ * exakt den fråga man ställer om en förfallen faktura. Utskicket dateras ur
+ * fakturans egen utställning, så tidslinjen håller.
+ */
+function buildInvoiceDispatches(invoices: SeedDataset["invoices"], currentUserId: string): SeedDataset["invoiceDispatches"] {
+  const out: SeedDataset["invoiceDispatches"] = [];
+  let seq = 0;
+  for (const inv of invoices) {
+    if (!ISSUED_INVOICE_STATUSES.has(String(inv.status))) continue;
+    const issued = asDate(inv.issuedAt);
+    const sentAt = new Date(issued.getTime() + 3600_000);
+    // Betald faktura bevisar att den kom fram; övriga stannar på "sent" —
+    // AVA kan inte veta mer än att den lämnade huset.
+    const delivered = inv.status === "PAID";
+    seq++;
+    out.push({
+      id: `disp-${String(seq).padStart(3, "0")}`,
+      invoiceId: inv.id,
+      channel: "email",
+      recipient: `faktura+${String(inv.id)}@example.se`,
+      status: delivered ? "delivered" : "sent",
+      queuedAt: issued,
+      sentAt,
+      deliveredAt: delivered ? new Date(sentAt.getTime() + 7200_000) : null,
+      failedAt: null,
+      messageId: `<${String(inv.id)}@firma.local>`,
+      error: null,
+      recordedById: currentUserId,
+      createdAt: issued,
+    });
+  }
+  return out;
 }
 
 function buildCalendarEvents(orgId: string, ASSIGN_USERS: string[]): SeedDataset["calendarEvents"] {
