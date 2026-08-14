@@ -75,10 +75,15 @@ test("dokumentmallar visas (data laddas från .ava/templates/)", async ({ page }
 test("ärendelistan visar seedens egna ärenden", async ({ page }) => {
   const seed = await fetchDemoSeed(page, BASE);
   await page.goto(`${BASE}/matters/`);
-  // Titeln kommer ur seeden, inte ur en hårdkodad sträng: listan ska visa det
-  // datat demon faktiskt bär, vad seeden än döpt ärendena till.
-  const title = seed.matters[0]?.title ?? "";
-  await expect(page.getByText(title, { exact: false }).first()).toBeVisible({ timeout: 15_000 });
+  // Titeln kommer ur seeden, inte ur en hårdkodad sträng — men INTE
+  // `matters[0]`: seed-JSON:ens ordning är serialiseringsordning och varierar
+  // mellan byggen, medan listan sorterar `createdAt DESC` med 20 per sida.
+  // Seedens 21:a (äldsta) ärende ligger alltid på sida 2, så bygget som råkade
+  // serialisera det äldsta först föll — ett 1/21-lotteri per bygge. Det NYASTE
+  // ärendet ligger per definition överst på sida 1.
+  const newest = [...seed.matters]
+    .sort((a, b) => String(b.createdAt ?? "").localeCompare(String(a.createdAt ?? "")))[0];
+  await expect(page.getByText(newest?.title ?? "", { exact: false }).first()).toBeVisible({ timeout: 15_000 });
 });
 
 test("kontaktlistan visar seedens egna kontakter", async ({ page }) => {

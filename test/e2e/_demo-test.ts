@@ -100,7 +100,7 @@ export async function seedDemoLogin(page: Page, baseUrl: string = DEMO_BASE_URL)
  * uppslagning som inte hittar något säger vad som saknas.
  */
 export interface DemoSeed {
-  matters: Array<{ id: string; title: string }>;
+  matters: Array<{ id: string; title: string; createdAt?: string }>;
   contacts: Array<{ id: string; name: string }>;
   invoices: Array<{ id: string; matterId: string }>;
   documents: Array<{ id: string; matterId: string; title: string }>;
