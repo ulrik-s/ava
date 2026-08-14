@@ -36,6 +36,14 @@ fliken så är allt borta.
   ansökan, kostnadsräkning …) från byråns egna mallar.
 - **AI (helt valfritt)** — en språkmodell som körs *lokalt i webbläsaren* kan
   föreslå hur uppladdade dokument ska sorteras. Inget skickas vidare.
+- **Fråga Claude om byrån (MCP)** — hela API-ytan är exponerad som
+  MCP-verktyg, inklusive rapporterna: byråöversikt per jurist, timdebitering
+  per vecka, kundfordringar. Repot bär sin egen serverkonfiguration
+  (`.mcp.json`), så varje Claude Code-session på repot — i terminalen, på
+  [claude.ai/code](https://claude.ai/code) eller startad från mobilappen — kan
+  svara på *"hur går det för byrån i år?"* direkt mot en seedad sandlåda.
+  Lokalt: `git clone … && bun install && claude`. Mot riktig data: sätt
+  `AVA_SERVER_URL` + `AVA_TOKEN` (PAT) mot en server-first-instans.
 
 > Allt ovan är förifyllt med exempeldata i demon så att du kan se hur det
 > hänger ihop. I skarp drift sparas dina ändringar löpande i byråns arkiv.

@@ -301,6 +301,10 @@ export function buildSeed(opts: BuildSeedOpts = {}): SeedDataset {
   out.paymentPlans = plan.paymentPlans;
   out.paymentPlanReminders = plan.paymentPlanReminders;
 
+  // Efter plan-bygget: statusarna är slutgiltiga, så fryst-länkningen ser
+  // fakturornas verkliga tillstånd.
+  linkFrozenWork(out.timeEntries, out.invoices);
+
   out.calendarEvents = buildCalendarEvents(orgId, ASSIGN_USERS);
   out.tasks = buildTasks(orgId, ASSIGN_USERS);
   out.documentTemplates = buildTemplates(orgId, currentUserId);
@@ -589,6 +593,39 @@ function buildInvoices(orgId: string): SeedDataset["invoices"] {
     });
   }
   return out;
+}
+
+/**
+ * Frys arbete mot fakturorna (#1018).
+ *
+ * "Fakturerat per jurist" (#90) fördelar fakturabelopp mot juristens andel av
+ * FRYST arbete — tidsposter med `invoiceId`. Utan länkarna var kolumnen 0 kr
+ * för alla trots 24 780 kr fakturerat i fordringsbryggan, och byråöversikten
+ * (#1016) gick inte att demo:a: fakturorna var föräldralösa.
+ *
+ * Länkar upp till 3 debiterbara, ännu olänkade poster per UTSTÄLLD faktura
+ * (ej DRAFT), daterade före fakturadatumet, på fakturans ärende. Posterna
+ * roterar författare, så attributionen sprids över flera jurister. De
+ * dedikerade tidsloggarna (m-010 #862, m-020 #878) lämnas orörda — deras
+ * berättelser äger sina fakturaflöden — och merparten av posterna förblir
+ * olänkade så "Upparbetat ofakturerat" lever (#882).
+ */
+/** Olänkad, debiterbar post på ärendet, daterad före fakturadatumet? */
+function isFreezable(te: SeedDataset["timeEntries"][number], inv: SeedDataset["invoices"][number]): boolean {
+  return te.matterId === inv.matterId
+    && te.invoiceId === null
+    && te.billable === true
+    && (te.date as Date).getTime() < (inv.invoiceDate as Date).getTime();
+}
+
+function linkFrozenWork(timeEntries: SeedDataset["timeEntries"], invoices: SeedDataset["invoices"]): void {
+  const DEDICATED = new Set(["m-010-vardnad-2", "m-020-rattshjalp-varierande"]);
+  for (const inv of invoices) {
+    if (inv.status === "DRAFT" || DEDICATED.has(inv.matterId as string)) continue;
+    for (const te of timeEntries.filter((t) => isFreezable(t, inv)).slice(0, 3)) {
+      te.invoiceId = inv.id;
+    }
+  }
 }
 
 interface PlanBundle {
