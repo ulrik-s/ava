@@ -63,6 +63,21 @@ const TOOL_OUTPUTS: Readonly<Record<string, z.ZodType>> = {
   }),
   "user.current": userRow,
   "user.list": z.looseObject({ users: z.array(userRow) }),
+  "reports.firmOverview": z.looseObject({
+    period: z.looseObject({ from: z.string(), to: z.string() }),
+    lawyers: z.array(z.looseObject({
+      userId: z.string(),
+      name: z.string(),
+      totalMinutes: z.number(),
+      billableMinutes: z.number(),
+      workValueOre: z.number(),
+      unbilledOre: z.number(),
+      billedOre: z.number(),
+      netOre: z.number(),
+    })),
+    totals: z.looseObject({ workValueOre: z.number(), unbilledOre: z.number(), billedOre: z.number(), netOre: z.number() }),
+    ar: z.looseObject({ fakturerat: z.number(), inbetalt: z.number(), utestaende: z.number() }),
+  }),
 };
 
 /** Paths med svarskontrakt — drift-/integrationstesterna läser den här. */

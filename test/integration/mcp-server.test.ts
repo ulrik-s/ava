@@ -288,6 +288,40 @@ describe("sidning av listor utan egen paginering (#1011)", () => {
 });
 
 /**
+ * Byråöversikten över MCP (#1016) — verktyget som gör "hur går det för byrån,
+ * per person?" till ETT anrop i stället för 2N+1. Körs mot demo-seeden, så
+ * testet vaktar också att seeden faktiskt HAR siffror att visa.
+ */
+describe("reports.firmOverview över MCP (#1016)", () => {
+  it("ger en rad per jurist, byråtotaler och fordringsläge i ett anrop", async () => {
+    const { client, close } = await connect("legacy");
+    try {
+      const res = await client.callTool({
+        name: "reports__firmOverview",
+        arguments: { from: "2026-01-01", to: "2026-12-31" },
+      });
+      expect(res.isError, textOf(res)).toBeFalsy();
+      // Svarskontrakt: structuredContent + text, som resten av läse-ytan.
+      const data = res.structuredContent as {
+        lawyers: { name: string; totalMinutes: number; billedOre: number }[];
+        totals: { totalMinutes: number; billedOre: number; unbilledOre: number };
+        ar: { fakturerat: number; utestaende: number };
+      };
+      expect(data.lawyers.length).toBeGreaterThan(1);
+      expect(data.totals.totalMinutes).toBe(data.lawyers.reduce((s, l) => s + l.totalMinutes, 0));
+      expect(data.totals.billedOre).toBe(data.lawyers.reduce((s, l) => s + l.billedOre, 0));
+      // Demo-seeden bär riktig ekonomi — en översikt med bara nollor är trasig.
+      expect(data.totals.unbilledOre).toBeGreaterThan(0);
+      expect(data.ar.fakturerat).toBeGreaterThan(0);
+      // En aggregering ska vara LITEN: långt under budget-ratchet:en.
+      expect(textOf(res).length).toBeLessThan(15_000);
+    } finally {
+      await close();
+    }
+  });
+});
+
+/**
  * Utdatabudget (#1008) — en RATCHET i samma anda som bundle-size.
  *
  * MCP-klienter kapar verktygssvar (Claude Code varnar över 10 000 tokens och

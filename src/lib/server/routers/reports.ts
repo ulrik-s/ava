@@ -6,7 +6,8 @@ import {
   type FrozenWorkInput,
 } from "@/lib/shared/billed-per-lawyer";
 import type { InvoiceStatus, PaymentMethod } from "@/lib/shared/schemas/enums";
-import { asId, userIdSchema, type BillingRunId, type InvoiceId, type MatterId, type UserId } from "@/lib/shared/schemas/ids";
+import { asId, userIdSchema, type BillingRunId, type InvoiceId, type MatterId, type OrganizationId, type UserId } from "@/lib/shared/schemas/ids";
+import type { Repositories } from "../repositories/repositories";
 import { router, protectedProcedure } from "../trpc";
 
 /**
@@ -318,6 +319,84 @@ function sumMatterTotals(matters: MatterAgg[]) {
   );
 }
 
+// ─── Byråöversikt (#1016) ────────────────────────────────────────────
+
+/** En jurists rad i byråöversikten. Alla kronbelopp i öre. */
+interface FirmLawyerRow {
+  userId: string;
+  name: string;
+  title: string | null;
+  totalMinutes: number;
+  billableMinutes: number;
+  workValueOre: number;
+  expenseOre: number;
+  /** Upparbetat, ännu inte fakturerat (debiterbar tid + utlägg utan faktura). */
+  unbilledOre: number;
+  /** Fakturerat i perioden, attribuerat mot juristens andel av fryst arbete (#90). */
+  billedOre: number;
+  writeOffOre: number;
+  netOre: number;
+}
+
+/** Org-datat som hämtas EN gång och delas mellan jurist-raderna. */
+interface FirmShared {
+  invoiceInputs: BilledInvoiceInput[];
+  frozenWork: FrozenWorkInput[];
+  period: { from: Date; to: Date };
+  prevPeriod: { from: Date; to: Date };
+}
+
+/** En jurists rad: periodens arbete (samma delrapporter som perLawyer) + fakturerat. */
+async function firmLawyerRow(
+  repos: Repositories,
+  org: OrganizationId,
+  user: { id: UserId; name: string; title?: string | null | undefined },
+  shared: FirmShared,
+): Promise<FirmLawyerRow> {
+  const [timeEntries, expenses] = await Promise.all([
+    repos.timeEntries.listForLawyerInPeriod(org, user.id, shared.period.from, shared.period.to),
+    repos.expenses.listForLawyerInPeriod(org, user.id, shared.period.from, shared.period.to),
+  ]);
+  const totals = sumMatterTotals(buildMatters(timeEntries, expenses));
+  const billed = billedPerLawyer({
+    userId: user.id,
+    invoices: shared.invoiceInputs,
+    frozenWork: shared.frozenWork,
+    period: shared.period,
+    prevPeriod: shared.prevPeriod,
+  });
+  return {
+    userId: String(user.id),
+    name: user.name,
+    title: user.title ?? null,
+    ...totals,
+    unbilledOre: buildUnbilled(timeEntries, expenses).total,
+    billedOre: billed.billedOre,
+    writeOffOre: billed.writeOffOre,
+    netOre: billed.netOre,
+  };
+}
+
+type FirmTotals = Omit<FirmLawyerRow, "userId" | "name" | "title">;
+
+/** Byråtotalerna = summan av raderna, fält för fält. */
+function firmTotals(rows: readonly FirmLawyerRow[]): FirmTotals {
+  const zero: FirmTotals = {
+    totalMinutes: 0, billableMinutes: 0, workValueOre: 0, expenseOre: 0,
+    unbilledOre: 0, billedOre: 0, writeOffOre: 0, netOre: 0,
+  };
+  return rows.reduce<FirmTotals>((acc, r) => ({
+    totalMinutes: acc.totalMinutes + r.totalMinutes,
+    billableMinutes: acc.billableMinutes + r.billableMinutes,
+    workValueOre: acc.workValueOre + r.workValueOre,
+    expenseOre: acc.expenseOre + r.expenseOre,
+    unbilledOre: acc.unbilledOre + r.unbilledOre,
+    billedOre: acc.billedOre + r.billedOre,
+    writeOffOre: acc.writeOffOre + r.writeOffOre,
+    netOre: acc.netOre + r.netOre,
+  }), zero);
+}
+
 export const reportsRouter = router({
   /**
    * Advokatrapport: en advokat, en period, tre delrapporter.
@@ -431,6 +510,63 @@ export const reportsRouter = router({
         billedOre: result.billedOre,
         writeOffOre: result.writeOffOre,
         netOre: result.netOre,
+      };
+    }),
+
+  /**
+   * Byråöversikt (#1016): en rad per jurist + byråtotaler + fordringsläge,
+   * i ETT anrop. Finns för AI-ytan — utan den kostar "hur går det för byrån,
+   * per person?" 2N+1 verktygsanrop (user.list + perLawyer×N + billed×N) där
+   * varje perLawyer-svar dessutom drar veckotabeller översikten inte behöver.
+   * Komponerad ur samma rena delrapporter som perLawyer/billed; org-datat
+   * hämtas en gång och delas mellan raderna.
+   */
+  firmOverview: protectedProcedure
+    .input(z.object({ from: z.string(), to: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const fromDate = new Date(input.from);
+      const toDate = new Date(input.to);
+      toDate.setUTCHours(23, 59, 59, 999);
+      const org = ctx.user.organizationId;
+
+      const [users, invoices, billingRuns, frozenTime] = await Promise.all([
+        ctx.repos.users.listByOrg(asId<"OrganizationId">(org)),
+        ctx.repos.invoices.listForOrg(asId<"OrganizationId">(org)),
+        ctx.repos.billingRuns.listForOrg(org),
+        ctx.repos.timeEntries.listBillableForOrg(org),
+      ]);
+      const ids = (invoices as Array<{ id: InvoiceId }>).map((i) => i.id);
+      const [payments, writeOffs] = await Promise.all([
+        ctx.repos.payments.listByInvoiceIds(ids),
+        ctx.repos.writeOffs.listByInvoiceIds(ids),
+      ]);
+
+      const runToInvoice = new Map<string, string>();
+      for (const r of billingRuns as Array<{ id: string; invoiceId?: string | null }>) {
+        if (r.invoiceId) runToInvoice.set(r.id, r.invoiceId);
+      }
+      const shared: FirmShared = {
+        invoiceInputs: toInvoiceInputs(
+          invoices as RawInvoice[],
+          writtenOffDates(writeOffs as Array<{ invoiceId?: string; writtenOffAt?: unknown }>),
+        ),
+        frozenWork: buildFrozenWork(frozenTime as RawTimeEntry[], runToInvoice),
+        period: { from: fromDate, to: toDate },
+        prevPeriod: previousCalendarMonth(fromDate),
+      };
+
+      const lawyers = await Promise.all(users.map((u) => firmLawyerRow(ctx.repos, org, u, shared)));
+      const scoped = scopeArToPeriod(
+        invoices as Record<string, unknown>[],
+        payments as Record<string, unknown>[],
+        writeOffs as Record<string, unknown>[],
+        { from: fromDate, to: toDate },
+      );
+      return {
+        period: { from: input.from, to: input.to },
+        lawyers,
+        totals: firmTotals(lawyers),
+        ar: computeArBridge(scoped.invoices, scoped.payments, scoped.writeOffs, new Date()),
       };
     }),
 
