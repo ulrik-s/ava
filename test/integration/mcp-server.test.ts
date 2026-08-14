@@ -313,6 +313,12 @@ describe("reports.firmOverview över MCP (#1016)", () => {
       // Demo-seeden bär riktig ekonomi — en översikt med bara nollor är trasig.
       expect(data.totals.unbilledOre).toBeGreaterThan(0);
       expect(data.ar.fakturerat).toBeGreaterThan(0);
+      // #1018: attributionen kräver FRYST arbete (tidsposter med invoiceId).
+      // Seeden hade fakturor utan en enda länkad post → "Fakturerat per jurist"
+      // var 0 kr för alla trots fakturerat i bryggan. Minst två jurister ska
+      // ha attribuerat fakturerat, annars har länkarna tappats igen.
+      expect(data.lawyers.filter((l) => l.billedOre > 0).length).toBeGreaterThanOrEqual(2);
+      expect(data.totals.billedOre).toBeGreaterThan(0);
       // En aggregering ska vara LITEN: långt under budget-ratchet:en.
       expect(textOf(res).length).toBeLessThan(15_000);
     } finally {
