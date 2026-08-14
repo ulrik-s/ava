@@ -69,6 +69,10 @@ function seededSource(): DemoSource {
     paymentPlans: seed.paymentPlans,
     paymentPlanReminders: seed.paymentPlanReminders,
     payments: seed.payments,
+    // Utan de här två är kostnadsräkningarnas livscykel och utskickshistoriken
+    // osynliga för CLI:t och MCP-ytan, hur väl seeden än fyller dem (#1021).
+    billingRuns: seed.billingRuns,
+    invoiceDispatches: seed.invoiceDispatches,
   } as DemoSource);
 }
 
