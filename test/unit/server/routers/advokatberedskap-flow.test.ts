@@ -37,10 +37,10 @@ interface EntrySpec {
   billable?: boolean;
 }
 
-function makeCaller(entries: readonly EntrySpec[], paymentMethod = "OFFENTLIGT_UPPDRAG") {
+function makeCaller(entries: readonly EntrySpec[], paymentMethod = "OFFENTLIGT_UPPDRAG", matterExtra: Record<string, unknown> = {}) {
   const ds = new DemoDataStore({
     organizations: [{ id: "org-1", name: "X" }],
-    matters: [{ id: "m-1", organizationId: "org-1", matterNumber: "2026-0001", title: "Brottmål", status: "ACTIVE", paymentMethod, createdAt: new Date() }],
+    matters: [{ id: "m-1", organizationId: "org-1", matterNumber: "2026-0001", title: "Brottmål", status: "ACTIVE", paymentMethod, createdAt: new Date(), ...matterExtra }],
     users: [{ id: "u-1", organizationId: "org-1", email: "a@x", name: "Anna", role: "ADMIN", hourlyRate: 250_000 }],
     timeEntries: entries.map((e) => ({
       id: e.id, organizationId: "org-1", userId: "u-1", matterId: "m-1",
@@ -69,10 +69,12 @@ describe("advokatberedskap i kostnadsräkningen (offentligt uppdrag)", () => {
   it("beredskapen läggs till arbetet, inte i stället för", async () => {
     const caller = makeCaller([
       beredskap("te-1", LUGN),
-      { id: "te-2", date: LUGN, minutes: 120, hourlyRate: 250_000 }, // 2 h × 2 500 kr
+      // Byråns 2 500 kr/h på posten är irrelevant: domstolen ersätter
+      // timkostnadsnormen (#1003) — 2 h × 1 626 kr.
+      { id: "te-2", date: LUGN, minutes: 120, hourlyRate: 250_000 },
     ]);
     const { run } = await caller.billingRun.createKostnadsrakning({ matterId: "m-1" });
-    expect(run.workValueOreAtRun).toBe(Math.round((DAG_2026 + 500_000) * 1.25));
+    expect(run.workValueOreAtRun).toBe(Math.round((DAG_2026 + 325_200) * 1.25));
   });
 
   it("§ 2: dag med helgförhandling ger arbetet — inte garantin", async () => {
@@ -93,6 +95,46 @@ describe("advokatberedskap i kostnadsräkningen (offentligt uppdrag)", () => {
     ]);
     const { run } = await caller.billingRun.createKostnadsrakning({ matterId: "m-1" });
     expect(run.workValueOreAtRun).toBe(Math.round((DAG_2026 + 488_400) * 1.25));
+  });
+});
+
+describe("offentligt uppdrag värderas på Domstolsverkets kategorinormer (#1003)", () => {
+  it("obekväm tid yrkas på DVFS-beloppet, inte på ärendets timtaxa", async () => {
+    // Posten bär medvetet byråns taxa (2 500 kr/h): domstolen ersätter ändå
+    // 3 256 kr/h (DVFS 2025:7 § 1) — 90 min × 3 256 kr = 4 884 kr netto.
+    const caller = makeCaller([
+      { id: "te-1", date: HELG, minutes: 90, kind: "ARBETE_OBEKVAM_TID", hourlyRate: 250_000 },
+    ]);
+    const { run } = await caller.billingRun.createKostnadsrakning({ matterId: "m-1" });
+    expect(run.workValueOreAtRun).toBe(Math.round(488_400 * 1.25));
+  });
+
+  it("tidsspillan yrkas på sin (lägre) norm — normen vinner åt båda hållen", async () => {
+    // 2 h tidsspillan på byråns taxa vore 5 000 kr; normen är 1 487 kr/h → 2 974 kr.
+    const caller = makeCaller([
+      { id: "te-1", date: LUGN, minutes: 120, kind: "TIDSSPILLAN", hourlyRate: 250_000 },
+    ]);
+    const { run } = await caller.billingRun.createKostnadsrakning({ matterId: "m-1" });
+    expect(run.workValueOreAtRun).toBe(Math.round(297_400 * 1.25));
+  });
+
+  it("ingen rådgivningstimme carvas ur offentligt uppdrag", async () => {
+    // Carve-outen är rättshjälpens (#868) — 60 min arbete ska yrkas fullt ut.
+    const caller = makeCaller([{ id: "te-1", date: LUGN, minutes: 60, hourlyRate: 250_000 }]);
+    const { run } = await caller.billingRun.createKostnadsrakning({ matterId: "m-1" });
+    expect(run.workValueOreAtRun).toBe(Math.round(162_600 * 1.25));
+  });
+
+  it("taxa-ärenden omvärderas INTE — taxan styr arvodet, posterna är informativa", async () => {
+    // Att räkna om posterna per timnorm vore ett yrkande brottmålstaxan aldrig
+    // ger. Körningen behåller posternas eget värde (2 h × 2 500 kr), som före #1003.
+    const caller = makeCaller(
+      [{ id: "te-1", date: LUGN, minutes: 120, hourlyRate: 250_000 }],
+      "OFFENTLIGT_UPPDRAG",
+      { isTaxeArende: true, taxaLevel: 1 },
+    );
+    const { run } = await caller.billingRun.createKostnadsrakning({ matterId: "m-1" });
+    expect(run.workValueOreAtRun).toBe(Math.round(500_000 * 1.25));
   });
 });
 
