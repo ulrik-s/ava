@@ -270,21 +270,22 @@ function invoiceGrossOre(work: UnfrozenWork): number {
 }
 
 /**
- * Slutregleringens arvode-netto (#891). RÄTTSHJÄLP: räkna om HELA ärendet på
+ * Slutregleringens arvode-netto (#891). Domstolsersatta metoder (rättshjälp,
+ * rättsskydd, offentligt uppdrag — #1003): räkna om HELA ärendet på
  * SLUTREGLERINGSÅRETS normer — den retroaktiva höjningen över ett årsskifte (arbete
  * 2025 värderas på 2026 års norm). Arbete värderas på timkostnadsnormen (minus
- * rådgivningstimmen), tidsspillan på tidsspillan-normen. Övriga metoder: platt
- * `flatRateOre` × alla debiterbara minuter (oförändrat).
+ * rådgivningstimmen vid rättshjälp), tidsspillan på tidsspillan-normen, obekväm
+ * tid och beredskap på sina DVFS-belopp. PRIVAT/MIX: posternas egna á-priser.
  */
 function settlementArvodeNet(method: PaymentMethod, work: UnfrozenWork, settleDate: Date | string): number {
   const billable = work.timeEntries.filter((t) => t.billable);
   // Varje post värderas på SIN KATEGORIS norm för slutregleringsåret (#949/#950).
   // Tidigare plattade icke-rättshjälp ut allt till ansvarig jurists timtaxa, vilket
   // gjorde att sammanställningens taxerader inte summerade till fakturabeloppet.
-  // Alla ärenden använder Domstolsverkets nivåer, så logiken är gemensam.
-  // PRIVAT/offentligt debiterar byråns egen taxa (ligger på posten) — bara
-  // täckningsärenden ersätts enligt Domstolsverkets nivåer (#950).
-  if (method !== "RATTSHJALP" && method !== "RATTSSKYDD") return arvodeNetOre(work);
+  // Domstolsverkets nivåer gäller allt domstolen/staten ersätter: täckningsärenden
+  // (#950) OCH offentliga uppdrag (#1003) — domstolen betalar normen, inte vad
+  // byrån råkar ta. Bara PRIVAT/MIX debiterar byråns egen taxa (ligger på posten).
+  if (method === "PRIVAT" || method === "MIX") return arvodeNetOre(work);
   // DVFS 2025:9 § 2 (#950): beredskapsdagar som "förbrukats" av en helgförhandling
   // eller ett polisförhör samma dag ersätts inte — arbetet betalas i stället.
   const payable = payableCoverageEntries(billable);
@@ -1278,12 +1279,16 @@ export const billingRunRouter = router({
         const work = await fetchUnfrozenWork(tx, input.matterId);
         const matter = await tx.matters.getByIdInOrg(input.matterId, ctx.orgId);
         if (!matter) throw new TRPCError({ code: "NOT_FOUND", message: "Ärendet finns inte." });
-        // Rättshjälp värderas på timkostnadsnormen (#839) — staten ersätter inte
-        // byråns privata timtaxa. Övriga (offentligt uppdrag/taxa): arvode inkl moms
-        // + utlägg som tidigare. Brutto matchar kostnadsräkningens PDF (#782).
-        const krArvodeNet = matter.paymentMethod === "RATTSHJALP"
-          ? settlementArvodeNet("RATTSHJALP", work, new Date()) // #891: retroaktiv norm
-          : arvodeNetOre(work);
+        // Domstolen ersätter enligt Domstolsverkets normer — rättshjälp (#839)
+        // och offentligt uppdrag (#1003) värderas per kategori-norm på yrkande-
+        // dagen (retroaktiv norm, #891), inte på posternas egna á-priser.
+        // TAXA-ÄRENDEN undantas: där styr brottmålstaxan arvodet och posterna är
+        // informativa — en omvärdering per timnorm vore ett yrkande taxan aldrig
+        // ger. Deras körning behåller posternas värde (status quo; jfr #1003).
+        // Brutto matchar kostnadsräkningens PDF (#782).
+        const krArvodeNet = matter.paymentMethod === "OFFENTLIGT_UPPDRAG" && matter.isTaxeArende
+          ? arvodeNetOre(work)
+          : settlementArvodeNet(matter.paymentMethod, work, new Date());
         const grossValue = krGrossOre(work, krArvodeNet);
         const run = await tx.billingRuns.create({
           matterId: input.matterId, type: "KOSTNADSRAKNING", recipient: "DOMSTOL",

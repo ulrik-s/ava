@@ -213,7 +213,9 @@ describe("billingRun.createKostnadsrakning", () => {
     expect(res.run.type).toBe("KOSTNADSRAKNING");
     expect(res.run.status).toBe("PENDING_VERDICT");
     expect(res.run.invoiceId).toBeFalsy();
-    expect(res.run.workValueOreAtRun).toBe(937500); // 3h × 2500 kr + 25 % moms (#782)
+    // Offentligt uppdrag värderas på timkostnadsnormen (#1003), inte byråns
+    // 2500 kr/h: 3h × 1626 kr + 25 % moms (#782).
+    expect(res.run.workValueOreAtRun).toBe(609750);
   });
 
   it("tilldelar en KR-referens KR-YYYY-NNNN (#889 — samma format som fakturornas F-nummer)", async () => {
@@ -277,17 +279,17 @@ describe("billingRun.setVerdict", () => {
   });
 
   it("invoice-beloppet är workValue + prutning (prutning negativ)", async () => {
-    const { caller } = makeCaller({ workMinutes: 120, paymentMethod: "OFFENTLIGT_UPPDRAG" }); // 5000 kr
+    const { caller } = makeCaller({ workMinutes: 120, paymentMethod: "OFFENTLIGT_UPPDRAG" }); // 2h på normen (#1003)
     const kr = await caller.billingRun.createKostnadsrakning({ matterId: "m-1" });
-    await caller.billingRun.recordKostnadsrakningBeslut({ billingRunId: kr.run.id, awardedOre: 525000, prutningOre: -100000 });
+    await caller.billingRun.recordKostnadsrakningBeslut({ billingRunId: kr.run.id, awardedOre: 306500, prutningOre: -100000 });
     const res = await caller.billingRun.setVerdict({ billingRunId: kr.run.id });
-    expect(res.invoice.amount).toBe(525000); // arvode 5000 kr + moms = 625000, − prutning 1000 = 525000 (#782)
+    expect(res.invoice.amount).toBe(306500); // arvode 2×1626 kr + moms = 406500, − prutning 1000 kr (#782)
   });
 
   it("LÄNKAR poster + PRUTNING till fakturan → vyn reconciler mot beloppet (#732)", async () => {
-    const { ds, caller } = makeCaller({ workMinutes: 120, expenseOre: 5000, paymentMethod: "OFFENTLIGT_UPPDRAG" }); // 5000 kr + 50 kr utlägg
+    const { ds, caller } = makeCaller({ workMinutes: 120, expenseOre: 5000, paymentMethod: "OFFENTLIGT_UPPDRAG" }); // 2h på normen + 50 kr utlägg
     const kr = await caller.billingRun.createKostnadsrakning({ matterId: "m-1" });
-    await caller.billingRun.recordKostnadsrakningBeslut({ billingRunId: kr.run.id, awardedOre: 595000, prutningOre: -30000 });
+    await caller.billingRun.recordKostnadsrakningBeslut({ billingRunId: kr.run.id, awardedOre: 382750, prutningOre: -30000 });
     const res = await caller.billingRun.setVerdict({ billingRunId: kr.run.id });
     const te = await ds.timeEntries.findFirst({ where: { id: "te-1" } }) as { invoiceId?: string | null };
     const ex = await ds.expenses.findFirst({ where: { id: "ex-1" } }) as { invoiceId?: string | null };
@@ -295,11 +297,11 @@ describe("billingRun.setVerdict", () => {
     expect(te.invoiceId).toBe(res.invoice.id); // arvode länkad
     expect(ex.invoiceId).toBe(res.invoice.id); // utlägg länkad
     expect(prut.invoiceId).toBe(res.invoice.id); // PRUTNING länkad (reducerar totalen)
-    // Arvode 5000 kr + 25 % moms = 625000, + utlägg 50 kr − prutning 300 kr (#782).
+    // Arvode 2h × 1626 kr (#1003) + 25 % moms = 406500, + utlägg 50 kr − prutning 300 kr (#782).
     // #945: fakturan går till DOMSTOL → utlägget debiteras 25 % moms (6250) fastän
     // posten själv är momsfri. Prutningen är en justering av totalen, inte ett utlägg,
     // och momsas därför inte.
-    expect(res.invoice.amount).toBe(625000 + 6250 - 30000);
+    expect(res.invoice.amount).toBe(406500 + 6250 - 30000);
   });
 
   it("DOMSTOL-faktura får F-nummer men ingen OCR (#889 — samma format som övriga)", async () => {
