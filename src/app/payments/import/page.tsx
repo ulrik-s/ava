@@ -79,7 +79,7 @@ export default function PaymentImportPage() {
 
   const outcome = useMemo((): MatchOutcome | null => {
     if (!parsed.file || !invoices.data) return null;
-    return matchTransactions(parsed.file.transactions, toCandidates(invoices.data as InvoiceRowData[]));
+    return matchTransactions(parsed.file.transactions, toCandidates(invoices.data.items as InvoiceRowData[]));
   }, [parsed.file, invoices.data]);
 
   const labels = useMemo((): Record<string, string> => {

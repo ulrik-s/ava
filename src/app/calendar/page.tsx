@@ -310,7 +310,8 @@ function TasksSection() {
 }
 
 function TaskList() {
-  const { data: tasks, isLoading } = trpc.task.list.useQuery();
+  const { data, isLoading } = trpc.task.list.useQuery();
+  const tasks = data?.items;
   const utils = trpc.useUtils();
   const complete = trpc.task.complete.useMutation({ onSuccess: () => utils.task.list.invalidate() });
   const del = trpc.task.delete.useMutation({ onSuccess: () => utils.task.list.invalidate() });

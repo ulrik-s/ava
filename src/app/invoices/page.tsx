@@ -104,7 +104,7 @@ export default function InvoicesPage() {
         <DataTable
           prefKey="list.invoices"
           columns={invoiceColumns}
-          data={(invoices.data ?? []) as InvoiceRow[]}
+          data={(invoices.data?.items ?? []) as InvoiceRow[]}
           rowKey={(i) => i.id}
           emptyMessage="Inga fakturor ännu."
         />

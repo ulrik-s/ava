@@ -71,7 +71,7 @@ describe("Seed-data smoke — varje meny-sida körs mot riktig DemoDataStore", (
     const trpc = makeCaller();
     const events = await trpc.calendar.list();
     expect(Array.isArray(events)).toBe(true);
-    const tasks = await trpc.task.list();
+    const { items: tasks } = await trpc.task.list();
     expect(Array.isArray(tasks)).toBe(true);
   });
 
@@ -222,10 +222,10 @@ describe("Seed-data smoke — varje meny-sida körs mot riktig DemoDataStore", (
 
   it("/payment-plans — paymentPlan.list + getById för varje plan", async () => {
     const trpc = makeCaller();
-    const list = await trpc.paymentPlan.list();
+    const { items: list } = await trpc.paymentPlan.list();
     expect(list.length).toBeGreaterThan(0);
     // Status-filter
-    const active = await trpc.paymentPlan.list({ status: "ACTIVE" });
+    const { items: active } = await trpc.paymentPlan.list({ status: "ACTIVE" });
     for (const p of active) expect((p as { status: string }).status).toBe("ACTIVE");
     // Detalj-vyn ska inkludera invoice + matter + klient + reminders
     for (const p of list) {
@@ -240,8 +240,8 @@ describe("Seed-data smoke — varje meny-sida körs mot riktig DemoDataStore", (
   // pekar tillbaka (UI:n skulle då visa olika antal i olika vyer).
   it("varje INSTALLMENT_PLAN-faktura har en motsvarande ACTIVE-plan", async () => {
     const trpc = makeCaller();
-    const invoices = await trpc.invoice.list({ status: "INSTALLMENT_PLAN" });
-    const activePlans = await trpc.paymentPlan.list({ status: "ACTIVE" });
+    const { items: invoices } = await trpc.invoice.list({ status: "INSTALLMENT_PLAN" });
+    const { items: activePlans } = await trpc.paymentPlan.list({ status: "ACTIVE" });
     const planInvoiceIds = new Set(activePlans.map((p: { invoiceId: string }) => p.invoiceId));
     expect(invoices.length).toBeGreaterThan(0);
     for (const inv of invoices) {
@@ -256,7 +256,7 @@ describe("Seed-data smoke — varje meny-sida körs mot riktig DemoDataStore", (
 
   it("payments-rader finns för aktiva planer (avbetalningarna är seedade)", async () => {
     const trpc = makeCaller();
-    const plans = await trpc.paymentPlan.list({ status: "ACTIVE" });
+    const { items: plans } = await trpc.paymentPlan.list({ status: "ACTIVE" });
     let totalPayments = 0;
     for (const p of plans) {
       const detail = await trpc.paymentPlan.getById({ id: (p as { id: string }).id });
@@ -268,7 +268,7 @@ describe("Seed-data smoke — varje meny-sida körs mot riktig DemoDataStore", (
 
   it("/invoices — invoice.list + getById för varje faktura", async () => {
     const trpc = makeCaller();
-    const list = await trpc.invoice.list({});
+    const { items: list } = await trpc.invoice.list({});
     expect(Array.isArray(list)).toBe(true);
     expect(list.length).toBeGreaterThan(0);
     for (const inv of list) {

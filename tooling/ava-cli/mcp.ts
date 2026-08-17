@@ -18,6 +18,7 @@ import type { AvaCaller } from "./caller";
 import type { ProcedureInfo, ProcedureType } from "./introspect";
 import { toolDescription, withPageSizeDefault } from "./tool-descriptions";
 import { toolOutputJsonSchema } from "./tool-outputs";
+import { projectToolResult } from "./tool-projections";
 
 export const MCP_SERVER_NAME = "ava";
 export const MCP_SERVER_VERSION = "0.2.0";
@@ -87,7 +88,11 @@ export async function executeToolCall(
   opts: { structured?: boolean } = {},
 ): Promise<McpToolResult> {
   try {
-    const data = await caller.invoke(pathFromTool(name), args ?? {});
+    const path = pathFromTool(name);
+    // Projektionen (#1014) sitter HÄR och inte i routern: listraderna är
+    // join-tunga för att UI:t behöver dem så, medan modellen betalar för varje
+    // fält den inte bad om. Detaljer hämtas via `getById`.
+    const data = projectToolResult(path, await caller.invoke(path, args ?? {}));
     return toolResult(data, opts.structured === true);
   } catch (err) {
     return { content: [{ type: "text", text: err instanceof Error ? err.message : String(err) }], isError: true };

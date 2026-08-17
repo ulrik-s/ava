@@ -82,7 +82,7 @@ describe("paymentPlan.list", () => {
       ],
       paymentPlans: [plan(), plan({ id: "pp-2", invoiceId: "inv-2" })],
     });
-    expect(await caller.list({})).toHaveLength(2);
+    expect((await caller.list({})).items).toHaveLength(2);
   });
 
   it("filtrerar på status när angivet", async () => {
@@ -94,18 +94,18 @@ describe("paymentPlan.list", () => {
       paymentPlans: [plan(), plan({ id: "pp-2", invoiceId: "inv-2", status: "COMPLETED" })],
     });
     const res = await caller.list({ status: "COMPLETED" });
-    expect(res.map((p) => p.id)).toEqual(["pp-2"]);
+    expect(res.items.map((p) => p.id)).toEqual(["pp-2"]);
   });
 
   it("söker i ärendenr/titel/klient/anteckningar (planHaystack)", async () => {
     const { caller } = makeCaller({ paymentPlans: [plan()] });
-    expect(await caller.list({ search: "lindström" })).toHaveLength(1); // matchar matter-titel
-    expect(await caller.list({ search: "saknas-helt" })).toHaveLength(0);
+    expect((await caller.list({ search: "lindström" })).items).toHaveLength(1); // matchar matter-titel
+    expect((await caller.list({ search: "saknas-helt" })).items).toHaveLength(0);
   });
 
   it("matchar på klientnamn", async () => {
     const { caller } = makeCaller({ paymentPlans: [plan()] });
-    expect(await caller.list({ search: "andersson" })).toHaveLength(1);
+    expect((await caller.list({ search: "andersson" })).items).toHaveLength(1);
   });
 });
 

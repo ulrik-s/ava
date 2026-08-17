@@ -13,9 +13,11 @@
  * inte allt som råkar finnas. `dateish` speglar att runtime-värdet är ett
  * `Date` som JSON-serialiseras till ISO-sträng.
  *
- * Scope: läse-ytan med OBJEKT-svar. `invoice.list`/`task.list` returnerar
- * arrayer, och MCP:s `outputSchema` kräver ett objekt på toppnivån — de får
- * sina kontrakt den dag listorna byter till kuvertform ({ items, total }, #1014).
+ * Scope: läse-ytan med OBJEKT-svar — vilket sedan #1014 är alla listor:
+ * `invoice.list`, `task.list` och `paymentPlan.list` bär kuvertform
+ * (`{ items, total }`) och kunde därmed få sina kontrakt. Deras `items` speglar
+ * den PROJICERADE raden (`tool-projections.ts`), inte routerns fulla rad — det
+ * är den formen modellen faktiskt får.
  */
 
 import { z } from "zod";
@@ -60,6 +62,26 @@ const TOOL_OUTPUTS: Readonly<Record<string, z.ZodType>> = {
     contacts: z.array(z.looseObject({ id: z.string(), name: z.string(), contactType: z.string() })),
     total: z.number(),
     pages: z.number(),
+  }),
+  // Kuvertlistorna (#1014). `total` är antalet FÖRE sidningen — utan det kan
+  // modellen inte skilja "tio fakturor" från "första sidan av hundra".
+  "invoice.list": z.looseObject({
+    items: z.array(z.looseObject({
+      id: z.string(),
+      invoiceNumber: z.string(),
+      status: z.string(),
+      amount: z.number(),
+      matterId: z.string(),
+    })),
+    total: z.number(),
+  }),
+  "task.list": z.looseObject({
+    items: z.array(z.looseObject({ id: z.string(), title: z.string(), status: z.string() })),
+    total: z.number(),
+  }),
+  "paymentPlan.list": z.looseObject({
+    items: z.array(z.looseObject({ id: z.string(), invoiceId: z.string(), status: z.string() })),
+    total: z.number(),
   }),
   "user.current": userRow,
   "user.list": z.looseObject({ users: z.array(userRow) }),
