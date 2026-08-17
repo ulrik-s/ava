@@ -72,7 +72,7 @@ describe("golven är ratchets", () => {
   // glider igenom för att få en röd körning grön (AGENTS.md: gates only tighten).
   const FLOOR_BASELINE: Readonly<Record<string, { line: number; func: number }>> = {
     "src/": { line: 0.900, func: 0.859 },
-    "tooling/ava-cli/": { line: 0.930, func: 0.880 },
+    "tooling/ava-cli/": { line: 0.950, func: 0.920 },
   };
 
   for (const [label, base] of Object.entries(FLOOR_BASELINE)) {

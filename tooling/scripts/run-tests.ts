@@ -143,20 +143,21 @@ const FUNC_FLOOR = 0.859;
  * så en total-siffra skulle dränka den — hela AI-ytan kan tappa sin täckning
  * utan att den gemensamma procenten rör sig mätbart. Två skalor, två golv.
  *
- * Uppmätt enprocess: 95,58 % rader / 93,10 % funktioner (519/543, 54/58).
- * Golven ankras MEDVETET lägre än så, av två skäl:
+ * Uppmätt: **96,07 % rader / 93,65 % funktioner** (586/610, 59/63).
  *
- *   1. Grinden kör pass A med `--parallel`, som underrapporterar täckning
- *      något (bun aggregerar löst över workers — se OBS 2 i docs/quality.md).
- *      Den siffran är inte känd förrän grinden kört skarpt.
- *   2. Ytan har bara 58 funktioner → EN funktion är 1,7 procentenheter. Ett
- *      snävt golv hade fällt på kvantiseringen i st.f. på en regression.
+ * Golven sattes först konservativt (93,0/88,0) därför att grinden kör pass A
+ * med `--parallel`, som underrapporterar täckning något (OBS 2 i
+ * docs/quality.md) — hur mycket var okänt innan grinden kört skarpt. Nu är det
+ * mätt: CI rapporterade EXAKT samma siffra som en enprocess-körning för det
+ * här området (#1027, körning 32039590050). Underrapporteringen gäller alltså
+ * inte en yta där testerna laddar samma moduler i samma worker.
  *
- * Dras åt mot den faktiska `--parallel`-siffran när den syns i CI-loggen —
- * ratchet:en flyttas bara uppåt, aldrig ned (AGENTS.md).
+ * Därmed dras golven åt mot uppmätt. Kvarvarande marginal är kvantiseringen:
+ * ytan har 63 funktioner, så EN funktion är 1,6 procentenheter — funktions-
+ * golvet lämnar plats för exakt en, inte fler. Ratchet:en flyttas bara uppåt.
  */
-const AI_LINE_FLOOR = 0.930;
-const AI_FUNC_FLOOR = 0.880;
+const AI_LINE_FLOOR = 0.950;
+const AI_FUNC_FLOOR = 0.920;
 
 /**
  * SERIAL_FILES — testfiler som SYNKRONT spawnar en barnprocess via
