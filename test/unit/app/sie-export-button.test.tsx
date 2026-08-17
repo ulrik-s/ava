@@ -17,11 +17,15 @@ vi.mock("@/lib/client/trpc", () => ({
   trpc: {
     invoice: {
       list: {
+        // Kuvertform sedan #1014 — knappen läser `data.items`.
         useQuery: () => ({
-          data: [
-            { amount: 12_500, invoiceDate: "2026-05-25", invoiceNumber: "F-2026-0042", status: "SENT" },
-            { amount: 9_999, invoiceDate: "2026-05-01", invoiceNumber: "F-1", status: "DRAFT" },
-          ],
+          data: {
+            items: [
+              { amount: 12_500, invoiceDate: "2026-05-25", invoiceNumber: "F-2026-0042", status: "SENT" },
+              { amount: 9_999, invoiceDate: "2026-05-01", invoiceNumber: "F-1", status: "DRAFT" },
+            ],
+            total: 2,
+          },
         }),
       },
     },

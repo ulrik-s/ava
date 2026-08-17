@@ -84,7 +84,7 @@ export default function PaymentImportPage() {
 
   const labels = useMemo((): Record<string, string> => {
     const out: Record<string, string> = {};
-    for (const r of (invoices.data ?? []) as InvoiceRowData[]) out[r.id] = r.invoiceNumber ?? r.id;
+    for (const r of (invoices.data?.items ?? []) as InvoiceRowData[]) out[r.id] = r.invoiceNumber ?? r.id;
     return out;
   }, [invoices.data]);
 

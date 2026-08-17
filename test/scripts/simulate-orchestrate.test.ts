@@ -91,8 +91,8 @@ describe("runSimulation (#880 integration)", () => {
   it("privatärendenas livscykler ger planer i alla tre tillstånd + en kundförlust", async () => {
     const { c, res: simRes } = await simulateDemo();
 
-    const plans = await c.paymentPlan.list({});
-    const statuses = new Set((plans as Any[]).map((p) => p.status));
+    const { items: plans } = (await c.paymentPlan.list({})) as { items: Any[] };
+    const statuses = new Set(plans.map((p) => p.status));
     // Cykeln i `privat.ts` är sex lång och seeden har fler privatärenden än så,
     // så alla tre tillstånden ska förekomma. Slår detta fel har antingen cykeln
     // ändrats eller antalet privatärenden fallit under sex.
@@ -103,7 +103,7 @@ describe("runSimulation (#880 integration)", () => {
 
     // Kundförlusten stänger sin faktura som BAD_DEBT (ADR 0007).
     expect(simRes.writeOffs).toBeGreaterThan(0);
-    const invoices = await c.invoice.list({}) as Any[];
+    const { items: invoices } = (await c.invoice.list({})) as { items: Any[] };
     expect(invoices.some((i) => i.status === "BAD_DEBT"), "avskriven faktura").toBe(true);
     // …och en plan-faktura står som INSTALLMENT_PLAN, inte som vanlig SENT.
     expect(invoices.some((i) => i.status === "INSTALLMENT_PLAN"), "faktura med plan").toBe(true);

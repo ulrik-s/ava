@@ -64,9 +64,9 @@ describe("deployed-path repro (prebakeJoins + ny store)", () => {
     const ctx = buildContext({ dataStore: store, ports: noopPorts, principal: ADMIN });
     const caller = appRouter.createCaller(ctx as never) as Any;
 
-    const inv = await caller.invoice.list({});
+    const { items: inv } = await caller.invoice.list({});
     const te = await caller.timeEntry.list({ pageSize: 100 });
-    const plans = await caller.paymentPlan.list({});
+    const { items: plans } = await caller.paymentPlan.list({});
      
     console.log("REPRO counts:", { invoices: inv.length, timeEntries: te.entries.length, paymentPlans: plans.length });
 
