@@ -83,12 +83,15 @@ AI-ytan tappa sin täckning utan att totalen rörde sig mätbart.
 | Område | Golv rader | Golv funktioner | Faktisk (lcov, --parallel) |
 |---|---|---|---|
 | `src/` | 90.0 % | 85.9 % | ~90.7 % / ~87.5 % |
-| `tooling/ava-cli/` (CLI + MCP) | 93.0 % | 88.0 % | 95.6 % / 93.1 % (enprocess) |
+| `tooling/ava-cli/` (CLI + MCP) | 95.0 % | 92.0 % | 96.1 % / 93.7 % |
 
-AI-ytans golv är ankrat under uppmätt med avsikt: siffran ovan är mätt
-enprocess, medan grinden kör pass A med `--parallel` (som underrapporterar,
-se OBS 2) — och med bara 58 funktioner är EN funktion 1,7 procentenheter.
-Dras åt mot den faktiska `--parallel`-siffran när den syns i CI-loggen.
+AI-ytans golv ankrades först konservativt (93,0/88,0) eftersom det var okänt
+hur mycket pass A:s `--parallel` underrapporterar (OBS 2). Nu är det mätt: CI
+rapporterade **exakt** samma siffra som en enprocess-körning för det området
+(#1027) — underrapporteringen gäller inte en yta vars tester laddar samma
+moduler i samma worker. Golven är därför åtdragna mot uppmätt. Kvarvarande
+marginal är kvantiseringen: 63 funktioner betyder att EN funktion är 1,6
+procentenheter, och funktions-golvet lämnar plats för exakt en.
 
 Coverage-rapporten skrivs till `coverage/` (lcov). `helper-ui` har en egen
 coverage-ratchet i [`helper-ui/bunfig.toml`](../helper-ui/bunfig.toml)
