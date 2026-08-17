@@ -569,7 +569,7 @@ describe("billingRun.settleCoverage — bokför prutnings-uppdelningen (#801)", 
     expect(res.payerInvoice.vatOre).toBe((settled.payerInvoice.vatOre ?? 0) - 25_000);
     expect(res.clientInvoice.vatOre).toBe((settled.clientInvoice.vatOre ?? 0) + 25_000);
     // Ingen ny faktura, och absolut ingen CREDIT mot försäkringsbolaget.
-    const invoices = await c.invoice.list({ matterId: "m-1" });
+    const { items: invoices } = await c.invoice.list({ matterId: "m-1" });
     expect(invoices.filter((i) => i.invoiceType === "CREDIT")).toHaveLength(0);
     expect(res.payerInvoice.id).toBe(settled.payerInvoice.id); // samma faktura, uppdaterad
     expect(res.clientInvoice.id).toBe(settled.clientInvoice.id);

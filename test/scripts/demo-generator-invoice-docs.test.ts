@@ -26,7 +26,7 @@ describe("populateInvoiceDocs", () => {
     expect(n).toBeGreaterThan(0);
     expect(writes.every((p) => p.startsWith("documents/content/invdoc-") && p.endsWith(".html"))).toBe(true);
 
-    const invoices: Any[] = await (target.caller as Any).invoice.list({});
+    const { items: invoices } = (await (target.caller as Any).invoice.list({})) as { items: Any[] };
     const final = invoices.find((i: Any) => i.invoiceType === "FINAL");
     expect(final).toBeDefined();
     const inv = await (target.caller as Any).invoice.getById({ id: final.id });

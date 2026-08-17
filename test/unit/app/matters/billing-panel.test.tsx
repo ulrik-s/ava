@@ -64,7 +64,8 @@ vi.mock("@/lib/client/trpc", () => ({
       register: { useMutation: () => ({ mutateAsync: vi.fn(async () => {}) }) },
     },
     invoice: {
-      list: { useQuery: () => ({ data: invoiceListData }) },
+      // Kuvertform sedan #1014 — panelen läser `data.items`.
+      list: { useQuery: () => ({ data: { items: invoiceListData, total: invoiceListData.length } }) },
       createRadgivning: {
         useMutation: (opts?: { onSuccess?: () => void }) => {
           void opts;

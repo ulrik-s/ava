@@ -36,7 +36,7 @@ export function SieExportButton() {
   const invoices = trpc.invoice.list.useQuery({});
   const org = trpc.organization.getSettings.useQuery();
 
-  const rows = (invoices.data ?? []) as ExportableInvoice[];
+  const rows = (invoices.data?.items ?? []) as ExportableInvoice[];
   const exportableCount = countExportable(rows);
 
   function handleExport(): void {

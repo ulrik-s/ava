@@ -193,7 +193,7 @@ export default function PaymentPlansPage() {
         <DataTable
           prefKey="list.payment-plans"
           columns={planColumns}
-          data={(list.data ?? []) as PlanRow[]}
+          data={(list.data?.items ?? []) as PlanRow[]}
           rowKey={(p) => p.id}
           emptyMessage={`Inga ${STATUS_LABEL[status].toLowerCase()} planer.`}
           onRowClick={(p) => router.push(shellPath("payment-plans", p.id))}

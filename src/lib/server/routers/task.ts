@@ -9,7 +9,7 @@
 
 import { z } from "zod";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
-import { pageSlice } from "@/lib/shared/paginate";
+import { pageEnvelope } from "@/lib/shared/paginate";
 import { taskPrioritySchema, taskStatusSchema, type Task } from "@/lib/shared/schemas";
 import { asId, taskIdSchema, matterIdSchema, userIdSchema } from "@/lib/shared/schemas/ids";
 import { router, protectedProcedure, TRPCError } from "../trpc";
@@ -46,7 +46,7 @@ export const taskRouter = router({
     )
     // Migrerad till repository-sömmen (ADR 0020): ägar-/org-scopad listForUser.
     .query(async ({ ctx, input }) =>
-      pageSlice(
+      pageEnvelope(
         await ctx.repos.tasks.listForUser(ctx.user.id, ctx.user.organizationId, {
           status: input?.status,
           matterId: input?.matterId,

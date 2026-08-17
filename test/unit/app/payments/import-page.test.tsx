@@ -15,14 +15,18 @@ const OCR = buildOcrReference("20260001");
 
 const mutateAsync = vi.fn().mockResolvedValue({});
 const invalidate = vi.fn();
+// Kuvertform sedan #1014 — sidan läser `data.items`.
 const invoiceList = {
-  data: [
-    {
-      id: "inv-1", invoiceNumber: "F-2026-0001", ocrReference: OCR,
-      amount: 10_000, payments: [],
-      matter: { id: "m1", matterNumber: "2026-0001", title: "T" },
-    },
-  ],
+  data: {
+    items: [
+      {
+        id: "inv-1", invoiceNumber: "F-2026-0001", ocrReference: OCR,
+        amount: 10_000, payments: [],
+        matter: { id: "m1", matterNumber: "2026-0001", title: "T" },
+      },
+    ],
+    total: 1,
+  },
   isLoading: false,
 };
 

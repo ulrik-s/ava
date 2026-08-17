@@ -90,6 +90,14 @@ function standaloneInvoices(invoices: StandaloneInvoiceRow[] | undefined, rows: 
   return (invoices ?? []).filter((i) => !runInvoiceIds.has(String(i.id)));
 }
 
+/** Fristående klientfakturor (#853) — t.ex. rådgivningstimmen (STANDARD, ingen
+ *  billing-run). Egen hook så att kuvertets `?.items` (#1014) inte belastar
+ *  `BillingPanel`:s komplexitetstak. */
+function useStandaloneInvoices(matterId: MatterId, rows: BillingRunRow[]): StandaloneInvoiceRow[] {
+  const invoices = trpc.invoice.list.useQuery({ matterId }).data;
+  return standaloneInvoices(invoices?.items as StandaloneInvoiceRow[] | undefined, rows);
+}
+
 interface KrDocInfo { id: DocumentId; fileName: string; storagePath: string | null }
 
 type DocumentListOutput = inferRouterOutputs<AppRouter>["document"]["list"];
@@ -389,9 +397,8 @@ export function BillingPanel({ matterId, matter }: Props) {
   const [verdictRunId, setVerdictRunId] = useState<BillingRunId | null>(null);
   const [beslutRunId, setBeslutRunId] = useState<BillingRunId | null>(null);
   const rows = (runs.data?.runs ?? []) as BillingRunRow[];
-  // Fristående klientfakturor (#853) — t.ex. rådgivningstimmen (STANDARD, ingen
-  // billing-run). Visas i faktura-listan utöver billing-runs.
-  const standalone = standaloneInvoices(trpc.invoice.list.useQuery({ matterId }).data as StandaloneInvoiceRow[] | undefined, rows);
+  // Visas i faktura-listan utöver billing-runs.
+  const standalone = useStandaloneInvoices(matterId, rows);
   // Aktiv kostnadsräkning (#828): KR vars livscykel inte är klar (≠ FAKTURERAD).
   const activeKr = rows.find((r) => r.type === "KOSTNADSRAKNING" && !!r.kostnadsrakningStatus && r.kostnadsrakningStatus !== "FAKTURERAD");
   // Flödesmodellen (#816) styr menyn + dom-bannern: fasen härleds ur runs+matter
@@ -576,7 +583,7 @@ function BillingSummary({ matterId }: { matterId: MatterId }) {
     ? d.timeEntries.filter((t) => t.billable).reduce((s, t) => s + t.valueOre, 0)
       + d.expenses.filter((e) => e.billable).reduce((s, e) => s + e.amount, 0)
     : 0;
-  const list = invoices.data ?? [];
+  const list = invoices.data?.items ?? [];
   const fakturerat = list.filter((i) => i.status !== "DRAFT" && i.status !== "CANCELLED").reduce((s, i) => s + i.amount, 0);
   const betalt = list.reduce((s, i) => s + (i.payments ?? []).reduce((p, pm) => p + pm.amount, 0), 0);
   return (

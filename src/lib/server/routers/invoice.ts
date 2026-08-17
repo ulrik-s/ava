@@ -19,7 +19,7 @@ import { arvodeInclVatOre, isPaymentPlanSettled } from "@/lib/shared/invoice-cal
 import { canTransition, transitionErrorMessage } from "@/lib/shared/invoice-state-machine";
 import { ocrFromInvoiceNumber } from "@/lib/shared/ocr-reference";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
-import { pageSlice } from "@/lib/shared/paginate";
+import { pageEnvelope } from "@/lib/shared/paginate";
 import { computeRadgivningsavgift } from "@/lib/shared/rattshjalp";
 import type { Invoice, Payment, PaymentPlan, WriteOff } from "@/lib/shared/schemas/billing";
 import { invoiceStatusSchema, invoiceTypeSchema, type InvoiceStatus } from "@/lib/shared/schemas/enums";
@@ -119,7 +119,7 @@ export const invoiceRouter = router({
     )
     // Migrerad till repository-sömmen (ADR 0020). listForOrg org-scopar +
     // hämtar listvyns include (matter-subset, plan, betalningar, aconto-avdrag).
-    .query(async ({ ctx, input }) => pageSlice(await ctx.repos.invoices.listForOrg(ctx.orgId, input), input)),
+    .query(async ({ ctx, input }) => pageEnvelope(await ctx.repos.invoices.listForOrg(ctx.orgId, input), input)),
 
   getById: orgProcedure
     .input(z.object({ id: invoiceIdSchema }))

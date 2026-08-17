@@ -17,7 +17,7 @@
  */
 
 import { z } from "zod";
-import { pageSlice } from "@/lib/shared/paginate";
+import { pageEnvelope } from "@/lib/shared/paginate";
 import {
   computeDueReminders,
   type PlanForScan,
@@ -96,7 +96,7 @@ export const paymentPlanRouter = router({
       const plans = await ctx.repos.paymentPlans.listForOrg(ctx.orgId, input?.status);
       const needle = input?.search?.toLowerCase();
       // Sidningen sist — sök först, annars sidas bort träffar.
-      return pageSlice(needle ? plans.filter((p) => planHaystack(p).includes(needle)) : plans, input);
+      return pageEnvelope(needle ? plans.filter((p) => planHaystack(p).includes(needle)) : plans, input);
     }),
 
   getById: orgProcedure

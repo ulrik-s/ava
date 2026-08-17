@@ -93,7 +93,8 @@ async function renderDoc(c: Any, inv: Any, l: DocLookups): Promise<string> {
 
 export async function populateInvoiceDocs(caller: GeneratorCaller, sink?: BinarySink, idFor?: InvoiceDocIdFn): Promise<number> {
   const c = caller as Any;
-  const invoices: Any[] = await c.invoice.list({});
+  // Kuvertform sedan #1014 — raderna bor under `items`.
+  const { items: invoices } = (await c.invoice.list({})) as { items: Any[] };
   const lookups = await loadLookups(c);
   // Fakturadokumenten filas som allt annat (#985) — utan mapp hade 46 av demons
   // 121 dokument legat kvar i roten och trädet sett halvsorterat ut.

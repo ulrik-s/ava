@@ -24,8 +24,11 @@ describe("svarskontraktens register", () => {
   it("läse-ytan är täckt", () => {
     // Scope-beslutet i #1012: listor + getById + user.current med OBJEKT-svar.
     // Krymper listan har någon tagit bort ett kontrakt — det ska synas här.
+    // #1014 lade till de tre som tidigare returnerade nakna arrayer och därför
+    // inte KUNDE bära kontrakt (MCP kräver objekt på toppnivån).
     expect([...outputDescribedPaths()].sort()).toEqual([
-      "contacts.list", "matter.getById", "matter.list", "reports.firmOverview", "timeEntry.list", "user.current", "user.list",
+      "contacts.list", "invoice.list", "matter.getById", "matter.list", "paymentPlan.list",
+      "reports.firmOverview", "task.list", "timeEntry.list", "user.current", "user.list",
     ]);
   });
 

@@ -27,7 +27,8 @@ const taskRows = [
     matter: { id: "m1", matterNumber: "2026-0001", title: "Tvist" } },
 ];
 const calListQuery = { data: eventRows as unknown[], isLoading: false };
-const taskListQuery = { data: taskRows as unknown[], isLoading: false };
+// Kuvertform sedan #1014.
+const taskListQuery = { data: { items: taskRows as unknown[], total: taskRows.length }, isLoading: false };
 
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
@@ -58,7 +59,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
   calListQuery.data = eventRows;
-  taskListQuery.data = taskRows;
+  taskListQuery.data = { items: taskRows, total: taskRows.length };
 });
 
 describe("CalendarPage — lista + skapa-flöden", () => {

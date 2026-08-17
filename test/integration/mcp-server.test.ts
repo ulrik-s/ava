@@ -27,6 +27,7 @@ import { listProcedures } from "../../tooling/ava-cli/introspect";
 import { buildAvaMcpServer, MCP_SERVER_NAME, toolName } from "../../tooling/ava-cli/mcp";
 import { MCP_DEFAULT_PAGE_SIZE } from "../../tooling/ava-cli/tool-descriptions";
 import { outputDescribedPaths } from "../../tooling/ava-cli/tool-outputs";
+import { projectedPaths, projectionFor } from "../../tooling/ava-cli/tool-projections";
 
 type Era = "modern" | "legacy";
 
@@ -266,11 +267,12 @@ describe("sidning av listor utan egen paginering (#1011)", () => {
   it("invoice.list får MCP-defaulten i stället för hela listan", async () => {
     const { client, close } = await connect("legacy");
     try {
-      const rows = JSON.parse(textOf(await client.callTool({ name: "invoice__list", arguments: {} }))) as unknown[];
+      // Kuvertform sedan #1014 — raderna bor under `items`.
+      const { items: rows } = JSON.parse(textOf(await client.callTool({ name: "invoice__list", arguments: {} }))) as { items: { id: string }[] };
       expect(rows).toHaveLength(MCP_DEFAULT_PAGE_SIZE);
-      const page2 = JSON.parse(textOf(await client.callTool({ name: "invoice__list", arguments: { page: 2, pageSize: 3 } }))) as { id: string }[];
+      const { items: page2 } = JSON.parse(textOf(await client.callTool({ name: "invoice__list", arguments: { page: 2, pageSize: 3 } }))) as { items: { id: string }[] };
       expect(page2).toHaveLength(3);
-      expect(page2[0]!.id).not.toBe((rows as { id: string }[])[0]!.id);
+      expect(page2[0]!.id).not.toBe(rows[0]!.id);
     } finally {
       await close();
     }
@@ -279,7 +281,7 @@ describe("sidning av listor utan egen paginering (#1011)", () => {
   it("task.list sidas på samma sätt", async () => {
     const { client, close } = await connect("legacy");
     try {
-      const rows = JSON.parse(textOf(await client.callTool({ name: "task__list", arguments: {} }))) as unknown[];
+      const { items: rows } = JSON.parse(textOf(await client.callTool({ name: "task__list", arguments: {} }))) as { items: unknown[] };
       expect(rows.length).toBeLessThanOrEqual(MCP_DEFAULT_PAGE_SIZE);
     } finally {
       await close();
@@ -340,7 +342,11 @@ describe("reports.firmOverview över MCP (#1016)", () => {
  * `invoice.list` — 10 rader à ~1 KB, join-feta rader. Nästa sänkning kräver
  * fältprojektion (#1014), inte mer sidning.
  */
-const OUTPUT_BUDGET_CHARS = 38_000;
+// Ratchet (#1014): 38 000 → 10 000 efter kuvertform + fältprojektion. Största
+// anropbara svaret på demo-seeden är nu `calendar.list` (6 795 tecken) mot
+// tidigare `invoice.list`/`matter.list` runt 26 000; taket ligger med marginal
+// över för att seeden ska kunna växa utan att grinden blir nyckfull.
+const OUTPUT_BUDGET_CHARS = 10_000;
 
 describe("verktygens utdatabudget", () => {
   it("inget verktyg som går att anropa utan argument spränger budgeten", async () => {
@@ -391,4 +397,78 @@ describe("verktygens utdatabudget", () => {
       await close();
     }
   });
+});
+
+describe("listornas kuvertform och radform (#1014)", () => {
+  it("de tidigare array-listorna bär { items, total }", async () => {
+    // Före #1014 returnerade de tre nakna arrayer: modellen kunde varken se
+    // hur många som fanns eller få ett svarskontrakt (MCP kräver objekt).
+    const { client, close } = await connect("legacy");
+    try {
+      for (const tool of ["invoice__list", "task__list", "paymentPlan__list"]) {
+        const data = JSON.parse(textOf(await client.callTool({ name: tool, arguments: {} }))) as
+          { items?: unknown[]; total?: number };
+        expect(Array.isArray(data.items), `${tool}.items`).toBe(true);
+        expect(typeof data.total, `${tool}.total`).toBe("number");
+      }
+    } finally {
+      await close();
+    }
+  });
+
+  it("`total` är antalet FÖRE sidningen, inte sidans längd", async () => {
+    // Den skillnaden är hela poängen: en modell som ser tio rader måste kunna
+    // avgöra om det var allt. Seedens fakturor är fler än MCP-sidan.
+    const { client, close } = await connect("legacy");
+    try {
+      const paged = JSON.parse(textOf(await client.callTool({ name: "invoice__list", arguments: {} }))) as
+        { items: unknown[]; total: number };
+      const all = JSON.parse(textOf(await client.callTool({ name: "invoice__list", arguments: { pageSize: 100 } }))) as
+        { items: unknown[]; total: number };
+      expect(paged.items).toHaveLength(MCP_DEFAULT_PAGE_SIZE);
+      expect(paged.total).toBeGreaterThan(paged.items.length);
+      expect(paged.total).toBe(all.items.length);
+    } finally {
+      await close();
+    }
+  });
+
+  it("raderna bär inte routerns join-fält", async () => {
+    // 74 % av en fakturarad var `matter` + `creditedInvoice` — fält UI:t
+    // behöver men modellen betalar för. Detaljer hämtas via getById.
+    const { client, close } = await connect("legacy");
+    try {
+      const data = JSON.parse(textOf(await client.callTool({ name: "invoice__list", arguments: {} }))) as
+        { items: Record<string, unknown>[] };
+      const row = data.items[0];
+      expect(row, "seeden ska ha minst en faktura").toBeDefined();
+      expect(row).not.toHaveProperty("matter");
+      expect(row).not.toHaveProperty("creditedInvoice");
+      expect(row).not.toHaveProperty("payments");
+      // Men det kontraktet lovar finns kvar.
+      expect(row).toHaveProperty("invoiceNumber");
+      expect(row).toHaveProperty("amount");
+    } finally {
+      await close();
+    }
+  });
+
+  it("projektionen gäller ALLA projicerade listverktyg", async () => {
+    const { client, close } = await connect("legacy");
+    try {
+      for (const path of projectedPaths()) {
+        const projection = projectionFor(path);
+        const data = JSON.parse(textOf(await client.callTool({ name: toolName(path), arguments: {} }))) as
+          Record<string, unknown>;
+        const rows = data[projection!.key] as Record<string, unknown>[];
+        expect(Array.isArray(rows), `${path}.${projection!.key}`).toBe(true);
+        for (const row of rows) {
+          const extra = Object.keys(row).filter((k) => !projection!.fields.includes(k));
+          expect(extra, `${path} läcker fält`).toEqual([]);
+        }
+      }
+    } finally {
+      await close();
+    }
+  }, 30_000);
 });

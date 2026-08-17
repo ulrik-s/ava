@@ -6,9 +6,13 @@ import { render, screen } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import InvoicesPage from "@/app/invoices/page";
 
+// Kuvertform sedan #1014 — sidan läser `data.items`.
 const invoicesQuery = {
-  data: undefined as Array<Record<string, unknown>> | undefined,
+  data: undefined as { items: Array<Record<string, unknown>>; total: number } | undefined,
   isLoading: false,
+};
+const setInvoices = (rows: Array<Record<string, unknown>> | undefined): void => {
+  invoicesQuery.data = rows === undefined ? undefined : { items: rows, total: rows.length };
 };
 
 vi.mock("@/lib/client/trpc", () => ({
@@ -35,13 +39,13 @@ vi.mock("@/lib/client/trpc", () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
-  invoicesQuery.data = undefined;
+  setInvoices(undefined);
   invoicesQuery.isLoading = false;
 });
 
 describe("InvoicesPage", () => {
   it("renderar rubrik", () => {
-    invoicesQuery.data = [];
+    setInvoices([]);
     render(<InvoicesPage />);
     expect(screen.getByRole("heading", { name: /Fakturor/i })).toBeInTheDocument();
   });
@@ -53,13 +57,13 @@ describe("InvoicesPage", () => {
   });
 
   it("visar tomt-läge när inga fakturor finns", () => {
-    invoicesQuery.data = [];
+    setInvoices([]);
     render(<InvoicesPage />);
     expect(screen.getByText(/Inga fakturor ännu/i)).toBeInTheDocument();
   });
 
   it("listar fakturor med status och typ", () => {
-    invoicesQuery.data = [
+    setInvoices([
       {
         id: "i1",
         invoiceDate: new Date("2026-02-01").toISOString(),
@@ -76,7 +80,7 @@ describe("InvoicesPage", () => {
         amount: 50000,
         matter: { id: "m2", matterNumber: "2026-0002", title: "Tvist" },
       },
-    ];
+    ]);
     render(<InvoicesPage />);
     expect(screen.getByText("Faktura")).toBeInTheDocument();
     expect(screen.getByText("Aconto")).toBeInTheDocument();
@@ -87,7 +91,7 @@ describe("InvoicesPage", () => {
   });
 
   it("länkar varje rad till faktura- och ärendesidor", () => {
-    invoicesQuery.data = [
+    setInvoices([
       {
         id: "i1",
         invoiceDate: new Date("2026-02-01").toISOString(),
@@ -96,7 +100,7 @@ describe("InvoicesPage", () => {
         amount: 1000,
         matter: { id: "m1", matterNumber: "2026-0001", title: "T" },
       },
-    ];
+    ]);
     render(<InvoicesPage />);
     const links = screen.getAllByRole("link");
     const hrefs = links.map((l) => l.getAttribute("href"));
@@ -111,13 +115,13 @@ describe("InvoicesPage", () => {
   });
 
   it("renderar alla statuser med rätt klass-färg", () => {
-    invoicesQuery.data = [
+    setInvoices([
       { id: "i1", invoiceDate: new Date().toISOString(), invoiceType: "STANDARD", status: "DRAFT", amount: 100, matter: { id: "m1", matterNumber: "1", title: "T" } },
       { id: "i2", invoiceDate: new Date().toISOString(), invoiceType: "STANDARD", status: "INSTALLMENT_PLAN", amount: 100, matter: { id: "m2", matterNumber: "2", title: "T" } },
       { id: "i3", invoiceDate: new Date().toISOString(), invoiceType: "STANDARD", status: "CANCELLED", amount: 100, matter: { id: "m3", matterNumber: "3", title: "T" } },
       { id: "i4", invoiceDate: new Date().toISOString(), invoiceType: "STANDARD", status: "BAD_DEBT", amount: 100, matter: { id: "m4", matterNumber: "4", title: "T" } },
       { id: "i5", invoiceDate: new Date().toISOString(), invoiceType: "FINAL", status: "SENT", amount: -100, matter: { id: "m5", matterNumber: "5", title: "T" } },
-    ];
+    ]);
     render(<InvoicesPage />);
     expect(screen.getByText("Utkast")).toBeInTheDocument();
     expect(screen.getByText("Avbetalningsplan")).toBeInTheDocument();

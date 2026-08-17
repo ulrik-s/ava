@@ -383,7 +383,7 @@ describe("Scenario: civilmål (bostadsrättstvist) på löpande räkning", () =>
     const times = await state.caller.timeEntry.list({ matterId: state.matterId! });
     expect(times.totalMinutes).toBe(885); // 14 tim 45 min
 
-    const invoices = await state.caller.invoice.list({ matterId: state.matterId! });
+    const { items: invoices } = await state.caller.invoice.list({ matterId: state.matterId! });
     expect(invoices.length).toBe(2);
     const acconto = invoices.find((i) => i.invoiceType === "ACCONTO");
     const final = invoices.find((i) => i.invoiceType === "FINAL");

@@ -8,7 +8,12 @@ import { describe, it, expect, beforeEach, vi } from "vitest-compat";
 
 import PaymentPlansPage, { formatScanResult } from "@/app/payment-plans/page";
 
-const listQuery = { data: undefined as unknown[] | undefined, isLoading: false };
+// Kuvertform sedan #1014. `setRows` håller mockens form på ETT ställe, så
+// testerna fortsätter tilldela rader utan att upprepa kuvertet.
+const listQuery = { data: undefined as { items: unknown[]; total: number } | undefined, isLoading: false };
+const setRows = (rows: unknown[] | undefined): void => {
+  listQuery.data = rows === undefined ? undefined : { items: rows, total: rows.length };
+};
 type ScanResult = { scanned: number; planned: number; due: number; overdue: number };
 const scanMutate = vi.fn();
 const scanState = { isPending: false, error: null as null | { message: string } };
@@ -45,7 +50,7 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ push: pushSpy }) }));
 
 beforeEach(() => {
   vi.clearAllMocks();
-  listQuery.data = undefined;
+  setRows(undefined);
   listQuery.isLoading = false;
   scanState.isPending = false;
   scanState.error = null;
@@ -54,7 +59,7 @@ beforeEach(() => {
 
 describe("PaymentPlansPage — utestående", () => {
   it("visar utestående = total − inbetalt − avskrivet", () => {
-    listQuery.data = [
+    setRows([
       {
         id: "pp1", status: "ACTIVE", monthlyAmount: 10_000, dayOfMonth: 15,
         invoice: {
@@ -64,7 +69,7 @@ describe("PaymentPlansPage — utestående", () => {
           matter: { matterNumber: "2026-0001", title: "Tvist", contacts: [{ contact: { id: "c1", name: "Anna" } }] },
         },
       },
-    ];
+    ]);
     render(<PaymentPlansPage />);
     // 100 000 − 30 000 betalt − 20 000 avskrivet = 50 000 öre = 500 kr utestående
     expect(screen.getByText("Utestående")).toBeInTheDocument();
@@ -137,7 +142,7 @@ describe("PaymentPlansPage — filter, sök, rad-klick", () => {
   });
 
   it("rad-klick navigerar till plan-detaljen (router.push)", () => {
-    listQuery.data = [planRow];
+    setRows([planRow]);
     render(<PaymentPlansPage />);
     fireEvent.click(screen.getByText("Tvist"));
     expect(pushSpy).toHaveBeenCalled();
