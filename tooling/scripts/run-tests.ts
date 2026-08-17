@@ -135,6 +135,30 @@ const LINE_FLOOR = 0.900;
 const FUNC_FLOOR = 0.859;
 
 /**
+ * AI-ytans golv (#1025). `tooling/ava-cli/` — CLI:t + MCP-servern — mättes
+ * aldrig av ratchet:en: `tally` räknade bara `src/`, så de sju testfilerna där
+ * höjde inget golv och 95,6 % kunde falla fritt.
+ *
+ * EGET golv i st.f. att bredda `isSrc`: ytan är ~540 rader mot appens ~40 000,
+ * så en total-siffra skulle dränka den — hela AI-ytan kan tappa sin täckning
+ * utan att den gemensamma procenten rör sig mätbart. Två skalor, två golv.
+ *
+ * Uppmätt enprocess: 95,58 % rader / 93,10 % funktioner (519/543, 54/58).
+ * Golven ankras MEDVETET lägre än så, av två skäl:
+ *
+ *   1. Grinden kör pass A med `--parallel`, som underrapporterar täckning
+ *      något (bun aggregerar löst över workers — se OBS 2 i docs/quality.md).
+ *      Den siffran är inte känd förrän grinden kört skarpt.
+ *   2. Ytan har bara 58 funktioner → EN funktion är 1,7 procentenheter. Ett
+ *      snävt golv hade fällt på kvantiseringen i st.f. på en regression.
+ *
+ * Dras åt mot den faktiska `--parallel`-siffran när den syns i CI-loggen —
+ * ratchet:en flyttas bara uppåt, aldrig ned (AGENTS.md).
+ */
+const AI_LINE_FLOOR = 0.930;
+const AI_FUNC_FLOOR = 0.880;
+
+/**
  * SERIAL_FILES — testfiler som SYNKRONT spawnar en barnprocess via
  * `execFileSync`/`spawnSync`: antingen git-binären mot temp-repon, eller
  * bash/bun/node (installer-script, dep-cruiser, manifest-generator). Körs
@@ -234,7 +258,7 @@ function runPass(label: string, files: string[], workers: number | null, covDir:
 // för funktioner tas per-fil-MAX av FNF/FNH (en fils instrumentering är
 // identisk mellan passen → FNF lika; FNH-max är en konservativ union för de få
 // filer som rörs i båda passen).
-interface FileCov { lines: Map<number, number>; fnf: number; fnh: number }
+export interface FileCov { lines: Map<number, number>; fnf: number; fnh: number }
 interface Totals { linesFound: number; linesHit: number; funcsFound: number; funcsHit: number }
 
 /** DA:<rad>,<antal> → union (max) av radens träffräknare. */
@@ -265,6 +289,23 @@ function mergeLcov(into: Map<string, FileCov>, text: string): void {
 
 const isSrc = (path: string): boolean => path.includes("/src/") || path.startsWith("src/");
 
+/** AI-ytan: CLI:t + MCP-servern (#1025). Mäts för sig, se AI_LINE_FLOOR. */
+const isAiSurface = (path: string): boolean => path.includes("tooling/ava-cli/");
+
+/** Ett mätområde med eget golv — appen och AI-ytan skalar för olika för att
+ *  dela en siffra (se AI_LINE_FLOOR). */
+export interface CoverageScope {
+  label: string;
+  match: (path: string) => boolean;
+  lineFloor: number;
+  funcFloor: number;
+}
+
+export const COVERAGE_SCOPES: readonly CoverageScope[] = [
+  { label: "src/", match: isSrc, lineFloor: LINE_FLOOR, funcFloor: FUNC_FLOOR },
+  { label: "tooling/ava-cli/", match: isAiSurface, lineFloor: AI_LINE_FLOOR, funcFloor: AI_FUNC_FLOOR },
+];
+
 /** Läs + union-merge:a lcov från alla pass-kataloger. */
 function loadMerged(covDirs: string[]): Map<string, FileCov> {
   const merged = new Map<string, FileCov>();
@@ -275,11 +316,11 @@ function loadMerged(covDirs: string[]): Map<string, FileCov> {
   return merged;
 }
 
-/** Räkna rad-/funktions-täckning över src/-filer. */
-function tally(merged: Map<string, FileCov>): Totals {
+/** Räkna rad-/funktions-täckning över filerna ett mätområde omfattar. */
+export function tally(merged: Map<string, FileCov>, match: (path: string) => boolean): Totals {
   const t: Totals = { linesFound: 0, linesHit: 0, funcsFound: 0, funcsHit: 0 };
   for (const [path, cov] of merged) {
-    if (!isSrc(path)) continue;
+    if (!match(path)) continue;
     for (const cnt of cov.lines.values()) { t.linesFound++; if (cnt > 0) t.linesHit++; }
     t.funcsFound += cov.fnf;
     t.funcsHit += cov.fnh;
@@ -287,15 +328,24 @@ function tally(merged: Map<string, FileCov>): Totals {
   return t;
 }
 
-function checkCoverage(covDirs: string[]): void {
-  const t = tally(loadMerged(covDirs));
+const pct = (n: number): string => `${(n * 100).toFixed(2)}%`;
+
+/** Mät ETT område mot sina golv; returnera dess brister (tom = grönt). */
+function checkScope(merged: Map<string, FileCov>, scope: CoverageScope): string[] {
+  const t = tally(merged, scope.match);
+  if (t.linesFound === 0) return [`${scope.label}: inga mätta rader — hittade grinden ingen lcov-data?`];
   const lines = t.linesHit / t.linesFound;
   const funcs = t.funcsHit / t.funcsFound;
-  const pct = (n: number): string => `${(n * 100).toFixed(2)}%`;
-  console.log(`\nCoverage (src/): rader ${pct(lines)} (golv ${pct(LINE_FLOOR)}), funktioner ${pct(funcs)} (golv ${pct(FUNC_FLOOR)})`);
+  console.log(`\nCoverage (${scope.label}): rader ${pct(lines)} (golv ${pct(scope.lineFloor)}), funktioner ${pct(funcs)} (golv ${pct(scope.funcFloor)})`);
   const failures: string[] = [];
-  if (lines < LINE_FLOOR) failures.push(`rader ${pct(lines)} < ${pct(LINE_FLOOR)}`);
-  if (funcs < FUNC_FLOOR) failures.push(`funktioner ${pct(funcs)} < ${pct(FUNC_FLOOR)}`);
+  if (lines < scope.lineFloor) failures.push(`${scope.label} rader ${pct(lines)} < ${pct(scope.lineFloor)}`);
+  if (funcs < scope.funcFloor) failures.push(`${scope.label} funktioner ${pct(funcs)} < ${pct(scope.funcFloor)}`);
+  return failures;
+}
+
+function checkCoverage(covDirs: string[]): void {
+  const merged = loadMerged(covDirs);
+  const failures = COVERAGE_SCOPES.flatMap((scope) => checkScope(merged, scope));
   if (failures.length > 0) {
     console.error(`✗ Coverage under golvet: ${failures.join("; ")}`);
     process.exit(1);

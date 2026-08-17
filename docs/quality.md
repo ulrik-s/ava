@@ -74,18 +74,39 @@ funktioner per-fil-max av FNF/FNH) → eliminerar `--parallel`-flaken.
 > isolering men under-rapporterar coverage något (bun aggregerar löst över
 > workers) — deterministiskt, så golvet är giltigt.
 
-Ratchet-golvet lever i [`tooling/scripts/run-tests.ts`](../tooling/scripts/run-tests.ts)
-(`LINE_FLOOR` / `FUNC_FLOOR`) — flyttas BARA uppåt. Aktuell baslinje (ratchet,
-strax under faktisk):
+Ratchet-golven lever i [`tooling/scripts/run-tests.ts`](../tooling/scripts/run-tests.ts)
+(`COVERAGE_SCOPES`) — flyttas BARA uppåt. **Två mätområden med var sitt golv**
+(#1025): appen och AI-ytan skalar för olika för att dela en siffra — `src/` är
+~40 000 rader, `tooling/ava-cli/` ~540, så en gemensam procent skulle låta hela
+AI-ytan tappa sin täckning utan att totalen rörde sig mätbart.
 
-| Mått | Golv (`run-tests.ts`) | Faktisk (lcov, src/, --parallel) |
-|---|---|---|
-| Lines | 90.0 % | ~90.7 % |
-| Functions | 85.9 % | ~87.5 % |
+| Område | Golv rader | Golv funktioner | Faktisk (lcov, --parallel) |
+|---|---|---|---|
+| `src/` | 90.0 % | 85.9 % | ~90.7 % / ~87.5 % |
+| `tooling/ava-cli/` (CLI + MCP) | 93.0 % | 88.0 % | 95.6 % / 93.1 % (enprocess) |
+
+AI-ytans golv är ankrat under uppmätt med avsikt: siffran ovan är mätt
+enprocess, medan grinden kör pass A med `--parallel` (som underrapporterar,
+se OBS 2) — och med bara 58 funktioner är EN funktion 1,7 procentenheter.
+Dras åt mot den faktiska `--parallel`-siffran när den syns i CI-loggen.
 
 Coverage-rapporten skrivs till `coverage/` (lcov). `helper-ui` har en egen
 coverage-ratchet i [`helper-ui/bunfig.toml`](../helper-ui/bunfig.toml)
 (`coverageThreshold`, line 0.90 / function 0.85).
+
+#### Vilken grind ser vilken katalog
+
+Luckan som #1025 stängde var osynlig just för att omfånget inte stod skrivet
+någonstans. Håll tabellen aktuell när en ny katalog tillkommer:
+
+| Katalog | Coverage | `deps:check` | knip |
+|---|---|---|---|
+| `src/` | ✅ eget golv | ✅ | ✅ |
+| `tooling/ava-cli/` | ✅ eget golv | ✅ | ✅ (via `package.json`-scripten `ava` / `ava:mcp`) |
+| `tooling/scripts/` | ❌ | ❌ | ✅ (entry-mönster) |
+| `helper-ui/` | ✅ egen ratchet (`bunfig.toml`) | ✅ | ✅ |
+| `office-addin/` | ❌ | ✅ | ✅ |
+| `test/` | — | ✅ | ✅ |
 
 ### Komplexitet (`bun run lint`)
 
