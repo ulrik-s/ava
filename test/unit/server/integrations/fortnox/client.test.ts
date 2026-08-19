@@ -145,3 +145,89 @@ describe("FortnoxClient fil-bilaga (#785)", () => {
     expect(body).toEqual({ VoucherFileConnection: { FileId: "guid-9", VoucherSeries: "A", VoucherNumber: "7" } });
   });
 });
+
+/**
+ * Läs-vägen (#1030) — tillagd för att e2e:t ska kunna VERIFIERA att en push
+ * landade, inte bara att skrivningen gav 200. Testerna vaktar två saker:
+ * att GET-svarets rader överlever parsningen (POST-schemat strippar dem), och
+ * att läs-vägen har samma token-livscykel som skriv-vägen.
+ */
+/**
+ * Typad fetch-fake. `globalThis.fetch` bär `preconnect` i bun:s typer, så en
+ * naken lambda matchar inte — och dubbel-cast är förbjuden (#562, ADR 0026).
+ * `Object.assign` ger fakern den saknade egenskapen på riktigt i st.f. att
+ * tysta typcheckaren.
+ */
+function fetchFake(handler: (url: string, init?: RequestInit) => Promise<Response>): typeof globalThis.fetch {
+  const fn = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => handler(String(input), init);
+  return Object.assign(fn, { preconnect: (): void => {} });
+}
+
+describe("FortnoxClient — läsa tillbaka (#1030)", () => {
+  const FETCHED = {
+    Voucher: {
+      VoucherSeries: "A", VoucherNumber: 17, Year: 1,
+      VoucherRows: [
+        { Account: 1510, Debit: 125, Credit: 0 },
+        { Account: 3041, Debit: 0, Credit: 100 },
+        { Account: 2611, Debit: 0, Credit: 25 },
+      ],
+    },
+  };
+
+  it("getVoucher behåller raderna — annars går balansen inte att kontrollera", async () => {
+    const store = new InMemoryFortnoxTokenStore({ accessToken: "at", refreshToken: "rt", accessTokenExpiresAt: Date.now() + 3_600_000 });
+    const client = new FortnoxClient(config, store, fetchFake(async () => json(200, FETCHED)));
+    const res = await client.getVoucher("A", "17");
+    expect(res.Voucher.VoucherRows).toHaveLength(3);
+    const debit = res.Voucher.VoucherRows.reduce((s, r) => s + r.Debit, 0);
+    const credit = res.Voucher.VoucherRows.reduce((s, r) => s + r.Credit, 0);
+    expect(debit).toBe(credit);
+  });
+
+  it("getVoucher går mot rätt path och skickar Bearer", async () => {
+    const store = new InMemoryFortnoxTokenStore({ accessToken: "at", refreshToken: "rt", accessTokenExpiresAt: Date.now() + 3_600_000 });
+    let seenUrl = ""; let seenAuth = "";
+    const client = new FortnoxClient(config, store, fetchFake(async (url, init) => {
+      seenUrl = url;
+      seenAuth = ((init?.headers ?? {}) as Record<string, string>).Authorization ?? "";
+      return json(200, FETCHED);
+    }));
+    await client.getVoucher("A", "17");
+    expect(seenUrl).toBe("https://api.test/3/vouchers/A/17");
+    expect(seenAuth).toBe("Bearer at");
+  });
+
+  it("getVoucher refreshar och gör om vid 401 — samma livscykel som skriv-vägen", async () => {
+    const store = new InMemoryFortnoxTokenStore({ accessToken: "at-gammal", refreshToken: "rt", accessTokenExpiresAt: Date.now() + 3_600_000 });
+    let calls = 0;
+    const client = new FortnoxClient(config, store, fetchFake(async (url) => {
+      if (url.endsWith("/oauth-v1/token")) return json(200, ROTATED);
+      calls++;
+      return calls === 1 ? json(401, { error: "expired" }) : json(200, FETCHED);
+    }));
+    const res = await client.getVoucher("A", "17");
+    expect(res.Voucher.VoucherNumber).toBe(17);
+    expect(calls).toBe(2);
+    expect((await store.load())?.accessToken).toBe("at-new");
+  });
+
+  it("checkConnection slår mot voucherseries och skapar ingenting", async () => {
+    const store = new InMemoryFortnoxTokenStore({ accessToken: "at", refreshToken: "rt", accessTokenExpiresAt: Date.now() + 3_600_000 });
+    const seen: Array<{ url: string; method: string }> = [];
+    const client = new FortnoxClient(config, store, fetchFake(async (url, init) => {
+      seen.push({ url, method: init?.method ?? "GET" });
+      return json(200, { VoucherSeries: [] });
+    }));
+    await client.checkConnection();
+    expect(seen).toEqual([{ url: "https://api.test/3/voucherseries", method: "GET" }]);
+  });
+
+  it("checkConnection kastar med statusen när anslutningen är död", async () => {
+    const store = new InMemoryFortnoxTokenStore({ accessToken: "at", refreshToken: "rt", accessTokenExpiresAt: Date.now() + 3_600_000 });
+    const client = new FortnoxClient(config, store, fetchFake(async (url) =>
+      url.endsWith("/oauth-v1/token") ? json(200, ROTATED) : json(403, { Message: "access-token saknas" })
+    ));
+    await expect(client.checkConnection()).rejects.toThrow(/403/);
+  });
+});

@@ -1,0 +1,82 @@
+name: Fortnox E2E (manuell)
+
+# E2E mot RIKTIGA Fortnox Voucher API (#1030).
+#
+# ## Varför manuell och inte i CI-matrisen
+#
+# Varje körning skapar ett verifikat i Fortnox som INTE går att ta tillbaka.
+# Att köra den på varje PR skulle bränna verifikatnummer i en riktig bokföring.
+# Kör den när connector-koden ändras, före release, eller när du vill veta att
+# anslutningen fortfarande lever.
+#
+# ## Roterande refresh-token — läs det här innan du felsöker
+#
+# Fortnox ogiltigförklarar den gamla refresh-token:en vid VARJE refresh. Ett
+# token i en secret räcker därför till EN körning om vi inte skriver tillbaka
+# det nya. Jobbet gör det (steget "Spara roterad refresh-token"), och det körs
+# med `if: always()` eftersom token:en roterar redan i första anropet — även om
+# verifikat-pushen senare fallerar är den gamla token:en död.
+#
+# Går write-back:en fel måste du göra om consent-rundan manuellt:
+#   1. bun -e 'console.log(buildAuthorizeUrl(config, "state"))' → öppna i browser
+#   2. godkänn → kopiera ?code= ur redirecten
+#   3. exchangeCodeForTokens(config, code) → spara refresh_token i secreten
+# Se src/lib/server/integrations/fortnox/README.md och docs/fortnox-e2e.md.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Bara auth + anslutningskoll (skapar INGET verifikat)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+# Aldrig två samtidiga körningar: de skulle refresha parallellt och slå ut
+# varandras tokens (den ena rotationen ogiltigförklarar den andras).
+concurrency:
+  group: fortnox-e2e
+  cancel-in-progress: false
+
+jobs:
+  fortnox-e2e:
+    name: Fortnox E2E (sandbox)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: fortnox-sandbox
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/bun-setup
+
+      - name: Kör Fortnox-E2E
+        id: e2e
+        env:
+          AVA_FORTNOX_CLIENT_ID: ${{ secrets.AVA_FORTNOX_CLIENT_ID }}
+          AVA_FORTNOX_CLIENT_SECRET: ${{ secrets.AVA_FORTNOX_CLIENT_SECRET }}
+          AVA_FORTNOX_REFRESH_TOKEN: ${{ secrets.AVA_FORTNOX_REFRESH_TOKEN }}
+          AVA_FORTNOX_VOUCHER_SERIES: ${{ vars.AVA_FORTNOX_VOUCHER_SERIES }}
+          AVA_FORTNOX_KONTO_KUNDFORDRAN: ${{ vars.AVA_FORTNOX_KONTO_KUNDFORDRAN }}
+          AVA_FORTNOX_KONTO_ARVODE: ${{ vars.AVA_FORTNOX_KONTO_ARVODE }}
+          AVA_FORTNOX_KONTO_MOMS: ${{ vars.AVA_FORTNOX_KONTO_MOMS }}
+          AVA_FORTNOX_DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
+        run: bun tooling/scripts/fortnox-e2e.ts
+
+      # Måste köras även när e2e:t fallerade: token:en roterade i det FÖRSTA
+      # anropet, så den gamla är död oavsett hur körningen slutade. Hoppar över
+      # sig själv om scriptet inte hann emitta något (t.ex. saknad secret).
+      - name: Spara roterad refresh-token
+        if: always() && steps.e2e.outputs.refresh_token != ''
+        env:
+          GH_TOKEN: ${{ secrets.AVA_FORTNOX_ROTATE_PAT }}
+          NEW_TOKEN: ${{ steps.e2e.outputs.refresh_token }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::AVA_FORTNOX_ROTATE_PAT saknas — den roterade token:en kan inte sparas."
+            echo "::error::Nästa körning kommer att misslyckas. Uppdatera AVA_FORTNOX_REFRESH_TOKEN manuellt."
+            exit 1
+          fi
+          printf '%s' "$NEW_TOKEN" | gh secret set AVA_FORTNOX_REFRESH_TOKEN \
+            --repo "${{ github.repository }}" --env fortnox-sandbox --body -
+          echo "✓ AVA_FORTNOX_REFRESH_TOKEN uppdaterad med den roterade token:en."
