@@ -149,6 +149,26 @@ export const fortnoxVoucherResponseSchema = z.object({
 });
 export type FortnoxVoucherResponse = z.infer<typeof fortnoxVoucherResponseSchema>;
 
+/**
+ * Svar från `GET /3/vouchers/{serie}/{nr}` (#1030). Skilt från POST-svaret för
+ * att det MÅSTE bära raderna: hela poängen med att läsa tillbaka är att kunna
+ * kontrollera att verifikatet balanserar hos Fortnox, inte bara att skrivningen
+ * gav 200. Löst (`looseObject`) — GET returnerar fler fält än vi bryr oss om,
+ * och de ska inte fälla en läsning.
+ */
+export const fortnoxVoucherFetchSchema = z.object({
+  Voucher: z.looseObject({
+    VoucherSeries: z.string(),
+    VoucherNumber: z.number().int(),
+    VoucherRows: z.array(z.looseObject({
+      Account: z.number().int(),
+      Debit: z.number().default(0),
+      Credit: z.number().default(0),
+    })).min(1),
+  }),
+});
+export type FortnoxVoucherFetch = z.infer<typeof fortnoxVoucherFetchSchema>;
+
 // ─── Filbilaga (#785) ───────────────────────────────────────────────────────
 
 /** Svar från `POST /3/inbox` (fil-uppladdning) — vi behöver fil-id:t (GUID). */

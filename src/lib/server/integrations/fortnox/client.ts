@@ -9,9 +9,11 @@
 import { refreshTokens, type FetchFn } from "./oauth";
 import {
   fortnoxInboxResponseSchema,
+  fortnoxVoucherFetchSchema,
   fortnoxVoucherResponseSchema,
   type FortnoxConfig,
   type FortnoxVoucher,
+  type FortnoxVoucherFetch,
   type FortnoxVoucherResponse,
 } from "./schema";
 import type { FortnoxTokenStore } from "./token-store";
@@ -60,6 +62,13 @@ export class FortnoxClient {
     return next.accessToken;
   }
 
+  private apiGet(path: string, token: string): Promise<Response> {
+    return this.fetchFn(new URL(path, this.config.apiBase).toString(), {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+    });
+  }
+
   private apiPost(path: string, token: string, body: unknown): Promise<Response> {
     return this.fetchFn(new URL(path, this.config.apiBase).toString(), {
       method: "POST",
@@ -81,6 +90,24 @@ export class FortnoxClient {
       throw new Error(`Fortnox ${what} ${res.status}: ${detail.slice(0, 300)}`);
     }
     return res;
+  }
+
+  /**
+   * Hämta ett verifikat. Finns för att kunna VERIFIERA att en push landade
+   * (e2e, #1030) — utan den vägen får man bara veta att Fortnox svarade 200 på
+   * skrivningen, inte att verifikatet går att läsa tillbaka och balanserar.
+   */
+  async getVoucher(voucherSeries: string, voucherNumber: string): Promise<FortnoxVoucherFetch> {
+    const res = await this.withRetry((t) => this.apiGet(`/3/vouchers/${voucherSeries}/${voucherNumber}`, t), "verifikat-hämtning");
+    return fortnoxVoucherFetchSchema.parse(await res.json());
+  }
+
+  /**
+   * Röktest av anslutningen: refreshar vid behov och slår mot en billig,
+   * biverkningsfri endpoint. Skapar INGET — säker att köra före en skarp push.
+   */
+  async checkConnection(): Promise<void> {
+    await this.withRetry((t) => this.apiGet("/3/voucherseries", t), "anslutningskoll");
   }
 
   /** Skapa ett verifikat. Returnerar serie + nummer (för idempotens/spårning). */
