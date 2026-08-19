@@ -60,11 +60,24 @@ Refresh-token:en dör efter 45 dygn utan användning, och en misslyckad
 write-back får samma effekt. Då krävs en ny consent-runda — den kan inte
 automatiseras, eftersom den kräver en människa som godkänner i Fortnox:
 
-1. Bygg authorize-URL:en med `buildAuthorizeUrl(config, state)`
-   (`src/lib/server/integrations/fortnox/oauth.ts`) och öppna den i en browser.
-2. Godkänn med ett konto som har rätt i den aktuella tenanten.
-3. Kopiera `?code=…` ur redirecten.
-4. `exchangeCodeForTokens(config, code)` → spara `refreshToken` i secreten.
+Kör **lokalt** (aldrig i CI — `client_secret` ska inte lämna din maskin, och
+`code` är engångs och kortlivad):
+
+```bash
+# 1. Bygg authorize-URL:en. Ingen hemlighet behövs i det här steget.
+AVA_FORTNOX_CLIENT_ID=… AVA_FORTNOX_REDIRECT_URI=… bun run fortnox:connect
+
+# 2. Godkänn i browsern. Kontrollera att `state` kommer tillbaka oförändrat
+#    (CSRF). Kopiera ?code=… ur adressfältet — landar du på en död sida är det
+#    väntat, koden står ändå i URL:en.
+
+# 3. Växla in koden → skriver ut refresh-token att lägga som secret.
+AVA_FORTNOX_CLIENT_ID=… AVA_FORTNOX_CLIENT_SECRET=… AVA_FORTNOX_REDIRECT_URI=… \
+  bun run fortnox:connect --code <kod>
+```
+
+`redirect_uri` måste matcha registreringen i Developer Portal **tecken för
+tecken** — annars avvisas anropet redan i steg 1.
 
 Modellen är **user-consent** (ingen `account_type`) — det är det flöde som
 verifierats mot sandbox. Service-konto är opt-in, se connector-README:n och
