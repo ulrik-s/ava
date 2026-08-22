@@ -330,7 +330,7 @@ bun-versionen där, gäller alla workflows. `ci.yml` har `concurrency`
 2. **Static analysis** — typecheck, lint (`--max-warnings 0`), `lint:complexity-strict`, depcruise, knip, jscpd. Inga tjänster.
 3. **Unit / komponent / integration** — `bun test` (två pass, se ovan) med coverage-ratchet mot in-memory `DemoDataStore`.
 4. **Repository (Postgres)** — Drizzle-repo-sviten mot RIKTIG Postgres i docker (fångar driver-/SQL-skillnader).
-5. **Server-first (deploy E2E)** — bygger server-first-binären, kör som docker-container mot Postgres, synkar push/pull + dokument-pipeline över HTTP.
+5. **Server-first (deploy E2E)** — bygger server-first-binären, kör som docker-container mot Postgres, synkar push/pull + dokument-pipeline + **faktureringskedjan** över HTTP. Faktureringsdelen (`billing-pipeline-e2e.ts`) täcker tid → slutfaktura (frysning, moms, OCR), avbetalning enligt plan (`INSTALLMENT_PLAN` → `PAID` + `COMPLETED`) och avbetalning som inte kommer i tid (DUE → OVERDUE, idempotent scan). Försenings-delen styrs av `asOf` i st.f. väggklockan, så jobbet är datum-oberoende. Kör lokalt med `bun run e2e:billing`.
 6. **E2E (OIDC login)** — browser-inloggning mot Keycloak via oauth2-proxy (Playwright).
 7. **Demo build** *(PR)* — statisk GH Pages-export + **bundle-size-ratchet** (`bun run size`).
 8. **Demo E2E (browser-smoke)** *(PR)* — serverar `out/` och verifierar att demon LADDAR (inte bara bygger). Hermetiskt: specarna blockerar varje förfrågan utanför sin egen origin (#932), så jobbet kan inte längre bli rött för att GH Pages ligger nere.
