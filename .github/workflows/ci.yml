@@ -159,6 +159,16 @@ jobs:
           AVA_DATABASE_URL: postgres://ava:ava@localhost:5433/ava_test
           AVA_ORGANIZATION_ID: "00000000-0000-0000-0000-000000000001"
         run: bun tooling/scripts/document-pipeline-e2e.ts
+      # Fakturerings-E2E: tid → slutfaktura (frysning, moms, OCR) → avbetalnings-
+      # plan → försenad avbetalning (DUE/OVERDUE). Försenings-delen styrs av
+      # `asOf` i st.f. väggklockan, så jobbet beter sig likadant alla dagar i
+      # månaden — annars hade det varit ett datumberoende flake.
+      - name: Fakturerings-E2E (fakturering → plan → försenad betalning)
+        env:
+          SERVER_URL: http://localhost:3001
+          AVA_DATABASE_URL: postgres://ava:ava@localhost:5433/ava_test
+          AVA_ORGANIZATION_ID: "00000000-0000-0000-0000-000000000001"
+        run: bun tooling/scripts/billing-pipeline-e2e.ts
       - name: Tear down docker
         if: always()
         run: docker compose -f tooling/docker/docker-compose.server-first.yml down -v
