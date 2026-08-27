@@ -231,3 +231,61 @@ describe("FortnoxClient — läsa tillbaka (#1030)", () => {
     await expect(client.checkConnection()).rejects.toThrow(/403/);
   });
 });
+
+describe("FortnoxClient — verifikatserier (#1035)", () => {
+  const SERIES = {
+    VoucherSeriesCollection: [
+      { Code: "A", Description: "Redovisning", Manual: true, Year: 1, NextVoucherNumber: 42 },
+      { Code: "B", Description: "Kundfakturor", Manual: false, Year: 1 },
+    ],
+  };
+
+  function storeWithFreshToken(): InMemoryFortnoxTokenStore {
+    return new InMemoryFortnoxTokenStore({ accessToken: "at", refreshToken: "rt", accessTokenExpiresAt: Date.now() + 3_600_000 });
+  }
+
+  it("listVoucherSeries packar upp kollektionen", async () => {
+    const client = new FortnoxClient(config, storeWithFreshToken(), fetchFake(async () => json(200, SERIES)));
+    const series = await client.listVoucherSeries();
+    expect(series.map((s) => s.Code)).toEqual(["A", "B"]);
+  });
+
+  // Manual-flaggan är hela poängen med listningen: en serie med Manual: false
+  // (t.ex. B "Kundfakturor") avvisar manuella verifikat, och den som väljer
+  // fel serie får ett 400 långt senare i stället för ett svar här.
+  it("bär med Manual-flaggan", async () => {
+    const client = new FortnoxClient(config, storeWithFreshToken(), fetchFake(async () => json(200, SERIES)));
+    const series = await client.listVoucherSeries();
+    expect(series.find((s) => s.Code === "A")?.Manual).toBe(true);
+    expect(series.find((s) => s.Code === "B")?.Manual).toBe(false);
+  });
+
+  it("createVoucherSeries POST:ar Code + Description i Fortnox nästling", async () => {
+    let seen: { url: string; method: string; body: unknown } | null = null;
+    const client = new FortnoxClient(config, storeWithFreshToken(), fetchFake(async (url, init) => {
+      seen = { url, method: init?.method ?? "GET", body: JSON.parse(String(init?.body)) };
+      return json(200, { VoucherSeries: { Code: "Z", Description: "CI-testverifikat", Manual: true } });
+    }));
+    const created = await client.createVoucherSeries("Z", "CI-testverifikat");
+    expect(created.Code).toBe("Z");
+    expect(seen).toEqual({
+      url: "https://api.test/3/voucherseries",
+      method: "POST",
+      body: { VoucherSeries: { Code: "Z", Description: "CI-testverifikat" } },
+    });
+  });
+
+  it("okända fält i svaret fäller inte parsningen", async () => {
+    const client = new FortnoxClient(config, storeWithFreshToken(), fetchFake(async () =>
+      json(200, { VoucherSeries: { Code: "Z", Description: "CI", Manual: true, "@url": "https://api.test/3/voucherseries/Z" } })
+    ));
+    expect((await client.createVoucherSeries("Z", "CI")).Code).toBe("Z");
+  });
+
+  it("kastar med statusen när serien redan finns", async () => {
+    const client = new FortnoxClient(config, storeWithFreshToken(), fetchFake(async (url) =>
+      url.endsWith("/oauth-v1/token") ? json(200, ROTATED) : json(400, { ErrorInformation: { message: "Serien finns redan" } })
+    ));
+    await expect(client.createVoucherSeries("A", "dubblett")).rejects.toThrow(/400/);
+  });
+});

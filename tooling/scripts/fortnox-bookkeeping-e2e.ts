@@ -17,69 +17,52 @@
  *   - momskontot KREDITERAS med momsen
  *   - summan av kreditsidan = bruttot, dvs. inget belopp har fallit bort
  *
- * ## Körs bara manuellt
+ * ## Var verifikaten hamnar
  *
- * Varje körning skapar verifikat i en riktig bokföring som INTE går att ta
- * tillbaka. Därför `workflow_dispatch` — aldrig PR-matrisen. Antalet ärenden
- * hålls medvetet nere av samma skäl.
+ * I CI:s egna verifikatserie och räkenskapsår, spärrat av
+ * `AVA_FORTNOX_BOOKING_WINDOW` (#1035): fakturorna dateras om till CI-året
+ * innan de bokförs, och `withBookingWindow` avvisar allt utanför fönstret
+ * innan det når nätet. Det gör verifikaten städbara — Fortnox GUI tar bort
+ * det sista verifikatet i en serie, och ett räkenskapsår med bara manuella
+ * verifikat kan raderas i sin helhet.
+ *
+ * Antalet ärenden hålls ändå nere: varje faktura bränner ett verifikatnummer.
  *
  * Kräver samma env som `fortnox-e2e.ts` + en körande server-first-stack.
  */
 
-import { FortnoxClient } from "@/lib/server/integrations/fortnox/client";
+import type { FortnoxClient } from "@/lib/server/integrations/fortnox/client";
 import { FortnoxLedgerConnector } from "@/lib/server/integrations/fortnox/connector";
-import {
-  fortnoxConfigSchema, fortnoxKontoMappningSchema,
-  type FortnoxConfig, type FortnoxKontoMappning,
-} from "@/lib/server/integrations/fortnox/schema";
-import { InMemoryFortnoxTokenStore } from "@/lib/server/integrations/fortnox/token-store";
+import type { FortnoxKontoMappning } from "@/lib/server/integrations/fortnox/schema";
 import { bookUnbookedInvoices, type BookableInvoice } from "@/lib/server/integrations/ledger/book-invoices";
+import { withBookingWindow } from "@/lib/server/integrations/ledger/booking-window";
+import type { LedgerConnector } from "@/lib/server/integrations/ledger/port";
 import { runCoverageScenario, SCENARIOS } from "./billing-scenarios-e2e";
 import {
   assert, clientFor, kr, seedUser, waitForServer, type Ava,
 } from "./e2e-harness";
+import {
+  bookingWindow, buildConfig, buildMapping, ciBookingDate, connect, emitRotatedToken,
+} from "./fortnox-harness";
 
 const USER = "anna-bookkeeping@byra.se";
 /** Bara ETT scenario per körning: varje faktura bränner ett verifikatnummer. */
 const SCENARIO = SCENARIOS[1]; // familjemål/rättsskydd — två betalande, ingen KR
 
-function required(name: string): string {
-  const v = process.env[name];
-  if (!v) { console.error(`✗ ${name} saknas. Se docs/fortnox-e2e.md.`); process.exit(2); }
-  return v;
-}
-
-const DEFAULT_MAPPING = { voucherSeries: "A", kundfordran: "1510", intaktArvode: "3041", momsUtgaende: "2611" };
-
-function buildMapping(): FortnoxKontoMappning {
-  const o: Record<string, string | undefined> = {
-    voucherSeries: process.env.AVA_FORTNOX_VOUCHER_SERIES,
-    kundfordran: process.env.AVA_FORTNOX_KONTO_KUNDFORDRAN,
-    intaktArvode: process.env.AVA_FORTNOX_KONTO_ARVODE,
-    momsUtgaende: process.env.AVA_FORTNOX_KONTO_MOMS,
-  };
-  const set = Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined));
-  return fortnoxKontoMappningSchema.parse({ ...DEFAULT_MAPPING, ...set });
-}
-
-function buildConfig(): FortnoxConfig {
-  return fortnoxConfigSchema.parse({
-    clientId: required("AVA_FORTNOX_CLIENT_ID"),
-    clientSecret: required("AVA_FORTNOX_CLIENT_SECRET"),
-    redirectUri: process.env.AVA_FORTNOX_REDIRECT_URI ?? "https://localhost/callback",
-    scopes: ["bookkeeping"],
-    ...(process.env.AVA_FORTNOX_ACCOUNT_TYPE === "service" ? { accountType: "service" as const } : {}),
-  });
-}
-
-/** Fakturan i den form drivrutinen vill ha den. */
+/**
+ * Fakturan i den form drivrutinen vill ha den, OMDATERAD till CI-året.
+ *
+ * AVA daterar fakturan till i dag; verifikatet måste ligga i CI:s
+ * räkenskapsår för att alls kunna städas bort efteråt. Bokföringsdatum och
+ * fakturadatum särar alltså här — medvetet, och bara i testharnessen.
+ */
 function toBookable(inv: {
-  id: string; amount: number; vatOre?: number | null; invoiceDate: Date | string;
+  id: string; amount: number; vatOre?: number | null;
   invoiceNumber?: string | null; status: string; matter?: { matterNumber?: string | null } | null;
-}): BookableInvoice {
+}, bookingDate: string): BookableInvoice {
   return {
     id: inv.id, amount: inv.amount, vatOre: inv.vatOre ?? null, vatBreakdown: null,
-    invoiceDate: inv.invoiceDate, invoiceNumber: inv.invoiceNumber ?? null,
+    invoiceDate: bookingDate, invoiceNumber: inv.invoiceNumber ?? null,
     status: inv.status, fortnoxId: null,
     matter: { matterNumber: inv.matter?.matterNumber ?? null },
   };
@@ -134,15 +117,17 @@ async function verifyVoucher(
 interface BookingCtx {
   ava: Ava;
   client: FortnoxClient;
-  connector: FortnoxLedgerConnector;
+  connector: LedgerConnector;
   mapping: FortnoxKontoMappning;
+  /** Datum inne i CI:s bokföringsfönster — verifikatets transaktionsdatum. */
+  bookingDate: string;
 }
 
 /** Bokför EN faktura och verifiera dess verifikat. */
 async function bookAndVerify(ctx: BookingCtx, invoiceId: string, label: string): Promise<void> {
-  const { ava: c, client, connector, mapping } = ctx;
+  const { ava: c, client, connector, mapping, bookingDate } = ctx;
   const raw = await c.invoice.getById.query({ id: invoiceId });
-  const inv = toBookable(raw as Parameters<typeof toBookable>[0]);
+  const inv = toBookable(raw as Parameters<typeof toBookable>[0], bookingDate);
   console.log(`  ${label}: ${inv.invoiceNumber} · ${kr(inv.amount)} (moms ${kr(inv.vatOre ?? 0)})`);
 
   const marked: Array<[string, string]> = [];
@@ -161,24 +146,19 @@ async function bookAndVerify(ctx: BookingCtx, invoiceId: string, label: string):
 
 async function main(): Promise<void> {
   if (SCENARIO === undefined) throw new Error("scenariolistan är tom");
-  const config = buildConfig();
   const mapping = buildMapping();
-  const store = new InMemoryFortnoxTokenStore({
-    accessToken: "utgången", refreshToken: required("AVA_FORTNOX_REFRESH_TOKEN"), accessTokenExpiresAt: 0,
-  });
-  const client = new FortnoxClient(config, store);
-  const connector = new FortnoxLedgerConnector({ client, mapping });
+  const period = bookingWindow();
+  const bookingDate = ciBookingDate(period);
+  const { client, store } = connect(buildConfig());
+  const connector = withBookingWindow(new FortnoxLedgerConnector({ client, mapping }), period);
 
   console.log("→ Steg 1: anslutningskoll mot Fortnox …");
   await client.checkConnection();
   console.log(`  ✓ Ansluten · serie ${mapping.voucherSeries}, konton ${mapping.kundfordran}/${mapping.intaktArvode}/${mapping.momsUtgaende}`);
+  console.log(`  ✓ Bokföringsfönster ${period.from}..${period.to} — verifikaten dateras ${bookingDate}`);
 
-  const rotated = await store.load();
-  if (rotated && process.env.GITHUB_OUTPUT) {
-    const { appendFileSync } = await import("node:fs");
-    appendFileSync(process.env.GITHUB_OUTPUT, `refresh_token=${rotated.refreshToken}\n`);
-    console.log("  ✓ Roterad refresh-token skriven till GITHUB_OUTPUT");
-  }
+  // Token:en roterade i anropet ovan; utan write-back kan nästa körning inte auth:a.
+  await emitRotatedToken(store);
 
   const userId = await seedUser(USER, "Anna Bookkeeping");
   const c = clientFor(USER);
@@ -195,7 +175,7 @@ async function main(): Promise<void> {
   assert(payer !== undefined, "hittade ingen betalarfaktura på ärendet");
 
   console.log("\n→ Steg 3: bokför BÅDA fakturorna mot Fortnox …");
-  const ctx: BookingCtx = { ava: c, client, connector, mapping };
+  const ctx: BookingCtx = { ava: c, client, connector, mapping, bookingDate };
   await bookAndVerify(ctx, clientInvoiceId, "Klientens självrisk");
   await bookAndVerify(ctx, String(payer?.id), "Försäkringsbolagets del");
 
