@@ -30,6 +30,10 @@ on:
         description: "Bara auth + anslutningskoll (skapar INGET verifikat)"
         type: boolean
         default: false
+      bookkeeping:
+        description: "Bokför ett täckningsärendes BÅDA fakturor (klient + betalare) och verifiera kontona"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -50,6 +54,15 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/bun-setup
 
+      # Bokförings-testet behöver en körande AVA-stack: det skapar ett riktigt
+      # täckningsärende med två betalande och bokför BÅDA fakturorna.
+      - name: Starta server-first-stacken (bara bokföringsläget)
+        if: inputs.bookkeeping && !inputs.dry_run
+        run: |
+          bun run server-first:build
+          docker compose -f tooling/docker/docker-compose.server-first.yml up -d --build --wait --wait-timeout 180
+          AVA_DATABASE_URL=postgres://ava:ava@localhost:5433/ava_test bun run db:migrate
+
       - name: Kör Fortnox-E2E
         id: e2e
         env:
@@ -63,14 +76,35 @@ jobs:
           AVA_FORTNOX_DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
         run: bun tooling/scripts/fortnox-e2e.ts
 
+      - name: Bokförings-E2E (två betalande → två verifikat)
+        id: bookkeeping
+        if: inputs.bookkeeping && !inputs.dry_run
+        env:
+          AVA_FORTNOX_CLIENT_ID: ${{ secrets.AVA_FORTNOX_CLIENT_ID }}
+          AVA_FORTNOX_CLIENT_SECRET: ${{ secrets.AVA_FORTNOX_CLIENT_SECRET }}
+          AVA_FORTNOX_REFRESH_TOKEN: ${{ steps.e2e.outputs.refresh_token || secrets.AVA_FORTNOX_REFRESH_TOKEN }}
+          AVA_FORTNOX_ACCOUNT_TYPE: ${{ vars.AVA_FORTNOX_ACCOUNT_TYPE }}
+          AVA_FORTNOX_VOUCHER_SERIES: ${{ vars.AVA_FORTNOX_VOUCHER_SERIES }}
+          AVA_FORTNOX_KONTO_KUNDFORDRAN: ${{ vars.AVA_FORTNOX_KONTO_KUNDFORDRAN }}
+          AVA_FORTNOX_KONTO_ARVODE: ${{ vars.AVA_FORTNOX_KONTO_ARVODE }}
+          AVA_FORTNOX_KONTO_MOMS: ${{ vars.AVA_FORTNOX_KONTO_MOMS }}
+          SERVER_URL: http://localhost:3001
+          AVA_DATABASE_URL: postgres://ava:ava@localhost:5433/ava_test
+          AVA_ORGANIZATION_ID: "00000000-0000-0000-0000-000000000001"
+        run: bun tooling/scripts/fortnox-bookkeeping-e2e.ts
+
+      - name: Riv ner stacken
+        if: always() && inputs.bookkeeping && !inputs.dry_run
+        run: docker compose -f tooling/docker/docker-compose.server-first.yml down -v
+
       # Måste köras även när e2e:t fallerade: token:en roterade i det FÖRSTA
       # anropet, så den gamla är död oavsett hur körningen slutade. Hoppar över
       # sig själv om scriptet inte hann emitta något (t.ex. saknad secret).
       - name: Spara roterad refresh-token
-        if: always() && steps.e2e.outputs.refresh_token != ''
+        if: always() && (steps.bookkeeping.outputs.refresh_token != '' || steps.e2e.outputs.refresh_token != '')
         env:
           GH_TOKEN: ${{ secrets.AVA_FORTNOX_ROTATE_PAT }}
-          NEW_TOKEN: ${{ steps.e2e.outputs.refresh_token }}
+          NEW_TOKEN: ${{ steps.bookkeeping.outputs.refresh_token || steps.e2e.outputs.refresh_token }}
         run: |
           if [ -z "$GH_TOKEN" ]; then
             echo "::error::AVA_FORTNOX_ROTATE_PAT saknas — den roterade token:en kan inte sparas."

@@ -29,15 +29,8 @@
  *     bun tooling/scripts/billing-pipeline-e2e.ts
  */
 
-import { createTRPCClient, httpBatchLink, type TRPCClient } from "@trpc/client";
-import postgres from "postgres";
-import superjson from "superjson";
-import type { AppRouter } from "@/lib/server/routers/_app";
-import { uuidv7 } from "@/lib/shared/uuid";
+import { assert, clientFor, kr, SERVER_URL, seedUser, waitForServer, type Ava } from "./e2e-harness";
 
-const SERVER_URL = process.env.SERVER_URL ?? "http://localhost:3001";
-const DB_URL = process.env.AVA_DATABASE_URL ?? "postgres://ava:ava@localhost:5433/ava_test";
-const ORG = process.env.AVA_ORGANIZATION_ID ?? "00000000-0000-0000-0000-000000000001";
 const USER = "anna-billing@byra.se";
 
 /** Timtaxa och tid valda så arvodet blir jämnt: 2 h × 2 500 kr = 5 000 kr. */
@@ -46,44 +39,8 @@ const WORK_MINUTES = 120;
 const ARVODE_NET_ORE = Math.round((WORK_MINUTES / 60) * HOURLY_RATE_ORE);
 const ARVODE_VAT_ORE = Math.round(ARVODE_NET_ORE * 0.25);
 
-function assert(cond: boolean, msg: string): void { if (!cond) throw new Error(`assert: ${msg}`); }
-function sleep(ms: number): Promise<void> { return new Promise((r) => setTimeout(r, ms)); }
-function kr(ore: number): string { return `${(ore / 100).toLocaleString("sv-SE")} kr`; }
-
-/** Seeda en allowlistad användare (orgProcedure släpper bara igenom dessa). */
-async function seedUser(email: string, name: string): Promise<string> {
-  const sql = postgres(DB_URL, { max: 1, onnotice: () => {} });
-  try {
-    const existing = await sql<Array<{ id: string }>>`SELECT id FROM users WHERE email = ${email} LIMIT 1`;
-    if (existing[0]) return existing[0].id;
-    const id = uuidv7();
-    await sql`INSERT INTO users (id, organization_id, email, name, role, active)
-              VALUES (${id}, ${ORG}, ${email}, ${name}, 'LAWYER', true)`;
-    return id;
-  } finally {
-    await sql.end({ timeout: 5 });
-  }
-}
-
-function clientFor(email: string): TRPCClient<AppRouter> {
-  return createTRPCClient<AppRouter>({
-    links: [httpBatchLink({
-      url: `${SERVER_URL}/api/trpc`,
-      transformer: superjson,
-      headers: () => ({ "X-Auth-Request-Email": email }),
-    })],
-  });
-}
-
-async function waitForServer(client: TRPCClient<AppRouter>): Promise<void> {
-  for (let i = 0; i < 30; i++) {
-    try { await client.documentTemplate.list.query(); return; } catch { await sleep(1000); }
-  }
-  throw new Error(`server-first svarade inte på ${SERVER_URL} inom 30s`);
-}
-
 /** Ett ärende med klient — grunden för allt nedan. */
-async function setupMatter(c: TRPCClient<AppRouter>, userId: string, label: string): Promise<string> {
+async function setupMatter(c: Ava, userId: string, label: string): Promise<string> {
   const client = await c.contacts.create.mutate({
     name: `Klient ${label}`, contactType: "PERSON", email: `klient-${label}@example.test`,
   });
@@ -96,7 +53,7 @@ async function setupMatter(c: TRPCClient<AppRouter>, userId: string, label: stri
 }
 
 /** Registrera debiterbart arbete på ärendet. */
-async function logWork(c: TRPCClient<AppRouter>, matterId: string, userId: string): Promise<void> {
+async function logWork(c: Ava, matterId: string, userId: string): Promise<void> {
   await c.timeEntry.create.mutate({
     matterId, userId, date: new Date().toISOString().slice(0, 10),
     minutes: WORK_MINUTES, description: "Genomgång och skrivelse",
@@ -106,7 +63,7 @@ async function logWork(c: TRPCClient<AppRouter>, matterId: string, userId: strin
 
 // ─── Del 1: fakturering ────────────────────────────────────────────────────
 
-async function phaseInvoicing(c: TRPCClient<AppRouter>, matterId: string, userId: string): Promise<string> {
+async function phaseInvoicing(c: Ava, matterId: string, userId: string): Promise<string> {
   console.log("\n=== Del 1: fakturering ===");
   await logWork(c, matterId, userId);
 
@@ -145,7 +102,7 @@ async function phaseInvoicing(c: TRPCClient<AppRouter>, matterId: string, userId
 
 // ─── Del 2: avbetalning enligt plan ────────────────────────────────────────
 
-async function phaseInstallmentsOnTime(c: TRPCClient<AppRouter>, invoiceId: string): Promise<void> {
+async function phaseInstallmentsOnTime(c: Ava, invoiceId: string): Promise<void> {
   console.log("\n=== Del 2: avbetalning enligt plan ===");
   const total = ARVODE_NET_ORE + ARVODE_VAT_ORE;
   const installments = 3;
@@ -188,7 +145,7 @@ function monthKey(d: Date): string {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
-async function phaseLateInstallments(c: TRPCClient<AppRouter>, matterId: string, userId: string): Promise<void> {
+async function phaseLateInstallments(c: Ava, matterId: string, userId: string): Promise<void> {
   console.log("\n=== Del 3: avbetalning som inte kommer i tid ===");
   await logWork(c, matterId, userId);
   const { invoice } = await c.billingRun.createFinal.mutate({ matterId, recipient: "KLIENT" });

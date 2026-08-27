@@ -49,6 +49,7 @@
     "e2e:oidc": "bash tooling/scripts/e2e-oidc.sh",
     "e2e:doc-pipeline": "bash tooling/scripts/document-pipeline-e2e.sh",
     "e2e:billing": "bash tooling/scripts/billing-pipeline-e2e.sh",
+    "e2e:billing-scenarios": "bash tooling/scripts/billing-scenarios-e2e.sh",
     "e2e:conflict": "bash tooling/scripts/conflict-e2e.sh",
     "selfhosted:local": "bash tooling/scripts/selfhosted-local.sh",
     "diagnose-ui": "bun tooling/scripts/diagnose-ui.ts",

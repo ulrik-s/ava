@@ -17,6 +17,19 @@ connectorn ändras, före release, eller för att bekräfta att anslutningen lev
 `dry_run`-inputen kör allt utom själva pushen — bra för att bara verifiera att
 tokens fortfarande fungerar.
 
+### Två lägen
+
+| Input | Vad som körs | Verifikat som skapas |
+|---|---|---|
+| `dry_run` | auth + `GET /3/voucherseries` | **0** |
+| *(inget)* | en syntetisk faktura bokförs och läses tillbaka | 1 |
+| `bookkeeping` | ett täckningsärende med **två betalande** körs upp i en riktig AVA-stack; BÅDA fakturorna bokförs och kontona verifieras | 2 |
+
+`bookkeeping`-läget är det som svarar på frågan *"blir det bokfört rätt?"* — per
+verifikat kontrolleras att Σdebet = Σkredit, att kundfordran debiterats med
+bruttot, intäktskontot krediterats med nettot och momskontot med momsen, och att
+kreditsidan summerar till bruttot så inget belopp fallit bort.
+
 ## Secrets och variabler
 
 Ligger på environment **`fortnox-sandbox`** (Settings → Environments), inte som
