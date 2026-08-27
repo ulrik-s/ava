@@ -5,25 +5,66 @@ Enhetstesterna för connectorn kör med injicerad `fetch` och bevisar att VÅR k
 hela vägen: OAuth-refresh → semantiskt verifikat → `POST /3/vouchers` → läs
 tillbaka verifikatet → kontrollera balans och idempotens.
 
-Kör: **Actions → “Fortnox E2E (manuell)” → Run workflow**.
-Lokalt: `bun tooling/scripts/fortnox-e2e.ts` med env satt (se nedan).
+Kör automatiskt på **push till `main`** (när Fortnox-/ledger-koden ändrats) och
+**nattligt 04:17 UTC**. Manuellt: **Actions → “Fortnox E2E” → Run workflow**.
+Lokalt: `bun run fortnox:e2e` med env satt (se nedan).
 
-## Varför den inte ligger i PR-matrisen
+## Var verifikaten hamnar — och hur de städas bort
 
-Varje körning skapar ett verifikat som **inte går att ta tillbaka**. En grind
-som bränner verifikatnummer på varje PR vore fel sorts grind. Kör den när
-connectorn ändras, före release, eller för att bekräfta att anslutningen lever.
+Det här är förutsättningen för att flödet alls får köra automatiskt, så det är
+värt att ha rätt. **Fortnox API kan inte ta bort ett verifikat** — det har varken
+`DELETE` eller `PUT` för `/3/vouchers`. Men kontot kan:
 
-`dry_run`-inputen kör allt utom själva pushen — bra för att bara verifiera att
-tokens fortfarande fungerar.
+- **I GUI:t går det alltid att ta bort det *sista* verifikatet i varje serie.**
+  Ska ett verifikat mitt i serien bort måste alla med högre nummer i samma serie
+  tas bort först.
+- **Ett räkenskapsår kan raderas i sin helhet** av en programadministratör för
+  Bokföring — förutsatt att det bara innehåller *manuella* verifikat, alltså inga
+  kund-/leverantörsfakturor, banktransaktioner eller anläggningsposter.
 
-### Två lägen
+Därför bokför CI i sin **egen verifikatserie** och sitt **egna räkenskapsår**.
+Villkoret för årsraderingen är uppfyllt av konstruktion: connectorn skapar bara
+manuella verifikat via `POST /3/vouchers`.
 
-| Input | Vad som körs | Verifikat som skapas |
+### Tömma bokföringen
+
+| Vill du … | Gör så |
+|---|---|
+| ta bort de senaste körningarnas skräp | Bokföring → verifikationer, filtrera på CI-serien, ta bort **bakifrån** |
+| börja om från noll | radera hela CI-räkenskapsåret (Inställningar → Räkenskapsår) och lägg upp det på nytt |
+
+Byråns skarpa serier och år rörs inte i något av fallen.
+
+### Spärren som håller det sant
+
+`AVA_FORTNOX_BOOKING_WINDOW` (`"YYYY-MM-DD..YYYY-MM-DD"`) anger CI:s
+räkenskapsår. E2E-skripten daterar om verifikaten till ett datum inne i fönstret
+och lindar connectorn i `withBookingWindow`, som **avvisar allt daterat utanför
+fönstret innan det når nätet**. Saknas variabeln kastar skriptet — spärren ska
+inte gå att komma runt genom att glömma en env-variabel.
+
+En felkonfad körning (fel tenant, fel datum, fel serie) kan alltså inte skriva i
+den skarpa perioden.
+
+## Varför inte på PR-commits
+
+Två skäl, båda oberoende av städbarheten:
+
+1. **Secrets når inte fork-PR:er.** Varje extern PR hade blivit röd på något
+   bidragsgivaren inte rår över.
+2. **`concurrency: fortnox-e2e` hade serialiserat hela PR-matrisen** bakom en
+   enda Fortnox-körning — refresh-token:en tål inte parallella refreshar.
+
+`push: main` + nattlig schedule ger samma täckning utan den kostnaden.
+
+### Lägen
+
+| Läge | Vad som körs | Verifikat som skapas |
 |---|---|---|
-| `dry_run` | auth + `GET /3/voucherseries` | **0** |
-| *(inget)* | en syntetisk faktura bokförs och läses tillbaka | 1 |
-| `bookkeeping` | ett täckningsärende med **två betalande** körs upp i en riktig AVA-stack; BÅDA fakturorna bokförs och kontona verifieras | 2 |
+| push till `main` / schedule | full körning: syntetisk faktura **och** täckningsärendet | 3 |
+| dispatch, `dry_run` | auth + `GET /3/voucherseries` | **0** |
+| dispatch, *(inget)* | en syntetisk faktura bokförs och läses tillbaka | 1 |
+| dispatch, `bookkeeping` | ett täckningsärende med **två betalande** körs upp i en riktig AVA-stack; BÅDA fakturorna bokförs och kontona verifieras | 3 |
 
 `bookkeeping`-läget är det som svarar på frågan *"blir det bokfört rätt?"* — per
 verifikat kontrolleras att Σdebet = Σkredit, att kundfordran debiterats med
@@ -44,7 +85,10 @@ repo-secrets — så åtkomsten kan begränsas separat.
 
 | Variable (`vars`) | Default | Vad |
 |---|---|---|
-| `AVA_FORTNOX_VOUCHER_SERIES` | `A` | verifikatserie — måste vara **manuell** (`Manual: true`). `A` "Redovisning" är det; `B` "Kundfakturor" är INTE och avvisar våra verifikat |
+| `AVA_FORTNOX_CI_ENABLED` | *(tom)* | måste vara `true` för att jobbet ska köra alls. Avstängningsknapp när samtycket gått ut — annars blir `main` röd på något som inte är ett kodfel |
+| `AVA_FORTNOX_VOUCHER_SERIES` | `A` | verifikatserie — måste vara **manuell** (`Manual: true`). `A` "Redovisning" är det; `B` "Kundfakturor" är INTE och avvisar våra verifikat. Sätt CI:s egen serie här |
+| `AVA_FORTNOX_BOOKING_WINDOW` | *(tom → skriptet kastar)* | CI:s räkenskapsår, `"2030-01-01..2030-12-31"`. Se spärren ovan |
+| `AVA_FORTNOX_ACCOUNT_TYPE` | *(tom)* | `service` för service-konto (rätt för CI) |
 | `AVA_FORTNOX_KONTO_KUNDFORDRAN` | `1510` | kundfordran (debet) |
 | `AVA_FORTNOX_KONTO_ARVODE` | `3041` | arvodesintäkt (kredit) |
 | `AVA_FORTNOX_KONTO_MOMS` | `2611` | utgående moms 25 % (kredit) |
@@ -102,6 +146,38 @@ Båda kontomodellerna är nu verifierade mot sandbox:
   persons konto kan dra undan mattan för workflow:et.
 
 Se connector-README:n och [#213](https://github.com/ulrik-s/ava/issues/213).
+
+## Sätta upp CI-serien och CI-året
+
+Engångsarbete, delvis manuellt:
+
+```bash
+# 1. Se vilka serier som finns och vilka som är manuella.
+AVA_FORTNOX_CLIENT_ID=… AVA_FORTNOX_CLIENT_SECRET=… AVA_FORTNOX_REFRESH_TOKEN=… \
+  bun run fortnox:series
+
+# 2. Skapa CI-serien.
+AVA_FORTNOX_CLIENT_ID=… AVA_FORTNOX_CLIENT_SECRET=… AVA_FORTNOX_REFRESH_TOKEN=… \
+  bun run fortnox:series --create Z "CI-testverifikat"
+```
+
+**Räkenskapsåret skapas i GUI:t** (Inställningar → Räkenskapsår). Fortnox avråder
+uttryckligen från att skapa räkenskapsår via API:t, och det är ändå ett
+engångsmoment.
+
+Sätt sedan `AVA_FORTNOX_VOUCHER_SERIES`, `AVA_FORTNOX_BOOKING_WINDOW` och
+`AVA_FORTNOX_CI_ENABLED=true` som environment-variabler.
+
+> Kör `fortnox:series` **lokalt** — det är ett adminverktyg som skriver ut den
+> roterade refresh-token:en på stdout. Kom ihåg att uppdatera secreten efteråt,
+> annars kan nästa CI-körning inte auth:a.
+
+## Källor
+
+- [Fortnox API v3 apidocs](https://apps.fortnox.se/apidocs)
+- [Best practices — Vouchers](https://www.fortnox.se/developer/guides-and-good-to-know/best-practices/vouchers)
+- [Ta bort eller ändra felaktig verifikation](https://support.fortnox.se/produkthjalp/bokforing/ta-bort-eller-andra-felaktig-verifikation)
+- [Räkenskapsår](https://support.fortnox.se/produkthjalp/bokforing/rakenskapsar)
 
 ## Kända begränsningar
 

@@ -14,17 +14,8 @@ import type {
   SemanticVoucherRow,
   VoucherRole,
 } from "@/lib/shared/accounting/semantic-voucher";
+import { toIsoDate } from "@/lib/shared/iso-date";
 import type { FortnoxKontoMappning, FortnoxVoucher, FortnoxVoucherRow } from "./schema";
-
-function pad2(n: number): string {
-  return String(n).padStart(2, "0");
-}
-
-/** `YYYY-MM-DD` (lokal tid) — Fortnox TransactionDate-format. */
-function isoDate(d: Date | string): string {
-  const dt = typeof d === "string" ? new Date(d) : d;
-  return `${dt.getFullYear()}-${pad2(dt.getMonth() + 1)}-${pad2(dt.getDate())}`;
-}
 
 /** Öre (heltal) → SEK med 2 decimaler. Exakt eftersom öre alltid är heltal. */
 function oreToSek(ore: number): number {
@@ -62,7 +53,7 @@ export function renderFortnoxVoucher(
 ): FortnoxVoucher {
   return {
     VoucherSeries: mapping.voucherSeries,
-    TransactionDate: isoDate(voucher.date),
+    TransactionDate: toIsoDate(voucher.date),
     Description: voucher.description,
     VoucherRows: voucher.rows.map((r) => renderRow(r, mapping)),
   };

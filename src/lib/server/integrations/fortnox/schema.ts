@@ -169,6 +169,35 @@ export const fortnoxVoucherFetchSchema = z.object({
 });
 export type FortnoxVoucherFetch = z.infer<typeof fortnoxVoucherFetchSchema>;
 
+// ─── Verifikatserier (#1035) ────────────────────────────────────────────────
+
+/**
+ * En verifikatserie ur `GET/POST /3/voucherseries`.
+ *
+ * `Manual` är fältet som avgör om serien duger för oss: en serie med
+ * `Manual: false` (t.ex. `B` "Kundfakturor") är reserverad för Fortnox egna
+ * automatposter och avvisar manuella verifikat. CI-serien måste vara manuell,
+ * precis som `A` "Redovisning". Löst schema — Fortnox skickar fler fält.
+ */
+export const fortnoxVoucherSeriesSchema = z.looseObject({
+  Code: z.string().min(1),
+  Description: z.string().optional(),
+  Manual: z.boolean().optional(),
+  Year: z.number().int().optional(),
+  NextVoucherNumber: z.number().int().optional(),
+});
+export type FortnoxVoucherSeries = z.infer<typeof fortnoxVoucherSeriesSchema>;
+
+/** Svar från `GET /3/voucherseries` (lista). */
+export const fortnoxVoucherSeriesListSchema = z.object({
+  VoucherSeriesCollection: z.array(fortnoxVoucherSeriesSchema),
+});
+
+/** Svar från `POST/GET /3/voucherseries/{code}` (enskild serie). */
+export const fortnoxVoucherSeriesResponseSchema = z.object({
+  VoucherSeries: fortnoxVoucherSeriesSchema,
+});
+
 // ─── Filbilaga (#785) ───────────────────────────────────────────────────────
 
 /** Svar från `POST /3/inbox` (fil-uppladdning) — vi behöver fil-id:t (GUID). */

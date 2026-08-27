@@ -20,6 +20,8 @@
     "ava:mcp": "bun tooling/ava-cli/ava-mcp.ts",
     "fortnox:connect": "bun tooling/scripts/fortnox-connect.ts",
     "fortnox:e2e": "bun tooling/scripts/fortnox-e2e.ts",
+    "fortnox:bookkeeping": "bun tooling/scripts/fortnox-bookkeeping-e2e.ts",
+    "fortnox:series": "bun tooling/scripts/fortnox-series.ts",
     "server-first": "bun src/bin/server-first.ts",
     "server-first:build": "bun tooling/scripts/build-server-first.ts",
     "install:server": "bun tooling/scripts/install-server.ts",

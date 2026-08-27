@@ -72,6 +72,12 @@ Connectorn POST:ar manuella verifikat (`POST /3/vouchers`), så mappningens
 `voucherSeries` måste peka på en serie med `Manual: true`. I sandboxen (och en
 standard-kontoplan) är **`A` "Redovisning"** en sådan — den är e2e:ns default.
 
+CI bokför dock i en **egen serie** (`AVA_FORTNOX_VOUCHER_SERIES`), inte i `A`.
+Skälet är städbarhet: Fortnox API kan inte ta bort ett verifikat, men i GUI:t går
+det alltid att ta bort det *sista* verifikatet i en serie. Ligger testverifikaten
+blandade med byråns skarpa poster går de i praktiken inte att få bort. Skapa
+serien med `bun run fortnox:series --create <kod> "CI-testverifikat"`.
+
 Fällan är `B` "Kundfakturor": namnet lockar, men den har `Manual: false` —
 Fortnox äger den för sin egen fakturabokföring och avvisar våra verifikat.
 Kontrollera med `GET /3/voucherseries` innan en byrå konfigureras.

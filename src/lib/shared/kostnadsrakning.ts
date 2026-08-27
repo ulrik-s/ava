@@ -18,6 +18,7 @@
  */
 
 import { applyNoFTaxFactorForDate, computeBrottmalstaxa, computeTimkostnadsnorm, coverageEntryRateOre, coverageEntryValueOre, isPerDayKind, payableCoverageEntries, timkostnadsnormFtaxForDate, type TaxaLevel, type TaxaResult } from "./brottmalstaxa";
+import { toIsoDate } from "./iso-date";
 import { RADGIVNING_MINUTES, radgivningTextRad } from "./rattshjalp";
 import type { TimeEntryKind } from "./schemas/enums";
 import { splitVat } from "./vat";
@@ -437,11 +438,6 @@ export function diffMinutes(start: Date, end: Date): number {
   const ms = end.getTime() - start.getTime();
   if (!Number.isFinite(ms) || ms < 0) return 0;
   return Math.floor(ms / 60_000);
-}
-
-function toIsoDate(d: Date | string): string {
-  const dt = typeof d === "string" ? new Date(d) : d;
-  return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`;
 }
 
 function toIsoDateTime(d: Date): string {

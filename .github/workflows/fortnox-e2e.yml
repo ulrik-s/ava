@@ -1,13 +1,27 @@
-name: Fortnox E2E (manuell)
+name: Fortnox E2E
 
-# E2E mot RIKTIGA Fortnox Voucher API (#1030).
+# E2E mot RIKTIGA Fortnox Voucher API (#1030, #1035).
 #
-# ## Varför manuell och inte i CI-matrisen
+# ## Varför den kan köras automatiskt
 #
-# Varje körning skapar ett verifikat i Fortnox som INTE går att ta tillbaka.
-# Att köra den på varje PR skulle bränna verifikatnummer i en riktig bokföring.
-# Kör den när connector-koden ändras, före release, eller när du vill veta att
-# anslutningen fortfarande lever.
+# En tidigare version av den här kommentaren påstod att verifikaten "INTE går
+# att ta tillbaka". Det gäller API:t — det har varken DELETE eller PUT för
+# verifikat — men inte kontot: i GUI:t går det ALLTID att ta bort det sista
+# verifikatet i en serie, och ett räkenskapsår som bara innehåller manuella
+# verifikat kan raderas i sin helhet.
+#
+# Därför bokför CI i en EGEN verifikatserie (AVA_FORTNOX_VOUCHER_SERIES) och ett
+# EGET räkenskapsår (AVA_FORTNOX_BOOKING_WINDOW). Verifikaten blir städbara, och
+# `withBookingWindow` avvisar allt daterat utanför fönstret innan det når nätet.
+# Se docs/fortnox-e2e.md för hur bokföringen töms.
+#
+# ## Varför inte på PR-commits
+#
+# Två skäl, båda oberoende av städbarheten: secrets når inte fork-PR:er (varje
+# extern PR hade blivit röd på något bidragsgivaren inte rår över), och
+# `concurrency` nedan hade serialiserat hela PR-matrisen bakom en enda
+# Fortnox-körning. `push: main` + nattlig schedule ger samma täckning utan
+# den kostnaden.
 #
 # ## Roterande refresh-token — läs det här innan du felsöker
 #
@@ -24,6 +38,21 @@ name: Fortnox E2E (manuell)
 # Se src/lib/server/integrations/fortnox/README.md och docs/fortnox-e2e.md.
 
 on:
+  push:
+    branches: [main]
+    # Bara när Fortnox-vägen faktiskt ändrats — en docs-commit behöver inte
+    # bränna verifikatnummer.
+    paths:
+      - "src/lib/server/integrations/fortnox/**"
+      - "src/lib/server/integrations/ledger/**"
+      - "src/lib/shared/accounting/**"
+      - "tooling/scripts/fortnox-*.ts"
+      - ".github/workflows/fortnox-e2e.yml"
+  schedule:
+    # 04:17 UTC — udda minut så den inte krockar med timslagets rusning.
+    # Fångar att anslutningen dött (roterad token, indraget samtycke) innan
+    # någon behöver den skarpt.
+    - cron: "17 4 * * *"
   workflow_dispatch:
     inputs:
       dry_run:
@@ -47,17 +76,42 @@ concurrency:
 jobs:
   fortnox-e2e:
     name: Fortnox E2E (sandbox)
+    # Avstängningsknapp utan att redigera workflowen: sätt repo-variabeln till
+    # något annat än "true" så hoppas jobbet över. Behövs t.ex. när samtycket
+    # gått ut och ingen hunnit förnya det — annars hade main blivit röd på något
+    # som inte är ett kodfel.
+    if: vars.AVA_FORTNOX_CI_ENABLED == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     environment: fortnox-sandbox
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/bun-setup
 
+      # Automatiska körningar (push/schedule) kör HELA vägen — det är poängen med
+      # att flytta in flödet i CI. Bara ett manuellt dispatch kan välja bort
+      # bokföringen (dry_run) eller nöja sig med syntet-fakturan. `inputs.*` är
+      # tomma på andra event än dispatch, därför normaliseras de här i st.f. i
+      # varje steg-villkor.
+      - name: Avgör körläge
+        id: mode
+        env:
+          DISPATCH: ${{ github.event_name == 'workflow_dispatch' }}
+          IN_DRY: ${{ inputs.dry_run }}
+          IN_BOOK: ${{ inputs.bookkeeping }}
+        run: |
+          if [ "$DISPATCH" = "true" ]; then
+            echo "dry_run=$IN_DRY"     >> "$GITHUB_OUTPUT"
+            echo "bookkeeping=$IN_BOOK" >> "$GITHUB_OUTPUT"
+          else
+            echo "dry_run=false"      >> "$GITHUB_OUTPUT"
+            echo "bookkeeping=true"   >> "$GITHUB_OUTPUT"
+          fi
+
       # Bokförings-testet behöver en körande AVA-stack: det skapar ett riktigt
       # täckningsärende med två betalande och bokför BÅDA fakturorna.
       - name: Starta server-first-stacken (bara bokföringsläget)
-        if: inputs.bookkeeping && !inputs.dry_run
+        if: steps.mode.outputs.bookkeeping == 'true' && steps.mode.outputs.dry_run != 'true'
         run: |
           bun run server-first:build
           docker compose -f tooling/docker/docker-compose.server-first.yml up -d --build --wait --wait-timeout 180
@@ -73,18 +127,21 @@ jobs:
           AVA_FORTNOX_KONTO_KUNDFORDRAN: ${{ vars.AVA_FORTNOX_KONTO_KUNDFORDRAN }}
           AVA_FORTNOX_KONTO_ARVODE: ${{ vars.AVA_FORTNOX_KONTO_ARVODE }}
           AVA_FORTNOX_KONTO_MOMS: ${{ vars.AVA_FORTNOX_KONTO_MOMS }}
-          AVA_FORTNOX_DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
+          AVA_FORTNOX_BOOKING_WINDOW: ${{ vars.AVA_FORTNOX_BOOKING_WINDOW }}
+          AVA_FORTNOX_ACCOUNT_TYPE: ${{ vars.AVA_FORTNOX_ACCOUNT_TYPE }}
+          AVA_FORTNOX_DRY_RUN: ${{ steps.mode.outputs.dry_run == 'true' && '1' || '' }}
         run: bun tooling/scripts/fortnox-e2e.ts
 
       - name: Bokförings-E2E (två betalande → två verifikat)
         id: bookkeeping
-        if: inputs.bookkeeping && !inputs.dry_run
+        if: steps.mode.outputs.bookkeeping == 'true' && steps.mode.outputs.dry_run != 'true'
         env:
           AVA_FORTNOX_CLIENT_ID: ${{ secrets.AVA_FORTNOX_CLIENT_ID }}
           AVA_FORTNOX_CLIENT_SECRET: ${{ secrets.AVA_FORTNOX_CLIENT_SECRET }}
           AVA_FORTNOX_REFRESH_TOKEN: ${{ steps.e2e.outputs.refresh_token || secrets.AVA_FORTNOX_REFRESH_TOKEN }}
           AVA_FORTNOX_ACCOUNT_TYPE: ${{ vars.AVA_FORTNOX_ACCOUNT_TYPE }}
           AVA_FORTNOX_VOUCHER_SERIES: ${{ vars.AVA_FORTNOX_VOUCHER_SERIES }}
+          AVA_FORTNOX_BOOKING_WINDOW: ${{ vars.AVA_FORTNOX_BOOKING_WINDOW }}
           AVA_FORTNOX_KONTO_KUNDFORDRAN: ${{ vars.AVA_FORTNOX_KONTO_KUNDFORDRAN }}
           AVA_FORTNOX_KONTO_ARVODE: ${{ vars.AVA_FORTNOX_KONTO_ARVODE }}
           AVA_FORTNOX_KONTO_MOMS: ${{ vars.AVA_FORTNOX_KONTO_MOMS }}
@@ -94,7 +151,7 @@ jobs:
         run: bun tooling/scripts/fortnox-bookkeeping-e2e.ts
 
       - name: Riv ner stacken
-        if: always() && inputs.bookkeeping && !inputs.dry_run
+        if: always() && steps.mode.outputs.bookkeeping == 'true' && steps.mode.outputs.dry_run != 'true'
         run: docker compose -f tooling/docker/docker-compose.server-first.yml down -v
 
       # Måste köras även när e2e:t fallerade: token:en roterade i det FÖRSTA

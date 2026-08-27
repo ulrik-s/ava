@@ -11,10 +11,13 @@ import {
   fortnoxInboxResponseSchema,
   fortnoxVoucherFetchSchema,
   fortnoxVoucherResponseSchema,
+  fortnoxVoucherSeriesListSchema,
+  fortnoxVoucherSeriesResponseSchema,
   type FortnoxConfig,
   type FortnoxVoucher,
   type FortnoxVoucherFetch,
   type FortnoxVoucherResponse,
+  type FortnoxVoucherSeries,
 } from "./schema";
 import type { FortnoxTokenStore } from "./token-store";
 
@@ -108,6 +111,24 @@ export class FortnoxClient {
    */
   async checkConnection(): Promise<void> {
     await this.withRetry((t) => this.apiGet("/3/voucherseries", t), "anslutningskoll");
+  }
+
+  /** Alla verifikatserier. `Manual` avgör om en serie tar manuella verifikat. */
+  async listVoucherSeries(): Promise<FortnoxVoucherSeries[]> {
+    const res = await this.withRetry((t) => this.apiGet("/3/voucherseries", t), "serielistning");
+    return fortnoxVoucherSeriesListSchema.parse(await res.json()).VoucherSeriesCollection;
+  }
+
+  /**
+   * Skapa en verifikatserie (#1035). Används för att lägga CI:s testverifikat i
+   * en EGEN numrering: Fortnox saknar DELETE för verifikat, men i GUI:t går det
+   * alltid att ta bort det sista verifikatet i en serie — vilket gör en egen
+   * serie städbar bakifrån utan att röra byråns skarpa serier.
+   */
+  async createVoucherSeries(code: string, description: string): Promise<FortnoxVoucherSeries> {
+    const body = { VoucherSeries: { Code: code, Description: description } };
+    const res = await this.withRetry((t) => this.apiPost("/3/voucherseries", t, body), "serie-skapande");
+    return fortnoxVoucherSeriesResponseSchema.parse(await res.json()).VoucherSeries;
   }
 
   /** Skapa ett verifikat. Returnerar serie + nummer (för idempotens/spårning). */
