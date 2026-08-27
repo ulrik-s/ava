@@ -31,7 +31,7 @@ repo-secrets — så åtkomsten kan begränsas separat.
 
 | Variable (`vars`) | Default | Vad |
 |---|---|---|
-| `AVA_FORTNOX_VOUCHER_SERIES` | `A` | verifikatserie |
+| `AVA_FORTNOX_VOUCHER_SERIES` | `A` | verifikatserie — måste vara **manuell** (`Manual: true`). `A` "Redovisning" är det; `B` "Kundfakturor" är INTE och avvisar våra verifikat |
 | `AVA_FORTNOX_KONTO_KUNDFORDRAN` | `1510` | kundfordran (debet) |
 | `AVA_FORTNOX_KONTO_ARVODE` | `3041` | arvodesintäkt (kredit) |
 | `AVA_FORTNOX_KONTO_MOMS` | `2611` | utgående moms 25 % (kredit) |
@@ -79,9 +79,16 @@ AVA_FORTNOX_CLIENT_ID=… AVA_FORTNOX_CLIENT_SECRET=… AVA_FORTNOX_REDIRECT_URI
 `redirect_uri` måste matcha registreringen i Developer Portal **tecken för
 tecken** — annars avvisas anropet redan i steg 1.
 
-Modellen är **user-consent** (ingen `account_type`) — det är det flöde som
-verifierats mot sandbox. Service-konto är opt-in, se connector-README:n och
-[#213](https://github.com/ulrik-s/ava/issues/213).
+Båda kontomodellerna är nu verifierade mot sandbox:
+
+- **user-consent** (default, ingen `account_type`) — token knuten till den som
+  godkände (`sub: 1@<tenant>`).
+- **service-konto** (`AVA_FORTNOX_ACCOUNT_TYPE=service` på connect-scriptet) —
+  egen identitet (`sub: 2@<tenant>`, `roles: []`), överlever att en anställd
+  slutar. **Rätt modell för CI och obevakad drift**, eftersom ingen enskild
+  persons konto kan dra undan mattan för workflow:et.
+
+Se connector-README:n och [#213](https://github.com/ulrik-s/ava/issues/213).
 
 ## Kända begränsningar
 

@@ -51,10 +51,27 @@ Fortnox `account_type` vid authorize är **valfri** (enda giltiga värdet är
   användare (överlever att hen slutar) — rätt modell för en obevakad
   self-hosted connector på sikt. Kräver dock att **service-konto aktiverats för
   appen i Developer Portal** och att en **sysadmin** auktoriserar (en
-  service-konto per client_id + kund). Ej end-to-end-verifierat än.
+  service-konto per client_id + kund).
+
+  **Verifierat mot sandbox 2026-08-22** (tenant 1838388): auktorisering med
+  `account_type=service` ger en EGEN identitet — `sub: 2@1838388`, `userId: 2`,
+  `roles: []` — mot user-consent-flödets `sub: 1@1838388`, `roles: [sysadmin]`.
+  Token:en är alltså inte knuten till den som godkände. Trots tom roll-lista
+  räcker scopet: `GET /3/voucherseries` → 200. Kräver att service-konto
+  aktiverats för appen i Developer Portal + att en sysadmin auktoriserar.
 
 Beslut: connectorn kör **user-consent som default** (det som bevisligen
 fungerar). Service-konto är **opt-in** via `accountType: "service"` i
 `FortnoxConfig`, eller env `AVA_FORTNOX_ACCOUNT_TYPE=service` i server-runtime:n.
 Refresh-flödet bryr sig inte om `account_type` — befintliga tokens roterar
 oavsett vald modell.
+
+## Verifikatserie: välj en MANUELL serie
+
+Connectorn POST:ar manuella verifikat (`POST /3/vouchers`), så mappningens
+`voucherSeries` måste peka på en serie med `Manual: true`. I sandboxen (och en
+standard-kontoplan) är **`A` "Redovisning"** en sådan — den är e2e:ns default.
+
+Fällan är `B` "Kundfakturor": namnet lockar, men den har `Manual: false` —
+Fortnox äger den för sin egen fakturabokföring och avvisar våra verifikat.
+Kontrollera med `GET /3/voucherseries` innan en byrå konfigureras.
