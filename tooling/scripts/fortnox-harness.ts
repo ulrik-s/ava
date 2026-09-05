@@ -94,6 +94,9 @@ export async function emitRotatedToken(store: InMemoryFortnoxTokenStore): Promis
   if (!out) return;
   const rotated = await store.load();
   if (!rotated) return;
+  // Step-outputs maskeras INTE automatiskt — ::add-mask:: gör att token:en
+  // redigeras bort ur loggen om ett senare steg råkar eka sin env.
+  console.log(`::add-mask::${rotated.refreshToken}`);
   appendFileSync(out, `refresh_token=${rotated.refreshToken}\n`);
   console.log("• Roterad refresh-token skriven till GITHUB_OUTPUT (maskerad).");
 }

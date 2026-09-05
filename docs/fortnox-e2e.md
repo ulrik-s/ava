@@ -85,7 +85,7 @@ repo-secrets — så åtkomsten kan begränsas separat.
 
 | Variable (`vars`) | Default | Vad |
 |---|---|---|
-| `AVA_FORTNOX_CI_ENABLED` | *(tom)* | måste vara `true` för att jobbet ska köra alls. Avstängningsknapp när samtycket gått ut — annars blir `main` röd på något som inte är ett kodfel |
+| `AVA_FORTNOX_CI_ENABLED` **(repo-nivå!)** | *(tom)* | måste vara `true` för att jobbet ska köra alls. Avstängningsknapp när samtycket gått ut — annars blir `main` röd på något som inte är ett kodfel. Sätts som **repository**-variabel: ett job-`if` utvärderas innan `environment:` resolvas, så en environment-variabel är alltid tom där och jobbet hade aldrig kört |
 | `AVA_FORTNOX_VOUCHER_SERIES` | `A` | verifikatserie — måste vara **manuell** (`Manual: true`). `A` "Redovisning" är det; `B` "Kundfakturor" är INTE och avvisar våra verifikat. Sätt CI:s egen serie här |
 | `AVA_FORTNOX_BOOKING_WINDOW` | *(tom → skriptet kastar)* | CI:s räkenskapsår, `"2030-01-01..2030-12-31"`. Se spärren ovan |
 | `AVA_FORTNOX_ACCOUNT_TYPE` | *(tom)* | `service` för service-konto (rätt för CI) |
@@ -111,6 +111,10 @@ efter första anropet**, före allt som kan fela, och workflow:et sparar den med
 Saknas `AVA_FORTNOX_ROTATE_PAT` fäller jobbet med ett tydligt fel — hellre det
 än en tyst död token som visar sig först vid nästa körning.
 
+> **Fallgrop:** skriv `gh secret set … ` *utan* `--body`. `gh` har ingen
+> `-`-konvention för `--body` (bara för `--env-file`), så `--body -` hade
+> lagrat strängen `-` som token och nästa körning hade dött i auth.
+
 ## När token:en dött ändå
 
 Refresh-token:en dör efter 45 dygn utan användning, och en misslyckad
@@ -135,6 +139,11 @@ AVA_FORTNOX_CLIENT_ID=… AVA_FORTNOX_CLIENT_SECRET=… AVA_FORTNOX_REDIRECT_URI
 
 `redirect_uri` måste matcha registreringen i Developer Portal **tecken för
 tecken** — annars avvisas anropet redan i steg 1.
+
+> **Fortnox-egenhet (#1038):** jämförelsen sker på råsträngen, *före*
+> URL-decode. En korrekt percent-encodad `redirect_uri=https%3A%2F%2F…` ger
+> `redirect_uri_mismatch` trots att URI:n är registrerad exakt. `buildAuthorizeUrl`
+> lägger därför på den oencodad — encoda den inte "för säkerhets skull".
 
 Båda kontomodellerna är nu verifierade mot sandbox:
 
@@ -165,8 +174,15 @@ AVA_FORTNOX_CLIENT_ID=… AVA_FORTNOX_CLIENT_SECRET=… AVA_FORTNOX_REFRESH_TOKE
 uttryckligen från att skapa räkenskapsår via API:t, och det är ändå ett
 engångsmoment.
 
-Sätt sedan `AVA_FORTNOX_VOUCHER_SERIES`, `AVA_FORTNOX_BOOKING_WINDOW` och
-`AVA_FORTNOX_CI_ENABLED=true` som environment-variabler.
+Sätt sedan `AVA_FORTNOX_VOUCHER_SERIES` och `AVA_FORTNOX_BOOKING_WINDOW` som
+environment-variabler, och `AVA_FORTNOX_CI_ENABLED=true` som **repo**-variabel:
+
+```bash
+gh variable set AVA_FORTNOX_VOUCHER_SERIES --env fortnox-sandbox --body Z
+gh variable set AVA_FORTNOX_BOOKING_WINDOW --env fortnox-sandbox --body '2030-01-01..2030-12-31'
+gh variable set AVA_FORTNOX_ACCOUNT_TYPE   --env fortnox-sandbox --body service
+gh variable set AVA_FORTNOX_CI_ENABLED --body true   # repo-nivå — se tabellen ovan
+```
 
 > Kör `fortnox:series` **lokalt** — det är ett adminverktyg som skriver ut den
 > roterade refresh-token:en på stdout. Kom ihåg att uppdatera secreten efteråt,

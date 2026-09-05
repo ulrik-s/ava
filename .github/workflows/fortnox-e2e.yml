@@ -80,6 +80,10 @@ jobs:
     # något annat än "true" så hoppas jobbet över. Behövs t.ex. när samtycket
     # gått ut och ingen hunnit förnya det — annars hade main blivit röd på något
     # som inte är ett kodfel.
+    #
+    # Den MÅSTE ligga på REPO-nivå (`gh variable set`), inte på miljön: ett
+    # job-`if` utvärderas innan `environment:` resolvas, så en
+    # environment-variabel är alltid tom här och jobbet hade aldrig kört.
     if: vars.AVA_FORTNOX_CI_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -168,6 +172,9 @@ jobs:
             echo "::error::Nästa körning kommer att misslyckas. Uppdatera AVA_FORTNOX_REFRESH_TOKEN manuellt."
             exit 1
           fi
+          # INTE `--body -`: gh har ingen "-"-konvention för --body (bara för
+          # --env-file), så värdet hade lagrats literalt som "-" och nästa
+          # körning dött i auth. Utan --body läser gh stdin.
           printf '%s' "$NEW_TOKEN" | gh secret set AVA_FORTNOX_REFRESH_TOKEN \
-            --repo "${{ github.repository }}" --env fortnox-sandbox --body -
+            --repo "${{ github.repository }}" --env fortnox-sandbox
           echo "✓ AVA_FORTNOX_REFRESH_TOKEN uppdaterad med den roterade token:en."
