@@ -126,16 +126,35 @@ interface BookingCtx {
 /** Bokför EN faktura och verifiera dess verifikat. */
 async function bookAndVerify(ctx: BookingCtx, invoiceId: string, label: string): Promise<void> {
   const { ava: c, client, connector, mapping, bookingDate } = ctx;
+
+  // Ställ ut fakturan först. `settleCoverage` skapar den som DRAFT, och
+  // `isBookable` hoppar korrekt över utkast — ett utkast existerar inte
+  // bokföringsmässigt. Utan det här steget bokförs ingenting och drivrutinen
+  // returnerar en TOM lista, vilket inte är ett fel utan ett korrekt "nej"
+  // (#1046). Riktiga byråer skickar fakturan innan de bokför den.
+  const before = await c.invoice.getById.query({ id: invoiceId });
+  if (before.status === "DRAFT") {
+    await c.invoice.setStatus.mutate({ invoiceId, status: "SENT" });
+  }
+
   const raw = await c.invoice.getById.query({ id: invoiceId });
   const inv = toBookable(raw as Parameters<typeof toBookable>[0], bookingDate);
-  console.log(`  ${label}: ${inv.invoiceNumber} · ${kr(inv.amount)} (moms ${kr(inv.vatOre ?? 0)})`);
+  console.log(`  ${label}: ${inv.invoiceNumber} · ${kr(inv.amount)} (moms ${kr(inv.vatOre ?? 0)}) · status ${inv.status}`);
 
   const marked: Array<[string, string]> = [];
   const [outcome] = await bookUnbookedInvoices({
     invoices: [inv], connector, markBooked: async (id, ext) => { marked.push([id, ext]); },
   });
-  if (!outcome || outcome.error || !outcome.externalId) {
-    throw new Error(`bokföring av ${label} misslyckades: ${outcome?.error ?? "inget utfall"}`);
+  // Skilj på "drivrutinen sa nej" och "pushen gick fel". Utan den skillnaden
+  // rapporterades båda som "inget utfall", vilket dolde att fakturan var DRAFT.
+  if (!outcome) {
+    throw new Error(
+      `${label} var inte bokförbar: status ${inv.status}, fortnoxId ${inv.fortnoxId ?? "null"} `
+      + "— drivrutinen såg den inte som kandidat.",
+    );
+  }
+  if (outcome.error || !outcome.externalId) {
+    throw new Error(`bokföring av ${label} misslyckades: ${outcome.error ?? "pushen gav inget externt id"}`);
   }
   assert(marked.length === 1, `write-back uteblev för ${label}`);
   await verifyVoucher(client, mapping, outcome.externalId, inv);
