@@ -19,8 +19,13 @@ FROM debian:stable-slim
 # i ett git-repo (AVA_CONTENT_DIR) där varje skrivning committas. Utan binären
 # kastar uploadContent "Executable not found in $PATH: git" → server-side-
 # dokumentlagringen (+ klassificeringen som läser bytes:en) fungerar inte.
+#
+# wget krävs av HEALTHCHECK:en (#1079). debian-slim har varken wget eller curl,
+# och en docker-healthcheck körs INUTI containern — utan en http-klient kan
+# containern inte kontrollera sig själv, healthchecken fallerar alltid, och
+# autoheal skulle starta om en fullt frisk tjänst i en evig loop.
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates git \
+  && apt-get install -y --no-install-recommends ca-certificates git wget \
   && rm -rf /var/lib/apt/lists/*
 
 COPY dist/server-first/ava-server-first-linux-x64   /opt/ava/bin/ava-server-first-linux-x64

@@ -22,8 +22,12 @@
 # inte hinner ruttna mellan gångerna någon behöver den.
 set -euo pipefail
 
+# Produktionsfilen + drill-overlayen (som exponerar portarna övningen behöver).
 COMPOSE="tooling/docker/docker-compose.production.yml"
+COMPOSE_ARGS=(-f "$COMPOSE" -f "tooling/docker/docker-compose.drill.yml")
 WORK="${TMPDIR:-/tmp}/ava-restore-drill"
+# backup-/restore-skripten tar EN compose-fil; de rör bara postgres och
+# server-first, så produktionsfilen räcker för dem.
 export AVA_COMPOSE="$COMPOSE"
 
 # Produktions-compose:n kräver riktiga värden för TLS/OIDC. Övningen startar
