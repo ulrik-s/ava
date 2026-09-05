@@ -32,6 +32,7 @@
  *   bun run e2e:camt-payment
  */
 
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { parseCamtXml } from "@/lib/shared/payments/camt-parse";
 import { matchTransactions, type InvoiceCandidate } from "@/lib/shared/payments/match-payments";
 import { matchReceivables, type ReceivableCandidate } from "@/lib/shared/payments/match-receivables";
@@ -40,6 +41,14 @@ import { buildCamt054, type CamtTx } from "./camt-builder";
 import {
   assert, clientFor, kr, seedUser, waitForServer, type Ava,
 } from "./e2e-harness";
+
+/**
+ * camt-parsern använder browser-nativ `DOMParser`, och det är INTE en
+ * eftergift för testet: importen sker i webbläsaren i AVA (importsidan parsar
+ * klient-sida). Bun saknar DOMParser, så e2e:t registrerar samma happy-dom som
+ * enhetstesterna använder — då körs parsern i den miljö den faktiskt lever i.
+ */
+GlobalRegistrator.register();
 
 const USER = "anna-camt@byra.se";
 const RATE_ORE = 250_000;
