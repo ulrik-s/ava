@@ -225,6 +225,18 @@ jobs:
           AVA_DATABASE_URL: postgres://ava:ava@localhost:5433/ava_test
           AVA_ORGANIZATION_ID: "00000000-0000-0000-0000-000000000001"
         run: bun tooling/scripts/invoice-dispatch-e2e.ts
+      # Förväntad domstolsbetalning-E2E: kostnadsräkning som Domstolsverket
+      # betalar — ingen faktura att pricka av mot, alltså inget av det vanliga
+      # fakturamaskineriet som fångar fel. Kör försiktighetsprincipen (3b-ii:
+      # begärt är memo, bara utbetalt bokas, bryggan orörd) och SÖMMEN mellan
+      # serverns candidates och den skarpa camt-matchningen (#175), som båda är
+      # enhetstestade var för sig men aldrig mot varandra.
+      - name: Domstolsbetalning-E2E (3b-ii + camt-sömmen)
+        env:
+          SERVER_URL: http://localhost:3001
+          AVA_DATABASE_URL: postgres://ava:ava@localhost:5433/ava_test
+          AVA_ORGANIZATION_ID: "00000000-0000-0000-0000-000000000001"
+        run: bun tooling/scripts/expected-receivable-e2e.ts
       - name: Tear down docker
         if: always()
         run: docker compose -f tooling/docker/docker-compose.server-first.yml down -v
