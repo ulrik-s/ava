@@ -140,8 +140,10 @@
   ],
   "//overrides": "CVE-tvingade versioner på TRANSITIVA beroenden (#966). Varje rad har en advisory bakom sig och det direkta beroendet kan inte bumpas dit själv. Ta bort en rad så fort uppströms hunnit ikapp — bun audit i Security-workflowen visar om den fortfarande behövs.",
   "overrides": {
+    "@xmldom/xmldom": "^0.8.15",
     "brace-expansion": "^5.0.9",
-    "fast-uri": "^3.1.5",
+    "browserslist": "^4.28.9",
+    "fast-uri": "^3.1.7",
     "hono": "^4.13.1",
     "js-yaml": "^4.3.1",
     "nanoid": "^3.3.18",
