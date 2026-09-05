@@ -27,8 +27,9 @@
   },
   "//overrides": "CVE-tvingade versioner på TRANSITIVA beroenden (#966) — allihop under electron/electron-builder, som är byggverktyg. Ta bort en rad så fort uppströms hunnit ikapp.",
   "overrides": {
+    "@xmldom/xmldom": "^0.8.15",
     "brace-expansion": "^5.0.9",
-    "fast-uri": "^3.1.5",
+    "fast-uri": "^3.1.7",
     "js-yaml": "^4.3.1",
     "tar": "^7.5.22",
     "undici": "^7.29.0"
