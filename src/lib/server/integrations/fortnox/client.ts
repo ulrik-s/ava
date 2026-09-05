@@ -8,14 +8,17 @@
 
 import { refreshTokens, type FetchFn } from "./oauth";
 import {
+  fortnoxFinancialYearListSchema,
   fortnoxInboxResponseSchema,
   fortnoxVoucherFetchSchema,
+  fortnoxVoucherListSchema,
   fortnoxVoucherResponseSchema,
   fortnoxVoucherSeriesListSchema,
   fortnoxVoucherSeriesResponseSchema,
   type FortnoxConfig,
   type FortnoxVoucher,
   type FortnoxVoucherFetch,
+  type FortnoxVoucherHead,
   type FortnoxVoucherResponse,
   type FortnoxVoucherSeries,
 } from "./schema";
@@ -117,6 +120,39 @@ export class FortnoxClient {
   async listVoucherSeries(): Promise<FortnoxVoucherSeries[]> {
     const res = await this.withRetry((t) => this.apiGet("/3/voucherseries", t), "serielistning");
     return fortnoxVoucherSeriesListSchema.parse(await res.json()).VoucherSeriesCollection;
+  }
+
+  /**
+   * Räkenskapsårets `Id` för ett datum-intervall (#1050). `financialyear`-
+   * parametern vill ha Id:t, inte årtalet — slås upp här i st.f. att hårdkodas,
+   * så CI inte går sönder tyst när byrån lägger upp ytterligare ett år.
+   */
+  async financialYearIdFor(fromDate: string, toDate: string): Promise<number> {
+    const res = await this.withRetry((t) => this.apiGet("/3/financialyears", t), "räkenskapsårslistning");
+    const years = fortnoxFinancialYearListSchema.parse(await res.json()).FinancialYears;
+    const hit = years.find((y) => y.FromDate === fromDate && y.ToDate === toDate);
+    if (!hit) {
+      const known = years.map((y) => `${y.FromDate}..${y.ToDate}`).join(", ");
+      throw new Error(`Inget räkenskapsår ${fromDate}..${toDate} i Fortnox. Fanns: ${known || "inga"}`);
+    }
+    return hit.Id;
+  }
+
+  /**
+   * Alla verifikat i ett räkenskapsår — HUVUDEN, inte rader (`GET /3/vouchers`
+   * levererar inga `VoucherRows`). Sidorna hämtas till `@TotalPages` är slut;
+   * utan det hade delta-kollen tystnat så fort CI-året passerat en sidbredd,
+   * och en tyst delta-koll är värre än ingen.
+   */
+  async listVouchers(financialYearId: number, pageSize = 100): Promise<FortnoxVoucherHead[]> {
+    const all: FortnoxVoucherHead[] = [];
+    for (let page = 1; ; page++) {
+      const path = `/3/vouchers?financialyear=${financialYearId}&limit=${pageSize}&page=${page}`;
+      const res = await this.withRetry((t) => this.apiGet(path, t), "verifikatlistning");
+      const body = fortnoxVoucherListSchema.parse(await res.json());
+      all.push(...body.Vouchers);
+      if (page >= (body.MetaInformation?.["@TotalPages"] ?? 1)) return all;
+    }
   }
 
   /**

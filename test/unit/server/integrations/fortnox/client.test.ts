@@ -289,3 +289,60 @@ describe("FortnoxClient — verifikatserier (#1035)", () => {
     await expect(client.createVoucherSeries("A", "dubblett")).rejects.toThrow(/400/);
   });
 });
+
+describe("FortnoxClient — verifikatlistning + räkenskapsår (#1050)", () => {
+  /** fetch som svarar på financialyears och paginerade voucher-listor. */
+  function listFetch(pages: Array<{ vouchers: Array<{ s: string; n: number }>; totalPages: number }>) {
+    const seen: string[] = [];
+    const fn = (async (url: string | URL) => {
+      const u = String(url);
+      seen.push(u);
+      if (u.endsWith("/oauth-v1/token")) return json(200, ROTATED);
+      if (u.includes("/3/financialyears")) {
+        return json(200, { FinancialYears: [
+          { Id: 1, FromDate: "2026-01-01", ToDate: "2026-12-31" },
+          { Id: 2, FromDate: "2027-01-01", ToDate: "2027-12-31" },
+        ] });
+      }
+      const page = Number(new URL(u).searchParams.get("page") ?? "1");
+      const p = pages[page - 1] ?? { vouchers: [], totalPages: pages.length };
+      return json(200, {
+        MetaInformation: { "@TotalPages": p.totalPages, "@CurrentPage": page },
+        Vouchers: p.vouchers.map((v) => ({ VoucherSeries: v.s, VoucherNumber: v.n })),
+      });
+    }) as typeof globalThis.fetch;
+    return { fn, seen };
+  }
+
+  it("slår upp räkenskapsårets Id via datumintervallet, inte årtalet", async () => {
+    const { fn } = listFetch([{ vouchers: [], totalPages: 1 }]);
+    const client = new FortnoxClient(config, new InMemoryFortnoxTokenStore(fresh()), fn);
+    expect(await client.financialYearIdFor("2027-01-01", "2027-12-31")).toBe(2);
+  });
+
+  it("kastar med de kända åren när intervallet inte finns — tyst fel vore värre", async () => {
+    const { fn } = listFetch([{ vouchers: [], totalPages: 1 }]);
+    const client = new FortnoxClient(config, new InMemoryFortnoxTokenStore(fresh()), fn);
+    await expect(client.financialYearIdFor("2030-01-01", "2030-12-31")).rejects.toThrow(/2027-01-01\.\.2027-12-31/);
+  });
+
+  // Utan pagineringsloopen hade listan tystnat vid sidbrytningen, och en tyst
+  // delta-koll rapporterar "inget nytt" i stället för att fälla.
+  it("hämtar ALLA sidor, inte bara den första", async () => {
+    const { fn, seen } = listFetch([
+      { vouchers: [{ s: "A", n: 1 }, { s: "A", n: 2 }], totalPages: 2 },
+      { vouchers: [{ s: "A", n: 3 }], totalPages: 2 },
+    ]);
+    const client = new FortnoxClient(config, new InMemoryFortnoxTokenStore(fresh()), fn);
+    const all = await client.listVouchers(2, 2);
+    expect(all.map((v) => v.VoucherNumber)).toEqual([1, 2, 3]);
+    expect(seen.filter((u) => u.includes("/3/vouchers")).length).toBe(2);
+  });
+
+  it("skickar räkenskapsårets id som financialyear-parameter", async () => {
+    const { fn, seen } = listFetch([{ vouchers: [], totalPages: 1 }]);
+    const client = new FortnoxClient(config, new InMemoryFortnoxTokenStore(fresh()), fn);
+    await client.listVouchers(2);
+    expect(seen.some((u) => u.includes("financialyear=2"))).toBe(true);
+  });
+});
