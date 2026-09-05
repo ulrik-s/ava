@@ -156,9 +156,28 @@ Båda kontomodellerna är nu verifierade mot sandbox:
 
 Se connector-README:n och [#213](https://github.com/ulrik-s/ava/issues/213).
 
-## Sätta upp CI-serien och CI-året
+## Uppsättningen som faktiskt körs
 
-Engångsarbete, delvis manuellt:
+Konfigurerad 2026-09-05. Serie och år hänger ihop — läs båda innan du ändrar
+något.
+
+| Vad | Värde |
+|---|---|
+| Fortnox-företag | **Firma1-Test** (555555-5555) |
+| Kontomodell | service-konto (`account_type=service`) |
+| Räkenskapsår | **2027-01-01 – 2027-12-31**, skapat tomt för CI |
+| Verifikatserie | **A** ("Redovisning", manuell) |
+
+**Varför ingen egen serie.** Poängen med en egen serie är städbarhet: verifikat
+kan bara tas bort bakifrån i sin serie. Men CI-*året* är redan CI:s eget och
+tomt — 2027 skapades utan ingående balanser, så det innehåller uteslutande våra
+manuella verifikat och kan raderas i sin helhet. Då tillför en separat serie
+ingenting, och default-`A` är en variabel mindre att glömma.
+
+Byter du till en verklig byrå där året delas med annat: skapa en egen serie
+(nedan) och peka `AVA_FORTNOX_VOUCHER_SERIES` på den.
+
+### Om du behöver en egen serie ändå
 
 ```bash
 # 1. Se vilka serier som finns och vilka som är manuella.
@@ -170,23 +189,36 @@ AVA_FORTNOX_CLIENT_ID=… AVA_FORTNOX_CLIENT_SECRET=… AVA_FORTNOX_REFRESH_TOKE
   bun run fortnox:series --create Z "CI-testverifikat"
 ```
 
-**Räkenskapsåret skapas i GUI:t** (Inställningar → Räkenskapsår). Fortnox avråder
-uttryckligen från att skapa räkenskapsår via API:t, och det är ändå ett
-engångsmoment.
+> Kör `fortnox:series` **lokalt** — det är ett adminverktyg som skriver ut den
+> roterade refresh-token:en på stdout. **Kom ihåg att uppdatera secreten
+> efteråt**, annars kan nästa CI-körning inte auth:a. Det gäller varje lokal
+> körning mot skarp Fortnox: refresh-token:en roterar, och CI:s secret blir död
+> i samma sekund.
 
-Sätt sedan `AVA_FORTNOX_VOUCHER_SERIES` och `AVA_FORTNOX_BOOKING_WINDOW` som
-environment-variabler, och `AVA_FORTNOX_CI_ENABLED=true` som **repo**-variabel:
+### Räkenskapsåret
+
+Skapas i GUI:t (kugghjulet → Räkenskapsår → *Skapa nytt*). Fortnox avråder
+uttryckligen från att skapa räkenskapsår via API:t. Två val vid skapandet spelar
+roll för CI:
+
+- **Ingående balanser: NEJ** — håller året fritt från allt utom våra egna
+  verifikat, vilket är villkoret för att kunna radera hela året.
+- **Öppna detta räkenskapsår vid inlogg: NEJ** — annars landar du i det tomma
+  CI-året varje gång du loggar in i företaget.
+
+### Variablerna
 
 ```bash
-gh variable set AVA_FORTNOX_VOUCHER_SERIES --env fortnox-sandbox --body Z
-gh variable set AVA_FORTNOX_BOOKING_WINDOW --env fortnox-sandbox --body '2030-01-01..2030-12-31'
+gh variable set AVA_FORTNOX_VOUCHER_SERIES --env fortnox-sandbox --body A
+gh variable set AVA_FORTNOX_BOOKING_WINDOW --env fortnox-sandbox --body '2027-01-01..2027-12-31'
 gh variable set AVA_FORTNOX_ACCOUNT_TYPE   --env fortnox-sandbox --body service
 gh variable set AVA_FORTNOX_CI_ENABLED --body true   # repo-nivå — se tabellen ovan
 ```
 
-> Kör `fortnox:series` **lokalt** — det är ett adminverktyg som skriver ut den
-> roterade refresh-token:en på stdout. Kom ihåg att uppdatera secreten efteråt,
-> annars kan nästa CI-körning inte auth:a.
+`AVA_FORTNOX_CI_ENABLED` sätts **sist**, och först när
+`AVA_FORTNOX_ROTATE_PAT` finns. Utan PAT:en fäller write-back-steget, och
+token:en har redan roterat då — första körningen skulle alltså döda
+anslutningen i stället för att förnya den.
 
 ## Källor
 
@@ -200,6 +232,12 @@ gh variable set AVA_FORTNOX_CI_ENABLED --body true   # repo-nivå — se tabelle
 - **Går inte att köra från Claude Code-containern.** `bun`:s `fetch` når inte
   igenom containerns proxy till Fortnox (`socket connection was closed
   unexpectedly`) medan `curl` gör det. GitHub-runnern har ingen sådan proxy.
+  Gäller bara containern — från macOS-värden går `bun`:s `fetch` fram
+  (verifierat 2026-09-05).
+- **Varje lokal körning bränner CI:s token.** Refresh-token:en roterar vid
+  första anropet, så ett lokalt `fortnox:e2e` gör secreten i `fortnox-sandbox`
+  död. Kör lokalt bara med en token du själv skaffat via `fortnox:connect`, och
+  skriv tillbaka den roterade till secreten efteråt.
 - **Testfakturan är syntetisk** (125,00 kr inkl moms, `E2E-<tidsstämpel>`) och
   byggs i minnet. Det som testas är ledger-vägen, inte repo-lagret — det har
   egna tester.
