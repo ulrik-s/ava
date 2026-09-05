@@ -81,7 +81,7 @@ repo-secrets — så åtkomsten kan begränsas separat.
 | `AVA_FORTNOX_CLIENT_ID` | ur Developer Portal |
 | `AVA_FORTNOX_CLIENT_SECRET` | ur Developer Portal |
 | `AVA_FORTNOX_REFRESH_TOKEN` | från consent-rundan — **roterar vid varje körning**, se nedan |
-| `AVA_FORTNOX_ROTATE_PAT` | PAT med `secrets: write` på repot, så jobbet kan spara den roterade token:en |
+| `AVA_FORTNOX_ROTATE_PAT` | fine-grained PAT med **`Environments: Read and write`** på repot, så jobbet kan spara den roterade token:en. Se fallgropen nedan — det är INTE `Secrets`-behörigheten |
 
 | Variable (`vars`) | Default | Vad |
 |---|---|---|
@@ -111,9 +111,22 @@ efter första anropet**, före allt som kan fela, och workflow:et sparar den med
 Saknas `AVA_FORTNOX_ROTATE_PAT` fäller jobbet med ett tydligt fel — hellre det
 än en tyst död token som visar sig först vid nästa körning.
 
-> **Fallgrop:** skriv `gh secret set … ` *utan* `--body`. `gh` har ingen
+> **Fallgrop 1:** skriv `gh secret set … ` *utan* `--body`. `gh` har ingen
 > `-`-konvention för `--body` (bara för `--env-file`), så `--body -` hade
 > lagrat strängen `-` som token och nästa körning hade dött i auth.
+>
+> **Fallgrop 2:** PAT:ens behörighet heter **`Environments`**, inte `Secrets`.
+> `Secrets: Read and write` räcker för *repo*-secrets men ger `403 Resource not
+> accessible by personal access token` på *environment*-secrets — och vår ligger
+> på miljön `fortnox-sandbox`. Testa PAT:en INNAN du slår på CI:
+>
+> ```bash
+> GH_TOKEN=<pat> gh secret set PROBE --repo ulrik-s/ava --env fortnox-sandbox --body probe \
+>   && GH_TOKEN=<pat> gh secret delete PROBE --repo ulrik-s/ava --env fortnox-sandbox
+> ```
+>
+> Går det igenom fungerar write-backen. Går det inte, och du slår på CI ändå,
+> dör anslutningen vid första körningen.
 
 ## När token:en dött ändå
 
