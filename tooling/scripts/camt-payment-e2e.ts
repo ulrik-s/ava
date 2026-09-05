@@ -32,7 +32,7 @@
  *   bun run e2e:camt-payment
  */
 
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { Window } from "happy-dom";
 import { parseCamtXml } from "@/lib/shared/payments/camt-parse";
 import { matchTransactions, type InvoiceCandidate } from "@/lib/shared/payments/match-payments";
 import { matchReceivables, type ReceivableCandidate } from "@/lib/shared/payments/match-receivables";
@@ -45,10 +45,15 @@ import {
 /**
  * camt-parsern använder browser-nativ `DOMParser`, och det är INTE en
  * eftergift för testet: importen sker i webbläsaren i AVA (importsidan parsar
- * klient-sida). Bun saknar DOMParser, så e2e:t registrerar samma happy-dom som
- * enhetstesterna använder — då körs parsern i den miljö den faktiskt lever i.
+ * klient-sida). Bun saknar DOMParser, så vi lånar happy-doms.
+ *
+ * ENBART `DOMParser` sätts — inte hela browsermiljön. `GlobalRegistrator`
+ * ersätter också `fetch`, och då slutar tRPC-klienten nå servern: första
+ * försöket föll på "server-first svarade inte inom 30s", inte på något
+ * camt-relaterat alls.
  */
-GlobalRegistrator.register();
+const { DOMParser } = new Window();
+Object.assign(globalThis, { DOMParser });
 
 const USER = "anna-camt@byra.se";
 const RATE_ORE = 250_000;
