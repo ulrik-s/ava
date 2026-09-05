@@ -53,6 +53,7 @@
     "e2e:billing": "bash tooling/scripts/billing-pipeline-e2e.sh",
     "e2e:billing-scenarios": "bash tooling/scripts/billing-scenarios-e2e.sh",
     "e2e:matter-flora": "bash tooling/scripts/matter-flora-e2e.sh",
+    "e2e:reports": "bash tooling/scripts/reports-e2e.sh",
     "e2e:conflict": "bash tooling/scripts/conflict-e2e.sh",
     "selfhosted:local": "bash tooling/scripts/selfhosted-local.sh",
     "diagnose-ui": "bun tooling/scripts/diagnose-ui.ts",
