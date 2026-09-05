@@ -1,0 +1,135 @@
+# PRODUKTIONS-STACK för self-hosted AVA (#1079) — server-first + OIDC + TLS.
+#
+# Skillnaden mot `docker-compose.selfhosted-local.yml`, som är en TESTRIGG:
+#
+#   testriggen                        den här
+#   ─────────────────────────────     ────────────────────────────────────
+#   Postgres på tmpfs (data borta      namngiven volym som överlever
+#     vid omstart)                       omstart och uppgradering
+#   Keycloak start-dev, admin/admin    byråns EGEN IdP via OIDC-discovery
+#   http på :8080                      TLS via Caddy (automatiskt cert)
+#   ingen omstartspolicy               restart: unless-stopped + autoheal
+#   attrapp-healthcheck i nginx        /readyz som faktiskt rör databasen
+#
+#   docker compose -f tooling/docker/docker-compose.production.yml up -d
+#
+# Kräver en ifylld `ava-server.env` (se docs/deploy-server-first.md).
+
+name: ava
+
+services:
+  # ─── TLS-terminering + statisk app ────────────────────────────────────
+  # Caddy i st.f. nginx HÄR (bara här): den skaffar och förnyar Let's
+  # Encrypt-cert själv. En byrå ska inte behöva sköta certbot-cron för att
+  # köra sitt ärendesystem, och ett utgånget cert är ett driftstopp.
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      AVA_DOMAIN: "${AVA_DOMAIN:?AVA_DOMAIN krävs (t.ex. ava.byra.se)}"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../../out:/srv/ava:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      oauth2-proxy:
+        condition: service_started
+      server-first:
+        condition: service_healthy
+
+  # ─── OIDC relying party mot byråns egen IdP ───────────────────────────
+  # Ingen inbyggd IdP. Entra, Google eller vad byrån redan har — samma
+  # mönster som docker-compose.oidc-byoidp.yml, se docs/self-hosted-entra.md.
+  oauth2-proxy:
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.6.0
+    restart: unless-stopped
+    environment:
+      OAUTH2_PROXY_HTTP_ADDRESS: "0.0.0.0:4180"
+      OAUTH2_PROXY_PROVIDER: "${OIDC_PROVIDER:-oidc}"
+      OAUTH2_PROXY_OIDC_ISSUER_URL: "${OIDC_ISSUER_URL:?OIDC_ISSUER_URL krävs}"
+      OAUTH2_PROXY_CLIENT_ID: "${OAUTH2_PROXY_CLIENT_ID:?OAUTH2_PROXY_CLIENT_ID krävs}"
+      OAUTH2_PROXY_CLIENT_SECRET: "${OAUTH2_PROXY_CLIENT_SECRET:?OAUTH2_PROXY_CLIENT_SECRET krävs}"
+      OAUTH2_PROXY_COOKIE_SECRET: "${OAUTH2_PROXY_COOKIE_SECRET:?OAUTH2_PROXY_COOKIE_SECRET krävs}"
+      OAUTH2_PROXY_EMAIL_DOMAINS: "${OIDC_EMAIL_DOMAINS:-*}"
+      OAUTH2_PROXY_REDIRECT_URL: "https://${AVA_DOMAIN}/oauth2/callback"
+      OAUTH2_PROXY_UPSTREAMS: "static://202"
+      OAUTH2_PROXY_REVERSE_PROXY: "true"
+      # Cookien får bara gå över TLS här — testriggen kör http och kan inte.
+      OAUTH2_PROXY_COOKIE_SECURE: "true"
+      OAUTH2_PROXY_SET_XAUTHREQUEST: "true"
+
+  # ─── Postgres: byråns akter ───────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: "${POSTGRES_USER:-ava}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD krävs}"
+      POSTGRES_DB: "${POSTGRES_DB:-ava}"
+    # NAMNGIVEN VOLYM, inte tmpfs. Testriggen kastar data vid omstart med
+    # flit; här ÄR den byråns akter.
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # Ingen host-port: databasen nås bara inifrån nätet. Backup går via
+    # `docker compose exec`, se tooling/scripts/backup-db.sh.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ava} -d ${POSTGRES_DB:-ava}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ─── AVA:s server-first-runtime ───────────────────────────────────────
+  server-first:
+    build:
+      context: ../..
+      dockerfile: tooling/docker/server-first/Dockerfile
+    restart: unless-stopped
+    environment:
+      AVA_DATABASE_URL: "postgres://${POSTGRES_USER:-ava}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-ava}"
+      AVA_ORGANIZATION_ID: "${AVA_ORGANIZATION_ID:?AVA_ORGANIZATION_ID krävs}"
+      AVA_HTTP_HOST: 0.0.0.0
+      AVA_HTTP_PORT: "3001"
+      AVA_CONTENT_DIR: /data/content
+    volumes:
+      - content:/data/content
+    # /readyz rör DATABASEN (#1079). En attrapp som bara säger att processen
+    # startat hade rapporterat frisk medan poolen var död — och då hade
+    # autoheal nedan aldrig gjort något.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://127.0.0.1:3001/readyz | grep -q '\"status\":\"ok\"'"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ─── Omstart vid HÄNGNING ─────────────────────────────────────────────
+  # `restart: unless-stopped` täcker bara krascher. En process som lever men
+  # slutat svara startas ALDRIG om av docker — den är ju igång. Autoheal
+  # bevakar healthcheck-statusen och startar om det som står som unhealthy.
+  #
+  # Därför måste healthchecken ovan vara ärlig: autoheal kan bara agera på
+  # det den får veta.
+  autoheal:
+    image: willfarrell/autoheal:latest
+    restart: unless-stopped
+    environment:
+      AUTOHEAL_CONTAINER_LABEL: all
+      # Vänta ut start_period innan något döms ohälsosamt.
+      AUTOHEAL_START_PERIOD: "60"
+      AUTOHEAL_INTERVAL: "15"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+volumes:
+  pgdata:
+  content:
+  caddy_data:
+  caddy_config:

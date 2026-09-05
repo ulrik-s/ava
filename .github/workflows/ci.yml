@@ -252,6 +252,26 @@ jobs:
         if: always()
         run: docker compose -f tooling/docker/docker-compose.server-first.yml down -v
 
+  # ─── Återställningsövning ─────────────────────────────────────────────────
+  # En backup som aldrig återställts är en förhoppning. Övningen kör hela
+  # vägen mot PRODUKTIONS-compose:n: skapa ärende via API:t → backup →
+  # FÖRSTÖR datan → bekräfta att den är borta → återställ → bekräfta att den
+  # är tillbaka. Steget "bekräfta att den är borta" är det som gör övningen
+  # ärlig; utan det skulle en återställning som inte gör någonting alls se ut
+  # att lyckas.
+  #
+  # Kör i CI i st.f. som en manuell checklista — en rutin som bara utförs när
+  # någon kommer ihåg den hinner ruttna mellan gångerna den behövs.
+  restore-drill:
+    name: Återställningsövning (backup → förstör → återställ)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/bun-setup
+      - name: Kör övningen
+        run: bash tooling/scripts/restore-drill.sh
+
   # ─── (Borttaget #422) E2E (git round-trip) ───
   # Self-hosted kör server-first sedan cutovern (ADR 0016 #420–#422) → iso-git-
   # round-trippen är pensionerad. Server-synken täcks nu av "Server-first
