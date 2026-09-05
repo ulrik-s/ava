@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest-compat";
 import {
-  coverageItems, deadlineItems, failedDispatchItems, overdueInvoiceItems,
+  coverageItems, dagar, deadlineItems, failedDispatchItems, overdueInvoiceItems,
   sortWatchlist, unbilledItems, daysBetween,
   DEFAULT_THRESHOLDS, type WatchlistItem,
 } from "@/lib/shared/watchlist";
@@ -200,5 +200,46 @@ describe("sortWatchlist", () => {
     const input = [item({ severity: "approaching" }), item({ severity: "passed" })];
     sortWatchlist(input);
     expect(input[0]?.severity).toBe("approaching");
+  });
+});
+
+/**
+ * Pluralböjningen (#1065). "Tidsfrist om 1 dagar" upptäcktes i den skarpa
+ * demon — en text som ser trasig ut får en användare att misstro hela vyn,
+ * även när siffran är rätt.
+ */
+describe("svensk böjning", () => {
+  it("böjer en dag i singular", () => {
+    expect(dagar(1)).toBe("1 dag");
+  });
+
+  it("böjer flera dagar i plural", () => {
+    expect(dagar(3)).toBe("3 dagar");
+  });
+
+  it("skriver inte \"om 1 dagar\" i en frist", () => {
+    const NOW2 = new Date("2026-09-05T00:00:00Z");
+    const [item] = deadlineItems(
+      [{ id: "t", title: "Ge in", dueAt: "2026-09-06", matterId: null, matterNumber: null }], NOW2,
+    );
+    expect(item?.title).toContain("imorgon");
+    expect(item?.title).not.toContain("1 dagar");
+  });
+
+  it("säger \"idag\" i st.f. \"om 0 dagar\"", () => {
+    const NOW2 = new Date("2026-09-05T00:00:00Z");
+    const [item] = deadlineItems(
+      [{ id: "t", title: "Ge in", dueAt: "2026-09-05", matterId: null, matterNumber: null }], NOW2,
+    );
+    expect(item?.title).toContain("idag");
+  });
+
+  it("böjer även dagar över förfallodag", () => {
+    const NOW2 = new Date("2026-09-05T00:00:00Z");
+    const [item] = overdueInvoiceItems(
+      [{ id: "i", invoiceNumber: "F-1", dueDate: "2026-09-04", outstandingOre: 100, matterId: null, matterNumber: null }],
+      NOW2,
+    );
+    expect(item?.detail).toBe("1 dag över förfallodag.");
   });
 });

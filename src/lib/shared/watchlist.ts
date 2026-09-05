@@ -116,6 +116,18 @@ export function daysBetween(from: Date, to: Date): number {
 
 const iso = (d: Date): string => d.toISOString().slice(0, 10);
 
+/** "1 dag" / "3 dagar" — svensk pluralböjning. "om 1 dagar" ser trasigt ut. */
+export function dagar(n: number): string {
+  return n === 1 ? "1 dag" : `${n} dagar`;
+}
+
+/** "idag" / "imorgon" / "om 3 dagar" — noll dagar kvar är inte "om 0 dagar". */
+function omDagar(n: number): string {
+  if (n === 0) return "idag";
+  if (n === 1) return "imorgon";
+  return `om ${dagar(n)}`;
+}
+
 export interface CoverageMatter extends CoverageCapInput {
   id: string;
   matterNumber: string;
@@ -173,9 +185,9 @@ function unbilledReason(m: UnbilledMatter, now: Date, t: WatchlistThresholds): s
   const ålder = m.oldestEntryDate === null ? 0 : daysBetween(new Date(m.oldestEntryDate), now);
   const överBelopp = m.unbilledOre >= t.unbilledThresholdOre;
   const förGammalt = m.oldestEntryDate !== null && ålder >= t.unbilledAgeDays;
-  if (överBelopp && förGammalt) return `över tröskeln och ${ålder} dagar gammalt`;
+  if (överBelopp && förGammalt) return `över tröskeln och ${dagar(ålder)} gammalt`;
   if (överBelopp) return "över tröskeln";
-  if (förGammalt) return `${ålder} dagar gammalt`;
+  if (förGammalt) return `${dagar(ålder)} gammalt`;
   return null;
 }
 
@@ -226,9 +238,9 @@ export function deadlineItems(
     out.push({
       kind: "deadline",
       severity: passerad ? "passed" : "approaching",
-      title: passerad ? `Tidsfrist passerad: ${task.title}` : `Tidsfrist om ${kvar} dagar: ${task.title}`,
+      title: passerad ? `Tidsfrist passerad: ${task.title}` : `Tidsfrist ${omDagar(kvar)}: ${task.title}`,
       detail: passerad
-        ? `Fristen gick ut för ${Math.abs(kvar)} dagar sedan.`
+        ? `Fristen gick ut för ${dagar(Math.abs(kvar))} sedan.`
         : `Förfaller ${iso(new Date(task.dueAt))}.`,
       matterId: task.matterId, matterNumber: task.matterNumber,
       at: iso(new Date(task.dueAt)), amountOre: null,
@@ -252,13 +264,13 @@ export function overdueInvoiceItems(invoices: readonly OverdueInvoice[], now: Da
   const out: WatchlistItem[] = [];
   for (const inv of invoices) {
     if (inv.outstandingOre <= 0) continue;
-    const dagar = daysBetween(new Date(inv.dueDate), now);
-    if (dagar <= 0) continue;
+    const dagarSen = daysBetween(new Date(inv.dueDate), now);
+    if (dagarSen <= 0) continue;
     out.push({
       kind: "overdueInvoice",
       severity: "passed",
       title: `Förfallen faktura ${inv.invoiceNumber ?? ""}`.trim(),
-      detail: `${dagar} dagar över förfallodag.`,
+      detail: `${dagar(dagarSen)} över förfallodag.`,
       matterId: inv.matterId, matterNumber: inv.matterNumber,
       at: inv.dueDate, amountOre: inv.outstandingOre,
       href: `/invoices/${inv.id}`,

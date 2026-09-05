@@ -77,6 +77,17 @@ describe("Att bevaka-sidan", () => {
     expect(screen.getByRole("button", { name: "Tidsfrister" })).toHaveAttribute("aria-pressed", "true");
   });
 
+  // #1065: rubriken räknade filtrerade poster → sidan påstod "inget behöver
+  // din uppmärksamhet" så fort man filtrerade till en tom kategori, medan
+  // något annat brann.
+  it("räknar ALLA poster i rubriken, inte de filtrerade", () => {
+    query.data = { items: [item({ kind: "deadline", severity: "passed" })] };
+    render(<WatchlistPage />);
+    fireEvent.click(screen.getByRole("button", { name: "Ofakturerat" }));
+    expect(screen.getByText(/1 poster, varav 1 redan passerade/)).toBeInTheDocument();
+    expect(screen.queryByText(/Inget behöver din uppmärksamhet/i)).not.toBeInTheDocument();
+  });
+
   it("säger till när kategorin är tom i st.f. att se trasig ut", () => {
     query.data = { items: [item({ kind: "deadline" })] };
     render(<WatchlistPage />);
