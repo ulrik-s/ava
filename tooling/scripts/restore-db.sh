@@ -4,12 +4,17 @@
 #
 #   bash tooling/scripts/restore-db.sh /srv/ava/backup/ava-2026-09-05-1400.sql.gz
 #
-# ## Detta ÖVERSKRIVER databasen
+# ## Detta RADERAR OCH ÅTERSKAPAR databasen
 #
-# Dumpen tas med `--clean --if-exists`, alltså släpper den befintliga objekt
-# innan den lägger tillbaka sina egna. Kör den mot fel databas och byråns
-# akter är borta. Därför kräver scriptet en uttrycklig bekräftelse — sätt
-# `AVA_RESTORE_YES=1` för att köra obevakat (t.ex. i en övning).
+# Databasen droppas och skapas om innan dumpen läses in. Kör den mot fel
+# databas och byråns akter är borta. Därför kräver scriptet en uttrycklig
+# bekräftelse — sätt `AVA_RESTORE_YES=1` för att köra obevakat (t.ex. i en
+# övning).
+#
+# Varför drop-and-create och inte `pg_dump --clean`: pg-boss partitionerar
+# sina jobbtabeller, och de DROP-satser `--clean` genererar fallerar på ärvda
+# constraints ("cannot drop inherited constraint job_common_pkey"). En tom
+# databas har inget att droppa och problemet uppstår aldrig.
 #
 # ## Ordningen spelar roll
 #
@@ -38,13 +43,24 @@ gzip -t "$DUMP" || { echo "✗ Dumpen är trasig." >&2; exit 1; }
 
 if [ "${AVA_RESTORE_YES:-}" != "1" ]; then
   echo
-  echo "Detta ÖVERSKRIVER databasen '$PG_DB'. Allt nuvarande innehåll försvinner."
+  echo "Detta RADERAR OCH ÅTERSKAPAR databasen '$PG_DB'. Allt nuvarande innehåll försvinner."
   read -r -p "Skriv ÅTERSTÄLL för att fortsätta: " answer
   [ "$answer" = "ÅTERSTÄLL" ] || { echo "Avbrutet."; exit 1; }
 fi
 
 echo "▸ Stoppar server-first (ingen ska skriva under återställningen) …"
 docker compose -f "$COMPOSE" stop server-first >/dev/null
+
+# Kvarvarande sessioner blockerar DROP DATABASE. server-first är stoppad, men
+# poolen kan ha connections som ännu inte hunnit stängas.
+echo "▸ Kopplar ner kvarvarande sessioner …"
+docker compose -f "$COMPOSE" exec -T postgres psql -U "$PG_USER" -d postgres --quiet -c \
+  "SELECT pg_terminate_backend(pid) FROM pg_stat_activity
+   WHERE datname = '$PG_DB' AND pid <> pg_backend_pid()" >/dev/null
+
+echo "▸ Återskapar databasen …"
+docker compose -f "$COMPOSE" exec -T postgres psql -U "$PG_USER" -d postgres --quiet \
+  -v ON_ERROR_STOP=1 -c "DROP DATABASE IF EXISTS \"$PG_DB\"" -c "CREATE DATABASE \"$PG_DB\"" >/dev/null
 
 echo "▸ Lägger tillbaka dumpen …"
 gunzip -c "$DUMP" | docker compose -f "$COMPOSE" exec -T postgres \

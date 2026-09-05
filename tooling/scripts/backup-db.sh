@@ -38,10 +38,14 @@ FILE="$OUT_DIR/ava-$STAMP.sql.gz"
 mkdir -p "$OUT_DIR"
 
 echo "▸ Dumpar $PG_DB …"
-# --clean --if-exists gör dumpen självständig: den kan läggas tillbaka i en
-# databas som redan har innehåll, utan att man först måste tömma den för hand.
+# INGEN --clean. Den genererar DROP-satser som fallerar på ÄRVDA constraints:
+# pg-boss partitionerar sina jobbtabeller, och `DROP CONSTRAINT job_common_pkey`
+# ger "cannot drop inherited constraint". Upptäckt av återställningsövningen —
+# med --clean var backupen oåterställbar, vilket inget annat hade avslöjat.
+#
+# I stället återskapar restore-db.sh databasen från grunden före återläsningen.
 docker compose -f "$COMPOSE" exec -T postgres \
-  pg_dump -U "$PG_USER" -d "$PG_DB" --clean --if-exists \
+  pg_dump -U "$PG_USER" -d "$PG_DB" \
   | gzip -9 > "$FILE"
 
 # Verifiera att dumpen inte är trunkerad. En tyst halv backup är värre än

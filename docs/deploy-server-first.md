@@ -144,9 +144,16 @@ samma maskin som databasen skyddar mot råttfel, inte mot att servern brinner:
 bash tooling/scripts/restore-db.sh /srv/ava/backup/ava-2026-09-05-0300.sql.gz
 ```
 
-Stoppar server-first före, lägger tillbaka dumpen, startar och väntar tills
-`/readyz` svarar ok. Skriver applikationen under tiden blir resultatet en
-blandning av två tidpunkter — värre än båda var för sig.
+Stoppar server-first, kopplar ner kvarvarande sessioner, **återskapar
+databasen**, läser in dumpen, startar och väntar tills `/readyz` svarar ok.
+Skriver applikationen under tiden blir resultatet en blandning av två
+tidpunkter — värre än båda var för sig.
+
+> Varför drop-and-create i stället för `pg_dump --clean`: pg-boss partitionerar
+> sina jobbtabeller, och de DROP-satser `--clean` genererar fallerar på ärvda
+> constraints (`cannot drop inherited constraint "job_common_pkey"`). Med
+> `--clean` gick backupen **inte att återställa alls** — upptäckt av övningen
+> nedan, vilket är hela poängen med att ha den.
 
 ### Övningen
 
