@@ -155,10 +155,17 @@ export function buildSemanticVoucher(
   };
 }
 
-/** Verifikatets titel: AVA-ärendenumret först (#785), sedan ev. fakturanummer. */
+/**
+ * Verifikatets titel: AVA-ärendenumret först (#785), sedan ev. fakturanummer.
+ *
+ * Separatorn är ett vanligt bindestreck, INTE `·` (U+00B7). Fortnox avvisar
+ * mittpunkten med `400 … code 2000359 "Värdet innehåller ej tillåtna tecken"`
+ * — verifierat skarpt 2026-09-05 (#1043). Åäö går bra; det är just den
+ * exotiska interpunktionen som fälls. Byt inte tillbaka för snyggheten skull.
+ */
 function voucherDescription(invoice: SemanticVoucherInput): string {
   const faktura = invoice.invoiceNumber ? `Faktura ${invoice.invoiceNumber}` : "Kundfaktura (AVA)";
-  return invoice.matterNumber ? `Ärende ${invoice.matterNumber} · ${faktura}` : faktura;
+  return invoice.matterNumber ? `Ärende ${invoice.matterNumber} - ${faktura}` : faktura;
 }
 
 /**

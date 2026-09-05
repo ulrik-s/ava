@@ -49,7 +49,16 @@ describe("buildSemanticVoucher", () => {
 
   it("titeln innehåller AVA-ärendenumret när det finns (#785)", () => {
     const v = buildSemanticVoucher({ amount: 12_500, invoiceDate: "2026-05-25", invoiceNumber: "F-2026-0042", matterNumber: "AA2026-0001" });
-    expect(v.description).toBe("Ärende AA2026-0001 · Faktura F-2026-0042");
+    expect(v.description).toBe("Ärende AA2026-0001 - Faktura F-2026-0042");
+  });
+
+  // #1043: Fortnox svarar 400 (code 2000359, "Värdet innehåller ej tillåtna
+  // tecken") på `·` U+00B7. Enhetstesterna kör med injicerad fetch och ser
+  // aldrig teckenvalideringen, så separatorn måste vaktas här — annars smyger
+  // mittpunkten tillbaka och VARJE bokföring fallerar skarpt.
+  it("använder ingen exotisk interpunktion Fortnox avvisar (#1043)", () => {
+    const v = buildSemanticVoucher({ amount: 12_500, invoiceDate: "2026-05-25", invoiceNumber: "F-2026-0042", matterNumber: "AA2026-0001" });
+    expect(v.description).not.toContain("\u00B7");
   });
 
   it("per-sats breakdown (#790): moms bokförs per sats + intäkt delas arvode/utlägg", () => {
