@@ -42,7 +42,8 @@ import {
   assert, clientFor, kr, seedUser, waitForServer, type Ava,
 } from "./e2e-harness";
 import {
-  bookingWindow, buildConfig, buildMapping, ciBookingDate, connect, emitRotatedToken,
+  assertVoucherDelta, bookingWindow, buildConfig, buildMapping, ciBookingDate, connect,
+  emitRotatedToken, snapshotVouchers,
 } from "./fortnox-harness";
 
 const USER = "anna-bookkeeping@byra.se";
@@ -124,7 +125,7 @@ interface BookingCtx {
 }
 
 /** Bokför EN faktura och verifiera dess verifikat. */
-async function bookAndVerify(ctx: BookingCtx, invoiceId: string, label: string): Promise<void> {
+async function bookAndVerify(ctx: BookingCtx, invoiceId: string, label: string): Promise<string> {
   const { ava: c, client, connector, mapping, bookingDate } = ctx;
 
   // Ställ ut fakturan först. `settleCoverage` skapar den som DRAFT, och
@@ -161,6 +162,7 @@ async function bookAndVerify(ctx: BookingCtx, invoiceId: string, label: string):
 
   // Skriv tillbaka i AVA också — annars bokförs fakturan igen nästa körning.
   await c.invoice.markFortnoxBooked.mutate({ invoiceId, fortnoxId: outcome.externalId });
+  return outcome.externalId;
 }
 
 async function main(): Promise<void> {
@@ -194,9 +196,21 @@ async function main(): Promise<void> {
   assert(payer !== undefined, "hittade ingen betalarfaktura på ärendet");
 
   console.log("\n→ Steg 3: bokför BÅDA fakturorna mot Fortnox …");
+  // Före-läget tas FÖRE första pushen, annars är den första fakturan redan
+  // med i baslinjen och delta-kollen skulle inte kunna se en dubblett av den.
+  const yearId = await client.financialYearIdFor(period.from, period.to);
+  const before = await snapshotVouchers(client, yearId);
+
   const ctx: BookingCtx = { ava: c, client, connector, mapping, bookingDate };
-  await bookAndVerify(ctx, clientInvoiceId, "Klientens självrisk");
-  await bookAndVerify(ctx, String(payer?.id), "Försäkringsbolagets del");
+  const created = [
+    await bookAndVerify(ctx, clientInvoiceId, "Klientens självrisk"),
+    await bookAndVerify(ctx, String(payer?.id), "Försäkringsbolagets del"),
+  ];
+
+  // Två betalande ska ge exakt TVÅ verifikat. Landar det ett tredje har någon
+  // faktura bokförts dubbelt — och det går inte att ta tillbaka via API:t.
+  console.log("\n→ Steg 4: delta-koll mot Fortnox …");
+  assertVoucherDelta(before, await snapshotVouchers(client, yearId), created);
 
   console.log("\n✓ Bokförings-E2E klart: båda betalarnas fakturor bokförda och verifierade i Fortnox.");
 }

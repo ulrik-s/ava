@@ -198,6 +198,53 @@ export const fortnoxVoucherSeriesResponseSchema = z.object({
   VoucherSeries: fortnoxVoucherSeriesSchema,
 });
 
+// ─── Verifikatlistning + räkenskapsår (#1050) ───────────────────────────────
+
+/**
+ * Ett verifikat som det ser ut i LISTsvaret. Rader ingår INTE — `GET /3/vouchers`
+ * ger bara huvuden, raderna kräver `GET /3/vouchers/{serie}/{nr}` per verifikat
+ * (verifierat mot skarp sandbox 2026-09-05). Det duger för delta-kollen, som
+ * frågar VILKA verifikat som finns, inte vad de innehåller.
+ */
+export const fortnoxVoucherHeadSchema = z.looseObject({
+  VoucherSeries: z.string().min(1),
+  VoucherNumber: z.number().int(),
+  Description: z.string().nullish(),
+  TransactionDate: z.string().optional(),
+  Year: z.number().int().optional(),
+});
+export type FortnoxVoucherHead = z.infer<typeof fortnoxVoucherHeadSchema>;
+
+/** Fortnox pagineringshuvud. `@TotalPages` styr hur många sidor vi hämtar. */
+export const fortnoxMetaSchema = z.looseObject({
+  "@TotalResources": z.number().int().optional(),
+  "@TotalPages": z.number().int().optional(),
+  "@CurrentPage": z.number().int().optional(),
+});
+
+/** Svar från `GET /3/vouchers` (lista). */
+export const fortnoxVoucherListSchema = z.object({
+  MetaInformation: fortnoxMetaSchema.optional(),
+  Vouchers: z.array(fortnoxVoucherHeadSchema),
+});
+
+/**
+ * Ett räkenskapsår. `Id` är INTE årtalet — det är en löpande nyckel, och det är
+ * den `financialyear`-parametern vill ha. Att hårdkoda den (CI-året råkade bli
+ * `2`) hade gått sönder tyst dagen någon lägger upp ett år till, därför slås den
+ * upp mot datumintervallet i stället.
+ */
+export const fortnoxFinancialYearSchema = z.looseObject({
+  Id: z.number().int(),
+  FromDate: z.string().min(1),
+  ToDate: z.string().min(1),
+});
+
+/** Svar från `GET /3/financialyears` (lista). */
+export const fortnoxFinancialYearListSchema = z.object({
+  FinancialYears: z.array(fortnoxFinancialYearSchema),
+});
+
 // ─── Filbilaga (#785) ───────────────────────────────────────────────────────
 
 /** Svar från `POST /3/inbox` (fil-uppladdning) — vi behöver fil-id:t (GUID). */

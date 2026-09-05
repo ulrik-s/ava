@@ -36,7 +36,8 @@ import { bookUnbookedInvoices, type BookableInvoice } from "@/lib/server/integra
 import { withBookingWindow, type BookingWindow } from "@/lib/server/integrations/ledger/booking-window";
 import type { LedgerConnector } from "@/lib/server/integrations/ledger/port";
 import {
-  bookingWindow, buildConfig, buildMapping, ciBookingDate, connect, emitRotatedToken,
+  assertVoucherDelta, bookingWindow, buildConfig, buildMapping, ciBookingDate, connect,
+  emitRotatedToken, snapshotVouchers,
 } from "./fortnox-harness";
 
 /** En faktura att bokföra. Byggd i minnet: det som testas är LEDGER-vägen,
@@ -132,10 +133,22 @@ async function main(): Promise<void> {
   const invoice = testInvoice(stamp, bookingDate);
   const connector = withBookingWindow(new FortnoxLedgerConnector({ client, mapping }), period);
 
+  // Före-läget: allt som redan finns i CI-året. Delta mot det här efteråt är
+  // vad som gör att året aldrig behöver nollställas (#1050).
+  const yearId = await client.financialYearIdFor(period.from, period.to);
+  const before = await snapshotVouchers(client, yearId);
+  console.log(`  ✓ Räkenskapsår ${period.from}..${period.to} = Fortnox-id ${yearId} (${before.size} verifikat sedan tidigare)`);
+
   const externalId = await pushTestInvoice(connector, invoice);
   await verifyVoucher(client, externalId);
   await verifyIdempotens(connector, invoice, externalId);
   await verifyWindowGuard(connector, invoice, period);
+
+  // Steg 6: bokförde vi exakt ETT verifikat? Idempotens- och spärrstegen ovan
+  // ska inte ha lämnat något efter sig — men det är just det man inte ser
+  // genom att läsa tillbaka det verifikat man själv känner till.
+  console.log("→ Steg 6: delta-koll mot Fortnox …");
+  assertVoucherDelta(before, await snapshotVouchers(client, yearId), [externalId]);
 
   console.log(`\n✓ Fortnox-E2E klart. Verifikat ${externalId} i serie ${mapping.voucherSeries}, daterat ${bookingDate}.`);
 }

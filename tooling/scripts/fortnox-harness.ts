@@ -83,6 +83,52 @@ export function connect(config: FortnoxConfig): { client: FortnoxClient; store: 
   return { client: new FortnoxClient(config, store), store };
 }
 
+/** Ett verifikat som "A/7" — nyckeln delta-kollen jämför på. */
+export function voucherKey(v: { VoucherSeries: string; VoucherNumber: number }): string {
+  return `${v.VoucherSeries}/${v.VoucherNumber}`;
+}
+
+/**
+ * Delta-koll mot Fortnox (#1050): vad fanns FÖRE körningen, vad finns EFTER?
+ *
+ * Per-verifikat-läsningen (`getVoucher`) svarar på "landade det vi skickade
+ * rätt?". Den kan strukturellt inte se att det landade något MER — en dubblett
+ * från en omkörning, ett halvskrivet verifikat från ett avbrutet jobb. Den
+ * frågan kräver aggregat, och det är dyrt att missa: Fortnox har ingen DELETE
+ * för verifikat.
+ *
+ * Delta i st.f. absoluta saldon är det som gör att CI-året ALDRIG behöver
+ * nollställas. Ett tomt år hade krävts för att påstå "konto 1510 = X"; för att
+ * påstå "exakt de här verifikaten tillkom" räcker två billiga listningar.
+ */
+export async function snapshotVouchers(client: FortnoxClient, yearId: number): Promise<Set<string>> {
+  return new Set((await client.listVouchers(yearId)).map(voucherKey));
+}
+
+/**
+ * Jämför efter-läget mot före-läget. `expected` är de verifikat körningen
+ * medvetet skapade — allt annat som tillkommit är ett fynd, inte brus.
+ */
+export function assertVoucherDelta(
+  before: Set<string>, after: Set<string>, expected: readonly string[],
+): void {
+  const added = [...after].filter((k) => !before.has(k)).sort();
+  const want = [...expected].sort();
+
+  const unexpected = added.filter((k) => !want.includes(k));
+  if (unexpected.length > 0) {
+    throw new Error(
+      `Fortnox fick ${unexpected.length} verifikat som testet inte skapade: ${unexpected.join(", ")}. `
+      + "Dubblett eller strökontering — kontrollera i GUI:t innan nästa körning.",
+    );
+  }
+  const missing = want.filter((k) => !added.includes(k));
+  if (missing.length > 0) {
+    throw new Error(`Verifikat saknas i Fortnox trots att pushen lyckades: ${missing.join(", ")}`);
+  }
+  console.log(`  ✓ Delta: exakt ${added.length} nya verifikat (${added.join(", ") || "inga"}) — inget mer`);
+}
+
 /**
  * Skriv den roterade refresh-token:en till `$GITHUB_OUTPUT`. ALDRIG till
  * stdout — GitHub maskerar bara det den känner till. Anropas direkt efter
