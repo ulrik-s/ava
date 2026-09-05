@@ -20,7 +20,12 @@ export const ORG = process.env.AVA_ORGANIZATION_ID ?? "00000000-0000-0000-0000-0
 
 export type Ava = TRPCClient<AppRouter>;
 
-export function assert(cond: boolean, msg: string): void {
+/**
+ * `asserts cond` — inte bara `void`. Utan det smalnar TypeScript inte av
+ * `T | null` efter en assert, och varje avstämning hade behövt en
+ * non-null-assertion (`!`) som tystar kompilatorn i st.f. att övertyga den.
+ */
+export function assert(cond: boolean, msg: string): asserts cond {
   if (!cond) throw new Error(`assert: ${msg}`);
 }
 
