@@ -1,6 +1,6 @@
 /**
  * InvoiceDispatchRepository-paritet (ADR 0020) — in-memory + Drizzle (pglite).
- * listByInvoice + listQueuedForOrg (org-scope via faktura→ärende, faktura-subset).
+ * listByInvoice + listByStatusForOrg (org-scope via faktura→ärende, faktura-subset).
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
@@ -15,7 +15,7 @@ import { uuidv7 } from "@/lib/shared/uuid";
 import { createTestDb, type TestDbHandle } from "../db/pg-test-db";
 
 describe("InvoiceDispatchRepository — in-memory", () => {
-  it("listByInvoice + listQueuedForOrg (faktura-subset)", async () => {
+  it("listByInvoice + listByStatusForOrg (faktura-subset)", async () => {
     const mId = uuidv7();
     const invId = uuidv7();
     const d1 = uuidv7();
@@ -29,10 +29,17 @@ describe("InvoiceDispatchRepository — in-memory", () => {
     } as DemoSource);
     const repo = new InMemoryInvoiceDispatchRepository(new LocalStore(source, async () => {}));
     expect(await repo.listByInvoice(asId<"InvoiceId">(invId))).toHaveLength(2);
-    const queued = await repo.listQueuedForOrg(asId<"OrganizationId">("org-1"));
+    const queued = await repo.listByStatusForOrg(asId<"OrganizationId">("org-1"), "queued");
     expect(queued).toHaveLength(1);
     expect(queued[0]!.invoice?.invoiceNumber).toBe("F-1");
-    expect(await repo.listQueuedForOrg(asId<"OrganizationId">("org-2"))).toHaveLength(0);
+    expect(await repo.listByStatusForOrg(asId<"OrganizationId">("org-2"), "queued")).toHaveLength(0);
+
+    // Statusen är en parameter (#1062): "Att bevaka" listar failed på samma väg
+    // som workern listar queued. Filtrerar den inte får bevakningslistan alla
+    // utskick, inklusive de som gått bra.
+    const sent = await repo.listByStatusForOrg(asId<"OrganizationId">("org-1"), "sent");
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.recipient).toBe("b@x");
   });
 });
 
@@ -41,7 +48,7 @@ describe("InvoiceDispatchRepository — Drizzle (pglite)", () => {
   beforeAll(async () => { handle = await createTestDb(); });
   afterAll(async () => { await handle.close(); });
 
-  it("listByInvoice + listQueuedForOrg (join faktura/ärende)", async () => {
+  it("listByInvoice + listByStatusForOrg (join faktura/ärende)", async () => {
     const db = handle.db;
     const org = uuidv7();
     const mId = uuidv7();
@@ -55,9 +62,9 @@ describe("InvoiceDispatchRepository — Drizzle (pglite)", () => {
     await db.insert(invoiceDispatches).values(v({ id: uuidv7(), invoiceId: invId, channel: "email", recipient: "b@x", status: "sent", queuedAt: new Date(), recordedById: uuidv7() }));
     const repo = new DrizzleInvoiceDispatchRepository(handle.db);
     expect(await repo.listByInvoice(asId<"InvoiceId">(invId))).toHaveLength(2);
-    const queued = await repo.listQueuedForOrg(asId<"OrganizationId">(org));
+    const queued = await repo.listByStatusForOrg(asId<"OrganizationId">(org), "queued");
     expect(queued).toHaveLength(1);
     expect(queued[0]!.invoice?.invoiceNumber).toBe("F-1");
-    expect(await repo.listQueuedForOrg(asId<"OrganizationId">(uuidv7()))).toHaveLength(0);
+    expect(await repo.listByStatusForOrg(asId<"OrganizationId">(uuidv7()), "queued")).toHaveLength(0);
   });
 });

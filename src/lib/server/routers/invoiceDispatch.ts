@@ -53,7 +53,7 @@ export const invoiceDispatchRouter = router({
 
   /** Alla köade utskick i org:en — server-runtime-dispatch-workern (#180) plockar dessa. */
   listQueued: orgProcedure.query(({ ctx }) =>
-    ctx.repos.invoiceDispatches.listQueuedForOrg(asId<"OrganizationId">(ctx.orgId)),
+    ctx.repos.invoiceDispatches.listByStatusForOrg(asId<"OrganizationId">(ctx.orgId), "queued"),
   ),
 
   queue: orgProcedure

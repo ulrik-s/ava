@@ -10,6 +10,8 @@ import Dashboard from "@/app/page";
 const todoQuery: { data: unknown; isLoading: boolean } = { data: undefined, isLoading: false };
 const timeQuery: { data: unknown; isLoading: boolean } = { data: undefined, isLoading: false };
 const meQuery: { data: unknown } = { data: { id: "u1", name: "Anna" } };
+/** "Att bevaka" (#1062) — self-gating: tom lista → kortet renderar ingenting. */
+const watchlistQuery: { data: unknown; isLoading: boolean } = { data: { items: [] }, isLoading: false };
 
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
@@ -17,6 +19,7 @@ vi.mock("@/lib/client/trpc", () => ({
     todo: { list: { useQuery: () => todoQuery } },
     timeEntry: { list: { useQuery: () => timeQuery } },
     user: { current: { useQuery: () => meQuery } },
+    watchlist: { list: { useQuery: () => watchlistQuery } },
     task: {
       complete: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       update: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
@@ -30,6 +33,7 @@ beforeEach(() => {
   todoQuery.isLoading = false;
   timeQuery.data = undefined;
   timeQuery.isLoading = false;
+  watchlistQuery.data = { items: [] };
 });
 
 describe("Dashboard", () => {

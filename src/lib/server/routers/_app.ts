@@ -23,6 +23,7 @@ import { taskRouter } from "./task";
 import { timeEntryRouter } from "./timeEntry";
 import { todoRouter } from "./todo";
 import { userRouter } from "./user";
+import { watchlistRouter } from "./watchlist";
 
 export const appRouter = router({
   contacts: contactRouter,
@@ -45,6 +46,7 @@ export const appRouter = router({
   task: taskRouter,
   serviceNote: serviceNoteRouter,
   todo: todoRouter,
+  watchlist: watchlistRouter,
   prefs: preferenceRouter,
   mail: mailRouter,
   sync: syncRouter,
