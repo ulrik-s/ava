@@ -1,0 +1,60 @@
+# Caddy-front för produktions-stacken (#1079).
+#
+# Speglar `nginx-selfhosted.conf` men med två skillnader som spelar roll i
+# drift: automatiskt Let's Encrypt-cert (ingen certbot-cron att glömma) och
+# en `forward_auth` i stället för nginx `auth_request`.
+#
+# ## Förtroendegränsen — läs innan du ändrar något här
+#
+# `X-Auth-Request-Email` sätts av oauth2-proxy efter verifierad OIDC-session
+# och är det server-first litar på som principal (ADR 0009). Kommer den från
+# klienten är den ett påstående, inte ett bevis.
+#
+# Caddys `forward_auth` med `copy_headers` skriver ÖVER klientens värde med
+# det från auth-svaret — det är den raden som gör spoofing omöjlig. Tar man
+# bort den kan vem som helst skicka en header och bli vem som helst.
+
+{$AVA_DOMAIN} {
+	encode gzip
+
+	# ─── OIDC-dansen ───────────────────────────────────────────────────
+	handle /oauth2/* {
+		reverse_proxy oauth2-proxy:4180 {
+			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-Uri {uri}
+		}
+	}
+
+	# ─── tRPC-API: kräver inloggad session ─────────────────────────────
+	handle /api/* {
+		forward_auth oauth2-proxy:4180 {
+			uri /oauth2/auth
+			# Skriver över ev. klient-skickad header med den VERIFIERADE
+			# emailen ur auth-svaret. Utan detta är principalen spoofbar.
+			copy_headers X-Auth-Request-Email
+		}
+		reverse_proxy server-first:3001
+	}
+
+	# ─── Hälsokontroller: ÖPPNA, aldrig cachade ────────────────────────
+	# Bakom inloggning kan de inte användas av det som ska övervaka dem.
+	# `/readyz` proxas till server-first eftersom det är DEN som vet om
+	# databasen svarar — en statisk rad här hade ljugit (#1079).
+	handle /healthz {
+		respond "ok" 200
+	}
+	handle /readyz {
+		reverse_proxy server-first:3001
+	}
+
+	# ─── Den statiska appen: kräver inloggning ─────────────────────────
+	handle {
+		forward_auth oauth2-proxy:4180 {
+			uri /oauth2/auth
+			copy_headers X-Auth-Request-Email
+		}
+		root * /srv/ava
+		try_files {path} {path}/ /index.html
+		file_server
+	}
+}

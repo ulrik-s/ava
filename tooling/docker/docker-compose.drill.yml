@@ -1,0 +1,21 @@
+# Overlay för återställningsövningen (#1079).
+#
+# Produktions-compose:n exponerar MEDVETET varken Postgres eller server-first
+# på värden — allt går genom Caddy, och databasen ska inte gå att nå utifrån.
+#
+# Övningen behöver båda: `db:migrate` och markör-ärendet körs från värden.
+# Den lösningen är en overlay, inte en uppmjukning av produktionsfilen — annars
+# skulle en glömd port i produktionsfilen bli en öppen databas hos en byrå.
+#
+#   docker compose -f docker-compose.production.yml -f docker-compose.drill.yml up -d
+
+name: ava
+
+services:
+  postgres:
+    ports:
+      - "5433:5432"
+
+  server-first:
+    ports:
+      - "3001:3001"

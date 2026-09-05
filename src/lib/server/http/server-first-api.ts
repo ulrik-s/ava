@@ -18,6 +18,7 @@ import { createDbChangeLogRecorder, enableChangeLogOnAll } from "@/lib/server/re
 import { buildDrizzleRepositories } from "@/lib/server/repositories/drizzle-repositories";
 import { DrizzleSyncStore } from "@/lib/server/sync/drizzle-sync-store";
 import { bearerConfigFromEnv, type BearerVerifyConfig } from "./bearer-claims";
+import { handleHealthRoute } from "./health";
 import { createServerTrpcHandler } from "./server-trpc-handler";
 
 export interface ServerFirstApiConfig {
@@ -51,7 +52,7 @@ export interface ServerFirstApi {
 
 /** Bygg server-first-API:t (handler + db-livscykel) ur en config. */
 export function buildServerFirstApi(config: ServerFirstApiConfig): ServerFirstApi {
-  const { db, close } = createPostgresDb(
+  const { db, close, ping } = createPostgresDb(
     config.databaseUrl,
     config.maxConnections !== undefined ? { max: config.maxConnections } : {},
   );
@@ -61,7 +62,7 @@ export function buildServerFirstApi(config: ServerFirstApiConfig): ServerFirstAp
   enableChangeLogOnAll(repos, createDbChangeLogRecorder(db));
   // Bearer-JWT-väg: explicit config, annars ur miljön (AVA_OIDC_*). Av som default.
   const bearer = config.bearer === undefined ? bearerConfigFromEnv() : config.bearer;
-  const handler = createServerTrpcHandler({
+  const trpc = createServerTrpcHandler({
     repos,
     ports: config.ports ?? noopPorts,
     organizationId: config.organizationId,
@@ -70,6 +71,12 @@ export function buildServerFirstApi(config: ServerFirstApiConfig): ServerFirstAp
     ...(config.onError ? { onError: config.onError } : {}),
     ...(bearer ? { bearer } : {}),
   });
+  // Hälso-rutterna ligger FÖRE tRPC: de ska svara även när allt annat är
+  // trasigt, och de får inte kräva en giltig principal (#1079).
+  const handler = async (req: Request): Promise<Response> => {
+    const health = await handleHealthRoute(new URL(req.url).pathname, ping);
+    return health ?? trpc(req);
+  };
   return { handler, repos, close };
 }
 

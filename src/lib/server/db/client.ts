@@ -23,6 +23,8 @@ export interface PostgresDb {
   db: AppDb;
   /** Stäng connection-poolen (vid nedstängning). */
   close: () => Promise<void>;
+  /** Minsta möjliga fråga som bevisar att anslutningen lever (#1079 /readyz). */
+  ping: () => Promise<unknown>;
 }
 
 export interface PostgresDbOptions {
@@ -37,5 +39,11 @@ export function createPostgresDb(url: string, opts: PostgresDbOptions = {}): Pos
     onnotice: () => {},
   });
   const db = drizzle(client, { schema });
-  return { db, close: () => client.end({ timeout: 5 }) };
+  return {
+    db,
+    close: () => client.end({ timeout: 5 }),
+    // `SELECT 1` rör faktiskt nätverket och poolen — till skillnad från att
+    // bara kontrollera att handlen finns, vilket alltid lyckas.
+    ping: () => client`SELECT 1`,
+  };
 }

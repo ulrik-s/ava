@@ -1,5 +1,16 @@
 # Deploy: self-hosted Linux + docker
 
+> **⚠️ PENSIONERAD — följ inte den här.**
+>
+> Beskriver den git-baserade arkitekturen (git-http-backend + htpasswd), som
+> [ADR 0016](./adr/0016-server-first-med-offline-first-klient.md) ersatte med
+> server-first (Postgres). Följer du den här får du fel system **och** en
+> backup som säkerhetskopierar ett git-repo som inte längre är sanningskällan.
+>
+> Aktuell drift: [`deploy-server-first.md`](./deploy-server-first.md).
+>
+> Behålls som referens för den som fortfarande kör den gamla stacken.
+
 Hur en byrå går från demo-läget till egen server. Två containers, en
 volym, en bash-script. Inget custom server-kod-skikt att underhålla.
 
