@@ -1,10 +1,10 @@
 /**
  * Drizzle `InvoiceDispatchRepository` (ADR 0020) — server-impl. Org-scopar
- * `listQueuedForOrg` via join faktura→ärende.
+ * `listByStatusForOrg` via join faktura→ärende.
  */
 
 import { and, asc, desc, eq, isNull } from "drizzle-orm";
-import type { InvoiceDispatch } from "@/lib/shared/schemas/billing";
+import type { DispatchStatus, InvoiceDispatch } from "@/lib/shared/schemas/billing";
 import type { InvoiceId, OrganizationId } from "@/lib/shared/schemas/ids";
 import { invoiceDispatches, invoices, matters } from "../db/schema";
 import type { AppDb } from "../db/types";
@@ -32,7 +32,7 @@ export class DrizzleInvoiceDispatchRepository
     return rows;
   }
 
-  async listQueuedForOrg(organizationId: OrganizationId): Promise<InvoiceDispatchQueuedRow[]> {
+  async listByStatusForOrg(organizationId: OrganizationId, status: DispatchStatus): Promise<InvoiceDispatchQueuedRow[]> {
     const rows = await this.db
       .select({
         d: invoiceDispatches,
@@ -43,7 +43,7 @@ export class DrizzleInvoiceDispatchRepository
       .innerJoin(invoices, eq(invoiceDispatches.invoiceId, invoices.id))
       .innerJoin(matters, eq(invoices.matterId, matters.id))
       .where(and(
-        eq(invoiceDispatches.status, "queued"),
+        eq(invoiceDispatches.status, status),
         eq(matters.organizationId, organizationId),
         isNull(invoiceDispatches.deletedAt),
       ))

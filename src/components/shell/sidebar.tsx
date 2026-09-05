@@ -32,6 +32,9 @@ const navigation = [
   { name: "Ärenden", href: "/matters", icon: "📁" },
   { name: "Startsida", href: "/", icon: "📊" },
   { name: "Att göra", href: "/todo", icon: "✅" },
+  // Att bevaka direkt under Att göra: båda svarar på "vad ska jag göra nu?",
+  // men den här räknas ut i st.f. att skrivas in (#1062).
+  { name: "Att bevaka", href: "/watchlist", icon: "🔔" },
   { name: "Kontakter", href: "/contacts", icon: "👤" },
   { name: "Dokumentsök", href: "/search", icon: "📄" },
   { name: "Dokumentmallar", href: "/templates", icon: "📝" },

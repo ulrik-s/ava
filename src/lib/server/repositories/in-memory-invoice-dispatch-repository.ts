@@ -2,7 +2,7 @@
  * In-memory `InvoiceDispatchRepository` (ADR 0020) — browser/offline-impl.
  */
 
-import type { InvoiceDispatch } from "@/lib/shared/schemas/billing";
+import type { DispatchStatus, InvoiceDispatch } from "@/lib/shared/schemas/billing";
 import type { InvoiceId, OrganizationId } from "@/lib/shared/schemas/ids";
 import type { IDataStore } from "../data-store/IDataStore";
 import { InMemoryRepository } from "./in-memory-repository";
@@ -24,9 +24,9 @@ export class InMemoryInvoiceDispatchRepository
     })) as InvoiceDispatch[];
   }
 
-  async listQueuedForOrg(organizationId: OrganizationId): Promise<InvoiceDispatchQueuedRow[]> {
+  async listByStatusForOrg(organizationId: OrganizationId, status: DispatchStatus): Promise<InvoiceDispatchQueuedRow[]> {
     return (await this.delegate.findMany({
-      where: { status: "queued", invoice: { matter: { organizationId } } },
+      where: { status, invoice: { matter: { organizationId } } },
       include: { invoice: { select: { id: true, invoiceNumber: true, amount: true, ocrReference: true, dueDate: true } } },
       orderBy: { queuedAt: "asc" },
     })) as InvoiceDispatchQueuedRow[];

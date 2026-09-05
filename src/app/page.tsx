@@ -2,6 +2,7 @@
 
 /**
  * Dashboard — översikt för inloggad användare:
+ *   - "Att bevaka" — härledda påminnelser (#1062)
  *   - "Att göra" för vald dag (tasks + events)
  *   - Tidrapportering för vald dag (summa + lista)
  *   - Senaste 5 ärenden man jobbat i (timeEntry order desc, dedup)
@@ -13,6 +14,7 @@ import { Plus, Calendar as CalendarIcon, Clock, MapPin } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Modal } from "@/components/ui/modal";
+import { WatchlistList } from "@/components/watchlist/watchlist-list";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
 import { formatMinutes } from "@/lib/client/utils";
@@ -55,12 +57,47 @@ export default function Dashboard() {
         <DaySwitcher ymd={ymd} onChange={setYmd} />
       </div>
 
+      <WatchlistCard />
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         <TodoCard ymd={ymd} />
         <TimeCard ymd={ymd} />
       </div>
 
       <RecentMattersCard />
+    </div>
+  );
+}
+
+/** Hur många poster som ryms på startsidan innan man skickas vidare. */
+const DASHBOARD_LIMIT = 5;
+
+/**
+ * Startsidans "Att bevaka". Visar de mest brådskande posterna och länkar
+ * vidare — kortet ska tala om ATT något behöver uppmärksamhet, inte ersätta
+ * hela listan. Self-gating: har man inget att bevaka renderas ingenting, så
+ * kortet aldrig blir tomt utfyllnad.
+ */
+function WatchlistCard() {
+  const q = trpc.watchlist.list.useQuery({ mine: true });
+  const items = q.data?.items ?? [];
+  if (items.length === 0) return null;
+
+  const passed = items.filter((i) => i.severity === "passed").length;
+  return (
+    <div className="bg-white rounded-lg border border-gray-200 p-4 mb-6">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="font-semibold text-gray-900 flex items-center gap-2">
+          🔔 Att bevaka
+          <span className="text-xs font-normal text-gray-500">
+            ({items.length}{passed > 0 ? `, ${passed} passerade` : ""})
+          </span>
+        </h2>
+        <Link href="/watchlist" className="text-sm text-blue-600 hover:underline">
+          Visa alla →
+        </Link>
+      </div>
+      <WatchlistList items={items.slice(0, DASHBOARD_LIMIT)} emptyText="" />
     </div>
   );
 }
