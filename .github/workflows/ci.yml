@@ -214,6 +214,17 @@ jobs:
           AVA_DATABASE_URL: postgres://ava:ava@localhost:5433/ava_test
           AVA_ORGANIZATION_ID: "00000000-0000-0000-0000-000000000001"
         run: bun tooling/scripts/conflict-check-e2e.ts
+      # Fakturautskick-E2E: en faktura som inte når mottagaren är tyst
+      # kapitalförstöring — ingen betalar, ingen påminns, inget larmar. Två fel
+      # står i centrum: att recordManual aldrig får hamna i workerns kö
+      # (dubbelutskick till klient) och att queue flippar DRAFT → SENT (annars
+      # försvinner fakturan ur kundfordringsbryggan, jfr #1054).
+      - name: Fakturautskick-E2E (kö, dubbelutskick, utkast-flipp)
+        env:
+          SERVER_URL: http://localhost:3001
+          AVA_DATABASE_URL: postgres://ava:ava@localhost:5433/ava_test
+          AVA_ORGANIZATION_ID: "00000000-0000-0000-0000-000000000001"
+        run: bun tooling/scripts/invoice-dispatch-e2e.ts
       - name: Tear down docker
         if: always()
         run: docker compose -f tooling/docker/docker-compose.server-first.yml down -v
