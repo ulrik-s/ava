@@ -23,6 +23,23 @@ type Row = Record<string, unknown>;
 /** Status som räknas som "utställd" (fakturerat). DRAFT/CANCELLED exkluderas. */
 const ISSUED_STATUSES = new Set(["SENT", "PAID", "BAD_DEBT", "INSTALLMENT_PLAN"]);
 
+/** Id:n på fakturor som har en kreditnota — de annullerades av krediteringen. */
+function creditedInvoiceIds(invoices: readonly Row[]): Set<string> {
+  const ids = new Set<string>();
+  for (const i of invoices) {
+    if (i.invoiceType !== "CREDIT") continue;
+    const target = String(i.creditedInvoiceId ?? "");
+    if (target) ids.add(target);
+  }
+  return ids;
+}
+
+/** Var fakturan utställd? Utställd status, eller annullerad AV en kreditering. */
+function wasIssued(inv: Row, creditedIds: ReadonlySet<string>): boolean {
+  if (ISSUED_STATUSES.has(String(inv.status))) return true;
+  return String(inv.status) === "CANCELLED" && creditedIds.has(String(inv.id ?? ""));
+}
+
 function num(v: unknown): number {
   return typeof v === "number" ? v : Number(v ?? 0);
 }
@@ -187,7 +204,13 @@ export function computeArBridge(
   writeOffs: readonly Row[],
   now: Date,
 ): ArBridge {
-  const issued = invoices.filter((i) => ISSUED_STATUSES.has(String(i.status)) && i.invoiceType !== "CREDIT");
+  // En fullkrediterad faktura är CANCELLED (createCredit annullerar originalet)
+  // men VAR utställd — den ska räknas i `fakturerat` så att `krediterat` gör
+  // avdraget EN gång. Utan undantaget dras krediteringen av två gånger och
+  // `utestaende` kan bli negativt (#1054). Annullerad UTAN kreditnota är något
+  // annat: den ställdes aldrig ut, och ska fortsatt vara exkluderad.
+  const creditedIds = creditedInvoiceIds(invoices);
+  const issued = invoices.filter((i) => i.invoiceType !== "CREDIT" && wasIssued(i, creditedIds));
   const fakturerat = issued.reduce((s, i) => s + num(i.amount), 0);
   const krediterat = invoices
     .filter((i) => i.invoiceType === "CREDIT")

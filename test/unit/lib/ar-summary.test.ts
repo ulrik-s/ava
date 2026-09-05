@@ -135,3 +135,44 @@ describe("computeAging", () => {
     expect(aging.every((b) => b.amount === 0)).toBe(true);
   });
 });
+
+/**
+ * #1054: `createCredit` annullerar originalet och skapar en kreditnota på hela
+ * beloppet. Fixturen överst i filen modellerar en DELkreditering där originalet
+ * förblir SENT — den formen produceras aldrig av flödet, och därför var bryggan
+ * grön mot en verklighet som inte finns. Rapport-E2E:t fällde på det.
+ */
+describe("computeArBridge — fullkreditering (#1054)", () => {
+  const NOW2 = new Date("2026-09-05T00:00:00Z");
+  const full = [
+    { id: "kvar", status: "SENT", invoiceType: "STANDARD", amount: 100_00 },
+    { id: "krd", status: "CANCELLED", invoiceType: "STANDARD", amount: 100_00 },
+    { id: "cn", status: "SENT", invoiceType: "CREDIT", creditedInvoiceId: "krd", amount: -100_00 },
+  ];
+
+  it("räknar den krediterade fakturan som fakturerad — den VAR utställd", () => {
+    expect(computeArBridge(full, [], [], NOW2).fakturerat).toBe(200_00);
+  });
+
+  // Kärnan: krediteringen ska dras av EN gång, inte två.
+  it("drar av krediteringen en gång — justerat = den kvarvarande fakturan", () => {
+    expect(computeArBridge(full, [], [], NOW2).justerat).toBe(100_00);
+  });
+
+  it("ger inte negativt utestående när allt krediteras bort", () => {
+    const allt = [
+      { id: "krd", status: "CANCELLED", invoiceType: "STANDARD", amount: 100_00 },
+      { id: "cn", status: "SENT", invoiceType: "CREDIT", creditedInvoiceId: "krd", amount: -100_00 },
+    ];
+    expect(computeArBridge(allt, [], [], NOW2).utestaende).toBe(0);
+  });
+
+  // Motsatsen måste fortsatt gälla: annullerad UTAN kreditnota ställdes aldrig ut.
+  it("räknar INTE annullerad faktura som saknar kreditnota", () => {
+    const avbruten = [
+      { id: "kvar", status: "SENT", invoiceType: "STANDARD", amount: 100_00 },
+      { id: "makulerad", status: "CANCELLED", invoiceType: "STANDARD", amount: 900_00 },
+    ];
+    expect(computeArBridge(avbruten, [], [], NOW2).fakturerat).toBe(100_00);
+  });
+});
