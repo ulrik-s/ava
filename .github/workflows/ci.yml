@@ -203,6 +203,17 @@ jobs:
           AVA_DATABASE_URL: postgres://ava:ava@localhost:5433/ava_test
           AVA_ORGANIZATION_ID: "00000000-0000-0000-0000-000000000001"
         run: bun tooling/scripts/reports-e2e.ts
+      # Jävskontroll-E2E: byråns mest juridiskt laddade funktion, tidigare utan
+      # e2e. Missad jäv är en disciplinär fråga, inte en bugg. Testar UNDERLAGET
+      # enligt VRGA 3.2.1/3.5 — byråjäv (annan jurists ärende), avslutade
+      # ärenden ("har biträtt"), identitet via personnummer, och att varje
+      # kontroll loggas. Bedömningen av motstridiga intressen är advokatens.
+      - name: Jävskontroll-E2E (VRGA 3.2.1 + 3.5)
+        env:
+          SERVER_URL: http://localhost:3001
+          AVA_DATABASE_URL: postgres://ava:ava@localhost:5433/ava_test
+          AVA_ORGANIZATION_ID: "00000000-0000-0000-0000-000000000001"
+        run: bun tooling/scripts/conflict-check-e2e.ts
       - name: Tear down docker
         if: always()
         run: docker compose -f tooling/docker/docker-compose.server-first.yml down -v
