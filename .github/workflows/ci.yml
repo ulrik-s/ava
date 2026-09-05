@@ -181,6 +181,17 @@ jobs:
           AVA_DATABASE_URL: postgres://ava:ava@localhost:5433/ava_test
           AVA_ORGANIZATION_ID: "00000000-0000-0000-0000-000000000001"
         run: bun tooling/scripts/billing-scenarios-e2e.ts
+      # Ärendeflora-E2E: BREDDEN i st.f. djupet — ett ärende per betalningssätt
+      # genom sitt eget flöde (PENDING/PRIVAT/MIX/OFFENTLIGT_UPPDRAG/RATTSSKYDD),
+      # plus avbetalningsplaner i tre discipliner. Den som HAVERERAR
+      # (cancelPaymentPlan → writeOff → BAD_DEBT) körs inte skarpt någon
+      # annanstans, och en felaktig avskrivning är en felaktig intäkt.
+      - name: Ärendeflora-E2E (ett ärende per betalningssätt)
+        env:
+          SERVER_URL: http://localhost:3001
+          AVA_DATABASE_URL: postgres://ava:ava@localhost:5433/ava_test
+          AVA_ORGANIZATION_ID: "00000000-0000-0000-0000-000000000001"
+        run: bun tooling/scripts/matter-flora-e2e.ts
       - name: Tear down docker
         if: always()
         run: docker compose -f tooling/docker/docker-compose.server-first.yml down -v
