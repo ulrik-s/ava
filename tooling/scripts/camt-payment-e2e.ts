@@ -147,7 +147,10 @@ interface Matched { invoicePayment: { amountOre: number; reference: string }; re
 async function matchAll(c: Ava, f: Fixture, file: ReturnType<typeof parseCamtXml>): Promise<Matched> {
   console.log("\n--- Steg 2: matcha mot fakturor och fordringar ---");
 
-  const invoices = await c.invoice.list.query({ pageSize: 200 });
+  // Utan pageSize = hela listan, precis som importsidan gör (`invoice.list`
+  // med tomt filter). Att skicka ett eget sidnummer hade testat en väg som
+  // ingen användare tar — och taket är 100, vilket e2e:t fick lära sig.
+  const invoices = await c.invoice.list.query({});
   const invoiceCands: InvoiceCandidate[] = invoices.items.map((r) => ({
     id: asId<"InvoiceId">(String(r.id)),
     invoiceNumber: r.invoiceNumber ?? null,
@@ -211,7 +214,7 @@ async function verifyReimport(c: Ava, f: Fixture, xml: string): Promise<void> {
   console.log("\n--- Steg 4: omimport av samma fil ---");
   const file = parseCamtXml(xml);
 
-  const invoices = await c.invoice.list.query({ pageSize: 200 });
+  const invoices = await c.invoice.list.query({});
   const cands: InvoiceCandidate[] = invoices.items.map((r) => ({
     id: asId<"InvoiceId">(String(r.id)),
     invoiceNumber: r.invoiceNumber ?? null,
