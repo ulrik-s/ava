@@ -57,6 +57,7 @@
     "e2e:conflict-check": "bash tooling/scripts/conflict-check-e2e.sh",
     "e2e:invoice-dispatch": "bash tooling/scripts/invoice-dispatch-e2e.sh",
     "e2e:expected-receivable": "bash tooling/scripts/expected-receivable-e2e.sh",
+    "e2e:camt-payment": "bash tooling/scripts/camt-payment-e2e.sh",
     "e2e:conflict": "bash tooling/scripts/conflict-e2e.sh",
     "selfhosted:local": "bash tooling/scripts/selfhosted-local.sh",
     "diagnose-ui": "bun tooling/scripts/diagnose-ui.ts",

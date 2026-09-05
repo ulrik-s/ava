@@ -237,6 +237,17 @@ jobs:
           AVA_DATABASE_URL: postgres://ava:ava@localhost:5433/ava_test
           AVA_ORGANIZATION_ID: "00000000-0000-0000-0000-000000000001"
         run: bun tooling/scripts/expected-receivable-e2e.ts
+      # Camt-betalnings-E2E: hela kedjan bankfil → parser → matchning →
+      # bokförd betalning. Parsern är testad mot riktiga SEB-filer och
+      # matcharna mot fixturer, men de riktiga filerna har FASTA referenser och
+      # kan aldrig matcha en faktura ett test just skapat — därför har
+      # XML-steget hoppats över. Här genereras filen med referenser som matchar.
+      - name: Camt-betalnings-E2E (bankfil → bokförd betalning)
+        env:
+          SERVER_URL: http://localhost:3001
+          AVA_DATABASE_URL: postgres://ava:ava@localhost:5433/ava_test
+          AVA_ORGANIZATION_ID: "00000000-0000-0000-0000-000000000001"
+        run: bun tooling/scripts/camt-payment-e2e.ts
       - name: Tear down docker
         if: always()
         run: docker compose -f tooling/docker/docker-compose.server-first.yml down -v
