@@ -63,6 +63,20 @@ describe("buildAuthorizeUrl", () => {
     const u = new URL(buildAuthorizeUrl({ ...config, accountType: "service" }, "s"));
     expect(u.searchParams.get("account_type")).toBe("service");
   });
+
+  // #1038: Fortnox jämför redirect_uri mot registreringen FÖRE URL-decode.
+  // Percent-encodad ger redirect_uri_mismatch trots exakt registrerad URI —
+  // verifierat mot skarp authorize-endpoint. Regressionen är osynlig i
+  // searchParams (den decodar åt oss), så råsträngen måste assertas.
+  it("skickar redirect_uri oencodad — annars avvisar Fortnox den", () => {
+    const raw = buildAuthorizeUrl(config, "s");
+    expect(raw).toContain("redirect_uri=https://app.example/cb");
+    expect(raw).not.toContain("https%3A%2F%2Fapp.example");
+  });
+
+  it("encodar fortfarande scope (mellanslag) trots rå redirect_uri", () => {
+    expect(buildAuthorizeUrl(config, "s")).toContain("scope=bookkeeping+profile");
+  });
 });
 
 describe("exchangeCodeForTokens", () => {

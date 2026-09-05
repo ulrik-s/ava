@@ -24,12 +24,22 @@ export type FetchFn = typeof globalThis.fetch;
 const AUTH_PATH = "/oauth-v1/auth";
 const TOKEN_PATH = "/oauth-v1/token";
 
-/** Bygg authorize-URL:n användaren skickas till. `state` ska vara slumpad (CSRF). */
+/**
+ * Bygg authorize-URL:n användaren skickas till. `state` ska vara slumpad (CSRF).
+ *
+ * `redirect_uri` läggs på RÅ, inte percent-encodad. Fortnox jämför parametern
+ * mot registreringen i Developer Portal innan den URL-decodas, så en korrekt
+ * encodad `https%3A%2F%2F…` ger `redirect_uri_mismatch` trots att URI:n är
+ * registrerad tecken för tecken. Verifierat mot skarp authorize-endpoint
+ * 2026-09-05 (#1038): encodad → mismatch, rå → consent-dialog. Fortnox egna
+ * exempel visar den också oencodad.
+ *
+ * Resten går genom URLSearchParams — `scope` MÅSTE encodas (mellanslag).
+ */
 export function buildAuthorizeUrl(config: FortnoxConfig, state: string): string {
   const url = new URL(AUTH_PATH, config.authBase);
   const params = new URLSearchParams({
     client_id: config.clientId,
-    redirect_uri: config.redirectUri,
     scope: config.scopes.join(" "),
     state,
     access_type: "offline", // krävs för att få en refresh-token
@@ -38,7 +48,7 @@ export function buildAuthorizeUrl(config: FortnoxConfig, state: string): string 
   // account_type är VALFRI hos Fortnox: utelämnad = user-consent (det verifierade
   // flödet). Sätt bara "service" när byrån medvetet kör service-konto (#213).
   if (config.accountType) params.set("account_type", config.accountType);
-  url.search = params.toString();
+  url.search = `redirect_uri=${config.redirectUri}&${params.toString()}`;
   return url.toString();
 }
 

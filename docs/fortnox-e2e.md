@@ -140,6 +140,11 @@ AVA_FORTNOX_CLIENT_ID=… AVA_FORTNOX_CLIENT_SECRET=… AVA_FORTNOX_REDIRECT_URI
 `redirect_uri` måste matcha registreringen i Developer Portal **tecken för
 tecken** — annars avvisas anropet redan i steg 1.
 
+> **Fortnox-egenhet (#1038):** jämförelsen sker på råsträngen, *före*
+> URL-decode. En korrekt percent-encodad `redirect_uri=https%3A%2F%2F…` ger
+> `redirect_uri_mismatch` trots att URI:n är registrerad exakt. `buildAuthorizeUrl`
+> lägger därför på den oencodad — encoda den inte "för säkerhets skull".
+
 Båda kontomodellerna är nu verifierade mot sandbox:
 
 - **user-consent** (default, ingen `account_type`) — token knuten till den som
