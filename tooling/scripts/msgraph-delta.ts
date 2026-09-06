@@ -87,5 +87,6 @@ export function assertMessageDelta(
       + missing.map((id) => id.slice(0, 24) + "…").join(", "),
     );
   }
-  console.log(`  ✓ Delta: exakt ${added.length} nytt meddelande — inget mer`);
+  const ord = added.length === 1 ? "nytt meddelande" : "nya meddelanden";
+  console.log(`  ✓ Delta: exakt ${added.length} ${ord} — inget mer`);
 }

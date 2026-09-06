@@ -65,10 +65,18 @@ Två steg i `ms-graph-e2e.yml`, i den ordningen med flit:
 Mail-E2E:t går hela vägen:
 
 ```
-sendMail → polla tills mailet landat → fetchMessageEml ($value, rå MIME)
-         → mail.saveIncoming mot en riktig AVA-stack
-         → läs tillbaka och jämför BYTE FÖR BYTE
+Funktion 1  sendMail → polla tills mailet landat → fetchMessageEml ($value)
+            → mail.saveIncoming mot en riktig AVA-stack
+            → läs tillbaka och jämför BYTE FÖR BYTE
+
+Funktion 2  mailDocument → polla → kontrollera att bilagan kom fram hel
 ```
+
+**Funktion 2 körs med CI-token, inte via MSAL.** MSAL:s popup går inte att köra
+obevakat — men Graph-anropen under den går, och det är den halvan som kan sluta
+fungera för att Microsoft ändrat sig. MSAL-inloggningen verifieras manuellt;
+`mailDocument` verifieras skarpt. `createDraft` går inte att täcka: att skapa
+ett utkast kräver `Mail.ReadWrite`.
 
 Sista steget är poängen. Att Graph svarade 200 säger inget om att rätt bytes
 hamnade i rätt ärende — `document.downloadContent` jämförs mot exakt de bytes
@@ -95,8 +103,9 @@ Att läsa tillbaka mailet man själv skickade svarar på *"landade det vi skicka
 rätt?"*. Den frågan kan strukturellt inte se att det landade något **mer** — en
 dubblett från en omkörning, ett halvskrivet mail från ett avbrutet jobb.
 
-Därför listas inkorgen före och efter, och skillnaden måste vara **exakt** det
-meddelande testet skapade. Två billiga listningar, inget som behöver nollställas.
+Därför listas inkorgen före och efter, och skillnaden måste vara **exakt** de
+meddelanden testet skapade (två: det inkommande och bilage-mailet från
+funktion 2). Två billiga listningar, inget som behöver nollställas.
 
 Tre detaljer som är avgörande för att kollen inte ska bli tyst:
 

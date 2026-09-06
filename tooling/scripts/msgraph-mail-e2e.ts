@@ -22,6 +22,7 @@
  */
 
 import { fetchMessageEml, sendMail, GRAPH_BASE } from "@/lib/client/graph/graph-mail";
+import { mailDocument } from "@/lib/client/graph/mail-document";
 import { asId } from "@/lib/shared/schemas/ids";
 import { assert, clientFor, seedUser, waitForServer, type Ava } from "./e2e-harness";
 import { assertMessageDelta, snapshotMessageIds, PAGE_SIZE } from "./msgraph-delta";
@@ -54,6 +55,19 @@ interface GraphMessageHead {
   readonly id: string;
   readonly subject: string;
   readonly receivedDateTime: string;
+}
+
+interface GraphAttachment {
+  readonly name: string;
+  readonly size: number;
+}
+
+/** Bilagorna på ett meddelande — det funktion 2 faktiskt lovar. */
+async function attachmentsOf(token: string, id: string): Promise<GraphAttachment[]> {
+  const url = `${GRAPH_BASE}/me/messages/${encodeURIComponent(id)}/attachments?$select=name,size`;
+  const res = await fetch(url, { headers: { authorization: `Bearer ${token}` } });
+  if (!res.ok) throw new Error(`Graph bilage-listning: HTTP ${res.status} ${(await res.text()).slice(0, 300)}`);
+  return ((await res.json()) as { value?: GraphAttachment[] }).value ?? [];
 }
 
 /** Sök upp mailet på ÄMNET. Unikt per körning → aldrig en träff från en tidigare. */
@@ -200,11 +214,39 @@ async function main(): Promise<void> {
   assert(saved.timeEntry.minutes === MAIL_MINUTES, `fel antal minuter: ${saved.timeEntry.minutes}`);
   console.log(`• Tidspost: ${saved.timeEntry.minutes} min`);
 
+  // ── Funktion 2 (#1076): maila ut dokumentet igen, nu som bilaga. ──
+  // MSAL:s popup går inte att köra i CI, men Graph-anropen under den gör det.
+  // Det är den halvan som kan sluta fungera för att Microsoft ändrat sig.
+  //
+  // `sendMail`, inte `createDraft`: att skapa ett utkast kräver Mail.ReadWrite,
+  // som vi medvetet inte ber om (docs/ms-graph.md).
+  const attachSubject = `${subject} bilaga`;
+  await mailDocument({
+    token,
+    doc: { fileName: saved.document.fileName, mimeType: "message/rfc822", bytes },
+    to: [mailbox],
+    subject: attachSubject,
+    body: `Vidarebefordrar ${saved.document.fileName} från ärendet.`,
+  });
+  const attached = await poll(
+    "Bilage-mailet landade", () => findBySubject(token, attachSubject),
+    "mailDocument returnerade utan fel men mailet kom aldrig fram.",
+  );
+  const atts = await attachmentsOf(token, attached.id);
+  assert(atts.length === 1, `förväntade en bilaga, fick ${atts.length}`);
+  assert(atts[0]!.name === saved.document.fileName, `fel bilagenamn: ${atts[0]!.name}`);
+  // Graph rapporterar bilagestorleken inklusive MIME-overhead, så exakt
+  // likhet vore fel att kräva — men en bilaga som är MINDRE än innehållet
+  // betyder att något trunkerats.
+  assert(atts[0]!.size >= bytes.byteLength, `bilagan krympte: ${atts[0]!.size} < ${bytes.byteLength}`);
+  console.log(`• Bilaga levererad: ${atts[0]!.name} (${atts[0]!.size} bytes)`);
+
   // Delta SIST, när allt testet skapar hunnit landa. Det förväntade är EXAKT
-  // det meddelande vi läste — hårdkodat, inte härlett ur utfallet. Härledde vi
-  // det ur `after` hade kollen alltid passerat och tyst slutat betyda något.
+  // de två meddelanden vi själva skickade — hårdkodat, inte härlett ur
+  // utfallet. Härledde vi det ur `after` hade kollen alltid passerat och tyst
+  // slutat betyda något.
   const after = await snapshotMessageIds(fetch, token, MESSAGES_URL);
-  assertMessageDelta(before, after, [msg.id]);
+  assertMessageDelta(before, after, [msg.id, attached.id]);
 
   console.log("\n✓ Graph mail-E2E grön — skickat, läst som MIME, sparat och verifierat byte för byte.");
 }
