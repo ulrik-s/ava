@@ -63,13 +63,13 @@ annat.
 
 Ursprungsplanen i #1070 var Microsoft 365 Developer Programs kostnadsfria
 E5-sandbox med 16 fiktiva användare och färdig mail-data. **Den finns inte att få
-längre** — dashboarden svarar "You don't currently qualify" utan en Visual
-Studio Enterprise/Professional-prenumeration (verifierat 2026-09-06).
+längre** — den kräver Visual Studio Professional eller Enterprise, och Dev
+Essentials (gratis) kvalificerar inte (verifierat 2026-09-06).
 
-Det som används i stället är en egen tenant med **betald Exchange-licens**
-(M365 Business Basic räcker). Tenanten som finns idag saknar licenser helt, vilket
-gör att `Mail.*` svarar `MailboxNotEnabledForRESTAPI` — anslutningen är klar, men
-brevlådan är en öppen post. Se [`docs/ms-graph.md`](../ms-graph.md).
+Det som används i stället är en egen tenant med **betald Exchange-licens**:
+`QnyxAB.onmicrosoft.com`, Microsoft 365 Business Basic, en licensierad
+testbrevlåda. Kedjan är verifierad mot skarp Graph — skickat mail, hittat i
+inkorgen, rå MIME hämtad via `$value`. Se [`docs/ms-graph.md`](../ms-graph.md).
 
 Kravet att **inte** använda en produktions-tenant står kvar och blir viktigare
 med delegerat consent: en admin-consent i arbetsgivarens tenant gäller riktiga

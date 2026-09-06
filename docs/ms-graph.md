@@ -73,17 +73,42 @@ sparar strängen `-`; ett job-`if` på en *environment*-variabel utvärderas inn
 `environment:` resolvas och blir alltid tomt; PAT:en behöver behörigheten
 **Environments**, inte `Secrets`.
 
-## Vad som INTE går än: brevlådan
+## Testtenanten
 
-Tenanten `ulriksjolingmail.onmicrosoft.com` har **noll M365-licenser**, alltså
-ingen Exchange-brevlåda. `GET /me` svarar 200 med `"mail": null`, och allt i
-`Mail.*` kommer att svara `MailboxNotEnabledForRESTAPI`.
+| | |
+|---|---|
+| Tenant | `QnyxAB.onmicrosoft.com` (Qnyx AB) |
+| Testbrevlåda | `UlrikSjolin@QnyxAB.onmicrosoft.com`, Microsoft 365 Business Basic |
+| App | AVA (dev), single tenant, redirect `http://localhost:53682/callback` |
 
-Microsoft 365 Developer Program ger inte längre en gratis E5-sandbox till alla —
-dashboarden svarar "You don't currently qualify" utan en Visual
-Studio-prenumeration (verifierat 2026-09-06). Det som återstår är en betald
-licens med Exchange Online i tenanten; en M365 Business Basic-prövotid räcker för
-att komma igång.
+Verifierat mot skarp Graph 2026-09-06, hela vägen:
 
-Fram till dess är #1074 och #1075 blockerade. Anslutningen, rotationen och
-`ms:connect` är däremot verifierade mot skarp Entra och påverkas inte.
+```
+refresh (roterade) → GET /me → sendMail 202 → hittad i inkorgen efter 3 s
+                   → GET /messages/{id}/$value → 200, 693 bytes rå MIME
+```
+
+Att `$value` faktiskt ger MIME och inte JSON är värt att ha bevisat: det är den
+byte-strömmen `mail.saveIncoming` ska skriva som `.eml`, och ett enhetstest mot
+injicerad `fetch` hade sagt ja oavsett vad Microsoft returnerade.
+
+### Varför inte den första tenanten
+
+Det första försöket gjordes i en tenant som Entra skapade automatiskt vid
+inloggning med ett gmail-konto. Den vägen är en återvändsgränd, och det är värt
+att veta innan någon provar igen:
+
+- `admin.microsoft.com` skickar `msafed=0` och **släpper inte in personliga
+  Microsoft-konton alls** — "You can't sign in here with a personal account"
+- ett gästkonto (`…#EXT#@…`) kan administrera Entra men aldrig äga en brevlåda
+- faktureringsprofilen gick inte att skapa: organisationsprofilen som en
+  köpflödet bygger på saknas i en tenant som uppstått som biprodukt
+
+Microsoft 365 Developer Programs kostnadsfria E5-sandbox är inte heller en väg
+ut: den kräver Visual Studio **Professional eller Enterprise**. Dev Essentials
+(gratis) kvalificerar inte — dashboarden svarar "You don't currently qualify"
+(verifierat 2026-09-06).
+
+Lösningen var att starta Business Basic-prövotiden från microsoft.com i stället
+för inifrån admin center. Det flödet **skapar en egen tenant** med riktig
+organisationsprofil, fungerande fakturering och en licensierad brevlåda direkt.
