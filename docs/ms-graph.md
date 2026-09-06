@@ -89,6 +89,31 @@ Tre detaljer som är lätta att få fel:
 - **`receivedAt` kommer från MAILET**, inte väggklockan, så körningen beter sig
   likadant oavsett när på dygnet den startar.
 
+### Delta-kollen
+
+Att läsa tillbaka mailet man själv skickade svarar på *"landade det vi skickade
+rätt?"*. Den frågan kan strukturellt inte se att det landade något **mer** — en
+dubblett från en omkörning, ett halvskrivet mail från ett avbrutet jobb.
+
+Därför listas inkorgen före och efter, och skillnaden måste vara **exakt** det
+meddelande testet skapade. Två billiga listningar, inget som behöver nollställas.
+
+Tre detaljer som är avgörande för att kollen inte ska bli tyst:
+
+- **Inkorgen, inte `/me/messages`.** `sendMail` sparar en kopia i Skickat, så
+  delta mot hela brevlådan hade gett två nya meddelanden varav vi bara känner
+  id:t på ett — och då är frestelsen att härleda det förväntade ur utfallet,
+  vilket gör kollen meningslös.
+- **`$top=2`.** Graph sidnumrerar med `@odata.nextLink`. Med normal sidstorlek
+  hade brevlådan behövt hundratals mail innan loopen kördes första gången —
+  månader av grönt utan att pagineringskoden någonsin testats. Två per sida
+  betyder att `nextLink` följs vid varje körning.
+- **`nextLink` följs ordagrant.** Den bär en skip-token; byggs URL:en om börjar
+  listningen om från sida ett, vilket ser ut som en hängning snarare än ett fel.
+
+Kollen tål ackumulerad historik: gamla testmail ligger i både före- och
+efter-mängden och tar ut sig själva.
+
 ### Städningen: testmailen ligger kvar, med flit
 
 Graph **kan** radera — till skillnad från Fortnox verifikat, vars avsaknad av

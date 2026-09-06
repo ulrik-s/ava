@@ -24,6 +24,7 @@
 import { fetchMessageEml, sendMail, GRAPH_BASE } from "@/lib/client/graph/graph-mail";
 import { asId } from "@/lib/shared/schemas/ids";
 import { assert, clientFor, seedUser, waitForServer, type Ava } from "./e2e-harness";
+import { assertMessageDelta, snapshotMessageIds, PAGE_SIZE } from "./msgraph-delta";
 import { connectGraph, required } from "./msgraph-harness";
 import { emitRotatedToken } from "./rotated-token";
 
@@ -35,6 +36,20 @@ const POLL_INTERVAL_MS = 3_000;
 /** Tidsposten mailet ska bokföra. Explicit, inte härledd — se `receivedAt`. */
 const MAIL_MINUTES = 6;
 
+/**
+ * Allt tittande sker i INKORGEN, inte i `/me/messages`.
+ *
+ * `/me/messages` spänner över hela brevlådan, och `sendMail` sparar en kopia i
+ * Skickat. Delta mot hela brevlådan hade därför gett TVÅ nya meddelanden varav
+ * vi bara känner id:t på det ena — och frestelsen att härleda det förväntade ur
+ * utfallet gör kollen tyst meningslös.
+ *
+ * `inbox` är ett well-known folder name; adresseras det fel svarar Graph 404,
+ * högljutt. `$top` är litet med flit — se PAGE_SIZE.
+ */
+const INBOX = `${GRAPH_BASE}/me/mailFolders/inbox/messages`;
+const MESSAGES_URL = `${INBOX}?$select=id&$top=${PAGE_SIZE}`;
+
 interface GraphMessageHead {
   readonly id: string;
   readonly subject: string;
@@ -44,7 +59,7 @@ interface GraphMessageHead {
 /** Sök upp mailet på ÄMNET. Unikt per körning → aldrig en träff från en tidigare. */
 async function findBySubject(token: string, subject: string): Promise<GraphMessageHead | null> {
   const filter = encodeURIComponent(`subject eq '${subject.replace(/'/g, "''")}'`);
-  const url = `${GRAPH_BASE}/me/messages?$filter=${filter}&$select=id,subject,receivedDateTime`;
+  const url = `${INBOX}?$filter=${filter}&$select=id,subject,receivedDateTime`;
   const res = await fetch(url, { headers: { authorization: `Bearer ${token}` } });
   if (!res.ok) throw new Error(`Graph sökning misslyckades: HTTP ${res.status} ${(await res.text()).slice(0, 300)}`);
   const json = (await res.json()) as { value?: GraphMessageHead[] };
@@ -136,6 +151,11 @@ async function main(): Promise<void> {
   const subject = `AVA E2E ${stamp}`;
   const bodyText = `Ärendet GRAPH-${stamp}. Genererat av msgraph-mail-e2e.`;
 
+  // FÖRE-läget. Delta mot det här är det enda som kan se att körningen
+  // producerade något MER än ett mail — read-back kan strukturellt inte det.
+  const before = await snapshotMessageIds(fetch, token, MESSAGES_URL);
+  console.log(`• Brevlådan före: ${before.size} meddelanden`);
+
   console.log(`▸ Skickar "${subject}" till ${mailbox} …`);
   await sendMail({ token, message: { subject, body: bodyText, to: [mailbox] } });
 
@@ -179,6 +199,12 @@ async function main(): Promise<void> {
   assert(saved.timeEntry !== null, "ingen tidspost skapades");
   assert(saved.timeEntry.minutes === MAIL_MINUTES, `fel antal minuter: ${saved.timeEntry.minutes}`);
   console.log(`• Tidspost: ${saved.timeEntry.minutes} min`);
+
+  // Delta SIST, när allt testet skapar hunnit landa. Det förväntade är EXAKT
+  // det meddelande vi läste — hårdkodat, inte härlett ur utfallet. Härledde vi
+  // det ur `after` hade kollen alltid passerat och tyst slutat betyda något.
+  const after = await snapshotMessageIds(fetch, token, MESSAGES_URL);
+  assertMessageDelta(before, after, [msg.id]);
 
   console.log("\n✓ Graph mail-E2E grön — skickat, läst som MIME, sparat och verifierat byte för byte.");
 }
