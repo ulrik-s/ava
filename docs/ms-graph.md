@@ -89,9 +89,21 @@ Tre detaljer som är lätta att få fel:
 - **`receivedAt` kommer från MAILET**, inte väggklockan, så körningen beter sig
   likadant oavsett när på dygnet den startar.
 
-Testet raderar sitt eget mail när det är klart. Graph **kan** radera — till
-skillnad från Fortnox verifikat, vars avsaknad av `DELETE` tvingade fram hela
-resonemanget om städbara serier och räkenskapsår.
+### Städningen: testmailen ligger kvar, med flit
+
+Graph **kan** radera — till skillnad från Fortnox verifikat, vars avsaknad av
+`DELETE` tvingade fram hela resonemanget om städbara serier och räkenskapsår.
+Men `DELETE /me/messages/{id}` kräver `Mail.ReadWrite`, och det är enligt
+Microsofts egen tabell den LÄGSTA behörighet som duger (verifierat 2026-09-06;
+första skarpa körningen svarade 403).
+
+AVA läser och skickar mail. Att be varje jurist om **skrivrätt** till sin egen
+brevlåda — för att ett testflöde ska kunna städa efter sig — är precis den
+sortens över-fråga ADR 0036 argumenterar emot. Consent-dialogen ska gå att läsa
+och säga ja till.
+
+Ett testmail per nattlig körning ackumuleras därför i testbrevlådan. Vad vi gör
+åt det hör hemma i #1075.
 
 Lokalt (startar stacken själv):
 
