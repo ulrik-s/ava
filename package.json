@@ -19,6 +19,7 @@
     "ava": "bun tooling/ava-cli/ava.ts",
     "ava:mcp": "bun tooling/ava-cli/ava-mcp.ts",
     "fortnox:connect": "bun tooling/scripts/fortnox-connect.ts",
+    "ms:connect": "bun tooling/scripts/ms-connect.ts",
     "fortnox:e2e": "bun tooling/scripts/fortnox-e2e.ts",
     "fortnox:bookkeeping": "bun tooling/scripts/fortnox-bookkeeping-e2e.ts",
     "fortnox:series": "bun tooling/scripts/fortnox-series.ts",
