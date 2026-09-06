@@ -3,7 +3,8 @@
 # Enhetstesterna för Graph-koden kör med injicerad `fetch` och bevisar att VÅR
 # kod är konsekvent. De kan inte upptäcka att Microsoft ändrat sig, att ett fält
 # heter något annat, eller att `$value` slutat ge MIME. Det här flödet går mot
-# skarp Graph.
+# skarp Graph: sendMail → polla → $value → mail.saveIncoming → läs tillbaka och
+# jämför byte för byte (#1074).
 #
 # ## Rotationen — hela skälet till att jobbet ser ut som det gör
 #
@@ -11,7 +12,7 @@
 # token i en secret räcker därför till EXAKT EN körning om vi inte skriver
 # tillbaka den nya. Steget "Spara roterad refresh-token" gör det, och det körs
 # med `if: always()` eftersom token:en roterar redan i första anropet — även om
-# smoken senare fallerar är den gamla token:en död.
+# något senare i körningen fallerar är den gamla token:en död.
 #
 # Går write-back:en fel måste consent-rundan göras om:
 #   AVA_MS_CLIENT_ID=… AVA_MS_CLIENT_SECRET=… AVA_MS_TENANT_ID=… \
@@ -26,6 +27,8 @@ on:
     paths:
       - "src/lib/server/integrations/msgraph/**"
       - "src/lib/server/integrations/token-store.ts"
+      - "src/lib/client/graph/**"
+      - "src/lib/server/routers/mail.ts"
       - "tooling/scripts/msgraph-*.ts"
       - "tooling/scripts/rotated-token.ts"
       - ".github/workflows/ms-graph-e2e.yml"
@@ -54,7 +57,7 @@ jobs:
     # jobbet hade aldrig kört. Det kostade Fortnox ett CI-varv (#1038).
     if: vars.AVA_MS_CI_ENABLED == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     environment: ms-graph
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -70,14 +73,45 @@ jobs:
           AVA_MS_TEST_MAILBOX: ${{ vars.AVA_MS_TEST_MAILBOX }}
         run: bun run ms:smoke
 
+      # Mail-e2e:t behöver en körande AVA-stack: det sparar mailet på ett
+      # riktigt ärende och läser tillbaka bytes:en därifrån. Smoken ovan har
+      # redan fällt om auth är trasig — då byggs ingen container i onödan.
+      - name: Starta server-first-stacken
+        run: |
+          bun run server-first:build
+          docker compose -f tooling/docker/docker-compose.server-first.yml up -d --build --wait --wait-timeout 180
+          AVA_DATABASE_URL=postgres://ava:ava@localhost:5433/ava_test bun run db:migrate
+
+      # Refresh-token:en är redan förbrukad av smoken — därför den roterade
+      # från dess output, inte secreten. Faller det här steget skrivs ändå
+      # smokens token tillbaka av write-back-steget nedan.
+      - name: Mail-E2E (skicka → läs MIME → spara → verifiera)
+        id: mail
+        env:
+          AVA_MS_CLIENT_ID: ${{ secrets.AVA_MS_CLIENT_ID }}
+          AVA_MS_CLIENT_SECRET: ${{ secrets.AVA_MS_CLIENT_SECRET }}
+          AVA_MS_TENANT_ID: ${{ secrets.AVA_MS_TENANT_ID }}
+          AVA_MS_REFRESH_TOKEN: ${{ steps.smoke.outputs.refresh_token || secrets.AVA_MS_REFRESH_TOKEN }}
+          AVA_MS_TEST_MAILBOX: ${{ vars.AVA_MS_TEST_MAILBOX }}
+          SERVER_URL: http://localhost:3001
+          AVA_DATABASE_URL: postgres://ava:ava@localhost:5433/ava_test
+          AVA_ORGANIZATION_ID: "00000000-0000-0000-0000-000000000001"
+        run: bun tooling/scripts/msgraph-mail-e2e.ts
+
+      - name: Riv ner stacken
+        if: always()
+        run: docker compose -f tooling/docker/docker-compose.server-first.yml down -v
+
       # Måste köras även när smoken fallerade: token:en roterade i det FÖRSTA
       # anropet, så den gamla är död oavsett hur körningen slutade. Hoppar över
       # sig själv om scriptet inte hann emitta något (t.ex. saknad secret).
       - name: Spara roterad refresh-token
-        if: always() && steps.smoke.outputs.refresh_token != ''
+        if: always() && (steps.mail.outputs.refresh_token != '' || steps.smoke.outputs.refresh_token != '')
         env:
           GH_TOKEN: ${{ secrets.AVA_MS_ROTATE_PAT }}
-          NEW_TOKEN: ${{ steps.smoke.outputs.refresh_token }}
+          # Mail-e2e:t refreshar en gång till — dess token är den färskaste.
+          # Föll det steget är smokens token den sista giltiga.
+          NEW_TOKEN: ${{ steps.mail.outputs.refresh_token || steps.smoke.outputs.refresh_token }}
         run: |
           if [ -z "$GH_TOKEN" ]; then
             echo "::error::AVA_MS_ROTATE_PAT saknas — den roterade token:en kan inte sparas."

@@ -53,6 +53,56 @@ går igenom. Regressionstestet asserterar på **råsträngen** i URL:en, efterso
 `url.searchParams.get(…)` decodar och skulle visa samma svar åt båda hållen —
 precis den blindhet som lät Fortnox-buggen ligga kvar.
 
+## E2E-flödet
+
+Två steg i `ms-graph-e2e.yml`, i den ordningen med flit:
+
+| Steg | Bevisar | Varför före/efter |
+|---|---|---|
+| `ms:smoke` | att token-kedjan håller | fäller på 10 sekunder om auth är trasig — då byggs ingen container i onödan |
+| mail-E2E | att integrationen fungerar | behöver en körande AVA-stack |
+
+Mail-E2E:t går hela vägen:
+
+```
+sendMail → polla tills mailet landat → fetchMessageEml ($value, rå MIME)
+         → mail.saveIncoming mot en riktig AVA-stack
+         → läs tillbaka och jämför BYTE FÖR BYTE
+```
+
+Sista steget är poängen. Att Graph svarade 200 säger inget om att rätt bytes
+hamnade i rätt ärende — `document.downloadContent` jämförs mot exakt de bytes
+`$value` gav.
+
+Flödet använder de RIKTIGA funktionerna ur `src/lib/client/graph/graph-mail.ts`,
+inte egna kopior. Ett e2e som återimplementerar det det ska bevisa bevisar
+ingenting — och `graph-mail.ts` är just den fil vars enhetstester kör mot
+injicerad `fetch` och därför är blinda för att Microsoft ändrat sig.
+
+Tre detaljer som är lätta att få fel:
+
+- **Eventuell konsistens.** Ett skickat mail syns inte omedelbart. Testet pollar
+  med tak (30 × 3 s) och ett felmeddelande som pekar på `AVA_MS_TEST_MAILBOX` —
+  inte en fast `sleep`, som blir flakig.
+- **Unikt ämne per körning.** Annars kan testet plocka upp ett mail från en
+  tidigare körning och bli grönt på fel bevis.
+- **`receivedAt` kommer från MAILET**, inte väggklockan, så körningen beter sig
+  likadant oavsett när på dygnet den startar.
+
+Testet raderar sitt eget mail när det är klart. Graph **kan** radera — till
+skillnad från Fortnox verifikat, vars avsaknad av `DELETE` tvingade fram hela
+resonemanget om städbara serier och räkenskapsår.
+
+Lokalt (startar stacken själv):
+
+```bash
+AVA_MS_CLIENT_ID=… AVA_MS_CLIENT_SECRET=… AVA_MS_TENANT_ID=… \
+AVA_MS_REFRESH_TOKEN=… AVA_MS_TEST_MAILBOX=… bun run ms:mail
+```
+
+Refresh-token:en roterar i första anropet — din lokala kopia är förbrukad efter
+körningen. Hämta en ny med `bun run ms:connect --listen`.
+
 ## Miljön `ms-graph` i CI
 
 | Secret | Innehåll |
