@@ -1,0 +1,91 @@
+# Microsoft Graph E2E — mot riktig Entra + riktig brevlåda (#1073, #1074).
+#
+# Enhetstesterna för Graph-koden kör med injicerad `fetch` och bevisar att VÅR
+# kod är konsekvent. De kan inte upptäcka att Microsoft ändrat sig, att ett fält
+# heter något annat, eller att `$value` slutat ge MIME. Det här flödet går mot
+# skarp Graph.
+#
+# ## Rotationen — hela skälet till att jobbet ser ut som det gör
+#
+# Entra utfärdar en NY refresh-token vid varje refresh och dödar den gamla. En
+# token i en secret räcker därför till EXAKT EN körning om vi inte skriver
+# tillbaka den nya. Steget "Spara roterad refresh-token" gör det, och det körs
+# med `if: always()` eftersom token:en roterar redan i första anropet — även om
+# smoken senare fallerar är den gamla token:en död.
+#
+# Går write-back:en fel måste consent-rundan göras om:
+#   AVA_MS_CLIENT_ID=… AVA_MS_CLIENT_SECRET=… AVA_MS_TENANT_ID=… \
+#     AVA_MS_REDIRECT_URI=http://localhost:53682/callback bun run ms:connect --listen
+# Se docs/ms-graph.md.
+
+name: MS Graph E2E
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/lib/server/integrations/msgraph/**"
+      - "src/lib/server/integrations/token-store.ts"
+      - "tooling/scripts/msgraph-*.ts"
+      - "tooling/scripts/rotated-token.ts"
+      - ".github/workflows/ms-graph-e2e.yml"
+  schedule:
+    # 04:41 UTC — udda minut, och skild från Fortnox 04:17 så de inte konkurrerar
+    # om runners. Nattlig körning håller också refresh-token:en vid liv:
+    # Entra dödar den efter en tids inaktivitet.
+    - cron: "41 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Aldrig två samtidiga körningar: de skulle refresha parallellt och slå ut
+# varandras tokens (den ena rotationen ogiltigförklarar den andras).
+concurrency:
+  group: ms-graph-e2e
+  cancel-in-progress: false
+
+jobs:
+  ms-graph-e2e:
+    name: MS Graph E2E (Qnyx-tenant)
+    # Avstängningsknapp utan att redigera workflowen. MÅSTE ligga på REPO-nivå
+    # (`gh variable set` utan `--env`): ett job-`if` utvärderas INNAN
+    # `environment:` resolvas, så en environment-variabel är alltid tom här och
+    # jobbet hade aldrig kört. Det kostade Fortnox ett CI-varv (#1038).
+    if: vars.AVA_MS_CI_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: ms-graph
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/bun-setup
+
+      - name: Graph-smoke (refresh → /me → brevlåda)
+        id: smoke
+        env:
+          AVA_MS_CLIENT_ID: ${{ secrets.AVA_MS_CLIENT_ID }}
+          AVA_MS_CLIENT_SECRET: ${{ secrets.AVA_MS_CLIENT_SECRET }}
+          AVA_MS_TENANT_ID: ${{ secrets.AVA_MS_TENANT_ID }}
+          AVA_MS_REFRESH_TOKEN: ${{ secrets.AVA_MS_REFRESH_TOKEN }}
+          AVA_MS_TEST_MAILBOX: ${{ vars.AVA_MS_TEST_MAILBOX }}
+        run: bun run ms:smoke
+
+      # Måste köras även när smoken fallerade: token:en roterade i det FÖRSTA
+      # anropet, så den gamla är död oavsett hur körningen slutade. Hoppar över
+      # sig själv om scriptet inte hann emitta något (t.ex. saknad secret).
+      - name: Spara roterad refresh-token
+        if: always() && steps.smoke.outputs.refresh_token != ''
+        env:
+          GH_TOKEN: ${{ secrets.AVA_MS_ROTATE_PAT }}
+          NEW_TOKEN: ${{ steps.smoke.outputs.refresh_token }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::AVA_MS_ROTATE_PAT saknas — den roterade token:en kan inte sparas."
+            echo "::error::Nästa körning kommer att misslyckas. Uppdatera AVA_MS_REFRESH_TOKEN manuellt."
+            exit 1
+          fi
+          # INTE `--body -`: gh har ingen "-"-konvention för --body (bara för
+          # --env-file), så värdet hade lagrats literalt som "-" och nästa
+          # körning dött i auth. Utan --body läser gh stdin.
+          printf '%s' "$NEW_TOKEN" | gh secret set AVA_MS_REFRESH_TOKEN \
+            --repo "${{ github.repository }}" --env ms-graph

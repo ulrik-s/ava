@@ -1,38 +1,24 @@
 /**
  * Persistens för Fortnox-tokens (#82).
  *
- * Refresh-token roterar vid varje refresh, så den MÅSTE överleva
- * server-omstarter — annars tappar vi kopplingen och byrån måste re-autha.
- * Lagringen är abstraherad: in-memory (test/dev) eller `VaultFortnoxTokenStore`
- * backad av secrets-valvet (#79) i skarp drift — samma interface, resten av
- * connectorn oförändrad.
+ * Formen är gemensam med Graph (#1073) — samma roterande refresh-token, samma
+ * krav på att överleva omstart — så mekaniken bor i `../token-store`. Här
+ * återstår bara att binda den till Fortnox token-schema och valv-nyckel.
+ *
+ * Klassnamnen behålls: `FortnoxClient` och hela e2e-riggen konstruerar dem, och
+ * ett namnbyte hade rört kod som inte har med #1073 att göra.
  */
 
 import type { SecretsVault } from "../../secrets/vault";
+import { InMemoryTokenStore, VaultTokenStore, type TokenStore } from "../token-store";
 import { fortnoxStoredTokensSchema, type FortnoxStoredTokens } from "./schema";
 
-export interface FortnoxTokenStore {
-  /** Hämta sparade tokens, eller null om byrån inte auth:at än. */
-  load(): Promise<FortnoxStoredTokens | null>;
-  /** Spara (skriv över) tokens — anropas efter varje refresh (rotation!). */
-  save(tokens: FortnoxStoredTokens): Promise<void>;
-}
+export type FortnoxTokenStore = TokenStore<FortnoxStoredTokens>;
 
 /** In-memory-store för tester och engångskörningar. Persisterar inget. */
-export class InMemoryFortnoxTokenStore implements FortnoxTokenStore {
-  private tokens: FortnoxStoredTokens | null;
-
+export class InMemoryFortnoxTokenStore extends InMemoryTokenStore<FortnoxStoredTokens> {
   constructor(initial?: FortnoxStoredTokens) {
-    this.tokens = initial ?? null;
-  }
-
-  async load(): Promise<FortnoxStoredTokens | null> {
-    return this.tokens;
-  }
-
-  async save(tokens: FortnoxStoredTokens): Promise<void> {
-    // Strikt parsning även internt — fångar trasig data tidigt.
-    this.tokens = fortnoxStoredTokensSchema.parse(tokens);
+    super(fortnoxStoredTokensSchema, initial);
   }
 }
 
@@ -40,19 +26,8 @@ export class InMemoryFortnoxTokenStore implements FortnoxTokenStore {
  * Persistent store backad av secrets-valvet (#79). Tokens (inkl. den roterande
  * refresh-token:en) lagras krypterat och överlever omstart.
  */
-export class VaultFortnoxTokenStore implements FortnoxTokenStore {
-  constructor(
-    private readonly vault: SecretsVault,
-    private readonly key: string = "fortnox.tokens",
-  ) {}
-
-  async load(): Promise<FortnoxStoredTokens | null> {
-    const raw = await this.vault.get(this.key);
-    if (!raw) return null;
-    return fortnoxStoredTokensSchema.parse(JSON.parse(raw));
-  }
-
-  async save(tokens: FortnoxStoredTokens): Promise<void> {
-    await this.vault.set(this.key, JSON.stringify(fortnoxStoredTokensSchema.parse(tokens)));
+export class VaultFortnoxTokenStore extends VaultTokenStore<FortnoxStoredTokens> {
+  constructor(vault: SecretsVault, key = "fortnox.tokens") {
+    super(vault, fortnoxStoredTokensSchema, key);
   }
 }
