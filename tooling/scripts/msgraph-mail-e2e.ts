@@ -68,16 +68,21 @@ async function waitForMail(token: string, subject: string): Promise<GraphMessage
   );
 }
 
-/** Städa bort testmailet. Graph KAN radera — till skillnad från Fortnox verifikat. */
-async function deleteMessage(token: string, id: string): Promise<void> {
-  const res = await fetch(`${GRAPH_BASE}/me/messages/${encodeURIComponent(id)}`, {
-    method: "DELETE",
-    headers: { authorization: `Bearer ${token}` },
-  });
-  // Städning får aldrig fälla en grön körning — men tystnad är värre än en rad.
-  if (!res.ok) console.log(`⚠ Kunde inte radera testmailet (HTTP ${res.status}) — städa manuellt.`);
-  else console.log("• Testmailet raderat");
-}
+/**
+ * Ingen städning här — och det är ett medvetet val, inte en lucka.
+ *
+ * `DELETE /me/messages/{id}` kräver `Mail.ReadWrite`, som enligt Microsofts
+ * egen tabell är den LÄGSTA behörighet som duger (verifierat mot
+ * graph/api/message-delete 2026-09-06; första försöket svarade 403).
+ *
+ * AVA läser och skickar mail. Att be varje jurist om SKRIVrätt till sin egen
+ * brevlåda — för att ett testflöde ska kunna städa efter sig — är precis den
+ * sortens över-fråga ADR 0036 argumenterar emot. Consent-dialogen ska gå att
+ * läsa och säga ja till.
+ *
+ * Testmailen ackumuleras därför, ett per nattlig körning. Vad vi gör åt det
+ * hör hemma i #1075, som äger både delta-kontroll och städning.
+ */
 
 async function createMatter(c: Ava, userId: string, matterNumber: string): Promise<string> {
   const m = await c.matter.create.mutate({
@@ -150,7 +155,6 @@ async function main(): Promise<void> {
   assert(saved.timeEntry.minutes === MAIL_MINUTES, `fel antal minuter: ${saved.timeEntry.minutes}`);
   console.log(`• Tidspost: ${saved.timeEntry.minutes} min`);
 
-  await deleteMessage(token, msg.id);
   console.log("\n✓ Graph mail-E2E grön — skickat, läst som MIME, sparat och verifierat byte för byte.");
 }
 
