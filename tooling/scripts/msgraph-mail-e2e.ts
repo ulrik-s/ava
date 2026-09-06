@@ -51,21 +51,41 @@ async function findBySubject(token: string, subject: string): Promise<GraphMessa
   return json.value?.[0] ?? null;
 }
 
-/** Vänta tills mailet dyker upp. Fel efter taket säger VAD som saknades. */
-async function waitForMail(token: string, subject: string): Promise<GraphMessageHead> {
+/**
+ * Polla tills `attempt` ger något, med tak. Delad av båda väntorna nedan —
+ * de väntar på olika saker men på exakt samma sätt, och taket ska vara ett.
+ */
+async function poll<T>(what: string, attempt: () => Promise<T | null>, hint: string): Promise<T> {
   for (let i = 1; i <= POLL_ATTEMPTS; i++) {
-    const hit = await findBySubject(token, subject);
-    if (hit) {
-      console.log(`• Mailet landade efter ~${i * (POLL_INTERVAL_MS / 1000)} s`);
+    const hit = await attempt();
+    if (hit !== null) {
+      console.log(`• ${what} efter ~${i * (POLL_INTERVAL_MS / 1000)} s`);
       return hit;
     }
     await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
   }
-  throw new Error(
-    `Mailet med ämnet "${subject}" dök aldrig upp inom ` +
-    `${(POLL_ATTEMPTS * POLL_INTERVAL_MS) / 1000} s. Kontrollera att ` +
-    `AVA_MS_TEST_MAILBOX är brevlådan token:en tillhör.`,
-  );
+  throw new Error(`${what}: gav upp efter ${(POLL_ATTEMPTS * POLL_INTERVAL_MS) / 1000} s. ${hint}`);
+}
+
+/**
+ * Hämta rå MIME — men tåla att meddelandet ännu inte finns i storen.
+ *
+ * Att sökningen hittar ett id betyder INTE att `$value` kan läsa det. Exchange
+ * indexerar och materialiserar i olika takt, och `$value` svarar då
+ * `404 ErrorItemNotFound`. Verifierat i skarp körning 34056859601: sökningen
+ * gav träff efter 3 s, `$value` föll direkt efteråt.
+ *
+ * Det är därför väntan måste ligga på det vi FAKTISKT behöver — bytes:en —
+ * och inte på att en sökning råkat svara. Föregående körning var grön av tur.
+ */
+async function tryFetchEml(token: string, restId: string): Promise<{ bytes: Uint8Array; base64: string } | null> {
+  try {
+    return await fetchMessageEml({ token, restId });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg.includes("HTTP 404")) return null;
+    throw e;
+  }
 }
 
 /**
@@ -119,9 +139,14 @@ async function main(): Promise<void> {
   console.log(`▸ Skickar "${subject}" till ${mailbox} …`);
   await sendMail({ token, message: { subject, body: bodyText, to: [mailbox] } });
 
-  const msg = await waitForMail(token, subject);
-
-  const { bytes, base64 } = await fetchMessageEml({ token, restId: msg.id });
+  const msg = await poll(
+    "Mailet landade", () => findBySubject(token, subject),
+    "Kontrollera att AVA_MS_TEST_MAILBOX är brevlådan token:en tillhör.",
+  );
+  const { bytes, base64 } = await poll(
+    "Rå MIME läsbar", () => tryFetchEml(token, msg.id),
+    `Meddelandet ${msg.id.slice(0, 20)}… hittades men $value svarade 404 hela vägen.`,
+  );
   assert(bytes.byteLength > 0, "$value gav noll bytes");
   const head = new TextDecoder().decode(bytes.slice(0, 200));
   // Att `$value` ger MIME och inte JSON är en av de saker en mock aldrig kan
