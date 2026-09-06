@@ -1,7 +1,11 @@
 /**
- * Test för Office365Connector (stub tills @azure/msal-browser adderas).
- * Connectorn registrerar sig vid import; vi hämtar den via registry och
- * verifierar metadata, status-flöde, ej-implementerad-fel och pub/sub.
+ * Registry-sidan av Office365-connectorn: att den registrerar sig vid import,
+ * och att pub/sub-kontraktet UI:n läser status ur håller.
+ *
+ * Själva MSAL-logiken (connect, tyst förnyelse, disconnect) testas mot en
+ * injicerad söm i `test/unit/client/integrations/office365-connector.test.ts`
+ * — den kan inte nås genom registry-singletonen, som med flit bär den riktiga
+ * MSAL-fabriken.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
@@ -15,25 +19,27 @@ function office365(): IntegrationConnector {
   return c;
 }
 
-describe("Office365Connector", () => {
+describe("Office365Connector (registry)", () => {
   beforeEach(async () => {
     // Återställ till disconnected mellan tester (delad singleton i registry).
     await office365().disconnect();
   });
 
-  it("metadata: id, displayName, capabilities", () => {
+  /**
+   * `capabilities` renderas i /settings. Den ska beskriva vad connectorn
+   * FAKTISKT kan — stubben listade "files" och "calendar" som ingen kod bakom
+   * den någonsin gjort, och scopen (`User.Read`, `Mail.Send`) räcker inte till
+   * dem. En capability-lista man inte kan lita på är sämre än en kort.
+   */
+  it("metadata: id, displayName, och bara de capabilities som finns", () => {
     const c = office365();
     expect(c.id).toBe("office365");
     expect(c.displayName).toBe("Office 365");
-    expect(c.capabilities).toEqual(expect.arrayContaining(["mail", "files", "calendar"]));
+    expect([...c.capabilities]).toEqual(["mail"]);
   });
 
   it("startar i disconnected", async () => {
     expect(await office365().getStatus()).toEqual({ kind: "disconnected" });
-  });
-
-  it("connect() kastar (ej implementerad än)", async () => {
-    await expect(office365().connect()).rejects.toThrow(/ej implementerad|msal-browser/i);
   });
 
   it("getAccessToken() kastar när disconnected", async () => {
