@@ -14,7 +14,6 @@
  *   AVA_FORTNOX_ACCOUNT_TYPE     "service" → service-konto i st.f. användarsamtycke
  */
 
-import { appendFileSync } from "node:fs";
 import { FortnoxClient } from "@/lib/server/integrations/fortnox/client";
 import {
   fortnoxConfigSchema, fortnoxKontoMappningSchema,
@@ -129,20 +128,5 @@ export function assertVoucherDelta(
   console.log(`  ✓ Delta: exakt ${added.length} nya verifikat (${added.join(", ") || "inga"}) — inget mer`);
 }
 
-/**
- * Skriv den roterade refresh-token:en till `$GITHUB_OUTPUT`. ALDRIG till
- * stdout — GitHub maskerar bara det den känner till. Anropas direkt efter
- * första refreshen: den gamla token:en är död från den sekunden, så tappas den
- * nya kan nästa körning inte auth:a alls.
- */
-export async function emitRotatedToken(store: InMemoryFortnoxTokenStore): Promise<void> {
-  const out = process.env.GITHUB_OUTPUT;
-  if (!out) return;
-  const rotated = await store.load();
-  if (!rotated) return;
-  // Step-outputs maskeras INTE automatiskt — ::add-mask:: gör att token:en
-  // redigeras bort ur loggen om ett senare steg råkar eka sin env.
-  console.log(`::add-mask::${rotated.refreshToken}`);
-  appendFileSync(out, `refresh_token=${rotated.refreshToken}\n`);
-  console.log("• Roterad refresh-token skriven till GITHUB_OUTPUT (maskerad).");
-}
+// `emitRotatedToken` bor i ./rotated-token — Graph behöver exakt samma sak (#1073).
+export { emitRotatedToken } from "./rotated-token";
