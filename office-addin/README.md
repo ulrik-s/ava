@@ -57,16 +57,90 @@ och `src/bin/server-runtime.ts` (montering + delad Mutex).
   (`WebApplicationInfo` i manifestet) + server-OBO; välj det om ni vill gå via
   `graph.microsoft.com` (`fetchMessageEml` tar en `baseUrl`).
 - **Funktion 2 (web-appen):** MS Graph-token via Office365-connectorn
-  (`src/lib/client/integrations/office365-connector.ts`) — **MSAL ännu ej
-  implementerad** (stub); det är blockeraren för web-app-knappen och hör till
-  auth-infra-spåret (#221–224), inte denna add-in.
+  (`src/lib/client/integrations/office365-connector.ts`) — MSAL implementerad i
+  #1076. Rör inte denna add-in; funktion 2 triggas i web-appen.
 
-## Sideload
+## Värdverifiering — checklistan (#1077)
 
-1. `bun run office-addin/build.ts`.
-2. Servera `office-addin/dist/` över **HTTPS** (Office-krav; dev-cert à la
-   `helper-ui/src/engine/tls/`). Uppdatera `SourceLocation` i manifestet till URL:en.
-3. Outlook → Hämta tillägg → Mina tillägg → Egna tillägg → Lägg till från fil →
-   `manifests/outlook-manifest.xml`.
-4. Öppna ett mail → AVA-panelen: ange server + PAT, sök ärende, (ev.) minuter,
-   **Spara**.
+`taskpane-controller.ts` har 19 enhetstester som kör helt utan Office. Det är
+rätt uppdelning, men det betyder att **de riktiga Office-API:erna aldrig bevisas
+bete sig som `OfficeLike` antar**. Motsvarande lucka hos Fortnox innehöll fem
+fel.
+
+Den här checklistan är den låga ambitionsnivån ur #1077: den bevisar samma sak
+som en nattlig OWA-Playwright, men bara när någon kör den. **Kör den före varje
+release som rört add-in:en.** En flakig OWA-smoke som alla ignorerar är sämre än
+en checklista som faktiskt följs.
+
+### Innan du börjar
+
+```sh
+bun run addin:build        # → office-addin/dist/
+bun run addin:serve        # HTTPS på :3443, skapar dev-cert, kontrollerar förtroende
+```
+
+Servern skriver ut ett `security add-trusted-cert`-kommando om certet inte är
+betrott. **Kör det.** Office visar inga nätverksfel — ett cert browsern inte
+litar på ger en TOM panel, utan förklaring, och då letar man efter buggar i
+controllern i en timme.
+
+Starta även en AVA-stack och ha en PAT redo:
+
+```sh
+bash tooling/scripts/selfhosted-local.sh   # eller din vanliga dev-stack
+```
+
+I **Outlook Web** fungerar `https://localhost:3443` — panelen laddas av
+browsern, inte av Microsofts servrar. Ingen publik host behövs (det gäller
+central utrullning, #1078).
+
+### Sideload
+
+1. Öppna <https://aka.ms/olksideload> (Outlook Web öppnas, dialogen dyker upp
+   efter några sekunder).
+2. **Mina tillägg** → längst ner **Egna tillägg** → **Lägg till ett eget
+   tillägg** → **Lägg till från fil**.
+3. Välj `manifests/outlook-manifest.xml`. Godkänn prompterna.
+   *"Lägg till från URL" finns inte längre* — filvägen är enda vägen.
+
+### Kör igenom, och notera VAD varje steg bevisar
+
+| # | Gör | Bevisar |
+|---|---|---|
+| 1 | Öppna ett mail, öppna AVA-panelen | `SourceLocation` + certet håller; `Office.onReady` fyrar |
+| 2 | Ange server-URL + PAT, spara | roaming-settings persisterar (ADR 0013 §3 C1) |
+| 3 | Ladda om panelen | inställningarna kom tillbaka — annars är roaming-settings fel läst |
+| 4 | Sök ärende på fritext | `matter.list` över tRPC-HTTP med Bearer-PAT fungerar från Office-iframen (CORS!) |
+| 5 | Välj ärende, ange minuter, **Spara** | **`getCallbackTokenAsync({ isRest: true })` + `Office.context.mailbox.restUrl`** — de minst standardiserade delarna, och den troligaste felkällan |
+| 6 | Öppna ärendet i AVA | `.eml` ligger som dokument av typen E-post, med rätt ämne |
+| 7 | Ladda ner `.eml` och öppna den | rätt bytes, inte en tom eller trunkerad fil |
+| 8 | Kolla tidsposten | rätt antal minuter, kopplad till ärendet |
+
+Steg 5 är det som issuen egentligen handlar om. Steg 6–8 är read-back: att
+panelen sa "sparat" bevisar inte att något rätt hamnade någonstans.
+
+### När panelen är tom eller tyst
+
+Office svälter fel. Öppna browserns devtools och välj task-pane-**iframen** i
+frame-väljaren — konsolen i toppdokumentet visar ingenting från panelen.
+
+| Symptom | Trolig orsak |
+|---|---|
+| Helt tom panel | certet inte betrott, eller `addin:serve` kör inte |
+| Panelen laddar men söket ger inget | CORS eller fel server-URL/PAT |
+| Spara faller på token | `getCallbackTokenAsync` — kontrollera `Permissions` i manifestet (`ReadWriteItem`) |
+| Gammal kod körs | Office cachar; servern sätter `no-store`, men ta bort och sideloada om vid tvivel |
+
+### Varför inte automatiserat (än)
+
+OWA-inloggning i CI är sköra beroenden: MFA, ändrade selektorer, en
+testanvändare som måste sakna MFA. Issuen (#1077) föreslår att ta den låga
+nivån först och se om den höga bär. Går den här checklistan igenom några gånger
+utan överraskningar är en nattlig Playwright värd att bygga — inte innan.
+
+## Sideload i Outlook Desktop
+
+Samma manifest, men via **Arkiv → Info → Hantera tillägg** (som öppnar samma
+dialog i browsern). Notera att klassisk Outlook för Windows kan behöva **upp
+till 24 timmar** för att visa ett manuellt sideloadat tillägg — cachning. Vill
+du verifiera snabbt: använd Outlook Web.

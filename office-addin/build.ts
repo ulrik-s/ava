@@ -30,4 +30,9 @@ if (!result.success) {
 }
 
 await cp(join(root, "taskpane/taskpane.html"), join(outdir, "taskpane.html"));
-console.log(`✓ Byggd → ${outdir}/ (taskpane.js + taskpane.html). Servera över HTTPS och uppdatera manifestets SourceLocation.`);
+// Ikonerna refereras av manifestets IconUrl. Saknas de visar Outlook en tom
+// ruta — inte ett fel, men i en sideload-checklista är "är det trasigt eller
+// ska det se ut så?" en fråga man inte ska behöva ställa.
+await cp(join(root, "assets"), join(outdir, "assets"), { recursive: true });
+console.log(`✓ Byggd → ${outdir}/ (taskpane.js + taskpane.html + assets/).`);
+console.log("  Servera över HTTPS: bun run addin:serve");
