@@ -22,6 +22,8 @@
     "ms:connect": "bun tooling/scripts/ms-connect.ts",
     "ms:smoke": "bun tooling/scripts/msgraph-smoke.ts",
     "ms:mail": "bash tooling/scripts/msgraph-mail-e2e.sh",
+    "addin:build": "bun office-addin/build.ts",
+    "addin:serve": "bun tooling/scripts/office-addin-serve.ts",
     "fortnox:e2e": "bun tooling/scripts/fortnox-e2e.ts",
     "fortnox:bookkeeping": "bun tooling/scripts/fortnox-bookkeeping-e2e.ts",
     "fortnox:series": "bun tooling/scripts/fortnox-series.ts",
