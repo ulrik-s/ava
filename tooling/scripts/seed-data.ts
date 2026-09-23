@@ -69,6 +69,43 @@ function isoDate(daysFromNow: number, hour = 9): Date {
   return d;
 }
 
+/** Scenariots årsgräns respektive sista händelse, i dagar från ärendets dag 0.
+ *  Speglar `scenarios/rattshjalp-arsskifte.ts` — ändras de där måste de ändras här. */
+const ARSSKIFTE_DAY_OFFSET = 60;
+const ARSSKIFTE_LAST_DAY = 245;
+
+/** Hela dagar mellan två datum (a före b). */
+function daysBetween(a: Date, b: Date): number {
+  return Math.round((b.getTime() - a.getTime()) / 86_400_000);
+}
+
+/**
+ * `createdDaysAgo` för de två ärenden som ska SPÄNNA ÖVER ett årsskifte
+ * (2026-0020/0021, #891/#899).
+ *
+ * De demonstrerar den retroaktiva normhöjningen (1 586 → 1 626 kr), vilket
+ * kräver att arbetet faktiskt ligger på båda sidor om ett årsskifte. Det är ett
+ * ABSOLUT kalenderfaktum — och ett fast `createdDaysAgo: 255` uttryckte det bara
+ * så länge kalendern stod still. Den 12 september 2026 gled dag 0 förbi nyår och
+ * ärendena slutade tyst korsa gränsen; demon tappade ett av sina mest
+ * genomarbetade fall och `simulate-orchestrate` blev röd i orörd kod (#1098).
+ *
+ * Ankras därför mot årsskiftet självt: dag 0 hamnar i november, årsgränsen på
+ * dag `ARSSKIFTE_DAY_OFFSET`. Ligger det senaste årsskiftet för nära i tiden för
+ * att scenariots svans ska rymmas väljs föregående — annars hade en körning i
+ * januari lagt tidsposter i framtiden.
+ */
+function arsskifteCreatedDaysAgo(now: Date = new Date()): number {
+  const dec31 = (year: number): Date => new Date(year, 11, 31, 9, 0, 0, 0);
+  const tailDays = ARSSKIFTE_LAST_DAY - ARSSKIFTE_DAY_OFFSET;
+  let boundary = dec31(now.getFullYear() - 1);
+  if (daysBetween(boundary, now) < tailDays) boundary = dec31(now.getFullYear() - 2);
+  return daysBetween(boundary, now) + ARSSKIFTE_DAY_OFFSET;
+}
+
+/** Exporterad för `test/scripts/seed-arsskifte.test.ts` — invarianten är hela poängen. */
+export { arsskifteCreatedDaysAgo, ARSSKIFTE_DAY_OFFSET, ARSSKIFTE_LAST_DAY };
+
 interface UserSeed {
   id: string; email: string; name: string; role: UserRole;
   hourlyRate: number; title: string;
@@ -173,8 +210,8 @@ export const MATTERS: MatterSeed[] = [
   // BEVILJAR försäkringen rättsskydd (i st.f. rättshjälps-vägen efter avslag). Positivt
   // besked: högst 100 tim arvode, självrisk 20 % dock lägst 1 800 kr → försäkringen tar
   // merparten, klienten bara självrisken (golvet 1 800 kr slår in vid litet arbete).
-  { id: "m-021-rattsskydd-positivt", matterNumber: "2026-0021", title: "Vårdnadstvist — rättsskydd beviljat Falk", status: "ACTIVE", matterType: "Familjerätt", paymentMethod: "RATTSSKYDD", description: "Speglar Fredrik Falks vårdnadstvist (jfr 2026-0020, rättshjälp) men här BEVILJAR försäkringen rättsskydd (100 tim arvode, självrisk 20 % dock lägst 1 800 kr). Större ärende som börjar nov 2025 och går över årsskiftet: löpande aconto-fakturor till klienten på självrisken (några 2025, några 2026), slutfaktura till försäkringen som PRUTAR — och då bär KLIENTEN mellanskillnaden (skillnad mot rättshjälp där byrån bär prutningen).", klientId: "c-falk", motpartId: "c-bergman", domstolId: "c-tingsratten-sthlm", createdDaysAgo: 255, clientShareBips: 2000, rattsskyddMaxOre: 16_260_000, rattsskyddSjalvriskMinOre: 180_000 },
-  { id: "m-020-rattshjalp-varierande", matterNumber: "2026-0020", title: "Vårdnadstvist — varierande rättshjälp Falk", status: "ACTIVE", matterType: "Familjerätt", paymentMethod: "RATTSHJALP", description: "Rättshjälp över ett årsskifte (start nov 2025, norm 1 586 kr → 2026 norm 1 626 kr) med varierande avgift (arbetslös 5 % → anställd 40 % → arbetslös 5 %) och tidsspillan. Vid slutregleringen räknas HELA ärendet om på 2026 års norm (retroaktiv höjning) — skillnaden regleras på slutfakturorna till klient + domstol. Myndighetens slutliga avgift: 5 %.", klientId: "c-falk", motpartId: "c-bergman", domstolId: "c-tingsratten-sthlm", createdDaysAgo: 255, clientShareBips: 500, rattshjalpMaxTimmar: 100 },
+  { id: "m-021-rattsskydd-positivt", matterNumber: "2026-0021", title: "Vårdnadstvist — rättsskydd beviljat Falk", status: "ACTIVE", matterType: "Familjerätt", paymentMethod: "RATTSSKYDD", description: "Speglar Fredrik Falks vårdnadstvist (jfr 2026-0020, rättshjälp) men här BEVILJAR försäkringen rättsskydd (100 tim arvode, självrisk 20 % dock lägst 1 800 kr). Större ärende som börjar nov 2025 och går över årsskiftet: löpande aconto-fakturor till klienten på självrisken (några 2025, några 2026), slutfaktura till försäkringen som PRUTAR — och då bär KLIENTEN mellanskillnaden (skillnad mot rättshjälp där byrån bär prutningen).", klientId: "c-falk", motpartId: "c-bergman", domstolId: "c-tingsratten-sthlm", createdDaysAgo: arsskifteCreatedDaysAgo(), clientShareBips: 2000, rattsskyddMaxOre: 16_260_000, rattsskyddSjalvriskMinOre: 180_000 },
+  { id: "m-020-rattshjalp-varierande", matterNumber: "2026-0020", title: "Vårdnadstvist — varierande rättshjälp Falk", status: "ACTIVE", matterType: "Familjerätt", paymentMethod: "RATTSHJALP", description: "Rättshjälp över ett årsskifte (start nov 2025, norm 1 586 kr → 2026 norm 1 626 kr) med varierande avgift (arbetslös 5 % → anställd 40 % → arbetslös 5 %) och tidsspillan. Vid slutregleringen räknas HELA ärendet om på 2026 års norm (retroaktiv höjning) — skillnaden regleras på slutfakturorna till klient + domstol. Myndighetens slutliga avgift: 5 %.", klientId: "c-falk", motpartId: "c-bergman", domstolId: "c-tingsratten-sthlm", createdDaysAgo: arsskifteCreatedDaysAgo(), clientShareBips: 500, rattshjalpMaxTimmar: 100 },
 ];
 
 // ASSIGN_USERS härleds inuti buildSeed() från de aktuella users — så ifall
