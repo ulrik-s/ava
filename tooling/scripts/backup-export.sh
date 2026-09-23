@@ -33,14 +33,19 @@ CONTENT_VOLUME="${AVA_CONTENT_VOLUME:-ava_content}"
 STAMP="$(date +%F-%H%M)"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
+# Det som paketeras ligger i en EGEN katalog. Låg chiffret i samma katalog som
+# tar läste såg tar katalogen ändras under läsningen ("file changed as we read
+# it", exit 1) — och kunde packa in sin egen halvskrivna utfil.
+DATA="$WORK/data"
+mkdir "$DATA"
 
-bash "$(dirname "$0")/backup-db.sh" "$WORK" >/dev/null
-docker run --rm -v "$CONTENT_VOLUME":/content:ro -v "$WORK":/out alpine \
+bash "$(dirname "$0")/backup-db.sh" "$DATA" >/dev/null
+docker run --rm -v "$CONTENT_VOLUME":/content:ro -v "$DATA":/out alpine \
   tar -C /content -czf /out/content.tar.gz .
-(cd "$WORK" && sha256sum ./*.gz > SHA256SUMS)
+(cd "$DATA" && sha256sum ./*.gz > SHA256SUMS)
 
 NAME="ava-$STAMP.tar.age"
-tar -C "$WORK" -cf - . | docker run --rm -i -v "$(realpath "$RECIPIENT")":/recipient:ro alpine \
+tar -C "$DATA" -cf - . | docker run --rm -i -v "$(realpath "$RECIPIENT")":/recipient:ro alpine \
   sh -c 'apk add -q --no-cache age >/dev/null && age -R /recipient' > "$WORK/$NAME"
 
 # Minsta rimliga storlek: en tom tar + age-header är några hundra byte.
