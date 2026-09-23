@@ -25,10 +25,11 @@
 import { loadContentDirFromEnv, makeContentStore } from "@/lib/server/adapters/git-content-store";
 import { noopPorts } from "@/lib/server/adapters/noop-ports";
 import { buildServerFirstApi, loadServerFirstConfig } from "@/lib/server/http/server-first-api";
+import { emailStatusLine } from "@/lib/server/integrations/email/disabled-email-sender";
 import { startJobRuntime, type JobRuntime } from "@/lib/server/jobs/job-worker-runtime";
 import { QueueBackedDocumentAnalyzer } from "@/lib/server/jobs/queue-backed-document-analyzer";
-import { QueueBackedEmailSender } from "@/lib/server/jobs/queue-backed-email-sender";
-import { buildServerFirstJobHandlers, loadSmtpConfigFromEnv } from "@/lib/server/jobs/server-first-handlers";
+import { makeEmailPort } from "@/lib/server/jobs/queue-backed-email-sender";
+import { buildServerFirstJobHandlers, loadActiveSmtpConfig } from "@/lib/server/jobs/server-first-handlers";
 import { InMemoryLeaseStore } from "@/lib/server/lease/lease-store";
 import { loadLlmConfigFromEnv } from "@/lib/server/llm/ollama-classifier";
 import { serveFetchHandler } from "@/lib/shared/http/node-http-adapter";
@@ -67,7 +68,8 @@ function main(): void {
         "Env: AVA_DATABASE_URL, AVA_ORGANIZATION_ID, AVA_HTTP_PORT, AVA_HTTP_HOST,\n" +
         "     AVA_CONTENT_DIR (dokument-bytes på disk, #518)\n" +
         "Jobb-kö (#504): pg-boss på samma DB. E-postutskick aktiveras när\n" +
-        "AVA_SMTP_HOST/PORT/USER/PASS/FROM (+ valfri AVA_SMTP_SECURE) är satta.\n" +
+        "AVA_SMTP_HOST/PORT/USER/PASS/FROM (+ valfri AVA_SMTP_SECURE) är satta;\n" +
+        "AVA_EMAIL_DISABLED=1 stänger av utskick helt (test-/pilotserver).\n" +
         "Dokumentklassificering (#518): server-LLM aktiveras när AVA_CONTENT_DIR +\n" +
         "AVA_LLM_ENDPOINT + AVA_LLM_MODEL (+ valfri AVA_LLM_API_KEY) är satta\n" +
         "(annars filnamns-heuristik). Kör ollama via docker `--profile llm`.\n",
@@ -86,7 +88,7 @@ function main(): void {
   const contentStore = makeContentStore(loadContentDirFromEnv());
   const ports = {
     ...noopPorts,
-    email: new QueueBackedEmailSender(() => jobRuntime?.boss ?? null),
+    email: makeEmailPort(() => jobRuntime?.boss ?? null),
     // Dokumentklassificering (#518): `document.analyze` enqueue:ar ett
     // classify-document-jobb durabelt på pg-boss i st.f. noop.
     documentAnalyzer: new QueueBackedDocumentAnalyzer(() => jobRuntime?.boss ?? null, config.organizationId),
@@ -104,11 +106,12 @@ function main(): void {
   });
   const server = serveFetchHandler(api.handler, { port: config.httpPort, hostname: config.httpHost });
   log(`lyssnar på ${config.httpHost}:${config.httpPort} (org ${config.organizationId})`);
+  log(emailStatusLine());
 
   // Jobb-kö (#504): best-effort start — en kö-hicka får ALDRIG ta ned HTTP-
   // serveringen. Handlers per konfigurerad integration (e-post via AVA_SMTP_*,
   // dokumentklassificering via repos #518).
-  const smtp = loadSmtpConfigFromEnv();
+  const smtp = loadActiveSmtpConfig();
   const llm = loadLlmConfigFromEnv();
   const handlers = buildServerFirstJobHandlers({
     ...(smtp ? { smtp } : {}),

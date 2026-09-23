@@ -70,7 +70,13 @@ OAUTH2_PROXY_CLIENT_ID=<app-id>
 OAUTH2_PROXY_CLIENT_SECRET=<hemlighet>
 OAUTH2_PROXY_COOKIE_SECRET=<32 byte>  # openssl rand -hex 16
 OIDC_EMAIL_DOMAINS=byra.se            # vilka som får logga in
+AVA_EMAIL_DISABLED=1                  # test/pilot: inga mejl ut, inte ens om SMTP sätts
 ```
+
+`AVA_EMAIL_DISABLED=1` stänger av e-postutskick helt: e-postporten vägrar med ett
+tydligt fel i st.f. att köa, och ingen utskicks-handler registreras ens om
+`AVA_SMTP_*` är satt. Utan flaggan köas mejl på pg-boss — de ligger kvar och går
+iväg den dag SMTP konfigureras, så en testserver ska ha flaggan från start.
 
 Starta, migrera och skapa byrån + första admin. Postgres har ingen host-port,
 så skripten körs i en engångs-container på compose-nätet:
