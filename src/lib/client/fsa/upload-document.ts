@@ -14,6 +14,7 @@
  */
 
 import type { MatterId } from "@/lib/shared/schemas/ids";
+import { uuidv7 } from "@/lib/shared/uuid";
 import { FsaIsoGitAdapter } from "./fs-adapter";
 
 export interface UploadResult {
@@ -32,8 +33,9 @@ export interface UploadOptions {
   generateId?: () => string;
 }
 
+/** uuid — servern lagrar bara uuid-nycklade rader (dataförlusten 2026-09-23). */
 function defaultGenerateId(): string {
-  return `d-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  return uuidv7();
 }
 
 function extFromFile(file: File): string {

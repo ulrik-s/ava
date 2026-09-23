@@ -122,6 +122,12 @@ export class MutationQueue {
     if (this.items.length !== before) await this.persist();
   }
 
+  /** Ersätt hela kön (id-reparation vid uppstart, se legacy-id-repair.ts). */
+  async replaceAll(items: readonly QueuedMutation[]): Promise<void> {
+    this.items = [...items];
+    await this.persist();
+  }
+
   async clear(): Promise<void> {
     if (this.items.length === 0) return;
     this.items = [];

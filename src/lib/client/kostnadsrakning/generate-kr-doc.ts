@@ -16,6 +16,7 @@
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { KOSTNADSRAKNING_DOCUMENT_TYPE } from "@/lib/shared/schemas/document";
 import { asId, type MatterId } from "@/lib/shared/schemas/ids";
+import { uuidv7 } from "@/lib/shared/uuid";
 import type { DocUtils, RegisterMut } from "./generate-faktura-doc";
 
 export interface KrDocMeta {
@@ -82,7 +83,8 @@ export async function generateKrDoc(args: GenerateKrDocArgs): Promise<void> {
     },
   });
 
-  const docId = `kostn-${matterId}-${now.getTime().toString(36)}`;
+  // uuid — servern lagrar bara uuid-nycklade rader (dataförlusten 2026-09-23).
+  const docId = uuidv7(now.getTime());
   const fileName = `Kostnadsräkning ${meta.matterNumber} ${now.toISOString().slice(0, 10)}.pdf`;
   const storagePath = `documents/content/${docId}.pdf`;
   await register.mutateAsync({

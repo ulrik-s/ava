@@ -26,6 +26,7 @@ import { type DemoSource, prebakeJoins } from "@/lib/shared/demo-source";
 import type { CursorStore } from "./cursor-store";
 import { InMemoryCursorStore } from "./cursor-store";
 import { SOURCE_KEY_BY_ENTITY } from "./entity-source-keys";
+import { repairLegacyIds } from "./legacy-id-repair";
 import { LocalStore } from "./local-store";
 import type { LocalStorePersistence } from "./local-store-persistence";
 import { MutationQueue, type MutationQueuePersistence } from "./mutation-queue";
@@ -77,6 +78,31 @@ function writeCanonical(store: LocalStore, entity: string, row: Record<string, u
   else arr.push(row);
 }
 
+/**
+ * Rader med icke-uuid-id (skapade innan klienten genererade uuid) nådde aldrig
+ * servern. Ge dem deterministiska uuid:n, skriv om alla referenser, köa dem som
+ * create och persistera — innan första reconcile. No-op när allt redan är uuid.
+ */
+async function repairHydrated(
+  source: DemoSource,
+  queue: MutationQueue,
+  persistence: LocalStorePersistence | undefined,
+): Promise<DemoSource> {
+  const repair = repairLegacyIds(source, queue.pending());
+  if (!repair.changed) return source;
+  const queuedCreates = new Set(repair.queued.filter((m) => m.kind === "create").map((m) => keyOf(m.entity, m.row)));
+  await queue.replaceAll(repair.queued);
+  for (const r of repair.recreated) {
+    if (!queuedCreates.has(keyOf(r.entity, r.row))) await queue.enqueue({ entity: r.entity, kind: "create", row: r.row });
+  }
+  if (persistence) await persistence.save(repair.source);
+  return repair.source;
+}
+
+function keyOf(entity: string, row: Record<string, unknown>): string {
+  return `${entity}:${String(row.id)}`;
+}
+
 export class CachingSyncDataStore {
   private constructor(
     /** Den `IDataStore` appen läser/skriver mot (lokal-först) — `ctx.dataStore`. */
@@ -91,7 +117,7 @@ export class CachingSyncDataStore {
   static async create(deps: CachingSyncDeps): Promise<CachingSyncDataStore> {
     const queue = await MutationQueue.hydrate(deps.queuePersistence);
     const hydrated = deps.persistence ? await deps.persistence.hydrate() : null;
-    const source: DemoSource = hydrated ?? deps.seed ?? {};
+    const source = await repairHydrated(hydrated ?? deps.seed ?? {}, queue, deps.persistence);
     return CachingSyncDataStore.wire(deps, queue, source);
   }
 

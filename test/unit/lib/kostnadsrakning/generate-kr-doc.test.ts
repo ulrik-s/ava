@@ -7,6 +7,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { generateKrDoc } from "@/lib/client/kostnadsrakning/generate-kr-doc";
 import { asId } from "@/lib/shared/schemas/ids";
+import { isUuid } from "@/lib/shared/uuid";
 
 const renderKostnadsrakningPdf = vi.fn(async () => new Uint8Array([1, 2, 3, 4]));
 const persistGeneratedDoc = vi.fn(async () => {});
@@ -40,8 +41,10 @@ describe("generateKrDoc", () => {
     expect(registerMutateAsync).toHaveBeenCalledWith(expect.objectContaining({
       matterId: "m1", documentType: "Kostnadsräkning", mimeType: "application/pdf", sizeBytes: 4,
     }));
-    const arg = registerMutateAsync.mock.calls[0]![0] as { fileName: string };
+    const arg = registerMutateAsync.mock.calls[0]![0] as { fileName: string; id: string };
     expect(arg.fileName).toMatch(/^Kostnadsräkning Ä-2026-1/);
+    // Servern lagrar bara uuid-nycklade rader — `kostn-…` synkades aldrig (2026-09-23).
+    expect(isUuid(arg.id)).toBe(true);
     expect(persistGeneratedDoc).toHaveBeenCalled();
   });
 

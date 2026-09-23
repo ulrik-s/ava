@@ -4,6 +4,7 @@
 
 import { describe, it, expect, vi } from "vitest-compat";
 import { WritableDelegate, type MutationEvent } from "@/lib/server/data-store/in-memory/writable-delegate";
+import { isUuid } from "@/lib/shared/uuid";
 
 interface Matter extends Record<string, unknown> {
   id: string;
@@ -38,6 +39,12 @@ describe("WritableDelegate", () => {
     const row = await delegate.create({ data: { title: "Utan ID", organizationId: "o1" } });
     expect((row as Matter).id).toBeTruthy();
     expect((row as Matter).id.length).toBeGreaterThan(3);
+  });
+
+  it("genererat id är ett uuid — servern lagrar inget annat (dataförlusten 2026-09-23)", async () => {
+    const { delegate } = makeDelegate([]);
+    const row = await delegate.create({ data: { title: "Ny klient", organizationId: "o1" } });
+    expect(isUuid((row as Matter).id)).toBe(true);
   });
 
   it("update muterar befintlig row", async () => {

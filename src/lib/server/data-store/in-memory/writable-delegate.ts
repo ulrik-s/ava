@@ -15,6 +15,7 @@
  * ska skrivas (create/update) eller raderas (delete).
  */
 
+import { uuidv7 } from "@/lib/shared/uuid";
 import { ReadOnlyDelegate, type RelationConfig } from "./read-only-delegate";
 
 export type MutationKind = "create" | "update" | "delete";
@@ -50,8 +51,10 @@ export interface WritableDelegateOpts<T> {
   enrichRow?: (row: T) => T;
 }
 
+/** uuid — servern lagrar bara uuid-nycklade rader. Det gamla formatet
+ *  (`muej66a9-jd9ieu`) synkades aldrig; se legacy-id-repair.ts. */
 function genId(): string {
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  return uuidv7();
 }
 
 export class WritableDelegate<T extends Record<string, unknown>> extends ReadOnlyDelegate<T> {
