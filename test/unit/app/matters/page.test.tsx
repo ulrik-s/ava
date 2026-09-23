@@ -2,7 +2,7 @@
  * Test för MattersPage — listrendering, sökning, filter, ny-form.
  */
 
-import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { act, render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import MattersPage from "@/app/matters/page";
 
@@ -15,7 +15,14 @@ const mattersQuery: {
 };
 const contactsQuery = { data: { contacts: [] } };
 const employeesQuery = { data: { users: [] } };
-const utilsMock = { matter: { list: { invalidate: vi.fn() } }, prefs: { get: { invalidate: vi.fn() } } };
+const utilsMock = {
+  matter: { list: { invalidate: vi.fn() } },
+  contacts: { list: { invalidate: vi.fn() } },
+  prefs: { get: { invalidate: vi.fn() } },
+};
+const createContactMutate = vi.fn();
+/** onSuccess från contacts.create — testet anropar den som servern hade gjort. */
+let contactCreated: ((c: { id: string; name: string }) => void) | undefined;
 const createMatterMutate = vi.fn();
 const searchParamsGet = vi.fn((_: string): string | null => null);
 
@@ -34,6 +41,12 @@ vi.mock("@/lib/client/trpc", () => ({
     },
     contacts: {
       list: { useQuery: () => contactsQuery },
+      create: {
+        useMutation: (opts?: { onSuccess?: (c: { id: string; name: string }) => void }) => {
+          contactCreated = opts?.onSuccess;
+          return { mutate: createContactMutate, isPending: false, error: null };
+        },
+      },
     },
     user: {
       list: { useQuery: () => employeesQuery },
@@ -193,5 +206,48 @@ describe("MattersPage", () => {
     expect(screen.getByText(/Sida 2 av 3/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Föregående/i }));
     expect(screen.getByText(/Sida 1 av 3/)).toBeInTheDocument();
+  });
+});
+
+describe("MattersPage — + Ny klient i nytt ärende", () => {
+  function openNewClient(): void {
+    render(<MattersPage />);
+    fireEvent.click(screen.getByRole("button", { name: /\+ Nytt ärende/i }));
+    fireEvent.click(screen.getByRole("button", { name: /\+ Ny klient/i }));
+  }
+
+  it("öppnar klient-formuläret som dialog UTANFÖR ärende-formuläret (ingen nästlad form)", () => {
+    openNewClient();
+    const dialog = screen.getByRole("dialog", { name: "Ny klient" });
+    expect(within(dialog).getByRole("heading", { name: "Ny klient" })).toBeInTheDocument();
+    expect(dialog.closest("form")).toBeNull();
+    expect(dialog.querySelector("form")).not.toBeNull();
+  });
+
+  it("skapar klienten och väljer den direkt i ärendet", () => {
+    openNewClient();
+    const dialog = screen.getByRole("dialog", { name: "Ny klient" });
+    fireEvent.change(within(dialog).getByLabelText(/Namn/), { target: { value: "Nya Klienten AB" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: /Spara kontakt/i }));
+    expect(createContactMutate).toHaveBeenCalledWith(expect.objectContaining({ name: "Nya Klienten AB" }));
+
+    act(() => contactCreated?.({ id: "c-new", name: "Nya Klienten AB" }));
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(utilsMock.contacts.list.invalidate).toHaveBeenCalled();
+    const klient = screen.getByLabelText("Klient") as HTMLSelectElement;
+    expect(klient.value).toBe("c-new");
+    expect(within(klient).getByRole("option", { name: "Nya Klienten AB" })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText(/Titel/), { target: { value: "Avtalstvist" } });
+    fireEvent.click(screen.getByRole("button", { name: /Skapa ärende/i }));
+    expect(createMatterMutate).toHaveBeenCalledWith(expect.objectContaining({ title: "Avtalstvist", klientId: "c-new" }));
+  });
+
+  it("Avbryt stänger dialogen utan att skapa något", () => {
+    openNewClient();
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Avbryt" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(createContactMutate).not.toHaveBeenCalled();
   });
 });

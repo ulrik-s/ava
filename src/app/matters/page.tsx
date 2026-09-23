@@ -9,6 +9,7 @@ import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
 import { coverageStatus } from "@/lib/shared/coverage-cap";
 import type { MatterStatus, PaymentMethod } from "@/lib/shared/schemas/enums";
+import { NewClientDialog, type CreatedClient } from "./_new-client-dialog";
 
 interface MatterRow {
   id: string;
@@ -141,13 +142,14 @@ interface NewMatterFormProps {
   contactsData: { contacts: NamedOption[] } | undefined;
   employeesData: { users: NamedOption[] } | undefined;
   onSubmit: (e: React.FormEvent) => void;
+  onNewClient: () => void;
   isPending: boolean;
   error: { message: string } | null | undefined;
 }
 
 /** Nytt-ärende-formuläret (utbrutet ur MattersContent, #6-ratchet). Äger sina
  *  fält-id:n; presentational (form-state + submit som props). */
-function NewMatterForm({ form, setForm, contactsData, employeesData, onSubmit, isPending, error }: NewMatterFormProps) {
+function NewMatterForm({ form, setForm, contactsData, employeesData, onSubmit, onNewClient, isPending, error }: NewMatterFormProps) {
   const titleId = useId();
   const klientId = useId();
   const matterTypeId = useId();
@@ -164,7 +166,12 @@ function NewMatterForm({ form, setForm, contactsData, employeesData, onSubmit, i
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
         </div>
         <div>
-          <label htmlFor={klientId} className="block text-sm font-medium text-gray-700 mb-1">Klient</label>
+          <div className="flex items-baseline justify-between mb-1">
+            <label htmlFor={klientId} className="block text-sm font-medium text-gray-700">Klient</label>
+            <button type="button" onClick={onNewClient} className="text-sm text-blue-600 hover:underline">
+              + Ny klient
+            </button>
+          </div>
           <select id={klientId} value={form.klientId}
             onChange={(e) => setForm({ ...form, klientId: e.target.value })}
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
@@ -267,6 +274,17 @@ function MatterFilters({ search, status, employeeId, employeesData, onSearch, on
   );
 }
 
+/** Klientlistan + en nyss skapad klient. Listan hämtar bara de första 100
+ *  kontakterna — utan detta kunde den nya klienten saknas i dropdownen. */
+function withCreatedClient(
+  data: { contacts: NamedOption[] } | undefined,
+  created: CreatedClient | null,
+): { contacts: NamedOption[] } | undefined {
+  if (!created) return data;
+  const rest = (data?.contacts ?? []).filter((c) => c.id !== created.id);
+  return { contacts: [created, ...rest] };
+}
+
 function MattersContent() {
   const searchParams = useSearchParams();
   const [search, setSearch] = useState("");
@@ -275,6 +293,8 @@ function MattersContent() {
   const [page, setPage] = useState(1);
   const [showForm, setShowForm] = useState(searchParams.get("new") === "1");
   const readOnly = useIsReadOnly();
+  const [newClientOpen, setNewClientOpen] = useState(false);
+  const [createdClient, setCreatedClient] = useState<CreatedClient | null>(null);
 
   const matters = trpc.matter.list.useQuery(matterListArgs({ search, status: statusFilter, employeeId, page }));
 
@@ -327,11 +347,23 @@ function MattersContent() {
         <NewMatterForm
           form={form}
           setForm={setForm}
-          contactsData={contacts.data}
+          contactsData={withCreatedClient(contacts.data, createdClient)}
           employeesData={employees.data}
           onSubmit={handleSubmit}
+          onNewClient={() => setNewClientOpen(true)}
           isPending={createMatter.isPending}
           error={createMatter.error}
+        />
+      )}
+
+      {newClientOpen && (
+        <NewClientDialog
+          onCreated={(c) => {
+            setCreatedClient(c);
+            setForm({ ...form, klientId: c.id });
+            setNewClientOpen(false);
+          }}
+          onClose={() => setNewClientOpen(false)}
         />
       )}
 
