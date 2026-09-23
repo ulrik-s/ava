@@ -3,10 +3,8 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
-import type { IDataStore } from "@/lib/server/data-store/IDataStore";
-import { buildInMemoryRepositories } from "@/lib/server/repositories/in-memory-repositories";
 import { timeEntryRouter } from "@/lib/server/routers/timeEntry";
-import { dataStoreFromMockPrisma } from "../helpers/mock-data-store";
+import { dataStoreFromMockPrisma, reposFromMockDataStore } from "../helpers/mock-data-store";
 
 const mockPrisma = {
   timeEntry: {
@@ -24,11 +22,11 @@ const mockPrisma = {
 };
 
 function makeCaller(orgId = "org-a", userId = "u1") {
-  const dataStore = dataStoreFromMockPrisma(mockPrisma as unknown as Record<string, unknown>);
+  const dataStore = dataStoreFromMockPrisma(mockPrisma);
   const ctx = {
     user: { id: userId, email: "a@b.se", name: "T", role: "LAWYER", organizationId: orgId },
     prisma: mockPrisma, dataStore,
-    repos: buildInMemoryRepositories(dataStore as unknown as IDataStore),
+    repos: reposFromMockDataStore(dataStore),
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return timeEntryRouter.createCaller(ctx as any);

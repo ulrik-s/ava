@@ -4,10 +4,8 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
-import type { IDataStore } from "@/lib/server/data-store/IDataStore";
-import { buildInMemoryRepositories } from "@/lib/server/repositories/in-memory-repositories";
 import { mailRouter } from "@/lib/server/routers/mail";
-import { dataStoreFromMockPrisma, type MockDataStore } from "../helpers/mock-data-store";
+import { dataStoreFromMockPrisma, reposFromMockDataStore, type MockDataStore } from "../helpers/mock-data-store";
 
 // Data-skrivningar går via repos (ADR 0020) som delegerar till samma mock-
 // delegates; emit använder dataStore.events.emit (kvarvarande events-söm).
@@ -30,12 +28,12 @@ const mockPorts = {
 };
 
 function makeCaller(orgId = "org-a", userId = "u1") {
-  dataStore = dataStoreFromMockPrisma(mockPrisma as unknown as Record<string, unknown>);
+  dataStore = dataStoreFromMockPrisma(mockPrisma);
   const ctx = {
     user: { id: userId, email: "a@b.se", name: "T", role: "LAWYER", organizationId: orgId },
     prisma: mockPrisma,
     dataStore,
-    repos: buildInMemoryRepositories(dataStore as unknown as IDataStore),
+    repos: reposFromMockDataStore(dataStore),
     ports: mockPorts,
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

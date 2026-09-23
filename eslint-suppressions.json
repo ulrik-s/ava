@@ -24,16 +24,6 @@
       "count": 1
     }
   },
-  "test/scripts/demo-generator-documents.test.ts": {
-    "no-restricted-syntax": {
-      "count": 1
-    }
-  },
-  "test/scripts/demo-generator-template-docs.test.ts": {
-    "no-restricted-syntax": {
-      "count": 1
-    }
-  },
   "test/scripts/demo-generator.test.ts": {
     "no-restricted-syntax": {
       "count": 1
@@ -57,11 +47,6 @@
   "test/unit/client/addin/addin-client.test.ts": {
     "no-restricted-syntax": {
       "count": 2
-    }
-  },
-  "test/unit/client/backend/oidc-principal.test.ts": {
-    "no-restricted-syntax": {
-      "count": 4
     }
   },
   "test/unit/client/fsa/read-from-fsa.test.ts": {
@@ -112,21 +97,6 @@
   "test/unit/lib/backend/static-content-store.test.ts": {
     "no-restricted-syntax": {
       "count": 6
-    }
-  },
-  "test/unit/lib/client/demo-meta.test.ts": {
-    "no-restricted-syntax": {
-      "count": 3
-    }
-  },
-  "test/unit/lib/demo/demo-seed-loader.test.ts": {
-    "no-restricted-syntax": {
-      "count": 1
-    }
-  },
-  "test/unit/lib/demo/document-content-cache.test.ts": {
-    "no-restricted-syntax": {
-      "count": 7
     }
   },
   "test/unit/lib/demo/generated-doc-cache.test.ts": {
@@ -249,17 +219,7 @@
       "count": 2
     }
   },
-  "test/unit/server/routers/calendar.test.ts": {
-    "no-restricted-syntax": {
-      "count": 2
-    }
-  },
   "test/unit/server/routers/conflict.test.ts": {
-    "no-restricted-syntax": {
-      "count": 2
-    }
-  },
-  "test/unit/server/routers/contact.test.ts": {
     "no-restricted-syntax": {
       "count": 2
     }
@@ -294,29 +254,9 @@
       "count": 1
     }
   },
-  "test/unit/server/routers/documentTemplate.test.ts": {
-    "no-restricted-syntax": {
-      "count": 2
-    }
-  },
-  "test/unit/server/routers/expense.test.ts": {
-    "no-restricted-syntax": {
-      "count": 2
-    }
-  },
   "test/unit/server/routers/invoice.demo-store.test.ts": {
     "no-restricted-syntax": {
       "count": 1
-    }
-  },
-  "test/unit/server/routers/invoice.test.ts": {
-    "no-restricted-syntax": {
-      "count": 2
-    }
-  },
-  "test/unit/server/routers/mail.test.ts": {
-    "no-restricted-syntax": {
-      "count": 2
     }
   },
   "test/unit/server/routers/matter.test.ts": {
@@ -324,57 +264,7 @@
       "count": 1
     }
   },
-  "test/unit/server/routers/organization.test.ts": {
-    "no-restricted-syntax": {
-      "count": 2
-    }
-  },
   "test/unit/server/routers/paymentPlan.test.ts": {
-    "no-restricted-syntax": {
-      "count": 2
-    }
-  },
-  "test/unit/server/routers/preference.test.ts": {
-    "no-restricted-syntax": {
-      "count": 2
-    }
-  },
-  "test/unit/server/routers/reports-ar-summary.test.ts": {
-    "no-restricted-syntax": {
-      "count": 2
-    }
-  },
-  "test/unit/server/routers/reports-billed.test.ts": {
-    "no-restricted-syntax": {
-      "count": 2
-    }
-  },
-  "test/unit/server/routers/reports.test.ts": {
-    "no-restricted-syntax": {
-      "count": 2
-    }
-  },
-  "test/unit/server/routers/serviceNote.test.ts": {
-    "no-restricted-syntax": {
-      "count": 2
-    }
-  },
-  "test/unit/server/routers/task.test.ts": {
-    "no-restricted-syntax": {
-      "count": 2
-    }
-  },
-  "test/unit/server/routers/timeEntry.test.ts": {
-    "no-restricted-syntax": {
-      "count": 2
-    }
-  },
-  "test/unit/server/routers/todo.test.ts": {
-    "no-restricted-syntax": {
-      "count": 2
-    }
-  },
-  "test/unit/server/routers/user.test.ts": {
     "no-restricted-syntax": {
       "count": 2
     }

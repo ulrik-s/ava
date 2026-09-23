@@ -4,6 +4,7 @@
  */
 import { describe, it, expect, beforeEach } from "vitest-compat";
 import { loadDemoMeta, demoMetaUrl, _resetDemoMetaCache } from "@/lib/client/demo/demo-meta";
+import { fetchFake } from "../../../helpers/fetch-fake";
 
 const VALID_META = {
   organizationId: "demo-firma-ab",
@@ -16,7 +17,7 @@ const VALID_META = {
 };
 
 function mockFetch(body: unknown, status = 200): typeof fetch {
-  return (() => Promise.resolve(new Response(JSON.stringify(body), { status }))) as unknown as typeof fetch;
+  return fetchFake(() => Promise.resolve(new Response(JSON.stringify(body), { status })));
 }
 
 beforeEach(() => _resetDemoMetaCache());
@@ -41,20 +42,20 @@ describe("loadDemoMeta", () => {
 
   it("fetchar med cache:'no-store' så reset/deploy ger färsk meta", async () => {
     let init: RequestInit | undefined;
-    const fetchFn: typeof fetch = ((_url: unknown, opts?: RequestInit) => {
+    const fetchFn = fetchFake(async (_url, opts) => {
       init = opts;
-      return Promise.resolve(new Response(JSON.stringify(VALID_META)));
-    }) as unknown as typeof fetch;
+      return new Response(JSON.stringify(VALID_META));
+    });
     await loadDemoMeta("ulrik-s/ava", fetchFn);
     expect(init?.cache).toBe("no-store");
   });
 
   it("cachar resultatet (andra anropet fetchar inte igen)", async () => {
     let calls = 0;
-    const fetchFn: typeof fetch = (() => {
+    const fetchFn = fetchFake(async () => {
       calls++;
-      return Promise.resolve(new Response(JSON.stringify(VALID_META)));
-    }) as unknown as typeof fetch;
+      return new Response(JSON.stringify(VALID_META));
+    });
     await loadDemoMeta("ulrik-s/ava", fetchFn);
     await loadDemoMeta("ulrik-s/ava", fetchFn);
     expect(calls).toBe(1);
