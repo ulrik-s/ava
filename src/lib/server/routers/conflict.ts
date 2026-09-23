@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { similarity } from "@/lib/shared/fuzzy-similarity";
+import { conflictScore, parseConflictQuery, type ConflictSearchType } from "@/lib/shared/conflict-match";
 import { asId, type ContactId, type MatterId } from "@/lib/shared/schemas/ids";
 import type { ConflictContactRow } from "../repositories/matter-contact-repository";
 import type { Repositories } from "../repositories/repositories";
@@ -38,23 +38,17 @@ function toResult(mc: ConflictRow): ConflictResult {
   };
 }
 
-/** Exakt delsträngsmatch på person-/org-nummer. */
-async function searchByNumber(ctx: ConflictCtx, term: string): Promise<ConflictResult[]> {
-  const rows = await ctx.repos.matterContacts.findForConflict(asId<"OrganizationId">(ctx.user.organizationId), term);
-  return rows.map(toResult);
-}
-
 /**
- * Fuzzy namnmatch via in-memory bigram-Jaccard similarity. Tidigare användes
- * Postgres' pg_trgm.similarity() via $queryRaw — ersatt eftersom git-modellen
- * inte har en SQL-databas.
+ * Jävskontrollens sökning (#1123): förnamn, efternamn och person-/orgnummer —
+ * tillsammans eller var för sig. Matchningen bor i `conflict-match` (ren och
+ * testad); här hämtas byråns kopplingar och rangordnas, bäst först.
  */
-async function searchByName(ctx: ConflictCtx, term: string): Promise<ConflictResult[]> {
-  const SIM_THRESHOLD = 0.4;
+async function searchConflicts(ctx: ConflictCtx, term: string, searchType: ConflictSearchType): Promise<ConflictResult[]> {
+  const query = parseConflictQuery(term, searchType);
   const rows = await ctx.repos.matterContacts.findForConflict(asId<"OrganizationId">(ctx.user.organizationId));
   return rows
-    .map((row) => ({ row, score: similarity(row.contact.name, term) }))
-    .filter((s) => s.score > SIM_THRESHOLD)
+    .map((row) => ({ row, score: conflictScore(row.contact, query, searchType) }))
+    .filter((s) => s.score > 0)
     .sort((a, b) => b.score - a.score)
     .map((s) => toResult(s.row));
 }
@@ -77,8 +71,7 @@ export const conflictRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const results: ConflictResult[] = [];
-      if (input.searchType !== "name") pushUnique(results, await searchByNumber(ctx, input.searchTerm));
-      if (input.searchType !== "personalNumber") pushUnique(results, await searchByName(ctx, input.searchTerm));
+      pushUnique(results, await searchConflicts(ctx, input.searchTerm, input.searchType));
 
       // Logga sökningen
       await ctx.repos.conflictChecks.create({
