@@ -112,7 +112,7 @@ done
 echo "[build-demo] Kör next build (DEMO_BUILD=1)..."
 DEMO_BUILD=1 \
 NEXT_PUBLIC_DEMO_BUILD=1 \
-DEMO_BASE_PATH="${DEMO_BASE_PATH:-/ava}" \
+DEMO_BASE_PATH="${DEMO_BASE_PATH-/ava}" \
   bunx next build
 
 # ─── Seed: kör samma buildSeed som docker-firma:n men med demo-args ─────
@@ -176,8 +176,9 @@ cat > "$ROOT/out/404.html" <<'HTML'
 })();
 </script></body></html>
 HTML
-# Baka in basePath (portabelt — node finns redan i bygget; sed -i skiljer sig mac/linux)
-node -e 'const f=process.argv[1],fs=require("fs");fs.writeFileSync(f,fs.readFileSync(f,"utf8").replace("__BASEPATH__",process.env.DEMO_BASE_PATH||""))' "$ROOT/out/404.html"
+# Baka in basePath (portabelt — sed -i skiljer sig mac/linux). Sökvägen via env,
+# inte argv: bun:s node-fallback (oven/bun-imagen) lägger inte argv[1] där node gör.
+F="$ROOT/out/404.html" bun -e 'const f=process.env.F,fs=require("fs");fs.writeFileSync(f,fs.readFileSync(f,"utf8").replace("__BASEPATH__",process.env.DEMO_BASE_PATH||""))'
 
 echo "[build-demo] Klar. Output: $ROOT/out/"
 echo "  • App: $(find "$ROOT/out" -name '*.html' | wc -l | tr -d ' ') HTML-filer"

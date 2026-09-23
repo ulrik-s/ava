@@ -48,13 +48,26 @@
 	}
 
 	# ─── Den statiska appen: kräver inloggning ─────────────────────────
+	# Speglar nginx-selfhosted.conf: utloggad → till IdP:n (inte en naken
+	# 401), och hårda navigeringar till runtime-id:n → shell-routing-shimmen.
 	handle {
 		forward_auth oauth2-proxy:4180 {
 			uri /oauth2/auth
 			copy_headers X-Auth-Request-Email
+			@unauthenticated status 401
+			handle_response @unauthenticated {
+				redir * /oauth2/start?rd={scheme}://{host}{uri}
+			}
 		}
 		root * /srv/ava
-		try_files {path} {path}/ /index.html
-		file_server
+		route {
+			@shell {
+				path_regexp shell ^/(matters|contacts|invoices|payment-plans|users|templates)/([^/]+)(/edit)?/?$
+				not file /{re.shell.1}/{re.shell.2}{re.shell.3}/index.html
+			}
+			rewrite @shell /{re.shell.1}/__shell__{re.shell.3}/index.html
+			try_files {path} {path}.html {path}/index.html /index.html
+			file_server
+		}
 	}
 }
