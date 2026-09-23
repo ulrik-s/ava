@@ -8,6 +8,8 @@ import { z } from "zod";
 import { conflictCopyName } from "@/lib/shared/conflict-copy";
 import { base64ToBytes, bytesToBase64, contentStoragePath, sha256Hex } from "@/lib/shared/content-address";
 import { isJunkFileName } from "@/lib/shared/junk-files";
+import { log } from "@/lib/shared/observability/logger";
+import { errorMessage } from "@/lib/shared/observability/redact";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { documentAnalysisStatusSchema, documentDirectionSchema, documentRecipientSchema, type Document } from "@/lib/shared/schemas/document";
 import { asId, documentFolderIdSchema, documentIdSchema, invoiceIdSchema, matterIdSchema, userIdSchema } from "@/lib/shared/schemas/ids";
@@ -158,7 +160,7 @@ export const coreProcedures = {
       await assertDocAccess(ctx, input.documentId);
       // Fire-and-forget — användaren får svar direkt; UI pollar för resultat.
       ctx.ports.documentAnalyzer.analyze(input.documentId).catch((e: unknown) =>
-        console.error("analyze failed:", e),
+        log.error("document.analyze.failed", { ...(ctx.requestId ? { requestId: ctx.requestId } : {}), message: errorMessage(e) }),
       );
       return { ok: true };
     }),
@@ -224,7 +226,7 @@ export const coreProcedures = {
         analysisStatus: "PENDING",
       });
       ctx.ports.documentAnalyzer.analyze(input.documentId).catch((e: unknown) =>
-        console.error("classify after upload failed:", e),
+        log.error("document.classify.failed", { ...(ctx.requestId ? { requestId: ctx.requestId } : {}), message: errorMessage(e) }),
       );
       return updated;
     }),
@@ -280,7 +282,7 @@ export const coreProcedures = {
         uploadedById: asId<"UserId">(ctx.user.id),
       }));
       ctx.ports.documentAnalyzer.analyze(copy.id).catch((e: unknown) =>
-        console.error("classify after conflict-copy failed:", e),
+        log.error("document.classify.failed", { ...(ctx.requestId ? { requestId: ctx.requestId } : {}), message: errorMessage(e) }),
       );
       return copy;
     }),

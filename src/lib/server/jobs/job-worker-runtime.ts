@@ -10,6 +10,8 @@
  */
 
 import type { Job, PgBoss } from "pg-boss";
+import { log } from "@/lib/shared/observability/logger";
+import { errorMessage } from "@/lib/shared/observability/redact";
 import { JOB_QUEUES, type JobQueueName, createJobQueue, startJobQueue } from "./job-queue";
 
 /** En handler kör ETT jobb. Kastar → pg-boss retry:ar (backoff) → dead-letter. */
@@ -41,7 +43,7 @@ export async function startJobRuntime(opts: JobRuntimeOptions): Promise<JobRunti
     connectionString: opts.connectionString,
     ...(opts.schema ? { schema: opts.schema } : {}),
   });
-  boss.on("error", (err) => console.error("[job-queue] fel:", err));
+  boss.on("error", (err: unknown) => log.error("jobqueue.error", { message: errorMessage(err) }));
   await startJobQueue(boss);
   await registerWorkers(boss, opts.handlers ?? {});
   return { boss, stop: () => boss.stop({ graceful: true }) };

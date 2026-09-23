@@ -18,6 +18,9 @@
 import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import type { Capabilities } from "@/lib/shared/capabilities";
+import { createLogger } from "@/lib/shared/observability/logger";
+import { errorMessage } from "@/lib/shared/observability/redact";
+import { newRequestId } from "@/lib/shared/observability/request-id";
 import { asId } from "@/lib/shared/schemas/ids";
 import type { Principal } from "./auth/principal";
 import type { IDataStore } from "./data-store/IDataStore";
@@ -58,6 +61,12 @@ export type Context = {
    * git/demo-contexten defaultar till demo-baslinjen. `undefined` → demo.
    */
   capabilities?: Capabilities;
+  /**
+   * Korrelations-id för anropet (#1080). Sätts av HTTP-lagret ur
+   * `x-ava-request-id` eller genereras; in-process-vägen (demo/git) får ett
+   * nytt per anrop via `logged`-middleware:n nedan.
+   */
+  requestId?: string;
 };
 
 const t = initTRPC.context<Context>().create({
@@ -69,7 +78,44 @@ const t = initTRPC.context<Context>().create({
 });
 
 export const router = t.router;
-export const publicProcedure = t.procedure;
+
+/**
+ * `logged` — en loggpost per tRPC-anrop (#1080).
+ *
+ * Loggar PATH, utfall, varaktighet och ids. ALDRIG inputen: den bär klientens
+ * personnummer och vad tvisten gäller (se `observability/redact.ts`).
+ *
+ * Felmeddelandet går genom `errorMessage`, som maskerar det som säkert går att
+ * känna igen. En domänregel kan mycket väl kasta "Klienten Anna Andersson
+ * (19670312-4521) saknar …" — och ett felmeddelande är den väg strukturskyddet
+ * inte täcker.
+ *
+ * Kastar vidare oförändrat. En logg som sväljer fel är värre än ingen logg.
+ */
+const logged = t.middleware(async ({ ctx, path, type, next }) => {
+  const requestId = ctx.requestId ?? newRequestId();
+  const started = Date.now();
+  const result = await next({ ctx: { ...ctx, requestId } });
+  const base = {
+    requestId, path, durationMs: Date.now() - started,
+    ...(ctx.user ? { userId: ctx.user.id, orgId: ctx.user.organizationId } : {}),
+  };
+  const logger = createLogger();
+  if (result.ok) {
+    logger.debug(`trpc.${type}`, { ...base, outcome: "ok" });
+  } else {
+    // `error` och inte `warn` även för 4xx: en användare som ser ett fel har
+    // ett problem, oavsett om koden klassar det som hens fel.
+    logger.error(`trpc.${type}`, {
+      ...base, outcome: "error",
+      code: result.error.code,
+      message: errorMessage(result.error.cause ?? result.error),
+    });
+  }
+  return result;
+});
+
+export const publicProcedure = t.procedure.use(logged);
 
 const isAuthed = t.middleware(({ ctx, next }) => {
   if (!ctx.user) {
@@ -78,7 +124,7 @@ const isAuthed = t.middleware(({ ctx, next }) => {
   return next({ ctx: { ...ctx, user: ctx.user } });
 });
 
-export const protectedProcedure = t.procedure.use(isAuthed);
+export const protectedProcedure = publicProcedure.use(isAuthed);
 
 /**
  * orgProcedure — kortare form av `protectedProcedure` som exponerar

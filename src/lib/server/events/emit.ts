@@ -10,6 +10,8 @@
  * men vi har minst en upstream-rad i Postgres-loggen om felet.
  */
 
+import { log } from "@/lib/shared/observability/logger";
+import { errorMessage } from "@/lib/shared/observability/redact";
 import type { MatterStatus } from "@/lib/shared/schemas/enums";
 import type {
   ContactId, DocumentId, InvoiceId, MatterId, OrganizationId, TimeEntryId, UserId,
@@ -30,7 +32,7 @@ async function safeEmit(ctx: EmitCtx, input: EmitInput): Promise<void> {
     // Read-only event-loggar (demo-/git-backend + generator) kan inte emit:a —
     // det är väntat, inte ett fel. Logga bara oväntade fel.
     if (err instanceof Error && err.name === "ReadOnlyError") return;
-    console.error("[emit] event-skrivning misslyckades:", err, { type: input.type });
+    log.error("event.emit.failed", { code: input.type, message: errorMessage(err) });
   }
 }
 

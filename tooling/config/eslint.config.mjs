@@ -167,6 +167,23 @@ const eslintConfig = defineConfig([
       "max-lines-per-function": ["error", { max: 200 }],
     },
   },
+  {
+    // Serverkoden loggar STRUKTURERAT, inte till konsolen (#1080).
+    //
+    // Före #1080 fanns sex `console.error` i hela serverkoden och inget annat.
+    // Att lägga till en logger utan att stänga dörren hade bara gett en sjunde
+    // väg: nästa `console.error` hamnar i containerloggen utan request-id, utan
+    // maskering, och utan att gå att larma på.
+    //
+    // `observability/logger.ts` är undantaget — den ÄR skrivvägen, och skriver
+    // avsiktligt JSON till stderr. Övriga områden (skript, CLI, UI) loggar till
+    // konsolen med flit och berörs inte.
+    files: ["src/lib/server/**/*.ts"],
+    ignores: ["src/lib/server/**/*.test.ts"],
+    rules: {
+      "no-console": "error",
+    },
+  },
   globalIgnores([
     ".next/**",
     "out/**",

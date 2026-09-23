@@ -12,6 +12,7 @@ import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
 import { buildInMemoryRepositories } from "@/lib/server/repositories/in-memory-repositories";
 import { documentRouter } from "@/lib/server/routers/document";
 import { prebakeJoins } from "@/lib/shared/demo-source";
+import { arraySink, setLogSink, type LogRecord } from "@/lib/shared/observability/logger";
 
 vi.mock("@/lib/server/services/meilisearch", () => ({
   searchDocuments: vi.fn(),
@@ -192,12 +193,14 @@ describe("document.analyze", () => {
       documents: [{ id: "d1", matterId: "m1", folderId: null, fileName: "a.pdf" }],
     });
     mockPorts.documentAnalyzer.analyze.mockRejectedValue(new Error("analys-krasch"));
-    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    // Asserterar på loggposten i stället för på console (#1080).
+    const records: LogRecord[] = [];
+    const restore = setLogSink(arraySink(records));
     const res = await caller.analyze({ documentId: "d1" });
     expect(res).toEqual({ ok: true });
     await new Promise((r) => setTimeout(r, 0)); // låt .catch:en köra
-    expect(errSpy).toHaveBeenCalled();
-    errSpy.mockRestore();
+    expect(records.map((r) => r.event)).toContain("document.analyze.failed");
+    setLogSink(restore);
   });
 });
 

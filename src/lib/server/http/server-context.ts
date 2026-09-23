@@ -28,6 +28,7 @@ import type { Repositories } from "@/lib/server/repositories/repositories";
 import type { SyncStore } from "@/lib/server/sync/sync-store";
 import type { Context } from "@/lib/server/trpc-core";
 import type { Capabilities } from "@/lib/shared/capabilities";
+import { requestIdFrom } from "@/lib/shared/observability/request-id";
 import { asId } from "@/lib/shared/schemas/ids";
 import type { User } from "@/lib/shared/schemas/user";
 import { bearerClaims, type BearerVerifyConfig } from "./bearer-claims";
@@ -127,6 +128,10 @@ export async function createServerContext(req: Request, deps: ServerContextDeps)
     principal,
     repos: deps.repos,
     ...(deps.sync ? { sync: deps.sync } : {}),
+    // Klienten får skicka sitt eget id (bara om det har VÅR form — annars kan
+    // vem som helst krocka med en annan användares, eller smuggla in tecken
+    // som bryter loggraden som JSON). Annars genereras ett här.
+    requestId: requestIdFrom(req.headers),
     capabilities: serverCapabilities(),
   });
 }
