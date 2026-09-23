@@ -159,6 +159,21 @@ const FUNC_FLOOR = 0.859;
 const AI_LINE_FLOOR = 0.950;
 const AI_FUNC_FLOOR = 0.920;
 
+// Verktygsskripten (#1100): installeraren, seed-datat, demo-generatorn,
+// Fortnox-/Graph-harnessen. 9 370 rader som INGEN grind mätte — samma lucka som
+// #1025 stängde för AI-ytan, fast åtta gånger större (den var 1 221 rader).
+// Uppmätt i CI 2026-09-23: 77,61 % rader / 79,02 % funktioner. Golven ankras
+// ~1 procentenhet under, som src/ (92,11 mot golv 90,00) och ava-cli (96,07 mot
+// 95,00).
+//
+// Siffran kommer från CI, inte från en lokal körning. En engångskörning av hela
+// sviten i EN process ger 80,1 % — men den körningen har 289 fel, eftersom
+// mock.module och globala stubbar läcker mellan filer utan `--isolate`
+// (se bunfig.toml). Den uppblåsta siffran hade gett ett golv som inte går att
+// hålla.
+const SCRIPTS_LINE_FLOOR = 0.765;
+const SCRIPTS_FUNC_FLOOR = 0.780;
+
 /**
  * SERIAL_FILES — testfiler som SYNKRONT spawnar en barnprocess via
  * `execFileSync`/`spawnSync`: antingen git-binären mot temp-repon, eller
@@ -293,6 +308,9 @@ const isSrc = (path: string): boolean => path.includes("/src/") || path.startsWi
 /** AI-ytan: CLI:t + MCP-servern (#1025). Mäts för sig, se AI_LINE_FLOOR. */
 const isAiSurface = (path: string): boolean => path.includes("tooling/ava-cli/");
 
+/** Verktygsskripten (#1100) — allt i tooling/scripts/, inklusive undermappar. */
+const isToolingScript = (path: string): boolean => path.includes("tooling/scripts/");
+
 /** Ett mätområde med eget golv — appen och AI-ytan skalar för olika för att
  *  dela en siffra (se AI_LINE_FLOOR). */
 export interface CoverageScope {
@@ -305,6 +323,7 @@ export interface CoverageScope {
 export const COVERAGE_SCOPES: readonly CoverageScope[] = [
   { label: "src/", match: isSrc, lineFloor: LINE_FLOOR, funcFloor: FUNC_FLOOR },
   { label: "tooling/ava-cli/", match: isAiSurface, lineFloor: AI_LINE_FLOOR, funcFloor: AI_FUNC_FLOOR },
+  { label: "tooling/scripts/", match: isToolingScript, lineFloor: SCRIPTS_LINE_FLOOR, funcFloor: SCRIPTS_FUNC_FLOOR },
 ];
 
 /** Läs + union-merge:a lcov från alla pass-kataloger. */

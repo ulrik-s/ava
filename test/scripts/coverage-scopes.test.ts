@@ -39,13 +39,23 @@ describe("mätområden", () => {
   it("områdena överlappar inte — en fil hör hemma i exakt ett", () => {
     // Överlapp vore värre än en lucka: AI-ytans dipp skulle delvis absorberas
     // av app-golvet och delvis fälla det, utan att någon förstod varför.
-    for (const path of ["src/lib/shared/kostnadsrakning.ts", "tooling/ava-cli/cli.ts"]) {
+    for (const path of ["src/lib/shared/kostnadsrakning.ts", "tooling/ava-cli/cli.ts", "tooling/scripts/seed-data.ts"]) {
       expect(COVERAGE_SCOPES.filter((s) => s.match(path)).map((s) => s.label), path).toHaveLength(1);
     }
   });
 
   it("verktygsskript utanför AI-ytan räknas inte in i den", () => {
     expect(scopeFor("tooling/ava-cli/")?.match("tooling/scripts/seed-data.ts")).toBe(false);
+  });
+
+  it("verktygsskripten mäts — 9 370 rader låg utanför varje grind (#1100)", () => {
+    // Samma lucka som #1025 stängde för AI-ytan, fast åtta gånger större.
+    // Här bor installeraren, seed-datat, demo-generatorn och e2e-harnessen:
+    // kod som går sönder tyst, för att ingen kör den förrän den behövs.
+    const scripts = scopeFor("tooling/scripts/");
+    expect(scripts, "tooling/scripts/ måste vara ett eget mätområde").toBeDefined();
+    expect(scripts?.match("tooling/scripts/seed-data.ts")).toBe(true);
+    expect(scripts?.match("tooling/scripts/install-server/preflight.ts")).toBe(true);
   });
 });
 
@@ -73,6 +83,7 @@ describe("golven är ratchets", () => {
   const FLOOR_BASELINE: Readonly<Record<string, { line: number; func: number }>> = {
     "src/": { line: 0.900, func: 0.859 },
     "tooling/ava-cli/": { line: 0.950, func: 0.920 },
+    "tooling/scripts/": { line: 0.765, func: 0.780 },
   };
 
   for (const [label, base] of Object.entries(FLOOR_BASELINE)) {
