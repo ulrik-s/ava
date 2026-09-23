@@ -7,6 +7,7 @@
 
 import { describe, it, expect } from "vitest-compat";
 import { loadDemoSeed } from "@/lib/client/demo/demo-seed-loader";
+import { fetchFake } from "../../../helpers/fetch-fake";
 
 const noSleep = () => Promise.resolve();
 
@@ -14,14 +15,14 @@ const BASE = "https://demo.example.io/r";
 
 /** Bygg en fake-fetch som svarar med given body per (relativ) path. */
 function fakeFetch(files: Record<string, { status?: number; body?: string }>): typeof fetch {
-  return (async (url: string) => {
+  return fetchFake(async (url: string) => {
     const path = url.replace(`${BASE}/`, "");
     const hit = files[path];
     if (!hit || hit.status === 404) {
       return new Response(hit?.body ?? "not found", { status: 404 });
     }
     return new Response(hit.body ?? "", { status: hit.status ?? 200 });
-  }) as unknown as typeof fetch;
+  });
 }
 
 const baseOpts = { baseUrl: BASE, sleepFn: noSleep, maxRetries: 1 };

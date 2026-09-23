@@ -11,6 +11,7 @@ import {
   setDocumentContent,
   clearDocumentContentCache,
 } from "@/lib/client/demo/document-content-cache";
+import { fetchFake } from "../../../helpers/fetch-fake";
 
 beforeEach(() => clearDocumentContentCache());
 
@@ -38,17 +39,17 @@ describe("fetchPlainText", () => {
       ok: true,
       text: async () => "Hej, världen.",
     } as Response));
-    expect(await fetchPlainText("http://x", fakeFetch as unknown as typeof fetch)).toBe("Hej, världen.");
+    expect(await fetchPlainText("http://x", fetchFake(fakeFetch))).toBe("Hej, världen.");
   });
 
   it("returnerar null vid 404", async () => {
     const fakeFetch = vi.fn(async () => ({ ok: false } as Response));
-    expect(await fetchPlainText("http://x", fakeFetch as unknown as typeof fetch)).toBeNull();
+    expect(await fetchPlainText("http://x", fetchFake(fakeFetch))).toBeNull();
   });
 
   it("returnerar null vid nät-fel (kastar)", async () => {
     const fakeFetch = vi.fn(async () => { throw new Error("network"); });
-    expect(await fetchPlainText("http://x", fakeFetch as unknown as typeof fetch)).toBeNull();
+    expect(await fetchPlainText("http://x", fetchFake(fakeFetch))).toBeNull();
   });
 });
 
@@ -65,7 +66,7 @@ describe("preloadDocumentContents + getDocumentContent", () => {
       { id: "d-1", storagePath: "documents/content/d-1.md" },
       { id: "d-2", storagePath: "documents/content/d-2.pdf" }, // ej text
     ];
-    await preloadDocumentContents(docs, "https://example.com/repo", fakeFetch as unknown as typeof fetch);
+    await preloadDocumentContents(docs, "https://example.com/repo", fetchFake(fakeFetch));
     expect(getDocumentContent("d-1")).toContain("d-1.md");
     expect(getDocumentContent("d-2")).toBe(""); // PDF skippas (saknar både text/ och plain-text-typ)
   });
@@ -78,7 +79,7 @@ describe("preloadDocumentContents + getDocumentContent", () => {
     await preloadDocumentContents(
       [{ id: "d-1", storagePath: "documents/content/d-1.pdf", mimeType: "application/pdf" }],
       "https://example.com/repo",
-      fakeFetch as unknown as typeof fetch,
+      fetchFake(fakeFetch),
     );
     expect(getDocumentContent("d-1")).toContain("/documents/text/d-1.txt");
   });
@@ -89,7 +90,7 @@ describe("preloadDocumentContents + getDocumentContent", () => {
     await preloadDocumentContents(
       [{ id: "d-1", storagePath: "documents/content/d-1.md" }],
       "http://x",
-      fakeFetch as unknown as typeof fetch,
+      fetchFake(fakeFetch),
     );
     expect(fakeFetch).not.toHaveBeenCalled();
     expect(getDocumentContent("d-1")).toBe("redan cached");
@@ -111,7 +112,7 @@ describe("preloadDocumentContents + getDocumentContent", () => {
     await preloadDocumentContents(
       [{ id: "d-1", storagePath: "documents/content/d-1.md" }],
       "https://example.com/repo/",   // trailing slash → ska normaliseras
-      fakeFetch as unknown as typeof fetch,
+      fetchFake(fakeFetch),
     );
     // Ingen dubbel slash trots trailing slash i baseUrl
     expect(seenUrls.every((u) => !u.includes("repo//"))).toBe(true);

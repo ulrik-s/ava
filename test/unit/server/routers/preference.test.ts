@@ -5,10 +5,8 @@
 
 import { TRPCError } from "@trpc/server";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
-import type { IDataStore } from "@/lib/server/data-store/IDataStore";
-import { buildInMemoryRepositories } from "@/lib/server/repositories/in-memory-repositories";
 import { preferenceRouter } from "@/lib/server/routers/preference";
-import { dataStoreFromMockPrisma } from "../helpers/mock-data-store";
+import { dataStoreFromMockPrisma, reposFromMockDataStore } from "../helpers/mock-data-store";
 
 const mockPrisma = {
   userPreference: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn(), findMany: vi.fn() },
@@ -18,11 +16,11 @@ const mockPrisma = {
 };
 
 function makeCaller(role: "ADMIN" | "LAWYER" = "LAWYER", orgId = "org-a", userId = "u1") {
-  const dataStore = dataStoreFromMockPrisma(mockPrisma as unknown as Record<string, unknown>);
+  const dataStore = dataStoreFromMockPrisma(mockPrisma);
   const ctx = {
     user: { id: userId, email: "a@b.se", name: "T", role, organizationId: orgId },
     prisma: mockPrisma, dataStore,
-    repos: buildInMemoryRepositories(dataStore as unknown as IDataStore),
+    repos: reposFromMockDataStore(dataStore),
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return preferenceRouter.createCaller(ctx as any);

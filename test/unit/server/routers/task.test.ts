@@ -4,10 +4,8 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
-import type { IDataStore } from "@/lib/server/data-store/IDataStore";
-import { buildInMemoryRepositories } from "@/lib/server/repositories/in-memory-repositories";
 import { taskRouter } from "@/lib/server/routers/task";
-import { dataStoreFromMockPrisma } from "../helpers/mock-data-store";
+import { dataStoreFromMockPrisma, reposFromMockDataStore } from "../helpers/mock-data-store";
 
 const mockPrisma = {
   task: {
@@ -20,11 +18,11 @@ const mockPrisma = {
 };
 
 function makeCaller(userId = "u1", orgId = "org-a") {
-  const dataStore = dataStoreFromMockPrisma(mockPrisma as unknown as Record<string, unknown>);
+  const dataStore = dataStoreFromMockPrisma(mockPrisma);
   const ctx = {
     user: { id: userId, email: "a@b.se", name: "T", role: "LAWYER", organizationId: orgId },
     dataStore,
-    repos: buildInMemoryRepositories(dataStore as unknown as IDataStore),
+    repos: reposFromMockDataStore(dataStore),
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return taskRouter.createCaller(ctx as any);

@@ -14,10 +14,8 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
-import type { IDataStore } from "@/lib/server/data-store/IDataStore";
-import { buildInMemoryRepositories } from "@/lib/server/repositories/in-memory-repositories";
 import { invoiceRouter } from "@/lib/server/routers/invoice";
-import { dataStoreFromMockPrisma } from "../helpers/mock-data-store";
+import { dataStoreFromMockPrisma, reposFromMockDataStore } from "../helpers/mock-data-store";
 
 // ─── Mock prisma ─────────────────────────────────────────────────
 
@@ -68,12 +66,12 @@ const mockPrisma = {
 };
 
 function makeCaller(orgId = "org-a", userId = "user-1") {
-  const dataStore = dataStoreFromMockPrisma(mockPrisma as unknown as Record<string, unknown>);
+  const dataStore = dataStoreFromMockPrisma(mockPrisma);
   const ctx = {
     user: { id: userId, email: "a@b.com", name: "Test", role: "LAWYER", organizationId: orgId },
     prisma: mockPrisma, dataStore,
     // ADR 0020: markFortnoxBooked är migrerad till ctx.repos → wira in-memory-repos.
-    repos: buildInMemoryRepositories(dataStore as unknown as IDataStore),
+    repos: reposFromMockDataStore(dataStore),
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return invoiceRouter.createCaller(ctx as any);
