@@ -159,6 +159,14 @@ const FUNC_FLOOR = 0.859;
 const AI_LINE_FLOOR = 0.950;
 const AI_FUNC_FLOOR = 0.920;
 
+// Verktygsskripten (#1100): installeraren, seed-datat, demo-generatorn,
+// Fortnox-/Graph-harnessen. 9 370 rader som INGEN grind mätte — samma lucka som
+// #1025 stängde för AI-ytan, fast åtta gånger större (den var 1 221 rader).
+// Uppmätt 2026-09-23: 80,1 % rader / 78,9 % funktioner. Golven ankras strax
+// under, som src/ och ava-cli.
+const SCRIPTS_LINE_FLOOR = 0.780;
+const SCRIPTS_FUNC_FLOOR = 0.760;
+
 /**
  * SERIAL_FILES — testfiler som SYNKRONT spawnar en barnprocess via
  * `execFileSync`/`spawnSync`: antingen git-binären mot temp-repon, eller
@@ -293,6 +301,9 @@ const isSrc = (path: string): boolean => path.includes("/src/") || path.startsWi
 /** AI-ytan: CLI:t + MCP-servern (#1025). Mäts för sig, se AI_LINE_FLOOR. */
 const isAiSurface = (path: string): boolean => path.includes("tooling/ava-cli/");
 
+/** Verktygsskripten (#1100) — allt i tooling/scripts/, inklusive undermappar. */
+const isToolingScript = (path: string): boolean => path.includes("tooling/scripts/");
+
 /** Ett mätområde med eget golv — appen och AI-ytan skalar för olika för att
  *  dela en siffra (se AI_LINE_FLOOR). */
 export interface CoverageScope {
@@ -305,6 +316,7 @@ export interface CoverageScope {
 export const COVERAGE_SCOPES: readonly CoverageScope[] = [
   { label: "src/", match: isSrc, lineFloor: LINE_FLOOR, funcFloor: FUNC_FLOOR },
   { label: "tooling/ava-cli/", match: isAiSurface, lineFloor: AI_LINE_FLOOR, funcFloor: AI_FUNC_FLOOR },
+  { label: "tooling/scripts/", match: isToolingScript, lineFloor: SCRIPTS_LINE_FLOOR, funcFloor: SCRIPTS_FUNC_FLOOR },
 ];
 
 /** Läs + union-merge:a lcov från alla pass-kataloger. */

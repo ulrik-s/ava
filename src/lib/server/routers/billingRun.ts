@@ -20,7 +20,13 @@ import { accontoCreditAmounts, accontoCreditLines, accontoSplit, deductAcconto }
 import type { VatBreakdownLine } from "@/lib/shared/accounting/semantic-voucher";
 import { assertBillingTransition, type BillingActionType } from "@/lib/shared/billing-flow";
 import { proposedAccontoOre } from "@/lib/shared/billing-proposal";
-import { TIMKOSTNADSNORM_FTAX_ORE_PER_H, coverageEntryRateOre, coverageEntryValueOre, isPerDayKind, payableCoverageEntries } from "@/lib/shared/brottmalstaxa";
+import {
+  arvodeLine, arvodeNetOre, entryOwnValueOre, expenseBreakdownLines, expenseGrossOre,
+  expenseNetOre, grossOreOf, invoiceGrossOre, invoiceVatBreakdown, krGrossOre, netOreOf,
+  settlementArvodeNet, timeEntryValueOre, vatOnNet, vatOreOf, workValueOre,
+  type UnfrozenWork,
+} from "@/lib/shared/billing-work-value";
+import { TIMKOSTNADSNORM_FTAX_ORE_PER_H, coverageEntryRateOre, coverageEntryValueOre, payableCoverageEntries } from "@/lib/shared/brottmalstaxa";
 import { computeCoverageSplit, partitionRattsskyddMinutes, type CoverageSplit, type RattsskyddClientParts } from "@/lib/shared/coverage-billing";
 import { chargedExpenseLines } from "@/lib/shared/expense-vat";
 import { arvodeInclVatOre } from "@/lib/shared/invoice-calc";
@@ -58,10 +64,6 @@ import { nextInvoiceNumberFrom } from "../repositories/invoice-repository";
 import type { Repositories } from "../repositories/repositories";
 import { router, orgProcedure } from "../trpc";
 
-interface UnfrozenWork {
-  timeEntries: Array<{ id: TimeEntryId; minutes: number; hourlyRate: number; billable: boolean; date: Date | string; description: string; kind?: TimeEntryKind | null | undefined }>;
-  expenses: Array<{ id: ExpenseId; amount: number; billable: boolean; vatRate?: number | null; vatIncluded?: boolean | null }>;
-}
 
 /** En itemiserad rad i fakturaförslaget (#397) — tidspost med beräknat värde. */
 interface ProposalTimeEntry {
@@ -88,34 +90,8 @@ interface BillingProposal {
   expenses: ProposalExpense[];
 }
 
-/** Värdet på en (debiterbar) tidspost i öre — speglar workValueOre:s ton. */
-function timeEntryValueOre(minutes: number, hourlyRate: number): number {
-  return Math.round((minutes / 60) * hourlyRate);
-}
 
-/** Postens värde när det är postens EGEN taxa som gäller (privat/offentligt
- *  uppdrag, fakturaförslaget) — i motsats till täckningsärendenas årsnormer.
- *
- *  Per-dygns-kategorier (#950) värderas ändå på Domstolsverkets dagbelopp för
- *  postens datum: advokatberedskapens garantiersättning är en föreskriven norm
- *  (DVFS 2025:9 § 1), inte byråns timtaxa. Utan undantaget blir de noll —
- *  `minuter × taxa` med noll minuter — och försvinner tyst ur både
- *  kostnadsräkningen och "Upparbetat ofakturerat". */
-function entryOwnValueOre(
-  t: { minutes: number; hourlyRate: number; date: Date | string; kind?: TimeEntryKind | null | undefined },
-): number {
-  return isPerDayKind(t.kind) ? coverageEntryValueOre(t, t.date) : timeEntryValueOre(t.minutes, t.hourlyRate);
-}
 
-/**
- * Minuter som rättshjälpsavgiften/coverage-splitten baseras på (#809): rättshjälp
- * exkluderar rådgivningstimmen — ärendets första timme loggas som vanlig tidspost
- * men faktureras klienten separat (rådgivningsavgiften) och ingår INTE i avgifts-
- * basen. Övriga betalningssätt: oförändrat.
- */
-function coverageBaseMinutes(method: PaymentMethod, billableMinutes: number): number {
-  return method === "RATTSHJALP" ? Math.max(0, billableMinutes - RADGIVNING_MINUTES) : billableMinutes;
-}
 
 /** Matter-fält som styr rättsskyddets tidsuppdelning + tak. */
 interface RattsskyddMatter {
@@ -238,134 +214,26 @@ function resolveAwardedOre(krRun: BillingRunListRow | undefined, inputAwardedOre
   return krRun.awardedOre ?? null;
 }
 
-/** Arvode netto (exkl. moms) — summa av debiterbara tidsposter. */
-function arvodeNetOre(work: UnfrozenWork): number {
-  return payableCoverageEntries(work.timeEntries.filter((t) => t.billable))
-    .reduce((sum, t) => sum + entryOwnValueOre(t), 0);
-}
 
 
-/** Debiterbara utlägg, netto (exkl. moms). */
-function expenseNetOre(work: UnfrozenWork): number {
-  return netOreOf(expenseBreakdownLines(work));
-}
 
-/** Debiterbara utlägg, brutto — det klienten/domstolen betalar. Härleds ur de
- *  DEBITERADE raderna (25 % enligt NJA 2005 s. 606, #975), inte ur de satser
- *  byrån själv betalade. */
-function expenseGrossOre(work: UnfrozenWork): number {
-  return grossOreOf(expenseBreakdownLines(work));
-}
 
-/** Nettovärde på arbetet: arvode (exkl moms) + utlägg (exkl moms). Bas för
- *  acconto-förslag och "upparbetat ofakturerat" — INTE fakturabeloppet (se invoiceGrossOre). */
-function workValueOre(work: UnfrozenWork): number {
-  return arvodeNetOre(work) + expenseNetOre(work);
-}
 
-/** Fakturans bruttobelopp: arvode + 25 % moms + utlägg. Alla fakturor lägger
- *  på moms på arvodet oavsett mottagare (#782). */
-function invoiceGrossOre(work: UnfrozenWork): number {
-  return arvodeInclVatOre(arvodeNetOre(work)) + expenseGrossOre(work);
-}
 
-/**
- * Slutregleringens arvode-netto (#891). Domstolsersatta metoder (rättshjälp,
- * rättsskydd, offentligt uppdrag — #1003): räkna om HELA ärendet på
- * SLUTREGLERINGSÅRETS normer — den retroaktiva höjningen över ett årsskifte (arbete
- * 2025 värderas på 2026 års norm). Arbete värderas på timkostnadsnormen (minus
- * rådgivningstimmen vid rättshjälp), tidsspillan på tidsspillan-normen, obekväm
- * tid och beredskap på sina DVFS-belopp. PRIVAT/MIX: posternas egna á-priser.
- */
-function settlementArvodeNet(method: PaymentMethod, work: UnfrozenWork, settleDate: Date | string): number {
-  const billable = work.timeEntries.filter((t) => t.billable);
-  // Varje post värderas på SIN KATEGORIS norm för slutregleringsåret (#949/#950).
-  // Tidigare plattade icke-rättshjälp ut allt till ansvarig jurists timtaxa, vilket
-  // gjorde att sammanställningens taxerader inte summerade till fakturabeloppet.
-  // Domstolsverkets nivåer gäller allt domstolen/staten ersätter: täckningsärenden
-  // (#950) OCH offentliga uppdrag (#1003) — domstolen betalar normen, inte vad
-  // byrån råkar ta. Bara PRIVAT/MIX debiterar byråns egen taxa (ligger på posten).
-  if (method === "PRIVAT" || method === "MIX") return arvodeNetOre(work);
-  // DVFS 2025:9 § 2 (#950): beredskapsdagar som "förbrukats" av en helgförhandling
-  // eller ett polisförhör samma dag ersätts inte — arbetet betalas i stället.
-  const payable = payableCoverageEntries(billable);
-  const byKind = minutesByKind(payable);
-  // Rådgivningstimmen carvas ur ARBETE (rättshjälp) — den faktureras klienten separat.
-  byKind.set("ARBETE", coverageBaseMinutes(method, byKind.get("ARBETE") ?? 0));
-  return sumKindValueOre(byKind, settleDate) + perDayValueOre(payable, settleDate);
-}
 
-/** Debiterbara minuter grupperade per arvodeskategori (#950). */
-function minutesByKind(
-  billable: ReadonlyArray<{ minutes: number; kind?: TimeEntryKind | null | undefined }>,
-): Map<TimeEntryKind, number> {
-  const byKind = new Map<TimeEntryKind, number>();
-  for (const t of billable) {
-    const kind = t.kind ?? "ARBETE";
-    // Per-dygns-kategorier har inga minuter att gruppera (#950) — de värderas
-    // av `perDayValueOre` och ska inte belasta timbaserade tak eller carve-outs.
-    if (isPerDayKind(kind)) continue;
-    byKind.set(kind, (byKind.get(kind) ?? 0) + t.minutes);
-  }
-  return byKind;
-}
 
-/** Summan av per-dygns-posternas garantiersättning på slutregleringsårets
- *  belopp (#950). Anroparen har redan filtrerat bort dagar som § 2 tar. */
-function perDayValueOre(
-  entries: ReadonlyArray<{ date: Date | string; minutes: number; kind?: TimeEntryKind | null | undefined }>,
-  settleDate: Date | string,
-): number {
-  return entries
-    .filter((e) => isPerDayKind(e.kind))
-    .reduce((sum, e) => sum + coverageEntryValueOre(e, settleDate), 0);
-}
 
-/** Summera kategoriernas minuter på respektive årsnorm (#950). */
-function sumKindValueOre(byKind: ReadonlyMap<TimeEntryKind, number>, settleDate: Date | string): number {
-  let net = 0;
-  for (const [kind, minutes] of byKind) net += timeEntryValueOre(minutes, coverageEntryRateOre(kind, settleDate));
-  return net;
-}
 
 /**
  * Rättshjälpens KR-anspråk till domstol, brutto (#839/#891): arbetet värderas på
  * TIMKOSTNADSNORMEN (staten ersätter bara normen, ej byråns taxa), tidsspillan på
  * tidsspillan-normen, rådgivningstimmen exkluderas. Utlägg ersätts brutto.
  */
-/** En arvode-breakdown-rad (25 % moms) ur ett netto-arvode; null om 0. */
-function arvodeLine(arvodeNet: number): VatBreakdownLine | null {
-  if (arvodeNet <= 0) return null;
-  return { kind: "arvode", vatRate: DEFAULT_VAT_RATE, netOre: arvodeNet, vatOre: arvodeInclVatOre(arvodeNet) - arvodeNet };
-}
 
-/** Utläggens moms-uppdelning: en 25 %-rad (kostnadselement) + en 0 %-rad (äkta
- *  utlägg), enligt NJA 2005 s. 606 (#975). Gäller ALLA betalare. */
-function expenseBreakdownLines(work: UnfrozenWork): VatBreakdownLine[] {
-  return chargedExpenseLines(work.expenses.filter((x) => x.billable));
-}
 
-/** Fakturans moms-uppdelning per sats (#790): en arvode-rad (25 %) + en utläggs-
- *  rad per förekommande momssats. Driver per-sats bokföring i verifikat/SIE. */
-function invoiceVatBreakdown(work: UnfrozenWork): VatBreakdownLine[] {
-  const arvode = arvodeLine(arvodeNetOre(work));
-  return [...(arvode ? [arvode] : []), ...expenseBreakdownLines(work)];
-}
 
-/** Summa moms (öre) ur en breakdown. */
-function vatOreOf(lines: VatBreakdownLine[]): number {
-  return lines.reduce((s, l) => s + l.vatOre, 0);
-}
 
-/** Netto (öre) ur en breakdown. */
-function netOreOf(lines: VatBreakdownLine[]): number {
-  return lines.reduce((s, l) => s + l.netOre, 0);
-}
 
-/** Brutto (öre) ur en breakdown: netto + moms. */
-function grossOreOf(lines: VatBreakdownLine[]): number {
-  return lines.reduce((s, l) => s + l.netOre + l.vatOre, 0);
-}
 
 /**
  * Det DÅ GÄLLANDE timarvodet (öre/tim) som arbetet ska värderas om på vid
@@ -476,16 +344,7 @@ function resolveAward(method: PaymentMethod, totalArvodeNet: number, work: Unfro
   };
 }
 
-/** Moms (öre) på ett nettobelopp vid standardsatsen. */
-function vatOnNet(netOre: number): number {
-  return Math.round((netOre * DEFAULT_VAT_RATE) / 10000);
-}
 
-/** Kostnadsräkningens yrkade brutto — den går ALLTID till domstol, så utläggen
- *  värderas med 25 % moms (#945). `arvodeNet` skiljer sig per betalningssätt. */
-function krGrossOre(work: UnfrozenWork, arvodeNet: number): number {
-  return arvodeInclVatOre(arvodeNet) + grossOreOf(expenseBreakdownLines(work));
-}
 
 /** Bygg ett itemiserat fakturaförslag ur ofrysta tids-/utläggsrader (#397). */
 function buildProposal(
