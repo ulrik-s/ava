@@ -22,6 +22,8 @@
  */
 
 import { CronExpressionParser } from "cron-parser";
+import { log } from "@/lib/shared/observability/logger";
+import { errorMessage } from "@/lib/shared/observability/redact";
 import type { IDataStore } from "../data-store/IDataStore";
 import type { AvaEvent } from "../events/schema";
 import { uuidv7 } from "../events/uuid7";
@@ -104,7 +106,7 @@ export async function runScheduledTick(deps: SchedulerDeps, now: Date = new Date
       // Logga själva tick-eventet så vi har en idempotency-key i loggen
       // som senare `alreadyRan` kan se.
       await deps.dataStore.events.emit(event).catch((e) => {
-        console.error("[scheduler] kunde inte logga tick-event:", e);
+        log.error("scheduler.tick.emit_failed", { code: rule.id, message: errorMessage(e) });
       });
 
       await executeRule({ rule, event, dataStore: deps.dataStore, handlers: deps.handlers });

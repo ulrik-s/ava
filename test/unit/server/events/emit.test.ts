@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest-compat";
 import { emit } from "@/lib/server/events/emit";
+import { arraySink, setLogSink, type LogRecord } from "@/lib/shared/observability/logger";
 import { asId } from "@/lib/shared/schemas/ids";
 
 function makeCtx() {
@@ -92,8 +93,11 @@ describe("emit-helpers", () => {
     expect(paymentDue.actor).toEqual({ kind: "system", id: "payment-scan" });
   });
 
-  it("emit-fel kraschar INTE caller (safeEmit sväljer)", async () => {
-    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+  it("emit-fel kraschar INTE caller (safeEmit sväljer) men LOGGAS", async () => {
+    // Asserterar på loggposten i stället för på console (#1080): det som ska
+    // bevisas är att felet blir synligt i drift, inte att det printas.
+    const records: LogRecord[] = [];
+    const restore = setLogSink(arraySink(records));
     const ctx = {
       user: { id: asId<"UserId">("anna") },
       dataStore: {
@@ -106,12 +110,13 @@ describe("emit-helpers", () => {
       } as never,
     };
     await expect(emit.matterCreated(ctx, { id: asId<"MatterId">("m1"), matterNumber: "x", title: "y" })).resolves.toBeUndefined();
-    expect(errSpy).toHaveBeenCalled(); // oväntat fel → loggas
-    errSpy.mockRestore();
+    expect(records.map((r) => r.event)).toContain("event.emit.failed");
+    setLogSink(restore);
   });
 
   it("ReadOnlyError sväljs tyst (väntat på demo-/git-backend, ingen log)", async () => {
-    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const records: LogRecord[] = [];
+    const restore = setLogSink(arraySink(records));
     const readOnly = new Error('Demo-läget är read-only — kan inte köra "events.emit".');
     readOnly.name = "ReadOnlyError";
     const ctx = {
@@ -126,7 +131,7 @@ describe("emit-helpers", () => {
       } as never,
     };
     await expect(emit.matterCreated(ctx, { id: asId<"MatterId">("m1"), matterNumber: "x", title: "y" })).resolves.toBeUndefined();
-    expect(errSpy).not.toHaveBeenCalled(); // väntat → tyst
-    errSpy.mockRestore();
+    expect(records, "ReadOnlyError är väntat på demo/git — ska inte larma").toHaveLength(0);
+    setLogSink(restore);
   });
 });

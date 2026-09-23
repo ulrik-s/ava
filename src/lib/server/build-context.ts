@@ -40,26 +40,43 @@ export interface BuildContextDeps {
   sync?: SyncStore;
   /** Kapabilitets-tier (ADR 0027). Default: demo-baslinjen (server-first sätter sina). */
   capabilities?: Capabilities;
+  /**
+   * Korrelations-id för anropet (#1080). HTTP-lagret tar det ur
+   * `x-ava-request-id` eller genererar ett; utelämnas det sätter
+   * tRPC-middleware:n ett eget, så loggen alltid har något att korrelera på.
+   */
+  requestId?: string;
 }
 
-export function buildContext(deps: BuildContextDeps): Context {
+/** Event-loggen ur någon av de två vägarna. Kastar hellre än returnerar en
+ *  halv context — ett saknat eventlager märks annars först vid första emit. */
+function resolveEvents(deps: BuildContextDeps): IEventLog {
   const events = deps.eventLog ?? deps.dataStore?.events;
   if (!events) {
     throw new Error("buildContext: ange `dataStore` eller `eventLog`.");
   }
-  let repos = deps.repos;
-  if (!repos) {
-    if (!deps.dataStore) {
-      throw new Error("buildContext: ange `repos` eller `dataStore` (för in-memory-repos).");
-    }
-    repos = buildInMemoryRepositories(deps.dataStore);
+  return events;
+}
+
+/** Injicerade repos, annars in-memory ovanpå `dataStore`. */
+function resolveRepos(deps: BuildContextDeps): Repositories {
+  if (deps.repos) return deps.repos;
+  if (!deps.dataStore) {
+    throw new Error("buildContext: ange `repos` eller `dataStore` (för in-memory-repos).");
   }
+  return buildInMemoryRepositories(deps.dataStore);
+}
+
+export function buildContext(deps: BuildContextDeps): Context {
+  const events = resolveEvents(deps);
+  const repos = resolveRepos(deps);
   return {
     dataStore: { events },
     repos,
     ports: deps.ports,
     user: deps.principal,
     ...(deps.sync ? { sync: deps.sync } : {}),
+    ...(deps.requestId ? { requestId: deps.requestId } : {}),
     capabilities: deps.capabilities ?? DEMO_CAPABILITIES,
   };
 }

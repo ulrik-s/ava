@@ -17,6 +17,9 @@
  *   AVA_HTTP_HOST         (default 127.0.0.1)
  *   AVA_CONTENT_DIR       (valfri) katalog för dokument-bytes (server-side
  *                         lagring; krävs för dokumentklassificering, #518)
+ *   AVA_LOG_LEVEL         (default info)  debug|info|warn|error — strukturerad
+ *                         JSON-logg till stderr (#1080). `debug` ger en rad per
+ *                         tRPC-anrop; `info` bara fel.
  */
 
 import { loadContentDirFromEnv, makeContentStore } from "@/lib/server/adapters/git-content-store";
@@ -29,13 +32,34 @@ import { buildServerFirstJobHandlers, loadSmtpConfigFromEnv } from "@/lib/server
 import { InMemoryLeaseStore } from "@/lib/server/lease/lease-store";
 import { loadLlmConfigFromEnv } from "@/lib/server/llm/ollama-classifier";
 import { serveFetchHandler } from "@/lib/shared/http/node-http-adapter";
+import { jsonSink, setLogLevel, setLogSink, type LogLevel } from "@/lib/shared/observability/logger";
 import { asId } from "@/lib/shared/schemas/ids";
 
 function log(msg: string): void {
   console.log(`[server-first] ${msg}`);
 }
 
+/**
+ * Slå på strukturerad loggning (#1080).
+ *
+ * Default-sink:en är `nullSink` så bibliotekskod aldrig spammar en testutskrift
+ * — destinationen väljs av den som äger processen, och det är här.
+ *
+ * `AVA_LOG_LEVEL=debug` ger en rad per lyckat tRPC-anrop. Default `info`
+ * loggar bara fel, vilket är rätt volym för en byrå: en advokatbyrå gör inte
+ * tillräckligt många anrop för att loggen ska bli dyr, men tillräckligt många
+ * för att en debug-rad per anrop ska dränka felen.
+ */
+function startLogging(): void {
+  setLogSink(jsonSink);
+  const level = process.env.AVA_LOG_LEVEL;
+  if (level === "debug" || level === "info" || level === "warn" || level === "error") {
+    setLogLevel(level satisfies LogLevel);
+  }
+}
+
 function main(): void {
+  startLogging();
   if (process.argv.slice(2).includes("--help")) {
     process.stdout.write(
       "ava server-first (#410, ADR 0016)\n\n" +
