@@ -18,6 +18,11 @@ describe("Modal", () => {
     expect(screen.getByText("Innehåll")).toBeInTheDocument();
   });
 
+  it("dialogen får titeln som tillgängligt namn (skärmläsare säger vilken dialog)", () => {
+    render(<Modal open={true} title="Ändra tidregistrering" onClose={() => {}}><p>x</p></Modal>);
+    expect(screen.getByRole("dialog", { name: "Ändra tidregistrering" })).toBeInTheDocument();
+  });
+
   it("klick på Stäng-knappen anropar onClose", () => {
     const onClose = vi.fn();
     render(<Modal open={true} title="T" onClose={onClose}><p>x</p></Modal>);

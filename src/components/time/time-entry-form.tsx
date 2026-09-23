@@ -1,14 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { DataTable, type Column } from "@/components/ui/data-table";
-import { Modal } from "@/components/ui/modal";
-import { TIME_ENTRY_KIND_SHORT } from "@/lib/client/labels";
 import { trpc } from "@/lib/client/trpc";
 import { formatMinutes } from "@/lib/client/utils";
 import { isPerDayKind } from "@/lib/shared/brottmalstaxa";
-import { TIME_ENTRY_KIND_LABELS, type MatterStatus, type PaymentMethod, type TimeEntryKind } from "@/lib/shared/schemas/enums";
-import type { InvoiceId, MatterId, TimeEntryId } from "@/lib/shared/schemas/ids";
+import { TIME_ENTRY_KIND_LABELS, type PaymentMethod, type TimeEntryKind } from "@/lib/shared/schemas/enums";
 import { applicableStandardAtgarder, type StandardAtgard } from "@/lib/shared/standard-atgard";
 
 /** Det formuläret behöver ur en tidpost (ärende-raden och /time-raden har båda detta). */

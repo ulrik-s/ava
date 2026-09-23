@@ -280,3 +280,26 @@ describe("timeEntry.report", () => {
     expect(w.matterId).toBe("m1");
   });
 });
+
+describe("timeEntry — frysta poster (slutfaktura/kostnadsräkning)", () => {
+  const frozen = { id: "t1", matterId: "m1", frozenAt: new Date("2026-09-01"), frozenByBillingRunId: "br1" };
+
+  it("update vägrar en fryst post — inget skrivs", async () => {
+    mockPrisma.timeEntry.findFirst.mockResolvedValue(frozen);
+    await expect(makeCaller().update({ id: "t1", minutes: 60 })).rejects.toThrow(/slutfaktura/);
+    expect(mockPrisma.timeEntry.update).not.toHaveBeenCalled();
+  });
+
+  it("delete vägrar en fryst post — inget tas bort", async () => {
+    mockPrisma.timeEntry.findFirst.mockResolvedValue(frozen);
+    await expect(makeCaller().delete({ id: "t1" })).rejects.toThrow(/slutfaktura/);
+    expect(mockPrisma.timeEntry.delete).not.toHaveBeenCalled();
+  });
+
+  it("en post med frozenAt null (t.ex. efter aconto) går att ändra", async () => {
+    mockPrisma.timeEntry.findFirst.mockResolvedValue({ ...frozen, frozenAt: null });
+    mockPrisma.timeEntry.update.mockResolvedValue({ id: "t1", matterId: "m1" });
+    await makeCaller().update({ id: "t1", minutes: 60 });
+    expect(mockPrisma.timeEntry.update).toHaveBeenCalled();
+  });
+});

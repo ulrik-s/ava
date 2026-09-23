@@ -10,9 +10,9 @@ import { TIME_ENTRY_KIND_SHORT } from "@/lib/client/labels";
 import { trpc } from "@/lib/client/trpc";
 import { formatMinutes } from "@/lib/client/utils";
 import { isPerDayKind } from "@/lib/shared/brottmalstaxa";
-import { TIME_ENTRY_KIND_LABELS, type MatterStatus, type PaymentMethod, type TimeEntryKind } from "@/lib/shared/schemas/enums";
+import type { MatterStatus, PaymentMethod, TimeEntryKind } from "@/lib/shared/schemas/enums";
 import type { InvoiceId, MatterId, TimeEntryId } from "@/lib/shared/schemas/ids";
-import { applicableStandardAtgarder, type StandardAtgard } from "@/lib/shared/standard-atgard";
+import type { StandardAtgard } from "@/lib/shared/standard-atgard";
 import { StandardAtgardSuggestions } from "./_standard-atgard-suggestions";
 
 interface Props {

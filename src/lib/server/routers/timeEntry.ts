@@ -13,6 +13,21 @@ import {
 import { emit } from "../events/emit";
 import { router, protectedProcedure, orgProcedure, TRPCError } from "../trpc";
 
+/**
+ * En fryst post (`frozenAt`, satt när den ingick i en slutfaktura eller
+ * kostnadsräkning) får varken ändras eller tas bort: det fakturerade eller till
+ * domstolen redovisade underlaget hade annars inte längre stämt med posterna.
+ * Aconto fryser inte — de posterna är fortfarande redigerbara.
+ */
+function assertEditable(entry: { frozenAt?: Date | string | null | undefined }): void {
+  if (entry.frozenAt) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "Tidposten ingår i en slutfaktura eller kostnadsräkning och kan inte ändras eller tas bort.",
+    });
+  }
+}
+
 /** Vad `minutes`-regeln behöver veta om posten. */
 interface EntryShape {
   minutes?: number | undefined;
@@ -137,6 +152,7 @@ export const timeEntryRouter = router({
       // INNAN update. NOT_FOUND vid mismatch.
       const owned = await ctx.repos.timeEntries.getByIdInOrg(input.id, ctx.orgId);
       if (!owned) throw new TRPCError({ code: "NOT_FOUND" });
+      assertEditable(owned);
       const { id, date, minutes, description, billable, kind, standardAtgardId } = input;
       const updated = await ctx.repos.timeEntries.update(id, omitUndefined({
         minutes,
@@ -155,6 +171,7 @@ export const timeEntryRouter = router({
     .mutation(async ({ ctx, input }) => {
       const owned = await ctx.repos.timeEntries.getByIdInOrg(input.id, ctx.orgId);
       if (!owned) throw new TRPCError({ code: "NOT_FOUND" });
+      assertEditable(owned);
       // Hård delete bevarar dagens beteende (ADR 0017-delete-policy öppen).
       await ctx.repos.timeEntries.hardDelete(input.id);
       await emit.timeEntryDeleted(ctx, input.id, owned.matterId);
