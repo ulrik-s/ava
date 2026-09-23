@@ -2,7 +2,7 @@
  * Test för TimePage — listrendering och nytt-tidsregistreringsflöde.
  */
 
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import TimePage from "@/app/time/page";
 
@@ -23,6 +23,10 @@ const matterQuery: { data: { matters: Array<Record<string, unknown>> } } = {
 };
 const utilsMock = { timeEntry: { list: { invalidate: vi.fn() } }, prefs: { get: { invalidate: vi.fn() } } };
 const createMutate = vi.fn();
+const updateMutate = vi.fn();
+const deleteMutate = vi.fn();
+/** Serverfel från update (t.ex. PRECONDITION_FAILED för en fryst post). */
+let updateError: { message: string } | null = null;
 
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
@@ -30,7 +34,11 @@ vi.mock("@/lib/client/trpc", () => ({
     timeEntry: {
       list: { useQuery: () => timeQuery },
       create: { useMutation: () => ({ mutate: createMutate, isPending: false }) },
+      update: { useMutation: () => ({ mutate: updateMutate, isPending: false, error: updateError }) },
+      delete: { useMutation: () => ({ mutate: deleteMutate, isPending: false, error: null }) },
     },
+    // Byråns standardåtgärder (#956) läses av ändra-formuläret. Tom → ingen väljare.
+    organization: { getSettings: { useQuery: () => ({ data: { standardAtgarder: [] } }) } },
     matter: {
       list: { useQuery: () => matterQuery },
     },
@@ -50,6 +58,7 @@ vi.mock("@/lib/client/trpc", () => ({
 beforeEach(() => {
   vi.clearAllMocks();
   timeQuery.data = { entries: [], total: 0, pages: 0, totalMinutes: 0 };
+  updateError = null;
 });
 
 describe("TimePage", () => {
@@ -147,5 +156,64 @@ describe("TimePage", () => {
     expect(screen.getByText(/Sida 1 av 3/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Nästa/i }));
     expect(screen.getByText(/Sida 2 av 3/)).toBeInTheDocument();
+  });
+});
+
+describe("TimePage — ändra och ta bort", () => {
+  const entry = {
+    id: "t1", date: "2026-09-20", minutes: 45, description: "Genomgång av avtal",
+    billable: true, kind: "ARBETE",
+    matter: { id: "m1", matterNumber: "UA2026-0001", title: "Avtalstvist" },
+    user: { name: "Cecilia" },
+  };
+  const withRows = (...entries: Array<Record<string, unknown>>) => {
+    timeQuery.data = { entries, total: entries.length, pages: 1, totalMinutes: 45 };
+  };
+
+  it("Ändra öppnar formuläret förifyllt; Spara skickar update med postens id", () => {
+    withRows(entry);
+    render(<TimePage />);
+    fireEvent.click(screen.getByRole("button", { name: "Ändra" }));
+    const dialog = screen.getByRole("dialog", { name: /Ändra tidregistrering/ });
+    const description = within(dialog).getByDisplayValue("Genomgång av avtal");
+    fireEvent.change(description, { target: { value: "Genomgång av avtal + mejl" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Spara" }));
+    expect(updateMutate).toHaveBeenCalledWith(expect.objectContaining({
+      id: "t1", description: "Genomgång av avtal + mejl", minutes: 45, date: "2026-09-20",
+    }));
+  });
+
+  it("Ta bort frågar först och tar bort vid ja", () => {
+    withRows(entry);
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    render(<TimePage />);
+    fireEvent.click(screen.getByRole("button", { name: "Ta bort" }));
+    expect(confirmSpy).toHaveBeenCalled();
+    expect(deleteMutate).toHaveBeenCalledWith({ id: "t1" });
+    confirmSpy.mockRestore();
+  });
+
+  it("Ta bort gör inget om man ångrar sig", () => {
+    withRows(entry);
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+    render(<TimePage />);
+    fireEvent.click(screen.getByRole("button", { name: "Ta bort" }));
+    expect(deleteMutate).not.toHaveBeenCalled();
+    confirmSpy.mockRestore();
+  });
+
+  it("en fryst post (slutfaktura/kostnadsräkning) visas som Låst utan knappar", () => {
+    withRows({ ...entry, frozenAt: "2026-09-21" });
+    render(<TimePage />);
+    expect(screen.getByText("Låst")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Ändra" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Ta bort" })).not.toBeInTheDocument();
+  });
+
+  it("visar serverns fel (t.ex. låst post) för användaren", () => {
+    updateError = { message: "Tidposten ingår i en slutfaktura eller kostnadsräkning och kan inte ändras eller tas bort." };
+    withRows(entry);
+    render(<TimePage />);
+    expect(screen.getByRole("alert")).toHaveTextContent(/slutfaktura/);
   });
 });

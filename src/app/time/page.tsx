@@ -8,6 +8,7 @@ import { periodFrom, periodTo } from "@/lib/client/time-filter";
 import { trpc } from "@/lib/client/trpc";
 import { formatMinutes } from "@/lib/client/utils";
 import { asId, type MatterId } from "@/lib/shared/schemas/ids";
+import { TimeEntryEditModal, timeActionsColumn, useTimeEntryEditing } from "./_time-entry-editing";
 
 interface TimeRow {
   id: string;
@@ -17,6 +18,7 @@ interface TimeRow {
   billable: boolean;
   matter: { id: string; matterNumber: string; title: string };
   user?: { name?: string | null } | null;
+  frozenAt?: Date | string | null;
 }
 
 const timeColumns: Column<TimeRow>[] = [
@@ -172,6 +174,9 @@ export default function TimePage() {
     billable: true,
   });
 
+  const editing = useTimeEntryEditing();
+  const columns = [...timeColumns, timeActionsColumn<TimeRow>(editing)];
+
   const createTimeEntry = trpc.timeEntry.create.useMutation({
     onSuccess: () => {
       void utils.timeEntry.list.invalidate();
@@ -215,11 +220,12 @@ export default function TimePage() {
 
       <DataTable
         prefKey="list.time-entries"
-        columns={timeColumns}
+        columns={columns}
         data={(timeEntries.data?.entries ?? []) as TimeRow[]}
         rowKey={(e) => e.id}
         emptyMessage="Inga tidsposter."
       />
+      <TimeEntryEditModal ed={editing} />
       {timeEntries.data && timeEntries.data.pages > 1 && (
         <div className="px-6 py-3 mt-2 bg-white border border-gray-200 rounded-lg flex items-center justify-between">
           <p className="text-sm text-gray-500">Sida {page} av {timeEntries.data.pages}</p>

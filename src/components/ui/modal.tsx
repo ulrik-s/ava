@@ -22,7 +22,7 @@ export function Modal({ open, title, onClose, children, widthClass = "max-w-lg" 
 
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" role="dialog" aria-modal="true" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" role="dialog" aria-modal="true" aria-label={title} onClick={onClose}>
       <div className={`bg-white rounded-xl shadow-xl w-full ${widthClass}`} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-3 border-b border-gray-200">
           <h3 className="font-semibold text-gray-900">{title}</h3>
