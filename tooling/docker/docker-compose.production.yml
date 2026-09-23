@@ -95,6 +95,8 @@ services:
       AVA_HTTP_HOST: 0.0.0.0
       AVA_HTTP_PORT: "3001"
       AVA_CONTENT_DIR: /data/content
+      # "1" = inga mejl köas eller skickas (test-/pilotserver), se deploy-server-first.md.
+      AVA_EMAIL_DISABLED: "${AVA_EMAIL_DISABLED:-}"
     volumes:
       - content:/data/content
     # /readyz rör DATABASEN (#1079). En attrapp som bara säger att processen

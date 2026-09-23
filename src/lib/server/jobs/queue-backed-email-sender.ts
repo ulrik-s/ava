@@ -12,6 +12,7 @@
  */
 
 import type { PgBoss } from "pg-boss";
+import { DisabledEmailSender, isEmailDisabled } from "@/lib/server/integrations/email/disabled-email-sender";
 import type { IEmailSender, SendEmailInput } from "@/lib/server/ports";
 import { JOB_QUEUES } from "./job-queue";
 
@@ -30,4 +31,15 @@ export class QueueBackedEmailSender implements IEmailSender {
       input.idempotencyKey ? { singletonKey: input.idempotencyKey } : {},
     );
   }
+}
+
+/**
+ * E-postporten för server-first. `AVA_EMAIL_DISABLED=1` → vägra i st.f. att köa:
+ * köade mejl hade legat kvar i pg-boss och gått iväg den dag SMTP konfigurerades.
+ */
+export function makeEmailPort(
+  getBoss: () => PgBoss | null,
+  env: Record<string, string | undefined> = process.env,
+): IEmailSender {
+  return isEmailDisabled(env) ? new DisabledEmailSender() : new QueueBackedEmailSender(getBoss);
 }

@@ -8,6 +8,7 @@
  */
 
 import { type SuggestionRepos, writeSuggestionsFromText } from "@/lib/server/documents/suggest-from-text";
+import { isEmailDisabled } from "@/lib/server/integrations/email/disabled-email-sender";
 import { createSmtpSender, type SmtpConfig } from "@/lib/server/integrations/email/smtp-sender";
 import { createOllamaClassifier, createOllamaTagSuggester, type LlmConfig } from "@/lib/server/llm/ollama-classifier";
 import type { IContentStore } from "@/lib/server/ports";
@@ -116,4 +117,12 @@ export function loadSmtpConfigFromEnv(env: Record<string, string | undefined> = 
   if (!host || !port || !user || !pass || !from) return undefined;
   const cfg: SmtpConfig = { host, port: Number(port), user, pass, from };
   return env.AVA_SMTP_SECURE ? { ...cfg, secure: env.AVA_SMTP_SECURE === "true" } : cfg;
+}
+
+/**
+ * SMTP-konfigen server-first faktiskt använder: `AVA_EMAIL_DISABLED=1` vinner
+ * över allt — då registreras ingen utskicks-handler ens om SMTP är konfigurerat.
+ */
+export function loadActiveSmtpConfig(env: Record<string, string | undefined> = process.env): SmtpConfig | undefined {
+  return isEmailDisabled(env) ? undefined : loadSmtpConfigFromEnv(env);
 }
