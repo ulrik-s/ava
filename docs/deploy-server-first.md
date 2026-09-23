@@ -31,7 +31,7 @@ byrån Microsoft 365 loggar advokaterna in med sina vanliga konton — se
 
 ## Förutsättningar
 
-- Linux-server med docker + docker compose (2 GB RAM räcker gott)
+- Linux-server med docker + docker compose + git (2 GB RAM räcker gott) — inget annat på hosten
 - Ett DNS-namn som pekar på servern (Caddy hämtar certet automatiskt — port
   80 måste vara öppen för ACME-utmaningen)
 - En OIDC-app hos byråns IdP: client-id, client-secret, redirect-URI
@@ -47,13 +47,14 @@ kommer att få från sina klienter, inte en teknikdetalj.
 
 ```bash
 git clone https://github.com/ulrik-s/ava && cd ava
-bun install
-bun run server-first:build                  # server-binären
-DEMO_BASE_PATH= bash tooling/scripts/build-demo.sh   # appen → out/, på domänens ROT
+# Bygg i en container — hosten behöver bara docker + git, ingen bun/node.
+docker run --rm -v "$PWD:/app" -w /app -e DEMO_BASE_PATH= oven/bun:1 sh -c \
+  'bun install --frozen-lockfile && bun run server-first:build && bash tooling/scripts/build-demo.sh'
 ```
 
-`bun run build:demo` bygger under `/ava` (GH Pages) — Caddy serverar `out/` på
-roten, så base-pathen måste vara tom.
+Det ger server-binären (`dist/`) och appen (`out/`). `bun run build:demo` bygger
+under `/ava` (GH Pages) — Caddy serverar `out/` på roten, så base-pathen måste
+vara tom.
 
 Skapa `ava-server.env`:
 
@@ -192,8 +193,9 @@ skulle en återställning som inte gör någonting alls se ut att lyckas.
 ## Uppgradering
 
 ```bash
-git pull && bun install
-bun run server-first:build && DEMO_BASE_PATH= bash tooling/scripts/build-demo.sh
+git pull
+docker run --rm -v "$PWD:/app" -w /app -e DEMO_BASE_PATH= oven/bun:1 sh -c \
+  'bun install --frozen-lockfile && bun run server-first:build && bash tooling/scripts/build-demo.sh'
 docker compose -f tooling/docker/docker-compose.production.yml up -d --build
 ```
 
