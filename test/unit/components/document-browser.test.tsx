@@ -530,7 +530,7 @@ describe("DocumentBrowser — flera filer på en gång", () => {
     render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     pick([pdf("stamning.pdf"), pdf("svaromal.pdf"), pdf("dom.pdf")]);
     await waitFor(() => expect(mutationStubs.register.mutateAsync).toHaveBeenCalledTimes(3));
-    const names = mutationStubs.register.mutateAsync.mock.calls.map((c) => (c[0] as { fileName: string }).fileName);
+    const names = mutationStubs.register.mutateAsync.mock.calls.map((c: readonly unknown[]) => (c[0] as { fileName: string }).fileName);
     expect(names).toEqual(["stamning.pdf", "svaromal.pdf", "dom.pdf"]);
   });
 
