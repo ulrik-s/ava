@@ -157,6 +157,59 @@ samma maskin som databasen skyddar mot råttfel, inte mot att servern brinner:
 0 3 * * * cd /srv/ava && bash tooling/scripts/backup-db.sh /srv/ava/backup
 ```
 
+### Backup utanför servern (pull, krypterat)
+
+En backup på samma maskin skyddar inte mot att servern försvinner eller
+kapas. Därför **hämtar** en dator på byrån backupen varje natt — servern har
+ingen väg in till den datorn och kan inte radera kopiorna där.
+
+```
+server 03:00  backup-export.sh ── db-dump + content-volymen → tar → age (publik nyckel)
+                                   → /srv/backup-chroot/ava/  (read-only SFTP, chroot)
+byrå   04:00  backup-pull.sh  ◄── hämtar nya, verifierar checksumma, provdekrypterar,
+                                   sparar 90 dagar, larmar om senaste > 48 h
+```
+
+**Nyckeln:** age-nyckelparet skapas på datorn som hämtar
+(`age-keygen -o ~/.config/ava-backup/age.key`); bara den *publika* nyckeln
+ligger på servern (`/srv/ava/backup-recipient.txt`). Kapas servern kommer
+angriparen inte åt backuperna. **Förlorar ni den privata nyckeln går
+backuperna inte att läsa** — lägg en kopia i byråns lösenordshanterare.
+
+**Servern:** en systemanvändare utan skal som bara når exportkatalogen
+read-only:
+
+```bash
+useradd --system --no-create-home --home-dir / --shell /usr/sbin/nologin avabackup
+install -d -o root -g root -m 755 /srv/backup-chroot
+install -d -o root -g avabackup -m 2750 /srv/backup-chroot/ava
+echo "restrict <hämtarens ssh-publika nyckel>" > /etc/ssh/authorized_keys/avabackup
+cat > /etc/ssh/sshd_config.d/ava-backup.conf <<'EOF'
+Match User avabackup
+    AuthorizedKeysFile /etc/ssh/authorized_keys/avabackup
+    PasswordAuthentication no
+    ChrootDirectory /srv/backup-chroot
+    ForceCommand internal-sftp -R -d /ava
+    AllowTcpForwarding no
+    AllowAgentForwarding no
+    X11Forwarding no
+    PermitTTY no
+EOF
+sshd -t && systemctl reload ssh
+```
+
+Lägg `backup-export.sh` efter `backup-db.sh` i nattjobbet (systemd-timer eller
+cron). **Hämtaren** (macOS: launchd, Linux/NAS: cron):
+
+```bash
+AVA_BACKUP_HOST=avabackup@ava.byra.se AVA_BACKUP_KEY=~/.config/ava-backup/age.key \
+  bash tooling/scripts/backup-pull.sh ~/AVA-backup
+```
+
+Återställ från en hämtad kopia: `age -d -i age.key ava-<datum>.tar.age | tar -x`
+ger `ava-<datum>.sql.gz` (→ `restore-db.sh`) och `content.tar.gz` (packas upp i
+`content`-volymen).
+
 ### Återställning
 
 ```bash
