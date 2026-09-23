@@ -48,7 +48,7 @@ export default function NewUserPage() {
       matterNumberPrefix: form.matterNumberPrefix || undefined,
       hourlyRate: form.hourlyRate ? Number(form.hourlyRate) : undefined,
       mileageRate: form.mileageRate ? Math.round(Number(form.mileageRate) * 100) : undefined,
-      password: form.password,
+      password: form.password || undefined,
     } as Parameters<typeof createUser.mutate>[0]);
   }
 
