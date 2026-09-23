@@ -6,8 +6,11 @@
  * duplicera aritmetiken. Ren funktion: inga repos, ingen I/O.
  */
 
+import { timeEntryValueOre } from "./billing-work-value";
+import { coverageEntryRateOre } from "./brottmalstaxa";
+import { chargedExpenseLines } from "./expense-vat";
 import { arvodeInclVatOre } from "./invoice-calc";
-import type { TimeEntryKind } from "./schemas/enums";
+import type { PaymentMethod, TimeEntryKind } from "./schemas/enums";
 
 /** En rad i fakturans tidsspecifikation (belopp = timmar × gällande timarvode). */
 export interface SpecTimeLine {
@@ -67,4 +70,55 @@ export function buildInvoiceSpecification(a: {
     adjustmentOre: a.payableOre - (grossOre - deductionOre),
     payableOre: a.payableOre,
   };
+}
+
+
+// ─── Radbyggarna (#1100) ────────────────────────────────────────────────────
+//
+// Låg i `routers/billingRun.ts` trots att de bygger just de rad-typer som
+// deklareras här ovan. Rent: en tidspost värderas, en utläggsrad delas i netto
+// och moms. `buildInvoiceSpecification` satt redan här — nu gör dess indata det
+// också.
+
+export function specTimeLines(
+  method: PaymentMethod,
+  entries: ReadonlyArray<{ date: Date | string; description: string; minutes: number; hourlyRate: number; billable: boolean; kind?: TimeEntryKind | null | undefined }>,
+  settleDate: Date | string,
+): SpecTimeLine[] {
+  return entries.filter((t) => t.billable).map((t) => ({
+    date: t.date, description: t.description, minutes: t.minutes, kind: t.kind,
+    amountOre: timeEntryValueOre(t.minutes, specLineRateOre(method, t, settleDate)),
+  }));
+}
+
+/**
+ * Taxan en spec-rad värderas på (#950). TÄCKNINGSÄRENDEN (rättshjälp/rättsskydd)
+ * ersätts enligt Domstolsverkets nivåer, så varje post värderas på SIN KATEGORIS
+ * norm för slutregleringsåret — samma regel som slutregleringen, vilket gör att
+ * sammanställningens taxerader alltid summerar till fakturabeloppet.
+ *
+ * PRIVAT/offentligt uppdrag debiterar byråns EGEN taxa, som ligger på posten —
+ * en privatklient ska inte faktureras statens norm.
+ */
+export function specLineRateOre(
+  method: PaymentMethod, entry: { hourlyRate: number; kind?: TimeEntryKind | null | undefined }, settleDate: Date | string,
+): number {
+  const coverage = method === "RATTSHJALP" || method === "RATTSSKYDD";
+  return coverage ? coverageEntryRateOre(entry.kind, settleDate) : entry.hourlyRate;
+}
+
+export function specExpenseLines(
+  expenses: ReadonlyArray<{ date: Date | string; description: string; amount: number; billable: boolean; vatRate?: number | null; vatIncluded?: boolean | null; passThrough?: boolean | null }>,
+): SpecExpenseLine[] {
+  // Bruttot är det DEBITERADE (25 % enligt NJA 2005 s. 606, #975), inte satsen
+  // byrån betalade — annars stämmer inte specifikationen med fakturabeloppet.
+  return expenses.filter((e) => e.billable).map((e) => {
+    const [line] = chargedExpenseLines([e]);
+    const netOre = line?.netOre ?? 0;
+    return {
+      date: e.date, description: e.description,
+      netOre, grossOre: netOre + (line?.vatOre ?? 0),
+      passThrough: e.passThrough === true,
+    };
+  });
 }

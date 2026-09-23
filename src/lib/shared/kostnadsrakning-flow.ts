@@ -72,3 +72,16 @@ export function applyKrAction(state: KostnadsrakningState, action: Kostnadsrakni
     case "SKAPA_FAKTURA": return { status: "FAKTURERAD", slutgiltigt: state.slutgiltigt };
   }
 }
+
+
+// ─── Tillstånd ur en lagrad run (#1100) ─────────────────────────────────────
+//
+// `applyKrAction` ovan äger övergångarna; de här två läser ut nuvarande
+// tillstånd ur en persisterad rad och applicerar en övergång. Ren avbildning —
+// de låg i routern bara för att det var där raden hämtades.
+
+/** KR-tillstånd ur en körning (#828); saknad status → INSKICKAD (äldre KR). */
+export function krStateOf(run: { kostnadsrakningStatus?: KostnadsrakningStatus | null | undefined; beslutSlutgiltigt?: boolean | null | undefined }): KostnadsrakningState {
+  return { status: run.kostnadsrakningStatus ?? "INSKICKAD", slutgiltigt: run.beslutSlutgiltigt ?? false };
+}
+
