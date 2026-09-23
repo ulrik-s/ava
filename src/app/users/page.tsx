@@ -3,6 +3,7 @@
 import { ShieldAlert, UserX, UserRound } from "lucide-react";
 import Link from "next/link";
 import { DataTable, type Column } from "@/components/ui/data-table";
+import { useCapabilities } from "@/lib/client/capabilities/use-capabilities";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { patchFirmaConfig } from "@/lib/client/firma/firma-config";
 import { trpc } from "@/lib/client/trpc";
@@ -48,6 +49,9 @@ function BecomeButton({ user, onClick }: { user: UserRow; onClick: (u: UserRow) 
 
 function buildUserColumns(opts: {
   isAdmin: boolean;
+  /** Byta principal i klienten — bara meningsfullt i demon; under OIDC är
+   *  principalen serverns `X-Auth-Request-Email` (#1109). */
+  canImpersonate: boolean;
   meId?: string | undefined;
   onDeactivate: (id: string, name: string) => void;
   onBecome: (u: UserRow) => void;
@@ -75,7 +79,7 @@ function buildUserColumns(opts: {
       render: (u) => (
         u.id !== opts.meId ? (
           <span className="inline-flex items-center gap-3">
-            <BecomeButton user={u} onClick={opts.onBecome} />
+            {opts.canImpersonate && <BecomeButton user={u} onClick={opts.onBecome} />}
             <button
               type="button"
               onClick={() => opts.onDeactivate(u.id, u.name)}
@@ -145,8 +149,10 @@ export default function UsersPage() {
   });
 
   const isAdmin = me.data?.role === "ADMIN";
+  const { oidc } = useCapabilities();
   const columns = buildUserColumns({
     isAdmin,
+    canImpersonate: !oidc,
     meId: me.data?.id,
     onDeactivate: (id, name) => confirmDeactivate(id, name, deactivate.mutate),
     onBecome: (u) => { if (confirm(`Logga in som ${u.name}?`)) becomeUser(u); },

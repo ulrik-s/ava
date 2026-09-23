@@ -57,6 +57,8 @@ function renderPage() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Lösenordsfälten finns bara utan OIDC (#1109) → dessa tester gäller demon.
+  localStorage.setItem("ava.firma", JSON.stringify({ tier: "demo" }));
   userQuery.data = {
     id: "u1",
     name: "Anna",

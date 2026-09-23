@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useId } from "react";
+import { useCapabilities } from "@/lib/client/capabilities/use-capabilities";
 
 export interface UserFormState {
   name: string;
@@ -49,6 +50,8 @@ export function UserForm({
   const matterPrefixId = useId();
   const hourlyRateId = useId();
   const mileageRateId = useId();
+  // OIDC (#1109): inloggning sker hos IdP:n — ett AVA-lösenord betyder ingenting.
+  const { oidc } = useCapabilities();
 
   return (
     <form onSubmit={onSubmit}>
@@ -96,7 +99,7 @@ export function UserForm({
             onChange={(e) => setForm({ ...form, mileageRate: e.target.value })}
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
         </FormField>
-        <PasswordFields form={form} setForm={setForm} required={passwordRequired} placeholder={passwordPlaceholder} />
+        {!oidc && <PasswordFields form={form} setForm={setForm} required={passwordRequired} placeholder={passwordPlaceholder} />}
       </div>
 
       {passwordError && <p className="mt-2 text-sm text-red-600">{passwordError}</p>}

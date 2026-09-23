@@ -32,6 +32,8 @@ vi.mock("@/lib/client/trpc", () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Lösenordsfälten finns bara utan OIDC (#1109) → dessa tester gäller demon.
+  localStorage.setItem("ava.firma", JSON.stringify({ tier: "demo" }));
   createState.isPending = false;
   createState.error = null;
 });
@@ -112,5 +114,27 @@ describe("NewUserPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /Skapa användare/i }));
     const arg = createMutate.mock.calls[0]![0];
     expect(arg.hourlyRate).toBe(3500);
+  });
+});
+
+describe("NewUserPage — OIDC (#1109)", () => {
+  beforeEach(() => {
+    localStorage.setItem("ava.firma", JSON.stringify({ tier: "self-hosted" }));
+  });
+
+  it("visar inga lösenordsfält — inloggning sker hos IdP:n", () => {
+    const { container } = render(<NewUserPage />);
+    expect(container.querySelectorAll('input[type="password"]')).toHaveLength(0);
+  });
+
+  it("skapar användare med bara namn + e-post, utan lösenord", () => {
+    const { container } = render(<NewUserPage />);
+    fireEvent.change(container.querySelectorAll("input")[0]!, { target: { value: "Cecilia" } });
+    fireEvent.change(container.querySelector('input[type="email"]')!, { target: { value: "cecilia@byra.se" } });
+    fireEvent.click(screen.getByRole("button", { name: /Skapa användare/i }));
+    expect(createMutate).toHaveBeenCalledTimes(1);
+    const arg = createMutate.mock.calls[0]![0];
+    expect(arg).toMatchObject({ name: "Cecilia", email: "cecilia@byra.se" });
+    expect(arg.password).toBeUndefined();
   });
 });

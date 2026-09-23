@@ -129,3 +129,20 @@ describe("UsersPage — behörighet + inaktivera + status", () => {
     expect(screen.getByText("Laddar...")).toBeInTheDocument();
   });
 });
+
+describe("UsersPage — Bli denna (#1109)", () => {
+  it("demo: admin kan byta principal till en annan användare", () => {
+    localStorage.setItem("ava.firma", JSON.stringify({ tier: "demo" }));
+    usersQuery.data = { users: [sampleUser] };
+    render(<UsersPage />);
+    expect(screen.getByText("Bli denna")).toBeInTheDocument();
+  });
+
+  it("OIDC: ingen Bli denna — principalen är serverns inloggade användare", () => {
+    localStorage.setItem("ava.firma", JSON.stringify({ tier: "self-hosted" }));
+    usersQuery.data = { users: [sampleUser] };
+    render(<UsersPage />);
+    expect(screen.queryByText("Bli denna")).not.toBeInTheDocument();
+    expect(screen.getByText("Inaktivera")).toBeInTheDocument();
+  });
+});
