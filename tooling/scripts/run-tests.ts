@@ -162,10 +162,17 @@ const AI_FUNC_FLOOR = 0.920;
 // Verktygsskripten (#1100): installeraren, seed-datat, demo-generatorn,
 // Fortnox-/Graph-harnessen. 9 370 rader som INGEN grind mätte — samma lucka som
 // #1025 stängde för AI-ytan, fast åtta gånger större (den var 1 221 rader).
-// Uppmätt 2026-09-23: 80,1 % rader / 78,9 % funktioner. Golven ankras strax
-// under, som src/ och ava-cli.
-const SCRIPTS_LINE_FLOOR = 0.780;
-const SCRIPTS_FUNC_FLOOR = 0.760;
+// Uppmätt i CI 2026-09-23: 77,61 % rader / 79,02 % funktioner. Golven ankras
+// ~1 procentenhet under, som src/ (92,11 mot golv 90,00) och ava-cli (96,07 mot
+// 95,00).
+//
+// Siffran kommer från CI, inte från en lokal körning. En engångskörning av hela
+// sviten i EN process ger 80,1 % — men den körningen har 289 fel, eftersom
+// mock.module och globala stubbar läcker mellan filer utan `--isolate`
+// (se bunfig.toml). Den uppblåsta siffran hade gett ett golv som inte går att
+// hålla.
+const SCRIPTS_LINE_FLOOR = 0.765;
+const SCRIPTS_FUNC_FLOOR = 0.780;
 
 /**
  * SERIAL_FILES — testfiler som SYNKRONT spawnar en barnprocess via

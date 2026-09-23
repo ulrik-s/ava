@@ -83,7 +83,7 @@ describe("golven är ratchets", () => {
   const FLOOR_BASELINE: Readonly<Record<string, { line: number; func: number }>> = {
     "src/": { line: 0.900, func: 0.859 },
     "tooling/ava-cli/": { line: 0.950, func: 0.920 },
-    "tooling/scripts/": { line: 0.780, func: 0.760 },
+    "tooling/scripts/": { line: 0.765, func: 0.780 },
   };
 
   for (const [label, base] of Object.entries(FLOOR_BASELINE)) {
