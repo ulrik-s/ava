@@ -34,6 +34,10 @@ describe("firma-config", () => {
       expect(cfg.repo).toBe("ulrik-s/ava-demo");
     });
 
+    it("byråns egen domän → self-hosted (inte demo)", () => {
+      expect(defaultConfigForHost("ava-crm.io").tier).toBe("self-hosted");
+    });
+
     it("undefined hostname → demo", () => {
       expect(defaultConfigForHost(undefined).tier).toBe("demo");
     });

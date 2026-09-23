@@ -98,20 +98,17 @@ const SELF_HOSTED_LOCALHOST_DEFAULT: FirmaConfig = {
 /**
  * Vilken default-config ska vi använda för en given hostname?
  *
- * - `localhost` / `127.0.0.1` → self-hosted mot docker (`localhost:8080`).
- *   Det här gör att `next dev` och den statiska exporten beter sig som
- *   en självhostad firma-Linux-låda utan att användaren behöver konfigurera
- *   något — docker måste vara igång, men det är förutsättningen för
- *   "git lokalt".
- * - Övrigt (gh-pages-domän etc.) → publik demo.
+ * - GH Pages (`*.github.io`) eller okänd host (SSR) → publik demo.
+ * - Allt annat → self-hosted: localhost (docker) OCH byråns egen domän
+ *   (`ava.byra.se`). Förr gav bara localhost self-hosted, så en riktig
+ *   produktionsdomän bootade i demo-läge tills varje browser bytte tier i
+ *   `/settings` — demon är den enda publika hosten, inte tvärtom.
  *
  * Pure-helper — testas direkt utan att mocka `window`.
  */
 export function defaultConfigForHost(hostname: string | undefined): FirmaConfig {
-  if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "0.0.0.0") {
-    return SELF_HOSTED_LOCALHOST_DEFAULT;
-  }
-  return DEMO_DEFAULT;
+  if (hostname === undefined || hostname.endsWith(".github.io")) return DEMO_DEFAULT;
+  return SELF_HOSTED_LOCALHOST_DEFAULT;
 }
 
 

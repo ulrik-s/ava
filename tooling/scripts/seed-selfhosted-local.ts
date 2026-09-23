@@ -32,10 +32,18 @@ const ORG = asId<"OrganizationId">(process.env.AVA_ORGANIZATION_ID ?? "00000000-
 
 /** KC-realm:ens (realm-ava.json) allowlistade testanvändare. `outsider` seedas
  *  MEDVETET INTE → demonstrerar att autentiserad ≠ auktoriserad (nekas). */
-const USERS: ReadonlyArray<{ email: string; name: string; role: UserRole }> = [
+const TEST_USERS: ReadonlyArray<{ email: string; name: string; role: UserRole }> = [
   { email: "lawyer@ava.test", name: "Lena Lawyer", role: "LAWYER" },
   { email: "admin@ava.test", name: "Alva Admin", role: "ADMIN" },
 ];
+
+/** Produktion (docs/deploy-server-first.md): `AVA_ADMIN_EMAIL` → EN riktig
+ *  admin i st.f. testanvändarna; fler användare läggs sedan till i appen. */
+const ADMIN_EMAIL = process.env.AVA_ADMIN_EMAIL;
+const USERS = ADMIN_EMAIL
+  ? [{ email: ADMIN_EMAIL, name: process.env.AVA_ADMIN_NAME ?? ADMIN_EMAIL, role: "ADMIN" as const }]
+  : TEST_USERS;
+const ORG_NAME = process.env.AVA_ORG_NAME ?? "Demobyrå AB";
 
 async function main(): Promise<void> {
   const { db, close } = createPostgresDb(DB_URL);
@@ -45,7 +53,7 @@ async function main(): Promise<void> {
   enableChangeLogOnAll(repos, createDbChangeLogRecorder(db));
   try {
     if (!(await repos.organizations.getById(ORG))) {
-      await repos.organizations.create({ id: ORG, name: "Demobyrå AB" } satisfies Partial<Organization>);
+      await repos.organizations.create({ id: ORG, name: ORG_NAME } satisfies Partial<Organization>);
     }
     // --demo (#633-uppf.): demo-seeden mappar sin admin + huvud-jurist till
     // KC-login-emailen (admin@/lawyer@ava.test) och ÄGER datan → skapa INTE

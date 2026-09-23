@@ -48,30 +48,48 @@ kommer att få från sina klienter, inte en teknikdetalj.
 ```bash
 git clone https://github.com/ulrik-s/ava && cd ava
 bun install
-bun run server-first:build      # server-binären
-bun run build:demo              # den statiska appen → out/
+bun run server-first:build                  # server-binären
+DEMO_BASE_PATH= bash tooling/scripts/build-demo.sh   # appen → out/, på domänens ROT
 ```
+
+`bun run build:demo` bygger under `/ava` (GH Pages) — Caddy serverar `out/` på
+roten, så base-pathen måste vara tom.
 
 Skapa `ava-server.env`:
 
 ```bash
 AVA_DOMAIN=ava.byra.se
-AVA_ORGANIZATION_ID=<uuid>            # bun -e 'console.log(crypto.randomUUID())'
-POSTGRES_PASSWORD=<slumpat>           # openssl rand -base64 32
+# = klientens default-org (firma-config.ts). En byrå per server → ingen
+# anledning att välja ett eget; ett annat id kräver att varje browser sätter
+# samma org i /settings.
+AVA_ORGANIZATION_ID=00000000-0000-0000-0000-000000000001
+POSTGRES_PASSWORD=<slumpat>           # openssl rand -hex 24  (hex: hamnar i en URL)
 OIDC_ISSUER_URL=https://login.microsoftonline.com/<tenant>/v2.0
 OAUTH2_PROXY_CLIENT_ID=<app-id>
 OAUTH2_PROXY_CLIENT_SECRET=<hemlighet>
-OAUTH2_PROXY_COOKIE_SECRET=<32 byte>  # openssl rand -base64 32 | head -c 32
+OAUTH2_PROXY_COOKIE_SECRET=<32 byte>  # openssl rand -hex 16
 OIDC_EMAIL_DOMAINS=byra.se            # vilka som får logga in
 ```
 
-Starta:
+Starta, migrera och skapa byrån + första admin. Postgres har ingen host-port,
+så skripten körs i en engångs-container på compose-nätet:
 
 ```bash
-set -a && . ava-server.env && set +a
+set -a && . ./ava-server.env && set +a
 docker compose -f tooling/docker/docker-compose.production.yml up -d --build
-AVA_DATABASE_URL="postgres://ava:$POSTGRES_PASSWORD@localhost:5432/ava" bun run db:migrate
+avarun() { docker run --rm --network ava_default -v "$PWD:/app" -w /app \
+  -e AVA_DATABASE_URL="postgres://ava:$POSTGRES_PASSWORD@postgres:5432/ava" \
+  -e AVA_ORGANIZATION_ID -e AVA_ORG_NAME -e AVA_ADMIN_EMAIL -e AVA_ADMIN_NAME \
+  oven/bun:1 bun "$@"; }
+avarun tooling/scripts/db-migrate.ts
+AVA_ORG_NAME="Byrån AB" AVA_ADMIN_EMAIL=anna@byra.se AVA_ADMIN_NAME="Anna" \
+  avarun tooling/scripts/seed-selfhosted-local.ts
 ```
+
+Det finns ingen JIT-provisionering: bara emailadresser i byråns användarlista
+släpps in, även om IdP:n godkänner inloggningen. Admin lägger till fler
+användare i appen (`/users`). Seeden går via repo-lagret så användarna får
+`change_log`-rader — rå-SQL hade gett en klient som hänger på "Laddar…".
 
 ## Övervakning
 
@@ -175,9 +193,12 @@ skulle en återställning som inte gör någonting alls se ut att lyckas.
 
 ```bash
 git pull && bun install
-bun run server-first:build && bun run build:demo
+bun run server-first:build && DEMO_BASE_PATH= bash tooling/scripts/build-demo.sh
 docker compose -f tooling/docker/docker-compose.production.yml up -d --build
-AVA_DATABASE_URL=… bun run db:migrate
 ```
 
 **Ta backup före migrering.** Migrationer går framåt, inte bakåt.
+
+> `db-migrate.ts` saknar spårningstabell och kör om ALLA filer — mot en
+> befintlig databas fallerar den på `relation already exists`. Applicera bara
+> de nya filerna (`avarun` ovan kan inte välja) tills spårningen finns.

@@ -112,7 +112,7 @@ done
 echo "[build-demo] Kör next build (DEMO_BUILD=1)..."
 DEMO_BUILD=1 \
 NEXT_PUBLIC_DEMO_BUILD=1 \
-DEMO_BASE_PATH="${DEMO_BASE_PATH:-/ava}" \
+DEMO_BASE_PATH="${DEMO_BASE_PATH-/ava}" \
   bunx next build
 
 # ─── Seed: kör samma buildSeed som docker-firma:n men med demo-args ─────
