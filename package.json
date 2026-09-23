@@ -102,8 +102,8 @@
     "json-logic-js": "^2.0.5",
     "lucide-react": "^1.17.0",
     "mammoth": "^1.12.0",
-    "next": "16.2.12",
-    "nodemailer": "^9.0.3",
+    "next": "16.3.6",
+    "nodemailer": "^9.1.1",
     "pdfjs-dist": "^6.2.108",
     "pg-boss": "^12.19.1",
     "postgres": "^3.4.9",
@@ -135,7 +135,7 @@
     "drizzle-kit": "^0.31.10",
     "drizzle-orm": "^0.45.2",
     "eslint": "^10",
-    "eslint-config-next": "16.2.12",
+    "eslint-config-next": "16.3.6",
     "eslint-plugin-import-x": "^4.16.2",
     "fake-indexeddb": "^6.2.5",
     "happy-dom": "^20.10.2",
@@ -158,11 +158,12 @@
     "browserslist": "^4.28.9",
     "fast-uri": "^3.1.7",
     "hono": "^4.13.1",
-    "js-yaml": "^4.3.1",
+    "js-yaml": "^4.3.2",
     "nanoid": "^3.3.18",
     "postcss": "^8.5.26",
-    "sharp": "^0.35.3",
-    "shell-quote": "^1.10.0"
+    "sharp": "^0.35.4",
+    "shell-quote": "^1.10.0",
+    "smol-toml": "^1.9.0"
   },
   "patchedDependencies": {
     "lint-staged@17.0.7": "patches/lint-staged@17.0.7.patch"
