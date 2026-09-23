@@ -201,6 +201,16 @@ docker compose -f tooling/docker/docker-compose.production.yml up -d --build
 
 **Ta backup före migrering.** Migrationer går framåt, inte bakåt.
 
-> `db-migrate.ts` saknar spårningstabell och kör om ALLA filer — mot en
-> befintlig databas fallerar den på `relation already exists`. Applicera bara
-> de nya filerna (`avarun` ovan kan inte välja) tills spårningen finns.
+```bash
+bash tooling/scripts/backup-db.sh /srv/ava/backup
+avarun tooling/scripts/db-migrate.ts        # kör bara filer som inte körts
+```
+
+`db-migrate` spårar körda filer i `schema_migrations` (#1107); varje fil körs i
+en egen transaktion ihop med sin spår-rad, så en fil som fallerar lämnar inget
+halvt schema efter sig.
+
+> **Databas migrerad före #1107** (har schemat men ingen `schema_migrations`):
+> migreringen vägrar, eftersom den inte kan veta vilka filer som körts. Kör
+> `avarun tooling/scripts/db-migrate.ts --baseline` EN gång, INNAN du drar ner
+> nya migrationer — det markerar alla filer i checkouten som körda.
