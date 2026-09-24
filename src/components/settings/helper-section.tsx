@@ -11,7 +11,8 @@
 import { ExternalLink, CheckCircle2, XCircle, Loader2, CloudUpload, AlertTriangle, CloudCheck } from "lucide-react";
 import { useHelper, useHelperSyncStatus, triggerHelperUpdateCheck } from "@/lib/client/helper/use-helper";
 
-const RELEASES_URL = "https://github.com/ulrik-s/ava/releases?q=helper-&expanded=true";
+const RELEASES_URL = "https://github.com/ulrik-s/ava/releases?q=helper-v&expanded=true";
+const GUIDE_URL = "https://github.com/ulrik-s/ava/blob/main/docs/helper-installation.md";
 
 export function HelperSection() {
   const status = useHelper();
@@ -24,8 +25,8 @@ export function HelperSection() {
       <p className="text-xs text-gray-500 mb-4">
         Liten lokal-app som öppnar PDF/Word-dokument direkt i dina vanliga
         editorer (PDF Gear, Preview, Word…) och synkar tillbaka ändringar
-        till AVA när du sparar. Installeras en gång — uppdaterar sig själv
-        därefter dagligen.
+        till AVA när du sparar. Installeras en gång — den säger till i
+        menyraden när en ny version finns.
       </p>
 
       <Status status={status} />
@@ -34,7 +35,11 @@ export function HelperSection() {
       <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
         <a href={RELEASES_URL} target="_blank" rel="noreferrer"
           className="inline-flex items-center gap-1 text-blue-600 hover:underline">
-          <ExternalLink size={14} /> Ladda ner / installations-anvisningar
+          <ExternalLink size={14} /> Ladda ner
+        </a>
+        <a href={GUIDE_URL} target="_blank" rel="noreferrer"
+          className="inline-flex items-center gap-1 text-blue-600 hover:underline">
+          <ExternalLink size={14} /> Installationsguide
         </a>
         {status.version && (
           <button type="button"

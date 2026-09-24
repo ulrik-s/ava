@@ -193,6 +193,7 @@ const eslintConfig = defineConfig([
     "src/shared/generated/**", // genererade Prisma-typer
     "next-env.d.ts",
     "office-addin/dist/**", // bygg-artefakt (taskpane.js/html)
+    "helper-ui/dist/**",   // bygg-artefakt (main.cjs + dmg)
   ]),
 ]);
 
