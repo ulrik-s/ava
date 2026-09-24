@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, test } from "bun:test";
 
-import { startEngine, type EngineHandle } from "../src/engine/main.ts";
+import { startEngine, type EngineHandle, type EngineOpts } from "../src/engine/main.ts";
 
 const dirs: string[] = [];
 const engines: EngineHandle[] = [];
@@ -21,12 +21,12 @@ afterAll(async () => {
   await Promise.all(dirs.map((d) => rm(d, { recursive: true, force: true })));
 });
 
-async function boot(): Promise<{ base: string; dir: string }> {
+async function boot(opts: Pick<EngineOpts, "confirmOrigin"> = {}): Promise<{ base: string; dir: string }> {
   const dir = await mkdtemp(join(tmpdir(), "ava-engine-"));
   dirs.push(dir);
   // Lediga högportar (deterministiskt nog för test; undviker default 48761).
   const port = 49000 + Math.floor((dirs.length * 7) % 500);
-  const engine = startEngine({ port, httpsPort: port + 1, dataDir: dir });
+  const engine = startEngine({ port, httpsPort: port + 1, dataDir: dir, ...opts });
   engines.push(engine);
   await new Promise((r) => setTimeout(r, 150)); // låt servern binda
   return { base: `http://127.0.0.1:${port}`, dir };
@@ -55,6 +55,17 @@ describe("startEngine (in-process, headless)", () => {
     expect(r.status).toBe(200);
     const written = JSON.parse(await readFile(join(dir, "helper-config.json"), "utf8"));
     expect(written).toMatchObject({ oidcIssuer: "http://localhost:8089/realms/ava" });
+  });
+
+  test("okänd https-webbplats → användaren tillfrågas; Tillåt → släpps in + sparas (#1149)", async () => {
+    const asked: string[] = [];
+    const { base, dir } = await boot({ confirmOrigin: async (o) => { asked.push(o); return true; } });
+    const ping = () => fetch(`${base}/ping`, { headers: { Origin: "https://ava-crm.io" } });
+    expect((await ping()).headers.get("Access-Control-Allow-Origin")).toBeNull();
+    await new Promise((r) => setTimeout(r, 20));
+    expect(asked).toEqual(["https://ava-crm.io"]);
+    expect((await ping()).headers.get("Access-Control-Allow-Origin")).toBe("https://ava-crm.io");
+    expect(JSON.parse(await readFile(join(dir, "allowed-origins.json"), "utf8"))).toEqual(["https://ava-crm.io"]);
   });
 
   test("CORS: tillåten origin får Access-Control-Allow-Origin", async () => {

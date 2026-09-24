@@ -52,6 +52,12 @@ describe("saveHelperConfig", () => {
     expect(JSON.parse(written.text!)).toMatchObject({ oidcIssuer: "https://idp/realms/ava" });
   });
 
+  test("behåller oidcScope (Entra kräver byråns API-scope, #1149)", () => {
+    const { deps, written } = spyDeps();
+    saveHelperConfig("/data", { oidcIssuer: "https://idp", oidcScope: "api://x/access_as_user openid" }, deps);
+    expect(JSON.parse(written.text!)).toMatchObject({ oidcScope: "api://x/access_as_user openid" });
+  });
+
   test("null + ingen skrivning utan issuer", () => {
     const { deps, written } = spyDeps();
     expect(saveHelperConfig("/data", { oidcClientId: "x" }, deps)).toBeNull();

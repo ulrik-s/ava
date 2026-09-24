@@ -81,11 +81,14 @@ export function saveHelperConfig(dir: string | null, input: Partial<HelperFileCo
   const clientId = str(input.oidcClientId);
   const audience = str(input.oidcAudience);
   const jwksUri = str(input.oidcJwksUri);
+  const scope = str(input.oidcScope);
   const cfg: HelperFileConfig = {
     oidcIssuer: issuer,
     ...(clientId ? { oidcClientId: clientId } : {}),
     ...(audience ? { oidcAudience: audience } : {}),
     ...(jwksUri ? { oidcJwksUri: jwksUri } : {}),
+    // Entra kräver byråns API-scope (#1149) — tappades förr här.
+    ...(scope ? { oidcScope: scope } : {}),
   };
   deps.mkdirp(dir);
   deps.writeText(join(dir, "helper-config.json"), JSON.stringify(cfg, null, 2));

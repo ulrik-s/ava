@@ -30,6 +30,10 @@ export interface ServerDeps {
   version: string;
   /** Extra tillåtna origins (från AVA_HELPER_ORIGINS). */
   extraOrigins?: readonly string[];
+  /** Origins användaren godkänt (trust-on-first-use, #1149). Läses per request. */
+  approvedOrigins?: () => readonly string[];
+  /** Anrop från en origin som inte släpps in → skalet kan fråga användaren. */
+  onUnknownOrigin?: (origin: string) => void;
   onOpen?: (req: Request) => Promise<Response>;
   onComposeMail?: (req: Request) => Promise<Response>;
   /** Trigga uppdaterings-kontroll. undefined → endpointen svarar 500 (ej konfigurerad). */
@@ -50,13 +54,20 @@ const EMPTY_STATUS: HelperStatusResponse = { pending: 0, conflict: 0, total: 0, 
 export function createHandler(deps: ServerDeps): (req: Request) => Promise<Response> {
   return async (req: Request): Promise<Response> => {
     const origin = req.headers.get("Origin") ?? "";
-    const allowed = isAllowedOrigin(origin, deps.extraOrigins ?? []);
+    const allowed = corsAllowed(origin, deps);
     if (req.method === "OPTIONS") {
       return withCors(new Response(null, { status: 204 }), origin, allowed);
     }
     const res = await route(req, deps);
     return withCors(res, origin, allowed);
   };
+}
+
+/** Släpp in origin? Okända rapporteras så skalet kan fråga användaren (#1149). */
+function corsAllowed(origin: string, deps: ServerDeps): boolean {
+  const allowed = isAllowedOrigin(origin, [...(deps.extraOrigins ?? []), ...(deps.approvedOrigins?.() ?? [])]);
+  if (!allowed && origin !== "") deps.onUnknownOrigin?.(origin);
+  return allowed;
 }
 
 /**

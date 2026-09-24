@@ -13,9 +13,10 @@ import { asId } from "@/lib/shared/schemas/ids";
 
 import { buildAuthHeaderProvider } from "../src/engine/auth/auth-provider.ts";
 import { parseCallback, waitForCallback } from "../src/engine/auth/callback-server.ts";
-import { loginConfigFromEnv, runLogin, type LoginDeps } from "../src/engine/auth/login.ts";
+import { loginConfigFromEnv, runLogin, type LoginConfig, type LoginDeps } from "../src/engine/auth/login.ts";
 import type { OidcEndpoints } from "../src/engine/auth/oidc.ts";
 import { InMemoryTokenStore } from "../src/engine/auth/token-store.ts";
+import { reloadableAuth } from "../src/engine/main.ts";
 import { UploadQueue } from "../src/engine/queue.ts";
 
 const EP: OidcEndpoints = {
@@ -169,5 +170,21 @@ describe("UploadQueue tokenProvider (autonom Bearer vid drain)", () => {
     await q.drainOnce();
     expect(puts[0]).toBe("Bearer BROWSER");
     await cleanup();
+  });
+});
+
+describe("reloadableAuth (#1149 — config efter start tar effekt utan omstart)", () => {
+  test("ingen config → undefined; efter reload med config → token från byggd provider", async () => {
+    let cfg: LoginConfig | null = null;
+    const built: LoginConfig[] = [];
+    const auth = reloadableAuth(() => cfg, new InMemoryTokenStore(), (c) => {
+      built.push(c);
+      return async () => "Bearer tok";
+    });
+    expect(await auth.provider()).toBeUndefined();
+    cfg = { issuer: "https://login.microsoftonline.com/t/v2.0", clientId: "c", redirectPort: 48765 };
+    auth.reload();
+    expect(await auth.provider()).toBe("Bearer tok");
+    expect(built).toEqual([cfg]);
   });
 });

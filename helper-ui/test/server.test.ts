@@ -51,6 +51,24 @@ describe("CORS", () => {
     expect(res.headers.get("Access-Control-Allow-Origin")).toBeNull();
   });
 
+  test("godkänd origin (trust-on-first-use) släpps in och läses per request", async () => {
+    const approved: string[] = [];
+    const h = handler({ approvedOrigins: () => approved });
+    const opts = { method: "OPTIONS", headers: { Origin: "https://ava-crm.io" } };
+    expect((await h(req("/ping", opts))).headers.get("Access-Control-Allow-Origin")).toBeNull();
+    approved.push("https://ava-crm.io");
+    expect((await h(req("/ping", opts))).headers.get("Access-Control-Allow-Origin")).toBe("https://ava-crm.io");
+  });
+
+  test("okänd origin rapporteras (skalet kan fråga), godkänd/utan origin gör det inte", async () => {
+    const unknown: string[] = [];
+    const h = handler({ extraOrigins: ["https://ok.example"], onUnknownOrigin: (o) => unknown.push(o) });
+    await h(req("/ping", { headers: { Origin: "https://ava-crm.io" } }));
+    await h(req("/ping", { headers: { Origin: "https://ok.example" } }));
+    await h(req("/ping"));
+    expect(unknown).toEqual(["https://ava-crm.io"]);
+  });
+
   test("custom origin via extraOrigins", async () => {
     const h = handler({ extraOrigins: ["https://firma.ava.se"] });
     const res = await h(req("/ping", { method: "OPTIONS", headers: { Origin: "https://firma.ava.se" } }));

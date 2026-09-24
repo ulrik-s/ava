@@ -131,6 +131,13 @@ export interface HelperConfigRequest {
   oidcAudience?: string;
   /** Explicit JWKS-URL (valfri; annars härleds ur issuern). */
   oidcJwksUri?: string;
+  /**
+   * OAuth-scope helpern ber om (valfri; default `openid email profile
+   * offline_access`). Entra kräver byråns API-scope, t.ex.
+   * `api://<klient-id>/access_as_user openid email profile offline_access`,
+   * annars får token Graph som audience och AVA kan inte verifiera den (#1149).
+   */
+  oidcScope?: string;
 }
 
 /**
