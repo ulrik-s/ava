@@ -11,7 +11,7 @@ import type { QueuedMutation } from "@/lib/server/data-store/in-memory/mutation-
 import type { PullResult, PushResult, SyncTransport } from "@/lib/server/data-store/in-memory/sync-transport";
 import { InMemoryMatterRepository } from "@/lib/server/repositories/in-memory-matter-repository";
 import { asId } from "@/lib/shared/schemas/ids";
-import { uuidv7 } from "@/lib/shared/uuid";
+import { isUuid, uuidv7 } from "@/lib/shared/uuid";
 
 class FakeTransport implements SyncTransport {
   pullResult: PullResult = { changes: [], cursor: 0 };
@@ -225,5 +225,42 @@ describe("CachingSyncDataStore (#415)", () => {
       await ds.reconcile();
       expect(saves).toBe(1); // tom poll-reconcile → ingen extra skrivning
     });
+  });
+});
+
+describe("CachingSyncDataStore — räddning av rader med icke-uuid-id (2026-09-23)", () => {
+  // Så låg Cecilias data: sparad lokalt, kön redan tömd (servern svarade
+  // "accepted" utan att spara), id:n i det gamla formatet.
+  const legacy = () => new InMemoryPersistence({
+    contacts: [{ id: "muej66a9-jd9ieu", organizationId: ORG, name: "Klient AB", createdAt: "2026-09-23T19:00:00.000Z" }],
+    matters: [{ ...matter("muej7b10-x81kd2", "Avtalstvist"), createdAt: "2026-09-23T19:05:00.000Z" }],
+    matterContacts: [{
+      id: "muej7b11-aa11bb", matterId: "muej7b10-x81kd2", contactId: "muej66a9-jd9ieu", role: "CLIENT",
+      createdAt: "2026-09-23T19:05:01.000Z",
+    }],
+  } as never);
+
+  it("köar raderna med uuid och rätt referenser — nästa reconcile pushar dem till servern", async () => {
+    const transport = new FakeTransport();
+    const persistence = legacy();
+    const ds = await CachingSyncDataStore.create({ transport, persistence });
+    expect(ds.pendingCount()).toBe(3);
+
+    await ds.reconcile();
+    expect(transport.pushed.map((m) => m.entity)).toEqual(["contact", "matter", "matterContact"]);
+    expect(transport.pushed.every((m) => isUuid(m.row.id))).toBe(true);
+    const [contact, mat, link] = transport.pushed;
+    expect(link!.row.contactId).toBe(contact!.row.id);
+    expect(link!.row.matterId).toBe(mat!.row.id);
+  });
+
+  it("den reparerade storen persisteras — nästa uppstart köar inget igen", async () => {
+    const persistence = legacy();
+    await CachingSyncDataStore.create({ transport: new FakeTransport(), persistence });
+    const saved = await persistence.hydrate();
+    expect(isUuid(saved?.contacts?.[0]?.id)).toBe(true);
+
+    const again = await CachingSyncDataStore.create({ transport: new FakeTransport(), persistence });
+    expect(again.pendingCount()).toBe(0);
   });
 });

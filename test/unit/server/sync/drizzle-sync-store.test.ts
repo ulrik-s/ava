@@ -172,12 +172,15 @@ describe("DrizzleSyncStore (#sync-bridge)", () => {
     expect(changes.find((c) => c.row.id === inv)).toMatchObject({ entity: "invoice" });
   });
 
-  // #879: en köad mutation med ett icke-uuid rowId (lokalt genererat nanoid) får
-  // ALDRIG kasta 22P02 och abortera reconcile-batchen → skippas som "accepted".
-  it("push med icke-uuid rowId skippas som accepted (kastar ej) (#879)", async () => {
+  // #879: en köad mutation med ett icke-uuid rowId (lokalt genererat) får ALDRIG
+  // kasta 22P02 och abortera reconcile-batchen. Men den får inte heller svaras
+  // "accepted": då trodde klienten att raden sparats fast den bara fanns lokalt
+  // (dataförlusten på ava-crm.io). "conflict" ackas också → ingen loop/hang.
+  it("push med icke-uuid rowId → conflict, kastar ej, sparar inget (#879)", async () => {
     const res = await sync.push(ORG, mut("invoice", "create", {
       id: "mrg6gvmu-gbvt9s", matterId: uuidv7(), amount: 100, invoiceDate: new Date(), status: "DRAFT",
     }));
-    expect(res.status).toBe("accepted"); // klienten ackar → slutar retry:a, ingen loop/hang
+    expect(res.status).toBe("conflict");
+    expect(res.status === "conflict" && res.reason).toMatch(/ogiltigt id/);
   });
 });

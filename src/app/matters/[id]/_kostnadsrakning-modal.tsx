@@ -30,6 +30,7 @@ import type { TaxaLevel } from "@/lib/shared/brottmalstaxa";
 import { buildKostnadsrakningContext } from "@/lib/shared/kostnadsrakning";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import type { MatterId } from "@/lib/shared/schemas/ids";
+import { uuidv7 } from "@/lib/shared/uuid";
 
 interface Props {
   matterId: MatterId;
@@ -222,7 +223,8 @@ function useKostnadsrakningModal(props: Props) {
     setGenerating(true);
     try {
       const fileName = `Kostnadsräkning ${props.matterNumber} ${new Date().toISOString().slice(0, 10)}.pdf`;
-      const docId = `kostn-${props.matterNumber}-${Date.now().toString(36)}`;
+      // uuid — servern lagrar bara uuid-nycklade rader (dataförlusten 2026-09-23).
+      const docId = uuidv7();
       // Riktig PDF direkt (pdf-lib, client-side) — öppnas inline i webbläsaren,
       // ingen utskrift behövs.
       const bytes = await renderKostnadsrakningPdf({
