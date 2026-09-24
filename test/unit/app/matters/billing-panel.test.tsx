@@ -8,7 +8,7 @@
  * dialogerna stubbas (de har egna tester) så panelens egen logik isoleras.
  */
 
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { BillingPanel } from "@/app/matters/[id]/_billing-panel";
 import { asId } from "@/lib/shared/schemas/ids";
@@ -59,6 +59,14 @@ vi.mock("@/lib/client/trpc", () => ({
       getSettings: { useQuery: () => ({ data: { name: "Byrå AB", orgNumber: "556677-8899", address: "Storgatan 1" } }) },
     },
     user: { current: { useQuery: () => ({ data: { name: "Adv. Anna", email: "anna@byra.se" } }) } },
+    // DataTable (faktura-listan, #1146) läser/sparar vy-inställningar.
+    prefs: {
+      get: { useQuery: () => ({ data: undefined, isLoading: false }) },
+      save: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      clear: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      setOrgDefault: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      clearOrgDefault: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+    },
     expense: { list: { useQuery: () => ({ data: { expenses: [] } }) } },
     timeEntry: { list: { useQuery: () => ({ data: { entries: [] } }) } },
     document: {
@@ -145,6 +153,19 @@ describe("BillingPanel — översikt", () => {
     };
     render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={baseMatter} />);
     expect(screen.getByText("F-1")).toBeInTheDocument();
+  });
+
+  it("faktura-listan har Kolumner-knappen och kan dölja en kolumn (#1146)", () => {
+    runsData = {
+      runs: [
+        { id: "r1", type: "ACCONTO", status: "SENT", recipient: "KLIENT", amountOre: 100_000, createdAt: "2026-01-01", invoiceId: "inv-1", invoice: { id: "inv-1", invoiceNumber: "F-1" } },
+      ],
+    };
+    render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={baseMatter} />);
+    fireEvent.click(screen.getByRole("button", { name: "Kolumner" }));
+    fireEvent.click(within(screen.getByRole("group", { name: "Kolumner" })).getByRole("checkbox", { name: "Mottagare" }));
+    expect(screen.queryByRole("columnheader", { name: /Mottagare/ })).not.toBeInTheDocument();
+    expect(screen.getByText("F-1")).toBeInTheDocument(); // åtgärdskolumnen kan inte döljas
   });
 
   it("fristående klientfaktura (rådgivning, ingen run) visas i faktura-listan (#853)", () => {

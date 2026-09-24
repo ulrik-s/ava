@@ -7,6 +7,7 @@
  */
 
 import type { inferRouterOutputs } from "@trpc/server";
+import { DataTable, type Column } from "@/components/ui/data-table";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
@@ -89,51 +90,41 @@ function ArSummaryBody({ data }: { data: ArData }) {
 
 interface ArRow { id: string; invoiceNumber: string; invoiceDate: string; matterId: MatterId; matterNumber: string; title: string; fakturerat: number; inbetalt: number; avskrivet: number; utestaende: number }
 
-function ArInvoiceTable({ rows }: { rows: readonly ArRow[] }) {
-  return (
-    <div className="mt-6 overflow-x-auto">
-      <h3 className="text-sm font-medium text-gray-600 mb-2">Per faktura</h3>
-      <table className="min-w-full text-sm">
-        <thead>
-          <tr className="text-left text-xs text-gray-500 border-b border-gray-200">
-            <th className="py-1.5 font-normal">Fakturanr</th>
-            <th className="py-1.5 font-normal">Fakturadatum</th>
-            <th className="py-1.5 font-normal">Ärende</th>
-            <th className="py-1.5 font-normal text-right">Fakturerat</th>
-            <th className="py-1.5 font-normal text-right">Inbetalt</th>
-            <th className="py-1.5 font-normal text-right">Avskrivet</th>
-            <th className="py-1.5 font-normal text-right">Utestående</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-100">
-          {rows.map((r) => <ArInvoiceRow key={r.id} r={r} />)}
-        </tbody>
-      </table>
-    </div>
-  );
+const arDate = (r: ArRow): string => new Date(r.invoiceDate).toLocaleDateString("sv-SE");
+
+/** Ärende-cellen — länk när ärendet finns kvar. */
+function ArMatterCell({ r }: { r: ArRow }) {
+  const matterLabel = `${r.matterNumber}${r.title ? ` — ${r.title}` : ""}`;
+  return r.matterId
+    ? <EntityLink route="matters" id={r.matterId} className="text-gray-700 hover:underline">{matterLabel}</EntityLink>
+    : <span className="text-gray-700">{matterLabel}</span>;
 }
 
-function ArInvoiceRow({ r }: { r: ArRow }) {
-  const matterLabel = `${r.matterNumber}${r.title ? ` — ${r.title}` : ""}`;
+const AR_COLUMNS: Column<ArRow>[] = [
+  { key: "invoiceNumber", label: "Fakturanr", sortable: true, sortValue: (r) => r.invoiceNumber,
+    render: (r) => (
+      <EntityLink route="invoices" id={r.id} className="font-mono text-xs text-blue-600 hover:underline">
+        {r.invoiceNumber || arDate(r)}
+      </EntityLink>
+    ) },
+  { key: "invoiceDate", label: "Fakturadatum", sortable: true, sortValue: (r) => new Date(r.invoiceDate).getTime(),
+    render: (r) => <span className="font-mono text-xs text-gray-500">{arDate(r)}</span> },
+  { key: "matter", label: "Ärende", sortable: true, sortValue: (r) => r.matterNumber, wrap: true, render: (r) => <ArMatterCell r={r} /> },
+  { key: "fakturerat", label: "Fakturerat", sortable: true, sortValue: (r) => r.fakturerat, align: "right",
+    render: (r) => <span className="font-mono">{formatCurrency(r.fakturerat)}</span> },
+  { key: "inbetalt", label: "Inbetalt", sortable: true, sortValue: (r) => r.inbetalt, align: "right",
+    render: (r) => <span className="font-mono text-gray-600">{formatCurrency(r.inbetalt)}</span> },
+  { key: "avskrivet", label: "Avskrivet", sortable: true, sortValue: (r) => r.avskrivet, align: "right",
+    render: (r) => <span className="font-mono text-red-700">{r.avskrivet > 0 ? `−${formatCurrency(r.avskrivet)}` : "—"}</span> },
+  { key: "utestaende", label: "Utestående", sortable: true, sortValue: (r) => r.utestaende, align: "right",
+    render: (r) => <span className="font-mono font-medium">{formatCurrency(r.utestaende)}</span> },
+];
+
+function ArInvoiceTable({ rows }: { rows: readonly ArRow[] }) {
   return (
-    <tr>
-      <td className="py-1.5 whitespace-nowrap font-mono text-xs">
-        <EntityLink route="invoices" id={r.id} className="text-blue-600 hover:underline">
-          {r.invoiceNumber || new Date(r.invoiceDate).toLocaleDateString("sv-SE")}
-        </EntityLink>
-      </td>
-      <td className="py-1.5 whitespace-nowrap font-mono text-xs text-gray-500">{new Date(r.invoiceDate).toLocaleDateString("sv-SE")}</td>
-      <td className="py-1.5">
-        {r.matterId ? (
-          <EntityLink route="matters" id={r.matterId} className="text-gray-700 hover:underline">{matterLabel}</EntityLink>
-        ) : (
-          <span className="text-gray-700">{matterLabel}</span>
-        )}
-      </td>
-      <td className="py-1.5 text-right font-mono">{formatCurrency(r.fakturerat)}</td>
-      <td className="py-1.5 text-right font-mono text-gray-600">{formatCurrency(r.inbetalt)}</td>
-      <td className="py-1.5 text-right font-mono text-red-700">{r.avskrivet > 0 ? `−${formatCurrency(r.avskrivet)}` : "—"}</td>
-      <td className="py-1.5 text-right font-mono font-medium">{formatCurrency(r.utestaende)}</td>
-    </tr>
+    <div className="mt-6">
+      <h3 className="text-sm font-medium text-gray-600 mb-2">Per faktura</h3>
+      <DataTable prefKey="list.report-ar-invoices" columns={AR_COLUMNS} data={[...rows]} rowKey={(r) => r.id} />
+    </div>
   );
 }

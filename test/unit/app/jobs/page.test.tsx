@@ -15,6 +15,20 @@ const cancel = vi.fn();
 const retry = vi.fn();
 const clearFinished = vi.fn();
 
+vi.mock("@/lib/client/trpc", () => ({
+  trpc: {
+    useUtils: () => ({ prefs: { get: { invalidate: vi.fn() } } }),
+    // DataTable (#1146) läser/sparar vy-inställningar.
+    prefs: {
+      get: { useQuery: () => ({ data: undefined, isLoading: false }) },
+      save: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      clear: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      setOrgDefault: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      clearOrgDefault: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+    },
+    user: { current: { useQuery: () => ({ data: { id: "u1", role: "LAWYER" } }) } },
+  },
+}));
 vi.mock("@/lib/client/jobs/use-jobs", () => ({ useJobs: () => JOBS }));
 vi.mock("@/lib/client/jobs/job-queue", () => ({
   jobQueue: { cancel, retry, clearFinished },

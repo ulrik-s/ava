@@ -6,6 +6,7 @@
  */
 
 import { X, RotateCcw, Trash2 } from "lucide-react";
+import { DataTable, type Column } from "@/components/ui/data-table";
 import { jobQueue, type Job } from "@/lib/client/jobs/job-queue";
 import { useJobs } from "@/lib/client/jobs/use-jobs";
 
@@ -55,49 +56,41 @@ function Section({ title, jobs, emptyText }: { title: string; jobs: Job[]; empty
   return (
     <div>
       {title && <h2 className="text-sm font-semibold text-gray-700 mb-3">{title}</h2>}
-      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="text-left px-3 py-2 text-xs font-medium text-gray-500">Status</th>
-              <th className="text-left px-3 py-2 text-xs font-medium text-gray-500">Jobb</th>
-              <th className="text-left px-3 py-2 text-xs font-medium text-gray-500">Typ</th>
-              <th className="text-left px-3 py-2 text-xs font-medium text-gray-500">Tid</th>
-              <th className="text-right px-3 py-2 text-xs font-medium text-gray-500"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {jobs.map((j) => <JobRow key={j.id} job={j} />)}
-          </tbody>
-        </table>
-      </div>
+      <DataTable prefKey="list.jobs" columns={JOB_COLUMNS} data={jobs} rowKey={(j) => j.id} />
     </div>
   );
 }
 
-function JobRow({ job }: { job: Job }) {
-  // För körande jobb visar vi inget exakt millisek-värde (annars triggar
-  // varje setInterval en re-render). Bara start-tid och status räcker.
-  const elapsed = job.finishedAt !== undefined
-    ? job.finishedAt - (job.startedAt ?? job.enqueuedAt)
-    : null;
+/** Körtid för avslutade jobb. För körande jobb visar vi inget exakt millisek-värde
+ *  (annars triggar varje setInterval en re-render) — bara status räcker. */
+function elapsedMs(job: Job): number | null {
+  return job.finishedAt !== undefined ? job.finishedAt - (job.startedAt ?? job.enqueuedAt) : null;
+}
+
+/** Jobb-cellen: etikett + ev. felmeddelande. */
+function JobLabel({ job }: { job: Job }) {
   return (
-    <tr className="border-t border-gray-100">
-      <td className="px-3 py-2"><StatusBadge status={job.status} progress={job.progress} /></td>
-      <td className="px-3 py-2">
-        <div className="text-gray-900">{job.label}</div>
-        {job.error && (
-          <div className="text-xs text-red-600 font-mono mt-1 max-w-md truncate" title={job.error}>
-            {job.error}
-          </div>
-        )}
-      </td>
-      <td className="px-3 py-2 text-xs text-gray-500 font-mono">{job.kind}</td>
-      <td className="px-3 py-2 text-xs text-gray-500">{elapsed !== null ? formatMs(elapsed) : "—"}</td>
-      <td className="px-3 py-2 text-right"><JobActions job={job} /></td>
-    </tr>
+    <>
+      <div className="text-gray-900">{job.label}</div>
+      {job.error && (
+        <div className="text-xs text-red-600 font-mono mt-1 max-w-md truncate" title={job.error}>
+          {job.error}
+        </div>
+      )}
+    </>
   );
 }
+
+const JOB_COLUMNS: Column<Job>[] = [
+  { key: "status", label: "Status", sortable: true, sortValue: (j) => j.status, groupable: true,
+    render: (j) => <StatusBadge status={j.status} progress={j.progress} /> },
+  { key: "label", label: "Jobb", sortable: true, sortValue: (j) => j.label, wrap: true, render: (j) => <JobLabel job={j} /> },
+  { key: "kind", label: "Typ", sortable: true, sortValue: (j) => j.kind, groupable: true,
+    render: (j) => <span className="text-xs text-gray-500 font-mono">{j.kind}</span> },
+  { key: "elapsed", label: "Tid", sortable: true, sortValue: (j) => elapsedMs(j) ?? -1,
+    render: (j) => { const ms = elapsedMs(j); return <span className="text-xs text-gray-500">{ms !== null ? formatMs(ms) : "—"}</span>; } },
+  { key: "actions", label: "", align: "right", hideable: false, render: (j) => <JobActions job={j} /> },
+];
 
 /** Rad-actions: Avbryt (köad/körande) eller Försök igen (misslyckad/avbruten). */
 function JobActions({ job }: { job: Job }) {

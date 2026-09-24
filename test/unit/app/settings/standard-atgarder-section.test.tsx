@@ -22,6 +22,15 @@ const updateMutate = vi.fn();
 
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
+    // DataTable (#1146) läser/sparar vy-inställningar.
+    prefs: {
+      get: { useQuery: () => ({ data: undefined, isLoading: false }) },
+      save: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      clear: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      setOrgDefault: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      clearOrgDefault: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+    },
+    user: { current: { useQuery: () => ({ data: { id: "u1", role: "LAWYER" } }) } },
     useUtils: () => ({ organization: { getSettings: { invalidate: vi.fn() } } }),
     organization: {
       getSettings: { useQuery: () => settingsQuery },
