@@ -61,6 +61,14 @@ services:
       # Cookien får bara gå över TLS här — testriggen kör http och kan inte.
       OAUTH2_PROXY_COOKIE_SECURE: "true"
       OAUTH2_PROXY_SET_XAUTHREQUEST: "true"
+      # AVA Helper (ADR 0028) kör utanför browsern och har ingen session-cookie:
+      # den skickar sin EGEN Entra-access-token som `Authorization: Bearer`.
+      # "true" → oauth2-proxy verifierar token (signatur mot IdP:ns JWKS, issuer,
+      # `aud` = klient-id ovan) och sätter X-Auth-Request-Email ur dess `email`-
+      # claim — samma verifierade principal som cookie-vägen, ingen ny förtroende-
+      # väg förbi Caddy. OPT-IN: kräver Entra-konfigen i docs/self-hosted-entra.md
+      # (exponerat API + email i access-token). Av som default.
+      OAUTH2_PROXY_SKIP_JWT_BEARER_TOKENS: "${AVA_HELPER_ENABLED:-false}"
 
   # ─── Postgres: byråns akter ───────────────────────────────────────────
   postgres:
@@ -97,6 +105,14 @@ services:
       AVA_CONTENT_DIR: /data/content
       # "1" = inga mejl köas eller skickas (test-/pilotserver), se deploy-server-first.md.
       AVA_EMAIL_DISABLED: "${AVA_EMAIL_DISABLED:-}"
+      # AVA Helper (ADR 0028/0029): webbappen hämtar helperns inloggnings-config
+      # via `system.helperConfig` och pushar den till helpern. Tomt = av (default).
+      # Sätts i ava-server.env när Entra är konfigurerat, se docs/self-hosted-entra.md.
+      AVA_OIDC_ISSUER: "${AVA_HELPER_OIDC_ISSUER:-}"
+      AVA_OIDC_CLIENT_ID: "${AVA_HELPER_OIDC_CLIENT_ID:-}"
+      AVA_OIDC_AUDIENCE: "${AVA_HELPER_OIDC_AUDIENCE:-}"
+      # Entras JWKS ligger inte på Keycloak-vägen som är default (bearer-claims.ts).
+      AVA_OIDC_JWKS_URI: "${AVA_HELPER_OIDC_JWKS_URI:-}"
     volumes:
       - content:/data/content
     # /readyz rör DATABASEN (#1079). En attrapp som bara säger att processen
