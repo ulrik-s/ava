@@ -288,7 +288,7 @@ function DocumentTree({
 function UploadErrorBanner({ message, onDismiss }: { message: string; onDismiss: () => void }) {
   return (
     <div className="mx-6 mt-3 p-3 rounded-md border border-red-200 bg-red-50 text-sm text-red-800 flex items-start justify-between gap-3">
-      <span><strong>Uppladdning misslyckades:</strong> {message}</span>
+      <span className="whitespace-pre-line"><strong>Uppladdning misslyckades:</strong> {message}</span>
       <button
         type="button"
         onClick={onDismiss}
@@ -356,12 +356,8 @@ function useFileUpload({ matterId, mutations, fileInputRef }: {
   const [pendingUploads, setPendingUploads] = useState<DocumentRecord[]>([]);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
-  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploadError(null);
-    setUploading(true);
-
+  /** En fil: placeholder → register → bytes → bakgrundsjobb. Kastar vid fel. */
+  async function uploadOne(file: File): Promise<void> {
     // Optimistisk rad — användaren ser filen direkt i listan, greyed,
     // med "Lokal"-pill. Tas bort när tree-refetch klart.
     const placeholderId = `pending-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
@@ -423,13 +419,35 @@ function useFileUpload({ matterId, mutations, fileInputRef }: {
       if (serverBytes) void suggestFromUpload(utils.client, result, serverBytes);
     } catch (err) {
       removePlaceholder();
-      const msg = err instanceof Error ? err.message : String(err);
-      setUploadError(msg);
-      console.error("[upload]", err);
+      throw err;
+    }
+  }
+
+  /**
+   * Alla valda filer, EN I TAGET: parallellt hade tRPC:s batch-länk packat
+   * allihop i en enda jättestor request. En fil som fallerar stoppar inte de
+   * andra — felen samlas per fil.
+   */
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) return;
+    setUploadError(null);
+    setUploading(true);
+    const errors: string[] = [];
+    try {
+      for (const file of files) {
+        try {
+          await uploadOne(file);
+        } catch (err) {
+          console.error("[upload]", err);
+          errors.push(`${file.name}: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
+    if (errors.length > 0) setUploadError(errors.join("\n"));
   }
 
   return { uploading, uploadingIds, pendingUploads, uploadError, setUploadError, handleFileUpload };
@@ -578,6 +596,7 @@ function BrowserHeader({
           <input
             ref={fileInputRef}
             type="file"
+            multiple
             className="hidden"
             onChange={onUpload}
             disabled={uploading}

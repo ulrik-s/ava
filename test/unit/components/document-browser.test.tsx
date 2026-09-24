@@ -512,3 +512,37 @@ describe("DocumentBrowser", () => {
     expect(screen.getByText(/500 B/)).toBeInTheDocument();
   });
 });
+
+describe("DocumentBrowser — flera filer på en gång", () => {
+  function pick(files: File[]): void {
+    const input = document.querySelector("input[type=file]")!;
+    Object.defineProperty(input, "files", { value: files, configurable: true });
+    fireEvent.change(input);
+  }
+  const pdf = (name: string) => new File(["%PDF"], name, { type: "application/pdf" });
+
+  it("filväljaren tillåter flera filer", () => {
+    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    expect(document.querySelector("input[type=file]")!.hasAttribute("multiple")).toBe(true);
+  });
+
+  it("laddar upp ALLA valda filer, i tur och ordning (förut bara den första)", async () => {
+    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    pick([pdf("stamning.pdf"), pdf("svaromal.pdf"), pdf("dom.pdf")]);
+    await waitFor(() => expect(mutationStubs.register.mutateAsync).toHaveBeenCalledTimes(3));
+    const names = mutationStubs.register.mutateAsync.mock.calls.map((c: readonly unknown[]) => (c[0] as { fileName: string }).fileName);
+    expect(names).toEqual(["stamning.pdf", "svaromal.pdf", "dom.pdf"]);
+  });
+
+  it("en fil som fallerar stoppar inte de andra, och felet säger vilken fil", async () => {
+    mutationStubs.register.mutateAsync
+      .mockResolvedValueOnce({})
+      .mockRejectedValueOnce(new Error("för stor"))
+      .mockResolvedValueOnce({});
+    render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+    pick([pdf("a.pdf"), pdf("b.pdf"), pdf("c.pdf")]);
+    await waitFor(() => expect(screen.getByText(/b\.pdf: för stor/)).toBeInTheDocument());
+    expect(mutationStubs.register.mutateAsync).toHaveBeenCalledTimes(3);
+    expect(screen.queryByText(/a\.pdf:/)).not.toBeInTheDocument();
+  });
+});
