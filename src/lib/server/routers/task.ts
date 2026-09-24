@@ -55,6 +55,18 @@ export const taskRouter = router({
       ),
     ),
 
+  /**
+   * Ärendets frister och att-göra-poster — alla användares (#1162). Ärendet
+   * måste tillhöra användarens org; annars NOT_FOUND (inget läckage mellan byråer).
+   */
+  listForMatter: protectedProcedure
+    .input(z.object({ matterId: matterIdSchema }))
+    .query(async ({ ctx, input }) => {
+      const org = asId<"OrganizationId">(ctx.user.organizationId);
+      if (!(await ctx.repos.matters.getByIdInOrg(input.matterId, org))) throw new TRPCError({ code: "NOT_FOUND" });
+      return ctx.repos.tasks.listForMatter(input.matterId, org);
+    }),
+
   create: protectedProcedure
     .input(createInput)
     .mutation(({ ctx, input }) => {

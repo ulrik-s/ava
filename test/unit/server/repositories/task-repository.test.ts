@@ -34,6 +34,22 @@ describe("TaskRepository — in-memory", () => {
     expect(await repo.getOwned(t1, userId, org)).toMatchObject({ id: t1 });
     expect(await repo.getOwned(t1, asId<"UserId">(uuidv7()), org)).toBeNull(); // annan user
   });
+
+  it("listForMatter: ALLA användares uppgifter i ärendet (#1162), bara den org:en", async () => {
+    const org = asId<"OrganizationId">("org-1");
+    const mId = asId<"MatterId">(uuidv7());
+    const store = new LocalStore({
+      matters: [{ id: mId, organizationId: org, matterNumber: "2026-1", title: "T" }],
+      tasks: [
+        { id: asId<"TaskId">(uuidv7()), userId: asId<"UserId">(uuidv7()), organizationId: org, title: "Anna", status: "TODO", matterId: mId },
+        { id: asId<"TaskId">(uuidv7()), userId: asId<"UserId">(uuidv7()), organizationId: org, title: "Bo", status: "DONE", matterId: mId },
+        { id: asId<"TaskId">(uuidv7()), userId: asId<"UserId">(uuidv7()), organizationId: org, title: "Annat ärende", status: "TODO", matterId: null },
+        { id: asId<"TaskId">(uuidv7()), userId: asId<"UserId">(uuidv7()), organizationId: asId<"OrganizationId">("org-2"), title: "Annan byrå", status: "TODO", matterId: mId },
+      ],
+    }, async () => {});
+    const rows = await new InMemoryTaskRepository(store).listForMatter(mId, org);
+    expect(rows.map((r) => r.title).sort()).toEqual(["Anna", "Bo"]);
+  });
 });
 
 describe("TaskRepository — Drizzle (pglite)", () => {
@@ -60,5 +76,21 @@ describe("TaskRepository — Drizzle (pglite)", () => {
     expect(withMatter.matter?.matterNumber).toBe("2026-1");
     expect(await repo.getOwned(t1, userId, org)).toMatchObject({ id: t1 });
     expect(await repo.getOwned(t1, asId<"UserId">(uuidv7()), org)).toBeNull();
+  });
+
+  it("listForMatter: alla användares, ej raderade, bara org:en (#1162)", async () => {
+    const db = handle.db;
+    const org = asId<"OrganizationId">(uuidv7());
+    const mId = asId<"MatterId">(uuidv7());
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const v = (o: Record<string, unknown>) => ({ version: 1, ...o }) as any;
+    await db.insert(matters).values(v({ id: mId, organizationId: org, matterNumber: "2026-2", title: "T" }));
+    await db.insert(tasks).values(v({ id: uuidv7(), userId: uuidv7(), organizationId: org, title: "Anna", status: "TODO", matterId: mId, dueAt: new Date("2026-02-01") }));
+    await db.insert(tasks).values(v({ id: uuidv7(), userId: uuidv7(), organizationId: org, title: "Bo", status: "TODO", matterId: mId, dueAt: new Date("2026-01-01") }));
+    await db.insert(tasks).values(v({ id: uuidv7(), userId: uuidv7(), organizationId: org, title: "Raderad", status: "TODO", matterId: mId, deletedAt: new Date() }));
+    await db.insert(tasks).values(v({ id: uuidv7(), userId: uuidv7(), organizationId: uuidv7(), title: "Annan byrå", status: "TODO", matterId: mId }));
+    const rows = await new DrizzleTaskRepository(db).listForMatter(mId, org);
+    expect(rows.map((r) => r.title)).toEqual(["Bo", "Anna"]); // dueAt asc
+    expect(rows[0]!.matter?.matterNumber).toBe("2026-2");
   });
 });

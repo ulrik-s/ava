@@ -13,6 +13,7 @@
 import { Plus, Calendar as CalendarIcon, Clock, MapPin } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { DeadlinesAlert } from "@/components/tasks/deadlines-alert";
 import { Modal } from "@/components/ui/modal";
 import { WatchlistList } from "@/components/watchlist/watchlist-list";
 import { EntityLink } from "@/lib/client/demo/entity-link";
@@ -57,6 +58,7 @@ export default function Dashboard() {
         <DaySwitcher ymd={ymd} onChange={setYmd} />
       </div>
 
+      <DeadlinesAlert />
       <WatchlistCard />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">

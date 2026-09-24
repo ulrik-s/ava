@@ -3,9 +3,9 @@
  * `listForUser` left-joinar matter (nullable FK), `getOwned` ägar-scopar.
  */
 
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, isNull, type SQL } from "drizzle-orm";
 import type { Task } from "@/lib/shared/schemas/calendar";
-import type { OrganizationId, TaskId, UserId } from "@/lib/shared/schemas/ids";
+import type { MatterId, OrganizationId, TaskId, UserId } from "@/lib/shared/schemas/ids";
 import { matters, tasks } from "../db/schema";
 import type { AppDb } from "../db/types";
 import { DrizzleRepository, versionedTable } from "./drizzle-repository";
@@ -17,6 +17,20 @@ export class DrizzleTaskRepository extends DrizzleRepository<Task> implements Ta
   }
 
   async listForUser(userId: UserId, organizationId: OrganizationId, filter: TaskListFilter): Promise<TaskListRow[]> {
+    return this.list(and(
+      eq(tasks.userId, userId),
+      eq(tasks.organizationId, organizationId),
+      filter.status ? eq(tasks.status, filter.status) : undefined,
+      filter.matterId ? eq(tasks.matterId, filter.matterId) : undefined,
+    ));
+  }
+
+  async listForMatter(matterId: MatterId, organizationId: OrganizationId): Promise<TaskListRow[]> {
+    return this.list(and(eq(tasks.matterId, matterId), eq(tasks.organizationId, organizationId)));
+  }
+
+  /** Uppgifter (ej raderade) med ärende-subset, dueAt asc. */
+  private async list(where: SQL | undefined): Promise<TaskListRow[]> {
     const rows = await this.db
       .select({
         t: tasks,
@@ -24,13 +38,7 @@ export class DrizzleTaskRepository extends DrizzleRepository<Task> implements Ta
       })
       .from(tasks)
       .leftJoin(matters, eq(tasks.matterId, matters.id))
-      .where(and(
-        eq(tasks.userId, userId),
-        eq(tasks.organizationId, organizationId),
-        isNull(tasks.deletedAt),
-        filter.status ? eq(tasks.status, filter.status) : undefined,
-        filter.matterId ? eq(tasks.matterId, filter.matterId) : undefined,
-      ))
+      .where(and(isNull(tasks.deletedAt), where))
       .orderBy(asc(tasks.dueAt));
     return rows.map((r): TaskListRow => ({
       ...r.t,
