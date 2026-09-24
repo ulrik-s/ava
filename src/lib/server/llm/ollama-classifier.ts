@@ -8,7 +8,7 @@
  * klassificering ger ALLTID ett vettigt värde även om LLM:en är nere.
  */
 
-import { KNOWN_KINDS, type DocumentKind, guessFromFilename } from "@/lib/shared/document-kind";
+import { KIND_DESCRIPTIONS, KNOWN_KINDS, type DocumentKind, guessFromFilename } from "@/lib/shared/document-kind";
 
 export interface LlmConfig {
   /** OpenAI-kompatibel bas-URL, t.ex. `http://ollama:11434/v1`. */
@@ -71,12 +71,15 @@ async function chat(config: LlmConfig, doFetch: FetchLike, system: string, user:
   }
 }
 
+/** "KOD = beskrivning" per rad (#1156 — koderna ensamma räckte inte för en liten modell). */
+const KIND_LINES = KNOWN_KINDS.map((k) => `${k} = ${KIND_DESCRIPTIONS[k]}`).join("\n");
+
 /** Klassificera till EN kategori; null vid fel/okänt svar. */
 async function askOllama(config: LlmConfig, doFetch: FetchLike, text: string): Promise<DocumentKind | null> {
   const out = await chat(
     config, doFetch,
     "Du klassificerar svenska juridiska dokument. Svara med EXAKT ETT ord — en av kategorierna.",
-    `Kategorier: ${KNOWN_KINDS.join(", ")}.\nVälj den som bäst beskriver dokumentet (OKLASSIFICERAT om ingen passar).\n\nDokument:\n"""${text.slice(0, MAX_TEXT)}"""`,
+    `Kategorier:\n${KIND_LINES}\n\nSvara med kategorins kod (ordet före =).\n\nDokument:\n"""${text.slice(0, MAX_TEXT)}"""`,
   );
   return out ? matchKind(out) : null;
 }

@@ -297,3 +297,28 @@ annars saknar helperns token det oauth2-proxy verifierar mot — se
 ```bash
 docker compose -f tooling/docker/docker-compose.production.yml up -d oauth2-proxy server-first
 ```
+
+## Dokumentklassificering med lokal LLM (valfritt)
+
+Uppladdade dokument klassificeras (stämning, dom, fullmakt …) av ett jobb på
+servern. Utan LLM tittar det bara på filnamnet. Med den lokala modellen läses
+dokumentets text — ingen text lämnar servern.
+
+I `ava-server.env`:
+
+```bash
+COMPOSE_PROFILES=llm
+AVA_LLM_ENDPOINT=http://ollama:11434/v1
+AVA_LLM_MODEL=qwen2.5:1.5b
+```
+
+```bash
+docker compose -f tooling/docker/docker-compose.production.yml up -d ollama server-first
+docker compose -f tooling/docker/docker-compose.production.yml logs -f ollama   # modellen laddas ner första gången (~1 GB)
+```
+
+Modellen är liten med flit: en server med 2 vCPU och ingen GPU klassificerar
+ett dokument på ~11 s med `qwen2.5:1.5b` (6 av 7 rätt på testdokument), och
+`qwen2.5:3b` tar dubbelt så lång tid för samma resultat. Ollama har ett
+minnestak på 3 GB. Byt modell genom att ändra `AVA_LLM_MODEL` och starta om
+`ollama` + `server-first` — nedladdningen sker automatiskt.
