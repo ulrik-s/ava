@@ -117,3 +117,40 @@ du resolvas som **ADMIN**. Klart.
 Bakom riktig HTTPS: sätt `OIDC_COOKIE_SECURE=true` och en publik
 `--oidc-redirect`/redirect-URI. Maskin-/CLI-klienter (git clone, server-runtime)
 använder PAT separat från människo-OIDC. Se [`docs/auth.md`](auth.md) + ADR 0009.
+
+## AVA Helper
+
+Helpern (ADR 0028) loggar in mot Entra själv — med PKCE, ingen hemlighet — och
+skickar sin access-token till AVA som `Authorization: Bearer`. oauth2-proxy
+verifierar den (`AVA_HELPER_ENABLED`, se
+[deploy-server-first.md](deploy-server-first.md#ava-helper-valfritt)) och kräver
+då två saker av tokenet: `aud` = appens klient-id och ett `email`-claim. Samma
+app-registrering som webbinloggningen används — helpern blir en publik klient
+på den.
+
+I **App registrations → din AVA-app**:
+
+1. **Expose an API** → *Application ID URI* → `api://<klient-id>` → **Add a
+   scope** `access_as_user` (vem kan godkänna: *Admins and users*).
+2. **Manifest** → `api.requestedAccessTokenVersion: 2` (i det äldre
+   manifestformatet heter fältet `accessTokenAcceptedVersion`). v2-token har
+   `aud` = klient-id och samma issuer (`…/v2.0`) som webbinloggningen — v1-token
+   har `aud` = `api://…` och en annan issuer, och oauth2-proxy avvisar dem.
+3. **Token configuration** → **Add optional claim** → *Access* → `email`.
+   Entras access-token saknar e-post som standard, och AVA identifierar
+   användaren på e-post (ADR 0009).
+4. **Manifest** → lägg helperns loopback-redirect under `publicClient`:
+
+   ```json
+   "publicClient": { "redirectUris": ["http://127.0.0.1:48765/callback"] }
+   ```
+
+   Portalens textfält godtar inte `http://127.0.0.1` — det måste in via
+   manifestet (i det äldre formatet: `replyUrlsWithType` med
+   `"type": "InstalledClient"`).
+5. **Authentication** → *Allow public client flows* → **Yes**.
+6. **API permissions** → **Grant admin consent** (så att användarna inte
+   får en godkännandedialog för `access_as_user`).
+
+Scopet helpern ska be om är `api://<klient-id>/access_as_user openid email
+profile offline_access`.

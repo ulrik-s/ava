@@ -273,3 +273,26 @@ halvt schema efter sig.
 > migreringen vägrar, eftersom den inte kan veta vilka filer som körts. Kör
 > `avarun tooling/scripts/db-migrate.ts --baseline` EN gång, INNAN du drar ner
 > nya migrationer — det markerar alla filer i checkouten som körda.
+
+## AVA Helper (valfritt)
+
+Helpern (ADR 0028) öppnar dokument i Word/Excel på användarens dator och
+synkar tillbaka. Den kör utanför browsern och har ingen session-cookie, så den
+loggar in mot byråns IdP själv och skickar sin access-token som
+`Authorization: Bearer`. Allt är **av** tills du slår på det i `ava-server.env`:
+
+| Variabel | Värde (Entra) | Gör |
+|---|---|---|
+| `AVA_HELPER_ENABLED` | `true` | oauth2-proxy accepterar verifierade Bearer-token (signatur, issuer, `aud` = `OAUTH2_PROXY_CLIENT_ID`) och sätter `X-Auth-Request-Email` ur tokenets `email`-claim — samma principal som cookie-vägen |
+| `AVA_HELPER_OIDC_ISSUER` | samma som `OIDC_ISSUER_URL` (`https://login.microsoftonline.com/<tenant>/v2.0`) | webbappen pushar helperns inloggnings-config (`system.helperConfig`) |
+| `AVA_HELPER_OIDC_CLIENT_ID` | samma som `OAUTH2_PROXY_CLIENT_ID` | klient-id helpern loggar in med |
+| `AVA_HELPER_OIDC_JWKS_URI` | `https://login.microsoftonline.com/<tenant>/discovery/v2.0/keys` | Entras nycklar (default-vägen är Keycloaks) |
+| `AVA_HELPER_OIDC_AUDIENCE` | tomt | lämna tomt — oauth2-proxy kontrollerar `aud` |
+
+Entra-appen måste först exponera ett API och lägga `email` i access-token,
+annars saknar helperns token det oauth2-proxy verifierar mot — se
+[self-hosted-entra.md](self-hosted-entra.md#ava-helper).
+
+```bash
+docker compose -f tooling/docker/docker-compose.production.yml up -d oauth2-proxy server-first
+```
