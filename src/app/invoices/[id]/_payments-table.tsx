@@ -1,5 +1,6 @@
 "use client";
 
+import { DataTable, type Column } from "@/components/ui/data-table";
 import { Money } from "@/components/ui/money";
 
 interface Payment {
@@ -15,6 +16,16 @@ interface Props {
   paidSum: number;
 }
 
+const COLUMNS: Column<Payment>[] = [
+  { key: "paidAt", label: "Datum", sortable: true, sortValue: (p) => new Date(p.paidAt).getTime(),
+    render: (p) => new Date(p.paidAt).toLocaleDateString("sv-SE") },
+  { key: "recordedBy", label: "Registrerad av", sortable: true, sortValue: (p) => p.recordedBy?.name ?? "",
+    render: (p) => <span className="text-gray-600">{p.recordedBy?.name ?? "—"}</span> },
+  { key: "note", label: "Notering", wrap: true, render: (p) => <span className="text-gray-600">{p.note ?? "—"}</span> },
+  { key: "amount", label: "Belopp", sortable: true, sortValue: (p) => p.amount, align: "right",
+    render: (p) => <Money ore={p.amount} basis="gross" className="font-mono" /> },
+];
+
 export function PaymentsTable({ payments, paidSum }: Props) {
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-6">
@@ -22,30 +33,11 @@ export function PaymentsTable({ payments, paidSum }: Props) {
       {payments.length === 0 ? (
         <p className="text-sm text-gray-500">Inga betalningar registrerade.</p>
       ) : (
-        <table className="min-w-full text-sm">
-          <thead>
-            <tr className="text-xs text-gray-500">
-              <th className="text-left pb-2">Datum</th>
-              <th className="text-left pb-2">Registrerad av</th>
-              <th className="text-left pb-2">Notering</th>
-              <th className="text-right pb-2">Belopp</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {payments.map((p) => (
-              <tr key={p.id}>
-                <td className="py-2">{new Date(p.paidAt).toLocaleDateString("sv-SE")}</td>
-                <td className="py-2 text-gray-600">{p.recordedBy?.name ?? "—"}</td>
-                <td className="py-2 text-gray-600">{p.note ?? "—"}</td>
-                <td className="py-2 text-right"><Money ore={p.amount} basis="gross" className="font-mono" /></td>
-              </tr>
-            ))}
-            <tr className="font-medium">
-              <td colSpan={3} className="pt-3">Totalt betalat</td>
-              <td className="pt-3 text-right"><Money ore={paidSum} basis="gross" className="font-mono" /></td>
-            </tr>
-          </tbody>
-        </table>
+        <DataTable prefKey="list.invoice-payments" columns={COLUMNS} data={payments} rowKey={(p) => p.id}
+          footer={() => ({
+            paidAt: <span className="font-medium">Totalt betalat</span>,
+            amount: <Money ore={paidSum} basis="gross" className="font-mono font-medium" />,
+          })} />
       )}
     </div>
   );

@@ -11,6 +11,7 @@
  */
 
 import { useMemo, useState } from "react";
+import { DataTable, type Column } from "@/components/ui/data-table";
 import { Money } from "@/components/ui/money";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
@@ -173,26 +174,8 @@ function ReceivableSuggestions({
         Matchade på ärende-/målnummer i betalningens referens. Bekräfta varje avprickning —
         utbetalt belopp bokas (ev. prutning hanteras automatiskt, #173).
       </p>
-      <table className="min-w-full text-sm">
-        <tbody className="divide-y divide-gray-100">
-          {suggestions.map((s) => (
-            <tr key={s.reference}>
-              <td className="py-2">{labels[s.receivableId] ?? s.receivableId}</td>
-              <td className="py-2 text-xs text-gray-500 font-mono">{s.matchedText}</td>
-              <td className="py-2 text-right font-mono"><Money ore={s.amountOre} basis="gross" /></td>
-              <td className="py-2 text-right">
-                <button
-                  onClick={() => onSettle(s)}
-                  disabled={busy}
-                  className="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
-                >
-                  Pricka av
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <DataTable prefKey="list.payments-import-receivables" data={suggestions} rowKey={(s) => s.reference}
+        columns={suggestionColumns(labels, busy, onSettle)} />
     </div>
   );
 }
@@ -234,20 +217,8 @@ function ImportPreview({ outcome, labels, busy, onBook }: { outcome: MatchOutcom
         {outcome.bookable.length === 0 ? (
           <p className="text-sm text-gray-500">Inga matchade betalningar i filen.</p>
         ) : (
-          <table className="min-w-full text-sm">
-            <thead>
-              <tr className="text-left text-xs text-gray-500 border-b border-gray-200">
-                <th className="py-1.5 font-normal">Faktura</th>
-                <th className="py-1.5 font-normal">Matchad via</th>
-                <th className="py-1.5 font-normal">Betalare</th>
-                <th className="py-1.5 font-normal">Datum</th>
-                <th className="py-1.5 font-normal text-right">Belopp</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {outcome.bookable.map((b) => <BookableRow key={b.reference} b={b} label={labels[b.invoiceId] ?? b.invoiceId} />)}
-            </tbody>
-          </table>
+          <DataTable prefKey="list.payments-import-bookable" data={outcome.bookable} rowKey={(b) => b.reference}
+            columns={bookableColumns(labels)} />
         )}
         {outcome.bookable.length > 0 && (
           <div className="mt-4 flex items-center justify-between">
@@ -286,20 +257,42 @@ function ImportPreview({ outcome, labels, busy, onBook }: { outcome: MatchOutcom
   );
 }
 
-function BookableRow({ b, label }: { b: BookablePayment; label: string }) {
-  return (
-    <tr>
-      <td className="py-1.5">
+/** Kolumner för matchade betalningar (#1146: döljbara som övriga listor). */
+function bookableColumns(labels: Record<string, string>): Column<BookablePayment>[] {
+  return [
+    { key: "invoice", label: "Faktura", sortable: true, sortValue: (b) => labels[b.invoiceId] ?? b.invoiceId,
+      render: (b) => (
         <EntityLink route="invoices" id={b.invoiceId} className="text-blue-600 hover:underline font-mono text-xs">
-          {label}
+          {labels[b.invoiceId] ?? b.invoiceId}
         </EntityLink>
-      </td>
-      <td className="py-1.5">
-        <span className="text-[10px] rounded-full px-2 py-0.5 font-medium bg-green-100 text-green-700">{MATCHED_BY_LABEL[b.matchedBy]}</span>
-      </td>
-      <td className="py-1.5 text-gray-600">{b.tx.debtorName ?? "—"}</td>
-      <td className="py-1.5 font-mono text-xs text-gray-500">{b.tx.valueDate ?? "—"}</td>
-      <td className="py-1.5 text-right font-mono"><Money ore={b.amountOre} basis="gross" /></td>
-    </tr>
-  );
+      ) },
+    { key: "matchedBy", label: "Matchad via", sortable: true, sortValue: (b) => MATCHED_BY_LABEL[b.matchedBy], groupable: true,
+      render: (b) => <span className="text-[10px] rounded-full px-2 py-0.5 font-medium bg-green-100 text-green-700">{MATCHED_BY_LABEL[b.matchedBy]}</span> },
+    { key: "debtor", label: "Betalare", sortable: true, sortValue: (b) => b.tx.debtorName ?? "",
+      render: (b) => <span className="text-gray-600">{b.tx.debtorName ?? "—"}</span> },
+    { key: "date", label: "Datum", sortable: true, sortValue: (b) => b.tx.valueDate ?? "",
+      render: (b) => <span className="font-mono text-xs text-gray-500">{b.tx.valueDate ?? "—"}</span> },
+    { key: "amount", label: "Belopp", sortable: true, sortValue: (b) => b.amountOre, align: "right",
+      render: (b) => <span className="font-mono"><Money ore={b.amountOre} basis="gross" /></span> },
+  ];
+}
+
+/** Kolumner för föreslagna avprickningar mot förväntade domstolsfordringar (#175). */
+function suggestionColumns(
+  labels: Record<string, string>, busy: boolean, onSettle: (s: ReceivableSuggestion) => void,
+): Column<ReceivableSuggestion>[] {
+  return [
+    { key: "receivable", label: "Fordran", sortable: true, sortValue: (s) => labels[s.receivableId] ?? s.receivableId,
+      render: (s) => labels[s.receivableId] ?? s.receivableId },
+    { key: "matchedText", label: "Matchad text", render: (s) => <span className="text-xs text-gray-500 font-mono">{s.matchedText}</span> },
+    { key: "amount", label: "Belopp", sortable: true, sortValue: (s) => s.amountOre, align: "right",
+      render: (s) => <span className="font-mono"><Money ore={s.amountOre} basis="gross" /></span> },
+    { key: "actions", label: "", align: "right", hideable: false,
+      render: (s) => (
+        <button onClick={() => onSettle(s)} disabled={busy}
+          className="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50">
+          Pricka av
+        </button>
+      ) },
+  ];
 }

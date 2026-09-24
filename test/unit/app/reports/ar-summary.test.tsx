@@ -10,7 +10,19 @@ import { ArSummarySection } from "@/app/reports/_ar-summary";
 const arQuery = { data: undefined as Record<string, unknown> | undefined, isLoading: false };
 
 vi.mock("@/lib/client/trpc", () => ({
-  trpc: { reports: { arSummary: { useQuery: () => arQuery } } },
+  trpc: {
+    useUtils: () => ({ prefs: { get: { invalidate: vi.fn() } } }),
+    // DataTable (#1146) läser/sparar vy-inställningar.
+    prefs: {
+      get: { useQuery: () => ({ data: undefined, isLoading: false }) },
+      save: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      clear: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      setOrgDefault: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      clearOrgDefault: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+    },
+    user: { current: { useQuery: () => ({ data: { id: "u1", role: "LAWYER" } }) } },
+    reports: { arSummary: { useQuery: () => arQuery } },
+  },
 }));
 
 beforeEach(() => {

@@ -16,6 +16,7 @@
  */
 import type { inferRouterOutputs } from "@trpc/server";
 import { useEffect, useRef, useState } from "react";
+import { DataTable, type Column } from "@/components/ui/data-table";
 import { DecimalInput } from "@/components/ui/decimal-input";
 import { Modal } from "@/components/ui/modal";
 import { Money } from "@/components/ui/money";
@@ -750,14 +751,14 @@ const svDate = (d: string | Date | null | undefined): string => (d ? new Date(d)
 /** Radens kronologiska datum: fakturadatum (backdaterat i demon) före createdAt (#878). */
 const runDateOf = (r: BillingRunRow): string | Date => r.invoice?.invoiceDate ?? r.createdAt;
 
-/** Åtgärds-cellen: KR-dokument-länk + faktura-länk. Utbruten → RunRow ≤8. */
+/** Åtgärds-cellen: KR-dokument-länk + faktura-länk. */
 function RunActions({ r, docs, client }: { r: BillingRunRow; docs: DocumentListOutput["documents"]; client: DownloadClient }) {
   const krDoc = r.type === "KOSTNADSRAKNING" ? pickKrDoc(docs, r) : null;
   // KR:ns referens `KR-YYYY-NNNN` (#889) i samma format som fakturornas F-nummer;
   // länken öppnar KR-dokumentet (faller tillbaka på etikett om referens saknas).
   const krLabel = r.reference ?? "Kostnadsräkning";
   return (
-    <td className="text-right space-x-2 whitespace-nowrap">
+    <span className="space-x-2 whitespace-nowrap">
       {r.type === "KOSTNADSRAKNING" && (krDoc
         ? <button type="button" onClick={() => void openKrDoc(krDoc, client)}
             className="text-xs text-blue-600 hover:underline">{krLabel}</button>
@@ -769,44 +770,60 @@ function RunActions({ r, docs, client }: { r: BillingRunRow; docs: DocumentListO
           {r.invoice?.invoiceNumber ?? "Faktura"}
         </EntityLink>
       )}
-    </td>
+    </span>
   );
 }
 
-/** En billing-run-rad. Aconto visar sin sats (#878) så den varierande rättshjälps-
- *  avgiften syns per period; KR-raden länkar till sitt dokument. */
-function RunRow({ r, docs, client }: { r: BillingRunRow; docs: DocumentListOutput["documents"]; client: DownloadClient }) {
+/** En rad i faktura-listan — billing-run eller fristående faktura, samma form (#1146). */
+interface BillingListRow {
+  key: string;
+  date: string | Date | null | undefined;
+  type: string;
+  recipient: string;
+  status: string;
+  amountOre: number;
+  actions: React.ReactNode;
+}
+
+/** Billing-run → listrad. Aconto visar sin sats (#878) så den varierande
+ *  rättshjälpsavgiften syns per period; KR-raden länkar till sitt dokument. */
+function runListRow(r: BillingRunRow, docs: DocumentListOutput["documents"], client: DownloadClient): BillingListRow {
   const typeLabel = BILLING_RUN_TYPE_LABELS[r.type as keyof typeof BILLING_RUN_TYPE_LABELS] ?? r.type;
   const rate = r.type === "ACCONTO" && r.clientShareBips != null ? ` (${r.clientShareBips / 100} %)` : "";
-  return (
-    <tr>
-      <td className="py-2 text-sm whitespace-nowrap text-gray-600">{svDate(runDateOf(r))}</td>
-      <td className="text-sm">{typeLabel}{rate}</td>
-      <td className="text-sm text-gray-600">{r.recipient}</td>
-      <td className="text-sm">{BILLING_RUN_STATUS_LABELS[r.status as keyof typeof BILLING_RUN_STATUS_LABELS] ?? r.status}</td>
-      <td className="text-right text-sm font-mono"><Money ore={r.amountOre} basis="gross" /></td>
-      <RunActions r={r} docs={docs} client={client} />
-    </tr>
-  );
+  return {
+    key: r.id, date: runDateOf(r), type: `${typeLabel}${rate}`, recipient: r.recipient,
+    status: BILLING_RUN_STATUS_LABELS[r.status as keyof typeof BILLING_RUN_STATUS_LABELS] ?? r.status,
+    amountOre: r.amountOre, actions: <RunActions r={r} docs={docs} client={client} />,
+  };
 }
 
-/** Fristående klientfaktura utan billing-run (#853), t.ex. rådgivningstimmen. */
-function StandaloneRow({ inv }: { inv: StandaloneInvoiceRow }) {
-  return (
-    <tr>
-      <td className="py-2 text-sm whitespace-nowrap text-gray-600">{svDate(inv.invoiceDate)}</td>
-      <td className="text-sm">Faktura</td>
-      <td className="text-sm text-gray-600">KLIENT</td>
-      <td className="text-sm">{INVOICE_STATUS_LABELS[inv.status as keyof typeof INVOICE_STATUS_LABELS] ?? inv.status}</td>
-      <td className="text-right text-sm font-mono"><Money ore={inv.amount} basis="gross" /></td>
-      <td className="text-right whitespace-nowrap">
-        <EntityLink route="invoices" id={inv.id} className="text-xs text-blue-600 hover:underline">
-          {inv.invoiceNumber ?? "Faktura"}
-        </EntityLink>
-      </td>
-    </tr>
-  );
+/** Fristående klientfaktura utan billing-run (#853), t.ex. rådgivningstimmen → listrad. */
+function standaloneListRow(inv: StandaloneInvoiceRow): BillingListRow {
+  return {
+    key: inv.id, date: inv.invoiceDate, type: "Faktura", recipient: "KLIENT",
+    status: INVOICE_STATUS_LABELS[inv.status as keyof typeof INVOICE_STATUS_LABELS] ?? inv.status,
+    amountOre: inv.amount,
+    actions: (
+      <EntityLink route="invoices" id={inv.id} className="text-xs text-blue-600 hover:underline">
+        {inv.invoiceNumber ?? "Faktura"}
+      </EntityLink>
+    ),
+  };
 }
+
+const dateMs = (d: BillingListRow["date"]): number => (d ? new Date(d).getTime() : 0);
+
+const BILLING_LIST_COLUMNS: Column<BillingListRow>[] = [
+  { key: "date", label: "Datum", sortable: true, sortValue: (r) => dateMs(r.date),
+    render: (r) => <span className="text-gray-600">{r.date ? svDate(r.date) : "—"}</span> },
+  { key: "type", label: "Typ", sortable: true, sortValue: (r) => r.type, groupable: true, render: (r) => r.type },
+  { key: "recipient", label: "Mottagare", sortable: true, sortValue: (r) => r.recipient, groupable: true,
+    render: (r) => <span className="text-gray-600">{r.recipient}</span> },
+  { key: "status", label: "Status", sortable: true, sortValue: (r) => r.status, groupable: true, render: (r) => r.status },
+  { key: "amount", label: "Belopp", sortable: true, sortValue: (r) => r.amountOre, align: "right",
+    render: (r) => <span className="font-mono"><Money ore={r.amountOre} basis="gross" /></span> },
+  { key: "actions", label: "", align: "right", hideable: false, render: (r) => r.actions },
+];
 
 /** Rättshjälpsavgiften ÖVER TID (#878): satsen varierar (arbetslös/anställd) och
  *  ställs ut per aconto vid den då gällande satsen. Härleds ur ACCONTO-körningarna
@@ -853,19 +870,12 @@ function RunsList({ matterId, rows, standalone, loading }: { matterId: MatterId;
   // Slå ihop billing-runs + fristående fakturor och sortera KRONOLOGISKT på fakturadatum
   // (#878) — annars blandas createdAt-ordning med en påklistrad standalone-grupp.
   const items = [
-    ...rows.map((r) => ({ key: r.id, date: runDateOf(r), node: <RunRow key={r.id} r={r} docs={docs} client={utils.client} /> })),
-    ...standalone.map((inv) => ({ key: inv.id, date: inv.invoiceDate ?? 0, node: <StandaloneRow key={inv.id} inv={inv} /> })),
-  ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    ...rows.map((r) => runListRow(r, docs, utils.client)),
+    ...standalone.map(standaloneListRow),
+  ].sort((a, b) => dateMs(a.date) - dateMs(b.date));
   return (
-    <div className="px-6 py-2 overflow-x-auto">
-      <table className="min-w-full text-sm">
-        <thead className="text-xs text-gray-500">
-          <tr><th className="text-left py-1">Datum</th><th className="text-left">Typ</th><th className="text-left">Mottagare</th><th className="text-left">Status</th><th className="text-right">Belopp</th><th></th></tr>
-        </thead>
-        <tbody className="divide-y divide-gray-100">
-          {items.map((it) => it.node)}
-        </tbody>
-      </table>
+    <div className="px-6 py-2">
+      <DataTable prefKey="list.matter-billing" columns={BILLING_LIST_COLUMNS} data={items} rowKey={(r) => r.key} />
     </div>
   );
 }

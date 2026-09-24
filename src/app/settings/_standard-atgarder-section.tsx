@@ -13,6 +13,7 @@
  */
 
 import { useState } from "react";
+import { DataTable, type Column } from "@/components/ui/data-table";
 import { trpc } from "@/lib/client/trpc";
 import { formatMinutes } from "@/lib/client/utils";
 import { TIME_ENTRY_KIND_LABELS, type TimeEntryKind } from "@/lib/shared/schemas/enums";
@@ -87,42 +88,43 @@ function AtgardTable({ list, isPending, onSave }: ListProps) {
   if (list.length === 0) {
     return <p className="text-xs text-gray-400 italic mb-3">Inga standardåtgärder ännu.</p>;
   }
+  const dim = (a: StandardAtgard): string => (a.active ? "" : "text-gray-400");
+  const columns: Column<StandardAtgard>[] = [
+    { key: "description", label: "Beskrivning", sortable: true, sortValue: (a) => a.description, wrap: true,
+      render: (a) => <span className={dim(a)}>{a.description}</span> },
+    { key: "minutes", label: "Tid", sortable: true, sortValue: (a) => a.minutes, align: "right",
+      render: (a) => <span className={`font-mono ${dim(a)}`}>{formatMinutes(a.minutes)}</span> },
+    { key: "stage", label: "Skede", sortable: true, sortValue: (a) => STANDARD_ATGARD_STAGE_LABELS[a.stage], groupable: true,
+      render: (a) => <span className={`text-xs ${dim(a)}`}>{STANDARD_ATGARD_STAGE_LABELS[a.stage]}</span> },
+    { key: "kind", label: "Kategori", sortable: true, sortValue: (a) => TIME_ENTRY_KIND_LABELS[a.kind], groupable: true,
+      render: (a) => <span className={`text-xs ${dim(a)}`}>{TIME_ENTRY_KIND_LABELS[a.kind]}</span> },
+    { key: "actions", label: "", align: "right", hideable: false,
+      render: (a) => <AtgardActions a={a} list={list} isPending={isPending} onSave={onSave} /> },
+  ];
   return (
-    <table className="w-full text-sm mb-4">
-      <thead>
-        <tr className="text-left text-xs text-gray-500 border-b border-gray-200">
-          <th className="py-1.5">Beskrivning</th>
-          <th className="py-1.5 text-right">Tid</th>
-          <th className="py-1.5">Skede</th>
-          <th className="py-1.5">Kategori</th>
-          <th className="py-1.5"></th>
-        </tr>
-      </thead>
-      <tbody>
-        {list.map((a) => (
-          <tr key={a.id} className={`border-b border-gray-100 ${a.active ? "" : "text-gray-400"}`}>
-            <td className="py-1.5">{a.description}</td>
-            <td className="py-1.5 text-right font-mono">{formatMinutes(a.minutes)}</td>
-            <td className="py-1.5 text-xs">{STANDARD_ATGARD_STAGE_LABELS[a.stage]}</td>
-            <td className="py-1.5 text-xs">{TIME_ENTRY_KIND_LABELS[a.kind]}</td>
-            <td className="py-1.5 text-right whitespace-nowrap">
-              <button type="button" disabled={isPending}
-                onClick={() => onSave(list.map((x) => (x.id === a.id ? { ...x, active: !x.active } : x)))}
-                aria-label={`${a.active ? "Avställ" : "Aktivera"} ${a.description}`}
-                className="text-xs text-gray-500 hover:text-blue-600 hover:underline mr-3 disabled:opacity-50">
-                {a.active ? "Avställ" : "Aktivera"}
-              </button>
-              <button type="button" disabled={isPending}
-                onClick={() => onSave(list.filter((x) => x.id !== a.id))}
-                aria-label={`Ta bort ${a.description}`}
-                className="text-xs text-red-500 hover:underline disabled:opacity-50">
-                Ta bort
-              </button>
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <div className="mb-4">
+      <DataTable prefKey="list.standard-atgarder" columns={columns} data={list} rowKey={(a) => a.id} />
+    </div>
+  );
+}
+
+/** Avställ/Aktivera + Ta bort för en åtgärd. */
+function AtgardActions({ a, list, isPending, onSave }: ListProps & { a: StandardAtgard }) {
+  return (
+    <span className="whitespace-nowrap">
+      <button type="button" disabled={isPending}
+        onClick={() => onSave(list.map((x) => (x.id === a.id ? { ...x, active: !x.active } : x)))}
+        aria-label={`${a.active ? "Avställ" : "Aktivera"} ${a.description}`}
+        className="text-xs text-gray-500 hover:text-blue-600 hover:underline mr-3 disabled:opacity-50">
+        {a.active ? "Avställ" : "Aktivera"}
+      </button>
+      <button type="button" disabled={isPending}
+        onClick={() => onSave(list.filter((x) => x.id !== a.id))}
+        aria-label={`Ta bort ${a.description}`}
+        className="text-xs text-red-500 hover:underline disabled:opacity-50">
+        Ta bort
+      </button>
+    </span>
   );
 }
 
