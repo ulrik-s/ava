@@ -27,7 +27,7 @@ import type { InvoiceStatus } from "@/lib/shared/schemas/enums";
  * Se diagrammet i [ADR 0015].
  */
 export const INVOICE_TRANSITIONS: Record<InvoiceStatus, readonly InvoiceStatus[]> = {
-  // Utkast: skicka eller annullera.
+  // Skapad (ej skickad): skicka eller annullera.
   DRAFT: ["SENT", "CANCELLED"],
   // Skickad: full betalning → PAID, delbetalning + plan → INSTALLMENT_PLAN,
   // avskrivning → BAD_DEBT, annullera/kreditera → CANCELLED.

@@ -18,6 +18,7 @@ import type { AppRouter } from "@/lib/server/routers/_app";
 import { arvodeInclVatOre } from "@/lib/shared/invoice-calc";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { computeMatterSettlement, computeRadgivningsavgift, type MatterSettlement } from "@/lib/shared/rattshjalp";
+import { INVOICE_STATUS_LABELS } from "@/lib/shared/schemas/enums";
 import { asId } from "@/lib/shared/schemas/ids";
 import type { SettlementView } from "@/lib/shared/settlement-view";
 import { splitVat } from "@/lib/shared/vat";
@@ -31,14 +32,6 @@ import { PlanModal } from "./_plan-modal";
 import { SendInvoiceModal, type SendInvoiceModalProps } from "./_send-invoice-modal";
 import { WriteOffModal } from "./_write-off-modal";
 
-const STATUS_LABELS: Record<string, string> = {
-  DRAFT: "Utkast",
-  SENT: "Skickad",
-  PAID: "Betald",
-  CANCELLED: "Annullerad",
-  BAD_DEBT: "Kundförlust",
-  INSTALLMENT_PLAN: "Avbetalningsplan",
-};
 
 /** All state + mutationer för fakturadetaljsidan (sätter/öppnar modals, fel). */
 function useInvoiceDetail(id: string) {
@@ -350,7 +343,7 @@ function SummaryGrid({
 }) {
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-      <div><p className="text-xs text-gray-500">Status</p><p className="font-medium">{STATUS_LABELS[inv.status] ?? inv.status}</p></div>
+      <div><p className="text-xs text-gray-500">Status</p><p className="font-medium">{INVOICE_STATUS_LABELS[inv.status] ?? inv.status}</p></div>
       <div><p className="text-xs text-gray-500">Belopp (brutto)</p><p><Money ore={inv.amount} basis="gross" className="font-mono" /></p></div>
       {inv.invoiceType === "FINAL" && (
         <>

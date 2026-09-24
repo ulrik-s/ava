@@ -123,7 +123,7 @@ describe("InvoicesPage", () => {
       { id: "i5", invoiceDate: new Date().toISOString(), invoiceType: "FINAL", status: "SENT", amount: -100, matter: { id: "m5", matterNumber: "5", title: "T" } },
     ]);
     render(<InvoicesPage />);
-    expect(screen.getByText("Utkast")).toBeInTheDocument();
+    expect(screen.getByText("Skapad")).toBeInTheDocument();
     expect(screen.getByText("Avbetalningsplan")).toBeInTheDocument();
     expect(screen.getByText("Annullerad")).toBeInTheDocument();
     expect(screen.getByText("Kundförlust")).toBeInTheDocument();

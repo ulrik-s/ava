@@ -5,17 +5,9 @@ import { DataTable, type Column } from "@/components/ui/data-table";
 import { Money } from "@/components/ui/money";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
-import type { InvoiceStatus, InvoiceType } from "@/lib/shared/schemas/enums";
+import { INVOICE_STATUS_LABELS, type InvoiceStatus, type InvoiceType } from "@/lib/shared/schemas/enums";
 import { SieExportButton } from "./_sie-export-button";
 
-const STATUS_LABELS: Record<string, string> = {
-  DRAFT: "Utkast",
-  SENT: "Skickad",
-  PAID: "Betald",
-  CANCELLED: "Annullerad",
-  BAD_DEBT: "Kundförlust",
-  INSTALLMENT_PLAN: "Avbetalningsplan",
-};
 const TYPE_LABELS: Record<string, string> = {
   STANDARD: "Faktura",
   ACCONTO: "Aconto",
@@ -70,10 +62,10 @@ const invoiceColumns: Column<InvoiceRow>[] = [
   },
   { key: "type", label: "Typ", sortable: true, sortValue: (i) => TYPE_LABELS[i.invoiceType] ?? i.invoiceType,
     render: (i) => <span className="text-gray-600">{TYPE_LABELS[i.invoiceType] ?? i.invoiceType}</span> },
-  { key: "status", label: "Status", sortable: true, sortValue: (i) => STATUS_LABELS[i.status] ?? i.status,
+  { key: "status", label: "Status", sortable: true, sortValue: (i) => INVOICE_STATUS_LABELS[i.status] ?? i.status,
     render: (i) => (
       <span className={`text-[10px] rounded-full px-2 py-0.5 font-medium ${statusBadgeClass(i.status)}`}>
-        {STATUS_LABELS[i.status] ?? i.status}
+        {INVOICE_STATUS_LABELS[i.status] ?? i.status}
       </span>
     ),
   },

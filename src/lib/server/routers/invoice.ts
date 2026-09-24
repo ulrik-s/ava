@@ -166,7 +166,8 @@ export const invoiceRouter = router({
         const invoice = await repos.invoices.create({
           matterId: input.matterId, invoiceNumber, ocrReference: ocrFromInvoiceNumber(invoiceNumber),
           amount: grossOre, vatOre, vatBreakdown: [{ kind: "arvode", vatRate: 2500, netOre, vatOre }],
-          invoiceType: "STANDARD", status: "SENT", invoiceDate: when, dueDate: null,
+          invoiceType: "STANDARD", status: "DRAFT", invoiceDate: when, // "Skapad" tills den skickas (#1138)
+          dueDate: null,
           notes: "Rådgivningstimme enligt rättshjälpstaxan (1 tim).",
         } satisfies Partial<Invoice>);
         await repos.matters.update(input.matterId, { radgivningBetaldAt: when } satisfies Partial<Matter>);

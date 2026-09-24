@@ -22,6 +22,7 @@ function recordingCaller(): { c: Any; calls: Array<{ method: string; args: Any }
     if (method === "billingRun.createAcconto") return { run: { id: "run" }, invoice: { id: `inv-${calls.length}` } };
     if (method === "billingRun.createKostnadsrakning") return { run: { id: "kr", workValueOreAtRun: 5_000_000 } };
     if (method === "billingRun.createFinal") return { invoice: { id: "fin", amount: 100_000 } };
+    if (method === "invoice.createRadgivning") return { invoice: { id: "rad" } };
     if (method === "billingRun.settleCoverage") return { clientInvoice: {}, payerInvoice: {} };
     if (method === "document.tree") return { folders: [], documents: [] };
     if (method === "document.suggestFromText") return { parties: 0, events: 0 };

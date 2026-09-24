@@ -25,6 +25,7 @@ function recordingCaller() {
     if (method === "document.suggestFromText") return { parties: 0, events: 0 };
     // −1: raden är redan pushad ovan, så id:na blir 0-baserade i anropsordning.
     if (method === "document.createFolder") return { id: `folder-${calls.filter((c) => c.method === "document.createFolder").length - 1}` };
+    if (method === "invoice.createRadgivning") return { invoice: { id: "rad" } };
     if (method === "billingRun.settleCoverage") return { creditInvoice: { id: "cred", amount: -50_000 }, clientInvoice: {}, payerInvoice: {} };
     return {};
   };
@@ -75,6 +76,8 @@ describe("runScenario (#880)", () => {
     const firstAcc = calls.findIndex((x) => x.method === "billingRun.createAcconto");
     expect(radIdx).toBeGreaterThanOrEqual(0);
     expect(radIdx).toBeLessThan(firstAcc);
+    // Rådgivningsfakturan skapas som "Skapad" (#1138) → generatorn markerar den skickad.
+    expect(calls[radIdx + 1]).toMatchObject({ method: "invoice.setStatus", args: { invoiceId: "rad", status: "SENT" } });
     // #880: rådgivningen faktureras SAMMA DAG (invoiceDate satt) + som egen tidspost.
     const rad = calls[radIdx]!;
     expect(rad.args.invoiceDate).toBeTruthy();

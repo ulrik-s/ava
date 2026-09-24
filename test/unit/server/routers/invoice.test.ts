@@ -106,7 +106,7 @@ describe("invoice.createRadgivning", () => {
     mockPrisma.matter.update.mockResolvedValue({});
   });
 
-  it("skapar en STANDARD-klientfaktura (SKICKAD) för rådgivningstimmen + märker ärendet (#853)", async () => {
+  it("skapar en STANDARD-klientfaktura (SKAPAD, ej skickad) för rådgivningstimmen + märker ärendet (#853)", async () => {
     mockPrisma.matter.findFirst.mockResolvedValue({ id: "m1", organizationId: "org-a", radgivningBetaldAt: null });
 
     const res = await makeCaller().createRadgivning({ matterId: "m1" });
@@ -116,7 +116,7 @@ describe("invoice.createRadgivning", () => {
     const data = mockPrisma.invoice.create.mock.calls[0]![0].data;
     expect(data.invoiceType).toBe("STANDARD"); // riktig faktura, inte aconto
     expect(data.amount).toBe(203_250); // brutto (inkl moms)
-    expect(data.status).toBe("SENT"); // ärendets första händelse, går ut direkt
+    expect(data.status).toBe("DRAFT"); // "Skapad" — skickas inte automatiskt (#1138)
     // Ingen billing-run skapas (det är en fristående klientfaktura).
     expect(mockPrisma.billingRun.create).not.toHaveBeenCalled();
     // Ärendet märks som registrerat.
