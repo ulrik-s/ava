@@ -7,6 +7,7 @@
  * regelmotor-handlers slotas in här i takt med att deras config/triggers byggs.
  */
 
+import { preparePdfjsForServer } from "@/lib/server/documents/pdfjs-server-runtime";
 import { type SuggestionRepos, writeSuggestionsFromText } from "@/lib/server/documents/suggest-from-text";
 import { isEmailDisabled } from "@/lib/server/integrations/email/disabled-email-sender";
 import { createSmtpSender, type SmtpConfig } from "@/lib/server/integrations/email/smtp-sender";
@@ -44,6 +45,7 @@ export interface JobHandlerConfig {
  * Delad av LLM-klassificeringen och förslagsskrivningen (#988).
  */
 function textReader(content: IContentStore): (doc: ClassifiableDoc) => Promise<string> {
+  preparePdfjsForServer(); // annars tom PDF-text i den kompilerade binären (#1156)
   return async (doc) => {
     const bytes = await content.read(doc.storagePath);
     return bytes ? await extractText({ bytes, mimeType: doc.mimeType, fileName: doc.fileName }) : "";
