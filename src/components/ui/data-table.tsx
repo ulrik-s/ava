@@ -17,16 +17,17 @@
  *     prefs.setOrgDefault. Merge: personal > org > komponent-default.
  */
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { trpc } from "@/lib/client/trpc";
 
 // Pure logik + typer bor i `data-table-logic.ts` (#62, SRP). Re-exporteras här
 // så importörer + tester fortsätter peka på "@/components/ui/data-table".
-import type { SortDir, Column, DataTablePrefs, RowGroup } from "./data-table-logic";
+import type { SortDir, Column, DataTablePrefs, MenuPosition, RowGroup } from "./data-table-logic";
 import {
   isFilterable, isGroupable, mergePrefs, sortRows, filterRows, groupRows,
   isColumnHidden, visibleColumns, hasOverrides, hasSummary, buildSummaryContent, hideBelowClass,
-  withColumnHidden,
+  withColumnHidden, menuPosition,
 } from "./data-table-logic";
 
 export type { SortDir, Column, DataTablePrefs, RowGroup } from "./data-table-logic";
@@ -509,11 +510,17 @@ function hasAnyMenu<T>(col: Column<T>): boolean {
 }
 
 function HeaderCell<T>({ col, prefs, width, actions }: HeaderCellProps<T>) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState<MenuPosition | null>(null);
+  const thRef = useRef<HTMLTableCellElement>(null);
+  const openMenu = (): void => {
+    const rect = thRef.current?.getBoundingClientRect();
+    if (rect) setOpen(menuPosition(rect, col.align ?? "left", { width: window.innerWidth, height: window.innerHeight }));
+  };
   const arrow = sortArrow(prefs, col.key);
   const menu = hasAnyMenu(col);
   return (
     <th
+      ref={thRef}
       style={{ width, textAlign: col.align ?? "left" }}
       className={`relative px-3 py-2 text-xs font-semibold text-gray-700 select-none ${hideBelowClass(col)}`.trimEnd()}
       draggable
@@ -523,7 +530,7 @@ function HeaderCell<T>({ col, prefs, width, actions }: HeaderCellProps<T>) {
     >
       <button
         type="button"
-        onClick={() => menu && setOpen(true)}
+        onClick={() => menu && openMenu()}
         className={menu ? "cursor-pointer hover:text-gray-900 inline-flex items-center gap-1" : "cursor-default"}
         disabled={!menu}
         aria-haspopup={menu ? "menu" : undefined}
@@ -532,7 +539,7 @@ function HeaderCell<T>({ col, prefs, width, actions }: HeaderCellProps<T>) {
         {menu && <span className="text-gray-400 text-[10px]">▾</span>}
       </button>
       {open && (
-        <ColumnMenu col={col} prefs={prefs} actions={actions} onClose={() => setOpen(false)} align={col.align ?? "left"} />
+        <ColumnMenu col={col} prefs={prefs} actions={actions} onClose={() => setOpen(null)} position={open} />
       )}
       <ResizeHandle width={width} onResize={(w) => actions.resize(col.key, w)} />
     </th>
@@ -544,7 +551,7 @@ interface ColumnMenuProps<T> {
   prefs: DataTablePrefs;
   actions: HeaderActions;
   onClose: () => void;
-  align: "left" | "right" | "center";
+  position: MenuPosition;
 }
 
 function SortSection<T>({ col, prefs, actions, onClose }: {
@@ -601,13 +608,27 @@ function FilterSection<T>({ col, prefs, actions, onClose }: {
   );
 }
 
-function ColumnMenu<T>({ col, prefs, actions, onClose, align }: ColumnMenuProps<T>) {
+/** Stäng menyn när sidan scrollar eller ändrar storlek — den är fäst i fönstret. */
+function useCloseOnScroll(onClose: () => void): void {
+  useEffect(() => {
+    window.addEventListener("scroll", onClose, true);
+    window.addEventListener("resize", onClose);
+    return () => {
+      window.removeEventListener("scroll", onClose, true);
+      window.removeEventListener("resize", onClose);
+    };
+  }, [onClose]);
+}
+
+function ColumnMenu<T>({ col, prefs, actions, onClose, position }: ColumnMenuProps<T>) {
   const isGrouped = prefs.groupBy === col.key;
-  const posClass = align === "right" ? "right-0" : "left-0";
-  return (
+  useCloseOnScroll(onClose);
+  // Portal: utanför tabellens overflow-behållare (#1152), se `menuPosition`.
+  return createPortal(
     <>
       <div className="fixed inset-0 z-30" onClick={onClose} />
-      <div className={`absolute top-full mt-1 z-40 ${posClass} min-w-[14rem] bg-white border border-gray-200 rounded shadow-lg p-1 text-left font-normal`}>
+      <div role="menu" style={{ ...position, position: "fixed" }}
+        className="z-40 min-w-[14rem] overflow-y-auto bg-white border border-gray-200 rounded shadow-lg p-1 text-left text-sm font-normal">
         {col.sortable && <SortSection col={col} prefs={prefs} actions={actions} onClose={onClose} />}
         {isFilterable(col) && <FilterSection col={col} prefs={prefs} actions={actions} onClose={onClose} />}
         {isGroupable(col) && (
@@ -625,7 +646,8 @@ function ColumnMenu<T>({ col, prefs, actions, onClose, align }: ColumnMenuProps<
           </MenuButton>
         )}
       </div>
-    </>
+    </>,
+    document.body,
   );
 }
 

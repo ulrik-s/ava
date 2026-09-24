@@ -226,3 +226,31 @@ export function buildSummaryContent<T>(columns: Column<T>[], rows: T[]): Partial
   }
   return out;
 }
+
+/** Fönsterkoordinater för en rubrikmeny (position: fixed). */
+export interface MenuPosition {
+  top: number;
+  left?: number;
+  right?: number;
+  maxHeight: number;
+}
+
+/**
+ * Placera rubrikmenyn under rubriken, i fönstrets koordinater. Menyn renderas
+ * utanför tabellens scroll-behållare (portal): absolut inuti den gjorde en kort
+ * tabell scrollbar i höjdled, så raderna scrollade undan och bara menyn syntes
+ * (#1152). `maxHeight` håller menyn inom fönstret — den scrollar själv i stället.
+ */
+export function menuPosition(
+  anchor: { bottom: number; left: number; right: number },
+  align: "left" | "right" | "center",
+  viewport: { width: number; height: number },
+): MenuPosition {
+  const GAP = 4;
+  const MARGIN = 8;
+  const top = anchor.bottom + GAP;
+  const maxHeight = Math.max(120, viewport.height - top - MARGIN);
+  return align === "right"
+    ? { top, right: Math.max(MARGIN, viewport.width - anchor.right), maxHeight }
+    : { top, left: Math.max(MARGIN, anchor.left), maxHeight };
+}

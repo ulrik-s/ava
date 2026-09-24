@@ -95,6 +95,22 @@ describe("DataTable", () => {
     expect(screen.getByText("Dölj kolumn")).toBeInTheDocument();
   });
 
+  it("rubrikmenyn renderas UTANFÖR tabellens scroll-behållare (#1152)", () => {
+    const { container } = render(<DataTable prefKey="x" columns={cols} data={rows} rowKey={(r) => r.id} />);
+    fireEvent.click(screen.getByRole("button", { name: /Namn/ }));
+    const menu = screen.getByRole("menu");
+    expect(container.querySelector(".overflow-x-auto")?.contains(menu)).toBe(false);
+    expect(menu.style.position).toBe("fixed");
+  });
+
+  it("rubrikmenyn stängs när sidan scrollar", () => {
+    render(<DataTable prefKey="x" columns={cols} data={rows} rowKey={(r) => r.id} />);
+    fireEvent.click(screen.getByRole("button", { name: /Namn/ }));
+    expect(screen.getByRole("menu")).toBeInTheDocument();
+    fireEvent.scroll(window);
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  });
+
   it("'Dölj kolumn' döljer faktiskt kolumnen (buggfix)", () => {
     render(<DataTable prefKey="x" columns={cols} data={rows} rowKey={(r) => r.id} />);
     fireEvent.click(screen.getByRole("button", { name: /Ålder/ }));
