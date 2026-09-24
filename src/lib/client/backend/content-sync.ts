@@ -12,7 +12,7 @@
  * Coalesce: pending-manifestet är keyat på documentId → bara senaste versionen.
  */
 
-import { bytesToBase64, contentStoragePath } from "@/lib/shared/content-address";
+import { bytesToBase64, contentStoragePath, sha256Hex } from "@/lib/shared/content-address";
 import type { DocumentId } from "@/lib/shared/schemas/ids";
 import { DocumentContentCache } from "./content-cache";
 
@@ -39,11 +39,48 @@ export async function runContentSync(deps: ContentSyncDeps): Promise<string[]> {
     if (!missing.has(contentStoragePath(sha))) { await deps.markUploaded(documentId); continue; }
     const bytes = await deps.getBytes(sha);
     if (!bytes) { await deps.markUploaded(documentId); continue; }
-    await deps.upload(documentId, bytes);
+    try {
+      await deps.upload(documentId, bytes);
+    } catch (e) {
+      // Ett dokument som inte går att ladda upp (metadatan har inte nått servern
+      // än, nätfel …) ligger kvar i pending och tas nästa runda — det får inte
+      // stoppa resten av kön (#1143).
+      console.warn("[content-sync] upload misslyckades, försöker igen nästa synk:", documentId, e);
+      continue;
+    }
     await deps.markUploaded(documentId);
     uploaded.push(sha);
   }
   return uploaded;
+}
+
+/** Ett genererat dokument som ligger kvar i webbläsarens IndexedDB (`generated-doc-idb`). */
+export interface LocalGeneratedDoc {
+  id: string;
+  bytes: Uint8Array;
+}
+
+/**
+ * Räddning (#1143): genererade dokument (faktura, kostnadsräkning) sparades
+ * förr BARA lokalt — innehållet nådde aldrig servern. Köa varje sådan blob för
+ * upload EN gång. Redan köade hoppas över (bytes finns i cachen per sha), så en
+ * senare omstart aldrig laddar upp gamla bytes över ett dokument som ändrats
+ * efteråt. Icke-uuid-id översätts som legacy-id-reparationen (#1124) gör, så
+ * blobben hamnar på rätt dokument.
+ */
+export async function queueLocalGeneratedDocs(
+  docs: readonly LocalGeneratedDoc[],
+  cache: DocumentContentCache,
+  toDocumentId: (localId: string) => DocumentId,
+): Promise<number> {
+  let queued = 0;
+  for (const doc of docs) {
+    const sha = await sha256Hex(doc.bytes);
+    if (await cache.getBytes(sha)) continue;
+    await cache.cache(toDocumentId(doc.id), sha, doc.bytes);
+    queued++;
+  }
+  return queued;
 }
 
 /** tRPC-ytan byte-synken behöver (strukturell → undviker hård klient-typ-koppling). */

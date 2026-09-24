@@ -51,6 +51,12 @@ export interface CachingSyncDeps {
   queuePersistence?: MutationQueuePersistence;
   /** Delta-sync-cursor-lagring. Default: in-memory. */
   cursor?: CursorStore;
+  /**
+   * Körs efter varje reconcile (best-effort, fel sväljs). Server-first-klienten
+   * laddar upp dokument-bytes här (#1143) — EFTER att metadatan pushats, så
+   * servern har dokumentraden när innehållet kommer.
+   */
+  afterReconcile?: () => Promise<unknown>;
 }
 
 /** No-op-transport: ingen synk (demon = degenerat-fallet, ADR 0016 — inget synk-mål). */
@@ -111,8 +117,11 @@ export class CachingSyncDataStore {
     private readonly engine: ReconcileEngine,
     /** Persistera hela source-snapshotet (en gång per reconcile-batch). */
     private readonly persistSnapshot: () => Promise<void>,
-    /** Lyssnare på lokala ändringar (köad + persisterad) — driver synk-efter-spara. */
-    private readonly localChangeListeners: Set<() => void>,
+    private readonly hooks: {
+      /** Lyssnare på lokala ändringar (köad + persisterad) — driver synk-efter-spara. */
+      localChangeListeners: Set<() => void>;
+      afterReconcile: (() => Promise<unknown>) | undefined;
+    },
   ) {}
 
   /**
@@ -121,8 +130,8 @@ export class CachingSyncDataStore {
    * först vid nästa sidladdning. Returnerar en avregistrering.
    */
   onLocalChange(listener: () => void): () => void {
-    this.localChangeListeners.add(listener);
-    return () => { this.localChangeListeners.delete(listener); };
+    this.hooks.localChangeListeners.add(listener);
+    return () => { this.hooks.localChangeListeners.delete(listener); };
   }
 
   /** Hydrera (kö + source ur persistens) och komponera klossarna (server-vägen). */
@@ -177,7 +186,7 @@ export class CachingSyncDataStore {
     };
 
     const engine = new ReconcileEngine({ transport: deps.transport, queue, cursor, apply });
-    return new CachingSyncDataStore(store, queue, engine, persistSnapshot, localChangeListeners);
+    return new CachingSyncDataStore(store, queue, engine, persistSnapshot, { localChangeListeners, afterReconcile: deps.afterReconcile });
   }
 
   /** Reconcile mot servern (pull→apply→replay→advance) — online-vägen.
@@ -189,6 +198,8 @@ export class CachingSyncDataStore {
       this.rebakeJoins();
       await this.persistSnapshot();
     }
+    // Best-effort: ett fel här får inte fälla reconcile (anroparen loggar själv).
+    await this.hooks.afterReconcile?.().catch(() => undefined);
     return result;
   }
 

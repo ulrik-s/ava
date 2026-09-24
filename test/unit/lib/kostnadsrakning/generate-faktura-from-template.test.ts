@@ -8,11 +8,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { generateFakturaFromTemplate } from "@/lib/client/kostnadsrakning/generate-faktura-doc";
 import { formatCurrency } from "@/lib/client/utils";
 import { asId } from "@/lib/shared/schemas/ids";
+import { isUuid } from "@/lib/shared/uuid";
 
 const persistGeneratedDoc = vi.fn(async () => {});
 vi.mock("@/lib/client/demo/persist-generated-doc", () => ({ persistGeneratedDoc }));
 
-const registerMutateAsync = vi.fn(async () => {});
+const registerMutateAsync = vi.fn(async (_input: { id: string }) => {});
 const utils = {
   document: {
     tree: { invalidate: vi.fn(async () => {}), refetch: vi.fn(async () => {}) },
@@ -36,6 +37,10 @@ describe("generateFakturaFromTemplate", () => {
       matterId: "m1", documentType: "Faktura", invoiceId: "inv-9", mimeType: "text/html; charset=utf-8",
     }));
     expect(persistGeneratedDoc).toHaveBeenCalled();
+    // uuid-id: servern lagrar bara uuid-nycklade rader (#1143, missades i #1124).
+    const registered = registerMutateAsync.mock.calls[0]![0];
+    expect(isUuid(registered.id)).toBe(true);
+    expect(persistGeneratedDoc.mock.calls[0]![0].id).toBe(registered.id);
     const html = new TextDecoder().decode(persistGeneratedDoc.mock.calls[0]![0].bytes as Uint8Array);
     expect(html).toContain("F-2026-0099"); // fakturanummer ur mallen
     expect(html).toContain("Staten");      // mottagare

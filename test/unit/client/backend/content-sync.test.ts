@@ -7,7 +7,7 @@
 import { IDBFactory } from "fake-indexeddb";
 import { describe, expect, it, vi } from "vitest-compat";
 import { DocumentContentCache } from "@/lib/client/backend/content-cache";
-import { runContentSync, syncDocumentContent } from "@/lib/client/backend/content-sync";
+import { queueLocalGeneratedDocs, runContentSync, syncDocumentContent } from "@/lib/client/backend/content-sync";
 import { base64ToBytes, contentStoragePath, sha256Hex } from "@/lib/shared/content-address";
 import { asId, type DocumentId } from "@/lib/shared/schemas/ids";
 
@@ -56,6 +56,47 @@ describe("runContentSync", () => {
     expect(out).toEqual([]);
     expect(upload).not.toHaveBeenCalled();
     expect(markUploaded).toHaveBeenCalledWith("d1");
+  });
+});
+
+describe("runContentSync — ett dokument som fallerar stoppar inte kön (#1143)", () => {
+  it("upload-fel → dokumentet ligger kvar i pending, nästa laddas ändå upp", async () => {
+    const markUploaded = vi.fn(async () => {});
+    const upload = vi.fn(async (id: DocumentId) => { if (id === "d1") throw new Error("NOT_FOUND"); });
+    const out = await runContentSync({
+      pending: async () => [{ documentId: docId("d1"), sha: "aaa" }, { documentId: docId("d2"), sha: "bbb" }],
+      missing: async (paths) => paths,
+      getBytes: async () => new Uint8Array([1]),
+      upload,
+      markUploaded,
+    });
+    expect(out).toEqual(["bbb"]);
+    expect(upload).toHaveBeenCalledTimes(2);
+    expect(markUploaded).toHaveBeenCalledTimes(1);
+    expect(markUploaded).toHaveBeenCalledWith("d2"); // d1 kvar → försöks igen nästa synk
+  });
+});
+
+describe("queueLocalGeneratedDocs — räddning av lokalt genererade dokument (#1143)", () => {
+  const toId = (id: string) => docId(`server-${id}`);
+
+  it("köar varje lokal blob under serverns id, en gång", async () => {
+    const cache = new DocumentContentCache(new IDBFactory());
+    const docs = [{ id: "faktura-a", bytes: new Uint8Array([1]) }, { id: "kr-b", bytes: new Uint8Array([2]) }];
+    expect(await queueLocalGeneratedDocs(docs, cache, toId)).toBe(2);
+    expect(await cache.pendingUploads()).toEqual([
+      { documentId: "server-faktura-a", sha: await sha256Hex(new Uint8Array([1])) },
+      { documentId: "server-kr-b", sha: await sha256Hex(new Uint8Array([2])) },
+    ]);
+  });
+
+  it("redan köad (bytes i cachen) → köas inte igen, även efter upload (skriver aldrig över nyare innehåll)", async () => {
+    const cache = new DocumentContentCache(new IDBFactory());
+    const docs = [{ id: "faktura-a", bytes: new Uint8Array([1]) }];
+    await queueLocalGeneratedDocs(docs, cache, toId);
+    await cache.markUploaded(docId("server-faktura-a")); // uppladdad
+    expect(await queueLocalGeneratedDocs(docs, cache, toId)).toBe(0);
+    expect(await cache.pendingUploads()).toEqual([]);
   });
 });
 
