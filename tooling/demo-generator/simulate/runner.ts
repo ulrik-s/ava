@@ -140,7 +140,9 @@ async function hRadgivning(ctx: RunCtx, m: SimMatter, _e: Any, iso: string): Pro
     billable: true, userId: m.lawyerId, hourlyRate: simTimeRateOre(m, {}, iso), createdAt: iso,
   });
   ctx.res.timeEntries++;
-  await ctx.c.invoice.createRadgivning({ matterId: m.id, invoiceDate: iso });
+  const { invoice } = await ctx.c.invoice.createRadgivning({ matterId: m.id, invoiceDate: iso });
+  // Skapas som DRAFT ("Skapad", #1138) — i demohistoriken är den skickad.
+  await ctx.c.invoice.setStatus({ invoiceId: invoice.id, status: "SENT" });
   ctx.res.invoices++;
 }
 

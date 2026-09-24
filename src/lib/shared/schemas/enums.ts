@@ -81,7 +81,9 @@ export type TimeEntryKind = z.infer<typeof timeEntryKindSchema>;
 // ─── Invoice status + type ────────────────────────────────────────────────
 
 export const INVOICE_STATUS_LABELS = {
-  DRAFT: "Utkast",
+  // Har fakturanummer men är inte skickad ännu (#1138) — "Utkast" lät som att
+  // fakturan inte fanns.
+  DRAFT: "Skapad",
   SENT: "Skickad",
   PAID: "Betald",
   CANCELLED: "Annullerad",
