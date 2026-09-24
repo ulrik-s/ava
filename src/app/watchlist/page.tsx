@@ -31,12 +31,16 @@ export default function WatchlistPage() {
   const [kind, setKind] = useState<WatchlistKind | "all">("all");
   const q = trpc.watchlist.list.useQuery({ mine });
 
-  const items = useMemo(() => {
-    const all = q.data?.items ?? [];
-    return kind === "all" ? all : all.filter((i) => i.kind === kind);
-  }, [q.data, kind]);
+  const all = useMemo(() => q.data?.items ?? [], [q.data]);
+  const items = useMemo(
+    () => (kind === "all" ? all : all.filter((i) => i.kind === kind)),
+    [all, kind],
+  );
 
-  const passed = items.filter((i) => i.severity === "passed").length;
+  // Rubriken räknar ALLA poster, inte de filtrerade. Annars påstår sidan
+  // "inget behöver din uppmärksamhet" så fort man filtrerar till en tom
+  // kategori — vilket är falskt och farligt när något annat brinner.
+  const passed = all.filter((i) => i.severity === "passed").length;
 
   return (
     <div>
@@ -45,8 +49,8 @@ export default function WatchlistPage() {
           <h1 className="text-2xl font-bold text-gray-900">Att bevaka</h1>
           <p className="text-sm text-gray-500">
             {q.isLoading ? "Hämtar…"
-              : items.length === 0 ? "Inget behöver din uppmärksamhet."
-              : `${items.length} poster, varav ${passed} redan passerade.`}
+              : all.length === 0 ? "Inget behöver din uppmärksamhet."
+              : `${all.length} poster, varav ${passed} redan passerade.`}
           </p>
         </div>
         <label className="flex items-center gap-2 text-sm text-gray-700">
