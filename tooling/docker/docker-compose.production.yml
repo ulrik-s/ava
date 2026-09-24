@@ -105,6 +105,10 @@ services:
       AVA_CONTENT_DIR: /data/content
       # "1" = inga mejl köas eller skickas (test-/pilotserver), se deploy-server-first.md.
       AVA_EMAIL_DISABLED: "${AVA_EMAIL_DISABLED:-}"
+      # Dokumentklassificering med lokal LLM (#1156): tomt = filnamns-heuristik.
+      # Med profilen "llm" (COMPOSE_PROFILES=llm): http://ollama:11434/v1 + modell.
+      AVA_LLM_ENDPOINT: "${AVA_LLM_ENDPOINT:-}"
+      AVA_LLM_MODEL: "${AVA_LLM_MODEL:-}"
       # AVA Helper (ADR 0028/0029): webbappen hämtar helperns inloggnings-config
       # via `system.helperConfig` och pushar den till helpern. Tomt = av (default).
       # Sätts i ava-server.env när Entra är konfigurerat, se docs/self-hosted-entra.md.
@@ -148,7 +152,31 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
 
+  # ─── Lokal LLM för dokumentklassificering (#1156) ─────────────────────
+  # OPT-IN: COMPOSE_PROFILES=llm i ava-server.env. Ingen dokumenttext lämnar
+  # servern. Ingen host-port — bara server-first når den, på det interna nätet.
+  # Laddar ner AVA_LLM_MODEL vid start (en gång; ligger sedan i volymen).
+  # Liten modell med flit: servern har 2 vCPU och ingen GPU — qwen2.5:1.5b
+  # klassificerade 6/7 testdokument på ~11 s (qwen2.5:3b: 6/7 på ~24 s).
+  ollama:
+    profiles: ["llm"]
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - 'ollama serve & pid=$$!; sleep 3; ollama pull "$${AVA_LLM_MODEL}" || echo "modell-nedladdning misslyckades"; wait $$pid'
+    environment:
+      AVA_LLM_MODEL: "${AVA_LLM_MODEL:-qwen2.5:1.5b}"
+      # Håll modellen laddad en timme efter senaste anropet (annars laddas den
+      # om efter 5 min — märks som en extra fördröjning på nästa uppladdning).
+      OLLAMA_KEEP_ALIVE: "1h"
+    volumes:
+      - ollama_models:/root/.ollama
+    # Tak så en klassificering aldrig kan svälta databasen/appen på minne.
+    mem_limit: 3g
+
 volumes:
+  ollama_models:
   pgdata:
   content:
   caddy_data:

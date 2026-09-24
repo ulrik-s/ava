@@ -24,6 +24,14 @@ describe("createOllamaClassifier", () => {
     expect(JSON.parse(init!.body as string)).toMatchObject({ model: "llama3.2", stream: false });
   });
 
+  it("prompten beskriver varje kategori i klartext (#1156 — koderna räckte inte)", async () => {
+    const fetchFn = vi.fn(async () => res("STAMNING"));
+    await createOllamaClassifier(cfg, { fetch: fetchFn })(LONG, "x.pdf");
+    const user = JSON.parse(fetchFn.mock.calls[0]![1]!.body as string).messages[1].content as string;
+    expect(user).toContain("STAMNING = stämningsansökan");
+    expect(user).toContain("OKLASSIFICERAT = inget av ovanstående");
+  });
+
   it("för kort text → filnamns-heuristik utan nätanrop", async () => {
     const fetchFn = vi.fn(async () => res("DOM"));
     const classify = createOllamaClassifier(cfg, { fetch: fetchFn });
