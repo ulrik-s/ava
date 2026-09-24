@@ -7,7 +7,8 @@
  *   • Klick på rubrik → sortera asc/desc/none.
  *   • Drag i höger kant → ändra kolumnbredd.
  *   • Drag på rubrik → ordna om kolumner.
- *   • Trepunktsmeny → dölj/visa kolumner, gruppera på kolumn.
+ *   • Rubrikmeny → sortera, filtrera, gruppera, dölj kolumn.
+ *   • "Kolumner"-knapp → alla kolumner som kryssrutor (visa/dölj på ett ställe).
  *   • Per-kolumn-text-filter (header-input) när col.filterable=true.
  *   • Footer-prop renderar `<tfoot>`-rad som alignar med kolumnerna —
  *     använd för Summa-rader (utlägg, tid m.fl.).
@@ -25,6 +26,7 @@ import type { SortDir, Column, DataTablePrefs, RowGroup } from "./data-table-log
 import {
   isFilterable, isGroupable, mergePrefs, sortRows, filterRows, groupRows,
   isColumnHidden, visibleColumns, hasOverrides, hasSummary, buildSummaryContent, hideBelowClass,
+  withColumnHidden,
 } from "./data-table-logic";
 
 export type { SortDir, Column, DataTablePrefs, RowGroup } from "./data-table-logic";
@@ -108,21 +110,14 @@ export function DataTable<T>({ prefKey, columns, data, rowKey, onRowClick, empty
 
   return (
     <div>
-      {(showOverrideBar || isAdmin) && (
+      {(showOverrideBar || isAdmin || hideableColumns(columns).length > 0) && (
         <ActivePrefsToolbar
           prefs={prefs}
           columns={columns}
           onClearSort={() => update({ sortBy: undefined, sortDir: undefined })}
           onClearFilter={(key) => update({ filters: { ...(prefs.filters ?? {}), [key]: "" } })}
           onClearGroup={() => update({ groupBy: undefined })}
-          onUnhide={(key) => {
-            const cur = prefs.columns ?? [];
-            const existing = cur.find((c) => c.key === key);
-            const next = existing
-              ? cur.map((c) => c.key === key ? { ...c, hidden: false } : c)
-              : [...cur, { key, hidden: false }];
-            update({ columns: next });
-          }}
+          onSetHidden={(key, hidden) => update({ columns: withColumnHidden(prefs, key, hidden) })}
           onResetAll={resetPersonal}
           isAdmin={isAdmin}
           hasOrgPref={persisted.data?.org != null}
@@ -172,7 +167,7 @@ interface ToolbarProps<T> {
   onClearSort: () => void;
   onClearFilter: (key: string) => void;
   onClearGroup: () => void;
-  onUnhide: (key: string) => void;
+  onSetHidden: (key: string, hidden: boolean) => void;
   onResetAll: () => void;
   isAdmin: boolean;
   hasOrgPref: boolean;
@@ -180,33 +175,39 @@ interface ToolbarProps<T> {
   onRemoveOrgDefault: () => void;
 }
 
-function hiddenColumns<T>(prefs: DataTablePrefs, columns: Column<T>[]): Column<T>[] {
-  return columns.filter((c) => isColumnHidden(c, prefs));
+/** Kolumner användaren kan visa/dölja (hideable !== false). */
+function hideableColumns<T>(columns: Column<T>[]): Column<T>[] {
+  return columns.filter((c) => c.hideable !== false);
 }
 
-function ShowHiddenButton<T>({ hidden, onUnhide }: { hidden: Column<T>[]; onUnhide: (key: string) => void }) {
+/**
+ * "Kolumner" — alltid synlig när tabellen har kolumner som kan döljas. Alla
+ * kolumner som kryssrutor; valfria fält (`defaultHidden`) i en egen grupp.
+ * Förr fanns bara "+ Visa kolumn", som syntes först när något redan var dolt.
+ */
+function ColumnsButton<T>({ columns, prefs, onSetHidden }: {
+  columns: Column<T>[]; prefs: DataTablePrefs; onSetHidden: (key: string, hidden: boolean) => void;
+}) {
   const [open, setOpen] = useState(false);
-  if (hidden.length === 0) return null;
-  // Separera default-dolda (katalog-tillgängliga fält) från user-dolda
-  // (kolumner som finns i default-vyn men användaren stängt av).
-  const catalog = hidden.filter((c) => c.defaultHidden);
-  const userHidden = hidden.filter((c) => !c.defaultHidden);
+  const cols = hideableColumns(columns);
+  if (cols.length === 0) return null;
+  const hiddenCount = cols.filter((c) => isColumnHidden(c, prefs)).length;
+  const visibleCount = columns.length - columns.filter((c) => isColumnHidden(c, prefs)).length;
   return (
     <div className="relative">
-      <button type="button" onClick={() => setOpen((v) => !v)}
+      <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open}
         className="text-xs px-3 py-1 border border-gray-300 rounded hover:bg-gray-50 text-gray-700 inline-flex items-center gap-1">
-        + Visa kolumn <span className="text-gray-400">({hidden.length})</span>
+        Kolumner{hiddenCount > 0 && <span className="text-gray-400">({hiddenCount} dolda)</span>}
       </button>
       {open && (
         <>
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full mt-1 z-40 min-w-[14rem] bg-white border border-gray-200 rounded shadow-lg p-1">
-            {userHidden.length > 0 && (
-              <ColumnList label="Dolda kolumner" cols={userHidden} onPick={(k) => { onUnhide(k); setOpen(false); }} />
-            )}
-            {catalog.length > 0 && (
-              <ColumnList label="Tillgängliga fält" cols={catalog} onPick={(k) => { onUnhide(k); setOpen(false); }} />
-            )}
+          <div role="group" aria-label="Kolumner"
+            className="absolute right-0 top-full mt-1 z-40 min-w-[14rem] max-h-96 overflow-y-auto bg-white border border-gray-200 rounded shadow-lg p-1">
+            <ColumnChecks label="Kolumner" cols={cols.filter((c) => !c.defaultHidden)} prefs={prefs}
+              lastVisible={visibleCount <= 1} onSetHidden={onSetHidden} />
+            <ColumnChecks label="Fler fält" cols={cols.filter((c) => c.defaultHidden)} prefs={prefs}
+              lastVisible={visibleCount <= 1} onSetHidden={onSetHidden} />
           </div>
         </>
       )}
@@ -214,16 +215,25 @@ function ShowHiddenButton<T>({ hidden, onUnhide }: { hidden: Column<T>[]; onUnhi
   );
 }
 
-function ColumnList<T>({ label, cols, onPick }: { label: string; cols: Column<T>[]; onPick: (key: string) => void }) {
+/** En grupp kryssrutor. Sista synliga kolumnen går inte att dölja (tom tabell). */
+function ColumnChecks<T>({ label, cols, prefs, lastVisible, onSetHidden }: {
+  label: string; cols: Column<T>[]; prefs: DataTablePrefs; lastVisible: boolean;
+  onSetHidden: (key: string, hidden: boolean) => void;
+}) {
+  if (cols.length === 0) return null;
   return (
     <>
       <p className="px-2 pt-1 pb-1 text-[10px] font-semibold uppercase text-gray-400">{label}</p>
-      {cols.map((c) => (
-        <button key={c.key} type="button" onClick={() => onPick(c.key)}
-          className="block w-full text-left px-2 py-1 text-xs text-gray-700 hover:bg-gray-50 rounded">
-          {c.label}
-        </button>
-      ))}
+      {cols.map((c) => {
+        const visible = !isColumnHidden(c, prefs);
+        return (
+          <label key={c.key} className="flex items-center gap-2 px-2 py-1 text-xs text-gray-700 hover:bg-gray-50 rounded cursor-pointer">
+            <input type="checkbox" checked={visible} disabled={visible && lastVisible}
+              onChange={() => onSetHidden(c.key, visible)} />
+            {c.label}
+          </label>
+        );
+      })}
     </>
   );
 }
@@ -275,17 +285,15 @@ function ToolbarAdminButtons({ hasOrgPref, onSaveAsOrgDefault, onRemoveOrgDefaul
 }
 
 function ActivePrefsToolbar<T>(props: ToolbarProps<T>) {
-  const { prefs, columns, onClearSort, onClearFilter, onClearGroup, onUnhide, onResetAll,
+  const { prefs, columns, onClearSort, onClearFilter, onClearGroup, onSetHidden, onResetAll,
     isAdmin, hasOrgPref, onSaveAsOrgDefault, onRemoveOrgDefault } = props;
   const hasAny = hasOverrides(prefs);
-  const hidden = hiddenColumns(prefs, columns);
-  if (!hasAny && !isAdmin && hidden.length === 0) return null;
   return (
     <div className="mb-2 flex flex-wrap items-center gap-2">
       <ActiveChips prefs={prefs} columns={columns}
         onClearSort={onClearSort} onClearFilter={onClearFilter} onClearGroup={onClearGroup} />
       <span className="flex-1" />
-      <ShowHiddenButton hidden={hidden} onUnhide={onUnhide} />
+      <ColumnsButton columns={columns} prefs={prefs} onSetHidden={onSetHidden} />
       {hasAny && (
         <button type="button" onClick={onResetAll}
           className="text-xs px-3 py-1 border border-gray-300 rounded hover:bg-gray-50 text-gray-700">
@@ -438,7 +446,7 @@ interface HeaderActions {
   setSort: (key: string, dir: SortDir | undefined) => void;
   setFilter: (key: string, value: string) => void;
   setGroupBy: (key: string | undefined) => void;
-  toggleHidden: (key: string) => void;
+  hideColumn: (key: string) => void;
   reorder: (from: string, to: string) => void;
   resize: (key: string, width: number) => void;
 }
@@ -452,16 +460,9 @@ function buildHeaderActions<T>(
     setSort: (key, dir) => update({ sortBy: dir ? key : undefined, sortDir: dir }),
     setFilter: (key, value) => update({ filters: { ...(prefs.filters ?? {}), [key]: value } }),
     setGroupBy: (key) => update({ groupBy: key }),
-    toggleHidden: (key) => {
-      const col = vCols.find((c) => c.key === key);
-      const isNowHidden = col ? false : true; // vCols är synliga → toggling till hidden
-      const cur = prefs.columns ?? [];
-      const existing = cur.find((c) => c.key === key);
-      const next = existing
-        ? cur.map((c) => c.key === key ? { ...c, hidden: isNowHidden } : c)
-        : [...cur, { key, hidden: isNowHidden }];
-      update({ columns: next });
-    },
+    // Rubrikmenyn visas bara på synliga kolumner → dölj (buggfix: förr sattes
+    // `hidden: false` här, så "Dölj kolumn" gjorde ingenting).
+    hideColumn: (key) => update({ columns: withColumnHidden(prefs, key, true) }),
     reorder: (from, to) => {
       const keys = vCols.map((c) => c.key);
       const fromIdx = keys.indexOf(from);
@@ -619,7 +620,7 @@ function ColumnMenu<T>({ col, prefs, actions, onClose, align }: ColumnMenuProps<
           </>
         )}
         {col.hideable !== false && (
-          <MenuButton onClick={() => { actions.toggleHidden(col.key); onClose(); }}>
+          <MenuButton onClick={() => { actions.hideColumn(col.key); onClose(); }}>
             Dölj kolumn
           </MenuButton>
         )}
