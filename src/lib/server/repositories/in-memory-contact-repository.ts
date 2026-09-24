@@ -20,6 +20,10 @@ export class InMemoryContactRepository extends InMemoryRepository<Contact> imple
     super(store.contacts, now ?? (() => new Date()));
   }
 
+  async listAllForOrg(organizationId: OrganizationId): Promise<Contact[]> {
+    return (await this.delegate.findMany({ where: { organizationId, parentId: null } })) as Contact[];
+  }
+
   async listForOrg(organizationId: OrganizationId, opts: ContactListOptions): Promise<ContactListResult> {
     const where = {
       organizationId,
