@@ -67,6 +67,8 @@ vi.mock("@/lib/client/trpc", () => ({
     },
     contacts: {
       list: { useQuery: () => contactsQuery },
+      search: { useQuery: () => ({ data: { contacts: [] }, isLoading: false }) },
+      create: { useMutation: () => ({ mutate: vi.fn(), isPending: false, error: null }) },
     },
     documentTemplate: {
       list: { useQuery: () => templatesQuery },
@@ -300,36 +302,13 @@ describe("MatterDetailPage", () => {
     expect(screen.getByText("En bodelning")).toBeInTheDocument();
   });
 
-  it("öppnar och stänger lägg-till-kontakt-formuläret", async () => {
-    renderPage();
-    await waitFor(() => expect(screen.getByText("2026-0001")).toBeInTheDocument());
-    fireEvent.click(screen.getByRole("button", { name: /\+ Lägg till/i }));
-    expect(screen.getByPlaceholderText(/Namn/i)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /Avbryt/i }));
-    expect(screen.queryByPlaceholderText(/Namn/i)).not.toBeInTheDocument();
-  });
-
-  it("växlar mellan Befintlig och Ny kontakt-läget", async () => {
+  it("'+ Lägg till' kontakt öppnar sökdialogen; Avbryt stänger (#1136)", async () => {
     renderPage();
     await waitFor(() => screen.getByText("2026-0001"));
     fireEvent.click(screen.getByRole("button", { name: /\+ Lägg till/i }));
-    fireEvent.click(screen.getByRole("button", { name: /Befintlig kontakt/i }));
-    expect(screen.getByText(/Välj kontakt/i)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /^Ny kontakt$/i }));
-    expect(screen.getByPlaceholderText(/Namn/i)).toBeInTheDocument();
-  });
-
-  it("submittar Ny kontakt-formuläret", async () => {
-    renderPage();
-    await waitFor(() => screen.getByText("2026-0001"));
-    fireEvent.click(screen.getByRole("button", { name: /\+ Lägg till/i }));
-    const nameInput = screen.getByPlaceholderText(/Namn/i);
-    fireEvent.change(nameInput, { target: { value: "Bertil Berg" } });
-    fireEvent.click(screen.getByRole("button", { name: /Skapa & lägg till/i }));
-    expect(stubs.addNewContact.mutate).toHaveBeenCalled();
-    const arg = stubs.addNewContact.mutate.mock.calls[0]![0];
-    expect(arg.name).toBe("Bertil Berg");
-    expect(arg.matterId).toBe("m1");
+    expect(screen.getByRole("dialog", { name: "Välj kontakt" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Avbryt" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   it("klickar Ta bort på en kontakt", async () => {
@@ -476,21 +455,6 @@ describe("MatterDetailPage", () => {
     const avbrytButtons = screen.getAllByRole("button", { name: /Avbryt/i });
     fireEvent.click(avbrytButtons[avbrytButtons.length - 1]!);
     expect(screen.queryByText(/Välj mall/i)).not.toBeInTheDocument();
-  });
-
-  it("submittar 'befintlig kontakt'-formuläret", async () => {
-    contactsQuery.data = { contacts: [{ id: "c2", name: "Bertil" }] } as never;
-    renderPage();
-    await waitFor(() => screen.getByText("2026-0001"));
-    fireEvent.click(screen.getByRole("button", { name: /\+ Lägg till/i }));
-    fireEvent.click(screen.getByRole("button", { name: /Befintlig kontakt/i }));
-    const select = screen.getByText(/Välj kontakt/i).closest("select")!;
-    fireEvent.change(select, { target: { value: "c2" } });
-    fireEvent.click(screen.getByRole("button", { name: /^Lägg till$/i }));
-    expect(stubs.addContact.mutate).toHaveBeenCalled();
-    const arg = stubs.addContact.mutate.mock.calls[0]![0];
-    expect(arg.contactId).toBe("c2");
-    expect(arg.matterId).toBe("m1");
   });
 
   it("genererar dokument client-side (öppnar blob i ny flik)", async () => {

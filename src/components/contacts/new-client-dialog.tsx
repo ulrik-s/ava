@@ -16,6 +16,8 @@ interface Props {
   initialName?: string;
   onCreated: (client: PickedClient) => void;
   onClose: () => void;
+  /** "klient" eller "kontakt" — styr rubriken. */
+  noun?: string;
 }
 
 /**
@@ -23,7 +25,7 @@ interface Props {
  * och väljer den, Avbryt stänger utan att skapa något. Samma formulär som
  * Kontakter-sidan.
  */
-export function NewClientDialog({ initialName = "", onCreated, onClose }: Props) {
+export function NewClientDialog({ initialName = "", onCreated, onClose, noun = "klient" }: Props) {
   const [form, setForm] = useState<ContactForm>({ ...EMPTY_CONTACT_FORM, name: initialName });
   const utils = trpc.useUtils();
   const createContact = trpc.contacts.create.useMutation({
@@ -40,7 +42,7 @@ export function NewClientDialog({ initialName = "", onCreated, onClose }: Props)
   }
 
   return (
-    <Modal open title="Ny klient" onClose={onClose} widthClass="max-w-2xl">
+    <Modal open title={`Ny ${noun}`} onClose={onClose} widthClass="max-w-2xl">
       <NewContactForm
         form={form}
         setForm={setForm}
