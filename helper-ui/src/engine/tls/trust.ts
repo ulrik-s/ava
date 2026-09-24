@@ -55,6 +55,18 @@ export interface TrustResult {
   reason?: string;
 }
 
+/** Tyst körning (ingen utskrift) — för statuskollar från GUI-skalet. */
+const quietRunner: Runner = (cmd, args) => ({ status: spawnSync(cmd, [...args], { stdio: "ignore" }).status });
+
+/**
+ * Litar macOS redan på CA-roten? `null` = frågan är inte relevant (inte macOS —
+ * Chromium/Firefox/Windows litar på loopback utan certifikat).
+ */
+export function isCaTrusted(caCertPath: string, deps: TrustDeps = {}): boolean | null {
+  if ((deps.platform ?? currentPlatform()) !== "darwin") return null;
+  return (deps.run ?? quietRunner)("security", verifyCertArgs(caCertPath)).status === 0;
+}
+
 /** Installera CA-roten som betrodd (idempotent). */
 export function installCaTrust(caCertPath: string, deps: TrustDeps = {}): TrustResult {
   const platform = deps.platform ?? currentPlatform();

@@ -56,7 +56,7 @@ import { currentPlatform } from "./platform/runtime.ts";
 import { UploadQueue } from "./queue.ts";
 import { createHandler } from "./server.ts";
 import { loadOrCreateTls } from "./tls/certs.ts";
-import { installCaTrust, removeCaTrust } from "./tls/trust.ts";
+import { installCaTrust, isCaTrusted, removeCaTrust, type TrustResult } from "./tls/trust.ts";
 import { checkForUpdate, runUpdateLoop, type NoticeLoopConfig, type UpdateCheckConfig, type UpdateNotice } from "./update.ts";
 import { VERSION } from "./version.ts";
 
@@ -75,17 +75,40 @@ function httpsPort(): number {
   return Number.isInteger(p) && p > 0 ? p : HELPER_HTTPS_PORT;
 }
 
+/** Sökväg till helperns lokala CA (skapas om den saknas); null utan data-dir. */
+function localCaPath(dir: string | null = dataDir()): string | null {
+  if (dir === null) return null;
+  const tlsDir = join(dir, "tls");
+  loadOrCreateTls(tlsDir); // säkerställ att CA finns
+  return join(tlsDir, "ca.pem");
+}
+
+/**
+ * Safari (#1149) blockerar http-anrop till helpern från en https-sida, så
+ * webbappen måste nå den över https://localhost — med ett certifikat macOS
+ * litar på. `unsupported` = inte macOS eller ingen data-dir (behövs inte / går inte).
+ */
+export function caTrustStatus(): "trusted" | "untrusted" | "unsupported" {
+  const caPath = localCaPath();
+  const trusted = caPath === null ? null : isCaTrusted(caPath);
+  if (trusted === null) return "unsupported";
+  return trusted ? "trusted" : "untrusted";
+}
+
+/** Lägg helperns CA i användarens nyckelring (macOS frågar efter lösenordet). */
+export function trustLocalCa(): TrustResult {
+  const caPath = localCaPath();
+  return caPath === null ? { ok: false, skipped: true, reason: "ingen data-dir" } : installCaTrust(caPath);
+}
+
 /** `--install-trust` / `--uninstall-trust`: lägg/ta bort CA i macOS-keychain. */
 function handleTrust(action: "install" | "uninstall"): void {
-  const dir = dataDir();
-  if (dir === null) {
+  const caPath = localCaPath();
+  if (caPath === null) {
     process.stderr.write("ingen data-dir tillgänglig\n");
     process.exitCode = 1;
     return;
   }
-  const tlsDir = join(dir, "tls");
-  loadOrCreateTls(tlsDir); // säkerställ att CA finns
-  const caPath = join(tlsDir, "ca.pem");
   const res = action === "install" ? installCaTrust(caPath) : removeCaTrust(caPath);
   const label = `CA-trust ${action}`;
   process.stdout.write(
