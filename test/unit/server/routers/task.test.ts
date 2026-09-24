@@ -8,6 +8,7 @@ import { taskRouter } from "@/lib/server/routers/task";
 import { dataStoreFromMockPrisma, reposFromMockDataStore } from "../helpers/mock-data-store";
 
 const mockPrisma = {
+  matter: { findFirst: vi.fn() },
   task: {
     findFirst: vi.fn(),
     findMany: vi.fn(),
@@ -53,6 +54,21 @@ describe("task.list", () => {
     await makeCaller().list({ matterId: "m-1" });
     const arg = mockPrisma.task.findMany.mock.calls[0]![0] as { where: { matterId: string } };
     expect(arg.where.matterId).toBe("m-1");
+  });
+});
+
+describe("task.listForMatter (#1162)", () => {
+  it("ärendet i org:en → alla användares uppgifter i ärendet (inte userId-scopat)", async () => {
+    mockPrisma.matter.findFirst.mockResolvedValue({ id: "m-1", organizationId: "org-x" });
+    await makeCaller("u-anna", "org-x").listForMatter({ matterId: "m-1" as never });
+    const arg = mockPrisma.task.findMany.mock.calls[0]![0] as { where: Record<string, unknown> };
+    expect(arg.where).toEqual({ matterId: "m-1", organizationId: "org-x" });
+  });
+
+  it("ärende i annan byrå → NOT_FOUND, inga uppgifter läses", async () => {
+    mockPrisma.matter.findFirst.mockResolvedValue(null);
+    await expect(makeCaller().listForMatter({ matterId: "m-x" as never })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(mockPrisma.task.findMany).not.toHaveBeenCalled();
   });
 });
 

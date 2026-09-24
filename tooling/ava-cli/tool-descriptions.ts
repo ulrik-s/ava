@@ -208,6 +208,7 @@ const DESCRIPTIONS: Readonly<Record<string, string>> = {
 
   // ── Uppgifter ────────────────────────────────────────────────────
   "task.list": "Lista uppgifter, valfritt filtrerat på status eller ärende.",
+  "task.listForMatter": "Lista ett ärendes frister och att-göra-poster — alla användares, sorterat på frist.",
   "task.create": "Skapa en uppgift, valfritt kopplad till ett ärende och med förfallodag.",
   "task.update": "Uppdatera en uppgift.",
   "task.complete": "Markera en uppgift som klar.",

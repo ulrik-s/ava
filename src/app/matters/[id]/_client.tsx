@@ -23,6 +23,7 @@ import { ExpenseSection } from "./_expense-section";
 import { GenerateModal } from "./_generate-modal";
 import { ServiceNotesSection } from "./_service-notes-section";
 import { TimeSection } from "./_time-section";
+import { TodoSection } from "./_todo-section";
 
  
 /** Ärendets målnummer som sträng (getById-typen saknar fältet i select-typen). */
@@ -66,6 +67,8 @@ export default function MatterDetailClient({ id: paramId }: { id: string }) {
         klient={klient}
         onOpenGenerate={() => setShowGenerateModal(true)}
       />
+
+      <TodoSection matterId={id} />
 
       <div className="mb-6">
         <MatterPaymentMethod matterId={id} matter={m} />

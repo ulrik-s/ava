@@ -23,6 +23,12 @@ export interface TaskListFilter {
 export interface TaskRepository extends Repository<Task> {
   /** Användarens uppgifter i org:en (dueAt asc), med ärende-subset. */
   listForUser(userId: UserId, organizationId: OrganizationId, filter: TaskListFilter): Promise<TaskListRow[]>;
+  /**
+   * Ärendets uppgifter (frister) i org:en — ALLA användares (dueAt asc). En
+   * frist i ett ärende angår alla som arbetar i det, inte bara den som lade in
+   * den. Ändra/klarmarkera är fortfarande ägar-scopat (`getOwned`).
+   */
+  listForMatter(matterId: MatterId, organizationId: OrganizationId): Promise<TaskListRow[]>;
   /** Uppgift by id, ägar-scopad (id + userId + org). Null om saknas/ej ägd/raderad. */
   getOwned(id: TaskId, userId: UserId, organizationId: OrganizationId): Promise<Task | null>;
 }

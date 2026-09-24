@@ -13,6 +13,9 @@ const meQuery: { data: unknown } = { data: { id: "u1", name: "Anna" } };
 /** "Att bevaka" (#1062) — self-gating: tom lista → kortet renderar ingenting. */
 const watchlistQuery: { data: unknown; isLoading: boolean } = { data: { items: [] }, isLoading: false };
 
+/** task.list för DeadlinesAlert — sätts per test. */
+const taskListQuery: { data: { items: unknown[]; total: number } | undefined } = { data: { items: [], total: 0 } };
+
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
     useUtils: () => ({ todo: { list: { invalidate: vi.fn() } } }),
@@ -21,6 +24,8 @@ vi.mock("@/lib/client/trpc", () => ({
     user: { current: { useQuery: () => meQuery } },
     watchlist: { list: { useQuery: () => watchlistQuery } },
     task: {
+      // DeadlinesAlert (#1162): mina uppgifter; tom lista → ingen röd ruta.
+      list: { useQuery: () => taskListQuery },
       complete: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       update: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
