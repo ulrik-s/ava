@@ -11,6 +11,6 @@
     },
     "noEmit": true
   },
-  "include": ["src/**/*.ts", "test/**/*.ts", "make-icons.ts"],
+  "include": ["src/**/*.ts", "test/**/*.ts", "make-icons.ts", "bundle.ts"],
   "exclude": ["node_modules"]
 }

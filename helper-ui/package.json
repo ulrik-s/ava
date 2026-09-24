@@ -1,6 +1,6 @@
 {
   "name": "@ava/helper-ui",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "AVA Helper — Electron tray-app med inbyggd in-process helper-motor (ADR 0029/0030).",
@@ -9,7 +9,7 @@
     "test": "bun test",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "icons": "bun make-icons.ts",
-    "bundle": "bun build src/main.ts --target=node --format=cjs --external electron --outfile=dist/main.cjs",
+    "bundle": "bun bundle.ts",
     "dev": "bun run bundle && electron dist/main.cjs",
     "dist": "bun run icons && bun run bundle && electron-builder"
   },

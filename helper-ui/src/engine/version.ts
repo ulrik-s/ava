@@ -1,7 +1,6 @@
 /**
- * Versionen bakas in vid build via `bun build --compile --define
- * __AVA_HELPER_VERSION__='"helper-v1.2.3"'` (se build.ts). Vid
- * dev-körning (`bun src/main.ts`) är symbolen odeklarerad → "dev".
+ * Versionen bakas in vid build (`bundle.ts`, `helper-v<package.json-version>`).
+ * Vid dev-körning (`bun src/main.ts`) är symbolen odeklarerad → "dev".
  *
  * `typeof <odeklarerad>` är säkert i JS (kastar inte) → fallbacken
  * funkar utan att symbolen behöver finnas.

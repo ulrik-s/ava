@@ -12,6 +12,7 @@
  * mål-datorn — den interaktiva tray-/login-delen kan inte headless-testas.
  */
 
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { app, dialog, Menu, shell, Tray, nativeImage } from "electron";
@@ -126,6 +127,12 @@ function buildMenu(tooltip: string, notice: UpdateNotice | null, actions: MenuAc
       ? [{ label: "Installera certifikat för Safari…", click: actions.onInstallCertificate }]
       : []),
     { label: "Sök efter uppdatering", click: actions.onCheckUpdate },
+    {
+      label: "Starta vid inloggning",
+      type: "checkbox",
+      checked: app.getLoginItemSettings().openAtLogin,
+      click: (item) => { app.setLoginItemSettings({ openAtLogin: item.checked }); },
+    },
     { type: "separator" },
     { label: "Avsluta AVA Helper", click: actions.onQuit },
   );
@@ -138,7 +145,24 @@ function trayImage(): Electron.NativeImage {
   return img;
 }
 
+/**
+ * Första starten slår på "Starta vid inloggning" — helpern måste köra för att
+ * dokument ska gå att öppna från AVA. Stänger användaren av det respekteras
+ * det (markören gör att vi inte slår på igen).
+ */
+function enableLoginItemOnFirstRun(): void {
+  const marker = join(app.getPath("userData"), "login-item-initialized");
+  if (existsSync(marker)) return;
+  app.setLoginItemSettings({ openAtLogin: true });
+  mkdirSync(app.getPath("userData"), { recursive: true });
+  writeFileSync(marker, new Date().toISOString());
+}
+
+// En instans åt gången — två motorer skulle slåss om portarna.
+if (!app.requestSingleInstanceLock()) app.quit();
+
 app.whenReady().then(() => {
+  enableLoginItemOnFirstRun();
   app.dock?.hide(); // tray-only, ingen dock-ikon
   const engine: EngineHandle = startEngine({ confirmOrigin });
 

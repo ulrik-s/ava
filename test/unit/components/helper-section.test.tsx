@@ -59,7 +59,8 @@ describe("HelperSection — installations-status", () => {
     global.fetch = routeFetch([[`${HTTP}/ping`, pingOk], [`${HTTP}/status`, () => statusBody({ pending: 0, conflict: 0, total: 0 })]]);
     render(<HelperSection />);
     const link = await screen.findByRole("link", { name: /Ladda ner/ });
-    expect(link.getAttribute("href")).toMatch(/github\.com\/ulrik-s\/ava\/releases/);
+    expect(link.getAttribute("href")).toMatch(/github\.com\/ulrik-s\/ava\/releases\?q=helper-v/);
+    expect(screen.getByRole("link", { name: /Installationsguide/ }).getAttribute("href")).toMatch(/docs\/helper-installation\.md$/);
   });
 });
 
