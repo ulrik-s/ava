@@ -2,7 +2,7 @@
  * Tests för useHelper() + transport-resolution (https→http, ADR 0006).
  */
 
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import {
   useHelper,
@@ -19,6 +19,7 @@ import {
   emptySyncTracker,
   SYNCED_TTL_MS,
   HELPER_BASE_OVERRIDE_KEY,
+  ABSENT_REPROBE_MS,
 } from "@/lib/client/helper/use-helper";
 import type { HelperStatusResponse, HelperSyncEntry } from "@/lib/shared/helper/protocol";
 import { asId } from "@/lib/shared/schemas/ids";
@@ -89,6 +90,29 @@ describe("useHelper / transport", () => {
     await waitFor(() => expect(screen.getByText("v9")).toBeInTheDocument());
     // Default-portarna (48761/48762) ska ALDRIG probas när en override finns.
     expect(fetchMock.mock.calls.every(([u]: [string]) => String(u).startsWith(OTHER))).toBe(true);
+  });
+
+  it("saknad helper söks igen var ABSENT_REPROBE_MS → dyker upp utan omladdning (#1149)", async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchMock = vi.fn().mockRejectedValue(new Error("CORS: origin ej godkänd ännu"));
+      global.fetch = fetchMock;
+      /** Flusha probens promises (fetch-reject → setState → ev. ny timer). */
+      const flush = () => act(async () => { for (let i = 0; i < 10; i++) await Promise.resolve(); });
+      render(<Probe />);
+      await flush();
+      expect(screen.getByText("absent")).toBeInTheDocument();
+      const afterFirst = fetchMock.mock.calls.length;
+      // Användaren klickar "Tillåt" i helpern → nästa probe lyckas.
+      global.fetch = routeFetch([[`${HTTPS}/ping`, () => new Response("ava-helper v3.0.0\n", { status: 200 })]]);
+      resetHelperBaseCache(); // miss-bromsen (10 s) har löpt ut när 15 s-timern slår
+      await act(async () => { vi.advanceTimersByTime(ABSENT_REPROBE_MS); });
+      await flush();
+      expect(screen.getByText("v3.0.0")).toBeInTheDocument();
+      expect(afterFirst).toBeGreaterThan(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("negativ-cachar en miss → ingen probe-storm (#653)", async () => {

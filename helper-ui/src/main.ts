@@ -49,6 +49,25 @@ async function startLogin(): Promise<void> {
   }
 }
 
+/**
+ * Trust-on-first-use (#1149): en okänd https-webbplats vill använda helpern.
+ * Bara användaren kan godkänna — webbplatsen själv kan inte ge sig tillgång.
+ */
+async function confirmOrigin(origin: string): Promise<boolean> {
+  const { response } = await dialog.showMessageBox({
+    type: "question",
+    buttons: ["Tillåt", "Neka"],
+    defaultId: 1,
+    cancelId: 1,
+    title: "AVA Helper",
+    message: `${new URL(origin).host} vill använda AVA Helper`,
+    detail:
+      `Webbplatsen ${origin} vill öppna och spara dokument via AVA Helper på den här datorn.\n\n` +
+      "Tillåt bara om det är din byrås AVA.",
+  });
+  return response === 0;
+}
+
 interface MenuActions {
   onCheckUpdate: () => void;
   onQuit: () => void;
@@ -87,7 +106,7 @@ function trayImage(): Electron.NativeImage {
 
 app.whenReady().then(() => {
   app.dock?.hide(); // tray-only, ingen dock-ikon
-  const engine: EngineHandle = startEngine();
+  const engine: EngineHandle = startEngine({ confirmOrigin });
 
   const tray = new Tray(trayImage());
   const quit = (): void => { engine.stop(); app.quit(); };

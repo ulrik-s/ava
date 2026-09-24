@@ -120,18 +120,24 @@ export function resetHelperBaseCache(): void {
   lastMissAt = 0;
 }
 
+/** Hur ofta en saknad helper söks igen (startad senare, eller webbplatsen
+ *  nyss godkänd i helperns dialog, #1149). Hittad → ingen polling. */
+export const ABSENT_REPROBE_MS = 15_000;
+
 export function useHelper(): HelperStatus {
   const [status, setStatus] = useState<HelperStatus>({ version: undefined, checked: false });
 
   useEffect(() => {
     let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     async function ping(): Promise<void> {
       const probe = await probeHelper();
       if (cancelled) return;
       setStatus({ version: probe?.version ?? null, checked: true });
+      if (!probe) timer = setTimeout(() => { void ping(); }, ABSENT_REPROBE_MS);
     }
     void ping();
-    return () => { cancelled = true; };
+    return () => { cancelled = true; clearTimeout(timer); };
   }, []);
 
   return status;

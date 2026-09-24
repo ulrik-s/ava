@@ -22,9 +22,10 @@ import { join } from "node:path";
 import { HELPER_HTTPS_PORT, HELPER_PORT } from "@/lib/shared/helper/protocol";
 import { serveFetchHandler } from "@/lib/shared/http/node-http-adapter";
 
+import { OriginGate, type ConfirmOrigin } from "./allowed-origins.ts";
 import { buildAuthHeaderProvider } from "./auth/auth-provider.ts";
 import { defaultLoginDeps, loginConfigFromEnv, runLogin, type LoginConfig } from "./auth/login.ts";
-import { selectTokenStore } from "./auth/token-store.ts";
+import { selectTokenStore, type TokenStore } from "./auth/token-store.ts";
 import { handleConfig } from "./config-endpoint.ts";
 import { ContentStore, resolveCacheTtlMs } from "./content-store.ts";
 import { fetchAndCacheContent, handleContent } from "./content.ts";
@@ -213,6 +214,25 @@ interface Stores {
 }
 
 /** Skapa + återställ kön + content-lagret (om data-dir finns) och starta dränerings-loopen. */
+/**
+ * Auth-header-provider som alltid finns men byggs om vid `reload()` — så en
+ * config som webbappen pushar efter start (ADR 0029) tar effekt direkt.
+ * Utan config ger den `undefined` (samma som förr: ingen Bearer).
+ */
+export function reloadableAuth(
+  resolve: () => LoginConfig | null,
+  tokenStore: TokenStore,
+  build: (cfg: LoginConfig, store: TokenStore) => AuthHeaderProvider = buildAuthHeaderProvider,
+): { provider: AuthHeaderProvider; reload: () => void } {
+  let current: AuthHeaderProvider | undefined;
+  const reload = (): void => {
+    const cfg = resolve();
+    current = cfg ? build(cfg, tokenStore) : undefined;
+  };
+  reload();
+  return { provider: async () => (current ? current() : undefined), reload };
+}
+
 function startStores(dir: string | null, signal: AbortSignal, authHeader?: AuthHeaderProvider): Stores | undefined {
   if (dir === null) {
     log("ingen data-dir → durabla lager inaktiverade (direkt-upload, ingen offline-cache)");
@@ -227,6 +247,9 @@ function startStores(dir: string | null, signal: AbortSignal, authHeader?: AuthH
 }
 
 export interface EngineOpts {
+  /** Fråga användaren om en okänd webbplats får använda helpern (skalets dialog, #1149).
+   *  Utelämnad (headless) → ingen fråga; bara localhost/github.io/AVA_HELPER_ORIGINS. */
+  confirmOrigin?: ConfirmOrigin;
   /** Lyssningsport (default `AVA_HELPER_PORT`/48761). */
   port?: number;
   /** HTTPS-port (default `AVA_HELPER_HTTPS_PORT`/48762). */
@@ -267,18 +290,28 @@ export function startEngine(opts: EngineOpts = {}): EngineHandle {
   };
 
   // Helperns egen OIDC-auth (om parad/konfigurerad) → autonom Bearer mot servern.
-  const loginCfg = loginConfigFromEnv(helperEnvFor(dir));
+  // Byggs om när webbappen pushar ny config (#1149) — förr krävdes omstart.
   const tokenStore = selectTokenStore(currentPlatform(), dir, { tokenFile: process.env.AVA_HELPER_TOKEN_FILE });
-  const authHeader: AuthHeaderProvider | undefined = loginCfg ? buildAuthHeaderProvider(loginCfg, tokenStore) : undefined;
+  const auth = reloadableAuth(() => loginConfigFromEnv(helperEnvFor(dir)), tokenStore);
+  const authHeader = auth.provider;
+  const origins = new OriginGate(dir, opts.confirmOrigin);
 
   const stores = startStores(dir, abort.signal, authHeader);
   const handler = createHandler({
     version: VERSION,
     extraOrigins: extraOrigins(),
+    approvedOrigins: () => origins.list(),
+    onUnknownOrigin: (origin) => origins.onUnknown(origin),
     onCheckUpdate: () => { void checkNow(); },
     updateAvailable: () => updateNotice !== null,
     // Auto-konfigurering från web-appen (ADR 0029) — alltid på (skriver helper-config.json).
-    onConfig: (req: Request) => handleConfig(req, { save: (input) => saveHelperConfig(dir, input) }),
+    onConfig: (req: Request) => handleConfig(req, {
+      save: (input) => {
+        const saved = saveHelperConfig(dir, input);
+        if (saved) auth.reload();
+        return saved;
+      },
+    }),
     ...(stores
       ? {
           onOpen: queueBackedOnOpen(stores.queue, stores.content, authHeader),

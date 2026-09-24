@@ -76,6 +76,11 @@ export function remoteJwksForIssuer(issuer: string, jwksUri?: string): JWTVerify
  *   - `AVA_OIDC_JWKS_URI` (valfri) — explicit JWKS-URL (annars Keycloak-vägen).
  *   - `AVA_OIDC_AUDIENCE` (valfri) — förväntad `aud`.
  */
+/** Trimmat env-värde; tomt räknas som osatt (compose sätter `""` för av). */
+function envValue(env: Record<string, string | undefined>, key: string): string | undefined {
+  return env[key]?.trim() || undefined;
+}
+
 /**
  * Den OIDC-config web-appen ska auto-pusha till helpern (ADR 0029) — den
  * PUBLIKA issuern (som helpern på host:en + browsern når) + klient-id, eller
@@ -84,13 +89,15 @@ export function remoteJwksForIssuer(issuer: string, jwksUri?: string): JWTVerify
  * backchannel-JWKS angår inte helpern).
  */
 export function helperOidcConfig(env: Record<string, string | undefined> = process.env): HelperConfigRequest | null {
-  const issuer = env.AVA_OIDC_ISSUER?.trim();
+  const issuer = envValue(env, "AVA_OIDC_ISSUER");
   if (!issuer) return null;
-  const audience = env.AVA_OIDC_AUDIENCE?.trim();
+  const audience = envValue(env, "AVA_OIDC_AUDIENCE");
+  const scope = envValue(env, "AVA_OIDC_SCOPE");
   return {
     oidcIssuer: issuer,
-    oidcClientId: env.AVA_OIDC_CLIENT_ID?.trim() || "ava-helper",
+    oidcClientId: envValue(env, "AVA_OIDC_CLIENT_ID") ?? "ava-helper",
     ...(audience ? { oidcAudience: audience } : {}),
+    ...(scope ? { oidcScope: scope } : {}),
   };
 }
 

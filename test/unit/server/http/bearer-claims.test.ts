@@ -120,6 +120,11 @@ describe("helperOidcConfig (ADR 0029)", () => {
     expect(helperOidcConfig({ AVA_OIDC_ISSUER: ISSUER })).toEqual({ oidcIssuer: ISSUER, oidcClientId: "ava-helper" });
   });
 
+  it("skickar med AVA_OIDC_SCOPE (Entra: byråns API-scope, #1149)", () => {
+    expect(helperOidcConfig({ AVA_OIDC_ISSUER: ISSUER, AVA_OIDC_SCOPE: "api://x/access_as_user openid" }))
+      .toEqual({ oidcIssuer: ISSUER, oidcClientId: "ava-helper", oidcScope: "api://x/access_as_user openid" });
+  });
+
   it("respekterar AVA_OIDC_CLIENT_ID + AVA_OIDC_AUDIENCE", () => {
     expect(helperOidcConfig({ AVA_OIDC_ISSUER: ISSUER, AVA_OIDC_CLIENT_ID: "c", AVA_OIDC_AUDIENCE: "a" })).toEqual({ oidcIssuer: ISSUER, oidcClientId: "c", oidcAudience: "a" });
   });
