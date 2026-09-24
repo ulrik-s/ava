@@ -148,9 +148,12 @@ I **App registrations → din AVA-app**:
    Portalens textfält godtar inte `http://127.0.0.1` — det måste in via
    manifestet (i det äldre formatet: `replyUrlsWithType` med
    `"type": "InstalledClient"`).
-5. **Authentication** → *Allow public client flows* → **Yes**.
-6. **API permissions** → **Grant admin consent** (så att användarna inte
+5. **API permissions** → **Grant admin consent** (så att användarna inte
    får en godkännandedialog för `access_as_user`).
+
+*Allow public client flows* ska **inte** slås på: den aktiverar lösenords-,
+device code- och Windows-integrerad inloggning. Helpern använder authorization
+code med PKCE, som fungerar via `publicClient`-redirecten ovan utan den.
 
 Scopet helpern ska be om är `api://<klient-id>/access_as_user openid email
 profile offline_access`.
