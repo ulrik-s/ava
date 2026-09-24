@@ -10,6 +10,6 @@
     // incremental-cache som maskerar/visar fel beroende på körordning).
     "incremental": false
   },
-  "include": ["**/*.ts", "**/*.tsx", "bun-compat.ts"],
+  "include": ["**/*.ts", "**/*.tsx", "bun-compat.ts", "../src/lib/server/documents/pdfjs-worker.d.ts"],
   "exclude": ["../node_modules"]
 }
