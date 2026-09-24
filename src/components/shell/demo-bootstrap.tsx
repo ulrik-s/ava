@@ -44,6 +44,7 @@ import { AppShell } from "./app-shell";
 import { AuthStatusBanner } from "./auth-status-banner";
 import { AutoSync } from "./auto-sync";
 import { JobsBadge } from "./jobs-badge";
+import { ServerFirstSync } from "./server-first-sync";
 import "@/lib/client/jobs/register-workers"; // ⚠ side-effect: registrerar workers
 
 type Status = "loading" | "ready" | "error";
@@ -207,7 +208,7 @@ export function DemoBootstrap({ children }: { children: ReactNode }) {
 
   // Storen byggs ASYNK i useDemoBootstrap (cache-hydrering + ev. GH-Pages-fetch)
   // → null tills den är klar; render gate:ar på trpcClient nedan.
-  const [, setCachingSync] = useState<CachingSyncDataStore | null>(null);
+  const [cachingSync, setCachingSync] = useState<CachingSyncDataStore | null>(null);
   // Initial status MÅSTE vara SSR-stabil för att undvika hydration-mismatch
   // (React #418). Pathname-baserad logik flyttas till useDemoBootstrap.
   const [status, setStatus] = useState<Status>("loading");
@@ -269,6 +270,7 @@ export function DemoBootstrap({ children }: { children: ReactNode }) {
         queryClient={queryClient}
         status={status}
         errorMsg={errorMsg}
+        cachingSync={cachingSync}
       >
         {children}
       </AuthGatedDemoTree>
@@ -282,11 +284,13 @@ interface TreeProps {
   queryClient: QueryClient;
   status: Status;
   errorMsg: string | null;
+  /** Server-first-storen — synkas till servern efter varje ändring. Null i demon. */
+  cachingSync: CachingSyncDataStore | null;
   children: ReactNode;
 }
 
 function AuthGatedDemoTree(props: TreeProps) {
-  const { firmaConfig, trpcClient, queryClient, status, errorMsg, children } = props;
+  const { firmaConfig, trpcClient, queryClient, status, errorMsg, cachingSync, children } = props;
   const auth = useAuthMode();
 
   // readOnly avgörs av auth-mode:
@@ -313,6 +317,7 @@ function AuthGatedDemoTree(props: TreeProps) {
             <div className="px-3 py-1.5 shrink-0 flex items-center gap-2">
               <JobsBadge />
               <AutoSync />
+              {!isDemoTier && <ServerFirstSync store={cachingSync} />}
             </div>
           </div>
           {status === "loading" && (
