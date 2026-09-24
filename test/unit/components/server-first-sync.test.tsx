@@ -59,6 +59,26 @@ describe("ServerFirstSync", () => {
     expect(e.defaultPrevented).toBe(false);
   });
 
+  it("offline: försöker inte synka, visar att ändringar väntar — synkar när nätet kommer tillbaka (ADR 0016)", async () => {
+    let online = false;
+    const original = Object.getOwnPropertyDescriptor(Navigator.prototype, "onLine");
+    Object.defineProperty(navigator, "onLine", { configurable: true, get: () => online });
+    try {
+      const { state, store } = fakeStore({ pending: 2 });
+      wrap(<ServerFirstSync store={store} />);
+      await waitFor(() => expect(screen.getByText(/väntar|offline|lokalt/i)).toBeInTheDocument());
+      expect(state.reconciles).toBe(0);
+
+      online = true;
+      act(() => { window.dispatchEvent(new Event("online")); });
+      await waitFor(() => expect(state.reconciles).toBe(1));
+      await waitFor(() => expect(screen.getByText(/Sparat/)).toBeInTheDocument());
+    } finally {
+      delete (navigator as { onLine?: boolean }).onLine;
+      if (original) Object.defineProperty(Navigator.prototype, "onLine", original);
+    }
+  });
+
   it("utan store (demo) renderas inget", () => {
     const { container } = wrap(<ServerFirstSync store={null} />);
     expect(container.textContent).toBe("");
