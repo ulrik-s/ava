@@ -5,6 +5,7 @@
 
 import { describe, it, expect } from "vitest-compat";
 import {
+  menuPosition,
   withColumnHidden,
   type Column,
   type DataTablePrefs,
@@ -119,6 +120,19 @@ describe("kolumn-synlighet", () => {
     const vis = visibleColumns(cols, prefs).map((c) => c.key);
     expect(vis).not.toContain("n");
     expect(vis.slice(0, 2)).toEqual(["type", "name"]); // order-styrt
+  });
+});
+
+describe("menuPosition (#1152 — rubrikmenyn i fönstrets koordinater)", () => {
+  const vp = { width: 1000, height: 800 };
+  it("under rubriken, vänsterjusterad", () => {
+    expect(menuPosition({ bottom: 100, left: 200, right: 300 }, "left", vp)).toEqual({ top: 104, left: 200, maxHeight: 688 });
+  });
+  it("högerjusterad kolumn → menyn fästs i rubrikens högerkant", () => {
+    expect(menuPosition({ bottom: 100, left: 800, right: 900 }, "right", vp)).toEqual({ top: 104, right: 100, maxHeight: 688 });
+  });
+  it("nära fönsterkanterna → hålls inom marginalen, minst 120 px hög (scrollar själv)", () => {
+    expect(menuPosition({ bottom: 780, left: -20, right: 50 }, "left", vp)).toEqual({ top: 784, left: 8, maxHeight: 120 });
   });
 });
 
