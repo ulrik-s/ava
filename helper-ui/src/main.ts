@@ -17,7 +17,7 @@ import { join } from "node:path";
 import { app, dialog, Menu, shell, Tray, nativeImage } from "electron";
 
 import { runLogin } from "./engine/auth/login.ts";
-import { resolveLoginConfig, startEngine, type EngineHandle } from "./engine/main.ts";
+import { caTrustStatus, resolveLoginConfig, startEngine, trustLocalCa, type EngineHandle } from "./engine/main.ts";
 import type { UpdateNotice } from "./engine/update.ts";
 import { pollHelper } from "./status-poller.ts";
 import { trayView } from "./tray-status.ts";
@@ -68,9 +68,40 @@ async function confirmOrigin(origin: string): Promise<boolean> {
   return response === 0;
 }
 
+/**
+ * Safari (#1149): webbappen når helpern bara över https://localhost med ett
+ * certifikat macOS litar på. Installeras i användarens nyckelring — macOS
+ * frågar själv efter lösenordet. `ask` = fråga först (vid start); menyvalet
+ * installerar direkt.
+ */
+async function installCertificate(ask: boolean): Promise<void> {
+  if (ask) {
+    const { response } = await dialog.showMessageBox({
+      type: "info",
+      buttons: ["Installera", "Inte nu"],
+      defaultId: 0,
+      cancelId: 1,
+      title: "AVA Helper",
+      message: "Installera certifikat för Safari",
+      detail:
+        "För att AVA i Safari ska kunna öppna dokument via AVA Helper behöver datorn lita på " +
+        "helperns lokala certifikat. Det gäller bara den här datorn (localhost).\n\n" +
+        "macOS ber dig bekräfta med ditt lösenord.",
+    });
+    if (response !== 0) return;
+  }
+  const res = trustLocalCa();
+  if (!res.ok && !res.skipped) {
+    dialog.showErrorBox("AVA Helper", "Certifikatet installerades inte. Försök igen via menyn \"Installera certifikat för Safari…\".");
+  }
+}
+
 interface MenuActions {
   onCheckUpdate: () => void;
   onQuit: () => void;
+  /** Visa "Installera certifikat för Safari…" (certifikatet saknas). */
+  needsCertificate: boolean;
+  onInstallCertificate: () => void;
 }
 
 /**
@@ -91,6 +122,9 @@ function buildMenu(tooltip: string, notice: UpdateNotice | null, actions: MenuAc
   }
   items.push(
     { label: "Logga in…", click: () => { void startLogin(); } },
+    ...(actions.needsCertificate
+      ? [{ label: "Installera certifikat för Safari…", click: actions.onInstallCertificate }]
+      : []),
     { label: "Sök efter uppdatering", click: actions.onCheckUpdate },
     { type: "separator" },
     { label: "Avsluta AVA Helper", click: actions.onQuit },
@@ -111,6 +145,13 @@ app.whenReady().then(() => {
   const tray = new Tray(trayImage());
   const quit = (): void => { engine.stop(); app.quit(); };
 
+  // Kollas vid start och efter installation — inte vid varje menyomritning (var 4:e s).
+  let needsCertificate = caTrustStatus() === "untrusted";
+  const recheckCertificate = (): void => {
+    needsCertificate = caTrustStatus() === "untrusted";
+    void refresh();
+  };
+
   const refresh = async (): Promise<void> => {
     const snap = await pollHelper();
     const view = trayView(snap.present, snap.status);
@@ -120,9 +161,12 @@ app.whenReady().then(() => {
       // Motorn körs in-process → kolla direkt (ingen HTTP-rundtur) och rita om.
       onCheckUpdate: () => { void engine.checkForUpdate().then(refresh); },
       onQuit: quit,
+      needsCertificate,
+      onInstallCertificate: () => { void installCertificate(false).then(recheckCertificate); },
     }));
   };
   void refresh();
+  if (needsCertificate) void installCertificate(true).then(recheckCertificate);
   const timer = setInterval(() => void refresh(), POLL_INTERVAL_MS);
   app.on("before-quit", () => { clearInterval(timer); engine.stop(); });
 }).catch((err: unknown) => {

@@ -4,6 +4,7 @@ import {
   addTrustedArgs,
   deleteCertArgs,
   installCaTrust,
+  isCaTrusted,
   loginKeychain,
   removeCaTrust,
   removeTrustArgs,
@@ -34,6 +35,22 @@ describe("kommando-argument", () => {
   });
   test("loginKeychain-sökväg", () => {
     expect(loginKeychain("/Users/u")).toBe("/Users/u/Library/Keychains/login.keychain-db");
+  });
+});
+
+describe("isCaTrusted (#1149 — Safari)", () => {
+  test("inte macOS → null (behövs inte, inget körs)", () => {
+    const calls: string[][] = [];
+    expect(isCaTrusted("/p/ca.pem", { platform: "linux", run: (_c, a) => { calls.push([...a]); return { status: 0 }; } })).toBeNull();
+    expect(calls).toEqual([]);
+  });
+
+  test("macOS: verify-cert 0 → betrodd, annars inte", () => {
+    const calls: string[][] = [];
+    const run = (status: number) => (_c: string, a: readonly string[]) => { calls.push([...a]); return { status }; };
+    expect(isCaTrusted("/p/ca.pem", { platform: "darwin", run: run(0) })).toBe(true);
+    expect(isCaTrusted("/p/ca.pem", { platform: "darwin", run: run(1) })).toBe(false);
+    expect(calls[0]).toEqual(["verify-cert", "-c", "/p/ca.pem"]);
   });
 });
 
