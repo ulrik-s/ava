@@ -10,6 +10,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { BillingDialog } from "@/app/matters/[id]/_billing-dialog";
 import { asId } from "@/lib/shared/schemas/ids";
 
+/** Fakturadokumentet får uuid-id (#1143). */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
 const accontoMutate = vi.fn();
 const finalMutate = vi.fn();
 let accontoOnSuccess: ((res: unknown) => Promise<void>) | undefined;
@@ -144,7 +147,7 @@ describe("BillingDialog — ACCONTO (#397 avdragsmedvetet förslag)", () => {
     expect(html).toContain("Aconto — klientens andel");
     expect(html).toContain("Anna Andersson"); // mottagare = klienten
     expect(registerMutateAsync).toHaveBeenCalledWith(expect.objectContaining({
-      id: "faktura-inv-1", matterId: "m1", invoiceId: "inv-1", documentType: "Faktura",
+      id: expect.stringMatching(UUID_RE), matterId: "m1", invoiceId: "inv-1", documentType: "Faktura",
     }));
     expect(persistGeneratedDoc).toHaveBeenCalled();
     await waitFor(() => expect(onClose).toHaveBeenCalled());
@@ -215,7 +218,7 @@ describe("BillingDialog — FINAL", () => {
     const onClose = vi.fn();
     render(<BillingDialog matterId={asId<"MatterId">("m1")} type="FINAL" existingAccontos={[]} meta={meta} onClose={onClose} />);
     await finalOnSuccess!({ invoice: { id: "inv-7", amount: 590_000 } });
-    expect(registerMutateAsync).toHaveBeenCalledWith(expect.objectContaining({ id: "faktura-inv-7", invoiceId: "inv-7" }));
+    expect(registerMutateAsync).toHaveBeenCalledWith(expect.objectContaining({ id: expect.stringMatching(UUID_RE), invoiceId: "inv-7" }));
     await waitFor(() => expect(onClose).toHaveBeenCalled());
   });
 });

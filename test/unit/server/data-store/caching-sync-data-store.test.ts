@@ -53,6 +53,21 @@ describe("CachingSyncDataStore (#415)", () => {
     });
   });
 
+  describe("afterReconcile (#1143)", () => {
+    it("körs efter varje reconcile; ett fel där sväljs (reconcile lyckas ändå)", async () => {
+      const calls: string[] = [];
+      const ds = await CachingSyncDataStore.create({
+        transport: new FakeTransport(),
+        persistence: new InMemoryPersistence(),
+        afterReconcile: async () => { calls.push("after"); throw new Error("upload-fel"); },
+      });
+      const res = await ds.reconcile();
+      expect(res.conflicts).toHaveLength(0);
+      await ds.reconcile();
+      expect(calls).toEqual(["after", "after"]);
+    });
+  });
+
   describe("online — reconcile (pull + replay)", () => {
     it("spelar upp köade mutationer och applicerar serverns kanoniska rad", async () => {
       const transport = new FakeTransport();

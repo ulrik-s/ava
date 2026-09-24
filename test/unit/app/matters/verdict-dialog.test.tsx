@@ -10,6 +10,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { VerdictDialog } from "@/app/matters/[id]/_verdict-dialog";
 import { asId } from "@/lib/shared/schemas/ids";
 
+/** Fakturadokumentet får uuid-id (#1143). */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
 let verdictOnSuccess: ((res: unknown) => Promise<void>) | undefined;
 const verdictMutate = vi.fn();
 const registerMutateAsync = vi.fn(async () => {});
@@ -81,7 +84,7 @@ describe("VerdictDialog", () => {
     expect(html).toContain("Sammanställning");
     expect(html).toContain("Rättshjälpsmyndighet/domstol");
     expect(registerMutateAsync).toHaveBeenCalledWith(expect.objectContaining({
-      id: "faktura-inv-9", matterId: "m1", invoiceId: "inv-9", documentType: "Faktura",
+      id: expect.stringMatching(UUID_RE), matterId: "m1", invoiceId: "inv-9", documentType: "Faktura",
     }));
     expect(persistGeneratedDoc).toHaveBeenCalled();
     await waitFor(() => expect(onClose).toHaveBeenCalled());

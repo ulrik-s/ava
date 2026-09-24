@@ -14,6 +14,7 @@
 import type { inferRouterInputs } from "@trpc/server";
 import type { AppRouter } from "@/lib/server/routers/_app";
 import { asId, type MatterId } from "@/lib/shared/schemas/ids";
+import { uuidv7 } from "@/lib/shared/uuid";
 import type { FakturaBreakdown, FakturaDocInvoice, FakturaDocMeta, InvoiceSpecification } from "./faktura-template";
 
 type RouterInputs = inferRouterInputs<AppRouter>;
@@ -58,7 +59,8 @@ export async function generateFakturaFromTemplate(args: GenerateFakturaFromTempl
   const { persistGeneratedDoc } = await import("@/lib/client/demo/persist-generated-doc");
   const html = renderFakturaHtml({ invoice, recipient, meta, spec, breakdown });
   const bytes = new TextEncoder().encode(html);
-  const docId = `faktura-${invoice.id}`;
+  // uuid — servern lagrar bara uuid-nycklade rader (#1124; fakturan missades där).
+  const docId = uuidv7();
   const fileName = `Faktura ${invoice.invoiceNumber ?? meta.matterNumber} ${new Date().toISOString().slice(0, 10)}.html`;
   const storagePath = `documents/content/${docId}.html`;
   await register.mutateAsync({
