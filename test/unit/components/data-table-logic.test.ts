@@ -5,6 +5,7 @@
 
 import { describe, it, expect } from "vitest-compat";
 import {
+  withColumnHidden,
   type Column,
   type DataTablePrefs,
   isFilterable,
@@ -118,6 +119,16 @@ describe("kolumn-synlighet", () => {
     const vis = visibleColumns(cols, prefs).map((c) => c.key);
     expect(vis).not.toContain("n");
     expect(vis.slice(0, 2)).toEqual(["type", "name"]); // order-styrt
+  });
+});
+
+describe("withColumnHidden", () => {
+  it("lägger till override för ny kolumn", () => {
+    expect(withColumnHidden({}, "age", true)).toEqual([{ key: "age", hidden: true }]);
+  });
+  it("uppdaterar befintlig override och behåller bredden", () => {
+    expect(withColumnHidden({ columns: [{ key: "age", width: 120, hidden: true }, { key: "name" }] }, "age", false))
+      .toEqual([{ key: "age", width: 120, hidden: false }, { key: "name" }]);
   });
 });
 

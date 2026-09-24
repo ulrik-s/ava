@@ -185,6 +185,14 @@ export function hideBelowClass<T>(col: Column<T>): string {
   return col.hideBelow ? HIDE_BELOW_CLASS[col.hideBelow] : "";
 }
 
+/** Per-kolumn-överrides med `key` satt till dold/synlig (övriga fält, t.ex. bredd, behålls). */
+export function withColumnHidden(prefs: DataTablePrefs, key: string, hidden: boolean): NonNullable<DataTablePrefs["columns"]> {
+  const cur = prefs.columns ?? [];
+  return cur.some((c) => c.key === key)
+    ? cur.map((c) => (c.key === key ? { ...c, hidden } : c))
+    : [...cur, { key, hidden }];
+}
+
 export function visibleColumns<T>(columns: Column<T>[], prefs: DataTablePrefs): Column<T>[] {
   const visible = columns.filter((c) => !isColumnHidden(c, prefs));
   if (!prefs.order?.length) return visible;

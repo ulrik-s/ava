@@ -6,7 +6,7 @@
  * Admin-knappar (Spara org-default etc.) sitter i samma toolbar.
  */
 
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { DataTable, type Column } from "@/components/ui/data-table";
 
@@ -95,6 +95,14 @@ describe("DataTable", () => {
     expect(screen.getByText("Dölj kolumn")).toBeInTheDocument();
   });
 
+  it("'Dölj kolumn' döljer faktiskt kolumnen (buggfix)", () => {
+    render(<DataTable prefKey="x" columns={cols} data={rows} rowKey={(r) => r.id} />);
+    fireEvent.click(screen.getByRole("button", { name: /Ålder/ }));
+    fireEvent.click(screen.getByText("Dölj kolumn"));
+    expect(screen.queryByRole("columnheader", { name: /Ålder/ })).not.toBeInTheDocument();
+    expect(screen.queryByText("25")).not.toBeInTheDocument();
+  });
+
   it("onRowClick fires när rad klickas", () => {
     const onRowClick = vi.fn();
     render(<DataTable prefKey="x" columns={cols} data={rows} rowKey={(r) => r.id} onRowClick={onRowClick} />);
@@ -149,26 +157,56 @@ describe("DataTable", () => {
     expect(screen.getByText(/Gruppering: Namn/)).toBeInTheDocument();
   });
 
-  it("'+ Visa kolumn'-knapp dyker upp i toolbar när någon kolumn är dold", () => {
-    persisted.data = { user: { columns: [{ key: "age", hidden: true }] }, org: null };
+  it("'Kolumner'-knappen syns alltid (även utan dolda kolumner och för icke-admin)", () => {
+    me.data = { id: "u1", role: "LAWYER" };
     render(<DataTable prefKey="x" columns={cols} data={rows} rowKey={(r) => r.id} />);
-    expect(screen.getByText(/\+ Visa kolumn/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Kolumner" })).toBeInTheDocument();
   });
 
-  it("klick på '+ Visa kolumn' öppnar lista med dolda kolumner", () => {
+  it("'Kolumner' visar antal dolda + alla kolumner som kryssrutor", () => {
     persisted.data = { user: { columns: [{ key: "age", hidden: true }] }, org: null };
     render(<DataTable prefKey="x" columns={cols} data={rows} rowKey={(r) => r.id} />);
-    fireEvent.click(screen.getByText(/\+ Visa kolumn/));
-    expect(screen.getByText("Dolda kolumner")).toBeInTheDocument();
-    // "Ålder" finns både i lista och i header (osynlig pga hidden)
-    const ages = screen.getAllByText("Ålder");
-    expect(ages.length).toBeGreaterThanOrEqual(1);
+    fireEvent.click(screen.getByRole("button", { name: /Kolumner.*1 dolda/ }));
+    const group = screen.getByRole("group", { name: "Kolumner" });
+    expect(within(group).getByRole("checkbox", { name: "Namn" })).toBeChecked();
+    expect(within(group).getByRole("checkbox", { name: "Ålder" })).not.toBeChecked();
   });
 
-  it("'+ Visa kolumn' visas INTE när inga kolumner är dolda", () => {
-    persisted.data = { user: { sortBy: "name" }, org: null };
+  it("kryssa av en kolumn → den döljs; kryssa i → den kommer tillbaka", () => {
     render(<DataTable prefKey="x" columns={cols} data={rows} rowKey={(r) => r.id} />);
-    expect(screen.queryByText(/\+ Visa kolumn/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Kolumner" }));
+    const age = () => within(screen.getByRole("group", { name: "Kolumner" })).getByRole("checkbox", { name: "Ålder" });
+    fireEvent.click(age());
+    expect(screen.queryByText("25")).not.toBeInTheDocument();
+    fireEvent.click(age());
+    expect(screen.getByText("25")).toBeInTheDocument();
+  });
+
+  it("sista synliga kolumnen går inte att dölja", () => {
+    persisted.data = { user: { columns: [{ key: "age", hidden: true }] }, org: null };
+    render(<DataTable prefKey="x" columns={cols} data={rows} rowKey={(r) => r.id} />);
+    fireEvent.click(screen.getByRole("button", { name: /Kolumner/ }));
+    expect(within(screen.getByRole("group", { name: "Kolumner" })).getByRole("checkbox", { name: "Namn" })).toBeDisabled();
+  });
+
+  it("valfria fält (defaultHidden) ligger under 'Fler fält'; kolumner som inte får döljas saknas", () => {
+    const withExtra: Column<Row>[] = [
+      { ...cols[0]!, hideable: false },
+      cols[1]!,
+      { key: "id", label: "Id", render: (r) => r.id, defaultHidden: true },
+    ];
+    render(<DataTable prefKey="x" columns={withExtra} data={rows} rowKey={(r) => r.id} />);
+    fireEvent.click(screen.getByRole("button", { name: /Kolumner/ }));
+    const group = screen.getByRole("group", { name: "Kolumner" });
+    expect(within(group).getByText("Fler fält")).toBeInTheDocument();
+    expect(within(group).getByRole("checkbox", { name: "Id" })).not.toBeChecked();
+    expect(within(group).queryByRole("checkbox", { name: "Namn" })).not.toBeInTheDocument();
+  });
+
+  it("inga kolumner som kan döljas → ingen 'Kolumner'-knapp", () => {
+    me.data = { id: "u1", role: "LAWYER" };
+    render(<DataTable prefKey="x" columns={cols.map((c) => ({ ...c, hideable: false }))} data={rows} rowKey={(r) => r.id} />);
+    expect(screen.queryByRole("button", { name: /Kolumner/ })).not.toBeInTheDocument();
   });
 });
 
@@ -212,13 +250,11 @@ describe("DataTable — footer/summa + interaktioner", () => {
     });
   });
 
-  it("unhide via '+ Visa kolumn'-listan triggar persist", () => {
+  it("visa kolumn via 'Kolumner' triggar persist", () => {
     persisted.data = { user: { columns: [{ key: "age", hidden: true }] }, org: null };
     render(<DataTable prefKey="x" columns={cols} data={rows} rowKey={(r) => r.id} />);
-    fireEvent.click(screen.getByText(/\+ Visa kolumn/));
-    // Klicka kolumnen i "Dolda kolumner"-listan (sista "Ålder"-träffen = lista).
-    const ages = screen.getAllByText("Ålder");
-    fireEvent.click(ages[ages.length - 1]!);
+    fireEvent.click(screen.getByRole("button", { name: /Kolumner/ }));
+    fireEvent.click(within(screen.getByRole("group", { name: "Kolumner" })).getByRole("checkbox", { name: "Ålder" }));
     return new Promise<void>((resolve) => {
       setTimeout(() => { expect(saveMutate).toHaveBeenCalled(); resolve(); }, 500);
     });
