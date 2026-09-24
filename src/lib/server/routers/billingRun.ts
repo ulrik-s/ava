@@ -36,7 +36,7 @@ import {
   buildInvoiceSpecification, specExpenseLines, specTimeLines,
   type InvoiceSpecification, type SpecDeduction,
 } from "@/lib/shared/invoice-specification";
-import { applyKrAction, krStateOf, type KostnadsrakningAction, type KostnadsrakningState } from "@/lib/shared/kostnadsrakning-flow";
+import { applyKrAction, canVoidKostnadsrakning, krStateOf, type KostnadsrakningAction, type KostnadsrakningState } from "@/lib/shared/kostnadsrakning-flow";
 import { ocrFromInvoiceNumber } from "@/lib/shared/ocr-reference";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { settlementBreakdownSchema, type BillingRun, type Invoice } from "@/lib/shared/schemas/billing";
@@ -673,6 +673,30 @@ export const billingRunRouter = router({
         // körningen (fetchWorkByRun), inte som ofryst.
         await freezeWork(tx, input.matterId, run.id);
         return { run };
+      });
+    }),
+
+  /**
+   * Ångra en kostnadsräkning (#1121) — t.ex. skapad av misstag eller innan allt
+   * arbete registrerats. Bara före domstolens beslut (`canVoidKostnadsrakning`).
+   * Låser upp EXAKT de poster körningen frös, och annullerar körningen (VOIDED)
+   * så ärendet lämnar "väntar på dom" och en ny kostnadsräkning kan skapas.
+   */
+  voidKostnadsrakning: orgProcedure
+    .input(z.object({ billingRunId: billingRunIdSchema }))
+    .mutation(async ({ ctx, input }) => {
+      return ctx.repos.transaction(async (tx) => {
+        const run = await assertKostnadsrakning(tx, input.billingRunId, ctx.orgId);
+        if (!canVoidKostnadsrakning(run)) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "Kostnadsräkningen kan bara ångras innan domstolen har beslutat och ingen faktura skapats.",
+          });
+        }
+        await tx.timeEntries.unfreezeByBillingRun(run.id);
+        await tx.expenses.unfreezeByBillingRun(run.id);
+        const updated = await tx.billingRuns.update(run.id, { status: "VOIDED" });
+        return { run: updated };
       });
     }),
 

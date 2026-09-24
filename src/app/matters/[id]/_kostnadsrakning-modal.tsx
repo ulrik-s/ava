@@ -56,6 +56,9 @@ interface Props {
    *  text-rad på kostnadsräkningen. */
   radgivningPaid?: boolean | undefined;
   onClose: () => void;
+  /** Anropas EN gång när kostnadsräkningen faktiskt genererats — inte när
+   *  modalen stängs (Avbryt/Escape/X skapade förut en inskickad KR, #1121). */
+  onGenerated?: () => void;
 }
 
 function toDatetimeLocalValue(d: Date): string {
@@ -248,6 +251,7 @@ function useKostnadsrakningModal(props: Props) {
         bytes, totalInclVat: ctx.totalInclVat,
         huvudforhandlingMinutes: ctx.huvudforhandlingMinutes,
       });
+      props.onGenerated?.();
       const mailOpened = await maybeComposeMail({
         helperAvailable: Boolean(helper.version),
         fileName, bytes,

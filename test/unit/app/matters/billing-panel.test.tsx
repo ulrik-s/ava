@@ -30,6 +30,7 @@ let coverageSplitData: { clientOre: number } | undefined = undefined;
 const refetch = vi.fn();
 const radgivningMutate = vi.fn();
 const krMutate = vi.fn();
+const voidMutate = vi.fn();
 let documentListData: { documents: Array<Record<string, unknown>> } = { documents: [] };
 let hasDoc = false;
 const openGeneratedDocFn = vi.fn();
@@ -49,6 +50,7 @@ vi.mock("@/lib/client/trpc", () => ({
       proposal: { useQuery: () => ({ data: proposalData, isLoading: false }) },
       createKostnadsrakning: { useMutation: () => ({ mutate: krMutate, isPending: false }) },
       appealKostnadsrakning: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      voidKostnadsrakning: { useMutation: () => ({ mutate: voidMutate, isPending: false, error: null }) },
       recordKostnadsrakningBeslut: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       recordInsurerPruning: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       coverageSplit: { useQuery: () => ({ data: coverageSplitData }) },
@@ -92,8 +94,14 @@ vi.mock("@/app/matters/[id]/_billing-dialog", () => ({
 vi.mock("@/app/matters/[id]/_verdict-dialog", () => ({
   VerdictDialog: () => <div data-testid="verdict-dialog" />,
 }));
+// Modalen själv testas separat — här bara skillnaden stänga vs faktiskt generera (#1121).
 vi.mock("@/app/matters/[id]/_kostnadsrakning-modal", () => ({
-  KostnadsrakningModal: () => <div data-testid="kr-modal" />,
+  KostnadsrakningModal: (p: { onClose: () => void; onGenerated?: () => void }) => (
+    <div data-testid="kr-modal">
+      <button type="button" onClick={p.onClose}>Avbryt modal</button>
+      <button type="button" onClick={() => p.onGenerated?.()}>Generera</button>
+    </div>
+  ),
 }));
 
 const baseMatter = {
@@ -191,12 +199,37 @@ describe("BillingPanel — kostnadsräknings-kort (#828)", () => {
     expect(screen.getByText(/Registrera domstolens beslut/)).toBeInTheDocument();
   });
 
+  it("inskickad KR kan ångras — efter bekräftelse (#1121)", () => {
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={verdictMatter} />);
+    fireEvent.click(screen.getByRole("button", { name: "Ångra kostnadsräkning" }));
+    expect(confirmSpy).toHaveBeenCalled();
+    expect(voidMutate).toHaveBeenCalledWith({ billingRunId: "r3" });
+    confirmSpy.mockRestore();
+  });
+
+  it("ångra avbruten i bekräftelsen → inget händer", () => {
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+    render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={verdictMatter} />);
+    fireEvent.click(screen.getByRole("button", { name: "Ångra kostnadsräkning" }));
+    expect(voidMutate).not.toHaveBeenCalled();
+    confirmSpy.mockRestore();
+  });
+
+  it("en ångrad (VOIDED) KR visas inte som aktiv", () => {
+    runsData = { runs: [{ id: "r3", type: "KOSTNADSRAKNING", status: "VOIDED", kostnadsrakningStatus: "INSKICKAD", recipient: "DOMSTOL", amountOre: 50_000, createdAt: "2026-03-01" }] };
+    render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={verdictMatter} />);
+    expect(screen.queryByText(/Inskickad — väntar på beslut/)).not.toBeInTheDocument();
+  });
+
   it("BESLUTAD KR visar 'Skapa faktura' + 'Överklaga prutning'", () => {
     runsData = { runs: [{ id: "r3", type: "KOSTNADSRAKNING", status: "PENDING_VERDICT", kostnadsrakningStatus: "BESLUTAD", recipient: "DOMSTOL", amountOre: 50_000, awardedOre: 40_000, createdAt: "2026-03-01" }] };
     render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={verdictMatter} />);
     expect(screen.getByText(/Beslutad/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Skapa faktura" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Överklaga prutning" })).toBeInTheDocument();
+    // Efter domstolens beslut går den inte att ångra (#1121).
+    expect(screen.queryByRole("button", { name: "Ångra kostnadsräkning" })).not.toBeInTheDocument();
   });
 
   it("öppnar KR-dokumentet ur blob-cachen när det finns", () => {
@@ -248,6 +281,19 @@ describe("BillingPanel — Skapa-faktura-menyn (flödesmodellen)", () => {
     fireEvent.click(screen.getByRole("button", { name: "+ Skapa faktura" }));
     fireEvent.click(screen.getByRole("button", { name: "Kostnadsräkning till domstol" }));
     expect(screen.getByTestId("kr-modal")).toBeInTheDocument();
+  });
+
+  it("att STÄNGA KR-modalen skapar ingen kostnadsräkning — bara att generera gör det (#1121)", () => {
+    render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={{ ...baseMatter, paymentMethod: "OFFENTLIGT_UPPDRAG" }} />);
+    fireEvent.click(screen.getByRole("button", { name: "+ Skapa faktura" }));
+    fireEvent.click(screen.getByRole("button", { name: "Kostnadsräkning till domstol" }));
+    fireEvent.click(screen.getByRole("button", { name: "Avbryt modal" }));
+    expect(krMutate).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "+ Skapa faktura" }));
+    fireEvent.click(screen.getByRole("button", { name: "Kostnadsräkning till domstol" }));
+    fireEvent.click(screen.getByRole("button", { name: "Generera" }));
+    expect(krMutate).toHaveBeenCalledWith({ matterId: "m1" }, expect.anything());
   });
 
   it("PENDING: ingen knapp men en förklaring (#824)", () => {

@@ -977,3 +977,41 @@ describe("slutreglering med ALLA arvodeskategorier (#953)", () => {
     expect(res.split.clientOre).toBeLessThan(Math.round(1_893_950 * 0.2));
   });
 });
+
+describe("billingRun.voidKostnadsrakning — ångra en kostnadsräkning (#1121)", () => {
+  type FrozenRow = { frozenAt?: Date | null; frozenByBillingRunId?: string | null };
+
+  it("låser upp posterna, annullerar körningen — och en ny kostnadsräkning kan skapas", async () => {
+    const { ds, caller } = makeCaller({ workMinutes: 60, paymentMethod: "OFFENTLIGT_UPPDRAG" });
+    const created = await caller.billingRun.createKostnadsrakning({ matterId: "m-1" });
+
+    const res = await caller.billingRun.voidKostnadsrakning({ billingRunId: created.run.id });
+    expect(res.run.status).toBe("VOIDED");
+    const te = await ds.timeEntries.findFirst({ where: { id: "te-1" } }) as FrozenRow;
+    expect(te.frozenAt).toBeFalsy();
+    expect(te.frozenByBillingRunId).toBeFalsy();
+
+    // Ärendet har lämnat "väntar på dom" → en ny, uppdaterad kostnadsräkning går att skapa.
+    const again = await caller.billingRun.createKostnadsrakning({ matterId: "m-1" });
+    expect(again.run.id).not.toBe(created.run.id);
+    const te2 = await ds.timeEntries.findFirst({ where: { id: "te-1" } }) as FrozenRow;
+    expect(te2.frozenByBillingRunId).toBe(again.run.id);
+  });
+
+  it("går inte att ångra efter domstolens beslut — posterna förblir låsta", async () => {
+    const { ds, caller } = makeCaller({ workMinutes: 60, paymentMethod: "OFFENTLIGT_UPPDRAG" });
+    const created = await caller.billingRun.createKostnadsrakning({ matterId: "m-1" });
+    await caller.billingRun.recordKostnadsrakningBeslut({ billingRunId: created.run.id, awardedOre: 100000 });
+
+    await expect(caller.billingRun.voidKostnadsrakning({ billingRunId: created.run.id })).rejects.toThrow(/innan domstolen/);
+    const te = await ds.timeEntries.findFirst({ where: { id: "te-1" } }) as FrozenRow;
+    expect(te.frozenByBillingRunId).toBe(created.run.id);
+  });
+
+  it("en redan ångrad kostnadsräkning kan inte ångras igen", async () => {
+    const { caller } = makeCaller({ workMinutes: 60, paymentMethod: "OFFENTLIGT_UPPDRAG" });
+    const created = await caller.billingRun.createKostnadsrakning({ matterId: "m-1" });
+    await caller.billingRun.voidKostnadsrakning({ billingRunId: created.run.id });
+    await expect(caller.billingRun.voidKostnadsrakning({ billingRunId: created.run.id })).rejects.toThrow(/innan domstolen/);
+  });
+});

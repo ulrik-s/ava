@@ -85,3 +85,22 @@ export function krStateOf(run: { kostnadsrakningStatus?: KostnadsrakningStatus |
   return { status: run.kostnadsrakningStatus ?? "INSKICKAD", slutgiltigt: run.beslutSlutgiltigt ?? false };
 }
 
+/** Det `canVoidKostnadsrakning` behöver ur en lagrad körning. */
+export interface VoidableKostnadsrakning {
+  status?: string | null | undefined;
+  kostnadsrakningStatus?: string | null | undefined;
+  awardedOre?: number | null | undefined;
+  invoiceId?: string | null | undefined;
+}
+
+/**
+ * Får kostnadsräkningen ångras (#1121)? Bara så länge domstolen inte beslutat:
+ * inget dömt belopp och ingen faktura. Därefter finns prutning, fakturor och
+ * verifikat som bygger på den — då är det ett överklagande, inte ett ångra.
+ */
+export function canVoidKostnadsrakning(run: VoidableKostnadsrakning): boolean {
+  return run.status !== "VOIDED"
+    && run.kostnadsrakningStatus === "INSKICKAD"
+    && run.awardedOre == null
+    && run.invoiceId == null;
+}

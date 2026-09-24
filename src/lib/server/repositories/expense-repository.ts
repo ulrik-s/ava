@@ -55,6 +55,8 @@ export interface ExpenseRepository extends Repository<Expense> {
   freezeForMatter(matterId: MatterId, billingRunId: BillingRunId, now: Date): Promise<void>;
   /** Frys ENBART de angivna (ofrysta) utläggen mot en billing-run — per-post-val. */
   freezeByIds(ids: ExpenseId[], billingRunId: BillingRunId, now: Date): Promise<void>;
+  /** Lås upp ENBART posterna som just denna körning frös (annullerad kostnadsräkning, #1121). */
+  unfreezeByBillingRun(billingRunId: BillingRunId): Promise<void>;
   /** En advokats utlägg i en period (date asc), med ärende-ref (perLawyer-rapporten). */
   listForLawyerInPeriod(organizationId: OrganizationId, userId: UserId, from: Date, to: Date): Promise<LawyerReportExpense[]>;
 }
