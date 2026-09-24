@@ -111,7 +111,19 @@ export class CachingSyncDataStore {
     private readonly engine: ReconcileEngine,
     /** Persistera hela source-snapshotet (en gång per reconcile-batch). */
     private readonly persistSnapshot: () => Promise<void>,
+    /** Lyssnare på lokala ändringar (köad + persisterad) — driver synk-efter-spara. */
+    private readonly localChangeListeners: Set<() => void>,
   ) {}
+
+  /**
+   * Anropas efter varje lokal ändring, när den är köad och persisterad lokalt.
+   * Klienten schemalägger en reconcile så ändringen når servern direkt — inte
+   * först vid nästa sidladdning. Returnerar en avregistrering.
+   */
+  onLocalChange(listener: () => void): () => void {
+    this.localChangeListeners.add(listener);
+    return () => { this.localChangeListeners.delete(listener); };
+  }
 
   /** Hydrera (kö + source ur persistens) och komponera klossarna (server-vägen). */
   static async create(deps: CachingSyncDeps): Promise<CachingSyncDataStore> {
@@ -135,6 +147,7 @@ export class CachingSyncDataStore {
     const persistSnapshot = (): Promise<void> =>
       deps.persistence ? deps.persistence.save(store.currentSource) : Promise.resolve();
 
+    const localChangeListeners = new Set<() => void>();
     const onLocalMutation = async (event: MutationEvent<Record<string, unknown>>): Promise<void> => {
       const version = event.row.version;
       await queue.enqueue(
@@ -148,6 +161,7 @@ export class CachingSyncDataStore {
       );
       await persistSnapshot();
       if (deps.writeBack) await deps.writeBack(event);
+      for (const listener of localChangeListeners) listener();
     };
 
     const store = new LocalStore(source, onLocalMutation);
@@ -163,7 +177,7 @@ export class CachingSyncDataStore {
     };
 
     const engine = new ReconcileEngine({ transport: deps.transport, queue, cursor, apply });
-    return new CachingSyncDataStore(store, queue, engine, persistSnapshot);
+    return new CachingSyncDataStore(store, queue, engine, persistSnapshot, localChangeListeners);
   }
 
   /** Reconcile mot servern (pull→apply→replay→advance) — online-vägen.

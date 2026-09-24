@@ -52,7 +52,7 @@ function offlineLabel(count: number): string {
 const PILL_VIEWS: { [K in SyncKind]: (s: SyncVariant<K>) => PillView } = {
   idle: () => ({ icon: "○", label: "Inte synkat ännu", cls: "bg-gray-50 text-gray-700 border-gray-200", title: "Synk inte påbörjad" }),
   synced: (s) => ({ icon: "✓", label: "Sparat", cls: "bg-green-50 text-green-800 border-green-200", title: `Senast synkat ${formatRelative(s.at)}` }),
-  syncing: (s) => ({ icon: "↻", label: s.what === "pull" ? "Hämtar…" : "Sparar…", cls: "bg-blue-50 text-blue-800 border-blue-200", title: "Synkar med GitHub" }),
+  syncing: (s) => ({ icon: "↻", label: s.what === "pull" ? "Hämtar…" : "Sparar…", cls: "bg-blue-50 text-blue-800 border-blue-200", title: "Sparar till servern" }),
   pending: (s) => ({ icon: "⏳", label: `${s.count} ${pluralChanges(s.count)} — sparas snart`, cls: "bg-amber-50 text-amber-800 border-amber-200", title: "Sparas automatiskt om några sekunder" }),
   offline: (s) => ({ icon: "⚠", label: offlineLabel(s.count), cls: "bg-gray-100 text-gray-700 border-gray-300", title: "Sparas till disk lokalt; pushas när du är tillbaka online" }),
   "merge-needed": () => ({ icon: "⚠", label: "Merge behövs", cls: "bg-orange-50 text-orange-900 border-orange-200", title: "Konflikt — öppna inställningar för att lösa" }),

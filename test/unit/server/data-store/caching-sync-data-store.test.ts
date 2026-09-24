@@ -264,3 +264,61 @@ describe("CachingSyncDataStore — räddning av rader med icke-uuid-id (2026-09-
     expect(again.pendingCount()).toBe(0);
   });
 });
+
+describe("CachingSyncDataStore — offline är ett hårt krav (ADR 0016)", () => {
+  it("utan nät: spara lyckas, raden går att läsa, ligger kvar i kön — och når servern när nätet är tillbaka", async () => {
+    const transport = new FakeTransport();
+    const persistence = new InMemoryPersistence();
+    const ds = await CachingSyncDataStore.create({ transport, persistence });
+    let net = false;
+    transport.pull = async () => { if (!net) throw new TypeError("Failed to fetch"); return { changes: [], cursor: 0 }; };
+
+    const id = uuidv7();
+    await ds.store.matters.create({ data: matter(id, "Skrivet på tåget") as never });
+    expect(await ds.store.matters.findUnique({ where: { id } })).toMatchObject({ title: "Skrivet på tåget" });
+
+    await expect(ds.reconcile()).rejects.toThrow("Failed to fetch");
+    expect(ds.pendingCount()).toBe(1); // inget tappat
+    expect((await persistence.hydrate())?.matters).toHaveLength(1);
+
+    net = true;
+    await ds.reconcile();
+    expect(transport.pushed.map((m) => m.row.id)).toEqual([id]);
+    expect(ds.pendingCount()).toBe(0);
+  });
+
+  it("en misslyckad synk rör inte det man redan skrivit — flera ändringar offline köas i ordning", async () => {
+    const transport = new FakeTransport();
+    const ds = await CachingSyncDataStore.create({ transport, persistence: new InMemoryPersistence() });
+    transport.pull = async () => { throw new TypeError("Failed to fetch"); };
+    const a = uuidv7(), b = uuidv7();
+    await ds.store.matters.create({ data: matter(a, "Ett") as never });
+    await ds.reconcile().catch(() => undefined);
+    await ds.store.matters.create({ data: matter(b, "Två") as never });
+    expect(ds.pendingCount()).toBe(2);
+    expect((await ds.store.matters.findMany({})).map((m) => (m as { id: string }).id).sort()).toEqual([a, b].sort());
+  });
+});
+
+describe("CachingSyncDataStore.onLocalChange — driver synk-efter-spara", () => {
+  it("anropas efter varje lokal ändring, när den redan är köad och persisterad", async () => {
+    const persistence = new InMemoryPersistence();
+    const ds = await CachingSyncDataStore.create({ transport: new FakeTransport(), persistence });
+    const seen: Array<{ pending: number; persisted: number }> = [];
+    ds.onLocalChange(() => { void persistence.hydrate().then((s) => seen.push({ pending: ds.pendingCount(), persisted: s?.matters?.length ?? 0 })); });
+
+    await ds.store.matters.create({ data: matter(uuidv7()) as never });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(seen).toEqual([{ pending: 1, persisted: 1 }]);
+  });
+
+  it("avregistrering stoppar notiserna", async () => {
+    const ds = await CachingSyncDataStore.create({ transport: new FakeTransport(), persistence: new InMemoryPersistence() });
+    let calls = 0;
+    const off = ds.onLocalChange(() => { calls++; });
+    await ds.store.matters.create({ data: matter(uuidv7()) as never });
+    off();
+    await ds.store.matters.create({ data: matter(uuidv7()) as never });
+    expect(calls).toBe(1);
+  });
+});
