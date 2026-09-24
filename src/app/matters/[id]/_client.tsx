@@ -17,6 +17,7 @@ import type { MatterRole, MatterStatus, PaymentMethod } from "@/lib/shared/schem
 import { asId } from "@/lib/shared/schemas/ids";
 import { BillingPanel } from "./_billing-panel";
 import { ContactsSection } from "./_contacts-section";
+import { CourtCaseNumberField } from "./_court-case-number-field";
 import { ExpectedReceivablesSection } from "./_expected-receivables-section";
 import { ExpenseSection } from "./_expense-section";
 import { GenerateModal } from "./_generate-modal";
@@ -76,7 +77,7 @@ export default function MatterDetailClient({ id: paramId }: { id: string }) {
         <ContactsSection matterId={id} contacts={m.contacts} />
         <DocumentBrowser matterId={id} />
         <BillingPanel matterId={id} matter={m} />
-        <ExpectedReceivablesSection matterId={id} courtCaseNumber={courtCaseOf(m)} isCourtMatter={isCourtMatter(m)} />
+        <ExpectedReceivablesSection matterId={id} isCourtMatter={isCourtMatter(m)} />
         <TimeSection matterId={id} isTaxeArende={m.isTaxeArende} paymentMethod={m.paymentMethod} matterStatus={m.status} />
         <ExpenseSection matterId={id} isTaxeArende={m.isTaxeArende} />
         <ServiceNotesSection matterId={id} />
@@ -248,6 +249,7 @@ function MatterHeader({ matter: m, klient, onOpenGenerate }: HeaderProps) {
         />
       </div>
       {m.description && <p className="text-sm text-gray-700 mt-3">{m.description}</p>}
+      <CourtCaseNumberField key={courtCaseOf(m)} matterId={asId<"MatterId">(m.id)} value={courtCaseOf(m)} />
     </div>
   );
 }

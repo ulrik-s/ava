@@ -30,7 +30,7 @@ describe("Matter-läsningar — in-memory", () => {
     const mcId = asId<"MatterContactId">(uuidv7());
     const source = prebakeJoins({
       matters: [
-        { id: mId, organizationId: ORG, matterNumber: "AA2026-0001", title: "Tvist", status: "ACTIVE", responsibleLawyerId: uId, createdAt: new Date("2026-01-01") },
+        { id: mId, organizationId: ORG, matterNumber: "AA2026-0001", courtCaseNumber: "T 3288-26", title: "Tvist", status: "ACTIVE", responsibleLawyerId: uId, createdAt: new Date("2026-01-01") },
       ],
       users: [{ id: uId, organizationId: ORG, name: "Anna" }],
       contacts: [{ id: cId, organizationId: ORG, name: "Klient AB", contactType: "COMPANY", personalNumber: null, orgNumber: "556-1" }],
@@ -49,6 +49,7 @@ describe("Matter-läsningar — in-memory", () => {
     expect(list.matters[0]!.contacts[0]?.contact.name).toBe("Klient AB");
     expect(list.matters[0]!._count).toMatchObject({ documents: 1, timeEntries: 1, contacts: 1 });
     expect((await mRepo.listForOrg(ORG, { search: "tvist", page: 1, pageSize: 20 })).total).toBe(1);
+    expect((await mRepo.listForOrg(ORG, { search: "t 3288", page: 1, pageSize: 20 })).total).toBe(1); // via målnummer (#1134)
     expect((await mRepo.listForOrg(ORG, { search: "saknas", page: 1, pageSize: 20 })).total).toBe(0);
 
     const detail = await mRepo.getByIdWithContacts(mId, ORG);
@@ -80,7 +81,7 @@ describe("Matter-läsningar — Drizzle (pglite)", () => {
     const mcId = asId<"MatterContactId">(uuidv7());
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const v = (o: Record<string, unknown>) => ({ version: 1, ...o }) as any;
-    await db.insert(matters).values(v({ id: mId, organizationId: org, matterNumber: "AA2026-0001", title: "Tvist", status: "ACTIVE", responsibleLawyerId: uId }));
+    await db.insert(matters).values(v({ id: mId, organizationId: org, matterNumber: "AA2026-0001", courtCaseNumber: "T 3288-26", title: "Tvist", status: "ACTIVE", responsibleLawyerId: uId }));
     await db.insert(users).values(v({ id: uId, organizationId: org, email: "a@x", name: "Anna" }));
     await db.insert(contacts).values(v({ id: cId, organizationId: org, name: "Klient AB", contactType: "COMPANY", orgNumber: "556-1" }));
     await db.insert(matterContacts).values(v({ id: mcId, matterId: mId, contactId: cId, role: "KLIENT" }));
@@ -95,6 +96,7 @@ describe("Matter-läsningar — Drizzle (pglite)", () => {
     expect(list.matters[0]!.contacts[0]?.contact.name).toBe("Klient AB");
     expect(list.matters[0]!._count).toMatchObject({ documents: 1, timeEntries: 1, contacts: 1 });
     expect((await mRepo.listForOrg(org, { search: "tvist", page: 1, pageSize: 20 })).total).toBe(1);
+    expect((await mRepo.listForOrg(org, { search: "t 3288", page: 1, pageSize: 20 })).total).toBe(1); // via målnummer (#1134)
     expect((await mRepo.listForOrg(org, { search: "klient", page: 1, pageSize: 20 })).total).toBe(1); // via kontaktnamn
     expect((await mRepo.listForOrg(org, { search: "saknas", page: 1, pageSize: 20 })).total).toBe(0);
 

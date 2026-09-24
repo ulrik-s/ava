@@ -26,6 +26,7 @@ function listWhere(organizationId: OrganizationId, f: MatterListFilter): Record<
           OR: [
             { title: ins(f.search) },
             { matterNumber: ins(f.search) },
+            { courtCaseNumber: ins(f.search) },
             { contacts: { some: { contact: { name: ins(f.search) } } } },
           ],
         }
