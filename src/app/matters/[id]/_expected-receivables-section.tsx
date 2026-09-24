@@ -4,8 +4,8 @@
  * Förväntade domstolsbetalningar utan faktura (#173) på ärende-sidan.
  *
  * Registrera en kostnadsräkning som väntar på utbetalning (Domstolsverket),
- * pricka av faktiskt utbetalt belopp (3b-ii: begärt är memo, utbetalt bokas),
- * och redigera ärendets målnummer (matchningsnyckel för avprickningen, #175).
+ * och pricka av faktiskt utbetalt belopp (3b-ii: begärt är memo, utbetalt bokas).
+ * Målnumret (matchningsnyckel, #175) redigeras i ärendehuvudet (#1134).
  */
 
 import { useId, useState } from "react";
@@ -26,30 +26,6 @@ const STATUS_LABEL: Record<string, string> = {
   SETTLED: "Mottagen",
   CANCELLED: "Avbruten",
 };
-
-/** Inline-redigering av ärendets målnummer (domstolens referens). */
-function CourtCaseNumberField({ matterId, value }: { matterId: MatterId; value: string }) {
-  const id = useId();
-  const [text, setText] = useState(value);
-  const utils = trpc.useUtils();
-  const update = trpc.matter.update.useMutation({
-    onSuccess: () => void utils.matter.getById.invalidate({ id: matterId }),
-  });
-  return (
-    <div className="flex items-end gap-2 mb-4">
-      <div className="flex-1">
-        <label htmlFor={id} className="block text-xs font-medium text-gray-500 mb-1">Domstolens målnummer</label>
-        <input id={id} value={text} onChange={(e) => setText(e.target.value)} placeholder="t.ex. B 1234-26"
-          className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm font-mono" />
-      </div>
-      <button onClick={() => update.mutate({ id: matterId, courtCaseNumber: text || null })}
-        disabled={update.isPending || text === value}
-        className="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50">
-        Spara målnummer
-      </button>
-    </div>
-  );
-}
 
 /** Formulär för att registrera en ny förväntad domstolsbetalning. */
 function AddReceivableForm({ matterId, onAdded }: { matterId: MatterId; onAdded: () => void }) {
@@ -123,7 +99,7 @@ function ReceivableRow({ r, onChanged }: { r: Receivable; onChanged: () => void 
  * dig, så panelen är bara förvirrande och döljs. Säkerhetsnät: redan registrerade
  * fordringar visas alltid (annars går de inte att se/pricka av/avbryta).
  */
-export function ExpectedReceivablesSection({ matterId, courtCaseNumber, isCourtMatter }: { matterId: MatterId; courtCaseNumber: string; isCourtMatter: boolean }) {
+export function ExpectedReceivablesSection({ matterId, isCourtMatter }: { matterId: MatterId; isCourtMatter: boolean }) {
   const list = trpc.expectedReceivable.list.useQuery({ matterId });
   const utils = trpc.useUtils();
   const refetch = () => void utils.expectedReceivable.list.invalidate({ matterId });
@@ -136,7 +112,6 @@ export function ExpectedReceivablesSection({ matterId, courtCaseNumber, isCourtM
         Kostnadsräkningar som domstolen betalar. Begärt belopp är ett memo — det
         domstolen faktiskt betalar bokas vid avprickning.
       </p>
-      <CourtCaseNumberField matterId={matterId} value={courtCaseNumber} />
       {rows.length > 0 ? (
         <ul className="divide-y divide-gray-100">
           {rows.map((r) => <ReceivableRow key={r.id} r={r} onChanged={refetch} />)}

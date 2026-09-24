@@ -48,6 +48,7 @@ export class DrizzleMatterRepository extends DrizzleRepository<Matter> implement
         ? or(
             ilike(matters.title, pat),
             ilike(matters.matterNumber, pat),
+            ilike(matters.courtCaseNumber, pat),
             sql`exists (select 1 from matter_contacts mc join contacts c on mc.contact_id = c.id where mc.matter_id = ${matters.id} and c.name ilike ${pat})`,
           )
         : undefined,

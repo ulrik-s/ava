@@ -222,6 +222,13 @@ describe("MatterDetailPage", () => {
     await waitFor(() => expect(screen.getByText(/Saknas/)).toBeInTheDocument());
   });
 
+  it("målnummer visas + kan redigeras även i icke-domstolsärende (#1134)", async () => {
+    matterQuery.data = { ...M, courtCaseNumber: "T 3288-26" };
+    renderPage();
+    await waitFor(() => expect(screen.getByLabelText("Målnummer")).toHaveValue("T 3288-26"));
+    expect(screen.queryByText(/Domstolsbetalningar/)).not.toBeInTheDocument();
+  });
+
   it("renderar matterNumber + title + klient-länk", async () => {
     renderPage();
     await waitFor(() => expect(screen.getByText("2026-0001")).toBeInTheDocument());
