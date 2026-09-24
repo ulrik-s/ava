@@ -20,6 +20,12 @@ export class DrizzleContactRepository extends DrizzleRepository<Contact> impleme
     super(db, versionedTable(contacts), now);
   }
 
+  async listAllForOrg(organizationId: OrganizationId): Promise<Contact[]> {
+    return this.db.select().from(contacts).where(and(
+      eq(contacts.organizationId, organizationId), isNull(contacts.parentId), isNull(contacts.deletedAt),
+    ));
+  }
+
   async listForOrg(organizationId: OrganizationId, opts: ContactListOptions): Promise<ContactListResult> {
     const where = and(
       eq(contacts.organizationId, organizationId),

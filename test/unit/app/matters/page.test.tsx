@@ -17,10 +17,13 @@ const contactsQuery = { data: { contacts: [] } };
 const employeesQuery = { data: { users: [] } };
 const utilsMock = {
   matter: { list: { invalidate: vi.fn() } },
-  contacts: { list: { invalidate: vi.fn() } },
+  contacts: { list: { invalidate: vi.fn() }, search: { invalidate: vi.fn() } },
   prefs: { get: { invalidate: vi.fn() } },
 };
 const createContactMutate = vi.fn();
+/** Klientsökets svar (#1128) — sätts per test. */
+let searchHits: Array<{ id: string; name: string; contactType: string; personalNumber?: string | null }> = [];
+const searchQuery = vi.fn((input: { term: string }) => ({ data: { contacts: input.term ? searchHits : [] }, isLoading: false }));
 /** onSuccess från contacts.create — testet anropar den som servern hade gjort. */
 let contactCreated: ((c: { id: string; name: string }) => void) | undefined;
 const createMatterMutate = vi.fn();
@@ -41,6 +44,7 @@ vi.mock("@/lib/client/trpc", () => ({
     },
     contacts: {
       list: { useQuery: () => contactsQuery },
+      search: { useQuery: (input: { term: string }) => searchQuery(input) },
       create: {
         useMutation: (opts?: { onSuccess?: (c: { id: string; name: string }) => void }) => {
           contactCreated = opts?.onSuccess;
@@ -209,45 +213,70 @@ describe("MattersPage", () => {
   });
 });
 
-describe("MattersPage — + Ny klient i nytt ärende", () => {
-  function openNewClient(): void {
-    render(<MattersPage />);
-    fireEvent.click(screen.getByRole("button", { name: /\+ Nytt ärende/i }));
-    fireEvent.click(screen.getByRole("button", { name: /\+ Ny klient/i }));
-  }
-
-  it("öppnar klient-formuläret som dialog UTANFÖR ärende-formuläret (ingen nästlad form)", () => {
-    openNewClient();
-    const dialog = screen.getByRole("dialog", { name: "Ny klient" });
-    expect(within(dialog).getByRole("heading", { name: "Ny klient" })).toBeInTheDocument();
-    expect(dialog.closest("form")).toBeNull();
-    expect(dialog.querySelector("form")).not.toBeNull();
+describe("MattersPage — Välj klient via sökdialog (#1128)", () => {
+  beforeEach(() => {
+    searchHits = [];
   });
 
-  it("skapar klienten och väljer den direkt i ärendet", () => {
-    openNewClient();
+  function openPicker(): void {
+    render(<MattersPage />);
+    fireEvent.click(screen.getByRole("button", { name: /\+ Nytt ärende/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Välj klient/ }));
+  }
+
+  it("ingen dropdown längre — 'Välj klient…' öppnar en sökdialog", () => {
+    openPicker();
+    expect(screen.queryByRole("combobox", { name: /Klient/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Välj klient" })).toBeInTheDocument();
+  });
+
+  it("söker och väljer en befintlig klient — ärendet skapas med den", () => {
+    searchHits = [{ id: "c-anna", name: "Anna Karlsson", contactType: "PERSON", personalNumber: "19800101-1234" }];
+    openPicker();
+    const dialog = screen.getByRole("dialog", { name: "Välj klient" });
+    fireEvent.change(within(dialog).getByRole("searchbox"), { target: { value: "Anna" } });
+    expect(searchQuery).toHaveBeenLastCalledWith({ term: "Anna" });
+    fireEvent.click(within(dialog).getByRole("button", { name: /Anna Karlsson/ }));
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByText("Anna Karlsson")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/Titel/), { target: { value: "Bodelning" } });
+    fireEvent.click(screen.getByRole("button", { name: /Skapa ärende/i }));
+    expect(createMatterMutate).toHaveBeenCalledWith(expect.objectContaining({ title: "Bodelning", klientId: "c-anna" }));
+  });
+
+  it("hittas inte klienten → 'Ny klient…' med sökordet förifyllt; OK skapar och väljer den", () => {
+    openPicker();
+    fireEvent.change(within(screen.getByRole("dialog", { name: "Välj klient" })).getByRole("searchbox"), { target: { value: "Nya Klienten AB" } });
+    expect(screen.getByText(/Ingen träff/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Ny klient/ }));
+
     const dialog = screen.getByRole("dialog", { name: "Ny klient" });
-    fireEvent.change(within(dialog).getByLabelText(/Namn/), { target: { value: "Nya Klienten AB" } });
-    fireEvent.click(within(dialog).getByRole("button", { name: /Spara kontakt/i }));
+    expect((within(dialog).getByLabelText(/Namn/) as HTMLInputElement).value).toBe("Nya Klienten AB");
+    fireEvent.click(within(dialog).getByRole("button", { name: "OK" }));
     expect(createContactMutate).toHaveBeenCalledWith(expect.objectContaining({ name: "Nya Klienten AB" }));
 
     act(() => contactCreated?.({ id: "c-new", name: "Nya Klienten AB" }));
-
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(utilsMock.contacts.list.invalidate).toHaveBeenCalled();
-    const klient = screen.getByLabelText("Klient") as HTMLSelectElement;
-    expect(klient.value).toBe("c-new");
-    expect(within(klient).getByRole("option", { name: "Nya Klienten AB" })).toBeInTheDocument();
-
     fireEvent.change(screen.getByLabelText(/Titel/), { target: { value: "Avtalstvist" } });
     fireEvent.click(screen.getByRole("button", { name: /Skapa ärende/i }));
-    expect(createMatterMutate).toHaveBeenCalledWith(expect.objectContaining({ title: "Avtalstvist", klientId: "c-new" }));
+    expect(createMatterMutate).toHaveBeenCalledWith(expect.objectContaining({ klientId: "c-new" }));
   });
 
-  it("Avbryt stänger dialogen utan att skapa något", () => {
-    openNewClient();
-    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Avbryt" }));
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  it("Avbryt i 'Ny klient' skapar inget och går tillbaka till sökningen", () => {
+    openPicker();
+    fireEvent.click(screen.getByRole("button", { name: /Ny klient/ }));
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Ny klient" })).getByRole("button", { name: "Avbryt" }));
     expect(createContactMutate).not.toHaveBeenCalled();
+    expect(screen.getByRole("dialog", { name: "Välj klient" })).toBeInTheDocument();
+  });
+
+  it("vald klient kan tas bort igen", () => {
+    searchHits = [{ id: "c-anna", name: "Anna Karlsson", contactType: "PERSON" }];
+    openPicker();
+    fireEvent.change(within(screen.getByRole("dialog")).getByRole("searchbox"), { target: { value: "Anna" } });
+    fireEvent.click(screen.getByRole("button", { name: /Anna Karlsson/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Ta bort vald klient" }));
+    expect(screen.getByRole("button", { name: /Välj klient/ })).toBeInTheDocument();
   });
 });

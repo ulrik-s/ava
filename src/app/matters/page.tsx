@@ -2,6 +2,8 @@
 
 import { useSearchParams } from "next/navigation";
 import { Suspense, useId, useState } from "react";
+import { ClientPickerDialog } from "@/components/contacts/client-picker-dialog";
+import type { PickedClient } from "@/components/contacts/new-client-dialog";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { Pager } from "@/components/ui/pager";
 import { useIsReadOnly } from "@/lib/client/demo/demo-mode-context";
@@ -9,7 +11,6 @@ import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
 import { coverageStatus } from "@/lib/shared/coverage-cap";
 import type { MatterStatus, PaymentMethod } from "@/lib/shared/schemas/enums";
-import { NewClientDialog, type CreatedClient } from "./_new-client-dialog";
 
 interface MatterRow {
   id: string;
@@ -139,19 +140,20 @@ function matterListArgs(p: { search: string; status: StatusFilter; employeeId: s
 interface NewMatterFormProps {
   form: MatterForm;
   setForm: (f: MatterForm) => void;
-  contactsData: { contacts: NamedOption[] } | undefined;
+  /** Vald klient (visas på knappen) — null = ingen vald. */
+  client: PickedClient | null;
+  onPickClient: () => void;
+  onClearClient: () => void;
   employeesData: { users: NamedOption[] } | undefined;
   onSubmit: (e: React.FormEvent) => void;
-  onNewClient: () => void;
   isPending: boolean;
   error: { message: string } | null | undefined;
 }
 
 /** Nytt-ärende-formuläret (utbrutet ur MattersContent, #6-ratchet). Äger sina
  *  fält-id:n; presentational (form-state + submit som props). */
-function NewMatterForm({ form, setForm, contactsData, employeesData, onSubmit, onNewClient, isPending, error }: NewMatterFormProps) {
+function NewMatterForm({ form, setForm, client, onPickClient, onClearClient, employeesData, onSubmit, isPending, error }: NewMatterFormProps) {
   const titleId = useId();
-  const klientId = useId();
   const matterTypeId = useId();
   const descriptionId = useId();
   const responsibleId = useId();
@@ -165,22 +167,7 @@ function NewMatterForm({ form, setForm, contactsData, employeesData, onSubmit, o
             onChange={(e) => setForm({ ...form, title: e.target.value })}
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
         </div>
-        <div>
-          <div className="flex items-baseline justify-between mb-1">
-            <label htmlFor={klientId} className="block text-sm font-medium text-gray-700">Klient</label>
-            <button type="button" onClick={onNewClient} className="text-sm text-blue-600 hover:underline">
-              + Ny klient
-            </button>
-          </div>
-          <select id={klientId} value={form.klientId}
-            onChange={(e) => setForm({ ...form, klientId: e.target.value })}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
-            <option value="">Välj klient (valfritt)...</option>
-            {contactsData?.contacts.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
-        </div>
+        <ClientField client={client} onPick={onPickClient} onClear={onClearClient} />
         <div>
           <label htmlFor={matterTypeId} className="block text-sm font-medium text-gray-700 mb-1">Ärendetyp</label>
           <input id={matterTypeId} type="text" value={form.matterType}
@@ -274,15 +261,28 @@ function MatterFilters({ search, status, employeeId, employeesData, onSearch, on
   );
 }
 
-/** Klientlistan + en nyss skapad klient. Listan hämtar bara de första 100
- *  kontakterna — utan detta kunde den nya klienten saknas i dropdownen. */
-function withCreatedClient(
-  data: { contacts: NamedOption[] } | undefined,
-  created: CreatedClient | null,
-): { contacts: NamedOption[] } | undefined {
-  if (!created) return data;
-  const rest = (data?.contacts ?? []).filter((c) => c.id !== created.id);
-  return { contacts: [created, ...rest] };
+/**
+ * Klientfältet (#1128): "Välj klient…" öppnar sökdialogen (som jävssöket) i
+ * st.f. en dropdown, som inte fungerar när byrån har många klienter.
+ */
+function ClientField({ client, onPick, onClear }: { client: PickedClient | null; onPick: () => void; onClear: () => void }) {
+  return (
+    <div>
+      <span className="block text-sm font-medium text-gray-700 mb-1">Klient</span>
+      {client ? (
+        <div className="flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm">
+          <span className="flex-1 font-medium text-gray-900">{client.name}</span>
+          <button type="button" onClick={onPick} className="text-blue-600 hover:underline">Byt…</button>
+          <button type="button" onClick={onClear} aria-label="Ta bort vald klient" className="text-gray-400 hover:text-gray-600">×</button>
+        </div>
+      ) : (
+        <button type="button" onClick={onPick}
+          className="w-full text-left rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-500 hover:border-blue-400">
+          Välj klient… <span className="text-gray-400">(valfritt)</span>
+        </button>
+      )}
+    </div>
+  );
 }
 
 function MattersContent() {
@@ -293,12 +293,11 @@ function MattersContent() {
   const [page, setPage] = useState(1);
   const [showForm, setShowForm] = useState(searchParams.get("new") === "1");
   const readOnly = useIsReadOnly();
-  const [newClientOpen, setNewClientOpen] = useState(false);
-  const [createdClient, setCreatedClient] = useState<CreatedClient | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [client, setClient] = useState<PickedClient | null>(null);
 
   const matters = trpc.matter.list.useQuery(matterListArgs({ search, status: statusFilter, employeeId, page }));
 
-  const contacts = trpc.contacts.list.useQuery({ pageSize: 100 });
   const employees = trpc.user.list.useQuery();
   const utils = trpc.useUtils();
 
@@ -347,23 +346,24 @@ function MattersContent() {
         <NewMatterForm
           form={form}
           setForm={setForm}
-          contactsData={withCreatedClient(contacts.data, createdClient)}
+          client={client}
+          onPickClient={() => setPickerOpen(true)}
+          onClearClient={() => { setClient(null); setForm({ ...form, klientId: "" }); }}
           employeesData={employees.data}
           onSubmit={handleSubmit}
-          onNewClient={() => setNewClientOpen(true)}
           isPending={createMatter.isPending}
           error={createMatter.error}
         />
       )}
 
-      {newClientOpen && (
-        <NewClientDialog
-          onCreated={(c) => {
-            setCreatedClient(c);
+      {pickerOpen && (
+        <ClientPickerDialog
+          onPick={(c) => {
+            setClient(c);
             setForm({ ...form, klientId: c.id });
-            setNewClientOpen(false);
+            setPickerOpen(false);
           }}
-          onClose={() => setNewClientOpen(false)}
+          onClose={() => setPickerOpen(false)}
         />
       )}
 

@@ -49,6 +49,9 @@ export interface ContactListResult {
 export interface ContactRepository extends Repository<Contact> {
   /** Topp-nivå-kontakter (parentId null) i org:en, paginerat + sökbart, med _count. */
   listForOrg(organizationId: OrganizationId, opts: ContactListOptions): Promise<ContactListResult>;
+  /** ALLA topp-nivå-kontakter i org:en, oformaterat — underlag för klientsök som
+   *  rangordnar själv (conflict-match, #1128). Kontaktpersoner (barn) ingår inte. */
+  listAllForOrg(organizationId: OrganizationId): Promise<Contact[]>;
   /** Full kontakt-detalj (barn/förälder/ärende-kopplingar), org-scopad. Null om saknas/raderad. */
   getByIdFull(id: ContactId, organizationId: OrganizationId): Promise<ContactFull | null>;
   /** Kontakt med givet personnummer i org:en (dedup). Null om ingen. */

@@ -25,8 +25,8 @@ export interface ConflictQuery {
 
 export interface ConflictCandidate {
   name: string;
-  personalNumber?: string | null;
-  orgNumber?: string | null;
+  personalNumber?: string | null | undefined;
+  orgNumber?: string | null | undefined;
 }
 
 /** Minst så många siffror för att en token ska räknas som ett nummer. */

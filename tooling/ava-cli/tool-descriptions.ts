@@ -61,6 +61,7 @@ const DESCRIPTIONS: Readonly<Record<string, string>> = {
 
   // ── Kontakter ────────────────────────────────────────────────────
   "contacts.list": "Lista och sök byråns kontakter (klienter, motparter, ombud, domstolar, försäkringsbolag).",
+  "contacts.search": "Sök klient bland byråns kontakter med samma matchning som jävskontrollen: förnamn, efternamn och person- eller orgnummer, var för sig eller tillsammans. Bäst träff först.",
   "contacts.getById": "Hämta en enskild kontakt.",
   "contacts.create": "Lägg upp en ny kontakt.",
   "contacts.update": "Uppdatera en kontakts uppgifter.",
