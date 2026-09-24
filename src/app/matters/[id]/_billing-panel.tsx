@@ -31,7 +31,7 @@ import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
 import type { AppRouter } from "@/lib/server/routers/_app";
 import { availableActions, currentPhase, type BillingAction, type BillingPhase, type FlowMatter } from "@/lib/shared/billing-flow";
-import { availableKrActions, KOSTNADSRAKNING_STATUS_LABELS, type KostnadsrakningState, type KostnadsrakningStatus } from "@/lib/shared/kostnadsrakning-flow";
+import { availableKrActions, canVoidKostnadsrakning, KOSTNADSRAKNING_STATUS_LABELS, type KostnadsrakningState, type KostnadsrakningStatus } from "@/lib/shared/kostnadsrakning-flow";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { computeRadgivningsavgift, SJALVRISK_ACCONTO_THRESHOLD_ORE } from "@/lib/shared/rattshjalp";
 import { BILLING_RUN_RECIPIENT_LABELS, BILLING_RUN_TYPE_LABELS, BILLING_RUN_STATUS_LABELS, INVOICE_STATUS_LABELS, type BillingRunRecipient, type BillingRunStatus, type BillingRunType, type PaymentMethod } from "@/lib/shared/schemas/enums";
@@ -156,6 +156,7 @@ function beslutButtonLabel(state: KostnadsrakningState): string {
 interface KrCardProps {
   matterId: MatterId; run: BillingRunRow;
   onRegistreraBeslut: () => void; onOverklaga: () => void; onSkapaFaktura: () => void;
+  onAngra?: (() => void) | undefined;
 }
 
 /**
@@ -163,7 +164,7 @@ interface KrCardProps {
  * dokument, och de tillåtna nästa-stegen (registrera beslut → skapa faktura /
  * överklaga → registrera hovrättens beslut). Ersätter den gamla dom-bannern.
  */
-function KostnadsrakningCard({ matterId, run, onRegistreraBeslut, onOverklaga, onSkapaFaktura }: KrCardProps) {
+function KostnadsrakningCard({ matterId, run, onRegistreraBeslut, onOverklaga, onSkapaFaktura, onAngra }: KrCardProps) {
   const doc = findKrDocument(matterId, run);
   const utils = trpc.useUtils();
   const state: KostnadsrakningState = { status: run.kostnadsrakningStatus ?? "INSKICKAD", slutgiltigt: run.beslutSlutgiltigt ?? false };
@@ -186,14 +187,16 @@ function KostnadsrakningCard({ matterId, run, onRegistreraBeslut, onOverklaga, o
           </div>
         )}
       </div>
-      <KrCardButtons state={state} onRegistreraBeslut={onRegistreraBeslut} onOverklaga={onOverklaga} onSkapaFaktura={onSkapaFaktura} />
+      <KrCardButtons state={state} onRegistreraBeslut={onRegistreraBeslut} onOverklaga={onOverklaga} onSkapaFaktura={onSkapaFaktura} onAngra={onAngra} />
     </div>
   );
 }
 
 /** KR-kortets nästa-stegs-knappar — vilka som visas styrs av availableKrActions. */
-function KrCardButtons({ state, onRegistreraBeslut, onOverklaga, onSkapaFaktura }: {
+function KrCardButtons({ state, onRegistreraBeslut, onOverklaga, onSkapaFaktura, onAngra }: {
   state: KostnadsrakningState; onRegistreraBeslut: () => void; onOverklaga: () => void; onSkapaFaktura: () => void;
+  /** Satt bara när kostnadsräkningen får ångras (före domstolens beslut, #1121). */
+  onAngra?: (() => void) | undefined;
 }) {
   const acts = availableKrActions(state);
   const canBeslut = acts.includes("REGISTRERA_BESLUT") || acts.includes("REGISTRERA_HOVRATT_BESLUT");
@@ -202,6 +205,7 @@ function KrCardButtons({ state, onRegistreraBeslut, onOverklaga, onSkapaFaktura 
       {canBeslut && <button onClick={onRegistreraBeslut} className="text-xs px-3 py-1 bg-amber-600 text-white rounded hover:bg-amber-700">{beslutButtonLabel(state)}</button>}
       {acts.includes("SKAPA_FAKTURA") && <button onClick={onSkapaFaktura} className="text-xs px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700">Skapa faktura</button>}
       {acts.includes("OVERKLAGA") && <button onClick={onOverklaga} className="text-xs px-3 py-1 border border-amber-600 text-amber-800 rounded hover:bg-amber-100">Överklaga prutning</button>}
+      {onAngra && <button onClick={onAngra} className="text-xs px-3 py-1 border border-gray-400 text-gray-700 rounded hover:bg-gray-100">Ångra kostnadsräkning</button>}
     </div>
   );
 }
@@ -249,6 +253,26 @@ function RecordBeslutDialog({ billingRunId, onClose, onDone }: { billingRunId: B
 }
 
 type DialogState = "NONE" | "ACCONTO" | "FINAL";
+
+/** Aktiv kostnadsräkning (#828): livscykeln är inte klar och den är inte ångrad (#1121). */
+function isActiveKr(r: BillingRunRow): boolean {
+  return r.type === "KOSTNADSRAKNING" && r.status !== "VOIDED"
+    && !!r.kostnadsrakningStatus && r.kostnadsrakningStatus !== "FAKTURERAD";
+}
+
+/** Ångra-åtgärden för KR-kortet — bara när den är tillåten, och efter bekräftelse. */
+function angraHandler(run: BillingRunRow, voidKr: (id: BillingRunId) => void): (() => void) | undefined {
+  if (!canVoidKostnadsrakning(run)) return undefined;
+  return () => {
+    const ok = confirm("Ångra kostnadsräkningen? Tidposter och utlägg låses upp så att du kan komplettera och skapa en ny. Det genererade dokumentet ligger kvar i ärendet.");
+    if (ok) voidKr(run.id);
+  };
+}
+
+/** Serverns felmeddelande under panelen (t.ex. "kan inte ångras efter beslut"). */
+function MutationErrorLine({ error }: { error: { message: string } | null }) {
+  return error ? <p role="alert" className="mx-6 text-sm text-red-700">{error.message}</p> : null;
+}
 
 function findPendingVerdict(rows: BillingRunRow[]): BillingRunRow | undefined {
   return rows.find((r) => r.type === "KOSTNADSRAKNING" && r.status === "PENDING_VERDICT");
@@ -364,8 +388,9 @@ function KostnadsrakningTrigger({ matterId, matter, open, onClose, onRecorded }:
   const data = useKrModalData(matterId);
   const createKr = trpc.billingRun.createKostnadsrakning.useMutation();
   if (!open) return null;
-  const onModalClose = (): void => {
-    onClose();
+  // Skapa (och frys) först när PDF:en faktiskt genererats — att stänga modalen
+  // (Avbryt/Escape/X) skapade förut en inskickad KR av misstag (#1121).
+  const onGenerated = (): void => {
     createKr.mutate({ matterId }, { onSuccess: onRecorded });
   };
   return (
@@ -381,7 +406,8 @@ function KostnadsrakningTrigger({ matterId, matter, open, onClose, onRecorded }:
       initialHufStart={matter.taxaHufStart ?? undefined}
       initialIsTaxe={matter.isTaxeArende ?? undefined}
       radgivningPaid={!!matter.radgivningBetaldAt}
-      onClose={onModalClose}
+      onClose={onClose}
+      onGenerated={onGenerated}
     />
   );
 }
@@ -400,7 +426,7 @@ export function BillingPanel({ matterId, matter }: Props) {
   // Visas i faktura-listan utöver billing-runs.
   const standalone = useStandaloneInvoices(matterId, rows);
   // Aktiv kostnadsräkning (#828): KR vars livscykel inte är klar (≠ FAKTURERAD).
-  const activeKr = rows.find((r) => r.type === "KOSTNADSRAKNING" && !!r.kostnadsrakningStatus && r.kostnadsrakningStatus !== "FAKTURERAD");
+  const activeKr = rows.find(isActiveKr);
   // Flödesmodellen (#816) styr menyn + dom-bannern: fasen härleds ur runs+matter
   // och avgör vilka actions som erbjuds och vad domsknappen öppnar.
   const flowMatter: FlowMatter = { paymentMethod: matter.paymentMethod ?? "PENDING", rattsskyddNekadAt: matter.rattsskyddNekadAt };
@@ -416,6 +442,7 @@ export function BillingPanel({ matterId, matter }: Props) {
     void utils.expense.list.invalidate({ matterId });
   };
   const appeal = trpc.billingRun.appealKostnadsrakning.useMutation({ onSuccess: refetch });
+  const voidKr = trpc.billingRun.voidKostnadsrakning.useMutation({ onSuccess: refetch });
   // Routa action → dialog via descriptorns `dialog`-fält (panelen är "dum").
   const onPick = (a: BillingAction) => {
     if (a.dialog === "kostnadsrakning") setShowKr(true);
@@ -436,7 +463,9 @@ export function BillingPanel({ matterId, matter }: Props) {
       {activeKr && <KostnadsrakningCard matterId={matterId} run={activeKr}
         onRegistreraBeslut={() => setBeslutRunId(activeKr.id)}
         onOverklaga={() => appeal.mutate({ billingRunId: activeKr.id })}
-        onSkapaFaktura={() => matter.paymentMethod === "RATTSHJALP" ? setShowSettle(true) : setVerdictRunId(activeKr.id)} />}
+        onSkapaFaktura={() => matter.paymentMethod === "RATTSHJALP" ? setShowSettle(true) : setVerdictRunId(activeKr.id)}
+        onAngra={angraHandler(activeKr, (id) => voidKr.mutate({ billingRunId: id }))} />}
+      <MutationErrorLine error={voidKr.error} />
       {beslutRunId && <RecordBeslutDialog billingRunId={beslutRunId} onClose={() => setBeslutRunId(null)} onDone={refetch} />}
       <RattshjalpRateSchedule matter={matter} rows={rows} />
       <RunsList matterId={matterId} rows={rows} standalone={standalone} loading={runs.isLoading} />

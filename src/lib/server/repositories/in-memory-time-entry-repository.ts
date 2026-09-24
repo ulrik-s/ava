@@ -151,6 +151,13 @@ export class InMemoryTimeEntryRepository extends InMemoryRepository<TimeEntry> i
     });
   }
 
+  async unfreezeByBillingRun(billingRunId: BillingRunId): Promise<void> {
+    await this.delegate.updateMany({
+      where: { frozenByBillingRunId: billingRunId },
+      data: { frozenAt: null, frozenByBillingRunId: null } as Partial<TimeEntry>,
+    });
+  }
+
   async freezeByIds(ids: TimeEntryId[], billingRunId: BillingRunId, now: Date): Promise<void> {
     if (!ids.length) return;
     await this.delegate.updateMany({

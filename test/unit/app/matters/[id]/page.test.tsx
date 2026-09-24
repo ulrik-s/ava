@@ -93,6 +93,7 @@ vi.mock("@/lib/client/trpc", () => ({
       createKostnadsrakning: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       setVerdict: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       appealKostnadsrakning: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      voidKostnadsrakning: { useMutation: () => ({ mutate: vi.fn(), isPending: false, error: null }) },
       recordKostnadsrakningBeslut: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       recordInsurerPruning: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       coverageSplit: { useQuery: () => ({ data: undefined }) },
