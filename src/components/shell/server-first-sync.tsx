@@ -3,6 +3,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { syncStateFromCachingSync, type CachingSyncStatus } from "@/lib/client/sync/caching-sync-status";
+import { registerServerSyncFlush } from "@/lib/client/sync/server-sync-flush";
 import { SyncScheduler } from "@/lib/client/sync/sync-scheduler";
 import type { CachingSyncDataStore } from "@/lib/server/data-store/in-memory/caching-sync-data-store";
 import { SyncStatusPill } from "./sync-status-pill";
@@ -32,6 +33,10 @@ export function ServerFirstSync({ store }: { store: SyncableStore | null }) {
       onRemoteChanges: () => { void queryClient.invalidateQueries(); },
     });
     const unsubscribe = store.onLocalChange(() => scheduler.notifyChange());
+    const unregister = registerServerSyncFlush(async () => {
+      await scheduler.syncNow();
+      if (scheduler.hasUnsyncedChanges()) throw new Error("Alla ändringar har inte nått servern än — försök igen om en stund.");
+    });
     const interval = setInterval(() => { void scheduler.syncNow(); }, PERIODIC_SYNC_MS);
     const onOnline = () => { void scheduler.syncNow(); };
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -43,6 +48,7 @@ export function ServerFirstSync({ store }: { store: SyncableStore | null }) {
     void scheduler.syncNow();
     return () => {
       unsubscribe();
+      unregister();
       clearInterval(interval);
       window.removeEventListener("online", onOnline);
       window.removeEventListener("beforeunload", onBeforeUnload);

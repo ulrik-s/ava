@@ -52,12 +52,13 @@ vi.mock("@/lib/client/trpc", () => ({
     invoiceDispatch: {
       list: { useQuery: () => ({ data: [], isLoading: false }) },
     },
-    // Fortnox-bokföring (#1172): ingen integration i de här testerna.
-    ledger: {
-      status: { useQuery: () => ({ data: { configured: false, connected: false } }) },
-      bookInvoice: { useMutation: () => ({ mutate: vi.fn(), isPending: false, error: null }) },
-    },
   },
+}));
+
+// Fortnox-bokföring (#1172): ingen integration i de här testerna.
+vi.mock("@/lib/client/backend/server-ledger", () => ({
+  useLedgerStatus: () => ({ data: undefined }),
+  useBookInvoice: () => ({ mutate: vi.fn(), isPending: false, error: null }),
 }));
 
 // Fakturadokument-panelen ska ÖPPNA dokumentet (ny flik) via openDocument —

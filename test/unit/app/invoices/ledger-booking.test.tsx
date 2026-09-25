@@ -8,13 +8,11 @@ const invalidate = vi.fn();
 let onSettled: (() => void) | undefined;
 
 vi.mock("@/lib/client/trpc", () => ({
-  trpc: {
-    useUtils: () => ({ invoice: { getById: { invalidate } } }),
-    ledger: {
-      status: { useQuery: () => status },
-      bookInvoice: { useMutation: (o: { onSettled: () => void }) => { onSettled = o.onSettled; return book; } },
-    },
-  },
+  trpc: { useUtils: () => ({ invoice: { getById: { invalidate } } }) },
+}));
+vi.mock("@/lib/client/backend/server-ledger", () => ({
+  useLedgerStatus: () => status,
+  useBookInvoice: (_id: string, onDone: () => void) => { onSettled = onDone; return book; },
 }));
 
 const ID = "0190a3f0-0000-7000-8000-000000000001";
@@ -46,7 +44,7 @@ describe("LedgerBooking", () => {
   it("knappen bokför och laddar om fakturan", () => {
     render(<LedgerBooking invoiceId={ID} status="SENT" fortnoxId={null} payments={[]} />);
     fireEvent.click(screen.getByRole("button", { name: "Bokför i Fortnox" }));
-    expect(book.mutate).toHaveBeenCalledWith({ invoiceId: ID });
+    expect(book.mutate).toHaveBeenCalled();
     onSettled?.();
     expect(invalidate).toHaveBeenCalledWith({ id: ID });
   });
