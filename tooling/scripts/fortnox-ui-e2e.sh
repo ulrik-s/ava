@@ -63,7 +63,14 @@ bun run playwright test --config tooling/config/playwright.fortnox.config.ts || 
 
 echo "==> [4/5] Hämtar serverns valv (token kan ha roterat)…"
 docker cp "$SERVER:/data/secrets/vault.enc" tooling/.fortnox-ui/vault.enc
-[ "$status" -eq 0 ] || { echo "❌ UI-delen fallerade"; exit "$status"; }
+if [ "$status" -ne 0 ]; then
+  echo "❌ UI-delen fallerade — serverns läge för testärendet:"
+  docker exec "${PROJECT}-postgres-1" psql -U ava -d ava_test -c \
+    "SELECT i.id, i.status, i.version, i.fortnox_id, i.amount FROM invoices i JOIN matters m ON m.id=i.matter_id WHERE m.title LIKE 'Fortnox UI-test%';" \
+    -c "SELECT p.amount, p.paid_at, p.fortnox_id FROM payments p JOIN invoices i ON i.id=p.invoice_id JOIN matters m ON m.id=i.matter_id WHERE m.title LIKE 'Fortnox UI-test%';" || true
+  docker logs "$SERVER" 2>&1 | tail -60 || true
+  exit "$status"
+fi
 
 echo "==> [5/5] Kontrollerar verifikaten i Fortnox…"
 bun tooling/scripts/fortnox-ui-harness.ts verify

@@ -99,6 +99,8 @@ async function pay(page: Page, kronor: string): Promise<void> {
 }
 
 test("ärende → faktura → delbetalningar → bokfört i Fortnox", async ({ page }) => {
+  // Synk-/bokföringsloggar till CI-loggen — det är där ett fel syns först.
+  page.on("console", (m) => { if (/sync|synk|konflikt|conflict|server-first|fortnox|bokför/i.test(m.text())) console.log(`[browser] ${m.text()}`); });
   await login(page);
   await configureLedger(page);
   await createMatterWithNewClient(page);

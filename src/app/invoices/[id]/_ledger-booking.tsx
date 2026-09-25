@@ -60,9 +60,10 @@ export function LedgerBooking({ invoiceId, status, fortnoxId, payments }: Props)
           >
             {book.isPending ? "Bokför…" : buttonLabel(!!fortnoxId, pending)}
           </button>
-          {book.error && <p role="alert" className="mt-2 text-sm text-red-700">Kunde inte bokföra: {book.error.message}</p>}
         </div>
       )}
+      {/* Utanför knappens villkor: ett fel kan ändra fakturans läge så knappen döljs. */}
+      {book.error && <p role="alert" className="mt-2 text-sm text-red-700">Kunde inte bokföra: {book.error.message}</p>}
     </>
   );
 }

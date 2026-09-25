@@ -73,4 +73,11 @@ describe("LedgerBooking", () => {
     expect(screen.getByText(/2 betalningar bokförda/)).toBeInTheDocument();
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
+
+  it("felet syns även när fakturan inte längre är bokförbar", () => {
+    book.error = { message: "Bara utställda fakturor kan bokföras" };
+    render(<LedgerBooking invoiceId={ID} status="DRAFT" fortnoxId={null} payments={[]} />);
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("Bara utställda fakturor");
+  });
 });
