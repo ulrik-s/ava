@@ -13,6 +13,12 @@ const createMut = vi.fn();
 const updateMut = vi.fn();
 const deleteMut = vi.fn();
 
+/** Extra rader per test (#1170: fryst post) + fel som update ska ge. */
+const extraEntries: unknown[] = [];
+const updateState: { error: { message: string } | null } = { error: null };
+/** delete-mutationens onError — så felvägen kan testas. */
+const deleteOpts: { onError?: ((e: { message: string }) => void) | undefined } = {};
+
 vi.mock("@/lib/client/trpc", () => {
   const noopMut = { mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false };
   return {
@@ -44,20 +50,21 @@ vi.mock("@/lib/client/trpc", () => {
                   user: { name: "Anna" }, invoiceId: null, invoice: null },
                 { id: "te-2", date: new Date("2026-04-15"), minutes: 30, description: "Inlaga", billable: true,
                   user: { name: "Björn" }, invoiceId: "inv-1", invoice: { id: "inv-1", invoiceNumber: "2026-0042" } },
+                ...extraEntries,
               ],
               totalMinutes: 90,
             },
           }),
         },
         create: { useMutation: () => ({ mutate: createMut, mutateAsync: vi.fn(), isPending: false }) },
-        update: { useMutation: () => ({ mutate: updateMut, mutateAsync: vi.fn(), isPending: false }) },
-        delete: { useMutation: () => ({ mutate: deleteMut, mutateAsync: vi.fn(), isPending: false }) },
+        update: { useMutation: () => ({ mutate: updateMut, mutateAsync: vi.fn(), isPending: false, error: updateState.error }) },
+        delete: { useMutation: (o: { onError?: (e: { message: string }) => void }) => { deleteOpts.onError = o.onError; return { mutate: deleteMut, mutateAsync: vi.fn(), isPending: false }; } },
       },
     },
   };
 });
 
-beforeEach(() => { vi.clearAllMocks(); });
+beforeEach(() => { vi.clearAllMocks(); extraEntries.length = 0; updateState.error = null; });
 
 function renderSection() {
   const client = new QueryClient();
@@ -80,11 +87,36 @@ describe("TimeSection — utan invoice-koppling i UI", () => {
     expect(screen.queryByText("2026-0042")).not.toBeInTheDocument();
   });
 
-  it("alla entries får Ändra + Ta bort — ingen 'Låst (på faktura)'-state", () => {
+  it("fakturakoppling (invoiceId) låser INTE — alla entries får Ändra + Ta bort", () => {
     renderSection();
     expect(screen.queryByText(/Låst/)).not.toBeInTheDocument();
     expect(screen.getAllByText("Ändra")).toHaveLength(2);
     expect(screen.getAllByText("Ta bort")).toHaveLength(2);
+  });
+});
+
+describe("TimeSection — frysta poster och sparfel (#1170)", () => {
+  it("post som ingår i slutfaktura/kostnadsräkning (frozenAt) visar Låst, inte Ändra/Ta bort", () => {
+    extraEntries.push({ id: "te-3", date: new Date("2026-03-01"), minutes: 45, description: "Huvudförhandling", billable: true,
+      user: { name: "Anna" }, frozenAt: new Date("2026-06-01") });
+    renderSection();
+    expect(screen.getByText("🔒 Låst")).toHaveAttribute("title", expect.stringContaining("kan inte ändras"));
+    expect(screen.getAllByText("Ändra")).toHaveLength(2); // bara de två olåsta
+  });
+
+  it("misslyckad borttagning säger till (alert) — aldrig tyst", () => {
+    const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => {});
+    renderSection();
+    deleteOpts.onError?.({ message: "Tidposten ingår i en slutfaktura" });
+    expect(alertSpy).toHaveBeenCalledWith("Kunde inte ta bort: Tidposten ingår i en slutfaktura");
+    alertSpy.mockRestore();
+  });
+
+  it("misslyckat sparande visas i dialogen — aldrig tyst", () => {
+    updateState.error = { message: "Tidposten ingår i en slutfaktura eller kostnadsräkning och kan inte ändras eller tas bort." };
+    renderSection();
+    fireEvent.click(screen.getAllByText("Ändra")[0]!);
+    expect(screen.getByRole("alert")).toHaveTextContent("Kunde inte spara: Tidposten ingår i en slutfaktura");
   });
 });
 

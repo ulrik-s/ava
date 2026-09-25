@@ -103,6 +103,27 @@ describe("DataTable", () => {
     expect(menu.style.position).toBe("fixed");
   });
 
+  it("dra i kolumnkanten (pointer events) sätter bredd på kolumnen (#1170)", () => {
+    render(<DataTable prefKey="x" columns={cols} data={rows} rowKey={(r) => r.id} />);
+    const handle = screen.getAllByRole("separator", { name: "Ändra kolumnbredd" })[1]!; // Ålder
+    const th = handle.closest("th")!;
+    fireEvent.pointerDown(handle, { clientX: 100, pointerId: 1 });
+    expect(th.getAttribute("draggable")).toBe("false"); // inte flytta kolumnen medan man ändrar bredd
+    fireEvent.pointerMove(handle, { clientX: 260, pointerId: 1 });
+    fireEvent.pointerUp(handle, { pointerId: 1 });
+    expect(th.style.width).toMatch(/px$/);
+    expect(Number.parseFloat(th.style.width)).toBeGreaterThanOrEqual(160);
+    expect(th.getAttribute("draggable")).toBe("true");
+  });
+
+  it("alla kolumner med bredd → fast tabell-layout med tabellbredd = summan (#1170)", () => {
+    persisted.data = { user: { columns: [{ key: "name", width: 200 }, { key: "age", width: 100 }] }, org: null };
+    const { container } = render(<DataTable prefKey="x" columns={cols} data={rows} rowKey={(r) => r.id} />);
+    const table = container.querySelector("table")!;
+    expect(table.className).toContain("table-fixed");
+    expect(table.style.width).toBe("332px");
+  });
+
   it("rubrikmenyn stängs när sidan scrollar", () => {
     render(<DataTable prefKey="x" columns={cols} data={rows} rowKey={(r) => r.id} />);
     fireEvent.click(screen.getByRole("button", { name: /Namn/ }));

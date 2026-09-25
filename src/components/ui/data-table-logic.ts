@@ -254,3 +254,37 @@ export function menuPosition(
     ? { top, right: Math.max(MARGIN, viewport.width - anchor.right), maxHeight }
     : { top, left: Math.max(MARGIN, anchor.left), maxHeight };
 }
+
+/** Per-kolumn-överrides med `key` satt till bredd `width` (dold-flagga m.m. behålls, #1170). */
+export function withColumnWidth(prefs: DataTablePrefs, key: string, width: number): NonNullable<DataTablePrefs["columns"]> {
+  return withColumnWidths(prefs, { [key]: width });
+}
+
+/** Per-kolumn-överrides med flera bredder satta på en gång (övriga fält behålls). */
+export function withColumnWidths(prefs: DataTablePrefs, widths: Readonly<Record<string, number>>): NonNullable<DataTablePrefs["columns"]> {
+  const cur = prefs.columns ?? [];
+  const seen = new Set(cur.map((c) => c.key));
+  const updated = cur.map((c) => {
+    const w = widths[c.key];
+    return w !== undefined ? { ...c, width: w } : c;
+  });
+  const added = Object.entries(widths).filter(([k]) => !seen.has(k)).map(([key, width]) => ({ key, width }));
+  return [...updated, ...added];
+}
+
+/**
+ * Tabellens bredd i fast layout, eller null (#1170). Har ALLA synliga kolumner
+ * en bredd används `table-layout: fixed` med tabellbredden = summan (+ den
+ * smala avslutande kolumnen): då blir en kolumn exakt så bred som man drar den.
+ * I automatisk layout höll Chrome tabellen inom behållaren och fördelade om —
+ * kolumnen man drog i ändrade sig inte.
+ */
+export function fixedTableWidth<T>(vCols: readonly Column<T>[], prefs: DataTablePrefs, trailing = 32): number | null {
+  let sum = trailing;
+  for (const col of vCols) {
+    const w = prefs.columns?.find((c) => c.key === col.key)?.width ?? col.defaultWidth;
+    if (w === undefined) return null;
+    sum += w;
+  }
+  return vCols.length > 0 ? sum : null;
+}

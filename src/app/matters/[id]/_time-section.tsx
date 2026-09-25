@@ -46,6 +46,8 @@ interface TimeEntryRow {
   user?: { name?: string | null } | null;
   invoiceId?: InvoiceId | null;
   invoice?: { id: InvoiceId; invoiceNumber?: string | null } | null;
+  /** Satt när posten ingick i en slutfaktura eller kostnadsräkning — låst. */
+  frozenAt?: Date | string | null;
   createdAt?: Date | string | null;
   updatedAt?: Date | string | null;
 }
@@ -84,10 +86,14 @@ export function TimeSection({ matterId, isTaxeArende, paymentMethod, matterStatu
       setEditingId(null);
       setEditForm(null);
     },
+    // Ett sparande som misslyckas får aldrig vara tyst (#1170) — felet visas i
+    // dialogen och loggas (så "Rapportera fel" får med det).
+    onError: (e) => console.error("[timeEntry.update] misslyckades:", e),
   });
 
   const deleteTimeEntry = trpc.timeEntry.delete.useMutation({
     onSuccess: () => utils.timeEntry.list.invalidate({ matterId }),
+    onError: (e) => { console.error("[timeEntry.delete] misslyckades:", e); alert(`Kunde inte ta bort: ${e.message}`); },
   });
 
   function startEdit(entry: TimeEntryRow): void {
@@ -137,12 +143,7 @@ export function TimeSection({ matterId, isTaxeArende, paymentMethod, matterStatu
     // Vid framtida rättshjälp-stöd hanteras kopplingen via separat invoice-
     // line-modell, inte invoiceId på timeEntry.
     { key: "actions", label: "", sortable: false, align: "right", hideable: false,
-      render: (e) => (
-        <span className="whitespace-nowrap">
-          <button onClick={() => startEdit(e)} className="text-xs text-gray-500 hover:text-blue-600 hover:underline mr-3">Ändra</button>
-          <button onClick={() => confirmDelete(e.id)} className="text-xs text-red-500 hover:underline">Ta bort</button>
-        </span>
-      ),
+      render: (e) => <TimeRowActions entry={e} onEdit={startEdit} onDelete={confirmDelete} />,
     },
     // Katalog-fält — finns på posten men visas inte i default-vyn. Användaren
     // aktiverar via "+ Visa kolumn → Tillgängliga fält".
@@ -220,7 +221,41 @@ export function TimeSection({ matterId, isTaxeArende, paymentMethod, matterStatu
             onCancel={() => { setEditingId(null); setEditForm(null); }}
           />
         )}
+        <SaveError error={updateTimeEntry.error} />
       </Modal>
     </div>
+  );
+}
+
+/**
+ * Ändra/Ta bort — eller låst (#1170): servern avvisar ändring av en post som
+ * ingår i slutfaktura eller kostnadsräkning. Förr visades Ändra ändå och
+ * sparandet föll tyst — "inget händer".
+ */
+function TimeRowActions({ entry, onEdit, onDelete }: {
+  entry: TimeEntryRow; onEdit: (e: TimeEntryRow) => void; onDelete: (id: TimeEntryId) => void;
+}) {
+  if (entry.frozenAt) {
+    return (
+      <span className="text-xs text-gray-500 whitespace-nowrap" title="Ingår i en slutfaktura eller kostnadsräkning och kan inte ändras eller tas bort.">
+        🔒 Låst
+      </span>
+    );
+  }
+  return (
+    <span className="whitespace-nowrap">
+      <button onClick={() => onEdit(entry)} className="text-xs text-gray-500 hover:text-blue-600 hover:underline mr-3">Ändra</button>
+      <button onClick={() => onDelete(entry.id)} className="text-xs text-red-500 hover:underline">Ta bort</button>
+    </span>
+  );
+}
+
+/** Varför sparandet misslyckades — aldrig tyst (#1170). */
+function SaveError({ error }: { error: { message: string } | null }) {
+  if (!error) return null;
+  return (
+    <p role="alert" className="mt-3 rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800">
+      Kunde inte spara: {error.message}
+    </p>
   );
 }
