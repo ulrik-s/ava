@@ -42,6 +42,10 @@ vi.mock("@/components/settings/ledger-accounts-section", () => ({
   LedgerAccountsSection: () => null,
 }));
 
+vi.mock("@/components/settings/fortnox-section", () => ({
+  FortnoxSection: () => null,
+}));
+
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
     useUtils: () => utilsMock,

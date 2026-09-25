@@ -17,6 +17,8 @@
  *   AVA_HTTP_HOST         (default 127.0.0.1)
  *   AVA_CONTENT_DIR       (valfri) katalog för dokument-bytes (server-side
  *                         lagring; krävs för dokumentklassificering, #518)
+ *   AVA_FORTNOX_CLIENT_ID/_CLIENT_SECRET/_REDIRECT_URI + AVA_SECRETS_KEY/_FILE
+ *                         (valfria) Fortnox-bokföring från appen (#1172)
  *   AVA_LOG_LEVEL         (default info)  debug|info|warn|error — strukturerad
  *                         JSON-logg till stderr (#1080). `debug` ger en rad per
  *                         tRPC-anrop; `info` bara fel.
@@ -26,12 +28,14 @@ import { loadContentDirFromEnv, makeContentStore } from "@/lib/server/adapters/g
 import { noopPorts } from "@/lib/server/adapters/noop-ports";
 import { buildServerFirstApi, loadServerFirstConfig } from "@/lib/server/http/server-first-api";
 import { emailStatusLine } from "@/lib/server/integrations/email/disabled-email-sender";
+import { fortnoxLedgerFromEnv } from "@/lib/server/integrations/fortnox/ledger-service";
 import { startJobRuntime, type JobRuntime } from "@/lib/server/jobs/job-worker-runtime";
 import { QueueBackedDocumentAnalyzer } from "@/lib/server/jobs/queue-backed-document-analyzer";
 import { makeEmailPort } from "@/lib/server/jobs/queue-backed-email-sender";
 import { buildServerFirstJobHandlers, loadActiveSmtpConfig } from "@/lib/server/jobs/server-first-handlers";
 import { InMemoryLeaseStore } from "@/lib/server/lease/lease-store";
 import { loadLlmConfigFromEnv } from "@/lib/server/llm/ollama-classifier";
+import type { ILedgerService } from "@/lib/server/ports";
 import { serveFetchHandler } from "@/lib/shared/http/node-http-adapter";
 import { jsonSink, setLogLevel, setLogSink, type LogLevel } from "@/lib/shared/observability/logger";
 import { asId } from "@/lib/shared/schemas/ids";
@@ -57,6 +61,13 @@ function startLogging(): void {
   if (level === "debug" || level === "info" || level === "warn" || level === "error") {
     setLogLevel(level satisfies LogLevel);
   }
+}
+
+/** Fortnox-bokföring (#1172): kräver AVA_FORTNOX_* + valvet (AVA_SECRETS_*). Annars noop. */
+function ledgerPort(): { ledger?: ILedgerService } {
+  const ledger = fortnoxLedgerFromEnv();
+  log(ledger ? "fortnox: konfigurerad" : "fortnox: av (AVA_FORTNOX_* / AVA_SECRETS_* saknas)");
+  return ledger ? { ledger } : {};
 }
 
 function main(): void {
@@ -96,6 +107,7 @@ function main(): void {
     // Mjuk lease (ADR 0033 §2): in-memory process-singleton — efemär koordinering,
     // en omstart löper ut alla leases (korrekt). Ett enda objekt delas av alla requests.
     lease: new InMemoryLeaseStore(),
+    ...ledgerPort(),
   };
 
   const api = buildServerFirstApi({

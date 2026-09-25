@@ -234,7 +234,7 @@ module.exports = {
       from: {
         path: [
           "^src/lib/shared/",
-          "^src/lib/server/routers/(invoice|billingRun|reports)\\.ts$",
+          "^src/lib/server/routers/(invoice|billingRun|reports|ledger)\\.ts$",
         ],
       },
       to: {

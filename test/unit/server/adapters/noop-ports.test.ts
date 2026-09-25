@@ -12,8 +12,10 @@ import {
   noopSearchIndex,
   noopPaymentScanner,
   noopContentStore,
+  noopLedger,
   noopPorts,
 } from "@/lib/server/adapters/noop-ports";
+import { DEFAULT_LEDGER_ACCOUNT_MAP } from "@/lib/shared/accounting/account-map";
 import { asId } from "@/lib/shared/schemas/ids";
 
 describe("noop-ports", () => {
@@ -63,5 +65,13 @@ describe("noop-ports", () => {
     expect(noopPorts.searchIndex).toBe(noopSearchIndex);
     expect(noopPorts.paymentScanner).toBe(noopPaymentScanner);
     expect(noopPorts.content).toBe(noopContentStore);
+  });
+
+  it("noopLedger: ej konfigurerad, allt annat säger ifrån", async () => {
+    expect(noopPorts.ledger).toBe(noopLedger);
+    expect(await noopLedger.status("o")).toEqual({ configured: false, connected: false });
+    await expect(noopLedger.authorizeUrl("o")).rejects.toThrow(/konfigurerad/);
+    await expect(noopLedger.completeConnect("o", "c", "s")).rejects.toThrow(/konfigurerad/);
+    expect(() => noopLedger.connector("o", DEFAULT_LEDGER_ACCOUNT_MAP)).toThrow(/konfigurerad/);
   });
 });

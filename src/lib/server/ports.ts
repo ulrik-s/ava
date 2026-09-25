@@ -5,7 +5,9 @@
  */
 
 import type { Buffer } from "node:buffer";
+import type { LedgerAccountMap } from "@/lib/shared/accounting/account-map";
 import type { DocumentId, UserId } from "@/lib/shared/schemas/ids";
+import type { LedgerConnector } from "./integrations/ledger/port";
 
 // ─── EmailSender ───────────────────────────────────────────────────
 
@@ -185,6 +187,30 @@ export interface ILeaseStore {
   get(documentId: DocumentId): LeaseView | null;
 }
 
+// ─── Ledger (bokföring, #1172) ─────────────────────────────────────
+
+/** Är en bokföringsintegration konfigurerad på servern, och har byrån anslutit? */
+export interface LedgerStatus {
+  /** Servern har klient-id/secret + valv → byrån KAN ansluta. */
+  configured: boolean;
+  /** Byrån har genomfört OAuth-anslutningen (tokens finns i valvet). */
+  connected: boolean;
+}
+
+/**
+ * Byråns koppling till bokföringssystemet (Fortnox först, ADR 0011). Routrar
+ * ser bara det här — connectorn wiras i server-runtime:n.
+ */
+export interface ILedgerService {
+  status(orgId: string): Promise<LedgerStatus>;
+  /** Authorize-URL att skicka administratören till (med CSRF-`state`). */
+  authorizeUrl(orgId: string): Promise<string>;
+  /** Växla in `code` från callbacken; `state` måste vara det vi delade ut. */
+  completeConnect(orgId: string, code: string, state: string): Promise<void>;
+  /** Push-verifikat mot byråns konton. Anropen serialiseras (roterande token). */
+  connector(orgId: string, map: LedgerAccountMap): Pick<LedgerConnector, "pushVoucher" | "capabilities">;
+}
+
 // ─── Aggregat ──────────────────────────────────────────────────────
 
 /**
@@ -199,6 +225,7 @@ export interface IPorts {
   paymentScanner: IPaymentScanner;
   content: IContentStore;
   lease: ILeaseStore;
+  ledger: ILedgerService;
 }
 
 // Buffer-typen exporteras så impl:erna kan importera utan Node:

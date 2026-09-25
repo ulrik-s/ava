@@ -10,6 +10,7 @@ import { expenseRouter } from "./expense";
 import { invoiceRouter } from "./invoice";
 import { invoiceDispatchRouter } from "./invoiceDispatch";
 import { kostnadsrakningRouter } from "./kostnadsrakning";
+import { ledgerRouter } from "./ledger";
 import { mailRouter } from "./mail";
 import { matterRouter } from "./matter";
 import { organizationRouter } from "./organization";
@@ -42,6 +43,7 @@ export const appRouter = router({
   billingRun: billingRunRouter,
   paymentPlan: paymentPlanRouter,
   kostnadsrakning: kostnadsrakningRouter,
+  ledger: ledgerRouter,
   calendar: calendarRouter,
   task: taskRouter,
   serviceNote: serviceNoteRouter,

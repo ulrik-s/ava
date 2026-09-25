@@ -119,8 +119,17 @@ services:
       AVA_OIDC_SCOPE: "${AVA_HELPER_OIDC_SCOPE:-}"
       # Entras JWKS ligger inte på Keycloak-vägen som är default (bearer-claims.ts).
       AVA_OIDC_JWKS_URI: "${AVA_HELPER_OIDC_JWKS_URI:-}"
+      # Fortnox-bokföring (#1172): tomt = av. Tokens krypteras i valvet nedan
+      # (AVA_SECRETS_KEY = base64 av 32 slumpbyte: `openssl rand -base64 32`).
+      AVA_FORTNOX_CLIENT_ID: "${AVA_FORTNOX_CLIENT_ID:-}"
+      AVA_FORTNOX_CLIENT_SECRET: "${AVA_FORTNOX_CLIENT_SECRET:-}"
+      AVA_FORTNOX_REDIRECT_URI: "${AVA_FORTNOX_REDIRECT_URI:-https://${AVA_DOMAIN}/settings/fortnox}"
+      AVA_SECRETS_KEY: "${AVA_SECRETS_KEY:-}"
+      AVA_SECRETS_FILE: /data/secrets/vault.enc
     volumes:
       - content:/data/content
+      # Eget volym: content är ett git-repo som kan speglas — hemligheter hör inte hemma där.
+      - secrets:/data/secrets
     # /readyz rör DATABASEN (#1079). En attrapp som bara säger att processen
     # startat hade rapporterat frisk medan poolen var död — och då hade
     # autoheal nedan aldrig gjort något.
@@ -179,5 +188,6 @@ volumes:
   ollama_models:
   pgdata:
   content:
+  secrets:
   caddy_data:
   caddy_config:

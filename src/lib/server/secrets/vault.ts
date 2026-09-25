@@ -74,7 +74,7 @@ export class EncryptedFileVault implements SecretsVault {
  *   - `AVA_SECRETS_KEY`  base64-kodade 32 byte master-nyckel.
  *   - `AVA_SECRETS_FILE` sökväg till valv-filen (UTANFÖR git-working-copy:n).
  */
-export function createVaultFromEnv(env: NodeJS.ProcessEnv = process.env): SecretsVault {
+export function createVaultFromEnv(env: Record<string, string | undefined> = process.env): SecretsVault {
   const key = loadMasterKey(env.AVA_SECRETS_KEY);
   const file = env.AVA_SECRETS_FILE;
   if (!file) {
