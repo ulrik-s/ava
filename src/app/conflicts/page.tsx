@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ListPage } from "@/components/layout/list-page";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { labelForContactType, labelForMatterRole } from "@/lib/client/labels";
@@ -74,8 +75,13 @@ export default function ConflictsPage() {
   }
 
   return (
-    <div>
+    <ListPage
+      header={(
+        <>
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Jävskontroll</h1>
+        </>
+      )}
+    >
 
       <form onSubmit={handleSearch} className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
         <p className="text-sm text-gray-500 mb-4">
@@ -136,6 +142,6 @@ export default function ConflictsPage() {
         </div>
       )}
 
-    </div>
+    </ListPage>
   );
 }

@@ -8,6 +8,7 @@
 import { Wallet, Search, BellRing } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { ListPage } from "@/components/layout/list-page";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { Money } from "@/components/ui/money";
 import { shellPath } from "@/lib/client/demo/entity-href";
@@ -130,7 +131,9 @@ export default function PaymentPlansPage() {
   });
 
   return (
-    <div>
+    <ListPage
+      header={(
+        <>
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
           <Wallet size={22} /> Avbetalningsplaner
@@ -139,6 +142,9 @@ export default function PaymentPlansPage() {
           Alla planer i organisationen. Klicka för detaljer + påminnelse-historik.
         </p>
       </div>
+        </>
+      )}
+    >
 
       <div className="flex items-center gap-3 mb-3">
         <button
@@ -199,6 +205,6 @@ export default function PaymentPlansPage() {
           onRowClick={(p) => router.push(shellPath("payment-plans", p.id))}
         />
       )}
-    </div>
+    </ListPage>
   );
 }

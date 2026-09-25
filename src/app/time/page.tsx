@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
+import { ListPage } from "@/components/layout/list-page";
 import { MatterCombobox, type MatterOption } from "@/components/matter/matter-combobox";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { EntityLink } from "@/lib/client/demo/entity-link";
@@ -186,7 +187,9 @@ export default function TimePage() {
   });
 
   return (
-    <div>
+    <ListPage
+      header={(
+        <>
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Tidregistrering</h1>
@@ -199,6 +202,9 @@ export default function TimePage() {
           {showForm ? "Avbryt" : "+ Registrera tid"}
         </button>
       </div>
+        </>
+      )}
+    >
 
       {showForm && (
         <TimeEntryForm
@@ -235,6 +241,6 @@ export default function TimePage() {
           </div>
         </div>
       )}
-    </div>
+    </ListPage>
   );
 }

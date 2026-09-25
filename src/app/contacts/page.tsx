@@ -3,6 +3,7 @@
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { EMPTY_CONTACT_FORM, NewContactForm, type ContactForm } from "@/components/contacts/new-contact-form";
+import { ListPage } from "@/components/layout/list-page";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { Pager } from "@/components/ui/pager";
 import { useIsReadOnly } from "@/lib/client/demo/demo-mode-context";
@@ -69,8 +70,11 @@ function ContactsContent() {
   }
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
+    <ListPage
+      footer={<Pager data={contacts.data} page={page} onPage={setPage} showTotal />}
+      header={(
+        <>
+      <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold text-gray-900">Kontakter</h1>
         <button
           onClick={() => setShowForm(!showForm)}
@@ -81,17 +85,6 @@ function ContactsContent() {
           {showForm ? "Avbryt" : "+ Ny kontakt"}
         </button>
       </div>
-
-      {showForm && (
-        <NewContactForm
-          form={form}
-          setForm={setForm}
-          onSubmit={handleSubmit}
-          onCancel={() => setShowForm(false)}
-          isPending={createContact.isPending}
-          error={createContact.error}
-        />
-      )}
 
       <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-4">
         <input type="text" placeholder="Sök kontakter..."
@@ -106,10 +99,22 @@ function ContactsContent() {
           ))}
         </select>
       </div>
+        </>
+      )}
+    >
+      {showForm && (
+        <NewContactForm
+          form={form}
+          setForm={setForm}
+          onSubmit={handleSubmit}
+          onCancel={() => setShowForm(false)}
+          isPending={createContact.isPending}
+          error={createContact.error}
+        />
+      )}
 
       <ContactsTable rows={(contacts.data?.contacts ?? []) as ContactRow[]} />
-      <Pager data={contacts.data} page={page} onPage={setPage} showTotal />
-    </div>
+    </ListPage>
   );
 }
 

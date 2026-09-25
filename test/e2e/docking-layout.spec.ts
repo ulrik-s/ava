@@ -57,6 +57,22 @@ for (const p of PANEL_PAGES) {
   });
 }
 
+/** Listsidor: huvudet står still, listan scrollar inuti — sidan aldrig. */
+const LIST_PAGES = ["/matters/", "/contacts/", "/invoices/", "/time/", "/payment-plans/", "/users/", "/templates/", "/search/", "/watchlist/", "/conflicts/"];
+
+for (const path of LIST_PAGES) {
+  test(`listsida ${path}: ingen sidscroll (13" och telefon)`, async ({ page, baseURL }) => {
+    const base = (baseURL ?? DEMO_BASE_URL).replace(/\/+$/, "");
+    await seedDemoLogin(page, base);
+    for (const [width, height] of [[1470, 956], [390, 844]] as const) {
+      await page.setViewportSize({ width, height });
+      await page.goto(`${base}${path}`, { waitUntil: "load" });
+      await expect(page.getByRole("heading", { level: 1 }).first()).toBeVisible({ timeout: 30_000 });
+      expect(await pageScroll(page)).toEqual({ doc: 0, main: 0 });
+    }
+  });
+}
+
 /** Gruppen (dockviews flikrad) en flik ligger i. */
 const groupOf = (page: Page, title: string) =>
   page.locator(".dv-groupview").filter({ has: page.getByRole("tab", { name: new RegExp(`^${title}`) }) });

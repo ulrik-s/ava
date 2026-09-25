@@ -91,8 +91,7 @@ describe("ContactsPage", () => {
   it("submittar nytt kontakt-formulär med namn", () => {
     render(<ContactsPage />);
     fireEvent.click(screen.getByRole("button", { name: /\+ Ny kontakt/i }));
-    const inputs = screen.getAllByRole("textbox") as HTMLInputElement[];
-    fireEvent.change(inputs[0]!, { target: { value: "Cecilia C" } });
+    fireEvent.change(screen.getByLabelText("Namn *"), { target: { value: "Cecilia C" } });
     fireEvent.click(screen.getByRole("button", { name: /Spara kontakt/i }));
     expect(createMutate).toHaveBeenCalled();
     expect(createMutate.mock.calls[0]![0].name).toBe("Cecilia C");
@@ -102,8 +101,7 @@ describe("ContactsPage", () => {
     render(<ContactsPage />);
     fireEvent.click(screen.getByRole("button", { name: /\+ Ny kontakt/i }));
     expect(screen.getByPlaceholderText(/YYYYMMDD/)).toBeInTheDocument();
-    const typeSelect = screen.getAllByRole("combobox")[0] as HTMLSelectElement;
-    fireEvent.change(typeSelect, { target: { value: "COMPANY" } });
+    fireEvent.change(screen.getByLabelText("Typ"), { target: { value: "COMPANY" } });
     expect(screen.queryByPlaceholderText(/YYYYMMDD/)).not.toBeInTheDocument();
     expect(screen.getByPlaceholderText(/XXXXXX-XXXX/)).toBeInTheDocument();
   });
