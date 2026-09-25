@@ -11,6 +11,7 @@
  */
 
 import { useMemo, useState } from "react";
+import { PanelPage } from "@/components/layout/panel-page";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { Money } from "@/components/ui/money";
 import { EntityLink } from "@/lib/client/demo/entity-link";
@@ -28,6 +29,7 @@ import {
   type ReceivableSuggestion,
 } from "@/lib/shared/payments/match-receivables";
 import { asId } from "@/lib/shared/schemas/ids";
+import { paymentImportLayout } from "./_import-layout";
 
 interface InvoiceRowData {
   id: string;
@@ -128,30 +130,35 @@ export default function PaymentImportPage() {
     setXml("");
   };
 
+  const panels = [
+    { id: "file", title: "Fil", render: () => (
+      <>
+        <p className="text-sm text-gray-500 mb-4">
+          camt.054/053 (SEB/Bankgirot &quot;Kontohändelser via fil&quot;) — matchas mot OCR, fakturanummer eller fri text.
+          Domstolsbetalningar (utan OCR) matchas på ärende-/målnummer mot förväntade fordringar (#173).
+          Driftskrav: ta emot domstolsbetalningar på ett bankgiro/konto som tillåter <em>fri referens</em> —
+          ett OCR-låst bankgiro kan avvisa betalningar utan OCR.
+        </p>
+        {doneMsg && <p className="mb-4 text-sm text-green-700 bg-green-50 rounded p-3">{doneMsg}</p>}
+        <FilePicker onXml={(x) => { setDoneMsg(null); setXml(x); }} xml={xml} />
+        {parsed.error && <p className="mt-4 text-sm text-red-700">Kunde inte läsa filen: {parsed.error}</p>}
+      </>
+    ) },
+    { id: "match", title: "Matchning", render: () => (outcome
+      ? <ImportPreview outcome={outcome} labels={labels} busy={recordPayment.isPending} onBook={() => void book(outcome.bookable)} />
+      : <p className="text-sm text-gray-500">Välj en betalfil för att se matchningen.</p>) },
+    { id: "receivables", title: "Domstolsbetalningar", render: () => (receivableSuggestions.length > 0
+      ? <ReceivableSuggestions suggestions={receivableSuggestions} labels={receivableLabels} busy={settleReceivable.isPending} onSettle={(x) => void settleSuggestion(x)} />
+      : <p className="text-sm text-gray-500">Inga domstolsbetalningar att matcha.</p>) },
+  ];
+
   return (
-    <div>
-      <h1 className="text-2xl font-bold text-gray-900 mb-2">Importera betalfil</h1>
-      <p className="text-sm text-gray-500 mb-6">
-        camt.054/053 (SEB/Bankgirot &quot;Kontohändelser via fil&quot;) — matchas mot OCR, fakturanummer eller fri text.
-        Domstolsbetalningar (utan OCR) matchas på ärende-/målnummer mot förväntade fordringar (#173).
-        Driftskrav: ta emot domstolsbetalningar på ett bankgiro/konto som tillåter <em>fri referens</em> —
-        ett OCR-låst bankgiro kan avvisa betalningar utan OCR.
-      </p>
-      {doneMsg && <p className="mb-4 text-sm text-green-700 bg-green-50 rounded p-3">{doneMsg}</p>}
-      <FilePicker onXml={(s) => { setDoneMsg(null); setXml(s); }} xml={xml} />
-      {parsed.error && <p className="mt-4 text-sm text-red-700">Kunde inte läsa filen: {parsed.error}</p>}
-      {outcome && (
-        <ImportPreview outcome={outcome} labels={labels} busy={recordPayment.isPending} onBook={() => void book(outcome.bookable)} />
-      )}
-      {receivableSuggestions.length > 0 && (
-        <ReceivableSuggestions
-          suggestions={receivableSuggestions}
-          labels={receivableLabels}
-          busy={settleReceivable.isPending}
-          onSettle={(s) => void settleSuggestion(s)}
-        />
-      )}
-    </div>
+    <PanelPage
+      page="payment-import"
+      panels={panels}
+      defaultLayout={paymentImportLayout}
+      header={<h1 className="text-2xl font-bold text-gray-900 mb-3">Importera betalfil</h1>}
+    />
   );
 }
 

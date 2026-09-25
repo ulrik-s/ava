@@ -30,6 +30,14 @@ const calListQuery = { data: eventRows as unknown[], isLoading: false };
 // Kuvertform sedan #1014.
 const taskListQuery = { data: { items: taskRows as unknown[], total: taskRows.length }, isLoading: false };
 
+// Dockytan (#1184) kräver en riktig webbläsarlayout — här renderas huvudet och
+// alla paneler efter varandra, synkront, så testerna kan granska innehållet.
+vi.mock("@/components/layout/panel-page", () => ({
+  PanelPage: ({ header, panels }: { header: React.ReactNode; panels: ReadonlyArray<{ id: string; render: () => React.ReactNode }> }) => (
+    <>{header}{panels.map((p) => <div key={p.id} data-panel={p.id}>{p.render()}</div>)}</>
+  ),
+}));
+
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
     useUtils: () => ({ calendar: { invalidate: vi.fn(), list: { invalidate: vi.fn() } }, task: { list: { invalidate: vi.fn() } } }),

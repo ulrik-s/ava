@@ -10,6 +10,7 @@
 
 import { Calendar as CalendarIcon, Plus, ExternalLink, Trash2, CheckCircle2, List, LayoutGrid, CalendarDays, Sun } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
+import { PanelPage } from "@/components/layout/panel-page";
 import { MatterCombobox } from "@/components/matter/matter-combobox";
 import { CheckboxList } from "@/components/ui/checkbox-list";
 import { resolveSelectedUsers } from "@/lib/client/calendar/select-users";
@@ -19,6 +20,7 @@ import { trpc } from "@/lib/client/trpc";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { asId, type CalendarEventId, type ContactId, type MatterId, type UserId } from "@/lib/shared/schemas/ids";
 import { CalendarGrid, startOfDay } from "./_calendar-grid";
+import { calendarLayout } from "./_calendar-layout";
 import { DayView } from "./_day-view";
 import { EventDetailModal, type EventDetail } from "./_event-detail-modal";
 import { UserPicker, loadSelectedUserIds } from "./_user-picker";
@@ -128,62 +130,62 @@ export default function CalendarPage() {
   const { anchor, setAnchor, view, setView, selectedUserIds, setSelectedUserIds, userNames, userColors } =
     useCalendarState();
 
-  return (
-    <div className="max-w-6xl">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-          <CalendarIcon size={24} /> Kalender
-        </h1>
-        <p className="text-sm text-gray-500 mt-1">
-          Möten, förhandlingar, frister och tasks. Färgkodat per användare —
-          markera vilka du vill se i listan till vänster.
-        </p>
-      </div>
-
-      <section className="mb-8 grid grid-cols-1 lg:grid-cols-[14rem_1fr] gap-4">
-        <UserPicker
-          selectedUserIds={selectedUserIds}
-          onChange={(ids) => setSelectedUserIds(ids.map((id) => asId<"UserId">(id)))}
-          enforceAtLeastOne
-          userColors={userColors}
-        />
-        <div>
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-3">
-              <h2 className="text-lg font-semibold text-gray-800">Events</h2>
-              <ViewSwitcher value={view} onChange={setView} />
-            </div>
-            <button
-              onClick={() => setShowNewEvent((v) => !v)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700"
-            >
-              <Plus size={14} /> Nytt event
-            </button>
-          </div>
-          {showNewEvent && <NewEventForm onClose={() => setShowNewEvent(false)} />}
-          {editingEvent && <NewEventForm initial={editingEvent} onClose={() => setEditingEvent(null)} />}
-          {view === "list" && <EventList />}
-          <CalendarBody
-            view={view}
-            anchor={anchor}
-            setAnchor={setAnchor}
-            selectedUserIds={selectedUserIds}
-            userNames={userNames}
-            userColors={userColors}
-            onSelectEvent={setSelectedEvent}
-          />
-          <EventDetailPanel
-            selectedEvent={selectedEvent}
-            userNames={userNames}
-            userColors={userColors}
-            onClose={() => setSelectedEvent(null)}
-            onEdit={(ev) => { setSelectedEvent(null); setEditingEvent(ev); }}
-          />
+  const panels = [
+    { id: "users", title: "Användare", render: () => (
+      <UserPicker
+        selectedUserIds={selectedUserIds}
+        onChange={(ids) => setSelectedUserIds(ids.map((id) => asId<"UserId">(id)))}
+        enforceAtLeastOne
+        userColors={userColors}
+      />
+    ) },
+    { id: "calendar", title: "Kalender", render: () => (
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <ViewSwitcher value={view} onChange={setView} />
+          <button
+            onClick={() => setShowNewEvent((v) => !v)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700"
+          >
+            <Plus size={14} /> Nytt event
+          </button>
         </div>
-      </section>
+        {showNewEvent && <NewEventForm onClose={() => setShowNewEvent(false)} />}
+        {editingEvent && <NewEventForm initial={editingEvent} onClose={() => setEditingEvent(null)} />}
+        {view === "list" && <EventList />}
+        <CalendarBody
+          view={view}
+          anchor={anchor}
+          setAnchor={setAnchor}
+          selectedUserIds={selectedUserIds}
+          userNames={userNames}
+          userColors={userColors}
+          onSelectEvent={setSelectedEvent}
+        />
+        <EventDetailPanel
+          selectedEvent={selectedEvent}
+          userNames={userNames}
+          userColors={userColors}
+          onClose={() => setSelectedEvent(null)}
+          onEdit={(ev) => { setSelectedEvent(null); setEditingEvent(ev); }}
+        />
+      </div>
+    ) },
+    { id: "tasks", title: "Uppgifter", render: () => <TasksSection /> },
+  ];
 
-      <TasksSection />
-    </div>
+  return (
+    <PanelPage
+      page="calendar"
+      panels={panels}
+      defaultLayout={calendarLayout}
+      header={(
+        <div className="mb-3">
+          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2"><CalendarIcon size={24} /> Kalender</h1>
+          <p className="text-sm text-gray-500">Möten, förhandlingar, frister och tasks. Färgkodat per användare.</p>
+        </div>
+      )}
+    />
   );
 }
 
