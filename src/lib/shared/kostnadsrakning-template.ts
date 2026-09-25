@@ -71,6 +71,52 @@ export const KOSTNADSRAKNING_DEFAULT_HTML = `<!DOCTYPE html>
   Datum: <strong>{{today}}</strong>
 </div>
 
+{{#if forordnande}}
+<h2>Förhör under förundersökningen</h2>
+<p>Förundersökningen har avslutats utan åtal — förordnandemål (DVFS 2025:5).</p>
+<table>
+  <thead><tr><th>Datum</th><th>Början</th><th>Slut</th><th class="num">Förhörstid</th></tr></thead>
+  <tbody>
+    {{#each forordnande.forhorLines}}
+    <tr><td>{{date}}</td><td>{{start}}</td><td>{{end}}</td><td class="num">{{minutesFormatted}}</td></tr>
+    {{/each}}
+  </tbody>
+  <tfoot><tr><td colspan="3">Sammanlagd förhörstid</td><td class="num">{{forordnande.forhorTotalFormatted}}</td></tr></tfoot>
+</table>
+
+{{#if forordnande.taxaApplies}}
+<h2>Arvode — taxa i förordnandemål</h2>
+<div class="totalsRow"><span>Taxa, förhörstid {{forordnande.intervalLabel}}</span><span class="num">{{forordnande.taxaAmountFormatted}}</span></div>
+<div class="totalsRow"><span>Tidsspillan totalt {{forordnande.tidsspillanTotalFormatted}}, varav {{forordnande.tidsspillanIngarFormatted}} ingår i taxan</span><span class="num"></span></div>
+{{#each forordnande.tidsspillanRader}}
+<div class="totalsRow"><span>+ {{label}} utöver taxan: {{minutesFormatted}} à {{rateFormatted}}</span><span class="num">{{amountFormatted}}</span></div>
+{{/each}}
+{{#if forordnande.gransvardeOverskrids}}
+<div class="warn">Arbetet överstiger taxans gränsvärde — taxan får frångås (10 §). Överväg löpande räkning.</div>
+{{/if}}
+{{else}}
+<h2>Arvode — löpande räkning</h2>
+<div class="warn">{{forordnande.utanforText}}</div>
+<div class="totalsRow"><span>Arvode enligt timkostnadsnorm</span><span class="num">{{arvodeExclFormatted}}</span></div>
+{{/if}}
+<div class="totalsRow"><span>+ Moms 25 %</span><span class="num">{{arvodeMomsFormatted}}</span></div>
+<div class="totalsRow" style="border-top: 1px solid #aaa; padding-top: 6pt; font-weight: 600;">
+  <span>Arvode inkl moms</span>
+  <span class="num">{{arvodeInclFormatted}}</span>
+</div>
+
+{{#if timeLines.length}}
+<h2>Utfört arbete{{#if forordnande.taxaApplies}} (ingår i taxan){{/if}}</h2>
+<table>
+  <thead><tr><th>Datum</th><th>Beskrivning</th><th class="num">Tid</th></tr></thead>
+  <tbody>
+    {{#each timeLines}}
+    <tr><td>{{date}}</td><td>{{description}}{{#if isTidsspillan}} (tidsspillan){{/if}}</td><td class="num">{{minutesFormatted}}</td></tr>
+    {{/each}}
+  </tbody>
+</table>
+{{/if}}
+{{else}}
 <h2>Huvudförhandling</h2>
 <div>
   Start: <strong>{{hufStart}}</strong> · Slut: <strong>{{hufEnd}}</strong> ·
@@ -96,6 +142,7 @@ export const KOSTNADSRAKNING_DEFAULT_HTML = `<!DOCTYPE html>
     Förhandlingstiden överstiger taxans maxgräns (3 tim 45 min).
     Ersättning beräknas enligt timkostnadsnorm × faktisk tid (DVFS 2025:6 § 8).
   </div>
+{{/if}}
 {{/if}}
 
 {{#if radgivningNotice}}

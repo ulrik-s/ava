@@ -18,6 +18,7 @@
  */
 
 import { applyNoFTaxFactorForDate, computeBrottmalstaxa, computeTimkostnadsnorm, coverageEntryRateOre, coverageEntryValueOre, isPerDayKind, payableCoverageEntries, timkostnadsnormFtaxForDate, type TaxaLevel, type TaxaResult } from "./brottmalstaxa";
+import { computeForordnandeErsattning, forhorMinutes, type Forhor, type ForordnandeResult } from "./forordnandetaxa";
 import { toIsoDate } from "./iso-date";
 import { RADGIVNING_MINUTES, radgivningTextRad } from "./rattshjalp";
 import type { TimeEntryKind } from "./schemas/enums";
@@ -56,10 +57,17 @@ export interface BuildInput {
   };
   /** Domstolens namn (för rubriken i kostnadsräkningen). */
   courtName?: string;
-  /** ISO-string eller Date — HUF startade. */
-  hufStart: Date | string;
+  /** ISO-string eller Date — HUF startade. Saknas i förordnandemål. */
+  hufStart?: Date | string;
   /** ISO-string eller Date — HUF slutade (just nu i rättssalen). */
-  hufEnd: Date | string;
+  hufEnd?: Date | string;
+  /**
+   * Förordnandemål (DVFS 2025:5): förundersökningen lades ned (eller
+   * strafföreläggande/inget åtal). Arvodet bestäms då av den sammanlagda
+   * förhörstiden i stället för en huvudförhandling, plus tidsspillan utöver den
+   * timme som ingår i taxan. Hamnar förhören utanför taxan räknas ärendet löpande.
+   */
+  forordnande?: { forhor: readonly Forhor[] };
   /**
    * När YRKANDET framställs (#980) — datumet som avgör vilket års normer
    * arbetet värderas på. Default: nu.
@@ -232,6 +240,7 @@ interface KrTemplateArgs {
   timeLines: TimeLine[];
   billableArbetsMinutes: number;
   totalArbetsMinutes: number;
+  ford: ForordnandeResult | null;
 }
 
 /** Bygg Handlebars-context (matchar default-mallen). Ren assemblering. */
@@ -297,6 +306,7 @@ function buildKrTemplateContext(a: KrTemplateArgs): Record<string, unknown> {
     billableArbetsFormatted: formatMinutes(a.billableArbetsMinutes),
     totalArbetsMinutes: a.totalArbetsMinutes,
     totalArbetsFormatted: formatMinutes(a.totalArbetsMinutes),
+    forordnande: forordnandeContext(a.input.forordnande?.forhor, a.ford),
   };
 }
 
@@ -350,10 +360,39 @@ function valuateTimeLine(
   };
 }
 
-export function buildKostnadsrakningContext(input: BuildInput): KostnadsrakningResult {
-  const start = new Date(input.hufStart);
-  const end = new Date(input.hufEnd);
-  const huvudforhandlingMinutes = diffMinutes(start, end);
+/**
+ * Debiterbara tidsposter. Rådgivningstimmen (ärendets FÖRSTA timme) faktureras
+ * klienten separat och ligger HELT utanför kostnadsräkningen till domstolen
+ * (#868): den carvas bort ur både specifikationen och arvodes-underlaget.
+ * DVFS 2025:9 § 2 (#950): beredskapsdagar som förbrukats av en helgförhandling
+ * eller ett polisförhör samma dag yrkas inte — arbetet yrkas i stället.
+ */
+function billableTimeEntriesOf(input: BuildInput): TimeEntryInput[] {
+  const allBillable = payableCoverageEntries((input.timeEntries ?? []).filter((t) => t.billable !== false));
+  return input.matter.radgivningPaid ? carveEarliestMinutes(allBillable, RADGIVNING_MINUTES) : allBillable;
+}
+
+/** Vilken grund räkningen står på: förordnandemål, huvudförhandling eller löpande. */
+function resolveBasis(original: BuildInput, billable: readonly TimeEntryInput[], yrkandeDate: Date) {
+  const ford = forordnandeOf(original, billable, yrkandeDate);
+  // Förhör utanför förordnandetaxan (kväll/helg, > 3 h 45 min) → löpande räkning.
+  const input: BuildInput = ford?.kind === "utanfor-taxan" ? { ...original, isTaxeArende: false } : original;
+  const start = new Date(input.hufStart ?? yrkandeDate);
+  const end = new Date(input.hufEnd ?? yrkandeDate);
+  return { ford, input, start, end, huvudforhandlingMinutes: ford ? 0 : diffMinutes(start, end) };
+}
+
+/** Utläggsrader — bara debiterbara; övriga är byråns egen kostnad. */
+function expenseLinesOf(expenses: readonly ExpenseInput[]): ExpenseLine[] {
+  return expenses.filter((e) => e.billable !== false).map((e) => {
+    const vatRate = e.vatRate ?? 2500;
+    const r = splitVat({ amount: e.amount, vatRate, vatIncluded: e.vatIncluded ?? true });
+    return { id: e.id, date: toIsoDate(e.date), description: e.description, vatRate, exclVat: r.exclVat, vat: r.vat, inclVat: r.inclVat };
+  });
+}
+
+export function buildKostnadsrakningContext(original: BuildInput): KostnadsrakningResult {
+  const yrkandeDate = yrkandeDateOf(original);
 
   // Tidsregistreringar — bara billable räknas (samma princip som utlägg).
   // Rådgivningstimmen (ärendets FÖRSTA timme) faktureras klienten separat och
@@ -362,37 +401,16 @@ export function buildKostnadsrakningContext(input: BuildInput): KostnadsrakningR
   // domstolen debiteras för samma timme (dubbel-debitering). Notisen förklarar den.
   // DVFS 2025:9 § 2 (#950): beredskapsdagar som förbrukats av en helgförhandling
   // eller ett polisförhör samma dag yrkas inte — arbetet yrkas i stället.
-  const allBillable = payableCoverageEntries((input.timeEntries ?? []).filter((t) => t.billable !== false));
-  const billableTimeEntries = input.matter.radgivningPaid
-    ? carveEarliestMinutes(allBillable, RADGIVNING_MINUTES)
-    : allBillable;
-  const yrkandeDate = yrkandeDateOf(input);
+  const billableTimeEntries = billableTimeEntriesOf(original);
+  const { ford, input, start, end, huvudforhandlingMinutes } = resolveBasis(original, billableTimeEntries, yrkandeDate);
   const { timeLines, arvodeNorm } = valuateTimeLines(billableTimeEntries, input, yrkandeDate);
   const billableArbetsMinutes = billableTimeEntries.reduce((s, t) => s + t.minutes, 0);
   const totalArbetsMinutes = billableArbetsMinutes + huvudforhandlingMinutes;
 
   const level: TaxaLevel = input.taxaLevel ?? 1;
-  const taxa = resolveTaxa(input, huvudforhandlingMinutes, totalArbetsMinutes, level);
+  const taxa = ford?.kind === "taxa" ? ford.taxa : resolveTaxa(input, huvudforhandlingMinutes, totalArbetsMinutes, level);
 
-  // Bara billable utlägg ska faktureras — non-billable är firmans egen kostnad.
-  const expenses = input.expenses.filter((e) => e.billable !== false);
-
-  const expenseLines: ExpenseLine[] = expenses.map((e) => {
-    const r = splitVat({
-      amount: e.amount,
-      vatRate: e.vatRate ?? 2500,
-      vatIncluded: e.vatIncluded ?? true,
-    });
-    return {
-      id: e.id,
-      date: toIsoDate(e.date),
-      description: e.description,
-      vatRate: e.vatRate ?? 2500,
-      exclVat: r.exclVat,
-      vat: r.vat,
-      inclVat: r.inclVat,
-    };
-  });
+  const expenseLines = expenseLinesOf(input.expenses);
 
   const expenseSummary = expenseLines.reduce(
     (s, l) => ({ exclVat: s.exclVat + l.exclVat, vat: s.vat + l.vat, inclVat: s.inclVat + l.inclVat }),
@@ -403,9 +421,7 @@ export function buildKostnadsrakningContext(input: BuildInput): KostnadsrakningR
   // ev. huvudförhandling (arbete-norm). Taxa-ärenden: taxans fasta belopp (#891).
   const icketaxaArvode = timeLines.reduce((s, l) => s + l.amountOre, 0)
     + Math.round((huvudforhandlingMinutes / 60) * arvodeNorm);
-  const arvodeExclVat = (input.isTaxeArende ?? true)
-    ? (taxa.kind === "taxa-applies" ? taxa.ersattningExclVat : 0)
-    : icketaxaArvode;
+  const arvodeExclVat = arvodeFor(input, taxa, ford, icketaxaArvode);
   const arvodeMoms = Math.round(arvodeExclVat * 0.25);
   const arvodeInclVat = arvodeExclVat + arvodeMoms;
   const totalInclVat = arvodeInclVat + expenseSummary.inclVat;
@@ -413,7 +429,7 @@ export function buildKostnadsrakningContext(input: BuildInput): KostnadsrakningR
   const templateContext = buildKrTemplateContext({
     input, start, end, yrkandeDate, huvudforhandlingMinutes, level, taxa,
     arvodeExclVat, arvodeMoms, arvodeInclVat, totalInclVat,
-    expenseLines, expenseSummary, timeLines, billableArbetsMinutes, totalArbetsMinutes,
+    expenseLines, expenseSummary, timeLines, billableArbetsMinutes, totalArbetsMinutes, ford,
   });
 
   return {
@@ -429,6 +445,74 @@ export function buildKostnadsrakningContext(input: BuildInput): KostnadsrakningR
     arvodeInclVat,
     totalInclVat,
     templateContext,
+  };
+}
+
+// ─── Förordnandemål (DVFS 2025:5) ─────────────────────────────────────────
+
+/** Minuter per tidsspillan-kategori ur de debiterbara raderna. */
+function minutesOfKind(entries: readonly TimeEntryInput[], kind: TimeEntryKind): number {
+  return entries.filter((t) => t.kind === kind).reduce((s, t) => s + t.minutes, 0);
+}
+
+/** Förordnandeersättningen, eller null när ärendet inte är ett förordnandemål. */
+function forordnandeOf(input: BuildInput, billable: readonly TimeEntryInput[], yrkandeDate: Date): ForordnandeResult | null {
+  if (!input.forordnande) return null;
+  const hasFTax = input.hasFTax ?? true;
+  // Skälig ersättning = det löpande värdet av det faktiska arbetet — jämförs mot gränsvärdet (10 §).
+  const skalig = billable.reduce((s, t) => s + coverageEntryValueOre(t, yrkandeDate), 0);
+  return computeForordnandeErsattning({
+    forhor: input.forordnande.forhor,
+    tidsspillan: { vardagMinutes: minutesOfKind(billable, "TIDSSPILLAN"), ovrigMinutes: minutesOfKind(billable, "TIDSSPILLAN_OVRIG_TID") },
+    hasFTax, yrkandeDate,
+    skaligErsattningOre: hasFTax ? skalig : applyNoFTaxFactorForDate(skalig, yrkandeDate),
+  });
+}
+
+/** Arvodet exkl moms: förordnandetaxa (+ tidsspillan), brottmålstaxa eller löpande. */
+function arvodeFor(input: BuildInput, taxa: TaxaResult, ford: ForordnandeResult | null, icketaxa: number): number {
+  if (ford?.kind === "taxa") return ford.arvodeExclVat;
+  if (!(input.isTaxeArende ?? true)) return icketaxa;
+  return taxa.kind === "taxa-applies" ? taxa.ersattningExclVat : 0;
+}
+
+const UTANFOR_TEXT = {
+  "over-max": "Den sammanlagda förhörstiden överstiger 3 tim 45 min — taxan tillämpas inte, ersättning enligt löpande räkning.",
+  "utanfor-tid": "Förhör har hållits utanför vardagar 07.00–18.00 — taxan tillämpas inte, ersättning enligt löpande räkning.",
+} as const;
+
+/** Rad för överskjutande tidsspillan, eller null när inget ersätts i kategorin. */
+function tidsspillanRad(label: string, minutes: number, rateOre: number): Record<string, string> | null {
+  if (minutes <= 0) return null;
+  return { label, minutesFormatted: formatMinutes(minutes), rateFormatted: `${formatOreAsKr(rateOre)}/h`, amountFormatted: formatOreAsKr(Math.round((minutes * rateOre) / 60)) };
+}
+
+/** Kostnadsräkningens förordnande-avsnitt: förhören, taxan och tidsspillan. */
+function forordnandeContext(forhor: readonly Forhor[] | undefined, ford: ForordnandeResult | null): Record<string, unknown> | null {
+  if (!forhor || !ford) return null;
+  const forhorLines = forhor.map((f) => ({
+    date: toIsoDate(f.start),
+    start: toIsoDateTime(new Date(f.start)).slice(11),
+    end: toIsoDateTime(new Date(f.end)).slice(11),
+    minutesFormatted: formatMinutes(forhorMinutes(f)),
+  }));
+  const base = { forhorLines, forhorTotalFormatted: formatMinutes(ford.forhorMinutes) };
+  if (ford.kind === "utanfor-taxan") return { ...base, taxaApplies: false, utanforText: UTANFOR_TEXT[ford.reason] };
+  const ts = ford.tidsspillan;
+  const d = ford.taxa;
+  return {
+    ...base,
+    taxaApplies: true,
+    intervalLabel: d.intervalLabel,
+    taxaAmountFormatted: formatOreAsKr(d.ersattningExclVat),
+    tidsspillanTotalFormatted: formatMinutes(ts.ingarOvrigMinutes + ts.ingarVardagMinutes + ts.extraOvrigMinutes + ts.extraVardagMinutes),
+    tidsspillanIngarFormatted: formatMinutes(ts.ingarOvrigMinutes + ts.ingarVardagMinutes),
+    tidsspillanRader: [
+      tidsspillanRad("Tidsspillan vardag 08–18", ts.extraVardagMinutes, ts.vardagRateOre),
+      tidsspillanRad("Tidsspillan annan tid", ts.extraOvrigMinutes, ts.ovrigRateOre),
+    ].filter((r) => r !== null),
+    tidsspillanAmountFormatted: formatOreAsKr(ts.amountOre),
+    gransvardeOverskrids: ford.gransvardeOverskrids,
   };
 }
 
