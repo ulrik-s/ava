@@ -4,11 +4,13 @@ import type { inferRouterOutputs } from "@trpc/server";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useId, useState } from "react";
+import { PanelPage } from "@/components/layout/panel-page";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { useRouteId } from "@/lib/client/demo/use-route-id";
 import { labelForContactType, labelForMatterRole, contactTypeOptions } from "@/lib/client/labels";
 import { trpc } from "@/lib/client/trpc";
 import type { AppRouter } from "@/lib/server/routers/_app";
+import { contactLayout } from "./_contact-layout";
 
 type ContactData = NonNullable<inferRouterOutputs<AppRouter>["contacts"]["getById"]>;
 
@@ -370,27 +372,26 @@ export default function ContactDetailClient({ id: paramId }: { id: string }) {
   const c = d.contact.data;
   const isOrg = c.contactType !== "PERSON";
 
-  return (
-    <div>
-      <div className="mb-6">
-        <Link href="/contacts" className="text-sm text-blue-600 hover:underline">&larr; Tillbaka till kontakter</Link>
-      </div>
-
-      <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
-        {d.editing ? (
-          <ContactEditForm
-            form={d.editForm}
-            setForm={d.setEditForm}
-            onSubmit={() => d.updateContact.mutate({ id: d.id, ...d.editForm } as Parameters<typeof d.updateContact.mutate>[0])}
-            onCancel={() => d.setEditing(false)}
-            isPending={d.updateContact.isPending}
-          />
-        ) : (
-          <ContactDetailsView c={c} onEdit={d.startEditing} onDelete={d.handleDelete} deletePending={d.deleteContact.isPending} />
-        )}
-      </div>
-
-      {isOrg && (
+  const details = (
+    <div className="bg-white rounded-lg border border-gray-200 p-6">
+      {d.editing ? (
+        <ContactEditForm
+          form={d.editForm}
+          setForm={d.setEditForm}
+          onSubmit={() => d.updateContact.mutate({ id: d.id, ...d.editForm } as Parameters<typeof d.updateContact.mutate>[0])}
+          onCancel={() => d.setEditing(false)}
+          isPending={d.updateContact.isPending}
+        />
+      ) : (
+        <ContactDetailsView c={c} onEdit={d.startEditing} onDelete={d.handleDelete} deletePending={d.deleteContact.isPending} />
+      )}
+    </div>
+  );
+  const panels = [
+    { id: "details", title: "Uppgifter", render: () => details },
+    // Kontaktpersoner finns bara för organisationer — panelen saknas för personer.
+    ...(isOrg ? [{
+      id: "people", title: "Kontaktpersoner", render: () => (
         <ChildContactsSection
           c={c}
           showForm={d.showChildForm}
@@ -400,9 +401,21 @@ export default function ContactDetailClient({ id: paramId }: { id: string }) {
           onAdd={() => d.addChild.mutate({ parentId: d.id, ...d.childForm })}
           addPending={d.addChild.isPending}
         />
-      )}
+      ),
+    }] : []),
+    { id: "matters", title: "Ärenden", render: () => <LinkedMattersSection matterLinks={c.matterLinks} /> },
+  ];
 
-      <LinkedMattersSection matterLinks={c.matterLinks} />
-    </div>
+  return (
+    <PanelPage
+      page="contact"
+      panels={panels}
+      defaultLayout={contactLayout}
+      header={(
+        <div className="mb-2">
+          <Link href="/contacts" className="text-xs text-blue-600 hover:underline">&larr; Tillbaka till kontakter</Link>
+        </div>
+      )}
+    />
   );
 }

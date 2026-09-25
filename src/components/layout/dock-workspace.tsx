@@ -32,6 +32,14 @@ export type AddPanel = (id: string, opts?: { position?: AddPanelPositionOptions;
 /** Sidans standardlayout per skärmklass. */
 export type DefaultLayout = (add: AddPanel, screen: "laptop" | "large") => void;
 
+/** En flikgrupp: första panelen synlig, resten som bakgrundsflikar i samma grupp. */
+export function addGroup(add: AddPanel, ids: readonly string[], position?: AddPanelPositionOptions): void {
+  const [first, ...rest] = ids;
+  if (!first) return;
+  add(first, position ? { position } : undefined);
+  rest.forEach((id) => add(id, { position: { referencePanel: first, direction: "within" }, inactive: true }));
+}
+
 interface Props {
   /** Sidtyp, t.ex. "matter" — en layout för alla ärenden. */
   page: string;

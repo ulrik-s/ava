@@ -2,11 +2,13 @@
 
 import { ArrowLeft, Ban, Wallet } from "lucide-react";
 import Link from "next/link";
+import { PanelPage } from "@/components/layout/panel-page";
 import { Money } from "@/components/ui/money";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { useRouteId } from "@/lib/client/demo/use-route-id";
 import { trpc } from "@/lib/client/trpc";
 import { computeInvoiceLedger } from "@/lib/shared/write-off-calc";
+import { paymentPlanLayout } from "./_payment-plan-layout";
 
 const STATUS_LABEL: Record<string, string> = {
   ACTIVE: "Aktiv",
@@ -35,19 +37,28 @@ export default function PaymentPlanDetailClient({ id: paramId }: { id: string })
   if (!plan.data) return null;
   const p = plan.data as PlanDetail;
 
-  return (
-    <div className="max-w-3xl">
-      <div className="mb-4">
-        <Link href="/payment-plans" className="text-sm text-blue-600 hover:underline inline-flex items-center gap-1">
-          <ArrowLeft size={14} /> Avbetalningsplaner
-        </Link>
-      </div>
+  const panels = [
+    { id: "summary", title: "Plan", render: () => <PlanSummaryCard p={p} onCancel={() => cancel.mutate({ planId: p.id })} cancelling={cancel.isPending} /> },
+    { id: "payments", title: "Inbetalningar", render: () => <PaymentsSection invoice={p.invoice} /> },
+    { id: "reminders", title: "Påminnelser", render: () => <RemindersSection reminders={p.reminders} /> },
+  ];
 
-      <PlanHeader p={p} />
-      <PlanSummaryCard p={p} onCancel={() => cancel.mutate({ planId: p.id })} cancelling={cancel.isPending} />
-      <PaymentsSection invoice={p.invoice} />
-      <RemindersSection reminders={p.reminders} />
-    </div>
+  return (
+    <PanelPage
+      page="payment-plan"
+      panels={panels}
+      defaultLayout={paymentPlanLayout}
+      header={(
+        <>
+          <div className="mb-2">
+            <Link href="/payment-plans" className="text-xs text-blue-600 hover:underline inline-flex items-center gap-1">
+              <ArrowLeft size={14} /> Avbetalningsplaner
+            </Link>
+          </div>
+          <PlanHeader p={p} />
+        </>
+      )}
+    />
   );
 }
 

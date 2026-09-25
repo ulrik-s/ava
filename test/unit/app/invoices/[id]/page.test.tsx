@@ -28,6 +28,14 @@ const stubs = {
   writeOff: { mutate: vi.fn(), isPending: false },
 };
 
+// Dockytan (#1184) kräver en riktig webbläsarlayout — här renderas huvudet och
+// alla paneler efter varandra, synkront, så testerna kan granska innehållet.
+vi.mock("@/components/layout/panel-page", () => ({
+  PanelPage: ({ header, panels }: { header: React.ReactNode; panels: ReadonlyArray<{ id: string; render: () => React.ReactNode }> }) => (
+    <>{header}{panels.map((p) => <div key={p.id} data-panel={p.id}>{p.render()}</div>)}</>
+  ),
+}));
+
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
     // DataTable (#1146) läser/sparar vy-inställningar.

@@ -76,6 +76,7 @@ test("fakturadokument öppnas i ny flik — dirigeras INTE in i ärendet (+ inge
   // fortfarande letade efter `.pdf` MÄRKTES INTE, eftersom det kördes mot den
   // DEPLOYADE demon — där låg en äldre build vars fakturor var PDF:er. Grönt mot
   // gammal data, fel mot koden i repot: precis det #932 handlar om.
+  await showPanel(page, "Fakturadokument"); // bakgrundsflik på fakturasidan (#1184)
   const docEl = page.getByText(/Faktura .*\.html/i).first();
   await expect(docEl).toBeVisible({ timeout: 15_000 });
 

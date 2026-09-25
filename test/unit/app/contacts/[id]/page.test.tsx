@@ -26,6 +26,14 @@ const deleteState = { isPending: false };
 const addChildMutate = vi.fn();
 const addChildState = { isPending: false };
 
+// Dockytan (#1184) kräver en riktig webbläsarlayout — här renderas huvudet och
+// alla paneler efter varandra, synkront, så testerna kan granska innehållet.
+vi.mock("@/components/layout/panel-page", () => ({
+  PanelPage: ({ header, panels }: { header: React.ReactNode; panels: ReadonlyArray<{ id: string; render: () => React.ReactNode }> }) => (
+    <>{header}{panels.map((p) => <div key={p.id} data-panel={p.id}>{p.render()}</div>)}</>
+  ),
+}));
+
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: routerPush }),
   // useRouteId() läser usePathname; null → faller tillbaka till prop-id:t.

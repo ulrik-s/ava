@@ -10,10 +10,18 @@ import Dashboard from "@/app/page";
 const todoQuery: { data: unknown; isLoading: boolean } = { data: undefined, isLoading: false };
 const timeQuery: { data: unknown; isLoading: boolean } = { data: undefined, isLoading: false };
 const meQuery: { data: unknown } = { data: { id: "u1", name: "Anna" } };
-/** "Att bevaka" (#1062) — self-gating: tom lista → kortet renderar ingenting. */
+/** "Att bevaka" (#1062) — tom lista → panelen säger att det är lugnt (#1184). */
 const watchlistQuery: { data: unknown; isLoading: boolean } = { data: { items: [] }, isLoading: false };
 
 const completeMutate = vi.fn();
+
+// Dockytan (#1184) kräver en riktig webbläsarlayout — här renderas huvudet och
+// alla paneler efter varandra, synkront, så testerna kan granska innehållet.
+vi.mock("@/components/layout/panel-page", () => ({
+  PanelPage: ({ header, panels }: { header: React.ReactNode; panels: ReadonlyArray<{ id: string; render: () => React.ReactNode }> }) => (
+    <>{header}{panels.map((p) => <div key={p.id} data-panel={p.id}>{p.render()}</div>)}</>
+  ),
+}));
 
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
@@ -39,13 +47,14 @@ beforeEach(() => {
 });
 
 describe("Dashboard", () => {
-  it("renderar rubrik + tre paneler", () => {
+  it("renderar rubrik + panelerna", async () => {
     render(<Dashboard />);
     expect(screen.getByRole("heading", { name: /Startsida/i })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: /Kalender/ })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /Kalender/ })).toBeInTheDocument();
     expect(screen.queryByText(/Att göra/)).not.toBeInTheDocument(); // samma lista som Att bevaka, borttagen
     expect(screen.getByText(/Tidrapportering/i)).toBeInTheDocument();
     expect(screen.getByText(/Senaste ärenden/i)).toBeInTheDocument();
+    expect(screen.getByText("Inget att bevaka just nu.")).toBeInTheDocument();
   });
 
   it("visar dagsväxlare och växlar valt datum", () => {

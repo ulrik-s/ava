@@ -6,7 +6,7 @@
  */
 
 import type { ReactNode } from "react";
-import type { DefaultLayout } from "@/components/layout/dock-workspace";
+import { addGroup, type DefaultLayout } from "@/components/layout/dock-workspace";
 import type { PanelDef } from "@/components/layout/panel-def";
 
 /** Panelernas id — samma lista i registret och standardlayouterna. */
@@ -27,16 +27,6 @@ export function matterPanels(content: Record<MatterPanelId, () => ReactNode>): P
   return MATTER_PANEL_IDS.map((id) => ({ id, title: TITLES[id], render: content[id] }));
 }
 
-type Add = Parameters<DefaultLayout>[0];
-
-/** Grupp: första panelen synlig, resten som bakgrundsflikar i samma grupp. */
-function group(add: Add, ids: readonly MatterPanelId[], position?: Parameters<Add>[1]): void {
-  const [first, ...rest] = ids;
-  if (!first) return;
-  add(first, position);
-  rest.forEach((id) => add(id, { position: { referencePanel: first, direction: "within" }, inactive: true }));
-}
-
 /**
  * 13"-laptop: arbetet (tid/utlägg/fakturering) till vänster, till höger det
  * man bevakar överst och dokument/händelser under.
@@ -44,12 +34,12 @@ function group(add: Add, ids: readonly MatterPanelId[], position?: Parameters<Ad
  */
 export const matterDefaultLayout: DefaultLayout = (add, screen) => {
   if (screen === "laptop") {
-    group(add, ["time", "expenses", "billing", "receivables"]);
-    group(add, ["watch", "payment", "contacts"], { position: { referencePanel: "time", direction: "right" } });
+    addGroup(add, ["time", "expenses", "billing", "receivables"]);
+    addGroup(add, ["watch", "payment", "contacts"], { referencePanel: "time", direction: "right" });
   } else {
-    group(add, ["time", "expenses"]);
-    group(add, ["billing", "receivables", "payment"], { position: { referencePanel: "time", direction: "right" } });
-    group(add, ["watch", "contacts"], { position: { referencePanel: "billing", direction: "right" } });
+    addGroup(add, ["time", "expenses"]);
+    addGroup(add, ["billing", "receivables", "payment"], { referencePanel: "time", direction: "right" });
+    addGroup(add, ["watch", "contacts"], { referencePanel: "billing", direction: "right" });
   }
-  group(add, ["documents", "events", "suggestions", "notes"], { position: { referencePanel: "watch", direction: "below" } });
+  addGroup(add, ["documents", "events", "suggestions", "notes"], { referencePanel: "watch", direction: "below" });
 };
