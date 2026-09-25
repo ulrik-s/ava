@@ -15,6 +15,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { DeadlinesAlert } from "@/components/tasks/deadlines-alert";
 import { Modal } from "@/components/ui/modal";
+import { sectionHeaderClass } from "@/components/ui/section-tone";
 import { WatchlistList } from "@/components/watchlist/watchlist-list";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
@@ -87,8 +88,8 @@ function WatchlistCard() {
 
   const passed = items.filter((i) => i.severity === "passed").length;
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-4 mb-6">
-      <div className="flex items-center justify-between mb-3">
+    <div className="bg-white rounded-lg border border-gray-200 mb-6">
+      <div className={sectionHeaderClass("amber")}>
         <h2 className="font-semibold text-gray-900 flex items-center gap-2">
           🔔 Att bevaka
           <span className="text-xs font-normal text-gray-500">
@@ -99,7 +100,9 @@ function WatchlistCard() {
           Visa alla →
         </Link>
       </div>
-      <WatchlistList items={items.slice(0, DASHBOARD_LIMIT)} emptyText="" />
+      <div className="p-4">
+        <WatchlistList items={items.slice(0, DASHBOARD_LIMIT)} emptyText="" />
+      </div>
     </div>
   );
 }
@@ -148,7 +151,7 @@ function TodoCard({ ymd }: { ymd: string }) {
 
   return (
     <div className="bg-white rounded-lg border border-gray-200">
-      <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+      <div className={sectionHeaderClass("blue")}>
         <h2 className="font-semibold text-gray-900 flex items-center gap-2">
           <CalendarIcon size={16} className="text-gray-500" /> Att göra
           {todo.data && <span className="text-xs font-normal text-gray-500">({todo.data.length})</span>}
@@ -350,7 +353,7 @@ function TimeCard({ ymd }: { ymd: string }) {
 
   return (
     <div className="bg-white rounded-lg border border-gray-200">
-      <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+      <div className={sectionHeaderClass("indigo")}>
         <h2 className="font-semibold text-gray-900 flex items-center gap-2">
           <Clock size={16} className="text-gray-500" /> Tidrapportering
           {entries.data && (
@@ -410,7 +413,7 @@ function RecentMattersCard() {
 
   return (
     <div className="bg-white rounded-lg border border-gray-200">
-      <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+      <div className={sectionHeaderClass("gray")}>
         <h2 className="font-semibold text-gray-900">Senaste ärenden du jobbat i</h2>
         <Link href="/matters" className="text-sm text-blue-600 hover:underline">Alla ärenden →</Link>
       </div>

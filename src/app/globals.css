@@ -9,6 +9,10 @@
   --font-mono: var(--font-geist-mono);
 }
 
+/* Sidans bakgrund (#1164): en tydlig grå-blå ton så att de vita avdelningskorten
+   lyfter. Förr bg-gray-50 (#f9fafb), nästan vitt — korten flöt ihop med sidan. */
+.bg-canvas { background-color: #e8edf3; }
+
 body {
   background: var(--color-background);
   color: var(--color-foreground);
@@ -35,6 +39,9 @@ body {
 
 /* Surfaces ─────────────────────────────────────────────────────────── */
 .dark .bg-white { background-color: #1e293b; /* slate-800 */ }
+.dark .bg-canvas { background-color: #0f172a; /* slate-900 — som förut */ }
+.dark .border-orange-200 { border-color: rgb(249 115 22 / 0.35); }
+.dark .bg-orange-100 { background-color: rgb(249 115 22 / 0.2); }
 .dark .bg-gray-50 { background-color: #0f172a; /* slate-900 */ }
 .dark .bg-gray-100 { background-color: #334155; /* slate-700 */ }
 .dark .bg-gray-200 { background-color: #475569; /* slate-600 */ }

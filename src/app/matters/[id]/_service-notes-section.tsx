@@ -8,6 +8,7 @@
 import { NotebookPen, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { DataTable, type Column } from "@/components/ui/data-table";
+import { sectionHeaderClass } from "@/components/ui/section-tone";
 import { trpc } from "@/lib/client/trpc";
 import type { MatterId, ServiceNoteId } from "@/lib/shared/schemas/ids";
 
@@ -94,7 +95,7 @@ export function ServiceNotesSection({ matterId }: { matterId: MatterId }) {
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 lg:col-span-2">
-      <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+      <div className={sectionHeaderClass("gray")}>
         <h2 className="font-semibold text-gray-900 flex items-center gap-2">
           <NotebookPen size={16} /> Tjänsteanteckningar
         </h2>

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ClientPickerDialog } from "@/components/contacts/client-picker-dialog";
 import { DataTable, type Column } from "@/components/ui/data-table";
+import { sectionHeaderClass } from "@/components/ui/section-tone";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { labelForMatterRole, matterRoleOptions } from "@/lib/client/labels";
 import { trpc } from "@/lib/client/trpc";
@@ -51,7 +52,7 @@ export function ContactsSection({ matterId, contacts }: Props) {
 
   return (
     <div className="bg-white rounded-lg border border-gray-200">
-      <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+      <div className={sectionHeaderClass("blue")}>
         <h2 className="font-semibold text-gray-900">Kontakter ({contacts.length})</h2>
         <button onClick={() => setPicking(true)} className="text-sm text-blue-600 hover:underline">
           + Lägg till

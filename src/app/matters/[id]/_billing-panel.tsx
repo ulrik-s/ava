@@ -20,6 +20,7 @@ import { DataTable, type Column } from "@/components/ui/data-table";
 import { DecimalInput } from "@/components/ui/decimal-input";
 import { Modal } from "@/components/ui/modal";
 import { Money } from "@/components/ui/money";
+import { sectionHeaderClass } from "@/components/ui/section-tone";
 import type { DownloadClient } from "@/lib/client/backend/load-document-blob";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { hasGeneratedDoc, openGeneratedDoc } from "@/lib/client/demo/generated-doc-cache";
@@ -452,7 +453,7 @@ export function BillingPanel({ matterId, matter }: Props) {
   };
   return (
     <div className="bg-white rounded-lg border border-gray-200 lg:col-span-2">
-      <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+      <div className={sectionHeaderClass("green")}>
         <h2 className="font-semibold text-gray-900">Fakturering</h2>
         <BillingHeaderActions actions={actions} onPick={onPick}
           hint={noActionsHint(currentPhase(flowMatter, rows), flowMatter.paymentMethod)} />

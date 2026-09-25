@@ -59,7 +59,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className="h-full bg-gray-50">
+      <body className="h-full bg-canvas">
         <ThemeRestore />
         <ThemeToggle />
         <PwaRegister />

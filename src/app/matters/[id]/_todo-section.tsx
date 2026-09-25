@@ -9,6 +9,7 @@
 
 import { useId, useState } from "react";
 import { DeadlineBadge } from "@/components/tasks/deadline-badge";
+import { sectionHeaderClass } from "@/components/ui/section-tone";
 import { trpc } from "@/lib/client/trpc";
 import { isDeadlineDue } from "@/lib/shared/deadline";
 import { asId, type MatterId } from "@/lib/shared/schemas/ids";
@@ -39,7 +40,7 @@ export function TodoSection({ matterId }: { matterId: MatterId }) {
 
   return (
     <section aria-label="Att göra och frister" className="bg-white rounded-lg border border-gray-200 mb-6">
-      <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+      <div className={sectionHeaderClass("red")}>
         <h2 className="font-semibold text-gray-900">Att göra &amp; frister ({open.length})</h2>
         {done.length > 0 && (
           <button type="button" onClick={() => setShowDone((v) => !v)} className="text-sm text-blue-600 hover:underline">
