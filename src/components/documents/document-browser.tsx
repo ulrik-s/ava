@@ -2,6 +2,7 @@
 
 import type { inferRouterInputs } from "@trpc/server";
 import { useState, useRef, useCallback, useMemo } from "react";
+import { sectionHeaderClass } from "@/components/ui/section-tone";
 import type { SuggestClient } from "@/lib/client/backend/suggest-from-bytes";
 import { useDocSyncStatus } from "@/lib/client/helper/use-helper";
 import { enqueueTextExtraction } from "@/lib/client/jobs/enqueue-text-extraction";
@@ -573,7 +574,7 @@ function BrowserHeader({
   onChangeViewMode: (m: ViewMode) => void;
 }) {
   return (
-    <div className="px-6 py-4 border-b border-gray-200 flex flex-wrap items-center justify-between gap-2">
+    <div className={sectionHeaderClass("purple", "flex flex-wrap items-center justify-between gap-2")}>
       <h2 className="font-semibold text-gray-900">Dokument</h2>
       <div className="flex items-center gap-3">
         <div className="inline-flex rounded-md border border-gray-200 text-xs">
