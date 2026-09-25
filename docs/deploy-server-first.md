@@ -252,11 +252,18 @@ skulle en återställning som inte gör någonting alls se ut att lyckas.
 ## Uppgradering
 
 ```bash
-git pull
-docker run --rm -v "$PWD:/app" -w /app -e DEMO_BASE_PATH= oven/bun:1 sh -c \
-  'bun install --frozen-lockfile && bun run server-first:build && bash tooling/scripts/build-demo.sh'
-docker compose -f tooling/docker/docker-compose.production.yml up -d --build
+cd /srv/ava && bash tooling/scripts/deploy-prod.sh
 ```
+
+Skriptet gör hela rundan: backup → `origin/main` (fast-forward) → **tömmer
+`.next/cache`** → bygger i `oven/bun` → kontrollerar att den byggda CSS:en har
+varje regel ur `globals.css` (annars avbryts det innan något startas om) → kör
+nya migrationer om deployen har några → startar om och väntar på `/readyz`.
+
+Byggcachen töms med flit varje gång (#1166): en gång gav den gammal CSS i prod
+— nya regler saknades trots rätt källkod och nya JS-chunkar, och inget larmade.
+
+### Manuellt
 
 **Ta backup före migrering.** Migrationer går framåt, inte bakåt.
 

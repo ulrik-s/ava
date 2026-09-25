@@ -199,6 +199,7 @@ const SERIAL_FILES = [
   "test/unit/lib/generate-demo-manifest.test.ts",
   "test/unit/architecture/fitness.test.ts",
   "test/integration/pdf-extract-compiled.test.ts", // bun build --compile + kör binären (#1156)
+  "test/scripts/check-built-css.test.ts", // bash-skripten för deploy (#1166)
 ];
 
 /** Matchar ett SYNKRONT child-spawn-anrop (regressionsvakt, #327). */
