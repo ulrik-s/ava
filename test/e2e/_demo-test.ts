@@ -210,3 +210,11 @@ export const test = base.extend<{ offsiteRequests: string[] }>({
 });
 
 export { expect };
+
+/**
+ * Visa en panel på en dockbar sida (#1185) — klicka dess flik. Fungerar både i
+ * dockview (dator) och i telefonens flikrad: båda är `role="tab"`.
+ */
+export async function showPanel(page: Page, title: string): Promise<void> {
+  await page.getByRole("tab", { name: new RegExp(`^${title}`) }).first().click({ timeout: 30_000 });
+}

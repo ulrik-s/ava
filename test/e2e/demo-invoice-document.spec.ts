@@ -20,7 +20,7 @@
  */
 import { type ConsoleMessage } from "@playwright/test";
 
-import { DEMO_BASE_URL, seedDemoConfig, test, expect } from "./_demo-test";
+import { DEMO_BASE_URL, seedDemoConfig, showPanel, test, expect } from "./_demo-test";
 
 // Seed-identiteter (ur .ava/meta.json). "Logga in som Anna" = seedad config.
 const ANNA = "e1c7d494-c148-5998-b717-df386937d5a1";
@@ -45,6 +45,7 @@ test("fakturadokument öppnas i ny flik — dirigeras INTE in i ärendet (+ inge
   // Ärendet (Brottmål — ekobrott Carlsson).
   await page.goto(`${base}/matters/${MATTER}/`, { waitUntil: "load" });
   await expect(page.getByRole("heading", { name: /ekobrott Carlsson/i })).toBeVisible({ timeout: 30_000 });
+  await showPanel(page, "Fakturering");
 
   // Ärendets kostnadsräkning är redan avgjord och fakturerad i seeden, så
   // fakturan finns när sidan öppnas. Vägen dit — "Registrera beslut" → "Skapa

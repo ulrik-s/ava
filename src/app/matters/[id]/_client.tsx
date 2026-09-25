@@ -1,6 +1,7 @@
 "use client";
 
 import { FileDown } from "lucide-react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useState } from "react";
 import { DocumentBrowser } from "@/components/documents/document-browser";
@@ -21,11 +22,17 @@ import { CourtCaseNumberField } from "./_court-case-number-field";
 import { ExpectedReceivablesSection } from "./_expected-receivables-section";
 import { ExpenseSection } from "./_expense-section";
 import { GenerateModal } from "./_generate-modal";
+import { matterDefaultLayout, matterPanels } from "./_matter-panels";
 import { ServiceNotesSection } from "./_service-notes-section";
 import { TimeSection } from "./_time-section";
 import { WatchSection } from "./_watch-section";
 
- 
+/** dockview laddas bara på sidor som använder det (bundle-storlek). */
+const DockWorkspace = dynamic(() => import("@/components/layout/dock-workspace").then((m) => m.DockWorkspace), {
+  ssr: false,
+  loading: () => <p className="text-sm text-gray-500">Laddar…</p>,
+});
+
 /** Ärendets målnummer som sträng (getById-typen saknar fältet i select-typen). */
 function courtCaseOf(m: unknown): string {
   return (m as { courtCaseNumber?: string | null }).courtCaseNumber ?? "";
@@ -56,10 +63,25 @@ export default function MatterDetailClient({ id: paramId }: { id: string }) {
   const m = matter.data;
   const klient = m.contacts.filter((c: { role: string }) => c.role === "KLIENT");
 
+  const panels = matterPanels({
+    time: () => <TimeSection matterId={id} isTaxeArende={m.isTaxeArende} paymentMethod={m.paymentMethod} matterStatus={m.status} />,
+    expenses: () => <ExpenseSection matterId={id} isTaxeArende={m.isTaxeArende} />,
+    billing: () => <BillingPanel matterId={id} matter={m} />,
+    receivables: () => <ExpectedReceivablesSection matterId={id} isCourtMatter={isCourtMatter(m)} />,
+    payment: () => <MatterPaymentMethod matterId={id} matter={m} />,
+    watch: () => <WatchSection matterId={id} />,
+    contacts: () => <ContactsSection matterId={id} contacts={m.contacts} />,
+    documents: () => <DocumentBrowser matterId={id} />,
+    events: () => <EventsPanel matterId={id} />,
+    suggestions: () => <SuggestionsPanel matterId={id} />,
+    notes: () => <ServiceNotesSection matterId={id} />,
+  });
+
+  // Sidan fyller exakt huvudytan: huvudet överst, panelerna resten (#1185).
   return (
-    <div>
-      <div className="mb-6">
-        <Link href="/matters" className="text-sm text-blue-600 hover:underline">&larr; Tillbaka till ärenden</Link>
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="mb-1 shrink-0">
+        <Link href="/matters" className="text-xs text-blue-600 hover:underline">&larr; Tillbaka till ärenden</Link>
       </div>
 
       <MatterHeader
@@ -68,22 +90,8 @@ export default function MatterDetailClient({ id: paramId }: { id: string }) {
         onOpenGenerate={() => setShowGenerateModal(true)}
       />
 
-      <WatchSection matterId={id} />
-
-      <div className="mb-6">
-        <MatterPaymentMethod matterId={id} matter={m} />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <EventsPanel matterId={id} />
-        <SuggestionsPanel matterId={id} />
-        <ContactsSection matterId={id} contacts={m.contacts} />
-        <DocumentBrowser matterId={id} />
-        <BillingPanel matterId={id} matter={m} />
-        <ExpectedReceivablesSection matterId={id} isCourtMatter={isCourtMatter(m)} />
-        <TimeSection matterId={id} isTaxeArende={m.isTaxeArende} paymentMethod={m.paymentMethod} matterStatus={m.status} />
-        <ExpenseSection matterId={id} isTaxeArende={m.isTaxeArende} />
-        <ServiceNotesSection matterId={id} />
+      <div className="min-h-0 flex-1">
+        <DockWorkspace page="matter" panels={panels} defaultLayout={matterDefaultLayout} />
       </div>
 
       {showGenerateModal && (
@@ -168,7 +176,7 @@ interface HeaderProps {
  *  optional-chain/&&-grenar inte räknas in i komponentkomplexiteten (#199). */
 function MatterClientLine({ klient, matterType }: { klient: MatterContact[]; matterType?: string | null | undefined }) {
   return (
-    <p className="text-sm text-gray-500 mt-1">
+    <p className="text-sm text-gray-500">
       {klient[0]?.contact && (
         <>Klient: <EntityLink route="contacts" id={klient[0].contact.id} className="text-blue-600 hover:underline">{klient[0].contact.name}</EntityLink></>
       )}
@@ -236,11 +244,13 @@ function MatterHeader({ matter: m, klient, onOpenGenerate }: HeaderProps) {
   };
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6 mb-6">
-      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-        <div>
-          <p className="text-sm font-mono text-gray-500">{m.matterNumber}</p>
-          <h1 className="text-2xl font-bold text-gray-900 mt-1">{m.title}</h1>
+    // Kompakt (#1185): panelerna ska få höjden, inte huvudet.
+    <div className="bg-white rounded-lg border border-gray-200 px-4 py-2 mb-2 shrink-0">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <div className="min-w-0">
+          <h1 className="text-lg font-bold text-gray-900 truncate">
+            <span className="mr-2 font-mono text-sm font-normal text-gray-500">{m.matterNumber}</span>{m.title}
+          </h1>
           <MatterClientLine klient={klient} matterType={m.matterType} />
         </div>
         <MatterHeaderActions
@@ -251,8 +261,10 @@ function MatterHeader({ matter: m, klient, onOpenGenerate }: HeaderProps) {
           onGenerate={onOpenGenerate}
         />
       </div>
-      {m.description && <p className="text-sm text-gray-700 mt-3">{m.description}</p>}
-      <CourtCaseNumberField key={courtCaseOf(m)} matterId={asId<"MatterId">(m.id)} value={courtCaseOf(m)} />
+      <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
+        <CourtCaseNumberField key={courtCaseOf(m)} matterId={asId<"MatterId">(m.id)} value={courtCaseOf(m)} />
+        {m.description && <p className="min-w-0 flex-1 truncate text-sm text-gray-600" title={m.description}>{m.description}</p>}
+      </div>
     </div>
   );
 }

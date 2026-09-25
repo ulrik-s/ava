@@ -4,7 +4,7 @@
  * Mockar alla relaterade trpc-queries + mutations + barnkomponenter.
  */
 
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, within, fireEvent, waitFor } from "@testing-library/react";
 import { Suspense } from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import MatterDetailPage from "@/app/matters/[id]/_client";
@@ -158,6 +158,14 @@ vi.mock("next/navigation", () => ({
   usePathname: () => "/matters/m1",
 }));
 vi.mock("@/lib/client/demo/use-route-id", () => ({ useRouteId: () => "m1" }));
+
+// Dockytan (#1185) kräver en riktig webbläsarlayout — här renderas alla
+// paneler efter varandra så testerna kan granska innehållet.
+vi.mock("@/components/layout/dock-workspace", () => ({
+  DockWorkspace: ({ panels }: { panels: ReadonlyArray<{ id: string; render: () => React.ReactNode }> }) => (
+    <>{panels.map((p) => <div key={p.id} data-panel={p.id}>{p.render()}</div>)}</>
+  ),
+}));
 
 // Tunga barnkomponenter — mocka som platshållare
 vi.mock("@/components/documents/document-browser", () => ({
@@ -412,9 +420,9 @@ describe("MatterDetailPage", () => {
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true); // delete bakom confirm nu
     renderPage();
     await waitFor(() => expect(screen.getByText("Domstolsavgift")).toBeInTheDocument());
-    const removes = screen.getAllByRole("button", { name: /^Ta bort$/i });
-    // sista Ta bort-knappen är på utläggsraden
-    fireEvent.click(removes[removes.length - 1]!);
+    // Knappen på just utläggsraden — panelernas ordning styrs av layouten (#1185).
+    const row = screen.getByRole("row", { name: /Domstolsavgift/ });
+    fireEvent.click(within(row).getByRole("button", { name: /^Ta bort$/i }));
     expect(stubs.deleteExpense.mutate).toHaveBeenCalledWith({ id: "e1" });
     confirmSpy.mockRestore();
   });

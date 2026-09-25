@@ -18,7 +18,7 @@
  * av scenariodispatchern (#882), inte av den här filen.
  */
 
-import { DEMO_BASE_URL, fetchDemoSeed, matterWithKrStatus, seedDemoLogin, test, expect } from "./_demo-test";
+import { DEMO_BASE_URL, fetchDemoSeed, matterWithKrStatus, seedDemoLogin, test, expect, showPanel } from "./_demo-test";
 
 /** Belopp domstolen dömer ut respektive prutar, i kronor. */
 const AWARDED_KR = 12_000;
@@ -32,6 +32,7 @@ test("kostnadsräkning som väntar på dom: registrera beslut → skapa faktura"
   const matterId = matterWithKrStatus(seed, "INSKICKAD");
 
   await page.goto(`${base}/matters/${matterId}/`, { waitUntil: "load" });
+  await showPanel(page, "Fakturering");
   // KR-kortet visar väntetillståndet — det som saknades i demon före #882.
   await expect(page.getByText(/Väntar på dom/i).first()).toBeVisible({ timeout: 30_000 });
 
@@ -86,6 +87,7 @@ test("överklagad kostnadsräkning: hovrättens beslut är slutgiltigt", async (
   const matterId = matterWithKrStatus(seed, "OVERKLAGAD");
 
   await page.goto(`${base}/matters/${matterId}/`, { waitUntil: "load" });
+  await showPanel(page, "Fakturering");
   // Ett överklagande är inte avgjort: varken fakturering eller ett nytt
   // överklagande ska erbjudas medan hovrätten har målet.
   await expect(page.getByRole("button", { name: /^Registrera hovrättens beslut$/ })).toBeVisible({ timeout: 30_000 });

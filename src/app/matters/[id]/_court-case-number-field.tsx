@@ -19,17 +19,17 @@ export function CourtCaseNumberField({ matterId, value }: { matterId: MatterId; 
     onSuccess: () => void utils.matter.getById.invalidate({ id: matterId }),
   });
   return (
-    <div className="flex items-end gap-2 mt-4">
-      <div className="flex-1 max-w-xs">
-        <label htmlFor={id} className="block text-xs font-medium text-gray-500 mb-1">Målnummer</label>
-        <input id={id} value={text} onChange={(e) => setText(e.target.value)} placeholder="t.ex. T 1234-26"
-          className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm font-mono" />
-      </div>
-      <button onClick={() => update.mutate({ id: matterId, courtCaseNumber: text || null })}
-        disabled={update.isPending || text === value}
-        className="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50">
-        Spara målnummer
-      </button>
+    <div className="flex items-center gap-2">
+      <label htmlFor={id} className="text-xs font-medium text-gray-500">Målnummer</label>
+      <input id={id} value={text} onChange={(e) => setText(e.target.value)} placeholder="t.ex. T 1234-26"
+        className="w-36 rounded border border-gray-300 px-2 py-0.5 text-sm font-mono" />
+      {text !== value && (
+        <button onClick={() => update.mutate({ id: matterId, courtCaseNumber: text || null })}
+          disabled={update.isPending}
+          className="px-2 py-0.5 text-xs border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50">
+          Spara målnummer
+        </button>
+      )}
     </div>
   );
 }

@@ -13,7 +13,8 @@ test("bevakning idag: röd i ärendet och i Att bevaka på startsidan", async ({
   const matterId = matterIdWith(seed, "timeEntries");
 
   await page.goto(`${base}/matters/${matterId}/`, { waitUntil: "load" });
-  const section = page.getByRole("region", { name: "Att bevaka" });
+  // Innersta: dockview märker även panelens yta med titeln (#1185).
+  const section = page.getByRole("region", { name: "Att bevaka" }).last();
   await expect(section).toBeVisible({ timeout: 25_000 });
 
   const now = new Date();

@@ -19,7 +19,7 @@
 
 import { type Page } from "@playwright/test";
 
-import { DEMO_BASE_URL as BASE, fetchDemoSeed, matterIdWith, seedDemoLogin, test, expect } from "./_demo-test";
+import { DEMO_BASE_URL as BASE, fetchDemoSeed, matterIdWith, seedDemoLogin, test, expect, showPanel } from "./_demo-test";
 
 /** `DocumentBrowser` läser vyläget härifrån — måste sättas FÖRE första render. */
 const VIEW_MODE_KEY = "ava.documents.viewMode";
@@ -46,6 +46,7 @@ async function useViewMode(page: Page, mode: "tree" | "list"): Promise<void> {
 async function gotoMatter(page: Page) {
   const seed = await fetchDemoSeed(page, BASE);
   await page.goto(`${BASE}/matters/${matterIdWith(seed, "documents")}/`);
+  await showPanel(page, "Dokument");
   await page.getByLabel("Dokumentåtgärder").first().waitFor({ timeout: 25_000 });
   await page.waitForTimeout(1500); // demo-bootstrap invalidateQueries settle
 }
