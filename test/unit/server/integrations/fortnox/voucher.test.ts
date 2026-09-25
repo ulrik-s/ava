@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest-compat";
 import type { FortnoxKontoMappning } from "@/lib/server/integrations/fortnox/schema";
 import { renderFortnoxVoucher } from "@/lib/server/integrations/fortnox/voucher";
 import {
+  buildPaymentVoucher,
   buildSemanticVoucher,
   type SemanticVoucher,
   type SemanticVoucherInput,
@@ -93,5 +94,19 @@ describe("renderFortnoxVoucher", () => {
       rows: [{ role: "intaktUtlagg", debit: 0, credit: 5_000 }],
     };
     expect(() => renderFortnoxVoucher(semantic, mapping)).toThrow(/intaktUtlagg/);
+  });
+});
+
+describe("inbetalningsverifikat (#1173)", () => {
+  it("bank → mappat bankkonto, kundfordran krediteras", () => {
+    const v = renderFortnoxVoucher(buildPaymentVoucher({ amount: 5000, paidAt: "2026-09-20", invoiceNumber: "F-1" }), { ...mapping, bank: "1930" });
+    expect(v.VoucherRows).toEqual([
+      { Account: 1930, Debit: 50, Credit: 0 },
+      { Account: 1510, Debit: 0, Credit: 50 },
+    ]);
+  });
+
+  it("utan bankkonto i mappningen → completeness-fel", () => {
+    expect(() => renderFortnoxVoucher(buildPaymentVoucher({ amount: 1, paidAt: "2026-09-20" }), mapping)).toThrow(/bank/);
   });
 });

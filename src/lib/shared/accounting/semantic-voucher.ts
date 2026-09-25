@@ -30,7 +30,9 @@ export type VoucherRole =
   | "intaktUtlagg"
   | "momsUtgaende"
   | "momsUtgaende12"
-  | "momsUtgaende06";
+  | "momsUtgaende06"
+  /** Bankkontot en kundbetalning kommer in på (#1173). */
+  | "bank";
 
 /** En rad i fakturans moms-uppdelning per sats (#790). */
 export interface VatBreakdownLine {
@@ -189,4 +191,26 @@ function buildSingleRateRows(invoice: SemanticVoucherInput, vatRate: VatRate, ku
     semanticRow("intaktArvode", exclVat, !kundfordranDebit),
     semanticRow("momsUtgaende", momsOre, !kundfordranDebit),
   ].filter((r) => r.debit > 0 || r.credit > 0); // släng 0-rader (t.ex. moms vid 0 %)
+}
+
+/** En registrerad kundbetalning mot en faktura (#1173). */
+export interface PaymentVoucherInput {
+  /** Inbetalt belopp i öre (negativt = återbetalning). */
+  amount: number;
+  paidAt: Date | string;
+  invoiceNumber?: string | null;
+  matterNumber?: string | null;
+}
+
+/**
+ * Inbetalning: bank DEBET, kundfordran KREDIT. Varje delbetalning är ett eget
+ * verifikat, så kundfordran nettar till noll när fakturan är fullt betald.
+ */
+export function buildPaymentVoucher(payment: PaymentVoucherInput): SemanticVoucher {
+  const faktura = payment.invoiceNumber ? `Inbetalning faktura ${payment.invoiceNumber}` : "Inbetalning (AVA)";
+  return {
+    date: payment.paidAt,
+    description: payment.matterNumber ? `Ärende ${payment.matterNumber} - ${faktura}` : faktura,
+    rows: [signedRow("bank", payment.amount, true), signedRow("kundfordran", payment.amount, false)],
+  };
 }

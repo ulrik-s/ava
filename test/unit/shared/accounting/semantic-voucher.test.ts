@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest-compat";
 import {
+  buildPaymentVoucher,
   buildSemanticVoucher,
   type SemanticVoucherRow,
   type VoucherRole,
@@ -186,5 +187,26 @@ describe("buildSemanticVoucher", () => {
     for (const r of v.rows) {
       expect((r.debit > 0 ? 1 : 0) + (r.credit > 0 ? 1 : 0)).toBe(1);
     }
+  });
+});
+
+describe("buildPaymentVoucher (#1173)", () => {
+  it("inbetalning: bank debet, kundfordran kredit, balanserat", () => {
+    const v = buildPaymentVoucher({ amount: 5000, paidAt: "2026-09-20", invoiceNumber: "F-1", matterNumber: "M-1" });
+    expect(v.date).toBe("2026-09-20");
+    expect(v.description).toBe("Ärende M-1 - Inbetalning faktura F-1");
+    expect(v.rows).toEqual([
+      { role: "bank", debit: 5000, credit: 0 },
+      { role: "kundfordran", debit: 0, credit: 5000 },
+    ]);
+  });
+
+  it("återbetalning vänder sidorna; utan nummer en neutral titel", () => {
+    const v = buildPaymentVoucher({ amount: -300, paidAt: "2026-09-21" });
+    expect(v.description).toBe("Inbetalning (AVA)");
+    expect(v.rows).toEqual([
+      { role: "bank", debit: 0, credit: 300 },
+      { role: "kundfordran", debit: 300, credit: 0 },
+    ]);
   });
 });

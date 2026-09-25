@@ -12,6 +12,7 @@ import { ledgerAccountMapSchema, type LedgerAccountMap } from "@/lib/shared/acco
 import { invoiceIdSchema, type OrganizationId } from "@/lib/shared/schemas/ids";
 import { assertAdmin } from "../auth/assert-admin";
 import { bookUnbookedInvoices, isBookable, type BookableInvoice } from "../integrations/ledger/book-invoices";
+import { bookUnbookedPayments } from "../integrations/ledger/book-payments";
 import { orgProcedure, router } from "../trpc";
 import type { Context } from "../trpc-core";
 
@@ -42,12 +43,45 @@ function toBookable(inv: FullInvoice): BookableInvoice {
   };
 }
 
-function connectorOrThrow(ctx: Ctx, map: LedgerAccountMap): ReturnType<Context["ports"]["ledger"]["connector"]> {
+function connectorOrThrow(ctx: Ctx, map: LedgerAccountMap): Connector {
   try {
     return ctx.ports.ledger.connector(ctx.orgId, map);
   } catch (e) {
     throw asTrpcError(e);
   }
+}
+
+type Connector = ReturnType<Context["ports"]["ledger"]["connector"]>;
+
+async function bookTheInvoice(ctx: Ctx, inv: FullInvoice, connector: Connector): Promise<string> {
+  const bookable = toBookable(inv);
+  if (!isBookable(bookable)) {
+    throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Bara utställda fakturor kan bokföras (inte utkast eller makulerade)." });
+  }
+  const [outcome] = await bookUnbookedInvoices({
+    invoices: [bookable], connector,
+    markBooked: (_id, externalId) => ctx.repos.invoices.update(inv.id, { fortnoxId: externalId }),
+  });
+  if (!outcome?.externalId) throw asTrpcError(new Error(outcome?.error ?? "Bokföringen gav inget verifikat."));
+  return outcome.externalId;
+}
+
+/** Inbetalningarnas verifikat (bank D / kundfordran K). Kräver bankkonto i mappningen. */
+async function bookPaymentsOf(ctx: Ctx, inv: FullInvoice, map: LedgerAccountMap, connector: Connector): Promise<string[]> {
+  const pending = inv.payments.filter((p) => !p.fortnoxId);
+  if (pending.length === 0) return [];
+  if (!map.bank) {
+    throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Fakturan är bokförd, men betalningarna kräver ett bankkonto i kontomappningen (Inställningar → Bokföring)." });
+  }
+  const outcomes = await bookUnbookedPayments({
+    payments: pending,
+    invoice: { invoiceNumber: inv.invoiceNumber ?? null, matterNumber: inv.matter?.matterNumber ?? null },
+    connector,
+    markBooked: (p, externalId) => ctx.repos.payments.update(p.id, { fortnoxId: externalId }),
+  });
+  const failed = outcomes.find((o) => o.error);
+  if (failed) throw asTrpcError(new Error(`En betalning kunde inte bokföras: ${failed.error ?? ""}`));
+  return outcomes.flatMap((o) => (o.externalId ? [o.externalId] : []));
 }
 
 export const ledgerRouter = router({
@@ -67,24 +101,19 @@ export const ledgerRouter = router({
       return { connected: true };
     }),
 
-  /** Bokför EN utställd faktura och skriv tillbaka verifikatets id. Idempotent. */
+  /**
+   * Bokför fakturan (om inte redan gjort) och därefter varje obokförd
+   * inbetalning (#1173). Idempotent — en omkörning bokför bara det som saknas.
+   */
   bookInvoice: orgProcedure
     .input(z.object({ invoiceId: invoiceIdSchema }))
     .mutation(async ({ ctx, input }) => {
       const inv = await ctx.repos.invoices.getByIdFull(input.invoiceId, ctx.orgId);
       if (!inv) throw new TRPCError({ code: "NOT_FOUND" });
-      if (inv.fortnoxId) return { externalId: inv.fortnoxId };
       const map = await requireAccountMap(ctx);
-      const bookable = toBookable(inv);
-      if (!isBookable(bookable)) {
-        throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Bara utställda fakturor kan bokföras (inte utkast eller makulerade)." });
-      }
-      const [outcome] = await bookUnbookedInvoices({
-        invoices: [bookable],
-        connector: connectorOrThrow(ctx, map),
-        markBooked: (_id, externalId) => ctx.repos.invoices.update(inv.id, { fortnoxId: externalId }),
-      });
-      if (!outcome?.externalId) throw asTrpcError(new Error(outcome?.error ?? "Bokföringen gav inget verifikat."));
-      return { externalId: outcome.externalId };
+      const connector = connectorOrThrow(ctx, map);
+      const externalId = inv.fortnoxId ?? await bookTheInvoice(ctx, inv, connector);
+      const payments = await bookPaymentsOf(ctx, inv, map, connector);
+      return { externalId, payments };
     }),
 });

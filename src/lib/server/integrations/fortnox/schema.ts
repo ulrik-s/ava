@@ -91,6 +91,8 @@ export const fortnoxKontoMappningSchema = z.object({
   momsUtgaende06: z.string().min(1).optional(),
   /** Intäktskonto för vidarefakturerade utlägg (kredit), valfritt. */
   intaktUtlagg: z.string().min(1).optional(),
+  /** Bankkonto för inbetalningar (debet), t.ex. 1930 (#1173), valfritt. */
+  bank: z.string().min(1).optional(),
 });
 export type FortnoxKontoMappning = z.infer<typeof fortnoxKontoMappningSchema>;
 
@@ -114,6 +116,7 @@ export function fortnoxMappingFromLedgerMap(
     ...(map.momsUtgaende12 ? { momsUtgaende12: map.momsUtgaende12.number } : {}),
     ...(map.momsUtgaende06 ? { momsUtgaende06: map.momsUtgaende06.number } : {}),
     ...(map.intaktUtlagg ? { intaktUtlagg: map.intaktUtlagg.number } : {}),
+    ...(map.bank ? { bank: map.bank.number } : {}),
   });
 }
 

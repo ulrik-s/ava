@@ -58,7 +58,7 @@ describe("invoicesToSie", () => {
 
   it("DEFAULT_BAS_ACCOUNT_MAP täcker alla roller inkl. per-sats moms (#790)", () => {
     expect(Object.keys(DEFAULT_BAS_ACCOUNT_MAP).sort()).toEqual(
-      ["intaktArvode", "intaktUtlagg", "kundfordran", "momsUtgaende", "momsUtgaende06", "momsUtgaende12"].sort(),
+      ["bank", "intaktArvode", "intaktUtlagg", "kundfordran", "momsUtgaende", "momsUtgaende06", "momsUtgaende12"].sort(),
     );
   });
 });
