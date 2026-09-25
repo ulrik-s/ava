@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { ListPage } from "@/components/layout/list-page";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { Money } from "@/components/ui/money";
 import { EntityLink } from "@/lib/client/demo/entity-link";
@@ -78,7 +79,9 @@ export default function InvoicesPage() {
   const invoices = trpc.invoice.list.useQuery({});
 
   return (
-    <div>
+    <ListPage
+      header={(
+        <>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Fakturor</h1>
         <div className="flex items-center gap-4">
@@ -88,6 +91,9 @@ export default function InvoicesPage() {
           </Link>
         </div>
       </div>
+        </>
+      )}
+    >
       {invoices.isLoading ? (
         <div className="bg-white rounded-lg border border-gray-200 p-6">
           <p className="text-sm text-gray-400">Laddar…</p>
@@ -101,6 +107,6 @@ export default function InvoicesPage() {
           emptyMessage="Inga fakturor ännu."
         />
       )}
-    </div>
+    </ListPage>
   );
 }

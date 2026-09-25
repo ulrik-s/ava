@@ -13,6 +13,7 @@
  */
 
 import { useMemo, useState } from "react";
+import { ListPage } from "@/components/layout/list-page";
 import { NewWatchForm } from "@/components/watchlist/new-watch-form";
 import { useCompleteWatch } from "@/components/watchlist/use-watch-actions";
 import { WatchlistList } from "@/components/watchlist/watchlist-list";
@@ -46,7 +47,9 @@ export default function WatchlistPage() {
   const passed = all.filter((i) => i.severity === "passed").length;
 
   return (
-    <div>
+    <ListPage
+      header={(
+        <>
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Att bevaka</h1>
@@ -66,6 +69,9 @@ export default function WatchlistPage() {
           Bara mina ärenden
         </label>
       </div>
+        </>
+      )}
+    >
 
       <NewWatchForm />
 
@@ -90,6 +96,6 @@ export default function WatchlistPage() {
         onComplete={complete}
         emptyText={kind === "all" ? "Inget att bevaka just nu." : "Inget att bevaka i den kategorin."}
       />
-    </div>
+    </ListPage>
   );
 }

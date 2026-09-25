@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ListPage } from "@/components/layout/list-page";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { useCapabilities } from "@/lib/client/capabilities/use-capabilities";
 import { EntityLink } from "@/lib/client/demo/entity-link";
@@ -245,8 +246,7 @@ export default function DocumentSearchPage() {
   }
 
   return (
-    <div>
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Dokumentsökning</h1>
+    <ListPage header={<h1 className="text-2xl font-bold text-gray-900 mb-4">Dokumentsökning</h1>}>
 
       <SearchForm
         query={query}
@@ -269,6 +269,6 @@ export default function DocumentSearchPage() {
           <p className="text-sm text-red-800">{results.error.message}</p>
         </div>
       )}
-    </div>
+    </ListPage>
   );
 }

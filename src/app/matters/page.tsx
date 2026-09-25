@@ -4,6 +4,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useId, useState } from "react";
 import { ClientPickerDialog } from "@/components/contacts/client-picker-dialog";
 import type { PickedClient } from "@/components/contacts/new-client-dialog";
+import { ListPage } from "@/components/layout/list-page";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { Pager } from "@/components/ui/pager";
 import { useIsReadOnly } from "@/lib/client/demo/demo-mode-context";
@@ -330,8 +331,11 @@ function MattersContent() {
   }
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
+    <ListPage
+      footer={<Pager data={matters.data} page={page} onPage={setPage} />}
+      header={(
+        <>
+      <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold text-gray-900">Ärenden</h1>
         <button
           onClick={() => setShowForm(!showForm)}
@@ -341,7 +345,18 @@ function MattersContent() {
           {showForm ? "Avbryt" : "+ Nytt ärende"}
         </button>
       </div>
-
+      <MatterFilters
+        search={search}
+        status={statusFilter}
+        employeeId={employeeId}
+        employeesData={employees.data}
+        onSearch={(v) => { setSearch(v); setPage(1); }}
+        onStatus={(v) => { setStatusFilter(v); setPage(1); }}
+        onEmployee={(v) => { setEmployeeId(v); setPage(1); }}
+      />
+        </>
+      )}
+    >
       {showForm && (
         <NewMatterForm
           form={form}
@@ -367,16 +382,6 @@ function MattersContent() {
         />
       )}
 
-      <MatterFilters
-        search={search}
-        status={statusFilter}
-        employeeId={employeeId}
-        employeesData={employees.data}
-        onSearch={(v) => { setSearch(v); setPage(1); }}
-        onStatus={(v) => { setStatusFilter(v); setPage(1); }}
-        onEmployee={(v) => { setEmployeeId(v); setPage(1); }}
-      />
-
       <DataTable
         prefKey="list.matters"
         columns={matterColumns}
@@ -384,8 +389,7 @@ function MattersContent() {
         rowKey={(m) => m.id}
         emptyMessage="Inga ärenden."
       />
-      <Pager data={matters.data} page={page} onPage={setPage} />
-    </div>
+    </ListPage>
   );
 }
 

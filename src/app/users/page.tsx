@@ -2,6 +2,7 @@
 
 import { ShieldAlert, UserX, UserRound } from "lucide-react";
 import Link from "next/link";
+import { ListPage } from "@/components/layout/list-page";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { useCapabilities } from "@/lib/client/capabilities/use-capabilities";
 import { EntityLink } from "@/lib/client/demo/entity-link";
@@ -159,9 +160,14 @@ export default function UsersPage() {
   });
 
   return (
-    <div>
+    <ListPage
+      header={(
+        <>
       <UsersHeader isAdmin={isAdmin} />
       <UsersNotice isAdmin={isAdmin} />
+        </>
+      )}
+    >
 
       <DataTable
         prefKey="list.users"
@@ -176,6 +182,6 @@ export default function UsersPage() {
         {...(users.error ? { listError: users.error.message } : {})}
         {...(deactivate.error ? { deactivateError: deactivate.error.message } : {})}
       />
-    </div>
+    </ListPage>
   );
 }

@@ -4,6 +4,7 @@ import { Plus, Pencil, Trash2, FileText } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { ListPage } from "@/components/layout/list-page";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { shellPath } from "@/lib/client/demo/entity-href";
 import { EntityLink } from "@/lib/client/demo/entity-link";
@@ -109,7 +110,9 @@ export default function TemplatesPage() {
   const columns = templateColumns(setConfirmDelete);
 
   return (
-    <div className="p-6 max-w-5xl">
+    <ListPage
+      header={(
+        <>
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Dokumentmallar</h1>
@@ -124,6 +127,9 @@ export default function TemplatesPage() {
           <Plus size={16} /> Ny mall
         </Link>
       </div>
+        </>
+      )}
+    >
 
       {templates.isLoading && <p className="text-gray-500 text-sm">Laddar mallar…</p>}
 
@@ -147,6 +153,6 @@ export default function TemplatesPage() {
           onConfirm={() => deleteTemplate.mutate({ id: confirmDelete })}
         />
       )}
-    </div>
+    </ListPage>
   );
 }
