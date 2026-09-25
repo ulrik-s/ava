@@ -1,10 +1,10 @@
 "use client";
 
 import { FileDown } from "lucide-react";
-import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useState } from "react";
 import { DocumentBrowser } from "@/components/documents/document-browser";
+import { PanelPage } from "@/components/layout/panel-page";
 import { CoverageCapWarning } from "@/components/matter/coverage-cap-warning";
 import { EventsPanel } from "@/components/matter/events-panel";
 import { PaymentMethodCard } from "@/components/matter/payment-method-card";
@@ -26,12 +26,6 @@ import { matterDefaultLayout, matterPanels } from "./_matter-panels";
 import { ServiceNotesSection } from "./_service-notes-section";
 import { TimeSection } from "./_time-section";
 import { WatchSection } from "./_watch-section";
-
-/** dockview laddas bara på sidor som använder det (bundle-storlek). */
-const DockWorkspace = dynamic(() => import("@/components/layout/dock-workspace").then((m) => m.DockWorkspace), {
-  ssr: false,
-  loading: () => <p className="text-sm text-gray-500">Laddar…</p>,
-});
 
 /** Ärendets målnummer som sträng (getById-typen saknar fältet i select-typen). */
 function courtCaseOf(m: unknown): string {
@@ -77,31 +71,25 @@ export default function MatterDetailClient({ id: paramId }: { id: string }) {
     notes: () => <ServiceNotesSection matterId={id} />,
   });
 
-  // Sidan fyller exakt huvudytan: huvudet överst, panelerna resten (#1185).
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="mb-1 shrink-0">
-        <Link href="/matters" className="text-xs text-blue-600 hover:underline">&larr; Tillbaka till ärenden</Link>
-      </div>
-
-      <MatterHeader
-        matter={m}
-        klient={klient}
-        onOpenGenerate={() => setShowGenerateModal(true)}
+    <>
+      <PanelPage
+        page="matter"
+        panels={panels}
+        defaultLayout={matterDefaultLayout}
+        header={(
+          <>
+            <div className="mb-1">
+              <Link href="/matters" className="text-xs text-blue-600 hover:underline">&larr; Tillbaka till ärenden</Link>
+            </div>
+            <MatterHeader matter={m} klient={klient} onOpenGenerate={() => setShowGenerateModal(true)} />
+          </>
+        )}
       />
-
-      <div className="min-h-0 flex-1">
-        <DockWorkspace page="matter" panels={panels} defaultLayout={matterDefaultLayout} />
-      </div>
-
       {showGenerateModal && (
-        <GenerateModal
-          matterId={id}
-          contacts={m.contacts}
-          onClose={() => setShowGenerateModal(false)}
-        />
+        <GenerateModal matterId={id} contacts={m.contacts} onClose={() => setShowGenerateModal(false)} />
       )}
-    </div>
+    </>
   );
 }
 

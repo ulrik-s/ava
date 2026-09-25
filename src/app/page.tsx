@@ -14,6 +14,7 @@
 import { Plus, Calendar as CalendarIcon, Clock, MapPin } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { PanelPage } from "@/components/layout/panel-page";
 import { Modal } from "@/components/ui/modal";
 import { sectionHeaderClass } from "@/components/ui/section-tone";
 import { useCompleteWatch } from "@/components/watchlist/use-watch-actions";
@@ -21,6 +22,7 @@ import { WatchlistList } from "@/components/watchlist/watchlist-list";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
 import { formatMinutes } from "@/lib/client/utils";
+import { dashboardLayout } from "./_dashboard-layout";
 
 function todayYmd(): string {
   const d = new Date();
@@ -48,26 +50,28 @@ function dayLabel(ymd: string): string {
 
 export default function Dashboard() {
   const [ymd, setYmd] = useState<string>(todayYmd());
+  const panels = [
+    { id: "watch", title: "Att bevaka", render: () => <WatchlistCard /> },
+    { id: "calendar", title: "Kalender", render: () => <CalendarCard ymd={ymd} /> },
+    { id: "time", title: "Tidrapportering", render: () => <TimeCard ymd={ymd} /> },
+    { id: "recent", title: "Senaste ärenden", render: () => <RecentMattersCard /> },
+  ];
 
   return (
-    <div>
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Startsida</h1>
-          <p className="text-sm text-gray-500 capitalize">{dayLabel(ymd)}</p>
+    <PanelPage
+      page="dashboard"
+      panels={panels}
+      defaultLayout={dashboardLayout}
+      header={(
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Startsida</h1>
+            <p className="text-sm text-gray-500 capitalize">{dayLabel(ymd)}</p>
+          </div>
+          <DaySwitcher ymd={ymd} onChange={setYmd} />
         </div>
-        <DaySwitcher ymd={ymd} onChange={setYmd} />
-      </div>
-
-      <WatchlistCard />
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        <CalendarCard ymd={ymd} />
-        <TimeCard ymd={ymd} />
-      </div>
-
-      <RecentMattersCard />
-    </div>
+      )}
+    />
   );
 }
 
@@ -84,7 +88,8 @@ function WatchlistCard() {
   const q = trpc.watchlist.list.useQuery({ mine: true });
   const complete = useCompleteWatch();
   const items = q.data?.items ?? [];
-  if (items.length === 0) return null;
+  // En panel ska inte stå tom och tyst — säg att det är lugnt (#1184).
+  if (items.length === 0) return <p className="p-4 text-sm text-gray-500">Inget att bevaka just nu.</p>;
 
   const passed = items.filter((i) => i.severity === "passed").length;
   return (

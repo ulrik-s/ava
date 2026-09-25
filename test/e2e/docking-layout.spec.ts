@@ -30,6 +30,27 @@ for (const [name, width, height] of [["13\" laptop", 1470, 956], ["stor skärm",
   });
 }
 
+/** Varje panelsida: en panel som ska finnas, och hur man tar sig dit. */
+const PANEL_PAGES = [
+  { name: "startsidan", path: () => "/", tab: "Kalender" },
+  { name: "en faktura", path: (s: Awaited<ReturnType<typeof fetchDemoSeed>>) => `/invoices/${s.invoices[0]?.id ?? ""}/`, tab: "Betalningar" },
+  { name: "en kontakt", path: (s: Awaited<ReturnType<typeof fetchDemoSeed>>) => `/contacts/${s.contacts[0]?.id ?? ""}/`, tab: "Ärenden" },
+] as const;
+
+for (const p of PANEL_PAGES) {
+  test(`${p.name}: paneler och ingen sidscroll (13" och telefon)`, async ({ page, baseURL }) => {
+    const base = (baseURL ?? DEMO_BASE_URL).replace(/\/+$/, "");
+    await seedDemoLogin(page, base);
+    const seed = await fetchDemoSeed(page, base);
+    for (const [width, height] of [[1470, 956], [390, 844]] as const) {
+      await page.setViewportSize({ width, height });
+      await page.goto(`${base}${p.path(seed)}`, { waitUntil: "load" });
+      await showPanel(page, p.tab);
+      expect(await pageScroll(page)).toEqual({ doc: 0, main: 0 });
+    }
+  });
+}
+
 /** Gruppen (dockviews flikrad) en flik ligger i. */
 const groupOf = (page: Page, title: string) =>
   page.locator(".dv-groupview").filter({ has: page.getByRole("tab", { name: new RegExp(`^${title}`) }) });

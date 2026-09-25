@@ -7,6 +7,7 @@
 
 import type { inferRouterOutputs } from "@trpc/server";
 import { useState } from "react";
+import { PanelPage } from "@/components/layout/panel-page";
 import { Money } from "@/components/ui/money";
 import type { DownloadClient } from "@/lib/client/backend/load-document-blob";
 import { EntityLink } from "@/lib/client/demo/entity-link";
@@ -26,6 +27,7 @@ import { computeInvoiceLedger } from "@/lib/shared/write-off-calc";
 import { CreditModal } from "./_credit-modal";
 import { DispatchHistory } from "./_dispatch-history";
 import { InvoiceActions } from "./_invoice-actions";
+import { invoiceLayout } from "./_invoice-layout";
 import { LedgerBooking } from "./_ledger-booking";
 import { PaymentModal } from "./_payment-modal";
 import { PaymentsTable } from "./_payments-table";
@@ -105,12 +107,30 @@ export default function InvoiceDetailClient({ id: paramId }: { id: string }) {
   const inv = invoice.data;
   const ledger = invoiceLedger(inv);
 
+  const onCancelPlan = () => { if (inv.paymentPlan) s.cancelPlan.mutate({ planId: inv.paymentPlan.id }); };
+  const panels = [
+    { id: "summary", title: "Översikt", render: () => <><InvoiceSummaryCard inv={inv} ledger={ledger} s={s} /><CreditBanners inv={inv} /></> },
+    { id: "spec", title: "Specifikation", render: () => <><PrimarySpecCard inv={inv} /><FinalInvoiceExtras inv={inv} ledger={ledger} /></> },
+    { id: "documents", title: "Fakturadokument", render: () => <InvoiceDocumentsCard documents={inv.documents ?? []} /> },
+    { id: "payments", title: "Betalningar", render: () => <InvoicePaymentsPanel inv={inv} ledger={ledger} onCancelPlan={onCancelPlan} /> },
+    { id: "dispatch", title: "Utskick", render: () => <DispatchHistory invoiceId={inv.id} /> },
+  ];
+
   return (
-    <div className="space-y-6">
-      <InvoiceHeader inv={inv} />
-      <InvoiceSummaryCard inv={inv} ledger={ledger} s={s} />
-      <InvoiceSections inv={inv} ledger={ledger} onCancelPlan={() => { if (inv.paymentPlan) s.cancelPlan.mutate({ planId: inv.paymentPlan.id }); }} />
+    <>
+      <PanelPage page="invoice" panels={panels} defaultLayout={invoiceLayout} header={<div className="mb-2"><InvoiceHeader inv={inv} /></div>} />
       <InvoiceModals inv={inv} ledger={ledger} s={s} />
+    </>
+  );
+}
+
+/** Betalningar, ev. avbetalningsplan och avskrivningar — det som rör vad som kommit in. */
+function InvoicePaymentsPanel({ inv, ledger, onCancelPlan }: { inv: Inv; ledger: LedgerView; onCancelPlan: () => void }) {
+  return (
+    <div className="space-y-4">
+      {inv.paymentPlan && <PaymentPlanCard plan={inv.paymentPlan} onCancel={onCancelPlan} />}
+      <PaymentsTable payments={inv.payments} paidSum={ledger.paidSum} />
+      {ledger.writeOffs.length > 0 && <WriteOffsCard writeOffs={ledger.writeOffs} />}
     </div>
   );
 }
@@ -139,22 +159,6 @@ function InvoiceSummaryCard({ inv, ledger, s }: { inv: Inv; ledger: LedgerView; 
       <LedgerBooking invoiceId={inv.id} status={inv.status} fortnoxId={inv.fortnoxId} payments={inv.payments} />
       {inv.notes && <p className="mt-4 text-sm text-gray-600 border-t pt-3">{inv.notes}</p>}
     </div>
-  );
-}
-
-/** Sektions-kort under summeringen (spec, dokument, kredit, plan, acconto, betalningar …). */
-function InvoiceSections({ inv, ledger, onCancelPlan }: { inv: Inv; ledger: LedgerView; onCancelPlan: () => void }) {
-  return (
-    <>
-      <PrimarySpecCard inv={inv} />
-      <InvoiceDocumentsCard documents={inv.documents ?? []} />
-      <CreditBanners inv={inv} />
-      {inv.paymentPlan && <PaymentPlanCard plan={inv.paymentPlan} onCancel={onCancelPlan} />}
-      <FinalInvoiceExtras inv={inv} ledger={ledger} />
-      <PaymentsTable payments={inv.payments} paidSum={ledger.paidSum} />
-      <DispatchHistory invoiceId={inv.id} />
-      {ledger.writeOffs.length > 0 && <WriteOffsCard writeOffs={ledger.writeOffs} />}
-    </>
   );
 }
 

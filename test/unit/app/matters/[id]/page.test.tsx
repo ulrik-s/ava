@@ -161,9 +161,11 @@ vi.mock("@/lib/client/demo/use-route-id", () => ({ useRouteId: () => "m1" }));
 
 // Dockytan (#1185) kräver en riktig webbläsarlayout — här renderas alla
 // paneler efter varandra så testerna kan granska innehållet.
-vi.mock("@/components/layout/dock-workspace", () => ({
-  DockWorkspace: ({ panels }: { panels: ReadonlyArray<{ id: string; render: () => React.ReactNode }> }) => (
-    <>{panels.map((p) => <div key={p.id} data-panel={p.id}>{p.render()}</div>)}</>
+// Dockytan (#1184) kräver en riktig webbläsarlayout — här renderas huvudet och
+// alla paneler efter varandra, synkront, så testerna kan granska innehållet.
+vi.mock("@/components/layout/panel-page", () => ({
+  PanelPage: ({ header, panels }: { header: React.ReactNode; panels: ReadonlyArray<{ id: string; render: () => React.ReactNode }> }) => (
+    <>{header}{panels.map((p) => <div key={p.id} data-panel={p.id}>{p.render()}</div>)}</>
   ),
 }));
 
