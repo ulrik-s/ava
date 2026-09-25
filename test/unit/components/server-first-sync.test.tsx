@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest-compat";
 import { ServerFirstSync, type SyncableStore } from "@/components/shell/server-first-sync";
+import { flushServerSync } from "@/lib/client/sync/server-sync-flush";
 
 function fakeStore(opts: { pending: number; fail?: boolean }) {
   const state = { pending: opts.pending, reconciles: 0, listener: null as null | (() => void) };
@@ -26,6 +27,25 @@ const wrap = (ui: React.ReactElement) =>
   render(<QueryClientProvider client={new QueryClient()}>{ui}</QueryClientProvider>);
 
 describe("ServerFirstSync", () => {
+  it("flushServerSync synkar via den monterade synken (#1176)", async () => {
+    const { state, store } = fakeStore({ pending: 0 });
+    const { unmount } = wrap(<ServerFirstSync store={store} />);
+    await waitFor(() => expect(state.reconciles).toBe(1));
+    state.pending = 1;
+    await flushServerSync();
+    expect(state.reconciles).toBe(2);
+    unmount();
+    await flushServerSync(); // avregistrerad → no-op
+    expect(state.reconciles).toBe(2);
+  });
+
+  it("flushServerSync kastar när ändringar inte når servern", async () => {
+    const { store } = fakeStore({ pending: 1, fail: true });
+    const { unmount } = wrap(<ServerFirstSync store={store} />);
+    await expect(flushServerSync()).rejects.toThrow(/inte nått servern/);
+    unmount();
+  });
+
   it("synkar köade ändringar direkt vid start och visar att allt är sparat", async () => {
     const { state, store } = fakeStore({ pending: 2 });
     wrap(<ServerFirstSync store={store} />);

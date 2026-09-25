@@ -9,14 +9,14 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef } from "react";
-import { trpc } from "@/lib/client/trpc";
+import { useCompleteLedgerConnect } from "@/lib/client/backend/server-ledger";
 
 function Callback() {
   const params = useSearchParams();
   const code = params.get("code");
   const state = params.get("state");
   const denied = params.get("error");
-  const complete = trpc.ledger.completeConnect.useMutation();
+  const complete = useCompleteLedgerConnect();
   const started = useRef(false);
 
   useEffect(() => {

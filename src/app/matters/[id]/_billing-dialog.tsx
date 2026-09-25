@@ -19,6 +19,7 @@ import { generateFakturaFromTemplate } from "@/lib/client/kostnadsrakning/genera
 import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
 import { proposedAccontoOre } from "@/lib/shared/billing-proposal";
+import { toIsoDate } from "@/lib/shared/iso-date";
 import type { MatterId } from "@/lib/shared/schemas/ids";
 
 interface AccontoRow { id: string; amountOre: number; recipient: string }
@@ -105,6 +106,7 @@ function AccontoForm({ matterId, meta, onDone }: { matterId: MatterId; meta: Bil
   // Förifyll med ärendets %-sats (#778); 20 % som fallback om ej satt.
   const [clientShareBips, setBips] = useState(meta.clientShareBips ?? 2000);
   const [amountKr, setAmountKr] = useState<number | null>(null); // null → följ förslaget
+  const [invoiceDate, setInvoiceDate] = useState(() => toIsoDate(new Date()));
   const makeDoc = useFakturaDoc(matterId, meta);
   const { suggestedOre, fieldKr, effectiveOre } = accontoAmounts(workValueOre, clientShareBips, priorOre, amountKr);
   const mut = trpc.billingRun.createAcconto.useMutation({
@@ -112,7 +114,7 @@ function AccontoForm({ matterId, meta, onDone }: { matterId: MatterId; meta: Bil
   });
   return (
     <form onSubmit={(e) => { e.preventDefault(); mut.mutate({
-      matterId, clientShareBips, amountOre: effectiveOre, recipient: "KLIENT",
+      matterId, clientShareBips, amountOre: effectiveOre, recipient: "KLIENT", invoiceDate,
     }); }} className="space-y-3">
       <p className="text-sm text-gray-600">
         Acconto baseras på klientens självrisk-/avgifts-procentsats × upparbetat värde,
@@ -129,6 +131,7 @@ function AccontoForm({ matterId, meta, onDone }: { matterId: MatterId; meta: Bil
           className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm" />
         <VatBreakdown inclOre={effectiveOre} />
       </Field>
+      <InvoiceDateField value={invoiceDate} onChange={setInvoiceDate} />
       {mut.error && <p className="text-sm text-red-700">{mut.error.message}</p>}
       <SubmitRow onDone={onDone} pending={mut.isPending} label="Skapa aconto-faktura" />
     </form>
@@ -165,6 +168,7 @@ function FinalForm({ matterId, meta, accontos, onDone }: { matterId: MatterId; m
   // användaren bockar ur en post går vi över till explicit lista.
   const allPostKeys = useMemo(() => unbilledRows(proposal.data).map((p) => p.id), [proposal.data]);
   const [posts, setPosts] = useState<string[] | null>(null);
+  const [invoiceDate, setInvoiceDate] = useState(() => toIsoDate(new Date()));
   const togglePost = (key: string, checked: boolean): void =>
     setPosts((prev) => { const base = prev ?? allPostKeys; return checked ? [...base, key] : base.filter((k) => k !== key); });
   const makeDoc = useFakturaDoc(matterId, meta);
@@ -173,13 +177,14 @@ function FinalForm({ matterId, meta, accontos, onDone }: { matterId: MatterId; m
   });
   return (
     <form onSubmit={(e) => { e.preventDefault(); mut.mutate({
-      matterId, recipient, deductedBillingRunIds: selected, ...splitSelectedPosts(posts),
+      matterId, recipient, deductedBillingRunIds: selected, ...splitSelectedPosts(posts), invoiceDate,
     }); }} className="space-y-3">
       <p className="text-sm text-gray-600">
         Faktura med full specifikation av tid och utlägg. Bocka i exakt vilka
         poster som ska med — ikryssade fryses och tas med på fakturan.
       </p>
       <UnbilledPosts proposal={proposal.data} loading={proposal.isLoading} selected={posts ?? allPostKeys} onToggle={togglePost} />
+      <InvoiceDateField value={invoiceDate} onChange={setInvoiceDate} />
       <Field label="Mottagare">
         <select value={recipient} onChange={(e) => setRecipient(e.target.value as typeof recipient)}
           className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm">
@@ -263,6 +268,16 @@ function unbilledRows(proposal: ProposalData | undefined): PostRow[] {
     .filter((e) => e.billable)
     .map((e) => ({ id: `ex-${e.id}`, label: e.description || "Utlägg", valueOre: e.amount }));
   return [...time, ...exp];
+}
+
+/** Fakturadatum (default i dag) — förfallodag och bokföringsdatum följer det. */
+function InvoiceDateField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <Field label="Fakturadatum">
+      <input type="date" aria-label="Fakturadatum" required value={value} onChange={(e) => onChange(e.target.value)}
+        className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm" />
+    </Field>
+  );
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {

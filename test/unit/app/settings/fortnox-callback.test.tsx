@@ -6,9 +6,7 @@ let params = new URLSearchParams();
 const complete = { mutate: vi.fn(), isSuccess: false, error: null as { message: string } | null };
 
 vi.mock("next/navigation", () => ({ useSearchParams: () => params }));
-vi.mock("@/lib/client/trpc", () => ({
-  trpc: { ledger: { completeConnect: { useMutation: () => complete } } },
-}));
+vi.mock("@/lib/client/backend/server-ledger", () => ({ useCompleteLedgerConnect: () => complete }));
 
 beforeEach(() => {
   vi.clearAllMocks();

@@ -6,14 +6,13 @@
  * Döljs helt när servern saknar Fortnox-konfiguration (och i demo).
  */
 
+import { useConnectLedger, useLedgerStatus } from "@/lib/client/backend/server-ledger";
 import { trpc } from "@/lib/client/trpc";
 
 export function FortnoxSection() {
-  const status = trpc.ledger.status.useQuery();
+  const status = useLedgerStatus();
   const me = trpc.user.current.useQuery();
-  const connect = trpc.ledger.connectUrl.useMutation({
-    onSuccess: ({ url }) => { window.location.assign(url); },
-  });
+  const connect = useConnectLedger();
 
   if (!status.data?.configured) return null;
   return (

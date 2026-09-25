@@ -44,6 +44,14 @@ services:
       # via mappern men vi sätter inte AVA_OIDC_AUDIENCE → signatur+iss+exp räcker).
       AVA_OIDC_ISSUER: "${OIDC_KC_HOSTNAME:-http://localhost:8089}/realms/ava"
       AVA_OIDC_JWKS_URI: "http://keycloak:8080/realms/ava/protocol/openid-connect/certs"
+      # Fortnox-bokföring (#1172/#1173): tomt = av. Fortnox-UI-E2E:t sätter dem och
+      # kopierar in ett valv med tokens (`docker cp`) till AVA_SECRETS_FILE.
+      AVA_FORTNOX_CLIENT_ID: "${AVA_FORTNOX_CLIENT_ID:-}"
+      AVA_FORTNOX_CLIENT_SECRET: "${AVA_FORTNOX_CLIENT_SECRET:-}"
+      AVA_FORTNOX_REDIRECT_URI: "${AVA_FORTNOX_REDIRECT_URI:-http://localhost:8080/ava/settings/fortnox}"
+      AVA_FORTNOX_ACCOUNT_TYPE: "${AVA_FORTNOX_ACCOUNT_TYPE:-}"
+      AVA_SECRETS_KEY: "${AVA_SECRETS_KEY:-}"
+      AVA_SECRETS_FILE: /data/secrets/vault.enc
     volumes:
       # Bind-mount (#649): demo-seeden (host) skriver dokument-bytes hit och
       # servern (GitContentStore) läser dem från samma katalog → /documents +

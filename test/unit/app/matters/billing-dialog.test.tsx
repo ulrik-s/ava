@@ -8,6 +8,7 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { BillingDialog } from "@/app/matters/[id]/_billing-dialog";
+import { toIsoDate } from "@/lib/shared/iso-date";
 import { asId } from "@/lib/shared/schemas/ids";
 
 /** Fakturadokumentet får uuid-id (#1143). */
@@ -76,8 +77,15 @@ describe("BillingDialog — ACCONTO (#397 avdragsmedvetet förslag)", () => {
     expect(screen.getByText("Aconto till klient")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Skapa aconto-faktura" }));
     expect(accontoMutate).toHaveBeenCalledWith({
-      matterId: "m1", clientShareBips: 2000, amountOre: 100_000, recipient: "KLIENT",
+      matterId: "m1", clientShareBips: 2000, amountOre: 100_000, recipient: "KLIENT", invoiceDate: toIsoDate(new Date()),
     });
+  });
+
+  it("fakturadatum går att ändra och skickas med (#1173)", () => {
+    render(<BillingDialog matterId={asId<"MatterId">("m1")} type="ACCONTO" existingAccontos={[]} meta={meta} onClose={() => {}} />);
+    fireEvent.change(screen.getByLabelText("Fakturadatum"), { target: { value: "2030-06-15" } });
+    fireEvent.click(screen.getByRole("button", { name: "Skapa aconto-faktura" }));
+    expect(accontoMutate).toHaveBeenCalledWith(expect.objectContaining({ invoiceDate: "2030-06-15" }));
   });
 
   it("förifyller med ärendets %-sats istället för 20 %: 25 % × 5000 = 1250 kr (#778)", () => {
@@ -179,8 +187,15 @@ describe("BillingDialog — FINAL", () => {
     expect(screen.getByText("Faktura")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Skapa faktura" }));
     expect(finalMutate).toHaveBeenCalledWith({
-      matterId: "m1", recipient: "KLIENT", deductedBillingRunIds: ["br-1", "br-2"],
+      matterId: "m1", recipient: "KLIENT", deductedBillingRunIds: ["br-1", "br-2"], invoiceDate: toIsoDate(new Date()),
     });
+  });
+
+  it("slutfaktura: valt fakturadatum skickas med (#1173)", () => {
+    render(<BillingDialog matterId={asId<"MatterId">("m1")} type="FINAL" existingAccontos={accontos} meta={meta} onClose={() => {}} />);
+    fireEvent.change(screen.getByLabelText("Fakturadatum"), { target: { value: "2030-06-16" } });
+    fireEvent.click(screen.getByRole("button", { name: "Skapa faktura" }));
+    expect(finalMutate).toHaveBeenCalledWith(expect.objectContaining({ invoiceDate: "2030-06-16" }));
   });
 
   it("avmarkera ett aconto → utesluts ur avdragen", () => {

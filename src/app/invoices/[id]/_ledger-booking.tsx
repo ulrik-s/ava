@@ -6,6 +6,7 @@
  * finns något obokfört; allt bokfört visas med sitt verifikat.
  */
 
+import { useBookInvoice, useLedgerStatus } from "@/lib/client/backend/server-ledger";
 import { trpc } from "@/lib/client/trpc";
 import type { InvoiceStatus } from "@/lib/shared/schemas/enums";
 import { asId } from "@/lib/shared/schemas/ids";
@@ -40,11 +41,9 @@ function shouldOfferBooking(connected: boolean, status: InvoiceStatus, invoiceBo
 
 export function LedgerBooking({ invoiceId, status, fortnoxId, payments }: Props) {
   const utils = trpc.useUtils();
-  const ledger = trpc.ledger.status.useQuery();
-  const book = trpc.ledger.bookInvoice.useMutation({
-    // Även vid fel: fakturan kan vara bokförd fast en betalning fastnade.
-    onSettled: () => { void utils.invoice.getById.invalidate({ id: invoiceId }); },
-  });
+  const ledger = useLedgerStatus();
+  // Även vid fel: fakturan kan vara bokförd fast en betalning fastnade.
+  const book = useBookInvoice(asId<"InvoiceId">(invoiceId), () => { void utils.invoice.getById.invalidate({ id: invoiceId }); });
   const pending = payments.filter((p) => !p.fortnoxId).length;
   const canBook = shouldOfferBooking(ledger.data?.connected === true, status, !!fortnoxId, pending);
 
@@ -56,14 +55,15 @@ export function LedgerBooking({ invoiceId, status, fortnoxId, payments }: Props)
           <button
             type="button"
             disabled={book.isPending}
-            onClick={() => book.mutate({ invoiceId: asId<"InvoiceId">(invoiceId) })}
+            onClick={() => book.mutate()}
             className="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50"
           >
             {book.isPending ? "Bokför…" : buttonLabel(!!fortnoxId, pending)}
           </button>
-          {book.error && <p role="alert" className="mt-2 text-sm text-red-700">Kunde inte bokföra: {book.error.message}</p>}
         </div>
       )}
+      {/* Utanför knappens villkor: ett fel kan ändra fakturans läge så knappen döljs. */}
+      {book.error && <p role="alert" className="mt-2 text-sm text-red-700">Kunde inte bokföra: {book.error.message}</p>}
     </>
   );
 }

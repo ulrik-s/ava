@@ -63,6 +63,10 @@ on:
         description: "Bokför ett täckningsärendes BÅDA fakturor (klient + betalare) och verifiera kontona"
         type: boolean
         default: false
+      ui:
+        description: "UI-E2E: klient, ärende, faktura och delbetalningar i webb-UIt → Bokför i Fortnox → kontrollera verifikaten (3 st)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -86,7 +90,7 @@ jobs:
     # environment-variabel är alltid tom här och jobbet hade aldrig kört.
     if: vars.AVA_FORTNOX_CI_ENABLED == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     environment: fortnox-sandbox
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -103,8 +107,14 @@ jobs:
           DISPATCH: ${{ github.event_name == 'workflow_dispatch' }}
           IN_DRY: ${{ inputs.dry_run }}
           IN_BOOK: ${{ inputs.bookkeeping }}
+          IN_UI: ${{ inputs.ui }}
         run: |
-          if [ "$DISPATCH" = "true" ]; then
+          if [ "$DISPATCH" = "true" ] && [ "$IN_UI" = "true" ]; then
+            # UI-läget kör BARA UI-flödet — inga extra verifikat från de andra lägena.
+            echo "ui=true"            >> "$GITHUB_OUTPUT"
+            echo "dry_run=true"       >> "$GITHUB_OUTPUT"
+            echo "bookkeeping=false"  >> "$GITHUB_OUTPUT"
+          elif [ "$DISPATCH" = "true" ]; then
             echo "dry_run=$IN_DRY"     >> "$GITHUB_OUTPUT"
             echo "bookkeeping=$IN_BOOK" >> "$GITHUB_OUTPUT"
           else
@@ -123,6 +133,7 @@ jobs:
 
       - name: Kör Fortnox-E2E
         id: e2e
+        if: steps.mode.outputs.ui != 'true'
         env:
           AVA_FORTNOX_CLIENT_ID: ${{ secrets.AVA_FORTNOX_CLIENT_ID }}
           AVA_FORTNOX_CLIENT_SECRET: ${{ secrets.AVA_FORTNOX_CLIENT_SECRET }}
@@ -154,6 +165,33 @@ jobs:
           AVA_ORGANIZATION_ID: "00000000-0000-0000-0000-000000000001"
         run: bun tooling/scripts/fortnox-bookkeeping-e2e.ts
 
+      # UI-läget (#1173): hela flödet i webb-UIt mot den fulla self-hosted-stacken.
+      - name: UI-E2E (klient → ärende → faktura → delbetalningar → Bokför i Fortnox)
+        id: ui
+        if: steps.mode.outputs.ui == 'true'
+        env:
+          AVA_FORTNOX_CLIENT_ID: ${{ secrets.AVA_FORTNOX_CLIENT_ID }}
+          AVA_FORTNOX_CLIENT_SECRET: ${{ secrets.AVA_FORTNOX_CLIENT_SECRET }}
+          AVA_FORTNOX_REFRESH_TOKEN: ${{ secrets.AVA_FORTNOX_REFRESH_TOKEN }}
+          AVA_FORTNOX_ACCOUNT_TYPE: ${{ vars.AVA_FORTNOX_ACCOUNT_TYPE }}
+          AVA_FORTNOX_VOUCHER_SERIES: ${{ vars.AVA_FORTNOX_VOUCHER_SERIES }}
+          AVA_FORTNOX_BOOKING_WINDOW: ${{ vars.AVA_FORTNOX_BOOKING_WINDOW }}
+          AVA_FORTNOX_KONTO_KUNDFORDRAN: ${{ vars.AVA_FORTNOX_KONTO_KUNDFORDRAN }}
+          AVA_FORTNOX_KONTO_ARVODE: ${{ vars.AVA_FORTNOX_KONTO_ARVODE }}
+          AVA_FORTNOX_KONTO_MOMS: ${{ vars.AVA_FORTNOX_KONTO_MOMS }}
+          AVA_FORTNOX_KONTO_BANK: ${{ vars.AVA_FORTNOX_KONTO_BANK }}
+        run: |
+          bun run e2e:install
+          bash tooling/scripts/fortnox-ui-e2e.sh
+
+      - name: Spara Playwright-rapport (UI-läget)
+        if: always() && steps.mode.outputs.ui == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: playwright-fortnox
+          path: reports/playwright-fortnox*
+          if-no-files-found: ignore
+
       - name: Riv ner stacken
         if: always() && steps.mode.outputs.bookkeeping == 'true' && steps.mode.outputs.dry_run != 'true'
         run: docker compose -f tooling/docker/docker-compose.server-first.yml down -v
@@ -162,10 +200,10 @@ jobs:
       # anropet, så den gamla är död oavsett hur körningen slutade. Hoppar över
       # sig själv om scriptet inte hann emitta något (t.ex. saknad secret).
       - name: Spara roterad refresh-token
-        if: always() && (steps.bookkeeping.outputs.refresh_token != '' || steps.e2e.outputs.refresh_token != '')
+        if: always() && (steps.ui.outputs.refresh_token != '' || steps.bookkeeping.outputs.refresh_token != '' || steps.e2e.outputs.refresh_token != '')
         env:
           GH_TOKEN: ${{ secrets.AVA_FORTNOX_ROTATE_PAT }}
-          NEW_TOKEN: ${{ steps.bookkeeping.outputs.refresh_token || steps.e2e.outputs.refresh_token }}
+          NEW_TOKEN: ${{ steps.ui.outputs.refresh_token || steps.bookkeeping.outputs.refresh_token || steps.e2e.outputs.refresh_token }}
         run: |
           if [ -z "$GH_TOKEN" ]; then
             echo "::error::AVA_FORTNOX_ROTATE_PAT saknas — den roterade token:en kan inte sparas."
