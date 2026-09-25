@@ -6,6 +6,7 @@ import { z } from "zod";
 import { DatasourceSection } from "@/components/settings/datasource-section";
 import { EditorExtensionsSection } from "@/components/settings/editor-extensions-section";
 import { ExternalEditSection } from "@/components/settings/external-edit-section";
+import { FortnoxSection } from "@/components/settings/fortnox-section";
 import { HelperSection } from "@/components/settings/helper-section";
 import { LedgerAccountsSection } from "@/components/settings/ledger-accounts-section";
 import { OrgDefaultsSection } from "@/components/settings/org-defaults-section";
@@ -566,7 +567,8 @@ export default function SettingsPage() {
       <OrgDefaultsSection />
 
       {/* 6. Bokföringsexport */}
-      <SectionHeader num={6} title="Bokföringsexport (admin)" subtitle="Konto-mappning (BAS) som SIE-exporten bokför mot. Förifyllt med standard för advokatbyrå." />
+      <SectionHeader num={6} title="Bokföring (admin)" subtitle="Konto-mappning (BAS) som SIE-exporten och Fortnox bokför mot. Förifyllt med standard för advokatbyrå." />
+      <FortnoxSection />
       <LedgerAccountsSection />
 
       {/* 7. Dokument-etiketter */}

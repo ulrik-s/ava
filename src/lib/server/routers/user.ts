@@ -3,6 +3,7 @@ import { z } from "zod";
 import { userRoleSchema } from "@/lib/shared/schemas/enums";
 import { userIdSchema, asId } from "@/lib/shared/schemas/ids";
 import { matterNumberPrefixSchema, type User } from "@/lib/shared/schemas/user";
+import { assertAdmin } from "../auth/assert-admin";
 import { router, protectedProcedure } from "../trpc";
 
 /** Projektion till listvyns fält (utan passwordHash). */
@@ -34,12 +35,6 @@ export interface UserProfile {
   mileageRate: number | null;
   matterNumberPrefix: string | null;
   createdAt: Date;
-}
-
-function assertAdmin(ctx: { user: { role: string; id: string } }): void {
-  if (ctx.user.role !== "ADMIN") {
-    throw new TRPCError({ code: "FORBIDDEN", message: "Endast administratörer kan göra det här." });
-  }
 }
 
 export const userRouter = router({

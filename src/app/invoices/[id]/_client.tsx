@@ -26,6 +26,7 @@ import { computeInvoiceLedger } from "@/lib/shared/write-off-calc";
 import { CreditModal } from "./_credit-modal";
 import { DispatchHistory } from "./_dispatch-history";
 import { InvoiceActions } from "./_invoice-actions";
+import { LedgerBooking } from "./_ledger-booking";
 import { PaymentModal } from "./_payment-modal";
 import { PaymentsTable } from "./_payments-table";
 import { PlanModal } from "./_plan-modal";
@@ -135,6 +136,7 @@ function InvoiceSummaryCard({ inv, ledger, s }: { inv: Inv; ledger: LedgerView; 
         onShowSend={() => s.setShowSend(true)}
         onSetStatus={(status) => s.setStatus.mutate({ invoiceId: inv.id, status: status as Parameters<typeof s.setStatus.mutate>[0]["status"] })}
       />
+      <LedgerBooking invoiceId={inv.id} status={inv.status} fortnoxId={inv.fortnoxId} />
       {inv.notes && <p className="mt-4 text-sm text-gray-600 border-t pt-3">{inv.notes}</p>}
     </div>
   );

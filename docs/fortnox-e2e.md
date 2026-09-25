@@ -256,3 +256,19 @@ anslutningen i stället för att förnya den.
   egna tester.
 - **Bilagor (#785) täcks inte** av e2e:t ännu; `uploadInboxFile` +
   `connectFileToVoucher` är enhetstestade men inte körda skarpt.
+
+## Fortnox i appen (#1172)
+
+Servern bokför fakturor när dessa är satta (i `ava-server.env`, se
+`docker-compose.production.yml`):
+
+| Env | Vad |
+|---|---|
+| `AVA_FORTNOX_CLIENT_ID` / `AVA_FORTNOX_CLIENT_SECRET` | appen i Developer Portal |
+| `AVA_FORTNOX_REDIRECT_URI` | default `https://<domän>/settings/fortnox` — registrera exakt den i Developer Portal |
+| `AVA_SECRETS_KEY` | `openssl rand -base64 32` — krypterar tokens i valvet (volymen `secrets`) |
+
+Administratören ansluter under **Inställningar → Bokföring → Anslut Fortnox**.
+Därefter har varje utställd faktura knappen **Bokför i Fortnox**; verifikatet
+(t.ex. `A/12`) skrivs tillbaka på fakturan och en andra bokföring är en no-op.
+Verifikatserien ur kontomappningen måste vara en *manuell* serie i Fortnox.

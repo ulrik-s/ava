@@ -138,6 +138,10 @@ const DESCRIPTIONS: Readonly<Record<string, string>> = {
   "invoice.createPaymentPlan": "Lägg upp en avbetalningsplan på en faktura.",
   "invoice.cancelPaymentPlan": "Avbryt en aktiv avbetalningsplan.",
   "invoice.markFortnoxBooked": "Märk fakturan som bokförd i Fortnox med sitt verifikatnummer. Skriver aldrig över ett redan satt id — det är dubbelbokföringsskyddet.",
+  "ledger.status": "Visa om Fortnox är konfigurerat på servern och om byrån har anslutit.",
+  "ledger.connectUrl": "Administratör: ge authorize-URL:en till Fortnox för att ansluta byrån (OAuth med CSRF-state).",
+  "ledger.completeConnect": "Administratör: slutför Fortnox-anslutningen med code + state från callbacken; sparar tokens krypterat.",
+  "ledger.bookInvoice": "Bokför en utställd faktura som verifikat i Fortnox och skriv tillbaka verifikatnumret. Idempotent — redan bokförd ger samma verifikat.",
 
   // ── Fakturautskick ───────────────────────────────────────────────
   "invoiceDispatch.list": "Utskickshistorik för fakturor.",

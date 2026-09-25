@@ -10,6 +10,7 @@ import type {
   IPaymentScanner,
   IContentStore,
   ILeaseStore,
+  ILedgerService,
   IPorts,
 } from "../ports";
 
@@ -63,6 +64,14 @@ export const noopLeaseStore: ILeaseStore = {
   get() { return null; },
 };
 
+/** Ingen bokföringsintegration (demo, eller server utan Fortnox-config). */
+export const noopLedger: ILedgerService = {
+  async status() { return { configured: false, connected: false }; },
+  async authorizeUrl() { throw new Error("Ingen bokföringsintegration är konfigurerad på servern."); },
+  async completeConnect() { throw new Error("Ingen bokföringsintegration är konfigurerad på servern."); },
+  connector() { throw new Error("Ingen bokföringsintegration är konfigurerad på servern."); },
+};
+
 export const noopPorts: IPorts = {
   email: noopEmail,
   documentAnalyzer: noopDocumentAnalyzer,
@@ -70,4 +79,5 @@ export const noopPorts: IPorts = {
   paymentScanner: noopPaymentScanner,
   content: noopContentStore,
   lease: noopLeaseStore,
+  ledger: noopLedger,
 };
