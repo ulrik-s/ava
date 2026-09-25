@@ -79,4 +79,5 @@ office-addin/dist/
 # Lokal self-hosted dokument-content (bind-mount, #649)
 tooling/docker/.selfhosted-content/
 tooling/.conflict-seed.json
+tooling/.fortnox-ui/
 .addin-tls/
