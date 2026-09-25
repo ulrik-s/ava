@@ -158,7 +158,10 @@ export class CachingSyncDataStore {
 
     const localChangeListeners = new Set<() => void>();
     const onLocalMutation = async (event: MutationEvent<Record<string, unknown>>): Promise<void> => {
-      const version = event.row.version;
+      // Basen är versionen ändringen BYGGDE PÅ (#1176). Repo:t har redan bumpat
+      // `row.version`; servern jämför basen mot sin version och avvisade annars
+      // varje surface-uppdatering (faktura) som "stale".
+      const version = event.previous?.version ?? event.row.version;
       await queue.enqueue(
         {
           entity: event.entity,
