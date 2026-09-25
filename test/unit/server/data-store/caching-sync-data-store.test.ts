@@ -10,6 +10,7 @@ import { InMemoryPersistence } from "@/lib/server/data-store/in-memory/local-sto
 import type { QueuedMutation } from "@/lib/server/data-store/in-memory/mutation-queue";
 import type { PullResult, PushResult, SyncTransport } from "@/lib/server/data-store/in-memory/sync-transport";
 import { InMemoryMatterRepository } from "@/lib/server/repositories/in-memory-matter-repository";
+import { buildInMemoryRepositories } from "@/lib/server/repositories/in-memory-repositories";
 import { asId } from "@/lib/shared/schemas/ids";
 import { isUuid, uuidv7 } from "@/lib/shared/uuid";
 
@@ -50,6 +51,28 @@ describe("CachingSyncDataStore (#415)", () => {
       // Persisterad till (in-memory) store.
       const saved = await persistence.hydrate();
       expect(saved?.matters).toHaveLength(1);
+    });
+  });
+
+  describe("baseVersion (#1176)", () => {
+    // Servern avvisar en surface-uppdatering (faktura) som "stale" när
+    // baseVersion ≠ serverns version. Repo:t bumpar version FÖRE eventet, så
+    // basen måste vara versionen FÖRE ändringen — annars avvisades varje
+    // fakturaändring från webbläsaren och vändes tillbaka vid nästa pull.
+    it("en uppdatering köas med versionen den byggde på, inte den nya", async () => {
+      const m1 = uuidv7();
+      const transport = new FakeTransport();
+      const ds = await CachingSyncDataStore.create({
+        transport,
+        seed: { matters: [{ ...matter(m1), version: 3 }] },
+        persistence: new InMemoryPersistence(),
+      });
+      const repos = buildInMemoryRepositories(ds.store);
+      await repos.matters.update(asId<"MatterId">(m1), { title: "Nytt" });
+      await ds.reconcile();
+      const [pushed] = transport.pushed;
+      expect(pushed?.row.version).toBe(4);
+      expect(pushed?.baseVersion).toBe(3);
     });
   });
 
