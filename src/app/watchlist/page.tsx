@@ -13,6 +13,8 @@
  */
 
 import { useMemo, useState } from "react";
+import { NewWatchForm } from "@/components/watchlist/new-watch-form";
+import { useCompleteWatch } from "@/components/watchlist/use-watch-actions";
 import { WatchlistList } from "@/components/watchlist/watchlist-list";
 import { trpc } from "@/lib/client/trpc";
 import type { WatchlistKind } from "@/lib/shared/watchlist";
@@ -30,6 +32,7 @@ export default function WatchlistPage() {
   const [mine, setMine] = useState(true);
   const [kind, setKind] = useState<WatchlistKind | "all">("all");
   const q = trpc.watchlist.list.useQuery({ mine });
+  const complete = useCompleteWatch();
 
   const all = useMemo(() => q.data?.items ?? [], [q.data]);
   const items = useMemo(
@@ -64,6 +67,8 @@ export default function WatchlistPage() {
         </label>
       </div>
 
+      <NewWatchForm />
+
       <div className="flex flex-wrap gap-2 mb-4">
         {FILTERS.map((f) => (
           <button
@@ -82,6 +87,7 @@ export default function WatchlistPage() {
 
       <WatchlistList
         items={items}
+        onComplete={complete}
         emptyText={kind === "all" ? "Inget att bevaka just nu." : "Inget att bevaka i den kategorin."}
       />
     </div>

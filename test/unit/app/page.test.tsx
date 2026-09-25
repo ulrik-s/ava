@@ -1,6 +1,6 @@
 /**
- * Test för Dashboard — Att-göra-list + tidrapportering + senaste ärenden,
- * med dagsväxlare (Idag/Igår/Förrgår/datum).
+ * Test för Dashboard — Att bevaka + Kalender (möten/förhandlingar) +
+ * tidrapportering + senaste ärenden, med dagsväxlare (#1167).
  */
 
 import { render, screen, fireEvent } from "@testing-library/react";
@@ -13,21 +13,18 @@ const meQuery: { data: unknown } = { data: { id: "u1", name: "Anna" } };
 /** "Att bevaka" (#1062) — self-gating: tom lista → kortet renderar ingenting. */
 const watchlistQuery: { data: unknown; isLoading: boolean } = { data: { items: [] }, isLoading: false };
 
-/** task.list för DeadlinesAlert — sätts per test. */
-const taskListQuery: { data: { items: unknown[]; total: number } | undefined } = { data: { items: [], total: 0 } };
+const completeMutate = vi.fn();
 
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
-    useUtils: () => ({ todo: { list: { invalidate: vi.fn() } } }),
+    useUtils: () => ({ watchlist: { list: { invalidate: vi.fn() } }, task: { listForMatter: { invalidate: vi.fn() } } }),
     todo: { list: { useQuery: () => todoQuery } },
     timeEntry: { list: { useQuery: () => timeQuery } },
     user: { current: { useQuery: () => meQuery } },
     watchlist: { list: { useQuery: () => watchlistQuery } },
     task: {
-      // DeadlinesAlert (#1162): mina uppgifter; tom lista → ingen röd ruta.
-      list: { useQuery: () => taskListQuery },
-      complete: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
-      update: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      // Att bevaka-kortet: bocka av tidsfrister direkt (#1167).
+      complete: { useMutation: () => ({ mutate: completeMutate, isPending: false }) },
     },
   },
 }));
@@ -45,7 +42,8 @@ describe("Dashboard", () => {
   it("renderar rubrik + tre paneler", () => {
     render(<Dashboard />);
     expect(screen.getByRole("heading", { name: /Startsida/i })).toBeInTheDocument();
-    expect(screen.getByText(/Att göra/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Kalender/ })).toBeInTheDocument();
+    expect(screen.queryByText(/Att göra/)).not.toBeInTheDocument(); // samma lista som Att bevaka, borttagen
     expect(screen.getByText(/Tidrapportering/i)).toBeInTheDocument();
     expect(screen.getByText(/Senaste ärenden/i)).toBeInTheDocument();
   });
@@ -58,85 +56,51 @@ describe("Dashboard", () => {
     expect(igår.className).toContain("bg-blue-50");
   });
 
-  it("visar tomt-läge för Att göra när inga items", () => {
+  it("Kalender: tomt-läge när inget möte idag", () => {
     todoQuery.data = [];
     render(<Dashboard />);
-    expect(screen.getByText(/Inget att göra idag/i)).toBeInTheDocument();
+    expect(screen.getByText(/Inget i kalendern idag/i)).toBeInTheDocument();
   });
 
-  it("renderar todo-item med ärendelänk", () => {
+  it("Kalender visar bara möten/förhandlingar — uppgifter står i Att bevaka", () => {
     todoQuery.data = [
-      {
-        id: "t1", source: "task", title: "Skriv stämningsansökan",
-        at: new Date(),
-        allDay: false, status: "TODO", kind: null,
-        matter: { id: "m1", matterNumber: "2026-0001", title: "Tvist" },
-      },
+      { id: "t1", source: "task", title: "Skriv stämningsansökan", at: new Date(), allDay: false, status: "TODO", kind: null, matter: null },
+      { id: "e1", source: "event", title: "Förlikningsmöte", at: new Date(), allDay: false, status: null, kind: "meeting", location: null, matter: { id: "m1", matterNumber: "2026-0001", title: "Tvist" } },
     ];
     render(<Dashboard />);
-    expect(screen.getByText("Skriv stämningsansökan")).toBeInTheDocument();
+    expect(screen.getByText("Förlikningsmöte")).toBeInTheDocument();
     expect(screen.getByText(/2026-0001 — Tvist/)).toBeInTheDocument();
+    expect(screen.queryByText("Skriv stämningsansökan")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Öppna kalender/ })).toHaveAttribute("href", "/calendar");
   });
 
   it("visar event-frist-badge", () => {
     todoQuery.data = [
-      {
-        id: "e1", source: "event", title: "Förhandlingsfrist",
-        at: new Date(),
-        allDay: false, status: null, kind: "deadline",
-        matter: null,
-      },
+      { id: "e1", source: "event", title: "Förhandlingsfrist", at: new Date(), allDay: false, status: null, kind: "deadline", matter: null },
     ];
     render(<Dashboard />);
     expect(screen.getByText("Frist")).toBeInTheDocument();
   });
 
-  it("klick på att-göra-rad öppnar detalj-modal", async () => {
-    const { fireEvent, waitFor } = await import("@testing-library/react");
+  it("klick på kalenderpost öppnar detaljer (plats, beskrivning, ärende) och Stäng", async () => {
+    const { waitFor } = await import("@testing-library/react");
     todoQuery.data = [
-      {
-        id: "t1", source: "task", title: "Skriv stämningsansökan",
-        description: "Förbered yrkanden + faktaomständigheter",
-        at: new Date(), allDay: false, status: "TODO", priority: "HIGH",
-        kind: null, location: null, userId: "u1",
-        matter: { id: "m1", matterNumber: "2026-0001", title: "Tvist" },
-      },
+      { id: "e1", source: "event", title: "Huvudförhandling", description: "Sal 4", at: new Date(), allDay: true, status: null, kind: "hearing", location: "Stockholms tingsrätt", matter: { id: "m1", matterNumber: "2026-0001", title: "Tvist" } },
     ];
     render(<Dashboard />);
-    fireEvent.click(screen.getByText("Skriv stämningsansökan"));
-    await waitFor(() => {
-      expect(screen.getByText(/Förbered yrkanden/)).toBeInTheDocument();
-      expect(screen.getByText(/Prioritet: Hög/)).toBeInTheDocument();
-    });
+    fireEvent.click(screen.getByText("Huvudförhandling"));
+    await waitFor(() => expect(screen.getByText(/Stockholms tingsrätt/)).toBeInTheDocument());
+    expect(screen.getByText("Sal 4")).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: "Stäng" }).at(-1)!); // Modal har även en ×-knapp
+    await waitFor(() => expect(screen.queryByText("Sal 4")).not.toBeInTheDocument());
   });
 
-  it("egen TODO-task visar 'Markera klar'-knapp i modal", async () => {
-    const { fireEvent, waitFor } = await import("@testing-library/react");
-    todoQuery.data = [
-      {
-        id: "t1", source: "task", title: "X", at: new Date(),
-        allDay: false, status: "TODO", priority: null, kind: null,
-        location: null, userId: "u1", description: null, matter: null,
-      },
-    ];
+  it("Att bevaka: tidsfrist kan bockas av direkt på startsidan", () => {
+    watchlistQuery.data = { items: [{ kind: "deadline", severity: "passed", title: "Tidsfrist passerad: Svaromål", detail: "d", matterId: "m1", matterNumber: "2026-0001", at: "2026-01-01", amountOre: null, href: "/matters/m1", taskId: "t9" }] };
     render(<Dashboard />);
-    fireEvent.click(screen.getByText("X"));
-    await waitFor(() => expect(screen.getByText("Markera klar")).toBeInTheDocument());
-  });
-
-  it("annans task visar INTE 'Markera klar'-knapp", async () => {
-    const { fireEvent, waitFor } = await import("@testing-library/react");
-    todoQuery.data = [
-      {
-        id: "t1", source: "task", title: "Annans task", at: new Date(),
-        allDay: false, status: "TODO", priority: null, kind: null,
-        location: null, userId: "u-other", description: null, matter: null,
-      },
-    ];
-    render(<Dashboard />);
-    fireEvent.click(screen.getByText("Annans task"));
-    await waitFor(() => expect(screen.getAllByText("Annans task").length).toBeGreaterThan(1));
-    expect(screen.queryByText("Markera klar")).not.toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent(/FÖRSENAD/);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Markera klar: Tidsfrist passerad: Svaromål" }));
+    expect(completeMutate).toHaveBeenCalledWith({ id: "t9" });
   });
 
   it("visar tomt-läge för tidrapportering när inga entries", () => {

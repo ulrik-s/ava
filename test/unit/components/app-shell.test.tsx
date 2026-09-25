@@ -38,11 +38,13 @@ describe("AppShell", () => {
     expect(screen.getByTestId("page-content")).toBeInTheDocument();
   });
 
-  it("ger Att göra-länk i sidebar (ersatt Kalender i UX:n)", () => {
+  it("sidebar: Att bevaka + Kalender, ingen Att göra (samma lista två gånger, #1167)", () => {
     currentQuery.data = { name: "X" };
     render(<AppShell>x</AppShell>);
     // Två förekomster (mobil + desktop) — räkna att minst en finns
-    expect(screen.getAllByRole("link", { name: /Att göra/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("link", { name: /Att bevaka/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("link", { name: /Kalender/i })[0]).toHaveAttribute("href", expect.stringContaining("/calendar"));
+    expect(screen.queryByRole("link", { name: /Att göra/i })).not.toBeInTheDocument();
   });
 
   it("tål null/undefined user.current utan att krascha", () => {

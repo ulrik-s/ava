@@ -10,7 +10,9 @@
  */
 
 import Link from "next/link";
+import { DeadlineBadge } from "@/components/tasks/deadline-badge";
 import { formatCurrency } from "@/lib/client/utils";
+import { deadlineOf } from "@/lib/shared/deadline";
 import type { WatchlistItem, WatchlistKind } from "@/lib/shared/watchlist";
 
 /** Ikon + etikett per signaltyp. Etiketten behövs för att raden ska gå att
@@ -34,17 +36,52 @@ function severityClasses(severity: WatchlistItem["severity"]): string {
     : "border-amber-300 bg-amber-50 text-amber-900";
 }
 
-export function WatchlistRow({ item }: { item: WatchlistItem }) {
-  const meta = KIND_META[item.kind];
+/**
+ * Inne (dagen är här) eller passerad (#1167): ska inte gå att missa. En
+ * tidsfrist på själva dagen räknas som "närmar sig" i härledningen men är
+ * precis det som måste göras NU — så den blir röd här.
+ */
+function isDue(item: WatchlistItem): boolean {
+  if (item.severity === "passed") return true;
+  return item.kind === "deadline" && deadlineOf(item.at).state === "today";
+}
+
+/** Bocka av en tidsfrist direkt i listan (#1167). Utelämnad → ingen kryssruta. */
+type OnComplete = (taskId: string) => void;
+
+/** Kryssrutan för en tidsfrist som kan bockas av; annars inget. */
+function CompleteBox({ item, onComplete }: { item: WatchlistItem; onComplete?: OnComplete | undefined }) {
+  const taskId = item.taskId;
+  if (!onComplete || !taskId) return null;
   return (
-    <li>
+    <input type="checkbox" className="mt-3" aria-label={`Markera klar: ${item.title}`}
+      onChange={() => onComplete(taskId)} />
+  );
+}
+
+/** Radens rubrik: inne/passerad tidsfrist med röd etikett och stor fet text. */
+function RowTitle({ item, due }: { item: WatchlistItem; due: boolean }) {
+  return (
+    <>
+      {due && item.kind === "deadline" && <DeadlineBadge dueAt={item.at} />}
+      <span className={due ? "text-lg font-extrabold" : "font-semibold"}>{item.title}</span>
+    </>
+  );
+}
+
+export function WatchlistRow({ item, onComplete }: { item: WatchlistItem; onComplete?: OnComplete | undefined }) {
+  const meta = KIND_META[item.kind];
+  const due = isDue(item);
+  return (
+    <li className="flex items-start gap-2">
+      <CompleteBox item={item} onComplete={onComplete} />
       <Link
         href={item.href}
-        className={`block rounded-lg border px-3 py-2 text-sm hover:brightness-95 ${severityClasses(item.severity)}`}
+        className={`block flex-1 rounded-lg border px-3 py-2 text-sm hover:brightness-95 ${due ? "border-2 border-red-600 bg-red-50 text-red-900" : severityClasses(item.severity)}`}
       >
         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
           <span aria-hidden="true">{meta.icon}</span>
-          <span className="font-semibold">{item.title}</span>
+          <RowTitle item={item} due={due} />
           {item.matterNumber !== null && (
             <span className="text-xs opacity-80">{item.matterNumber}</span>
           )}
@@ -61,7 +98,9 @@ export function WatchlistRow({ item }: { item: WatchlistItem }) {
   );
 }
 
-export function WatchlistList({ items, emptyText }: { items: readonly WatchlistItem[]; emptyText: string }) {
+export function WatchlistList({ items, emptyText, onComplete }: {
+  items: readonly WatchlistItem[]; emptyText: string; onComplete?: OnComplete | undefined;
+}) {
   if (items.length === 0) {
     return <p className="text-sm text-gray-500">{emptyText}</p>;
   }
@@ -72,7 +111,7 @@ export function WatchlistList({ items, emptyText }: { items: readonly WatchlistI
           då den ena tyst. Listan räknas om i sin helhet vid varje hämtning och
           har ingen rad-lokal state, så indexet är stabilt nog. */}
       {items.map((item, i) => (
-        <WatchlistRow key={`${item.kind}-${item.matterId ?? "-"}-${i}`} item={item} />
+        <WatchlistRow key={`${item.kind}-${item.matterId ?? "-"}-${i}`} item={item} onComplete={onComplete} />
       ))}
     </ul>
   );

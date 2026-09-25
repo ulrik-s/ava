@@ -82,6 +82,8 @@ export interface WatchlistItem {
   amountOre: number | null;
   /** Vart man går för att åtgärda. */
   href: string;
+  /** Uppgiften bakom en tidsfrist — så den kan bockas av direkt i listan (#1167). */
+  taskId?: string;
 }
 
 /** Passerat före annalkande; inom samma grupp: äldst datum först. */
@@ -107,14 +109,22 @@ export function sortWatchlist(items: readonly WatchlistItem[]): WatchlistItem[] 
 
 const DAY_MS = 86_400_000;
 
-/** Hela dagar mellan två datum (b − a). Negativt = b ligger före a. */
-export function daysBetween(from: Date, to: Date): number {
-  const a = Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate());
-  const b = Date.UTC(to.getUTCFullYear(), to.getUTCMonth(), to.getUTCDate());
-  return Math.round((b - a) / DAY_MS);
+/**
+ * Kalenderdagen i byråns tidszon, "YYYY-MM-DD" (#1167). Servern kör i UTC:
+ * räknat i UTC blev en frist på svensk midnatt (25/9 00:00 = 24/9 22:00 UTC)
+ * gårdagens datum — fristen "passerade" ett dygn för tidigt.
+ */
+const DAY_FMT = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Stockholm", year: "numeric", month: "2-digit", day: "2-digit" });
+export function stockholmDay(d: Date): string {
+  return DAY_FMT.format(d);
 }
 
-const iso = (d: Date): string => d.toISOString().slice(0, 10);
+/** Hela kalenderdagar (svensk tid) mellan två tidpunkter (b − a). Negativt = b ligger före a. */
+export function daysBetween(from: Date, to: Date): number {
+  return Math.round((Date.parse(stockholmDay(to)) - Date.parse(stockholmDay(from))) / DAY_MS);
+}
+
+const iso = (d: Date): string => stockholmDay(d);
 
 /** "1 dag" / "3 dagar" — svensk pluralböjning. "om 1 dagar" ser trasigt ut. */
 export function dagar(n: number): string {
@@ -244,7 +254,8 @@ export function deadlineItems(
         : `Förfaller ${iso(new Date(task.dueAt))}.`,
       matterId: task.matterId, matterNumber: task.matterNumber,
       at: iso(new Date(task.dueAt)), amountOre: null,
-      href: task.matterId ? `/matters/${task.matterId}` : "/tasks",
+      href: task.matterId ? `/matters/${task.matterId}` : "/watchlist",
+      taskId: task.id,
     });
   }
   return out;

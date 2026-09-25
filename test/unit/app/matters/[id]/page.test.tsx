@@ -53,8 +53,12 @@ vi.mock("@/lib/client/trpc", () => ({
       update: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       coverageUsage: { useQuery: () => ({ data: { billableMinutes: 0, billableValueOre: 0 }, isLoading: false }) },
     },
+    watchlist: {
+      // WatchSection: ärendets övriga signaler (#1167).
+      list: { useQuery: () => ({ data: { items: [] } }) },
+    },
     task: {
-      // TodoSection (#1162).
+      // WatchSection (#1162/#1167).
       listForMatter: { useQuery: () => ({ data: [], isLoading: false }) },
       create: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       complete: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },

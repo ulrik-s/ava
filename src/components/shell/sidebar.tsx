@@ -31,10 +31,10 @@ const navigation = [
   { name: "Jävskontroll", href: "/conflicts", icon: "🔍" },
   { name: "Ärenden", href: "/matters", icon: "📁" },
   { name: "Startsida", href: "/", icon: "📊" },
-  { name: "Att göra", href: "/todo", icon: "✅" },
-  // Att bevaka direkt under Att göra: båda svarar på "vad ska jag göra nu?",
-  // men den här räknas ut i st.f. att skrivas in (#1062).
+  // EN lista för det som ska bevakas (#1167): bevakningar/frister + härledda
+  // signaler. "Att göra" visade samma poster en gång till och förvirrade.
   { name: "Att bevaka", href: "/watchlist", icon: "🔔" },
+  { name: "Kalender", href: "/calendar", icon: "🗓️" },
   { name: "Kontakter", href: "/contacts", icon: "👤" },
   { name: "Dokumentsök", href: "/search", icon: "📄" },
   { name: "Dokumentmallar", href: "/templates", icon: "📝" },

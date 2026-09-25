@@ -12,10 +12,10 @@
 
 import { z } from "zod";
 import type { PaymentMethod } from "@/lib/shared/schemas/enums";
-import { asId, type OrganizationId, userIdSchema } from "@/lib/shared/schemas/ids";
+import { asId, matterIdSchema, type OrganizationId, userIdSchema } from "@/lib/shared/schemas/ids";
 import {
   coverageItems, deadlineItems, failedDispatchItems, overdueInvoiceItems,
-  sortWatchlist, unbilledItems,
+  sortWatchlist, stockholmDay, unbilledItems,
   DEFAULT_THRESHOLDS, type CoverageMatter, type DeadlineTask, type FailedDispatch,
   type OverdueInvoice, type UnbilledMatter, type WatchlistItem,
 } from "@/lib/shared/watchlist";
@@ -26,8 +26,12 @@ type Ctx = { repos: Repositories; orgId: OrganizationId; user: { id: string } };
 
 /** ISO-datum (YYYY-MM-DD) ur ett fält som kan vara Date eller sträng. */
 function isoDate(v: unknown): string | null {
-  if (v instanceof Date) return v.toISOString().slice(0, 10);
-  if (typeof v === "string" && v.length >= 10) return v.slice(0, 10);
+  // Svensk kalenderdag, inte UTC (#1167) — se stockholmDay.
+  if (v instanceof Date) return stockholmDay(v);
+  // Ren datumsträng ("2026-09-25") är redan en kalenderdag; en tidpunkt
+  // (demodatalagrets ISO-strängar, "…T22:00:00.000Z") räknas om till svensk dag.
+  if (typeof v === "string" && v.length === 10) return v;
+  if (typeof v === "string" && v.length > 10) return stockholmDay(new Date(v));
   return null;
 }
 
@@ -154,6 +158,8 @@ export const watchlistRouter = router({
     .input(z.object({
       mine: z.boolean().default(true),
       userId: userIdSchema.optional(),
+      /** Bara ett ärendes poster — "Att bevaka" i ärendet (#1167). */
+      matterId: matterIdSchema.optional(),
     }).optional())
     .query(async ({ ctx, input }): Promise<{ items: WatchlistItem[]; generatedAt: string }> => {
       const userId = input?.userId ?? ctx.user.id;
@@ -189,6 +195,7 @@ export const watchlistRouter = router({
         ...failedDispatchItems(failed),
       ]);
 
-      return { items, generatedAt: now.toISOString() };
+      const scoped = input?.matterId ? items.filter((i) => i.matterId === String(input.matterId)) : items;
+      return { items: scoped, generatedAt: now.toISOString() };
     }),
 });
