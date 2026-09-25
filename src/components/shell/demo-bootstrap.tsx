@@ -310,7 +310,10 @@ function AuthGatedDemoTree(props: TreeProps) {
           <ExtractTextDispatcherRegistrar />
           <MirrorOutlookRegistrar />
           <HelperAutoConfig />
-          <div className="flex items-center justify-between gap-2 border-b border-gray-200 bg-white">
+          {/* Statusraden + appen delar på skärmhöjden — annars skjuts den
+              fullhöjds-appen ned och hela sidan scrollar (#1185). */}
+          <div className="flex h-full flex-col">
+          <div className="flex shrink-0 items-center justify-between gap-2 border-b border-gray-200 bg-white">
             <div className="flex-1 min-w-0">
               <AuthStatusBanner />
             </div>
@@ -348,9 +351,12 @@ function AuthGatedDemoTree(props: TreeProps) {
               </div>
             </div>
           )}
-          <RenderErrorBoundary>
-            <AppShell>{children}</AppShell>
-          </RenderErrorBoundary>
+          <div className="min-h-0 flex-1">
+            <RenderErrorBoundary>
+              <AppShell>{children}</AppShell>
+            </RenderErrorBoundary>
+          </div>
+          </div>
           </SyncProviderRoot>
           </CapabilitiesProvider>
         </QueryClientProvider>

@@ -15,8 +15,7 @@
  */
 
 import {
-  DEMO_BASE_URL as BASE, fetchDemoSeed, matterIdWith, rowsForMatter, seedDemoLogin, test, expect,
-} from "./_demo-test";
+  DEMO_BASE_URL as BASE, fetchDemoSeed, matterIdWith, rowsForMatter, seedDemoLogin, test, expect, showPanel } from "./_demo-test";
 
 test.beforeEach(async ({ page }) => {
   // Tvinga demo-tier (localhost defaultar self-hosted → 401) OCH logga in:
@@ -199,8 +198,10 @@ test("matter-detalj visar tabell-rader för fakturor/utlägg/tider", async ({ pa
   const opts = { useInnerText: true, timeout: 15_000 } as const;
   // Utlägget kommer ur seeden — samma rad som ska stå i tabellen.
   const expense = rowsForMatter(seed, "expenses", matterId)[0];
+  await showPanel(page, "Utlägg");
   await expect(body, "Utlägg ska visas på matter-detalj").toContainText(expense?.description ?? "", opts);
   // Tid-rad: HH:MM-format
+  await showPanel(page, "Tid");
   await expect(body, "Tid-rader ska visas").toContainText(/\d+:\d{2}/, opts);
   // Inga "NaN kr" eller "Invalid Date" från brutna fält
   await expect(body, "Inga NaN-belopp").not.toContainText(/NaN kr|Invalid Date/, opts);
