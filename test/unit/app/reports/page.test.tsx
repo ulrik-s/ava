@@ -18,6 +18,14 @@ const billedQuery = {
   isLoading: false,
 };
 
+// Dockytan (#1184) kräver en riktig webbläsarlayout — här renderas huvudet och
+// alla paneler efter varandra, synkront, så testerna kan granska innehållet.
+vi.mock("@/components/layout/panel-page", () => ({
+  PanelPage: ({ header, panels }: { header: React.ReactNode; panels: ReadonlyArray<{ id: string; render: () => React.ReactNode }> }) => (
+    <>{header}{panels.map((p) => <div key={p.id} data-panel={p.id}>{p.render()}</div>)}</>
+  ),
+}));
+
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
     useUtils: () => ({ prefs: { get: { invalidate: vi.fn() } } }),
@@ -124,7 +132,7 @@ describe("ReportsPage", () => {
   it("visar Laddar rapport... när report.isLoading", () => {
     reportQuery.isLoading = true;
     render(<ReportsPage />);
-    expect(screen.getByText(/Laddar rapport/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Laddar rapport/i).length).toBeGreaterThan(0); // en per rapportpanel (#1184)
   });
 
   it("renderar SummaryCard, MattersTable, WeeklyTable och UnbilledTable när data finns", () => {

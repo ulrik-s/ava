@@ -2,6 +2,7 @@
 
 import type { inferRouterOutputs } from "@trpc/server";
 import { useId, useState } from "react";
+import { PanelPage } from "@/components/layout/panel-page";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { labelForPaymentMethod, creditRiskFor, CREDIT_RISK_LABELS, type CreditRisk } from "@/lib/client/labels";
@@ -12,6 +13,7 @@ import { omitUndefined } from "@/lib/shared/omit-undefined";
 import type { PaymentMethod } from "@/lib/shared/schemas/enums";
 import { asId, type UserId } from "@/lib/shared/schemas/ids";
 import { ArSummarySection } from "./_ar-summary";
+import { reportsLayout } from "./_reports-layout";
 
 const RISK_BADGE_CLASSES: Record<CreditRisk, string> = {
   LOW: "bg-green-50 text-green-700 border-green-200",
@@ -125,42 +127,35 @@ export default function ReportsPage() {
     { enabled: !!userId },
   );
 
-  return (
-    <div className="flex flex-col h-full">
-      <div className="flex-none mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 mb-6">Rapporter</h1>
-        <ReportsFilterBar
-          from={from} to={to} userId={userId} users={users.data}
-          canExport={!!userId && !!report.data}
-          onFrom={setFrom} onTo={setTo} onUser={setExplicitUserId}
-          onExport={() => void exportExcel(from, to, userId)}
-        />
-      </div>
+  const loading = <p className="text-sm text-gray-500">{report.isLoading ? "Laddar rapport…" : "Välj jurist och period."}</p>;
+  const r = report.data;
+  const panels = [
+    { id: "ar", title: "Kundfordringar", render: () => (
+      <ArSummarySection from={from} to={to} userId={userId} {...omitUndefined({ lawyerName: lawyerNameFor(users.data, userId) })} />
+    ) },
+    { id: "summary", title: "Sammanfattning", render: () => (r ? <SummaryCard report={r} /> : loading) },
+    { id: "matters", title: "Ärenden", render: () => (r ? <MattersTable report={r} /> : loading) },
+    { id: "weekly", title: "Veckor", render: () => (r ? <WeeklyTable report={r} /> : loading) },
+    { id: "unbilled", title: "Ofakturerat", render: () => (r ? <UnbilledTable report={r} /> : loading) },
+  ];
 
-      <div className="flex-1 overflow-y-auto min-h-0 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8">
-        <div className="mb-6">
-          <ArSummarySection
-            from={from}
-            to={to}
-            userId={userId}
-            {...omitUndefined({ lawyerName: lawyerNameFor(users.data, userId) })}
+  return (
+    <PanelPage
+      page="reports"
+      panels={panels}
+      defaultLayout={reportsLayout}
+      header={(
+        <div className="mb-3">
+          <h1 className="text-2xl font-bold text-gray-900 mb-3">Rapporter</h1>
+          <ReportsFilterBar
+            from={from} to={to} userId={userId} users={users.data}
+            canExport={!!userId && !!report.data}
+            onFrom={setFrom} onTo={setTo} onUser={setExplicitUserId}
+            onExport={() => void exportExcel(from, to, userId)}
           />
         </div>
-
-        {report.isLoading && (
-          <p className="text-sm text-gray-500">Laddar rapport...</p>
-        )}
-
-        {report.data && (
-          <>
-            <SummaryCard report={report.data} />
-            <MattersTable report={report.data} />
-            <WeeklyTable report={report.data} />
-            <UnbilledTable report={report.data} />
-          </>
-        )}
-      </div>
-    </div>
+      )}
+    />
   );
 }
 

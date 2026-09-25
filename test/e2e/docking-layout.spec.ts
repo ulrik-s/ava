@@ -35,6 +35,12 @@ const PANEL_PAGES = [
   { name: "startsidan", path: () => "/", tab: "Kalender" },
   { name: "en faktura", path: (s: Awaited<ReturnType<typeof fetchDemoSeed>>) => `/invoices/${s.invoices[0]?.id ?? ""}/`, tab: "Betalningar" },
   { name: "en kontakt", path: (s: Awaited<ReturnType<typeof fetchDemoSeed>>) => `/contacts/${s.contacts[0]?.id ?? ""}/`, tab: "Ärenden" },
+  { name: "inställningar", path: () => "/settings/", tab: "Standardåtgärder" },
+  { name: "rapporter", path: () => "/reports/", tab: "Veckor" },
+  { name: "kalendern", path: () => "/calendar/", tab: "Uppgifter" },
+  { name: "jobbkön", path: () => "/jobs/", tab: "Historik" },
+  { name: "min profil", path: () => "/profile/", tab: "Anslutna tjänster" },
+  { name: "betalfilsimporten", path: () => "/payments/import/", tab: "Matchning" },
 ] as const;
 
 for (const p of PANEL_PAGES) {

@@ -10,8 +10,10 @@
 
 import { User } from "lucide-react";
 import { useEffect, useState } from "react";
+import { PanelPage } from "@/components/layout/panel-page";
 import { IntegrationsSection } from "@/components/settings/integrations-section";
 import { trpc } from "@/lib/client/trpc";
+import { profileLayout } from "./_profile-layout";
 
 export default function ProfilePage() {
   const me = trpc.user.current.useQuery();
@@ -44,29 +46,26 @@ export default function ProfilePage() {
     updateUser.mutate({ id: u.id, name: form.name, title: form.title || null, email: form.email });
   };
 
+  const panels = [
+    { id: "basics", title: "Uppgifter", render: () => (
+      <ProfileBasicsSection form={form} setForm={setForm} role={u.role} onSave={saveProfile} saving={updateUser.isPending} saveError={updateUser.error?.message ?? null} />
+    ) },
+    // Anslutna tjänster (O365, Google, …)
+    { id: "integrations", title: "Anslutna tjänster", render: () => <IntegrationsSection /> },
+  ];
+
   return (
-    <div className="p-6 max-w-3xl">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-          <User size={22} /> Min profil
-        </h1>
-        <p className="text-sm text-gray-500 mt-1">
-          Dina uppgifter syns för hela firman.
-        </p>
-      </div>
-
-      <ProfileBasicsSection
-        form={form}
-        setForm={setForm}
-        role={u.role}
-        onSave={saveProfile}
-        saving={updateUser.isPending}
-        saveError={updateUser.error?.message ?? null}
-      />
-
-      {/* Anslutna tjänster (O365, Google, …) */}
-      <IntegrationsSection />
-    </div>
+    <PanelPage
+      page="profile"
+      panels={panels}
+      defaultLayout={profileLayout}
+      header={(
+        <div className="mb-3">
+          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2"><User size={22} /> Min profil</h1>
+          <p className="text-sm text-gray-500">Dina uppgifter syns för hela firman.</p>
+        </div>
+      )}
+    />
   );
 }
 

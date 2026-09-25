@@ -6,41 +6,45 @@
  */
 
 import { X, RotateCcw, Trash2 } from "lucide-react";
+import { PanelPage } from "@/components/layout/panel-page";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { jobQueue, type Job } from "@/lib/client/jobs/job-queue";
 import { useJobs } from "@/lib/client/jobs/use-jobs";
+import { jobsLayout } from "./_jobs-layout";
 
 export default function JobsPage() {
   const jobs = useJobs();
   const active = jobs.filter((j) => j.status === "queued" || j.status === "running");
   const finished = jobs.filter((j) => j.status === "done" || j.status === "failed" || j.status === "canceled");
 
-  return (
-    <div className="p-6 max-w-4xl">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Jobbkö</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          Bakgrundsarbete som körs i din webbläsare: dokumentanalys,
-          indexering och liknande. Inget skickas till någon server.
-        </p>
-      </div>
-
-      <Section title="Aktiva" jobs={active} emptyText="Inga aktiva jobb." />
-
-      <div className="flex items-center justify-between mt-8 mb-3">
-        <h2 className="text-sm font-semibold text-gray-700">Klart / misslyckat</h2>
+  const panels = [
+    { id: "active", title: "Aktiva", render: () => <Section title="" jobs={active} emptyText="Inga aktiva jobb." /> },
+    { id: "history", title: "Historik", render: () => (
+      <>
         {finished.length > 0 && (
-          <button
-            type="button"
-            onClick={() => jobQueue.clearFinished()}
-            className="text-xs text-gray-500 hover:underline inline-flex items-center gap-1"
-          >
-            <Trash2 size={12} /> Rensa historik
-          </button>
+          <div className="mb-2 flex justify-end">
+            <button type="button" onClick={() => jobQueue.clearFinished()} className="text-xs text-gray-500 hover:underline inline-flex items-center gap-1">
+              <Trash2 size={12} /> Rensa historik
+            </button>
+          </div>
         )}
-      </div>
-      <Section title="" jobs={finished} emptyText="Ingen historik ännu." />
-    </div>
+        <Section title="" jobs={finished} emptyText="Ingen historik ännu." />
+      </>
+    ) },
+  ];
+
+  return (
+    <PanelPage
+      page="jobs"
+      panels={panels}
+      defaultLayout={jobsLayout}
+      header={(
+        <div className="mb-3">
+          <h1 className="text-2xl font-bold text-gray-900">Jobbkö</h1>
+          <p className="text-sm text-gray-500">Bakgrundsarbete som körs i din webbläsare: dokumentanalys, indexering och liknande. Inget skickas till någon server.</p>
+        </div>
+      )}
+    />
   );
 }
 

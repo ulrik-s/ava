@@ -3,6 +3,7 @@
 import { Upload, Trash2, Building2, Plus, Pencil, X, Check } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { z } from "zod";
+import { PanelPage } from "@/components/layout/panel-page";
 import { DatasourceSection } from "@/components/settings/datasource-section";
 import { EditorExtensionsSection } from "@/components/settings/editor-extensions-section";
 import { ExternalEditSection } from "@/components/settings/external-edit-section";
@@ -12,6 +13,7 @@ import { LedgerAccountsSection } from "@/components/settings/ledger-accounts-sec
 import { OrgDefaultsSection } from "@/components/settings/org-defaults-section";
 import { trpc } from "@/lib/client/trpc";
 import { DocumentTagsSection } from "./_document-tags-section";
+import { settingsLayout } from "./_settings-layout";
 import { StandardAtgarderSection } from "./_standard-atgarder-section";
 
 // Zod vid parsegränsen (#187): logo-API:ts svar valideras.
@@ -526,70 +528,41 @@ export default function SettingsPage() {
     return <div className="p-6 text-sm text-gray-500">Laddar inställningar…</div>;
   }
 
+  const panels = [
+    { id: "datasource", title: "Datakälla", render: () => <><PanelIntro text="Var ligger din byrås data? Konfigureras en gång — synkar sedan automatiskt." /><DatasourceSection /></> },
+    { id: "org", title: "Byråns uppgifter", render: () => (
+      <>
+        <PanelIntro text="Visas i genererade dokument (offerter, fakturor, kostnadsräkningar)." />
+        <OrgLogoSection logo={logo} />
+        <OrgFieldsForm form={form} setForm={setForm} isPending={updateSettings.isPending} saved={saved} error={updateSettings.error?.message ?? null} />
+        <DocFooterPreview form={form} />
+      </>
+    ) },
+    { id: "offices", title: "Kontor", render: () => <><PanelIntro text="Adresser för Stockholm, Göteborg osv. — visas på dokument-sidfot." /><OfficesSection /></> },
+    { id: "external", title: "Extern editering", render: () => <><PanelIntro text="Öppna PDF/Word direkt i din favorit-editor. Valfritt." /><HelperSection /><ExternalEditSection /><EditorExtensionsSection /></> },
+    { id: "views", title: "Standardvyer", render: () => <><PanelIntro text="Org-globala kolumn- och sort-defaults för listor (admin). Personliga val vinner." /><OrgDefaultsSection /></> },
+    { id: "ledger", title: "Bokföring", render: () => <><PanelIntro text="Fortnox och konto-mappning (BAS) som SIE-exporten och Fortnox bokför mot (admin)." /><FortnoxSection /><LedgerAccountsSection /></> },
+    { id: "tags", title: "Dokument-etiketter", render: () => <><PanelIntro text="Giltiga etiketter som dokument kan taggas med — av AI:n och handläggarna (admin)." /><DocumentTagsSection /></> },
+    { id: "atgarder", title: "Standardåtgärder", render: () => <><PanelIntro text="Åtgärder som förekommer i varje ärende — samma beskrivning och tidsåtgång för alla (admin)." /><StandardAtgarderSection /></> },
+  ];
+
   return (
-    <div className="p-6 max-w-2xl">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Inställningar</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          Ändringar sparas automatiskt — du behöver inte klicka &quot;Spara&quot;.
-          Konfigurera ovanifrån-och-ner.
-        </p>
-      </div>
-
-      {/* 1. Datakälla — engångskonfiguration */}
-      <SectionHeader num={1} title="Datakälla & inloggning" subtitle="Var ligger din byrås data? Konfigureras en gång — synkar sedan automatiskt." />
-      <DatasourceSection />
-
-      {/* 2. Byråns uppgifter — kontakt + logo (auto-save) */}
-      <SectionHeader num={2} title="Byråns uppgifter" subtitle="Visas i genererade dokument (offerter, fakturor, kostnadsräkningar)." />
-      <OrgLogoSection logo={logo} />
-      <OrgFieldsForm
-        form={form}
-        setForm={setForm}
-        isPending={updateSettings.isPending}
-        saved={saved}
-        error={updateSettings.error?.message ?? null}
-      />
-      <DocFooterPreview form={form} />
-
-      {/* 3. Lokala kontor */}
-      <SectionHeader num={3} title="Lokala kontor" subtitle="Lägg till adresser för Stockholm, Göteborg osv. — visas på dokument-sidfot." />
-      <OfficesSection />
-
-      {/* 4. Editera dokument externt */}
-      <SectionHeader num={4} title="Editera dokument externt" subtitle="Öppna PDF/Word direkt i din favorit-editor. Valfritt — bara om du vill jobba i andra program än AVA:s inbyggda viewer." />
-      <HelperSection />
-      <ExternalEditSection />
-      <EditorExtensionsSection />
-
-      {/* 5. Standardvyer */}
-      <SectionHeader num={5} title="Standardvyer (admin)" subtitle="Org-globala kolumn- och sort-defaults för listor. Personliga val vinner över org-defaults." />
-      <OrgDefaultsSection />
-
-      {/* 6. Bokföringsexport */}
-      <SectionHeader num={6} title="Bokföring (admin)" subtitle="Konto-mappning (BAS) som SIE-exporten och Fortnox bokför mot. Förifyllt med standard för advokatbyrå." />
-      <FortnoxSection />
-      <LedgerAccountsSection />
-
-      {/* 7. Dokument-etiketter */}
-      <SectionHeader num={7} title="Dokument-etiketter (admin)" subtitle="Vokabulär av giltiga etiketter som dokument kan taggas med — av AI:n och handläggarna." />
-      <DocumentTagsSection />
-
-      {/* 8. Standardåtgärder */}
-      <SectionHeader num={8} title="Standardåtgärder (admin)" subtitle="Åtgärder som förekommer i varje ärende — samma beskrivning och tidsåtgång för alla på byrån." />
-      <StandardAtgarderSection />
-    </div>
+    <PanelPage
+      page="settings"
+      panels={panels}
+      defaultLayout={settingsLayout}
+      header={(
+        <div className="mb-3">
+          <h1 className="text-2xl font-bold text-gray-900">Inställningar</h1>
+          <p className="text-sm text-gray-500">Ändringar sparas automatiskt — du behöver inte klicka &quot;Spara&quot;.</p>
+        </div>
+      )}
+    />
   );
 }
 
-function SectionHeader({ num, title, subtitle }: { num: number; title: string; subtitle?: string }) {
-  return (
-    <div className="flex items-baseline gap-3 mt-8 mb-3 first:mt-0">
-      <span className="flex items-center justify-center h-6 w-6 rounded-full bg-blue-100 text-blue-700 text-xs font-semibold shrink-0">{num}</span>
-      <div>
-        <h2 className="text-base font-semibold text-gray-900">{title}</h2>
-        {subtitle && <p className="text-xs text-gray-500">{subtitle}</p>}
-      </div>
-    </div>
-  );
+/** Panelens korta förklaring överst. */
+function PanelIntro({ text }: { text: string }) {
+  return <p className="mb-3 text-xs text-gray-500">{text}</p>;
 }
+

@@ -30,6 +30,14 @@ const deleteOfficeMutate = vi.fn();
 
 // DatasourceSection har egna tester (firma-settings-panel.test.tsx).
 // Stubba ut den här så vi inte krockar med dess Spara-knapp + checkbox.
+// Dockytan (#1184) kräver en riktig webbläsarlayout — här renderas huvudet och
+// alla paneler efter varandra, synkront, så testerna kan granska innehållet.
+vi.mock("@/components/layout/panel-page", () => ({
+  PanelPage: ({ header, panels }: { header: React.ReactNode; panels: ReadonlyArray<{ id: string; render: () => React.ReactNode }> }) => (
+    <>{header}{panels.map((p) => <div key={p.id} data-panel={p.id}>{p.render()}</div>)}</>
+  ),
+}));
+
 vi.mock("@/components/settings/datasource-section", () => ({
   DatasourceSection: () => null,
 }));

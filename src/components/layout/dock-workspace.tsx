@@ -28,7 +28,7 @@ import type { PanelDef } from "./panel-def";
 import { PhonePanels } from "./phone-panels";
 
 /** Lägg till en panel (via id); standardlayouter bygger med den. `inactive` = lägg till som bakgrundsflik. */
-export type AddPanel = (id: string, opts?: { position?: AddPanelPositionOptions; inactive?: boolean }) => void;
+export type AddPanel = (id: string, opts?: { position?: AddPanelPositionOptions; inactive?: boolean; initialWidth?: number }) => void;
 /** Sidans standardlayout per skärmklass. */
 export type DefaultLayout = (add: AddPanel, screen: "laptop" | "large") => void;
 
@@ -65,6 +65,7 @@ function adder(api: DockviewApi, defs: ReadonlyMap<string, PanelDef>): AddPanel 
     api.addPanel({
       id, component: "panel", title: def.title, params: { id },
       ...(opts.position ? { position: opts.position } : {}), ...(opts.inactive ? { inactive: true } : {}),
+      ...(opts.initialWidth ? { initialWidth: opts.initialWidth } : {}),
     });
   };
 }
