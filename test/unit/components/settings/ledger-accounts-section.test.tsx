@@ -56,6 +56,20 @@ describe("LedgerAccountsSection", () => {
     expect(screen.getByText(/siffror/)).toBeTruthy();
   });
 
+  it("admin: bankkontot förifylls och ett tömt valfritt konto utelämnas (#1173)", () => {
+    state.role = "ADMIN";
+    mutate.mockClear();
+    render(<LedgerAccountsSection />);
+    const bankNr = screen.getByLabelText(/Bank.*kontonummer/) as HTMLInputElement;
+    expect(bankNr.value).toBe("1930");
+    fireEvent.change(bankNr, { target: { value: "" } });
+    fireEvent.change(screen.getByLabelText(/Bank.*kontonamn/), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: /Spara mappning/ }));
+    const arg = mutate.mock.calls[0]![0] as { ledgerAccountMap: Record<string, unknown> };
+    expect(arg.ledgerAccountMap).not.toHaveProperty("bank");
+    expect(arg.ledgerAccountMap).toHaveProperty("intaktUtlagg");
+  });
+
   it("icke-admin ser bara ett meddelande", () => {
     state.role = "LAWYER";
     render(<LedgerAccountsSection />);

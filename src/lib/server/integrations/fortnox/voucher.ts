@@ -33,6 +33,7 @@ function accountForRole(role: VoucherRole, mapping: FortnoxKontoMappning): strin
     momsUtgaende12: mapping.momsUtgaende12,
     momsUtgaende06: mapping.momsUtgaende06,
     intaktUtlagg: mapping.intaktUtlagg,
+    bank: mapping.bank,
   }[role];
   if (!account) throw new Error(`Rollen '${role}' saknar kontomappning`);
   return account;

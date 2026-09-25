@@ -12,6 +12,7 @@ describe("fortnoxMappingFromLedgerMap", () => {
       momsUtgaende12: "2621",
       momsUtgaende06: "2631",
       intaktUtlagg: "3590",
+      bank: "1930",
     });
   });
 

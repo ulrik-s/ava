@@ -242,6 +242,8 @@ export const payments = pgTable("payments", {
   paidAt: timestamp("paid_at", { withTimezone: true }).notNull(),
   note: text("note"),
   reference: text("reference"),
+  /** Verifikat i bokföringssystemet (#1173). */
+  fortnoxId: text("fortnox_id"),
   recordedById: uuid("recorded_by_id").notNull().$type<UserId>(),
 }, (t) => [index("payments_invoice_idx").on(t.invoiceId)]);
 

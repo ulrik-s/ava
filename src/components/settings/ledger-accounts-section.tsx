@@ -18,7 +18,7 @@ import {
 } from "@/lib/shared/accounting/account-map";
 
 interface RoleDef {
-  key: "kundfordran" | "intaktArvode" | "momsUtgaende" | "intaktUtlagg";
+  key: "kundfordran" | "intaktArvode" | "momsUtgaende" | "intaktUtlagg" | "bank";
   label: string;
   optional?: boolean;
 }
@@ -28,6 +28,7 @@ const ROLES: readonly RoleDef[] = [
   { key: "intaktArvode", label: "Intäkt arvode (kredit)" },
   { key: "momsUtgaende", label: "Utgående moms (kredit)" },
   { key: "intaktUtlagg", label: "Intäkt utlägg (valfritt)", optional: true },
+  { key: "bank", label: "Bank, inbetalningar (debet)", optional: true },
 ];
 
 type Draft = Record<RoleDef["key"], LedgerAccount>;
@@ -39,19 +40,24 @@ function toDraft(map: LedgerAccountMap): Draft {
     intaktArvode: map.intaktArvode,
     momsUtgaende: map.momsUtgaende,
     intaktUtlagg: map.intaktUtlagg ?? empty,
+    bank: map.bank ?? empty,
   };
 }
 
-/** Bygg en (ev. ogiltig) mappning ur formuläret; tomt utläggskonto utelämnas. */
+/** Ett valfritt konto tas med bara om något av fälten är ifyllt. */
+function optionalAccount(key: "intaktUtlagg" | "bank", a: LedgerAccount): Partial<Record<typeof key, LedgerAccount>> {
+  return a.number !== "" || a.name !== "" ? { [key]: a } : {};
+}
+
+/** Bygg en (ev. ogiltig) mappning ur formuläret; tomma valfria konton utelämnas. */
 function draftToMap(series: string, draft: Draft): unknown {
-  const utlagg = draft.intaktUtlagg;
-  const hasUtlagg = utlagg.number !== "" || utlagg.name !== "";
   return {
     voucherSeries: series,
     kundfordran: draft.kundfordran,
     intaktArvode: draft.intaktArvode,
     momsUtgaende: draft.momsUtgaende,
-    ...(hasUtlagg ? { intaktUtlagg: utlagg } : {}),
+    ...optionalAccount("intaktUtlagg", draft.intaktUtlagg),
+    ...optionalAccount("bank", draft.bank),
   };
 }
 

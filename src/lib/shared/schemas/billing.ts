@@ -192,6 +192,8 @@ export const paymentSchema = z.object({
   /** Extern betalningsreferens (camt AcctSvcrRef m.m., #181) — idempotent
    *  betalfils-import: samma fil omladdad bokför inte om samma betalning. */
   reference: z.string().nullish(),
+  /** Verifikatet i bokföringssystemet (t.ex. "A/13", #1173). Satt = bokförd. */
+  fortnoxId: z.string().nullish(),
   recordedById: userIdSchema,
   createdAt: dateLike,
 }).passthrough();

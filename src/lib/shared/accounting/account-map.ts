@@ -33,6 +33,8 @@ export const ledgerAccountMapSchema = z.object({
   momsUtgaende12: ledgerAccountSchema.optional(),
   momsUtgaende06: ledgerAccountSchema.optional(),
   intaktUtlagg: ledgerAccountSchema.optional(),
+  /** Bankkonto för inbetalningar (#1173). Valfritt: krävs först när betalningar bokförs. */
+  bank: ledgerAccountSchema.optional(),
 });
 export type LedgerAccountMap = z.infer<typeof ledgerAccountMapSchema>;
 
@@ -45,6 +47,7 @@ export const DEFAULT_LEDGER_ACCOUNT_MAP: LedgerAccountMap = {
   momsUtgaende12: { number: "2621", name: "Utgående moms 12 %" },
   momsUtgaende06: { number: "2631", name: "Utgående moms 6 %" },
   intaktUtlagg: { number: "3590", name: "Övriga sidointäkter" },
+  bank: { number: "1930", name: "Företagskonto" },
 };
 
 /** Plocka ut roll→konto-delen (utan serie) som SIE-renderarens `SieAccountMap`. */
@@ -56,5 +59,6 @@ export function toSieAccountMap(map: LedgerAccountMap): SieAccountMap {
     ...(map.momsUtgaende12 ? { momsUtgaende12: map.momsUtgaende12 } : {}),
     ...(map.momsUtgaende06 ? { momsUtgaende06: map.momsUtgaende06 } : {}),
     ...(map.intaktUtlagg ? { intaktUtlagg: map.intaktUtlagg } : {}),
+    ...(map.bank ? { bank: map.bank } : {}),
   };
 }
