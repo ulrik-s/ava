@@ -27,7 +27,7 @@ import type { SortDir, Column, DataTablePrefs, MenuPosition, RowGroup } from "./
 import {
   isFilterable, isGroupable, mergePrefs, sortRows, filterRows, groupRows,
   isColumnHidden, visibleColumns, hasOverrides, hasSummary, buildSummaryContent, hideBelowClass,
-  withColumnHidden, menuPosition,
+  withColumnHidden, menuPosition, withColumnWidth, withColumnWidths, fixedTableWidth,
 } from "./data-table-logic";
 
 export type { SortDir, Column, DataTablePrefs, RowGroup } from "./data-table-logic";
@@ -37,6 +37,17 @@ export {
 } from "./data-table-logic";
 
 type FooterFn<T> = (rows: T[]) => Partial<Record<string, React.ReactNode>>;
+
+/** Fast layout när alla kolumner har bredd (se `fixedTableWidth`), annars automatisk. */
+function tableLayout(fixedWidth: number | null): { className: string; style?: React.CSSProperties } {
+  return fixedWidth === null
+    ? { className: "min-w-full text-sm" }
+    : { className: "text-sm table-fixed", style: { width: fixedWidth, minWidth: "100%" } };
+}
+
+/** Patch (explicit `undefined` rensar en nyckel) eller en funktion av aktuellt tillstånd. */
+type PrefsPatch = { [K in keyof DataTablePrefs]?: DataTablePrefs[K] | undefined };
+type Update = (patchOrFn: PrefsPatch | ((cur: DataTablePrefs) => PrefsPatch)) => void;
 
 interface Props<T> {
   prefKey: string;
@@ -84,9 +95,13 @@ export function DataTable<T>({ prefKey, columns, data, rowKey, onRowClick, empty
   };
   // Patch tillåter explicit `undefined` per nyckel — det är så vi RENSAR
   // en pref (spread `{ ...cur, key: undefined }` nollställer fältet).
-  const update = (patch: { [K in keyof DataTablePrefs]?: DataTablePrefs[K] | undefined }): void => {
+  // En funktion av aktuellt tillstånd får också skickas in — en kolumndragning
+  // skickar många uppdateringar ur samma closure och måste bygga på den senaste,
+  // inte på tillståndet när dragningen började (#1170).
+  const update: Update = (patchOrFn) => {
     setLocalPrefs((cur) => {
-      const next = { ...(cur ?? remote), ...patch };
+      const base = cur ?? remote;
+      const next = { ...base, ...(typeof patchOrFn === "function" ? patchOrFn(base) : patchOrFn) };
       persist(next);
       return next;
     });
@@ -97,6 +112,7 @@ export function DataTable<T>({ prefKey, columns, data, rowKey, onRowClick, empty
   const filtered = useMemo(() => filterRows(sorted, columns, prefs.filters), [sorted, columns, prefs.filters]);
   const grouped = useMemo(() => groupRows(filtered, columns, prefs.groupBy), [filtered, columns, prefs.groupBy]);
   const showOverrideBar = hasOverrides(prefs);
+  const fixedWidth = fixedTableWidth(vCols, prefs);
 
   const resetPersonal = (): void => {
     setLocalPrefs({});
@@ -127,7 +143,7 @@ export function DataTable<T>({ prefKey, columns, data, rowKey, onRowClick, empty
         />
       )}
       <div className="overflow-x-auto bg-white border border-gray-200 rounded-lg">
-        <table className="min-w-full text-sm">
+        <table {...tableLayout(fixedWidth)}>
           <DataTableHeader columns={columns} vCols={vCols} prefs={prefs} update={update} />
           <tbody className="divide-y divide-gray-100">
             <BodyRows
@@ -440,7 +456,7 @@ interface HeaderProps<T> {
   columns: Column<T>[];
   vCols: Column<T>[];
   prefs: DataTablePrefs;
-  update: (patch: Partial<DataTablePrefs>) => void;
+  update: Update;
 }
 
 interface HeaderActions {
@@ -455,7 +471,7 @@ interface HeaderActions {
 function buildHeaderActions<T>(
   prefs: DataTablePrefs,
   vCols: Column<T>[],
-  update: (patch: Partial<DataTablePrefs>) => void,
+  update: Update,
 ): HeaderActions {
   return {
     setSort: (key, dir) => update({ sortBy: dir ? key : undefined, sortDir: dir }),
@@ -472,20 +488,31 @@ function buildHeaderActions<T>(
       keys.splice(toIdx, 0, ...keys.splice(fromIdx, 1));
       update({ order: keys });
     },
-    resize: (key, width) => {
-      const cols = (prefs.columns ?? []).filter((c) => c.key !== key);
-      update({ columns: [...cols, { key, width }] });
-    },
+    // Funktion av aktuellt tillstånd (inte `prefs` ur closuren) och behåll
+    // dold-flaggan — förr skrevs posten om till bara { key, width } (#1170).
+    resize: (key, width) => update((cur) => ({ columns: withColumnWidth(cur, key, width) })),
   };
 }
 
 function DataTableHeader<T>({ vCols, prefs, update }: HeaderProps<T>) {
   const actions = buildHeaderActions(prefs, vCols, update);
+  const theadRef = useRef<HTMLTableSectionElement>(null);
+  // När man börjar dra: frys ALLA kolumners nuvarande bredd, så tabellen kan gå
+  // över till fast layout och bara kolumnen man drar i ändras (#1170).
+  const freezeWidths = (): void => update((cur) => {
+    if (fixedTableWidth(vCols, cur) !== null) return {};
+    const widths: Record<string, number> = {};
+    theadRef.current?.querySelectorAll<HTMLTableCellElement>("th[data-col-key]").forEach((th) => {
+      const w = Math.round(th.getBoundingClientRect().width);
+      if (w > 0 && th.dataset.colKey) widths[th.dataset.colKey] = w;
+    });
+    return { columns: withColumnWidths(cur, widths) };
+  });
   return (
-    <thead className="bg-gray-50 text-left">
+    <thead ref={theadRef} className="bg-gray-50 text-left">
       <tr>
         {vCols.map((c) => (
-          <HeaderCell key={c.key} col={c} prefs={prefs} width={widthOf(c, prefs)} actions={actions} />
+          <HeaderCell key={c.key} col={c} prefs={prefs} width={widthOf(c, prefs)} actions={actions} onResizeStart={freezeWidths} />
         ))}
         <th className="px-2 py-2 w-8" />
       </tr>
@@ -498,6 +525,7 @@ interface HeaderCellProps<T> {
   prefs: DataTablePrefs;
   width?: number | undefined;
   actions: HeaderActions;
+  onResizeStart: () => void;
 }
 
 function sortArrow(prefs: DataTablePrefs, key: string): string {
@@ -509,8 +537,9 @@ function hasAnyMenu<T>(col: Column<T>): boolean {
   return Boolean(col.sortable || isFilterable(col) || isGroupable(col) || col.hideable !== false);
 }
 
-function HeaderCell<T>({ col, prefs, width, actions }: HeaderCellProps<T>) {
+function HeaderCell<T>({ col, prefs, width, actions, onResizeStart }: HeaderCellProps<T>) {
   const [open, setOpen] = useState<MenuPosition | null>(null);
+  const [resizing, setResizing] = useState(false);
   const thRef = useRef<HTMLTableCellElement>(null);
   const openMenu = (): void => {
     const rect = thRef.current?.getBoundingClientRect();
@@ -521,9 +550,10 @@ function HeaderCell<T>({ col, prefs, width, actions }: HeaderCellProps<T>) {
   return (
     <th
       ref={thRef}
+      data-col-key={col.key}
       style={{ width, textAlign: col.align ?? "left" }}
       className={`relative px-3 py-2 text-xs font-semibold text-gray-700 select-none ${hideBelowClass(col)}`.trimEnd()}
-      draggable
+      draggable={!resizing}
       onDragStart={(e) => e.dataTransfer.setData("text/x-col", col.key)}
       onDragOver={(e) => e.preventDefault()}
       onDrop={(e) => { e.preventDefault(); const from = e.dataTransfer.getData("text/x-col"); if (from) actions.reorder(from, col.key); }}
@@ -541,7 +571,8 @@ function HeaderCell<T>({ col, prefs, width, actions }: HeaderCellProps<T>) {
       {open && (
         <ColumnMenu col={col} prefs={prefs} actions={actions} onClose={() => setOpen(null)} position={open} />
       )}
-      <ResizeHandle width={width} onResize={(w) => actions.resize(col.key, w)} />
+      <ResizeHandle width={width} onResize={(w) => actions.resize(col.key, w)}
+        onActive={(active) => { if (active) onResizeStart(); setResizing(active); }} />
     </th>
   );
 }
@@ -664,16 +695,39 @@ function Separator() {
   return <div className="my-1 border-t border-gray-100" />;
 }
 
-function ResizeHandle({ width, onResize }: { width?: number | undefined; onResize: (width: number) => void }) {
-  const onMouseDown = (e: React.MouseEvent): void => {
+/**
+ * Dra i kolumnens högerkant för att ändra bredd (#1170). Rubrikcellen är
+ * `draggable` (flytta kolumner) — i Chrome startade en musnedtryckning här en
+ * inbyggd HTML-dragning av hela rubriken, och under den kommer inga
+ * mousemove-händelser: markören ändrades men bredden aldrig. Därför: pointer
+ * events med pointer capture (fungerar även med touch/iPad), och rubriken är
+ * inte dragbar medan man ändrar bredd (`onActive`).
+ */
+function ResizeHandle({ width, onResize, onActive }: {
+  width?: number | undefined; onResize: (width: number) => void; onActive: (active: boolean) => void;
+}) {
+  const onPointerDown = (e: React.PointerEvent<HTMLSpanElement>): void => {
     e.preventDefault();
+    e.stopPropagation();
+    const handle = e.currentTarget;
     const startX = e.clientX;
-    const startW = width ?? (e.currentTarget.parentElement?.getBoundingClientRect().width ?? 120);
-    const move = (ev: MouseEvent) => onResize(Math.max(40, startW + (ev.clientX - startX)));
-    const up = () => { document.removeEventListener("mousemove", move); document.removeEventListener("mouseup", up); };
-    document.addEventListener("mousemove", move);
-    document.addEventListener("mouseup", up);
+    const startW = width ?? (handle.parentElement?.getBoundingClientRect().width ?? 120);
+    handle.setPointerCapture?.(e.pointerId);
+    onActive(true);
+    const move = (ev: PointerEvent) => onResize(Math.max(40, startW + (ev.clientX - startX)));
+    const up = () => {
+      handle.removeEventListener("pointermove", move);
+      handle.removeEventListener("pointerup", up);
+      handle.removeEventListener("pointercancel", up);
+      onActive(false);
+    };
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", up);
+    handle.addEventListener("pointercancel", up);
   };
-  return <span onMouseDown={onMouseDown} className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-400" />;
+  return (
+    <span onPointerDown={onPointerDown} draggable={false} role="separator" aria-orientation="vertical" aria-label="Ändra kolumnbredd"
+      className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize touch-none hover:bg-blue-400" />
+  );
 }
 

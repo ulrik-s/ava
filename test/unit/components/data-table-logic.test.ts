@@ -5,6 +5,9 @@
 
 import { describe, it, expect } from "vitest-compat";
 import {
+  withColumnWidth,
+  withColumnWidths,
+  fixedTableWidth,
   menuPosition,
   withColumnHidden,
   type Column,
@@ -133,6 +136,30 @@ describe("menuPosition (#1152 — rubrikmenyn i fönstrets koordinater)", () => 
   });
   it("nära fönsterkanterna → hålls inom marginalen, minst 120 px hög (scrollar själv)", () => {
     expect(menuPosition({ bottom: 780, left: -20, right: 50 }, "left", vp)).toEqual({ top: 784, left: 8, maxHeight: 120 });
+  });
+});
+
+describe("withColumnWidth / withColumnWidths (#1170)", () => {
+  it("sätter bredd och BEHÅLLER dold-flaggan (förr skrevs posten om till bara { key, width })", () => {
+    expect(withColumnWidth({ columns: [{ key: "age", hidden: true }] }, "age", 200)).toEqual([{ key: "age", hidden: true, width: 200 }]);
+  });
+  it("flera bredder på en gång: uppdaterar befintliga och lägger till nya", () => {
+    expect(withColumnWidths({ columns: [{ key: "a", width: 10 }, { key: "b", hidden: true }] }, { a: 50, c: 70 }))
+      .toEqual([{ key: "a", width: 50 }, { key: "b", hidden: true }, { key: "c", width: 70 }]);
+  });
+});
+
+describe("fixedTableWidth (#1170)", () => {
+  const colA = { key: "a", label: "A", render: () => null };
+  const colB = { key: "b", label: "B", render: () => null, defaultWidth: 100 };
+  it("alla kolumner har bredd (sparad eller default) → summan + avslutande kolumn", () => {
+    expect(fixedTableWidth([colA, colB], { columns: [{ key: "a", width: 150 }] })).toBe(150 + 100 + 32);
+  });
+  it("någon kolumn saknar bredd → null (automatisk layout)", () => {
+    expect(fixedTableWidth([colA, colB], {})).toBeNull();
+  });
+  it("inga kolumner → null", () => {
+    expect(fixedTableWidth([], {})).toBeNull();
   });
 });
 

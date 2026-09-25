@@ -104,7 +104,7 @@ export interface DemoSeed {
   contacts: Array<{ id: string; name: string }>;
   invoices: Array<{ id: string; matterId: string }>;
   documents: Array<{ id: string; matterId: string; title: string }>;
-  timeEntries: Array<{ id: string; matterId: string; description: string }>;
+  timeEntries: Array<{ id: string; matterId: string; description: string; frozenAt?: string | null }>;
   expenses: Array<{ id: string; matterId: string; description: string }>;
   paymentPlans: Array<{ id: string; invoiceId: string; status: string }>;
   billingRuns: Array<{ id: string; matterId: string; type: string; status: string; kostnadsrakningStatus?: string }>;
