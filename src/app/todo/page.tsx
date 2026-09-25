@@ -1,11 +1,16 @@
+"use client";
+
 /**
- * Server-wrapper för /todo — enad "Att-göra med datum/tid"-vy som ersätter
- * den traditionella kalendern. Renderar TodoClient som hämtar todo.list
- * (aggregerar tasks + calendar-events).
+ * /todo finns kvar för gamla bokmärken och länkar. "Att göra" och "Att bevaka"
+ * visade samma poster och förvirrade (#1167) — uppgifter och frister finns nu
+ * bara i "Att bevaka", möten och förhandlingar i Kalendern.
  */
 
-import TodoClient from "./_client";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 
-export default function TodoPage() {
-  return <TodoClient />;
+export default function TodoRedirect() {
+  const router = useRouter();
+  useEffect(() => { router.replace("/watchlist"); }, [router]);
+  return <p className="text-sm text-gray-500">Att göra heter nu Att bevaka — skickar dig vidare…</p>;
 }

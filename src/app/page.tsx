@@ -3,7 +3,8 @@
 /**
  * Dashboard — översikt för inloggad användare:
  *   - "Att bevaka" — härledda påminnelser (#1062)
- *   - "Att göra" för vald dag (tasks + events)
+ *   - "Att bevaka" överst — frister/bevakningar i rött när de är inne (#1167)
+ *   - "Kalender" för vald dag (möten, förhandlingar)
  *   - Tidrapportering för vald dag (summa + lista)
  *   - Senaste 5 ärenden man jobbat i (timeEntry order desc, dedup)
  *
@@ -13,14 +14,13 @@
 import { Plus, Calendar as CalendarIcon, Clock, MapPin } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { DeadlinesAlert } from "@/components/tasks/deadlines-alert";
 import { Modal } from "@/components/ui/modal";
 import { sectionHeaderClass } from "@/components/ui/section-tone";
+import { useCompleteWatch } from "@/components/watchlist/use-watch-actions";
 import { WatchlistList } from "@/components/watchlist/watchlist-list";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { trpc } from "@/lib/client/trpc";
 import { formatMinutes } from "@/lib/client/utils";
-import { asId, type UserId } from "@/lib/shared/schemas/ids";
 
 function todayYmd(): string {
   const d = new Date();
@@ -59,11 +59,10 @@ export default function Dashboard() {
         <DaySwitcher ymd={ymd} onChange={setYmd} />
       </div>
 
-      <DeadlinesAlert />
       <WatchlistCard />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        <TodoCard ymd={ymd} />
+        <CalendarCard ymd={ymd} />
         <TimeCard ymd={ymd} />
       </div>
 
@@ -83,6 +82,7 @@ const DASHBOARD_LIMIT = 5;
  */
 function WatchlistCard() {
   const q = trpc.watchlist.list.useQuery({ mine: true });
+  const complete = useCompleteWatch();
   const items = q.data?.items ?? [];
   if (items.length === 0) return null;
 
@@ -101,7 +101,7 @@ function WatchlistCard() {
         </Link>
       </div>
       <div className="p-4">
-        <WatchlistList items={items.slice(0, DASHBOARD_LIMIT)} emptyText="" />
+        <WatchlistList items={items.slice(0, DASHBOARD_LIMIT)} emptyText="" onComplete={complete} />
       </div>
     </div>
   );
@@ -128,7 +128,12 @@ function DaySwitcher({ ymd, onChange }: { ymd: string; onChange: (y: string) => 
   );
 }
 
-function TodoCard({ ymd }: { ymd: string }) {
+/**
+ * Dagens kalender (#1167): möten och förhandlingar. Uppgifter och frister
+ * står i "Att bevaka" — förr visade det här kortet ("Att göra") samma
+ * poster en gång till, och två listor med samma innehåll förvirrade.
+ */
+function CalendarCard({ ymd }: { ymd: string }) {
   const range = useMemo(() => rangeForDay(ymd), [ymd]);
   // Vänta på me.data innan vi frågar — todo.list verifierar att user finns
   // i org:en. Demo-runtime hydrerar users asynkront → utan gate kraschar
@@ -138,106 +143,68 @@ function TodoCard({ ymd }: { ymd: string }) {
     { from: range.from, to: range.to },
     { enabled: !!me.data?.id },
   );
-  const [selected, setSelected] = useState<TodoItem | null>(null);
-  const utils = trpc.useUtils();
-  const completeTask = trpc.task.complete.useMutation({ onSuccess: () => utils.todo.list.invalidate() });
-  const updateTask = trpc.task.update.useMutation({ onSuccess: () => utils.todo.list.invalidate() });
-
-  const toggleDone = (item: TodoItem): void => {
-    if (item.status === "DONE") updateTask.mutate({ id: item.id, status: "TODO" });
-    else completeTask.mutate({ id: item.id });
-    setSelected(null);
-  };
+  const events = todo.data?.filter((i) => i.source === "event") as CalendarItem[] | undefined;
+  const [selected, setSelected] = useState<CalendarItem | null>(null);
 
   return (
     <div className="bg-white rounded-lg border border-gray-200">
       <div className={sectionHeaderClass("blue")}>
         <h2 className="font-semibold text-gray-900 flex items-center gap-2">
-          <CalendarIcon size={16} className="text-gray-500" /> Att göra
-          {todo.data && <span className="text-xs font-normal text-gray-500">({todo.data.length})</span>}
+          <CalendarIcon size={16} className="text-gray-500" /> Kalender
+          {events && <span className="text-xs font-normal text-gray-500">({events.length})</span>}
         </h2>
-        <Link href="/todo" className="text-sm text-blue-600 hover:underline">Öppna alla →</Link>
+        <Link href="/calendar" className="text-sm text-blue-600 hover:underline">Öppna kalender →</Link>
       </div>
-      <TodoList todo={todo as TodoQueryLike} ymd={ymd} onSelect={setSelected} />
-      <TodoDetailModal selected={selected} meId={me.data?.id ? asId<"UserId">(me.data.id) : null} onClose={() => setSelected(null)} onToggle={toggleDone} />
+      <CalendarList events={events} isLoading={todo.isLoading} ymd={ymd} onSelect={setSelected} />
+      <Modal open={!!selected} title={selected?.title ?? ""} onClose={() => setSelected(null)} widthClass="max-w-lg">
+        {selected && <CalendarDetail item={selected} onClose={() => setSelected(null)} />}
+      </Modal>
     </div>
   );
 }
-
-interface TodoQueryLike { data?: TodoItem[] | undefined; isLoading: boolean }
 
 /** Listinnehållet: laddar / tomt / rader. */
-function TodoList({ todo, ymd, onSelect }: { todo: TodoQueryLike; ymd: string; onSelect: (i: TodoItem) => void }) {
+function CalendarList({ events, isLoading, ymd, onSelect }: {
+  events: CalendarItem[] | undefined; isLoading: boolean; ymd: string; onSelect: (i: CalendarItem) => void;
+}) {
   return (
     <div className="divide-y divide-gray-100">
-      {todo.isLoading && <p className="px-6 py-3 text-sm text-gray-500">Laddar…</p>}
-      {todo.data && todo.data.length === 0 && (
-        <p className="px-6 py-4 text-sm text-gray-500">Inget att göra {ymd === todayYmd() ? "idag" : "denna dag"}.</p>
+      {isLoading && <p className="px-6 py-3 text-sm text-gray-500">Laddar…</p>}
+      {events && events.length === 0 && (
+        <p className="px-6 py-4 text-sm text-gray-500">Inget i kalendern {ymd === todayYmd() ? "idag" : "denna dag"}.</p>
       )}
-      {todo.data?.map((item) => (
-        <TodoRow key={`${item.source}-${item.id}`} item={item as TodoItem} onSelect={onSelect} />
-      ))}
+      {events?.map((item) => <CalendarRow key={item.id} item={item} onSelect={onSelect} />)}
     </div>
   );
 }
 
-/** Detalj-modalen för en vald todo-rad. */
-function TodoDetailModal({ selected, meId, onClose, onToggle }: {
-  selected: TodoItem | null;
-  meId: UserId | null;
-  onClose: () => void;
-  onToggle: (item: TodoItem) => void;
-}) {
-  return (
-    <Modal open={!!selected} title={selected?.title ?? ""} onClose={onClose} widthClass="max-w-lg">
-      {selected && (
-        <TodoDetailCard
-          item={selected}
-          isOwn={!!meId && selected.userId === meId}
-          onToggleDone={() => onToggle(selected)}
-          onClose={onClose}
-        />
-      )}
-    </Modal>
-  );
-}
-
-interface TodoItem {
+interface CalendarItem {
   id: string;
-  source: "task" | "event";
   title: string;
   at: string | Date;
   endAt?: string | Date | null;
   allDay: boolean;
-  status: string | null;
-  priority: string | null;
   kind: string | null;
   location: string | null;
   description?: string | null;
-  userId: UserId;
   matter: { id: string; matterNumber: string; title: string } | null;
 }
 
-function badgeFor(item: TodoItem): { cls: string; label: string } {
-  if (item.source === "task") return { cls: "bg-blue-50 text-blue-700", label: "Att göra" };
+function badgeFor(item: CalendarItem): { cls: string; label: string } {
   if (item.kind === "deadline") return { cls: "bg-amber-100 text-amber-800", label: "Frist" };
   return { cls: "bg-purple-50 text-purple-700", label: "Möte" };
 }
 
-function TodoRow({ item, onSelect }: { item: TodoItem; onSelect: (item: TodoItem) => void }) {
+function CalendarRow({ item, onSelect }: { item: CalendarItem; onSelect: (item: CalendarItem) => void }) {
   const date = new Date(item.at);
   const timeStr = item.allDay ? "Hela dagen" : date.toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" });
   const badge = badgeFor(item);
-  const isDone = item.source === "task" && item.status === "DONE";
   return (
-    <button
-      type="button"
-      onClick={() => onSelect(item)}
-      className={`w-full text-left px-6 py-3 hover:bg-gray-50 flex items-center gap-3 ${isDone ? "opacity-60" : ""}`}
-    >
+    <button type="button" onClick={() => onSelect(item)}
+      className="w-full text-left px-6 py-3 hover:bg-gray-50 flex items-center gap-3">
       <span className={`inline-flex text-[10px] font-medium uppercase rounded-full px-1.5 py-0.5 ${badge.cls}`}>{badge.label}</span>
       <div className="flex-1 min-w-0">
-        <p className={`text-sm font-medium text-gray-900 truncate ${isDone ? "line-through" : ""}`}>{item.title}</p>
+        <p className="text-sm font-medium text-gray-900 truncate">{item.title}</p>
         {item.matter && (
           <p className="text-xs text-gray-500 truncate">{item.matter.matterNumber} — {item.matter.title}</p>
         )}
@@ -247,18 +214,12 @@ function TodoRow({ item, onSelect }: { item: TodoItem; onSelect: (item: TodoItem
   );
 }
 
-const PRIORITY_LABELS: Record<string, string> = { LOW: "Låg", MEDIUM: "Medium", HIGH: "Hög" };
-const STATUS_LABELS: Record<string, string> = { TODO: "Att göra", IN_PROGRESS: "Pågår", DONE: "Klar" };
-
-function TodoDetailCard({ item, isOwn, onToggleDone, onClose }: {
-  item: TodoItem;
-  isOwn: boolean;
-  onToggleDone: () => void;
-  onClose: () => void;
-}) {
+/** Detaljer för en kalenderpost (läsvy). */
+function CalendarDetail({ item, onClose }: { item: CalendarItem; onClose: () => void }) {
+  const badge = badgeFor(item);
   return (
     <div className="space-y-3 text-sm">
-      <DetailBadges item={item} />
+      <span className={`inline-flex text-[10px] font-medium uppercase rounded-full px-1.5 py-0.5 ${badge.cls}`}>{badge.label}</span>
       <DetailWhen item={item} />
       {item.location && (
         <p className="text-gray-700 inline-flex items-center gap-1"><MapPin size={12} className="text-gray-400" /> {item.location}</p>
@@ -277,66 +238,24 @@ function TodoDetailCard({ item, isOwn, onToggleDone, onClose }: {
           </EntityLink>
         </div>
       )}
-      <DetailActions item={item} isOwn={isOwn} onToggleDone={onToggleDone} onClose={onClose} />
-    </div>
-  );
-}
-
-/** Badge + status + prioritet. */
-function DetailBadges({ item }: { item: TodoItem }) {
-  const badge = badgeFor(item);
-  return (
-    <div className="flex items-center gap-2">
-      <span className={`inline-flex text-[10px] font-medium uppercase rounded-full px-1.5 py-0.5 ${badge.cls}`}>{badge.label}</span>
-      {item.source === "task" && item.status && (
-        <span className="text-xs text-gray-600">{STATUS_LABELS[item.status] ?? item.status}</span>
-      )}
-      {item.source === "task" && item.priority && (
-        <span className="text-xs text-gray-600">· Prioritet: {PRIORITY_LABELS[item.priority] ?? item.priority}</span>
-      )}
-    </div>
-  );
-}
-
-/** Datum + tid (+ ev. sluttid). */
-function DetailWhen({ item }: { item: TodoItem }) {
-  const date = new Date(item.at);
-  const dateStr = date.toLocaleDateString("sv-SE", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
-  const timeStr = item.allDay ? "Hela dagen" : date.toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" });
-  const endStr = item.endAt && !item.allDay ? new Date(item.endAt).toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" }) : null;
-  return (
-    <p className="text-gray-700"><span className="capitalize">{dateStr}</span>{!item.allDay && <> · {timeStr}{endStr ? `–${endStr}` : ""}</>}</p>
-  );
-}
-
-/** Footer-knappar: markera klar (egen task) + ändra + stäng. */
-function DetailActions({ item, isOwn, onToggleDone, onClose }: {
-  item: TodoItem; isOwn: boolean; onToggleDone: () => void; onClose: () => void;
-}) {
-  const ownTask = isOwn && item.source === "task";
-  return (
-    <div className="flex justify-between gap-2 pt-3 border-t border-gray-200">
-      <div>
-        {ownTask && (
-          <button type="button" onClick={onToggleDone}
-            className="px-3 py-1.5 text-sm bg-green-600 text-white rounded hover:bg-green-700">
-            {item.status === "DONE" ? "Markera ej klar" : "Markera klar"}
-          </button>
-        )}
-      </div>
-      <div className="flex gap-2">
-        {ownTask && (
-          <Link href="/todo" onClick={onClose}
-            className="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50">
-            Ändra…
-          </Link>
-        )}
+      <div className="flex justify-end pt-3 border-t border-gray-200">
         <button type="button" onClick={onClose}
           className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700">
           Stäng
         </button>
       </div>
     </div>
+  );
+}
+
+/** Datum + tid (+ ev. sluttid). */
+function DetailWhen({ item }: { item: CalendarItem }) {
+  const date = new Date(item.at);
+  const dateStr = date.toLocaleDateString("sv-SE", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+  const timeStr = item.allDay ? "Hela dagen" : date.toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" });
+  const endStr = item.endAt && !item.allDay ? new Date(item.endAt).toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" }) : null;
+  return (
+    <p className="text-gray-700"><span className="capitalize">{dateStr}</span>{!item.allDay && <> · {timeStr}{endStr ? `–${endStr}` : ""}</>}</p>
   );
 }
 

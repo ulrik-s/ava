@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest-compat";
 import {
   coverageItems, dagar, deadlineItems, failedDispatchItems, overdueInvoiceItems,
-  sortWatchlist, unbilledItems, daysBetween,
+  sortWatchlist, stockholmDay, unbilledItems, daysBetween,
   DEFAULT_THRESHOLDS, type WatchlistItem,
 } from "@/lib/shared/watchlist";
 
@@ -18,8 +18,22 @@ describe("daysBetween", () => {
 
   // Klockslag får inte påverka — annars flimrar "3 dagar kvar" beroende på
   // när på dygnet sidan laddas.
-  it("bryr sig inte om klockslag", () => {
-    expect(daysBetween(new Date("2026-09-05T23:59:00Z"), new Date("2026-09-06T00:01:00Z"))).toBe(1);
+  // Dygnsgränsen är SVENSK midnatt (#1167) — servern kör i UTC.
+  it("bryr sig inte om klockslag, räknar svensk midnatt som dygnsgräns", () => {
+    // 23:59 resp. 00:01 svensk sommartid (UTC+2)
+    expect(daysBetween(new Date("2026-09-05T21:59:00Z"), new Date("2026-09-05T22:01:00Z"))).toBe(1);
+    expect(daysBetween(new Date("2026-09-05T23:59:00Z"), new Date("2026-09-06T00:01:00Z"))).toBe(0); // båda 6/9 i Sverige
+  });
+
+  it("vintertid (UTC+1) räknas också rätt", () => {
+    expect(daysBetween(new Date("2026-12-05T22:59:00Z"), new Date("2026-12-05T23:01:00Z"))).toBe(1);
+  });
+});
+
+describe("stockholmDay", () => {
+  it("svensk kalenderdag, inte UTC", () => {
+    expect(stockholmDay(new Date("2026-09-24T22:00:00Z"))).toBe("2026-09-25"); // svensk midnatt
+    expect(stockholmDay(new Date("2026-09-24T21:59:00Z"))).toBe("2026-09-24");
   });
 });
 
@@ -102,6 +116,13 @@ describe("deadlineItems", () => {
     expect(deadlineItems([{ ...bas, dueAt: "2026-12-01" }], NOW)).toEqual([]);
   });
 
+  it("frist på svensk midnatt samma dag är 'idag', inte passerad (#1167)", () => {
+    // Uppgift lagrad som 25/9 00:00 svensk tid; nu 25/9 10:00 svensk tid.
+    const [item] = deadlineItems([{ ...bas, dueAt: stockholmDay(new Date("2026-09-24T22:00:00Z")) }], new Date("2026-09-25T08:00:00Z"));
+    expect(item?.severity).toBe("approaching");
+    expect(item?.at).toBe("2026-09-25");
+  });
+
   it("tar med frister inom horisonten", () => {
     const [item] = deadlineItems([{ ...bas, dueAt: "2026-09-10" }], NOW);
     expect(item?.severity).toBe("approaching");
@@ -114,9 +135,10 @@ describe("deadlineItems", () => {
     expect(item?.detail).toContain("4 dagar sedan");
   });
 
-  it("länkar till uppgiftslistan när fristen saknar ärende", () => {
+  it("utan ärende länkar till Att bevaka (/tasks fanns inte, #1167) och bär uppgiftens id", () => {
     const [item] = deadlineItems([{ ...bas, matterId: null, matterNumber: null, dueAt: "2026-09-06" }], NOW);
-    expect(item?.href).toBe("/tasks");
+    expect(item?.href).toBe("/watchlist");
+    expect(item?.taskId).toBe(bas.id); // så den kan bockas av i listan
   });
 });
 
