@@ -27,12 +27,13 @@ import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
 import type { AppRouter } from "@/lib/server/routers/_app";
 import type { TaxaLevel } from "@/lib/shared/brottmalstaxa";
-import { buildKostnadsrakningContext } from "@/lib/shared/kostnadsrakning";
+import { buildKostnadsrakningContext, withDocumentFields, type KrDocumentFields } from "@/lib/shared/kostnadsrakning";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import type { MatterId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
 
-interface Props {
+/** Dokumentfälten (#1218) — målnummer, titel och byråns sidfot — ärvs från KrDocumentFields. */
+interface Props extends KrDocumentFields {
   matterId: MatterId;
   matterNumber: string;
   matterTitle: string;
@@ -191,7 +192,7 @@ function useKostnadsrakningModal(props: Props) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hufStart]);
 
-  const ctx = useMemo(() => buildKostnadsrakningContext({
+  const ctx = useMemo(() => buildKostnadsrakningContext(withDocumentFields({
     matter: { matterNumber: props.matterNumber, title: props.matterTitle, clientName: props.clientName, ...omitUndefined({ radgivningPaid: props.radgivningPaid }) },
     defender: {
       name: props.defenderName,
@@ -212,7 +213,7 @@ function useKostnadsrakningModal(props: Props) {
     expenses: props.expenses,
     // Låsta (redan fakturerade/redovisade) poster utelämnas av byggaren (#1205).
     timeEntries: timeEntries.data?.entries ?? [],
-  }), [hufStart, hufEnd, yrkandeDate, level, isTaxe, hasFTax, props, timeEntries.data]);
+  }, props)), [hufStart, hufEnd, yrkandeDate, level, isTaxe, hasFTax, props, timeEntries.data]);
 
   useEffect(() => {
     const h = (e: KeyboardEvent) => { if (e.key === "Escape") props.onClose(); };

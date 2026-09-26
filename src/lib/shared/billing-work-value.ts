@@ -32,6 +32,7 @@ import type { VatBreakdownLine } from "./accounting/semantic-voucher";
 import { coverageEntryRateOre, coverageEntryValueOre, isPerDayKind, payableCoverageEntries } from "./brottmalstaxa";
 import { chargedExpenseLines } from "./expense-vat";
 import { arvodeInclVatOre } from "./invoice-calc";
+import { krClaim } from "./kr-claim";
 import type { PaymentMethod, TimeEntryKind } from "./schemas/enums";
 import type { ExpenseId, TimeEntryId } from "./schemas/ids";
 import { DEFAULT_VAT_RATE } from "./vat";
@@ -184,12 +185,22 @@ export function settlementArvodeNet(method: PaymentMethod, work: ArvodeWork, set
   // (#950) OCH offentliga uppdrag (#1003) — domstolen betalar normen, inte vad
   // byrån råkar ta. Bara PRIVAT/MIX debiterar byråns egen taxa (ligger på posten).
   if (method === "PRIVAT" || method === "MIX") return arvodeNetOre(work);
+  return kindValueRowsOre(billable, settleDate).reduce((s, r) => s + r, 0);
+}
+
+/**
+ * Arvodet per kategori på normerna för `date` (öre): en rad per timkategori och
+ * en för beredskapsdygnen — kostnadsräkningens sammanställningsrader (#1218).
+ */
+function kindValueRowsOre(billable: ArvodeWork["timeEntries"], date: Date | string): number[] {
   // DVFS 2025:9 § 2 (#950): beredskapsdagar som "förbrukats" av en helgförhandling
   // eller ett polisförhör samma dag ersätts inte — arbetet betalas i stället.
   const payable = payableCoverageEntries(billable);
   // Rådgivningstimmen dras INTE av här (#1205): den är en låst post som redan
   // fakturerats klienten och ingår aldrig i underlaget som värderas.
-  return sumKindValueOre(minutesByKind(payable), settleDate) + perDayValueOre(payable, settleDate);
+  const rows = [...minutesByKind(payable)].map(([kind, minutes]) => timeEntryValueOre(minutes, coverageEntryRateOre(kind, date)));
+  const perDay = perDayValueOre(payable, date);
+  return perDay > 0 ? [...rows, perDay] : rows;
 }
 
 /** Det av ärendet som styr hur arbetet värderas. */
@@ -222,8 +233,22 @@ export function matterEntryValueOre(
   return usesOwnRates(m) ? entryOwnValueOre(t) : coverageEntryValueOre(t, date);
 }
 
-/** Kostnadsräkningens yrkade brutto — den går ALLTID till domstol, så utläggen
- *  värderas med 25 % moms (#945). `arvodeNet` skiljer sig per betalningssätt. */
-export function krGrossOre(work: UnfrozenWork, arvodeNet: number): number {
-  return arvodeInclVatOre(arvodeNet) + grossOreOf(expenseBreakdownLines(work));
+/**
+ * Kostnadsräkningens arvodesrader enligt ärendets värderingsregel: domstols-
+ * ersatta metoder en rad per kategori (Domstolsverkets normer), egna á-priser
+ * (taxeärenden) en rad för hela arvodet.
+ */
+export function matterKrArvodeRows(m: ValuationMatter, work: ArvodeWork, date: Date | string): number[] {
+  return usesOwnRates(m) ? [arvodeNetOre(work)] : kindValueRowsOre(work.timeEntries.filter((t) => t.billable), date);
+}
+
+/**
+ * Kostnadsräkningens yrkade brutto (#1218) — samma avrundning som dokumentet
+ * (`krClaim`): varje rad till hela kronor, moms 25 % på summan utom äkta utlägg
+ * (#945/#975), avrundad till hela kronor.
+ */
+export function krGrossOre(work: UnfrozenWork, arvodeRowsOre: readonly number[]): number {
+  const lines = expenseBreakdownLines(work);
+  const passThrough = netOreOf(lines.filter((l) => l.vatRate === 0));
+  return krClaim({ arvodeRowsOre, expenseChargedNetOre: netOreOf(lines) - passThrough, expensePassThroughOre: passThrough }).inclVat;
 }

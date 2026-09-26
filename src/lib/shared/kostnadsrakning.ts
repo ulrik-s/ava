@@ -18,14 +18,20 @@
  */
 
 import { applyNoFTaxFactorForDate, computeBrottmalstaxa, computeTimkostnadsnorm, coverageEntryRateOre, coverageEntryValueOre, isPerDayKind, payableCoverageEntries, timkostnadsnormFtaxForDate, type TaxaLevel, type TaxaResult } from "./brottmalstaxa";
+import { CHARGED_EXPENSE_VAT_RATE, chargedVatOre, expenseNetOre as chargedExpenseNetOre } from "./expense-vat";
 import { computeForordnandeErsattning, forhorMinutes, type Forhor, type ForordnandeResult } from "./forordnandetaxa";
 import { isTidsspillanKind } from "./hourly-rate";
-import { toIsoDate } from "./iso-date";
+import { toIsoDate, toLocalTime } from "./iso-date";
+import { buildKrDocument, krArvodePart, type KrArvodeBasis, type KrArvodePart, type KrDocumentView, type KrHuvudforhandling } from "./kostnadsrakning-document";
+import { timeAmountOre } from "./kostnadsrakning-document-rows";
+import { krClaim, roundToKronor, type KrClaim } from "./kr-claim";
+import { formatHours, formatMinutes, formatOreAsKr } from "./kr-format";
+import { omitUndefined } from "./omit-undefined";
+import type { OrgImage } from "./org-image";
 import { radgivningTextRad } from "./rattshjalp";
 import type { TimeEntryKind } from "./schemas/enums";
 import type { BillingRunId } from "./schemas/ids";
 import { isLockedEntry, type LockableEntry } from "./time-entry-lock";
-import { splitVat } from "./vat";
 
 export interface ExpenseInput {
   id: string;
@@ -38,6 +44,12 @@ export interface ExpenseInput {
   /** Default true. */
   vatIncluded?: boolean;
   billable?: boolean;
+  /** Antal (t.ex. 16 mil) — visas i arbetsredogörelsen tillsammans med á-pris (#1218). */
+  quantity?: number;
+  /** Á-pris i öre (t.ex. 950 = 9,50 kr/mil). */
+  unitPriceOre?: number;
+  /** Äkta utlägg (#975) — vidarefaktureras utan moms. */
+  passThrough?: boolean;
 }
 
 export interface BuildInput {
@@ -48,15 +60,29 @@ export interface BuildInput {
     /** Rättshjälp (#383): klienten har betalat en rådgivningstimme separat →
      *  visa transparens-textraden på kostnadsräkningen (inget belopp). */
     radgivningPaid?: boolean;
+    /** Domstolens målnummer (#1218) — rubriken "KOSTNADSRÄKNING i mål …". */
+    courtCaseNumber?: string;
   };
   defender: {
     name: string;
     email?: string;
+    /** Titel under underskriften, t.ex. "Advokat" (#1218). */
+    title?: string;
   };
   organization?: {
     name?: string;
     orgNumber?: string;
     address?: string;
+    /** Sidfotens kontaktuppgifter + bankgiro (#1218). */
+    phone?: string;
+    email?: string;
+    bankgiro?: string;
+    /** Ort för "{ort} den {datum}"; saknas → adressens postort. */
+    city?: string;
+    /** Webbplats, logga och sidfotsmärke (byråinställningarna). */
+    website?: string;
+    logo?: OrgImage;
+    footerSeal?: OrgImage;
   };
   /** Domstolens namn (för rubriken i kostnadsräkningen). */
   courtName?: string;
@@ -123,6 +149,9 @@ export interface ExpenseLine {
   exclVat: number;
   vat: number;
   inclVat: number;
+  quantity?: number;
+  unitPriceOre?: number;
+  passThrough?: boolean;
 }
 
 export interface TimeLine {
@@ -137,6 +166,8 @@ export interface TimeLine {
   amountOre: number;
   /** TIDSSPILLAN → visas som tidsspillan-rad; annars arbete. */
   isTidsspillan: boolean;
+  /** Kategorin (default ARBETE) — styr avsnitt i arbetsredogörelsen (#1218). */
+  kind: TimeEntryKind;
 }
 
 export interface KostnadsrakningResult {
@@ -157,6 +188,8 @@ export interface KostnadsrakningResult {
   arvodeInclVat: number;
   /** Belopp att fakturera staten = arvode inkl moms + utlägg inkl moms. */
   totalInclVat: number;
+  /** Dokumentvyn (#1218) — samma som `templateContext.document`. */
+  document: KrDocumentView;
   templateContext: Record<string, unknown>;
 }
 
@@ -198,7 +231,45 @@ function orgContext(organization: BuildInput["organization"]): Record<string, st
     organizationName: org.name ?? "",
     organizationOrgNumber: org.orgNumber ?? "",
     organizationAddress: org.address ?? "",
+    organizationPhone: org.phone ?? "",
+    organizationEmail: org.email ?? "",
+    organizationBankgiro: org.bankgiro ?? "",
   };
+}
+
+/** Vad arvodet står på: förordnandetaxa, brottmålstaxa eller löpande räkning. */
+function arvodeBasis(input: BuildInput, ford: ForordnandeResult | null, level: TaxaLevel, taxa: TaxaResult): KrArvodeBasis {
+  if (ford?.kind === "taxa") return { kind: "forordnande", ford };
+  if (input.isTaxeArende ?? true) return { kind: "brottmalstaxa", level, taxa };
+  return { kind: "lopande", notes: ford?.kind === "utanfor-taxan" ? [UTANFOR_TEXT[ford.reason]] : [] };
+}
+
+/** Dokumentvyn (#1218) ur samma underlag som de äldre vy-fälten. */
+function krDocument(a: KrTemplateArgs): KrDocumentView {
+  const { input } = a;
+  return buildKrDocument({
+    matterNumber: input.matter.matterNumber,
+    courtCaseNumber: input.matter.courtCaseNumber,
+    courtName: input.courtName,
+    defenderName: input.defender.name,
+    defenderTitle: input.defender.title,
+    organization: input.organization ?? {},
+    hasFTax: input.hasFTax ?? true,
+    yrkandeDate: a.yrkandeDate,
+    basis: a.basis,
+    huf: a.huf,
+    timeLines: a.timeLines,
+    forhor: input.forordnande?.forhor,
+    expenseLines: a.expenseLines,
+    claim: a.claim,
+    radgivningNotice: radgivningNoticeOf(input),
+  });
+}
+
+/** #383: rådgivningstimmen redovisas som textrad (utan belopp) — ingår ej
+ *  i domstolens kostnadsräkning, klienten har betalat den separat. */
+function radgivningNoticeOf(input: BuildInput): string | null {
+  return input.matter.radgivningPaid ? radgivningTextRad() : null;
 }
 
 interface KrTemplateArgs {
@@ -220,20 +291,26 @@ interface KrTemplateArgs {
   billableArbetsMinutes: number;
   totalArbetsMinutes: number;
   ford: ForordnandeResult | null;
+  basis: KrArvodeBasis;
+  huf: KrHuvudforhandling;
+  claim: KrClaim;
 }
 
 /** Bygg Handlebars-context (matchar default-mallen). Ren assemblering. */
-function buildKrTemplateContext(a: KrTemplateArgs): Record<string, unknown> {
+function buildKrTemplateContext(a: KrTemplateArgs, document: KrDocumentView): Record<string, unknown> {
   return {
+    // Dokumentvyn (#1218) — default-mallen och PDF:en ritar ur den. De platta
+    // fälten nedan finns kvar för byråernas egna mallar (#852).
+    document,
+    courtCaseNumber: a.input.matter.courtCaseNumber ?? "",
+    defenderTitle: a.input.defender.title ?? "",
     // Räkningens datum = yrkandedatumet (#980), inte "nu": headern och beloppen
     // ska alltid tala om samma dag.
     today: toIsoDate(a.yrkandeDate),
     matterNumber: a.input.matter.matterNumber,
     matterTitle: a.input.matter.title,
     clientName: a.input.matter.clientName ?? "",
-    // #383: rådgivningstimmen redovisas som textrad (utan belopp) — ingår ej
-    // i domstolens kostnadsräkning, klienten har betalat den separat.
-    radgivningNotice: a.input.matter.radgivningPaid ? radgivningTextRad() : null,
+    radgivningNotice: radgivningNoticeOf(a.input),
     defenderName: a.input.defender.name,
     defenderEmail: a.input.defender.email ?? "",
     ...orgContext(a.input.organization),
@@ -335,7 +412,7 @@ function valuateTimeLine(
   const amountOre = ctx.isTaxe ? 0 : ctx.forFTax(coverageEntryValueOre(t, ctx.valDate));
   return {
     id: t.id, date: toIsoDate(t.date), description: t.description, minutes: t.minutes,
-    rateOrePerH, amountOre, isTidsspillan: isTidsspillanKind(t.kind),
+    rateOrePerH, amountOre, isTidsspillan: isTidsspillanKind(t.kind), kind: t.kind ?? "ARBETE",
   };
 }
 
@@ -362,13 +439,60 @@ function resolveBasis(original: BuildInput, billable: readonly TimeEntryInput[],
   return { ford, input, start, end, huvudforhandlingMinutes: ford ? 0 : diffMinutes(start, end) };
 }
 
-/** Utläggsrader — bara debiterbara; övriga är byråns egen kostnad. */
+/**
+ * Utläggsrader — bara debiterbara; övriga är byråns egen kostnad. Momsen är den
+ * DEBITERADE (#975, NJA 2005 s. 606): byråns ingående moms räknas av och 25 %
+ * läggs på; äkta utlägg går vidare utan moms. Samma regel som körningens belopp
+ * (`krGrossOre`), så dokumentet och det lagrade yrkandet stämmer.
+ */
 function expenseLinesOf(expenses: readonly ExpenseInput[]): ExpenseLine[] {
   return expenses.filter((e) => e.billable !== false).map((e) => {
-    const vatRate = e.vatRate ?? 2500;
-    const r = splitVat({ amount: e.amount, vatRate, vatIncluded: e.vatIncluded ?? true });
-    return { id: e.id, date: toIsoDate(e.date), description: e.description, vatRate, exclVat: r.exclVat, vat: r.vat, inclVat: r.inclVat };
+    const exclVat = chargedExpenseNetOre({ ...e, vatIncluded: e.vatIncluded ?? true });
+    const vat = e.passThrough === true ? 0 : chargedVatOre(exclVat);
+    return {
+      id: e.id, date: toIsoDate(e.date), description: e.description,
+      vatRate: e.passThrough === true ? 0 : CHARGED_EXPENSE_VAT_RATE, exclVat, vat, inclVat: exclVat + vat,
+      ...omitUndefined({ quantity: e.quantity, unitPriceOre: e.unitPriceOre, passThrough: e.passThrough }),
+    };
   });
+}
+
+/** Yrkandet (#1218): raderna avrundade till hela kronor, moms 25 % på summan. */
+function claimOf(part: KrArvodePart, expenseLines: readonly ExpenseLine[]): KrClaim {
+  const passThrough = expenseLines.filter((l) => l.passThrough === true).reduce((s, l) => s + l.exclVat, 0);
+  const charged = expenseLines.reduce((s, l) => s + l.exclVat, 0) - passThrough;
+  return krClaim({ arvodeRowsOre: part.rows.map((r) => r.amountOre), expenseChargedNetOre: charged, expensePassThroughOre: passThrough });
+}
+
+/**
+ * Dokumentfälten (#1218) som anroparna hämtar ur ärendet, användaren och
+ * byråinställningarna — platta så de kan skickas som props/meta.
+ */
+export interface KrDocumentFields {
+  courtCaseNumber?: string | undefined;
+  defenderTitle?: string | undefined;
+  organizationPhone?: string | undefined;
+  organizationEmail?: string | undefined;
+  organizationBankgiro?: string | undefined;
+  organizationWebsite?: string | undefined;
+  organizationLogo?: OrgImage | undefined;
+  organizationFooterSeal?: OrgImage | undefined;
+}
+
+/** Lägg dokumentfälten på rätt ställe i `BuildInput` (utelämnade fält rörs inte). */
+export function withDocumentFields(input: BuildInput, f: KrDocumentFields): BuildInput {
+  return {
+    ...input,
+    matter: { ...input.matter, ...omitUndefined({ courtCaseNumber: f.courtCaseNumber }) },
+    defender: { ...input.defender, ...omitUndefined({ title: f.defenderTitle }) },
+    organization: {
+      ...input.organization,
+      ...omitUndefined({
+        phone: f.organizationPhone, email: f.organizationEmail, bankgiro: f.organizationBankgiro,
+        website: f.organizationWebsite, logo: f.organizationLogo, footerSeal: f.organizationFooterSeal,
+      }),
+    },
+  };
 }
 
 export function buildKostnadsrakningContext(original: BuildInput): KostnadsrakningResult {
@@ -390,25 +514,32 @@ export function buildKostnadsrakningContext(original: BuildInput): Kostnadsrakni
 
   const expenseLines = expenseLinesOf(input.expenses);
 
-  const expenseSummary = expenseLines.reduce(
-    (s, l) => ({ exclVat: s.exclVat + l.exclVat, vat: s.vat + l.vat, inclVat: s.inclVat + l.inclVat }),
-    { exclVat: 0, vat: 0, inclVat: 0 },
-  );
-
-  // Icke-taxa: arvodet = Σ per-rad-belopp (arbete + tidsspillan på sina normer) +
-  // ev. huvudförhandling (arbete-norm). Taxa-ärenden: taxans fasta belopp (#891).
-  const icketaxaArvode = timeLines.reduce((s, l) => s + l.amountOre, 0)
-    + Math.round((huvudforhandlingMinutes / 60) * arvodeNorm);
-  const arvodeExclVat = arvodeFor(input, taxa, ford, icketaxaArvode);
-  const arvodeMoms = Math.round(arvodeExclVat * 0.25);
+  // Arvodet står på förordnandetaxan, brottmålstaxan eller löpande räkning (arbete
+  // + tidsspillan på sina normer + ev. huvudförhandling på arbete-normen, #891).
+  // Yrkandet avrundas per rad till hela kronor och momsen på summan (#1218).
+  const huf: KrHuvudforhandling = {
+    start, end, minutes: huvudforhandlingMinutes, rateOrePerH: arvodeNorm,
+    amountOre: Math.round((huvudforhandlingMinutes / 60) * arvodeNorm),
+  };
+  const basis = arvodeBasis(input, ford, level, taxa);
+  const claim = claimOf(krArvodePart(basis, huf, timeLines), expenseLines);
+  const arvodeExclVat = claim.arvodeExclVat;
+  // Delsummorna (äldre vy-fält): arvodets moms i hela kronor, utläggen tar resten
+  // av den avrundade totalmomsen — så arvode + utlägg alltid = yrkandet.
+  const arvodeMoms = roundToKronor(arvodeExclVat * 0.25);
+  const expenseVat = claim.vat - arvodeMoms;
+  const expenseSummary = { exclVat: claim.expenseExclVat, vat: expenseVat, inclVat: claim.expenseExclVat + expenseVat };
   const arvodeInclVat = arvodeExclVat + arvodeMoms;
-  const totalInclVat = arvodeInclVat + expenseSummary.inclVat;
+  const totalInclVat = claim.inclVat;
 
-  const templateContext = buildKrTemplateContext({
+  const args: KrTemplateArgs = {
     input, start, end, yrkandeDate, huvudforhandlingMinutes, level, taxa,
     arvodeExclVat, arvodeMoms, arvodeInclVat, totalInclVat,
     expenseLines, expenseSummary, timeLines, billableArbetsMinutes, totalArbetsMinutes, ford,
-  });
+    basis, huf, claim,
+  };
+  const document = krDocument(args);
+  const templateContext = buildKrTemplateContext(args, document);
 
   return {
     huvudforhandlingMinutes,
@@ -422,6 +553,7 @@ export function buildKostnadsrakningContext(original: BuildInput): Kostnadsrakni
     arvodeMoms,
     arvodeInclVat,
     totalInclVat,
+    document,
     templateContext,
   };
 }
@@ -447,13 +579,6 @@ function forordnandeOf(input: BuildInput, billable: readonly TimeEntryInput[], y
   });
 }
 
-/** Arvodet exkl moms: förordnandetaxa (+ tidsspillan), brottmålstaxa eller löpande. */
-function arvodeFor(input: BuildInput, taxa: TaxaResult, ford: ForordnandeResult | null, icketaxa: number): number {
-  if (ford?.kind === "taxa") return ford.arvodeExclVat;
-  if (!(input.isTaxeArende ?? true)) return icketaxa;
-  return taxa.kind === "taxa-applies" ? taxa.ersattningExclVat : 0;
-}
-
 const UTANFOR_TEXT = {
   "over-max": "Den sammanlagda förhörstiden överstiger 3 tim 45 min — taxan tillämpas inte, ersättning enligt löpande räkning.",
   "utanfor-tid": "Förhör har hållits utanför vardagar 07.00–18.00 — taxan tillämpas inte, ersättning enligt löpande räkning.",
@@ -462,7 +587,7 @@ const UTANFOR_TEXT = {
 /** Rad för överskjutande tidsspillan, eller null när inget ersätts i kategorin. */
 function tidsspillanRad(label: string, minutes: number, rateOre: number): Record<string, string> | null {
   if (minutes <= 0) return null;
-  return { label, minutesFormatted: formatMinutes(minutes), rateFormatted: `${formatOreAsKr(rateOre)}/h`, amountFormatted: formatOreAsKr(Math.round((minutes * rateOre) / 60)) };
+  return { label, minutesFormatted: formatMinutes(minutes), rateFormatted: `${formatOreAsKr(rateOre)}/h`, amountFormatted: formatOreAsKr(timeAmountOre(minutes, rateOre)) };
 }
 
 /** Kostnadsräkningens förordnande-avsnitt: förhören, taxan och tidsspillan. */
@@ -470,8 +595,8 @@ function forordnandeContext(forhor: readonly Forhor[] | undefined, ford: Forordn
   if (!forhor || !ford) return null;
   const forhorLines = forhor.map((f) => ({
     date: toIsoDate(f.start),
-    start: toIsoDateTime(new Date(f.start)).slice(11),
-    end: toIsoDateTime(new Date(f.end)).slice(11),
+    start: toLocalTime(f.start),
+    end: toLocalTime(f.end),
     minutesFormatted: formatMinutes(forhorMinutes(f)),
   }));
   const base = { forhorLines, forhorTotalFormatted: formatMinutes(ford.forhorMinutes) };
@@ -503,31 +628,15 @@ export function diffMinutes(start: Date, end: Date): number {
 }
 
 function toIsoDateTime(d: Date): string {
-  return `${toIsoDate(d)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
-function pad(n: number): string {
-  return String(n).padStart(2, "0");
+  return `${toIsoDate(d)} ${toLocalTime(d)}`;
 }
 
 /** Minuter → decimaltimmar, "4,00 h" (antal-kolumnen i tidsspecifikationen, #891). */
 export function formatHoursDecimal(m: number): string {
-  return `${new Intl.NumberFormat("sv-SE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(m / 60)} h`;
+  return `${formatHours(m)} h`;
 }
 
-export function formatMinutes(m: number): string {
-  if (m <= 0) return "0 min";
-  const h = Math.floor(m / 60);
-  const rest = m % 60;
-  if (h === 0) return `${rest} min`;
-  if (rest === 0) return `${h} tim`;
-  return `${h} tim ${rest} min`;
-}
-
-function formatOreAsKr(ore: number): string {
-  const kr = ore / 100;
-  return new Intl.NumberFormat("sv-SE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(kr) + " kr";
-}
+export { formatMinutes };
 
 function vatRateLabel(bp: number): string {
   return bp === 0 ? "0 %"

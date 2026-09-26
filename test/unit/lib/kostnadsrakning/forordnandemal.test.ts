@@ -74,20 +74,20 @@ describe("förordnandemål: FU nedlagd efter två förhör", () => {
     const html = renderHandlebars(KOSTNADSRAKNING_DEFAULT_HTML, kr.templateContext);
     expect(html).not.toMatch(/\{\{/);
     expect(html).toContain("förordnandemål (DVFS 2025:5)");
-    // Varje förhör + den sammanlagda tiden
-    expect(html).toContain("2026-03-02");
-    expect(html).toContain("50 min");
-    expect(html).toContain("35 min");
-    expect(html).toContain("1 tim 25 min");
+    // Varje förhör + den sammanlagda tiden (decimaltimmar i arbetsredogörelsen, #1218)
+    expect(html).toContain("Förhör kl. 08:00–08:50");
+    expect(html).toContain("0,83");
+    expect(html).toContain("0,58");
+    expect(html).toContain("1,42 tim");
     // Taxan
     expect(html).toContain("Taxa, förhörstid 1 tim 15 min - 1 tim 29 min");
     expect(html).toMatch(/5\s106,00 kr/);
     // Tidsspillan med avdrag för den timme som ingår
     expect(html).toContain("Tidsspillan totalt 3 tim, varav 1 tim ingår i taxan");
-    expect(html).toMatch(/Tidsspillan vardag 08–18 utöver taxan: 2 tim à 1\s487,00 kr\/h/);
+    expect(html).toMatch(/TIDSSPILLAN UTÖVER TAXAN<\/td><td class="num">2,00 á 1\s487 kr/);
     expect(html).toMatch(/2\s974,00 kr/);
     // Arbetet som utförts (ingår i taxan) + utlägg + totalen
-    expect(html).toContain("Utfört arbete (ingår i taxan)");
+    expect(html).toContain("Arvode (ingår i taxan)");
     expect(html).toContain("Genomgång av förundersökningsmaterial");
     expect(html).toContain("Parkering polishuset");
     expect(html).toMatch(/10\s225,00 kr/);
@@ -103,11 +103,13 @@ describe("förordnandemål som inte ryms i taxan", () => {
       ...INPUT,
       forordnande: { forhor: [...FORHOR, { start: at("05", "18:30"), end: at("05", "19:15") }] },
     });
-    // Löpande: arbete 205 min à 1 626 + tidsspillan 150 min à 1 487 + 30 min à 975.
-    expect(kr.arvodeExclVat).toBe(Math.round((205 * 162_600 + 150 * 148_700 + 30 * 97_500) / 60));
+    // Löpande: arbete 205 min à 1 626 + tidsspillan 150 min à 1 487 + 30 min à 975,
+    // varje rad avrundad till hela kronor (#1218): 5 555,50 → 5 556; 3 717,50 → 3 718; 487,50 → 488.
+    expect(kr.arvodeExclVat).toBe(555_600 + 371_800 + 48_800);
     const html = renderHandlebars(KOSTNADSRAKNING_DEFAULT_HTML, kr.templateContext);
     expect(html).toContain("utanför vardagar 07.00–18.00");
-    expect(html).toContain("Arvode — löpande räkning");
+    // Löpande: arvodet per kategori och á-pris i sammanställningen (#1218).
+    expect(html).toMatch(/ARVODE<\/td><td class="num">3,42 á 1\s626 kr/);
     expect(html).not.toMatch(/\{\{/);
   });
 

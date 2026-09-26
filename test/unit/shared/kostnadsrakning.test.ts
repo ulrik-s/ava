@@ -57,9 +57,9 @@ describe("buildKostnadsrakningContext — utan utlägg, 95 min nivå 1", () => {
     expect(r.arvodeExclVat).toBe(563500);
   });
 
-  it("+25 % moms = 7 044 kr inkl", () => {
-    expect(r.arvodeMoms).toBe(140875);
-    expect(r.arvodeInclVat).toBe(704375);
+  it("+25 % moms avrundad till hela kronor (#1218): 1 408,75 → 1 409 kr, 7 044 kr inkl", () => {
+    expect(r.arvodeMoms).toBe(140900);
+    expect(r.arvodeInclVat).toBe(704400);
   });
 
   it("inga utlägg → 0", () => {
@@ -89,19 +89,29 @@ describe("buildKostnadsrakningContext — med utlägg", () => {
     expect(r.expenseLines.map((l) => l.id).sort()).toEqual(["e1", "e2"]);
   });
 
-  it("delar upp varje utlägg korrekt (exkl/moms/inkl)", () => {
+  it("delar upp varje utlägg: byråns moms räknas av, 25 % debiteras (#975)", () => {
     const e1 = r.expenseLines.find((l) => l.id === "e1")!;
-    expect(e1).toMatchObject({ exclVat: 12500, vat: 0, inclVat: 12500 });
+    expect(e1).toMatchObject({ exclVat: 12500, vat: 3125, inclVat: 15625, vatRate: 2500 });
     const e2 = r.expenseLines.find((l) => l.id === "e2")!;
-    expect(e2).toMatchObject({ exclVat: 42453, vat: 2547, inclVat: 45000 });
+    expect(e2).toMatchObject({ exclVat: 42453, vat: 10613, inclVat: 53066 });
   });
 
-  it("expenseSummary summerar", () => {
-    expect(r.expenseSummary).toEqual({
-      exclVat: 12500 + 42453,
-      vat: 0 + 2547,
-      inclVat: 12500 + 45000,
+  it("expenseSummary: utläggsraden avrundad till hela kronor (#1218)", () => {
+    // Totalt: exkl 5 635 + 550 = 6 185 kr, moms 1 546,25 → 1 546 kr. Arvodets moms
+    // 1 409 kr; utläggen bär resten (137 kr) så delsummorna går ihop med yrkandet.
+    expect(r.expenseSummary).toEqual({ exclVat: 55000, vat: 13700, inclVat: 68700 });
+    expect(r.totalInclVat).toBe(618500 + 154600);
+  });
+
+  it("äkta utlägg vidarefaktureras utan moms", () => {
+    const p = buildKostnadsrakningContext({
+      ...baseInput,
+      expenses: [{ id: "p", date: "2026-05-20", description: "Ansökningsavgift", amount: 90000, vatRate: 0, vatIncluded: false, passThrough: true }],
     });
+    expect(p.expenseLines[0]).toMatchObject({ exclVat: 90000, vat: 0, vatRate: 0, passThrough: true });
+    // Moms bara på arvodet: 563 500 × 25 % = 140 875 → 140 900.
+    expect(p.totalInclVat).toBe(563500 + 90000 + 140900);
+    expect(p.document.totals.vatLabel).toBe("Moms");
   });
 
   it("totalInclVat = arvodeInclVat + expenseSummary.inclVat", () => {
@@ -143,8 +153,8 @@ describe("templateContext — formaterad data för Handlebars", () => {
 
   it("expenseLines har formaterade belopp + vatRateLabel", () => {
     const lines = (r.templateContext.expenseLines as Array<Record<string, unknown>>);
-    expect(lines[0]!.vatRateLabel).toBe("6 %");
-    expect(lines[0]!.inclVatFormatted).toMatch(/450,00\s+kr/);
+    expect(lines[0]!.vatRateLabel).toBe("25 %");
+    expect(lines[0]!.inclVatFormatted).toMatch(/530,66\s+kr/);
   });
 });
 
@@ -173,9 +183,10 @@ describe("buildKostnadsrakningContext — icke-taxa-ärende (timkostnadsnorm)", 
   it("arvode = timkostnadsnorm (1 626 kr/h) × 245 min, ej brottmålstaxan", () => {
     expect(r.taxa.kind).toBe("taxa-applies");
     expect(r.taxa.intervalLabel).toBe("Timkostnadsnorm");
-    expect(r.arvodeExclVat).toBe(663950);
-    expect(r.arvodeMoms).toBe(165988);
-    expect(r.arvodeInclVat).toBe(829938);
+    // 245 min × 1 626 kr/h = 6 639,50 → 6 640 kr (hela kronor per rad, #1218).
+    expect(r.arvodeExclVat).toBe(664000);
+    expect(r.arvodeMoms).toBe(166000);
+    expect(r.arvodeInclVat).toBe(830000);
   });
 
   it("noten beskriver timkostnadsnorm-beräkningen (á-pris per rad, #891)", () => {
@@ -193,7 +204,7 @@ describe("buildKostnadsrakningContext — icke-taxa-ärende (timkostnadsnorm)", 
       timeEntries: [{ id: "t1", date: "2026-05-20", description: "Arbete", minutes: 60, billable: true }],
     });
     // 60 + 95 = 155 min × 1237 kr/h — per-rad-normen (arbete) är no-FTax-normen (#891).
-    expect(noFtax.arvodeExclVat).toBe(Math.round((155 * 123700) / 60));
+    expect(noFtax.arvodeExclVat).toBe(Math.round((155 * 123700) / 6000) * 100);
     expect((noFtax.templateContext.timeLines as Array<{ rateOrePerH: number }>)[0]!.rateOrePerH).toBe(123_700);
   });
 });
@@ -217,22 +228,22 @@ describe("buildKostnadsrakningContext — timeLines i taxa-ärende", () => {
   });
 });
 
-describe("vatRateLabel — alla momssatser via templateContext", () => {
+describe("vatRateLabel — debiterad sats via templateContext (#975)", () => {
   const r = buildKostnadsrakningContext({
     ...baseInput,
     expenses: [
-      { id: "v0", date: "2026-05-20", description: "Momsfritt", amount: 10000, vatRate: 0, vatIncluded: true, billable: true },
+      { id: "v0", date: "2026-05-20", description: "Äkta utlägg", amount: 10000, vatRate: 0, vatIncluded: true, billable: true, passThrough: true },
       { id: "v12", date: "2026-05-20", description: "Mat 12 %", amount: 10000, vatRate: 1200, vatIncluded: true, billable: true },
       { id: "v25", date: "2026-05-20", description: "Standard (default 25 %)", amount: 10000, vatIncluded: true, billable: true },
     ],
   });
 
-  it("mappar momssats-baspoäng till etikett (0/12/25 %)", () => {
+  it("äkta utlägg 0 %, övriga debiteras 25 % oavsett byråns egen sats", () => {
     const byId = new Map(
       (r.templateContext.expenseLines as Array<Record<string, unknown>>).map((l) => [l.id, l.vatRateLabel]),
     );
     expect(byId.get("v0")).toBe("0 %");
-    expect(byId.get("v12")).toBe("12 %");
+    expect(byId.get("v12")).toBe("25 %");
     expect(byId.get("v25")).toBe("25 %"); // vatRate utelämnad → default 2500
   });
 });
@@ -364,8 +375,8 @@ describe("buildKostnadsrakningContext — taxans årgång (#1004)", () => {
   it("momsen räknas på årets belopp, inte på ett fastfruset", () => {
     const r2025 = buildKostnadsrakningContext({ ...decemberHuf, yrkandeDate: "2025-12-20" });
     const r2026 = buildKostnadsrakningContext({ ...decemberHuf, yrkandeDate: "2026-01-10" });
-    expect(r2025.arvodeMoms).toBe(Math.round(549_500 * 0.25));
-    expect(r2026.arvodeMoms).toBe(Math.round(563_500 * 0.25));
+    expect(r2025.arvodeMoms).toBe(Math.round(549_500 * 0.25 / 100) * 100);
+    expect(r2026.arvodeMoms).toBe(Math.round(563_500 * 0.25 / 100) * 100);
     expect(r2026.totalInclVat).toBeGreaterThan(r2025.totalInclVat);
   });
 });

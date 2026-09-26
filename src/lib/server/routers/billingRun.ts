@@ -26,7 +26,7 @@ import {
 import { buildProposal, proposedAccontoOre } from "@/lib/shared/billing-proposal";
 import {
   expenseGrossOre,
-  expenseNetOre, grossOreOf, invoiceGrossOre, invoiceVatBreakdown, krGrossOre, matterArvodeNet, netOreOf,
+  expenseNetOre, grossOreOf, invoiceGrossOre, invoiceVatBreakdown, krGrossOre, matterArvodeNet, matterKrArvodeRows, netOreOf,
   settlementArvodeNet, vatOreOf,
   type UnfrozenWork,
 } from "@/lib/shared/billing-work-value";
@@ -684,8 +684,8 @@ export const billingRunRouter = router({
         // informativa — en omvärdering per timnorm vore ett yrkande taxan aldrig
         // ger. Deras körning behåller posternas värde (status quo; jfr #1003).
         // Brutto matchar kostnadsräkningens PDF (#782).
-        const krArvodeNet = matterArvodeNet(matter, work, new Date());
-        const grossValue = krGrossOre(work, krArvodeNet);
+        // Avrundat per rad till hela kronor som kostnadsräkningens dokument (#1218).
+        const grossValue = krGrossOre(work, matterKrArvodeRows(matter, work, new Date()));
         const run = await tx.billingRuns.create({
           matterId: input.matterId, type: "KOSTNADSRAKNING", recipient: "DOMSTOL",
           status: "PENDING_VERDICT", kostnadsrakningStatus: "INSKICKAD", workValueOreAtRun: grossValue,

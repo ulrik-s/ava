@@ -35,8 +35,10 @@ import { formatCurrency } from "@/lib/client/utils";
 import type { AppRouter } from "@/lib/server/routers/_app";
 import { availableActions, type BillingAction, type FlowMatter } from "@/lib/shared/billing-flow";
 import { insurerPruningPending, isActiveKr, paymentMethodPending, sjalvriskAccontoDue } from "@/lib/shared/billing-todo";
+import type { KrDocumentFields } from "@/lib/shared/kostnadsrakning";
 import { availableKrActions, canVoidKostnadsrakning, type KostnadsrakningState, type KostnadsrakningStatus } from "@/lib/shared/kostnadsrakning-flow";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
+import type { OrgImage } from "@/lib/shared/org-image";
 import { SJALVRISK_ACCONTO_THRESHOLD_ORE } from "@/lib/shared/rattshjalp";
 import { BILLING_RUN_RECIPIENT_LABELS, BILLING_RUN_TYPE_LABELS, BILLING_RUN_STATUS_LABELS, INVOICE_STATUS_LABELS, type BillingRunRecipient, type BillingRunStatus, type BillingRunType, type InvoiceStatus, type PaymentMethod } from "@/lib/shared/schemas/enums";
 import type { BillingRunId, DocumentId, InvoiceId, MatterId } from "@/lib/shared/schemas/ids";
@@ -56,6 +58,8 @@ interface MatterContext {
   paymentMethod?: PaymentMethod | null | undefined;
   clientShareBips?: number | null | undefined;
   radgivningBetaldAt?: string | Date | null | undefined;
+  /** Domstolens målnummer — kostnadsräkningens rubrik (#1218). */
+  courtCaseNumber?: string | null | undefined;
   rattsskyddNekadAt?: string | Date | null | undefined;
   contacts?: ReadonlyArray<{ role: string; contact?: { name?: string | null | undefined; email?: string | null | undefined } | null | undefined }> | undefined;
 }
@@ -331,7 +335,7 @@ interface KrTriggerProps {
   onRecorded: () => void;
 }
 
-interface KrModalData {
+interface KrModalData extends Omit<KrDocumentFields, "courtCaseNumber"> {
   defenderName: string;
   defenderEmail?: string;
   organizationName?: string;
@@ -344,12 +348,26 @@ function strOrUndef(v: string | null | undefined): string | undefined {
   return v ?? undefined;
 }
 
-interface OrgData { name?: string; orgNumber?: string; address?: string }
-function orgProps(org: { name?: string | null | undefined; orgNumber?: string | null | undefined; address?: string | null | undefined } | undefined): OrgData {
-  const name = strOrUndef(org?.name);
-  const orgNumber = strOrUndef(org?.orgNumber);
-  const address = strOrUndef(org?.address);
-  return omitUndefined({ name, orgNumber, address });
+type OrgField = "name" | "orgNumber" | "address" | "phone" | "email" | "bankgiro" | "website";
+type OrgData = Partial<Record<OrgField, string>> & { logo?: OrgImage; footerSeal?: OrgImage };
+type OrgSettingsLike = Partial<Record<OrgField, string | null | undefined>> & { logo?: OrgImage | null | undefined; footerSeal?: OrgImage | null | undefined };
+function orgProps(settings: OrgSettingsLike | undefined): OrgData {
+  const org = settings ?? {};
+  return omitUndefined({
+    name: strOrUndef(org.name), orgNumber: strOrUndef(org.orgNumber), address: strOrUndef(org.address),
+    // Sidfotens kontaktuppgifter, bankgiro, webbplats och bilder på kostnadsräkningen (#1218).
+    phone: strOrUndef(org.phone), email: strOrUndef(org.email), bankgiro: strOrUndef(org.bankgiro),
+    website: strOrUndef(org.website), logo: org.logo ?? undefined, footerSeal: org.footerSeal ?? undefined,
+  });
+}
+
+/** Dokumentfälten (#1218) till rättshjälps-KR:ns dokument. */
+function krDocumentFieldsOf(d: KrModalData, matter: MatterContext): KrDocumentFields {
+  return omitUndefined({
+    courtCaseNumber: strOrUndef(matter.courtCaseNumber), defenderTitle: d.defenderTitle,
+    organizationPhone: d.organizationPhone, organizationEmail: d.organizationEmail, organizationBankgiro: d.organizationBankgiro,
+    organizationWebsite: d.organizationWebsite, organizationLogo: d.organizationLogo, organizationFooterSeal: d.organizationFooterSeal,
+  });
 }
 
 function useKrModalData(matterId: MatterId): KrModalData {
@@ -364,6 +382,13 @@ function useKrModalData(matterId: MatterId): KrModalData {
     organizationName: org.name,
     organizationOrgNumber: org.orgNumber,
     organizationAddress: org.address,
+    organizationPhone: org.phone,
+    organizationEmail: org.email,
+    organizationBankgiro: org.bankgiro,
+    organizationWebsite: org.website,
+    organizationLogo: org.logo,
+    organizationFooterSeal: org.footerSeal,
+    defenderTitle: strOrUndef(me?.title),
     expenses: expenses as KrModalData["expenses"],
   }) as KrModalData;
 }
@@ -393,6 +418,7 @@ function KostnadsrakningTrigger({ matterId, matter, open, onClose, onRecorded }:
       matterTitle={matter.title}
       clientName={clientOf(matter)}
       courtName={courtOf(matter)}
+      courtCaseNumber={strOrUndef(matter.courtCaseNumber)}
       {...data}
       initialLevel={(matter.taxaLevel ?? undefined) as 1 | 2 | 3 | 4 | undefined}
       initialHasFTax={matter.taxaHasFTax ?? undefined}
@@ -631,6 +657,7 @@ function useRattshjalpKr(matterId: MatterId, matter: MatterContext, onClose: () 
           matterId, register, utils,
           meta: {
             matterNumber: matter.matterNumber, matterTitle: matter.title, defenderName: krData.defenderName,
+            ...krDocumentFieldsOf(krData, matter),
             ...omitUndefined({
               clientName: clientOf(matter) || undefined, courtName: courtOf(matter),
               defenderEmail: krData.defenderEmail, organizationName: krData.organizationName,

@@ -64,20 +64,22 @@ describe("populateKostnadsrakningDocs", () => {
     expect(String(docs[0].fileName)).toContain("Kostnadsräkning");
   });
 
-  it("KR-dokumentet innehåller en FULL specifikation (tidsspec + arvode + total) (#864)", async () => {
+  it("KR-dokumentet renderas ur byråns default-mall: sammanställning + arbetsredogörelse (#864, #1218)", async () => {
     const seed = buildSeed();
     const target = createGitTarget({ principal: ADMIN, writeBack: async () => {} });
     await runDemoSeed(target.caller, seed);
     const htmls: string[] = [];
     await populateKostnadsrakningDocs(target.caller, (_p, b) => { htmls.push(new TextDecoder().decode(b)); return b.byteLength; });
-    // Minst en KR har en tidsspecifikation + summering (ej längre "ospecificerad").
-    const withSpec = htmls.find((h) => h.includes("Tidsspecifikation"));
-    expect(withSpec, "minst en KR ska ha en tidsspecifikation").toBeDefined();
-    expect(withSpec).toContain("Summa att fastställa av rätten");
-    // Rättshjälps-KR:n (den med rådgivningsnotis) värderas på timkostnadsnormen.
+    // Minst en KR har en arbetsredogörelse (ej längre "ospecificerad") + summor.
+    const withSpec = htmls.find((h) => h.includes("ARBETSREDOGÖRELSE"));
+    expect(withSpec, "minst en KR ska ha en arbetsredogörelse").toBeDefined();
+    expect(withSpec).toContain("Belopp inkl. moms");
+    expect(withSpec).toContain("Anges vid betalning");
+    expect(withSpec).not.toMatch(/\{\{/);
+    // Rättshjälps-KR:n (den med rådgivningsnotis) värderas på timkostnadsnormen: ARVODE á timpris.
     const rattshjalp = htmls.find((h) => h.includes("Rådgivningstimme"));
     expect(rattshjalp, "en rättshjälps-KR ska ha rådgivningsnotis").toBeDefined();
-    expect(rattshjalp).toContain("Arvode (timkostnadsnormen)");
-    expect(rattshjalp).toContain("Tidsspecifikation");
+    expect(rattshjalp).toMatch(/ARVODE<\/td><td class="num">[\d,]+ á /);
+    expect(rattshjalp).toContain("ARBETSREDOGÖRELSE");
   });
 });

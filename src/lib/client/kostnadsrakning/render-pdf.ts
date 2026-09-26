@@ -5,56 +5,21 @@
  * client-side via pdf-lib.
  *
  * Tas av "Generera kostnadsräkning"-knappen i rättssalen — flödet är
- * stressigt så vi vill ha låg latens och inga server-anrop. pdf-lib
- * är ~500 KB gzipped, redan installerad för seed-binärerna.
+ * stressigt så vi vill ha låg latens och inga server-anrop.
  *
- * Layout:
- *   ┌────────────────────────────────────────────┐
- *   │  KOSTNADSRÄKNING                            │
- *   │  Mål 2026-0016 — Brottmål, Falk             │
- *   │  Stockholms tingsrätt           2026-05-25  │
- *   │                                              │
- *   │  ─ Huvudförhandling ─                       │
- *   │  Start: 09:00  Slut: 10:35  (1 tim 35 min)  │
- *   │                                              │
- *   │  ─ Arvode (DVFS 2025:6, nivå 1) ─           │
- *   │  Brottmålstaxa            5 635,00 kr exkl  │
- *   │  + Moms 25 %              1 408,75 kr       │
- *   │                          --------           │
- *   │                           7 043,75 kr inkl  │
- *   │                                              │
- *   │  ─ Utlägg ─                                 │
- *   │  Datum  Beskr.  Exkl  Moms  Inkl            │
- *   │  ... rader ...                              │
- *   │  Summa utlägg: X / Y / Z kr                 │
- *   │                                              │
- *   │  ─ TOTALT ATT FAKTURERA STATEN ─            │
- *   │  Z kr                                       │
- *   │                                              │
- *   │  Anna Advokat · Firma AB · 556999-9999      │
- *   └────────────────────────────────────────────┘
+ * Ritar dokumentvyn (`result.document`, #1218) — samma vy som HTML-mallen —
+ * i byråns layout:
+ *   Sida 1  — brevhuvud, mottagare, rubrik, referens, sammanställning, summor,
+ *             ev. rådgivningsnotis, ort + datum, underskrift, sidfot. Inget sidnummer.
+ *   Sida 2+ — ARBETSREDOGÖRELSE per kategori + utlägg; "Sida N" nederst.
+ * Times (serif) som i byråns dokument; sidfoten i sans-serif.
  */
 
-import type { PDFPage, PDFFont, RGB } from "pdf-lib";
+import type { PDFDocument, StandardFonts } from "pdf-lib";
 import type { KostnadsrakningResult } from "@/lib/shared/kostnadsrakning";
-
-/** En formaterad utläggsrad i templateContext.expenseLines (se
- *  kostnadsrakning.ts buildTemplateContext) — alla fält är required strings. */
-interface ExpenseRow {
-  date: string;
-  description: string;
-  vatRateLabel: string;
-  exclVatFormatted: string;
-  vatFormatted: string;
-  inclVatFormatted: string;
-}
-
-/** En formaterad tidsrad i templateContext.timeLines (#863). */
-interface TimeRow {
-  date: string;
-  description: string;
-  minutesFormatted: string;
-}
+import type { KrDocumentView } from "@/lib/shared/kostnadsrakning-document";
+import type { KrExpenseSpec, KrSpecSection } from "@/lib/shared/kostnadsrakning-document-rows";
+import { PAGE_WIDTH, PdfWriter, type PdfFonts } from "./pdf-writer";
 
 export interface RenderInput {
   result: KostnadsrakningResult;
@@ -69,199 +34,217 @@ export interface RenderInput {
   };
 }
 
+/** Marginaler och kolumner (punkter), avlästa ur byråns kostnadsräkningar. */
+const LEFT = 72;
+const RIGHT = 533;
+const QTY_RIGHT = 395;
+const RECIPIENT_X = 365;
+const SPEC_DATE_X = 77;
+const SPEC_DESC_X = 168;
+const SPEC_HOURS_RIGHT = 510;
+const SPEC_SUM_RIGHT = 527;
+const SPEC_TOP = 93;
+const SPEC_BOTTOM = 770;
+const SPEC_SIZE = 11;
+const SPEC_LEADING = 12.6;
+
 export async function renderKostnadsrakningPdf(input: RenderInput): Promise<Uint8Array> {
-  const { PDFDocument, StandardFonts, rgb } = await import("pdf-lib");
-  const pdf = await PDFDocument.create();
-  const c = input.result.templateContext;
+  const lib = await import("pdf-lib");
+  const pdf = await lib.PDFDocument.create();
   pdf.setTitle(`Kostnadsräkning ${input.meta.matterNumber}`);
   pdf.setAuthor(input.meta.defenderName);
   pdf.setSubject("Kostnadsräkning till rätten");
-
-  const page = pdf.addPage([595, 842]); // A4
-  const font = await pdf.embedFont(StandardFonts.Helvetica);
-  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
-
-  const PAGE_W = 595;
-  const MARGIN = 50;
-  let y = 800;
-
-  // Header
-  page.drawText("KOSTNADSRÄKNING", {
-    x: MARGIN, y, size: 20, font: bold, color: rgb(0, 0, 0),
-  });
-  y -= 28;
-  page.drawText(`Mål ${input.meta.matterNumber} — ${input.meta.matterTitle}`, {
-    x: MARGIN, y, size: 12, font: bold,
-  });
-  y -= 16;
-  if (input.meta.clientName) {
-    page.drawText(`Klient: ${input.meta.clientName}`, { x: MARGIN, y, size: 10, font });
-  }
-  page.drawText(`Datum: ${String(c.today)}`, {
-    x: PAGE_W - MARGIN - 100, y, size: 10, font,
-  });
-  y -= 14;
-  if (input.meta.courtName) {
-    page.drawText(`Domstol: ${input.meta.courtName}`, { x: MARGIN, y, size: 10, font });
-    y -= 14;
-  }
-  y -= 8;
-  page.drawLine({ start: { x: MARGIN, y }, end: { x: PAGE_W - MARGIN, y }, thickness: 0.5, color: rgb(0.7, 0.7, 0.7) });
-  y -= 18;
-
-  const ctx: PdfCtx = { page, font, bold, marginX: MARGIN, pageW: PAGE_W, lineColor: rgb(0.7, 0.7, 0.7) };
-
-  // Tidsspecifikation (per-post) — #863
-  y = drawTimeSection(ctx, c, y);
-
-  // Huvudförhandling — bara om det finns någon (brottmål; rättshjälp har ingen).
-  if (typeof c.huvudforhandlingMinutes === "number" && c.huvudforhandlingMinutes > 0) {
-    page.drawText("Huvudförhandling", { x: MARGIN, y, size: 11, font: bold });
-    y -= 14;
-    page.drawText(
-      `Start: ${String(c.hufStart)}   Slut: ${String(c.hufEnd)}   (${String(c.huvudforhandlingFormatted)})`,
-      { x: MARGIN, y, size: 10, font },
-    );
-    y -= 22;
-  }
-
-  // Arvode — alltid med belopp (timkostnadsnorm för rättshjälp, annars brottmålstaxa).
-  y = drawArvodeSection(ctx, c, y);
-
-  // Utlägg (tabell + summa) — egen sektion för att hålla komplexiteten nere.
-  y = drawExpenseSection(ctx, c, y);
-
-  // TOTAL
-  page.drawLine({ start: { x: MARGIN, y: y + 8 }, end: { x: PAGE_W - MARGIN, y: y + 8 }, thickness: 1, color: rgb(0, 0, 0) });
-  page.drawText("TOTALT ATT FAKTURERA STATEN", { x: MARGIN, y, size: 12, font: bold });
-  page.drawText(String(c.totalInclFormatted), { x: MARGIN + 350, y, size: 12, font: bold });
-  y -= 28;
-
-  // Rådgivningstimme-notis (#860): visas ENDAST här (ej på domstols-fakturan),
-  // som en textrad utan belopp — klienten har betalat den separat.
-  if (typeof c.radgivningNotice === "string" && c.radgivningNotice) {
-    page.drawText(c.radgivningNotice, { x: MARGIN, y, size: 9, font, color: rgb(0.3, 0.3, 0.3) });
-    y -= 20;
-  }
-
-  // Sidfot
-  const footerParts = [
-    input.meta.defenderName,
-    input.meta.organizationName,
-    input.meta.organizationOrgNumber,
-  ].filter(Boolean);
-  page.drawText(footerParts.join("  ·  "), {
-    x: MARGIN, y, size: 9, font, color: rgb(0.4, 0.4, 0.4),
-  });
-
+  const w = new PdfWriter(pdf, await embedFonts(pdf, lib.StandardFonts), lib.rgb);
+  const doc = input.result.document;
+  await drawFirstPage(w, doc);
+  if (doc.hasSpecification) drawSpecification(w, doc);
+  numberPages(w);
   return pdf.save();
 }
 
-interface PdfCtx {
-  page: PDFPage;
-  font: PDFFont;
-  bold: PDFFont;
-  marginX: number;
-  pageW: number;
-  lineColor: RGB;
+async function embedFonts(pdf: PDFDocument, fonts: typeof StandardFonts): Promise<PdfFonts> {
+  const [regular, bold, italic, sans] = await Promise.all([
+    pdf.embedFont(fonts.TimesRoman), pdf.embedFont(fonts.TimesRomanBold),
+    pdf.embedFont(fonts.TimesRomanItalic), pdf.embedFont(fonts.Helvetica),
+  ]);
+  return { regular, bold, italic, sans };
 }
 
-/** Rita utläggs-tabell + summa-rad. Returnerar ny y-position. No-op om inga utlägg. */
-function drawExpenseSection(ctx: PdfCtx, c: Record<string, unknown>, startY: number): number {
-  // Lokal radtyp (alla fält required strings) i st.f. Record<string,string> —
-  // annars ger noUncheckedIndexedAccess `string | undefined` per fält.
-  const lines = (c.expenseLines as ExpenseRow[] | undefined) ?? [];
-  let y = startY;
-  if (lines.length === 0) return y;
-  const { page, font, bold } = ctx;
+// ─── Sida 1 ────────────────────────────────────────────────────────────────
 
-  page.drawText("Utlägg", { x: ctx.marginX, y, size: 11, font: bold });
-  y -= 14;
-  drawTableHeader(page, y, font);
-  y -= 14;
-  for (const l of lines) {
-    page.drawText(l.date, { x: ctx.marginX, y, size: 9, font });
-    const desc = l.description.length > 30 ? l.description.slice(0, 28) + "…" : l.description;
-    page.drawText(desc, { x: ctx.marginX + 70, y, size: 9, font });
-    page.drawText(l.vatRateLabel, { x: ctx.marginX + 250, y, size: 9, font });
-    page.drawText(l.exclVatFormatted, { x: ctx.marginX + 290, y, size: 9, font });
-    page.drawText(l.vatFormatted, { x: ctx.marginX + 370, y, size: 9, font });
-    page.drawText(l.inclVatFormatted, { x: ctx.marginX + 440, y, size: 9, font });
-    y -= 12;
-    if (y < 100) break; // safety — single-page
+async function drawFirstPage(w: PdfWriter, doc: KrDocumentView): Promise<void> {
+  await drawLetterhead(w, doc);
+  if (doc.recipient) {
+    w.text(doc.recipient, RECIPIENT_X, 160);
+    w.text("via e-post", RECIPIENT_X, 174);
   }
-  y -= 6;
-  page.drawLine({ start: { x: ctx.marginX, y }, end: { x: ctx.pageW - ctx.marginX, y }, thickness: 0.5, color: ctx.lineColor });
-  y -= 14;
-  const s = c.expenseSummary as { exclVatFormatted: string; vatFormatted: string; inclVatFormatted: string };
-  page.drawText("Summa utlägg", { x: ctx.marginX, y, size: 10, font: bold });
-  page.drawText(s.exclVatFormatted, { x: ctx.marginX + 290, y, size: 10, font: bold });
-  page.drawText(s.vatFormatted, { x: ctx.marginX + 370, y, size: 10, font: bold });
-  page.drawText(s.inclVatFormatted, { x: ctx.marginX + 440, y, size: 10, font: bold });
-  y -= 22;
-  return y;
+  drawHeading(w, doc);
+  let top = drawSummary(w, doc);
+  top = drawNotes(w, doc.notes, top);
+  top = drawRadgivning(w, doc.radgivningNotice, top);
+  drawSignature(w, doc, top + 24);
+  drawFooter(w, doc.footerLines);
+  if (doc.footerSeal) await w.image(doc.footerSeal, { x: LEFT, top: 790, maxWidth: 80, maxHeight: 42, align: "left" });
 }
 
-/** Rita arvode-sektionen (rubrik + ev. norm-not + belopp) (#863). Returnerar ny y. */
-function drawArvodeSection(ctx: PdfCtx, c: Record<string, unknown>, startY: number): number {
-  const { page, font, bold, marginX } = ctx;
-  let y = startY;
-  const norm = c.isTimkostnadsnorm === true;
-  page.drawText(norm ? "Arvode (timkostnadsnormen)" : `Arvode (DVFS 2025:6, nivå ${String(c.taxaLevel)})`, { x: marginX, y, size: 11, font: bold });
-  y -= 14;
-  const note = ((c.taxaNotes as string[] | undefined) ?? [])[0];
-  if (note) {
-    page.drawText(note, { x: marginX, y, size: 8, font, color: ctx.lineColor });
-    y -= 13;
+/** Loggan centrerad överst — eller byråns namn när loggan saknas/inte går att läsa. */
+async function drawLetterhead(w: PdfWriter, doc: KrDocumentView): Promise<void> {
+  const drawn = doc.logo ? await w.image(doc.logo, { x: PAGE_WIDTH / 2, top: 38, maxWidth: 205, maxHeight: 95, align: "center" }) : false;
+  if (!drawn && doc.firmName) w.text(doc.firmName, PAGE_WIDTH / 2, 95, { size: 18, align: "center" });
+}
+
+function drawHeading(w: PdfWriter, doc: KrDocumentView): void {
+  w.text(doc.title, LEFT, 211, { font: "bold" });
+  const label = w.text("Faktura-/ärendenr: ", LEFT, 229);
+  w.text(`${doc.paymentReference} Anges vid betalning`, LEFT + label, 229, { font: "bold" });
+  if (doc.bankgiro) w.text(`Bankgiro: ${doc.bankgiro}`, LEFT, 247);
+}
+
+/** Sammanställningen + summorna. Returnerar `top` under den tjocka linjen. */
+function drawSummary(w: PdfWriter, doc: KrDocumentView): number {
+  w.text("Enligt bifogad specifikation", LEFT, 289, { font: "italic", grey: true });
+  w.text("tid/antal", QTY_RIGHT, 289, { font: "italic", grey: true, align: "right" });
+  w.text("kr", RIGHT, 289, { font: "italic", grey: true, align: "right" });
+  let top = 310;
+  for (const row of doc.summaryRows) {
+    w.text(row.label, LEFT, top);
+    w.text(row.quantity, QTY_RIGHT, top, { align: "right" });
+    w.text(row.amount, RIGHT, top, { align: "right" });
+    top += 21.5;
   }
-  drawRow(page, y, font, norm ? "Arvode exkl moms" : "Brottmålstaxa", String(c.arvodeExclFormatted));
-  y -= 14;
-  drawRow(page, y, font, "+ Moms 25 %", String(c.arvodeMomsFormatted));
-  y -= 14;
-  drawRow(page, y, bold, "Arvode inkl moms", String(c.arvodeInclFormatted));
-  return y - 22;
+  top += 36;
+  drawTotal(w, "Belopp exkl. moms", doc.totals.exclVat, top);
+  drawTotal(w, doc.totals.vatLabel, doc.totals.vat, top + 35);
+  drawTotal(w, "Belopp inkl. moms", doc.totals.inclVat, top + 53, "bold");
+  w.rule(LEFT, RIGHT, top + 59, 2.2);
+  return top + 59;
 }
 
-/** Rita tidsspecifikations-tabell (datum · åtgärd · tid) + summa arbetstid (#863).
- *  Returnerar ny y-position. No-op om inga tidsrader. */
-function drawTimeSection(ctx: PdfCtx, c: Record<string, unknown>, startY: number): number {
-  const lines = (c.timeLines as TimeRow[] | undefined) ?? [];
-  let y = startY;
-  if (lines.length === 0) return y;
-  const { page, font, bold } = ctx;
-  page.drawText("Tidsspecifikation", { x: ctx.marginX, y, size: 11, font: bold });
-  y -= 14;
-  page.drawText("Datum", { x: ctx.marginX, y, size: 9, font: bold });
-  page.drawText("Åtgärd", { x: ctx.marginX + 80, y, size: 9, font: bold });
-  page.drawText("Tid", { x: ctx.marginX + 450, y, size: 9, font: bold });
-  y -= 14;
-  for (const l of lines) {
-    page.drawText(l.date, { x: ctx.marginX, y, size: 9, font });
-    const desc = l.description.length > 58 ? l.description.slice(0, 56) + "…" : l.description;
-    page.drawText(desc, { x: ctx.marginX + 80, y, size: 9, font });
-    page.drawText(l.minutesFormatted, { x: ctx.marginX + 450, y, size: 9, font });
-    y -= 12;
-    if (y < 120) break; // safety — single-page
+function drawTotal(w: PdfWriter, label: string, amount: string, top: number, font: "regular" | "bold" = "regular"): void {
+  w.text(label, LEFT, top, { font });
+  w.text(amount, RIGHT, top, { font, align: "right" });
+}
+
+/** Radbruten text i spaltbredd. Returnerar `top` efter sista raden. */
+function drawParagraph(w: PdfWriter, text: string, top: number, size: number, leading: number): number {
+  let t = top;
+  for (const line of w.wrap(text, "regular", size, RIGHT - LEFT)) {
+    w.text(line, LEFT, t, { size });
+    t += leading;
   }
-  y -= 6;
-  page.drawLine({ start: { x: ctx.marginX, y }, end: { x: ctx.pageW - ctx.marginX, y }, thickness: 0.5, color: ctx.lineColor });
-  y -= 14;
-  page.drawText("Summa arbetstid", { x: ctx.marginX, y, size: 10, font: bold });
-  page.drawText(String(c.billableArbetsFormatted), { x: ctx.marginX + 450, y, size: 10, font: bold });
-  y -= 22;
-  return y;
+  return t;
 }
 
-function drawRow(page: PDFPage, y: number, font: PDFFont, label: string, value: string): void {
-  page.drawText(label, { x: 50, y, size: 10, font });
-  page.drawText(value, { x: 50 + 350, y, size: 10, font });
+function drawNotes(w: PdfWriter, notes: readonly string[], top: number): number {
+  let t = top + (notes.length > 0 ? 16 : 0);
+  for (const note of notes) t = drawParagraph(w, note, t, 10, 12);
+  return t;
 }
 
-function drawTableHeader(page: PDFPage, y: number, font: PDFFont): void {
-  page.drawText("Datum", { x: 50, y, size: 8, font });
-  page.drawText("Beskrivning", { x: 50 + 70, y, size: 8, font });
-  page.drawText("Sats", { x: 50 + 250, y, size: 8, font });
-  page.drawText("Exkl", { x: 50 + 290, y, size: 8, font });
-  page.drawText("Moms", { x: 50 + 370, y, size: 8, font });
-  page.drawText("Inkl", { x: 50 + 440, y, size: 8, font });
+function drawRadgivning(w: PdfWriter, notice: string | null, top: number): number {
+  return notice ? drawParagraph(w, notice, top + 20, 12, 14) : top;
+}
+
+function drawSignature(w: PdfWriter, doc: KrDocumentView, top: number): void {
+  w.text(doc.placeDate, LEFT, top);
+  w.text(doc.signatureName, LEFT, top + 30);
+  if (doc.signatureTitle) w.text(doc.signatureTitle, LEFT, top + 44);
+}
+
+const FOOTER_SIZE = 8;
+
+/** Sidfoten på sida 1: linje + centrerade rader, delarna åtskilda av ∽. */
+function drawFooter(w: PdfWriter, lines: readonly string[][]): void {
+  if (lines.length === 0) return;
+  w.rule(LEFT, RIGHT, 782, 0.75, true);
+  lines.forEach((parts, i) => drawFooterLine(w, parts, 805 + i * 10.5));
+}
+
+function drawFooterLine(w: PdfWriter, parts: readonly string[], top: number): void {
+  const gap = w.width(" ", "sans", FOOTER_SIZE) * 2 + FOOTER_SIZE * 0.9;
+  const total = parts.reduce((s, p) => s + w.width(p, "sans", FOOTER_SIZE), 0) + gap * (parts.length - 1);
+  let x = (PAGE_WIDTH - total) / 2;
+  parts.forEach((part, i) => {
+    if (i > 0) {
+      w.tilde(x + w.width(" ", "sans", FOOTER_SIZE), top, FOOTER_SIZE);
+      x += gap;
+    }
+    x += w.text(part, x, top, { font: "sans", size: FOOTER_SIZE });
+  });
+}
+
+// ─── Sida 2+: arbetsredogörelsen ───────────────────────────────────────────
+
+/** Markör över sidbrytningar: ny sida när nästa block inte ryms. */
+class SpecCursor {
+  top = 168;
+  constructor(private readonly w: PdfWriter) {}
+
+  ensure(height: number): void {
+    if (this.top + height <= SPEC_BOTTOM) return;
+    this.w.addPage();
+    this.top = SPEC_TOP;
+  }
+}
+
+function drawSpecification(w: PdfWriter, doc: KrDocumentView): void {
+  w.addPage();
+  w.text("ARBETSREDOGÖRELSE", LEFT, SPEC_TOP, { font: "bold" });
+  w.rule(LEFT, RIGHT, 116, 1);
+  const c = new SpecCursor(w);
+  for (const section of doc.specSections) drawTimeSection(w, c, section);
+  if (doc.expenseSpec) drawExpenseSection(w, c, doc.expenseSpec);
+}
+
+function drawSectionHeading(w: PdfWriter, c: SpecCursor, heading: string): void {
+  c.ensure(40);
+  const width = w.text(heading, SPEC_DATE_X, c.top, { font: "bold", size: SPEC_SIZE });
+  w.rule(SPEC_DATE_X, SPEC_DATE_X + width, c.top + 1.6, 0.6);
+  c.top += 17;
+}
+
+/** En rad med radbruten beskrivning. `cells` ritas på första raden. */
+function drawSpecRow(w: PdfWriter, c: SpecCursor, row: { date: string; lines: string[] }, cells: ReadonlyArray<[string, number]>): void {
+  const height = row.lines.length * SPEC_LEADING;
+  c.ensure(height);
+  w.text(row.date, SPEC_DATE_X, c.top, { size: SPEC_SIZE });
+  row.lines.forEach((line, i) => w.text(line, SPEC_DESC_X, c.top + i * SPEC_LEADING, { size: SPEC_SIZE }));
+  for (const [text, right] of cells) w.text(text, right, c.top, { size: SPEC_SIZE, align: "right" });
+  c.top += height + 2.5;
+}
+
+function drawSum(w: PdfWriter, c: SpecCursor, sum: string): void {
+  c.ensure(SPEC_LEADING);
+  w.text("Summa", LEFT, c.top, { font: "bold", size: SPEC_SIZE });
+  w.text(sum, SPEC_SUM_RIGHT, c.top, { font: "bold", size: SPEC_SIZE, align: "right" });
+  c.top += 48;
+}
+
+function drawTimeSection(w: PdfWriter, c: SpecCursor, section: KrSpecSection): void {
+  drawSectionHeading(w, c, section.heading);
+  for (const r of section.rows) {
+    const lines = w.wrap(r.description, "regular", SPEC_SIZE, SPEC_HOURS_RIGHT - SPEC_DESC_X - 30);
+    drawSpecRow(w, c, { date: r.date, lines }, [[r.quantity, SPEC_HOURS_RIGHT]]);
+  }
+  drawSum(w, c, section.sum);
+}
+
+const EXP_QTY_RIGHT = 445;
+const EXP_PRICE_RIGHT = 485;
+
+function drawExpenseSection(w: PdfWriter, c: SpecCursor, spec: KrExpenseSpec): void {
+  drawSectionHeading(w, c, "Utlägg");
+  for (const r of spec.rows) {
+    const lines = w.wrap(r.description, "regular", SPEC_SIZE, EXP_QTY_RIGHT - SPEC_DESC_X - 30);
+    drawSpecRow(w, c, { date: r.date, lines }, [[r.quantity, EXP_QTY_RIGHT], [r.unitPrice, EXP_PRICE_RIGHT], [r.amount, SPEC_SUM_RIGHT]]);
+  }
+  drawSum(w, c, spec.sum);
+}
+
+/** "Sida N" centrerat nederst på sida 2 och framåt — sida 1 får inget nummer. */
+function numberPages(w: PdfWriter): void {
+  w.pages.forEach((page, i) => {
+    if (i === 0) return;
+    w.textOn(page, `Sida ${i + 1}`, PAGE_WIDTH / 2, 802, { size: SPEC_SIZE, align: "center" });
+  });
 }

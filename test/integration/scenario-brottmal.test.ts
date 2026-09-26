@@ -294,9 +294,11 @@ describe("Scenario: brottmål från förordnande till betald faktura", () => {
     expect(kr.arvodeExclVat).toBe(670400);
     expect(kr.arvodeMoms).toBe(167600);
     expect(kr.arvodeInclVat).toBe(838000); // 8 380 kr inkl moms
-    // Utlägg-summa: 3875 + 8750 = 12625 öre inkl moms (= 126,25 kr)
-    expect(kr.expenseSummary.inclVat).toBe(12625);
-    expect(kr.totalInclVat).toBe(838000 + 12625); // 850 625 öre = 8 506,25 kr
+    // Utlägg 31 + 70 = 101 kr exkl. Yrkandet avrundas som på kostnadsräkningen
+    // (#1218): exkl 6 805 kr, moms 1 701,25 → 1 701 kr, inkl 8 506 kr — utläggen
+    // bär resten av den avrundade momsen (1 701 − 1 676 = 25 kr).
+    expect(kr.expenseSummary.inclVat).toBe(10100 + 2500);
+    expect(kr.totalInclVat).toBe(850600);
   });
 
   // ─── 9. Tingsrättsdom + faktura till staten ──────────────────────
@@ -373,7 +375,7 @@ describe("Scenario: brottmål från förordnande till betald faktura", () => {
       expenses: [],
     });
     expect(kr.arvodeExclVat).toBe(563500);
-    expect(kr.arvodeInclVat).toBe(563500 + Math.round(563500 * 0.25)); // 704 375 öre
+    expect(kr.arvodeInclVat).toBe(563500 + 140900); // moms 1 408,75 → 1 409 kr (hela kronor, #1218)
   });
 
   // ─── 13. PRUTNING — rätten sätter ned arvodet ───────────────────
