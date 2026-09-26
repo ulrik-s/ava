@@ -4,7 +4,7 @@
  * (`_billing-dialog`) så samma uträkning aldrig divergerar.
  */
 
-import { entryOwnValueOre } from "./billing-work-value";
+import { matterArvodeNet, matterEntryValueOre, type ValuationMatter } from "./billing-work-value";
 import { payableCoverageEntries } from "./brottmalstaxa";
 import type { ExpenseKind, TimeEntryKind } from "./schemas/enums";
 
@@ -53,22 +53,29 @@ export interface BillingProposal {
   expenses: ProposalExpense[];
 }
 
-/** Bygg ett itemiserat fakturaförslag ur ofrysta tids-/utläggsrader (#397). */
+/**
+ * Bygg ett itemiserat fakturaförslag ur ofrysta tids-/utläggsrader (#397),
+ * värderat enligt ärendets betalningssätt (se `matterArvodeNet`). `workValueOre`
+ * är arvode netto + debiterbara utlägg — i rättshjälp utan rådgivningstimmen.
+ */
 export function buildProposal(
   te: ReadonlyArray<{ id: string; description?: string | null; minutes: number; hourlyRate: number; billable: boolean; date: Date | string; kind?: TimeEntryKind | null | undefined }>,
   ex: ReadonlyArray<{ id: string; description?: string | null; amount: number; billable: boolean; kind?: ExpenseKind }>,
   priorAccontoSumOre: number,
+  matter: ValuationMatter,
+  date: Date | string = new Date(),
 ): BillingProposal {
   // § 2-filtret först (#950): en beredskapsdag som förbrukats av helgförhandling
   // ska inte ens synas som fakturerbar rad.
-  const timeEntries: ProposalTimeEntry[] = payableCoverageEntries(te).map((t) => ({
+  const payable = payableCoverageEntries(te);
+  const timeEntries: ProposalTimeEntry[] = payable.map((t) => ({
     id: t.id, description: t.description ?? "", minutes: t.minutes, hourlyRate: t.hourlyRate,
-    billable: t.billable, valueOre: entryOwnValueOre(t),
+    billable: t.billable, valueOre: matterEntryValueOre(matter, t, date),
   }));
   const expenses: ProposalExpense[] = ex
     .filter((e) => e.kind !== "PRUTNING")
     .map((e) => ({ id: e.id, description: e.description ?? "", amount: e.amount, billable: e.billable }));
-  const workValueOre = timeEntries.filter((t) => t.billable).reduce((s, t) => s + t.valueOre, 0)
+  const workValueOre = matterArvodeNet(matter, { timeEntries: te }, date)
     + expenses.filter((e) => e.billable).reduce((s, e) => s + e.amount, 0);
   return { workValueOre, priorAccontoSumOre, timeEntries, expenses };
 }

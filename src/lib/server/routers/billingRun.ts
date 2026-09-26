@@ -21,9 +21,9 @@ import type { VatBreakdownLine } from "@/lib/shared/accounting/semantic-voucher"
 import { assertBillingTransition, type BillingActionType } from "@/lib/shared/billing-flow";
 import { buildProposal, proposedAccontoOre } from "@/lib/shared/billing-proposal";
 import {
-  arvodeNetOre, expenseGrossOre,
-  expenseNetOre, grossOreOf, invoiceGrossOre, invoiceVatBreakdown, krGrossOre, netOreOf,
-  settlementArvodeNet, vatOreOf, workValueOre,
+  expenseGrossOre,
+  expenseNetOre, grossOreOf, invoiceGrossOre, invoiceVatBreakdown, krGrossOre, matterArvodeNet, netOreOf,
+  settlementArvodeNet, vatOreOf,
   type UnfrozenWork,
 } from "@/lib/shared/billing-work-value";
 import { TIMKOSTNADSNORM_FTAX_ORE_PER_H } from "@/lib/shared/brottmalstaxa";
@@ -507,7 +507,7 @@ export const billingRunRouter = router({
       const te = await ctx.repos.timeEntries.listUnfrozenForMatter(input.matterId);
       const ex = await ctx.repos.expenses.listUnfrozenForMatter(input.matterId);
       const priorAccontoSumOre = await sumPriorAccontos(ctx.repos, input.matterId);
-      return buildProposal(te, ex, priorAccontoSumOre);
+      return buildProposal(te, ex, priorAccontoSumOre, matter);
     }),
 
   /**
@@ -556,7 +556,9 @@ export const billingRunRouter = router({
       return ctx.repos.transaction(async (tx) => {
         await assertFlowAction(tx, ctx.orgId, input.matterId, "ACCONTO");
         const work = await fetchUnfrozenWork(tx, input.matterId);
-        const value = workValueOre(work);
+        const matter = await tx.matters.getByIdInOrg(input.matterId, ctx.orgId);
+        if (!matter) throw new TRPCError({ code: "NOT_FOUND", message: "Ärendet finns inte." });
+        const value = matterArvodeNet(matter, work, new Date()) + expenseNetOre(work);
         // #397: dra av tidigare aconton i det FÖRESLAGNA beloppet —
         // belopp = %-sats × upparbetat − Σ tidigare aconto-fakturor.
         const priorAccontoSumOre = await sumPriorAccontos(tx, input.matterId);
@@ -656,9 +658,7 @@ export const billingRunRouter = router({
         // informativa — en omvärdering per timnorm vore ett yrkande taxan aldrig
         // ger. Deras körning behåller posternas värde (status quo; jfr #1003).
         // Brutto matchar kostnadsräkningens PDF (#782).
-        const krArvodeNet = matter.paymentMethod === "OFFENTLIGT_UPPDRAG" && matter.isTaxeArende
-          ? arvodeNetOre(work)
-          : settlementArvodeNet(matter.paymentMethod, work, new Date());
+        const krArvodeNet = matterArvodeNet(matter, work, new Date());
         const grossValue = krGrossOre(work, krArvodeNet);
         const run = await tx.billingRuns.create({
           matterId: input.matterId, type: "KOSTNADSRAKNING", recipient: "DOMSTOL",
