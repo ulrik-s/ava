@@ -2,7 +2,8 @@
  * Test för Sidebar — navigation, aktiv markering, mobile drawer, lokal sign-out.
  */
 
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { renderToString } from "react-dom/server";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { Sidebar } from "@/components/shell/sidebar";
 
@@ -125,5 +126,80 @@ describe("Sidebar", () => {
   it("renderar utan userName=null utan att krascha", () => {
     render(<Sidebar userName={null} />);
     expect(screen.getAllByText("Logga ut").length).toBeGreaterThan(0);
+  });
+});
+
+describe("Sidebar — hopfällt ikon-läge (#1198)", () => {
+  it("visar fullt läge som standard med Fäll ihop-knapp", () => {
+    render(<Sidebar userName="Anna Karlsson" />);
+    expect(screen.getByRole("button", { name: "Fäll ihop menyn" })).toBeInTheDocument();
+    expect(screen.getAllByText("Advokat CRM").length).toBe(2);
+    const links = screen.getAllByRole("link", { name: "Kontakter" });
+    expect(links.every((l) => l.getAttribute("title") === null)).toBe(true);
+  });
+
+  it("fäller ihop: länkar får title, namnet blir sr-only och läget sparas", () => {
+    render(<Sidebar userName="Anna Karlsson" />);
+    fireEvent.click(screen.getByRole("button", { name: "Fäll ihop menyn" }));
+    const titled = screen.getAllByRole("link", { name: "Kontakter" }).filter((l) => l.getAttribute("title") === "Kontakter");
+    expect(titled.length).toBe(1);
+    expect(titled[0]!.querySelector(".sr-only")?.textContent).toBe("Kontakter");
+    expect(screen.getByRole("button", { name: "Fäll ut menyn" })).toBeInTheDocument();
+    // Mobil-topbaren behåller "Advokat CRM"; desktop döljer den + användarnamnet
+    expect(screen.getAllByText("Advokat CRM").length).toBe(1);
+    expect(screen.queryByText("Anna Karlsson")).toBeNull();
+    expect(localStorage.getItem("ava.sidebar.collapsed")).toBe("true");
+  });
+
+  it("fäller ut igen och sparar false", () => {
+    render(<Sidebar />);
+    fireEvent.click(screen.getByRole("button", { name: "Fäll ihop menyn" }));
+    fireEvent.click(screen.getByRole("button", { name: "Fäll ut menyn" }));
+    expect(localStorage.getItem("ava.sidebar.collapsed")).toBe("false");
+    expect(screen.getByRole("button", { name: "Fäll ihop menyn" })).toBeInTheDocument();
+  });
+
+  it("återställer hopfällt läge från localStorage efter mount", async () => {
+    localStorage.setItem("ava.sidebar.collapsed", "true");
+    render(<Sidebar />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Fäll ut menyn" })).toBeInTheDocument());
+  });
+
+  it("server-render (statisk export) ger alltid fullt läge — ingen hydreringsmismatch", () => {
+    localStorage.setItem("ava.sidebar.collapsed", "true");
+    const html = renderToString(<Sidebar />);
+    expect(html).toContain("Fäll ihop menyn");
+    expect(html).not.toContain("Fäll ut menyn");
+  });
+
+  it("avmonteras utan fel", () => {
+    const { unmount } = render(<Sidebar />);
+    expect(() => unmount()).not.toThrow();
+  });
+
+  it("ogiltigt lagrat värde → fullt läge", async () => {
+    localStorage.setItem("ava.sidebar.collapsed", "\"ja\"");
+    render(<Sidebar />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Fäll ihop menyn" })).toBeInTheDocument());
+  });
+
+  it("växlar även när localStorage.setItem kastar", () => {
+    render(<Sidebar />);
+    const spy = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("blocked"); });
+    fireEvent.click(screen.getByRole("button", { name: "Fäll ihop menyn" }));
+    expect(screen.getByRole("button", { name: "Fäll ut menyn" })).toBeInTheDocument();
+    spy.mockRestore();
+  });
+
+  it("ikonknappen Logga ut loggar fortfarande ut", () => {
+    localStorage.setItem("ava.firma", JSON.stringify({ tier: "demo", token: "ghp_x", principalId: "u-uuid" }));
+    render(<Sidebar />);
+    fireEvent.click(screen.getByRole("button", { name: "Fäll ihop menyn" }));
+    const logout = screen.getByRole("button", { name: "Logga ut" });
+    expect(logout.getAttribute("title")).toBe("Logga ut");
+    fireEvent.click(logout);
+    const stored = JSON.parse(localStorage.getItem("ava.firma") ?? "{}");
+    expect(stored.token).toBeUndefined();
+    expect(replaceMock).toHaveBeenCalledWith(expect.stringMatching(/\/login\/$/));
   });
 });
