@@ -129,7 +129,7 @@ export function TimeSection({ matterId, isTaxeArende, paymentMethod, matterStatu
           {isPerDayKind(e.kind) ? "1 dygn" : formatMinutes(e.minutes)}
         </span>
       ) },
-    { key: "description", label: "Beskrivning", sortable: true, sortValue: (e) => e.description ?? "",
+    { key: "description", label: "Beskrivning", sortable: true, sortValue: (e) => e.description ?? "", wrap: true,
       render: (e) => <span className="text-sm text-gray-700">{e.description}</span> },
     // Kategorin styr vilken av Domstolsverkets normer posten värderas på vid
     // slutreglering (#950/#953) — den påverkar beloppet och hör därför i default-vyn.

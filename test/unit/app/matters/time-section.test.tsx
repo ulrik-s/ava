@@ -78,6 +78,11 @@ describe("TimeSection — arvodeskategori (#953)", () => {
     expect(screen.getByText("Arbete")).toBeInTheDocument();
   });
 
+  it("beskrivningen bryter rad i stället för att rinna in i grannkolumnen (#1197)", () => {
+    render(<TimeSection matterId={matterId} />);
+    expect(screen.getByText("Genomgång av handlingar").closest("td")).toHaveClass("whitespace-normal");
+  });
+
   it("formuläret erbjuder alla arvodeskategorier och skickar den valda", () => {
     render(<TimeSection matterId={matterId} />);
     fireEvent.click(screen.getByText("+ Registrera tid"));
