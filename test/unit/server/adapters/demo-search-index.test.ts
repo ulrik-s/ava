@@ -174,6 +174,13 @@ describe("makeDemoSearchIndex (ISearchIndex över DataStore)", () => {
     matters: {
       findMany: async () => [{ id: "m-1", matterNumber: "2026-1", title: "Vårdnad", organizationId: "org-1" }],
     },
+    documentParts: {
+      findMany: async () => [
+        { documentId: "d-1", kind: "STAMNING", fromPage: 2, toPage: 4 },
+        { documentId: "d-1", kind: "KALLELSE", fromPage: 1, toPage: 1 },
+        { documentId: "d-1", kind: "FUP", fromPage: 5, toPage: 9, deletedAt: new Date() },
+      ],
+    },
   } as unknown as IDataStore;
 
   it("search delegerar till searchDocuments + org-scopar", async () => {
@@ -181,6 +188,15 @@ describe("makeDemoSearchIndex (ISearchIndex över DataStore)", () => {
     const res = await idx.search("stämning", "org-1", 10);
     expect(res.hits.map((h) => h.id)).toEqual(["d-1"]);
     expect(res.hits[0]!.matterNumber).toBe("2026-1");
+    expect(res.hits[0]!.part).toBeNull(); // demon vet inte sidan
+  });
+
+  it("#1220: typfilter träffar valfri del; facetter per del (raderade delar ignoreras)", async () => {
+    const idx = makeDemoSearchIndex(fakeStore);
+    const res = await idx.search("stämning", "org-1", 10, { documentTypes: ["KALLELSE"] });
+    expect(res.hits.map((h) => h.id)).toEqual(["d-1"]);
+    expect(res.facets?.documentTypes).toEqual([{ type: "KALLELSE", count: 1 }, { type: "STAMNING", count: 1 }]);
+    expect((await idx.search("stämning", "org-1", 10, { documentTypes: ["FUP"] })).hits).toEqual([]);
   });
 
   it("upsert/remove är no-ops (live data-store, inget index)", async () => {

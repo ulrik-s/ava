@@ -13,7 +13,7 @@
  */
 
 import type {
-  Contact, Matter, MatterContact, Document, DocumentFolder,
+  Contact, Matter, MatterContact, Document, DocumentFolder, DocumentPart,
   DocumentTemplate, DocumentAnalysisSuggestion, MatterEventSuggestion,
   Invoice, TimeEntry, Expense, User, Organization, Office, ConflictCheck,
   Payment, PaymentPlan, AccontoDeduction, BillingRun, WriteOff, InvoiceDispatch,
@@ -147,6 +147,7 @@ export type ContactDelegate = Delegate<Contact>;
 export type MatterContactDelegate = Delegate<MatterContact>;
 export type DocumentDelegate = Delegate<Document>;
 export type DocumentFolderDelegate = Delegate<DocumentFolder>;
+export type DocumentPartDelegate = Delegate<DocumentPart>;
 export type DocumentTemplateDelegate = Delegate<DocumentTemplate>;
 export type DocumentAnalysisSuggestionDelegate = Delegate<DocumentAnalysisSuggestion>;
 export type MatterEventSuggestionDelegate = Delegate<MatterEventSuggestion>;
@@ -181,6 +182,7 @@ export interface DataStoreTx {
   contacts: ContactDelegate;
   documents: DocumentDelegate;
   documentFolders: DocumentFolderDelegate;
+  documentParts: DocumentPartDelegate;
   documentTemplates: DocumentTemplateDelegate;
   documentAnalysisSuggestions: DocumentAnalysisSuggestionDelegate;
   matterEventSuggestions: MatterEventSuggestionDelegate;
@@ -218,6 +220,7 @@ export interface IDataStore {
   readonly contacts: ContactDelegate;
   readonly documents: DocumentDelegate;
   readonly documentFolders: DocumentFolderDelegate;
+  readonly documentParts: DocumentPartDelegate;
   readonly documentTemplates: DocumentTemplateDelegate;
   readonly documentAnalysisSuggestions: DocumentAnalysisSuggestionDelegate;
   readonly matterEventSuggestions: MatterEventSuggestionDelegate;

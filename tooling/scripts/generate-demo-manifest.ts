@@ -28,7 +28,7 @@ import { join, resolve, relative } from "node:path";
 
 const DEFAULT_SCAN_PATHS = [
   "matters", "contacts", ".ava",
-  "matter-contacts", "documents", "document-folders",
+  "matter-contacts", "documents", "document-folders", "document-parts",
   "document-analysis-suggestions", "matter-event-suggestions",
   "time-entries", "expenses", "invoices",
   // Senare tillagda entiteter — utan dessa skulle demo:n inte se kalender,

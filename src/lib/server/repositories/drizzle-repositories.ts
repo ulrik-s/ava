@@ -21,6 +21,7 @@ import { DrizzleCalendarEventRepository } from "./drizzle-calendar-event-reposit
 import { DrizzleConflictCheckRepository } from "./drizzle-conflict-check-repository";
 import { DrizzleContactRepository } from "./drizzle-contact-repository";
 import { DrizzleDocumentFolderRepository } from "./drizzle-document-folder-repository";
+import { DrizzleDocumentPartRepository } from "./drizzle-document-part-repository";
 import { DrizzleDocumentRepository } from "./drizzle-document-repository";
 import { DrizzleDocumentSuggestionRepository } from "./drizzle-document-suggestion-repository";
 import { DrizzleDocumentTemplateRepository } from "./drizzle-document-template-repository";
@@ -67,6 +68,7 @@ function entityRepos(db: AppDb): Omit<Repositories, "transaction"> {
     serviceNotes: new DrizzleServiceNoteRepository(db),
     documents: new DrizzleDocumentRepository(db),
     documentFolders: new DrizzleDocumentFolderRepository(db),
+    documentParts: new DrizzleDocumentPartRepository(db),
     matterEventSuggestions: new DrizzleMatterEventSuggestionRepository(db),
     documentAnalysisSuggestions: new DrizzleDocumentSuggestionRepository(db),
     documentTemplates: new DrizzleDocumentTemplateRepository(db),

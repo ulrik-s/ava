@@ -12,7 +12,7 @@ import { preparePdfjsForServer } from "@/lib/server/documents/pdfjs-server-runti
 import { type SuggestionRepos, writeSuggestionsFromText } from "@/lib/server/documents/suggest-from-text";
 import { isEmailDisabled } from "@/lib/server/integrations/email/disabled-email-sender";
 import { createSmtpSender, type SmtpConfig } from "@/lib/server/integrations/email/smtp-sender";
-import { createOllamaClassifier, createOllamaTagSuggester, type LlmConfig } from "@/lib/server/llm/ollama-classifier";
+import { createOllamaPartClassifier, createOllamaTagSuggester, type LlmConfig } from "@/lib/server/llm/ollama-classifier";
 import type { IContentStore, IDocumentPageIndex } from "@/lib/server/ports";
 import { extractPages } from "@/lib/shared/extract-text";
 import { createClassifyDocumentHandler, type ClassifyDocumentDeps } from "./handlers/classify-document-handler";
@@ -40,6 +40,8 @@ export interface JobHandlerConfig {
   /** Byråns etikett-vokabulär (#621 B2). Satt + content + llm → LLM föreslår
    *  taggar ur listan vid klassificeringen. Lazy så den läses per jobb. */
   vocabulary?: () => Promise<readonly string[]>;
+  /** Dokumentdel-repo (#1220). Satt → klassificeringsjobbet skriver delar. */
+  parts?: ClassifyDocumentDeps["parts"];
   /** Serverns sidindex (#1215). Satt + content → jobben indexerar sidtexten
    *  och `index-document`-kön får en worker (backfill). */
   pageIndex?: IDocumentPageIndex;
@@ -80,19 +82,18 @@ function buildSuggest(cfg: JobHandlerConfig): Pick<ClassifyDocumentDeps, "sugges
 }
 
 /**
- * Bygg `classify` (+ `suggestTags`) för dokumentjobbet. Med content-store +
- * LLM-konfig: klassificera jobbets text via ollama (fail-soft till filnamns-
- * heuristik). Med dessutom en vokabulär (#621 B2): föreslå taggar ur listan.
- * Utan content/llm → handlerns default (heuristik).
+ * Bygg `classifyPart` (+ `suggestTags`) för dokumentjobbet. Med content-store +
+ * LLM-konfig: segmenteringen frågar ollama om kandidat-startsidorna (#1220;
+ * fail-soft till rubrikheuristik/filnamn). Med dessutom en vokabulär (#621 B2):
+ * föreslå taggar ur listan. Utan content/llm → bara heuristik.
  */
-function buildClassify(cfg: JobHandlerConfig): Pick<ClassifyDocumentDeps, "classify" | "suggestTags" | "model"> {
+function buildClassify(cfg: JobHandlerConfig): Pick<ClassifyDocumentDeps, "classifyPart" | "suggestTags" | "model"> {
   if (!cfg.content || !cfg.llm) return {};
-  const ollama = createOllamaClassifier(cfg.llm);
   const tagger = createOllamaTagSuggester(cfg.llm);
   const { vocabulary } = cfg;
   return {
     model: `ollama:${cfg.llm.model}`,
-    classify: async (doc, text) => ollama(text, doc.fileName),
+    classifyPart: createOllamaPartClassifier(cfg.llm),
     ...(vocabulary ? {
       suggestTags: async (_doc, text) => tagger(text, await vocabulary()),
     } : {}),
@@ -104,6 +105,7 @@ function registerDocumentHandlers(handlers: JobHandlers, cfg: JobHandlerConfig &
   const pages = buildPages(cfg);
   handlers[JOB_QUEUES.classifyDocument] = createClassifyDocumentHandler({
     documents: cfg.documents,
+    ...(cfg.parts ? { parts: cfg.parts } : {}),
     ...pages,
     ...buildClassify(cfg),
     ...buildSuggest(cfg),

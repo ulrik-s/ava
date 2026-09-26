@@ -4,11 +4,16 @@ import type { inferRouterInputs } from "@trpc/server";
 import { useState, useRef, useCallback, useMemo } from "react";
 import { sectionHeaderClass } from "@/components/ui/section-tone";
 import type { SuggestClient } from "@/lib/client/backend/suggest-from-bytes";
+import { useCapabilities } from "@/lib/client/capabilities/use-capabilities";
 import { useDocSyncStatus } from "@/lib/client/helper/use-helper";
+import { shouldClassifyOnClient } from "@/lib/client/jobs/classify-policy";
 import { enqueueTextExtraction } from "@/lib/client/jobs/enqueue-text-extraction";
 import { trpc } from "@/lib/client/trpc";
 import type { AppRouter } from "@/lib/server/routers/_app";
+import { kindLabel } from "@/lib/shared/document-kind";
+import { kindsOf } from "@/lib/shared/document-part-kinds";
 import { asId, type DocumentFolderId, type DocumentId, type MatterId } from "@/lib/shared/schemas/ids";
+import { useDocumentsWithParts } from "./_document-parts";
 import { DocumentRow, DOCUMENT_RECIPIENT_LABELS, type DocumentRecord } from "./_document-row";
 import { DocumentsListView } from "./_documents-list-view";
 import { type DragItem } from "./_drag-helpers";
@@ -55,13 +60,16 @@ export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
     () => tree.data?.folders ?? [],
     [tree.data],
   );
-  const documents = useMemo<DocumentRecord[]>(
+  const treeDocuments = useMemo<DocumentRecord[]>(
     () => tree.data?.documents ?? [],
     [tree.data],
   );
-  // Filter på riktning + mottagare (#901) — t.ex. "utgående till domstol". Påverkar
+  // Delar i sammansatta dokument (#1220) hängs på varje dokument.
+  const documents = useDocumentsWithParts(matterId, treeDocuments);
+  // Filter på riktning + mottagare (#901) + typ (#1220, träffar valfri del). Påverkar
   // bara VISNINGEN; mutations/lookups använder hela `documents`.
-  const { dirFilter, recipientFilter, setDirFilter, setRecipientFilter, visibleDocuments } = useDocumentFilter(documents);
+  const filter = useDocumentFilter(documents);
+  const { visibleDocuments } = filter;
 
   // Per-dokument write-back-status ur AVA Helperns lokala kö (ADR 0031): "väntar
   // på server", transient "synkad"-bekräftelse, och "konflikt".
@@ -104,11 +112,7 @@ export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
         onChangeViewMode={changeViewMode}
       />
 
-      <DocumentFilterBar
-        dir={dirFilter} recipient={recipientFilter}
-        onDir={setDirFilter} onRecipient={setRecipientFilter}
-        shownCount={visibleDocuments.length} totalCount={documents.length}
-      />
+      <DocumentFilterBar filter={filter} totalCount={documents.length} />
 
       {upload.uploadError && (
         <UploadErrorBanner message={upload.uploadError} onDismiss={() => upload.setUploadError(null)} />
@@ -149,30 +153,36 @@ export function DocumentBrowser({ matterId }: DocumentBrowserProps) {
   );
 }
 
-/** Dokumentfilter-state (#901): riktning + mottagare, samt den filtrerade vyn.
- *  Egen hook så DocumentBrowser håller sig under max-lines-per-function. */
+/** Matchar dokumentet filtren? Tomt filter = allt. Typ träffar valfri del (#1220). */
+function matchesFilter(d: DocumentRecord, f: { dir: string; recipient: string; kind: string }): boolean {
+  return (!f.dir || d.direction === f.dir)
+    && (!f.recipient || d.recipient === f.recipient)
+    && (!f.kind || kindsOf(d).includes(f.kind));
+}
+
+/** Dokumentfilter-state (#901, #1220): riktning + mottagare + typ, samt den filtrerade
+ *  vyn och typerna som finns. Egen hook så DocumentBrowser håller sig under max-lines. */
 function useDocumentFilter(documents: DocumentRecord[]) {
   const [dirFilter, setDirFilter] = useState<"" | "INKOMMANDE" | "UTGAENDE">("");
   const [recipientFilter, setRecipientFilter] = useState<string>("");
+  const [kindFilter, setKindFilter] = useState<string>("");
   const visibleDocuments = useMemo<DocumentRecord[]>(
-    () => documents.filter((d) =>
-      (!dirFilter || d.direction === dirFilter) && (!recipientFilter || d.recipient === recipientFilter)),
-    [documents, dirFilter, recipientFilter],
+    () => documents.filter((d) => matchesFilter(d, { dir: dirFilter, recipient: recipientFilter, kind: kindFilter })),
+    [documents, dirFilter, recipientFilter, kindFilter],
   );
-  return { dirFilter, recipientFilter, setDirFilter, setRecipientFilter, visibleDocuments };
+  const kinds = useMemo(
+    () => [...new Set(documents.flatMap(kindsOf))].sort((a, b) => kindLabel(a).localeCompare(kindLabel(b), "sv")),
+    [documents],
+  );
+  return { dirFilter, recipientFilter, kindFilter, setDirFilter, setRecipientFilter, setKindFilter, visibleDocuments, kinds };
 }
 
-/** Filterrad (#901): riktning + mottagare, så användaren enkelt ser t.ex. vilka
- *  dokument som skickats till domstol. Rensa-knapp + "X av Y" när filter är aktivt. */
-function DocumentFilterBar({ dir, recipient, onDir, onRecipient, shownCount, totalCount }: {
-  dir: "" | "INKOMMANDE" | "UTGAENDE";
-  recipient: string;
-  onDir: (v: "" | "INKOMMANDE" | "UTGAENDE") => void;
-  onRecipient: (v: string) => void;
-  shownCount: number;
-  totalCount: number;
-}) {
-  const active = dir !== "" || recipient !== "";
+/** Filterrad (#901, #1220): riktning + mottagare + typ, så användaren enkelt ser t.ex.
+ *  vilka dokument som skickats till domstol eller innehåller en FUP. Rensa + "X av Y". */
+function DocumentFilterBar({ filter, totalCount }: { filter: ReturnType<typeof useDocumentFilter>; totalCount: number }) {
+  const { dirFilter: dir, recipientFilter: recipient, kindFilter: kind, setDirFilter: onDir, setRecipientFilter: onRecipient, setKindFilter: onKind } = filter;
+  const shownCount = filter.visibleDocuments.length;
+  const active = dir !== "" || recipient !== "" || kind !== "";
   const selectCls = "border border-gray-300 rounded px-1.5 py-0.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-500";
   return (
     <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-100 text-xs flex-wrap">
@@ -186,7 +196,11 @@ function DocumentFilterBar({ dir, recipient, onDir, onRecipient, shownCount, tot
         <option value="">Alla mottagare</option>
         {Object.entries(DOCUMENT_RECIPIENT_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
       </select>
-      {active && <button type="button" onClick={() => { onDir(""); onRecipient(""); }} className="text-blue-600 hover:underline">Rensa</button>}
+      <select aria-label="Typ" value={kind} onChange={(e) => onKind(e.target.value)} className={selectCls}>
+        <option value="">Alla typer</option>
+        {filter.kinds.map((k) => <option key={k} value={k}>{kindLabel(k)}</option>)}
+      </select>
+      {active && <button type="button" onClick={() => { onDir(""); onRecipient(""); onKind(""); }} className="text-blue-600 hover:underline">Rensa</button>}
       {active && <span className="text-gray-400 ml-auto">{shownCount} av {totalCount}</span>}
     </div>
   );
@@ -352,6 +366,7 @@ function useFileUpload({ matterId, mutations, fileInputRef }: {
   fileInputRef: React.RefObject<HTMLInputElement | null>;
 }) {
   const utils = trpc.useUtils();
+  const { jobs } = useCapabilities();
   const [uploading, setUploading] = useState(false);
   const [uploadingIds, setUploadingIds] = useState<Set<string>>(new Set());
   const [pendingUploads, setPendingUploads] = useState<DocumentRecord[]>([]);
@@ -405,13 +420,17 @@ function useFileUpload({ matterId, mutations, fileInputRef }: {
         setPendingUploads((p) => p.filter((d) => d.id !== result.id));
       }
 
-      // Bakgrundsjobb: AI-klassificering + text-extraktion → sökbart innehåll
-      const { jobQueue } = await import("@/lib/client/jobs/job-queue");
-      jobQueue.enqueue("classify-document", `Analyserar ${result.fileName}`, {
-        documentId: result.id,
-        fileName: result.fileName,
-        storagePath: result.storagePath,
-      });
+      // Bakgrundsjobb: klassificering + text-extraktion → sökbart innehåll.
+      // Server-first äger klassificeringen när bytes:en nått servern (#1220) —
+      // annars skrev klientens filnamnsgissning över serverns svar.
+      if (shouldClassifyOnClient(jobs, serverBytes !== null)) {
+        const { jobQueue } = await import("@/lib/client/jobs/job-queue");
+        jobQueue.enqueue("classify-document", `Analyserar ${result.fileName}`, {
+          documentId: result.id,
+          fileName: result.fileName,
+          storagePath: result.storagePath,
+        });
+      }
       await enqueueTextExtraction(result);
       // Utan working copy (demon, server-first i browsern) kan extract-text-
       // jobbet aldrig läsa filen igen — bytes:en finns bara här. Extrahera nu

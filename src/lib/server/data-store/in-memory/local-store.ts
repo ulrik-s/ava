@@ -15,7 +15,7 @@
 import type { DemoSource } from "@/lib/shared/demo-source";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import type {
-  AccontoDeduction, BillingRun, CalendarEvent, ConflictCheck, Contact, Document, DocumentAnalysisSuggestion, DocumentFolder, DocumentTemplate, ExpectedReceivable, Expense, Invoice, InvoiceDispatch, Matter, MatterContact, MatterEventSuggestion, Office, Organization, Payment, PaymentPlan, ServiceNote, Task, TimeEntry, User, WriteOff,
+  AccontoDeduction, BillingRun, CalendarEvent, ConflictCheck, Contact, Document, DocumentAnalysisSuggestion, DocumentFolder, DocumentPart, DocumentTemplate, ExpectedReceivable, Expense, Invoice, InvoiceDispatch, Matter, MatterContact, MatterEventSuggestion, Office, Organization, Payment, PaymentPlan, ServiceNote, Task, TimeEntry, User, WriteOff,
 } from "@/lib/shared/schemas";
 import type { AvaEvent, EmitInput, EventFilter } from "../../events/schema";
 import type {
@@ -28,6 +28,7 @@ import type {
   ContactDelegate,
   DocumentDelegate,
   DocumentFolderDelegate,
+  DocumentPartDelegate,
   DocumentTemplateDelegate,
   DocumentAnalysisSuggestionDelegate,
   MatterEventSuggestionDelegate,
@@ -60,6 +61,7 @@ export class LocalStore implements IDataStore {
   readonly contacts: ContactDelegate;
   readonly documents: DocumentDelegate;
   readonly documentFolders: DocumentFolderDelegate;
+  readonly documentParts: DocumentPartDelegate;
   readonly documentTemplates: DocumentTemplateDelegate;
   readonly documentAnalysisSuggestions: DocumentAnalysisSuggestionDelegate;
   readonly matterEventSuggestions: MatterEventSuggestionDelegate;
@@ -111,6 +113,7 @@ export class LocalStore implements IDataStore {
     this.contacts = this.makeDelegate<Contact>("contacts", relations.contacts);
     this.documents = this.makeDelegate<Document>("documents", relations.documents);
     this.documentFolders = this.makeDelegate<DocumentFolder>("documentFolders", relations.documentFolders);
+    this.documentParts = this.makeDelegate<DocumentPart>("documentParts", relations.documentParts);
     this.documentTemplates = this.makeDelegate<DocumentTemplate>("documentTemplates", relations.documentTemplates);
     this.documentAnalysisSuggestions = this.makeDelegate<DocumentAnalysisSuggestion>("documentAnalysisSuggestions", relations.documentAnalysisSuggestions);
     this.matterEventSuggestions = this.makeDelegate<MatterEventSuggestion>("matterEventSuggestions", relations.matterEventSuggestions);
@@ -254,6 +257,7 @@ export class LocalStore implements IDataStore {
       contacts: this.contacts,
       documents: this.documents,
       documentFolders: this.documentFolders,
+      documentParts: this.documentParts,
       documentTemplates: this.documentTemplates,
       documentAnalysisSuggestions: this.documentAnalysisSuggestions,
       matterEventSuggestions: this.matterEventSuggestions,

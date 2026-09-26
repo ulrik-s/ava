@@ -13,6 +13,17 @@
  *
  *   AVA_DATABASE_URL=postgres://… bun tooling/scripts/backfill-search-index.ts
  *
+ * `--reclassify` (#1220): köa `classify-document` i stället — indexerar sidorna
+ * OCH kör om klassificering + segmentering, så befintliga dokument får DELAR
+ * (kallelse + stämning + FUP …). Jobbet skriver inte över användarens val:
+ *   - specialvärden i documentType (Kostnadsräkning, E-post, fritext) rörs inte
+ *     och får inga delar;
+ *   - en kategori användaren satt (en kod som servern aldrig analyserat och som
+ *     inte är filnamnsgissningen) behålls och blir EN manuell del;
+ *   - MANUAL-delar (rättade i panelen) bevaras så länge sidantalet är samma.
+ *
+ *   AVA_DATABASE_URL=postgres://… bun tooling/scripts/backfill-search-index.ts --reclassify
+ *
  * Kör EFTER db:migrate (0026) och efter att server-first startats om med
  * #1215 (annars finns ingen worker på kön än — jobben väntar då kvar).
  */
@@ -36,11 +47,14 @@ export async function listIndexableDocumentIds(db: AppDb): Promise<DocumentId[]>
   return rows.map((r) => r.id);
 }
 
-/** Köa ett `index-document`-jobb per dokument. Returnerar antalet köade. */
-export async function enqueueBackfill(db: AppDb, sender: JobSender): Promise<number> {
+/** Kön backfillen köar på: bara indexering, eller omklassificering + delar (#1220). */
+export type BackfillQueue = typeof JOB_QUEUES.indexDocument | typeof JOB_QUEUES.classifyDocument;
+
+/** Köa ett jobb per dokument (default `index-document`). Returnerar antalet köade. */
+export async function enqueueBackfill(db: AppDb, sender: JobSender, queue: BackfillQueue = JOB_QUEUES.indexDocument): Promise<number> {
   const ids = await listIndexableDocumentIds(db);
   for (const documentId of ids) {
-    await sender.send(JOB_QUEUES.indexDocument, { documentId }, { singletonKey: documentId });
+    await sender.send(queue, { documentId }, { singletonKey: documentId });
   }
   return ids.length;
 }
@@ -60,30 +74,39 @@ async function connect(url: string): Promise<BackfillConnections> {
   return { db, sender: boss, close: async () => { await boss.stop({ graceful: true }); await close(); } };
 }
 
-/** Postgres-URL ur argument eller AVA_DATABASE_URL. */
+/** Postgres-URL ur första icke-flagg-argumentet eller AVA_DATABASE_URL. */
 export function resolveUrl(argv: readonly string[], env: Record<string, string | undefined>): string | undefined {
-  return argv[0] ?? env.AVA_DATABASE_URL;
+  return argv.find((a) => !a.startsWith("--")) ?? env.AVA_DATABASE_URL;
+}
+
+/** Kön för argumenten: `--reclassify` → classify-document, annars index-document. */
+export function resolveQueue(argv: readonly string[]): BackfillQueue {
+  return argv.includes("--reclassify") ? JOB_QUEUES.classifyDocument : JOB_QUEUES.indexDocument;
 }
 
 /** Anslut, köa, stäng. Returnerar antalet köade dokument. */
-export async function runBackfill(url: string, open: (url: string) => Promise<BackfillConnections> = connect): Promise<number> {
+export async function runBackfill(
+  url: string, open: (url: string) => Promise<BackfillConnections> = connect, queue: BackfillQueue = JOB_QUEUES.indexDocument,
+): Promise<number> {
   const conn = await open(url);
   try {
-    return await enqueueBackfill(conn.db, conn.sender);
+    return await enqueueBackfill(conn.db, conn.sender, queue);
   } finally {
     await conn.close();
   }
 }
 
 async function main(): Promise<void> {
-  const url = resolveUrl(process.argv.slice(2), process.env);
+  const argv = process.argv.slice(2);
+  const url = resolveUrl(argv, process.env);
   if (!url) {
     process.stderr.write("backfill-search-index: ange Postgres-URL via AVA_DATABASE_URL eller argument\n");
     process.exitCode = 1;
     return;
   }
-  const n = await runBackfill(url);
-  process.stdout.write(`backfill-search-index: ${n} dokument köade för indexering\n`);
+  const queue = resolveQueue(argv);
+  const n = await runBackfill(url, connect, queue);
+  process.stdout.write(`backfill-search-index: ${n} dokument köade på ${queue}\n`);
 }
 
 // Kör bara som script (inte vid import i tester).

@@ -114,6 +114,27 @@ describe("DrizzleSyncStore (#sync-bridge)", () => {
     expect(changes.find((c) => c.row.id === doc)).toMatchObject({ entity: "document" });
   });
 
+  // #1220: document_parts saknar org-kolumn → org via matter_id (samma fälla som #528).
+  it("documentPart delta-synkas via pull, även tombstone vid ersättning (#1220)", async () => {
+    const m = uuidv7(), doc = uuidv7(), user = uuidv7(), part = uuidv7();
+    await repos.matters.create({ id: m, organizationId: ORG, title: "Del-synk", status: "ACTIVE", matterNumber: "2026-0020" } as never);
+    await repos.documents.create({
+      id: doc, matterId: m, fileName: "sammansatt.pdf", mimeType: "application/pdf",
+      sizeBytes: 10, storagePath: "documents/content/y", uploadedById: user,
+    } as never);
+    const cursor = (await sync.pull(ORG, 0)).cursor;
+    await repos.documentParts.create({
+      id: part, documentId: doc, matterId: m, ordinal: 0, kind: "KALLELSE", fromPage: 1, toPage: 2, source: "AUTO",
+    } as never);
+    const created = (await sync.pull(ORG, cursor)).changes.find((c) => c.row.id === part);
+    expect(created).toMatchObject({ entity: "documentPart", row: { kind: "KALLELSE", fromPage: 1, toPage: 2 } });
+    const cursor2 = (await sync.pull(ORG, 0)).cursor;
+    await repos.documentParts.softDelete(asId<"DocumentPartId">(part));
+    expect((await sync.pull(ORG, cursor2)).changes.find((c) => c.row.id === part)).toMatchObject({ deleted: true });
+    // Annan byrå ser inte delen.
+    expect((await sync.pull(uuidv7(), 0)).changes.find((c) => c.row.id === part)).toBeUndefined();
+  });
+
   // #632: matter_contacts/time_entries/expenses saknar org-kolumn (samma form som
   // document, #528) men missades — utan resolveOrg-override loggas de aldrig →
   // ärendet visar inga kontakter/tid/utlägg trots att raderna finns server-side.

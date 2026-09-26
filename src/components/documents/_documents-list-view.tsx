@@ -12,6 +12,7 @@ import { useState } from "react";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { trpc } from "@/lib/client/trpc";
 import type { DocumentFolderId, MatterId } from "@/lib/shared/schemas/ids";
+import { DocumentPartsList, documentKindsLabel } from "./_document-parts";
 import { DocumentActions, type DocumentRecord } from "./_document-row";
 import { formatFileSize } from "./_drag-helpers";
 import type { FolderRecord } from "./_folder-row";
@@ -55,13 +56,16 @@ export function DocumentsListView({ matterId, documents, folders, docSync = NO_S
     // växer annars till sitt max-content, vilket `break-words` inte hjälper mot.
     { key: "fileName", label: "Filnamn", sortable: true, wrap: true, sortValue: (d) => d.fileName,
       render: (d) => (
-        <span className="flex items-center gap-2 min-w-0">
-          <button type="button" onClick={() => void openDocument(d, setModal)}
-            className="min-w-0 break-words text-sm font-medium text-blue-600 hover:underline text-left"
-            title="PDF/Word/Excel → öppnas i extern editor om du har valt en lokal mapp">
-            {d.fileName}
-          </button>
-          <SyncStatusBadge status={docSync.get(d.id)} />
+        <span className="flex flex-col min-w-0">
+          <span className="flex items-center gap-2 min-w-0">
+            <button type="button" onClick={() => void openDocument(d, setModal)}
+              className="min-w-0 break-words text-sm font-medium text-blue-600 hover:underline text-left"
+              title="PDF/Word/Excel → öppnas i extern editor om du har valt en lokal mapp">
+              {d.fileName}
+            </button>
+            <SyncStatusBadge status={docSync.get(d.id)} />
+          </span>
+          <DocumentPartsList doc={d} />
         </span>
       ),
     },
@@ -70,8 +74,8 @@ export function DocumentsListView({ matterId, documents, folders, docSync = NO_S
     // tiden; nu gör listvyn det också. Kolumnerna finns kvar i sortering,
     // filtrering och kolumnmenyn — bara `display` växlar.
     { key: "documentType", label: "Typ", sortable: true, hideBelow: "sm",
-      sortValue: (d) => d.documentType ?? "",
-      render: (d) => <span className="text-sm text-gray-500">{d.documentType ?? "—"}</span> },
+      sortValue: (d) => documentKindsLabel(d) ?? "",
+      render: (d) => <span className="text-sm text-gray-500">{documentKindsLabel(d) ?? "—"}</span> },
     { key: "folder", label: "Mapp", sortable: true, hideBelow: "lg",
       sortValue: (d) => folderPath(d.folderId ?? null, folders),
       render: (d) => <span className="text-sm text-gray-500 font-mono">{folderPath(d.folderId ?? null, folders)}</span> },

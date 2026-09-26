@@ -19,7 +19,8 @@ import { asId } from "@/lib/shared/schemas/ids";
 
 export type OpenableDoc = { id: string; storagePath?: string | null; fileName?: string };
 
-export async function openMatterDocument(doc: OpenableDoc): Promise<void> {
+/** Öppna dokumentet; `page` (#1220) öppnar på den sidan (t.ex. en dels första sida). */
+export async function openMatterDocument(doc: OpenableDoc, page?: number): Promise<void> {
   const { openDocument } = await import("./open-document");
   const { loadHandle } = await import("@/lib/client/fsa/handle-store");
   const { readFromFsa } = await import("@/lib/client/fsa/read-from-fsa");
@@ -45,6 +46,7 @@ export async function openMatterDocument(doc: OpenableDoc): Promise<void> {
 
   await openDocument({
     doc,
+    ...(page ? { page } : {}),
     isDemo,
     ...(process.env.NEXT_PUBLIC_DEFAULT_DEMO_REPO ? { demoRepo: process.env.NEXT_PUBLIC_DEFAULT_DEMO_REPO } : {}),
     loadHandle: () => loadHandle("repo-root"),

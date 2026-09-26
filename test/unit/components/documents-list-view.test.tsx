@@ -9,9 +9,12 @@ import { asId } from "@/lib/shared/schemas/ids";
 
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
-    useUtils: () => ({ prefs: { get: { invalidate: vi.fn() } } }),
+    useUtils: () => ({ prefs: { get: { invalidate: vi.fn() } }, document: { partsByMatter: { invalidate: vi.fn() }, tree: { invalidate: vi.fn() } } }),
     user: { current: { useQuery: () => ({ data: { id: "u1", role: "LAWYER" } }) } },
-    document: { takeoverLease: { useMutation: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }) } },
+    document: {
+      takeoverLease: { useMutation: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }) },
+      setPartKind: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+    },
     prefs: {
       get: { useQuery: () => ({ data: undefined, isLoading: false }) },
       save: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
@@ -53,6 +56,26 @@ const baseFolder = (id: string, name: string, parentId: string | null = null) =>
   });
 
 describe("DocumentsListView", () => {
+  it("#1220: Typ-kolumnen visar etiketter (inte koder) och delarna i sammansatta dokument", () => {
+    render(
+      <DocumentsListView
+        matterId={asId<"MatterId">("m1")} folders={[]}
+        documents={[
+          baseDoc({ id: "d1", fileName: "a.pdf", documentType: "STAMNING" }),
+          baseDoc({ id: "d2", fileName: "b.pdf", documentType: "KALLELSE", parts: [
+            { id: "p1", kind: "KALLELSE", fromPage: 1, toPage: 1, source: "AUTO" },
+            { id: "p2", kind: "FUP", fromPage: 2, toPage: 40, source: "AUTO" },
+          ] }),
+        ]}
+        onDelete={() => {}} onReanalyze={() => {}}
+      />,
+    );
+    expect(screen.getByText("Stämning")).toBeInTheDocument();
+    expect(screen.getByText("Kallelse + FUP")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /2 delar/ }));
+    expect(screen.getByText("s. 2–40")).toBeInTheDocument();
+  });
+
   it("renderar tomt-state när inga docs", () => {
     render(
       <DocumentsListView

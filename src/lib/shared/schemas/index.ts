@@ -31,6 +31,7 @@ import { contactSchema } from "./contact";
 import {
   documentSchema,
   documentFolderSchema,
+  documentPartSchema,
   documentAnalysisSuggestionSchema,
   matterEventSuggestionSchema,
 } from "./document";
@@ -127,6 +128,12 @@ export const ENTITY_REGISTRY: Record<string, EntityEntry> = {
     gitPath: p((id) => `document-folders/${id}.json`),
     gitPrefix: "document-folders",
     sourceKey: "documentFolders",
+  },
+  documentPart: {
+    schema: documentPartSchema,
+    gitPath: p((id) => `document-parts/${id}.json`),
+    gitPrefix: "document-parts",
+    sourceKey: "documentParts",
   },
   documentAnalysisSuggestion: {
     schema: documentAnalysisSuggestionSchema,
@@ -255,7 +262,7 @@ export const ENTITY_REGISTRY: Record<string, EntityEntry> = {
 /** Union av alla giltiga entity-namn (strängliteraler). */
 export type EntityName =
   | "organization" | "office" | "user" | "contact" | "matter" | "matterContact"
-  | "document" | "documentFolder" | "documentAnalysisSuggestion" | "matterEventSuggestion"
+  | "document" | "documentFolder" | "documentPart" | "documentAnalysisSuggestion" | "matterEventSuggestion"
   | "timeEntry" | "expense" | "invoice" | "payment" | "paymentPlan"
   | "paymentPlanReminder" | "accontoDeduction" | "billingRun" | "writeOff"
   | "invoiceDispatch" | "expectedReceivable"

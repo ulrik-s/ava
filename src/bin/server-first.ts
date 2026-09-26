@@ -128,6 +128,8 @@ function main(): void {
   const handlers = buildServerFirstJobHandlers({
     ...(smtp ? { smtp } : {}),
     documents: api.repos.documents,
+    // #1220: segmenteringen skriver dokumentdelar (synkas till klienterna).
+    parts: api.repos.documentParts,
     // Server-LLM-klassificering (#518 Fas 3): med content-store + AVA_LLM_*
     // läses bytes → text extraheras (PDF/DOCX) → ollama klassificerar.
     ...(contentStore ? { content: contentStore } : {}),

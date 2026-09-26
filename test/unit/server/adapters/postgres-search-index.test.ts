@@ -7,7 +7,7 @@
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest-compat";
 import { likePatternOf, markHeadline, PostgresSearchIndex } from "@/lib/server/adapters/postgres-search-index";
-import { documentPages, documents, matters, users } from "@/lib/server/db/schema";
+import { documentPages, documentParts, documents, matters, users } from "@/lib/server/db/schema";
 import { DrizzleDocumentRepository } from "@/lib/server/repositories/drizzle-document-repository";
 import { asId, type DocumentId, type MatterId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
@@ -192,6 +192,46 @@ describe("search", () => {
 
   it("ingen träff alls → tomt resultat med tomma facetter", async () => {
     expect(await index.search("finnsinte", ORG)).toEqual({ hits: [], estimatedTotalHits: 0, facets: { documentTypes: [] } });
+  });
+});
+
+describe("search — dokumentdelar (#1220)", () => {
+  const M_PARTS = asId<"MatterId">(uuidv7());
+  let composite: DocumentId;
+
+  beforeAll(async () => {
+    await handle.db.insert(matters).values({ id: M_PARTS, organizationId: ORG, matterNumber: "AA2026-0099", title: "Brottmål" });
+    composite = await addDoc(M_PARTS, { fileName: "inkommet.pdf", documentType: "KALLELSE" });
+    await index.replacePages(composite, ["Kallelse till huvudförhandling", "Ansökan om stämning, åklagaren yrkar", "Förhör med målsäganden om misshandeln"]);
+    const part = (ordinal: number, kind: "KALLELSE" | "STAMNING" | "FUP", fromPage: number, toPage: number) => ({
+      id: asId<"DocumentPartId">(uuidv7()), documentId: composite, matterId: M_PARTS, ordinal, kind, fromPage, toPage, source: "AUTO" as const,
+    });
+    await handle.db.insert(documentParts).values([
+      part(0, "KALLELSE", 1, 1), part(1, "STAMNING", 2, 2), part(2, "FUP", 3, 3),
+      { ...part(3, "FUP", 4, 4), deletedAt: new Date() },
+    ]);
+  });
+
+  it("träff på sida N rapporterar delen den ligger i", async () => {
+    const hit = (await index.search("misshandeln", ORG, 20, { matterId: M_PARTS })).hits[0];
+    expect(hit).toMatchObject({ id: composite, page: 3, part: { kind: "FUP", fromPage: 3, toPage: 3 } });
+  });
+
+  it("typfilter träffar valfri del (inte bara documentType)", async () => {
+    const r = await index.search("misshandeln", ORG, 20, { matterId: M_PARTS, documentTypes: ["FUP"] });
+    expect(r.hits.map((h) => h.id)).toEqual([composite]);
+  });
+
+  it("facetter räknar dokumentet i varje dels typ", async () => {
+    const r = await index.search("misshandeln", ORG, 20, { matterId: M_PARTS });
+    expect(r.facets?.documentTypes).toEqual([
+      { type: "FUP", count: 1 }, { type: "KALLELSE", count: 1 }, { type: "STAMNING", count: 1 },
+    ]);
+  });
+
+  it("dokument utan delar: part = null", async () => {
+    const hit = (await index.search("avtalsbrott", ORG)).hits[0];
+    expect(hit?.part).toBeNull();
   });
 });
 

@@ -6,7 +6,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest-compat";
 import type { DemoSource } from "@/lib/server/data-store/DemoDataStore";
 import { LocalStore } from "@/lib/server/data-store/in-memory/local-store";
-import { documentFolders, documents, matters, users } from "@/lib/server/db/schema";
+import { documentFolders, documentParts, documents, matters, users } from "@/lib/server/db/schema";
 import { DrizzleDocumentFolderRepository } from "@/lib/server/repositories/drizzle-document-folder-repository";
 import { DrizzleDocumentRepository } from "@/lib/server/repositories/drizzle-document-repository";
 import { InMemoryDocumentFolderRepository } from "@/lib/server/repositories/in-memory-document-folder-repository";
@@ -36,6 +36,12 @@ describe("DocumentRepository / DocumentFolderRepository — in-memory", () => {
         { id: d1, matterId: mId, folderId: root, fileName: "a.pdf", uploadedById: uId, documentType: "Avtal" },
         { id: uuidv7(), matterId: mId, folderId: null, fileName: "b.pdf", documentType: "Faktura" },
       ],
+      // #1220: d1 är sammansatt → räknas under varje dels typ i stället för documentType.
+      documentParts: [
+        { id: uuidv7(), documentId: d1, matterId: mId, ordinal: 0, kind: "KALLELSE", fromPage: 1, toPage: 1, source: "AUTO" },
+        { id: uuidv7(), documentId: d1, matterId: mId, ordinal: 1, kind: "FUP", fromPage: 2, toPage: 3, source: "AUTO" },
+        { id: uuidv7(), documentId: d1, matterId: mId, ordinal: 2, kind: "DOM", fromPage: 4, toPage: 4, source: "AUTO", deletedAt: new Date() },
+      ],
     } as DemoSource);
     const store = new LocalStore(source, async () => {});
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -50,7 +56,7 @@ describe("DocumentRepository / DocumentFolderRepository — in-memory", () => {
     expect(await docs.getByIdInOrg(d1, asId<"OrganizationId">(uuidv7()))).toBeNull();
     expect((await docs.listByMatter(mId)).length).toBe(2);
     expect(await docs.listDocumentTypesForOrg(ORG)).toEqual([
-      { type: "Avtal", count: 1 }, { type: "Faktura", count: 1 },
+      { type: "Faktura", count: 1 }, { type: "FUP", count: 1 }, { type: "KALLELSE", count: 1 },
     ]);
 
     const rootFolders = await folders.listInParent(mId, null);
@@ -87,6 +93,9 @@ describe("DocumentRepository / DocumentFolderRepository — Drizzle (pglite)", (
       v({ matterId: mId, fileName: "f", mimeType: "application/pdf", sizeBytes: 1, storagePath: "p", uploadedById: uId, ...extra });
     await db.insert(documents).values(doc({ id: d1, folderId: root, documentType: "Avtal" }));
     await db.insert(documents).values(doc({ id: uuidv7(), folderId: null, documentType: "Faktura" }));
+    const part = (ordinal: number, kind: string, deletedAt: Date | null = null) =>
+      v({ id: uuidv7(), documentId: d1, matterId: mId, ordinal, kind, fromPage: ordinal + 1, toPage: ordinal + 1, source: "AUTO", deletedAt });
+    await db.insert(documentParts).values([part(0, "KALLELSE"), part(1, "FUP"), part(2, "DOM", new Date())]);
     const docs = new DrizzleDocumentRepository(db);
     const folders = new DrizzleDocumentFolderRepository(db);
 
@@ -97,7 +106,7 @@ describe("DocumentRepository / DocumentFolderRepository — Drizzle (pglite)", (
     expect(await docs.getByIdInOrg(d1, asId<"OrganizationId">(uuidv7()))).toBeNull();
     expect((await docs.listByMatter(mId)).length).toBe(2);
     expect(await docs.listDocumentTypesForOrg(org)).toEqual([
-      { type: "Avtal", count: 1 }, { type: "Faktura", count: 1 },
+      { type: "Faktura", count: 1 }, { type: "FUP", count: 1 }, { type: "KALLELSE", count: 1 },
     ]);
 
     const rootFolders = await folders.listInParent(mId, null);

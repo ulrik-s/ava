@@ -78,6 +78,8 @@ const DESCRIPTIONS: Readonly<Record<string, string>> = {
   "document.delete": "Radera ett dokument.",
   "document.updateMetadata": "Skriv dokumentets metadata (typ, datum, motpart) — AI-genererad eller manuellt överstyrd.",
   "document.setTags": "Sätt dokumentets etiketter. Validerar mot byråns etikettvokabulär och bumpar inte versionen.",
+  "document.partsByMatter": "Lista delarna i ett ärendes sammansatta dokument (t.ex. kallelse + stämning + FUP i en PDF): kategori och sidintervall per del, i sidordning.",
+  "document.setPartKind": "Rätta kategorin för en del i ett sammansatt dokument. Delen markeras som manuell och bevaras vid omklassificering; är det första delen följer dokumentets typ med.",
   "document.analyze": "Kör (eller kör om) AI-analys av ett dokument. Returnerar omedelbart; resultatet skrivs när analysen är klar.",
   "document.suggestFromText": "Härled kontakt- och händelseförslag ur ett dokuments text. Idempotent — texten skickas in, routern läser inga filer.",
   "document.uploadContent": "Ta emot dokumentets bytes och lagra dem innehållsadresserat. Ger en ny immutabel version och triggar omklassificering.",

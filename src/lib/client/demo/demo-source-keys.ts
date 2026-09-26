@@ -44,6 +44,8 @@ const MATCHERS: Matcher[] = [
   // poäng osynlig i demon (allt låg i roten), och utskickshistoriken på
   // fakturan stod tom oavsett hur många fakturor som skickats.
   { key: "documentFolders", owns: (p) => p.startsWith("document-folders/") },
+  // #1220: delar av sammansatta dokument (kallelse + stämning + FUP i en PDF).
+  { key: "documentParts", owns: (p) => p.startsWith("document-parts/") },
   { key: "invoiceDispatches", owns: (p) => p.startsWith("invoice-dispatches/") },
   // #988: kontakt- och händelseförslagen fick en producent (extraktion ur
   // dokumenttexten) och kan därmed hydreras — panelerna var tomma i alla tier

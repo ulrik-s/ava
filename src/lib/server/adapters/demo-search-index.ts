@@ -11,6 +11,7 @@
  */
 
 import { getDocumentContent } from "@/lib/client/demo/document-content-cache";
+import { groupPartsByDocument, type PartLike } from "@/lib/shared/document-part-kinds";
 import type { IDataStore } from "../data-store/IDataStore";
 import type { ISearchIndex, SearchResponse } from "../ports";
 import {
@@ -27,6 +28,8 @@ interface DocLike {
   storagePath?: string | null;
   /** Optional — i git-db saknar documents detta fält och vi resolver:ar via matter. */
   organizationId?: string;
+  /** Dokumentdelar (#1220) ur den lokala storen — typfilter/facetter per del. */
+  parts?: readonly PartLike[];
 }
 interface MatterLike {
   id: string;
@@ -109,8 +112,9 @@ function toSearchHit(doc: DocLike, snippet: string, matters: Map<string, MatterL
     matterNumber: mf.matterNumber,
     matterTitle: mf.matterTitle,
     organizationId: doc.organizationId ?? mf.organizationId,
-    // Demons innehållscache är sidlös (ihopslagen text) → sidan är okänd.
+    // Demons innehållscache är sidlös (ihopslagen text) → sidan (och delen) är okänd.
     page: null,
+    part: null,
     _formatted: {
       content: snippet,
     },
@@ -177,7 +181,12 @@ export function makeDemoSearchIndex(dataStore: IDataStore): ISearchIndex {
       // (DocumentWhereInput har ingen organizationId-direkt, det går
       // via matter-relation som vår in-memory-implementation inte
       // expanderar transparent).
-      const docs: DocLike[] = await dataStore.documents.findMany({});
+      const [docRows, partRows] = await Promise.all([
+        dataStore.documents.findMany({}) as Promise<DocLike[]>,
+        dataStore.documentParts.findMany({}) as Promise<PartLike[]>,
+      ]);
+      const partsByDoc = groupPartsByDocument(partRows);
+      const docs = docRows.map((d): DocLike => ({ ...d, parts: partsByDoc.get(d.id) ?? [] }));
       const matterRows: MatterLike[] = await dataStore.matters.findMany({
         where: { organizationId },
       });

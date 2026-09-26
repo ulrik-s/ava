@@ -15,7 +15,7 @@ const ORG_KEYS = [
   "invoices", "matters", "payments", "writeOffs", "paymentPlans", "paymentPlanReminders",
   "timeEntries", "expenses", "accontoDeductions", "billingRuns", "contacts", "matterContacts",
   "conflictChecks", "users", "tasks", "calendarEvents", "serviceNotes", "documents",
-  "documentFolders", "matterEventSuggestions", "documentAnalysisSuggestions", "documentTemplates",
+  "documentFolders", "documentParts", "matterEventSuggestions", "documentAnalysisSuggestions", "documentTemplates",
   "expectedReceivables", "invoiceDispatches", "organizations", "offices", "userPreferences", "orgPreferences",
 ] as const;
 

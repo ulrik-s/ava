@@ -1,9 +1,11 @@
 import { z } from "zod";
+import { KNOWN_KINDS } from "../document-kind";
 import { baseFields, optionalDateLike } from "./common";
 import { suggestionStatusSchema, matterRoleSchema, contactTypeSchema } from "./enums";
 import {
   documentIdSchema,
   documentFolderIdSchema,
+  documentPartIdSchema,
   documentAnalysisSuggestionIdSchema,
   matterEventSuggestionIdSchema,
   matterIdSchema,
@@ -76,6 +78,40 @@ export const documentSchema = z.object({
 }).passthrough();
 
 export type Document = z.infer<typeof documentSchema>;
+
+/** Dokumentkategori (`KNOWN_KINDS`) som zod-enum — typen på en dokumentdel. */
+export const documentKindSchema = z.enum(KNOWN_KINDS);
+
+/**
+ * Var en dokumentdel kommer ifrån: `AUTO` = segmenteringen i klassificerings-
+ * jobbet (ersätts vid omklassificering), `MANUAL` = användaren har rättat delens
+ * typ (bevaras så länge dokumentets sidantal är oförändrat).
+ */
+export const documentPartSourceSchema = z.enum(["AUTO", "MANUAL"]);
+export type DocumentPartSource = z.infer<typeof documentPartSourceSchema>;
+
+/**
+ * DocumentPart (#1220) — en del av ett sammansatt dokument ("kallelse +
+ * stämning + FUP" i EN PDF). Filen delas aldrig fysiskt; delen är metadata:
+ * kategori + sidintervall (1-baserat, inklusive). Delarna i ett dokument täcker
+ * dess sidor i ordning (`ordinal` 0, 1, …). `matterId` speglar dokumentets
+ * ärende — det org-scopar delen i synken (samma mönster som mappar, #528).
+ * Lagras i `document-parts/<id>.json`.
+ */
+export const documentPartSchema = z.object({
+  ...baseFields,
+  id: documentPartIdSchema,
+  documentId: documentIdSchema,
+  matterId: matterIdSchema,
+  ordinal: z.number().int().nonnegative(),
+  kind: documentKindSchema,
+  fromPage: z.number().int().positive(),
+  toPage: z.number().int().positive(),
+  source: documentPartSourceSchema,
+  version: z.number().int().positive().default(1),
+}).passthrough();
+
+export type DocumentPart = z.infer<typeof documentPartSchema>;
 
 /**
  * Kanonisk `documentType`-tagg för genererade kostnadsräkningar. Sätts av

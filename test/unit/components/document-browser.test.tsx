@@ -32,6 +32,15 @@ const treeQuery = {
   isLoading: false,
 };
 
+/** Ärendets dokumentdelar (#1220). */
+const partsQuery = { data: [] as Array<Record<string, unknown>> };
+const setPartKind = { mutate: vi.fn(), isPending: false };
+let setPartKindOptions: { onSuccess?: () => void } = {};
+
+/** Klientens jobbkö — klassificeringen ska INTE köas när servern äger den (#1220). */
+const jobQueueEnqueue = vi.fn();
+vi.mock("@/lib/client/jobs/job-queue", () => ({ jobQueue: { enqueue: jobQueueEnqueue } }));
+
 /** Vanilla-klienten uppladdningen använder (uploadContent + suggestFromText). */
 const clientMock = {
   document: {
@@ -44,6 +53,7 @@ const utilsMock = {
   client: clientMock,
   document: {
     tree: { invalidate: vi.fn(), fetch: vi.fn().mockResolvedValue({ folders: [], documents: [] }) },
+    partsByMatter: { invalidate: vi.fn() },
     pendingSuggestionsGrouped: { invalidate: vi.fn() },
     pendingSuggestions: { invalidate: vi.fn() },
   },
@@ -86,6 +96,8 @@ vi.mock("@/lib/client/trpc", () => ({
     useUtils: () => utilsMock,
     document: {
       tree: { useQuery: () => treeQuery },
+      partsByMatter: { useQuery: () => partsQuery },
+      setPartKind: { useMutation: (opts?: { onSuccess?: () => void }) => { setPartKindOptions = opts ?? {}; return setPartKind; } },
       createFolder: { useMutation: () => mutationStubs.createFolder },
       renameFolder: { useMutation: () => mutationStubs.renameFolder },
       deleteFolder: { useMutation: () => mutationStubs.deleteFolder },
@@ -115,6 +127,7 @@ beforeEach(() => {
   // tvinga träd-läget innan varje render (default är annars "list").
   window.localStorage.setItem("ava.documents.viewMode", "tree");
   treeQuery.data = { folders: [], documents: [] };
+  partsQuery.data = [];
   mutationStubs.createFolder.mutate = vi.fn();
   mutationStubs.renameFolder.mutate = vi.fn();
   mutationStubs.deleteFolder.mutate = vi.fn();
@@ -180,6 +193,92 @@ describe("DocumentBrowser", () => {
     expect(screen.queryByText("svaromal.pdf")).not.toBeInTheDocument();
   });
 
+  describe("sammansatta dokument (#1220)", () => {
+    const parts = [
+      { id: "p1", documentId: "d1", kind: "KALLELSE", fromPage: 1, toPage: 2, source: "AUTO" },
+      { id: "p2", documentId: "d1", kind: "STAMNING", fromPage: 3, toPage: 5, source: "MANUAL" },
+      { id: "p3", documentId: "d1", kind: "FUP", fromPage: 6, toPage: 6, source: "AUTO" },
+    ];
+
+    it("visar delarnas etiketter och en expanderbar dellista med sidintervall", () => {
+      treeQuery.data = { folders: [], documents: [baseDoc({ documentType: "KALLELSE" })] };
+      partsQuery.data = parts;
+      render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+      expect(screen.getByText("Kallelse + Stämning + FUP")).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: /3 delar/ }));
+      expect(screen.getByText("s. 1–2")).toBeInTheDocument();
+      expect(screen.getByText("s. 6")).toBeInTheDocument();
+      expect(screen.getByText("rättad")).toBeInTheDocument();
+    });
+
+    it("rättar en dels typ via setPartKind och invaliderar", () => {
+      treeQuery.data = { folders: [], documents: [baseDoc()] };
+      partsQuery.data = parts;
+      render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+      fireEvent.click(screen.getByRole("button", { name: /3 delar/ }));
+      fireEvent.change(screen.getByLabelText("Rätta typ för del 3"), { target: { value: "BEVIS" } });
+      expect(setPartKind.mutate).toHaveBeenCalledWith({ partId: "p3", kind: "BEVIS" });
+      setPartKindOptions.onSuccess?.();
+      expect(utilsMock.document.partsByMatter.invalidate).toHaveBeenCalled();
+      expect(utilsMock.document.tree.invalidate).toHaveBeenCalled();
+    });
+
+    it("klick på en del öppnar dokumentet på delens första sida", async () => {
+      window.localStorage.setItem("ava.firma", JSON.stringify({ tier: "demo", repo: "ulrik-s/ava-demo" }));
+      treeQuery.data = { folders: [], documents: [baseDoc()] };
+      partsQuery.data = parts;
+      const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
+      try {
+        render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+        fireEvent.click(screen.getByRole("button", { name: /3 delar/ }));
+        fireEvent.click(screen.getByTitle("Öppna på sidan 3"));
+        await waitFor(() => expect(openSpy).toHaveBeenCalled(), { timeout: 2000 });
+        expect(String(openSpy.mock.calls[0]![0])).toMatch(/#page=3$/);
+      } finally {
+        openSpy.mockRestore();
+        window.localStorage.removeItem("ava.firma");
+      }
+    });
+
+    it("typfiltret träffar valfri del", () => {
+      treeQuery.data = { folders: [], documents: [
+        baseDoc({ id: "d1", fileName: "sammansatt.pdf", documentType: "KALLELSE" }),
+        baseDoc({ id: "d2", fileName: "dom.pdf", documentType: "DOM" }),
+      ] };
+      partsQuery.data = parts;
+      render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+      fireEvent.change(screen.getByLabelText("Typ"), { target: { value: "FUP" } });
+      expect(screen.getByText("sammansatt.pdf")).toBeInTheDocument();
+      expect(screen.queryByText("dom.pdf")).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "Rensa" }));
+      expect(screen.getByText("dom.pdf")).toBeInTheDocument();
+    });
+
+    it("server-first: klientens filnamnsgissning köas inte (servern klassificerar)", async () => {
+      render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+      const file = new File(["text"], "stamning.txt", { type: "text/plain" });
+      const input = document.querySelector("input[type=file]")!;
+      Object.defineProperty(input, "files", { value: [file], configurable: true });
+      fireEvent.change(input);
+      await waitFor(() => expect(enqueueTextExtraction).toHaveBeenCalled());
+      expect(jobQueueEnqueue).not.toHaveBeenCalledWith("classify-document", expect.anything(), expect.anything());
+    });
+
+    it("demo (ingen server-jobbkö): klienten klassificerar som förut", async () => {
+      window.localStorage.setItem("ava.firma", JSON.stringify({ tier: "demo", repo: "u/r" }));
+      try {
+        render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
+        const file = new File(["text"], "stamning.txt", { type: "text/plain" });
+        const input = document.querySelector("input[type=file]")!;
+        Object.defineProperty(input, "files", { value: [file], configurable: true });
+        fireEvent.change(input);
+        await waitFor(() => expect(jobQueueEnqueue).toHaveBeenCalledWith("classify-document", expect.any(String), expect.anything()));
+      } finally {
+        window.localStorage.removeItem("ava.firma");
+      }
+    });
+  });
+
   it("visar AI-extraherad titel istället för filnamn när satt", () => {
     treeQuery.data = {
       folders: [],
@@ -187,7 +286,7 @@ describe("DocumentBrowser", () => {
     };
     render(<DocumentBrowser matterId={asId<"MatterId">("m1")} />);
     expect(screen.getByText("Stämningsansökan 2026-0001")).toBeInTheDocument();
-    expect(screen.getByText("Stämning")).toBeInTheDocument();
+    expect(screen.getByText("Stämning", { selector: "span" })).toBeInTheDocument();
   });
 
   it("renderar mappar i trädet", () => {

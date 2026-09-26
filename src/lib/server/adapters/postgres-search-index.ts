@@ -9,13 +9,18 @@
  * wildcard) via den delade `search-scoring` — så rankning och facetter beter
  * sig lika i alla omfång. Med `*` i frågan matchas sidtexten med ILIKE.
  *
+ * Dokumentdelar (#1220): kandidaternas delar läses i EN fråga; typfiltret
+ * träffar om någon del har typen, facetterna räknar per deltyp och träffsidan
+ * rapporteras med sin del ("Stämning, s. 5").
+ *
  * Org-scopning: dokument saknar org-kolumn → via ärendet (documents → matters).
  * Radera­de (tombstonade) dokument hittas aldrig.
  */
 
-import { and, asc, desc, eq, ilike, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
+import { groupPartsByDocument, partForPage } from "@/lib/shared/document-part-kinds";
 import { asId, type DocumentId, type MatterId, type OrganizationId } from "@/lib/shared/schemas/ids";
-import { documentPages, documents, matters } from "../db/schema";
+import { documentPages, documentParts, documents, matters } from "../db/schema";
 import type { AppDb } from "../db/types";
 import type { IDocumentPageIndex, IndexableDocument, ISearchIndex, ISearchOpts, SearchHit, SearchResponse } from "../ports";
 import {
@@ -47,7 +52,12 @@ interface Candidate {
   organizationId: OrganizationId;
   page: number | null;
   rank: number | null;
+  /** Dokumentets delar (#1220), sidordning; tom = inga delar. */
+  parts?: PartRange[];
 }
+
+/** En del som den visas i sökträffen. */
+interface PartRange { kind: string; fromPage: number; toPage: number }
 
 interface Scored extends Candidate { score: number }
 
@@ -89,6 +99,7 @@ function toHit(c: Scored, headline: string | undefined): SearchHit {
     matterTitle: c.matterTitle,
     organizationId: c.organizationId,
     page: c.page,
+    part: partForPage(c.parts, c.page),
     _formatted: { content: headline ?? markHeadline(c.summary ?? "") },
   };
 }
@@ -100,7 +111,7 @@ export class PostgresSearchIndex implements ISearchIndex, IDocumentPageIndex {
     const needle = parseNeedle(query);
     if (!needle) return { hits: [], estimatedTotalHits: 0 };
     const scope = this.scope(asId<"OrganizationId">(organizationId), opts.matterId);
-    const candidates = (await this.candidates(needle, scope))
+    const candidates = (await this.withParts(await this.candidates(needle, scope)))
       .map((c) => ({ ...c, score: scoreOf(c, needle.matcher) }))
       .filter((c) => c.score > 0);
     const matched = candidates.filter(documentTypeFilter(opts.documentTypes)).sort((a, b) => b.score - a.score);
@@ -111,6 +122,20 @@ export class PostgresSearchIndex implements ISearchIndex, IDocumentPageIndex {
       estimatedTotalHits: matched.length,
       facets: { documentTypes: computeFacetEntries(candidates) },
     };
+  }
+
+  /** Hämta kandidaternas delar (EN fråga) och hänge dem. */
+  private async withParts(candidates: Candidate[]): Promise<Candidate[]> {
+    if (candidates.length === 0) return candidates;
+    const rows = await this.db
+      .select({ documentId: documentParts.documentId, kind: documentParts.kind, fromPage: documentParts.fromPage, toPage: documentParts.toPage })
+      .from(documentParts)
+      .where(and(inArray(documentParts.documentId, candidates.map((c) => c.id)), isNull(documentParts.deletedAt)));
+    const byDoc = groupPartsByDocument(rows);
+    return candidates.map((c) => ({
+      ...c,
+      parts: (byDoc.get(c.id) ?? []).map(({ kind, fromPage, toPage }): PartRange => ({ kind, fromPage, toPage })),
+    }));
   }
 
   /** Ersätt dokumentets sidor (delete + insert i en transaktion). */

@@ -11,6 +11,7 @@ import type { CalendarEventRepository } from "./calendar-event-repository";
 import type { ConflictCheckRepository } from "./conflict-check-repository";
 import type { ContactRepository } from "./contact-repository";
 import type { DocumentFolderRepository } from "./document-folder-repository";
+import type { DocumentPartRepository } from "./document-part-repository";
 import type { DocumentRepository } from "./document-repository";
 import type { DocumentSuggestionRepository } from "./document-suggestion-repository";
 import type { DocumentTemplateRepository } from "./document-template-repository";
@@ -54,6 +55,7 @@ export interface Repositories {
   serviceNotes: ServiceNoteRepository;
   documents: DocumentRepository;
   documentFolders: DocumentFolderRepository;
+  documentParts: DocumentPartRepository;
   matterEventSuggestions: MatterEventSuggestionRepository;
   documentAnalysisSuggestions: DocumentSuggestionRepository;
   documentTemplates: DocumentTemplateRepository;

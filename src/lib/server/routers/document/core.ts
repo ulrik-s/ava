@@ -79,6 +79,8 @@ export const coreProcedures = {
           highlight: hit._formatted?.content || "",
           /** 1-baserad sida med bästa innehållsträffen; null = okänd/metadata-träff. */
           page: hit.page ?? null,
+          /** Delen träffsidan ligger i (#1220); null = okänd/inga delar. */
+          part: hit.part ?? null,
         })),
         totalHits: result.estimatedTotalHits,
         // Per-type-räknare baserat på query-match (oavsett type-filter)

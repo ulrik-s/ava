@@ -22,6 +22,7 @@ export interface DemoSource {
   contacts?: readonly Record<string, unknown>[];
   documents?: readonly Record<string, unknown>[];
   documentFolders?: readonly Record<string, unknown>[];
+  documentParts?: readonly Record<string, unknown>[];
   documentTemplates?: readonly Record<string, unknown>[];
   documentAnalysisSuggestions?: readonly Record<string, unknown>[];
   matterEventSuggestions?: readonly Record<string, unknown>[];

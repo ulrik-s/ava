@@ -9,6 +9,7 @@ import { searchScope, searchScopeLabel, type SearchScope } from "@/lib/client/se
 import { useDocumentSearch } from "@/lib/client/search/use-document-search";
 import { useOnlineStatus } from "@/lib/client/sync/use-online-status";
 import { trpc } from "@/lib/client/trpc";
+import { kindLabel } from "@/lib/shared/document-kind";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import type { DocumentId, MatterId } from "@/lib/shared/schemas/ids";
 
@@ -22,6 +23,14 @@ interface SearchHit {
   highlight: string;
   /** Sida med bästa innehållsträffen (#1215); null = okänd/metadata-träff. */
   page?: number | null;
+  /** Dokumentdelen träffsidan ligger i (#1220); null = okänd/inga delar. */
+  part?: { kind: string; fromPage: number; toPage: number } | null;
+}
+
+/** Var i dokumentet träffen ligger: "Stämning, s. 5", "s. 5" eller inget (#1220). */
+function hitLocation(h: Pick<SearchHit, "page" | "part">): string | null {
+  if (!h.page) return null;
+  return h.part ? `${kindLabel(h.part.kind)}, s. ${h.page}` : `s. ${h.page}`;
 }
 
 /**
@@ -72,7 +81,7 @@ function searchColumns(open: (h: SearchHit) => Promise<void>): Column<SearchHit>
     { key: "highlight", label: "Träff", sortable: false,
       render: (h) => (
         <span className="text-sm text-gray-600 line-clamp-2">
-          {h.page ? <span className="mr-1 text-xs font-medium text-gray-500">s. {h.page}</span> : null}
+          {hitLocation(h) ? <span className="mr-1 text-xs font-medium text-gray-500">{hitLocation(h)}</span> : null}
           <span dangerouslySetInnerHTML={{ __html: h.highlight }} />
         </span>
       ),
@@ -120,7 +129,7 @@ function DocTypeFilter({ types, data, searchTerm, selectedTypes, onToggle, onCle
               className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs cursor-pointer border ${checked ? "bg-blue-100 border-blue-300 text-blue-900" : zeroAfterSearch ? "bg-gray-50 border-gray-200 text-gray-400" : "bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100"}`}
             >
               <input type="checkbox" className="sr-only" checked={checked} onChange={() => onToggle(type)} />
-              {type} <span className={zeroAfterSearch ? "text-gray-300" : "text-gray-400"}>({count})</span>
+              {kindLabel(type)} <span className={zeroAfterSearch ? "text-gray-300" : "text-gray-400"}>({count})</span>
             </label>
           );
         })}

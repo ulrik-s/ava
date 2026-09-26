@@ -5,11 +5,45 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { clearGeneratedDocCache, stashGeneratedDoc } from "@/lib/client/demo/generated-doc-cache";
-import { openDocument, withUtf8CharsetIfText } from "@/lib/client/firma/open-document";
+import { openDocument, withPage, withUtf8CharsetIfText } from "@/lib/client/firma/open-document";
 
 const baseDoc = { id: "doc-1", storagePath: "documents/content/doc-1.md", fileName: "x.md" };
 
 beforeEach(() => clearGeneratedDocCache());
+
+describe("withPage (#1220)", () => {
+  it("lägger #page=N för sida > 1, annars orörd", () => {
+    expect(withPage("blob:x", 4)).toBe("blob:x#page=4");
+    expect(withPage("blob:x", 1)).toBe("blob:x");
+    expect(withPage("blob:x", undefined)).toBe("blob:x");
+  });
+});
+
+describe("openDocument — page (#1220)", () => {
+  it("demo: gh-pages-URL:en får #page=N", async () => {
+    const openUrl = vi.fn();
+    await openDocument({
+      doc: baseDoc, page: 3, isDemo: true, demoRepo: "alice/firma",
+      loadHandle: async () => null, readFromHandle: async () => null, openUrl, notifyError: vi.fn(),
+    });
+    expect(openUrl).toHaveBeenCalledWith("https://alice.github.io/firma/documents/content/doc-1.md#page=3");
+  });
+
+  it("server-first: blob:-URL:en får #page=N", async () => {
+    const openUrl = vi.fn();
+    const created = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:abc");
+    try {
+      await openDocument({
+        doc: { ...baseDoc, storagePath: "documents/content/doc-1.pdf" }, page: 5, isDemo: false,
+        fetchBlob: async () => new Blob(["%PDF"]),
+        loadHandle: async () => null, readFromHandle: async () => null, openUrl, notifyError: vi.fn(),
+      });
+      expect(openUrl).toHaveBeenCalledWith("blob:abc#page=5");
+    } finally {
+      created.mockRestore();
+    }
+  });
+});
 
 describe("openDocument", () => {
   it("demo-mode → öppnar gh-pages-URL byggd från demoRepo", async () => {

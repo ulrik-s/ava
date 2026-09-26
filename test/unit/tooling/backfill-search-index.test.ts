@@ -10,7 +10,7 @@ import { JOB_QUEUES } from "@/lib/server/jobs/job-queue";
 import { asId, type DocumentId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
 import {
-  enqueueBackfill, type JobSender, listIndexableDocumentIds, resolveUrl, runBackfill,
+  enqueueBackfill, type JobSender, listIndexableDocumentIds, resolveQueue, resolveUrl, runBackfill,
 } from "../../../tooling/scripts/backfill-search-index";
 import { createTestDb, type TestDbHandle } from "../server/db/pg-test-db";
 
@@ -81,5 +81,16 @@ describe("backfill-search-index", () => {
     expect(resolveUrl(["postgres://arg"], { AVA_DATABASE_URL: "postgres://env" })).toBe("postgres://arg");
     expect(resolveUrl([], { AVA_DATABASE_URL: "postgres://env" })).toBe("postgres://env");
     expect(resolveUrl([], {})).toBeUndefined();
+    expect(resolveUrl(["--reclassify", "postgres://arg"], {})).toBe("postgres://arg");
+    expect(resolveUrl(["--reclassify"], { AVA_DATABASE_URL: "postgres://env" })).toBe("postgres://env");
+  });
+
+  it("#1220: --reclassify köar classify-document (klassificering + delar) i stället", async () => {
+    expect(resolveQueue(["--reclassify"])).toBe(JOB_QUEUES.classifyDocument);
+    expect(resolveQueue([])).toBe(JOB_QUEUES.indexDocument);
+    const sender = recordingSender();
+    const n = await runBackfill("postgres://x", async () => ({ db: handle.db, sender, close: async () => {} }), JOB_QUEUES.classifyDocument);
+    expect(n).toBe(2);
+    expect(sender.sent.every((s) => s.name === JOB_QUEUES.classifyDocument)).toBe(true);
   });
 });
