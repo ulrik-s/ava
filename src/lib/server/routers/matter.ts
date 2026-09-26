@@ -1,10 +1,12 @@
 import { z } from "zod";
+import { paymentMethodNote, rattsskyddNekadNote } from "@/lib/shared/billing-notes";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import {
   matterRoleSchema,
   contactTypeSchema,
   matterStatusSchema,
   paymentMethodSchema,
+  type PaymentMethod,
 } from "@/lib/shared/schemas/enums";
 import { hourlyRatesSchema } from "@/lib/shared/schemas/hourly-rates";
 import {
@@ -19,6 +21,7 @@ import {
   type UserId,
 } from "@/lib/shared/schemas/ids";
 import type { Matter, MatterContact } from "@/lib/shared/schemas/matter";
+import { logMatterNote, type NoteCtx } from "../billing/matter-note";
 import { emit } from "../events/emit";
 import type { Repositories } from "../repositories/repositories";
 import { router, orgProcedure, TRPCError } from "../trpc";
@@ -77,6 +80,26 @@ type MatterCreateInput = z.infer<typeof matterCreateInput>;
 const MATTER_NUMBER_RE = /^([A-ZÅÄÖ]{1,3})?(\d{4})-(\d{4})$/;
 
 /** Löpnumret i ett ärendenummer OM det avser `year`, annars 0. */
+/** Det i en matter-uppdatering som loggas som anteckning (#1221). */
+interface BillingChangeInput {
+  paymentMethod?: PaymentMethod | undefined;
+  rattsskyddNekadAt?: string | null | undefined;
+}
+
+/**
+ * Faktureringsrelevanta ärendeändringar som tjänsteanteckning (#1221): nytt
+ * betalningssätt och avslaget rättsskydd. Bara när värdet faktiskt ÄNDRAS —
+ * ett formulär som sparar samma betalningssätt igen ska inte logga något.
+ */
+async function logBillingChanges(repos: Repositories, ctx: MatterCtx & NoteCtx, before: Matter, input: BillingChangeInput): Promise<void> {
+  if (input.paymentMethod && input.paymentMethod !== before.paymentMethod) {
+    await logMatterNote(repos, ctx, before.id, paymentMethodNote(input.paymentMethod));
+  }
+  if (input.rattsskyddNekadAt && !before.rattsskyddNekadAt) {
+    await logMatterNote(repos, ctx, before.id, rattsskyddNekadNote(input.rattsskyddNekadAt.slice(0, 10)));
+  }
+}
+
 function seqForYear(matterNumber: string, year: number): number {
   const m = MATTER_NUMBER_RE.exec(matterNumber);
   if (!m || Number(m[2]) !== year) return 0;
@@ -276,7 +299,11 @@ export const matterRouter = router({
       applyOptionalDate(data, "tvistUppkomDatum", tvistUppkomDatum);
       applyOptionalDate(data, "rattsskyddBeslutDatum", rattsskyddBeslutDatum);
       applyOptionalDate(data, "rattsskyddNekadAt", rattsskyddNekadAt);
-      const updated = await ctx.repos.matters.update(id, data satisfies Partial<Matter>);
+      const updated = await ctx.repos.transaction(async (repos) => {
+        // Jämför mot läget FÖRE uppdateringen — in-memory-lagret kan mutera `before`.
+        await logBillingChanges(repos, ctx, before, input);
+        return repos.matters.update(id, data satisfies Partial<Matter>);
+      });
       await emit.matterUpdated(ctx, id, data);
       if (input.status && input.status !== before.status) {
         await emit.matterStatusChanged(ctx, id, before.status, input.status);

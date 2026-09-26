@@ -10,17 +10,22 @@
 
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import { invoiceQueuedNote, invoiceSentNote } from "@/lib/shared/billing-notes";
 import { canTransition } from "@/lib/shared/invoice-state-machine";
 import { dispatchChannelSchema, dispatchStatusSchema, type DispatchStatus, type InvoiceDispatch } from "@/lib/shared/schemas/billing";
 import type { InvoiceStatus } from "@/lib/shared/schemas/enums";
-import { asId, type InvoiceId, invoiceDispatchIdSchema, invoiceIdSchema } from "@/lib/shared/schemas/ids";
+import { asId, type InvoiceId, invoiceDispatchIdSchema, invoiceIdSchema, type MatterId } from "@/lib/shared/schemas/ids";
+import { logMatterNote } from "../billing/matter-note";
 import type { Repositories } from "../repositories/repositories";
 import { router, orgProcedure } from "../trpc";
 
 type DispatchCtx = { repos: Repositories; orgId: string };
 
+/** Fakturans fält som utskicket läser: status (utkast?) + ärende/nummer till anteckningen. */
+interface DispatchInvoice { id: InvoiceId; status: string; matterId: MatterId; invoiceNumber?: string | null | undefined }
+
 /** Verifiera org-tillhörighet + returnera fakturans id/status (repository-sömmen, ADR 0020). */
-async function assertInvoiceInOrg(ctx: DispatchCtx, invoiceId: InvoiceId): Promise<{ id: InvoiceId; status: string }> {
+async function assertInvoiceInOrg(ctx: DispatchCtx, invoiceId: InvoiceId): Promise<DispatchInvoice> {
   const inv = await ctx.repos.invoices.getByIdInOrg(invoiceId, asId<"OrganizationId">(ctx.orgId));
   if (!inv) throw new TRPCError({ code: "NOT_FOUND", message: "Fakturan finns inte i organisationen." });
   return inv;
@@ -30,7 +35,7 @@ async function assertInvoiceInOrg(ctx: DispatchCtx, invoiceId: InvoiceId): Promi
  * En köad/skickad faktura är inte längre ett utkast (#392). Flippa DRAFT → SENT
  * via tillståndsmaskinen (#350); redan utställd faktura lämnas oförändrad.
  */
-async function markSentIfDraft(ctx: DispatchCtx, inv: { id: InvoiceId; status: string }): Promise<void> {
+async function markSentIfDraft(ctx: DispatchCtx, inv: DispatchInvoice): Promise<void> {
   if (inv.status !== "DRAFT" || !canTransition("DRAFT", "SENT")) return;
   await ctx.repos.invoices.update(inv.id, { status: "SENT" satisfies InvoiceStatus });
 }
@@ -76,6 +81,7 @@ export const invoiceDispatchRouter = router({
       } satisfies Partial<InvoiceDispatch>);
       // Köad för automatiskt utskick → fakturan är inte längre ett utkast (#392).
       await markSentIfDraft(ctx, inv);
+      await logMatterNote(ctx.repos, ctx, inv.matterId, invoiceQueuedNote(inv.invoiceNumber, input.recipient), now);
       return dispatch;
     }),
 
@@ -108,6 +114,7 @@ export const invoiceDispatchRouter = router({
       } satisfies Partial<InvoiceDispatch>);
       // Manuellt skickad → fakturan är inte längre ett utkast (#392).
       await markSentIfDraft(ctx, inv);
+      await logMatterNote(ctx.repos, ctx, inv.matterId, invoiceSentNote(inv.invoiceNumber, input.recipient), now);
       return dispatch;
     }),
 

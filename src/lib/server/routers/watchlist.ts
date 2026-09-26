@@ -11,14 +11,16 @@
  */
 
 import { z } from "zod";
+import { SJALVRISK_ACCONTO_THRESHOLD_ORE } from "@/lib/shared/rattshjalp";
 import type { PaymentMethod } from "@/lib/shared/schemas/enums";
 import { asId, matterIdSchema, type OrganizationId, userIdSchema } from "@/lib/shared/schemas/ids";
 import {
-  coverageItems, deadlineItems, failedDispatchItems, overdueInvoiceItems,
+  billingActionItems, coverageItems, deadlineItems, failedDispatchItems, overdueInvoiceItems,
   sortWatchlist, stockholmDay, unbilledItems,
-  DEFAULT_THRESHOLDS, type CoverageMatter, type DeadlineTask, type FailedDispatch,
+  DEFAULT_THRESHOLDS, type BillingActionMatter, type CoverageMatter, type DeadlineTask, type FailedDispatch,
   type OverdueInvoice, type UnbilledMatter, type WatchlistItem,
 } from "@/lib/shared/watchlist";
+import { billingActionMatters } from "../billing/billing-action-input";
 import type { Repositories } from "../repositories/repositories";
 import { router, orgProcedure } from "../trpc";
 
@@ -38,7 +40,10 @@ function isoDate(v: unknown): string | null {
 interface MatterRow {
   id: string;
   matterNumber: string;
-  paymentMethod?: string | null;
+  status?: string | null;
+  paymentMethod?: PaymentMethod | null;
+  clientShareBips?: number | null;
+  radgivningBetaldAt?: Date | string | null;
   rattsskyddMaxOre?: number | null;
   rattshjalpMaxTimmar?: number | null;
   responsibleLawyerId?: string | null;
@@ -52,7 +57,7 @@ async function coverageInput(ctx: Ctx, matters: readonly MatterRow[]): Promise<C
   return matters.map((m) => ({
     id: m.id,
     matterNumber: m.matterNumber,
-    method: (m.paymentMethod ?? null) as PaymentMethod | null,
+    method: m.paymentMethod ?? null,
     rattsskyddMaxOre: m.rattsskyddMaxOre ?? null,
     rattshjalpMaxTimmar: m.rattshjalpMaxTimmar ?? null,
     billableMinutes: usage[m.id]?.billableMinutes ?? 0,
@@ -65,8 +70,9 @@ async function coverageInput(ctx: Ctx, matters: readonly MatterRow[]): Promise<C
  * slutfaktura. `frozenAt` är gränsen — aconto fryser inte, så ett ärende med
  * aconto har fortfarande upparbetat kvar att slutfakturera.
  */
-async function unbilledInput(ctx: Ctx, matters: readonly MatterRow[]): Promise<UnbilledMatter[]> {
-  const entries = await ctx.repos.timeEntries.listBillableForOrg(ctx.orgId);
+type EntryRow = Awaited<ReturnType<Repositories["timeEntries"]["listBillableForOrg"]>>[number];
+
+function unbilledInput(matters: readonly MatterRow[], entries: readonly EntryRow[]): UnbilledMatter[] {
   const known = new Map(matters.map((m) => [m.id, m]));
   const acc = new Map<string, { ore: number; oldest: string | null }>();
 
@@ -127,9 +133,25 @@ function toOverdue(inv: InvoiceRow): OverdueInvoice | null {
   };
 }
 
-async function overdueInput(ctx: Ctx): Promise<OverdueInvoice[]> {
-  const rows = await ctx.repos.invoices.listForOrg(ctx.orgId, {});
+function overdueInput(rows: readonly InvoiceRow[]): OverdueInvoice[] {
   return rows.map(toOverdue).filter((r): r is OverdueInvoice => r !== null);
+}
+
+/** Faktureringsåtgärder som väntar (#1221) — ur samma org-breda läsningar som övriga signaler. */
+async function billingActionInput(
+  ctx: Ctx, matters: readonly MatterRow[], invoices: readonly InvoiceRow[], entries: readonly EntryRow[], now: Date,
+): Promise<BillingActionMatter[]> {
+  const [runs, org] = await Promise.all([
+    ctx.repos.billingRuns.listForOrg(ctx.orgId),
+    ctx.repos.organizations.getById(ctx.orgId),
+  ]);
+  return billingActionMatters({
+    matters, now,
+    runs, entries,
+    invoices: invoices.map((i) => ({ ...i, day: isoDate(i.invoiceDate) })),
+    // Byråns gränsbelopp (#885), annars default — samma som panelens ruta.
+    sjalvriskThresholdOre: org?.accontoThresholdOre ?? SJALVRISK_ACCONTO_THRESHOLD_ORE,
+  });
 }
 
 /** Misslyckade fakturautskick — fakturan nådde aldrig mottagaren. */
@@ -175,13 +197,18 @@ export const watchlistRouter = router({
       const matters = mine ? all.filter((m) => String(m.responsibleLawyerId ?? "") === userId) : all;
       const matterIds = new Set(matters.map((m) => m.id));
 
-      const [coverage, unbilled, deadlines, overdue, failed] = await Promise.all([
-        coverageInput(ctx, matters),
-        unbilledInput(ctx, matters),
-        deadlineInput(ctx, userId),
-        overdueInput(ctx),
-        failedInput(ctx),
+      const [invoices, entries] = await Promise.all([
+        ctx.repos.invoices.listForOrg(ctx.orgId, {}),
+        ctx.repos.timeEntries.listBillableForOrg(ctx.orgId),
       ]);
+      const [coverage, deadlines, failed, billing] = await Promise.all([
+        coverageInput(ctx, matters),
+        deadlineInput(ctx, userId),
+        failedInput(ctx),
+        billingActionInput(ctx, matters, invoices, entries, now),
+      ]);
+      const unbilled = unbilledInput(matters, entries);
+      const overdue = overdueInput(invoices);
 
       // Faktura-signalerna är org-breda i datalagret; filtrera dem mot samma
       // ärendeurval så "mina" betyder samma sak för alla fem signalerna.
@@ -193,6 +220,7 @@ export const watchlistRouter = router({
         ...deadlineItems(deadlines, now, thresholds),
         ...overdueInvoiceItems(overdue.filter((i) => ownInvoice(i.matterId)), now),
         ...failedDispatchItems(failed),
+        ...billingActionItems(billing, now),
       ]);
 
       const scoped = input?.matterId ? items.filter((i) => i.matterId === String(input.matterId)) : items;

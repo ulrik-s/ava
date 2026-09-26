@@ -10,6 +10,7 @@ import { useState } from "react";
 import { PanelPage } from "@/components/layout/panel-page";
 import { Money } from "@/components/ui/money";
 import type { DownloadClient } from "@/lib/client/backend/load-document-blob";
+import { invalidateBillingSideEffects } from "@/lib/client/billing/invalidate-billing-side-effects";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { useRouteId } from "@/lib/client/demo/use-route-id";
 import { isDemoTier } from "@/lib/client/firma/firma-config";
@@ -47,6 +48,7 @@ function useInvoiceDetail(id: string) {
   const [error, setError] = useState<string | null>(null);
 
   const refetchAll = () => {
+    invalidateBillingSideEffects(utils);
     void utils.invoice.getById.invalidate({ id });
     void utils.invoice.list.invalidate();
   };

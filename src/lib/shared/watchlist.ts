@@ -22,7 +22,13 @@
  * för att de hör hemma i samma vy, inte för att de räknas ut.
  */
 
+import {
+  insurerPruningPending, isUnsentInvoice, krAwaitingBeslut, paymentMethodPending, sjalvriskAccontoDue,
+  type TodoRun,
+} from "./billing-todo";
 import { coverageStatus, type CoverageCapInput } from "./coverage-cap";
+import { formatKr } from "./format-kr";
+import type { InvoiceStatus, PaymentMethod } from "./schemas/enums";
 
 // ─── Trösklar ──────────────────────────────────────────────────────────────
 
@@ -59,7 +65,8 @@ export type WatchlistKind =
   | "unbilled"         // upparbetat som borde faktureras
   | "deadline"         // tidsfrist ur en uppgift (dokument, överklagande)
   | "overdueInvoice"   // förfallen faktura eller avbetalningspost
-  | "failedDispatch";  // fakturan nådde aldrig mottagaren
+  | "failedDispatch"   // fakturan nådde aldrig mottagaren
+  | "billingAction";   // faktureringen väntar på en åtgärd (#1221)
 
 /**
  * `passed` = det har redan hänt (taket passerat, fristen ute, utskicket
@@ -326,4 +333,93 @@ export function failedDispatchItems(dispatches: readonly FailedDispatch[]): Watc
     at: d.failedAt, amountOre: null,
     link: { route: "invoices", id: d.invoiceId },
   }));
+}
+
+// ─── Fakturering som väntar på en åtgärd (#1221) ───────────────────────────
+
+/**
+ * En skapad faktura som inte skickats på så här många dagar räknas som
+ * passerad (röd). Fakturor skickas normalt samma dag de skapas; en vecka är
+ * gott om tid för granskning och fångar den som glömts i "Skapad".
+ */
+export const UNSENT_INVOICE_GRACE_DAYS = 7;
+
+export interface BillingActionInvoice {
+  id: string;
+  invoiceNumber: string | null;
+  status: InvoiceStatus | string;
+  amountOre: number;
+  /** Fakturadatum (svensk kalenderdag), eller null. */
+  day: string | null;
+}
+
+/** Ärendets faktureringsläge — det predikaten i `billing-todo` läser. */
+export interface BillingActionMatter {
+  id: string;
+  matterNumber: string;
+  paymentMethod: PaymentMethod | null;
+  runs: readonly TodoRun[];
+  invoices: readonly BillingActionInvoice[];
+  /** Rådgivningsfakturan finns men ingen låst rådgivningspost (#1207). */
+  radgivningEntryMissing: boolean;
+  /** Klientens självrisk (rättshjälp, netto öre); null när det inte är rättshjälp. */
+  sjalvriskClientOre: number | null;
+  sjalvriskThresholdOre: number;
+}
+
+type ActionFields = Pick<WatchlistItem, "title" | "detail"> & Partial<Pick<WatchlistItem, "severity" | "at" | "amountOre">>;
+
+function actionItem(m: BillingActionMatter, f: ActionFields): WatchlistItem {
+  return {
+    kind: "billingAction", severity: f.severity ?? "approaching", title: f.title, detail: f.detail,
+    matterId: m.id, matterNumber: m.matterNumber, at: f.at ?? null, amountOre: f.amountOre ?? null,
+    link: { route: "matters", id: m.id },
+  };
+}
+
+/** "Skicka faktura F-2026-0012" per skapad men oskickad faktura. */
+function unsentInvoiceItems(m: BillingActionMatter, now: Date): WatchlistItem[] {
+  return m.invoices.filter(isUnsentInvoice).map((inv) => {
+    const age = inv.day === null ? 0 : daysBetween(new Date(inv.day), now);
+    const late = age > UNSENT_INVOICE_GRACE_DAYS;
+    return actionItem(m, {
+      title: `Skicka faktura ${inv.invoiceNumber ?? ""}`.trim(),
+      detail: late ? `Skapad för ${dagar(age)} sedan men inte skickad.` : "Fakturan är skapad men inte skickad.",
+      severity: late ? "passed" : "approaching", at: inv.day, amountOre: inv.amountOre,
+    });
+  });
+}
+
+function krBeslutItems(m: BillingActionMatter): WatchlistItem[] {
+  const pending = krAwaitingBeslut(m.runs);
+  if (pending === null) return [];
+  const vem = pending === "HOVRATT" ? "hovrättens" : "domstolens";
+  return [actionItem(m, {
+    title: `Registrera ${vem} beslut på kostnadsräkningen`,
+    detail: "Fakturan kan skapas först när beslutet är registrerat.",
+  })];
+}
+
+/** Övriga skäl — ett per ärende, när predikatet slår till. */
+function stateItems(m: BillingActionMatter): WatchlistItem[] {
+  const out: WatchlistItem[] = [];
+  if (paymentMethodPending(m.paymentMethod)) {
+    out.push(actionItem(m, { title: "Välj betalningssätt", detail: "Ärendet kan inte faktureras innan betalningssättet är bestämt." }));
+  }
+  if (m.radgivningEntryMissing) {
+    out.push(actionItem(m, { title: "Markera rådgivningsmötet som rådgivning", detail: "Annars yrkas rådgivningstimmen i kostnadsräkningen." }));
+  }
+  const clientOre = m.sjalvriskClientOre ?? 0;
+  if (sjalvriskAccontoDue({ method: m.paymentMethod, clientOre, thresholdOre: m.sjalvriskThresholdOre, runs: m.runs })) {
+    out.push(actionItem(m, { title: `Skicka självrisk-aconto (${formatKr(clientOre)})`, detail: "Klientens självrisk har nått byråns tröskel.", amountOre: clientOre }));
+  }
+  if (insurerPruningPending(m.paymentMethod, m.runs)) {
+    out.push(actionItem(m, { title: "Registrera försäkringsbolagets prutning", detail: "Har bolaget prutat flyttas beloppet till klientens faktura." }));
+  }
+  return out;
+}
+
+/** Faktureringsåtgärder som väntar, per ärende. Försvinner när åtgärden är gjord. */
+export function billingActionItems(matters: readonly BillingActionMatter[], now: Date): WatchlistItem[] {
+  return matters.flatMap((m) => [...unsentInvoiceItems(m, now), ...krBeslutItems(m), ...stateItems(m)]);
 }

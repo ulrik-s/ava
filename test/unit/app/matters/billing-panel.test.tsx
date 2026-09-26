@@ -16,7 +16,8 @@ import { asId } from "@/lib/shared/schemas/ids";
 interface BillingRunRow {
   id: string; type: string; status: string; recipient: string;
   amountOre: number; createdAt: string | Date;
-  invoiceId?: string | null; invoice?: { id: string; invoiceNumber?: string | null } | null;
+  invoiceId?: string | null; invoice?: { id: string; invoiceNumber?: string | null; status?: string } | null;
+  reference?: string | null;
   kostnadsrakningStatus?: string | null; awardedOre?: number | null; beslutSlutgiltigt?: boolean | null;
 }
 
@@ -29,6 +30,7 @@ let invoiceListData: InvoiceRow[] = [];
 let coverageSplitData: { clientOre: number } | undefined = undefined;
 const refetch = vi.fn();
 const radgivningMutate = vi.fn();
+let radgivningError: { message: string } | null = null;
 const krMutate = vi.fn();
 let krOpts: { onSuccess?: (res: { run: { id: string } }) => Promise<void> } | undefined;
 const generateKrDocFn = vi.fn(async () => {});
@@ -46,6 +48,8 @@ vi.mock("@/lib/client/trpc", () => ({
       invoice: { list: { invalidate } },
       timeEntry: { list: { invalidate } },
       expense: { list: { invalidate } },
+      serviceNote: { list: { invalidate } },
+      watchlist: { list: { invalidate } },
     }),
     billingRun: {
       list: { useQuery: () => ({ data: runsData, isLoading: runsLoading, refetch }) },
@@ -83,7 +87,7 @@ vi.mock("@/lib/client/trpc", () => ({
       createRadgivning: {
         useMutation: (opts?: { onSuccess?: () => void }) => {
           void opts;
-          return { mutate: radgivningMutate, isPending: false };
+          return { mutate: radgivningMutate, isPending: false, error: radgivningError };
         },
       },
     },
@@ -134,6 +138,7 @@ beforeEach(() => {
   proposalData = { workValueOre: 0, priorAccontoSumOre: 0, timeEntries: [], expenses: [] };
   invoiceListData = [];
   coverageSplitData = undefined;
+  radgivningError = null;
   hasDoc = false;
 });
 
@@ -218,9 +223,11 @@ describe("BillingPanel — kostnadsräknings-kort (#828)", () => {
 
   const verdictMatter = { ...baseMatter, paymentMethod: "OFFENTLIGT_UPPDRAG" as const };
 
-  it("visar KR-kortet med status + 'Registrera beslut' → öppnar beslut-dialogen", () => {
+  it("visar KR-kortet + 'Registrera beslut' → öppnar beslut-dialogen; statusen står i Anteckningar (#1221)", () => {
+    runsData = { runs: [{ ...runsData.runs[0]!, reference: "KR-2026-0003" } as BillingRunRow] };
     render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={verdictMatter} />);
-    expect(screen.getByText(/Inskickad — väntar på beslut/)).toBeInTheDocument();
+    expect(screen.getAllByText("KR-2026-0003", { exact: false }).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/Inskickad — väntar på beslut/)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Registrera beslut" }));
     expect(screen.getByText(/Registrera domstolens beslut/)).toBeInTheDocument();
   });
@@ -245,13 +252,14 @@ describe("BillingPanel — kostnadsräknings-kort (#828)", () => {
   it("en ångrad (VOIDED) KR visas inte som aktiv", () => {
     runsData = { runs: [{ id: "r3", type: "KOSTNADSRAKNING", status: "VOIDED", kostnadsrakningStatus: "INSKICKAD", recipient: "DOMSTOL", amountOre: 50_000, createdAt: "2026-03-01" }] };
     render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={verdictMatter} />);
-    expect(screen.queryByText(/Inskickad — väntar på beslut/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Registrera beslut" })).not.toBeInTheDocument();
   });
 
   it("BESLUTAD KR visar 'Skapa faktura' + 'Överklaga prutning'", () => {
     runsData = { runs: [{ id: "r3", type: "KOSTNADSRAKNING", status: "PENDING_VERDICT", kostnadsrakningStatus: "BESLUTAD", recipient: "DOMSTOL", amountOre: 50_000, awardedOre: 40_000, createdAt: "2026-03-01" }] };
     render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={verdictMatter} />);
-    expect(screen.getByText(/Beslutad/)).toBeInTheDocument();
+    // Dömt belopp + status loggas som anteckning (#1221), inte i kortet.
+    expect(screen.queryByText(/Dömt belopp/)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Skapa faktura" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Överklaga prutning" })).toBeInTheDocument();
     // Efter domstolens beslut går den inte att ångra (#1121).
@@ -355,7 +363,8 @@ describe("BillingPanel — Skapa-faktura-menyn (flödesmodellen)", () => {
 describe("BillingPanel — rådgivnings-banner (rättshjälp)", () => {
   it("RATTSHJALP utan registrerad rådgivning → auto-skapar (#839)", () => {
     render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={{ ...baseMatter, paymentMethod: "RATTSHJALP" }} />);
-    expect(screen.getByText(/Rådgivningstimme \(rättshjälp\)/)).toBeInTheDocument();
+    // Ingen informationsruta längre (#1221) — händelsen blir en anteckning.
+    expect(screen.queryByText(/Rådgivningstimme \(rättshjälp\)/)).not.toBeInTheDocument();
     // Ingen manuell knapp längre — fakturan skapas automatiskt via useEffect.
     expect(screen.queryByRole("button", { name: "Registrera betald" })).not.toBeInTheDocument();
     expect(radgivningMutate).toHaveBeenCalledWith(expect.objectContaining({ matterId: "m1" }));
@@ -365,8 +374,14 @@ describe("BillingPanel — rådgivnings-banner (rättshjälp)", () => {
     // Rådgivningen är nu ett ACCONTO som syns i faktura-listan (RunsList), inte
     // en länk i banderollen.
     render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={{ ...baseMatter, paymentMethod: "RATTSHJALP", radgivningBetaldAt: "2026-01-05" }} />);
-    expect(screen.getByText(/Fakturerad/)).toBeInTheDocument();
+    expect(screen.queryByText(/Fakturerad/)).not.toBeInTheDocument();
     expect(radgivningMutate).not.toHaveBeenCalled();
+  });
+
+  it("misslyckad auto-skapning syns som fel — det enda juristen behöver agera på (#1221)", () => {
+    radgivningError = { message: "nätverksfel" };
+    render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={{ ...baseMatter, paymentMethod: "RATTSHJALP" }} />);
+    expect(screen.getByRole("alert")).toHaveTextContent("Rådgivningsfakturan kunde inte skapas: nätverksfel");
   });
 
   it("självrisk-aconto-hint visas när självrisken nått tröskeln (#854)", () => {
@@ -384,5 +399,41 @@ describe("BillingPanel — rådgivnings-banner (rättshjälp)", () => {
   it("icke-rättshjälp → ingen rådgivnings-banner", () => {
     render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={{ ...baseMatter, paymentMethod: "PRIVAT" }} />);
     expect(screen.queryByText(/Rådgivningstimme/)).not.toBeInTheDocument();
+  });
+});
+
+describe("BillingPanel — informationsrutorna är borta (#1221)", () => {
+  it("slutreglerat ärende: ingen lägestext i rubriken", () => {
+    runsData = { runs: [{ id: "f1", type: "FINAL", status: "SENT", recipient: "KLIENT", amountOre: 1000, createdAt: "2026-03-01" }] };
+    render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={{ ...baseMatter, paymentMethod: "PRIVAT" }} />);
+    expect(screen.queryByText(/Ärendet är slutreglerat/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Inga faktureringsåtgärder/)).not.toBeInTheDocument();
+  });
+
+  it("nekat rättsskydd: ingen lägestext i rubriken", () => {
+    render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={{ ...baseMatter, paymentMethod: "RATTSSKYDD", rattsskyddNekadAt: "2026-02-01" }} />);
+    expect(screen.queryByText(/Rättsskydd nekat/)).not.toBeInTheDocument();
+  });
+
+  it("försäkringens prutning: rutan visas tills fakturan är betald", () => {
+    const payer = { id: "p1", type: "FINAL", status: "SENT", recipient: "FORSAKRING", amountOre: 1000, createdAt: "2026-03-01" };
+    runsData = { runs: [payer] };
+    const { unmount } = render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={{ ...baseMatter, paymentMethod: "RATTSSKYDD" }} />);
+    expect(screen.getByRole("button", { name: "Registrera prutning" })).toBeInTheDocument();
+    unmount();
+    runsData = { runs: [{ ...payer, invoice: { id: "i1", status: "PAID" } } as BillingRunRow] };
+    render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={{ ...baseMatter, paymentMethod: "RATTSSKYDD" }} />);
+    expect(screen.queryByRole("button", { name: "Registrera prutning" })).not.toBeInTheDocument();
+  });
+
+  it("efter en faktureringshändelse hämtas Anteckningar och Att bevaka om", () => {
+    render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={{ ...baseMatter, paymentMethod: "OFFENTLIGT_UPPDRAG" }} />);
+    fireEvent.click(screen.getByRole("button", { name: "+ Skapa faktura" }));
+    fireEvent.click(screen.getByRole("button", { name: "Kostnadsräkning till domstol" }));
+    fireEvent.click(screen.getByRole("button", { name: "Generera" }));
+    const onSuccess = (krMutate.mock.calls[0]?.[1] as { onSuccess: () => void }).onSuccess;
+    invalidate.mockClear();
+    onSuccess();
+    expect(invalidate).toHaveBeenCalledTimes(6);
   });
 });

@@ -10,6 +10,7 @@
 
 import { useId, useState } from "react";
 import { formatKrPerHour, HourlyRatesFields } from "@/components/billing/hourly-rates-fields";
+import { invalidateBillingSideEffects } from "@/lib/client/billing/invalidate-billing-side-effects";
 import {
   PAYMENT_METHOD_LABELS,
   paymentMethodOptions,
@@ -282,6 +283,7 @@ function PaymentMethodEditor({ matterId, initial, onDone }: { matterId: MatterId
   const update = trpc.matter.update.useMutation({
     onSuccess: () => {
       void utils.matter.getById.invalidate({ id: matterId });
+      invalidateBillingSideEffects(utils);
       onDone();
     },
   });

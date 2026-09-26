@@ -27,6 +27,7 @@ const FILTERS: Array<{ key: WatchlistKind | "all"; label: string }> = [
   { key: "unbilled", label: "Ofakturerat" },
   { key: "overdueInvoice", label: "Förfallna fakturor" },
   { key: "failedDispatch", label: "Misslyckade utskick" },
+  { key: "billingAction", label: "Fakturering" },
 ];
 
 export default function WatchlistPage() {

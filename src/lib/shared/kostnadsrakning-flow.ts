@@ -35,13 +35,6 @@ export interface KostnadsrakningState {
   slutgiltigt: boolean;
 }
 
-export const KOSTNADSRAKNING_STATUS_LABELS: Record<KostnadsrakningStatus, string> = {
-  INSKICKAD: "Inskickad — väntar på beslut",
-  BESLUTAD: "Beslutad",
-  OVERKLAGAD: "Överklagad — väntar på hovrätten",
-  FAKTURERAD: "Fakturerad",
-};
-
 /** Lagliga åtgärder i ett givet KR-tillstånd (state-maskinens kanter). */
 export function availableKrActions(state: KostnadsrakningState): readonly KostnadsrakningAction[] {
   switch (state.status) {

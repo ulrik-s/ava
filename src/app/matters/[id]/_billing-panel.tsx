@@ -22,6 +22,7 @@ import { Modal } from "@/components/ui/modal";
 import { Money } from "@/components/ui/money";
 import { sectionHeaderClass } from "@/components/ui/section-tone";
 import type { DownloadClient } from "@/lib/client/backend/load-document-blob";
+import { invalidateBillingSideEffects } from "@/lib/client/billing/invalidate-billing-side-effects";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { hasGeneratedDoc, openGeneratedDoc } from "@/lib/client/demo/generated-doc-cache";
 import { useMatterInvariants } from "@/lib/client/diagnostics/use-matter-invariants";
@@ -32,11 +33,12 @@ import { generateKrDoc } from "@/lib/client/kostnadsrakning/generate-kr-doc";
 import { trpc } from "@/lib/client/trpc";
 import { formatCurrency } from "@/lib/client/utils";
 import type { AppRouter } from "@/lib/server/routers/_app";
-import { availableActions, currentPhase, type BillingAction, type BillingPhase, type FlowMatter } from "@/lib/shared/billing-flow";
-import { availableKrActions, canVoidKostnadsrakning, KOSTNADSRAKNING_STATUS_LABELS, type KostnadsrakningState, type KostnadsrakningStatus } from "@/lib/shared/kostnadsrakning-flow";
+import { availableActions, type BillingAction, type FlowMatter } from "@/lib/shared/billing-flow";
+import { insurerPruningPending, isActiveKr, paymentMethodPending, sjalvriskAccontoDue } from "@/lib/shared/billing-todo";
+import { availableKrActions, canVoidKostnadsrakning, type KostnadsrakningState, type KostnadsrakningStatus } from "@/lib/shared/kostnadsrakning-flow";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
-import { computeRadgivningsavgift, SJALVRISK_ACCONTO_THRESHOLD_ORE } from "@/lib/shared/rattshjalp";
-import { BILLING_RUN_RECIPIENT_LABELS, BILLING_RUN_TYPE_LABELS, BILLING_RUN_STATUS_LABELS, INVOICE_STATUS_LABELS, type BillingRunRecipient, type BillingRunStatus, type BillingRunType, type PaymentMethod } from "@/lib/shared/schemas/enums";
+import { SJALVRISK_ACCONTO_THRESHOLD_ORE } from "@/lib/shared/rattshjalp";
+import { BILLING_RUN_RECIPIENT_LABELS, BILLING_RUN_TYPE_LABELS, BILLING_RUN_STATUS_LABELS, INVOICE_STATUS_LABELS, type BillingRunRecipient, type BillingRunStatus, type BillingRunType, type InvoiceStatus, type PaymentMethod } from "@/lib/shared/schemas/enums";
 import type { BillingRunId, DocumentId, InvoiceId, MatterId } from "@/lib/shared/schemas/ids";
 import { BillingDialog, type BillingMeta } from "./_billing-dialog";
 import { KostnadsrakningModal } from "./_kostnadsrakning-modal";
@@ -73,7 +75,7 @@ interface BillingRunRow {
   /** Aconto-satsen (bips) som gällde när acontot ställdes ut (#878) — visas i listan. */
   clientShareBips?: number | null;
   invoiceId?: InvoiceId | null;
-  invoice?: { id: InvoiceId; invoiceNumber?: string | null; invoiceDate?: string | Date | null } | null;
+  invoice?: { id: InvoiceId; invoiceNumber?: string | null; invoiceDate?: string | Date | null; status?: InvoiceStatus | null } | null;
   /** KR-referens `KR-YYYY-NNNN` (#889) — visas i ref-kolumnen för kostnadsräkningen. */
   reference?: string | null;
   kostnadsrakningStatus?: KostnadsrakningStatus | null;
@@ -163,8 +165,7 @@ interface KrCardProps {
 }
 
 /**
- * Kostnadsräknings-kort (#828) — visar KR:ns livscykel-status + dömt belopp +
- * dokument, och de tillåtna nästa-stegen (registrera beslut → skapa faktura /
+ * Kostnadsräknings-kort (#828) — KR:ns dokument och de tillåtna nästa-stegen (registrera beslut → skapa faktura /
  * överklaga → registrera hovrättens beslut). Ersätter den gamla dom-bannern.
  */
 function KostnadsrakningCard({ matterId, run, onRegistreraBeslut, onOverklaga, onSkapaFaktura, onAngra }: KrCardProps) {
@@ -174,14 +175,9 @@ function KostnadsrakningCard({ matterId, run, onRegistreraBeslut, onOverklaga, o
   return (
     <div className="mx-6 my-3 rounded border border-amber-300 bg-amber-50 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
       <div className="text-sm text-amber-900 space-y-1">
-        <div>
-          <strong>Kostnadsräkning</strong> — {KOSTNADSRAKNING_STATUS_LABELS[state.status]}
-          {run.awardedOre != null && state.status !== "INSKICKAD" && (
-            // awardedOre lagras brutto (= workValueOreAtRun, inkl moms) → basis="gross"
-            // så Dömt belopp och "Upparbetat" visas på samma momsbasis (#839).
-            <> · Dömt belopp: <Money ore={run.awardedOre} basis="gross" className="font-mono font-semibold" /></>
-          )}
-        </div>
+        {/* Status, dömt belopp och övriga händelser står i ärendets Anteckningar
+            (#1221) — kortet bär bara dokumentet och nästa steg. */}
+        <div><strong>Kostnadsräkning</strong>{run.reference ? ` ${run.reference}` : ""}</div>
         {doc && (
           <div className="text-xs text-amber-800">
             Dokument:{" "}
@@ -256,12 +252,6 @@ function RecordBeslutDialog({ billingRunId, onClose, onDone }: { billingRunId: B
 }
 
 type DialogState = "NONE" | "ACCONTO" | "FINAL";
-
-/** Aktiv kostnadsräkning (#828): livscykeln är inte klar och den är inte ångrad (#1121). */
-function isActiveKr(r: BillingRunRow): boolean {
-  return r.type === "KOSTNADSRAKNING" && r.status !== "VOIDED"
-    && !!r.kostnadsrakningStatus && r.kostnadsrakningStatus !== "FAKTURERAD";
-}
 
 /** Ångra-åtgärden för KR-kortet — bara när den är tillåten, och efter bekräftelse. */
 function angraHandler(run: BillingRunRow, voidKr: (id: BillingRunId) => void): (() => void) | undefined {
@@ -443,6 +433,7 @@ export function BillingPanel({ matterId, matter }: Props) {
     void utils.invoice.list.invalidate();
     void utils.timeEntry.list.invalidate({ matterId });
     void utils.expense.list.invalidate({ matterId });
+    invalidateBillingSideEffects(utils);
   };
   const appeal = trpc.billingRun.appealKostnadsrakning.useMutation({ onSuccess: refetch });
   const voidKr = trpc.billingRun.voidKostnadsrakning.useMutation({ onSuccess: refetch });
@@ -457,7 +448,7 @@ export function BillingPanel({ matterId, matter }: Props) {
       <div className={sectionHeaderClass("green")}>
         <h2 className="font-semibold text-gray-900">Fakturering</h2>
         <BillingHeaderActions actions={actions} onPick={onPick}
-          hint={noActionsHint(currentPhase(flowMatter, rows), flowMatter.paymentMethod)} />
+          hint={noActionsHint(flowMatter.paymentMethod)} />
       </div>
       <BillingSummary matterId={matterId} />
       <RadgivningBanner matterId={matterId} matter={matter} onRecorded={refetch} />
@@ -493,7 +484,7 @@ export function BillingPanel({ matterId, matter }: Props) {
 
 /** Rättshjälp (#383/#839): klientens rådgivningstimme (ärendets första timme)
  *  debiteras ALLTID klienten → skapas automatiskt som en separat klientfaktura
- *  när den saknas. Self-gating — null för icke-rättshjälpsärenden. */
+ *  när den saknas. Renderar inget utom ett fel (#1221). */
 function RadgivningBanner({ matterId, matter, onRecorded }: { matterId: MatterId; matter: MatterContext; onRecorded: () => void }) {
   const register = trpc.document.register.useMutation();
   const utils = trpc.useUtils();
@@ -525,19 +516,13 @@ function RadgivningBanner({ matterId, matter, onRecorded }: { matterId: MatterId
     create.mutate({ matterId });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isRattshjalp, registered, matterId]);
-  if (!isRattshjalp) return null;
-  const avgift = computeRadgivningsavgift();
+  // Informationen ("fakturerad") står nu i ärendets Anteckningar (#1221) och
+  // fakturan i listan nedan (#853). Bara ett misslyckande kräver något av juristen.
+  if (!create.error) return null;
   return (
-    <div className="mx-6 mb-4 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 flex items-center justify-between gap-3">
-      <div className="text-xs text-blue-900">
-        <strong>Rådgivningstimme (rättshjälp)</strong> — klientens 1 tim enligt rättshjälpstaxan,{" "}
-        <span className="font-mono">{formatCurrency(avgift.beloppExclVatOre)}</span> exkl moms, faktureras separat till klienten.
-      </div>
-      {/* Rådgivningen är en riktig faktura som syns i faktura-listan nedan (#853). */}
-      <span className="text-xs whitespace-nowrap text-blue-700">
-        {registered ? "✓ Fakturerad (se faktura nedan)" : create.error ? "Kunde inte skapas" : "Skapas automatiskt…"}
-      </span>
-    </div>
+    <p role="alert" className="mx-6 mb-4 text-xs text-red-700">
+      Rådgivningsfakturan kunde inte skapas: {create.error.message}
+    </p>
   );
 }
 
@@ -552,9 +537,7 @@ function SjalvriskAccontoHint({ matterId, matter, rows }: { matterId: MatterId; 
   // Gränsbeloppet är en byrå-inställning (#885); faller tillbaka på default-konstanten.
   const orgThreshold = trpc.organization.getSettings.useQuery(undefined, { enabled: isRattshjalp }).data?.accontoThresholdOre;
   const threshold = orgThreshold ?? SJALVRISK_ACCONTO_THRESHOLD_ORE;
-  if (!isRattshjalp || !split) return null;
-  const hasSjalvriskAconto = rows.some((r) => r.type === "ACCONTO" && r.recipient === "KLIENT");
-  if (hasSjalvriskAconto || split.clientOre < threshold) return null;
+  if (!split || !sjalvriskAccontoDue({ method: matter.paymentMethod, clientOre: split.clientOre, thresholdOre: threshold, runs: rows })) return null;
   return (
     <div className="mx-6 mb-4 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
       Klientens självrisk har nått{" "}
@@ -578,9 +561,7 @@ function SjalvriskAccontoHint({ matterId, matter, rows }: { matterId: MatterId; 
 function InsurerPruningBanner({ matterId, matter, rows, onRecorded }: { matterId: MatterId; matter: MatterContext; rows: BillingRunRow[]; onRecorded: () => void }) {
   const [krStr, setKrStr] = useState("");
   const record = trpc.billingRun.recordInsurerPruning.useMutation({ onSuccess: onRecorded });
-  const hasPayerFinal = rows.some((r) => r.type === "FINAL" && r.recipient === "FORSAKRING");
-  const alreadyPruned = rows.some((r) => r.recipient === "FORSAKRING" && r.prutningOre != null);
-  if (matter.paymentMethod !== "RATTSSKYDD" || !hasPayerFinal || alreadyPruned) return null;
+  if (!insurerPruningPending(matter.paymentMethod, rows)) return null;
   const netOre = Math.round(Number.parseFloat(krStr.replace(",", ".")) * 100);
   const valid = Number.isFinite(netOre) && netOre > 0;
   return (
@@ -709,19 +690,17 @@ function Card({ label, value, dim, basis = "gross" }: { label: string; value: nu
   );
 }
 
-/** Header-zonen: skapa-faktura-menyn när det finns åtgärder, annars en förklaring. */
-function BillingHeaderActions({ actions, onPick, hint }: { actions: readonly BillingAction[]; onPick: (a: BillingAction) => void; hint: string }) {
+/** Header-zonen: skapa-faktura-menyn när det finns åtgärder, annars ev. vad som måste göras. */
+function BillingHeaderActions({ actions, onPick, hint }: { actions: readonly BillingAction[]; onPick: (a: BillingAction) => void; hint: string | null }) {
   if (actions.length > 0) return <BillingActions actions={actions} onPick={onPick} />;
-  return <span className="text-xs text-gray-500">{hint}</span>;
+  return hint ? <span className="text-xs text-gray-500">{hint}</span> : null;
 }
 
-/** Förklarar varför inga faktureringsåtgärder erbjuds i nuvarande fas (#824) —
- *  annars försvinner knappen tyst och användaren tror fakturering saknas. */
-function noActionsHint(phase: BillingPhase, pm: PaymentMethod): string {
-  if (pm === "PENDING") return "Välj betalningssätt för att fakturera";
-  if (phase === "SLUTREGLERAD") return "Ärendet är slutreglerat";
-  if (phase === "NEKAD") return "Rättsskydd nekat — se förslag nedan";
-  return "Inga faktureringsåtgärder i nuvarande läge";
+/** Varför inga faktureringsåtgärder erbjuds (#824) — bara när juristen kan göra
+ *  något åt det. Lägesbeskrivningarna ("slutreglerat", "nekat") står nu i
+ *  ärendets Anteckningar (#1221) i stället för i panelen. */
+function noActionsHint(pm: PaymentMethod): string | null {
+  return paymentMethodPending(pm) ? "Välj betalningssätt för att fakturera" : null;
 }
 
 /** Skapa-faktura-menyn — alternativen kommer från flödesmodellen (#816); panelen
