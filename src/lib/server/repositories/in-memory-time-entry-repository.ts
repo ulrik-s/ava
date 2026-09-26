@@ -6,6 +6,7 @@
 
 import type { TimeEntry } from "@/lib/shared/schemas/billing";
 import type { BillingRunId, InvoiceId, MatterId, OrganizationId, TimeEntryId, UserId } from "@/lib/shared/schemas/ids";
+import { isInvoicedOutsideCoverage } from "@/lib/shared/time-entry-lock";
 import type { IDataStore } from "../data-store/IDataStore";
 import { InMemoryRepository } from "./in-memory-repository";
 import type {
@@ -121,7 +122,7 @@ export class InMemoryTimeEntryRepository extends InMemoryRepository<TimeEntry> i
     let billableMinutes = 0;
     let billableValueOre = 0;
     for (const t of rows) {
-      if (!t.billable) continue;
+      if (!t.billable || isInvoicedOutsideCoverage(t)) continue;
       billableMinutes += t.minutes;
       billableValueOre += Math.round((t.minutes / 60) * (t.hourlyRate ?? 0));
     }
@@ -134,7 +135,7 @@ export class InMemoryTimeEntryRepository extends InMemoryRepository<TimeEntry> i
     const wanted = new Set<string>(matterIds);
     const rows = (await this.delegate.findMany({})) as TimeEntry[];
     for (const t of rows) {
-      if (!t.billable || !wanted.has(t.matterId)) continue;
+      if (!t.billable || !wanted.has(t.matterId) || isInvoicedOutsideCoverage(t)) continue;
       const acc = out[t.matterId] ?? { billableMinutes: 0, billableValueOre: 0 };
       acc.billableMinutes += t.minutes;
       acc.billableValueOre += Math.round((t.minutes / 60) * (t.hourlyRate ?? 0));

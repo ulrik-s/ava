@@ -9,7 +9,7 @@
  * leftJoin-nullbara select-värden, inte \`as unknown as\`.
  */
 
-import { and, asc, desc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
 import type { TimeEntry } from "@/lib/shared/schemas/billing";
 import { asId, type BillingRunId, type InvoiceId, type MatterId, type OrganizationId, type TimeEntryId, type UserId } from "@/lib/shared/schemas/ids";
 import { matters, timeEntries, users } from "../db/schema";
@@ -28,6 +28,12 @@ import type {
  */
 function isUnlocked() {
   return and(isNull(timeEntries.frozenByBillingRunId), isNull(timeEntries.frozenAt));
+}
+
+/** Räknas mot täckningstaket (#1210): allt utom rådgivningstimmen (låst direkt
+ *  mot en faktura, utan körning). Samma regel som `isInvoicedOutsideCoverage`. */
+function countsTowardCoverage() {
+  return or(isNull(timeEntries.frozenAt), isNotNull(timeEntries.frozenByBillingRunId));
 }
 
 /** Org-scopat where för `listForOrg` (utbruten för komplexitet ≤8). */
@@ -156,7 +162,7 @@ export class DrizzleTimeEntryRepository extends DrizzleRepository<TimeEntry> imp
     const rows = await this.db
       .select({ minutes: timeEntries.minutes, hourlyRate: timeEntries.hourlyRate })
       .from(timeEntries)
-      .where(and(eq(timeEntries.matterId, matterId), eq(timeEntries.billable, true), isNull(timeEntries.deletedAt)));
+      .where(and(eq(timeEntries.matterId, matterId), eq(timeEntries.billable, true), isNull(timeEntries.deletedAt), countsTowardCoverage()));
     let billableMinutes = 0;
     let billableValueOre = 0;
     for (const r of rows) {
@@ -172,7 +178,7 @@ export class DrizzleTimeEntryRepository extends DrizzleRepository<TimeEntry> imp
     const rows = await this.db
       .select({ matterId: timeEntries.matterId, minutes: timeEntries.minutes, hourlyRate: timeEntries.hourlyRate })
       .from(timeEntries)
-      .where(and(inArray(timeEntries.matterId, matterIds), eq(timeEntries.billable, true), isNull(timeEntries.deletedAt)));
+      .where(and(inArray(timeEntries.matterId, matterIds), eq(timeEntries.billable, true), isNull(timeEntries.deletedAt), countsTowardCoverage()));
     for (const r of rows) {
       const acc = out[r.matterId] ?? { billableMinutes: 0, billableValueOre: 0 };
       acc.billableMinutes += r.minutes;
