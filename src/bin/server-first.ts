@@ -138,6 +138,8 @@ function main(): void {
     suggestions: api.repos,
     // #621 B2: LLM föreslår taggar ur byråns vokabulär (läses lazy per jobb).
     vocabulary: async () => (await api.repos.organizations.getById(asId<"OrganizationId">(config.organizationId)))?.documentTags ?? [],
+    // #1215: jobben indexerar sidtexten för fulltextsökningen (document.search).
+    pageIndex: api.pageIndex,
   });
   void startJobRuntime({ connectionString: config.databaseUrl, handlers })
     .then((rt) => { jobRuntime = rt; log(`jobb-kö startad (pg-boss; ${Object.keys(handlers).length} handlers)`); })

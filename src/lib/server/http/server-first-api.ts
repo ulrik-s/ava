@@ -12,8 +12,9 @@
  */
 
 import { noopPorts } from "@/lib/server/adapters/noop-ports";
+import { PostgresSearchIndex } from "@/lib/server/adapters/postgres-search-index";
 import { createPostgresDb } from "@/lib/server/db/client";
-import type { IPorts } from "@/lib/server/ports";
+import type { IDocumentPageIndex, IPorts } from "@/lib/server/ports";
 import { createDbChangeLogRecorder, enableChangeLogOnAll } from "@/lib/server/repositories/change-log-recorder";
 import { buildDrizzleRepositories } from "@/lib/server/repositories/drizzle-repositories";
 import { DrizzleSyncStore } from "@/lib/server/sync/drizzle-sync-store";
@@ -46,6 +47,8 @@ export interface ServerFirstApi {
   handler: (req: Request) => Promise<Response>;
   /** Typade repos ovanpå db:n — exponeras så jobb-handlers (#518) kan läsa/skriva. */
   repos: ReturnType<typeof buildDrizzleRepositories>;
+  /** Serverns sidindex (#1215) — dokumentjobben skriver sidtexten hit. */
+  pageIndex: IDocumentPageIndex;
   /** Stäng db-poolen vid nedstängning. */
   close: () => Promise<void>;
 }
@@ -62,9 +65,11 @@ export function buildServerFirstApi(config: ServerFirstApiConfig): ServerFirstAp
   enableChangeLogOnAll(repos, createDbChangeLogRecorder(db));
   // Bearer-JWT-väg: explicit config, annars ur miljön (AVA_OIDC_*). Av som default.
   const bearer = config.bearer === undefined ? bearerConfigFromEnv() : config.bearer;
+  // Fulltextsökningen (#1215) bor i samma Postgres → alltid på i server-first.
+  const search = new PostgresSearchIndex(db);
   const trpc = createServerTrpcHandler({
     repos,
-    ports: config.ports ?? noopPorts,
+    ports: { ...(config.ports ?? noopPorts), searchIndex: search },
     organizationId: config.organizationId,
     sync: new DrizzleSyncStore(db, repos),
     ...(config.endpoint ? { endpoint: config.endpoint } : {}),
@@ -77,7 +82,7 @@ export function buildServerFirstApi(config: ServerFirstApiConfig): ServerFirstAp
     const health = await handleHealthRoute(new URL(req.url).pathname, ping);
     return health ?? trpc(req);
   };
-  return { handler, repos, close };
+  return { handler, repos, pageIndex: search, close };
 }
 
 /** Env-nycklar för den körbara entryn. */

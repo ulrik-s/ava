@@ -107,6 +107,15 @@
   `pgboss`-schema). Claim/lease (FOR UPDATE SKIP LOCKED), retry/backoff,
   dead-letter. Handlers (t.ex. e-postutskick via smtp-sender) registreras i
   runtimen; `ctx.ports.email` köar durabelt.
+- **Fulltextsökning** (#1215): dokumentjobben (`classify-document`,
+  `index-document`) extraherar texten EN gång per jobb, per sida
+  (`extractPages`), och skriver den till `document_pages` (genererad
+  `tsvector`, 'swedish'-stemming, GIN-index). `PostgresSearchIndex` svarar på
+  `document.search` (websearch_to_tsquery + ts_rank + ts_headline, org/ärende/
+  typ-filter, facetter, sidnummer för bästa träff). Tabellen är **server-only**:
+  ingen entitet, inget `change_log`, synkas aldrig till klienter (kan bli stor;
+  klienten söker via serverns tRPC i "server"-omfånget). Mjuk delete av ett
+  dokument rensar sidorna, hård delete kaskaderar.
 - Schemat appliceras med `db:migrate` (versionerade SQL-migrationer); binären
   byggs med `bun build --compile` och körs som docker-image.
 

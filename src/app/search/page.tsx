@@ -6,6 +6,7 @@ import { DataTable, type Column } from "@/components/ui/data-table";
 import { useCapabilities } from "@/lib/client/capabilities/use-capabilities";
 import { EntityLink } from "@/lib/client/demo/entity-link";
 import { searchScope, searchScopeLabel, type SearchScope } from "@/lib/client/search/search-scope";
+import { useDocumentSearch } from "@/lib/client/search/use-document-search";
 import { useOnlineStatus } from "@/lib/client/sync/use-online-status";
 import { trpc } from "@/lib/client/trpc";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
@@ -19,6 +20,8 @@ interface SearchHit {
   matterNumber: string;
   matterTitle: string;
   highlight: string;
+  /** Sida med bästa innehållsträffen (#1215); null = okänd/metadata-träff. */
+  page?: number | null;
 }
 
 /**
@@ -68,8 +71,10 @@ function searchColumns(open: (h: SearchHit) => Promise<void>): Column<SearchHit>
     },
     { key: "highlight", label: "Träff", sortable: false,
       render: (h) => (
-        <span className="text-sm text-gray-600 line-clamp-2"
-          dangerouslySetInnerHTML={{ __html: h.highlight }} />
+        <span className="text-sm text-gray-600 line-clamp-2">
+          {h.page ? <span className="mr-1 text-xs font-medium text-gray-500">s. {h.page}</span> : null}
+          <span dangerouslySetInnerHTML={{ __html: h.highlight }} />
+        </span>
       ),
     },
   ];
@@ -230,9 +235,9 @@ export default function DocumentSearchPage() {
 
   const docTypes = trpc.document.listDocumentTypes.useQuery();
 
-  const results = trpc.document.search.useQuery(
-    { query: searchTerm, documentTypes: searchedTypes.length > 0 ? searchedTypes : undefined },
-    { enabled: searchTerm.length > 0 && scope !== "offline" }
+  const results = useDocumentSearch(
+    { query: searchTerm, ...(searchedTypes.length > 0 ? { documentTypes: searchedTypes } : {}) },
+    scope,
   );
 
   function handleSearch(e: React.FormEvent) {

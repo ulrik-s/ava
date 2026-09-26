@@ -6,7 +6,7 @@
 
 import type { Buffer } from "node:buffer";
 import type { LedgerAccountMap } from "@/lib/shared/accounting/account-map";
-import type { DocumentId, UserId } from "@/lib/shared/schemas/ids";
+import type { DocumentId, MatterId, UserId } from "@/lib/shared/schemas/ids";
 import type { LedgerConnector } from "./integrations/ledger/port";
 
 // ─── EmailSender ───────────────────────────────────────────────────
@@ -64,6 +64,11 @@ export interface SearchHit {
   matterNumber: string;
   matterTitle: string;
   organizationId: string;
+  /**
+   * 1-baserad sida med bästa innehållsträffen (#1215). `null`/saknas när
+   * träffen bara är i metadata eller när indexet inte vet sidan (demon).
+   */
+  page?: number | null;
   _formatted?: {
     content?: string;
     fileName?: string;
@@ -93,12 +98,23 @@ export interface IndexableDocument {
 export interface ISearchOpts {
   /** Bara dokument vars documentType matchar någon i listan. */
   documentTypes?: string[];
+  /** Bara dokument i detta ärende (#1215). */
+  matterId?: MatterId;
 }
 
 export interface ISearchIndex {
   search(query: string, organizationId: string, limit?: number, opts?: ISearchOpts): Promise<SearchResponse>;
   upsert(doc: IndexableDocument): Promise<void>;
   remove(id: string): Promise<void>;
+}
+
+/**
+ * Skrivsidan av serverns sidindex (#1215): ersätt ett dokuments sidtexter
+ * (index 0 = sida 1). Tom lista = dokumentet har ingen sökbar text → sidorna
+ * tas bort. Dokumentjobben (klassificering/indexering) skriver hit.
+ */
+export interface IDocumentPageIndex {
+  replacePages(documentId: DocumentId, pages: readonly string[]): Promise<void>;
 }
 
 // ─── PaymentScanner ────────────────────────────────────────────────

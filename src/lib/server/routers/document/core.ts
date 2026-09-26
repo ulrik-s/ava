@@ -52,17 +52,21 @@ export const coreProcedures = {
       return { folders, documents: visibleDocs };
     }),
 
-  /** Meilisearch-baserad full-text-sök inom org. */
+  /**
+   * Fulltextsök inom org (valfritt ett ärende). Server-first: Postgres-indexet
+   * över sidtexten (#1215); demo: in-process-skanning av cachen.
+   */
   search: orgProcedure
     .input(z.object({
       query: z.string().min(1),
       limit: z.number().min(1).max(50).default(20),
       documentTypes: z.array(z.string()).optional(),
+      matterId: matterIdSchema.optional(),
     }))
     .query(async ({ ctx, input }) => {
       const result = await ctx.ports.searchIndex.search(
         input.query, ctx.orgId, input.limit,
-        omitUndefined({ documentTypes: input.documentTypes }),
+        omitUndefined({ documentTypes: input.documentTypes, matterId: input.matterId }),
       );
       return {
         hits: result.hits.map((hit) => ({
@@ -73,6 +77,8 @@ export const coreProcedures = {
           matterNumber: hit.matterNumber,
           matterTitle: hit.matterTitle,
           highlight: hit._formatted?.content || "",
+          /** 1-baserad sida med bästa innehållsträffen; null = okänd/metadata-träff. */
+          page: hit.page ?? null,
         })),
         totalHits: result.estimatedTotalHits,
         // Per-type-räknare baserat på query-match (oavsett type-filter)

@@ -22,6 +22,8 @@ import { PgBoss } from "pg-boss";
 export const JOB_QUEUES = {
   emailDispatch: "email-dispatch",
   classifyDocument: "classify-document",
+  /** Indexera ett dokuments sidtext utan omklassificering (#1215, backfill). */
+  indexDocument: "index-document",
   fortnoxSync: "fortnox-sync",
   rulesTick: "rules-tick",
   outlookMirror: "outlook-mirror",

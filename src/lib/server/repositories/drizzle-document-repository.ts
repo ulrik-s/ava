@@ -8,7 +8,7 @@ import type { Document } from "@/lib/shared/schemas/document";
 import type {
   DocumentFolderId, DocumentId, MatterId, OrganizationId,
 } from "@/lib/shared/schemas/ids";
-import { documents, matters, users } from "../db/schema";
+import { documentPages, documents, matters, users } from "../db/schema";
 import type { AppDb } from "../db/types";
 import type {
   DocumentAccessRow, DocumentListRow, DocumentRepository,
@@ -38,6 +38,17 @@ export class DrizzleDocumentRepository
   /** Dokument saknar org-kolumn → härled via ärendet (#528) så change_log/pull funkar. */
   protected override resolveOrg(row: unknown): Promise<string | undefined> {
     return matterOrg(this.db, (row as { matterId?: MatterId }).matterId);
+  }
+
+  /**
+   * Tombstone + rensa serverns sidindex (#1215). Hård delete kaskaderar via
+   * FK:n; en mjuk delete lämnar raden kvar, så sidorna tas bort här — ett
+   * raderat dokument ska inte ligga kvar som sökbar text.
+   */
+  override async softDelete(id: DocumentId): Promise<Document> {
+    const row = await super.softDelete(id);
+    await this.db.delete(documentPages).where(eq(documentPages.documentId, id));
+    return row;
   }
 
   async listInFolder(

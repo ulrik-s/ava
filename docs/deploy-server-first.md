@@ -281,6 +281,22 @@ halvt schema efter sig.
 > `avarun tooling/scripts/db-migrate.ts --baseline` EN gång, INNAN du drar ner
 > nya migrationer — det markerar alla filer i checkouten som körda.
 
+### Fulltextindexet (engångs-backfill, #1215)
+
+Dokumentsökningen läser sidtexten i `document_pages`. Nya och ändrade dokument
+indexeras av dokumentjobbet; dokument som laddades upp innan indexet fanns
+fylls på EN gång, efter att migration 0026 körts och `server-first` startats
+om (workern på kön måste finnas):
+
+```bash
+avarun tooling/scripts/backfill-search-index.ts
+```
+
+Skriptet köar ett `index-document`-jobb per dokument — servern läser bytes ur
+content-store:n och skriver sidorna. Inget klassificeras om, och en omkörning
+är ofarlig (sidorna ersätts). Följ förloppet med
+`docker compose -f tooling/docker/docker-compose.production.yml logs -f server-first`.
+
 ## AVA Helper (valfritt)
 
 Helpern (ADR 0028) öppnar dokument i Word/Excel på användarens dator och

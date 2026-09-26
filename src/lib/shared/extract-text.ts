@@ -5,7 +5,10 @@
  * mammoth fungerar både i browser och Node/bun.
  *
  * Designval:
- *   - Pure-funktion (in: bytes/Blob, ut: string) → trivial att testa.
+ *   - Pure-funktion (in: bytes/Blob, ut: sidor/string) → trivial att testa.
+ *   - `extractPages` är kärnan: en sträng per PDF-sida (sidgränserna behövs
+ *     för sökindexet `document_pages`, #1215); DOCX/text saknar sidor → en
+ *     enda "sida". `extractText` är sidorna ihopslagna.
  *   - Dynamiska imports så pdfjs-dist (~3 MB) bara laddas när PDF används.
  *   - Fail-soft: okänd mime / fel i lib → tom sträng, aldrig exception.
  */
@@ -16,18 +19,30 @@ export interface ExtractInput {
   fileName?: string;
 }
 
-/** Ren text. Tom sträng = "kunde inte extrahera" (okänt format, lib-fel, …). */
-export async function extractText(input: ExtractInput): Promise<string> {
+/** Separator mellan sidor när de slås ihop till en text. */
+const PAGE_SEPARATOR = "\n\n";
+
+/**
+ * Text per sida (index 0 = sida 1). PDF → en sträng per sida; DOCX/text → en
+ * enda sida. Tom lista = "kunde inte extrahera" (okänt format, lib-fel, …).
+ */
+export async function extractPages(input: ExtractInput): Promise<string[]> {
   const kind = detectKind(input);
+  if (kind === "unknown") return [];
   const bytes = await toBytes(input.bytes);
-  switch (kind) {
-    case "text": return new TextDecoder().decode(bytes);
-    case "pdf": return extractFromPdf(bytes);
-    case "docx": return extractFromDocx(bytes);
-    case "unknown":
-    default:
-      return "";
-  }
+  if (kind === "pdf") return extractPdfPages(bytes);
+  const text = kind === "text" ? new TextDecoder().decode(bytes) : await extractFromDocx(bytes);
+  return text ? [text] : [];
+}
+
+/** Ren text (sidorna ihopslagna). Tom sträng = "kunde inte extrahera". */
+export async function extractText(input: ExtractInput): Promise<string> {
+  return joinPages(await extractPages(input));
+}
+
+/** Slå ihop sidor till en text (samma form som `extractText`). */
+export function joinPages(pages: readonly string[]): string {
+  return pages.join(PAGE_SEPARATOR);
 }
 
 type ExtractKind = "text" | "pdf" | "docx" | "unknown";
@@ -64,7 +79,7 @@ async function toBytes(input: Uint8Array | ArrayBuffer | Blob): Promise<Uint8Arr
   return new Uint8Array(await input.arrayBuffer());
 }
 
-async function extractFromPdf(bytes: Uint8Array): Promise<string> {
+async function extractPdfPages(bytes: Uint8Array): Promise<string[]> {
   try {
     // Legacy-build för max-kompabilitet (Node/bun + jsdom). Re-exporterar
     // pdfjs-dists egna typer → fullt typad utan cast.
@@ -82,10 +97,10 @@ async function extractFromPdf(bytes: Uint8Array): Promise<string> {
       const content = await (await doc.getPage(i)).getTextContent();
       parts.push(content.items.map((item) => ("str" in item ? item.str : "")).join(" "));
     }
-    return parts.join("\n\n");
+    return parts;
   } catch (err) {
     console.warn("[extract] PDF-extraktion misslyckades:", err);
-    return "";
+    return [];
   }
 }
 
