@@ -11,6 +11,7 @@ import {
   invoiceIdSchema,
   type OrganizationId,
 } from "@/lib/shared/schemas/ids";
+import { loadRadgivningStatus, markEntryAsRadgivning } from "../billing/radgivning-entry";
 import { entryRateOre } from "../billing/time-entry-rate";
 import { emit } from "../events/emit";
 import { router, protectedProcedure, orgProcedure, TRPCError } from "../trpc";
@@ -189,6 +190,33 @@ export const timeEntryRouter = router({
       await ctx.repos.timeEntries.hardDelete(input.id);
       await emit.timeEntryDeleted(ctx, input.id, owned.matterId);
       return { id: input.id };
+    }),
+
+  /**
+   * Ärendets rådgivningspost (#1207): `missing` = rådgivningsfakturan finns men
+   * ingen låst post — styr "Markera som rådgivning" och fakturapanelens varning.
+   */
+  radgivningStatus: orgProcedure
+    .input(z.object({ matterId: matterIdSchema }))
+    .query(async ({ ctx, input }) => {
+      const matter = await ctx.repos.matters.getByIdInOrg(input.matterId, ctx.orgId);
+      if (!matter) throw new TRPCError({ code: "NOT_FOUND" });
+      return loadRadgivningStatus(ctx.repos, matter);
+    }),
+
+  /**
+   * "Markera som rådgivning" (#1207): låser en befintlig post mot ärendets
+   * rådgivningsfaktura — för rättshjälpsärenden vars rådgivningsfaktura skapades
+   * före #1205 och därför saknar den låsta posten. Över 60 min delas posten.
+   * Regler + delning: `markEntryAsRadgivning`.
+   */
+  markAsRadgivning: orgProcedure
+    .input(z.object({ id: timeEntryIdSchema }))
+    .mutation(async ({ ctx, input }) => {
+      const res = await ctx.repos.transaction((repos) => markEntryAsRadgivning(repos, ctx.orgId, input.id, new Date()));
+      await emit.timeEntryUpdated(ctx, { id: res.locked.id, matterId: res.locked.matterId });
+      if (res.remainder) await emit.timeEntryAdded(ctx, res.remainder);
+      return res;
     }),
 
   report: protectedProcedure

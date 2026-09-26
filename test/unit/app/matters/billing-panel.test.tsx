@@ -72,7 +72,7 @@ vi.mock("@/lib/client/trpc", () => ({
       clearOrgDefault: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
     expense: { list: { useQuery: () => ({ data: { expenses: [] } }) } },
-    timeEntry: { list: { useQuery: () => ({ data: { entries: [] } }) } },
+    timeEntry: { list: { useQuery: () => ({ data: { entries: [] } }) }, radgivningStatus: { useQuery: () => ({ data: undefined }) }, markAsRadgivning: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) }, },
     document: {
       list: { useQuery: () => ({ data: documentListData }) },
       register: { useMutation: () => ({ mutateAsync: vi.fn(async () => {}) }) },

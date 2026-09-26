@@ -40,6 +40,7 @@ import { BILLING_RUN_RECIPIENT_LABELS, BILLING_RUN_TYPE_LABELS, BILLING_RUN_STAT
 import type { BillingRunId, DocumentId, InvoiceId, MatterId } from "@/lib/shared/schemas/ids";
 import { BillingDialog, type BillingMeta } from "./_billing-dialog";
 import { KostnadsrakningModal } from "./_kostnadsrakning-modal";
+import { RadgivningEntryWarning } from "./_radgivning-entry";
 import { SettlementDialog } from "./_settlement-dialog";
 import { VerdictDialog } from "./_verdict-dialog";
 
@@ -460,6 +461,7 @@ export function BillingPanel({ matterId, matter }: Props) {
       </div>
       <BillingSummary matterId={matterId} />
       <RadgivningBanner matterId={matterId} matter={matter} onRecorded={refetch} />
+      <RadgivningEntryWarning matterId={matterId} paymentMethod={matter.paymentMethod} />
       <SjalvriskAccontoHint matterId={matterId} matter={matter} rows={rows} />
       <InsurerPruningBanner matterId={matterId} matter={matter} rows={rows} onRecorded={refetch} />
       {activeKr && <KostnadsrakningCard matterId={matterId} run={activeKr}
