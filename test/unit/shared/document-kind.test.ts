@@ -3,7 +3,7 @@
  */
 
 import { describe, expect, it } from "vitest-compat";
-import { KIND_DESCRIPTIONS, KNOWN_KINDS, guessFromFilename } from "@/lib/shared/document-kind";
+import { KIND_DESCRIPTIONS, KIND_LABELS, KNOWN_KINDS, guessFromFilename, isDocumentKind, kindLabel } from "@/lib/shared/document-kind";
 
 describe("guessFromFilename", () => {
   const cases: Array<[string, string]> = [
@@ -22,6 +22,9 @@ describe("guessFromFilename", () => {
     ["faktura-123.pdf", "FAKTURA"],
     ["expertrapport.pdf", "RAPPORT"],
     ["anteckningar.txt", "OKLASSIFICERAT"],
+    ["Delgivningskvitto dom.pdf", "DELGIVNINGSKVITTO"],
+    ["FUP 5000-K1.pdf", "FUP"],
+    ["Förundersökningsprotokoll.pdf", "FUP"],
   ];
   for (const [name, expected] of cases) {
     it(`"${name}" → ${expected}`, () => {
@@ -39,5 +42,21 @@ describe("guessFromFilename", () => {
 describe("KIND_DESCRIPTIONS", () => {
   it("varje kategori har en beskrivning (LLM-prompten, #1156)", () => {
     for (const k of KNOWN_KINDS) expect(KIND_DESCRIPTIONS[k].length).toBeGreaterThan(5);
+  });
+});
+
+describe("KIND_LABELS / kindLabel / isDocumentKind (#1220)", () => {
+  it("varje kategori har en etikett", () => {
+    for (const k of KNOWN_KINDS) expect(KIND_LABELS[k].length).toBeGreaterThan(1);
+  });
+  it("kända koder → etikett; specialvärden och fritext visas som de är", () => {
+    expect(kindLabel("STAMNING")).toBe("Stämning");
+    expect(kindLabel("DELGIVNINGSKVITTO")).toBe("Delgivningskvitto");
+    expect(kindLabel("Kostnadsräkning")).toBe("Kostnadsräkning");
+  });
+  it("isDocumentKind skiljer koder från annat", () => {
+    expect(isDocumentKind("FUP")).toBe(true);
+    expect(isDocumentKind("E-post")).toBe(false);
+    expect(isDocumentKind(null)).toBe(false);
   });
 });

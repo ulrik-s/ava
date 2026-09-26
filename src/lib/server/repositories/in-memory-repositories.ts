@@ -15,6 +15,7 @@ import { InMemoryCalendarEventRepository } from "./in-memory-calendar-event-repo
 import { InMemoryConflictCheckRepository } from "./in-memory-conflict-check-repository";
 import { InMemoryContactRepository } from "./in-memory-contact-repository";
 import { InMemoryDocumentFolderRepository } from "./in-memory-document-folder-repository";
+import { InMemoryDocumentPartRepository } from "./in-memory-document-part-repository";
 import { InMemoryDocumentRepository } from "./in-memory-document-repository";
 import { InMemoryDocumentSuggestionRepository } from "./in-memory-document-suggestion-repository";
 import { InMemoryDocumentTemplateRepository } from "./in-memory-document-template-repository";
@@ -61,6 +62,7 @@ function reposForTx(tx: DataStoreTx): Repositories {
     serviceNotes: new InMemoryServiceNoteRepository(tx),
     documents: new InMemoryDocumentRepository(tx),
     documentFolders: new InMemoryDocumentFolderRepository(tx),
+    documentParts: new InMemoryDocumentPartRepository(tx),
     matterEventSuggestions: new InMemoryMatterEventSuggestionRepository(tx),
     documentAnalysisSuggestions: new InMemoryDocumentSuggestionRepository(tx),
     documentTemplates: new InMemoryDocumentTemplateRepository(tx),
@@ -96,6 +98,7 @@ export function buildInMemoryRepositories(dataStore: IDataStore): Repositories {
     serviceNotes: new InMemoryServiceNoteRepository(dataStore),
     documents: new InMemoryDocumentRepository(dataStore),
     documentFolders: new InMemoryDocumentFolderRepository(dataStore),
+    documentParts: new InMemoryDocumentPartRepository(dataStore),
     matterEventSuggestions: new InMemoryMatterEventSuggestionRepository(dataStore),
     documentAnalysisSuggestions: new InMemoryDocumentSuggestionRepository(dataStore),
     documentTemplates: new InMemoryDocumentTemplateRepository(dataStore),

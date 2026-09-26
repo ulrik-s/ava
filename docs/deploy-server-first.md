@@ -297,6 +297,25 @@ content-store:n och skriver sidorna. Inget klassificeras om, och en omkörning
 är ofarlig (sidorna ersätts). Följ förloppet med
 `docker compose -f tooling/docker/docker-compose.production.yml logs -f server-first`.
 
+### Dokumentdelar (omklassificering, #1220)
+
+Sammansatta dokument ("kallelse + stämning + FUP" i en PDF) får delar när
+klassificeringsjobbet körs. Nya uppladdningar får dem direkt. Befintliga
+dokument får dem efter migration 0027 och omstart av `server-first` med:
+
+```bash
+avarun tooling/scripts/backfill-search-index.ts --reclassify
+```
+
+Skriptet köar ett `classify-document`-jobb per dokument (indexering +
+klassificering + segmentering). Användarens val skrivs inte över:
+specialvärden i dokumenttypen (Kostnadsräkning, E-post, fritext) rörs inte och
+får inga delar; en dokumenttyp som användaren satt (en kategorikod som servern
+aldrig analyserat och som inte är filnamnsgissningen) behålls och blir EN
+manuell del; delar som rättats i dokumentpanelen (MANUAL) bevaras så länge
+sidantalet är detsamma. LLM-anropen är högst 12 per dokument (~11 s styck med
+qwen2.5:1.5b) — räkna med att kön tar en stund för stora arkiv.
+
 ## AVA Helper (valfritt)
 
 Helpern (ADR 0028) öppnar dokument i Word/Excel på användarens dator och

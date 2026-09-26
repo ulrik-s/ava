@@ -38,4 +38,13 @@ describe("openMatterDocument (#651)", () => {
     expect(typeof deps.fetchBlob).toBe("function");
     expect(createServerDownloadClientSpy).toHaveBeenCalled();
   });
+
+  it("#1220: page skickas vidare (öppna en del på dess första sida)", async () => {
+    tier = "demo";
+    await openMatterDocument({ id: "d1", fileName: "d1.pdf" }, 7);
+    expect((openDocumentSpy.mock.calls[0]![0] as { page?: number }).page).toBe(7);
+    openDocumentSpy.mockClear();
+    await openMatterDocument({ id: "d1", fileName: "d1.pdf" });
+    expect((openDocumentSpy.mock.calls[0]![0] as { page?: number }).page).toBeUndefined();
+  });
 });

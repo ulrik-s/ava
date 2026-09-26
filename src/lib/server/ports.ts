@@ -69,6 +69,11 @@ export interface SearchHit {
    * träffen bara är i metadata eller när indexet inte vet sidan (demon).
    */
   page?: number | null;
+  /**
+   * Dokumentdelen (#1220) som träffsidan ligger i — "Stämning, s. 5". null
+   * när sidan är okänd eller dokumentet saknar delar.
+   */
+  part?: { kind: string; fromPage: number; toPage: number } | null;
   _formatted?: {
     content?: string;
     fileName?: string;
@@ -96,7 +101,7 @@ export interface IndexableDocument {
 }
 
 export interface ISearchOpts {
-  /** Bara dokument vars documentType matchar någon i listan. */
+  /** Bara dokument där någon del (eller documentType) matchar någon i listan (#1220). */
   documentTypes?: string[];
   /** Bara dokument i detta ärende (#1215). */
   matterId?: MatterId;

@@ -4,11 +4,12 @@
  *
  * Ingen klient-LLM, ingen modell-nedladdning hos användaren: servern frågar
  * sin egen ollama. Fail-soft hela vägen — för kort text, nät-fel, oväntat svar
- * eller okänd kategori → filnamns-heuristik (`guessFromFilename`). Så
- * klassificering ger ALLTID ett vettigt värde även om LLM:en är nere.
+ * eller okänd kategori → null, och segmenteringen (#1220) faller tillbaka på
+ * rubrikheuristik/filnamn. Klassificeraren anropas per kandidat-startsida i
+ * ett sammansatt dokument, inte per dokument.
  */
 
-import { KIND_DESCRIPTIONS, KNOWN_KINDS, type DocumentKind, guessFromFilename } from "@/lib/shared/document-kind";
+import { KIND_DESCRIPTIONS, KNOWN_KINDS, type DocumentKind, isDocumentKind } from "@/lib/shared/document-kind";
 
 export interface LlmConfig {
   /** OpenAI-kompatibel bas-URL, t.ex. `http://ollama:11434/v1`. */
@@ -34,10 +35,17 @@ export function loadLlmConfigFromEnv(env: Record<string, string | undefined> = p
   return key ? { endpoint, model, apiKey: key } : { endpoint, model };
 }
 
-/** Plocka första kända kategorin ur ett LLM-svar (versal-matchning). */
-function matchKind(raw: string): DocumentKind | null {
-  const upper = raw.toUpperCase();
-  return (KNOWN_KINDS as readonly string[]).find((k) => upper.includes(k)) as DocumentKind ?? null;
+/** Hela ord (koderna är ASCII) — "DOM" ska inte träffa i "DOMSTOL". */
+const KIND_WORDS = new RegExp(`\\b(${KNOWN_KINDS.join("|")})\\b`);
+
+/**
+ * Den kategori LLM-svaret nämner FÖRST (#1220). Tidigare vann den som låg
+ * först i `KNOWN_KINDS` var den än stod i svaret — fel när modellen räknar
+ * upp flera ("DOM, inte STAMNING" blev STAMNING).
+ */
+export function matchKind(raw: string): DocumentKind | null {
+  const first = KIND_WORDS.exec(raw.toUpperCase())?.[1];
+  return isDocumentKind(first) ? first : null;
 }
 
 /**
@@ -78,8 +86,8 @@ const KIND_LINES = KNOWN_KINDS.map((k) => `${k} = ${KIND_DESCRIPTIONS[k]}`).join
 async function askOllama(config: LlmConfig, doFetch: FetchLike, text: string): Promise<DocumentKind | null> {
   const out = await chat(
     config, doFetch,
-    "Du klassificerar svenska juridiska dokument. Svara med EXAKT ETT ord — en av kategorierna.",
-    `Kategorier:\n${KIND_LINES}\n\nSvara med kategorins kod (ordet före =).\n\nDokument:\n"""${text.slice(0, MAX_TEXT)}"""`,
+    "Du klassificerar svenska juridiska dokument. Svara med EXAKT EN kategorikod och inget annat.",
+    `Kategorier:\n${KIND_LINES}\n\nSvara med EN kod (ordet före =), t.ex. DOM. Ange aldrig flera koder.\n\nDokument:\n"""${text.slice(0, MAX_TEXT)}"""`,
   );
   return out ? matchKind(out) : null;
 }
@@ -95,19 +103,19 @@ function matchTags(raw: string, vocabulary: readonly string[]): string[] {
 }
 
 /**
- * Bygg en klassificerare bunden till `config`. Returnerar en funktion
- * `(text, fileName) → DocumentKind` som anroparen (classify-handlern) matar
- * med extraherad dokumenttext. Fail-soft: kort text / LLM-miss → heuristik.
+ * Bygg en del-klassificerare bunden till `config` (#1220). Returnerar
+ * `(text) → DocumentKind | null` som segmenteringen matar med texten för en
+ * kandidat-startsida. Fail-soft: kort text / LLM-miss → null (anroparen
+ * faller tillbaka på rubrikheuristik/filnamn).
  */
-export function createOllamaClassifier(
+export function createOllamaPartClassifier(
   config: LlmConfig,
   opts: { fetch?: FetchLike } = {},
-): (text: string, fileName: string) => Promise<DocumentKind> {
+): (text: string) => Promise<DocumentKind | null> {
   const doFetch: FetchLike = opts.fetch ?? ((url, init) => fetch(url, init));
-  return async (text: string, fileName: string): Promise<DocumentKind> => {
-    const heuristic = guessFromFilename(fileName);
-    if (text.trim().length < MIN_TEXT) return heuristic;
-    return (await askOllama(config, doFetch, text)) ?? heuristic;
+  return async (text: string): Promise<DocumentKind | null> => {
+    if (text.trim().length < MIN_TEXT) return null;
+    return askOllama(config, doFetch, text);
   };
 }
 

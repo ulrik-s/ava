@@ -47,6 +47,9 @@ export type DocumentId = z.infer<typeof documentIdSchema>;
 export const documentFolderIdSchema = brandedId<"DocumentFolderId">();
 export type DocumentFolderId = z.infer<typeof documentFolderIdSchema>;
 
+export const documentPartIdSchema = brandedId<"DocumentPartId">();
+export type DocumentPartId = z.infer<typeof documentPartIdSchema>;
+
 export const documentAnalysisSuggestionIdSchema = brandedId<"DocumentAnalysisSuggestionId">();
 export type DocumentAnalysisSuggestionId = z.infer<typeof documentAnalysisSuggestionIdSchema>;
 

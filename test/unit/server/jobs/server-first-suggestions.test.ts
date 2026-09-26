@@ -161,7 +161,9 @@ describe("classify-document → kontakt-/händelseförslag (server-first)", () =
       globalThis.fetch = realFetch;
     }
     expect(reads).toBe(1);
-    expect(prompts).toHaveLength(2);
+    // Rubriken "STÄMNINGSANSÖKAN" räcker för segmenteringen (#1220) → bara
+    // taggprompten går till LLM:en.
+    expect(prompts).toHaveLength(1);
     expect(prompts.every((p) => p.includes("Anna Andersson"))).toBe(true);
     expect(patches[0]).toMatchObject({ documentType: "STAMNING", tags: ["Tvist"], analysisModel: "ollama:test" });
   });

@@ -7,6 +7,8 @@
 export const KNOWN_KINDS = [
   "STAMNING",
   "KALLELSE",
+  "FUP",
+  "DELGIVNINGSKVITTO",
   "INLAGA",
   "DOM",
   "BEVIS",
@@ -18,6 +20,11 @@ export const KNOWN_KINDS = [
 ] as const;
 export type DocumentKind = (typeof KNOWN_KINDS)[number];
 
+/** True om `value` är en känd kategori-kod (annars t.ex. "Kostnadsräkning"/fritext). */
+export function isDocumentKind(value: unknown): value is DocumentKind {
+  return typeof value === "string" && (KNOWN_KINDS as readonly string[]).includes(value);
+}
+
 /**
  * Vad varje kategori betyder, i klartext — för LLM-prompten (#1156). De nakna
  * koderna räckte inte för en liten modell: `STAMNING` (utan ä) kändes inte
@@ -27,8 +34,10 @@ export type DocumentKind = (typeof KNOWN_KINDS)[number];
 export const KIND_DESCRIPTIONS: Readonly<Record<DocumentKind, string>> = {
   STAMNING: "stämningsansökan, ansökan om stämning",
   KALLELSE: "kallelse till förhandling, sammanträde eller huvudförhandling",
+  FUP: "förundersökningsprotokoll från polis eller åklagare (förhör, utredning i brottmål)",
+  DELGIVNINGSKVITTO: "delgivningskvitto eller mottagningsbevis som ska undertecknas och skickas tillbaka",
   INLAGA: "inlaga eller skrift till domstol eller myndighet: yttrande, svaromål, överklagande, bemötande",
-  DOM: "dom eller beslut från domstol eller myndighet (domslut, domskäl)",
+  DOM: "dom, beslut eller föreläggande från domstol eller myndighet (domslut, domskäl)",
   BEVIS: "bevisning, bilaga, fotografi, intyg som åberopas som bevis",
   FULLMAKT: "fullmakt att företräda någon",
   AVTAL: "avtal, kontrakt, hyresavtal, köpeavtal, överenskommelse",
@@ -50,6 +59,8 @@ export const KIND_DESCRIPTIONS: Readonly<Record<DocumentKind, string>> = {
 const FILENAME_RULES: ReadonlyArray<readonly [RegExp, DocumentKind]> = [
   [/(stamning|stämning)/, "STAMNING"],
   [/kallelse/, "KALLELSE"],
+  [/delgivning/, "DELGIVNINGSKVITTO"],
+  [/(\bfup\b|förundersökning|forundersokning)/, "FUP"],
   [/(inlaga|yttr|svaromål|svaromal|överklag|overklag|bemötande|bemotande)/, "INLAGA"],
   [/(dom|beslut|tingsr|domstol)/, "DOM"],
   [/(bevis|fotografi|bilaga|exhibit)/, "BEVIS"],
@@ -62,4 +73,41 @@ const FILENAME_RULES: ReadonlyArray<readonly [RegExp, DocumentKind]> = [
 export function guessFromFilename(name: string): DocumentKind {
   const lower = name.toLowerCase();
   return FILENAME_RULES.find(([re]) => re.test(lower))?.[1] ?? "OKLASSIFICERAT";
+}
+
+/**
+ * Specialvärde i `documentType` (ej en kategorikod: "Kostnadsräkning",
+ * "E-post", äldre fritext). Klassificeringen skriver aldrig över det, och
+ * sådana dokument får inga delar (#1220).
+ */
+export function isSpecialDocumentType(documentType: string | null | undefined): boolean {
+  return !!documentType && !isDocumentKind(documentType);
+}
+
+/**
+ * Visningsnamn per kategori — UI:t visar aldrig råa koder ("STAMNING"). DOM
+ * täcker även beslut och förelägganden (se `KIND_DESCRIPTIONS`), därav
+ * "Dom/beslut".
+ */
+export const KIND_LABELS: Readonly<Record<DocumentKind, string>> = {
+  STAMNING: "Stämning",
+  KALLELSE: "Kallelse",
+  FUP: "FUP",
+  DELGIVNINGSKVITTO: "Delgivningskvitto",
+  INLAGA: "Inlaga",
+  DOM: "Dom/beslut",
+  BEVIS: "Bevis",
+  FULLMAKT: "Fullmakt",
+  AVTAL: "Avtal",
+  FAKTURA: "Faktura",
+  RAPPORT: "Rapport",
+  OKLASSIFICERAT: "Övrigt",
+};
+
+/**
+ * Visningsnamn för ett `documentType`-värde. Kända koder → etikett; allt annat
+ * (specialvärden som "Kostnadsräkning"/"E-post", äldre fritext) visas som det är.
+ */
+export function kindLabel(value: string): string {
+  return isDocumentKind(value) ? KIND_LABELS[value] : value;
 }

@@ -17,6 +17,7 @@ export const ENTITY_NAME_BY_SOURCE_KEY: Record<string, string> = {
   matterContacts: "matterContact",
   documents: "document",
   documentFolders: "documentFolder",
+  documentParts: "documentPart",
   documentTemplates: "documentTemplate",
   documentAnalysisSuggestions: "documentAnalysisSuggestion",
   matterEventSuggestions: "matterEventSuggestion",

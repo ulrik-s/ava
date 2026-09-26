@@ -4,11 +4,12 @@
  */
 
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { groupPartsByDocument, kindCountsByName } from "@/lib/shared/document-part-kinds";
 import type { Document } from "@/lib/shared/schemas/document";
 import type {
   DocumentFolderId, DocumentId, MatterId, OrganizationId,
 } from "@/lib/shared/schemas/ids";
-import { documentPages, documents, matters, users } from "../db/schema";
+import { documentPages, documentParts, documents, matters, users } from "../db/schema";
 import type { AppDb } from "../db/types";
 import type {
   DocumentAccessRow, DocumentListRow, DocumentRepository,
@@ -75,15 +76,18 @@ export class DrizzleDocumentRepository
   }
 
   async listDocumentTypesForOrg(organizationId: OrganizationId): Promise<Array<{ type: string; count: number }>> {
-    const rows = await this.db
-      .select({ type: documents.documentType, count: sql<number>`count(*)` })
-      .from(documents).innerJoin(matters, eq(documents.matterId, matters.id))
-      .where(and(eq(matters.organizationId, organizationId), isNull(documents.deletedAt)))
-      .groupBy(documents.documentType);
-    return rows
-      .filter((r): r is { type: string; count: number } => Boolean(r.type))
-      .map((r) => ({ type: r.type, count: Number(r.count) }))
-      .sort((a, b) => a.type.localeCompare(b.type, "sv"));
+    const inOrg = and(eq(matters.organizationId, organizationId), isNull(documents.deletedAt));
+    const docs = await this.db
+      .select({ id: documents.id, documentType: documents.documentType })
+      .from(documents).innerJoin(matters, eq(documents.matterId, matters.id)).where(inOrg);
+    // Delarnas typer räknas (#1220) — ett sammansatt dokument syns under varje dels typ.
+    const partRows = await this.db
+      .select({ documentId: documentParts.documentId, kind: documentParts.kind, fromPage: documentParts.fromPage, toPage: documentParts.toPage })
+      .from(documentParts).innerJoin(documents, eq(documentParts.documentId, documents.id))
+      .innerJoin(matters, eq(documents.matterId, matters.id))
+      .where(and(inOrg, isNull(documentParts.deletedAt)));
+    const parts = groupPartsByDocument(partRows);
+    return kindCountsByName(docs.map((d) => ({ documentType: d.documentType, parts: parts.get(d.id) })));
   }
 
   async getByIdInOrg(id: DocumentId, organizationId: OrganizationId): Promise<DocumentAccessRow | null> {

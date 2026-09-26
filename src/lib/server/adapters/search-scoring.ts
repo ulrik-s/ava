@@ -4,7 +4,12 @@
  * (`postgres-search-index`). Samma sökterms-tolkning (`*`-wildcard), samma
  * metadata-poäng (filnamn/typ/sammanfattning) och samma facett-räkning — så
  * rankning och typ-badges beter sig lika oavsett omfång.
+ *
+ * Typfilter och facetter går på dokumentets DELAR (#1220): ett sammansatt
+ * dokument träffar filtret om någon del har typen och räknas i varje dels typ.
  */
+
+import { countKinds, type KindCarrier, kindsOf } from "@/lib/shared/document-part-kinds";
 
 /**
  * Kompilerad sökterm — antingen substring-matchning (snabb path) eller
@@ -76,28 +81,23 @@ export function metadataScore(d: ScorableMeta, matcher: NeedleMatcher): number {
   return hit(matcher, metaHaystack(d), 1) + hit(matcher, d.fileName ?? "", 2) + hit(matcher, d.documentType ?? "", 1);
 }
 
-/** Facet-räknare per documentType (för typ-filter-badges), sorterad fallande. */
+/** Facet-räknare per kategori (delarnas typer, #1220), sorterad fallande. */
 export function computeFacetEntries(
-  queryMatches: ReadonlyArray<{ documentType?: string | null | undefined }>,
+  queryMatches: readonly KindCarrier[],
 ): Array<{ type: string; count: number }> {
-  const facetCounts = new Map<string, number>();
-  for (const d of queryMatches) {
-    if (!d.documentType) continue;
-    facetCounts.set(d.documentType, (facetCounts.get(d.documentType) ?? 0) + 1);
-  }
-  return [...facetCounts.entries()]
+  return [...countKinds(queryMatches).entries()]
     .map(([type, count]) => ({ type, count }))
     .sort((a, b) => b.count - a.count || a.type.localeCompare(b.type, "sv"));
 }
 
 /**
  * Typ-filtret som predikat. Tom lista/undefined = alla typer; annars bara
- * dokument vars documentType finns i listan (dokument utan typ faller bort).
+ * dokument där NÅGON del (eller documentType, utan delar) finns i listan.
  */
 export function documentTypeFilter(
   documentTypes: readonly string[] | undefined,
-): (d: { documentType?: string | null | undefined }) => boolean {
+): (d: KindCarrier) => boolean {
   if (!documentTypes || documentTypes.length === 0) return () => true;
   const allowed = new Set(documentTypes);
-  return (d) => typeof d.documentType === "string" && allowed.has(d.documentType);
+  return (d) => kindsOf(d).some((k) => allowed.has(k));
 }

@@ -15,11 +15,13 @@ import { relations, sql } from "drizzle-orm";
 import {
   bigint, bigserial, boolean, customType, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uuid,
 } from "drizzle-orm/pg-core";
+import type { DocumentKind } from "@/lib/shared/document-kind";
 import type { KostnadsrakningStatus } from "@/lib/shared/kostnadsrakning-flow";
 import type { DispatchChannel, DispatchStatus, ExpectedReceivableStatus } from "@/lib/shared/schemas/billing";
 import type {
   CalendarEventKind, CalendarEventVisibility, TaskPriority, TaskStatus,
 } from "@/lib/shared/schemas/calendar";
+import type { DocumentPartSource } from "@/lib/shared/schemas/document";
 import type {
   BillingRunRecipient, BillingRunStatus, BillingRunType, ContactType, ExpenseKind, InvoiceStatus,
   InvoiceType, MatterRole, MatterStatus, PaymentMethod, PaymentPlanStatus, ReminderType,
@@ -28,7 +30,7 @@ import type {
 import type { HourlyRates } from "@/lib/shared/schemas/hourly-rates";
 import type {
   AccontoDeductionId, BillingRunId, CalendarEventId, ConflictCheckId, ContactId,
-  DocumentAnalysisSuggestionId, DocumentFolderId, DocumentId,
+  DocumentAnalysisSuggestionId, DocumentFolderId, DocumentId, DocumentPartId,
   DocumentTemplateId, ExpenseId, InvoiceDispatchId, InvoiceId, MatterContactId, MatterEventSuggestionId,
   MatterId, OfficeId, OrganizationId, OrgPreferenceId, PaymentId, PaymentPlanId, PaymentPlanReminderId,
   ServiceNoteId, TaskId, TimeEntryId, UserId, UserPreferenceId, WriteOffId,
@@ -386,6 +388,28 @@ export const documents = pgTable("documents", {
   analysisModel: text("analysis_model"),
   analysisError: text("analysis_error"),
 }, (t) => [index("documents_matter_idx").on(t.matterId)]);
+
+/**
+ * Delar av ett sammansatt dokument (#1220) — "kallelse + stämning + FUP" i EN
+ * fil. Kategori + sidintervall (1-baserat, inklusive); filen delas aldrig.
+ * Synkad entitet: org härleds via `matter_id` (speglar dokumentets ärende).
+ * `source` = AUTO (segmenteringen) | MANUAL (användaren rättade typen).
+ */
+export const documentParts = pgTable("document_parts", {
+  ...baseColumns,
+  id: uuid("id").primaryKey().$type<DocumentPartId>(),
+  documentId: uuid("document_id").notNull().$type<DocumentId>()
+    .references(() => documents.id, { onDelete: "cascade" }),
+  matterId: uuid("matter_id").notNull().$type<MatterId>(),
+  ordinal: integer("ordinal").notNull(),
+  kind: text("kind").notNull().$type<DocumentKind>(),
+  fromPage: integer("from_page").notNull(),
+  toPage: integer("to_page").notNull(),
+  source: text("source").notNull().$type<DocumentPartSource>(),
+}, (t) => [
+  index("document_parts_document_idx").on(t.documentId),
+  index("document_parts_matter_idx").on(t.matterId),
+]);
 
 /** Postgres `tsvector` (fulltext-sökvektor) — läses aldrig som värde, bara i frågor. */
 const tsvector = customType<{ data: string }>({ dataType: () => "tsvector" });

@@ -17,6 +17,11 @@ import { demoDataBaseUrl } from "@/lib/client/demo/demo-data-base";
 
 export interface OpenDocumentDeps {
   doc: { id: string; storagePath?: string | null; fileName?: string };
+  /**
+   * Öppna på sidan N (#1220 — en del i ett sammansatt dokument). Läggs som
+   * `#page=N` på URL:en (PDF-visarnas öppningsparameter, även för blob:-URL:er).
+   */
+  page?: number;
   /** Demo-flagga från env. Bygg-tid: NEXT_PUBLIC_DEMO_BUILD === "1". */
   isDemo: boolean;
   /** "user/repo" för demo. Ignoreras i självhostad. */
@@ -36,10 +41,15 @@ export interface OpenDocumentDeps {
   fetchBlob?: () => Promise<Blob | null>;
 }
 
+/** `#page=N` (PDF open parameter) när en sida begärts; annars URL:en orörd. */
+export function withPage(url: string, page: number | undefined): string {
+  return page && page > 1 ? `${url}#page=${page}` : url;
+}
+
 /** Öppna en blob i ny flik (charset-taggad för text). Revoke efter 60 s. */
-function openBlobUrl(blob: Blob, storagePath: string, openUrl: (url: string) => void): void {
+function openBlobUrl(blob: Blob, storagePath: string, openUrl: (url: string) => void, page?: number): void {
   const url = URL.createObjectURL(withUtf8CharsetIfText(blob, storagePath));
-  openUrl(url);
+  openUrl(withPage(url, page));
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
@@ -61,7 +71,7 @@ export async function openDocument(deps: OpenDocumentDeps): Promise<"opened-gh-p
     // ger same-origin när så är fallet. Här stod förr en egen kopia av
     // github.io-konstruktionen, vilket öppnade dokument mot LIVE-demon även när
     // man körde en lokalt serverad `out/` (#932).
-    openUrl(`${demoDataBaseUrl(demoRepo ?? "")}/${storagePath}`);
+    openUrl(withPage(`${demoDataBaseUrl(demoRepo ?? "")}/${storagePath}`, deps.page));
     return "opened-gh-pages";
   }
 
@@ -69,7 +79,7 @@ export async function openDocument(deps: OpenDocumentDeps): Promise<"opened-gh-p
   if (fetchBlob) {
     const blob = await fetchBlob();
     if (!blob) { notifyError(`Dokumentet kunde inte hämtas (${storagePath}).`); return "error"; }
-    openBlobUrl(blob, storagePath, openUrl);
+    openBlobUrl(blob, storagePath, openUrl, deps.page);
     return "opened-blob";
   }
 

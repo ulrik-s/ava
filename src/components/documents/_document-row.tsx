@@ -7,6 +7,7 @@ import { useCapabilities } from "@/lib/client/capabilities/use-capabilities";
 import { loadFirmaConfig } from "@/lib/client/firma/firma-config";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import type { DocumentId, DocumentFolderId, MatterId, UserId } from "@/lib/shared/schemas/ids";
+import { DocumentPartsList, documentKindsLabel, type DocumentPartView } from "./_document-parts";
 import { DocumentTags } from "./_document-tags";
 import { formatFileSize } from "./_drag-helpers";
 import { SyncStatusBadge, type SyncStatus } from "./_sync-badge";
@@ -27,6 +28,8 @@ export interface DocumentRecord {
   uploadedBy: { name: string | null } | null;
   title?: string | null | undefined;
   documentType?: string | null | undefined;
+  /** Delar i ett sammansatt dokument (#1220), sidordning. Tom/saknas = inga delar. */
+  parts?: readonly DocumentPartView[] | undefined;
   direction?: "INKOMMANDE" | "UTGAENDE" | null | undefined;
   recipient?: "DOMSTOL" | "MOTPART" | "KLIENT" | "FORSAKRING" | "MYNDIGHET" | "OVRIGT" | null | undefined;
   tags?: readonly string[] | undefined;
@@ -113,6 +116,7 @@ export function DocumentRow({
               )}
               <SyncStatusBadge status={syncStatus} />
             </div>
+            <DocumentPartsList doc={doc} />
             <DocumentTags documentId={doc.id} matterId={doc.matterId} tags={doc.tags ?? []} />
           </div>
         </td>
@@ -314,13 +318,14 @@ function RecipientBadge({ recipient, direction }: { recipient?: DocumentRecord["
 /** Meta-raden under filnamnet (typ-badge, filnamn, analys-status). Utbruten
  *  ur DocumentNameButton — alla villkorade `&&`-render-grenar bor här. */
 function DocumentNameMeta({ doc, isAnalyzing, isWaitingAnalysis }: { doc: DocumentRecord; isAnalyzing: boolean; isWaitingAnalysis: boolean }) {
+  const kinds = documentKindsLabel(doc);
   return (
     <span className="flex items-center gap-1.5 text-xs text-gray-500 font-normal min-w-0">
       <DirectionBadge direction={doc.direction} />
       <RecipientBadge recipient={doc.recipient} direction={doc.direction} />
-      {doc.documentType && (
+      {kinds && (
         <span className="inline-block rounded-full bg-purple-50 text-purple-700 px-1.5 py-0.5 text-[10px] font-medium flex-shrink-0">
-          {doc.documentType}
+          {kinds}
         </span>
       )}
       {doc.title && <span className="truncate">{doc.fileName}</span>}

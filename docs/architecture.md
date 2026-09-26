@@ -203,6 +203,7 @@ contacts/<id>.json
 matter-contacts/<id>.json
 documents/<id>.json                 # metadata
 documents/content/<id>.<ext>         # binärfil (PDF/DOCX)
+document-parts/<id>.json             # delar av sammansatta dokument (#1220)
 time-entries/<id>.json
 expenses/<id>.json
 invoices/<id>.json
@@ -256,6 +257,20 @@ bytes, extraherar text (pdfjs/mammoth) och frågar en ollama-tjänst bakom
 docker-`--profile llm` (`AVA_LLM_ENDPOINT`/`AVA_LLM_MODEL`). Fail-soft hela
 vägen → filnamns-heuristik (`guessFromFilename`) om LLM:en är av/nere. Ingen
 användare behöver ladda ner en LLM lokalt.
+
+**Sammansatta dokument (#1220).** En PDF innehåller ofta flera dokument efter
+varandra ("kallelse + stämning + FUP", "delgivningskvitto + dom"). Filen delas
+aldrig; jobbet segmenterar sidorna till **delar** (`document_parts`: kategori +
+sidintervall, `source` AUTO/MANUAL) — rubrikheuristik per sida
+(`src/lib/shared/document-segmentation.ts`) + LLM bara på kandidat-startsidor
+utan entydig rubrik (tak 12 anrop/dokument; utöver det bara heuristik).
+`documentType` = första delens typ (bakåtkompatibelt), utom specialvärden
+(Kostnadsräkning, E-post) som aldrig skrivs över. Delarna är en synkad entitet
+(org via `matter_id`); användaren kan rätta en dels typ i dokumentpanelen
+(→ MANUAL, bevaras vid omklassning så länge sidantalet är oförändrat). Sökningen
+filtrerar/facetterar per del och visar träffens del ("Stämning, s. 5").
+I server-first äger servern klassificeringen: klientens filnamnsgissning köas
+bara när ingen server-jobbkö har fått bytes:en (kapabiliteten `jobs`).
 
 Klienten (web/demo/offline) har **ingen** lokal LLM längre (den WebGPU-baserade
 `@mlc-ai/web-llm`-modellen togs bort i #518 Fas 5). Demo/offline saknar server-

@@ -3,6 +3,7 @@
  * till query-engine:n (uploadedBy/matter-relations registrerade i relations.ts).
  */
 
+import { groupPartsByDocument, kindCountsByName, type PartLike } from "@/lib/shared/document-part-kinds";
 import type { Document } from "@/lib/shared/schemas/document";
 import type {
   DocumentFolderId, DocumentId, MatterId, OrganizationId,
@@ -13,12 +14,12 @@ import type {
 } from "./document-repository";
 import { InMemoryRepository } from "./in-memory-repository";
 
-export type DocumentRepoSource = Pick<IDataStore, "documents">;
+export type DocumentRepoSource = Pick<IDataStore, "documents" | "documentParts">;
 
 export class InMemoryDocumentRepository
   extends InMemoryRepository<Document>
   implements DocumentRepository {
-  constructor(store: DocumentRepoSource, now?: () => Date) {
+  constructor(private readonly store: DocumentRepoSource, now?: () => Date) {
     super(store.documents, now ?? (() => new Date()));
   }
 
@@ -50,15 +51,10 @@ export class InMemoryDocumentRepository
   async listDocumentTypesForOrg(organizationId: OrganizationId): Promise<Array<{ type: string; count: number }>> {
     const docs = (await this.delegate.findMany({
       where: { matter: { organizationId } },
-    })) as Array<{ documentType?: string | null }>;
-    const counts = new Map<string, number>();
-    for (const d of docs) {
-      if (!d.documentType) continue;
-      counts.set(d.documentType, (counts.get(d.documentType) ?? 0) + 1);
-    }
-    return [...counts.entries()]
-      .map(([type, count]) => ({ type, count }))
-      .sort((a, b) => a.type.localeCompare(b.type, "sv"));
+    })) as Array<{ id: string; documentType?: string | null; deletedAt?: unknown }>;
+    // Delarnas typer räknas (#1220) — ett sammansatt dokument syns under varje dels typ.
+    const parts = groupPartsByDocument((await this.store.documentParts.findMany({})) as PartLike[]);
+    return kindCountsByName(docs.filter((d) => !d.deletedAt).map((d) => ({ documentType: d.documentType, parts: parts.get(d.id) })));
   }
 
   async getByIdInOrg(id: DocumentId, organizationId: OrganizationId): Promise<DocumentAccessRow | null> {
