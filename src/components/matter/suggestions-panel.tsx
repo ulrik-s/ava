@@ -31,7 +31,8 @@ export function SuggestionsPanel({ matterId }: SuggestionsPanelProps) {
 
   if (groups.isLoading) return null;
   const list = (groups.data ?? []) as SuggestionGroup[];
-  if (list.length === 0) return null;
+  // Panel-UI (#1213): en tom flik ska förklara sig, inte vara blank.
+  if (list.length === 0) return <p className="text-sm text-gray-500">Inga föreslagna kontakter. AVA föreslår parter ur dokument som laddas upp.</p>;
 
   return (
     <div className="bg-amber-50 border border-amber-200 rounded-lg lg:col-span-2">

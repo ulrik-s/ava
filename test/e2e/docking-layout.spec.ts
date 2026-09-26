@@ -39,7 +39,7 @@ const PANEL_PAGES = [
   { name: "rapporter", path: () => "/reports/", tab: "Veckor" },
   { name: "kalendern", path: () => "/calendar/", tab: "Uppgifter" },
   { name: "jobbkön", path: () => "/jobs/", tab: "Historik" },
-  { name: "min profil", path: () => "/profile/", tab: "Anslutna tjänster" },
+  { name: "min profil", path: () => "/profile/", tab: "Uppgifter" }, // Anslutna tjänster finns bara med integrationer (#1213)
   { name: "betalfilsimporten", path: () => "/payments/import/", tab: "Matchning" },
 ] as const;
 

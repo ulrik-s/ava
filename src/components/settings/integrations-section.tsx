@@ -17,14 +17,21 @@ import "@/lib/client/integrations/office365-connector"; // ⚠ side-effect: regi
 import { listConnectors } from "@/lib/client/integrations/registry";
 import type { ConnectionStatus, IntegrationConnector } from "@/lib/client/integrations/types";
 
-export function IntegrationsSection() {
+/**
+ * Finns något att ansluta? Kräver registrerade connectors OCH en server —
+ * ADR 0027: mejl/kalender/ledger-anslutningar döljs i demon
+ * (capabilities.mailSync/ledger = false). Profilen visar panelen bara då (#1213).
+ */
+export function useIntegrationsAvailable(): boolean {
   const caps = useCapabilities();
+  return listConnectors().length > 0 && (caps.mailSync || caps.ledger);
+}
+
+export function IntegrationsSection() {
+  const available = useIntegrationsAvailable();
   const [connectors] = useState(() => listConnectors());
 
-  if (connectors.length === 0) return null;
-  // ADR 0027: externa tjänst-anslutningar (mejl/kalender/ledger) kräver en
-  // server → dölj affordansen i demon (capabilities.mailSync/ledger = false).
-  if (!caps.mailSync && !caps.ledger) return null;
+  if (!available) return null;
 
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
