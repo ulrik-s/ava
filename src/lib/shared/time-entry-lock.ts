@@ -28,3 +28,13 @@ export function isLockedEntry(t: LockableEntry, ownRunId?: BillingRunId): boolea
   if (ownRunId !== undefined && t.frozenByBillingRunId === ownRunId) return false;
   return t.frozenAt != null || t.frozenByBillingRunId != null;
 }
+
+/**
+ * Låst direkt mot en faktura, utan körning — rättshjälpens rådgivningstimme
+ * (#1205). Den är redan fakturerad klienten och ligger utanför rättshjälpen,
+ * så den räknas inte mot täckningstaket (#1210). Poster som frysts av en
+ * körning (kostnadsräkning/slutfaktura) är arbete i uppdraget och räknas.
+ */
+export function isInvoicedOutsideCoverage(t: LockableEntry): boolean {
+  return t.frozenAt != null && t.frozenByBillingRunId == null;
+}

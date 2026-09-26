@@ -106,4 +106,42 @@ describe("TimeEntryRepository coverageUsageForMatter(s) — täcknings-tak (#793
     expect(batch[mA]).toEqual({ billableMinutes: 90, billableValueOre: 375000 });
     expect(batch[mB]).toEqual({ billableMinutes: 120, billableValueOre: 500000 });
   });
+
+  it("in-memory: rådgivningstimmen (låst direkt mot faktura) räknas inte mot taket; KR-frysta poster gör (#1210)", async () => {
+    const mId = uuidv7(), userId = uuidv7();
+    const source = prebakeJoins({
+      matters: [{ id: mId, organizationId: "org-1", matterNumber: "2026-1", title: "A" }],
+      users: [{ id: userId, name: "Anna" }],
+      timeEntries: [
+        { id: uuidv7(), userId, matterId: mId, minutes: 390, hourlyRate: 162600, billable: true, date: new Date("2026-06-02") },
+        { id: uuidv7(), userId, matterId: mId, minutes: 60, hourlyRate: 162600, billable: true, date: new Date("2026-06-01"), frozenAt: new Date("2026-06-01") },
+        { id: uuidv7(), userId, matterId: mId, minutes: 42, hourlyRate: 148700, billable: true, date: new Date("2026-06-03"), frozenAt: new Date("2026-06-10"), frozenByBillingRunId: uuidv7() },
+      ],
+    } as DemoSource);
+    const repo = new InMemoryTimeEntryRepository(new LocalStore(source, async () => {}));
+    const expected = { billableMinutes: 432, billableValueOre: 1_056_900 + 104_090 };
+    expect(await repo.coverageUsageForMatter(asId<"MatterId">(mId))).toEqual(expected);
+    expect((await repo.coverageUsageForMatters([asId<"MatterId">(mId)]))[mId]).toEqual(expected);
+  });
+});
+
+describe("TimeEntryRepository coverageUsageForMatter(s) — Drizzle (pglite, #1210)", () => {
+  let handle: TestDbHandle;
+  beforeAll(async () => { handle = await createTestDb(); });
+  afterAll(async () => { await handle.close(); });
+
+  it("rådgivningstimmen (frozenAt utan körning) räknas inte mot taket", async () => {
+    const db = handle.db;
+    const org = uuidv7(), mId = uuidv7(), userId = uuidv7();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const v = (o: Record<string, unknown>) => ({ version: 1, ...o }) as any;
+    await db.insert(matters).values(v({ id: mId, organizationId: org, matterNumber: "2026-1", title: "T" }));
+    await db.insert(users).values(v({ id: userId, organizationId: org, email: "a@x", name: "Anna" }));
+    await db.insert(timeEntries).values(v({ id: uuidv7(), userId, matterId: mId, minutes: 390, description: "arbete", hourlyRate: 162600, billable: true, date: new Date("2026-06-02") }));
+    await db.insert(timeEntries).values(v({ id: uuidv7(), userId, matterId: mId, minutes: 60, description: "Rådgivning", hourlyRate: 162600, billable: true, date: new Date("2026-06-01"), frozenAt: new Date("2026-06-01") }));
+    const repo = new DrizzleTimeEntryRepository(handle.db);
+    const expected = { billableMinutes: 390, billableValueOre: 1_056_900 };
+    expect(await repo.coverageUsageForMatter(asId<"MatterId">(mId))).toEqual(expected);
+    expect((await repo.coverageUsageForMatters([asId<"MatterId">(mId)]))[mId]).toEqual(expected);
+  });
 });
