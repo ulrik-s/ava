@@ -20,6 +20,7 @@ import { canTransition, transitionErrorMessage } from "@/lib/shared/invoice-stat
 import { ocrFromInvoiceNumber } from "@/lib/shared/ocr-reference";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { pageEnvelope } from "@/lib/shared/paginate";
+import { RADGIVNING_INVOICE_NOTES } from "@/lib/shared/radgivning-entry";
 import { computeRadgivningsavgift, RADGIVNING_DESCRIPTION, type Radgivningsavgift } from "@/lib/shared/rattshjalp";
 import type { Invoice, Payment, PaymentPlan, TimeEntry, WriteOff } from "@/lib/shared/schemas/billing";
 import { invoiceStatusSchema, invoiceTypeSchema, type InvoiceStatus } from "@/lib/shared/schemas/enums";
@@ -197,7 +198,7 @@ export const invoiceRouter = router({
           amount: grossOre, vatOre, vatBreakdown: [{ kind: "arvode", vatRate: 2500, netOre, vatOre }],
           invoiceType: "STANDARD", status: "DRAFT", invoiceDate: when, // "Skapad" tills den skickas (#1138)
           dueDate: null,
-          notes: "Rådgivningstimme enligt rättshjälpstaxan (1 tim).",
+          notes: RADGIVNING_INVOICE_NOTES,
         } satisfies Partial<Invoice>);
         await repos.matters.update(input.matterId, { radgivningBetaldAt: when } satisfies Partial<Matter>);
         await emit.invoiceCreated(ctx, invoice);

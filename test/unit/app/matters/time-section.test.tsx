@@ -37,6 +37,9 @@ const orgSettingsQuery = {
 const billingRunQuery = { data: { runs: [] as Array<Record<string, unknown>> }, isLoading: false };
 const createMutate = vi.fn();
 const updateMutate = vi.fn();
+// Rådgivningspostens status (#1207): `missing` = legacy-ärende utan låst post.
+const radgivningStatusQuery: { data: unknown } = { data: undefined };
+const markMutate = vi.fn();
 const noopMut = () => ({ mutate: vi.fn(), isPending: false });
 
 vi.mock("@/lib/client/trpc", () => ({
@@ -47,6 +50,8 @@ vi.mock("@/lib/client/trpc", () => ({
       create: { useMutation: () => ({ mutate: createMutate, isPending: false }) },
       update: { useMutation: () => ({ mutate: updateMutate, isPending: false }) },
       delete: { useMutation: noopMut },
+      radgivningStatus: { useQuery: () => radgivningStatusQuery },
+      markAsRadgivning: { useMutation: () => ({ mutate: markMutate, isPending: false }) },
     },
     prefs: {
       get: { useQuery: () => ({ data: undefined, isLoading: false }) },
@@ -66,6 +71,7 @@ const matterId = asId<"MatterId">("m1");
 beforeEach(() => {
   vi.clearAllMocks();
   billingRunQuery.data.runs = [];
+  radgivningStatusQuery.data = undefined;
 });
 
 describe("TimeSection — arvodeskategori (#953)", () => {
@@ -315,5 +321,39 @@ describe("TimeSection — förslag om standardåtgärder (#958)", () => {
     ];
     render(<TimeSection matterId={matterId} paymentMethod="RATTSHJALP" matterStatus="CLOSED" />);
     expect(screen.queryByText(/som inte är registrerade/i)).not.toBeInTheDocument();
+  });
+});
+
+describe("TimeSection — Markera som rådgivning (#1207)", () => {
+  const MARK = "Markera som rådgivning";
+
+  it("visas på olåsta debiterbara rader när ärendet saknar låst rådgivningspost", () => {
+    radgivningStatusQuery.data = { kind: "missing", invoiceId: "inv-r" };
+    render(<TimeSection matterId={matterId} paymentMethod="RATTSHJALP" />);
+    expect(screen.getAllByText(MARK)).toHaveLength(3);
+  });
+
+  it("visas inte när ärendet redan har en rådgivningspost", () => {
+    radgivningStatusQuery.data = { kind: "present", invoiceId: "inv-r" };
+    render(<TimeSection matterId={matterId} paymentMethod="RATTSHJALP" />);
+    expect(screen.queryByText(MARK)).toBeNull();
+  });
+
+  it("visas inte utan status (t.ex. inte rättshjälp)", () => {
+    render(<TimeSection matterId={matterId} paymentMethod="PRIVAT" />);
+    expect(screen.queryByText(MARK)).toBeNull();
+  });
+
+  it("bekräftar först — avbryt markerar inte, bekräfta markerar raden", () => {
+    radgivningStatusQuery.data = { kind: "missing", invoiceId: "inv-r" };
+    const confirmSpy = vi.spyOn(globalThis, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
+    render(<TimeSection matterId={matterId} paymentMethod="RATTSHJALP" />);
+    fireEvent.click(screen.getAllByText(MARK)[0]!);
+    expect(markMutate).not.toHaveBeenCalled();
+    expect(confirmSpy.mock.calls[0]![0]).toContain("delas");
+    fireEvent.click(screen.getAllByText(MARK)[0]!);
+    expect(markMutate).toHaveBeenCalledTimes(1);
+    expect(markMutate.mock.calls[0]![0]).toEqual({ id: expect.stringMatching(/^t[123]$/) });
+    confirmSpy.mockRestore();
   });
 });

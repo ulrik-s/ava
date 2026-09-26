@@ -12,8 +12,9 @@ import { trpc } from "@/lib/client/trpc";
 import { formatMinutes } from "@/lib/client/utils";
 import { isPerDayKind } from "@/lib/shared/brottmalstaxa";
 import type { MatterStatus, PaymentMethod, TimeEntryKind } from "@/lib/shared/schemas/enums";
-import type { InvoiceId, MatterId, TimeEntryId } from "@/lib/shared/schemas/ids";
+import type { BillingRunId, InvoiceId, MatterId, TimeEntryId } from "@/lib/shared/schemas/ids";
 import type { StandardAtgard } from "@/lib/shared/standard-atgard";
+import { useMarkRadgivning, type MarkRadgivning } from "./_radgivning-entry";
 import { StandardAtgardSuggestions } from "./_standard-atgard-suggestions";
 
 interface Props {
@@ -48,6 +49,7 @@ interface TimeEntryRow {
   invoice?: { id: InvoiceId; invoiceNumber?: string | null } | null;
   /** Satt när posten ingick i en slutfaktura eller kostnadsräkning — låst. */
   frozenAt?: Date | string | null;
+  frozenByBillingRunId?: BillingRunId | null;
   createdAt?: Date | string | null;
   updatedAt?: Date | string | null;
 }
@@ -62,6 +64,7 @@ function fmtDateTime(v: Date | string | null | undefined): string {
 export function TimeSection({ matterId, isTaxeArende, paymentMethod, matterStatus }: Props) {
   const isCoverage = isCoverageMethod(paymentMethod);
   const atgarder = useStandardAtgarder(paymentMethod);
+  const radgivning = useMarkRadgivning(matterId, paymentMethod);
   const utils = trpc.useUtils();
   const timeEntries = trpc.timeEntry.list.useQuery({ matterId });
   // EN källa för både tabellen och förslagsraden (#958) — annars kunde de visa
@@ -143,7 +146,7 @@ export function TimeSection({ matterId, isTaxeArende, paymentMethod, matterStatu
     // Vid framtida rättshjälp-stöd hanteras kopplingen via separat invoice-
     // line-modell, inte invoiceId på timeEntry.
     { key: "actions", label: "", sortable: false, align: "right", hideable: false,
-      render: (e) => <TimeRowActions entry={e} onEdit={startEdit} onDelete={confirmDelete} />,
+      render: (e) => <TimeRowActions entry={e} onEdit={startEdit} onDelete={confirmDelete} radgivning={radgivning} />,
     },
     // Katalog-fält — finns på posten men visas inte i default-vyn. Användaren
     // aktiverar via "+ Visa kolumn → Tillgängliga fält".
@@ -232,8 +235,8 @@ export function TimeSection({ matterId, isTaxeArende, paymentMethod, matterStatu
  * ingår i slutfaktura eller kostnadsräkning. Förr visades Ändra ändå och
  * sparandet föll tyst — "inget händer".
  */
-function TimeRowActions({ entry, onEdit, onDelete }: {
-  entry: TimeEntryRow; onEdit: (e: TimeEntryRow) => void; onDelete: (id: TimeEntryId) => void;
+function TimeRowActions({ entry, onEdit, onDelete, radgivning }: {
+  entry: TimeEntryRow; onEdit: (e: TimeEntryRow) => void; onDelete: (id: TimeEntryId) => void; radgivning: MarkRadgivning;
 }) {
   if (entry.frozenAt) {
     return (
@@ -244,6 +247,12 @@ function TimeRowActions({ entry, onEdit, onDelete }: {
   }
   return (
     <span className="whitespace-nowrap">
+      {radgivning.canMark(entry) && (
+        <button onClick={() => radgivning.mark(entry.id)} className="text-xs text-blue-600 hover:underline mr-3"
+          title="Lås posten som rättshjälpens rådgivningstimme (#1207)">
+          Markera som rådgivning
+        </button>
+      )}
       <button onClick={() => onEdit(entry)} className="text-xs text-gray-500 hover:text-blue-600 hover:underline mr-3">Ändra</button>
       <button onClick={() => onDelete(entry.id)} className="text-xs text-red-500 hover:underline">Ta bort</button>
     </span>

@@ -42,6 +42,7 @@ vi.mock("@/lib/client/trpc", () => {
         listOrgDefaults: { useQuery: () => ({ data: null }) },
       },
       timeEntry: {
+        radgivningStatus: { useQuery: () => ({ data: undefined }) }, markAsRadgivning: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
         list: {
           useQuery: () => ({
             data: {

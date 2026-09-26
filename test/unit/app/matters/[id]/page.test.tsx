@@ -65,6 +65,7 @@ vi.mock("@/lib/client/trpc", () => ({
       update: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
     timeEntry: {
+      radgivningStatus: { useQuery: () => ({ data: undefined }) }, markAsRadgivning: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       list: { useQuery: () => timeQuery },
       create: { useMutation: () => stubs.createTimeEntry },
       update: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },

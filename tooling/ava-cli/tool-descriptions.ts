@@ -224,6 +224,8 @@ const DESCRIPTIONS: Readonly<Record<string, string>> = {
   "timeEntry.update": "Uppdatera en tidspost.",
   "timeEntry.delete": "Radera en tidspost.",
   "timeEntry.report": "Tidsrapport aggregerad över en period.",
+  "timeEntry.radgivningStatus": "Visa om ett rättshjälpsärendes rådgivningsfaktura saknar låst rådgivningspost (missing) eller redan har en (present).",
+  "timeEntry.markAsRadgivning": "Markera en befintlig debiterbar tidspost som rättshjälpens rådgivningstimme: låses mot rådgivningsfakturan och yrkas aldrig i kostnadsräkningen. Poster över 60 min delas. Kräver att ärendet saknar låst rådgivningspost.",
 
   // ── Att göra-vy ──────────────────────────────────────────────────
   "todo.list": "Sammanställd att göra-lista: uppgifter, frister och kalenderhändelser som kräver åtgärd.",
