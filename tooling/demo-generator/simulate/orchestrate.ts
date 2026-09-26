@@ -88,7 +88,7 @@ interface SeedLookup {
 function buildLookup(seed: Any): SeedLookup {
   const users = (seed.users ?? [])
     .filter((u: Any) => typeof u.id === "string")
-    .map((u: Any) => ({ id: String(u.id), rateOre: Number(u.hourlyRate ?? 0) || 0 }));
+    .map((u: Any) => ({ id: String(u.id), rateOre: Number(u.hourlyRates?.ARBETE ?? 0) || 0 }));
   return { users, matterContacts: seed.matterContacts ?? [], contacts: seed.contacts ?? [] };
 }
 

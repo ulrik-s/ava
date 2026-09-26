@@ -147,9 +147,9 @@ describe("renderFakturaPdf — samma uträkning och deltabeller som HTML:en (#12
     const at = (s: string) => texts.indexOf(s);
     // Kategorirubriken står både i sammanställningen och som deltabellens rubrik
     // (sista förekomsten) — efter arvodets delsumma.
-    expect(texts.lastIndexOf(toWinAnsi("Tidsspillan — vardag 08–18"))).toBeGreaterThan(at("Summa arvode"));
-    expect(at("Summa arvode")).toBeGreaterThan(-1);
-    expect(at(toWinAnsi("Summa tidsspillan — vardag 08–18"))).toBeGreaterThan(-1);
+    expect(texts.lastIndexOf("Tidsspillan")).toBeGreaterThan(at("Summa timarvode"));
+    expect(at("Summa timarvode")).toBeGreaterThan(-1);
+    expect(at("Summa tidsspillan")).toBeGreaterThan(-1);
     expect(texts).toContain(toWinAnsi(v.timeGroups[0]?.lines[0]?.rate ?? "saknas"));
   });
 });

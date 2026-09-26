@@ -41,7 +41,7 @@ function makeCaller(entries: readonly EntrySpec[], paymentMethod = "OFFENTLIGT_U
   const ds = new DemoDataStore({
     organizations: [{ id: "org-1", name: "X" }],
     matters: [{ id: "m-1", organizationId: "org-1", matterNumber: "2026-0001", title: "Brottmål", status: "ACTIVE", paymentMethod, createdAt: new Date(), ...matterExtra }],
-    users: [{ id: "u-1", organizationId: "org-1", email: "a@x", name: "Anna", role: "ADMIN", hourlyRate: 250_000 }],
+    users: [{ id: "u-1", organizationId: "org-1", email: "a@x", name: "Anna", role: "ADMIN", hourlyRates: { ARBETE: 250_000 } }],
     timeEntries: entries.map((e) => ({
       id: e.id, organizationId: "org-1", userId: "u-1", matterId: "m-1",
       date: e.date, minutes: e.minutes, description: "Post",

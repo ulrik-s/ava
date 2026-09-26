@@ -1,6 +1,6 @@
 /**
  * In-memory `TimeEntryRepository` (ADR 0020) — browser/offline-impl. Ärver
- * bas-CRUD; `listUnbilled` använder samma include som routern (user.hourlyRate),
+ * bas-CRUD; `listUnbilled` filtrerar valda ofakturerade poster,
  * `flagBilled` bulk-uppdaterar invoiceId via delegaten.
  */
 
@@ -10,7 +10,7 @@ import type { IDataStore } from "../data-store/IDataStore";
 import { InMemoryRepository } from "./in-memory-repository";
 import type {
   LawyerReportTimeEntry, TimeEntryListFilter, TimeEntryListResult, TimeEntryListRow,
-  TimeEntryReportFilter, TimeEntryReportRow, TimeEntryRepository, UnbilledTimeEntry,
+  TimeEntryReportFilter, TimeEntryReportRow, TimeEntryRepository,
 } from "./time-entry-repository";
 
 /** Delegaten repot behöver — uppfylls av `IDataStore`, `DataStoreTx` och `LocalStore`. */
@@ -86,12 +86,11 @@ export class InMemoryTimeEntryRepository extends InMemoryRepository<TimeEntry> i
     })) as TimeEntryReportRow[];
   }
 
-  async listUnbilled(matterId: MatterId, ids: TimeEntryId[]): Promise<UnbilledTimeEntry[]> {
+  async listUnbilled(matterId: MatterId, ids: TimeEntryId[]): Promise<TimeEntry[]> {
     if (!ids.length) return [];
     return (await this.delegate.findMany({
       where: { id: { in: ids }, matterId, invoiceId: null },
-      include: { user: { select: { hourlyRate: true } } },
-    })) as UnbilledTimeEntry[];
+    })) as TimeEntry[];
   }
 
   async flagBilled(ids: TimeEntryId[], invoiceId: InvoiceId): Promise<void> {

@@ -1,6 +1,5 @@
 import { z } from "zod";
-import { advokatberedskapFtaxForDate, isPerDayKind } from "@/lib/shared/brottmalstaxa";
-import { hourlyRateForKind } from "@/lib/shared/hourly-rate";
+import { isPerDayKind } from "@/lib/shared/brottmalstaxa";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { type TimeEntry } from "@/lib/shared/schemas/billing";
 import { timeEntryKindSchema, type TimeEntryKind } from "@/lib/shared/schemas/enums";
@@ -10,8 +9,9 @@ import {
   userIdSchema,
   timeEntryIdSchema,
   invoiceIdSchema,
-  type MatterId,
+  type OrganizationId,
 } from "@/lib/shared/schemas/ids";
+import { entryRateOre } from "../billing/time-entry-rate";
 import { emit } from "../events/emit";
 import { router, protectedProcedure, orgProcedure, TRPCError } from "../trpc";
 import type { Context } from "../trpc-core";
@@ -51,27 +51,17 @@ function assertMinutes(input: EntryShape): void {
   });
 }
 
-/** Postens á-pris: dagbeloppet för beredskap, annars användarens timtaxa. */
-function rateForEntry(input: EntryShape & { hourlyRate?: number | undefined }, userRate: number): number {
-  if (isPerDayKind(input.kind)) return advokatberedskapFtaxForDate(input.date ?? new Date());
-  return input.hourlyRate ?? userRate;
-}
-
 /**
- * Timpriset en ny tidspost får: byråns tidsspillan-pris för tidsspillan (om
- * satt), annars ärendets avvikande pris → juristens → byråns standard → 0.
- * Priset sparas på posten, så en senare ändring rör inte gammal tid.
+ * Nytt á-pris när kategorin byts (#1206) — en post som går från timarvode till
+ * tidsspillan ska debiteras som tidsspillan. Oförändrad eller utelämnad
+ * kategori rör inte priset (en prisändring på byrå/jurist/ärende gäller bara ny tid).
  */
-async function hourlyRateFor(
-  ctx: { repos: Context["repos"]; user: { organizationId: string } },
-  entry: { matterId: MatterId; kind?: TimeEntryKind | undefined }, userRate: number | null | undefined,
-): Promise<number> {
-  const orgId = asId<"OrganizationId">(ctx.user.organizationId);
-  const [matter, org] = await Promise.all([ctx.repos.matters.getByIdInOrg(entry.matterId, orgId), ctx.repos.organizations.getById(orgId)]);
-  return hourlyRateForKind(entry.kind, {
-    matterRate: matter?.hourlyRate, userRate,
-    orgDefaultRate: org?.defaultHourlyRate, orgTidsspillanRate: org?.tidsspillanHourlyRate,
-  });
+async function rateOnKindChange(
+  repos: Context["repos"], orgId: OrganizationId, owned: TimeEntry, kind: TimeEntryKind | undefined,
+): Promise<number | undefined> {
+  if (kind === undefined || kind === (owned.kind ?? "ARBETE")) return undefined;
+  const user = await repos.users.getById(owned.userId);
+  return entryRateOre(repos, orgId, { kind, date: owned.date, matterId: owned.matterId, userRates: user?.hourlyRates });
 }
 
 export const timeEntryRouter = router({
@@ -131,7 +121,10 @@ export const timeEntryRouter = router({
       const userId = input.userId ?? asId<"UserId">(ctx.user.id);
       const user = await ctx.repos.users.getById(userId);
       if (!user) throw new TRPCError({ code: "NOT_FOUND", message: "Användare finns inte." });
-      const rate = await hourlyRateFor(ctx, input, user.hourlyRate);
+      // Explicit á-pris i input (setup-/fixture-väg) vinner, utom för beredskap.
+      const rate = input.hourlyRate !== undefined && !isPerDayKind(input.kind)
+        ? input.hourlyRate
+        : await entryRateOre(ctx.repos, asId<"OrganizationId">(ctx.user.organizationId), { ...input, userRates: user.hourlyRates });
 
       const entry = await ctx.repos.timeEntries.create(omitUndefined({
         id: input.id, // undefined → store genererar
@@ -140,9 +133,7 @@ export const timeEntryRouter = router({
         date: new Date(input.date),
         minutes: input.minutes,
         description: input.description,
-        // Per-dygns-kategorier har ingen timtaxa; posten bär DAGBELOPPET så den
-        // råa raden är läsbar. Värderingen läser ändå alltid årstabellen (#950).
-        hourlyRate: rateForEntry(input, rate),
+        hourlyRate: rate,
         kind: input.kind,
         standardAtgardId: input.standardAtgardId,
         billable: input.billable,
@@ -181,6 +172,7 @@ export const timeEntryRouter = router({
         billable,
         kind,
         standardAtgardId,
+        hourlyRate: await rateOnKindChange(ctx.repos, ctx.orgId, owned, kind),
         ...(date ? { date: new Date(date) } : {}),
       }) satisfies Partial<TimeEntry>);
       await emit.timeEntryUpdated(ctx, { id: updated.id, matterId: updated.matterId });

@@ -13,8 +13,9 @@
  */
 
 import { z } from "zod";
-import { asId, documentFolderIdSchema, type MatterId, matterIdSchema } from "@/lib/shared/schemas/ids";
+import { asId, documentFolderIdSchema, type MatterId, matterIdSchema, type OrganizationId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
+import { entryRateOre } from "../billing/time-entry-rate";
 import { emit, type EmitCtx } from "../events/emit";
 import type { Repositories } from "../repositories/repositories";
 import { router, orgProcedure, TRPCError } from "../trpc";
@@ -23,7 +24,7 @@ import { router, orgProcedure, TRPCError } from "../trpc";
  * Den delmängd av tRPC-context tidspost-helpern + emit behöver. Data-skrivningar
  * går via `repos` (ADR 0020); `emit` använder fortfarande events-sömmen (dataStore).
  */
-type MailCtx = EmitCtx & { repos: Repositories };
+type MailCtx = EmitCtx & { repos: Repositories; orgId: OrganizationId };
 
 /** Avkoda base64 → bytes (browser+Node-säkert; routern bundlas för bägge). */
 function base64ToBytes(b64: string): Uint8Array {
@@ -114,13 +115,14 @@ async function createMailTimeEntry(
 ) {
   const userId = asId<"UserId">(ctx.user.id);
   const user = await ctx.repos.users.getByIdOrThrow(userId);
+  const rate = await entryRateOre(ctx.repos, ctx.orgId, { matterId, userRates: user.hourlyRates });
   const entryData = {
     userId,
     matterId,
     date: new Date(receivedAt),
     minutes: time.minutes,
     description: time.description ?? subject,
-    hourlyRate: user.hourlyRate ?? 0,
+    hourlyRate: rate,
     billable: true,
   };
   const entry = await ctx.repos.timeEntries.create(entryData);

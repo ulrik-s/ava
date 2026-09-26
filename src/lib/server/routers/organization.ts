@@ -2,6 +2,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { ledgerAccountMapSchema } from "@/lib/shared/accounting/account-map";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
+import { hourlyRatesSchema } from "@/lib/shared/schemas/hourly-rates";
 import { officeIdSchema, organizationIdSchema, asId } from "@/lib/shared/schemas/ids";
 import type { Office, Organization } from "@/lib/shared/schemas/organization";
 import { normalizeStandardAtgarder, standardAtgardSchema } from "@/lib/shared/standard-atgard";
@@ -31,10 +32,8 @@ function toOrgSettings(org: Organization) {
     documentTags: org.documentTags ?? [],
     /** Gränsbelopp (öre) för aconto-utskick (#885). */
     accontoThresholdOre: org.accontoThresholdOre ?? null,
-    /** Byråns standardtimpris (öre/h). */
-    defaultHourlyRate: org.defaultHourlyRate ?? null,
-    /** Byråns timpris för tidsspillan (öre/h). */
-    tidsspillanHourlyRate: org.tidsspillanHourlyRate ?? null,
+    /** Byråns timpris per kategori (öre/h, #1206). */
+    hourlyRates: org.hourlyRates ?? {},
     /** Byråns standardåtgärder (#956) — samma beskrivning + tid för alla. */
     standardAtgarder: org.standardAtgarder ?? [],
   };
@@ -66,10 +65,9 @@ export const organizationRouter = router({
         documentTags: z.array(z.string()).optional(),
         /** Gränsbelopp (öre) för aconto-utskick (#885). */
         accontoThresholdOre: z.number().int().nonnegative().optional(),
-        /** Standardtimpris (öre/h). null = ta bort. */
-        defaultHourlyRate: z.number().int().nonnegative().nullable().optional(),
-        /** Timpris tidsspillan (öre/h). null = ta bort (samma som arbete). */
-        tidsspillanHourlyRate: z.number().int().nonnegative().nullable().optional(),
+        /** Timpris per kategori (öre/h, #1206). HELA kartan ersätts; en
+         *  utelämnad kategori har inget byråpris (→ timarvodet). */
+        hourlyRates: hourlyRatesSchema.optional(),
         /** Byråns standardåtgärder (#956). HELA listan ersätts — admin redigerar
          *  den som en enhet, så en borttagen post försvinner. */
         standardAtgarder: z.array(standardAtgardSchema).optional(),
@@ -102,6 +100,8 @@ export const organizationRouter = router({
         email: z.string().optional(),
         bankgiro: z.string().optional(),
         accontoThresholdOre: z.number().int().nonnegative().optional(),
+        /** Byråns timpris per kategori (#1206) — setup-/seed-väg. */
+        hourlyRates: hourlyRatesSchema.optional(),
         /** Byråns standardåtgärder (#956) — setup-/seed-väg (ADR 0003). */
         standardAtgarder: z.array(standardAtgardSchema).optional(),
       })

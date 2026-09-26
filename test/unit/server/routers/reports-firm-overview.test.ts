@@ -28,8 +28,8 @@ function makeCaller() {
   const ds = new DemoDataStore({
     organizations: [{ id: "org-1", name: "Byrån" }],
     users: [
-      { id: "u-anna", organizationId: "org-1", email: "a@x", name: "Anna", role: "ADMIN", hourlyRate: 250_000 },
-      { id: "u-bo", organizationId: "org-1", email: "b@x", name: "Bo", role: "LAWYER", hourlyRate: 200_000 },
+      { id: "u-anna", organizationId: "org-1", email: "a@x", name: "Anna", role: "ADMIN", hourlyRates: { ARBETE: 250_000 } },
+      { id: "u-bo", organizationId: "org-1", email: "b@x", name: "Bo", role: "LAWYER", hourlyRates: { ARBETE: 200_000 } },
     ],
     matters: [{
       id: "m-1", organizationId: "org-1", matterNumber: "2026-0001", title: "Tvist",

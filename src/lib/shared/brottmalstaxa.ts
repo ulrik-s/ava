@@ -49,7 +49,8 @@ export const NO_FTAX_FACTOR_NUMERATOR = 1237;
 export const NO_FTAX_FACTOR_DENOMINATOR = 1626;
 
 /**
- * Domstolsverkets timkostnadsnorm 2026 (DVFS 2025:6 § 8). Använd för
+ * Timkostnadsnormen 2026 — regeringen fastställer den med stöd av förordningen
+ * (2009:1237) om timkostnadsnorm inom rättshjälpsområdet. Använd för
  * statligt betalda ärenden som INTE är taxemål — t.ex. komplexa brottmål
  * där HUF > 3 tim 45 min, eller rättshjälp i tvistemål, eller offentligt
  * biträde i förvaltningsmål (LVU, LPT, asyl, m.m.).
@@ -67,7 +68,7 @@ export const TIMKOSTNADSNORM_NO_FTAX_ORE_PER_H = 123_700; // 1 237 kr/h
  */
 const TIMKOSTNADSNORM_FTAX_BY_YEAR: Readonly<Record<number, number>> = {
   2025: 158_600, // 1 586 kr/h (DVFS 2024:14)
-  2026: 162_600, // 1 626 kr/h (DVFS 2025:6, +40 kr)
+  2026: 162_600, // 1 626 kr/h (förordningen (2009:1237), +40 kr)
 };
 
 /**

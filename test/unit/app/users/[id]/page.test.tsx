@@ -48,6 +48,9 @@ vi.mock("@/lib/client/trpc", () => ({
         useMutation: () => ({ mutate: deleteMutate, isPending: deleteState.isPending }),
       },
     },
+    organization: {
+      getSettings: { useQuery: () => ({ data: { hourlyRates: { ARBETE: 200000, TIDSSPILLAN: 148700 } } }) },
+    },
   },
 }));
 
@@ -65,7 +68,7 @@ beforeEach(() => {
     title: "Advokat",
     email: "anna@x.se",
     role: "LAWYER",
-    hourlyRate: 250000, // öre = 2 500 kr/h
+    hourlyRates: { ARBETE: 250000 }, // öre = 2 500 kr/h
     mileageRate: 2500,
   };
   userQuery.isLoading = false;
@@ -131,7 +134,7 @@ describe("EditUserPage", () => {
     expect(updateMutate).not.toHaveBeenCalled();
   });
 
-  it("ändrar roll och timtaxa, submittar med nya värden", async () => {
+  it("ändrar roll och timpriser, submittar med nya värden", async () => {
     renderPage();
     await screen.findByRole("heading", { name: /Redigera användare/i });
     const roleSelect = screen.getByRole("combobox") as HTMLSelectElement;
@@ -139,10 +142,21 @@ describe("EditUserPage", () => {
     fireEvent.change(roleSelect, { target: { value: "ADMIN" } });
     const hourlyInput = screen.getByDisplayValue("2500") as HTMLInputElement;
     fireEvent.change(hourlyInput, { target: { value: "3000" } });
+    fireEvent.change(screen.getByLabelText(/^Tidsspillan helg\/kväll/), { target: { value: "975" } });
     fireEvent.click(screen.getByRole("button", { name: /^Spara$/i }));
     const arg = updateMutate.mock.calls[0]![0];
     expect(arg.role).toBe("ADMIN");
-    expect(arg.hourlyRate).toBe(300000); // 3 000 kr/h lagras i öre, som tidsposterna
+    // kr/h lagras i öre, som tidsposterna (#1206: en karta per kategori).
+    expect(arg.hourlyRates).toEqual({ ARBETE: 300000, TIDSSPILLAN_OVRIG_TID: 97500 });
+  });
+
+  it("tomma timprisfält visar vad som ärvs från byrån (#1206)", async () => {
+    renderPage();
+    await screen.findByRole("heading", { name: /Redigera användare/i });
+    // Byråns tidsspillan går före juristens eget timarvode …
+    expect((screen.getByLabelText(/^Tidsspillan \(kr/) as HTMLInputElement).placeholder).toMatch(/^ärvs: 1\s487 kr\/h$/);
+    // … men utan byråpris ärvs juristens timarvode.
+    expect((screen.getByLabelText(/^Timarvode helg\/kväll/) as HTMLInputElement).placeholder).toMatch(/^ärvs: 2\s500 kr\/h$/);
   });
 
   it("inkluderar lösenord i submit när matchande", async () => {

@@ -72,8 +72,8 @@ describe("renderFakturaHtml — sammanställning + specifikation (#937)", () => 
     expect(html).toContain("Restid till sammanträde");
     // Äldre rader saknar arvodeskategori (#953) → tidsspillan-normerna räddas ur
     // taxan, resten benämns arvode. Här: 1 626 = arvode, 1 487 = tidsspillan dagtid.
-    expect(html).toContain("<td>Arvode</td>");
-    expect(html).toContain("Tidsspillan — vardag 08–18");
+    expect(html).toContain("<td>Timarvode</td>");
+    expect(html).toContain("<td>Tidsspillan</td>");
     expect(html).toContain(`${formatCurrency(148_700)}/tim`);
     // Uppdelningen (klient/betalare) och fakturans faktiska belopp bevaras.
     expect(html).toContain("Klientens självrisk 20 % (exkl moms)");
@@ -119,17 +119,17 @@ describe("renderFakturaHtml — sammanställning + specifikation (#937)", () => 
         totalMinutes: 630, arvodeNetOre: 1_893_950, arvodeVatOre: 473_488, grossOre: 2_367_438, payableOre: 2_367_438,
       }),
     });
-    expect(html).toContain("<td>Arvode</td>");
-    expect(html).toContain("Arvode — obekväm tid (helg/kväll/natt)");
-    expect(html).toContain("Tidsspillan — vardag 08–18");
-    expect(html).toContain("Tidsspillan — annan tid");
+    expect(html).toContain("<td>Timarvode</td>");
+    expect(html).toContain("<td>Timarvode helg/kväll</td>");
+    expect(html).toContain("<td>Tidsspillan</td>");
+    expect(html).toContain("<td>Tidsspillan helg/kväll</td>");
     // Varje kategori får sin egen taxa-rad, ingen sammanslagning.
     expect(html).toContain(`${formatCurrency(325_600)}/tim`);
     expect(html).toContain(`${formatCurrency(97_500)}/tim`);
     // Ordningen är kategori-ordningen (arvode först, tidsspillan sist), inte taxan —
     // annars hamnar helgtaxan (högst) överst.
-    expect(html.indexOf("<td>Arvode</td>")).toBeLessThan(html.indexOf("Tidsspillan — vardag"));
-    expect(html.indexOf("Tidsspillan — vardag")).toBeLessThan(html.indexOf("Tidsspillan — annan"));
+    expect(html.indexOf("<td>Timarvode</td>")).toBeLessThan(html.indexOf("<td>Tidsspillan</td>"));
+    expect(html.indexOf("<td>Tidsspillan</td>")).toBeLessThan(html.indexOf("<td>Tidsspillan helg/kväll</td>"));
   });
 
   it("samma kategori på TVÅ taxor (byråns egen taxa ändrad) ger en rad per taxa", () => {
@@ -199,14 +199,15 @@ describe("buildFakturaView — sammanställningen är en uträkning (#1200)", ()
 
   it("arvoderaderna läses som tim × timpris = belopp, arvode före tidsspillan", () => {
     expect(v.summary.slice(0, 2)).toEqual([
-      { label: "Arvode", hours: "3,5", rateLabel: "150000/tim", amount: "525000", subtotal: false },
-      { label: "Tidsspillan — vardag 08–18", hours: "1,5", rateLabel: "100000/tim", amount: "150000", subtotal: false },
+      { label: "Timarvode", hours: "3,5", rateLabel: "150000/tim", amount: "525000", subtotal: false },
+      { label: "Tidsspillan", hours: "1,5", rateLabel: "100000/tim", amount: "150000", subtotal: false },
     ]);
   });
 
   it("kedjan: summa arvode → moms → utlägg → moms → äkta utlägg → summa inkl moms", () => {
     expect(v.summary.map((r) => r.label)).toEqual([
-      "Arvode", "Tidsspillan — vardag 08–18",
+      // Kategorin heter "Timarvode" — inte "Arvode" bredvid "Summa arvode exkl moms" (#1206).
+      "Timarvode", "Tidsspillan",
       "Summa arvode exkl moms", "Moms 25 % på arvode",
       "Utlägg exkl moms", "Moms 25 % på utlägg", "Äkta utlägg (utan moms)",
     ]);
@@ -231,8 +232,8 @@ describe("buildFakturaView — sammanställningen är en uträkning (#1200)", ()
 
   it("tidsspecifikationen delas per kategori, med timpris och delsumma", () => {
     expect(v.timeGroups.map((g) => [g.label, g.subtotalLabel, g.hours, g.amount])).toEqual([
-      ["Arvode", "Summa arvode", "3,5", "525000"],
-      ["Tidsspillan — vardag 08–18", "Summa tidsspillan — vardag 08–18", "1,5", "150000"],
+      ["Timarvode", "Summa timarvode", "3,5", "525000"],
+      ["Tidsspillan", "Summa tidsspillan", "1,5", "150000"],
     ]);
     expect(v.timeGroups[0]?.lines.map((l) => [l.description, l.hours, l.rate, l.amount])).toEqual([
       ["Genomgång av handlingar", "2,5", "150000/tim", "375000"],
@@ -253,7 +254,7 @@ describe("buildFakturaView — kantfall i uträkningen (#1200)", () => {
       expenseLines: [], deductions: [], payableOre: 187_500,
     });
     const v = buildFakturaView({ invoice: invoice({ amount: 187_500 }), recipient: "K", meta: META, spec: s }, ore);
-    expect(v.summary.map((r) => r.label)).toEqual(["Arvode", "Summa arvode exkl moms", "Moms 25 % på arvode"]);
+    expect(v.summary.map((r) => r.label)).toEqual(["Timarvode", "Summa arvode exkl moms", "Moms 25 % på arvode"]);
     expect(reconcile(v.summary)).toBe(187_500);
     expect(v.hasSplit).toBe(false);
   });
@@ -295,7 +296,7 @@ describe("buildFakturaView — kantfall i uträkningen (#1200)", () => {
         expenseLines: [], deductions: [], payableOre: 0,
       }),
     }, ore);
-    expect(v.timeGroups.map((g) => g.label)).toEqual(["Arvode", "Tidsspillan — annan tid"]);
+    expect(v.timeGroups.map((g) => g.label)).toEqual(["Timarvode", "Tidsspillan helg/kväll"]);
   });
 
   it("slutregleringens nedbrytning (utan egen spec) ger ändå en kedja som går ihop", () => {
@@ -334,9 +335,9 @@ describe("renderFakturaHtml — kolumner och deltabeller (#1200)", () => {
   });
 
   it("tidsspecifikationen har en deltabell per kategori med delsumma", () => {
-    expect(html).toContain("<h4 style=\"font-size:13px;margin-top:1rem;margin-bottom:.25rem\">Arvode</h4>");
-    expect(html.indexOf(">Arvode</h4>")).toBeLessThan(html.indexOf(">Tidsspillan — vardag 08–18</h4>"));
-    expect(html).toContain(`<td colspan="2">Summa tidsspillan — vardag 08–18</td><td style="text-align:right">1,5</td>`);
+    expect(html).toContain("<h4 style=\"font-size:13px;margin-top:1rem;margin-bottom:.25rem\">Timarvode</h4>");
+    expect(html.indexOf(">Timarvode</h4>")).toBeLessThan(html.indexOf(">Tidsspillan</h4>"));
+    expect(html).toContain(`<td colspan="2">Summa tidsspillan</td><td style="text-align:right">1,5</td>`);
     expect(html).toContain(`${formatCurrency(150_000)}/tim`);
     expect(html).not.toContain("{{");
   });

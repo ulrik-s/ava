@@ -47,7 +47,7 @@ beforeEach(() => {
 
 const sampleUser = {
   id: "u1", name: "Anna Karlsson", title: "Advokat", email: "anna@x.se",
-  role: "LAWYER", hourlyRate: 3000, mileageRate: 2500,
+  role: "LAWYER", hourlyRates: { ARBETE: 300000 }, mileageRate: 2500,
 };
 
 describe("UsersPage", () => {
@@ -66,7 +66,7 @@ describe("UsersPage", () => {
           title: "Advokat",
           email: "anna@x.se",
           role: "LAWYER",
-          hourlyRate: 3000,
+          hourlyRates: { ARBETE: 300000 },
           mileageRate: 2500,
         },
         {
@@ -75,12 +75,15 @@ describe("UsersPage", () => {
           title: "Biträdande jurist",
           email: "sofia@x.se",
           role: "ASSISTANT",
-          hourlyRate: 1800,
+          hourlyRates: {},
           mileageRate: null,
         },
       ],
     };
     render(<UsersPage />);
+    // Eget timarvode visas; saknas det följer juristen byråns (#1206).
+    expect(screen.getByText(/^3\s000 kr\/h$/)).toBeInTheDocument();
+    expect(screen.getByText("byråns")).toBeInTheDocument();
     expect(screen.getByText("Anna Karlsson")).toBeInTheDocument();
     expect(screen.getByText("Sofia Bergström")).toBeInTheDocument();
     // "Advokat" finns både som roll och titel — matcha minst en

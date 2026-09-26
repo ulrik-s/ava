@@ -15,6 +15,10 @@ describe("parseDecimal", () => {
   it("punkt-decimal → tal", () => expect(parseDecimal("12.5")).toBe(12.5));
   it("under min → null", () => expect(parseDecimal("-3", 0)).toBeNull());
   it("skräp → null", () => expect(parseDecimal("abc")).toBeNull());
+  it("tusentalsmellanslag (även hårt) → tal", () => {
+    expect(parseDecimal("3 000")).toBe(3000);
+    expect(parseDecimal("1\u00a0626,5")).toBe(1626.5);
+  });
 });
 
 describe("DecimalInput", () => {

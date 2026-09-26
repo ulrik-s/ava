@@ -41,7 +41,7 @@ const ADMIN_USER = {
 function makeStore() {
   const source: DemoSource = prebakeJoins({
     organizations: [{ id: ORG_ID, name: "Anna Advokat AB", orgNumber: "556677-8899" }],
-    users: [{ ...ADMIN_USER, hourlyRate: 250_000, title: "Senior partner" }],
+    users: [{ ...ADMIN_USER, hourlyRates: { ARBETE: 250_000 }, title: "Senior partner" }],
     contacts: [], matters: [], matterContacts: [],
     documents: [], documentFolders: [], timeEntries: [], expenses: [],
     invoices: [], calendarEvents: [], tasks: [],

@@ -23,6 +23,7 @@ import type {
   InvoiceType, MatterRole, MatterStatus, PaymentMethod, PaymentPlanStatus, ReminderType,
   SuggestionStatus, UserRole,
 } from "@/lib/shared/schemas/enums";
+import type { HourlyRates } from "@/lib/shared/schemas/hourly-rates";
 import type {
   AccontoDeductionId, BillingRunId, CalendarEventId, ConflictCheckId, ContactId,
   DocumentAnalysisSuggestionId, DocumentFolderId, DocumentId,
@@ -36,6 +37,9 @@ import { baseColumns, boolDefault, orgScopedColumns } from "./columns";
 
 /** Monetärt öre-belopp (bigint → ingen int4-overflow för stora fakturor). */
 const ore = (name: string) => bigint(name, { mode: "number" });
+
+/** Timpris per kategori (#1206) — samma jsonb-karta på byrå, jurist och ärende. */
+const hourlyRatesColumn = () => jsonb("hourly_rates").notNull().default({}).$type<HourlyRates>();
 
 export const organizations = pgTable("organizations", {
   ...baseColumns,
@@ -55,10 +59,8 @@ export const organizations = pgTable("organizations", {
   /** Gränsbelopp (öre) för klientens ackumulerade självrisk innan ett aconto
    *  skickas (#885). NULL = använd default (SJALVRISK_ACCONTO_THRESHOLD_ORE). */
   accontoThresholdOre: integer("acconto_threshold_ore"),
-  /** Byråns standardtimpris (öre/h, exkl moms) — när varken ärendet eller juristen har eget. */
-  defaultHourlyRate: integer("default_hourly_rate"),
-  /** Timpris för tidsspillan (öre/h, exkl moms) vid privat fakturering. NULL = samma som arbete. */
-  tidsspillanHourlyRate: integer("tidsspillan_hourly_rate"),
+  /** Byråns timpris per kategori (öre/h, exkl moms) — minst specifika nivån (#1206). */
+  hourlyRates: hourlyRatesColumn(),
   /** Byråns standardåtgärder (#956) — samma beskrivning + tidsåtgång för alla. */
   standardAtgarder: jsonb("standard_atgarder").notNull().default([]).$type<StandardAtgard[]>(),
 });
@@ -83,7 +85,8 @@ export const users = pgTable("users", {
   title: text("title"),
   role: text("role").notNull().default("LAWYER").$type<UserRole>(),
   matterNumberPrefix: text("matter_number_prefix"),
-  hourlyRate: integer("hourly_rate"),
+  /** Juristens timpris per kategori (öre/h) — vinner över byråns (#1206). */
+  hourlyRates: hourlyRatesColumn(),
   mileageRate: integer("mileage_rate"),
   active: boolDefault("active", true),
   passwordHash: text("password_hash"),
@@ -130,8 +133,8 @@ export const matters = pgTable("matters", {
   radgivningBetaldAt: timestamp("radgivning_betald_at", { withTimezone: true }),
   /** Klientens andel (självrisk/avgift) i bips — rättsskydd/rättshjälp (#778). */
   clientShareBips: integer("client_share_bips"),
-  /** Avvikande timpris för ärendet (öre/h) — ovanligt; vinner över jurist och byrå. */
-  hourlyRate: integer("hourly_rate"),
+  /** Ärendets avvikande timpris per kategori (öre/h) — ovanligt; vinner över jurist och byrå (#1206). */
+  hourlyRates: hourlyRatesColumn(),
   /** Rättsskyddets maxbelopp (öre) resp. rättshjälpens timtak — täcknings-tak (#793). */
   rattsskyddMaxOre: integer("rattsskydd_max_ore"),
   /** Rättsskyddets lägsta självrisk (öre) — "dock lägst 1 800 kr" (#899). */

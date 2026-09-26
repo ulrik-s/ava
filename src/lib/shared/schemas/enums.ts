@@ -56,11 +56,17 @@ export type PaymentMethod = z.infer<typeof paymentMethodSchema>;
  * Kategorierna gäller både rättshjälp och rättsskydd; helgtaxorna är ovanliga
  * men ingår (DVFS-föreskrifterna i `brottmalstaxa.ts` är källan till beloppen).
  *
- *   ARBETE                — timkostnadsnormen (DVFS 2025:6 § 8)
- *   ARBETE_OBEKVAM_TID    — helgförhandling / polisförhör utom kontorstid
- *                           (DVFS 2025:7 § 1, 2025:8 § 1)
- *   TIDSSPILLAN           — vardag 08–18 (DVFS 2025:4 § 4)
- *   TIDSSPILLAN_OVRIG_TID — all annan tid, lägre norm (DVFS 2025:4 § 4)
+ *   ARBETE                — "Timarvode": timkostnadsnormen (förordningen
+ *                           (2009:1237) om timkostnadsnorm inom rättshjälpsområdet)
+ *   ARBETE_OBEKVAM_TID    — "Timarvode helg/kväll": häktningsförhandling lör/sön/
+ *                           helgdag/midsommar-, jul-, nyårsafton (DVFS 2025:7 § 1)
+ *                           och polisförhör vardagar 00–07 och 18–24 samt helg
+ *                           (DVFS 2025:8 § 1)
+ *   TIDSSPILLAN           — "Tidsspillan": vardag 08–18 (DVFS 2025:4 § 4), även
+ *                           helg/natt i anslutning till häktningsförhandling under
+ *                           helg eller polisförhör utom kontorstid (2025:7 § 1, 2025:8 § 3)
+ *   TIDSSPILLAN_OVRIG_TID — "Tidsspillan helg/kväll": all annan tid, lägre norm
+ *                           (DVFS 2025:4 § 4); bara 07–22 ersätts (§ 2)
  *   ADVOKATBEREDSKAP      — garantiersättning PER DAG (DVFS 2025:9 § 1)
  *
  * `ADVOKATBEREDSKAP` bryter mönstret: den ersätts per DAG, inte per timme, och
@@ -69,14 +75,26 @@ export type PaymentMethod = z.infer<typeof paymentMethodSchema>;
  * timnorm. Se `brottmalstaxa.ts`.
  */
 export const TIME_ENTRY_KIND_LABELS = {
-  ARBETE: "Arvode",
-  ARBETE_OBEKVAM_TID: "Arvode — obekväm tid (helg/kväll/natt)",
-  TIDSSPILLAN: "Tidsspillan — vardag 08–18",
-  TIDSSPILLAN_OVRIG_TID: "Tidsspillan — annan tid",
+  ARBETE: "Timarvode",
+  ARBETE_OBEKVAM_TID: "Timarvode helg/kväll",
+  TIDSSPILLAN: "Tidsspillan",
+  TIDSSPILLAN_OVRIG_TID: "Tidsspillan helg/kväll",
   ADVOKATBEREDSKAP: "Advokatberedskap — garantiersättning per dag",
 } as const satisfies Record<string, string>;
 export const timeEntryKindSchema = enumFromLabels(TIME_ENTRY_KIND_LABELS);
 export type TimeEntryKind = z.infer<typeof timeEntryKindSchema>;
+
+/**
+ * De TIMBASERADE kategorierna — var och en har ett eget timpris som ärvs
+ * byrå → jurist → ärende (#1206). `ADVOKATBEREDSKAP` ersätts per dag och står
+ * utanför.
+ */
+export const hourlyTimeEntryKindSchema = timeEntryKindSchema.extract([
+  "ARBETE", "ARBETE_OBEKVAM_TID", "TIDSSPILLAN", "TIDSSPILLAN_OVRIG_TID",
+]);
+export type HourlyTimeEntryKind = z.infer<typeof hourlyTimeEntryKindSchema>;
+/** De timbaserade kategorierna i dropdown-/formulärordning. */
+export const HOURLY_TIME_ENTRY_KINDS: readonly HourlyTimeEntryKind[] = hourlyTimeEntryKindSchema.options;
 
 // ─── Invoice status + type ────────────────────────────────────────────────
 

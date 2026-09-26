@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { orgScopedFields, optionalDateLike } from "./common";
 import { matterStatusSchema, paymentMethodSchema, matterRoleSchema } from "./enums";
+import { hourlyRatesSchema } from "./hourly-rates";
 import { matterIdSchema, matterContactIdSchema, contactIdSchema, userIdSchema } from "./ids";
 
 /**
@@ -37,8 +38,9 @@ export const matterSchema = z.object({
    * värde. Driver acconto-förslaget; kan ändras under ärendets gång (#778).
    */
   clientShareBips: z.number().int().min(0).max(10000).nullish(),
-  /** Avvikande timpris för ärendet (öre/h). Ovanligt — vinner över jurist och byrå. */
-  hourlyRate: z.number().int().nonnegative().nullish(),
+  /** Ärendets avvikande timpris per kategori (öre/h). Ovanligt — vinner över
+   *  jurist och byrå (#1206). */
+  hourlyRates: hourlyRatesSchema.default({}),
   /**
    * Rättsskyddets maxbelopp i öre (försäkringens tak, ur beslutet). När
    * upparbetat arvode-värde närmar sig (≥90 %) taket flaggas ärendet (#793).

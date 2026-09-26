@@ -2,7 +2,10 @@
 
 import Link from "next/link";
 import { useId } from "react";
+import { HourlyRatesFields } from "@/components/billing/hourly-rates-fields";
 import { useCapabilities } from "@/lib/client/capabilities/use-capabilities";
+import { trpc } from "@/lib/client/trpc";
+import type { HourlyRates } from "@/lib/shared/schemas/hourly-rates";
 
 export interface UserFormState {
   name: string;
@@ -10,7 +13,8 @@ export interface UserFormState {
   email: string;
   role: string;
   matterNumberPrefix: string;
-  hourlyRate: string;
+  /** Juristens egna timpriser per kategori (öre/h, #1206); saknad = byråns. */
+  hourlyRates: HourlyRates;
   mileageRate: string;
   password: string;
   confirmPassword: string;
@@ -48,7 +52,6 @@ export function UserForm({
   const emailId = useId();
   const roleId = useId();
   const matterPrefixId = useId();
-  const hourlyRateId = useId();
   const mileageRateId = useId();
   // OIDC (#1109): inloggning sker hos IdP:n — ett AVA-lösenord betyder ingenting.
   const { oidc } = useCapabilities();
@@ -89,11 +92,7 @@ export function UserForm({
             Juristens egen ärendenummerserie (AA2026-0001). Byte fortsätter serien.
           </p>
         </FormField>
-        <FormField id={hourlyRateId} label="Timtaxa (kr/h) — tomt = byråns standard">
-          <input id={hourlyRateId} type="text" inputMode="decimal" value={form.hourlyRate}
-            onChange={(e) => setForm({ ...form, hourlyRate: e.target.value })}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-        </FormField>
+        <UserRatesField form={form} setForm={setForm} />
         <FormField id={mileageRateId} label="Milersättning (kr/km)">
           <input id={mileageRateId} type="text" inputMode="decimal" value={form.mileageRate}
             onChange={(e) => setForm({ ...form, mileageRate: e.target.value })}
@@ -124,6 +123,18 @@ export function UserForm({
         {extraActions}
       </div>
     </form>
+  );
+}
+
+/** Juristens timpriser — tomt fält ärver byråns pris, som placeholdern visar. */
+function UserRatesField({ form, setForm }: { form: UserFormState; setForm: (f: UserFormState) => void }) {
+  const org = trpc.organization.getSettings.useQuery();
+  return (
+    <fieldset className="md:col-span-2">
+      <legend className="block text-sm font-medium text-gray-700 mb-1">Timpriser — tomt = byråns</legend>
+      <HourlyRatesFields value={form.hourlyRates} onChange={(hourlyRates) => setForm({ ...form, hourlyRates })}
+        parents={[org.data?.hourlyRates]} />
+    </fieldset>
   );
 }
 

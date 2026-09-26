@@ -434,7 +434,7 @@ export const reportsRouter = router({
       // modul-nivå → query-arrowen hålls kort + delrapporterna testbara).
       const matters = buildMatters(timeEntries, expenses);
       return {
-        user: { id: user.id, name: user.name, hourlyRate: user.hourlyRate },
+        user: { id: user.id, name: user.name, hourlyRates: user.hourlyRates },
         period: { from: input.from, to: input.to },
         matters,
         weeklyRows: buildWeeklyRows(timeEntries, fromDate, toDate),

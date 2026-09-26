@@ -287,7 +287,7 @@ export const KOSTNADSRAKNING_ICKE_TAXA_DEFAULT_HTML = `<!DOCTYPE html>
 <h2>Arvode — Timkostnadsnorm (icke-taxa)</h2>
 <div class="note">
   Brottmålstaxan är inte tillämplig — ersättning enligt timkostnadsnorm för
-  arbete och tidsspillan-norm för tidsspillan (DVFS 2025:6 § 8 + RB 21:10).
+  arbete (förordningen (2009:1237)) och tidsspillan-norm för tidsspillan (DVFS 2025:4) + RB 21:10.
   Á-pris per rad ovan; olika taxor summeras inte till en gemensam timkostnad.
 </div>
 <div class="totalsRow">

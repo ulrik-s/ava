@@ -2,6 +2,7 @@ import { z } from "zod";
 import { ledgerAccountMapSchema } from "../accounting/account-map";
 import { standardAtgardSchema } from "../standard-atgard";
 import { baseFields, dateLike } from "./common";
+import { hourlyRatesSchema } from "./hourly-rates";
 import { organizationIdSchema, officeIdSchema } from "./ids";
 
 /**
@@ -28,12 +29,9 @@ export const organizationSchema = z.object({
   /** Gränsbelopp (öre) för klientens ackumulerade självrisk innan ett aconto
    *  skickas (#885). NULL = använd default (SJALVRISK_ACCONTO_THRESHOLD_ORE). */
   accontoThresholdOre: z.number().int().nonnegative().nullish(),
-  /** Byråns standardtimpris (öre/h, exkl moms). Används när varken ärendet eller
-   *  juristen har ett eget. NULL = inget standardpris. */
-  defaultHourlyRate: z.number().int().nonnegative().nullish(),
-  /** Byråns timpris för tidsspillan (öre/h, exkl moms) vid privat fakturering —
-   *  vinner över ärende/jurist/byrå för TIDSSPILLAN*-poster. NULL = samma som arbete. */
-  tidsspillanHourlyRate: z.number().int().nonnegative().nullish(),
+  /** Byråns timpris per kategori (öre/h, exkl moms) — minst specifika nivån,
+   *  gäller när varken ärendet eller juristen har ett eget (#1206). */
+  hourlyRates: hourlyRatesSchema.default({}),
   /** Byråns standardåtgärder (#956) — åtgärder som förekommer i varje ärende med
    *  samma beskrivning och tidsåtgång för alla på byrån. Redigeras i org-inställningarna. */
   standardAtgarder: z.array(standardAtgardSchema).default([]),

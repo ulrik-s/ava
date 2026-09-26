@@ -1,18 +1,13 @@
 /**
  * `TimeEntryRepository` (ADR 0020, #409 fan-out) — tidsposter. Bas-CRUD ärvs;
- * `listUnbilled` hämtar valda ofakturerade poster (med juristens timtaxa för
- * fakturaberäkningen) och `flagBilled` kopplar dem till fakturan (bulk).
+ * `listUnbilled` hämtar valda ofakturerade poster (med sitt eget á-pris) och
+ * `flagBilled` kopplar dem till fakturan (bulk).
  */
 
 import type { TimeEntry } from "@/lib/shared/schemas/billing";
 import type { PaymentMethod } from "@/lib/shared/schemas/enums";
 import type { BillingRunId, InvoiceId, MatterId, OrganizationId, TimeEntryId, UserId } from "@/lib/shared/schemas/ids";
 import type { Repository } from "./types";
-
-/** Tidspost + juristens timtaxa (det fakturaberäkningen behöver). */
-export interface UnbilledTimeEntry extends TimeEntry {
-  user: { hourlyRate: number | null };
-}
 
 /** Tidspost + relationer för listvyn. matter alltid satt (matterId NOT NULL FK). */
 export interface TimeEntryListRow extends TimeEntry {
@@ -81,8 +76,8 @@ export interface TimeEntryRepository extends Repository<TimeEntry> {
   getByIdInOrg(id: TimeEntryId, organizationId: OrganizationId): Promise<TimeEntry | null>;
   /** Tidsrapport-rader (jurist + ärende + KLIENT-kontakt), org-scopat, userId asc / date asc. */
   listForReport(organizationId: OrganizationId, filter: TimeEntryReportFilter): Promise<TimeEntryReportRow[]>;
-  /** Valda ofakturerade tidsposter i ett ärende (med user.hourlyRate). Tom lista vid tomma ids. */
-  listUnbilled(matterId: MatterId, ids: TimeEntryId[]): Promise<UnbilledTimeEntry[]>;
+  /** Valda ofakturerade tidsposter i ett ärende. Tom lista vid tomma ids. */
+  listUnbilled(matterId: MatterId, ids: TimeEntryId[]): Promise<TimeEntry[]>;
   /** Koppla tidsposter till en faktura (sätter invoiceId). No-op vid tomma ids. */
   flagBilled(ids: TimeEntryId[], invoiceId: InvoiceId): Promise<void>;
   /** Tidsposter kopplade till en faktura (date asc) — fakturaspecifikationen (#856). */

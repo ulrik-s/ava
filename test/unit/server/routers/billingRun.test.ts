@@ -26,7 +26,7 @@ function makeCaller(opts?: { workMinutes?: number; expenseOre?: number; paymentM
   const ds = new DemoDataStore({
     organizations: [{ id: "org-1", name: "X" }],
     matters: [{ id: "m-1", organizationId: "org-1", matterNumber: "2026-0001", title: "Test", status: "ACTIVE", paymentMethod: opts?.paymentMethod ?? "RATTSSKYDD", createdAt: new Date() }],
-    users: [{ id: "u-1", organizationId: "org-1", email: "a@x", name: "Anna", role: "ADMIN", hourlyRate: 250000 }],
+    users: [{ id: "u-1", organizationId: "org-1", email: "a@x", name: "Anna", role: "ADMIN", hourlyRates: { ARBETE: 250000 } }],
     timeEntries: [{ id: "te-1", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date(), minutes: opts?.workMinutes ?? 120, description: "Möte", hourlyRate: opts?.hourlyRate ?? 250000, billable: true }, ...tids],
     expenses: opts?.expenseOre != null ? [{ id: "ex-1", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date(), amount: opts.expenseOre, description: "Avgift", billable: true, vatRate: 0, vatIncluded: false, kind: "EXPENSE" }] : [],
   }, async () => { /* writable: noop write-back */ });
@@ -181,6 +181,13 @@ describe("billingRun.createFinal", () => {
     expect(t2.invoiceId).toBeFalsy(); // ej vald → kvar ofryst för senare
     expect(t2.frozenAt).toBeFalsy();
     expect(e1.frozenAt).toBeFalsy(); // expenseIds=[] → utlägg ej med
+  });
+
+  it("per-post-val värderar posten på SITT á-pris, inte juristens nuvarande (#1206)", async () => {
+    // te-1 registrerades à 2 000 kr/h; juristen har sedan fått 2 500 kr/h.
+    const { caller } = makeCaller({ workMinutes: 60, hourlyRate: 200000 });
+    const res = await caller.billingRun.createFinal({ matterId: "m-1", recipient: "KLIENT", timeEntryIds: ["te-1"], expenseIds: [] });
+    expect(res.invoice.amount).toBe(250000); // 1 tim × 2 000 kr + 25 % moms
   });
 
   it("per-post-val validerar id:n (okänt/fel-scopat → fel)", async () => {
@@ -417,13 +424,40 @@ describe("billingRun.list / byId", () => {
   });
 });
 
+describe("billingRun.coverageSplit — currentRateOre ärvs ärende → ansvarig jurist → byrå (#1206)", () => {
+  function rate(matterExtra: Record<string, unknown>, lawyerRates: Record<string, number>) {
+    const ds = new DemoDataStore({
+      organizations: [{ id: "org-1", name: "X", hourlyRates: { ARBETE: 180000 } }],
+      matters: [{ id: "m-1", organizationId: "org-1", matterNumber: "2026-0001", title: "T", status: "ACTIVE", paymentMethod: "RATTSSKYDD", clientShareBips: 2000, ...matterExtra, createdAt: new Date() }],
+      users: [{ id: "u-1", organizationId: "org-1", email: "a@x", name: "Anna", role: "ADMIN", hourlyRates: lawyerRates }],
+      timeEntries: [{ id: "te-1", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date(), minutes: 60, description: "M", hourlyRate: 200000, billable: true }],
+    }, async () => {});
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const c = appRouter.createCaller(buildContext({ dataStore: ds, ports: noopPorts, principal: PRINCIPAL }) as any);
+    return c.billingRun.coverageSplit({ matterId: "m-1" }).then((r) => r.currentRateOre);
+  }
+
+  it("ansvarig jurist med eget timarvode", async () => {
+    expect(await rate({ responsibleLawyerId: "u-1" }, { ARBETE: 300000 })).toBe(300000);
+  });
+
+  it("ärendets avvikande timarvode vinner över juristens", async () => {
+    expect(await rate({ responsibleLawyerId: "u-1", hourlyRates: { ARBETE: 400000 } }, { ARBETE: 300000 })).toBe(400000);
+  });
+
+  it("utan ansvarig jurist (eller utan eget pris) → byråns timarvode", async () => {
+    expect(await rate({}, { ARBETE: 300000 })).toBe(180000);
+    expect(await rate({ responsibleLawyerId: "u-1" }, {})).toBe(180000);
+  });
+});
+
 describe("billingRun.coverageSplit — prutning/självrisk på aktuellt timarvode (#800)", () => {
   function caller(matterExtra: Record<string, unknown>, currentRate: number, minutes = 120) {
     const ds = new DemoDataStore({
       organizations: [{ id: "org-1", name: "X" }],
       matters: [{ id: "m-1", organizationId: "org-1", matterNumber: "2026-0001", title: "T", status: "ACTIVE", responsibleLawyerId: "u-1", ...matterExtra, createdAt: new Date() }],
       // Juristens AKTUELLA timtaxa = currentRate (skiljer sig från tidspostens snapshot 200000).
-      users: [{ id: "u-1", organizationId: "org-1", email: "a@x", name: "Anna", role: "ADMIN", hourlyRate: currentRate }],
+      users: [{ id: "u-1", organizationId: "org-1", email: "a@x", name: "Anna", role: "ADMIN", hourlyRates: { ARBETE: currentRate } }],
       timeEntries: [{ id: "te-1", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date(), minutes, description: "M", hourlyRate: 200000, billable: true }],
     }, async () => {});
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -466,7 +500,7 @@ describe("billingRun.coverageSplit — prutning/självrisk på aktuellt timarvod
     const ds = new DemoDataStore({
       organizations: [{ id: "org-1", name: "X" }],
       matters: [{ id: "m-1", organizationId: "org-1", matterNumber: "2026-0001", title: "T", status: "ACTIVE", responsibleLawyerId: "u-1", paymentMethod: "RATTSSKYDD", clientShareBips: 2000, createdAt: new Date() }],
-      users: [{ id: "u-1", organizationId: "org-1", email: "a@x", name: "Anna", role: "ADMIN", hourlyRate: 300000 }],
+      users: [{ id: "u-1", organizationId: "org-1", email: "a@x", name: "Anna", role: "ADMIN", hourlyRates: { ARBETE: 300000 } }],
       timeEntries: [{ id: "te-1", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date(), minutes: 120, description: "M", hourlyRate: 200000, billable: true }],
       expenses: [
         { id: "ex-1", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date(), amount: 7920, description: "Kopiering", billable: true, vatRate: 2500, vatIncluded: false, kind: "EXPENSE" },
@@ -502,7 +536,7 @@ describe("moms mot DOMSTOL är alltid 25 % (#945)", () => {
       organizations: [{ id: "org-1", name: "X" }],
       matters: [{ id: "m-1", organizationId: "org-1", matterNumber: "2026-0001", title: "T", status: "ACTIVE",
         responsibleLawyerId: "u-1", paymentMethod: "RATTSHJALP", clientShareBips: 4000, taxaHasFTax: true, createdAt: new Date() }],
-      users: [{ id: "u-1", organizationId: "org-1", email: "a@x", name: "Anna", role: "ADMIN", hourlyRate: 250000 }],
+      users: [{ id: "u-1", organizationId: "org-1", email: "a@x", name: "Anna", role: "ADMIN", hourlyRates: { ARBETE: 250000 } }],
       timeEntries: [{ id: "te-1", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date(), minutes: 660, description: "Arbete", hourlyRate: 162600, billable: true }],
       expenses: [
         { id: "ex-1", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date(), amount: 90000, description: "Domstolsavgift", billable: true, vatRate: 0, vatIncluded: false, kind: "EXPENSE" },
@@ -549,7 +583,7 @@ describe("billingRun.settleCoverage — bokför prutnings-uppdelningen (#801)", 
     const ds = new DemoDataStore({
       organizations: [{ id: "org-1", name: "X" }],
       matters: [{ id: "m-1", organizationId: "org-1", matterNumber: "2026-0001", title: "T", status: "ACTIVE", responsibleLawyerId: "u-1", ...matterExtra, createdAt: new Date() }],
-      users: [{ id: "u-1", organizationId: "org-1", email: "a@x", name: "Anna", role: "ADMIN", hourlyRate: currentRate }],
+      users: [{ id: "u-1", organizationId: "org-1", email: "a@x", name: "Anna", role: "ADMIN", hourlyRates: { ARBETE: currentRate } }],
       timeEntries: [{ id: "te-1", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date(), minutes, description: "M", hourlyRate: 200000, billable: true }],
     }, async () => {});
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -763,7 +797,7 @@ describe("billingRun.settleCoverage — bokför prutnings-uppdelningen (#801)", 
     const ds = new DemoDataStore({
       organizations: [{ id: "org-1", name: "X" }],
       matters: [{ id: "m-1", organizationId: "org-1", matterNumber: "2026-0001", title: "T", status: "ACTIVE", responsibleLawyerId: "u-1", paymentMethod: "RATTSHJALP", clientShareBips: 2000, taxaHasFTax: true, createdAt: new Date() }],
-      users: [{ id: "u-1", organizationId: "org-1", email: "a@x", name: "Anna", role: "ADMIN", hourlyRate: 999999 }],
+      users: [{ id: "u-1", organizationId: "org-1", email: "a@x", name: "Anna", role: "ADMIN", hourlyRates: { ARBETE: 999999 } }],
       timeEntries: [{ id: "te-1", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date(), minutes: 120, description: "M", hourlyRate: 200000, billable: true }],
       expenses: [{ id: "ex-1", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date(), amount: 10000, description: "Ansökningsavgift", billable: true, vatRate: 2500, vatIncluded: false }],
     }, async () => {});
@@ -843,7 +877,7 @@ describe("billingRun.settleCoverage — bokför prutnings-uppdelningen (#801)", 
         responsibleLawyerId: "u-1", paymentMethod: "RATTSSKYDD", clientShareBips: 2000,
         tvistUppkomDatum: new Date("2026-03-01"), rattsskyddBeslutDatum: new Date("2026-04-01"), createdAt: new Date(),
       }],
-      users: [{ id: "u-1", organizationId: "org-1", email: "a@x", name: "Anna", role: "ADMIN", hourlyRate: 300000 }],
+      users: [{ id: "u-1", organizationId: "org-1", email: "a@x", name: "Anna", role: "ADMIN", hourlyRates: { ARBETE: 300000 } }],
       timeEntries: [
         { id: "te-pre", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date("2026-02-01"), minutes: 120, description: "före tvist", hourlyRate: 200000, billable: true },
         { id: "te-retro", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date("2026-03-15"), minutes: 120, description: "retroaktivt", hourlyRate: 200000, billable: true },
@@ -889,7 +923,7 @@ describe("billingRun.invoiceSpecification (#856)", () => {
     const ds = new DemoDataStore({
       organizations: [{ id: "org-1", name: "X" }],
       matters: [{ id: "m-1", organizationId: "org-1", matterNumber: "2026-0001", title: "T", status: "ACTIVE", responsibleLawyerId: "u-1", paymentMethod: "RATTSHJALP", clientShareBips: 2000, taxaHasFTax: true, createdAt: new Date() }],
-      users: [{ id: "u-1", organizationId: "org-1", email: "a@x", name: "Anna", role: "ADMIN", hourlyRate: 999999 }],
+      users: [{ id: "u-1", organizationId: "org-1", email: "a@x", name: "Anna", role: "ADMIN", hourlyRates: { ARBETE: 999999 } }],
       timeEntries: [{ id: "te-1", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date(), minutes: 180, description: "M", hourlyRate: 200000, billable: true }],
     }, async () => {});
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -929,7 +963,7 @@ describe("slutreglering med ALLA arvodeskategorier (#953)", () => {
     const ds = new DemoDataStore({
       organizations: [{ id: "org-1", name: "X" }],
       matters: [{ id: "m-1", organizationId: "org-1", matterNumber: "2026-0001", title: "T", status: "ACTIVE", responsibleLawyerId: "u-1", paymentMethod, clientShareBips: 2000, taxaHasFTax: true, createdAt: new Date("2026-05-01") }],
-      users: [{ id: "u-1", organizationId: "org-1", email: "a@x", name: "Anna", role: "ADMIN", hourlyRate: 999_999 }],
+      users: [{ id: "u-1", organizationId: "org-1", email: "a@x", name: "Anna", role: "ADMIN", hourlyRates: { ARBETE: 999_999 } }],
       timeEntries: ALLA_KATEGORIER.map((t) => ({
         id: t.id, organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date("2026-05-02"),
         minutes: t.minutes, description: t.description, hourlyRate: 200_000, billable: true,

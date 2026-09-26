@@ -9,6 +9,7 @@
  */
 
 import { useId, useState } from "react";
+import { formatKrPerHour, HourlyRatesFields } from "@/components/billing/hourly-rates-fields";
 import {
   PAYMENT_METHOD_LABELS,
   paymentMethodOptions,
@@ -17,7 +18,10 @@ import {
   type CreditRisk,
 } from "@/lib/client/labels";
 import { trpc } from "@/lib/client/trpc";
-import { paymentMethodSchema, type PaymentMethod } from "@/lib/shared/schemas/enums";
+import {
+  HOURLY_TIME_ENTRY_KINDS, paymentMethodSchema, TIME_ENTRY_KIND_LABELS, type PaymentMethod,
+} from "@/lib/shared/schemas/enums";
+import type { HourlyRates } from "@/lib/shared/schemas/hourly-rates";
 import type { MatterId } from "@/lib/shared/schemas/ids";
 
 const RISK_BADGE: Record<CreditRisk, string> = {
@@ -43,8 +47,8 @@ interface Props {
   rattsskyddBeslutDatum?: Date | string | null | undefined;
   /** Rättsskydd: datum då rättsskydd nekades (#811). */
   rattsskyddNekadAt?: Date | string | null | undefined;
-  /** Avvikande timpris för ärendet (öre/h); null/utelämnat = följ jurist/byrå. */
-  hourlyRate?: number | null | undefined;
+  /** Ärendets avvikande timpriser per kategori (öre/h, #1206); saknad = följ jurist/byrå. */
+  hourlyRates?: HourlyRates | undefined;
 }
 
 /** ISO-datum (yyyy-mm-dd) ur ett valfritt datumfält, tomt om saknas. */
@@ -72,7 +76,7 @@ function PaymentMethodView({
   clientShareBips,
   rattsskyddMaxOre,
   rattshjalpMaxTimmar,
-  hourlyRate,
+  hourlyRates,
   onEdit,
 }: {
   paymentMethod: PaymentMethod;
@@ -81,7 +85,7 @@ function PaymentMethodView({
   clientShareBips: number | null;
   rattsskyddMaxOre: number | null;
   rattshjalpMaxTimmar: number | null;
-  hourlyRate?: number | null | undefined;
+  hourlyRates?: HourlyRates | undefined;
   onEdit: () => void;
 }) {
   const risk = creditRiskFor(paymentMethod);
@@ -101,7 +105,7 @@ function PaymentMethodView({
             <span className={`text-xs rounded-full px-2 py-0.5 border ${badgeClass}`}>
               Kreditrisk: {CREDIT_RISK_LABELS[risk]}
             </span>
-            <MatterRateBadge hourlyRate={hourlyRate} />
+            <MatterRateBadge hourlyRates={hourlyRates} />
             {showShare && (
               <span className="text-xs rounded-full px-2 py-0.5 border border-blue-200 bg-blue-50 text-blue-700">
                 Klientens andel: {clientShareBips != null ? `${clientShareBips / 100} %` : "ej satt"}
@@ -214,12 +218,23 @@ function ClientShareField({ id, value, onChange }: { id: string; value: string; 
   );
 }
 
+/** Ärendets satta priser som "Timarvode 3 000 kr/h · Tidsspillan 1 500 kr/h". */
+function matterRateSummary(rates: HourlyRates | undefined): string {
+  return HOURLY_TIME_ENTRY_KINDS
+    .flatMap((kind) => {
+      const ore = rates?.[kind];
+      return ore != null ? [`${TIME_ENTRY_KIND_LABELS[kind]} ${formatKrPerHour(ore)}`] : [];
+    })
+    .join(" · ");
+}
+
 /** Syns bara när ärendet har ett avvikande pris — det ovanliga fallet. */
-function MatterRateBadge({ hourlyRate }: { hourlyRate: number | null | undefined }) {
-  if (hourlyRate == null) return null;
+function MatterRateBadge({ hourlyRates }: { hourlyRates: HourlyRates | undefined }) {
+  const summary = matterRateSummary(hourlyRates);
+  if (!summary) return null;
   return (
     <span className="text-xs rounded-full px-2 py-0.5 border border-amber-200 bg-amber-50 text-amber-800">
-      Avvikande timpris: {hourlyRate / 100} kr/h
+      Avvikande timpris: {summary}
     </span>
   );
 }
@@ -230,18 +245,17 @@ function krText(ore: number | null | undefined): string {
 }
 
 /**
- * Ärendets avvikande timpris — ovanligt, så det ligger hopfällt längst ned och
- * tar ingen plats i vardagen. Tomt = juristens timpris (eller byråns standard).
+ * Ärendets avvikande timpriser — ovanligt, så de ligger hopfällda längst ned och
+ * tar ingen plats i vardagen. Tomt fält = den registrerande juristens pris, annars
+ * byråns (placeholdern visar byråns — juristens beror på vem som skriver tid).
  */
-function MatterRateField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const id = useId();
+function MatterRateField({ value, onChange }: { value: HourlyRates; onChange: (v: HourlyRates) => void }) {
+  const org = trpc.organization.getSettings.useQuery();
   return (
-    <details open={value !== ""} className="rounded border border-gray-200 px-3 py-2">
+    <details open={Object.keys(value).length > 0} className="rounded border border-gray-200 px-3 py-2">
       <summary className="cursor-pointer text-xs font-medium text-gray-600">Avvikande timpris för ärendet</summary>
-      <label htmlFor={id} className="mt-2 block text-xs font-medium mb-1">Timpris (kr/h, exkl moms) — tomt = juristens/byråns</label>
-      <input id={id} type="text" inputMode="decimal" value={value} onChange={(e) => onChange(e.target.value)} placeholder="t.ex. 3000"
-        className="w-40 border border-gray-300 rounded px-2 py-1.5 text-sm" />
-      <p className="mt-1 text-[11px] text-gray-400">Gäller tid som registreras efter ändringen.</p>
+      <p className="mt-2 mb-2 text-[11px] text-gray-500">Tomt = juristens pris, annars byråns. Gäller tid som registreras efter ändringen.</p>
+      <HourlyRatesFields value={value} onChange={onChange} parents={[org.data?.hourlyRates]} />
     </details>
   );
 }
@@ -261,7 +275,7 @@ function PaymentMethodEditor({ matterId, initial, onDone }: { matterId: MatterId
   const [tvist, setTvist] = useState(isoDate(initial.tvistUppkomDatum));
   const [beslut, setBeslut] = useState(isoDate(initial.rattsskyddBeslutDatum));
   const [nekad, setNekad] = useState(isoDate(initial.rattsskyddNekadAt));
-  const [rateKr, setRateKr] = useState(krText(initial.hourlyRate));
+  const [rates, setRates] = useState<HourlyRates>(initial.hourlyRates ?? {});
   const [methodId, decidedAtId, noteId, shareId] = [useId(), useId(), useId(), useId()];
 
   const utils = trpc.useUtils();
@@ -319,7 +333,7 @@ function PaymentMethodEditor({ matterId, initial, onDone }: { matterId: MatterId
             placeholder="T.ex. Trygg-Hansa, nr. TH-2024-4455 · Självrisk 20% · Maxbelopp 75 000 kr"
           />
         </div>
-        <MatterRateField value={rateKr} onChange={setRateKr} />
+        <MatterRateField value={rates} onChange={setRates} />
         <div className="flex gap-2 justify-end">
           <button onClick={onDone} className="px-3 py-1.5 text-sm border border-gray-300 rounded">
             Avbryt
@@ -338,7 +352,7 @@ function PaymentMethodEditor({ matterId, initial, onDone }: { matterId: MatterId
                 tvistUppkomDatum: tvist || null,
                 rattsskyddBeslutDatum: beslut || null,
                 rattsskyddNekadAt: nekad || null,
-                hourlyRate: oreFromKr(rateKr),
+                hourlyRates: rates,
               })
             }
             className="px-4 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
@@ -364,7 +378,7 @@ export function PaymentMethodCard(props: Props) {
       clientShareBips={props.clientShareBips}
       rattsskyddMaxOre={props.rattsskyddMaxOre}
       rattshjalpMaxTimmar={props.rattshjalpMaxTimmar}
-      hourlyRate={props.hourlyRate}
+      hourlyRates={props.hourlyRates}
       onEdit={() => setEditing(true)}
     />
   );

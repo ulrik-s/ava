@@ -50,7 +50,7 @@ describe("reports.perLawyer", () => {
   });
 
   it("aggregerar tid + utlägg per ärende", async () => {
-    mockPrisma.user.findFirst.mockResolvedValue({ id: "u1", name: "Anna", hourlyRate: 3000 });
+    mockPrisma.user.findFirst.mockResolvedValue({ id: "u1", name: "Anna", hourlyRates: { ARBETE: 3000 } });
     mockPrisma.timeEntry.findMany.mockResolvedValue([
       {
         id: "t1", date: new Date("2026-04-15"), minutes: 60, billable: true,
@@ -77,7 +77,7 @@ describe("reports.perLawyer", () => {
   });
 
   it("totals summerar alla ärenden", async () => {
-    mockPrisma.user.findFirst.mockResolvedValue({ id: "u1", name: "A", hourlyRate: 1000 });
+    mockPrisma.user.findFirst.mockResolvedValue({ id: "u1", name: "A", hourlyRates: { ARBETE: 1000 } });
     mockPrisma.timeEntry.findMany.mockResolvedValue([
       { id: "1", date: new Date("2026-04-01"), minutes: 60, billable: true, hourlyRate: 1000, description: "", invoiceId: null,
         matter: matter({ id: "m1", matterNumber: "0001" }) },
@@ -92,7 +92,7 @@ describe("reports.perLawyer", () => {
   });
 
   it("genererar weeklyRows med ISO-veckor i intervallet", async () => {
-    mockPrisma.user.findFirst.mockResolvedValue({ id: "u1", name: "A", hourlyRate: 1000 });
+    mockPrisma.user.findFirst.mockResolvedValue({ id: "u1", name: "A", hourlyRates: { ARBETE: 1000 } });
     mockPrisma.timeEntry.findMany.mockResolvedValue([]);
     const res = await makeCaller().perLawyer({
       from: "2026-04-01", to: "2026-04-30", userId: "u1",
@@ -103,7 +103,7 @@ describe("reports.perLawyer", () => {
   });
 
   it("listar bara ofakturerat (utan invoiceId) i unbilled", async () => {
-    mockPrisma.user.findFirst.mockResolvedValue({ id: "u1", name: "A", hourlyRate: 1000 });
+    mockPrisma.user.findFirst.mockResolvedValue({ id: "u1", name: "A", hourlyRates: { ARBETE: 1000 } });
     mockPrisma.timeEntry.findMany.mockResolvedValue([
       { id: "billed", date: new Date("2026-04-01"), minutes: 60, billable: true, hourlyRate: 1000, description: "", invoiceId: "inv1",
         matter: matter() },
@@ -118,7 +118,7 @@ describe("reports.perLawyer", () => {
   });
 
   it("ignorerar non-billable i workValueOre och unbilled", async () => {
-    mockPrisma.user.findFirst.mockResolvedValue({ id: "u1", name: "A", hourlyRate: 1000 });
+    mockPrisma.user.findFirst.mockResolvedValue({ id: "u1", name: "A", hourlyRates: { ARBETE: 1000 } });
     mockPrisma.timeEntry.findMany.mockResolvedValue([
       { id: "1", date: new Date("2026-04-01"), minutes: 60, billable: false, hourlyRate: 1000, description: "", invoiceId: null,
         matter: matter() },
@@ -133,7 +133,7 @@ describe("reports.perLawyer", () => {
   });
 
   it("propagerar paymentMethod och note till MatterAgg", async () => {
-    mockPrisma.user.findFirst.mockResolvedValue({ id: "u1", name: "A", hourlyRate: 1000 });
+    mockPrisma.user.findFirst.mockResolvedValue({ id: "u1", name: "A", hourlyRates: { ARBETE: 1000 } });
     mockPrisma.timeEntry.findMany.mockResolvedValue([
       { id: "1", date: new Date("2026-04-01"), minutes: 30, billable: true, hourlyRate: 1000, description: "", invoiceId: null,
         matter: matter({ paymentMethod: "RATTSHJALP", paymentMethodNote: "Diarienr X" }) },

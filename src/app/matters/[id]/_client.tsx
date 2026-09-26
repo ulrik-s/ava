@@ -15,6 +15,7 @@ import { useRouteId } from "@/lib/client/demo/use-route-id";
 import { useEagerCacheMatterDocuments } from "@/lib/client/firma/use-eager-cache-matter-documents";
 import { trpc } from "@/lib/client/trpc";
 import type { MatterRole, MatterStatus, PaymentMethod } from "@/lib/shared/schemas/enums";
+import type { HourlyRates } from "@/lib/shared/schemas/hourly-rates";
 import { asId } from "@/lib/shared/schemas/ids";
 import { BillingPanel } from "./_billing-panel";
 import { ContactsSection } from "./_contacts-section";
@@ -107,7 +108,7 @@ function MatterPaymentMethod({ matterId, matter }: {
     tvistUppkomDatum?: Date | string | null | undefined;
     rattsskyddBeslutDatum?: Date | string | null | undefined;
     rattsskyddNekadAt?: Date | string | null | undefined;
-    hourlyRate?: number | null | undefined;
+    hourlyRates?: HourlyRates | undefined;
   };
 }) {
   const rattsskyddMaxOre = matter.rattsskyddMaxOre ?? null;
@@ -135,7 +136,7 @@ function MatterPaymentMethod({ matterId, matter }: {
         rattshjalpMaxTimmar={rattshjalpMaxTimmar}
         tvistUppkomDatum={matter.tvistUppkomDatum}
         rattsskyddBeslutDatum={matter.rattsskyddBeslutDatum}
-        hourlyRate={matter.hourlyRate ?? null}
+        hourlyRates={matter.hourlyRates}
         rattsskyddNekadAt={matter.rattsskyddNekadAt}
       />
     </>
