@@ -67,6 +67,16 @@ export type WatchlistKind =
  */
 export type WatchlistSeverity = "passed" | "approaching";
 
+/**
+ * Vart en rad leder (#1215): route + id i stället för en färdig URL, så UI:t kan
+ * navigera via `EntityLink` — en Next-`<Link>` till `/matters/<id>` hittar ingen
+ * route för ärenden som skapats efter bygget (static export) och gör ingenting.
+ */
+export interface WatchlistLink {
+  route: "matters" | "invoices";
+  id: string;
+}
+
 export interface WatchlistItem {
   kind: WatchlistKind;
   severity: WatchlistSeverity;
@@ -80,8 +90,8 @@ export interface WatchlistItem {
   at: string | null;
   /** Belopp posten gäller (öre), när det finns ett. */
   amountOre: number | null;
-  /** Vart man går för att åtgärda. */
-  href: string;
+  /** Vart man går för att åtgärda — null när posten saknar ärende/faktura. */
+  link: WatchlistLink | null;
   /** Uppgiften bakom en tidsfrist — så den kan bockas av direkt i listan (#1167). */
   taskId?: string;
 }
@@ -160,7 +170,7 @@ function coverageItem(m: CoverageMatter, status: NonNullable<ReturnType<typeof c
       : `Begär ${utokning} innan taket nås.`,
     matterId: m.id, matterNumber: m.matterNumber, at: null,
     amountOre: status.kind === "amount" ? status.usedOre : null,
-    href: `/matters/${m.id}`,
+    link: { route: "matters", id: m.id },
   };
 }
 
@@ -218,7 +228,7 @@ export function unbilledItems(
       detail: `Upparbetat ofakturerat ${skäl}.`,
       matterId: m.id, matterNumber: m.matterNumber,
       at: m.oldestEntryDate, amountOre: m.unbilledOre,
-      href: `/matters/${m.id}`,
+      link: { route: "matters", id: m.id },
     });
   }
   return out;
@@ -254,7 +264,7 @@ export function deadlineItems(
         : `Förfaller ${iso(new Date(task.dueAt))}.`,
       matterId: task.matterId, matterNumber: task.matterNumber,
       at: iso(new Date(task.dueAt)), amountOre: null,
-      href: task.matterId ? `/matters/${task.matterId}` : "/watchlist",
+      link: task.matterId ? { route: "matters", id: task.matterId } : null,
       taskId: task.id,
     });
   }
@@ -284,7 +294,7 @@ export function overdueInvoiceItems(invoices: readonly OverdueInvoice[], now: Da
       detail: `${dagar(dagarSen)} över förfallodag.`,
       matterId: inv.matterId, matterNumber: inv.matterNumber,
       at: inv.dueDate, amountOre: inv.outstandingOre,
-      href: `/invoices/${inv.id}`,
+      link: { route: "invoices", id: inv.id },
     });
   }
   return out;
@@ -314,6 +324,6 @@ export function failedDispatchItems(dispatches: readonly FailedDispatch[]): Watc
     detail: `Nådde aldrig ${d.recipient}${d.error ? ` — ${d.error}` : ""}. Fakturan är obetald för att den inte kommit fram.`,
     matterId: d.matterId, matterNumber: d.matterNumber,
     at: d.failedAt, amountOre: null,
-    href: `/invoices/${d.invoiceId}`,
+    link: { route: "invoices", id: d.invoiceId },
   }));
 }

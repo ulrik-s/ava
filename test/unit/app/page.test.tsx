@@ -105,7 +105,7 @@ describe("Dashboard", () => {
   });
 
   it("Att bevaka: tidsfrist kan bockas av direkt på startsidan", () => {
-    watchlistQuery.data = { items: [{ kind: "deadline", severity: "passed", title: "Tidsfrist passerad: Svaromål", detail: "d", matterId: "m1", matterNumber: "2026-0001", at: "2026-01-01", amountOre: null, href: "/matters/m1", taskId: "t9" }] };
+    watchlistQuery.data = { items: [{ kind: "deadline", severity: "passed", title: "Tidsfrist passerad: Svaromål", detail: "d", matterId: "m1", matterNumber: "2026-0001", at: "2026-01-01", amountOre: null, link: { route: "matters", id: "m1" }, taskId: "t9" }] };
     render(<Dashboard />);
     expect(screen.getByRole("alert")).toHaveTextContent(/FÖRSENAD/);
     fireEvent.click(screen.getByRole("checkbox", { name: "Markera klar: Tidsfrist passerad: Svaromål" }));

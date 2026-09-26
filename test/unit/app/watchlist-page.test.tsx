@@ -33,7 +33,7 @@ function item(p: Partial<WatchlistItem> = {}): WatchlistItem {
   return {
     kind: "deadline", severity: "approaching", title: "Tidsfrist", detail: "d",
     matterId: "m1", matterNumber: "2026-0001", at: "2026-09-08",
-    amountOre: null, href: "/matters/m1", ...p,
+    amountOre: null, link: { route: "matters", id: "m1" }, ...p,
   };
 }
 
