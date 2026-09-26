@@ -58,16 +58,17 @@ describe("renderKostnadsrakningPdf", () => {
       hufStart: new Date("2026-06-30T09:00:00Z"), hufEnd: new Date("2026-06-30T09:00:00Z"), // ingen HUF
       taxaLevel: 1, hasFTax: true,
       timeEntries: [
-        { id: "t1", date: "2026-06-18", description: "Första möte med klient i ärendet", minutes: 60, billable: true },
+        // Rådgivningstimmens LÅSTA post (redan fakturerad klienten, #1205).
+        { id: "t1", date: "2026-06-18", description: "Rådgivning", minutes: 60, billable: true, frozenAt: "2026-06-18" },
         { id: "t2", date: "2026-06-24", description: "Upprättande av inlaga till tingsrätten", minutes: 90, billable: true },
       ],
       expenses: [{ id: "x1", date: new Date("2026-06-25T00:00:00Z"), description: "Ansökningsavgift", amount: 90000, vatRate: 0, vatIncluded: false }],
     });
-    // Kontext: rådgivnings-posten (60 min, tidigast) carvas bort ur KR:n (#868) →
-    // bara arbetsposten (90 min) kvar; notis satt.
+    // Kontext: den låsta rådgivnings-posten ingår inte (#1205) → bara arbetsposten
+    // (90 min) kvar; notisen säger att timmen redan är fakturerad.
     expect(result.timeLines).toHaveLength(1);
     expect(result.timeLines[0]!.description).toBe("Upprättande av inlaga till tingsrätten");
-    expect((result.templateContext.radgivningNotice as string | null)).toMatch(/rådgivningstimme/i);
+    expect((result.templateContext.radgivningNotice as string | null)).toMatch(/har redan fakturerats klienten/);
     const bytes = await renderKostnadsrakningPdf({
       result,
       meta: { matterNumber: "2026-0010", matterTitle: "Umgängestvist Carlsson", clientName: "Cecilia Carlsson", courtName: "Stockholms tingsrätt", defenderName: "Anna Advokat" },

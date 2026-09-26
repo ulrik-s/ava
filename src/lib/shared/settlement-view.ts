@@ -13,8 +13,7 @@ import { coverageEntryValueOre, payableCoverageEntries } from "./brottmalstaxa";
 import type { RattsskyddClientParts } from "./coverage-billing";
 import { arvodeInclVatOre } from "./invoice-calc";
 import type { SpecDeduction, SpecTimeLine } from "./invoice-specification";
-import { carveEarliestMinutes } from "./kostnadsrakning";
-import { RADGIVNING_MINUTES } from "./rattshjalp";
+import { radgivningTextRad } from "./rattshjalp";
 import type { PaymentMethod, TimeEntryKind } from "./schemas/enums";
 
 /** `add` = delbelopp/steg i trappan, `deduct` = avgår (−), `info` = spårbarhets-
@@ -86,12 +85,12 @@ export interface SettlementBreakdown {
   firmLossNetOre: number;        // byrå-förlust/prutning NETTO — domstolens trappa (#876)
   prutningGrossOre: number;      // byrå-förlust/prutning brutto
   payerArvodeNetOre: number;     // domstolens/försäkringens andel av arvodet NETTO — trappan (#876)
-  radgivningGrossOre: number;    // klient-betald rådgivningstimme brutto — omnämns på domstolsfakturan, ej i totalen (#876)
-  radgivningNetOre: number;      // samma timme NETTO — första avdraget i arvodestrappan (#941)
+  radgivningGrossOre: number;    // redan fakturerad rådgivningstimme brutto — bara omnämnd, ej i underlaget (#876/#1205)
+  radgivningNetOre: number;      // samma timme NETTO — info-raden i arvodestrappan (#1205)
   payerPayableOre: number;       // domstolen att betala
   clientPayableOre: number;      // klienten att betala (självrisk − aconton)
   // Klientens självrisk-faktura specificeras med den arbetade tiden (#876). Raderna
-  // är carvade (rättshjälp: rådgivningstimmen bort) + avstämda så summan = arvodeBaseNetOre.
+  // är avstämda så summan = arvodeBaseNetOre (låsta poster, t.ex. rådgivningen, ingår ej).
   clientArvodeLines: SpecTimeLine[];
   deductedAccontos: SpecDeduction[];
   /** Rättsskydd: varför klientens del blev som den blev (#935) — otäckt arbete,
@@ -99,14 +98,12 @@ export interface SettlementBreakdown {
   clientParts?: RattsskyddClientParts;
 }
 
-/** Klientfakturans tidsspec (#876): arbetad tid, rådgivningstimmen carvad bort
- *  (rättshjälp), värderad på samma rate som arvodesbasen och AVSTÄMD så radernas
- *  summa exakt = `totalArvodeNet` (per-rad-avrundning läggs på sista raden). */
-export function buildClientArvodeLines(
-  method: PaymentMethod, rateOre: number, work: UnfrozenWork, totalArvodeNet: number, settleDate: Date | string,
-): SpecTimeLine[] {
-  const billable = payableCoverageEntries(work.timeEntries.filter((t) => t.billable));
-  const entries = method === "RATTSHJALP" ? carveEarliestMinutes(billable, RADGIVNING_MINUTES) : billable;
+/** Klientfakturans tidsspec (#876): det ofrysta arbetet, värderat på samma rate
+ *  som arvodesbasen och AVSTÄMT så radernas summa exakt = `totalArvodeNet` (per-
+ *  rad-avrundning läggs på sista raden). Rådgivningstimmen är en låst post och
+ *  finns inte i `work` (#1205) — ingen registrerad tid dras av i dess ställe. */
+export function buildClientArvodeLines(work: UnfrozenWork, totalArvodeNet: number, settleDate: Date | string): SpecTimeLine[] {
+  const entries = payableCoverageEntries(work.timeEntries.filter((t) => t.billable));
   // #891/#950: varje rad värderas på sin KATEGORIS norm för slutregleringsåret —
   // för alla betalningssätt, så raderna summerar till `totalArvodeNet`. Per-dygns-
   // kategorier (advokatberedskap) får sitt dagbelopp, inte minuter × norm.
@@ -120,10 +117,11 @@ export function buildClientArvodeLines(
   return lines;
 }
 
-/** Rådgivningstimmen (1 h) betalas av klienten separat; värdet = en timme på samma
- *  norm som arvodesbasen (jfr coverageBaseMinutes −60). 0 för icke-rättshjälp. */
-export function radgivningOre(method: PaymentMethod, rateOre: number): { radgivningGrossOre: number; radgivningNetOre: number } {
-  if (method !== "RATTSHJALP") return { radgivningGrossOre: 0, radgivningNetOre: 0 };
+/** Den redan fakturerade rådgivningstimmen (1 h, rättshjälp) — omnämns på
+ *  fakturorna men ingår ALDRIG i underlaget (#1205). 0 när ingen rådgivnings-
+ *  faktura finns (icke-rättshjälp, eller rättshjälp utan registrerad rådgivning). */
+export function radgivningOre(radgivningInvoiced: boolean, rateOre: number): { radgivningGrossOre: number; radgivningNetOre: number } {
+  if (!radgivningInvoiced) return { radgivningGrossOre: 0, radgivningNetOre: 0 };
   return { radgivningGrossOre: arvodeInclVatOre(rateOre), radgivningNetOre: rateOre };
 }
 
@@ -162,16 +160,15 @@ export const shareLabel = (bips: number): string => (bips / 100).toLocaleString(
 /**
  * Arvodestrappan ned till det BEVILJADE beloppet (#941) — samma på klientens och
  * betalarens faktura, och i den ordning beräkningen faktiskt sker:
- *   1. rådgivningstimmen av FÖRST (klienten har redan betalat den separat),
- *   2. därefter domstolens prutning (byrån bär den),
- *   3. först då är basen för klientens rättshjälpsavgift klar.
- * Mellanstegen renderas bara när de har ett belopp, så rättsskydd (ingen
- * rådgivning, ingen byrå-buren prutning) får samma enda rad som tidigare.
+ *   1. domstolens prutning (byrån bär den),
+ *   2. först då är basen för klientens rättshjälpsavgift klar.
+ * Rådgivningstimmen ingår inte i underlaget (#1205) — den är redan fakturerad
+ * klienten och omnämns bara som info-rad. Mellanstegen renderas bara när de har
+ * ett belopp, så rättsskydd (ingen byrå-buren prutning) får en enda rad.
  */
 export function arvodeLadderRows(b: SettlementBreakdown, payerNoun: string): SettlementRow[] {
-  const arvodeFullNetOre = b.arvodeBaseNetOre + b.radgivningNetOre;
   const rows: SettlementRow[] = [
-    { label: "Upparbetat arvode (exkl moms)", amountOre: arvodeFullNetOre, kind: "add" },
+    { label: "Upparbetat arvode (exkl moms)", amountOre: b.arvodeBaseNetOre, kind: "add" },
   ];
   // Utläggen tillhör BASEN — de prutas och delas precis som arvodet (#947), så de
   // hör hemma ovanför avdragen och inte som en lös rad längst ned.
@@ -179,22 +176,20 @@ export function arvodeLadderRows(b: SettlementBreakdown, payerNoun: string): Set
     rows.push({ label: "Utlägg (exkl moms)", amountOre: b.expensesBaseNetOre, kind: "add" });
     rows.push({ label: "Underlag (exkl moms)", amountOre: ladderBaseOre(b), kind: "add" });
   }
-  if (b.radgivningNetOre > 0) {
-    rows.push({ label: "Avgår rådgivningstimme (1 tim) — betald av klienten separat (exkl moms)", amountOre: b.radgivningNetOre, kind: "deduct" });
-  }
   const prutningOre = totalPrutningNetOre(b);
   if (prutningOre > 0) {
     rows.push({ label: `Avgår ${payerNoun.toLowerCase()} prutning — byrån bär (exkl moms)`, amountOre: prutningOre, kind: "deduct" });
-  }
-  if (b.radgivningNetOre > 0 || prutningOre > 0) {
     rows.push({ label: "Beviljat belopp (exkl moms)", amountOre: awardedBaseOre(b), kind: "add" });
+  }
+  if (b.radgivningNetOre > 0) {
+    rows.push({ label: radgivningTextRad("faktura"), amountOre: b.radgivningNetOre, kind: "info" });
   }
   return rows;
 }
 
 /** Basen trappan utgår från: allt upparbetat arvode + utlägg, netto. */
 export function ladderBaseOre(b: SettlementBreakdown): number {
-  return b.arvodeBaseNetOre + b.radgivningNetOre + b.expensesBaseNetOre;
+  return b.arvodeBaseNetOre + b.expensesBaseNetOre;
 }
 
 /** Hela nedsättningen byrån bär — arvodets del OCH utläggens (#943). */
@@ -202,9 +197,9 @@ export function totalPrutningNetOre(b: SettlementBreakdown): number {
   return b.firmLossNetOre + b.expenseLossNetOre;
 }
 
-/** Det beviljade beloppet klientens andel räknas på: bas − rådgivning − prutning. */
+/** Det beviljade beloppet klientens andel räknas på: bas − prutning. */
 export function awardedBaseOre(b: SettlementBreakdown): number {
-  return ladderBaseOre(b) - b.radgivningNetOre - totalPrutningNetOre(b);
+  return ladderBaseOre(b) - totalPrutningNetOre(b);
 }
 
 /** Klientens andel räknas på det BEVILJADE beloppet när domstolen prutat (#941)

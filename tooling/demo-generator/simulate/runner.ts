@@ -132,15 +132,11 @@ async function hDoc(ctx: RunCtx, m: SimMatter, e: Any, iso: string, st: SimState
 }
 
 async function hRadgivning(ctx: RunCtx, m: SimMatter, _e: Any, iso: string): Promise<void> {
-  // Rådgivningstimmen (#880): en debiterbar tidspost — så settlementens coverageBaseMinutes
-  // −60 stämmer — MEN utanför aconto-basen (rör INTE accruedNetOre; allt EFTER rådgivningen
-  // går på aconto). Faktureras separat SAMMA DAG som mötet.
-  await ctx.c.timeEntry.create({
-    matterId: m.id, date: iso, minutes: 60, description: "Rådgivning — första möte med klient",
-    billable: true, userId: m.lawyerId, hourlyRate: simTimeRateOre(m, {}, iso), createdAt: iso,
-  });
+  // Rådgivningstimmen (#880/#1205): faktureras separat SAMMA DAG som mötet. Fakturan
+  // skapar själv mötets tidspost — låst och kopplad till fakturan — så den ligger
+  // utanför aconto-basen (rör INTE accruedNetOre) och ingår aldrig i KR/slutreglering.
+  const { invoice } = await ctx.c.invoice.createRadgivning({ matterId: m.id, invoiceDate: iso, userId: m.lawyerId });
   ctx.res.timeEntries++;
-  const { invoice } = await ctx.c.invoice.createRadgivning({ matterId: m.id, invoiceDate: iso });
   // Skapas som DRAFT ("Skapad", #1138) — i demohistoriken är den skickad.
   await ctx.c.invoice.setStatus({ invoiceId: invoice.id, status: "SENT" });
   ctx.res.invoices++;

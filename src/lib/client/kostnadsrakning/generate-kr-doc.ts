@@ -13,9 +13,10 @@
  * `generateFakturaFromTemplate`, så det funkar i både demo- och git/server-backend.
  */
 
+import type { TimeEntryInput } from "@/lib/shared/kostnadsrakning";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { KOSTNADSRAKNING_DOCUMENT_TYPE } from "@/lib/shared/schemas/document";
-import { asId, type MatterId } from "@/lib/shared/schemas/ids";
+import { asId, type BillingRunId, type MatterId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
 import type { DocUtils, RegisterMut } from "./generate-faktura-doc";
 
@@ -37,21 +38,23 @@ export interface KrDocExpense {
   id: string; date: string | Date; description: string;
   amount: number; vatRate?: number; vatIncluded?: boolean; billable?: boolean;
 }
-export interface KrDocTimeEntry {
-  id: string; date: string | Date; description: string; minutes: number; billable?: boolean;
-}
+/** Tidspost till KR-dokumentet. Låsfälten (#1205) avgör om posten redan är
+ *  fakturerad (t.ex. rådgivningstimmen) och därför utelämnas. */
+export type KrDocTimeEntry = TimeEntryInput;
 
 export interface GenerateKrDocArgs {
   matterId: MatterId;
   meta: KrDocMeta;
   expenses: readonly KrDocExpense[];
   timeEntries: readonly KrDocTimeEntry[];
+  /** Kostnadsräkningens körning: posterna den just frös är dess underlag (#1205). */
+  ownBillingRunId?: BillingRunId;
   register: RegisterMut;
   utils: DocUtils;
 }
 
 export async function generateKrDoc(args: GenerateKrDocArgs): Promise<void> {
-  const { matterId, meta, expenses, timeEntries, register, utils } = args;
+  const { matterId, meta, expenses, timeEntries, ownBillingRunId, register, utils } = args;
   const { buildKostnadsrakningContext } = await import("@/lib/shared/kostnadsrakning");
   const { renderKostnadsrakningPdf } = await import("@/lib/client/kostnadsrakning/render-pdf");
   const { persistGeneratedDoc } = await import("@/lib/client/demo/persist-generated-doc");
@@ -71,6 +74,7 @@ export async function generateKrDoc(args: GenerateKrDocArgs): Promise<void> {
     isTaxeArende: false,
     expenses,
     timeEntries,
+    ...omitUndefined({ ownBillingRunId }),
   });
 
   const bytes = await renderKostnadsrakningPdf({

@@ -44,8 +44,10 @@ describe("populateInvoiceDocs", () => {
     await populateInvoiceDocs(target.caller, (_p, b) => { htmls.push(new TextDecoder().decode(b)); return b.byteLength; });
     const radg = htmls.find((h) => h.includes("Rådgivningsfaktura"));
     expect(radg, "en rådgivningsfaktura-doc ska genereras").toBeDefined();
-    // Specifikationen är inte tom längre — raden ur notes framgår, med belopp.
-    expect(radg).toContain("Rådgivningstimme enligt rättshjälpstaxan");
+    // Specifikationen är inte tom — fakturan bär mötets låsta tidspost (#1205):
+    // "Rådgivning", 1 tim på rättshjälpsnormen, med belopp.
+    expect(radg).toContain("<td>Rådgivning</td>");
+    expect(radg).toMatch(/1\s626,00\skr\/tim/);
     // Klargör (spegel av KR-notisen) att timmen INTE ligger i domstolens KR.
     expect(radg).toContain("ingår INTE i kostnadsräkningen till domstolen");
   });

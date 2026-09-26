@@ -21,6 +21,15 @@ import type {
   TimeEntryReportFilter, TimeEntryReportRow, TimeEntryRepository, UnbilledTimeEntry,
 } from "./time-entry-repository";
 
+/**
+ * Ej låst (#1205): varken fryst av en körning ELLER låst direkt mot en faktura
+ * (`frozenAt` utan körning — rättshjälpens rådgivningstimme). Samma regel som
+ * `isLockedEntry` i `@/lib/shared/time-entry-lock`.
+ */
+function isUnlocked() {
+  return and(isNull(timeEntries.frozenByBillingRunId), isNull(timeEntries.frozenAt));
+}
+
 /** Org-scopat where för `listForOrg` (utbruten för komplexitet ≤8). */
 function listWhere(organizationId: OrganizationId, opts: TimeEntryListFilter) {
   return and(
@@ -128,7 +137,7 @@ export class DrizzleTimeEntryRepository extends DrizzleRepository<TimeEntry> imp
   async listUnfrozenForMatter(matterId: MatterId): Promise<TimeEntry[]> {
     const rows = await this.db
       .select().from(timeEntries)
-      .where(and(eq(timeEntries.matterId, matterId), isNull(timeEntries.frozenByBillingRunId), isNull(timeEntries.deletedAt)))
+      .where(and(eq(timeEntries.matterId, matterId), isUnlocked(), isNull(timeEntries.deletedAt)))
       .orderBy(asc(timeEntries.date));
     return rows;
   }
@@ -217,7 +226,7 @@ export class DrizzleTimeEntryRepository extends DrizzleRepository<TimeEntry> imp
   async freezeForMatter(matterId: MatterId, billingRunId: BillingRunId, now: Date): Promise<void> {
     await this.db.update(timeEntries)
       .set({ frozenAt: now, frozenByBillingRunId: billingRunId })
-      .where(and(eq(timeEntries.matterId, matterId), isNull(timeEntries.frozenByBillingRunId)));
+      .where(and(eq(timeEntries.matterId, matterId), isUnlocked()));
   }
 
   async unfreezeByBillingRun(billingRunId: BillingRunId): Promise<void> {
@@ -230,6 +239,6 @@ export class DrizzleTimeEntryRepository extends DrizzleRepository<TimeEntry> imp
     if (ids.length === 0) return;
     await this.db.update(timeEntries)
       .set({ frozenAt: now, frozenByBillingRunId: billingRunId })
-      .where(and(inArray(timeEntries.id, ids), isNull(timeEntries.frozenByBillingRunId)));
+      .where(and(inArray(timeEntries.id, ids), isUnlocked()));
   }
 }

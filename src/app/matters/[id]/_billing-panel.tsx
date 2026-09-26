@@ -610,8 +610,8 @@ function BillingSummary({ matterId }: { matterId: MatterId }) {
   const proposal = trpc.billingRun.proposal.useQuery({ matterId });
   const invoices = trpc.invoice.list.useQuery({ matterId });
   const d = proposal.data;
-  // Förslagets värde följer ärendets betalningssätt (rättshjälp: normen, utan
-  // rådgivningstimmen som redan fakturerats klienten).
+  // Förslagets värde följer ärendets betalningssätt (rättshjälp: normen). Den
+  // redan fakturerade rådgivningstimmen är låst och ingår inte (#1205).
   const unbilledOre = d?.workValueOre ?? 0;
   const list = invoices.data?.items ?? [];
   const fakturerat = list.filter((i) => i.status !== "DRAFT" && i.status !== "CANCELLED").reduce((s, i) => s + i.amount, 0);
@@ -640,7 +640,7 @@ function useRattshjalpKr(matterId: MatterId, matter: MatterContext, onClose: () 
   const register = trpc.document.register.useMutation();
   const utils = trpc.useUtils();
   const create = trpc.billingRun.createKostnadsrakning.useMutation({
-    onSuccess: async () => {
+    onSuccess: async ({ run }) => {
       // KR-dokumentet är en presentation av det inskickade — misslyckas det
       // ska billing-run:en ändå stå kvar (best-effort), så fånga felet.
       try {
@@ -656,7 +656,10 @@ function useRattshjalpKr(matterId: MatterId, matter: MatterContext, onClose: () 
             }),
           },
           expenses: krData.expenses,
-          timeEntries: (timeEntries.data?.entries ?? []) as ReadonlyArray<{ id: string; date: string | Date; description: string; minutes: number; billable?: boolean }>,
+          // Låsta poster (redan fakturerade, t.ex. rådgivningstimmen) utelämnas av
+          // byggaren; de som just DENNA kostnadsräkning frös är dess underlag (#1205).
+          timeEntries: timeEntries.data?.entries ?? [],
+          ownBillingRunId: run.id,
         });
       } catch (e) { console.warn("[rättshjälp-kr] dokument misslyckades:", e); }
       onRecorded(); onClose();

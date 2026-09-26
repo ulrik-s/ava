@@ -9,8 +9,9 @@ const entry = (minutes: number, hourlyRate: number) => ({ minutes, hourlyRate, b
 const WORK = { timeEntries: [entry(60, 0), entry(390, 0)] }; // 7,5 h utan timpris
 
 describe("matterArvodeNet", () => {
-  it("rättshjälp: normen utan rådgivningstimmen, oavsett posternas timpris", () => {
-    expect(matterArvodeNet({ paymentMethod: "RATTSHJALP" }, WORK, DATE)).toBe(Math.round(6.5 * NORM));
+  it("rättshjälp: normen för HELA den registrerade tiden, oavsett posternas timpris (#1205)", () => {
+    // Ingen timme dras av: rådgivningstimmen är en egen låst post som aldrig når underlaget.
+    expect(matterArvodeNet({ paymentMethod: "RATTSHJALP" }, WORK, DATE)).toBe(Math.round(7.5 * NORM));
   });
 
   it("offentligt uppdrag (ej taxa): normen för hela tiden", () => {

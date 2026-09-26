@@ -210,7 +210,8 @@ function useKostnadsrakningModal(props: Props) {
     hasFTax,
     isTaxeArende: isTaxe,
     expenses: props.expenses,
-    timeEntries: ((timeEntries.data?.entries ?? []) as Array<{ id: string; date: string | Date; description: string; minutes: number; billable: boolean }>),
+    // Låsta (redan fakturerade/redovisade) poster utelämnas av byggaren (#1205).
+    timeEntries: timeEntries.data?.entries ?? [],
   }), [hufStart, hufEnd, yrkandeDate, level, isTaxe, hasFTax, props, timeEntries.data]);
 
   useEffect(() => {

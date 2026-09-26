@@ -56,7 +56,8 @@ export interface BillingProposal {
 /**
  * Bygg ett itemiserat fakturaförslag ur ofrysta tids-/utläggsrader (#397),
  * värderat enligt ärendets betalningssätt (se `matterArvodeNet`). `workValueOre`
- * är arvode netto + debiterbara utlägg — i rättshjälp utan rådgivningstimmen.
+ * är arvode netto + debiterbara utlägg. Rättshjälpens rådgivningstimme är en
+ * låst (redan fakturerad) post och finns därför inte bland de ofrysta raderna.
  */
 export function buildProposal(
   te: ReadonlyArray<{ id: string; description?: string | null; minutes: number; hourlyRate: number; billable: boolean; date: Date | string; kind?: TimeEntryKind | null | undefined }>,

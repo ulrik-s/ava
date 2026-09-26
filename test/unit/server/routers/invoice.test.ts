@@ -32,6 +32,7 @@ const mockPrisma = {
   },
   timeEntry: {
     findMany: vi.fn(),
+    create: vi.fn(),
     updateMany: vi.fn(),
   },
   expense: {
@@ -104,6 +105,32 @@ describe("invoice.createRadgivning", () => {
     mockPrisma.invoice.create.mockImplementation(async (a: { data: Record<string, unknown> }) => ({ id: "rad-1", ...a.data }));
     mockPrisma.billingRun.create.mockImplementation(async (a: { data: Record<string, unknown> }) => ({ id: "run-1", ...a.data }));
     mockPrisma.matter.update.mockResolvedValue({});
+    mockPrisma.timeEntry.create.mockImplementation(async (a: { data: Record<string, unknown> }) => ({ id: "te-rad", ...a.data }));
+  });
+
+  it("registrerar mötet som EN låst 60-min-post kopplad till fakturan (#1205)", async () => {
+    mockPrisma.matter.findFirst.mockResolvedValue({ id: "m1", organizationId: "org-a", radgivningBetaldAt: null });
+
+    await makeCaller().createRadgivning({ matterId: "m1", invoiceDate: "2026-03-02" });
+
+    expect(mockPrisma.timeEntry.create).toHaveBeenCalledTimes(1);
+    const te = mockPrisma.timeEntry.create.mock.calls[0]![0].data;
+    expect(te).toMatchObject({
+      matterId: "m1", userId: "user-1", minutes: 60, description: "Rådgivning", kind: "ARBETE",
+      billable: true, hourlyRate: 162_600, invoiceId: "rad-1",
+    });
+    // Låst: fryst samma dag som fakturan, utan billing-run (fasen flyttas inte).
+    expect(te.frozenAt).toEqual(new Date("2026-03-02"));
+    expect(te.date).toEqual(new Date("2026-03-02"));
+    expect(te.frozenByBillingRunId).toBeUndefined();
+  });
+
+  it("tidsposten kan ägas av en annan jurist (setup-fält)", async () => {
+    mockPrisma.matter.findFirst.mockResolvedValue({ id: "m1", organizationId: "org-a", radgivningBetaldAt: null });
+
+    await makeCaller().createRadgivning({ matterId: "m1", userId: "u-lawyer" });
+
+    expect(mockPrisma.timeEntry.create.mock.calls[0]![0].data.userId).toBe("u-lawyer");
   });
 
   it("skapar en STANDARD-klientfaktura (SKAPAD, ej skickad) för rådgivningstimmen + märker ärendet (#853)", async () => {
@@ -130,6 +157,7 @@ describe("invoice.createRadgivning", () => {
 
     await expect(makeCaller().createRadgivning({ matterId: "m1" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
     expect(mockPrisma.invoice.create).not.toHaveBeenCalled();
+    expect(mockPrisma.timeEntry.create).not.toHaveBeenCalled();
   });
 
   it("NOT_FOUND cross-org", async () => {

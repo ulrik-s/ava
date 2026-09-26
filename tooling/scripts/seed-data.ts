@@ -471,7 +471,7 @@ function buildTimeEntries(orgId: string, users: UserSeed[]): SeedDataset["timeEn
   let teSeq = 0;
   activeMatters.forEach((matter, mi) => {
     // Umgängestvist Carlsson (m-010) + varierande-rättshjälp (m-020) har dedikerade,
-    // kronologiskt koherenta tidsloggar (rådgivningstimmen först) — se nedan (#862/#878).
+    // kronologiskt koherenta tidsloggar — se nedan (#862/#878).
     if (matter.id === "m-010-vardnad-2" || matter.id === "m-020-rattshjalp-varierande") return;
     const count = 4 + (mi % 3); // 4,5,6,4,5,6…
     for (let j = 0; j < count; j++) {
@@ -497,15 +497,16 @@ function buildTimeEntries(orgId: string, users: UserSeed[]): SeedDataset["timeEn
 
 /**
  * Dedikerad tidslogg för "Vårdnadstvist — varierande rättshjälp" (m-020) (#878):
- * rådgivningstimmen först, sedan arbete spritt över ~120 dagar så aconton hinner
- * ställas ut vid olika rättshjälpsavgifts-satser (arbetslös/anställd/arbetslös).
- * Totalt 10,5 tim (−1 tim rådgivning = 9,5 tim debiterbart arvode).
+ * arbete spritt över ~120 dagar så aconton hinner ställas ut vid olika
+ * rättshjälpsavgifts-satser (arbetslös/anställd/arbetslös). Totalt 9,5 tim, som
+ * alla ingår i kostnadsräkningen. Rådgivningsmötet loggas INTE här: rådgivnings-
+ * fakturan (`invoice.createRadgivning`, auto-skapad av panelen) registrerar själv
+ * mötets låsta tidspost (#1205).
  */
 function appendVaryingRattshjalpTimeEntries(out: SeedDataset["timeEntries"], orgId: string, users: UserSeed[]): void {
   const lawyer = users.find((u) => u.role === "LAWYER") ?? users[0];
   if (!lawyer) return;
   const rows: Array<{ daysAgo: number; minutes: number; description: string }> = [
-    { daysAgo: 118, minutes: 60, description: "Första möte med klient i ärendet" }, // rådgivningstimmen — FÖRST
     { daysAgo: 100, minutes: 90, description: "Genomgång av handlingar (klient arbetslös, 5 % avgift)" },
     { daysAgo: 70, minutes: 120, description: "Förhandlingsförberedelse och inlaga" },
     { daysAgo: 55, minutes: 90, description: "Klientmöte (klient fått anställning, 40 % avgift)" },
@@ -527,15 +528,14 @@ function appendVaryingRattshjalpTimeEntries(out: SeedDataset["timeEntries"], org
 
 /**
  * Dedikerad tidslogg för "Umgängestvist Carlsson" (m-010, rättshjälp) (#862):
- * rådgivningstimmen ("Första möte med klient i ärendet") ligger KRONOLOGISKT
- * FÖRST (ärendets första händelse), följt av några arbetsposter — totalt ~5,75 tim
- * så ärendet får ett rimligt antal timmar. Ärendet skapades för 15 dagar sedan.
+ * några arbetsposter — totalt 4,75 tim så ärendet får ett rimligt antal timmar.
+ * Ärendet skapades för 15 dagar sedan. Rådgivningsmötet registreras av rådgivnings-
+ * fakturan som en låst post (#1205), inte här.
  */
 function appendVardnad2TimeEntries(out: SeedDataset["timeEntries"], orgId: string, users: UserSeed[]): void {
   const lawyer = users.find((u) => u.role === "LAWYER") ?? users[0];
   if (!lawyer) return;
   const rows: Array<{ daysAgo: number; minutes: number; description: string }> = [
-    { daysAgo: 14, minutes: 60, description: "Första möte med klient i ärendet" }, // rådgivningstimmen — FÖRST
     { daysAgo: 11, minutes: 60, description: "Genomgång av handlingar och underlag" },
     { daysAgo: 8, minutes: 90, description: "Upprättande av inlaga till tingsrätten" },
     { daysAgo: 4, minutes: 75, description: "Telefonkontakt med motpartens ombud" },
