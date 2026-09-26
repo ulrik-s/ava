@@ -42,6 +42,8 @@ const stubs = {
   deleteExpense: { mutate: vi.fn(), isPending: false },
 };
 
+const receivablesQuery: { data: unknown[] } = { data: [] };
+
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
     useUtils: () => utilsMock,
@@ -127,7 +129,7 @@ vi.mock("@/lib/client/trpc", () => ({
       delete: { useMutation: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }) },
     },
     expectedReceivable: {
-      list: { useQuery: () => ({ data: [], isLoading: false }) },
+      list: { useQuery: () => ({ data: receivablesQuery.data, isLoading: false }) },
       create: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       settle: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       cancel: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
@@ -251,6 +253,25 @@ describe("MatterDetailPage", () => {
     renderPage();
     await waitFor(() => expect(screen.getByLabelText("Målnummer")).toHaveValue("T 3288-26"));
     expect(screen.queryByText(/Domstolsbetalningar/)).not.toBeInTheDocument();
+  });
+
+  it("Domstolsbetalningar-panelen finns bara i domstolsärenden eller med registrerade fordringar (#1213)", async () => {
+    const panel = (c: HTMLElement) => c.querySelector('[data-panel="receivables"]');
+    const first = renderPage();
+    await waitFor(() => expect(screen.getByText("2026-0001")).toBeInTheDocument());
+    expect(panel(first.container)).toBeNull();
+    first.unmount();
+
+    matterQuery.data = { ...M, paymentMethod: "OFFENTLIGT_UPPDRAG" };
+    const court = renderPage();
+    await waitFor(() => expect(panel(court.container)).not.toBeNull());
+    court.unmount();
+
+    matterQuery.data = M;
+    receivablesQuery.data = [{ id: "r1" }];
+    const withRows = renderPage();
+    await waitFor(() => expect(panel(withRows.container)).not.toBeNull());
+    receivablesQuery.data = [];
   });
 
   it("renderar matterNumber + title + klient-länk", async () => {

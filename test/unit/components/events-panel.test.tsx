@@ -70,10 +70,10 @@ describe("EventsPanel", () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it("renderar inget när events är tomt", () => {
+  it("visar ett förklarande tomtillstånd när events är tomt (#1213)", () => {
     eventsQuery.data = [];
-    const { container } = render(<EventsPanel matterId={asId<"MatterId">("m1")} />);
-    expect(container).toBeEmptyDOMElement();
+    render(<EventsPanel matterId={asId<"MatterId">("m1")} />);
+    expect(screen.getByText(/Inga tidpunkter hittade ännu/)).toBeInTheDocument();
   });
 
   it("renderar event-titel, eventType och plats", () => {

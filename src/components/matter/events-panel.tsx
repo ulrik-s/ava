@@ -38,7 +38,8 @@ export function EventsPanel({ matterId }: EventsPanelProps) {
 
   if (events.isLoading) return null;
   const list = events.data ?? [];
-  if (list.length === 0) return null;
+  // Panel-UI (#1213): en tom flik ska förklara sig, inte vara blank.
+  if (list.length === 0) return <p className="text-sm text-gray-500">Inga tidpunkter hittade ännu. AVA läser ut datum — förhandlingar, frister — ur dokument som laddas upp.</p>;
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);

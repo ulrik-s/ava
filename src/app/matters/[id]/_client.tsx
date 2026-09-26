@@ -47,6 +47,9 @@ export default function MatterDetailClient({ id: paramId }: { id: string }) {
   // id:t ur URL:en (faller tillbaka till build-time-param i server-mode).
   const id = asId<"MatterId">(useRouteId() ?? paramId);
   const matter = trpc.matter.getById.useQuery({ id });
+  // Samma query som panelen (react-query delar cachen): redan registrerade
+  // fordringar håller panelen kvar även i ett icke-domstolsärende (#1213).
+  const receivables = trpc.expectedReceivable.list.useQuery({ matterId: id });
   const [showGenerateModal, setShowGenerateModal] = useState(false);
   // ADR 0028 §4a: öppna ärende → eager-cacha dess dokument-bytes (offline).
   useEagerCacheMatterDocuments(id);
@@ -70,7 +73,7 @@ export default function MatterDetailClient({ id: paramId }: { id: string }) {
     events: () => <EventsPanel matterId={id} />,
     suggestions: () => <SuggestionsPanel matterId={id} />,
     notes: () => <ServiceNotesSection matterId={id} />,
-  });
+  }).filter((p) => p.id !== "receivables" || isCourtMatter(m) || (receivables.data?.length ?? 0) > 0);
 
   return (
     <>

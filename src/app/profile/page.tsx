@@ -11,7 +11,7 @@
 import { User } from "lucide-react";
 import { useEffect, useState } from "react";
 import { PanelPage } from "@/components/layout/panel-page";
-import { IntegrationsSection } from "@/components/settings/integrations-section";
+import { IntegrationsSection, useIntegrationsAvailable } from "@/components/settings/integrations-section";
 import { trpc } from "@/lib/client/trpc";
 import { profileLayout } from "./_profile-layout";
 
@@ -19,6 +19,7 @@ export default function ProfilePage() {
   const me = trpc.user.current.useQuery();
   const utils = trpc.useUtils();
   const updateUser = trpc.user.update.useMutation({ onSuccess: () => utils.user.current.invalidate() });
+  const integrationsAvailable = useIntegrationsAvailable();
 
   const [form, setForm] = useState({ name: "", title: "", email: "" });
   const [formReady, setFormReady] = useState(false);
@@ -50,8 +51,8 @@ export default function ProfilePage() {
     { id: "basics", title: "Uppgifter", render: () => (
       <ProfileBasicsSection form={form} setForm={setForm} role={u.role} onSave={saveProfile} saving={updateUser.isPending} saveError={updateUser.error?.message ?? null} />
     ) },
-    // Anslutna tjänster (O365, Google, …)
-    { id: "integrations", title: "Anslutna tjänster", render: () => <IntegrationsSection /> },
+    // Anslutna tjänster (O365, Google, …) — bara när något går att ansluta (#1213).
+    ...(integrationsAvailable ? [{ id: "integrations", title: "Anslutna tjänster", render: () => <IntegrationsSection /> }] : []),
   ];
 
   return (

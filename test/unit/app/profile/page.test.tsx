@@ -16,8 +16,10 @@ vi.mock("@/components/layout/panel-page", () => ({
   ),
 }));
 
+const integrations = { available: true };
 vi.mock("@/components/settings/integrations-section", () => ({
   IntegrationsSection: () => <div data-testid="integrations-stub" />,
+  useIntegrationsAvailable: () => integrations.available,
 }));
 
 const meData = {
@@ -53,8 +55,16 @@ describe("ProfilePage", () => {
   });
 
   it("renderar anslutna tjänster (IntegrationsSection)", () => {
+    integrations.available = true;
     render(<ProfilePage />);
     expect(screen.getByTestId("integrations-stub")).toBeInTheDocument();
+  });
+
+  it("utan tillgängliga integrationer finns ingen tom Anslutna tjänster-panel (#1213)", () => {
+    integrations.available = false;
+    const { container } = render(<ProfilePage />);
+    expect(container.querySelector('[data-panel="integrations"]')).toBeNull();
+    integrations.available = true;
   });
 
   it("nämner inte längre SSH-nycklar / commit-signering", () => {

@@ -80,10 +80,10 @@ describe("SuggestionsPanel", () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it("renderar inget när inga förslag finns", () => {
+  it("visar ett förklarande tomtillstånd när inga förslag finns (#1213)", () => {
     groupsQuery.data = [];
-    const { container } = render(<SuggestionsPanel matterId={asId<"MatterId">("m1")} />);
-    expect(container).toBeEmptyDOMElement();
+    render(<SuggestionsPanel matterId={asId<"MatterId">("m1")} />);
+    expect(screen.getByText(/Inga föreslagna kontakter/)).toBeInTheDocument();
   });
 
   it("renderar gruppnamn, roll och kontaktdata", () => {
