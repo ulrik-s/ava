@@ -6,11 +6,12 @@
  * med `category: "Kostnadsräkning"` — modal:en plockar den med högst
  * `updatedAt` och faller tillbaka på denna default om ingen finns.
  *
- * Mallen är ren HTML med Handlebars-variabler. Variablerna kommer från
- * `buildKostnadsrakningContext().templateContext`. UI-renderingen sker
- * client-side; browserns print-dialog (`window.print()`) konverterar
- * till PDF/utskrift — fungerar på Mac, PC, telefon och padda utan
- * extra deps.
+ * Mallen är ren HTML med Handlebars-variabler ur
+ * `buildKostnadsrakningContext().templateContext`. Default-mallen ritar ur
+ * dokumentvyn `document` (#1218) — samma vy som PDF-renderaren använder — och
+ * följer byråns kostnadsräkningar: sida 1 = sammanställning, sida 2+ =
+ * arbetsredogörelse med "Sida N" nederst. De platta fälten (`arvodeExclFormatted`,
+ * `timeLines` …) finns kvar för byråernas egna mallar.
  */
 
 export const KOSTNADSRAKNING_TEMPLATE_NAME = "Kostnadsräkning till rätten";
@@ -26,330 +27,145 @@ export function templateCategoryFor(isTaxe: boolean): string {
   return isTaxe ? KOSTNADSRAKNING_TEMPLATE_CATEGORY : KOSTNADSRAKNING_ICKE_TAXA_TEMPLATE_CATEGORY;
 }
 
-export function defaultTemplateFor(isTaxe: boolean): string {
-  return isTaxe ? KOSTNADSRAKNING_DEFAULT_HTML : KOSTNADSRAKNING_ICKE_TAXA_DEFAULT_HTML;
+/** Default-mallen för en kategori. Sedan #1218 delar taxe- och löpande
+ *  ärenden samma layout — vad arvodet står på avgörs av contexten. Parametern
+ *  finns kvar för kategorisymmetrin med `templateCategoryFor`. */
+export function defaultTemplateFor(_isTaxe: boolean): string {
+  return KOSTNADSRAKNING_DEFAULT_HTML;
 }
 
+/**
+ * Default-mallen. En och samma layout för taxe- och löpande ärenden: vad
+ * arvodet står på (brottmålstaxa, förordnandetaxa, timkostnadsnorm) avgörs
+ * redan i dokumentvyns sammanställningsrader och noter.
+ */
 export const KOSTNADSRAKNING_DEFAULT_HTML = `<!DOCTYPE html>
 <html lang="sv">
 <head>
 <meta charset="utf-8">
 <title>Kostnadsräkning {{matterNumber}}</title>
 <style>
-  @page { margin: 24mm 18mm 18mm; size: A4; }
-  body { font-family: Helvetica, Arial, sans-serif; font-size: 11pt; color: #111; margin: 0; }
-  h1 { font-size: 18pt; margin: 0 0 4pt; letter-spacing: 0.5pt; }
-  h2 { font-size: 12pt; margin: 18pt 0 6pt; border-bottom: 1px solid #bbb; padding-bottom: 2pt; }
-  .meta { color: #555; font-size: 10pt; }
-  .meta strong { color: #111; }
-  .totalsRow { display: flex; justify-content: space-between; padding: 4pt 0; }
-  .totalsRow.grand { font-size: 13pt; font-weight: 700; border-top: 2px solid #111; margin-top: 8pt; padding-top: 8pt; }
-  table { width: 100%; border-collapse: collapse; font-size: 10pt; }
-  th { text-align: left; border-bottom: 1px solid #aaa; padding: 4pt 6pt; font-weight: 600; }
-  td { padding: 3pt 6pt; }
-  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
-  tbody tr + tr td { border-top: 1px solid #eee; }
-  tfoot td { font-weight: 700; border-top: 1px solid #aaa; padding-top: 6pt; }
-  .footer { margin-top: 32pt; color: #666; font-size: 9pt; }
-  .warn { background: #fff7e6; border: 1px solid #f0c574; padding: 6pt 10pt; border-radius: 4pt; margin: 8pt 0; font-size: 10pt; color: #8a5a00; }
-  .note { background: #f3f6fb; border: 1px solid #c9d6ea; padding: 6pt 10pt; border-radius: 4pt; margin: 8pt 0; font-size: 10pt; color: #33415c; }
+  @page { size: A4; margin: 20mm 22mm 22mm 25mm; @bottom-center { content: "Sida " counter(page); font: 11pt "Times New Roman", Times, serif; } }
+  @page :first { @bottom-center { content: none; } }
+  body { font-family: "Times New Roman", Times, serif; font-size: 12pt; color: #000; margin: 0; line-height: 1.35; }
+  .page1 { min-height: 250mm; display: flex; flex-direction: column; }
+  .letterhead { text-align: center; font-size: 18pt; letter-spacing: 1pt; margin: 6mm 0 12mm; }
+  .letterhead img { max-width: 72mm; max-height: 34mm; }
+  .recipient { margin-left: 55%; margin-bottom: 12mm; }
+  .title { font-weight: 700; }
+  .meta p { margin: 0 0 4pt; }
+  table { width: 100%; border-collapse: collapse; }
+  td, th { padding: 3pt 0; vertical-align: top; font-weight: 400; }
+  .num { text-align: right; white-space: nowrap; }
+  .summary { margin-top: 12mm; }
+  .summary th { color: #7f7f7f; font-style: italic; text-align: left; }
+  .summary th.num { text-align: right; }
+  .summary td { padding: 5pt 0; }
+  .summary .gap td { padding-top: 22pt; }
+  .summary .grand td { font-weight: 700; border-bottom: 2.5pt solid #000; }
+  .notes { font-size: 10pt; margin-top: 6pt; }
+  .notes p { margin: 0 0 3pt; }
+  .radgivning { margin: 14pt 0 0; }
+  .placedate { margin: 16pt 0 16pt; }
+  .signature p { margin: 0; }
+  .footer { position: relative; margin-top: auto; border-top: 1px solid #bfbfbf; padding-top: 8pt; text-align: center; font-family: Calibri, Helvetica, Arial, sans-serif; font-size: 8pt; line-height: 1.3; }
+  .footer .seal { position: absolute; left: 0; top: 6pt; max-width: 28mm; max-height: 15mm; }
+  .spec { break-before: page; font-size: 11pt; }
+  .spec h1 { font-size: 12pt; margin: 18mm 0 0; padding-bottom: 12pt; border-bottom: 1px solid #000; }
+  .spec h2 { font-size: 11pt; text-decoration: underline; margin: 22pt 0 4pt 3pt; }
+  .spec td { padding: 1pt 0 2pt; }
+  .spec td.date { width: 30%; padding-left: 3pt; }
+  .spec .sum td { font-weight: 700; padding-left: 0; }
+  .spec td.qty { width: 7%; }
   @media print { .noprint { display: none !important; } }
-  .noprint { background: #eef; padding: 8pt; text-align: center; font-size: 9pt; color: #335; border-bottom: 1px solid #aac; }
+  .noprint { background: #eef; padding: 8pt; text-align: center; font: 9pt Helvetica, Arial, sans-serif; color: #335; border-bottom: 1px solid #aac; }
 </style>
 </head>
 <body>
 
 <div class="noprint">
-  📋 Kostnadsräkning genererad av AVA. Skriv ut till PDF (Cmd/Ctrl + P → Spara som PDF) och attacha i mailet till rätten.
+  Kostnadsräkning genererad av AVA. Skriv ut till PDF (Cmd/Ctrl + P → Spara som PDF) och bifoga i mailet till rätten.
 </div>
 
-<h1>KOSTNADSRÄKNING</h1>
-<div class="meta">
-  Mål <strong>{{matterNumber}}</strong> — {{matterTitle}}<br>
-  {{#if clientName}}Klient: <strong>{{clientName}}</strong><br>{{/if}}
-  {{#if courtName}}Domstol: <strong>{{courtName}}</strong><br>{{/if}}
-  Datum: <strong>{{today}}</strong>
-</div>
+{{#with document}}
+<section class="page1">
+  {{#if logo}}<div class="letterhead"><img src="{{logo}}" alt="{{firmName}}"></div>
+  {{else}}{{#if firmName}}<div class="letterhead">{{firmName}}</div>{{/if}}{{/if}}
 
-{{#if forordnande}}
-<h2>Förhör under förundersökningen</h2>
-<p>Förundersökningen har avslutats utan åtal — förordnandemål (DVFS 2025:5).</p>
-<table>
-  <thead><tr><th>Datum</th><th>Början</th><th>Slut</th><th class="num">Förhörstid</th></tr></thead>
-  <tbody>
-    {{#each forordnande.forhorLines}}
-    <tr><td>{{date}}</td><td>{{start}}</td><td>{{end}}</td><td class="num">{{minutesFormatted}}</td></tr>
-    {{/each}}
-  </tbody>
-  <tfoot><tr><td colspan="3">Sammanlagd förhörstid</td><td class="num">{{forordnande.forhorTotalFormatted}}</td></tr></tfoot>
-</table>
+  {{#if recipient}}
+  <div class="recipient">{{recipient}}<br>via e-post</div>
+  {{/if}}
 
-{{#if forordnande.taxaApplies}}
-<h2>Arvode — taxa i förordnandemål</h2>
-<div class="totalsRow"><span>Taxa, förhörstid {{forordnande.intervalLabel}}</span><span class="num">{{forordnande.taxaAmountFormatted}}</span></div>
-<div class="totalsRow"><span>Tidsspillan totalt {{forordnande.tidsspillanTotalFormatted}}, varav {{forordnande.tidsspillanIngarFormatted}} ingår i taxan</span><span class="num"></span></div>
-{{#each forordnande.tidsspillanRader}}
-<div class="totalsRow"><span>+ {{label}} utöver taxan: {{minutesFormatted}} à {{rateFormatted}}</span><span class="num">{{amountFormatted}}</span></div>
-{{/each}}
-{{#if forordnande.gransvardeOverskrids}}
-<div class="warn">Arbetet överstiger taxans gränsvärde — taxan får frångås (10 §). Överväg löpande räkning.</div>
-{{/if}}
-{{else}}
-<h2>Arvode — löpande räkning</h2>
-<div class="warn">{{forordnande.utanforText}}</div>
-<div class="totalsRow"><span>Arvode enligt timkostnadsnorm</span><span class="num">{{arvodeExclFormatted}}</span></div>
-{{/if}}
-<div class="totalsRow"><span>+ Moms 25 %</span><span class="num">{{arvodeMomsFormatted}}</span></div>
-<div class="totalsRow" style="border-top: 1px solid #aaa; padding-top: 6pt; font-weight: 600;">
-  <span>Arvode inkl moms</span>
-  <span class="num">{{arvodeInclFormatted}}</span>
-</div>
-
-{{#if timeLines.length}}
-<h2>Utfört arbete{{#if forordnande.taxaApplies}} (ingår i taxan){{/if}}</h2>
-<table>
-  <thead><tr><th>Datum</th><th>Beskrivning</th><th class="num">Tid</th></tr></thead>
-  <tbody>
-    {{#each timeLines}}
-    <tr><td>{{date}}</td><td>{{description}}{{#if isTidsspillan}} (tidsspillan){{/if}}</td><td class="num">{{minutesFormatted}}</td></tr>
-    {{/each}}
-  </tbody>
-</table>
-{{/if}}
-{{else}}
-<h2>Huvudförhandling</h2>
-<div>
-  Start: <strong>{{hufStart}}</strong> · Slut: <strong>{{hufEnd}}</strong> ·
-  Tid: <strong>{{huvudforhandlingFormatted}}</strong>
-</div>
-
-<h2>Arvode — Brottmålstaxa (DVFS 2025:6, nivå {{taxaLevel}})</h2>
-{{#if taxaApplies}}
-  <div class="totalsRow">
-    <span>Brottmålstaxa, intervall {{taxaIntervalLabel}}</span>
-    <span class="num">{{arvodeExclFormatted}}</span>
+  <div class="meta">
+    <p class="title">{{title}}</p>
+    <p>Faktura-/ärendenr: <strong>{{paymentReference}} Anges vid betalning</strong></p>
+    {{#if bankgiro}}<p>Bankgiro: {{bankgiro}}</p>{{/if}}
   </div>
-  <div class="totalsRow">
-    <span>+ Moms 25 %</span>
-    <span class="num">{{arvodeMomsFormatted}}</span>
+
+  <table class="summary">
+    <thead><tr><th>Enligt bifogad specifikation</th><th class="num">tid/antal</th><th class="num">kr</th></tr></thead>
+    <tbody>
+      {{#each summaryRows}}
+      <tr><td>{{label}}</td><td class="num">{{quantity}}</td><td class="num">{{amount}}</td></tr>
+      {{/each}}
+      <tr class="gap"><td>Belopp exkl. moms</td><td></td><td class="num">{{totals.exclVat}}</td></tr>
+      <tr class="gap"><td>{{totals.vatLabel}}</td><td></td><td class="num">{{totals.vat}}</td></tr>
+      <tr class="grand"><td>Belopp inkl. moms</td><td></td><td class="num">{{totals.inclVat}}</td></tr>
+    </tbody>
+  </table>
+
+  {{#if notes.length}}
+  <div class="notes">{{#each notes}}<p>{{this}}</p>{{/each}}</div>
+  {{/if}}
+
+  {{#if radgivningNotice}}
+  <p class="radgivning">{{radgivningNotice}}</p>
+  {{/if}}
+
+  <p class="placedate">{{placeDate}}</p>
+  <div class="signature">
+    <p>{{signatureName}}</p>
+    {{#if signatureTitle}}<p>{{signatureTitle}}</p>{{/if}}
   </div>
-  <div class="totalsRow" style="border-top: 1px solid #aaa; padding-top: 6pt; font-weight: 600;">
-    <span>Arvode inkl moms</span>
-    <span class="num">{{arvodeInclFormatted}}</span>
+
+  {{#if footerLines.length}}
+  <div class="footer">
+    {{#if footerSeal}}<img class="seal" src="{{footerSeal}}" alt="">{{/if}}
+    {{#each footerLines}}<div>{{#each this}}{{#unless @first}} ∽ {{/unless}}{{this}}{{/each}}</div>{{/each}}
   </div>
-{{else}}
-  <div class="warn">
-    Förhandlingstiden överstiger taxans maxgräns (3 tim 45 min).
-    Ersättning beräknas enligt timkostnadsnorm × faktisk tid (DVFS 2025:6 § 8).
-  </div>
+  {{/if}}
+</section>
+
+{{#if hasSpecification}}
+<section class="spec">
+  <h1>ARBETSREDOGÖRELSE</h1>
+
+  {{#each specSections}}
+  <h2>{{heading}}</h2>
+  <table>
+    <tbody>
+      {{#each rows}}
+      <tr><td class="date">{{date}}</td><td>{{description}}</td><td class="num">{{quantity}}</td></tr>
+      {{/each}}
+      <tr class="sum"><td>Summa</td><td></td><td class="num">{{sum}}</td></tr>
+    </tbody>
+  </table>
+  {{/each}}
+
+  {{#if expenseSpec}}
+  <h2>Utlägg</h2>
+  <table>
+    <tbody>
+      {{#each expenseSpec.rows}}
+      <tr><td class="date">{{date}}</td><td>{{description}}</td><td class="num qty">{{quantity}}</td><td class="num qty">{{unitPrice}}</td><td class="num qty">{{amount}}</td></tr>
+      {{/each}}
+      <tr class="sum"><td>Summa</td><td></td><td></td><td></td><td class="num">{{expenseSpec.sum}}</td></tr>
+    </tbody>
+  </table>
+  {{/if}}
+</section>
 {{/if}}
-{{/if}}
-
-{{#if radgivningNotice}}
-<div class="note">{{radgivningNotice}}</div>
-{{/if}}
-
-{{#if expenseLines.length}}
-<h2>Utlägg</h2>
-<table>
-  <thead>
-    <tr>
-      <th>Datum</th>
-      <th>Beskrivning</th>
-      <th class="num">Moms</th>
-      <th class="num">Exkl moms</th>
-      <th class="num">Moms</th>
-      <th class="num">Inkl moms</th>
-    </tr>
-  </thead>
-  <tbody>
-    {{#each expenseLines}}
-    <tr>
-      <td>{{date}}</td>
-      <td>{{description}}</td>
-      <td class="num">{{vatRateLabel}}</td>
-      <td class="num">{{exclVatFormatted}}</td>
-      <td class="num">{{vatFormatted}}</td>
-      <td class="num">{{inclVatFormatted}}</td>
-    </tr>
-    {{/each}}
-  </tbody>
-  <tfoot>
-    <tr>
-      <td colspan="3">Summa</td>
-      <td class="num">{{expenseSummary.exclVatFormatted}}</td>
-      <td class="num">{{expenseSummary.vatFormatted}}</td>
-      <td class="num">{{expenseSummary.inclVatFormatted}}</td>
-    </tr>
-  </tfoot>
-</table>
-{{/if}}
-
-<div class="totalsRow grand">
-  <span>TOTALT ATT FAKTURERA STATEN</span>
-  <span class="num">{{totalInclFormatted}}</span>
-</div>
-
-<div class="footer">
-  <strong>{{defenderName}}</strong>
-  {{#if organizationName}} · {{organizationName}}{{/if}}
-  {{#if organizationOrgNumber}} · Org.nr {{organizationOrgNumber}}{{/if}}
-  {{#if organizationAddress}}<br>{{organizationAddress}}{{/if}}
-</div>
-
-</body>
-</html>`;
-
-/**
- * Mall för icke-taxa-kostnadsräkning. Visar specifikation av all billable
- * tid + HUF som multipliceras med timkostnadsnorm (1626 kr/h med F-skatt).
- * Ingen taxa-tabell — det är fri timdebitering enligt timkostnadsnorm.
- */
-export const KOSTNADSRAKNING_ICKE_TAXA_DEFAULT_HTML = `<!DOCTYPE html>
-<html lang="sv">
-<head>
-<meta charset="utf-8">
-<title>Kostnadsräkning {{matterNumber}}</title>
-<style>
-  @page { margin: 24mm 18mm 18mm; size: A4; }
-  body { font-family: Helvetica, Arial, sans-serif; font-size: 11pt; color: #111; margin: 0; }
-  h1 { font-size: 18pt; margin: 0 0 4pt; letter-spacing: 0.5pt; }
-  h2 { font-size: 12pt; margin: 18pt 0 6pt; border-bottom: 1px solid #bbb; padding-bottom: 2pt; }
-  .meta { color: #555; font-size: 10pt; }
-  .meta strong { color: #111; }
-  .totalsRow { display: flex; justify-content: space-between; padding: 4pt 0; }
-  .totalsRow.grand { font-size: 13pt; font-weight: 700; border-top: 2px solid #111; margin-top: 8pt; padding-top: 8pt; }
-  table { width: 100%; border-collapse: collapse; font-size: 10pt; }
-  th { text-align: left; border-bottom: 1px solid #aaa; padding: 4pt 6pt; font-weight: 600; }
-  td { padding: 3pt 6pt; }
-  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
-  tbody tr + tr td { border-top: 1px solid #eee; }
-  tfoot td { font-weight: 700; border-top: 1px solid #aaa; padding-top: 6pt; }
-  .footer { margin-top: 32pt; color: #666; font-size: 9pt; }
-  .note { background: #f0f7ff; border: 1px solid #b8d4f0; padding: 6pt 10pt; border-radius: 4pt; margin: 8pt 0; font-size: 10pt; color: #1e4a7a; }
-  @media print { .noprint { display: none !important; } }
-  .noprint { background: #eef; padding: 8pt; text-align: center; font-size: 9pt; color: #335; border-bottom: 1px solid #aac; }
-</style>
-</head>
-<body>
-
-<div class="noprint">
-  📋 Kostnadsräkning (icke-taxa) genererad av AVA. Skriv ut till PDF (Cmd/Ctrl + P → Spara som PDF) och attacha i mailet till rätten.
-</div>
-
-<h1>KOSTNADSRÄKNING</h1>
-<div class="meta">
-  Mål <strong>{{matterNumber}}</strong> — {{matterTitle}}<br>
-  {{#if clientName}}Klient: <strong>{{clientName}}</strong><br>{{/if}}
-  {{#if courtName}}Domstol: <strong>{{courtName}}</strong><br>{{/if}}
-  Datum: <strong>{{today}}</strong>
-</div>
-
-<h2>Huvudförhandling</h2>
-<div>
-  Start: <strong>{{hufStart}}</strong> · Slut: <strong>{{hufEnd}}</strong> ·
-  Tid: <strong>{{huvudforhandlingFormatted}}</strong>
-</div>
-
-{{#if timeLines.length}}
-<h2>Tidsspecifikation</h2>
-<table>
-  <thead>
-    <tr>
-      <th>Datum</th>
-      <th>Beskrivning</th>
-      <th class="num">Á-pris</th>
-      <th class="num">Antal</th>
-      <th class="num">Totalt (exkl moms)</th>
-    </tr>
-  </thead>
-  <tbody>
-    {{#each timeLines}}
-    <tr>
-      <td>{{date}}</td>
-      <td>{{description}}{{#if isTidsspillan}} (tidsspillan){{/if}}</td>
-      <td class="num">{{rateFormatted}}</td>
-      <td class="num">{{hoursFormatted}}</td>
-      <td class="num">{{amountFormatted}}</td>
-    </tr>
-    {{/each}}
-  </tbody>
-  <tfoot>
-    <tr>
-      <td colspan="3"><strong>Summa arbetstid</strong></td>
-      <td class="num"><strong>{{billableArbetsFormatted}}</strong></td>
-      <td class="num"><strong>{{arvodeExclFormatted}}</strong></td>
-    </tr>
-  </tfoot>
-</table>
-{{/if}}
-
-<h2>Arvode — Timkostnadsnorm (icke-taxa)</h2>
-<div class="note">
-  Brottmålstaxan är inte tillämplig — ersättning enligt timkostnadsnorm för
-  arbete (förordningen (2009:1237)) och tidsspillan-norm för tidsspillan (DVFS 2025:4) + RB 21:10.
-  Á-pris per rad ovan; olika taxor summeras inte till en gemensam timkostnad.
-</div>
-<div class="totalsRow">
-  <span>Arvode exkl moms (enligt tidsspecifikationen)</span>
-  <span class="num">{{arvodeExclFormatted}}</span>
-</div>
-<div class="totalsRow">
-  <span>+ Moms 25 %</span>
-  <span class="num">{{arvodeMomsFormatted}}</span>
-</div>
-<div class="totalsRow" style="border-top: 1px solid #aaa; padding-top: 6pt; font-weight: 600;">
-  <span>Arvode inkl moms</span>
-  <span class="num">{{arvodeInclFormatted}}</span>
-</div>
-
-{{#if expenseLines.length}}
-<h2>Utlägg</h2>
-<table>
-  <thead>
-    <tr>
-      <th>Datum</th>
-      <th>Beskrivning</th>
-      <th class="num">Moms</th>
-      <th class="num">Exkl moms</th>
-      <th class="num">Moms</th>
-      <th class="num">Inkl moms</th>
-    </tr>
-  </thead>
-  <tbody>
-    {{#each expenseLines}}
-    <tr>
-      <td>{{date}}</td>
-      <td>{{description}}</td>
-      <td class="num">{{vatRateLabel}}</td>
-      <td class="num">{{exclVatFormatted}}</td>
-      <td class="num">{{vatFormatted}}</td>
-      <td class="num">{{inclVatFormatted}}</td>
-    </tr>
-    {{/each}}
-  </tbody>
-  <tfoot>
-    <tr>
-      <td colspan="3">Summa</td>
-      <td class="num">{{expenseSummary.exclVatFormatted}}</td>
-      <td class="num">{{expenseSummary.vatFormatted}}</td>
-      <td class="num">{{expenseSummary.inclVatFormatted}}</td>
-    </tr>
-  </tfoot>
-</table>
-{{/if}}
-
-<div class="totalsRow grand">
-  <span>TOTALT ATT FAKTURERA STATEN</span>
-  <span class="num">{{totalInclFormatted}}</span>
-</div>
-
-<div class="footer">
-  <strong>{{defenderName}}</strong>
-  {{#if organizationName}} · {{organizationName}}{{/if}}
-  {{#if organizationOrgNumber}} · Org.nr {{organizationOrgNumber}}{{/if}}
-  {{#if organizationAddress}}<br>{{organizationAddress}}{{/if}}
-</div>
+{{/with}}
 
 </body>
 </html>`;

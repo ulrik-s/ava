@@ -12,9 +12,9 @@
 
 import { describe, it, expect } from "vitest-compat";
 import {
-  arvodeLine, arvodeNetOre, entryOwnValueOre, expenseBreakdownLines,
+  arvodeLine, arvodeNetOre, entryOwnValueOre,
   expenseGrossOre, expenseNetOre, grossOreOf, invoiceGrossOre, invoiceVatBreakdown,
-  krGrossOre, minutesByKind, netOreOf, settlementArvodeNet, sumKindValueOre,
+  krGrossOre, matterKrArvodeRows, minutesByKind, netOreOf, settlementArvodeNet, sumKindValueOre,
   timeEntryValueOre, vatOnNet, vatOreOf, workValueOre, type UnfrozenWork,
 } from "@/lib/shared/billing-work-value";
 import { asId } from "@/lib/shared/schemas/ids";
@@ -189,13 +189,39 @@ describe("settlementArvodeNet", () => {
 
 describe("krGrossOre", () => {
   // Kostnadsräkningen går ALLTID till domstol, så utläggen värderas med 25 %
-  // moms oavsett vad byrån själv betalade (#945).
-  it("arvode inkl moms + utläggens brutto", () => {
-    const w = work([], [ex({ amount: 20_000 })]);
-    expect(krGrossOre(w, 100_000)).toBe(125_000 + grossOreOf(expenseBreakdownLines(w)));
+  // moms oavsett vad byrån själv betalade (#945). Yrkandet avrundas som på
+  // kostnadsräkningen (#1218): varje rad till hela kronor, moms på summan.
+  it("raderna avrundas till hela kronor, moms 25 % på summan avrundad till hela kronor", () => {
+    // 5 097 510 → 5 097 500; 2 096 670 → 2 096 700; utlägg 60 800.
+    // exkl 7 255 000; moms 1 813 750 → 1 813 800; inkl 9 068 800.
+    const w = work([], [ex({ amount: 60_800 })]);
+    expect(krGrossOre(w, [5_097_510, 2_096_670])).toBe(9_068_800);
   });
 
-  it("noll arvode ger bara utläggen", () => {
-    expect(krGrossOre(work(), 0)).toBe(0);
+  it("äkta utlägg bär ingen moms", () => {
+    // UnfrozenWork-typen bär inte passThrough, men raderna från repot gör det (#975).
+    const akta = Object.assign(ex({ id: asId<"ExpenseId">("ex-2"), amount: 5_000 }), { passThrough: true });
+    const w = work([], [ex({ amount: 10_000 }), akta]);
+    // arvode 100 000 + utlägg 15 000 = 115 000; moms 25 % av 110 000 = 27 500.
+    expect(krGrossOre(w, [100_000])).toBe(142_500);
+  });
+
+  it("noll arvode och inga utlägg ger noll", () => {
+    expect(krGrossOre(work(), [])).toBe(0);
   });
 });
+
+describe("matterKrArvodeRows", () => {
+  it("egna á-priser (taxeärende) → en rad; domstolsnormer → en rad per kategori + beredskap", () => {
+    const own = matterKrArvodeRows({ paymentMethod: "OFFENTLIGT_UPPDRAG", isTaxeArende: true }, work([te({ minutes: 60 })]), "2026-06-01");
+    expect(own).toEqual([250_000]);
+    const norm = matterKrArvodeRows(
+      { paymentMethod: "RATTSHJALP" },
+      work([te({ minutes: 60 }), te({ id: asId<"TimeEntryId">("te-2"), minutes: 30, kind: "TIDSSPILLAN" }), te({ id: asId<"TimeEntryId">("te-3"), minutes: 0, kind: "ADVOKATBEREDSKAP", date: "2026-06-02" })]),
+      "2026-06-01",
+    );
+    expect(norm).toHaveLength(3);
+    expect(norm.reduce((s, r) => s + r, 0)).toBe(settlementArvodeNet("RATTSHJALP", work([te({ minutes: 60 }), te({ id: asId<"TimeEntryId">("te-2"), minutes: 30, kind: "TIDSSPILLAN" }), te({ id: asId<"TimeEntryId">("te-3"), minutes: 0, kind: "ADVOKATBEREDSKAP", date: "2026-06-02" })]), "2026-06-01"));
+  });
+});
+

@@ -1,6 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import { organizationRouter } from "@/lib/server/routers/organization";
+import { TINY_PNG } from "../../../helpers/tiny-images";
 import { dataStoreFromMockPrisma, reposFromMockDataStore } from "../helpers/mock-data-store";
 
 // ─── Helpers ─────────────────────────────────────────────────────
@@ -293,13 +294,17 @@ describe("organization.getSettings", () => {
       phone: "08-123 456 78",
       email: "info@byrå.se",
       bankgiro: "123-4567",
-      logoPath: null,
+      website: "https://www.byra.se",
     });
 
     const result = await makeCaller("org-a").getSettings();
 
     expect(result.name).toBe("Advokat AB");
     expect(result.bankgiro).toBe("123-4567");
+    // Webbplats, logga och sidfotsmärke (#1218) — saknade bilder blir null.
+    expect(result.website).toBe("https://www.byra.se");
+    expect(result.logo).toBeNull();
+    expect(result.footerSeal).toBeNull();
     expect(result.hourlyRates).toEqual({}); // inga byråpriser satta (#1206)
     expect(mockPrisma.organization.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: "org-a" } })
@@ -327,6 +332,19 @@ describe("organization.updateSettings", () => {
     expect(mockPrisma.organization.update).toHaveBeenLastCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ hourlyRates: { ARBETE: 250000 } }) }),
     );
+  });
+
+  it("sparar webbplats, logga och sidfotsmärke; null tar bort en bild (#1218)", async () => {
+    mockPrisma.organization.findFirst.mockResolvedValue({ id: "org-a" });
+    mockPrisma.organization.update.mockResolvedValue({ id: "org-a" });
+    await makeCaller("org-a").updateSettings({ website: "https://www.byra.se", logo: TINY_PNG, footerSeal: null });
+    expect(mockPrisma.organization.update).toHaveBeenLastCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ website: "https://www.byra.se", logo: TINY_PNG, footerSeal: null }) }),
+    );
+  });
+
+  it("avvisar en bild som inte är PNG/JPEG-data-URL", async () => {
+    await expect(makeCaller("org-a").updateSettings({ logo: "data:image/svg+xml;base64,PHN2Zz4=" as never })).rejects.toThrow();
   });
 
   it("avvisar en okänd kategori och ett negativt pris", async () => {

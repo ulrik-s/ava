@@ -13,14 +13,15 @@
  * `generateFakturaFromTemplate`, så det funkar i både demo- och git/server-backend.
  */
 
-import type { TimeEntryInput } from "@/lib/shared/kostnadsrakning";
+import type { KrDocumentFields, TimeEntryInput } from "@/lib/shared/kostnadsrakning";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { KOSTNADSRAKNING_DOCUMENT_TYPE } from "@/lib/shared/schemas/document";
 import { asId, type BillingRunId, type MatterId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
 import type { DocUtils, RegisterMut } from "./generate-faktura-doc";
 
-export interface KrDocMeta {
+/** Dokumentets metadata; dokumentfälten (#1218) ger målnummer, titel, sidfot. */
+export interface KrDocMeta extends KrDocumentFields {
   matterNumber: string;
   matterTitle: string;
   clientName?: string;
@@ -55,12 +56,12 @@ export interface GenerateKrDocArgs {
 
 export async function generateKrDoc(args: GenerateKrDocArgs): Promise<void> {
   const { matterId, meta, expenses, timeEntries, ownBillingRunId, register, utils } = args;
-  const { buildKostnadsrakningContext } = await import("@/lib/shared/kostnadsrakning");
+  const { buildKostnadsrakningContext, withDocumentFields } = await import("@/lib/shared/kostnadsrakning");
   const { renderKostnadsrakningPdf } = await import("@/lib/client/kostnadsrakning/render-pdf");
   const { persistGeneratedDoc } = await import("@/lib/client/demo/persist-generated-doc");
 
   const now = new Date();
-  const ctx = buildKostnadsrakningContext({
+  const ctx = buildKostnadsrakningContext(withDocumentFields({
     matter: { matterNumber: meta.matterNumber, title: meta.matterTitle, ...omitUndefined({ clientName: meta.clientName, radgivningPaid: meta.radgivningPaid }) },
     defender: { name: meta.defenderName, ...omitUndefined({ email: meta.defenderEmail }) },
     organization: omitUndefined({ name: meta.organizationName, orgNumber: meta.organizationOrgNumber, address: meta.organizationAddress }),
@@ -75,7 +76,7 @@ export async function generateKrDoc(args: GenerateKrDocArgs): Promise<void> {
     expenses,
     timeEntries,
     ...omitUndefined({ ownBillingRunId }),
-  });
+  }, meta));
 
   const bytes = await renderKostnadsrakningPdf({
     result: ctx,

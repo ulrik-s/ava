@@ -1,8 +1,7 @@
 "use client";
 
-import { Upload, Trash2, Building2, Plus, Pencil, X, Check } from "lucide-react";
-import { useEffect, useId, useRef, useState } from "react";
-import { z } from "zod";
+import { Trash2, Plus, Pencil, X, Check } from "lucide-react";
+import { useEffect, useId, useState } from "react";
 import { HourlyRatesFields } from "@/components/billing/hourly-rates-fields";
 import { PanelPage } from "@/components/layout/panel-page";
 import { DatasourceSection } from "@/components/settings/datasource-section";
@@ -12,15 +11,13 @@ import { FortnoxSection } from "@/components/settings/fortnox-section";
 import { HelperSection } from "@/components/settings/helper-section";
 import { LedgerAccountsSection } from "@/components/settings/ledger-accounts-section";
 import { OrgDefaultsSection } from "@/components/settings/org-defaults-section";
+import { OrgImageSection } from "@/components/settings/org-image-section";
 import { trpc } from "@/lib/client/trpc";
+import type { OrgImage } from "@/lib/shared/org-image";
 import type { HourlyRates } from "@/lib/shared/schemas/hourly-rates";
 import { DocumentTagsSection } from "./_document-tags-section";
 import { settingsLayout } from "./_settings-layout";
 import { StandardAtgarderSection } from "./_standard-atgarder-section";
-
-// Zod vid parsegränsen (#187): logo-API:ts svar valideras.
-const logoResponseSchema = z.object({ logoUrl: z.string().nullable() });
-const uploadErrorSchema = z.object({ error: z.string().optional() }).passthrough();
 
 // ─── Offices sub-component ───────────────────────────────────────
 
@@ -235,6 +232,8 @@ interface OrgForm {
   phone: string;
   email: string;
   bankgiro: string;
+  /** Webbplats — kostnadsräkningens sidfot (#1218). */
+  website: string;
   /** Aconto-gränsbelopp i KRONOR (öre/100) — sparas som öre (#885). */
   accontoThresholdKr: string;
   /** Byråns timpris per kategori (öre/h, #1206) — fälten visar kronor. */
@@ -244,11 +243,11 @@ interface OrgForm {
 type NullableStr = string | null | undefined;
 /** Settings-data → form (null/undefined → ""). Egen helper håller
  *  useOrgSettings under complexity@8 (annars 6× `??`). */
-function toOrgForm(d: { name?: NullableStr; orgNumber?: NullableStr; address?: NullableStr; phone?: NullableStr; email?: NullableStr; bankgiro?: NullableStr; accontoThresholdOre?: number | null; hourlyRates?: HourlyRates | undefined }): OrgForm {
+function toOrgForm(d: { name?: NullableStr; orgNumber?: NullableStr; address?: NullableStr; phone?: NullableStr; email?: NullableStr; bankgiro?: NullableStr; website?: NullableStr; accontoThresholdOre?: number | null; hourlyRates?: HourlyRates | undefined }): OrgForm {
   const s = (v: NullableStr): string => v ?? "";
   return {
     name: s(d.name), orgNumber: s(d.orgNumber), address: s(d.address),
-    phone: s(d.phone), email: s(d.email), bankgiro: s(d.bankgiro),
+    phone: s(d.phone), email: s(d.email), bankgiro: s(d.bankgiro), website: s(d.website),
     accontoThresholdKr: oreToKr(d.accontoThresholdOre),
     hourlyRates: d.hourlyRates ?? {},
   };
@@ -270,7 +269,7 @@ function krToOre(kr: string): number | undefined {
 function useOrgSettings() {
   const settings = trpc.organization.getSettings.useQuery();
   const utils = trpc.useUtils();
-  const [form, setForm] = useState<OrgForm>({ name: "", orgNumber: "", address: "", phone: "", email: "", bankgiro: "", accontoThresholdKr: "", hourlyRates: {} });
+  const [form, setForm] = useState<OrgForm>({ name: "", orgNumber: "", address: "", phone: "", email: "", bankgiro: "", website: "", accontoThresholdKr: "", hourlyRates: {} });
   const [formReady, setFormReady] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -294,6 +293,7 @@ function useOrgSettings() {
         name: form.name || undefined, orgNumber: form.orgNumber || undefined,
         address: form.address || undefined, phone: form.phone || undefined,
         email: form.email || undefined, bankgiro: form.bankgiro || undefined,
+        website: form.website || undefined,
         accontoThresholdOre: krToOre(form.accontoThresholdKr),
         // Hela kartan: ett tömt fält tar bort byråns pris för kategorin.
         hourlyRates: form.hourlyRates,
@@ -306,118 +306,19 @@ function useOrgSettings() {
   return { settings, form, setForm, saved, updateSettings };
 }
 
-interface OrgLogo {
-  logoUrl: string | null;
-  logoLoading: boolean;
-  logoError: string | null;
-  onUpload: (file: File) => Promise<void>;
-  onDelete: () => Promise<void>;
-}
-
-/** Logo-state + upp-/nedladdning mot /api/organization/logo. */
-function useOrgLogo(): OrgLogo {
-  const [logoUrl, setLogoUrl] = useState<string | null>(null);
-  const [logoLoading, setLogoLoading] = useState(false);
-  const [logoError, setLogoError] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetch("/api/organization/logo")
-      .then((r) => r.json())
-      .then((d: unknown) => setLogoUrl(logoResponseSchema.parse(d).logoUrl))
-      .catch(() => {});
-  }, []);
-
-  const onUpload = async (file: File): Promise<void> => {
-    setLogoLoading(true);
-    setLogoError(null);
-    try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const res = await fetch("/api/organization/logo", { method: "POST", body: fd });
-      if (!res.ok) {
-        const err = uploadErrorSchema.parse(await res.json());
-        throw new Error(err.error ?? "Uppladdning misslyckades");
-      }
-      setLogoUrl(logoResponseSchema.parse(await res.json()).logoUrl);
-    } catch (e) {
-      setLogoError(e instanceof Error ? e.message : "Okänt fel");
-    } finally {
-      setLogoLoading(false);
-    }
-  };
-
-  const onDelete = async (): Promise<void> => {
-    setLogoLoading(true);
-    setLogoError(null);
-    try {
-      await fetch("/api/organization/logo", { method: "DELETE" });
-      setLogoUrl(null);
-    } catch {
-      setLogoError("Kunde inte ta bort logotypen");
-    } finally {
-      setLogoLoading(false);
-    }
-  };
-
-  return { logoUrl, logoLoading, logoError, onUpload, onDelete };
-}
-
-/** Logotyp-sektionen (preview + ladda upp/byt/ta bort). */
-function OrgLogoSection({ logo }: { logo: OrgLogo }) {
-  const fileInputRef = useRef<HTMLInputElement>(null);
+/** Byråns bilder i genererade dokument (#1218): logga och sidfotsmärke. Sparas
+ *  direkt (inte via formulärets debounce) — en bild är ett helt värde. */
+function OrgImagesSection({ logo, footerSeal, save }: {
+  logo: OrgImage | null; footerSeal: OrgImage | null;
+  save: (patch: { logo?: OrgImage | null; footerSeal?: OrgImage | null }) => void;
+}) {
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
-      <div className="flex items-center gap-2 mb-4">
-        <Building2 size={16} className="text-gray-500" />
-        <h3 className="font-semibold text-gray-900">Logotyp</h3>
-      </div>
-      <p className="text-xs text-gray-500 mb-4">
-        Visas i sidhuvudet på alla genererade dokument. PNG, JPEG eller SVG, max 2 MB.
-      </p>
-
-      <div className="flex items-center gap-4">
-        <div className="w-40 h-20 border border-gray-200 rounded flex items-center justify-center bg-gray-50 shrink-0 overflow-hidden">
-          {logo.logoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={logo.logoUrl} alt="Logotyp" className="max-h-full max-w-full object-contain p-2" />
-          ) : (
-            <span className="text-xs text-gray-400">Ingen logotyp</span>
-          )}
-        </div>
-
-        <div className="flex flex-col gap-2">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/png,image/jpeg,image/svg+xml,image/webp"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) void logo.onUpload(file);
-              e.target.value = "";
-            }}
-          />
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={logo.logoLoading}
-            className="flex items-center gap-2 px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50"
-          >
-            <Upload size={14} />
-            {logo.logoLoading ? "Laddar upp…" : logo.logoUrl ? "Byt logotyp" : "Ladda upp logotyp"}
-          </button>
-          {logo.logoUrl && (
-            <button
-              onClick={() => void logo.onDelete()}
-              disabled={logo.logoLoading}
-              className="flex items-center gap-2 px-3 py-1.5 text-sm border border-red-200 text-red-600 rounded hover:bg-red-50 disabled:opacity-50"
-            >
-              <Trash2 size={14} /> Ta bort
-            </button>
-          )}
-        </div>
-      </div>
-      {logo.logoError && <p className="mt-2 text-sm text-red-600">{logo.logoError}</p>}
-    </div>
+    <>
+      <OrgImageSection title="Logotyp" description="Visas centrerad överst på kostnadsräkningar och andra genererade dokument (annars byråns namn)."
+        value={logo} onChange={(v) => save({ logo: v })} />
+      <OrgImageSection title="Sidfotsmärke" description="Visas till vänster i sidfoten, t.ex. märket för ledamot av Sveriges advokatsamfund."
+        value={footerSeal} onChange={(v) => save({ footerSeal: v })} />
+    </>
   );
 }
 
@@ -437,6 +338,7 @@ function OrgFieldsForm({ form, setForm, isPending, saved, error }: OrgFieldsProp
   const phoneId = useId();
   const emailId = useId();
   const bankgiroId = useId();
+  const websiteId = useId();
   const thresholdId = useId();
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
@@ -477,6 +379,13 @@ function OrgFieldsForm({ form, setForm, isPending, saved, error }: OrgFieldsProp
               onChange={(e) => setForm({ ...form, email: e.target.value })}
               className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
           </div>
+        </div>
+
+        <div>
+          <label htmlFor={websiteId} className="block text-xs font-medium text-gray-700 mb-1">Webbplats</label>
+          <input id={websiteId} type="url" value={form.website} placeholder="https://www.byrå.se"
+            onChange={(e) => setForm({ ...form, website: e.target.value })}
+            className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
         </div>
 
         <div className="grid grid-cols-2 gap-3">
@@ -542,7 +451,6 @@ function DocFooterPreview({ form }: { form: OrgForm }) {
 
 export default function SettingsPage() {
   const { settings, form, setForm, saved, updateSettings } = useOrgSettings();
-  const logo = useOrgLogo();
 
   if (settings.isLoading) {
     return <div className="p-6 text-sm text-gray-500">Laddar inställningar…</div>;
@@ -553,7 +461,8 @@ export default function SettingsPage() {
     { id: "org", title: "Byråns uppgifter", render: () => (
       <>
         <PanelIntro text="Visas i genererade dokument (offerter, fakturor, kostnadsräkningar)." />
-        <OrgLogoSection logo={logo} />
+        <OrgImagesSection logo={settings.data?.logo ?? null} footerSeal={settings.data?.footerSeal ?? null}
+          save={(patch) => updateSettings.mutate(patch)} />
         <OrgFieldsForm form={form} setForm={setForm} isPending={updateSettings.isPending} saved={saved} error={updateSettings.error?.message ?? null} />
         <DocFooterPreview form={form} />
       </>

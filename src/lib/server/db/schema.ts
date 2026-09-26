@@ -17,6 +17,7 @@ import {
 } from "drizzle-orm/pg-core";
 import type { DocumentKind } from "@/lib/shared/document-kind";
 import type { KostnadsrakningStatus } from "@/lib/shared/kostnadsrakning-flow";
+import type { OrgImage } from "@/lib/shared/org-image";
 import type { DispatchChannel, DispatchStatus, ExpectedReceivableStatus } from "@/lib/shared/schemas/billing";
 import type {
   CalendarEventKind, CalendarEventVisibility, TaskPriority, TaskStatus,
@@ -54,7 +55,11 @@ export const organizations = pgTable("organizations", {
   phone: text("phone"),
   email: text("email"),
   bankgiro: text("bankgiro"),
-  logoPath: text("logo_path"),
+  /** Webbplats, logga och sidfotsmärke (#1218) — bilderna som data-URL (≤ 300 kB,
+   *  zod-validerade i `orgImageSchema`). Ersätter den oanvända `logo_path`. */
+  website: text("website"),
+  logo: text("logo").$type<OrgImage>(),
+  footerSeal: text("footer_seal").$type<OrgImage>(),
   azureTenantId: text("azure_tenant_id"),
   ledgerAccountMap: jsonb("ledger_account_map"),
   /** Byråns vokabulär av giltiga dokument-etiketter (#621). Dokument får bara

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ledgerAccountMapSchema } from "../accounting/account-map";
+import { orgImageSchema } from "../org-image";
 import { standardAtgardSchema } from "../standard-atgard";
 import { baseFields, dateLike } from "./common";
 import { hourlyRatesSchema } from "./hourly-rates";
@@ -18,7 +19,12 @@ export const organizationSchema = z.object({
   phone: z.string().nullish(),
   email: z.string().nullish(),
   bankgiro: z.string().nullish(),
-  logoPath: z.string().nullish(),
+  /** Webbplats (t.ex. "https://www.exempel.se") — kostnadsräkningens sidfot (#1218). */
+  website: z.string().nullish(),
+  /** Logga (PNG/JPEG data-URL, ≤ 300 kB) överst i genererade dokument (#1218). */
+  logo: orgImageSchema.nullish(),
+  /** Märke i sidfoten, t.ex. "Ledamot av Sveriges advokatsamfund" (#1218). */
+  footerSeal: orgImageSchema.nullish(),
   /** Entra ID tenant-id för O365 single-tenant-inloggning. Server-only fält. */
   azureTenantId: z.string().nullish(),
   /** Per-byrå roll→konto-mappning för bokföringsexport (SIE m.fl., #249). */

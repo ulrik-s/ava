@@ -25,6 +25,8 @@ const PRINCIPAL: Principal = {
 };
 
 const DAG_2026 = 255_000; // 2 550 kr (DVFS 2025:9 § 1)
+/** Yrkat brutto på en kostnadsräkning (#1218): exkl (hela kronor) + 25 % moms avrundad till hela kronor. */
+const yrkat = (exklOre: number): number => exklOre + Math.round((exklOre * 0.25) / 100) * 100;
 const HELG = new Date("2026-05-02T09:00:00.000Z"); // beredskapsdag med förhandling
 const LUGN = new Date("2026-05-03T00:00:00.000Z"); // beredskapsdag utan arbete
 
@@ -63,7 +65,7 @@ describe("advokatberedskap i kostnadsräkningen (offentligt uppdrag)", () => {
     const caller = makeCaller([beredskap("te-1", LUGN)]);
     const { run } = await caller.billingRun.createKostnadsrakning({ matterId: "m-1" });
     // Enda posten är beredskapen → arvodet är dagbeloppet, brutto inkl 25 % moms.
-    expect(run.workValueOreAtRun).toBe(Math.round(DAG_2026 * 1.25));
+    expect(run.workValueOreAtRun).toBe(yrkat(DAG_2026));
   });
 
   it("beredskapen läggs till arbetet, inte i stället för", async () => {
@@ -74,7 +76,7 @@ describe("advokatberedskap i kostnadsräkningen (offentligt uppdrag)", () => {
       { id: "te-2", date: LUGN, minutes: 120, hourlyRate: 250_000 },
     ]);
     const { run } = await caller.billingRun.createKostnadsrakning({ matterId: "m-1" });
-    expect(run.workValueOreAtRun).toBe(Math.round((DAG_2026 + 325_200) * 1.25));
+    expect(run.workValueOreAtRun).toBe(yrkat(DAG_2026 + 325_200));
   });
 
   it("§ 2: dag med helgförhandling ger arbetet — inte garantin", async () => {
@@ -84,7 +86,7 @@ describe("advokatberedskap i kostnadsräkningen (offentligt uppdrag)", () => {
     ]);
     const { run } = await caller.billingRun.createKostnadsrakning({ matterId: "m-1" });
     // Bara arbetet: 90 min × 3 256 kr/h = 4 884 kr.
-    expect(run.workValueOreAtRun).toBe(Math.round(488_400 * 1.25));
+    expect(run.workValueOreAtRun).toBe(yrkat(488_400));
   });
 
   it("två beredskapsdygn där ETT förbrukas → ett dygn kvar", async () => {
@@ -94,7 +96,7 @@ describe("advokatberedskap i kostnadsräkningen (offentligt uppdrag)", () => {
       { id: "te-3", date: HELG, minutes: 90, kind: "ARBETE_OBEKVAM_TID", hourlyRate: 325_600 },
     ]);
     const { run } = await caller.billingRun.createKostnadsrakning({ matterId: "m-1" });
-    expect(run.workValueOreAtRun).toBe(Math.round((DAG_2026 + 488_400) * 1.25));
+    expect(run.workValueOreAtRun).toBe(yrkat(DAG_2026 + 488_400));
   });
 });
 
@@ -106,7 +108,7 @@ describe("offentligt uppdrag värderas på Domstolsverkets kategorinormer (#1003
       { id: "te-1", date: HELG, minutes: 90, kind: "ARBETE_OBEKVAM_TID", hourlyRate: 250_000 },
     ]);
     const { run } = await caller.billingRun.createKostnadsrakning({ matterId: "m-1" });
-    expect(run.workValueOreAtRun).toBe(Math.round(488_400 * 1.25));
+    expect(run.workValueOreAtRun).toBe(yrkat(488_400));
   });
 
   it("tidsspillan yrkas på sin (lägre) norm — normen vinner åt båda hållen", async () => {
@@ -115,14 +117,14 @@ describe("offentligt uppdrag värderas på Domstolsverkets kategorinormer (#1003
       { id: "te-1", date: LUGN, minutes: 120, kind: "TIDSSPILLAN", hourlyRate: 250_000 },
     ]);
     const { run } = await caller.billingRun.createKostnadsrakning({ matterId: "m-1" });
-    expect(run.workValueOreAtRun).toBe(Math.round(297_400 * 1.25));
+    expect(run.workValueOreAtRun).toBe(yrkat(297_400));
   });
 
   it("ingen rådgivningstimme carvas ur offentligt uppdrag", async () => {
     // Carve-outen är rättshjälpens (#868) — 60 min arbete ska yrkas fullt ut.
     const caller = makeCaller([{ id: "te-1", date: LUGN, minutes: 60, hourlyRate: 250_000 }]);
     const { run } = await caller.billingRun.createKostnadsrakning({ matterId: "m-1" });
-    expect(run.workValueOreAtRun).toBe(Math.round(162_600 * 1.25));
+    expect(run.workValueOreAtRun).toBe(yrkat(162_600));
   });
 
   it("taxa-ärenden omvärderas INTE — taxan styr arvodet, posterna är informativa", async () => {
@@ -134,7 +136,7 @@ describe("offentligt uppdrag värderas på Domstolsverkets kategorinormer (#1003
       { isTaxeArende: true, taxaLevel: 1 },
     );
     const { run } = await caller.billingRun.createKostnadsrakning({ matterId: "m-1" });
-    expect(run.workValueOreAtRun).toBe(Math.round(500_000 * 1.25));
+    expect(run.workValueOreAtRun).toBe(yrkat(500_000));
   });
 });
 
@@ -177,7 +179,7 @@ describe("advokatberedskap i täckningsärenden (rättshjälp)", () => {
     const { run } = await caller.billingRun.createKostnadsrakning({ matterId: "m-1" });
     // Dagbeloppet + 1 h på timkostnadsnormen (1 626 kr) — rådgivningen är en egen
     // låst post och äter inte registrerat arbete.
-    expect(run.workValueOreAtRun).toBe(Math.round((DAG_2026 + 162_600) * 1.25));
+    expect(run.workValueOreAtRun).toBe(yrkat(DAG_2026 + 162_600));
   });
 });
 

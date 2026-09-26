@@ -239,8 +239,9 @@ describe("billingRun.createKostnadsrakning", () => {
     expect(res.run.status).toBe("PENDING_VERDICT");
     expect(res.run.invoiceId).toBeFalsy();
     // Offentligt uppdrag värderas på timkostnadsnormen (#1003), inte byråns
-    // 2500 kr/h: 3h × 1626 kr + 25 % moms (#782).
-    expect(res.run.workValueOreAtRun).toBe(609750);
+    // 2500 kr/h: 3h × 1626 kr + 25 % moms (#782), momsen i hela kronor (#1218):
+    // 4 878 + 1 219,50 → 1 220 = 6 098 kr.
+    expect(res.run.workValueOreAtRun).toBe(609800);
   });
 
   it("tilldelar en KR-referens KR-YYYY-NNNN (#889 — samma format som fakturornas F-nummer)", async () => {
@@ -259,10 +260,10 @@ describe("billingRun.createKostnadsrakning", () => {
 
   it("tidsspillan värderas på tidsspillan-normen, arbete på timkostnadsnormen (#891)", async () => {
     // 120 min arbete på 1 626 kr + 60 min tidsspillan på 1 487 kr — inget dras av (#1205).
-    // netto: 120/60×162600 + 60/60×148700 = 473900; brutto ×1.25 = 592375.
+    // netto: 120/60×162600 + 60/60×148700 = 473900; moms 118475 → 118500 (hela kronor, #1218).
     const { caller } = makeCaller({ workMinutes: 120, tidsspillanMin: 60, paymentMethod: "RATTSHJALP" });
     const res = await caller.billingRun.createKostnadsrakning({ matterId: "m-1" });
-    expect(res.run.workValueOreAtRun).toBe(592375);
+    expect(res.run.workValueOreAtRun).toBe(592400);
   });
 
   it("rättshjälp värderas på timkostnadsnormen (F-skatt), hela registrerade tiden (#839/#1205)", async () => {
@@ -322,11 +323,12 @@ describe("billingRun.setVerdict", () => {
     expect(te.invoiceId).toBe(res.invoice.id); // arvode länkad
     expect(ex.invoiceId).toBe(res.invoice.id); // utlägg länkad
     expect(prut.invoiceId).toBe(res.invoice.id); // PRUTNING länkad (reducerar totalen)
-    // Arvode 2h × 1626 kr (#1003) + 25 % moms = 406500, + utlägg 50 kr − prutning 300 kr (#782).
+    // Arvode 2h × 1626 kr (#1003) + utlägg 50 kr = 3 302 kr, + 25 % moms 825,50 → 826 kr
+    // (hela kronor, #1218) = 4 128 kr, − prutning 300 kr (#782).
     // #945: fakturan går till DOMSTOL → utlägget debiteras 25 % moms (6250) fastän
     // posten själv är momsfri. Prutningen är en justering av totalen, inte ett utlägg,
     // och momsas därför inte.
-    expect(res.invoice.amount).toBe(406500 + 6250 - 30000);
+    expect(res.invoice.amount).toBe(412800 - 30000);
   });
 
   it("DOMSTOL-faktura får F-nummer men ingen OCR (#889 — samma format som övriga)", async () => {
@@ -551,8 +553,9 @@ describe("moms mot DOMSTOL är alltid 25 % (#945)", () => {
     const c = courtCaller();
     const kr = await c.billingRun.createKostnadsrakning({ matterId: "m-1" });
     // Utlägg netto 1 300 kr → 1 625 kr mot domstol (25 %), inte 1 324 kr (0 % + 6 %).
-    const arvodeGross = 11 * 162600 * 1.25; // alla 11 registrerade tim på timkostnadsnormen (#1205)
-    expect(kr.run.workValueOreAtRun).toBe(Math.round(arvodeGross) + 162500);
+    // Alla 11 registrerade tim på timkostnadsnormen (#1205): 17 886 + 1 300 = 19 186 kr exkl,
+    // moms 4 796,50 → 4 797 kr (hela kronor, #1218).
+    expect(kr.run.workValueOreAtRun).toBe(1_918_600 + 479_700);
   });
 
   it("BÅDA fakturorna får EN 25 %-utläggsrad — regeln följer biträdet, inte betalaren (#975)", async () => {

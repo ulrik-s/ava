@@ -1,10 +1,11 @@
 /**
- * Test för SettingsPage — logo, WebDAV, kontor, kontaktuppgifter.
+ * Test för SettingsPage — logga/sidfotsmärke, WebDAV, kontor, kontaktuppgifter.
  */
 
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest-compat";
 import SettingsPage from "@/app/settings/page";
+import { TINY_PNG, TINY_PNG_BYTES } from "../../../helpers/tiny-images";
 
 const settingsQuery = {
   data: undefined as null | Record<string, unknown> | undefined,
@@ -98,17 +99,8 @@ beforeEach(() => {
   addOfficeState.isPending = false;
   updateOfficeState.isPending = false;
 
-  // Mock fetch for logo endpoint
-  global.fetch = vi.fn((url: string | URL | Request) => {
-    const urlStr = typeof url === "string" ? url : url.toString();
-    if (urlStr.includes("/api/organization/logo")) {
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ logoUrl: null }),
-      } as Response);
-    }
-    return Promise.reject(new Error("unexpected fetch: " + urlStr));
-  }) as typeof fetch;
+  // Inga riktiga nätverksanrop från sidans sektioner i enhetstestet.
+  global.fetch = vi.fn((url: string | URL | Request) => Promise.reject(new Error(`unexpected fetch: ${String(url)}`))) as typeof fetch;
 
   // Mock clipboard
   Object.assign(navigator, {
@@ -330,78 +322,25 @@ describe("SettingsPage", () => {
     expect(addressInput.value).toBe("Ny adress");
   });
 
-  it("laddar upp logotyp och uppdaterar förhandsvisning", async () => {
-    let logoUploaded = false;
-    global.fetch = vi.fn((url: string | URL | Request, init?: RequestInit) => {
-      const urlStr = typeof url === "string" ? url : url.toString();
-      if (urlStr.includes("/api/organization/logo")) {
-        if (init?.method === "POST") {
-          logoUploaded = true;
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ logoUrl: "/uploads/logo.png" }),
-          } as Response);
-        }
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ logoUrl: null }),
-        } as Response);
-      }
-      return Promise.reject(new Error("unexpected: " + urlStr));
-    }) as typeof fetch;
-
-    const { container } = render(<SettingsPage />);
-    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
-    const file = new File(["abc"], "logo.png", { type: "image/png" });
-    fireEvent.change(fileInput, { target: { files: [file] } });
-    await waitFor(() => expect(logoUploaded).toBe(true));
-  });
-
-  it("visar fel när logotyp-uppladdning misslyckas", async () => {
-    global.fetch = vi.fn((url: string | URL | Request, init?: RequestInit) => {
-      const urlStr = typeof url === "string" ? url : url.toString();
-      if (urlStr.includes("/api/organization/logo") && init?.method === "POST") {
-        return Promise.resolve({
-          ok: false,
-          json: () => Promise.resolve({ error: "Filen är för stor" }),
-        } as Response);
-      }
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ logoUrl: null }),
-      } as Response);
-    }) as typeof fetch;
-
-    const { container } = render(<SettingsPage />);
-    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
-    const file = new File(["x"], "big.png", { type: "image/png" });
-    fireEvent.change(fileInput, { target: { files: [file] } });
-    await waitFor(() => expect(screen.getByText(/Filen är för stor/)).toBeInTheDocument());
-  });
-
-  it("tar bort logotyp via fetch DELETE", async () => {
-    let deleted = false;
-    global.fetch = vi.fn((url: string | URL | Request, init?: RequestInit) => {
-      const urlStr = typeof url === "string" ? url : url.toString();
-      if (urlStr.includes("/api/organization/logo")) {
-        if (init?.method === "DELETE") {
-          deleted = true;
-          return Promise.resolve({ ok: true, json: () => Promise.resolve({}) } as Response);
-        }
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ logoUrl: "/uploads/old.png" }),
-        } as Response);
-      }
-      return Promise.reject(new Error("unexpected: " + urlStr));
-    }) as typeof fetch;
-
+  it("laddar upp logotyp → sparas direkt på organisationen som data-URL (#1218)", async () => {
     render(<SettingsPage />);
-    // Vänta tills "Ta bort"-knappen för logotyp dyker upp (logoUrl satt)
-    const removeBtn = await waitFor(() =>
-      screen.getByRole("button", { name: /^Ta bort$/i }),
-    );
-    fireEvent.click(removeBtn);
-    await waitFor(() => expect(deleted).toBe(true));
+    const input = screen.getByLabelText("Logotyp — välj fil");
+    fireEvent.change(input, { target: { files: [new File([TINY_PNG_BYTES], "logo.png", { type: "image/png" })] } });
+    await waitFor(() => expect(updateSettingsMutate).toHaveBeenCalledWith({ logo: TINY_PNG }));
   });
+
+  it("sidfotsmärket visas och kan tas bort", () => {
+    settingsQuery.data = { ...settingsQuery.data, footerSeal: TINY_PNG };
+    render(<SettingsPage />);
+    expect(screen.getByRole("img", { name: "Sidfotsmärke" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Ta bort/ }));
+    expect(updateSettingsMutate).toHaveBeenCalledWith({ footerSeal: null });
+  });
+
+  it("webbplatsen auto-sparas med kontaktuppgifterna", async () => {
+    render(<SettingsPage />);
+    fireEvent.change(screen.getByLabelText("Webbplats"), { target: { value: "https://www.byra.se" } });
+    await waitFor(() => expect(updateSettingsMutate.mock.calls.at(-1)?.[0]).toMatchObject({ website: "https://www.byra.se" }), { timeout: 2000 });
+  });
+
 });

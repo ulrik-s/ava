@@ -2,6 +2,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { ledgerAccountMapSchema } from "@/lib/shared/accounting/account-map";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
+import { orgImageSchema } from "@/lib/shared/org-image";
 import { hourlyRatesSchema } from "@/lib/shared/schemas/hourly-rates";
 import { officeIdSchema, organizationIdSchema, asId } from "@/lib/shared/schemas/ids";
 import type { Office, Organization } from "@/lib/shared/schemas/organization";
@@ -17,8 +18,17 @@ function nullableOrgFields(org: Organization) {
     phone: org.phone ?? null,
     email: org.email ?? null,
     bankgiro: org.bankgiro ?? null,
-    logoPath: org.logoPath ?? null,
     ledgerAccountMap: org.ledgerAccountMap ?? null,
+    ...brandingFields(org),
+  };
+}
+
+/** Webbplats, logga och sidfotsmärke (#1218) — dokumentens byråprofil. */
+function brandingFields(org: Organization) {
+  return {
+    website: org.website ?? null,
+    logo: org.logo ?? null,
+    footerSeal: org.footerSeal ?? null,
   };
 }
 
@@ -58,6 +68,10 @@ export const organizationRouter = router({
         phone: z.string().optional(),
         email: z.string().optional(),
         bankgiro: z.string().optional(),
+        /** Webbplats, logga och sidfotsmärke (#1218). `null` tar bort bilden. */
+        website: z.string().optional(),
+        logo: orgImageSchema.nullable().optional(),
+        footerSeal: orgImageSchema.nullable().optional(),
         /** Roll→konto-mappning för bokföringsexport (#249). */
         ledgerAccountMap: ledgerAccountMapSchema.optional(),
         /** Byråns vokabulär av giltiga dokument-etiketter (#621). Hela listan
