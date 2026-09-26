@@ -12,8 +12,9 @@
  */
 
 import { describe, it, expect } from "vitest-compat";
+import { asId } from "@/lib/shared/schemas/ids";
 import {
-  awardedBaseOre, buildClientView, buildCreditView, buildPayerView, buildSettlementViews,
+  arvodeLadderRows, awardedBaseOre, buildClientArvodeLines, buildClientView, buildCreditView, buildPayerView, buildSettlementViews,
   creditPayload, feeBaseSuffix, ladderBaseOre, radgivningOre, shareLabel, svd,
   totalPrutningNetOre, vatLabel, type SettlementBreakdown,
 } from "@/lib/shared/settlement-view";
@@ -56,16 +57,71 @@ describe("shareLabel", () => {
 });
 
 describe("radgivningOre", () => {
-  // Rådgivningstimmen faktureras klienten separat och är det första avdraget i
-  // arvodestrappan (#941). Bara rättshjälp har den.
-  it("rättshjälp får rådgivningstimmen brutto + netto", () => {
-    const r = radgivningOre("RATTSHJALP", 162_600);
+  // Den redan fakturerade rådgivningstimmen (#1205) — bara omnämnd, aldrig i underlaget.
+  it("registrerad rådgivning → timmen brutto + netto (för omnämnandet)", () => {
+    const r = radgivningOre(true, 162_600);
     expect(r.radgivningNetOre).toBe(162_600);
     expect(r.radgivningGrossOre).toBeGreaterThan(r.radgivningNetOre);
   });
 
-  it.each(["PRIVAT", "RATTSSKYDD", "OFFENTLIGT_UPPDRAG", "MIX"] as const)("%s har ingen", (m) => {
-    expect(radgivningOre(m, 162_600)).toEqual({ radgivningGrossOre: 0, radgivningNetOre: 0 });
+  it("ingen rådgivningsfaktura → noll", () => {
+    expect(radgivningOre(false, 162_600)).toEqual({ radgivningGrossOre: 0, radgivningNetOre: 0 });
+  });
+});
+
+describe("arvodeLadderRows — rådgivningstimmen (#1205)", () => {
+  it("toppraden är det upparbetade (ofrysta) arvodet — rådgivningen läggs varken till eller dras av", () => {
+    const rows = arvodeLadderRows(breakdown({ radgivningNetOre: 162_600, radgivningGrossOre: 203_250 }), "Domstolens");
+    expect(rows[0]).toEqual({ label: "Upparbetat arvode (exkl moms)", amountOre: 100_000, kind: "add" });
+    expect(rows.some((r) => r.kind === "deduct")).toBe(false);
+    expect(rows.some((r) => r.label.startsWith("Beviljat"))).toBe(false);
+  });
+
+  it("omnämner den redan fakturerade timmen som info-rad utan beloppspåverkan", () => {
+    const rows = arvodeLadderRows(breakdown({ radgivningNetOre: 162_600, radgivningGrossOre: 203_250 }), "Domstolens");
+    expect(rows.at(-1)).toEqual({
+      label: "Rådgivningstimme (1 tim) har redan fakturerats klienten separat enligt rättshjälpstaxan och ingår ej i denna faktura.",
+      amountOre: 162_600, kind: "info",
+    });
+  });
+
+  it("ingen rådgivning → ingen info-rad", () => {
+    expect(arvodeLadderRows(breakdown(), "Domstolens").some((r) => r.kind === "info")).toBe(false);
+  });
+
+  it("prutning → avdrag + beviljat belopp, rådgivningen påverkar inte basen", () => {
+    const b = breakdown({ firmLossNetOre: 5_000, radgivningNetOre: 162_600 });
+    const rows = arvodeLadderRows(b, "Domstolens");
+    expect(rows.find((r) => r.label.startsWith("Beviljat"))?.amountOre).toBe(108_000 - 5_000);
+  });
+});
+
+describe("buildClientArvodeLines (#1205)", () => {
+  const entry = (id: string, date: string, minutes: number, kind: "ARBETE" | "TIDSSPILLAN" = "ARBETE") => ({
+    id: asId<"TimeEntryId">(id), date, description: id, minutes, hourlyRate: 0, billable: true, kind,
+  });
+
+  it("ingen registrerad tid carvas bort — varken ärendets första timme eller tidsspillan", () => {
+    const work = {
+      timeEntries: [entry("ts", "2026-03-01", 42, "TIDSSPILLAN"), entry("a1", "2026-03-02", 390)],
+      expenses: [],
+    };
+    const lines = buildClientArvodeLines(work, 0, "2026-06-01");
+    expect(lines.map((l) => [l.description, l.minutes])).toEqual([["ts", 42], ["a1", 390]]);
+  });
+
+  it("stämmer av sista raden mot arvodesbasen och hoppar över icke-debiterbart", () => {
+    const work = {
+      timeEntries: [entry("a1", "2026-03-02", 60), { ...entry("x", "2026-03-03", 60), billable: false }],
+      expenses: [],
+    };
+    const lines = buildClientArvodeLines(work, 162_601, "2026-06-01");
+    expect(lines).toHaveLength(1);
+    expect(lines[0]!.amountOre).toBe(162_601);
+  });
+
+  it("tomt underlag → inga rader", () => {
+    expect(buildClientArvodeLines({ timeEntries: [], expenses: [] }, 0, "2026-06-01")).toEqual([]);
   });
 });
 

@@ -11,8 +11,33 @@ import {
 import {
   computeRadgivningsavgift,
   computeMatterSettlement,
+  isRadgivningInvoiced,
+  radgivningTextRad,
   RADGIVNING_MINUTES,
 } from "@/lib/shared/rattshjalp";
+
+describe("radgivningTextRad (#1205)", () => {
+  it("säger att timmen redan är fakturerad och inte ingår i kostnadsräkningen", () => {
+    expect(radgivningTextRad()).toBe(
+      "Rådgivningstimme (1 tim) har redan fakturerats klienten separat enligt rättshjälpstaxan och ingår ej i denna kostnadsräkning.",
+    );
+  });
+
+  it("fakturakontext → 'ingår ej i denna faktura'", () => {
+    expect(radgivningTextRad("faktura")).toMatch(/ingår ej i denna faktura\.$/);
+  });
+});
+
+describe("isRadgivningInvoiced (#1205)", () => {
+  it("rättshjälp med registrerad rådgivning → true", () => {
+    expect(isRadgivningInvoiced({ paymentMethod: "RATTSHJALP", radgivningBetaldAt: "2026-05-10" })).toBe(true);
+  });
+
+  it("rättshjälp utan rådgivning, eller annat betalningssätt → false", () => {
+    expect(isRadgivningInvoiced({ paymentMethod: "RATTSHJALP", radgivningBetaldAt: null })).toBe(false);
+    expect(isRadgivningInvoiced({ paymentMethod: "RATTSSKYDD", radgivningBetaldAt: "2026-05-10" })).toBe(false);
+  });
+});
 
 describe("computeRadgivningsavgift", () => {
   it("är en timme enligt timkostnadsnormen (F-skatt)", () => {

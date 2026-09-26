@@ -130,7 +130,7 @@ const DESCRIPTIONS: Readonly<Record<string, string>> = {
   // ── Fakturor ─────────────────────────────────────────────────────
   "invoice.list": "Lista fakturor, valfritt filtrerat på ärende, typ eller status.",
   "invoice.getById": "Hämta en enskild faktura med belopp, betalningar och utestående.",
-  "invoice.createRadgivning": "Fakturera den obligatoriska rådgivningstimmen. Hålls medvetet i DRAFT: den är en additiv klientkostnad och ska aldrig dras av på en slutfaktura. Idempotent — avvisar om den redan registrerats.",
+  "invoice.createRadgivning": "Fakturera den obligatoriska rådgivningstimmen och registrera mötet som en låst tidspost (60 min) kopplad till fakturan — den ingår aldrig i kostnadsräkning eller slutreglering. Hålls medvetet i DRAFT: den är en additiv klientkostnad och ska aldrig dras av på en slutfaktura. Idempotent — avvisar om den redan registrerats.",
   "invoice.createCredit": "Kreditera en faktura: skapar en motfaktura med negativt belopp och annullerar originalet. En redan krediterad eller annullerad faktura kan inte krediteras igen.",
   "invoice.recordPayment": "Bokför en inbetalning på en faktura.",
   "invoice.writeOff": "Skriv av en faktura som konstaterad kundförlust, helt eller delvis. Endast utställda fakturor med utestående belopp; avskrivningen får inte överstiga det utestående.",

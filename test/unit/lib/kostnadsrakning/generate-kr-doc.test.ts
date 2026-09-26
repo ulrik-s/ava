@@ -9,7 +9,7 @@ import { generateKrDoc } from "@/lib/client/kostnadsrakning/generate-kr-doc";
 import { asId } from "@/lib/shared/schemas/ids";
 import { isUuid } from "@/lib/shared/uuid";
 
-const renderKostnadsrakningPdf = vi.fn(async () => new Uint8Array([1, 2, 3, 4]));
+const renderKostnadsrakningPdf = vi.fn(async (_a: unknown) => new Uint8Array([1, 2, 3, 4]));
 const persistGeneratedDoc = vi.fn(async () => {});
 
 vi.mock("@/lib/client/kostnadsrakning/render-pdf", () => ({ renderKostnadsrakningPdf }));
@@ -51,5 +51,19 @@ describe("generateKrDoc", () => {
   it("dokument-registreringen får DONE-analysstatus (ingen AI-körning behövs)", async () => {
     await generateKrDoc(baseArgs);
     expect(registerMutateAsync).toHaveBeenCalledWith(expect.objectContaining({ analysisStatus: "DONE" }));
+  });
+
+  it("körningens egna frysta poster ingår; redan fakturerade (låsta) utelämnas (#1205)", async () => {
+    const run = asId<"BillingRunId">("kr-1");
+    await generateKrDoc({
+      ...baseArgs,
+      ownBillingRunId: run,
+      timeEntries: [
+        { id: "egen", date: "2026-03-02", description: "Inlaga", minutes: 90, billable: true, frozenAt: "2026-03-05", frozenByBillingRunId: run },
+        { id: "radg", date: "2026-03-01", description: "Rådgivning", minutes: 60, billable: true, frozenAt: "2026-03-01" },
+      ],
+    });
+    const arg = renderKostnadsrakningPdf.mock.calls[0]![0] as { result: { timeLines: Array<{ id: string }> } };
+    expect(arg.result.timeLines.map((t: { id: string }) => t.id)).toEqual(["egen"]);
   });
 });

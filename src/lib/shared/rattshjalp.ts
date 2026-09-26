@@ -4,8 +4,9 @@
  * Ett rättshjälpsärende går via domstol och faktureras med en kostnadsräkning
  * till domstolen. Klienten betalar själv två saker:
  *   1. En **rådgivningstimme** (1 h) enligt rättshjälpstaxan — en separat
- *      klientfaktura. Den syns som en TEXTRAD på domstolens kostnadsräkning
- *      (transparens, inget belopp domstolen ska betala).
+ *      klientfaktura direkt efter mötet, med en LÅST tidspost (#1205) som aldrig
+ *      ingår i något senare underlag. Den syns som en TEXTRAD på domstolens
+ *      kostnadsräkning (transparens, inget belopp domstolen ska betala).
  *   2. **Rättshjälpsavgiften** — en procent-andel av upparbetad tid, faktureras
  *      som acconto till klienten (täcks av `clientShareBips` på BillingRun).
  *
@@ -15,9 +16,13 @@
  */
 
 import { computeTimkostnadsnorm, timkostnadsnormFtaxForDate } from "@/lib/shared/brottmalstaxa";
+import type { PaymentMethod } from "@/lib/shared/schemas/enums";
 
 /** Rådgivning enligt rättshjälpslagen = 1 timme. */
 export const RADGIVNING_MINUTES = 60;
+
+/** Beskrivningen på rådgivningstimmens låsta tidspost (#1205). */
+export const RADGIVNING_DESCRIPTION = "Rådgivning";
 
 /**
  * Tröskel (öre) för klientens självrisk innan ett självrisk-aconto skickas (#854):
@@ -51,12 +56,21 @@ export function computeRadgivningsavgift(opts: { hasFTax?: boolean; date?: Date 
 }
 
 /**
- * Textraden om den klient-betalda rådgivningstimmen som ska synas på domstolens
- * kostnadsräkning (#383): transparens, inget belopp domstolen ska betala.
+ * Textraden om rådgivningstimmen som ska synas på domstolens kostnadsräkning
+ * (#383/#1205): transparens, inget belopp domstolen ska betala. Timmen faktureras
+ * klienten direkt efter mötet och är därför redan fakturerad när räkningen skrivs.
  */
 export function radgivningTextRad(context: "kostnadsräkning" | "faktura" = "kostnadsräkning"): string {
-  return "Rådgivningstimme (1 tim) fakturerad och betald av klienten separat enligt " +
-    `rättshjälpstaxan — ingår ej i denna ${context}.`;
+  return "Rådgivningstimme (1 tim) har redan fakturerats klienten separat enligt " +
+    `rättshjälpstaxan och ingår ej i denna ${context}.`;
+}
+
+/**
+ * Har ärendet en (redan fakturerad) rådgivningstimme (#1205)? Styr textraden på
+ * kostnadsräkningen och info-raden på slutregleringsfakturorna — aldrig beloppet.
+ */
+export function isRadgivningInvoiced(m: { paymentMethod?: PaymentMethod | null | undefined; radgivningBetaldAt?: Date | string | null | undefined }): boolean {
+  return m.paymentMethod === "RATTSHJALP" && m.radgivningBetaldAt != null;
 }
 
 export interface MatterSettlementInput {

@@ -20,16 +20,19 @@ import { canTransition, transitionErrorMessage } from "@/lib/shared/invoice-stat
 import { ocrFromInvoiceNumber } from "@/lib/shared/ocr-reference";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
 import { pageEnvelope } from "@/lib/shared/paginate";
-import { computeRadgivningsavgift } from "@/lib/shared/rattshjalp";
-import type { Invoice, Payment, PaymentPlan, WriteOff } from "@/lib/shared/schemas/billing";
+import { computeRadgivningsavgift, RADGIVNING_DESCRIPTION, type Radgivningsavgift } from "@/lib/shared/rattshjalp";
+import type { Invoice, Payment, PaymentPlan, TimeEntry, WriteOff } from "@/lib/shared/schemas/billing";
 import { invoiceStatusSchema, invoiceTypeSchema, type InvoiceStatus } from "@/lib/shared/schemas/enums";
 import {
   asId,
   matterIdSchema,
   invoiceIdSchema,
   paymentPlanIdSchema,
+  userIdSchema,
   type InvoiceId,
+  type MatterId,
   type OrganizationId,
+  type UserId,
 } from "@/lib/shared/schemas/ids";
 import type { Matter } from "@/lib/shared/schemas/matter";
 import { computeInvoiceLedger, deriveInvoiceStatus, invoicePartitionViolation } from "@/lib/shared/write-off-calc";
@@ -105,6 +108,22 @@ function resolveWriteOffAmount(outstanding: number, requested?: number): number 
   return amount;
 }
 
+/**
+ * Rådgivningstimmens tidspost (#1205): 60 min arbete på rådgivningsnormen, redan
+ * fakturerad → låst (`frozenAt`) och kopplad till rådgivningsfakturan (`invoiceId`,
+ * samma länk som slutregleringen sätter med `flagBilled`). Ingen billing-run: en
+ * FINAL-körning hade flyttat ärendets fakturerings-fas. Låsregeln: `isLockedEntry`.
+ */
+async function createRadgivningEntry(repos: Repositories, a: {
+  matterId: MatterId; invoiceId: InvoiceId; userId: UserId; when: Date; avgift: Radgivningsavgift;
+}): Promise<TimeEntry> {
+  return repos.timeEntries.create({
+    matterId: a.matterId, userId: a.userId, date: a.when,
+    minutes: a.avgift.minutes, description: RADGIVNING_DESCRIPTION, hourlyRate: a.avgift.rateOrePerH,
+    kind: "ARBETE", billable: true, invoiceId: a.invoiceId, frozenAt: a.when,
+  } satisfies Partial<TimeEntry>);
+}
+
 export const invoiceRouter = router({
   list: orgProcedure
     .input(
@@ -142,9 +161,18 @@ export const invoiceRouter = router({
    * självrisken och ska ALDRIG dras av på en slutfaktura. Aconto-deduktionerna
    * kräver status SENT (`listAccontoSent` / panelens deduktions-val), så ett
    * DRAFT-aconto exkluderas automatiskt. Idempotent: avvisar om redan registrerad.
+   *
+   * Mötet registreras samtidigt som en LÅST tidspost (#1205) kopplad till fakturan
+   * — den syns i tidslistan som "Låst" och ingår aldrig i kostnadsräkning,
+   * slutreglering, aconto eller "upparbetat ofakturerat".
    */
   createRadgivning: orgProcedure
-    .input(z.object({ matterId: matterIdSchema, hasFTax: z.boolean().optional(), invoiceDate: z.string().optional() }))
+    .input(z.object({
+      matterId: matterIdSchema, hasFTax: z.boolean().optional(), invoiceDate: z.string().optional(),
+      /** Juristen som höll mötet (tidspostens ägare). Default: inloggad användare.
+       *  Setup-fält för demo-generatorn/fixtures (ADR 0003), jfr timeEntry.create. */
+      userId: userIdSchema.optional(),
+    }))
     // Migrerad till repository-sömmen (ADR 0020): matters + invoices via typade repos.
     .mutation(({ ctx, input }) =>
       ctx.repos.transaction(async (repos) => {
@@ -159,7 +187,8 @@ export const invoiceRouter = router({
         // Datum = mötesdagen om angivet (#880: rådgivning faktureras samma dag som mötet), annars idag.
         const when = input.invoiceDate ? new Date(input.invoiceDate) : new Date();
         // Norm efter mötesdagen (#897): rådgivning i nov 2025 → 2025 års timkostnadsnorm.
-        const netOre = computeRadgivningsavgift({ ...omitUndefined({ hasFTax: input.hasFTax }), date: when }).beloppExclVatOre;
+        const avgift = computeRadgivningsavgift({ ...omitUndefined({ hasFTax: input.hasFTax }), date: when });
+        const netOre = avgift.beloppExclVatOre;
         const grossOre = arvodeInclVatOre(netOre);
         const vatOre = grossOre - netOre;
         const invoiceNumber = await repos.invoices.nextInvoiceNumber(ctx.orgId);
@@ -172,6 +201,10 @@ export const invoiceRouter = router({
         } satisfies Partial<Invoice>);
         await repos.matters.update(input.matterId, { radgivningBetaldAt: when } satisfies Partial<Matter>);
         await emit.invoiceCreated(ctx, invoice);
+        const entry = await createRadgivningEntry(repos, {
+          matterId: input.matterId, invoiceId: invoice.id, userId: input.userId ?? asId<"UserId">(ctx.user.id), when, avgift,
+        });
+        await emit.timeEntryAdded(ctx, entry);
         return { invoice, beloppExclVatOre: netOre };
       }),
     ),

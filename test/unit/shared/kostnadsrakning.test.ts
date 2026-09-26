@@ -4,6 +4,7 @@
 
 import { describe, it, expect } from "vitest-compat";
 import { buildKostnadsrakningContext, diffMinutes, formatMinutes } from "@/lib/shared/kostnadsrakning";
+import { asId } from "@/lib/shared/schemas/ids";
 
 const baseInput = {
   matter: { matterNumber: "2026-0016", title: "Brottmål — rattfylleri", clientName: "Falk" },
@@ -260,7 +261,7 @@ describe("buildKostnadsrakningContext — rådgivningstimme (#383)", () => {
     expect(withR.templateContext.totalInclVat).toBe(without.templateContext.totalInclVat);
   });
 
-  it("icke-taxa (rättshjälp) + radgivningPaid → arvodet exkluderar rådgivningstimmen (#863)", () => {
+  it("icke-taxa (rättshjälp) + radgivningPaid → registrerad tid dras INTE av (#1205)", () => {
     const input = {
       ...baseInput,
       isTaxeArende: false,
@@ -269,31 +270,66 @@ describe("buildKostnadsrakningContext — rådgivningstimme (#383)", () => {
     };
     const without = buildKostnadsrakningContext(input);
     const withR = buildKostnadsrakningContext({ ...input, matter: { ...input.matter, radgivningPaid: true } });
-    // 120 min × timkostnadsnorm (F-skatt 1 626 kr/h) = 325 200; med rådgivning carvas
-    // första 60 min bort → 60 min × norm = 162 600.
+    // 120 min × timkostnadsnorm (F-skatt 1 626 kr/h) = 325 200 — med eller utan
+    // rådgivning. Rådgivningstimmen är en egen, låst post; den äter inte annan tid.
     expect(without.arvodeExclVat).toBe(325_200);
-    expect(withR.arvodeExclVat).toBe(162_600);
+    expect(withR.arvodeExclVat).toBe(325_200);
     expect(withR.templateContext.isTimkostnadsnorm).toBe(true);
-    // Rådgivningstimmen ligger UTANFÖR KR:n (#868): carvas ur både arvode OCH
-    // tidsspec → summa arbetstid = 60 min (ej 120), ingen dubbel-debitering.
-    expect(withR.billableArbetsMinutes).toBe(60);
+    expect(withR.billableArbetsMinutes).toBe(120);
   });
 
-  it("carvar hela rådgivnings-posten ur tidsspecen när den är exakt 1 tim (#868)", () => {
-    const input = {
+  it("regression #1205: 6,5 h arbete + 42 min tidsspillan utan rådgivningspost → exakt det registrerade + notisen", () => {
+    const r = buildKostnadsrakningContext({
       ...baseInput,
+      matter: { ...baseInput.matter, radgivningPaid: true },
+      isTaxeArende: false,
+      hufStart: new Date("2026-05-25T09:00:00"), hufEnd: new Date("2026-05-25T09:00:00"),
+      yrkandeDate: "2026-05-25",
+      timeEntries: [
+        { id: "a1", date: "2026-05-10", description: "Klientmöte", minutes: 150, billable: true, kind: "ARBETE" },
+        { id: "ts", date: "2026-05-12", description: "Resa till tingsrätten", minutes: 42, billable: true, kind: "TIDSSPILLAN" },
+        { id: "a2", date: "2026-05-20", description: "Inlaga", minutes: 240, billable: true, kind: "ARBETE" },
+      ],
+    });
+    const arbete = r.timeLines.filter((l) => !l.isTidsspillan).reduce((s, l) => s + l.minutes, 0);
+    const tidsspillan = r.timeLines.filter((l) => l.isTidsspillan).reduce((s, l) => s + l.minutes, 0);
+    expect(arbete).toBe(390); // 6,5 h
+    expect(tidsspillan).toBe(42);
+    expect(r.billableArbetsMinutes).toBe(432);
+    expect(r.templateContext.radgivningNotice).toBe(
+      "Rådgivningstimme (1 tim) har redan fakturerats klienten separat enligt rättshjälpstaxan och ingår ej i denna kostnadsräkning.",
+    );
+  });
+
+  it("låsta (redan fakturerade) poster ingår aldrig — t.ex. rådgivningstimmens låsta post (#1205)", () => {
+    const r = buildKostnadsrakningContext({
+      ...baseInput,
+      matter: { ...baseInput.matter, radgivningPaid: true },
       isTaxeArende: false,
       hufStart: new Date("2026-05-25T09:00:00"), hufEnd: new Date("2026-05-25T09:00:00"),
       timeEntries: [
-        { id: "radg", date: "2026-05-10", description: "Första möte med klient i ärendet", minutes: 60, billable: true },
+        { id: "radg", date: "2026-05-10", description: "Rådgivning", minutes: 60, billable: true, frozenAt: "2026-05-10" },
         { id: "arb", date: "2026-05-20", description: "Inlaga", minutes: 90, billable: true },
       ],
-    };
-    const withR = buildKostnadsrakningContext({ ...input, matter: { ...input.matter, radgivningPaid: true } });
-    // Rådgivnings-posten (60 min, tidigast) utelämnas HELT → bara arbetsposten kvar.
-    expect(withR.timeLines).toHaveLength(1);
-    expect(withR.timeLines[0]!.description).toBe("Inlaga");
-    expect(withR.billableArbetsMinutes).toBe(90);
+    });
+    expect(r.timeLines.map((l) => l.description)).toEqual(["Inlaga"]);
+    expect(r.billableArbetsMinutes).toBe(90);
+  });
+
+  it("poster som kostnadsräkningens EGEN körning frös är dess underlag; andra körningars utelämnas (#1205)", () => {
+    const own = asId<"BillingRunId">("run-own");
+    const other = asId<"BillingRunId">("run-other");
+    const r = buildKostnadsrakningContext({
+      ...baseInput,
+      isTaxeArende: false,
+      hufStart: new Date("2026-05-25T09:00:00"), hufEnd: new Date("2026-05-25T09:00:00"),
+      ownBillingRunId: own,
+      timeEntries: [
+        { id: "egen", date: "2026-05-10", description: "Egen", minutes: 60, frozenAt: "2026-05-24", frozenByBillingRunId: own },
+        { id: "tidigare", date: "2026-04-10", description: "Tidigare KR", minutes: 30, frozenAt: "2026-04-24", frozenByBillingRunId: other },
+      ],
+    });
+    expect(r.timeLines.map((l) => l.description)).toEqual(["Egen"]);
   });
 });
 

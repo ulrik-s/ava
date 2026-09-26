@@ -12,7 +12,7 @@
 
 import { describe, it, expect } from "vitest-compat";
 import {
-  arvodeLine, arvodeNetOre, coverageBaseMinutes, entryOwnValueOre, expenseBreakdownLines,
+  arvodeLine, arvodeNetOre, entryOwnValueOre, expenseBreakdownLines,
   expenseGrossOre, expenseNetOre, grossOreOf, invoiceGrossOre, invoiceVatBreakdown,
   krGrossOre, minutesByKind, netOreOf, settlementArvodeNet, sumKindValueOre,
   timeEntryValueOre, vatOnNet, vatOreOf, workValueOre, type UnfrozenWork,
@@ -58,22 +58,6 @@ describe("entryOwnValueOre", () => {
   it("per-dygns-post värderas på DVFS-dagbeloppet, inte på minuter", () => {
     const advokatberedskap = entryOwnValueOre({ minutes: 0, hourlyRate: 250_000, date: "2026-03-01", kind: "ADVOKATBEREDSKAP" });
     expect(advokatberedskap).toBeGreaterThan(0);
-  });
-});
-
-describe("coverageBaseMinutes", () => {
-  // Rådgivningstimmen loggas som vanlig tidspost men faktureras separat, och
-  // ska därför inte ingå i rättshjälpsavgiftens bas (#809).
-  it("rättshjälp räknar bort rådgivningstimmen", () => {
-    expect(coverageBaseMinutes("RATTSHJALP", 600)).toBe(540);
-  });
-
-  it("klampar till noll — ett ärende under en timme ger inte negativ bas", () => {
-    expect(coverageBaseMinutes("RATTSHJALP", 30)).toBe(0);
-  });
-
-  it.each(["PRIVAT", "RATTSSKYDD", "OFFENTLIGT_UPPDRAG", "MIX"] as const)("%s rör inte basen", (m) => {
-    expect(coverageBaseMinutes(m, 600)).toBe(600);
   });
 });
 
@@ -185,6 +169,15 @@ describe("settlementArvodeNet", () => {
     const pa2025 = settlementArvodeNet("RATTSHJALP", arbete2025, "2025-12-01");
     const pa2026 = settlementArvodeNet("RATTSHJALP", arbete2025, "2026-06-01");
     expect(pa2026).toBeGreaterThan(pa2025);
+  });
+
+  // #1205: rådgivningstimmen är en låst post som aldrig når underlaget — ingen
+  // registrerad tid (varken arbete eller tidsspillan) dras av i dess ställe.
+  it("rättshjälp drar inte av någon timme från det registrerade arbetet", () => {
+    const tioTimmar = work([te({ minutes: 600, date: "2026-03-01" })]);
+    expect(settlementArvodeNet("RATTSHJALP", tioTimmar, "2026-06-01"))
+      .toBe(settlementArvodeNet("RATTSSKYDD", tioTimmar, "2026-06-01"));
+    expect(settlementArvodeNet("RATTSHJALP", tioTimmar, "2026-06-01")).toBe(10 * 162_600);
   });
 
   it("tomt ärende ger noll för alla betalningssätt", () => {

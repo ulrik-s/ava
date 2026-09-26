@@ -118,6 +118,8 @@ async function krContextFor(c: Any, run: Any): Promise<Any> {
     yrkandeDate: date,
     isTaxeArende: false, hasFTax: true,
     timeEntries: (te.entries ?? []) as Any,
+    // Posterna run:en frös är dess underlag; övriga låsta (t.ex. rådgivningen) utelämnas (#1205).
+    ownBillingRunId: run.id,
     expenses: (ex.expenses ?? []) as Any,
   });
   return result.templateContext;

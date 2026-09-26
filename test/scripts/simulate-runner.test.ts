@@ -78,11 +78,13 @@ describe("runScenario (#880)", () => {
     expect(radIdx).toBeLessThan(firstAcc);
     // Rådgivningsfakturan skapas som "Skapad" (#1138) → generatorn markerar den skickad.
     expect(calls[radIdx + 1]).toMatchObject({ method: "invoice.setStatus", args: { invoiceId: "rad", status: "SENT" } });
-    // #880: rådgivningen faktureras SAMMA DAG (invoiceDate satt) + som egen tidspost.
+    // #880: rådgivningen faktureras SAMMA DAG (invoiceDate satt), av ärendets jurist.
     const rad = calls[radIdx]!;
     expect(rad.args.invoiceDate).toBeTruthy();
-    const radTime = calls.find((x) => x.method === "timeEntry.create" && String(x.args.description).includes("Rådgivning"));
-    expect(radTime?.args.date).toBe(rad.args.invoiceDate); // samma dag som mötet
+    expect(rad.args.userId).toBe("u-1");
+    // #1205: mötets tidspost skapas av createRadgivning (låst) — generatorn loggar
+    // den INTE själv, annars hade mötet registrerats två gånger.
+    expect(calls.some((x) => x.method === "timeEntry.create" && String(x.args.description).includes("Rådgivning"))).toBe(false);
 
     // Tre aconton vid varierande satser (5/40/5 %), belopp härlett ur upparbetat.
     const accontos = calls.filter((x) => x.method === "billingRun.createAcconto");

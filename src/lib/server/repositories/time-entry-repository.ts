@@ -87,7 +87,8 @@ export interface TimeEntryRepository extends Repository<TimeEntry> {
   flagBilled(ids: TimeEntryId[], invoiceId: InvoiceId): Promise<void>;
   /** Tidsposter kopplade till en faktura (date asc) — fakturaspecifikationen (#856). */
   listByInvoice(invoiceId: InvoiceId): Promise<TimeEntry[]>;
-  /** Ofrysta tidsposter i ett ärende (date asc) — underlag för billing-run. */
+  /** Ofrysta tidsposter i ett ärende (date asc) — underlag för billing-run. Ofryst =
+   *  varken fryst av en körning eller låst mot en faktura (`frozenAt`, #1205). */
   listUnfrozenForMatter(matterId: MatterId): Promise<TimeEntry[]>;
   /** Tidsposter frysta mot en specifik billing-run (date asc) — underlag för
    *  dom/slutreglering av en kostnadsräkning, vars rader frystes vid inskick. */
@@ -97,7 +98,8 @@ export interface TimeEntryRepository extends Repository<TimeEntry> {
   /** Som ovan men batchat för flera ärenden (täcknings-kolumn i listan, #793).
    *  Keyas på matterId; ärenden utan poster utelämnas (→ 0 hos anroparen). */
   coverageUsageForMatters(matterIds: MatterId[]): Promise<Record<string, CoverageUsage>>;
-  /** Frys alla ofrysta tidsposter i ett ärende mot en billing-run (bulk). */
+  /** Frys alla ofrysta tidsposter i ett ärende mot en billing-run (bulk). Redan
+   *  låsta poster (t.ex. rådgivningstimmen, #1205) lämnas orörda. */
   freezeForMatter(matterId: MatterId, billingRunId: BillingRunId, now: Date): Promise<void>;
   /** Frys ENBART de angivna (ofrysta) tidsposterna mot en billing-run — per-post-val. */
   freezeByIds(ids: TimeEntryId[], billingRunId: BillingRunId, now: Date): Promise<void>;
