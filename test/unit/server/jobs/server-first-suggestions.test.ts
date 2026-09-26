@@ -122,6 +122,68 @@ describe("classify-document → kontakt-/händelseförslag (server-first)", () =
     expect(await suggestions.documentAnalysisSuggestions.listForDocument(documentId)).toHaveLength(0);
   });
 
+  it("#1215: bytes läses EN gång per jobb för både förslag och index", async () => {
+    const { documentId, suggestions, documents } = setup();
+    let reads = 0;
+    const base = contentWith(new TextEncoder().encode(TEXT));
+    const content: IContentStore = { ...base, read: async (path) => { reads++; return base.read(path); } };
+    const replaced: Array<{ id: string; pages: readonly string[] }> = [];
+    const handlers = buildServerFirstJobHandlers({
+      documents: documents as never, content, suggestions,
+      pageIndex: { replacePages: async (id, pages) => { replaced.push({ id, pages }); } },
+    });
+    await runClassify(handlers, documentId);
+    expect(reads).toBe(1);
+    expect(replaced).toEqual([{ id: documentId, pages: [TEXT] }]);
+  });
+
+  it("#1215: med LLM + vokabulär delar klassificering och taggar samma (enda) läsning", async () => {
+    const { documentId, suggestions, documents } = setup();
+    let reads = 0;
+    const base = contentWith(new TextEncoder().encode(TEXT));
+    const content: IContentStore = { ...base, read: async (path) => { reads++; return base.read(path); } };
+    const patches: unknown[] = [];
+    const realFetch = globalThis.fetch;
+    const prompts: string[] = [];
+    globalThis.fetch = (async (_url: string, init: RequestInit) => {
+      prompts.push(String(init.body));
+      return new Response(JSON.stringify({ choices: [{ message: { content: "STAMNING, Tvist" } }] }), { status: 200 });
+    }) as typeof fetch;
+    try {
+      const handlers = buildServerFirstJobHandlers({
+        documents: { ...documents, updateMetadata: async (_id: string, patch: unknown) => { patches.push(patch); return {}; } } as never,
+        content, suggestions,
+        llm: { endpoint: "http://llm.test/v1", model: "test" },
+        vocabulary: async () => ["Tvist", "Sekretess"],
+      });
+      await runClassify(handlers, documentId);
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+    expect(reads).toBe(1);
+    expect(prompts).toHaveLength(2);
+    expect(prompts.every((p) => p.includes("Anna Andersson"))).toBe(true);
+    expect(patches[0]).toMatchObject({ documentType: "STAMNING", tags: ["Tvist"], analysisModel: "ollama:test" });
+  });
+
+  it("#1215: index-document-kön får en worker när sidor kan läsas och skrivas", async () => {
+    const { documentId, documents } = setup();
+    const replaced: string[] = [];
+    const pageIndex = { replacePages: async (id: string) => { replaced.push(id); } };
+    const handlers = buildServerFirstJobHandlers({
+      documents: documents as never, content: contentWith(new TextEncoder().encode(TEXT)), pageIndex,
+    });
+    const index = handlers[JOB_QUEUES.indexDocument];
+    if (!index) throw new Error("ingen index-handler registrerad");
+    await index({ ...jobFor(documentId), name: JOB_QUEUES.indexDocument });
+    expect(replaced).toEqual([documentId]);
+    // Utan content-store eller utan index → ingen index-worker.
+    expect(buildServerFirstJobHandlers({ documents: documents as never, pageIndex })[JOB_QUEUES.indexDocument]).toBeUndefined();
+    expect(buildServerFirstJobHandlers({
+      documents: documents as never, content: contentWith(null),
+    })[JOB_QUEUES.indexDocument]).toBeUndefined();
+  });
+
   it("utan content-store finns ingen text server-side → steget kopplas inte in", async () => {
     const { documentId, suggestions, documents } = setup();
     const handlers = buildServerFirstJobHandlers({ documents: documents as never, suggestions });

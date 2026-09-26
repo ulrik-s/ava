@@ -122,6 +122,19 @@ describe("document.search", () => {
     expect(res.totalHits).toBe(1);
     expect(res.hits[0]!.documentId).toBe("d1");
     expect(res.hits[0]!.highlight).toContain("highlighted");
+    expect(res.hits[0]!.page).toBeNull();
+  });
+
+  it("skickar matterId vidare och returnerar sidnumret (#1215)", async () => {
+    mockPorts.searchIndex.search.mockResolvedValue({
+      hits: [{ id: "d1", fileName: "a.pdf", matterId: "m1", matterNumber: "1", matterTitle: "X", page: 3 } as never],
+      estimatedTotalHits: 1,
+    } as never);
+    const matterId = "0195f3b2-0000-7000-8000-000000000001";
+    const { caller } = makeCaller({}, "org-a");
+    const res = await caller.search({ query: "a", matterId });
+    expect(mockPorts.searchIndex.search).toHaveBeenLastCalledWith("a", "org-a", 20, { matterId });
+    expect(res.hits[0]!.page).toBe(3);
   });
 
   it("returnerar tom highlight när _formatted saknas", async () => {

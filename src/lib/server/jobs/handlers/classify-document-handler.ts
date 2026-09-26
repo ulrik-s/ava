@@ -6,6 +6,10 @@
  * deterministisk, ingen LLM, ingen modell-nedladdning. Fas 3 injicerar en
  * LLM-backad `classify` (server-LLM via ollama) med samma signatur.
  *
+ * Med `readPages` + `pageIndex` (#1215) läses dokumentets text EN gång per
+ * jobb, indexeras per sida för fulltextsökning och återanvänds av
+ * klassificering, taggförslag och förslagsskrivning.
+ *
  * Med en injicerad `suggestFromText` (#988) skriver jobbet dessutom kontakt-
  * och händelseförslag ur dokumentets text — det är server-first-tier:ns väg in
  * i `SuggestionsPanel`/`EventsPanel`.
@@ -15,37 +19,30 @@
  * jobbet kördes) → tyst no-op.
  */
 
-import { z } from "zod";
 import { type DocumentKind, guessFromFilename } from "@/lib/shared/document-kind";
+import { joinPages } from "@/lib/shared/extract-text";
 import type { Document } from "@/lib/shared/schemas/document";
-import { type DocumentId, documentIdSchema, organizationIdSchema } from "@/lib/shared/schemas/ids";
+import type { DocumentId } from "@/lib/shared/schemas/ids";
 import type { DocumentRepository } from "../../repositories/document-repository";
 import type { JobHandler } from "../job-worker-runtime";
+import { type ClassifiableDoc, classifiableFields, documentJobSchema, type PageDeps, readAndIndexPages } from "./document-text";
 
-const classifyJobSchema = z.object({
-  documentId: documentIdSchema,
-  organizationId: organizationIdSchema.optional(),
-});
-
-/** Dokument-fälten klassificeraren behöver (filnamn + var bytes ligger). */
-export interface ClassifiableDoc {
-  fileName: string;
-  storagePath: string;
-  mimeType: string;
-}
-
-export interface ClassifyDocumentDeps {
+export interface ClassifyDocumentDeps extends PageDeps {
   /** Dokument-repo (läs hela raden + skriv tillbaka metadatan UTAN version-bump:
    *  klassificering är metadata, inte en innehållsändring → ADR 0023). */
   documents: Pick<DocumentRepository, "getById" | "updateMetadata">;
-  /** Klassificerare; default = filnamns-heuristik. Fas 3 injicerar LLM-varianten. */
-  classify?: (doc: ClassifiableDoc) => Promise<DocumentKind>;
+  /**
+   * Klassificerare; default = filnamns-heuristik. Fas 3 injicerar LLM-varianten.
+   * `text` = dokumentets sidor ihopslagna (läst EN gång via `readPages`, #1215);
+   * tom sträng när ingen text finns server-side.
+   */
+  classify?: (doc: ClassifiableDoc, text: string) => Promise<DocumentKind>;
   /**
    * Föreslå etiketter ur byråns vokabulär (#621 B2, LLM-väg). Returnerar en
    * delmängd av vokabulären; slås ihop (union) med dokumentets befintliga
    * taggar så manuellt satta taggar ALDRIG skrivs över. Saknas → taggar rörs ej.
    */
-  suggestTags?: (doc: ClassifiableDoc) => Promise<string[]>;
+  suggestTags?: (doc: ClassifiableDoc, text: string) => Promise<string[]>;
   /**
    * Skapa kontakt- och händelseförslag ur dokumentets TEXT (#988). Körs EFTER
    * metadata-skrivningen: misslyckas extraktionen får klassificeringen ändå
@@ -54,7 +51,7 @@ export interface ClassifyDocumentDeps {
    * Saknas → hoppas över. Så är det i klient-tier:erna, där bytes:en aldrig
    * når servern och texten i stället kommer ur browserns `extract-text`-jobb.
    */
-  suggestFromText?: (documentId: DocumentId, doc: ClassifiableDoc) => Promise<void>;
+  suggestFromText?: (documentId: DocumentId, text: string) => Promise<void>;
   /** Modell-etikett som sparas i `analysisModel`. */
   model?: string;
   /** Injicerbar nu-tid för deterministiska tester. */
@@ -67,15 +64,18 @@ export function createClassifyDocumentHandler(deps: ClassifyDocumentDeps): JobHa
   const now = deps.now ?? (() => new Date());
 
   return async (job): Promise<void> => {
-    const { documentId } = classifyJobSchema.parse(job.data);
+    const { documentId } = documentJobSchema.parse(job.data);
     const doc = (await deps.documents.getById(documentId)) as Document | null;
     if (!doc) return; // raderat innan jobbet kördes → no-op
-    const fields: ClassifiableDoc = { fileName: doc.fileName, storagePath: doc.storagePath, mimeType: doc.mimeType };
-    const kind = await classify(fields);
+    const fields = classifiableFields(doc);
+    // Sidorna läses EN gång och indexeras (#1215) — även om klassificeringen
+    // sedan fallerar är dokumentet sökbart.
+    const text = joinPages(await readAndIndexPages(deps, documentId, fields));
+    const kind = await classify(fields, text);
     // LLM-föreslagna taggar slås ihop med befintliga (union) → AI lägger till,
     // användarens manuella taggar bevaras. Utan suggestTags rörs taggarna inte.
     const tagPatch = deps.suggestTags
-      ? { tags: [...new Set([...(doc.tags ?? []), ...(await deps.suggestTags(fields))])] }
+      ? { tags: [...new Set([...(doc.tags ?? []), ...(await deps.suggestTags(fields, text))])] }
       : {};
     await deps.documents.updateMetadata(documentId, {
       documentType: kind,
@@ -84,6 +84,6 @@ export function createClassifyDocumentHandler(deps: ClassifyDocumentDeps): JobHa
       analysisStatus: "DONE",
       analysisModel: model,
     });
-    await deps.suggestFromText?.(documentId, fields);
+    await deps.suggestFromText?.(documentId, text);
   };
 }

@@ -11,8 +11,10 @@
  * även de vars zod-schema saknar dem (zod `.passthrough()` tolererar vid läsning).
  */
 
-import { relations } from "drizzle-orm";
-import { bigint, bigserial, boolean, index, integer, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { relations, sql } from "drizzle-orm";
+import {
+  bigint, bigserial, boolean, customType, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uuid,
+} from "drizzle-orm/pg-core";
 import type { KostnadsrakningStatus } from "@/lib/shared/kostnadsrakning-flow";
 import type { DispatchChannel, DispatchStatus, ExpectedReceivableStatus } from "@/lib/shared/schemas/billing";
 import type {
@@ -384,6 +386,29 @@ export const documents = pgTable("documents", {
   analysisModel: text("analysis_model"),
   analysisError: text("analysis_error"),
 }, (t) => [index("documents_matter_idx").on(t.matterId)]);
+
+/** Postgres `tsvector` (fulltext-sökvektor) — läses aldrig som värde, bara i frågor. */
+const tsvector = customType<{ data: string }>({ dataType: () => "tsvector" });
+
+/**
+ * Text per sida i ett dokument (#1215) — serverns fulltextindex. SERVER-ONLY:
+ * ingen entitet (inget id/version/deletedAt), inget change_log, synkas aldrig
+ * till klienter (kan bli stort; klienten söker via serverns tRPC). Org-scopas
+ * via dokumentets ärende. `tsv` genereras av Postgres med 'swedish'-stemming.
+ * Hård delete av dokumentet kaskaderar; mjuk delete rensar i dokument-repot.
+ * Sidnumret är grunden för dokumentdelar (steg 2 av flerdokuments-PDF:er).
+ */
+export const documentPages = pgTable("document_pages", {
+  documentId: uuid("document_id").notNull().$type<DocumentId>()
+    .references(() => documents.id, { onDelete: "cascade" }),
+  /** 1-baserat sidnummer. */
+  pageNo: integer("page_no").notNull(),
+  text: text("text").notNull(),
+  tsv: tsvector("tsv").generatedAlwaysAs(sql`to_tsvector('swedish'::regconfig, text)`),
+}, (t) => [
+  primaryKey({ columns: [t.documentId, t.pageNo] }),
+  index("document_pages_tsv_idx").using("gin", t.tsv),
+]);
 
 export const documentAnalysisSuggestions = pgTable("document_analysis_suggestions", {
   ...baseColumns,

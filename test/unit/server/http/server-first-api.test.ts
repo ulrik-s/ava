@@ -5,6 +5,7 @@
  */
 
 import { describe, it, expect } from "vitest-compat";
+import { PostgresSearchIndex } from "@/lib/server/adapters/postgres-search-index";
 import {
   buildServerFirstApi,
   loadServerFirstConfig,
@@ -19,6 +20,8 @@ describe("buildServerFirstApi", () => {
       maxConnections: 1,
     });
     expect(typeof api.handler).toBe("function");
+    // #1215: fulltextsökningen i samma Postgres är alltid wirad.
+    expect(api.pageIndex).toBeInstanceOf(PostgresSearchIndex);
     await expect(api.close()).resolves.toBeUndefined();
   });
 });

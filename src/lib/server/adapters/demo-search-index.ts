@@ -13,6 +13,9 @@
 import { getDocumentContent } from "@/lib/client/demo/document-content-cache";
 import type { IDataStore } from "../data-store/IDataStore";
 import type { ISearchIndex, SearchResponse } from "../ports";
+import {
+  compileNeedle, computeFacetEntries, documentTypeFilter, metaHaystack, metadataScore, type NeedleMatcher,
+} from "./search-scoring";
 
 interface DocLike {
   id: string;
@@ -34,50 +37,6 @@ interface MatterLike {
 }
 
 /**
- * Kompilerad sökterm — antingen substring-matchning (snabb path) eller
- * regex (när användaren skrivit `*`-wildcards).
- *
- * Exporteras för testbarhet och så att andra konsumenter (server-side
- * search-index om vi någonsin lägger till en sådan) kan återanvända.
- */
-export interface NeedleMatcher {
-  /** True om mönstret kompilerats som regex (innehöll `*`). */
-  hasWildcard: boolean;
-  /** Original-needle i lowercase utan padding. */
-  raw: string;
-  /** Returnerar true om `haystack` innehåller en träff (case-insensitive). */
-  test(haystack: string): boolean;
-  /** Hittar första träff:ens position i en lowercase-sträng + längd; null om ingen träff. */
-  findMatch(haystackLc: string): { index: number; length: number } | null;
-}
-
-export function compileNeedle(query: string): NeedleMatcher {
-  const raw = query.toLowerCase().trim();
-  const hasWildcard = raw.includes("*");
-  if (!hasWildcard) {
-    return {
-      hasWildcard: false, raw,
-      test: (h) => h.toLowerCase().includes(raw),
-      findMatch: (hLc) => {
-        const i = hLc.indexOf(raw);
-        return i < 0 ? null : { index: i, length: raw.length };
-      },
-    };
-  }
-  // Bygg regex: escape allt utom * → `.*`. Anchor varken före/efter (substring).
-  const escaped = raw.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*");
-  const re = new RegExp(escaped, "i");
-  return {
-    hasWildcard: true, raw,
-    test: (h) => re.test(h),
-    findMatch: (hLc) => {
-      const m = re.exec(hLc);
-      return m ? { index: m.index, length: m[0].length } : null;
-    },
-  };
-}
-
-/**
  * Pure search-funktion: returnerar ranked hits utan I/O.
  * Exporteras separat för enkel testbarhet.
  *
@@ -88,29 +47,23 @@ export interface SearchOpts {
   /** Begränsa till dokument vars documentType matchar någon i listan.
    *  Tomt array eller undefined = alla typer. */
   documentTypes?: string[];
+  /** Bara dokument i detta ärende (#1215). */
+  matterId?: string;
   /** Max antal träffar (default 20). */
   limit?: number;
 }
 
 type SearchHit = SearchResponse["hits"][number];
 
-/** Viktad träff: `weight` om needle matchar `text`, annars 0. */
-function hit(matcher: NeedleMatcher, text: string, weight: number): number {
-  return matcher.test(text) ? weight : 0;
-}
-
-/** Poängsätt ett dokument. Boost för träff i fileName/documentType (mer specifika). */
+/** Poängsätt ett dokument: metadata-poäng + 1 för träff i innehållet. */
 function scoreDoc(
   d: DocLike,
   matcher: NeedleMatcher,
   contentLc: string,
 ): { score: number; metaHit: number; contentHit: number } {
-  const haystack = [d.fileName ?? "", d.documentType ?? "", d.summary ?? ""].join(" ").toLowerCase();
-  const metaHit = hit(matcher, haystack, 1);
-  const contentHit = hit(matcher, contentLc, 1);
-  const titleHit = hit(matcher, d.fileName ?? "", 2);
-  const typeHit = hit(matcher, d.documentType ?? "", 1);
-  return { score: metaHit + contentHit + titleHit + typeHit, metaHit, contentHit };
+  const metaHit = matcher.test(metaHaystack(d)) ? 1 : 0;
+  const contentHit = matcher.test(contentLc) ? 1 : 0;
+  return { score: metadataScore(d, matcher) + contentHit, metaHit, contentHit };
 }
 
 /** Snippet med kontext runt query för UI:n (faller tillbaka på summary). */
@@ -156,22 +109,12 @@ function toSearchHit(doc: DocLike, snippet: string, matters: Map<string, MatterL
     matterNumber: mf.matterNumber,
     matterTitle: mf.matterTitle,
     organizationId: doc.organizationId ?? mf.organizationId,
+    // Demons innehållscache är sidlös (ihopslagen text) → sidan är okänd.
+    page: null,
     _formatted: {
       content: snippet,
     },
   };
-}
-
-/** Facet-räknare per documentType (för typ-filter-badges), sorterad fallande. */
-function computeFacetEntries(queryMatches: DocLike[]): Array<{ type: string; count: number }> {
-  const facetCounts = new Map<string, number>();
-  for (const d of queryMatches) {
-    if (!d.documentType) continue;
-    facetCounts.set(d.documentType, (facetCounts.get(d.documentType) ?? 0) + 1);
-  }
-  return [...facetCounts.entries()]
-    .map(([type, count]) => ({ type, count }))
-    .sort((a, b) => b.count - a.count || a.type.localeCompare(b.type, "sv"));
 }
 
 export function searchDocuments(
@@ -188,24 +131,21 @@ export function searchDocuments(
   const orgOf = (d: DocLike): string | undefined =>
     d.organizationId ?? matters.get(d.matterId)?.organizationId;
 
-  const typeFilter = opts.documentTypes && opts.documentTypes.length > 0
-    ? new Set(opts.documentTypes)
-    : null;
+  const typeFilter = documentTypeFilter(opts.documentTypes);
+  const inScope = (d: DocLike): boolean =>
+    orgOf(d) === organizationId && (!opts.matterId || d.matterId === opts.matterId);
 
   // Steg 1: hitta ALLA dokument i org som matchar query, oavsett type-filter.
   //   - Behövs för facet-counts (badges visar hur många träffar varje typ
   //     SKULLE ge — så user kan toggla utan att tappa kontext).
   //   - Tar bara ett extra pass över redan-filtrerade docs; billigt.
-  const orgDocs = docs.filter((d) => orgOf(d) === organizationId);
-  const queryMatches = orgDocs.filter((d) => {
-    const haystack = [d.fileName ?? "", d.documentType ?? "", d.summary ?? ""].join(" ").toLowerCase();
-    if (matcher.test(haystack)) return true;
-    return matcher.test(getDocumentContent(d.id).toLowerCase());
-  });
+  const orgDocs = docs.filter(inScope);
+  const queryMatches = orgDocs.filter((d) =>
+    matcher.test(metaHaystack(d)) || matcher.test(getDocumentContent(d.id).toLowerCase()));
   const facetEntries = computeFacetEntries(queryMatches);
 
   const matched = orgDocs
-    .filter((d) => typeFilter === null || (d.documentType !== null && d.documentType !== undefined && typeFilter.has(d.documentType)))
+    .filter(typeFilter)
     .map((d) => {
       // Bevara original-content för snippet-rendering (case-känsligt),
       // sök case-insensitively via lowercase-kopia.

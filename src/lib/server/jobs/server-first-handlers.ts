@@ -3,7 +3,8 @@
  * `JobHandlers`-kartan som `startJobRuntime` registrerar. En kö får en worker
  * BARA när dess integration är konfigurerad (annars körs kön men konsumeras ej).
  *
- * Idag: e-postutskick (smtp-sender) när AVA_SMTP_* är satt. Fortnox-sync +
+ * Idag: e-postutskick (smtp-sender) när AVA_SMTP_* är satt; dokument-
+ * klassificering + sidindexering (#518, #1215). Fortnox-sync +
  * regelmotor-handlers slotas in här i takt med att deras config/triggers byggs.
  */
 
@@ -12,10 +13,12 @@ import { type SuggestionRepos, writeSuggestionsFromText } from "@/lib/server/doc
 import { isEmailDisabled } from "@/lib/server/integrations/email/disabled-email-sender";
 import { createSmtpSender, type SmtpConfig } from "@/lib/server/integrations/email/smtp-sender";
 import { createOllamaClassifier, createOllamaTagSuggester, type LlmConfig } from "@/lib/server/llm/ollama-classifier";
-import type { IContentStore } from "@/lib/server/ports";
-import { extractText } from "@/lib/shared/extract-text";
-import { createClassifyDocumentHandler, type ClassifiableDoc, type ClassifyDocumentDeps } from "./handlers/classify-document-handler";
+import type { IContentStore, IDocumentPageIndex } from "@/lib/server/ports";
+import { extractPages } from "@/lib/shared/extract-text";
+import { createClassifyDocumentHandler, type ClassifyDocumentDeps } from "./handlers/classify-document-handler";
+import type { ClassifiableDoc, PageDeps } from "./handlers/document-text";
 import { createEmailDispatchHandler } from "./handlers/email-dispatch-handler";
+import { createIndexDocumentHandler } from "./handlers/index-document-handler";
 import { JOB_QUEUES } from "./job-queue";
 import type { JobHandlers } from "./job-worker-runtime";
 
@@ -37,57 +40,79 @@ export interface JobHandlerConfig {
   /** Byråns etikett-vokabulär (#621 B2). Satt + content + llm → LLM föreslår
    *  taggar ur listan vid klassificeringen. Lazy så den läses per jobb. */
   vocabulary?: () => Promise<readonly string[]>;
+  /** Serverns sidindex (#1215). Satt + content → jobben indexerar sidtexten
+   *  och `index-document`-kön får en worker (backfill). */
+  pageIndex?: IDocumentPageIndex;
 }
 
 /**
- * Läs dokumentets bytes ur content-store:n och extrahera text (PDF/DOCX/text).
- * Tom sträng när bytes saknas — anroparen faller tillbaka på filnamnet.
- * Delad av LLM-klassificeringen och förslagsskrivningen (#988).
+ * Läs dokumentets bytes ur content-store:n och extrahera text per sida
+ * (PDF/DOCX/text). Tom lista när bytes saknas — anroparen faller tillbaka på
+ * filnamnet. Körs EN gång per jobb (#1215); klassificering, taggar och förslag
+ * delar resultatet.
  */
-function textReader(content: IContentStore): (doc: ClassifiableDoc) => Promise<string> {
+function pageReader(content: IContentStore): (doc: ClassifiableDoc) => Promise<string[]> {
   preparePdfjsForServer(); // annars tom PDF-text i den kompilerade binären (#1156)
   return async (doc) => {
     const bytes = await content.read(doc.storagePath);
-    return bytes ? await extractText({ bytes, mimeType: doc.mimeType, fileName: doc.fileName }) : "";
+    return bytes ? await extractPages({ bytes, mimeType: doc.mimeType, fileName: doc.fileName }) : [];
   };
 }
 
+/** Sidläsning (kräver content-store) + sidindex (när det finns). */
+function buildPages(cfg: JobHandlerConfig): PageDeps {
+  if (!cfg.content) return {};
+  return { readPages: pageReader(cfg.content), ...(cfg.pageIndex ? { pageIndex: cfg.pageIndex } : {}) };
+}
+
 /**
- * Bygg `suggestFromText` för dokumentjobbet (#988): läs texten och skriv
- * kontakt-/händelseförslagen. Kräver content-store (texten) + repositories
+ * Bygg `suggestFromText` för dokumentjobbet (#988): skriv kontakt-/händelse-
+ * förslagen ur jobbets text. Kräver content-store (texten) + repositories
  * (skrivningen) — men INTE en LLM: extraktionen är deterministisk, så
  * server-first ger förslag även utan ollama.
  */
 function buildSuggest(cfg: JobHandlerConfig): Pick<ClassifyDocumentDeps, "suggestFromText"> {
   const { content, suggestions } = cfg;
   if (!content || !suggestions) return {};
-  const textOf = textReader(content);
   return {
-    suggestFromText: async (documentId, doc) => {
-      await writeSuggestionsFromText(suggestions, documentId, await textOf(doc));
-    },
+    suggestFromText: async (documentId, text) => { await writeSuggestionsFromText(suggestions, documentId, text); },
   };
 }
 
 /**
  * Bygg `classify` (+ `suggestTags`) för dokumentjobbet. Med content-store +
- * LLM-konfig: läs bytes → extrahera text (PDF/DOCX/text) → klassificera via
- * ollama (fail-soft till filnamns-heuristik). Med dessutom en vokabulär (#621
- * B2): föreslå taggar ur listan. Utan content/llm → handlerns default (heuristik).
+ * LLM-konfig: klassificera jobbets text via ollama (fail-soft till filnamns-
+ * heuristik). Med dessutom en vokabulär (#621 B2): föreslå taggar ur listan.
+ * Utan content/llm → handlerns default (heuristik).
  */
 function buildClassify(cfg: JobHandlerConfig): Pick<ClassifyDocumentDeps, "classify" | "suggestTags" | "model"> {
   if (!cfg.content || !cfg.llm) return {};
   const ollama = createOllamaClassifier(cfg.llm);
   const tagger = createOllamaTagSuggester(cfg.llm);
   const { vocabulary } = cfg;
-  const textOf = textReader(cfg.content);
   return {
     model: `ollama:${cfg.llm.model}`,
-    classify: async (doc: ClassifiableDoc) => ollama(await textOf(doc), doc.fileName),
+    classify: async (doc, text) => ollama(text, doc.fileName),
     ...(vocabulary ? {
-      suggestTags: async (doc: ClassifiableDoc) => tagger(await textOf(doc), await vocabulary()),
+      suggestTags: async (_doc, text) => tagger(text, await vocabulary()),
     } : {}),
   };
+}
+
+/** Registrera dokumentjobben: klassificering alltid, indexering när sidor kan läsas + skrivas. */
+function registerDocumentHandlers(handlers: JobHandlers, cfg: JobHandlerConfig & Required<Pick<JobHandlerConfig, "documents">>): void {
+  const pages = buildPages(cfg);
+  handlers[JOB_QUEUES.classifyDocument] = createClassifyDocumentHandler({
+    documents: cfg.documents,
+    ...pages,
+    ...buildClassify(cfg),
+    ...buildSuggest(cfg),
+  });
+  if (pages.readPages && pages.pageIndex) {
+    handlers[JOB_QUEUES.indexDocument] = createIndexDocumentHandler({
+      documents: cfg.documents, readPages: pages.readPages, pageIndex: pages.pageIndex,
+    });
+  }
 }
 
 /** Bygg handler-kartan ur den tillgängliga integrations-konfigen. */
@@ -96,13 +121,7 @@ export function buildServerFirstJobHandlers(cfg: JobHandlerConfig): JobHandlers 
   if (cfg.smtp) {
     handlers[JOB_QUEUES.emailDispatch] = createEmailDispatchHandler(createSmtpSender(cfg.smtp));
   }
-  if (cfg.documents) {
-    handlers[JOB_QUEUES.classifyDocument] = createClassifyDocumentHandler({
-      documents: cfg.documents,
-      ...buildClassify(cfg),
-      ...buildSuggest(cfg),
-    });
-  }
+  if (cfg.documents) registerDocumentHandlers(handlers, { ...cfg, documents: cfg.documents });
   return handlers;
 }
 

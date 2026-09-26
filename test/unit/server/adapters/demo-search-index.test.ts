@@ -4,7 +4,8 @@
 
 import { describe, it, expect, beforeEach } from "vitest-compat";
 import { setDocumentContent, clearDocumentContentCache } from "@/lib/client/demo/document-content-cache";
-import { searchDocuments, compileNeedle, makeDemoSearchIndex } from "@/lib/server/adapters/demo-search-index";
+import { searchDocuments, makeDemoSearchIndex } from "@/lib/server/adapters/demo-search-index";
+import { compileNeedle } from "@/lib/server/adapters/search-scoring";
 import type { IDataStore } from "@/lib/server/data-store/IDataStore";
 
 beforeEach(() => clearDocumentContentCache());

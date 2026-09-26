@@ -21,6 +21,7 @@ import { TrpcSyncTransport } from "@/lib/client/sync/trpc-sync-transport";
 import { buildServerFirstApi } from "@/lib/server/http/server-first-api";
 import type { AppRouter } from "@/lib/server/routers/_app";
 import { serveFetchHandler } from "@/lib/shared/http/node-http-adapter";
+import { asId } from "@/lib/shared/schemas/ids";
 import { uuidv7 } from "@/lib/shared/uuid";
 import { applyMigrations } from "../../../../tooling/scripts/db-migrate";
 
@@ -54,6 +55,7 @@ describe("server-first deploy (migrerad Postgres, riktig socket)", () => {
   itPg("buildServerFirstApi synkar mot migrerad Postgres över HTTP", async () => {
     const dbUrl = url as string;
     const org = uuidv7();
+    const userId = uuidv7();
 
     // 1. Återställ + migrera publikt schema (det `createPostgresDb` ser), seed user.
     const admin = postgres(dbUrl, { max: 1, onnotice: () => {} });
@@ -62,7 +64,7 @@ describe("server-first deploy (migrerad Postgres, riktig socket)", () => {
     await admin.unsafe(
       `INSERT INTO users (id, organization_id, email, name, role, active)
        VALUES ($1, $2, 'anna@byra.se', 'Anna', 'LAWYER', true)`,
-      [uuidv7(), org],
+      [userId, org],
     );
     await admin.end({ timeout: 5 });
 
@@ -96,6 +98,20 @@ describe("server-first deploy (migrerad Postgres, riktig socket)", () => {
 
       const pulled = await transport.pull(0);
       expect(pulled.changes.some((c) => c.row.id === m1)).toBe(true);
+
+      // 4. Fulltextsökningen (#1215) är wirad: indexerad sidtext hittas via
+      //    document.search, med svensk stemming och sidnummer.
+      const d1 = uuidv7();
+      const docPush = await transport.push({
+        mutationId: uuidv7(), entity: "document", kind: "create",
+        row: { id: d1, matterId: m1, fileName: "inlaga.pdf", mimeType: "application/pdf", sizeBytes: 1,
+          storagePath: `documents/content/${d1}.pdf`, uploadedById: userId },
+        enqueuedAt: 0,
+      });
+      expect(docPush.status).toBe("accepted");
+      await api.pageIndex.replacePages(asId<"DocumentId">(d1), ["Försättsblad", "Grunden för stämningen är avtalsbrott."]);
+      const found = await client.document.search.query({ query: "stämningar" });
+      expect(found.hits).toEqual([expect.objectContaining({ documentId: d1, matterId: m1, page: 2 })]);
     } finally {
       server.close();
       await api.close();

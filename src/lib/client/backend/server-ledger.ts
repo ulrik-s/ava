@@ -8,19 +8,12 @@
  */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createTRPCClient, httpBatchLink } from "@trpc/client";
-import superjson from "superjson";
 import { useCapabilities } from "@/lib/client/capabilities/use-capabilities";
 import { flushServerSync } from "@/lib/client/sync/server-sync-flush";
-import type { AppRouter } from "@/lib/server/routers/_app";
 import type { InvoiceId } from "@/lib/shared/schemas/ids";
-import { serverTrpcEndpoint } from "./http-backend-runtime";
+import { serverTrpcClient as server } from "./server-trpc-client";
 
 const STATUS_KEY = ["server", "ledger.status"] as const;
-
-function server() {
-  return createTRPCClient<AppRouter>({ links: [httpBatchLink({ url: serverTrpcEndpoint(), transformer: superjson })] });
-}
 
 /** Serverns Fortnox-läge; `undefined` utan server (demo). */
 export function useLedgerStatus() {

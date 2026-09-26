@@ -77,3 +77,26 @@ describe("searchDocuments — documentTypes-filter", () => {
     expect(r.facets?.documentTypes).toEqual([{ type: "Yttrande", count: 1 }]);
   });
 });
+
+describe("searchDocuments — ärende-filter + sida (#1215)", () => {
+  const twoMatters = new Map([
+    ...matters,
+    ["m-2", { id: "m-2", matterNumber: "2026-0002", title: "Y", organizationId: ORG }],
+  ]);
+  const withOther = [...docs, { id: "d4", organizationId: ORG, matterId: "m-2", fileName: "tvist.pdf", documentType: "Dom", summary: null }];
+
+  it("matterId begränsar både träffar och facetter till ärendet", () => {
+    const r = searchDocuments(withOther, twoMatters, "tvist", ORG, { limit: 50, matterId: "m-2" });
+    expect(r.hits.map((h) => h.id)).toEqual(["d4"]);
+    expect(r.facets?.documentTypes).toEqual([{ type: "Dom", count: 1 }]);
+  });
+
+  it("utan matterId söks hela byrån", () => {
+    expect(searchDocuments(withOther, twoMatters, "tvist", ORG, { limit: 50 }).hits).toHaveLength(4);
+  });
+
+  it("demons innehåll är sidlöst → page är null", () => {
+    const r = searchDocuments(docs, matters, "tvist", ORG, { limit: 50 });
+    expect(r.hits.every((h) => h.page === null)).toBe(true);
+  });
+});

@@ -12,11 +12,13 @@ const searchQuery = {
   error: null as Error | null,
 };
 
+// Omfångsvalet (server/lokal) testas i use-document-search.test.tsx.
+vi.mock("@/lib/client/search/use-document-search", () => ({ useDocumentSearch: () => searchQuery }));
+
 vi.mock("@/lib/client/trpc", () => ({
   trpc: {
     useUtils: () => ({ prefs: { get: { invalidate: vi.fn() } } }),
     document: {
-      search: { useQuery: () => searchQuery },
       listDocumentTypes: { useQuery: () => ({ data: [] }) },
     },
     prefs: {
@@ -72,6 +74,19 @@ describe("DocumentSearchPage", () => {
     fireEvent.submit(input.closest("form")!);
     expect(screen.getByText("stamning.pdf")).toBeInTheDocument();
     expect(screen.getByText(/2026-0001/)).toBeInTheDocument();
+    expect(screen.queryByText(/^s\. /)).toBeNull();
+  });
+
+  it("visar sidnumret för innehållsträffen (#1215)", () => {
+    searchQuery.data = {
+      hits: [{ documentId: "d1", fileName: "inlaga.pdf", matterId: "m1", matterNumber: "1", matterTitle: "X", highlight: "<mark>stämning</mark>", page: 7 }],
+      totalHits: 1,
+    };
+    const { container } = render(<DocumentSearchPage />);
+    const input = container.querySelector("input[type='text']") as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "stämning" } });
+    fireEvent.submit(input.closest("form")!);
+    expect(screen.getByText("s. 7")).toBeInTheDocument();
   });
 
   it("visar 'Söker...' under fetch", () => {
