@@ -31,6 +31,9 @@ export const organizationSchema = z.object({
   /** Byråns standardtimpris (öre/h, exkl moms). Används när varken ärendet eller
    *  juristen har ett eget. NULL = inget standardpris. */
   defaultHourlyRate: z.number().int().nonnegative().nullish(),
+  /** Byråns timpris för tidsspillan (öre/h, exkl moms) vid privat fakturering —
+   *  vinner över ärende/jurist/byrå för TIDSSPILLAN*-poster. NULL = samma som arbete. */
+  tidsspillanHourlyRate: z.number().int().nonnegative().nullish(),
   /** Byråns standardåtgärder (#956) — åtgärder som förekommer i varje ärende med
    *  samma beskrivning och tidsåtgång för alla på byrån. Redigeras i org-inställningarna. */
   standardAtgarder: z.array(standardAtgardSchema).default([]),

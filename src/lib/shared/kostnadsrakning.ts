@@ -19,6 +19,7 @@
 
 import { applyNoFTaxFactorForDate, computeBrottmalstaxa, computeTimkostnadsnorm, coverageEntryRateOre, coverageEntryValueOre, isPerDayKind, payableCoverageEntries, timkostnadsnormFtaxForDate, type TaxaLevel, type TaxaResult } from "./brottmalstaxa";
 import { computeForordnandeErsattning, forhorMinutes, type Forhor, type ForordnandeResult } from "./forordnandetaxa";
+import { isTidsspillanKind } from "./hourly-rate";
 import { toIsoDate } from "./iso-date";
 import { RADGIVNING_MINUTES, radgivningTextRad } from "./rattshjalp";
 import type { TimeEntryKind } from "./schemas/enums";
@@ -356,7 +357,7 @@ function valuateTimeLine(
   const amountOre = ctx.isTaxe ? 0 : ctx.forFTax(coverageEntryValueOre(t, ctx.valDate));
   return {
     id: t.id, date: toIsoDate(t.date), description: t.description, minutes: t.minutes,
-    rateOrePerH, amountOre, isTidsspillan: t.kind === "TIDSSPILLAN" || t.kind === "TIDSSPILLAN_OVRIG_TID",
+    rateOrePerH, amountOre, isTidsspillan: isTidsspillanKind(t.kind),
   };
 }
 
