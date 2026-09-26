@@ -104,7 +104,7 @@ describe("generateFakturaFromTemplate", () => {
     expect(html).not.toContain("Rådgivning"); // rådgivningstimmen syns ALDRIG på domstols-fakturan (#860)
   });
 
-  it("sammanställning: sektion per timtaxa + utlägg exkl/inkl + summa, spec efter (#925)", async () => {
+  it("sammanställning: rad per kategori + timpris, uträkningskedja till summa, spec efter (#925/#1200)", async () => {
     await generateFakturaFromTemplate({
       invoice: { id: asId<"InvoiceId">("inv-s1"), amount: 1_071_500, vatOre: 196_300, invoiceNumber: "F-2026-0055", invoiceDate: "2026-06-30" },
       matterId: asId<"MatterId">("m1"),
@@ -128,29 +128,31 @@ describe("generateFakturaFromTemplate", () => {
       },
     });
     const html = new TextDecoder().decode(persistGeneratedDoc.mock.calls[0]![0].bytes as Uint8Array);
-    // En sektion per unik timtaxa (norm 1 626 kr/tim + tidsspillan 1 450 kr/tim),
-    // varje rad med BENÄMNING + timtaxa i egna kolumner.
+    // En rad per kategori + timpris (norm 1 626 kr/tim + tidsspillan 1 487 kr/tim),
+    // läst som uträkning: Benämning | Tim | Timpris | Belopp (#1200).
     expect(html).toContain("Sammanställning");
     expect(html).toContain("Benämning");
-    expect(html).toContain("Timtaxa");
+    expect(html).toContain("Timpris");
     expect(html).toContain(`${formatCurrency(162_600)}/tim`); // timkostnadsnorm 2026
     expect(html).toContain(`${formatCurrency(148_700)}/tim`); // tidsspillan 2026 (297 400 / 2 tim)
     // Utan arvodeskategori på raden (äldre faktura) räddas tidsspillan-normerna ur
     // taxan; resten benämns arvode (#953).
     expect(html).toContain("<td>Arvode</td>");
     expect(html).toContain("Tidsspillan — vardag 08–18");
-    // Ordning i utläggsdelen: utlägg exkl moms → moms → utlägg inkl moms → summa.
-    expect(html).toContain("Utlägg exkl moms");
-    expect(html).toContain("<td>Moms</td>");
-    expect(html).toContain("Utlägg inkl moms");
-    expect(html).toContain("Summa (inkl moms)");
+    // Kedjan (#1200): summa arvode exkl moms → moms på arvode → utlägg exkl moms →
+    // summa inkl moms. Utläggen är momsfria här → ingen momsrad för utlägg.
+    const iArvode = html.indexOf("Summa arvode exkl moms");
+    const iMoms = html.indexOf("Moms 25 % på arvode");
     const iExkl = html.indexOf("Utlägg exkl moms");
-    const iMoms = html.indexOf("<td>Moms</td>");
-    const iInkl = html.indexOf("Utlägg inkl moms");
-    expect(iExkl).toBeLessThan(iMoms);
-    expect(iMoms).toBeLessThan(iInkl);
-    expect(html).toContain(formatCurrency(196_300)); // momsraden = arvodeVat + expensesVat
-    expect(html).toContain(formatCurrency(1_071_500)); // summa = arvode inkl moms + utlägg inkl moms
+    const iSumma = html.indexOf("Summa inkl moms");
+    expect(iArvode).toBeGreaterThan(-1);
+    expect(iArvode).toBeLessThan(iMoms);
+    expect(iMoms).toBeLessThan(iExkl);
+    expect(iExkl).toBeLessThan(iSumma);
+    expect(html).not.toContain("på utlägg");
+    expect(html).toContain(formatCurrency(785_200)); // summa arvode exkl moms
+    expect(html).toContain(formatCurrency(196_300)); // moms på arvode
+    expect(html).toContain(formatCurrency(1_071_500)); // 785 200 + 196 300 + 90 000
     // Sammanställningen står FÖRE specifikationen; specen har sidbrytning.
     expect(html.indexOf("Sammanställning")).toBeLessThan(html.indexOf("Specifikation"));
     expect(html.indexOf("Sammanställning")).toBeLessThan(html.indexOf("Tidsspecifikation"));
