@@ -248,6 +248,8 @@ export const matterRouter = router({
         paymentMethodNote: z.string().nullable().optional(),
         paymentMethodDecidedAt: z.string().nullable().optional(),
         clientShareBips: z.number().int().min(0).max(10000).nullable().optional(),
+        /** Avvikande timpris för ärendet (öre/h). null = följ jurist/byrå. */
+        hourlyRate: z.number().int().nonnegative().nullable().optional(),
         rattsskyddMaxOre: z.number().int().nonnegative().nullable().optional(),
         rattshjalpMaxTimmar: z.number().int().positive().nullable().optional(),
         /** Rättsskydd (#810): tvistdatum + bolagets beslutsdatum, ur beslutet. */

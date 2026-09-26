@@ -107,6 +107,7 @@ function MatterPaymentMethod({ matterId, matter }: {
     tvistUppkomDatum?: Date | string | null | undefined;
     rattsskyddBeslutDatum?: Date | string | null | undefined;
     rattsskyddNekadAt?: Date | string | null | undefined;
+    hourlyRate?: number | null | undefined;
   };
 }) {
   const rattsskyddMaxOre = matter.rattsskyddMaxOre ?? null;
@@ -134,6 +135,7 @@ function MatterPaymentMethod({ matterId, matter }: {
         rattshjalpMaxTimmar={rattshjalpMaxTimmar}
         tvistUppkomDatum={matter.tvistUppkomDatum}
         rattsskyddBeslutDatum={matter.rattsskyddBeslutDatum}
+        hourlyRate={matter.hourlyRate ?? null}
         rattsskyddNekadAt={matter.rattsskyddNekadAt}
       />
     </>

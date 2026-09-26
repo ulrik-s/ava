@@ -31,6 +31,8 @@ function toOrgSettings(org: Organization) {
     documentTags: org.documentTags ?? [],
     /** Gränsbelopp (öre) för aconto-utskick (#885). */
     accontoThresholdOre: org.accontoThresholdOre ?? null,
+    /** Byråns standardtimpris (öre/h). */
+    defaultHourlyRate: org.defaultHourlyRate ?? null,
     /** Byråns standardåtgärder (#956) — samma beskrivning + tid för alla. */
     standardAtgarder: org.standardAtgarder ?? [],
   };
@@ -62,6 +64,8 @@ export const organizationRouter = router({
         documentTags: z.array(z.string()).optional(),
         /** Gränsbelopp (öre) för aconto-utskick (#885). */
         accontoThresholdOre: z.number().int().nonnegative().optional(),
+        /** Standardtimpris (öre/h). null = ta bort. */
+        defaultHourlyRate: z.number().int().nonnegative().nullable().optional(),
         /** Byråns standardåtgärder (#956). HELA listan ersätts — admin redigerar
          *  den som en enhet, så en borttagen post försvinner. */
         standardAtgarder: z.array(standardAtgardSchema).optional(),

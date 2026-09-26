@@ -149,6 +149,15 @@ describe("SettingsPage", () => {
     expect(updateSettingsMutate.mock.calls.at(-1)![0]).toMatchObject({ name: "Byrå AB" });
   });
 
+  it("standardtimpris: kr/h i fältet, sparas i öre; tomt tar bort det (null)", async () => {
+    render(<SettingsPage />);
+    const rate = screen.getByLabelText(/Standardtimpris/);
+    fireEvent.change(rate, { target: { value: "2500" } });
+    await waitFor(() => expect(updateSettingsMutate.mock.calls.at(-1)?.[0]).toMatchObject({ defaultHourlyRate: 250000 }), { timeout: 2000 });
+    fireEvent.change(rate, { target: { value: "" } });
+    await waitFor(() => expect(updateSettingsMutate.mock.calls.at(-1)?.[0]).toMatchObject({ defaultHourlyRate: null }), { timeout: 2000 });
+  });
+
   it("öppnar formuläret för att lägga till kontor och sparar", async () => {
     render(<SettingsPage />);
     fireEvent.click(screen.getByRole("button", { name: /Lägg till kontor/i }));

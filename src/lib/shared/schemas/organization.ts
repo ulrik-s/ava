@@ -28,6 +28,9 @@ export const organizationSchema = z.object({
   /** Gränsbelopp (öre) för klientens ackumulerade självrisk innan ett aconto
    *  skickas (#885). NULL = använd default (SJALVRISK_ACCONTO_THRESHOLD_ORE). */
   accontoThresholdOre: z.number().int().nonnegative().nullish(),
+  /** Byråns standardtimpris (öre/h, exkl moms). Används när varken ärendet eller
+   *  juristen har ett eget. NULL = inget standardpris. */
+  defaultHourlyRate: z.number().int().nonnegative().nullish(),
   /** Byråns standardåtgärder (#956) — åtgärder som förekommer i varje ärende med
    *  samma beskrivning och tidsåtgång för alla på byrån. Redigeras i org-inställningarna. */
   standardAtgarder: z.array(standardAtgardSchema).default([]),

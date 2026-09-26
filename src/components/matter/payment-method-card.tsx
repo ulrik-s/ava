@@ -43,6 +43,8 @@ interface Props {
   rattsskyddBeslutDatum?: Date | string | null | undefined;
   /** Rättsskydd: datum då rättsskydd nekades (#811). */
   rattsskyddNekadAt?: Date | string | null | undefined;
+  /** Avvikande timpris för ärendet (öre/h); null/utelämnat = följ jurist/byrå. */
+  hourlyRate?: number | null | undefined;
 }
 
 /** ISO-datum (yyyy-mm-dd) ur ett valfritt datumfält, tomt om saknas. */
@@ -70,6 +72,7 @@ function PaymentMethodView({
   clientShareBips,
   rattsskyddMaxOre,
   rattshjalpMaxTimmar,
+  hourlyRate,
   onEdit,
 }: {
   paymentMethod: PaymentMethod;
@@ -78,6 +81,7 @@ function PaymentMethodView({
   clientShareBips: number | null;
   rattsskyddMaxOre: number | null;
   rattshjalpMaxTimmar: number | null;
+  hourlyRate?: number | null | undefined;
   onEdit: () => void;
 }) {
   const risk = creditRiskFor(paymentMethod);
@@ -97,6 +101,7 @@ function PaymentMethodView({
             <span className={`text-xs rounded-full px-2 py-0.5 border ${badgeClass}`}>
               Kreditrisk: {CREDIT_RISK_LABELS[risk]}
             </span>
+            <MatterRateBadge hourlyRate={hourlyRate} />
             {showShare && (
               <span className="text-xs rounded-full px-2 py-0.5 border border-blue-200 bg-blue-50 text-blue-700">
                 Klientens andel: {clientShareBips != null ? `${clientShareBips / 100} %` : "ej satt"}
@@ -209,6 +214,38 @@ function ClientShareField({ id, value, onChange }: { id: string; value: string; 
   );
 }
 
+/** Syns bara när ärendet har ett avvikande pris — det ovanliga fallet. */
+function MatterRateBadge({ hourlyRate }: { hourlyRate: number | null | undefined }) {
+  if (hourlyRate == null) return null;
+  return (
+    <span className="text-xs rounded-full px-2 py-0.5 border border-amber-200 bg-amber-50 text-amber-800">
+      Avvikande timpris: {hourlyRate / 100} kr/h
+    </span>
+  );
+}
+
+/** Öre → kronor som text för ett formulärfält; null → tomt. */
+function krText(ore: number | null | undefined): string {
+  return ore != null ? String(ore / 100) : "";
+}
+
+/**
+ * Ärendets avvikande timpris — ovanligt, så det ligger hopfällt längst ned och
+ * tar ingen plats i vardagen. Tomt = juristens timpris (eller byråns standard).
+ */
+function MatterRateField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const id = useId();
+  return (
+    <details open={value !== ""} className="rounded border border-gray-200 px-3 py-2">
+      <summary className="cursor-pointer text-xs font-medium text-gray-600">Avvikande timpris för ärendet</summary>
+      <label htmlFor={id} className="mt-2 block text-xs font-medium mb-1">Timpris (kr/h, exkl moms) — tomt = juristens/byråns</label>
+      <input id={id} type="text" inputMode="decimal" value={value} onChange={(e) => onChange(e.target.value)} placeholder="t.ex. 3000"
+        className="w-40 border border-gray-300 rounded px-2 py-1.5 text-sm" />
+      <p className="mt-1 text-[11px] text-gray-400">Gäller tid som registreras efter ändringen.</p>
+    </details>
+  );
+}
+
 /** Redigeringsformulär: äger sitt formulär-state + spar-mutationen. */
 function PaymentMethodEditor({ matterId, initial, onDone }: { matterId: MatterId; initial: Props; onDone: () => void }) {
   const [method, setMethod] = useState(initial.paymentMethod);
@@ -219,15 +256,13 @@ function PaymentMethodEditor({ matterId, initial, onDone }: { matterId: MatterId
   // %-sats redigeras i procent (bips/100); tomt fält → null. Tillåt komma-decimal.
   const [sharePct, setSharePct] = useState(initial.clientShareBips != null ? String(initial.clientShareBips / 100) : "");
   // Tak: rättsskydd i kr (öre/100), rättshjälp i timmar. Tomt fält → null.
-  const [rsMaxKr, setRsMaxKr] = useState(initial.rattsskyddMaxOre != null ? String(initial.rattsskyddMaxOre / 100) : "");
+  const [rsMaxKr, setRsMaxKr] = useState(krText(initial.rattsskyddMaxOre));
   const [rhMaxTim, setRhMaxTim] = useState(initial.rattshjalpMaxTimmar != null ? String(initial.rattshjalpMaxTimmar) : "");
   const [tvist, setTvist] = useState(isoDate(initial.tvistUppkomDatum));
   const [beslut, setBeslut] = useState(isoDate(initial.rattsskyddBeslutDatum));
   const [nekad, setNekad] = useState(isoDate(initial.rattsskyddNekadAt));
-  const methodId = useId();
-  const decidedAtId = useId();
-  const noteId = useId();
-  const shareId = useId();
+  const [rateKr, setRateKr] = useState(krText(initial.hourlyRate));
+  const [methodId, decidedAtId, noteId, shareId] = [useId(), useId(), useId(), useId()];
 
   const utils = trpc.useUtils();
   const update = trpc.matter.update.useMutation({
@@ -284,6 +319,7 @@ function PaymentMethodEditor({ matterId, initial, onDone }: { matterId: MatterId
             placeholder="T.ex. Trygg-Hansa, nr. TH-2024-4455 · Självrisk 20% · Maxbelopp 75 000 kr"
           />
         </div>
+        <MatterRateField value={rateKr} onChange={setRateKr} />
         <div className="flex gap-2 justify-end">
           <button onClick={onDone} className="px-3 py-1.5 text-sm border border-gray-300 rounded">
             Avbryt
@@ -302,6 +338,7 @@ function PaymentMethodEditor({ matterId, initial, onDone }: { matterId: MatterId
                 tvistUppkomDatum: tvist || null,
                 rattsskyddBeslutDatum: beslut || null,
                 rattsskyddNekadAt: nekad || null,
+                hourlyRate: oreFromKr(rateKr),
               })
             }
             className="px-4 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
@@ -327,6 +364,7 @@ export function PaymentMethodCard(props: Props) {
       clientShareBips={props.clientShareBips}
       rattsskyddMaxOre={props.rattsskyddMaxOre}
       rattshjalpMaxTimmar={props.rattshjalpMaxTimmar}
+      hourlyRate={props.hourlyRate}
       onEdit={() => setEditing(true)}
     />
   );

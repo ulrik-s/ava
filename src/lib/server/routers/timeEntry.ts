@@ -9,9 +9,11 @@ import {
   userIdSchema,
   timeEntryIdSchema,
   invoiceIdSchema,
+  type MatterId,
 } from "@/lib/shared/schemas/ids";
 import { emit } from "../events/emit";
 import { router, protectedProcedure, orgProcedure, TRPCError } from "../trpc";
+import type { Context } from "../trpc-core";
 
 /**
  * En fryst post (`frozenAt`, satt när den ingick i en slutfaktura eller
@@ -52,6 +54,19 @@ function assertMinutes(input: EntryShape): void {
 function rateForEntry(input: EntryShape & { hourlyRate?: number | undefined }, userRate: number): number {
   if (isPerDayKind(input.kind)) return advokatberedskapFtaxForDate(input.date ?? new Date());
   return input.hourlyRate ?? userRate;
+}
+
+/**
+ * Timpriset en ny tidspost får: ärendets avvikande pris → juristens → byråns
+ * standard → 0. Priset sparas på posten, så en senare ändring rör inte gammal tid.
+ */
+async function hourlyRateFor(
+  ctx: { repos: Context["repos"]; user: { organizationId: string } },
+  matterId: MatterId, userRate: number | null | undefined,
+): Promise<number> {
+  const orgId = asId<"OrganizationId">(ctx.user.organizationId);
+  const [matter, org] = await Promise.all([ctx.repos.matters.getByIdInOrg(matterId, orgId), ctx.repos.organizations.getById(orgId)]);
+  return matter?.hourlyRate ?? userRate ?? org?.defaultHourlyRate ?? 0;
 }
 
 export const timeEntryRouter = router({
@@ -111,6 +126,7 @@ export const timeEntryRouter = router({
       const userId = input.userId ?? asId<"UserId">(ctx.user.id);
       const user = await ctx.repos.users.getById(userId);
       if (!user) throw new TRPCError({ code: "NOT_FOUND", message: "Användare finns inte." });
+      const rate = await hourlyRateFor(ctx, input.matterId, user.hourlyRate);
 
       const entry = await ctx.repos.timeEntries.create(omitUndefined({
         id: input.id, // undefined → store genererar
@@ -121,7 +137,7 @@ export const timeEntryRouter = router({
         description: input.description,
         // Per-dygns-kategorier har ingen timtaxa; posten bär DAGBELOPPET så den
         // råa raden är läsbar. Värderingen läser ändå alltid årstabellen (#950).
-        hourlyRate: rateForEntry(input, user.hourlyRate ?? 0),
+        hourlyRate: rateForEntry(input, rate),
         kind: input.kind,
         standardAtgardId: input.standardAtgardId,
         billable: input.billable,
