@@ -150,3 +150,56 @@ describe("TimeEntryRepository — frysning/perLawyer/billable (Drizzle/pglite)",
     expect(await repo.listUnfrozenForMatter(asId<"MatterId">(f.mId))).toHaveLength(0);
   });
 });
+
+// ─── Låst mot en faktura utan körning (#1205 — rättshjälpens rådgivningstimme) ───
+
+/** Två poster: en öppen och en låst direkt mot en faktura (`frozenAt`, ingen körning). */
+function lockedFixture() {
+  const mId = uuidv7(), uId = uuidv7(), open = uuidv7(), locked = uuidv7();
+  const rows = [
+    { id: open, userId: uId, matterId: mId, minutes: 90, date: new Date("2026-03-02"), description: "Inlaga", billable: true },
+    { id: locked, userId: uId, matterId: mId, minutes: 60, date: new Date("2026-03-01"), description: "Rådgivning", billable: true, invoiceId: uuidv7(), frozenAt: new Date("2026-03-01") },
+  ];
+  return { mId, uId, open, locked, rows };
+}
+
+/** Samma kontrakt för båda backends: den låsta posten är aldrig ofryst och fryses aldrig om. */
+async function expectLockedEntryUntouched(repo: InMemoryTimeEntryRepository | DrizzleTimeEntryRepository, f: ReturnType<typeof lockedFixture>): Promise<void> {
+  const m = asId<"MatterId">(f.mId);
+  expect((await repo.listUnfrozenForMatter(m)).map((t) => t.id)).toEqual([f.open]);
+  await repo.freezeByIds([asId<"TimeEntryId">(f.locked)], asId<"BillingRunId">(uuidv7()), new Date("2026-06-30"));
+  const run = asId<"BillingRunId">(uuidv7());
+  await repo.freezeForMatter(m, run, new Date("2026-06-30"));
+  expect((await repo.listByBillingRun(run)).map((t) => t.id)).toEqual([f.open]);
+  const locked = await repo.getById(asId<"TimeEntryId">(f.locked));
+  expect(locked?.frozenByBillingRunId ?? null).toBeNull();
+}
+
+describe("TimeEntryRepository — låst mot faktura (#1205, in-memory)", () => {
+  it("listUnfrozenForMatter/freezeForMatter/freezeByIds lämnar den låsta posten", async () => {
+    const f = lockedFixture();
+    const store = new LocalStore({
+      matters: [{ id: f.mId, organizationId: ORG, matterNumber: "2026-1", title: "T" }],
+      users: [{ id: f.uId, name: "Anna" }],
+      timeEntries: f.rows,
+    }, async () => {});
+    await expectLockedEntryUntouched(new InMemoryTimeEntryRepository(store), f);
+  });
+});
+
+describe("TimeEntryRepository — låst mot faktura (#1205, Drizzle/pglite)", () => {
+  let handle: TestDbHandle;
+  beforeAll(async () => { handle = await createTestDb(); });
+  afterAll(async () => { await handle.close(); });
+
+  it("listUnfrozenForMatter/freezeForMatter/freezeByIds lämnar den låsta posten", async () => {
+    const f = lockedFixture();
+    const org = uuidv7();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const v = (o: Record<string, unknown>) => ({ version: 1, ...o }) as any;
+    await handle.db.insert(matters).values(v({ id: f.mId, organizationId: org, matterNumber: "2026-1", title: "T" }));
+    await handle.db.insert(users).values(v({ id: f.uId, organizationId: org, email: "a@x", name: "Anna" }));
+    for (const r of f.rows) await handle.db.insert(timeEntries).values(v({ ...r, hourlyRate: 1000 }));
+    await expectLockedEntryUntouched(new DrizzleTimeEntryRepository(handle.db), f);
+  });
+});

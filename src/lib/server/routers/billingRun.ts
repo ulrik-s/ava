@@ -40,6 +40,7 @@ import {
 import { applyKrAction, canVoidKostnadsrakning, krStateOf, type KostnadsrakningAction, type KostnadsrakningState } from "@/lib/shared/kostnadsrakning-flow";
 import { ocrFromInvoiceNumber } from "@/lib/shared/ocr-reference";
 import { omitUndefined } from "@/lib/shared/omit-undefined";
+import { isRadgivningInvoiced } from "@/lib/shared/rattshjalp";
 import { settlementBreakdownSchema, type BillingRun, type Invoice } from "@/lib/shared/schemas/billing";
 import { billingRunRecipientSchema, type BillingRunRecipient, type PaymentMethod } from "@/lib/shared/schemas/enums";
 import {
@@ -159,7 +160,7 @@ function resolveAwardedOre(krRun: BillingRunListRow | undefined, inputAwardedOre
 /**
  * Rättshjälpens KR-anspråk till domstol, brutto (#839/#891): arbetet värderas på
  * TIMKOSTNADSNORMEN (staten ersätter bara normen, ej byråns taxa), tidsspillan på
- * tidsspillan-normen, rådgivningstimmen exkluderas. Utlägg ersätts brutto.
+ * tidsspillan-normen; den låsta rådgivningstimmen ingår inte. Utlägg ersätts brutto.
  */
 
 
@@ -250,7 +251,7 @@ async function fetchSpecDeductions(repos: Repositories, orgId: OrganizationId, f
 
 async function buildSettlementBreakdown(repos: Repositories, orgId: OrganizationId, a: {
   clientShareBips: number; totalArvodeNet: number; split: CoverageSplit; work: UnfrozenWork;
-  payerGross: number; clientPayable: number; method: PaymentMethod; rateOre: number; settleDate: Date | string;
+  payerGross: number; clientPayable: number; radgivningInvoiced: boolean; rateOre: number; settleDate: Date | string;
   deductedRuns: ReadonlyArray<{ invoiceId?: InvoiceId | null | undefined }>;
   /** Utläggsrader per part EFTER nedsättning (#943) och ev. 25 %-omrating mot
    *  domstol (#945) — exakt de rader fakturorna bär. */
@@ -261,8 +262,8 @@ async function buildSettlementBreakdown(repos: Repositories, orgId: Organization
   /** Utlägg netto FÖRE domstolens nedsättning — trappans utläggsrad (#947). */
   expensesBaseNetOre: number;
 }): Promise<SettlementBreakdown> {
-  // Rådgivningstimmen ingår ALDRIG i domstolens arvode (#860) — arvodet värderas
-  // på bas-minuterna (exkl rådgivning). Rådgivningen syns bara i kostnadsräkningen.
+  // Rådgivningstimmen ingår ALDRIG i domstolens arvode (#860/#1205) — den är en
+  // låst, redan fakturerad post och finns inte i `work`; den omnämns bara.
   // Utlägg delas per samma andel som arvodet (#878): klientens del + betalarens del.
   const clientExpensesGrossOre = grossOreOf(a.clientExpenseLines);
   const payerExpensesGrossOre = grossOreOf(a.payerExpenseLines);
@@ -289,10 +290,10 @@ async function buildSettlementBreakdown(repos: Repositories, orgId: Organization
     firmLossNetOre: a.split.firmLossOre,
     prutningGrossOre: arvodeInclVatOre(a.split.firmLossOre),
     payerArvodeNetOre: a.split.payerOre,
-    ...radgivningOre(a.method, a.rateOre),
+    ...radgivningOre(a.radgivningInvoiced, a.rateOre),
     payerPayableOre: a.payerGross,
     clientPayableOre: a.clientPayable,
-    clientArvodeLines: buildClientArvodeLines(a.method, a.rateOre, a.work, a.totalArvodeNet, a.settleDate),
+    clientArvodeLines: buildClientArvodeLines(a.work, a.totalArvodeNet, a.settleDate),
     deductedAccontos,
     ...(a.split.clientParts ? { clientParts: a.split.clientParts } : {}),
   };
@@ -909,7 +910,7 @@ export const billingRunRouter = router({
         const breakdown = await buildSettlementBreakdown(tx, ctx.orgId, {
           clientShareBips: matter.clientShareBips ?? 0, totalArvodeNet,
           split, work, payerGross, clientPayable: clientAmount,
-          method: matter.paymentMethod, rateOre, settleDate, deductedRuns,
+          radgivningInvoiced: isRadgivningInvoiced(matter), rateOre, settleDate, deductedRuns,
           clientExpenseLines, payerExpenseLines, expenseLossNetOre, expensesBaseNetOre,
         });
         const { clientView, payerView } = buildSettlementViews(breakdown, matter.paymentMethod);

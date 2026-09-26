@@ -32,7 +32,6 @@ import type { VatBreakdownLine } from "./accounting/semantic-voucher";
 import { coverageEntryRateOre, coverageEntryValueOre, isPerDayKind, payableCoverageEntries } from "./brottmalstaxa";
 import { chargedExpenseLines } from "./expense-vat";
 import { arvodeInclVatOre } from "./invoice-calc";
-import { RADGIVNING_MINUTES } from "./rattshjalp";
 import type { PaymentMethod, TimeEntryKind } from "./schemas/enums";
 import type { ExpenseId, TimeEntryId } from "./schemas/ids";
 import { DEFAULT_VAT_RATE } from "./vat";
@@ -64,16 +63,6 @@ export function entryOwnValueOre(
   t: { minutes: number; hourlyRate: number; date: Date | string; kind?: TimeEntryKind | null | undefined },
 ): number {
   return isPerDayKind(t.kind) ? coverageEntryValueOre(t, t.date) : timeEntryValueOre(t.minutes, t.hourlyRate);
-}
-
-/**
- * Minuter som rättshjälpsavgiften/coverage-splitten baseras på (#809): rättshjälp
- * exkluderar rådgivningstimmen — ärendets första timme loggas som vanlig tidspost
- * men faktureras klienten separat (rådgivningsavgiften) och ingår INTE i avgifts-
- * basen. Övriga betalningssätt: oförändrat.
- */
-export function coverageBaseMinutes(method: PaymentMethod, billableMinutes: number): number {
-  return method === "RATTSHJALP" ? Math.max(0, billableMinutes - RADGIVNING_MINUTES) : billableMinutes;
 }
 
 /** Debiterbara minuter grupperade per arvodeskategori (#950). */
@@ -182,8 +171,8 @@ export function invoiceVatBreakdown(work: UnfrozenWork): VatBreakdownLine[] {
  * Slutregleringens arvode-netto (#891). Domstolsersatta metoder (rättshjälp,
  * rättsskydd, offentligt uppdrag — #1003): räkna om HELA ärendet på
  * SLUTREGLERINGSÅRETS normer — den retroaktiva höjningen över ett årsskifte (arbete
- * 2025 värderas på 2026 års norm). Arbete värderas på timkostnadsnormen (minus
- * rådgivningstimmen vid rättshjälp), tidsspillan på tidsspillan-normen, obekväm
+ * 2025 värderas på 2026 års norm). Arbete värderas på timkostnadsnormen,
+ * tidsspillan på tidsspillan-normen, obekväm
  * tid och beredskap på sina DVFS-belopp. PRIVAT/MIX: posternas egna á-priser.
  */
 export function settlementArvodeNet(method: PaymentMethod, work: ArvodeWork, settleDate: Date | string): number {
@@ -198,10 +187,9 @@ export function settlementArvodeNet(method: PaymentMethod, work: ArvodeWork, set
   // DVFS 2025:9 § 2 (#950): beredskapsdagar som "förbrukats" av en helgförhandling
   // eller ett polisförhör samma dag ersätts inte — arbetet betalas i stället.
   const payable = payableCoverageEntries(billable);
-  const byKind = minutesByKind(payable);
-  // Rådgivningstimmen carvas ur ARBETE (rättshjälp) — den faktureras klienten separat.
-  byKind.set("ARBETE", coverageBaseMinutes(method, byKind.get("ARBETE") ?? 0));
-  return sumKindValueOre(byKind, settleDate) + perDayValueOre(payable, settleDate);
+  // Rådgivningstimmen dras INTE av här (#1205): den är en låst post som redan
+  // fakturerats klienten och ingår aldrig i underlaget som värderas.
+  return sumKindValueOre(minutesByKind(payable), settleDate) + perDayValueOre(payable, settleDate);
 }
 
 /** Det av ärendet som styr hur arbetet värderas. */
@@ -219,8 +207,7 @@ function usesOwnRates(m: ValuationMatter): boolean {
 /**
  * Ärendets arvode netto — EN regel för förslag, "upparbetat ofakturerat",
  * aconto och kostnadsräkning. Domstolsersatta betalningssätt (rättshjälp,
- * rättsskydd, offentligt uppdrag) värderas på Domstolsverkets normer och
- * rättshjälp utan rådgivningstimmen (den faktureras klienten separat); privat
+ * rättsskydd, offentligt uppdrag) värderas på Domstolsverkets normer; privat
  * och taxeärenden på posternas egna á-priser. Förr värderade förslaget alltid
  * på posternas á-pris — en jurist utan timpris gav 0 kr i ett rättshjälpsärende.
  */
@@ -228,7 +215,7 @@ export function matterArvodeNet(m: ValuationMatter, work: ArvodeWork, date: Date
   return usesOwnRates(m) ? arvodeNetOre(work) : settlementArvodeNet(m.paymentMethod, work, date);
 }
 
-/** En enskild tidsposts värde enligt samma regel (rådgivningstimmen dras bara av i summan). */
+/** En enskild tidsposts värde enligt samma regel. */
 export function matterEntryValueOre(
   m: ValuationMatter, t: ArvodeWork["timeEntries"][number], date: Date | string,
 ): number {

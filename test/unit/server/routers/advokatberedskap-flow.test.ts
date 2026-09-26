@@ -4,8 +4,8 @@
  * Enhetstesterna i `advokatberedskap.test.ts` täcker normen och § 2-regeln som
  * ren logik. Här testas det som gör den lätt att tappa: kategorin bär NOLL
  * minuter, och varje väg som räknar `minuter × taxa` ger då tyst noll. Det
- * hände inte hypotetiskt — `carveEarliestMinutes` svalde hela posten och
- * `arvodeNetOre` värderade den till 0 innan de fixades.
+ * hände inte hypotetiskt — den numera borttagna rådgivnings-carven (#1205)
+ * svalde hela posten och `arvodeNetOre` värderade den till 0 innan de fixades.
  *
  * Vägarna som måste bära beloppet:
  *   - kostnadsräkningen till domstol (offentligt uppdrag — beredskapens hem)
@@ -169,16 +169,15 @@ describe("advokatberedskap i täckningsärenden (rättshjälp)", () => {
     expect(proposal.workValueOre).toBe(DAG_2026);
   });
 
-  it("överlever rådgivningstimmens carve-out (noll minuter äts inte upp)", async () => {
-    // Rättshjälpens första timme carvas bort ur kostnadsräkningen. En post utan
-    // minuter kan inte vara en del av den — men `0 <= 60` svalde den förut.
+  it("rättshjälp: beredskapen och arbetet yrkas båda — ingen timme dras av (#1205)", async () => {
     const caller = makeCaller([
       beredskap("te-1", LUGN),
       { id: "te-2", date: LUGN, minutes: 60, hourlyRate: 162_600 },
     ], "RATTSHJALP");
     const { run } = await caller.billingRun.createKostnadsrakning({ matterId: "m-1" });
-    // Rådgivningstimmen (60 min) carvas → bara beredskapens dagbelopp kvar.
-    expect(run.workValueOreAtRun).toBe(Math.round(DAG_2026 * 1.25));
+    // Dagbeloppet + 1 h på timkostnadsnormen (1 626 kr) — rådgivningen är en egen
+    // låst post och äter inte registrerat arbete.
+    expect(run.workValueOreAtRun).toBe(Math.round((DAG_2026 + 162_600) * 1.25));
   });
 });
 

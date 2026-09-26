@@ -100,7 +100,7 @@ export class InMemoryTimeEntryRepository extends InMemoryRepository<TimeEntry> i
 
   async listUnfrozenForMatter(matterId: MatterId): Promise<TimeEntry[]> {
     return (await this.delegate.findMany({
-      where: { matterId, frozenByBillingRunId: null }, orderBy: { date: "asc" },
+      where: { matterId, frozenByBillingRunId: null, frozenAt: null }, orderBy: { date: "asc" },
     })) as TimeEntry[];
   }
 
@@ -145,7 +145,7 @@ export class InMemoryTimeEntryRepository extends InMemoryRepository<TimeEntry> i
 
   async freezeForMatter(matterId: MatterId, billingRunId: BillingRunId, now: Date): Promise<void> {
     await this.delegate.updateMany({
-      where: { matterId, frozenByBillingRunId: null },
+      where: { matterId, frozenByBillingRunId: null, frozenAt: null },
       data: { frozenAt: now, frozenByBillingRunId: billingRunId } as Partial<TimeEntry>,
     });
   }
@@ -160,7 +160,7 @@ export class InMemoryTimeEntryRepository extends InMemoryRepository<TimeEntry> i
   async freezeByIds(ids: TimeEntryId[], billingRunId: BillingRunId, now: Date): Promise<void> {
     if (!ids.length) return;
     await this.delegate.updateMany({
-      where: { id: { in: ids }, frozenByBillingRunId: null },
+      where: { id: { in: ids }, frozenByBillingRunId: null, frozenAt: null },
       data: { frozenAt: now, frozenByBillingRunId: billingRunId } as Partial<TimeEntry>,
     });
   }

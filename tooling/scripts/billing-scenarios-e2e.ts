@@ -83,6 +83,11 @@ export async function newMatterWithClient(c: Ava, userId: string, sc: Scenario, 
     ...(sc.extra ?? {}),
   });
   await c.matter.addContact.mutate({ matterId: matter.id, contactId: client.id, role: "KLIENT" });
+  // Rättshjälp: rådgivningsfakturan skapas direkt (panelen gör det automatiskt) och
+  // registrerar mötets LÅSTA tidspost (#1205) — den får aldrig nå anspråket.
+  if (sc.paymentMethod === "RATTSHJALP") {
+    await c.invoice.createRadgivning.mutate({ matterId: matter.id, invoiceDate: "2026-03-01" });
+  }
   await c.timeEntry.create.mutate({
     matterId: matter.id, userId, date: "2026-03-02", minutes: WORK_MINUTES,
     description: "Handläggning", billable: true, hourlyRate: RATE_ORE,
@@ -129,12 +134,13 @@ export async function runCoverageScenario(c: Ava, userId: string, sc: Scenario, 
     `klientandel ${clientShare} bips ≠ avtalade ${sc.clientShareBips}`);
   console.log(`  ✓ Klientandelen är ${clientShare / 100} % som avtalat`);
 
-  // Rättshjälp: rådgivningstimmen ligger UTANFÖR (#868) → 9 h, inte 10.
+  // Rättshjälp (#1205): den låsta rådgivningsposten ligger UTANFÖR anspråket, och
+  // ingen registrerad tid dras av i dess ställe → hela 10 h, varken 9 eller 11.
   if (sc.paymentMethod === "RATTSHJALP") {
-    const utanRadgivning = Math.round(((WORK_MINUTES - 60) / 60) * NORM_ORE * VAT);
-    assert(Math.abs(sum - utanRadgivning) <= 2,
-      `rådgivningstimmen carvades inte: ${kr(sum)} ≠ ${kr(utanRadgivning)}`);
-    console.log("  ✓ Rådgivningstimmen ligger utanför anspråket (#868)");
+    const helaArbetet = Math.round((WORK_MINUTES / 60) * NORM_ORE * VAT);
+    assert(Math.abs(sum - helaArbetet) <= 2,
+      `anspråket ≠ registrerat arbete: ${kr(sum)} ≠ ${kr(helaArbetet)}`);
+    console.log("  ✓ Rådgivningstimmen ligger utanför anspråket, registrerad tid är orörd (#1205)");
   }
   return res.clientInvoice.id;
 }

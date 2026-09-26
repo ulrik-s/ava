@@ -30,6 +30,8 @@ let coverageSplitData: { clientOre: number } | undefined = undefined;
 const refetch = vi.fn();
 const radgivningMutate = vi.fn();
 const krMutate = vi.fn();
+let krOpts: { onSuccess?: (res: { run: { id: string } }) => Promise<void> } | undefined;
+const generateKrDocFn = vi.fn(async () => {});
 const voidMutate = vi.fn();
 let documentListData: { documents: Array<Record<string, unknown>> } = { documents: [] };
 let hasDoc = false;
@@ -48,7 +50,9 @@ vi.mock("@/lib/client/trpc", () => ({
     billingRun: {
       list: { useQuery: () => ({ data: runsData, isLoading: runsLoading, refetch }) },
       proposal: { useQuery: () => ({ data: proposalData, isLoading: false }) },
-      createKostnadsrakning: { useMutation: () => ({ mutate: krMutate, isPending: false }) },
+      createKostnadsrakning: {
+        useMutation: (opts?: typeof krOpts) => { krOpts = opts; return { mutate: krMutate, isPending: false }; },
+      },
       appealKostnadsrakning: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       voidKostnadsrakning: { useMutation: () => ({ mutate: voidMutate, isPending: false, error: null }) },
       recordKostnadsrakningBeslut: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
@@ -86,6 +90,7 @@ vi.mock("@/lib/client/trpc", () => ({
   },
 }));
 
+vi.mock("@/lib/client/kostnadsrakning/generate-kr-doc", () => ({ generateKrDoc: generateKrDocFn }));
 vi.mock("@/lib/client/diagnostics/use-matter-invariants", () => ({ useMatterInvariants: vi.fn() }));
 vi.mock("@/lib/client/demo/entity-link", () => ({
   EntityLink: ({ children }: { children: React.ReactNode }) => <a href="#">{children}</a>,
@@ -332,6 +337,18 @@ describe("BillingPanel — Skapa-faktura-menyn (flödesmodellen)", () => {
     // Rättshjälps-dialogen (egen, ej brottmåls-KR-modalen) bekräftar inskicket.
     expect(screen.getByRole("button", { name: "Skicka kostnadsräkning" })).toBeInTheDocument();
     expect(screen.queryByTestId("kr-modal")).not.toBeInTheDocument();
+  });
+
+  it("RATTSHJALP: KR-dokumentet byggs på körningens EGNA poster + rådgivningsnotisen (#1205)", async () => {
+    render(<BillingPanel matterId={asId<"MatterId">("m1")} matter={{ ...baseMatter, paymentMethod: "RATTSHJALP", radgivningBetaldAt: "2026-01-05" }} />);
+    fireEvent.click(screen.getByRole("button", { name: "+ Skapa faktura" }));
+    fireEvent.click(screen.getByRole("button", { name: "Kostnadsräkning till domstol" }));
+    fireEvent.click(screen.getByRole("button", { name: "Skicka kostnadsräkning" }));
+    await krOpts?.onSuccess?.({ run: { id: "kr-1" } });
+    expect(generateKrDocFn).toHaveBeenCalledWith(expect.objectContaining({
+      ownBillingRunId: "kr-1", timeEntries: [],
+      meta: expect.objectContaining({ radgivningPaid: true }),
+    }));
   });
 });
 

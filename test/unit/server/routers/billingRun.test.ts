@@ -72,13 +72,13 @@ describe("billingRun.createAcconto", () => {
 
 describe("billingRun.proposal (#397)", () => {
   // Rättshjälp värderas på timkostnadsnormen, inte på posternas á-pris — en jurist
-  // utan timpris gav annars 0 kr trots 7,5 h i ärendet. Rådgivningstimmen dras av
-  // (den faktureras klienten separat).
-  it("rättshjälp: posternas timpris 0 → normen, minus rådgivningstimmen", async () => {
+  // utan timpris gav annars 0 kr trots 7,5 h i ärendet. Ingen timme dras av (#1205):
+  // rådgivningstimmen är en egen låst post, inte en del av det registrerade arbetet.
+  it("rättshjälp: posternas timpris 0 → normen, hela det registrerade arbetet", async () => {
     const { caller } = makeCaller({ workMinutes: 450, paymentMethod: "RATTSHJALP", hourlyRate: 0 });
     const p = await caller.billingRun.proposal({ matterId: "m-1" });
     const norm = timkostnadsnormFtaxForDate(new Date());
-    expect(p.workValueOre).toBe(Math.round((390 / 60) * norm));
+    expect(p.workValueOre).toBe(Math.round((450 / 60) * norm));
     expect(p.timeEntries[0]?.valueOre).toBe(Math.round((450 / 60) * norm));
   });
 
@@ -258,20 +258,20 @@ describe("billingRun.createKostnadsrakning", () => {
   });
 
   it("tidsspillan värderas på tidsspillan-normen, arbete på timkostnadsnormen (#891)", async () => {
-    // 120 min arbete (−60 rådgivning = 60 kvar) på 1 626 kr + 60 min tidsspillan på 1 487 kr.
-    // netto: 60/60×162600 + 60/60×148700 = 311300; brutto ×1.25 = 389125.
+    // 120 min arbete på 1 626 kr + 60 min tidsspillan på 1 487 kr — inget dras av (#1205).
+    // netto: 120/60×162600 + 60/60×148700 = 473900; brutto ×1.25 = 592375.
     const { caller } = makeCaller({ workMinutes: 120, tidsspillanMin: 60, paymentMethod: "RATTSHJALP" });
     const res = await caller.billingRun.createKostnadsrakning({ matterId: "m-1" });
-    expect(res.run.workValueOreAtRun).toBe(389125);
+    expect(res.run.workValueOreAtRun).toBe(592375);
   });
 
-  it("rättshjälp värderas på timkostnadsnormen (F-skatt) minus rådgivningstimmen (#839)", async () => {
+  it("rättshjälp värderas på timkostnadsnormen (F-skatt), hela registrerade tiden (#839/#1205)", async () => {
     // 120 min billable, INTE byråns 2500 kr/h: rättshjälp → timkostnadsnorm 1626 kr/h.
-    // Rådgivningstimmen (60 min) exkluderas → 60 min kvar = 1 h × 162600 = 162600 netto,
-    // + 25 % moms = 203250 brutto (inga utlägg). Byråns privata taxa ignoreras.
+    // Ingen timme dras av (#1205) → 2 h × 162600 = 325200 netto, + 25 % moms =
+    // 406500 brutto (inga utlägg). Byråns privata taxa ignoreras.
     const { caller } = makeCaller({ workMinutes: 120, paymentMethod: "RATTSHJALP" });
     const res = await caller.billingRun.createKostnadsrakning({ matterId: "m-1" });
-    expect(res.run.workValueOreAtRun).toBe(203250);
+    expect(res.run.workValueOreAtRun).toBe(406500);
   });
 });
 
@@ -476,9 +476,9 @@ describe("billingRun.coverageSplit — prutning/självrisk på aktuellt timarvod
   });
 
   it("rättshjälp: värderar på timkostnadsnormen; dom-prutning → byrå-förlust + klient på reducerat", async () => {
-    // 3 tim loggat, varav 1 tim rådgivning (exkl, #809) → 2 effektiva tim × 1626 kr =
-    // 325 200 öre bas; dom 300 000 → förlust 25 200; klient 20 % × 300 000.
-    const c = caller({ paymentMethod: "RATTSHJALP", clientShareBips: 2000, taxaHasFTax: true }, 999999, 180);
+    // 2 tim loggat × 1626 kr = 325 200 öre bas (ingen timme dras av, #1205);
+    // dom 300 000 → förlust 25 200; klient 20 % × 300 000.
+    const c = caller({ paymentMethod: "RATTSHJALP", clientShareBips: 2000, taxaHasFTax: true }, 999999, 120);
     const r = await c.billingRun.coverageSplit({ matterId: "m-1", awardedOre: 300000 });
     expect(r.totalOre).toBe(325200);
     expect(r.firmLossOre).toBe(25200);
@@ -486,11 +486,12 @@ describe("billingRun.coverageSplit — prutning/självrisk på aktuellt timarvod
     expect(r.payerOre).toBe(240000);
   });
 
-  it("rättshjälp: rådgivningstimmen exkluderas ur avgiftsbasen (#809)", async () => {
-    // 2 tim loggat, 1 tim rådgivning exkl → bas = 1 effektiv tim × 1626 kr = 162 600.
+  it("rättshjälp: ingen registrerad timme dras av ur avgiftsbasen (#1205, ersätter #809)", async () => {
+    // 2 tim loggat → bas = 2 tim × 1626 kr = 325 200. Rådgivningstimmen är en egen
+    // låst post (skapas av invoice.createRadgivning) och når aldrig basen.
     const c = caller({ paymentMethod: "RATTSHJALP", clientShareBips: 2000, taxaHasFTax: true }, 999999, 120);
     const r = await c.billingRun.coverageSplit({ matterId: "m-1" });
-    expect(r.totalOre).toBe(162600);
+    expect(r.totalOre).toBe(325200);
   });
 
   it("returnerar utläggens netto OCH brutto exakt vid BLANDADE momssatser (#849/#850)", async () => {
@@ -550,7 +551,7 @@ describe("moms mot DOMSTOL är alltid 25 % (#945)", () => {
     const c = courtCaller();
     const kr = await c.billingRun.createKostnadsrakning({ matterId: "m-1" });
     // Utlägg netto 1 300 kr → 1 625 kr mot domstol (25 %), inte 1 324 kr (0 % + 6 %).
-    const arvodeGross = 10 * 162600 * 1.25; // 10 tim (11 − 1 rådgivning) på timkostnadsnormen
+    const arvodeGross = 11 * 162600 * 1.25; // alla 11 registrerade tim på timkostnadsnormen (#1205)
     expect(kr.run.workValueOreAtRun).toBe(Math.round(arvodeGross) + 162500);
   });
 
@@ -672,8 +673,8 @@ describe("billingRun.settleCoverage — bokför prutnings-uppdelningen (#801)", 
   });
 
   it("rättshjälp: timkostnadsnorm; dom prutar → byrå-förlust bokas (icke-debiterbar PRUTNING), klient på reducerat", async () => {
-    // 3 tim loggat − 1 tim rådgivning (#809) = 2 effektiva tim → bas 325 200.
-    const { ds, caller: c } = caller({ paymentMethod: "RATTSHJALP", clientShareBips: 2000, taxaHasFTax: true }, 999999, 180);
+    // 2 tim loggat → bas 325 200 (ingen timme dras av, #1205).
+    const { ds, caller: c } = caller({ paymentMethod: "RATTSHJALP", clientShareBips: 2000, taxaHasFTax: true }, 999999, 120);
     const res = await c.billingRun.settleCoverage({ matterId: "m-1", payerRecipient: "RATTSHJALPSMYNDIGHET", awardedOre: 300000 });
     // #943: domsbeloppet är BRUTTO (det KR:n yrkade, inkl moms) — inte nettoarvode.
     // Yrkat 325 200 netto = 406 500 brutto; dom 300 000 brutto → beviljat netto 240 000,
@@ -689,7 +690,7 @@ describe("billingRun.settleCoverage — bokför prutnings-uppdelningen (#801)", 
   });
 
   it("rättshjälp: skickade klient-aconton dras AUTO av från klientfakturan; betalare = DOMSTOL (#856)", async () => {
-    const { caller: c } = caller({ paymentMethod: "RATTSHJALP", clientShareBips: 2000, taxaHasFTax: true }, 999999, 180);
+    const { caller: c } = caller({ paymentMethod: "RATTSHJALP", clientShareBips: 2000, taxaHasFTax: true }, 999999, 120);
     const ac = await c.billingRun.createAcconto({ matterId: "m-1", clientShareBips: 2000, amountOre: 50000 }); // SENT aconto
     const res = await c.billingRun.settleCoverage({ matterId: "m-1", payerRecipient: "DOMSTOL" });
     // Klientens självrisk 20 % × 325 200 = 65 040 netto → ×1,25 = 81 300; minus aconto 50 000 = 31 300.
@@ -706,7 +707,7 @@ describe("billingRun.settleCoverage — bokför prutnings-uppdelningen (#801)", 
     // `vatBreakdown`, så acontots moms och intäkt bokfördes två gånger — och
     // eftersom verifikatet härleder bruttot ur raderna (semantic-voucher) drog
     // det med sig kundfordran också.
-    const { caller: c } = caller({ paymentMethod: "RATTSHJALP", clientShareBips: 2000, taxaHasFTax: true }, 999999, 180);
+    const { caller: c } = caller({ paymentMethod: "RATTSHJALP", clientShareBips: 2000, taxaHasFTax: true }, 999999, 120);
     const ac = await c.billingRun.createAcconto({ matterId: "m-1", clientShareBips: 2000, amountOre: 50_000 });
     const res = await c.billingRun.settleCoverage({ matterId: "m-1", payerRecipient: "DOMSTOL" });
 
@@ -725,11 +726,11 @@ describe("billingRun.settleCoverage — bokför prutnings-uppdelningen (#801)", 
   });
 
   it("returnerar itemiserad nedbrytning som reconcilar mot båda beloppen (#858)", async () => {
-    const { caller: c } = caller({ paymentMethod: "RATTSHJALP", clientShareBips: 2000, taxaHasFTax: true }, 999999, 180);
+    const { caller: c } = caller({ paymentMethod: "RATTSHJALP", clientShareBips: 2000, taxaHasFTax: true, radgivningBetaldAt: new Date() }, 999999, 120);
     await c.billingRun.createAcconto({ matterId: "m-1", clientShareBips: 2000, amountOre: 50000 });
     const res = await c.billingRun.settleCoverage({ matterId: "m-1", payerRecipient: "DOMSTOL" });
     const b = res.breakdown;
-    // Domstolens arvode värderas på BAS-minuterna (2 tim, exkl rådgivning) = 325 200 net.
+    // Domstolens arvode värderas på det registrerade (2 tim) = 325 200 net.
     expect(b.arvodeBaseNetOre).toBe(325_200);
     expect(b.baseArvodeGrossOre).toBe(406_500);   // 325 200 × 1,25 — rådgivning ingår EJ (#860)
     expect(b.sjalvriskGrossOre).toBe(81_300);     // 65 040 × 1,25
@@ -746,9 +747,9 @@ describe("billingRun.settleCoverage — bokför prutnings-uppdelningen (#801)", 
     // #876 — rådgivningstimmen omnämns på domstolsfakturan (1 h × norm 162 600 × 1,25) men
     // ligger UTANFÖR domstolens total (bekräftas av reconcile-raden ovan som ej rör den).
     expect(b.radgivningGrossOre).toBe(203_250);
-    // #876 — klientens självrisk-spec: rådgivningstimmen carvad bort, summan == arvodesbasen.
+    // #876/#1205 — klientens självrisk-spec: hela det registrerade, summan == arvodesbasen.
     expect(b.clientArvodeLines).toHaveLength(1);
-    expect(b.clientArvodeLines[0]!.minutes).toBe(120);            // 180 − 60 rådgivning
+    expect(b.clientArvodeLines[0]!.minutes).toBe(120);            // ingen carve
     expect(b.clientArvodeLines.reduce((s, l) => s + l.amountOre, 0)).toBe(b.arvodeBaseNetOre);
 
     // #876 — persisterad vy på BÅDA fakturorna = EN källa för dokument + Slutfaktura-sida.
@@ -778,24 +779,18 @@ describe("billingRun.settleCoverage — bokför prutnings-uppdelningen (#801)", 
     // #947: andelen omfattar arvode + utlägg; utan utlägg i fixturen = 325 200 − 65 040.
     expect(pv.rows.find((r) => r.label.includes("andel (exkl moms)"))?.amountOre).toBe(260_160);
     expect(pv.rows.find((r) => r.label === "Moms 25 %")?.amountOre).toBe(65_040);               // moms på domstolens andel
-    // #941 — trappan ska läsas uppifrån och ned i den ordning beräkningen sker:
-    // rådgivningstimmen av FÖRST, sedan prutningen, och först därefter klientens
-    // andel (som räknas på det som återstår). Rådgivningen är ett EXPLICIT avdrag,
-    // inte längre en info-rad längst ned.
+    // #1205 — rådgivningstimmen är redan fakturerad klienten: den ingår varken i
+    // "Upparbetat" eller dras av, utan omnämns som info-rad före klientens andel.
     const labels = pv.rows.map((r) => r.label);
     const iRadgivning = labels.findIndex((l) => l.toLowerCase().includes("rådgivningstimme"));
     const iAvgift = labels.findIndex((l) => l.includes("Avgår klientens"));
     expect(iRadgivning).toBeGreaterThan(-1);
-    expect(pv.rows[iRadgivning]!.kind).toBe("deduct");
+    expect(pv.rows[iRadgivning]!.kind).toBe("info");
+    expect(labels[iRadgivning]).toMatch(/har redan fakturerats klienten separat/);
     expect(iRadgivning).toBeLessThan(iAvgift);
     expect(labels[0]).toBe("Upparbetat arvode (exkl moms)");
-    // Upparbetat inkluderar rådgivningstimmen; underlaget är det som återstår.
-    expect(pv.rows[0]!.amountOre).toBe(b.arvodeBaseNetOre + b.radgivningNetOre);
-    // #947: trappan stämmer rad för rad — bas − rådgivning − prutning = beviljat.
-    const amountOf = (needle: string): number => pv.rows.find((r) => r.label.includes(needle))?.amountOre ?? 0;
-    expect(amountOf("Beviljat belopp")).toBe(
-      pv.rows[0]!.amountOre + amountOf("Utlägg (exkl moms)") - amountOf("rådgivningstimme") - amountOf("prutning"),
-    );
+    expect(pv.rows[0]!.amountOre).toBe(b.arvodeBaseNetOre);
+    expect(pv.rows.some((r) => r.kind === "deduct" && r.label.toLowerCase().includes("rådgivning"))).toBe(false);
   });
 
   it("rättshjälp (#878): utlägg delas per andel; klientens del heter 'rättshjälpsavgift'", async () => {
@@ -803,7 +798,7 @@ describe("billingRun.settleCoverage — bokför prutnings-uppdelningen (#801)", 
       organizations: [{ id: "org-1", name: "X" }],
       matters: [{ id: "m-1", organizationId: "org-1", matterNumber: "2026-0001", title: "T", status: "ACTIVE", responsibleLawyerId: "u-1", paymentMethod: "RATTSHJALP", clientShareBips: 2000, taxaHasFTax: true, createdAt: new Date() }],
       users: [{ id: "u-1", organizationId: "org-1", email: "a@x", name: "Anna", role: "ADMIN", hourlyRates: { ARBETE: 999999 } }],
-      timeEntries: [{ id: "te-1", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date(), minutes: 180, description: "M", hourlyRate: 200000, billable: true }],
+      timeEntries: [{ id: "te-1", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date(), minutes: 120, description: "M", hourlyRate: 200000, billable: true }],
       expenses: [{ id: "ex-1", organizationId: "org-1", userId: "u-1", matterId: "m-1", date: new Date(), amount: 10000, description: "Ansökningsavgift", billable: true, vatRate: 2500, vatIncluded: false }],
     }, async () => {});
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -827,7 +822,7 @@ describe("billingRun.settleCoverage — bokför prutnings-uppdelningen (#801)", 
   it("rättshjälp (#878): aconton > slutlig rättshjälpsavgift → KREDITfaktura till klienten", async () => {
     // Slutlig helhetssats 5 % (myndighetsbeslut), men klienten har betalat ett aconto
     // på 50 000 (utställt vid en högre period-sats) → överfakturerat → kredit.
-    const { caller: c } = caller({ paymentMethod: "RATTSHJALP", clientShareBips: 500, taxaHasFTax: true }, 999999, 180);
+    const { caller: c } = caller({ paymentMethod: "RATTSHJALP", clientShareBips: 500, taxaHasFTax: true }, 999999, 120);
     await c.billingRun.createAcconto({ matterId: "m-1", clientShareBips: 7500, amountOre: 50_000 }); // SENT-aconto
     const res = await c.billingRun.settleCoverage({ matterId: "m-1", payerRecipient: "DOMSTOL" });
     // Slutlig andel: 5 % × 325 200 = 16 260 net → 20 325 brutto. Betalt 50 000 → kredit 29 675.
@@ -845,7 +840,7 @@ describe("billingRun.settleCoverage — bokför prutnings-uppdelningen (#801)", 
   });
 
   it("rättshjälp: aconton < slutlig rättshjälpsavgift → INGEN kreditfaktura", async () => {
-    const { caller: c } = caller({ paymentMethod: "RATTSHJALP", clientShareBips: 2000, taxaHasFTax: true }, 999999, 180);
+    const { caller: c } = caller({ paymentMethod: "RATTSHJALP", clientShareBips: 2000, taxaHasFTax: true }, 999999, 120);
     await c.billingRun.createAcconto({ matterId: "m-1", clientShareBips: 2000, amountOre: 10_000 });
     const res = await c.billingRun.settleCoverage({ matterId: "m-1", payerRecipient: "DOMSTOL" });
     expect(res.creditInvoice).toBeNull();               // 20 % × 325 200 = 65 040 > 10 000 aconto
@@ -854,7 +849,7 @@ describe("billingRun.settleCoverage — bokför prutnings-uppdelningen (#801)", 
   });
 
   it("rättshjälp via KR (#828): kräver registrerat beslut; domsbeloppet läses från KR:n; KR konsumeras EJ utan markeras FAKTURERAD", async () => {
-    const { ds, caller: c } = caller({ paymentMethod: "RATTSHJALP", clientShareBips: 2000, taxaHasFTax: true }, 999999, 180);
+    const { ds, caller: c } = caller({ paymentMethod: "RATTSHJALP", clientShareBips: 2000, taxaHasFTax: true }, 999999, 120);
     const kr = await c.billingRun.createKostnadsrakning({ matterId: "m-1" });
     // Faktura före beslut är otillåtet.
     await expect(c.billingRun.settleCoverage({ matterId: "m-1", payerRecipient: "RATTSHJALPSMYNDIGHET" }))
@@ -1004,14 +999,11 @@ describe("slutreglering med ALLA arvodeskategorier (#953)", () => {
       // flattas först på FAKTURAN, #945 — specifikationen visar underlaget).
       expect(spec.expenseLines.map((l) => l.netOre).sort((a, b) => a - b)).toEqual([25_000, 42_000, 90_000]);
 
-      // Sammanställningen ska gå att stämma av: taxeraderna summerar till
-      // slutregleringens bas. Enda tillåtna differensen är rådgivningstimmen, som
-      // rättshjälpen carvar ur basen men fortfarande specificerar (#860).
+      // Sammanställningen ska gå att stämma av: taxeraderna summerar EXAKT till
+      // slutregleringens bas — för båda metoderna, ingen carve (#1205).
       const radSumma = spec.timeLines.reduce((s, l) => s + l.amountOre, 0);
       expect(radSumma).toBe(650_400 + 651_200 + 446_100 + 146_250);
-      expect(res.breakdown.arvodeBaseNetOre).toBe(radSumma - res.breakdown.radgivningNetOre);
-      if (method === "RATTSSKYDD") expect(res.breakdown.radgivningNetOre).toBe(0); // ingen carve
-      else expect(res.breakdown.radgivningNetOre).toBe(162_600); // 1 tim på 2026 års norm
+      expect(res.breakdown.arvodeBaseNetOre).toBe(radSumma);
     },
   );
 

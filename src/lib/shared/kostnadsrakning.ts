@@ -21,8 +21,10 @@ import { applyNoFTaxFactorForDate, computeBrottmalstaxa, computeTimkostnadsnorm,
 import { computeForordnandeErsattning, forhorMinutes, type Forhor, type ForordnandeResult } from "./forordnandetaxa";
 import { isTidsspillanKind } from "./hourly-rate";
 import { toIsoDate } from "./iso-date";
-import { RADGIVNING_MINUTES, radgivningTextRad } from "./rattshjalp";
+import { radgivningTextRad } from "./rattshjalp";
 import type { TimeEntryKind } from "./schemas/enums";
+import type { BillingRunId } from "./schemas/ids";
+import { isLockedEntry, type LockableEntry } from "./time-entry-lock";
 import { splitVat } from "./vat";
 
 export interface ExpenseInput {
@@ -98,16 +100,19 @@ export interface BuildInput {
    *  arvodes-beräkningen för icke-taxa-ärenden. För taxa-ärenden visas de
    *  bara som information; beloppet styrs av taxan. */
   timeEntries?: readonly TimeEntryInput[];
+  /** Körningen räkningen hör till (#1205): poster som just den frös är dess
+   *  eget underlag. Övriga låsta poster (redan fakturerade/redovisade) utelämnas. */
+  ownBillingRunId?: BillingRunId;
 }
 
-export interface TimeEntryInput {
+export interface TimeEntryInput extends LockableEntry {
   id: string;
   date: Date | string;
   description: string;
   minutes: number;
   billable?: boolean;
   /** ARBETE (default) eller TIDSSPILLAN — värderas på tidsspillan-normen (#891). */
-  kind?: TimeEntryKind | null;
+  kind?: TimeEntryKind | null | undefined;
 }
 
 export interface ExpenseLine {
@@ -168,33 +173,6 @@ function timkostnadsnormResult(totalArbetsMinutes: number, hasFTax: boolean): Ta
     gransvardeExclVat: 0,
     notes: ["Icke-taxa-ärende — ersättning enligt timkostnadsnorm (arbete) resp. tidsspillan-norm; á-pris per rad i tidsspecifikationen."],
   };
-}
-
-/**
- * Ta bort de FÖRSTA `carveMinutes` (kronologiskt) ur listan (#868) — rådgivnings-
- * timmen är ärendets första timme, faktureras klienten separat och ligger utanför
- * domstolens kostnadsräkning. Hela poster utelämnas tills kvoten är uppfylld; en
- * post som delvis överlappar krymps med resterande minuter.
- *
- * Poster UTAN minuter passerar orörda (#950): en post som inte är arbetad tid —
- * advokatberedskapens garantiersättning per dygn — kan inte vara en del av
- * ärendets första timme. Utan undantaget hade `0 <= left` svalt hela posten och
- * ersättningen försvunnit tyst, utan att ens konsumera en minut av kvoten.
- */
-export function carveEarliestMinutes<T extends { date: Date | string; minutes: number }>(
-  entries: readonly T[],
-  carveMinutes: number,
-): T[] {
-  const sorted = [...entries].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-  let left = carveMinutes;
-  const out: T[] = [];
-  for (const t of sorted) {
-    if (left <= 0 || t.minutes === 0) { out.push(t); continue; }
-    if (t.minutes <= left) { left -= t.minutes; continue; } // hela posten är rådgivning → utelämna
-    out.push({ ...t, minutes: t.minutes - left }); // delvis → krymp
-    left = 0;
-  }
-  return out;
 }
 
 /** Arvode-beräkning: taxa-ärende → brottmålstaxa, annars timkostnadsnorm. */
@@ -362,15 +340,16 @@ function valuateTimeLine(
 }
 
 /**
- * Debiterbara tidsposter. Rådgivningstimmen (ärendets FÖRSTA timme) faktureras
- * klienten separat och ligger HELT utanför kostnadsräkningen till domstolen
- * (#868): den carvas bort ur både specifikationen och arvodes-underlaget.
+ * Debiterbara tidsposter som ännu inte är redovisade eller fakturerade (#1205).
+ * Rådgivningstimmen (rättshjälp) är en sådan: den faktureras klienten direkt efter
+ * mötet och registreras som en LÅST post — den ingår därför aldrig här, och ingen
+ * annan registrerad tid dras av i dess ställe. Notisen förklarar den för domstolen.
  * DVFS 2025:9 § 2 (#950): beredskapsdagar som förbrukats av en helgförhandling
  * eller ett polisförhör samma dag yrkas inte — arbetet yrkas i stället.
  */
 function billableTimeEntriesOf(input: BuildInput): TimeEntryInput[] {
-  const allBillable = payableCoverageEntries((input.timeEntries ?? []).filter((t) => t.billable !== false));
-  return input.matter.radgivningPaid ? carveEarliestMinutes(allBillable, RADGIVNING_MINUTES) : allBillable;
+  const open = (input.timeEntries ?? []).filter((t) => t.billable !== false && !isLockedEntry(t, input.ownBillingRunId));
+  return payableCoverageEntries(open);
 }
 
 /** Vilken grund räkningen står på: förordnandemål, huvudförhandling eller löpande. */
@@ -395,11 +374,9 @@ function expenseLinesOf(expenses: readonly ExpenseInput[]): ExpenseLine[] {
 export function buildKostnadsrakningContext(original: BuildInput): KostnadsrakningResult {
   const yrkandeDate = yrkandeDateOf(original);
 
-  // Tidsregistreringar — bara billable räknas (samma princip som utlägg).
-  // Rådgivningstimmen (ärendets FÖRSTA timme) faktureras klienten separat och
-  // ligger HELT utanför kostnadsräkningen till domstolen (#868): den carvas bort
-  // ur BÅDE tidsspecifikationen och arvodes-underlaget — annars ser det ut som att
-  // domstolen debiteras för samma timme (dubbel-debitering). Notisen förklarar den.
+  // Tidsregistreringar — bara billable och ej redan fakturerade räknas (samma
+  // princip som utlägg). Rådgivningstimmen är redan fakturerad klienten (låst post,
+  // #1205) och ligger HELT utanför kostnadsräkningen; notisen förklarar den.
   // DVFS 2025:9 § 2 (#950): beredskapsdagar som förbrukats av en helgförhandling
   // eller ett polisförhör samma dag yrkas inte — arbetet yrkas i stället.
   const billableTimeEntries = billableTimeEntriesOf(original);
