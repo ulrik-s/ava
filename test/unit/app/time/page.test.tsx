@@ -89,6 +89,8 @@ describe("TimePage", () => {
     render(<TimePage />);
     expect(screen.getByText("Möte med klient")).toBeInTheDocument();
     expect(screen.getByText("Anna")).toBeInTheDocument();
+    // Lång beskrivning bryter rad i stället för att rinna in i grannkolumnen (#1197).
+    expect(screen.getByText("Möte med klient").closest("td")).toHaveClass("whitespace-normal");
   });
 
   it("öppnar Ny-form vid klick", () => {

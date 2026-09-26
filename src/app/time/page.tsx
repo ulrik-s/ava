@@ -37,7 +37,7 @@ const timeColumns: Column<TimeRow>[] = [
   { key: "minutes", label: "Tid", sortable: true, align: "right", sortValue: (e) => e.minutes,
     summary: (rows) => <span className="font-mono">{formatMinutes(rows.reduce((s, r) => s + r.minutes, 0))}</span>,
     render: (e) => <span className="text-sm font-mono text-gray-900">{formatMinutes(e.minutes)}</span> },
-  { key: "description", label: "Beskrivning", sortable: true, sortValue: (e) => e.description,
+  { key: "description", label: "Beskrivning", sortable: true, sortValue: (e) => e.description, wrap: true,
     render: (e) => <span className="text-sm text-gray-700">{e.description}</span> },
   { key: "billable", label: "Deb.", sortable: true, sortValue: (e) => (e.billable ? 1 : 0),
     render: (e) => <span className="text-sm">{e.billable ? "Ja" : "Nej"}</span> },
